@@ -19,9 +19,13 @@ package mysqlctl
 import (
 	"context"
 	"fmt"
+	"slices"
+	"strings"
 	"time"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -77,6 +81,14 @@ func (mysqld *Mysqld) ConfigureGroupReplication(ctx context.Context, cfg mysql.G
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot configure group replication while the member is %s", status.MemberState)
 	}
 
+	params, err := mysqld.dbcfgs.ReplConnector().MysqlParams()
+	if err != nil {
+		return err
+	}
+	if err := mysqld.checkGroupReplicationPrivileges(ctx, conn, params.Uname); err != nil {
+		return err
+	}
+
 	var cmds []string
 	if !status.PluginActive {
 		// INSTALL PLUGIN writes to mysql.plugin, which super_read_only rejects. The statement
@@ -95,24 +107,47 @@ func (mysqld *Mysqld) ConfigureGroupReplication(ctx context.Context, cfg mysql.G
 		}
 	}
 	cmds = append(cmds, mysql.ConfigureGroupReplicationCommands(cfg)...)
+	cmds = append(cmds, mysql.GroupReplicationCredentialsCommand(params.Uname, params.Pass))
 	log.Info(fmt.Sprintf("Configuring group replication: group %s, local address %s, seeds %v", cfg.GroupName, cfg.LocalAddress, cfg.Seeds))
 	return mysqld.executeSuperQueryListConn(ctx, conn, cmds)
 }
 
-// StartGroupReplication makes the member join its group. With bootstrap set, the member
-// creates a new group instead. Distributed recovery authenticates as the replication user.
-func (mysqld *Mysqld) StartGroupReplication(ctx context.Context, bootstrap bool) error {
-	params, err := mysqld.dbcfgs.ReplConnector().MysqlParams()
+// checkGroupReplicationPrivileges returns a FAILED_PRECONDITION error unless an account of the
+// replication user has the privileges that the MySQL communication stack needs. Without them,
+// MySQL refuses the connections between members, and a join fails only after its timeout.
+func (mysqld *Mysqld) checkGroupReplicationPrivileges(ctx context.Context, conn *dbconnpool.PooledDBConnection, user string) error {
+	query := "SELECT HOST, PRIV FROM mysql.global_grants WHERE USER = " + sqltypes.EncodeStringSQL(user)
+	qr, err := mysqld.executeFetchContext(ctx, conn, query, 10000, false)
 	if err != nil {
-		return err
+		return vterrors.Wrapf(err, "failed to read the privileges of the replication user %s", user)
 	}
+	privileges := make(map[string][]string)
+	for _, row := range qr.Rows {
+		host := row[0].ToString()
+		privileges[host] = append(privileges[host], strings.ToUpper(row[1].ToString()))
+	}
+	for _, granted := range privileges {
+		if !slices.ContainsFunc(mysql.GroupReplicationPrivileges, func(p string) bool { return !slices.Contains(granted, p) }) {
+			return nil
+		}
+	}
+	required := strings.Join(mysql.GroupReplicationPrivileges, ", ")
+	return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+		"the replication user %s lacks %s, which Group Replication needs to connect the members of a group; run GRANT %s ON *.* TO %s@'%%' on the shard primary",
+		user, required, required, sqltypes.EncodeStringSQL(user))
+}
+
+// StartGroupReplication makes the member join its group. With bootstrap set, the member
+// creates a new group instead. The member authenticates to the others as the replication user
+// that ConfigureGroupReplication stored on the recovery channel.
+func (mysqld *Mysqld) StartGroupReplication(ctx context.Context, bootstrap bool) error {
 	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
 	if err != nil {
 		return err
 	}
 	defer conn.Recycle()
 
-	cmds := mysql.StartGroupReplicationCommands(bootstrap, params.Uname, params.Pass)
+	cmds := mysql.StartGroupReplicationCommands(bootstrap)
 	log.Info(fmt.Sprintf("Starting group replication (bootstrap: %v)", bootstrap))
 	err = mysqld.executeSuperQueryListConn(ctx, conn, cmds)
 	if err != nil && bootstrap {

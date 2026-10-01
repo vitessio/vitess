@@ -25,7 +25,6 @@ import (
 	"path"
 	"path/filepath"
 	"slices"
-	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -63,10 +62,7 @@ type Node struct {
 	Group     string // tablet group (mysqld + vttablet)
 	OrcGroup  string
 	EtcdGroup string
-	// GRPort is the group communication port of the tablet's MySQL (--group-replication-port),
-	// in Group Replication mode.
-	GRPort int
-	db     *sql.DB // unix socket connection used by the observer/invariants
+	db        *sql.DB // unix socket connection used by the observer/invariants
 }
 
 // Socket returns the path of the tablet's mysqld unix socket.
@@ -220,18 +216,15 @@ func NewChaos(t *testing.T, name string, opts Options) *Chaos {
 		n.Tablet.VttabletProcess.Binary = path.Join(dir, "vttablet")
 		nf.SetPorts(n.Group, n.Tablet.MySQLPort, n.Tablet.GrpcPort, n.Tablet.HTTPPort)
 		if GRMode() {
-			// Every tablet gets a group communication port; it belongs to the tablet's
-			// network group, so partitions cut the group's traffic too.
-			n.GRPort = ci.GetAndReservePort()
-			n.Tablet.VttabletProcess.ExtraArgs = append(n.Tablet.VttabletProcess.ExtraArgs,
-				"--group-replication-port", strconv.Itoa(n.GRPort))
+			// The members of the group connect through the MySQL port, which belongs to the
+			// tablet's network group: partitions cut the group's traffic too.
+			n.Tablet.VttabletProcess.ExtraArgs = append(n.Tablet.VttabletProcess.ExtraArgs, "--enable-group-replication")
 			// CHAOS_GR_EXIT_STATE_ACTION selects group_replication_exit_state_action
 			// (READ_ONLY, OFFLINE_MODE, ABORT_SERVER); unset keeps vttablet's default.
 			if action := os.Getenv("CHAOS_GR_EXIT_STATE_ACTION"); action != "" {
 				n.Tablet.VttabletProcess.ExtraArgs = append(n.Tablet.VttabletProcess.ExtraArgs,
 					"--group-replication-exit-state-action", action)
 			}
-			nf.SetPorts(n.Group, n.GRPort)
 		}
 	}
 	var procs []*exec.Cmd

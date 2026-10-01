@@ -47,20 +47,18 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-const testGroupReplicationPort = 33061
-
 // resetDefaultChannel is the statement a tablet runs once its MySQL is an active member.
 var resetDefaultChannel = mysql.ResetDefaultReplicationChannelCommand()
 
-// enableGroupReplication sets the group replication flags for the duration of the test. The
+// withGroupReplication sets the group replication flags for the duration of the test. The
 // sync loop interval is long enough for the loop never to run on its own: tests call reconcile.
-func enableGroupReplication(t *testing.T) {
+func withGroupReplication(t *testing.T) {
 	t.Helper()
-	oldPort, oldInterval, oldPoll := groupReplicationPort, groupReplicationSyncInterval, groupReplicationPollInterval
+	oldEnabled, oldInterval, oldPoll := enableGroupReplication, groupReplicationSyncInterval, groupReplicationPollInterval
 	t.Cleanup(func() {
-		groupReplicationPort, groupReplicationSyncInterval, groupReplicationPollInterval = oldPort, oldInterval, oldPoll
+		enableGroupReplication, groupReplicationSyncInterval, groupReplicationPollInterval = oldEnabled, oldInterval, oldPoll
 	})
-	groupReplicationPort = testGroupReplicationPort
+	enableGroupReplication = true
 	groupReplicationSyncInterval = time.Hour
 	groupReplicationPollInterval = 5 * time.Millisecond
 }
@@ -183,34 +181,28 @@ func TestBuildTabletFromInputPublishesGroupReplicationPort(t *testing.T) {
 	initTabletType = "replica"
 	alias := &topodatapb.TabletAlias{Cell: "cell1", Uid: 1}
 
+	// Members reach each other through the MySQL port of their tablet records: the tablet does not
+	// publish a port of its own for group replication.
+	withGroupReplication(t)
 	tablet, err := BuildTabletFromInput(alias, 1, 2, nil, collations.MySQL8())
 	require.NoError(t, err)
-	assert.NotContains(t, tablet.PortMap, groupReplicationPortName)
-
-	enableGroupReplication(t)
-	tablet, err = BuildTabletFromInput(alias, 1, 2, nil, collations.MySQL8())
-	require.NoError(t, err)
-	assert.Equal(t, map[string]int32{"vt": 1, "grpc": 2, "gr": testGroupReplicationPort}, tablet.PortMap)
+	assert.Equal(t, map[string]int32{"vt": 1, "grpc": 2}, tablet.PortMap)
 }
 
 func TestValidateGroupReplicationFlags(t *testing.T) {
-	enableGroupReplication(t)
+	withGroupReplication(t)
 	require.NoError(t, validateFlags())
 
-	groupReplicationPort = 70000
-	require.ErrorContains(t, validateFlags(), "--group-replication-port must be between 0 and 65535")
-
-	groupReplicationPort = testGroupReplicationPort
 	groupReplicationSyncInterval = 0
 	require.ErrorContains(t, validateFlags(), "--group-replication-sync-interval must be positive")
 
 	// The interval does not matter while group replication is disabled.
-	groupReplicationPort = 0
+	enableGroupReplication = false
 	require.NoError(t, validateFlags())
 }
 
 func TestGroupReplicationConfig(t *testing.T) {
-	enableGroupReplication(t)
+	withGroupReplication(t)
 	oldTries := groupReplicationAutorejoinTries
 	t.Cleanup(func() {
 		groupReplicationAutorejoinTries = oldTries
@@ -220,14 +212,14 @@ func TestGroupReplicationConfig(t *testing.T) {
 	ctx := t.Context()
 	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplication)
 	peers := []*topodatapb.Tablet{{
-		// Other tablets reach MySQL at its mysql hostname.
+		// Other tablets reach MySQL at its mysql hostname and port.
 		Alias: &topodatapb.TabletAlias{Cell: "cell1", Uid: 2}, Keyspace: "ks", Shard: "0", Type: topodatapb.TabletType_REPLICA,
-		Hostname: "tablet2", MysqlHostname: "mysql2", PortMap: map[string]int32{"gr": 33062},
+		Hostname: "tablet2", MysqlHostname: "mysql2", MysqlPort: 3312,
 	}, {
 		Alias: &topodatapb.TabletAlias{Cell: "cell1", Uid: 3}, Keyspace: "ks", Shard: "0", Type: topodatapb.TabletType_REPLICA,
-		Hostname: "tablet3", PortMap: map[string]int32{"gr": 33063},
+		Hostname: "tablet3", MysqlPort: 3313,
 	}, {
-		// A tablet without group replication support is not a seed.
+		// A tablet whose MySQL port is not known yet is not a seed.
 		Alias: &topodatapb.TabletAlias{Cell: "cell1", Uid: 4}, Keyspace: "ks", Shard: "0", Type: topodatapb.TabletType_RDONLY,
 		Hostname: "tablet4", MysqlHostname: "mysql4",
 	}}
@@ -245,8 +237,8 @@ func TestGroupReplicationConfig(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, mysql.GroupReplicationConfig{
 		GroupName:       policy.GroupName("ks", "0"),
-		LocalAddress:    "localhost:33061",
-		Seeds:           []string{"mysql2:33062", "tablet3:33063"},
+		LocalAddress:    "localhost:3306",
+		Seeds:           []string{"mysql2:3312", "tablet3:3313"},
 		MemberWeight:    50,
 		Consistency:     "BEFORE_ON_PRIMARY_FAILOVER",
 		ExitStateAction: "READ_ONLY",
@@ -269,7 +261,7 @@ func TestGroupReplicationDisablesAutorejoinByDefault(t *testing.T) {
 		"SET GLOBAL group_replication_autorejoin_tries = 0")
 }
 
-func TestGroupReplicationRPCsRequirePort(t *testing.T) {
+func TestGroupReplicationRPCsRequireFlag(t *testing.T) {
 	ts := newGroupReplicationTopo(t, policy.DurabilityNone)
 	tm, _ := newGroupReplicationTestTM(t, ts, 1, nil)
 
@@ -282,7 +274,7 @@ func TestGroupReplicationRPCsRequirePort(t *testing.T) {
 // TestStartGroupReplicationJoinsAsSecondary checks that a replica stops its asynchronous
 // replication before it joins, clears the default channel afterwards and disables semi-sync.
 func TestStartGroupReplicationJoinsAsSecondary(t *testing.T) {
-	enableGroupReplication(t)
+	withGroupReplication(t)
 	ts := newGroupReplicationTopo(t, policy.DurabilitySemiSync)
 	tm, fmd := newGroupReplicationTestTM(t, ts, 1, nil)
 	fmd.Replicating = true
@@ -303,7 +295,7 @@ func TestStartGroupReplicationJoinsAsSecondary(t *testing.T) {
 // TestStartGroupReplicationBootstrapOnPrimary checks that a primary that bootstraps a group
 // stays writable and keeps semi-sync, which its asynchronous replicas still acknowledge.
 func TestStartGroupReplicationBootstrapOnPrimary(t *testing.T) {
-	enableGroupReplication(t)
+	withGroupReplication(t)
 	ts := newGroupReplicationTopo(t, policy.DurabilitySemiSync)
 	tm, fmd := newGroupReplicationTestTM(t, ts, 1, nil)
 	setTabletType(t, tm, topodatapb.TabletType_PRIMARY)
@@ -333,7 +325,7 @@ func TestStartGroupReplicationBootstrapOnPrimary(t *testing.T) {
 // already joined: it does not start group replication again, and it disables primary semi-sync
 // once the group supersedes it.
 func TestStartGroupReplicationOnActiveMember(t *testing.T) {
-	enableGroupReplication(t)
+	withGroupReplication(t)
 	ts := newGroupReplicationTopo(t, policy.DurabilitySemiSync)
 	tm, fmd := newGroupReplicationTestTM(t, ts, 1, nil)
 	setTabletType(t, tm, topodatapb.TabletType_PRIMARY)
@@ -353,7 +345,7 @@ func TestStartGroupReplicationOnActiveMember(t *testing.T) {
 }
 
 func TestStartGroupReplicationRefusesOtherGroup(t *testing.T) {
-	enableGroupReplication(t)
+	withGroupReplication(t)
 	ts := newGroupReplicationTopo(t, policy.DurabilityNone)
 	tm, fmd := newGroupReplicationTestTM(t, ts, 1, nil)
 	status := groupStatus(testServerUUID(1), groupMember(testServerUUID(1), mysql.GroupMemberStateOnline, mysql.GroupMemberRolePrimary))
@@ -367,7 +359,7 @@ func TestStartGroupReplicationRefusesOtherGroup(t *testing.T) {
 // TestStartGroupReplicationRestartsReplicationAfterFailedJoin checks that a replica that cannot
 // join keeps replicating asynchronously, so that it keeps acknowledging semi-sync transactions.
 func TestStartGroupReplicationRestartsReplicationAfterFailedJoin(t *testing.T) {
-	enableGroupReplication(t)
+	withGroupReplication(t)
 	ts := newGroupReplicationTopo(t, policy.DurabilitySemiSync)
 	tm, fmd := newGroupReplicationTestTM(t, ts, 1, nil)
 	fmd.Replicating = true
@@ -381,7 +373,7 @@ func TestStartGroupReplicationRestartsReplicationAfterFailedJoin(t *testing.T) {
 }
 
 func TestStartGroupReplicationWaitsForOnline(t *testing.T) {
-	enableGroupReplication(t)
+	withGroupReplication(t)
 	ts := newGroupReplicationTopo(t, policy.DurabilityNone)
 	tm, fmd := newGroupReplicationTestTM(t, ts, 1, nil)
 	recovering := groupStatus(testServerUUID(1),
@@ -408,7 +400,7 @@ func TestStartGroupReplicationWaitsForOnline(t *testing.T) {
 // TestStopGroupReplicationRestoresReadWriteOnPrimary checks that a primary that leaves its
 // group, the last step of a migration back to asynchronous replication, serves writes again.
 func TestStopGroupReplicationRestoresReadWriteOnPrimary(t *testing.T) {
-	enableGroupReplication(t)
+	withGroupReplication(t)
 	ts := newGroupReplicationTopo(t, policy.DurabilitySemiSync)
 	tm, fmd := newGroupReplicationTestTM(t, ts, 1, nil)
 	setTabletType(t, tm, topodatapb.TabletType_PRIMARY)
@@ -435,7 +427,7 @@ func TestStopGroupReplicationRestoresReadWriteOnPrimary(t *testing.T) {
 }
 
 func TestStopGroupReplicationKeepsSecondaryReadOnly(t *testing.T) {
-	enableGroupReplication(t)
+	withGroupReplication(t)
 	ts := newGroupReplicationTopo(t, policy.DurabilityNone)
 	tm, fmd := newGroupReplicationTestTM(t, ts, 1, nil)
 	// Even a PRIMARY tablet stays read-only if its MySQL was not the group primary.
@@ -456,7 +448,7 @@ func TestStopGroupReplicationKeepsSecondaryReadOnly(t *testing.T) {
 // member that is not the group primary: such a member would accept writes and replicate them to
 // the whole group.
 func TestGroupSecondaryIsNeverMadeWritable(t *testing.T) {
-	enableGroupReplication(t)
+	withGroupReplication(t)
 	ts := newGroupReplicationTopo(t, policy.DurabilityNone)
 	tm, fmd := newGroupReplicationTestTM(t, ts, 1, nil)
 	secondary := groupStatus(testServerUUID(1),
@@ -501,7 +493,7 @@ func TestGroupSecondaryIsNeverMadeWritable(t *testing.T) {
 // TestPromoteReplicaSwitchesGroupPrimary checks that PromoteReplica on a member asks the group
 // to switch primaries, instead of resetting its replication.
 func TestPromoteReplicaSwitchesGroupPrimary(t *testing.T) {
-	enableGroupReplication(t)
+	withGroupReplication(t)
 	ts := newGroupReplicationTopo(t, policy.DurabilitySemiSync)
 	tm, fmd := newGroupReplicationTestTM(t, ts, 1, nil)
 	fmd.SetGroupReplicationStatus(groupStatus(testServerUUID(1),
@@ -536,7 +528,7 @@ func TestPromoteReplicaSwitchesGroupPrimary(t *testing.T) {
 }
 
 func TestPromoteReplicaRefusesRecoveringMember(t *testing.T) {
-	enableGroupReplication(t)
+	withGroupReplication(t)
 	ts := newGroupReplicationTopo(t, policy.DurabilityNone)
 	tm, fmd := newGroupReplicationTestTM(t, ts, 1, nil)
 	fmd.SetGroupReplicationStatus(groupStatus(testServerUUID(1),
@@ -551,7 +543,7 @@ func TestPromoteReplicaRefusesRecoveringMember(t *testing.T) {
 // TestDemotePrimarySkipsSemiSyncOnGroupMember checks that DemotePrimary makes a group primary
 // read-only without touching semi-sync.
 func TestDemotePrimarySkipsSemiSyncOnGroupMember(t *testing.T) {
-	enableGroupReplication(t)
+	withGroupReplication(t)
 	ts := newGroupReplicationTopo(t, policy.DurabilitySemiSync)
 	tm, fmd := newGroupReplicationTestTM(t, ts, 1, nil)
 	setTabletType(t, tm, topodatapb.TabletType_PRIMARY)
@@ -569,7 +561,7 @@ func TestDemotePrimarySkipsSemiSyncOnGroupMember(t *testing.T) {
 // TestSetReplicationSourceOnGroupMember checks that a member keeps replicating through its
 // group: it does not configure the default channel, and still waits for the position.
 func TestSetReplicationSourceOnGroupMember(t *testing.T) {
-	enableGroupReplication(t)
+	withGroupReplication(t)
 	ts := newGroupReplicationTopo(t, policy.DurabilitySemiSync)
 	tm, fmd := newGroupReplicationTestTM(t, ts, 1, nil)
 	setTabletType(t, tm, topodatapb.TabletType_PRIMARY)
@@ -601,7 +593,7 @@ func TestSetReplicationSourceOnGroupMember(t *testing.T) {
 // example from a VTOrc acting on an old view, does not demote the tablet whose MySQL is the
 // primary of a group with quorum.
 func TestSetReplicationSourceRefusedOnGroupPrimary(t *testing.T) {
-	enableGroupReplication(t)
+	withGroupReplication(t)
 	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplicationCrossCell)
 	tm, fmd := newGroupReplicationTestTM(t, ts, 1, nil)
 	setTabletType(t, tm, topodatapb.TabletType_PRIMARY)
@@ -620,7 +612,7 @@ func TestSetReplicationSourceRefusedOnGroupPrimary(t *testing.T) {
 // arrives: PlannedReparentShard repoints the tablets while the primary-elect's PromoteReplica
 // switches the group's primary, which the old primary's member applies a moment later.
 func TestSetReplicationSourceWaitsForGroupPrimarySwitch(t *testing.T) {
-	enableGroupReplication(t)
+	withGroupReplication(t)
 	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplicationCrossCell)
 	tm, fmd := newGroupReplicationTestTM(t, ts, 1, nil)
 	setTabletType(t, tm, topodatapb.TabletType_PRIMARY)
@@ -645,7 +637,7 @@ func TestSetReplicationSourceWaitsForGroupPrimarySwitch(t *testing.T) {
 }
 
 func TestStopAndStartReplicationOnGroupMember(t *testing.T) {
-	enableGroupReplication(t)
+	withGroupReplication(t)
 	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplication)
 	setGroupReplicationVoters(t, ts, 1, 2)
 	addPeerTablets(t, ts, 2)
@@ -679,7 +671,7 @@ func TestStopAndStartReplicationOnGroupMember(t *testing.T) {
 }
 
 func TestResetReplicationParametersOnGroupMember(t *testing.T) {
-	enableGroupReplication(t)
+	withGroupReplication(t)
 	ts := newGroupReplicationTopo(t, policy.DurabilityNone)
 	tm, fmd := newGroupReplicationTestTM(t, ts, 1, nil)
 	fmd.SetGroupReplicationStatus(groupStatus(testServerUUID(1),
@@ -694,7 +686,7 @@ func TestResetReplicationParametersOnGroupMember(t *testing.T) {
 // TestInitPrimaryBootstrapsGroup checks that InitPrimary in a keyspace that uses group
 // replication bootstraps the shard's group on the new primary.
 func TestInitPrimaryBootstrapsGroup(t *testing.T) {
-	enableGroupReplication(t)
+	withGroupReplication(t)
 	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplication)
 	tm, fmd := newGroupReplicationTestTM(t, ts, 1, func(fmd *mysqlctl.FakeMysqlDaemon) {
 		// No other member is reachable when the tablet starts.
@@ -743,13 +735,13 @@ func TestFixSemiSyncSupersededByGroup(t *testing.T) {
 // TestStartJoinsGroup checks that a tablet that the shard record lists as a voter joins its
 // group when it starts, and never bootstraps one.
 func TestStartJoinsGroup(t *testing.T) {
-	enableGroupReplication(t)
+	withGroupReplication(t)
 	ctx := t.Context()
 	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplication)
 	// The shard has a primary, which an asynchronous replica would replicate from.
 	primary := &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{Cell: "cell1", Uid: 2}, Keyspace: "ks", Shard: "0", Type: topodatapb.TabletType_PRIMARY,
-		Hostname: "tablet2", MysqlHostname: "mysql2", MysqlPort: 3306, PortMap: map[string]int32{"gr": 33062},
+		Hostname: "tablet2", MysqlHostname: "mysql2", MysqlPort: 3306,
 	}
 	require.NoError(t, ts.CreateShard(ctx, "ks", "0"))
 	require.NoError(t, ts.CreateTablet(ctx, primary))
@@ -766,7 +758,7 @@ func TestStartJoinsGroup(t *testing.T) {
 			return errors.New("the default channel must not be configured on a group member")
 		}
 	})
-	assert.Equal(t, []string{"mysql2:33062"}, fmd.GroupReplicationConfig.Seeds)
+	assert.Equal(t, []string{"mysql2:3306"}, fmd.GroupReplicationConfig.Seeds)
 	status, err := fmd.GroupReplicationStatus(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, mysql.GroupMemberStateOnline, status.MemberState)
@@ -775,7 +767,7 @@ func TestStartJoinsGroup(t *testing.T) {
 }
 
 func TestStartSucceedsWhenGroupJoinFails(t *testing.T) {
-	enableGroupReplication(t)
+	withGroupReplication(t)
 	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplication)
 	setGroupReplicationVoters(t, ts, 1, 2)
 	addPeerTablets(t, ts, 2)
@@ -797,7 +789,7 @@ func setShardPrimary(t *testing.T, ts *topo.Server, tm *TabletManager, fmd *mysq
 	ctx := t.Context()
 	primary := &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{Cell: "cell1", Uid: 2}, Keyspace: "ks", Shard: "0", Type: topodatapb.TabletType_PRIMARY,
-		Hostname: "tablet2", MysqlHostname: "mysql2", MysqlPort: 3306, PortMap: map[string]int32{"gr": 33062},
+		Hostname: "tablet2", MysqlHostname: "mysql2", MysqlPort: 3306,
 	}
 	require.NoError(t, ts.CreateTablet(ctx, primary))
 	_, err := ts.UpdateShardFields(ctx, "ks", "0", func(si *topo.ShardInfo) error {
@@ -828,7 +820,7 @@ func TestStartReplicatesAsynchronouslyWhenNotVoter(t *testing.T) {
 	}}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			enableGroupReplication(t)
+			withGroupReplication(t)
 			ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplication)
 			setGroupReplicationVoters(t, ts, tc.voters...)
 			tm, fmd := newGroupReplicationTestTM(t, ts, 1, nil)
@@ -856,7 +848,7 @@ func TestStartReplicatesAsynchronouslyWhenNotVoter(t *testing.T) {
 // of its group, but that the shard record does not list as a voter, neither leaves the group nor
 // configures asynchronous replication when it starts: removing a member is VTOrc's decision.
 func TestStartLeavesActiveNonVoterAlone(t *testing.T) {
-	enableGroupReplication(t)
+	withGroupReplication(t)
 	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplication)
 	setGroupReplicationVoters(t, ts, 2, 3)
 	superQueries := 0
@@ -888,7 +880,7 @@ func TestStartLeavesActiveNonVoterAlone(t *testing.T) {
 // TestStartReplicationOnNonVoter checks that StartReplication and StopReplication keep their
 // asynchronous meaning on a tablet that is neither an active member of its group nor a voter.
 func TestStartReplicationOnNonVoter(t *testing.T) {
-	enableGroupReplication(t)
+	withGroupReplication(t)
 	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplication)
 	setGroupReplicationVoters(t, ts, 2)
 	tm, fmd := newGroupReplicationTestTM(t, ts, 1, nil)
@@ -906,7 +898,7 @@ func TestStartReplicationOnNonVoter(t *testing.T) {
 // group only while the shard record lists the tablet as a voter, and that it never makes a
 // member that is no longer a voter leave the group.
 func TestGroupReplicationSyncRejoinsOnlyVoters(t *testing.T) {
-	enableGroupReplication(t)
+	withGroupReplication(t)
 	ctx := t.Context()
 	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplication)
 	setGroupReplicationVoters(t, ts, 2)
@@ -947,7 +939,7 @@ func TestGroupReplicationSyncRejoinsOnlyVoters(t *testing.T) {
 // TestCheckPrimaryShipUnderGroupReplication checks that a restarted tablet does not trust a
 // PRIMARY record in a keyspace that uses group replication: the group decides.
 func TestCheckPrimaryShipUnderGroupReplication(t *testing.T) {
-	enableGroupReplication(t)
+	withGroupReplication(t)
 	ctx := t.Context()
 	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplication)
 	tablet := newTestTablet(t, 1, "ks", "0", nil)
@@ -972,7 +964,7 @@ func TestCheckPrimaryShipUnderGroupReplication(t *testing.T) {
 }
 
 func TestEndPrimaryTermOnGroupMember(t *testing.T) {
-	enableGroupReplication(t)
+	withGroupReplication(t)
 	ts := newGroupReplicationTopo(t, policy.DurabilityNone)
 	tm, fmd := newGroupReplicationTestTM(t, ts, 1, nil)
 	setTabletType(t, tm, topodatapb.TabletType_PRIMARY)
@@ -987,7 +979,7 @@ func TestEndPrimaryTermOnGroupMember(t *testing.T) {
 }
 
 func TestGroupReplicationSyncPromotesGroupPrimary(t *testing.T) {
-	enableGroupReplication(t)
+	withGroupReplication(t)
 	ctx := t.Context()
 	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplication)
 	tm, fmd := newGroupReplicationTestTM(t, ts, 1, func(fmd *mysqlctl.FakeMysqlDaemon) {
@@ -1022,7 +1014,7 @@ func TestGroupReplicationSyncPromotesGroupPrimary(t *testing.T) {
 }
 
 func TestGroupReplicationSyncDemotesFormerPrimary(t *testing.T) {
-	enableGroupReplication(t)
+	withGroupReplication(t)
 	ctx := t.Context()
 	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplication)
 	tm, fmd := newGroupReplicationTestTM(t, ts, 1, func(fmd *mysqlctl.FakeMysqlDaemon) {
@@ -1049,7 +1041,7 @@ func TestGroupReplicationSyncDemotesFormerPrimary(t *testing.T) {
 }
 
 func TestGroupReplicationSyncDemotesPrimaryWithoutQuorum(t *testing.T) {
-	enableGroupReplication(t)
+	withGroupReplication(t)
 	ctx := t.Context()
 	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplication)
 	tm, fmd := newGroupReplicationTestTM(t, ts, 1, func(fmd *mysqlctl.FakeMysqlDaemon) {
@@ -1066,7 +1058,7 @@ func TestGroupReplicationSyncDemotesPrimaryWithoutQuorum(t *testing.T) {
 }
 
 func TestGroupReplicationSyncRejoinsWithBackoff(t *testing.T) {
-	enableGroupReplication(t)
+	withGroupReplication(t)
 	ctx := t.Context()
 	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplication)
 	setGroupReplicationVoters(t, ts, 1, 2)
@@ -1144,7 +1136,7 @@ func TestGroupReplicationSyncDoesNotRejoin(t *testing.T) {
 	}}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			enableGroupReplication(t)
+			withGroupReplication(t)
 			ts := newGroupReplicationTopo(t, tc.durability)
 			voters := tc.voters
 			if voters == nil {
@@ -1166,7 +1158,7 @@ func TestGroupReplicationSyncDoesNotRejoin(t *testing.T) {
 }
 
 func TestGroupReplicationSyncEnforcesSemiSync(t *testing.T) {
-	enableGroupReplication(t)
+	withGroupReplication(t)
 	ctx := t.Context()
 	ts := newGroupReplicationTopo(t, policy.DurabilitySemiSync)
 	tm, fmd := newGroupReplicationTestTM(t, ts, 1, nil)
@@ -1197,7 +1189,7 @@ func TestGroupReplicationSyncEnforcesSemiSync(t *testing.T) {
 // TestGroupReplicationSyncLoop checks that the loop runs in the background once the tablet
 // started, and stops with the tablet.
 func TestGroupReplicationSyncLoop(t *testing.T) {
-	enableGroupReplication(t)
+	withGroupReplication(t)
 	groupReplicationSyncInterval = 10 * time.Millisecond
 	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplication)
 	tm, _ := newGroupReplicationTestTM(t, ts, 1, func(fmd *mysqlctl.FakeMysqlDaemon) {
@@ -1214,4 +1206,21 @@ func TestGroupReplicationSyncLoop(t *testing.T) {
 	tm.mutex.Lock()
 	defer tm.mutex.Unlock()
 	assert.Nil(t, tm._groupReplicationSyncCancel)
+}
+
+// TestFullStatusReportsGroupReplicationEnabled checks that FullStatus tells whether the tablet runs
+// with --enable-group-replication: the migration to Group Replication refuses voters without it.
+func TestFullStatusReportsGroupReplicationEnabled(t *testing.T) {
+	ts := newGroupReplicationTopo(t, policy.DurabilityNone)
+	tm, _ := newGroupReplicationTestTM(t, ts, 1, func(fmd *mysqlctl.FakeMysqlDaemon) {
+		fmd.FullStatusData = &replicationdatapb.FullStatus{}
+	})
+	status, err := tm.FullStatus(t.Context())
+	require.NoError(t, err)
+	assert.False(t, status.GroupReplicationEnabled)
+
+	withGroupReplication(t)
+	status, err = tm.FullStatus(t.Context())
+	require.NoError(t, err)
+	assert.True(t, status.GroupReplicationEnabled)
 }

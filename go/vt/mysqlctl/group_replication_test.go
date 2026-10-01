@@ -24,9 +24,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/vterrors"
+
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 const testGroupMemberUUID = "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9"
@@ -129,6 +133,44 @@ func TestStartGroupReplicationBootstrapTimeoutResetsFlag(t *testing.T) {
 	require.Error(t, err)
 	assert.Equal(t, 1, db.GetQueryCalledNum(bootstrapOn))
 	assert.Equal(t, 1, db.GetQueryCalledNum(bootstrapOff), "group_replication_bootstrap_group must be reset after a failed bootstrap")
+}
+
+// TestConfigureGroupReplicationRequiresStreamPrivileges checks that the configuration refuses a
+// replication user without the privileges of the MySQL communication stack, and that otherwise it
+// selects that stack and stores the replication user's credentials on the recovery channel, which
+// MySQL uses for the connections between members. Credentials given to START GROUP_REPLICATION
+// would only be used for distributed recovery.
+func TestConfigureGroupReplicationRequiresStreamPrivileges(t *testing.T) {
+	db := fakesqldb.New(t)
+	t.Cleanup(db.Close)
+	params := db.ConnParams()
+	cp := *params
+	cp.Pass = "secret"
+	mysqld := NewMysqld(dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb"))
+	t.Cleanup(mysqld.Close)
+	addGroupReplicationStatusQueries(db)
+	// A member that is not in a group.
+	db.AddQueryPattern(`SELECT MEMBER_ID, MEMBER_HOST, MEMBER_PORT, MEMBER_STATE, MEMBER_ROLE, MEMBER_VERSION FROM performance_schema\.replication_group_members .*`,
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("MEMBER_ID|MEMBER_HOST|MEMBER_PORT|MEMBER_STATE|MEMBER_ROLE|MEMBER_VERSION", "varchar|varchar|int32|varchar|varchar|varchar"),
+			testGroupMemberUUID+"|vm|3306|OFFLINE||8.4.11"))
+	grantsQuery := "SELECT HOST, PRIV FROM mysql.global_grants WHERE USER = '" + cp.Uname + "'"
+	grantFields := sqltypes.MakeTestFields("HOST|PRIV", "varchar|varchar")
+	db.AddQueryPattern("SET .*", &sqltypes.Result{})
+	db.AddQueryPattern("CHANGE REPLICATION SOURCE TO.*", &sqltypes.Result{})
+	cfg := mysql.GroupReplicationConfig{GroupName: "g", LocalAddress: "h1:3306", Seeds: []string{"h2:3306"}, AutorejoinTries: -1}
+
+	// GROUP_REPLICATION_STREAM on one account and CONNECTION_ADMIN on another are not enough.
+	db.AddQuery(grantsQuery, sqltypes.MakeTestResult(grantFields, "%|GROUP_REPLICATION_STREAM", "localhost|CONNECTION_ADMIN"))
+	err := mysqld.ConfigureGroupReplication(t.Context(), cfg)
+	require.Error(t, err)
+	assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+	require.ErrorContains(t, err, "lacks GROUP_REPLICATION_STREAM, CONNECTION_ADMIN")
+	assert.Zero(t, db.GetQueryCalledNum("SET GLOBAL group_replication_communication_stack = 'MYSQL'"), "nothing is configured")
+
+	db.AddQuery(grantsQuery, sqltypes.MakeTestResult(grantFields, "%|GROUP_REPLICATION_STREAM", "%|connection_admin", "%|BACKUP_ADMIN"))
+	require.NoError(t, mysqld.ConfigureGroupReplication(t.Context(), cfg))
+	assert.Equal(t, 1, db.GetQueryCalledNum("SET GLOBAL group_replication_communication_stack = 'MYSQL'"))
+	assert.Equal(t, 1, db.GetQueryCalledNum(mysql.GroupReplicationCredentialsCommand(cp.Uname, "secret")))
 }
 
 // TestOfflineMode checks that the tablet reads offline_mode, which Group Replication's

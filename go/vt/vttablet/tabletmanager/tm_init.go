@@ -304,19 +304,13 @@ func BuildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32, d
 		charset = collationEnv.DefaultConnectionCharset()
 	}
 
-	portMap := map[string]int32{
-		"vt":   port,
-		"grpc": grpcPort,
-	}
-	if groupReplicationEnabled() {
-		// Other members of the shard's group find this tablet's MySQL through this port.
-		portMap[groupReplicationPortName] = int32(groupReplicationPort)
-	}
-
 	return &topodatapb.Tablet{
-		Alias:                alias,
-		Hostname:             hostname,
-		PortMap:              portMap,
+		Alias:    alias,
+		Hostname: hostname,
+		PortMap: map[string]int32{
+			"vt":   port,
+			"grpc": grpcPort,
+		},
 		Keyspace:             initKeyspace,
 		Shard:                shard,
 		KeyRange:             keyRange,

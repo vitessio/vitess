@@ -87,15 +87,13 @@ func (c *grPeersTMC) FullStatus(ctx context.Context, tablet *topodatapb.Tablet) 
 	return status.CloneVT(), nil
 }
 
-// addPeerTablets creates the tablet records cell1-<uid> of ks/0, which publish a group
-// replication port.
+// addPeerTablets creates the tablet records cell1-<uid> of ks/0, whose MySQL is mysql<uid>:3306.
 func addPeerTablets(t *testing.T, ts *topo.Server, uids ...uint32) {
 	t.Helper()
 	for _, uid := range uids {
 		require.NoError(t, ts.CreateTablet(t.Context(), &topodatapb.Tablet{
 			Alias: &topodatapb.TabletAlias{Cell: "cell1", Uid: uid}, Keyspace: "ks", Shard: "0", Type: topodatapb.TabletType_REPLICA,
 			Hostname: fmt.Sprintf("tablet%d", uid), MysqlHostname: fmt.Sprintf("mysql%d", uid), MysqlPort: 3306,
-			PortMap: map[string]int32{"gr": 33060 + int32(uid)},
 		}))
 	}
 }
@@ -142,7 +140,7 @@ func newLegitimacyTestTM(t *testing.T) (*TabletManager, *mysqlctl.FakeMysqlDaemo
 // promote its tablet: that group lacks the transactions the other members acknowledged. It makes
 // MySQL leave the group instead.
 func TestGroupReplicationSyncLeavesForeignGroup(t *testing.T) {
-	enableGroupReplication(t)
+	withGroupReplication(t)
 	ctx := t.Context()
 	tm, fmd, _, _ := newLegitimacyTestTM(t)
 	fmd.SetGroupReplicationStatus(withViewID(groupStatus(testServerUUID(1),
@@ -166,7 +164,7 @@ func TestGroupReplicationSyncLeavesForeignGroup(t *testing.T) {
 // could not get one while these voters were missing from its majority, and writes stopped for up
 // to 15s longer.
 func TestGroupReplicationSyncRejoinsAfterLeavingForeignGroup(t *testing.T) {
-	enableGroupReplication(t)
+	withGroupReplication(t)
 	ctx := t.Context()
 	tm, fmd, peers, _ := newLegitimacyTestTM(t)
 	fmd.StartGroupReplicationError = nil
@@ -199,7 +197,7 @@ func TestGroupReplicationSyncRejoinsAfterLeavingForeignGroup(t *testing.T) {
 // in the view by the server_uuids that their tablets report: MySQL reports its own hostname, which
 // need not match the tablet record.
 func TestGroupReplicationSyncPromotesOnlyWithVoterMajority(t *testing.T) {
-	enableGroupReplication(t)
+	withGroupReplication(t)
 	ctx := t.Context()
 	tm, fmd, peers, _ := newLegitimacyTestTM(t)
 	s := newGroupReplicationSync(tm)
@@ -232,7 +230,7 @@ func TestGroupReplicationSyncPromotesOnlyWithVoterMajority(t *testing.T) {
 // group's new primary does not wait for the failed primary's tablet, which cannot tell its
 // server_uuid, once the voters that answer make a majority (S2: the old primary is frozen).
 func TestGroupReplicationSyncPromotesWithoutWaitingForFailedVoter(t *testing.T) {
-	enableGroupReplication(t)
+	withGroupReplication(t)
 	oldPeerTimeout := groupReplicationPeerTimeout
 	groupReplicationPeerTimeout = 10 * time.Second
 	t.Cleanup(func() { groupReplicationPeerTimeout = oldPeerTimeout })
@@ -254,7 +252,7 @@ func TestGroupReplicationSyncPromotesWithoutWaitingForFailedVoter(t *testing.T) 
 // TestGroupReplicationSyncTrustsOwnBootstrap checks that a tablet does not take the group it just
 // bootstrapped for a foreign one before the shard record lists its incarnation.
 func TestGroupReplicationSyncTrustsOwnBootstrap(t *testing.T) {
-	enableGroupReplication(t)
+	withGroupReplication(t)
 	ctx := t.Context()
 	tm, fmd, _, _ := newLegitimacyTestTM(t)
 	fmd.StartGroupReplicationError = nil
@@ -275,7 +273,7 @@ func TestGroupReplicationSyncTrustsOwnBootstrap(t *testing.T) {
 // while it was the only voter in the new group. A PRIMARY tablet must stop serving before its MySQL
 // bootstraps a group, and serve again once a majority of the voters is ONLINE in it.
 func TestStartGroupReplicationBootstrapOnPrimaryDoesNotServe(t *testing.T) {
-	enableGroupReplication(t)
+	withGroupReplication(t)
 	ctx := t.Context()
 	tm, fmd, _, _ := newLegitimacyTestTM(t)
 	setTabletType(t, tm, topodatapb.TabletType_PRIMARY)
@@ -311,7 +309,7 @@ func TestStartGroupReplicationBootstrapOnPrimaryDoesNotServe(t *testing.T) {
 // acknowledged before the next run of the loop. The loop must leave the reason alone while it
 // cannot tell whether a majority of the voters is back.
 func TestGroupReplicationSyncKeepsNotServingDuringBootstrap(t *testing.T) {
-	enableGroupReplication(t)
+	withGroupReplication(t)
 	ctx := t.Context()
 	tm, fmd, _, _ := newLegitimacyTestTM(t)
 	setTabletType(t, tm, topodatapb.TabletType_PRIMARY)
@@ -334,7 +332,7 @@ func TestGroupReplicationSyncKeepsNotServingDuringBootstrap(t *testing.T) {
 // ERROR state after its group lost its majority, and cleared super_read_only on it. Under a group
 // replication policy, a demotion is only undone on the primary of the shard's legitimate group.
 func TestUndoDemotePrimaryRequiresLegitimateGroupPrimary(t *testing.T) {
-	enableGroupReplication(t)
+	withGroupReplication(t)
 	ctx := t.Context()
 	tm, fmd, _, _ := newLegitimacyTestTM(t)
 	setTabletType(t, tm, topodatapb.TabletType_PRIMARY)
@@ -363,7 +361,7 @@ func TestUndoDemotePrimaryRequiresLegitimateGroupPrimary(t *testing.T) {
 // type so that vtgate buffers, leaves MySQL alone, and serves again once a majority of the
 // voters is back in the view.
 func TestGroupReplicationSyncStopsServingWithoutVoterMajority(t *testing.T) {
-	enableGroupReplication(t)
+	withGroupReplication(t)
 	ctx := t.Context()
 	tm, fmd, _, _ := newLegitimacyTestTM(t)
 	setTabletType(t, tm, topodatapb.TabletType_PRIMARY)
@@ -405,7 +403,7 @@ func TestGroupReplicationSyncStopsServingWithoutVoterMajority(t *testing.T) {
 // while the keyspace policy is not a group replication policy: during MigrateReplicationMode the
 // primary bootstraps a group of one and keeps serving with semi-sync while the voters join.
 func TestGroupReplicationSyncServesDuringMigration(t *testing.T) {
-	enableGroupReplication(t)
+	withGroupReplication(t)
 	ctx := t.Context()
 	ts := newGroupReplicationTopo(t, policy.DurabilitySemiSync)
 	setGroupReplicationVoters(t, ts, 1, 2, 3)
@@ -446,7 +444,7 @@ func activeGroupPeers(uids ...uint32) *grPeersTMC {
 // VTOrc's bootstrap on the same member fails. The sync loop only starts a join while another
 // tablet reports an active member of the shard's legitimate group with quorum.
 func TestGroupReplicationSyncRejoinsOnlyAnActiveGroup(t *testing.T) {
-	enableGroupReplication(t)
+	withGroupReplication(t)
 	ctx := t.Context()
 	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplication)
 	setGroupReplicationVoters(t, ts, 1, 2, 3)
@@ -484,7 +482,7 @@ func TestGroupReplicationSyncRejoinsOnlyAnActiveGroup(t *testing.T) {
 	assert.Equal(t, 1, start)
 	assert.False(t, fmd.GroupReplicationBootstrapped)
 	// The joining member contacts the active member of the shard's group first.
-	assert.Equal(t, []string{"mysql3:33063", "mysql2:33062"}, fmd.GroupReplicationConfig.Seeds)
+	assert.Equal(t, []string{"mysql3:3306", "mysql2:3306"}, fmd.GroupReplicationConfig.Seeds)
 }
 
 // TestStartGroupReplicationJoinStopsOngoingStart checks that a join on a member on which an
@@ -492,7 +490,7 @@ func TestGroupReplicationSyncRejoinsOnlyAnActiveGroup(t *testing.T) {
 // running a START whose client gave up, refuses any change meanwhile (errno 3724), and such a
 // START has been seen to end in a group of its own (S7d after the legitimacy fixes).
 func TestStartGroupReplicationJoinStopsOngoingStart(t *testing.T) {
-	enableGroupReplication(t)
+	withGroupReplication(t)
 	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplication)
 	tm, fmd := newGroupReplicationTestTM(t, ts, 1, nil)
 	fmd.ConfigureGroupReplicationErrors = []error{
@@ -520,7 +518,7 @@ func TestPreferSeeds(t *testing.T) {
 // MySQL refuses to change the configuration with errno 3724 until that START ends, which can take
 // minutes when no group exists. The tablet stops it and bootstraps.
 func TestStartGroupReplicationBootstrapStopsOngoingStart(t *testing.T) {
-	enableGroupReplication(t)
+	withGroupReplication(t)
 	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplication)
 	setGroupReplicationVoters(t, ts, 1)
 	tm, fmd := newGroupReplicationTestTM(t, ts, 1, nil)
@@ -542,7 +540,7 @@ func TestStartGroupReplicationBootstrapStopsOngoingStart(t *testing.T) {
 // TestStartGroupReplicationBootstrapStopsJoinWithoutGroup checks that a bootstrap stops a member
 // that is RECOVERING without a group, a join that found no member, instead of refusing it.
 func TestStartGroupReplicationBootstrapStopsJoinWithoutGroup(t *testing.T) {
-	enableGroupReplication(t)
+	withGroupReplication(t)
 	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplication)
 	setGroupReplicationVoters(t, ts, 1)
 	tm, fmd := newGroupReplicationTestTM(t, ts, 1, nil)
@@ -589,7 +587,7 @@ func TestGroupReplicationSyncDemotesStalePrimary(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			enableGroupReplication(t)
+			withGroupReplication(t)
 			ts := newGroupReplicationTopo(t, tt.durability)
 			setGroupReplicationVoters(t, ts, tt.voters...)
 			addPeerTablets(t, ts, 2, 3)

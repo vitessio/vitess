@@ -40,7 +40,7 @@ import (
 // voters in its view, and not before: not while it recovers, not in a view without the majority
 // of the voters, and not in a group of another incarnation.
 func TestGroupReplicationSyncLiftsOfflineModeInLegitimateGroup(t *testing.T) {
-	enableGroupReplication(t)
+	withGroupReplication(t)
 	ctx := t.Context()
 	tm, fmd, _, _ := newLegitimacyTestTM(t)
 	fmd.OfflineMode.Store(true)
@@ -89,7 +89,7 @@ func TestGroupReplicationSyncLiftsOfflineModeInLegitimateGroup(t *testing.T) {
 // MySQL refuses while offline_mode is ON. Its PRIMARY tablet still does not serve without the
 // majority of the voters.
 func TestGroupReplicationSyncLiftsOfflineModeOnBootstrappedPrimary(t *testing.T) {
-	enableGroupReplication(t)
+	withGroupReplication(t)
 	ctx := t.Context()
 	tm, fmd, _, _ := newLegitimacyTestTM(t)
 	fmd.OfflineMode.Store(true)
@@ -106,7 +106,7 @@ func TestGroupReplicationSyncLiftsOfflineModeOnBootstrappedPrimary(t *testing.T)
 // exit state action every member is fenced; the member that VTOrc bootstraps is the only donor
 // of the others.
 func TestStartGroupReplicationBootstrapLiftsOfflineMode(t *testing.T) {
-	enableGroupReplication(t)
+	withGroupReplication(t)
 	tm, fmd, _, _ := newLegitimacyTestTM(t)
 	fmd.StartGroupReplicationError = nil
 	fmd.OfflineMode.Store(true)
@@ -122,7 +122,7 @@ func TestStartGroupReplicationBootstrapLiftsOfflineMode(t *testing.T) {
 // TestPromoteReplicaLiftsOfflineMode checks that PromoteReplica clears offline_mode on the member
 // it makes the group primary: the tablet could not serve as the primary otherwise.
 func TestPromoteReplicaLiftsOfflineMode(t *testing.T) {
-	enableGroupReplication(t)
+	withGroupReplication(t)
 	ts := newGroupReplicationTopo(t, policy.DurabilitySemiSync)
 	tm, fmd := newGroupReplicationTestTM(t, ts, 1, nil)
 	fmd.SetGroupReplicationStatus(groupStatus(testServerUUID(1),
@@ -143,7 +143,7 @@ func TestPromoteReplicaLiftsOfflineMode(t *testing.T) {
 // TestPromoteReplicaFailsWhenOfflineModeStays checks that a promotion that cannot clear
 // offline_mode fails before it changes the tablet type.
 func TestPromoteReplicaFailsWhenOfflineModeStays(t *testing.T) {
-	enableGroupReplication(t)
+	withGroupReplication(t)
 	ts := newGroupReplicationTopo(t, policy.DurabilitySemiSync)
 	tm, fmd := newGroupReplicationTestTM(t, ts, 1, nil)
 	fmd.SetGroupReplicationStatus(groupStatus(testServerUUID(1),
@@ -163,7 +163,7 @@ func TestPromoteReplicaFailsWhenOfflineModeStays(t *testing.T) {
 // as a voter, is unfenced: nothing else would clear the offline_mode that its exit from the group
 // left.
 func TestSetReplicationSourceLiftsOfflineModeOnFormerMember(t *testing.T) {
-	enableGroupReplication(t)
+	withGroupReplication(t)
 	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplication)
 	setGroupReplicationVoters(t, ts, 2)
 	tm, fmd := newGroupReplicationTestTM(t, ts, 1, nil)

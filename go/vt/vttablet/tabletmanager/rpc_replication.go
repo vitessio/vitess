@@ -192,6 +192,7 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 	status.SemiSyncBlocked = tm.SemiSyncMonitor.AllWritesBlocked()
 	status.TabletType = tm.Tablet().Type
 	status.ShardPeerHealth = tm.shardPeerHealthSnapshot()
+	status.GroupReplicationEnabled = groupReplicationEnabled()
 	return status, nil
 }
 

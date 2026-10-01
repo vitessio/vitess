@@ -232,6 +232,9 @@ type FakeMysqlDaemon struct {
 	// SemiSyncReplicaEnabled represents the state of rpl_semi_sync_replica_enabled.
 	SemiSyncReplicaEnabled bool
 
+	// FullStatusData is returned by CollectFullStatusData.
+	FullStatusData *replicationdatapb.FullStatus
+
 	// GroupReplication is returned by GroupReplicationStatus. StartGroupReplication,
 	// StopGroupReplication and SetGroupReplicationPrimary update it.
 	GroupReplication *replicationdatapb.GroupReplicationStatus
@@ -438,7 +441,7 @@ func (fmd *FakeMysqlDaemon) PrimaryStatus(ctx context.Context) (replication.Prim
 
 // CollectFullStatusData is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) CollectFullStatusData(context.Context) (*replicationdatapb.FullStatus, error) {
-	return nil, nil
+	return fmd.FullStatusData.CloneVT(), nil
 }
 
 // GetGTIDPurged is part of the MysqlDaemon interface.

@@ -199,6 +199,7 @@ func (m *FullStatus) CloneVT() *FullStatus {
 	r.SemiSyncBlocked = m.SemiSyncBlocked
 	r.TabletType = m.TabletType
 	r.GroupReplicationStatus = m.GroupReplicationStatus.CloneVT()
+	r.GroupReplicationEnabled = m.GroupReplicationEnabled
 	if rhs := m.ShardPeerHealth; rhs != nil {
 		tmpContainer := make([]*ShardPeerHealth, len(rhs))
 		for k, v := range rhs {
@@ -861,6 +862,18 @@ func (m *FullStatus) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.GroupReplicationEnabled {
+		i--
+		if m.GroupReplicationEnabled {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x1
+		i--
+		dAtA[i] = 0xe0
 	}
 	if m.GroupReplicationStatus != nil {
 		size, err := m.GroupReplicationStatus.MarshalToSizedBufferVT(dAtA[:i])
@@ -1638,6 +1651,9 @@ func (m *FullStatus) SizeVT() (n int) {
 	if m.GroupReplicationStatus != nil {
 		l = m.GroupReplicationStatus.SizeVT()
 		n += 2 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	if m.GroupReplicationEnabled {
+		n += 3
 	}
 	n += len(m.unknownFields)
 	return n
@@ -3822,6 +3838,26 @@ func (m *FullStatus) UnmarshalVT(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
+		case 28:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field GroupReplicationEnabled", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.GroupReplicationEnabled = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])

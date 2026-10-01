@@ -184,9 +184,10 @@ func IsGroupPrimary(status *replicationdatapb.GroupReplicationStatus) bool {
 type GroupReplicationConfig struct {
 	// GroupName is the UUID that identifies the group. All members of a shard use the same name.
 	GroupName string
-	// LocalAddress is the host:port on which this member's group communication engine listens.
+	// LocalAddress is this member's MySQL host:port. The group uses the MySQL communication
+	// stack, so members reach each other through the port on which MySQL serves clients.
 	LocalAddress string
-	// Seeds are the host:port group communication addresses of the other members.
+	// Seeds are the MySQL host:port addresses of the other members.
 	Seeds []string
 	// MemberWeight is the member's weight in primary elections, 0-100.
 	MemberWeight int
@@ -197,8 +198,6 @@ type GroupReplicationConfig struct {
 	// AutorejoinTries is group_replication_autorejoin_tries. A negative value keeps the
 	// server's setting.
 	AutorejoinTries int
-	// IPAllowlist is group_replication_ip_allowlist. Empty keeps the server's setting.
-	IPAllowlist string
 }
 
 // InstallGroupReplicationPluginCommand returns the statement that installs the Group
@@ -215,6 +214,11 @@ func ConfigureGroupReplicationCommands(cfg GroupReplicationConfig) []string {
 		"SET PERSIST group_replication_start_on_boot = OFF",
 		"SET GLOBAL group_replication_single_primary_mode = ON",
 		"SET GLOBAL group_replication_enforce_update_everywhere_checks = OFF",
+		// Members connect to each other through MySQL's own port, authenticated as the
+		// replication user and secured like any other client connection, rather than through
+		// XCom's separate port, allowlist and TLS settings. MySQL deprecates XCom in 9.7.2 and
+		// makes this the default in 26.7. Every member of a group must use the same stack.
+		"SET GLOBAL group_replication_communication_stack = 'MYSQL'",
 		"SET GLOBAL group_replication_group_name = " + sqltypes.EncodeStringSQL(cfg.GroupName),
 		"SET GLOBAL group_replication_local_address = " + sqltypes.EncodeStringSQL(cfg.LocalAddress),
 		"SET GLOBAL group_replication_group_seeds = " + sqltypes.EncodeStringSQL(strings.Join(cfg.Seeds, ",")),
@@ -248,22 +252,40 @@ func ConfigureGroupReplicationCommands(cfg GroupReplicationConfig) []string {
 	if cfg.AutorejoinTries >= 0 {
 		cmds = append(cmds, fmt.Sprintf("SET GLOBAL group_replication_autorejoin_tries = %d", cfg.AutorejoinTries))
 	}
-	if cfg.IPAllowlist != "" {
-		cmds = append(cmds, "SET GLOBAL group_replication_ip_allowlist = "+sqltypes.EncodeStringSQL(cfg.IPAllowlist))
-	}
 	return cmds
 }
+
+// GroupReplicationCredentialsCommand returns the statement that sets the user as which a member
+// connects to the other members of its group. With the MySQL communication stack, MySQL uses the
+// credentials of the recovery channel both for distributed recovery and for the group
+// communication connections, so they must be stored on the channel: credentials given to START
+// GROUP_REPLICATION are only used for recovery. The user needs REPLICATION SLAVE,
+// GROUP_REPLICATION_STREAM and CONNECTION_ADMIN.
+//
+// The password is formatted like in SetReplicationSourceCommand, so that logs redact it.
+func GroupReplicationCredentialsCommand(user, password string) string {
+	return "CHANGE REPLICATION SOURCE TO\n" +
+		"  SOURCE_PASSWORD = " + sqltypes.EncodeStringSQL(password) + ",\n" +
+		"  SOURCE_USER = " + sqltypes.EncodeStringSQL(user) + "\n" +
+		"  FOR CHANNEL '" + GroupReplicationRecoveryChannel + "'"
+}
+
+// GroupReplicationPrivileges are the privileges the replication user needs, in addition to
+// REPLICATION SLAVE, to connect members of a group that uses the MySQL communication stack:
+// GROUP_REPLICATION_STREAM for the group communication connections, and CONNECTION_ADMIN so that
+// MySQL keeps them when a member is placed in offline_mode, rather than expelling it.
+var GroupReplicationPrivileges = []string{"GROUP_REPLICATION_STREAM", "CONNECTION_ADMIN"}
 
 // StartGroupReplicationCommands returns the statements that make the member join its group.
 // With bootstrap set, the member instead creates a new group of which it is the only member
 // and the primary. Bootstrapping a group that already exists elsewhere splits the shard's
 // data, so callers must only bootstrap while they hold the shard lock and have verified that
 // no member of the group is active.
-func StartGroupReplicationCommands(bootstrap bool, user, password string) []string {
+//
+// The member authenticates as the user stored on the recovery channel by
+// GroupReplicationCredentialsCommand.
+func StartGroupReplicationCommands(bootstrap bool) []string {
 	start := "START GROUP_REPLICATION"
-	if user != "" {
-		start = fmt.Sprintf("START GROUP_REPLICATION USER=%s, PASSWORD=%s", sqltypes.EncodeStringSQL(user), sqltypes.EncodeStringSQL(password))
-	}
 	if !bootstrap {
 		return []string{start}
 	}

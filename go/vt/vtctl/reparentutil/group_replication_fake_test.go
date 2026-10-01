@@ -51,6 +51,8 @@ type fakeGRTablet struct {
 	alias string
 	cell  string
 	uuid  string
+	// grEnabled is reported in FullStatus: the tablet supports group replication.
+	grEnabled bool
 	// primary marks the shard's topo primary. Its tablet loop enforces the effective
 	// semi-sync rule.
 	primary bool
@@ -247,6 +249,7 @@ func (c *fakeGRCluster) FullStatus(ctx context.Context, tablet *topodatapb.Table
 		SuperReadOnly:               ft.superReadOnly,
 		ReadOnly:                    ft.superReadOnly,
 		GroupReplicationStatus:      c.groupStatus(ft),
+		GroupReplicationEnabled:     ft.grEnabled,
 	}
 	if ft.source != "" {
 		src := c.tabletRecs[ft.source]
@@ -487,7 +490,7 @@ type fakeGRTabletSpec struct {
 	cell       string
 	uid        uint32
 	tabletType topodatapb.TabletType
-	noGRPort   bool
+	noGR       bool
 }
 
 // newFakeGRCluster creates the keyspace "ks" with shard "-" in a memory topo, with the given
@@ -524,9 +527,6 @@ func newFakeGRCluster(t *testing.T, durability string, specs ...fakeGRTabletSpec
 			MysqlPort:     3306,
 			PortMap:       map[string]int32{"vt": 15000, "grpc": 16000},
 		}
-		if !spec.noGRPort {
-			tablet.PortMap["gr"] = 33061
-		}
 		if spec.tabletType == topodatapb.TabletType_PRIMARY {
 			tablet.PrimaryTermStartTime = protoutil.TimeToProto(time.Now())
 			primary = tablet
@@ -541,6 +541,8 @@ func newFakeGRCluster(t *testing.T, durability string, specs ...fakeGRTabletSpec
 			primary:  spec.tabletType == topodatapb.TabletType_PRIMARY,
 			version:  "8.4.11",
 			gtidMode: "ON",
+			// The tablet runs with --enable-group-replication.
+			grEnabled: !spec.noGR,
 		}
 	}
 	if primary == nil {

@@ -47,17 +47,13 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-// groupReplicationPortName is the name under which a tablet publishes the port of its MySQL's
-// group communication engine in its tablet record.
-const groupReplicationPortName = "gr"
-
 // defaultGroupMemberWeight is MySQL's default group_replication_member_weight. It is used when
 // the keyspace durability policy does not use Group Replication, for example while a shard is
 // migrated to it.
 const defaultGroupMemberWeight = 50
 
 var (
-	groupReplicationPort            int
+	enableGroupReplication          bool
 	groupReplicationSyncInterval    = 1 * time.Second
 	groupReplicationConsistency     = "BEFORE_ON_PRIMARY_FAILOVER"
 	groupReplicationExitStateAction = "READ_ONLY"
@@ -97,10 +93,10 @@ var (
 )
 
 func registerGroupReplicationFlags(fs *pflag.FlagSet) {
-	utils.SetFlagIntVar(fs, &groupReplicationPort, "group-replication-port", groupReplicationPort,
-		"Port on which the group communication engine of this tablet's MySQL listens for MySQL Group Replication (group_replication_local_address). It is published in the tablet record. 0 disables Group Replication support on this tablet.")
+	utils.SetFlagBoolVar(fs, &enableGroupReplication, "enable-group-replication", enableGroupReplication,
+		"Enable MySQL Group Replication support on this tablet: it can make its MySQL a member of its shard's group, whose members connect to each other through the MySQL port in their tablet records.")
 	utils.SetFlagDurationVar(fs, &groupReplicationSyncInterval, "group-replication-sync-interval", groupReplicationSyncInterval,
-		"How often a tablet with --group-replication-port makes its tablet type follow its MySQL's role in its replication group, and rejoins the group if needed.")
+		"How often a tablet with --enable-group-replication makes its tablet type follow its MySQL's role in its replication group, and rejoins the group if needed.")
 	utils.SetFlagStringVar(fs, &groupReplicationConsistency, "group-replication-consistency", groupReplicationConsistency,
 		"group_replication_consistency that the tablet applies before its MySQL starts Group Replication. Empty keeps the server's setting.")
 	utils.SetFlagStringVar(fs, &groupReplicationExitStateAction, "group-replication-exit-state-action", groupReplicationExitStateAction,
@@ -115,14 +111,11 @@ func init() {
 
 // groupReplicationEnabled returns whether the tablet supports MySQL Group Replication.
 func groupReplicationEnabled() bool {
-	return groupReplicationPort > 0
+	return enableGroupReplication
 }
 
 // validateGroupReplicationFlags returns an error when a group replication flag has an invalid value.
 func validateGroupReplicationFlags() error {
-	if groupReplicationPort < 0 || groupReplicationPort > 65535 {
-		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "--group-replication-port must be between 0 and 65535, got %d", groupReplicationPort)
-	}
 	if groupReplicationEnabled() && groupReplicationSyncInterval <= 0 {
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "--group-replication-sync-interval must be positive, got %v", groupReplicationSyncInterval)
 	}
@@ -133,17 +126,16 @@ func validateGroupReplicationFlags() error {
 // support Group Replication.
 func checkGroupReplicationEnabled() error {
 	if !groupReplicationEnabled() {
-		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "group replication is not enabled on this tablet: --group-replication-port is not set")
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "group replication is not enabled on this tablet: --enable-group-replication is not set")
 	}
 	return nil
 }
 
-// groupReplicationAddress returns the host:port on which the group communication engine of the
-// tablet's MySQL listens, or "" if the tablet does not publish one. The host is the one other
-// tablets use to replicate from this tablet's MySQL.
+// groupReplicationAddress returns the address through which the other members of the shard's
+// group reach the tablet's MySQL, or "" if the tablet record does not have it yet. The group uses
+// the MySQL communication stack, so it is the address other tablets replicate from.
 func groupReplicationAddress(tablet *topodatapb.Tablet) string {
-	port := tablet.PortMap[groupReplicationPortName]
-	if port <= 0 {
+	if tablet.MysqlPort <= 0 {
 		return ""
 	}
 	host := tablet.MysqlHostname
@@ -153,11 +145,11 @@ func groupReplicationAddress(tablet *topodatapb.Tablet) string {
 	if host == "" {
 		return ""
 	}
-	return netutil.JoinHostPort(host, port)
+	return netutil.JoinHostPort(host, tablet.MysqlPort)
 }
 
-// groupReplicationSeeds returns the group communication addresses of the tablets of the shard
-// other than self, sorted so that every tablet computes the same list.
+// groupReplicationSeeds returns the MySQL addresses of the tablets of the shard other than self,
+// sorted so that every tablet computes the same list.
 func groupReplicationSeeds(self *topodatapb.TabletAlias, tablets map[string]*topo.TabletInfo) []string {
 	var seeds []string
 	for _, ti := range tablets {
@@ -210,11 +202,16 @@ func (tm *TabletManager) keyspaceDurability(ctx context.Context) (policy.Durable
 // the shard, and the member weight from the durability policy.
 func (tm *TabletManager) groupReplicationConfig(ctx context.Context, durability policy.Durabler) (mysql.GroupReplicationConfig, error) {
 	tablet := tm.Tablet()
-	host := tablet.MysqlHostname
-	if host == "" {
-		host = tablet.Hostname
+	if tablet.MysqlPort <= 0 {
+		// The tablet record gets the port once MySQL answered; the join cannot wait for that.
+		port, err := tm.MysqlDaemon.GetMysqlPort(ctx)
+		if err != nil {
+			return mysql.GroupReplicationConfig{}, vterrors.Wrapf(err, "cannot derive the group replication address: failed to read the MySQL port")
+		}
+		tablet.MysqlPort = port
 	}
-	if host == "" {
+	localAddress := groupReplicationAddress(tablet)
+	if localAddress == "" {
 		return mysql.GroupReplicationConfig{}, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot derive the group replication address: the tablet has no hostname")
 	}
 
@@ -236,7 +233,7 @@ func (tm *TabletManager) groupReplicationConfig(ctx context.Context, durability 
 
 	return mysql.GroupReplicationConfig{
 		GroupName:       policy.GroupName(tablet.Keyspace, tablet.Shard),
-		LocalAddress:    netutil.JoinHostPort(host, int32(groupReplicationPort)),
+		LocalAddress:    localAddress,
 		Seeds:           preferSeeds(groupReplicationSeeds(tablet.Alias, tablets), tm.groupReplicationPeers.activeSeeds()),
 		MemberWeight:    weight,
 		Consistency:     groupReplicationConsistency,
@@ -335,10 +332,8 @@ func (tm *TabletManager) startGroupReplicationLocked(ctx context.Context, bootst
 		// The caller records the new group's incarnation in the shard record right after the
 		// bootstrap. Until then, the sync loop must not take the group for a foreign one.
 		tm.groupReplicationPeers.noteBootstrap(policy.GroupIncarnation(status.GetViewId()))
-		// The other voters join the new group with this member as their only donor, and MySQL
-		// refuses their recovery connections, as the replication user, while offline_mode is ON.
-		// The bootstrap has happened: a failure is left to the sync loop, which lifts offline_mode
-		// on the primary of the shard's group too.
+		// The new group's primary must serve. The bootstrap has happened: a failure is left to the
+		// sync loop, which lifts offline_mode on the primary of the shard's group too.
 		if err := tm.liftOfflineMode(ctx, "MySQL bootstrapped the shard's group"); err != nil {
 			log.Warn("Failed to clear offline_mode after bootstrapping the group", slog.Any("error", err))
 		}
@@ -351,8 +346,9 @@ func (tm *TabletManager) startGroupReplicationLocked(ctx context.Context, bootst
 // With group_replication_exit_state_action=OFFLINE_MODE, MySQL sets offline_mode, along with
 // super_read_only, when a member leaves its group involuntarily: unreachable_majority_timeout, an
 // expulsion, an applier or recovery error. MySQL then disconnects and refuses every connection of
-// a user without CONNECTION_ADMIN or SUPER, which are vttablet's app, allprivs and filtered users,
-// and the replication user; the tablet stops serving until the flag is cleared. This fences reads
+// a user without CONNECTION_ADMIN or SUPER, which are vttablet's app, allprivs and filtered users;
+// the tablet stops serving until the flag is cleared. The replication user has CONNECTION_ADMIN,
+// which the MySQL communication stack requires, so the group's connections are kept. This fences reads
 // on a member that is out of its group, without its tablet having to act, but MySQL never clears
 // the flag itself: not when the member rejoins, nor when it becomes the primary. Vitess clears it
 // once the member is back in the shard's legitimate group, when it bootstraps the group, and when

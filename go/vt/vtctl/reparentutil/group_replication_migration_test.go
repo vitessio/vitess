@@ -278,14 +278,14 @@ func TestMigrateReplicationModePreflight(t *testing.T) {
 			errContain: "app.nopk has no primary key",
 		},
 		{
-			name:       "voting tablet without gr port",
+			name:       "voting tablet without group replication support",
 			durability: "group_replication",
 			specs: []fakeGRTabletSpec{
 				{cell: "zone1", uid: 100, tabletType: topodatapb.TabletType_PRIMARY},
-				{cell: "zone2", uid: 200, tabletType: topodatapb.TabletType_REPLICA, noGRPort: true},
+				{cell: "zone2", uid: 200, tabletType: topodatapb.TabletType_REPLICA, noGR: true},
 				{cell: "zone3", uid: 300, tabletType: topodatapb.TabletType_REPLICA},
 			},
-			errContain: `zone2-0000000200: the tablet does not publish a "gr" port`,
+			errContain: "zone2-0000000200: group replication is not enabled on the tablet; start vttablet with --enable-group-replication",
 		},
 		{
 			name:       "too few voting members",

@@ -113,12 +113,14 @@ Group Replication decides which member is the primary, and Vitess follows it. Bu
 Apart from the voters and the group incarnation, nothing new is stored in topo:
 
 - **Group name.** A UUIDv5 of `keyspace/shard` in a fixed Vitess namespace, the same on every tablet of the shard. After a reshard the new shards get new groups automatically.
-- **Local address.** `<mysql hostname>:<--group-replication-port>`. The tablet publishes the port in its tablet record as `port_map["gr"]`. The default is off; the flag enables GR support on the tablet.
-- **Seeds.** The `gr` addresses of the other tablets of the shard that publish a `gr` port, read from topo each time the tablet (re)joins. Non-voters are harmless seeds: a joiner only needs one reachable member.
-- **Credentials.** Distributed recovery authenticates as the existing replication user (`START GROUP_REPLICATION USER=…, PASSWORD=…`, never stored), with `group_replication_recovery_get_public_key=ON` or TLS.
+- **Communication stack.** Always `group_replication_communication_stack=MYSQL`: members connect to each other through MySQL's own port, authenticated as the replication user and secured like any other MySQL client connection. There is no separate group communication port, allowlist or XCom TLS configuration. MySQL deprecates the XCom stack in 9.7.2 and makes `MYSQL` the default in 26.7. Every member of a group must use the same stack; a group bootstrapped with XCom cannot be joined, and has to be restarted from scratch.
+- **Enabling.** `--enable-group-replication` (default off) enables GR support on the tablet. `FullStatus` reports it (`group_replication_enabled`), which the migration preflight checks.
+- **Local address.** The tablet record's MySQL address, `<mysql hostname>:<mysql port>`: the address other tablets replicate from.
+- **Seeds.** The MySQL addresses of the other tablets of the shard, read from topo each time the tablet (re)joins. Non-voters are harmless seeds: a joiner only needs one reachable member.
+- **Credentials.** The MySQL stack authenticates the connections between members, as well as distributed recovery, with the credentials stored on the `group_replication_recovery` channel; credentials given to `START GROUP_REPLICATION` would only be used for recovery. The tablet stores the existing replication user's credentials there (`CHANGE REPLICATION SOURCE TO … FOR CHANNEL 'group_replication_recovery'`) before each join, as it does on the default channel for asynchronous replication, with `group_replication_recovery_get_public_key=ON` or TLS. The replication user needs `GROUP_REPLICATION_STREAM` for these connections and `CONNECTION_ADMIN`, without which MySQL expels a member placed in `offline_mode`. `config/init_db.sql` grants both to `vt_repl`; existing deployments grant them on the shard primary before the migration. The tablet checks `mysql.global_grants` before it configures a join and refuses with `FAILED_PRECONDITION`, naming the `GRANT` to run, rather than letting MySQL refuse the connections and the join fail only after its timeout.
 - **Tunables** (vttablet flags, applied with `SET GLOBAL` before each start):
   - `consistency`, default `BEFORE_ON_PRIMARY_FAILOVER`: a new primary applies its backlog before it serves.
-  - `exit_state_action`, default `READ_ONLY`. `OFFLINE_MODE` (MySQL 8.4's default) is supported: MySQL then also sets `offline_mode` on a member that leaves its group involuntarily, which refuses vttablet's app, allprivs and filtered users and the replication user, so a partitioned old primary stops answering reads before the majority elects a new primary (READ_ONLY: 6–7 such reads per run in the G3E chaos scenario, OFFLINE_MODE: none). MySQL never clears it; the tablet does, once the member is ONLINE in the legitimate group with a majority of the voters in its view, when it bootstraps the group, and when it makes MySQL the writable primary or an asynchronous replica. It is not the default because the flapping-partition scenario S7d lost its majority in 4 of 4 runs with it, against 3 of 8 with READ_ONLY: MySQL finishes the leave after a heal slightly later, and the rejoin misses the next partition (see "Exit state action" in `doc/failover-audit/GroupReplication.md`).
+  - `exit_state_action`, default `READ_ONLY`. `OFFLINE_MODE` (MySQL 8.4's default) is supported: MySQL then also sets `offline_mode` on a member that leaves its group involuntarily, which refuses vttablet's app, allprivs and filtered users (not the replication user, which has `CONNECTION_ADMIN`), so a partitioned old primary stops answering reads before the majority elects a new primary (READ_ONLY: 6–7 such reads per run in the G3E chaos scenario, OFFLINE_MODE: none). MySQL never clears it; the tablet does, once the member is ONLINE in the legitimate group with a majority of the voters in its view, when it bootstraps the group, and when it makes MySQL the writable primary or an asynchronous replica. It is not the default because the flapping-partition scenario S7d lost its majority in 4 of 4 runs with it, against 3 of 8 with READ_ONLY: MySQL finishes the leave after a heal slightly later, and the rejoin misses the next partition (see "Exit state action" in `doc/failover-audit/GroupReplication.md`).
   - `autorejoin_tries`, default 0. The tablet rejoins an expelled member itself, once the shard's legitimate group is active on another tablet. MySQL's own auto-rejoin does not check that: in the chaos tests an attempt blocked the member for about a minute (its status queries hung, and every change was refused) and could end in a group of its own.
   - `group_replication_start_on_boot` is persisted OFF. vttablet decides when to join, as it does for async replication (`skip_replica_start`).
 - **Fixed settings.** Vitess always applies these three, because its design depends on them. They are not flags.
@@ -231,10 +233,11 @@ The steps were validated on MySQL 8.4.11 with a continuous write load; bootstrap
 
 1. **Preflight.**
    - All tablets reachable; GTID mode ON; ROW binlog format.
-   - MySQL ≥ 8.0.27; 8.4 is recommended because of its defaults (`BEFORE_ON_PRIMARY_FAILOVER`, `OFFLINE_MODE`, certification GC).
+   - MySQL ≥ 8.0.27, the first version with the MySQL communication stack; 8.4 is recommended because of its defaults (`BEFORE_ON_PRIMARY_FAILOVER`, `OFFLINE_MODE`, certification GC).
    - The voters are selected (`SelectVoters` for the target policy, with the current primary as the group's primary and any voters already in the shard record as the current list, so a re-run keeps them). There must be at least 3 and at most 9; under `group_replication_cross_cell`, which allows one voter per cell, that means eligible tablets in at least 3 cells. The error names the cells found.
    - Every user table has a primary key and is InnoDB.
-   - Every voter has a `gr` port.
+   - Every voter runs vttablet with `--enable-group-replication`, and its tablet record has a MySQL port.
+   - The replication user's privileges are not read here, since vtctld does not know the user: each tablet checks them before it configures its join, the primary first, before the bootstrap.
 2. **Store the voters** in the shard record.
 3. **Bootstrap on the current primary** (`StartGroupReplication(bootstrap=true)`), and **record the group's incarnation** in the shard record. Writes continue. Semi-sync stays enabled, and the async replicas keep acknowledging.
 4. **Join the other voters one by one** (`StartGroupReplication`). Each one stops its async channel, recovers incrementally from a donor, and becomes ONLINE. Cross-cell voters join first, so the group gets a cross-cell majority as early as possible.
@@ -313,7 +316,6 @@ Follow-ups:
 - PRS to a tablet that is not a voter, by swapping it into the voter list first.
 - ERS with forced quorum (`group_replication_force_members`).
 - Builtin-backup integration.
-- The MySQL communication stack (`communication_stack=MYSQL`, the default from 26.7), which removes the separate port.
 - vtadmin and operator support.
 - Flow-control defaults.
 - A multi-shard migration test.

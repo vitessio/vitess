@@ -104,12 +104,12 @@ func TestIsGroupPrimary(t *testing.T) {
 }
 
 func TestGroupReplicationCommands(t *testing.T) {
-	assert.Equal(t, []string{"START GROUP_REPLICATION USER='vt_repl', PASSWORD='p\\'w'"}, StartGroupReplicationCommands(false, "vt_repl", "p'w"))
+	assert.Equal(t, []string{"START GROUP_REPLICATION"}, StartGroupReplicationCommands(false))
 	assert.Equal(t, []string{
 		"SET GLOBAL group_replication_bootstrap_group = ON",
 		"START GROUP_REPLICATION",
 		"SET GLOBAL group_replication_bootstrap_group = OFF",
-	}, StartGroupReplicationCommands(true, "", ""))
+	}, StartGroupReplicationCommands(true))
 
 	cmd, err := SetGroupPrimaryCommand("uuid-1")
 	require.NoError(t, err)
@@ -119,8 +119,8 @@ func TestGroupReplicationCommands(t *testing.T) {
 
 	cmds := ConfigureGroupReplicationCommands(GroupReplicationConfig{
 		GroupName:       "g",
-		LocalAddress:    "h1:33061",
-		Seeds:           []string{"h2:33061", "h3:33061"},
+		LocalAddress:    "h1:3306",
+		Seeds:           []string{"h2:3306", "h3:3306"},
 		MemberWeight:    75,
 		Consistency:     "BEFORE_ON_PRIMARY_FAILOVER",
 		AutorejoinTries: -1,
@@ -128,8 +128,15 @@ func TestGroupReplicationCommands(t *testing.T) {
 	assert.Contains(t, cmds, "SET GLOBAL group_replication_member_expel_timeout = 0")
 	assert.Contains(t, cmds, "SET GLOBAL group_replication_paxos_single_leader = ON")
 	assert.Contains(t, cmds, "SET PERSIST group_replication_start_on_boot = OFF")
-	assert.Contains(t, cmds, "SET GLOBAL group_replication_group_seeds = 'h2:33061,h3:33061'")
+	assert.Contains(t, cmds, "SET GLOBAL group_replication_communication_stack = 'MYSQL'")
+	assert.Contains(t, cmds, "SET GLOBAL group_replication_local_address = 'h1:3306'")
+	assert.Contains(t, cmds, "SET GLOBAL group_replication_group_seeds = 'h2:3306,h3:3306'")
 	assert.Contains(t, cmds, "SET GLOBAL group_replication_member_weight = 75")
 	assert.Contains(t, cmds, "SET GLOBAL group_replication_consistency = 'BEFORE_ON_PRIMARY_FAILOVER'")
 	assert.Contains(t, cmds, "SET GLOBAL group_replication_unreachable_majority_timeout = 1")
+
+	assert.Equal(t, "CHANGE REPLICATION SOURCE TO\n"+
+		"  SOURCE_PASSWORD = 'p\\'w',\n"+
+		"  SOURCE_USER = 'vt_repl'\n"+
+		"  FOR CHANNEL 'group_replication_recovery'", GroupReplicationCredentialsCommand("vt_repl", "p'w"))
 }

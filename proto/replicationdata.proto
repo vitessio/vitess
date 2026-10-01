@@ -138,6 +138,9 @@ message FullStatus {
   repeated ShardPeerHealth shard_peer_health = 26;
   // group_replication_status is set when the MySQL Group Replication plugin is loaded.
   GroupReplicationStatus group_replication_status = 27;
+  // group_replication_enabled is true when the tablet runs with --enable-group-replication, and so
+  // can make its MySQL a member of its shard's group.
+  bool group_replication_enabled = 28;
 }
 
 // GroupReplicationMember is one member of a MySQL Group Replication group, as seen by the

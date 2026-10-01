@@ -70,7 +70,6 @@ const (
 	MigrationActionSetIncarnation         = "set_incarnation"
 	MigrationActionClearIncarnation       = "clear_incarnation"
 	minimumGroupReplicationMembers        = 3
-	groupReplicationPortName              = "gr"
 	defaultReplicationModeMigrationWait   = 5 * time.Minute
 	defaultReplicationModeMigrationPollAt = 500 * time.Millisecond
 )
@@ -539,9 +538,12 @@ func (s *migrationShard) preflightToGroupReplication(ctx context.Context) error 
 			len(voting), policy.MaxGroupReplicationMembers))
 	}
 	for _, tablet := range voting {
-		if tablet.PortMap[groupReplicationPortName] == 0 {
-			problems = append(problems, fmt.Sprintf("%v: the tablet does not publish a %q port; start vttablet with --group-replication-port",
-				topoproto.TabletAliasString(tablet.Alias), groupReplicationPortName))
+		alias := topoproto.TabletAliasString(tablet.Alias)
+		if !s.status(tablet).status.GetGroupReplicationEnabled() {
+			problems = append(problems, fmt.Sprintf("%v: group replication is not enabled on the tablet; start vttablet with --enable-group-replication", alias))
+		}
+		if tablet.MysqlPort == 0 {
+			problems = append(problems, fmt.Sprintf("%v: the tablet record has no MySQL port, through which the other members would reach it", alias))
 		}
 	}
 	if grd.RequiresCrossCellMajority() {

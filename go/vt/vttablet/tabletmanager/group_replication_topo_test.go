@@ -75,7 +75,7 @@ func (c *hangingConn) Get(ctx context.Context, filePath string) ([]byte, topo.Ve
 // until the partition healed: 140s without a primary. Each cell is now read with its own timeout,
 // and the tablet records of the cells that answer are used.
 func TestGroupReplicationSyncPromotesWhileOldPrimaryCellTopoHangs(t *testing.T) {
-	enableGroupReplication(t)
+	withGroupReplication(t)
 	ctx := t.Context()
 	_, mf := memorytopo.NewServerAndFactory(ctx, "cell1", "cell2")
 	f := &hangingCellFactory{Factory: mf, cell: "cell2"}
@@ -89,7 +89,7 @@ func TestGroupReplicationSyncPromotesWhileOldPrimaryCellTopoHangs(t *testing.T) 
 	oldPrimary := &topodatapb.TabletAlias{Cell: "cell2", Uid: 3}
 	require.NoError(t, ts.CreateTablet(ctx, &topodatapb.Tablet{
 		Alias: oldPrimary, Keyspace: "ks", Shard: "0", Type: topodatapb.TabletType_PRIMARY,
-		Hostname: "tablet3", MysqlHostname: "mysql3", MysqlPort: 3306, PortMap: map[string]int32{"gr": 33063},
+		Hostname: "tablet3", MysqlHostname: "mysql3", MysqlPort: 3306,
 	}))
 	_, err = ts.UpdateShardFields(ctx, "ks", "0", func(si *topo.ShardInfo) error {
 		si.PrimaryAlias = oldPrimary
@@ -131,7 +131,7 @@ func TestGroupReplicationSyncPromotesWhileOldPrimaryCellTopoHangs(t *testing.T) 
 // of the voters when its MySQL is ONLINE in the view: the tablet knows its server_uuid (S9b chaos
 // scenario: the primary dies while another cell's topology server is down).
 func TestGroupReplicationSyncCountsVoterOfUnreachableCell(t *testing.T) {
-	enableGroupReplication(t)
+	withGroupReplication(t)
 	ctx := t.Context()
 	_, mf := memorytopo.NewServerAndFactory(ctx, "cell1", "cell2")
 	f := &hangingCellFactory{Factory: mf, cell: "cell2"}
@@ -145,7 +145,7 @@ func TestGroupReplicationSyncCountsVoterOfUnreachableCell(t *testing.T) {
 	otherCellVoter := &topodatapb.TabletAlias{Cell: "cell2", Uid: 2}
 	require.NoError(t, ts.CreateTablet(ctx, &topodatapb.Tablet{
 		Alias: otherCellVoter, Keyspace: "ks", Shard: "0", Type: topodatapb.TabletType_REPLICA,
-		Hostname: "tablet2", MysqlHostname: "mysql2", MysqlPort: 3306, PortMap: map[string]int32{"gr": 33062},
+		Hostname: "tablet2", MysqlHostname: "mysql2", MysqlPort: 3306,
 	}))
 	_, err = ts.UpdateShardFields(ctx, "ks", "0", func(si *topo.ShardInfo) error {
 		si.GroupReplicationVoters = []*topodatapb.TabletAlias{{Cell: "cell1", Uid: 1}, otherCellVoter, {Cell: "cell1", Uid: 3}}
@@ -178,7 +178,7 @@ func TestGroupReplicationSyncCountsVoterOfUnreachableCell(t *testing.T) {
 // group elected, while the old primary's cell is cut off, does not wait for that cell: the tablet
 // records read a moment before identify every voter, so they are reused.
 func TestGroupReplicationSyncPromotionReusesTabletRecords(t *testing.T) {
-	enableGroupReplication(t)
+	withGroupReplication(t)
 	ctx := t.Context()
 	_, mf := memorytopo.NewServerAndFactory(ctx, "cell1", "cell2")
 	f := &hangingCellFactory{Factory: mf, cell: "cell2"}
@@ -192,7 +192,7 @@ func TestGroupReplicationSyncPromotionReusesTabletRecords(t *testing.T) {
 	oldPrimary := &topodatapb.TabletAlias{Cell: "cell2", Uid: 3}
 	require.NoError(t, ts.CreateTablet(ctx, &topodatapb.Tablet{
 		Alias: oldPrimary, Keyspace: "ks", Shard: "0", Type: topodatapb.TabletType_PRIMARY,
-		Hostname: "tablet3", MysqlHostname: "mysql3", MysqlPort: 3306, PortMap: map[string]int32{"gr": 33063},
+		Hostname: "tablet3", MysqlHostname: "mysql3", MysqlPort: 3306,
 	}))
 	_, err = ts.UpdateShardFields(ctx, "ks", "0", func(si *topo.ShardInfo) error {
 		si.PrimaryAlias = oldPrimary

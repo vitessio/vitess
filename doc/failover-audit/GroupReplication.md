@@ -230,7 +230,7 @@ S9i partitions the primary's cell, including its cell topo server, from the othe
 
 ## Exit state action
 
-`group_replication_exit_state_action` decides what MySQL does to a member that leaves its group involuntarily (`unreachable_majority_timeout`, an expulsion, an applier error). `READ_ONLY` (Vitess's default) sets `super_read_only`; `OFFLINE_MODE` (MySQL 8.4's default) also sets `offline_mode`, which disconnects and refuses every user without `CONNECTION_ADMIN` or `SUPER`: vttablet's app, allprivs and filtered users, and the replication user. MySQL never clears `offline_mode` itself, not even when the member rejoins or becomes the primary; since 35adb1d the tablet clears it once the member is ONLINE in the shard's legitimate group with a majority of the voters in its view, when it bootstraps the group, and when it makes MySQL the writable primary or an asynchronous replica.
+`group_replication_exit_state_action` decides what MySQL does to a member that leaves its group involuntarily (`unreachable_majority_timeout`, an expulsion, an applier error). `READ_ONLY` (Vitess's default) sets `super_read_only`; `OFFLINE_MODE` (MySQL 8.4's default) also sets `offline_mode`, which disconnects and refuses every user without `CONNECTION_ADMIN` or `SUPER`: vttablet's app, allprivs and filtered users, and, in the runs below, which used the XCom communication stack, the replication user. Since the MySQL communication stack (see below), the replication user has `CONNECTION_ADMIN` and keeps its connections. MySQL never clears `offline_mode` itself, not even when the member rejoins or becomes the primary; since 35adb1d the tablet clears it once the member is ONLINE in the shard's legitimate group with a majority of the voters in its view, when it bootstraps the group, and when it makes MySQL the writable primary or an asynchronous replica.
 
 The harness selects the action with `CHAOS_GR_EXIT_STATE_ACTION` (6aa6c59) and counts the primary reads, through vtgate, that the old primary answered after the fault, after another member became the primary of a majority view ("stale"), and after the topo primary changed. Runs 1–2 of each scenario used the binaries of 6aa6c59, the others those of 627f1f0 (the S9i fix; S9i itself is above).
 
@@ -254,6 +254,22 @@ Every run: 0 acked writes lost, 0 violations. The earlier READ_ONLY S7d runs on 
 **Decision: the default stays READ_ONLY.** OFFLINE_MODE fences reads on a member that left its group, which READ_ONLY does not, and costs nothing in the single-fault scenarios. But S7d's availability regressed in 4 of 4 runs (and 4 of 4 is unlikely by chance alone given 3 of 8 under READ_ONLY, p≈0.07), and the default must not trade availability for it. OFFLINE_MODE is supported (`--group-replication-exit-state-action=OFFLINE_MODE`, with the tablet clearing `offline_mode`), and recommended where stale reads from a partitioned old primary matter more than recovery under repeated partitions. Revisit when the leave after a heal is faster, or when the tablet can fence reads itself on a member that left its group.
 
 Regression checks on the final binaries (627f1f0 and the documentation commit after it; the default READ_ONLY): S1 gap 7.65s, 0/2144 lost, 0 violations; S2 gap 9.05s, 0/3780 lost, the known 1-sample violation of the resumed old primary; S3 gap 9.04s, 0/3828 lost, 0 violations; G3E gap 7.60s, 0/4940 lost, 75 reads answered by the old primary, 5 of them stale, 0 violations. `TestGroupReplicationLifecycle` and `TestGroupReplicationOneVoterPerCell` pass.
+
+## MySQL communication stack
+
+Since this change Vitess always runs groups on `group_replication_communication_stack=MYSQL`: members connect through the MySQL port of their tablet records, as the replication user, whose credentials the tablet stores on the `group_replication_recovery` channel. The `--group-replication-port` flag and the `gr` port in the tablet record are gone; `--enable-group-replication` enables GR support, and `FullStatus` reports it. The replication user needs `GROUP_REPLICATION_STREAM` and `CONNECTION_ADMIN`, which `config/init_db.sql` grants and the tablet checks before a join. Every run above used XCom, on a separate port.
+
+The chaos harness's partitions already cut the MySQL port, so they now cut the group's traffic with no port of its own. Results on the MySQL stack, GR mode, the default READ_ONLY:
+
+| Scenario | Failover | Gap | Lost | Violations |
+|---|---|---|---|---|
+| S1 (primary mysqld killed) | 6.7s | 6.95s | 0/2217 | 0 |
+| S2 (primary frozen) | 7.1s | 9.07s | 0/3734 | the known violation of the resumed old primary (2 samples, 200ms; the last XCom run: 1 sample) |
+| S3 (primary isolated) | 7.7s | 9.05s | 0/3732 | 0 |
+| S9i (primary's cell partitioned) | 6.9s | 9.05s | 0/3731 | 0 |
+| G3E (primary isolated, still reachable by vtgate) | 6.9s | 7.10s | 0/4878 | 0; 69 reads answered by the old primary, 2 of them stale (XCom: 75 and 5) |
+
+`TestGroupReplicationLifecycle` (migration from semi-sync and back, planned reparent, and a killed primary, which the group replaced in 7.1s) and `TestGroupReplicationOneVoterPerCell` pass. Failover and gaps match the XCom runs: the election is bounded by the same 5s failure detection, whichever stack carries the messages. The S7d and OFFLINE_MODE comparisons above were not repeated on the MySQL stack; with OFFLINE_MODE, the group's connections are no longer refused, which may change S7d.
 
 ## Not tested
 

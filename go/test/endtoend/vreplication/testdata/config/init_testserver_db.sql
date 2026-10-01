@@ -64,6 +64,8 @@ GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, RELOAD, PROCESS, FILE,
 # User for slave replication connections.
 CREATE USER 'vt_repl'@'%';
 GRANT REPLICATION SLAVE ON *.* TO 'vt_repl'@'%';
+# MySQL Group Replication connects the members of a group as this user.
+GRANT GROUP_REPLICATION_STREAM, CONNECTION_ADMIN ON *.* TO 'vt_repl'@'%';
 
 # User for Vitess VReplication (base vstreamers and vplayer).
 CREATE USER 'vt_filtered'@'localhost';

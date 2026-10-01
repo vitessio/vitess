@@ -137,10 +137,9 @@ func setupCluster(t *testing.T, opts clusterOptions) *testCluster {
 
 	for _, tablet := range tablets {
 		tablet.VttabletProcess.SupportsBackup = false
-		// Every tablet gets its own group communication port. RDONLY tablets never join the
-		// group, but enabling the port on them is harmless and keeps the setup uniform.
-		tablet.VttabletProcess.ExtraArgs = append(tablet.VttabletProcess.ExtraArgs,
-			"--group-replication-port", strconv.Itoa(clusterInstance.GetAndReservePort()))
+		// RDONLY tablets never join the group, but enabling group replication on them is
+		// harmless and keeps the setup uniform.
+		tablet.VttabletProcess.ExtraArgs = append(tablet.VttabletProcess.ExtraArgs, "--enable-group-replication")
 		require.NoError(t, tablet.VttabletProcess.Setup())
 	}
 	for _, tablet := range tablets {
