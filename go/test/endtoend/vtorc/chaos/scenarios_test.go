@@ -69,6 +69,11 @@ func runScenario(t *testing.T, name string, opts Options, body func(s *Scenario)
 	s.O = c.StartObserver()
 	s.W = c.StartWorkload(4, 40*time.Millisecond)
 	s.W.StartReader(c.CI.VtgateProcess.MySQLServerPort, 100*time.Millisecond)
+	if os.Getenv("CHAOS_WRITE_PROBE") == "1" {
+		// Transactions that wait up to 60s for their outcome, to measure how long clients of a
+		// primary that cannot commit block.
+		s.W.StartWriteProbe(c.CI.VtgateProcess.MySQLServerPort, 500*time.Millisecond, 60*time.Second, 16)
+	}
 	s.Sleep(5*time.Second, "baseline load")
 
 	body(s)

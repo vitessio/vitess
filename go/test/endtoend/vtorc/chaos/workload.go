@@ -45,6 +45,7 @@ type Workload struct {
 	mu      sync.Mutex
 	recs    []WriteRecord
 	reads   []ReadRecord
+	probes  []ProbeRecord
 	cancel  context.CancelFunc
 	wg      sync.WaitGroup
 	log     *EventLog
@@ -157,6 +158,99 @@ func (w *Workload) StartReader(port int, interval time.Duration) {
 			w.mu.Unlock()
 		}
 	})
+}
+
+// ProbeRecord is one transaction of the write probe: which mysqld vtgate routed it to, and how
+// long its client waited for the outcome.
+type ProbeRecord struct {
+	Start time.Time
+	// UUID is the server_uuid of the mysqld that answered the transaction's first statement,
+	// empty if that statement failed.
+	UUID string
+	End  time.Time
+	// Acked is set when the commit returned success.
+	Acked bool
+	Err   string
+}
+
+// StartWriteProbe starts a transaction through vtgate every interval, with at most maxInFlight
+// outstanding. Each transaction reads @@global.server_uuid, which tells which mysqld vtgate routed
+// it to, inserts a row and commits. Unlike the writers, whose driver timeouts cut a write off after
+// 3s, a probe waits up to timeout: it measures how long a client blocks on a primary that cannot
+// commit before it gets an error.
+func (w *Workload) StartWriteProbe(port int, interval, timeout time.Duration, maxInFlight int) {
+	db, err := sql.Open("mysql", fmt.Sprintf("root@tcp(127.0.0.1:%d)/%s?timeout=1s&readTimeout=%s&writeTimeout=%s&interpolateParams=true",
+		port, keyspaceName, timeout, timeout))
+	if err != nil {
+		return
+	}
+	db.SetMaxOpenConns(maxInFlight)
+	db.SetMaxIdleConns(maxInFlight)
+	ctx, cancel := context.WithCancel(context.Background())
+	prev := w.cancel
+	w.cancel = func() { cancel(); prev() }
+	sem := make(chan struct{}, maxInFlight)
+	w.wg.Go(func() {
+		defer db.Close()
+		var inFlight sync.WaitGroup
+		defer inFlight.Wait()
+		tick := time.NewTicker(interval)
+		defer tick.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-tick.C:
+			}
+			select {
+			case sem <- struct{}{}:
+			default:
+				continue // maxInFlight probes are still waiting
+			}
+			id := w.next.Add(1)
+			inFlight.Go(func() {
+				defer func() { <-sem }()
+				rec := w.probe(db, id, timeout)
+				w.mu.Lock()
+				w.probes = append(w.probes, rec)
+				w.mu.Unlock()
+			})
+		}
+	})
+}
+
+func (w *Workload) probe(db *sql.DB, id int64, timeout time.Duration) ProbeRecord {
+	rec := ProbeRecord{Start: time.Now()}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	tx, err := db.BeginTx(ctx, nil)
+	if err == nil {
+		err = tx.QueryRowContext(ctx, fmt.Sprintf("select @@global.server_uuid from %s limit 1", tableName)).Scan(&rec.UUID)
+		if err == nil {
+			_, err = tx.ExecContext(ctx, fmt.Sprintf("insert into %s (id, worker, src) values (?, -1, @@global.server_uuid)", tableName), id)
+		}
+		if err == nil {
+			err = tx.Commit()
+		} else {
+			_ = tx.Rollback()
+		}
+	}
+	rec.End = time.Now()
+	if err != nil {
+		rec.Err = err.Error()
+	} else {
+		rec.Acked = true
+	}
+	return rec
+}
+
+// Probes returns the write probe's transactions.
+func (w *Workload) Probes() []ProbeRecord {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	r := append([]ProbeRecord(nil), w.probes...)
+	sort.Slice(r, func(i, j int) bool { return r[i].Start.Before(r[j].Start) })
+	return r
 }
 
 // Reads returns the primary reads.

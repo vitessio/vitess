@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -309,6 +310,11 @@ func (c *Chaos) reportOldPrimaryServing(r *Report, w *Workload, o *Observer, opt
 	if s, ok := o.FirstAfter(old.Idx, opts.Fault, func(s Sample) bool { return !writable(s) }); ok {
 		r.timing("old primary %s mysqld stopped being writable (read_only or down) at +%.2fs", old.Tablet.Alias, s.T.Sub(opts.Fault).Seconds())
 	}
+	if s, ok := o.FirstAfter(old.Idx, opts.Fault, func(s Sample) bool { return s.MySQLOK && s.SuperReadOnly }); ok {
+		r.timing("old primary %s mysqld super_read_only ON at +%.2fs", old.Tablet.Alias, s.T.Sub(opts.Fault).Seconds())
+	} else {
+		r.timing("old primary %s mysqld super_read_only never ON after the fault", old.Tablet.Alias)
+	}
 	if s, ok := o.FirstAfter(old.Idx, opts.Fault, func(s Sample) bool { return s.MySQLOK && s.OfflineMode }); ok {
 		r.timing("old primary %s mysqld offline_mode ON (app connections refused) at +%.2fs", old.Tablet.Alias, s.T.Sub(opts.Fault).Seconds())
 	}
@@ -332,6 +338,7 @@ func (c *Chaos) reportOldPrimaryServing(r *Report, w *Workload, o *Observer, opt
 			r.timing("another member became the primary of a majority view at +%.2fs", electedAt.Sub(opts.Fault).Seconds())
 		}
 	}
+	c.reportWriteProbe(r, w, opts, backAt, back)
 	rs := oldPrimaryReads(w.Reads(), opts.OldPrimaryUUID, opts.Fault, changeAt, changed, electedAt, elected, backAt, back)
 	if !rs.LastOld.IsZero() {
 		r.timing("vtgate primary reads answered by the old primary until +%.2fs after the fault", rs.LastOld.Sub(opts.Fault).Seconds())
@@ -343,6 +350,125 @@ func (c *Chaos) reportOldPrimaryServing(r *Report, w *Workload, o *Observer, opt
 	}
 	r.outcome("vtgate primary reads after fault: %d, failed %d, answered by old primary: %d, after another member was elected: %d, after the topo primary changed: %d",
 		rs.Total, rs.Failed, rs.Old, rs.Stale, rs.AfterTopoChange)
+}
+
+// probeErrno matches the MySQL error number in an error message: the one MySQL returned to
+// vttablet, else the one vtgate returned.
+var probeErrno = []*regexp.Regexp{regexp.MustCompile(`errno (\d+)`), regexp.MustCompile(`Error (\d+) \(`)}
+
+// probeErrorKind shortens a write probe's error to a category.
+func probeErrorKind(e string) string {
+	for _, re := range probeErrno {
+		if m := re.FindStringSubmatch(e); m != nil {
+			return "errno " + m[1]
+		}
+	}
+	for _, k := range []string{"context deadline exceeded", "i/o timeout", "invalid connection", "connection refused", "bad connection", "EOF"} {
+		if strings.Contains(e, k) {
+			return k
+		}
+	}
+	if len(e) > 60 {
+		e = e[:60]
+	}
+	return e
+}
+
+// probeStats summarizes the write probe's transactions that vtgate routed to the old primary after
+// a fault, until the old primary became the topo primary again (back).
+type probeStats struct {
+	Started, Routed, Inferred, Acked, Failed int
+	// Waits are how long the failed transactions routed to the old primary waited for their error.
+	Waits []time.Duration
+	// MaxWaitFirstSecond is the longest wait of such a transaction started in the first second.
+	MaxWaitFirstSecond time.Duration
+	LastStart, LastEnd time.Time
+	Kinds              map[string]int
+}
+
+// oldPrimaryProbes counts the write probe's transactions routed to the old primary. A transaction
+// whose first statement failed has no server_uuid: it counts as routed to the old primary
+// (Inferred) when the last primary read that started before it was answered by the old primary.
+func oldPrimaryProbes(probes []ProbeRecord, reads []ReadRecord, oldUUID string, fault, backAt time.Time, back bool) probeStats {
+	st := probeStats{Kinds: map[string]int{}}
+	for _, p := range probes {
+		if !p.Start.After(fault) || (back && !p.Start.Before(backAt)) {
+			continue
+		}
+		st.Started++
+		routed := p.UUID == oldUUID
+		if p.UUID == "" {
+			last := ""
+			for _, rd := range reads {
+				if rd.Start.After(p.Start) {
+					break
+				}
+				if rd.Err == "" {
+					last = rd.UUID
+				}
+			}
+			if last == oldUUID {
+				routed = true
+				st.Inferred++
+			}
+		}
+		if !routed {
+			continue
+		}
+		st.Routed++
+		st.LastStart = p.Start
+		if p.End.After(st.LastEnd) {
+			st.LastEnd = p.End
+		}
+		if p.Acked {
+			st.Acked++
+			continue
+		}
+		st.Failed++
+		wait := p.End.Sub(p.Start)
+		st.Waits = append(st.Waits, wait)
+		if p.Start.Sub(fault) < time.Second && wait > st.MaxWaitFirstSecond {
+			st.MaxWaitFirstSecond = wait
+		}
+		st.Kinds[probeErrorKind(p.Err)]++
+	}
+	slices.Sort(st.Waits)
+	return st
+}
+
+// reportWriteProbe reports how long the write probe's transactions that vtgate routed to the old
+// primary waited for their outcome, and saves every probe transaction to probes.txt.
+func (c *Chaos) reportWriteProbe(r *Report, w *Workload, opts CheckOptions, backAt time.Time, back bool) {
+	probes := w.Probes()
+	if len(probes) == 0 {
+		return
+	}
+	reads := w.Reads()
+	st := oldPrimaryProbes(probes, reads, opts.OldPrimaryUUID, opts.Fault, backAt, back)
+	var b strings.Builder
+	b.WriteString("# start(+s after fault) wait(s) server acked error\n")
+	for _, p := range probes {
+		fmt.Fprintf(&b, "%+.3f %.3f %s %v %s\n", p.Start.Sub(opts.Fault).Seconds(), p.End.Sub(p.Start).Seconds(),
+			aliasOf(c.nodeByUUIDCached(p.UUID)), p.Acked, strings.ReplaceAll(p.Err, "\n", " "))
+	}
+	_ = os.MkdirAll(path.Join(resultsDir(), r.Name), 0o755)
+	_ = os.WriteFile(path.Join(resultsDir(), r.Name, "probes.txt"), []byte(b.String()), 0o644)
+	if st.Routed == 0 {
+		r.timing("write probe: %d transactions after the fault, none routed to the old primary", st.Started)
+		return
+	}
+	var kinds []string
+	for k, n := range st.Kinds {
+		kinds = append(kinds, fmt.Sprintf("%s x%d", k, n))
+	}
+	slices.Sort(kinds)
+	r.timing("write probe: %d transactions after the fault, %d routed to the old primary (%d inferred from reads), last one started at +%.2fs: acked %d, failed %d [%s]",
+		st.Started, st.Routed, st.Inferred, st.LastStart.Sub(opts.Fault).Seconds(), st.Acked, st.Failed, strings.Join(kinds, ", "))
+	if len(st.Waits) > 0 {
+		r.timing("write probe: failed transactions routed to the old primary waited min %.2fs, median %.2fs, max %.2fs (max %.2fs for those started in the first second); the last returned at +%.2fs",
+			st.Waits[0].Seconds(), st.Waits[len(st.Waits)/2].Seconds(), st.Waits[len(st.Waits)-1].Seconds(),
+			st.MaxWaitFirstSecond.Seconds(), st.LastEnd.Sub(opts.Fault).Seconds())
+	}
 }
 
 // primaryReadStats counts the primary reads of the workload after a fault.

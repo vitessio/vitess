@@ -17,6 +17,8 @@
 #                   the semi-sync setup (see cluster.go).
 #   CHAOS_TEST_BIN, CHAOS_SKIP_BUILD=1 run an already compiled test binary.
 #   CHAOS_TABLET_EXTRA_ARGS extra vttablet flags (space separated) for every tablet.
+#   CHAOS_WRITE_PROBE=1 also runs a write probe: transactions that wait up to 60s for their
+#                   outcome, to measure how long a primary that cannot commit blocks its clients.
 # The per-run VTDATAROOT is deleted afterwards, unless CHAOS_KEEP_DATA=1.
 set -uo pipefail
 

@@ -141,3 +141,42 @@ func TestObserverFirstOtherGroupPrimary(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, t0.Add(6*time.Second), at)
 }
+
+// TestOldPrimaryProbes checks which write probe transactions count as routed to the old primary:
+// those it answered, and those whose first statement failed while vtgate's primary reads still
+// went to it; and that the waits of the failed ones are reported.
+func TestOldPrimaryProbes(t *testing.T) {
+	t0 := time.Now()
+	at := func(s float64) time.Time { return t0.Add(time.Duration(s * float64(time.Second))) }
+	probe := func(start, end float64, uuid, err string) ProbeRecord {
+		return ProbeRecord{Start: at(start), End: at(end), UUID: uuid, Acked: err == "", Err: err}
+	}
+	reads := []ReadRecord{
+		{Start: at(0.1), End: at(0.2), UUID: "old"},
+		{Start: at(9), End: at(9.1), UUID: "new"},
+	}
+	probes := []ProbeRecord{
+		// Before the fault.
+		probe(-1, -0.9, "old", ""),
+		probe(0.5, 8.5, "old", "Error 3101 (HY000): Plugin instructed the server to rollback (errno 3101)"),
+		// Inferred from the read at +0.1.
+		probe(2, 9, "", "context deadline exceeded"),
+		// The new primary.
+		probe(9.5, 9.6, "new", ""),
+		// Not routed to the old primary: the read at +9 went to the new primary.
+		probe(10, 10.1, "", "Error 1203 (42000): target: ks.0.primary: vttablet: rpc error"),
+		// The old primary is the topo primary again from +20.
+		probe(30, 30.1, "old", ""),
+	}
+	st := oldPrimaryProbes(probes, reads, "old", t0, at(20), true)
+	assert.Equal(t, 4, st.Started)
+	assert.Equal(t, 2, st.Routed)
+	assert.Equal(t, 1, st.Inferred)
+	assert.Equal(t, 2, st.Failed)
+	assert.Equal(t, 0, st.Acked)
+	assert.Equal(t, []time.Duration{7 * time.Second, 8 * time.Second}, st.Waits)
+	assert.Equal(t, 8*time.Second, st.MaxWaitFirstSecond)
+	assert.Equal(t, at(9), st.LastEnd)
+	assert.Equal(t, map[string]int{"errno 3101": 1, "context deadline exceeded": 1}, st.Kinds)
+	assert.Equal(t, "errno 1203", probeErrorKind(probes[4].Err))
+}

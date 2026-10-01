@@ -335,6 +335,11 @@ func (c *Chaos) migrateToGroupReplication(primary *Node) {
 		return true
 	}, 90*time.Second, 500*time.Millisecond, "group replication did not form")
 	c.Log.Add("setup", fmt.Sprintf("group formed after %.1fs", time.Since(start).Seconds()))
+	for _, n := range c.Nodes {
+		v := n.variables("group_replication_%_timeout")
+		c.Log.Add("setup", fmt.Sprintf("%s: group_replication_unreachable_majority_timeout=%s group_replication_member_expel_timeout=%s",
+			n.Tablet.Alias, v["group_replication_unreachable_majority_timeout"], v["group_replication_member_expel_timeout"]))
+	}
 	c.gr = true
 }
 
