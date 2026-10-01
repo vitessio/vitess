@@ -123,7 +123,7 @@ func ParseFlagsForTest() {
 		fmt.Println("Error parsing regular test flags:", err)
 	}
 
-	// Parse the remaining flags.
+	// Add the Go testing flags to the pflag set before the parse. pflag rejects a flag that it does not know.
 	flag.CommandLine.AddGoFlagSet(goflag.CommandLine)
 	flag.Parse()
 }
