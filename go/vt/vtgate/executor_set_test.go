@@ -974,3 +974,34 @@ func TestSetSysVarPreservesTargetTabletAlias(t *testing.T) {
 	_, err = executorExecSession(ctx, executor, pinnedSession, "set @@default_week_format = 1", nil)
 	require.ErrorContains(t, err, "not found")
 }
+
+// A SET in a transaction that already includes the probe shard evaluates its assignment in
+// that transaction, as MySQL evaluates it on the session's connection: an assignment that
+// reads a table sees the rows the transaction changed. The session's SET_VAR variables
+// ride on the hint, as on any other query there, and the shard begins nothing new.
+func TestSetSysVarEvaluatesInTransaction(t *testing.T) {
+	executor, sbc1, _, _, ctx := createCustomExecutor(t, "{}", "8.0.0")
+
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{
+		EnableSystemSettings: true,
+		TargetString:         KsTestSharded + ":-20",
+		SystemVariables:      map[string]string{"sql_mode": "'only_full_group_by'"},
+	})
+	_, err := executorExecSession(ctx, executor, session, "begin", nil)
+	require.NoError(t, err)
+	_, err = executorExecSession(ctx, executor, session, "update t1 set v = 2 where id = 1", nil)
+	require.NoError(t, err)
+	require.Len(t, session.ShardSessions, 1)
+	beginCount := sbc1.BeginCount.Load()
+	sbc1.Queries = nil
+
+	sbc1.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("v", "int64"), "2")})
+	_, err = executorExecSession(ctx, executor, session, "set @@default_week_format = (select v from t1 where id = 1)", nil)
+	require.NoError(t, err)
+
+	require.NotEmpty(t, sbc1.Queries)
+	// the planner already hints the subqueries, as in any statement of the session
+	assert.Equal(t, "select /*+ SET_VAR(sql_mode = 'only_full_group_by') */ (select /*+ SET_VAR(sql_mode = 'only_full_group_by') */ v from t1 where id = 1) from dual where @@default_week_format != (select /*+ SET_VAR(sql_mode = 'only_full_group_by') */ v from t1 where id = 1)", sbc1.Queries[0].Sql)
+	assert.Equal(t, beginCount, sbc1.BeginCount.Load())
+	assert.Equal(t, "2", session.SystemVariables["default_week_format"])
+}

@@ -25,6 +25,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -89,6 +93,7 @@ func TestSetTable(t *testing.T) {
 		resultErr        error
 		validateErr      error
 		withSettingsErrs []error
+		holdsSessionConn bool
 	}
 
 	ks := &vindexes.Keyspace{Name: "ks", Sharded: true}
@@ -1044,7 +1049,7 @@ func TestSetTable(t *testing.T) {
 			},
 		},
 		systemVariables:  map[string]string{"default_week_format": "'old'"},
-		withSettingsErrs: []error{errors.New("Variable 'default_week_format' can't be set to the value of 'old'")},
+		withSettingsErrs: []error{sqlerror.NewSQLError(sqlerror.ERWrongValueForVar, sqlerror.SSClientError, "Variable 'default_week_format' can't be set to the value of 'old'")},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("new", "varchar"),
 			"new",
 		)},
@@ -1055,6 +1060,66 @@ func TestSetTable(t *testing.T) {
 			"SysVar set with (default_week_format,'new')",
 			"ValidateSessionSettings ks.-20",
 			"Needs Reserved Conn",
+		},
+	}, {
+		// a failure that says nothing about the value, such as a lost connection, is not
+		// retried: without the variable, the expression could evaluate to another value
+		testName: "evaluation that fails for a reason other than a value is not retried",
+		setOps: []SetOp{
+			&SysVarReservedConn{
+				Name:     "default_week_format",
+				Keyspace: &vindexes.Keyspace{Name: "ks", Sharded: true},
+				Expr:     "'new'",
+			},
+		},
+		systemVariables:  map[string]string{"default_week_format": "'old'"},
+		withSettingsErrs: []error{vterrors.New(vtrpcpb.Code_UNAVAILABLE, "connection refused")},
+		expectedError:    "connection refused",
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
+			`ExecuteWithSessionSettings ks.-20: select 'new' from dual {}`,
+		},
+	}, {
+		// the session's transaction or reserved connection on the probe shard sees what
+		// MySQL's session would, such as rows the transaction changed
+		testName: "evaluation runs on the connection the session holds to the probe shard",
+		setOps: []SetOp{
+			&SysVarReservedConn{
+				Name:     "default_week_format",
+				Keyspace: &vindexes.Keyspace{Name: "ks", Sharded: true},
+				Expr:     "(select v from t)",
+			},
+		},
+		holdsSessionConn: true,
+		shardSession:     []*srvtopo.ResolvedShard{{Target: &querypb.Target{Keyspace: "ks", Shard: "-20"}}},
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("v", "int64"),
+			"2",
+		)},
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
+			`ExecuteOnSessionConnection ks.-20: select (select v from t) from dual where @@default_week_format != (select v from t) {}`,
+			`SysVar set with (default_week_format,2)`,
+			`Needs Reserved Conn`,
+			`ExecuteMultiShard ks.-20: set default_week_format = 2 {} false false`,
+		},
+	}, {
+		// the connection the session holds carries settings MySQL accepted, so a failure
+		// there is the SET's, and evaluating elsewhere could see other rows
+		testName: "evaluation failure on the session's connection is not retried",
+		setOps: []SetOp{
+			&SysVarReservedConn{
+				Name:     "default_week_format",
+				Keyspace: &vindexes.Keyspace{Name: "ks", Sharded: true},
+				Expr:     "'new'",
+			},
+		},
+		holdsSessionConn: true,
+		systemVariables:  map[string]string{"default_week_format": "'old'"},
+		resultErr:        sqlerror.NewSQLError(sqlerror.ERWrongValueForVar, sqlerror.SSClientError, "Variable 'default_week_format' can't be set to the value of 'new'"),
+		expectedError:    "Variable 'default_week_format' can't be set to the value of 'new' (errno 1231) (sqlstate 42000)",
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
+			`ExecuteOnSessionConnection ks.-20: select 'new' from dual {}`,
 		},
 	}, {
 		// without a value of its own in the session, the variable's setting is not what
@@ -1229,6 +1294,7 @@ func TestSetTable(t *testing.T) {
 
 				validateSettingsErr: tc.validateErr,
 				withSettingsErrs:    tc.withSettingsErrs,
+				holdsSessionConn:    tc.holdsSessionConn,
 			}
 			_, err = set.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 			if tc.expectedError == "" {

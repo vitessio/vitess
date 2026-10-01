@@ -1010,6 +1010,29 @@ func (vc *VCursorImpl) ExecuteWithSessionSettings(ctx context.Context, rs *srvto
 	return qr, vterrors.Aggregate(errs)
 }
 
+// ExecuteOnSessionConnection is part of the engine.VCursor interface. A connection the
+// session holds carries the session's settings from when it was reserved or began its
+// transaction, and the set statements sent to it since; a variable that rides on the
+// SET_VAR hint reaches it only through the hint, as it does for every other query.
+func (vc *VCursorImpl) ExecuteOnSessionConnection(ctx context.Context, rs *srvtopo.ResolvedShard, query string, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, bool, error) {
+	if !vc.SafeSession.HoldsConnection(rs.Target) {
+		return nil, false, nil
+	}
+	if vc.CanUseSetVar() {
+		if hint := vc.PrepareSetVarComment(); hint != "" {
+			if rest, ok := strings.CutPrefix(query, "select "); ok {
+				query = "select /*+ " + hint + " */ " + rest
+			}
+		}
+	}
+	queries := []*querypb.BoundQuery{{
+		Sql:           query,
+		BindVariables: bindVars,
+	}}
+	qr, errs := vc.ExecuteMultiShard(ctx, nil /*primitive*/, []*srvtopo.ResolvedShard{rs}, queries, false /*rollbackOnError*/, false /*canAutocommit*/, false /*fetchLastInsertID*/)
+	return qr, true, vterrors.Aggregate(errs)
+}
+
 // ExecuteKeyspaceID is part of the engine.VCursor interface.
 func (vc *VCursorImpl) ExecuteKeyspaceID(ctx context.Context, keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, rollbackOnError, autocommit bool) (*sqltypes.Result, error) {
 	atomic.AddUint64(&vc.logStats.ShardQueries, 1)

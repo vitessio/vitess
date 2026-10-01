@@ -423,6 +423,10 @@ func (t *noopVCursor) ExecuteWithSessionSettings(context.Context, *srvtopo.Resol
 	panic("unimplemented")
 }
 
+func (t *noopVCursor) ExecuteOnSessionConnection(context.Context, *srvtopo.ResolvedShard, string, map[string]*querypb.BindVariable) (*sqltypes.Result, bool, error) {
+	panic("unimplemented")
+}
+
 func (t *noopVCursor) ValidateSessionSettings(context.Context, *srvtopo.ResolvedShard) error {
 	panic("unimplemented")
 }
@@ -498,6 +502,10 @@ type loggingVCursor struct {
 	// withSettingsErrs are returned, one per call and in order, from
 	// ExecuteWithSessionSettings; once they run out, multiShardErrs apply
 	withSettingsErrs []error
+
+	// holdsSessionConn makes ExecuteOnSessionConnection report that the session
+	// holds a connection to the shard and run the query on it
+	holdsSessionConn bool
 
 	log []string
 	mu  sync.Mutex
@@ -764,6 +772,20 @@ func (f *loggingVCursor) ExecuteWithSessionSettings(ctx context.Context, rs *srv
 		return nil, err
 	}
 	return res, vterrors.Aggregate(f.multiShardErrs)
+}
+
+func (f *loggingVCursor) ExecuteOnSessionConnection(ctx context.Context, rs *srvtopo.ResolvedShard, query string, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, bool, error) {
+	if !f.holdsSessionConn {
+		return nil, false, nil
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.log = append(f.log, fmt.Sprintf("ExecuteOnSessionConnection %s.%s: %s {%s}", rs.Target.Keyspace, rs.Target.Shard, query, deprecatedPrintBindVars(bindVars)))
+	res, err := f.nextResult()
+	if err != nil {
+		return nil, true, err
+	}
+	return res, true, vterrors.Aggregate(f.multiShardErrs)
 }
 
 func (f *loggingVCursor) StreamExecuteMulti(ctx context.Context, primitive Primitive, query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, rollbackOnError, autocommit, fetchLastInsertID bool, callback func(reply *sqltypes.Result) error) []error {

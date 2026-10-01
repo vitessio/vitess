@@ -84,6 +84,13 @@ type (
 		// carries the session's system variables as settings, except omitSysVar when it
 		// is not empty.
 		ExecuteWithSessionSettings(ctx context.Context, rs *srvtopo.ResolvedShard, query string, bindVars map[string]*querypb.BindVariable, omitSysVar string) (*sqltypes.Result, error)
+		// ExecuteOnSessionConnection runs a read query on the connection the session
+		// already holds to the shard: the shard's connection in the session's
+		// transaction, or outside a transaction, the session's reserved connection,
+		// with the session's SET_VAR hints. It runs nothing and reports false when the
+		// session holds no such connection, so that it never begins a transaction on
+		// the shard or reserves a connection.
+		ExecuteOnSessionConnection(ctx context.Context, rs *srvtopo.ResolvedShard, query string, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, bool, error)
 
 		// Keyspace ID level functions.
 		ExecuteKeyspaceID(ctx context.Context, keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, rollbackOnError, autocommit bool) (*sqltypes.Result, error)

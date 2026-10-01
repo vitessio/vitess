@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"strings"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/mysql/sqlmode"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -317,13 +318,19 @@ func (svs *SysVarReservedConn) execSetStatement(ctx context.Context, vcursor VCu
 
 // evaluate runs the assignment on the probe shard and reports whether it changes the
 // variable's value, along with the evaluated value for the session to store and the shard
-// that evaluated it. The query runs outside the session's reserved connection and
+// that evaluated it.
+//
+// When the session already holds a connection to the probe shard, the query runs there,
+// so that it sees what the session's transaction or connection sees, such as rows the
+// transaction changed. Otherwise it runs outside the session's reserved connection and
 // transaction, so that it neither reserves a shard merely to evaluate an expression nor
-// joins the session's transaction, but with the session's system variables as settings:
-// the expression is evaluated against the session's values, including those an earlier
-// assignment of the same SET stored. When the session holds a value for this variable,
-// that value may be what the shard rejects, and the SET replacing it must still get
-// through, so a failed evaluation is retried without it.
+// joins the shard to the session's transaction, with the session's system variables as
+// settings. Either way the expression is evaluated against the session's values,
+// including those an earlier assignment of the same SET stored. Outside the session's
+// connections, a value the session holds for this variable may be what the shard
+// rejects, and the SET replacing it must still get through, so an evaluation the shard
+// refuses is retried without it. A failure that says nothing about the value, such as a
+// timeout or a lost connection, is returned as is.
 func (svs *SysVarReservedConn) evaluate(ctx context.Context, vcursor VCursor, res *evalengine.ExpressionEnv) (changed bool, storedValue string, probeShard *srvtopo.ResolvedShard, err error) {
 	_, held := svs.heldValue(vcursor)
 	sysVarExprValidationQuery := fmt.Sprintf("select %s from dual where @@%s != %s", svs.Expr, svs.Name, svs.Expr)
@@ -342,9 +349,12 @@ func (svs *SysVarReservedConn) evaluate(ctx context.Context, vcursor VCursor, re
 	if len(rss) == 0 {
 		return false, "", nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "no shard resolved for %v", svs.probeDestination())
 	}
-	qr, err := vcursor.ExecuteWithSessionSettings(ctx, rss[0], sysVarExprValidationQuery, res.BindVars, "")
-	if err != nil && held {
-		qr, err = vcursor.ExecuteWithSessionSettings(ctx, rss[0], sysVarExprValidationQuery, res.BindVars, svs.Name)
+	qr, onSessionConn, err := vcursor.ExecuteOnSessionConnection(ctx, rss[0], sysVarExprValidationQuery, res.BindVars)
+	if !onSessionConn {
+		qr, err = vcursor.ExecuteWithSessionSettings(ctx, rss[0], sysVarExprValidationQuery, res.BindVars, "")
+		if err != nil && held && !sqlerror.IsEphemeralError(sqlerror.NewSQLErrorFromError(err)) {
+			qr, err = vcursor.ExecuteWithSessionSettings(ctx, rss[0], sysVarExprValidationQuery, res.BindVars, svs.Name)
+		}
 	}
 	if err != nil {
 		return false, "", nil, err
