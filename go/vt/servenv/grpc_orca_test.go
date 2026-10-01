@@ -33,6 +33,9 @@ func TestOrcaCountingInterceptorsCountQueriesAndErrors(t *testing.T) {
 		healthCheck           = "/grpc.health.v1.Health/Check"
 		healthWatch           = "/grpc.health.v1.Health/Watch"
 		orcaStreamCoreMetrics = "/xds.service.orca.v3.OpenRcaService/StreamCoreMetrics"
+		tabletExecute         = "/queryservice.Query/Execute"
+		tabletStreamExecute   = "/queryservice.Query/StreamExecute"
+		tabletStreamHealth    = "/queryservice.Query/StreamHealth"
 	)
 	errFailed := errors.New("failed")
 
@@ -53,6 +56,9 @@ func TestOrcaCountingInterceptorsCountQueriesAndErrors(t *testing.T) {
 		{name: "failed health check is not counted", fullMethod: healthCheck, err: errFailed},
 		{name: "health watch stream is not counted", fullMethod: healthWatch, stream: true, sends: 3, err: errFailed},
 		{name: "ORCA report stream is not counted", fullMethod: orcaStreamCoreMetrics, stream: true, sends: 3, err: errFailed},
+		{name: "tablet health stream is not counted", fullMethod: tabletStreamHealth, stream: true, sends: 3, err: errFailed},
+		{name: "other tablet unary call is counted", fullMethod: tabletExecute, wantQueries: 1},
+		{name: "other tablet stream is counted", fullMethod: tabletStreamExecute, stream: true, sends: 3, wantQueries: 3},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

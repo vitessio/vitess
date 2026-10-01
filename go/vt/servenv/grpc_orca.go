@@ -26,6 +26,7 @@ import (
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 
 	"vitess.io/vitess/go/sets"
+	queryservicepb "vitess.io/vitess/go/vt/proto/queryservice"
 )
 
 // orcaEgressMessages counts gRPC messages sent since the last ORCA report, so
@@ -38,16 +39,24 @@ var orcaEgressMessages atomic.Int64
 
 var orcaErrors atomic.Int64
 
-// orcaUncountedServices are not counted because their traffic scales with the
-// number of client connections rather than with client work.
+// orcaUncountedServices and orcaUncountedMethods are not counted because their
+// traffic scales with the number of client connections rather than with client
+// work.
 var orcaUncountedServices = sets.New(
 	healthpb.Health_ServiceDesc.ServiceName,
 	orcaservicepb.OpenRcaService_ServiceDesc.ServiceName,
 )
 
+var orcaUncountedMethods = sets.New(
+	queryservicepb.Query_StreamHealth_FullMethodName,
+)
+
 // isOrcaCounted reports whether fullMethod, in gRPC's "/service/method" form,
-// belongs to a counted service.
+// is counted.
 func isOrcaCounted(fullMethod string) bool {
+	if orcaUncountedMethods.Has(fullMethod) {
+		return false
+	}
 	serviceEnd := strings.LastIndexByte(fullMethod, '/')
 	if serviceEnd <= 0 {
 		return true

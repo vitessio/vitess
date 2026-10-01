@@ -24,8 +24,6 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/health"
-	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/test/bufconn"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -33,13 +31,17 @@ import (
 	vtgateservicepb "vitess.io/vitess/go/vt/proto/vtgateservice"
 )
 
-type benchVStreamServer struct {
+type benchVitessServer struct {
 	vtgateservicepb.UnimplementedVitessServer
+}
+
+func (benchVitessServer) Execute(context.Context, *vtgatepb.ExecuteRequest) (*vtgatepb.ExecuteResponse, error) {
+	return &vtgatepb.ExecuteResponse{}, nil
 }
 
 var benchVStreamResponse = &vtgatepb.VStreamResponse{Events: []*binlogdatapb.VEvent{{Type: binlogdatapb.VEventType_HEARTBEAT}}}
 
-func (benchVStreamServer) VStream(_ *vtgatepb.VStreamRequest, stream grpc.ServerStreamingServer[vtgatepb.VStreamResponse]) error {
+func (benchVitessServer) VStream(_ *vtgatepb.VStreamRequest, stream grpc.ServerStreamingServer[vtgatepb.VStreamResponse]) error {
 	for range 100 {
 		if err := stream.Send(benchVStreamResponse); err != nil {
 			return err
@@ -54,8 +56,7 @@ func startBenchServer(b *testing.B, orcaEnabled bool) *grpc.ClientConn {
 	b.Cleanup(withTempVar(&GRPCServerMetricsRecorder, nil))
 	b.Cleanup(withTempVar(&GRPCServer, (*grpc.Server)(nil)))
 	createGRPCServer()
-	healthpb.RegisterHealthServer(GRPCServer, health.NewServer())
-	vtgateservicepb.RegisterVitessServer(GRPCServer, benchVStreamServer{})
+	vtgateservicepb.RegisterVitessServer(GRPCServer, benchVitessServer{})
 	lis := bufconn.Listen(1 << 20)
 	go GRPCServer.Serve(lis)
 	b.Cleanup(GRPCServer.Stop)
@@ -71,15 +72,15 @@ func startBenchServer(b *testing.B, orcaEnabled bool) *grpc.ClientConn {
 
 // Comparing orca=false with orca=true shows the per-RPC cost of counting
 // messages for ORCA QPS.
-func BenchmarkOrcaAllocsUnaryHealthCheck(b *testing.B) {
+func BenchmarkOrcaAllocsUnaryExecute(b *testing.B) {
 	for _, orca := range []bool{false, true} {
 		b.Run(fmt.Sprintf("orca=%t", orca), func(b *testing.B) {
-			client := healthpb.NewHealthClient(startBenchServer(b, orca))
+			client := vtgateservicepb.NewVitessClient(startBenchServer(b, orca))
 			ctx := b.Context()
-			req := &healthpb.HealthCheckRequest{}
+			req := &vtgatepb.ExecuteRequest{}
 			b.ReportAllocs()
 			for b.Loop() {
-				if _, err := client.Check(ctx, req); err != nil {
+				if _, err := client.Execute(ctx, req); err != nil {
 					b.Fatal(err)
 				}
 			}
