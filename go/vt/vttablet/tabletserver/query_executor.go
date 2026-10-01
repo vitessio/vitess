@@ -977,20 +977,31 @@ func (qre *QueryExecutor) checkAccess(authorized *tableacl.ACLResult, tableName 
 
 // checkUndeterminedTableAccess enforces table ACL for a statement whose table
 // set could not be determined at planning time (see checkPermissions). It
-// mirrors checkAccess's dry-run and stats handling, but denies unconditionally
-// under strict table ACL: the tables the planner did derive have already been
-// checked, no grant can cover the ones it could not, and the caller has
-// already been shown to be non-exempt.
+// mirrors checkAccess's dry-run and stats handling. The tables the planner did
+// derive have already been checked, and the caller has already been shown to
+// be non-exempt. The ones it could not derive are covered only by a table
+// group that covers every table ("%"), and then only for a caller who holds
+// every role in it, since the statement may read, write or alter any of them;
+// the roles are granted separately, so being an ADMIN alone does not let a
+// caller read. Such a caller may run the statement whatever it touches. Any
+// other caller is denied under strict table ACL.
 func (qre *QueryExecutor) checkUndeterminedTableAccess(callerID *querypb.VTGateCallerID) error {
+	authorized := tableacl.AuthorizedForAllTables(tableacl.ADMIN)
 	var aclState acl.ACLState
 	defer func() {
 		// There is no table to name; label the denial so operators can tell
 		// it apart from a per-table one in the TableACL* counters. The label
 		// carries hyphens so that no unquoted table name can share the series.
-		statsKey := qre.generateACLStatsKey("undetermined-table-set", &tableacl.ACLResult{}, callerID)
+		statsKey := qre.generateACLStatsKey("undetermined-table-set", authorized, callerID)
 		qre.recordACLStats(statsKey, aclState)
 	}()
 
+	if authorized.IsMember(callerID) &&
+		tableacl.AuthorizedForAllTables(tableacl.WRITER).IsMember(callerID) &&
+		tableacl.AuthorizedForAllTables(tableacl.READER).IsMember(callerID) {
+		aclState = acl.ACLAllow
+		return nil
+	}
 	if qre.tsv.qe.enableTableACLDryRun {
 		aclState = acl.ACLPseudoDenied
 		return nil

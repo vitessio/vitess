@@ -271,6 +271,38 @@ func (tacl *tableACL) Authorized(table string, role Role) *ACLResult {
 	}
 }
 
+// AuthorizedForAllTables returns the ACL of the given role in the table group that
+// covers every table, the one whose table names or prefixes hold "%". A caller in
+// it holds that role on any table, including the tables of a statement whose table
+// set the planner cannot determine. Without such a group, the returned ACL denies
+// everyone.
+func AuthorizedForAllTables(role Role) *ACLResult {
+	return currentTableACL.AuthorizedForAllTables(role)
+}
+
+// AuthorizedForAllTables returns the ACL of the given role in the table group that
+// covers every table, see the package function of the same name.
+func (tacl *tableACL) AuthorizedForAllTables(role Role) *ACLResult {
+	tacl.RLock()
+	defer tacl.RUnlock()
+	for _, entry := range tacl.entries {
+		if entry.tableNameOrPrefix != "%" {
+			continue
+		}
+		if acl, ok := entry.acl[role]; ok {
+			return &ACLResult{
+				ACL:       acl,
+				GroupName: entry.groupName,
+			}
+		}
+		break
+	}
+	return &ACLResult{
+		ACL:       acl.DenyAllACL{},
+		GroupName: "",
+	}
+}
+
 // GetCurrentConfig returns a copy of current tableacl configuration.
 func GetCurrentConfig() *tableaclpb.Config {
 	return currentTableACL.Config()
