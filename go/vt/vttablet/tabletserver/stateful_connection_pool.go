@@ -70,6 +70,12 @@ type StatefulConnectionPool struct {
 	// the temp-table idle timeout. Maintained by the connections' mark and
 	// release paths.
 	tempTableUnmanaged atomic.Int64
+
+	// concludeTx concludes the transaction of a connection released while the
+	// transaction is still open (see StatefulConnection.ReleaseString). The
+	// TxPool sets it, as the transaction limiter and the transaction log are
+	// its own; nil leaves such a transaction unconcluded.
+	concludeTx func(*StatefulConnection, tx.ReleaseReason)
 }
 
 // NewStatefulConnPool creates an ActivePool
