@@ -19,7 +19,7 @@ import { Popover } from 'react-tiny-popover';
 import style from './Tooltip.module.scss';
 
 export interface TooltipProps {
-    children: React.ReactElement;
+    children: React.ReactElement<React.HTMLAttributes<HTMLElement>>;
     text: string | JSX.Element;
 }
 
