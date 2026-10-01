@@ -79,6 +79,10 @@ type vplayer struct {
 	query    func(ctx context.Context, sql string) (*sqltypes.Result, error)
 	commit   func() error
 	dbClient *vdbClient
+	// warnedUnknownEventTypes holds the vevent types the serial applier has
+	// already warned about skipping.
+	warnedUnknownEventTypes map[binlogdatapb.VEventType]struct{}
+
 	// If the VPlayer is in batch mode, we accumulate each transaction's statements
 	// that are then sent as a single multi-statement protocol request to the database.
 	batchMode bool
@@ -1210,10 +1214,19 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		// did, so that a target keeps replicating from a newer source that
 		// sends a new type. The parallel applier's scheduler fails closed on
 		// them instead.
-		log.Warn("Skipping unsupported vevent type",
-			slog.String("workflow", vp.vr.WorkflowName),
-			slog.String("type", event.Type.String()),
-		)
+		// Warn once per type: such a source can send one with every
+		// transaction. Only the serial applier gets here, from a single
+		// goroutine.
+		if _, warned := vp.warnedUnknownEventTypes[event.Type]; !warned {
+			if vp.warnedUnknownEventTypes == nil {
+				vp.warnedUnknownEventTypes = make(map[binlogdatapb.VEventType]struct{})
+			}
+			vp.warnedUnknownEventTypes[event.Type] = struct{}{}
+			log.Warn("Skipping unsupported vevent type",
+				slog.String("workflow", vp.vr.WorkflowName),
+				slog.String("type", event.Type.String()),
+			)
+		}
 	}
 
 	return nil

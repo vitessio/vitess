@@ -17,10 +17,12 @@ limitations under the License.
 package vreplication
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"math"
 	"strconv"
 	"strings"
@@ -39,6 +41,7 @@ import (
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
+	"vitess.io/vitess/go/vt/log"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtenv"
@@ -4839,8 +4842,16 @@ func TestScheduleItems_UnknownVEventTypeFailsFast(t *testing.T) {
 
 	// The serial applier keeps skipping unknown event types, so a target
 	// keeps replicating from a newer source that sends a type it does not
-	// know, as in earlier versions.
-	require.NoError(t, vp.applyEvent(ctx, &binlogdatapb.VEvent{Type: binlogdatapb.VEventType(12345)}, false))
+	// know, as in earlier versions. It warns once per type, not once per
+	// event, as such a source can send one with every transaction.
+	var logBuf bytes.Buffer
+	oldLogger := log.SwapLogger(slog.New(slog.NewTextHandler(&logBuf, nil)))
+	t.Cleanup(func() { log.SwapLogger(oldLogger) })
+	for range 3 {
+		require.NoError(t, vp.applyEvent(ctx, &binlogdatapb.VEvent{Type: binlogdatapb.VEventType(12345)}, false))
+	}
+	require.NoError(t, vp.applyEvent(ctx, &binlogdatapb.VEvent{Type: binlogdatapb.VEventType(12346)}, false))
+	require.Equal(t, 2, strings.Count(logBuf.String(), "Skipping unsupported vevent type"))
 }
 
 func TestScheduleItems_InsertStatementEventDoesNotFailFast(t *testing.T) {

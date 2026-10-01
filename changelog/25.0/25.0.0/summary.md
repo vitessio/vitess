@@ -243,7 +243,7 @@ See [#19906](https://github.com/vitessio/vitess/pull/19906) for details.
 
 #### <a id="vreplication-unknown-event-error"/>Unknown `on-ddl` actions are now errors in the applier</a>
 
-The VReplication applier previously did nothing for a DDL when the workflow's `on-ddl` action was one it did not recognize. It now fails the workflow with an error instead. The applier still skips VStream event types it does not recognize, so that a target keeps replicating from a source on a newer version, except for the experimental parallel applier, which fails the workflow on them.
+The VReplication applier previously did nothing for a DDL when the workflow's `on-ddl` action was one it did not recognize. It now fails the workflow with an error instead. The applier still skips VStream event types it does not recognize, logging a warning once per type, so that a target keeps replicating from a source on a newer version. The experimental parallel applier is the exception: during the replication phase it fails the workflow on them (the copy phase applies serially and skips them).
 
 #### <a id="vreplication-source-overrides-allowlist"/>Workflow config overrides sent to source tablets are now allowlisted</a>
 
