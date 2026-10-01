@@ -206,6 +206,14 @@ func TestWritesetUniqueKeysFromSpec(t *testing.T) {
 			wantMustSerialize: true,
 		},
 		{
+			// The replication identity leaves out generated primary key
+			// columns, and equal (id, g) implies equal id, so hashing id
+			// alone misses no conflict.
+			name:         "primary key with a generated column",
+			ddl:          "create table t1 (id int not null, g int as (id + 1) stored not null, primary key(id, g))",
+			identityCols: []string{"id"},
+		},
+		{
 			// A plain primary key matching the identity with no secondary
 			// indexes needs nothing extra.
 			name:         "plain primary key without secondary indexes",

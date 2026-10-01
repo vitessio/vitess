@@ -1108,6 +1108,17 @@ func writesetUniqueKeyColumnsFromSpec(plan *TablePlan, tableSpec *sqlparser.Tabl
 		identityColSet[col] = struct{}{}
 	}
 
+	// The replication identity leaves out generated primary key columns
+	// (analyzePK), and hashing the remaining columns misses no conflict, as
+	// equal primary keys have equal remaining columns, so leave them out of
+	// the comparison too.
+	generatedColumns := make(map[string]struct{})
+	for _, col := range tableSpec.Columns {
+		if col != nil && col.Type != nil && col.Type.Options != nil && col.Type.Options.As != nil {
+			generatedColumns[col.Name.Lowered()] = struct{}{}
+		}
+	}
+
 	primaryKeyMatchesIdentity := true
 	primaryKeyMatchesIdentitySet := len(identityColSet) == len(identityCols)
 	primaryKeyColumnCount := 0
@@ -1115,22 +1126,23 @@ func writesetUniqueKeyColumnsFromSpec(plan *TablePlan, tableSpec *sqlparser.Tabl
 		if index == nil || index.Info == nil || index.Info.Type != sqlparser.IndexTypePrimary {
 			continue
 		}
-		primaryKeyColumnCount = len(index.Columns)
+		var primaryKeyColumns []string
+		for _, idxCol := range index.Columns {
+			if idxCol.Expression != nil || idxCol.Length != nil {
+				// Uniqueness over a derived value: no column list can match.
+				return nil, true
+			}
+			colName := idxCol.Column.Lowered()
+			if _, generated := generatedColumns[colName]; generated {
+				continue
+			}
+			primaryKeyColumns = append(primaryKeyColumns, colName)
+		}
+		primaryKeyColumnCount = len(primaryKeyColumns)
 		if primaryKeyColumnCount != len(identityCols) {
 			return nil, true
 		}
-		for i, idxCol := range index.Columns {
-			if idxCol.Expression != nil {
-				primaryKeyMatchesIdentity = false
-				primaryKeyMatchesIdentitySet = false
-				break
-			}
-			if idxCol.Length != nil {
-				primaryKeyMatchesIdentity = false
-				primaryKeyMatchesIdentitySet = false
-				break
-			}
-			colName := idxCol.Column.Lowered()
+		for i, colName := range primaryKeyColumns {
 			if colName != identityCols[i] {
 				primaryKeyMatchesIdentity = false
 			}
