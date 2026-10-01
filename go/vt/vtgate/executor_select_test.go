@@ -342,9 +342,11 @@ func TestSetSystemVariables(t *testing.T) {
 	lookup.SetResults([]*sqltypes.Result{{}, {
 		Fields: []*querypb.Field{
 			{Name: "sql_safe_updates", Type: sqltypes.VarChar, Charset: uint32(collations.MySQL8().DefaultConnectionCharset())},
+			{Name: "changed", Type: sqltypes.Int64},
 		},
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewVarChar("0"),
+			sqltypes.NewInt64(1),
 		}},
 	}})
 	_, err = executor.Execute(t.Context(), nil, "TestSetStmt", session, "set @@sql_safe_updates = 0", map[string]*querypb.BindVariable{}, false)
@@ -352,7 +354,7 @@ func TestSetSystemVariables(t *testing.T) {
 	require.False(t, session.InReservedConn())
 	wantQueries = []*querypb.BoundQuery{
 		{Sql: "set sql_mode = 'only_full_group_by'"},
-		{Sql: "select 0 from dual where @@sql_safe_updates != 0"},
+		{Sql: "select v, @@sql_safe_updates != v from (select 0 as v) as t"},
 		{Sql: "set sql_mode = 'only_full_group_by', sql_safe_updates = '0'"},
 		{Sql: "select 1 from dual"},
 	}
@@ -392,9 +394,11 @@ func TestSetSystemVariables(t *testing.T) {
 	lookup.SetResults([]*sqltypes.Result{{}, {
 		Fields: []*querypb.Field{
 			{Name: "max_tmp_tables", Type: sqltypes.VarChar, Charset: uint32(collations.MySQL8().DefaultConnectionCharset())},
+			{Name: "changed", Type: sqltypes.Int64},
 		},
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewVarChar("1"),
+			sqltypes.NewInt64(1),
 		}},
 	}})
 	_, err = executor.Execute(t.Context(), nil, "TestSetStmt", session, "set @@max_tmp_tables = 1", map[string]*querypb.BindVariable{}, false)
@@ -406,7 +410,7 @@ func TestSetSystemVariables(t *testing.T) {
 
 	wantQueries = []*querypb.BoundQuery{
 		{Sql: "set sql_mode = 'only_full_group_by', sql_safe_updates = '0'"},
-		{Sql: "select 1 from dual where @@max_tmp_tables != 1"},
+		{Sql: "select v, @@max_tmp_tables != v from (select 1 as v) as t"},
 		{Sql: "set max_tmp_tables = '1', sql_mode = 'only_full_group_by', sql_safe_updates = '0'"},
 		{Sql: "select 1 from dual"},
 		{Sql: "set max_tmp_tables = '1', sql_mode = 'only_full_group_by', sql_safe_updates = '0'", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
@@ -4766,7 +4770,7 @@ func TestSysVarGlobalAndSession(t *testing.T) {
 		sqltypes.MakeTestResult(sqltypes.MakeTestFields("innodb_lock_wait_timeout", "uint64"), "20"),
 		sqltypes.MakeTestResult(sqltypes.MakeTestFields("innodb_lock_wait_timeout", "uint64"), "20"),
 		sqltypes.MakeTestResult(sqltypes.MakeTestFields("1", "int64")),
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("new", "uint64"), "40"),
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("new|changed", "uint64|int64"), "40|1"),
 		// the shard validates the new value: the settings, then the query carrying them
 		sqltypes.MakeTestResult(sqltypes.MakeTestFields("reserve_execute", "uint64")),
 		sqltypes.MakeTestResult(sqltypes.MakeTestFields("1", "int64"), "1"),

@@ -499,6 +499,10 @@ type loggingVCursor struct {
 	// validateSettingsErr is returned from ValidateSessionSettings
 	validateSettingsErr error
 
+	// validateSettingsErrs are returned, one per call and in order, from
+	// ValidateSessionSettings; once they run out, validateSettingsErr applies
+	validateSettingsErrs []error
+
 	// withSettingsErrs are returned, one per call and in order, from
 	// ExecuteWithSessionSettings; once they run out, multiShardErrs apply
 	withSettingsErrs []error
@@ -749,6 +753,11 @@ func (f *loggingVCursor) ValidateSessionSettings(ctx context.Context, rs *srvtop
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.log = append(f.log, fmt.Sprintf("ValidateSessionSettings %s.%s", rs.Target.Keyspace, rs.Target.Shard))
+	if len(f.validateSettingsErrs) > 0 {
+		err := f.validateSettingsErrs[0]
+		f.validateSettingsErrs = f.validateSettingsErrs[1:]
+		return err
+	}
 	return f.validateSettingsErr
 }
 

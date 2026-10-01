@@ -2924,15 +2924,15 @@ func TestExecutorSettingsInTwoPC(t *testing.T) {
 				`insert into user_extra(user_id) values (3)`,
 			},
 			testRes: []*sqltypes.Result{
-				sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "varchar"),
-					"+08:00"),
+				sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|changed", "varchar|int64"),
+					"+08:00|1"),
 			},
 			expectedQueries: [][]string{
 				{
 					// the assignment is evaluated and the value validated outside the
 					// transaction, so the shard joins it with the first insert, whose
 					// reservation carries the value
-					"select '+08:00' from dual where @@time_zone != '+08:00'",
+					"select v, @@time_zone != v from (select '+08:00' as v from dual) as t",
 					"set time_zone = '+08:00'",
 					"select 1 from dual",
 					"set time_zone = '+08:00'",

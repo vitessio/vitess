@@ -326,14 +326,14 @@ func (svs *SysVarReservedConn) execSetStatement(ctx context.Context, vcursor VCu
 // transaction, so that it neither reserves a shard merely to evaluate an expression nor
 // joins the shard to the session's transaction, with the session's system variables as
 // settings. Either way the expression is evaluated against the session's values,
-// including those an earlier assignment of the same SET stored. Outside the session's
-// connections, a value the session holds for this variable may be what the shard
-// rejects, and the SET replacing it must still get through, so an evaluation the shard
-// refuses is retried without it. A failure that says nothing about the value, such as a
-// timeout or a lost connection, is returned as is.
+// including those an earlier assignment of the same SET stored.
+//
+// The expression is evaluated once, as MySQL evaluates a SET's: an expression with side
+// effects or a varying result, such as a stored function or UUID_SHORT(), must not run
+// twice, nor be compared as one value and stored as another.
 func (svs *SysVarReservedConn) evaluate(ctx context.Context, vcursor VCursor, res *evalengine.ExpressionEnv) (changed bool, storedValue string, probeShard *srvtopo.ResolvedShard, err error) {
 	_, held := svs.heldValue(vcursor)
-	sysVarExprValidationQuery := fmt.Sprintf("select %s from dual where @@%s != %s", svs.Expr, svs.Name, svs.Expr)
+	var sysVarExprValidationQuery string
 	switch {
 	case svs.Name == "sql_mode":
 		sysVarExprValidationQuery = sqlModeJudgmentQuery(svs.Expr)
@@ -341,6 +341,11 @@ func (svs *SysVarReservedConn) evaluate(ctx context.Context, vcursor VCursor, re
 		// The session already overrides this variable, so the shard's default is not
 		// the value to compare against: the new value is stored either way.
 		sysVarExprValidationQuery = fmt.Sprintf("select %s from dual", svs.Expr)
+	default:
+		// MySQL materializes a derived table that reads no table rather than merging
+		// it into the outer query, so the expression is evaluated once and the
+		// comparison reads the materialized value.
+		sysVarExprValidationQuery = fmt.Sprintf("select v, @@%s != v from (select %s as v) as t", svs.Name, svs.Expr)
 	}
 	rss, _, err := vcursor.ResolveDestinations(ctx, svs.Keyspace.Name, nil, []key.ShardDestination{svs.probeDestination()})
 	if err != nil {
@@ -351,10 +356,7 @@ func (svs *SysVarReservedConn) evaluate(ctx context.Context, vcursor VCursor, re
 	}
 	qr, onSessionConn, err := vcursor.ExecuteOnSessionConnection(ctx, rss[0], sysVarExprValidationQuery, res.BindVars)
 	if !onSessionConn {
-		qr, err = vcursor.ExecuteWithSessionSettings(ctx, rss[0], sysVarExprValidationQuery, res.BindVars, "")
-		if err != nil && held && !sqlerror.IsEphemeralError(sqlerror.NewSQLErrorFromError(err)) {
-			qr, err = vcursor.ExecuteWithSessionSettings(ctx, rss[0], sysVarExprValidationQuery, res.BindVars, svs.Name)
-		}
+		qr, err = svs.evaluateWithSessionSettings(ctx, vcursor, rss[0], sysVarExprValidationQuery, res.BindVars, held)
 	}
 	if err != nil {
 		return false, "", nil, err
@@ -368,11 +370,20 @@ func (svs *SysVarReservedConn) evaluate(ctx context.Context, vcursor VCursor, re
 			return false, "", nil, err
 		}
 		changed = changed || held
-	} else {
+	} else if held {
 		changed = len(qr.Rows) > 0
 		if changed {
 			value = qr.Rows[0][0]
 		}
+	} else if len(qr.Rows) > 0 {
+		if len(qr.Rows[0]) != 2 {
+			return false, "", nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected result evaluating %s: %d columns", svs.Name, len(qr.Rows[0]))
+		}
+		// a NULL comparison, when either value is NULL, is no change, as the
+		// comparison in a WHERE clause would be
+		value = qr.Rows[0][0]
+		cmp := qr.Rows[0][1]
+		changed = !cmp.IsNull() && cmp.ToString() != "0"
 	}
 	if !changed {
 		return false, "", nil, nil
@@ -380,6 +391,32 @@ func (svs *SysVarReservedConn) evaluate(ctx context.Context, vcursor VCursor, re
 	var buf strings.Builder
 	value.EncodeSQL(&buf)
 	return true, buf.String(), rss[0], nil
+}
+
+// evaluateWithSessionSettings runs the evaluation outside the session's connections, with
+// the session's system variables as settings. A value the session holds for this
+// variable may be what the shard rejects, and the SET replacing it must still get
+// through, so when the evaluation fails because the shard rejects the session's
+// settings, it is retried without the variable's value. Whether the settings are what
+// failed is asked of the shard with the settings alone: an error the evaluation itself
+// raises, such as one that depends on the session's sql_mode, fails the SET as it would
+// in MySQL, and so does a failure that says nothing about the value, such as a timeout
+// or a lost connection.
+func (svs *SysVarReservedConn) evaluateWithSessionSettings(ctx context.Context, vcursor VCursor, rs *srvtopo.ResolvedShard, query string, bindVars map[string]*querypb.BindVariable, held bool) (*sqltypes.Result, error) {
+	qr, err := vcursor.ExecuteWithSessionSettings(ctx, rs, query, bindVars, "")
+	if err == nil || !held || !refusedByMySQL(err) {
+		return qr, err
+	}
+	if settingsErr := vcursor.ValidateSessionSettings(ctx, rs); settingsErr == nil || !refusedByMySQL(settingsErr) {
+		return nil, err
+	}
+	return vcursor.ExecuteWithSessionSettings(ctx, rs, query, bindVars, svs.Name)
+}
+
+// refusedByMySQL reports whether MySQL refused the statement, as opposed to a failure
+// that may succeed on a retry, such as a timeout or a lost connection.
+func refusedByMySQL(err error) bool {
+	return !sqlerror.IsEphemeralError(sqlerror.NewSQLErrorFromError(err))
 }
 
 // apply delivers the stored value to the shards, and has a shard judge it on the SET

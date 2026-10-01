@@ -337,8 +337,9 @@ func TestExecutorSetOp(t *testing.T) {
 	executor, _, _, sbclookup, ctx := createExecutorEnv(t)
 	sysVarSetEnabled = true
 
+	// returnResult is a shard reporting that the assigned value differs from its own
 	returnResult := func(columnName, typ, value string) *sqltypes.Result {
-		return sqltypes.MakeTestResult(sqltypes.MakeTestFields(columnName, typ), value)
+		return sqltypes.MakeTestResult(sqltypes.MakeTestFields(columnName+"|changed", typ+"|int64"), value+"|1")
 	}
 	returnNoResult := func(columnName, typ string) *sqltypes.Result {
 		return sqltypes.MakeTestResult(sqltypes.MakeTestFields(columnName, typ))
@@ -778,11 +779,11 @@ func TestExecutorSetAndSelect(t *testing.T) {
 			sbc.ExecCount.Store(0) // reset the value
 
 			if tcase.val != "" {
-				// check query result for `select <new_setting> from dual where @@transaction_isolation != <new_setting>
+				// check query result for `select v, @@transaction_isolation != v from (select <new_setting> as v) as t
 				// not always the check query is the first query, so setting it two times, as it will use one of those results.
 				sbc.SetResults([]*sqltypes.Result{
-					sqltypes.MakeTestResult(sqltypes.MakeTestFields(tcase.sysVar, "varchar"), tcase.val), // one for set prequeries
-					sqltypes.MakeTestResult(sqltypes.MakeTestFields(tcase.sysVar, "varchar"), tcase.val), // second for check query
+					sqltypes.MakeTestResult(sqltypes.MakeTestFields(tcase.sysVar+"|changed", "varchar|int64"), tcase.val+"|1"), // one for set prequeries
+					sqltypes.MakeTestResult(sqltypes.MakeTestFields(tcase.sysVar+"|changed", "varchar|int64"), tcase.val+"|1"), // second for check query
 					sqltypes.MakeTestResult(nil),
 				}) // third one for new set query
 
@@ -864,13 +865,13 @@ func TestSetVarTargetedSession(t *testing.T) {
 	// receives the stored settings with the next query rather than a SET of its own; the
 	// evaluation carries the session's settings, which the first result answers
 	sbc1.SetResults([]*sqltypes.Result{{}, sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields("new", "int64"),
-		"0")})
+		sqltypes.MakeTestFields("new|changed", "int64|int64"),
+		"0|1")})
 	_, err = executorExecSession(ctx, executor, session, "set @@sql_notes = 0", map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{
 		"set sql_mode = 'only_full_group_by'",
-		"select 0 from dual where @@sql_notes != 0",
+		"select v, @@sql_notes != v from (select 0 as v) as t",
 		"set sql_mode = 'only_full_group_by', sql_notes = 0",
 		"select 1 from dual",
 	}, shardSaw())
@@ -934,7 +935,7 @@ func TestSetSysVarMultiAssignmentReadsEarlierAssignment(t *testing.T) {
 	session := econtext.NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: KsTestUnsharded})
 
 	lookup.SetResults([]*sqltypes.Result{
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("new", "int64"), "1"),
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("new|changed", "int64|int64"), "1|1"),
 		// the validation of the first value: its settings and its query
 		{},
 		{},
@@ -946,7 +947,7 @@ func TestSetSysVarMultiAssignmentReadsEarlierAssignment(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "2", session.SystemVariables["default_week_format"])
 	utils.MustMatch(t, []*querypb.BoundQuery{
-		{Sql: "select 1 from dual where @@default_week_format != 1", BindVariables: map[string]*querypb.BindVariable{}},
+		{Sql: "select v, @@default_week_format != v from (select 1 as v) as t", BindVariables: map[string]*querypb.BindVariable{}},
 		{Sql: "set default_week_format = 1", BindVariables: map[string]*querypb.BindVariable{}},
 		{Sql: "select 1 from dual", BindVariables: map[string]*querypb.BindVariable{}},
 		// the second assignment reads the first one's value
@@ -989,19 +990,19 @@ func TestSetSysVarEvaluatesInTransaction(t *testing.T) {
 	})
 	_, err := executorExecSession(ctx, executor, session, "begin", nil)
 	require.NoError(t, err)
-	_, err = executorExecSession(ctx, executor, session, "update t1 set v = 2 where id = 1", nil)
+	_, err = executorExecSession(ctx, executor, session, "update t1 set n = 2 where id = 1", nil)
 	require.NoError(t, err)
 	require.Len(t, session.ShardSessions, 1)
 	beginCount := sbc1.BeginCount.Load()
 	sbc1.Queries = nil
 
-	sbc1.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("v", "int64"), "2")})
-	_, err = executorExecSession(ctx, executor, session, "set @@default_week_format = (select v from t1 where id = 1)", nil)
+	sbc1.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("v|changed", "int64|int64"), "2|1")})
+	_, err = executorExecSession(ctx, executor, session, "set @@default_week_format = (select n from t1 where id = 1)", nil)
 	require.NoError(t, err)
 
 	require.NotEmpty(t, sbc1.Queries)
 	// the planner already hints the subqueries, as in any statement of the session
-	assert.Equal(t, "select /*+ SET_VAR(sql_mode = 'only_full_group_by') */ (select /*+ SET_VAR(sql_mode = 'only_full_group_by') */ v from t1 where id = 1) from dual where @@default_week_format != (select /*+ SET_VAR(sql_mode = 'only_full_group_by') */ v from t1 where id = 1)", sbc1.Queries[0].Sql)
+	assert.Equal(t, "select /*+ SET_VAR(sql_mode = 'only_full_group_by') */ v, @@default_week_format != v from (select (select /*+ SET_VAR(sql_mode = 'only_full_group_by') */ n from t1 where id = 1) as v) as t", sbc1.Queries[0].Sql)
 	assert.Equal(t, beginCount, sbc1.BeginCount.Load())
 	assert.Equal(t, "2", session.SystemVariables["default_week_format"])
 }
