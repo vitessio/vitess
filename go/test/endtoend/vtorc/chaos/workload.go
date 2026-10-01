@@ -40,16 +40,19 @@ type WriteRecord struct {
 // Only an INSERT that returned without error counts as acked; a timeout or connection error is
 // "unknown" (it may or may not have committed) and is never counted as acked.
 type Workload struct {
-	db      *sql.DB
-	next    atomic.Int64
-	mu      sync.Mutex
-	recs    []WriteRecord
-	reads   []ReadRecord
-	probes  []ProbeRecord
-	cancel  context.CancelFunc
-	wg      sync.WaitGroup
-	log     *EventLog
-	failing atomic.Bool
+	db     *sql.DB
+	next   atomic.Int64
+	mu     sync.Mutex
+	recs   []WriteRecord
+	reads  []ReadRecord
+	probes []ProbeRecord
+	// acked are the acknowledged writes, in the order they completed.
+	acked        []ackedWrite
+	replicaReads []ReplicaReadRecord
+	cancel       context.CancelFunc
+	wg           sync.WaitGroup
+	log          *EventLog
+	failing      atomic.Bool
 	// stopped is when Stop was called: the end of the scenario for availability metrics.
 	stopped time.Time
 }
@@ -103,8 +106,104 @@ func (w *Workload) run(ctx context.Context, worker int, interval time.Duration) 
 		}
 		w.mu.Lock()
 		w.recs = append(w.recs, rec)
+		if rec.Acked {
+			w.acked = append(w.acked, ackedWrite{id: rec.ID, end: rec.End})
+		}
 		w.mu.Unlock()
 	}
+}
+
+// ackedWrite is an acknowledged write and when its client got the acknowledgement.
+type ackedWrite struct {
+	id  int64
+	end time.Time
+}
+
+// lastAckedBefore returns the last write whose acknowledgement completed before t, if any.
+func (w *Workload) lastAckedBefore(t time.Time) (ackedWrite, bool) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	i := sort.Search(len(w.acked), func(i int) bool { return !w.acked[i].end.Before(t) })
+	if i == 0 {
+		return ackedWrite{}, false
+	}
+	return w.acked[i-1], true
+}
+
+// ReplicaReadRecord is one replica read through vtgate: which mysqld answered it, and whether it
+// saw two writes that had been acknowledged before the read started: the last one, and the last
+// one acknowledged at least StaleAge earlier.
+type ReplicaReadRecord struct {
+	Start, End time.Time
+	UUID       string
+	Err        string
+	// Checked is set when a write had been acknowledged before the read.
+	Checked bool
+	// Missing is set when the read did not see the last write acknowledged before it started,
+	// which LatestAckedAt acknowledged.
+	Missing       bool
+	LatestAckedAt time.Time
+	// MissingOld is set when the read did not see the last write acknowledged at least StaleAge
+	// before it started.
+	MissingOld bool
+}
+
+// StaleAge is how old an acknowledged write must be for a replica read that misses it to count
+// as stale beyond normal apply latency.
+const StaleAge = time.Second
+
+// StartReplicaReader reads through vtgate from REPLICA tablets (ks@replica) every interval. Each
+// read returns @@global.server_uuid, which tells which mysqld vtgate routed it to, and whether two
+// acknowledged writes are visible (see ReplicaReadRecord), which tells whether the answer was
+// stale relative to the writes that the primary acknowledged.
+func (w *Workload) StartReplicaReader(port int, interval time.Duration) {
+	db, err := sql.Open("mysql", fmt.Sprintf("root@tcp(127.0.0.1:%d)/%s@replica?timeout=1s&readTimeout=2s&writeTimeout=2s&interpolateParams=true", port, keyspaceName))
+	if err != nil {
+		return
+	}
+	db.SetMaxOpenConns(1)
+	ctx, cancel := context.WithCancel(context.Background())
+	prev := w.cancel
+	w.cancel = func() { cancel(); prev() }
+	w.wg.Go(func() {
+		defer db.Close()
+		tick := time.NewTicker(interval)
+		defer tick.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-tick.C:
+			}
+			rec := ReplicaReadRecord{Start: time.Now()}
+			latest, ok := w.lastAckedBefore(rec.Start)
+			old, _ := w.lastAckedBefore(rec.Start.Add(-StaleAge))
+			rec.Checked = ok
+			rec.LatestAckedAt = latest.end
+			var latestSeen, oldSeen int
+			qctx, qcancel := context.WithTimeout(context.Background(), 2*time.Second)
+			err := db.QueryRowContext(qctx, fmt.Sprintf("select @@global.server_uuid, (select count(*) from %s where id = ?), (select count(*) from %s where id = ?)", tableName, tableName),
+				latest.id, old.id).Scan(&rec.UUID, &latestSeen, &oldSeen)
+			qcancel()
+			rec.End = time.Now()
+			if err != nil {
+				rec.Err = err.Error()
+			} else if ok {
+				rec.Missing = latestSeen == 0
+				rec.MissingOld = old.id != 0 && oldSeen == 0
+			}
+			w.mu.Lock()
+			w.replicaReads = append(w.replicaReads, rec)
+			w.mu.Unlock()
+		}
+	})
+}
+
+// ReplicaReads returns the replica reads.
+func (w *Workload) ReplicaReads() []ReplicaReadRecord {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return append([]ReplicaReadRecord(nil), w.replicaReads...)
 }
 
 // Stop stops the writers and waits for in-flight writes to finish (bounded by their timeouts).

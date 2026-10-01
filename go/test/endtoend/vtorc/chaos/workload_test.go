@@ -206,3 +206,33 @@ func TestParseErrLogLine(t *testing.T) {
 	_, ok = parseErrLogLine("not a log line")
 	assert.False(t, ok)
 }
+
+func TestLastAckedBefore(t *testing.T) {
+	t0 := time.Now()
+	w := &Workload{acked: []ackedWrite{{id: 1, end: t0}, {id: 2, end: t0.Add(time.Second)}, {id: 3, end: t0.Add(2 * time.Second)}}}
+	_, ok := w.lastAckedBefore(t0)
+	assert.False(t, ok)
+	got, ok := w.lastAckedBefore(t0.Add(1500 * time.Millisecond))
+	assert.True(t, ok)
+	assert.Equal(t, int64(2), got.id)
+	got, _ = w.lastAckedBefore(t0.Add(time.Hour))
+	assert.Equal(t, int64(3), got.id)
+}
+
+func TestReplicaReadsBy(t *testing.T) {
+	t0 := time.Now()
+	at := func(s float64) time.Time { return t0.Add(time.Duration(s * float64(time.Second))) }
+	reads := []ReplicaReadRecord{
+		{Start: at(0), UUID: "a"},
+		{Start: at(1), UUID: "a", Missing: true},
+		{Start: at(2), UUID: "a", Missing: true, MissingOld: true},
+		{Start: at(3), UUID: "a", Missing: true, MissingOld: true},
+		{Start: at(4), UUID: "b"},
+		{Start: at(5), Err: "no healthy tablet"},
+		{Start: at(9), UUID: "a"},
+	}
+	stats, failed := replicaReadsBy(reads, at(1), at(9))
+	assert.Equal(t, 1, failed)
+	assert.Equal(t, &replicaReadStats{Answered: 3, Missing: 3, Stale: 2, First: at(1), Last: at(3), FirstStale: at(2), LastStale: at(3)}, stats["a"])
+	assert.Equal(t, 1, stats["b"].Answered)
+}

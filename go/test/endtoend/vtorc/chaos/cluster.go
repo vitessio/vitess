@@ -84,6 +84,12 @@ type Options struct {
 	// one of cells). Extra tablets get their own network group (tablet4, ...) but share that
 	// cell's etcd and VTOrc.
 	ExtraTabletCells []string
+	// VtgateExtraArgs are extra vtgate flags.
+	VtgateExtraArgs []string
+	// CellsAlias puts all cells in one cell alias, so that vtgate (in zone1) routes replica
+	// reads to the REPLICA tablets of every cell: it only routes them to tablets of its own cell
+	// or cell alias.
+	CellsAlias bool
 }
 
 // Chaos is a running reference deployment plus fault injection machinery.
@@ -271,7 +277,12 @@ func NewChaos(t *testing.T, name string, opts Options) *Chaos {
 		return primary != nil && primary.Tablet.VttabletProcess.GetTabletType() == "primary"
 	}, 90*time.Second, time.Second, "no primary elected")
 
+	if opts.CellsAlias {
+		out, err := ci.VtctldClientProcess.ExecuteCommandWithOutput("AddCellsAlias", "--cells", strings.Join(cells, ","), "all")
+		require.NoError(t, err, out)
+	}
 	// vtgate in zone1, watching all cells.
+	ci.VtGateExtraArgs = append(ci.VtGateExtraArgs, opts.VtgateExtraArgs...)
 	vtg := ci.NewVtgateInstance()
 	vtg.CellsToWatch = strings.Join(cells, ",")
 	vtg.Binary = path.Join(c.wrappers("vtgate", "vtgate"), "vtgate")

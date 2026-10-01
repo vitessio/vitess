@@ -406,6 +406,36 @@ Failover (6.4–7.2s to the group's election), the longest write gap (G3E 7.0–
 
 **Decision: 2s.** It keeps as many interrupted joins as 3s, measurably more than 1s, and fences a partitioned primary 1s later than 1s rather than 2s. It costs the OFFLINE_MODE read fencing that only 1s gave, which the READ_ONLY default does not rely on. Evidence: `/home/ubuntu/chaos-umt/` (`summaries/` has the per-run tables).
 
+## Replica reads with polling lag tracking
+
+With the `READ_ONLY` exit state action, a member that leaves its group stays readable, so replica reads from it must be bounded by the tablet's replication lag tracking (design: "Replica reads and replication lag" in `doc/design-docs/GroupReplication.md`). In polling mode (`--enable-replication-reporter`) the poller only read `SHOW REPLICA STATUS FOR CHANNEL ''`, and a member has no default channel.
+
+**Before** (44f9d49):
+- Unit level: `poller.Status()` on a member (the server returns no row for `SHOW REPLICA STATUS FOR CHANNEL ''`) returned `no replication status (errno 100)`, which makes the tablet's health check go unhealthy.
+- `TestGroupReplicationReplicaReadsWithPollingLag` with the 44f9d49 binaries: both secondaries logged `Going unhealthy due to replication error: no replication status (errno 100) (sqlstate HY000)`, and vtgate refused every `@replica` read for 90s with `no healthy tablet available for 'keyspace:"ks" shard:"0" tablet_type:REPLICA'`.
+- The cluster framework passes `--enable-replication-reporter` to every tablet, so every GR chaos run above that did not set `CHAOS_VTTABLET_HEARTBEAT=1` had its secondaries NOT_SERVING. The harness only read from the primary, so nothing showed it.
+- An applier-based lag alone does not fence a cut-off member. Raw MySQL 8.4.11, a group of two: with its primary frozen (SIGSTOP), the secondary stayed `ONLINE` in the same view (`17908682034375831:2`), with `COUNT_TRANSACTIONS_IN_QUEUE=0`, `COUNT_TRANSACTIONS_REMOTE_IN_APPLIER_QUEUE=0` and no worker applying. Only the peer's `UNREACHABLE` state showed that it received nothing.
+
+**After.** The poller reads the member's group state with one query and takes the legitimacy verdict of the tablet's sync loop; a member that is not `ONLINE` with quorum in the shard's legitimate group reports the lag accumulated since it last was. `TestGroupReplicationReplicaReadsWithPollingLag` passes (both secondaries answer `@replica` reads), as do `TestGroupReplicationLifecycle` and `TestGroupReplicationOneVoterPerCell`.
+
+G13 (new, harness only: `TestG13SecondaryCutOffFromGroupReplicaReads`) cuts off the secondary that answers replica reads from the other members, while vtgate, VTOrc and the topology servers still reach it, for 47s, and reads through vtgate `@replica` every 100ms. Each read returns the answering `server_uuid` and checks whether two acknowledged writes are visible: the last one acknowledged before the read, and the last one acknowledged at least 1s before it ("stale"). vtgate runs with `--discovery-low-replication-lag 5s` and `--min-number-serving-vttablets 1` (with the default of 2 and two secondaries, vtgate keeps a lagging secondary until the tablet's 2h unhealthy threshold), the tablets with `--health-check-interval 1s`; one run each:
+
+| G13 | polling | heartbeat (`--heartbeat-interval 1s`) |
+|---|---|---|
+| cut-off member left its group | +7.3s | +7.9s |
+| cut-off secondary's last replica read | +10.1s | +7.1s |
+| its stale answers (first) | 50 of 56 (+1.1s) | 32 of 37 (+1.3s) |
+| other secondary during the cut: reads answered, stale | 410, 0 | 441, 0 |
+| failed replica reads | 0 | 0 |
+| cut-off secondary back in replica reads after the heal | 13.4s (ONLINE after 11.4s) | 11.3s (ONLINE after 10.7s) |
+| writes acked / lost | 8713 / 0 | 8733 / 0 |
+
+With polling, the cut-off member is healthy for MySQL until Group Replication suspects its peers, about 5s after the cut (`its view of the group has no quorum (1 of 3 members reachable)` at +5.8s, the sync loop's verdict at +5.6s); its lag counts from its last healthy health check (+4.8s) and passed 5s at +9.8s. Heartbeat lag counts from the last heartbeat it applied, at the cut. Polling thus serves stale replica reads about 3s longer here, and up to the ~5s detection time in general.
+
+The first polling run of G13 found that MySQL blocks the read of the group state while VTOrc's `GroupMemberNotOnline` recovery runs `START GROUP_REPLICATION` on the cut-off member, which VTOrc can reach: the reads timed out after the poller's 5s, the poller fell back to `no replication status`, and the tablet stopped serving, holding the query service's state lock for 5s on every health check. The poller now bounds the read to 1s, does not repeat it for 5s after a failure, and counts the member as not healthy meanwhile (`its group replication state cannot be read`, logged every 6s in the second run).
+
+Regressions in polling mode (the harness default), same binaries: S1 failover 7.1s, gap 7.25s, 0/2240 lost, 0 violations; S3 failover 7.1s, gap 9.05s, 0/3728 lost, 0 violations. Evidence: `/home/ubuntu/chaos-results-lag-*`.
+
 ## Not tested
 
 - S11/S11b/S11c and S12/S13 as written: they use `SOURCE_DELAY`, `fixReplica` and the default channel, which GR members do not have. G11/G11k/G11s replace them.
@@ -417,6 +447,8 @@ Failover (6.4–7.2s to the group's election), the longest write gap (G3E 7.0–
 ```
 go/test/endtoend/vtorc/chaos/chaos_run.sh -test.run '^TestS7dFlappingPrimaryLong$' -test.v -test.timeout 30m   # semi-sync
 CHAOS_DURABILITY=group_replication_cross_cell go/test/endtoend/vtorc/chaos/chaos_run.sh -test.run '^TestG11GracefulLeaveThenPrimaryDies$' -test.v -test.timeout 30m
+CHAOS_DURABILITY=group_replication_cross_cell go/test/endtoend/vtorc/chaos/chaos_run.sh -test.run '^TestG13SecondaryCutOffFromGroupReplicaReads$' -test.v -test.timeout 30m   # polling
+CHAOS_VTTABLET_HEARTBEAT=1 CHAOS_DURABILITY=group_replication_cross_cell go/test/endtoend/vtorc/chaos/chaos_run.sh -test.run '^TestG13SecondaryCutOffFromGroupReplicaReads$' -test.v -test.timeout 30m
 ```
 
 `chaos_run.sh` must run as root; it builds the test binary, drops to `RUN_USER` (default `ubuntu`) with `CAP_NET_ADMIN`, and deletes the run's VTDATAROOT afterwards. `CHAOS_TABLET_EXTRA_ARGS` adds vttablet flags. Reports go to `/home/$RUN_USER/chaos-results/<scenario>/`.
