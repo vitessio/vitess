@@ -176,18 +176,8 @@ func (lud *LdapUserData) update() {
 	if !lud.updating.CompareAndSwap(false, true) {
 		return
 	}
-<<<<<<< HEAD
-	lud.updating = true
-	lud.Unlock()
-	err := lud.asl.Client.Connect("tcp", &lud.asl.ServerConfig)
-||||||| parent of c4ad3c3058 (Clear the LDAP updating latch when a refresh fails #21340 (#21341))
-	lud.updating = true
-	lud.Unlock()
-	err := lud.asl.Connect("tcp", &lud.asl.ServerConfig)
-=======
 	defer lud.updating.Store(false)
-	err := lud.asl.Connect("tcp", &lud.asl.ServerConfig)
->>>>>>> c4ad3c3058 (Clear the LDAP updating latch when a refresh fails #21340 (#21341))
+	err := lud.asl.Client.Connect("tcp", &lud.asl.ServerConfig)
 	if err != nil {
 		log.Errorf("Error updating LDAP user data: %v", err)
 		return
