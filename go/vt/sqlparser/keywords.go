@@ -606,6 +606,7 @@ var keywords = []keyword{
 	{"sensitive", UNUSED},
 	{"separator", SEPARATOR},
 	{"sequence", SEQUENCE},
+	{"serial", SERIAL},
 	{"serializable", SERIALIZABLE},
 	{"session", SESSION},
 	{"set", SET},
