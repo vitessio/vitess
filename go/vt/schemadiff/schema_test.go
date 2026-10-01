@@ -400,6 +400,10 @@ func TestInvalidSchema(t *testing.T) {
 			schema: "create table t10(id int primary key); create table t11 (id int primary key, i int, key ix(i), constraint f10 foreign key (i) references t10(id) on delete restrict)",
 		},
 		{
+			// SERIAL's implicit unique key covers the referenced column
+			schema: "create table t10(id serial); create table t11 (id int primary key, i bigint unsigned, key ix(i), constraint f10 foreign key (i) references t10(id) on delete restrict)",
+		},
+		{
 			schema:    "create table t11 (id int primary key, i int, constraint f11 foreign key (i7) references t11(id) on delete restrict)",
 			expectErr: &InvalidColumnInForeignKeyConstraintError{Table: "t11", Constraint: "f11", Column: "i7"},
 		},

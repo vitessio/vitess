@@ -58,10 +58,16 @@ func TestCreateTableDiff(t *testing.T) {
 			to:   "create table t (id int primary key)",
 		},
 		{
-			// SERIAL is an alias for BIGINT UNSIGNED NOT NULL AUTO_INCREMENT UNIQUE
+			// SERIAL is an alias for BIGINT UNSIGNED NOT NULL AUTO_INCREMENT UNIQUE, and
+			// MySQL keeps its unique key as a key of the table
 			name: "serial is identical to its expansion",
 			from: "create table t (id serial)",
-			to:   "create table t (id bigint unsigned not null auto_increment unique)",
+			to:   "create table t (id bigint unsigned not null auto_increment, unique key id (id))",
+		},
+		{
+			name: "serial with another key is identical to its expansion",
+			from: "create table t (id serial, b int, key b_idx (b))",
+			to:   "create table t (id bigint unsigned not null auto_increment, b int, unique key id (id), key b_idx (b))",
 		},
 		{
 			name: "serial primary key is identical to its expansion",
@@ -3411,13 +3417,19 @@ func TestNormalize(t *testing.T) {
 			to:   "CREATE TABLE `t` (\n\t`id` tinyint(1),\n\t`b` tinyint(1),\n\tPRIMARY KEY (`id`)\n)",
 		},
 		{
-			// SERIAL is an alias for BIGINT UNSIGNED NOT NULL AUTO_INCREMENT UNIQUE
+			// SERIAL is an alias for BIGINT UNSIGNED NOT NULL AUTO_INCREMENT UNIQUE, and
+			// MySQL keeps its unique key as a key of the table
 			name: "normalize serial",
 			from: "create table t (id serial)",
-			to:   "CREATE TABLE `t` (\n\t`id` bigint unsigned NOT NULL AUTO_INCREMENT UNIQUE\n)",
+			to:   "CREATE TABLE `t` (\n\t`id` bigint unsigned NOT NULL AUTO_INCREMENT,\n\tUNIQUE KEY `id` (`id`)\n)",
 		},
 		{
-			// A column holds a single inline key, so SERIAL's unique key is a key of its own
+			// an inline UNIQUE is the same key
+			name: "normalize serial unique",
+			from: "create table t (id serial unique)",
+			to:   "CREATE TABLE `t` (\n\t`id` bigint unsigned NOT NULL AUTO_INCREMENT,\n\tUNIQUE KEY `id` (`id`)\n)",
+		},
+		{
 			name: "normalize serial primary key",
 			from: "create table t (id serial primary key)",
 			to:   "CREATE TABLE `t` (\n\t`id` bigint unsigned NOT NULL AUTO_INCREMENT,\n\tPRIMARY KEY (`id`),\n\tUNIQUE KEY `id` (`id`)\n)",

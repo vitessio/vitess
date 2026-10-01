@@ -850,12 +850,12 @@ func newPrimaryKeyIndexDefinitionSingleColumn(name sqlparser.IdentifierCI) *sqlp
 }
 
 // normalizeSerialColumns expands a SERIAL column into what MySQL stores for it.
-// SERIAL is an alias for BIGINT UNSIGNED NOT NULL AUTO_INCREMENT UNIQUE, so
-// `create table t (id serial)` turns into
-// `create table t (id bigint unsigned not null auto_increment unique)`.
-// A column holds a single inline key, so when it already has one other than a
-// unique key, such as `id serial primary key`, the unique key is added as a key
-// of its own, and named like any other unnamed key.
+// SERIAL is an alias for BIGINT UNSIGNED NOT NULL AUTO_INCREMENT UNIQUE, and MySQL
+// keeps its unique key as a key of the table, so `create table t (id serial)`
+// turns into `create table t (id bigint unsigned not null auto_increment, unique
+// key (id))`, where the key is named like any other unnamed key. An inline UNIQUE
+// on the column is the same key, so it is folded into it; any other inline key,
+// such as a PRIMARY KEY, is kept and normalized as usual.
 func (c *CreateTableEntity) normalizeSerialColumns() {
 	for _, col := range c.TableSpec.Columns {
 		if !strings.EqualFold(col.Type.Type, "serial") {
@@ -868,16 +868,13 @@ func (c *CreateTableEntity) normalizeSerialColumns() {
 		}
 		col.Type.Options.Null = new(false)
 		col.Type.Options.Autoincrement = true
-		switch col.Type.Options.KeyOpt {
-		case sqlparser.ColKeyNone:
-			col.Type.Options.KeyOpt = sqlparser.ColKeyUnique
-		case sqlparser.ColKeyUnique, sqlparser.ColKeyUniqueKey:
-		default:
-			c.TableSpec.Indexes = append(c.TableSpec.Indexes, &sqlparser.IndexDefinition{
-				Info:    &sqlparser.IndexInfo{Type: sqlparser.IndexTypeUnique},
-				Columns: []*sqlparser.IndexColumn{{Column: col.Name}},
-			})
+		if col.Type.Options.KeyOpt == sqlparser.ColKeyUnique || col.Type.Options.KeyOpt == sqlparser.ColKeyUniqueKey {
+			col.Type.Options.KeyOpt = sqlparser.ColKeyNone
 		}
+		c.TableSpec.Indexes = append(c.TableSpec.Indexes, &sqlparser.IndexDefinition{
+			Info:    &sqlparser.IndexInfo{Type: sqlparser.IndexTypeUnique},
+			Columns: []*sqlparser.IndexColumn{{Column: col.Name}},
+		})
 	}
 }
 
