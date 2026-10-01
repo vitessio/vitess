@@ -725,3 +725,25 @@ func TestGroupReplicationPrimaryWithoutVoterMajorityWritesNoHeartbeats(t *testin
 	setTabletType(t, tm, topodatapb.TabletType_REPLICA)
 	assert.False(t, qsc.HeartbeatWritesSuppressed())
 }
+
+// TestFetchPeerServerUUIDsReturnsWhenAlreadyDone checks that the tablet does not wait for a voter
+// that does not answer once the voter majority is established. The sync loop learns the voters'
+// server_uuids in the background, and a promotion that found the majority missing, and then
+// listed the voters whose server_uuid it did not know, could start waiting after that background
+// fetch had established the majority: it then waited for the failed voter until its timeout.
+func TestFetchPeerServerUUIDsReturnsWhenAlreadyDone(t *testing.T) {
+	withGroupReplication(t)
+	oldPeerTimeout := groupReplicationPeerTimeout
+	groupReplicationPeerTimeout = 30 * time.Second
+	t.Cleanup(func() { groupReplicationPeerTimeout = oldPeerTimeout })
+	tm, _, peers, ts := newLegitimacyTestTM(t)
+	peers.mu.Lock()
+	peers.frozen = map[string]bool{"cell1-0000000002": true}
+	peers.mu.Unlock()
+	frozen, err := ts.GetTablet(t.Context(), &topodatapb.TabletAlias{Cell: "cell1", Uid: 2})
+	require.NoError(t, err)
+
+	start := time.Now()
+	tm.fetchPeerServerUUIDs(t.Context(), []*topodatapb.Tablet{frozen.Tablet}, func() bool { return true })
+	assert.Less(t, time.Since(start), groupReplicationPeerTimeout/2, "the tablet must not wait for a voter once the majority is established")
+}

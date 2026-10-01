@@ -235,9 +235,12 @@ func (tm *TabletManager) votersWithoutServerUUID(rec *shardGroupRecord) []*topod
 
 // fetchPeerServerUUIDs asks the given tablets for their FullStatus concurrently, each bounded by
 // groupReplicationPeerTimeout, and remembers the server_uuids they report. It returns as soon as
-// enough reports that done returns true, or once every tablet answered or timed out.
+// done returns true, which it checks first: the server_uuids can be learned concurrently, by the
+// sync loop's background fetch, between the caller's check and this call, and waiting for an
+// answer then made a promotion wait for a voter that does not answer. It otherwise returns once
+// every tablet answered or timed out.
 func (tm *TabletManager) fetchPeerServerUUIDs(ctx context.Context, tablets []*topodatapb.Tablet, done func() bool) {
-	if tm.tmc == nil {
+	if tm.tmc == nil || done() {
 		return
 	}
 	answered := make(chan struct{}, len(tablets))
