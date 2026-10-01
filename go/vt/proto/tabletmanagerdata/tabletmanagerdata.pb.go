@@ -6335,7 +6335,7 @@ func (*ValidateVReplicationPermissionsRequest) Descriptor() ([]byte, []int) {
 
 type ValidateVReplicationPermissionsResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// The --db_filtered_user on the tablet.
+	// The --db-filtered-user on the tablet.
 	User string `protobuf:"bytes,1,opt,name=user,proto3" json:"user,omitempty"`
 	// Does the user have the minimum privileges needed to manage
 	// vreplication metadata.

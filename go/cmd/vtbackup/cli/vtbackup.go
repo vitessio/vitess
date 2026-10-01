@@ -549,7 +549,7 @@ func restoreForBackup(ctx context.Context, mysqlTermHandler *mySQLTermHandler, t
 	case mysqlctl.ErrNoBackup:
 		// There is no backup found, but we may be taking the initial backup of a shard.
 		if !allowFirstBackup {
-			return replication.Position{}, vterrors.New(vtrpc.Code_FAILED_PRECONDITION, "no backup found; not starting up empty since --initial-backup flag was not enabled")
+			return replication.Position{}, vterrors.New(vtrpc.Code_FAILED_PRECONDITION, "no backup found; not starting up empty since --allow-first-backup flag was not enabled")
 		}
 
 		deprecatedDurationByPhase.Set("RestoreLastBackup", int64(time.Since(restoreAt).Seconds()))
@@ -976,14 +976,14 @@ func shouldBackup(ctx context.Context, topoServer *topo.Server, backupStorage ba
 
 	// We need at least one backup so we can restore first, unless the user explicitly says we don't
 	if len(backups) == 0 && !allowFirstBackup {
-		return false, errors.New("no existing backups to restore from; backup is not possible since --initial-backup flag was not enabled")
+		return false, errors.New("no existing backups to restore from; backup is not possible since --allow-first-backup flag was not enabled")
 	}
 	if lastBackup == nil {
 		if allowFirstBackup {
 			// There's no complete backup, but we were told to take one from scratch anyway.
 			return true, nil
 		}
-		return false, errors.New("no complete backups to restore from; backup is not possible since --initial-backup flag was not enabled")
+		return false, errors.New("no complete backups to restore from; backup is not possible since --allow-first-backup flag was not enabled")
 	}
 
 	// Has it been long enough since the last complete backup to need a new one?
