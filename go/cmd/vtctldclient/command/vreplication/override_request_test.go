@@ -88,6 +88,31 @@ func TestVtctldclientConfigOverrideRequestsIncludeParallelReplicationWorkers(t *
 		require.Equal(t, "7", server.moveTablesCreateReq.WorkflowOptions.Config["vreplication-parallel-replication-workers"])
 	})
 
+	// A whitespace-only value is not a value: it is sent as empty, which the
+	// tablet ignores on create, rather than as whitespace the tablet cannot
+	// parse, which would keep the workflow's stream from starting.
+	t.Run("MoveTablesCreate sends a whitespace-only value as empty", func(t *testing.T) {
+		server.moveTablesCreateReq = nil
+		os.Args = []string{
+			"vtctldclient",
+			"--server", "ignored",
+			"MoveTables",
+			"--workflow", "wf1",
+			"--target-keyspace", "target",
+			"create",
+			"--source-keyspace", "source",
+			"--all-tables",
+			"--config-overrides", "vreplication-net-read-timeout= ",
+		}
+
+		err := command.Root.Execute()
+		require.NoError(t, err)
+		require.NotNil(t, server.moveTablesCreateReq)
+		value, ok := server.moveTablesCreateReq.WorkflowOptions.Config["vreplication-net-read-timeout"]
+		require.True(t, ok)
+		require.Empty(t, value)
+	})
+
 	t.Run("WorkflowUpdate", func(t *testing.T) {
 		os.Args = []string{
 			"vtctldclient",
