@@ -260,7 +260,7 @@ func groupReplicationRecoveryTestWithPolicy(t *testing.T, durability string, tab
 	oldTS, oldTMC := ts, tmc
 	t.Cleanup(func() { ts, tmc = oldTS, oldTMC })
 	ctx := t.Context()
-	ts, recoveryTopoFactory = memorytopo.NewServerAndFactory(ctx, "zone1", "zone2")
+	ts, recoveryTopoFactory = memorytopo.NewServerAndFactory(ctx, "zone1", "zone2", "zone3")
 	require.NoError(t, ts.CreateKeyspace(ctx, "ks", &topodatapb.Keyspace{DurabilityPolicy: durability}))
 	require.NoError(t, ts.CreateShard(ctx, "ks", "0"))
 	for _, tablet := range tablets {

@@ -63,20 +63,20 @@ const (
 var groupReplicationCellTimeout = 2 * time.Second
 
 // getReachableShardTablets returns the tablets of the shard from the cells whose topology server
-// answers within groupReplicationCellTimeout.
-func getReachableShardTablets(ctx context.Context, keyspace, shard string) ([]*topo.TabletInfo, error) {
+// answers within groupReplicationCellTimeout, and the cells that did not answer.
+func getReachableShardTablets(ctx context.Context, keyspace, shard string) ([]*topo.TabletInfo, []string, error) {
 	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer cancel()
-	tabletMap, err := ts.GetTabletMapForShardWithCellTimeout(ctx, keyspace, shard, groupReplicationCellTimeout)
+	tabletMap, failedCells, err := ts.GetTabletMapAndFailedCellsForShard(ctx, keyspace, shard, groupReplicationCellTimeout)
 	if err != nil && !topo.IsErrType(err, topo.PartialResult) {
-		return nil, err
+		return nil, nil, err
 	}
 	aliases := slices.Sorted(maps.Keys(tabletMap))
 	tablets := make([]*topo.TabletInfo, 0, len(aliases))
 	for _, alias := range aliases {
 		tablets = append(tablets, tabletMap[alias])
 	}
-	return tablets, nil
+	return tablets, failedCells, nil
 }
 
 // groupReplicationFailoverSkipCode decides whether a failover of the shard primary (an emergency
@@ -141,8 +141,18 @@ func promoteGroupPrimary(ctx context.Context, analysisEntry *inst.DetectionAnaly
 	}
 	// The voters of the cells that do not answer are counted as not ONLINE: the majority of the
 	// voters must be ONLINE among the others.
-	tabletInfos, err := getReachableShardTablets(ctx, tablet.Keyspace, tablet.Shard)
+	tabletInfos, failedCells, err := getReachableShardTablets(ctx, tablet.Keyspace, tablet.Shard)
 	if err != nil {
+		return true, topologyRecovery, err
+	}
+	if slices.Contains(failedCells, tablet.Alias.Cell) {
+		// The tablet writes its own record, in its cell's topology server, before it becomes
+		// PRIMARY: neither it nor VTOrc can promote it while that server does not answer. The
+		// group primary is moved to a member whose cell answers instead (NEW-4).
+		target, err := moveGroupPrimaryOutOfUnreachableCell(ctx, analysisEntry, tablet, shardInfo, tabletInfos, failedCells, topologyRecovery, logger)
+		if target != nil {
+			promoted = &inst.Instance{InstanceAlias: target.Alias}
+		}
 		return true, topologyRecovery, err
 	}
 	statuses := readShardTabletStatuses(ctx, tabletInfos)
@@ -240,7 +250,7 @@ func checkLegitimateGroupActive(ctx context.Context, tablet *topodatapb.Tablet) 
 		return vterrors.Wrapf(err, "failed to read the shard record of %s", topoproto.KeyspaceShardString(tablet.Keyspace, tablet.Shard))
 	}
 	// One active member of the legitimate group is enough, in any cell that answers.
-	tabletInfos, err := getReachableShardTablets(ctx, tablet.Keyspace, tablet.Shard)
+	tabletInfos, _, err := getReachableShardTablets(ctx, tablet.Keyspace, tablet.Shard)
 	if err != nil {
 		return err
 	}

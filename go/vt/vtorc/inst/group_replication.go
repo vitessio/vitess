@@ -577,8 +577,14 @@ func matchGroupPrimaryNotInTopo(a *DetectionAnalysis, ca *clusterAnalysis, now t
 	if a.TabletType == topodatapb.TabletType_PRIMARY || a.CurrentTabletType == topodatapb.TabletType_PRIMARY {
 		return false
 	}
-	key := "GroupPrimaryNotInTopo/" + topoproto.TabletAliasString(a.AnalyzedInstanceAlias)
-	return GroupReplicationConditions.Observe(key, now) >= groupPrimaryNotInTopoGracePeriod
+	return ObserveGroupPrimaryNotInTopo(a.AnalyzedInstanceAlias, now) >= groupPrimaryNotInTopoGracePeriod
+}
+
+// ObserveGroupPrimaryNotInTopo records that the tablet's MySQL is the primary of its shard's
+// legitimate group while the tablet is not the topology primary, and returns for how long VTOrc has
+// observed that.
+func ObserveGroupPrimaryNotInTopo(alias *topodatapb.TabletAlias, now time.Time) time.Duration {
+	return GroupReplicationConditions.Observe("GroupPrimaryNotInTopo/"+topoproto.TabletAliasString(alias), now)
 }
 
 // ConditionTracker remembers since when a condition has been observed continuously. A condition

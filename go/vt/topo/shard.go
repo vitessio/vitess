@@ -717,9 +717,17 @@ func (ts *Server) GetTabletMapForShardByCell(ctx context.Context, keyspace, shar
 // cells are returned with ErrPartialResult. The map is indexed by
 // topoproto.TabletAliasString(tablet alias).
 func (ts *Server) GetTabletMapForShardWithCellTimeout(ctx context.Context, keyspace, shard string, cellTimeout time.Duration) (map[string]*TabletInfo, error) {
+	result, _, err := ts.GetTabletMapAndFailedCellsForShard(ctx, keyspace, shard, cellTimeout)
+	return result, err
+}
+
+// GetTabletMapAndFailedCellsForShard is GetTabletMapForShardWithCellTimeout, and also returns the
+// cells that did not answer within cellTimeout, sorted, so that the caller can tell a tablet whose
+// cell's topology server does not answer from a tablet that does not exist.
+func (ts *Server) GetTabletMapAndFailedCellsForShard(ctx context.Context, keyspace, shard string, cellTimeout time.Duration) (map[string]*TabletInfo, []string, error) {
 	cells, err := ts.GetCellInfoNames(ctx)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	var (
 		mu       sync.Mutex
@@ -751,15 +759,15 @@ func (ts *Server) GetTabletMapForShardWithCellTimeout(ctx context.Context, keysp
 	}
 	wg.Wait()
 	if len(failed) == 0 {
-		return result, nil
-	}
-	if answered == 0 && len(result) == 0 && firstErr != nil {
-		// No cell answered: for example, the shard does not exist.
-		return nil, firstErr
+		return result, nil, nil
 	}
 	sort.Strings(failed)
+	if answered == 0 && len(result) == 0 && firstErr != nil {
+		// No cell answered: for example, the shard does not exist.
+		return nil, failed, firstErr
+	}
 	log.Warn(fmt.Sprintf("GetTabletMapForShardWithCellTimeout(%v,%v): got partial result, failed cells: %v", keyspace, shard, strings.Join(failed, ",")))
-	return result, NewError(PartialResult, strings.Join(failed, ","))
+	return result, failed, NewError(PartialResult, strings.Join(failed, ","))
 }
 
 func shardFilePath(keyspace, shard string) string {

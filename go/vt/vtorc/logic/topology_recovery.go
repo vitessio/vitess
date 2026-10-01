@@ -90,6 +90,10 @@ const (
 	// RecoverySkipGroupPrimaryAlive is used when VTOrc cannot reach the primary tablet, but the
 	// members of its replication group still see its MySQL as their primary.
 	RecoverySkipGroupPrimaryAlive
+	// RecoverySkipGroupPrimaryMoveBackoff is used while VTOrc waits before it tries again to move
+	// the primary of a replication group away from a member whose cell's topology server does not
+	// answer, after it could not.
+	RecoverySkipGroupPrimaryMoveBackoff
 )
 
 // String represents a RecoverySkip as a string.
@@ -113,6 +117,8 @@ func (rsc RecoverySkipCode) String() string {
 		return "GroupReplicationGracePeriod"
 	case RecoverySkipGroupPrimaryAlive:
 		return "GroupPrimaryAlive"
+	case RecoverySkipGroupPrimaryMoveBackoff:
+		return "GroupPrimaryMoveBackoff"
 	default:
 		return "None"
 	}
@@ -755,6 +761,7 @@ func getCheckAndRecoverFunctionCode(analysisEntry *inst.DetectionAnalysis) (reco
 		}
 		recoveryFunc = recoverPrimaryTabletDeletedFunc
 	case inst.GroupPrimaryNotInTopo:
+		recoverySkipCode = groupPrimaryMoveSkipCode(analysisEntry, time.Now())
 		recoveryFunc = promoteGroupPrimaryFunc
 	case inst.GroupMemberNotOnline:
 		recoveryFunc = startGroupReplicationFunc
@@ -974,6 +981,18 @@ func recoveryRunsWithoutShardPrimary(recoveryFunctionCode recoveryFunction) bool
 		// A group that was just bootstrapped, or that lost the majority of its voters, only gets
 		// a primary tablet once enough voters have joined it: its primary is not followed before
 		// a majority of the voters is ONLINE in its view.
+		return true
+	default:
+		return false
+	}
+}
+
+// isGroupReplicationTabletRecovery returns whether the given recovery is a group replication
+// recovery of a single tablet. These recoveries read the shard's tablets cell by cell, each cell with
+// its own deadline, and work with the cells that answer.
+func isGroupReplicationTabletRecovery(recoveryFunctionCode recoveryFunction) bool {
+	switch recoveryFunctionCode {
+	case promoteGroupPrimaryFunc, startGroupReplicationFunc, updateGroupReplicationVotersFunc:
 		return true
 	default:
 		return false
@@ -1200,7 +1219,13 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.DetectionAnalysis) (err 
 			// So, we only need to refresh the tablet info records (to know if the primary tablet has changed),
 			// and the replication data of the new primary and this tablet.
 			logger.Info("Refreshing shard tablet info")
-			refreshTabletInfoOfShard(ctx, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
+			if isGroupReplicationTabletRecovery(checkAndRecoverFunctionCode) {
+				// A group replication recovery can do with the tablet records of the cells
+				// that answer: it must not wait for a cell whose topology server is cut off.
+				refreshReachableTabletInfoOfShard(ctx, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
+			} else {
+				refreshTabletInfoOfShard(ctx, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
+			}
 			logger.Info("Discovering analysis instance")
 			DiscoverInstance(analysisEntry.AnalyzedInstanceAlias, true)
 			logger.Info("Getting shard primary")

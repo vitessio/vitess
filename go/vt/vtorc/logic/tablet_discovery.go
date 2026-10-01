@@ -359,6 +359,32 @@ func refreshTabletInfoOfShard(ctx context.Context, keyspace, shard string) {
 	}, false, nil)
 }
 
+// refreshReachableTabletInfoOfShard is refreshTabletInfoOfShard for the group replication
+// recoveries of a single tablet. It reads each cell with its own deadline
+// (groupReplicationCellTimeout), refreshes the tablet records of the cells that answer, and leaves
+// those of the other cells as they are. A cell whose topology server is cut off otherwise holds the
+// recovery for the whole remote operation timeout, after which nothing is refreshed: in the G9b
+// chaos scenario the group elected a member of such a cell, and VTOrc must move the group primary
+// out of it without waiting for that cell.
+func refreshReachableTabletInfoOfShard(ctx context.Context, keyspace, shard string) {
+	log.Info(fmt.Sprintf("refresh of the tablet records of shard %v/%v from the cells that answer", keyspace, shard))
+	tablets, failedCells, err := getReachableShardTablets(ctx, keyspace, shard)
+	if err != nil {
+		log.Error(fmt.Sprintf("Error fetching tablets for keyspace/shard %v/%v: %v", keyspace, shard, err))
+		return
+	}
+	// Only the tablets of the cells that answered may be forgotten.
+	query := "SELECT alias FROM vitess_tablet WHERE keyspace = ? AND shard = ?"
+	args := sqlutils.Args(keyspace, shard)
+	if len(failedCells) > 0 {
+		query += " AND cell NOT IN (" + strings.TrimSuffix(strings.Repeat("?, ", len(failedCells)), ", ") + ")"
+		for _, cell := range failedCells {
+			args = append(args, cell)
+		}
+	}
+	refreshTablets(tablets, query, args, func(*topodatapb.TabletAlias) {}, false, nil)
+}
+
 func refreshTabletsInKeyspaceShard(ctx context.Context, keyspace, shard string, loader func(*topodatapb.TabletAlias), forceRefresh bool, tabletsToIgnore []*topodatapb.TabletAlias) {
 	tablets, err := getShardTabletsByCell(ctx, keyspace, shard, nil)
 	if err != nil {

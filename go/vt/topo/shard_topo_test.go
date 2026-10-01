@@ -127,6 +127,13 @@ func TestGetTabletMapForShardWithCellTimeout(t *testing.T) {
 	require.True(t, topo.IsErrType(err, topo.PartialResult), "got %v", err)
 	assert.Equal(t, []string{"zone1-0000000001"}, maps.Keys(tablets))
 
+	// The cells that did not answer are named, so that a tablet of a cut-off cell can be told
+	// from a tablet that does not exist.
+	tablets, failed, err := ts.GetTabletMapAndFailedCellsForShard(readCtx, "ks", "0", 100*time.Millisecond)
+	require.True(t, topo.IsErrType(err, topo.PartialResult), "got %v", err)
+	assert.Equal(t, []string{"zone1-0000000001"}, maps.Keys(tablets))
+	assert.Equal(t, []string{"zone2"}, failed)
+
 	// A shard that does not exist is an error, not a partial result.
 	_, err = ts.GetTabletMapForShardWithCellTimeout(readCtx, "ks", "-80", 100*time.Millisecond)
 	require.True(t, topo.IsErrType(err, topo.NoNode), "got %v", err)
