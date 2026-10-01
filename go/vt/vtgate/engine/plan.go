@@ -18,6 +18,7 @@ package engine
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"sync/atomic"
@@ -259,9 +260,18 @@ func (pk PlanKey) DebugString() string {
 }
 
 func (pk PlanKey) Hash() theine.HashKey256 {
-	hasher := vthash.New256()
+	hasher := vthash.New256Value()
 	_, _ = hasher.WriteUint16(uint16(pk.Collation))
 	_, _ = hasher.WriteUint16(uint16(pk.TabletType))
+
+	// Include field lengths so different string boundaries cannot serialize identically.
+	var lengths [32]byte
+	binary.LittleEndian.PutUint64(lengths[0:8], uint64(len(pk.CurrentKeyspace)))
+	binary.LittleEndian.PutUint64(lengths[8:16], uint64(len(pk.Destination)))
+	binary.LittleEndian.PutUint64(lengths[16:24], uint64(len(pk.SetVarComment)))
+	binary.LittleEndian.PutUint64(lengths[24:32], uint64(len(pk.Query)))
+	_, _ = hasher.Write(lengths[:])
+
 	_, _ = hasher.WriteString(pk.CurrentKeyspace)
 	_, _ = hasher.WriteString(pk.Destination)
 	_, _ = hasher.WriteString(pk.SetVarComment)
