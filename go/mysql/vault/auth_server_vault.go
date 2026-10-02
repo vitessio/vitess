@@ -39,7 +39,7 @@ type AuthServerVault struct {
 	methods []mysql.AuthMethod
 	mu      sync.Mutex
 	// users, passwords and user data
-	// We use the same JSON format as for --mysql_auth_server_static
+	// We use the same JSON format as for --mysql-auth-server-static-file
 	// Acts as a cache for the in-Vault data
 	entries                map[string][]*mysql.AuthServerStaticEntry
 	vaultCacheExpireTicker *time.Ticker
@@ -54,11 +54,25 @@ type AuthServerVault struct {
 func InitAuthServerVault(vaultAddr string, vaultTimeout time.Duration, vaultCACert, vaultPath string, vaultCacheTTL time.Duration, vaultTokenFile, vaultRoleID, vaultRoleSecretIDFile, vaultRoleMountPoint string) {
 	// Check critical parameters.
 	if vaultAddr == "" {
+<<<<<<< HEAD
 		log.Infof("Not configuring AuthServerVault, as --mysql_auth_vault_addr is empty.")
+||||||| parent of a240ed6c4b (Refer to flags by their dashed names in help and error text (#21339))
+		log.Info("Not configuring AuthServerVault, as --mysql_auth_vault_addr is empty.")
+=======
+		log.Info("Not configuring AuthServerVault, as --mysql-auth-vault-addr is empty.")
+>>>>>>> a240ed6c4b (Refer to flags by their dashed names in help and error text (#21339))
 		return
 	}
 	if vaultPath == "" {
+<<<<<<< HEAD
 		log.Exitf("If using Vault auth server, --mysql_auth_vault_path is required.")
+||||||| parent of a240ed6c4b (Refer to flags by their dashed names in help and error text (#21339))
+		log.Error("If using Vault auth server, --mysql_auth_vault_path is required.")
+		os.Exit(1)
+=======
+		log.Error("If using Vault auth server, --mysql-auth-vault-path is required.")
+		os.Exit(1)
+>>>>>>> a240ed6c4b (Refer to flags by their dashed names in help and error text (#21339))
 	}
 
 	registerAuthServerVault(vaultAddr, vaultTimeout, vaultCACert, vaultPath, vaultCacheTTL, vaultTokenFile, vaultRoleID, vaultRoleSecretIDFile, vaultRoleMountPoint)
@@ -76,11 +90,23 @@ func newAuthServerVault(addr string, timeout time.Duration, caCertPath string, p
 	// Validate more parameters
 	token, err := readFromFile(tokenFilePath)
 	if err != nil {
+<<<<<<< HEAD
 		return nil, fmt.Errorf("No Vault token in provided filename for --mysql_auth_vault_tokenfile")
+||||||| parent of a240ed6c4b (Refer to flags by their dashed names in help and error text (#21339))
+		return nil, errors.New("No Vault token in provided filename for --mysql_auth_vault_tokenfile")
+=======
+		return nil, errors.New("No Vault token in provided filename for --mysql-auth-vault-tokenfile")
+>>>>>>> a240ed6c4b (Refer to flags by their dashed names in help and error text (#21339))
 	}
 	secretID, err := readFromFile(secretIDPath)
 	if err != nil {
+<<<<<<< HEAD
 		return nil, fmt.Errorf("No Vault secret_id in provided filename for --mysql_auth_vault_role_secretidfile")
+||||||| parent of a240ed6c4b (Refer to flags by their dashed names in help and error text (#21339))
+		return nil, errors.New("No Vault secret_id in provided filename for --mysql_auth_vault_role_secretidfile")
+=======
+		return nil, errors.New("No Vault secret_id in provided filename for --mysql-auth-vault-role-secretidfile")
+>>>>>>> a240ed6c4b (Refer to flags by their dashed names in help and error text (#21339))
 	}
 
 	config := vaultapi.NewConfig()
