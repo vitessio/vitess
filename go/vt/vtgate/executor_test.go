@@ -2175,15 +2175,13 @@ func TestServingKeyspaces(t *testing.T) {
 }
 
 // TestLockPlansStayOnSameKeyspaceAfterServingBlip tests that GET_LOCK and
-// RELEASE_LOCK keep one lock-session target when the two statements are planned
-// under different serving sets.
+// RELEASE_LOCK stay on the alphabetically first VSchema keyspace when they are
+// planned under different serving sets.
 //
-// FirstSortedKeyspace picks the alphabetically first serving keyspace and
-// buildLockingPrimitive stores that keyspace on the cached plan. The plan cache
-// key does not include the serving set, and a serving change does not clear
-// plans. GET_LOCK and RELEASE_LOCK are separate statements, so one can stay
-// pinned to the keyspace that was serving when it was planned while the other
-// pins to a different keyspace planned during the blip.
+// Lock plans cache that keyspace. The plan-cache key does not include the
+// serving set, and a serving change does not clear plans. GET_LOCK and
+// RELEASE_LOCK are separate statements, so a serving-dependent choice would
+// pin them to different keyspaces and release held locks.
 func TestLockPlansStayOnSameKeyspaceAfterServingBlip(t *testing.T) {
 	buffer.SetBufferingModeInTestingEnv(true)
 	defer func() {
@@ -2221,9 +2219,14 @@ func TestLockPlansStayOnSameKeyspaceAfterServingBlip(t *testing.T) {
 	require.ElementsMatch(t, []string{KsTestUnsharded}, gw.GetServingKeyspaces())
 
 	sbc1.Queries = nil
-	_, err = exec(executor, econtext.NewSafeSession(nil), "select release_lock('lock name') from dual")
-	require.NoError(t, err)
-	require.NotEmpty(t, sbclookup.Queries)
+	// Plan only. Executing here would target the down keyspace and wait out
+	// the failover buffer. The cached plan is what a later RELEASE_LOCK uses.
+	releasePlan, _ := getPlanCached(t, t.Context(), executor, econtext.NewSafeSession(nil), "select release_lock('lock name') from dual", sqlparser.MarginComments{}, nil, false)
+	lock, ok := releasePlan.Instructions.(*engine.Lock)
+	require.True(t, ok)
+	require.Equal(t, KsTestSharded, lock.Keyspace.Name)
+	require.Empty(t, sbc1.Queries)
+	require.Empty(t, sbclookup.Queries)
 
 	setServing(KsTestSharded, true)
 	require.ElementsMatch(t, []string{KsTestSharded, KsTestUnsharded}, gw.GetServingKeyspaces())
