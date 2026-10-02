@@ -173,6 +173,30 @@ func TestTableACLAuthorize(t *testing.T) {
 	readerACL := tacl.Authorized("test_data_any", READER)
 	require.True(t, readerACL.IsMember(&querypb.VTGateCallerID{Username: "u1"}), "user u1 should have reader permission to table test_data_any")
 	require.True(t, readerACL.IsMember(&querypb.VTGateCallerID{Username: "u2"}), "user u2 should have reader permission to table test_data_any")
+
+	// No group covers every table, not even one with a prefix, so no one holds
+	// every role on all of them.
+	allTablesACL := tacl.AuthorizedForAllTables()
+	require.False(t, allTablesACL.IsMember(&querypb.VTGateCallerID{Username: "u1"}), "no user should hold every role on every table without a group covering every table")
+	require.Empty(t, allTablesACL.GroupName)
+
+	// A group covering every table ("%") must be the only one, as any other
+	// entry would overlap it. Only a user holding every role in it is a member:
+	// u3 is, u1 is not a writer, and u2 is not an admin.
+	require.NoError(t, tacl.Set(&tableaclpb.Config{
+		TableGroups: []*tableaclpb.TableGroupSpec{{
+			Name:                 "all",
+			TableNamesOrPrefixes: []string{"%"},
+			Readers:              []string{"u1", "u2", "u3"},
+			Writers:              []string{"u2", "u3"},
+			Admins:               []string{"u1", "u3"},
+		}},
+	}))
+	allTablesACL = tacl.AuthorizedForAllTables()
+	require.Equal(t, "all", allTablesACL.GroupName)
+	require.True(t, allTablesACL.IsMember(&querypb.VTGateCallerID{Username: "u3"}), "user u3 should hold every role on every table")
+	require.False(t, allTablesACL.IsMember(&querypb.VTGateCallerID{Username: "u1"}), "user u1 should not hold every role on every table")
+	require.False(t, allTablesACL.IsMember(&querypb.VTGateCallerID{Username: "u2"}), "user u2 should not hold every role on every table")
 }
 
 func TestFailedToCreateACL(t *testing.T) {

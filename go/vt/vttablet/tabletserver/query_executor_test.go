@@ -1139,6 +1139,7 @@ func TestQueryExecutorTableAclPassthroughDenied(t *testing.T) {
 	db.AddQueryPattern("(?is)do .*", &sqltypes.Result{})
 	db.AddQueryPattern("(?is)call .*", &sqltypes.Result{})
 	db.AddQueryPattern("(?is)load data .*", &sqltypes.Result{})
+	db.AddQueryPattern("(?is)create table .*", &sqltypes.Result{})
 
 	// A subquery-reading DO, a stored-procedure CALL, and a LOAD DATA: one per
 	// tablet plan type whose statement the parser leaves opaque.
@@ -1166,6 +1167,28 @@ func TestQueryExecutorTableAclPassthroughDenied(t *testing.T) {
 	require.NoError(t, tableacl.InitFromProto(config))
 	callerID := &querypb.VTGateCallerID{Username: "u2", Groups: []string{"eng", "beta"}}
 	ctx := callerid.NewContext(t.Context(), nil, callerID)
+
+	// allTablesConfig has a single group covering every table ("%"), the only
+	// group a "%" entry allows: u4 holds every role in it, u3 is a reader and a
+	// writer, and u5 only an ADMIN. The roles are granted separately, so u5
+	// cannot read.
+	allTablesConfig := &tableaclpb.Config{
+		TableGroups: []*tableaclpb.TableGroupSpec{{
+			Name:                 "all",
+			TableNamesOrPrefixes: []string{"%"},
+			Readers:              []string{"u3", "u4"},
+			Writers:              []string{"u3", "u4"},
+			Admins:               []string{"u4", "u5"},
+		}},
+	}
+	// useAllTablesConfig switches the table ACL to allTablesConfig for one
+	// sub-case and restores config when it ends.
+	useAllTablesConfig := func(t *testing.T) {
+		t.Helper()
+		require.NoError(t, tableacl.InitFromProto(allTablesConfig))
+		t.Cleanup(func() { require.NoError(t, tableacl.InitFromProto(config)) })
+	}
+	adminCtx := callerid.NewContext(t.Context(), nil, &querypb.VTGateCallerID{Username: "u4"})
 
 	// newServer starts a tablet server for one sub-case and stops it when that
 	// sub-case ends, whether or not its assertions pass, so a failure cannot
@@ -1239,8 +1262,55 @@ func TestQueryExecutorTableAclPassthroughDenied(t *testing.T) {
 				require.NoError(t, err, "with strict table ACL off the statement must still run")
 				assert.Equal(t, calledBefore+1, db.GetQueryCalledNum(tc.query), "the statement must reach the backend")
 			})
+
+			// A caller holding every role in a group that covers every table may
+			// do anything to any table the statement could touch, so its
+			// unknown table set does not matter. One that lacks a role does not.
+			t.Run("a caller with every role on every table runs", func(t *testing.T) {
+				useAllTablesConfig(t)
+				tsv := newServer(t, enableStrictTableACL)
+				qre := newTestQueryExecutor(adminCtx, tsv, tc.query, 0)
+				require.True(t, qre.plan.TablesUndetermined)
+				allowedKey := strings.Join([]string{"undetermined-table-set", "all", tc.planID.String(), "u4"}, ".")
+				allowedBefore := tsv.stats.TableaclAllowed.Counts()[allowedKey]
+				calledBefore := db.GetQueryCalledNum(tc.query)
+				_, err := qre.Execute()
+				require.NoError(t, err, "a caller with every role on every table must be able to run the statement under strict table ACL")
+				assert.Equal(t, calledBefore+1, db.GetQueryCalledNum(tc.query), "the statement must reach the backend")
+				assert.Equal(t, allowedBefore+1, tsv.stats.TableaclAllowed.Counts()[allowedKey], "the access must be counted as allowed for the group covering every table")
+			})
+
+			for _, user := range []string{"u3", "u5"} {
+				t.Run("a caller lacking a role on every table is denied/"+user, func(t *testing.T) {
+					useAllTablesConfig(t)
+					tsv := newServer(t, enableStrictTableACL)
+					userCtx := callerid.NewContext(t.Context(), nil, &querypb.VTGateCallerID{Username: user})
+					qre := newTestQueryExecutor(userCtx, tsv, tc.query, 0)
+					calledBefore := db.GetQueryCalledNum(tc.query)
+					_, err := qre.Execute()
+					require.EqualError(t, err, tc.planID.String()+" command denied to user '"+user+"' for a table set that cannot be determined (ACL check error)")
+					assert.Equal(t, calledBefore, db.GetQueryCalledNum(tc.query), "the backend must not see a statement the ACL denied")
+				})
+			}
 		})
 	}
+
+	// A CREATE TABLE the parser only partially parses names the table it
+	// creates, but its body is opaque and may copy rows from other tables. An
+	// caller holding every role in a group covering every table may read those
+	// tables too, so the statement runs for it.
+	t.Run("a partially parsed CREATE TABLE runs for a caller with every role on every table", func(t *testing.T) {
+		useAllTablesConfig(t)
+		const query = "create table ct (select pk from test_table)"
+		tsv := newServer(t, enableStrictTableACL)
+		qre := newTestQueryExecutor(adminCtx, tsv, query, 0)
+		require.Equal(t, planbuilder.PlanDDL, qre.plan.PlanID)
+		require.True(t, qre.plan.TablesUndetermined)
+		calledBefore := db.GetQueryCalledNum(query)
+		_, err := qre.Execute()
+		require.NoError(t, err)
+		assert.Equal(t, calledBefore+1, db.GetQueryCalledNum(query), "the statement must reach the backend")
+	})
 }
 
 // TestQueryExecutorTableAclCTEBypass guards against GHSA-mv22-c3rp-c6m4: a
