@@ -1903,6 +1903,10 @@ var validSQL = []struct {
 	input:  "create table serial (serial serial)",
 	output: "create table `serial` (\n\t`serial` serial\n)",
 }, {
+	input: "alter table t add column s serial",
+}, {
+	input: "alter table t modify column id serial first",
+}, {
 	input:  "create table a (b1 bool not null primary key, b2 boolean not null)",
 	output: "create table a (\n\tb1 bool not null primary key,\n\tb2 boolean not null\n)",
 }, {
