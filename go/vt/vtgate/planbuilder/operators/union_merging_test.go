@@ -25,86 +25,44 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-// TestHasShardedReferenceAlternate verifies that UNION ALL keeps a reference
-// alternate separate from sharded routes, including single-shard routes.
-func TestHasShardedReferenceAlternate(t *testing.T) {
-	referenceKeyspace := &vindexes.Keyspace{Name: "reference"}
-	shardedKeyspace := &vindexes.Keyspace{Name: "sharded", Sharded: true}
-
-	makeRoute := func(routing Routing) *Route {
-		return &Route{Routing: routing}
-	}
-	makeReferenceRoute := func(alternate *Route) *Route {
-		return makeRoute(&AnyShardRouting{
-			keyspace: referenceKeyspace,
-			Alternates: map[*vindexes.Keyspace]*Route{
-				shardedKeyspace: alternate,
-			},
-		})
-	}
-	scatter := makeRoute(&ShardedRouting{keyspace: shardedKeyspace, RouteOpCode: engine.Scatter})
-	singleShard := makeRoute(&ShardedRouting{keyspace: shardedKeyspace, RouteOpCode: engine.EqualUnique})
-	none := makeRoute(&NoneRouting{keyspace: shardedKeyspace})
-
+func TestRouteContainsSpecialUnionInput(t *testing.T) {
+	keyspace := &vindexes.Keyspace{Name: "main", Sharded: true}
 	tests := []struct {
-		name string
-		lhs  *Route
-		rhs  *Route
-		want bool
+		name  string
+		route *Route
+		want  bool
 	}{
-		{
-			name: "blocks alternate scatter on the left",
-			lhs:  makeReferenceRoute(makeRoute(&ShardedRouting{keyspace: shardedKeyspace, RouteOpCode: engine.Scatter})),
-			rhs:  scatter,
-			want: true,
-		},
-		{
-			name: "blocks alternate scatter on the right",
-			lhs:  scatter,
-			rhs:  makeReferenceRoute(makeRoute(&ShardedRouting{keyspace: shardedKeyspace, RouteOpCode: engine.Scatter})),
-			want: true,
-		},
-		{
-			name: "blocks single-shard alternate even when other route is single-shard",
-			lhs:  makeReferenceRoute(makeRoute(&ShardedRouting{keyspace: shardedKeyspace, RouteOpCode: engine.Scatter})),
-			rhs:  singleShard,
-			want: true,
-		},
-		{
-			name: "blocks scatter even when alternate is single-shard",
-			lhs:  makeReferenceRoute(makeRoute(&AnyShardRouting{keyspace: shardedKeyspace})),
-			rhs:  scatter,
-			want: true,
-		},
-		{
-			name: "does not block an empty alternate",
-			lhs:  makeReferenceRoute(makeRoute(&NoneRouting{keyspace: shardedKeyspace})),
-			rhs:  scatter,
-			want: false,
-		},
-		{
-			name: "does not block an empty other route",
-			lhs:  makeReferenceRoute(makeRoute(&AnyShardRouting{keyspace: shardedKeyspace})),
-			rhs:  none,
-			want: false,
-		},
-		{
-			name: "blocks single-shard alternate and route",
-			lhs:  makeReferenceRoute(makeRoute(&ShardedRouting{keyspace: shardedKeyspace, RouteOpCode: engine.EqualUnique})),
-			rhs:  singleShard,
-			want: true,
-		},
-		{
-			name: "does not block without alternate",
-			lhs:  makeRoute(&AnyShardRouting{keyspace: referenceKeyspace}),
-			rhs:  scatter,
-			want: false,
-		},
+		{name: "reference route", route: &Route{Routing: &AnyShardRouting{keyspace: keyspace}}, want: true},
+		{name: "dual route", route: &Route{Routing: &DualRouting{}}, want: true},
+		{name: "merged provenance", route: &Route{Routing: &ShardedRouting{keyspace: keyspace}, ContainsSpecialUnionInput: true}, want: true},
+		{name: "sharded route", route: &Route{Routing: &ShardedRouting{keyspace: keyspace}}, want: false},
+		{name: "nil route", route: nil, want: false},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			assert.Equal(t, test.want, hasShardedReferenceAlternate(test.lhs, test.rhs))
+			assert.Equal(t, test.want, routeContainsSpecialUnionInput(test.route))
+		})
+	}
+
+	merged := &Route{Routing: &ShardedRouting{keyspace: keyspace, RouteOpCode: engine.EqualUnique}}
+	markSpecialUnionInput(merged, routeContainsSpecialUnionInput(&Route{Routing: &DualRouting{}}))
+	assert.True(t, merged.ContainsSpecialUnionInput)
+}
+
+func TestIsSingleShardRouting(t *testing.T) {
+	for _, test := range []struct {
+		opcode engine.Opcode
+		want   bool
+	}{
+		{opcode: engine.EqualUnique, want: true},
+		{opcode: engine.Reference, want: true},
+		{opcode: engine.Equal},
+		{opcode: engine.IN},
+		{opcode: engine.Scatter},
+	} {
+		t.Run(test.opcode.String(), func(t *testing.T) {
+			assert.Equal(t, test.want, isSingleShardRouting(&ShardedRouting{RouteOpCode: test.opcode}))
 		})
 	}
 }

@@ -269,9 +269,10 @@ func (jm *joinMerger) merge(ctx *plancontext.PlanningContext, op1, op2 *Route, r
 		}
 	}
 	return &Route{
-		unaryOperator: newUnaryOp(aj),
-		MergedWith:    []*Route{op2},
-		Routing:       r,
-		Conditions:    conditions,
+		unaryOperator:             newUnaryOp(aj),
+		MergedWith:                []*Route{op2},
+		ContainsSpecialUnionInput: routeContainsSpecialUnionInput(op1) || routeContainsSpecialUnionInput(op2),
+		Routing:                   r,
+		Conditions:                conditions,
 	}
 }
