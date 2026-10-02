@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"net"
 	"sync/atomic"
 	"testing"
@@ -156,8 +157,11 @@ func TestReportedOrca(t *testing.T) {
 	t.Cleanup(GRPCServer.Stop)
 
 	serverMetrics := GRPCServerMetricsRecorder.ServerMetrics()
+	// registerOrca publishes the first CPU sample. With cgroup v2 that sample is only a
+	// baseline, so CPU stays unset (-1) until the first ticker update; host CPU and later
+	// samples report a value.
 	cpuUsage := serverMetrics.CPUUtilization
-	assert.GreaterOrEqualf(t, cpuUsage, float64(0), "CPU Utilization is not set %.2f", cpuUsage)
+	assert.Truef(t, cpuUsage == -1 || (cpuUsage >= 0 && !math.IsInf(cpuUsage, 1)), "CPU Utilization is invalid %.2f", cpuUsage)
 	t.Logf("CPU Utilization is %.2f", cpuUsage)
 
 	memUsage := serverMetrics.MemUtilization
