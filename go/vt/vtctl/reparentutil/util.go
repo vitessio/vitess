@@ -579,3 +579,72 @@ func GetBackupCandidates(tablets []*topo.TabletInfo, stats []*replicationdatapb.
 	}
 	return res
 }
+
+// backupTabletTypes are the tablet types chosen for a backup when none are requested.
+var backupTabletTypes = []topodatapb.TabletType{
+	topodatapb.TabletType_REPLICA,
+	topodatapb.TabletType_RDONLY,
+	topodatapb.TabletType_SPARE,
+}
+
+// requestableBackupTabletTypes are the tablet types that may be requested for a backup.
+// PRIMARY is one of them, but callers must also require AllowPrimary before choosing it.
+var requestableBackupTabletTypes = []topodatapb.TabletType{
+	topodatapb.TabletType_REPLICA,
+	topodatapb.TabletType_RDONLY,
+	topodatapb.TabletType_SPARE,
+	topodatapb.TabletType_PRIMARY,
+}
+
+// UnsupportedBackupTabletTypes returns the given tablet types that cannot back up a shard.
+func UnsupportedBackupTabletTypes(tabletTypes []topodatapb.TabletType) []topodatapb.TabletType {
+	var unsupported []topodatapb.TabletType
+
+	for _, tabletType := range tabletTypes {
+		if !slices.Contains(requestableBackupTabletTypes, tabletType) {
+			unsupported = append(unsupported, tabletType)
+		}
+	}
+
+	return unsupported
+}
+
+// ChooseBackupTablet returns the tablet that should take a backup of the shard, or nil if none can.
+// tabletTypes is an ordered preference, empty meaning any of backupTabletTypes.
+func ChooseBackupTablet(tablets []*topo.TabletInfo, stats []*replicationdatapb.Status, tabletTypes []topodatapb.TabletType) *topo.TabletInfo {
+	if len(tabletTypes) == 0 {
+		return lowestLagTablet(tablets, stats, backupTabletTypes)
+	}
+
+	for _, tabletType := range tabletTypes {
+		if tablet := lowestLagTablet(tablets, stats, []topodatapb.TabletType{tabletType}); tablet != nil {
+			return tablet
+		}
+	}
+
+	return nil
+}
+
+// lowestLagTablet returns the tablet of one of the given types with the lowest known lag.
+func lowestLagTablet(tablets []*topo.TabletInfo, stats []*replicationdatapb.Status, tabletTypes []topodatapb.TabletType) *topo.TabletInfo {
+	var (
+		chosen *topo.TabletInfo
+		lag    uint32
+	)
+
+	for i, tablet := range tablets {
+		if !slices.Contains(tabletTypes, tablet.Type) {
+			continue
+		}
+		// Ignore a tablet whose replication lag is missing or unknown.
+		if i >= len(stats) || stats[i] == nil || stats[i].ReplicationLagUnknown {
+			continue
+		}
+
+		if tabletLag := stats[i].ReplicationLagSeconds; chosen == nil || tabletLag < lag {
+			chosen, lag = tablet, tabletLag
+		}
+	}
+
+	return chosen
+}

@@ -67,6 +67,7 @@
         - [Slow clean mysqld shutdowns no longer fail backups](#backup-mysqld-shutdown-timeout)
         - [Parallel S3 downloads during restore](#vttablet-s3-parallel-downloads)
         - [lz4 engine: library upgrade and `--compression-level` mapping](#backup-lz4-v4)
+        - [`BackupShard` can choose the tablet type to back up from](#backup-shard-tablet-types)
     - **[VTAdmin](#minor-changes-vtadmin)**
         - [vtadmin-web updated to node v22.23.2 (LTS)](#vtadmin-updated-node)
     - **[General](#minor-changes-general)**
@@ -761,6 +762,21 @@ The `lz4` compression engine now uses the `pierrec/lz4/v4` library instead of `p
 The upgrade changes how `--compression-level` is interpreted for the lz4 engine. Values `0` and `1`, including the default of `1`, select the fast compressor. Values `2` through `9` now select lz4's named hash-chain levels (`Level2` through `Level9`) instead of using the raw value as the hash-chain search depth, so higher values produce a better ratio at more CPU cost. Values above `9` and negative values, which previously requested an unlimited search, select `Level9`. Other compression engines are not affected.
 
 See [#20778](https://github.com/vitessio/vitess/pull/20778) for details.
+
+#### <a id="backup-shard-tablet-types"/>`BackupShard` can choose the tablet type to back up from</a>
+
+`BackupShard` picks whichever of the shard's `REPLICA`, `RDONLY` and `SPARE` tablets has the lowest replication lag, ignoring the type. A new `--tablet-types` flag, and the matching `tablet_types` field on `BackupShardRequest`, turn that into an ordered preference: the first listed type with a usable tablet wins, and the lowest lag decides within a type.
+
+Passing `--tablet-types=rdonly,replica` prioritises backups from an `RDONLY` tablet and falls back to a `REPLICA` if no `RDONLY` tablet can serve one, which keeps backup load off the tablets serving replica reads.
+
+| flags | result |
+|---|---|
+| `--tablet-types=rdonly,replica` | an `RDONLY` tablet, falling back to a `REPLICA` when none can serve the backup |
+| `--tablet-types=rdonly` | an `RDONLY` tablet only, with no fallback |
+| `--tablet-types=rdonly,primary --allow-primary` | the primary only when no `RDONLY` tablet can serve the backup |
+| `--tablet-types=rdonly,primary` | rejected: listing `primary` requires `--allow-primary` |
+| `--tablet-types=rdonly --allow-primary` | an `RDONLY` tablet only, since `--allow-primary` does not add an unlisted primary |
+| unset | unchanged, including the existing fallback to the primary under `--allow-primary` |
 
 ### <a id="minor-changes-vtadmin"/>VTAdmin</a>
 
