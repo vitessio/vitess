@@ -20,6 +20,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/rand/v2"
 	"os"
@@ -1332,15 +1333,34 @@ func terminateRestore(t *testing.T) {
 	assert.True(t, found, "Restore message not found")
 }
 
+// vtctlBackupReplicaNoDestroyNoWrites verifies a usable JSON backup result can
+// be tied to the backup written to storage.
 func vtctlBackupReplicaNoDestroyNoWrites(t *testing.T, replicaIndex int) (backups []string) {
 	replica := getReplica(t, replicaIndex)
 	numBackups := len(waitForNumBackups(t, -1))
 
-	err := localCluster.VtctldClientProcess.ExecuteCommand("Backup", replica.Alias)
-	require.NoError(t, err)
+	output, err := localCluster.VtctldClientProcess.ExecuteCommandWithOutput("Backup", "--json", replica.Alias)
+	require.NoErrorf(t, err, "output: %v", output)
+
+	// A backup that produced data reports status "USABLE" and inlines its MANIFEST, so
+	// callers can identify the backup they just took without listing backup storage.
+	result := parseBackupJSONOutput(t, output)
+	require.Equalf(t, "USABLE", result.Status, "output: %v", output)
+	require.NotNilf(t, result.Manifest, "output: %v", output)
 
 	backups = waitForNumBackups(t, numBackups+1)
 	require.NotEmpty(t, backups)
+
+	// backup_name is a typed field populated by the tablet for every engine, so it
+	// always identifies the backup that landed in storage.
+	require.Equalf(t, backups[len(backups)-1], result.BackupName, "output: %v", output)
+
+	// The mysqlshell engine does not populate BackupName inside its MANIFEST, so only
+	// the engines that do can be tied back through the manifest itself.
+	if currentSetupType != MySQLShell {
+		require.NotEmptyf(t, result.Manifest.BackupName, "output: %v", output)
+		require.Equalf(t, backups[len(backups)-1], result.Manifest.BackupName, "output: %v", output)
+	}
 
 	verifyTabletBackupStats(t, replica.VttabletProcess.GetVars())
 
@@ -1467,6 +1487,50 @@ func readManifestFile(t *testing.T, backupLocation string) (manifest *mysqlctl.B
 	return manifest
 }
 
+// backupJSONOutput mirrors the JSON object that "vtctldclient Backup --json" prints to
+// stdout when the backup stream completes. Manifest is the backup's MANIFEST inlined
+// verbatim, and is nil for an empty (no-op) incremental backup.
+type backupJSONOutput struct {
+	Status     string                   `json:"status"`
+	BackupName string                   `json:"backup_name"`
+	Manifest   *mysqlctl.BackupManifest `json:"manifest"`
+}
+
+// parseBackupJSONOutput extracts the JSON object printed by "vtctldclient Backup --json".
+// ExecuteCommandWithOutput returns stdout and stderr combined, and in JSON mode the log
+// events go to stderr, so the whole output cannot be unmarshalled. The JSON object is
+// printed last, by json.MarshalIndent with a two space indent, so we scan from the end
+// for the opening brace of its first field -- a log line containing the same marker
+// must not win.
+func parseBackupJSONOutput(t *testing.T, output string) *backupJSONOutput {
+	idx := strings.LastIndex(output, "{\n  \"status\"")
+	require.GreaterOrEqualf(t, idx, 0, "no backup JSON object in output: %v", output)
+
+	result := &backupJSONOutput{}
+	err := json.NewDecoder(strings.NewReader(output[idx:])).Decode(result)
+	require.NoErrorf(t, err, "error while parsing backup JSON output: %v", output)
+	return result
+}
+
+// testReplicaEmptyIncrementalBackupJSON verifies the machine readable contract of an
+// empty incremental backup: with --json, vtctldclient reports status "EMPTY" with a null
+// manifest and exits with code 2 (command.EmptyBackupExitCode) so callers can skip follow
+// up work by checking $?. Without --json the same backup exits 0, which the caller
+// asserts. Re-running an incremental backup that found no new data is itself a no-op, so
+// this adds no backup to the shard.
+func testReplicaEmptyIncrementalBackupJSON(t *testing.T, replica *cluster.Vttablet, incrementalFromPos string) {
+	output, err := localCluster.VtctldClientProcess.ExecuteCommandWithOutput("Backup", "--json", "--incremental-from-pos", incrementalFromPos, replica.Alias)
+	// An empty backup is a success that exits non-zero, so ExecuteCommandWithOutput
+	// returns the *exec.ExitError from CombinedOutput rather than nil.
+	exitErr, ok := errors.AsType[*exec.ExitError](err)
+	require.Truef(t, ok, "expected *exec.ExitError, got %v; output: %v", err, output)
+	require.Equalf(t, 2, exitErr.ExitCode(), "output: %v", output)
+
+	result := parseBackupJSONOutput(t, output)
+	require.Equalf(t, "EMPTY", result.Status, "output: %v", output)
+	require.Nilf(t, result.Manifest, "output: %v", output)
+}
+
 func TestReplicaFullBackup(t *testing.T, replicaIndex int) (manifest *mysqlctl.BackupManifest) {
 	backups := vtctlBackupReplicaNoDestroyNoWrites(t, replicaIndex)
 
@@ -1504,6 +1568,8 @@ func waitForNumBackups(t *testing.T, expectNumBackups int) []string {
 	}
 }
 
+// testReplicaIncrementalBackup verifies both stored and empty incremental
+// backup outcomes, including the opt-in JSON exit-code contract.
 func testReplicaIncrementalBackup(t *testing.T, replica *cluster.Vttablet, incrementalFromPos string, expectEmpty bool, expectError string) (manifest *mysqlctl.BackupManifest, backupName string) {
 	numBackups := len(waitForNumBackups(t, -1))
 
@@ -1517,6 +1583,10 @@ func testReplicaIncrementalBackup(t *testing.T, replica *cluster.Vttablet, incre
 
 	if expectEmpty {
 		require.Contains(t, output, mysqlctl.EmptyBackupMessage)
+		// The invocation above had no --json and exited 0, asserted by the NoErrorf
+		// check. Re-run the same no-op backup with --json to cover the other half of
+		// the contract: a machine readable "EMPTY" status and a distinct exit code.
+		testReplicaEmptyIncrementalBackupJSON(t, replica, incrementalFromPos)
 		return nil, ""
 	}
 

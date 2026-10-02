@@ -22,6 +22,7 @@ import (
 	replicationdata "vitess.io/vitess/go/vt/proto/replicationdata"
 	tabletmanagerdata "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodata "vitess.io/vitess/go/vt/proto/topodata"
+	tmclient "vitess.io/vitess/go/vt/vttablet/tmclient"
 )
 
 // MockTabletManagerClient is a mock of TabletManagerClient interface.
@@ -64,10 +65,10 @@ func (mr *MockTabletManagerClientMockRecorder) ApplySchema(ctx, tablet, change a
 }
 
 // Backup mocks base method.
-func (m *MockTabletManagerClient) Backup(ctx context.Context, tablet *topodata.Tablet, req *tabletmanagerdata.BackupRequest) (logutil.EventStream, error) {
+func (m *MockTabletManagerClient) Backup(ctx context.Context, tablet *topodata.Tablet, req *tabletmanagerdata.BackupRequest) (tmclient.BackupStream, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Backup", ctx, tablet, req)
-	ret0, _ := ret[0].(logutil.EventStream)
+	ret0, _ := ret[0].(tmclient.BackupStream)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

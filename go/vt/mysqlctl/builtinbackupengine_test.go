@@ -710,6 +710,7 @@ func TestBackupRestoreWithManyChunks(t *testing.T) {
 	t.Cleanup(mysqld.Close)
 	mysqld.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA", "START REPLICA"}
 
+	var reportedManifest string
 	backupResult, err := be.ExecuteBackup(ctx, BackupParams{
 		Logger: logutil.NewMemoryLogger(),
 		Mysqld: mysqld,
@@ -725,10 +726,15 @@ func TestBackupRestoreWithManyChunks(t *testing.T) {
 		Keyspace:             keyspace,
 		Shard:                shard,
 		MysqlShutdownTimeout: time.Minute,
+		ManifestOut:          &reportedManifest,
 	}, bh)
 
 	require.NoError(t, err)
 	require.Equal(t, BackupUsable, backupResult)
+
+	storedManifest, err := os.ReadFile(path.Join(backupRoot, backupManifestFileName))
+	require.NoError(t, err)
+	require.Equal(t, string(storedManifest), reportedManifest, "ManifestOut must be the MANIFEST bytes written to storage")
 
 	// Restore: read back all 256 chunks and reassemble into the original file.
 	restoreBh := filebackupstorage.NewBackupHandle(nil, "", "", true)

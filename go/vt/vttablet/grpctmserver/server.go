@@ -18,6 +18,7 @@ package grpctmserver
 
 import (
 	"context"
+	"log/slog"
 	"path/filepath"
 	"time"
 
@@ -25,8 +26,11 @@ import (
 
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/callinfo"
+	"vitess.io/vitess/go/vt/grpccommon"
 	"vitess.io/vitess/go/vt/hook"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -693,7 +697,66 @@ func (s *server) Backup(request *tabletmanagerdatapb.BackupRequest, stream table
 		})
 	})
 
-	return s.tm.Backup(ctx, logger, request)
+	outcome, err := s.tm.Backup(ctx, logger, request)
+	if err != nil {
+		return err
+	}
+	// Send a terminal message carrying the backup's MANIFEST and outcome so the
+	// caller can identify the backup (by name) and detect an empty incremental
+	// backup without scraping log lines.
+	//
+	// The terminal message also carries a real (non-nil) completion Event. Older
+	// vtctld/vtctldclient peers predate the manifest/status fields and dereference
+	// Event unconditionally (logutil.LogEvent switches on event.Level), so a nil
+	// Event would panic them during a mixed-version rolling upgrade or downgrade.
+	// A populated Event keeps the terminal message safe for those peers, which log
+	// it as an ordinary line and ignore the unknown manifest/status fields.
+	status := backupResultToStatus(outcome.Result)
+	// Build the completion event through logutil so it carries the same
+	// Time/Level/File/Line shape as every other event on this stream; a
+	// hand-built event would render with an empty "file:line]" prefix.
+	completion := logutil.NewMemoryLogger()
+	completion.Infof("backup completed: %s", status)
+	resp := &tabletmanagerdatapb.BackupResponse{
+		Event:      completion.Events[0],
+		Manifest:   outcome.Manifest,
+		Status:     status,
+		BackupName: outcome.Name,
+	}
+	// A message over the gRPC limit fails the whole RPC, not just this Send, so
+	// the caller would see an error for a backup that is already stored. Drop
+	// the manifest instead; the name and status still identify the backup.
+	if maxSize := grpccommon.MaxMessageSize(); resp.SizeVT() > maxSize {
+		log.Warn("backup MANIFEST exceeds --grpc-max-message-size; sending the terminal Backup message without it",
+			slog.String("backup_name", resp.BackupName),
+			slog.Int("manifest_bytes", len(resp.Manifest)),
+			slog.Int("max_message_size", maxSize),
+		)
+		resp.Manifest = ""
+	}
+	if sendErr := stream.Send(resp); sendErr != nil {
+		// gRPC has already sent this error to the caller as the RPC's status, so
+		// returning it would change nothing. The likely cause is a client that
+		// disconnected during a long backup.
+		log.Warn("backup completed but sending the terminal Backup message failed",
+			slog.String("status", status.String()),
+			slog.Any("error", sendErr),
+		)
+	}
+	return nil
+}
+
+// backupResultToStatus maps the mysqlctl backup classification to the proto
+// status enum sent on the terminal Backup stream message.
+func backupResultToStatus(result mysqlctl.BackupResult) tabletmanagerdatapb.BackupResponse_Status {
+	switch result {
+	case mysqlctl.BackupUsable:
+		return tabletmanagerdatapb.BackupResponse_USABLE
+	case mysqlctl.BackupEmpty:
+		return tabletmanagerdatapb.BackupResponse_EMPTY
+	default:
+		return tabletmanagerdatapb.BackupResponse_STATUS_UNSPECIFIED
+	}
 }
 
 func (s *server) RestoreFromBackup(request *tabletmanagerdatapb.RestoreFromBackupRequest, stream tabletmanagerservicepb.TabletManager_RestoreFromBackupServer) (err error) {

@@ -37,6 +37,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
@@ -1465,10 +1466,12 @@ var (
 	testBackupConcurrency       = int32(24)
 	testBackupAllowPrimary      = false
 	testBackupCalled            = false
+	testBackupManifest          = "{\"BackupName\":\"test-backup\"}"
+	testBackupName              = "test-backup"
 	testRestoreFromBackupCalled = false
 )
 
-func (fra *fakeRPCTM) Backup(ctx context.Context, logger logutil.Logger, request *tabletmanagerdatapb.BackupRequest) error {
+func (fra *fakeRPCTM) Backup(ctx context.Context, logger logutil.Logger, request *tabletmanagerdatapb.BackupRequest) (mysqlctl.BackupOutcome, error) {
 	if fra.panics {
 		panic(errors.New("test-triggered panic"))
 	}
@@ -1476,20 +1479,65 @@ func (fra *fakeRPCTM) Backup(ctx context.Context, logger logutil.Logger, request
 	compare(fra.t, "Backup args", request.AllowPrimary, testBackupAllowPrimary)
 	logStuff(logger, 10)
 	testBackupCalled = true
-	return nil
+	return mysqlctl.BackupOutcome{
+		Name:     testBackupName,
+		Manifest: testBackupManifest,
+		Result:   mysqlctl.BackupUsable,
+	}, nil
 }
 
 func (fra *fakeRPCTM) IsBackupRunning() bool {
 	return false
 }
 
+// compareLoggedBackupStuff reads count log-event messages followed by the
+// terminal message carrying the manifest and status, then expects EOF.
+func compareLoggedBackupStuff(t *testing.T, name string, stream tmclient.BackupStream, count int) error {
+	t.Helper()
+	for i := range count {
+		be, err := stream.Recv()
+		if err != nil {
+			t.Errorf("No logged value for %v/%v", name, i)
+			return err
+		}
+		if be.Event == nil || be.Event.Value != testLogString {
+			t.Errorf("Unexpected log response for %v: got %v expected %v", name, be.Event, testLogString)
+		}
+	}
+	// Terminal message carrying the manifest and status.
+	term, err := stream.Recv()
+	if err != nil {
+		t.Errorf("missing terminal Backup message for %v: %v", name, err)
+		return err
+	}
+	compare(t, "Backup manifest", term.Manifest, testBackupManifest)
+	compare(t, "Backup status", term.Status, tabletmanagerdatapb.BackupResponse_USABLE)
+	compare(t, "Backup name", term.BackupName, testBackupName)
+	// The terminal message must carry a non-nil Event: older vtctld/vtctldclient
+	// peers dereference Event unconditionally, so a nil Event would panic them
+	// during a mixed-version rolling upgrade or downgrade.
+	if term.Event == nil {
+		t.Errorf("terminal Backup message for %v has a nil Event; older peers would panic on it", name)
+	}
+	_, err = stream.Recv()
+	if err == nil {
+		t.Fatalf("log channel wasn't closed for %v", name)
+	}
+	if err == io.EOF {
+		return nil
+	}
+	return err
+}
+
+// tmRPCTestBackup verifies progress events and the terminal backup outcome are
+// delivered in order through a TabletManagerClient implementation.
 func tmRPCTestBackup(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	req := &tabletmanagerdatapb.BackupRequest{Concurrency: testBackupConcurrency, AllowPrimary: testBackupAllowPrimary}
 	stream, err := client.Backup(ctx, tablet, req)
 	if err != nil {
 		t.Fatalf("Backup failed: %v", err)
 	}
-	err = compareLoggedStuff(t, "Backup", stream, 10)
+	err = compareLoggedBackupStuff(t, "Backup", stream, 10)
 	compareError(t, "Backup", err, true, testBackupCalled)
 }
 
