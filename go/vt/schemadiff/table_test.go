@@ -70,6 +70,19 @@ func TestCreateTableDiff(t *testing.T) {
 			to:   "create table t (id bigint unsigned not null auto_increment, b int, unique key id (id), key b_idx (b))",
 		},
 		{
+			// MySQL adds SERIAL's key where the column is defined, so it is named
+			// ahead of the table's own unnamed keys
+			name: "serial with an unnamed key on the same column is identical to its expansion",
+			from: "create table t (id serial, x int, unique key (id, x))",
+			to:   "create table t (id bigint unsigned not null auto_increment, x int, unique key id (id), unique key id_2 (id, x))",
+		},
+		{
+			// named keys keep their names
+			name: "serial with a key named like the column is identical to its expansion",
+			from: "create table t (x int, unique key id (x), id serial)",
+			to:   "create table t (x int, id bigint unsigned not null auto_increment, unique key id (x), unique key id_2 (id))",
+		},
+		{
 			// an explicit NULL after SERIAL wins, as in MySQL
 			name: "nullable serial is identical to its expansion",
 			from: "create table t (id serial null)",

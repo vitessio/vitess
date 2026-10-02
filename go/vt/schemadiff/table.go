@@ -856,7 +856,14 @@ func newPrimaryKeyIndexDefinitionSingleColumn(name sqlparser.IdentifierCI) *sqlp
 // key (id))`, where the key is named like any other unnamed key. An inline UNIQUE
 // on the column is the same key, so it is folded into it; any other inline key,
 // such as a PRIMARY KEY, is kept and normalized as usual.
+//
+// MySQL adds SERIAL's key where the column is defined, so when the table's own
+// keys are written after its columns, SERIAL's keys come first and are named
+// first: `create table t (id serial, x int, unique key (id, x))` has the keys
+// `id (id)` and `id_2 (id, x)`. They are placed after the primary key, which
+// stays first.
 func (c *CreateTableEntity) normalizeSerialColumns() {
+	var serialKeys []*sqlparser.IndexDefinition
 	for _, col := range c.TableSpec.Columns {
 		if !strings.EqualFold(col.Type.Type, "serial") {
 			continue
@@ -874,11 +881,19 @@ func (c *CreateTableEntity) normalizeSerialColumns() {
 		if col.Type.Options.KeyOpt == sqlparser.ColKeyUnique || col.Type.Options.KeyOpt == sqlparser.ColKeyUniqueKey {
 			col.Type.Options.KeyOpt = sqlparser.ColKeyNone
 		}
-		c.TableSpec.Indexes = append(c.TableSpec.Indexes, &sqlparser.IndexDefinition{
+		serialKeys = append(serialKeys, &sqlparser.IndexDefinition{
 			Info:    &sqlparser.IndexInfo{Type: sqlparser.IndexTypeUnique},
 			Columns: []*sqlparser.IndexColumn{{Column: col.Name}},
 		})
 	}
+	if len(serialKeys) == 0 {
+		return
+	}
+	pos := 0
+	for pos < len(c.TableSpec.Indexes) && c.TableSpec.Indexes[pos].Info.Type == sqlparser.IndexTypePrimary {
+		pos++
+	}
+	c.TableSpec.Indexes = slices.Insert(c.TableSpec.Indexes, pos, serialKeys...)
 }
 
 func (c *CreateTableEntity) normalizePrimaryKeyColumns() {
