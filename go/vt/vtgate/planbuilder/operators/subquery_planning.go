@@ -650,12 +650,13 @@ func (s *subqueryRouteMerger) merge(ctx *plancontext.PlanningContext, inner, out
 	if !s.subq.TopLevel {
 		// if the subquery we are merging isn't a top level predicate, we can't use it for routing
 		return &Route{
-			unaryOperator: newUnaryOp(outer.Source),
-			MergedWith:    mergedWith(inner, outer),
-			Routing:       outer.Routing,
-			Ordering:      outer.Ordering,
-			ResultColumns: outer.ResultColumns,
-			Conditions:    allCond,
+			unaryOperator:             newUnaryOp(outer.Source),
+			MergedWith:                mergedWith(inner, outer),
+			ContainsSpecialUnionInput: routeContainsSpecialUnionInput(inner) || routeContainsSpecialUnionInput(outer),
+			Routing:                   outer.Routing,
+			Ordering:                  outer.Ordering,
+			ResultColumns:             outer.ResultColumns,
+			Conditions:                allCond,
 		}
 	}
 	_, isSharded := r.(*ShardedRouting)
@@ -669,12 +670,13 @@ func (s *subqueryRouteMerger) merge(ctx *plancontext.PlanningContext, inner, out
 		src = s.rewriteASTExpression(ctx, inner)
 	}
 	return &Route{
-		unaryOperator: newUnaryOp(src),
-		MergedWith:    mergedWith(inner, outer),
-		Routing:       r,
-		Ordering:      s.outer.Ordering,
-		ResultColumns: s.outer.ResultColumns,
-		Conditions:    allCond,
+		unaryOperator:             newUnaryOp(src),
+		MergedWith:                mergedWith(inner, outer),
+		ContainsSpecialUnionInput: routeContainsSpecialUnionInput(inner) || routeContainsSpecialUnionInput(outer),
+		Routing:                   r,
+		Ordering:                  s.outer.Ordering,
+		ResultColumns:             s.outer.ResultColumns,
+		Conditions:                allCond,
 	}
 }
 

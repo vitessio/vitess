@@ -431,7 +431,44 @@
           ]
         },
         "ref": {
-          "type": "reference"
+          "type": "reference",
+          "columns": [
+            {
+              "name": "id",
+              "type": "INT64"
+            },
+            {
+              "name": "name",
+              "type": "VARCHAR"
+            },
+            {
+              "name": "costly",
+              "type": "INT64"
+            },
+            {
+              "name": "col",
+              "type": "INT16"
+            },
+            {
+              "name": "predef1"
+            },
+            {
+              "name": "predef2"
+            },
+            {
+              "name": "textcol1",
+              "type": "VARCHAR"
+            },
+            {
+              "name": "intcol",
+              "type": "INT16"
+            },
+            {
+              "name": "textcol2",
+              "type": "VARCHAR",
+              "collation_name": "big5_bin"
+            }
+          ]
         },
         "ambiguous_ref_with_source": {
           "type": "reference",
@@ -730,7 +767,45 @@
         "ambiguous_ref_with_source": {},
         "global_ref": {},
         "rerouted_ref": {},
-        "source_of_ref": {},
+        "source_of_ref": {
+          "columns": [
+            {
+              "name": "id",
+              "type": "INT64"
+            },
+            {
+              "name": "name",
+              "type": "VARCHAR"
+            },
+            {
+              "name": "costly",
+              "type": "INT64"
+            },
+            {
+              "name": "col",
+              "type": "INT16"
+            },
+            {
+              "name": "predef1"
+            },
+            {
+              "name": "predef2"
+            },
+            {
+              "name": "textcol1",
+              "type": "VARCHAR"
+            },
+            {
+              "name": "intcol",
+              "type": "INT16"
+            },
+            {
+              "name": "textcol2",
+              "type": "VARCHAR",
+              "collation_name": "big5_bin"
+            }
+          ]
+        },
         "unsharded_ref": {}
       }
     },

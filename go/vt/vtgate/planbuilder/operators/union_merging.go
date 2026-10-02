@@ -110,13 +110,8 @@ func mergeUnionInputs(
 	lhsExprs, rhsExprs []sqlparser.SelectExpr,
 	distinct bool,
 ) (Operator, []sqlparser.SelectExpr) {
-	if !distinct {
-		lhsRoute, rhsRoute := operatorsToRoutes(lhs, rhs)
-		if lhsRoute != nil && rhsRoute != nil && hasShardedReferenceAlternate(lhsRoute, rhsRoute) {
-			checkCrossKeyspaceOp(ctx, lhs, rhs, "UNION")
-			return nil, nil
-		}
-	}
+	lhsInput, rhsInput := operatorsToRoutes(lhs, rhs)
+	containsSpecialInput := routeContainsSpecialUnionInput(lhsInput) || routeContainsSpecialUnionInput(rhsInput)
 
 	lhsRoute, rhsRoute, routingA, routingB, a, b, sameKeyspace := prepareInputRoutes(ctx, lhs, rhs)
 	if lhsRoute == nil {
@@ -130,29 +125,37 @@ func mergeUnionInputs(
 	// incorrectly discard the other side's rows.
 	if a == none || b == none {
 		if op, exprs, merged := tryMergeNoneUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingA, routingB, a, b); merged {
+			markSpecialUnionInput(op, containsSpecialInput)
 			return op, exprs
 		}
 		checkCrossKeyspaceOp(ctx, lhs, rhs, "UNION")
 		return nil, nil
 	}
 
+	// A reference/dual input can be merged into a single-shard route, but a
+	// UNION ALL route containing one must not be widened to multiple shards.
+	if !distinct && containsSpecialInput &&
+		((a == sharded && !isSingleShardRouting(routingA)) || (b == sharded && !isSingleShardRouting(routingB))) {
+		checkCrossKeyspaceOp(ctx, lhs, rhs, "UNION")
+		return nil, nil
+	}
+
 	switch {
-	// UNION ALL cannot merge a dual or any-shard route into a sharded route:
-	// a later UNION arm could widen a single-shard route and repeat those rows.
+	// Preserve the single-shard optimization. The provenance check above
+	// prevents a later UNION ALL arm from widening this route to scatter.
 	case b == dual || (b == anyShard && sameKeyspace):
-		if !distinct && a == sharded {
-			return nil, nil
-		}
-		return createMergedUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingA, nil)
+		op, exprs := createMergedUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingA, nil)
+		markSpecialUnionInput(op, containsSpecialInput)
+		return op, exprs
 	case a == dual || (a == anyShard && sameKeyspace):
-		if !distinct && b == sharded {
-			return nil, nil
-		}
-		return createMergedUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingB, nil)
+		op, exprs := createMergedUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingB, nil)
+		markSpecialUnionInput(op, containsSpecialInput)
+		return op, exprs
 
 	case a == sharded && b == sharded && sameKeyspace:
 		res, exprs := tryMergeUnionShardedRouting(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct)
 		if res != nil {
+			markSpecialUnionInput(res, containsSpecialInput)
 			return res, exprs
 		}
 	}
@@ -163,29 +166,32 @@ func mergeUnionInputs(
 	return nil, nil
 }
 
-// hasShardedReferenceAlternate reports whether routing either any-shard input
-// through the other input's keyspace would make it a sharded route. The
-// alternate must be checked before prepareInputRoutes, since it can replace
-// the any-shard routing with a sharded routing.
-func hasShardedReferenceAlternate(lhs, rhs *Route) bool {
-	return hasShardedReferenceAlternateFor(lhs, rhs) || hasShardedReferenceAlternateFor(rhs, lhs)
+func isSingleShardRouting(routing Routing) bool {
+	switch routing.OpCode() {
+	case engine.Unsharded, engine.DBA, engine.Next, engine.EqualUnique, engine.Reference:
+		return true
+	}
+	return false
 }
 
-func hasShardedReferenceAlternateFor(reference, other *Route) bool {
-	anyShard, ok := reference.Routing.(*AnyShardRouting)
-	if !ok || other.Routing.Keyspace() == nil {
+func routeContainsSpecialUnionInput(route *Route) bool {
+	if route == nil {
 		return false
 	}
-	alternate := anyShard.AlternateInKeyspace(other.Routing.Keyspace())
-	if alternate == nil || alternate.Routing.OpCode() == engine.None {
-		return false
+	if route.ContainsSpecialUnionInput {
+		return true
 	}
-	return isShardedUnionRoute(alternate) || isShardedUnionRoute(other)
+	switch route.Routing.(type) {
+	case *AnyShardRouting, *DualRouting:
+		return true
+	}
+	return false
 }
 
-func isShardedUnionRoute(route *Route) bool {
-	_, ok := route.Routing.(*ShardedRouting)
-	return ok && route.Routing.OpCode() != engine.None
+func markSpecialUnionInput(op Operator, contains bool) {
+	if route, ok := op.(*Route); ok && contains {
+		route.ContainsSpecialUnionInput = true
+	}
 }
 
 // tryMergeNoneUnion merges a union pairing in which at least one side has a
