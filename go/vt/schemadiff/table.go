@@ -866,7 +866,10 @@ func (c *CreateTableEntity) normalizeSerialColumns() {
 		if col.Type.Options == nil {
 			col.Type.Options = &sqlparser.ColumnTypeOptions{}
 		}
-		col.Type.Options.Null = new(false)
+		if col.Type.Options.Null == nil {
+			// an explicit NULL after SERIAL wins in MySQL
+			col.Type.Options.Null = new(false)
+		}
 		col.Type.Options.Autoincrement = true
 		if col.Type.Options.KeyOpt == sqlparser.ColKeyUnique || col.Type.Options.KeyOpt == sqlparser.ColKeyUniqueKey {
 			col.Type.Options.KeyOpt = sqlparser.ColKeyNone

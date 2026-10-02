@@ -70,6 +70,12 @@ func TestCreateTableDiff(t *testing.T) {
 			to:   "create table t (id bigint unsigned not null auto_increment, b int, unique key id (id), key b_idx (b))",
 		},
 		{
+			// an explicit NULL after SERIAL wins, as in MySQL
+			name: "nullable serial is identical to its expansion",
+			from: "create table t (id serial null)",
+			to:   "create table t (id bigint unsigned auto_increment, unique key id (id))",
+		},
+		{
 			name: "serial primary key is identical to its expansion",
 			from: "create table t (id serial primary key)",
 			to:   "create table t (id bigint unsigned not null auto_increment, primary key (id), unique key id (id))",
@@ -3428,6 +3434,12 @@ func TestNormalize(t *testing.T) {
 			name: "normalize serial unique",
 			from: "create table t (id serial unique)",
 			to:   "CREATE TABLE `t` (\n\t`id` bigint unsigned NOT NULL AUTO_INCREMENT,\n\tUNIQUE KEY `id` (`id`)\n)",
+		},
+		{
+			// an explicit NULL after SERIAL wins, as in MySQL
+			name: "normalize nullable serial",
+			from: "create table t (id serial null)",
+			to:   "CREATE TABLE `t` (\n\t`id` bigint unsigned AUTO_INCREMENT,\n\tUNIQUE KEY `id` (`id`)\n)",
 		},
 		{
 			name: "normalize serial primary key",
