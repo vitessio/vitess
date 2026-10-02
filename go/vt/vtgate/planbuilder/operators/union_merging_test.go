@@ -25,7 +25,9 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-func TestHasMultiShardReferenceAlternate(t *testing.T) {
+// TestHasShardedReferenceAlternate verifies that UNION ALL keeps a reference
+// alternate separate from sharded routes, including single-shard routes.
+func TestHasShardedReferenceAlternate(t *testing.T) {
 	referenceKeyspace := &vindexes.Keyspace{Name: "reference"}
 	shardedKeyspace := &vindexes.Keyspace{Name: "sharded", Sharded: true}
 
@@ -63,7 +65,7 @@ func TestHasMultiShardReferenceAlternate(t *testing.T) {
 			want: true,
 		},
 		{
-			name: "blocks multi-shard alternate even when other route is single-shard",
+			name: "blocks single-shard alternate even when other route is single-shard",
 			lhs:  makeReferenceRoute(makeRoute(&ShardedRouting{keyspace: shardedKeyspace, RouteOpCode: engine.Scatter})),
 			rhs:  singleShard,
 			want: true,
@@ -87,10 +89,10 @@ func TestHasMultiShardReferenceAlternate(t *testing.T) {
 			want: false,
 		},
 		{
-			name: "does not block single-shard alternate and route",
-			lhs:  makeReferenceRoute(makeRoute(&AnyShardRouting{keyspace: shardedKeyspace})),
+			name: "blocks single-shard alternate and route",
+			lhs:  makeReferenceRoute(makeRoute(&ShardedRouting{keyspace: shardedKeyspace, RouteOpCode: engine.EqualUnique})),
 			rhs:  singleShard,
-			want: false,
+			want: true,
 		},
 		{
 			name: "does not block without alternate",
@@ -102,7 +104,7 @@ func TestHasMultiShardReferenceAlternate(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			assert.Equal(t, test.want, hasMultiShardReferenceAlternate(test.lhs, test.rhs))
+			assert.Equal(t, test.want, hasShardedReferenceAlternate(test.lhs, test.rhs))
 		})
 	}
 }
