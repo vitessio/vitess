@@ -39,6 +39,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vtenv"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -315,7 +316,7 @@ func (t *noopVCursor) ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard
 func (t *noopVCursor) NeedsReservedConn() {
 }
 
-func (t *noopVCursor) ResetReservedConn() {
+func (t *noopVCursor) RemoveSysVar(string) {
 }
 
 func (t *noopVCursor) SetUDV(key string, value any) error {
@@ -418,6 +419,18 @@ func (t *noopVCursor) AutocommitApproval() bool {
 	panic("unimplemented")
 }
 
+func (t *noopVCursor) ExecuteWithSessionSettings(context.Context, *srvtopo.ResolvedShard, string, map[string]*querypb.BindVariable, string) (*sqltypes.Result, error) {
+	panic("unimplemented")
+}
+
+func (t *noopVCursor) ExecuteOnSessionConnection(context.Context, *srvtopo.ResolvedShard, string, map[string]*querypb.BindVariable) (*sqltypes.Result, bool, error) {
+	panic("unimplemented")
+}
+
+func (t *noopVCursor) ValidateSessionSettings(context.Context, *srvtopo.ResolvedShard) error {
+	panic("unimplemented")
+}
+
 func (t *noopVCursor) ExecuteStandalone(ctx context.Context, primitive Primitive, query string, bindvars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard, fetchLastInsertID bool) (*sqltypes.Result, error) {
 	panic("unimplemented")
 }
@@ -482,6 +495,21 @@ type loggingVCursor struct {
 	// Optional errors that can be returned from nextResult() alongside the results for
 	// multi-shard queries
 	multiShardErrs []error
+
+	// validateSettingsErr is returned from ValidateSessionSettings
+	validateSettingsErr error
+
+	// validateSettingsErrs are returned, one per call and in order, from
+	// ValidateSessionSettings; once they run out, validateSettingsErr applies
+	validateSettingsErrs []error
+
+	// withSettingsErrs are returned, one per call and in order, from
+	// ExecuteWithSessionSettings; once they run out, multiShardErrs apply
+	withSettingsErrs []error
+
+	// holdsSessionConn makes ExecuteOnSessionConnection report that the session
+	// holds a connection to the shard and run the query on it
+	holdsSessionConn bool
 
 	log []string
 	mu  sync.Mutex
@@ -558,8 +586,10 @@ func (f *loggingVCursor) HasSystemVariables() bool {
 	return len(f.systemVariables) > 0
 }
 
-func (f *loggingVCursor) GetSystemVariables(func(k string, v string)) {
-	panic("implement me")
+func (f *loggingVCursor) GetSystemVariables(visit func(k string, v string)) {
+	for k, v := range f.systemVariables {
+		visit(k, v)
+	}
 }
 
 func (f *loggingVCursor) SetFoundRows(u uint64) {
@@ -585,16 +615,20 @@ func (f *loggingVCursor) SetUDV(key string, value any) error {
 
 func (f *loggingVCursor) SetSysVar(name string, expr string) {
 	f.log = append(f.log, fmt.Sprintf("SysVar set with (%s,%v)", name, expr))
+	if f.systemVariables == nil {
+		f.systemVariables = map[string]string{}
+	}
+	f.systemVariables[name] = expr
+}
+
+func (f *loggingVCursor) RemoveSysVar(name string) {
+	f.log = append(f.log, fmt.Sprintf("SysVar removed (%s)", name))
+	delete(f.systemVariables, name)
 }
 
 func (f *loggingVCursor) NeedsReservedConn() {
 	f.log = append(f.log, "Needs Reserved Conn")
 	f.inReservedConn = true
-}
-
-func (f *loggingVCursor) ResetReservedConn() {
-	f.log = append(f.log, "Reset Reserved Conn")
-	f.inReservedConn = false
 }
 
 func (f *loggingVCursor) InReservedConn() bool {
@@ -713,6 +747,54 @@ func (f *loggingVCursor) ExecuteStandalone(ctx context.Context, _ Primitive, que
 	defer f.mu.Unlock()
 	f.log = append(f.log, fmt.Sprintf("ExecuteStandalone %s %v %s %s", query, deprecatedPrintBindVars(bindvars), rs.Target.Keyspace, rs.Target.Shard))
 	return f.nextResult()
+}
+
+func (f *loggingVCursor) ValidateSessionSettings(ctx context.Context, rs *srvtopo.ResolvedShard) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.log = append(f.log, fmt.Sprintf("ValidateSessionSettings %s.%s", rs.Target.Keyspace, rs.Target.Shard))
+	if len(f.validateSettingsErrs) > 0 {
+		err := f.validateSettingsErrs[0]
+		f.validateSettingsErrs = f.validateSettingsErrs[1:]
+		return err
+	}
+	return f.validateSettingsErr
+}
+
+func (f *loggingVCursor) ExecuteWithSessionSettings(ctx context.Context, rs *srvtopo.ResolvedShard, query string, bindVars map[string]*querypb.BindVariable, omitSysVar string) (*sqltypes.Result, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	line := fmt.Sprintf("ExecuteWithSessionSettings %s.%s: %s {%s}", rs.Target.Keyspace, rs.Target.Shard, query, deprecatedPrintBindVars(bindVars))
+	if omitSysVar != "" {
+		line += " without " + omitSysVar
+	}
+	f.log = append(f.log, line)
+	if len(f.withSettingsErrs) > 0 {
+		err := f.withSettingsErrs[0]
+		f.withSettingsErrs = f.withSettingsErrs[1:]
+		if err != nil {
+			return nil, err
+		}
+	}
+	res, err := f.nextResult()
+	if err != nil {
+		return nil, err
+	}
+	return res, vterrors.Aggregate(f.multiShardErrs)
+}
+
+func (f *loggingVCursor) ExecuteOnSessionConnection(ctx context.Context, rs *srvtopo.ResolvedShard, query string, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, bool, error) {
+	if !f.holdsSessionConn {
+		return nil, false, nil
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.log = append(f.log, fmt.Sprintf("ExecuteOnSessionConnection %s.%s: %s {%s}", rs.Target.Keyspace, rs.Target.Shard, query, deprecatedPrintBindVars(bindVars)))
+	res, err := f.nextResult()
+	if err != nil {
+		return nil, true, err
+	}
+	return res, true, vterrors.Aggregate(f.multiShardErrs)
 }
 
 func (f *loggingVCursor) StreamExecuteMulti(ctx context.Context, primitive Primitive, query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, rollbackOnError, autocommit, fetchLastInsertID bool, callback func(reply *sqltypes.Result) error) []error {

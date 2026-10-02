@@ -75,6 +75,22 @@ type (
 		ExecuteMultiShard(ctx context.Context, primitive Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, rollbackOnError, canAutocommit, fetchLastInsertID bool) (*sqltypes.Result, []error)
 		ExecuteStandalone(ctx context.Context, primitive Primitive, query string, bindVars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard, fetchLastInsertID bool) (*sqltypes.Result, error)
 		StreamExecuteMulti(ctx context.Context, primitive Primitive, query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, rollbackOnError, autocommit, fetchLastInsertID bool, callback func(reply *sqltypes.Result) error) []error
+		// ValidateSessionSettings runs a trivial query on the shard, outside the session's
+		// transaction and reserved connections, on a connection that carries the session's
+		// system variables as settings, so that the shard rejects a value it does not accept.
+		ValidateSessionSettings(ctx context.Context, rs *srvtopo.ResolvedShard) error
+		// ExecuteWithSessionSettings runs a read query on the shard the same way: outside
+		// the session's transaction and reserved connections, on a connection that
+		// carries the session's system variables as settings, except omitSysVar when it
+		// is not empty.
+		ExecuteWithSessionSettings(ctx context.Context, rs *srvtopo.ResolvedShard, query string, bindVars map[string]*querypb.BindVariable, omitSysVar string) (*sqltypes.Result, error)
+		// ExecuteOnSessionConnection runs a read query on the connection the session
+		// already holds to the shard: the shard's connection in the session's
+		// transaction, or outside a transaction, the session's reserved connection,
+		// with the session's SET_VAR hints. It runs nothing and reports false when the
+		// session holds no such connection, so that it never begins a transaction on
+		// the shard or reserves a connection.
+		ExecuteOnSessionConnection(ctx context.Context, rs *srvtopo.ResolvedShard, query string, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, bool, error)
 
 		// Keyspace ID level functions.
 		ExecuteKeyspaceID(ctx context.Context, keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, rollbackOnError, autocommit bool) (*sqltypes.Result, error)
@@ -198,15 +214,11 @@ type (
 		ClearPrepareData(name string)
 
 		SetSysVar(name string, expr string)
+		// RemoveSysVar drops a system variable from the session, so that it no longer applies to connections
+		RemoveSysVar(name string)
 
 		// NeedsReservedConn marks this session as needing a dedicated connection to underlying database
 		NeedsReservedConn()
-
-		// ResetReservedConn clears the mark NeedsReservedConn set. It is for a
-		// caller that marked the session for an operation that then failed
-		// before any connection was reserved; the caller checks ShardSession
-		// for that, as a failed reservation is still recorded there.
-		ResetReservedConn()
 
 		// InReservedConn provides whether this session is using reserved connection
 		InReservedConn() bool

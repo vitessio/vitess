@@ -2676,11 +2676,14 @@ func TestReservedConnDML(t *testing.T) {
 	_, err := executor.Execute(ctx, nil, "TestReservedConnDML", session, "use "+KsTestUnsharded, nil, false)
 	require.NoError(t, err)
 
+	// the SET evaluates the assignment, then has the shard validate the value in its settings
 	wantQueries := []*querypb.BoundQuery{
-		{Sql: "select 1 from dual where @@default_week_format != 1", BindVariables: map[string]*querypb.BindVariable{}},
+		{Sql: "select v, @@default_week_format != v from (select 1 as v) as t", BindVariables: map[string]*querypb.BindVariable{}},
+		{Sql: "set default_week_format = 1", BindVariables: map[string]*querypb.BindVariable{}},
+		{Sql: "select 1 from dual", BindVariables: map[string]*querypb.BindVariable{}},
 	}
 	sbc.SetResults([]*sqltypes.Result{
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "1"),
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|changed", "int64|int64"), "1|1"),
 	})
 	_, err = executor.Execute(ctx, nil, "TestReservedConnDML", session, "set default_week_format = 1", nil, false)
 	require.NoError(t, err)

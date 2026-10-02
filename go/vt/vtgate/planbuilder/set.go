@@ -65,6 +65,12 @@ func buildSetPlan(stmt *sqlparser.Set, vschema plancontext.VSchema) (*planResult
 		// we have a UDV. If the original query didn't explicitly specify the scope, it
 		// would have been explicitly set to sqlparser.SessionStr before reaching this
 		// phase of planning
+		if expr.Var.Scope != sqlparser.VariableScope && containsLockingFunc(expr.Expr) {
+			// A system variable's assignment is evaluated or checked on a pooled
+			// connection, or on one the session holds for other reasons, and a lock
+			// taken there would be held by a connection the session does not track.
+			return nil, vterrors.VT12001("lock function in the assignment of system variable " + expr.Var.Name.Lowered())
+		}
 		switch expr.Var.Scope {
 		case sqlparser.GlobalScope:
 			if vschema.IsSystemVariableDenied(expr.Var.Name.Lowered()) {
@@ -245,6 +251,17 @@ func buildSetOpReservedConn(s setting) planFunc {
 			SupportSetVar:     s.supportSetVar,
 		}, nil
 	}
+}
+
+func containsLockingFunc(expr sqlparser.Expr) bool {
+	found := false
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+		if _, ok := node.(*sqlparser.LockingFunc); ok {
+			found = true
+		}
+		return !found, nil
+	}, expr)
+	return found
 }
 
 func provideAppliedCase(value string, storageCase sysvars.StorageCase) string {

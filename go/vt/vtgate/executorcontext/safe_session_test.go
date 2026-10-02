@@ -307,3 +307,43 @@ func TestShardSessionSnapshots(t *testing.T) {
 	assert.EqualValues(t, 20, snapshots[0].TransactionID,
 		"a snapshot must not observe later in-place updates of the live shard session")
 }
+
+// A connection counts as held only when a query reaches it without beginning a
+// transaction or reserving one.
+func TestHoldsConnection(t *testing.T) {
+	target := &querypb.Target{Keyspace: "ks", Shard: "-80", TabletType: topodatapb.TabletType_PRIMARY}
+	tests := []struct {
+		name          string
+		inTransaction bool
+		shardSession  *vtgatepb.Session_ShardSession
+		want          bool
+	}{{
+		name: "no shard session",
+	}, {
+		name:          "shard in the transaction",
+		inTransaction: true,
+		shardSession:  &vtgatepb.Session_ShardSession{Target: target, TransactionId: 1},
+		want:          true,
+	}, {
+		name:          "reserved shard not yet in the transaction",
+		inTransaction: true,
+		shardSession:  &vtgatepb.Session_ShardSession{Target: target, ReservedId: 1},
+	}, {
+		name:         "reserved shard outside a transaction",
+		shardSession: &vtgatepb.Session_ShardSession{Target: target, ReservedId: 1},
+		want:         true,
+	}, {
+		name:          "another shard in the transaction",
+		inTransaction: true,
+		shardSession:  &vtgatepb.Session_ShardSession{Target: &querypb.Target{Keyspace: "ks", Shard: "80-", TabletType: topodatapb.TabletType_PRIMARY}, TransactionId: 1},
+	}}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			session := NewSafeSession(&vtgatepb.Session{InTransaction: tc.inTransaction})
+			if tc.shardSession != nil {
+				session.ShardSessions = []*vtgatepb.Session_ShardSession{tc.shardSession}
+			}
+			assert.Equal(t, tc.want, session.HoldsConnection(target))
+		})
+	}
+}

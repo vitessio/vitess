@@ -272,21 +272,21 @@ func TestLockWaitOnConnTimeoutWithTxNext(t *testing.T) {
 	_ = utils.Exec(t, conn, `commit`)
 }
 
-// TestTargetedSetEvaluatesLockFunctionOnReservedConn checks that a targeted
-// session's SET whose expression is a lock function is evaluated on the
-// reserved connection the SET is then applied to: the tablet refuses get_lock()
-// outside a reserved connection, and the lock has to be held by the connection
-// the session keeps, so that the session can release it.
-func TestTargetedSetEvaluatesLockFunctionOnReservedConn(t *testing.T) {
-	conn, err := mysql.Connect(t.Context(), &vtParams)
-	require.NoError(t, err)
-	defer conn.Close()
+// TestSetSysVarRefusesLockFunction checks that a system variable's assignment cannot call
+// a lock function, session or global, in an untargeted and in a targeted session: the
+// assignment is evaluated or checked on a connection the session does not track a lock
+// on, and no lock is left behind.
+func TestSetSysVarRefusesLockFunction(t *testing.T) {
+	for _, target := range []string{"ks", "ks:-80"} {
+		t.Run(target, func(t *testing.T) {
+			conn, err := mysql.Connect(t.Context(), &vtParams)
+			require.NoError(t, err)
+			t.Cleanup(conn.Close)
 
-	utils.Exec(t, conn, "use `ks:-80`")
-	// group_concat_max_len is applied through a reserved connection, unlike
-	// the Vitess-aware settings such as sql_select_limit.
-	utils.Exec(t, conn, `set @@group_concat_max_len = get_lock('targeted set', 2)`)
-	utils.AssertMatches(t, conn, `select @@group_concat_max_len`, `[[INT64(1)]]`)
-	utils.AssertMatches(t, conn, `select is_free_lock('targeted set')`, `[[INT64(0)]]`)
-	utils.AssertMatches(t, conn, `select release_lock('targeted set')`, `[[INT64(1)]]`)
+			utils.Exec(t, conn, "use `"+target+"`")
+			utils.AssertContainsError(t, conn, `set @@group_concat_max_len = get_lock('set lock', 2)`, "lock function in the assignment of system variable group_concat_max_len")
+			utils.AssertContainsError(t, conn, `set @@global.group_concat_max_len = get_lock('set lock', 2)`, "lock function in the assignment of system variable group_concat_max_len")
+			utils.AssertMatches(t, conn, `select is_free_lock('set lock')`, `[[INT64(1)]]`)
+		})
+	}
 }

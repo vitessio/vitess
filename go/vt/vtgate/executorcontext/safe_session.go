@@ -516,6 +516,23 @@ func (session *SafeSession) FindAndChangeSessionIfInSingleTxMode(keyspace, shard
 	return shardSession, nil
 }
 
+// HoldsConnection reports whether the session holds a connection to the target that
+// a query reaches without beginning a transaction or reserving a connection: the
+// target's connection in the session's transaction, or outside a transaction, the
+// session's reserved connection to it.
+func (session *SafeSession) HoldsConnection(target *querypb.Target) bool {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	shardSession := session.findSessionLocked(target.Keyspace, target.Shard, target.TabletType)
+	if shardSession == nil {
+		return false
+	}
+	if session.Session.InTransaction {
+		return shardSession.TransactionId != 0
+	}
+	return shardSession.ReservedId != 0
+}
+
 func (session *SafeSession) findSessionLocked(keyspace, shard string, tabletType topodatapb.TabletType) *vtgatepb.Session_ShardSession {
 	// Select the appropriate session list based on the commit order.
 	var sessions []*vtgatepb.Session_ShardSession
@@ -697,6 +714,13 @@ func (session *SafeSession) SetSystemVariable(name string, expr string) {
 		session.SystemVariables = make(map[string]string)
 	}
 	session.SystemVariables[name] = expr
+}
+
+// RemoveSystemVariable drops a system variable from the session.
+func (session *SafeSession) RemoveSystemVariable(name string) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	delete(session.SystemVariables, name)
 }
 
 // GetSystemVariables takes a visitor function that will receive each MySQL system variable in the session.

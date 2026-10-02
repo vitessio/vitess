@@ -25,6 +25,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -52,10 +56,10 @@ func TestSetSystemVariableAsString(t *testing.T) {
 		shards: []string{"-20", "20-"},
 		results: []*sqltypes.Result{sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields(
-				"id",
-				"varchar",
+				"id|changed",
+				"varchar|int64",
 			),
-			"foobar",
+			"foobar|1",
 		)},
 		shardSession: []*srvtopo.ResolvedShard{{Target: &querypb.Target{Keyspace: "ks", Shard: "-20"}}},
 	}
@@ -64,10 +68,10 @@ func TestSetSystemVariableAsString(t *testing.T) {
 
 	vc.ExpectLog(t, []string{
 		"ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)",
-		"ExecuteMultiShard ks.-20: select dummy_expr from dual where @@x != dummy_expr {} false false",
+		"ExecuteWithSessionSettings ks.-20: select v, @@x != v from (select dummy_expr as v) as t {}",
 		"SysVar set with (x,'foobar')",
 		"Needs Reserved Conn",
-		"ExecuteMultiShard ks.-20: set x = dummy_expr {} false false",
+		"ExecuteMultiShard ks.-20: set x = 'foobar' {} false false",
 	})
 }
 
@@ -84,6 +88,13 @@ func TestSetTable(t *testing.T) {
 		mysqlVersion     string
 		disableSetVar    bool
 		shardSession     []*srvtopo.ResolvedShard
+		systemVariables  map[string]string
+		inReservedConn   bool
+		resultErr        error
+		validateErr      error
+		withSettingsErrs []error
+		holdsSessionConn bool
+		validateErrs     []error
 	}
 
 	ks := &vindexes.Keyspace{Name: "ks", Sharded: true}
@@ -217,7 +228,9 @@ func TestSetTable(t *testing.T) {
 			`ExecuteMultiShard ks.-20: select @@sql_mode orig, concat('STRICT_TRANS', '_TABLES') new {} false false`,
 		},
 	}, {
-		testName: "sysvar checkAndIgnore multi destination error",
+		// the setting is only checked, so a target spanning several shards is
+		// checked on its first shard rather than rejected
+		testName: "sysvar checkAndIgnore checks one shard of a multi-shard target",
 		setOps: []SetOp{
 			&SysVarCheckAndIgnore{
 				Name:              "x",
@@ -228,8 +241,8 @@ func TestSetTable(t *testing.T) {
 		},
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
+			`ExecuteMultiShard ks.-20: select 1 from dual where @@x = dummy_expr {} false false`,
 		},
-		expectedError: "Unexpected error, DestinationKeyspaceID mapping to multiple shards: DestinationAllShards()",
 	}, {
 		testName: "sysvar checkAndIgnore execute error",
 		setOps: []SetOp{
@@ -276,128 +289,132 @@ func TestSetTable(t *testing.T) {
 			"1",
 		)},
 	}, {
-		// the session replays the stored text as a connection setting, so the
-		// value is stored, not the expression
-		testName: "targeted set evaluates the expression and stores the value",
+		// a targeted session's SET is judged on the target shard, not on the shard
+		// owning keyspace id 0, and is then carried the way an untargeted session's
+		// is: nothing is executed on shards the session has not reached
+		testName: "targeted set probes the target shard",
 		setOps: []SetOp{
 			&SysVarReservedConn{
 				Name:              "x",
 				Keyspace:          ks,
-				TargetDestination: key.DestinationAnyShard{},
+				TargetDestination: key.DestinationShard("20-"),
 				Expr:              "dummy_expr",
 			},
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(
-			sqltypes.MakeTestFields(
-				"dummy_expr",
-				"int64",
-			),
-			"123456",
+			sqltypes.MakeTestFields("id|changed", "int64|int64"),
+			"123456|1",
 		)},
 		expectedQueryLog: []string{
-			`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
-			`Needs Reserved Conn`,
-			`ExecuteMultiShard ks.-20: select dummy_expr from dual {} false false`,
-			`ExecuteMultiShard ks.-20: set x = 123456 {} false false`,
+			`ResolveDestinations ks [] Destinations:DestinationShard(20-)`,
+			`ExecuteWithSessionSettings ks.DestinationShard(20-): select v, @@x != v from (select dummy_expr as v) as t {}`,
 			`SysVar set with (x,123456)`,
+			"ValidateSessionSettings ks.DestinationShard(20-)",
+			`Needs Reserved Conn`,
 		},
 	}, {
-		// the expression is evaluated on the reserved connection the SET is then
-		// applied to: the tablet refuses a lock function outside a reserved
-		// connection, and the lock get_lock() takes must be held by the
-		// connection the session keeps, as it was when the SET carried the
-		// expression itself
-		testName: "targeted set evaluates a lock function on the reserved connection",
+		testName: "targeted set to the current value is ignored",
 		setOps: []SetOp{
 			&SysVarReservedConn{
 				Name:              "x",
 				Keyspace:          ks,
-				TargetDestination: key.DestinationAnyShard{},
-				Expr:              "get_lock('x', 0)",
+				TargetDestination: key.DestinationShard("20-"),
+				Expr:              "dummy_expr",
+			},
+		},
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationShard(20-)`,
+			`ExecuteWithSessionSettings ks.DestinationShard(20-): select v, @@x != v from (select dummy_expr as v) as t {}`,
+		},
+	}, {
+		// a targeted session rides on SET_VAR like an untargeted one instead of
+		// pinning itself to a reserved connection
+		testName:     "targeted set of a SET_VAR-capable variable needs no reserved connection",
+		mysqlVersion: "8.0.0",
+		setOps: []SetOp{
+			&SysVarReservedConn{
+				Name:              "x",
+				Keyspace:          ks,
+				TargetDestination: key.DestinationShard("20-"),
+				Expr:              "dummy_expr",
+				SupportSetVar:     true,
 			},
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(
-			sqltypes.MakeTestFields(
-				"get_lock('x', 0)",
-				"int64",
-			),
-			"1",
+			sqltypes.MakeTestFields("id|changed", "int64|int64"),
+			"123456|1",
 		)},
 		expectedQueryLog: []string{
-			`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
-			`Needs Reserved Conn`,
-			`ExecuteMultiShard ks.-20: select get_lock('x', 0) from dual {} false false`,
-			`ExecuteMultiShard ks.-20: set x = 1 {} false false`,
-			`SysVar set with (x,1)`,
+			`ResolveDestinations ks [] Destinations:DestinationShard(20-)`,
+			`ExecuteWithSessionSettings ks.DestinationShard(20-): select v, @@x != v from (select dummy_expr as v) as t {}`,
+			`SysVar set with (x,123456)`,
+			`SET_VAR can be used`,
+			"ValidateSessionSettings ks.DestinationShard(20-)",
 		},
 	}, {
-		// a targeted SET whose evaluation fails must not leave its value in the
-		// session, where the settings transport would replay it on every
-		// subsequent query (TestSysVarSetErr covers the SET itself failing)
-		testName: "targeted set evaluation failure does not store the value",
+		// a target spanning several shards is judged on its first shard; the value
+		// reaches every shard through the session's settings
+		testName: "targeted set spanning several shards probes the first",
 		setOps: []SetOp{
 			&SysVarReservedConn{
 				Name:              "x",
 				Keyspace:          ks,
-				TargetDestination: key.DestinationAnyShard{},
+				TargetDestination: key.DestinationAllShards{},
+				Expr:              "dummy_expr",
+			},
+		},
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("id|changed", "int64|int64"),
+			"123456|1",
+		)},
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
+			`ExecuteWithSessionSettings ks.-20: select v, @@x != v from (select dummy_expr as v) as t {}`,
+			`SysVar set with (x,123456)`,
+			"ValidateSessionSettings ks.-20",
+			`Needs Reserved Conn`,
+		},
+	}, {
+		// shards the session already holds receive the SET directly, as for an
+		// untargeted session
+		testName: "targeted set applies to existing shard sessions",
+		setOps: []SetOp{
+			&SysVarReservedConn{
+				Name:              "x",
+				Keyspace:          ks,
+				TargetDestination: key.DestinationShard("-20"),
+				Expr:              "dummy_expr",
+			},
+		},
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("id|changed", "int64|int64"),
+			"123456|1",
+		)},
+		shardSession: []*srvtopo.ResolvedShard{{Target: &querypb.Target{Keyspace: "ks", Shard: "-20"}}},
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationShard(-20)`,
+			`ExecuteWithSessionSettings ks.DestinationShard(-20): select v, @@x != v from (select dummy_expr as v) as t {}`,
+			`SysVar set with (x,123456)`,
+			`Needs Reserved Conn`,
+			`ExecuteMultiShard ks.-20: set x = 123456 {} false false`,
+		},
+	}, {
+		// a failed targeted SET must not leave its value in the session, where the
+		// settings transport would replay it on every subsequent query
+		testName: "targeted set failure does not store the value",
+		setOps: []SetOp{
+			&SysVarReservedConn{
+				Name:              "x",
+				Keyspace:          ks,
+				TargetDestination: key.DestinationShard("20-"),
 				Expr:              "dummy_expr",
 			},
 		},
 		execErr:       errors.New("some random error"),
 		expectedError: "some random error",
 		expectedQueryLog: []string{
-			`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
-			`Needs Reserved Conn`,
-			`ExecuteMultiShard ks.-20: select dummy_expr from dual {} false false`,
-			`Reset Reserved Conn`,
-		},
-	}, {
-		// the same failure on a session that already holds a shard session,
-		// as after a reservation the tablet made before refusing the query,
-		// keeps the mark: the reservation is recorded in the session
-		testName: "targeted set evaluation failure keeps the mark of a session with a shard session",
-		setOps: []SetOp{
-			&SysVarReservedConn{
-				Name:              "x",
-				Keyspace:          ks,
-				TargetDestination: key.DestinationAnyShard{},
-				Expr:              "dummy_expr",
-			},
-		},
-		shardSession:  []*srvtopo.ResolvedShard{{Target: &querypb.Target{Keyspace: "ks", Shard: "-20"}}},
-		execErr:       errors.New("some random error"),
-		expectedError: "some random error",
-		expectedQueryLog: []string{
-			`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
-			`Needs Reserved Conn`,
-			`ExecuteMultiShard ks.-20: select dummy_expr from dual {} false false`,
-		},
-	}, {
-		// the evaluation returns one value; anything else cannot be applied or
-		// stored and fails rather than pass the expression through
-		testName: "targeted set rejects an evaluation that is not a single value",
-		setOps: []SetOp{
-			&SysVarReservedConn{
-				Name:              "x",
-				Keyspace:          ks,
-				TargetDestination: key.DestinationAnyShard{},
-				Expr:              "dummy_expr",
-			},
-		},
-		qr: []*sqltypes.Result{sqltypes.MakeTestResult(
-			sqltypes.MakeTestFields(
-				"dummy_expr",
-				"int64",
-			),
-			"1",
-			"2",
-		)},
-		expectedError: "unexpected result evaluating x: 2 rows",
-		expectedQueryLog: []string{
-			`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
-			`Needs Reserved Conn`,
-			`ExecuteMultiShard ks.-20: select dummy_expr from dual {} false false`,
-			`Reset Reserved Conn`,
+			`ResolveDestinations ks [] Destinations:DestinationShard(20-)`,
+			`ExecuteWithSessionSettings ks.DestinationShard(20-): select v, @@x != v from (select dummy_expr as v) as t {}`,
 		},
 	}, {
 		// a targeted session's SET gets the same sql_mode judgment as an untargeted
@@ -422,9 +439,7 @@ func TestSetTable(t *testing.T) {
 		expectedError: "setting the ANSI sql_mode is unsupported",
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
-			`Needs Reserved Conn`,
-			`ExecuteMultiShard ks.-20: select @@sql_mode orig, concat('AN', 'SI') new {} false false`,
-			`Reset Reserved Conn`,
+			`ExecuteWithSessionSettings ks.-20: select @@sql_mode orig, concat('AN', 'SI') new {}`,
 		},
 	}, {
 		// the SET carries the judged value rather than the expression: evaluating the
@@ -445,12 +460,13 @@ func TestSetTable(t *testing.T) {
 			),
 			"NO_ZERO_DATE|STRICT_TRANS_TABLES",
 		)},
+		shardSession: []*srvtopo.ResolvedShard{{Target: &querypb.Target{Keyspace: "ks", Shard: "-20"}}},
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
-			`Needs Reserved Conn`,
-			`ExecuteMultiShard ks.-20: select @@sql_mode orig, concat('STRICT_TRANS', '_TABLES') new {} false false`,
-			`ExecuteMultiShard ks.-20: set sql_mode = 'STRICT_TRANS_TABLES' {} false false`,
+			`ExecuteWithSessionSettings ks.-20: select @@sql_mode orig, concat('STRICT_TRANS', '_TABLES') new {}`,
 			`SysVar set with (sql_mode,'STRICT_TRANS_TABLES')`,
+			`Needs Reserved Conn`,
+			`ExecuteMultiShard ks.-20: set sql_mode = 'STRICT_TRANS_TABLES' {} false false`,
 		},
 	}, {
 		testName: "sysvar set not modifying setting",
@@ -463,7 +479,7 @@ func TestSetTable(t *testing.T) {
 		},
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
-			`ExecuteMultiShard ks.-20: select dummy_expr from dual where @@x != dummy_expr {} false false`,
+			`ExecuteWithSessionSettings ks.-20: select v, @@x != v from (select dummy_expr as v) as t {}`,
 		},
 	}, {
 		testName: "sysvar set modifying setting",
@@ -476,16 +492,17 @@ func TestSetTable(t *testing.T) {
 		},
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
-			`ExecuteMultiShard ks.-20: select dummy_expr from dual where @@x != dummy_expr {} false false`,
+			`ExecuteWithSessionSettings ks.-20: select v, @@x != v from (select dummy_expr as v) as t {}`,
 			`SysVar set with (x,123456)`,
+			"ValidateSessionSettings ks.-20",
 			`Needs Reserved Conn`,
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields(
-				"id",
-				"int64",
+				"id|changed",
+				"int64|int64",
 			),
-			"123456",
+			"123456|1",
 		)},
 	}, {
 		testName: "sql_mode no change - same",
@@ -498,7 +515,7 @@ func TestSetTable(t *testing.T) {
 		},
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
-			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'STRICT_TRANS_TABLES,NO_ZERO_DATE' new {} false false`,
+			`ExecuteWithSessionSettings ks.-20: select @@sql_mode orig, 'STRICT_TRANS_TABLES,NO_ZERO_DATE' new {}`,
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
 			"STRICT_TRANS_TABLES,NO_ZERO_DATE|STRICT_TRANS_TABLES,NO_ZERO_DATE",
@@ -514,7 +531,7 @@ func TestSetTable(t *testing.T) {
 		},
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
-			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'STRICT_TRANS_TABLES,NO_ZERO_DATE' new {} false false`,
+			`ExecuteWithSessionSettings ks.-20: select @@sql_mode orig, 'STRICT_TRANS_TABLES,NO_ZERO_DATE' new {}`,
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
 			"NO_ZERO_DATE,STRICT_TRANS_TABLES|STRICT_TRANS_TABLES,NO_ZERO_DATE",
@@ -530,7 +547,7 @@ func TestSetTable(t *testing.T) {
 		},
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
-			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'NO_ZERO_DATE,STRICT_TRANS_TABLES' new {} false false`,
+			`ExecuteWithSessionSettings ks.-20: select @@sql_mode orig, 'NO_ZERO_DATE,STRICT_TRANS_TABLES' new {}`,
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
 			"STRICT_TRANS_TABLES,NO_ZERO_DATE|NO_ZERO_DATE,STRICT_TRANS_TABLES",
@@ -546,7 +563,7 @@ func TestSetTable(t *testing.T) {
 		},
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
-			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'no_zero_date,STRICT_TRANS_TABLES' new {} false false`,
+			`ExecuteWithSessionSettings ks.-20: select @@sql_mode orig, 'no_zero_date,STRICT_TRANS_TABLES' new {}`,
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
 			"STRICT_TRANS_TABLES,NO_ZERO_DATE|no_zero_date,STRICT_TRANS_TABLES",
@@ -563,7 +580,7 @@ func TestSetTable(t *testing.T) {
 		},
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
-			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'no_zero_date,STRICT_TRANS_TABLES,strict_trans_tables,no_zero_date,NO_ZERO_DATE,STRICT_TRANS_TABLES' new {} false false`,
+			`ExecuteWithSessionSettings ks.-20: select @@sql_mode orig, 'no_zero_date,STRICT_TRANS_TABLES,strict_trans_tables,no_zero_date,NO_ZERO_DATE,STRICT_TRANS_TABLES' new {}`,
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
 			"STRICT_TRANS_TABLES,NO_ZERO_DATE|no_zero_date,STRICT_TRANS_TABLES,strict_trans_tables,no_zero_date,NO_ZERO_DATE,STRICT_TRANS_TABLES",
@@ -581,8 +598,9 @@ func TestSetTable(t *testing.T) {
 		},
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
-			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'no_zero_date,STRICT_TRANS_TABLES,strict_trans_tables,NO_ZERO_IN_DATE' new {} false false`,
+			`ExecuteWithSessionSettings ks.-20: select @@sql_mode orig, 'no_zero_date,STRICT_TRANS_TABLES,strict_trans_tables,NO_ZERO_IN_DATE' new {}`,
 			"SysVar set with (sql_mode,'no_zero_date,STRICT_TRANS_TABLES,strict_trans_tables,NO_ZERO_IN_DATE')",
+			"ValidateSessionSettings ks.-20",
 			"Needs Reserved Conn",
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
@@ -601,8 +619,9 @@ func TestSetTable(t *testing.T) {
 		},
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
-			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'no_zero_date,NO_ZERO_DATE' new {} false false`,
+			`ExecuteWithSessionSettings ks.-20: select @@sql_mode orig, 'no_zero_date,NO_ZERO_DATE' new {}`,
 			"SysVar set with (sql_mode,'no_zero_date,NO_ZERO_DATE')",
+			"ValidateSessionSettings ks.-20",
 			"Needs Reserved Conn",
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
@@ -620,7 +639,7 @@ func TestSetTable(t *testing.T) {
 		},
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
-			`ExecuteMultiShard ks.-20: select @@sql_mode orig, '' new {} false false`,
+			`ExecuteWithSessionSettings ks.-20: select @@sql_mode orig, '' new {}`,
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
 			"|",
@@ -638,8 +657,9 @@ func TestSetTable(t *testing.T) {
 		},
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
-			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'STRICT_TRANS_TABLES' new {} false false`,
+			`ExecuteWithSessionSettings ks.-20: select @@sql_mode orig, 'STRICT_TRANS_TABLES' new {}`,
 			"SysVar set with (sql_mode,'STRICT_TRANS_TABLES')",
+			"ValidateSessionSettings ks.-20",
 			"Needs Reserved Conn",
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
@@ -657,9 +677,10 @@ func TestSetTable(t *testing.T) {
 		},
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
-			`ExecuteMultiShard ks.-20: select @@sql_mode orig, '' new {} false false`,
+			`ExecuteWithSessionSettings ks.-20: select @@sql_mode orig, '' new {}`,
 			"SysVar set with (sql_mode,'')",
 			"SET_VAR can be used",
+			"ValidateSessionSettings ks.-20",
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
 			"STRICT_TRANS_TABLES|",
@@ -677,9 +698,10 @@ func TestSetTable(t *testing.T) {
 		},
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
-			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'STRICT_TRANS_TABLES' new {} false false`,
+			`ExecuteWithSessionSettings ks.-20: select @@sql_mode orig, 'STRICT_TRANS_TABLES' new {}`,
 			"SysVar set with (sql_mode,'STRICT_TRANS_TABLES')",
 			"SET_VAR can be used",
+			"ValidateSessionSettings ks.-20",
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
 			"|STRICT_TRANS_TABLES",
@@ -697,9 +719,10 @@ func TestSetTable(t *testing.T) {
 		},
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
-			`ExecuteMultiShard ks.-20: select @@sql_mode orig, '' new {} false false`,
+			`ExecuteWithSessionSettings ks.-20: select @@sql_mode orig, '' new {}`,
 			"SysVar set with (sql_mode,'')",
 			"SET_VAR can be used",
+			"ValidateSessionSettings ks.-20",
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
 			"STRICT_TRANS_TABLES|",
@@ -717,8 +740,9 @@ func TestSetTable(t *testing.T) {
 		},
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
-			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'STRICT_TRANS_TABLES' new {} false false`,
+			`ExecuteWithSessionSettings ks.-20: select @@sql_mode orig, 'STRICT_TRANS_TABLES' new {}`,
 			"SysVar set with (sql_mode,'STRICT_TRANS_TABLES')",
+			"ValidateSessionSettings ks.-20",
 			"Needs Reserved Conn",
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
@@ -741,7 +765,7 @@ func TestSetTable(t *testing.T) {
 		shardSession: []*srvtopo.ResolvedShard{{Target: &querypb.Target{Keyspace: "ks", Shard: "-20"}}},
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
-			`ExecuteMultiShard ks.-20: select @@sql_mode orig, concat('STRICT_TRANS', '_TABLES') new {} false false`,
+			`ExecuteWithSessionSettings ks.-20: select @@sql_mode orig, concat('STRICT_TRANS', '_TABLES') new {}`,
 			"SysVar set with (sql_mode,'STRICT_TRANS_TABLES')",
 			"Needs Reserved Conn",
 			`ExecuteMultiShard ks.-20: set sql_mode = 'STRICT_TRANS_TABLES' {} false false`,
@@ -763,7 +787,7 @@ func TestSetTable(t *testing.T) {
 		},
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
-			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'REAL_AS_FLOAT' new {} false false`,
+			`ExecuteWithSessionSettings ks.-20: select @@sql_mode orig, 'REAL_AS_FLOAT' new {}`,
 		},
 		expectedError: "setting the REAL_AS_FLOAT sql_mode is unsupported",
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
@@ -783,7 +807,7 @@ func TestSetTable(t *testing.T) {
 		},
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
-			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'REAL_AS_FLOAT,STRICT_TRANS_TABLES' new {} false false`,
+			`ExecuteWithSessionSettings ks.-20: select @@sql_mode orig, 'REAL_AS_FLOAT,STRICT_TRANS_TABLES' new {}`,
 		},
 		// the assignment would not change the value, but it is rejected regardless:
 		// such sessions were never parsed correctly by the vtgate
@@ -804,7 +828,7 @@ func TestSetTable(t *testing.T) {
 		},
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
-			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 1048576 new {} false false`,
+			`ExecuteWithSessionSettings ks.-20: select @@sql_mode orig, 1048576 new {}`,
 		},
 		expectedError: "setting the NO_BACKSLASH_ESCAPES sql_mode is unsupported",
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|int64"),
@@ -823,7 +847,7 @@ func TestSetTable(t *testing.T) {
 		},
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
-			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'ansi' new {} false false`,
+			`ExecuteWithSessionSettings ks.-20: select @@sql_mode orig, 'ansi' new {}`,
 		},
 		expectedError: "setting the ANSI sql_mode is unsupported",
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
@@ -842,7 +866,7 @@ func TestSetTable(t *testing.T) {
 		},
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
-			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'IGNORE_SPACE' new {} false false`,
+			`ExecuteWithSessionSettings ks.-20: select @@sql_mode orig, 'IGNORE_SPACE' new {}`,
 		},
 		expectedError: "setting the IGNORE_SPACE sql_mode is unsupported",
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
@@ -861,7 +885,7 @@ func TestSetTable(t *testing.T) {
 		},
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
-			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'BOGUS' new {} false false`,
+			`ExecuteWithSessionSettings ks.-20: select @@sql_mode orig, 'BOGUS' new {}`,
 		},
 		expectedError: "Variable 'sql_mode' can't be set to the value of 'BOGUS'",
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
@@ -880,7 +904,7 @@ func TestSetTable(t *testing.T) {
 		},
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
-			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'STRICT_TRANS_TABLES' new {} false false`,
+			`ExecuteWithSessionSettings ks.-20: select @@sql_mode orig, 'STRICT_TRANS_TABLES' new {}`,
 		},
 		expectedError: "unexpected result reading sql_mode: 1 fields, 1 rows",
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig", "varchar"),
@@ -899,7 +923,7 @@ func TestSetTable(t *testing.T) {
 		},
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
-			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'STRICT_TRANS_TABLES' new {} false false`,
+			`ExecuteWithSessionSettings ks.-20: select @@sql_mode orig, 'STRICT_TRANS_TABLES' new {}`,
 		},
 		expectedError: "unexpected result reading sql_mode: 2 fields, 0 rows",
 		qr:            []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"))},
@@ -916,7 +940,7 @@ func TestSetTable(t *testing.T) {
 		},
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
-			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'STRICT_TRANS_TABLES' new {} false false`,
+			`ExecuteWithSessionSettings ks.-20: select @@sql_mode orig, 'STRICT_TRANS_TABLES' new {}`,
 		},
 		expectedError: "unexpected result reading sql_mode: 2 fields, 2 rows",
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
@@ -936,7 +960,7 @@ func TestSetTable(t *testing.T) {
 		},
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
-			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 256 new {} false false`,
+			`ExecuteWithSessionSettings ks.-20: select @@sql_mode orig, 256 new {}`,
 		},
 		expectedError: "sql_mode=0x00000100 is not supported.",
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|int64"),
@@ -954,13 +978,316 @@ func TestSetTable(t *testing.T) {
 		},
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
-			`ExecuteMultiShard ks.-20: select 'a' from dual where @@default_week_format != 'a' {} false false`,
+			`ExecuteWithSessionSettings ks.-20: select v, @@default_week_format != v from (select 'a' as v) as t {}`,
 			"SysVar set with (default_week_format,'a')",
+			"ValidateSessionSettings ks.-20",
 			"Needs Reserved Conn",
 		},
-		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("new", "varchar"),
-			"a",
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("new|changed", "varchar|int64"),
+			"a|1",
 		)},
+	}, {
+		// the value is stored before the set runs, so that a connection reserved for
+		// it carries the value; a set the shard rejects must then remove it again
+		testName:     "reserved conn sysvar rejected by a shard session leaves the session untouched",
+		mysqlVersion: "8.0.0",
+		setOps: []SetOp{
+			&SysVarReservedConn{
+				Name:     "default_week_format",
+				Keyspace: &vindexes.Keyspace{Name: "ks", Sharded: true},
+				Expr:     "'a'",
+			},
+		},
+		shardSession: []*srvtopo.ResolvedShard{{Target: &querypb.Target{Keyspace: "ks", Shard: "-20"}}},
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
+			`ExecuteWithSessionSettings ks.-20: select v, @@default_week_format != v from (select 'a' as v) as t {}`,
+			"SysVar set with (default_week_format,'a')",
+			"Needs Reserved Conn",
+			`ExecuteMultiShard ks.-20: set default_week_format = 'a' {} false false`,
+			"SysVar removed (default_week_format)",
+		},
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("new|changed", "varchar|int64"),
+			"a|1",
+		), nil},
+		resultErr:     errors.New("bad value"),
+		expectedError: "bad value",
+	}, {
+		testName:     "reserved conn sysvar already held by the session is restored when a shard session rejects the new value",
+		mysqlVersion: "8.0.0",
+		setOps: []SetOp{
+			&SysVarReservedConn{
+				Name:     "default_week_format",
+				Keyspace: &vindexes.Keyspace{Name: "ks", Sharded: true},
+				Expr:     "'new'",
+			},
+		},
+		systemVariables: map[string]string{"default_week_format": "'old'"},
+		inReservedConn:  true,
+		shardSession:    []*srvtopo.ResolvedShard{{Target: &querypb.Target{Keyspace: "ks", Shard: "-20"}}},
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
+			`ExecuteWithSessionSettings ks.-20: select 'new' from dual {}`,
+			"SysVar set with (default_week_format,'new')",
+			"Needs Reserved Conn",
+			`ExecuteMultiShard ks.-20: set default_week_format = 'new' {} false false`,
+			"SysVar set with (default_week_format,'old')",
+		},
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("new", "varchar"),
+			"new",
+		), nil},
+		resultErr:     errors.New("bad value"),
+		expectedError: "bad value",
+	}, {
+		// the session's own value of the variable may be what the shard rejects, and the
+		// SET replacing it must still get through
+		testName: "evaluation that fails with the session's settings is retried without the variable's value",
+		setOps: []SetOp{
+			&SysVarReservedConn{
+				Name:     "default_week_format",
+				Keyspace: &vindexes.Keyspace{Name: "ks", Sharded: true},
+				Expr:     "'new'",
+			},
+		},
+		systemVariables:  map[string]string{"default_week_format": "'old'"},
+		withSettingsErrs: []error{sqlerror.NewSQLError(sqlerror.ERWrongValueForVar, sqlerror.SSClientError, "Variable 'default_week_format' can't be set to the value of 'old'")},
+		validateErrs:     []error{sqlerror.NewSQLError(sqlerror.ERWrongValueForVar, sqlerror.SSClientError, "Variable 'default_week_format' can't be set to the value of 'old'")},
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("new", "varchar"),
+			"new",
+		)},
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
+			`ExecuteWithSessionSettings ks.-20: select 'new' from dual {}`,
+			"ValidateSessionSettings ks.-20",
+			`ExecuteWithSessionSettings ks.-20: select 'new' from dual {} without default_week_format`,
+			"SysVar set with (default_week_format,'new')",
+			"ValidateSessionSettings ks.-20",
+			"Needs Reserved Conn",
+		},
+	}, {
+		// an error the evaluation itself raises can depend on the session's value, such
+		// as a query that the session's sql_mode rejects; the shard accepts the
+		// session's settings alone, so the error is the SET's, as in MySQL
+		testName: "evaluation error with settings the shard accepts is not retried",
+		setOps: []SetOp{
+			&SysVarReservedConn{
+				Name:     "sql_mode",
+				Keyspace: &vindexes.Keyspace{Name: "ks", Sharded: true},
+				Expr:     "(select max(id) from t group by c)",
+			},
+		},
+		systemVariables:  map[string]string{"sql_mode": "'only_full_group_by'"},
+		withSettingsErrs: []error{sqlerror.NewSQLError(sqlerror.ERWrongFieldWithGroup, sqlerror.SSClientError, "Expression #1 of SELECT list is not in GROUP BY clause")},
+		expectedError:    "Expression #1 of SELECT list is not in GROUP BY clause (errno 1055) (sqlstate 42000)",
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
+			`ExecuteWithSessionSettings ks.-20: select @@sql_mode orig, (select max(id) from t group by c) new {}`,
+			"ValidateSessionSettings ks.-20",
+		},
+	}, {
+		// a failure that says nothing about the value, such as a lost connection, is not
+		// retried: without the variable, the expression could evaluate to another value
+		testName: "evaluation that fails for a reason other than a value is not retried",
+		setOps: []SetOp{
+			&SysVarReservedConn{
+				Name:     "default_week_format",
+				Keyspace: &vindexes.Keyspace{Name: "ks", Sharded: true},
+				Expr:     "'new'",
+			},
+		},
+		systemVariables:  map[string]string{"default_week_format": "'old'"},
+		withSettingsErrs: []error{vterrors.New(vtrpcpb.Code_UNAVAILABLE, "connection refused")},
+		expectedError:    "connection refused",
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
+			`ExecuteWithSessionSettings ks.-20: select 'new' from dual {}`,
+		},
+	}, {
+		// the session's transaction or reserved connection on the probe shard sees what
+		// MySQL's session would, such as rows the transaction changed
+		testName: "evaluation runs on the connection the session holds to the probe shard",
+		setOps: []SetOp{
+			&SysVarReservedConn{
+				Name:     "default_week_format",
+				Keyspace: &vindexes.Keyspace{Name: "ks", Sharded: true},
+				Expr:     "(select v from t)",
+			},
+		},
+		holdsSessionConn: true,
+		shardSession:     []*srvtopo.ResolvedShard{{Target: &querypb.Target{Keyspace: "ks", Shard: "-20"}}},
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("v|changed", "int64|int64"),
+			"2|1",
+		)},
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
+			`ExecuteOnSessionConnection ks.-20: select v, @@default_week_format != v from (select (select v from t) as v) as t {}`,
+			`SysVar set with (default_week_format,2)`,
+			`Needs Reserved Conn`,
+			`ExecuteMultiShard ks.-20: set default_week_format = 2 {} false false`,
+		},
+	}, {
+		// the connection the session holds carries settings MySQL accepted, so a failure
+		// there is the SET's, and evaluating elsewhere could see other rows
+		testName: "evaluation failure on the session's connection is not retried",
+		setOps: []SetOp{
+			&SysVarReservedConn{
+				Name:     "default_week_format",
+				Keyspace: &vindexes.Keyspace{Name: "ks", Sharded: true},
+				Expr:     "'new'",
+			},
+		},
+		holdsSessionConn: true,
+		systemVariables:  map[string]string{"default_week_format": "'old'"},
+		resultErr:        sqlerror.NewSQLError(sqlerror.ERWrongValueForVar, sqlerror.SSClientError, "Variable 'default_week_format' can't be set to the value of 'new'"),
+		expectedError:    "Variable 'default_week_format' can't be set to the value of 'new' (errno 1231) (sqlstate 42000)",
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
+			`ExecuteOnSessionConnection ks.-20: select 'new' from dual {}`,
+		},
+	}, {
+		// without a value of its own in the session, the variable's setting is not what
+		// failed, so the failure is the SET's
+		testName: "evaluation failure is not retried when the session holds no value for the variable",
+		setOps: []SetOp{
+			&SysVarReservedConn{
+				Name:     "default_week_format",
+				Keyspace: &vindexes.Keyspace{Name: "ks", Sharded: true},
+				Expr:     "'new'",
+			},
+		},
+		systemVariables:  map[string]string{"sql_safe_updates": "1"},
+		withSettingsErrs: []error{errors.New("some random error")},
+		expectedError:    "some random error",
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
+			`ExecuteWithSessionSettings ks.-20: select v, @@default_week_format != v from (select 'new' as v) as t {}`,
+		},
+	}, {
+		// a targeted session gets the same revert
+		testName: "targeted set rejected by a shard session leaves the session untouched",
+		setOps: []SetOp{
+			&SysVarReservedConn{
+				Name:              "x",
+				Keyspace:          ks,
+				TargetDestination: key.DestinationShard("-20"),
+				Expr:              "dummy_expr",
+			},
+		},
+		shardSession: []*srvtopo.ResolvedShard{{Target: &querypb.Target{Keyspace: "ks", Shard: "-20"}}},
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationShard(-20)`,
+			`ExecuteWithSessionSettings ks.DestinationShard(-20): select v, @@x != v from (select dummy_expr as v) as t {}`,
+			`SysVar set with (x,123456)`,
+			`Needs Reserved Conn`,
+			`ExecuteMultiShard ks.-20: set x = 123456 {} false false`,
+			`SysVar removed (x)`,
+		},
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("id|changed", "int64|int64"),
+			"123456|1",
+		), nil},
+		resultErr:     errors.New("bad value"),
+		expectedError: "bad value",
+	}, {
+		// the session already overrides the variable, so the assignment is not
+		// compared against the shard's default: the new value is stored either way
+		testName:     "reserved conn sysvar already held by the session is stored before the shards apply it",
+		mysqlVersion: "8.0.0",
+		setOps: []SetOp{
+			&SysVarReservedConn{
+				Name:     "default_week_format",
+				Keyspace: &vindexes.Keyspace{Name: "ks", Sharded: true},
+				Expr:     "'new'",
+			},
+		},
+		systemVariables: map[string]string{"default_week_format": "'old'"},
+		inReservedConn:  true,
+		shardSession:    []*srvtopo.ResolvedShard{{Target: &querypb.Target{Keyspace: "ks", Shard: "-20"}}},
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
+			`ExecuteWithSessionSettings ks.-20: select 'new' from dual {}`,
+			"SysVar set with (default_week_format,'new')",
+			"Needs Reserved Conn",
+			`ExecuteMultiShard ks.-20: set default_week_format = 'new' {} false false`,
+		},
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("new", "varchar"),
+			"new",
+		)},
+	}, {
+		testName:     "SET_VAR sysvar already held by the session is re-evaluated even when equal to the default - MySQL80",
+		mysqlVersion: "8.0.0",
+		setOps: []SetOp{
+			&SysVarReservedConn{
+				Name:          "sql_safe_updates",
+				Keyspace:      &vindexes.Keyspace{Name: "ks", Sharded: true},
+				Expr:          "0",
+				SupportSetVar: true,
+			},
+		},
+		systemVariables: map[string]string{"sql_safe_updates": "1"},
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
+			`ExecuteWithSessionSettings ks.-20: select 0 from dual {}`,
+			"SysVar set with (sql_safe_updates,0)",
+			"SET_VAR can be used",
+			"ValidateSessionSettings ks.-20",
+		},
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("new", "int64"),
+			"0",
+		)},
+	}, {
+		// no shard session receives a set, so the target shard validates the value, which
+		// it rejects: the SET fails and the session neither keeps the value nor is marked
+		// as needing a reserved connection
+		testName: "targeted set rejected by the target shard leaves the session untouched",
+		setOps: []SetOp{
+			&SysVarReservedConn{
+				Name:              "x",
+				Keyspace:          ks,
+				TargetDestination: key.DestinationShard("20-"),
+				Expr:              "dummy_expr",
+			},
+		},
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("id|changed", "int64|int64"),
+			"123456|1",
+		)},
+		validateErr:   errors.New("bad value"),
+		expectedError: "bad value",
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationShard(20-)`,
+			`ExecuteWithSessionSettings ks.DestinationShard(20-): select v, @@x != v from (select dummy_expr as v) as t {}`,
+			`SysVar set with (x,123456)`,
+			"ValidateSessionSettings ks.DestinationShard(20-)",
+			`SysVar removed (x)`,
+		},
+	}, {
+		// MySQL ignores a SET_VAR hint whose value it rejects, so the shard validates the
+		// value on the SET; a rejected value restores the one the session held
+		testName:     "SET_VAR sysvar rejected by the shard restores the held value - MySQL80",
+		mysqlVersion: "8.0.0",
+		setOps: []SetOp{
+			&SysVarReservedConn{
+				Name:          "sql_safe_updates",
+				Keyspace:      &vindexes.Keyspace{Name: "ks", Sharded: true},
+				Expr:          "7",
+				SupportSetVar: true,
+			},
+		},
+		systemVariables: map[string]string{"sql_safe_updates": "1"},
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("new", "int64"),
+			"7",
+		)},
+		validateErr:   errors.New("bad value"),
+		expectedError: "bad value",
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
+			`ExecuteWithSessionSettings ks.-20: select 7 from dual {}`,
+			"SysVar set with (sql_safe_updates,7)",
+			"SET_VAR can be used",
+			"ValidateSessionSettings ks.-20",
+			"SysVar set with (sql_safe_updates,1)",
+		},
 	}}
 
 	for _, tc := range tests {
@@ -978,12 +1305,21 @@ func TestSetTable(t *testing.T) {
 			})
 			require.NoError(t, err)
 			vc := &loggingVCursor{
-				shards:         []string{"-20", "20-"},
-				results:        tc.qr,
-				multiShardErrs: []error{tc.execErr},
-				disableSetVar:  tc.disableSetVar,
-				parser:         parser,
-				shardSession:   tc.shardSession,
+				shards:          []string{"-20", "20-"},
+				results:         tc.qr,
+				multiShardErrs:  []error{tc.execErr},
+				disableSetVar:   tc.disableSetVar,
+				parser:          parser,
+				shardSession:    tc.shardSession,
+				systemVariables: tc.systemVariables,
+				inReservedConn:  tc.inReservedConn,
+				resultErr:       tc.resultErr,
+
+				validateSettingsErr: tc.validateErr,
+				withSettingsErrs:    tc.withSettingsErrs,
+				holdsSessionConn:    tc.holdsSessionConn,
+
+				validateSettingsErrs: tc.validateErrs,
 			}
 			_, err = set.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 			if tc.expectedError == "" {
@@ -1011,13 +1347,10 @@ func TestSysVarSetErr(t *testing.T) {
 		},
 	}
 
-	// the evaluation succeeds and the SET itself fails: it must not leave its
-	// value in the session, so no "SysVar set with"
+	// the failed SET must not leave its value in the session: no "SysVar set with"
 	expectedQueryLog := []string{
 		`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
-		"Needs Reserved Conn",
-		`ExecuteMultiShard ks.-20: select dummy_expr from dual {} false false`,
-		`ExecuteMultiShard ks.-20: set x = 123456 {} false false`,
+		`ExecuteWithSessionSettings ks.-20: select v, @@x != v from (select dummy_expr as v) as t {}`,
 	}
 
 	set := &Set{
@@ -1025,11 +1358,8 @@ func TestSysVarSetErr(t *testing.T) {
 		Input: &SingleRow{},
 	}
 	vc := &loggingVCursor{
-		shards: []string{"-20", "20-"},
-		// the first result answers the evaluation; the nil entry makes the SET
-		// return resultErr
-		results:   []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("dummy_expr", "int64"), "123456"), nil},
-		resultErr: errors.New("error"),
+		shards:         []string{"-20", "20-"},
+		multiShardErrs: []error{errors.New("error")},
 	}
 	_, err := set.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.EqualError(t, err, "error")

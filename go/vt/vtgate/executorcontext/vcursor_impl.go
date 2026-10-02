@@ -978,6 +978,61 @@ func (vc *VCursorImpl) ExecuteStandalone(ctx context.Context, primitive engine.P
 	return qr, vterrors.Aggregate(errs)
 }
 
+// ValidateSessionSettings is part of the engine.VCursor interface.
+func (vc *VCursorImpl) ValidateSessionSettings(ctx context.Context, rs *srvtopo.ResolvedShard) error {
+	_, err := vc.ExecuteWithSessionSettings(ctx, rs, "select 1 from dual", nil, "")
+	return err
+}
+
+// ExecuteWithSessionSettings is part of the engine.VCursor interface. The query runs in
+// a copy of the session without its transaction and shard sessions, marked as needing a
+// reserved connection, so that the shard receives the session's system variables as
+// settings. VTTablet applies them to a connection from its settings pool, which fails
+// on a value MySQL rejects, and serves the query there without reserving a connection.
+func (vc *VCursorImpl) ExecuteWithSessionSettings(ctx context.Context, rs *srvtopo.ResolvedShard, query string, bindVars map[string]*querypb.BindVariable, omitSysVar string) (*sqltypes.Result, error) {
+	atomic.AddUint64(&vc.logStats.ShardQueries, 1)
+	session := NewAutocommitSession(vc.SafeSession.Session)
+	// A tablet-specific target (USE ks:shard@type|alias) is stored on SafeSession, not
+	// in the vtgatepb.Session proto, so NewAutocommitSession drops it; the query must
+	// reach the tablet the session's queries reach.
+	session.SetTargetTabletAlias(vc.SafeSession.GetTargetTabletAlias())
+	if omitSysVar != "" {
+		delete(session.SystemVariables, omitSysVar)
+	}
+	session.SetReservedConn(len(session.SystemVariables) > 0)
+	rss := []*srvtopo.ResolvedShard{rs}
+	queries := []*querypb.BoundQuery{{
+		Sql:           vc.marginComments.Leading + query + vc.marginComments.Trailing,
+		BindVariables: bindVars,
+	}}
+	qr, errs := vc.executor.ExecuteMultiShard(ctx, nil /*primitive*/, rss, queries, session, false /*autocommit*/, vc.ignoreMaxMemoryRows, vc.observer, false /*fetchLastInsertID*/)
+	vc.logShardsQueried(nil /*primitive*/, len(rss))
+	return qr, vterrors.Aggregate(errs)
+}
+
+// ExecuteOnSessionConnection is part of the engine.VCursor interface. A connection the
+// session holds carries the session's settings from when it was reserved or began its
+// transaction, and the set statements sent to it since; a variable that rides on the
+// SET_VAR hint reaches it only through the hint, as it does for every other query.
+func (vc *VCursorImpl) ExecuteOnSessionConnection(ctx context.Context, rs *srvtopo.ResolvedShard, query string, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, bool, error) {
+	if !vc.SafeSession.HoldsConnection(rs.Target) {
+		return nil, false, nil
+	}
+	if vc.CanUseSetVar() {
+		if hint := vc.PrepareSetVarComment(); hint != "" {
+			if rest, ok := strings.CutPrefix(query, "select "); ok {
+				query = "select /*+ " + hint + " */ " + rest
+			}
+		}
+	}
+	queries := []*querypb.BoundQuery{{
+		Sql:           query,
+		BindVariables: bindVars,
+	}}
+	qr, errs := vc.ExecuteMultiShard(ctx, nil /*primitive*/, []*srvtopo.ResolvedShard{rs}, queries, false /*rollbackOnError*/, false /*canAutocommit*/, false /*fetchLastInsertID*/)
+	return qr, true, vterrors.Aggregate(errs)
+}
+
 // ExecuteKeyspaceID is part of the engine.VCursor interface.
 func (vc *VCursorImpl) ExecuteKeyspaceID(ctx context.Context, keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, rollbackOnError, autocommit bool) (*sqltypes.Result, error) {
 	atomic.AddUint64(&vc.logStats.ShardQueries, 1)
@@ -1133,6 +1188,11 @@ func (vc *VCursorImpl) SetSysVar(name string, expr string) {
 	vc.SafeSession.SetSystemVariable(name, expr)
 }
 
+// RemoveSysVar implements the SessionActions interface
+func (vc *VCursorImpl) RemoveSysVar(name string) {
+	vc.SafeSession.RemoveSystemVariable(name)
+}
+
 func (vc *VCursorImpl) CheckForReservedConnection(setVarComment string, stmt sqlparser.Statement) {
 	if setVarComment == "" {
 		return
@@ -1161,11 +1221,6 @@ func (vc *VCursorImpl) CheckForReservedConnection(setVarComment string, stmt sql
 // NeedsReservedConn implements the SessionActions interface
 func (vc *VCursorImpl) NeedsReservedConn() {
 	vc.SafeSession.SetReservedConn(true)
-}
-
-// ResetReservedConn implements the SessionActions interface
-func (vc *VCursorImpl) ResetReservedConn() {
-	vc.SafeSession.SetReservedConn(false)
 }
 
 func (vc *VCursorImpl) InReservedConn() bool {

@@ -2585,6 +2585,8 @@ func TestExecutorSavepointInTxWithReservedConn(t *testing.T) {
 
 	sbc1WantQueries := []*querypb.BoundQuery{
 		{Sql: "select @@sql_mode orig, '' new", BindVariables: emptyBV},
+		{Sql: "set sql_mode = ''", BindVariables: emptyBV},
+		{Sql: "select 1 from dual", BindVariables: emptyBV},
 		{Sql: "savepoint a", BindVariables: emptyBV},
 		{Sql: "select /*+ SET_VAR(sql_mode = ' ') */ id from `user` where id = 1", BindVariables: emptyBV},
 		{Sql: "savepoint b", BindVariables: emptyBV},
@@ -2600,7 +2602,8 @@ func TestExecutorSavepointInTxWithReservedConn(t *testing.T) {
 
 	utils.MustMatch(t, sbc1WantQueries, sbc1.Queries, "")
 	utils.MustMatch(t, sbc2WantQueries, sbc2.Queries, "")
-	testQueryLog(t, executor, logChan, "TestExecute", "SET", "set @@sql_mode = ''", 1)
+	// the SET evaluates the assignment and validates the value on the shard
+	testQueryLog(t, executor, logChan, "TestExecute", "SET", "set @@sql_mode = ''", 2)
 	testQueryLog(t, executor, logChan, "TestExecute", "BEGIN", "begin", 0)
 	testQueryLog(t, executor, logChan, "TestExecute", "SAVEPOINT", "savepoint a", 0)
 	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select /*+ SET_VAR(sql_mode = ' ') */ id from `user` where id = 1", 1)
@@ -2921,13 +2924,17 @@ func TestExecutorSettingsInTwoPC(t *testing.T) {
 				`insert into user_extra(user_id) values (3)`,
 			},
 			testRes: []*sqltypes.Result{
-				sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "varchar"),
-					"+08:00"),
+				sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|changed", "varchar|int64"),
+					"+08:00|1"),
 			},
 			expectedQueries: [][]string{
 				{
-					"select '+08:00' from dual where @@time_zone != '+08:00'",
+					// the assignment is evaluated and the value validated outside the
+					// transaction, so the shard joins it with the first insert, whose
+					// reservation carries the value
+					"select v, @@time_zone != v from (select '+08:00' as v from dual) as t",
 					"set time_zone = '+08:00'",
+					"select 1 from dual",
 					"set time_zone = '+08:00'",
 					"insert into user_extra(user_id) values (1)",
 					"insert into user_extra(user_id) values (2)",

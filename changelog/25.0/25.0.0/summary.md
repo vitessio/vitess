@@ -40,6 +40,7 @@
         - [Stricter PROXY protocol v1 header validation](#vtgate-proxy-protocol-v1-strictness)
         - [MySQL-faithful validation and rejection of unsupported `sql_mode` values](#vtgate-sql-mode-rejection)
         - [New `VEXPLAIN MYSQLPLAN` statement](#vtgate-vexplain-mysqlplan)
+        - [`SET` fails on a value MySQL rejects, and on a lock function in the assignment](#vtgate-set-sysvar-rejections)
     - **[Reparent](#minor-changes-reparent)**
         - [`EmergencyReparentShard` no longer waits on replicas that cannot win the election](#ers-lagging-relay-log-wait)
         - [`EmergencyReparentShard` can explicitly recover from split brain](#ers-allow-split-brain-promotion)
@@ -454,6 +455,12 @@ For each `Route` in the plan, the per-shard `EXPLAIN` queries are run concurrent
 Because each per-shard `EXPLAIN` runs on a separate connection, a `VEXPLAIN MYSQLPLAN` issued inside an open transaction reflects the pre-transaction state of each shard rather than any uncommitted changes made in that transaction — the same limitation as `VEXPLAIN ALL`.
 
 Like a plain `EXPLAIN`, the per-shard `EXPLAIN FORMAT=JSON` queries `VEXPLAIN MYSQLPLAN` issues are not subject to table ACL checks on the explained tables, so `VEXPLAIN MYSQLPLAN` can return per-shard plan metadata (index names, row estimates, filtered percentages) for tables the caller could not otherwise read. For the same reason — the tablet plans an `EXPLAIN` without the explained table's identity — query denylist rules that are conditioned on a table name are not enforced against these per-shard `EXPLAIN` queries either; denylist rules conditioned on the query pattern still apply if their pattern matches the `explain format = json ...` query text. Unlike a plain `EXPLAIN`, which reaches a single arbitrary shard, `VEXPLAIN MYSQLPLAN` extends this to every resolved shard of every keyspace in the plan. Deployments that rely on table ACLs or table-scoped query denylist rules to restrict read access should restrict access to `VEXPLAIN MYSQLPLAN` accordingly.
+
+#### <a id="vtgate-set-sysvar-rejections"/>`SET` fails on a value MySQL rejects, and on a lock function in the assignment</a>
+
+A shard now checks a system variable's new value before the `SET` returns, so a value MySQL rejects, such as `SET time_zone = 'No/Such_Zone'`, fails the `SET` itself. Before, the session stored the value and every later query failed, or, for a variable VTGate sends as a `SET_VAR` hint, MySQL ignored the value with a warning and later queries ran with the shard's value.
+
+VTGate now refuses a system variable assignment that calls a lock function, such as `SET @@group_concat_max_len = GET_LOCK('l', 1)`. Sessions targeted at a shard (`USE ks:-80`) and sessions holding a reserved connection used to accept one.
 
 ### <a id="minor-changes-reparent"/>Reparent</a>
 
