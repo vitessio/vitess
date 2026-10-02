@@ -1,34 +1,34 @@
 [
   {
     "comment": "UNION ALL after a reference EXISTS predicate can merge into a scatter route",
-    "query": "select id from (select u.id from user u where exists (select 1 from ref r where r.id = u.id) union all select id from user) as t",
+    "query": "select * from (select u.* from user u where exists (select 1 from ref r where r.id = u.id) union all select * from user) as t",
     "plan": {
       "Type": "Scatter",
       "QueryType": "SELECT",
-      "Original": "select id from (select u.id from user u where exists (select 1 from ref r where r.id = u.id) union all select id from user) as t",
+      "Original": "select * from (select u.* from user u where exists (select 1 from ref r where r.id = u.id) union all select * from user) as t",
       "Instructions": {
         "OperatorType": "Route",
         "Variant": "Scatter",
         "Keyspace": {"Name": "user", "Sharded": true},
-        "FieldQuery": "select id from (select u.id from `user` as u where 1 != 1 union all select id from `user` where 1 != 1) as t where 1 != 1",
-        "Query": "select id from (select u.id from `user` as u where exists (select 1 from ref as r where r.id = u.id) union all select id from `user`) as t"
+        "FieldQuery": "select * from (select u.* from `user` as u where 1 != 1 union all select * from `user` where 1 != 1) as t where 1 != 1",
+        "Query": "select * from (select u.* from `user` as u where exists (select 1 from ref as r where r.id = u.id) union all select * from `user`) as t"
       },
       "TablesUsed": ["user.user"]
     }
   },
   {
     "comment": "UNION ALL after a reference EXISTS predicate in OR can merge into a scatter route",
-    "query": "select id from (select u.id from user u where u.id = 1 or exists (select 1 from ref r where r.id = u.id) union all select id from user) as t",
+    "query": "select * from (select u.* from user u where u.id = 1 or exists (select 1 from ref r where r.id = u.id) union all select * from user) as t",
     "plan": {
       "Type": "Scatter",
       "QueryType": "SELECT",
-      "Original": "select id from (select u.id from user u where u.id = 1 or exists (select 1 from ref r where r.id = u.id) union all select id from user) as t",
+      "Original": "select * from (select u.* from user u where u.id = 1 or exists (select 1 from ref r where r.id = u.id) union all select * from user) as t",
       "Instructions": {
         "OperatorType": "Route",
         "Variant": "Scatter",
         "Keyspace": {"Name": "user", "Sharded": true},
-        "FieldQuery": "select id from (select u.id from `user` as u where 1 != 1 union all select id from `user` where 1 != 1) as t where 1 != 1",
-        "Query": "select id from (select u.id from `user` as u where u.id = 1 or exists (select 1 from ref as r where r.id = u.id) union all select id from `user`) as t"
+        "FieldQuery": "select * from (select u.* from `user` as u where 1 != 1 union all select * from `user` where 1 != 1) as t where 1 != 1",
+        "Query": "select * from (select u.* from `user` as u where u.id = 1 or exists (select 1 from ref as r where r.id = u.id) union all select * from `user`) as t"
       },
       "TablesUsed": ["user.user"]
     }
