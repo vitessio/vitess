@@ -777,10 +777,7 @@ func (pr *PlannedReparenter) reparentShardLocked(
 	// Refuse before we touch anything. We cannot repoint a tablet Vitess does not manage, so
 	// carrying on would promote the new primary and only then report failure, leaving the shard
 	// reparented but with that tablet still replicating from the old one.
-	if err := ValidateAllTabletsManaged(tabletMap); err != nil {
-		return err
-	}
-	if err := ValidateAllTabletsManagedInShard(ctx, pr.ts, keyspace, shard); err != nil {
+	if err := ValidateShardManaged(ctx, pr.ts, keyspace, shard, tabletMap); err != nil {
 		return err
 	}
 

@@ -851,4 +851,49 @@ func TestNonManagedTabletMarkerFailurePaths(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, []*topodatapb.TabletAlias{tablet.Alias}, aliases)
 	})
+
+	// The marker path is derived from the tablet record, so a delete that removed the record
+	// first would leave nothing to derive it from: the marker would block every reparent of the
+	// shard forever, with no record left to explain why and no retry able to clear it.
+	t.Run("marker delete failure leaves the tablet record for a retry", func(t *testing.T) {
+		ts, factory := memorytopo.NewServerAndFactory(t.Context(), "zone1")
+		t.Cleanup(ts.Close)
+
+		tablet := newTablet()
+		require.NoError(t, ts.CreateTablet(t.Context(), tablet))
+		factory.AddOperationError(memorytopo.Delete, "keyspaces/commerce/shards/0/non_managed_tablets/zone1-0000000001", errors.New("marker delete failed"))
+
+		require.ErrorContains(t, ts.DeleteTablet(t.Context(), tablet.Alias), "marker delete failed")
+		require.Len(t, readMarkers(t, ts), 1)
+		// The record survived, so the marker path is still derivable and the delete is retryable.
+		stored, err := ts.GetTablet(t.Context(), tablet.Alias)
+		require.NoError(t, err)
+		assert.Equal(t, topodatapb.TabletMySQLMode_UNMANAGED, stored.GetMysqlMode())
+
+		factory.ClearOperationErrors()
+		require.NoError(t, ts.DeleteTablet(t.Context(), tablet.Alias))
+		aliases, err := ts.GetNonManagedTabletAliasesByShard(t.Context(), tablet.Keyspace, tablet.Shard)
+		require.NoError(t, err)
+		assert.Empty(t, aliases)
+	})
+
+	// DeleteTabletReplicationData has usually already run by this point, so the marker is the
+	// only thing still telling a reparent that this tablet is unmanaged -- and the record we
+	// failed to delete still says that it is. Leaving the marker deleted would be fail-open.
+	t.Run("tablet delete failure restores the marker", func(t *testing.T) {
+		ts, factory := memorytopo.NewServerAndFactory(t.Context(), "zone1")
+		t.Cleanup(ts.Close)
+
+		tablet := newTablet()
+		require.NoError(t, ts.CreateTablet(t.Context(), tablet))
+		require.NoError(t, topo.DeleteTabletReplicationData(t.Context(), ts, tablet))
+		factory.AddOperationError(memorytopo.Delete, "tablets/zone1-0000000001/Tablet", errors.New("tablet delete failed"))
+
+		require.ErrorContains(t, ts.DeleteTablet(t.Context(), tablet.Alias), "tablet delete failed")
+		require.Len(t, readMarkers(t, ts), 1)
+		aliases, err := ts.GetNonManagedTabletAliasesByShard(t.Context(), tablet.Keyspace, tablet.Shard)
+		require.NoError(t, err)
+		require.Len(t, aliases, 1)
+		assert.True(t, topoproto.TabletAliasEqual(tablet.Alias, aliases[0]))
+	})
 }

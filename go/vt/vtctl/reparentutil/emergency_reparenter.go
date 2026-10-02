@@ -297,10 +297,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	// Refuse before we touch anything. We cannot stop replication on, or revoke writes from, a
 	// tablet Vitess does not manage, so promoting here would report a safety guarantee we never
 	// established and could leave the shard with a second writer.
-	if err := ValidateAllTabletsManaged(tabletMap); err != nil {
-		return err
-	}
-	if err := ValidateAllTabletsManagedInShard(ctx, erp.ts, keyspace, shard); err != nil {
+	if err := ValidateShardManaged(ctx, erp.ts, keyspace, shard, tabletMap); err != nil {
 		return err
 	}
 
@@ -318,6 +315,10 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 
 	if err != nil {
 		return vterrors.Wrapf(err, "failed to stop replication and build status maps")
+	}
+	// Again, now that the stop phase is over: a tablet may have restarted as unmanaged since preflight.
+	if err := ValidateShardManaged(ctx, erp.ts, keyspace, shard, tabletMap); err != nil {
+		return err
 	}
 
 	// check that we still have the shard lock. If we don't then we can terminate at this point

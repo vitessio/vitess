@@ -156,6 +156,76 @@ func TestEmergencyReparenterRejectsUnmanagedTabletMissingFromShardReplication(t 
 	assert.ErrorContains(t, err, "shard has unmanaged tablets [zone1-0000000101]")
 }
 
+func TestEmergencyReparenterRejectsPrimaryBecomingUnmanaged(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	t.Cleanup(cancel)
+	ts := memorytopo.NewServer(ctx, "zone1")
+	t.Cleanup(ts.Close)
+	primary := &topodatapb.Tablet{
+		Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+		Keyspace: "testkeyspace", Shard: "-", Type: topodatapb.TabletType_PRIMARY,
+	}
+	replica := primary.CloneVT()
+	replica.Alias = &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}
+	replica.Type = topodatapb.TabletType_REPLICA
+	testutil.AddShards(ctx, t, ts, &vtctldatapb.Shard{
+		Keyspace: primary.Keyspace, Name: primary.Shard,
+		Shard: &topodatapb.Shard{PrimaryAlias: primary.Alias},
+	})
+	testutil.AddTablets(ctx, t, ts, nil, primary, replica)
+	reparenttestutil.SetKeyspaceDurability(ctx, t, ts, primary.Keyspace, policy.DurabilityNone)
+
+	tmc := tmcmock.NewMockTabletManagerClient(gomock.NewController(t))
+	primaryStarted := make(chan struct{})
+	tmc.EXPECT().StopReplicationAndGetStatus(gomock.Any(), tabletAliasMatcher(topoproto.TabletAliasString(primary.Alias)), replicationdatapb.StopReplicationMode_IOTHREADONLY).
+		DoAndReturn(func(rpcCtx context.Context, _ *topodatapb.Tablet, _ replicationdatapb.StopReplicationMode) (*replicationdatapb.StopReplicationStatus, error) {
+			if err := topo.CheckShardLocked(rpcCtx, primary.Keyspace, primary.Shard); err != nil {
+				return nil, err
+			}
+			close(primaryStarted)
+			select {
+			case <-rpcCtx.Done():
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			}
+			_, err := ts.UpdateTabletFields(ctx, primary.Alias, func(tablet *topodatapb.Tablet) error {
+				tablet.MysqlMode = topodatapb.TabletMySQLMode_UNMANAGED
+				return nil
+			})
+			if err != nil {
+				return nil, err
+			}
+			return nil, rpcCtx.Err()
+		})
+	tmc.EXPECT().StopReplicationAndGetStatus(gomock.Any(), tabletAliasMatcher(topoproto.TabletAliasString(replica.Alias)), replicationdatapb.StopReplicationMode_IOTHREADONLY).
+		DoAndReturn(func(context.Context, *topodatapb.Tablet, replicationdatapb.StopReplicationMode) (*replicationdatapb.StopReplicationStatus, error) {
+			select {
+			case <-primaryStarted:
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			}
+			return &replicationdatapb.StopReplicationStatus{
+				Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning)},
+				After:  &replicationdatapb.Status{},
+			}, nil
+		})
+	var advancedPastStop atomic.Bool
+	tmc.EXPECT().WaitForPosition(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(context.Context, *topodatapb.Tablet, string) error {
+		advancedPastStop.Store(true)
+		return assert.AnError
+	}).AnyTimes()
+	tmc.EXPECT().StartReplication(gomock.Any(), tabletAliasMatcher(topoproto.TabletAliasString(replica.Alias)), false).Return(nil)
+
+	erp := NewEmergencyReparenter(ts, tmc, logutil.NewMemoryLogger())
+	_, err := erp.ReparentShard(ctx, primary.Keyspace, primary.Shard, EmergencyReparentOptions{WaitReplicasTimeout: 30 * time.Second})
+	assert.False(t, advancedPastStop.Load())
+	require.ErrorContains(t, err, "shard has unmanaged tablets [zone1-0000000100]")
+	assert.Equal(t, vtrpc.Code_FAILED_PRECONDITION, vterrors.Code(err))
+	shard, err := ts.GetShard(ctx, primary.Keyspace, primary.Shard)
+	require.NoError(t, err)
+	assert.True(t, topoproto.TabletAliasEqual(primary.Alias, shard.PrimaryAlias))
+}
+
 func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 	tests := []struct {
 		name                 string

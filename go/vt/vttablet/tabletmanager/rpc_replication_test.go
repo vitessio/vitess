@@ -1726,6 +1726,7 @@ func TestUnmanagedTabletRejectsReplicationRPCs(t *testing.T) {
 			err := call()
 			require.ErrorContains(t, err, "tablet is unmanaged")
 			assert.Equal(t, vtrpc.Code_FAILED_PRECONDITION, vterrors.Code(err))
+			assert.True(t, vterrors.IsError(vterrors.FromGRPC(vterrors.ToGRPC(err)), "VT09033"))
 
 			// The guard runs before tm.lock(), so the action semaphore was never taken.
 			require.True(t, tm.actionSema.TryAcquire(1), "%s acquired the action semaphore", name)

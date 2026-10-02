@@ -2878,10 +2878,7 @@ func (s *VtctldServer) InitShardPrimaryLocked(
 	// Refuse before the ResetReplication phase below, which deletes binary and relay logs and resets
 	// GTID state on every tablet concurrently. Letting only the unmanaged tablet's call fail would
 	// leave the managed ones already reset.
-	if err := reparentutil.ValidateAllTabletsManaged(tabletMap); err != nil {
-		return err
-	}
-	if err := reparentutil.ValidateAllTabletsManagedInShard(ctx, s.ts, req.Keyspace, req.Shard); err != nil {
+	if err := reparentutil.ValidateShardManaged(ctx, s.ts, req.Keyspace, req.Shard, tabletMap); err != nil {
 		return err
 	}
 

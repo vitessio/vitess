@@ -1277,12 +1277,7 @@ func ForgetInstance(tabletAlias *topodatapb.TabletAlias) error {
 		log.Error(errMsg)
 		return errors.New(errMsg)
 	}
-	wasAlreadyForgotten := InstanceIsForgotten(tabletAlias)
-	forgetAliases.Set(tabletAliasString, true, cache.DefaultExpiration)
 	if err := tx.Commit(); err != nil {
-		if !wasAlreadyForgotten {
-			forgetAliases.Delete(tabletAliasString)
-		}
 		log.Error(err.Error())
 		return err
 	}

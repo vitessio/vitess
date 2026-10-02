@@ -1474,11 +1474,9 @@ func (tm *TabletManager) handleRecoverableReplicationInitError(ctx context.Conte
 	return err
 }
 
-// isReparentingDisabled reports whether this vttablet must leave its MySQL's replication alone.
-// It checks the tablet-local mode as well as the older process-wide setting.
-//
-// Comparing against UNMANAGED is safe here, unlike in the callers reading another tablet's record:
-// tm.mysqlMode comes from our own config, so it only holds a mode this build knows.
+// isReparentingDisabled reports whether this vttablet must leave its MySQL's replication alone,
+// via the tablet-local mode or the older process-wide setting. Comparing against UNMANAGED is safe
+// here, unlike when reading another tablet's record: tm.mysqlMode comes from our own config.
 func (tm *TabletManager) isReparentingDisabled() bool {
 	return mysqlctl.DisableActiveReparents || tm.mysqlMode == topodatapb.TabletMySQLMode_UNMANAGED
 }
@@ -1487,8 +1485,7 @@ func (tm *TabletManager) isReparentingDisabled() bool {
 // writing to replication state refuse. Read-only RPCs and ChangeType stay available.
 func (tm *TabletManager) checkIsManaged() error {
 	if tm.mysqlMode == topodatapb.TabletMySQLMode_UNMANAGED {
-		return vterrors.New(vtrpc.Code_FAILED_PRECONDITION,
-			"tablet is unmanaged (started with --unmanaged), replication and reparent operations are not allowed")
+		return vterrors.VT09033()
 	}
 	return nil
 }

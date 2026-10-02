@@ -415,6 +415,15 @@ func (f *Factory) AddOperationError(op Operation, pathPattern string, err error)
 	})
 }
 
+// ClearOperationErrors drops every spec added by AddOperationError, so a test can fake a
+// transient failure and then let the retry through.
+func (f *Factory) ClearOperationErrors() {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	clear(f.operationErrors)
+}
+
 func (f *Factory) getOperationError(op Operation, path string) error {
 	specs := f.operationErrors[op]
 	for _, spec := range specs {

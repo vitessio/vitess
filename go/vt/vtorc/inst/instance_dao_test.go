@@ -971,10 +971,40 @@ func TestForgetInstanceRetiresWriteGenerationAfterAliasCleanup(t *testing.T) {
 	assert.False(t, found)
 }
 
-func TestForgetInstancePreventsStaleProbeWriteAfterMarkerExpires(t *testing.T) {
+// blockedProbe is a ReadTopologyInstanceBufferable call parked inside FullStatus, so a test can run
+// ForgetInstance while the probe is in flight and then let it through.
+type blockedProbe struct {
+	release func()
+	done    chan blockedProbeResult
+}
+
+type blockedProbeResult struct {
+	instance *Instance
+	err      error
+}
+
+// blockedProbeTablet is the tablet the three stale-write tests probe; only the uid and type differ.
+func blockedProbeTablet(uid uint32, tabletType topodatapb.TabletType) *topodatapb.Tablet {
+	return &topodatapb.Tablet{
+		Alias:         &topodatapb.TabletAlias{Cell: "zone9", Uid: uid},
+		Hostname:      "vttablet.example",
+		Keyspace:      "ks",
+		Shard:         "0",
+		Type:          tabletType,
+		MysqlHostname: "mysql.example",
+		MysqlPort:     3306,
+	}
+}
+
+// startBlockedProbe saves tablet (and its shard, if shardPrimary is set), swaps in a forget cache
+// with the given TTL and a tmc whose FullStatus blocks until release, then starts the probe and
+// waits for it to reach FullStatus. Everything it swaps is restored on cleanup.
+func startBlockedProbe(t *testing.T, tablet *topodatapb.Tablet, shardPrimary *topodatapb.TabletAlias, forgetTTL time.Duration, result *replicationdatapb.FullStatus, probeErr error) *blockedProbe {
+	t.Helper()
+
 	InitializeForgetAliasesCache()
 	oldCache := forgetAliases
-	forgetAliases = cache.New(20*time.Millisecond, time.Millisecond)
+	forgetAliases = cache.New(forgetTTL, forgetTTL)
 	oldTMC := tmc
 	release := make(chan struct{})
 	var releaseOnce sync.Once
@@ -988,35 +1018,28 @@ func TestForgetInstancePreventsStaleProbeWriteAfterMarkerExpires(t *testing.T) {
 	db.ClearVTOrcDatabase()
 	_, err := db.OpenVTOrc()
 	require.NoError(t, err)
-
-	alias := &topodatapb.TabletAlias{Cell: "zone9", Uid: 987656}
-	tablet := &topodatapb.Tablet{
-		Alias:         alias,
-		Hostname:      "vttablet.example",
-		Keyspace:      "ks",
-		Shard:         "0",
-		Type:          topodatapb.TabletType_PRIMARY,
-		MysqlHostname: "mysql.example",
-		MysqlPort:     3306,
-	}
 	require.NoError(t, SaveTablet(tablet))
-	require.NoError(t, SaveShard(topo.NewShardInfo(tablet.Keyspace, tablet.Shard, &topodatapb.Shard{PrimaryAlias: alias}, nil)))
+	if shardPrimary != nil {
+		require.NoError(t, SaveShard(topo.NewShardInfo(tablet.Keyspace, tablet.Shard, &topodatapb.Shard{PrimaryAlias: shardPrimary}, nil)))
+	}
 
 	started := make(chan struct{})
 	tmc = &blockingFullStatusTMC{
 		TabletManagerClient: &testutil.TabletManagerClient{},
 		started:             started,
 		release:             release,
-		result:              &replicationdatapb.FullStatus{TabletType: topodatapb.TabletType_PRIMARY},
+		result:              result,
+		err:                 probeErr,
 	}
 	latency := stopwatch.NewNamedStopwatch()
 	require.NoError(t, latency.AddMany([]string{"backend", "instance", "total"}))
-	probeDone := make(chan error, 1)
-	var probedInstance *Instance
+	probe := &blockedProbe{
+		release: func() { releaseOnce.Do(func() { close(release) }) },
+		done:    make(chan blockedProbeResult, 1),
+	}
 	go func() {
-		var err error
-		probedInstance, err = ReadTopologyInstanceBufferable(alias, latency)
-		probeDone <- err
+		instance, err := ReadTopologyInstanceBufferable(tablet.Alias, latency)
+		probe.done <- blockedProbeResult{instance: instance, err: err}
 	}()
 
 	select {
@@ -1024,13 +1047,22 @@ func TestForgetInstancePreventsStaleProbeWriteAfterMarkerExpires(t *testing.T) {
 	case <-time.After(30 * time.Second):
 		require.FailNow(t, "FullStatus did not start")
 	}
+	return probe
+}
+
+func TestForgetInstancePreventsStaleProbeWriteAfterMarkerExpires(t *testing.T) {
+	tablet := blockedProbeTablet(987656, topodatapb.TabletType_PRIMARY)
+	alias := tablet.Alias
+	probe := startBlockedProbe(t, tablet, alias, 20*time.Millisecond, &replicationdatapb.FullStatus{TabletType: topodatapb.TabletType_PRIMARY}, nil)
+
 	require.NoError(t, ForgetInstance(alias))
 	assert.Eventually(t, func() bool {
 		return !InstanceIsForgotten(alias)
 	}, 30*time.Second, time.Millisecond)
 
-	releaseOnce.Do(func() { close(release) })
-	require.NoError(t, <-probeDone)
+	probe.release()
+	probed := <-probe.done
+	require.NoError(t, probed.err)
 
 	dbConn, err := db.OpenVTOrc()
 	require.NoError(t, err)
@@ -1039,72 +1071,26 @@ func TestForgetInstancePreventsStaleProbeWriteAfterMarkerExpires(t *testing.T) {
 	assert.Zero(t, rows)
 
 	require.NoError(t, SaveTablet(tablet))
-	require.NoError(t, WriteInstance(probedInstance, true, nil))
+	require.NoError(t, WriteInstance(probed.instance, true, nil))
 	require.NoError(t, dbConn.QueryRow("SELECT COUNT(*) FROM database_instance WHERE alias = ?", topoproto.TabletAliasString(alias)).Scan(&rows))
 	assert.Equal(t, 1, rows)
 }
 
 func TestForgetInstancePreventsStaleShardPeerHealthWrite(t *testing.T) {
-	InitializeForgetAliasesCache()
-	oldCache := forgetAliases
-	forgetAliases = cache.New(time.Minute, time.Minute)
-	oldTMC := tmc
-	release := make(chan struct{})
-	var releaseOnce sync.Once
 	resetShardPeerHealth()
-	t.Cleanup(func() {
-		releaseOnce.Do(func() { close(release) })
-		forgetAliases = oldCache
-		tmc = oldTMC
-		resetShardPeerHealth()
-		db.ClearVTOrcDatabase()
-	})
+	t.Cleanup(resetShardPeerHealth)
 
-	db.ClearVTOrcDatabase()
-	_, err := db.OpenVTOrc()
-	require.NoError(t, err)
-
-	observer := &topodatapb.TabletAlias{Cell: "zone9", Uid: 987657}
+	tablet := blockedProbeTablet(987657, topodatapb.TabletType_REPLICA)
 	primary := &topodatapb.TabletAlias{Cell: "zone9", Uid: 987658}
-	tablet := &topodatapb.Tablet{
-		Alias:         observer,
-		Hostname:      "vttablet.example",
-		Keyspace:      "ks",
-		Shard:         "0",
-		Type:          topodatapb.TabletType_REPLICA,
-		MysqlHostname: "mysql.example",
-		MysqlPort:     3306,
-	}
-	require.NoError(t, SaveTablet(tablet))
-	require.NoError(t, SaveShard(topo.NewShardInfo(tablet.Keyspace, tablet.Shard, &topodatapb.Shard{PrimaryAlias: primary}, nil)))
+	probe := startBlockedProbe(t, tablet, primary, time.Minute, &replicationdatapb.FullStatus{
+		TabletType:      topodatapb.TabletType_REPLICA,
+		ShardPeerHealth: reportFor(primary, 5, 0, time.Now()),
+	}, nil)
 
-	started := make(chan struct{})
-	tmc = &blockingFullStatusTMC{
-		TabletManagerClient: &testutil.TabletManagerClient{},
-		started:             started,
-		release:             release,
-		result: &replicationdatapb.FullStatus{
-			TabletType:      topodatapb.TabletType_REPLICA,
-			ShardPeerHealth: reportFor(primary, 5, 0, time.Now()),
-		},
-	}
-	latency := stopwatch.NewNamedStopwatch()
-	require.NoError(t, latency.AddMany([]string{"backend", "instance", "total"}))
-	probeDone := make(chan error, 1)
-	go func() {
-		_, probeErr := ReadTopologyInstanceBufferable(observer, latency)
-		probeDone <- probeErr
-	}()
+	require.NoError(t, ForgetInstance(tablet.Alias))
 
-	select {
-	case <-started:
-	case <-time.After(30 * time.Second):
-		require.FailNow(t, "FullStatus did not start")
-	}
-	require.NoError(t, ForgetInstance(observer))
-
-	releaseOnce.Do(func() { close(release) })
-	require.NoError(t, <-probeDone)
+	probe.release()
+	require.NoError(t, (<-probe.done).err)
 
 	quorum := EvaluatePrimaryQuorum(primary, tablet.Keyspace, tablet.Shard, 0, QuorumOptions{
 		FailureThreshold: 3,
@@ -1116,55 +1102,10 @@ func TestForgetInstancePreventsStaleShardPeerHealthWrite(t *testing.T) {
 }
 
 func TestForgetInstancePreventsStaleFailedProbeUpdate(t *testing.T) {
-	InitializeForgetAliasesCache()
-	oldCache := forgetAliases
-	forgetAliases = cache.New(20*time.Millisecond, time.Millisecond)
-	oldTMC := tmc
-	release := make(chan struct{})
-	var releaseOnce sync.Once
-	t.Cleanup(func() {
-		releaseOnce.Do(func() { close(release) })
-		forgetAliases = oldCache
-		tmc = oldTMC
-		db.ClearVTOrcDatabase()
-	})
+	tablet := blockedProbeTablet(987659, topodatapb.TabletType_REPLICA)
+	alias := tablet.Alias
+	probe := startBlockedProbe(t, tablet, nil, 20*time.Millisecond, nil, errors.New("injected stale probe failure"))
 
-	db.ClearVTOrcDatabase()
-	_, err := db.OpenVTOrc()
-	require.NoError(t, err)
-
-	alias := &topodatapb.TabletAlias{Cell: "zone9", Uid: 987659}
-	tablet := &topodatapb.Tablet{
-		Alias:         alias,
-		Hostname:      "vttablet.example",
-		Keyspace:      "ks",
-		Shard:         "0",
-		Type:          topodatapb.TabletType_REPLICA,
-		MysqlHostname: "mysql.example",
-		MysqlPort:     3306,
-	}
-	require.NoError(t, SaveTablet(tablet))
-
-	started := make(chan struct{})
-	tmc = &blockingFullStatusTMC{
-		TabletManagerClient: &testutil.TabletManagerClient{},
-		started:             started,
-		release:             release,
-		err:                 errors.New("injected stale probe failure"),
-	}
-	latency := stopwatch.NewNamedStopwatch()
-	require.NoError(t, latency.AddMany([]string{"backend", "instance", "total"}))
-	probeDone := make(chan error, 1)
-	go func() {
-		_, probeErr := ReadTopologyInstanceBufferable(alias, latency)
-		probeDone <- probeErr
-	}()
-
-	select {
-	case <-started:
-	case <-time.After(30 * time.Second):
-		require.FailNow(t, "FullStatus did not start")
-	}
 	require.NoError(t, ForgetInstance(alias))
 	assert.Eventually(t, func() bool {
 		return !InstanceIsForgotten(alias)
@@ -1187,8 +1128,8 @@ func TestForgetInstancePreventsStaleFailedProbeUpdate(t *testing.T) {
 		return err == nil && clockAdvanced
 	}, 30*time.Second, time.Millisecond)
 
-	releaseOnce.Do(func() { close(release) })
-	require.ErrorContains(t, <-probeDone, "injected stale probe failure")
+	probe.release()
+	require.ErrorContains(t, (<-probe.done).err, "injected stale probe failure")
 
 	rediscovered, found, err := ReadInstance(alias)
 	require.NoError(t, err)

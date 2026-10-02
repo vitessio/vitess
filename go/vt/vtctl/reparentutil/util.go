@@ -580,41 +580,31 @@ func GetBackupCandidates(tablets []*topo.TabletInfo, stats []*replicationdatapb.
 	return res
 }
 
-// ValidateAllTabletsManagedInShard checks the per-shard safety index independently from
-// `ShardReplication`. An incomplete index read must fail closed before a reparent changes MySQL.
-func ValidateAllTabletsManagedInShard(ctx context.Context, ts *topo.Server, keyspace, shard string) error {
+// ValidateShardManaged refuses a shard holding a tablet Vitess cannot revoke writes from, since a
+// reparent there would report a guarantee it never established. It checks both the records in
+// tabletMap and the per-shard marker index, because a tablet can be in one and not the other: gone
+// from ShardReplication, or its record not yet visible. Anything but MANAGED fails closed, records
+// predating the field read as MANAGED, and an incomplete index read fails closed too.
+func ValidateShardManaged(ctx context.Context, ts *topo.Server, keyspace, shard string, tabletMap map[string]*topo.TabletInfo) error {
+	unmanaged := map[string]struct{}{}
+	for alias, tabletInfo := range tabletMap {
+		if tabletInfo.GetMysqlMode() != topodatapb.TabletMySQLMode_MANAGED {
+			unmanaged[alias] = struct{}{}
+		}
+	}
 	aliases, err := ts.GetNonManagedTabletAliasesByShard(ctx, keyspace, shard)
 	if err != nil {
 		return vterrors.Wrapf(err, "failed to read non-managed tablets while checking %s/%s", keyspace, shard)
 	}
-
-	unmanaged := make([]string, 0, len(aliases))
 	for _, alias := range aliases {
-		unmanaged = append(unmanaged, topoproto.TabletAliasString(alias))
+		unmanaged[topoproto.TabletAliasString(alias)] = struct{}{}
 	}
-	return validateNoNonManagedTablets(unmanaged)
-}
-
-// ValidateAllTabletsManaged errors unless every tablet in the shard reports MANAGED. We can't stop
-// replication on a tablet we don't manage or revoke its writes, so a reparent here would report a
-// guarantee it never established. Anything other than MANAGED fails closed, and records predating
-// the field read as MANAGED.
-func ValidateAllTabletsManaged(tabletMap map[string]*topo.TabletInfo) error {
-	var unmanaged []string
-	for alias, tabletInfo := range tabletMap {
-		if tabletInfo.GetMysqlMode() != topodatapb.TabletMySQLMode_MANAGED {
-			unmanaged = append(unmanaged, alias)
-		}
-	}
-	return validateNoNonManagedTablets(unmanaged)
-}
-
-func validateNoNonManagedTablets(unmanaged []string) error {
 	if len(unmanaged) == 0 {
 		return nil
 	}
-	slices.Sort(unmanaged)
+	list := maps.Keys(unmanaged)
+	slices.Sort(list)
 	return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION,
 		"shard has unmanaged tablets %v that Vitess cannot revoke writes from, so it cannot be reparented safely; "+
-			"unmanaged tablets belong in a keyspace of their own", unmanaged)
+			"unmanaged tablets belong in a keyspace of their own", list)
 }
