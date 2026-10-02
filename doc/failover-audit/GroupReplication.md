@@ -590,6 +590,58 @@ No decision write in any run: no tablet started or resumed serving while its vie
 
 **Still open: the migration back.** In 25 of the 34 runs, and 16 of 24 on 2ee8c64 and its base, the migration back to semi-sync takes 38s instead of 12–16s: when the group shrinks to the primary, the primary stops serving (fewer than a majority of the voters, a rule that predates these commits) and serves again with the same primary term, and vtgate buffers until `--buffer-max-failover-duration`, the same mechanism as the bootstrap above, in the other direction. The test tolerates 5 failed writes; it failed once, in the fifth run with load, with 16 (`primary is not serving`), after the load had ended. The migration could clear the voters before the last secondary leaves, or end the not-serving moment with a new primary term; neither is in these commits.
 
+## The migration's pauses and vtgate's buffer
+
+This section replaces the tablet-side retry of deea0a6 with vtgate's buffering, and closes "Still open: the migration back" above. Design: "The migration's pauses and vtgate's buffer" in `doc/design-docs/GroupReplication.md`.
+
+### Why the migration back buffered for 30s
+
+The earlier explanation (the group shrinking to the primary stops it serving) does not hold: under the semi-sync policy that the migration back sets first, the voter-majority rule does not apply, and no run logged it. A run on 0070196's binaries (`/home/user/vtlab/gr-buffer/before/b1.log`, logs in `b1-logs/`) shows the actual sequence:
+
+- 12:14:04.825, primary zone3-301 (`StopGroupReplication`): `PRIMARY: Serving -> PRIMARY: Not Serving` with term 12:13:45, then `STOP GROUP_REPLICATION`.
+- 12:14:04.842, vtgate: `Starting buffering ... seen error: primary is not serving, there may be a reparent operation in progress`. This error is vtgate's own: the tablet gateway found no serving primary (vtgate had already processed the not-serving health check), and `ShouldStartBufferingForTarget` agreed. Starting the buffering calls `MarkShardNotServing(isReparentErr=true)`, which sets `waitForReparent` after the not-serving health check had cleared it.
+- 12:14:08.425, primary: `PRIMARY: Not Serving -> PRIMARY: Serving`, same term. vtgate ignores this serving health check: with `waitForReparent` set, only a newer primary term ends the wait (`keyspace_events.go`, `onHealthCheck`).
+- 12:14:34.843, vtgate: `Stopping buffering ... after: 30.0 seconds due to: stopping buffering because failover did not finish in time`.
+
+So vtgate ends a same-term pause promptly only if a not-serving health check reaches its keyspace event watcher after the buffering started. That happened in the runs where a write reached the primary before vtgate saw it stop serving: the write's `CLUSTER_EVENT` started the buffering, the not-serving health check cleared `waitForReparent`, and the serving one ended the buffering; that write failed anyway, since vtgate does not send a request again to a tablet that refused it (`invalidTablets` in `withRetry`), which is why the test tolerated 5 failed writes. Which of the two came first was a race, lost in 25 of 34 runs. The bootstrap's 30s buffering (above) is the first case without the not-serving health check: the primary never stopped serving. `TestBufferingEndsWhenSamePrimaryServesAgain` (`go/vt/vtgate/buffer`) reproduces both orders against vtgate's buffer and keyspace event watcher: the second order only ends when the not-serving health check is sent again after the buffering started, and either order times out if a not-serving health check stops clearing `waitForReparent`.
+
+### Fix
+
+vtgate is unchanged. Both migration steps that make MySQL refuse commits under a serving primary are planned pauses (`pauseServingLocked`): the bootstrap forward, and the primary's leave of its group back (the step that switches it back to semi-sync durability). No other step refuses commits: in every run below, the MySQL error logs show `before_commit` failures only on the primary during its own `STOP GROUP_REPLICATION` (its heartbeat writes, inside the pause), and none during joins or the secondaries' leaves.
+
+- The tablet first reports that it does not serve while it still serves (100ms, `--group-replication-pause-notice`), so vtgate buffers instead of sending writes that the tablet would refuse; then it stops serving and drains, MySQL changes, and the tablet serves again once MySQL is writable, through the serving invariant, with its primary term. The pause ends, and the tablet serves again, after `groupReplicationPauseResumeTimeout` (5s) whatever MySQL's state, and also when the change fails: MySQL is then still the semi-sync primary, and the RPC reports the error so that the migration can be run again. Nothing else makes the tablet serve during the pause.
+- A PRIMARY that serves again with its term first broadcasts that it does not serve (`announceNotServingBeforeResuming` in the tabletserver's state manager), so the buffering ends on the next health check whichever order vtgate saw. This also ends the 30s buffering of `UndoDemotePrimary` and of a primary that the sync loop let serve again.
+- In 2 of 16 runs with the pauses alone (`/home/user/vtlab/gr-buffer/v1/run5` and `run15`), the primary's sync loop still had the group replication policy cached (for up to 10s) when the group shrank to the primary at 12:44:45.921: it stopped serving for the lost voter majority, served again 1s later when its cache expired (vtgate's buffering ended then, thanks to the announcement), and the planned pause followed 2s later. vtgate buffers a shard at most once per `--buffer-min-time-between-failovers`, 1 minute by default, so the planned pause would have failed writes. Before it reports a lost majority, the loop now reads the policy again, along with the shard record it already read again (`voterMajorityLost`); `TestGroupReplicationSyncDoesNotStopServingUnderStalePolicy` fails without it.
+- The retry of deea0a6 is removed: `read_only_window.go`, the hooks in `query_executor.go`, the window in `StartGroupReplication`, `SetGroupReplicationBootstrapInProgress`, and `sqlerror.ERRunHookError`, which nothing uses any more.
+
+Unit tests, each failing without its fix: the pause's order (`TestBootstrapOnServingPrimaryPausesServing`, `TestPrimaryLeavingItsGroupPausesServing`), serving only once MySQL is writable (`TestPausedPrimaryServesOnlyOnceMySQLIsWritable`), failures during the pause (`TestPausedPrimaryResumesAfterFailedBootstrap`, `TestPausedPrimaryResumesWhenMySQLStaysReadOnly`), no serving during the pause on a state refresh (`TestPausedPrimaryDoesNotServeWhenItsStateIsRefreshed`), the serving invariant at the pause's end (`TestPausedPrimaryKeepsTheServingInvariant`), and the announcement (`TestPrimaryAnnouncesNotServingBeforeResuming`).
+
+### Results
+
+`TestGroupReplicationLifecycle` with `--enable-buffer`, one run after the other (`/home/user/vtlab/gr-buffer/`). "Longest write" is the longest time a write of the test's writer took during the migration step, buffered or not.
+
+| | Before (0070196, deea0a6's retry) | Pauses only (`v1/`, 16 runs) | Final (`v2/`, 16 runs) |
+|---|---|---|---|
+| Runs passed | 34 of 34 (the test tolerated 5 failed writes back) | 16 of 16 | 16 of 16 |
+| Failed writes, forward / back | 0 / up to 16 | 0 / 0 | 0 / 0 |
+| Buffered until `--buffer-max-failover-duration` (30s), back | 25 of 34 runs (`b1`: 30.0s) | 0 | 0 |
+| Longest write, forward | | 1.63–2.24s | 1.57–2.33s |
+| Longest write, back | 30s in 25 of 34 runs | 4.64–4.89s | 4.65–4.91s |
+| vtgate bufferings per migration, forward / back | | 1 / 1, and 1 / 2 in the 2 runs with the sync loop's pause | 1 / 1 in every run, all ended by the serving primary |
+| Pause, forward / back | | 1.32–1.51s / 3.69–3.94s | 1.33–1.50s / 3.70–3.96s |
+
+The pause forward is mostly MySQL's `START GROUP_REPLICATION` (about 1.2s), the pause back its `STOP GROUP_REPLICATION` (about 3.6s, the time the leave takes on every member, secondaries included). After the pause back, the first commit waits up to about 1s more for a semi-sync acknowledgement (0.96s in MySQL in `after/a1`): Group Replication's stop ends the binlog dump threads (the replicas log `Lost connection to MySQL server during query` when the primary's leave ends), and MySQL's semi-sync ack receiver only polls a reconnected replica from its next round. After the pause forward, the first commit takes 0.2–0.9s. The test bounds the longest write at 8s.
+
+With 8 more writer sessions through vtgate during each migration (`load/`, 3 runs, `run_load.sh`), no write failed in either direction; before, MySQL refused 3–9 writes per run during the bootstrap and the tablet retried them. `TestGroupReplicationOneVoterPerCell` and `TestGroupReplicationReplicaReadsWithPollingLag` pass.
+
+Chaos regression on the final binaries (`/home/ubuntu/chaos-fix/pause/`, `CHAOS_DURABILITY=group_replication_cross_cell`, one run each; the setup's migration to Group Replication pauses the primary too):
+
+| Scenario | Previous section | Now | Acked writes lost | Violations | Single-voter writes (decision / shrink) |
+|---|---|---|---|---|---|
+| S1 | gap 7.84s | gap 7.63s | 0/2172 | 0 | 0 / 0 |
+| S3 | gap 9.04s | gap 9.04s | 0/3768 | 0 | 0 / 0 |
+| G12 (`CHAOS_RACE_OFFSETS=500ms`) | first write after the cut 34.5s (31.5–38.5) | 5 of 6 cycles lost the majority; longest outage per cycle 31.7–36.8s | 0/17791 | 0 | 0 / 0 |
+
 ## Not tested
 
 - S11/S11b/S11c and S12/S13 as written: they use `SOURCE_DELAY`, `fixReplica` and the default channel, which GR members do not have. G11/G11k/G11s replace them.
