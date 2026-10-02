@@ -1,5 +1,83 @@
 [
   {
+    "comment": "UNION ALL returns reference rows once",
+    "query": "select id from ref union all select id from user",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select id from ref union all select id from user",
+      "Instructions": {
+        "OperatorType": "Concatenate",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Reference",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from ref where 1 != 1",
+            "Query": "select id from ref"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from `user` where 1 != 1",
+            "Query": "select id from `user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "UNION ALL keeps reference rows separate when the reference arm is last",
+    "query": "select id from user union all select id from ref",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select id from user union all select id from ref",
+      "Instructions": {
+        "OperatorType": "Concatenate",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from `user` where 1 != 1",
+            "Query": "select id from `user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Reference",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from ref where 1 != 1",
+            "Query": "select id from ref"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
     "comment": "select from unqualified ambiguous reference routes to reference source",
     "query": "select * from ambiguous_ref_with_source",
     "plan": {
