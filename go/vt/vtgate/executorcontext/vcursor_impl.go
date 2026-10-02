@@ -673,12 +673,22 @@ func (vc *VCursorImpl) getSortedServingKeyspaces() []*vindexes.Keyspace {
 	return keyspaces
 }
 
+// FirstSortedKeyspace returns the alphabetically first keyspace in the VSchema.
+// Advisory-lock plans cache this keyspace. The choice ignores gateway serving
+// state: GET_LOCK and RELEASE_LOCK are cached as separate plans, and a serving
+// change does not clear that cache. A serving-dependent choice lets those plans
+// pin to different keyspaces and release held locks.
 func (vc *VCursorImpl) FirstSortedKeyspace() (*vindexes.Keyspace, error) {
 	if len(vc.vschema.Keyspaces) == 0 {
 		return nil, errNoDbAvailable
 	}
-	keyspaces := vc.getSortedServingKeyspaces()
-
+	keyspaces := make([]*vindexes.Keyspace, 0, len(vc.vschema.Keyspaces))
+	for _, ks := range vc.vschema.Keyspaces {
+		keyspaces = append(keyspaces, ks.Keyspace)
+	}
+	sort.Slice(keyspaces, func(i, j int) bool {
+		return keyspaces[i].Name < keyspaces[j].Name
+	})
 	return keyspaces[0], nil
 }
 
