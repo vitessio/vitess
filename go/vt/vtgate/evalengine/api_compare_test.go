@@ -1491,6 +1491,20 @@ func TestMerger(t *testing.T) {
 	row := func(v int64) sqltypes.Row {
 		return sqltypes.Row{sqltypes.NewInt64(v)}
 	}
+	cmp := Comparison{{Col: 0, Type: NewType(sqltypes.Int64, collations.CollationBinaryID)}}
+
+	t.Run("constructor reserves padded tree capacity", func(t *testing.T) {
+		assert.Zero(t, cap(NewMerger(cmp, 0).keys))
+
+		merger := NewMerger(cmp, 3)
+		require.Equal(t, 4, cap(merger.keys))
+		for source := range 3 {
+			merger.Push(row(int64(source)), source)
+		}
+		first := &merger.keys[0]
+		merger.Init()
+		assert.Same(t, first, &merger.keys[0])
+	})
 
 	t.Run("single stream", func(t *testing.T) {
 		streams := [][]sqltypes.Row{{row(1), row(2), row(3)}}
