@@ -19,10 +19,13 @@ package tabletmanager
 import (
 	"context"
 	"log/slog"
+	"time"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
 
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // StartGroupReplication makes the tablet's MySQL join its shard's replication group, or
@@ -58,12 +61,42 @@ func (tm *TabletManager) StartGroupReplication(ctx context.Context, bootstrap bo
 		if err := tm.stopServingBeforeBootstrap(ctx); err != nil {
 			return nil, err
 		}
+		if tm.Tablet().Type == topodatapb.TabletType_PRIMARY {
+			// A primary that still serves while its MySQL bootstraps the group, as during a
+			// migration, sees MySQL super_read_only for a moment, and a commit under way refused
+			// by Group Replication's before_commit hook: the query service retries the writes that
+			// MySQL refuses meanwhile once the bootstrap is over, rather than report them to vtgate
+			// (see tabletserver.readOnlyWindow).
+			tm.QueryServiceControl.SetGroupReplicationBootstrapInProgress(true)
+			defer tm.endGroupReplicationBootstrapWindow(ctx)
+		}
 	}
 	if _, err := tm.startGroupReplicationLocked(ctx, bootstrap); err != nil {
 		return nil, err
 	}
 	return tm.waitForGroupMemberOnline(ctx)
 }
+
+// endGroupReplicationBootstrapWindow ends the window that StartGroupReplication opened in the query
+// service for a bootstrap on a PRIMARY tablet, once MySQL is the writable primary of its group, or
+// it is clear that it will not be: the writes that MySQL refused during the window are then
+// retried, and must find MySQL writable.
+func (tm *TabletManager) endGroupReplicationBootstrapWindow(ctx context.Context) {
+	defer tm.QueryServiceControl.SetGroupReplicationBootstrapInProgress(false)
+	status, err := tm.groupReplicationStatus(ctx)
+	if err != nil || !mysql.IsGroupMemberActive(status) {
+		return
+	}
+	waitCtx, cancel := context.WithTimeout(ctx, groupReplicationBootstrapWritableTimeout)
+	defer cancel()
+	if err := tm.waitForGroupPrimaryWritable(waitCtx); err != nil {
+		log.Warn("MySQL is not the writable primary of its group after the bootstrap", slog.Any("error", err))
+	}
+}
+
+// groupReplicationBootstrapWritableTimeout bounds how long a bootstrap on a PRIMARY tablet waits for
+// MySQL to become writable before the writes it held are retried.
+var groupReplicationBootstrapWritableTimeout = 5 * time.Second
 
 // StopGroupReplication makes the tablet's MySQL leave its shard's replication group. MySQL
 // stays read-only, unless it was the primary of the group and the tablet is PRIMARY: the tablet

@@ -256,7 +256,33 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] %s unexpected plan type", qre.plan.PlanID.String())
 }
 
+// execAutocommit runs f on a connection in autocommit mode. A write that MySQL refused as read-only
+// during a known read-only window of the primary is run again once the window ended (see
+// retryAfterReadOnlyWindow).
 func (qre *QueryExecutor) execAutocommit(f func(conn *StatefulConnection) (*sqltypes.Result, error)) (reply *sqltypes.Result, err error) {
+	reply, err = qre.execAutocommitOnce(f)
+	if qre.retryAfterReadOnlyWindow(err) {
+		return qre.execAutocommitOnce(f)
+	}
+	return reply, err
+}
+
+// retryAfterReadOnlyWindow returns whether a write that the tablet ran as a whole, in autocommit
+// mode or in a transaction of its own, and that failed with err, must run again: MySQL refused it
+// as read-only, or Group Replication's before_commit hook refused its commit, while the tablet
+// manager made the MySQL of this serving primary bootstrap a Group Replication group (see
+// readOnlyWindow). It waits for the bootstrap to end. Such a write had no effect: MySQL refused
+// the statement, or rolled it back with its transaction. A statement of a client's transaction is
+// not retried: the transaction failed.
+func (qre *QueryExecutor) retryAfterReadOnlyWindow(err error) bool {
+	if err == nil || !qre.tsv.grBootstrap.waitToRetry(qre.ctx, err) {
+		return false
+	}
+	log.Info("Retrying a write that MySQL refused while it bootstrapped a replication group", slog.Any("error", err))
+	return true
+}
+
+func (qre *QueryExecutor) execAutocommitOnce(f func(conn *StatefulConnection) (*sqltypes.Result, error)) (reply *sqltypes.Result, err error) {
 	if qre.options == nil {
 		qre.options = &querypb.ExecuteOptions{}
 	} else {
@@ -277,7 +303,17 @@ func (qre *QueryExecutor) execAutocommit(f func(conn *StatefulConnection) (*sqlt
 	return f(conn)
 }
 
+// execAsTransaction runs f in a transaction of its own. Like execAutocommit, it runs it again once
+// a known read-only window of the primary ended, if MySQL refused it as read-only meanwhile.
 func (qre *QueryExecutor) execAsTransaction(f func(conn *StatefulConnection) (*sqltypes.Result, error)) (*sqltypes.Result, error) {
+	reply, err := qre.execAsTransactionOnce(f)
+	if qre.retryAfterReadOnlyWindow(err) {
+		return qre.execAsTransactionOnce(f)
+	}
+	return reply, err
+}
+
+func (qre *QueryExecutor) execAsTransactionOnce(f func(conn *StatefulConnection) (*sqltypes.Result, error)) (*sqltypes.Result, error) {
 	if qre.tsv.txThrottler.Throttle(qre.tsv.getPriorityFromOptions(qre.options), qre.options.GetWorkloadName()) {
 		return nil, errTxThrottled
 	}

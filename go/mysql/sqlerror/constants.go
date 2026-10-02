@@ -264,6 +264,7 @@ const (
 	ERWrongValue                   = ErrorCode(1525)
 	ERWrongParamcountToNativeFct   = ErrorCode(1582)
 	ERDataOutOfRange               = ErrorCode(1690)
+	ERRunHookError                 = ErrorCode(3100)
 	ERInvalidJSONText              = ErrorCode(3140)
 	ERInvalidJSONTextInParams      = ErrorCode(3141)
 	ERInvalidJSONBinaryData        = ErrorCode(3142)

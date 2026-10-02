@@ -145,6 +145,10 @@ type TabletServer struct {
 	env *vtenv.Environment
 
 	queryThrottler *querythrottler.QueryThrottler
+
+	// grBootstrap is the window during which the tablet manager makes the MySQL of this serving
+	// primary bootstrap a Group Replication group (see readOnlyWindow).
+	grBootstrap readOnlyWindow
 }
 
 var _ queryservice.QueryService = (*TabletServer)(nil)
@@ -2078,6 +2082,11 @@ func (tsv *TabletServer) StreamHealth(ctx context.Context, callback func(*queryp
 // BroadcastHealth will broadcast the current health to all listeners
 func (tsv *TabletServer) BroadcastHealth() {
 	tsv.sm.Broadcast()
+}
+
+// SetGroupReplicationBootstrapInProgress is part of the tabletserver.Controller interface.
+func (tsv *TabletServer) SetGroupReplicationBootstrapInProgress(inProgress bool) {
+	tsv.grBootstrap.set(inProgress)
 }
 
 // SetHeartbeatWritesSuppressed is part of the tabletserver.Controller interface.

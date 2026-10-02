@@ -19,6 +19,7 @@ package tabletservermock
 
 import (
 	"context"
+	"slices"
 	"sync"
 	"time"
 
@@ -95,6 +96,11 @@ type Controller struct {
 
 	// groupReplicationVerdict is the last verdict passed to SetGroupReplicationVerdict.
 	groupReplicationVerdict *GroupReplicationVerdict
+
+	// groupReplicationBootstrapInProgress is the last value passed to
+	// SetGroupReplicationBootstrapInProgress, and groupReplicationBootstrapCalls every value.
+	groupReplicationBootstrapInProgress bool
+	groupReplicationBootstrapCalls      []bool
 
 	// heartbeatWritesSuppressed is the last value passed to SetHeartbeatWritesSuppressed.
 	heartbeatWritesSuppressed bool
@@ -230,6 +236,22 @@ func (tqsc *Controller) LastGroupReplicationVerdict() *GroupReplicationVerdict {
 	tqsc.mu.Lock()
 	defer tqsc.mu.Unlock()
 	return tqsc.groupReplicationVerdict
+}
+
+// SetGroupReplicationBootstrapInProgress is part of the tabletserver.Controller interface
+func (tqsc *Controller) SetGroupReplicationBootstrapInProgress(inProgress bool) {
+	tqsc.mu.Lock()
+	defer tqsc.mu.Unlock()
+	tqsc.groupReplicationBootstrapInProgress = inProgress
+	tqsc.groupReplicationBootstrapCalls = append(tqsc.groupReplicationBootstrapCalls, inProgress)
+}
+
+// GroupReplicationBootstrapInProgress returns the last value passed to
+// SetGroupReplicationBootstrapInProgress, and every value passed so far.
+func (tqsc *Controller) GroupReplicationBootstrapInProgress() (bool, []bool) {
+	tqsc.mu.Lock()
+	defer tqsc.mu.Unlock()
+	return tqsc.groupReplicationBootstrapInProgress, slices.Clone(tqsc.groupReplicationBootstrapCalls)
 }
 
 // SetHeartbeatWritesSuppressed is part of the tabletserver.Controller interface
