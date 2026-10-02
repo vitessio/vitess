@@ -520,7 +520,8 @@ func (s *SignalSet) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (hcss *HandlerConditionSQLState) Format(buf *TrackedBuffer) {
-	buf.astPrintf(hcss, "sqlstate %v", hcss.SQLStateValue)
+	buf.literal("sqlstate ")
+	buf.formatSingleToken(hcss.SQLStateValue)
 }
 
 // Format formats the node.
@@ -723,13 +724,16 @@ func (node *PartitionDefinitionOptions) Format(buf *TrackedBuffer) {
 		buf.astPrintf(node, " %v", node.Engine)
 	}
 	if node.Comment != nil {
-		buf.astPrintf(node, " comment %v", node.Comment)
+		buf.literal(" comment ")
+		buf.formatSingleToken(node.Comment)
 	}
 	if node.DataDirectory != nil {
-		buf.astPrintf(node, " data directory %v", node.DataDirectory)
+		buf.literal(" data directory ")
+		buf.formatSingleToken(node.DataDirectory)
 	}
 	if node.IndexDirectory != nil {
-		buf.astPrintf(node, " index directory %v", node.IndexDirectory)
+		buf.literal(" index directory ")
+		buf.formatSingleToken(node.IndexDirectory)
 	}
 	if node.MaxRows != nil {
 		buf.astPrintf(node, " max_rows %d", *node.MaxRows)
@@ -766,13 +770,16 @@ func (node *SubPartitionDefinitionOptions) Format(buf *TrackedBuffer) {
 		buf.astPrintf(node, " %v", node.Engine)
 	}
 	if node.Comment != nil {
-		buf.astPrintf(node, " comment %v", node.Comment)
+		buf.literal(" comment ")
+		buf.formatSingleToken(node.Comment)
 	}
 	if node.DataDirectory != nil {
-		buf.astPrintf(node, " data directory %v", node.DataDirectory)
+		buf.literal(" data directory ")
+		buf.formatSingleToken(node.DataDirectory)
 	}
 	if node.IndexDirectory != nil {
-		buf.astPrintf(node, " index directory %v", node.IndexDirectory)
+		buf.literal(" index directory ")
+		buf.formatSingleToken(node.IndexDirectory)
 	}
 	if node.MaxRows != nil {
 		buf.astPrintf(node, " max_rows %d", *node.MaxRows)
@@ -908,7 +915,8 @@ func (ts *TableSpec) Format(buf *TrackedBuffer) {
 				buf.astPrintf(ts, " %s", opt.String)
 			}
 		} else if opt.Value != nil {
-			buf.astPrintf(ts, " %v", opt.Value)
+			buf.WriteByte(' ')
+			buf.formatSingleToken(opt.Value)
 		} else {
 			buf.astPrintf(ts, " (%v)", opt.Tables)
 		}
@@ -999,7 +1007,8 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 			buf.astPrintf(ct, " %s", keywordStrings[AUTO_INCREMENT])
 		}
 		if ct.Options.Comment != nil {
-			buf.astPrintf(ct, " %s %v", keywordStrings[COMMENT_KEYWORD], ct.Options.Comment)
+			buf.astPrintf(ct, " %s ", keywordStrings[COMMENT_KEYWORD])
+			buf.formatSingleToken(ct.Options.Comment)
 		}
 		if ct.Options.Invisible != nil {
 			if *ct.Options.Invisible {
@@ -1012,10 +1021,12 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 			buf.astPrintf(ct, " %s %s", keywordStrings[COLUMN_FORMAT], ct.Options.Format.ToString())
 		}
 		if ct.Options.EngineAttribute != nil {
-			buf.astPrintf(ct, " %s %v", keywordStrings[ENGINE_ATTRIBUTE], ct.Options.EngineAttribute)
+			buf.astPrintf(ct, " %s ", keywordStrings[ENGINE_ATTRIBUTE])
+			buf.formatSingleToken(ct.Options.EngineAttribute)
 		}
 		if ct.Options.SecondaryEngineAttribute != nil {
-			buf.astPrintf(ct, " %s %v", keywordStrings[SECONDARY_ENGINE_ATTRIBUTE], ct.Options.SecondaryEngineAttribute)
+			buf.astPrintf(ct, " %s ", keywordStrings[SECONDARY_ENGINE_ATTRIBUTE])
+			buf.formatSingleToken(ct.Options.SecondaryEngineAttribute)
 		}
 		if ct.Options.KeyOpt == ColKeyPrimary {
 			buf.astPrintf(ct, " %s %s", keywordStrings[PRIMARY], keywordStrings[KEY])
@@ -1072,7 +1083,8 @@ func (idx *IndexDefinition) Format(buf *TrackedBuffer) {
 		if opt.String != "" {
 			buf.astPrintf(idx, " %#s", opt.String)
 		} else if opt.Value != nil {
-			buf.astPrintf(idx, " %v", opt.Value)
+			buf.WriteByte(' ')
+			buf.formatSingleToken(opt.Value)
 		}
 	}
 }
@@ -1290,7 +1302,7 @@ func (node *ExplainTab) Format(buf *TrackedBuffer) {
 func (node *PrepareStmt) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "prepare %v%v from ", node.Comments, node.Name)
 	if node.Statement != nil {
-		buf.astPrintf(node, "%v", node.Statement)
+		buf.formatSingleToken(node.Statement)
 	}
 }
 
@@ -1570,7 +1582,7 @@ func (node *AssignmentExpr) Format(buf *TrackedBuffer) {
 func (node *Literal) Format(buf *TrackedBuffer) {
 	switch node.Type {
 	case StrVal:
-		sqltypes.MakeTrusted(sqltypes.VarChar, node.Bytes()).EncodeSQL(buf)
+		encodeSQLValue(buf.Builder, sqltypes.MakeTrusted(sqltypes.VarChar, node.Bytes()), !buf.singleToken)
 	case IntVal, FloatVal, DecimalVal, HexNum, BitNum:
 		buf.astPrintf(node, "%#s", node.Val)
 	case HexVal:
@@ -1600,27 +1612,27 @@ func (node *Argument) Format(buf *TrackedBuffer) {
 		// do nothing, the default literal will be correct.
 	case sqltypes.IsDecimal(node.Type) && node.Scale == 0:
 		buf.WriteString("CAST(")
-		buf.WriteArg(":", node.Name)
+		buf.writeExprArg(":", node.Name)
 		buf.astPrintf(node, " AS DECIMAL(%d, %d))", node.Size, node.Scale)
 		return
 	case sqltypes.IsUnsigned(node.Type):
 		buf.WriteString("CAST(")
-		buf.WriteArg(":", node.Name)
+		buf.writeExprArg(":", node.Name)
 		buf.WriteString(" AS UNSIGNED)")
 		return
 	case node.Type == sqltypes.Float64:
 		buf.WriteString("CAST(")
-		buf.WriteArg(":", node.Name)
+		buf.writeExprArg(":", node.Name)
 		buf.WriteString(" AS DOUBLE)")
 		return
 	case node.Type == sqltypes.Float32:
 		buf.WriteString("CAST(")
-		buf.WriteArg(":", node.Name)
+		buf.writeExprArg(":", node.Name)
 		buf.WriteString(" AS FLOAT)")
 		return
 	case node.Type == sqltypes.Timestamp, node.Type == sqltypes.Datetime:
 		buf.WriteString("CAST(")
-		buf.WriteArg(":", node.Name)
+		buf.writeExprArg(":", node.Name)
 		buf.WriteString(" AS DATETIME")
 		if node.Size == 0 {
 			buf.WriteString(")")
@@ -1630,13 +1642,13 @@ func (node *Argument) Format(buf *TrackedBuffer) {
 		return
 	case sqltypes.IsDate(node.Type):
 		buf.WriteString("CAST(")
-		buf.WriteArg(":", node.Name)
+		buf.writeExprArg(":", node.Name)
 		buf.WriteString(" AS DATE")
 		buf.WriteString(")")
 		return
 	case node.Type == sqltypes.Time:
 		buf.WriteString("CAST(")
-		buf.WriteArg(":", node.Name)
+		buf.writeExprArg(":", node.Name)
 		buf.WriteString(" AS TIME")
 		if node.Size == 0 {
 			buf.WriteString(")")
@@ -1646,7 +1658,7 @@ func (node *Argument) Format(buf *TrackedBuffer) {
 		return
 	}
 	// Nothing special to do, the default literal will be correct.
-	buf.WriteArg(":", node.Name)
+	buf.writeExprArg(":", node.Name)
 	if node.Type >= 0 {
 		// For bind variables that are statically typed, emit their type as an adjacent comment.
 		// This comment will be ignored by older versions of Vitess (and by MySQL) but will provide
@@ -1711,7 +1723,7 @@ func (node *DerivedTable) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node ListArg) Format(buf *TrackedBuffer) {
-	buf.WriteArg("::", string(node))
+	buf.writeExprArg("::", string(node))
 }
 
 // Format formats the node.
@@ -1721,6 +1733,17 @@ func (node *BinaryExpr) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *UnaryExpr) Format(buf *TrackedBuffer) {
+	if node.Operator == NStringOp {
+		if nationalStringNeedsIntroducer(node.Expr) {
+			// Unlike N, an explicit introducer recomputes the repertoire
+			// after unescaping. Its operand must stay a single literal.
+			buf.astPrintf(node, "%#s ", Utf8mb3Str)
+		} else {
+			buf.literal("N")
+		}
+		buf.formatSingleToken(node.Expr)
+		return
+	}
 	if _, unary := node.Expr.(*UnaryExpr); unary {
 		// They have same precedence so parenthesis is not required.
 		buf.astPrintf(node, "%s %v", node.Operator.ToString(), node.Expr)
@@ -1731,7 +1754,8 @@ func (node *UnaryExpr) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *IntroducerExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%#s %v", node.CharacterSet, node.Expr)
+	buf.astPrintf(node, "%#s ", node.CharacterSet)
+	buf.formatSingleToken(node.Expr)
 }
 
 // Format formats the node.
@@ -2327,7 +2351,8 @@ func (node *SetExpr) Format(buf *TrackedBuffer) {
 	// We don't have to backtick set variable names.
 	switch {
 	case node.Var.Name.EqualString("charset") || node.Var.Name.EqualString("names"):
-		buf.astPrintf(node, "%s %v", node.Var.Name.String(), node.Expr)
+		buf.astPrintf(node, "%s ", node.Var.Name.String())
+		buf.formatSingleToken(node.Expr)
 	default:
 		buf.astPrintf(node, "%v = %v", node.Var, node.Expr)
 	}
@@ -2915,7 +2940,8 @@ func (node TableOptions) Format(buf *TrackedBuffer) {
 				buf.astPrintf(node, " %s", option.String)
 			}
 		case option.Value != nil:
-			buf.astPrintf(node, " %v", option.Value)
+			buf.WriteByte(' ')
+			buf.formatSingleToken(option.Value)
 		default:
 			buf.astPrintf(node, " (%v)", option.Tables)
 		}

@@ -85,7 +85,7 @@ func TestVtGateVExplain(t *testing.T) {
 			qr.Rows[i] = qr.Rows[i][1:]
 		}
 
-		assert.NoError(t, sqltypes.RowsEqualsStr(expected, qr.Rows))
+		assert.NoError(t, vexplainRowsEqualsStr(expected, qr.Rows))
 	}
 
 	utils.AssertContainsError(t, conn,

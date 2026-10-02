@@ -777,7 +777,7 @@ func writeValuesAsSQL(sql *sqlparser.TrackedBuffer, tce *tableCacheEntry, rs *my
 			value.EncodeSQL(sql)
 			sql.WriteString(", '+00:00', @@session.time_zone)")
 		} else {
-			value.EncodeSQL(sql)
+			value.EncodeSQLExprStringBuilder(sql.Builder)
 		}
 		if c == tce.keyspaceIDIndex {
 			keyspaceIDCell = value
@@ -842,7 +842,7 @@ func writeIdentifiersAsSQL(sql *sqlparser.TrackedBuffer, tce *tableCacheEntry, r
 			value.EncodeSQL(sql)
 			sql.WriteString(", '+00:00', @@session.time_zone)")
 		} else {
-			value.EncodeSQL(sql)
+			value.EncodeSQLExprStringBuilder(sql.Builder)
 		}
 		if c == tce.keyspaceIDIndex {
 			keyspaceIDCell = value

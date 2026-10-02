@@ -3641,7 +3641,7 @@ func (cached *ParsedQuery) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.Query)))
 	// field bindLocations []vitess.io/vitess/go/vt/sqlparser.BindLocation
 	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.bindLocations)) * int64(16))
+		size += hack.RuntimeAllocSize(int64(cap(cached.bindLocations)) * int64(24))
 	}
 	return size
 }

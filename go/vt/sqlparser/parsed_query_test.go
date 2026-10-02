@@ -17,6 +17,8 @@ limitations under the License.
 package sqlparser
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -33,7 +35,7 @@ func TestNewParsedQuery(t *testing.T) {
 	pq := NewParsedQuery(stmt)
 	want := &ParsedQuery{
 		Query:         "select * from a where id = :id",
-		bindLocations: []BindLocation{{Offset: 27, Length: 3}},
+		bindLocations: []BindLocation{{Offset: 27, Length: 3, isExpression: true}},
 	}
 	assert.Equalf(t, want, pq, "GenerateParsedQuery")
 }
@@ -68,6 +70,22 @@ func TestGenerateQuery(t *testing.T) {
 				"id2": sqltypes.NullBindVariable,
 			},
 			output: "select * from a where id1 = 1 and id2 = null",
+		}, {
+			desc:  "non-ASCII bind vars",
+			query: "insert into t values (:a, :b, :c, :d)",
+			bindVars: map[string]*querypb.BindVariable{
+				"a": sqltypes.BytesBindVariable([]byte{0x81, '\''}),
+				"b": sqltypes.BytesBindVariable([]byte{0x81, '\\'}),
+				"c": sqltypes.StringBindVariable("é"),
+				// A text bind var is not validated against the connection
+				// charset either, so it gets the same treatment.
+				"d": sqltypes.StringBindVariable("\x81'"),
+			},
+			output: "insert into t values (" +
+				"_binary'\x81''', " + // quote doubled, so the lead byte stays raw
+				"_binary'" + "\\\x81" + "\\\\" + "', " + // `\` has no doubled form, so the run is escaped
+				"'é', " +
+				"'\x81''')",
 		}, {
 			desc:  "tuple *querypb.BindVariable",
 			query: "select * from a where id in ::vals",
@@ -304,11 +322,130 @@ func TestCastBindVars(t *testing.T) {
 	}
 }
 
+func TestGenerateQueryTextExpressions(t *testing.T) {
+	parser := NewTestParser()
+	stmt, err := parser.Parse("select :v, _latin1 :v, :v from t where c in ::vals")
+	require.NoError(t, err)
+	binds := map[string]*querypb.BindVariable{
+		"v": sqltypes.StringBindVariable("é\n"),
+		"vals": {
+			Type: querypb.Type_TUPLE,
+			Values: []*querypb.Value{
+				sqltypes.ValueToProto(sqltypes.NewVarChar("é\n")),
+				sqltypes.ValueToProto(sqltypes.NewVarBinary("\x81\\")),
+			},
+		},
+	}
+	literal := sqltypes.EncodeStringSQL("é\n")
+	want := "select '' " + literal + ", _latin1 " + literal + ", '' " + literal +
+		" from t where c in ('' " + literal + ", _binary'\\\x81\\\\')"
+	for _, fast := range []bool{false, true} {
+		t.Run(fmt.Sprintf("fast=%v", fast), func(t *testing.T) {
+			buf := NewTrackedBuffer(nil)
+			buf.fast = fast
+			buf.WriteNode(stmt)
+			query, err := buf.ParsedQuery().GenerateQuery(binds, nil)
+			require.NoError(t, err)
+			assert.Equal(t, want, query)
+			_, err = parser.Parse(query)
+			require.NoError(t, err)
+		})
+	}
+
+	t.Run("national bind", func(t *testing.T) {
+		pq := NewParsedQuery(&UnaryExpr{Operator: NStringOp, Expr: NewArgument("v")})
+		query, err := pq.GenerateQuery(binds, nil)
+		require.NoError(t, err)
+		assert.Equal(t, "_utf8mb3 "+literal, query)
+	})
+
+	t.Run("row tuple", func(t *testing.T) {
+		stmt, err := parser.Parse("select 1 from (values ::rows) dt")
+		require.NoError(t, err)
+		query, err := NewParsedQuery(stmt).GenerateQuery(map[string]*querypb.BindVariable{
+			"rows": {
+				Type:   querypb.Type_ROW_TUPLE,
+				Values: []*querypb.Value{sqltypes.ValueToProto(sqltypes.TestTuple(sqltypes.NewVarChar("é\n"), sqltypes.NewInt64(1)))},
+			},
+		}, nil)
+		require.NoError(t, err)
+		assert.Equal(t, "select 1 from (values row('' "+literal+", 1)) as dt", query)
+	})
+
+	t.Run("raw template expression contexts", func(t *testing.T) {
+		pq := BuildParsedQuery("select %e, _latin1 %a, %e from t where c in %e", ":v", ":v", ":v", "::vals")
+		query, err := pq.GenerateQuery(binds, nil)
+		require.NoError(t, err)
+		assert.Equal(t, want, query)
+		_, err = parser.Parse(query)
+		require.NoError(t, err)
+	})
+
+	t.Run("raw expression binds", func(t *testing.T) {
+		query, err := ParseAndBind("select convert(%e using latin1) from t where c in %e", binds["v"], binds["vals"])
+		require.NoError(t, err)
+		assert.Equal(t, "select convert('' "+literal+" using latin1) from t where c in ('' "+literal+", _binary'\\\x81\\\\')", query)
+		_, err = parser.Parse(query)
+		require.NoError(t, err)
+	})
+
+	t.Run("raw template remains single-token", func(t *testing.T) {
+		query, err := ParseAndBind("show tables like %a", binds["v"])
+		require.NoError(t, err)
+		assert.Equal(t, "show tables like "+literal, query)
+		_, err = parser.Parse(query)
+		require.NoError(t, err)
+	})
+}
+
 func createRowTupleBV() *querypb.BindVariable {
 	v1 := sqltypes.TestTuple(sqltypes.NewVarChar("a"), sqltypes.NewInt64(1))
 	v2 := sqltypes.TestTuple(sqltypes.NewVarChar("b"), sqltypes.NewInt64(2))
 	return &querypb.BindVariable{
 		Type:   querypb.Type_ROW_TUPLE,
 		Values: append([]*querypb.Value{sqltypes.ValueToProto(v1)}, sqltypes.ValueToProto(v2)),
+	}
+}
+
+// BenchmarkGenerateQueryStringBinds measures bind substitution with eight
+// string and binary values, so encoding dominates the query traversal.
+func BenchmarkGenerateQueryStringBinds(b *testing.B) {
+	parser := NewTestParser()
+	stmt, err := parser.Parse("insert into t(a, b, c, d, e, f, g, h) values (:a, :b, :c, :d, :e, :f, :g, :h)")
+	require.NoError(b, err)
+	pq := NewParsedQuery(stmt)
+
+	// Every bind exercises both clean-run copying and escaping. The non-ASCII
+	// shape additionally reaches the high-byte run handling, which is the
+	// branch that has to escape byte by byte.
+	for _, text := range []struct {
+		name string
+		body string
+	}{
+		{name: "ascii", body: "It's the quick brown fox that jumps over the lazy dog; again. "},
+		{name: "highbytes", body: "L'été où le renard brun sauta par-dessus le chien paresseux; à nouveau. "},
+	} {
+		for _, size := range []int{64, 1024} {
+			payload := strings.Repeat(text.body, size/len(text.body)+1)[:size]
+			bindVars := map[string]*querypb.BindVariable{
+				"a": sqltypes.StringBindVariable(payload),
+				"b": sqltypes.StringBindVariable(payload),
+				"c": sqltypes.StringBindVariable(payload),
+				"d": sqltypes.StringBindVariable(payload),
+				"e": sqltypes.BytesBindVariable([]byte(payload)),
+				"f": sqltypes.BytesBindVariable([]byte(payload)),
+				"g": sqltypes.BytesBindVariable([]byte(payload)),
+				"h": sqltypes.BytesBindVariable([]byte(payload)),
+			}
+			b.Run(fmt.Sprintf("%s/%dB", text.name, size), func(b *testing.B) {
+				b.ReportAllocs()
+				b.SetBytes(int64(8 * size))
+				for b.Loop() {
+					if _, err := pq.GenerateQuery(bindVars, nil); err != nil {
+						b.Fatal(err)
+					}
+				}
+			})
+		}
 	}
 }

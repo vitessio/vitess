@@ -1129,7 +1129,11 @@ func (tp *TablePlan) appendFromRow(buf *bytes2.Buffer, row *querypb.Row) error {
 					vv = sqltypes.MakeTrusted(typ, raw)
 				}
 
-				vv.EncodeSQLBytes2(buf)
+				if loc.IsExpression() {
+					vv.EncodeSQLExprBytes2(buf)
+				} else {
+					vv.EncodeSQLBytes2(buf)
+				}
 			}
 		}
 		offsetQuery = loc.Offset + loc.Length

@@ -127,12 +127,12 @@ func (l *Literal) format(buf *sqlparser.TrackedBuffer) {
 			if i > 0 {
 				buf.WriteString(", ")
 			}
-			evalToSQLValue(val).EncodeSQLStringBuilder(buf.Builder)
+			evalToSQLValue(val).EncodeSQLExprStringBuilder(buf.Builder)
 		}
 		buf.WriteByte(')')
 
 	default:
-		evalToSQLValue(l.inner).EncodeSQLStringBuilder(buf.Builder)
+		evalToSQLValue(l.inner).EncodeSQLExprStringBuilder(buf.Builder)
 	}
 }
 
@@ -146,9 +146,9 @@ func (bv *BindVariable) FormatFast(buf *sqlparser.TrackedBuffer) {
 
 func (bv *BindVariable) format(buf *sqlparser.TrackedBuffer) {
 	if bv.Type == sqltypes.Tuple {
-		buf.WriteArg("::", bv.Key)
+		sqlparser.ListArg(bv.Key).Format(buf)
 	} else {
-		buf.WriteArg(":", bv.Key)
+		sqlparser.NewArgument(bv.Key).Format(buf)
 	}
 }
 
