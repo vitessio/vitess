@@ -275,7 +275,7 @@ func TestGroupReplicationSyncTrustsOwnBootstrap(t *testing.T) {
 func TestStartGroupReplicationBootstrapOnPrimaryDoesNotServe(t *testing.T) {
 	withGroupReplication(t)
 	ctx := t.Context()
-	tm, fmd, _, _ := newLegitimacyTestTM(t)
+	tm, fmd, _, ts := newLegitimacyTestTM(t)
 	setTabletType(t, tm, topodatapb.TabletType_PRIMARY)
 	qsc := tm.QueryServiceControl.(*tabletservermock.Controller)
 	require.True(t, qsc.IsServing())
@@ -293,11 +293,15 @@ func TestStartGroupReplicationBootstrapOnPrimaryDoesNotServe(t *testing.T) {
 	s.reconcile(ctx)
 	assert.False(t, qsc.IsServing())
 
-	// A second voter joined: a majority of the three voters is ONLINE in the group.
+	// A second voter joined: a majority of the three voters is ONLINE in the group. Until the
+	// component that asked for the bootstrap records the new incarnation, the tablet does not serve.
 	fmd.SetGroupReplicationStatus(withViewID(groupStatus(testServerUUID(1),
 		groupMember(testServerUUID(1), mysql.GroupMemberStateOnline, mysql.GroupMemberRolePrimary),
 		groupMember(testServerUUID(2), mysql.GroupMemberStateOnline, mysql.GroupMemberRoleSecondary)),
 		policy.GroupIncarnation(status.ViewId)+":2"))
+	s.reconcile(ctx)
+	assert.False(t, qsc.IsServing(), "the primary of an unrecorded incarnation must not serve")
+	setGroupReplicationIncarnation(t, ts, policy.GroupIncarnation(status.ViewId))
 	s.reconcile(ctx)
 	assert.True(t, qsc.IsServing(), "the primary serves once a majority of the voters is back")
 }

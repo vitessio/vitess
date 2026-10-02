@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -58,6 +59,17 @@ func init() {
 	servenv.OnParseFor("vttablet", registerStateFlags)
 }
 
+// groupReplicationNotServingState is the reason why a PRIMARY tablet must not serve for its
+// replication group, empty if it may, and the generation of the not-serving decisions: every reason
+// set counts as a new one. A caller that decided, from a status of MySQL, that the tablet may serve
+// again captures the generation before it reads that status, and the reason is only cleared if
+// none was set since (ClearGroupReplicationNotServing): a decision made on an older status never
+// undoes a newer one.
+type groupReplicationNotServingState struct {
+	reason string
+	gen    uint64
+}
+
 // tmState manages the state of the TabletManager.
 type tmState struct {
 	tm     *TabletManager
@@ -86,9 +98,11 @@ type tmState struct {
 	// publishKick wakes up a retryPublish that waits for its next attempt, when the state changed
 	// while it waited: the change is published right away rather than after publishRetryInterval.
 	publishKick chan struct{}
-	// groupReplicationNotServing is the reason why a PRIMARY tablet must not serve while its
-	// replication group lacks a majority of its voters. Empty means that it may serve.
-	groupReplicationNotServing string
+	// groupReplicationNotServing is why a PRIMARY tablet must not serve for its replication group
+	// (see groupReplicationNotServingState). It is read and cleared without mu: mu is held while the
+	// tablet record is published to a topology server that may not answer (retryPublish), and the
+	// RPCs that decide whether the tablet serves hold the action lock meanwhile.
+	groupReplicationNotServing atomic.Pointer[groupReplicationNotServingState]
 
 	// displayState contains the current snapshot of the internal state
 	// and has its own mutex.
@@ -355,7 +369,7 @@ func (ts *tmState) updateLocked(ctx context.Context) error {
 	// voters, or because its MySQL is about to bootstrap a group, must not write heartbeats
 	// either: MySQL is writable then, and a heartbeat would be committed on a single voter. The
 	// query service keeps writing them on a primary that does not serve for another reason.
-	ts.tm.QueryServiceControl.SetHeartbeatWritesSuppressed(ts.tablet.Type == topodatapb.TabletType_PRIMARY && ts.groupReplicationNotServing != "")
+	ts.tm.QueryServiceControl.SetHeartbeatWritesSuppressed(ts.tablet.Type == topodatapb.TabletType_PRIMARY && ts.grNotServing().reason != "")
 
 	// Disable TabletServer first so the nonserving state gets advertised
 	// before other services are shutdown.
@@ -437,33 +451,117 @@ func (ts *tmState) canServe(tabletType topodatapb.TabletType) string {
 	if tabletType == topodatapb.TabletType_PRIMARY && ts.isResharding {
 		return "primary tablet with filtered replication on"
 	}
-	if tabletType == topodatapb.TabletType_PRIMARY && ts.groupReplicationNotServing != "" {
-		return ts.groupReplicationNotServing
+	if reason := ts.grNotServing().reason; tabletType == topodatapb.TabletType_PRIMARY && reason != "" {
+		return reason
 	}
 	return ""
 }
 
-// SetGroupReplicationNotServing makes a PRIMARY tablet stop serving with the given reason, or
-// serve again when the reason is empty. The tablet keeps its type, so that vtgate buffers
-// writes instead of failing them. It only applies the change when the reason changed, or when
-// the query service serves although it must not.
+// grNotServing returns the current group replication not-serving state.
+func (ts *tmState) grNotServing() groupReplicationNotServingState {
+	if state := ts.groupReplicationNotServing.Load(); state != nil {
+		return *state
+	}
+	return groupReplicationNotServingState{}
+}
+
+// SetGroupReplicationNotServing makes a PRIMARY tablet stop serving with the given reason, which
+// must not be empty. The tablet keeps its type, so that vtgate buffers writes instead of failing
+// them. Every call counts as a new decision (see ClearGroupReplicationNotServing); the query service
+// only changes when the reason changed, or when it serves although it must not. A tablet that is
+// not PRIMARY keeps the reason without any other change: it applies once the tablet is PRIMARY.
 func (ts *tmState) SetGroupReplicationNotServing(ctx context.Context, reason string) error {
+	if reason == "" {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "a group replication not-serving reason must not be empty")
+	}
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
-	if ts.groupReplicationNotServing == reason &&
-		(reason == "" || ts.tablet.Type != topodatapb.TabletType_PRIMARY || !ts.tm.QueryServiceControl.IsServing()) {
+	var previous string
+	for {
+		old := ts.groupReplicationNotServing.Load()
+		var state groupReplicationNotServingState
+		if old != nil {
+			state = *old
+		}
+		previous = state.reason
+		if ts.groupReplicationNotServing.CompareAndSwap(old, &groupReplicationNotServingState{reason: reason, gen: state.gen + 1}) {
+			break
+		}
+	}
+	if ts.tablet.Type != topodatapb.TabletType_PRIMARY || (previous == reason && !ts.tm.QueryServiceControl.IsServing()) {
 		return nil
 	}
-	ts.groupReplicationNotServing = reason
 	return ts.updateLocked(ctx)
 }
 
-// GroupReplicationNotServing returns the reason for which a PRIMARY tablet does not serve while its
-// replication group lacks the majority of its voters, empty if there is none.
-func (ts *tmState) GroupReplicationNotServing() string {
+// ClearGroupReplicationNotServing lets a PRIMARY tablet serve again, if no not-serving reason was set
+// since the caller captured gen (GroupReplicationNotServingState). The caller decided from a status of
+// MySQL that it read after it captured gen, under the action lock, that the tablet may serve; a
+// reason set since, for example by a bootstrap that is about to make MySQL the primary of a group
+// of one, was decided on a newer state and stands. It returns whether no reason is set anymore.
+func (ts *tmState) ClearGroupReplicationNotServing(ctx context.Context, gen uint64) (bool, error) {
+	cleared, changed := ts.clearGroupReplicationNotServing(gen)
+	if !cleared || !changed {
+		return cleared, nil
+	}
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
-	return ts.groupReplicationNotServing
+	if ts.tablet.Type != topodatapb.TabletType_PRIMARY {
+		return true, nil
+	}
+	return true, ts.updateLocked(ctx)
+}
+
+// ClearGroupReplicationNotServingBeforeChange is ClearGroupReplicationNotServing, but it leaves the
+// query service as it is: the caller applies the change right after, with the change of the tablet
+// type that it is about to make (ChangeTabletType) or by serving again
+// (SetServingUnlessGroupReplicationNotServing), once MySQL is ready.
+func (ts *tmState) ClearGroupReplicationNotServingBeforeChange(gen uint64) bool {
+	cleared, _ := ts.clearGroupReplicationNotServing(gen)
+	return cleared
+}
+
+// clearGroupReplicationNotServing clears the reason unless one was set since gen. It returns
+// whether no reason is set anymore, and whether it cleared one.
+func (ts *tmState) clearGroupReplicationNotServing(gen uint64) (cleared, changed bool) {
+	for {
+		old := ts.groupReplicationNotServing.Load()
+		if old == nil || old.reason == "" {
+			return true, false
+		}
+		if old.gen != gen {
+			return false, false
+		}
+		if ts.groupReplicationNotServing.CompareAndSwap(old, &groupReplicationNotServingState{gen: old.gen}) {
+			return true, true
+		}
+	}
+}
+
+// GroupReplicationNotServingState returns the reason for which a PRIMARY tablet does not serve for
+// its replication group, empty if there is none, and the generation of the not-serving decisions.
+func (ts *tmState) GroupReplicationNotServingState() (string, uint64) {
+	state := ts.grNotServing()
+	return state.reason, state.gen
+}
+
+// SetServingUnlessGroupReplicationNotServing makes the query service serve as the given type again,
+// after an RPC stopped it directly (DemotePrimary's revert, UndoDemotePrimary, a primary that left
+// its group), unless the tablet is PRIMARY and must not serve for its replication group: the query
+// service then stays not serving, with that reason. Without Group Replication, no reason is ever
+// set, and the query service serves as before. It does not wait for mu: a reason set concurrently
+// either is seen by the check after serving, or makes its setter stop serving after it.
+func (ts *tmState) SetServingUnlessGroupReplicationNotServing(tabletType topodatapb.TabletType, primaryTermStartTime time.Time) error {
+	if reason := ts.grNotServing().reason; tabletType == topodatapb.TabletType_PRIMARY && reason != "" {
+		return ts.tm.QueryServiceControl.SetServingType(tabletType, primaryTermStartTime, false, reason)
+	}
+	if err := ts.tm.QueryServiceControl.SetServingType(tabletType, primaryTermStartTime, true, ""); err != nil {
+		return err
+	}
+	if reason := ts.grNotServing().reason; tabletType == topodatapb.TabletType_PRIMARY && reason != "" {
+		return ts.tm.QueryServiceControl.SetServingType(tabletType, primaryTermStartTime, false, reason)
+	}
+	return nil
 }
 
 func (ts *tmState) applyDenyList(ctx context.Context) (err error) {

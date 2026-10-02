@@ -162,6 +162,7 @@ func (tm *TabletManager) readShardGroupRecord(ctx context.Context, prev *shardGr
 	tm.groupReplicationTopo.setVoters(rec.voters)
 	if prev != nil && time.Since(prev.tabletsRead) < groupReplicationTabletsCacheTTL && tm.identifiesVoters(rec.voters, prev.tablets) {
 		rec.tablets, rec.tabletsRead = prev.tablets, prev.tabletsRead
+		tm.groupReplicationTopo.setRecord(rec)
 		return rec, nil
 	}
 	rec.tabletsRead = time.Now()
@@ -178,6 +179,7 @@ func (tm *TabletManager) readShardGroupRecord(ctx context.Context, prev *shardGr
 			rec.tablets[alias] = ti.Tablet
 		}
 	}
+	tm.groupReplicationTopo.setRecord(rec)
 	return rec, nil
 }
 
@@ -265,6 +267,25 @@ func (tm *TabletManager) fetchPeerServerUUIDs(ctx context.Context, tablets []*to
 // buildLegitimateGroup returns the shard's legitimate group from the record and the server_uuids
 // the tablet knows.
 func (tm *TabletManager) buildLegitimateGroup(rec *shardGroupRecord, status *replicationdatapb.GroupReplicationStatus) *policy.LegitimateGroup {
+	incarnation := rec.incarnation
+	if bootstrapped := tm.groupReplicationPeers.recentlyBootstrapped(); bootstrapped != "" && bootstrapped == policy.GroupIncarnation(status.GetViewId()) {
+		incarnation = bootstrapped
+	}
+	return policy.NewLegitimateGroup(incarnation, rec.voters, rec.tablets, tm.knownServerUUIDs(rec))
+}
+
+// recordedLegitimateGroup returns the shard's legitimate group exactly as the shard record lists it:
+// unlike buildLegitimateGroup, it does not trust the incarnation of a group that the tablet
+// bootstrapped itself. It does not ask the voters for their server_uuids.
+func (tm *TabletManager) recordedLegitimateGroup(ctx context.Context, rec *shardGroupRecord) *policy.LegitimateGroup {
+	if uuid, err := tm.MysqlDaemon.GetServerUUID(ctx); err == nil {
+		tm.groupReplicationPeers.setServerUUID(topoproto.TabletAliasString(tm.tabletAlias), uuid)
+	}
+	return policy.NewLegitimateGroup(rec.incarnation, rec.voters, rec.tablets, tm.knownServerUUIDs(rec))
+}
+
+// knownServerUUIDs returns the server_uuids the tablet knows for the tablets and voters of the record.
+func (tm *TabletManager) knownServerUUIDs(rec *shardGroupRecord) map[string]string {
 	uuids := make(map[string]string, len(rec.tablets)+len(rec.voters))
 	for alias := range rec.tablets {
 		uuids[alias] = tm.groupReplicationPeers.serverUUID(alias)
@@ -274,11 +295,7 @@ func (tm *TabletManager) buildLegitimateGroup(rec *shardGroupRecord, status *rep
 		alias := topoproto.TabletAliasString(voter)
 		uuids[alias] = tm.groupReplicationPeers.serverUUID(alias)
 	}
-	incarnation := rec.incarnation
-	if bootstrapped := tm.groupReplicationPeers.recentlyBootstrapped(); bootstrapped != "" && bootstrapped == policy.GroupIncarnation(status.GetViewId()) {
-		incarnation = bootstrapped
-	}
-	return policy.NewLegitimateGroup(incarnation, rec.voters, rec.tablets, uuids)
+	return uuids
 }
 
 // peerFullStatuses reads the FullStatus of the given tablets concurrently, each bounded by

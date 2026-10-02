@@ -46,6 +46,21 @@ type groupReplicationTopoCache struct {
 	hasVoters bool
 	// tablets are the shard's tablet records, by alias, if any was read.
 	tablets map[string]*topo.TabletInfo
+	// record is the shard's group record that the tablet read last (readShardGroupRecord), if any.
+	// Its tablet records are reused by the next read while they identify every voter.
+	record *shardGroupRecord
+}
+
+func (c *groupReplicationTopoCache) setRecord(rec *shardGroupRecord) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.record = rec
+}
+
+func (c *groupReplicationTopoCache) lastRecord() *shardGroupRecord {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.record
 }
 
 func (c *groupReplicationTopoCache) setDurability(name string) {

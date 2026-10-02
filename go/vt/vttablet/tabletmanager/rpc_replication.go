@@ -724,7 +724,8 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 		defer func() {
 			if finalErr != nil && revertPartialFailure && wasServing {
 				log.Info("reverting query service to serving")
-				if err := tm.QueryServiceControl.SetServingType(tablet.Type, protoutil.TimeFromProto(tablet.PrimaryTermStartTime).UTC(), true, ""); err != nil {
+				// A PRIMARY that must not serve for its replication group stays not serving.
+				if err := tm.tmState.SetServingUnlessGroupReplicationNotServing(tablet.Type, protoutil.TimeFromProto(tablet.PrimaryTermStartTime).UTC()); err != nil {
 					log.Warn(fmt.Sprintf("SetServingType(serving=true) failed during revert: %v", err))
 				}
 			}
@@ -886,7 +887,9 @@ func (tm *TabletManager) UndoDemotePrimary(ctx context.Context, semiSync bool) e
 	defer tm.unlock()
 
 	// A group replication member can only serve as the primary while it is the group primary.
-	// Check before anything changes.
+	// Check before anything changes. A not-serving reason set after the status is read is decided
+	// on a newer state, and stands (see below).
+	_, servingGen := tm.tmState.GroupReplicationNotServingState()
 	groupStatus, err := tm.groupReplicationStatus(ctx)
 	if err != nil {
 		return err
@@ -894,8 +897,17 @@ func (tm *TabletManager) UndoDemotePrimary(ctx context.Context, semiSync bool) e
 	if mysql.IsGroupMemberActive(groupStatus) && !mysql.IsGroupPrimary(groupStatus) {
 		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot undo the demotion: MySQL is no longer the primary of group %s (member %s %s)", groupStatus.GroupName, groupStatus.MemberState, groupStatus.MemberRole)
 	}
-	if err := tm.checkLegitimatePrimaryToServe(ctx, groupStatus); err != nil {
+	// Under a group replication policy that lists voters, only the primary of the shard's
+	// recorded group, with a majority of the voters ONLINE in its view, serves: VTOrc's
+	// PrimaryIsReadOnly recovery undid the demotion of a PRIMARY tablet whose MySQL was in the
+	// ERROR state after its group lost its majority, which cleared super_read_only on a MySQL
+	// outside of any group (S7d chaos scenario). The decision is made on MySQL's status read now,
+	// under the action lock, and any not-serving reason set before is only cleared at the end.
+	if reason, err := tm.groupReplicationServingDecision(ctx, nil, groupStatus); err != nil {
 		return err
+	} else if reason != "" {
+		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot undo the demotion: %s (member %s %s, view %s)",
+			reason, groupStatus.GetMemberState(), groupStatus.GetMemberRole(), groupStatus.GetViewId())
 	}
 	if mysql.IsGroupPrimary(groupStatus) {
 		if err := tm.liftOfflineMode(ctx, "MySQL is the primary of its group and serves again"); err != nil {
@@ -928,6 +940,7 @@ func (tm *TabletManager) UndoDemotePrimary(ctx context.Context, semiSync bool) e
 			return err
 		}
 		if ti.Type == topodatapb.TabletType_PRIMARY {
+			tm.tmState.ClearGroupReplicationNotServingBeforeChange(servingGen)
 			return tm.tmState.updateTypeAndPublish(ctx, topodatapb.TabletType_PRIMARY, ti.PrimaryTermStartTime, DBActionSetReadWrite, 0)
 		}
 	}
@@ -937,9 +950,10 @@ func (tm *TabletManager) UndoDemotePrimary(ctx context.Context, semiSync bool) e
 		return err
 	}
 
-	// Update serving graph
+	// Update serving graph. A not-serving reason set since the decision above stands.
 	log.Info("UndoDemotePrimary re-enabling query service")
-	if err := tm.QueryServiceControl.SetServingType(tablet.Type, protoutil.TimeFromProto(tablet.PrimaryTermStartTime).UTC(), true, ""); err != nil {
+	tm.tmState.ClearGroupReplicationNotServingBeforeChange(servingGen)
+	if err := tm.tmState.SetServingUnlessGroupReplicationNotServing(tablet.Type, protoutil.TimeFromProto(tablet.PrimaryTermStartTime).UTC()); err != nil {
 		return vterrors.Wrap(err, "SetServingType(serving=true) failed")
 	}
 	return nil

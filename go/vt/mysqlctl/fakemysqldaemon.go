@@ -257,6 +257,13 @@ type FakeMysqlDaemon struct {
 	// StartGroupReplicationError is returned by StartGroupReplication, if set.
 	StartGroupReplicationError error
 
+	// StartGroupReplicationHook, if set, is called at the start of StartGroupReplication, before
+	// the fake changes anything, for example to block a START GROUP_REPLICATION while it runs.
+	StartGroupReplicationHook func(bootstrap bool)
+
+	// groupReplicationStatusHook is called after each read of the group replication status.
+	groupReplicationStatusHook func()
+
 	// ConfigureGroupReplicationErrors are returned by the next calls of
 	// ConfigureGroupReplication, one per call.
 	ConfigureGroupReplicationErrors []error
@@ -952,7 +959,16 @@ func (fmd *FakeMysqlDaemon) ReleaseGlobalReadLock(ctx context.Context) error {
 // GroupReplicationStatus is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) GroupReplicationStatus(ctx context.Context) (*replicationdatapb.GroupReplicationStatus, error) {
 	fmd.mu.Lock()
-	defer fmd.mu.Unlock()
+	hook := fmd.groupReplicationStatusHook
+	status, err := fmd.groupReplicationStatusLocked()
+	fmd.mu.Unlock()
+	if hook != nil {
+		hook()
+	}
+	return status, err
+}
+
+func (fmd *FakeMysqlDaemon) groupReplicationStatusLocked() (*replicationdatapb.GroupReplicationStatus, error) {
 	if fmd.GroupReplicationError != nil {
 		return nil, fmd.GroupReplicationError
 	}
@@ -960,6 +976,14 @@ func (fmd *FakeMysqlDaemon) GroupReplicationStatus(ctx context.Context) (*replic
 		return &replicationdatapb.GroupReplicationStatus{}, nil
 	}
 	return fmd.GroupReplication.CloneVT(), nil
+}
+
+// SetGroupReplicationStatusHook sets a function that GroupReplicationStatus calls after each read
+// of the status, for tests that need to know when a reader has read it; nil removes it.
+func (fmd *FakeMysqlDaemon) SetGroupReplicationStatusHook(hook func()) {
+	fmd.mu.Lock()
+	defer fmd.mu.Unlock()
+	fmd.groupReplicationStatusHook = hook
 }
 
 // GroupReplicationApplierStatus is part of the MysqlDaemon interface.
@@ -1003,6 +1027,9 @@ func (fmd *FakeMysqlDaemon) ConfigureGroupReplication(ctx context.Context, cfg m
 // bootstrap it is the only member and the writable primary, otherwise it joins the members
 // already in GroupReplication.Members as a read-only secondary.
 func (fmd *FakeMysqlDaemon) StartGroupReplication(ctx context.Context, bootstrap bool) error {
+	if fmd.StartGroupReplicationHook != nil {
+		fmd.StartGroupReplicationHook(bootstrap)
+	}
 	fmd.mu.Lock()
 	defer fmd.mu.Unlock()
 	fmd.GroupReplicationStartCalls++

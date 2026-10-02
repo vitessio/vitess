@@ -58,8 +58,9 @@ import (
 //     removing a member that is no longer a voter is VTOrc's decision.
 //   - On a PRIMARY that is the group primary, it applies the effective semi-sync setting: a group
 //     with at least two ONLINE members supersedes semi-sync.
-//   - A PRIMARY whose group view holds fewer than a majority of the shard's listed voters stops
-//     serving, and serves again once the majority is back. It keeps its type, so vtgate buffers.
+//   - A PRIMARY whose group view holds fewer than a majority of the shard's listed voters, or that
+//     is not in the recorded incarnation, stops serving, and serves again once both hold, as MySQL
+//     reports it under the action lock (serveAgain). It keeps its type, so vtgate buffers.
 //     MySQL still commits in such a group (MySQL's view quorum counts only the members that are
 //     still in the view, after the others left it), but a transaction would then only exist on a
 //     minority of the voters. This fails closed, like a semi-sync primary without an acker.
@@ -168,6 +169,9 @@ func (s *groupReplicationSync) run(ctx context.Context, interval time.Duration) 
 // reconcile runs one iteration of the sync loop.
 func (s *groupReplicationSync) reconcile(ctx context.Context) {
 	tm := s.tm
+	// The not-serving decisions made from here on are based on the status read below: a reason set
+	// after this point by another component (a bootstrap RPC) is never cleared by this run.
+	_, gen := tm.tmState.GroupReplicationNotServingState()
 	status, err := tm.groupReplicationStatus(ctx)
 	if err != nil {
 		log.Warn("Group replication sync: cannot read the group replication status", slog.Any("error", err))
@@ -203,7 +207,7 @@ func (s *groupReplicationSync) reconcile(ctx context.Context) {
 	if tablet.Type == topodatapb.TabletType_PRIMARY && mysql.IsGroupPrimary(status) {
 		s.enforceSemiSync(ctx, status, durability, tablet)
 	}
-	s.enforceVoterMajority(ctx, status, durability, tablet)
+	s.enforceVoterMajority(ctx, status, durability, tablet, gen)
 	if s.isStalePrimary(ctx, status, durability, tablet) {
 		s.demoteStalePrimary(ctx, durability)
 		tablet = tm.Tablet()
@@ -412,8 +416,10 @@ func (s *groupReplicationSync) promote(ctx context.Context, tabletType topodatap
 		return
 	}
 	s.setTwoPCAllowed(twoPCDurable(status, tm.isPrimarySideSemiSyncEnabled(ctx)))
-	// DBActionSetReadWrite redoes prepared transactions. MySQL is already writable.
-	if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_PRIMARY, DBActionSetReadWrite, SemiSyncActionNone); err != nil {
+	// DBActionSetReadWrite redoes prepared transactions. MySQL is already writable. Whether the
+	// new PRIMARY serves is decided on MySQL's status once more, against the shard's recorded
+	// group (see groupReplicationServingReason).
+	if err := tm.changeTypeWithGroupRecordLocked(ctx, topodatapb.TabletType_PRIMARY, DBActionSetReadWrite, SemiSyncActionNone, rec); err != nil {
 		log.Error("Group replication sync: failed to promote the tablet to PRIMARY", slog.Any("error", err))
 	}
 }
@@ -535,51 +541,127 @@ func (s *groupReplicationSync) enforceSemiSync(ctx context.Context, status *repl
 const groupReplicationVoterMajorityLost = "replication group lost the majority of its voters"
 
 // enforceVoterMajority makes a PRIMARY tablet stop serving while its MySQL is the primary of a
-// group view that holds fewer than a majority of the shard's listed voters, and serve again once
-// the majority is back. MySQL is left alone. The check only applies under a group replication
-// policy with listed voters: during a migration, the group grows from a single member while the
-// primary keeps serving with semi-sync.
+// group view that holds fewer than a majority of the shard's listed voters, or of a group of
+// another incarnation than the recorded one, and serve again once both hold. MySQL is left alone.
+// The check only applies under a group replication policy with listed voters: during a
+// migration, the group grows from a single member while the primary keeps serving with semi-sync.
 //
-// The reason may also have been set outside of the loop, by a bootstrap on a PRIMARY tablet
-// (stopServingBeforeBootstrap). While the tablet is PRIMARY under a group replication policy but
-// its MySQL is not a group primary (for example while the bootstrap runs), the loop cannot tell
-// whether the majority is back and leaves the reason as it is: clearing it then let the tablet
-// serve the moment the bootstrap made MySQL the writable primary of a group of one.
-func (s *groupReplicationSync) enforceVoterMajority(ctx context.Context, status *replicationdatapb.GroupReplicationStatus, durability policy.Durabler, tablet *topodatapb.Tablet) {
+// The status that the loop read at the start of its run can be old by now: the run may have waited
+// for an unresponsive topology since. Stopping to serve on it is safe, and it is done right away.
+// Serving again is not: in the S7d chaos scenario, a run read MySQL's status while MySQL was the
+// primary of two voters, waited for the topology of its cut-off cell, and after the heal made the
+// tablet serve again 16ms after a bootstrap RPC had stopped it; the bootstrap then made MySQL the
+// writable primary of a group of one, which acknowledged writes on that single voter for 1.3s. The
+// loop therefore only lets the tablet serve again from serveAgain: under the action lock that the
+// bootstrap and the other RPCs that change MySQL's group hold, on a status read after acquiring it,
+// and only if no not-serving reason was set since (see ClearGroupReplicationNotServing).
+//
+// While the tablet is PRIMARY under a group replication policy but its MySQL is not a group primary
+// (for example while a bootstrap runs), the loop leaves the reason as it is: the demotion steps
+// handle such a tablet.
+func (s *groupReplicationSync) enforceVoterMajority(ctx context.Context, status *replicationdatapb.GroupReplicationStatus, durability policy.Durabler, tablet *topodatapb.Tablet, gen uint64) {
 	tm := s.tm
-	current := tm.tmState.GroupReplicationNotServing()
-	reason := ""
-	if tablet.Type == topodatapb.TabletType_PRIMARY && policy.IsGroupReplication(durability) {
-		if !mysql.IsGroupPrimary(status) {
-			return
+	current, _ := tm.tmState.GroupReplicationNotServingState()
+	if tablet.Type != topodatapb.TabletType_PRIMARY || !policy.IsGroupReplication(durability) {
+		// The reason only applies to a PRIMARY under a group replication policy. It is cleared
+		// unless one was set since the run started: a promotion decides again under the action
+		// lock (changeTypeLocked).
+		if current != "" {
+			if _, err := tm.tmState.ClearGroupReplicationNotServing(ctx, gen); err != nil {
+				log.Error("Group replication sync: failed to change the serving state of the primary", slog.Any("error", err))
+			}
 		}
-		lost, err := s.voterMajorityLost(ctx, status)
-		if err != nil {
-			log.Warn("Group replication sync: cannot check the voter majority of the group", slog.Any("error", err))
-			return
-		}
-		if lost {
-			reason = groupReplicationVoterMajorityLost
-		}
-	}
-	if reason == "" && current == "" {
 		return
 	}
-	if reason != current {
-		if reason != "" {
-			log.Warn("Group replication sync: the group view holds fewer than a majority of the shard's voters, the primary stops serving",
-				slog.String("group", status.GetGroupName()),
-				slog.String("view_id", status.GetViewId()),
-				slog.Int("online_members", mysql.OnlineGroupMembers(status)))
-		} else {
-			log.Info("Group replication sync: the primary serves again",
+	if !mysql.IsGroupPrimary(status) {
+		return
+	}
+	reason, rec, err := s.servingReason(ctx, status, durability)
+	if err != nil {
+		log.Warn("Group replication sync: cannot check the voter majority of the group", slog.Any("error", err))
+		return
+	}
+	if reason != "" {
+		if reason != current {
+			log.Warn("Group replication sync: the primary stops serving",
+				slog.String("reason", reason),
 				slog.String("group", status.GetGroupName()),
 				slog.String("view_id", status.GetViewId()),
 				slog.Int("online_members", mysql.OnlineGroupMembers(status)))
 		}
+		if err := tm.tmState.SetGroupReplicationNotServing(ctx, reason); err != nil {
+			log.Error("Group replication sync: failed to change the serving state of the primary", slog.Any("error", err))
+		}
+		return
 	}
-	if err := tm.tmState.SetGroupReplicationNotServing(ctx, reason); err != nil {
+	if current != "" {
+		s.serveAgain(ctx, durability, rec)
+	}
+}
+
+// servingReason returns why the PRIMARY tablet must not serve for the given status of its MySQL
+// (see groupReplicationServingReason), and the shard record it decided on. Before it reports a lost
+// voter majority, it reads the shard record again and asks the voters whose server_uuid it does
+// not know (voterMajorityLost); before it reports an unrecorded incarnation, it reads the shard
+// record again: the group may have been bootstrapped and recorded a moment ago.
+func (s *groupReplicationSync) servingReason(ctx context.Context, status *replicationdatapb.GroupReplicationStatus, durability policy.Durabler) (string, *shardGroupRecord, error) {
+	lost, err := s.voterMajorityLost(ctx, status)
+	if err != nil {
+		return "", nil, err
+	}
+	if lost {
+		return groupReplicationVoterMajorityLost, s.record, nil
+	}
+	rec, err := s.getRecord(ctx, false)
+	if err != nil {
+		return "", nil, err
+	}
+	if rec.incarnation != "" && rec.incarnation != policy.GroupIncarnation(status.GetViewId()) {
+		if rec, err = s.getRecord(ctx, true); err != nil {
+			return "", nil, err
+		}
+	}
+	// voterMajorityLost asked the voters it could not identify a moment ago, at most every
+	// groupReplicationVotersCacheTTL.
+	return s.tm.groupReplicationServingReason(ctx, durability, rec, status, false), rec, nil
+}
+
+// serveAgain lets the PRIMARY tablet serve again, after deciding once more under the action lock,
+// on a status of MySQL read after acquiring it, against the shard record rec that the run read
+// before (the topology is not read under the lock). The lock is taken without waiting: an RPC that
+// holds it may be changing MySQL's group (a bootstrap), and the next run decides after it.
+func (s *groupReplicationSync) serveAgain(ctx context.Context, durability policy.Durabler, rec *shardGroupRecord) {
+	tm := s.tm
+	if !tm.actionSema.TryAcquire(1) {
+		return
+	}
+	defer tm.unlock()
+	_, gen := tm.tmState.GroupReplicationNotServingState()
+	status, err := tm.groupReplicationStatus(ctx)
+	if err != nil {
+		log.Warn("Group replication sync: cannot read the group replication status, the primary does not serve yet", slog.Any("error", err))
+		return
+	}
+	if tm.Tablet().Type != topodatapb.TabletType_PRIMARY {
+		return
+	}
+	// The voters are not asked for their server_uuids under the lock: servingReason did, before.
+	if reason := tm.groupReplicationServingReason(ctx, durability, rec, status, false); reason != "" {
+		if err := tm.tmState.SetGroupReplicationNotServing(ctx, reason); err != nil {
+			log.Error("Group replication sync: failed to change the serving state of the primary", slog.Any("error", err))
+		}
+		return
+	}
+	cleared, err := tm.tmState.ClearGroupReplicationNotServing(ctx, gen)
+	if err != nil {
 		log.Error("Group replication sync: failed to change the serving state of the primary", slog.Any("error", err))
+		return
+	}
+	if cleared {
+		log.Info("Group replication sync: the primary serves again",
+			slog.String("group", status.GetGroupName()),
+			slog.String("view_id", status.GetViewId()),
+			slog.Int("online_members", mysql.OnlineGroupMembers(status)))
 	}
 }
 

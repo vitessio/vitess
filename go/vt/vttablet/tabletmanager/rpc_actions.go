@@ -141,6 +141,12 @@ func (tm *TabletManager) ChangeType(ctx context.Context, tabletType topodatapb.T
 
 // changeTypeLocked changes the tablet type under a lock
 func (tm *TabletManager) changeTypeLocked(ctx context.Context, tabletType topodatapb.TabletType, action DBAction, semiSync SemiSyncAction) error {
+	return tm.changeTypeWithGroupRecordLocked(ctx, tabletType, action, semiSync, nil)
+}
+
+// changeTypeWithGroupRecordLocked is changeTypeLocked, with the shard's group record that the
+// caller read a moment ago, if any, for the decision whether a PRIMARY tablet may serve.
+func (tm *TabletManager) changeTypeWithGroupRecordLocked(ctx context.Context, tabletType topodatapb.TabletType, action DBAction, semiSync SemiSyncAction, rec *shardGroupRecord) error {
 	// We don't want to allow multiple callers to claim a tablet as drained.
 	if tabletType == topodatapb.TabletType_DRAINED && tm.Tablet().Type == topodatapb.TabletType_DRAINED {
 		return fmt.Errorf("Tablet: %v, is already drained", tm.tabletAlias)
@@ -150,6 +156,14 @@ func (tm *TabletManager) changeTypeLocked(ctx context.Context, tabletType topoda
 	// secondary cannot become PRIMARY. Check before the tablet record changes.
 	if tabletType == topodatapb.TabletType_PRIMARY {
 		if err := tm.checkGroupAllowsReadWrite(ctx); err != nil {
+			return vterrors.Wrapf(err, "cannot change the tablet type to PRIMARY")
+		}
+		// Under a group replication policy, the tablet becomes PRIMARY but only serves while
+		// MySQL is the primary of the shard's recorded group with a majority of its voters, as
+		// MySQL reports it now, under the action lock. Every promotion goes through here: the
+		// sync loop's, PromoteReplica (PRS, ERS and VTOrc), InitPrimary, ReplicaWasPromoted and
+		// ChangeType.
+		if _, err := tm.applyGroupReplicationServingDecisionLocked(ctx, rec); err != nil {
 			return vterrors.Wrapf(err, "cannot change the tablet type to PRIMARY")
 		}
 	}
