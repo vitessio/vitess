@@ -2805,6 +2805,20 @@ func TestValidate(t *testing.T) {
 			expectErr: &MissingPartitionColumnInUniqueKeyError{Table: "t", Column: "i", UniqueKey: "id_idx"},
 		},
 		{
+			// SERIAL's implicit unique key must cover the partitioning columns too
+			name:      "add serial column to a table partitioned by another column",
+			from:      "create table t (id int primary key, x int) partition by hash(id)",
+			alter:     "alter table t add column s serial",
+			expectErr: &MissingPartitionColumnInUniqueKeyError{Table: "t", Column: "id", UniqueKey: "s"},
+		},
+		{
+			// SERIAL's implicit unique key covers a foreign key added in the same ALTER
+			name:  "serial unique key covers a foreign key in the same alter",
+			from:  "create table t (id int primary key)",
+			alter: "alter table t add column s serial, add constraint f foreign key (s) references parent(id)",
+			to:    "create table t (id int primary key, s bigint unsigned not null auto_increment, unique key s (s), constraint f foreign key (s) references parent(id))",
+		},
+		{
 			name:      "add multiple keys, multi columns, missing column",
 			from:      "create table t (id int primary key, i1 int, i2 int, i4 int)",
 			alter:     "alter table t add key i12_idx(i1, i2), add key i32_idx((IF(i3 IS NULL, i2, i3)), i2), add key i21_idx(i2, i1)",

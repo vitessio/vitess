@@ -2626,7 +2626,12 @@ func (c *CreateTableEntity) Apply(diff EntityDiff) (Entity, error) {
 //   - drop check constraints for a single specific column if that column
 //     is the only referenced column in that check constraint.
 //   - add implicit keys for foreign key constraint, if needed
+//   - expand SERIAL columns, adding their unique keys
 func (c *CreateTableEntity) postApplyNormalize() error {
+	// an added or modified SERIAL column brings its unique key, which the
+	// validation and the implicit foreign key keys below must see
+	c.normalizeSerialColumns()
+
 	// reduce or remove keys based on existing column list
 	// (a column may have been removed)postApplyNormalize
 	columnExists := map[string]bool{}
