@@ -74,6 +74,14 @@ func isMergeable(ctx *plancontext.PlanningContext, query sqlparser.TableStatemen
 }
 
 func settleSubqueries(ctx *plancontext.PlanningContext, op Operator) Operator {
+	onlyExistsSubqueries := true
+	_ = Visit(op, func(op Operator) error {
+		if subquery, ok := op.(*SubQuery); ok && subquery.FilterType != opcode.PulloutExists {
+			onlyExistsSubqueries = false
+		}
+		return nil
+	})
+
 	visit := func(op Operator, lhsTables semantics.TableSet, isRoot bool) (Operator, *ApplyResult) {
 		switch op := op.(type) {
 		case *SubQueryContainer:
@@ -86,6 +94,9 @@ func settleSubqueries(ctx *plancontext.PlanningContext, op Operator) Operator {
 		case *Projection:
 			ap, err := op.GetAliasedProjections()
 			if err != nil {
+				if _, isStar := op.Columns.(StarProjections); isStar && onlyExistsSubqueries {
+					return op, NoRewrite
+				}
 				panic(err)
 			}
 
