@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc/orca"
 )
 
 func TestGetCGroupCpuUsageMetrics(t *testing.T) {
@@ -107,7 +108,9 @@ func TestFirstCgroupCpuSampleIsNotPublished(t *testing.T) {
 	require.Equal(t, -1, int(cpu))
 
 	lastTime = time.Time{}
-	require.Equal(t, -1, int(getCpuUsage()), "the first cgroup sample must not fall back to host CPU")
+	recorder := orca.NewServerMetricsRecorder()
+	recorder.SetCPUUtilization(getCpuUsage())
+	require.Equal(t, float64(-1), recorder.ServerMetrics().CPUUtilization, "the first cgroup sample must not fall back to host CPU")
 }
 
 func TestGetCpuUsageFromSamplesRejectsShortInterval(t *testing.T) {
