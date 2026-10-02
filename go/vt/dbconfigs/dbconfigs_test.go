@@ -453,7 +453,7 @@ func newStallingServer(t *testing.T) (*stallingHandler, *mysql.ConnParams) {
 	t.Helper()
 	h := &stallingHandler{release: make(chan struct{})}
 	t.Cleanup(func() { close(h.release) })
-	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), h, 0, 0, false, false, 0, 0, false)
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), h, 0, 0, false, 0, false, 0, 0, false)
 	require.NoError(t, err)
 	t.Cleanup(listener.Close)
 	go listener.Accept()
