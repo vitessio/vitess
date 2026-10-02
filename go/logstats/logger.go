@@ -17,12 +17,16 @@ limitations under the License.
 package logstats
 
 import (
+	"bytes"
+	"encoding/json/jsontext"
 	"io"
 	"slices"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/tidwall/gjson"
 
 	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/sqltypes"
@@ -34,7 +38,7 @@ type logbv struct {
 	BVar *querypb.BindVariable
 }
 
-// Logger is a zero-allocation logger for logstats.
+// Logger formats logstats using reusable buffers.
 // It can output logs as JSON or as plaintext, following the commonly used
 // logstats format that is shared between the tablets and the gates.
 type Logger struct {
@@ -62,23 +66,31 @@ func (log *Logger) appendBVarsJSON(b []byte, bvars map[string]*querypb.BindVaria
 		if i > 0 {
 			b = append(b, ',', ' ')
 		}
-		b = strconv.AppendQuote(b, bv.Name)
-		b = append(b, `: {"type": `...)
-		b = strconv.AppendQuote(b, querypb.Type_name[int32(bv.BVar.Type)])
-		b = append(b, `, "value": `...)
+		b = appendQuote(b, bv.Name, log.json)
+		// Generated enum names are ASCII identifiers and need no escaping.
+		b = append(b, `: {"type": "`...)
+		b = append(b, querypb.Type_name[int32(bv.BVar.Type)]...)
+		b = append(b, `", "value": `...)
 
 		if sqltypes.IsIntegral(bv.BVar.Type) || sqltypes.IsFloat(bv.BVar.Type) {
-			b = append(b, bv.BVar.Value...)
+			if log.json {
+				b = appendJSONNumber(b, bv.BVar.Value)
+			} else if bytes.ContainsAny(bv.BVar.Value, "\t\r\n") {
+				// Keep numeric bind values from splitting text log fields or records.
+				b = strconv.AppendQuote(b, hack.String(bv.BVar.Value))
+			} else {
+				b = append(b, bv.BVar.Value...)
+			}
 		} else if bv.BVar.Type == sqltypes.Tuple {
 			b = append(b, '"')
 			b = strconv.AppendInt(b, int64(len(bv.BVar.Values)), 10)
 			b = append(b, ` items"`...)
 		} else {
 			if full {
-				b = strconv.AppendQuote(b, hack.String(bv.BVar.Value))
+				b = appendQuote(b, hack.String(bv.BVar.Value), log.json)
 			} else {
 				b = append(b, '"')
-				b = strconv.AppendInt(b, int64(len(bv.BVar.Values)), 10)
+				b = strconv.AppendInt(b, int64(len(bv.BVar.Value)), 10)
 				b = append(b, ` bytes"`...)
 			}
 		}
@@ -117,7 +129,7 @@ func (log *Logger) Key(key string) {
 
 func (log *Logger) StringUnquoted(value string) {
 	if log.json {
-		log.b = strconv.AppendQuote(log.b, value)
+		log.b = appendJSONQuote(log.b, value)
 	} else {
 		log.b = append(log.b, value...)
 	}
@@ -130,12 +142,12 @@ func (log *Logger) TabTerminated() {
 }
 
 func (log *Logger) String(value string) {
-	log.b = strconv.AppendQuote(log.b, value)
+	log.b = appendQuote(log.b, value, log.json)
 }
 
 func (log *Logger) StringSingleQuoted(value string) {
 	if log.json {
-		log.b = strconv.AppendQuote(log.b, value)
+		log.b = appendJSONQuote(log.b, value)
 	} else {
 		log.b = append(log.b, '\'')
 		log.b = append(log.b, value...)
@@ -159,9 +171,8 @@ func (log *Logger) Duration(t time.Duration) {
 }
 
 func (log *Logger) BindVariables(bvars map[string]*querypb.BindVariable, full bool) {
-	// the bind variables are printed as JSON in text mode because the original
-	// printing syntax, which was simply `fmt.Sprintf("%v")`, is not stable or
-	// safe to parse
+	// Text logs retain Go string escaping inside the JSON-shaped object for
+	// compatibility, so their bind-variable field is not always valid JSON.
 	log.b = log.appendBVarsJSON(log.b, bvars, full)
 }
 
@@ -183,7 +194,7 @@ func (log *Logger) Strings(strs []string) {
 		if i > 0 {
 			log.b = append(log.b, ',')
 		}
-		log.b = strconv.AppendQuote(log.b, t)
+		log.b = appendQuote(log.b, t, log.json)
 	}
 	log.b = append(log.b, ']')
 }
@@ -202,6 +213,65 @@ func (log *Logger) Flush(w io.Writer) (err error) {
 
 	loggerPool.Put(log)
 	return err
+}
+
+func appendJSONNumber(dst, value []byte) []byte {
+	// Keep valid numbers exact, but quote non-JSON spellings such as NaN and 007.
+	// Trim JSON whitespace so a numeric value cannot split a log record.
+	number := value
+	if len(number) > 0 && (number[0] <= ' ' || number[len(number)-1] <= ' ') {
+		number = bytes.Trim(number, " \t\r\n")
+	}
+	if len(number) > 0 && (number[0] == '-' || number[0] >= '0' && number[0] <= '9') && gjson.ValidBytes(number) {
+		return append(dst, number...)
+	}
+	return appendJSONQuote(dst, hack.String(value))
+}
+
+func appendQuote(dst []byte, s string, json bool) []byte {
+	return appendQuoteDispatch(dst, s, json, strconv.AppendQuote, appendJSONQuote)
+}
+
+// Passing the quote functions keeps the dispatch and stdlib text path inlineable.
+func appendQuoteDispatch(dst []byte, s string, json bool, quoteText, quoteJSON func([]byte, string) []byte) []byte {
+	if json {
+		return quoteJSON(dst, s)
+	}
+	return quoteText(dst, s)
+}
+
+// appendJSONQuote preserves the log format while using the JSON string encoder.
+func appendJSONQuote(dst []byte, s string) []byte {
+	if strings.Contains(s, "\u2028") || strings.Contains(s, "\u2029") {
+		return appendJSONQuoteWithOptions(dst, s)
+	}
+	// AppendQuote replaces invalid UTF-8 even when it returns an error.
+	dst, _ = jsontext.AppendQuote(dst, s)
+	return dst
+}
+
+type jsonQuoteEncoder struct {
+	buf bytes.Buffer
+	enc jsontext.Encoder
+}
+
+var jsonQuoteEncoderPool = sync.Pool{New: func() any {
+	return &jsonQuoteEncoder{}
+}}
+
+func appendJSONQuoteWithOptions(dst []byte, s string) []byte {
+	// Handle separator escaping and UTF-8 replacement in one pass without an error allocation.
+	quote := jsonQuoteEncoderPool.Get().(*jsonQuoteEncoder)
+	quote.buf = *bytes.NewBuffer(dst)
+	quote.enc.Reset(&quote.buf, jsontext.AllowInvalidUTF8(true), jsontext.EscapeForJS(true))
+	_ = quote.enc.WriteToken(jsontext.String(s))
+	dst = quote.buf.Bytes()
+	dst = dst[:len(dst)-1] // The streaming encoder appends a record-ending newline.
+	// Do not retain the caller's buffer in the pool.
+	quote.buf = bytes.Buffer{}
+	quote.enc.Reset(&quote.buf)
+	jsonQuoteEncoderPool.Put(quote)
+	return dst
 }
 
 var loggerPool = sync.Pool{New: func() any {

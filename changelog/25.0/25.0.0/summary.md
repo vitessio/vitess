@@ -14,6 +14,7 @@
         - [VTOrc `--cell` flag is now required](#vtorc-cell-required)
         - [`BackupHandle` interface gains `Wait()` method](#backup-handle-wait-method)
         - [VTOrc: `--cells-to-watch` removed in favor of `--cells-no-recovery`](#vtorc-cells-no-recovery)
+        - [Query-log output compatibility](#query-log-output-compatibility)
     - **[Deprecations](#deprecations)**
         - [CLI Flags](#deprecated-cli-flags)
         - [Legacy streaming-path plan types in query rules](#deprecated-selectstream-rule-plan)
@@ -157,6 +158,21 @@ The replacement, `--cells-no-recovery`, is a deny-list for *recovery actions onl
 **Migration:** drop `--cells-to-watch` from your vtorc invocation. If you previously used it for true cell-isolated deployments, the new flag is not a like-for-like replacement (vtorc will now discover and watch all cells); discuss your scenario in the linked issue if the new flag does not cover your needs. If you are upgrading from v24.0.0 specifically and have `--cells-to-watch` in your vtorc flags, note that this flag was already removed in v24.0.1; replace it with `--cells-no-recovery` before upgrading.
 
 See [#20021](https://github.com/vitessio/vitess/issues/20021) for details.
+
+#### <a id="query-log-output-compatibility"/>Query-log output compatibility</a>
+
+VTGate and VTTablet query logs have consumer-visible formatting changes:
+
+- JSON strings now use JSON escaping instead of Go string escaping. For example, a NUL byte is written as `\u0000` rather than the JSON-invalid `\x00`. Valid Unicode characters may also be written literally instead of escaped; consumers must not rely on the previous byte-for-byte representation.
+- Invalid UTF-8 bytes in JSON strings, including full `VARBINARY` bind values, are replaced with Unicode replacement characters (`U+FFFD`). Unlike the previous Go-style escapes, this does not preserve the original bytes.
+- For integral and floating-point bind variables, `BindVars.<name>.value` can now be a JSON string even when `type` is numeric. Spellings that are not JSON numbers, such as `007`, `.5`, and `NaN`, are quoted rather than emitted as invalid JSON; the `type` field is unchanged. Valid JSON numbers retain their spelling and precision, except that surrounding JSON whitespace is removed.
+- Abbreviated scalar byte counts now report the actual payload length instead of `"0 bytes"`, in both JSON and text logs. Tuple item counts are unchanged.
+
+Text logs also quote numeric bind values containing tabs, carriage returns, or newlines, escaping those characters instead of allowing them to split fields or records. Other numeric spellings and text string escaping are unchanged.
+
+**Migration**: Update log consumers before upgrading to understand JSON escaping and accept either a number or a string for integral and floating-point bind values. Consumers must tolerate old and new representations during rolling upgrades. Applications requiring byte-exact binary values must obtain them from a byte-preserving source rather than JSON query logs.
+
+These changes affect log representation, not query execution or the names of logged fields.
 
 ### <a id="deprecations"/>Deprecations</a>
 
