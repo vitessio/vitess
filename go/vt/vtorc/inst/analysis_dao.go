@@ -128,6 +128,7 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		vitess_shard.disable_emergency_reparent AS shard_disable_emergency_reparent,
 		vitess_shard.group_replication_voters AS shard_group_replication_voters,
 		vitess_shard.group_replication_incarnation AS shard_group_replication_incarnation,
+		vitess_shard.group_replication_bootstrap_target AS shard_group_replication_bootstrap_target,
 		primary_instance.read_only AS read_only,
 		MIN(primary_instance.gtid_errant) AS gtid_errant,
 		MIN(primary_instance.alias) IS NULL AS is_invalid,
@@ -512,6 +513,9 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		a.GroupOnlineMembers = m.GetUint("gr_online_members")
 		a.IsGroupMemberActive = isGroupMemberActive(a.GroupReplicationPluginActive, a.GroupMemberState)
 		a.IsGroupPrimary = isGroupPrimary(a.GroupReplicationPluginActive, a.GroupMemberState, a.GroupMemberRole, a.GroupHasQuorum)
+		a.GroupViewIncarnation = policy.GroupIncarnation(m.GetString("gr_view_id"))
+		a.ShardGroupIncarnation = m.GetString("shard_group_replication_incarnation")
+		a.IsGroupBootstrapIntentTarget = m.GetString("shard_group_replication_bootstrap_target") == topoproto.TabletAliasString(tablet.Alias)
 		if a.IsGroupMemberActive {
 			// An active group member replicates through the group's own channels and has no
 			// default replication channel. It is neither stopped nor, unless it is the group's

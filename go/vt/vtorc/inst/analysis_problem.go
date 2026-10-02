@@ -251,6 +251,23 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 	},
 	{
 		Meta: &DetectionAnalysisProblemMeta{
+			Analysis:    GroupBootstrapNotRecorded,
+			Description: "Tablet's MySQL is the primary of a group that a bootstrap created, but the shard record does not list its incarnation",
+			Priority:    detectionAnalysisPriorityCritical,
+		},
+		// Until the incarnation is recorded, no tablet follows the group, and the shard has no
+		// primary that a reparent could follow either.
+		BeforeAnalyses: []AnalysisCode{
+			DeadPrimary, DeadPrimaryAndReplicas, DeadPrimaryAndSomeReplicas, DeadPrimaryWithoutReplicas,
+			PrimaryTabletUnreachableByQuorum, IncapacitatedPrimary, PrimarySemiSyncBlocked,
+			PrimaryTabletDeleted, ClusterHasNoPrimary,
+		},
+		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
+			return matchGroupBootstrapNotRecorded(a, ca)
+		},
+	},
+	{
+		Meta: &DetectionAnalysisProblemMeta{
 			Analysis:    GroupMemberNotOnline,
 			Description: "Tablet should be a member of the shard's replication group, but its MySQL is not an active member",
 			// Higher than the asynchronous replication problems (NotConnectedToPrimary, ...) that

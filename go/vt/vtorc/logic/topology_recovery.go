@@ -202,6 +202,9 @@ const (
 	bootstrapGroupReplicationFunc
 	// updateGroupReplicationVotersFunc updates the voters of a shard's replication group.
 	updateGroupReplicationVotersFunc
+	// adoptGroupReplicationBootstrapFunc records the incarnation of a group whose bootstrap's
+	// reply was lost.
+	adoptGroupReplicationBootstrapFunc
 )
 
 // TopologyRecovery represents an entry in the topology_recovery table
@@ -776,6 +779,8 @@ func getCheckAndRecoverFunctionCode(analysisEntry *inst.DetectionAnalysis) (reco
 		recoveryFunc = startGroupReplicationFunc
 	case inst.GroupNotBootstrapped:
 		recoveryFunc = bootstrapGroupReplicationFunc
+	case inst.GroupBootstrapNotRecorded:
+		recoveryFunc = adoptGroupReplicationBootstrapFunc
 	case inst.GroupVotersOutOfDate:
 		recoveryFunc = updateGroupReplicationVotersFunc
 	case inst.ErrantGTIDDetected:
@@ -850,7 +855,8 @@ func hasActionableRecovery(recoveryFunctionCode recoveryFunction) bool {
 		return true
 	case reconcileStaleTopoPrimaryFunc:
 		return true
-	case promoteGroupPrimaryFunc, startGroupReplicationFunc, bootstrapGroupReplicationFunc, updateGroupReplicationVotersFunc:
+	case promoteGroupPrimaryFunc, startGroupReplicationFunc, bootstrapGroupReplicationFunc, updateGroupReplicationVotersFunc,
+		adoptGroupReplicationBootstrapFunc:
 		return true
 	default:
 		return false
@@ -896,6 +902,8 @@ func getCheckAndRecoverFunction(recoveryFunctionCode recoveryFunction) (
 		return bootstrapGroupReplication
 	case updateGroupReplicationVotersFunc:
 		return updateGroupReplicationVoters
+	case adoptGroupReplicationBootstrapFunc:
+		return adoptGroupReplicationBootstrap
 	default:
 		return nil
 	}
@@ -939,6 +947,8 @@ func getRecoverFunctionName(recoveryFunctionCode recoveryFunction) string {
 		return BootstrapGroupReplicationRecoveryName
 	case updateGroupReplicationVotersFunc:
 		return UpdateGroupReplicationVotersRecoveryName
+	case adoptGroupReplicationBootstrapFunc:
+		return AdoptGroupReplicationBootstrapRecoveryName
 	default:
 		return ""
 	}
@@ -991,6 +1001,9 @@ func recoveryRunsWithoutShardPrimary(recoveryFunctionCode recoveryFunction) bool
 		// a primary tablet once enough voters have joined it: its primary is not followed before
 		// a majority of the voters is ONLINE in its view.
 		return true
+	case adoptGroupReplicationBootstrapFunc:
+		// A group whose incarnation is not recorded is followed by no tablet.
+		return true
 	default:
 		return false
 	}
@@ -1001,7 +1014,7 @@ func recoveryRunsWithoutShardPrimary(recoveryFunctionCode recoveryFunction) bool
 // its own deadline, and work with the cells that answer.
 func isGroupReplicationTabletRecovery(recoveryFunctionCode recoveryFunction) bool {
 	switch recoveryFunctionCode {
-	case promoteGroupPrimaryFunc, startGroupReplicationFunc, updateGroupReplicationVotersFunc:
+	case promoteGroupPrimaryFunc, startGroupReplicationFunc, updateGroupReplicationVotersFunc, adoptGroupReplicationBootstrapFunc:
 		return true
 	default:
 		return false

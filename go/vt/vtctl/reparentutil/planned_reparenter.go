@@ -377,11 +377,18 @@ func (pr *PlannedReparenter) performInitialPromotion(
 
 	// Under a group replication policy, InitPrimary bootstraps the shard's group. Its voters
 	// are selected and stored first, with the primary-elect among them, so that the right
-	// tablets join the group once it exists.
+	// tablets join the group once it exists. The incarnation the shard record lists before the
+	// bootstrap is what the new group's incarnation replaces (a compare-and-swap).
+	previousIncarnation := ""
 	if grd, ok := policy.AsGroupReplication(opts.durability); ok {
 		if err := pr.selectInitialVoters(ctx, keyspace, shard, grd, primaryElect, tabletMap); err != nil {
 			return "", err
 		}
+		si, err := pr.ts.GetShard(ctx, keyspace, shard)
+		if err != nil {
+			return "", vterrors.Wrapf(err, "cannot read the shard record of %s/%s", keyspace, shard)
+		}
+		previousIncarnation = si.GroupReplicationIncarnation
 	}
 
 	promoteCtx, promoteCancel := context.WithTimeout(ctx, opts.WaitReplicasTimeout)
@@ -403,7 +410,7 @@ func (pr *PlannedReparenter) performInitialPromotion(
 	// InitPrimary bootstrapped the shard's group: record its incarnation as the shard's
 	// legitimate group, while the shard lock is still held.
 	if policy.IsGroupReplication(opts.durability) {
-		incarnation, err := RecordGroupReplicationIncarnation(ctx, pr.ts, pr.tmc, keyspace, shard, primaryElect)
+		incarnation, err := RecordGroupReplicationIncarnation(ctx, pr.ts, pr.tmc, keyspace, shard, primaryElect, previousIncarnation)
 		if err != nil {
 			return "", vterrors.Wrapf(err, "primary-elect tablet %v bootstrapped the replication group, but its incarnation could not be recorded; please re-run", primaryElectAliasStr)
 		}

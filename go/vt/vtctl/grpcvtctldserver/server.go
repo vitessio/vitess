@@ -2947,7 +2947,7 @@ func (s *VtctldServer) InitShardPrimaryLocked(
 	// Under a group replication policy, InitPrimary bootstrapped the shard's group: record it as
 	// the shard's legitimate group while the shard lock is held.
 	if policy.IsGroupReplication(durability) {
-		if _, err := reparentutil.RecordGroupReplicationIncarnation(ctx, s.ts, tmc, req.Keyspace, req.Shard, primaryElectTabletInfo.Tablet); err != nil {
+		if _, err := reparentutil.RecordGroupReplicationIncarnation(ctx, s.ts, tmc, req.Keyspace, req.Shard, primaryElectTabletInfo.Tablet, shardInfo.GroupReplicationIncarnation); err != nil {
 			return err
 		}
 	}

@@ -683,7 +683,7 @@ func (s *migrationShard) toGroupReplication(ctx context.Context) error {
 		s.record(MigrationActionSetIncarnation, primary, MigrationStepSkipped, fmt.Sprintf("the shard record already lists the group incarnation %s", incarnation))
 	} else {
 		err := s.do(ctx, MigrationActionSetIncarnation, primary, fmt.Sprintf("record the incarnation of the group of primary %v in the shard record", primaryAlias), func(ctx context.Context) error {
-			_, err := RecordGroupReplicationIncarnation(ctx, s.run.m.ts, s.run.m.tmc, s.run.keyspace, s.shard, primary)
+			_, err := RecordGroupReplicationIncarnation(ctx, s.run.m.ts, s.run.m.tmc, s.run.keyspace, s.shard, primary, s.recordedIncarnation)
 			return err
 		})
 		if err != nil {
@@ -969,7 +969,7 @@ func (s *migrationShard) clearVoters(ctx context.Context) error {
 		s.record(MigrationActionClearIncarnation, nil, MigrationStepSkipped, "the shard record lists no group incarnation")
 	} else {
 		err := s.do(ctx, MigrationActionClearIncarnation, nil, fmt.Sprintf("remove the group incarnation %s from the shard record", s.recordedIncarnation), func(ctx context.Context) error {
-			return WriteGroupReplicationIncarnation(ctx, s.run.m.ts, s.run.keyspace, s.shard, "")
+			return WriteGroupReplicationIncarnation(ctx, s.run.m.ts, s.run.keyspace, s.shard, s.recordedIncarnation, "")
 		})
 		if err != nil {
 			return err

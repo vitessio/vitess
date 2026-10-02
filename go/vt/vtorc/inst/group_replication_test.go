@@ -667,6 +667,79 @@ func TestGetDetectionAnalysisGroupReplicationLegitimateGroup(t *testing.T) {
 	}
 }
 
+// TestGetDetectionAnalysisGroupBootstrapNotRecorded checks that VTOrc detects a bootstrap whose reply
+// was lost (S7d chaos scenario, run r3): the target of the shard's bootstrap intent is the primary of
+// a group of another incarnation than the shard record lists. A member alone in a new incarnation
+// that is not the intent's target, such as a stray group that a failed join formed, is not adopted.
+func TestGetDetectionAnalysisGroupBootstrapNotRecorded(t *testing.T) {
+	resetPrimaryHealthState()
+	oldVoterGrace := config.GetGroupReplicationVoterReplacementGracePeriod()
+	config.SetGroupReplicationVoterReplacementGracePeriod(time.Hour)
+	t.Cleanup(func() {
+		config.SetGroupReplicationVoterReplacementGracePeriod(oldVoterGrace)
+		GroupReplicationConditions.Reset()
+		UnreachableGroupTablets.Reset()
+	})
+
+	oldPrimary := grTablet("zone1", 101, topodatapb.TabletType_PRIMARY)
+	replica := grTablet("zone1", 100, topodatapb.TabletType_REPLICA)
+	crossCellReplica := grTablet("zone2", 200, topodatapb.TabletType_REPLICA)
+	gr := policy.DurabilityGroupReplication
+	const recorded = "1790785744160779"
+
+	// rows returns the shard after the bootstrap on target: its MySQL is alone in a new
+	// incarnation, and the other voters' MySQL is OFFLINE.
+	rows := func(target *topodatapb.Tablet) []*test.InfoForRecoveryAnalysis {
+		var result []*test.InfoForRecoveryAnalysis
+		for _, tablet := range []*topodatapb.Tablet{oldPrimary, replica, crossCellReplica} {
+			row := member(grRow(tablet, gr), mysql.GroupMemberStateOffline, "", false, nil)
+			if tablet == target {
+				row = sees(member(grRow(tablet, gr), mysql.GroupMemberStateOnline, mysql.GroupMemberRolePrimary, true, tablet), tablet)
+				row.GroupViewID = "17908892198863259:1"
+				row.ReadOnly = 0
+			}
+			row.CurrentTabletType = int(topodatapb.TabletType_REPLICA)
+			result = append(result, row)
+		}
+		return result
+	}
+	tests := []struct {
+		name string
+		// target is the tablet whose MySQL is alone in a new incarnation.
+		target *topodatapb.Tablet
+		// intent is the target of the shard's bootstrap intent, nil for none.
+		intent *topodatapb.Tablet
+		want   bool
+	}{
+		{name: "the intent's target bootstrapped a group that is not recorded", target: crossCellReplica, intent: crossCellReplica, want: true},
+		{name: "no intent", target: crossCellReplica},
+		{name: "a member that is not the intent's target is alone in a new incarnation", target: replica, intent: crossCellReplica},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			GroupReplicationConditions.Reset()
+			UnreachableGroupTablets.Reset()
+			rows := rows(tt.target)
+			for _, row := range rows {
+				row.ShardGroupReplicationVoters = voterList(oldPrimary, replica, crossCellReplica)
+				row.ShardGroupReplicationIncarnation = recorded
+				if tt.intent != nil {
+					row.ShardGroupReplicationBootstrapTarget = topoproto.TabletAliasString(tt.intent.Alias)
+				}
+			}
+			got := analysisCodes(runAnalysis(t, rows))
+			targetAlias := topoproto.TabletAliasString(tt.target.Alias)
+			if tt.want {
+				assert.Equal(t, GroupBootstrapNotRecorded, got[targetAlias])
+			} else {
+				for alias, code := range got {
+					assert.NotEqual(t, GroupBootstrapNotRecorded, code, "tablet %s", alias)
+				}
+			}
+		})
+	}
+}
+
 // TestGetDetectionAnalysisGroupReplicationShardState verifies the shard-wide Group Replication
 // state that the recoveries use to decide whether to wait for the group.
 func TestGetDetectionAnalysisGroupReplicationShardState(t *testing.T) {

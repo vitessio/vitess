@@ -138,9 +138,9 @@ func SaveShard(shard *topo.ShardInfo) error {
 	_, err := db.ExecVTOrc(`
 		replace	into vitess_shard (
 			keyspace, shard, primary_alias, primary_timestamp, disable_emergency_reparent, group_replication_voters,
-			group_replication_incarnation
+			group_replication_incarnation, group_replication_bootstrap_target
 		) values (
-			?, ?, ?, ?, ?, ?, ?
+			?, ?, ?, ?, ?, ?, ?, ?
 		)`,
 		shard.Keyspace(),
 		shard.ShardName(),
@@ -149,8 +149,19 @@ func SaveShard(shard *topo.ShardInfo) error {
 		disableEmergencyReparent,
 		formatGroupReplicationVoters(shard.GroupReplicationVoters),
 		shard.GroupReplicationIncarnation,
+		groupReplicationBootstrapTarget(shard.Shard),
 	)
 	return err
+}
+
+// groupReplicationBootstrapTarget returns the alias of the target of the shard's bootstrap intent,
+// if the intent still applies to the incarnation the shard record lists, else "".
+func groupReplicationBootstrapTarget(shard *topodatapb.Shard) string {
+	intent := shard.GetGroupReplicationBootstrapIntent()
+	if intent == nil || intent.GetTarget() == nil || intent.GetPreviousIncarnation() != shard.GetGroupReplicationIncarnation() {
+		return ""
+	}
+	return topoproto.TabletAliasString(intent.GetTarget())
 }
 
 // ReadShardGroupReplicationVoters reads the voting members of the shard's replication group, as

@@ -289,6 +289,29 @@ message Shard {
   // back to asynchronous replication. A member that reports another incarnation belongs to a
   // group that Vitess did not create, and is never followed. Empty means unknown.
   string group_replication_incarnation = 11;
+
+  // group_replication_bootstrap_intent records that VTOrc is about to bootstrap the shard's MySQL
+  // Group Replication group, before it does, under the shard lock. If the bootstrap's reply is
+  // lost, VTOrc adopts the group it created from the intent: it records the group's incarnation
+  // when the group's primary is the intent's target, its incarnation differs from the intent's
+  // previous incarnation, and it has quorum. While it is recent, the intent also keeps another
+  // VTOrc from bootstrapping the group on another tablet. It is cleared when an incarnation is
+  // recorded. Readers that do not know it ignore it.
+  GroupReplicationBootstrapIntent group_replication_bootstrap_intent = 12;
+}
+
+// GroupReplicationBootstrapIntent is a bootstrap of a shard's MySQL Group Replication group that
+// VTOrc started (see Shard.group_replication_bootstrap_intent).
+message GroupReplicationBootstrapIntent {
+  // target is the tablet whose MySQL bootstraps the group.
+  TabletAlias target = 1;
+  // time is when the intent was recorded.
+  vttime.Time time = 2;
+  // previous_incarnation is the shard record's group_replication_incarnation when the intent was
+  // recorded. The group the bootstrap creates has another incarnation.
+  string previous_incarnation = 3;
+  // token identifies the intent, so that it is only cleared or replaced by whoever read it.
+  string token = 4;
 }
 
 // A Keyspace contains data about a keyspace.

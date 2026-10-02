@@ -319,6 +319,7 @@ CREATE TABLE vitess_shard (
 	disable_emergency_reparent tinyint NOT NULL,
 	group_replication_voters text NOT NULL DEFAULT '',
 	group_replication_incarnation varchar(128) NOT NULL DEFAULT '',
+	group_replication_bootstrap_target varchar(512) NOT NULL DEFAULT '',
 	PRIMARY KEY (keyspace, shard)
 )`,
 	`

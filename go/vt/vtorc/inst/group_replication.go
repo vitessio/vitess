@@ -536,6 +536,16 @@ func matchGroupNotBootstrapped(a *DetectionAnalysis, ca *clusterAnalysis) bool {
 		a.ShardGroupVotingMembers > 0 && a.ShardGroupUnreachableVotingMembers == 0
 }
 
+// matchGroupBootstrapNotRecorded returns whether the analyzed tablet is the target of its shard's
+// bootstrap intent, and its MySQL is the primary of a group, with quorum, of another incarnation
+// than the shard record lists: a bootstrap whose reply was lost. VTOrc adopts the group after it
+// checked it again under the shard lock (see reparentutil.AdoptGroupReplicationBootstrap). The
+// tablet trusts the group it bootstrapped for a minute, and then leaves it.
+func matchGroupBootstrapNotRecorded(a *DetectionAnalysis, ca *clusterAnalysis) bool {
+	return policy.IsGroupReplication(ca.durability) && a.LastCheckValid && a.IsGroupBootstrapIntentTarget &&
+		a.IsGroupPrimary && a.GroupViewIncarnation != "" && a.GroupViewIncarnation != a.ShardGroupIncarnation
+}
+
 // matchGroupMemberNotOnline returns whether the analyzed tablet is a voter of its shard's group
 // but its MySQL is not an active member, while other tablets are active members of the shard's
 // legitimate group with quorum in their view.

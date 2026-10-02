@@ -241,7 +241,7 @@ func (x ShardReplicationError_Type) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ShardReplicationError_Type.Descriptor instead.
 func (ShardReplicationError_Type) EnumDescriptor() ([]byte, []int) {
-	return file_topodata_proto_rawDescGZIP(), []int{6, 0}
+	return file_topodata_proto_rawDescGZIP(), []int{7, 0}
 }
 
 // KeyRange describes a range of sharding keys, when range-based
@@ -604,8 +604,16 @@ type Shard struct {
 	// back to asynchronous replication. A member that reports another incarnation belongs to a
 	// group that Vitess did not create, and is never followed. Empty means unknown.
 	GroupReplicationIncarnation string `protobuf:"bytes,11,opt,name=group_replication_incarnation,json=groupReplicationIncarnation,proto3" json:"group_replication_incarnation,omitempty"`
-	unknownFields               protoimpl.UnknownFields
-	sizeCache                   protoimpl.SizeCache
+	// group_replication_bootstrap_intent records that VTOrc is about to bootstrap the shard's MySQL
+	// Group Replication group, before it does, under the shard lock. If the bootstrap's reply is
+	// lost, VTOrc adopts the group it created from the intent: it records the group's incarnation
+	// when the group's primary is the intent's target, its incarnation differs from the intent's
+	// previous incarnation, and it has quorum. While it is recent, the intent also keeps another
+	// VTOrc from bootstrapping the group on another tablet. It is cleared when an incarnation is
+	// recorded. Readers that do not know it ignore it.
+	GroupReplicationBootstrapIntent *GroupReplicationBootstrapIntent `protobuf:"bytes,12,opt,name=group_replication_bootstrap_intent,json=groupReplicationBootstrapIntent,proto3" json:"group_replication_bootstrap_intent,omitempty"`
+	unknownFields                   protoimpl.UnknownFields
+	sizeCache                       protoimpl.SizeCache
 }
 
 func (x *Shard) Reset() {
@@ -701,6 +709,88 @@ func (x *Shard) GetGroupReplicationIncarnation() string {
 	return ""
 }
 
+func (x *Shard) GetGroupReplicationBootstrapIntent() *GroupReplicationBootstrapIntent {
+	if x != nil {
+		return x.GroupReplicationBootstrapIntent
+	}
+	return nil
+}
+
+// GroupReplicationBootstrapIntent is a bootstrap of a shard's MySQL Group Replication group that
+// VTOrc started (see Shard.group_replication_bootstrap_intent).
+type GroupReplicationBootstrapIntent struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// target is the tablet whose MySQL bootstraps the group.
+	Target *TabletAlias `protobuf:"bytes,1,opt,name=target,proto3" json:"target,omitempty"`
+	// time is when the intent was recorded.
+	Time *vttime.Time `protobuf:"bytes,2,opt,name=time,proto3" json:"time,omitempty"`
+	// previous_incarnation is the shard record's group_replication_incarnation when the intent was
+	// recorded. The group the bootstrap creates has another incarnation.
+	PreviousIncarnation string `protobuf:"bytes,3,opt,name=previous_incarnation,json=previousIncarnation,proto3" json:"previous_incarnation,omitempty"`
+	// token identifies the intent, so that it is only cleared or replaced by whoever read it.
+	Token         string `protobuf:"bytes,4,opt,name=token,proto3" json:"token,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GroupReplicationBootstrapIntent) Reset() {
+	*x = GroupReplicationBootstrapIntent{}
+	mi := &file_topodata_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GroupReplicationBootstrapIntent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GroupReplicationBootstrapIntent) ProtoMessage() {}
+
+func (x *GroupReplicationBootstrapIntent) ProtoReflect() protoreflect.Message {
+	mi := &file_topodata_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GroupReplicationBootstrapIntent.ProtoReflect.Descriptor instead.
+func (*GroupReplicationBootstrapIntent) Descriptor() ([]byte, []int) {
+	return file_topodata_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *GroupReplicationBootstrapIntent) GetTarget() *TabletAlias {
+	if x != nil {
+		return x.Target
+	}
+	return nil
+}
+
+func (x *GroupReplicationBootstrapIntent) GetTime() *vttime.Time {
+	if x != nil {
+		return x.Time
+	}
+	return nil
+}
+
+func (x *GroupReplicationBootstrapIntent) GetPreviousIncarnation() string {
+	if x != nil {
+		return x.PreviousIncarnation
+	}
+	return ""
+}
+
+func (x *GroupReplicationBootstrapIntent) GetToken() string {
+	if x != nil {
+		return x.Token
+	}
+	return ""
+}
+
 // A Keyspace contains data about a keyspace.
 type Keyspace struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -737,7 +827,7 @@ type Keyspace struct {
 
 func (x *Keyspace) Reset() {
 	*x = Keyspace{}
-	mi := &file_topodata_proto_msgTypes[4]
+	mi := &file_topodata_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -749,7 +839,7 @@ func (x *Keyspace) String() string {
 func (*Keyspace) ProtoMessage() {}
 
 func (x *Keyspace) ProtoReflect() protoreflect.Message {
-	mi := &file_topodata_proto_msgTypes[4]
+	mi := &file_topodata_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -762,7 +852,7 @@ func (x *Keyspace) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Keyspace.ProtoReflect.Descriptor instead.
 func (*Keyspace) Descriptor() ([]byte, []int) {
-	return file_topodata_proto_rawDescGZIP(), []int{4}
+	return file_topodata_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *Keyspace) GetKeyspaceType() KeyspaceType {
@@ -834,7 +924,7 @@ type ShardReplication struct {
 
 func (x *ShardReplication) Reset() {
 	*x = ShardReplication{}
-	mi := &file_topodata_proto_msgTypes[5]
+	mi := &file_topodata_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -846,7 +936,7 @@ func (x *ShardReplication) String() string {
 func (*ShardReplication) ProtoMessage() {}
 
 func (x *ShardReplication) ProtoReflect() protoreflect.Message {
-	mi := &file_topodata_proto_msgTypes[5]
+	mi := &file_topodata_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -859,7 +949,7 @@ func (x *ShardReplication) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ShardReplication.ProtoReflect.Descriptor instead.
 func (*ShardReplication) Descriptor() ([]byte, []int) {
-	return file_topodata_proto_rawDescGZIP(), []int{5}
+	return file_topodata_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *ShardReplication) GetNodes() []*ShardReplication_Node {
@@ -883,7 +973,7 @@ type ShardReplicationError struct {
 
 func (x *ShardReplicationError) Reset() {
 	*x = ShardReplicationError{}
-	mi := &file_topodata_proto_msgTypes[6]
+	mi := &file_topodata_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -895,7 +985,7 @@ func (x *ShardReplicationError) String() string {
 func (*ShardReplicationError) ProtoMessage() {}
 
 func (x *ShardReplicationError) ProtoReflect() protoreflect.Message {
-	mi := &file_topodata_proto_msgTypes[6]
+	mi := &file_topodata_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -908,7 +998,7 @@ func (x *ShardReplicationError) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ShardReplicationError.ProtoReflect.Descriptor instead.
 func (*ShardReplicationError) Descriptor() ([]byte, []int) {
-	return file_topodata_proto_rawDescGZIP(), []int{6}
+	return file_topodata_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *ShardReplicationError) GetType() ShardReplicationError_Type {
@@ -937,7 +1027,7 @@ type ShardReference struct {
 
 func (x *ShardReference) Reset() {
 	*x = ShardReference{}
-	mi := &file_topodata_proto_msgTypes[7]
+	mi := &file_topodata_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -949,7 +1039,7 @@ func (x *ShardReference) String() string {
 func (*ShardReference) ProtoMessage() {}
 
 func (x *ShardReference) ProtoReflect() protoreflect.Message {
-	mi := &file_topodata_proto_msgTypes[7]
+	mi := &file_topodata_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -962,7 +1052,7 @@ func (x *ShardReference) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ShardReference.ProtoReflect.Descriptor instead.
 func (*ShardReference) Descriptor() ([]byte, []int) {
-	return file_topodata_proto_rawDescGZIP(), []int{7}
+	return file_topodata_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *ShardReference) GetName() string {
@@ -993,7 +1083,7 @@ type ShardTabletControl struct {
 
 func (x *ShardTabletControl) Reset() {
 	*x = ShardTabletControl{}
-	mi := &file_topodata_proto_msgTypes[8]
+	mi := &file_topodata_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1005,7 +1095,7 @@ func (x *ShardTabletControl) String() string {
 func (*ShardTabletControl) ProtoMessage() {}
 
 func (x *ShardTabletControl) ProtoReflect() protoreflect.Message {
-	mi := &file_topodata_proto_msgTypes[8]
+	mi := &file_topodata_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1018,7 +1108,7 @@ func (x *ShardTabletControl) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ShardTabletControl.ProtoReflect.Descriptor instead.
 func (*ShardTabletControl) Descriptor() ([]byte, []int) {
-	return file_topodata_proto_rawDescGZIP(), []int{8}
+	return file_topodata_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *ShardTabletControl) GetName() string {
@@ -1060,7 +1150,7 @@ type ThrottledAppRule struct {
 
 func (x *ThrottledAppRule) Reset() {
 	*x = ThrottledAppRule{}
-	mi := &file_topodata_proto_msgTypes[9]
+	mi := &file_topodata_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1072,7 +1162,7 @@ func (x *ThrottledAppRule) String() string {
 func (*ThrottledAppRule) ProtoMessage() {}
 
 func (x *ThrottledAppRule) ProtoReflect() protoreflect.Message {
-	mi := &file_topodata_proto_msgTypes[9]
+	mi := &file_topodata_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1085,7 +1175,7 @@ func (x *ThrottledAppRule) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ThrottledAppRule.ProtoReflect.Descriptor instead.
 func (*ThrottledAppRule) Descriptor() ([]byte, []int) {
-	return file_topodata_proto_rawDescGZIP(), []int{9}
+	return file_topodata_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *ThrottledAppRule) GetName() string {
@@ -1143,7 +1233,7 @@ type ThrottlerConfig struct {
 
 func (x *ThrottlerConfig) Reset() {
 	*x = ThrottlerConfig{}
-	mi := &file_topodata_proto_msgTypes[10]
+	mi := &file_topodata_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1155,7 +1245,7 @@ func (x *ThrottlerConfig) String() string {
 func (*ThrottlerConfig) ProtoMessage() {}
 
 func (x *ThrottlerConfig) ProtoReflect() protoreflect.Message {
-	mi := &file_topodata_proto_msgTypes[10]
+	mi := &file_topodata_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1168,7 +1258,7 @@ func (x *ThrottlerConfig) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ThrottlerConfig.ProtoReflect.Descriptor instead.
 func (*ThrottlerConfig) Descriptor() ([]byte, []int) {
-	return file_topodata_proto_rawDescGZIP(), []int{10}
+	return file_topodata_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *ThrottlerConfig) GetEnabled() bool {
@@ -1238,7 +1328,7 @@ type SrvKeyspace struct {
 
 func (x *SrvKeyspace) Reset() {
 	*x = SrvKeyspace{}
-	mi := &file_topodata_proto_msgTypes[11]
+	mi := &file_topodata_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1250,7 +1340,7 @@ func (x *SrvKeyspace) String() string {
 func (*SrvKeyspace) ProtoMessage() {}
 
 func (x *SrvKeyspace) ProtoReflect() protoreflect.Message {
-	mi := &file_topodata_proto_msgTypes[11]
+	mi := &file_topodata_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1263,7 +1353,7 @@ func (x *SrvKeyspace) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SrvKeyspace.ProtoReflect.Descriptor instead.
 func (*SrvKeyspace) Descriptor() ([]byte, []int) {
-	return file_topodata_proto_rawDescGZIP(), []int{11}
+	return file_topodata_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *SrvKeyspace) GetPartitions() []*SrvKeyspace_KeyspacePartition {
@@ -1306,7 +1396,7 @@ type CellInfo struct {
 
 func (x *CellInfo) Reset() {
 	*x = CellInfo{}
-	mi := &file_topodata_proto_msgTypes[12]
+	mi := &file_topodata_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1318,7 +1408,7 @@ func (x *CellInfo) String() string {
 func (*CellInfo) ProtoMessage() {}
 
 func (x *CellInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_topodata_proto_msgTypes[12]
+	mi := &file_topodata_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1331,7 +1421,7 @@ func (x *CellInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CellInfo.ProtoReflect.Descriptor instead.
 func (*CellInfo) Descriptor() ([]byte, []int) {
-	return file_topodata_proto_rawDescGZIP(), []int{12}
+	return file_topodata_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *CellInfo) GetServerAddress() string {
@@ -1359,7 +1449,7 @@ type CellsAlias struct {
 
 func (x *CellsAlias) Reset() {
 	*x = CellsAlias{}
-	mi := &file_topodata_proto_msgTypes[13]
+	mi := &file_topodata_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1371,7 +1461,7 @@ func (x *CellsAlias) String() string {
 func (*CellsAlias) ProtoMessage() {}
 
 func (x *CellsAlias) ProtoReflect() protoreflect.Message {
-	mi := &file_topodata_proto_msgTypes[13]
+	mi := &file_topodata_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1384,7 +1474,7 @@ func (x *CellsAlias) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CellsAlias.ProtoReflect.Descriptor instead.
 func (*CellsAlias) Descriptor() ([]byte, []int) {
-	return file_topodata_proto_rawDescGZIP(), []int{13}
+	return file_topodata_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *CellsAlias) GetCells() []string {
@@ -1405,7 +1495,7 @@ type TopoConfig struct {
 
 func (x *TopoConfig) Reset() {
 	*x = TopoConfig{}
-	mi := &file_topodata_proto_msgTypes[14]
+	mi := &file_topodata_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1417,7 +1507,7 @@ func (x *TopoConfig) String() string {
 func (*TopoConfig) ProtoMessage() {}
 
 func (x *TopoConfig) ProtoReflect() protoreflect.Message {
-	mi := &file_topodata_proto_msgTypes[14]
+	mi := &file_topodata_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1430,7 +1520,7 @@ func (x *TopoConfig) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TopoConfig.ProtoReflect.Descriptor instead.
 func (*TopoConfig) Descriptor() ([]byte, []int) {
-	return file_topodata_proto_rawDescGZIP(), []int{14}
+	return file_topodata_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *TopoConfig) GetTopoType() string {
@@ -1463,7 +1553,7 @@ type ExternalVitessCluster struct {
 
 func (x *ExternalVitessCluster) Reset() {
 	*x = ExternalVitessCluster{}
-	mi := &file_topodata_proto_msgTypes[15]
+	mi := &file_topodata_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1475,7 +1565,7 @@ func (x *ExternalVitessCluster) String() string {
 func (*ExternalVitessCluster) ProtoMessage() {}
 
 func (x *ExternalVitessCluster) ProtoReflect() protoreflect.Message {
-	mi := &file_topodata_proto_msgTypes[15]
+	mi := &file_topodata_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1488,7 +1578,7 @@ func (x *ExternalVitessCluster) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExternalVitessCluster.ProtoReflect.Descriptor instead.
 func (*ExternalVitessCluster) Descriptor() ([]byte, []int) {
-	return file_topodata_proto_rawDescGZIP(), []int{15}
+	return file_topodata_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *ExternalVitessCluster) GetTopoConfig() *TopoConfig {
@@ -1508,7 +1598,7 @@ type ExternalClusters struct {
 
 func (x *ExternalClusters) Reset() {
 	*x = ExternalClusters{}
-	mi := &file_topodata_proto_msgTypes[16]
+	mi := &file_topodata_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1520,7 +1610,7 @@ func (x *ExternalClusters) String() string {
 func (*ExternalClusters) ProtoMessage() {}
 
 func (x *ExternalClusters) ProtoReflect() protoreflect.Message {
-	mi := &file_topodata_proto_msgTypes[16]
+	mi := &file_topodata_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1533,7 +1623,7 @@ func (x *ExternalClusters) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExternalClusters.ProtoReflect.Descriptor instead.
 func (*ExternalClusters) Descriptor() ([]byte, []int) {
-	return file_topodata_proto_rawDescGZIP(), []int{16}
+	return file_topodata_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *ExternalClusters) GetVitessCluster() []*ExternalVitessCluster {
@@ -1564,7 +1654,7 @@ type Shard_SourceShard struct {
 
 func (x *Shard_SourceShard) Reset() {
 	*x = Shard_SourceShard{}
-	mi := &file_topodata_proto_msgTypes[19]
+	mi := &file_topodata_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1576,7 +1666,7 @@ func (x *Shard_SourceShard) String() string {
 func (*Shard_SourceShard) ProtoMessage() {}
 
 func (x *Shard_SourceShard) ProtoReflect() protoreflect.Message {
-	mi := &file_topodata_proto_msgTypes[19]
+	mi := &file_topodata_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1645,7 +1735,7 @@ type Shard_TabletControl struct {
 
 func (x *Shard_TabletControl) Reset() {
 	*x = Shard_TabletControl{}
-	mi := &file_topodata_proto_msgTypes[20]
+	mi := &file_topodata_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1657,7 +1747,7 @@ func (x *Shard_TabletControl) String() string {
 func (*Shard_TabletControl) ProtoMessage() {}
 
 func (x *Shard_TabletControl) ProtoReflect() protoreflect.Message {
-	mi := &file_topodata_proto_msgTypes[20]
+	mi := &file_topodata_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1718,7 +1808,7 @@ type ShardReplication_Node struct {
 
 func (x *ShardReplication_Node) Reset() {
 	*x = ShardReplication_Node{}
-	mi := &file_topodata_proto_msgTypes[21]
+	mi := &file_topodata_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1730,7 +1820,7 @@ func (x *ShardReplication_Node) String() string {
 func (*ShardReplication_Node) ProtoMessage() {}
 
 func (x *ShardReplication_Node) ProtoReflect() protoreflect.Message {
-	mi := &file_topodata_proto_msgTypes[21]
+	mi := &file_topodata_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1743,7 +1833,7 @@ func (x *ShardReplication_Node) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ShardReplication_Node.ProtoReflect.Descriptor instead.
 func (*ShardReplication_Node) Descriptor() ([]byte, []int) {
-	return file_topodata_proto_rawDescGZIP(), []int{5, 0}
+	return file_topodata_proto_rawDescGZIP(), []int{6, 0}
 }
 
 func (x *ShardReplication_Node) GetTabletAlias() *TabletAlias {
@@ -1762,7 +1852,7 @@ type ThrottlerConfig_MetricNames struct {
 
 func (x *ThrottlerConfig_MetricNames) Reset() {
 	*x = ThrottlerConfig_MetricNames{}
-	mi := &file_topodata_proto_msgTypes[23]
+	mi := &file_topodata_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1774,7 +1864,7 @@ func (x *ThrottlerConfig_MetricNames) String() string {
 func (*ThrottlerConfig_MetricNames) ProtoMessage() {}
 
 func (x *ThrottlerConfig_MetricNames) ProtoReflect() protoreflect.Message {
-	mi := &file_topodata_proto_msgTypes[23]
+	mi := &file_topodata_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1787,7 +1877,7 @@ func (x *ThrottlerConfig_MetricNames) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ThrottlerConfig_MetricNames.ProtoReflect.Descriptor instead.
 func (*ThrottlerConfig_MetricNames) Descriptor() ([]byte, []int) {
-	return file_topodata_proto_rawDescGZIP(), []int{10, 1}
+	return file_topodata_proto_rawDescGZIP(), []int{11, 1}
 }
 
 func (x *ThrottlerConfig_MetricNames) GetNames() []string {
@@ -1811,7 +1901,7 @@ type SrvKeyspace_KeyspacePartition struct {
 
 func (x *SrvKeyspace_KeyspacePartition) Reset() {
 	*x = SrvKeyspace_KeyspacePartition{}
-	mi := &file_topodata_proto_msgTypes[26]
+	mi := &file_topodata_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1823,7 +1913,7 @@ func (x *SrvKeyspace_KeyspacePartition) String() string {
 func (*SrvKeyspace_KeyspacePartition) ProtoMessage() {}
 
 func (x *SrvKeyspace_KeyspacePartition) ProtoReflect() protoreflect.Message {
-	mi := &file_topodata_proto_msgTypes[26]
+	mi := &file_topodata_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1836,7 +1926,7 @@ func (x *SrvKeyspace_KeyspacePartition) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SrvKeyspace_KeyspacePartition.ProtoReflect.Descriptor instead.
 func (*SrvKeyspace_KeyspacePartition) Descriptor() ([]byte, []int) {
-	return file_topodata_proto_rawDescGZIP(), []int{11, 0}
+	return file_topodata_proto_rawDescGZIP(), []int{12, 0}
 }
 
 func (x *SrvKeyspace_KeyspacePartition) GetServedType() TabletType {
@@ -1894,7 +1984,7 @@ const file_topodata_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\x05R\x05value:\x028\x01\x1a7\n" +
 	"\tTagsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01J\x04\b\x03\x10\x04J\x04\b\v\x10\fJ\x04\b\x0f\x10\x10\"\xa5\a\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01J\x04\b\x03\x10\x04J\x04\b\v\x10\fJ\x04\b\x0f\x10\x10\"\x9d\b\n" +
 	"\x05Shard\x12:\n" +
 	"\rprimary_alias\x18\x01 \x01(\v2\x15.topodata.TabletAliasR\fprimaryAlias\x12C\n" +
 	"\x17primary_term_start_time\x18\b \x01(\v2\f.vttime.TimeR\x14primaryTermStartTime\x12/\n" +
@@ -1906,7 +1996,8 @@ const file_topodata_proto_rawDesc = "" +
 	"vtorcState\x12O\n" +
 	"\x18group_replication_voters\x18\n" +
 	" \x03(\v2\x15.topodata.TabletAliasR\x16groupReplicationVoters\x12B\n" +
-	"\x1dgroup_replication_incarnation\x18\v \x01(\tR\x1bgroupReplicationIncarnation\x1a\x9a\x01\n" +
+	"\x1dgroup_replication_incarnation\x18\v \x01(\tR\x1bgroupReplicationIncarnation\x12v\n" +
+	"\"group_replication_bootstrap_intent\x18\f \x01(\v2).topodata.GroupReplicationBootstrapIntentR\x1fgroupReplicationBootstrapIntent\x1a\x9a\x01\n" +
 	"\vSourceShard\x12\x10\n" +
 	"\x03uid\x18\x01 \x01(\x05R\x03uid\x12\x1a\n" +
 	"\bkeyspace\x18\x02 \x01(\tR\bkeyspace\x12\x14\n" +
@@ -1920,7 +2011,12 @@ const file_topodata_proto_rawDesc = "" +
 	"\rdenied_tables\x18\x04 \x03(\tR\fdeniedTables\x12\x16\n" +
 	"\x06frozen\x18\x05 \x01(\bR\x06frozen\x12\x1f\n" +
 	"\vallow_reads\x18\x06 \x01(\bR\n" +
-	"allowReadsJ\x04\b\x03\x10\x04J\x04\b\x03\x10\x04J\x04\b\x05\x10\x06\"\xd6\x03\n" +
+	"allowReadsJ\x04\b\x03\x10\x04J\x04\b\x03\x10\x04J\x04\b\x05\x10\x06\"\xbb\x01\n" +
+	"\x1fGroupReplicationBootstrapIntent\x12-\n" +
+	"\x06target\x18\x01 \x01(\v2\x15.topodata.TabletAliasR\x06target\x12 \n" +
+	"\x04time\x18\x02 \x01(\v2\f.vttime.TimeR\x04time\x121\n" +
+	"\x14previous_incarnation\x18\x03 \x01(\tR\x13previousIncarnation\x12\x14\n" +
+	"\x05token\x18\x04 \x01(\tR\x05token\"\xd6\x03\n" +
 	"\bKeyspace\x12;\n" +
 	"\rkeyspace_type\x18\x05 \x01(\x0e2\x16.topodata.KeyspaceTypeR\fkeyspaceType\x12#\n" +
 	"\rbase_keyspace\x18\x06 \x01(\tR\fbaseKeyspace\x121\n" +
@@ -2037,91 +2133,95 @@ func file_topodata_proto_rawDescGZIP() []byte {
 }
 
 var file_topodata_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_topodata_proto_msgTypes = make([]protoimpl.MessageInfo, 27)
+var file_topodata_proto_msgTypes = make([]protoimpl.MessageInfo, 28)
 var file_topodata_proto_goTypes = []any{
-	(KeyspaceType)(0),                     // 0: topodata.KeyspaceType
-	(TabletType)(0),                       // 1: topodata.TabletType
-	(ShardReplicationError_Type)(0),       // 2: topodata.ShardReplicationError.Type
-	(*KeyRange)(nil),                      // 3: topodata.KeyRange
-	(*TabletAlias)(nil),                   // 4: topodata.TabletAlias
-	(*Tablet)(nil),                        // 5: topodata.Tablet
-	(*Shard)(nil),                         // 6: topodata.Shard
-	(*Keyspace)(nil),                      // 7: topodata.Keyspace
-	(*ShardReplication)(nil),              // 8: topodata.ShardReplication
-	(*ShardReplicationError)(nil),         // 9: topodata.ShardReplicationError
-	(*ShardReference)(nil),                // 10: topodata.ShardReference
-	(*ShardTabletControl)(nil),            // 11: topodata.ShardTabletControl
-	(*ThrottledAppRule)(nil),              // 12: topodata.ThrottledAppRule
-	(*ThrottlerConfig)(nil),               // 13: topodata.ThrottlerConfig
-	(*SrvKeyspace)(nil),                   // 14: topodata.SrvKeyspace
-	(*CellInfo)(nil),                      // 15: topodata.CellInfo
-	(*CellsAlias)(nil),                    // 16: topodata.CellsAlias
-	(*TopoConfig)(nil),                    // 17: topodata.TopoConfig
-	(*ExternalVitessCluster)(nil),         // 18: topodata.ExternalVitessCluster
-	(*ExternalClusters)(nil),              // 19: topodata.ExternalClusters
-	nil,                                   // 20: topodata.Tablet.PortMapEntry
-	nil,                                   // 21: topodata.Tablet.TagsEntry
-	(*Shard_SourceShard)(nil),             // 22: topodata.Shard.SourceShard
-	(*Shard_TabletControl)(nil),           // 23: topodata.Shard.TabletControl
-	(*ShardReplication_Node)(nil),         // 24: topodata.ShardReplication.Node
-	nil,                                   // 25: topodata.ThrottlerConfig.ThrottledAppsEntry
-	(*ThrottlerConfig_MetricNames)(nil),   // 26: topodata.ThrottlerConfig.MetricNames
-	nil,                                   // 27: topodata.ThrottlerConfig.AppCheckedMetricsEntry
-	nil,                                   // 28: topodata.ThrottlerConfig.MetricThresholdsEntry
-	(*SrvKeyspace_KeyspacePartition)(nil), // 29: topodata.SrvKeyspace.KeyspacePartition
-	(*vttime.Time)(nil),                   // 30: vttime.Time
-	(*vtorcdata.Shard)(nil),               // 31: vtorcdata.Shard
-	(*vtorcdata.Keyspace)(nil),            // 32: vtorcdata.Keyspace
-	(*querythrottler.Config)(nil),         // 33: querythrottler.Config
+	(KeyspaceType)(0),                       // 0: topodata.KeyspaceType
+	(TabletType)(0),                         // 1: topodata.TabletType
+	(ShardReplicationError_Type)(0),         // 2: topodata.ShardReplicationError.Type
+	(*KeyRange)(nil),                        // 3: topodata.KeyRange
+	(*TabletAlias)(nil),                     // 4: topodata.TabletAlias
+	(*Tablet)(nil),                          // 5: topodata.Tablet
+	(*Shard)(nil),                           // 6: topodata.Shard
+	(*GroupReplicationBootstrapIntent)(nil), // 7: topodata.GroupReplicationBootstrapIntent
+	(*Keyspace)(nil),                        // 8: topodata.Keyspace
+	(*ShardReplication)(nil),                // 9: topodata.ShardReplication
+	(*ShardReplicationError)(nil),           // 10: topodata.ShardReplicationError
+	(*ShardReference)(nil),                  // 11: topodata.ShardReference
+	(*ShardTabletControl)(nil),              // 12: topodata.ShardTabletControl
+	(*ThrottledAppRule)(nil),                // 13: topodata.ThrottledAppRule
+	(*ThrottlerConfig)(nil),                 // 14: topodata.ThrottlerConfig
+	(*SrvKeyspace)(nil),                     // 15: topodata.SrvKeyspace
+	(*CellInfo)(nil),                        // 16: topodata.CellInfo
+	(*CellsAlias)(nil),                      // 17: topodata.CellsAlias
+	(*TopoConfig)(nil),                      // 18: topodata.TopoConfig
+	(*ExternalVitessCluster)(nil),           // 19: topodata.ExternalVitessCluster
+	(*ExternalClusters)(nil),                // 20: topodata.ExternalClusters
+	nil,                                     // 21: topodata.Tablet.PortMapEntry
+	nil,                                     // 22: topodata.Tablet.TagsEntry
+	(*Shard_SourceShard)(nil),               // 23: topodata.Shard.SourceShard
+	(*Shard_TabletControl)(nil),             // 24: topodata.Shard.TabletControl
+	(*ShardReplication_Node)(nil),           // 25: topodata.ShardReplication.Node
+	nil,                                     // 26: topodata.ThrottlerConfig.ThrottledAppsEntry
+	(*ThrottlerConfig_MetricNames)(nil),     // 27: topodata.ThrottlerConfig.MetricNames
+	nil,                                     // 28: topodata.ThrottlerConfig.AppCheckedMetricsEntry
+	nil,                                     // 29: topodata.ThrottlerConfig.MetricThresholdsEntry
+	(*SrvKeyspace_KeyspacePartition)(nil),   // 30: topodata.SrvKeyspace.KeyspacePartition
+	(*vttime.Time)(nil),                     // 31: vttime.Time
+	(*vtorcdata.Shard)(nil),                 // 32: vtorcdata.Shard
+	(*vtorcdata.Keyspace)(nil),              // 33: vtorcdata.Keyspace
+	(*querythrottler.Config)(nil),           // 34: querythrottler.Config
 }
 var file_topodata_proto_depIdxs = []int32{
 	4,  // 0: topodata.Tablet.alias:type_name -> topodata.TabletAlias
-	20, // 1: topodata.Tablet.port_map:type_name -> topodata.Tablet.PortMapEntry
+	21, // 1: topodata.Tablet.port_map:type_name -> topodata.Tablet.PortMapEntry
 	3,  // 2: topodata.Tablet.key_range:type_name -> topodata.KeyRange
 	1,  // 3: topodata.Tablet.type:type_name -> topodata.TabletType
-	21, // 4: topodata.Tablet.tags:type_name -> topodata.Tablet.TagsEntry
-	30, // 5: topodata.Tablet.primary_term_start_time:type_name -> vttime.Time
-	30, // 6: topodata.Tablet.tablet_start_time:type_name -> vttime.Time
-	30, // 7: topodata.Tablet.tablet_shutdown_time:type_name -> vttime.Time
+	22, // 4: topodata.Tablet.tags:type_name -> topodata.Tablet.TagsEntry
+	31, // 5: topodata.Tablet.primary_term_start_time:type_name -> vttime.Time
+	31, // 6: topodata.Tablet.tablet_start_time:type_name -> vttime.Time
+	31, // 7: topodata.Tablet.tablet_shutdown_time:type_name -> vttime.Time
 	4,  // 8: topodata.Shard.primary_alias:type_name -> topodata.TabletAlias
-	30, // 9: topodata.Shard.primary_term_start_time:type_name -> vttime.Time
+	31, // 9: topodata.Shard.primary_term_start_time:type_name -> vttime.Time
 	3,  // 10: topodata.Shard.key_range:type_name -> topodata.KeyRange
-	22, // 11: topodata.Shard.source_shards:type_name -> topodata.Shard.SourceShard
-	23, // 12: topodata.Shard.tablet_controls:type_name -> topodata.Shard.TabletControl
-	31, // 13: topodata.Shard.vtorc_state:type_name -> vtorcdata.Shard
+	23, // 11: topodata.Shard.source_shards:type_name -> topodata.Shard.SourceShard
+	24, // 12: topodata.Shard.tablet_controls:type_name -> topodata.Shard.TabletControl
+	32, // 13: topodata.Shard.vtorc_state:type_name -> vtorcdata.Shard
 	4,  // 14: topodata.Shard.group_replication_voters:type_name -> topodata.TabletAlias
-	0,  // 15: topodata.Keyspace.keyspace_type:type_name -> topodata.KeyspaceType
-	30, // 16: topodata.Keyspace.snapshot_time:type_name -> vttime.Time
-	13, // 17: topodata.Keyspace.throttler_config:type_name -> topodata.ThrottlerConfig
-	32, // 18: topodata.Keyspace.vtorc_state:type_name -> vtorcdata.Keyspace
-	33, // 19: topodata.Keyspace.query_throttler_config:type_name -> querythrottler.Config
-	24, // 20: topodata.ShardReplication.nodes:type_name -> topodata.ShardReplication.Node
-	2,  // 21: topodata.ShardReplicationError.type:type_name -> topodata.ShardReplicationError.Type
-	4,  // 22: topodata.ShardReplicationError.tablet_alias:type_name -> topodata.TabletAlias
-	3,  // 23: topodata.ShardReference.key_range:type_name -> topodata.KeyRange
-	3,  // 24: topodata.ShardTabletControl.key_range:type_name -> topodata.KeyRange
-	30, // 25: topodata.ThrottledAppRule.expires_at:type_name -> vttime.Time
-	25, // 26: topodata.ThrottlerConfig.throttled_apps:type_name -> topodata.ThrottlerConfig.ThrottledAppsEntry
-	27, // 27: topodata.ThrottlerConfig.app_checked_metrics:type_name -> topodata.ThrottlerConfig.AppCheckedMetricsEntry
-	28, // 28: topodata.ThrottlerConfig.metric_thresholds:type_name -> topodata.ThrottlerConfig.MetricThresholdsEntry
-	29, // 29: topodata.SrvKeyspace.partitions:type_name -> topodata.SrvKeyspace.KeyspacePartition
-	13, // 30: topodata.SrvKeyspace.throttler_config:type_name -> topodata.ThrottlerConfig
-	33, // 31: topodata.SrvKeyspace.query_throttler_config:type_name -> querythrottler.Config
-	17, // 32: topodata.ExternalVitessCluster.topo_config:type_name -> topodata.TopoConfig
-	18, // 33: topodata.ExternalClusters.vitess_cluster:type_name -> topodata.ExternalVitessCluster
-	3,  // 34: topodata.Shard.SourceShard.key_range:type_name -> topodata.KeyRange
-	1,  // 35: topodata.Shard.TabletControl.tablet_type:type_name -> topodata.TabletType
-	4,  // 36: topodata.ShardReplication.Node.tablet_alias:type_name -> topodata.TabletAlias
-	12, // 37: topodata.ThrottlerConfig.ThrottledAppsEntry.value:type_name -> topodata.ThrottledAppRule
-	26, // 38: topodata.ThrottlerConfig.AppCheckedMetricsEntry.value:type_name -> topodata.ThrottlerConfig.MetricNames
-	1,  // 39: topodata.SrvKeyspace.KeyspacePartition.served_type:type_name -> topodata.TabletType
-	10, // 40: topodata.SrvKeyspace.KeyspacePartition.shard_references:type_name -> topodata.ShardReference
-	11, // 41: topodata.SrvKeyspace.KeyspacePartition.shard_tablet_controls:type_name -> topodata.ShardTabletControl
-	42, // [42:42] is the sub-list for method output_type
-	42, // [42:42] is the sub-list for method input_type
-	42, // [42:42] is the sub-list for extension type_name
-	42, // [42:42] is the sub-list for extension extendee
-	0,  // [0:42] is the sub-list for field type_name
+	7,  // 15: topodata.Shard.group_replication_bootstrap_intent:type_name -> topodata.GroupReplicationBootstrapIntent
+	4,  // 16: topodata.GroupReplicationBootstrapIntent.target:type_name -> topodata.TabletAlias
+	31, // 17: topodata.GroupReplicationBootstrapIntent.time:type_name -> vttime.Time
+	0,  // 18: topodata.Keyspace.keyspace_type:type_name -> topodata.KeyspaceType
+	31, // 19: topodata.Keyspace.snapshot_time:type_name -> vttime.Time
+	14, // 20: topodata.Keyspace.throttler_config:type_name -> topodata.ThrottlerConfig
+	33, // 21: topodata.Keyspace.vtorc_state:type_name -> vtorcdata.Keyspace
+	34, // 22: topodata.Keyspace.query_throttler_config:type_name -> querythrottler.Config
+	25, // 23: topodata.ShardReplication.nodes:type_name -> topodata.ShardReplication.Node
+	2,  // 24: topodata.ShardReplicationError.type:type_name -> topodata.ShardReplicationError.Type
+	4,  // 25: topodata.ShardReplicationError.tablet_alias:type_name -> topodata.TabletAlias
+	3,  // 26: topodata.ShardReference.key_range:type_name -> topodata.KeyRange
+	3,  // 27: topodata.ShardTabletControl.key_range:type_name -> topodata.KeyRange
+	31, // 28: topodata.ThrottledAppRule.expires_at:type_name -> vttime.Time
+	26, // 29: topodata.ThrottlerConfig.throttled_apps:type_name -> topodata.ThrottlerConfig.ThrottledAppsEntry
+	28, // 30: topodata.ThrottlerConfig.app_checked_metrics:type_name -> topodata.ThrottlerConfig.AppCheckedMetricsEntry
+	29, // 31: topodata.ThrottlerConfig.metric_thresholds:type_name -> topodata.ThrottlerConfig.MetricThresholdsEntry
+	30, // 32: topodata.SrvKeyspace.partitions:type_name -> topodata.SrvKeyspace.KeyspacePartition
+	14, // 33: topodata.SrvKeyspace.throttler_config:type_name -> topodata.ThrottlerConfig
+	34, // 34: topodata.SrvKeyspace.query_throttler_config:type_name -> querythrottler.Config
+	18, // 35: topodata.ExternalVitessCluster.topo_config:type_name -> topodata.TopoConfig
+	19, // 36: topodata.ExternalClusters.vitess_cluster:type_name -> topodata.ExternalVitessCluster
+	3,  // 37: topodata.Shard.SourceShard.key_range:type_name -> topodata.KeyRange
+	1,  // 38: topodata.Shard.TabletControl.tablet_type:type_name -> topodata.TabletType
+	4,  // 39: topodata.ShardReplication.Node.tablet_alias:type_name -> topodata.TabletAlias
+	13, // 40: topodata.ThrottlerConfig.ThrottledAppsEntry.value:type_name -> topodata.ThrottledAppRule
+	27, // 41: topodata.ThrottlerConfig.AppCheckedMetricsEntry.value:type_name -> topodata.ThrottlerConfig.MetricNames
+	1,  // 42: topodata.SrvKeyspace.KeyspacePartition.served_type:type_name -> topodata.TabletType
+	11, // 43: topodata.SrvKeyspace.KeyspacePartition.shard_references:type_name -> topodata.ShardReference
+	12, // 44: topodata.SrvKeyspace.KeyspacePartition.shard_tablet_controls:type_name -> topodata.ShardTabletControl
+	45, // [45:45] is the sub-list for method output_type
+	45, // [45:45] is the sub-list for method input_type
+	45, // [45:45] is the sub-list for extension type_name
+	45, // [45:45] is the sub-list for extension extendee
+	0,  // [0:45] is the sub-list for field type_name
 }
 
 func init() { file_topodata_proto_init() }
@@ -2135,7 +2235,7 @@ func file_topodata_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_topodata_proto_rawDesc), len(file_topodata_proto_rawDesc)),
 			NumEnums:      3,
-			NumMessages:   27,
+			NumMessages:   28,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

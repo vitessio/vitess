@@ -17,7 +17,10 @@ limitations under the License.
 package policy
 
 import (
+	"math"
+	"strconv"
 	"strings"
+	"time"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -33,6 +36,24 @@ import (
 func GroupIncarnation(viewID string) string {
 	incarnation, _, _ := strings.Cut(viewID, ":")
 	return incarnation
+}
+
+// GroupIncarnationTime returns when the group of the given incarnation was created, as MySQL encodes
+// it in the incarnation: the fixed part of a Group Replication view id is the time, in units of 100
+// nanoseconds since the Unix epoch, at which the group communication engine installed the group's
+// first view (for example 17908892198863259 for a group bootstrapped at 2026-10-01 21:13:39.886
+// UTC). It returns false when the incarnation is not such a time, between the years 2000 and 2200:
+// it is an implementation detail of MySQL, which callers may only use as an additional check.
+func GroupIncarnationTime(incarnation string) (time.Time, bool) {
+	units, err := strconv.ParseInt(incarnation, 10, 64)
+	if err != nil || units <= 0 || units > math.MaxInt64/100 {
+		return time.Time{}, false
+	}
+	t := time.Unix(0, units*100).UTC()
+	if t.Year() < 2000 || t.Year() > 2200 {
+		return time.Time{}, false
+	}
+	return t, true
 }
 
 // GroupVoter identifies a voter of a shard's replication group in the membership view of a

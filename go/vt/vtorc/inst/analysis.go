@@ -74,6 +74,11 @@ const (
 	// GroupNotBootstrapped describes a shard whose durability policy uses Group Replication, but
 	// on which no tablet is an active member of the group, while all voters are reachable.
 	GroupNotBootstrapped AnalysisCode = "GroupNotBootstrapped"
+	// GroupBootstrapNotRecorded describes a tablet that is the target of its shard's bootstrap
+	// intent (Shard.group_replication_bootstrap_intent), whose MySQL is the primary of a group of
+	// another incarnation than the shard record lists: the bootstrap happened, but its reply was
+	// lost before the incarnation was recorded. VTOrc adopts the group.
+	GroupBootstrapNotRecorded AnalysisCode = "GroupBootstrapNotRecorded"
 	// GroupVotersOutOfDate describes a shard whose recorded voters differ from the voters that its
 	// durability policy selects: no voter is selected yet, a voter failed for longer than
 	// --group-replication-voter-replacement-grace-period, a cell misses a voter, or a tablet that
@@ -234,6 +239,13 @@ type DetectionAnalysis struct {
 	// IsGroupMemberForeign is true when the analyzed tablet's MySQL is active in a group of
 	// another incarnation than the one the shard record lists.
 	IsGroupMemberForeign bool
+	// GroupViewIncarnation is the incarnation of the analyzed tablet's MySQL's view of its group,
+	// and ShardGroupIncarnation the incarnation that the shard record lists.
+	GroupViewIncarnation  string
+	ShardGroupIncarnation string
+	// IsGroupBootstrapIntentTarget is true when the analyzed tablet is the target of the shard's
+	// current bootstrap intent.
+	IsGroupBootstrapIntentTarget bool
 	// IsLegitimateGroupPrimary is true when the analyzed tablet's MySQL is the primary of the
 	// shard's legitimate group: the recorded incarnation, and a majority of the listed voters
 	// ONLINE in its view (see policy.LegitimateGroup).

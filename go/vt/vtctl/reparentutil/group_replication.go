@@ -258,8 +258,10 @@ func legitimateGroup(incarnation string, voters []*topodatapb.TabletAlias, statu
 // RecordGroupReplicationIncarnation records the incarnation of the group that the tablet's MySQL
 // is an active member of as the shard's legitimate group incarnation. Callers use it right after
 // they bootstrapped the shard's group on the tablet, while they still hold the shard lock, which
-// is re-checked first. It returns the recorded incarnation.
-func RecordGroupReplicationIncarnation(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManagerClient, keyspace, shard string, tablet *topodatapb.Tablet) (string, error) {
+// is re-checked first. expected is the incarnation the shard record listed before the bootstrap:
+// the write is a compare-and-swap against it (see WriteGroupReplicationIncarnation). It returns
+// the recorded incarnation.
+func RecordGroupReplicationIncarnation(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManagerClient, keyspace, shard string, tablet *topodatapb.Tablet, expected string) (string, error) {
 	res := fetchFullStatus(ctx, tmc, tablet, topo.RemoteOperationTimeout)
 	if res.err != nil {
 		return "", vterrors.Wrapf(res.err, "cannot read the group incarnation of %v", topoproto.TabletAliasString(tablet.Alias))
@@ -270,27 +272,53 @@ func RecordGroupReplicationIncarnation(ctx context.Context, ts *topo.Server, tmc
 		return "", vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "the MySQL of %v is not an active member of a group with a view (state %s, view %q)",
 			topoproto.TabletAliasString(tablet.Alias), gs.GetMemberState(), gs.GetViewId())
 	}
-	if err := WriteGroupReplicationIncarnation(ctx, ts, keyspace, shard, incarnation); err != nil {
+	if err := WriteGroupReplicationIncarnation(ctx, ts, keyspace, shard, expected, incarnation); err != nil {
 		return "", err
 	}
 	return incarnation, nil
 }
 
 // WriteGroupReplicationIncarnation stores the incarnation of the shard's legitimate replication
-// group in the shard record; an empty incarnation clears it. The caller must hold the shard lock,
-// which is re-checked first.
-func WriteGroupReplicationIncarnation(ctx context.Context, ts *topo.Server, keyspace, shard, incarnation string) error {
+// group in the shard record; an empty incarnation clears it. It is a compare-and-swap: it fails
+// with FAILED_PRECONDITION unless the shard record lists the expected incarnation, the one the
+// caller read before it changed the group, or already lists the new one. It clears the shard's
+// bootstrap intent (see WriteGroupReplicationBootstrapIntent), which the recorded incarnation
+// supersedes. The caller must hold the shard lock, which is re-checked first.
+func WriteGroupReplicationIncarnation(ctx context.Context, ts *topo.Server, keyspace, shard, expected, incarnation string) error {
+	return writeGroupReplicationIncarnation(ctx, ts, keyspace, shard, expected, incarnation, "")
+}
+
+// writeGroupReplicationIncarnation is WriteGroupReplicationIncarnation. With an intentToken, the
+// shard record must also still hold the bootstrap intent of that token.
+func writeGroupReplicationIncarnation(ctx context.Context, ts *topo.Server, keyspace, shard, expected, incarnation, intentToken string) error {
 	if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
 		return vterrors.Wrap(err, lostTopologyLockMsg)
 	}
 	_, err := ts.UpdateShardFields(ctx, keyspace, shard, func(si *topo.ShardInfo) error {
 		if si.GroupReplicationIncarnation == incarnation {
-			return topo.NewError(topo.NoUpdateNeeded, keyspace+"/"+shard)
+			// Recorded already, for example by another VTOrc that adopted the same group.
+			if si.GroupReplicationBootstrapIntent == nil {
+				return topo.NewError(topo.NoUpdateNeeded, keyspace+"/"+shard)
+			}
+			si.GroupReplicationBootstrapIntent = nil
+			return nil
+		}
+		if si.GroupReplicationIncarnation != expected {
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "the shard record of %s/%s lists the group replication incarnation %q instead of %q: it changed concurrently, not recording %q",
+				keyspace, shard, si.GroupReplicationIncarnation, expected, incarnation)
+		}
+		if intentToken != "" && si.GroupReplicationBootstrapIntent.GetToken() != intentToken {
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "the bootstrap intent of shard %s/%s changed concurrently, not recording the group replication incarnation %q",
+				keyspace, shard, incarnation)
 		}
 		si.GroupReplicationIncarnation = incarnation
+		si.GroupReplicationBootstrapIntent = nil
 		return nil
 	})
 	if err != nil {
+		if vterrors.Code(err) == vtrpcpb.Code_FAILED_PRECONDITION {
+			return err
+		}
 		return vterrors.Wrapf(err, "failed to store the group replication incarnation of shard %s/%s", keyspace, shard)
 	}
 	return nil
