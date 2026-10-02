@@ -103,6 +103,10 @@ type tmState struct {
 	// tablet record is published to a topology server that may not answer (retryPublish), and the
 	// RPCs that decide whether the tablet serves hold the action lock meanwhile.
 	groupReplicationNotServing atomic.Pointer[groupReplicationNotServingState]
+	// servingPause is why a PRIMARY tablet pauses for a planned change of its MySQL's replication
+	// (see TabletManager.pauseServingLocked), empty if it does not. Like groupReplicationNotServing,
+	// it is read without mu.
+	servingPause atomic.Pointer[string]
 
 	// displayState contains the current snapshot of the internal state
 	// and has its own mutex.
@@ -451,10 +455,31 @@ func (ts *tmState) canServe(tabletType topodatapb.TabletType) string {
 	if tabletType == topodatapb.TabletType_PRIMARY && ts.isResharding {
 		return "primary tablet with filtered replication on"
 	}
-	if reason := ts.grNotServing().reason; tabletType == topodatapb.TabletType_PRIMARY && reason != "" {
+	if reason := ts.primaryNotServingReason(); tabletType == topodatapb.TabletType_PRIMARY && reason != "" {
 		return reason
 	}
 	return ""
+}
+
+// primaryNotServingReason returns why a PRIMARY tablet must not serve for its replication group: a
+// planned pause first, then the group replication not-serving reason. It is empty if it may serve.
+func (ts *tmState) primaryNotServingReason() string {
+	if reason := ts.servingPause.Load(); reason != nil && *reason != "" {
+		return *reason
+	}
+	return ts.grNotServing().reason
+}
+
+// setServingPause records that a PRIMARY tablet pauses for the given reason. The caller stops the
+// query service itself.
+func (ts *tmState) setServingPause(reason string) {
+	ts.servingPause.Store(&reason)
+}
+
+// clearServingPause records that the planned pause of a PRIMARY tablet ended. The caller makes the
+// query service serve again.
+func (ts *tmState) clearServingPause() {
+	ts.servingPause.Store(nil)
 }
 
 // grNotServing returns the current group replication not-serving state.
@@ -547,18 +572,19 @@ func (ts *tmState) GroupReplicationNotServingState() (string, uint64) {
 
 // SetServingUnlessGroupReplicationNotServing makes the query service serve as the given type again,
 // after an RPC stopped it directly (DemotePrimary's revert, UndoDemotePrimary, a primary that left
-// its group), unless the tablet is PRIMARY and must not serve for its replication group: the query
-// service then stays not serving, with that reason. Without Group Replication, no reason is ever
-// set, and the query service serves as before. It does not wait for mu: a reason set concurrently
-// either is seen by the check after serving, or makes its setter stop serving after it.
+// its group), unless the tablet is PRIMARY and must not serve for its replication group, or pauses
+// for it (see TabletManager.pauseServingLocked): the query service then stays not serving, with
+// that reason. Without Group Replication, no reason is ever set, and the query service serves as
+// before. It does not wait for mu: a reason set concurrently either is seen by the check after
+// serving, or makes its setter stop serving after it.
 func (ts *tmState) SetServingUnlessGroupReplicationNotServing(tabletType topodatapb.TabletType, primaryTermStartTime time.Time) error {
-	if reason := ts.grNotServing().reason; tabletType == topodatapb.TabletType_PRIMARY && reason != "" {
+	if reason := ts.primaryNotServingReason(); tabletType == topodatapb.TabletType_PRIMARY && reason != "" {
 		return ts.tm.QueryServiceControl.SetServingType(tabletType, primaryTermStartTime, false, reason)
 	}
 	if err := ts.tm.QueryServiceControl.SetServingType(tabletType, primaryTermStartTime, true, ""); err != nil {
 		return err
 	}
-	if reason := ts.grNotServing().reason; tabletType == topodatapb.TabletType_PRIMARY && reason != "" {
+	if reason := ts.primaryNotServingReason(); tabletType == topodatapb.TabletType_PRIMARY && reason != "" {
 		return ts.tm.QueryServiceControl.SetServingType(tabletType, primaryTermStartTime, false, reason)
 	}
 	return nil

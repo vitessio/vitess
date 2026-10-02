@@ -335,30 +335,3 @@ func TestClearGroupReplicationNotServingRequiresGeneration(t *testing.T) {
 	assert.True(t, cleared)
 	assert.True(t, qsc.IsServing())
 }
-
-// TestStartGroupReplicationBootstrapOnServingPrimaryHoldsReadOnlyRefusals checks that a bootstrap on
-// a PRIMARY tablet that keeps serving, as MigrateReplicationMode's, tells the query service about
-// the moment MySQL is super_read_only, from before MySQL starts Group Replication until it is the
-// writable primary of its group, so that the writes MySQL refuses meanwhile are retried rather than
-// reported to vtgate as a failover.
-func TestStartGroupReplicationBootstrapOnServingPrimaryHoldsReadOnlyRefusals(t *testing.T) {
-	withGroupReplication(t)
-	ts := newGroupReplicationTopo(t, policy.DurabilitySemiSync)
-	tm, fmd := newGroupReplicationTestTM(t, ts, 1, nil)
-	setTabletType(t, tm, topodatapb.TabletType_PRIMARY)
-	qsc := tm.QueryServiceControl.(*tabletservermock.Controller)
-	fmd.ExpectedExecuteSuperQueryList = []string{resetDefaultChannel}
-	var duringStart bool
-	fmd.StartGroupReplicationHook = func(bootstrap bool) {
-		duringStart, _ = qsc.GroupReplicationBootstrapInProgress()
-	}
-
-	_, err := tm.StartGroupReplication(t.Context(), true)
-	require.NoError(t, err)
-	assert.True(t, duringStart, "the window is open while MySQL starts Group Replication")
-	inProgress, calls := qsc.GroupReplicationBootstrapInProgress()
-	assert.False(t, inProgress, "the window ends with the bootstrap")
-	assert.Equal(t, []bool{true, false}, calls)
-	assert.True(t, qsc.IsServing(), "a primary that bootstraps during a migration keeps serving")
-	assert.False(t, fmd.SuperReadOnly.Load())
-}

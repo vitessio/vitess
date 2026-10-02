@@ -258,8 +258,10 @@ type writer struct {
 	cancel   context.CancelFunc
 	wg       sync.WaitGroup
 	ok, fail atomic.Int64
-	mu       sync.Mutex
-	lastErr  error
+	// longest is the longest time a write took, in nanoseconds, whether it succeeded or not.
+	longest atomic.Int64
+	mu      sync.Mutex
+	lastErr error
 }
 
 func startWriter(t *testing.T, tc *testCluster) *writer {
@@ -277,7 +279,10 @@ func startWriter(t *testing.T, tc *testCluster) *writer {
 					continue
 				}
 			}
-			if _, err := conn.ExecuteFetch("insert into writes (val) values ('x')", 0, false); err != nil {
+			start := time.Now()
+			_, err := conn.ExecuteFetch("insert into writes (val) values ('x')", 0, false)
+			w.observe(time.Since(start))
+			if err != nil {
 				w.record(err)
 				conn.Close()
 				conn = nil
@@ -296,6 +301,21 @@ func startWriter(t *testing.T, tc *testCluster) *writer {
 	return w
 }
 
+// observe records how long a write took.
+func (w *writer) observe(d time.Duration) {
+	for {
+		longest := w.longest.Load()
+		if int64(d) <= longest || w.longest.CompareAndSwap(longest, int64(d)) {
+			return
+		}
+	}
+}
+
+// longestWrite returns the longest time a write took so far.
+func (w *writer) longestWrite() time.Duration {
+	return time.Duration(w.longest.Load())
+}
+
 func (w *writer) record(err error) {
 	w.fail.Add(1)
 	w.mu.Lock()
@@ -310,6 +330,52 @@ func (w *writer) stop() (ok, fail int64, lastErr error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	return w.ok.Load(), w.fail.Load(), w.lastErr
+}
+
+// migrationMaxWriteStall bounds how long a write may take during a migration step. vtgate buffers
+// the writes while the primary pauses for a change of its MySQL's replication, and releases them as
+// soon as it serves again; the buffering would otherwise last --buffer-max-failover-duration (30s).
+// The longest pause is the primary's leave of its group: MySQL's STOP GROUP_REPLICATION takes about
+// 3.6s, and the first commit after it waits up to about 1s for a semi-sync acknowledgement, since
+// the replicas reconnect.
+const migrationMaxWriteStall = 8 * time.Second
+
+// bufferStats returns vtgate's buffering starts for the test's shard, and its buffering stops by
+// reason.
+func bufferStats(t *testing.T, tc *testCluster) (starts int, stops map[string]int) {
+	t.Helper()
+	vars := tc.VtgateProcess.GetVars()
+	require.NotNil(t, vars)
+	key := keyspaceName + "." + shardName
+	if m, ok := vars["BufferStarts"].(map[string]any); ok {
+		if v, ok := m[key].(float64); ok {
+			starts = int(v)
+		}
+	}
+	stops = make(map[string]int)
+	if m, ok := vars["BufferStops"].(map[string]any); ok {
+		for k, v := range m {
+			if reason, ok := strings.CutPrefix(k, key+"."); ok {
+				stops[reason] = int(v.(float64))
+			}
+		}
+	}
+	return starts, stops
+}
+
+// checkMigrationWrites checks that no write failed during a migration step, and that none waited
+// for long: vtgate buffered the writes only while the primary paused, and never until
+// --buffer-max-failover-duration.
+func checkMigrationWrites(t *testing.T, tc *testCluster, w *writer, startsBefore int, stopsBefore map[string]int) {
+	t.Helper()
+	ok, fail, lastErr := w.stop()
+	assert.Positive(t, ok)
+	assert.Zero(t, fail, "writes failed during the migration, last error: %v", lastErr)
+	starts, stops := bufferStats(t, tc)
+	t.Logf("longest write %v, %d writes, vtgate buffered %d times, stopped buffering: %v (before: %v)",
+		w.longestWrite(), ok, starts-startsBefore, stops, stopsBefore)
+	assert.Less(t, w.longestWrite(), migrationMaxWriteStall, "a write waited for too long during the migration")
+	assert.Equal(t, stopsBefore["MaxDurationExceeded"], stops["MaxDurationExceeded"], "vtgate buffered until --buffer-max-failover-duration")
 }
 
 // killMysqld kills the tablet's mysqld without letting it leave its group cleanly.
@@ -349,20 +415,21 @@ func waitForRowCounts(t *testing.T, tc *testCluster, primary *cluster.Vttablet) 
 }
 
 // TestGroupReplicationLifecycle converts a cross-cell semi-sync shard to Group Replication
-// online, fails over with PRS and by killing the primary, and converts it back.
+// online, fails over with PRS and by killing the primary, and converts it back. vtgate buffers the
+// writes while the primary pauses for a migration step, and no write fails in either direction.
 func TestGroupReplicationLifecycle(t *testing.T) {
 	tc := setupCluster(t, defaultClusterOptions())
 	primary := tc.replicas[0]
 
 	t.Run("migrate from semi-sync to group replication without failing writes", func(t *testing.T) {
+		startsBefore, stopsBefore := bufferStats(t, tc)
 		w := startWriter(t, tc)
 		out, err := tc.VtctldClientProcess.ExecuteCommandWithOutput("MigrateReplicationMode",
 			"--durability-policy", policy.DurabilityGroupReplicationCrossCell, keyspaceName)
 		require.NoError(t, err, out)
 		waitForGroup(t, tc, primary, tc.replicas)
-		ok, fail, lastErr := w.stop()
-		assert.Zero(t, fail, "writes failed during the migration, last error: %v", lastErr)
-		assert.Positive(t, ok)
+		// The primary pauses while its MySQL bootstraps the group.
+		checkMigrationWrites(t, tc, w, startsBefore, stopsBefore)
 
 		ks, err := tc.VtctldClientProcess.GetKeyspace(keyspaceName)
 		require.NoError(t, err)
@@ -435,7 +502,8 @@ func TestGroupReplicationLifecycle(t *testing.T) {
 		waitForRowCounts(t, tc, primary)
 	})
 
-	t.Run("migrate back to semi-sync without data loss", func(t *testing.T) {
+	t.Run("migrate back to semi-sync without failing writes", func(t *testing.T) {
+		startsBefore, stopsBefore := bufferStats(t, tc)
 		w := startWriter(t, tc)
 		out, err := tc.VtctldClientProcess.ExecuteCommandWithOutput("MigrateReplicationMode",
 			"--durability-policy", policy.DurabilityCrossCell, keyspaceName)
@@ -455,11 +523,8 @@ func TestGroupReplicationLifecycle(t *testing.T) {
 				assert.Equal(c, int32(primary.MySQLPort), status.ReplicationStatus.SourcePort, voter.Alias)
 			}
 		}, waitTimeout, pollInterval)
-		ok, fail, lastErr := w.stop()
-		assert.Positive(t, ok)
-		// Leaving the group on the primary makes MySQL read-only for a moment; vtgate buffers
-		// most of it, a few writes may still fail.
-		assert.LessOrEqual(t, fail, int64(5), "too many writes failed during the migration back, last error: %v", lastErr)
+		// The primary pauses while its MySQL leaves the group.
+		checkMigrationWrites(t, tc, w, startsBefore, stopsBefore)
 		waitForRowCounts(t, tc, primary)
 	})
 }

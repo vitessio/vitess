@@ -576,9 +576,18 @@ func (s *groupReplicationSync) enforceVoterMajority(ctx context.Context, status 
 	if !mysql.IsGroupPrimary(status) {
 		return
 	}
-	reason, rec, err := s.servingReason(ctx, status, durability)
+	reason, rec, durability, err := s.servingReason(ctx, status, durability)
 	if err != nil {
 		log.Warn("Group replication sync: cannot check the voter majority of the group", slog.Any("error", err))
+		return
+	}
+	if !policy.IsGroupReplication(durability) {
+		// The policy changed since the loop read it: the rule does not apply anymore.
+		if current != "" {
+			if _, err := tm.tmState.ClearGroupReplicationNotServing(ctx, gen); err != nil {
+				log.Error("Group replication sync: failed to change the serving state of the primary", slog.Any("error", err))
+			}
+		}
 		return
 	}
 	if reason != "" {
@@ -600,30 +609,35 @@ func (s *groupReplicationSync) enforceVoterMajority(ctx context.Context, status 
 }
 
 // servingReason returns why the PRIMARY tablet must not serve for the given status of its MySQL
-// (see groupReplicationServingReason), and the shard record it decided on. Before it reports a lost
-// voter majority, it reads the shard record again and asks the voters whose server_uuid it does
-// not know (voterMajorityLost); before it reports an unrecorded incarnation, it reads the shard
-// record again: the group may have been bootstrapped and recorded a moment ago.
-func (s *groupReplicationSync) servingReason(ctx context.Context, status *replicationdatapb.GroupReplicationStatus, durability policy.Durabler) (string, *shardGroupRecord, error) {
+// (see groupReplicationServingReason), the shard record it decided on, and the durability policy it
+// decided under. Before it reports a lost voter majority, it reads the shard record and the
+// durability policy again and asks the voters whose server_uuid it does not know
+// (voterMajorityLost); before it reports an unrecorded incarnation, it reads the shard record again:
+// the group may have been bootstrapped and recorded a moment ago.
+func (s *groupReplicationSync) servingReason(ctx context.Context, status *replicationdatapb.GroupReplicationStatus, durability policy.Durabler) (string, *shardGroupRecord, policy.Durabler, error) {
 	lost, err := s.voterMajorityLost(ctx, status)
 	if err != nil {
-		return "", nil, err
+		return "", nil, durability, err
+	}
+	if s.durability != nil {
+		// voterMajorityLost may have read the policy again.
+		durability = s.durability
 	}
 	if lost {
-		return groupReplicationVoterMajorityLost, s.record, nil
+		return groupReplicationVoterMajorityLost, s.record, durability, nil
 	}
 	rec, err := s.getRecord(ctx, false)
 	if err != nil {
-		return "", nil, err
+		return "", nil, durability, err
 	}
 	if rec.incarnation != "" && rec.incarnation != policy.GroupIncarnation(status.GetViewId()) {
 		if rec, err = s.getRecord(ctx, true); err != nil {
-			return "", nil, err
+			return "", nil, durability, err
 		}
 	}
 	// voterMajorityLost asked the voters it could not identify a moment ago, at most every
 	// groupReplicationVotersCacheTTL.
-	return s.tm.groupReplicationServingReason(ctx, durability, rec, status, false), rec, nil
+	return s.tm.groupReplicationServingReason(ctx, durability, rec, status, false), rec, durability, nil
 }
 
 // serveAgain lets the PRIMARY tablet serve again, after deciding once more under the action lock,
@@ -666,8 +680,10 @@ func (s *groupReplicationSync) serveAgain(ctx context.Context, durability policy
 }
 
 // voterMajorityLost returns whether the member's view holds fewer than a majority of the shard's
-// listed voters. Before it reports a loss, it reads the shard record again and asks the voters
-// whose server_uuid it does not know, at most every groupReplicationVotersCacheTTL.
+// listed voters. Before it reports a loss, it reads the shard record and the durability policy
+// again, and asks the voters whose server_uuid it does not know, at most every
+// groupReplicationVotersCacheTTL. It reports no loss under a policy that is no longer a group
+// replication policy.
 func (s *groupReplicationSync) voterMajorityLost(ctx context.Context, status *replicationdatapb.GroupReplicationStatus) (bool, error) {
 	rec, err := s.getRecord(ctx, false)
 	if err != nil {
@@ -686,6 +702,15 @@ func (s *groupReplicationSync) voterMajorityLost(ctx context.Context, status *re
 	s.peersFetched = time.Now()
 	if rec, err = s.getRecord(ctx, true); err != nil {
 		return false, err
+	}
+	// A migration back to semi-sync sets the keyspace policy first, and then shrinks the group to
+	// the primary: under the policy cached a moment ago, the primary would stop serving, and serve
+	// again once the cache expires, a second pause before the primary's own leave of the group.
+	if durability, err := s.tm.keyspaceDurability(ctx); err == nil {
+		s.durability, s.durabilityRead = durability, time.Now()
+		if !policy.IsGroupReplication(durability) {
+			return false, nil
+		}
 	}
 	return len(rec.voters) > 0 && !s.tm.legitimateGroup(ctx, rec, status, true).HasVoterMajority(status), nil
 }

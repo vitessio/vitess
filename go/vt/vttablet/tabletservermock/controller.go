@@ -19,6 +19,7 @@ package tabletservermock
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"sync"
 	"time"
@@ -97,10 +98,8 @@ type Controller struct {
 	// groupReplicationVerdict is the last verdict passed to SetGroupReplicationVerdict.
 	groupReplicationVerdict *GroupReplicationVerdict
 
-	// groupReplicationBootstrapInProgress is the last value passed to
-	// SetGroupReplicationBootstrapInProgress, and groupReplicationBootstrapCalls every value.
-	groupReplicationBootstrapInProgress bool
-	groupReplicationBootstrapCalls      []bool
+	// servingEvents is what ServingEvents returns.
+	servingEvents []string
 
 	// heartbeatWritesSuppressed is the last value passed to SetHeartbeatWritesSuppressed.
 	heartbeatWritesSuppressed bool
@@ -158,6 +157,7 @@ func (tqsc *Controller) SetServingType(tabletType topodatapb.TabletType, ptsTime
 		Serving:    serving,
 		TabletType: tabletType,
 	}
+	tqsc.servingEvents = append(tqsc.servingEvents, fmt.Sprintf("serving=%v", serving))
 	tqsc.isInLameduck = false
 	return tqsc.SetServingTypeError
 }
@@ -238,22 +238,6 @@ func (tqsc *Controller) LastGroupReplicationVerdict() *GroupReplicationVerdict {
 	return tqsc.groupReplicationVerdict
 }
 
-// SetGroupReplicationBootstrapInProgress is part of the tabletserver.Controller interface
-func (tqsc *Controller) SetGroupReplicationBootstrapInProgress(inProgress bool) {
-	tqsc.mu.Lock()
-	defer tqsc.mu.Unlock()
-	tqsc.groupReplicationBootstrapInProgress = inProgress
-	tqsc.groupReplicationBootstrapCalls = append(tqsc.groupReplicationBootstrapCalls, inProgress)
-}
-
-// GroupReplicationBootstrapInProgress returns the last value passed to
-// SetGroupReplicationBootstrapInProgress, and every value passed so far.
-func (tqsc *Controller) GroupReplicationBootstrapInProgress() (bool, []bool) {
-	tqsc.mu.Lock()
-	defer tqsc.mu.Unlock()
-	return tqsc.groupReplicationBootstrapInProgress, slices.Clone(tqsc.groupReplicationBootstrapCalls)
-}
-
 // SetHeartbeatWritesSuppressed is part of the tabletserver.Controller interface
 func (tqsc *Controller) SetHeartbeatWritesSuppressed(suppressed bool) {
 	tqsc.mu.Lock()
@@ -273,8 +257,12 @@ func (tqsc *Controller) BroadcastHealth() {
 	tqsc.mu.Lock()
 	defer tqsc.mu.Unlock()
 
-	tqsc.BroadcastData <- &BroadcastData{
-		Serving: tqsc.queryServiceEnabled && (!tqsc.isInLameduck),
+	serving := tqsc.queryServiceEnabled && (!tqsc.isInLameduck)
+	tqsc.servingEvents = append(tqsc.servingEvents, fmt.Sprintf("broadcast serving=%v", serving))
+	// A test that does not read the broadcasts must not block the tablet manager.
+	select {
+	case tqsc.BroadcastData <- &BroadcastData{Serving: serving}:
+	default:
 	}
 }
 
@@ -356,6 +344,24 @@ func (tqsc *Controller) EnterLameduck() {
 	defer tqsc.mu.Unlock()
 
 	tqsc.isInLameduck = true
+	tqsc.servingEvents = append(tqsc.servingEvents, "lameduck")
+}
+
+// RecordServingEvent appends an event of the test to the events that ServingEvents returns, for
+// example a change of MySQL, so that the test can check its order against the serving state.
+func (tqsc *Controller) RecordServingEvent(event string) {
+	tqsc.mu.Lock()
+	defer tqsc.mu.Unlock()
+	tqsc.servingEvents = append(tqsc.servingEvents, event)
+}
+
+// ServingEvents returns, in order, the calls that changed or reported the serving state
+// ("serving=<bool>" for SetServingType, "lameduck", "broadcast serving=<bool>"), and the events
+// recorded by RecordServingEvent.
+func (tqsc *Controller) ServingEvents() []string {
+	tqsc.mu.Lock()
+	defer tqsc.mu.Unlock()
+	return slices.Clone(tqsc.servingEvents)
 }
 
 // SetQueryServiceEnabledForTests can set queryServiceEnabled in tests.

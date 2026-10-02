@@ -111,6 +111,8 @@ func registerGroupReplicationFlags(fs *pflag.FlagSet) {
 		"group_replication_consistency that the tablet applies before its MySQL starts Group Replication. Empty keeps the server's setting.")
 	utils.SetFlagStringVar(fs, &groupReplicationExitStateAction, "group-replication-exit-state-action", groupReplicationExitStateAction,
 		"group_replication_exit_state_action that the tablet applies before its MySQL starts Group Replication. READ_ONLY keeps a member that left its group readable; OFFLINE_MODE also refuses the tablet's app connections, which fences reads on it, and the tablet clears offline_mode once the member is back in the shard's group. Empty keeps the server's setting.")
+	utils.SetFlagDurationVar(fs, &groupReplicationPauseNotice, "group-replication-pause-notice", groupReplicationPauseNotice,
+		"How long a serving PRIMARY tablet reports that it does not serve, while it still serves, before it stops serving for a change of its MySQL's replication that makes MySQL refuse commits for a moment (a migration's bootstrap of the group, the primary leaving its group). vtgate buffers the writes that it receives meanwhile, instead of sending them to the tablet, which would then refuse them.")
 	utils.SetFlagIntVar(fs, &groupReplicationAutorejoinTries, "group-replication-autorejoin-tries", groupReplicationAutorejoinTries,
 		"group_replication_autorejoin_tries that the tablet applies before its MySQL starts Group Replication. The default 0 leaves rejoins to the tablet, which only rejoins while the shard's group is active on another tablet. A negative value keeps the server's setting.")
 }
@@ -128,6 +130,9 @@ func groupReplicationEnabled() bool {
 func validateGroupReplicationFlags() error {
 	if groupReplicationEnabled() && groupReplicationSyncInterval <= 0 {
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "--group-replication-sync-interval must be positive, got %v", groupReplicationSyncInterval)
+	}
+	if groupReplicationEnabled() && groupReplicationPauseNotice < 0 {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "--group-replication-pause-notice must not be negative, got %v", groupReplicationPauseNotice)
 	}
 	return nil
 }
@@ -633,15 +638,22 @@ func (tm *TabletManager) stopGroupReplicationLocked(ctx context.Context) (*repli
 	leavingPrimary := mysql.IsGroupPrimary(status) && tablet.Type == topodatapb.TabletType_PRIMARY
 	if leavingPrimary {
 		// While the primary leaves its group, MySQL rejects commits (the before_commit hook
-		// fails) and then turns read-only. Stop serving first, like DemotePrimary does, so that
-		// vtgate buffers writes instead of failing them.
-		log.Info("Group primary is leaving its group, disabling query service")
-		termStart := protoutil.TimeFromProto(tablet.PrimaryTermStartTime).UTC()
-		if err := tm.QueryServiceControl.SetServingType(tablet.Type, termStart, false, "leaving the replication group"); err != nil {
-			return nil, vterrors.Wrap(err, "SetServingType(serving=false) failed")
+		// fails) and then turns read-only. A serving primary pauses first, so that vtgate buffers
+		// writes instead of failing them, and serves again once MySQL is writable (see
+		// pauseServingLocked).
+		log.Info("Group primary is leaving its group")
+		pause, err := tm.pauseServingLocked(ctx, groupReplicationLeavePause)
+		if err != nil {
+			return nil, err
 		}
 		defer func() {
-			// A PRIMARY that must not serve for its replication group stays not serving.
+			if pause != nil {
+				pause.resume(ctx)
+				return
+			}
+			// A primary that did not serve before serves now, unless it must not serve for its
+			// replication group.
+			termStart := protoutil.TimeFromProto(tablet.PrimaryTermStartTime).UTC()
 			if err := tm.tmState.SetServingUnlessGroupReplicationNotServing(tablet.Type, termStart); err != nil {
 				log.Warn(fmt.Sprintf("SetServingType(serving=true) failed after leaving the replication group: %v", err))
 			}

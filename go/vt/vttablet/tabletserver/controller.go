@@ -93,12 +93,6 @@ type Controller interface {
 	// viewID. Replication lag polling needs it on a Group Replication member.
 	SetGroupReplicationVerdict(healthy bool, viewID string)
 
-	// SetGroupReplicationBootstrapInProgress tells the query service whether the tablet manager is
-	// making the MySQL of this PRIMARY tablet bootstrap a Group Replication group while it serves,
-	// during which MySQL is super_read_only for a moment. A write that MySQL refuses as read-only
-	// meanwhile is retried once the bootstrap is over, instead of failing (see readOnlyWindow).
-	SetGroupReplicationBootstrapInProgress(inProgress bool)
-
 	// SetHeartbeatWritesSuppressed keeps a PRIMARY tablet from writing heartbeats while suppressed
 	// is set, whatever its serving state. The tablet manager sets it while a Group Replication
 	// primary does not serve because its MySQL must not commit anything.
