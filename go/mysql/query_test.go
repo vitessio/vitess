@@ -1042,16 +1042,30 @@ func TestParseRowCopyCachedSizeParity(t *testing.T) {
 // TestParseRowCopyMalformedPacket checks the error path is the one parseRow already
 // returns, and that a half-filled buffer is simply dropped rather than returned.
 func TestParseRowCopyMalformedPacket(t *testing.T) {
-	// A good first value, then one claiming 9 bytes but carrying 3.
-	data := []byte{0x01, 'a', 0x09, 'b', 'c', 'd'}
+	for _, tc := range []struct {
+		name   string
+		data   []byte
+		fields int
+	}{
+		{"truncated value", []byte{0x01, 'a', 0x09, 'b', 'c', 'd'}, 2},
+		{"oversized 8-byte length", []byte{0xfe, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}, 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var (
+				row []sqltypes.Value
+				err error
+			)
+			require.NotPanics(t, func() {
+				row, err = (&Conn{}).parseRowCopy(tc.data, varcharFields(tc.fields))
+			})
+			require.Error(t, err)
+			require.Nil(t, row)
 
-	row, err := (&Conn{}).parseRowCopy(data, varcharFields(2))
-	require.Error(t, err)
-	require.Nil(t, row)
-
-	var sqlErr *sqlerror.SQLError
-	require.ErrorAs(t, err, &sqlErr)
-	require.Equal(t, sqlerror.CRMalformedPacket, sqlErr.Number())
+			var sqlErr *sqlerror.SQLError
+			require.ErrorAs(t, err, &sqlErr)
+			require.Equal(t, sqlerror.CRMalformedPacket, sqlErr.Number())
+		})
+	}
 }
 
 // TestParseRowCopyShortPacket covers packets that run out before the fields do. The

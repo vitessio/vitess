@@ -332,7 +332,7 @@ func (c *Conn) parseRowCopy(data []byte, fields []*querypb.Field) ([]sqltypes.Va
 			pos++
 		default:
 			size, next, ok := readLenEncInt(data, pos)
-			if !ok {
+			if !ok || size > uint64(len(data)-next) {
 				return nil, sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "decoding string failed")
 			}
 			n, pos = int(size), next
