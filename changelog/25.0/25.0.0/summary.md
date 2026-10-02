@@ -556,7 +556,7 @@ Two consequences are deliberate. Connections that serve `ExecuteFetchAsDba`-styl
 
 A `vttablet` started with `--unmanaged` now refuses the tabletmanager RPCs that would change replication on its external MySQL, or promote or demote it, returning `FAILED_PRECONDITION` to every caller. Those are `StopReplication`, `StopReplicationMinimum`, `StartReplication`, `RestartReplication`, `StartReplicationUntilAfter`, `ResetReplication`, `ResetReplicationParameters`, `SetReplicationSource`, `StopReplicationAndGetStatus`, `InitPrimary`, `InitReplica`, `PopulateReparentJournal`, `DemotePrimary`, `UndoDemotePrimary`, `PromoteReplica`, `SetReadOnly` and `SetReadWrite`. Read-only RPCs are unaffected, and `ChangeType` stays available so `TabletExternallyReparented` keeps working, though it now only moves the topology record rather than configuring semi-sync or restarting replication.
 
-**Impact**: anyone deliberately driving these RPCs against an unmanaged tablet, for example via `vtctldclient`, now gets an error instead of a silent change to the external MySQL. `--tablet-config` is validated after its YAML overrides are applied, so an invalid effective configuration is rejected before the tablet loads local MySQL settings or advertises itself as unmanaged. External MySQL connectivity validation honors the configured `connectTimeoutMilliseconds` value, connection TLS policy and TCP-versus-Unix-socket selection.
+**Impact**: anyone deliberately driving these RPCs against an unmanaged tablet, for example via `vtctldclient`, now gets an error instead of a silent change to the external MySQL.
 
 #### <a id="vttablet-consolidator-reject-on-cap"/>Consolidator Reject on Waiter Cap</a>
 
