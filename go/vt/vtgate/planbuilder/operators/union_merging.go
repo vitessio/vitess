@@ -205,7 +205,39 @@ func isOrdinaryShardedRoute(route *Route) bool {
 		return false
 	}
 	_, ok := route.Routing.(*ShardedRouting)
-	return ok
+	return ok && !hasGlobalAggregate(route.Source)
+}
+
+func hasGlobalAggregate(op Operator) bool {
+	if op == nil {
+		return false
+	}
+	if agg, ok := op.(*Aggregator); ok && len(agg.Grouping) == 0 && len(agg.Aggregations) > 0 {
+		return true
+	}
+	if horizon, ok := op.(*Horizon); ok && hasGlobalAggregateQuery(horizon.Query) {
+		return true
+	}
+	return slices.ContainsFunc(op.Inputs(), hasGlobalAggregate)
+}
+
+func hasGlobalAggregateQuery(query sqlparser.SQLNode) bool {
+	found := false
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+		selectStmt, ok := node.(*sqlparser.Select)
+		if !ok || selectStmt.GroupBy != nil {
+			return true, nil
+		}
+		_ = sqlparser.Walk(func(expr sqlparser.SQLNode) (bool, error) {
+			if _, ok := expr.(sqlparser.AggrFunc); ok {
+				found = true
+				return false, nil
+			}
+			return !found, nil
+		}, selectStmt)
+		return !found, nil
+	}, query)
+	return found
 }
 
 func routeContainsSpecialUnionInput(route *Route) bool {

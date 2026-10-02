@@ -652,7 +652,7 @@ func (s *subqueryRouteMerger) merge(ctx *plancontext.PlanningContext, inner, out
 		return &Route{
 			unaryOperator:             newUnaryOp(outer.Source),
 			MergedWith:                mergedWith(inner, outer),
-			ContainsSpecialUnionInput: routeContainsSpecialUnionInput(inner) || routeContainsSpecialUnionInput(outer),
+			ContainsSpecialUnionInput: routeContainsSpecialUnionInput(outer),
 			Routing:                   outer.Routing,
 			Ordering:                  outer.Ordering,
 			ResultColumns:             outer.ResultColumns,
@@ -672,7 +672,7 @@ func (s *subqueryRouteMerger) merge(ctx *plancontext.PlanningContext, inner, out
 	return &Route{
 		unaryOperator:             newUnaryOp(src),
 		MergedWith:                mergedWith(inner, outer),
-		ContainsSpecialUnionInput: routeContainsSpecialUnionInput(inner) || routeContainsSpecialUnionInput(outer),
+		ContainsSpecialUnionInput: routeContainsSpecialUnionInput(outer),
 		Routing:                   r,
 		Ordering:                  s.outer.Ordering,
 		ResultColumns:             s.outer.ResultColumns,
