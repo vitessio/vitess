@@ -174,6 +174,40 @@ func isSingleShardRouting(routing Routing) bool {
 	return false
 }
 
+func containsSpecialInputAfterJoin(joinType sqlparser.JoinType, lhs, rhs *Route, routing Routing) bool {
+	lhsSpecial := routeContainsSpecialUnionInput(lhs)
+	rhsSpecial := routeContainsSpecialUnionInput(rhs)
+	if !lhsSpecial && !rhsSpecial {
+		return false
+	}
+	if _, sharded := routing.(*ShardedRouting); !sharded {
+		return true
+	}
+
+	lhsSharded := isOrdinaryShardedRoute(lhs)
+	rhsSharded := isOrdinaryShardedRoute(rhs)
+	if joinType.IsInner() && (lhsSharded || rhsSharded) {
+		// An inner join with a sharded input emits rows partitioned by that
+		// input, so any reference/dual rows have been consumed by the join.
+		return false
+	}
+	if !joinType.IsInner() && lhsSharded {
+		// A left outer join preserves its left input. A special input on the
+		// right is consumed by the ordinary sharded left input, but one on the
+		// left can still produce a null-extended row on every shard.
+		return lhsSpecial
+	}
+	return true
+}
+
+func isOrdinaryShardedRoute(route *Route) bool {
+	if route == nil || routeContainsSpecialUnionInput(route) {
+		return false
+	}
+	_, ok := route.Routing.(*ShardedRouting)
+	return ok
+}
+
 func routeContainsSpecialUnionInput(route *Route) bool {
 	if route == nil {
 		return false
@@ -186,6 +220,12 @@ func routeContainsSpecialUnionInput(route *Route) bool {
 		return true
 	}
 	return false
+}
+
+func withSpecialUnionInput(route *Route) *Route {
+	routeCopy := *route
+	routeCopy.ContainsSpecialUnionInput = true
+	return &routeCopy
 }
 
 func markSpecialUnionInput(op Operator, contains bool) {

@@ -21,6 +21,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
@@ -63,6 +64,35 @@ func TestIsSingleShardRouting(t *testing.T) {
 	} {
 		t.Run(test.opcode.String(), func(t *testing.T) {
 			assert.Equal(t, test.want, isSingleShardRouting(&ShardedRouting{RouteOpCode: test.opcode}))
+		})
+	}
+}
+
+func TestContainsSpecialInputAfterJoin(t *testing.T) {
+	keyspace := &vindexes.Keyspace{Name: "main", Sharded: true}
+	reference := &Route{Routing: &AnyShardRouting{keyspace: keyspace}}
+	sharded := &Route{Routing: &ShardedRouting{keyspace: keyspace, RouteOpCode: engine.Scatter}}
+	unionRoute := &Route{
+		Routing:                   &ShardedRouting{keyspace: keyspace, RouteOpCode: engine.EqualUnique},
+		ContainsSpecialUnionInput: true,
+	}
+	tests := []struct {
+		name     string
+		joinType sqlparser.JoinType
+		lhs, rhs *Route
+		want     bool
+	}{
+		{name: "inner join consumes reference input", joinType: sqlparser.NormalJoinType, lhs: reference, rhs: sharded, want: false},
+		{name: "left join keeps preserved reference input", joinType: sqlparser.LeftJoinType, lhs: reference, rhs: sharded, want: true},
+		{name: "left join consumes right-side reference input", joinType: sqlparser.LeftJoinType, lhs: sharded, rhs: reference, want: false},
+		{name: "inner join consumes union reference input", joinType: sqlparser.NormalJoinType, lhs: unionRoute, rhs: sharded, want: false},
+		{name: "left join preserves union reference input", joinType: sqlparser.LeftJoinType, lhs: unionRoute, rhs: sharded, want: true},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			routing := &ShardedRouting{keyspace: keyspace, RouteOpCode: engine.Scatter}
+			assert.Equal(t, test.want, containsSpecialInputAfterJoin(test.joinType, test.lhs, test.rhs, routing))
 		})
 	}
 }
