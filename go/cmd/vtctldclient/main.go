@@ -17,7 +17,6 @@ limitations under the License.
 package main
 
 import (
-	"flag"
 	"fmt"
 
 	"vitess.io/vitess/go/acl"
@@ -26,25 +25,20 @@ import (
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/grpccommon"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtctl/grpcclientcommon"
 	"vitess.io/vitess/go/vt/vtctl/vtctlclient"
 	"vitess.io/vitess/go/vt/vttablet/grpctmclient"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
-	_flag "vitess.io/vitess/go/internal/flag"
 	flagUtils "vitess.io/vitess/go/vt/utils"
 )
 
 func main() {
 	defer exit.Recover()
 
-	// Grab all those global flags across the codebase and shove 'em on in.
-	// (TODO|andrew) remove this line after the migration to pflag is complete.
-	command.Root.PersistentFlags().AddGoFlagSet(flag.CommandLine)
 	log.RegisterFlags(command.Root.PersistentFlags())
-	logutil.RegisterFlags(command.Root.PersistentFlags())
+	log.RegisterRemovedClientFlags(command.Root.PersistentFlags())
 	grpcclient.RegisterFlags(command.Root.PersistentFlags())
 	grpccommon.RegisterFlags(command.Root.PersistentFlags())
 	grpcclientcommon.RegisterFlags(command.Root.PersistentFlags())
@@ -54,11 +48,7 @@ func main() {
 	vtctlclient.RegisterFlags(command.Root.PersistentFlags())
 	acl.RegisterFlags(command.Root.PersistentFlags())
 
-	// hack to get rid of an "ERROR: logging before flag.Parse"
-	_flag.TrickGlog()
-
 	command.Root.SetGlobalNormalizationFunc(flagUtils.NormalizeUnderscoresToDashes)
-	// back to your regularly scheduled cobra programming
 	if err := command.Root.Execute(); err != nil {
 		log.Error(fmt.Sprint(err))
 		exit.Return(1)

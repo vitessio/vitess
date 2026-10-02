@@ -27,7 +27,6 @@ import (
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/zkctl"
 )
@@ -43,10 +42,7 @@ var (
 		Args:              cobra.NoArgs,
 		Version:           servenv.AppVersion.String(),
 		PersistentPreRunE: servenv.CobraPreRunE,
-		PostRun: func(cmd *cobra.Command, args []string) {
-			logutil.Flush()
-		},
-		RunE: run,
+		RunE:              run,
 	}
 )
 

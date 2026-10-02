@@ -147,12 +147,8 @@ func listener(ev Syslogger) {
 }
 
 func init() {
-	// We only want to init syslog when the app is being initialized
-	// Some binaries import the syslog package indirectly leading to
-	// the syslog.New function being called and this might fail if
-	// running inside Docker without the syslog daemon enabled, leading
-	// logging the error which will make glog think there are not --log_dir
-	// flag set as we have not parsed the flags yet.
+	// Connect to syslog when servenv initializes. The connection fails when no syslog daemon runs, for example in
+	// Docker. An error logged before servenv initializes ignores the logging flags.
 	// https://github.com/vitessio/vitess/issues/15120
 	servenv.OnInit(func() {
 		initSyslog()

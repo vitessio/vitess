@@ -4169,7 +4169,6 @@ func TestPlayerStalls(t *testing.T) {
 				// The log message is written asynchronously after the stalled
 				// workflow transitions to the error state, so poll for it.
 				require.EventuallyWithT(t, func(c *assert.CollectT) {
-					log.Flush()
 					assert.Contains(c, logger.String(), relayLogIOStalledMsg)
 				}, 30*time.Second, 100*time.Millisecond, "expected log message not found")
 				execStatements(t, []string{"set @@session.binlog_format='ROW'"})
@@ -4209,7 +4208,6 @@ func TestPlayerStalls(t *testing.T) {
 				// locks held by the preFunc connection, rather than sleeping a
 				// fixed multiple of the heartbeat interval.
 				require.EventuallyWithT(t, func(c *assert.CollectT) {
-					log.Flush()
 					assert.Contains(c, logger.String(), failedToRecordHeartbeatMsg)
 				}, 30*time.Second, 100*time.Millisecond, "expected log message not found")
 				// The vplayer also records the failure in the vreplication
@@ -4414,7 +4412,6 @@ func TestPlayerNoStallWhileThrottled(t *testing.T) {
 	// denial handoff to the relay log, the stall fires within
 	// vplayerProgressDeadline and errors the stream.
 	time.Sleep(3 * vplayerProgressDeadline)
-	log.Flush()
 	require.NotContains(t, logger.String(), relayLogIOStalledMsg,
 		"the stall detector fired while the vplayer was throttled")
 
@@ -4435,6 +4432,5 @@ func TestPlayerNoStallWhileThrottled(t *testing.T) {
 		require.Len(c, res.Rows, 1)
 		assert.Equal(c, "3", res.Rows[0][0].ToString())
 	}, 30*time.Second, 100*time.Millisecond, "the queued rows were not applied after the throttler allowed again")
-	log.Flush()
 	require.NotContains(t, logger.String(), relayLogIOStalledMsg)
 }

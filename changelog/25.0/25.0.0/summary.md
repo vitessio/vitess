@@ -10,6 +10,7 @@
     - **[New Support](#new-support)**
         - [VTOrc failover of an unreachable primary `vttablet` via replica quorum](#vtorc-quorum-unreachable-primary)
     - **[Breaking Changes](#breaking-changes)**
+        - [`glog` logging removed](#glog-removed)
         - [`--watch-replication-stream` flag removed](#vttablet-watch-replication-stream-removed)
         - [VRLog feature removed](#vttablet-vrlog-removed)
         - [Snapshot Topology feature removed](#vtorc-snapshot-topology-removed)
@@ -118,6 +119,39 @@ See [#19918](https://github.com/vitessio/vitess/issues/19918).
 
 ### <a id="breaking-changes"/>Breaking Changes</a>
 
+#### <a id="glog-removed"/>`glog` logging removed</a>
+
+The `glog` backend and its command-line flags have been removed after their deprecation in
+[v24](../../24.0/24.0.0/summary.md#structured-logging). Vitess uses structured logging only.
+
+This release removes the following `glog` flags from each binary that registered them.
+
+- `--logtostderr`, `--alsologtostderr`, `--stderrthreshold`
+- `--log_dir`, `--log_link`, `--log_backtrace_at`
+- `--v`, `--vmodule`, `--logbuflevel`
+
+The following flags did not show a deprecation warning in v24. This release keeps them as no-ops that show a
+deprecation warning. v26 removes them.
+
+- `--log-structured`, `--log-rotate-max-size`, `--keep-logs`, `--keep-logs-by-mtime`, and `--purge-logs-interval` on
+  all binaries that registered them
+- `--logtostderr` and `--alsologtostderr` on `vtctldclient` and `vtctlclient`
+
+A binary fails to start with `--log-structured=false`, because that value asks for `glog` log files.
+
+The other `glog` flags on `vtctldclient` and `vtctlclient` did not show a deprecation warning in v24, but this release
+removes them. `vtctldclient` uses `-v` as the shorthand for `--version`, the same as the other binaries. `-v` does not
+set a log level.
+
+The `/debug/flushlogs` HTTP endpoint is deprecated and is a no-op. It responds with success and logs a deprecation
+warning. v26 removes it.
+
+**Migration**: remove the flags above from startup arguments.
+
+**Impact**: a binary fails to start when it receives a removed flag or `--log-structured=false`.
+
+See [#21310](https://github.com/vitessio/vitess/issues/21310).
+
 #### <a id="vttablet-watch-replication-stream-removed"/>`--watch-replication-stream` flag removed</a>
 
 The deprecated `--watch-replication-stream` VTTablet flag has been removed.
@@ -197,6 +231,14 @@ The VTTablet flag `--vreplication-enable-http-log` is now deprecated and is a no
 The vtctld and vtcombo flags `--cell`, `--proxy-tablets`, `--action-timeout`, and `--tablet-health-keep-alive` are now deprecated and are no-ops, as the [legacy vtctld HTTP API they configured has been removed](#vtctld-http-api-removed). The flags will be removed entirely in v26. This deprecation is tracked in https://github.com/vitessio/vitess/issues/21170.
 
 **Impact**: Remove any usage of these flags from vtctld and vtcombo startup scripts or configuration.
+
+The logging flags `--log-structured`, `--log-rotate-max-size`, `--keep-logs`, `--keep-logs-by-mtime`, and `--purge-logs-interval`, and the `vtctldclient` and `vtctlclient` flags `--logtostderr` and `--alsologtostderr`, are now deprecated and are no-ops, as the [`glog` backend has been removed](#glog-removed). The flags will be removed entirely in v26.
+
+**Impact**: Remove any usage of these flags from startup scripts or configuration.
+
+The `/debug/flushlogs` HTTP endpoint is now deprecated and is a no-op, as the [`glog` backend has been removed](#glog-removed). The endpoint will be removed entirely in v26.
+
+**Impact**: Remove any calls to `/debug/flushlogs`.
 
 #### <a id="deprecated-selectstream-rule-plan"/>Legacy streaming-path plan types in query rules</a>
 

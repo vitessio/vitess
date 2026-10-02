@@ -43,7 +43,6 @@ echo "Topology flags at start of backup vttablet, after explicitly setting: $TOP
 # shellcheck disable=SC2086
 vttablet \
  $TOPOLOGY_FLAGS \
- --log_dir $VTDATAROOT/tmp \
  --log-queries-to-file $VTDATAROOT/tmp/$tablet_logfile \
  --tablet-path $alias \
  --tablet-hostname "$tablet_hostname" \

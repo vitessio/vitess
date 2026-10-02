@@ -52,6 +52,7 @@ func init() {
 		fs.StringVar(&server, "server", server, "server to use for connection")
 
 		acl.RegisterFlags(fs)
+		log.RegisterRemovedClientFlags(fs)
 
 		fs.SetNormalizeFunc(utils.NormalizeUnderscoresToDashes)
 	})

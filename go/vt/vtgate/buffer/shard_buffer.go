@@ -518,7 +518,7 @@ func (sb *shardBuffer) recordKeyspaceEvent(alias *topodatapb.TabletAlias, stillS
 	sb.mu.Lock()
 	defer sb.mu.Unlock()
 
-	log.V(2).Info(fmt.Sprintf("disruption in shard %s/%s resolved (serving: %v), movetable state %#v", sb.keyspace, sb.shard, stillServing, keyspaceEvent.MoveTablesState))
+	log.Debug(fmt.Sprintf("disruption in shard %s/%s resolved (serving: %v), movetable state %#v", sb.keyspace, sb.shard, stillServing, keyspaceEvent.MoveTablesState))
 
 	if !topoproto.TabletAliasEqual(alias, sb.currentPrimary) {
 		if sb.currentPrimary != nil {

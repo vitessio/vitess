@@ -39,11 +39,9 @@ var Main = &cobra.Command{
 	--topo-implementation etcd2 \
 	--topo-global-server-address localhost:2379 \
 	--topo-global-root /vitess/global \
-	--log_dir $VTDATAROOT/tmp \
 	--port 15000 \
 	--instance-poll-time "1s" \
-	--topo-information-refresh-duration "30s" \
-	--alsologtostderr`,
+	--topo-information-refresh-duration "30s"`,
 	Args:    cobra.NoArgs,
 	Version: servenv.AppVersion.String(),
 	PreRunE: servenv.CobraPreRunE,

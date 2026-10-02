@@ -32,7 +32,6 @@ require (
 	github.com/gammazero/deque v1.2.1
 	github.com/go-sql-driver/mysql v1.10.1
 	github.com/go-viper/mapstructure/v2 v2.5.0
-	github.com/golang/glog v1.2.5
 	github.com/golang/snappy v1.0.0
 	github.com/google/go-cmp v0.7.0
 	github.com/google/go-containerregistry v0.22.1

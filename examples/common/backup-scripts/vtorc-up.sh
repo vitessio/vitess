@@ -10,8 +10,6 @@ port=16000
 echo "Starting vtorc..."
 vtorc \
   $TOPOLOGY_FLAGS \
-  --logtostderr \
-  --alsologtostderr \
   --config-path="${script_dir}/../vtorc/" \
   --config-name="config.yaml" \
   --config-type="yml" \

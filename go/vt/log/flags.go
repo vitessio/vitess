@@ -20,54 +20,60 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"strconv"
-	"sync/atomic"
 	"testing"
 
-	"github.com/golang/glog"
 	"github.com/lmittmann/tint"
 	"github.com/mattn/go-isatty"
 	"github.com/spf13/pflag"
-
-	"vitess.io/vitess/go/vt/utils"
 )
+
+// removedFlagMessage is the deprecation message of the logging flags that have no effect.
+const removedFlagMessage = "it has no effect and will be removed in v26"
 
 var (
-	logStructured bool
-	logLevel      string
-	logFormat     string
+	logLevel  = "info"
+	logFormat = "json"
+
+	// logStructured is the value of the removed --log-structured flag. Init fails when it is false.
+	logStructured = true
 )
 
+// RegisterFlags registers the logging flags on fs.
 func RegisterFlags(fs *pflag.FlagSet) {
-	flagVal := logRotateMaxSize{
-		val: strconv.FormatUint(atomic.LoadUint64(&glog.MaxSize), 10),
-	}
-	utils.SetFlagVar(fs, &flagVal, "log-rotate-max-size", "size in bytes at which logs are rotated (glog.MaxSize)")
+	fs.StringVar(&logLevel, "log-level", logLevel, "minimum log level (debug, info, warn, error)")
+	fs.StringVar(&logFormat, "log-format", logFormat, "log output format: json for machine-readable JSON, text for human-readable colored output")
 
-	fs.BoolVar(&logStructured, "log-structured", true, "enable structured JSON logging")
-	fs.StringVar(&logLevel, "log-level", "info", "minimum log level when structured logging is enabled (debug, info, warn, error)")
-	fs.StringVar(&logFormat, "log-format", "json", "log output format: json for machine-readable JSON, text for human-readable colored output")
+	registerRemovedFlags(fs)
 }
 
-// Init configures the logging backend. By default, a slog.JSONHandler is
-// configured. If --log-structured=false is set, the deprecated glog backend
-// is used instead.
-func Init(fs *pflag.FlagSet) error {
+// registerRemovedFlags registers the removed logging flags that v24 did not mark as deprecated. The flags let old
+// startup arguments parse for one more release.
+func registerRemovedFlags(fs *pflag.FlagSet) {
+	fs.BoolVar(&logStructured, "log-structured", logStructured, "")
+	_ = fs.MarkDeprecated("log-structured", removedFlagMessage)
+
+	for _, name := range []string{"log-rotate-max-size", "keep-logs", "keep-logs-by-mtime", "purge-logs-interval"} {
+		fs.String(name, "", "")
+		_ = fs.MarkDeprecated(name, removedFlagMessage)
+	}
+}
+
+// RegisterRemovedClientFlags registers the removed glog flags that vtctldclient and vtctlclient accepted without a
+// deprecation warning in v24. The flags let old scripts run for one more release.
+func RegisterRemovedClientFlags(fs *pflag.FlagSet) {
+	for _, name := range []string{"logtostderr", "alsologtostderr"} {
+		fs.Bool(name, false, "")
+		_ = fs.MarkDeprecated(name, removedFlagMessage)
+	}
+}
+
+// Init configures the logger.
+func Init() error {
+	// Fail on --log-structured=false. The caller expects glog log files, which Vitess does not write.
 	if !logStructured {
-		fmt.Fprintln(os.Stderr, "WARNING: glog is deprecated and will be removed in v25")
-		structured.Store(false)
-		return nil
+		return fmt.Errorf("log: --log-structured=false is not supported, glog was removed in v25")
 	}
 
-	// Warn if any glog flags were explicitly set while structured logging is active,
-	// since they have no effect.
-	for _, name := range []string{"logtostderr", "alsologtostderr", "stderrthreshold", "log_dir", "log_backtrace_at", "vmodule", "v"} {
-		if fs.Changed(name) {
-			fmt.Fprintf(os.Stderr, "WARNING: --%s has no effect when structured logging is enabled, pass --log-structured=false to use glog flags\n", name)
-		}
-	}
-
-	// Parse the level flag into an [slog.Level].
 	var level slog.Level
 	if err := level.UnmarshalText([]byte(logLevel)); err != nil {
 		return fmt.Errorf("log: invalid --log-level %q: %w", logLevel, err)
@@ -75,7 +81,6 @@ func Init(fs *pflag.FlagSet) error {
 
 	l := newLogger(level)
 	logger.Store(l)
-	structured.Store(true)
 
 	return nil
 }
@@ -99,28 +104,4 @@ func newLogger(level slog.Level) *slog.Logger {
 	}
 
 	return slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{AddSource: true, Level: level}))
-}
-
-type logRotateMaxSize struct {
-	val string
-}
-
-func (lrms *logRotateMaxSize) Set(s string) error {
-	maxSize, err := strconv.ParseUint(s, 10, 64)
-	if err != nil {
-		return err
-	}
-
-	atomic.StoreUint64(&glog.MaxSize, maxSize)
-	lrms.val = s
-
-	return nil
-}
-
-func (lrms *logRotateMaxSize) String() string {
-	return lrms.val
-}
-
-func (lrms *logRotateMaxSize) Type() string {
-	return "uint64"
 }
