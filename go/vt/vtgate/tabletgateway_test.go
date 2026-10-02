@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
 
@@ -397,4 +398,32 @@ func TestWithRetry(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestGetStatsAggregatorDoesNotBlockOnGatewayLock verifies that recording
+// per-query stats for a known target does not wait on gw.mu.
+func TestGetStatsAggregatorDoesNotBlockOnGatewayLock(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	tg := NewTabletGateway(ctx, discovery.NewFakeHealthCheck(nil), &econtext.FakeTopoServer{}, "cell")
+	defer tg.Close(ctx)
+
+	target := &querypb.Target{Keyspace: "ks", Shard: "-80", TabletType: topodatapb.TabletType_REPLICA}
+	aggr := tg.getStatsAggregator(target)
+	require.NotNil(t, aggr)
+
+	tg.mu.Lock()
+	result := make(chan *TabletStatusAggregator, 1)
+	go func() { result <- tg.getStatsAggregator(target) }()
+	var got *TabletStatusAggregator
+	blocked := false
+	select {
+	case got = <-result:
+	case <-time.After(5 * time.Second):
+		blocked = true
+	}
+	tg.mu.Unlock()
+
+	require.False(t, blocked, "getStatsAggregator blocked while gw.mu was held")
+	assert.Same(t, aggr, got)
+	assert.Equal(t, "ks/-80/REPLICA", got.Name)
 }

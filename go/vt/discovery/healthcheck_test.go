@@ -2028,3 +2028,47 @@ func deleteCellsAlias(t *testing.T, ts *topo.Server, alias string) {
 		t.Logf("DeleteCellsAlias(%s) failed: %v", alias, err)
 	}
 }
+
+// TestGetHealthyTabletStatsDoesNotBlockOnHealthCheckLock verifies that routing
+// reads do not wait on hc.mu, which health updates hold while recomputing the
+// healthy lists (including topo lookups for cell aliases).
+func TestGetHealthyTabletStatsDoesNotBlockOnHealthCheckLock(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	ts := memorytopo.NewServer(ctx, "cell")
+	defer ts.Close()
+	hc := createTestHc(ctx, ts)
+	defer hc.Close()
+
+	tablet := createTestTablet(0, "cell", "a")
+	tablet.Type = topodatapb.TabletType_PRIMARY
+	input := make(chan *querypb.StreamHealthResponse)
+	createFakeConn(tablet, input)
+	hc.AddTablet(tablet)
+	input <- &querypb.StreamHealthResponse{
+		TabletAlias:               tablet.Alias,
+		Target:                    &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY},
+		Serving:                   true,
+		PrimaryTermStartTimestamp: 10,
+		RealtimeStats:             &querypb.RealtimeStats{},
+	}
+	target := &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY}
+	require.Eventually(t, func() bool {
+		return len(hc.GetHealthyTabletStats(target)) == 1
+	}, 30*time.Second, time.Millisecond)
+
+	hc.mu.Lock()
+	result := make(chan []*TabletHealth, 1)
+	go func() { result <- hc.GetHealthyTabletStats(target) }()
+	var ths []*TabletHealth
+	blocked := false
+	select {
+	case ths = <-result:
+	case <-time.After(5 * time.Second):
+		blocked = true
+	}
+	hc.mu.Unlock()
+
+	require.False(t, blocked, "GetHealthyTabletStats blocked while hc.mu was held")
+	require.Len(t, ths, 1)
+	assert.True(t, topoproto.TabletAliasEqual(tablet.Alias, ths[0].Tablet.Alias))
+}
