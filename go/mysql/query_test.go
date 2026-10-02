@@ -845,3 +845,275 @@ func TestIsZeroDateTime(t *testing.T) {
 		})
 	}
 }
+
+// rowPacket builds a text-protocol row packet. A nil value is encoded as SQL NULL,
+// an empty-but-non-nil one as a zero-length string, since the two take different
+// branches in parseRow and must not be confused for each other.
+func rowPacket(t testing.TB, values [][]byte) []byte {
+	size := 0
+	for _, v := range values {
+		if v == nil {
+			size++
+			continue
+		}
+		size += lenEncStringSize(string(v))
+	}
+
+	data := make([]byte, size)
+	pos := 0
+	for _, v := range values {
+		if v == nil {
+			pos = writeByte(data, pos, NullValue)
+			continue
+		}
+		pos = writeLenEncString(data, pos, string(v))
+	}
+	require.Equal(t, size, pos, "row packet size mismatch")
+	return data
+}
+
+func varcharFields(n int) []*querypb.Field {
+	fields := make([]*querypb.Field, n)
+	for i := range fields {
+		fields[i] = &querypb.Field{
+			Name:    fmt.Sprintf("c%d", i),
+			Type:    querypb.Type_VARCHAR,
+			Charset: uint32(collations.MySQL8().DefaultConnectionCharset()),
+		}
+	}
+	return fields
+}
+
+// parseRowCopyShapes returns the row shapes the per-row copy has to handle. The NULL
+// and zero-length cases are the interesting ones: a NULL holds no bytes at all, and a
+// zero-length value still has to be rewritten rather than left aliasing the packet.
+func parseRowCopyShapes() []struct {
+	name   string
+	values [][]byte
+} {
+	wide := make([][]byte, 20)
+	for i := range wide {
+		wide[i] = []byte(fmt.Sprintf("value-%d", i))
+	}
+
+	return []struct {
+		name   string
+		values [][]byte
+	}{
+		{"narrow", [][]byte{[]byte("10"), []byte("nice name")}},
+		{"wide", wide},
+		{"all NULL", [][]byte{nil, nil, nil}},
+		{"all empty", [][]byte{{}, {}, {}}},
+		{"leading empty", [][]byte{{}, []byte("a"), []byte("b")}},
+		{"trailing empty", [][]byte{[]byte("a"), []byte("b"), {}}},
+		{"interleaved NULL and empty", [][]byte{nil, {}, []byte("a"), nil, {}, []byte("b")}},
+		{"single large value", [][]byte{[]byte(strings.Repeat("x", 1<<16))}},
+	}
+}
+
+// TestParseRowCopyAllocations pins the allocation count the per-row copy exists for:
+// 2 per row whatever its width, against 1+C for a copy per value.
+func TestParseRowCopyAllocations(t *testing.T) {
+	const cols = 20
+	values := make([][]byte, cols)
+	for i := range values {
+		values[i] = []byte(fmt.Sprintf("value-%d", i))
+	}
+	data := rowPacket(t, values)
+	fields := varcharFields(cols)
+
+	c := &Conn{}
+	var sink []sqltypes.Value
+	var err error
+
+	perValue := testing.AllocsPerRun(100, func() {
+		sink, err = c.parseRow(data, fields, readLenEncStringAsBytesCopy, nil)
+	})
+	require.NoError(t, err)
+	require.Len(t, sink, cols)
+	assert.Equal(t, float64(1+cols), perValue, "a copy per value allocates 1+C times")
+
+	perRow := testing.AllocsPerRun(100, func() {
+		sink, err = c.parseRowCopy(data, fields)
+	})
+	require.NoError(t, err)
+	require.Len(t, sink, cols)
+	assert.Equal(t, float64(2), perRow, "the per-row copy allocates twice whatever the width")
+}
+
+// TestParseRowCopyCapEqualsLen locks the invariant the memory accounting rests on.
+// `sqltypes.Value.CachedSize` charges `cap(val)`, so a value whose capacity ran past
+// its length would be billed the whole row buffer. If a future edit drops the third
+// index from the sub-slice in parseRowCopy nothing else fails and no error surfaces,
+// stream consolidation just quietly stops working, so this is a hard require on every
+// value rather than a spot check.
+func TestParseRowCopyCapEqualsLen(t *testing.T) {
+	c := &Conn{}
+	for _, shape := range parseRowCopyShapes() {
+		t.Run(shape.name, func(t *testing.T) {
+			row, err := c.parseRowCopy(rowPacket(t, shape.values), varcharFields(len(shape.values)))
+			require.NoError(t, err)
+			require.Len(t, row, len(shape.values))
+
+			for i, v := range row {
+				require.Equal(t, len(v.Raw()), cap(v.Raw()), "column %d capacity runs past its length", i)
+			}
+		})
+	}
+}
+
+// TestParseRowCopyNoPacketAliasing covers the reason the buffered path copies at all:
+// readEphemeralPacket takes its buffer from bufPool and the read loop hands it straight
+// back after every row, so a row that aliased the packet would see its bytes overwritten
+// by a later query on the same connection.
+func TestParseRowCopyNoPacketAliasing(t *testing.T) {
+	values := [][]byte{[]byte("10"), nil, []byte("nice name"), {}}
+	data := rowPacket(t, values)
+
+	row, err := (&Conn{}).parseRowCopy(data, varcharFields(len(values)))
+	require.NoError(t, err)
+
+	// Scribble over the packet the way bufPool reuse would.
+	for i := range data {
+		data[i] = 'Z'
+	}
+
+	require.Equal(t, "10", row[0].ToString())
+	require.True(t, row[1].IsNull())
+	require.Equal(t, "nice name", row[2].ToString())
+	require.Empty(t, row[3].ToString())
+	require.False(t, row[3].IsNull(), "a zero-length value is not a NULL")
+}
+
+// TestParseRowCopyMatchesPerValueCopy compares the per-row copy against the copy per
+// value it replaces. require.Equal on two byte slices is bytes.Equal, which treats nil
+// and empty as equal, so nil-ness is asserted separately: a NULL must not collapse into
+// an empty string, nor an empty string into a NULL.
+func TestParseRowCopyMatchesPerValueCopy(t *testing.T) {
+	c := &Conn{}
+	for _, shape := range parseRowCopyShapes() {
+		t.Run(shape.name, func(t *testing.T) {
+			data := rowPacket(t, shape.values)
+			fields := varcharFields(len(shape.values))
+
+			want, err := c.parseRow(data, fields, readLenEncStringAsBytesCopy, nil)
+			require.NoError(t, err)
+			got, err := c.parseRowCopy(data, fields)
+			require.NoError(t, err)
+
+			require.Len(t, got, len(want))
+			for i := range want {
+				require.Equal(t, want[i].Type(), got[i].Type(), "column %d type", i)
+				require.Equal(t, want[i].Raw(), got[i].Raw(), "column %d bytes", i)
+				require.Equal(t, want[i].Raw() == nil, got[i].Raw() == nil, "column %d nil-ness", i)
+				require.True(t, want[i].Equal(got[i]), "column %d", i)
+			}
+		})
+	}
+}
+
+// TestParseRowCopyCachedSizeParity asserts the per-row copy is invisible to the memory
+// accounting StreamConsolidator budgets against, so a result costs exactly what it costs
+// today. Both results are built by the same append sequence the read loop uses, so the
+// row and value slice capacities line up and only the value bytes are under test.
+func TestParseRowCopyCachedSizeParity(t *testing.T) {
+	c := &Conn{}
+	for _, shape := range parseRowCopyShapes() {
+		t.Run(shape.name, func(t *testing.T) {
+			data := rowPacket(t, shape.values)
+			fields := varcharFields(len(shape.values))
+
+			var want, got sqltypes.Result
+			for range 8 {
+				perValue, err := c.parseRow(data, fields, readLenEncStringAsBytesCopy, nil)
+				require.NoError(t, err)
+				want.Rows = append(want.Rows, perValue)
+
+				perRow, err := c.parseRowCopy(data, fields)
+				require.NoError(t, err)
+				got.Rows = append(got.Rows, perRow)
+			}
+
+			require.Equal(t, want.CachedSize(true), got.CachedSize(true))
+		})
+	}
+}
+
+// TestParseRowCopyMalformedPacket checks the error path is the one parseRow already
+// returns, and that a half-filled buffer is simply dropped rather than returned.
+func TestParseRowCopyMalformedPacket(t *testing.T) {
+	// A good first value, then one claiming 9 bytes but carrying 3.
+	data := []byte{0x01, 'a', 0x09, 'b', 'c', 'd'}
+
+	row, err := (&Conn{}).parseRowCopy(data, varcharFields(2))
+	require.Error(t, err)
+	require.Nil(t, row)
+
+	var sqlErr *sqlerror.SQLError
+	require.ErrorAs(t, err, &sqlErr)
+	require.Equal(t, sqlerror.CRMalformedPacket, sqlErr.Number())
+}
+
+// TestParseRowCopyShortPacket covers packets that run out before the fields do. The
+// reader-injection path reaches its NULL check through an unguarded `data[pos]` and
+// panics on these _(`index out of range`)_, recovered per-query by
+// `TabletServer.HandlePanic` but still a panic per malformed row. parseRowCopy
+// bounds-checks its own walk, so a truncated row is a malformed-packet error like any
+// other. This is the test that fails if parseRowCopy is ever rewritten to delegate its
+// walk back to parseRow.
+func TestParseRowCopyShortPacket(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		data   []byte
+		fields int
+	}{
+		{"empty packet", []byte{}, 1},
+		{"ends at a column boundary", []byte{0x01, 'a'}, 2},
+		{"ends mid-value", []byte{0x01, 'a', 0x09, 'b', 'c'}, 2},
+		{"truncated length prefix", []byte{0x01, 'a', 0xfc}, 2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var (
+				row []sqltypes.Value
+				err error
+			)
+			require.NotPanics(t, func() {
+				row, err = (&Conn{}).parseRowCopy(tc.data, varcharFields(tc.fields))
+			})
+			require.Error(t, err)
+			require.Nil(t, row)
+
+			var sqlErr *sqlerror.SQLError
+			require.ErrorAs(t, err, &sqlErr)
+			require.Equal(t, sqlerror.CRMalformedPacket, sqlErr.Number())
+		})
+	}
+}
+
+// TestParseRowCopySingleColumn covers the narrowest shape, where the arena holds one
+// value and the change is a no-op in allocation terms. The invariants still have to
+// hold: the value owns its bytes and its capacity matches its length.
+func TestParseRowCopySingleColumn(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		value []byte
+	}{
+		{"value", []byte("nice name")},
+		{"empty", []byte{}},
+		{"NULL", nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			data := rowPacket(t, [][]byte{tc.value})
+			row, err := (&Conn{}).parseRowCopy(data, varcharFields(1))
+			require.NoError(t, err)
+			require.Len(t, row, 1)
+			require.Equal(t, len(row[0].Raw()), cap(row[0].Raw()))
+			require.Equal(t, tc.value == nil, row[0].IsNull())
+
+			for i := range data {
+				data[i] = 'Z'
+			}
+			require.Equal(t, string(tc.value), row[0].ToString())
+		})
+	}
+}
