@@ -40,7 +40,7 @@ type AuthServerVault struct {
 	methods []mysql.AuthMethod
 	mu      sync.Mutex
 	// users, passwords and user data
-	// We use the same JSON format as for --mysql_auth_server_static
+	// We use the same JSON format as for --mysql-auth-server-static-file
 	// Acts as a cache for the in-Vault data
 	entries                map[string][]*mysql.AuthServerStaticEntry
 	vaultCacheExpireTicker *time.Ticker
@@ -55,11 +55,11 @@ type AuthServerVault struct {
 func InitAuthServerVault(vaultAddr string, vaultTimeout time.Duration, vaultCACert, vaultPath string, vaultCacheTTL time.Duration, vaultTokenFile, vaultRoleID, vaultRoleSecretIDFile, vaultRoleMountPoint string) {
 	// Check critical parameters.
 	if vaultAddr == "" {
-		log.Info("Not configuring AuthServerVault, as --mysql_auth_vault_addr is empty.")
+		log.Info("Not configuring AuthServerVault, as --mysql-auth-vault-addr is empty.")
 		return
 	}
 	if vaultPath == "" {
-		log.Error("If using Vault auth server, --mysql_auth_vault_path is required.")
+		log.Error("If using Vault auth server, --mysql-auth-vault-path is required.")
 		os.Exit(1)
 	}
 
@@ -79,11 +79,11 @@ func newAuthServerVault(addr string, timeout time.Duration, caCertPath string, p
 	// Validate more parameters
 	token, err := readFromFile(tokenFilePath)
 	if err != nil {
-		return nil, errors.New("No Vault token in provided filename for --mysql_auth_vault_tokenfile")
+		return nil, errors.New("No Vault token in provided filename for --mysql-auth-vault-tokenfile")
 	}
 	secretID, err := readFromFile(secretIDPath)
 	if err != nil {
-		return nil, errors.New("No Vault secret_id in provided filename for --mysql_auth_vault_role_secretidfile")
+		return nil, errors.New("No Vault secret_id in provided filename for --mysql-auth-vault-role-secretidfile")
 	}
 
 	config := vaultapi.NewConfig()
