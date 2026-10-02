@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -76,6 +77,13 @@ func TestContainsSpecialInputAfterJoin(t *testing.T) {
 		Routing:                   &ShardedRouting{keyspace: keyspace, RouteOpCode: engine.EqualUnique},
 		ContainsSpecialUnionInput: true,
 	}
+	singleShard := &Route{Routing: &ShardedRouting{keyspace: keyspace, RouteOpCode: engine.EqualUnique}}
+	aggregateQuery, err := sqlparser.NewTestParser().Parse("select count(*) from user")
+	require.NoError(t, err)
+	aggregate := &Route{
+		unaryOperator: newUnaryOp(&Horizon{Query: aggregateQuery.(sqlparser.TableStatement)}),
+		Routing:       &ShardedRouting{keyspace: keyspace, RouteOpCode: engine.EqualUnique},
+	}
 	tests := []struct {
 		name     string
 		joinType sqlparser.JoinType
@@ -83,6 +91,8 @@ func TestContainsSpecialInputAfterJoin(t *testing.T) {
 		want     bool
 	}{
 		{name: "inner join consumes reference input", joinType: sqlparser.NormalJoinType, lhs: reference, rhs: sharded, want: false},
+		{name: "inner join consumes reference input with single-shard route", joinType: sqlparser.NormalJoinType, lhs: reference, rhs: singleShard, want: false},
+		{name: "inner join retains reference input with global aggregate", joinType: sqlparser.NormalJoinType, lhs: reference, rhs: aggregate, want: true},
 		{name: "left join keeps preserved reference input", joinType: sqlparser.LeftJoinType, lhs: reference, rhs: sharded, want: true},
 		{name: "left join consumes right-side reference input", joinType: sqlparser.LeftJoinType, lhs: sharded, rhs: reference, want: false},
 		{name: "inner join consumes union reference input", joinType: sqlparser.NormalJoinType, lhs: unionRoute, rhs: sharded, want: false},
@@ -93,6 +103,27 @@ func TestContainsSpecialInputAfterJoin(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			routing := &ShardedRouting{keyspace: keyspace, RouteOpCode: engine.Scatter}
 			assert.Equal(t, test.want, containsSpecialInputAfterJoin(test.joinType, test.lhs, test.rhs, routing))
+		})
+	}
+}
+
+func TestSubqueryMergeKeepsOnlyOuterUnionProvenance(t *testing.T) {
+	keyspace := &vindexes.Keyspace{Name: "main", Sharded: true}
+	inner := &Route{Routing: &AnyShardRouting{keyspace: keyspace}}
+	outer := &Route{Routing: &ShardedRouting{keyspace: keyspace, RouteOpCode: engine.Scatter}}
+
+	for _, topLevel := range []bool{false, true} {
+		name := "nested"
+		if topLevel {
+			name = "top_level"
+		}
+		t.Run(name, func(t *testing.T) {
+			merger := &subqueryRouteMerger{
+				outer: outer,
+				subq:  &SubQuery{TopLevel: topLevel, IsArgument: true},
+			}
+			merged := merger.merge(nil, inner, outer, outer.Routing)
+			assert.False(t, merged.ContainsSpecialUnionInput)
 		})
 	}
 }
