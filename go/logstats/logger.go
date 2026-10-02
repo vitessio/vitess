@@ -72,15 +72,10 @@ func (log *Logger) appendBVarsJSON(b []byte, bvars map[string]*querypb.BindVaria
 		b = append(b, querypb.Type_name[int32(bv.BVar.Type)]...)
 		b = append(b, `", "value": `...)
 
-		if sqltypes.IsIntegral(bv.BVar.Type) || sqltypes.IsFloat(bv.BVar.Type) {
-			if log.json {
-				b = appendJSONNumber(b, bv.BVar.Value)
-			} else if bytes.ContainsAny(bv.BVar.Value, "\t\r\n") {
-				// Keep numeric bind values from splitting text log fields or records.
-				b = strconv.AppendQuote(b, hack.String(bv.BVar.Value))
-			} else {
-				b = append(b, bv.BVar.Value...)
-			}
+		if sqltypes.IsIntegral(bv.BVar.Type) {
+			b = appendJSONInteger(b, bv.BVar.Value, sqltypes.IsUnsigned(bv.BVar.Type))
+		} else if sqltypes.IsFloat(bv.BVar.Type) {
+			b = appendJSONNumber(b, bv.BVar.Value)
 		} else if bv.BVar.Type == sqltypes.Tuple {
 			b = append(b, '"')
 			b = strconv.AppendInt(b, int64(len(bv.BVar.Values)), 10)
@@ -215,9 +210,35 @@ func (log *Logger) Flush(w io.Writer) (err error) {
 	return err
 }
 
+func appendJSONInteger(dst, value []byte, unsigned bool) []byte {
+	// Normalise decimal digits without narrowing the value to a machine integer.
+	number := value
+	if len(number) > 0 && (number[0] <= ' ' || number[len(number)-1] <= ' ') {
+		number = bytes.Trim(number, " \t\r\n")
+	}
+	negative := len(number) > 0 && number[0] == '-'
+	if len(number) > 0 && (negative || number[0] == '+') {
+		number = number[1:]
+	}
+	if len(number) == 0 || unsigned && negative {
+		return appendJSONQuote(dst, hack.String(value))
+	}
+	for len(number) > 1 && number[0] == '0' {
+		number = number[1:]
+	}
+	for _, digit := range number {
+		if digit < '0' || digit > '9' {
+			return appendJSONQuote(dst, hack.String(value))
+		}
+	}
+	if negative {
+		dst = append(dst, '-')
+	}
+	return append(dst, number...)
+}
+
 func appendJSONNumber(dst, value []byte) []byte {
-	// Keep valid numbers exact, but quote non-JSON spellings such as NaN and 007.
-	// Trim JSON whitespace so a numeric value cannot split a log record.
+	// Preserve canonical numbers without parsing or rounding their value.
 	number := value
 	if len(number) > 0 && (number[0] <= ' ' || number[len(number)-1] <= ' ') {
 		number = bytes.Trim(number, " \t\r\n")
@@ -225,7 +246,62 @@ func appendJSONNumber(dst, value []byte) []byte {
 	if len(number) > 0 && (number[0] == '-' || number[0] >= '0' && number[0] <= '9') && gjson.ValidBytes(number) {
 		return append(dst, number...)
 	}
+	var ok bool
+	dst, ok = appendNormalisedJSONNumber(dst, number)
+	if ok {
+		return dst
+	}
 	return appendJSONQuote(dst, hack.String(value))
+}
+
+func appendNormalisedJSONNumber(dst, number []byte) ([]byte, bool) {
+	start := len(dst)
+	if len(number) > 0 {
+		switch number[0] {
+		case '-':
+			dst = append(dst, '-')
+			number = number[1:]
+		case '+':
+			number = number[1:]
+		}
+	}
+	if len(number) == 0 {
+		return dst[:start], false
+	}
+	beforeZeros := len(number)
+	number = bytes.TrimLeft(number, "0")
+	if len(number) == 0 {
+		return append(dst, '0'), true
+	}
+	switch number[0] {
+	case '.':
+		// A leading decimal point needs an original digit, not just an inserted zero.
+		if beforeZeros == len(number) && (len(number) == 1 || number[1] < '0' || number[1] > '9') {
+			return dst[:start], false
+		}
+		dst = append(dst, '0')
+	case 'e', 'E':
+		if beforeZeros == len(number) {
+			return dst[:start], false
+		}
+		dst = append(dst, '0')
+	default:
+		if number[0] < '1' || number[0] > '9' {
+			return dst[:start], false
+		}
+	}
+	point := bytes.IndexByte(number, '.')
+	if point >= 0 && (point+1 == len(number) || number[point+1] == 'e' || number[point+1] == 'E') {
+		dst = append(dst, number[:point+1]...)
+		dst = append(dst, '0')
+		dst = append(dst, number[point+1:]...)
+	} else {
+		dst = append(dst, number...)
+	}
+	if gjson.ValidBytes(dst[start:]) {
+		return dst, true
+	}
+	return dst[:start], false
 }
 
 func appendQuote(dst []byte, s string, json bool) []byte {

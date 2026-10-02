@@ -140,12 +140,12 @@ func TestVTGateExecuteNumericTabsInTextQueryLog(t *testing.T) {
 
 			var bindings map[string]struct {
 				Type  string
-				Value string
+				Value json.RawMessage
 			}
 			require.NoError(t, json.Unmarshal([]byte(fields[13]), &bindings))
 			require.Contains(t, bindings, "v")
 			assert.Equal(t, "INT64", bindings["v"].Type)
-			assert.Equal(t, value, bindings["v"].Value)
+			assert.Equal(t, "42", string(bindings["v"].Value))
 		})
 	}
 }
