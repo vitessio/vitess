@@ -16,6 +16,7 @@
         - [VTOrc `--cell` flag is now required](#vtorc-cell-required)
         - [`BackupHandle` interface gains `Wait()` method](#backup-handle-wait-method)
         - [VTOrc: `--cells-to-watch` removed in favor of `--cells-no-recovery`](#vtorc-cells-no-recovery)
+        - [Query-log output compatibility](#query-log-output-compatibility)
     - **[Deprecations](#deprecations)**
         - [CLI Flags](#deprecated-cli-flags)
         - [Legacy streaming-path plan types in query rules](#deprecated-selectstream-rule-plan)
@@ -179,6 +180,18 @@ The replacement, `--cells-no-recovery`, is a deny-list for *recovery actions onl
 **Migration:** drop `--cells-to-watch` from your vtorc invocation. If you previously used it for true cell-isolated deployments, the new flag is not a like-for-like replacement (vtorc will now discover and watch all cells); discuss your scenario in the linked issue if the new flag does not cover your needs. If you are upgrading from v24.0.0 specifically and have `--cells-to-watch` in your vtorc flags, note that this flag was already removed in v24.0.1; replace it with `--cells-no-recovery` before upgrading.
 
 See [#20021](https://github.com/vitessio/vitess/issues/20021) for details.
+
+#### <a id="query-log-output-compatibility"/>Query-log output compatibility</a>
+
+VTGate and VTTablet query logs change as follows:
+
+- JSON strings use JSON rather than Go escapes (`\x00` -> `\u0000`), and valid Unicode may be literal. Invalid UTF-8, including in `VARBINARY` values, becomes `U+FFFD`, losing the original bytes.
+- In both formats, decimal integer/float bind values trim JSON whitespace (space, tab, CR and LF) and normalise spellings (`007` -> `7`, `.5` -> `0.5`, `1.` -> `1.0`) without rounding. Unexpected numeric payloads, including `NaN` and infinity, are JSON-quoted and escaped; their declared type is unchanged.
+- Abbreviated scalar counts report the actual byte length instead of `"0 bytes"`; tuple counts are unchanged.
+
+**Migration**: Before upgrading, update consumers to accept JSON escaping, number or string values for numeric binds, and old/new representations during rolling upgrades. Use a byte-preserving source when exact binary values are required.
+
+Query execution, field names and nonnumeric text escaping are unchanged.
 
 ### <a id="deprecations"/>Deprecations</a>
 
