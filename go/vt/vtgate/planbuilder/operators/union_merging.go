@@ -110,6 +110,14 @@ func mergeUnionInputs(
 	lhsExprs, rhsExprs []sqlparser.SelectExpr,
 	distinct bool,
 ) (Operator, []sqlparser.SelectExpr) {
+	if !distinct {
+		lhsRoute, rhsRoute := operatorsToRoutes(lhs, rhs)
+		if lhsRoute != nil && rhsRoute != nil && hasMultiShardReferenceAlternate(lhsRoute, rhsRoute) {
+			checkCrossKeyspaceOp(ctx, lhs, rhs, "UNION")
+			return nil, nil
+		}
+	}
+
 	lhsRoute, rhsRoute, routingA, routingB, a, b, sameKeyspace := prepareInputRoutes(ctx, lhs, rhs)
 	if lhsRoute == nil {
 		checkCrossKeyspaceOp(ctx, lhs, rhs, "UNION")
@@ -129,11 +137,17 @@ func mergeUnionInputs(
 	}
 
 	switch {
-	// if either side is a dual query, we can always merge them together
-	// an unsharded/reference route can be merged with anything going to that keyspace
+	// UNION ALL cannot merge a dual or any-shard route into a multi-shard route:
+	// that would execute the dual or replicated table arm once per shard.
 	case b == dual || (b == anyShard && sameKeyspace):
+		if !distinct && !routingA.OpCode().IsSingleShard() {
+			return nil, nil
+		}
 		return createMergedUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingA, nil)
 	case a == dual || (a == anyShard && sameKeyspace):
+		if !distinct && !routingB.OpCode().IsSingleShard() {
+			return nil, nil
+		}
 		return createMergedUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingB, nil)
 
 	case a == sharded && b == sharded && sameKeyspace:
@@ -147,6 +161,30 @@ func mergeUnionInputs(
 	checkCrossKeyspaceOp(ctx, lhs, rhs, "UNION")
 
 	return nil, nil
+}
+
+// hasMultiShardReferenceAlternate reports whether routing either any-shard
+// input through the other input's keyspace would make the union execute on
+// multiple shards. The alternate must be checked before prepareInputRoutes,
+// since it can replace the any-shard routing with a sharded routing.
+func hasMultiShardReferenceAlternate(lhs, rhs *Route) bool {
+	return hasMultiShardReferenceAlternateFor(lhs, rhs) || hasMultiShardReferenceAlternateFor(rhs, lhs)
+}
+
+func hasMultiShardReferenceAlternateFor(reference, other *Route) bool {
+	anyShard, ok := reference.Routing.(*AnyShardRouting)
+	if !ok || other.Routing.Keyspace() == nil {
+		return false
+	}
+	alternate := anyShard.AlternateInKeyspace(other.Routing.Keyspace())
+	if alternate == nil || alternate.Routing.OpCode() == engine.None {
+		return false
+	}
+	return isMultiShardUnionRoute(alternate) || isMultiShardUnionRoute(other)
+}
+
+func isMultiShardUnionRoute(route *Route) bool {
+	return route.Routing.OpCode() != engine.None && !route.Routing.OpCode().IsSingleShard()
 }
 
 // tryMergeNoneUnion merges a union pairing in which at least one side has a

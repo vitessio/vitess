@@ -1,5 +1,43 @@
 [
   {
+    "comment": "UNION ALL does not repeat a dual row for every shard",
+    "query": "select 1 from dual union all select id from user",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select 1 from dual union all select id from user",
+      "Instructions": {
+        "OperatorType": "Concatenate",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Reference",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select 1 from dual where 1 != 1",
+            "Query": "select 1 from dual"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from `user` where 1 != 1",
+            "Query": "select id from `user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
     "comment": "union all between two scatter selects",
     "query": "select id from user union all select id from music",
     "plan": {
