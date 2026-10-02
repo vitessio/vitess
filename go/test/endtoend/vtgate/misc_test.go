@@ -1444,9 +1444,10 @@ func TestQueryProcessedMetric(t *testing.T) {
 		sql:         "set @x=3",
 		queryMetric: "SET.Local.PRIMARY",
 	}, {
+		// sql_mode is session-owned by vtgate and applied via SET_VAR hints,
+		// so no query is routed to any shard.
 		sql:         "set sql_mode=''",
-		queryMetric: "SET.MultiShard.PRIMARY",
-		shards:      1,
+		queryMetric: "SET.Local.PRIMARY",
 	}, {
 		sql:         "set @@vitess_metadata.k1='v1'",
 		queryMetric: "SET.Topology.PRIMARY",

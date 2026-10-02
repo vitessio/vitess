@@ -27,6 +27,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/sysvars"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/dynamicconfig"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -94,7 +95,13 @@ func TestBuilder(query string, vschema plancontext.VSchema, keyspace string) (*e
 		}
 	}
 	reservedVars := sqlparser.NewReservedVars("vtg", known)
-	result, err := sqlparser.Normalize(stmt, reservedVars, map[string]*querypb.BindVariable{}, false, keyspace, sqlparser.SQLSelectLimitUnset, "", nil, vschema.GetForeignKeyChecksState(), vschema)
+	// VTGate seeds every session with the default sql_mode on its first request, unless
+	// system settings are disabled
+	var sysVars map[string]string
+	if vschema.SysVarSetEnabled() {
+		sysVars = map[string]string{sysvars.SQLMode.Name: sqltypes.EncodeStringSQL(vschema.DefaultSQLMode())}
+	}
+	result, err := sqlparser.Normalize(stmt, reservedVars, map[string]*querypb.BindVariable{}, false, keyspace, sqlparser.SQLSelectLimitUnset, "", sysVars, vschema.GetForeignKeyChecksState(), vschema)
 	if err != nil {
 		return nil, err
 	}

@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -47,6 +48,21 @@ func keyspaceByName(t *testing.T, name string) *cluster.Keyspace {
 	}
 	require.Failf(t, "keyspace not found", "keyspace %q not found in cluster", name)
 	return nil
+}
+
+// optimizerHintRE matches optimizer hint comments (e.g. /*+ SET_VAR(...) */) that
+// newer vtgate versions may inject into the queries sent to the shards.
+var optimizerHintRE = regexp.MustCompile(`\s*/\*\+.*?\*/`)
+
+func stripOptimizerHints(rows [][]sqltypes.Value) {
+	for _, row := range rows {
+		for i, val := range row {
+			s := val.ToString()
+			if stripped := optimizerHintRE.ReplaceAllString(s, ""); stripped != s {
+				row[i] = sqltypes.MakeTrusted(val.Type(), []byte(stripped))
+			}
+		}
+	}
 }
 
 func start(t *testing.T) (*mysql.Conn, func()) {
@@ -84,6 +100,7 @@ func TestVtGateVExplain(t *testing.T) {
 		for i := range qr.Rows {
 			qr.Rows[i] = qr.Rows[i][1:]
 		}
+		stripOptimizerHints(qr.Rows)
 
 		assert.NoError(t, sqltypes.RowsEqualsStr(expected, qr.Rows))
 	}
@@ -122,7 +139,10 @@ func TestVtGateVExplain(t *testing.T) {
 	for _, mode := range []string{"oltp", "olap"} {
 		t.Run(mode, func(t *testing.T) {
 			utils.Exec(t, conn, "set workload = "+mode)
-			utils.AssertMatches(t, conn, `vexplain queries select id from user where lookup = "apa"`, expected)
+			qr := utils.Exec(t, conn, `vexplain queries select id from user where lookup = "apa"`)
+			stripOptimizerHints(qr.Rows)
+			got := fmt.Sprintf("%v", qr.Rows)
+			assert.Equal(t, expected, got)
 		})
 	}
 

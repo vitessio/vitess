@@ -91,6 +91,12 @@ func TestMain(m *testing.M) {
 			"--migration-check-interval", "5s",
 		}
 
+		// The suite's test tables use zero-date defaults, so vtgate sessions
+		// must run with a sql_mode that allows them.
+		clusterInstance.VtGateExtraArgs = []string{
+			"--sql-mode", sqlModeAllowsZeroDate,
+		}
+
 		if err := clusterInstance.StartTopo(); err != nil {
 			return 1, err
 		}
