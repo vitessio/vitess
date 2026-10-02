@@ -7,10 +7,16 @@ Usage of vtctlclient:
       --config-path strings                                         Paths to search for config files in. (default [{{ .Workdir }}])
       --config-persistence-min-interval duration                    minimum interval between persisting dynamic config changes back to disk (if no change has occurred, nothing is done). (default 1s)
       --config-type string                                          Config file type (omit to infer config type from file extension).
+<<<<<<< HEAD
       --datadog-agent-host string                                   host to send spans to. if empty, no tracing will be done
       --datadog-agent-port string                                   port to send spans to. if empty, no tracing will be done
       --datadog-trace-debug-mode                                    enable debug mode for datadog tracing
       --grpc-auth-static-client-creds string                        When using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server.
+||||||| parent of a240ed6c4b (Refer to flags by their dashed names in help and error text (#21339))
+      --grpc-auth-static-client-creds string                        When using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server.
+=======
+      --grpc-auth-static-client-creds string                        When using --grpc-auth-mode=static in the server, this file provides the credentials to use to authenticate with server.
+>>>>>>> a240ed6c4b (Refer to flags by their dashed names in help and error text (#21339))
       --grpc-compression string                                     Which protocol to use for compressing gRPC. Default: nothing. Supported: snappy
       --grpc-dial-concurrency-limit int                             Maximum concurrency of grpc dial operations. This should be less than the golang max thread limit of 10000. (default 1024)
       --grpc-enable-tracing                                         Enable gRPC tracing.

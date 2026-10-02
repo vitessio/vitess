@@ -73,7 +73,7 @@ For query bound variables, we assume place-holders in the query string
 in the form of :v1, :v2, etc.`,
 		Example: `vtclient --server vtgate:15991 "SELECT * FROM messages"
 
-vtclient --server vtgate:15991 --target '@primary' --bind_variables '[ 12345, 1, "msg 12345" ]' "INSERT INTO messages (page,time_created_ns,message) VALUES (:v1, :v2, :v3)"`,
+vtclient --server vtgate:15991 --target '@primary' --bind-variables '[ 12345, 1, "msg 12345" ]' "INSERT INTO messages (page,time_created_ns,message) VALUES (:v1, :v2, :v3)"`,
 		Args:    cobra.ExactArgs(1),
 		Version: servenv.AppVersion.String(),
 		RunE:    run,
