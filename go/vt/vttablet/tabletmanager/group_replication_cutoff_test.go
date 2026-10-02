@@ -295,7 +295,7 @@ func TestStartGroupReplicationBootstrapDoesNotWaitForCutOffTopo(t *testing.T) {
 	// The tablet read the shard's group, as its sync loop does every few seconds.
 	_, err := tm.readShardGroupRecord(ctx, nil)
 	require.NoError(t, err)
-	durability, err := tm.keyspaceDurability(ctx)
+	durability, err := tm.shardDurability(ctx)
 	require.NoError(t, err)
 	want, err := tm.groupReplicationConfig(ctx, durability)
 	require.NoError(t, err)

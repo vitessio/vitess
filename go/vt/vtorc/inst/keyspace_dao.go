@@ -87,11 +87,30 @@ func SaveKeyspace(keyspace *topo.KeyspaceInfo) error {
 	return err
 }
 
-// GetDurabilityPolicy gets the durability policy for the given keyspace.
-func GetDurabilityPolicy(keyspace string) (policy.Durabler, error) {
+// GetShardDurabilityPolicy gets the durability policy that applies to the given shard: the
+// shard's own policy if its shard record sets one, else its keyspace's (topo.ShardDurabilityPolicy),
+// from VTOrc's copies of the records. A recovery refreshes both under the shard lock before it
+// runs (RefreshKeyspaceAndShard). A shard whose record VTOrc has not read has the keyspace's
+// policy, as in the detection analysis.
+func GetShardDurabilityPolicy(keyspace, shard string) (policy.Durabler, error) {
 	ki, err := ReadKeyspace(keyspace)
 	if err != nil {
 		return nil, err
 	}
-	return policy.GetDurabilityPolicy(ki.DurabilityPolicy)
+	shardPolicy, err := ReadShardDurabilityPolicy(keyspace, shard)
+	if err != nil && !errors.Is(err, ErrShardNotFound) {
+		return nil, err
+	}
+	return policy.GetDurabilityPolicy(topo.ShardDurabilityPolicy(ki.DurabilityPolicy, &topodatapb.Shard{DurabilityPolicy: shardPolicy}))
+}
+
+// GetShardRecordDurabilityPolicy gets the durability policy that applies to the shard of a shard
+// record read from the topology: the shard's own policy if the record sets one, else its
+// keyspace's, from VTOrc's copy of the keyspace record.
+func GetShardRecordDurabilityPolicy(keyspace string, shard *topodatapb.Shard) (policy.Durabler, error) {
+	ki, err := ReadKeyspace(keyspace)
+	if err != nil {
+		return nil, err
+	}
+	return policy.GetDurabilityPolicy(topo.ShardDurabilityPolicy(ki.DurabilityPolicy, shard))
 }

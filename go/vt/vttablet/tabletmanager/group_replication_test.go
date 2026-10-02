@@ -231,7 +231,7 @@ func TestGroupReplicationConfig(t *testing.T) {
 		fmd.StartGroupReplicationError = errors.New("no seed reachable")
 	})
 
-	durability, err := tm.keyspaceDurability(ctx)
+	durability, err := tm.shardDurability(ctx)
 	require.NoError(t, err)
 	cfg, err := tm.groupReplicationConfig(ctx, durability)
 	require.NoError(t, err)

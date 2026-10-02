@@ -39,11 +39,16 @@ var MigrateReplicationMode = &cobra.Command{
 
 With a group replication durability policy (group_replication, group_replication_cross_cell), every shard
 is converted under its shard lock: the group is bootstrapped on the primary, the voting replicas join one
-at a time, and the other tablets keep replicating asynchronously from the primary. The keyspace durability
-policy is updated once every shard of the keyspace runs Group Replication.
+at a time, and the other tablets keep replicating asynchronously from the primary.
 
-With any other durability policy, the keyspace durability policy is updated first, and then every shard
-leaves its group: the secondaries first, each repointed to the primary, and the primary last.
+With any other durability policy, every shard leaves its group under its shard lock: the secondaries
+first, each repointed to the primary, and the primary last.
+
+A converted shard gets the target policy as its own durability policy (in its shard record), which
+applies instead of the keyspace's, so that vtctld, VTOrc and vttablet manage it as converted while the
+keyspace is half migrated. The keyspace durability policy is updated once every shard of the keyspace is
+converted, and the shards' own policies are then removed. vtctld, VTOrc and every vttablet must run a
+version that knows the shard's own policy before a migration starts.
 
 Every step checks the current state first, so the command can be run again after a failure. With
 --dry-run, the command prints the plan without changing anything.`,

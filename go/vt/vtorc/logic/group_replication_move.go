@@ -266,17 +266,17 @@ func moveGroupPrimaryOutOfUnreachableCell(ctx context.Context, analysisEntry *in
 	groupPrimaryAlias := topoproto.TabletAliasString(groupPrimary.Alias)
 	cell := groupPrimary.Alias.Cell
 
-	durability, err := inst.GetDurabilityPolicy(keyspace)
+	durability, err := inst.GetShardRecordDurabilityPolicy(keyspace, shardInfo.Shard)
 	if err != nil {
-		return nil, vterrors.Wrapf(err, "failed to read the durability policy of keyspace %s", keyspace)
+		return nil, vterrors.Wrapf(err, "failed to read the durability policy of shard %s", keyspaceShard)
 	}
 	grd, ok := policy.AsGroupReplication(durability)
 	if !ok {
-		// During a migration the policy is still asynchronous, and the shard primary may not be a
-		// member of the group: the group primary is not moved.
+		// While the shard is being converted the policy is still asynchronous, and the shard
+		// primary may not be a member of the group: the group primary is not moved.
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
-			"cannot promote %s: the topology server of its cell %s does not answer, and the durability policy of keyspace %s does not use group replication, so the group primary is not moved",
-			groupPrimaryAlias, cell, keyspace)
+			"cannot promote %s: the topology server of its cell %s does not answer, and the durability policy of shard %s does not use group replication, so the group primary is not moved",
+			groupPrimaryAlias, cell, keyspaceShard)
 	}
 	if remaining := groupPrimaryMoves.holdRemaining(groupPrimaryAlias, now); remaining > 0 {
 		groupPrimaryMoves.backOff(groupPrimaryAlias, now.Add(min(remaining, groupPrimaryMoveRetryInterval)))

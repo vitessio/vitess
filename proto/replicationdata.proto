@@ -141,6 +141,10 @@ message FullStatus {
   // group_replication_enabled is true when the tablet runs with --enable-group-replication, and so
   // can make its MySQL a member of its shard's group.
   bool group_replication_enabled = 28;
+  // shard_durability_policy_supported is true when the tablet applies its shard's own durability
+  // policy (topodata.Shard.durability_policy) over its keyspace's. MigrateReplicationMode
+  // requires it on every voter.
+  bool shard_durability_policy_supported = 29;
 }
 
 // GroupReplicationMember is one member of a MySQL Group Replication group, as seen by the

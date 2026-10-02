@@ -348,7 +348,7 @@ func TestMigrateReplicationModePreflight(t *testing.T) {
 }
 
 // TestMigrateReplicationModeFromGroupReplication converts a group back to semi-sync: the
-// policy changes first, the secondaries leave one by one and replicate from the primary with
+// shard's policy changes first, the secondaries leave one by one and replicate from the primary with
 // semi-sync, the migrator waits for the primary to re-enable semi-sync, the primary leaves
 // last and becomes writable, and the voters are removed from the shard record. Running it
 // again changes nothing.
@@ -368,6 +368,10 @@ func TestMigrateReplicationModeFromGroupReplication(t *testing.T) {
 	assert.Equal(t, MigrationStepDone, stepStatuses(resp.Shards[0].Steps)[MigrationActionClearIncarnation])
 	assert.Equal(t, MigrationStepDone, stepStatuses(resp.Shards[0].Steps)[MigrationActionClearVoters])
 	assert.Equal(t, MigrationStepDone, stepStatuses(resp.KeyspaceSteps)[MigrationActionSetDurabilityPolicy])
+	// The shard's own policy, which the keyspace has now, is removed once the keyspace switched.
+	assert.Equal(t, MigrationStepDone, stepStatuses(resp.Shards[0].Steps)[MigrationActionSetShardDurabilityPolicy])
+	assert.Equal(t, MigrationStepDone, stepStatuses(resp.KeyspaceSteps)[MigrationActionClearShardDurabilityPolicy])
+	assert.Empty(t, c.shardPolicy(t))
 
 	stops := callsWithPrefix(c.mutatingCalls(), "StopGroupReplication")
 	require.Len(t, stops, 4)

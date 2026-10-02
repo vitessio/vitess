@@ -139,6 +139,45 @@ func (ts *Server) GetKeyspaceDurability(ctx context.Context, keyspace string) (s
 	return "none", nil
 }
 
+// ShardDurabilityPolicy is the single resolver of the durability policy that applies to a shard:
+// the shard's own policy (Shard.durability_policy) if it is set, else its keyspace's. It returns ""
+// if neither is set. MigrateReplicationMode sets a shard's own policy while it converts a keyspace
+// between asynchronous replication and MySQL Group Replication one shard at a time, so that every
+// component manages a converted shard by the policy it was converted to, and the shards that are
+// not converted yet by the keyspace's. Every decision that depends on the durability of a shard
+// resolves its policy here.
+func ShardDurabilityPolicy(keyspacePolicy string, shard *topodatapb.Shard) string {
+	if shardPolicy := shard.GetDurabilityPolicy(); shardPolicy != "" {
+		return shardPolicy
+	}
+	return keyspacePolicy
+}
+
+// GetShardDurability reads the keyspace and the shard records and returns the durability policy
+// that applies to the shard (see ShardDurabilityPolicy), or "none" if neither sets one.
+func (ts *Server) GetShardDurability(ctx context.Context, keyspace, shard string) (string, error) {
+	si, err := ts.GetShard(ctx, keyspace, shard)
+	if err != nil {
+		return "", err
+	}
+	return ts.GetShardInfoDurability(ctx, si)
+}
+
+// GetShardInfoDurability returns the durability policy that applies to the shard of a shard record
+// that the caller read (see ShardDurabilityPolicy), or "none" if neither the shard nor its keyspace
+// sets one. It only reads the keyspace record: the shard's own policy comes from the caller's
+// record, so that a caller that holds the shard lock decides on the record it locked.
+func (ts *Server) GetShardInfoDurability(ctx context.Context, si *ShardInfo) (string, error) {
+	keyspaceInfo, err := ts.GetKeyspace(ctx, si.Keyspace())
+	if err != nil {
+		return "", err
+	}
+	if durability := ShardDurabilityPolicy(keyspaceInfo.GetDurabilityPolicy(), si.Shard); durability != "" {
+		return durability, nil
+	}
+	return "none", nil
+}
+
 func (ts *Server) GetSidecarDBName(ctx context.Context, keyspace string) (string, error) {
 	keyspaceInfo, err := ts.GetKeyspace(ctx, keyspace)
 	if err != nil {

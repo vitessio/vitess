@@ -687,7 +687,7 @@ func (s *VtctldServer) ChangeTabletType(ctx context.Context, req *vtctldatapb.Ch
 		return nil, err
 	}
 
-	durabilityName, err := s.ts.GetKeyspaceDurability(ctx, tablet.Keyspace)
+	durabilityName, err := s.ts.GetShardInfoDurability(ctx, shard)
 	if err != nil {
 		return nil, err
 	}
@@ -2851,7 +2851,9 @@ func (s *VtctldServer) InitShardPrimaryLocked(
 	}
 	ev.ShardInfo = *shardInfo
 
-	durabilityName, err := s.ts.GetKeyspaceDurability(ctx, req.Keyspace)
+	// The shard's own policy, from the record read under the shard lock, applies over the
+	// keyspace's (see topo.ShardDurabilityPolicy).
+	durabilityName, err := s.ts.GetShardInfoDurability(ctx, shardInfo)
 	if err != nil {
 		return err
 	}
@@ -3768,7 +3770,7 @@ func (s *VtctldServer) ReparentTablet(ctx context.Context, req *vtctldatapb.Repa
 		return nil, err
 	}
 
-	durabilityName, err := s.ts.GetKeyspaceDurability(ctx, tablet.Keyspace)
+	durabilityName, err := s.ts.GetShardInfoDurability(ctx, shard)
 	if err != nil {
 		return nil, err
 	}
@@ -4522,7 +4524,7 @@ func (s *VtctldServer) StartReplication(ctx context.Context, req *vtctldatapb.St
 		return nil, err
 	}
 
-	durabilityName, err := s.ts.GetKeyspaceDurability(ctx, tablet.Keyspace)
+	durabilityName, err := s.ts.GetShardInfoDurability(ctx, shard)
 	if err != nil {
 		return nil, err
 	}
@@ -4627,7 +4629,7 @@ func (s *VtctldServer) TabletExternallyReparented(ctx context.Context, req *vtct
 
 	event.DispatchUpdate(ev, "starting external reparent")
 
-	durabilityName, err := s.ts.GetKeyspaceDurability(ctx, tablet.Keyspace)
+	durabilityName, err := s.ts.GetShardInfoDurability(ctx, shard)
 	if err != nil {
 		return nil, err
 	}

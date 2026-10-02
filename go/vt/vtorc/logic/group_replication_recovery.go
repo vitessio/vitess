@@ -385,17 +385,19 @@ func bootstrapGroupReplication(ctx context.Context, analysisEntry *inst.Detectio
 		}
 	}()
 
-	durability, err := inst.GetDurabilityPolicy(analysisEntry.AnalyzedKeyspace)
+	// The shard is locked, so the voters and the shard's durability policy cannot change until the
+	// group is bootstrapped.
+	shardInfo, err := ts.GetShard(ctx, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
+	if err != nil {
+		return false, topologyRecovery, vterrors.Wrapf(err, "failed to read the shard record of %s", topoproto.KeyspaceShardString(analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard))
+	}
+	durability, err := inst.GetShardRecordDurabilityPolicy(analysisEntry.AnalyzedKeyspace, shardInfo.Shard)
 	if err != nil {
 		return false, topologyRecovery, err
 	}
 	if !policy.IsGroupReplication(durability) {
-		return false, topologyRecovery, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "the durability policy of keyspace %s does not use group replication", analysisEntry.AnalyzedKeyspace)
-	}
-	// The shard is locked, so the voters cannot change until the group is bootstrapped.
-	shardInfo, err := ts.GetShard(ctx, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
-	if err != nil {
-		return false, topologyRecovery, vterrors.Wrapf(err, "failed to read the shard record of %s", topoproto.KeyspaceShardString(analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard))
+		return false, topologyRecovery, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "the durability policy of shard %s does not use group replication",
+			topoproto.KeyspaceShardString(analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard))
 	}
 	tabletInfos, err := getShardTablets(ctx, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
 	if err != nil {
@@ -744,17 +746,17 @@ func updateGroupReplicationVoters(ctx context.Context, analysisEntry *inst.Detec
 
 	keyspace, shard := analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard
 	keyspaceShard := topoproto.KeyspaceShardString(keyspace, shard)
-	durability, err := inst.GetDurabilityPolicy(keyspace)
+	shardInfo, err := ts.GetShard(ctx, keyspace, shard)
+	if err != nil {
+		return false, topologyRecovery, vterrors.Wrapf(err, "failed to read the shard record of %s", keyspaceShard)
+	}
+	durability, err := inst.GetShardRecordDurabilityPolicy(keyspace, shardInfo.Shard)
 	if err != nil {
 		return false, topologyRecovery, err
 	}
 	grd, ok := policy.AsGroupReplication(durability)
 	if !ok {
-		return false, topologyRecovery, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "the durability policy of keyspace %s does not use group replication", keyspace)
-	}
-	shardInfo, err := ts.GetShard(ctx, keyspace, shard)
-	if err != nil {
-		return false, topologyRecovery, vterrors.Wrapf(err, "failed to read the shard record of %s", keyspaceShard)
+		return false, topologyRecovery, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "the durability policy of shard %s does not use group replication", keyspaceShard)
 	}
 	current := shardInfo.GroupReplicationVoters
 	tabletInfos, err := getShardTablets(ctx, keyspace, shard)

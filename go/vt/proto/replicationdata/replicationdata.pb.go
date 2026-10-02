@@ -648,8 +648,12 @@ type FullStatus struct {
 	// group_replication_enabled is true when the tablet runs with --enable-group-replication, and so
 	// can make its MySQL a member of its shard's group.
 	GroupReplicationEnabled bool `protobuf:"varint,28,opt,name=group_replication_enabled,json=groupReplicationEnabled,proto3" json:"group_replication_enabled,omitempty"`
-	unknownFields           protoimpl.UnknownFields
-	sizeCache               protoimpl.SizeCache
+	// shard_durability_policy_supported is true when the tablet applies its shard's own durability
+	// policy (topodata.Shard.durability_policy) over its keyspace's. MigrateReplicationMode
+	// requires it on every voter.
+	ShardDurabilityPolicySupported bool `protobuf:"varint,29,opt,name=shard_durability_policy_supported,json=shardDurabilityPolicySupported,proto3" json:"shard_durability_policy_supported,omitempty"`
+	unknownFields                  protoimpl.UnknownFields
+	sizeCache                      protoimpl.SizeCache
 }
 
 func (x *FullStatus) Reset() {
@@ -874,6 +878,13 @@ func (x *FullStatus) GetGroupReplicationStatus() *GroupReplicationStatus {
 func (x *FullStatus) GetGroupReplicationEnabled() bool {
 	if x != nil {
 		return x.GroupReplicationEnabled
+	}
+	return false
+}
+
+func (x *FullStatus) GetShardDurabilityPolicySupported() bool {
+	if x != nil {
+		return x.ShardDurabilityPolicySupported
 	}
 	return false
 }
@@ -1175,7 +1186,7 @@ const file_replicationdata_proto_rawDesc = "" +
 	"\x19consecutive_ping_failures\x18\x02 \x01(\x03R\x17consecutivePingFailures\x12>\n" +
 	"\x14last_successful_ping\x18\x03 \x01(\v2\f.vttime.TimeR\x12lastSuccessfulPing\x12<\n" +
 	"\x13last_attempted_ping\x18\x04 \x01(\v2\f.vttime.TimeR\x11lastAttemptedPing\x12T\n" +
-	"\x1etime_since_last_attempted_ping\x18\x05 \x01(\v2\x10.vttime.DurationR\x1atimeSinceLastAttemptedPing\"\xbb\v\n" +
+	"\x1etime_since_last_attempted_ping\x18\x05 \x01(\v2\x10.vttime.DurationR\x1atimeSinceLastAttemptedPing\"\x86\f\n" +
 	"\n" +
 	"FullStatus\x12\x1b\n" +
 	"\tserver_id\x18\x01 \x01(\rR\bserverId\x12\x1f\n" +
@@ -1209,7 +1220,8 @@ const file_replicationdata_proto_rawDesc = "" +
 	"tabletType\x12L\n" +
 	"\x11shard_peer_health\x18\x1a \x03(\v2 .replicationdata.ShardPeerHealthR\x0fshardPeerHealth\x12a\n" +
 	"\x18group_replication_status\x18\x1b \x01(\v2'.replicationdata.GroupReplicationStatusR\x16groupReplicationStatus\x12:\n" +
-	"\x19group_replication_enabled\x18\x1c \x01(\bR\x17groupReplicationEnabled\"\xa5\x01\n" +
+	"\x19group_replication_enabled\x18\x1c \x01(\bR\x17groupReplicationEnabled\x12I\n" +
+	"!shard_durability_policy_supported\x18\x1d \x01(\bR\x1eshardDurabilityPolicySupported\"\xa5\x01\n" +
 	"\x16GroupReplicationMember\x12\x1f\n" +
 	"\vmember_uuid\x18\x01 \x01(\tR\n" +
 	"memberUuid\x12\x12\n" +

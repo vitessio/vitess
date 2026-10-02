@@ -138,9 +138,9 @@ func SaveShard(shard *topo.ShardInfo) error {
 	_, err := db.ExecVTOrc(`
 		replace	into vitess_shard (
 			keyspace, shard, primary_alias, primary_timestamp, disable_emergency_reparent, group_replication_voters,
-			group_replication_incarnation, group_replication_bootstrap_target
+			group_replication_incarnation, group_replication_bootstrap_target, durability_policy
 		) values (
-			?, ?, ?, ?, ?, ?, ?, ?
+			?, ?, ?, ?, ?, ?, ?, ?, ?
 		)`,
 		shard.Keyspace(),
 		shard.ShardName(),
@@ -150,8 +150,35 @@ func SaveShard(shard *topo.ShardInfo) error {
 		formatGroupReplicationVoters(shard.GroupReplicationVoters),
 		shard.GroupReplicationIncarnation,
 		groupReplicationBootstrapTarget(shard.Shard),
+		shard.GetDurabilityPolicy(),
 	)
 	return err
+}
+
+// ReadShardDurabilityPolicy reads the shard's own durability policy, "" if its shard record does
+// not set one (see topo.ShardDurabilityPolicy).
+func ReadShardDurabilityPolicy(keyspaceName, shardName string) (string, error) {
+	query := `SELECT
+			durability_policy
+		FROM
+			vitess_shard
+		WHERE
+			keyspace = ?
+			AND shard = ?`
+	durabilityPolicy := ""
+	shardFound := false
+	err := db.QueryVTOrc(query, sqlutils.Args(keyspaceName, shardName), func(row sqlutils.RowMap) error {
+		shardFound = true
+		durabilityPolicy = row.GetString("durability_policy")
+		return nil
+	})
+	if err != nil {
+		return "", err
+	}
+	if !shardFound {
+		return "", ErrShardNotFound
+	}
+	return durabilityPolicy, nil
 }
 
 // groupReplicationBootstrapTarget returns the alias of the target of the shard's bootstrap intent,

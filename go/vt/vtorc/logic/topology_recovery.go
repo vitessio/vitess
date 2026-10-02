@@ -567,10 +567,10 @@ func restartDirectReplicas(ctx context.Context, analysisEntry *inst.DetectionAna
 		}
 	}()
 
-	// Get durability policy for the keyspace to determine semi-sync settings
-	durabilityPolicy, err := inst.GetDurabilityPolicy(analysisEntry.AnalyzedKeyspace)
+	// Get the shard's durability policy to determine semi-sync settings
+	durabilityPolicy, err := inst.GetShardDurabilityPolicy(analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
 	if err != nil {
-		logger.Error(fmt.Sprintf("Error getting durability policy for keyspace %v: %v", analysisEntry.AnalyzedKeyspace, err))
+		logger.Error(fmt.Sprintf("Error getting durability policy for shard %v/%v: %v", analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard, err))
 		return false, topologyRecovery, err
 	}
 
@@ -1598,7 +1598,7 @@ func fixPrimary(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logg
 		return false, topologyRecovery, err
 	}
 
-	durabilityPolicy, err := inst.GetDurabilityPolicy(analyzedTablet.Keyspace)
+	durabilityPolicy, err := inst.GetShardDurabilityPolicy(analyzedTablet.Keyspace, analyzedTablet.Shard)
 	if err != nil {
 		logger.Info(fmt.Sprintf("Could not read the durability policy for %v/%v", analyzedTablet.Keyspace, analyzedTablet.Shard))
 		return false, topologyRecovery, err
@@ -1644,7 +1644,7 @@ func fixReplica(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logg
 		return false, topologyRecovery, err
 	}
 
-	durabilityPolicy, err := inst.GetDurabilityPolicy(analyzedTablet.Keyspace)
+	durabilityPolicy, err := inst.GetShardDurabilityPolicy(analyzedTablet.Keyspace, analyzedTablet.Shard)
 	if err != nil {
 		logger.Info(fmt.Sprintf("Could not read the durability policy for %v/%v", analyzedTablet.Keyspace, analyzedTablet.Shard))
 		return false, topologyRecovery, err
@@ -1736,7 +1736,7 @@ func reconcileStaleTopoPrimary(ctx context.Context, analysisEntry *inst.Detectio
 			return
 		}
 
-		durabilityPolicy, err := inst.GetDurabilityPolicy(analyzedTablet.Keyspace)
+		durabilityPolicy, err := inst.GetShardDurabilityPolicy(analyzedTablet.Keyspace, analyzedTablet.Shard)
 		if err != nil {
 			logger.Error("failed to read durability policy", slog.String("tablet", aliasString), slog.Any("error", err))
 			return
@@ -1826,7 +1826,7 @@ func recoverErrantGTIDDetected(ctx context.Context, analysisEntry *inst.Detectio
 		return false, topologyRecovery, err
 	}
 
-	durabilityPolicy, err := inst.GetDurabilityPolicy(analyzedTablet.Keyspace)
+	durabilityPolicy, err := inst.GetShardDurabilityPolicy(analyzedTablet.Keyspace, analyzedTablet.Shard)
 	if err != nil {
 		logger.Info(fmt.Sprintf("Could not read the durability policy for %v/%v", analyzedTablet.Keyspace, analyzedTablet.Shard))
 		return false, topologyRecovery, err

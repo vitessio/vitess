@@ -138,6 +138,9 @@ type shardGroupRecord struct {
 	incarnation  string
 	voters       []*topodatapb.TabletAlias
 	primaryAlias *topodatapb.TabletAlias
+	// durabilityPolicy is the shard's own durability policy, "" if the shard record does not set
+	// one (see TabletManager.shardDurability).
+	durabilityPolicy string
 	// tablets are the tablet records of the shard, by alias, read at tabletsRead.
 	tablets     map[string]*topodatapb.Tablet
 	tabletsRead time.Time
@@ -154,10 +157,11 @@ func (tm *TabletManager) readShardGroupRecord(ctx context.Context, prev *shardGr
 		return nil, vterrors.Wrapf(err, "cannot read shard %v/%v", tablet.Keyspace, tablet.Shard)
 	}
 	rec := &shardGroupRecord{
-		incarnation:  si.GetGroupReplicationIncarnation(),
-		voters:       si.GetGroupReplicationVoters(),
-		primaryAlias: si.PrimaryAlias,
-		tablets:      make(map[string]*topodatapb.Tablet),
+		incarnation:      si.GetGroupReplicationIncarnation(),
+		voters:           si.GetGroupReplicationVoters(),
+		primaryAlias:     si.PrimaryAlias,
+		durabilityPolicy: si.GetDurabilityPolicy(),
+		tablets:          make(map[string]*topodatapb.Tablet),
 	}
 	tm.groupReplicationTopo.setVoters(rec.voters)
 	if prev != nil && time.Since(prev.tabletsRead) < groupReplicationTabletsCacheTTL && tm.identifiesVoters(rec.voters, prev.tablets) {

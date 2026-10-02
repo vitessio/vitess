@@ -243,7 +243,7 @@ type TabletManager struct {
 	// incarnation of the last group this tablet bootstrapped.
 	groupReplicationPeers groupReplicationPeers
 	// groupReplicationTopo remembers what the tablet last read from the topology about its
-	// keyspace's durability policy and its shard's voters and tablets, for the group replication
+	// shard's durability policy, voters and tablets, for the group replication
 	// RPCs that must not wait for a topology server that does not answer.
 	groupReplicationTopo groupReplicationTopoCache
 
@@ -835,7 +835,7 @@ func (tm *TabletManager) rebuildKeyspace(ctx context.Context, done chan<- struct
 
 func (tm *TabletManager) checkPrimaryShip(ctx context.Context, si *topo.ShardInfo) error {
 	if groupReplicationEnabled() {
-		durability, err := tm.keyspaceDurability(ctx)
+		durability, err := tm.shardDurability(ctx)
 		if err != nil {
 			return err
 		}
@@ -1250,9 +1250,9 @@ func (tm *TabletManager) initializeReplication(ctx context.Context, tabletType t
 		return "", vterrors.Wrapf(err, "cannot read primary tablet %v", si.PrimaryAlias)
 	}
 
-	durabilityName, err := tm.TopoServer.GetKeyspaceDurability(ctx, tablet.Keyspace)
+	durabilityName, err := tm.TopoServer.GetShardInfoDurability(ctx, si)
 	if err != nil {
-		return "", vterrors.Wrapf(err, "cannot read keyspace durability policy %v", tablet.Keyspace)
+		return "", vterrors.Wrapf(err, "cannot read the durability policy of shard %v/%v", tablet.Keyspace, tablet.Shard)
 	}
 	log.Info(fmt.Sprintf("Getting a new durability policy for %v", durabilityName))
 	durability, err := policy.GetDurabilityPolicy(durabilityName)

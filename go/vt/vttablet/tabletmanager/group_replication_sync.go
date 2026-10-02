@@ -74,8 +74,11 @@ import (
 type groupReplicationSync struct {
 	tm *TabletManager
 
-	durability     policy.Durabler
-	durabilityRead time.Time
+	// durability is the shard's durability policy, read at durabilityRead from a shard record
+	// that set the shard's own policy durabilityShardPolicy ("" for none).
+	durability            policy.Durabler
+	durabilityRead        time.Time
+	durabilityShardPolicy string
 
 	voters     []*topodatapb.TabletAlias
 	votersRead time.Time
@@ -354,16 +357,32 @@ func (s *groupReplicationSync) logTransition(status *replicationdatapb.GroupRepl
 	s.lastRole = status.MemberRole
 }
 
+// getDurability returns the shard's durability policy (TabletManager.shardDurability), cached for
+// groupReplicationDurabilityCacheTTL. The cache is dropped as soon as a shard record that the loop
+// read since sets another own policy for the shard: MigrateReplicationMode changes it under the
+// shard lock when it converts the shard, and the loop reads the shard record much more often than
+// the keyspace's.
 func (s *groupReplicationSync) getDurability(ctx context.Context) (policy.Durabler, error) {
-	if s.durability != nil && time.Since(s.durabilityRead) < groupReplicationDurabilityCacheTTL {
+	if s.durability != nil && time.Since(s.durabilityRead) < groupReplicationDurabilityCacheTTL && !s.shardPolicyChanged() {
 		return s.durability, nil
 	}
-	durability, err := s.tm.keyspaceDurability(ctx)
+	return s.readDurability(ctx)
+}
+
+// shardPolicyChanged returns whether the loop read a shard record after the cached durability
+// policy, and that record sets another own policy for the shard than the one the cached policy was
+// resolved with.
+func (s *groupReplicationSync) shardPolicyChanged() bool {
+	return s.record != nil && s.recordRead.After(s.durabilityRead) && s.record.durabilityPolicy != s.durabilityShardPolicy
+}
+
+// readDurability reads the shard's durability policy from the topology and caches it.
+func (s *groupReplicationSync) readDurability(ctx context.Context) (policy.Durabler, error) {
+	durability, shardPolicy, err := s.tm.resolveShardDurability(ctx)
 	if err != nil {
 		return nil, err
 	}
-	s.durability = durability
-	s.durabilityRead = time.Now()
+	s.durability, s.durabilityRead, s.durabilityShardPolicy = durability, time.Now(), shardPolicy
 	return durability, nil
 }
 
@@ -703,14 +722,11 @@ func (s *groupReplicationSync) voterMajorityLost(ctx context.Context, status *re
 	if rec, err = s.getRecord(ctx, true); err != nil {
 		return false, err
 	}
-	// A migration back to semi-sync sets the keyspace policy first, and then shrinks the group to
+	// A migration back to semi-sync sets the shard's policy first, and then shrinks the group to
 	// the primary: under the policy cached a moment ago, the primary would stop serving, and serve
 	// again once the cache expires, a second pause before the primary's own leave of the group.
-	if durability, err := s.tm.keyspaceDurability(ctx); err == nil {
-		s.durability, s.durabilityRead = durability, time.Now()
-		if !policy.IsGroupReplication(durability) {
-			return false, nil
-		}
+	if durability, err := s.readDurability(ctx); err == nil && !policy.IsGroupReplication(durability) {
+		return false, nil
 	}
 	return len(rec.voters) > 0 && !s.tm.legitimateGroup(ctx, rec, status, true).HasVoterMajority(status), nil
 }

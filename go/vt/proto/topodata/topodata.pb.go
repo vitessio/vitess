@@ -612,8 +612,19 @@ type Shard struct {
 	// VTOrc from bootstrapping the group on another tablet. It is cleared when an incarnation is
 	// recorded. Readers that do not know it ignore it.
 	GroupReplicationBootstrapIntent *GroupReplicationBootstrapIntent `protobuf:"bytes,12,opt,name=group_replication_bootstrap_intent,json=groupReplicationBootstrapIntent,proto3" json:"group_replication_bootstrap_intent,omitempty"`
-	unknownFields                   protoimpl.UnknownFields
-	sizeCache                       protoimpl.SizeCache
+	// durability_policy, if set, is the durability policy of this shard, which then applies instead
+	// of the keyspace's durability_policy. MigrateReplicationMode converts a keyspace between
+	// asynchronous replication and MySQL Group Replication one shard at a time, under the shard
+	// lock: it sets the target policy here once it converted the shard, so that the shard is
+	// managed as a converted shard while the keyspace policy still describes the shards that are
+	// not converted yet, and clears it once the keyspace policy matches. Every component resolves
+	// a shard's policy as "this field if set, else the keyspace's" (topo.ShardDurabilityPolicy).
+	// Readers that do not know the field use the keyspace policy, which is wrong for a converted
+	// shard of a keyspace that is half migrated: vtctld, VTOrc and vttablet must all know it
+	// before a migration starts.
+	DurabilityPolicy string `protobuf:"bytes,13,opt,name=durability_policy,json=durabilityPolicy,proto3" json:"durability_policy,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *Shard) Reset() {
@@ -714,6 +725,13 @@ func (x *Shard) GetGroupReplicationBootstrapIntent() *GroupReplicationBootstrapI
 		return x.GroupReplicationBootstrapIntent
 	}
 	return nil
+}
+
+func (x *Shard) GetDurabilityPolicy() string {
+	if x != nil {
+		return x.DurabilityPolicy
+	}
+	return ""
 }
 
 // GroupReplicationBootstrapIntent is a bootstrap of a shard's MySQL Group Replication group that
@@ -1984,7 +2002,7 @@ const file_topodata_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\x05R\x05value:\x028\x01\x1a7\n" +
 	"\tTagsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01J\x04\b\x03\x10\x04J\x04\b\v\x10\fJ\x04\b\x0f\x10\x10\"\x9d\b\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01J\x04\b\x03\x10\x04J\x04\b\v\x10\fJ\x04\b\x0f\x10\x10\"\xca\b\n" +
 	"\x05Shard\x12:\n" +
 	"\rprimary_alias\x18\x01 \x01(\v2\x15.topodata.TabletAliasR\fprimaryAlias\x12C\n" +
 	"\x17primary_term_start_time\x18\b \x01(\v2\f.vttime.TimeR\x14primaryTermStartTime\x12/\n" +
@@ -1997,7 +2015,8 @@ const file_topodata_proto_rawDesc = "" +
 	"\x18group_replication_voters\x18\n" +
 	" \x03(\v2\x15.topodata.TabletAliasR\x16groupReplicationVoters\x12B\n" +
 	"\x1dgroup_replication_incarnation\x18\v \x01(\tR\x1bgroupReplicationIncarnation\x12v\n" +
-	"\"group_replication_bootstrap_intent\x18\f \x01(\v2).topodata.GroupReplicationBootstrapIntentR\x1fgroupReplicationBootstrapIntent\x1a\x9a\x01\n" +
+	"\"group_replication_bootstrap_intent\x18\f \x01(\v2).topodata.GroupReplicationBootstrapIntentR\x1fgroupReplicationBootstrapIntent\x12+\n" +
+	"\x11durability_policy\x18\r \x01(\tR\x10durabilityPolicy\x1a\x9a\x01\n" +
 	"\vSourceShard\x12\x10\n" +
 	"\x03uid\x18\x01 \x01(\x05R\x03uid\x12\x1a\n" +
 	"\bkeyspace\x18\x02 \x01(\tR\bkeyspace\x12\x14\n" +

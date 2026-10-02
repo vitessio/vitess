@@ -54,24 +54,31 @@ const (
 
 // Actions of a replication mode migration.
 const (
-	MigrationActionPreflight              = "preflight"
-	MigrationActionBootstrapGroup         = "bootstrap_group"
-	MigrationActionJoinGroup              = "join_group"
-	MigrationActionWaitSemiSyncDisabled   = "wait_semi_sync_disabled"
-	MigrationActionWaitSemiSyncAckers     = "wait_semi_sync_ackers"
-	MigrationActionWaitSemiSyncEnabled    = "wait_semi_sync_enabled"
-	MigrationActionSetReplicationSource   = "set_replication_source"
-	MigrationActionLeaveGroup             = "leave_group"
-	MigrationActionWaitWritable           = "wait_writable"
-	MigrationActionSetDurabilityPolicy    = "set_durability_policy"
-	MigrationActionKeepDurabilityPolicy   = "keep_durability_policy"
-	MigrationActionSetVoters              = "set_voters"
-	MigrationActionClearVoters            = "clear_voters"
-	MigrationActionSetIncarnation         = "set_incarnation"
-	MigrationActionClearIncarnation       = "clear_incarnation"
-	minimumGroupReplicationMembers        = 3
-	defaultReplicationModeMigrationWait   = 5 * time.Minute
-	defaultReplicationModeMigrationPollAt = 500 * time.Millisecond
+	MigrationActionPreflight            = "preflight"
+	MigrationActionBootstrapGroup       = "bootstrap_group"
+	MigrationActionJoinGroup            = "join_group"
+	MigrationActionWaitSemiSyncDisabled = "wait_semi_sync_disabled"
+	MigrationActionWaitSemiSyncAckers   = "wait_semi_sync_ackers"
+	MigrationActionWaitSemiSyncEnabled  = "wait_semi_sync_enabled"
+	MigrationActionSetReplicationSource = "set_replication_source"
+	MigrationActionLeaveGroup           = "leave_group"
+	MigrationActionWaitWritable         = "wait_writable"
+	MigrationActionSetDurabilityPolicy  = "set_durability_policy"
+	MigrationActionKeepDurabilityPolicy = "keep_durability_policy"
+	MigrationActionSetVoters            = "set_voters"
+	MigrationActionClearVoters          = "clear_voters"
+	MigrationActionSetIncarnation       = "set_incarnation"
+	MigrationActionClearIncarnation     = "clear_incarnation"
+	// MigrationActionSetShardDurabilityPolicy sets the shard's own durability policy to the target
+	// policy (Shard.durability_policy): after its conversion to Group Replication, or before its
+	// conversion back.
+	MigrationActionSetShardDurabilityPolicy = "set_shard_durability_policy"
+	// MigrationActionClearShardDurabilityPolicy removes a shard's own durability policy once the
+	// keyspace has the same policy.
+	MigrationActionClearShardDurabilityPolicy = "clear_shard_durability_policy"
+	minimumGroupReplicationMembers            = 3
+	defaultReplicationModeMigrationWait       = 5 * time.Minute
+	defaultReplicationModeMigrationPollAt     = 500 * time.Millisecond
 )
 
 // groupReplicationSchemaCheckQuery lists the user tables that Group Replication cannot
@@ -129,6 +136,8 @@ type migrationRun struct {
 	opts     MigrateReplicationModeOptions
 	current  policy.Durabler
 	target   policy.Durabler
+	// keyspacePolicy is the keyspace's durability policy when the migration started.
+	keyspacePolicy string
 }
 
 // migrationShard carries the state of the migration of one shard.
@@ -147,17 +156,24 @@ type migrationShard struct {
 	// recordedIncarnation is the group incarnation stored in the shard record when the shard
 	// was read.
 	recordedIncarnation string
+	// recordedPolicy is the shard's own durability policy stored in the shard record when the
+	// shard was read, "" if none.
+	recordedPolicy string
 }
 
 // Migrate converts the requested shards of the keyspace to the replication mode of the
-// target durability policy, and updates the keyspace durability policy:
+// target durability policy, and updates the keyspace durability policy. Both directions work
+// the same way:
 //
-//   - To a group replication policy, the shards are converted first, one at a time under
-//     their shard lock, and the keyspace policy is updated once every shard of the keyspace
-//     runs Group Replication.
-//   - To any other policy, the keyspace policy is updated first. Active groups supersede
-//     semi-sync, so this changes nothing until the shards leave their groups, one at a time
-//     under their shard lock.
+//   - The shards are converted one at a time, under their shard lock. Each shard's durability
+//     policy (topo.ShardDurabilityPolicy) changes only there, at a fixed step of its conversion:
+//     the migration stores the target policy as the shard's own policy (Shard.durability_policy)
+//     after the shard's conversion to Group Replication, or before its conversion back, before
+//     its group shrinks. Every component then manages a converted shard by the target policy,
+//     and the shards that are not converted yet by the keyspace policy.
+//   - The keyspace policy is switched once it changes the policy of no shard: every shard of
+//     the keyspace is converted and has the target policy. The shards' own policies, which are
+//     the keyspace's from then on, are removed afterwards.
 //
 // The response lists the steps of every shard, even when Migrate fails.
 func (m *ReplicationModeMigrator) Migrate(ctx context.Context, keyspace string, opts MigrateReplicationModeOptions) (*vtctldatapb.MigrateReplicationModeResponse, error) {
@@ -197,36 +213,40 @@ func (m *ReplicationModeMigrator) Migrate(ctx context.Context, keyspace string, 
 		}
 	}
 
-	run := &migrationRun{m: m, keyspace: keyspace, opts: opts, current: current, target: target}
-	if policy.IsGroupReplication(target) {
-		err = run.toGroupReplication(ctx, resp, shards, allShards, currentName)
-	} else {
-		err = run.fromGroupReplication(ctx, resp, shards, currentName)
-	}
-	return resp, err
+	run := &migrationRun{m: m, keyspace: keyspace, opts: opts, current: current, target: target, keyspacePolicy: currentName}
+	return resp, run.migrate(ctx, resp, shards, allShards, policy.IsGroupReplication(target))
 }
 
-func (r *migrationRun) toGroupReplication(ctx context.Context, resp *vtctldatapb.MigrateReplicationModeResponse, shards, allShards []string, currentName string) error {
+// migrate converts the shards, and switches the keyspace policy once every shard of the keyspace
+// is converted (see Migrate).
+func (r *migrationRun) migrate(ctx context.Context, resp *vtctldatapb.MigrateReplicationModeResponse, shards, allShards []string, toGroup bool) error {
+	from, to := policy.ReplicationModeGroupReplication.String(), policy.ReplicationModeAsync.String()
+	desc := "asynchronous replication"
+	if toGroup {
+		from, to = to, from
+		desc = "group replication"
+	}
 	converted := make(map[string]bool)
 	for _, shard := range shards {
-		result := &vtctldatapb.ReplicationModeMigrationShardResult{Shard: shard, ReplicationMode: policy.ReplicationModeAsync.String()}
+		result := &vtctldatapb.ReplicationModeMigrationShardResult{Shard: shard, ReplicationMode: from}
 		resp.Shards = append(resp.Shards, result)
-		if err := r.migrateShard(ctx, shard, result, true); err != nil {
-			return vterrors.Wrapf(err, "failed to convert shard %s/%s to group replication", r.keyspace, shard)
+		if err := r.migrateShard(ctx, shard, result, toGroup); err != nil {
+			return vterrors.Wrapf(err, "failed to convert shard %s/%s to %s", r.keyspace, shard, desc)
 		}
-		result.ReplicationMode = policy.ReplicationModeGroupReplication.String()
+		result.ReplicationMode = to
 		converted[shard] = true
 	}
 
-	// Switch the keyspace only once every shard of the keyspace runs Group Replication.
+	// The keyspace policy only changes once that changes no shard's policy: every shard of the
+	// keyspace is converted, and has the target policy, its own or the keyspace's.
 	var notConverted []string
 	for _, shard := range allShards {
 		if converted[shard] {
 			continue
 		}
-		ok, err := r.shardRunsGroupReplication(ctx, shard)
+		ok, err := r.shardConverted(ctx, shard, toGroup)
 		if err != nil {
-			r.m.logger.Warningf("cannot tell whether shard %s/%s runs group replication: %v", r.keyspace, shard, err)
+			r.m.logger.Warningf("cannot tell whether shard %s/%s is converted to %s: %v", r.keyspace, shard, desc, err)
 		}
 		if !ok {
 			notConverted = append(notConverted, shard)
@@ -234,25 +254,87 @@ func (r *migrationRun) toGroupReplication(ctx context.Context, resp *vtctldatapb
 	}
 	if len(notConverted) > 0 {
 		r.addKeyspaceStep(resp, MigrationActionKeepDurabilityPolicy, MigrationStepSkipped,
-			fmt.Sprintf("keep durability policy %s: shards %s do not run group replication yet", currentName, strings.Join(notConverted, ", ")))
+			fmt.Sprintf("keep durability policy %s: shards %s are not converted to %s with durability policy %s yet",
+				r.keyspacePolicy, strings.Join(notConverted, ", "), desc, r.opts.DurabilityPolicy))
 		return nil
 	}
-	return r.setKeyspacePolicy(ctx, resp, currentName)
-}
-
-func (r *migrationRun) fromGroupReplication(ctx context.Context, resp *vtctldatapb.MigrateReplicationModeResponse, shards []string, currentName string) error {
-	// Active groups supersede semi-sync, so the policy can change first. The tablets then
-	// re-enable semi-sync as their groups shrink.
-	if err := r.setKeyspacePolicy(ctx, resp, currentName); err != nil {
+	if err := r.setKeyspacePolicy(ctx, resp, r.keyspacePolicy); err != nil {
 		return err
 	}
-	for _, shard := range shards {
-		result := &vtctldatapb.ReplicationModeMigrationShardResult{Shard: shard, ReplicationMode: policy.ReplicationModeGroupReplication.String()}
-		resp.Shards = append(resp.Shards, result)
-		if err := r.migrateShard(ctx, shard, result, false); err != nil {
-			return vterrors.Wrapf(err, "failed to convert shard %s/%s to asynchronous replication", r.keyspace, shard)
+	return r.clearShardPolicies(ctx, resp, allShards, converted)
+}
+
+// clearShardPolicies removes the shards' own durability policy, which equals the keyspace's now
+// that the keyspace has the target policy. A shard that has another policy of its own keeps it.
+//
+// In a dry run, the shards converted by the run (converted) are planned to have the target policy
+// as their own unless the keyspace has it already.
+func (r *migrationRun) clearShardPolicies(ctx context.Context, resp *vtctldatapb.MigrateReplicationModeResponse, allShards []string, converted map[string]bool) error {
+	for _, shard := range allShards {
+		si, err := r.m.ts.GetShard(ctx, r.keyspace, shard)
+		if err != nil {
+			return err
 		}
-		result.ReplicationMode = policy.ReplicationModeAsync.String()
+		own := si.GetDurabilityPolicy()
+		if own == "" && r.opts.DryRun && converted[shard] && r.keyspacePolicy != r.opts.DurabilityPolicy {
+			own = r.opts.DurabilityPolicy
+		}
+		if own == "" {
+			continue
+		}
+		desc := fmt.Sprintf("remove the durability policy %s of shard %s/%s, which the keyspace has now", own, r.keyspace, shard)
+		switch {
+		case own != r.opts.DurabilityPolicy:
+			r.addKeyspaceStep(resp, MigrationActionClearShardDurabilityPolicy, MigrationStepSkipped,
+				fmt.Sprintf("shard %s/%s keeps its durability policy %s, which differs from the keyspace's %s", r.keyspace, shard, own, r.opts.DurabilityPolicy))
+		case r.opts.DryRun:
+			r.addKeyspaceStep(resp, MigrationActionClearShardDurabilityPolicy, MigrationStepPlanned, desc)
+		default:
+			if err := clearShardDurabilityPolicy(ctx, r.m.ts, r.keyspace, shard, own); err != nil {
+				return vterrors.Wrapf(err, "failed to %s", desc)
+			}
+			r.addKeyspaceStep(resp, MigrationActionClearShardDurabilityPolicy, MigrationStepDone, desc)
+		}
+	}
+	return nil
+}
+
+// clearShardDurabilityPolicy removes the shard's own durability policy, under the shard lock, if
+// it is still the given one.
+func clearShardDurabilityPolicy(ctx context.Context, ts *topo.Server, keyspace, shard, durabilityPolicy string) (err error) {
+	ctx, unlock, err := ts.LockShard(ctx, keyspace, shard, "MigrateReplicationMode(clear shard durability policy)")
+	if err != nil {
+		return err
+	}
+	defer unlock(&err)
+	_, err = ts.UpdateShardFields(ctx, keyspace, shard, func(si *topo.ShardInfo) error {
+		if si.DurabilityPolicy != durabilityPolicy {
+			return topo.NewError(topo.NoUpdateNeeded, keyspace+"/"+shard)
+		}
+		si.DurabilityPolicy = ""
+		return nil
+	})
+	return err
+}
+
+// writeShardDurabilityPolicy stores the shard's own durability policy (Shard.durability_policy).
+// The caller holds the shard lock.
+func writeShardDurabilityPolicy(ctx context.Context, ts *topo.Server, keyspace, shard, durabilityPolicy string) error {
+	if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
+		return vterrors.Wrap(err, lostTopologyLockMsg)
+	}
+	if !policy.CheckDurabilityPolicyExists(durabilityPolicy) {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "durability policy <%v> is not a valid policy", durabilityPolicy)
+	}
+	_, err := ts.UpdateShardFields(ctx, keyspace, shard, func(si *topo.ShardInfo) error {
+		if si.DurabilityPolicy == durabilityPolicy {
+			return topo.NewError(topo.NoUpdateNeeded, keyspace+"/"+shard)
+		}
+		si.DurabilityPolicy = durabilityPolicy
+		return nil
+	})
+	if err != nil {
+		return vterrors.Wrapf(err, "failed to store the durability policy of shard %s/%s", keyspace, shard)
 	}
 	return nil
 }
@@ -338,7 +420,10 @@ func (r *migrationRun) readShard(ctx context.Context, shard string) (*migrationS
 	if err != nil {
 		return nil, vterrors.Wrapf(err, "failed to get tablet map for %s/%s", r.keyspace, shard)
 	}
-	s := &migrationShard{run: r, shard: shard, recordedVoters: si.GroupReplicationVoters, voters: si.GroupReplicationVoters, recordedIncarnation: si.GroupReplicationIncarnation}
+	s := &migrationShard{
+		run: r, shard: shard, recordedVoters: si.GroupReplicationVoters, voters: si.GroupReplicationVoters,
+		recordedIncarnation: si.GroupReplicationIncarnation, recordedPolicy: si.GetDurabilityPolicy(),
+	}
 	for _, alias := range slices.Sorted(maps.Keys(tabletMap)) {
 		tablet := tabletMap[alias].Tablet
 		switch tablet.Type {
@@ -362,12 +447,25 @@ func (r *migrationRun) readShard(ctx context.Context, shard string) (*migrationS
 	return s, nil
 }
 
-// shardRunsGroupReplication returns whether the shard's voters were selected, its primary
-// is the primary of its group and every voter is ONLINE in it.
-func (r *migrationRun) shardRunsGroupReplication(ctx context.Context, shard string) (bool, error) {
+// shardConverted returns whether the shard is converted to the target: its durability policy,
+// its own or the keyspace's, is the target policy, and, to Group Replication, its voters were
+// selected, its primary is the primary of its group and every voter is ONLINE in it, or, back to
+// asynchronous replication, none of its tablets is an active group member.
+func (r *migrationRun) shardConverted(ctx context.Context, shard string, toGroup bool) (bool, error) {
 	s, err := r.readShard(ctx, shard)
 	if err != nil {
 		return false, err
+	}
+	if !s.hasTargetPolicy() {
+		return false, nil
+	}
+	if !toGroup {
+		for _, tablet := range s.tablets {
+			if s.status(tablet).isActiveMember() {
+				return false, nil
+			}
+		}
+		return true, nil
 	}
 	if len(s.voters) == 0 || !s.status(s.primary).isGroupPrimary() {
 		return false, nil
@@ -378,6 +476,29 @@ func (r *migrationRun) shardRunsGroupReplication(ctx context.Context, shard stri
 		}
 	}
 	return true, nil
+}
+
+// hasTargetPolicy returns whether the shard's durability policy, as the shard record read by the
+// migration resolves it, is the target policy.
+func (s *migrationShard) hasTargetPolicy() bool {
+	return topo.ShardDurabilityPolicy(s.run.keyspacePolicy, &topodatapb.Shard{DurabilityPolicy: s.recordedPolicy}) == s.run.opts.DurabilityPolicy
+}
+
+// setShardPolicy makes the target policy the shard's durability policy: it stores it as the
+// shard's own policy, unless the shard has it already, its own or through the keyspace.
+func (s *migrationShard) setShardPolicy(ctx context.Context) error {
+	target := s.run.opts.DurabilityPolicy
+	if s.hasTargetPolicy() {
+		s.record(MigrationActionSetShardDurabilityPolicy, nil, MigrationStepSkipped, fmt.Sprintf("shard %s/%s already has durability policy %s", s.run.keyspace, s.shard, target))
+		return nil
+	}
+	return s.do(ctx, MigrationActionSetShardDurabilityPolicy, nil, fmt.Sprintf("store durability policy %s in the shard record", target), func(ctx context.Context) error {
+		if err := writeShardDurabilityPolicy(ctx, s.run.m.ts, s.run.keyspace, s.shard, target); err != nil {
+			return err
+		}
+		s.recordedPolicy = target
+		return nil
+	})
 }
 
 func (s *migrationShard) status(tablet *topodatapb.Tablet) *fullStatusResult {
@@ -541,6 +662,8 @@ func (s *migrationShard) preflightToGroupReplication(ctx context.Context) error 
 		alias := topoproto.TabletAliasString(tablet.Alias)
 		if !s.status(tablet).status.GetGroupReplicationEnabled() {
 			problems = append(problems, fmt.Sprintf("%v: group replication is not enabled on the tablet; start vttablet with --enable-group-replication", alias))
+		} else if problem := shardDurabilityPolicyProblem(tablet, s.status(tablet)); problem != "" {
+			problems = append(problems, problem)
 		}
 		if tablet.MysqlPort == 0 {
 			problems = append(problems, fmt.Sprintf("%v: the tablet record has no MySQL port, through which the other members would reach it", alias))
@@ -587,6 +710,20 @@ func (s *migrationShard) preflightToGroupReplication(ctx context.Context) error 
 	return nil
 }
 
+// shardDurabilityPolicyProblem describes why the tablet's vttablet cannot take part in a
+// migration, "" if it can: a vttablet that does not know the shard's own durability policy
+// (Shard.durability_policy) manages its shard by the keyspace's policy, which is not the shard's
+// while the keyspace is half migrated. It would not apply the serving invariant of a converted
+// shard, nor rejoin its group, and would stop serving while a shard converted back shrinks its
+// group.
+func shardDurabilityPolicyProblem(tablet *topodatapb.Tablet, res *fullStatusResult) string {
+	if res.status.GetShardDurabilityPolicySupported() {
+		return ""
+	}
+	return fmt.Sprintf("%v: vttablet does not apply the shard's own durability policy; upgrade it, and vtctld and VTOrc, before the migration",
+		topoproto.TabletAliasString(tablet.Alias))
+}
+
 // checkSchema lists the user tables that Group Replication cannot replicate.
 func (s *migrationShard) checkSchema(ctx context.Context) ([]string, error) {
 	sidecarName, err := s.run.m.ts.GetSidecarDBName(ctx, s.run.keyspace)
@@ -631,6 +768,13 @@ func (s *migrationShard) checkSchema(ctx context.Context) ([]string, error) {
 //     two ONLINE members. An acker that would be the last one is not joined while the
 //     group has fewer than two ONLINE members.
 //  5. Point the tablets that are not voters at the primary, without semi-sync.
+//  6. Store the target policy as the shard's own durability policy. Until then, the shard has
+//     the keyspace's policy, which is not a group replication policy: the primary serves with
+//     semi-sync while its group grows from one member, and neither the tablets nor VTOrc apply
+//     the rules of a group replication policy (the serving invariant, rejoins, bootstraps, voter
+//     replacement) to a group that is still being formed. From then on, they do, whatever the
+//     keyspace policy: the shard runs its group with all its voters ONLINE, its incarnation
+//     recorded, and semi-sync superseded.
 func (s *migrationShard) toGroupReplication(ctx context.Context) error {
 	if err := s.preflightToGroupReplication(ctx); err != nil {
 		return err
@@ -793,7 +937,7 @@ func (s *migrationShard) toGroupReplication(ctx context.Context) error {
 			return err
 		}
 	}
-	return nil
+	return s.setShardPolicy(ctx)
 }
 
 func boolRank(b bool) int {
@@ -855,6 +999,14 @@ func (s *migrationShard) preflightFromGroupReplication() error {
 	if primaryRes.isActiveMember() && !primaryRes.isGroupPrimary() {
 		problems = append(problems, fmt.Sprintf("the primary %v is a member of a group but not its primary with quorum", primaryAlias))
 	}
+	// The members manage the shard by its own policy while the keyspace has another one.
+	for _, tablet := range s.tablets {
+		if res := s.status(tablet); (res.isActiveMember() || policy.IsVoter(s.voters, tablet.Alias)) && s.run.keyspacePolicy != s.run.opts.DurabilityPolicy {
+			if problem := shardDurabilityPolicyProblem(tablet, res); problem != "" {
+				problems = append(problems, problem)
+			}
+		}
+	}
 	for _, tablet := range s.tablets {
 		res := s.status(tablet)
 		if s.isPrimary(tablet) || !res.isActiveMember() {
@@ -887,8 +1039,13 @@ func (s *migrationShard) preflightFromGroupReplication() error {
 }
 
 // fromGroupReplication converts the shard from Group Replication back to asynchronous
-// replication. The keyspace already has the target policy:
+// replication:
 //
+//  0. Store the target policy as the shard's own durability policy, before anything changes.
+//     The tablets and VTOrc then manage the shard by it: its primary re-enables semi-sync, and
+//     does not stop serving, as its group shrinks below a majority of the voters, and serves on
+//     its own once it left the group. Active groups supersede semi-sync, so this changes nothing
+//     until the group shrinks.
 //  1. Point the tablets outside the group at the primary, with the target's semi-sync
 //     setting, so they can acknowledge once the primary needs semi-sync again.
 //  2. Remove the secondaries from the group one at a time, semi-sync ackers first, and
@@ -898,6 +1055,9 @@ func (s *migrationShard) preflightFromGroupReplication() error {
 //  3. Remove the primary from the group. Its tablet restores read-write; wait for that.
 func (s *migrationShard) fromGroupReplication(ctx context.Context) error {
 	if err := s.preflightFromGroupReplication(); err != nil {
+		return err
+	}
+	if err := s.setShardPolicy(ctx); err != nil {
 		return err
 	}
 	primary := s.primary

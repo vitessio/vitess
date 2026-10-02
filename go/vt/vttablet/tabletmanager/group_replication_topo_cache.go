@@ -38,7 +38,8 @@ import (
 // partition, and must not wait for a topology server that does not answer yet.
 type groupReplicationTopoCache struct {
 	mu sync.Mutex
-	// durability is the name of the keyspace's durability policy, if hasDurability is set.
+	// durability is the name of the shard's durability policy (shardDurability), if hasDurability
+	// is set.
 	durability    string
 	hasDurability bool
 	// voters are the shard's voters, if hasVoters is set.
@@ -116,14 +117,14 @@ func withTopoReadDeadline(ctx context.Context, deadline time.Time, bounded bool)
 	return context.WithDeadline(ctx, deadline)
 }
 
-// durabilityForGroupChange returns the keyspace's durability policy for a join or a bootstrap. If
+// durabilityForGroupChange returns the shard's durability policy for a join or a bootstrap. If
 // the tablet read the policy before, it waits for the topology until deadline only, and otherwise
 // uses the policy it read last. A zero deadline does not bound the read.
 func (tm *TabletManager) durabilityForGroupChange(ctx context.Context, deadline time.Time) (policy.Durabler, error) {
 	last, known := tm.groupReplicationTopo.lastDurability()
 	readCtx, cancel := withTopoReadDeadline(ctx, deadline, known)
 	defer cancel()
-	durability, err := tm.keyspaceDurability(readCtx)
+	durability, err := tm.shardDurability(readCtx)
 	if err == nil || !known || ctx.Err() != nil {
 		return durability, err
 	}

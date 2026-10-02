@@ -129,6 +129,7 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		vitess_shard.group_replication_voters AS shard_group_replication_voters,
 		vitess_shard.group_replication_incarnation AS shard_group_replication_incarnation,
 		vitess_shard.group_replication_bootstrap_target AS shard_group_replication_bootstrap_target,
+		vitess_shard.durability_policy AS shard_durability_policy,
 		primary_instance.read_only AS read_only,
 		MIN(primary_instance.gtid_errant) AS gtid_errant,
 		MIN(primary_instance.alias) IS NULL AS is_invalid,
@@ -548,7 +549,9 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 					log.Warn(fmt.Sprintf("failed to parse shard primary alias %q: %v", shardPrimaryAliasStr, err))
 				}
 			}
-			durabilityPolicy := m.GetString("durability_policy")
+			// The shard's own policy applies over the keyspace's: a shard that MigrateReplicationMode
+			// converted while the keyspace is still being migrated is analyzed as converted.
+			durabilityPolicy := topo.ShardDurabilityPolicy(m.GetString("durability_policy"), &topodatapb.Shard{DurabilityPolicy: m.GetString("shard_durability_policy")})
 			if durabilityPolicy == "" {
 				log.Error(fmt.Sprintf("ignoring keyspace %v because no durability_policy is set. Please set it using SetKeyspaceDurabilityPolicy", a.AnalyzedKeyspace))
 				return nil

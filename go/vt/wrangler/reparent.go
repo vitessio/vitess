@@ -126,7 +126,7 @@ func (wr *Wrangler) TabletExternallyReparented(ctx context.Context, newPrimaryAl
 	if tablet.Type != topodatapb.TabletType_PRIMARY {
 		log.Info("TabletExternallyReparented: executing tablet type change to PRIMARY")
 
-		durabilityName, err := wr.ts.GetKeyspaceDurability(ctx, tablet.Keyspace)
+		durabilityName, err := wr.ts.GetShardInfoDurability(ctx, si)
 		if err != nil {
 			return err
 		}

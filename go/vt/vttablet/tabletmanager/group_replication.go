@@ -48,7 +48,7 @@ import (
 )
 
 // defaultGroupMemberWeight is MySQL's default group_replication_member_weight. It is used when
-// the keyspace durability policy does not use Group Replication, for example while a shard is
+// the shard's durability policy does not use Group Replication, for example while a shard is
 // migrated to it.
 const defaultGroupMemberWeight = 50
 
@@ -198,19 +198,34 @@ func preferSeeds(seeds, preferred []string) []string {
 	return ordered
 }
 
-// keyspaceDurability returns the durability policy of the tablet's keyspace.
-func (tm *TabletManager) keyspaceDurability(ctx context.Context) (policy.Durabler, error) {
-	keyspace := tm.Tablet().Keyspace
-	durabilityName, err := tm.TopoServer.GetKeyspaceDurability(ctx, keyspace)
+// shardDurability returns the durability policy that applies to the tablet's shard: the shard's own
+// policy if its shard record sets one, else its keyspace's (topo.ShardDurabilityPolicy). Both
+// records are read together, so the policy is never resolved from a shard record and a keyspace
+// record of different moments of a migration.
+func (tm *TabletManager) shardDurability(ctx context.Context) (policy.Durabler, error) {
+	durability, _, err := tm.resolveShardDurability(ctx)
+	return durability, err
+}
+
+// resolveShardDurability is shardDurability, and also returns the shard's own policy as its shard
+// record set it ("" if it does not), so that a caller that caches the policy can tell when a newer
+// shard record sets another one.
+func (tm *TabletManager) resolveShardDurability(ctx context.Context) (policy.Durabler, string, error) {
+	tablet := tm.Tablet()
+	si, err := tm.TopoServer.GetShard(ctx, tablet.Keyspace, tablet.Shard)
 	if err != nil {
-		return nil, vterrors.Wrapf(err, "cannot read durability policy of keyspace %v", keyspace)
+		return nil, "", vterrors.Wrapf(err, "cannot read the durability policy of shard %v/%v", tablet.Keyspace, tablet.Shard)
+	}
+	durabilityName, err := tm.TopoServer.GetShardInfoDurability(ctx, si)
+	if err != nil {
+		return nil, "", vterrors.Wrapf(err, "cannot read the durability policy of shard %v/%v", tablet.Keyspace, tablet.Shard)
 	}
 	durability, err := policy.GetDurabilityPolicy(durabilityName)
 	if err != nil {
-		return nil, vterrors.Wrapf(err, "cannot get durability policy %v", durabilityName)
+		return nil, "", vterrors.Wrapf(err, "cannot get durability policy %v", durabilityName)
 	}
 	tm.groupReplicationTopo.setDurability(durabilityName)
-	return durability, nil
+	return durability, si.GetDurabilityPolicy(), nil
 }
 
 // groupReplicationConfig derives the Group Replication configuration of the tablet's MySQL from
@@ -715,7 +730,7 @@ func (tm *TabletManager) setGroupPrimaryWritable(ctx context.Context) error {
 
 // fixPrimarySemiSyncFromPolicy applies the primary semi-sync setting of the durability policy.
 func (tm *TabletManager) fixPrimarySemiSyncFromPolicy(ctx context.Context) error {
-	durability, err := tm.keyspaceDurability(ctx)
+	durability, err := tm.shardDurability(ctx)
 	if err != nil {
 		return err
 	}
@@ -964,7 +979,7 @@ func (tm *TabletManager) groupReplicationVoters(ctx context.Context) ([]*topodat
 }
 
 // isGroupReplicationVoter returns whether the tablet should be a voting member of its shard's
-// group: the tablet has a group replication port, the keyspace durability policy uses Group
+// group: the tablet has a group replication port, the shard's durability policy uses Group
 // Replication, and the shard record lists the tablet among the group's voters. The voters are
 // selected by MigrateReplicationMode, PlannedReparentShard and VTOrc; an empty list means that
 // they have not been selected yet, and makes no tablet a voter.
@@ -976,7 +991,7 @@ func (tm *TabletManager) isGroupReplicationVoter(ctx context.Context) (bool, err
 	if !groupReplicationEnabled() {
 		return false, nil
 	}
-	durability, err := tm.keyspaceDurability(ctx)
+	durability, err := tm.shardDurability(ctx)
 	if err != nil {
 		return false, err
 	}

@@ -193,6 +193,9 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 	status.TabletType = tm.Tablet().Type
 	status.ShardPeerHealth = tm.shardPeerHealthSnapshot()
 	status.GroupReplicationEnabled = groupReplicationEnabled()
+	// Every decision of the tablet that depends on the durability policy resolves the shard's own
+	// policy over its keyspace's (shardDurability). MigrateReplicationMode requires it on the voters.
+	status.ShardDurabilityPolicySupported = true
 	return status, nil
 }
 
@@ -457,7 +460,7 @@ func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string
 	// In a keyspace that uses group replication, the primary is the member that bootstraps the
 	// shard's group. The caller holds the shard lock.
 	if groupReplicationEnabled() {
-		durability, err := tm.keyspaceDurability(ctx)
+		durability, err := tm.shardDurability(ctx)
 		if err != nil {
 			return "", err
 		}

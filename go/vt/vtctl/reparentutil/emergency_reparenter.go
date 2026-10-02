@@ -254,13 +254,16 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		)
 	}
 
-	keyspaceDurability, err := erp.ts.GetKeyspaceDurability(ctx, keyspace)
+	// The shard's own policy, from the record read under the shard lock, applies over the
+	// keyspace's: a shard converted to Group Replication while its keyspace is still being
+	// migrated takes the Group Replication path.
+	shardDurability, err := erp.ts.GetShardInfoDurability(ctx, shardInfo)
 	if err != nil {
 		return err
 	}
 
-	erp.logger.Infof("Getting a new durability policy for %v", keyspaceDurability)
-	opts.durability, err = policy.GetDurabilityPolicy(keyspaceDurability)
+	erp.logger.Infof("Getting a new durability policy for %v", shardDurability)
+	opts.durability, err = policy.GetDurabilityPolicy(shardDurability)
 	if err != nil {
 		return err
 	}

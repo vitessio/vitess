@@ -53,6 +53,9 @@ type fakeGRTablet struct {
 	uuid  string
 	// grEnabled is reported in FullStatus: the tablet supports group replication.
 	grEnabled bool
+	// shardPolicy is reported in FullStatus: the tablet applies the shard's own durability
+	// policy over the keyspace's.
+	shardPolicy bool
 	// primary marks the shard's topo primary. Its tablet loop enforces the effective
 	// semi-sync rule.
 	primary bool
@@ -149,10 +152,14 @@ func (c *fakeGRCluster) onlineMembers() int {
 	return n
 }
 
-// policyNeedsSemiSync returns whether the keyspace policy requires the primary to use
-// semi-sync.
+// policyNeedsSemiSync returns whether the shard's durability policy, its own or else the
+// keyspace's, requires the primary to use semi-sync. A tablet that does not know the shard's own
+// policy uses the keyspace's.
 func (c *fakeGRCluster) policyNeedsSemiSync(ft *fakeGRTablet) bool {
-	name, err := c.ts.GetKeyspaceDurability(c.t.Context(), c.keyspace)
+	name, err := c.ts.GetShardDurability(c.t.Context(), c.keyspace, "-")
+	if !ft.shardPolicy {
+		name, err = c.ts.GetKeyspaceDurability(c.t.Context(), c.keyspace)
+	}
 	require.NoError(c.t, err)
 	d, err := policy.GetDurabilityPolicy(name)
 	require.NoError(c.t, err)
@@ -250,6 +257,8 @@ func (c *fakeGRCluster) FullStatus(ctx context.Context, tablet *topodatapb.Table
 		ReadOnly:                    ft.superReadOnly,
 		GroupReplicationStatus:      c.groupStatus(ft),
 		GroupReplicationEnabled:     ft.grEnabled,
+		// A tablet that knows the shard's own durability policy reports it.
+		ShardDurabilityPolicySupported: ft.shardPolicy,
 	}
 	if ft.source != "" {
 		src := c.tabletRecs[ft.source]
@@ -443,7 +452,14 @@ func (c *fakeGRCluster) GetGlobalStatusVars(ctx context.Context, tablet *topodat
 func (c *fakeGRCluster) DemotePrimary(ctx context.Context, tablet *topodatapb.Tablet, force bool) (*replicationdatapb.PrimaryStatus, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return nil, c.record(fmt.Sprintf("DemotePrimary(%s)", topoproto.TabletAliasString(tablet.Alias)))
+	return &replicationdatapb.PrimaryStatus{}, c.record(fmt.Sprintf("DemotePrimary(%s)", topoproto.TabletAliasString(tablet.Alias)))
+}
+
+// UndoDemotePrimary is part of the tmclient.TabletManagerClient interface.
+func (c *fakeGRCluster) UndoDemotePrimary(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.record(fmt.Sprintf("UndoDemotePrimary(%s)", topoproto.TabletAliasString(tablet.Alias)))
 }
 
 // PrimaryPosition is part of the tmclient.TabletManagerClient interface.
@@ -464,6 +480,33 @@ func (c *fakeGRCluster) ExecuteFetchAsDba(ctx context.Context, tablet *topodatap
 	c.queries = append(c.queries, string(req.Query))
 	result := sqltypes.MakeTestResult(sqltypes.MakeTestFields("TABLE_SCHEMA|TABLE_NAME|ENGINE", "varchar|varchar|varchar"), c.schemaRows...)
 	return sqltypes.ResultToProto3(result), nil
+}
+
+// asyncReparentPath records that a reparent took the asynchronous replication path, which the
+// fake does not simulate, and fails the call.
+func (c *fakeGRCluster) asyncReparentPath(call string, tablet *topodatapb.Tablet) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	name := fmt.Sprintf("%s(%s)", call, topoproto.TabletAliasString(tablet.Alias))
+	c.calls = append(c.calls, name)
+	c.violations = append(c.violations, "asynchronous reparent path: "+name)
+	return fmt.Errorf("the fake does not simulate %s", name)
+}
+
+// StopReplicationAndGetStatus is part of the tmclient.TabletManagerClient interface. Only the
+// asynchronous ERS path calls it.
+func (c *fakeGRCluster) StopReplicationAndGetStatus(ctx context.Context, tablet *topodatapb.Tablet, mode replicationdatapb.StopReplicationMode) (*replicationdatapb.StopReplicationStatus, error) {
+	return nil, c.asyncReparentPath("StopReplicationAndGetStatus", tablet)
+}
+
+// WaitForPosition is part of the tmclient.TabletManagerClient interface.
+func (c *fakeGRCluster) WaitForPosition(ctx context.Context, tablet *topodatapb.Tablet, pos string) error {
+	return c.asyncReparentPath("WaitForPosition", tablet)
+}
+
+// PrimaryStatus is part of the tmclient.TabletManagerClient interface.
+func (c *fakeGRCluster) PrimaryStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
+	return nil, c.asyncReparentPath("PrimaryStatus", tablet)
 }
 
 func (c *fakeGRCluster) mutatingCalls() []string {
@@ -491,6 +534,9 @@ type fakeGRTabletSpec struct {
 	uid        uint32
 	tabletType topodatapb.TabletType
 	noGR       bool
+	// noShardPolicy makes the tablet a vttablet that does not know the shard's own durability
+	// policy.
+	noShardPolicy bool
 }
 
 // newFakeGRCluster creates the keyspace "ks" with shard "-" in a memory topo, with the given
@@ -542,7 +588,8 @@ func newFakeGRCluster(t *testing.T, durability string, specs ...fakeGRTabletSpec
 			version:  "8.4.11",
 			gtidMode: "ON",
 			// The tablet runs with --enable-group-replication.
-			grEnabled: !spec.noGR,
+			grEnabled:   !spec.noGR,
+			shardPolicy: !spec.noShardPolicy,
 		}
 	}
 	if primary == nil {
@@ -606,6 +653,23 @@ func (c *fakeGRCluster) setVotersLocked(t *testing.T, voters []*topodatapb.Table
 		return nil
 	})
 	require.NoError(t, err)
+}
+
+// setShardPolicy stores the shard's own durability policy in the shard record, as
+// MigrateReplicationMode does once it converted the shard.
+func (c *fakeGRCluster) setShardPolicy(t *testing.T, durability string) {
+	_, err := c.ts.UpdateShardFields(t.Context(), c.keyspace, "-", func(si *topo.ShardInfo) error {
+		si.DurabilityPolicy = durability
+		return nil
+	})
+	require.NoError(t, err)
+}
+
+// shardPolicy returns the shard's own durability policy stored in the shard record.
+func (c *fakeGRCluster) shardPolicy(t *testing.T) string {
+	si, err := c.ts.GetShard(t.Context(), c.keyspace, "-")
+	require.NoError(t, err)
+	return si.DurabilityPolicy
 }
 
 // setIncarnation stores the group incarnation in the shard record.

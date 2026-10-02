@@ -96,6 +96,7 @@ type InfoForRecoveryAnalysis struct {
 	GroupViewID                               string
 	ShardGroupReplicationIncarnation          string
 	ShardGroupReplicationBootstrapTarget      string
+	ShardDurabilityPolicy                     string
 }
 
 func (info *InfoForRecoveryAnalysis) ConvertToRowMap() sqlutils.RowMap {
@@ -177,6 +178,7 @@ func (info *InfoForRecoveryAnalysis) ConvertToRowMap() sqlutils.RowMap {
 	rowMap["gr_view_id"] = sqlutils.CellData{String: info.GroupViewID, Valid: true}
 	rowMap["shard_group_replication_incarnation"] = sqlutils.CellData{String: info.ShardGroupReplicationIncarnation, Valid: true}
 	rowMap["shard_group_replication_bootstrap_target"] = sqlutils.CellData{String: info.ShardGroupReplicationBootstrapTarget, Valid: true}
+	rowMap["shard_durability_policy"] = sqlutils.CellData{String: info.ShardDurabilityPolicy, Valid: true}
 	return rowMap
 }
 

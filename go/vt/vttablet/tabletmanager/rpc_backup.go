@@ -158,7 +158,7 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 				return
 			}
 
-			durabilityName, err := tm.TopoServer.GetKeyspaceDurability(bgCtx, tablet.Keyspace)
+			durabilityName, err := tm.TopoServer.GetShardDurability(bgCtx, tablet.Keyspace, tablet.Shard)
 			if err != nil {
 				l.Errorf("Failed to get durability policy, error: %v", err)
 				return

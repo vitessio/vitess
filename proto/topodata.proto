@@ -298,6 +298,18 @@ message Shard {
   // VTOrc from bootstrapping the group on another tablet. It is cleared when an incarnation is
   // recorded. Readers that do not know it ignore it.
   GroupReplicationBootstrapIntent group_replication_bootstrap_intent = 12;
+
+  // durability_policy, if set, is the durability policy of this shard, which then applies instead
+  // of the keyspace's durability_policy. MigrateReplicationMode converts a keyspace between
+  // asynchronous replication and MySQL Group Replication one shard at a time, under the shard
+  // lock: it sets the target policy here once it converted the shard, so that the shard is
+  // managed as a converted shard while the keyspace policy still describes the shards that are
+  // not converted yet, and clears it once the keyspace policy matches. Every component resolves
+  // a shard's policy as "this field if set, else the keyspace's" (topo.ShardDurabilityPolicy).
+  // Readers that do not know the field use the keyspace policy, which is wrong for a converted
+  // shard of a keyspace that is half migrated: vtctld, VTOrc and vttablet must all know it
+  // before a migration starts.
+  string durability_policy = 13;
 }
 
 // GroupReplicationBootstrapIntent is a bootstrap of a shard's MySQL Group Replication group that
