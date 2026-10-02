@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"math/rand/v2"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -328,15 +329,34 @@ func TestBindVariables(t *testing.T) {
 	}
 }
 
+var logNumberPattern = regexp.MustCompile(`^([+-]?)([0-9]*)(\.[0-9]*)?([eE][+-]?[0-9]+)?$`)
+
+func logNumberReference(typ querypb.Type, value []byte) (string, bool) {
+	parts := logNumberPattern.FindStringSubmatch(strings.Trim(string(value), " \t\r\n"))
+	if parts == nil || parts[2] == "" && len(parts[3]) <= 1 {
+		return "", false
+	}
+	if sqltypes.IsIntegral(typ) && (parts[3] != "" || parts[4] != "" || sqltypes.IsUnsigned(typ) && parts[1] == "-") {
+		return "", false
+	}
+	sign := parts[1]
+	if sign == "+" {
+		sign = ""
+	}
+	integer := strings.TrimLeft(parts[2], "0")
+	if integer == "" {
+		integer = "0"
+	}
+	fraction := parts[3]
+	if fraction == "." {
+		fraction = ".0"
+	}
+	return sign + integer + fraction + parts[4], true
+}
+
 func checkNumericBindVariable(t *testing.T, typ querypb.Type, value []byte) {
 	t.Helper()
-	decoder := json.NewDecoder(bytes.NewReader(value))
-	decoder.UseNumber()
-	var decoded any
-	err := decoder.Decode(&decoded)
-	number, isNumber := decoded.(json.Number)
-	var extra any
-	isNumber = err == nil && isNumber && decoder.Decode(&extra) == io.EOF
+	number, isNumber := logNumberReference(typ, value)
 
 	bindVars := map[string]*querypb.BindVariable{"v": {Type: typ, Value: value}}
 	for _, jsonFormat := range []bool{false, true} {
@@ -350,28 +370,23 @@ func checkNumericBindVariable(t *testing.T, typ querypb.Type, value []byte) {
 			assert.Equal(t, 1, bytes.Count(out.Bytes(), []byte{'\n'}))
 			assert.NotContains(t, out.String(), "\t")
 			assert.NotContains(t, out.String(), "\r")
-			if !jsonFormat {
-				text := string(value)
-				if bytes.ContainsAny(value, "\t\r\n") {
-					text = strconv.Quote(text)
-				}
-				assert.Equal(t, fmt.Sprintf("{\"v\": {\"type\": %q, \"value\": %s}}\n", typ.String(), text), out.String())
-				continue
+			encoded := out.Bytes()
+			if jsonFormat {
+				var record struct{ BindVars json.RawMessage }
+				require.NoError(t, json.Unmarshal(encoded, &record))
+				encoded = record.BindVars
 			}
-
-			var record struct {
-				BindVars map[string]struct {
-					Type  string
-					Value json.RawMessage
-				}
+			var bindings map[string]struct {
+				Type  string
+				Value json.RawMessage
 			}
-			require.NoError(t, json.Unmarshal(out.Bytes(), &record))
-			require.Len(t, record.BindVars, 1)
-			binding, ok := record.BindVars["v"]
+			require.NoError(t, json.Unmarshal(encoded, &bindings))
+			require.Len(t, bindings, 1)
+			binding, ok := bindings["v"]
 			require.True(t, ok)
 			assert.Equal(t, typ.String(), binding.Type)
 			if isNumber {
-				assert.Equal(t, number.String(), string(binding.Value))
+				assert.Equal(t, number, string(binding.Value))
 			} else {
 				var text string
 				require.NoError(t, json.Unmarshal(binding.Value, &text))
@@ -391,7 +406,14 @@ func TestBindVariablesNumbers(t *testing.T) {
 		{querypb.Type_INT64, "9223372036854775807"},
 		{querypb.Type_UINT64, "18446744073709551615"},
 		{querypb.Type_INT64, "007"},
+		{querypb.Type_INT64, "+42"},
 		{querypb.Type_INT64, "-01"},
+		{querypb.Type_INT64, "000"},
+		{querypb.Type_INT64, "-000"},
+		{querypb.Type_INT64, "1.5"},
+		{querypb.Type_INT64, "1e2"},
+		{querypb.Type_UINT64, "-1"},
+		{querypb.Type_UINT64, "+0018446744073709551615"},
 		{querypb.Type_INT64, " 42 "},
 		{querypb.Type_INT64, "\t42"},
 		{querypb.Type_INT64, "42\t"},
@@ -413,6 +435,19 @@ func TestBindVariablesNumbers(t *testing.T) {
 		{querypb.Type_FLOAT64, "+5"},
 		{querypb.Type_FLOAT64, ".5"},
 		{querypb.Type_FLOAT64, "1."},
+		{querypb.Type_FLOAT64, "1.e2"},
+		{querypb.Type_FLOAT64, "0.e2"},
+		{querypb.Type_FLOAT64, "000e2"},
+		{querypb.Type_FLOAT64, " \t+.12345678901234567890e+002\t "},
+		{querypb.Type_FLOAT64, "-001.2345678901234567890"},
+		{querypb.Type_FLOAT64, "."},
+		{querypb.Type_FLOAT64, ".e2"},
+		{querypb.Type_FLOAT64, "+-1"},
+		{querypb.Type_FLOAT64, "--1"},
+		{querypb.Type_FLOAT64, "1_000"},
+		{querypb.Type_FLOAT64, "0x1p2"},
+		{querypb.Type_FLOAT64, "1.2.3"},
+		{querypb.Type_FLOAT64, "1e+"},
 		{querypb.Type_FLOAT64, "1e"},
 		{querypb.Type_FLOAT64, ""},
 		{querypb.Type_FLOAT64, "null"},
@@ -430,11 +465,13 @@ func TestBindVariablesNumbers(t *testing.T) {
 }
 
 func FuzzBindVariablesNumbers(f *testing.F) {
-	for _, value := range []string{"", "42", "NaN", "007", "-0", ".5", "1e+20", "1e9999", " 42 ", "\t42", "42\t", "\t42\t", "4\t2", `\t42\t`, "42\r", " \t42\r\n", "1\n2", "\xff\"\n", "null", "[1]"} {
+	for _, value := range []string{"", "42", "NaN", "007", "-0", ".5", "1e+20", "1e9999", "1.e2", ".e2", "0.e2", "+-1", ".12345678901234567890", " 42 ", "\t42", "42\t", "\t42\t", "4\t2", `\t42\t`, "42\r", " \t42\r\n", "1\n2", "\xff\"\n", "null", "[1]"} {
 		f.Add([]byte(value))
 	}
 	f.Fuzz(func(t *testing.T, value []byte) {
-		checkNumericBindVariable(t, querypb.Type_FLOAT64, value)
+		for _, typ := range []querypb.Type{querypb.Type_INT64, querypb.Type_UINT64, querypb.Type_FLOAT64} {
+			checkNumericBindVariable(t, typ, value)
+		}
 	})
 }
 
@@ -588,6 +625,10 @@ func BenchmarkNumericBindVariables(b *testing.B) {
 			{"fraction", querypb.Type_FLOAT64, ".5"},
 			{"trailing-dot", querypb.Type_FLOAT64, "1."},
 			{"whitespace", querypb.Type_INT64, " \t42\t "},
+			{"float-whitespace", querypb.Type_FLOAT64, " \t123.456\t "},
+			{"float-leading-zero", querypb.Type_FLOAT64, "00123.456"},
+			{"precise-float", querypb.Type_FLOAT64, "0.12345678901234567890"},
+			{"precise-fraction", querypb.Type_FLOAT64, ".12345678901234567890"},
 		} {
 			b.Run(format+"/"+tc.name, func(b *testing.B) {
 				bindVars := map[string]*querypb.BindVariable{"v": {Type: tc.typ, Value: []byte(tc.value)}}

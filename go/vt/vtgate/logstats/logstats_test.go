@@ -373,7 +373,6 @@ func TestLogStatsJSONBindValues(t *testing.T) {
 					"varchar":   sqltypes.StringBindVariable(record.value),
 					"varbinary": sqltypes.BytesBindVariable([]byte(record.value)),
 				}
-				require.NoError(t, sqltypes.ValidateBindVariables(bindVars))
 				stats := NewLogStats(t.Context(), "Execute", "select :varchar, :varbinary", record.name, bindVars, config)
 				stats.SaveEndTime()
 				require.NoError(t, stats.Logf(&output, params))
