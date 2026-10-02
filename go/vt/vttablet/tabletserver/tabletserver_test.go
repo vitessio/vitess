@@ -2693,6 +2693,167 @@ func TestTempTableIdleTimeoutAutoWaitTimeout(t *testing.T) {
 		30*time.Second, 10*time.Millisecond)
 }
 
+// A connection a SET ran on is discarded when it is released, rather than
+// recycled into the pool under settings its MySQL session no longer matches, and
+// the pool opens a replacement. The SET reaches the connection through the
+// buffered and the streaming path alike.
+func TestInBandSetDiscardsTheConnectionOnRelease(t *testing.T) {
+	for _, streaming := range []bool{false, true} {
+		t.Run(fmt.Sprintf("streaming=%t", streaming), func(t *testing.T) {
+			ctx := t.Context()
+			db, tsv := setupTabletServerTest(t, ctx, "")
+			t.Cleanup(db.Close)
+			t.Cleanup(tsv.StopService)
+
+			db.AddQueryPattern(`set .*sql_safe_updates.*`, &sqltypes.Result{})
+			db.AddQueryPattern(`set .*sql_select_limit.*`, &sqltypes.Result{})
+			db.AddQueryPattern(`select 1 from dual.*`, &sqltypes.Result{})
+			target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
+			settings := []string{"set sql_safe_updates = 1"}
+
+			beginState, _, err := tsv.ReserveBeginExecute(ctx, nil, &target, settings, nil, "select 1 from dual", nil, &querypb.ExecuteOptions{})
+			require.NoError(t, err)
+			require.Equal(t, int64(0), beginState.ReservedID, "a settings-pool transaction is not a true reservation")
+			txConns := db.QueryConnIDs("set sql_safe_updates = 1")
+			require.Len(t, txConns, 1)
+			if streaming {
+				_, err = tsv.ReserveStreamExecute(ctx, nil, &target, settings, "set sql_select_limit = 10", nil, beginState.TransactionID, &querypb.ExecuteOptions{}, func(*sqltypes.Result) error { return nil })
+			} else {
+				_, _, err = tsv.ReserveExecute(ctx, nil, &target, settings, "set sql_select_limit = 10", nil, beginState.TransactionID, &querypb.ExecuteOptions{})
+			}
+			require.NoError(t, err)
+			_, err = tsv.Commit(ctx, &target, beginState.TransactionID)
+			require.NoError(t, err)
+			assert.Equal(t, int64(1), tsv.te.txPool.scp.conns.Metrics.DiscardedByCallerCount(), "the pool counts the connection discarded at commit")
+			require.Eventually(t, func() bool { return !db.IsConnectionOpen(txConns[0]) },
+				30*time.Second, 10*time.Millisecond, "the connection a SET ran on must be closed")
+		})
+	}
+}
+
+// A SET that fails may still have changed the connection's session, by an
+// assignment that took effect before a later one failed or by a failure that
+// leaves its outcome unknown, so the connection is discarded when it is
+// released just as after a SET that succeeded.
+func TestFailedInBandSetDiscardsTheConnectionOnRelease(t *testing.T) {
+	ctx := t.Context()
+	db, tsv := setupTabletServerTest(t, ctx, "")
+	t.Cleanup(db.Close)
+	t.Cleanup(tsv.StopService)
+
+	db.AddQuery("set sql_safe_updates = 1", &sqltypes.Result{})
+	db.AddQueryPattern(`select 1 from dual.*`, &sqltypes.Result{})
+	db.AddRejectedQuery("set sql_select_limit = 10, time_zone = 'bogus'", sqlerror.NewSQLError(sqlerror.ERUnknownTimeZone, sqlerror.SSUnknownSQLState, "Unknown or incorrect time zone: 'bogus'"))
+	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
+	settings := []string{"set sql_safe_updates = 1"}
+
+	beginState, _, err := tsv.ReserveBeginExecute(ctx, nil, &target, settings, nil, "select 1 from dual", nil, &querypb.ExecuteOptions{})
+	require.NoError(t, err)
+	txConns := db.QueryConnIDs("set sql_safe_updates = 1")
+	require.Len(t, txConns, 1)
+	_, _, err = tsv.ReserveExecute(ctx, nil, &target, settings, "set sql_select_limit = 10, time_zone = 'bogus'", nil, beginState.TransactionID, &querypb.ExecuteOptions{})
+	require.ErrorContains(t, err, "Unknown or incorrect time zone")
+	_, err = tsv.Commit(ctx, &target, beginState.TransactionID)
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), tsv.te.txPool.scp.conns.Metrics.DiscardedByCallerCount(), "the pool counts the connection discarded at commit")
+	require.Eventually(t, func() bool { return !db.IsConnectionOpen(txConns[0]) },
+		30*time.Second, 10*time.Millisecond, "the connection a failed SET ran on must be closed")
+}
+
+// A post-begin query runs on the transaction's connection under the same rule
+// as any other statement: a SET needs a reserved connection or settings that
+// carry it, so it cannot leave its change on a pooled connection.
+func TestPostBeginSetNeedsReservedConnection(t *testing.T) {
+	ctx := t.Context()
+	db, tsv := setupTabletServerTest(t, ctx, "")
+	t.Cleanup(db.Close)
+	t.Cleanup(tsv.StopService)
+
+	db.AddQueryPattern(`set .*sql_select_limit.*`, &sqltypes.Result{})
+	db.AddQueryPattern(`select 1 from dual.*`, &sqltypes.Result{})
+	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
+
+	state, _, err := tsv.BeginExecute(ctx, nil, &target, []string{"set sql_select_limit = 10"}, "select 1 from dual", nil, 0, &querypb.ExecuteOptions{})
+	require.ErrorContains(t, err, "not allowed without reserved connection")
+	assert.Zero(t, db.GetQueryCalledNum("set sql_select_limit = 10"), "the SET must not run")
+	if state.TransactionID != 0 {
+		_, _ = tsv.Rollback(ctx, &target, state.TransactionID)
+	}
+}
+
+// A setting applied on a connection that already carries another one is
+// applied on top of it: the old one's variables the new one does not assign
+// stay in effect, and one it assigns can keep part of its old value
+// (optimizer_switch merges the flags an assignment names into the current
+// ones). The connection is discarded when it is released rather than recycled
+// under the new setting, also when the new setting assigns every variable the
+// old one did, as VTGate's settings do when a session changes a variable a
+// SET_VAR hint can carry mid-transaction.
+func TestSettingSwitchDiscardsTheConnectionOnRelease(t *testing.T) {
+	for _, tc := range []struct {
+		name, applyNew string
+	}{
+		{name: "other variables", applyNew: "set sql_select_limit = 10"},
+		{name: "every old variable", applyNew: "set sql_safe_updates = 0, sql_select_limit = 10"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := t.Context()
+			db, tsv := setupTabletServerTest(t, ctx, "")
+			t.Cleanup(db.Close)
+			t.Cleanup(tsv.StopService)
+
+			const applyOld = "set sql_safe_updates = 1"
+			db.AddQuery(applyOld, &sqltypes.Result{})
+			db.AddQuery(tc.applyNew, &sqltypes.Result{})
+			db.AddQueryPattern(`select 1 from dual.*`, &sqltypes.Result{})
+			target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
+
+			beginState, _, err := tsv.ReserveBeginExecute(ctx, nil, &target, []string{applyOld}, nil, "select 1 from dual", nil, &querypb.ExecuteOptions{})
+			require.NoError(t, err)
+			require.Equal(t, int64(0), beginState.ReservedID)
+			txConns := db.QueryConnIDs(applyOld)
+			require.Len(t, txConns, 1)
+			_, _, err = tsv.ReserveExecute(ctx, nil, &target, []string{tc.applyNew}, "select 1 from dual", nil, beginState.TransactionID, &querypb.ExecuteOptions{})
+			require.NoError(t, err)
+			_, err = tsv.Commit(ctx, &target, beginState.TransactionID)
+			require.NoError(t, err)
+			assert.Equal(t, int64(1), tsv.te.txPool.scp.conns.Metrics.DiscardedByCallerCount(), "the pool counts the connection discarded at commit")
+			require.Eventually(t, func() bool { return !db.IsConnectionOpen(txConns[0]) },
+				30*time.Second, 10*time.Millisecond, "a connection a setting was applied over must be closed")
+		})
+	}
+}
+
+// A setting that fails to apply on a transaction's connection may have taken
+// effect in part, or not at all, so the connection's session is in a state no
+// setting describes: the connection is closed, as the pool closes one it fails
+// to apply a setting to, and its loss is not counted as a discard of a diverged
+// connection when the transaction releases it.
+func TestFailedSettingApplyClosesTheConnection(t *testing.T) {
+	ctx := t.Context()
+	db, tsv := setupTabletServerTest(t, ctx, "")
+	t.Cleanup(db.Close)
+	t.Cleanup(tsv.StopService)
+
+	db.AddQuery("set sql_safe_updates = 1", &sqltypes.Result{})
+	db.AddQueryPattern(`select 1 from dual.*`, &sqltypes.Result{})
+	db.AddRejectedQuery("set sql_select_limit = 10", errors.New("interrupted"))
+	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
+
+	beginState, _, err := tsv.ReserveBeginExecute(ctx, nil, &target, []string{"set sql_safe_updates = 1"}, nil, "select 1 from dual", nil, &querypb.ExecuteOptions{})
+	require.NoError(t, err)
+	txConns := db.QueryConnIDs("set sql_safe_updates = 1")
+	require.Len(t, txConns, 1)
+
+	_, _, err = tsv.ReserveExecute(ctx, nil, &target, []string{"set sql_select_limit = 10"}, "select 1 from dual", nil, beginState.TransactionID, &querypb.ExecuteOptions{})
+	require.ErrorContains(t, err, "failed to execute system setting on the connection")
+	require.Eventually(t, func() bool { return !db.IsConnectionOpen(txConns[0]) },
+		30*time.Second, 10*time.Millisecond, "the connection a setting failed to apply on must be closed")
+
+	_, _ = tsv.Rollback(ctx, &target, beginState.TransactionID)
+	assert.Zero(t, tsv.te.txPool.scp.conns.Metrics.DiscardedByCallerCount(), "a connection already closed must not be counted as discarded")
+}
+
 func TestReserveExecute_WithTx(t *testing.T) {
 	ctx := t.Context()
 	db, tsv := setupTabletServerTest(t, ctx, "")
