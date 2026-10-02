@@ -2875,6 +2875,13 @@ func (s *VtctldServer) InitShardPrimaryLocked(
 		return err
 	}
 
+	// Refuse before the ResetReplication phase below, which deletes binary and relay logs and resets
+	// GTID state on every tablet concurrently. Letting only the unmanaged tablet's call fail would
+	// leave the managed ones already reset.
+	if err := reparentutil.ValidateShardManaged(ctx, s.ts, req.Keyspace, req.Shard, tabletMap); err != nil {
+		return err
+	}
+
 	// Check the primary elect is in tabletMap.
 	primaryElectTabletAliasStr := topoproto.TabletAliasString(req.PrimaryElectTabletAlias)
 	primaryElectTabletInfo, ok := tabletMap[primaryElectTabletAliasStr]

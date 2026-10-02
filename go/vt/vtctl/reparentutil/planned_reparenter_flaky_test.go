@@ -36,11 +36,13 @@ import (
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topotools/events"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/proto/vttime"
 )
 
@@ -3181,6 +3183,40 @@ func TestPlannedReparenter_performPotentialPromotion(t *testing.T) {
 	}
 }
 
+func TestPlannedReparenterRejectsUnmanagedTabletMissingFromShardReplication(t *testing.T) {
+	ctx := t.Context()
+	ts := memorytopo.NewServer(ctx, "zone1")
+	t.Cleanup(ts.Close)
+
+	primary := &topodatapb.Tablet{
+		Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+		Keyspace: "testkeyspace",
+		Shard:    "-",
+		Type:     topodatapb.TabletType_PRIMARY,
+	}
+	unmanaged := &topodatapb.Tablet{
+		Alias:     &topodatapb.TabletAlias{Cell: "zone1", Uid: 200},
+		Keyspace:  "testkeyspace",
+		Shard:     "-",
+		Type:      topodatapb.TabletType_REPLICA,
+		MysqlMode: topodatapb.TabletMySQLMode_UNMANAGED,
+	}
+	testutil.AddShards(ctx, t, ts, &vtctldatapb.Shard{
+		Keyspace: primary.Keyspace,
+		Name:     primary.Shard,
+		Shard:    &topodatapb.Shard{PrimaryAlias: primary.Alias},
+	})
+	testutil.AddTablets(ctx, t, ts, nil, primary, unmanaged)
+	require.NoError(t, topo.DeleteTabletReplicationData(ctx, ts, unmanaged))
+
+	pr := NewPlannedReparenter(ts, &testutil.TabletManagerClient{}, logutil.NewMemoryLogger())
+	_, err := pr.ReparentShard(ctx, primary.Keyspace, primary.Shard, PlannedReparentOptions{})
+
+	require.Error(t, err)
+	assert.Equal(t, vtrpc.Code_FAILED_PRECONDITION, vterrors.Code(err))
+	assert.ErrorContains(t, err, "shard has unmanaged tablets [zone1-0000000200]")
+}
+
 func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 	t.Parallel()
 
@@ -3200,6 +3236,40 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 		errShouldContain string
 		expectedEvent    *events.Reparent
 	}{
+		{
+			// The tmc has nothing configured, so if the guard did not fire first this would fail
+			// on a reachability or demote RPC instead, with a different error.
+			name: "refuses a shard containing an unmanaged tablet",
+			tmc:  &testutil.TabletManagerClient{},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_PRIMARY,
+				},
+				{
+					Alias:     &topodatapb.TabletAlias{Cell: "zone1", Uid: 200},
+					Keyspace:  "testkeyspace",
+					Shard:     "-",
+					MysqlMode: topodatapb.TabletMySQLMode_UNMANAGED,
+				},
+			},
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+					Shard: &topodatapb.Shard{
+						PrimaryAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+					},
+				},
+			},
+			ev:               &events.Reparent{},
+			keyspace:         "testkeyspace",
+			shard:            "-",
+			shouldErr:        true,
+			errShouldContain: "shard has unmanaged tablets [zone1-0000000200]",
+		},
 		{
 			name: "success: current primary cannot be determined", // "Case (1)"
 			tmc: &testutil.TabletManagerClient{

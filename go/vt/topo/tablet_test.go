@@ -721,3 +721,179 @@ func TestGetTabletsIndividuallyByCell(t *testing.T) {
 		})
 	}
 }
+
+func TestUpdateNonManagedTabletMovesMarker(t *testing.T) {
+	ts := memorytopo.NewServer(t.Context(), "zone1")
+	t.Cleanup(ts.Close)
+
+	tablet := &topodatapb.Tablet{
+		Alias:     &topodatapb.TabletAlias{Cell: "zone1", Uid: 1},
+		Keyspace:  "commerce",
+		Shard:     "0",
+		MysqlMode: topodatapb.TabletMySQLMode_UNMANAGED,
+	}
+	require.NoError(t, ts.CreateTablet(t.Context(), tablet))
+	ti, err := ts.GetTablet(t.Context(), tablet.Alias)
+	require.NoError(t, err)
+	ti.Keyspace = "customer"
+	ti.Shard = "-80"
+	require.NoError(t, ts.UpdateTablet(t.Context(), ti))
+
+	aliases, err := ts.GetNonManagedTabletAliasesByShard(t.Context(), "commerce", "0")
+	require.NoError(t, err)
+	require.Empty(t, aliases)
+	aliases, err = ts.GetNonManagedTabletAliasesByShard(t.Context(), ti.Keyspace, ti.Shard)
+	require.NoError(t, err)
+	require.Len(t, aliases, 1)
+	require.True(t, topoproto.TabletAliasEqual(tablet.Alias, aliases[0]))
+}
+
+func TestGetNonManagedTabletAliasesByShardIncludesUnreadableCandidate(t *testing.T) {
+	ts, factory := memorytopo.NewServerAndFactory(t.Context(), "zone1")
+	t.Cleanup(ts.Close)
+
+	for uid := uint32(1); uid <= 2; uid++ {
+		tablet := &topodatapb.Tablet{
+			Alias:     &topodatapb.TabletAlias{Cell: "zone1", Uid: uid},
+			Keyspace:  "commerce",
+			Shard:     "0",
+			MysqlMode: topodatapb.TabletMySQLMode_UNMANAGED,
+		}
+		require.NoError(t, ts.CreateTablet(t.Context(), tablet))
+	}
+	factory.AddOperationError(memorytopo.Get, "tablets/zone1-0000000002/Tablet", errors.New("tablet read failed"))
+
+	aliases, err := ts.GetNonManagedTabletAliasesByShard(t.Context(), "commerce", "0")
+	require.NoError(t, err)
+	require.Len(t, aliases, 2)
+	require.Equal(t, uint32(1), aliases[0].Uid)
+	require.Equal(t, uint32(2), aliases[1].Uid)
+}
+
+func TestNonManagedTabletMarkerFailurePaths(t *testing.T) {
+	newTablet := func() *topodatapb.Tablet {
+		return &topodatapb.Tablet{
+			Alias:     &topodatapb.TabletAlias{Cell: "zone1", Uid: 1},
+			Keyspace:  "commerce",
+			Shard:     "0",
+			MysqlMode: topodatapb.TabletMySQLMode_UNMANAGED,
+		}
+	}
+	readMarkers := func(t *testing.T, ts *topo.Server) []topo.DirEntry {
+		t.Helper()
+		conn, err := ts.ConnForCell(t.Context(), "zone1")
+		require.NoError(t, err)
+		entries, err := conn.ListDir(t.Context(), "keyspaces/commerce/shards/0/"+topo.NonManagedTabletsPath, false)
+		require.NoError(t, err)
+		return entries
+	}
+
+	t.Run("marker create failure prevents tablet create", func(t *testing.T) {
+		ts, factory := memorytopo.NewServerAndFactory(t.Context(), "zone1")
+		t.Cleanup(ts.Close)
+		factory.AddOperationError(memorytopo.Create, "keyspaces/commerce/shards/0/non_managed_tablets/.*", errors.New("marker create failed"))
+
+		tablet := newTablet()
+		require.ErrorContains(t, ts.CreateTablet(t.Context(), tablet), "marker create failed")
+		_, err := ts.GetTablet(t.Context(), tablet.Alias)
+		require.True(t, topo.IsErrType(err, topo.NoNode))
+	})
+
+	t.Run("tablet create failure leaves conservative marker", func(t *testing.T) {
+		ts, factory := memorytopo.NewServerAndFactory(t.Context(), "zone1")
+		t.Cleanup(ts.Close)
+		factory.AddOperationError(memorytopo.Create, "tablets/zone1-0000000001/Tablet", errors.New("tablet create failed"))
+
+		tablet := newTablet()
+		require.ErrorContains(t, ts.CreateTablet(t.Context(), tablet), "tablet create failed")
+		require.Len(t, readMarkers(t, ts), 1)
+		aliases, err := ts.GetNonManagedTabletAliasesByShard(t.Context(), tablet.Keyspace, tablet.Shard)
+		require.NoError(t, err)
+		assert.Equal(t, []*topodatapb.TabletAlias{tablet.Alias}, aliases)
+	})
+
+	t.Run("tablet update failure leaves conservative marker", func(t *testing.T) {
+		ts, factory := memorytopo.NewServerAndFactory(t.Context(), "zone1")
+		t.Cleanup(ts.Close)
+
+		tablet := newTablet()
+		tablet.MysqlMode = topodatapb.TabletMySQLMode_MANAGED
+		require.NoError(t, ts.CreateTablet(t.Context(), tablet))
+		ti, err := ts.GetTablet(t.Context(), tablet.Alias)
+		require.NoError(t, err)
+		ti.MysqlMode = topodatapb.TabletMySQLMode_UNMANAGED
+		factory.AddOperationError(memorytopo.Update, "tablets/zone1-0000000001/Tablet", errors.New("tablet update failed"))
+
+		require.ErrorContains(t, ts.UpdateTablet(t.Context(), ti), "tablet update failed")
+		require.Len(t, readMarkers(t, ts), 1)
+		aliases, err := ts.GetNonManagedTabletAliasesByShard(t.Context(), tablet.Keyspace, tablet.Shard)
+		require.NoError(t, err)
+		assert.Equal(t, []*topodatapb.TabletAlias{tablet.Alias}, aliases)
+	})
+
+	t.Run("marker delete failure leaves conservative marker", func(t *testing.T) {
+		ts, factory := memorytopo.NewServerAndFactory(t.Context(), "zone1")
+		t.Cleanup(ts.Close)
+
+		tablet := newTablet()
+		require.NoError(t, ts.CreateTablet(t.Context(), tablet))
+		ti, err := ts.GetTablet(t.Context(), tablet.Alias)
+		require.NoError(t, err)
+		ti.MysqlMode = topodatapb.TabletMySQLMode_MANAGED
+		factory.AddOperationError(memorytopo.Delete, "keyspaces/commerce/shards/0/non_managed_tablets/zone1-0000000001", errors.New("marker delete failed"))
+
+		require.ErrorContains(t, ts.UpdateTablet(t.Context(), ti), "marker delete failed")
+		require.Len(t, readMarkers(t, ts), 1)
+		stored, err := ts.GetTablet(t.Context(), tablet.Alias)
+		require.NoError(t, err)
+		require.Equal(t, topodatapb.TabletMySQLMode_MANAGED, stored.GetMysqlMode())
+		aliases, err := ts.GetNonManagedTabletAliasesByShard(t.Context(), tablet.Keyspace, tablet.Shard)
+		require.NoError(t, err)
+		assert.Equal(t, []*topodatapb.TabletAlias{tablet.Alias}, aliases)
+	})
+
+	// The marker path is derived from the tablet record, so a delete that removed the record
+	// first would leave nothing to derive it from: the marker would block every reparent of the
+	// shard forever, with no record left to explain why and no retry able to clear it.
+	t.Run("marker delete failure leaves the tablet record for a retry", func(t *testing.T) {
+		ts, factory := memorytopo.NewServerAndFactory(t.Context(), "zone1")
+		t.Cleanup(ts.Close)
+
+		tablet := newTablet()
+		require.NoError(t, ts.CreateTablet(t.Context(), tablet))
+		factory.AddOperationError(memorytopo.Delete, "keyspaces/commerce/shards/0/non_managed_tablets/zone1-0000000001", errors.New("marker delete failed"))
+
+		require.ErrorContains(t, ts.DeleteTablet(t.Context(), tablet.Alias), "marker delete failed")
+		require.Len(t, readMarkers(t, ts), 1)
+		// The record survived, so the marker path is still derivable and the delete is retryable.
+		stored, err := ts.GetTablet(t.Context(), tablet.Alias)
+		require.NoError(t, err)
+		assert.Equal(t, topodatapb.TabletMySQLMode_UNMANAGED, stored.GetMysqlMode())
+
+		factory.ClearOperationErrors()
+		require.NoError(t, ts.DeleteTablet(t.Context(), tablet.Alias))
+		aliases, err := ts.GetNonManagedTabletAliasesByShard(t.Context(), tablet.Keyspace, tablet.Shard)
+		require.NoError(t, err)
+		assert.Empty(t, aliases)
+	})
+
+	// DeleteTabletReplicationData has usually already run by this point, so the marker is the
+	// only thing still telling a reparent that this tablet is unmanaged -- and the record we
+	// failed to delete still says that it is. Leaving the marker deleted would be fail-open.
+	t.Run("tablet delete failure restores the marker", func(t *testing.T) {
+		ts, factory := memorytopo.NewServerAndFactory(t.Context(), "zone1")
+		t.Cleanup(ts.Close)
+
+		tablet := newTablet()
+		require.NoError(t, ts.CreateTablet(t.Context(), tablet))
+		require.NoError(t, topo.DeleteTabletReplicationData(t.Context(), ts, tablet))
+		factory.AddOperationError(memorytopo.Delete, "tablets/zone1-0000000001/Tablet", errors.New("tablet delete failed"))
+
+		require.ErrorContains(t, ts.DeleteTablet(t.Context(), tablet.Alias), "tablet delete failed")
+		require.Len(t, readMarkers(t, ts), 1)
+		aliases, err := ts.GetNonManagedTabletAliasesByShard(t.Context(), tablet.Keyspace, tablet.Shard)
+		require.NoError(t, err)
+		require.Len(t, aliases, 1)
+		assert.True(t, topoproto.TabletAliasEqual(tablet.Alias, aliases[0]))
+	})
+}
