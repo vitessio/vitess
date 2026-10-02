@@ -1011,6 +1011,104 @@ func TestFindColumn(t *testing.T) {
 	}
 }
 
+// TestPlanUnreconstructibleAfterColumn confirms which emitted column, if any,
+// cannot be produced from a partial after image: only emitted columns count,
+// whatever the image omits elsewhere; keyspace_id() needs all its vindex
+// inputs; a JSON column sent as a PARTIAL_JSON diff needs the previous value.
+func TestPlanUnreconstructibleAfterColumn(t *testing.T) {
+	hash, err := vindexes.CreateVindex("hash", "hash", nil)
+	require.NoError(t, err)
+
+	// Source table columns: 0 id, 1 blb, 2 val, 3 j1, 4 j2 (two JSON columns,
+	// so j1 is JSON ordinal 0 and j2 ordinal 1 in the partial-JSON bitmap).
+	table := &Table{Name: "t", Fields: []*querypb.Field{
+		{Name: "id", Type: querypb.Type_INT32},
+		{Name: "blb", Type: querypb.Type_BLOB},
+		{Name: "val", Type: querypb.Type_VARBINARY},
+		{Name: "j1", Type: querypb.Type_JSON},
+		{Name: "j2", Type: querypb.Type_JSON},
+	}}
+	col := func(i int) ColExpr { return ColExpr{ColNum: i, Field: table.Fields[i]} }
+	ksid := func(cols ...int) ColExpr {
+		return ColExpr{Vindex: hash, VindexColumns: cols, Field: &querypb.Field{Name: "keyspace_id"}}
+	}
+	bits := func(set ...int) *mysql.Bitmap {
+		bm := mysql.NewServerBitmap(len(table.Fields))
+		for _, i := range set {
+			bm.Set(i, true)
+		}
+		return &bm
+	}
+	jsonBits := func(set ...int) *mysql.Bitmap {
+		bm := mysql.NewServerBitmap(2)
+		for _, i := range set {
+			bm.Set(i, true)
+		}
+		return &bm
+	}
+	noJSON := &mysql.Bitmap{}
+
+	blobOmitted := bits(0, 2, 3, 4) // NOBLOB left blb out
+	full := bits(0, 1, 2, 3, 4)
+
+	testCases := []struct {
+		name     string
+		colExprs []ColExpr
+		data     *mysql.Bitmap
+		json     *mysql.Bitmap
+		want     string
+	}{{
+		name:     "full image",
+		colExprs: []ColExpr{col(0), col(1), col(2), col(3)},
+		data:     full,
+		json:     noJSON,
+	}, {
+		name:     "omitted blob is not emitted",
+		colExprs: []ColExpr{col(0), col(2)},
+		data:     blobOmitted,
+		json:     noJSON,
+	}, {
+		name:     "omitted blob is emitted",
+		colExprs: []ColExpr{col(0), col(1), col(2)},
+		data:     blobOmitted,
+		json:     noJSON,
+		want:     "blb",
+	}, {
+		name:     "constant is always present",
+		colExprs: []ColExpr{col(0), {ColNum: -1, FixedValue: sqltypes.NewInt64(1), Field: &querypb.Field{Name: "1"}}},
+		data:     blobOmitted,
+		json:     noJSON,
+	}, {
+		name:     "keyspace_id over a present column",
+		colExprs: []ColExpr{col(0), ksid(0)},
+		data:     blobOmitted,
+		json:     noJSON,
+	}, {
+		name:     "keyspace_id over an omitted column",
+		colExprs: []ColExpr{col(0), ksid(0, 1)},
+		data:     blobOmitted,
+		json:     noJSON,
+		want:     "keyspace_id",
+	}, {
+		name:     "partial JSON diff on an emitted column",
+		colExprs: []ColExpr{col(0), col(4)},
+		data:     full,
+		json:     jsonBits(1), // j2 is partial
+		want:     "j2",
+	}, {
+		name:     "partial JSON diff on a column that is not emitted",
+		colExprs: []ColExpr{col(0), col(3)},
+		data:     full,
+		json:     jsonBits(1), // j2 is partial, j1 is complete
+	}}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			plan := &Plan{Table: table, ColExprs: tc.colExprs}
+			assert.Equal(t, tc.want, plan.unreconstructibleAfterColumn(tc.data, tc.json))
+		})
+	}
+}
+
 // TestPlanMapBitmap confirms that a column presence bitmap in the source table's
 // column order is projected onto the plan's emitted columns: plain columns take
 // the bit of the source column they copy, fixed values are always present, and
