@@ -20,6 +20,8 @@
         - [CLI Flags](#deprecated-cli-flags)
         - [Legacy streaming-path plan types in query rules](#deprecated-selectstream-rule-plan)
 - **[Minor Changes](#minor-changes)**
+    - **[VTOrc](#minor-changes-vtorc)**
+        - [Consistent hash ring to partition shard monitoring across instances](#vtorc-consistent-hash-ring)
     - **[VReplication](#minor-changes-vreplication)**
         - [Default data protection for `_reverse` workflow cancel/complete](#vreplication-reverse-workflow-data-protection)
         - [`vdiff show --no-samples` strips the per-table row-sample report](#vreplication-vdiff-no-samples)
@@ -212,6 +214,28 @@ Both compatibility behaviors will be removed in v26, along with the `SelectStrea
 **Impact**: Update query rules that use `SelectStream` to the concrete plan names listed above, and re-key `OtherRead` rules meant to gate streamed `ANALYZE` on the `Select` plan or a `Query` pattern. Note that rules keyed on concrete plan names match on both execution paths, not only streamed queries.
 
 ## <a id="minor-changes"/>Minor Changes</a>
+
+### <a id="minor-changes-vtorc"/>VTOrc</a>
+
+#### <a id="vtorc-consistent-hash-ring"/>Consistent hash ring to partition shard monitoring across instances</a>
+
+VTOrc can now split shard-monitoring responsibility across a pool of instances using rendezvous (highest-random-weight) hashing, so each instance watches only a deterministic slice of the fleet instead of the entire topology. It is controlled by three new flags:
+
+- `--vtorc-ring-size` (default `1`, disabled): total number of VTOrc instances in the ring.
+- `--vtorc-ring-index`: this instance's 0-based position in the ring.
+- `--vtorc-ring-watchers-per-shard` (default `3`): number of instances that watch each shard.
+
+Each shard is watched by the `--vtorc-ring-watchers-per-shard` highest-ranked instances under rendezvous hashing of `keyspace/shard`, giving that many watchers per shard for HA. Because rendezvous weights are independent of the ring membership, changing the ring by one instance moves a shard between at most one old and one new watcher, so the old and new watcher sets share at least `watchers-per-shard - 1` instances; a change of `m` instances shares at least `watchers-per-shard - m`, and the sets can become disjoint once `m` reaches `watchers-per-shard`.
+
+Changing any ring flag requires restarting the instance, which is briefly offline while it restarts, so translating that set overlap into gap-free live coverage depends on the rollout. **Stage the rollout so the instances that will watch a shard under the new size are live before the old watchers stop, and coverage is preserved for any resize:** to grow, start all added indices on the new size before restarting the incumbents onto it; to shrink, restart every surviving instance onto the new size before removing any old index. If instances are instead restarted in arbitrary order (any one may be offline at a time), at least one watcher survives only when the old and new watcher sets share at least two instances, i.e. a change of at most `watchers-per-shard - 2` instances per rollout. Setting `--vtorc-ring-watchers-per-shard=1` provides no redundancy at all — a single watcher per shard means any restart or resize leaves that shard unwatched until a replacement instance picks it up; VTOrc logs a warning at startup in that case.
+
+Ring sizes at or below `--vtorc-ring-watchers-per-shard` are a no-op (every instance watches every shard); the default `--vtorc-ring-size=1` preserves the existing behavior of watching the entire topology.
+
+The ring partitions only the per-shard MySQL polling and recovery work, **not topology reads**: every instance still lists all tablets and fetches every shard record from the topology server on each refresh, filtering by ring membership afterward. Topology-server load therefore grows with the ring size rather than shrinking, so size the ring against your topology server's capacity when running many instances. Reducing those reads is planned as a follow-up.
+
+Because each instance only reports its own ring configuration (via the `VtorcRingSize`, `VtorcRingIndex`, and `VtorcRingWatchersPerShard` vars), a misconfiguration — two instances sharing an index, a missing index, or one instance left on an old ring size — silently lowers the watcher count for some shards without any single instance detecting it. Alert on those vars disagreeing across the pool (every instance should report the same size and watcher count, and together cover each index in `[0, size)`) to catch such drift outside of a rollout.
+
+See [#21121](https://github.com/vitessio/vitess/pull/21121) for details.
 
 #### <a id="vreplication-reverse-workflow-data-protection"/>Default data protection for `_reverse` workflow cancel/complete</a>
 
