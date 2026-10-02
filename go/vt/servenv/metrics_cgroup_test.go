@@ -19,6 +19,7 @@ limitations under the License.
 package servenv
 
 import (
+	"math"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -114,6 +115,11 @@ func TestFirstCgroupCpuSampleIsNotPublished(t *testing.T) {
 }
 
 func TestGetCpuUsageFromSamplesRejectsShortInterval(t *testing.T) {
-	_, err := getCpuUsageFromSamples(1_000, 2_000, 500*time.Nanosecond, 1)
-	require.Error(t, err)
+	for _, interval := range []time.Duration{0, -time.Nanosecond, 999 * time.Nanosecond} {
+		_, err := getCpuUsageFromSamples(1_000, 2_000, interval, 1)
+		require.Errorf(t, err, "interval %v", interval)
+	}
+	cpu, err := getCpuUsageFromSamples(1_000, 2_000, time.Microsecond, 1)
+	require.NoError(t, err)
+	require.False(t, math.IsInf(cpu, 0) || math.IsNaN(cpu), "cpu %v", cpu)
 }
