@@ -17,6 +17,7 @@ limitations under the License.
 package inst
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -1144,13 +1145,13 @@ func TestGetDetectionAnalysisGroupReplicationJoinTargets(t *testing.T) {
 	}
 }
 
-// TestGetDetectionAnalysisGroupReplicationReadOnlyPrimary checks that VTOrc's PrimaryIsReadOnly, whose
-// recovery is UndoDemotePrimary, applies under a group replication policy only to the primary of the
-// shard's legitimate group. Group Replication leaves the primary it elects super_read_only (the member
-// action mysql_disable_super_read_only_if_primary is disabled), and the tablet keeps MySQL read-only
-// while the serving invariant does not hold, refusing UndoDemotePrimary: VTOrc would retry it every
-// few seconds. Under another policy it applies as before.
-func TestGetDetectionAnalysisGroupReplicationReadOnlyPrimary(t *testing.T) {
+// TestGetDetectionAnalysisGroupReplicationUndoDemotePrimary checks that VTOrc's PrimaryIsReadOnly and
+// PrimaryCurrentTypeMismatch, whose recovery is UndoDemotePrimary, apply under a group replication
+// policy only to the primary of the shard's legitimate group. Group Replication leaves the primary it
+// elects super_read_only (the member action mysql_disable_super_read_only_if_primary is disabled), and
+// the tablet keeps MySQL read-only while the serving invariant does not hold, refusing
+// UndoDemotePrimary: VTOrc would retry it every few seconds. Under another policy they apply as before.
+func TestGetDetectionAnalysisGroupReplicationUndoDemotePrimary(t *testing.T) {
 	resetPrimaryHealthState()
 	// Every tablet is reachable: the voter replacement grace period does not matter.
 	t.Cleanup(func() {
@@ -1164,77 +1165,86 @@ func TestGetDetectionAnalysisGroupReplicationReadOnlyPrimary(t *testing.T) {
 	gr := policy.DurabilityGroupReplication
 	const recorded = "1790785744160779"
 
+	// Each fault makes one of the analyses match a PRIMARY tablet that is otherwise healthy.
+	faults := []struct {
+		analysis AnalysisCode
+		apply    func(row *test.InfoForRecoveryAnalysis)
+	}{{
+		analysis: PrimaryIsReadOnly,
+		apply:    func(row *test.InfoForRecoveryAnalysis) { row.ReadOnly = 1 },
+	}, {
+		analysis: PrimaryCurrentTypeMismatch,
+		// A PRIMARY in the topology whose tablet runs as a REPLICA, for example after a
+		// DemotePrimary that its caller did not follow up.
+		apply: func(row *test.InfoForRecoveryAnalysis) { row.CurrentTabletType = int(topodatapb.TabletType_REPLICA) },
+	}}
 	tests := []struct {
 		name string
+		// rows returns the rows of the shard, the PRIMARY tablet's first.
 		rows func() []*test.InfoForRecoveryAnalysis
-		// readOnlyPrimary is whether PrimaryIsReadOnly matches the PRIMARY tablet.
-		readOnlyPrimary bool
+		// match is whether the analyses match the PRIMARY tablet.
+		match bool
 	}{{
-		name: "the legitimate group's primary is read-only",
+		name: "the legitimate group's primary",
 		rows: func() []*test.InfoForRecoveryAnalysis {
-			groupPrimary := sees(member(grRow(primary, gr), mysql.GroupMemberStateOnline, mysql.GroupMemberRolePrimary, true, primary), primary, replica, crossCellReplica)
-			groupPrimary.ReadOnly = 1
 			return []*test.InfoForRecoveryAnalysis{
-				groupPrimary,
+				sees(member(grRow(primary, gr), mysql.GroupMemberStateOnline, mysql.GroupMemberRolePrimary, true, primary), primary, replica, crossCellReplica),
 				sees(member(grRow(replica, gr), mysql.GroupMemberStateOnline, mysql.GroupMemberRoleSecondary, true, primary), primary, replica, crossCellReplica),
 				sees(member(grRow(crossCellReplica, gr), mysql.GroupMemberStateOnline, mysql.GroupMemberRoleSecondary, true, primary), primary, replica, crossCellReplica),
 			}
 		},
-		readOnlyPrimary: true,
+		match: true,
 	}, {
-		name: "the primary of a view without the voter majority is read-only",
+		name: "the primary of a view without the voter majority",
 		rows: func() []*test.InfoForRecoveryAnalysis {
-			groupPrimary := sees(member(grRow(primary, gr), mysql.GroupMemberStateOnline, mysql.GroupMemberRolePrimary, true, primary), primary)
-			groupPrimary.ReadOnly = 1
 			return []*test.InfoForRecoveryAnalysis{
-				groupPrimary,
+				sees(member(grRow(primary, gr), mysql.GroupMemberStateOnline, mysql.GroupMemberRolePrimary, true, primary), primary),
 				member(grRow(replica, gr), mysql.GroupMemberStateOffline, "", false, nil),
 				member(grRow(crossCellReplica, gr), mysql.GroupMemberStateOffline, "", false, nil),
 			}
 		},
 	}, {
-		name: "a PRIMARY tablet whose MySQL is out of its group is read-only",
+		name: "a PRIMARY tablet whose MySQL is out of its group",
 		rows: func() []*test.InfoForRecoveryAnalysis {
-			stale := member(grRow(primary, gr), mysql.GroupMemberStateOffline, "", false, nil)
-			stale.ReadOnly = 1
 			return []*test.InfoForRecoveryAnalysis{
-				stale,
+				member(grRow(primary, gr), mysql.GroupMemberStateOffline, "", false, nil),
 				sees(member(grRow(replica, gr), mysql.GroupMemberStateOnline, mysql.GroupMemberRolePrimary, true, replica), replica, crossCellReplica),
 				sees(member(grRow(crossCellReplica, gr), mysql.GroupMemberStateOnline, mysql.GroupMemberRoleSecondary, true, replica), replica, crossCellReplica),
 			}
 		},
 	}, {
-		name: "a read-only primary under a semi-sync policy",
+		name: "a primary under a semi-sync policy",
 		rows: func() []*test.InfoForRecoveryAnalysis {
-			readOnly := grRow(primary, policy.DurabilitySemiSync)
-			readOnly.ReadOnly = 1
-			return []*test.InfoForRecoveryAnalysis{readOnly}
+			return []*test.InfoForRecoveryAnalysis{grRow(primary, policy.DurabilitySemiSync)}
 		},
-		readOnlyPrimary: true,
+		match: true,
 	}}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			GroupReplicationConditions.Reset()
-			UnreachableGroupTablets.Reset()
-			rows := tt.rows()
-			for _, row := range rows {
-				if row.DurabilityPolicy == gr {
-					row.ShardGroupReplicationVoters = voterList(primary, replica, crossCellReplica)
-					row.ShardGroupReplicationIncarnation = recorded
-					if row.GroupMemberState == mysql.GroupMemberStateOnline {
-						row.GroupViewID = recorded + ":7"
+	for _, fault := range faults {
+		for _, tt := range tests {
+			t.Run(fmt.Sprintf("%s: %s", fault.analysis, tt.name), func(t *testing.T) {
+				GroupReplicationConditions.Reset()
+				UnreachableGroupTablets.Reset()
+				rows := tt.rows()
+				fault.apply(rows[0])
+				for _, row := range rows {
+					if row.DurabilityPolicy == gr {
+						row.ShardGroupReplicationVoters = voterList(primary, replica, crossCellReplica)
+						row.ShardGroupReplicationIncarnation = recorded
+						if row.GroupMemberState == mysql.GroupMemberStateOnline {
+							row.GroupViewID = recorded + ":7"
+						}
 					}
 				}
-			}
-			var matched bool
-			for _, a := range runAnalysis(t, rows) {
-				if topoproto.TabletAliasEqual(a.AnalyzedInstanceAlias, primary.Alias) {
-					for _, problem := range a.AnalysisMatchedProblems {
-						matched = matched || problem.Analysis == PrimaryIsReadOnly
+				var matched bool
+				for _, a := range runAnalysis(t, rows) {
+					if topoproto.TabletAliasEqual(a.AnalyzedInstanceAlias, primary.Alias) {
+						for _, problem := range a.AnalysisMatchedProblems {
+							matched = matched || problem.Analysis == fault.analysis
+						}
 					}
 				}
-			}
-			assert.Equal(t, tt.readOnlyPrimary, matched)
-		})
+				assert.Equal(t, tt.match, matched)
+			})
+		}
 	}
 }
