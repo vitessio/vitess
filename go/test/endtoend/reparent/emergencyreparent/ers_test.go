@@ -17,8 +17,10 @@ limitations under the License.
 package emergencyreparent
 
 import (
+	"context"
 	"fmt"
 	"os/exec"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -27,14 +29,193 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/reparent/utils"
 	endtoendutils "vitess.io/vitess/go/test/endtoend/utils"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/grpctmclient"
 
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
+
+func TestPrepareEmergencyReparent(t *testing.T) {
+	endtoendutils.SkipIfBinaryIsBelowVersion(t, 25, "vttablet")
+
+	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilityNone)
+	t.Cleanup(func() { utils.TeardownCluster(clusterInstance) })
+	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
+	primary := tablets[0]
+	replica := tablets[1]
+
+	utils.ConfirmReplication(t, primary, tablets[1:])
+
+	client := grpctmclient.NewClient()
+	t.Cleanup(client.Close)
+	primaryTablet, err := clusterInstance.VtctldClientProcess.GetTablet(primary.Alias)
+	require.NoError(t, err)
+	replicaTablet, err := clusterInstance.VtctldClientProcess.GetTablet(replica.Alias)
+	require.NoError(t, err)
+
+	journalResult := utils.RunSQL(t.Context(), t, "SELECT COUNT(*) FROM _vt.reparent_journal", replica)
+	require.Len(t, journalResult.Rows, 1)
+	journalLength, err := journalResult.Rows[0][0].ToInt32()
+	require.NoError(t, err)
+
+	position, err := client.PrimaryPosition(t.Context(), primaryTablet)
+	require.NoError(t, err)
+	replicaMySQLConn, err := utils.GetMySQLConn(t.Context(), replica)
+	require.NoError(t, err)
+	t.Cleanup(replicaMySQLConn.Close)
+	_, err = replicaMySQLConn.ExecuteFetch(replicaMySQLConn.StopSQLThreadCommand(), 0, false)
+	require.NoError(t, err)
+	err = client.PopulateReparentJournal(t.Context(), primaryTablet, time.Unix(1700000000, 123).UnixNano(), "PrepareEmergencyReparent", primaryTablet.Alias, position)
+	require.NoError(t, err)
+
+	primaryGTIDs := strings.ReplaceAll(utils.RunSQL(t.Context(), t, "SELECT @@global.gtid_executed", primary).Rows[0][0].ToString(), "\n", "")
+	waitForReceivedPosition(t, replica, primaryGTIDs)
+	journalResult = utils.RunSQL(t.Context(), t, "SELECT COUNT(*) FROM _vt.reparent_journal", replica)
+	require.Len(t, journalResult.Rows, 1)
+	journalLengthBeforeDrain, err := journalResult.Rows[0][0].ToInt32()
+	require.NoError(t, err)
+	require.Equal(t, journalLength, journalLengthBeforeDrain)
+
+	type prepareResult struct {
+		response *tabletmanagerdatapb.PrepareEmergencyReparentResponse
+		err      error
+	}
+	resultCh := make(chan prepareResult, 1)
+	go func() {
+		response, err := client.PrepareEmergencyReparent(t.Context(), replicaTablet, &tabletmanagerdatapb.PrepareEmergencyReparentRequest{
+			WaitForPositionTimeout: protoutil.DurationToProto(60 * time.Second),
+		})
+		resultCh <- prepareResult{response: response, err: err}
+	}()
+
+	require.Eventually(t, func() bool {
+		return replicaStatusField(t, replica, "Replica_IO_Running") == "No"
+	}, 30*time.Second, time.Second)
+	_, err = replicaMySQLConn.ExecuteFetch(replicaMySQLConn.StartSQLThreadCommand(), 0, false)
+	require.NoError(t, err)
+
+	var result prepareResult
+	require.Eventually(t, func() bool {
+		select {
+		case result = <-resultCh:
+			return true
+		default:
+			return false
+		}
+	}, 30*time.Second, 100*time.Millisecond)
+	require.NoError(t, result.err)
+	require.NotNil(t, result.response)
+	require.NotNil(t, result.response.Status)
+	require.NotNil(t, result.response.Status.After)
+	assert.NotEmpty(t, result.response.RelayLogPosition)
+	assert.Equal(t, journalLength+1, result.response.ReparentJournalLength)
+	assert.Nil(t, result.response.StopReplicationError)
+	assert.Nil(t, result.response.WaitForPositionError)
+	assert.Nil(t, result.response.ReadReparentJournalError)
+
+	require.NoError(t, client.StartReplication(t.Context(), replicaTablet, false))
+
+	_, err = replicaMySQLConn.ExecuteFetch(replicaMySQLConn.StopSQLThreadCommand(), 0, false)
+	require.NoError(t, err)
+	err = client.PopulateReparentJournal(t.Context(), primaryTablet, time.Unix(1700000001, 123).UnixNano(), "PrepareEmergencyReparentCancellation", primaryTablet.Alias, position)
+	require.NoError(t, err)
+	primaryGTIDs = strings.ReplaceAll(utils.RunSQL(t.Context(), t, "SELECT @@global.gtid_executed", primary).Rows[0][0].ToString(), "\n", "")
+	waitForReceivedPosition(t, replica, primaryGTIDs)
+
+	cancelCtx, cancel := context.WithCancel(t.Context())
+	t.Cleanup(cancel)
+	cancelResultCh := make(chan prepareResult, 1)
+	go func() {
+		response, err := client.PrepareEmergencyReparent(cancelCtx, replicaTablet, &tabletmanagerdatapb.PrepareEmergencyReparentRequest{
+			WaitForPositionTimeout: protoutil.DurationToProto(60 * time.Second),
+		})
+		cancelResultCh <- prepareResult{response: response, err: err}
+	}()
+
+	require.Eventually(t, func() bool {
+		return replicaStatusField(t, replica, "Replica_IO_Running") == "No" && replicaStatusField(t, replica, "Replica_SQL_Running") == "No"
+	}, 30*time.Second, time.Second)
+	cancel()
+
+	var cancelResult prepareResult
+	require.Eventually(t, func() bool {
+		select {
+		case cancelResult = <-cancelResultCh:
+			return true
+		default:
+			return false
+		}
+	}, 30*time.Second, 100*time.Millisecond)
+	assert.Nil(t, cancelResult.response)
+	require.Error(t, cancelResult.err)
+	assert.Equal(t, vtrpcpb.Code_CANCELED, vterrors.Code(cancelResult.err))
+	require.Eventually(t, func() bool {
+		return replicaStatusField(t, replica, "Replica_IO_Running") == "Yes"
+	}, 90*time.Second, time.Second)
+	assert.Equal(t, "No", replicaStatusField(t, replica, "Replica_SQL_Running"))
+	require.NoError(t, client.StartReplication(t.Context(), replicaTablet, false))
+}
+
+func TestPromoteReplicaAndJournal(t *testing.T) {
+	endtoendutils.SkipIfBinaryIsBelowVersion(t, 25, "vttablet")
+
+	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilityNone)
+	t.Cleanup(func() { utils.TeardownCluster(clusterInstance) })
+	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
+	primary := tablets[0]
+	replica := tablets[1]
+
+	utils.ConfirmReplication(t, primary, tablets[1:])
+
+	client := grpctmclient.NewClient()
+	t.Cleanup(client.Close)
+	primaryTablet, err := clusterInstance.VtctldClientProcess.GetTablet(primary.Alias)
+	require.NoError(t, err)
+	replicaTablet, err := clusterInstance.VtctldClientProcess.GetTablet(replica.Alias)
+	require.NoError(t, err)
+
+	demotedStatus, err := client.DemotePrimary(t.Context(), primaryTablet, false)
+	require.NoError(t, err)
+	require.NotEmpty(t, demotedStatus.Position)
+	waitCtx, waitCancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer waitCancel()
+	require.NoError(t, client.WaitForPosition(waitCtx, replicaTablet, demotedStatus.Position))
+
+	timeCreated := time.Unix(1700000000, 123).UTC()
+	response, err := client.PromoteReplicaAndJournal(t.Context(), replicaTablet, &tabletmanagerdatapb.PromoteReplicaAndJournalRequest{
+		TimeCreated: protoutil.TimeToProto(timeCreated),
+		ActionName:  "PlannedReparentShard",
+	})
+	require.NoError(t, err)
+	require.NotNil(t, response)
+	assert.NotEmpty(t, response.Position)
+	assert.Nil(t, response.PromoteReplicaError)
+	assert.Nil(t, response.PopulateReparentJournalError)
+
+	promotedTablet, err := clusterInstance.VtctldClientProcess.GetTablet(replica.Alias)
+	require.NoError(t, err)
+	assert.Equal(t, topodatapb.TabletType_PRIMARY, promotedTablet.Type)
+
+	readOnlyResult := utils.RunSQL(t.Context(), t, "SELECT @@global.read_only, @@global.super_read_only", replica)
+	require.Len(t, readOnlyResult.Rows, 1)
+	assert.Equal(t, "0", readOnlyResult.Rows[0][0].ToString())
+	assert.Equal(t, "0", readOnlyResult.Rows[0][1].ToString())
+
+	journalResult := utils.RunSQL(t.Context(), t, fmt.Sprintf("SELECT action_name, primary_alias, replication_position FROM _vt.reparent_journal WHERE time_created_ns = %d", timeCreated.UnixNano()), replica)
+	require.Len(t, journalResult.Rows, 1)
+	assert.Equal(t, "PlannedReparentShard", journalResult.Rows[0][0].ToString())
+	assert.Equal(t, topoproto.TabletAliasString(replicaTablet.Alias), journalResult.Rows[0][1].ToString())
+	assert.Equal(t, response.Position, journalResult.Rows[0][2].ToString())
+}
 
 func TestTrivialERS(t *testing.T) {
 	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)

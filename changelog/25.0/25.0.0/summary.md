@@ -41,6 +41,7 @@
         - [MySQL-faithful validation and rejection of unsupported `sql_mode` values](#vtgate-sql-mode-rejection)
         - [New `VEXPLAIN MYSQLPLAN` statement](#vtgate-vexplain-mysqlplan)
     - **[Reparent](#minor-changes-reparent)**
+        - [TabletManager adds fused reparent RPCs](#fused-tablet-reparent-rpcs)
         - [`EmergencyReparentShard` no longer waits on replicas that cannot win the election](#ers-lagging-relay-log-wait)
         - [`EmergencyReparentShard` can explicitly recover from split brain](#ers-allow-split-brain-promotion)
         - [Reparent candidate ordering now respects partially ordered GTID histories](#reparent-gtid-candidate-ordering)
@@ -456,6 +457,10 @@ Because each per-shard `EXPLAIN` runs on a separate connection, a `VEXPLAIN MYSQ
 Like a plain `EXPLAIN`, the per-shard `EXPLAIN FORMAT=JSON` queries `VEXPLAIN MYSQLPLAN` issues are not subject to table ACL checks on the explained tables, so `VEXPLAIN MYSQLPLAN` can return per-shard plan metadata (index names, row estimates, filtered percentages) for tables the caller could not otherwise read. For the same reason — the tablet plans an `EXPLAIN` without the explained table's identity — query denylist rules that are conditioned on a table name are not enforced against these per-shard `EXPLAIN` queries either; denylist rules conditioned on the query pattern still apply if their pattern matches the `explain format = json ...` query text. Unlike a plain `EXPLAIN`, which reaches a single arbitrary shard, `VEXPLAIN MYSQLPLAN` extends this to every resolved shard of every keyspace in the plan. Deployments that rely on table ACLs or table-scoped query denylist rules to restrict read access should restrict access to `VEXPLAIN MYSQLPLAN` accordingly.
 
 ### <a id="minor-changes-reparent"/>Reparent</a>
+
+#### <a id="fused-tablet-reparent-rpcs"/>TabletManager adds fused reparent RPCs</a>
+
+vttablet now serves two additive `TabletManager` RPCs, `PrepareEmergencyReparent` and `PromoteReplicaAndJournal`. They fuse the tablet-local steps of an emergency reparent (stop the I/O thread, apply relay logs, read the reparent journal) and of promotion (promote, write the journal row) so future orchestrators need fewer round trips. Nothing calls them yet: `EmergencyReparentShard`, `PlannedReparentShard`, and VTOrc keep their existing RPCs in v25. See [#21156](https://github.com/vitessio/vitess/issues/21156) for the staged rollout.
 
 #### <a id="ers-lagging-relay-log-wait"/>`EmergencyReparentShard` no longer waits on replicas that cannot win the election</a>
 

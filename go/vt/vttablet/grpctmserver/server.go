@@ -667,6 +667,12 @@ func (s *server) StopReplicationAndGetStatus(ctx context.Context, request *table
 	return response, err
 }
 
+func (s *server) PrepareEmergencyReparent(ctx context.Context, request *tabletmanagerdatapb.PrepareEmergencyReparentRequest) (response *tabletmanagerdatapb.PrepareEmergencyReparentResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "PrepareEmergencyReparent", request, response, true /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+	return s.tm.PrepareEmergencyReparent(ctx, request)
+}
+
 func (s *server) PromoteReplica(ctx context.Context, request *tabletmanagerdatapb.PromoteReplicaRequest) (response *tabletmanagerdatapb.PromoteReplicaResponse, err error) {
 	defer s.tm.HandleRPCPanic(ctx, "PromoteReplica", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
@@ -676,6 +682,12 @@ func (s *server) PromoteReplica(ctx context.Context, request *tabletmanagerdatap
 		response.Position = position
 	}
 	return response, err
+}
+
+func (s *server) PromoteReplicaAndJournal(ctx context.Context, request *tabletmanagerdatapb.PromoteReplicaAndJournalRequest) (response *tabletmanagerdatapb.PromoteReplicaAndJournalResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "PromoteReplicaAndJournal", request, response, true /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+	return s.tm.PromoteReplicaAndJournal(ctx, request)
 }
 
 func (s *server) Backup(request *tabletmanagerdatapb.BackupRequest, stream tabletmanagerservicepb.TabletManager_BackupServer) (err error) {
