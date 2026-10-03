@@ -2672,3 +2672,108 @@ func addTabletToSandboxTopo(tb testing.TB, ctx context.Context, st *sandboxTopo,
 	err = st.topoServer.CreateTablet(ctx, tablet)
 	require.NoError(tb, err)
 }
+
+// chunkedTxFailureSandbox returns a one-shard sandbox whose tablet fails with a
+// retryable error after sending BEGIN and one ROW event of rowBytes bytes, and
+// then, if the stream retries, sends a complete transaction.
+func chunkedTxFailureSandbox(t *testing.T, ks string, rowBytes int) (*vstreamManager, *sandboxconn.SandboxConn) {
+	t.Helper()
+	ctx := t.Context()
+	cell := "aa"
+	_ = createSandbox(ks)
+	hc := discovery.NewFakeHealthCheck(nil)
+	st := getSandboxTopo(ctx, cell, ks, []string{"-20"})
+	vsm := newTestVStreamManager(ctx, hc, st, cell)
+	sbc0 := hc.AddTestTablet(cell, "1.1.1.1", 1001, ks, "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
+	addTabletToSandboxTopo(t, ctx, st, ks, "-20", sbc0.Tablet())
+
+	rowData := make([]byte, rowBytes)
+	sbc0.AddVStreamEvents([]*binlogdatapb.VEvent{{Type: binlogdatapb.VEventType_BEGIN}}, nil)
+	sbc0.AddVStreamEvents([]*binlogdatapb.VEvent{{
+		Type: binlogdatapb.VEventType_ROW,
+		RowEvent: &binlogdatapb.RowEvent{
+			TableName:  "t1",
+			RowChanges: []*binlogdatapb.RowChange{{After: &querypb.Row{Lengths: []int64{int64(rowBytes)}, Values: rowData}}},
+		},
+	}}, nil)
+	sbc0.AddVStreamEvents(nil, vterrors.New(vtrpcpb.Code_UNAVAILABLE, "tablet went away"))
+	sbc0.AddVStreamEvents([]*binlogdatapb.VEvent{{Type: binlogdatapb.VEventType_BEGIN}}, nil)
+	sbc0.AddVStreamEvents([]*binlogdatapb.VEvent{{Type: binlogdatapb.VEventType_COMMIT}}, nil)
+	return vsm, sbc0
+}
+
+// TestVStreamChunkedTxFailureDoesNotDeadlock covers a tablet stream failing with a
+// retryable error after a chunk of a large transaction has already been sent to
+// the client, so vs.mu is held. Retrying would re-enter keyspaceHasBeenResharded
+// with the lock still held and deadlock the whole VStream. The stream must
+// instead end with an error, since the partially delivered transaction cannot be
+// resumed in place.
+func TestVStreamChunkedTxFailureDoesNotDeadlock(t *testing.T) {
+	ks := "TestVStream"
+	vsm, sbc0 := chunkedTxFailureSandbox(t, ks, 100)
+	vgtid := &binlogdatapb.VGtid{ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: ks, Shard: "-20", Gtid: "pos"}}}
+	flags := &vtgatepb.VStreamFlags{TransactionChunkSize: 10}
+
+	vstreamCtx, vstreamCancel := context.WithCancel(t.Context())
+	defer vstreamCancel()
+
+	var begins, commits int
+	done := make(chan error, 1)
+	go func() {
+		done <- vsm.VStream(vstreamCtx, topodatapb.TabletType_PRIMARY, vgtid, nil, flags, func(events []*binlogdatapb.VEvent) error {
+			for _, ev := range events {
+				switch ev.Type {
+				case binlogdatapb.VEventType_BEGIN:
+					begins++
+				case binlogdatapb.VEventType_COMMIT:
+					commits++
+				}
+			}
+			return nil
+		})
+	}()
+
+	select {
+	case err := <-done:
+		require.Error(t, err)
+		require.Equal(t, vtrpcpb.Code_UNAVAILABLE, vterrors.Code(err))
+		require.ErrorContains(t, err, "partially delivering a chunked transaction")
+	case <-time.After(5 * time.Second):
+		require.FailNow(t, "VStream did not return: the stream is deadlocked")
+	}
+	require.Len(t, sbc0.VStreamRequests, 1, "a partially delivered chunked transaction must not be retried in place")
+	require.Equal(t, 1, begins, "the client must not see the transaction's BEGIN replayed")
+	require.Equal(t, 0, commits)
+}
+
+// TestVStreamChunkingEnabledSmallTxFailureRetries checks that with chunking
+// enabled, a failure in a transaction that stayed under the chunk size (so no
+// lock was taken and nothing was delivered) is still retried as before.
+func TestVStreamChunkingEnabledSmallTxFailureRetries(t *testing.T) {
+	ks := "TestVStream"
+	vsm, sbc0 := chunkedTxFailureSandbox(t, ks, 8)
+	vgtid := &binlogdatapb.VGtid{ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: ks, Shard: "-20", Gtid: "pos"}}}
+	flags := &vtgatepb.VStreamFlags{TransactionChunkSize: 1024}
+
+	vstreamCtx, vstreamCancel := context.WithCancel(t.Context())
+	defer vstreamCancel()
+
+	var begins, commits int
+	err := vsm.VStream(vstreamCtx, topodatapb.TabletType_PRIMARY, vgtid, nil, flags, func(events []*binlogdatapb.VEvent) error {
+		for _, ev := range events {
+			switch ev.Type {
+			case binlogdatapb.VEventType_BEGIN:
+				begins++
+			case binlogdatapb.VEventType_COMMIT:
+				commits++
+				vstreamCancel()
+			}
+		}
+		return nil
+	})
+	require.Error(t, err)
+	require.ErrorIs(t, vterrors.UnwrapAll(err), context.Canceled)
+	require.Len(t, sbc0.VStreamRequests, 2, "the failed attempt should have been retried")
+	require.Equal(t, 1, begins, "the aborted small transaction was never delivered, so only the retried one is seen")
+	require.Equal(t, 1, commits)
+}
