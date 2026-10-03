@@ -871,6 +871,41 @@ func TestCompilerSingle(t *testing.T) {
 			expression: `GREATEST(JSON_OBJECT(), JSON_ARRAY())`,
 			result:     `VARCHAR("{}")`,
 		},
+		{
+			// MySQL reads zero-padded octets as decimal.
+			expression: `INET_ATON('192.168.001.010')`,
+			result:     `UINT64(3232235786)`,
+		},
+		{
+			// MySQL accepts the short forms a.b, a.b.c and a.
+			expression: `INET_ATON('127.1')`,
+			result:     `UINT64(2130706433)`,
+		},
+		{
+			expression: `IS_IPV4('010.0.0.1')`,
+			result:     `INT64(1)`,
+		},
+		{
+			expression: `HEX(INET6_ATON('010.0.0.1'))`,
+			result:     `VARCHAR("0A000001")`,
+		},
+		{
+			expression: `HEX(INET6_ATON('::ffff:010.002.003.004'))`,
+			result:     `VARCHAR("00000000000000000000FFFF0A020304")`,
+		},
+		{
+			expression: `IS_IPV6('::ffff:1.2.3.04')`,
+			result:     `INT64(1)`,
+		},
+		{
+			// MySQL does not accept IPv6 zone identifiers.
+			expression: `IS_IPV6('fe80::1%eth0')`,
+			result:     `INT64(0)`,
+		},
+		{
+			expression: `INET6_ATON('fe80::1%eth0')`,
+			result:     `NULL`,
+		},
 	}
 
 	tz, _ := time.LoadLocation("Europe/Madrid")

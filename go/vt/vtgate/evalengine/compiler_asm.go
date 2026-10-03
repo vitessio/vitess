@@ -4541,12 +4541,12 @@ func (asm *assembler) Interval(l int) {
 func (asm *assembler) Fn_INET_ATON() {
 	asm.emit(func(env *ExpressionEnv) int {
 		arg := env.vm.stack[env.vm.sp-1].(*evalBytes)
-		ip, err := netip.ParseAddr(arg.string())
-		if err != nil || !ip.Is4() {
+		ip, ok := mysqlInetAton(arg.string())
+		if !ok {
 			env.vm.stack[env.vm.sp-1] = nil
 			return 1
 		}
-		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalUint64(uint64(binary.BigEndian.Uint32(ip.AsSlice())))
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalUint64(uint64(ip))
 		return 1
 	}, "FN INET_ATON VARBINARY(SP-1)")
 }
@@ -4568,8 +4568,8 @@ func (asm *assembler) Fn_INET_NTOA(col collations.TypedCollation) {
 func (asm *assembler) Fn_INET6_ATON() {
 	asm.emit(func(env *ExpressionEnv) int {
 		arg := env.vm.stack[env.vm.sp-1].(*evalBytes)
-		ip, err := netip.ParseAddr(arg.string())
-		if err != nil {
+		ip, ok := mysqlParseIP(arg.string())
+		if !ok {
 			env.vm.stack[env.vm.sp-1] = nil
 			return 1
 		}
@@ -4601,8 +4601,8 @@ func (asm *assembler) Fn_IS_IPV4() {
 	asm.emit(func(env *ExpressionEnv) int {
 		arg := env.vm.stack[env.vm.sp-1].(*evalBytes)
 
-		ip, err := netip.ParseAddr(arg.string())
-		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalBool(err == nil && ip.Is4())
+		_, ok := mysqlParseIPv4(arg.string())
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalBool(ok)
 		return 1
 	}, "FN IS_IPV4 VARBINARY(SP-1)")
 }
@@ -4629,8 +4629,8 @@ func (asm *assembler) Fn_IS_IPV6() {
 	asm.emit(func(env *ExpressionEnv) int {
 		arg := env.vm.stack[env.vm.sp-1].(*evalBytes)
 
-		ip, err := netip.ParseAddr(arg.string())
-		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalBool(err == nil && ip.Is6())
+		_, ok := mysqlParseIPv6(arg.string())
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalBool(ok)
 		return 1
 	}, "FN IS_IPV6 VARBINARY(SP-1)")
 }

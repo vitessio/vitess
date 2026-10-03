@@ -109,11 +109,11 @@ func (call *builtinInetAton) eval(env *ExpressionEnv) (eval, error) {
 		return nil, err
 	}
 	rawIp := evalToBinary(arg)
-	ip, err := netip.ParseAddr(rawIp.string())
-	if err != nil || !ip.Is4() {
+	ip, ok := mysqlInetAton(rawIp.string())
+	if !ok {
 		return nil, nil
 	}
-	return newEvalUint64(uint64(binary.BigEndian.Uint32(ip.AsSlice()))), nil
+	return newEvalUint64(uint64(ip)), nil
 }
 
 func (call *builtinInetAton) compile(c *compiler) (ctype, error) {
@@ -173,8 +173,8 @@ func (call *builtinInet6Aton) eval(env *ExpressionEnv) (eval, error) {
 		return nil, err
 	}
 	rawIp := evalToBinary(arg)
-	ip, err := netip.ParseAddr(rawIp.string())
-	if err != nil {
+	ip, ok := mysqlParseIP(rawIp.string())
+	if !ok {
 		return nil, nil
 	}
 	b := ip.AsSlice()
@@ -244,6 +244,181 @@ func printIPv6AsIPv4(addr netip.Addr) (netip.Addr, bool) {
 	return netip.AddrFrom4(([4]byte)(b[12:])), true
 }
 
+// mysqlInetAton parses an IPv4 address the way MySQL's INET_ATON() does.
+// Unlike netip.ParseAddr, it accepts octets with leading zeros, which are
+// read as decimal ("010.0.0.1" is 10.0.0.1), and the short forms "a", "a.b"
+// and "a.b.c", where the last part is the last octet ("127.1" is 127.0.0.1).
+func mysqlInetAton(s string) (uint32, bool) {
+	var result uint64
+	var octet uint64
+	dots := 0
+	last := byte('.') // an empty string is not an address
+	for i := 0; i < len(s); i++ {
+		last = s[i]
+		switch {
+		case last >= '0' && last <= '9':
+			octet = octet*10 + uint64(last-'0')
+			if octet > 255 {
+				return 0, false
+			}
+		case last == '.':
+			dots++
+			if dots > 3 {
+				return 0, false
+			}
+			result = result<<8 + octet
+			octet = 0
+		default:
+			return 0, false
+		}
+	}
+	if last == '.' {
+		return 0, false
+	}
+	switch dots {
+	case 1:
+		result <<= 16
+	case 2:
+		result <<= 8
+	}
+	return uint32(result<<8 + octet), true
+}
+
+// mysqlParseIPv4 parses a dotted-quad IPv4 address the way MySQL's IS_IPV4()
+// and INET6_ATON() do: exactly four decimal octets of one to three digits
+// each, so octets with leading zeros ("010") are accepted.
+func mysqlParseIPv4(s string) (netip.Addr, bool) {
+	if len(s) < len("0.0.0.0") || len(s) > len("255.255.255.255") {
+		return netip.Addr{}, false
+	}
+	var ip [4]byte
+	octet, digits, dots := 0, 0, 0
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		switch {
+		case c >= '0' && c <= '9':
+			digits++
+			octet = octet*10 + int(c-'0')
+			if digits > 3 || octet > 255 {
+				return netip.Addr{}, false
+			}
+		case c == '.':
+			if digits == 0 || dots == 3 {
+				return netip.Addr{}, false
+			}
+			ip[dots] = byte(octet)
+			dots++
+			octet, digits = 0, 0
+		default:
+			return netip.Addr{}, false
+		}
+	}
+	if digits == 0 || dots != 3 {
+		return netip.Addr{}, false
+	}
+	ip[3] = byte(octet)
+	return netip.AddrFrom4(ip), true
+}
+
+// mysqlParseIPv6 parses an IPv6 address the way MySQL's IS_IPV6() and
+// INET6_ATON() do. Unlike netip.ParseAddr, it rejects zone identifiers
+// ("fe80::1%eth0") and accepts an embedded IPv4 address whose octets have
+// leading zeros ("::ffff:010.0.0.1").
+func mysqlParseIPv6(s string) (netip.Addr, bool) {
+	if len(s) < len("::") || len(s) > len("ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff") {
+		return netip.Addr{}, false
+	}
+	var ip [16]byte
+	n := 0    // bytes written to ip
+	gap := -1 // position of the "::" gap in ip, if any
+	i := 0
+	if s[0] == ':' {
+		if s[1] != ':' {
+			return netip.Addr{}, false
+		}
+		i = 1
+	}
+	groupStart := i
+	group, digits := 0, 0
+	for ; i < len(s); i++ {
+		c := s[i]
+		switch c {
+		case ':':
+			groupStart = i + 1
+			if digits == 0 {
+				if gap >= 0 {
+					return netip.Addr{}, false
+				}
+				gap = n
+				continue
+			}
+			if i+1 == len(s) || n+2 > len(ip) {
+				return netip.Addr{}, false
+			}
+			ip[n], ip[n+1] = byte(group>>8), byte(group)
+			n += 2
+			group, digits = 0, 0
+		case '.':
+			if n+4 > len(ip) {
+				return netip.Addr{}, false
+			}
+			ip4, ok := mysqlParseIPv4(s[groupStart:])
+			if !ok {
+				return netip.Addr{}, false
+			}
+			b := ip4.As4()
+			copy(ip[n:], b[:])
+			n += 4
+			digits = 0
+			i = len(s)
+		default:
+			var v byte
+			switch {
+			case c >= '0' && c <= '9':
+				v = c - '0'
+			case c >= 'a' && c <= 'f':
+				v = c - 'a' + 10
+			case c >= 'A' && c <= 'F':
+				v = c - 'A' + 10
+			default:
+				return netip.Addr{}, false
+			}
+			if digits == 4 {
+				return netip.Addr{}, false
+			}
+			group = group<<4 | int(v)
+			digits++
+		}
+	}
+	if digits > 0 {
+		if n+2 > len(ip) {
+			return netip.Addr{}, false
+		}
+		ip[n], ip[n+1] = byte(group>>8), byte(group)
+		n += 2
+	}
+	if gap >= 0 {
+		if n == len(ip) {
+			return netip.Addr{}, false
+		}
+		tail := n - gap
+		copy(ip[len(ip)-tail:], ip[gap:n])
+		clear(ip[gap : len(ip)-tail])
+	} else if n < len(ip) {
+		return netip.Addr{}, false
+	}
+	return netip.AddrFrom16(ip), true
+}
+
+// mysqlParseIP parses an address the way MySQL's INET6_ATON() does: as an
+// IPv4 address first, then as an IPv6 address.
+func mysqlParseIP(s string) (netip.Addr, bool) {
+	if ip, ok := mysqlParseIPv4(s); ok {
+		return ip, true
+	}
+	return mysqlParseIPv6(s)
+}
+
 func isIPv4Compat(addr netip.Addr) bool {
 	b := addr.AsSlice()
 	if len(b) != 16 {
@@ -308,11 +483,8 @@ func (call *builtinIsIPV4) eval(env *ExpressionEnv) (eval, error) {
 		return nil, err
 	}
 	rawIp := evalToBinary(arg)
-	ip, err := netip.ParseAddr(rawIp.string())
-	if err != nil {
-		return newEvalBool(false), nil
-	}
-	return newEvalBool(ip.Is4()), nil
+	_, ok := mysqlParseIPv4(rawIp.string())
+	return newEvalBool(ok), nil
 }
 
 func (call *builtinIsIPV4) compile(c *compiler) (ctype, error) {
@@ -402,11 +574,8 @@ func (call *builtinIsIPV6) eval(env *ExpressionEnv) (eval, error) {
 		return nil, err
 	}
 	rawIp := evalToBinary(arg)
-	ip, err := netip.ParseAddr(rawIp.string())
-	if err != nil {
-		return newEvalBool(false), nil
-	}
-	return newEvalBool(ip.Is6()), nil
+	_, ok := mysqlParseIPv6(rawIp.string())
+	return newEvalBool(ok), nil
 }
 
 func (call *builtinIsIPV6) compile(c *compiler) (ctype, error) {
