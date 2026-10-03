@@ -222,7 +222,9 @@ func (tm *TabletManager) legitimateGroup(ctx context.Context, rec *shardGroupRec
 	}
 	missing := tm.votersWithoutServerUUID(rec)
 	if len(missing) == 0 {
-		return legitimate
+		// The sync loop's background fetch (warmVoterServerUUIDs) may have learned the missing
+		// server_uuids since legitimate was built: the group built before lacks those voters.
+		return tm.buildLegitimateGroup(rec, status)
 	}
 	tm.fetchPeerServerUUIDs(ctx, missing, func() bool {
 		return tm.buildLegitimateGroup(rec, status).HasVoterMajority(status)

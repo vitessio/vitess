@@ -82,7 +82,8 @@ Suggested fix: do not read `replication_group_communication_information` on ever
 
 - `vtctldclient StopReplication` on a voter is undone by VTOrc `GroupMemberNotOnline` within seconds (G11s), unlike the tablet's own rejoin, which honours it.
 - `StartGroupReplication(bootstrap)` left `group_replication_bootstrap_group=ON` when `START` outlived the caller's context: the reset reused the expired context. A later join would bootstrap a second group. **Fixed** (a49bfc9, with a unit test).
-- `TestStopGroupReplicationRestoresReadWriteOnPrimary` is flaky on this branch (2/40 runs without any change); `TestWaitForDBAGrants` fails in this environment.
+- `TestStopGroupReplicationRestoresReadWriteOnPrimary` was flaky early on this branch (2/40 runs). It no longer fails: 0 of 2,900 runs, 2,400 of them on 8 loaded parallel processes. `TestWaitForDBAGrants` fails in this environment.
+- `TestPausedPrimaryKeepsTheServingInvariant` failed in about 1% of runs under load. This came from a race in the tablet, not the test. `legitimateGroup` built the group from the voter server_uuids it knew, then looked for the voters it could not identify. The sync loop's background fetch (`warmVoterServerUUIDs`) could learn them in between: nothing was missing any more, so it returned the group built before, which lacked those voters. A primary with its voter majority could then stop serving for "lost the majority of its voters" until the next sync run, and a promotion could be refused once the same way. **Fixed**: the group is built again when no voter is missing. 0 of 4,800 runs fail under the load that failed 22 of 2,400 before.
 - S8 does not exercise its fault in GR mode: VTOrc never starts an ERS for `DeadPrimary` within 60s (the group elects first).
 
 ## Fixes in this branch
