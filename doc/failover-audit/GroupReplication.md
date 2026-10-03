@@ -84,6 +84,7 @@ Suggested fix: do not read `replication_group_communication_information` on ever
 - `StartGroupReplication(bootstrap)` left `group_replication_bootstrap_group=ON` when `START` outlived the caller's context: the reset reused the expired context. A later join would bootstrap a second group. **Fixed** (a49bfc9, with a unit test).
 - `TestStopGroupReplicationRestoresReadWriteOnPrimary` was flaky early on this branch (2/40 runs). It no longer fails: 0 of 2,900 runs, 2,400 of them on 8 loaded parallel processes. `TestWaitForDBAGrants` fails in this environment.
 - `TestPausedPrimaryKeepsTheServingInvariant` failed in about 1% of runs under load. This came from a race in the tablet, not the test. `legitimateGroup` built the group from the voter server_uuids it knew, then looked for the voters it could not identify. The sync loop's background fetch (`warmVoterServerUUIDs`) could learn them in between: nothing was missing any more, so it returned the group built before, which lacked those voters. A primary with its voter majority could then stop serving for "lost the majority of its voters" until the next sync run, and a promotion could be refused once the same way. **Fixed**: the group is built again when no voter is missing. 0 of 4,800 runs fail under the load that failed 22 of 2,400 before.
+- `go test -race` reports a race in `TestGetDetectionAnalysisGroupReplication`. It comes from a bug in `go/viperutil` that is the same on `main`, not from this branch: see "Outside Group Replication: config reads race with config writes".
 - S8 does not exercise its fault in GR mode: VTOrc never starts an ERS for `DeadPrimary` within 60s (the group elects first).
 
 ## Fixes in this branch
@@ -718,3 +719,30 @@ CHAOS_VTTABLET_HEARTBEAT=1 CHAOS_DURABILITY=group_replication_cross_cell go/test
 ```
 
 `chaos_run.sh` must run as root; it builds the test binary, drops to `RUN_USER` (default `ubuntu`) with `CAP_NET_ADMIN`, and deletes the run's VTDATAROOT afterwards. `CHAOS_TABLET_EXTRA_ARGS` adds vttablet flags. Reports go to `/home/$RUN_USER/chaos-results/<scenario>/`.
+
+## Outside Group Replication: config reads race with config writes
+
+Found while checking a race that `go test -race` reports in `TestGetDetectionAnalysisGroupReplication` (`go/vt/vtorc/inst`). The bug is the same on `main` (checked against e5e0091). This branch does not change `go/viperutil`, and does not fix it: it belongs in its own upstream PR, since every Vitess component reads its dynamic configuration through this code.
+
+**What races.** `go/viperutil/internal/sync/sync.go` guards each key with its own `sync.RWMutex`, and the live `viper.Viper` with one shared `sync.Mutex`, `v.m` (line 43):
+
+- `Set` (line 76) takes the key's lock, then `v.m`, and writes the live viper.
+- The getter that `AdaptGetter` returns (line 326) takes only its own key's read lock, then reads the live viper (`getter(v.live)(key)`, line 342).
+- `loadFromDisk` (line 275), which applies a changed config file, takes only `v.m`, and replaces `v.live` with a new viper.
+- `AllSettings` (line 268) and `WriteConfig` (line 231) take `v.m`; `WriteConfig` takes every key's lock first.
+
+Viper keeps every key's override in one map. A `Set` of one key therefore writes the map while a getter of another key reads it, each under a different key lock. And a reload replaces `v.live` while any getter reads it, under no common lock.
+
+**Where it shows.** VTOrc's `inst` package starts a goroutine from `init()` (`go/vt/vtorc/inst/analysis_dao.go:47`) that waits until the configuration is loaded, which the package's tests mark in their own `init()`, and then reads `RecoveryPollDuration`. A test that sets a dynamic value first, here `config.SetGroupReplicationVoterReplacementGracePeriod` when `TestGetDetectionAnalysisGroupReplication` runs alone, writes the map at the same time. Run with `-race -count=3 -run TestGetDetectionAnalysisGroupReplication`, it fails on the base of this branch as well.
+
+**Production impact.** The getters race with `loadFromDisk`, which runs when a watched config file changes (`--config-file` with dynamic values), in every binary that registers dynamic `viperutil` values. In VTOrc, only tests call the dynamic setters (`config.Set*`); the race that matters in production is the one with a reload. A concurrent map read and write in Go can abort the process (`fatal error: concurrent map read and map write`).
+
+**Proposed fix.**
+
+1. Make `v.m` a `sync.RWMutex`.
+2. Have the adapted getter take `v.m.RLock()` after its key's read lock, and read `v.live` under it.
+3. Leave `Set`, `WriteConfig`, `AllSettings` and `loadFromDisk` taking `v.m` for writing.
+
+Every path that takes both locks takes the key lock first and `v.m` second, so this adds no lock-order inversion. A read lock on every config read costs little: readers only exclude `Set`, a reload and a config write.
+
+**Test.** A unit test in `go/viperutil/internal/sync` that, under `-race`, runs a getter of one key concurrently with `Set` of another key, and with `loadFromDisk`. It fails on `main` with the race detector's report.
