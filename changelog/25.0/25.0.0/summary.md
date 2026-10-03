@@ -287,9 +287,7 @@ See [#20733](https://github.com/vitessio/vitess/pull/20733) for details.
 
 #### <a id="fused-tablet-reparent-rpcs"/>TabletManager adds fused reparent RPCs</a>
 
-vttablet now serves the additive `PrepareEmergencyReparent` and `PromoteReplicaAndJournal` RPCs. They combine the tablet-local phases needed to prepare a replica for emergency reparenting and to promote a replica and write its reparent journal entry, reducing the number of round trips required by future reparent orchestration.
-
-These RPCs establish the tablet side of the staged rollout. Cancellation recovery does not overwrite newer replication actions, and promotion responses retain the promoted MySQL position when a later tablet-state transition fails. Existing `EmergencyReparentShard`, `PlannedReparentShard`, and VTOrc workflows do not invoke them in v25.
+vttablet now serves two additive `TabletManager` RPCs, `PrepareEmergencyReparent` and `PromoteReplicaAndJournal`. They fuse the tablet-local steps of an emergency reparent (stop the I/O thread, apply relay logs, read the reparent journal) and of promotion (promote, write the journal row) so future orchestrators need fewer round trips. Nothing calls them yet: `EmergencyReparentShard`, `PlannedReparentShard`, and VTOrc keep their existing RPCs in v25. See [#21156](https://github.com/vitessio/vitess/issues/21156) for the staged rollout.
 
 #### <a id="ers-lagging-relay-log-wait"/>`EmergencyReparentShard` no longer waits on replicas that cannot win the election</a>
 

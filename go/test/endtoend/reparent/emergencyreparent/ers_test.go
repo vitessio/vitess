@@ -186,19 +186,18 @@ func TestPromoteReplicaAndJournal(t *testing.T) {
 	demotedStatus, err := client.DemotePrimary(t.Context(), primaryTablet, false)
 	require.NoError(t, err)
 	require.NotEmpty(t, demotedStatus.Position)
+	waitCtx, waitCancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer waitCancel()
+	require.NoError(t, client.WaitForPosition(waitCtx, replicaTablet, demotedStatus.Position))
 
 	timeCreated := time.Unix(1700000000, 123).UTC()
 	response, err := client.PromoteReplicaAndJournal(t.Context(), replicaTablet, &tabletmanagerdatapb.PromoteReplicaAndJournalRequest{
-		WaitPosition:                   demotedStatus.Position,
-		WaitForPositionTimeout:         protoutil.DurationToProto(30 * time.Second),
-		TimeCreated:                    protoutil.TimeToProto(timeCreated),
-		ActionName:                     "EmergencyReparentShard",
-		PopulateReparentJournalTimeout: protoutil.DurationToProto(30 * time.Second),
+		TimeCreated: protoutil.TimeToProto(timeCreated),
+		ActionName:  "PlannedReparentShard",
 	})
 	require.NoError(t, err)
 	require.NotNil(t, response)
 	assert.NotEmpty(t, response.Position)
-	assert.Nil(t, response.WaitForPositionError)
 	assert.Nil(t, response.PromoteReplicaError)
 	assert.Nil(t, response.PopulateReparentJournalError)
 
@@ -213,7 +212,7 @@ func TestPromoteReplicaAndJournal(t *testing.T) {
 
 	journalResult := utils.RunSQL(t.Context(), t, fmt.Sprintf("SELECT action_name, primary_alias, replication_position FROM _vt.reparent_journal WHERE time_created_ns = %d", timeCreated.UnixNano()), replica)
 	require.Len(t, journalResult.Rows, 1)
-	assert.Equal(t, "EmergencyReparentShard", journalResult.Rows[0][0].ToString())
+	assert.Equal(t, "PlannedReparentShard", journalResult.Rows[0][0].ToString())
 	assert.Equal(t, topoproto.TabletAliasString(replicaTablet.Alias), journalResult.Rows[0][1].ToString())
 	assert.Equal(t, response.Position, journalResult.Rows[0][2].ToString())
 }

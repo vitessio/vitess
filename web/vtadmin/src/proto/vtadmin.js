@@ -93822,8 +93822,6 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * Properties of a PromoteReplicaAndJournalRequest.
          * @typedef {Object} tabletmanagerdata.PromoteReplicaAndJournalRequest.$Properties
          * @property {boolean|null} [semi_sync] PromoteReplicaAndJournalRequest semi_sync
-         * @property {string|null} [wait_position] PromoteReplicaAndJournalRequest wait_position
-         * @property {vttime.Duration.$Properties|null} [wait_for_position_timeout] PromoteReplicaAndJournalRequest wait_for_position_timeout
          * @property {vttime.Time.$Properties|null} [time_created] PromoteReplicaAndJournalRequest time_created
          * @property {string|null} [action_name] PromoteReplicaAndJournalRequest action_name
          * @property {vttime.Duration.$Properties|null} [populate_reparent_journal_timeout] PromoteReplicaAndJournalRequest populate_reparent_journal_timeout
@@ -93865,22 +93863,6 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @instance
          */
         PromoteReplicaAndJournalRequest.prototype.semi_sync = false;
-
-        /**
-         * PromoteReplicaAndJournalRequest wait_position.
-         * @member {string} wait_position
-         * @memberof tabletmanagerdata.PromoteReplicaAndJournalRequest
-         * @instance
-         */
-        PromoteReplicaAndJournalRequest.prototype.wait_position = "";
-
-        /**
-         * PromoteReplicaAndJournalRequest wait_for_position_timeout.
-         * @member {vttime.Duration.$Properties|null|undefined} wait_for_position_timeout
-         * @memberof tabletmanagerdata.PromoteReplicaAndJournalRequest
-         * @instance
-         */
-        PromoteReplicaAndJournalRequest.prototype.wait_for_position_timeout = null;
 
         /**
          * PromoteReplicaAndJournalRequest time_created.
@@ -93940,16 +93922,12 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 throw $Error("max depth exceeded");
             if (message.semi_sync != null && $Object.hasOwnProperty.call(message, "semi_sync") && message.semi_sync !== false)
                 writer.uint32(/* id 1, wireType 0 =*/8).bool(message.semi_sync);
-            if (message.wait_position != null && $Object.hasOwnProperty.call(message, "wait_position") && message.wait_position !== "")
-                writer.uint32(/* id 2, wireType 2 =*/18).string(message.wait_position);
-            if (message.wait_for_position_timeout != null && $Object.hasOwnProperty.call(message, "wait_for_position_timeout"))
-                $root.vttime.Duration.encode(message.wait_for_position_timeout, writer.uint32(/* id 3, wireType 2 =*/26).fork(), _depth + 1).ldelim();
             if (message.time_created != null && $Object.hasOwnProperty.call(message, "time_created"))
-                $root.vttime.Time.encode(message.time_created, writer.uint32(/* id 4, wireType 2 =*/34).fork(), _depth + 1).ldelim();
+                $root.vttime.Time.encode(message.time_created, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
             if (message.action_name != null && $Object.hasOwnProperty.call(message, "action_name") && message.action_name !== "")
-                writer.uint32(/* id 5, wireType 2 =*/42).string(message.action_name);
+                writer.uint32(/* id 3, wireType 2 =*/26).string(message.action_name);
             if (message.populate_reparent_journal_timeout != null && $Object.hasOwnProperty.call(message, "populate_reparent_journal_timeout"))
-                $root.vttime.Duration.encode(message.populate_reparent_journal_timeout, writer.uint32(/* id 6, wireType 2 =*/50).fork(), _depth + 1).ldelim();
+                $root.vttime.Duration.encode(message.populate_reparent_journal_timeout, writer.uint32(/* id 4, wireType 2 =*/34).fork(), _depth + 1).ldelim();
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -94009,25 +93987,10 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        if ((value = reader.stringVerify()).length)
-                            message.wait_position = value;
-                        else
-                            delete message.wait_position;
-                        continue;
-                    }
-                case 3: {
-                        if (wireType !== 2)
-                            break;
-                        message.wait_for_position_timeout = $root.vttime.Duration.decode(reader, reader.uint32(), $undefined, _depth + 1, message.wait_for_position_timeout);
-                        continue;
-                    }
-                case 4: {
-                        if (wireType !== 2)
-                            break;
                         message.time_created = $root.vttime.Time.decode(reader, reader.uint32(), $undefined, _depth + 1, message.time_created);
                         continue;
                     }
-                case 5: {
+                case 3: {
                         if (wireType !== 2)
                             break;
                         if ((value = reader.stringVerify()).length)
@@ -94036,7 +93999,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                             delete message.action_name;
                         continue;
                     }
-                case 6: {
+                case 4: {
                         if (wireType !== 2)
                             break;
                         message.populate_reparent_journal_timeout = $root.vttime.Duration.decode(reader, reader.uint32(), $undefined, _depth + 1, message.populate_reparent_journal_timeout);
@@ -94088,14 +94051,6 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
             if (message.semi_sync != null && $Object.hasOwnProperty.call(message, "semi_sync"))
                 if (typeof message.semi_sync !== "boolean")
                     return "semi_sync: boolean expected";
-            if (message.wait_position != null && $Object.hasOwnProperty.call(message, "wait_position"))
-                if (!$util.isString(message.wait_position))
-                    return "wait_position: string expected";
-            if (message.wait_for_position_timeout != null && $Object.hasOwnProperty.call(message, "wait_for_position_timeout")) {
-                let error = $root.vttime.Duration.verify(message.wait_for_position_timeout, _depth + 1);
-                if (error)
-                    return "wait_for_position_timeout." + error;
-            }
             if (message.time_created != null && $Object.hasOwnProperty.call(message, "time_created")) {
                 let error = $root.vttime.Time.verify(message.time_created, _depth + 1);
                 if (error)
@@ -94133,14 +94088,6 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
             if (object.semi_sync != null)
                 if (object.semi_sync)
                     message.semi_sync = $Boolean(object.semi_sync);
-            if (object.wait_position != null)
-                if (typeof object.wait_position !== "string" || object.wait_position.length)
-                    message.wait_position = $String(object.wait_position);
-            if (object.wait_for_position_timeout != null) {
-                if (!$util.isObject(object.wait_for_position_timeout))
-                    throw $TypeError(".tabletmanagerdata.PromoteReplicaAndJournalRequest.wait_for_position_timeout: object expected");
-                message.wait_for_position_timeout = $root.vttime.Duration.fromObject(object.wait_for_position_timeout, _depth + 1);
-            }
             if (object.time_created != null) {
                 if (!$util.isObject(object.time_created))
                     throw $TypeError(".tabletmanagerdata.PromoteReplicaAndJournalRequest.time_created: object expected");
@@ -94176,18 +94123,12 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
             let object = {};
             if (options.defaults) {
                 object.semi_sync = false;
-                object.wait_position = "";
-                object.wait_for_position_timeout = null;
                 object.time_created = null;
                 object.action_name = "";
                 object.populate_reparent_journal_timeout = null;
             }
             if (message.semi_sync != null && $Object.hasOwnProperty.call(message, "semi_sync"))
                 object.semi_sync = message.semi_sync;
-            if (message.wait_position != null && $Object.hasOwnProperty.call(message, "wait_position"))
-                object.wait_position = message.wait_position;
-            if (message.wait_for_position_timeout != null && $Object.hasOwnProperty.call(message, "wait_for_position_timeout"))
-                object.wait_for_position_timeout = $root.vttime.Duration.toObject(message.wait_for_position_timeout, options, _depth + 1);
             if (message.time_created != null && $Object.hasOwnProperty.call(message, "time_created"))
                 object.time_created = $root.vttime.Time.toObject(message.time_created, options, _depth + 1);
             if (message.action_name != null && $Object.hasOwnProperty.call(message, "action_name"))
@@ -94231,7 +94172,6 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * Properties of a PromoteReplicaAndJournalResponse.
          * @typedef {Object} tabletmanagerdata.PromoteReplicaAndJournalResponse.$Properties
          * @property {string|null} [position] PromoteReplicaAndJournalResponse position
-         * @property {vtrpc.RPCError.$Properties|null} [wait_for_position_error] PromoteReplicaAndJournalResponse wait_for_position_error
          * @property {vtrpc.RPCError.$Properties|null} [promote_replica_error] PromoteReplicaAndJournalResponse promote_replica_error
          * @property {vtrpc.RPCError.$Properties|null} [populate_reparent_journal_error] PromoteReplicaAndJournalResponse populate_reparent_journal_error
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
@@ -94272,14 +94212,6 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @instance
          */
         PromoteReplicaAndJournalResponse.prototype.position = "";
-
-        /**
-         * PromoteReplicaAndJournalResponse wait_for_position_error.
-         * @member {vtrpc.RPCError.$Properties|null|undefined} wait_for_position_error
-         * @memberof tabletmanagerdata.PromoteReplicaAndJournalResponse
-         * @instance
-         */
-        PromoteReplicaAndJournalResponse.prototype.wait_for_position_error = null;
 
         /**
          * PromoteReplicaAndJournalResponse promote_replica_error.
@@ -94331,12 +94263,10 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 throw $Error("max depth exceeded");
             if (message.position != null && $Object.hasOwnProperty.call(message, "position") && message.position !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.position);
-            if (message.wait_for_position_error != null && $Object.hasOwnProperty.call(message, "wait_for_position_error"))
-                $root.vtrpc.RPCError.encode(message.wait_for_position_error, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
             if (message.promote_replica_error != null && $Object.hasOwnProperty.call(message, "promote_replica_error"))
-                $root.vtrpc.RPCError.encode(message.promote_replica_error, writer.uint32(/* id 3, wireType 2 =*/26).fork(), _depth + 1).ldelim();
+                $root.vtrpc.RPCError.encode(message.promote_replica_error, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
             if (message.populate_reparent_journal_error != null && $Object.hasOwnProperty.call(message, "populate_reparent_journal_error"))
-                $root.vtrpc.RPCError.encode(message.populate_reparent_journal_error, writer.uint32(/* id 4, wireType 2 =*/34).fork(), _depth + 1).ldelim();
+                $root.vtrpc.RPCError.encode(message.populate_reparent_journal_error, writer.uint32(/* id 3, wireType 2 =*/26).fork(), _depth + 1).ldelim();
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -94396,16 +94326,10 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.wait_for_position_error = $root.vtrpc.RPCError.decode(reader, reader.uint32(), $undefined, _depth + 1, message.wait_for_position_error);
-                        continue;
-                    }
-                case 3: {
-                        if (wireType !== 2)
-                            break;
                         message.promote_replica_error = $root.vtrpc.RPCError.decode(reader, reader.uint32(), $undefined, _depth + 1, message.promote_replica_error);
                         continue;
                     }
-                case 4: {
+                case 3: {
                         if (wireType !== 2)
                             break;
                         message.populate_reparent_journal_error = $root.vtrpc.RPCError.decode(reader, reader.uint32(), $undefined, _depth + 1, message.populate_reparent_journal_error);
@@ -94457,11 +94381,6 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
             if (message.position != null && $Object.hasOwnProperty.call(message, "position"))
                 if (!$util.isString(message.position))
                     return "position: string expected";
-            if (message.wait_for_position_error != null && $Object.hasOwnProperty.call(message, "wait_for_position_error")) {
-                let error = $root.vtrpc.RPCError.verify(message.wait_for_position_error, _depth + 1);
-                if (error)
-                    return "wait_for_position_error." + error;
-            }
             if (message.promote_replica_error != null && $Object.hasOwnProperty.call(message, "promote_replica_error")) {
                 let error = $root.vtrpc.RPCError.verify(message.promote_replica_error, _depth + 1);
                 if (error)
@@ -94496,11 +94415,6 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
             if (object.position != null)
                 if (typeof object.position !== "string" || object.position.length)
                     message.position = $String(object.position);
-            if (object.wait_for_position_error != null) {
-                if (!$util.isObject(object.wait_for_position_error))
-                    throw $TypeError(".tabletmanagerdata.PromoteReplicaAndJournalResponse.wait_for_position_error: object expected");
-                message.wait_for_position_error = $root.vtrpc.RPCError.fromObject(object.wait_for_position_error, _depth + 1);
-            }
             if (object.promote_replica_error != null) {
                 if (!$util.isObject(object.promote_replica_error))
                     throw $TypeError(".tabletmanagerdata.PromoteReplicaAndJournalResponse.promote_replica_error: object expected");
@@ -94533,14 +94447,11 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
             let object = {};
             if (options.defaults) {
                 object.position = "";
-                object.wait_for_position_error = null;
                 object.promote_replica_error = null;
                 object.populate_reparent_journal_error = null;
             }
             if (message.position != null && $Object.hasOwnProperty.call(message, "position"))
                 object.position = message.position;
-            if (message.wait_for_position_error != null && $Object.hasOwnProperty.call(message, "wait_for_position_error"))
-                object.wait_for_position_error = $root.vtrpc.RPCError.toObject(message.wait_for_position_error, options, _depth + 1);
             if (message.promote_replica_error != null && $Object.hasOwnProperty.call(message, "promote_replica_error"))
                 object.promote_replica_error = $root.vtrpc.RPCError.toObject(message.promote_replica_error, options, _depth + 1);
             if (message.populate_reparent_journal_error != null && $Object.hasOwnProperty.call(message, "populate_reparent_journal_error"))

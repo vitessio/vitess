@@ -599,16 +599,12 @@ message PromoteReplicaResponse {
 message PromoteReplicaAndJournalRequest {
   // semi_sync controls whether semi-sync is enabled on the promoted tablet.
   bool semi_sync = 1;
-  // wait_position is the optional position to reach before promotion. An empty value skips the wait phase.
-  string wait_position = 2;
-  // wait_for_position_timeout limits the optional wait phase. Zero uses the default remote operation timeout.
-  vttime.Duration wait_for_position_timeout = 3;
   // Required. time_created is the positive creation time stored in the reparent journal row.
-  vttime.Time time_created = 4;
+  vttime.Time time_created = 2;
   // Required. action_name is the non-empty action stored in the reparent journal row and must not exceed 255 bytes.
-  string action_name = 5;
-  // populate_reparent_journal_timeout limits the journal write phase. Zero uses the default remote operation timeout.
-  vttime.Duration populate_reparent_journal_timeout = 6;
+  string action_name = 3;
+  // populate_reparent_journal_timeout limits the journal write phase. Zero uses the remote operation timeout; nonzero values cannot exceed it.
+  vttime.Duration populate_reparent_journal_timeout = 4;
 }
 
 // PromoteReplicaAndJournalResponse contains the completed phase results and any partial failure.
@@ -616,12 +612,10 @@ message PromoteReplicaAndJournalRequest {
 message PromoteReplicaAndJournalResponse {
   // Output only. position is set after promotion, including when writing the reparent journal fails.
   string position = 1;
-  // Output only. wait_for_position_error describes a wait phase failure. Later phases are skipped when this is set.
-  vtrpc.RPCError wait_for_position_error = 2;
   // Output only. promote_replica_error describes a promotion failure. The journal write is skipped when this is set.
-  vtrpc.RPCError promote_replica_error = 3;
+  vtrpc.RPCError promote_replica_error = 2;
   // Output only. populate_reparent_journal_error describes a journal write failure after promotion.
-  vtrpc.RPCError populate_reparent_journal_error = 4;
+  vtrpc.RPCError populate_reparent_journal_error = 3;
 }
 
 // Backup / Restore related messages

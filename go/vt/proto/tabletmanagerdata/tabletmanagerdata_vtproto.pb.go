@@ -2116,8 +2116,6 @@ func (m *PromoteReplicaAndJournalRequest) CloneVT() *PromoteReplicaAndJournalReq
 	}
 	r := new(PromoteReplicaAndJournalRequest)
 	r.SemiSync = m.SemiSync
-	r.WaitPosition = m.WaitPosition
-	r.WaitForPositionTimeout = m.WaitForPositionTimeout.CloneVT()
 	r.TimeCreated = m.TimeCreated.CloneVT()
 	r.ActionName = m.ActionName
 	r.PopulateReparentJournalTimeout = m.PopulateReparentJournalTimeout.CloneVT()
@@ -2138,7 +2136,6 @@ func (m *PromoteReplicaAndJournalResponse) CloneVT() *PromoteReplicaAndJournalRe
 	}
 	r := new(PromoteReplicaAndJournalResponse)
 	r.Position = m.Position
-	r.WaitForPositionError = m.WaitForPositionError.CloneVT()
 	r.PromoteReplicaError = m.PromoteReplicaError.CloneVT()
 	r.PopulateReparentJournalError = m.PopulateReparentJournalError.CloneVT()
 	if len(m.unknownFields) > 0 {
@@ -8325,14 +8322,14 @@ func (m *PromoteReplicaAndJournalRequest) MarshalToSizedBufferVT(dAtA []byte) (i
 		i -= size
 		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 		i--
-		dAtA[i] = 0x32
+		dAtA[i] = 0x22
 	}
 	if len(m.ActionName) > 0 {
 		i -= len(m.ActionName)
 		copy(dAtA[i:], m.ActionName)
 		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.ActionName)))
 		i--
-		dAtA[i] = 0x2a
+		dAtA[i] = 0x1a
 	}
 	if m.TimeCreated != nil {
 		size, err := m.TimeCreated.MarshalToSizedBufferVT(dAtA[:i])
@@ -8341,23 +8338,6 @@ func (m *PromoteReplicaAndJournalRequest) MarshalToSizedBufferVT(dAtA []byte) (i
 		}
 		i -= size
 		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
-		i--
-		dAtA[i] = 0x22
-	}
-	if m.WaitForPositionTimeout != nil {
-		size, err := m.WaitForPositionTimeout.MarshalToSizedBufferVT(dAtA[:i])
-		if err != nil {
-			return 0, err
-		}
-		i -= size
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
-		i--
-		dAtA[i] = 0x1a
-	}
-	if len(m.WaitPosition) > 0 {
-		i -= len(m.WaitPosition)
-		copy(dAtA[i:], m.WaitPosition)
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.WaitPosition)))
 		i--
 		dAtA[i] = 0x12
 	}
@@ -8412,20 +8392,10 @@ func (m *PromoteReplicaAndJournalResponse) MarshalToSizedBufferVT(dAtA []byte) (
 		i -= size
 		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 		i--
-		dAtA[i] = 0x22
+		dAtA[i] = 0x1a
 	}
 	if m.PromoteReplicaError != nil {
 		size, err := m.PromoteReplicaError.MarshalToSizedBufferVT(dAtA[:i])
-		if err != nil {
-			return 0, err
-		}
-		i -= size
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
-		i--
-		dAtA[i] = 0x1a
-	}
-	if m.WaitForPositionError != nil {
-		size, err := m.WaitForPositionError.MarshalToSizedBufferVT(dAtA[:i])
 		if err != nil {
 			return 0, err
 		}
@@ -13455,14 +13425,6 @@ func (m *PromoteReplicaAndJournalRequest) SizeVT() (n int) {
 	if m.SemiSync {
 		n += 2
 	}
-	l = len(m.WaitPosition)
-	if l > 0 {
-		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
-	}
-	if m.WaitForPositionTimeout != nil {
-		l = m.WaitForPositionTimeout.SizeVT()
-		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
-	}
 	if m.TimeCreated != nil {
 		l = m.TimeCreated.SizeVT()
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
@@ -13487,10 +13449,6 @@ func (m *PromoteReplicaAndJournalResponse) SizeVT() (n int) {
 	_ = l
 	l = len(m.Position)
 	if l > 0 {
-		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
-	}
-	if m.WaitForPositionError != nil {
-		l = m.WaitForPositionError.SizeVT()
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	if m.PromoteReplicaError != nil {
@@ -25166,74 +25124,6 @@ func (m *PromoteReplicaAndJournalRequest) UnmarshalVT(dAtA []byte) error {
 			m.SemiSync = bool(v != 0)
 		case 2:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field WaitPosition", wireType)
-			}
-			var stringLen uint64
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return protohelpers.ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			intStringLen := int(stringLen)
-			if intStringLen < 0 {
-				return protohelpers.ErrInvalidLength
-			}
-			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return protohelpers.ErrInvalidLength
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.WaitPosition = string(dAtA[iNdEx:postIndex])
-			iNdEx = postIndex
-		case 3:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field WaitForPositionTimeout", wireType)
-			}
-			var msglen int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return protohelpers.ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				msglen |= int(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			if msglen < 0 {
-				return protohelpers.ErrInvalidLength
-			}
-			postIndex := iNdEx + msglen
-			if postIndex < 0 {
-				return protohelpers.ErrInvalidLength
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			if m.WaitForPositionTimeout == nil {
-				m.WaitForPositionTimeout = &vttime.Duration{}
-			}
-			if err := m.WaitForPositionTimeout.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-				return err
-			}
-			iNdEx = postIndex
-		case 4:
-			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field TimeCreated", wireType)
 			}
 			var msglen int
@@ -25268,7 +25158,7 @@ func (m *PromoteReplicaAndJournalRequest) UnmarshalVT(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
-		case 5:
+		case 3:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field ActionName", wireType)
 			}
@@ -25300,7 +25190,7 @@ func (m *PromoteReplicaAndJournalRequest) UnmarshalVT(dAtA []byte) error {
 			}
 			m.ActionName = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
-		case 6:
+		case 4:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field PopulateReparentJournalTimeout", wireType)
 			}
@@ -25421,42 +25311,6 @@ func (m *PromoteReplicaAndJournalResponse) UnmarshalVT(dAtA []byte) error {
 			iNdEx = postIndex
 		case 2:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field WaitForPositionError", wireType)
-			}
-			var msglen int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return protohelpers.ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				msglen |= int(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			if msglen < 0 {
-				return protohelpers.ErrInvalidLength
-			}
-			postIndex := iNdEx + msglen
-			if postIndex < 0 {
-				return protohelpers.ErrInvalidLength
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			if m.WaitForPositionError == nil {
-				m.WaitForPositionError = &vtrpc.RPCError{}
-			}
-			if err := m.WaitForPositionError.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-				return err
-			}
-			iNdEx = postIndex
-		case 3:
-			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field PromoteReplicaError", wireType)
 			}
 			var msglen int
@@ -25491,7 +25345,7 @@ func (m *PromoteReplicaAndJournalResponse) UnmarshalVT(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
-		case 4:
+		case 3:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field PopulateReparentJournalError", wireType)
 			}
