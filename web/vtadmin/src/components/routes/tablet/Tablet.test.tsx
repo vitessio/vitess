@@ -71,7 +71,7 @@ describe('Tablet view', () => {
 
     describe('read-only mode', () => {
         beforeEach(() => {
-            (process as any).env.VITE_READONLY_MODE = 'true';
+            import.meta.env.VITE_READONLY_MODE = 'true';
         });
 
         it('hides the "Advanced" tab', () => {

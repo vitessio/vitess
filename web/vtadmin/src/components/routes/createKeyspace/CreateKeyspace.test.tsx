@@ -23,6 +23,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { CreateKeyspace } from './CreateKeyspace';
 import { vtadmin } from '../../../proto/vtadmin';
 import * as Snackbar from '../../Snackbar';
+import { server } from '../../../../tests/server';
 
 // This integration test verifies the behaviour from the form UI
 // all the way down to the network level (which we mock with msw).
@@ -31,7 +32,7 @@ import * as Snackbar from '../../Snackbar';
 // to UI changes (e.g., like how the Select works, adding new form fields, etc.)
 describe('CreateKeyspace integration test', () => {
     it('successfully creates a keyspace', async () => {
-        vi.spyOn(global, 'fetch');
+        vi.spyOn(globalThis, 'fetch');
         vi.spyOn(Snackbar, 'success');
 
         const cluster = { id: 'local', name: 'local' };
@@ -45,7 +46,7 @@ describe('CreateKeyspace integration test', () => {
             releaseRequest = resolve;
         });
 
-        global.server.use(
+        server.use(
             http.get(`${apiAddr}/api/clusters`, async (info) => {
                 return HttpResponse.json({ result: { clusters: [cluster] }, ok: true });
             }),
@@ -85,7 +86,7 @@ describe('CreateKeyspace integration test', () => {
 
         // Reset the fetch mock after the initial queries have completed so that
         // form submission assertions are easier.
-        (global.fetch as any).mockClear();
+        (globalThis.fetch as any).mockClear();
 
         // From here on we can proceed with filling out the form fields.
         const user = userEvent.setup();
@@ -99,7 +100,7 @@ describe('CreateKeyspace integration test', () => {
         await user.click(submitButton);
 
         // Assert that the client sent the correct API request
-        expect(global.fetch).toHaveBeenCalledWith(`${apiAddr}/api/keyspace/local`, {
+        expect(globalThis.fetch).toHaveBeenCalledWith(`${apiAddr}/api/keyspace/local`, {
             credentials: undefined,
             body: JSON.stringify({
                 name: 'some-keyspace',
