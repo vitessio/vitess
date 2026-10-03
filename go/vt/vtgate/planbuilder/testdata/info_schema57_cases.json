@@ -501,7 +501,8 @@
           "Sharded": false
         },
         "FieldQuery": "select `table_name` from (select TABLE_CATALOG, TABLE_SCHEMA, `TABLE_NAME`, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from information_schema.`tables` where 1 != 1) as _subquery where 1 != 1",
-        "Query": "select `table_name` from (select TABLE_CATALOG, TABLE_SCHEMA, `TABLE_NAME`, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from information_schema.`tables` where table_schema = :__vtschemaname /* VARCHAR */ and table_type = 'table_type' and `table_name` = 'table_name') as _subquery",
+        "Query": "select `table_name` from (select TABLE_CATALOG, TABLE_SCHEMA, `TABLE_NAME`, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from information_schema.`tables` where table_schema = :__vtschemaname /* VARCHAR */ and TABLE_TYPE = 'table_type' and `TABLE_NAME` = :TABLE_NAME /* VARCHAR */) as _subquery",
+        "SysTableTableName": "[TABLE_NAME:'table_name']",
         "SysTableTableSchema": "['table_schema']"
       }
     }
