@@ -188,6 +188,13 @@ func (tkn *Tokenizer) Scan() (int, string) {
 			if tID == LEX_ERROR {
 				return tID, ""
 			}
+			// A system variable name may not end in a dot; MySQL rejects such
+			// references as syntax errors. Here they would otherwise reach
+			// NewVariableExpression, which strips a scope prefix off the front
+			// and can be left holding nothing at all.
+			if tokenID == AT_AT_ID && strings.HasSuffix(tBytes, ".") {
+				return LEX_ERROR, tBytes
+			}
 			return tokenID, tBytes
 		case isLetter(ch):
 			if ch == 'X' || ch == 'x' {
