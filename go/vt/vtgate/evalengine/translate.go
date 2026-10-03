@@ -55,10 +55,42 @@ func (ast *astCompiler) translateComparisonExpr2(op sqlparser.ComparisonExprOper
 	}
 
 	if op == sqlparser.InOp || op == sqlparser.NotInOp {
-		return &InExpr{
+		in := &InExpr{
 			BinaryExpr: binaryExpr,
 			Negate:     op == sqlparser.NotInOp,
-		}, nil
+		}
+		tuple, ok := right.(TupleExpr)
+		if !ok {
+			if ast.staticCmpClass(left) == classJSON {
+				in.PrefixJSON = inJSONYes
+			}
+			return in, nil
+		}
+		// MySQL's type scan inspects the RHS elements in order and stops
+		// after the first one that is not constant for one execution: a
+		// JSON element behind that stopper never selects JSON comparison.
+		in.JSONScanRHS = len(tuple)
+		for idx, el := range tuple {
+			if !el.constForExecution() {
+				in.JSONScanRHS = idx + 1
+				break
+			}
+		}
+		in.PrefixJSON = inJSONNo
+		for _, op := range append([]IR{left}, tuple[:in.JSONScanRHS]...) {
+			switch ast.staticCmpClass(op) {
+			case classJSON:
+				in.PrefixJSON = inJSONYes
+			case classUnknown:
+				if in.PrefixJSON == inJSONNo {
+					in.PrefixJSON = inJSONUnknown
+				}
+			}
+			if in.PrefixJSON == inJSONYes {
+				break
+			}
+		}
+		return in, nil
 	}
 
 	switch op {
@@ -456,9 +488,11 @@ func (ast *astCompiler) translateCaseExpr(node *sqlparser.CaseExpr) (IR, error) 
 		}
 
 		if cmpbase != nil {
-			cond, err = ast.translateComparisonExpr2(sqlparser.EqualOp, cmpbase, cond)
-			if err != nil {
-				return nil, err
+			// Unlike the `=` operator, MySQL never uses the JSON comparator
+			// between the base operand of a simple CASE and its WHEN operands.
+			cond = &ComparisonExpr{
+				Left: cmpbase, Right: cond,
+				Op: compareCaseEQ{},
 			}
 		}
 
@@ -471,27 +505,54 @@ func (ast *astCompiler) translateCaseExpr(node *sqlparser.CaseExpr) (IR, error) 
 	return &result, nil
 }
 
+// staticCmpClass resolves the comparison class of an operand at translation
+// time, before constant folding, by compiling it into a throwaway compiler;
+// classUnknown when the type resolves only at evaluation time.
+func (ast *astCompiler) staticCmpClass(op IR) cmpClass {
+	if lit, ok := op.(*Literal); ok {
+		if lit.inner == nil {
+			return classNull
+		}
+		return classFromType(lit.inner.SQLType())
+	}
+	comp := compiler{
+		collation: ast.cfg.Collation,
+		env:       ast.cfg.Environment,
+		sqlmode:   ast.cfg.SQLMode,
+	}
+	typ, err := op.compile(&comp)
+	if err != nil {
+		return classUnknown
+	}
+	return classFromType(typ.Type)
+}
+
 func (ast *astCompiler) translateBetweenExpr(node *sqlparser.BetweenExpr) (IR, error) {
-	// x BETWEEN a AND b => x >= a AND x <= b
-	from := &sqlparser.ComparisonExpr{
-		Operator: sqlparser.GreaterEqualOp,
-		Left:     node.Left,
-		Right:    node.From,
+	// BETWEEN is not lowered to `x >= a AND x <= b`: MySQL decides the
+	// comparison domain across all three operands when JSON participates.
+	left, err := ast.translateExpr(node.Left)
+	if err != nil {
+		return nil, err
 	}
-	to := &sqlparser.ComparisonExpr{
-		Operator: sqlparser.LessEqualOp,
-		Left:     node.Left,
-		Right:    node.To,
+	from, err := ast.translateExpr(node.From)
+	if err != nil {
+		return nil, err
 	}
-
-	if !node.IsBetween {
-		// x NOT BETWEEN a AND b  => x < a OR x > b
-		from.Operator = sqlparser.LessThanOp
-		to.Operator = sqlparser.GreaterThanOp
-		return ast.translateExpr(&sqlparser.OrExpr{Left: from, Right: to})
+	to, err := ast.translateExpr(node.To)
+	if err != nil {
+		return nil, err
 	}
-
-	return ast.translateExpr(sqlparser.AndExpressions(from, to))
+	return &BetweenExpr{
+		Left:   left,
+		From:   from,
+		To:     to,
+		Negate: !node.IsBetween,
+		StaticClasses: [3]cmpClass{
+			ast.staticCmpClass(left),
+			ast.staticCmpClass(from),
+			ast.staticCmpClass(to),
+		},
+	}, nil
 }
 
 func translateExprNotSupported(e sqlparser.Expr) error {

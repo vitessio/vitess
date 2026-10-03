@@ -53,6 +53,17 @@ var inputJSONBinaryValues = []string{
 	`CAST('foo' AS BINARY)`, `b'1010'`,
 }
 
+// inputJSONComparisonDomainJSON are JSON values that force MySQL to aggregate
+// the comparison domain of IN, BETWEEN and simple CASE;
+// inputJSONComparisonDomainScalars are the SQL scalars they coerce against.
+var inputJSONComparisonDomainJSON = []string{
+	`JSON_ARRAY()`, `JSON_OBJECT()`, `JSON_EXTRACT('[1]', '$')`, `CAST('[]' AS JSON)`,
+}
+
+var inputJSONComparisonDomainScalars = []string{
+	`0`, `1`, `'0'`, `'1'`, `'[]'`, `'{}'`, `NULL`,
+}
+
 var inputBitwise = []string{
 	"0", "1", "0xFF", "255", "1.0", "1.1", "-1", "-255", "7", "9", "13", "1.5", "-1.5", "'1.5'", "'-1.5'",
 	"0.0e0", "1.0e0", "255.0", "1.5e0", "-1.5e0", "1.1e0", "-1e0", "-255e0", "7e0", "9e0", "13e0",
