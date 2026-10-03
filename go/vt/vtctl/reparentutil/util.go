@@ -57,6 +57,31 @@ const (
 	lostTopologyLockMsg = "lost topology lock, aborting"
 )
 
+// warnIfDeprecatedServingShardReplication keeps serving-shard deprecation
+// warnings consistent across version and canonical-position detection.
+func warnIfDeprecatedServingShardReplication(logger logutil.Logger, version, alias string, encodedPositions ...string) {
+	flavor, _, err := mysqlctl.ParseVersionString(version)
+	if err == nil && flavor == mysqlctl.FlavorMariaDB {
+		logger.Warningf("MariaDB support for serving shards is deprecated and will become unsupported in v26.0.0; tablet %s uses MariaDB", alias)
+		return
+	}
+
+	for _, encodedPosition := range encodedPositions {
+		position, err := replication.DecodePosition(encodedPosition)
+		if err != nil {
+			continue
+		}
+		switch position.GTIDSet.(type) {
+		case replication.MariadbGTIDSet:
+			logger.Warningf("MariaDB support for serving shards is deprecated and will become unsupported in v26.0.0; tablet %s uses MariaDB", alias)
+			return
+		case replication.FilePosGTID:
+			logger.Warningf("File-position replication for serving shards is deprecated and will become unsupported in v26.0.0; tablet %s uses file positions", alias)
+			return
+		}
+	}
+}
+
 // ElectNewPrimary finds a tablet that should become a primary after reparent.
 // The criteria for the new primary-elect are (preferably) to be in the same
 // cell as the current primary, and to be different from avoidPrimaryAlias.
@@ -133,6 +158,9 @@ func ElectNewPrimary(
 			pos, replLag, takingBackup, replUnknown, serverVersion, err := findTabletPositionLagBackupStatus(groupCtx, tb, logger, tmc, opts.WaitReplicasTimeout)
 			mu.Lock()
 			defer mu.Unlock()
+			if err == nil {
+				warnIfDeprecatedServingShardReplication(logger, serverVersion, topoproto.TabletAliasString(tb.Alias), replication.EncodePosition(pos.Executed), replication.EncodePosition(pos.Combined))
+			}
 			if err == nil && (opts.TolerableReplLag == 0 || opts.TolerableReplLag >= replLag) {
 				if takingBackup {
 					fmt.Fprintf(&reasonsToInvalidate, "\n%v is taking a backup", topoproto.TabletAliasString(tablet.Alias))
