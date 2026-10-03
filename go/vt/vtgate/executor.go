@@ -1387,12 +1387,6 @@ func (e *Executor) getCachedOrBuildPlan(
 		}
 	}
 
-	defer func() {
-		if err == nil {
-			vcursor.CheckForReservedConnection(setVarComment, stmt)
-		}
-	}()
-
 	qh, err := sqlparser.BuildQueryHints(stmt)
 	if err != nil {
 		return nil, false, nil, err
@@ -1441,11 +1435,11 @@ func (e *Executor) getCachedOrBuildPlan(
 			planKey = buildPlanKey(ctx, vcursor, query, setVarComment)
 		}
 		plan, cached, err = e.plans.GetOrLoad(planKey.Hash(), e.epoch.Load(), func() (*engine.Plan, error) {
-			return e.buildStatement(ctx, vcursor, query, stmt, reservedVars, bindVarNeeds, qh, paramsCount)
+			return e.buildStatement(ctx, vcursor, query, stmt, reservedVars, bindVarNeeds, qh, paramsCount, setVarComment)
 		})
 		return plan, cached, stmt, err
 	}
-	plan, err = e.buildStatement(ctx, vcursor, query, stmt, reservedVars, bindVarNeeds, qh, paramsCount)
+	plan, err = e.buildStatement(ctx, vcursor, query, stmt, reservedVars, bindVarNeeds, qh, paramsCount, setVarComment)
 	return plan, false, stmt, err
 }
 
@@ -1498,12 +1492,16 @@ func (e *Executor) buildStatement(
 	bindVarNeeds *sqlparser.BindVarNeeds,
 	qh sqlparser.QueryHints,
 	paramsCount uint16,
+	setVarComment string,
 ) (*engine.Plan, error) {
 	plan, err := planbuilder.BuildFromStmt(ctx, query, stmt, reservedVars, vcursor, bindVarNeeds, e.ddlConfig)
 	if err != nil {
 		return nil, err
 	}
 
+	if vcursor.StatementNeedsSettingsOnConn(setVarComment, stmt) {
+		plan.NeedsSettingsOnConn = true
+	}
 	plan.ParamsCount = paramsCount
 	plan.Warnings = vcursor.GetAndEmptyWarnings()
 	plan.QueryHints = qh
