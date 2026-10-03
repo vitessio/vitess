@@ -1010,15 +1010,14 @@ func TestReadTopologyInstanceGroupReplication(t *testing.T) {
 //     lock for up to a minute meanwhile.
 //   - A voter whose START is still in progress is not joined again: MySQL refuses another START, and a
 //     STOP, until it ends.
-//   - While any voter's START is in progress, the group is not bootstrapped: that member reports
-//     OFFLINE for up to about a minute and can still end in a group of its own (sro-eval case A). Nor
-//     does the shard get a failover meanwhile.
+//   - While any voter's START is in progress, the group is not bootstrapped, for at most
+//     groupStartInProgressGrace: that member reports OFFLINE for up to about a minute and can still end
+//     in a group of its own (sro-eval case A), which stays read-only. Nor does the shard get a
+//     failover meanwhile.
 func TestGetDetectionAnalysisGroupReplicationJoinTargets(t *testing.T) {
 	resetPrimaryHealthState()
-	oldVoterGrace := config.GetGroupReplicationVoterReplacementGracePeriod()
-	config.SetGroupReplicationVoterReplacementGracePeriod(time.Hour)
+	// Every tablet is reachable: the voter replacement grace period does not matter.
 	t.Cleanup(func() {
-		config.SetGroupReplicationVoterReplacementGracePeriod(oldVoterGrace)
 		GroupReplicationConditions.Reset()
 		UnreachableGroupTablets.Reset()
 	})
@@ -1051,6 +1050,8 @@ func TestGetDetectionAnalysisGroupReplicationJoinTargets(t *testing.T) {
 		notWant []AnalysisCode
 		// want is the analysis of the given tablets.
 		want map[string]AnalysisCode
+		// startGrace is groupStartInProgressGrace; 0 means its default, a negative value none.
+		startGrace time.Duration
 	}{{
 		name: "a PRIMARY tablet out of its group is not joined",
 		rows: func() []*test.InfoForRecoveryAnalysis {
@@ -1092,6 +1093,19 @@ func TestGetDetectionAnalysisGroupReplicationJoinTargets(t *testing.T) {
 		},
 		notWant: []AnalysisCode{GroupNotBootstrapped, ClusterHasNoPrimary, PrimaryTabletDeleted, GroupMemberNotOnline},
 	}, {
+		name: "the group is bootstrapped once VTOrc observed a voter's START for longer than the grace",
+		rows: func() []*test.InfoForRecoveryAnalysis {
+			starting := member(grRow(grTablet("zone1", 101, topodatapb.TabletType_REPLICA), gr), mysql.GroupMemberStateOffline, "", false, nil)
+			starting.GroupStartInProgress = 1
+			return []*test.InfoForRecoveryAnalysis{
+				member(grRow(replica, gr), mysql.GroupMemberStateOffline, "", false, nil),
+				member(grRow(crossCellReplica, gr), mysql.GroupMemberStateOffline, "", false, nil),
+				starting,
+			}
+		},
+		startGrace: -1,
+		want:       map[string]AnalysisCode{"zone1-0000000100": GroupNotBootstrapped},
+	}, {
 		name: "the group is bootstrapped once no START is in progress",
 		rows: func() []*test.InfoForRecoveryAnalysis {
 			return []*test.InfoForRecoveryAnalysis{
@@ -1106,6 +1120,11 @@ func TestGetDetectionAnalysisGroupReplicationJoinTargets(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			GroupReplicationConditions.Reset()
 			UnreachableGroupTablets.Reset()
+			oldGrace := groupStartInProgressGrace
+			t.Cleanup(func() { groupStartInProgressGrace = oldGrace })
+			if tt.startGrace != 0 {
+				groupStartInProgressGrace = max(tt.startGrace, 0)
+			}
 			rows := tt.rows()
 			for _, row := range rows {
 				row.ShardGroupReplicationVoters = voterList(stalePrimary, replica, crossCellReplica)
@@ -1133,10 +1152,8 @@ func TestGetDetectionAnalysisGroupReplicationJoinTargets(t *testing.T) {
 // few seconds. Under another policy it applies as before.
 func TestGetDetectionAnalysisGroupReplicationReadOnlyPrimary(t *testing.T) {
 	resetPrimaryHealthState()
-	oldVoterGrace := config.GetGroupReplicationVoterReplacementGracePeriod()
-	config.SetGroupReplicationVoterReplacementGracePeriod(time.Hour)
+	// Every tablet is reachable: the voter replacement grace period does not matter.
 	t.Cleanup(func() {
-		config.SetGroupReplicationVoterReplacementGracePeriod(oldVoterGrace)
 		GroupReplicationConditions.Reset()
 		UnreachableGroupTablets.Reset()
 	})

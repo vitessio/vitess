@@ -37,6 +37,17 @@ import (
 // in when the tablet does not. It is a variable so that tests can shorten it.
 var groupPrimaryNotInTopoGracePeriod = 2 * time.Second
 
+// groupStartInProgressGrace bounds how long a START GROUP_REPLICATION in progress on a tablet keeps
+// VTOrc from bootstrapping the shard's group, from the moment VTOrc first observed it. Such a START
+// reports its member OFFLINE until it ends, for up to about a minute when it finds no group, and
+// MySQL refuses to stop it meanwhile. It cannot join anything while no member is active, which is when
+// the group needs a bootstrap, and a group of its own that it forms stays super_read_only (the member
+// action mysql_disable_super_read_only_if_primary is disabled), and is left by its tablet as a
+// foreign group, or adopted if its member is the target of a bootstrap intent. Waiting longer only
+// delays the bootstrap: in the G12 chaos scenario, by 6-22s per cycle. It is a variable so that tests
+// can change it.
+var groupStartInProgressGrace = 10 * time.Second
+
 // isGroupMemberActive returns whether a member in the given state is part of a group.
 func isGroupMemberActive(pluginActive bool, memberState string) bool {
 	return mysql.IsGroupMemberActive(&replicationdatapb.GroupReplicationStatus{
@@ -311,8 +322,9 @@ type groupReplicationShardState struct {
 	// the one the shard record lists.
 	foreignMembers map[string]bool
 	// anyActive is true when any tablet, reachable or not, last reported an active member, or a
-	// START GROUP_REPLICATION in progress. An unreachable tablet that was a member may still be one,
-	// so a new group must not be bootstrapped. Nor while a START runs: its member reports OFFLINE,
+	// START GROUP_REPLICATION in progress that VTOrc observed for less than
+	// groupStartInProgressGrace. An unreachable tablet that was a member may still be one, so a new
+	// group must not be bootstrapped. Nor right away while a START runs: its member reports OFFLINE,
 	// for up to about a minute when it finds no group, and can still end as the primary of a group
 	// of its own, next to the one a bootstrap creates; MySQL also refuses to stop it until it ends.
 	anyActive bool
@@ -374,7 +386,7 @@ func computeGroupReplicationShardState(durability policy.Durabler, incarnation s
 			state.anyActive = true
 			state.anyMember = true
 		}
-		if row.startInProgress {
+		if row.startInProgress && GroupStartInProgressBlocksBootstrap(row.tablet.GetAlias(), now) {
 			state.anyActive = true
 		}
 		if row.valid && !row.active && row.tablet.GetType() == topodatapb.TabletType_PRIMARY {
@@ -623,6 +635,21 @@ func matchGroupPrimaryNotInTopo(a *DetectionAnalysis, ca *clusterAnalysis, now t
 		return false
 	}
 	return ObserveGroupPrimaryNotInTopo(a.AnalyzedInstanceAlias, now) >= groupPrimaryNotInTopoGracePeriod
+}
+
+// SetGroupStartInProgressGrace sets groupStartInProgressGrace, and returns its previous value. It is
+// used by tests.
+func SetGroupStartInProgressGrace(grace time.Duration) time.Duration {
+	previous := groupStartInProgressGrace
+	groupStartInProgressGrace = grace
+	return previous
+}
+
+// GroupStartInProgressBlocksBootstrap records that a START GROUP_REPLICATION runs on the tablet's
+// MySQL, and returns whether it still keeps VTOrc from bootstrapping the shard's group: VTOrc has
+// observed it for less than groupStartInProgressGrace.
+func GroupStartInProgressBlocksBootstrap(alias *topodatapb.TabletAlias, now time.Time) bool {
+	return GroupReplicationConditions.Observe("GroupStartInProgress/"+topoproto.TabletAliasString(alias), now) < groupStartInProgressGrace
 }
 
 // ObserveGroupPrimaryNotInTopo records that the tablet's MySQL is the primary of its shard's

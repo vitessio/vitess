@@ -623,6 +623,9 @@ func chooseGroupBootstrapCandidate(ctx context.Context, voters []*topodatapb.Tab
 
 	found := 0
 	var candidates []*groupBootstrapCandidate
+	// starting are the tablets whose START GROUP_REPLICATION still runs: MySQL refuses to bootstrap
+	// them until it ends.
+	starting := make(map[string]bool)
 	for _, ts := range statuses {
 		aliasString := topoproto.TabletAliasString(ts.tablet.Alias)
 		isMember := policy.IsVoter(voters, ts.tablet.Alias)
@@ -641,11 +644,17 @@ func chooseGroupBootstrapCandidate(ctx context.Context, voters []*topodatapb.Tab
 			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "the MySQL of %s is already an active group member", aliasString)
 		}
 		if ts.status.GetGroupReplicationStatus().GetStartInProgress() {
-			// The member reports OFFLINE, but its START can still end in a group: the one it was
-			// joining, or one of its own, next to the group a bootstrap would create. MySQL refuses to
-			// stop it, and to bootstrap that member, until it ends, within about a minute.
-			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
-				"a START GROUP_REPLICATION is in progress on the MySQL of %s: not bootstrapping the group until it ends", aliasString)
+			// The member reports OFFLINE, but its START can still end in a group of its own, next to
+			// the group a bootstrap would create, and MySQL refuses to stop it, or to bootstrap that
+			// member, until it ends, within about a minute. VTOrc waits for it for a while
+			// (groupStartInProgressGrace): the group it may form stays super_read_only, and its tablet
+			// leaves it, so waiting longer only delays the bootstrap.
+			if inst.GroupStartInProgressBlocksBootstrap(ts.tablet.Alias, time.Now()) {
+				return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+					"a START GROUP_REPLICATION is in progress on the MySQL of %s: not bootstrapping the group until it ends", aliasString)
+			}
+			starting[aliasString] = true
+			logger.Warn("bootstrapping the group although a START GROUP_REPLICATION still runs on a tablet", slog.String("tablet", aliasString))
 		}
 		if !isMember {
 			continue
@@ -661,13 +670,21 @@ func chooseGroupBootstrapCandidate(ctx context.Context, voters []*topodatapb.Tab
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "only %d of the %d voters of the shard have a tablet", found, len(voters))
 	}
 
-	// Prefer the target of a recent bootstrap intent among members with equal GTID sets, then the
-	// shard primary, then the lowest alias, so that concurrent VTOrcs make the same choice.
+	// Prefer the target of a recent bootstrap intent among members with equal GTID sets, then a member
+	// without a START in progress, then the shard primary, then the lowest alias, so that concurrent
+	// VTOrcs make the same choice.
 	slices.SortStableFunc(candidates, func(a, b *groupBootstrapCandidate) int {
 		aPreferred := preferred != nil && topoproto.TabletAliasEqual(a.tablet.Alias, preferred)
 		bPreferred := preferred != nil && topoproto.TabletAliasEqual(b.tablet.Alias, preferred)
 		if aPreferred != bPreferred {
 			if aPreferred {
+				return -1
+			}
+			return 1
+		}
+		aStarting, bStarting := starting[topoproto.TabletAliasString(a.tablet.Alias)], starting[topoproto.TabletAliasString(b.tablet.Alias)]
+		if aStarting != bStarting {
+			if bStarting {
 				return -1
 			}
 			return 1

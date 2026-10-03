@@ -711,6 +711,8 @@ func TestBootstrapGroupReplication(t *testing.T) {
 		// want is the uid of the tablet that bootstraps the group, 0 for none.
 		want        uint32
 		wantErrCode vtrpcpb.Code
+		// startGraceOver is whether VTOrc observed the STARTs in progress for longer than the grace.
+		startGraceOver bool
 	}{
 		{
 			name: "the member with the most transactions bootstraps",
@@ -779,6 +781,24 @@ func TestBootstrapGroupReplication(t *testing.T) {
 			wantErrCode: vtrpcpb.Code_FAILED_PRECONDITION,
 		},
 		{
+			// Once VTOrc observed the START for longer than the grace, it bootstraps anyway: the group the
+			// START may form stays read-only, and its tablet leaves it. Among equal members, it prefers one
+			// without a START, which MySQL would refuse to bootstrap.
+			name: "a START GROUP_REPLICATION in progress for longer than the grace: another voter bootstraps",
+			statuses: [4]*replicationdatapb.FullStatus{
+				func() *replicationdatapb.FullStatus {
+					status := offline(groupName+":1-10", "")
+					status.GroupReplicationStatus.StartInProgress = true
+					return status
+				}(),
+				offline(groupName+":1-10", ""),
+				offline(groupName+":1-10", ""),
+				offline(groupName+":1-10", ""),
+			},
+			startGraceOver: true,
+			want:           101,
+		},
+		{
 			name: "a voter is unreachable: nothing is bootstrapped",
 			statuses: [4]*replicationdatapb.FullStatus{
 				offline(groupName+":1-10", ""),
@@ -799,6 +819,11 @@ func TestBootstrapGroupReplication(t *testing.T) {
 				recoveryTablet("zone2", 103, topodatapb.TabletType_RDONLY),
 			}
 			mockTMC := groupReplicationRecoveryTest(t, tablets...)
+			inst.GroupReplicationConditions.Reset()
+			if tt.startGraceOver {
+				old := inst.SetGroupStartInProgressGrace(0)
+				t.Cleanup(func() { inst.SetGroupStartInProgressGrace(old) })
+			}
 			// The RDONLY tablet is not a voter.
 			setVoters(t, tablets[:3]...)
 			for i, tablet := range tablets {
