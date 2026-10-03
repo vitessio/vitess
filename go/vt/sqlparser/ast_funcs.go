@@ -322,6 +322,11 @@ func SQLTypeToQueryType(typeName string, unsigned bool) querypb.Type {
 // If the list already contains a query hint, the given string will be merged with
 // the first one: MySQL honors only the first optimizer hint comment of a statement
 // and reads any later one as an ordinary comment, so later ones are kept as they are.
+// When merging, SET_VAR hints of the given string for variables that the comment
+// sets itself are left out, so the comment's own value applies without a
+// duplicate, and the rest goes ahead of the hints already in the comment: MySQL
+// stops reading a hint comment at its first syntax error, so a malformed hint
+// written by the client would otherwise drop the hints added after it.
 func (node *ParsedComments) AddQueryHint(queryHint string) (Comments, error) {
 	if queryHint == "" {
 		if node == nil {
@@ -341,11 +346,18 @@ func (node *ParsedComments) AddQueryHint(queryHint string) (Comments, error) {
 				if !ok {
 					return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "Query hint comment is malformed")
 				}
-				if strings.Contains(comment, queryHint) {
+				hints := strings.TrimSpace(strings.TrimPrefix(before, queryOptimizerPrefix))
+				added := removeSetVarHints(queryHint, setVarNames(comment))
+				if added == "" || strings.HasPrefix(hints, added) {
+					// The comment sets every variable of the query hint, or the
+					// query hint was merged into it already.
 					newComments = append(Comments{comment}, newComments...)
 					continue
 				}
-				newComment := fmt.Sprintf("%s %s */", strings.TrimSpace(before), queryHint)
+				newComment := fmt.Sprintf("%s %s %s */", queryOptimizerPrefix, added, hints)
+				if hints == "" {
+					newComment = fmt.Sprintf("%s %s */", queryOptimizerPrefix, added)
+				}
 				newComments = append(Comments{newComment}, newComments...)
 				continue
 			}

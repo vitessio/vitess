@@ -412,7 +412,40 @@ func TestSetVarWithSeveralOptimizerHintComments(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, session.InReservedConn())
 	wantQueries := []*querypb.BoundQuery{
-		{Sql: "select /*+ MAX_EXECUTION_TIME(100) SET_VAR(sql_mode = 'only_full_group_by') */ /*+ NO_BKA(t) */ id from main1", BindVariables: map[string]*querypb.BindVariable{}},
+		{Sql: "select /*+ SET_VAR(sql_mode = 'only_full_group_by') MAX_EXECUTION_TIME(100) */ /*+ NO_BKA(t) */ id from main1", BindVariables: map[string]*querypb.BindVariable{}},
+	}
+	utils.MustMatch(t, wantQueries, lookup.Queries)
+}
+
+// A client's own SET_VAR hint wins over the session's value for that variable in the
+// same hint comment: the session's hint leaves the variable out there, and the rest of
+// it goes first. The nested block still gets the session's full hint, which MySQL
+// prefers over the enclosing block's; that needs the planner and is tracked on #21014.
+func TestSetVarClientHintWinsOverSession(t *testing.T) {
+	executor, _, _, lookup, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: KsTestUnsharded, SystemVariables: map[string]string{"sql_mode": "'only_full_group_by'", "sql_safe_updates": "0"}})
+
+	_, err := executor.Execute(t.Context(), nil, "TestSelect", session, "select /*+ SET_VAR(sql_mode = 'ANSI_QUOTES') */ id from main1 where exists (select 1 from main1)", map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	require.False(t, session.InReservedConn())
+	wantQueries := []*querypb.BoundQuery{
+		{Sql: "select /*+ SET_VAR(sql_safe_updates = 0) SET_VAR(sql_mode = 'ANSI_QUOTES') */ id from main1 where exists (select /*+ SET_VAR(sql_mode = 'only_full_group_by') SET_VAR(sql_safe_updates = 0) */ 1 from main1)", BindVariables: map[string]*querypb.BindVariable{"vtg1": sqltypes.Int64BindVariable(1)}},
+	}
+	utils.MustMatch(t, wantQueries, lookup.Queries)
+}
+
+// MySQL stops reading an optimizer hint comment at its first syntax error and drops
+// every hint after it. The session's SET_VAR hint goes ahead of the client's hints, so
+// a malformed client hint does not drop the session's settings.
+func TestSetVarAheadOfMalformedClientHint(t *testing.T) {
+	executor, _, _, lookup, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: KsTestUnsharded, SystemVariables: map[string]string{"sql_mode": "'only_full_group_by'"}})
+
+	_, err := executor.Execute(t.Context(), nil, "TestSelect", session, "select /*+ BOGUS_HINT(x) */ id from main1", map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	require.False(t, session.InReservedConn())
+	wantQueries := []*querypb.BoundQuery{
+		{Sql: "select /*+ SET_VAR(sql_mode = 'only_full_group_by') BOGUS_HINT(x) */ id from main1", BindVariables: map[string]*querypb.BindVariable{}},
 	}
 	utils.MustMatch(t, wantQueries, lookup.Queries)
 }
