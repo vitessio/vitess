@@ -1,0 +1,33 @@
+{{ define "stream.html" }}
+{{ template "layout" . }}
+{{ end }}
+
+{{ define "content" }}
+{{ $d := .Data }}
+{{ $s := $d.Stream }}
+<div class="toolbar">
+  <h1>{{ $d.StreamKey }}</h1>
+  <div class="toolbar-links">
+    <a href="/workflow/{{ pathEscape $d.ClusterID }}/{{ pathEscape $d.Keyspace }}/{{ pathEscape $d.Workflow }}">Back to workflow</a>
+  </div>
+</div>
+
+<div class="card">
+  <dl>
+    <dt>Cluster</dt><dd>{{ $d.ClusterID }}</dd>
+    <dt>Workflow</dt><dd><a href="/workflow/{{ pathEscape $d.ClusterID }}/{{ pathEscape $d.Keyspace }}/{{ pathEscape $d.Workflow }}">{{ $d.Workflow }}</a></dd>
+    <dt>Stream key</dt><dd>{{ $d.StreamKey }}</dd>
+    <dt>Shard</dt><dd>{{ $s.GetShard }}</dd>
+    <dt>State</dt><dd>{{ $s.GetState }}</dd>
+    <dt>Position</dt><dd>{{ $s.GetPosition }}</dd>
+    <dt>Stop position</dt><dd>{{ $s.GetStopPosition }}</dd>
+    <dt>DB name</dt><dd>{{ $s.GetDbName }}</dd>
+    <dt>Message</dt><dd>{{ $s.GetMessage }}</dd>
+  </dl>
+</div>
+
+<div class="card">
+  <h2>Stream data</h2>
+  <pre>{{ protoJSON $s }}</pre>
+</div>
+{{ end }}

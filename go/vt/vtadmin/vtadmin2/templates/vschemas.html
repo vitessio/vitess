@@ -1,0 +1,28 @@
+{{ define "vschemas.html" }}
+{{ template "layout" . }}
+{{ end }}
+
+{{ define "content" }}
+<div class="toolbar">
+  <h1>VSchema</h1>
+  <input class="table-filter" data-table-filter="#vschemas-table" placeholder="Filter VSchema" aria-label="Filter VSchema">
+</div>
+<div class="card">
+  <table id="vschemas-table">
+    <thead>
+      <tr><th>Cluster</th><th>Keyspace</th><th>Details</th></tr>
+    </thead>
+    <tbody>
+      {{ range .Data }}
+      <tr>
+        <td>{{ clusterID .GetCluster }}</td>
+        <td><a href="/vschema/{{ pathEscape (clusterID .GetCluster) }}/{{ pathEscape .GetName }}">{{ .GetName }}</a></td>
+        <td><pre>{{ protoJSON .GetVSchema }}</pre></td>
+      </tr>
+      {{ else }}
+      <tr><td colspan="3">No VSchema found.</td></tr>
+      {{ end }}
+    </tbody>
+  </table>
+</div>
+{{ end }}
