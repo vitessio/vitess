@@ -54,6 +54,12 @@ func (code PulloutOpcode) NeedsListArg() bool {
 	return code == PulloutIn || code == PulloutNotIn
 }
 
+// NeedsExistsArg reports whether the pullout replaces an EXISTS predicate,
+// in which case the whole ExistsExpr is substituted by the has-values argument.
+func (code PulloutOpcode) NeedsExistsArg() bool {
+	return code == PulloutExists || code == PulloutNotExists
+}
+
 // MarshalJSON serializes the PulloutOpcode as a JSON string.
 // It's used for testing and diagnostics.
 func (code PulloutOpcode) MarshalJSON() ([]byte, error) {
