@@ -276,7 +276,9 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 			Priority: detectionAnalysisPriorityHigh,
 		},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
-			return matchGroupMemberNotOnline(a, ca)
+			// A voter whose START GROUP_REPLICATION is still in progress is joining already: MySQL
+			// refuses another START, and a STOP, until it ends.
+			return matchGroupMemberNotOnline(a, ca) && !a.GroupStartInProgress
 		},
 	},
 	{
@@ -434,7 +436,7 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 			Priority:    detectionAnalysisPriorityShardWideAction,
 		},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
-			return topo.IsReplicaType(a.TabletType) && ca.primaryAlias == nil && a.ShardPrimaryTermTimestamp.IsZero() && !groupNeedsBootstrap(a, ca) &&
+			return topo.IsReplicaType(a.TabletType) && ca.primaryAlias == nil && a.ShardPrimaryTermTimestamp.IsZero() && !groupHasNoMember(a, ca) &&
 				!matchGroupMemberNotOnline(a, ca)
 		},
 	},
@@ -445,7 +447,7 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 			Priority:    detectionAnalysisPriorityShardWideAction,
 		},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
-			return topo.IsReplicaType(a.TabletType) && ca.primaryAlias == nil && !a.ShardPrimaryTermTimestamp.IsZero() && !groupNeedsBootstrap(a, ca) &&
+			return topo.IsReplicaType(a.TabletType) && ca.primaryAlias == nil && !a.ShardPrimaryTermTimestamp.IsZero() && !groupHasNoMember(a, ca) &&
 				!matchGroupMemberNotOnline(a, ca)
 		},
 	},

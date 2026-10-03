@@ -942,6 +942,11 @@ func (s *groupReplicationSync) shouldRejoin(ctx context.Context, status *replica
 		s.rejoinBackoff = 0
 		return false
 	}
+	if status.GetStartInProgress() {
+		// A START GROUP_REPLICATION still runs, for example the join of an earlier run whose client
+		// gave up: MySQL refuses another one, and any change of the configuration, until it ends.
+		return false
+	}
 	if !policy.IsGroupReplication(durability) {
 		return false
 	}

@@ -19,10 +19,16 @@ package tabletmanager
 import (
 	"context"
 	"log/slog"
+	"time"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // StartGroupReplication makes the tablet's MySQL join its shard's replication group, or
@@ -51,6 +57,11 @@ func (tm *TabletManager) StartGroupReplication(ctx context.Context, bootstrap bo
 	}
 	defer tm.unlock()
 
+	if !bootstrap {
+		if err := tm.refuseJoinOnPrimaryLocked(ctx); err != nil {
+			return nil, err
+		}
+	}
 	// An explicit start lifts a previous explicit stop. A bootstrap also keeps the sync loop from
 	// starting a join while it runs: a join in progress makes MySQL refuse the bootstrap.
 	tm.groupReplicationRejoinSuspended.Store(bootstrap)
@@ -95,4 +106,45 @@ func (tm *TabletManager) StopGroupReplication(ctx context.Context) (*replication
 
 	tm.groupReplicationRejoinSuspended.Store(true)
 	return tm.stopGroupReplicationLocked(ctx)
+}
+
+// refuseJoinOnPrimaryLocked refuses, with FAILED_PRECONDITION, a join of MySQL into its group on a
+// PRIMARY tablet under a group replication policy that lists voters, while MySQL is not an active
+// member. Such a join is never intended: the migration only joins replicas and bootstraps the group
+// on the primary, and VTOrc's GroupMemberNotOnline does not analyze a PRIMARY tablet. A PRIMARY
+// tablet whose MySQL is out of its group is a stale primary, which the tablet demotes on its own
+// first (demoteStalePrimary), and only then rejoins; a join started on it instead would hold the
+// action lock for up to a minute, keeping that demotion from running, while the tablet still
+// claims to be the shard's primary. Refusing changes nothing, and the join is retried once the
+// tablet is a REPLICA. A MySQL that is already an active member only finishes its transition (see
+// StartGroupReplication), which is harmless.
+func (tm *TabletManager) refuseJoinOnPrimaryLocked(ctx context.Context) error {
+	if tm.Tablet().Type != topodatapb.TabletType_PRIMARY {
+		return nil
+	}
+	deadline := time.Now().Add(groupReplicationTopoReadTimeout)
+	durability, err := tm.durabilityForGroupChange(ctx, deadline)
+	if err != nil {
+		return err
+	}
+	if !policy.IsGroupReplication(durability) {
+		return nil
+	}
+	voters, err := tm.votersForGroupChange(ctx, deadline)
+	if err != nil {
+		return err
+	}
+	if len(voters) == 0 {
+		return nil
+	}
+	status, err := tm.groupReplicationStatus(ctx)
+	if err != nil {
+		return err
+	}
+	if mysql.IsGroupMemberActive(status) {
+		return nil
+	}
+	return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+		"refusing to join the replication group on a PRIMARY tablet whose MySQL is %s: the tablet demotes itself to REPLICA first, and then rejoins the group",
+		status.GetMemberState())
 }

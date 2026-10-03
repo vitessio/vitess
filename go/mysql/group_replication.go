@@ -44,6 +44,12 @@ const (
 	GroupReplicationRecoveryChannel = "group_replication_recovery"
 
 	groupReplicationPluginName = "group_replication"
+
+	// GroupReplicationCommandRunningMessage is how MySQL explains its errno 3663
+	// (ER_GROUP_REPLICATION_COMMAND_FAILURE) when it refuses a START or STOP GROUP_REPLICATION
+	// because another one is running. A START that finds no group runs for about a minute, and a STOP
+	// is refused for as long (verified on MySQL 8.4.11).
+	GroupReplicationCommandRunningMessage = "Another instance of START/STOP GROUP_REPLICATION command is executing"
 )
 
 const (
@@ -66,6 +72,13 @@ const (
 	// member has received from the group but not applied yet.
 	readGroupReplicationReceived = "SELECT RECEIVED_TRANSACTION_SET FROM performance_schema.replication_connection_status " +
 		"WHERE CHANNEL_NAME = 'group_replication_applier'"
+	// readGroupReplicationProgress reads whether a START GROUP_REPLICATION runs on the member. MySQL
+	// lists the statement in performance_schema.processlist for as long as it runs, also after its
+	// client connection was killed (verified on MySQL 8.4.11), and a START that finds no group runs
+	// for about a minute while the member reports OFFLINE. The query's own text starts with SELECT,
+	// so it does not count itself.
+	readGroupReplicationProgress = "SELECT (SELECT COUNT(*) FROM performance_schema.processlist " +
+		"WHERE INFO LIKE 'START GROUP_REPLICATION%') AS starts"
 )
 
 // GroupReplicationStatus reads the Group Replication state of the server. It returns a
@@ -117,6 +130,14 @@ func (c *Conn) GroupReplicationStatus() (*replicationdatapb.GroupReplicationStat
 	}
 	if len(qr.Rows) == 1 {
 		status.ReceivedTransactionSet = strings.ReplaceAll(qr.Rows[0][0].ToString(), "\n", "")
+	}
+
+	qr, err = c.ExecuteFetch(readGroupReplicationProgress, 1, true)
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "failed to read whether group replication is starting")
+	}
+	if len(qr.Rows) == 1 {
+		status.StartInProgress = qr.Named().Row().AsInt64("starts", 0) > 0
 	}
 	return status, nil
 }
@@ -315,6 +336,16 @@ func StartGroupReplicationCommands(bootstrap bool) []string {
 		start,
 		"SET GLOBAL group_replication_bootstrap_group = OFF",
 	}
+}
+
+// GroupReplicationStartInProgress returns whether a START GROUP_REPLICATION runs on the server (see
+// readGroupReplicationProgress).
+func (c *Conn) GroupReplicationStartInProgress() (bool, error) {
+	qr, err := c.ExecuteFetch(readGroupReplicationProgress, 1, true)
+	if err != nil {
+		return false, vterrors.Wrapf(err, "failed to read whether group replication is starting")
+	}
+	return len(qr.Rows) == 1 && qr.Named().Row().AsInt64("starts", 0) > 0, nil
 }
 
 // StopGroupReplicationCommand returns the statement that makes the member leave its group.

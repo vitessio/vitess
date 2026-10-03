@@ -360,6 +360,7 @@ func ReadTopologyInstanceBufferable(tabletAlias *topodatapb.TabletAlias, latency
 		instance.GroupActiveMemberUUIDs = ActiveGroupMemberUUIDs(gr)
 		instance.GroupOnlineMemberUUIDs = OnlineGroupMemberUUIDs(gr)
 		instance.GroupViewID = gr.ViewId
+		instance.GroupStartInProgress = gr.StartInProgress
 	}
 
 	instanceFound = true
@@ -701,6 +702,7 @@ func readInstanceRow(m sqlutils.RowMap) (*Instance, error) {
 	instance.GroupActiveMemberUUIDs = splitGroupMemberUUIDs(m.GetString("gr_active_member_uuids"))
 	instance.GroupOnlineMemberUUIDs = splitGroupMemberUUIDs(m.GetString("gr_online_member_uuids"))
 	instance.GroupViewID = m.GetString("gr_view_id")
+	instance.GroupStartInProgress = m.GetBool("gr_start_in_progress")
 
 	var err error
 	instance.InstanceAlias, err = topoproto.ParseTabletAlias(m.GetString("alias"))
@@ -1023,6 +1025,7 @@ func mkInsertForInstances(instances []*Instance, instanceWasActuallyFound bool, 
 		"gr_active_member_uuids",
 		"gr_online_member_uuids",
 		"gr_view_id",
+		"gr_start_in_progress",
 	}
 
 	values := make([]string, len(columns))
@@ -1114,6 +1117,7 @@ func mkInsertForInstances(instances []*Instance, instanceWasActuallyFound bool, 
 		args = append(args, strings.Join(instance.GroupActiveMemberUUIDs, ","))
 		args = append(args, strings.Join(instance.GroupOnlineMemberUUIDs, ","))
 		args = append(args, instance.GroupViewID)
+		args = append(args, instance.GroupStartInProgress)
 	}
 
 	sql, err := mkInsert("database_instance", columns, values, len(instances), insertIgnore)

@@ -192,4 +192,10 @@ message GroupReplicationStatus {
   // starts Group Replication, so on an active member of a group that Vitess bootstrapped it is
   // the group's setting: a single consensus leader, the primary.
   bool paxos_single_leader = 12;
+  // start_in_progress is true while a START GROUP_REPLICATION runs on the member: MySQL lists it in
+  // performance_schema.processlist, even after its client gave up, or the tablet runs one itself.
+  // Such a START reports the member OFFLINE until it ends, for up to about a minute when it finds
+  // no group, and can still end with the member alone in a group of its own: the member is not
+  // active, but its membership is changing.
+  bool start_in_progress = 13;
 }

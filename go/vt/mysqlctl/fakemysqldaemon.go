@@ -31,6 +31,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/dbconnpool"
@@ -281,8 +282,10 @@ type FakeMysqlDaemon struct {
 
 	// groupReplicationFenceStatusReads counts the calls to GroupReplicationFenceStatus.
 	groupReplicationFenceStatusReads int
-	// startRunning is set while StartGroupReplicationFunc runs, and closed when it returns: like
-	// MySQL, GroupReplicationFenceStatus does not return the view id until then.
+	// startRunning is set while StartGroupReplicationFunc runs, and closed when it returns.
+	// GroupReplicationFenceStatus does not return the view id until then: MySQL holds it back for
+	// about a second while a START forms or joins a group, and the fake holds it back for the whole
+	// START, which is the worst case for its readers.
 	startRunning chan struct{}
 
 	// groupReplicationStatusHook is called after each read of the group replication status.
@@ -1010,7 +1013,16 @@ func (fmd *FakeMysqlDaemon) groupReplicationStatusLocked() (*replicationdatapb.G
 	if fmd.GroupReplication == nil {
 		return &replicationdatapb.GroupReplicationStatus{}, nil
 	}
-	return fmd.GroupReplication.CloneVT(), nil
+	status := fmd.GroupReplication.CloneVT()
+	// Like MySQL's processlist, the status shows a START GROUP_REPLICATION for as long as it runs.
+	status.StartInProgress = status.StartInProgress || fmd.startRunning != nil
+	return status, nil
+}
+
+// errGroupReplicationCommandRunning is how MySQL refuses a START or STOP GROUP_REPLICATION while a
+// START runs (errno 3663).
+func errGroupReplicationCommandRunning(command string) error {
+	return sqlerror.NewSQLErrorf(3663, "HY000", "The %s command encountered a failure. %s.", command, mysql.GroupReplicationCommandRunningMessage)
 }
 
 // SetGroupReplicationStatusHook sets a function that GroupReplicationStatus calls after each read
@@ -1036,9 +1048,9 @@ func (fmd *FakeMysqlDaemon) GroupReplicationApplierStatus(ctx context.Context) (
 }
 
 // GroupReplicationFenceStatus is part of the MysqlDaemon interface. It returns the status that
-// GroupReplicationStatus returns, and super_read_only. Like MySQL, it does not return the view id
-// while a START GROUP_REPLICATION runs (StartGroupReplicationFunc): it waits for it to return, or for
-// ctx to end. Without withView, it returns no view id.
+// GroupReplicationStatus returns, and super_read_only. It does not return the view id while a START
+// GROUP_REPLICATION runs (StartGroupReplicationFunc): it waits for it to return, or for ctx to end,
+// which is the worst case of MySQL's (see startRunning). Without withView, it returns no view id.
 func (fmd *FakeMysqlDaemon) GroupReplicationFenceStatus(ctx context.Context, withView bool) (*mysql.GroupReplicationFenceStatus, error) {
 	fmd.mu.Lock()
 	if running := fmd.startRunning; withView && running != nil {
@@ -1081,6 +1093,10 @@ func (fmd *FakeMysqlDaemon) ConfigureGroupReplication(ctx context.Context, cfg m
 	if fmd.GroupReplicationError != nil {
 		return fmd.GroupReplicationError
 	}
+	if fmd.startRunning != nil {
+		// Like MySQL, the configuration cannot change while a START runs.
+		return sqlerror.NewSQLError(3724, "HY000", "This option cannot be set while START or STOP GROUP_REPLICATION is ongoing.")
+	}
 	if len(fmd.ConfigureGroupReplicationErrors) > 0 {
 		err := fmd.ConfigureGroupReplicationErrors[0]
 		fmd.ConfigureGroupReplicationErrors = fmd.ConfigureGroupReplicationErrors[1:]
@@ -1115,6 +1131,9 @@ func (fmd *FakeMysqlDaemon) StartGroupReplication(ctx context.Context, bootstrap
 	}
 	if fmd.GroupReplication == nil || !fmd.GroupReplication.PluginActive {
 		return errors.New("group replication plugin is not loaded")
+	}
+	if fmd.startRunning != nil {
+		return errGroupReplicationCommandRunning("START GROUP_REPLICATION")
 	}
 	if mysql.IsGroupMemberActive(fmd.GroupReplication) {
 		return errors.New("group replication is already running")
@@ -1165,6 +1184,10 @@ func (fmd *FakeMysqlDaemon) StopGroupReplication(ctx context.Context) error {
 	fmd.GroupReplicationStopCalls++
 	if fmd.GroupReplicationError != nil {
 		return fmd.GroupReplicationError
+	}
+	if fmd.startRunning != nil {
+		// Like MySQL, a STOP is refused until the START in progress ends.
+		return errGroupReplicationCommandRunning("STOP GROUP_REPLICATION")
 	}
 	if fmd.GroupReplication != nil {
 		fmd.GroupReplication.MemberState = mysql.GroupMemberStateOffline

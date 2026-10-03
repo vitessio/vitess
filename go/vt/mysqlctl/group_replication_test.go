@@ -18,6 +18,7 @@ package mysqlctl
 
 import (
 	"context"
+	"strconv"
 	"testing"
 	"time"
 
@@ -51,6 +52,18 @@ func addGroupReplicationStatusQueries(db *fakesqldb.DB) {
 		sqltypes.MakeTestResult(sqltypes.MakeTestFields("VIEW_ID", "varchar"), "17907857441607796:3"))
 	db.AddQueryPattern(`SELECT RECEIVED_TRANSACTION_SET FROM performance_schema\.replication_connection_status .*`,
 		sqltypes.MakeTestResult(sqltypes.MakeTestFields("RECEIVED_TRANSACTION_SET", "varchar"), ""))
+	setGroupReplicationStartsInProgress(db, 0)
+}
+
+// groupReplicationProgressPattern matches the query that reads whether a START GROUP_REPLICATION
+// runs.
+const groupReplicationProgressPattern = `SELECT \(SELECT COUNT\(\*\) FROM performance_schema\.processlist WHERE INFO LIKE 'START GROUP_REPLICATION%'\) AS starts.*`
+
+// setGroupReplicationStartsInProgress makes the fake server list the given number of START
+// GROUP_REPLICATION statements in its processlist.
+func setGroupReplicationStartsInProgress(db *fakesqldb.DB, starts int) {
+	db.AddQueryPattern(groupReplicationProgressPattern,
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("starts", "int64"), strconv.Itoa(starts)))
 }
 
 // TestGroupReplicationStatusReadsSingleLeaderFromVariables checks that the status of an active
@@ -74,6 +87,60 @@ func TestGroupReplicationStatusReadsSingleLeaderFromVariables(t *testing.T) {
 	assert.Equal(t, "PRIMARY", status.MemberRole)
 	assert.Equal(t, "17907857441607796:3", status.ViewId)
 	assert.True(t, status.PaxosSingleLeader)
+	assert.False(t, status.StartInProgress)
+}
+
+// TestGroupReplicationStatusReportsStartInProgress checks that the status reports a START
+// GROUP_REPLICATION that MySQL lists in its processlist: such a START reports the member OFFLINE for
+// up to about a minute, also after its client gave up (sro-eval case A).
+func TestGroupReplicationStatusReportsStartInProgress(t *testing.T) {
+	db := fakesqldb.New(t)
+	t.Cleanup(db.Close)
+	params := db.ConnParams()
+	cp := *params
+	mysqld := NewMysqld(dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb"))
+	t.Cleanup(mysqld.Close)
+	addGroupReplicationStatusQueries(db)
+	db.AddQueryPattern(`SELECT MEMBER_ID, MEMBER_HOST, MEMBER_PORT, MEMBER_STATE, MEMBER_ROLE, MEMBER_VERSION FROM performance_schema\.replication_group_members .*`,
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("MEMBER_ID|MEMBER_HOST|MEMBER_PORT|MEMBER_STATE|MEMBER_ROLE|MEMBER_VERSION", "varchar|varchar|int32|varchar|varchar|varchar"),
+			testGroupMemberUUID+"|vm|3306|OFFLINE||8.4.11"))
+	setGroupReplicationStartsInProgress(db, 1)
+
+	status, err := mysqld.GroupReplicationStatus(t.Context())
+	require.NoError(t, err)
+	assert.Equal(t, mysql.GroupMemberStateOffline, status.MemberState)
+	assert.True(t, status.StartInProgress)
+}
+
+// TestStartGroupReplicationBootstrapRefusedWhileStartRuns checks that a bootstrap does not set
+// group_replication_bootstrap_group while a START GROUP_REPLICATION runs: MySQL accepts the flag then,
+// and could complete that START as a bootstrap (sro-eval case A). The refusal is UNAVAILABLE, and
+// says that a START runs, so that the tablet waits for it to end.
+func TestStartGroupReplicationBootstrapRefusedWhileStartRuns(t *testing.T) {
+	const bootstrapOn = "SET GLOBAL group_replication_bootstrap_group = ON"
+	db := fakesqldb.New(t)
+	t.Cleanup(db.Close)
+	params := db.ConnParams()
+	cp := *params
+	mysqld := NewMysqld(dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb"))
+	t.Cleanup(mysqld.Close)
+	db.AddQuery("SELECT 1", &sqltypes.Result{})
+	db.AddQuery(bootstrapOn, &sqltypes.Result{})
+	db.AddQuery("SET GLOBAL group_replication_bootstrap_group = OFF", &sqltypes.Result{})
+	db.AddQuery("START GROUP_REPLICATION", &sqltypes.Result{})
+	setGroupReplicationStartsInProgress(db, 1)
+
+	err := mysqld.StartGroupReplication(t.Context(), true)
+	require.Error(t, err)
+	assert.Equal(t, vtrpcpb.Code_UNAVAILABLE, vterrors.Code(err))
+	require.ErrorContains(t, err, mysql.GroupReplicationCommandRunningMessage)
+	assert.Zero(t, db.GetQueryCalledNum(bootstrapOn))
+	assert.Zero(t, db.GetQueryCalledNum("START GROUP_REPLICATION"))
+
+	setGroupReplicationStartsInProgress(db, 0)
+	require.NoError(t, mysqld.StartGroupReplication(t.Context(), true))
+	assert.Equal(t, 1, db.GetQueryCalledNum(bootstrapOn))
+	assert.Equal(t, 1, db.GetQueryCalledNum("START GROUP_REPLICATION"))
 }
 
 const groupReplicationApplierStatusPattern = `SELECT \(SELECT PLUGIN_STATUS FROM information_schema\.PLUGINS WHERE PLUGIN_NAME = 'group_replication'\) AS plugin_status, .*performance_schema\.replication_applier_status_by_worker .*performance_schema\.replication_applier_status_by_coordinator .*`
@@ -175,6 +242,7 @@ func TestStartGroupReplicationBootstrapTimeoutResetsFlag(t *testing.T) {
 	db.AddQuery(bootstrapOn, &sqltypes.Result{})
 	db.AddQuery(bootstrapOff, &sqltypes.Result{})
 	db.AddQueryPattern("kill .*", &sqltypes.Result{})
+	setGroupReplicationStartsInProgress(db, 0)
 	// The join outlives the caller's context, as when no seed answers.
 	db.AddQueryPatternWithCallback("START GROUP_REPLICATION.*", &sqltypes.Result{}, func(string) {
 		time.Sleep(500 * time.Millisecond)

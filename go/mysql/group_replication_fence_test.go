@@ -90,8 +90,8 @@ func TestParseGroupReplicationFenceStatus(t *testing.T) {
 }
 
 // TestGroupReplicationFenceStatusQueries checks that the query read while START GROUP_REPLICATION
-// runs leaves out performance_schema.replication_group_member_stats, which does not answer until the
-// START returns, and that both queries return the same columns.
+// runs leaves out performance_schema.replication_group_member_stats, which MySQL can hold back for
+// about a second while a START forms or joins a group, and that both queries return the same columns.
 func TestGroupReplicationFenceStatusQueries(t *testing.T) {
 	assert.Contains(t, readGroupReplicationFenceStatus, "replication_group_member_stats")
 	assert.NotContains(t, readGroupReplicationFenceStatusWithoutView, "replication_group_member_stats")

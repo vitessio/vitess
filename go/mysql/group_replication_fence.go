@@ -31,10 +31,14 @@ import (
 // is not in a group lists no member (performance_schema then shows its own row with an empty
 // MEMBER_ID), so the LEFT JOIN returns a single row whose member columns are NULL.
 //
-// %s is the view id's expression: performance_schema.replication_group_member_stats does not
-// answer while START GROUP_REPLICATION runs, for about a second after the member is ONLINE
-// (measured on MySQL 8.4.11), while replication_group_members already lists it as the primary of
-// the group it formed. readGroupReplicationFenceStatusWithoutView leaves it out.
+// %s is the view id's expression. While START GROUP_REPLICATION runs, a read of
+// performance_schema.replication_group_member_stats can block for about a second: when the START
+// forms a group, or is admitted to one, MySQL answers it only once the START returns, about a
+// second after replication_group_members lists the member as ONLINE, and as the primary of a group
+// it formed. Otherwise it answers at once, with no row (an empty view id), also during a START that
+// finds no group and runs for about a minute (both measured on MySQL 8.4.11). A reader that must
+// not wait, such as the fence check during one of the tablet's own STARTs, uses
+// readGroupReplicationFenceStatusWithoutView, which leaves it out.
 const readGroupReplicationFenceStatusFormat = "SELECT " +
 	"(SELECT PLUGIN_STATUS FROM information_schema.PLUGINS WHERE PLUGIN_NAME = 'group_replication') AS plugin_status, " +
 	"@@global.server_uuid AS server_uuid, @@global.super_read_only AS super_read_only, " +
@@ -65,8 +69,9 @@ type GroupReplicationFenceStatus struct {
 }
 
 // GroupReplicationFenceStatus reads the member's Group Replication state and super_read_only with a
-// single query, and the view id if withView is set: the view id does not answer while START
-// GROUP_REPLICATION runs. Status.PluginActive is false, and there is no error, when the plugin is
+// single query, and the view id if withView is set: reading the view id can block for about a second
+// while a START GROUP_REPLICATION forms or joins a group (see readGroupReplicationFenceStatusFormat).
+// Status.PluginActive is false, and there is no error, when the plugin is
 // not loaded.
 func (c *Conn) GroupReplicationFenceStatus(withView bool) (*GroupReplicationFenceStatus, error) {
 	query := readGroupReplicationFenceStatusWithoutView

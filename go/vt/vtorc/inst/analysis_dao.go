@@ -311,7 +311,8 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		MIN(primary_instance.gr_online_members) AS gr_online_members,
 		MIN(primary_instance.gr_active_member_uuids) AS gr_active_member_uuids,
 		MIN(primary_instance.gr_online_member_uuids) AS gr_online_member_uuids,
-		MIN(primary_instance.gr_view_id) AS gr_view_id
+		MIN(primary_instance.gr_view_id) AS gr_view_id,
+		MIN(primary_instance.gr_start_in_progress) AS gr_start_in_progress
 	FROM
 		vitess_tablet
 		JOIN vitess_keyspace ON (
@@ -406,6 +407,7 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 			hasQuorum:         m.GetBool("gr_has_quorum"),
 			primaryUUID:       m.GetString("gr_primary_uuid"),
 			activeMemberUUIDs: splitGroupMemberUUIDs(m.GetString("gr_active_member_uuids")),
+			startInProgress:   m.GetBool("gr_start_in_progress"),
 			status: groupRowStatus(m.GetBool("gr_plugin_active"), m.GetString("gr_member_state"), m.GetString("gr_member_role"),
 				m.GetBool("gr_has_quorum"), m.GetString("gr_primary_uuid"), m.GetString("gr_view_id"), splitGroupMemberUUIDs(m.GetString("gr_online_member_uuids"))),
 		})
@@ -515,6 +517,7 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		a.IsGroupMemberActive = isGroupMemberActive(a.GroupReplicationPluginActive, a.GroupMemberState)
 		a.IsGroupPrimary = isGroupPrimary(a.GroupReplicationPluginActive, a.GroupMemberState, a.GroupMemberRole, a.GroupHasQuorum)
 		a.GroupViewIncarnation = policy.GroupIncarnation(m.GetString("gr_view_id"))
+		a.GroupStartInProgress = m.GetBool("gr_start_in_progress")
 		a.ShardGroupIncarnation = m.GetString("shard_group_replication_incarnation")
 		a.IsGroupBootstrapIntentTarget = m.GetString("shard_group_replication_bootstrap_target") == topoproto.TabletAliasString(tablet.Alias)
 		if a.IsGroupMemberActive {

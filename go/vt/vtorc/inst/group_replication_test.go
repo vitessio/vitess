@@ -603,8 +603,10 @@ func TestGetDetectionAnalysisGroupReplicationLegitimateGroup(t *testing.T) {
 			alone.ReadOnly = 0
 			return []*test.InfoForRecoveryAnalysis{oldPrimary, member(grRow(replica, gr), mysql.GroupMemberStateOffline, "", false, nil), alone}
 		},
-		// The other voters may join the group of the recorded incarnation to restore its majority.
-		want: map[string]AnalysisCode{"zone1-0000000100": GroupMemberNotOnline, "zone1-0000000101": GroupMemberNotOnline},
+		// The other voters may join the group of the recorded incarnation to restore its majority. VTOrc
+		// does not join the old primary, whose record still says PRIMARY: its tablet runs as a REPLICA
+		// and rejoins on its own.
+		want: map[string]AnalysisCode{"zone1-0000000100": GroupMemberNotOnline, "zone1-0000000101": PrimaryCurrentTypeMismatch},
 	}, {
 		name: "group primary with a majority of the voters in the recorded incarnation is promoted",
 		rows: func() []*test.InfoForRecoveryAnalysis {
@@ -619,7 +621,7 @@ func TestGetDetectionAnalysisGroupReplicationLegitimateGroup(t *testing.T) {
 		},
 		want: map[string]AnalysisCode{
 			"zone2-0000000200": GroupPrimaryNotInTopo,
-			"zone1-0000000101": GroupMemberNotOnline,
+			"zone1-0000000101": PrimaryCurrentTypeMismatch,
 		},
 	}, {
 		// S7d after the fixes: VTOrc bootstrapped the group again on zone2, whose view holds one
@@ -1000,4 +1002,126 @@ func TestReadTopologyInstanceGroupReplication(t *testing.T) {
 	}, instance.GroupActiveMemberUUIDs, "an UNREACHABLE member is not active")
 	assert.True(t, instance.IsGroupMemberActive())
 	assert.False(t, instance.IsGroupPrimary())
+}
+
+// TestGetDetectionAnalysisGroupReplicationJoinTargets checks which voters VTOrc joins to their group,
+// and that it does not bootstrap a group while a START GROUP_REPLICATION is in progress:
+//   - A PRIMARY tablet, in the topology or in its own state, whose MySQL is out of its group is never
+//     joined: the tablet demotes itself first (a stale primary), and a join on it would hold its action
+//     lock for up to a minute meanwhile.
+//   - A voter whose START is still in progress is not joined again: MySQL refuses another START, and a
+//     STOP, until it ends.
+//   - While any voter's START is in progress, the group is not bootstrapped: that member reports
+//     OFFLINE for up to about a minute and can still end in a group of its own (sro-eval case A). Nor
+//     does the shard get a failover meanwhile.
+func TestGetDetectionAnalysisGroupReplicationJoinTargets(t *testing.T) {
+	resetPrimaryHealthState()
+	oldVoterGrace := config.GetGroupReplicationVoterReplacementGracePeriod()
+	config.SetGroupReplicationVoterReplacementGracePeriod(time.Hour)
+	t.Cleanup(func() {
+		config.SetGroupReplicationVoterReplacementGracePeriod(oldVoterGrace)
+		GroupReplicationConditions.Reset()
+		UnreachableGroupTablets.Reset()
+	})
+
+	stalePrimary := grTablet("zone1", 101, topodatapb.TabletType_PRIMARY)
+	replica := grTablet("zone1", 100, topodatapb.TabletType_REPLICA)
+	groupPrimaryTablet := grTablet("zone1", 100, topodatapb.TabletType_PRIMARY)
+	crossCellReplica := grTablet("zone2", 200, topodatapb.TabletType_REPLICA)
+	gr := policy.DurabilityGroupReplication
+	const recorded = "1790785744160779"
+
+	// group returns the shard whose group runs on 100 (its primary, and the shard primary) and 200,
+	// with the MySQL of the third voter, 101, OFFLINE.
+	group := func(third *test.InfoForRecoveryAnalysis) []*test.InfoForRecoveryAnalysis {
+		groupPrimary := sees(member(grRow(groupPrimaryTablet, gr), mysql.GroupMemberStateOnline, mysql.GroupMemberRolePrimary, true, replica), replica, crossCellReplica)
+		groupPrimary.ReadOnly = 0
+		secondary := sees(member(grRow(crossCellReplica, gr), mysql.GroupMemberStateOnline, mysql.GroupMemberRoleSecondary, true, replica), replica, crossCellReplica)
+		rows := []*test.InfoForRecoveryAnalysis{groupPrimary, secondary, third}
+		for _, row := range rows {
+			if row.GroupMemberState == mysql.GroupMemberStateOnline {
+				row.GroupViewID = recorded + ":7"
+			}
+		}
+		return rows
+	}
+	tests := []struct {
+		name string
+		rows func() []*test.InfoForRecoveryAnalysis
+		// notWant are analyses that no tablet may report.
+		notWant []AnalysisCode
+		// want is the analysis of the given tablets.
+		want map[string]AnalysisCode
+	}{{
+		name: "a PRIMARY tablet out of its group is not joined",
+		rows: func() []*test.InfoForRecoveryAnalysis {
+			return group(member(grRow(stalePrimary, gr), mysql.GroupMemberStateOffline, "", false, nil))
+		},
+		notWant: []AnalysisCode{GroupMemberNotOnline},
+	}, {
+		name: "a tablet that runs as PRIMARY, out of its group, is not joined",
+		rows: func() []*test.InfoForRecoveryAnalysis {
+			row := member(grRow(grTablet("zone1", 101, topodatapb.TabletType_REPLICA), gr), mysql.GroupMemberStateOffline, "", false, nil)
+			row.CurrentTabletType = int(topodatapb.TabletType_PRIMARY)
+			return group(row)
+		},
+		notWant: []AnalysisCode{GroupMemberNotOnline},
+	}, {
+		name: "a REPLICA out of its group is joined",
+		rows: func() []*test.InfoForRecoveryAnalysis {
+			return group(member(grRow(grTablet("zone1", 101, topodatapb.TabletType_REPLICA), gr), mysql.GroupMemberStateOffline, "", false, nil))
+		},
+		want: map[string]AnalysisCode{"zone1-0000000101": GroupMemberNotOnline},
+	}, {
+		name: "a voter whose START is in progress is not joined again",
+		rows: func() []*test.InfoForRecoveryAnalysis {
+			row := member(grRow(grTablet("zone1", 101, topodatapb.TabletType_REPLICA), gr), mysql.GroupMemberStateOffline, "", false, nil)
+			row.GroupStartInProgress = 1
+			return group(row)
+		},
+		notWant: []AnalysisCode{GroupMemberNotOnline, ClusterHasNoPrimary, PrimaryTabletDeleted},
+	}, {
+		name: "no group is bootstrapped while a voter's START is in progress",
+		rows: func() []*test.InfoForRecoveryAnalysis {
+			starting := member(grRow(grTablet("zone1", 101, topodatapb.TabletType_REPLICA), gr), mysql.GroupMemberStateOffline, "", false, nil)
+			starting.GroupStartInProgress = 1
+			return []*test.InfoForRecoveryAnalysis{
+				member(grRow(replica, gr), mysql.GroupMemberStateOffline, "", false, nil),
+				member(grRow(crossCellReplica, gr), mysql.GroupMemberStateOffline, "", false, nil),
+				starting,
+			}
+		},
+		notWant: []AnalysisCode{GroupNotBootstrapped, ClusterHasNoPrimary, PrimaryTabletDeleted, GroupMemberNotOnline},
+	}, {
+		name: "the group is bootstrapped once no START is in progress",
+		rows: func() []*test.InfoForRecoveryAnalysis {
+			return []*test.InfoForRecoveryAnalysis{
+				member(grRow(replica, gr), mysql.GroupMemberStateOffline, "", false, nil),
+				member(grRow(crossCellReplica, gr), mysql.GroupMemberStateOffline, "", false, nil),
+				member(grRow(grTablet("zone1", 101, topodatapb.TabletType_REPLICA), gr), mysql.GroupMemberStateOffline, "", false, nil),
+			}
+		},
+		want: map[string]AnalysisCode{"zone1-0000000100": GroupNotBootstrapped},
+	}}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			GroupReplicationConditions.Reset()
+			UnreachableGroupTablets.Reset()
+			rows := tt.rows()
+			for _, row := range rows {
+				row.ShardGroupReplicationVoters = voterList(stalePrimary, replica, crossCellReplica)
+				row.ShardGroupReplicationIncarnation = recorded
+			}
+			analyses := runAnalysis(t, rows)
+			got := analysisCodes(analyses)
+			for alias, code := range tt.want {
+				assert.Equal(t, code, got[alias], "tablet %s", alias)
+			}
+			for _, a := range analyses {
+				for _, problem := range a.AnalysisMatchedProblems {
+					assert.NotContains(t, tt.notWant, problem.Analysis, "tablet %s", topoproto.TabletAliasString(a.AnalyzedInstanceAlias))
+				}
+			}
+		})
+	}
 }

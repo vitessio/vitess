@@ -763,6 +763,22 @@ func TestBootstrapGroupReplication(t *testing.T) {
 			wantErrCode: vtrpcpb.Code_FAILED_PRECONDITION,
 		},
 		{
+			// sro-eval case A: a START that finds no group reports OFFLINE for up to about a minute,
+			// and can still end in a group of its own next to the one a bootstrap would create.
+			name: "a START GROUP_REPLICATION is in progress on a voter: nothing is bootstrapped",
+			statuses: [4]*replicationdatapb.FullStatus{
+				offline(groupName+":1-10", ""),
+				func() *replicationdatapb.FullStatus {
+					status := offline(groupName+":1-10", "")
+					status.GroupReplicationStatus.StartInProgress = true
+					return status
+				}(),
+				offline(groupName+":1-10", ""),
+				offline(groupName+":1-10", ""),
+			},
+			wantErrCode: vtrpcpb.Code_FAILED_PRECONDITION,
+		},
+		{
 			name: "a voter is unreachable: nothing is bootstrapped",
 			statuses: [4]*replicationdatapb.FullStatus{
 				offline(groupName+":1-10", ""),

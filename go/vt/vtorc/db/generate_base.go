@@ -117,6 +117,7 @@ CREATE TABLE database_instance (
 	gr_active_member_uuids text NOT NULL DEFAULT '',
 	gr_online_member_uuids text NOT NULL DEFAULT '',
 	gr_view_id varchar(128) NOT NULL DEFAULT '',
+	gr_start_in_progress TINYint NOT NULL DEFAULT 0,
 	PRIMARY KEY (alias)
 )`,
 	`

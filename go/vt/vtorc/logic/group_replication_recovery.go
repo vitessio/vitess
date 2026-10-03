@@ -640,6 +640,13 @@ func chooseGroupBootstrapCandidate(ctx context.Context, voters []*topodatapb.Tab
 		if mysql.IsGroupMemberActive(ts.status.GetGroupReplicationStatus()) {
 			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "the MySQL of %s is already an active group member", aliasString)
 		}
+		if ts.status.GetGroupReplicationStatus().GetStartInProgress() {
+			// The member reports OFFLINE, but its START can still end in a group: the one it was
+			// joining, or one of its own, next to the group a bootstrap would create. MySQL refuses to
+			// stop it, and to bootstrap that member, until it ends, within about a minute.
+			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+				"a START GROUP_REPLICATION is in progress on the MySQL of %s: not bootstrapping the group until it ends", aliasString)
+		}
 		if !isMember {
 			continue
 		}

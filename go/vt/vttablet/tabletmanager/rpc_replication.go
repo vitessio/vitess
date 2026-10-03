@@ -193,6 +193,15 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 	status.TabletType = tm.Tablet().Type
 	status.ShardPeerHealth = tm.shardPeerHealthSnapshot()
 	status.GroupReplicationEnabled = groupReplicationEnabled()
+	if tm.groupReplicationFence.starts.Load() > 0 {
+		// A join or a bootstrap of the tablet's own is in progress, which MySQL's processlist may not
+		// show yet (the START has not been sent) or anymore (it returned, and the tablet finishes the
+		// transition). VTOrc must not bootstrap another member meanwhile.
+		if status.GroupReplicationStatus == nil {
+			status.GroupReplicationStatus = &replicationdatapb.GroupReplicationStatus{}
+		}
+		status.GroupReplicationStatus.StartInProgress = true
+	}
 	// Every decision of the tablet that depends on the durability policy resolves the shard's own
 	// policy over its keyspace's (shardDurability). MigrateReplicationMode requires it on the voters.
 	status.ShardDurabilityPolicySupported = true

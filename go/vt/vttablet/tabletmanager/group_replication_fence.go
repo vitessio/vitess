@@ -234,8 +234,9 @@ func (s *groupReplicationSync) checkFence(ctx context.Context) {
 		return
 	}
 	epoch := tm.groupReplicationFence.epoch.Load()
-	// MySQL does not return the view id while one of the tablet's START GROUP_REPLICATION runs,
-	// which is when a join forms a group of its own: the check then decides on the members alone.
+	// MySQL can hold back the view id for about a second while one of the tablet's START
+	// GROUP_REPLICATION forms a group or is admitted to one, which is when a join forms a group of its
+	// own: the check then does not read it, and decides on the members alone.
 	withView := tm.groupReplicationFence.starts.Load() == 0
 	readCtx, cancel := context.WithTimeout(ctx, groupReplicationFenceTimeout)
 	fs, err := tm.MysqlDaemon.GroupReplicationFenceStatus(readCtx, withView)

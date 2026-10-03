@@ -413,17 +413,49 @@ func (tm *TabletManager) liftOfflineMode(ctx context.Context, reason string) err
 	return nil
 }
 
-// mysqlErrGroupReplicationCommandOngoing is the MySQL error that refuses a change of the Group
-// Replication configuration while START or STOP GROUP_REPLICATION is in progress.
-const mysqlErrGroupReplicationCommandOngoing = 3724
+// The MySQL errors that refuse a statement while START or STOP GROUP_REPLICATION is in progress:
+//   - mysqlErrGroupReplicationCommandOngoing refuses a change of the Group Replication configuration
+//     (SET GLOBAL group_replication_*).
+//   - mysqlErrGroupReplicationCommandFailure is MySQL's generic failure of a START or STOP
+//     GROUP_REPLICATION (ER_GROUP_REPLICATION_COMMAND_FAILURE); it refuses a STOP, and a second START,
+//     while a START runs with mysql.GroupReplicationCommandRunningMessage. A START that finds no group
+//     runs for about a minute, and a STOP fails that way for as long (verified on MySQL 8.4.11).
+const (
+	mysqlErrGroupReplicationCommandOngoing = 3724
+	mysqlErrGroupReplicationCommandFailure = 3663
+)
+
+var (
+	// groupReplicationStopOngoingStartTimeout bounds how long the tablet waits, under the action lock,
+	// for MySQL to accept the STOP GROUP_REPLICATION of a START in progress. MySQL refuses it until the
+	// START ends, which takes up to about a minute when the START finds no group: a caller that cannot
+	// wait that long gets UNAVAILABLE, and tries again later.
+	groupReplicationStopOngoingStartTimeout = 10 * time.Second
+	// groupReplicationStopOngoingStartRetry is how often the tablet tries that STOP again.
+	groupReplicationStopOngoingStartRetry = 1 * time.Second
+)
 
 // isGroupReplicationCommandOngoing returns whether MySQL refused a statement because START or STOP
-// GROUP_REPLICATION is in progress.
+// GROUP_REPLICATION is in progress: errno 3724, or errno 3663 with
+// mysql.GroupReplicationCommandRunningMessage (3663 also reports other failures of the command).
+// vterrors does not unwrap, so the error's text counts too.
 func isGroupReplicationCommandOngoing(err error) bool {
-	if sqlErr, ok := errors.AsType[*sqlerror.SQLError](err); ok && sqlErr.Number() == mysqlErrGroupReplicationCommandOngoing {
-		return true
+	if err == nil {
+		return false
 	}
-	return err != nil && strings.Contains(err.Error(), "START or STOP GROUP_REPLICATION is ongoing")
+	if sqlErr, ok := errors.AsType[*sqlerror.SQLError](err); ok {
+		switch sqlErr.Number() {
+		case mysqlErrGroupReplicationCommandOngoing:
+			return true
+		case mysqlErrGroupReplicationCommandFailure:
+			if strings.Contains(sqlErr.Message, mysql.GroupReplicationCommandRunningMessage) {
+				return true
+			}
+		}
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "START or STOP GROUP_REPLICATION is ongoing") ||
+		strings.Contains(msg, mysql.GroupReplicationCommandRunningMessage)
 }
 
 // isJoinWithoutGroup returns whether MySQL is RECOVERING while it sees no ONLINE member: a join
@@ -432,13 +464,37 @@ func isJoinWithoutGroup(status *replicationdatapb.GroupReplicationStatus) bool {
 	return status.GetPluginActive() && status.GetMemberState() == mysql.GroupMemberStateRecovering && mysql.OnlineGroupMembers(status) == 0
 }
 
-// stopOngoingGroupStartLocked stops Group Replication on a member whose join is in progress, and
-// returns its status afterwards.
+// stopOngoingGroupStartLocked stops Group Replication on a member whose START GROUP_REPLICATION is
+// in progress, and returns its status afterwards.
+//
+// MySQL refuses the STOP (errno 3663) until the START ends, for up to about a minute when the START
+// finds no group, and accepts it right after. The tablet tries again every
+// groupReplicationStopOngoingStartRetry, for at most groupReplicationStopOngoingStartTimeout or until
+// ctx ends, and then fails with UNAVAILABLE: the caller holds the action lock, which the tablet's
+// other RPCs and its sync loop need meanwhile.
 func (tm *TabletManager) stopOngoingGroupStartLocked(ctx context.Context) (*replicationdatapb.GroupReplicationStatus, error) {
-	if err := tm.MysqlDaemon.StopGroupReplication(ctx); err != nil {
-		return nil, vterrors.Wrapf(err, "failed to stop the group replication start in progress before the bootstrap")
+	deadline := time.Now().Add(groupReplicationStopOngoingStartTimeout)
+	for {
+		err := tm.MysqlDaemon.StopGroupReplication(ctx)
+		if err == nil {
+			return tm.groupReplicationStatus(ctx)
+		}
+		if !isGroupReplicationCommandOngoing(err) {
+			return nil, vterrors.Wrapf(err, "failed to stop the group replication start in progress")
+		}
+		wait := groupReplicationStopOngoingStartRetry
+		if remaining := time.Until(deadline); remaining < wait {
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE,
+				"a START GROUP_REPLICATION is still in progress on MySQL, which refuses to stop it until it ends (up to about a minute when it finds no group); try again later: %v", err)
+		}
+		log.Info("MySQL refuses to stop the START GROUP_REPLICATION in progress until it ends, trying again", slog.Duration("retry", wait), slog.Any("error", err))
+		select {
+		case <-ctx.Done():
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE,
+				"a START GROUP_REPLICATION is still in progress on MySQL, which refuses to stop it until it ends: %v (last error: %v)", ctx.Err(), err)
+		case <-time.After(wait):
+		}
 	}
-	return tm.groupReplicationStatus(ctx)
 }
 
 // joinGroupLocked configures Group Replication and starts it on a MySQL that is not an active

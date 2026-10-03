@@ -188,6 +188,27 @@ func (mysqld *Mysqld) StartGroupReplication(ctx context.Context, bootstrap bool)
 	}
 	defer conn.Recycle()
 
+	if bootstrap {
+		// MySQL accepts group_replication_bootstrap_group=ON while a START GROUP_REPLICATION runs, for
+		// example one whose client gave up, and such a START could then complete as a bootstrap: a
+		// second group. The caller holds the tablet's action lock, under which every START of the
+		// tablet runs, and MySQL never starts one on its own (start_on_boot and auto-rejoin are off),
+		// so none can begin between this check and the bootstrap.
+		var starting bool
+		err = mysqld.executeWithContext(ctx, conn, "group replication start in progress", func() error {
+			var queryErr error
+			starting, queryErr = conn.Conn.GroupReplicationStartInProgress()
+			return queryErr
+		})
+		if err != nil {
+			return err
+		}
+		if starting {
+			return vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE,
+				"refusing to set group_replication_bootstrap_group while a START GROUP_REPLICATION runs, which MySQL could complete as a bootstrap: %s",
+				mysql.GroupReplicationCommandRunningMessage)
+		}
+	}
 	cmds := mysql.StartGroupReplicationCommands(bootstrap)
 	log.Info(fmt.Sprintf("Starting group replication (bootstrap: %v)", bootstrap))
 	err = mysqld.executeSuperQueryListConn(ctx, conn, cmds)

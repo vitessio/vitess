@@ -289,6 +289,8 @@ type groupReplicationRow struct {
 	primaryUUID  string
 	// activeMemberUUIDs are the members that the tablet's MySQL last saw as active.
 	activeMemberUUIDs []string
+	// startInProgress is true when a START GROUP_REPLICATION ran on the tablet's MySQL, as last seen.
+	startInProgress bool
 	// status is the member's group replication status, as far as VTOrc stores it.
 	status *replicationdatapb.GroupReplicationStatus
 	// foreign is true when the member is active in a group of another incarnation than the one
@@ -308,10 +310,15 @@ type groupReplicationShardState struct {
 	// foreignMembers are the tablets whose MySQL is active in a group of another incarnation than
 	// the one the shard record lists.
 	foreignMembers map[string]bool
-	// anyActive is true when any tablet, reachable or not, last reported an active member. An
-	// unreachable tablet that was a member may still be one, so a new group must not be
-	// bootstrapped.
+	// anyActive is true when any tablet, reachable or not, last reported an active member, or a
+	// START GROUP_REPLICATION in progress. An unreachable tablet that was a member may still be one,
+	// so a new group must not be bootstrapped. Nor while a START runs: its member reports OFFLINE,
+	// for up to about a minute when it finds no group, and can still end as the primary of a group
+	// of its own, next to the one a bootstrap creates; MySQL also refuses to stop it until it ends.
 	anyActive bool
+	// anyMember is anyActive without the STARTs in progress: whether any tablet last reported an
+	// active member.
+	anyMember bool
 	// reachableNonMemberPrimary is true when VTOrc reached a tablet of type PRIMARY whose MySQL is
 	// not an active group member: the shard has a working primary outside of any group.
 	reachableNonMemberPrimary bool
@@ -364,6 +371,10 @@ func computeGroupReplicationShardState(durability policy.Durabler, incarnation s
 			reachable[topoproto.TabletAliasString(row.tablet.GetAlias())] = true
 		}
 		if row.active {
+			state.anyActive = true
+			state.anyMember = true
+		}
+		if row.startInProgress {
 			state.anyActive = true
 		}
 		if row.valid && !row.active && row.tablet.GetType() == topodatapb.TabletType_PRIMARY {
@@ -509,6 +520,7 @@ func applyGroupReplicationShardState(a *DetectionAnalysis, state *groupReplicati
 	a.ShardGroupDesiredVoters = state.desiredVoters
 	a.IsGroupVoter = policy.IsVoter(state.voters, a.AnalyzedInstanceAlias)
 	a.shardGroupAnyActive = state.anyActive
+	a.shardGroupAnyMember = state.anyMember
 	a.shardReachableNonMemberPrimary = state.reachableNonMemberPrimary
 	a.isGroupVotersReporter = state.votersOutOfDate && topoproto.TabletAliasEqual(state.votersReporter, a.AnalyzedInstanceAlias)
 }
@@ -520,10 +532,17 @@ func isGroupSecondary(a *DetectionAnalysis) bool {
 }
 
 // groupNeedsBootstrap returns whether the shard's durability policy uses Group Replication but no
-// tablet of the shard is known to be an active member. Such a shard gets a primary by
-// bootstrapping its group (GroupNotBootstrapped), not by a reparent.
+// tablet of the shard is known to be an active member, nor to run a START GROUP_REPLICATION. Such a
+// shard gets a primary by bootstrapping its group (GroupNotBootstrapped), not by a reparent.
 func groupNeedsBootstrap(a *DetectionAnalysis, ca *clusterAnalysis) bool {
 	return policy.IsGroupReplication(ca.durability) && !a.shardGroupAnyActive
+}
+
+// groupHasNoMember returns whether the shard's durability policy uses Group Replication but no tablet
+// of the shard is known to be an active member. Such a shard gets a primary by bootstrapping its
+// group, or once a START in progress ends, not by a reparent.
+func groupHasNoMember(a *DetectionAnalysis, ca *clusterAnalysis) bool {
+	return policy.IsGroupReplication(ca.durability) && !a.shardGroupAnyMember
 }
 
 // matchGroupNotBootstrapped returns whether the shard's group must be bootstrapped: its durability
@@ -557,8 +576,13 @@ func matchGroupBootstrapNotRecorded(a *DetectionAnalysis, ca *clusterAnalysis) b
 // join anything: the join blocks until MySQL's join timeout, during which a bootstrap on the
 // member fails, and a member has been seen to form a group of its own. Tablets that are not
 // voters replicate asynchronously and keep the asynchronous replication analyses.
+//
+// A PRIMARY tablet never matches: its MySQL out of its group makes it a stale primary, which the
+// tablet demotes on its own first, and the tablet refuses a join meanwhile (a join holds its action
+// lock for up to a minute, which keeps the demotion from running).
 func matchGroupMemberNotOnline(a *DetectionAnalysis, ca *clusterAnalysis) bool {
 	return policy.IsGroupReplication(ca.durability) && a.IsGroupVoter &&
+		a.TabletType != topodatapb.TabletType_PRIMARY && a.CurrentTabletType != topodatapb.TabletType_PRIMARY &&
 		a.LastCheckValid && !a.IsGroupMemberActive && !a.IsGroupMemberForeign && a.ShardGroupLegitimateActiveMembers > 0
 }
 

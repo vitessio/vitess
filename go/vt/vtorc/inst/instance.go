@@ -118,6 +118,10 @@ type Instance struct {
 	// GroupViewID is the id of this member's view of its group. Its incarnation (the part before
 	// the ':') identifies the group.
 	GroupViewID string
+	// GroupStartInProgress is true while a START GROUP_REPLICATION runs on this MySQL (see
+	// replicationdata.GroupReplicationStatus.start_in_progress): the member reports OFFLINE, but its
+	// membership is changing.
+	GroupStartInProgress bool
 
 	LastSeenTimestamp    string
 	IsLastCheckValid     bool

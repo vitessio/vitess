@@ -257,6 +257,7 @@ func (m *GroupReplicationStatus) CloneVT() *GroupReplicationStatus {
 	r.SinglePrimaryMode = m.SinglePrimaryMode
 	r.MemberWeight = m.MemberWeight
 	r.PaxosSingleLeader = m.PaxosSingleLeader
+	r.StartInProgress = m.StartInProgress
 	if rhs := m.Members; rhs != nil {
 		tmpContainer := make([]*GroupReplicationMember, len(rhs))
 		for k, v := range rhs {
@@ -1244,6 +1245,16 @@ func (m *GroupReplicationStatus) MarshalToSizedBufferVT(dAtA []byte) (int, error
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.StartInProgress {
+		i--
+		if m.StartInProgress {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x68
+	}
 	if m.PaxosSingleLeader {
 		i--
 		if m.PaxosSingleLeader {
@@ -1757,6 +1768,9 @@ func (m *GroupReplicationStatus) SizeVT() (n int) {
 		n += 1 + protohelpers.SizeOfVarint(uint64(m.MemberWeight))
 	}
 	if m.PaxosSingleLeader {
+		n += 2
+	}
+	if m.StartInProgress {
 		n += 2
 	}
 	n += len(m.unknownFields)
@@ -4500,6 +4514,26 @@ func (m *GroupReplicationStatus) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.PaxosSingleLeader = bool(v != 0)
+		case 13:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field StartInProgress", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.StartInProgress = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])

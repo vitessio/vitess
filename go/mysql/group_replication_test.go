@@ -22,6 +22,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 )
@@ -153,4 +154,36 @@ func TestGroupReplicationCommands(t *testing.T) {
 		"  SOURCE_PASSWORD = 'p\\'w',\n"+
 		"  SOURCE_USER = 'vt_repl'\n"+
 		"  FOR CHANNEL 'group_replication_recovery'", GroupReplicationCredentialsCommand("vt_repl", "p'w"))
+}
+
+// TestGroupReplicationStatusProgressRoundTrip checks the new fields of GroupReplicationStatus through
+// the generated marshalling code: the vtprotobuf functions and the reflection-based ones agree, and a
+// status without them encodes as before, so that readers that do not know them skip them.
+func TestGroupReplicationStatusProgressRoundTrip(t *testing.T) {
+	status := &replicationdatapb.GroupReplicationStatus{
+		PluginActive:      true,
+		GroupName:         "f2758c3b-42d2-5bef-9eb7-01b4c747900d",
+		MemberState:       GroupMemberStateOffline,
+		PaxosSingleLeader: true,
+		StartInProgress:   true,
+	}
+	vt, err := status.MarshalVT()
+	require.NoError(t, err)
+	assert.Len(t, vt, status.SizeVT())
+	reflected, err := proto.Marshal(status)
+	require.NoError(t, err)
+
+	fromVT := &replicationdatapb.GroupReplicationStatus{}
+	require.NoError(t, proto.Unmarshal(vt, fromVT))
+	assert.True(t, proto.Equal(status, fromVT), "vtprotobuf encoding, reflection decoding")
+	fromReflected := &replicationdatapb.GroupReplicationStatus{}
+	require.NoError(t, fromReflected.UnmarshalVT(reflected))
+	assert.True(t, proto.Equal(status, fromReflected), "reflection encoding, vtprotobuf decoding")
+	assert.True(t, proto.Equal(status, status.CloneVT()))
+
+	without := status.CloneVT()
+	without.StartInProgress = false
+	old, err := without.MarshalVT()
+	require.NoError(t, err)
+	assert.Equal(t, old, vt[:len(old)], "the new fields are encoded after the existing ones")
 }

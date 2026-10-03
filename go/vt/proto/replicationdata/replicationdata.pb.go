@@ -1010,8 +1010,14 @@ type GroupReplicationStatus struct {
 	// starts Group Replication, so on an active member of a group that Vitess bootstrapped it is
 	// the group's setting: a single consensus leader, the primary.
 	PaxosSingleLeader bool `protobuf:"varint,12,opt,name=paxos_single_leader,json=paxosSingleLeader,proto3" json:"paxos_single_leader,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// start_in_progress is true while a START GROUP_REPLICATION runs on the member: MySQL lists it in
+	// performance_schema.processlist, even after its client gave up, or the tablet runs one itself.
+	// Such a START reports the member OFFLINE until it ends, for up to about a minute when it finds
+	// no group, and can still end with the member alone in a group of its own: the member is not
+	// active, but its membership is changing.
+	StartInProgress bool `protobuf:"varint,13,opt,name=start_in_progress,json=startInProgress,proto3" json:"start_in_progress,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *GroupReplicationStatus) Reset() {
@@ -1128,6 +1134,13 @@ func (x *GroupReplicationStatus) GetPaxosSingleLeader() bool {
 	return false
 }
 
+func (x *GroupReplicationStatus) GetStartInProgress() bool {
+	if x != nil {
+		return x.StartInProgress
+	}
+	return false
+}
+
 var File_replicationdata_proto protoreflect.FileDescriptor
 
 const file_replicationdata_proto_rawDesc = "" +
@@ -1229,7 +1242,7 @@ const file_replicationdata_proto_rawDesc = "" +
 	"\x04port\x18\x03 \x01(\x05R\x04port\x12\x14\n" +
 	"\x05state\x18\x04 \x01(\tR\x05state\x12\x12\n" +
 	"\x04role\x18\x05 \x01(\tR\x04role\x12\x18\n" +
-	"\aversion\x18\x06 \x01(\tR\aversion\"\xfd\x03\n" +
+	"\aversion\x18\x06 \x01(\tR\aversion\"\xa9\x04\n" +
 	"\x16GroupReplicationStatus\x12#\n" +
 	"\rplugin_active\x18\x01 \x01(\bR\fpluginActive\x12\x1d\n" +
 	"\n" +
@@ -1246,7 +1259,8 @@ const file_replicationdata_proto_rawDesc = "" +
 	"\x13single_primary_mode\x18\n" +
 	" \x01(\bR\x11singlePrimaryMode\x12#\n" +
 	"\rmember_weight\x18\v \x01(\x05R\fmemberWeight\x12.\n" +
-	"\x13paxos_single_leader\x18\f \x01(\bR\x11paxosSingleLeader*;\n" +
+	"\x13paxos_single_leader\x18\f \x01(\bR\x11paxosSingleLeader\x12*\n" +
+	"\x11start_in_progress\x18\r \x01(\bR\x0fstartInProgress*;\n" +
 	"\x13StopReplicationMode\x12\x12\n" +
 	"\x0eIOANDSQLTHREAD\x10\x00\x12\x10\n" +
 	"\fIOTHREADONLY\x10\x01B.Z,vitess.io/vitess/go/vt/proto/replicationdatab\x06proto3"

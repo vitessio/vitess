@@ -208,6 +208,9 @@ type DetectionAnalysis struct {
 	// IsGroupPrimary is true when the analyzed tablet's MySQL is the ONLINE primary of a group
 	// that has quorum.
 	IsGroupPrimary bool
+	// GroupStartInProgress is true when a START GROUP_REPLICATION runs on the analyzed tablet's
+	// MySQL, as last seen: it reports OFFLINE, but its membership is changing.
+	GroupStartInProgress bool
 	// ShardGroupActiveMembers is the number of tablets of the shard that VTOrc reached on its
 	// last check and whose MySQL is an active group member.
 	ShardGroupActiveMembers uint
@@ -254,8 +257,11 @@ type DetectionAnalysis struct {
 	// are not voters replicate asynchronously from the primary.
 	IsGroupVoter bool
 	// shardGroupAnyActive is true when any tablet of the shard, reachable or not, last reported
-	// an active member.
+	// an active member, or a START GROUP_REPLICATION in progress.
 	shardGroupAnyActive bool
+	// shardGroupAnyMember is true when any tablet of the shard, reachable or not, last reported an
+	// active member: shardGroupAnyActive without the STARTs in progress.
+	shardGroupAnyMember bool
 	// shardReachableNonMemberPrimary is true when VTOrc reached a PRIMARY tablet of the shard whose
 	// MySQL is not an active group member.
 	shardReachableNonMemberPrimary bool
