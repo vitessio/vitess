@@ -77,6 +77,10 @@ type MysqlDaemon interface {
 	// GroupReplicationApplierStatus returns the member's own state and how far its applier is
 	// behind its group, with a single query, for replication lag tracking.
 	GroupReplicationApplierStatus(ctx context.Context) (*mysql.GroupReplicationApplierStatus, error)
+	// GroupReplicationFenceStatus returns the member's state, view and super_read_only, with a
+	// single query, for the tablet's fast check of whether its MySQL must be fenced. The view id is
+	// only read if withView is set: MySQL does not return it while START GROUP_REPLICATION runs.
+	GroupReplicationFenceStatus(ctx context.Context, withView bool) (*mysql.GroupReplicationFenceStatus, error)
 	ConfigureGroupReplication(ctx context.Context, cfg mysql.GroupReplicationConfig) error
 	StartGroupReplication(ctx context.Context, bootstrap bool) error
 	StopGroupReplication(ctx context.Context) error

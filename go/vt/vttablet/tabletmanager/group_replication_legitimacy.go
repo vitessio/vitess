@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -141,6 +142,9 @@ type shardGroupRecord struct {
 	// durabilityPolicy is the shard's own durability policy, "" if the shard record does not set
 	// one (see TabletManager.shardDurability).
 	durabilityPolicy string
+	// intent is the shard's bootstrap intent, if it applies to the recorded incarnation (see
+	// reparentutil.CurrentGroupReplicationBootstrapIntent).
+	intent *topodatapb.GroupReplicationBootstrapIntent
 	// tablets are the tablet records of the shard, by alias, read at tabletsRead.
 	tablets     map[string]*topodatapb.Tablet
 	tabletsRead time.Time
@@ -161,6 +165,7 @@ func (tm *TabletManager) readShardGroupRecord(ctx context.Context, prev *shardGr
 		voters:           si.GetGroupReplicationVoters(),
 		primaryAlias:     si.PrimaryAlias,
 		durabilityPolicy: si.GetDurabilityPolicy(),
+		intent:           reparentutil.CurrentGroupReplicationBootstrapIntent(si.Shard),
 		tablets:          make(map[string]*topodatapb.Tablet),
 	}
 	tm.groupReplicationTopo.setVoters(rec.voters)
@@ -406,7 +411,11 @@ var errNoLegitimateGroupToJoin = vterrors.New(vtrpcpb.Code_UNAVAILABLE, "no othe
 
 // leaveForeignGroupLocked makes MySQL leave a group that is not the shard's legitimate group:
 // MySQL formed or joined a group of another incarnation than the one the shard record lists, and
-// that group does not hold the shard's acknowledged transactions. MySQL stays super_read_only.
+// that group does not hold the shard's acknowledged transactions. MySQL is fenced with
+// super_read_only first: MySQL makes the primary of such a group writable, and its STOP
+// GROUP_REPLICATION took 4.7s in the chaos tests, during which clients that write to MySQL directly
+// could commit transactions that the shard's group does not have (doc/failover-audit/
+// GroupReplication.md, "A join can form a group of one"). MySQL stays super_read_only afterwards.
 // The tablet's own rejoins are not suspended: like any rejoin, the next one only starts once
 // another tablet reports an active member of the legitimate group (checkLegitimateGroupToJoin).
 // Waiting for VTOrc instead kept such a member out of its group until the group had a primary
@@ -421,6 +430,16 @@ func (tm *TabletManager) leaveForeignGroupLocked(ctx context.Context, status *re
 		slog.String("state", status.GetMemberState()),
 		slog.String("role", status.GetMemberRole()),
 		slog.Int("online_members", mysql.OnlineGroupMembers(status)))
+	if f := &tm.groupReplicationFence; mysql.IsGroupPrimary(status) {
+		// Fence first: the demotion below may wait for the topology, and MySQL's leave takes
+		// seconds, during which MySQL would take writes. Under the action lock, the decision stands.
+		if _, ok := f.decide(f.epoch.Load(), groupReplicationUnrecordedIncarnation, func() bool { return false }); ok {
+			if err := tm.setFenceSuperReadOnly(ctx); err != nil {
+				log.Error("Group replication: failed to fence MySQL with super_read_only before it leaves the foreign group", slog.Any("error", err))
+			}
+			f.unlock()
+		}
+	}
 	if tm.Tablet().Type == topodatapb.TabletType_PRIMARY {
 		// Stop serving before MySQL leaves; the group this tablet followed is not the shard's. The
 		// record is published in the background if the topology server does not answer in time.
@@ -430,5 +449,8 @@ func (tm *TabletManager) leaveForeignGroupLocked(ctx context.Context, status *re
 	}
 	if err := tm.MysqlDaemon.StopGroupReplication(ctx); err != nil {
 		log.Error("Group replication: failed to leave the foreign group", slog.Any("error", err))
+		return
 	}
+	// MySQL is out of any group, and Group Replication keeps it super_read_only.
+	tm.groupReplicationFence.reset()
 }

@@ -19,6 +19,8 @@ package tabletmanager
 import (
 	"context"
 	"log/slog"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"vitess.io/vitess/go/mysql"
@@ -108,10 +110,26 @@ type groupReplicationSync struct {
 	// uuidsWarmed is when the loop last asked the voters whose server_uuid the tablet does not
 	// know for it in the background.
 	uuidsWarmed time.Time
+
+	// wake makes the loop run right away, and refresh makes its next run read the shard record and
+	// the durability policy from the topology. The fence check (checkFence), which runs in its own
+	// goroutine, asks for both after it fenced MySQL.
+	wake    chan struct{}
+	refresh atomic.Bool
 }
 
 func newGroupReplicationSync(tm *TabletManager) *groupReplicationSync {
-	return &groupReplicationSync{tm: tm}
+	return &groupReplicationSync{tm: tm, wake: make(chan struct{}, 1)}
+}
+
+// requestRefresh makes the loop run right away, and read the shard record and the durability
+// policy from the topology in that run. It does not wait.
+func (s *groupReplicationSync) requestRefresh() {
+	s.refresh.Store(true)
+	select {
+	case s.wake <- struct{}{}:
+	default:
+	}
 }
 
 // startGroupReplicationSync starts the group replication sync loop if the tablet supports
@@ -131,9 +149,12 @@ func (tm *TabletManager) startGroupReplicationSync() {
 	tm._groupReplicationSyncDone = done
 
 	s := newGroupReplicationSync(tm)
+	var wg sync.WaitGroup
+	wg.Go(func() { s.run(ctx, groupReplicationSyncInterval) })
+	wg.Go(func() { s.runFenceCheck(ctx, groupReplicationFenceCheckInterval) })
 	go func() {
-		defer close(done)
-		s.run(ctx, groupReplicationSyncInterval)
+		wg.Wait()
+		close(done)
 	}()
 }
 
@@ -153,7 +174,7 @@ func (tm *TabletManager) stopGroupReplicationSync() {
 }
 
 func (s *groupReplicationSync) run(ctx context.Context, interval time.Duration) {
-	log.Info("Starting the group replication sync loop", slog.Duration("interval", interval))
+	log.Info("Starting the group replication sync loop", slog.Duration("interval", interval), slog.Duration("fence_check_interval", groupReplicationFenceCheckInterval))
 	s.loopCtx = ctx
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
@@ -162,6 +183,7 @@ func (s *groupReplicationSync) run(ctx context.Context, interval time.Duration) 
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
+		case <-s.wake:
 		}
 		stepCtx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 		s.reconcile(stepCtx)
@@ -172,6 +194,11 @@ func (s *groupReplicationSync) run(ctx context.Context, interval time.Duration) 
 // reconcile runs one iteration of the sync loop.
 func (s *groupReplicationSync) reconcile(ctx context.Context) {
 	tm := s.tm
+	if s.refresh.Swap(false) {
+		// The fence check asked for the shard record and the durability policy to be read again.
+		s.recordRead = time.Time{}
+		s.durabilityRead = time.Time{}
+	}
 	// The not-serving decisions made from here on are based on the status read below: a reason set
 	// after this point by another component (a bootstrap RPC) is never cleared by this run.
 	_, gen := tm.tmState.GroupReplicationNotServingState()
@@ -413,6 +440,10 @@ func (s *groupReplicationSync) promote(ctx context.Context, tabletType topodatap
 	}
 	legitimate := tm.legitimateGroup(ctx, rec, status, true)
 	if legitimate.IsForeignIncarnation(status) {
+		if rec.adoptableByIntent(tm.tabletAlias, policy.GroupIncarnation(status.GetViewId()), time.Now()) {
+			// VTOrc asked for this group and adopts it: it is not foreign, nor legitimate yet.
+			return
+		}
 		tm.leaveForeignGroupLocked(ctx, status, rec.incarnation)
 		return
 	}
@@ -622,7 +653,7 @@ func (s *groupReplicationSync) enforceVoterMajority(ctx context.Context, status 
 		}
 		return
 	}
-	if current != "" {
+	if current != "" || tm.groupReplicationFence.fenced.Load() {
 		s.serveAgain(ctx, durability, rec)
 	}
 }
@@ -670,6 +701,7 @@ func (s *groupReplicationSync) serveAgain(ctx context.Context, durability policy
 	}
 	defer tm.unlock()
 	_, gen := tm.tmState.GroupReplicationNotServingState()
+	fences := tm.groupReplicationFence.snapshot()
 	status, err := tm.groupReplicationStatus(ctx)
 	if err != nil {
 		log.Warn("Group replication sync: cannot read the group replication status, the primary does not serve yet", slog.Any("error", err))
@@ -683,6 +715,10 @@ func (s *groupReplicationSync) serveAgain(ctx context.Context, durability policy
 		if err := tm.tmState.SetGroupReplicationNotServing(ctx, reason); err != nil {
 			log.Error("Group replication sync: failed to change the serving state of the primary", slog.Any("error", err))
 		}
+		return
+	}
+	// MySQL takes writes again before the tablet serves, if the fence check fenced it.
+	if !tm.liftGroupReplicationFenceLocked(ctx, fences) {
 		return
 	}
 	cleared, err := tm.tmState.ClearGroupReplicationNotServing(ctx, gen)
@@ -795,6 +831,12 @@ func (s *groupReplicationSync) warmVoterServerUUIDs(ctx context.Context) {
 // isForeignGroup returns whether MySQL is an active member of a group of another incarnation
 // than the one the shard record lists, and that this tablet did not bootstrap a moment ago. A
 // mismatch with the cached record is confirmed with a fresh read before it counts.
+//
+// The new group of which MySQL is the primary while a live bootstrap intent names this tablet is
+// not foreign either: VTOrc adopts it (see shardGroupRecord.adoptableByIntent), whether it is the
+// group of a bootstrap whose reply was lost or a group of its own that a join of the intent's target
+// ended in. Leaving it would leave VTOrc nothing to adopt. The tablet does not serve it until its
+// incarnation is recorded (the serving invariant), and the fence check does not fence it either.
 func (s *groupReplicationSync) isForeignGroup(ctx context.Context, status *replicationdatapb.GroupReplicationStatus) bool {
 	incarnation := policy.GroupIncarnation(status.GetViewId())
 	if incarnation == "" || incarnation == s.tm.groupReplicationPeers.recentlyBootstrapped() {
@@ -806,6 +848,9 @@ func (s *groupReplicationSync) isForeignGroup(ctx context.Context, status *repli
 	}
 	rec, err = s.getRecord(ctx, true)
 	if err != nil {
+		return false
+	}
+	if mysql.IsGroupPrimary(status) && rec.adoptableByIntent(s.tm.tabletAlias, incarnation, time.Now()) {
 		return false
 	}
 	return rec.incarnation != "" && rec.incarnation != incarnation

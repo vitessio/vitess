@@ -19,9 +19,11 @@ package tabletmanager
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/hook"
@@ -152,6 +154,9 @@ func (tm *TabletManager) changeTypeWithGroupRecordLocked(ctx context.Context, ta
 		return fmt.Errorf("Tablet: %v, is already drained", tm.tabletAlias)
 	}
 
+	// settle is set when the tablet becomes a PRIMARY that may serve: MySQL takes writes from then
+	// on, unless a fence was decided since the snapshot fences (see groupReplicationFence).
+	settle, fences := false, uint64(0)
 	// Only the group decides which member of a replication group is writable, so a group
 	// secondary cannot become PRIMARY. Check before the tablet record changes.
 	if tabletType == topodatapb.TabletType_PRIMARY {
@@ -163,12 +168,42 @@ func (tm *TabletManager) changeTypeWithGroupRecordLocked(ctx context.Context, ta
 		// MySQL reports it now, under the action lock. Every promotion goes through here: the
 		// sync loop's, PromoteReplica (PRS, ERS and VTOrc), InitPrimary, ReplicaWasPromoted and
 		// ChangeType.
-		if _, err := tm.applyGroupReplicationServingDecisionLocked(ctx, rec); err != nil {
+		//
+		// The fence check may fence MySQL meanwhile, without the action lock: a fence decided
+		// since the snapshot below stands (see groupReplicationFence).
+		fence := &tm.groupReplicationFence
+		fences = fence.snapshot()
+		reason, err := tm.applyGroupReplicationServingDecisionLocked(ctx, rec)
+		if err != nil {
 			return vterrors.Wrapf(err, "cannot change the tablet type to PRIMARY")
 		}
+		if reason == "" && fence.decidedSince(fences) {
+			reason = fence.lastReason()
+			log.Warn("Group replication: MySQL was fenced while the tablet decided to serve as the primary", slog.String("reason", reason))
+			if err := tm.tmState.SetGroupReplicationNotServing(ctx, reason); err != nil {
+				return vterrors.Wrapf(err, "cannot change the tablet type to PRIMARY")
+			}
+		}
+		if fence.fenced.Load() {
+			// The fence check made MySQL super_read_only. Only a decision that the tablet may serve
+			// lifts it: otherwise MySQL stays fenced, and the tablet becomes a PRIMARY that does not
+			// serve.
+			if reason != "" {
+				action = DBActionNone
+			} else if err := tm.setGroupPrimaryWritable(ctx); err != nil {
+				return vterrors.Wrapf(err, "cannot change the tablet type to PRIMARY: cannot lift the fence of MySQL")
+			}
+		}
+		settle = reason == ""
 	}
 
-	if err := tm.tmState.ChangeTabletType(ctx, tabletType, action); err != nil {
+	err := tm.tmState.ChangeTabletType(ctx, tabletType, action)
+	if settle {
+		// MySQL may take writes now. If a fence was decided meanwhile, MySQL is fenced again, and
+		// the tablet does not serve.
+		tm.settleGroupReplicationFenceLocked(ctx, fences)
+	}
+	if err != nil {
 		return err
 	}
 

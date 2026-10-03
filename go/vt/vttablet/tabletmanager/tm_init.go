@@ -246,6 +246,9 @@ type TabletManager struct {
 	// shard's durability policy, voters and tablets, for the group replication
 	// RPCs that must not wait for a topology server that does not answer.
 	groupReplicationTopo groupReplicationTopoCache
+	// groupReplicationFence is what the fence check knows about the joins and bootstraps of the
+	// tablet's MySQL, and about the fence it set (see groupReplicationFence).
+	groupReplicationFence groupReplicationFence
 
 	// _lockTablesConnection is used to get and release the table read locks to pause replication
 	_lockTablesConnection *dbconnpool.DBConnection

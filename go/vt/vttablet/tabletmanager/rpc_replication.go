@@ -892,7 +892,10 @@ func (tm *TabletManager) UndoDemotePrimary(ctx context.Context, semiSync bool) e
 	// A group replication member can only serve as the primary while it is the group primary.
 	// Check before anything changes. A not-serving reason set after the status is read is decided
 	// on a newer state, and stands (see below).
+	// The fence check may fence MySQL meanwhile, without the action lock: a fence decided since the
+	// snapshot below stands (see groupReplicationFence).
 	_, servingGen := tm.tmState.GroupReplicationNotServingState()
+	fences := tm.groupReplicationFence.snapshot()
 	groupStatus, err := tm.groupReplicationStatus(ctx)
 	if err != nil {
 		return err
@@ -943,14 +946,29 @@ func (tm *TabletManager) UndoDemotePrimary(ctx context.Context, semiSync bool) e
 			return err
 		}
 		if ti.Type == topodatapb.TabletType_PRIMARY {
+			if tm.groupReplicationFence.decidedSince(fences) {
+				return errFencedDuringUndoDemotePrimary
+			}
 			tm.tmState.ClearGroupReplicationNotServingBeforeChange(servingGen)
-			return tm.tmState.updateTypeAndPublish(ctx, topodatapb.TabletType_PRIMARY, ti.PrimaryTermStartTime, DBActionSetReadWrite, 0)
+			err := tm.tmState.updateTypeAndPublish(ctx, topodatapb.TabletType_PRIMARY, ti.PrimaryTermStartTime, DBActionSetReadWrite, 0)
+			if !tm.settleGroupReplicationFenceLocked(ctx, fences) {
+				return errFencedDuringUndoDemotePrimary
+			}
+			return err
 		}
 	}
 
+	if tm.groupReplicationFence.decidedSince(fences) {
+		return errFencedDuringUndoDemotePrimary
+	}
 	// We need to redo the prepared transactions in read only mode using the dba user to ensure we don't lose them.
 	if err = tm.redoPreparedTransactionsAndSetReadWrite(ctx); err != nil {
 		return err
+	}
+	// The decision above holds, and lifts a fence that the fence check set, unless the check fenced
+	// MySQL again meanwhile: MySQL is then fenced again, and the tablet does not serve.
+	if !tm.settleGroupReplicationFenceLocked(ctx, fences) {
+		return errFencedDuringUndoDemotePrimary
 	}
 
 	// Update serving graph. A not-serving reason set since the decision above stands.
@@ -961,6 +979,12 @@ func (tm *TabletManager) UndoDemotePrimary(ctx context.Context, semiSync bool) e
 	}
 	return nil
 }
+
+// errFencedDuringUndoDemotePrimary is returned by UndoDemotePrimary when the tablet's fence check
+// fenced MySQL while UndoDemotePrimary decided that the tablet may serve: the fence may be decided
+// on a newer status of MySQL, and stands.
+var errFencedDuringUndoDemotePrimary = vterrors.New(vtrpc.Code_FAILED_PRECONDITION,
+	"cannot undo the demotion: MySQL was fenced with super_read_only meanwhile, its replication group does not let it serve")
 
 // ReplicaWasPromoted promotes a replica to primary, no questions asked.
 func (tm *TabletManager) ReplicaWasPromoted(ctx context.Context) error {

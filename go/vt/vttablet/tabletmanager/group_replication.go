@@ -225,6 +225,7 @@ func (tm *TabletManager) resolveShardDurability(ctx context.Context) (policy.Dur
 		return nil, "", vterrors.Wrapf(err, "cannot get durability policy %v", durabilityName)
 	}
 	tm.groupReplicationTopo.setDurability(durabilityName)
+	tm.noteShardGroupFields(si.Shard)
 	return durability, si.GetDurabilityPolicy(), nil
 }
 
@@ -325,7 +326,13 @@ func twoPCDurable(status *replicationdatapb.GroupReplicationStatus, semiSync boo
 // Replication, which is idempotent. It does not wait for the member to become ONLINE.
 //
 // The caller must hold the action lock, or run during startup.
-func (tm *TabletManager) startGroupReplicationLocked(ctx context.Context, bootstrap bool) (*replicationdatapb.GroupReplicationStatus, error) {
+//
+// While it runs, and for a while after it ended, the fence check watches MySQL's view (see
+// groupReplicationFence.armed): a join that does not find its group can end in a group of its own,
+// of which MySQL is the writable primary.
+func (tm *TabletManager) startGroupReplicationLocked(ctx context.Context, bootstrap bool) (_ *replicationdatapb.GroupReplicationStatus, err error) {
+	end := tm.groupReplicationFence.beginStart(bootstrap)
+	defer func() { end(err != nil) }()
 	tablet := tm.Tablet()
 	status, err := tm.groupReplicationStatus(ctx)
 	if err != nil {
@@ -487,6 +494,9 @@ func (tm *TabletManager) joinGroupLocked(ctx context.Context, status *replicatio
 		slog.String("local_address", cfg.LocalAddress),
 		slog.Any("seeds", cfg.Seeds),
 		slog.Bool("bootstrap", bootstrap))
+	// MySQL is not in a group: Group Replication decides from here whether it is writable, and the
+	// fence check fences a group it must not take writes in again.
+	tm.groupReplicationFence.reset()
 	if err := tm.MysqlDaemon.StartGroupReplication(ctx, bootstrap); err != nil {
 		restartReplication()
 		return vterrors.Wrapf(err, "failed to start group replication")
@@ -678,6 +688,8 @@ func (tm *TabletManager) stopGroupReplicationLocked(ctx context.Context) (*repli
 	if err := tm.MysqlDaemon.StopGroupReplication(ctx); err != nil {
 		return nil, vterrors.Wrapf(err, "failed to stop group replication")
 	}
+	// MySQL left its group, super_read_only: from here on, whether it takes writes is decided below.
+	tm.groupReplicationFence.reset()
 
 	if leavingPrimary {
 		// The last step of a migration back to asynchronous replication runs under the
@@ -975,6 +987,7 @@ func (tm *TabletManager) groupReplicationVoters(ctx context.Context) ([]*topodat
 		return nil, vterrors.Wrapf(err, "cannot read shard %v/%v", tablet.Keyspace, tablet.Shard)
 	}
 	tm.groupReplicationTopo.setVoters(si.GetGroupReplicationVoters())
+	tm.noteShardGroupFields(si.Shard)
 	return si.GetGroupReplicationVoters(), nil
 }
 

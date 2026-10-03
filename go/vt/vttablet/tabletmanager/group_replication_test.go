@@ -51,16 +51,18 @@ import (
 var resetDefaultChannel = mysql.ResetDefaultReplicationChannelCommand()
 
 // withGroupReplication sets the group replication flags for the duration of the test. The
-// sync loop interval is long enough for the loop never to run on its own: tests call reconcile.
+// sync loop and fence check intervals are long enough for them never to run on their own: tests
+// call reconcile and checkFence.
 func withGroupReplication(t *testing.T) {
 	t.Helper()
-	oldEnabled, oldInterval, oldPoll := enableGroupReplication, groupReplicationSyncInterval, groupReplicationPollInterval
+	oldEnabled, oldInterval, oldPoll, oldFence := enableGroupReplication, groupReplicationSyncInterval, groupReplicationPollInterval, groupReplicationFenceCheckInterval
 	t.Cleanup(func() {
-		enableGroupReplication, groupReplicationSyncInterval, groupReplicationPollInterval = oldEnabled, oldInterval, oldPoll
+		enableGroupReplication, groupReplicationSyncInterval, groupReplicationPollInterval, groupReplicationFenceCheckInterval = oldEnabled, oldInterval, oldPoll, oldFence
 	})
 	enableGroupReplication = true
 	groupReplicationSyncInterval = time.Hour
 	groupReplicationPollInterval = 5 * time.Millisecond
+	groupReplicationFenceCheckInterval = time.Hour
 }
 
 func testServerUUID(uid int) string {

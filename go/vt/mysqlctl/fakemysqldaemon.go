@@ -261,6 +261,30 @@ type FakeMysqlDaemon struct {
 	// the fake changes anything, for example to block a START GROUP_REPLICATION while it runs.
 	StartGroupReplicationHook func(bootstrap bool)
 
+	// StartGroupReplicationFunc, if set, replaces what StartGroupReplication does after its hook
+	// and its checks of the errors above: the test sets the status the start ends with, for
+	// example a group of its own, and its error.
+	StartGroupReplicationFunc func(bootstrap bool) error
+
+	// StopGroupReplicationHook, if set, is called at the start of StopGroupReplication, before the
+	// fake changes anything, for example to observe the state MySQL leaves its group in.
+	StopGroupReplicationHook func()
+
+	// GroupReplicationFenceStatusHook, if set, is called after each read of
+	// GroupReplicationFenceStatus, before it returns, for example to change MySQL's group between the
+	// read and what the reader does with it.
+	GroupReplicationFenceStatusHook func()
+
+	// SetSuperReadOnlyHook, if set, is called at the start of SetSuperReadOnly, before the fake
+	// changes anything, with the value being set.
+	SetSuperReadOnlyHook func(on bool)
+
+	// groupReplicationFenceStatusReads counts the calls to GroupReplicationFenceStatus.
+	groupReplicationFenceStatusReads int
+	// startRunning is set while StartGroupReplicationFunc runs, and closed when it returns: like
+	// MySQL, GroupReplicationFenceStatus does not return the view id until then.
+	startRunning chan struct{}
+
 	// groupReplicationStatusHook is called after each read of the group replication status.
 	groupReplicationStatusHook func()
 
@@ -528,6 +552,8 @@ func (fmd *FakeMysqlDaemon) SetPrimaryPositionLocked(pos replication.Position) {
 
 // IsReadOnly is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) IsReadOnly(ctx context.Context) (bool, error) {
+	fmd.mu.Lock()
+	defer fmd.mu.Unlock()
 	return fmd.ReadOnly, nil
 }
 
@@ -538,6 +564,8 @@ func (fmd *FakeMysqlDaemon) IsSuperReadOnly(ctx context.Context) (bool, error) {
 
 // SetReadOnly is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) SetReadOnly(ctx context.Context, on bool) error {
+	fmd.mu.Lock()
+	defer fmd.mu.Unlock()
 	fmd.ReadOnly = on
 	return nil
 }
@@ -548,6 +576,11 @@ func (fmd *FakeMysqlDaemon) SetSuperReadOnly(ctx context.Context, on bool, opts 
 	for _, opt := range opts {
 		opt(&options)
 	}
+	if fmd.SetSuperReadOnlyHook != nil {
+		fmd.SetSuperReadOnlyHook(on)
+	}
+	fmd.mu.Lock()
+	defer fmd.mu.Unlock()
 	fmd.SetSuperReadOnlyLockWaitTimeout = options.lockWaitTimeout
 	if fmd.SetSuperReadOnlyError != nil {
 		return nil, fmd.SetSuperReadOnlyError
@@ -564,6 +597,8 @@ func (fmd *FakeMysqlDaemon) SetSuperReadOnly(ctx context.Context, on bool, opts 
 		return nil, nil
 	}
 	return func() error {
+		fmd.mu.Lock()
+		defer fmd.mu.Unlock()
 		fmd.SuperReadOnly.Store(prev)
 		fmd.ReadOnly = prevReadOnly
 		return nil
@@ -1000,6 +1035,45 @@ func (fmd *FakeMysqlDaemon) GroupReplicationApplierStatus(ctx context.Context) (
 	return &status, nil
 }
 
+// GroupReplicationFenceStatus is part of the MysqlDaemon interface. It returns the status that
+// GroupReplicationStatus returns, and super_read_only. Like MySQL, it does not return the view id
+// while a START GROUP_REPLICATION runs (StartGroupReplicationFunc): it waits for it to return, or for
+// ctx to end. Without withView, it returns no view id.
+func (fmd *FakeMysqlDaemon) GroupReplicationFenceStatus(ctx context.Context, withView bool) (*mysql.GroupReplicationFenceStatus, error) {
+	fmd.mu.Lock()
+	if running := fmd.startRunning; withView && running != nil {
+		fmd.mu.Unlock()
+		select {
+		case <-running:
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+		fmd.mu.Lock()
+	}
+	fmd.groupReplicationFenceStatusReads++
+	status, err := fmd.groupReplicationStatusLocked()
+	var fs *mysql.GroupReplicationFenceStatus
+	if err == nil {
+		if !withView {
+			status.ViewId = ""
+		}
+		fs = &mysql.GroupReplicationFenceStatus{Status: status, ViewKnown: withView, ServerUUID: fmd.serverUUIDLocked(), SuperReadOnly: fmd.SuperReadOnly.Load()}
+	}
+	hook := fmd.GroupReplicationFenceStatusHook
+	fmd.mu.Unlock()
+	if hook != nil {
+		hook()
+	}
+	return fs, err
+}
+
+// GroupReplicationFenceStatusReads returns how many times GroupReplicationFenceStatus was called.
+func (fmd *FakeMysqlDaemon) GroupReplicationFenceStatusReads() int {
+	fmd.mu.Lock()
+	defer fmd.mu.Unlock()
+	return fmd.groupReplicationFenceStatusReads
+}
+
 // ConfigureGroupReplication is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) ConfigureGroupReplication(ctx context.Context, cfg mysql.GroupReplicationConfig) error {
 	fmd.mu.Lock()
@@ -1045,6 +1119,17 @@ func (fmd *FakeMysqlDaemon) StartGroupReplication(ctx context.Context, bootstrap
 	if mysql.IsGroupMemberActive(fmd.GroupReplication) {
 		return errors.New("group replication is already running")
 	}
+	if start := fmd.StartGroupReplicationFunc; start != nil {
+		running := make(chan struct{})
+		fmd.startRunning = running
+		fmd.mu.Unlock()
+		defer func() {
+			fmd.mu.Lock()
+			fmd.startRunning = nil
+			close(running)
+		}()
+		return start(bootstrap)
+	}
 	uuid := fmd.serverUUIDLocked()
 	fmd.GroupReplication.MemberState = mysql.GroupMemberStateOnline
 	fmd.GroupReplication.HasQuorum = true
@@ -1072,6 +1157,9 @@ var fakeGroupIncarnations atomic.Int64
 // StopGroupReplication is part of the MysqlDaemon interface. Like MySQL, it leaves the member
 // super_read_only, and the member only sees itself afterwards.
 func (fmd *FakeMysqlDaemon) StopGroupReplication(ctx context.Context) error {
+	if fmd.StopGroupReplicationHook != nil {
+		fmd.StopGroupReplicationHook()
+	}
 	fmd.mu.Lock()
 	defer fmd.mu.Unlock()
 	fmd.GroupReplicationStopCalls++

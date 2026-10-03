@@ -78,6 +78,27 @@ func (mysqld *Mysqld) GroupReplicationApplierStatus(ctx context.Context) (*mysql
 	return status, nil
 }
 
+// GroupReplicationFenceStatus returns the member's state, view and super_read_only, read with a
+// single query, and its view id if withView is set. Like GroupReplicationStatus, it is bounded by
+// ctx.
+func (mysqld *Mysqld) GroupReplicationFenceStatus(ctx context.Context, withView bool) (*mysql.GroupReplicationFenceStatus, error) {
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Recycle()
+	var status *mysql.GroupReplicationFenceStatus
+	err = mysqld.executeWithContext(ctx, conn, "group replication fence status", func() error {
+		var queryErr error
+		status, queryErr = conn.Conn.GroupReplicationFenceStatus(withView)
+		return queryErr
+	})
+	if err != nil {
+		return nil, err
+	}
+	return status, nil
+}
+
 // ConfigureGroupReplication installs the Group Replication plugin if it is not loaded yet
 // and applies cfg. The member must not be part of a group: MySQL rejects changes to most of
 // these variables while Group Replication runs.
