@@ -17,11 +17,9 @@ limitations under the License.
 package tabletmanager
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -39,7 +37,6 @@ import (
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -103,14 +100,6 @@ func setReparentJournalLength(fakeMysqlDaemon *mysqlctl.FakeMysqlDaemon, length 
 
 func recoverableReplicationInitError() error {
 	return sqlerror.NewSQLError(sqlerror.ERMasterInfo, sqlerror.SSUnknownSQLState, "Could not initialize master info structure; more error messages can be found in the MySQL error log")
-}
-
-func captureLogs(t *testing.T) *bytes.Buffer {
-	t.Helper()
-	var logs bytes.Buffer
-	previousLogger := log.SwapLogger(slog.New(slog.NewTextHandler(&logs, nil)))
-	t.Cleanup(func() { log.SwapLogger(previousLogger) })
-	return &logs
 }
 
 // TestWaitForGrantsToHaveApplied tests that waitForGrantsToHaveApplied only succeeds after waitForDBAGrants has been called.
@@ -195,52 +184,26 @@ type (
 		executeDeadline chan time.Time
 	}
 
-	cancellationGateContext struct {
-		context.Context
-		errCalls atomic.Int32
-		entered  chan struct{}
-		release  chan struct{}
-	}
-
 	deadlineSignalContext struct {
 		context.Context
 		once    sync.Once
 		entered chan struct{}
 	}
 
-	cancelOnErrCallContext struct {
-		context.Context
-		actionSema     *semaphore.Weighted
-		cancelOnCall   int32
-		errCalls       atomic.Int32
-		actionLockHeld atomic.Bool
+	prepareResult struct {
+		response *tabletmanagerdatapb.PrepareEmergencyReparentResponse
+		err      error
+	}
+
+	promoteResult struct {
+		response *tabletmanagerdatapb.PromoteReplicaAndJournalResponse
+		err      error
 	}
 )
-
-func (ctx *cancellationGateContext) Err() error {
-	err := ctx.Context.Err()
-	if ctx.errCalls.Add(1) == 2 {
-		close(ctx.entered)
-		<-ctx.release
-	}
-	return err
-}
 
 func (ctx *deadlineSignalContext) Deadline() (time.Time, bool) {
 	ctx.once.Do(func() { close(ctx.entered) })
 	return ctx.Context.Deadline()
-}
-
-func (ctx *cancelOnErrCallContext) Err() error {
-	if ctx.errCalls.Add(1) >= ctx.cancelOnCall {
-		if ctx.actionSema.TryAcquire(1) {
-			ctx.actionSema.Release(1)
-		} else {
-			ctx.actionLockHeld.Store(true)
-		}
-		return context.Canceled
-	}
-	return ctx.Context.Err()
 }
 
 func recordDeadline(ctx context.Context) time.Time {
@@ -248,18 +211,15 @@ func recordDeadline(ctx context.Context) time.Time {
 	return deadline
 }
 
-func receiveRecordedDeadline(t *testing.T, deadlines <-chan time.Time) time.Time {
+func receive[T any](t *testing.T, ch <-chan T) T {
 	t.Helper()
-	var deadline time.Time
-	require.Eventually(t, func() bool {
-		select {
-		case deadline = <-deadlines:
-			return true
-		default:
-			return false
-		}
-	}, 30*time.Second, 10*time.Millisecond)
-	return deadline
+	select {
+	case v := <-ch:
+		return v
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "timed out waiting on channel")
+		return *new(T)
+	}
 }
 
 func (d *deadlineRecordingMysqlDaemon) StopIOThread(ctx context.Context) error {
@@ -1965,9 +1925,9 @@ func TestPrepareEmergencyReparent(t *testing.T) {
 		})
 
 		require.NoError(t, err)
-		assert.WithinDuration(t, started.Add(topo.RemoteOperationTimeout), receiveRecordedDeadline(t, daemon.stopDeadline), 2*time.Second)
-		assert.WithinDuration(t, started.Add(45*time.Second), receiveRecordedDeadline(t, daemon.waitDeadline), 2*time.Second)
-		assert.WithinDuration(t, started.Add(topo.RemoteOperationTimeout), receiveRecordedDeadline(t, daemon.fetchDeadline), 2*time.Second)
+		assert.WithinDuration(t, started.Add(topo.RemoteOperationTimeout), receive(t, daemon.stopDeadline), 2*time.Second)
+		assert.WithinDuration(t, started.Add(45*time.Second), receive(t, daemon.waitDeadline), 2*time.Second)
+		assert.WithinDuration(t, started.Add(topo.RemoteOperationTimeout), receive(t, daemon.fetchDeadline), 2*time.Second)
 		require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
 	})
 
@@ -2004,35 +1964,16 @@ func TestPrepareEmergencyReparent(t *testing.T) {
 			resultCh <- err
 		}()
 
-		require.Eventually(t, func() bool {
-			select {
-			case <-ctx.entered:
-				return true
-			default:
-				return false
-			}
-		}, 30*time.Second, 10*time.Millisecond)
-		waitStarted := time.Now()
-		require.Eventually(t, func() bool {
-			return time.Since(waitStarted) >= 2*time.Second
-		}, 30*time.Second, 10*time.Millisecond)
+		receive(t, ctx.entered)
+		time.Sleep(2 * time.Second)
 		lockReleased := time.Now()
 		tm.actionSema.Release(1)
 		lockHeld = false
 
-		deadline := receiveRecordedDeadline(t, daemon.stopDeadline)
+		deadline := receive(t, daemon.stopDeadline)
 		assert.Greater(t, deadline.Sub(lockReleased), 4*time.Second)
 
-		var resultErr error
-		require.Eventually(t, func() bool {
-			select {
-			case resultErr = <-resultCh:
-				return true
-			default:
-				return false
-			}
-		}, 30*time.Second, 10*time.Millisecond)
-		require.NoError(t, resultErr)
+		require.NoError(t, receive(t, resultCh))
 		require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
 	})
 
@@ -2064,6 +2005,17 @@ func TestPrepareEmergencyReparent(t *testing.T) {
 
 		assert.Nil(t, response)
 		require.ErrorContains(t, err, "wait_for_position_timeout")
+		require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
+	})
+
+	t.Run("nil request", func(t *testing.T) {
+		fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
+		tm := newTestReplicationTM(newTestTablet(t, 100, "ks", "0", nil), fakeMysqlDaemon, nil)
+
+		response, err := tm.PrepareEmergencyReparent(t.Context(), nil)
+
+		assert.Nil(t, response)
+		require.ErrorContains(t, err, "request is required")
 		require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
 	})
 
@@ -2228,10 +2180,6 @@ func TestPrepareEmergencyReparentCancellationRestoresIOThread(t *testing.T) {
 			tm := newTestReplicationTM(newTestTablet(t, 100, "ks", "0", nil), daemon, nil)
 			ctx, cancel := context.WithCancel(t.Context())
 			t.Cleanup(cancel)
-			type prepareResult struct {
-				response *tabletmanagerdatapb.PrepareEmergencyReparentResponse
-				err      error
-			}
 			resultCh := make(chan prepareResult, 1)
 			go func() {
 				response, err := tm.PrepareEmergencyReparent(ctx, &tabletmanagerdatapb.PrepareEmergencyReparentRequest{
@@ -2240,28 +2188,13 @@ func TestPrepareEmergencyReparentCancellationRestoresIOThread(t *testing.T) {
 				resultCh <- prepareResult{response: response, err: err}
 			}()
 
-			require.Eventually(t, func() bool {
-				select {
-				case <-entered:
-					return true
-				default:
-					return false
-				}
-			}, 30*time.Second, 10*time.Millisecond)
+			receive(t, entered)
 			if tc.beforeCancel != nil {
 				tc.beforeCancel(tm)
 			}
 			cancel()
 
-			var result prepareResult
-			require.Eventually(t, func() bool {
-				select {
-				case result = <-resultCh:
-					return true
-				default:
-					return false
-				}
-			}, 30*time.Second, 10*time.Millisecond)
+			result := receive(t, resultCh)
 			assert.Nil(t, result.response)
 			require.ErrorIs(t, result.err, context.Canceled)
 			assert.Equal(t, tc.wantRunning, daemon.ioThreadRunning.Load())
@@ -2278,10 +2211,6 @@ func TestPrepareEmergencyReparentCancellationRestoresIOThread(t *testing.T) {
 		tm := newTestReplicationTM(newTestTablet(t, 100, "ks", "0", nil), daemon, nil)
 		ctx, cancel := context.WithCancel(t.Context())
 		t.Cleanup(cancel)
-		type prepareResult struct {
-			response *tabletmanagerdatapb.PrepareEmergencyReparentResponse
-			err      error
-		}
 		resultCh := make(chan prepareResult, 1)
 		go func() {
 			response, err := tm.PrepareEmergencyReparent(ctx, &tabletmanagerdatapb.PrepareEmergencyReparentRequest{
@@ -2290,30 +2219,47 @@ func TestPrepareEmergencyReparentCancellationRestoresIOThread(t *testing.T) {
 			resultCh <- prepareResult{response: response, err: err}
 		}()
 
-		require.Eventually(t, func() bool {
-			select {
-			case <-daemon.waitEntered:
-				return true
-			default:
-				return false
-			}
-		}, 30*time.Second, 10*time.Millisecond)
+		receive(t, daemon.waitEntered)
 		cancel()
 
-		var result prepareResult
-		require.Eventually(t, func() bool {
-			select {
-			case result = <-resultCh:
-				return true
-			default:
-				return false
-			}
-		}, 30*time.Second, 10*time.Millisecond)
+		result := receive(t, resultCh)
 		assert.Nil(t, result.response)
 		require.ErrorContains(t, result.err, "injected restart failure")
 		assert.Equal(t, vtrpcpb.Code_CANCELED, vterrors.Code(result.err))
 		assert.False(t, daemon.ioThreadRunning.Load())
 		assert.EqualValues(t, 1, daemon.startIOThreadCalls.Load())
+	})
+
+	t.Run("restart lock timeout", func(t *testing.T) {
+		daemon := newDaemon()
+		daemon.ioThreadRunning.Store(true)
+		daemon.CurrentRelayLogPosition = relayLogPosition
+		daemon.waitEntered = make(chan struct{})
+		tm := newTestReplicationTM(newTestTablet(t, 100, "ks", "0", nil), daemon, nil)
+		ctx, cancel := context.WithCancel(t.Context())
+		t.Cleanup(cancel)
+		resultCh := make(chan prepareResult, 1)
+		go func() {
+			response, err := tm.PrepareEmergencyReparent(ctx, &tabletmanagerdatapb.PrepareEmergencyReparentRequest{
+				WaitForPositionTimeout: protoutil.DurationToProto(30 * time.Second),
+			})
+			resultCh <- prepareResult{response: response, err: err}
+		}()
+
+		receive(t, daemon.waitEntered)
+		require.True(t, tm.actionSema.TryAcquire(1))
+		t.Cleanup(func() { tm.actionSema.Release(1) })
+		originalRemoteOperationTimeout := topo.RemoteOperationTimeout
+		topo.RemoteOperationTimeout = 0
+		t.Cleanup(func() { topo.RemoteOperationTimeout = originalRemoteOperationTimeout })
+		cancel()
+
+		result := receive(t, resultCh)
+		assert.Nil(t, result.response)
+		require.ErrorContains(t, result.err, "failed to reacquire the action lock")
+		assert.Equal(t, vtrpcpb.Code_CANCELED, vterrors.Code(result.err))
+		assert.False(t, daemon.ioThreadRunning.Load())
+		assert.Zero(t, daemon.startIOThreadCalls.Load())
 	})
 }
 
@@ -2332,10 +2278,6 @@ func TestPrepareEmergencyReparentCancellationDoesNotReverseNewerStopReplication(
 	tm := newTestReplicationTM(newTestTablet(t, 100, "ks", "0", nil), daemon, nil)
 	ctx, cancel := context.WithCancel(t.Context())
 	t.Cleanup(cancel)
-	type prepareResult struct {
-		response *tabletmanagerdatapb.PrepareEmergencyReparentResponse
-		err      error
-	}
 	resultCh := make(chan prepareResult, 1)
 	go func() {
 		response, err := tm.PrepareEmergencyReparent(ctx, &tabletmanagerdatapb.PrepareEmergencyReparentRequest{
@@ -2344,14 +2286,7 @@ func TestPrepareEmergencyReparentCancellationDoesNotReverseNewerStopReplication(
 		resultCh <- prepareResult{response: response, err: err}
 	}()
 
-	require.Eventually(t, func() bool {
-		select {
-		case <-daemon.waitEntered:
-			return true
-		default:
-			return false
-		}
-	}, 30*time.Second, 10*time.Millisecond)
+	receive(t, daemon.waitEntered)
 	require.True(t, tm.actionSema.TryAcquire(1))
 	tm.actionSema.Release(1)
 
@@ -2359,27 +2294,10 @@ func TestPrepareEmergencyReparentCancellationDoesNotReverseNewerStopReplication(
 	go func() {
 		stopResultCh <- tm.StopReplication(t.Context())
 	}()
-	var stopErr error
-	require.Eventually(t, func() bool {
-		select {
-		case stopErr = <-stopResultCh:
-			return true
-		default:
-			return false
-		}
-	}, 30*time.Second, 10*time.Millisecond)
-	require.NoError(t, stopErr)
+	require.NoError(t, receive(t, stopResultCh))
 	cancel()
 
-	var result prepareResult
-	require.Eventually(t, func() bool {
-		select {
-		case result = <-resultCh:
-			return true
-		default:
-			return false
-		}
-	}, 30*time.Second, 10*time.Millisecond)
+	result := receive(t, resultCh)
 	assert.Nil(t, result.response)
 	require.ErrorIs(t, result.err, context.Canceled)
 
@@ -2427,23 +2345,18 @@ func TestReparentPhaseError(t *testing.T) {
 
 func TestPromoteReplicaAndJournal(t *testing.T) {
 	promotionPosition := replication.MustParsePosition(replication.Mysql56FlavorID, "24bc7856-9c9d-11ee-bb9d-0242ac120002:1-10")
-	waitPosition := replication.MustParsePosition(replication.Mysql56FlavorID, "24bc7856-9c9d-11ee-bb9d-0242ac120002:1-9")
 	created := time.Unix(1700000000, 123).UTC()
 
 	newRequest := func() *tabletmanagerdatapb.PromoteReplicaAndJournalRequest {
 		return &tabletmanagerdatapb.PromoteReplicaAndJournalRequest{
-			SemiSync:                       true,
-			WaitPosition:                   replication.EncodePosition(waitPosition),
-			WaitForPositionTimeout:         protoutil.DurationToProto(30 * time.Second),
-			TimeCreated:                    protoutil.TimeToProto(created),
-			ActionName:                     "EmergencyReparentShard",
-			PopulateReparentJournalTimeout: protoutil.DurationToProto(30 * time.Second),
+			SemiSync:    true,
+			TimeCreated: protoutil.TimeToProto(created),
+			ActionName:  "EmergencyReparentShard",
 		}
 	}
 
 	t.Run("success", func(t *testing.T) {
 		fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
-		fakeMysqlDaemon.WaitPrimaryPositions = []replication.Position{waitPosition}
 		fakeMysqlDaemon.PromoteResult = promotionPosition
 		tm := newPromoteReplicaAndJournalTestTM(t, fakeMysqlDaemon)
 		fakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
@@ -2454,7 +2367,6 @@ func TestPromoteReplicaAndJournal(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.Equal(t, replication.EncodePosition(promotionPosition), response.Position)
-		assert.Nil(t, response.WaitForPositionError)
 		assert.Nil(t, response.PromoteReplicaError)
 		assert.Nil(t, response.PopulateReparentJournalError)
 		assert.True(t, fakeMysqlDaemon.SemiSyncPrimaryEnabled)
@@ -2464,11 +2376,9 @@ func TestPromoteReplicaAndJournal(t *testing.T) {
 
 	t.Run("phase deadlines", func(t *testing.T) {
 		fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
-		fakeMysqlDaemon.WaitPrimaryPositions = []replication.Position{waitPosition}
 		fakeMysqlDaemon.PromoteResult = promotionPosition
 		daemon := &deadlineRecordingMysqlDaemon{
 			FakeMysqlDaemon: fakeMysqlDaemon,
-			waitDeadline:    make(chan time.Time, 1),
 			promoteDeadline: make(chan time.Time, 1),
 			executeDeadline: make(chan time.Time, 1),
 		}
@@ -2477,16 +2387,15 @@ func TestPromoteReplicaAndJournal(t *testing.T) {
 			mysqlctl.PopulateReparentJournal(created.UnixNano(), "EmergencyReparentShard", topoproto.TabletAliasString(tm.tabletAlias), promotionPosition),
 		}
 		request := newRequest()
-		request.WaitForPositionTimeout = protoutil.DurationToProto(45 * time.Second)
-		request.PopulateReparentJournalTimeout = protoutil.DurationToProto(50 * time.Second)
+		journalTimeout := topo.RemoteOperationTimeout / 2
+		request.PopulateReparentJournalTimeout = protoutil.DurationToProto(journalTimeout)
 		started := time.Now()
 
 		_, err := tm.PromoteReplicaAndJournal(t.Context(), request)
 
 		require.NoError(t, err)
-		assert.WithinDuration(t, started.Add(45*time.Second), receiveRecordedDeadline(t, daemon.waitDeadline), 2*time.Second)
-		assert.WithinDuration(t, started.Add(topo.RemoteOperationTimeout), receiveRecordedDeadline(t, daemon.promoteDeadline), 2*time.Second)
-		assert.WithinDuration(t, started.Add(50*time.Second), receiveRecordedDeadline(t, daemon.executeDeadline), 2*time.Second)
+		assert.WithinDuration(t, started.Add(topo.RemoteOperationTimeout), receive(t, daemon.promoteDeadline), 2*time.Second)
+		assert.WithinDuration(t, started.Add(journalTimeout), receive(t, daemon.executeDeadline), 2*time.Second)
 	})
 
 	t.Run("action lock wait does not consume promotion deadline", func(t *testing.T) {
@@ -2507,110 +2416,44 @@ func TestPromoteReplicaAndJournal(t *testing.T) {
 		}
 		require.NoError(t, tm.actionSema.Acquire(t.Context(), 1))
 		lockHeld := true
-		ctx := &cancellationGateContext{
-			Context: t.Context(),
-			entered: make(chan struct{}),
-			release: make(chan struct{}),
-		}
-		gateReleased := false
 		t.Cleanup(func() {
-			if !gateReleased {
-				close(ctx.release)
-			}
 			if lockHeld {
 				tm.actionSema.Release(1)
 			}
 		})
-		type promoteResult struct {
-			response *tabletmanagerdatapb.PromoteReplicaAndJournalResponse
-			err      error
+		ctx := &deadlineSignalContext{
+			Context: t.Context(),
+			entered: make(chan struct{}),
 		}
 		resultCh := make(chan promoteResult, 1)
 		request := newRequest()
-		request.WaitPosition = ""
 		go func() {
 			response, err := tm.PromoteReplicaAndJournal(ctx, request)
 			resultCh <- promoteResult{response: response, err: err}
 		}()
 
-		require.Eventually(t, func() bool {
-			select {
-			case <-ctx.entered:
-				return true
-			default:
-				return false
-			}
-		}, 30*time.Second, 10*time.Millisecond)
-		close(ctx.release)
-		gateReleased = true
-		waitStarted := time.Now()
-		require.Eventually(t, func() bool {
-			return time.Since(waitStarted) >= 2*time.Second
-		}, 30*time.Second, 10*time.Millisecond)
+		receive(t, ctx.entered)
+		time.Sleep(2 * time.Second)
 		lockReleased := time.Now()
 		tm.actionSema.Release(1)
 		lockHeld = false
 
-		deadline := receiveRecordedDeadline(t, daemon.promoteDeadline)
+		deadline := receive(t, daemon.promoteDeadline)
 		assert.True(t, deadline.After(lockReleased.Add(4*time.Second)))
 
-		var result promoteResult
-		require.Eventually(t, func() bool {
-			select {
-			case result = <-resultCh:
-				return true
-			default:
-				return false
-			}
-		}, 30*time.Second, 10*time.Millisecond)
+		result := receive(t, resultCh)
 		require.NoError(t, result.err)
 		assert.Equal(t, replication.EncodePosition(promotionPosition), result.response.Position)
 	})
 
-	t.Run("success without wait position", func(t *testing.T) {
-		fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
-		fakeMysqlDaemon.TimeoutHook = func() error { return errors.New("wait should not run") }
-		fakeMysqlDaemon.PromoteResult = promotionPosition
-		tm := newPromoteReplicaAndJournalTestTM(t, fakeMysqlDaemon)
-		fakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
-			mysqlctl.PopulateReparentJournal(created.UnixNano(), "EmergencyReparentShard", topoproto.TabletAliasString(tm.tabletAlias), promotionPosition),
-		}
-		request := newRequest()
-		request.WaitPosition = ""
-
-		response, err := tm.PromoteReplicaAndJournal(t.Context(), request)
-
-		require.NoError(t, err)
-		assert.Equal(t, replication.EncodePosition(promotionPosition), response.Position)
-		assert.Nil(t, response.WaitForPositionError)
-		require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
-	})
-
-	t.Run("wait failure prevents promotion", func(t *testing.T) {
-		fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
-		fakeMysqlDaemon.TimeoutHook = func() error { return errors.New("injected wait failure") }
-		tm := newTestReplicationTM(newTestTablet(t, 100, "ks", "0", nil), fakeMysqlDaemon, nil)
-
-		response, err := tm.PromoteReplicaAndJournal(t.Context(), newRequest())
-
-		require.NoError(t, err)
-		require.ErrorContains(t, vterrors.FromVTRPC(response.WaitForPositionError), "injected wait failure")
-		assert.Nil(t, response.PromoteReplicaError)
-		assert.Nil(t, response.PopulateReparentJournalError)
-		assert.Empty(t, response.Position)
-		assert.Equal(t, topodatapb.TabletType_REPLICA, tm.Tablet().Type)
-	})
-
 	t.Run("promotion failure prevents journal write", func(t *testing.T) {
 		fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
-		fakeMysqlDaemon.WaitPrimaryPositions = []replication.Position{waitPosition}
 		fakeMysqlDaemon.PromoteError = errors.New("injected promotion failure")
 		tm := newPromoteReplicaAndJournalTestTM(t, fakeMysqlDaemon)
 
 		response, err := tm.PromoteReplicaAndJournal(t.Context(), newRequest())
 
 		require.NoError(t, err)
-		assert.Nil(t, response.WaitForPositionError)
 		require.ErrorContains(t, vterrors.FromVTRPC(response.PromoteReplicaError), "injected promotion failure")
 		assert.Nil(t, response.PopulateReparentJournalError)
 		assert.Empty(t, response.Position)
@@ -2619,7 +2462,6 @@ func TestPromoteReplicaAndJournal(t *testing.T) {
 
 	t.Run("post-promotion failure preserves promotion position", func(t *testing.T) {
 		fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
-		fakeMysqlDaemon.WaitPrimaryPositions = []replication.Position{waitPosition}
 		fakeMysqlDaemon.PromoteResult = promotionPosition
 		tm := newPromoteReplicaAndJournalTestTM(t, fakeMysqlDaemon)
 		queryService := tm.QueryServiceControl.(*tabletservermock.Controller)
@@ -2630,7 +2472,6 @@ func TestPromoteReplicaAndJournal(t *testing.T) {
 		}, &dbconfigs.DBConfigs{}, fakeMysqlDaemon))
 		tm.tmState.Open()
 		queryService.SetServingTypeError = errors.New("injected query service activation failure")
-		logs := captureLogs(t)
 
 		response, err := tm.PromoteReplicaAndJournal(t.Context(), newRequest())
 
@@ -2639,12 +2480,10 @@ func TestPromoteReplicaAndJournal(t *testing.T) {
 		require.ErrorContains(t, vterrors.FromVTRPC(response.PromoteReplicaError), "injected query service activation failure")
 		assert.Nil(t, response.PopulateReparentJournalError)
 		assert.Equal(t, topodatapb.TabletType_PRIMARY, tm.Tablet().Type)
-		assert.Contains(t, logs.String(), "PromoteReplicaAndJournal failed after promoting MySQL")
 	})
 
 	t.Run("journal failure preserves promotion position", func(t *testing.T) {
 		fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
-		fakeMysqlDaemon.WaitPrimaryPositions = []replication.Position{waitPosition}
 		fakeMysqlDaemon.PromoteResult = promotionPosition
 		tm := newPromoteReplicaAndJournalTestTM(t, fakeMysqlDaemon)
 		journalQuery := mysqlctl.PopulateReparentJournal(created.UnixNano(), "EmergencyReparentShard", topoproto.TabletAliasString(tm.tabletAlias), promotionPosition)
@@ -2687,26 +2526,12 @@ func TestPromoteReplicaAndJournalCancellation(t *testing.T) {
 		fakeMysqlDaemon.PromoteResult = promotionPosition
 		tm := newPromoteReplicaAndJournalTestTM(t, fakeMysqlDaemon)
 		require.NoError(t, tm.actionSema.Acquire(t.Context(), 1))
-		lockHeld := true
+		t.Cleanup(func() { tm.actionSema.Release(1) })
 		baseCtx, cancel := context.WithCancel(t.Context())
-		ctx := &cancellationGateContext{
+		t.Cleanup(cancel)
+		ctx := &deadlineSignalContext{
 			Context: baseCtx,
 			entered: make(chan struct{}),
-			release: make(chan struct{}),
-		}
-		gateReleased := false
-		t.Cleanup(func() {
-			cancel()
-			if !gateReleased {
-				close(ctx.release)
-			}
-			if lockHeld {
-				tm.actionSema.Release(1)
-			}
-		})
-		type promoteResult struct {
-			response *tabletmanagerdatapb.PromoteReplicaAndJournalResponse
-			err      error
 		}
 		resultCh := make(chan promoteResult, 1)
 		go func() {
@@ -2717,55 +2542,13 @@ func TestPromoteReplicaAndJournalCancellation(t *testing.T) {
 			resultCh <- promoteResult{response: response, err: err}
 		}()
 
-		require.Eventually(t, func() bool {
-			select {
-			case <-ctx.entered:
-				return true
-			default:
-				return false
-			}
-		}, 30*time.Second, 10*time.Millisecond)
+		receive(t, ctx.entered)
 		cancel()
-		close(ctx.release)
-		gateReleased = true
-		tm.actionSema.Release(1)
-		lockHeld = false
 
-		var result promoteResult
-		require.Eventually(t, func() bool {
-			select {
-			case result = <-resultCh:
-				return true
-			default:
-				return false
-			}
-		}, 30*time.Second, 10*time.Millisecond)
+		result := receive(t, resultCh)
 		assert.Nil(t, result.response)
 		require.ErrorIs(t, result.err, context.Canceled)
 		assert.Equal(t, topodatapb.TabletType_REPLICA, tm.Tablet().Type)
-		require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
-	})
-
-	t.Run("after action lock acquisition", func(t *testing.T) {
-		fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
-		tm := newPromoteReplicaAndJournalTestTM(t, fakeMysqlDaemon)
-		ctx := &cancelOnErrCallContext{
-			Context:      t.Context(),
-			actionSema:   tm.actionSema,
-			cancelOnCall: 3,
-		}
-
-		response, err := tm.PromoteReplicaAndJournal(ctx, &tabletmanagerdatapb.PromoteReplicaAndJournalRequest{
-			TimeCreated: protoutil.TimeToProto(created),
-			ActionName:  "EmergencyReparentShard",
-		})
-
-		assert.Nil(t, response)
-		require.ErrorIs(t, err, context.Canceled)
-		assert.Equal(t, topodatapb.TabletType_REPLICA, tm.Tablet().Type)
-		assert.True(t, ctx.actionLockHeld.Load())
-		require.True(t, tm.actionSema.TryAcquire(1))
-		tm.actionSema.Release(1)
 		require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
 	})
 
@@ -2791,40 +2574,20 @@ func TestPromoteReplicaAndJournalCancellation(t *testing.T) {
 			mysqlctl.PopulateReparentJournal(created.UnixNano(), "EmergencyReparentShard", topoproto.TabletAliasString(tm.tabletAlias), promotionPosition),
 		}
 		ctx, cancel := context.WithCancel(t.Context())
-		type promoteResult struct {
-			response *tabletmanagerdatapb.PromoteReplicaAndJournalResponse
-			err      error
-		}
 		resultCh := make(chan promoteResult, 1)
 		go func() {
 			response, err := tm.PromoteReplicaAndJournal(ctx, &tabletmanagerdatapb.PromoteReplicaAndJournalRequest{
-				TimeCreated:                    protoutil.TimeToProto(created),
-				ActionName:                     "EmergencyReparentShard",
-				PopulateReparentJournalTimeout: protoutil.DurationToProto(30 * time.Second),
+				TimeCreated: protoutil.TimeToProto(created),
+				ActionName:  "EmergencyReparentShard",
 			})
 			resultCh <- promoteResult{response: response, err: err}
 		}()
 
-		require.Eventually(t, func() bool {
-			select {
-			case <-daemon.entered:
-				return true
-			default:
-				return false
-			}
-		}, 30*time.Second, 10*time.Millisecond)
+		receive(t, daemon.entered)
 		cancel()
 		close(daemon.release)
 
-		var result promoteResult
-		require.Eventually(t, func() bool {
-			select {
-			case result = <-resultCh:
-				return true
-			default:
-				return false
-			}
-		}, 30*time.Second, 10*time.Millisecond)
+		result := receive(t, resultCh)
 		require.NoError(t, result.err)
 		assert.Equal(t, replication.EncodePosition(promotionPosition), result.response.Position)
 		assert.NoError(t, <-daemon.ctxErr)
@@ -2864,23 +2627,9 @@ func TestPromoteReplicaAndJournalRejectsInvalidRequest(t *testing.T) {
 			expectErr: "time_created must be positive",
 		},
 		{
-			name:      "empty action",
-			request:   &tabletmanagerdatapb.PromoteReplicaAndJournalRequest{TimeCreated: protoutil.TimeToProto(created)},
-			expectErr: "action_name",
-		},
-		{
 			name:      "oversized action",
 			request:   &tabletmanagerdatapb.PromoteReplicaAndJournalRequest{TimeCreated: protoutil.TimeToProto(created), ActionName: strings.Repeat("a", 256)},
 			expectErr: "action_name must not exceed 255 bytes",
-		},
-		{
-			name: "negative wait timeout",
-			request: &tabletmanagerdatapb.PromoteReplicaAndJournalRequest{
-				TimeCreated:            protoutil.TimeToProto(created),
-				ActionName:             "EmergencyReparentShard",
-				WaitForPositionTimeout: protoutil.DurationToProto(-time.Second),
-			},
-			expectErr: "wait_for_position_timeout",
 		},
 		{
 			name: "negative journal timeout",
@@ -2890,6 +2639,15 @@ func TestPromoteReplicaAndJournalRejectsInvalidRequest(t *testing.T) {
 				PopulateReparentJournalTimeout: protoutil.DurationToProto(-time.Second),
 			},
 			expectErr: "populate_reparent_journal_timeout",
+		},
+		{
+			name: "journal timeout exceeds remote operation timeout",
+			request: &tabletmanagerdatapb.PromoteReplicaAndJournalRequest{
+				TimeCreated:                    protoutil.TimeToProto(created),
+				ActionName:                     "EmergencyReparentShard",
+				PopulateReparentJournalTimeout: protoutil.DurationToProto(topo.RemoteOperationTimeout + time.Second),
+			},
+			expectErr: "must not exceed the remote operation timeout",
 		},
 	}
 

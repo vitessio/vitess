@@ -39356,12 +39356,6 @@ export namespace tabletmanagerdata {
         /** PromoteReplicaAndJournalRequest semi_sync. */
         semi_sync: boolean;
 
-        /** PromoteReplicaAndJournalRequest wait_position. */
-        wait_position: string;
-
-        /** PromoteReplicaAndJournalRequest wait_for_position_timeout. */
-        wait_for_position_timeout?: (vttime.Duration.$Properties|null);
-
         /** PromoteReplicaAndJournalRequest time_created. */
         time_created?: (vttime.Time.$Properties|null);
 
@@ -39458,12 +39452,6 @@ export namespace tabletmanagerdata {
             /** PromoteReplicaAndJournalRequest semi_sync */
             semi_sync?: (boolean|null);
 
-            /** PromoteReplicaAndJournalRequest wait_position */
-            wait_position?: (string|null);
-
-            /** PromoteReplicaAndJournalRequest wait_for_position_timeout */
-            wait_for_position_timeout?: (vttime.Duration.$Properties|null);
-
             /** PromoteReplicaAndJournalRequest time_created */
             time_created?: (vttime.Time.$Properties|null);
 
@@ -39502,9 +39490,6 @@ export namespace tabletmanagerdata {
 
         /** PromoteReplicaAndJournalResponse position. */
         position: string;
-
-        /** PromoteReplicaAndJournalResponse wait_for_position_error. */
-        wait_for_position_error?: (vtrpc.RPCError.$Properties|null);
 
         /** PromoteReplicaAndJournalResponse promote_replica_error. */
         promote_replica_error?: (vtrpc.RPCError.$Properties|null);
@@ -39598,9 +39583,6 @@ export namespace tabletmanagerdata {
 
             /** PromoteReplicaAndJournalResponse position */
             position?: (string|null);
-
-            /** PromoteReplicaAndJournalResponse wait_for_position_error */
-            wait_for_position_error?: (vtrpc.RPCError.$Properties|null);
 
             /** PromoteReplicaAndJournalResponse promote_replica_error */
             promote_replica_error?: (vtrpc.RPCError.$Properties|null);

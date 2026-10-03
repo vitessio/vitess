@@ -1255,14 +1255,11 @@ func (tm *TabletManager) prepareEmergencyReparentCancellationError(ctx context.C
 
 func (tm *TabletManager) PrepareEmergencyReparent(ctx context.Context, request *tabletmanagerdatapb.PrepareEmergencyReparentRequest) (*tabletmanagerdatapb.PrepareEmergencyReparentResponse, error) {
 	if request == nil {
-		request = &tabletmanagerdatapb.PrepareEmergencyReparentRequest{}
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "request is required")
 	}
 	waitTimeout, err := reparentPhaseTimeout(request.WaitForPositionTimeout)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "invalid wait_for_position_timeout")
-	}
-	if err := ctx.Err(); err != nil {
-		return nil, err
 	}
 
 	tabletAlias := slog.String("tablet_alias", topoproto.TabletAliasString(tm.tabletAlias))
@@ -1296,17 +1293,14 @@ func (tm *TabletManager) PrepareEmergencyReparent(ctx context.Context, request *
 	}()
 	stopCancel()
 	response.Status = status.Status
+	cancellationError := func() error {
+		return tm.prepareEmergencyReparentCancellationError(ctx, response.Status, replicationActionGeneration)
+	}
 	if err != nil {
 		if ctx.Err() != nil {
-			return nil, tm.prepareEmergencyReparentCancellationError(ctx, response.Status, replicationActionGeneration)
+			return nil, cancellationError()
 		}
 		log.Warn("PrepareEmergencyReparent failed to stop the replication I/O thread", tabletAlias, slog.Any("error", err))
-		response.StopReplicationError = reparentPhaseError(err)
-		return response, nil
-	}
-	if response.Status == nil || response.Status.After == nil {
-		err := vterrors.Errorf(vtrpc.Code_INTERNAL, "stop replication returned no after status")
-		log.Warn("PrepareEmergencyReparent could not determine the relay log position", tabletAlias, slog.Any("error", err))
 		response.StopReplicationError = reparentPhaseError(err)
 		return response, nil
 	}
@@ -1321,7 +1315,7 @@ func (tm *TabletManager) PrepareEmergencyReparent(ctx context.Context, request *
 		waitCancel()
 		if err != nil {
 			if ctx.Err() != nil {
-				return nil, tm.prepareEmergencyReparentCancellationError(ctx, response.Status, replicationActionGeneration)
+				return nil, cancellationError()
 			}
 			log.Warn("PrepareEmergencyReparent failed to apply relay logs", tabletAlias, slog.Any("error", err))
 			response.WaitForPositionError = reparentPhaseError(err)
@@ -1335,13 +1329,13 @@ func (tm *TabletManager) PrepareEmergencyReparent(ctx context.Context, request *
 	journalCancel()
 	if err != nil {
 		if ctx.Err() != nil {
-			return nil, tm.prepareEmergencyReparentCancellationError(ctx, response.Status, replicationActionGeneration)
+			return nil, cancellationError()
 		}
 		log.Warn("PrepareEmergencyReparent failed to read the reparent journal", tabletAlias, slog.Any("error", err))
 		response.ReadReparentJournalError = reparentPhaseError(err)
 	}
 	if ctx.Err() != nil {
-		return nil, tm.prepareEmergencyReparentCancellationError(ctx, response.Status, replicationActionGeneration)
+		return nil, cancellationError()
 	}
 	return response, nil
 }
@@ -1391,13 +1385,12 @@ func (tm *TabletManager) PromoteReplicaAndJournal(ctx context.Context, request *
 	if request == nil {
 		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "request is required")
 	}
-	waitTimeout, err := reparentPhaseTimeout(request.WaitForPositionTimeout)
-	if err != nil {
-		return nil, vterrors.Wrap(err, "invalid wait_for_position_timeout")
-	}
 	journalTimeout, err := reparentPhaseTimeout(request.PopulateReparentJournalTimeout)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "invalid populate_reparent_journal_timeout")
+	}
+	if journalTimeout > topo.RemoteOperationTimeout {
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "populate_reparent_journal_timeout must not exceed the remote operation timeout of %s", topo.RemoteOperationTimeout)
 	}
 	if request.TimeCreated == nil {
 		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "time_created is required")
@@ -1409,38 +1402,12 @@ func (tm *TabletManager) PromoteReplicaAndJournal(ctx context.Context, request *
 	if timeCreated.UnixNano() <= 0 {
 		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "time_created must be positive")
 	}
-	if request.ActionName == "" {
-		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "action_name is required")
-	}
 	if len(request.ActionName) > 255 {
 		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "action_name must not exceed 255 bytes")
 	}
-	if tm.tabletAlias == nil || topoproto.TabletAliasIsZero(tm.tabletAlias) {
-		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "tablet alias is not configured")
-	}
 	tabletAlias := slog.String("tablet_alias", topoproto.TabletAliasString(tm.tabletAlias))
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-
 	log.Info("PromoteReplicaAndJournal", tabletAlias)
 	response := &tabletmanagerdatapb.PromoteReplicaAndJournalResponse{}
-	if request.WaitPosition != "" {
-		waitCtx, waitCancel := context.WithTimeout(ctx, waitTimeout)
-		err = tm.WaitForPosition(waitCtx, request.WaitPosition)
-		waitCancel()
-		if err != nil {
-			if ctxErr := ctx.Err(); ctxErr != nil {
-				return nil, ctxErr
-			}
-			log.Warn("PromoteReplicaAndJournal failed to reach the requested position", tabletAlias, slog.Any("error", err))
-			response.WaitForPositionError = reparentPhaseError(err)
-			return response, nil
-		}
-	}
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
 
 	prePromotionCtx, prePromotionCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	err = tm.waitForGrantsToHaveApplied(prePromotionCtx)
@@ -1456,11 +1423,6 @@ func (tm *TabletManager) PromoteReplicaAndJournal(ctx context.Context, request *
 		response.PromoteReplicaError = reparentPhaseError(err)
 		return response, nil
 	}
-	if err := ctx.Err(); err != nil {
-		tm.unlock()
-		return nil, err
-	}
-
 	operationCtx := context.WithoutCancel(ctx)
 	response.Position, err = func() (string, error) {
 		defer tm.unlock()
@@ -1469,11 +1431,7 @@ func (tm *TabletManager) PromoteReplicaAndJournal(ctx context.Context, request *
 		return tm.promoteReplicaLocked(promoteCtx, request.SemiSync)
 	}()
 	if err != nil {
-		if response.Position == "" {
-			log.Warn("PromoteReplicaAndJournal failed to promote the replica", tabletAlias, slog.Any("error", err))
-		} else {
-			log.Warn("PromoteReplicaAndJournal failed after promoting MySQL", tabletAlias, slog.Any("error", err))
-		}
+		log.Warn("PromoteReplicaAndJournal failed to promote the replica", tabletAlias, slog.String("position", response.Position), slog.Any("error", err))
 		response.PromoteReplicaError = reparentPhaseError(err)
 		return response, nil
 	}

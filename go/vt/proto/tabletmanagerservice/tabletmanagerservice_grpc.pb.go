@@ -225,7 +225,7 @@ type TabletManagerClient interface {
 	PrepareEmergencyReparent(ctx context.Context, in *tabletmanagerdata.PrepareEmergencyReparentRequest, opts ...grpc.CallOption) (*tabletmanagerdata.PrepareEmergencyReparentResponse, error)
 	// PromoteReplica makes the replica the new primary
 	PromoteReplica(ctx context.Context, in *tabletmanagerdata.PromoteReplicaRequest, opts ...grpc.CallOption) (*tabletmanagerdata.PromoteReplicaResponse, error)
-	// PromoteReplicaAndJournal optionally waits for a position, promotes the replica, and writes the reparent journal
+	// PromoteReplicaAndJournal promotes the replica and writes the reparent journal
 	PromoteReplicaAndJournal(ctx context.Context, in *tabletmanagerdata.PromoteReplicaAndJournalRequest, opts ...grpc.CallOption) (*tabletmanagerdata.PromoteReplicaAndJournalResponse, error)
 	Backup(ctx context.Context, in *tabletmanagerdata.BackupRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[tabletmanagerdata.BackupResponse], error)
 	// RestoreFromBackup deletes all local data and restores it from the latest backup.
@@ -1095,7 +1095,7 @@ type TabletManagerServer interface {
 	PrepareEmergencyReparent(context.Context, *tabletmanagerdata.PrepareEmergencyReparentRequest) (*tabletmanagerdata.PrepareEmergencyReparentResponse, error)
 	// PromoteReplica makes the replica the new primary
 	PromoteReplica(context.Context, *tabletmanagerdata.PromoteReplicaRequest) (*tabletmanagerdata.PromoteReplicaResponse, error)
-	// PromoteReplicaAndJournal optionally waits for a position, promotes the replica, and writes the reparent journal
+	// PromoteReplicaAndJournal promotes the replica and writes the reparent journal
 	PromoteReplicaAndJournal(context.Context, *tabletmanagerdata.PromoteReplicaAndJournalRequest) (*tabletmanagerdata.PromoteReplicaAndJournalResponse, error)
 	Backup(*tabletmanagerdata.BackupRequest, grpc.ServerStreamingServer[tabletmanagerdata.BackupResponse]) error
 	// RestoreFromBackup deletes all local data and restores it from the latest backup.

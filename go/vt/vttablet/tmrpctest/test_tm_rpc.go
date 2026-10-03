@@ -1506,18 +1506,12 @@ func tmRPCTestPromoteReplicaPanic(ctx context.Context, t *testing.T, client tmcl
 var (
 	testPromoteReplicaAndJournalRequest = &tabletmanagerdatapb.PromoteReplicaAndJournalRequest{
 		SemiSync:                       true,
-		WaitPosition:                   testWaitPosition,
-		WaitForPositionTimeout:         protoutil.DurationToProto(38 * time.Second),
 		TimeCreated:                    protoutil.TimeToProto(time.Unix(1700000000, 123)),
 		ActionName:                     testActionName,
-		PopulateReparentJournalTimeout: protoutil.DurationToProto(39 * time.Second),
+		PopulateReparentJournalTimeout: protoutil.DurationToProto(10 * time.Second),
 	}
 	testPromoteReplicaAndJournalResponse = &tabletmanagerdatapb.PromoteReplicaAndJournalResponse{
 		Position: testReplicationPosition,
-		WaitForPositionError: &vtrpcpb.RPCError{
-			Code:    vtrpcpb.Code_DEADLINE_EXCEEDED,
-			Message: "position wait failed",
-		},
 		PromoteReplicaError: &vtrpcpb.RPCError{
 			Code:    vtrpcpb.Code_ABORTED,
 			Message: "promotion failed",
