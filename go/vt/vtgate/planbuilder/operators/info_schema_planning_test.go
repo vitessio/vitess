@@ -22,10 +22,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 // environmentOnlyVSchema stubs the one plancontext.VSchema method extraction
@@ -36,6 +38,118 @@ type environmentOnlyVSchema struct {
 
 func (environmentOnlyVSchema) Environment() *vtenv.Environment {
 	return vtenv.NewTestEnv()
+}
+
+type infoSchemaRoutingVSchema struct {
+	environmentOnlyVSchema
+}
+
+func (infoSchemaRoutingVSchema) AnyKeyspace() (*vindexes.Keyspace, error) {
+	return &vindexes.Keyspace{Name: "commerce"}, nil
+}
+
+func (infoSchemaRoutingVSchema) ConnCollation() collations.ID {
+	return collations.CollationUtf8mb4ID
+}
+
+// TestInfoSchemaRoutingResetPreservesRoutingValues pins that resetRoutingLogic
+// replays the original predicates, not the rewritten ones: the routing values
+// and the tablet predicates must be unchanged after repeated resets.
+func TestInfoSchemaRoutingResetPreservesRoutingValues(t *testing.T) {
+	tests := []struct {
+		name       string
+		predicates []string
+		schemas    []string
+		tables     map[string]string
+	}{
+		{
+			name:       "schema equality",
+			predicates: []string{"table_schema = 'commerce'"},
+			schemas:    []string{"'commerce'"},
+		},
+		{
+			name:       "reversed schema equality",
+			predicates: []string{"'commerce' = table_schema"},
+			schemas:    []string{"'commerce'"},
+		},
+		{
+			name:       "schema bind variable",
+			predicates: []string{"table_schema = :schema"},
+			schemas:    []string{":schema"},
+		},
+		{
+			name:       "schema single value IN",
+			predicates: []string{"table_schema in ('commerce')"},
+			schemas:    []string{"'commerce'"},
+		},
+		{
+			name:       "schema tuple IN",
+			predicates: []string{"table_schema in ('commerce', 'customer')"},
+			schemas:    []string{"('commerce', 'customer')"},
+		},
+		{
+			name:       "schema list argument",
+			predicates: []string{"table_schema in ::schemas"},
+			schemas:    []string{"::schemas"},
+		},
+		{
+			name:       "table equality",
+			predicates: []string{"table_name = 'orders'"},
+			tables:     map[string]string{"table_name": "'orders'"},
+		},
+		{
+			name:       "conflicting table predicates",
+			predicates: []string{"table_name = 'orders'", "table_name = 'customers'"},
+			tables:     map[string]string{"table_name": "'orders'"},
+		},
+		{
+			name:       "schema and table predicates",
+			predicates: []string{"table_schema = 'commerce'", "table_name = :table"},
+			schemas:    []string{"'commerce'"},
+			tables:     map[string]string{"table_name": ":table"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := &plancontext.PlanningContext{
+				ReservedVars:      sqlparser.NewReservedVars("vtg", sqlparser.BindVars{"schema": {}, "schemas": {}, "table": {}}),
+				ReservedArguments: map[sqlparser.Expr]string{},
+				SemTable:          semantics.EmptySemTable(),
+				VSchema:           infoSchemaRoutingVSchema{},
+			}
+			isr := &InfoSchemaRouting{}
+			var predicates []sqlparser.Expr
+			var rewritten []string
+			for _, query := range tt.predicates {
+				expr, err := sqlparser.NewTestParser().ParseExpr(query)
+				require.NoError(t, err)
+				require.Same(t, isr, UpdateRoutingLogic(ctx, expr, isr))
+				predicates = append(predicates, expr)
+				rewritten = append(rewritten, sqlparser.String(expr))
+			}
+
+			checkRouting := func() {
+				t.Helper()
+				var schemas []string
+				for _, expr := range isr.SysTableTableSchema {
+					schemas = append(schemas, sqlparser.String(expr))
+				}
+				assert.Equal(t, tt.schemas, schemas)
+				assert.Len(t, isr.SysTableTableName, len(tt.tables))
+				for name, value := range tt.tables {
+					assert.Equal(t, value, sqlparser.String(isr.SysTableTableName[name]))
+				}
+			}
+			checkRouting()
+			for range 2 {
+				require.Same(t, isr, isr.resetRoutingLogic(ctx))
+				checkRouting()
+				for i, expr := range predicates {
+					assert.Equal(t, rewritten[i], sqlparser.String(expr), "reset must preserve the tablet predicate")
+				}
+			}
+		})
+	}
 }
 
 // TestExtractInfoSchemaRoutingPredicateListArgReplay pins that re-extracting an
