@@ -180,6 +180,15 @@ func (r *RecurseCTE) planOffsets(ctx *plancontext.PlanningContext) Operator {
 				continue
 			}
 
+			// a declared column list renames every output column of the CTE, so
+			// its names are matched positionally against the seed columns first
+			for offset, column := range r.Def.Columns {
+				if lhsExpr.Expr.Name.Equal(column) {
+					r.Vars[lhsExpr.Name] = offset
+					continue outer
+				}
+			}
+
 			for offset, column := range columns {
 				if lhsExpr.Expr.Name.EqualString(column.ColumnName()) {
 					r.Vars[lhsExpr.Name] = offset
