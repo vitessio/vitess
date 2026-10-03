@@ -1364,3 +1364,49 @@ func TestValidateFlags(t *testing.T) {
 	demotePrimaryLockWaitTimeout = time.Second
 	require.NoError(t, validateFlags())
 }
+
+// TestStartFailureStopsBackgroundGoroutines checks that a failed Start does not
+// leave the keyspace rebuild and shard sync goroutines running. They use the
+// topo server, which the caller may close as soon as Start has returned.
+func TestStartFailureStopsBackgroundGoroutines(t *testing.T) {
+	defer func(saved time.Duration) { rebuildKeyspaceRetryInterval = saved }(rebuildKeyspaceRetryInterval)
+	rebuildKeyspaceRetryInterval = 10 * time.Millisecond
+	// --restore-from-backup without a my.cnf makes Start fail in handleRestore,
+	// after createKeyspaceShard and startShardSync have spawned their goroutines.
+	defer func(saved bool) { restoreFromBackup = saved }(restoreFromBackup)
+	restoreFromBackup = true
+
+	ctx := t.Context()
+	ts := memorytopo.NewServer(ctx, "cell1")
+	// With only one of two shards populated the keyspace rebuild keeps
+	// retrying, so its goroutine never exits on its own.
+	tablet := newTestTablet(t, 1, "ks", "-80", nil)
+	fakeDb := newTestMysqlDaemon(t, 1)
+	tm := &TabletManager{
+		BatchCtx:            ctx,
+		TopoServer:          ts,
+		MysqlDaemon:         fakeDb,
+		DBConfigs:           &dbconfigs.DBConfigs{},
+		SemiSyncMonitor:     semisyncmonitor.CreateTestSemiSyncMonitor(fakeDb.DB(), exporter),
+		QueryServiceControl: tabletservermock.NewController(),
+	}
+
+	err := tm.Start(tablet, nil)
+	require.ErrorContains(t, err, "without a my.cnf file")
+
+	tm.mutex.Lock()
+	rebuildDone, shardSyncDone := tm._rebuildKeyspaceDone, tm._shardSyncDone
+	tm.mutex.Unlock()
+	require.NotNil(t, rebuildDone, "Start should have started a keyspace rebuild before failing")
+	require.NotNil(t, shardSyncDone, "Start should have started the shard sync loop before failing")
+
+	assertStopped := func(name string, done <-chan struct{}) {
+		select {
+		case <-done:
+		default:
+			assert.Fail(t, name+" goroutine is still running after Start failed")
+		}
+	}
+	assertStopped("rebuildKeyspace", rebuildDone)
+	assertStopped("shardSyncLoop", shardSyncDone)
+}
