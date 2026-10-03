@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/json"
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -48,6 +49,22 @@ func TestHashCodes(t *testing.T) {
 		{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`{"1": "foo", "2": "bar"}`)), sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`{"2": "bar", "1": "foo"}`)), true, nil},
 		{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`{"1": "foo", "2": "bar"}`)), sqltypes.NewVarChar(`{"2": "bar", "1": "foo"}`), false, nil},
 		{sqltypes.NewVarChar(`{"2": "bar", "1": "foo"}`), sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`{"1": "foo", "2": "bar"}`)), false, nil},
+		// JSON arrays and objects with the same cardinality but different contents must not collide.
+		{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[1]`)), sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[2]`)), false, nil},
+		{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`{"a": 1}`)), sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`{"b": 1}`)), false, nil},
+		{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`{"a": 1}`)), sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`{"a": 2}`)), false, nil},
+		{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[[1, 2], {"a": [3]}]`)), sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[[1, 2], {"a": [4]}]`)), false, nil},
+		{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[[1, 2], {"a": [3]}]`)), sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[[1, 2], {"a": [3]}]`)), true, nil},
+		// Numerically equal JSON numbers hash the same, nested or not.
+		{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`1`)), sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`1.0`)), true, nil},
+		{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[1, 2.50]`)), sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[1.0, 2.5]`)), true, nil},
+		// JSON scalars of different types never compare equal.
+		{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`"1"`)), sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`1`)), false, nil},
+		{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`true`)), sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`1`)), false, nil},
+		{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`true`)), sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`false`)), false, nil},
+		{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`null`)), sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[]`)), false, nil},
+		{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`"ab"`)), sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`"ab"`)), true, nil},
+		{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`"ab"`)), sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`"AB"`)), false, nil},
 	}
 
 	for _, tc := range cases {
@@ -115,6 +132,136 @@ func TestEnumSetHashing(t *testing.T) {
 	assert.NotEqual(t, hSetA, hSetC)
 }
 
+func parseJSON(t *testing.T, doc string) *json.Value {
+	t.Helper()
+
+	var p json.Parser
+	v, err := p.ParseBytes([]byte(doc))
+	require.NoError(t, err)
+	return v
+}
+
+// parseStoredJSON reads doc as text MySQL printed from a stored document.
+func parseStoredJSON(t *testing.T, doc string) *json.Value {
+	t.Helper()
+
+	var p json.Parser
+	v, err := p.ParseStored([]byte(doc))
+	require.NoError(t, err)
+	return v
+}
+
+func hashJSON(v *json.Value) vthash.Hash {
+	hasher := vthash.New()
+	v.Hash(&hasher)
+	return hasher.Sum128()
+}
+
+// TestJSONHashMatchesComparison pins the invariant that every consumer of a JSON
+// hash relies on: the compiled IN table, the DISTINCT probe table and the hash
+// join probe table all treat a hash hit as equality without comparing the
+// candidate, so two documents may share a hash only when they compare equal.
+func TestJSONHashMatchesComparison(t *testing.T) {
+	documents := []struct {
+		name  string
+		value *json.Value
+	}{
+		{`[1]`, parseJSON(t, `[1]`)},
+		{`[2]`, parseJSON(t, `[2]`)},
+		{`[1,2]`, parseJSON(t, `[1, 2]`)},
+		{`[2,1]`, parseJSON(t, `[2, 1]`)},
+		{`[]`, parseJSON(t, `[]`)},
+		{`[[]]`, parseJSON(t, `[[]]`)},
+		// Element payloads that spell out the tags framing their neighbours.
+		{"array of empty and tagged string", parseJSON(t, "[\"\", \"X\x02\x00Y\"]")},
+		{"array of tagged string and Y", parseJSON(t, "[\"\x02\x00X\", \"Y\"]")},
+		{`{"a":1}`, parseJSON(t, `{"a": 1}`)},
+		{`{"b":1}`, parseJSON(t, `{"b": 1}`)},
+		{`{"a":2}`, parseJSON(t, `{"a": 2}`)},
+		{`{"a":[1]}`, parseJSON(t, `{"a": [1]}`)},
+		{`{"a":[2]}`, parseJSON(t, `{"a": [2]}`)},
+		{`{"a":1,"b":2}`, parseJSON(t, `{"a": 1, "b": 2}`)},
+		{`{"b":2,"a":1}`, parseJSON(t, `{"b": 2, "a": 1}`)},
+		{`{"a":"b"}`, parseJSON(t, `{"a": "b"}`)},
+		{`{"ab":""}`, parseJSON(t, `{"ab": ""}`)},
+		{`1`, parseJSON(t, `1`)},
+		{`1.0`, parseJSON(t, `1.0`)},
+		{`1e0`, parseJSON(t, `1e0`)},
+		{`2`, parseJSON(t, `2`)},
+		// A number is fingerprinted by the form it is stored in. The first is
+		// an integer and the next two are one double with its value; the
+		// fourth stayed an integer and keeps the digit no double can hold,
+		// which the fifth lost on becoming one.
+		{"9007199254740992", parseJSON(t, `9007199254740992`)},
+		{"9007199254740992.0", parseJSON(t, `9007199254740992.0`)},
+		{"9007199254740992.1", parseJSON(t, `9007199254740992.1`)},
+		{"9007199254740993", parseJSON(t, `9007199254740993`)},
+		{"9007199254740993.0", parseJSON(t, `9007199254740993.0`)},
+		// Printed from a stored document, a spelling no double prints is a
+		// decimal that keeps its digits.
+		{"stored 9007199254740993.0", parseStoredJSON(t, `9007199254740993.0`)},
+		{"stored 9007199254740992.0", parseStoredJSON(t, `9007199254740992.0`)},
+		{"stored 1.500", parseStoredJSON(t, `1.500`)},
+		{"stored 99999999999999999999", parseStoredJSON(t, `99999999999999999999`)},
+		{"stored 1e20", parseStoredJSON(t, `1e20`)},
+		{"1e27", parseJSON(t, `1e27`)},
+		{"1e27 written out", parseJSON(t, `1000000000000000000000000000`)},
+		// Integral spellings canonicalise on a different code path to the rest,
+		// so the two have to agree on every value they both accept.
+		{"7", json.NewNumber("7", json.NumberTypeSigned)},
+		{"7.0", json.NewNumber("7.0", json.NumberTypeFloat)},
+		{"007", json.NewNumber("007", json.NumberTypeSigned)},
+		{"-7", json.NewNumber("-7", json.NumberTypeSigned)},
+		{"-7.0", json.NewNumber("-7.0", json.NumberTypeFloat)},
+		{"-0", json.NewNumber("-0", json.NumberTypeSigned)},
+		{"0", json.NewNumber("0", json.NumberTypeSigned)},
+		{`"a"`, parseJSON(t, `"a"`)},
+		{`"b"`, parseJSON(t, `"b"`)},
+		{`true`, parseJSON(t, `true`)},
+		{`false`, parseJSON(t, `false`)},
+		{`null`, parseJSON(t, `null`)},
+		{"date 2020-01-01", json.NewDate("2020-01-01")},
+		{"datetime 2020-01-01 00:00:00", json.NewDateTime("2020-01-01 00:00:00")},
+		{"datetime 2020-01-01 00:00:00.000000", json.NewDateTime("2020-01-01 00:00:00.000000")},
+		{"time 00:00:00", json.NewTime("00:00:00")},
+		{"time -00:00:00", json.NewTime("-00:00:00")},
+		{"time 10:00:00", json.NewTime("10:00:00")},
+		{`bit "x"`, json.NewBit("x")},
+		{`blob "x"`, json.NewBlob("x")},
+		{`opaque "x"`, json.NewOpaqueValue("x")},
+	}
+
+	for _, lhs := range documents {
+		for _, rhs := range documents {
+			t.Run(lhs.name+" vs "+rhs.name, func(t *testing.T) {
+				sameHash := hashJSON(lhs.value) == hashJSON(rhs.value)
+
+				cmp, err := compareJSONValue(lhs.value, rhs.value)
+				require.NoError(t, err)
+
+				require.Equalf(t, cmp == 0, sameHash,
+					"%s and %s compare as %s but hash as %s",
+					lhs.name, rhs.name, equality(cmp == 0), equality(sameHash))
+			})
+		}
+	}
+}
+
+// TestJSONHashIgnoresLazyUnescaping checks that a JSON string hashes the same
+// whether or not it has already been unescaped. Parsing leaves a string in a raw
+// kind and Type() rewrites it in place on first use, so two equal strings can
+// reach the hasher in different internal states.
+func TestJSONHashIgnoresLazyUnescaping(t *testing.T) {
+	plain := parseJSON(t, `"ab"`)
+	escaped := parseJSON(t, `"\u0061b"`)
+
+	normalized := parseJSON(t, `"ab"`)
+	require.Equal(t, json.TypeString, normalized.Type())
+
+	require.Equal(t, hashJSON(normalized), hashJSON(plain))
+	require.Equal(t, hashJSON(normalized), hashJSON(escaped))
+}
+
 type equality bool
 
 func (e equality) Operator() string {
@@ -154,6 +301,22 @@ func TestHashCodes128(t *testing.T) {
 		{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`{"1": "foo", "2": "bar"}`)), sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`{"2": "bar", "1": "foo"}`)), true, nil},
 		{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`{"1": "foo", "2": "bar"}`)), sqltypes.NewVarChar(`{"2": "bar", "1": "foo"}`), false, nil},
 		{sqltypes.NewVarChar(`{"2": "bar", "1": "foo"}`), sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`{"1": "foo", "2": "bar"}`)), false, nil},
+		// JSON arrays and objects with the same cardinality but different contents must not collide.
+		{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[1]`)), sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[2]`)), false, nil},
+		{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`{"a": 1}`)), sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`{"b": 1}`)), false, nil},
+		{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`{"a": 1}`)), sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`{"a": 2}`)), false, nil},
+		{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[[1, 2], {"a": [3]}]`)), sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[[1, 2], {"a": [4]}]`)), false, nil},
+		{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[[1, 2], {"a": [3]}]`)), sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[[1, 2], {"a": [3]}]`)), true, nil},
+		// Numerically equal JSON numbers hash the same, nested or not.
+		{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`1`)), sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`1.0`)), true, nil},
+		{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[1, 2.50]`)), sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[1.0, 2.5]`)), true, nil},
+		// JSON scalars of different types never compare equal.
+		{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`"1"`)), sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`1`)), false, nil},
+		{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`true`)), sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`1`)), false, nil},
+		{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`true`)), sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`false`)), false, nil},
+		{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`null`)), sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`[]`)), false, nil},
+		{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`"ab"`)), sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`"ab"`)), true, nil},
+		{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`"ab"`)), sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`"AB"`)), false, nil},
 	}
 
 	for _, tc := range cases {

@@ -433,7 +433,7 @@ func valueToEval(value sqltypes.Value, collation collations.TypedCollation, valu
 		return nil, nil
 	case tt == sqltypes.TypeJSON:
 		var p json.Parser
-		j, err := p.ParseBytes(value.Raw())
+		j, err := p.ParseStored(value.Raw())
 		return j, wrap(err)
 	case fallbackBinary(tt):
 		return newEvalRaw(tt, value.Raw(), collation), nil
