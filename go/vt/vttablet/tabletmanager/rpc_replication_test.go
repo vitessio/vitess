@@ -2099,7 +2099,7 @@ func TestPrepareEmergencyReparentCancellationRestoresIOThread(t *testing.T) {
 		name             string
 		initialIORunning bool
 		configure        func(*prepareCancellationMysqlDaemon) <-chan struct{}
-		beforeCancel     func(*TabletManager)
+		beforeCancel     func(*testing.T, *TabletManager)
 		wantRunning      bool
 		wantStartCall    int32
 	}{
@@ -2132,11 +2132,24 @@ func TestPrepareEmergencyReparentCancellationRestoresIOThread(t *testing.T) {
 				daemon.waitEntered = make(chan struct{})
 				return daemon.waitEntered
 			},
-			beforeCancel: func(tm *TabletManager) {
+			beforeCancel: func(t *testing.T, tm *TabletManager) {
 				tm.Sleep(t.Context(), 0)
 			},
 			wantRunning:   true,
 			wantStartCall: 1,
+		},
+		{
+			name:             "failed replication action",
+			initialIORunning: true,
+			configure: func(daemon *prepareCancellationMysqlDaemon) <-chan struct{} {
+				daemon.CurrentRelayLogPosition = relayLogPosition
+				daemon.waitEntered = make(chan struct{})
+				return daemon.waitEntered
+			},
+			beforeCancel: func(t *testing.T, tm *TabletManager) {
+				_, err := tm.StopReplicationMinimum(t.Context(), "not-a-position", 30*time.Second)
+				require.ErrorContains(t, err, "parse error")
+			},
 		},
 		{
 			name:             "tablet was promoted",
@@ -2146,7 +2159,7 @@ func TestPrepareEmergencyReparentCancellationRestoresIOThread(t *testing.T) {
 				daemon.waitEntered = make(chan struct{})
 				return daemon.waitEntered
 			},
-			beforeCancel: func(tm *TabletManager) {
+			beforeCancel: func(t *testing.T, tm *TabletManager) {
 				tm.tmState.displayState.mu.Lock()
 				tm.tmState.displayState.tablet.Type = topodatapb.TabletType_PRIMARY
 				tm.tmState.displayState.mu.Unlock()
@@ -2190,7 +2203,7 @@ func TestPrepareEmergencyReparentCancellationRestoresIOThread(t *testing.T) {
 
 			receive(t, entered)
 			if tc.beforeCancel != nil {
-				tc.beforeCancel(tm)
+				tc.beforeCancel(t, tm)
 			}
 			cancel()
 
