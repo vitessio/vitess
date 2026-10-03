@@ -315,8 +315,12 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 		BeforeAnalyses: []AnalysisCode{PrimarySemiSyncBlocked},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
 			// A group secondary is read-only by design. It is the group primary's tablet that
-			// must become the shard primary (GroupPrimaryNotInTopo), not this one writable.
-			return a.IsClusterPrimary && a.IsReadOnly && !isGroupSecondary(a)
+			// must become the shard primary (GroupPrimaryNotInTopo), not this one writable. Under a
+			// group replication policy, MySQL stays read-only as long as its tablet may not serve
+			// (the serving invariant), and the recovery's UndoDemotePrimary is refused then: it only
+			// applies to the primary of the shard's legitimate group, the backstop that makes it
+			// writable once it may serve.
+			return a.IsClusterPrimary && a.IsReadOnly && !isGroupSecondary(a) && matchPrimaryOfGroupShard(a, ca)
 		},
 	},
 	{
@@ -400,9 +404,11 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 		},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
 			// A tablet whose MySQL is no longer the group primary demotes itself. The group
-			// primary's tablet takes over (GroupPrimaryNotInTopo, then StaleTopoPrimary).
+			// primary's tablet takes over (GroupPrimaryNotInTopo, then StaleTopoPrimary). Its
+			// recovery, UndoDemotePrimary, only succeeds on the primary of the shard's legitimate group
+			// under a group replication policy (see matchPrimaryOfGroupShard).
 			return a.IsClusterPrimary && a.CurrentTabletType != topodatapb.TabletType_UNKNOWN && a.CurrentTabletType != topodatapb.TabletType_PRIMARY &&
-				!isGroupSecondary(a)
+				!isGroupSecondary(a) && matchPrimaryOfGroupShard(a, ca)
 		},
 	},
 	{

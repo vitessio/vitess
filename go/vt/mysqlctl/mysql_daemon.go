@@ -79,9 +79,18 @@ type MysqlDaemon interface {
 	GroupReplicationApplierStatus(ctx context.Context) (*mysql.GroupReplicationApplierStatus, error)
 	// GroupReplicationFenceStatus returns the member's state, view and super_read_only, with a
 	// single query, for the tablet's fast check of whether its MySQL must be fenced. The view id is
-	// only read if withView is set: MySQL does not return it while START GROUP_REPLICATION runs.
+	// only read if withView is set: MySQL can hold it back for about a second while a START
+	// GROUP_REPLICATION forms or joins a group.
 	GroupReplicationFenceStatus(ctx context.Context, withView bool) (*mysql.GroupReplicationFenceStatus, error)
+	// ConfigureGroupReplication applies cfg to a member that is not in a group, and disables the
+	// member action mysql_disable_super_read_only_if_primary in its own configuration.
 	ConfigureGroupReplication(ctx context.Context, cfg mysql.GroupReplicationConfig) error
+	// GroupReplicationMemberActions returns the member actions configuration of the member: its
+	// group's while it is in a group.
+	GroupReplicationMemberActions(ctx context.Context) (*mysql.GroupReplicationMemberActions, error)
+	// DisableGroupReplicationSuperReadOnlyAction disables mysql_disable_super_read_only_if_primary in
+	// the configuration of the member's group; only the writable primary of the group may.
+	DisableGroupReplicationSuperReadOnlyAction(ctx context.Context) error
 	StartGroupReplication(ctx context.Context, bootstrap bool) error
 	StopGroupReplication(ctx context.Context) error
 	SetGroupReplicationPrimary(ctx context.Context, memberUUID string) error

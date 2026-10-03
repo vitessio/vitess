@@ -545,6 +545,17 @@ func groupHasNoMember(a *DetectionAnalysis, ca *clusterAnalysis) bool {
 	return policy.IsGroupReplication(ca.durability) && !a.shardGroupAnyMember
 }
 
+// matchPrimaryOfGroupShard returns whether a PRIMARY analysis that VTOrc repairs with
+// UndoDemotePrimary (PrimaryIsReadOnly, PrimaryCurrentTypeMismatch) applies to the analyzed tablet:
+// always under a policy that does not use Group Replication, and under one that does only on the
+// primary of the shard's legitimate group. Group Replication leaves the primary it elects
+// super_read_only, and a PRIMARY tablet whose MySQL is not that primary, or that may not serve, stays
+// read-only by design: the tablet refuses UndoDemotePrimary until the serving invariant holds, and
+// VTOrc would retry it every few seconds.
+func matchPrimaryOfGroupShard(a *DetectionAnalysis, ca *clusterAnalysis) bool {
+	return !policy.IsGroupReplication(ca.durability) || a.IsLegitimateGroupPrimary
+}
+
 // matchGroupNotBootstrapped returns whether the shard's group must be bootstrapped: its durability
 // policy uses Group Replication, no tablet is known to be an active member, voters have been
 // selected, and VTOrc reached every voter on its last check, so it knows that none of them is.

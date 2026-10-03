@@ -259,6 +259,14 @@ func (s *groupReplicationSync) checkFence(ctx context.Context) {
 
 	reason := tm.groupReplicationFenceReason(fs.Status, fs.ViewKnown, tablet.Type, &s.majorityIncarnation, time.Now())
 	if reason == "" {
+		if rec := tm.groupReplicationTopo.lastRecord(); rec != nil && tm.cachedPolicyIsGroupReplication(rec) &&
+			tablet.Type == topodatapb.TabletType_PRIMARY && fs.SuperReadOnly && mysql.IsGroupPrimary(fs.Status) &&
+			!tm.groupReplicationFence.fenced.Load() && !tm.groupReplicationDemoted.Load() && tm.QueryServiceControl.IsServing() {
+			// A serving primary whose MySQL is read-only, for example because the end of its election
+			// made it super_read_only after the decision that it may serve: the sync loop decides
+			// again, and makes MySQL writable (servesReadOnly).
+			s.wakeUp()
+		}
 		return
 	}
 	if tm.fenceGroupReplicationMember(ctx, fs, reason, epoch) {
@@ -427,27 +435,49 @@ func (tm *TabletManager) setFenceSuperReadOnly(ctx context.Context) error {
 	return err
 }
 
-// liftGroupReplicationFenceLocked makes MySQL writable again if it is fenced, after the caller
-// decided, under the action lock and on MySQL's status read under it, that the tablet may serve as
-// PRIMARY. snap is what groupReplicationFence.snapshot returned before the caller read that status:
-// a fence decided since stands, MySQL stays (or is again) fenced, and it returns false. It returns
-// true if MySQL is not fenced anymore.
+// liftGroupReplicationFenceLocked makes MySQL writable if it is not, after the caller decided, under
+// the action lock and on MySQL's status read under it, that the tablet may serve as PRIMARY. MySQL is
+// read-only when the fence check fenced it, and also when Group Replication elected it primary: the
+// member action mysql_disable_super_read_only_if_primary is disabled, so only this decision makes it
+// writable. snap is what groupReplicationFence.snapshot returned before the caller read that status:
+// a fence decided since stands, MySQL stays (or is again) fenced, and it returns false. It also
+// returns false while the primary election that made MySQL the primary still runs (Group Replication
+// sets super_read_only when it ends), or if MySQL cannot be made writable. It returns true if MySQL
+// takes writes.
+//
+// The prepared transactions are redone too if the tablet became PRIMARY without serving
+// (groupReplicationRedoPending): the tablet does not serve yet, so the transaction engine may restart.
 func (tm *TabletManager) liftGroupReplicationFenceLocked(ctx context.Context, snap uint64) bool {
 	f := &tm.groupReplicationFence
 	if f.decidedSince(snap) {
 		return false
 	}
-	if !f.fenced.Load() {
-		return true
-	}
-	if err := tm.setGroupPrimaryWritable(ctx); err != nil {
-		log.Warn("Group replication: cannot lift the fence of MySQL, the primary does not serve yet", slog.Any("error", err))
+	readOnly, err := tm.mysqlReadOnly(ctx)
+	if err != nil {
+		log.Warn("Group replication: cannot read whether MySQL is read-only, the primary does not serve yet", slog.Any("error", err))
 		return false
 	}
+	fenced := f.fenced.Load()
+	if !readOnly && !fenced {
+		return true
+	}
+	makeWritable := tm.setGroupPrimaryWritable
+	if tm.groupReplicationRedoPending.Load() {
+		makeWritable = tm.redoPreparedTransactionsAndSetReadWrite
+	}
+	if err := makeWritable(ctx); err != nil {
+		log.Warn("Group replication: cannot make MySQL writable, the primary does not serve yet", slog.Any("error", err))
+		return false
+	}
+	tm.groupReplicationRedoPending.Store(false)
 	if !tm.settleGroupReplicationFenceLocked(ctx, snap) {
 		return false
 	}
-	log.Info("Group replication: lifted the fence of MySQL, the primary may serve")
+	if fenced {
+		log.Info("Group replication: lifted the fence of MySQL, the primary may serve")
+	} else {
+		log.Info("Group replication: made MySQL writable, the primary may serve")
+	}
 	return true
 }
 

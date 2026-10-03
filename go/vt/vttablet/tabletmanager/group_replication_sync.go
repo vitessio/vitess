@@ -122,6 +122,11 @@ type groupReplicationSync struct {
 	// Only the fence check's goroutine uses them.
 	fenceViewID         string
 	majorityIncarnation string
+
+	// memberActionsIncarnation is the last group incarnation in which the loop found the member
+	// action mysql_disable_super_read_only_if_primary disabled, or disabled it, at memberActionsChecked.
+	memberActionsIncarnation string
+	memberActionsChecked     time.Time
 }
 
 func newGroupReplicationSync(tm *TabletManager) *groupReplicationSync {
@@ -132,6 +137,15 @@ func newGroupReplicationSync(tm *TabletManager) *groupReplicationSync {
 // policy from the topology in that run. It does not wait.
 func (s *groupReplicationSync) requestRefresh() {
 	s.refresh.Store(true)
+	select {
+	case s.wake <- struct{}{}:
+	default:
+	}
+}
+
+// wakeUp makes the loop run right away, with its cached shard record and durability policy. It does
+// not wait.
+func (s *groupReplicationSync) wakeUp() {
 	select {
 	case s.wake <- struct{}{}:
 	default:
@@ -244,6 +258,9 @@ func (s *groupReplicationSync) reconcile(ctx context.Context) {
 		s.enforceSemiSync(ctx, status, durability, tablet)
 	}
 	s.enforceVoterMajority(ctx, status, durability, tablet, gen)
+	if tablet.Type == topodatapb.TabletType_PRIMARY && mysql.IsGroupPrimary(status) && !status.GetPrimaryElectionInProgress() {
+		s.disableSuperReadOnlyActionOnline(ctx, status)
+	}
 	if s.isStalePrimary(ctx, status, durability, tablet) {
 		s.demoteStalePrimary(ctx, durability)
 		tablet = tm.Tablet()
@@ -472,9 +489,10 @@ func (s *groupReplicationSync) promote(ctx context.Context, tabletType topodatap
 		return
 	}
 	s.setTwoPCAllowed(twoPCDurable(status, tm.isPrimarySideSemiSyncEnabled(ctx)))
-	// DBActionSetReadWrite redoes prepared transactions. MySQL is already writable. Whether the
-	// new PRIMARY serves is decided on MySQL's status once more, against the shard's recorded
-	// group (see groupReplicationServingReason).
+	// Group Replication left MySQL super_read_only. Whether the new PRIMARY serves is decided on
+	// MySQL's status once more, once its election ended, against the shard's recorded group (see
+	// groupReplicationServingReason): DBActionSetReadWrite then makes MySQL writable and redoes
+	// prepared transactions, and MySQL stays read-only otherwise.
 	if err := tm.changeTypeWithGroupRecordLocked(ctx, topodatapb.TabletType_PRIMARY, DBActionSetReadWrite, SemiSyncActionNone, rec); err != nil {
 		log.Error("Group replication sync: failed to promote the tablet to PRIMARY", slog.Any("error", err))
 	}
@@ -639,6 +657,11 @@ func (s *groupReplicationSync) enforceVoterMajority(ctx context.Context, status 
 	if !mysql.IsGroupPrimary(status) {
 		return
 	}
+	if status.GetPrimaryElectionInProgress() {
+		// The status read at the start of the run is older than the election's end, which the
+		// promotion of this run may have waited for already: the next run decides on a newer one.
+		return
+	}
 	reason, rec, durability, err := s.servingReason(ctx, status, durability)
 	if err != nil {
 		log.Warn("Group replication sync: cannot check the voter majority of the group", slog.Any("error", err))
@@ -670,9 +693,24 @@ func (s *groupReplicationSync) enforceVoterMajority(ctx context.Context, status 
 		}
 		return
 	}
-	if current != "" || tm.groupReplicationFence.fenced.Load() {
+	if current != "" || tm.groupReplicationFence.fenced.Load() || s.servesReadOnly(ctx) {
 		s.serveAgain(ctx, durability, rec)
 	}
+}
+
+// servesReadOnly returns whether the PRIMARY tablet serves while its MySQL is read-only. It should
+// not: the decision that it may serve made MySQL writable. Group Replication sets super_read_only
+// when the election that elected MySQL ends, though, and a decision that read MySQL's status just
+// before the election started (MySQL may report itself PRIMARY a moment before the election runs)
+// would be undone: serveAgain then makes MySQL writable again. A tablet whose primary was demoted
+// (DemotePrimary) does not serve, and is left alone.
+func (s *groupReplicationSync) servesReadOnly(ctx context.Context) bool {
+	tm := s.tm
+	if !tm.QueryServiceControl.IsServing() || tm.groupReplicationDemoted.Load() {
+		return false
+	}
+	readOnly, err := tm.mysqlReadOnly(ctx)
+	return err == nil && readOnly
 }
 
 // liftFenceUnderOtherPolicy lifts the fence of a PRIMARY tablet's MySQL, and clears its not-serving
@@ -748,6 +786,14 @@ func (s *groupReplicationSync) serveAgain(ctx context.Context, durability policy
 		return
 	}
 	defer tm.unlock()
+	if tm.groupReplicationDemoted.Load() {
+		// The caller of DemotePrimary, a planned reparent, decides whether this primary serves again
+		// (UndoDemotePrimary), and its MySQL stays read-only meanwhile.
+		return
+	}
+	// Group Replication sets super_read_only when the election that elected MySQL ends: decide once
+	// it ended.
+	tm.waitForGroupElectionEnd(ctx)
 	_, gen := tm.tmState.GroupReplicationNotServingState()
 	fences := tm.groupReplicationFence.snapshot()
 	status, err := tm.groupReplicationStatus(ctx)
@@ -780,6 +826,53 @@ func (s *groupReplicationSync) serveAgain(ctx context.Context, durability policy
 			slog.String("view_id", status.GetViewId()),
 			slog.Int("online_members", mysql.OnlineGroupMembers(status)))
 	}
+}
+
+// disableSuperReadOnlyActionOnline disables the member action mysql_disable_super_read_only_if_primary
+// in the configuration of the group of which the tablet's MySQL is the serving, writable primary, if
+// it is enabled there: a group bootstrapped before Vitess disabled it before every START. MySQL lets
+// only the primary of a group change the group's configuration, with super_read_only OFF; the members
+// in the group take the change within about a second, and the others when they join. The change takes
+// no GTID. It is checked once per group incarnation and groupReplicationMemberActionsCheckInterval, and
+// done under the action lock, on MySQL's status read under it.
+func (s *groupReplicationSync) disableSuperReadOnlyActionOnline(ctx context.Context, status *replicationdatapb.GroupReplicationStatus) {
+	tm := s.tm
+	incarnation := policy.GroupIncarnation(status.GetViewId())
+	if incarnation == "" || !tm.QueryServiceControl.IsServing() ||
+		(incarnation == s.memberActionsIncarnation && time.Since(s.memberActionsChecked) < groupReplicationMemberActionsCheckInterval) {
+		return
+	}
+	actions, err := tm.MysqlDaemon.GroupReplicationMemberActions(ctx)
+	if err != nil {
+		log.Warn("Group replication sync: cannot read the member actions of the group", slog.Any("error", err))
+		return
+	}
+	if !actions.SuperReadOnlyActionEnabled {
+		s.memberActionsIncarnation, s.memberActionsChecked = incarnation, time.Now()
+		return
+	}
+	if !tm.actionSema.TryAcquire(1) {
+		return
+	}
+	defer tm.unlock()
+	status, err = tm.groupReplicationStatus(ctx)
+	if err != nil || !mysql.IsGroupPrimary(status) || status.GetPrimaryElectionInProgress() || policy.GroupIncarnation(status.GetViewId()) != incarnation ||
+		tm.Tablet().Type != topodatapb.TabletType_PRIMARY || !tm.QueryServiceControl.IsServing() {
+		return
+	}
+	if readOnly, err := tm.mysqlReadOnly(ctx); err != nil || readOnly {
+		return
+	}
+	log.Info("Group replication sync: disabling the member action that makes the primary of every election writable, in the configuration of the group",
+		slog.String("action", mysql.GroupReplicationSuperReadOnlyAction),
+		slog.String("group", status.GetGroupName()),
+		slog.String("view_id", status.GetViewId()),
+		slog.Int64("configuration_version", actions.ConfigurationVersion))
+	if err := tm.MysqlDaemon.DisableGroupReplicationSuperReadOnlyAction(ctx); err != nil {
+		log.Error("Group replication sync: failed to disable the member action", slog.String("action", mysql.GroupReplicationSuperReadOnlyAction), slog.Any("error", err))
+		return
+	}
+	s.memberActionsIncarnation, s.memberActionsChecked = incarnation, time.Now()
 }
 
 // voterMajorityLost returns whether the member's view holds fewer than a majority of the shard's

@@ -1016,8 +1016,15 @@ type GroupReplicationStatus struct {
 	// no group, and can still end with the member alone in a group of its own: the member is not
 	// active, but its membership is changing.
 	StartInProgress bool `protobuf:"varint,13,opt,name=start_in_progress,json=startInProgress,proto3" json:"start_in_progress,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// primary_election_in_progress is true while Group Replication's primary election runs on the
+	// member that it elected (performance_schema.threads lists THD_primary_election_primary_process):
+	// under group_replication_consistency BEFORE_ON_PRIMARY_FAILOVER the new primary applies its
+	// backlog first. The member already reports itself PRIMARY, but when the election ends Group
+	// Replication sets super_read_only again (and clears it only if the member action
+	// mysql_disable_super_read_only_if_primary is enabled), undoing an earlier clear.
+	PrimaryElectionInProgress bool `protobuf:"varint,14,opt,name=primary_election_in_progress,json=primaryElectionInProgress,proto3" json:"primary_election_in_progress,omitempty"`
+	unknownFields             protoimpl.UnknownFields
+	sizeCache                 protoimpl.SizeCache
 }
 
 func (x *GroupReplicationStatus) Reset() {
@@ -1141,6 +1148,13 @@ func (x *GroupReplicationStatus) GetStartInProgress() bool {
 	return false
 }
 
+func (x *GroupReplicationStatus) GetPrimaryElectionInProgress() bool {
+	if x != nil {
+		return x.PrimaryElectionInProgress
+	}
+	return false
+}
+
 var File_replicationdata_proto protoreflect.FileDescriptor
 
 const file_replicationdata_proto_rawDesc = "" +
@@ -1242,7 +1256,7 @@ const file_replicationdata_proto_rawDesc = "" +
 	"\x04port\x18\x03 \x01(\x05R\x04port\x12\x14\n" +
 	"\x05state\x18\x04 \x01(\tR\x05state\x12\x12\n" +
 	"\x04role\x18\x05 \x01(\tR\x04role\x12\x18\n" +
-	"\aversion\x18\x06 \x01(\tR\aversion\"\xa9\x04\n" +
+	"\aversion\x18\x06 \x01(\tR\aversion\"\xea\x04\n" +
 	"\x16GroupReplicationStatus\x12#\n" +
 	"\rplugin_active\x18\x01 \x01(\bR\fpluginActive\x12\x1d\n" +
 	"\n" +
@@ -1260,7 +1274,8 @@ const file_replicationdata_proto_rawDesc = "" +
 	" \x01(\bR\x11singlePrimaryMode\x12#\n" +
 	"\rmember_weight\x18\v \x01(\x05R\fmemberWeight\x12.\n" +
 	"\x13paxos_single_leader\x18\f \x01(\bR\x11paxosSingleLeader\x12*\n" +
-	"\x11start_in_progress\x18\r \x01(\bR\x0fstartInProgress*;\n" +
+	"\x11start_in_progress\x18\r \x01(\bR\x0fstartInProgress\x12?\n" +
+	"\x1cprimary_election_in_progress\x18\x0e \x01(\bR\x19primaryElectionInProgress*;\n" +
 	"\x13StopReplicationMode\x12\x12\n" +
 	"\x0eIOANDSQLTHREAD\x10\x00\x12\x10\n" +
 	"\fIOTHREADONLY\x10\x01B.Z,vitess.io/vitess/go/vt/proto/replicationdatab\x06proto3"

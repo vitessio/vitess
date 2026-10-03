@@ -397,6 +397,35 @@ func rowCount(t *testing.T, tablet *cluster.Vttablet) (int, error) {
 	return qr.Rows[0][0].ToInt()
 }
 
+// superReadOnlyActionEnabled returns whether the member action mysql_disable_super_read_only_if_primary
+// is enabled in the configuration of the tablet's MySQL: its group's while it is in a group.
+func superReadOnlyActionEnabled(tablet *cluster.Vttablet) (bool, error) {
+	qr, err := tablet.VttabletProcess.QueryTablet("SELECT ENABLED FROM performance_schema.replication_group_member_actions "+
+		"WHERE NAME = 'mysql_disable_super_read_only_if_primary' AND EVENT = 'AFTER_PRIMARY_ELECTION'", keyspaceName, false)
+	if err != nil {
+		return false, err
+	}
+	if len(qr.Rows) != 1 {
+		return false, fmt.Errorf("unexpected member actions of %s: %v", tablet.Alias, qr.Rows)
+	}
+	enabled, err := qr.Rows[0][0].ToInt()
+	return enabled != 0, err
+}
+
+// requireSuperReadOnlyActionDisabled checks that every voter's MySQL has the member action
+// mysql_disable_super_read_only_if_primary disabled: Group Replication leaves the primary of every
+// election super_read_only, and only the tablet's decision that it may serve makes it writable.
+func requireSuperReadOnlyActionDisabled(t *testing.T, tc *testCluster) {
+	t.Helper()
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		for _, voter := range tc.replicas {
+			enabled, err := superReadOnlyActionEnabled(voter)
+			require.NoError(c, err, voter.Alias)
+			assert.False(c, enabled, "%s has mysql_disable_super_read_only_if_primary enabled", voter.Alias)
+		}
+	}, waitTimeout, pollInterval)
+}
+
 func waitForRowCounts(t *testing.T, tc *testCluster, primary *cluster.Vttablet) {
 	t.Helper()
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
@@ -449,6 +478,11 @@ func TestGroupReplicationLifecycle(t *testing.T) {
 		require.NotNil(t, status.ReplicationStatus)
 		assert.Equal(t, int32(primary.MySQLPort), status.ReplicationStatus.SourcePort)
 		waitForRowCounts(t, tc, primary)
+
+		// Every member has the member action that makes the primary of an election writable
+		// disabled: the group took the configuration of the primary that bootstrapped it, and every
+		// tablet disables it before it starts Group Replication.
+		requireSuperReadOnlyActionDisabled(t, tc)
 	})
 
 	t.Run("planned reparent switches the group primary", func(t *testing.T) {
@@ -500,6 +534,12 @@ func TestGroupReplicationLifecycle(t *testing.T) {
 		// the group as a secondary.
 		waitForGroup(t, tc, primary, tc.replicas)
 		waitForRowCounts(t, tc, primary)
+		// The member that joined the group again has the action disabled too, and the primary that
+		// the group elected became writable only through its tablet.
+		requireSuperReadOnlyActionDisabled(t, tc)
+		status, err := fullStatus(t, tc, primary)
+		require.NoError(t, err)
+		assert.False(t, status.ReadOnly)
 	})
 
 	t.Run("migrate back to semi-sync without failing writes", func(t *testing.T) {

@@ -150,7 +150,97 @@ func (mysqld *Mysqld) ConfigureGroupReplication(ctx context.Context, cfg mysql.G
 	cmds = append(cmds, mysql.ConfigureGroupReplicationCommands(cfg)...)
 	cmds = append(cmds, mysql.GroupReplicationCredentialsCommand(params.Uname, params.Pass))
 	log.Info(fmt.Sprintf("Configuring group replication: group %s, local address %s, seeds %v", cfg.GroupName, cfg.LocalAddress, cfg.Seeds))
-	return mysqld.executeSuperQueryListConn(ctx, conn, cmds)
+	if err := mysqld.executeSuperQueryListConn(ctx, conn, cmds); err != nil {
+		return err
+	}
+	return mysqld.disableSuperReadOnlyActionLocally(ctx, conn)
+}
+
+// disableSuperReadOnlyActionLocally disables the member action
+// mysql_disable_super_read_only_if_primary in the configuration of a member that is not in a group,
+// if it is enabled there.
+//
+// With the action enabled, Group Replication makes the member it elects primary writable after the
+// election, whatever Vitess decided: the primary of a group that the shard's tablets do not follow
+// too, such as a group of one that a join formed on its own. Such a group uses the configuration of
+// the member that forms it: in the lab, a joiner whose configuration was still enabled formed a
+// writable group of one and took 133 commits, and with it disabled every election left the new
+// primary super_read_only (sro-eval case B, MySQL 8.4.11). A member that joins a group takes the
+// group's configuration, so this matters for every member that may form a group, before every
+// START: fresh members, members that were out of the group when it was disabled online, and members
+// whose configuration was reset.
+//
+// MySQL changes the configuration only with super_read_only OFF, like INSTALL PLUGIN, and does not
+// write the change to the binary log; read_only stays ON meanwhile, as it does for INSTALL PLUGIN.
+func (mysqld *Mysqld) disableSuperReadOnlyActionLocally(ctx context.Context, conn *dbconnpool.PooledDBConnection) error {
+	var actions *mysql.GroupReplicationMemberActions
+	err := mysqld.executeWithContext(ctx, conn, "group replication member actions", func() error {
+		var queryErr error
+		actions, queryErr = conn.Conn.GroupReplicationMemberActions()
+		return queryErr
+	})
+	if err != nil {
+		return err
+	}
+	if !actions.SuperReadOnlyActionEnabled {
+		return nil
+	}
+	superReadOnly, err := mysqld.IsSuperReadOnly(ctx)
+	if err != nil {
+		return err
+	}
+	var cmds []string
+	if superReadOnly {
+		cmds = append(cmds, "SET GLOBAL super_read_only = OFF")
+	}
+	cmds = append(cmds, mysql.DisableGroupReplicationSuperReadOnlyActionCommand())
+	if superReadOnly {
+		cmds = append(cmds, "SET GLOBAL super_read_only = ON")
+	}
+	log.Info(fmt.Sprintf("Disabling the group replication member action %s in the member's own configuration (version %d)",
+		mysql.GroupReplicationSuperReadOnlyAction, actions.ConfigurationVersion))
+	err = mysqld.executeSuperQueryListConn(ctx, conn, cmds)
+	if err != nil && superReadOnly {
+		// Never leave super_read_only off on a member that had it on.
+		resetCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), bootstrapFlagResetTimeout)
+		defer cancel()
+		if _, resetErr := mysqld.SetSuperReadOnly(resetCtx, true); resetErr != nil {
+			log.Warn(fmt.Sprintf("Failed to set super_read_only again after failing to disable %s: %v", mysql.GroupReplicationSuperReadOnlyAction, resetErr))
+		}
+	}
+	if err != nil {
+		return vterrors.Wrapf(err, "failed to disable the group replication member action %s", mysql.GroupReplicationSuperReadOnlyAction)
+	}
+	return nil
+}
+
+// GroupReplicationMemberActions returns the member's member actions configuration: its group's while
+// it is in a group, its own otherwise.
+func (mysqld *Mysqld) GroupReplicationMemberActions(ctx context.Context) (*mysql.GroupReplicationMemberActions, error) {
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Recycle()
+	var actions *mysql.GroupReplicationMemberActions
+	err = mysqld.executeWithContext(ctx, conn, "group replication member actions", func() error {
+		var queryErr error
+		actions, queryErr = conn.Conn.GroupReplicationMemberActions()
+		return queryErr
+	})
+	if err != nil {
+		return nil, err
+	}
+	return actions, nil
+}
+
+// DisableGroupReplicationSuperReadOnlyAction disables the member action
+// mysql_disable_super_read_only_if_primary in the configuration of the member's group. MySQL accepts it
+// only on the primary of the group, and only while super_read_only is OFF; the group's other members
+// take the new configuration within about a second, and the members that are out of the group when
+// they join it.
+func (mysqld *Mysqld) DisableGroupReplicationSuperReadOnlyAction(ctx context.Context) error {
+	return mysqld.ExecuteSuperQueryList(ctx, []string{mysql.DisableGroupReplicationSuperReadOnlyActionCommand()})
 }
 
 // checkGroupReplicationPrivileges returns a FAILED_PRECONDITION error unless an account of the

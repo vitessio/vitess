@@ -72,13 +72,41 @@ const (
 	// member has received from the group but not applied yet.
 	readGroupReplicationReceived = "SELECT RECEIVED_TRANSACTION_SET FROM performance_schema.replication_connection_status " +
 		"WHERE CHANNEL_NAME = 'group_replication_applier'"
-	// readGroupReplicationProgress reads whether a START GROUP_REPLICATION runs on the member. MySQL
-	// lists the statement in performance_schema.processlist for as long as it runs, also after its
-	// client connection was killed (verified on MySQL 8.4.11), and a START that finds no group runs
-	// for about a minute while the member reports OFFLINE. The query's own text starts with SELECT,
-	// so it does not count itself.
+	// readGroupReplicationProgress reads whether a START GROUP_REPLICATION runs on the member, and
+	// whether a primary election that made it the primary is still running.
+	//   - MySQL lists the START in performance_schema.processlist for as long as it runs, also after
+	//     its client connection was killed, and a START that finds no group runs for about a minute
+	//     while the member reports OFFLINE. The query's own text starts with SELECT, so it does not
+	//     count itself.
+	//   - The elected member runs THD_primary_election_primary_process until the election ends: under
+	//     BEFORE_ON_PRIMARY_FAILOVER, until it applied its backlog. It already reports itself PRIMARY
+	//     meanwhile, and Group Replication sets super_read_only when the election ends. The thread is
+	//     listed without any stage consumer.
+	// Both verified on MySQL 8.4.11 (sro-eval cases A and B).
 	readGroupReplicationProgress = "SELECT (SELECT COUNT(*) FROM performance_schema.processlist " +
-		"WHERE INFO LIKE 'START GROUP_REPLICATION%') AS starts"
+		"WHERE INFO LIKE 'START GROUP_REPLICATION%') AS starts, " +
+		"(SELECT COUNT(*) FROM performance_schema.threads WHERE NAME = '" + groupReplicationPrimaryElectionThread + "') AS elections"
+	// groupReplicationPrimaryElectionThread is the thread that runs the primary election on the member
+	// that the group elected.
+	groupReplicationPrimaryElectionThread = "thread/group_rpl/THD_primary_election_primary_process"
+	// readGroupReplicationMemberActions reads whether the member action
+	// mysql_disable_super_read_only_if_primary is enabled in the member's configuration, and the
+	// version of that configuration. The configuration is the group's while the member is in a group,
+	// and its own otherwise (verified on MySQL 8.4.11).
+	readGroupReplicationMemberActions = "SELECT (SELECT ENABLED FROM performance_schema.replication_group_member_actions " +
+		"WHERE NAME = '" + GroupReplicationSuperReadOnlyAction + "' AND EVENT = '" + groupReplicationMemberActionEvent + "') AS enabled, " +
+		"(SELECT VERSION FROM performance_schema.replication_group_configuration_version " +
+		"WHERE NAME = 'replication_group_member_actions') AS version"
+)
+
+const (
+	// GroupReplicationSuperReadOnlyAction is the member action with which Group Replication clears
+	// super_read_only on the member it elects primary, after every election: a bootstrap, a
+	// failover, group_replication_set_as_primary, and the election of a member alone in a group of
+	// its own. Vitess disables it, so that MySQL never makes a primary writable by itself: only a
+	// decision of the tablet that the primary may serve does.
+	GroupReplicationSuperReadOnlyAction = "mysql_disable_super_read_only_if_primary"
+	groupReplicationMemberActionEvent   = "AFTER_PRIMARY_ELECTION"
 )
 
 // GroupReplicationStatus reads the Group Replication state of the server. It returns a
@@ -134,12 +162,59 @@ func (c *Conn) GroupReplicationStatus() (*replicationdatapb.GroupReplicationStat
 
 	qr, err = c.ExecuteFetch(readGroupReplicationProgress, 1, true)
 	if err != nil {
-		return nil, vterrors.Wrapf(err, "failed to read whether group replication is starting")
+		return nil, vterrors.Wrapf(err, "failed to read whether group replication is starting or electing a primary")
 	}
 	if len(qr.Rows) == 1 {
-		status.StartInProgress = qr.Named().Row().AsInt64("starts", 0) > 0
+		row := qr.Named().Row()
+		status.StartInProgress = row.AsInt64("starts", 0) > 0
+		status.PrimaryElectionInProgress = row.AsInt64("elections", 0) > 0
 	}
 	return status, nil
+}
+
+// GroupReplicationMemberActions is the part of a member's Group Replication member actions
+// configuration that Vitess manages.
+type GroupReplicationMemberActions struct {
+	// SuperReadOnlyActionEnabled is whether GroupReplicationSuperReadOnlyAction is enabled.
+	SuperReadOnlyActionEnabled bool
+	// ConfigurationVersion is the version of the member actions configuration. Every change bumps
+	// it, and a member that joins a group takes the group's configuration, whatever its version.
+	ConfigurationVersion int64
+}
+
+// GroupReplicationMemberActions reads the member's member actions configuration (see
+// readGroupReplicationMemberActions).
+func (c *Conn) GroupReplicationMemberActions() (*GroupReplicationMemberActions, error) {
+	qr, err := c.ExecuteFetch(readGroupReplicationMemberActions, 1, true)
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "failed to read the group replication member actions")
+	}
+	if len(qr.Rows) != 1 {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected result reading the group replication member actions: %v", qr.Rows)
+	}
+	row := qr.Named().Row()
+	if row["enabled"].IsNull() {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "MySQL does not list the group replication member action %s", GroupReplicationSuperReadOnlyAction)
+	}
+	return &GroupReplicationMemberActions{
+		SuperReadOnlyActionEnabled: row.AsInt64("enabled", 1) != 0,
+		ConfigurationVersion:       row.AsInt64("version", 0),
+	}, nil
+}
+
+// DisableGroupReplicationSuperReadOnlyActionCommand returns the statement that disables
+// GroupReplicationSuperReadOnlyAction, and EnableGroupReplicationSuperReadOnlyActionCommand the one
+// that enables it again. MySQL requires super_read_only=OFF for either. Outside of a group the
+// statement changes the member's own configuration, and is not written to the binary log; in a group,
+// only the primary may run it, and the group's configuration changes on every member.
+func DisableGroupReplicationSuperReadOnlyActionCommand() string {
+	return fmt.Sprintf("SELECT group_replication_disable_member_action('%s', '%s')", GroupReplicationSuperReadOnlyAction, groupReplicationMemberActionEvent)
+}
+
+// EnableGroupReplicationSuperReadOnlyActionCommand returns the statement that enables
+// GroupReplicationSuperReadOnlyAction (see DisableGroupReplicationSuperReadOnlyActionCommand).
+func EnableGroupReplicationSuperReadOnlyActionCommand() string {
+	return fmt.Sprintf("SELECT group_replication_enable_member_action('%s', '%s')", GroupReplicationSuperReadOnlyAction, groupReplicationMemberActionEvent)
 }
 
 func parseGroupReplicationMembers(qr *sqltypes.Result) []*replicationdatapb.GroupReplicationMember {

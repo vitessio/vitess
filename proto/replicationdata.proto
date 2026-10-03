@@ -198,4 +198,11 @@ message GroupReplicationStatus {
   // no group, and can still end with the member alone in a group of its own: the member is not
   // active, but its membership is changing.
   bool start_in_progress = 13;
+  // primary_election_in_progress is true while Group Replication's primary election runs on the
+  // member that it elected (performance_schema.threads lists THD_primary_election_primary_process):
+  // under group_replication_consistency BEFORE_ON_PRIMARY_FAILOVER the new primary applies its
+  // backlog first. The member already reports itself PRIMARY, but when the election ends Group
+  // Replication sets super_read_only again (and clears it only if the member action
+  // mysql_disable_super_read_only_if_primary is enabled), undoing an earlier clear.
+  bool primary_election_in_progress = 14;
 }

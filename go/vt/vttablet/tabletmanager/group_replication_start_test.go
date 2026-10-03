@@ -62,7 +62,7 @@ func blockedStart(t *testing.T, fmd *mysqlctl.FakeMysqlDaemon) (release func()) 
 		released = true
 		close(unblock)
 		<-done
-		fmd.StartGroupReplicationFunc = nil
+		fmd.SetStartGroupReplicationFunc(nil)
 	}
 	t.Cleanup(release)
 	return release

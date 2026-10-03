@@ -134,8 +134,12 @@ func (p *servingPause) resume(ctx context.Context) {
 }
 
 // waitForWritablePrimary waits until MySQL takes writes as a primary: read_only and
-// super_read_only are off, and it is the primary of its group if it is an active member.
+// super_read_only are off, and it is the primary of its group if it is an active member. Group
+// Replication leaves the primary it elects super_read_only: once the election ended, the tablet's
+// decision that it may serve makes MySQL writable (makeGroupPrimaryWritableLocked), or keeps it from
+// serving, which ends the wait. The caller holds the action lock.
 func (tm *TabletManager) waitForWritablePrimary(ctx context.Context) error {
+	decided := false
 	for {
 		status, err := tm.groupReplicationStatus(ctx)
 		if err != nil {
@@ -154,6 +158,16 @@ func (tm *TabletManager) waitForWritablePrimary(ctx context.Context) error {
 		}
 		if !superReadOnly && !readOnly {
 			return nil
+		}
+		if !decided && mysql.IsGroupPrimary(status) && !status.GetPrimaryElectionInProgress() {
+			decided = true
+			if err := tm.makeGroupPrimaryWritableLocked(ctx); err != nil {
+				return err
+			}
+			if reason, _ := tm.tmState.GroupReplicationNotServingState(); reason != "" {
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "the primary does not serve: %s", reason)
+			}
+			continue
 		}
 		select {
 		case <-ctx.Done():

@@ -100,6 +100,17 @@ var (
 	// whose own topology server does not answer, for example one whose cell's topology server is
 	// down or cut off.
 	groupReplicationTopoReadTimeout = 1 * time.Second
+	// groupReplicationElectionWaitTimeout bounds how long a decision that the tablet may serve as
+	// PRIMARY waits, under the action lock, for the primary election that made its MySQL the group's
+	// primary to end, before it decides: Group Replication sets super_read_only when the election ends,
+	// which would undo the decision's making MySQL writable. Under BEFORE_ON_PRIMARY_FAILOVER the
+	// election lasts as long as the new primary takes to apply its backlog. A decision whose wait ends
+	// first does not serve, and is taken again later.
+	groupReplicationElectionWaitTimeout = 10 * time.Second
+	// groupReplicationMemberActionsCheckInterval is how often the serving primary of a group checks
+	// that the group's configuration has the member action mysql_disable_super_read_only_if_primary
+	// disabled, besides once per group incarnation.
+	groupReplicationMemberActionsCheckInterval = 1 * time.Minute
 )
 
 func registerGroupReplicationFlags(fs *pflag.FlagSet) {
@@ -298,10 +309,39 @@ func (tm *TabletManager) groupReplicationStatus(ctx context.Context) (*replicati
 	return status, nil
 }
 
+// checkGroupAllowsPrimary returns a FAILED_PRECONDITION error if the tablet's MySQL is an active
+// member of a group but not its primary: only the group decides which of its members is the primary,
+// so such a tablet cannot become PRIMARY.
+func (tm *TabletManager) checkGroupAllowsPrimary(ctx context.Context) error {
+	status, err := tm.groupReplicationStatus(ctx)
+	if err != nil {
+		return err
+	}
+	if mysql.IsGroupMemberActive(status) && !mysql.IsGroupPrimary(status) {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+			"MySQL is a %s %s member of group %s but not the primary of a group with quorum",
+			status.MemberState, status.MemberRole, status.GroupName)
+	}
+	return nil
+}
+
+// mysqlReadOnly returns whether MySQL has super_read_only or read_only set.
+func (tm *TabletManager) mysqlReadOnly(ctx context.Context) (bool, error) {
+	superReadOnly, err := tm.MysqlDaemon.IsSuperReadOnly(ctx)
+	if err != nil {
+		return false, err
+	}
+	if superReadOnly {
+		return true, nil
+	}
+	return tm.MysqlDaemon.IsReadOnly(ctx)
+}
+
 // checkGroupAllowsReadWrite returns a FAILED_PRECONDITION error if the tablet's MySQL is an
 // active member of a group but not its primary. Such a member must never be made writable: a
 // Group Replication secondary without super_read_only accepts writes and replicates them to the
-// whole group.
+// whole group. It returns UNAVAILABLE while the primary election that made MySQL the primary still
+// runs: Group Replication sets super_read_only when it ends, which would undo the change.
 func (tm *TabletManager) checkGroupAllowsReadWrite(ctx context.Context) error {
 	status, err := tm.groupReplicationStatus(ctx)
 	if err != nil {
@@ -312,7 +352,18 @@ func (tm *TabletManager) checkGroupAllowsReadWrite(ctx context.Context) error {
 			"refusing to make MySQL writable: it is a %s %s member of group %s but not the primary of a group with quorum",
 			status.MemberState, status.MemberRole, status.GroupName)
 	}
+	if groupElectionInProgress(status) {
+		return vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE,
+			"refusing to make MySQL writable: group %s is still electing it its primary, and Group Replication sets super_read_only when the election ends",
+			status.GroupName)
+	}
 	return nil
+}
+
+// groupElectionInProgress returns whether MySQL is the primary of its group, and the primary
+// election that made it the primary still runs.
+func groupElectionInProgress(status *replicationdatapb.GroupReplicationStatus) bool {
+	return mysql.IsGroupPrimary(status) && status.GetPrimaryElectionInProgress()
 }
 
 // twoPCDurable returns whether a primary with this group replication state and primary-side
@@ -583,8 +634,9 @@ func (tm *TabletManager) stopReplicationForGroupJoin(ctx context.Context) (bool,
 //   - It removes the default replication channel, so that it cannot be restarted by accident
 //     (on a member, START REPLICA fails in the SQL thread).
 //   - On a secondary, it disables semi-sync, which the member no longer uses.
-//   - On the primary of a PRIMARY tablet, it makes MySQL writable and applies the rule that a
-//     group with two ONLINE members supersedes semi-sync. Semi-sync otherwise stays as it is: a
+//   - On the primary of a PRIMARY tablet, it makes MySQL writable if the tablet may serve (Group
+//     Replication leaves the primary it elects super_read_only), and applies the rule that a group
+//     with two ONLINE members supersedes semi-sync. Semi-sync otherwise stays as it is: a
 //     primary that bootstraps a group during a migration still has asynchronous replicas
 //     acknowledging its transactions.
 func (tm *TabletManager) finishGroupJoinLocked(ctx context.Context) (*replicationdatapb.GroupReplicationStatus, error) {
@@ -603,12 +655,18 @@ func (tm *TabletManager) finishGroupJoinLocked(ctx context.Context) (*replicatio
 	switch {
 	case mysql.IsGroupPrimary(status):
 		if tablet.Type == topodatapb.TabletType_PRIMARY {
-			// The primary kept serving while it bootstrapped the group, and MySQL did not
-			// restart, so prepared transactions are intact: only clear the read-only flags if
-			// Group Replication left them set. Redoing prepared transactions would restart the
+			// Group Replication leaves the primary it elected super_read_only (the member action
+			// mysql_disable_super_read_only_if_primary is disabled): the tablet makes MySQL writable
+			// if it may serve, as the primary of a migration's bootstrap, and leaves it read-only
+			// otherwise, as the primary of a group that VTOrc bootstrapped and whose incarnation is
+			// not recorded yet. The primary kept serving while it bootstrapped the group, and MySQL
+			// did not restart, so prepared transactions are intact: redoing them would restart the
 			// transaction engine and fail in-flight queries.
-			if err := tm.setGroupPrimaryWritable(ctx); err != nil {
+			if err := tm.makeGroupPrimaryWritableLocked(ctx); err != nil {
 				return nil, vterrors.Wrapf(err, "failed to make the group primary writable")
+			}
+			if status, err = tm.groupReplicationStatus(ctx); err != nil {
+				return nil, err
 			}
 			if mysql.GroupSupersedesSemiSync(status) && tm.isPrimarySideSemiSyncEnabled(ctx) {
 				if err := tm.disableSemiSync(ctx, tablet.Type); err != nil {
@@ -678,29 +736,79 @@ func (tm *TabletManager) waitUntilNotGroupPrimary(ctx context.Context) (*replica
 	}
 }
 
-// waitForGroupPrimaryWritable waits until the tablet's MySQL is the primary of its group and
-// Group Replication has lifted super_read_only.
-func (tm *TabletManager) waitForGroupPrimaryWritable(ctx context.Context) error {
+// waitForGroupPrimaryElected waits until the tablet's MySQL is the primary of its group and the
+// primary election that made it the primary has ended. Group Replication does not make it writable
+// (the member action mysql_disable_super_read_only_if_primary is disabled), and sets super_read_only
+// when the election ends: the caller decides afterwards whether MySQL takes writes.
+func (tm *TabletManager) waitForGroupPrimaryElected(ctx context.Context) (*replicationdatapb.GroupReplicationStatus, error) {
 	for {
 		status, err := tm.groupReplicationStatus(ctx)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		if mysql.IsGroupPrimary(status) {
-			superReadOnly, err := tm.MysqlDaemon.IsSuperReadOnly(ctx)
-			if err != nil {
-				return err
-			}
-			if !superReadOnly {
-				return nil
-			}
+		if mysql.IsGroupPrimary(status) && !status.GetPrimaryElectionInProgress() {
+			return status, nil
 		}
 		select {
 		case <-ctx.Done():
-			return vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "timed out waiting for MySQL to become the writable primary of its group (member %s %s): %v", status.MemberState, status.MemberRole, ctx.Err())
+			return nil, vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED,
+				"timed out waiting for MySQL to become the primary of its group, with its election ended (member %s %s, election in progress: %v): %v",
+				status.MemberState, status.MemberRole, status.GetPrimaryElectionInProgress(), ctx.Err())
 		case <-time.After(groupReplicationPollInterval):
 		}
 	}
+}
+
+// waitForGroupElectionEnd waits, for at most groupReplicationElectionWaitTimeout, while the tablet's
+// MySQL is the primary of its group and the primary election that made it the primary still runs. A
+// decision whether the tablet may serve as PRIMARY waits for it before it takes its fence snapshot and
+// reads MySQL's status: the end of the election makes MySQL super_read_only, which would undo the
+// decision. A decision that still finds the election running does not serve
+// (groupReplicationElectionInProgress).
+func (tm *TabletManager) waitForGroupElectionEnd(ctx context.Context) {
+	waitCtx, cancel := context.WithTimeout(ctx, groupReplicationElectionWaitTimeout)
+	defer cancel()
+	for {
+		status, err := tm.groupReplicationStatus(waitCtx)
+		if err != nil || !groupElectionInProgress(status) {
+			return
+		}
+		select {
+		case <-waitCtx.Done():
+			log.Warn("Group replication: the primary election of MySQL still runs, deciding whether the tablet serves without waiting longer",
+				slog.String("group", status.GetGroupName()), slog.String("view_id", status.GetViewId()))
+			return
+		case <-time.After(groupReplicationPollInterval):
+		}
+	}
+}
+
+// makeGroupPrimaryWritableLocked makes the tablet's MySQL, the primary of its group, writable if the
+// tablet may serve as PRIMARY: a decision under the action lock, on MySQL's status read under it
+// after the primary election ended (groupReplicationServingDecision, which also records a reason not
+// to serve). Group Replication leaves the primary it elects super_read_only, since the member action
+// mysql_disable_super_read_only_if_primary is disabled; this is how the primary of a migration's
+// bootstrap, or of a group that the tablet serves again after a planned pause, becomes writable. A
+// fence decided since the decision started stands (see groupReplicationFence). MySQL is left as it is
+// if it is not the primary of a group, or if the tablet must not serve.
+func (tm *TabletManager) makeGroupPrimaryWritableLocked(ctx context.Context) error {
+	tm.waitForGroupElectionEnd(ctx)
+	fences := tm.groupReplicationFence.snapshot()
+	reason, status, err := tm.applyGroupReplicationServingDecisionLocked(ctx, nil)
+	if err != nil {
+		return err
+	}
+	if !mysql.IsGroupPrimary(status) || reason != "" {
+		return nil
+	}
+	if tm.groupReplicationFence.decidedSince(fences) {
+		return nil
+	}
+	if err := tm.setGroupPrimaryWritable(ctx); err != nil {
+		return err
+	}
+	tm.settleGroupReplicationFenceLocked(ctx, fences)
+	return nil
 }
 
 // stopGroupReplicationLocked makes the tablet's MySQL leave its group. MySQL stays
@@ -751,7 +859,7 @@ func (tm *TabletManager) stopGroupReplicationLocked(ctx context.Context) (*repli
 		// The last step of a migration back to asynchronous replication runs under the
 		// asynchronous policy. Under a group replication policy that lists voters, a primary
 		// outside of any group must not serve: it stays read-only, and the sync loop demotes it.
-		reason, err := tm.applyGroupReplicationServingDecisionLocked(ctx, nil)
+		reason, _, err := tm.applyGroupReplicationServingDecisionLocked(ctx, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -828,7 +936,9 @@ func (tm *TabletManager) promoteGroupMemberLocked(ctx context.Context, status *r
 			return "", vterrors.Wrapf(err, "failed to make %s the group primary", serverUUID)
 		}
 	}
-	if err := tm.waitForGroupPrimaryWritable(ctx); err != nil {
+	// Group Replication leaves the new primary super_read_only, and sets it again when its election
+	// ends: the promotion below makes MySQL writable once the election ended, if the tablet may serve.
+	if _, err := tm.waitForGroupPrimaryElected(ctx); err != nil {
 		return "", err
 	}
 	if err := tm.liftOfflineMode(ctx, "MySQL is promoted to the shard primary"); err != nil {
@@ -872,7 +982,10 @@ func (tm *TabletManager) bootstrapGroupForInitPrimaryLocked(ctx context.Context)
 	} else if _, err := tm.startGroupReplicationLocked(ctx, true); err != nil {
 		return err
 	}
-	return tm.waitForGroupPrimaryWritable(ctx)
+	// Group Replication leaves the bootstrapped primary super_read_only: InitPrimary makes MySQL
+	// writable once the election ended.
+	_, err = tm.waitForGroupPrimaryElected(ctx)
+	return err
 }
 
 // stopServingBeforeBootstrap makes a PRIMARY tablet stop serving before its MySQL bootstraps a new
@@ -925,6 +1038,9 @@ const (
 	groupReplicationUnrecordedIncarnation = "MySQL's replication group is not the incarnation recorded in the shard record"
 	// groupReplicationRecordUnknown: the shard record could not be read to decide.
 	groupReplicationRecordUnknown = "cannot read the shard record to check the replication group"
+	// groupReplicationElectionInProgress: MySQL is the group's primary, but the primary election that
+	// made it the primary still runs. Group Replication sets super_read_only when it ends.
+	groupReplicationElectionInProgress = "MySQL's replication group is still electing it its primary"
 )
 
 // groupReplicationServingReason returns why a PRIMARY tablet must not serve as the primary of its
@@ -947,6 +1063,11 @@ func (tm *TabletManager) groupReplicationServingReason(ctx context.Context, dura
 	}
 	if rec == nil {
 		return groupReplicationRecordUnknown
+	}
+	if groupElectionInProgress(status) {
+		// MySQL cannot take writes yet: Group Replication makes it super_read_only when the election
+		// ends.
+		return groupReplicationElectionInProgress
 	}
 	if len(rec.voters) == 0 {
 		// The voters are not selected yet: MySQL's own view quorum applies, as it does everywhere
@@ -979,16 +1100,31 @@ func (tm *TabletManager) groupReplicationServingReason(ctx context.Context, dura
 // answers. rec, if set, is a shard record the caller read a moment ago; status, if set, is MySQL's
 // status that the caller read under the action lock, after it captured the not-serving generation.
 func (tm *TabletManager) groupReplicationServingDecision(ctx context.Context, rec *shardGroupRecord, status *replicationdatapb.GroupReplicationStatus) (string, error) {
+	reason, _, err := tm.groupReplicationServingDecisionWithStatus(ctx, rec, status)
+	return reason, err
+}
+
+// groupReplicationServingDecisionWithStatus is groupReplicationServingDecision, and also returns
+// MySQL's status: the caller's, or the one it read last, also when the policy alone decided.
+func (tm *TabletManager) groupReplicationServingDecisionWithStatus(ctx context.Context, rec *shardGroupRecord, status *replicationdatapb.GroupReplicationStatus) (string, *replicationdatapb.GroupReplicationStatus, error) {
+	readStatus := func() (*replicationdatapb.GroupReplicationStatus, error) {
+		if status != nil {
+			return status, nil
+		}
+		return tm.groupReplicationStatus(ctx)
+	}
 	if !groupReplicationEnabled() {
-		return "", nil
+		status, err := readStatus()
+		return "", status, err
 	}
 	deadline := time.Now().Add(groupReplicationTopoReadTimeout)
 	durability, err := tm.durabilityForGroupChange(ctx, deadline)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	if !policy.IsGroupReplication(durability) {
-		return "", nil
+		status, err := readStatus()
+		return "", status, err
 	}
 	if rec == nil {
 		last := tm.groupReplicationTopo.lastRecord()
@@ -997,15 +1133,14 @@ func (tm *TabletManager) groupReplicationServingDecision(ctx context.Context, re
 		cancel()
 		if err != nil {
 			log.Warn("Group replication: cannot read the shard record, the primary does not serve until it can", slog.Any("error", err))
-			return groupReplicationRecordUnknown, nil
+			status, err := readStatus()
+			return groupReplicationRecordUnknown, status, err
 		}
 	}
-	if status == nil {
-		if status, err = tm.groupReplicationStatus(ctx); err != nil {
-			return "", err
-		}
+	if status, err = readStatus(); err != nil {
+		return "", nil, err
 	}
-	return tm.groupReplicationServingReason(ctx, durability, rec, status, true), nil
+	return tm.groupReplicationServingReason(ctx, durability, rec, status, true), status, nil
 }
 
 // applyGroupReplicationServingDecisionLocked decides, under the action lock, whether the tablet may
@@ -1016,22 +1151,24 @@ func (tm *TabletManager) groupReplicationServingDecision(ctx context.Context, re
 // tablet's state (ChangeTabletType, SetServingUnlessGroupReplicationNotServing), so that the
 // tablet does not serve before MySQL is ready. rec, if set, is a shard record the caller read a
 // moment ago. It returns the reason that stands.
-func (tm *TabletManager) applyGroupReplicationServingDecisionLocked(ctx context.Context, rec *shardGroupRecord) (string, error) {
+//
+// It also returns MySQL's status on which it decided.
+func (tm *TabletManager) applyGroupReplicationServingDecisionLocked(ctx context.Context, rec *shardGroupRecord) (string, *replicationdatapb.GroupReplicationStatus, error) {
 	_, gen := tm.tmState.GroupReplicationNotServingState()
-	reason, err := tm.groupReplicationServingDecision(ctx, rec, nil)
+	reason, status, err := tm.groupReplicationServingDecisionWithStatus(ctx, rec, nil)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	if reason != "" {
 		log.Warn("Group replication: the tablet does not serve as the primary", slog.String("reason", reason))
-		return reason, tm.tmState.SetGroupReplicationNotServing(ctx, reason)
+		return reason, status, tm.tmState.SetGroupReplicationNotServing(ctx, reason)
 	}
 	if !tm.tmState.ClearGroupReplicationNotServingBeforeChange(gen) {
 		// A reason was set since the decision started: it was decided on a newer state.
 		reason, _ = tm.tmState.GroupReplicationNotServingState()
-		return reason, nil
+		return reason, status, nil
 	}
-	return "", nil
+	return "", status, nil
 }
 
 // groupReplicationVoters returns the voting members of the tablet's shard's group, as recorded

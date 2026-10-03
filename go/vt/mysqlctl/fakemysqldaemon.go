@@ -252,6 +252,27 @@ type FakeMysqlDaemon struct {
 	// GroupReplicationBootstrapped is set when StartGroupReplication bootstrapped a group.
 	GroupReplicationBootstrapped bool
 
+	// SuperReadOnlyActionDisabled is whether the member action mysql_disable_super_read_only_if_primary
+	// is disabled in the member's configuration (its group's while it is in one). MySQL enables it by
+	// default. Like Mysqld, ConfigureGroupReplication disables it; DisableGroupReplicationSuperReadOnlyAction
+	// disables it on a writable member. Every primary election that elects this member ends with
+	// super_read_only set, and cleared again only if the action is enabled.
+	SuperReadOnlyActionDisabled bool
+	// SuperReadOnlyActionLocalDisables and SuperReadOnlyActionOnlineDisables count the disables of the
+	// action by ConfigureGroupReplication and by DisableGroupReplicationSuperReadOnlyAction.
+	SuperReadOnlyActionLocalDisables  int
+	SuperReadOnlyActionOnlineDisables int
+	// SuperReadOnlyActionEnabledAtStart records, for each StartGroupReplication, whether the action
+	// was enabled in the member's configuration when the START began.
+	SuperReadOnlyActionEnabledAtStart []bool
+	// HoldGroupPrimaryElection keeps a primary election that elects this member running
+	// (GroupReplication.PrimaryElectionInProgress) until EndGroupPrimaryElection, as under
+	// BEFORE_ON_PRIMARY_FAILOVER while the new primary applies its backlog; otherwise the election ends
+	// at once.
+	HoldGroupPrimaryElection bool
+	// memberActionsVersion is the version of the member actions configuration.
+	memberActionsVersion int64
+
 	// GroupReplicationError is returned by the group replication methods, if set.
 	GroupReplicationError error
 
@@ -1103,6 +1124,13 @@ func (fmd *FakeMysqlDaemon) ConfigureGroupReplication(ctx context.Context, cfg m
 		return err
 	}
 	fmd.GroupReplicationConfig = cfg
+	if !fmd.SuperReadOnlyActionDisabled {
+		// Like Mysqld, before every START: a group that the member forms on its own uses its own
+		// configuration.
+		fmd.SuperReadOnlyActionDisabled = true
+		fmd.SuperReadOnlyActionLocalDisables++
+		fmd.memberActionsVersion++
+	}
 	if fmd.GroupReplication == nil {
 		fmd.GroupReplication = &replicationdatapb.GroupReplicationStatus{MemberState: mysql.GroupMemberStateOffline}
 	}
@@ -1138,6 +1166,7 @@ func (fmd *FakeMysqlDaemon) StartGroupReplication(ctx context.Context, bootstrap
 	if mysql.IsGroupMemberActive(fmd.GroupReplication) {
 		return errors.New("group replication is already running")
 	}
+	fmd.SuperReadOnlyActionEnabledAtStart = append(fmd.SuperReadOnlyActionEnabledAtStart, !fmd.SuperReadOnlyActionDisabled)
 	if start := fmd.StartGroupReplicationFunc; start != nil {
 		running := make(chan struct{})
 		fmd.startRunning = running
@@ -1159,14 +1188,99 @@ func (fmd *FakeMysqlDaemon) StartGroupReplication(ctx context.Context, bootstrap
 		fmd.GroupReplication.MemberRole = mysql.GroupMemberRolePrimary
 		fmd.GroupReplication.PrimaryUuid = uuid
 		fmd.GroupReplication.Members = nil
-		fmd.SuperReadOnly.Store(false)
-		fmd.ReadOnly = false
+		// MySQL elects the bootstrapping member: writable at the end of the election only if the
+		// member action mysql_disable_super_read_only_if_primary is enabled.
+		fmd.electGroupPrimaryLocked()
 	} else {
 		fmd.GroupReplication.MemberRole = mysql.GroupMemberRoleSecondary
 		fmd.SuperReadOnly.Store(true)
 		fmd.ReadOnly = true
 	}
 	fmd.setOwnGroupMemberLocked(fmd.GroupReplication.MemberState, fmd.GroupReplication.MemberRole)
+	return nil
+}
+
+// electGroupPrimaryLocked models the primary election that makes this member the primary of its
+// group: the election runs (GroupReplication.PrimaryElectionInProgress) until it ends, at once unless
+// HoldGroupPrimaryElection is set.
+func (fmd *FakeMysqlDaemon) electGroupPrimaryLocked() {
+	fmd.GroupReplication.PrimaryElectionInProgress = true
+	if !fmd.HoldGroupPrimaryElection {
+		fmd.endGroupPrimaryElectionLocked()
+	}
+}
+
+// endGroupPrimaryElectionLocked ends a primary election of this member like Group Replication does:
+// it sets super_read_only, which undoes an earlier clear, and runs the member action
+// mysql_disable_super_read_only_if_primary if it is enabled (sro-eval case B, MySQL 8.4.11).
+func (fmd *FakeMysqlDaemon) endGroupPrimaryElectionLocked() {
+	if fmd.GroupReplication == nil || !fmd.GroupReplication.PrimaryElectionInProgress {
+		return
+	}
+	fmd.GroupReplication.PrimaryElectionInProgress = false
+	fmd.SuperReadOnly.Store(true)
+	fmd.ReadOnly = true
+	if !fmd.SuperReadOnlyActionDisabled {
+		fmd.SuperReadOnly.Store(false)
+		fmd.ReadOnly = false
+	}
+}
+
+// ElectGroupPrimary replaces the group replication status with status, in which this member is the
+// group's new primary, and runs the election that made it the primary (see HoldGroupPrimaryElection).
+func (fmd *FakeMysqlDaemon) ElectGroupPrimary(status *replicationdatapb.GroupReplicationStatus) {
+	fmd.mu.Lock()
+	defer fmd.mu.Unlock()
+	fmd.GroupReplication = status
+	fmd.electGroupPrimaryLocked()
+}
+
+// EndGroupPrimaryElection ends a primary election that HoldGroupPrimaryElection kept running.
+func (fmd *FakeMysqlDaemon) EndGroupPrimaryElection() {
+	fmd.mu.Lock()
+	defer fmd.mu.Unlock()
+	fmd.endGroupPrimaryElectionLocked()
+}
+
+// SetStartGroupReplicationFunc sets StartGroupReplicationFunc, safely while the daemon is in use.
+func (fmd *FakeMysqlDaemon) SetStartGroupReplicationFunc(start func(bootstrap bool) error) {
+	fmd.mu.Lock()
+	defer fmd.mu.Unlock()
+	fmd.StartGroupReplicationFunc = start
+}
+
+// GroupPrimaryElectionInProgress returns whether a primary election of this member runs, without
+// calling the status hooks.
+func (fmd *FakeMysqlDaemon) GroupPrimaryElectionInProgress() bool {
+	fmd.mu.Lock()
+	defer fmd.mu.Unlock()
+	return fmd.GroupReplication.GetPrimaryElectionInProgress()
+}
+
+// GroupReplicationMemberActions is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) GroupReplicationMemberActions(ctx context.Context) (*mysql.GroupReplicationMemberActions, error) {
+	fmd.mu.Lock()
+	defer fmd.mu.Unlock()
+	if fmd.GroupReplicationError != nil {
+		return nil, fmd.GroupReplicationError
+	}
+	return &mysql.GroupReplicationMemberActions{SuperReadOnlyActionEnabled: !fmd.SuperReadOnlyActionDisabled, ConfigurationVersion: fmd.memberActionsVersion + 1}, nil
+}
+
+// DisableGroupReplicationSuperReadOnlyAction is part of the MysqlDaemon interface. Like MySQL, it
+// requires super_read_only OFF (errno 1123).
+func (fmd *FakeMysqlDaemon) DisableGroupReplicationSuperReadOnlyAction(ctx context.Context) error {
+	fmd.mu.Lock()
+	defer fmd.mu.Unlock()
+	if fmd.GroupReplicationError != nil {
+		return fmd.GroupReplicationError
+	}
+	if fmd.SuperReadOnly.Load() {
+		return sqlerror.NewSQLError(1123, "HY000", "Can't initialize function 'group_replication_disable_member_action'; Server must have super_read_only=0.")
+	}
+	fmd.SuperReadOnlyActionDisabled = true
+	fmd.SuperReadOnlyActionOnlineDisables++
+	fmd.memberActionsVersion++
 	return nil
 }
 
@@ -1194,6 +1308,7 @@ func (fmd *FakeMysqlDaemon) StopGroupReplication(ctx context.Context) error {
 		fmd.GroupReplication.MemberRole = ""
 		fmd.GroupReplication.PrimaryUuid = ""
 		fmd.GroupReplication.HasQuorum = false
+		fmd.GroupReplication.PrimaryElectionInProgress = false
 		fmd.GroupReplication.Members = nil
 		fmd.setOwnGroupMemberLocked(mysql.GroupMemberStateOffline, "")
 	}
@@ -1233,11 +1348,11 @@ func (fmd *FakeMysqlDaemon) SetGroupReplicationPrimary(ctx context.Context, memb
 	}
 	fmd.GroupReplication.PrimaryUuid = memberUUID
 	role := mysql.GroupMemberRoleSecondary
-	if memberUUID == fmd.serverUUIDLocked() {
+	self := memberUUID == fmd.serverUUIDLocked()
+	if self {
 		role = mysql.GroupMemberRolePrimary
-		fmd.SuperReadOnly.Store(false)
-		fmd.ReadOnly = false
 	} else {
+		fmd.GroupReplication.PrimaryElectionInProgress = false
 		fmd.SuperReadOnly.Store(true)
 		fmd.ReadOnly = true
 	}
@@ -1249,6 +1364,10 @@ func (fmd *FakeMysqlDaemon) SetGroupReplicationPrimary(ctx context.Context, memb
 		default:
 			m.Role = mysql.GroupMemberRoleSecondary
 		}
+	}
+	if self {
+		// group_replication_set_as_primary returns once the election ended on the new primary.
+		fmd.electGroupPrimaryLocked()
 	}
 	return nil
 }

@@ -249,6 +249,14 @@ type TabletManager struct {
 	// groupReplicationFence is what the fence check knows about the joins and bootstraps of the
 	// tablet's MySQL, and about the fence it set (see groupReplicationFence).
 	groupReplicationFence groupReplicationFence
+	// groupReplicationRedoPending is set when the tablet became PRIMARY without serving, and so
+	// without making MySQL writable and redoing its prepared transactions: the decision that lets it
+	// serve does both (liftGroupReplicationFenceLocked).
+	groupReplicationRedoPending atomic.Bool
+	// groupReplicationDemoted is set by DemotePrimary on a PRIMARY tablet, and cleared by
+	// UndoDemotePrimary and by any change of the tablet type: the sync loop does not make such a
+	// tablet serve again, nor its MySQL writable, which only the caller of DemotePrimary decides.
+	groupReplicationDemoted atomic.Bool
 
 	// _lockTablesConnection is used to get and release the table read locks to pause replication
 	_lockTablesConnection *dbconnpool.DBConnection

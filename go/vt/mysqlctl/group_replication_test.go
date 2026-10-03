@@ -18,7 +18,8 @@ package mysqlctl
 
 import (
 	"context"
-	"strconv"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -60,10 +61,120 @@ func addGroupReplicationStatusQueries(db *fakesqldb.DB) {
 const groupReplicationProgressPattern = `SELECT \(SELECT COUNT\(\*\) FROM performance_schema\.processlist WHERE INFO LIKE 'START GROUP_REPLICATION%'\) AS starts.*`
 
 // setGroupReplicationStartsInProgress makes the fake server list the given number of START
-// GROUP_REPLICATION statements in its processlist.
+// GROUP_REPLICATION statements in its processlist, and no primary election thread.
 func setGroupReplicationStartsInProgress(db *fakesqldb.DB, starts int) {
+	setGroupReplicationProgress(db, starts, 0)
+}
+
+// setGroupReplicationProgress makes the fake server list the given number of START
+// GROUP_REPLICATION statements in its processlist, and of primary election threads.
+func setGroupReplicationProgress(db *fakesqldb.DB, starts, elections int) {
 	db.AddQueryPattern(groupReplicationProgressPattern,
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("starts", "int64"), strconv.Itoa(starts)))
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("starts|elections", "int64|int64"), fmt.Sprintf("%d|%d", starts, elections)))
+}
+
+// memberActionsQuery is the query that reads the member action mysql_disable_super_read_only_if_primary.
+const memberActionsPattern = `SELECT \(SELECT ENABLED FROM performance_schema\.replication_group_member_actions WHERE NAME = 'mysql_disable_super_read_only_if_primary' AND EVENT = 'AFTER_PRIMARY_ELECTION'\) AS enabled, .*replication_group_configuration_version.*`
+
+// setSuperReadOnlyActionEnabled makes the fake server report the member action
+// mysql_disable_super_read_only_if_primary as enabled or disabled.
+func setSuperReadOnlyActionEnabled(db *fakesqldb.DB, enabled bool) {
+	value := "0"
+	if enabled {
+		value = "1"
+	}
+	db.AddQueryPattern(memberActionsPattern, sqltypes.MakeTestResult(sqltypes.MakeTestFields("enabled|version", "int64|int64"), value+"|3"))
+}
+
+// TestGroupReplicationStatusReportsPrimaryElection checks that the status reports the primary
+// election that runs on the member it elected (THD_primary_election_primary_process): the member is
+// already PRIMARY, and Group Replication sets super_read_only when the election ends (sro-eval case B).
+func TestGroupReplicationStatusReportsPrimaryElection(t *testing.T) {
+	db := fakesqldb.New(t)
+	t.Cleanup(db.Close)
+	params := db.ConnParams()
+	cp := *params
+	mysqld := NewMysqld(dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb"))
+	t.Cleanup(mysqld.Close)
+	addGroupReplicationStatusQueries(db)
+
+	status, err := mysqld.GroupReplicationStatus(t.Context())
+	require.NoError(t, err)
+	assert.False(t, status.PrimaryElectionInProgress)
+
+	setGroupReplicationProgress(db, 0, 1)
+	status, err = mysqld.GroupReplicationStatus(t.Context())
+	require.NoError(t, err)
+	assert.True(t, mysql.IsGroupPrimary(status))
+	assert.True(t, status.PrimaryElectionInProgress)
+	assert.False(t, status.StartInProgress)
+}
+
+// TestConfigureGroupReplicationDisablesSuperReadOnlyAction checks that the configuration that precedes
+// every START GROUP_REPLICATION disables the member action mysql_disable_super_read_only_if_primary in
+// the member's own configuration when it is enabled, lifting super_read_only for the change, as MySQL
+// requires, and setting it again: a group that the member forms on its own uses that configuration,
+// and its primary must stay read-only (sro-eval case B). An action that is disabled already is left
+// alone, and so is a writable member's super_read_only.
+func TestConfigureGroupReplicationDisablesSuperReadOnlyAction(t *testing.T) {
+	const (
+		sroOff  = "SET GLOBAL super_read_only = OFF"
+		sroOn   = "SET GLOBAL super_read_only = ON"
+		disable = "SELECT group_replication_disable_member_action('mysql_disable_super_read_only_if_primary', 'AFTER_PRIMARY_ELECTION')"
+	)
+	db := fakesqldb.New(t)
+	t.Cleanup(db.Close)
+	params := db.ConnParams()
+	cp := *params
+	mysqld := NewMysqld(dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb"))
+	t.Cleanup(mysqld.Close)
+	addGroupReplicationStatusQueries(db)
+	db.AddQueryPattern(`SELECT MEMBER_ID, MEMBER_HOST, MEMBER_PORT, MEMBER_STATE, MEMBER_ROLE, MEMBER_VERSION FROM performance_schema\.replication_group_members .*`,
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("MEMBER_ID|MEMBER_HOST|MEMBER_PORT|MEMBER_STATE|MEMBER_ROLE|MEMBER_VERSION", "varchar|varchar|int32|varchar|varchar|varchar"),
+			testGroupMemberUUID+"|vm|3306|OFFLINE||8.4.11"))
+	db.AddQuery("SELECT HOST, PRIV FROM mysql.global_grants WHERE USER = '"+cp.Uname+"'",
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("HOST|PRIV", "varchar|varchar"), "%|GROUP_REPLICATION_STREAM", "%|CONNECTION_ADMIN"))
+	db.AddQueryPattern("SET GLOBAL group_replication.*", &sqltypes.Result{})
+	db.AddQueryPattern("SET PERSIST group_replication.*", &sqltypes.Result{})
+	db.AddQueryPattern("CHANGE REPLICATION SOURCE TO.*", &sqltypes.Result{})
+	db.AddQuery(sroOff, &sqltypes.Result{})
+	db.AddQuery(sroOn, &sqltypes.Result{})
+	db.AddQuery(disable, &sqltypes.Result{})
+	cfg := mysql.GroupReplicationConfig{GroupName: "g", LocalAddress: "h1:3306", Seeds: []string{"h2:3306"}, AutorejoinTries: -1}
+	superReadOnly := func(on bool) {
+		value := "0"
+		if on {
+			value = "1"
+		}
+		db.AddQuery("SELECT @@global.super_read_only", sqltypes.MakeTestResult(sqltypes.MakeTestFields("@@global.super_read_only", "int64"), value))
+	}
+
+	// A read-only member whose configuration has the action enabled, as MySQL's default.
+	superReadOnly(true)
+	setSuperReadOnlyActionEnabled(db, true)
+	db.ResetQueryLog()
+	require.NoError(t, mysqld.ConfigureGroupReplication(t.Context(), cfg))
+	assert.Equal(t, 1, db.GetQueryCalledNum(disable))
+	assert.Equal(t, 1, db.GetQueryCalledNum(sroOff))
+	assert.Equal(t, 1, db.GetQueryCalledNum(sroOn), "super_read_only is set again")
+	log := strings.ToLower(db.QueryLog())
+	off, dis, on := strings.Index(log, strings.ToLower(sroOff)), strings.Index(log, strings.ToLower(disable)), strings.LastIndex(log, strings.ToLower(sroOn))
+	assert.True(t, off >= 0 && off < dis && dis < on, "super_read_only is lifted for the change only: %s", log)
+
+	// The action is disabled already: nothing changes.
+	setSuperReadOnlyActionEnabled(db, false)
+	require.NoError(t, mysqld.ConfigureGroupReplication(t.Context(), cfg))
+	assert.Equal(t, 1, db.GetQueryCalledNum(disable))
+	assert.Equal(t, 1, db.GetQueryCalledNum(sroOff))
+
+	// A writable member, such as a primary that bootstraps the group during a migration, keeps
+	// super_read_only off.
+	superReadOnly(false)
+	setSuperReadOnlyActionEnabled(db, true)
+	require.NoError(t, mysqld.ConfigureGroupReplication(t.Context(), cfg))
+	assert.Equal(t, 2, db.GetQueryCalledNum(disable))
+	assert.Equal(t, 1, db.GetQueryCalledNum(sroOff))
+	assert.Equal(t, 1, db.GetQueryCalledNum(sroOn))
 }
 
 // TestGroupReplicationStatusReadsSingleLeaderFromVariables checks that the status of an active
@@ -278,6 +389,7 @@ func TestConfigureGroupReplicationRequiresStreamPrivileges(t *testing.T) {
 	grantFields := sqltypes.MakeTestFields("HOST|PRIV", "varchar|varchar")
 	db.AddQueryPattern("SET .*", &sqltypes.Result{})
 	db.AddQueryPattern("CHANGE REPLICATION SOURCE TO.*", &sqltypes.Result{})
+	setSuperReadOnlyActionEnabled(db, false)
 	cfg := mysql.GroupReplicationConfig{GroupName: "g", LocalAddress: "h1:3306", Seeds: []string{"h2:3306"}, AutorejoinTries: -1}
 
 	// GROUP_REPLICATION_STREAM on one account and CONNECTION_ADMIN on another are not enough.

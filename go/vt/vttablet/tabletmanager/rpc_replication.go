@@ -881,6 +881,11 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 	protoStatus.ServerVersion = tm.getMySQLVersionStringBounded(ctx)
 
 	log.Info("demoted primary", slog.String("position", protoStatus.Position))
+	if wasPrimary {
+		// Only the caller decides whether this primary serves again (UndoDemotePrimary): the group
+		// replication sync loop does not make it serve, nor its MySQL writable, meanwhile.
+		tm.groupReplicationDemoted.Store(true)
+	}
 
 	return protoStatus, nil
 }
@@ -902,7 +907,11 @@ func (tm *TabletManager) UndoDemotePrimary(ctx context.Context, semiSync bool) e
 	// Check before anything changes. A not-serving reason set after the status is read is decided
 	// on a newer state, and stands (see below).
 	// The fence check may fence MySQL meanwhile, without the action lock: a fence decided since the
-	// snapshot below stands (see groupReplicationFence).
+	// snapshot below stands (see groupReplicationFence). Group Replication sets super_read_only when
+	// the election that elected MySQL ends: the decision waits for that first.
+	if groupReplicationEnabled() {
+		tm.waitForGroupElectionEnd(ctx)
+	}
 	_, servingGen := tm.tmState.GroupReplicationNotServingState()
 	fences := tm.groupReplicationFence.snapshot()
 	groupStatus, err := tm.groupReplicationStatus(ctx)
@@ -963,6 +972,10 @@ func (tm *TabletManager) UndoDemotePrimary(ctx context.Context, semiSync bool) e
 			if !tm.settleGroupReplicationFenceLocked(ctx, fences) {
 				return errFencedDuringUndoDemotePrimary
 			}
+			if err == nil {
+				tm.groupReplicationDemoted.Store(false)
+				tm.groupReplicationRedoPending.Store(false)
+			}
 			return err
 		}
 	}
@@ -974,11 +987,13 @@ func (tm *TabletManager) UndoDemotePrimary(ctx context.Context, semiSync bool) e
 	if err = tm.redoPreparedTransactionsAndSetReadWrite(ctx); err != nil {
 		return err
 	}
+	tm.groupReplicationRedoPending.Store(false)
 	// The decision above holds, and lifts a fence that the fence check set, unless the check fenced
 	// MySQL again meanwhile: MySQL is then fenced again, and the tablet does not serve.
 	if !tm.settleGroupReplicationFenceLocked(ctx, fences) {
 		return errFencedDuringUndoDemotePrimary
 	}
+	tm.groupReplicationDemoted.Store(false)
 
 	// Update serving graph. A not-serving reason set since the decision above stands.
 	log.Info("UndoDemotePrimary re-enabling query service")

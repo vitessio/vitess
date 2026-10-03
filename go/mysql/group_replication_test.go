@@ -126,6 +126,14 @@ func TestGroupReplicationCommands(t *testing.T) {
 		"SET GLOBAL group_replication_bootstrap_group = OFF",
 	}, StartGroupReplicationCommands(true))
 
+	// Vitess disables the member action that makes the primary of every election writable.
+	assert.Equal(t, "SELECT group_replication_disable_member_action('mysql_disable_super_read_only_if_primary', 'AFTER_PRIMARY_ELECTION')",
+		DisableGroupReplicationSuperReadOnlyActionCommand())
+	assert.Equal(t, "SELECT group_replication_enable_member_action('mysql_disable_super_read_only_if_primary', 'AFTER_PRIMARY_ELECTION')",
+		EnableGroupReplicationSuperReadOnlyActionCommand())
+	assert.Contains(t, readGroupReplicationProgress, "performance_schema.threads WHERE NAME = 'thread/group_rpl/THD_primary_election_primary_process'")
+	assert.Contains(t, readGroupReplicationProgress, "performance_schema.processlist WHERE INFO LIKE 'START GROUP_REPLICATION%'")
+
 	cmd, err := SetGroupPrimaryCommand("uuid-1")
 	require.NoError(t, err)
 	assert.Equal(t, "SELECT group_replication_set_as_primary('uuid-1')", cmd)
@@ -161,11 +169,12 @@ func TestGroupReplicationCommands(t *testing.T) {
 // status without them encodes as before, so that readers that do not know them skip them.
 func TestGroupReplicationStatusProgressRoundTrip(t *testing.T) {
 	status := &replicationdatapb.GroupReplicationStatus{
-		PluginActive:      true,
-		GroupName:         "f2758c3b-42d2-5bef-9eb7-01b4c747900d",
-		MemberState:       GroupMemberStateOffline,
-		PaxosSingleLeader: true,
-		StartInProgress:   true,
+		PluginActive:              true,
+		GroupName:                 "f2758c3b-42d2-5bef-9eb7-01b4c747900d",
+		MemberState:               GroupMemberStateOffline,
+		PaxosSingleLeader:         true,
+		StartInProgress:           true,
+		PrimaryElectionInProgress: true,
 	}
 	vt, err := status.MarshalVT()
 	require.NoError(t, err)
@@ -183,6 +192,7 @@ func TestGroupReplicationStatusProgressRoundTrip(t *testing.T) {
 
 	without := status.CloneVT()
 	without.StartInProgress = false
+	without.PrimaryElectionInProgress = false
 	old, err := without.MarshalVT()
 	require.NoError(t, err)
 	assert.Equal(t, old, vt[:len(old)], "the new fields are encoded after the existing ones")
