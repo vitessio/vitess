@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -32,9 +33,12 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
+	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
 
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // recordedIncarnation is the incarnation of the shard's group in the shard record of
@@ -358,30 +362,280 @@ func TestGroupReplicationFenceSparesBootstrapIntentTarget(t *testing.T) {
 // by vtgate were acknowledged on a single voter within 0.68s. The fence check, which watches a
 // PRIMARY every groupReplicationFenceCheckInterval, fences MySQL and stops serving on its own, with
 // the sync loop never running in between. The primary serves again, writable, once a majority of
+// the voters is back, as the sync loop decides under the action lock.
+func TestGroupReplicationFenceCheckFencesShrunkPrimary(t *testing.T) {
+	withGroupReplication(t)
+	groupReplicationFenceCheckInterval = 10 * time.Millisecond
+	ctx := t.Context()
+	tm, fmd, _ := newFenceTestTM(t)
+	qsc := tm.QueryServiceControl.(*tabletservermock.Controller)
+	fmd.SetGroupReplicationStatus(primaryView(recordedIncarnation, 2, 3))
+	setTabletType(t, tm, topodatapb.TabletType_PRIMARY)
+	require.True(t, qsc.IsServing())
+	reads := fmd.GroupReplicationFenceStatusReads()
+	assert.Eventually(t, func() bool { return fmd.GroupReplicationFenceStatusReads() > reads+2 }, groupReplicationTestTimeout, 5*time.Millisecond,
+		"the fence check watches the primary")
+	require.False(t, fmd.SuperReadOnly.Load())
+	require.True(t, qsc.IsServing())
+
+	// Both other voters leave cleanly: MySQL is the primary of a view of one, with quorum.
+	fmd.SetGroupReplicationStatus(primaryView(recordedIncarnation))
+	assert.Eventually(t, func() bool { return fmd.SuperReadOnly.Load() && !qsc.IsServing() }, groupReplicationTestTimeout, 5*time.Millisecond,
+		"the primary of a view without the voter majority must be fenced and stop serving")
+	assert.Equal(t, topodatapb.TabletType_PRIMARY, tm.Tablet().Type, "the tablet keeps its type, so that vtgate buffers")
+	reason, _ := tm.tmState.GroupReplicationNotServingState()
+	assert.Equal(t, groupReplicationVoterMajorityLost, reason)
+
+	// VTOrc's PrimaryIsReadOnly recovery cannot make it writable while the majority is missing.
+	err := tm.UndoDemotePrimary(ctx, false)
+	requireCode(t, err, vtrpcpb.Code_FAILED_PRECONDITION)
+	assert.True(t, fmd.SuperReadOnly.Load())
+
+	// A voter rejoins: the sync loop lets the primary serve again, writable. The fence woke the
+	// tablet's own sync loop, which may hold the action lock when the test's run wants it.
+	fmd.SetGroupReplicationStatus(primaryView(recordedIncarnation, 3))
+	s := newGroupReplicationSync(tm)
+	assert.Eventually(t, func() bool {
+		s.reconcile(ctx)
+		return qsc.IsServing()
+	}, groupReplicationTestTimeout, 5*time.Millisecond, "the primary serves again once the majority is back")
+	assert.False(t, fmd.SuperReadOnly.Load(), "MySQL takes writes again before the primary serves")
+	assert.False(t, tm.groupReplicationFence.fenced.Load())
+}
+
 // TestGroupReplicationFenceCheckFencesShrunkPrimaryAfterItsBootstrap reproduces the G11 chaos
 // scenario as the harness runs it: the migration to Group Replication bootstraps the group on the
 // primary, records its incarnation, and the other voters join; a few seconds later, within
 // groupReplicationBootstrapGrace, they leave cleanly. The tablet trusts a group it bootstrapped
+// until its incarnation is recorded, not after: the shrink is fenced like any other.
+func TestGroupReplicationFenceCheckFencesShrunkPrimaryAfterItsBootstrap(t *testing.T) {
+	withGroupReplication(t)
+	ctx := t.Context()
+	tm, fmd, _ := newFenceTestTM(t)
+	qsc := tm.QueryServiceControl.(*tabletservermock.Controller)
+	tm.groupReplicationPeers.noteBootstrap(recordedIncarnation)
+	fmd.SetGroupReplicationStatus(primaryView(recordedIncarnation, 2, 3))
+	setTabletType(t, tm, topodatapb.TabletType_PRIMARY)
+	s := newGroupReplicationSync(tm)
+	s.checkFence(ctx)
+	require.False(t, fmd.SuperReadOnly.Load())
+	require.True(t, qsc.IsServing())
+
+	fmd.SetGroupReplicationStatus(primaryView(recordedIncarnation))
+	s.checkFence(ctx)
+
+	assert.True(t, fmd.SuperReadOnly.Load(), "the primary of the group it bootstrapped must be fenced once the group shrinks")
+	assert.False(t, qsc.IsServing())
+}
+
 // TestGroupReplicationFenceIsLiftedOnlyByCurrentDecision checks how the fence interacts with the
 // serving invariant: a decision to serve that read MySQL's status before the fence check fenced it
 // does not make MySQL writable, nor the tablet serve; and a promotion that the invariant refuses
+// keeps MySQL fenced.
+func TestGroupReplicationFenceIsLiftedOnlyByCurrentDecision(t *testing.T) {
+	withGroupReplication(t)
+	ctx := t.Context()
+	tm, fmd, _ := newFenceTestTM(t)
+	qsc := tm.QueryServiceControl.(*tabletservermock.Controller)
+	fmd.SetGroupReplicationStatus(primaryView(recordedIncarnation, 2, 3))
+	setTabletType(t, tm, topodatapb.TabletType_PRIMARY)
+	s := newGroupReplicationSync(tm)
+	s.checkFence(ctx)
+
+	// A decision takes its snapshot, then the view shrinks and the fence check fences MySQL before
+	// the decision lifts anything.
+	fences := tm.groupReplicationFence.snapshot()
+	fmd.SetGroupReplicationStatus(primaryView(recordedIncarnation))
+	s.checkFence(ctx)
+	require.True(t, fmd.SuperReadOnly.Load())
+	require.False(t, qsc.IsServing())
+	assert.False(t, tm.liftGroupReplicationFenceLocked(ctx, fences), "a decision older than the fence must not lift it")
+	assert.True(t, fmd.SuperReadOnly.Load())
+	assert.True(t, tm.groupReplicationFence.fenced.Load())
+
+	// A promotion that the serving invariant refuses keeps MySQL fenced.
+	setTabletType(t, tm, topodatapb.TabletType_REPLICA)
+	require.NoError(t, tm.ChangeType(ctx, topodatapb.TabletType_PRIMARY, false))
+	assert.True(t, fmd.SuperReadOnly.Load(), "a primary that may not serve must stay fenced")
+	assert.False(t, qsc.IsServing())
+
+	// Once the majority is back, the promotion's decision lifts it.
+	fmd.SetGroupReplicationStatus(primaryView(recordedIncarnation, 2))
+	setTabletType(t, tm, topodatapb.TabletType_REPLICA)
+	require.NoError(t, tm.ChangeType(ctx, topodatapb.TabletType_PRIMARY, false))
+	assert.False(t, fmd.SuperReadOnly.Load())
+	assert.True(t, qsc.IsServing())
+}
+
 // TestGroupReplicationFenceCheckFollowsMigrationBack checks the migration back to semi-sync, which
 // stores the semi-sync policy as the shard's own policy before the secondaries leave the group one
 // by one, and the primary keeps serving as its group shrinks below the voter majority. The fence
 // check decides on the policy the tablet read last: the first leave, which keeps the majority,
 // makes the sync loop read it again, so that the second leave does not fence the primary. A fence
 // decided under a policy that was out of date is lifted, and the primary serves again, once the
+// sync loop reads the new policy.
+func TestGroupReplicationFenceCheckFollowsMigrationBack(t *testing.T) {
+	t.Run("the first leave refreshes the policy", func(t *testing.T) {
+		withGroupReplication(t)
+		ctx := t.Context()
+		tm, fmd, ts := newFenceTestTM(t)
+		qsc := tm.QueryServiceControl.(*tabletservermock.Controller)
+		fmd.SetGroupReplicationStatus(primaryView(recordedIncarnation, 2, 3))
+		setTabletType(t, tm, topodatapb.TabletType_PRIMARY)
+		s := newGroupReplicationSync(tm)
+		// The sync loop caches the shard record and the policy it read, for a few seconds.
+		s.reconcile(ctx)
+		s.checkFence(ctx)
+
+		setShardDurabilityPolicy(t, ts, policy.DurabilitySemiSync)
+		fmd.SetGroupReplicationStatus(primaryView(recordedIncarnation, 2))
+		s.checkFence(ctx)
+		s.reconcile(ctx)
+		fmd.SetGroupReplicationStatus(primaryView(recordedIncarnation))
+		s.checkFence(ctx)
+
+		assert.False(t, fmd.SuperReadOnly.Load(), "a semi-sync primary must not be fenced as its group shrinks")
+		assert.True(t, qsc.IsServing())
+	})
+
+	t.Run("a fence under an out of date policy is lifted", func(t *testing.T) {
+		withGroupReplication(t)
+		ctx := t.Context()
+		tm, fmd, ts := newFenceTestTM(t)
+		qsc := tm.QueryServiceControl.(*tabletservermock.Controller)
+		fmd.SetGroupReplicationStatus(primaryView(recordedIncarnation, 2, 3))
+		setTabletType(t, tm, topodatapb.TabletType_PRIMARY)
+		s := newGroupReplicationSync(tm)
+		// The sync loop caches the shard record and the policy it read, for a few seconds.
+		s.reconcile(ctx)
+		s.checkFence(ctx)
+
+		setShardDurabilityPolicy(t, ts, policy.DurabilitySemiSync)
+		fmd.SetGroupReplicationStatus(primaryView(recordedIncarnation))
+		s.checkFence(ctx)
+		require.True(t, fmd.SuperReadOnly.Load())
+		require.False(t, qsc.IsServing())
+
+		s.reconcile(ctx)
+		assert.False(t, fmd.SuperReadOnly.Load(), "the fence check fenced the primary under the policy it read last")
+		assert.True(t, qsc.IsServing())
+	})
+}
+
 // TestGroupReplicationFenceCheckLeavesPausedPrimaryAlone checks the planned pause of a primary (see
 // pauseServingLocked): the pause makes the primary serve again once MySQL takes writes, so the
+// fence check must not fence MySQL while it lasts.
+func TestGroupReplicationFenceCheckLeavesPausedPrimaryAlone(t *testing.T) {
+	withGroupReplication(t)
+	ctx := t.Context()
+	tm, fmd, _ := newFenceTestTM(t)
+	fmd.SetGroupReplicationStatus(primaryView(recordedIncarnation, 2, 3))
+	setTabletType(t, tm, topodatapb.TabletType_PRIMARY)
+	s := newGroupReplicationSync(tm)
+	s.checkFence(ctx)
+
+	tm.tmState.setServingPause(groupReplicationLeavePause)
+	fmd.SetGroupReplicationStatus(primaryView(recordedIncarnation))
+	s.checkFence(ctx)
+	assert.False(t, fmd.SuperReadOnly.Load(), "a paused primary must not be fenced")
+
+	tm.tmState.clearServingPause()
+	s.checkFence(ctx)
+	assert.True(t, fmd.SuperReadOnly.Load(), "the fence applies once the pause ended")
+}
+
 // shrinkAndFenceOnce returns a function that, the first time it is called, shrinks the view of the
 // primary cell1-1 to itself and runs the fence check, as if the other voters left, and the check ran,
+// at that moment of what the test runs.
+func shrinkAndFenceOnce(t *testing.T, tm *TabletManager, fmd *mysqlctl.FakeMysqlDaemon, s *groupReplicationSync) func() {
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			fmd.SetGroupReplicationStatus(primaryView(recordedIncarnation))
+			s.checkFence(t.Context())
+		})
+	}
+}
+
 // TestGroupReplicationFenceDecidedDuringUndoDemotePrimaryStands checks VTOrc's PrimaryIsReadOnly
 // recovery of a fenced primary, racing with the fence check. UndoDemotePrimary reads MySQL's status
 // while a majority of the voters is back, and decides that the primary may serve; the voters leave
 // again, and the fence check, which does not wait for the action lock, fences MySQL, before
+// UndoDemotePrimary makes MySQL writable. The fence was decided on a newer status: MySQL stays
+// fenced, the primary does not serve, and UndoDemotePrimary fails.
+func TestGroupReplicationFenceDecidedDuringUndoDemotePrimaryStands(t *testing.T) {
+	withGroupReplication(t)
+	ctx := t.Context()
+	tm, fmd, _ := newFenceTestTM(t)
+	qsc := tm.QueryServiceControl.(*tabletservermock.Controller)
+	fmd.SetGroupReplicationStatus(primaryView(recordedIncarnation, 2, 3))
+	setTabletType(t, tm, topodatapb.TabletType_PRIMARY)
+	s := newGroupReplicationSync(tm)
+	s.checkFence(ctx)
+	// The view shrank once, and the fence check fenced the primary.
+	fmd.SetGroupReplicationStatus(primaryView(recordedIncarnation))
+	s.checkFence(ctx)
+	require.True(t, fmd.SuperReadOnly.Load())
+
+	// The voters are back when UndoDemotePrimary reads MySQL's status, and leave right after.
+	fmd.SetGroupReplicationStatus(primaryView(recordedIncarnation, 2, 3))
+	fmd.SetGroupReplicationStatusHook(shrinkAndFenceOnce(t, tm, fmd, s))
+	t.Cleanup(func() { fmd.SetGroupReplicationStatusHook(nil) })
+
+	err := tm.UndoDemotePrimary(ctx, false)
+	requireCode(t, err, vtrpcpb.Code_FAILED_PRECONDITION)
+	assert.True(t, fmd.SuperReadOnly.Load(), "a fence decided while UndoDemotePrimary decided must stand")
+	assert.True(t, tm.groupReplicationFence.fenced.Load())
+	assert.False(t, qsc.IsServing())
+}
+
 // TestGroupReplicationFenceDecidedDuringPromotionStands checks a promotion that lifts the fence of
 // its MySQL, racing with the fence check: the promotion decided that the tablet may serve, and while
 // it makes MySQL writable, the voters leave again and the fence check fences MySQL. The fence was
+// decided on a newer status: MySQL is fenced again, and the tablet becomes a PRIMARY that does not
+// serve, until a majority of the voters is back.
+func TestGroupReplicationFenceDecidedDuringPromotionStands(t *testing.T) {
+	withGroupReplication(t)
+	ctx := t.Context()
+	tm, fmd, _ := newFenceTestTM(t)
+	qsc := tm.QueryServiceControl.(*tabletservermock.Controller)
+	fmd.SetGroupReplicationStatus(primaryView(recordedIncarnation, 2, 3))
+	setTabletType(t, tm, topodatapb.TabletType_PRIMARY)
+	s := newGroupReplicationSync(tm)
+	s.checkFence(ctx)
+	fmd.SetGroupReplicationStatus(primaryView(recordedIncarnation))
+	s.checkFence(ctx)
+	require.True(t, fmd.SuperReadOnly.Load())
+	// The tablet was demoted meanwhile, and MySQL stayed fenced.
+	setTabletType(t, tm, topodatapb.TabletType_REPLICA)
+	require.True(t, tm.groupReplicationFence.fenced.Load())
+
+	// The voters are back for the promotion's decision, and leave while it lifts the fence.
+	fmd.SetGroupReplicationStatus(primaryView(recordedIncarnation, 2, 3))
+	shrink := shrinkAndFenceOnce(t, tm, fmd, s)
+	fmd.SetSuperReadOnlyHook = func(on bool) {
+		if !on {
+			shrink()
+		}
+	}
+	t.Cleanup(func() { fmd.SetSuperReadOnlyHook = nil })
+
+	require.NoError(t, tm.ChangeType(ctx, topodatapb.TabletType_PRIMARY, false))
+	assert.Equal(t, topodatapb.TabletType_PRIMARY, tm.Tablet().Type)
+	assert.True(t, fmd.SuperReadOnly.Load(), "a fence decided while the promotion lifted it must stand")
+	assert.True(t, tm.groupReplicationFence.fenced.Load())
+	assert.False(t, qsc.IsServing())
+	reason, _ := tm.tmState.GroupReplicationNotServingState()
+	assert.Equal(t, groupReplicationVoterMajorityLost, reason)
+
+	// Once the majority is back, the sync loop lets the primary serve again, writable.
+	fmd.SetSuperReadOnlyHook = nil
+	fmd.SetGroupReplicationStatus(primaryView(recordedIncarnation, 2))
+	s.reconcile(ctx)
+	assert.False(t, fmd.SuperReadOnly.Load())
+	assert.True(t, qsc.IsServing())
+}
+
 // TestGroupReplicationFenceDropsDecisionOfEarlierEpoch checks a fence decided on a status of MySQL
 // read before MySQL joined, bootstrapped or left a group. The fence check read MySQL as the primary
 // of a stray group; before it set super_read_only, the tablet left that group and bootstrapped a new

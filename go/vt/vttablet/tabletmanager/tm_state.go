@@ -476,6 +476,12 @@ func (ts *tmState) setServingPause(reason string) {
 	ts.servingPause.Store(&reason)
 }
 
+// servingPaused returns whether a PRIMARY tablet pauses for a planned change of its replication.
+func (ts *tmState) servingPaused() bool {
+	reason := ts.servingPause.Load()
+	return reason != nil && *reason != ""
+}
+
 // clearServingPause records that the planned pause of a PRIMARY tablet ended. The caller makes the
 // query service serve again.
 func (ts *tmState) clearServingPause() {

@@ -180,12 +180,13 @@ func (f *groupReplicationFence) lastReason() string {
 	return groupReplicationVoterMajorityLost
 }
 
-// armed returns whether the fence check reads MySQL's view: while MySQL is fenced, while a join or a
-// bootstrap of the tablet's MySQL runs, and for groupReplicationJoinWatchWindow after one ended. MySQL keeps running a START GROUP_REPLICATION
+// armed returns whether the fence check reads MySQL's view, given the tablet's type: on a PRIMARY
+// tablet, while MySQL is fenced, while a join or a bootstrap of the tablet's MySQL runs, and for
+// groupReplicationJoinWatchWindow after one ended. MySQL keeps running a START GROUP_REPLICATION
 // whose client gave up, so a start that failed keeps it armed for groupReplicationJoinTimeout, the
 // time the sync loop gives a join, if that is longer.
-func (f *groupReplicationFence) armed() bool {
-	if f.fenced.Load() || f.starts.Load() > 0 {
+func (f *groupReplicationFence) armed(tabletType topodatapb.TabletType) bool {
+	if tabletType == topodatapb.TabletType_PRIMARY || f.fenced.Load() || f.starts.Load() > 0 {
 		return true
 	}
 	end := f.lastStartEnd.Load()
@@ -227,7 +228,9 @@ func (s *groupReplicationSync) runFenceCheck(ctx context.Context, interval time.
 // status read before MySQL joined, bootstrapped or left a group is dropped.
 func (s *groupReplicationSync) checkFence(ctx context.Context) {
 	tm := s.tm
-	if !tm.groupReplicationFence.armed() {
+	tablet := tm.Tablet()
+	if !tm.groupReplicationFence.armed(tablet.Type) {
+		s.fenceViewID = ""
 		return
 	}
 	epoch := tm.groupReplicationFence.epoch.Load()
@@ -243,8 +246,17 @@ func (s *groupReplicationSync) checkFence(ctx context.Context) {
 	if fs.ServerUUID != "" {
 		tm.groupReplicationPeers.setServerUUID(topoproto.TabletAliasString(tm.tabletAlias), fs.ServerUUID)
 	}
+	if viewID := fs.Status.GetViewId(); fs.ViewKnown {
+		if tablet.Type == topodatapb.TabletType_PRIMARY && s.fenceViewID != "" && viewID != s.fenceViewID {
+			// The primary's view changed: a voter joined or left. The sync loop reads the shard record
+			// and the durability policy again, so that the check below decides on them. A migration
+			// back to semi-sync sets the shard's own policy before the first voter leaves.
+			s.requestRefresh()
+		}
+		s.fenceViewID = viewID
+	}
 
-	reason := tm.groupReplicationFenceReason(fs.Status, fs.ViewKnown, time.Now())
+	reason := tm.groupReplicationFenceReason(fs.Status, fs.ViewKnown, tablet.Type, &s.majorityIncarnation, time.Now())
 	if reason == "" {
 		return
 	}
@@ -261,8 +273,13 @@ func (s *groupReplicationSync) checkFence(ctx context.Context) {
 //   - A stray group: the incarnation is not the recorded one, and the view holds fewer than a
 //     majority of the voters. A join that did not find the shard's group can end that way, as the
 //     only member of a new incarnation (any tablet type).
-//   - While the fence holds, a view that the tablet may not serve keeps it: Group Replication
-//     clears super_read_only on the member it elects primary.
+//   - A shrunk or superseded group, on a PRIMARY tablet: its MySQL was the primary of a view with a
+//     majority of the voters in this incarnation (majorityIncarnation, which the check maintains),
+//     and the view now holds fewer than a majority of the voters (they left cleanly, and MySQL's
+//     view quorum only counts the members still in the view), or the shard record lists another
+//     incarnation.
+//   - While the fence holds, the same conditions keep it: Group Replication clears super_read_only
+//     on the member it elects primary.
 //   - Without the view id (viewKnown unset; MySQL does not return it while one of the tablet's
 //     joins runs): a view that holds fewer than a majority of the voters. A join into the shard's
 //     group never makes the joiner the primary: it is a group of its own, or a group whose other
@@ -270,13 +287,14 @@ func (s *groupReplicationSync) checkFence(ctx context.Context) {
 //
 // It never fences a group in the recorded incarnation that never had the voter majority, such as
 // one bootstrapped a moment ago, which other voters are about to join, and which InitPrimary and
-// PlannedReparentShard write to before they do; nor a group that this tablet is bootstrapping or
-// bootstrapped within groupReplicationBootstrapGrace; nor the new group of which this tablet's
-// MySQL is the primary while a live bootstrap intent names this tablet (VTOrc adopts that group;
-// see shardGroupRecord.adoptableByIntent). A view whose voters the tablet cannot all identify, and
+// PlannedReparentShard write to before they do; nor a group that this tablet is bootstrapping, or
+// bootstrapped within groupReplicationBootstrapGrace and whose incarnation is not recorded yet; nor
+// the new group of which this tablet's MySQL is the primary while a live bootstrap intent names
+// this tablet (VTOrc adopts that group; see shardGroupRecord.adoptableByIntent); nor anything
+// during a planned pause of the primary. A view whose voters the tablet cannot all identify, and
 // which holds enough members to be a majority, is left to the sync loop, which asks the voters for
 // their server_uuid.
-func (tm *TabletManager) groupReplicationFenceReason(status *replicationdatapb.GroupReplicationStatus, viewKnown bool, now time.Time) string {
+func (tm *TabletManager) groupReplicationFenceReason(status *replicationdatapb.GroupReplicationStatus, viewKnown bool, tabletType topodatapb.TabletType, majorityIncarnation *string, now time.Time) string {
 	if !mysql.IsGroupPrimary(status) {
 		return ""
 	}
@@ -285,7 +303,7 @@ func (tm *TabletManager) groupReplicationFenceReason(status *replicationdatapb.G
 		return ""
 	}
 	if !viewKnown {
-		if tm.groupReplicationFence.bootstraps.Load() > 0 {
+		if tm.groupReplicationFence.bootstraps.Load() > 0 || tm.tmState.servingPaused() {
 			return ""
 		}
 		legitimate := policy.NewLegitimateGroup(rec.incarnation, rec.voters, rec.tablets, tm.knownServerUUIDs(rec))
@@ -296,15 +314,23 @@ func (tm *TabletManager) groupReplicationFenceReason(status *replicationdatapb.G
 		return ""
 	}
 	incarnation := policy.GroupIncarnation(status.GetViewId())
-	if tm.groupReplicationFence.bootstraps.Load() > 0 ||
-		(incarnation != "" && incarnation == tm.groupReplicationPeers.recentlyBootstrapped()) ||
+	recorded := rec.incarnation == "" || incarnation == rec.incarnation
+	// The tablet trusts a group it bootstrapped until its incarnation is recorded, not after: the
+	// migration to Group Replication and VTOrc's recoveries bootstrap a group that its voters join
+	// and leave within groupReplicationBootstrapGrace.
+	if tm.groupReplicationFence.bootstraps.Load() > 0 || tm.tmState.servingPaused() ||
+		(!recorded && incarnation != "" && incarnation == tm.groupReplicationPeers.recentlyBootstrapped()) ||
 		rec.adoptableByIntent(tm.tabletAlias, incarnation, now) {
 		return ""
 	}
 	legitimate := policy.NewLegitimateGroup(rec.incarnation, rec.voters, rec.tablets, tm.knownServerUUIDs(rec))
-	recorded := rec.incarnation == "" || incarnation == rec.incarnation
 	majority := legitimate.HasVoterMajority(status)
 	if majority && recorded {
+		if *majorityIncarnation != incarnation {
+			log.Info("Group replication: the fence check saw MySQL as the primary of its group with the voter majority, and fences a later shrink of the group",
+				slog.String("view_id", status.GetViewId()), slog.Int("online_members", mysql.OnlineGroupMembers(status)), slog.String("tablet_type", tabletType.String()))
+		}
+		*majorityIncarnation = incarnation
 		return ""
 	}
 	lacking := !majority && (mysql.OnlineGroupMembers(status) < legitimate.VoterMajority() || identifiesEveryVoter(legitimate))
@@ -312,7 +338,8 @@ func (tm *TabletManager) groupReplicationFenceReason(status *replicationdatapb.G
 	switch {
 	case !recorded && lacking:
 		return groupReplicationUnrecordedIncarnation
-	case tm.groupReplicationFence.fenced.Load() && notServable:
+	case tabletType == topodatapb.TabletType_PRIMARY && *majorityIncarnation != "" && incarnation == *majorityIncarnation && notServable,
+		tm.groupReplicationFence.fenced.Load() && notServable:
 		if !recorded {
 			return groupReplicationUnrecordedIncarnation
 		}
@@ -353,13 +380,13 @@ func (tm *TabletManager) cachedPolicyIsGroupReplication(rec *shardGroupRecord) b
 // buffers. A tablet of another type gets no reason, which its sync loop would clear: its promotion
 // decides whether it serves, and lifts the fence only if it may (changeTypeWithGroupRecordLocked).
 // The fence is dropped if MySQL joined, bootstrapped or left a group since fs was read, or if a
-// bootstrap started since. It returns whether it changed
+// bootstrap or a planned pause of the primary started since. It returns whether it changed
 // anything: a fence that holds is checked on every run without waking the sync loop.
 func (tm *TabletManager) fenceGroupReplicationMember(ctx context.Context, fs *mysql.GroupReplicationFenceStatus, reason string, epoch uint64) bool {
 	f := &tm.groupReplicationFence
 	status := fs.Status
 	first, ok := f.decide(epoch, reason, func() bool {
-		return f.bootstraps.Load() > 0
+		return f.bootstraps.Load() > 0 || tm.tmState.servingPaused()
 	})
 	if !ok {
 		return false

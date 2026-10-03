@@ -113,9 +113,15 @@ type groupReplicationSync struct {
 
 	// wake makes the loop run right away, and refresh makes its next run read the shard record and
 	// the durability policy from the topology. The fence check (checkFence), which runs in its own
-	// goroutine, asks for both after it fenced MySQL.
+	// goroutine, asks for both after it fenced MySQL, and when the view of a primary changed.
 	wake    chan struct{}
 	refresh atomic.Bool
+
+	// fenceViewID is the view id that the fence check read last, and majorityIncarnation the last
+	// incarnation in which it saw MySQL as the primary of a view with a majority of the voters.
+	// Only the fence check's goroutine uses them.
+	fenceViewID         string
+	majorityIncarnation string
 }
 
 func newGroupReplicationSync(tm *TabletManager) *groupReplicationSync {
@@ -616,6 +622,13 @@ func (s *groupReplicationSync) enforceVoterMajority(ctx context.Context, status 
 		// The reason only applies to a PRIMARY under a group replication policy. It is cleared
 		// unless one was set since the run started: a promotion decides again under the action
 		// lock (changeTypeLocked).
+		if tablet.Type == topodatapb.TabletType_PRIMARY && tm.groupReplicationFence.fenced.Load() {
+			// The fence check fenced the primary under the group replication policy it read last,
+			// for example while a migration back to semi-sync shrinks the group: the primary is
+			// writable again before it serves again.
+			s.liftFenceUnderOtherPolicy(ctx, gen)
+			return
+		}
 		if current != "" {
 			if _, err := tm.tmState.ClearGroupReplicationNotServing(ctx, gen); err != nil {
 				log.Error("Group replication sync: failed to change the serving state of the primary", slog.Any("error", err))
@@ -633,6 +646,10 @@ func (s *groupReplicationSync) enforceVoterMajority(ctx context.Context, status 
 	}
 	if !policy.IsGroupReplication(durability) {
 		// The policy changed since the loop read it: the rule does not apply anymore.
+		if tm.groupReplicationFence.fenced.Load() {
+			s.liftFenceUnderOtherPolicy(ctx, gen)
+			return
+		}
 		if current != "" {
 			if _, err := tm.tmState.ClearGroupReplicationNotServing(ctx, gen); err != nil {
 				log.Error("Group replication sync: failed to change the serving state of the primary", slog.Any("error", err))
@@ -655,6 +672,37 @@ func (s *groupReplicationSync) enforceVoterMajority(ctx context.Context, status 
 	}
 	if current != "" || tm.groupReplicationFence.fenced.Load() {
 		s.serveAgain(ctx, durability, rec)
+	}
+}
+
+// liftFenceUnderOtherPolicy lifts the fence of a PRIMARY tablet's MySQL, and clears its not-serving
+// reason, once the loop found that the shard's durability policy is not a group replication policy
+// anymore, under the action lock and on MySQL's status read under it. gen is the not-serving
+// generation captured before the run read MySQL's status: a reason set since stands, as does a
+// fence decided since the status read under the lock.
+func (s *groupReplicationSync) liftFenceUnderOtherPolicy(ctx context.Context, gen uint64) {
+	tm := s.tm
+	if !tm.actionSema.TryAcquire(1) {
+		return
+	}
+	defer tm.unlock()
+	if tm.Tablet().Type != topodatapb.TabletType_PRIMARY {
+		return
+	}
+	fences := tm.groupReplicationFence.snapshot()
+	status, err := tm.groupReplicationStatus(ctx)
+	if err != nil {
+		log.Warn("Group replication sync: cannot read the group replication status, the primary stays fenced", slog.Any("error", err))
+		return
+	}
+	if mysql.IsGroupMemberActive(status) && !mysql.IsGroupPrimary(status) {
+		return
+	}
+	if !tm.liftGroupReplicationFenceLocked(ctx, fences) {
+		return
+	}
+	if _, err := tm.tmState.ClearGroupReplicationNotServing(ctx, gen); err != nil {
+		log.Error("Group replication sync: failed to change the serving state of the primary", slog.Any("error", err))
 	}
 }
 
