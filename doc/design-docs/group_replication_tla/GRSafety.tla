@@ -43,6 +43,13 @@ CONSTANTS
                     \* refuses an intent that the shard record no longer holds
     KEEP_NEWER_INTENT, \* recording an incarnation that is recorded already keeps an intent recorded
                        \* for it (a later bootstrap's)
+    WITHDRAW_ON_REFUSAL, \* VTOrc withdraws its intent (compare-and-swap on the token) when the tablet
+                         \* refuses the bootstrap definitively: MySQL lacks a required transaction, and
+                         \* no START GROUP_REPLICATION runs
+    \* --- unsafe variants, to validate the conditions of WITHDRAW_ON_REFUSAL (FALSE = the code) ---
+    WITHDRAW_ANY_FAILURE, \* VTOrc withdraws its intent after any error or timeout of the bootstrap RPC
+    DEFINITIVE_WHILE_STARTING, \* the tablet reports as definitive the refusal it sends while a START
+                               \* GROUP_REPLICATION still runs (it gave up waiting for the START to end)
     \* --- a rule considered and rejected (FALSE = the code) ---
     CAND_EXECUTED,  \* only a voter that executed every voter's transactions may be the candidate
     \* --- environment and checking modes ---
@@ -111,13 +118,16 @@ VARIABLES
     otok,       \* token of the intent the recovery wrote or adopts
     oborn,      \* first incarnation created after that intent
     oreq,       \* every transaction that a voter executed or received, when the recovery read them
-    orep,       \* reply of the bootstrap RPC: 0 none, -1 error, else the new incarnation
+    orep,       \* reply of the bootstrap RPC: 0 none, -1 error, -2 definitive refusal, else the new
+                \* incarnation
     lockOwner,  \* holder of the shard lock's lease
     \* ---- clients and history ----
     acked, nextTx,
     bootFrom,   \* for a bootstrapped incarnation i: the recorded incarnation it started from, and its target
     decisionAck, minorityAck, fenceUndone,
     adopted,    \* incarnations recorded for each intent token
+    wfail,      \* STUCK_CHECK only: the bootstrap RPC of the current intent failed without a definitive
+                \* refusal (an error or a timeout), so that only adoption or the intent's expiry ends it
     \* ---- budgets ----
     nCrash, nLeave, nLoss, nExpire
 
@@ -126,7 +136,7 @@ vT == <<ttype, serving, lk, dph, dOK, dGen, dFence, snap, fenced, fcPend, majInc
         recentBoot, dmt, breq, bOrc, bPrev, badServe>>
 vS == <<recInc, intent, nextTok, intExp, newest>>
 vO == <<oph, ocand, oexp, otok, oborn, oreq, orep, lockOwner>>
-vH == <<acked, nextTx, bootFrom, decisionAck, minorityAck, fenceUndone, adopted>>
+vH == <<acked, nextTx, bootFrom, decisionAck, minorityAck, fenceUndone, adopted, wfail>>
 vB == <<nCrash, nLeave, nLoss, nExpire>>
 vars == <<vM, vT, vS, vO, vH, vB>>
 
@@ -243,6 +253,7 @@ Init ==
         /\ minorityAck = FALSE
         /\ fenceUndone = FALSE
         /\ adopted = [k \in Toks |-> {}]
+        /\ wfail = FALSE
         /\ nCrash = 0 /\ nLeave = 0 /\ nLoss = 0 /\ nExpire = 0
 
 ----------------------------------------------------------------------------
@@ -258,7 +269,7 @@ Commit(p) ==
     /\ minorityAck' = (minorityAck \/ ~VoterMaj(grp[p]))
     /\ decisionAck' = (decisionAck \/ (ttype[p] = "P" /\ serving[p] /\ badServe[p] /\ ~LegitMaj(p)))
     /\ UNCHANGED <<up, grp, st, sro, electing, recv, view, prim, dead, nextInc, async>>
-    /\ UNCHANGED <<vT, vS, vO, vB, bootFrom, fenceUndone, adopted>>
+    /\ UNCHANGED <<vT, vS, vO, vB, bootFrom, fenceUndone, adopted, wfail>>
 
 ----------------------------------------------------------------------------
 (* MySQL and Group Replication *)
@@ -372,7 +383,7 @@ CrashVars(s) ==
     /\ badServe' = [badServe EXCEPT ![s] = FALSE]
     /\ nCrash' = nCrash + 1
     /\ UNCHANGED <<exec, nextInc, cInc, bPrev>>
-    /\ UNCHANGED <<vS, vO, acked, bootFrom, decisionAck, minorityAck, fenceUndone, adopted,
+    /\ UNCHANGED <<vS, vO, acked, bootFrom, decisionAck, minorityAck, fenceUndone, adopted, wfail,
                    nLeave, nLoss, nExpire>>
 
 Crash(s) ==
@@ -471,7 +482,7 @@ BootComplete(s) ==
     /\ UNCHANGED <<ttype, serving, dph, dOK, dGen, dFence, snap, fenced, fcPend, majInc, cInc,
                    dmt, breq, badServe>>
     /\ UNCHANGED <<vS, oph, ocand, oexp, otok, oborn, oreq, lockOwner, vB, acked, nextTx, decisionAck,
-                   minorityAck, fenceUndone, adopted>>
+                   minorityAck, fenceUndone, adopted, wfail>>
 
 \* asynchronous replication on the default channel (only after StaleTopoPrimary without NEW3_FIX)
 AsyncApply(s) ==
@@ -613,7 +624,7 @@ PrAct(s) ==
     /\ UNCHANGED <<up, grp, st, electing, exec, recv, view, prim, hist, dead, nextInc, async>>
     /\ UNCHANGED <<fcPend, majInc, cInc, recentBoot, breq, bOrc, bPrev>>
     /\ UNCHANGED <<recInc, intent, nextTok, intExp>>
-    /\ UNCHANGED <<vO, vB, acked, nextTx, bootFrom, decisionAck, minorityAck, adopted>>
+    /\ UNCHANGED <<vO, vB, acked, nextTx, bootFrom, decisionAck, minorityAck, adopted, wfail>>
 
 \* serveAgain, step 1: TryAcquire, the generation, the fence snapshot
 SaSnap(s) ==
@@ -661,7 +672,7 @@ SaAct(s) ==
     /\ UNCHANGED <<up, grp, st, electing, exec, recv, view, prim, hist, dead, nextInc, async>>
     /\ UNCHANGED <<ttype, snap, fcPend, majInc, cInc, recentBoot,
                    dmt, breq, bOrc, bPrev>>
-    /\ UNCHANGED <<vS, vO, vB, acked, nextTx, bootFrom, decisionAck, minorityAck, adopted>>
+    /\ UNCHANGED <<vS, vO, vB, acked, nextTx, bootFrom, decisionAck, minorityAck, adopted, wfail>>
 
 \* a join (the sync loop's rejoin, the startup join, VTOrc's GroupMemberNotOnline): a new epoch, the
 \* fence reset, MySQL's START; the applier applies the relay backlog; the default channel is stopped
@@ -754,7 +765,8 @@ FcAct(s) ==
 \* the RPC gets the action lock: stopServingBeforeBootstrap, a new epoch; an active member refuses, and
 \* so does a superseded intent (BOOT_TOKEN); a START in progress is waited for; else the tablet applies
 \* its relay log and checks what the RPC requires (BOOT_REQ), resets the fence, and MySQL's START
-\* (bootstrap) runs
+\* (bootstrap) runs. Only the refusal for a missing transaction, decided while no START runs, is
+\* definitive (-2): this RPC did not start MySQL, and never will.
 HBoot1(s) ==
     /\ Free
     /\ up[s] /\ lk[s] = "free"
@@ -766,15 +778,16 @@ HBoot1(s) ==
         /\ badServe' = [badServe EXCEPT ![s] = IF ttype[s] = "P" /\ ~stale THEN FALSE ELSE @]
         /\ fcPend' = [fcPend EXCEPT ![s] = IF stale THEN @ ELSE FALSE]
         /\ IF stale \/ grp[s] # 0 \/ (st[s] = "none" /\ ~ReqOK(s, r))
-           THEN /\ Reply(r, s, -1)
+           THEN /\ Reply(r, s, IF stale \/ grp[s] # 0 THEN -1 ELSE -2)
                 /\ UNCHANGED <<lk, st, fenced, bOrc, bPrev, exec, recv>>
            ELSE /\ bOrc' = [bOrc EXCEPT ![s] = r]
-                /\ bPrev' = [bPrev EXCEPT ![s] = recInc]
                 /\ UNCHANGED orep
                 /\ IF st[s] # "none"
+                   \* a bootstrap START in progress keeps the recorded incarnation it started from
                    THEN /\ lk' = [lk EXCEPT ![s] = "bootw"]
-                        /\ UNCHANGED <<st, fenced, exec, recv>>
+                        /\ UNCHANGED <<st, fenced, exec, recv, bPrev>>
                    ELSE /\ lk' = [lk EXCEPT ![s] = "boot"]
+                        /\ bPrev' = [bPrev EXCEPT ![s] = recInc]
                         /\ st' = [st EXCEPT ![s] = "boot"]
                         /\ fenced' = [fenced EXCEPT ![s] = FALSE]
                         /\ exec' = [exec EXCEPT ![s] = ApplyFor(s, r)]
@@ -786,7 +799,7 @@ HBoot1(s) ==
 \* stopOngoingGroupStartLocked: MySQL accepts the STOP once its START ended; a superseded intent is
 \* refused before the STOP (BOOT_TOKEN), so that it never makes MySQL leave a group that a newer
 \* bootstrap formed; MySQL leaves whatever the START joined or formed; then the checks of HBoot1 and the
-\* bootstrap
+\* bootstrap. A missing transaction is a definitive refusal: the START ended, and MySQL left its group.
 HBootGo(s) ==
     /\ Free
     /\ up[s] /\ lk[s] = "bootw" /\ st[s] = "none"
@@ -805,8 +818,9 @@ HBootGo(s) ==
                      /\ fenced' = [fenced EXCEPT ![s] = FALSE]
                      /\ exec' = [exec EXCEPT ![s] = ApplyFor(s, bOrc[s])]
                      /\ recv' = [recv EXCEPT ![s] = IF ApplyFor(s, bOrc[s]) = exec[s] THEN @ ELSE {}]
-                     /\ UNCHANGED <<orep, bOrc, bPrev>>
-                ELSE /\ Reply(bOrc[s], s, -1)
+                     /\ bPrev' = [bPrev EXCEPT ![s] = recInc]
+                     /\ UNCHANGED <<orep, bOrc>>
+                ELSE /\ Reply(bOrc[s], s, -2)
                      /\ lk' = [lk EXCEPT ![s] = "free"]
                      /\ bOrc' = [bOrc EXCEPT ![s] = NoReq]
                      /\ bPrev' = [bPrev EXCEPT ![s] = 0]
@@ -816,14 +830,15 @@ HBootGo(s) ==
                    dmt, breq, badServe>>
     /\ UNCHANGED <<vS, oph, ocand, oexp, otok, oborn, oreq, lockOwner, vH, vB>>
 
-\* the START in progress did not end within groupReplicationStopOngoingStartTimeout: UNAVAILABLE
+\* the START in progress did not end within groupReplicationStopOngoingStartTimeout: UNAVAILABLE, never
+\* definitive (DEFINITIVE_WHILE_STARTING: the unsafe variant that reports it as definitive)
 HBootGiveUp(s) ==
     /\ Free
     /\ lk[s] = "bootw"
-    /\ Reply(bOrc[s], s, -1)
+    /\ Reply(bOrc[s], s, IF DEFINITIVE_WHILE_STARTING THEN -2 ELSE -1)
     /\ lk' = [lk EXCEPT ![s] = "free"]
     /\ bOrc' = [bOrc EXCEPT ![s] = NoReq]
-    /\ bPrev' = [bPrev EXCEPT ![s] = 0]
+    /\ bPrev' = [bPrev EXCEPT ![s] = IF st[s] = "boot" THEN @ ELSE 0]
     /\ UNCHANGED <<vM, ttype, serving, dph, dOK, dGen, dFence, snap, fenced, fcPend, majInc,
                    cInc, recentBoot, dmt, breq, badServe>>
     /\ UNCHANGED <<vS, oph, ocand, oexp, otok, oborn, oreq, lockOwner, vH, vB>>
@@ -862,6 +877,9 @@ OBegin(o) ==
            P2    == IF \E c \in P1b : st[c] = "none" THEN {c \in P1b : st[c] = "none"} ELSE P1b
            P3    == IF \E c \in P2 : ttype[c] = "P" THEN {c \in P2 : ttype[c] = "P"} ELSE P2
        IN \E c \in P3 :
+            \* STUCK_CHECK: a recovery whose intent the fence refuses changes nothing, and its loop
+            \* would hide a stuck state from the deadlock check
+            /\ STUCK_CHECK => ~(INTENT /\ INTENT_FENCE /\ IntentLive(intent) /\ intent.tgt # c)
             /\ lockOwner' = o
             /\ ocand' = [ocand EXCEPT ![o] = c]
             /\ oexp' = [oexp EXCEPT ![o] = recInc]
@@ -903,7 +921,9 @@ OIntent(o) ==
     /\ oreq' = [oreq EXCEPT ![o] = {}]
     /\ UNCHANGED <<vM, ttype, serving, lk, dph, dOK, dGen, dFence, snap, fenced, fcPend, majInc,
                    cInc, recentBoot, dmt, bOrc, bPrev, badServe>>
-    /\ UNCHANGED <<recInc, newest, orep, vH, vB>>
+    /\ wfail' = FALSE
+    /\ UNCHANGED <<recInc, newest, orep, acked, nextTx, bootFrom, decisionAck, minorityAck, fenceUndone,
+                   adopted, vB>>
 
 \* writeGroupReplicationIncarnation: compare-and-swap against the expected incarnation and the token
 RecordOK(o, inc) ==
@@ -920,7 +940,26 @@ Record(o, inc) ==
     /\ adopted' = IF RecordOK(o, inc) /\ otok[o] # 0 /\ recInc # inc
                   THEN [adopted EXCEPT ![otok[o]] = @ \cup {inc}] ELSE adopted
 
-\* the reply of the bootstrap RPC: record the incarnation, or adopt after an error
+\* the recovery ends: the shard lock is released
+OEnd(o) ==
+    /\ oph' = [oph EXCEPT ![o] = "idle"]
+    /\ lockOwner' = Unlock(o)
+    /\ ocand' = [ocand EXCEPT ![o] = NoServer] /\ oexp' = [oexp EXCEPT ![o] = 0]
+    /\ otok' = [otok EXCEPT ![o] = 0] /\ oborn' = [oborn EXCEPT ![o] = 0] /\ orep' = [orep EXCEPT ![o] = 0]
+
+\* WithdrawGroupReplicationBootstrapIntent: removes the recovery's own intent, a compare-and-swap on its
+\* token and on the incarnation it was recorded for; a newer intent, or an incarnation recorded since,
+\* is left as it is
+Withdraw(o) ==
+    LET mine == otok[o] # 0 /\ intent.tok = otok[o] /\ recInc = intent.prev IN
+    /\ intent' = IF mine THEN NoIntent ELSE intent
+    /\ intExp' = IF mine THEN FALSE ELSE intExp
+
+\* after a failed bootstrap RPC (reply v < 0, or a timeout: v = 0), VTOrc withdraws its intent
+WithdrawsAfter(v) == INTENT /\ ((WITHDRAW_ON_REFUSAL /\ v = -2) \/ WITHDRAW_ANY_FAILURE)
+
+\* the reply of the bootstrap RPC: record the incarnation, or adopt after an error, or withdraw the
+\* intent after a definitive refusal
 OReply(o) ==
     /\ Free
     /\ oph[o] = "wait" /\ orep[o] # 0
@@ -930,14 +969,16 @@ OReply(o) ==
             /\ lockOwner' = Unlock(o)
             /\ ocand' = [ocand EXCEPT ![o] = NoServer] /\ oexp' = [oexp EXCEPT ![o] = 0]
             /\ otok' = [otok EXCEPT ![o] = 0] /\ oborn' = [oborn EXCEPT ![o] = 0] /\ orep' = [orep EXCEPT ![o] = 0]
-       ELSE /\ UNCHANGED <<recInc, intent, adopted, intExp>>
-            /\ IF ADOPT /\ INTENT
-               THEN /\ oph' = [oph EXCEPT ![o] = "adopt"]
-                    /\ UNCHANGED <<lockOwner, ocand, oexp, otok, oborn, orep>>
-               ELSE /\ oph' = [oph EXCEPT ![o] = "idle"]
-                    /\ lockOwner' = Unlock(o)
-                    /\ ocand' = [ocand EXCEPT ![o] = NoServer] /\ oexp' = [oexp EXCEPT ![o] = 0]
-                    /\ otok' = [otok EXCEPT ![o] = 0] /\ oborn' = [oborn EXCEPT ![o] = 0] /\ orep' = [orep EXCEPT ![o] = 0]
+       ELSE /\ UNCHANGED <<recInc, adopted>>
+            /\ IF WithdrawsAfter(orep[o])
+               THEN /\ Withdraw(o)
+                    /\ OEnd(o)
+               ELSE /\ UNCHANGED <<intent, intExp>>
+                    /\ IF ADOPT /\ INTENT
+                       THEN /\ oph' = [oph EXCEPT ![o] = "adopt"]
+                            /\ UNCHANGED <<lockOwner, ocand, oexp, otok, oborn, orep>>
+                       ELSE OEnd(o)
+    /\ wfail' = IF STUCK_CHECK /\ orep[o] = -1 /\ otok[o] # 0 /\ otok[o] = intent.tok THEN TRUE ELSE wfail
     /\ UNCHANGED <<vM, vT, nextTok, newest, oreq>>
     /\ UNCHANGED <<acked, nextTx, bootFrom, decisionAck, minorityAck, fenceUndone, vB>>
 
@@ -946,17 +987,20 @@ OTimeout(o) ==
     /\ Free
     /\ oph[o] = "wait"
     /\ breq' = [breq EXCEPT ![ocand[o]] = {r \in @ : ~(r.o = o /\ r.tok = otok[o])}]
-    /\ IF ADOPT /\ INTENT
-       THEN /\ oph' = [oph EXCEPT ![o] = "adopt"]
-            /\ UNCHANGED <<lockOwner, ocand, oexp, otok, oborn>>
-            /\ orep' = [orep EXCEPT ![o] = 0]
-       ELSE /\ oph' = [oph EXCEPT ![o] = "idle"]
-            /\ lockOwner' = Unlock(o)
-            /\ ocand' = [ocand EXCEPT ![o] = NoServer] /\ oexp' = [oexp EXCEPT ![o] = 0]
-            /\ otok' = [otok EXCEPT ![o] = 0] /\ oborn' = [oborn EXCEPT ![o] = 0] /\ orep' = [orep EXCEPT ![o] = 0]
+    /\ IF WithdrawsAfter(0)
+       THEN /\ Withdraw(o)
+            /\ OEnd(o)
+       ELSE /\ UNCHANGED <<intent, intExp>>
+            /\ IF ADOPT /\ INTENT
+               THEN /\ oph' = [oph EXCEPT ![o] = "adopt"]
+                    /\ UNCHANGED <<lockOwner, ocand, oexp, otok, oborn>>
+                    /\ orep' = [orep EXCEPT ![o] = 0]
+               ELSE OEnd(o)
     /\ UNCHANGED <<vM, ttype, serving, lk, dph, dOK, dGen, dFence, snap, fenced, fcPend, majInc,
                    cInc, recentBoot, dmt, bOrc, bPrev, badServe>>
-    /\ UNCHANGED <<vS, oreq, vH, vB>>
+    /\ wfail' = IF STUCK_CHECK /\ otok[o] # 0 /\ otok[o] = intent.tok THEN TRUE ELSE wfail
+    /\ UNCHANGED <<recInc, nextTok, newest, oreq, acked, nextTx, bootFrom, decisionAck, minorityAck,
+                   fenceUndone, adopted, vB>>
 
 \* AdoptGroupReplicationBootstrap: the target's status now, then the compare-and-swap
 OAdopt(o) ==
@@ -971,7 +1015,7 @@ OAdopt(o) ==
     /\ ocand' = [ocand EXCEPT ![o] = NoServer] /\ oexp' = [oexp EXCEPT ![o] = 0]
     /\ otok' = [otok EXCEPT ![o] = 0] /\ oborn' = [oborn EXCEPT ![o] = 0] /\ orep' = [orep EXCEPT ![o] = 0]
     /\ UNCHANGED <<vM, vT, nextTok, newest, oreq>>
-    /\ UNCHANGED <<acked, nextTx, bootFrom, decisionAck, minorityAck, fenceUndone, vB>>
+    /\ UNCHANGED <<acked, nextTx, bootFrom, decisionAck, minorityAck, fenceUndone, wfail, vB>>
 
 \* GroupBootstrapNotRecorded: the shard lock, the shard record's intent, its target's group
 OAdoptLater(o) ==
@@ -1029,10 +1073,15 @@ StaleTopo(t) ==
 ----------------------------------------------------------------------------
 \* STUCK_CHECK: a state is a legitimate end state when a legitimate primary serves, or a bound is reached
 Healthy == \E p \in Servers : ttype[p] = "P" /\ serving[p] /\ CanAccept(p) /\ LegitMaj(p)
+\* ... or when only the expiry of the live intent, which this check leaves out, can end the wait that the
+\* design accepts: the intent's bootstrap RPC failed without a definitive refusal, and its target is in
+\* no group to adopt, nor runs a START
+WaitsForExpiry ==
+    wfail /\ IntentLive(intent) /\ grp[intent.tgt] = 0 /\ st[intent.tgt] = "none"
 Done ==
     /\ Free
     /\ STUCK_CHECK
-    /\ Healthy \/ nextInc > MaxInc \/ nextTok > MaxTok
+    /\ Healthy \/ nextInc > MaxInc \/ nextTok > MaxTok \/ WaitsForExpiry
     /\ UNCHANGED vars
 
 Step ==

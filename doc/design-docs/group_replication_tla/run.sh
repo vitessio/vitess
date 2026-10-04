@@ -34,6 +34,9 @@ EXPECTED=(
   stale_rpc:NoDualBootstrap
   stale_rpc_timeout:NoDualBootstrap
   dup_record:NoDualBootstrap
+  withdraw_any:NoDualBootstrap
+  withdraw_starting:NoDualBootstrap
+  refusal_stuck:deadlock
   current:pass
   s7d_r2_ma_off:pass
   s7d_r2_ma_off_leaves:NoDecisionAck
@@ -42,6 +45,8 @@ EXPECTED=(
   orcs:pass
   orcs_stall:pass
   stale_rpc_fixed:pass
+  refusal_withdraw:pass
+  withdraw_orcs:pass
   stale_rec:pass
   tablet_tx2:pass
   integrated:pass
