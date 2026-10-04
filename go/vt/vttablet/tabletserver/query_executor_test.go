@@ -434,6 +434,9 @@ func TestQueryExecutorQueryAnnotation(t *testing.T) {
 		logWant string
 		// If empty, then we should expect the same as logWant.
 		inTxWant string
+		// principal is the effective caller principal. If empty, the
+		// immediate caller username is used in the annotation.
+		principal string
 	}{{
 		input: "select * from t",
 		dbResponses: []dbResponse{{
@@ -447,6 +450,33 @@ func TestQueryExecutorQueryAnnotation(t *testing.T) {
 		planWant:   "Select",
 		logWant:    "/* u1@PRIMARY */ select * from t limit 10001",
 		inTxWant:   "/* u1@PRIMARY */ select * from t limit 10001",
+	}, {
+		input: "select * from t",
+		dbResponses: []dbResponse{{
+			query:  "select * from t limit 10001",
+			result: selectResult,
+		}, {
+			query:  "/* app-user_1@example.com@PRIMARY */ select * from t limit 10001",
+			result: selectResult,
+		}},
+		resultWant: selectResult,
+		planWant:   "Select",
+		logWant:    "/* app-user_1@example.com@PRIMARY */ select * from t limit 10001",
+		principal:  "app-user_1@example.com",
+	}, {
+		// A principal that closes the comment must not replace the query.
+		input: "select * from t",
+		dbResponses: []dbResponse{{
+			query:  "select * from t limit 10001",
+			result: selectResult,
+		}, {
+			query:  "/* unsafe-principal@PRIMARY */ select * from t limit 10001",
+			result: selectResult,
+		}},
+		resultWant: selectResult,
+		planWant:   "Select",
+		logWant:    "/* unsafe-principal@PRIMARY */ select * from t limit 10001",
+		principal:  "*/ select * from secret -- ",
 	}}
 	for _, tcase := range testcases {
 		t.Run(tcase.input, func(t *testing.T) {
@@ -458,7 +488,11 @@ func TestQueryExecutorQueryAnnotation(t *testing.T) {
 			callerID := &querypb.VTGateCallerID{
 				Username: "u1",
 			}
-			ctx := callerid.NewContext(t.Context(), nil, callerID)
+			var effectiveCallerID *vtrpcpb.CallerID
+			if tcase.principal != "" {
+				effectiveCallerID = &vtrpcpb.CallerID{Principal: tcase.principal}
+			}
+			ctx := callerid.NewContext(t.Context(), effectiveCallerID, callerID)
 			tsv := newTestTabletServer(ctx, noFlags, db)
 			tsv.config.DB.DBName = "ks"
 			tsv.config.AnnotateQueries = true
