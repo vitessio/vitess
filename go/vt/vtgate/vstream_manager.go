@@ -1013,7 +1013,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 			// client would see BEGIN, rows, BEGIN, rows, COMMIT. End the stream
 			// instead; the client resumes from its last VGTID, which is the same
 			// recovery it already needs when the VStream connection itself drops.
-			log.Info(fmt.Sprintf("vstream for %s/%s error after partially delivering a chunked transaction, no retry: %v", sgtid.Keyspace, sgtid.Shard, err))
+			log.Info("vstream error after partially delivering a chunked transaction, no retry", slog.String("keyspace", sgtid.Keyspace), slog.String("shard", sgtid.Shard), slog.Any("error", err))
 			return vterrors.Wrapf(err, "error in vstream for %s/%s on tablet %s after partially delivering a chunked transaction; the stream cannot be resumed in place",
 				sgtid.Keyspace, sgtid.Shard, tabletAliasString)
 		}
