@@ -294,6 +294,9 @@ type FakeMysqlDaemon struct {
 	// is set, which it returns instead.
 	ApplyGroupReplicationRelayLogCalls int
 	ApplyGroupReplicationRelayLogError error
+	// ApplyGroupReplicationRelayLogBlocks makes ApplyGroupReplicationRelayLog wait until its context
+	// ends and return its error, like an applier that cannot apply the relay log.
+	ApplyGroupReplicationRelayLogBlocks bool
 
 	// StopGroupReplicationHook, if set, is called at the start of StopGroupReplication, before the
 	// fake changes anything, for example to observe the state MySQL leaves its group in.
@@ -1210,8 +1213,13 @@ func (fmd *FakeMysqlDaemon) StartGroupReplication(ctx context.Context, bootstrap
 // ApplyGroupReplicationRelayLog is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) ApplyGroupReplicationRelayLog(ctx context.Context, until replication.GTIDSet) error {
 	fmd.mu.Lock()
-	defer fmd.mu.Unlock()
 	fmd.ApplyGroupReplicationRelayLogCalls++
+	if fmd.ApplyGroupReplicationRelayLogBlocks {
+		fmd.mu.Unlock()
+		<-ctx.Done()
+		return ctx.Err()
+	}
+	defer fmd.mu.Unlock()
 	if fmd.ApplyGroupReplicationRelayLogError != nil {
 		return fmd.ApplyGroupReplicationRelayLogError
 	}

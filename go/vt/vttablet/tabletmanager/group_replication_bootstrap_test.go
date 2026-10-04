@@ -136,6 +136,53 @@ func TestBootstrapRefusesWhenRelayLogIsNotApplied(t *testing.T) {
 	assert.Equal(t, 1, fmd.ApplyGroupReplicationRelayLogCalls)
 }
 
+// TestBootstrapRefusalReachesCallerWhenRelayLogApplyStalls checks that a bootstrap whose relay log
+// MySQL does not apply still refuses before its caller's deadline. VTOrc withdraws the bootstrap
+// intent only on a definitive refusal that reaches it; with the apply bounded only by
+// groupReplicationRelayLogApplyTimeout, which equals VTOrc's RPC timeout, the refusal came after
+// VTOrc gave up, and the intent fenced every other voter until it expired.
+func TestBootstrapRefusalReachesCallerWhenRelayLogApplyStalls(t *testing.T) {
+	withGroupReplication(t)
+	oldReserve := groupReplicationRefusalReserve
+	t.Cleanup(func() { groupReplicationRefusalReserve = oldReserve })
+	// The caller's deadline equals groupReplicationRelayLogApplyTimeout, as VTOrc's does; the
+	// reserve leaves the apply one second of it.
+	groupReplicationRefusalReserve = groupReplicationRelayLogApplyTimeout - time.Second
+	tm, fmd, _, _ := newLegitimacyTestTM(t)
+	fmd.StartGroupReplicationError = nil
+	setExecutedAndReceived(t, fmd, bootstrapTestGroupUUID+":1-10", bootstrapTestGroupUUID+":1-15")
+	fmd.ApplyGroupReplicationRelayLogBlocks = true
+	ctx, cancel := context.WithTimeout(t.Context(), groupReplicationRelayLogApplyTimeout)
+	defer cancel()
+
+	_, err := tm.StartGroupReplication(ctx, &tabletmanagerdatapb.StartGroupReplicationRequest{
+		Bootstrap:       true,
+		RequiredGtidSet: bootstrapTestGroupUUID + ":1-15",
+	})
+	require.NoError(t, ctx.Err(), "the refusal must return before the caller's deadline")
+	requireCode(t, err, vtrpcpb.Code_FAILED_PRECONDITION)
+	assert.True(t, tmclient.IsGroupBootstrapRefused(err), "%v", err)
+	assert.Equal(t, 1, fmd.ApplyGroupReplicationRelayLogCalls)
+	start, _, _ := fmd.GroupReplicationCalls()
+	assert.Zero(t, start)
+}
+
+// TestRelayLogApplyTimeoutKeepsRefusalReserve checks the bound on the relay-log apply.
+func TestRelayLogApplyTimeoutKeepsRefusalReserve(t *testing.T) {
+	assert.Equal(t, groupReplicationRelayLogApplyTimeout, relayLogApplyTimeout(t.Context()), "no deadline")
+	ctx, cancel := context.WithTimeout(t.Context(), time.Hour)
+	defer cancel()
+	assert.Equal(t, groupReplicationRelayLogApplyTimeout, relayLogApplyTimeout(ctx), "a distant deadline")
+	ctx, cancel = context.WithTimeout(t.Context(), groupReplicationRelayLogApplyTimeout)
+	defer cancel()
+	timeout := relayLogApplyTimeout(ctx)
+	assert.LessOrEqual(t, timeout, groupReplicationRelayLogApplyTimeout-groupReplicationRefusalReserve)
+	assert.Positive(t, timeout)
+	ctx, cancel = context.WithTimeout(t.Context(), groupReplicationRefusalReserve/2)
+	defer cancel()
+	assert.LessOrEqual(t, relayLogApplyTimeout(ctx), time.Duration(0), "less than the reserve remains")
+}
+
 // TestStartGroupReplicationRejectsInvalidRequiredSet checks that a required set that is not a MySQL
 // GTID set is refused before anything changes.
 func TestStartGroupReplicationRejectsInvalidRequiredSet(t *testing.T) {

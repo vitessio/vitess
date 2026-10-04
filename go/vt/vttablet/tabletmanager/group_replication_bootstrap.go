@@ -36,6 +36,24 @@ import (
 // (see checkGroupBootstrapLocked). The caller's context may end it earlier.
 var groupReplicationRelayLogApplyTimeout = 30 * time.Second
 
+// groupReplicationRefusalReserve is the part of its caller's deadline that a bootstrap keeps after
+// applying the relay log: for stopping the applier thread, reading MySQL's executed set and status
+// again, and returning its refusal. VTOrc withdraws the bootstrap intent only on a definitive refusal
+// that reaches it (see refuseGroupBootstrapLocked); a refusal that arrives after the caller gave up
+// leaves the intent to fence every other voter until it expires.
+var groupReplicationRefusalReserve = 5 * time.Second
+
+// relayLogApplyTimeout returns how long a bootstrap may wait for MySQL to apply its relay log:
+// groupReplicationRelayLogApplyTimeout, or less, so that groupReplicationRefusalReserve of ctx's
+// deadline remains. It is not positive when less than the reserve remains.
+func relayLogApplyTimeout(ctx context.Context) time.Duration {
+	timeout := groupReplicationRelayLogApplyTimeout
+	if deadline, ok := ctx.Deadline(); ok {
+		timeout = min(timeout, time.Until(deadline)-groupReplicationRefusalReserve)
+	}
+	return timeout
+}
+
 // groupBootstrapChecks are what the caller of a bootstrap asks the tablet to verify under the
 // action lock, right before MySQL's START GROUP_REPLICATION (see StartGroupReplicationRequest).
 // VTOrc chose the voter to bootstrap from a read of every voter's status; MySQL may have changed
@@ -161,13 +179,19 @@ func (tm *TabletManager) checkGroupBootstrapLocked(ctx context.Context, checks *
 		}
 	}
 	if executed.Union(received).Contains(required) {
-		log.Info("Applying the transactions that MySQL received from its last group before bootstrapping a new one",
-			slog.String("executed", executed.String()), slog.String("received", received.String()), slog.String("required", required.String()))
-		applyCtx, cancel := context.WithTimeout(ctx, groupReplicationRelayLogApplyTimeout)
-		applyErr := tm.MysqlDaemon.ApplyGroupReplicationRelayLog(applyCtx, required)
-		cancel()
-		if applyErr != nil {
-			log.Warn("Failed to apply the relay log before bootstrapping the group", slog.Any("error", applyErr))
+		if timeout := relayLogApplyTimeout(ctx); timeout > 0 {
+			log.Info("Applying the transactions that MySQL received from its last group before bootstrapping a new one",
+				slog.String("executed", executed.String()), slog.String("received", received.String()), slog.String("required", required.String()),
+				slog.Duration("timeout", timeout))
+			applyCtx, cancel := context.WithTimeout(ctx, timeout)
+			applyErr := tm.MysqlDaemon.ApplyGroupReplicationRelayLog(applyCtx, required)
+			cancel()
+			if applyErr != nil {
+				log.Warn("Failed to apply the relay log before bootstrapping the group", slog.Any("error", applyErr))
+			}
+		} else {
+			log.Warn("Not applying the relay log before bootstrapping the group: too little of the caller's deadline remains to return a refusal",
+				slog.Duration("reserve", groupReplicationRefusalReserve))
 		}
 		if executed, err = tm.executedGTIDSet(ctx); err != nil {
 			return err
