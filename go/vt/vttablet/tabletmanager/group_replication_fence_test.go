@@ -129,7 +129,7 @@ func TestGroupReplicationFenceCheckFencesStrayGroupDuringJoin(t *testing.T) {
 		defer close(joinDone)
 		rpcCtx, cancel := context.WithTimeout(ctx, groupReplicationTestTimeout)
 		defer cancel()
-		_, joinErr = tm.StartGroupReplication(rpcCtx, false)
+		_, joinErr = tm.StartGroupReplication(rpcCtx, startRequest(false))
 	}()
 	waitClosed(t, formed, "the join's START GROUP_REPLICATION")
 

@@ -1347,7 +1347,7 @@ func (tm *TabletManager) initializeGroupReplication(ctx context.Context) {
 			return
 		}
 	}
-	if _, err := tm.startGroupReplicationLocked(ctx, false /* bootstrap */); err != nil {
+	if _, err := tm.startGroupReplicationLocked(ctx, false /* bootstrap */, nil); err != nil {
 		log.Warn(fmt.Sprintf("Cannot join the group replication group during initialization, the group replication sync loop will retry: %v", err))
 	}
 }

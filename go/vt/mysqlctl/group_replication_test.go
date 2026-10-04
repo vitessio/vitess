@@ -19,6 +19,7 @@ package mysqlctl
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -28,6 +29,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -430,4 +432,58 @@ func TestOfflineMode(t *testing.T) {
 	on, err = mysqld.IsOfflineMode(t.Context())
 	require.NoError(t, err)
 	assert.False(t, on)
+}
+
+// TestApplyGroupReplicationRelayLog checks that the relay log of a member out of its group is
+// applied with the applier thread of the group_replication_applier channel, until the executed GTID
+// set holds the required transactions, and that the thread is stopped again, also when they are not
+// applied in time.
+func TestApplyGroupReplicationRelayLog(t *testing.T) {
+	const gtidExecuted = "SELECT @@global.gtid_executed"
+	gtidFields := sqltypes.MakeTestFields("@@global.gtid_executed", "varchar")
+	until, err := replication.ParseMysql56GTIDSet(testGroupMemberUUID + ":1-15")
+	require.NoError(t, err)
+	startApplier, stopApplier := mysql.StartGroupReplicationApplierCommand(), mysql.StopGroupReplicationApplierCommand()
+	assert.Equal(t, "START REPLICA SQL_THREAD FOR CHANNEL 'group_replication_applier'", startApplier)
+	assert.Equal(t, "STOP REPLICA SQL_THREAD FOR CHANNEL 'group_replication_applier'", stopApplier)
+
+	newMysqld := func(t *testing.T) (*fakesqldb.DB, *Mysqld) {
+		db := fakesqldb.New(t)
+		t.Cleanup(db.Close)
+		cp := *db.ConnParams()
+		mysqld := NewMysqld(dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb"))
+		t.Cleanup(mysqld.Close)
+		db.AddQuery("SELECT 1", &sqltypes.Result{})
+		db.AddQuery(stopApplier, &sqltypes.Result{})
+		return db, mysqld
+	}
+
+	t.Run("applied", func(t *testing.T) {
+		db, mysqld := newMysqld(t)
+		db.AddQuery(gtidExecuted, sqltypes.MakeTestResult(gtidFields, testGroupMemberUUID+":1-10"))
+		// The applier applies the relay log once it starts.
+		starts := 0
+		db.AddQueryPatternWithCallback(regexp.QuoteMeta(startApplier), &sqltypes.Result{}, func(string) {
+			starts++
+			db.AddQuery(gtidExecuted, sqltypes.MakeTestResult(gtidFields, testGroupMemberUUID+":1-15"))
+		})
+		ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+		defer cancel()
+		require.NoError(t, mysqld.ApplyGroupReplicationRelayLog(ctx, until))
+		assert.Equal(t, 1, starts)
+		assert.Equal(t, 1, db.GetQueryCalledNum(stopApplier), "the applier must be stopped again")
+	})
+
+	t.Run("not applied in time", func(t *testing.T) {
+		db, mysqld := newMysqld(t)
+		db.AddQuery(startApplier, &sqltypes.Result{})
+		db.AddQuery(gtidExecuted, sqltypes.MakeTestResult(gtidFields, testGroupMemberUUID+":1-10"))
+		ctx, cancel := context.WithTimeout(t.Context(), 300*time.Millisecond)
+		defer cancel()
+		err := mysqld.ApplyGroupReplicationRelayLog(ctx, until)
+		require.Error(t, err)
+		assert.Equal(t, vtrpcpb.Code_DEADLINE_EXCEEDED, vterrors.Code(err))
+		assert.Equal(t, 1, db.GetQueryCalledNum(startApplier))
+		assert.Equal(t, 1, db.GetQueryCalledNum(stopApplier), "the applier must be stopped again")
+	})
 }

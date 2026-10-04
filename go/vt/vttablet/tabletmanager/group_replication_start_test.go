@@ -113,7 +113,7 @@ func TestBootstrapWaitsForStartInProgress(t *testing.T) {
 		}
 		release()
 	}()
-	status, err := tm.StartGroupReplication(t.Context(), true)
+	status, err := tm.StartGroupReplication(t.Context(), startRequest(true))
 	require.NoError(t, err)
 	assert.True(t, mysql.IsGroupPrimary(status))
 	assert.True(t, fmd.GroupReplicationBootstrapped)
@@ -138,7 +138,7 @@ func TestBootstrapGivesUpOnStartInProgress(t *testing.T) {
 	blockedStart(t, fmd)
 
 	started := time.Now()
-	_, err := tm.StartGroupReplication(t.Context(), true)
+	_, err := tm.StartGroupReplication(t.Context(), startRequest(true))
 	requireCode(t, err, vtrpcpb.Code_UNAVAILABLE)
 	assert.Less(t, time.Since(started), 10*time.Second)
 	_, stop, _ := fmd.GroupReplicationCalls()
@@ -161,7 +161,7 @@ func TestStartGroupReplicationRefusesJoinOnPrimary(t *testing.T) {
 	setTabletType(t, tm, topodatapb.TabletType_PRIMARY)
 	startBefore, _, _ := fmd.GroupReplicationCalls()
 
-	_, err := tm.StartGroupReplication(t.Context(), false)
+	_, err := tm.StartGroupReplication(t.Context(), startRequest(false))
 	requireCode(t, err, vtrpcpb.Code_FAILED_PRECONDITION)
 	start, _, _ := fmd.GroupReplicationCalls()
 	assert.Equal(t, startBefore, start, "no START GROUP_REPLICATION on a PRIMARY tablet")
@@ -169,7 +169,7 @@ func TestStartGroupReplicationRefusesJoinOnPrimary(t *testing.T) {
 	fmd.StartGroupReplicationError = nil
 	fmd.ExpectedExecuteSuperQueryList = []string{resetDefaultChannel}
 	setTabletType(t, tm, topodatapb.TabletType_REPLICA)
-	status, err := tm.StartGroupReplication(t.Context(), false)
+	status, err := tm.StartGroupReplication(t.Context(), startRequest(false))
 	require.NoError(t, err)
 	assert.Equal(t, mysql.GroupMemberStateOnline, status.MemberState)
 }

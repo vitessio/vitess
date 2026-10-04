@@ -283,7 +283,7 @@ func TestStrayGroupStaysReadOnlyWithoutFenceCheck(t *testing.T) {
 	}
 	fmd.ExpectedExecuteSuperQueryList = []string{resetDefaultChannel}
 
-	_, err := tm.StartGroupReplication(ctx, false)
+	_, err := tm.StartGroupReplication(ctx, startRequest(false))
 	require.NoError(t, err)
 	status := tmStatus(t, fmd)
 	require.True(t, mysql.IsGroupPrimary(status), "MySQL is the primary of a group of its own")
@@ -312,7 +312,7 @@ func TestBootstrapOnPrimaryStaysReadOnlyUntilRecorded(t *testing.T) {
 	fmd.StartGroupReplicationError = nil
 	fmd.ExpectedExecuteSuperQueryList = []string{resetDefaultChannel}
 
-	status, err := tm.StartGroupReplication(ctx, true)
+	status, err := tm.StartGroupReplication(ctx, startRequest(true))
 	require.NoError(t, err)
 	require.True(t, mysql.IsGroupPrimary(status))
 	assert.True(t, fmd.SuperReadOnly.Load(), "the primary of a group of one voter stays read-only")

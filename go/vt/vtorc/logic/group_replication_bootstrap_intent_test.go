@@ -37,6 +37,7 @@ import (
 	tmcmock "vitess.io/vitess/go/vt/vttablet/tmclient/mock"
 
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
@@ -80,8 +81,8 @@ func newGroupStatus(tablet *topodatapb.Tablet, incarnation string) *replicationd
 func expectJoins(mockTMC *tmcmock.MockTabletManagerClient, tablets ...*topodatapb.Tablet) *atomic.Int32 {
 	var joins atomic.Int32
 	for _, tablet := range tablets {
-		mockTMC.EXPECT().StartGroupReplication(gomock.Any(), sameTablet(tablet), false).
-			DoAndReturn(func(context.Context, *topodatapb.Tablet, bool) (*replicationdatapb.GroupReplicationStatus, error) {
+		mockTMC.EXPECT().StartGroupReplication(gomock.Any(), sameTablet(tablet), startRequest(false)).
+			DoAndReturn(func(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.StartGroupReplicationRequest) (*replicationdatapb.GroupReplicationStatus, error) {
 				joins.Add(1)
 				return &replicationdatapb.GroupReplicationStatus{}, nil
 			})
@@ -119,7 +120,7 @@ func TestBootstrapGroupReplicationAdoptsGroupAfterLostReply(t *testing.T) {
 	mockTMC, tablets := bootstrapIntentTest(t, recorded)
 	target := tablets[1]
 	incarnation := incarnationAt(time.Now())
-	mockTMC.EXPECT().StartGroupReplication(gomock.Any(), sameTablet(target), true).
+	mockTMC.EXPECT().StartGroupReplication(gomock.Any(), sameTablet(target), startRequest(true)).
 		Return(nil, vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "context deadline exceeded"))
 	// The bootstrap happened: the target is the primary of a new group.
 	mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(target)).Return(newGroupStatus(target, incarnation), nil)
@@ -148,7 +149,7 @@ func TestAdoptGroupReplicationBootstrapOnLaterPass(t *testing.T) {
 	const recorded = "17908000000000000"
 	mockTMC, tablets := bootstrapIntentTest(t, recorded)
 	target := tablets[1]
-	mockTMC.EXPECT().StartGroupReplication(gomock.Any(), sameTablet(target), true).
+	mockTMC.EXPECT().StartGroupReplication(gomock.Any(), sameTablet(target), startRequest(true)).
 		Return(nil, vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "context deadline exceeded"))
 	// MySQL's START still runs: the member is not in a group yet.
 	recovering := notMemberStatus(target)
@@ -205,7 +206,7 @@ func TestBootstrapGroupReplicationFencedByIntent(t *testing.T) {
 		return nil
 	})
 	require.NoError(t, err)
-	mockTMC.EXPECT().StartGroupReplication(gomock.Any(), gomock.Any(), true).Times(0)
+	mockTMC.EXPECT().StartGroupReplication(gomock.Any(), gomock.Any(), startRequest(true)).Times(0)
 
 	attempted, topologyRecovery, err := runLocked(t, bootstrapGroupReplication, inst.GroupNotBootstrapped, tablets[0])
 	require.True(t, attempted)
@@ -248,7 +249,7 @@ func TestBootstrapGroupReplicationPrefersIntentTarget(t *testing.T) {
 		mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(tablet)).Return(status, nil)
 	}
 	incarnation := incarnationAt(time.Now())
-	mockTMC.EXPECT().StartGroupReplication(gomock.Any(), sameTablet(target), true).
+	mockTMC.EXPECT().StartGroupReplication(gomock.Any(), sameTablet(target), startRequest(true)).
 		Return(&replicationdatapb.GroupReplicationStatus{ViewId: incarnation + ":1"}, nil)
 	joins := expectJoins(mockTMC, tablets[0], tablets[1])
 

@@ -4837,9 +4837,15 @@ type StartGroupReplicationRequest struct {
 	// instead of joining the shard's existing group. The caller must hold the shard lock and
 	// must have verified that no member of the shard's group is active: bootstrapping while
 	// the group exists elsewhere splits the shard.
-	Bootstrap     bool `protobuf:"varint,1,opt,name=bootstrap,proto3" json:"bootstrap,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Bootstrap bool `protobuf:"varint,1,opt,name=bootstrap,proto3" json:"bootstrap,omitempty"`
+	// required_gtid_set, for a bootstrap, is a MySQL 5.6 GTID set that the tablet's MySQL must have
+	// executed before it bootstraps the group: the transactions that the caller found executed or
+	// received on any voter. If MySQL received some of them from its previous group but has not
+	// applied them yet, the tablet applies its relay log first; if it still lacks any, it refuses the
+	// bootstrap with FAILED_PRECONDITION. Empty means no check.
+	RequiredGtidSet string `protobuf:"bytes,2,opt,name=required_gtid_set,json=requiredGtidSet,proto3" json:"required_gtid_set,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *StartGroupReplicationRequest) Reset() {
@@ -4877,6 +4883,13 @@ func (x *StartGroupReplicationRequest) GetBootstrap() bool {
 		return x.Bootstrap
 	}
 	return false
+}
+
+func (x *StartGroupReplicationRequest) GetRequiredGtidSet() string {
+	if x != nil {
+		return x.RequiredGtidSet
+	}
+	return ""
 }
 
 type StartGroupReplicationResponse struct {
@@ -9032,9 +9045,10 @@ const file_tabletmanagerdata_proto_rawDesc = "" +
 	"\x19ReplicaWasPromotedRequest\"\x1c\n" +
 	"\x1aReplicaWasPromotedResponse\"#\n" +
 	"!ResetReplicationParametersRequest\"$\n" +
-	"\"ResetReplicationParametersResponse\"<\n" +
+	"\"ResetReplicationParametersResponse\"h\n" +
 	"\x1cStartGroupReplicationRequest\x12\x1c\n" +
-	"\tbootstrap\x18\x01 \x01(\bR\tbootstrap\"`\n" +
+	"\tbootstrap\x18\x01 \x01(\bR\tbootstrap\x12*\n" +
+	"\x11required_gtid_set\x18\x02 \x01(\tR\x0frequiredGtidSet\"`\n" +
 	"\x1dStartGroupReplicationResponse\x12?\n" +
 	"\x06status\x18\x01 \x01(\v2'.replicationdata.GroupReplicationStatusR\x06status\"\x1d\n" +
 	"\x1bStopGroupReplicationRequest\"_\n" +

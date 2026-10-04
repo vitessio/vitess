@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
@@ -43,9 +44,16 @@ import (
 // A bootstrap creates a group of which this MySQL is the only member and the primary. The
 // caller must hold the shard lock and must have verified that no member of the shard's group
 // is active: bootstrapping while the group exists elsewhere splits the shard. A serving PRIMARY
-// tablet pauses serving during the bootstrap (see pauseServingLocked).
-func (tm *TabletManager) StartGroupReplication(ctx context.Context, bootstrap bool) (*replicationdatapb.GroupReplicationStatus, error) {
-	log.Info("StartGroupReplication", slog.Bool("bootstrap", bootstrap))
+// tablet pauses serving during the bootstrap (see pauseServingLocked). Right before MySQL's START,
+// a bootstrap passes the checks that req asks for (see groupBootstrapChecks), and is refused with
+// FAILED_PRECONDITION otherwise.
+func (tm *TabletManager) StartGroupReplication(ctx context.Context, req *tabletmanagerdatapb.StartGroupReplicationRequest) (*replicationdatapb.GroupReplicationStatus, error) {
+	bootstrap := req.GetBootstrap()
+	log.Info("StartGroupReplication", slog.Bool("bootstrap", bootstrap), slog.String("required_gtid_set", req.GetRequiredGtidSet()))
+	checks, err := newGroupBootstrapChecks(req)
+	if err != nil {
+		return nil, err
+	}
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
 		return nil, err
 	}
@@ -73,12 +81,11 @@ func (tm *TabletManager) StartGroupReplication(ctx context.Context, bootstrap bo
 		}
 		// A PRIMARY tablet that still serves, as during a migration, pauses: MySQL refuses commits
 		// for a moment while it bootstraps the group (see pauseServingLocked).
-		var err error
 		if pause, err = tm.pauseServingLocked(ctx, groupReplicationBootstrapPause); err != nil {
 			return nil, err
 		}
 	}
-	_, err := tm.startGroupReplicationLocked(ctx, bootstrap)
+	_, err = tm.startGroupReplicationLocked(ctx, bootstrap, checks)
 	pause.resume(ctx)
 	if err != nil {
 		return nil, err

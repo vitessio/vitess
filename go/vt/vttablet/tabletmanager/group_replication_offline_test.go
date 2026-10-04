@@ -112,7 +112,7 @@ func TestStartGroupReplicationBootstrapLiftsOfflineMode(t *testing.T) {
 	fmd.OfflineMode.Store(true)
 	fmd.ExpectedExecuteSuperQueryList = []string{resetDefaultChannel}
 
-	status, err := tm.StartGroupReplication(t.Context(), true)
+	status, err := tm.StartGroupReplication(t.Context(), startRequest(true))
 	require.NoError(t, err)
 	assert.True(t, mysql.IsGroupPrimary(status))
 	assert.False(t, fmd.OfflineMode.Load())

@@ -810,7 +810,7 @@ func (s *migrationShard) toGroupReplication(ctx context.Context) error {
 		err := s.do(ctx, MigrationActionBootstrapGroup, primary, fmt.Sprintf("bootstrap the group on primary %v", primaryAlias), func(ctx context.Context) error {
 			startCtx, cancel := context.WithTimeout(ctx, s.run.opts.WaitTimeout)
 			defer cancel()
-			if _, err := s.run.m.tmc.StartGroupReplication(startCtx, primary, true); err != nil {
+			if _, err := s.run.m.tmc.StartGroupReplication(startCtx, primary, &tabletmanagerdatapb.StartGroupReplicationRequest{Bootstrap: true}); err != nil {
 				return err
 			}
 			return s.waitFor(ctx, primary, fmt.Sprintf("%v is the primary of its group", primaryAlias), (*fullStatusResult).isGroupPrimary)
@@ -904,7 +904,7 @@ func (s *migrationShard) toGroupReplication(ctx context.Context) error {
 			if !s.status(tablet).isActiveMember() {
 				startCtx, cancel := context.WithTimeout(ctx, s.run.opts.WaitTimeout)
 				defer cancel()
-				if _, err := s.run.m.tmc.StartGroupReplication(startCtx, tablet, false); err != nil {
+				if _, err := s.run.m.tmc.StartGroupReplication(startCtx, tablet, &tabletmanagerdatapb.StartGroupReplicationRequest{}); err != nil {
 					return err
 				}
 			}

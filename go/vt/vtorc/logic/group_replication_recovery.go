@@ -38,6 +38,7 @@ import (
 	"vitess.io/vitess/go/vt/vtorc/inst"
 
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
@@ -243,7 +244,7 @@ func startGroupReplicationOnMember(ctx context.Context, analysisEntry *inst.Dete
 	go func() {
 		defer groupJoinsInFlight.done(aliasString)
 		// The recovery's context belongs to the shard lock, which is released by now.
-		if _, err := startGroupReplication(context.Background(), tablet, false); err != nil {
+		if _, err := startGroupReplication(context.Background(), tablet, &tabletmanagerdatapb.StartGroupReplicationRequest{}); err != nil {
 			logger.Warn("failed to make a voter join its group", slog.String("tablet", aliasString), slog.Any("error", err))
 			return
 		}
@@ -351,14 +352,21 @@ func checkLegitimateGroupActive(ctx context.Context, tablet *topodatapb.Tablet) 
 // groupBootstrapCandidate is a voting member that could bootstrap the shard's group.
 type groupBootstrapCandidate struct {
 	tablet *topodatapb.Tablet
+	// executed is the set of transactions the member executed: they are in its binlog.
+	executed replication.GTIDSet
 	// gtidSet is the union of the transactions the member executed and the transactions it
-	// received from its group but has not applied yet.
+	// received from its group but has not applied yet. The latter are only in the relay log of its
+	// group_replication_applier channel, which a restart of mysqld discards (relay_log_recovery).
 	gtidSet replication.GTIDSet
 }
 
 // bootstrapGroupReplication bootstraps the shard's group on the voting member with the most
 // advanced GTID set. The other members then join it (GroupMemberNotOnline, or their own
 // reconcile loop). It runs under the shard lock, after VTOrc refreshed all tablets of the shard.
+//
+// The bootstrap RPC carries every transaction that a voter executed or received: the tablet
+// refuses to bootstrap unless its MySQL has executed all of them right before its START (see
+// chooseGroupBootstrapCandidate), and VTOrc chooses again on its next pass.
 //
 // Bootstrapping a second group would split the shard's data, so the recovery re-reads the
 // status of every tablet of the shard and gives up when a voting member cannot be reached, when
@@ -407,7 +415,7 @@ func bootstrapGroupReplication(ctx context.Context, analysisEntry *inst.Detectio
 	if intent := reparentutil.LiveGroupReplicationBootstrapIntent(shardInfo.Shard, time.Now()); intent != nil {
 		preferred = intent.GetTarget()
 	}
-	candidate, err := chooseGroupBootstrapCandidate(ctx, shardInfo.GroupReplicationVoters, tabletInfos, preferred, logger)
+	candidate, required, err := chooseGroupBootstrapCandidate(ctx, shardInfo.GroupReplicationVoters, tabletInfos, preferred, logger)
 	if err != nil {
 		_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("not bootstrapping the group: %v", err))
 		return true, topologyRecovery, err
@@ -427,7 +435,10 @@ func bootstrapGroupReplication(ctx context.Context, analysisEntry *inst.Detectio
 	saveShardRecord(ctx, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard, logger)
 	_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("bootstrapping the replication group on %s, which has the most advanced GTID set %s (intent %s)", aliasString, candidate.gtidSet, intent.GetToken()))
 	var incarnation string
-	groupStatus, err := startGroupReplication(ctx, candidate.tablet, true)
+	groupStatus, err := startGroupReplication(ctx, candidate.tablet, &tabletmanagerdatapb.StartGroupReplicationRequest{
+		Bootstrap:       true,
+		RequiredGtidSet: required.String(),
+	})
 	if err != nil {
 		// The bootstrap may have happened although its reply was lost, for example because the
 		// tablet was cut off again while MySQL's START ran. Its group is adopted if it is the
@@ -548,7 +559,7 @@ func joinVotersAfterBootstrap(voters []*topodatapb.TabletAlias, tabletInfos []*t
 		}
 		go func() {
 			aliasString := topoproto.TabletAliasString(tablet.Alias)
-			if _, err := startGroupReplication(context.Background(), tablet, false); err != nil {
+			if _, err := startGroupReplication(context.Background(), tablet, &tabletmanagerdatapb.StartGroupReplicationRequest{}); err != nil {
 				logger.Warn("failed to make a voter join the group that was just bootstrapped", slog.String("tablet", aliasString), slog.Any("error", err))
 				return
 			}
@@ -608,16 +619,30 @@ func readShardTabletStatuses(ctx context.Context, tabletInfos []*topo.TabletInfo
 }
 
 // chooseGroupBootstrapCandidate reads the status of every tablet of the shard and returns the
-// voter whose GTID set contains every other voter's. It returns an error when the group must not
-// be bootstrapped.
+// voter whose GTID set, executed and received, contains every other voter's, with the union of all
+// voters' GTID sets, which the bootstrap requires. It returns an error when the group must not be
+// bootstrapped.
 //
-// Among voters with equal GTID sets, it prefers the target of a recent bootstrap intent (preferred,
-// if set): the intent fences a bootstrap on any other tablet, and a bootstrap on the same target is
-// safe. Without it, the choice changed when the old primary's tablet demoted itself, and the fence
-// then kept the group down until it expired (S7d chaos scenario, VTOrc killed during a bootstrap).
-func chooseGroupBootstrapCandidate(ctx context.Context, voters []*topodatapb.TabletAlias, tabletInfos []*topo.TabletInfo, preferred *topodatapb.TabletAlias, logger *log.PrefixedLogger) (*groupBootstrapCandidate, error) {
+// Every transaction that a voter executed or received must be in the new group. An acknowledged
+// transaction was committed by the primary that acknowledged it, so it is in a voter's executed
+// set. And a member that holds a transaction the group lacks, even one only in its relay log,
+// applies it when it starts its join, and MySQL then refuses the join for good (lab, MySQL 8.4.11:
+// doc/failover-audit/GroupReplication.md, "Bootstrap candidate"). The candidate need not have
+// executed them all yet: a transaction that a group decided while its primary crashed before it
+// committed it can be in relay logs only. The tablet applies its relay log before it bootstraps
+// (StartGroupReplicationRequest.required_gtid_set), and refuses if that does not cover the required
+// set, after a restart of its mysqld discarded the relay log.
+//
+// Among the voters that hold every transaction, it prefers the target of a recent bootstrap intent
+// (preferred, if set): the intent fences a bootstrap on any other tablet, and a bootstrap on the
+// same target is safe. Without it, the choice changed when the old primary's tablet demoted itself,
+// and the fence then kept the group down until it expired (S7d chaos scenario, VTOrc killed during
+// a bootstrap). It then prefers a voter that executed every transaction already, typically the old
+// primary: one that holds some only in its relay log could lose them to a restart of its mysqld
+// before the bootstrap, which the tablet would then refuse.
+func chooseGroupBootstrapCandidate(ctx context.Context, voters []*topodatapb.TabletAlias, tabletInfos []*topo.TabletInfo, preferred *topodatapb.TabletAlias, logger *log.PrefixedLogger) (*groupBootstrapCandidate, replication.GTIDSet, error) {
 	if len(voters) == 0 {
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "the shard has no voters yet")
+		return nil, nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "the shard has no voters yet")
 	}
 	statuses := readShardTabletStatuses(ctx, tabletInfos)
 
@@ -634,14 +659,14 @@ func chooseGroupBootstrapCandidate(ctx context.Context, voters []*topodatapb.Tab
 		}
 		if ts.err != nil {
 			if isMember {
-				return nil, vterrors.Wrapf(ts.err, "voter %s is unreachable", aliasString)
+				return nil, nil, vterrors.Wrapf(ts.err, "voter %s is unreachable", aliasString)
 			}
 			// A tablet that is not a voter does not take part in the group.
 			logger.Warn("ignoring unreachable tablet that is not a voter", slog.String("tablet", aliasString), slog.Any("error", ts.err))
 			continue
 		}
 		if mysql.IsGroupMemberActive(ts.status.GetGroupReplicationStatus()) {
-			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "the MySQL of %s is already an active group member", aliasString)
+			return nil, nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "the MySQL of %s is already an active group member", aliasString)
 		}
 		if ts.status.GetGroupReplicationStatus().GetStartInProgress() {
 			// The member reports OFFLINE, but its START can still end in a group of its own, next to
@@ -650,7 +675,7 @@ func chooseGroupBootstrapCandidate(ctx context.Context, voters []*topodatapb.Tab
 			// (groupStartInProgressGrace): the group it may form stays super_read_only, and its tablet
 			// leaves it, so waiting longer only delays the bootstrap.
 			if inst.GroupStartInProgressBlocksBootstrap(ts.tablet.Alias, time.Now()) {
-				return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+				return nil, nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
 					"a START GROUP_REPLICATION is in progress on the MySQL of %s: not bootstrapping the group until it ends", aliasString)
 			}
 			starting[aliasString] = true
@@ -659,25 +684,37 @@ func chooseGroupBootstrapCandidate(ctx context.Context, voters []*topodatapb.Tab
 		if !isMember {
 			continue
 		}
-		gtidSet, err := memberGTIDSet(ts.status)
+		executed, gtidSet, err := memberGTIDSets(ts.status)
 		if err != nil {
-			return nil, vterrors.Wrapf(err, "failed to read the GTID set of %s", aliasString)
+			return nil, nil, vterrors.Wrapf(err, "failed to read the GTID set of %s", aliasString)
 		}
-		candidates = append(candidates, &groupBootstrapCandidate{tablet: ts.tablet, gtidSet: gtidSet})
+		candidates = append(candidates, &groupBootstrapCandidate{tablet: ts.tablet, executed: executed, gtidSet: gtidSet})
 	}
 	if found < len(voters) {
 		// A voter whose tablet no longer exists may still hold transactions that the others lack.
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "only %d of the %d voters of the shard have a tablet", found, len(voters))
+		return nil, nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "only %d of the %d voters of the shard have a tablet", found, len(voters))
+	}
+	// required holds every transaction that a voter executed or received.
+	var required replication.GTIDSet = replication.Mysql56GTIDSet{}
+	for _, c := range candidates {
+		required = required.Union(c.gtidSet)
 	}
 
-	// Prefer the target of a recent bootstrap intent among members with equal GTID sets, then a member
-	// without a START in progress, then the shard primary, then the lowest alias, so that concurrent
-	// VTOrcs make the same choice.
+	// Among the members that hold every transaction, prefer the target of a recent bootstrap intent,
+	// then a member that executed them all, then a member without a START in progress, then the shard
+	// primary, then the lowest alias, so that concurrent VTOrcs make the same choice.
 	slices.SortStableFunc(candidates, func(a, b *groupBootstrapCandidate) int {
 		aPreferred := preferred != nil && topoproto.TabletAliasEqual(a.tablet.Alias, preferred)
 		bPreferred := preferred != nil && topoproto.TabletAliasEqual(b.tablet.Alias, preferred)
 		if aPreferred != bPreferred {
 			if aPreferred {
+				return -1
+			}
+			return 1
+		}
+		aBinlog, bBinlog := a.executed.Contains(required), b.executed.Contains(required)
+		if aBinlog != bBinlog {
+			if aBinlog {
 				return -1
 			}
 			return 1
@@ -700,47 +737,40 @@ func chooseGroupBootstrapCandidate(ctx context.Context, voters []*topodatapb.Tab
 		return strings.Compare(topoproto.TabletAliasString(a.tablet.Alias), topoproto.TabletAliasString(b.tablet.Alias))
 	})
 	for _, c := range candidates {
-		if containsAll(c, candidates) {
-			return c, nil
+		if c.gtidSet.Contains(required) {
+			return c, required, nil
 		}
 	}
 	var sets []string
 	for _, c := range candidates {
 		sets = append(sets, fmt.Sprintf("%s: %s", topoproto.TabletAliasString(c.tablet.Alias), c.gtidSet))
 	}
-	return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no voter has all the transactions of the others, bootstrapping any of them would lose transactions: %s", strings.Join(sets, "; "))
+	return nil, nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no voter has all the transactions of the others, bootstrapping any of them would lose transactions: %s", strings.Join(sets, "; "))
 }
 
-func containsAll(c *groupBootstrapCandidate, candidates []*groupBootstrapCandidate) bool {
-	for _, other := range candidates {
-		if !c.gtidSet.Contains(other.gtidSet) {
-			return false
-		}
-	}
-	return true
-}
-
-// memberGTIDSet returns the transactions that a member executed or received from its group.
-func memberGTIDSet(status *replicationdatapb.FullStatus) (replication.GTIDSet, error) {
+// memberGTIDSets returns the transactions that a member executed, and those it executed or received
+// from its group.
+func memberGTIDSets(status *replicationdatapb.FullStatus) (executed, all replication.GTIDSet, err error) {
 	if status.GetPrimaryStatus() == nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "the tablet did not report its executed GTID set")
+		return nil, nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "the tablet did not report its executed GTID set")
 	}
-	executed, err := replication.DecodePosition(status.GetPrimaryStatus().GetPosition())
+	position, err := replication.DecodePosition(status.GetPrimaryStatus().GetPosition())
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	gtidSet := executed.GTIDSet
-	if gtidSet == nil {
-		gtidSet = replication.Mysql56GTIDSet{}
+	executed = position.GTIDSet
+	if executed == nil {
+		executed = replication.Mysql56GTIDSet{}
 	}
+	all = executed
 	if received := status.GetGroupReplicationStatus().GetReceivedTransactionSet(); received != "" {
 		receivedSet, err := replication.ParseMysql56GTIDSet(received)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		gtidSet = gtidSet.Union(receivedSet)
+		all = executed.Union(receivedSet)
 	}
-	return gtidSet, nil
+	return executed, all, nil
 }
 
 // updateGroupReplicationVoters writes the voters that the durability policy selects for the shard's
@@ -850,7 +880,7 @@ func updateGroupReplicationVoters(ctx context.Context, analysisEntry *inst.Detec
 		switch {
 		case isVoter && !policy.IsVoter(current, o.Tablet.Alias) && o.Reachable && !o.Active:
 			_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("starting group replication on the new voter %s", aliasString))
-			if _, err := startGroupReplication(ctx, o.Tablet, false); err != nil {
+			if _, err := startGroupReplication(ctx, o.Tablet, &tabletmanagerdatapb.StartGroupReplicationRequest{}); err != nil {
 				errs = append(errs, vterrors.Wrapf(err, "failed to start group replication on the new voter %s", aliasString))
 			}
 		case isVoter || topoproto.TabletAliasEqual(o.Tablet.Alias, selection.GroupPrimary) || !selection.IsActive(o.Tablet.Alias):
@@ -937,10 +967,10 @@ func tabletFullStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicat
 // startGroupReplication calls the StartGroupReplication RPC for the given tablet. Joining a group
 // includes the distributed recovery of the missing transactions, so the RPC gets the longer
 // --wait-replicas-timeout.
-func startGroupReplication(ctx context.Context, tablet *topodatapb.Tablet, bootstrap bool) (*replicationdatapb.GroupReplicationStatus, error) {
+func startGroupReplication(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.StartGroupReplicationRequest) (*replicationdatapb.GroupReplicationStatus, error) {
 	ctx, cancel := context.WithTimeout(ctx, max(topo.RemoteOperationTimeout, config.GetWaitReplicasTimeout()))
 	defer cancel()
-	return tmc.StartGroupReplication(ctx, tablet, bootstrap)
+	return tmc.StartGroupReplication(ctx, tablet, req)
 }
 
 // populateReparentJournal records in the reparent journal of the given primary that it became

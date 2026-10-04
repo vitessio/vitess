@@ -277,7 +277,8 @@ func (c *fakeGRCluster) FullStatus(ctx context.Context, tablet *topodatapb.Table
 }
 
 // StartGroupReplication is part of the tmclient.TabletManagerClient interface.
-func (c *fakeGRCluster) StartGroupReplication(ctx context.Context, tablet *topodatapb.Tablet, bootstrap bool) (*replicationdatapb.GroupReplicationStatus, error) {
+func (c *fakeGRCluster) StartGroupReplication(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.StartGroupReplicationRequest) (*replicationdatapb.GroupReplicationStatus, error) {
+	bootstrap := req.GetBootstrap()
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	ft, err := c.get(tablet)

@@ -156,7 +156,7 @@ type RPCTM interface {
 
 	ResetReplicationParameters(ctx context.Context) error
 
-	StartGroupReplication(ctx context.Context, bootstrap bool) (*replicationdatapb.GroupReplicationStatus, error)
+	StartGroupReplication(ctx context.Context, req *tabletmanagerdatapb.StartGroupReplicationRequest) (*replicationdatapb.GroupReplicationStatus, error)
 
 	StopGroupReplication(ctx context.Context) (*replicationdatapb.GroupReplicationStatus, error)
 

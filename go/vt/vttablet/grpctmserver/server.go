@@ -645,7 +645,7 @@ func (s *server) StartGroupReplication(ctx context.Context, request *tabletmanag
 	defer s.tm.HandleRPCPanic(ctx, "StartGroupReplication", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.StartGroupReplicationResponse{}
-	response.Status, err = s.tm.StartGroupReplication(ctx, request.Bootstrap)
+	response.Status, err = s.tm.StartGroupReplication(ctx, request)
 	return response, err
 }
 

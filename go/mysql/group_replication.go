@@ -429,6 +429,26 @@ func StopGroupReplicationCommand() string {
 	return "STOP GROUP_REPLICATION"
 }
 
+// StartGroupReplicationApplierCommand returns the statement that starts the applier (SQL) thread of
+// the group_replication_applier channel on a member that is not in a group. The member then applies
+// the transactions that it received from its last group into the channel's relay log and had not
+// applied when it left: MySQL keeps them after STOP GROUP_REPLICATION, applies them first when the
+// member bootstraps a group or starts a join, and discards them when mysqld restarts with
+// relay_log_recovery=ON. Applied, they are in the member's binlog, and survive a restart. MySQL
+// accepts the statement while Group Replication is stopped, with super_read_only on, and refuses to
+// start the channel's receiver thread (errno 3139); a START GROUP_REPLICATION while the thread
+// still runs succeeds (verified on MySQL 8.4.11).
+func StartGroupReplicationApplierCommand() string {
+	return "START REPLICA SQL_THREAD FOR CHANNEL '" + GroupReplicationApplierChannel + "'"
+}
+
+// StopGroupReplicationApplierCommand returns the statement that stops the applier thread that
+// StartGroupReplicationApplierCommand started. MySQL accepts it, with a warning, when the thread
+// does not run.
+func StopGroupReplicationApplierCommand() string {
+	return "STOP REPLICA SQL_THREAD FOR CHANNEL '" + GroupReplicationApplierChannel + "'"
+}
+
 // SetGroupPrimaryCommand returns the statement that makes the member with the given
 // server_uuid the group's primary. The statement can run on any ONLINE member. It waits for
 // transactions that are running on the current primary to finish.

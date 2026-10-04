@@ -314,7 +314,7 @@ func (client *FakeTabletManagerClient) ResetReplicationParameters(ctx context.Co
 }
 
 // StartGroupReplication is part of the tmclient.TabletManagerClient interface.
-func (client *FakeTabletManagerClient) StartGroupReplication(ctx context.Context, tablet *topodatapb.Tablet, bootstrap bool) (*replicationdatapb.GroupReplicationStatus, error) {
+func (client *FakeTabletManagerClient) StartGroupReplication(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.StartGroupReplicationRequest) (*replicationdatapb.GroupReplicationStatus, error) {
 	return &replicationdatapb.GroupReplicationStatus{}, nil
 }
 

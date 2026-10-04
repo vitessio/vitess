@@ -309,7 +309,7 @@ func TestStartGroupReplicationBootstrapDoesNotWaitForCutOffTopo(t *testing.T) {
 	rpcCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	start := time.Now()
-	status, err := tm.StartGroupReplication(rpcCtx, true)
+	status, err := tm.StartGroupReplication(rpcCtx, startRequest(true))
 	elapsed := time.Since(start)
 	require.NoError(t, err)
 	assert.True(t, mysql.IsGroupPrimary(status))

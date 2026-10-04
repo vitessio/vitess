@@ -257,7 +257,7 @@ func TestGroupReplicationSyncTrustsOwnBootstrap(t *testing.T) {
 	tm, fmd, _, _ := newLegitimacyTestTM(t)
 	fmd.StartGroupReplicationError = nil
 	fmd.ExpectedExecuteSuperQueryList = []string{resetDefaultChannel}
-	status, err := tm.StartGroupReplication(ctx, true)
+	status, err := tm.StartGroupReplication(ctx, startRequest(true))
 	require.NoError(t, err)
 	require.NotEqual(t, "1780000001", policy.GroupIncarnation(status.ViewId))
 
@@ -282,7 +282,7 @@ func TestStartGroupReplicationBootstrapOnPrimaryDoesNotServe(t *testing.T) {
 	fmd.StartGroupReplicationError = nil
 	fmd.ExpectedExecuteSuperQueryList = []string{resetDefaultChannel}
 
-	status, err := tm.StartGroupReplication(ctx, true)
+	status, err := tm.StartGroupReplication(ctx, startRequest(true))
 	require.NoError(t, err)
 	require.True(t, mysql.IsGroupPrimary(status))
 	assert.False(t, qsc.IsServing(), "the only voter of a new group must not serve")
@@ -502,7 +502,7 @@ func TestStartGroupReplicationJoinStopsOngoingStart(t *testing.T) {
 	}
 	fmd.ExpectedExecuteSuperQueryList = []string{resetDefaultChannel}
 
-	status, err := tm.StartGroupReplication(t.Context(), false)
+	status, err := tm.StartGroupReplication(t.Context(), startRequest(false))
 	require.NoError(t, err)
 	assert.Equal(t, mysql.GroupMemberStateOnline, status.MemberState)
 	assert.False(t, fmd.GroupReplicationBootstrapped)
@@ -532,7 +532,7 @@ func TestStartGroupReplicationBootstrapStopsOngoingStart(t *testing.T) {
 	fmd.ExpectedExecuteSuperQueryList = []string{resetDefaultChannel}
 	_, stopsBefore, _ := fmd.GroupReplicationCalls()
 
-	status, err := tm.StartGroupReplication(t.Context(), true)
+	status, err := tm.StartGroupReplication(t.Context(), startRequest(true))
 	require.NoError(t, err)
 	assert.True(t, mysql.IsGroupPrimary(status))
 	assert.True(t, fmd.GroupReplicationBootstrapped)
@@ -552,7 +552,7 @@ func TestStartGroupReplicationBootstrapStopsJoinWithoutGroup(t *testing.T) {
 	fmd.SetGroupReplicationStatus(recovering)
 	fmd.ExpectedExecuteSuperQueryList = []string{resetDefaultChannel}
 
-	status, err := tm.StartGroupReplication(t.Context(), true)
+	status, err := tm.StartGroupReplication(t.Context(), startRequest(true))
 	require.NoError(t, err)
 	assert.True(t, mysql.IsGroupPrimary(status))
 	_, stops, _ := fmd.GroupReplicationCalls()
@@ -563,7 +563,7 @@ func TestStartGroupReplicationBootstrapStopsJoinWithoutGroup(t *testing.T) {
 	fmd2.SetGroupReplicationStatus(groupStatus(testServerUUID(2),
 		groupMember(testServerUUID(2), mysql.GroupMemberStateRecovering, ""),
 		groupMember(testServerUUID(1), mysql.GroupMemberStateOnline, mysql.GroupMemberRolePrimary)))
-	_, err = tm2.StartGroupReplication(t.Context(), true)
+	_, err = tm2.StartGroupReplication(t.Context(), startRequest(true))
 	requireCode(t, err, vtrpcpb.Code_FAILED_PRECONDITION)
 	_, stops, _ = fmd2.GroupReplicationCalls()
 	assert.Zero(t, stops)
@@ -720,7 +720,7 @@ func TestGroupReplicationPrimaryWithoutVoterMajorityWritesNoHeartbeats(t *testin
 	fmd.SetGroupReplicationStatus(groupStatus(testServerUUID(1), groupMember(testServerUUID(1), mysql.GroupMemberStateOffline, "")))
 	fmd.StartGroupReplicationError = nil
 	fmd.ExpectedExecuteSuperQueryList = []string{resetDefaultChannel}
-	_, err := tm.StartGroupReplication(ctx, true)
+	_, err := tm.StartGroupReplication(ctx, startRequest(true))
 	require.NoError(t, err)
 	require.False(t, qsc.IsServing())
 	assert.True(t, qsc.HeartbeatWritesSuppressed(), "the only voter of a new group must not write heartbeats")

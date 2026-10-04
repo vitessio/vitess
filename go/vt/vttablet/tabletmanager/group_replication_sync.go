@@ -1091,7 +1091,7 @@ func (s *groupReplicationSync) rejoin(ctx context.Context) {
 	}
 	joinCtx, cancel := context.WithTimeout(joinBase, groupReplicationJoinTimeout)
 	defer cancel()
-	if _, err := tm.startGroupReplicationLocked(joinCtx, false /* bootstrap */); err != nil {
+	if _, err := tm.startGroupReplicationLocked(joinCtx, false /* bootstrap */, nil); err != nil {
 		if s.rejoinBackoff == 0 {
 			s.rejoinBackoff = groupReplicationSyncInterval
 		} else {

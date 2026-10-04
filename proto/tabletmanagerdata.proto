@@ -528,6 +528,12 @@ message StartGroupReplicationRequest {
   // must have verified that no member of the shard's group is active: bootstrapping while
   // the group exists elsewhere splits the shard.
   bool bootstrap = 1;
+  // required_gtid_set, for a bootstrap, is a MySQL 5.6 GTID set that the tablet's MySQL must have
+  // executed before it bootstraps the group: the transactions that the caller found executed or
+  // received on any voter. If MySQL received some of them from its previous group but has not
+  // applied them yet, the tablet applies its relay log first; if it still lacks any, it refuses the
+  // bootstrap with FAILED_PRECONDITION. Empty means no check.
+  string required_gtid_set = 2;
 }
 
 message StartGroupReplicationResponse {

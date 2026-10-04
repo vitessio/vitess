@@ -32,6 +32,7 @@ import (
 	"vitess.io/vitess/go/vt/vtorc/inst"
 
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vttimepb "vitess.io/vitess/go/vt/proto/vttime"
 )
@@ -103,12 +104,12 @@ func TestBootstrapGroupReplicationOfConvertedShard(t *testing.T) {
 			},
 		}, nil)
 	}
-	mockTMC.EXPECT().StartGroupReplication(gomock.Any(), sameTablet(tablets[0]), true).
+	mockTMC.EXPECT().StartGroupReplication(gomock.Any(), sameTablet(tablets[0]), startRequest(true)).
 		Return(&replicationdatapb.GroupReplicationStatus{ViewId: "1790000123:1"}, nil)
 	joined := make(chan struct{}, len(tablets))
 	for _, tablet := range tablets[1:] {
-		mockTMC.EXPECT().StartGroupReplication(gomock.Any(), sameTablet(tablet), false).
-			DoAndReturn(func(context.Context, *topodatapb.Tablet, bool) (*replicationdatapb.GroupReplicationStatus, error) {
+		mockTMC.EXPECT().StartGroupReplication(gomock.Any(), sameTablet(tablet), startRequest(false)).
+			DoAndReturn(func(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.StartGroupReplicationRequest) (*replicationdatapb.GroupReplicationStatus, error) {
 				joined <- struct{}{}
 				return &replicationdatapb.GroupReplicationStatus{ViewId: "1790000123:2"}, nil
 			})

@@ -354,7 +354,7 @@ func (tm *TabletManager) StartReplication(ctx context.Context, semiSync bool) er
 		}
 	}
 	if groupMember {
-		_, err := tm.startGroupReplicationLocked(ctx, false /* bootstrap */)
+		_, err := tm.startGroupReplicationLocked(ctx, false /* bootstrap */, nil)
 		return err
 	}
 

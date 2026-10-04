@@ -867,18 +867,18 @@ func (mr *MockTabletManagerClientMockRecorder) Sleep(ctx, tablet, duration any) 
 }
 
 // StartGroupReplication mocks base method.
-func (m *MockTabletManagerClient) StartGroupReplication(ctx context.Context, tablet *topodata.Tablet, bootstrap bool) (*replicationdata.GroupReplicationStatus, error) {
+func (m *MockTabletManagerClient) StartGroupReplication(ctx context.Context, tablet *topodata.Tablet, req *tabletmanagerdata.StartGroupReplicationRequest) (*replicationdata.GroupReplicationStatus, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "StartGroupReplication", ctx, tablet, bootstrap)
+	ret := m.ctrl.Call(m, "StartGroupReplication", ctx, tablet, req)
 	ret0, _ := ret[0].(*replicationdata.GroupReplicationStatus)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // StartGroupReplication indicates an expected call of StartGroupReplication.
-func (mr *MockTabletManagerClientMockRecorder) StartGroupReplication(ctx, tablet, bootstrap any) *gomock.Call {
+func (mr *MockTabletManagerClientMockRecorder) StartGroupReplication(ctx, tablet, req any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartGroupReplication", reflect.TypeOf((*MockTabletManagerClient)(nil).StartGroupReplication), ctx, tablet, bootstrap)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartGroupReplication", reflect.TypeOf((*MockTabletManagerClient)(nil).StartGroupReplication), ctx, tablet, req)
 }
 
 // StartReplication mocks base method.

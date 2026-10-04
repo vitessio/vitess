@@ -1477,13 +1477,13 @@ func (client *Client) ResetReplicationParameters(ctx context.Context, tablet *to
 }
 
 // StartGroupReplication is part of the tmclient.TabletManagerClient interface.
-func (client *Client) StartGroupReplication(ctx context.Context, tablet *topodatapb.Tablet, bootstrap bool) (*replicationdatapb.GroupReplicationStatus, error) {
+func (client *Client) StartGroupReplication(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.StartGroupReplicationRequest) (*replicationdatapb.GroupReplicationStatus, error) {
 	c, closer, err := client.dialer.dial(ctx, tablet)
 	if err != nil {
 		return nil, err
 	}
 	defer closer.Close()
-	response, err := c.StartGroupReplication(ctx, &tabletmanagerdatapb.StartGroupReplicationRequest{Bootstrap: bootstrap})
+	response, err := c.StartGroupReplication(ctx, req)
 	if err != nil {
 		return nil, vterrors.FromGRPC(err)
 	}

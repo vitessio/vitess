@@ -92,6 +92,10 @@ type MysqlDaemon interface {
 	// the configuration of the member's group; only the writable primary of the group may.
 	DisableGroupReplicationSuperReadOnlyAction(ctx context.Context) error
 	StartGroupReplication(ctx context.Context, bootstrap bool) error
+	// ApplyGroupReplicationRelayLog applies, on a member that is not in a group, the transactions
+	// that it received from its last group and had not applied when it left, until its executed
+	// GTID set contains until or ctx ends. It then stops the applier again.
+	ApplyGroupReplicationRelayLog(ctx context.Context, until replication.GTIDSet) error
 	StopGroupReplication(ctx context.Context) error
 	SetGroupReplicationPrimary(ctx context.Context, memberUUID string) error
 	// IsOfflineMode returns whether offline_mode is ON. Group Replication's OFFLINE_MODE exit

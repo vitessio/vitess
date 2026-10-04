@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
@@ -314,6 +315,44 @@ func (mysqld *Mysqld) StartGroupReplication(ctx context.Context, bootstrap bool)
 		}
 	}
 	return err
+}
+
+// groupReplicationApplierPollInterval is how often ApplyGroupReplicationRelayLog reads the executed
+// GTID set while the applier runs.
+const groupReplicationApplierPollInterval = 100 * time.Millisecond
+
+// ApplyGroupReplicationRelayLog starts the applier thread of the group_replication_applier channel
+// on a member that is not in a group, which applies what the member received from its last group
+// and had not applied when it left (see mysql.StartGroupReplicationApplierCommand). It waits until
+// the executed GTID set contains until, or ctx ends, and stops the thread again in either case.
+func (mysqld *Mysqld) ApplyGroupReplicationRelayLog(ctx context.Context, until replication.GTIDSet) error {
+	if err := mysqld.ExecuteSuperQueryList(ctx, []string{mysql.StartGroupReplicationApplierCommand()}); err != nil {
+		return vterrors.Wrapf(err, "failed to start the applier of the %s channel", mysql.GroupReplicationApplierChannel)
+	}
+	defer func() {
+		// Stop the thread even if ctx ended: a later START GROUP_REPLICATION restarts the channel
+		// anyway, but nothing else should apply transactions while the member is out of its group.
+		stopCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), bootstrapFlagResetTimeout)
+		defer cancel()
+		if err := mysqld.ExecuteSuperQueryList(stopCtx, []string{mysql.StopGroupReplicationApplierCommand()}); err != nil {
+			log.Warn(fmt.Sprintf("Failed to stop the applier of the %s channel: %v", mysql.GroupReplicationApplierChannel, err))
+		}
+	}()
+	for {
+		pos, err := mysqld.PrimaryPosition(ctx)
+		if err != nil {
+			return vterrors.Wrapf(err, "failed to read the executed GTID set")
+		}
+		if pos.GTIDSet != nil && pos.GTIDSet.Contains(until) {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "the applier of the %s channel did not apply %s in time, the executed GTID set is %v: %v",
+				mysql.GroupReplicationApplierChannel, until, pos.GTIDSet, ctx.Err())
+		case <-time.After(groupReplicationApplierPollInterval):
+		}
+	}
 }
 
 // StopGroupReplication makes the member leave its group. MySQL leaves the member

@@ -107,7 +107,7 @@ func TestBootstrapOnServingPrimaryPausesServing(t *testing.T) {
 	}
 	n := len(qsc.ServingEvents())
 
-	_, err := tm.StartGroupReplication(t.Context(), true)
+	_, err := tm.StartGroupReplication(t.Context(), startRequest(true))
 	require.NoError(t, err)
 	assert.False(t, servingDuringStart.Load(), "the primary must not serve while MySQL starts Group Replication")
 	assert.Equal(t, concat(pauseEvents, []string{mysqlStartEvent}, resumeEvents), eventsSince(qsc, n))
@@ -138,7 +138,7 @@ func TestPausedPrimaryServesOnlyOnceMySQLIsWritable(t *testing.T) {
 		}
 	})
 
-	_, err := tm.StartGroupReplication(t.Context(), true)
+	_, err := tm.StartGroupReplication(t.Context(), startRequest(true))
 	require.NoError(t, err)
 	require.Equal(t, int32(5), readOnlyPolls.Load(), "the tablet must wait for MySQL to be writable")
 	assert.False(t, servedWhileReadOnly.Load(), "the primary must not serve while MySQL is read-only")
@@ -156,7 +156,7 @@ func TestPausedPrimaryResumesAfterFailedBootstrap(t *testing.T) {
 	fmd.StartGroupReplicationHook = func(bool) { qsc.RecordServingEvent(mysqlStartEvent) }
 	n := len(qsc.ServingEvents())
 
-	_, err := tm.StartGroupReplication(t.Context(), true)
+	_, err := tm.StartGroupReplication(t.Context(), startRequest(true))
 	require.ErrorContains(t, err, "the group failed to start")
 	assert.Equal(t, concat(pauseEvents, []string{mysqlStartEvent}, resumeEvents), eventsSince(qsc, n))
 	assert.True(t, qsc.IsServing(), "the primary serves again after a failed bootstrap")
@@ -177,7 +177,7 @@ func TestPausedPrimaryResumesWhenMySQLStaysReadOnly(t *testing.T) {
 	}
 	n := len(qsc.ServingEvents())
 
-	_, err := tm.StartGroupReplication(t.Context(), true)
+	_, err := tm.StartGroupReplication(t.Context(), startRequest(true))
 	require.ErrorContains(t, err, "the group failed to start")
 	assert.Equal(t, concat(pauseEvents, []string{mysqlStartEvent}, resumeEvents), eventsSince(qsc, n))
 	assert.True(t, qsc.IsServing())
@@ -197,7 +197,7 @@ func TestPausedPrimaryDoesNotServeWhenItsStateIsRefreshed(t *testing.T) {
 		servingAfterRefresh.Store(qsc.IsServing())
 	}
 
-	_, err := tm.StartGroupReplication(t.Context(), true)
+	_, err := tm.StartGroupReplication(t.Context(), startRequest(true))
 	require.NoError(t, err)
 	require.NoError(t, refreshErr)
 	assert.False(t, servingAfterRefresh.Load(), "a refresh must not make a paused primary serve")
@@ -209,7 +209,7 @@ func TestPausedPrimaryDoesNotServeWhenItsStateIsRefreshed(t *testing.T) {
 // Replication stops, and is read-only after; the tablet serves again once MySQL is writable.
 func TestPrimaryLeavingItsGroupPausesServing(t *testing.T) {
 	tm, fmd, qsc := newPausingPrimary(t)
-	_, err := tm.StartGroupReplication(t.Context(), true)
+	_, err := tm.StartGroupReplication(t.Context(), startRequest(true))
 	require.NoError(t, err)
 	fmd.SetGroupReplicationStatusHook(func() {
 		if _, stop, _ := fmd.GroupReplicationCalls(); stop == 1 {

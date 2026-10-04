@@ -288,6 +288,13 @@ type FakeMysqlDaemon struct {
 	// example a group of its own, and its error.
 	StartGroupReplicationFunc func(bootstrap bool) error
 
+	// ApplyGroupReplicationRelayLogCalls counts the calls to ApplyGroupReplicationRelayLog, which
+	// adds GroupReplication.ReceivedTransactionSet to CurrentPrimaryPosition, like MySQL's applier
+	// applying the relay log of a member out of its group, unless ApplyGroupReplicationRelayLogError
+	// is set, which it returns instead.
+	ApplyGroupReplicationRelayLogCalls int
+	ApplyGroupReplicationRelayLogError error
+
 	// StopGroupReplicationHook, if set, is called at the start of StopGroupReplication, before the
 	// fake changes anything, for example to observe the state MySQL leaves its group in.
 	StopGroupReplicationHook func()
@@ -1197,6 +1204,34 @@ func (fmd *FakeMysqlDaemon) StartGroupReplication(ctx context.Context, bootstrap
 		fmd.ReadOnly = true
 	}
 	fmd.setOwnGroupMemberLocked(fmd.GroupReplication.MemberState, fmd.GroupReplication.MemberRole)
+	return nil
+}
+
+// ApplyGroupReplicationRelayLog is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) ApplyGroupReplicationRelayLog(ctx context.Context, until replication.GTIDSet) error {
+	fmd.mu.Lock()
+	defer fmd.mu.Unlock()
+	fmd.ApplyGroupReplicationRelayLogCalls++
+	if fmd.ApplyGroupReplicationRelayLogError != nil {
+		return fmd.ApplyGroupReplicationRelayLogError
+	}
+	if fmd.GroupReplication != nil && mysql.IsGroupMemberActive(fmd.GroupReplication) {
+		return errors.New("the applier of the group_replication_applier channel runs with group replication")
+	}
+	if received := fmd.GroupReplication.GetReceivedTransactionSet(); received != "" {
+		set, err := replication.ParseMysql56GTIDSet(received)
+		if err != nil {
+			return err
+		}
+		executed := fmd.CurrentPrimaryPosition.GTIDSet
+		if executed == nil {
+			executed = replication.Mysql56GTIDSet{}
+		}
+		fmd.CurrentPrimaryPosition = replication.Position{GTIDSet: executed.Union(set)}
+	}
+	if fmd.CurrentPrimaryPosition.GTIDSet == nil || !fmd.CurrentPrimaryPosition.GTIDSet.Contains(until) {
+		return fmt.Errorf("the applier did not apply %v", until)
+	}
 	return nil
 }
 

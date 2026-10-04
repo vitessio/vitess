@@ -374,14 +374,15 @@ func twoPCDurable(status *replicationdatapb.GroupReplicationStatus, semiSync boo
 
 // startGroupReplicationLocked makes the tablet's MySQL join its shard's group, or bootstrap a
 // new group, unless it is already an active member. It then finishes the transition to Group
-// Replication, which is idempotent. It does not wait for the member to become ONLINE.
+// Replication, which is idempotent. It does not wait for the member to become ONLINE. A bootstrap
+// first passes the caller's checks, if any (see groupBootstrapChecks), right before MySQL's START.
 //
 // The caller must hold the action lock, or run during startup.
 //
 // While it runs, and for a while after it ended, the fence check watches MySQL's view (see
 // groupReplicationFence.armed): a join that does not find its group can end in a group of its own,
 // of which MySQL is the writable primary.
-func (tm *TabletManager) startGroupReplicationLocked(ctx context.Context, bootstrap bool) (_ *replicationdatapb.GroupReplicationStatus, err error) {
+func (tm *TabletManager) startGroupReplicationLocked(ctx context.Context, bootstrap bool, checks *groupBootstrapChecks) (_ *replicationdatapb.GroupReplicationStatus, err error) {
 	end := tm.groupReplicationFence.beginStart(bootstrap)
 	defer func() { end(err != nil) }()
 	tablet := tm.Tablet()
@@ -404,7 +405,7 @@ func (tm *TabletManager) startGroupReplicationLocked(ctx context.Context, bootst
 		if groupName := policy.GroupName(tablet.Keyspace, tablet.Shard); status.GroupName != groupName {
 			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "MySQL is %s in group %s, but the group of shard %s/%s is %s", status.MemberState, status.GroupName, tablet.Keyspace, tablet.Shard, groupName)
 		}
-	} else if err := tm.joinGroupLocked(ctx, status, bootstrap); err != nil {
+	} else if err := tm.joinGroupLocked(ctx, status, bootstrap, checks); err != nil {
 		if !isGroupReplicationCommandOngoing(err) {
 			return nil, err
 		}
@@ -416,7 +417,7 @@ func (tm *TabletManager) startGroupReplicationLocked(ctx context.Context, bootst
 		if status, err = tm.stopOngoingGroupStartLocked(ctx); err != nil {
 			return nil, err
 		}
-		if err := tm.joinGroupLocked(ctx, status, bootstrap); err != nil {
+		if err := tm.joinGroupLocked(ctx, status, bootstrap, checks); err != nil {
 			return nil, err
 		}
 	}
@@ -549,13 +550,13 @@ func (tm *TabletManager) stopOngoingGroupStartLocked(ctx context.Context) (*repl
 }
 
 // joinGroupLocked configures Group Replication and starts it on a MySQL that is not an active
-// member.
+// member. A bootstrap passes checks first, right before MySQL's START (see groupBootstrapChecks).
 //
 // The durability policy and the tablet records only give the member weight and the seeds. A tablet
 // that read them before waits at most groupReplicationTopoReadTimeout for the topology, and
 // otherwise uses what it read last: a bootstrap or a join that VTOrc asks for to recover the
 // shard's group must not wait for a topology server that does not answer the tablet.
-func (tm *TabletManager) joinGroupLocked(ctx context.Context, status *replicationdatapb.GroupReplicationStatus, bootstrap bool) error {
+func (tm *TabletManager) joinGroupLocked(ctx context.Context, status *replicationdatapb.GroupReplicationStatus, bootstrap bool, checks *groupBootstrapChecks) error {
 	deadline := time.Now().Add(groupReplicationTopoReadTimeout)
 	durability, err := tm.durabilityForGroupChange(ctx, deadline)
 	if err != nil {
@@ -595,6 +596,12 @@ func (tm *TabletManager) joinGroupLocked(ctx context.Context, status *replicatio
 	if err := tm.MysqlDaemon.ConfigureGroupReplication(ctx, cfg); err != nil {
 		restartReplication()
 		return vterrors.Wrapf(err, "failed to configure group replication")
+	}
+	if bootstrap {
+		if err := tm.checkGroupBootstrapLocked(ctx, checks); err != nil {
+			restartReplication()
+			return err
+		}
 	}
 	log.Info("Starting group replication",
 		slog.String("group", cfg.GroupName),
@@ -976,10 +983,10 @@ func (tm *TabletManager) bootstrapGroupForInitPrimaryLocked(ctx context.Context)
 		if len(status.Members) > 1 {
 			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot initialize the primary: MySQL is already %s in group %s with %d members", status.MemberState, status.GroupName, len(status.Members))
 		}
-		if _, err := tm.startGroupReplicationLocked(ctx, false); err != nil {
+		if _, err := tm.startGroupReplicationLocked(ctx, false, nil); err != nil {
 			return err
 		}
-	} else if _, err := tm.startGroupReplicationLocked(ctx, true); err != nil {
+	} else if _, err := tm.startGroupReplicationLocked(ctx, true, nil); err != nil {
 		return err
 	}
 	// Group Replication leaves the bootstrapped primary super_read_only: InitPrimary makes MySQL

@@ -1360,21 +1360,26 @@ var testGroupReplicationStatus = &replicationdatapb.GroupReplicationStatus{
 	HasQuorum:    true,
 }
 
-func (fra *fakeRPCTM) StartGroupReplication(ctx context.Context, bootstrap bool) (*replicationdatapb.GroupReplicationStatus, error) {
+var testStartGroupReplicationRequest = &tabletmanagerdatapb.StartGroupReplicationRequest{
+	Bootstrap:       true,
+	RequiredGtidSet: "8a94f357-aab4-11df-86ab-c80aa9429562:1-15",
+}
+
+func (fra *fakeRPCTM) StartGroupReplication(ctx context.Context, req *tabletmanagerdatapb.StartGroupReplicationRequest) (*replicationdatapb.GroupReplicationStatus, error) {
 	if fra.panics {
 		panic(errors.New("test-triggered panic"))
 	}
-	compare(fra.t, "StartGroupReplication bootstrap", bootstrap, true)
+	compare(fra.t, "StartGroupReplication request", req, testStartGroupReplicationRequest)
 	return testGroupReplicationStatus, nil
 }
 
 func tmRPCTestStartGroupReplication(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	status, err := client.StartGroupReplication(ctx, tablet, true)
+	status, err := client.StartGroupReplication(ctx, tablet, testStartGroupReplicationRequest)
 	compareError(t, "StartGroupReplication", err, status, testGroupReplicationStatus)
 }
 
 func tmRPCTestStartGroupReplicationPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	_, err := client.StartGroupReplication(ctx, tablet, true)
+	_, err := client.StartGroupReplication(ctx, tablet, testStartGroupReplicationRequest)
 	expectHandleRPCPanic(t, "StartGroupReplication", true /*verbose*/, err)
 }
 

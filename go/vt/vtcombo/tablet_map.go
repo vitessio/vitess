@@ -1119,7 +1119,7 @@ func (itmc *internalTabletManagerClient) ResetReplicationParameters(context.Cont
 	return errors.New("not implemented in vtcombo")
 }
 
-func (itmc *internalTabletManagerClient) StartGroupReplication(context.Context, *topodatapb.Tablet, bool) (*replicationdatapb.GroupReplicationStatus, error) {
+func (itmc *internalTabletManagerClient) StartGroupReplication(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.StartGroupReplicationRequest) (*replicationdatapb.GroupReplicationStatus, error) {
 	return nil, errors.New("not implemented in vtcombo")
 }
 

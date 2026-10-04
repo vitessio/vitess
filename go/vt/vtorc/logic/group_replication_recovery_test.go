@@ -42,6 +42,7 @@ import (
 	tmcmock "vitess.io/vitess/go/vt/vttablet/tmclient/mock"
 
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	vttimepb "vitess.io/vitess/go/vt/proto/vttime"
@@ -309,6 +310,15 @@ func readVoters(t *testing.T) []string {
 	return voters
 }
 
+// startRequest matches a StartGroupReplication request that bootstraps the group or, with bootstrap
+// unset, joins it.
+func startRequest(bootstrap bool) gomock.Matcher {
+	return gomock.Cond(func(x any) bool {
+		req, ok := x.(*tabletmanagerdatapb.StartGroupReplicationRequest)
+		return ok && req.GetBootstrap() == bootstrap
+	})
+}
+
 // sameTablet matches a tablet argument by alias.
 func sameTablet(tablet *topodatapb.Tablet) gomock.Matcher {
 	return gomock.Cond(func(x any) bool {
@@ -503,8 +513,8 @@ func TestStartGroupReplicationOnMember(t *testing.T) {
 				starts = 1
 			}
 			joined := make(chan struct{})
-			mockTMC.EXPECT().StartGroupReplication(gomock.Any(), sameTablet(member), false).DoAndReturn(
-				func(context.Context, *topodatapb.Tablet, bool) (*replicationdatapb.GroupReplicationStatus, error) {
+			mockTMC.EXPECT().StartGroupReplication(gomock.Any(), sameTablet(member), startRequest(false)).DoAndReturn(
+				func(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.StartGroupReplicationRequest) (*replicationdatapb.GroupReplicationStatus, error) {
 					close(joined)
 					return &replicationdatapb.GroupReplicationStatus{}, nil
 				}).Times(starts)
@@ -562,7 +572,7 @@ func TestStartGroupReplicationOnMemberDoesNotWaitForUnreachableTablet(t *testing
 			<-ctx.Done()
 			return nil, ctx.Err()
 		})
-	mockTMC.EXPECT().StartGroupReplication(gomock.Any(), sameTablet(member), false).Return(&replicationdatapb.GroupReplicationStatus{}, nil)
+	mockTMC.EXPECT().StartGroupReplication(gomock.Any(), sameTablet(member), startRequest(false)).Return(&replicationdatapb.GroupReplicationStatus{}, nil)
 
 	analysisEntry := &inst.DetectionAnalysis{
 		Analysis:              inst.GroupMemberNotOnline,
@@ -616,8 +626,8 @@ func TestStartGroupReplicationOnMemberDoesNotHoldShardLock(t *testing.T) {
 			close(releaseJoin)
 		}
 	})
-	mockTMC.EXPECT().StartGroupReplication(gomock.Any(), sameTablet(member), false).DoAndReturn(
-		func(ctx context.Context, _ *topodatapb.Tablet, _ bool) (*replicationdatapb.GroupReplicationStatus, error) {
+	mockTMC.EXPECT().StartGroupReplication(gomock.Any(), sameTablet(member), startRequest(false)).DoAndReturn(
+		func(ctx context.Context, _ *topodatapb.Tablet, _ *tabletmanagerdatapb.StartGroupReplicationRequest) (*replicationdatapb.GroupReplicationStatus, error) {
 			close(joinStarted)
 			select {
 			case <-releaseJoin:
@@ -838,12 +848,12 @@ func TestBootstrapGroupReplication(t *testing.T) {
 					// The other voters are made to join the new group right away.
 					joinTimes = 1
 				}
-				mockTMC.EXPECT().StartGroupReplication(gomock.Any(), sameTablet(tablet), true).
-					DoAndReturn(func(context.Context, *topodatapb.Tablet, bool) (*replicationdatapb.GroupReplicationStatus, error) {
+				mockTMC.EXPECT().StartGroupReplication(gomock.Any(), sameTablet(tablet), startRequest(true)).
+					DoAndReturn(func(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.StartGroupReplicationRequest) (*replicationdatapb.GroupReplicationStatus, error) {
 						return &replicationdatapb.GroupReplicationStatus{ViewId: "1790000123:1"}, nil
 					}).Times(times)
-				mockTMC.EXPECT().StartGroupReplication(gomock.Any(), sameTablet(tablet), false).
-					DoAndReturn(func(context.Context, *topodatapb.Tablet, bool) (*replicationdatapb.GroupReplicationStatus, error) {
+				mockTMC.EXPECT().StartGroupReplication(gomock.Any(), sameTablet(tablet), startRequest(false)).
+					DoAndReturn(func(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.StartGroupReplicationRequest) (*replicationdatapb.GroupReplicationStatus, error) {
 						joins.Add(1)
 						return &replicationdatapb.GroupReplicationStatus{ViewId: "1790000123:2"}, nil
 					}).Times(joinTimes)
@@ -945,9 +955,9 @@ func TestBootstrapGroupReplicationVoters(t *testing.T) {
 				} else if tt.want != 0 && slices.Contains(tt.voters, tablet.Alias.Uid) {
 					joinTimes = 1
 				}
-				mockTMC.EXPECT().StartGroupReplication(gomock.Any(), sameTablet(tablet), true).Return(&replicationdatapb.GroupReplicationStatus{ViewId: "1790000123:1"}, nil).Times(times)
-				mockTMC.EXPECT().StartGroupReplication(gomock.Any(), sameTablet(tablet), false).
-					DoAndReturn(func(_ context.Context, tablet *topodatapb.Tablet, _ bool) (*replicationdatapb.GroupReplicationStatus, error) {
+				mockTMC.EXPECT().StartGroupReplication(gomock.Any(), sameTablet(tablet), startRequest(true)).Return(&replicationdatapb.GroupReplicationStatus{ViewId: "1790000123:1"}, nil).Times(times)
+				mockTMC.EXPECT().StartGroupReplication(gomock.Any(), sameTablet(tablet), startRequest(false)).
+					DoAndReturn(func(_ context.Context, tablet *topodatapb.Tablet, _ *tabletmanagerdatapb.StartGroupReplicationRequest) (*replicationdatapb.GroupReplicationStatus, error) {
 						joined <- tablet.Alias.Uid
 						return &replicationdatapb.GroupReplicationStatus{ViewId: "1790000123:2"}, nil
 					}).Times(joinTimes)
@@ -982,6 +992,153 @@ func TestBootstrapGroupReplicationVoters(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestBootstrapGroupReplicationPrefersTransactionsInTheBinlog verifies that, among voters that hold
+// every transaction, VTOrc bootstraps the group on one that holds them all in its binlog, not on one
+// that holds some of them only in its relay log. MySQL runs with relay_log_recovery=ON, which
+// discards the received backlog when mysqld restarts: a restart of the chosen voter's mysqld between
+// VTOrc's status read and the bootstrap's START GROUP_REPLICATION makes the new group lose
+// acknowledged transactions that the old primary still holds in its binlog, and the old primary can
+// then no longer join it. The TLA+ model in doc/design-docs/group_replication_tla found this
+// interleaving.
+//
+// Here the group lost its majority after its primary, 101, committed 11-15: voter 100 received them
+// but did not apply them, voter 102 did not receive them. 100 and 101 have the same GTID set, and
+// 100 has the lower alias.
+func TestBootstrapGroupReplicationPrefersTransactionsInTheBinlog(t *testing.T) {
+	const groupName = "6f1c2c2e-5a8e-4b8e-9d3a-7c1f0b6e2a41"
+	offline := func(position, received string) *replicationdatapb.FullStatus {
+		return &replicationdatapb.FullStatus{
+			PrimaryStatus: &replicationdatapb.PrimaryStatus{Position: "MySQL56/" + position},
+			GroupReplicationStatus: &replicationdatapb.GroupReplicationStatus{
+				PluginActive:           true,
+				MemberState:            mysql.GroupMemberStateOffline,
+				ReceivedTransactionSet: received,
+			},
+		}
+	}
+	tablets := []*topodatapb.Tablet{
+		recoveryTablet("zone1", 100, topodatapb.TabletType_REPLICA),
+		recoveryTablet("zone2", 101, topodatapb.TabletType_REPLICA),
+		recoveryTablet("zone3", 102, topodatapb.TabletType_REPLICA),
+	}
+	statuses := []*replicationdatapb.FullStatus{
+		offline(groupName+":1-10", groupName+":1-15"),
+		offline(groupName+":1-15", ""),
+		offline(groupName+":1-10", ""),
+	}
+	const want = 101
+	mockTMC := groupReplicationRecoveryTest(t, tablets...)
+	inst.GroupReplicationConditions.Reset()
+	setVoters(t, tablets...)
+	var joins atomic.Int32
+	for i, tablet := range tablets {
+		mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(tablet)).Return(statuses[i], nil).MaxTimes(1)
+		times, joinTimes := 0, 1
+		if tablet.Alias.Uid == want {
+			times, joinTimes = 1, 0
+		}
+		mockTMC.EXPECT().StartGroupReplication(gomock.Any(), sameTablet(tablet), startRequest(true)).
+			Return(&replicationdatapb.GroupReplicationStatus{ViewId: "1790000123:1"}, nil).Times(times)
+		mockTMC.EXPECT().StartGroupReplication(gomock.Any(), sameTablet(tablet), startRequest(false)).
+			DoAndReturn(func(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.StartGroupReplicationRequest) (*replicationdatapb.GroupReplicationStatus, error) {
+				joins.Add(1)
+				return &replicationdatapb.GroupReplicationStatus{ViewId: "1790000123:2"}, nil
+			}).Times(joinTimes)
+	}
+
+	analysisEntry := &inst.DetectionAnalysis{
+		Analysis:              inst.GroupNotBootstrapped,
+		AnalyzedInstanceAlias: tablets[0].Alias,
+		AnalyzedKeyspace:      "ks",
+		AnalyzedShard:         "0",
+	}
+	lockedCtx, unlock, err := ts.LockShard(t.Context(), "ks", "0", "test")
+	require.NoError(t, err)
+	defer unlock(&err)
+	attempted, topologyRecovery, err := bootstrapGroupReplication(lockedCtx, analysisEntry, log.NewPrefixedLogger("test"))
+	require.True(t, attempted)
+	require.NoError(t, err)
+	require.NotNil(t, topologyRecovery)
+	assert.EqualValues(t, want, topologyRecovery.SuccessorAlias.Uid)
+	assert.Eventually(t, func() bool { return joins.Load() == 2 }, 30*time.Second, 10*time.Millisecond)
+}
+
+// TestBootstrapGroupReplicationRequiresEveryTransaction checks that the bootstrap RPC asks the
+// tablet to hold, in its binlog, every transaction that any voter executed or received, and that a
+// voter holding some of them only in its relay log is still chosen when no voter executed them all.
+//
+// Here the group's primary, 101, crashed after its group decided 16, before it committed it: 16 was
+// never acknowledged, and only voter 100 received it, without applying it. 101 executed 1-15, which
+// 100 only received. Requiring a voter that executed every transaction would never bootstrap the
+// group; bootstrapping 101 would leave 100 unable to join (it would apply 16 when it starts its
+// join, and MySQL would refuse it for its extra transaction). 100 must bootstrap, after applying
+// its relay log, which the tablet does when the RPC requires 1-16.
+func TestBootstrapGroupReplicationRequiresEveryTransaction(t *testing.T) {
+	const groupName = "6f1c2c2e-5a8e-4b8e-9d3a-7c1f0b6e2a41"
+	offline := func(position, received string) *replicationdatapb.FullStatus {
+		return &replicationdatapb.FullStatus{
+			PrimaryStatus: &replicationdatapb.PrimaryStatus{Position: "MySQL56/" + position},
+			GroupReplicationStatus: &replicationdatapb.GroupReplicationStatus{
+				PluginActive:           true,
+				MemberState:            mysql.GroupMemberStateOffline,
+				ReceivedTransactionSet: received,
+			},
+		}
+	}
+	tablets := []*topodatapb.Tablet{
+		recoveryTablet("zone1", 100, topodatapb.TabletType_REPLICA),
+		recoveryTablet("zone2", 101, topodatapb.TabletType_REPLICA),
+		recoveryTablet("zone3", 102, topodatapb.TabletType_REPLICA),
+	}
+	statuses := []*replicationdatapb.FullStatus{
+		offline(groupName+":1-10", groupName+":1-16"),
+		offline(groupName+":1-15", ""),
+		offline(groupName+":1-10", ""),
+	}
+	const want = 100
+	mockTMC := groupReplicationRecoveryTest(t, tablets...)
+	inst.GroupReplicationConditions.Reset()
+	setVoters(t, tablets...)
+	var joins atomic.Int32
+	var bootstrapRequest atomic.Pointer[tabletmanagerdatapb.StartGroupReplicationRequest]
+	for i, tablet := range tablets {
+		mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(tablet)).Return(statuses[i], nil).MaxTimes(1)
+		times, joinTimes := 0, 1
+		if tablet.Alias.Uid == want {
+			times, joinTimes = 1, 0
+		}
+		mockTMC.EXPECT().StartGroupReplication(gomock.Any(), sameTablet(tablet), startRequest(true)).
+			DoAndReturn(func(_ context.Context, _ *topodatapb.Tablet, req *tabletmanagerdatapb.StartGroupReplicationRequest) (*replicationdatapb.GroupReplicationStatus, error) {
+				bootstrapRequest.Store(req)
+				return &replicationdatapb.GroupReplicationStatus{ViewId: "1790000123:1"}, nil
+			}).Times(times)
+		mockTMC.EXPECT().StartGroupReplication(gomock.Any(), sameTablet(tablet), startRequest(false)).
+			DoAndReturn(func(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.StartGroupReplicationRequest) (*replicationdatapb.GroupReplicationStatus, error) {
+				joins.Add(1)
+				return &replicationdatapb.GroupReplicationStatus{ViewId: "1790000123:2"}, nil
+			}).Times(joinTimes)
+	}
+
+	analysisEntry := &inst.DetectionAnalysis{
+		Analysis:              inst.GroupNotBootstrapped,
+		AnalyzedInstanceAlias: tablets[0].Alias,
+		AnalyzedKeyspace:      "ks",
+		AnalyzedShard:         "0",
+	}
+	lockedCtx, unlock, err := ts.LockShard(t.Context(), "ks", "0", "test")
+	require.NoError(t, err)
+	defer unlock(&err)
+	attempted, topologyRecovery, err := bootstrapGroupReplication(lockedCtx, analysisEntry, log.NewPrefixedLogger("test"))
+	require.True(t, attempted)
+	require.NoError(t, err)
+	require.NotNil(t, topologyRecovery)
+	assert.EqualValues(t, want, topologyRecovery.SuccessorAlias.Uid)
+	req := bootstrapRequest.Load()
+	require.NotNil(t, req)
+	assert.Equal(t, groupName+":1-16", req.GetRequiredGtidSet(), "the tablet must have executed every voter's transactions before it bootstraps")
+	assert.Eventually(t, func() bool { return joins.Load() == 2 }, 30*time.Second, 10*time.Millisecond)
 }
 
 func TestGetCheckAndRecoverFunctionCodeGroupVotersOutOfDate(t *testing.T) {
@@ -1074,7 +1231,7 @@ func TestUpdateGroupReplicationVoters(t *testing.T) {
 				e.mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(primary)).Return(groupMemberStatus(primary, primary, primary), nil)
 				e.mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(crossCellVoter)).Return(nil, errUnreachable)
 				e.mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(crossCellReplica)).Return(notMemberStatus(crossCellReplica), nil)
-				e.mockTMC.EXPECT().StartGroupReplication(gomock.Any(), sameTablet(crossCellReplica), false).Return(&replicationdatapb.GroupReplicationStatus{}, nil)
+				e.mockTMC.EXPECT().StartGroupReplication(gomock.Any(), sameTablet(crossCellReplica), startRequest(false)).Return(&replicationdatapb.GroupReplicationStatus{}, nil)
 			},
 			wantVoters: []string{"zone1-0000000101", "zone2-0000000201"},
 		},

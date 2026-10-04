@@ -267,7 +267,7 @@ func TestGroupReplicationRPCsRequireFlag(t *testing.T) {
 	ts := newGroupReplicationTopo(t, policy.DurabilityNone)
 	tm, _ := newGroupReplicationTestTM(t, ts, 1, nil)
 
-	_, err := tm.StartGroupReplication(t.Context(), false)
+	_, err := tm.StartGroupReplication(t.Context(), startRequest(false))
 	requireCode(t, err, vtrpcpb.Code_FAILED_PRECONDITION)
 	_, err = tm.StopGroupReplication(t.Context())
 	requireCode(t, err, vtrpcpb.Code_FAILED_PRECONDITION)
@@ -283,7 +283,7 @@ func TestStartGroupReplicationJoinsAsSecondary(t *testing.T) {
 	fmd.SemiSyncReplicaEnabled = true
 	fmd.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA", resetDefaultChannel}
 
-	status, err := tm.StartGroupReplication(t.Context(), false)
+	status, err := tm.StartGroupReplication(t.Context(), startRequest(false))
 	require.NoError(t, err)
 	assert.Equal(t, mysql.GroupMemberStateOnline, status.MemberState)
 	assert.Equal(t, mysql.GroupMemberRoleSecondary, status.MemberRole)
@@ -304,7 +304,7 @@ func TestStartGroupReplicationBootstrapOnPrimary(t *testing.T) {
 	fmd.SemiSyncPrimaryEnabled = true
 	fmd.ExpectedExecuteSuperQueryList = []string{resetDefaultChannel}
 
-	status, err := tm.StartGroupReplication(t.Context(), true)
+	status, err := tm.StartGroupReplication(t.Context(), startRequest(true))
 	require.NoError(t, err)
 	assert.True(t, mysql.IsGroupPrimary(status))
 	assert.True(t, fmd.GroupReplicationBootstrapped)
@@ -317,7 +317,7 @@ func TestStartGroupReplicationBootstrapOnPrimary(t *testing.T) {
 	assert.False(t, tm.QueryServiceControl.(*tabletservermock.Controller).MethodCalled["RedoPreparedTransactions"])
 
 	// Bootstrapping an active member would create a second group.
-	_, err = tm.StartGroupReplication(t.Context(), true)
+	_, err = tm.StartGroupReplication(t.Context(), startRequest(true))
 	requireCode(t, err, vtrpcpb.Code_FAILED_PRECONDITION)
 	start, _, _ := fmd.GroupReplicationCalls()
 	assert.Equal(t, 1, start)
@@ -337,7 +337,7 @@ func TestStartGroupReplicationOnActiveMember(t *testing.T) {
 	fmd.SemiSyncPrimaryEnabled = true
 	fmd.ExpectedExecuteSuperQueryList = []string{resetDefaultChannel}
 
-	status, err := tm.StartGroupReplication(t.Context(), false)
+	status, err := tm.StartGroupReplication(t.Context(), startRequest(false))
 	require.NoError(t, err)
 	assert.True(t, mysql.IsGroupPrimary(status))
 	start, _, _ := fmd.GroupReplicationCalls()
@@ -354,7 +354,7 @@ func TestStartGroupReplicationRefusesOtherGroup(t *testing.T) {
 	status.GroupName = policy.GroupName("ks", "-80")
 	fmd.SetGroupReplicationStatus(status)
 
-	_, err := tm.StartGroupReplication(t.Context(), false)
+	_, err := tm.StartGroupReplication(t.Context(), startRequest(false))
 	requireCode(t, err, vtrpcpb.Code_FAILED_PRECONDITION)
 }
 
@@ -368,7 +368,7 @@ func TestStartGroupReplicationRestartsReplicationAfterFailedJoin(t *testing.T) {
 	fmd.StartGroupReplicationError = errors.New("no seed reachable")
 	fmd.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA", "START REPLICA"}
 
-	_, err := tm.StartGroupReplication(t.Context(), false)
+	_, err := tm.StartGroupReplication(t.Context(), startRequest(false))
 	require.ErrorContains(t, err, "no seed reachable")
 	assert.True(t, fmd.Replicating)
 	require.NoError(t, fmd.CheckSuperQueryList())
@@ -387,14 +387,14 @@ func TestStartGroupReplicationWaitsForOnline(t *testing.T) {
 	// A member that stays RECOVERING times out.
 	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
 	defer cancel()
-	_, err := tm.StartGroupReplication(ctx, false)
+	_, err := tm.StartGroupReplication(ctx, startRequest(false))
 	requireCode(t, err, vtrpcpb.Code_DEADLINE_EXCEEDED)
 
 	// An ONLINE member succeeds.
 	fmd.SetGroupReplicationStatus(groupStatus(testServerUUID(1),
 		groupMember(testServerUUID(1), mysql.GroupMemberStateOnline, mysql.GroupMemberRoleSecondary),
 		groupMember(testServerUUID(2), mysql.GroupMemberStateOnline, mysql.GroupMemberRolePrimary)))
-	status, err := tm.StartGroupReplication(t.Context(), false)
+	status, err := tm.StartGroupReplication(t.Context(), startRequest(false))
 	require.NoError(t, err)
 	assert.Equal(t, mysql.GroupMemberStateOnline, status.MemberState)
 }
@@ -407,7 +407,7 @@ func TestStopGroupReplicationRestoresReadWriteOnPrimary(t *testing.T) {
 	tm, fmd := newGroupReplicationTestTM(t, ts, 1, nil)
 	setTabletType(t, tm, topodatapb.TabletType_PRIMARY)
 	fmd.ExpectedExecuteSuperQueryList = []string{resetDefaultChannel}
-	_, err := tm.StartGroupReplication(t.Context(), true)
+	_, err := tm.StartGroupReplication(t.Context(), startRequest(true))
 	require.NoError(t, err)
 	qsc := tm.QueryServiceControl.(*tabletservermock.Controller)
 	for len(qsc.StateChanges) > 0 {
