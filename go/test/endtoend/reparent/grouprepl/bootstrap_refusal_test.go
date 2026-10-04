@@ -17,10 +17,16 @@ limitations under the License.
 package grouprepl
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
+	"path"
+	"strconv"
 	"strings"
+	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -43,20 +49,25 @@ import (
 // bootstrap that VTOrc chose on an earlier pass.
 const plantedIntentToken = "planted-by-test"
 
-// TestGroupReplicationWithdrawsRefusedBootstrapIntent reproduces, on MySQL 8.4, the delay that the
-// bootstrap intent of a candidate whose mysqld restarted after VTOrc chose it added to an outage,
-// and checks that VTOrc now withdraws the intent at once when the candidate refuses definitively.
+// refusalSetup is a shard whose group lost its last member while its primary held transactions
+// that the candidate had only received, and an intent of an earlier pass that names the candidate.
+type refusalSetup struct {
+	tc              *testCluster
+	primary         *cluster.Vttablet
+	candidate       *cluster.Vttablet
+	ts              *topo.Server
+	vtorc           *cluster.VTOrcProcess
+	recorded        string
+	primaryExecuted replication.Mysql56GTIDSet
+}
+
+// setupRefusedBootstrap sets up the shard of refusalSetup, with VTOrc's recoveries disabled.
 //
-// The group lost its majority while its primary had committed transactions that the candidate
-// had received into its relay log, without applying them (FLUSH TABLES WITH READ LOCK holds its
-// applier, as in the lab of doc/failover-audit/GroupReplication.md, "Bootstrap candidate"). An
-// intent of an earlier pass names the candidate, so VTOrc chooses it again, and sends it the
-// bootstrap RPC, which waits for the tablet's action lock (held by SleepTablet). Meanwhile, the
-// candidate's mysqld restarts, which discards its relay log (relay_log_recovery). Its tablet then
-// refuses the bootstrap: MySQL lacks transactions that the primary holds, and no START
-// GROUP_REPLICATION runs. Before the fix, the intent fenced the bootstrap of the primary for two
-// minutes; now VTOrc withdraws it, and bootstraps the primary on its next pass.
-func TestGroupReplicationWithdrawsRefusedBootstrapIntent(t *testing.T) {
+// The group lost its majority while its primary had committed transactions that the candidate had
+// received into its relay log, without applying them (FLUSH TABLES WITH READ LOCK holds its applier,
+// as in the lab of doc/failover-audit/GroupReplication.md, "Bootstrap candidate"). An intent of an
+// earlier pass names the candidate, so VTOrc chooses it again once its recoveries are enabled.
+func setupRefusedBootstrap(t *testing.T) *refusalSetup {
 	// Without heartbeats, the primary commits nothing on its own once the candidate left with its
 	// backlog: the candidate must hold every transaction the primary executed.
 	tc := setupCluster(t, clusterOptions{vtorc: vtorcConfig, replicaCells: cells, pollingLag: true})
@@ -133,56 +144,171 @@ func TestGroupReplicationWithdrawsRefusedBootstrapIntent(t *testing.T) {
 	t.Logf("the primary executed %v; the candidate executed %v and received %v", primaryExecuted, candidateExecuted, candidateReceived)
 	require.False(t, candidateExecuted.Contains(primaryExecuted), "the candidate applied its whole backlog")
 	require.True(t, candidateExecuted.Union(candidateReceived).Contains(primaryExecuted), "the candidate lacks transactions that the primary executed")
+	return &refusalSetup{tc: tc, primary: primary, candidate: candidate, ts: ts, vtorc: vtorc, recorded: recorded, primaryExecuted: primaryExecuted}
+}
 
-	// The bootstrap RPC is to wait for the candidate's action lock while its mysqld restarts.
-	const lockHeld = 25 * time.Second
-	sleep := exec.Command(tc.VtctldClientProcess.Binary, "--server", tc.VtctldClientProcess.Server, "SleepTablet", candidate.Alias, lockHeld.String())
+// holdActionLock takes the tablet's action lock for the given time (SleepTablet), and returns when it
+// was taken.
+func holdActionLock(t *testing.T, tc *testCluster, tablet *cluster.Vttablet, held time.Duration) time.Time {
+	sleep := exec.Command(tc.VtctldClientProcess.Binary, "--server", tc.VtctldClientProcess.Server, "SleepTablet", tablet.Alias, held.String())
 	require.NoError(t, sleep.Start())
-	sleepStart := time.Now()
 	t.Cleanup(func() { _ = sleep.Wait() })
-	time.Sleep(time.Second)
-	vtorc.EnableGlobalRecoveries(t)
+	return time.Now()
+}
 
+// waitForOwnIntent waits until VTOrc recorded its own bootstrap intent, which must name the candidate,
+// and returns it.
+func waitForOwnIntent(t *testing.T, r *refusalSetup) *topodatapb.GroupReplicationBootstrapIntent {
 	var intent *topodatapb.GroupReplicationBootstrapIntent
 	require.Eventually(t, func() bool {
-		intent = shardRecord(t, ts).GetGroupReplicationBootstrapIntent()
+		intent = shardRecord(t, r.ts).GetGroupReplicationBootstrapIntent()
 		return intent.GetToken() != "" && intent.GetToken() != plantedIntentToken
 	}, waitTimeout, 10*time.Millisecond, "VTOrc records its own intent")
-	require.Equal(t, candidate.Alias, topoproto.TabletAliasString(intent.GetTarget()), "VTOrc chooses the intent's target again")
-	intentTime := time.Now()
-	t.Logf("VTOrc recorded intent %s for %s %.1fs after the lock was taken", intent.GetToken(), candidate.Alias, intentTime.Sub(sleepStart).Seconds())
+	require.Equal(t, r.candidate.Alias, topoproto.TabletAliasString(intent.GetTarget()), "VTOrc chooses the intent's target again")
+	return intent
+}
 
-	// mysqld_safe restarts the killed mysqld, which discards the relay log (relay_log_recovery).
-	killMysqld(t, candidate)
-	time.Sleep(time.Second)
+// waitForRelayLogDiscarded waits until the candidate's mysqld is back without its relay log.
+func waitForRelayLogDiscarded(t *testing.T, candidate *cluster.Vttablet) {
 	require.Eventually(t, func() bool {
 		qr, err := candidate.VttabletProcess.QueryTablet("SELECT RECEIVED_TRANSACTION_SET FROM performance_schema.replication_connection_status "+
 			"WHERE CHANNEL_NAME = 'group_replication_applier'", keyspaceName, false)
 		return err == nil && (len(qr.Rows) == 0 || qr.Rows[0][0].ToString() == "")
 	}, waitTimeout, 100*time.Millisecond, "the candidate's mysqld restarts without its relay log")
-	require.Less(t, time.Since(sleepStart), lockHeld, "mysqld must be back before the RPC gets the lock")
-	t.Logf("the candidate's mysqld restarted %.1fs after the lock was taken; it executed %v", time.Since(sleepStart).Seconds(), executedGTIDSet(t, candidate))
+}
 
-	// The RPC gets the lock, the tablet refuses, and VTOrc bootstraps the primary.
+// waitForBootstrap waits until VTOrc records a new incarnation, and returns when.
+func waitForBootstrap(t *testing.T, r *refusalSetup) time.Time {
 	var bootstrapped time.Time
 	require.Eventually(t, func() bool {
-		if shardRecord(t, ts).GetGroupReplicationIncarnation() == recorded {
+		if shardRecord(t, r.ts).GetGroupReplicationIncarnation() == r.recorded {
 			return false
 		}
 		bootstrapped = time.Now()
 		return true
 	}, 3*time.Minute, 50*time.Millisecond, "VTOrc bootstraps the group")
+	return bootstrapped
+}
+
+// checkPrimaryBootstrapped checks that the primary, which executed every transaction, bootstrapped,
+// that the others joined, the candidate after its read lock was released, and that no acknowledged
+// write is lost.
+func checkPrimaryBootstrapped(t *testing.T, r *refusalSetup) {
+	waitForGroup(t, r.tc, r.primary, r.tc.replicas)
+	newPrimaryExecuted := executedGTIDSet(t, r.primary)
+	assert.True(t, newPrimaryExecuted.Contains(r.primaryExecuted), "the new group lacks acknowledged transactions: %v, want %v", newPrimaryExecuted, r.primaryExecuted)
+	waitForRowCounts(t, r.tc, r.primary)
+}
+
+// TestGroupReplicationWithdrawsRefusedBootstrapIntent reproduces, on MySQL 8.4, the delay that the
+// bootstrap intent of a candidate whose mysqld restarted after VTOrc chose it added to an outage,
+// and checks that VTOrc now withdraws the intent at once when the candidate refuses definitively.
+//
+// VTOrc chooses the candidate of setupRefusedBootstrap again, and sends it the bootstrap RPC, which
+// waits for the tablet's action lock (held by SleepTablet). Meanwhile, the candidate's mysqld
+// restarts, which discards its relay log (relay_log_recovery). Its tablet then refuses the bootstrap:
+// MySQL lacks transactions that the primary holds, and no START GROUP_REPLICATION runs. Before the
+// fix, the intent fenced the bootstrap of the primary for two minutes; now VTOrc withdraws it, and
+// bootstraps the primary on its next pass.
+func TestGroupReplicationWithdrawsRefusedBootstrapIntent(t *testing.T) {
+	r := setupRefusedBootstrap(t)
+
+	// The bootstrap RPC is to wait for the candidate's action lock while its mysqld restarts.
+	const lockHeld = 25 * time.Second
+	sleepStart := holdActionLock(t, r.tc, r.candidate, lockHeld)
+	time.Sleep(time.Second)
+	r.vtorc.EnableGlobalRecoveries(t)
+
+	intent := waitForOwnIntent(t, r)
+	intentTime := time.Now()
+	t.Logf("VTOrc recorded intent %s for %s %.1fs after the lock was taken", intent.GetToken(), r.candidate.Alias, intentTime.Sub(sleepStart).Seconds())
+
+	// mysqld_safe restarts the killed mysqld, which discards the relay log (relay_log_recovery).
+	killMysqld(t, r.candidate)
+	time.Sleep(time.Second)
+	waitForRelayLogDiscarded(t, r.candidate)
+	require.Less(t, time.Since(sleepStart), lockHeld, "mysqld must be back before the RPC gets the lock")
+	t.Logf("the candidate's mysqld restarted %.1fs after the lock was taken; it executed %v", time.Since(sleepStart).Seconds(), executedGTIDSet(t, r.candidate))
+
+	// The RPC gets the lock, the tablet refuses, and VTOrc bootstraps the primary.
+	bootstrapped := waitForBootstrap(t, r)
 	lockReleased := sleepStart.Add(lockHeld)
 	t.Logf("the group was bootstrapped %.1fs after the candidate's lock was released, %.1fs after VTOrc's intent",
 		bootstrapped.Sub(lockReleased).Seconds(), bootstrapped.Sub(intentTime).Seconds())
 	assert.Less(t, bootstrapped.Sub(lockReleased), 30*time.Second, "the refused intent must not fence the bootstrap of the primary")
+	checkPrimaryBootstrapped(t, r)
+}
 
-	// The primary, which executed every transaction, bootstraps; the others join, the candidate
-	// after its read lock was released, and no acknowledged write is lost.
-	waitForGroup(t, tc, primary, tc.replicas)
-	newPrimaryExecuted := executedGTIDSet(t, primary)
-	assert.True(t, newPrimaryExecuted.Contains(primaryExecuted), "the new group lacks acknowledged transactions: %v, want %v", newPrimaryExecuted, primaryExecuted)
-	waitForRowCounts(t, tc, primary)
+// TestGroupReplicationReprobesStaleBootstrapIntent reproduces, on MySQL 8.4, the delay that the
+// bootstrap intent of a candidate added to an outage when its bootstrap RPC failed without a
+// definitive refusal, and the candidate's mysqld then restarted without its relay log; and checks that
+// VTOrc now ends it by sending the intent's bootstrap to the candidate again.
+//
+// VTOrc chooses the candidate of setupRefusedBootstrap again, and sends it the bootstrap RPC, which
+// waits for the tablet's action lock (held by SleepTablet). Meanwhile, the candidate's mysqld dies,
+// and stays down (mysqld_safe is stopped) until the RPC got the lock: the RPC fails on its first
+// MySQL read, which is not a definitive refusal, and VTOrc keeps the intent. mysqld then restarts,
+// which discards its relay log (relay_log_recovery). VTOrc no longer chooses the candidate, but the
+// primary, which its intent fenced until it expired, two minutes after VTOrc recorded it. Now VTOrc
+// sends the intent's bootstrap to the candidate again, which refuses it definitively, withdraws the
+// intent, and bootstraps the primary in the same pass.
+func TestGroupReplicationReprobesStaleBootstrapIntent(t *testing.T) {
+	r := setupRefusedBootstrap(t)
+
+	// The bootstrap RPC is to wait for the candidate's action lock while its mysqld is down.
+	const lockHeld = 10 * time.Second
+	sleepStart := holdActionLock(t, r.tc, r.candidate, lockHeld)
+	time.Sleep(time.Second)
+	r.vtorc.EnableGlobalRecoveries(t)
+
+	intent := waitForOwnIntent(t, r)
+	intentTime := time.Now()
+	t.Logf("VTOrc recorded intent %s for %s %.1fs after the lock was taken", intent.GetToken(), r.candidate.Alias, intentTime.Sub(sleepStart).Seconds())
+
+	// mysqld dies, and mysqld_safe does not restart it until the RPC failed.
+	resume := pauseMysqldSafe(t, r.candidate)
+	killMysqld(t, r.candidate)
+	require.Less(t, time.Since(sleepStart), lockHeld, "mysqld must be down before the RPC gets the lock")
+	time.Sleep(time.Until(sleepStart.Add(lockHeld + 3*time.Second)))
+	current := shardRecord(t, r.ts).GetGroupReplicationBootstrapIntent()
+	require.Equal(t, intent.GetToken(), current.GetToken(), "the RPC that failed without a definitive refusal keeps the intent")
+	require.Equal(t, r.recorded, shardRecord(t, r.ts).GetGroupReplicationIncarnation())
+
+	// mysqld_safe restarts mysqld, which discards the relay log (relay_log_recovery).
+	resume()
+	waitForRelayLogDiscarded(t, r.candidate)
+	back := time.Now()
+	t.Logf("the candidate's mysqld is back %.1fs after VTOrc's intent; it executed %v", back.Sub(intentTime).Seconds(), executedGTIDSet(t, r.candidate))
+
+	bootstrapped := waitForBootstrap(t, r)
+	t.Logf("the group was bootstrapped %.1fs after the candidate's mysqld was back, %.1fs after VTOrc's intent",
+		bootstrapped.Sub(back).Seconds(), bootstrapped.Sub(intentTime).Seconds())
+	assert.Less(t, bootstrapped.Sub(back), 30*time.Second, "the stale intent must not fence the bootstrap of the primary")
+	checkPrimaryBootstrapped(t, r)
+}
+
+// pauseMysqldSafe stops (SIGSTOP) the mysqld_safe that runs the tablet's mysqld, so that it does not
+// restart a mysqld that dies, and returns the function that resumes it (SIGCONT). It is resumed at the
+// end of the test in any case.
+func pauseMysqldSafe(t *testing.T, tablet *cluster.Vttablet) (resume func()) {
+	pidFile := path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("vt_%010d", tablet.TabletUID), "mysql.pid")
+	data, err := os.ReadFile(pidFile)
+	require.NoError(t, err)
+	stat, err := os.ReadFile(fmt.Sprintf("/proc/%s/stat", strings.TrimSpace(string(data))))
+	require.NoError(t, err)
+	// The fields after the command name, which ends with the last ')': state, then the parent's pid.
+	fields := strings.Fields(string(stat[bytes.LastIndexByte(stat, ')')+1:]))
+	require.GreaterOrEqual(t, len(fields), 2)
+	ppid, err := strconv.Atoi(fields[1])
+	require.NoError(t, err)
+	cmdline, err := os.ReadFile(fmt.Sprintf("/proc/%d/cmdline", ppid))
+	require.NoError(t, err)
+	require.Contains(t, string(cmdline), "mysqld_safe", "the parent of mysqld")
+	require.NoError(t, syscall.Kill(ppid, syscall.SIGSTOP))
+	var once sync.Once
+	resume = func() { once.Do(func() { _ = syscall.Kill(ppid, syscall.SIGCONT) }) }
+	t.Cleanup(resume)
+	return resume
 }
 
 // executedGTIDSet returns the executed GTID set of the tablet's MySQL.

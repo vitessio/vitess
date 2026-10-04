@@ -225,9 +225,13 @@ func RecordGroupReplicationBootstrap(ctx context.Context, ts *topo.Server, keysp
 // WithdrawGroupReplicationBootstrapIntent removes the caller's bootstrap intent from the shard
 // record, once the intent's target refused the bootstrap definitively (see
 // tmclient.GroupBootstrapRefusedError): the tablet proved, under its action lock, that the RPC did
-// not start MySQL's bootstrap and never will, and no other RPC carries the intent's token. The
-// intent then fences nothing, and the caller can bootstrap the group on another voter on its next
-// pass, instead of waiting GroupReplicationBootstrapIntentFence for it to expire.
+// not start MySQL's bootstrap and never will, and that no START runs. The only other RPC that can
+// carry the intent's token is the intent's first bootstrap, when VTOrc sent the intent's bootstrap
+// again after that one failed (its target no longer held every transaction): once the intent is
+// withdrawn, the tablet's intent check refuses it, and until then the transactions it requires,
+// which include those the target lacks, do. The intent then fences nothing, and the caller can
+// bootstrap the group on another voter, instead of waiting GroupReplicationBootstrapIntentFence for
+// it to expire.
 //
 // The caller must hold the shard lock, which is re-checked first, as for the other writes of the
 // intent. The write is a compare-and-swap: it removes the intent only while the shard record still

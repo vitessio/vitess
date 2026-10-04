@@ -1168,8 +1168,10 @@ func TestBootstrapGroupReplicationRequiresEveryTransaction(t *testing.T) {
 // A definitive refusal proves that the RPC did not, and never will, start a group on 100: VTOrc
 // withdraws the intent at once, and its next pass bootstraps 102. Any other failure, a refusal that
 // the tablet did not report as definitive, a timeout, a transport error or a canceled context, may
-// hide a bootstrap that still runs on 100: the intent must stay, and keep fencing 102 until it is
-// adopted or expires.
+// hide a bootstrap that still runs on 100: the intent must stay. On the next pass, 100 answers, in no
+// group and without a START, but it no longer holds 16: VTOrc sends the intent's bootstrap to 100
+// again, which now refuses definitively, withdraws the intent, and bootstraps 102 in the same pass (see
+// TestBootstrapGroupReplicationReprobesStaleIntentTarget).
 func TestBootstrapGroupReplicationWithdrawsIntentOfDefinitiveRefusal(t *testing.T) {
 	const groupName = "6f1c2c2e-5a8e-4b8e-9d3a-7c1f0b6e2a41"
 	offline := func(position, received string) *replicationdatapb.FullStatus {
@@ -1216,24 +1218,34 @@ func TestBootstrapGroupReplicationWithdrawsIntentOfDefinitiveRefusal(t *testing.
 			setVoters(t, tablets...)
 			var pass atomic.Int32
 			var joins atomic.Int32
-			var refusedRequest atomic.Pointer[tabletmanagerdatapb.StartGroupReplicationRequest]
+			var refusedRequest, reprobeRequest atomic.Pointer[tabletmanagerdatapb.StartGroupReplicationRequest]
 			for i, tablet := range tablets {
 				mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(tablet)).
 					DoAndReturn(func(context.Context, *topodatapb.Tablet) (*replicationdatapb.FullStatus, error) {
 						return statuses[pass.Load()][i], nil
 					}).AnyTimes()
 				bootstraps, joinTimes := 0, 0
-				switch {
-				case tablet.Alias.Uid == 100:
+				switch tablet.Alias.Uid {
+				case 100:
+					// The bootstrap of the first pass fails with tt.err; when that keeps the intent, the
+					// second pass sends it again, and 100, which lost 16, refuses it definitively.
+					calls := 1
+					if !tt.withdrawn {
+						calls = 2
+					}
 					mockTMC.EXPECT().StartGroupReplication(gomock.Any(), sameTablet(tablet), startRequest(true)).
 						DoAndReturn(func(_ context.Context, _ *topodatapb.Tablet, req *tabletmanagerdatapb.StartGroupReplicationRequest) (*replicationdatapb.GroupReplicationStatus, error) {
-							refusedRequest.Store(req)
-							return nil, tt.err
-						}).Times(1)
-				case tablet.Alias.Uid == 102 && tt.withdrawn:
+							if pass.Load() == 0 {
+								refusedRequest.Store(req)
+								return nil, tt.err
+							}
+							reprobeRequest.Store(req)
+							return nil, tmclient.NewGroupBootstrapRefusedError(refusal)
+						}).Times(calls)
+				case 102:
 					bootstraps = 1
 				}
-				if tt.withdrawn && tablet.Alias.Uid != 102 {
+				if tablet.Alias.Uid != 102 {
 					joinTimes = 1
 				}
 				if tablet.Alias.Uid != 100 {
@@ -1278,15 +1290,13 @@ func TestBootstrapGroupReplicationWithdrawsIntentOfDefinitiveRefusal(t *testing.
 			// The next pass, after 100's mysqld restarted: only 102 holds 16.
 			pass.Store(1)
 			topologyRecovery, err := bootstrap()
-			if !tt.withdrawn {
-				assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err), "the intent of 100 fences 102: %v", err)
-				si, err = ts.GetShard(t.Context(), "ks", "0")
-				require.NoError(t, err)
-				assert.Equal(t, req.GetBootstrapIntentToken(), si.GroupReplicationBootstrapIntent.GetToken())
-				assert.Empty(t, si.GroupReplicationIncarnation)
-				return
-			}
 			require.NoError(t, err)
+			if !tt.withdrawn {
+				reprobe := reprobeRequest.Load()
+				require.NotNil(t, reprobe, "the bootstrap of the intent that stayed must be sent to 100 again")
+				assert.Equal(t, req.GetBootstrapIntentToken(), reprobe.GetBootstrapIntentToken())
+				assert.Equal(t, groupName+":1-16", reprobe.GetRequiredGtidSet())
+			}
 			require.NotNil(t, topologyRecovery)
 			assert.EqualValues(t, 102, topologyRecovery.SuccessorAlias.Uid)
 			si, err = ts.GetShard(t.Context(), "ks", "0")

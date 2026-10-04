@@ -26,14 +26,17 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtorc/inst"
+	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	tmcmock "vitess.io/vitess/go/vt/vttablet/tmclient/mock"
 
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
@@ -46,6 +49,13 @@ import (
 // group of incarnation recorded; 101 has the most transactions. The FullStatus of every tablet is
 // read once, for the choice of the bootstrap candidate.
 func bootstrapIntentTest(t *testing.T, recorded string) (*tmcmock.MockTabletManagerClient, []*topodatapb.Tablet) {
+	t.Helper()
+	return bootstrapIntentTestWith(t, recorded, 1, nil)
+}
+
+// bootstrapIntentTestWith is bootstrapIntentTest, with the FullStatus of every tablet read up to reads
+// times (any number if reads is 0), as edit changes it.
+func bootstrapIntentTestWith(t *testing.T, recorded string, reads int, edit func(*topodatapb.Tablet, *replicationdatapb.FullStatus)) (*tmcmock.MockTabletManagerClient, []*topodatapb.Tablet) {
 	t.Helper()
 	tablets := []*topodatapb.Tablet{
 		recoveryTablet("zone1", 100, topodatapb.TabletType_REPLICA),
@@ -63,7 +73,15 @@ func bootstrapIntentTest(t *testing.T, recorded string) (*tmcmock.MockTabletMana
 	for i, last := range []int{10, 12, 11} {
 		status := notMemberStatus(tablets[i])
 		status.PrimaryStatus = &replicationdatapb.PrimaryStatus{Position: "MySQL56/" + groupName + ":1-" + strconv.Itoa(last)}
-		mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(tablets[i])).Return(status, nil)
+		if edit != nil {
+			edit(tablets[i], status)
+		}
+		call := mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(tablets[i])).Return(status, nil)
+		if reads == 0 {
+			call.AnyTimes()
+		} else {
+			call.Times(reads)
+		}
 	}
 	return mockTMC, tablets
 }
@@ -193,10 +211,18 @@ func TestAdoptGroupReplicationBootstrapOnLaterPass(t *testing.T) {
 // TestBootstrapGroupReplicationFencedByIntent checks that a recent bootstrap intent for another
 // tablet, recorded by another VTOrc whose bootstrap's reply may have been lost, keeps this VTOrc
 // from bootstrapping a second group: the other bootstrap may still be running, its member not
-// active yet. The expiry of the fence is covered in reparentutil.
+// active yet. Here MySQL's START still runs on the intent's target, past VTOrc's grace for it, so
+// VTOrc does not send the intent's bootstrap to it again either (see
+// TestBootstrapGroupReplicationReprobesStaleIntentTarget). The expiry of the fence is covered in
+// reparentutil.
 func TestBootstrapGroupReplicationFencedByIntent(t *testing.T) {
 	const recorded = "17908000000000000"
-	mockTMC, tablets := bootstrapIntentTest(t, recorded)
+	previous := inst.SetGroupStartInProgressGrace(0)
+	t.Cleanup(func() { inst.SetGroupStartInProgressGrace(previous) })
+	inst.GroupReplicationConditions.Reset()
+	mockTMC, tablets := bootstrapIntentTestWith(t, recorded, 1, func(tablet *topodatapb.Tablet, status *replicationdatapb.FullStatus) {
+		status.GroupReplicationStatus.StartInProgress = tablet.Alias.Uid == 100
+	})
 	other := tablets[0]
 	// Another VTOrc started a bootstrap on another tablet 10s ago.
 	_, err := ts.UpdateShardFields(t.Context(), "ks", "0", func(si *topo.ShardInfo) error {
@@ -262,4 +288,207 @@ func TestBootstrapGroupReplicationPrefersIntentTarget(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, incarnation, si.GroupReplicationIncarnation)
 	assert.Eventually(t, func() bool { return joins.Load() == 2 }, 30*time.Second, 10*time.Millisecond)
+}
+
+// staleIntentToken is the token of the bootstrap intent that an earlier pass recorded for 100.
+const staleIntentToken = "earlier-pass"
+
+// staleIntentTest sets up the layout of bootstrapIntentTest, read on every pass, and the live bootstrap
+// intent that an earlier pass of VTOrc recorded for 100, 10s ago, and returns it. 100 was the candidate
+// then; its bootstrap RPC failed without a definitive refusal (it timed out, or reached the tablet while
+// mysqld was down), and its mysqld restarted, which discarded transactions from its relay log that 101
+// holds. 100 is now reachable, in no group and without a START, but 101 is the candidate.
+func staleIntentTest(t *testing.T, recorded string) (*tmcmock.MockTabletManagerClient, []*topodatapb.Tablet, *topodatapb.GroupReplicationBootstrapIntent) {
+	t.Helper()
+	mockTMC, tablets := bootstrapIntentTestWith(t, recorded, 0, nil)
+	intent := &topodatapb.GroupReplicationBootstrapIntent{
+		Target:              tablets[0].Alias,
+		Time:                protoutil.TimeToProto(time.Now().Add(-10 * time.Second)),
+		PreviousIncarnation: recorded,
+		Token:               staleIntentToken,
+	}
+	_, err := ts.UpdateShardFields(t.Context(), "ks", "0", func(si *topo.ShardInfo) error {
+		si.GroupReplicationBootstrapIntent = proto.Clone(intent).(*topodatapb.GroupReplicationBootstrapIntent)
+		return nil
+	})
+	require.NoError(t, err)
+	return mockTMC, tablets, intent
+}
+
+// TestBootstrapGroupReplicationReprobesStaleIntentTarget checks what VTOrc does with a live bootstrap
+// intent whose target is no longer the candidate. Before, the intent fenced the bootstrap of the
+// candidate until it expired, two minutes after it was recorded: nothing refused that intent's
+// bootstrap, since VTOrc no longer chose its target (the TLA+ model's reprobe_stuck configuration, in
+// doc/design-docs/group_replication_tla). VTOrc now sends the intent's own bootstrap to its target
+// again: the same token and expected incarnation, the transactions that every voter holds now, and
+// without rewriting the intent, whose time, and fence, must not be extended.
+//   - The target refuses definitively: VTOrc withdraws the intent and bootstraps the candidate in the
+//     same pass.
+//   - Any other failure keeps the intent, as it is: the bootstrap may still run.
+//   - The target bootstraps after all (the tablet checked that MySQL executed every required
+//     transaction): its group is recorded for the intent, and the other voters join it.
+func TestBootstrapGroupReplicationReprobesStaleIntentTarget(t *testing.T) {
+	const recorded = "17908000000000000"
+	const groupName = "6f1c2c2e-5a8e-4b8e-9d3a-7c1f0b6e2a41"
+	refusal := vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "refusing to bootstrap the replication group: MySQL has not executed %s:11-12", groupName)
+
+	// checkReprobe checks the request that sends the stale intent's bootstrap again, and that the
+	// shard record holds the intent as it was when the request is sent.
+	checkReprobe := func(t *testing.T, intent *topodatapb.GroupReplicationBootstrapIntent, req *tabletmanagerdatapb.StartGroupReplicationRequest) {
+		assert.Equal(t, staleIntentToken, req.GetBootstrapIntentToken())
+		assert.Equal(t, recorded, req.GetExpectedIncarnation())
+		assert.Equal(t, groupName+":1-12", req.GetRequiredGtidSet(), "the transactions that the voters hold now")
+		assert.True(t, req.GetReportDefinitiveRefusal())
+		si, err := ts.GetShard(t.Context(), "ks", "0")
+		if assert.NoError(t, err) {
+			assert.True(t, proto.Equal(intent, si.GroupReplicationBootstrapIntent), "the intent must not be rewritten: %v", si.GroupReplicationBootstrapIntent)
+		}
+	}
+
+	t.Run("definitive refusal", func(t *testing.T) {
+		mockTMC, tablets, intent := staleIntentTest(t, recorded)
+		var reprobed atomic.Bool
+		mockTMC.EXPECT().StartGroupReplication(gomock.Any(), sameTablet(tablets[0]), startRequest(true)).
+			DoAndReturn(func(_ context.Context, _ *topodatapb.Tablet, req *tabletmanagerdatapb.StartGroupReplicationRequest) (*replicationdatapb.GroupReplicationStatus, error) {
+				checkReprobe(t, intent, req)
+				reprobed.Store(true)
+				return nil, tmclient.NewGroupBootstrapRefusedError(refusal)
+			})
+		incarnation := incarnationAt(time.Now())
+		mockTMC.EXPECT().StartGroupReplication(gomock.Any(), sameTablet(tablets[1]), startRequest(true)).
+			DoAndReturn(func(_ context.Context, _ *topodatapb.Tablet, req *tabletmanagerdatapb.StartGroupReplicationRequest) (*replicationdatapb.GroupReplicationStatus, error) {
+				assert.True(t, reprobed.Load(), "the intent's target must refuse before the candidate bootstraps")
+				si, err := ts.GetShard(t.Context(), "ks", "0")
+				if assert.NoError(t, err) {
+					assert.Equal(t, "zone2-0000000101", topoproto.TabletAliasString(si.GroupReplicationBootstrapIntent.GetTarget()))
+					assert.NotEqual(t, staleIntentToken, req.GetBootstrapIntentToken())
+					assert.Equal(t, si.GroupReplicationBootstrapIntent.GetToken(), req.GetBootstrapIntentToken())
+				}
+				return &replicationdatapb.GroupReplicationStatus{ViewId: incarnation + ":1"}, nil
+			})
+		joins := expectJoins(mockTMC, tablets[0], tablets[2])
+
+		attempted, topologyRecovery, err := runLocked(t, bootstrapGroupReplication, inst.GroupNotBootstrapped, tablets[0])
+		require.NoError(t, err)
+		require.True(t, attempted)
+		assert.True(t, topologyRecovery.IsSuccessful)
+		assert.EqualValues(t, 101, topologyRecovery.SuccessorAlias.Uid, "the candidate is bootstrapped in the same pass")
+		si, err := ts.GetShard(t.Context(), "ks", "0")
+		require.NoError(t, err)
+		assert.Equal(t, incarnation, si.GroupReplicationIncarnation)
+		assert.Nil(t, si.GroupReplicationBootstrapIntent)
+		assert.Eventually(t, func() bool { return joins.Load() == 2 }, 30*time.Second, 10*time.Millisecond)
+	})
+
+	for _, tc := range []struct {
+		name string
+		err  error
+	}{
+		{name: "timeout", err: vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "context deadline exceeded")},
+		{name: "transport error", err: vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "connection error: connection refused")},
+		{name: "refusal that is not definitive", err: refusal},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			mockTMC, tablets, intent := staleIntentTest(t, recorded)
+			mockTMC.EXPECT().StartGroupReplication(gomock.Any(), sameTablet(tablets[0]), startRequest(true)).
+				DoAndReturn(func(_ context.Context, _ *topodatapb.Tablet, req *tabletmanagerdatapb.StartGroupReplicationRequest) (*replicationdatapb.GroupReplicationStatus, error) {
+					checkReprobe(t, intent, req)
+					return nil, tc.err
+				})
+			mockTMC.EXPECT().StartGroupReplication(gomock.Any(), sameTablet(tablets[1]), gomock.Any()).Times(0)
+
+			attempted, topologyRecovery, err := runLocked(t, bootstrapGroupReplication, inst.GroupNotBootstrapped, tablets[0])
+			require.Error(t, err)
+			require.True(t, attempted)
+			assert.False(t, topologyRecovery.IsSuccessful)
+			si, err := ts.GetShard(t.Context(), "ks", "0")
+			require.NoError(t, err)
+			assert.True(t, proto.Equal(intent, si.GroupReplicationBootstrapIntent), "the intent must stay as it was: %v", si.GroupReplicationBootstrapIntent)
+			assert.Equal(t, recorded, si.GroupReplicationIncarnation)
+		})
+	}
+
+	t.Run("target bootstraps", func(t *testing.T) {
+		mockTMC, tablets, intent := staleIntentTest(t, recorded)
+		incarnation := incarnationAt(time.Now())
+		mockTMC.EXPECT().StartGroupReplication(gomock.Any(), sameTablet(tablets[0]), startRequest(true)).
+			DoAndReturn(func(_ context.Context, _ *topodatapb.Tablet, req *tabletmanagerdatapb.StartGroupReplicationRequest) (*replicationdatapb.GroupReplicationStatus, error) {
+				checkReprobe(t, intent, req)
+				return &replicationdatapb.GroupReplicationStatus{ViewId: incarnation + ":1"}, nil
+			})
+		mockTMC.EXPECT().StartGroupReplication(gomock.Any(), sameTablet(tablets[1]), startRequest(true)).Times(0)
+		joins := expectJoins(mockTMC, tablets[1], tablets[2])
+
+		attempted, topologyRecovery, err := runLocked(t, bootstrapGroupReplication, inst.GroupNotBootstrapped, tablets[0])
+		require.NoError(t, err)
+		require.True(t, attempted)
+		assert.True(t, topologyRecovery.IsSuccessful)
+		assert.EqualValues(t, 100, topologyRecovery.SuccessorAlias.Uid)
+		si, err := ts.GetShard(t.Context(), "ks", "0")
+		require.NoError(t, err)
+		assert.Equal(t, incarnation, si.GroupReplicationIncarnation)
+		assert.Nil(t, si.GroupReplicationBootstrapIntent, "the recorded incarnation clears the intent")
+		assert.Eventually(t, func() bool { return joins.Load() == 2 }, 30*time.Second, 10*time.Millisecond)
+	})
+}
+
+// TestStaleGroupBootstrapIntentTarget checks when VTOrc sends the bootstrap of a live intent to its
+// target again: only when the target is a voter other than the candidate whose tablet answered on this
+// pass, whose MySQL is in no group and runs no START, and the intent has a token.
+func TestStaleGroupBootstrapIntentTarget(t *testing.T) {
+	target := recoveryTablet("zone1", 100, topodatapb.TabletType_REPLICA)
+	candidate := recoveryTablet("zone2", 101, topodatapb.TabletType_REPLICA)
+	other := recoveryTablet("zone3", 102, topodatapb.TabletType_REPLICA)
+	voters := []*topodatapb.TabletAlias{target.Alias, candidate.Alias, other.Alias}
+	liveIntent := func() *topodatapb.GroupReplicationBootstrapIntent {
+		return &topodatapb.GroupReplicationBootstrapIntent{Target: target.Alias, Token: staleIntentToken, PreviousIncarnation: "1"}
+	}
+	statuses := func(edit func(*shardTabletStatus)) []*shardTabletStatus {
+		list := []*shardTabletStatus{
+			{tablet: target, status: notMemberStatus(target)},
+			{tablet: candidate, status: notMemberStatus(candidate)},
+			{tablet: other, status: notMemberStatus(other)},
+		}
+		if edit != nil {
+			edit(list[0])
+		}
+		return list
+	}
+	tests := []struct {
+		name     string
+		intent   *topodatapb.GroupReplicationBootstrapIntent
+		voters   []*topodatapb.TabletAlias
+		statuses []*shardTabletStatus
+		reprobe  bool
+	}{
+		{name: "reachable, out of any group, no START", intent: liveIntent(), voters: voters, statuses: statuses(nil), reprobe: true},
+		{name: "no intent", voters: voters, statuses: statuses(nil)},
+		{name: "intent without a token", intent: &topodatapb.GroupReplicationBootstrapIntent{Target: target.Alias, PreviousIncarnation: "1"}, voters: voters, statuses: statuses(nil)},
+		{name: "intent for the candidate", intent: &topodatapb.GroupReplicationBootstrapIntent{Target: candidate.Alias, Token: staleIntentToken}, voters: voters, statuses: statuses(nil)},
+		{name: "target no longer a voter", intent: liveIntent(), voters: voters[1:], statuses: statuses(nil)},
+		{name: "target without a tablet record", intent: liveIntent(), voters: voters, statuses: statuses(nil)[1:]},
+		{name: "target unreachable", intent: liveIntent(), voters: voters, statuses: statuses(func(st *shardTabletStatus) {
+			st.status, st.err = nil, vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "connection refused")
+		})},
+		{name: "target ONLINE in a group", intent: liveIntent(), voters: voters, statuses: statuses(func(st *shardTabletStatus) {
+			st.status.GroupReplicationStatus.MemberState = mysql.GroupMemberStateOnline
+		})},
+		{name: "target RECOVERING", intent: liveIntent(), voters: voters, statuses: statuses(func(st *shardTabletStatus) {
+			st.status.GroupReplicationStatus.MemberState = mysql.GroupMemberStateRecovering
+		})},
+		{name: "START in progress", intent: liveIntent(), voters: voters, statuses: statuses(func(st *shardTabletStatus) {
+			st.status.GroupReplicationStatus.StartInProgress = true
+		})},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := staleGroupBootstrapIntentTarget(tt.intent, &groupBootstrapCandidate{tablet: candidate}, tt.voters, tt.statuses)
+			if tt.reprobe {
+				require.NotNil(t, got)
+				assert.Equal(t, "zone1-0000000100", topoproto.TabletAliasString(got.Alias))
+			} else {
+				assert.Nil(t, got)
+			}
+		})
+	}
 }

@@ -388,6 +388,14 @@ type groupBootstrapCandidate struct {
 // runs), there is nothing to adopt: the intent is withdrawn right away (see
 // reparentutil.WithdrawGroupReplicationBootstrapIntent), so that the next pass can bootstrap the
 // voter that holds those transactions, rather than wait for the intent to expire.
+//
+// A live intent can name a voter that is no longer the candidate: its bootstrap RPC failed without a
+// definitive refusal (it timed out, or reached the tablet while mysqld was down), and the voter's
+// mysqld then restarted and discarded transactions from its relay log that another voter holds.
+// Nothing refuses that intent's bootstrap any more, so it fenced the bootstrap of the candidate until
+// it expired. VTOrc then sends the intent's own bootstrap to that voter again first (see
+// staleGroupBootstrapIntentTarget): its tablet refuses it definitively, the intent is withdrawn, and
+// the candidate is bootstrapped in the same pass.
 func bootstrapGroupReplication(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logger *log.PrefixedLogger) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
 	topologyRecovery, err = AttemptRecoveryRegistration(analysisEntry)
 	if topologyRecovery == nil {
@@ -405,30 +413,60 @@ func bootstrapGroupReplication(ctx context.Context, analysisEntry *inst.Detectio
 
 	// The shard is locked, so the voters and the shard's durability policy cannot change until the
 	// group is bootstrapped.
+	keyspaceShard := topoproto.KeyspaceShardString(analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
 	shardInfo, err := ts.GetShard(ctx, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
 	if err != nil {
-		return false, topologyRecovery, vterrors.Wrapf(err, "failed to read the shard record of %s", topoproto.KeyspaceShardString(analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard))
+		return false, topologyRecovery, vterrors.Wrapf(err, "failed to read the shard record of %s", keyspaceShard)
 	}
 	durability, err := inst.GetShardRecordDurabilityPolicy(analysisEntry.AnalyzedKeyspace, shardInfo.Shard)
 	if err != nil {
 		return false, topologyRecovery, err
 	}
 	if !policy.IsGroupReplication(durability) {
-		return false, topologyRecovery, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "the durability policy of shard %s does not use group replication",
-			topoproto.KeyspaceShardString(analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard))
+		return false, topologyRecovery, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "the durability policy of shard %s does not use group replication", keyspaceShard)
 	}
 	tabletInfos, err := getShardTablets(ctx, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
 	if err != nil {
 		return false, topologyRecovery, err
 	}
-	var preferred *topodatapb.TabletAlias
-	if intent := reparentutil.LiveGroupReplicationBootstrapIntent(shardInfo.Shard, time.Now()); intent != nil {
-		preferred = intent.GetTarget()
-	}
-	candidate, required, err := chooseGroupBootstrapCandidate(ctx, shardInfo.GroupReplicationVoters, tabletInfos, preferred, logger)
+	intent := reparentutil.LiveGroupReplicationBootstrapIntent(shardInfo.Shard, time.Now())
+	candidate, required, statuses, err := chooseGroupBootstrapCandidate(ctx, shardInfo.GroupReplicationVoters, tabletInfos, intent.GetTarget(), logger)
 	if err != nil {
 		_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("not bootstrapping the group: %v", err))
 		return true, topologyRecovery, err
+	}
+
+	if stale := staleGroupBootstrapIntentTarget(intent, candidate, shardInfo.GroupReplicationVoters, statuses); stale != nil {
+		staleAlias := topoproto.TabletAliasString(stale.Alias)
+		_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("the live bootstrap intent %s names %s, which no longer holds every transaction of the voters (%s); the candidate is %s: sending the intent's bootstrap to %s again",
+			intent.GetToken(), staleAlias, required, topoproto.TabletAliasString(candidate.tablet.Alias), staleAlias))
+		incarnation, withdrawn, err := runGroupBootstrap(ctx, analysisEntry, stale, intent, shardInfo.GetGroupReplicationIncarnation(), required, topologyRecovery, logger)
+		if err == nil {
+			// The tablet checked, right before MySQL's START, that MySQL executed every transaction
+			// required now: the bootstrap is as safe as the candidate's.
+			bootstrapped = &inst.Instance{InstanceAlias: stale.Alias}
+			finishGroupBootstrap(ctx, analysisEntry, shardInfo.GroupReplicationVoters, tabletInfos, stale, incarnation, topologyRecovery, logger)
+			return true, topologyRecovery, nil
+		}
+		if !withdrawn {
+			// The intent stays, until it is adopted or expires: the bootstrap may still run.
+			return true, topologyRecovery, vterrors.Wrapf(err, "the bootstrap of the live intent %s on %s, sent again, failed; not bootstrapping the group on %s before the intent expires",
+				intent.GetToken(), staleAlias, topoproto.TabletAliasString(candidate.tablet.Alias))
+		}
+		// The intent no longer fences the candidate. Choose again, on a fresh read of the shard record
+		// and of every voter, and bootstrap the candidate in this pass: the shard lock is still held,
+		// and the intent's write checks it first.
+		if shardInfo, err = ts.GetShard(ctx, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard); err != nil {
+			return true, topologyRecovery, vterrors.Wrapf(err, "failed to read the shard record of %s", keyspaceShard)
+		}
+		if tabletInfos, err = getShardTablets(ctx, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard); err != nil {
+			return true, topologyRecovery, err
+		}
+		intent = reparentutil.LiveGroupReplicationBootstrapIntent(shardInfo.Shard, time.Now())
+		if candidate, required, _, err = chooseGroupBootstrapCandidate(ctx, shardInfo.GroupReplicationVoters, tabletInfos, intent.GetTarget(), logger); err != nil {
+			_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("not bootstrapping the group: %v", err))
+			return true, topologyRecovery, err
+		}
 	}
 
 	aliasString := topoproto.TabletAliasString(candidate.tablet.Alias)
@@ -436,7 +474,7 @@ func bootstrapGroupReplication(ctx context.Context, analysisEntry *inst.Detectio
 	// is adopted from the intent (adoptGroupReplicationBootstrap), and while the intent is recent
 	// no other VTOrc bootstraps the group on another tablet: a bootstrap whose reply was lost may
 	// still be running, its member not active yet.
-	intent, err := reparentutil.WriteGroupReplicationBootstrapIntent(ctx, ts, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard,
+	intent, err = reparentutil.WriteGroupReplicationBootstrapIntent(ctx, ts, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard,
 		candidate.tablet.Alias, shardInfo.GetGroupReplicationIncarnation(), time.Now())
 	if err != nil {
 		_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("not bootstrapping the group: %v", err))
@@ -444,69 +482,144 @@ func bootstrapGroupReplication(ctx context.Context, analysisEntry *inst.Detectio
 	}
 	saveShardRecord(ctx, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard, logger)
 	_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("bootstrapping the replication group on %s, which has the most advanced GTID set %s (intent %s)", aliasString, candidate.gtidSet, intent.GetToken()))
-	var incarnation string
-	groupStatus, err := startGroupReplication(ctx, candidate.tablet, &tabletmanagerdatapb.StartGroupReplicationRequest{
+	incarnation, _, err := runGroupBootstrap(ctx, analysisEntry, candidate.tablet, intent, shardInfo.GetGroupReplicationIncarnation(), required, topologyRecovery, logger)
+	if err != nil {
+		return true, topologyRecovery, err
+	}
+	bootstrapped = &inst.Instance{InstanceAlias: candidate.tablet.Alias}
+	finishGroupBootstrap(ctx, analysisEntry, shardInfo.GroupReplicationVoters, tabletInfos, candidate.tablet, incarnation, topologyRecovery, logger)
+	return true, topologyRecovery, nil
+}
+
+// staleGroupBootstrapIntentTarget returns the tablet of the live bootstrap intent's target when VTOrc
+// sends that intent's bootstrap to it again, before it bootstraps candidate: the intent fences the
+// candidate, and its target is no longer a candidate itself (chooseGroupBootstrapCandidate prefers the
+// intent's target among the voters that hold every transaction). It returns nil, and the intent keeps
+// fencing the candidate until it is adopted or expires, unless all of these hold on this pass:
+//   - the intent has a token, which the tablet checks and the withdrawal compares;
+//   - its target is not the candidate, and is still a voter with a tablet record;
+//   - its tablet answered FullStatus;
+//   - its MySQL is not an active group member: a member would refuse the bootstrap without a
+//     definitive refusal, and its group is GroupBootstrapNotRecorded's to adopt;
+//   - no START GROUP_REPLICATION runs on it, which could still form a group of one; the tablet would
+//     also stop it, or wait for it, before it refused.
+//
+// VTOrc sends the same intent's bootstrap, with the intent's token and the incarnation it expects, and
+// the transactions that every voter executed or received now; it does not write the intent, so that its
+// time, and the fence, are not extended. The tablet's checks make that bootstrap safe whatever it finds:
+// under its action lock, it refuses a superseded intent, applies its relay log if that covers the
+// required transactions, and refuses, definitively when no START runs, unless MySQL then executed all
+// of them. A target that lost transactions in a restart of mysqld refuses definitively, and VTOrc then
+// withdraws the intent (see runGroupBootstrap). A target that bootstraps after all holds every
+// required transaction in its binlog, like any candidate, and its group is recorded as the reply of the
+// intent's bootstrap. Any other failure keeps the intent, as for the intent's first bootstrap.
+//
+// The definitive refusal still proves that no bootstrap can start from the intent, although the
+// intent's token was sent twice. The first RPC failed before VTOrc sent the second one. If its handler
+// still waits for the action lock, it gets it after the refusal, and its intent check refuses it once the
+// intent is withdrawn; before the withdrawal, its own required set refuses it: it was computed on an
+// earlier pass, and the transactions that the voters executed or received only shrink while no group
+// runs (a restart of mysqld discards its relay log), so it contains what the target lacks now.
+func staleGroupBootstrapIntentTarget(intent *topodatapb.GroupReplicationBootstrapIntent, candidate *groupBootstrapCandidate, voters []*topodatapb.TabletAlias, statuses []*shardTabletStatus) *topodatapb.Tablet {
+	if intent.GetToken() == "" || intent.GetTarget() == nil || topoproto.TabletAliasEqual(intent.GetTarget(), candidate.tablet.Alias) ||
+		!policy.IsVoter(voters, intent.GetTarget()) {
+		return nil
+	}
+	for _, st := range statuses {
+		if !topoproto.TabletAliasEqual(st.tablet.Alias, intent.GetTarget()) {
+			continue
+		}
+		if st.err != nil || st.status == nil {
+			return nil
+		}
+		gs := st.status.GetGroupReplicationStatus()
+		if mysql.IsGroupMemberActive(gs) || gs.GetStartInProgress() {
+			return nil
+		}
+		return st.tablet
+	}
+	return nil
+}
+
+// runGroupBootstrap sends the bootstrap of intent, recorded while the shard record listed
+// recordedIncarnation, to target, with the transactions it requires, and records the incarnation of the
+// group it created, from the reply or, if the RPC failed, by adoption (the reply may be lost while the
+// bootstrap ran). If the tablet refused definitively, it withdraws the intent instead, and reports
+// whether it did. It returns the recorded incarnation, or the error.
+func runGroupBootstrap(ctx context.Context, analysisEntry *inst.DetectionAnalysis, target *topodatapb.Tablet, intent *topodatapb.GroupReplicationBootstrapIntent,
+	recordedIncarnation string, required replication.GTIDSet, topologyRecovery *TopologyRecovery, logger *log.PrefixedLogger,
+) (incarnation string, withdrawn bool, err error) {
+	aliasString := topoproto.TabletAliasString(target.Alias)
+	groupStatus, err := startGroupReplication(ctx, target, &tabletmanagerdatapb.StartGroupReplicationRequest{
 		Bootstrap:               true,
 		RequiredGtidSet:         required.String(),
 		BootstrapIntentToken:    intent.GetToken(),
-		ExpectedIncarnation:     shardInfo.GetGroupReplicationIncarnation(),
+		ExpectedIncarnation:     recordedIncarnation,
 		ReportDefinitiveRefusal: true,
 	})
 	if tmclient.IsGroupBootstrapRefused(err) {
-		withdrawGroupReplicationBootstrapIntent(ctx, analysisEntry, intent, aliasString, err, topologyRecovery, logger)
-		return true, topologyRecovery, err
+		return "", withdrawGroupReplicationBootstrapIntent(ctx, analysisEntry, intent, aliasString, err, topologyRecovery, logger), err
 	}
 	if err != nil {
 		// The bootstrap may have happened although its reply was lost, for example because the
 		// tablet was cut off again while MySQL's START ran. Its group is adopted if it is the
 		// target's new group.
 		adopted, adoptErr := reparentutil.AdoptGroupReplicationBootstrap(ctx, ts, tmc, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard,
-			shardInfo.GetGroupReplicationIncarnation(), intent, candidate.tablet)
+			recordedIncarnation, intent, target)
 		if adoptErr != nil {
 			_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("the bootstrap on %s failed (%v), and no group to adopt: %v", aliasString, err, adoptErr))
-			return true, topologyRecovery, vterrors.Wrapf(err, "failed to bootstrap the replication group on %s", aliasString)
+			return "", false, vterrors.Wrapf(err, "failed to bootstrap the replication group on %s", aliasString)
 		}
 		_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("the bootstrap RPC on %s failed (%v), but it created the group: adopted its incarnation %s", aliasString, err, adopted))
-		incarnation = adopted
-	} else {
-		// The new group is the shard's legitimate group: record its incarnation while the shard is
-		// still locked, before any other member joins it.
-		incarnation = policy.GroupIncarnation(groupStatus.GetViewId())
-		if incarnation == "" {
-			return true, topologyRecovery, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "bootstrapped the replication group on %s, but it reports no view id", aliasString)
-		}
-		if err := reparentutil.RecordGroupReplicationBootstrap(ctx, ts, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard, intent, incarnation); err != nil {
-			return true, topologyRecovery, vterrors.Wrapf(err, "bootstrapped the replication group on %s, but failed to record its incarnation %s", aliasString, incarnation)
-		}
+		return adopted, false, nil
 	}
-	bootstrapped = &inst.Instance{InstanceAlias: candidate.tablet.Alias}
+	// The new group is the shard's legitimate group: record its incarnation while the shard is still
+	// locked, before any other member joins it.
+	incarnation = policy.GroupIncarnation(groupStatus.GetViewId())
+	if incarnation == "" {
+		return "", false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "bootstrapped the replication group on %s, but it reports no view id", aliasString)
+	}
+	if err := reparentutil.RecordGroupReplicationBootstrap(ctx, ts, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard, intent, incarnation); err != nil {
+		return "", false, vterrors.Wrapf(err, "bootstrapped the replication group on %s, but failed to record its incarnation %s", aliasString, incarnation)
+	}
+	return incarnation, false, nil
+}
+
+// finishGroupBootstrap refreshes VTOrc's copy of the shard record once the incarnation of the group
+// bootstrapped on the given tablet is recorded, and makes the other voters join it.
+func finishGroupBootstrap(ctx context.Context, analysisEntry *inst.DetectionAnalysis, voters []*topodatapb.TabletAlias, tabletInfos []*topo.TabletInfo,
+	bootstrapped *topodatapb.Tablet, incarnation string, topologyRecovery *TopologyRecovery, logger *log.PrefixedLogger,
+) {
 	// Until VTOrc refreshes its copy of the shard record, its analysis would take the new group
 	// for a foreign one, and not make the other voters join it.
 	saveShardRecord(ctx, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard, logger)
 	_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("recorded the group incarnation %s", incarnation))
-	joinVotersAfterBootstrap(shardInfo.GroupReplicationVoters, tabletInfos, candidate.tablet, logger)
-	_ = inst.AuditOperation(BootstrapGroupReplicationRecoveryName, candidate.tablet.Alias, "bootstrapped the replication group")
-	_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("%s: bootstrapped the replication group on %s", BootstrapGroupReplicationRecoveryName, aliasString))
-	return true, topologyRecovery, nil
+	joinVotersAfterBootstrap(voters, tabletInfos, bootstrapped, logger)
+	_ = inst.AuditOperation(BootstrapGroupReplicationRecoveryName, bootstrapped.Alias, "bootstrapped the replication group")
+	_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("%s: bootstrapped the replication group on %s", BootstrapGroupReplicationRecoveryName, topoproto.TabletAliasString(bootstrapped.Alias)))
 }
 
 // withdrawGroupReplicationBootstrapIntent withdraws the bootstrap intent of a bootstrap that its
 // target refused definitively (refusal), under the shard lock that the recovery holds: a
 // compare-and-swap on the intent's token, which leaves a newer intent, or an incarnation recorded
-// since, as they are. A failure only costs time: the intent then expires.
+// since, as they are. A failure only costs time: the intent then expires. It returns whether it
+// withdrew the intent.
 func withdrawGroupReplicationBootstrapIntent(ctx context.Context, analysisEntry *inst.DetectionAnalysis, intent *topodatapb.GroupReplicationBootstrapIntent,
 	aliasString string, refusal error, topologyRecovery *TopologyRecovery, logger *log.PrefixedLogger,
-) {
+) bool {
 	withdrawn, err := reparentutil.WithdrawGroupReplicationBootstrapIntent(ctx, ts, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard, intent)
 	switch {
 	case err != nil:
 		logger.Warn("failed to withdraw the bootstrap intent of a refused bootstrap", slog.String("intent", intent.GetToken()), slog.Any("error", err))
 		_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("%s refused the bootstrap definitively (%v), but its intent %s could not be withdrawn: %v", aliasString, refusal, intent.GetToken(), err))
+		return false
 	case withdrawn:
 		saveShardRecord(ctx, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard, logger)
 		_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("%s refused the bootstrap definitively (%v): withdrew its intent %s", aliasString, refusal, intent.GetToken()))
+		return true
 	default:
 		_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("%s refused the bootstrap definitively (%v); the shard record no longer holds its intent %s", aliasString, refusal, intent.GetToken()))
+		return false
 	}
 }
 
@@ -657,8 +770,8 @@ func readShardTabletStatuses(ctx context.Context, tabletInfos []*topo.TabletInfo
 
 // chooseGroupBootstrapCandidate reads the status of every tablet of the shard and returns the
 // voter whose GTID set, executed and received, contains every other voter's, with the union of all
-// voters' GTID sets, which the bootstrap requires. It returns an error when the group must not be
-// bootstrapped.
+// voters' GTID sets, which the bootstrap requires, and the statuses it read. It returns an error when
+// the group must not be bootstrapped.
 //
 // Every transaction that a voter executed or received must be in the new group. An acknowledged
 // transaction was committed by the primary that acknowledged it, so it is in a voter's executed
@@ -677,9 +790,9 @@ func readShardTabletStatuses(ctx context.Context, tabletInfos []*topo.TabletInfo
 // a bootstrap). It then prefers a voter that executed every transaction already, typically the old
 // primary: one that holds some only in its relay log could lose them to a restart of its mysqld
 // before the bootstrap, which the tablet would then refuse.
-func chooseGroupBootstrapCandidate(ctx context.Context, voters []*topodatapb.TabletAlias, tabletInfos []*topo.TabletInfo, preferred *topodatapb.TabletAlias, logger *log.PrefixedLogger) (*groupBootstrapCandidate, replication.GTIDSet, error) {
+func chooseGroupBootstrapCandidate(ctx context.Context, voters []*topodatapb.TabletAlias, tabletInfos []*topo.TabletInfo, preferred *topodatapb.TabletAlias, logger *log.PrefixedLogger) (*groupBootstrapCandidate, replication.GTIDSet, []*shardTabletStatus, error) {
 	if len(voters) == 0 {
-		return nil, nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "the shard has no voters yet")
+		return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "the shard has no voters yet")
 	}
 	statuses := readShardTabletStatuses(ctx, tabletInfos)
 
@@ -696,14 +809,14 @@ func chooseGroupBootstrapCandidate(ctx context.Context, voters []*topodatapb.Tab
 		}
 		if ts.err != nil {
 			if isMember {
-				return nil, nil, vterrors.Wrapf(ts.err, "voter %s is unreachable", aliasString)
+				return nil, nil, nil, vterrors.Wrapf(ts.err, "voter %s is unreachable", aliasString)
 			}
 			// A tablet that is not a voter does not take part in the group.
 			logger.Warn("ignoring unreachable tablet that is not a voter", slog.String("tablet", aliasString), slog.Any("error", ts.err))
 			continue
 		}
 		if mysql.IsGroupMemberActive(ts.status.GetGroupReplicationStatus()) {
-			return nil, nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "the MySQL of %s is already an active group member", aliasString)
+			return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "the MySQL of %s is already an active group member", aliasString)
 		}
 		if ts.status.GetGroupReplicationStatus().GetStartInProgress() {
 			// The member reports OFFLINE, but its START can still end in a group of its own, next to
@@ -712,7 +825,7 @@ func chooseGroupBootstrapCandidate(ctx context.Context, voters []*topodatapb.Tab
 			// (groupStartInProgressGrace): the group it may form stays super_read_only, and its tablet
 			// leaves it, so waiting longer only delays the bootstrap.
 			if inst.GroupStartInProgressBlocksBootstrap(ts.tablet.Alias, time.Now()) {
-				return nil, nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+				return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
 					"a START GROUP_REPLICATION is in progress on the MySQL of %s: not bootstrapping the group until it ends", aliasString)
 			}
 			starting[aliasString] = true
@@ -723,13 +836,13 @@ func chooseGroupBootstrapCandidate(ctx context.Context, voters []*topodatapb.Tab
 		}
 		executed, gtidSet, err := memberGTIDSets(ts.status)
 		if err != nil {
-			return nil, nil, vterrors.Wrapf(err, "failed to read the GTID set of %s", aliasString)
+			return nil, nil, nil, vterrors.Wrapf(err, "failed to read the GTID set of %s", aliasString)
 		}
 		candidates = append(candidates, &groupBootstrapCandidate{tablet: ts.tablet, executed: executed, gtidSet: gtidSet})
 	}
 	if found < len(voters) {
 		// A voter whose tablet no longer exists may still hold transactions that the others lack.
-		return nil, nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "only %d of the %d voters of the shard have a tablet", found, len(voters))
+		return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "only %d of the %d voters of the shard have a tablet", found, len(voters))
 	}
 	// required holds every transaction that a voter executed or received.
 	var required replication.GTIDSet = replication.Mysql56GTIDSet{}
@@ -775,14 +888,14 @@ func chooseGroupBootstrapCandidate(ctx context.Context, voters []*topodatapb.Tab
 	})
 	for _, c := range candidates {
 		if c.gtidSet.Contains(required) {
-			return c, required, nil
+			return c, required, statuses, nil
 		}
 	}
 	var sets []string
 	for _, c := range candidates {
 		sets = append(sets, fmt.Sprintf("%s: %s", topoproto.TabletAliasString(c.tablet.Alias), c.gtidSet))
 	}
-	return nil, nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no voter has all the transactions of the others, bootstrapping any of them would lose transactions: %s", strings.Join(sets, "; "))
+	return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no voter has all the transactions of the others, bootstrapping any of them would lose transactions: %s", strings.Join(sets, "; "))
 }
 
 // memberGTIDSets returns the transactions that a member executed, and those it executed or received
