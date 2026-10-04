@@ -60,6 +60,7 @@
         - [ApplySchema session variables](#vttablet-applyschema-session-variables)
         - [Table ACL: statements whose tables cannot be determined are denied under strict table ACL](#vttablet-table-acl-undetermined-table-set)
         - [Table ACL: reads embedded in non-SELECT statements are now checked](#vttablet-table-acl-embedded-reads)
+        - [Query annotations include only identifier-safe principals](#vttablet-annotate-queries-safe-principal)
     - **[VTCtld](#minor-changes-vtctld)**
         - [MySQL version-aware reparent candidate election](#vtctld-version-aware-reparent)
     - **[Backup/Restore](#minor-changes-backup)**
@@ -685,6 +686,14 @@ Connection settings — the SET statements vtgate attaches to a session's querie
 **Compatibility note:** a v24 vtgate still stores a targeted session's `SET` expression as written. Against a vttablet with this change running strict table ACL without dry run, a v24 vtgate session that runs `SET @@var = (<subquery>)` while targeted has that setting rejected on every later query until the client reconnects. Upgrade vtgate before vttablet, or avoid subqueries in targeted `SET` statements during the upgrade. Without strict table ACL nothing changes for such a session.
 
 See [#21139](https://github.com/vitessio/vitess/pull/21139) for details.
+
+#### <a id="vttablet-annotate-queries-safe-principal"/>Query annotations include only identifier-safe principals</a>
+
+With `--queryserver-config-annotate-queries`, vttablet prefixes each query it sends to MySQL with a `/* <principal>@<tablet type> */` comment. The principal comes from the caller ID, which a vtgate gRPC client can set, and vttablet previously wrote it into the comment unchanged. See [GHSA-x56j-8c72-5xgg](https://github.com/vitessio/vitess/security/advisories/GHSA-x56j-8c72-5xgg).
+
+The annotation now includes the principal only when every character is an ASCII letter, a digit, or one of `_ - . @ : /`. Any other principal is written as `unsafe-principal`, for example `/* unsafe-principal@PRIMARY */`. Queries run as before in both cases. Anything that reads the principal from these comments, such as MySQL query log analysis, sees `unsafe-principal` for those callers instead of their principal.
+
+See [#21369](https://github.com/vitessio/vitess/pull/21369) for details.
 
 
 ### <a id="minor-changes-vtctld"/>VTCtld</a>
