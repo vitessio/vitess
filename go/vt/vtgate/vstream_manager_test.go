@@ -2673,29 +2673,44 @@ func addTabletToSandboxTopo(tb testing.TB, ctx context.Context, st *sandboxTopo,
 	require.NoError(tb, err)
 }
 
-// chunkedTxFailureSandbox returns a one-shard sandbox whose tablet fails with a
-// retryable error after sending BEGIN and one ROW event of rowBytes bytes, and
-// then, if the stream retries, sends a complete transaction.
-func chunkedTxFailureSandbox(t *testing.T, ks string, rowBytes int) (*vstreamManager, *sandboxconn.SandboxConn) {
+func chunkedTxRowEvent(table string, rowBytes int) []*binlogdatapb.VEvent {
+	return []*binlogdatapb.VEvent{{
+		Type: binlogdatapb.VEventType_ROW,
+		RowEvent: &binlogdatapb.RowEvent{
+			TableName:  table,
+			RowChanges: []*binlogdatapb.RowChange{{After: &querypb.Row{Lengths: []int64{int64(rowBytes)}, Values: make([]byte, rowBytes)}}},
+		},
+	}}
+}
+
+// chunkedTxSandbox returns a sandbox for the given shards whose first tablet
+// sends BEGIN and one ROW event of rowBytes bytes for table t1.
+func chunkedTxSandbox(t *testing.T, ks string, shards []string, rowBytes int) (*vstreamManager, []*sandboxconn.SandboxConn) {
 	t.Helper()
 	ctx := t.Context()
 	cell := "aa"
 	_ = createSandbox(ks)
 	hc := discovery.NewFakeHealthCheck(nil)
-	st := getSandboxTopo(ctx, cell, ks, []string{"-20"})
+	st := getSandboxTopo(ctx, cell, ks, shards)
 	vsm := newTestVStreamManager(ctx, hc, st, cell)
-	sbc0 := hc.AddTestTablet(cell, "1.1.1.1", 1001, ks, "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
-	addTabletToSandboxTopo(t, ctx, st, ks, "-20", sbc0.Tablet())
+	var sbcs []*sandboxconn.SandboxConn
+	for i, shard := range shards {
+		sbc := hc.AddTestTablet(cell, "1.1.1.1", int32(1001+i), ks, shard, topodatapb.TabletType_PRIMARY, true, 1, nil)
+		addTabletToSandboxTopo(t, ctx, st, ks, shard, sbc.Tablet())
+		sbcs = append(sbcs, sbc)
+	}
+	sbcs[0].AddVStreamEvents([]*binlogdatapb.VEvent{{Type: binlogdatapb.VEventType_BEGIN}}, nil)
+	sbcs[0].AddVStreamEvents(chunkedTxRowEvent("t1", rowBytes), nil)
+	return vsm, sbcs
+}
 
-	rowData := make([]byte, rowBytes)
-	sbc0.AddVStreamEvents([]*binlogdatapb.VEvent{{Type: binlogdatapb.VEventType_BEGIN}}, nil)
-	sbc0.AddVStreamEvents([]*binlogdatapb.VEvent{{
-		Type: binlogdatapb.VEventType_ROW,
-		RowEvent: &binlogdatapb.RowEvent{
-			TableName:  "t1",
-			RowChanges: []*binlogdatapb.RowChange{{After: &querypb.Row{Lengths: []int64{int64(rowBytes)}, Values: rowData}}},
-		},
-	}}, nil)
+// chunkedTxFailureSandbox returns a one-shard sandbox whose tablet fails with a
+// retryable error after sending BEGIN and one ROW event of rowBytes bytes, and
+// then, if the stream retries, sends a complete transaction.
+func chunkedTxFailureSandbox(t *testing.T, ks string, rowBytes int) (*vstreamManager, *sandboxconn.SandboxConn) {
+	t.Helper()
+	vsm, sbcs := chunkedTxSandbox(t, ks, []string{"-20"}, rowBytes)
+	sbc0 := sbcs[0]
 	sbc0.AddVStreamEvents(nil, vterrors.New(vtrpcpb.Code_UNAVAILABLE, "tablet went away"))
 	sbc0.AddVStreamEvents([]*binlogdatapb.VEvent{{Type: binlogdatapb.VEventType_BEGIN}}, nil)
 	sbc0.AddVStreamEvents([]*binlogdatapb.VEvent{{Type: binlogdatapb.VEventType_COMMIT}}, nil)
@@ -2776,4 +2791,62 @@ func TestVStreamChunkingEnabledSmallTxFailureRetries(t *testing.T) {
 	require.Len(t, sbc0.VStreamRequests, 2, "the failed attempt should have been retried")
 	require.Equal(t, 1, begins, "the aborted small transaction was never delivered, so only the retried one is seen")
 	require.Equal(t, 1, commits)
+}
+
+// TestVStreamChunkedTxFailureBlocksOtherShards checks that when a tablet fails
+// mid chunked transaction, a shard waiting on vs.mu to send its own transaction
+// sees the stream error and does not deliver its events after the partially
+// delivered transaction.
+func TestVStreamChunkedTxFailureBlocksOtherShards(t *testing.T) {
+	ks := "TestVStream"
+	vsm, sbcs := chunkedTxSandbox(t, ks, []string{"-20", "20-40"}, 100)
+	sbc0, sbc1 := sbcs[0], sbcs[1]
+	// The delay gives shard 20-40 time to block in sendAll before -20 fails.
+	sbc0.VStreamEventDelay = 200 * time.Millisecond
+	sbc0.AddVStreamEvents(nil, vterrors.New(vtrpcpb.Code_UNAVAILABLE, "tablet went away"))
+	sbc1.VStreamCh = make(chan *binlogdatapb.VEvent)
+
+	vgtid := &binlogdatapb.VGtid{ShardGtids: []*binlogdatapb.ShardGtid{
+		{Keyspace: ks, Shard: "-20", Gtid: "pos"},
+		{Keyspace: ks, Shard: "20-40", Gtid: "pos"},
+	}}
+	flags := &vtgatepb.VStreamFlags{TransactionChunkSize: 10}
+
+	vstreamCtx, vstreamCancel := context.WithCancel(t.Context())
+	defer vstreamCancel()
+
+	var begins int
+	var otherShardRows int
+	err := vsm.VStream(vstreamCtx, topodatapb.TabletType_PRIMARY, vgtid, nil, flags, func(events []*binlogdatapb.VEvent) error {
+		for _, ev := range events {
+			switch ev.Type {
+			case binlogdatapb.VEventType_BEGIN:
+				begins++
+			case binlogdatapb.VEventType_ROW:
+				if ev.RowEvent.TableName == "t2" {
+					otherShardRows++
+					continue
+				}
+				go func() {
+					otherTx := [][]*binlogdatapb.VEvent{
+						{{Type: binlogdatapb.VEventType_BEGIN}},
+						chunkedTxRowEvent("t2", 1),
+						{{Type: binlogdatapb.VEventType_COMMIT}},
+					}
+					for _, evs := range otherTx {
+						select {
+						case sbc1.VStreamCh <- evs[0]:
+						case <-vstreamCtx.Done():
+							return
+						}
+					}
+				}()
+			}
+		}
+		return nil
+	})
+	require.Error(t, err)
+	require.ErrorContains(t, err, "partially delivering a chunked transaction")
+	require.Equal(t, 1, begins, "no other transaction may be delivered after the partial one")
+	require.Equal(t, 0, otherShardRows)
 }

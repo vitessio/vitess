@@ -986,36 +986,42 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 
 			return nil
 		})
-		// If the tablet stream failed while we were holding vs.mu for a chunked
-		// transaction, release it before anything else: the retry path below
-		// re-enters keyspaceHasBeenResharded, which takes vs.mu again, and the
-		// deferred unlock only runs when this function returns.
-		partialTxDelivered := txLockHeld
-		if txLockHeld {
-			vs.mu.Unlock()
-			txLockHeld = false
-		}
-		// If stream was ended (by a journal event), return nil without checking for error.
-		select {
-		case <-journalDone:
-			return nil
-		default:
-		}
 		if err == nil {
 			// Unreachable.
 			err = vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "vstream ended unexpectedly on tablet %s in %s/%s",
 				tabletAliasString, sgtid.Keyspace, sgtid.Shard)
 		}
-		if partialTxDelivered {
+		if txLockHeld {
 			// The client has already received this transaction's BEGIN and some
 			// of its rows. sgtid.Gtid only advances on COMMIT, so retrying would
 			// replay the transaction from the start into the same stream, and the
 			// client would see BEGIN, rows, BEGIN, rows, COMMIT. End the stream
 			// instead; the client resumes from its last VGTID, which is the same
 			// recovery it already needs when the VStream connection itself drops.
-			log.Info("vstream error after partially delivering a chunked transaction, no retry", slog.String("keyspace", sgtid.Keyspace), slog.String("shard", sgtid.Shard), slog.Any("error", err))
-			return vterrors.Wrapf(err, "error in vstream for %s/%s on tablet %s after partially delivering a chunked transaction; the stream cannot be resumed in place",
-				sgtid.Keyspace, sgtid.Shard, tabletAliasString)
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				err = vterrors.Wrapf(ctxErr, "context ended while streaming from tablet %s in %s/%s",
+					tabletAliasString, sgtid.Keyspace, sgtid.Shard)
+			} else {
+				log.Info("vstream error after partially delivering a chunked transaction, no retry", slog.String("keyspace", sgtid.Keyspace), slog.String("shard", sgtid.Shard), slog.Any("error", err))
+				err = vterrors.Wrapf(err, "error in vstream for %s/%s on tablet %s after partially delivering a chunked transaction; the stream cannot be resumed in place",
+					sgtid.Keyspace, sgtid.Shard, tabletAliasString)
+			}
+			// Publish the error and cancel the stream before releasing vs.mu, so
+			// that a shard blocked in sendAll sees the error instead of sending
+			// its events after this transaction's partial delivery.
+			vs.once.Do(func() {
+				vs.setError(err, fmt.Sprintf("error starting stream from shard GTID %+v", sgtid))
+				vs.cancel()
+			})
+			vs.mu.Unlock()
+			txLockHeld = false
+			return err
+		}
+		// If stream was ended (by a journal event), return nil without checking for error.
+		select {
+		case <-journalDone:
+			return nil
+		default:
 		}
 
 		retry, ignoreTablet := vs.shouldRetry(err)
