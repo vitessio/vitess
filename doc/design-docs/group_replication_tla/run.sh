@@ -37,6 +37,8 @@ EXPECTED=(
   withdraw_any:NoDualBootstrap
   withdraw_starting:NoDualBootstrap
   refusal_stuck:deadlock
+  reprobe_stuck:deadlock
+  reprobe_noreq:NoLostAck
   current:pass
   s7d_r2_ma_off:pass
   s7d_r2_ma_off_leaves:NoDecisionAck
@@ -47,6 +49,7 @@ EXPECTED=(
   stale_rpc_fixed:pass
   refusal_withdraw:pass
   withdraw_orcs:pass
+  reprobe:pass
   stale_rec:pass
   tablet_tx2:pass
   integrated:pass
