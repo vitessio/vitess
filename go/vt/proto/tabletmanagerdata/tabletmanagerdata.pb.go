@@ -4844,8 +4844,17 @@ type StartGroupReplicationRequest struct {
 	// applied them yet, the tablet applies its relay log first; if it still lacks any, it refuses the
 	// bootstrap with FAILED_PRECONDITION. Empty means no check.
 	RequiredGtidSet string `protobuf:"bytes,2,opt,name=required_gtid_set,json=requiredGtidSet,proto3" json:"required_gtid_set,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// bootstrap_intent_token, for a bootstrap, is the token of the shard record's bootstrap intent
+	// (topodata.GroupReplicationBootstrapIntent) that the caller recorded for it. The tablet refuses
+	// the bootstrap with FAILED_PRECONDITION if the shard record no longer holds that intent, or
+	// lists another group replication incarnation than expected_incarnation: the caller's intent was
+	// superseded while the request waited for the tablet. Empty means no check.
+	BootstrapIntentToken string `protobuf:"bytes,3,opt,name=bootstrap_intent_token,json=bootstrapIntentToken,proto3" json:"bootstrap_intent_token,omitempty"`
+	// expected_incarnation is the shard record's group replication incarnation for which the caller
+	// recorded the bootstrap intent. It is only checked with bootstrap_intent_token.
+	ExpectedIncarnation string `protobuf:"bytes,4,opt,name=expected_incarnation,json=expectedIncarnation,proto3" json:"expected_incarnation,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *StartGroupReplicationRequest) Reset() {
@@ -4888,6 +4897,20 @@ func (x *StartGroupReplicationRequest) GetBootstrap() bool {
 func (x *StartGroupReplicationRequest) GetRequiredGtidSet() string {
 	if x != nil {
 		return x.RequiredGtidSet
+	}
+	return ""
+}
+
+func (x *StartGroupReplicationRequest) GetBootstrapIntentToken() string {
+	if x != nil {
+		return x.BootstrapIntentToken
+	}
+	return ""
+}
+
+func (x *StartGroupReplicationRequest) GetExpectedIncarnation() string {
+	if x != nil {
+		return x.ExpectedIncarnation
 	}
 	return ""
 }
@@ -9045,10 +9068,12 @@ const file_tabletmanagerdata_proto_rawDesc = "" +
 	"\x19ReplicaWasPromotedRequest\"\x1c\n" +
 	"\x1aReplicaWasPromotedResponse\"#\n" +
 	"!ResetReplicationParametersRequest\"$\n" +
-	"\"ResetReplicationParametersResponse\"h\n" +
+	"\"ResetReplicationParametersResponse\"\xd1\x01\n" +
 	"\x1cStartGroupReplicationRequest\x12\x1c\n" +
 	"\tbootstrap\x18\x01 \x01(\bR\tbootstrap\x12*\n" +
-	"\x11required_gtid_set\x18\x02 \x01(\tR\x0frequiredGtidSet\"`\n" +
+	"\x11required_gtid_set\x18\x02 \x01(\tR\x0frequiredGtidSet\x124\n" +
+	"\x16bootstrap_intent_token\x18\x03 \x01(\tR\x14bootstrapIntentToken\x121\n" +
+	"\x14expected_incarnation\x18\x04 \x01(\tR\x13expectedIncarnation\"`\n" +
 	"\x1dStartGroupReplicationResponse\x12?\n" +
 	"\x06status\x18\x01 \x01(\v2'.replicationdata.GroupReplicationStatusR\x06status\"\x1d\n" +
 	"\x1bStopGroupReplicationRequest\"_\n" +

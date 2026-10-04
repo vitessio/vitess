@@ -366,7 +366,11 @@ type groupBootstrapCandidate struct {
 //
 // The bootstrap RPC carries every transaction that a voter executed or received: the tablet
 // refuses to bootstrap unless its MySQL has executed all of them right before its START (see
-// chooseGroupBootstrapCandidate), and VTOrc chooses again on its next pass.
+// chooseGroupBootstrapCandidate), and VTOrc chooses again on its next pass. It also carries the
+// intent's token and the incarnation it was recorded for: the tablet refuses the bootstrap if the
+// shard record no longer holds them when the RPC gets the tablet's action lock, or right before
+// MySQL's START. An RPC can wait for that lock while this VTOrc loses its shard lock and another
+// VTOrc replaces the intent.
 //
 // Bootstrapping a second group would split the shard's data, so the recovery re-reads the
 // status of every tablet of the shard and gives up when a voting member cannot be reached, when
@@ -436,8 +440,10 @@ func bootstrapGroupReplication(ctx context.Context, analysisEntry *inst.Detectio
 	_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("bootstrapping the replication group on %s, which has the most advanced GTID set %s (intent %s)", aliasString, candidate.gtidSet, intent.GetToken()))
 	var incarnation string
 	groupStatus, err := startGroupReplication(ctx, candidate.tablet, &tabletmanagerdatapb.StartGroupReplicationRequest{
-		Bootstrap:       true,
-		RequiredGtidSet: required.String(),
+		Bootstrap:            true,
+		RequiredGtidSet:      required.String(),
+		BootstrapIntentToken: intent.GetToken(),
+		ExpectedIncarnation:  shardInfo.GetGroupReplicationIncarnation(),
 	})
 	if err != nil {
 		// The bootstrap may have happened although its reply was lost, for example because the

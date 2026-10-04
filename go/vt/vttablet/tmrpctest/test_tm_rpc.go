@@ -1361,8 +1361,10 @@ var testGroupReplicationStatus = &replicationdatapb.GroupReplicationStatus{
 }
 
 var testStartGroupReplicationRequest = &tabletmanagerdatapb.StartGroupReplicationRequest{
-	Bootstrap:       true,
-	RequiredGtidSet: "8a94f357-aab4-11df-86ab-c80aa9429562:1-15",
+	Bootstrap:            true,
+	RequiredGtidSet:      "8a94f357-aab4-11df-86ab-c80aa9429562:1-15",
+	BootstrapIntentToken: "1791099930472903533-241bf83d03a12194",
+	ExpectedIncarnation:  "17908000000000000",
 }
 
 func (fra *fakeRPCTM) StartGroupReplication(ctx context.Context, req *tabletmanagerdatapb.StartGroupReplicationRequest) (*replicationdatapb.GroupReplicationStatus, error) {

@@ -534,6 +534,15 @@ message StartGroupReplicationRequest {
   // applied them yet, the tablet applies its relay log first; if it still lacks any, it refuses the
   // bootstrap with FAILED_PRECONDITION. Empty means no check.
   string required_gtid_set = 2;
+  // bootstrap_intent_token, for a bootstrap, is the token of the shard record's bootstrap intent
+  // (topodata.GroupReplicationBootstrapIntent) that the caller recorded for it. The tablet refuses
+  // the bootstrap with FAILED_PRECONDITION if the shard record no longer holds that intent, or
+  // lists another group replication incarnation than expected_incarnation: the caller's intent was
+  // superseded while the request waited for the tablet. Empty means no check.
+  string bootstrap_intent_token = 3;
+  // expected_incarnation is the shard record's group replication incarnation for which the caller
+  // recorded the bootstrap intent. It is only checked with bootstrap_intent_token.
+  string expected_incarnation = 4;
 }
 
 message StartGroupReplicationResponse {

@@ -319,3 +319,46 @@ func TestGroupIncarnationTime(t *testing.T) {
 		assert.False(t, ok, incarnation)
 	}
 }
+
+// TestRecordGroupReplicationBootstrapKeepsNewerIntent checks that recording an incarnation that the
+// shard record lists already does not clear an intent recorded after it. The TLA+ model found the
+// interleaving: VTOrc o2 adopted the group that o1 bootstrapped for intent 1; the group lost its
+// majority again, and o2 recorded intent 2 to bootstrap the group again; o1's bootstrap reply then
+// arrived and recorded the same incarnation again, which cleared intent 2 while its bootstrap still
+// ran. Without the intent, nothing fenced a bootstrap on another voter, and the group of intent 2
+// could no longer be adopted.
+func TestRecordGroupReplicationBootstrapKeepsNewerIntent(t *testing.T) {
+	const recorded = "17908000000000000"
+	now := time.Now()
+	newIncarnation := policyIncarnationAt(now.Add(time.Second))
+	ctx, ts := intentTestShard(t, recorded)
+	target := intentTestTablet(100)
+
+	first, err := WriteGroupReplicationBootstrapIntent(ctx, ts, "ks", "0", target.Alias, recorded, now)
+	require.NoError(t, err)
+	// Another VTOrc adopted the group of the first intent.
+	_, err = ts.UpdateShardFields(ctx, "ks", "0", func(si *topo.ShardInfo) error {
+		si.GroupReplicationIncarnation = newIncarnation
+		si.GroupReplicationBootstrapIntent = nil
+		return nil
+	})
+	require.NoError(t, err)
+	second, err := WriteGroupReplicationBootstrapIntent(ctx, ts, "ks", "0", target.Alias, newIncarnation, now.Add(2*time.Second))
+	require.NoError(t, err)
+
+	// The reply of the first bootstrap arrives.
+	require.NoError(t, RecordGroupReplicationBootstrap(ctx, ts, "ks", "0", first, newIncarnation))
+	si := readShard(t, ts)
+	assert.Equal(t, newIncarnation, si.GroupReplicationIncarnation)
+	assert.Equal(t, second.Token, si.GroupReplicationBootstrapIntent.GetToken(), "the newer intent must stay")
+
+	// An intent of an earlier incarnation, which a component that does not know intents left
+	// behind, is cleared.
+	_, err = ts.UpdateShardFields(ctx, "ks", "0", func(si *topo.ShardInfo) error {
+		si.GroupReplicationBootstrapIntent = first
+		return nil
+	})
+	require.NoError(t, err)
+	require.NoError(t, RecordGroupReplicationBootstrap(ctx, ts, "ks", "0", first, newIncarnation))
+	assert.Nil(t, readShard(t, ts).GroupReplicationBootstrapIntent)
+}

@@ -394,7 +394,7 @@ func (tm *TabletManager) startGroupReplicationLocked(ctx context.Context, bootst
 		// A join that found no member to recover from. The caller verified that no member of the
 		// shard's group is active, so there is nothing to join: stop it and bootstrap.
 		log.Warn("MySQL is RECOVERING without an ONLINE member, stopping the join before the bootstrap", slog.String("group", status.GroupName))
-		if status, err = tm.stopOngoingGroupStartLocked(ctx); err != nil {
+		if status, err = tm.stopOngoingGroupStartLocked(ctx, checks); err != nil {
 			return nil, err
 		}
 	}
@@ -414,7 +414,7 @@ func (tm *TabletManager) startGroupReplicationLocked(ctx context.Context, bootst
 		// take minutes when no group exists. Such a join has been seen to end in a group of its
 		// own. Stop it, then start again: a bootstrap, or a join that the caller decided on now.
 		log.Warn("A START GROUP_REPLICATION is in progress, stopping it before starting again", slog.Bool("bootstrap", bootstrap), slog.Any("error", err))
-		if status, err = tm.stopOngoingGroupStartLocked(ctx); err != nil {
+		if status, err = tm.stopOngoingGroupStartLocked(ctx, checks); err != nil {
 			return nil, err
 		}
 		if err := tm.joinGroupLocked(ctx, status, bootstrap, checks); err != nil {
@@ -524,9 +524,16 @@ func isJoinWithoutGroup(status *replicationdatapb.GroupReplicationStatus) bool {
 // groupReplicationStopOngoingStartRetry, for at most groupReplicationStopOngoingStartTimeout or until
 // ctx ends, and then fails with UNAVAILABLE: the caller holds the action lock, which the tablet's
 // other RPCs and its sync loop need meanwhile.
-func (tm *TabletManager) stopOngoingGroupStartLocked(ctx context.Context) (*replicationdatapb.GroupReplicationStatus, error) {
+//
+// Before each attempt, a bootstrap checks that its intent still holds (see
+// checkGroupBootstrapIntentLocked): the START it stops may be the bootstrap of a newer intent, whose
+// group the STOP would make MySQL leave once it formed.
+func (tm *TabletManager) stopOngoingGroupStartLocked(ctx context.Context, checks *groupBootstrapChecks) (*replicationdatapb.GroupReplicationStatus, error) {
 	deadline := time.Now().Add(groupReplicationStopOngoingStartTimeout)
 	for {
+		if err := tm.checkGroupBootstrapIntentLocked(ctx, checks); err != nil {
+			return nil, err
+		}
 		err := tm.MysqlDaemon.StopGroupReplication(ctx)
 		if err == nil {
 			return tm.groupReplicationStatus(ctx)

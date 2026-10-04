@@ -296,8 +296,13 @@ func writeGroupReplicationIncarnation(ctx context.Context, ts *topo.Server, keys
 	}
 	_, err := ts.UpdateShardFields(ctx, keyspace, shard, func(si *topo.ShardInfo) error {
 		if si.GroupReplicationIncarnation == incarnation {
-			// Recorded already, for example by another VTOrc that adopted the same group.
-			if si.GroupReplicationBootstrapIntent == nil {
+			// Recorded already, for example by another VTOrc that adopted the same group. An intent
+			// recorded for this incarnation was written after it, for a later bootstrap that may
+			// still run, by a VTOrc that found the group gone again: it must keep fencing a bootstrap
+			// on another tablet, and lead to the adoption of that bootstrap's group. Only an intent
+			// for an earlier incarnation, which this one supersedes, is cleared.
+			intent := si.GroupReplicationBootstrapIntent
+			if intent == nil || intent.GetPreviousIncarnation() == incarnation {
 				return topo.NewError(topo.NoUpdateNeeded, keyspace+"/"+shard)
 			}
 			si.GroupReplicationBootstrapIntent = nil

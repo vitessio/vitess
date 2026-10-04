@@ -49,7 +49,8 @@ import (
 // FAILED_PRECONDITION otherwise.
 func (tm *TabletManager) StartGroupReplication(ctx context.Context, req *tabletmanagerdatapb.StartGroupReplicationRequest) (*replicationdatapb.GroupReplicationStatus, error) {
 	bootstrap := req.GetBootstrap()
-	log.Info("StartGroupReplication", slog.Bool("bootstrap", bootstrap), slog.String("required_gtid_set", req.GetRequiredGtidSet()))
+	log.Info("StartGroupReplication", slog.Bool("bootstrap", bootstrap), slog.String("required_gtid_set", req.GetRequiredGtidSet()),
+		slog.String("intent_token", req.GetBootstrapIntentToken()), slog.String("expected_incarnation", req.GetExpectedIncarnation()))
 	checks, err := newGroupBootstrapChecks(req)
 	if err != nil {
 		return nil, err
@@ -65,10 +66,14 @@ func (tm *TabletManager) StartGroupReplication(ctx context.Context, req *tabletm
 	}
 	defer tm.unlock()
 
-	if !bootstrap {
-		if err := tm.refuseJoinOnPrimaryLocked(ctx); err != nil {
+	if bootstrap {
+		// A request whose bootstrap intent was superseded while it waited for the action lock changes
+		// nothing: not the explicit stop of the rejoins, nor whether a PRIMARY tablet serves.
+		if err := tm.checkGroupBootstrapIntentLocked(ctx, checks); err != nil {
 			return nil, err
 		}
+	} else if err := tm.refuseJoinOnPrimaryLocked(ctx); err != nil {
+		return nil, err
 	}
 	// An explicit start lifts a previous explicit stop. A bootstrap also keeps the sync loop from
 	// starting a join while it runs: a join in progress makes MySQL refuse the bootstrap.

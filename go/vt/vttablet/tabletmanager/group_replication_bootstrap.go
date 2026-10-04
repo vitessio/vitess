@@ -42,22 +42,85 @@ type groupBootstrapChecks struct {
 	// requiredGTIDSet must be in MySQL's executed GTID set: the transactions that the caller found
 	// executed or received on any voter, which include every acknowledged transaction.
 	requiredGTIDSet replication.Mysql56GTIDSet
+	// intentToken, if set, is the token of the bootstrap intent that the caller recorded in the
+	// shard record for this bootstrap, for the incarnation expectedIncarnation (see
+	// checkGroupBootstrapIntentLocked).
+	intentToken         string
+	expectedIncarnation string
 }
 
 // newGroupBootstrapChecks returns the checks that req asks for, or nil when it asks for none.
 func newGroupBootstrapChecks(req *tabletmanagerdatapb.StartGroupReplicationRequest) (*groupBootstrapChecks, error) {
-	if !req.GetBootstrap() || req.GetRequiredGtidSet() == "" {
+	if !req.GetBootstrap() || (req.GetRequiredGtidSet() == "" && req.GetBootstrapIntentToken() == "") {
 		return nil, nil
 	}
-	required, err := replication.ParseMysql56GTIDSet(req.GetRequiredGtidSet())
-	if err != nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid required GTID set %q: %v", req.GetRequiredGtidSet(), err)
+	checks := &groupBootstrapChecks{
+		intentToken:         req.GetBootstrapIntentToken(),
+		expectedIncarnation: req.GetExpectedIncarnation(),
 	}
-	return &groupBootstrapChecks{requiredGTIDSet: required}, nil
+	if req.GetRequiredGtidSet() != "" {
+		required, err := replication.ParseMysql56GTIDSet(req.GetRequiredGtidSet())
+		if err != nil {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid required GTID set %q: %v", req.GetRequiredGtidSet(), err)
+		}
+		checks.requiredGTIDSet = required
+	}
+	return checks, nil
 }
 
-// checkGroupBootstrapLocked refuses a bootstrap, with FAILED_PRECONDITION, when MySQL lacks
-// something that its caller requires. It runs under the action lock, right before MySQL's START.
+// checkGroupBootstrapIntentLocked refuses a bootstrap, with FAILED_PRECONDITION, whose bootstrap
+// intent the shard record no longer holds, or that was recorded for another incarnation than the
+// shard record lists now. It runs under the action lock: when the RPC gets it, before it stops a
+// START GROUP_REPLICATION in progress, and right before MySQL's START.
+//
+// VTOrc records the intent under the shard lock before it sends the RPC, and the intent fences a
+// bootstrap on another tablet. But an RPC can wait for the tablet's action lock for a long time:
+// meanwhile the VTOrc that sent it may have lost its shard lock, and another VTOrc may have replaced
+// the intent, bootstrapped this tablet, recorded the group, and found the group gone again and
+// bootstrapped another voter (the TLA+ model's integrated simulation; doc/design-docs/
+// group_replication_tla). The stale RPC would then bootstrap a second group from the same recorded
+// incarnation. The compare-and-swap refuses to record that group, which stays read-only and is
+// never served, but the tablet's MySQL is out of the shard's group until it leaves it. Checking
+// before a STOP also keeps a stale RPC from making MySQL leave the group of a newer bootstrap that
+// is still to be adopted.
+//
+// The read of the shard record waits at most groupReplicationTopoReadTimeout, like the other reads
+// of a bootstrap: VTOrc may reach a tablet whose topology server does not answer. If it does not
+// answer in time, the tablet bootstraps without the check, as before it: the check protects the
+// availability of the shard's group, while a bootstrap that the topology keeps from running would
+// cost it.
+func (tm *TabletManager) checkGroupBootstrapIntentLocked(ctx context.Context, checks *groupBootstrapChecks) error {
+	if checks == nil || checks.intentToken == "" {
+		return nil
+	}
+	tablet := tm.Tablet()
+	readCtx, cancel := context.WithTimeout(ctx, groupReplicationTopoReadTimeout)
+	defer cancel()
+	si, err := tm.TopoServer.GetShard(readCtx, tablet.Keyspace, tablet.Shard)
+	if err != nil {
+		if ctx.Err() != nil {
+			return vterrors.Wrapf(err, "failed to read the shard record of %s/%s", tablet.Keyspace, tablet.Shard)
+		}
+		log.Warn("Group replication: the topology did not answer in time, bootstrapping without checking the bootstrap intent",
+			slog.String("intent_token", checks.intentToken), slog.Any("error", err))
+		return nil
+	}
+	if token := si.GetGroupReplicationBootstrapIntent().GetToken(); token != checks.intentToken {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+			"refusing to bootstrap the replication group: the shard record of %s/%s holds the bootstrap intent %q, not %q, for which the bootstrap was requested",
+			tablet.Keyspace, tablet.Shard, token, checks.intentToken)
+	}
+	if incarnation := si.GetGroupReplicationIncarnation(); incarnation != checks.expectedIncarnation {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+			"refusing to bootstrap the replication group: the shard record of %s/%s lists the incarnation %q, not %q, for which the bootstrap was requested",
+			tablet.Keyspace, tablet.Shard, incarnation, checks.expectedIncarnation)
+	}
+	return nil
+}
+
+// checkGroupBootstrapLocked refuses a bootstrap, with FAILED_PRECONDITION, whose intent was
+// superseded (see checkGroupBootstrapIntentLocked), or when MySQL lacks something that its caller
+// requires. It runs under the action lock, right before MySQL's START.
 //
 // The required GTID set must be in MySQL's binlog: an acknowledged transaction was committed by the
 // primary that acknowledged it, so it is in the executed set of a voter, and the caller found every
@@ -70,6 +133,9 @@ func newGroupBootstrapChecks(req *tabletmanagerdatapb.StartGroupReplicationReque
 // restart discarded them since the caller read MySQL's status: the bootstrap would lose them, and
 // the caller must choose again.
 func (tm *TabletManager) checkGroupBootstrapLocked(ctx context.Context, checks *groupBootstrapChecks) error {
+	if err := tm.checkGroupBootstrapIntentLocked(ctx, checks); err != nil {
+		return err
+	}
 	if checks == nil || len(checks.requiredGTIDSet) == 0 {
 		return nil
 	}

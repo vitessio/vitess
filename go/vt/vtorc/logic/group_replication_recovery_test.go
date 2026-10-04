@@ -1075,6 +1075,10 @@ func TestBootstrapGroupReplicationPrefersTransactionsInTheBinlog(t *testing.T) {
 // group; bootstrapping 101 would leave 100 unable to join (it would apply 16 when it starts its
 // join, and MySQL would refuse it for its extra transaction). 100 must bootstrap, after applying
 // its relay log, which the tablet does when the RPC requires 1-16.
+//
+// The RPC also carries the token of the bootstrap intent that VTOrc recorded for it, and the
+// incarnation the intent was recorded for, so that the tablet can refuse it once another VTOrc has
+// superseded the intent.
 func TestBootstrapGroupReplicationRequiresEveryTransaction(t *testing.T) {
 	const groupName = "6f1c2c2e-5a8e-4b8e-9d3a-7c1f0b6e2a41"
 	offline := func(position, received string) *replicationdatapb.FullStatus {
@@ -1103,6 +1107,7 @@ func TestBootstrapGroupReplicationRequiresEveryTransaction(t *testing.T) {
 	setVoters(t, tablets...)
 	var joins atomic.Int32
 	var bootstrapRequest atomic.Pointer[tabletmanagerdatapb.StartGroupReplicationRequest]
+	var intentAtRequest atomic.Pointer[topodatapb.GroupReplicationBootstrapIntent]
 	for i, tablet := range tablets {
 		mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(tablet)).Return(statuses[i], nil).MaxTimes(1)
 		times, joinTimes := 0, 1
@@ -1112,6 +1117,11 @@ func TestBootstrapGroupReplicationRequiresEveryTransaction(t *testing.T) {
 		mockTMC.EXPECT().StartGroupReplication(gomock.Any(), sameTablet(tablet), startRequest(true)).
 			DoAndReturn(func(_ context.Context, _ *topodatapb.Tablet, req *tabletmanagerdatapb.StartGroupReplicationRequest) (*replicationdatapb.GroupReplicationStatus, error) {
 				bootstrapRequest.Store(req)
+				si, err := ts.GetShard(t.Context(), "ks", "0")
+				if err != nil {
+					return nil, err
+				}
+				intentAtRequest.Store(si.GroupReplicationBootstrapIntent)
 				return &replicationdatapb.GroupReplicationStatus{ViewId: "1790000123:1"}, nil
 			}).Times(times)
 		mockTMC.EXPECT().StartGroupReplication(gomock.Any(), sameTablet(tablet), startRequest(false)).
@@ -1138,6 +1148,11 @@ func TestBootstrapGroupReplicationRequiresEveryTransaction(t *testing.T) {
 	req := bootstrapRequest.Load()
 	require.NotNil(t, req)
 	assert.Equal(t, groupName+":1-16", req.GetRequiredGtidSet(), "the tablet must have executed every voter's transactions before it bootstraps")
+	intent := intentAtRequest.Load()
+	require.NotNil(t, intent, "VTOrc records the intent before the RPC")
+	assert.NotEmpty(t, intent.GetToken())
+	assert.Equal(t, intent.GetToken(), req.GetBootstrapIntentToken())
+	assert.Equal(t, intent.GetPreviousIncarnation(), req.GetExpectedIncarnation())
 	assert.Eventually(t, func() bool { return joins.Load() == 2 }, 30*time.Second, 10*time.Millisecond)
 }
 

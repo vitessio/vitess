@@ -2008,6 +2008,8 @@ func (m *StartGroupReplicationRequest) CloneVT() *StartGroupReplicationRequest {
 	r := new(StartGroupReplicationRequest)
 	r.Bootstrap = m.Bootstrap
 	r.RequiredGtidSet = m.RequiredGtidSet
+	r.BootstrapIntentToken = m.BootstrapIntentToken
+	r.ExpectedIncarnation = m.ExpectedIncarnation
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -8223,6 +8225,20 @@ func (m *StartGroupReplicationRequest) MarshalToSizedBufferVT(dAtA []byte) (int,
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if len(m.ExpectedIncarnation) > 0 {
+		i -= len(m.ExpectedIncarnation)
+		copy(dAtA[i:], m.ExpectedIncarnation)
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.ExpectedIncarnation)))
+		i--
+		dAtA[i] = 0x22
+	}
+	if len(m.BootstrapIntentToken) > 0 {
+		i -= len(m.BootstrapIntentToken)
+		copy(dAtA[i:], m.BootstrapIntentToken)
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.BootstrapIntentToken)))
+		i--
+		dAtA[i] = 0x1a
+	}
 	if len(m.RequiredGtidSet) > 0 {
 		i -= len(m.RequiredGtidSet)
 		copy(dAtA[i:], m.RequiredGtidSet)
@@ -14069,6 +14085,14 @@ func (m *StartGroupReplicationRequest) SizeVT() (n int) {
 		n += 2
 	}
 	l = len(m.RequiredGtidSet)
+	if l > 0 {
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	l = len(m.BootstrapIntentToken)
+	if l > 0 {
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	l = len(m.ExpectedIncarnation)
 	if l > 0 {
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
@@ -25091,6 +25115,70 @@ func (m *StartGroupReplicationRequest) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			m.RequiredGtidSet = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field BootstrapIntentToken", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.BootstrapIntentToken = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 4:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ExpectedIncarnation", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.ExpectedIncarnation = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
