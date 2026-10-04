@@ -63,14 +63,14 @@ func higherRank(weightA uint64, indexA int, weightB uint64, indexB int) bool {
 // Turning that set overlap into gap-free live coverage during a resize must
 // account for the restart each instance needs to adopt new ring flags: it is
 // briefly offline while restarting, so it does not watch during that window.
-// Staging the rollout preserves coverage for any resize: bring the instances
-// that will watch a shard under the new size online before the old watchers
-// stop. To grow, start all added indices on the new size before restarting the
-// incumbents onto it; to shrink, restart every surviving instance onto the new
-// size before removing any old index. In arbitrary restart order (any one
-// instance offline at a time) at least one watcher survives only when the old
-// and new watcher sets share >= 2 instances, i.e. a change of at most k-2
-// instances per rollout.
+// With watchersPerShard >= 2, staging the rollout preserves coverage for any
+// resize: bring the instances that will watch a shard under the new size
+// online before the old watchers stop. To grow, start all added indices on the
+// new size before restarting the incumbents onto it; to shrink, restart every
+// surviving instance onto the new size before removing any old index. In
+// arbitrary restart order (any one instance offline at a time) at least one
+// watcher survives only when the old and new watcher sets share >= 2
+// instances, i.e. a change of at most k-2 instances per rollout.
 //
 // When ringSize <= watchersPerShard every instance is always within the top-k,
 // so all instances watch every shard — matching the full-fleet default.
