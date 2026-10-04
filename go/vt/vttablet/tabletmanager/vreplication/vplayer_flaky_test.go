@@ -4438,3 +4438,81 @@ func TestPlayerNoStallWhileThrottled(t *testing.T) {
 	log.Flush()
 	require.NotContains(t, logger.String(), relayLogIOStalledMsg)
 }
+
+// TestPlayerBatchModeBulkApplyMatchesPerRow checks that the bulk DELETE used
+// for multi-row events in batch mode removes the same rows as the per-change
+// DELETE.
+func TestPlayerBatchModeBulkApplyMatchesPerRow(t *testing.T) {
+	oldVreplicationExperimentalFlags := vttablet.DefaultVReplicationConfig.ExperimentalFlags
+	vttablet.DefaultVReplicationConfig.ExperimentalFlags = vttablet.VReplicationExperimentalFlagVPlayerBatching |
+		vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage
+	defer func() {
+		vttablet.DefaultVReplicationConfig.ExperimentalFlags = oldVreplicationExperimentalFlags
+	}()
+
+	defer deleteTablet(addTablet(100))
+	execStatements(t, []string{
+		"create table reorder(id int, a varchar(10), b varchar(10), primary key(id))",
+		fmt.Sprintf("create table %s.reorder(x varchar(20), id int, primary key(id))", vrepldb),
+		"create table pkexpr(id int, val varchar(10), primary key(id))",
+		fmt.Sprintf("create table %s.pkexpr(id int, val varchar(10), primary key(id))", vrepldb),
+		"create table charsetpk(id varchar(10) character set latin1, val int, primary key(id))",
+		fmt.Sprintf("create table %s.charsetpk(id varchar(10) character set utf8mb4, val int, primary key(id))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table reorder",
+		fmt.Sprintf("drop table %s.reorder", vrepldb),
+		"drop table pkexpr",
+		fmt.Sprintf("drop table %s.pkexpr", vrepldb),
+		"drop table charsetpk",
+		fmt.Sprintf("drop table %s.charsetpk", vrepldb),
+	})
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "reorder",
+			Filter: "select concat(a, b) as x, id from reorder",
+		}, {
+			Match:  "pkexpr",
+			Filter: "select id+1000 as id, val from pkexpr",
+		}, {
+			Match:  "charsetpk",
+			Filter: "select id, val from charsetpk",
+			ConvertCharset: map[string]*binlogdatapb.CharsetConversion{
+				"id": {FromCharset: "latin1", ToCharset: "utf8mb4"},
+			},
+		}},
+	}
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	cancel, _ := startVReplication(t, bls, "")
+	defer cancel()
+	defer drainDBQueries()
+
+	t.Run("bulk delete reads the pk from its source column", func(t *testing.T) {
+		// Each b value is another row's id, so deleting by b removes the wrong rows.
+		execStatements(t, []string{
+			"insert into reorder(id, a, b) values (1, 'p', '3'), (2, 'q', '4'), (3, 'r', '5'), (4, 's', '6')",
+			"delete from reorder where id in (1, 2)",
+		})
+		expectData(t, "reorder", [][]string{{"r5", "3"}, {"s6", "4"}})
+	})
+	t.Run("pk expression falls back to the per-row delete", func(t *testing.T) {
+		execStatements(t, []string{
+			"insert into pkexpr(id, val) values (1, 'a'), (2, 'b'), (3, 'c')",
+			"delete from pkexpr where id in (1, 2)",
+		})
+		expectData(t, "pkexpr", [][]string{{"1003", "c"}})
+	})
+	t.Run("bulk delete converts the pk charset", func(t *testing.T) {
+		execStatements(t, []string{
+			"insert into charsetpk(id, val) values ('é1', 1), ('é2', 2), ('é3', 3)",
+			"delete from charsetpk where id in ('é1', 'é2')",
+		})
+		expectData(t, "charsetpk", [][]string{{"é3", "3"}})
+	})
+}
