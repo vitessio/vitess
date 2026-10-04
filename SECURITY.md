@@ -4,6 +4,48 @@ Vitess is a large growing community of volunteers, users, and vendors. The Vites
 adopted this security disclosure and response policy to ensure we responsibly handle critical
 issues.
 
+## Deployment Trust Boundary
+
+Application clients should connect through VTGate. Restrict VTTablet's gRPC endpoint to trusted
+VTGate instances and trusted administrative and replication components, using network access
+controls and appropriately scoped authentication credentials. Treat access to this endpoint as
+administrative access, not as an application user's table-level grant.
+
+VTTablet's query service and tablet manager service share a gRPC server and its authentication
+interceptors. The built-in `static` and `mtls` authentication plugins do not distinguish permissions
+by RPC method. When the tablet manager service is enabled, an authenticated caller can invoke
+`ExecuteFetchAsDba`, which executes SQL as the tablet's DBA user without consulting table ACLs.
+Granting unrelated services access through shared credentials or a broad
+`--grpc-auth-mtls-allowed-substrings` pattern therefore grants more than ordinary query access.
+The service map can disable services, and custom authentication plugins can restrict methods;
+neither changes how the query service trusts forwarded caller IDs.
+
+Table ACLs constrain queries forwarded by a trusted VTGate on behalf of application users.
+VTGate derives the immediate caller ID from the client's authentication information, such as
+MySQL authentication `UserData` or a verified gRPC client certificate. VTTablet trusts the
+`ImmediateCallerId` username and groups supplied in the query request; it does not bind them
+to the connection's authenticated identity. A caller with direct query-service access can
+therefore claim another user's identity. Table ACLs do not isolate mutually untrusted callers
+that have direct VTTablet access, even when the tablet manager service is disabled.
+
+### VTGate Caller-ID Overrides
+
+`--grpc-use-effective-callerid` allows VTGate gRPC clients to supply the immediate caller ID
+through the effective caller ID's principal when no username is available from a verified
+client certificate. This includes TLS connections without a verified client certificate and
+verified certificates with an empty Common Name. Encryption alone does not prevent the override.
+When this override supplies a non-empty principal, it takes precedence over
+`--grpc-use-static-authentication-callerid`.
+
+`--grpc-use-effective-groups` copies non-empty effective caller ID groups when the
+`--grpc-use-effective-callerid` fallback is used. Both flags are disabled by default. Enable
+them only for trusted clients: the principal and groups are client-supplied assertions, not
+proof of the user's identity or group membership.
+
+For configuration details, see the
+[transport security model](https://vitess.io/docs/reference/features/transport-security-model/)
+and [table authorization guide](https://vitess.io/docs/user-guides/configuration-advanced/authorization/).
+
 ## Maintainers Team
 
 Security vulnerabilities should be handled quickly and sometimes privately. The primary goal of this

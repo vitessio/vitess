@@ -40,6 +40,7 @@ func validateMem(t *testing.T, mem float64, err error) {
 }
 
 func TestGetCpuUsageMetrics(t *testing.T) {
+	getCpuUsage()
 	sleepBeforeCpuSample()
 	value := getCpuUsage()
 	t.Logf("CPU usage %v", value)

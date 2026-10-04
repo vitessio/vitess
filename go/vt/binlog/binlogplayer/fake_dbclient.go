@@ -52,6 +52,13 @@ func (dc *fakeDBClient) Rollback() error {
 	return nil
 }
 
+// SetMultiStatements is part of the DBClient interface. Nothing this fake serves
+// sets the capability, and answering quietly would let a caller that came to
+// believe it can send a batch go unnoticed.
+func (dc *fakeDBClient) SetMultiStatements(on bool) error {
+	panic(fmt.Sprintf("fakeDBClient: unexpected SetMultiStatements(%v)", on))
+}
+
 func (dc *fakeDBClient) Close() {
 }
 

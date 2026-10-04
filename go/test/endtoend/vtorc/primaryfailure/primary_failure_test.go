@@ -71,7 +71,7 @@ func TestDownPrimary(t *testing.T) {
 	// We specify the --wait-replicas-timeout to a small value because we spawn a cross-cell replica later in the test.
 	// If that replica is more advanced than the same-cell-replica, then we try to promote the cross-cell replica as an intermediate source.
 	// If we don't specify a small value of --wait-replicas-timeout, then we would end up waiting for 30 seconds for the dead-primary to respond, failing this test.
-	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, []string{"--remote-operation-timeout" + "=10s", "--wait-replicas-timeout=5s"}, cluster.VTOrcConfiguration{
+	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, []string{"--remote-operation-timeout" + "=10s", "--wait-replicas-timeout=5s", "--emergency-reparent-require-primary-position"}, cluster.VTOrcConfiguration{
 		PreventCrossCellFailover: true,
 	}, cluster.DefaultVtorcsByCell, policy.DurabilitySemiSync)
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
@@ -107,6 +107,21 @@ func TestDownPrimary(t *testing.T) {
 	utils.VerifyWritesSucceed(t, clusterInfo, curPrimary, []*cluster.Vttablet{rdonly, replica}, 10*time.Second)
 	waitForReceivedPosition(t, curPrimary, crossCellReplica)
 
+	// Wait for a stored primary position. The failover then has a requirement to enforce.
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		rows, err := readVTOrcTable(vtOrcProcess, "database_instance")
+		require.NoError(c, err)
+
+		for _, row := range rows {
+			if row.GetString("alias") == curPrimary.Alias {
+				assert.NotEmpty(c, row.GetString("executed_gtid_set"))
+				return
+			}
+		}
+
+		assert.Fail(c, "primary is missing from database_instance")
+	}, 30*time.Second, time.Second)
+
 	// since all tablets are up and running, InstancePollSecondsExceeded should have `0` zero value
 	utils.WaitForInstancePollSecondsExceededCount(t, vtOrcProcess, 0, true)
 	// Make the rdonly vttablet unavailable
@@ -141,6 +156,19 @@ func TestDownPrimary(t *testing.T) {
 	utils.VerifyWritesSucceed(t, clusterInfo, replica, []*cluster.Vttablet{crossCellReplica}, 10*time.Second)
 	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.RecoverDeadPrimaryRecoveryName, keyspace.Name, shard0.Name, 1)
 	utils.WaitForSuccessfulERSCount(t, vtOrcProcess, keyspace.Name, shard0.Name, 1)
+
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		steps, err := readVTOrcTable(vtOrcProcess, "topology_recovery_steps")
+		require.NoError(c, err)
+
+		var messages []string
+		for _, step := range steps {
+			messages = append(messages, step.GetString("message"))
+		}
+
+		assert.Regexp(c, `required position: [0-9a-f-]{36}:`, strings.Join(messages, "\n"))
+	}, 30*time.Second, time.Second)
+
 	t.Run("Check ERS and PRS Vars and Metrics", func(t *testing.T) {
 		utils.CheckVarExists(t, vtOrcProcess, "EmergencyReparentCounts")
 		utils.CheckVarExists(t, vtOrcProcess, "PlannedReparentCounts")
@@ -226,6 +254,84 @@ func TestDownPrimary_KeyspaceEmergencyReparentDisabled(t *testing.T) {
 		utils.CheckMetricExists(t, vtOrcProcess, "vtorc_planned_reparent_counts")
 		utils.CheckMetricExists(t, vtOrcProcess, "vtorc_reparent_shard_operation_timings_bucket")
 	})
+}
+
+// bring down primary in a cell that's listed in --cells-no-recovery, verify the
+// recovery is detected but the action is skipped with reason CellNoRecovery.
+// Then restart vtorc without the flag and verify the recovery now proceeds.
+func TestDownPrimary_CellsNoRecovery(t *testing.T) {
+	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
+
+	// Phase 1: normal setup so vtorc elects a primary in zone1.
+	// We can't pass --cells-no-recovery=zone1 from the start because that would
+	// also block initial primary election (which goes through electNewPrimaryFunc,
+	// an actionable recovery).
+	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, []string{"--remote-operation-timeout=10s", "--wait-replicas-timeout=5s"}, cluster.VTOrcConfiguration{}, cluster.DefaultVtorcsByCell, policy.DurabilityNone)
+	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
+	shard0 := &keyspace.Shards[0]
+	curPrimary := utils.ShardPrimaryTablet(t, clusterInfo, keyspace, shard0)
+	assert.NotNil(t, curPrimary, "should have elected a primary")
+	require.Equal(t, utils.Cell1, curPrimary.Cell, "expected initial primary in zone1")
+	utils.WaitForSuccessfulRecoveryCount(t, clusterInfo.ClusterInstance.VTOrcProcesses[0], logic.ElectNewPrimaryRecoveryName, keyspace.Name, shard0.Name, 1)
+	utils.WaitForSuccessfulPRSCount(t, clusterInfo.ClusterInstance.VTOrcProcesses[0], keyspace.Name, shard0.Name, 1)
+
+	// find the replica and rdonly tablets
+	var replica, rdonly *cluster.Vttablet
+	for _, tablet := range shard0.Vttablets {
+		if tablet.Alias != curPrimary.Alias && tablet.Type == "replica" {
+			replica = tablet
+		}
+		if tablet.Type == "rdonly" {
+			rdonly = tablet
+		}
+	}
+	require.NotNil(t, replica, "could not find replica tablet")
+	require.NotNil(t, rdonly, "could not find rdonly tablet")
+	utils.CheckReplication(t, clusterInfo, curPrimary, []*cluster.Vttablet{rdonly, replica}, 10*time.Second)
+
+	// Phase 2: stop vtorc and restart with --cells-no-recovery covering the
+	// primary's cell. The flag is process-scoped (not a runtime config), so a
+	// restart is the only way to apply it.
+	utils.StopVTOrcs(t, clusterInfo)
+	utils.StartVTOrcs(t, clusterInfo, []string{
+		"--remote-operation-timeout=10s",
+		"--wait-replicas-timeout=5s",
+		"--cells-no-recovery=" + utils.Cell1,
+	}, cluster.VTOrcConfiguration{}, cluster.DefaultVtorcsByCell)
+	vtOrcProcess := clusterInfo.ClusterInstance.VTOrcProcesses[0]
+
+	// Phase 3: take down the primary.
+	err := curPrimary.VttabletProcess.TearDown()
+	require.NoError(t, err)
+	err = curPrimary.MysqlctlProcess.Stop()
+	require.NoError(t, err)
+	defer utils.PermanentlyRemoveVttablet(clusterInfo, curPrimary)
+
+	// Phase 4: vtorc detects DeadPrimary, but recovery is skipped with reason
+	// CellNoRecovery. No ERS runs.
+	utils.WaitForSkippedRecoveryCount(t, vtOrcProcess, logic.RecoverDeadPrimaryRecoveryName, keyspace.Name, shard0.Name, logic.RecoverySkipCellNoRecovery, 1)
+	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.RecoverDeadPrimaryRecoveryName, keyspace.Name, shard0.Name, 0)
+	utils.WaitForSuccessfulERSCount(t, vtOrcProcess, keyspace.Name, shard0.Name, 0)
+
+	// Shard primary unchanged because no ERS ran.
+	origPrimary := curPrimary
+	curPrimary = utils.ShardPrimaryTablet(t, clusterInfo, keyspace, shard0)
+	assert.NotNil(t, curPrimary)
+	assert.Equal(t, origPrimary.Alias, curPrimary.Alias, "primary should not change while its cell is in --cells-no-recovery")
+
+	// Phase 5: restart vtorcs without the flag, verify ERS now proceeds.
+	utils.StopVTOrcs(t, clusterInfo)
+	utils.StartVTOrcs(t, clusterInfo, []string{
+		"--remote-operation-timeout=10s",
+		"--wait-replicas-timeout=5s",
+	}, cluster.VTOrcConfiguration{}, cluster.DefaultVtorcsByCell)
+	vtOrcProcess = clusterInfo.ClusterInstance.VTOrcProcesses[0]
+
+	// the replica gets promoted by vtorc once the cell is no longer suppressed.
+	utils.CheckPrimaryTablet(t, clusterInfo, replica, true)
+	utils.VerifyWritesSucceed(t, clusterInfo, replica, []*cluster.Vttablet{rdonly}, 10*time.Second)
+	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.RecoverDeadPrimaryRecoveryName, keyspace.Name, shard0.Name, 1)
+	utils.WaitForSuccessfulERSCount(t, vtOrcProcess, keyspace.Name, shard0.Name, 1)
 }
 
 // bring down primary before VTOrc has started, let vtorc repair.

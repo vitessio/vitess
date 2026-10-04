@@ -42689,6 +42689,9 @@ export namespace tabletmanagerdata {
         /** VDiffReportOptions row_diff_column_truncate_at. */
         row_diff_column_truncate_at: (number|Long);
 
+        /** VDiffReportOptions no_samples. */
+        no_samples: boolean;
+
         /**
          * Creates a new VDiffReportOptions instance using the specified properties.
          * @param [properties] Properties to set
@@ -42787,6 +42790,9 @@ export namespace tabletmanagerdata {
 
             /** VDiffReportOptions row_diff_column_truncate_at */
             row_diff_column_truncate_at?: (number|Long|null);
+
+            /** VDiffReportOptions no_samples */
+            no_samples?: (boolean|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
@@ -47846,6 +47852,9 @@ export namespace binlogdata {
         /** RowChange json_partial_values. */
         json_partial_values?: (binlogdata.RowChange.Bitmap.$Properties|null);
 
+        /** RowChange before_data_columns. */
+        before_data_columns?: (binlogdata.RowChange.Bitmap.$Properties|null);
+
         /**
          * Creates a new RowChange instance using the specified properties.
          * @param [properties] Properties to set
@@ -47941,6 +47950,9 @@ export namespace binlogdata {
 
             /** RowChange json_partial_values */
             json_partial_values?: (binlogdata.RowChange.Bitmap.$Properties|null);
+
+            /** RowChange before_data_columns */
+            before_data_columns?: (binlogdata.RowChange.Bitmap.$Properties|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
@@ -53372,6 +53384,15 @@ export namespace query {
         /** ExecuteRequest reserved_id. */
         reserved_id: (number|Long);
 
+        /** ExecuteRequest reserved_conn_keep_alive. */
+        reserved_conn_keep_alive: boolean;
+
+        /** ExecuteRequest reserved_conn_keep_alive_ids. */
+        reserved_conn_keep_alive_ids: (number|Long)[];
+
+        /** ExecuteRequest reserved_conn_activity_refresh. */
+        reserved_conn_activity_refresh: boolean;
+
         /**
          * Creates a new ExecuteRequest instance using the specified properties.
          * @param [properties] Properties to set
@@ -53477,6 +53498,15 @@ export namespace query {
             /** ExecuteRequest reserved_id */
             reserved_id?: (number|Long|null);
 
+            /** ExecuteRequest reserved_conn_keep_alive */
+            reserved_conn_keep_alive?: (boolean|null);
+
+            /** ExecuteRequest reserved_conn_keep_alive_ids */
+            reserved_conn_keep_alive_ids?: ((number|Long)[]|null);
+
+            /** ExecuteRequest reserved_conn_activity_refresh */
+            reserved_conn_activity_refresh?: (boolean|null);
+
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
@@ -53490,6 +53520,9 @@ export namespace query {
           transaction_id?: number|Long|null;
           options?: query.ExecuteOptions.$Shape|null;
           reserved_id?: number|Long|null;
+          reserved_conn_keep_alive?: boolean|null;
+          reserved_conn_keep_alive_ids?: (number|Long)[]|null;
+          reserved_conn_activity_refresh?: boolean|null;
           $unknowns?: Uint8Array[];
         };
     }
@@ -72621,6 +72654,9 @@ export namespace vtctldata {
         /** EmergencyReparentShardRequest allow_split_brain_promotion. */
         allow_split_brain_promotion: boolean;
 
+        /** EmergencyReparentShardRequest required_position. */
+        required_position: string;
+
         /**
          * Creates a new EmergencyReparentShardRequest instance using the specified properties.
          * @param [properties] Properties to set
@@ -72731,6 +72767,9 @@ export namespace vtctldata {
 
             /** EmergencyReparentShardRequest allow_split_brain_promotion */
             allow_split_brain_promotion?: (boolean|null);
+
+            /** EmergencyReparentShardRequest required_position */
+            required_position?: (string|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
@@ -97335,6 +97374,9 @@ export namespace vtctldata {
         /** VDiffShowRequest arg. */
         arg: string;
 
+        /** VDiffShowRequest no_samples. */
+        no_samples: boolean;
+
         /**
          * Creates a new VDiffShowRequest instance using the specified properties.
          * @param [properties] Properties to set
@@ -97427,6 +97469,9 @@ export namespace vtctldata {
 
             /** VDiffShowRequest arg */
             arg?: (string|null);
+
+            /** VDiffShowRequest no_samples */
+            no_samples?: (boolean|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];

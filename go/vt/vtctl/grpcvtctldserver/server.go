@@ -36,6 +36,7 @@ import (
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/event"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sets"
@@ -65,6 +66,7 @@ import (
 	vtorcdatapb "vitess.io/vitess/go/vt/proto/vtorcdata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/schemadiff"
 	"vitess.io/vitess/go/vt/schemamanager"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
@@ -96,6 +98,7 @@ const (
 // VtctldServer implements the Vtctld RPC service protocol.
 type VtctldServer struct {
 	vtctlservicepb.UnimplementedVtctldServer
+	env *vtenv.Environment
 	ts  *topo.Server
 	tmc tmclient.TabletManagerClient
 	ws  *workflow.Server
@@ -106,6 +109,7 @@ func NewVtctldServer(env *vtenv.Environment, ts *topo.Server) *VtctldServer {
 	tmc := tmclient.NewTabletManagerClient()
 
 	return &VtctldServer{
+		env: env,
 		ts:  ts,
 		tmc: tmc,
 		ws:  workflow.NewServer(env, ts, tmc),
@@ -115,10 +119,12 @@ func NewVtctldServer(env *vtenv.Environment, ts *topo.Server) *VtctldServer {
 // NewTestVtctldServer returns a new VtctldServer for the given topo server
 // AND tmclient for use in tests. This should NOT be used in production.
 func NewTestVtctldServer(ts *topo.Server, tmc tmclient.TabletManagerClient) *VtctldServer {
+	env := vtenv.NewTestEnv()
 	return &VtctldServer{
+		env: env,
 		ts:  ts,
 		tmc: tmc,
-		ws:  workflow.NewServer(vtenv.NewTestEnv(), ts, tmc),
+		ws:  workflow.NewServer(env, ts, tmc),
 	}
 }
 
@@ -1312,6 +1318,12 @@ func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldat
 	span.Annotate("shard", req.Shard)
 	span.Annotate("new_primary_alias", topoproto.TabletAliasString(req.NewPrimary))
 	span.Annotate("allow_split_brain_promotion", req.AllowSplitBrainPromotion)
+	span.Annotate("required_position", req.RequiredPosition)
+
+	requiredPosition, err := replication.DecodePositionDefaultFlavor(req.RequiredPosition, replication.Mysql56FlavorID)
+	if err != nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid required position: %s", err.Error())
+	}
 
 	ignoreReplicaAliases := topoproto.TabletAliasList(req.IgnoreReplicas).ToStringSlice()
 	span.Annotate("ignore_replicas", strings.Join(ignoreReplicaAliases, ","))
@@ -1347,6 +1359,7 @@ func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldat
 			AllowSplitBrainPromotion:  req.AllowSplitBrainPromotion,
 			PreventCrossCellPromotion: req.PreventCrossCellPromotion,
 			ExpectedPrimaryAlias:      req.ExpectedPrimary,
+			RequiredPosition:          requiredPosition,
 		},
 	)
 
@@ -5088,7 +5101,15 @@ func (s *VtctldServer) ValidateSchemaKeyspace(ctx context.Context, req *vtctldat
 						return
 					}
 
-					tmutils.DiffSchema(topoproto.TabletAliasString(referenceAlias), referenceSchema, topoproto.TabletAliasString(alias), replicaSchema, &aliasErrs)
+					diffEnv := schemadiff.NewEnv(s.env, s.env.CollationEnv().DefaultConnectionCharset())
+					tmutils.DiffSchemaWithEnvironment(
+						diffEnv,
+						topoproto.TabletAliasString(referenceAlias),
+						referenceSchema,
+						topoproto.TabletAliasString(alias),
+						replicaSchema,
+						&aliasErrs,
+					)
 				}(alias)
 			}
 			aliasWg.Wait()

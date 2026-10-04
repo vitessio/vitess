@@ -777,7 +777,7 @@ message ValidateVReplicationPermissionsRequest {
 }
 
 message ValidateVReplicationPermissionsResponse {
-  // The --db_filtered_user on the tablet.
+  // The --db-filtered-user on the tablet.
   string user = 1;
   // Does the user have the minimum privileges needed to manage
   // vreplication metadata.
@@ -815,6 +815,10 @@ message VDiffReportOptions {
   string format = 3;
   int64 max_sample_rows = 4;
   int64 row_diff_column_truncate_at = 5;
+  // no_samples strips the row-sample arrays from the per-table diff report
+  // (keeping the scalar counters), avoiding gRPC message-size limits on diffs
+  // with large blob/JSON rows.
+  bool no_samples = 6;
 }
 
 message VDiffCoreOptions {

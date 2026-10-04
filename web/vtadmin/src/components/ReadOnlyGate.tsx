@@ -41,7 +41,7 @@ import { isReadOnlyMode } from '../util/env';
  *          }
  *      </Switch>
  */
-export const ReadOnlyGate: React.FunctionComponent = ({ children }) => {
+export const ReadOnlyGate: React.FunctionComponent<React.PropsWithChildren> = ({ children }) => {
     if (isReadOnlyMode()) {
         return <></>;
     }

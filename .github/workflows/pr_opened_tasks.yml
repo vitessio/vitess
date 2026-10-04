@@ -15,12 +15,13 @@ jobs:
   check_labels:
     name: Check for Backport or Forwardport labels
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       skip: ${{ steps.check_labels.outputs.skip }}
 
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
         with:
           egress-policy: audit
 
@@ -53,6 +54,7 @@ jobs:
     permissions:
       pull-requests: write
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     needs: check_labels
     if: needs.check_labels.outputs.skip != 'true'
 
@@ -82,6 +84,7 @@ jobs:
   add_initial_labels:
     name: Add Initial Labels
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     needs: check_labels
     if: needs.check_labels.outputs.skip != 'true'
 
@@ -109,6 +112,7 @@ jobs:
       contents: read
       pull-requests: write
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Run actions/labeler
         uses: actions/labeler@bf12e9b00b37c5c0ca2b87b79b2daf7891dbda13 # v7.0.0

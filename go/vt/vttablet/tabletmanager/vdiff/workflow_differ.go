@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"reflect"
 	"slices"
 	"strings"
@@ -28,6 +29,7 @@ import (
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/key"
@@ -249,6 +251,16 @@ func (wd *workflowDiffer) doReconcileExtraRows(dr *DiffReport, maxExtraRowsToCom
 	return nil
 }
 
+// maxDiffDurationUnresumableError builds the error diffTable returns when an
+// un-checkpointable table exceeds --max-diff-duration. It is a MySQL
+// ERNotSupportedYet error so it survives persist+rebuild as non-ephemeral and the
+// engine does not auto-retry it forever.
+func maxDiffDurationUnresumableError(tableName string) error {
+	return sqlerror.NewSQLError(sqlerror.ERNotSupportedYet, sqlerror.SSClientError,
+		fmt.Sprintf("table %s exceeded the configured --max-diff-duration and cannot be resumed because no resumable source checkpoint can be built for it (its filter does not project the full source primary key, or its target primary key extends a source key that is unique only within each source shard); increase or unset --max-diff-duration so it can complete within a single window",
+			tableName))
+}
+
 func (wd *workflowDiffer) diffTable(ctx context.Context, dbClient binlogplayer.DBClient, td *tableDiffer) error {
 	cancelShardStreams := func() {
 		if td.shardStreamsCancel != nil {
@@ -323,6 +335,18 @@ func (wd *workflowDiffer) diffTable(ctx context.Context, dbClient binlogplayer.D
 		if !errors.Is(diffErr, ErrMaxDiffDurationExceeded) { // We only want to retry if we hit the max-diff-duration
 			return diffErr
 		}
+		if td.tablePlan.sourceCheckpointUnavailable {
+			// This table cannot be checkpointed (see getSourcePKCols), so it
+			// cannot be resumed and every retry would restart from the beginning
+			// and hit the same timeout. We do not override the operator's
+			// --max-diff-duration bound (long-lived snapshots have real
+			// operational cost), so we stop here. The failure is wrapped as a
+			// MySQL ERNotSupportedYet so that its "(errno 1235)" suffix survives
+			// being persisted as a string and rebuilt by retryVDiffs: that makes
+			// IsEphemeralError classify it as non-ephemeral, so the engine does
+			// not auto-retry it forever.
+			return maxDiffDurationUnresumableError(td.table.Name)
+		}
 	}
 	log.Info(fmt.Sprintf("Table diff done on table %s for vdiff %s with report: %+v", td.table.Name, wd.ct.uuid, diffReport))
 
@@ -334,7 +358,7 @@ func (wd *workflowDiffer) diffTable(ctx context.Context, dbClient binlogplayer.D
 	}
 
 	if diffReport.MismatchedRows > 0 || diffReport.ExtraRowsTarget > 0 || diffReport.ExtraRowsSource > 0 {
-		if err := updateTableMismatch(dbClient, wd.ct.id, td.table.Name); err != nil {
+		if err := setTableMismatch(dbClient, wd.ct.id, td.table.Name, true); err != nil {
 			return err
 		}
 	}
@@ -405,11 +429,7 @@ func (wd *workflowDiffer) diff(ctx context.Context) (err error) {
 
 		log.Info(fmt.Sprintf("Starting diff of table %s for vdiff %s", td.table.Name, wd.ct.uuid))
 		if err := wd.diffTable(ctx, dbClient, td); err != nil {
-			if err := td.updateTableState(ctx, dbClient, ErrorState); err != nil {
-				return err
-			}
-			insertVDiffLog(ctx, dbClient, wd.ct.id, fmt.Sprintf("Table %s Error: %s", td.table.Name, err))
-			return err
+			return wd.markTableErrored(ctx, dbClient, td, err)
 		}
 		if err := td.updateTableState(ctx, dbClient, CompletedState); err != nil {
 			return err
@@ -420,6 +440,18 @@ func (wd *workflowDiffer) diff(ctx context.Context) (err error) {
 		return err
 	}
 	return nil
+}
+
+// markTableErrored returns diffErr; a failure marking the table errored (e.g. a closed connection) must not shadow it.
+func (wd *workflowDiffer) markTableErrored(ctx context.Context, dbClient binlogplayer.DBClient, td *tableDiffer, diffErr error) error {
+	if stateErr := td.updateTableState(ctx, dbClient, ErrorState); stateErr != nil {
+		log.Error("failed to mark table as errored",
+			slog.String("table", td.table.Name),
+			slog.String("vdiff", wd.ct.uuid),
+			slog.Any("error", stateErr))
+	}
+	insertVDiffLog(ctx, dbClient, wd.ct.id, fmt.Sprintf("Table %s Error: %s", td.table.Name, diffErr))
+	return diffErr
 }
 
 func (wd *workflowDiffer) markIfCompleted(ctx context.Context, dbClient binlogplayer.DBClient) error {

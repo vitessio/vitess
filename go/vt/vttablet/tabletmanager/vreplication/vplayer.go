@@ -25,9 +25,11 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/tb"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -50,6 +52,11 @@ var (
 
 	// The error to return when we have detected a stall in the vplayer.
 	errVPlayerStalled = errors.New("progress stalled; vplayer was unable to replicate the transaction in a timely manner; examine the target mysqld instance health and the replicated queries' EXPLAIN output to see why queries are taking unusually long")
+
+	// vplayerThrottleEpoch is the reference instant for throttle-denial
+	// offsets: it carries a monotonic clock reading, so durations measured
+	// against it are immune to wall clock steps in either direction.
+	vplayerThrottleEpoch = time.Now()
 )
 
 // vplayer replays binlog events by pulling them from a vstreamer.
@@ -70,6 +77,10 @@ type vplayer struct {
 	// If the VPlayer is in batch mode, we accumulate each transaction's statements
 	// that are then sent as a single multi-statement protocol request to the database.
 	batchMode bool
+	// maxBatchSize is the size a transaction's batch may reach before it is sent,
+	// and is zero when this player does not batch. It is handed to the client by
+	// setConnectionBatchMode, once the connection is known to accept a batch.
+	maxBatchSize int64
 
 	pos replication.Position
 	// unsavedEvent is set any time we skip an event without
@@ -92,6 +103,12 @@ type vplayer struct {
 	phase string
 
 	throttlerAppName string
+	// lastThrottledNano is when applyEvents was last denied by the
+	// throttler, as monotonic nanoseconds since vplayerThrottleEpoch.
+	// The relay log uses it to defer the stall verdict: a
+	// throttle-denied applier does not drain the relay log, so that
+	// time must not count toward vplayerProgressDeadline.
+	lastThrottledNano atomic.Int64
 
 	// See updateFKCheck for more details on how the two fields below are used.
 
@@ -139,8 +156,9 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 	// We only do batching in the running/replicating phase.
 	batchMode := len(copyState) == 0 && vr.workflowConfig.ExperimentalFlags&vttablet.VReplicationExperimentalFlagVPlayerBatching != 0
 
+	var maxBatchSize int64
 	if batchMode {
-		maxAllowedPacket := vr.maxQuerySize(vr.dbClient)
+		maxBatchSize = vr.maxQuerySize(vr.dbClient)
 		queryFunc = func(ctx context.Context, sql string) (*sqltypes.Result, error) {
 			if !vr.dbClient.InTransaction { // Should be sent down the wire immediately
 				return vr.dbClient.Execute(sql)
@@ -150,7 +168,6 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 		commitFunc = func() error {
 			return vr.dbClient.CommitTrxQueryBatch() // Commit the current trx batch
 		}
-		vr.dbClient.maxBatchSize = maxAllowedPacket
 	}
 
 	return &vplayer{
@@ -167,6 +184,73 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 		query:            queryFunc,
 		commit:           commitFunc,
 		batchMode:        batchMode,
+		maxBatchSize:     maxBatchSize,
+	}
+}
+
+// setConnectionBatchMode lets the connection send several statements in a
+// single query while, and only while, this player batches transactions, and
+// hands the client the batch size to match.
+//
+// The connection is shared by the copy and the replicate phase, which do not
+// batch alike, and a re-created connection comes back through here when the
+// controller restarts the workflow, so the state is set for every run rather
+// than once per connection.
+//
+// The client is only allowed to build a batch after the connection has accepted
+// one, so that the two can never disagree: an error here leaves the client
+// unable to batch rather than batching onto a connection that would reject it.
+// A player that batches gives the capability back with clearConnectionBatchMode
+// once it is done with it, and a player that does not batch takes it away here,
+// so a connection only carries it while a batch can actually be sent.
+func (vp *vplayer) setConnectionBatchMode() error {
+	// Take the ability to build a batch away for the duration of the exchange,
+	// so that a failure can never leave the client batching onto a connection
+	// whose state we did not get to set.
+	vp.vr.dbClient.maxBatchSize = 0
+
+	if err := vp.vr.dbClient.SetMultiStatements(vp.batchMode); err != nil {
+		if sqlerror.IsConnErr(err) || vp.vr.dbClient.IsClosed() {
+			// Losing the connection says nothing about whether it could have
+			// batched. The client already dropped it, so the workflow gets a new
+			// one on the next run: keep the error as it came so that it is
+			// retried rather than ending the workflow. The connection is also
+			// dropped when the server's answer leaves its state unknown, which
+			// is not reported as a connection error, so ask the client too.
+			return vterrors.Wrapf(err, "failed to configure multi statement support for the vplayer")
+		}
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "failed to configure multi statement support for the vplayer (%v); clear the vplayer batching bit (%d) of --vreplication-experimental-flags to replay without batching",
+			err, vttablet.VReplicationExperimentalFlagVPlayerBatching)
+	}
+
+	vp.vr.dbClient.maxBatchSize = vp.maxBatchSize
+	return nil
+}
+
+// clearConnectionBatchMode takes the ability to send several statements in a
+// single query away again, once this player is done with it, so that a
+// connection outlives the capability by as little as possible.
+//
+// The client loses the ability to build a batch before the connection loses the
+// ability to run one, so that the two can never disagree. A failure is logged
+// rather than returned: the player is on its way out and has an error of its own
+// to report, and the next one sets the state it needs from scratch.
+func (vp *vplayer) clearConnectionBatchMode() {
+	vp.vr.dbClient.maxBatchSize = 0
+
+	// A connection that is already gone took the capability with it, and closing
+	// it leaves the capability it negotiated on record, so asking would write to
+	// a dead connection for nothing. This is the ordinary outcome whenever the
+	// query that ended the run is what killed the connection.
+	if vp.vr.dbClient.IsClosed() {
+		return
+	}
+
+	if err := vp.vr.dbClient.SetMultiStatements(false); err != nil {
+		log.Warn("failed to disable multi statement support",
+			slog.String("workflow", vp.vr.WorkflowName),
+			slog.Any("error", err),
+		)
 	}
 }
 
@@ -178,6 +262,17 @@ func (vp *vplayer) play(ctx context.Context) error {
 			return vp.vr.setState(binlogdatapb.VReplicationWorkflowState_Stopped, fmt.Sprintf("Stop position %v already reached: %v", vp.startPos, vp.stopPos))
 		}
 		return nil
+	}
+
+	// A player that has nothing left to replay sends no batch, so the connection
+	// is only configured once there is something to replay.
+	if err := vp.setConnectionBatchMode(); err != nil {
+		return err
+	}
+	if vp.batchMode {
+		// A player that does not batch has already turned the capability off
+		// above, so only the one that turned it on has something to give back.
+		defer vp.clearConnectionBatchMode()
 	}
 
 	plan, err := vp.vr.buildReplicatorPlan(vp.vr.source, vp.vr.colInfoMap, vp.copyState, vp.vr.stats, vp.vr.vre.env.CollationEnv(), vp.vr.vre.env.Parser())
@@ -273,7 +368,7 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	relay := newRelayLog(ctx, vp.vr.workflowConfig.RelayLogMaxItems, vp.vr.workflowConfig.RelayLogMaxSize)
+	relay := newRelayLog(ctx, vp.vr.workflowConfig.RelayLogMaxItems, vp.vr.workflowConfig.RelayLogMaxSize, &vp.lastThrottledNano)
 
 	streamErr := make(chan error, 1)
 	go func() {
@@ -550,6 +645,10 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 		}
 		// Check throttler.
 		if checkResult, ok := vp.vr.vre.throttlerClient.ThrottleCheckOKOrWaitAppName(ctx, throttlerapp.Name(vp.throttlerAppName)); !ok {
+			// While denied we are deliberately not draining the relay log,
+			// so this time must not count toward the relay log's stall
+			// deadline.
+			vp.lastThrottledNano.Store(int64(time.Since(vplayerThrottleEpoch)))
 			_ = vp.vr.updateTimeThrottled(throttlerapp.VPlayerName, checkResult.Summary())
 			estimateLag()
 			continue

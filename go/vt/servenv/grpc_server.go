@@ -21,6 +21,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math"
 	"net"
 	"os"
@@ -72,6 +73,7 @@ var (
 
 	// GRPC server metrics recorder
 	GRPCServerMetricsRecorder orca.ServerMetricsRecorder
+	orcaUpdateInterval        = 30 * time.Second
 
 	authPlugin Authenticator
 )
@@ -160,7 +162,7 @@ func RegisterGRPCServerFlags() {
 		utils.SetFlagStringVar(fs, &gRPCKey, "grpc-key", gRPCKey, "server private key to use for gRPC connections, requires grpc-cert, enables TLS")
 		utils.SetFlagStringVar(fs, &gRPCCA, "grpc-ca", gRPCCA, "server CA to use for gRPC connections, requires TLS, and enforces client certificate check")
 		utils.SetFlagStringVar(fs, &gRPCCRL, "grpc-crl", gRPCCRL, "path to a certificate revocation list in PEM format, client certificates will be further verified against this file during TLS handshake")
-		utils.SetFlagBoolVar(fs, &gRPCEnableOptionalTLS, "grpc-enable-optional-tls", gRPCEnableOptionalTLS, "enable optional TLS mode when a server accepts both TLS and plain-text connections on the same port")
+		utils.SetFlagBoolVar(fs, &gRPCEnableOptionalTLS, "grpc-enable-optional-tls", gRPCEnableOptionalTLS, "enable optional TLS mode when a server accepts both TLS and plain-text connections on the same port; plain-text connections are served unauthenticated, even with --grpc-ca")
 		utils.SetFlagStringVar(fs, &gRPCServerCA, "grpc-server-ca", gRPCServerCA, "path to server CA in PEM format, which will be combine with server cert, return full certificate chain to clients")
 		utils.SetFlagDurationVar(fs, &gRPCKeepaliveTime, "grpc-server-keepalive-time", gRPCKeepaliveTime, "After a duration of this time, if the server doesn't see any activity, it pings the client to see if the transport is still alive.")
 		utils.SetFlagDurationVar(fs, &gRPCKeepaliveTimeout, "grpc-server-keepalive-timeout", gRPCKeepaliveTimeout, "After having pinged for keepalive check, the server waits for a duration of Timeout and if no activity is seen even after that the connection is closed.")
@@ -215,8 +217,14 @@ func createGRPCServer() {
 		return
 	}
 
+	tlsEnabled, err := vttls.ServerTLSEnabled(gRPCCert, gRPCKey, gRPCCRL)
+	if err != nil {
+		log.Error("Failed to configure gRPC TLS", slog.Any("error", err))
+		os.Exit(1)
+	}
+
 	var opts []grpc.ServerOption
-	if gRPCCert != "" && gRPCKey != "" {
+	if tlsEnabled {
 		config, err := vttls.ServerConfig(gRPCCert, gRPCKey, gRPCCA, gRPCCRL, gRPCServerCA, tls.VersionTLS12)
 		if err != nil {
 			log.Error(fmt.Sprintf("Failed to log gRPC cert/key/ca: %v", err))
@@ -226,7 +234,19 @@ func createGRPCServer() {
 		// create the creds server options
 		creds := credentials.NewTLS(config)
 		if gRPCEnableOptionalTLS {
-			log.Warn("Optional TLS is active. Plain-text connections will be accepted")
+			// Optional TLS is for moving clients to TLS one at a time: the
+			// plain-text connections are served, unauthenticated, until the
+			// last client has moved and the flag is dropped. Say so plainly
+			// when a client CA is configured, since --grpc-ca then only holds
+			// for the TLS connections, and point at the stats that show the
+			// plain-text connections without claiming they prove that every
+			// client has moved: one that is offline or connects only now and
+			// then does not show in them.
+			if gRPCCA != "" {
+				log.Warn("Optional TLS is active. Plain-text connections will be accepted and are not authenticated: the client certificate check of --grpc-ca only applies to TLS connections. Drop --grpc-enable-optional-tls once every client uses TLS. The GrpcOptionalTlsOpenConnections and GrpcOptionalTlsConnections stats show whether plain-text connections are open now and whether new ones are still being made; a client that is offline or connects only now and then can show in neither")
+			} else {
+				log.Warn("Optional TLS is active. Plain-text connections will be accepted")
+			}
 			creds = grpcoptionaltls.New(creds)
 		}
 		opts = []grpc.ServerOption{grpc.Creds(creds)}
@@ -303,6 +323,10 @@ func interceptors() []grpc.ServerOption {
 
 	if grpccommon.EnableGRPCPrometheus() {
 		interceptors.Add(grpc_prometheus.StreamServerInterceptor, grpc_prometheus.UnaryServerInterceptor)
+	}
+
+	if gRPCEnableOrcaMetrics {
+		interceptors.Add(orcaCountingStreamInterceptor, orcaCountingUnaryInterceptor)
 	}
 
 	trace.AddGrpcServerOptions(interceptors.Add)
@@ -395,17 +419,26 @@ func registerOrca() (stop func()) {
 	// Capture the recorder so the goroutine below does not read the
 	// GRPCServerMetricsRecorder global, which tests swap out between runs.
 	recorder := GRPCServerMetricsRecorder
+	interval := orcaUpdateInterval
 	stopCh := make(chan struct{})
 	doneCh := make(chan struct{})
 	go func() {
 		defer close(doneCh)
-		ticker := time.NewTicker(30 * time.Second)
+		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
+		lastReport := time.Now()
 		for {
 			select {
 			case <-ticker.C:
 				recorder.SetCPUUtilization(getCpuUsage())
 				recorder.SetMemoryUtilization(getMemoryUsage())
+				// gRPC's default weighted round robin (gRFC A58) weights
+				// backends by qps / (cpu + eps/qps * errorUtilizationPenalty).
+				now := time.Now()
+				elapsed := now.Sub(lastReport).Seconds()
+				recorder.SetQPS(float64(orcaEgressMessages.Swap(0)) / elapsed)
+				recorder.SetEPS(float64(orcaErrors.Swap(0)) / elapsed)
+				lastReport = now
 			case <-stopCh:
 				return
 			}

@@ -142,9 +142,11 @@ func TestClientFoundRows(t *testing.T) {
 
 func doTestMultiResult(t *testing.T, disableClientDeprecateEOF bool) {
 	ctx := t.Context()
-	connParams.DisableClientDeprecateEOF = disableClientDeprecateEOF
+	params := connParams
+	params.DisableClientDeprecateEOF = disableClientDeprecateEOF
+	params.EnableMultiStatements = true
 
-	conn, err := mysql.Connect(ctx, &connParams)
+	conn, err := mysql.Connect(ctx, &params)
 	expectNoError(t, err)
 	defer conn.Close()
 
@@ -231,6 +233,121 @@ func TestMultiResultDeprecateEOF(t *testing.T) {
 
 func TestMultiResultNoDeprecateEOF(t *testing.T) {
 	doTestMultiResult(t, true)
+}
+
+// TestMultiStatements checks that a connection can only send several statements
+// in a single query when it asked for that capability, either at handshake time
+// or later on with SetMultiStatements.
+func TestMultiStatements(t *testing.T) {
+	ctx := t.Context()
+
+	const batch = "select 1 from dual; select 2 from dual"
+
+	// executeBatch runs the two statement batch above and drains its results.
+	executeBatch := func(t *testing.T, conn *mysql.Conn) error {
+		t.Helper()
+
+		qr, more, err := conn.ExecuteFetchMulti(batch, 10, true)
+		if err != nil {
+			return err
+		}
+		require.True(t, more, "the batch must return more than one result")
+		require.Len(t, qr.Rows, 1)
+		for more {
+			qr, more, _, err = conn.ReadQueryResult(10, true)
+			require.NoError(t, err)
+			require.Len(t, qr.Rows, 1)
+		}
+		return nil
+	}
+
+	t.Run("off by default", func(t *testing.T) {
+		params := connParams
+		conn, err := mysql.Connect(ctx, &params)
+		require.NoError(t, err)
+		defer conn.Close()
+
+		err = executeBatch(t, conn)
+		assertSQLError(t, err, sqlerror.ERParseError, sqlerror.SSClientError, "You have an error in your SQL syntax", batch)
+
+		// A single statement still works on the very same connection.
+		qr, err := conn.ExecuteFetch("select 1 from dual", 10, true)
+		require.NoError(t, err)
+		require.Len(t, qr.Rows, 1)
+	})
+
+	// Several of the queries vitess builds end in a semicolon of their own,
+	// notably the ones the vstreamer and the vreplicator run on connections that
+	// no longer negotiate the capability. MySQL strips a trailing semicolon from
+	// every query it receives, so they keep working, and this is what says so.
+	t.Run("a trailing semicolon is not a second statement", func(t *testing.T) {
+		params := connParams
+		conn, err := mysql.Connect(ctx, &params)
+		require.NoError(t, err)
+		defer conn.Close()
+
+		for _, query := range []string{
+			"select 1 from dual;",
+			"select 1 from dual; ",
+			"select 1 from dual;\n",
+			"select 1 from dual  ;  \n\t",
+		} {
+			qr, err := conn.ExecuteFetch(query, 10, true)
+			require.NoError(t, err, "query %q must run as the single statement it is", query)
+			require.Len(t, qr.Rows, 1)
+		}
+	})
+
+	t.Run("enabled at handshake", func(t *testing.T) {
+		params := connParams
+		params.EnableMultiStatements = true
+		conn, err := mysql.Connect(ctx, &params)
+		require.NoError(t, err)
+		defer conn.Close()
+
+		require.NoError(t, executeBatch(t, conn))
+	})
+
+	t.Run("toggled at runtime", func(t *testing.T) {
+		params := connParams
+		conn, err := mysql.Connect(ctx, &params)
+		require.NoError(t, err)
+		defer conn.Close()
+
+		require.NoError(t, conn.SetMultiStatements(true))
+		require.NoError(t, executeBatch(t, conn))
+
+		require.NoError(t, conn.SetMultiStatements(false))
+		err = executeBatch(t, conn)
+		assertSQLError(t, err, sqlerror.ERParseError, sqlerror.SSClientError, "You have an error in your SQL syntax", batch)
+	})
+
+	t.Run("multi results are unaffected", func(t *testing.T) {
+		params := connParams
+		conn, err := mysql.Connect(ctx, &params)
+		require.NoError(t, err)
+		t.Cleanup(conn.Close)
+
+		// A compound statement body carries semicolons of its own, and a CALL
+		// returns several results. Both only need CLIENT_MULTI_RESULTS.
+		_, err = conn.ExecuteFetch("create procedure multi_results() begin select 1 from dual; select 2 from dual; end", 0, false)
+		require.NoError(t, err)
+		// Cleanups run last registered first, so this one still has the
+		// connection it needs.
+		t.Cleanup(func() {
+			_, err := conn.ExecuteFetch("drop procedure multi_results", 0, false)
+			require.NoError(t, err)
+		})
+
+		qr, more, err := conn.ExecuteFetchMulti("call multi_results()", 10, true)
+		require.NoError(t, err)
+		require.True(t, more, "call must return more than one result")
+		require.Len(t, qr.Rows, 1)
+		for more {
+			_, more, _, err = conn.ReadQueryResult(10, true)
+			require.NoError(t, err)
+		}
+	})
 }
 
 func expectNoError(t *testing.T, err error) {

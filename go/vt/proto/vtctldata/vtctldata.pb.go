@@ -4344,8 +4344,14 @@ type EmergencyReparentShardRequest struct {
 	// are detected. NewPrimary is required and must be an upfront undominated candidate.
 	// Transactions only present on losing histories will not be preserved.
 	AllowSplitBrainPromotion bool `protobuf:"varint,9,opt,name=allow_split_brain_promotion,json=allowSplitBrainPromotion,proto3" json:"allow_split_brain_promotion,omitempty"`
-	unknownFields            protoimpl.UnknownFields
-	sizeCache                protoimpl.SizeCache
+	// RequiredPosition is the minimum MySQL GTID set, for example <uuid>:1-100,
+	// that the new primary must have. The reparent fails if no candidate has
+	// received it, either applied or still in its relay log. The check supports
+	// MySQL GTID shards only. On any other shard, the reparent fails only after it
+	// stops replication and demotes a reachable primary. Empty means no requirement.
+	RequiredPosition string `protobuf:"bytes,10,opt,name=required_position,json=requiredPosition,proto3" json:"required_position,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *EmergencyReparentShardRequest) Reset() {
@@ -4439,6 +4445,13 @@ func (x *EmergencyReparentShardRequest) GetAllowSplitBrainPromotion() bool {
 		return x.AllowSplitBrainPromotion
 	}
 	return false
+}
+
+func (x *EmergencyReparentShardRequest) GetRequiredPosition() string {
+	if x != nil {
+		return x.RequiredPosition
+	}
+	return ""
 }
 
 type EmergencyReparentShardResponse struct {
@@ -15364,7 +15377,11 @@ type VDiffShowRequest struct {
 	Workflow       string                 `protobuf:"bytes,1,opt,name=workflow,proto3" json:"workflow,omitempty"`
 	TargetKeyspace string                 `protobuf:"bytes,2,opt,name=target_keyspace,json=targetKeyspace,proto3" json:"target_keyspace,omitempty"`
 	// This will be 'all', 'last', or a UUID.
-	Arg           string `protobuf:"bytes,3,opt,name=arg,proto3" json:"arg,omitempty"`
+	Arg string `protobuf:"bytes,3,opt,name=arg,proto3" json:"arg,omitempty"`
+	// no_samples strips the per-table report's row-sample arrays from the
+	// response (keeping the scalar counters), avoiding gRPC message-size limits
+	// on diffs with large blob/JSON rows.
+	NoSamples     bool `protobuf:"varint,4,opt,name=no_samples,json=noSamples,proto3" json:"no_samples,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -15418,6 +15435,13 @@ func (x *VDiffShowRequest) GetArg() string {
 		return x.Arg
 	}
 	return ""
+}
+
+func (x *VDiffShowRequest) GetNoSamples() bool {
+	if x != nil {
+		return x.NoSamples
+	}
+	return false
 }
 
 type VDiffShowResponse struct {
@@ -17854,7 +17878,7 @@ const file_vtctldata_proto_rawDesc = "" +
 	"\x14DeleteTabletsRequest\x12<\n" +
 	"\x0etablet_aliases\x18\x01 \x03(\v2\x15.topodata.TabletAliasR\rtabletAliases\x12#\n" +
 	"\rallow_primary\x18\x02 \x01(\bR\fallowPrimary\"\x17\n" +
-	"\x15DeleteTabletsResponse\"\x82\x04\n" +
+	"\x15DeleteTabletsResponse\"\xaf\x04\n" +
 	"\x1dEmergencyReparentShardRequest\x12\x1a\n" +
 	"\bkeyspace\x18\x01 \x01(\tR\bkeyspace\x12\x14\n" +
 	"\x05shard\x18\x02 \x01(\tR\x05shard\x126\n" +
@@ -17865,7 +17889,9 @@ const file_vtctldata_proto_rawDesc = "" +
 	"\x1cprevent_cross_cell_promotion\x18\x06 \x01(\bR\x19preventCrossCellPromotion\x12/\n" +
 	"\x14wait_for_all_tablets\x18\a \x01(\bR\x11waitForAllTablets\x12@\n" +
 	"\x10expected_primary\x18\b \x01(\v2\x15.topodata.TabletAliasR\x0fexpectedPrimary\x12=\n" +
-	"\x1ballow_split_brain_promotion\x18\t \x01(\bR\x18allowSplitBrainPromotion\"\xbc\x01\n" +
+	"\x1ballow_split_brain_promotion\x18\t \x01(\bR\x18allowSplitBrainPromotion\x12+\n" +
+	"\x11required_position\x18\n" +
+	" \x01(\tR\x10requiredPosition\"\xbc\x01\n" +
 	"\x1eEmergencyReparentShardResponse\x12\x1a\n" +
 	"\bkeyspace\x18\x01 \x01(\tR\bkeyspace\x12\x14\n" +
 	"\x05shard\x18\x02 \x01(\tR\x05shard\x12@\n" +
@@ -18603,11 +18629,13 @@ const file_vtctldata_proto_rawDesc = "" +
 	"\x0ftarget_keyspace\x18\x02 \x01(\tR\x0etargetKeyspace\x12\x12\n" +
 	"\x04uuid\x18\x03 \x01(\tR\x04uuid\x12#\n" +
 	"\rtarget_shards\x18\x04 \x03(\tR\ftargetShards\"\x15\n" +
-	"\x13VDiffResumeResponse\"i\n" +
+	"\x13VDiffResumeResponse\"\x88\x01\n" +
 	"\x10VDiffShowRequest\x12\x1a\n" +
 	"\bworkflow\x18\x01 \x01(\tR\bworkflow\x12'\n" +
 	"\x0ftarget_keyspace\x18\x02 \x01(\tR\x0etargetKeyspace\x12\x10\n" +
-	"\x03arg\x18\x03 \x01(\tR\x03arg\"\xd7\x01\n" +
+	"\x03arg\x18\x03 \x01(\tR\x03arg\x12\x1d\n" +
+	"\n" +
+	"no_samples\x18\x04 \x01(\bR\tnoSamples\"\xd7\x01\n" +
 	"\x11VDiffShowResponse\x12\\\n" +
 	"\x10tablet_responses\x18\x01 \x03(\v21.vtctldata.VDiffShowResponse.TabletResponsesEntryR\x0ftabletResponses\x1ad\n" +
 	"\x14TabletResponsesEntry\x12\x10\n" +

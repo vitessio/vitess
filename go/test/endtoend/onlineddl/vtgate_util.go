@@ -52,8 +52,16 @@ func VtgateExecQuery(ctx context.Context, vtParams *mysql.ConnParams, query stri
 		return nil, err
 	}
 	defer conn.Close()
+	// The context bounds the query as well as the connection: closing the
+	// connection fails a query still executing.
+	stop := context.AfterFunc(ctx, conn.Close)
+	defer stop()
 
-	return conn.ExecuteFetch(query, -1, true)
+	rs, err := conn.ExecuteFetch(query, -1, true)
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	return rs, err
 }
 
 // VtgateExecQueryInTransaction runs a query on VTGate using given query params, inside a transaction

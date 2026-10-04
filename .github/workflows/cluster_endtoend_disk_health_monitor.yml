@@ -28,7 +28,7 @@ jobs:
 
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
         with:
           egress-policy: audit
 
@@ -45,7 +45,7 @@ jobs:
           persist-credentials: "false"
 
       - name: Check for changes in relevant files
-        uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         id: changes
         with:
           token: ""
@@ -65,10 +65,11 @@ jobs:
               - 'bootstrap.sh'
               - '.github/workflows/cluster_endtoend_disk_health_monitor.yml'
               - '.github/actions/setup-mysql/action.yml'
+              - '.github/actions/setup-go/action.yml'
 
       - name: Set up Go
         if: steps.changes.outputs.end_to_end == 'true'
-        uses: ./.github/actions/setup-go
+        uses: $/.github/actions/setup-go
 
       - name: Set up python
         if: steps.changes.outputs.end_to_end == 'true'
@@ -77,12 +78,12 @@ jobs:
       - name: Tune the OS
         if: steps.changes.outputs.end_to_end == 'true'
         timeout-minutes: 5
-        uses: ./.github/actions/tune-os
+        uses: $/.github/actions/tune-os
 
       - name: Setup MySQL
         if: steps.changes.outputs.end_to_end == 'true'
         timeout-minutes: 8
-        uses: ./.github/actions/setup-mysql
+        uses: $/.github/actions/setup-mysql
         with:
           flavor: mysql-8.4
 
@@ -93,7 +94,6 @@ jobs:
           sudo apt-get -qq install -y mysql-shell
           sudo apt-get -qq install -y make unzip g++ etcd-client etcd-server curl git wget xz-utils libncurses6 fuse3
           sudo service etcd stop
-          go mod download
 
       - name: Setup launchable dependencies
         if: |

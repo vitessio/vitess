@@ -51,6 +51,61 @@ func TestSelectNoConnectionReservationOnSettings(t *testing.T) {
 	}
 }
 
+// A connection that carried `foreign_key_checks = 0` and `unique_checks = 0` as
+// settings must serve the next settingless caller with both checks on. MySQL
+// Bug#121262 makes `SET ... = DEFAULT` set both to 0, so the reset restores the global
+// value explicitly.
+func TestSettingsResetRestoresForeignKeyChecks(t *testing.T) {
+	resetTxConnPool(t)
+
+	// hold every connection but one, so the settingless transaction below can only be
+	// served by the connection that carried the settings
+	txPoolSize := framework.Server.Config().TxPool.Size
+	holders := make([]*framework.QueryClient, 0, txPoolSize-1)
+	for range txPoolSize - 1 {
+		holder := framework.NewClient()
+		_, err := holder.BeginExecute("select 1", nil, nil)
+		require.NoError(t, err)
+		holders = append(holders, holder)
+	}
+	t.Cleanup(func() {
+		for _, holder := range holders {
+			assert.NoError(t, holder.Release())
+		}
+	})
+
+	client := framework.NewClient()
+	t.Cleanup(func() {
+		// the test rolls back both transactions; release only what a failure left behind
+		if client.TransactionID() != 0 || client.ReservedID() != 0 {
+			assert.NoError(t, client.Release())
+		}
+	})
+
+	query := "select connection_id(), @@foreign_key_checks, @@unique_checks"
+	settings := []string{"set @@foreign_key_checks = 0, @@unique_checks = 0"}
+
+	// take a transaction connection with the settings applied and release it: the
+	// pool files it under the setting
+	withSettings, err := client.ReserveBeginExecute(query, settings, nil, nil)
+	require.NoError(t, err)
+	require.NoError(t, client.Rollback())
+	require.Len(t, withSettings.Rows, 1)
+	connID := withSettings.Rows[0][0].ToString()
+	assert.Equal(t, "0", withSettings.Rows[0][1].ToString())
+	assert.Equal(t, "0", withSettings.Rows[0][2].ToString())
+
+	// a settingless transaction reuses the released connection; it must see the
+	// checks on again
+	fresh, err := client.BeginExecute(query, nil, nil)
+	require.NoError(t, err)
+	require.NoError(t, client.Rollback())
+	require.Len(t, fresh.Rows, 1)
+	require.Equal(t, connID, fresh.Rows[0][0].ToString(), "the test needs the pool to hand out the same connection")
+	assert.Equal(t, "1", fresh.Rows[0][1].ToString(), "foreign_key_checks after the reset")
+	assert.Equal(t, "1", fresh.Rows[0][2].ToString(), "unique_checks after the reset")
+}
+
 func TestSetttingsReuseConnWithSettings(t *testing.T) {
 	resetTxConnPool(t)
 
@@ -112,6 +167,49 @@ func TestSetttingsReuseConnWithSettings(t *testing.T) {
 		err = client.Rollback()
 		require.NoError(t, err)
 	}
+}
+
+// A plain request that finds no clean connection and no spare capacity is handed a
+// connection with settings applied, after the pool has reset them. The reset must
+// succeed on MySQL: when it fails, the pool silently replaces the connection, so the
+// client observes a new connection id instead of the reused one.
+func TestSettingsResetReusesConnection(t *testing.T) {
+	resetTxConnPool(t)
+
+	connectionIDQuery := "select connection_id(), @@sql_safe_updates"
+	setting := "set @@sql_safe_updates = 1"
+
+	// hold every connection but one, so the plain request below cannot be served
+	// from the clean stack or by opening a new connection
+	txPoolSize := framework.Server.Config().TxPool.Size
+	holders := make([]*framework.QueryClient, 0, txPoolSize-1)
+	for range txPoolSize - 1 {
+		holder := framework.NewClient()
+		_, err := holder.BeginExecute("select 1", nil, nil)
+		require.NoError(t, err)
+		holders = append(holders, holder)
+	}
+	t.Cleanup(func() {
+		for _, holder := range holders {
+			assert.NoError(t, holder.Release())
+		}
+	})
+
+	client := framework.NewClient()
+	defer client.Release()
+
+	withSetting, err := client.ReserveBeginExecute(connectionIDQuery, []string{setting}, nil, nil)
+	require.NoError(t, err)
+	require.NoError(t, client.Rollback())
+	require.Equal(t, "1", withSetting.Rows[0][1].ToString())
+
+	plain, err := client.BeginExecute(connectionIDQuery, nil, nil)
+	require.NoError(t, err)
+	require.NoError(t, client.Rollback())
+
+	// the same connection is reused, with its settings reset
+	assert.Equal(t, withSetting.Rows[0][0].ToString(), plain.Rows[0][0].ToString(), "expected the settings connection to be reused")
+	assert.Equal(t, "0", plain.Rows[0][1].ToString(), "expected sql_safe_updates to be reset")
 }
 
 // resetTxConnPool resets the settings pool by fetching all the connections from the pool with no settings.

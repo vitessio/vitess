@@ -1496,6 +1496,7 @@ func (m *EmergencyReparentShardRequest) CloneVT() *EmergencyReparentShardRequest
 	r.WaitForAllTablets = m.WaitForAllTablets
 	r.ExpectedPrimary = m.ExpectedPrimary.CloneVT()
 	r.AllowSplitBrainPromotion = m.AllowSplitBrainPromotion
+	r.RequiredPosition = m.RequiredPosition
 	if rhs := m.IgnoreReplicas; rhs != nil {
 		tmpContainer := make([]*topodata.TabletAlias, len(rhs))
 		for k, v := range rhs {
@@ -5556,6 +5557,7 @@ func (m *VDiffShowRequest) CloneVT() *VDiffShowRequest {
 	r.Workflow = m.Workflow
 	r.TargetKeyspace = m.TargetKeyspace
 	r.Arg = m.Arg
+	r.NoSamples = m.NoSamples
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -10529,6 +10531,13 @@ func (m *EmergencyReparentShardRequest) MarshalToSizedBufferVT(dAtA []byte) (int
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if len(m.RequiredPosition) > 0 {
+		i -= len(m.RequiredPosition)
+		copy(dAtA[i:], m.RequiredPosition)
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.RequiredPosition)))
+		i--
+		dAtA[i] = 0x52
 	}
 	if m.AllowSplitBrainPromotion {
 		i--
@@ -21248,6 +21257,16 @@ func (m *VDiffShowRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.NoSamples {
+		i--
+		if m.NoSamples {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x20
+	}
 	if len(m.Arg) > 0 {
 		i -= len(m.Arg)
 		copy(dAtA[i:], m.Arg)
@@ -24361,6 +24380,10 @@ func (m *EmergencyReparentShardRequest) SizeVT() (n int) {
 	}
 	if m.AllowSplitBrainPromotion {
 		n += 2
+	}
+	l = len(m.RequiredPosition)
+	if l > 0 {
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	n += len(m.unknownFields)
 	return n
@@ -28324,6 +28347,9 @@ func (m *VDiffShowRequest) SizeVT() (n int) {
 	l = len(m.Arg)
 	if l > 0 {
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	if m.NoSamples {
+		n += 2
 	}
 	n += len(m.unknownFields)
 	return n
@@ -40936,6 +40962,38 @@ func (m *EmergencyReparentShardRequest) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.AllowSplitBrainPromotion = bool(v != 0)
+		case 10:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field RequiredPosition", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.RequiredPosition = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
@@ -66221,6 +66279,26 @@ func (m *VDiffShowRequest) UnmarshalVT(dAtA []byte) error {
 			}
 			m.Arg = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
+		case 4:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field NoSamples", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.NoSamples = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])

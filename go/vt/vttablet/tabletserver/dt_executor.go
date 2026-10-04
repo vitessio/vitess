@@ -68,7 +68,7 @@ func (dte *DTExecutor) Prepare(transactionID int64, dtid string) error {
 	defer dte.te.env.Stats().QueryTimings.Record("PREPARE", time.Now())
 	dte.logStats.TransactionID = transactionID
 
-	conn, err := dte.te.txPool.GetAndLock(transactionID, "for prepare")
+	conn, err := dte.te.txPool.GetAndLock(dte.ctx, transactionID, "for prepare")
 	if err != nil {
 		return err
 	}
@@ -244,7 +244,7 @@ func (dte *DTExecutor) StartCommit(transactionID int64, dtid string) (querypb.St
 	defer dte.te.env.Stats().QueryTimings.Record("START_COMMIT", time.Now())
 	dte.logStats.TransactionID = transactionID
 
-	conn, err := dte.te.txPool.GetAndLock(transactionID, "for 2pc commit")
+	conn, err := dte.te.txPool.GetAndLock(dte.ctx, transactionID, "for 2pc commit")
 	if err != nil {
 		return querypb.StartCommitState_Fail, err
 	}
