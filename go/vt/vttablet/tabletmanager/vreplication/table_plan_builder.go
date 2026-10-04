@@ -362,10 +362,6 @@ func (tpb *tablePlanBuilder) generate() *TablePlan {
 			fieldsToSkip[strings.ToLower(colInfo.Name)] = true
 		}
 	}
-	multiDelete, multiDeletePKField := tpb.generateMultiDeleteStatement(), ""
-	if multiDelete != nil {
-		multiDeletePKField = tpb.multiDeletePKField()
-	}
 	return &TablePlan{
 		TargetName:              tpb.name.String(),
 		Lastpk:                  tpb.lastpk,
@@ -375,9 +371,9 @@ func (tpb *tablePlanBuilder) generate() *TablePlan {
 		Insert:                  tpb.generateInsertStatement(),
 		Update:                  tpb.generateUpdateStatement(),
 		Delete:                  tpb.generateDeleteStatement(),
-		MultiDelete:             multiDelete,
+		MultiDelete:             tpb.generateMultiDeleteStatement(),
+		MultiDeleteValue:        tpb.generateMultiDeleteValue(),
 		PKReferences:            pkrefs,
-		MultiDeletePKField:      multiDeletePKField,
 		Stats:                   tpb.stats,
 		FieldsToSkip:            fieldsToSkip,
 		HasExtraSourcePkColumns: len(tpb.extraSourcePkCols) > 0,
@@ -884,37 +880,37 @@ func (tpb *tablePlanBuilder) generateDeleteStatement() *sqlparser.ParsedQuery {
 	return buf.ParsedQuery()
 }
 
-func (tpb *tablePlanBuilder) generateMultiDeleteStatement() *sqlparser.ParsedQuery {
-	if tpb.workflowConfig.ExperimentalFlags&vttablet.VReplicationExperimentalFlagVPlayerBatching == 0 ||
-		tpb.multiDeletePKField() == "" {
-		return nil
-	}
+func (tpb *tablePlanBuilder) bulkDeleteSupported() bool {
 	// Grouped plans must stay on the per-row path: their delete semantics
 	// are a count-decrementing UPDATE (insertOnDup) or a deliberate no-op
 	// (insertIgnore), never a plain DELETE.
-	if tpb.onInsert != insertNormal {
-		return nil
-	}
-	return sqlparser.BuildParsedQuery(
-		"delete from %s where %s in %a",
-		sqlparser.String(tpb.name),
-		sqlparser.String(tpb.pkCols[0].colName),
-		"::bulk_pks",
-	)
+	return tpb.workflowConfig.ExperimentalFlags&vttablet.VReplicationExperimentalFlagVPlayerBatching != 0 &&
+		len(tpb.pkCols) == 1 && len(tpb.extraSourcePkCols) == 0 && tpb.onInsert == insertNormal
 }
 
-// multiDeletePKField returns the source column that holds the value of the
-// target's single primary key column, or "" when the PK is computed by an
-// expression, which only the per-row delete evaluates.
-func (tpb *tablePlanBuilder) multiDeletePKField() string {
-	if len(tpb.pkCols) != 1 || len(tpb.extraSourcePkCols) != 0 || tpb.pkCols[0].operation != opExpr {
-		return ""
+func (tpb *tablePlanBuilder) generateMultiDeleteStatement() *sqlparser.ParsedQuery {
+	if !tpb.bulkDeleteSupported() {
+		return nil
 	}
-	col, ok := tpb.pkCols[0].expr.(*sqlparser.ColName)
-	if !ok {
-		return ""
+	buf := sqlparser.NewTrackedBuffer(nil)
+	buf.Myprintf("delete from %v where %v in ", tpb.name, tpb.pkCols[0].colName)
+	return buf.ParsedQuery()
+}
+
+// generateMultiDeleteValue renders the PK expression over the before image,
+// as generateWhere does, so the bulk delete targets the same rows.
+func (tpb *tablePlanBuilder) generateMultiDeleteValue() *sqlparser.ParsedQuery {
+	if !tpb.bulkDeleteSupported() {
+		return nil
 	}
-	return col.Name.String()
+	bvf := &bindvarFormatter{mode: bvBefore}
+	buf := sqlparser.NewTrackedBuffer(bvf.formatter)
+	if _, ok := tpb.pkCols[0].expr.(*sqlparser.ColName); ok {
+		buf.Myprintf("%v", tpb.pkCols[0].expr)
+	} else {
+		buf.Myprintf("(%v)", tpb.pkCols[0].expr)
+	}
+	return buf.ParsedQuery()
 }
 
 func (tpb *tablePlanBuilder) generateWhere(buf *sqlparser.TrackedBuffer, bvf *bindvarFormatter) {

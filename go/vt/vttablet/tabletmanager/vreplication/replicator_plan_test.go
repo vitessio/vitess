@@ -864,28 +864,30 @@ func TestBuildPlayerPlanMultiDelete(t *testing.T) {
 		"this test requires VPlayer batching to be enabled in the default config")
 
 	testcases := []struct {
-		name            string
-		filter          string
-		wantMultiDelete string
-		wantPKField     string
+		name                 string
+		filter               string
+		wantMultiDelete      string
+		wantMultiDeleteValue string
 	}{{
-		name:            "insertNormal builds a bulk delete",
-		filter:          "select c1, c2 from t1",
-		wantMultiDelete: "delete from t1 where c1 in ::bulk_pks",
-		wantPKField:     "c1",
+		name:                 "insertNormal builds a bulk delete",
+		filter:               "select c1, c2 from t1",
+		wantMultiDelete:      "delete from t1 where c1 in ",
+		wantMultiDeleteValue: ":b_c1",
 	}, {
-		name:            "pk after an expression reads its own source field",
-		filter:          "select concat(c2, c3) as c2, c1 from t1",
-		wantMultiDelete: "delete from t1 where c1 in ::bulk_pks",
-		wantPKField:     "c1",
+		name:                 "pk after an expression reads its own source field",
+		filter:               "select concat(c2, c3) as c2, c1 from t1",
+		wantMultiDelete:      "delete from t1 where c1 in ",
+		wantMultiDeleteValue: ":b_c1",
 	}, {
-		name:            "renamed pk reads the source column",
-		filter:          "select src as c1, c2 from t1",
-		wantMultiDelete: "delete from t1 where c1 in ::bulk_pks",
-		wantPKField:     "src",
+		name:                 "renamed pk reads the source column",
+		filter:               "select src as c1, c2 from t1",
+		wantMultiDelete:      "delete from t1 where c1 in ",
+		wantMultiDeleteValue: ":b_src",
 	}, {
-		name:   "pk computed by an expression must not build a bulk delete",
-		filter: "select c1+1000 as c1, c2 from t1",
+		name:                 "pk computed by an expression is evaluated per row",
+		filter:               "select c1+1000 as c1, c2 from t1",
+		wantMultiDelete:      "delete from t1 where c1 in ",
+		wantMultiDeleteValue: "(:b_c1 + 1000)",
 	}, {
 		name:   "insertOnDup (partial group by) must not build a bulk delete",
 		filter: "select c1, count(*) as c2 from t1 group by c1",
@@ -911,11 +913,13 @@ func TestBuildPlayerPlanMultiDelete(t *testing.T) {
 			require.NotNil(t, tplan)
 			if tcase.wantMultiDelete == "" {
 				require.Nil(t, tplan.MultiDelete)
+				require.Nil(t, tplan.MultiDeleteValue)
 			} else {
 				require.NotNil(t, tplan.MultiDelete)
 				require.Equal(t, tcase.wantMultiDelete, tplan.MultiDelete.Query)
+				require.NotNil(t, tplan.MultiDeleteValue)
+				require.Equal(t, tcase.wantMultiDeleteValue, tplan.MultiDeleteValue.Query)
 			}
-			require.Equal(t, tcase.wantPKField, tplan.MultiDeletePKField)
 		})
 	}
 }
@@ -1297,13 +1301,13 @@ func TestApplyBulkInsertChangesMaxQuerySize(t *testing.T) {
 func TestApplyBulkDeleteChanges(t *testing.T) {
 	newTablePlan := func() *TablePlan {
 		return &TablePlan{
-			TargetName:  "t",
-			MultiDelete: sqlparser.BuildParsedQuery("delete from t where id in %a", "::bulk_pks"),
+			TargetName:       "t",
+			MultiDelete:      sqlparser.BuildParsedQuery("delete from t where id in "),
+			MultiDeleteValue: sqlparser.BuildParsedQuery("%a", ":b_id"),
 			Fields: []*querypb.Field{
 				{Name: "id", Type: querypb.Type_INT64},
 				{Name: "v", Type: querypb.Type_VARCHAR},
 			},
-			MultiDeletePKField: "id",
 			TablePlanBuilder: &tablePlanBuilder{
 				pkCols: []*colExpr{{}},
 				stats:  binlogplayer.NewStats(),
@@ -1381,6 +1385,32 @@ func TestApplyBulkDeleteChanges(t *testing.T) {
 			}, 1024)
 		require.NoError(t, err)
 		require.Equal(t, []string{"delete from t where id in ('é1', 'é2')"}, executed)
+	})
+
+	t.Run("pk expression is evaluated for each row", func(t *testing.T) {
+		tp := newTablePlan()
+		tp.MultiDeleteValue = sqlparser.BuildParsedQuery("(%a + 1000)", ":b_id")
+		var executed []string
+		_, err := tp.applyBulkDeleteChanges([]*binlogdatapb.RowChange{makeRowDelete(1, "a"), makeRowDelete(2, "b")},
+			func(sql string) (*sqltypes.Result, error) {
+				executed = append(executed, sql)
+				return &sqltypes.Result{RowsAffected: 1}, nil
+			}, 1024)
+		require.NoError(t, err)
+		require.Equal(t, []string{"delete from t where id in ((1 + 1000), (2 + 1000))"}, executed)
+	})
+
+	t.Run("statement is split at the max query size", func(t *testing.T) {
+		tp := newTablePlan()
+		var executed []string
+		maxQuerySize := int64(len("delete from t where id in (1, 2)"))
+		_, err := tp.applyBulkDeleteChanges([]*binlogdatapb.RowChange{makeRowDelete(1, "a"), makeRowDelete(2, "b"), makeRowDelete(3, "c")},
+			func(sql string) (*sqltypes.Result, error) {
+				executed = append(executed, sql)
+				return &sqltypes.Result{RowsAffected: 1}, nil
+			}, maxQuerySize)
+		require.NoError(t, err)
+		require.Equal(t, []string{"delete from t where id in (1, 2)", "delete from t where id in (3)"}, executed)
 	})
 
 	t.Run("insert-shaped change returns an error instead of panicking", func(t *testing.T) {
