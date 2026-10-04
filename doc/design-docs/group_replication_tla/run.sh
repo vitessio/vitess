@@ -29,16 +29,22 @@ EXPECTED=(
   fence_snapshot:FenceNotUndone
   no_cas:AdoptOnce
   minority:NoMinorityAck
-  current:NoLostAck
+  relay_cand:NoLostAck
+  cand_strict:deadlock
+  stale_rpc:NoDualBootstrap
+  stale_rpc_timeout:NoDualBootstrap
+  dup_record:NoDualBootstrap
+  current:pass
   s7d_r2_ma_off:pass
   s7d_r2_ma_off_leaves:NoDecisionAck
   s7d_r3_adopt:pass
   tablet:pass
   orcs:pass
   orcs_stall:pass
+  stale_rpc_fixed:pass
   stale_rec:pass
   tablet_tx2:pass
-  integrated:NoDualBootstrap
+  integrated:pass
   integrated_core:pass
 )
 
