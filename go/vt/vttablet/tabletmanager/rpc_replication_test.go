@@ -31,6 +31,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
@@ -1652,4 +1653,119 @@ func TestShardPeerHealthSnapshot(t *testing.T) {
 	snap := tm.shardPeerHealthSnapshot()
 	require.Len(t, snap, 1)
 	assert.Equal(t, int64(1), snap[0].ConsecutivePingFailures)
+}
+
+// semiSyncOrderMysqlDaemon records, when source-side semi-sync is disabled, whether the query
+// service was still serving: disabling it completes the commits that wait for an ACK.
+type semiSyncOrderMysqlDaemon struct {
+	*mysqlctl.FakeMysqlDaemon
+	tm                     *TabletManager
+	disabledSourceSemiSync bool
+	servingWhenDisabled    bool
+}
+
+func (d *semiSyncOrderMysqlDaemon) IsSemiSyncBlocked(context.Context) (bool, error) {
+	return d.SemiSyncPrimaryEnabled, nil
+}
+
+func (d *semiSyncOrderMysqlDaemon) SetSemiSyncEnabled(ctx context.Context, primary, replica bool) error {
+	if d.SemiSyncPrimaryEnabled && !primary && !d.disabledSourceSemiSync {
+		d.disabledSourceSemiSync = true
+		d.servingWhenDisabled = d.tm.QueryServiceControl.IsServing()
+	}
+	return d.FakeMysqlDaemon.SetSemiSyncEnabled(ctx, primary, replica)
+}
+
+// TestSetReplicationSourceDemotesPrimaryBeforeSemiSync checks that SetReplicationSource on a
+// PRIMARY tablet whose writes wait for semi-sync ACKs stops serving (killing those sessions)
+// and sets super_read_only before it disables source-side semi-sync. An ERS sends this RPC to an
+// old primary that it could not demote; disabling semi-sync first completed the waiting commits
+// and acknowledged them to their clients, although the new primary does not have them.
+func TestSetReplicationSourceDemotesPrimaryBeforeSemiSync(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, "cell1")
+	tm := newTestTM(t, ts, 1, "ks", "0", nil)
+	t.Cleanup(tm.Stop)
+
+	require.NoError(t, tm.ChangeType(ctx, topodatapb.TabletType_PRIMARY, true))
+	fakeMysqlDaemon := tm.MysqlDaemon.(*mysqlctl.FakeMysqlDaemon)
+	fakeMysqlDaemon.DB().SetNeverFail(true)
+	require.NoError(t, fakeMysqlDaemon.SetReadOnly(ctx, false))
+	require.NoError(t, fakeMysqlDaemon.SetSemiSyncEnabled(ctx, true, true))
+	daemon := &semiSyncOrderMysqlDaemon{FakeMysqlDaemon: fakeMysqlDaemon, tm: tm}
+	tm.MysqlDaemon = daemon
+	require.True(t, tm.QueryServiceControl.IsServing())
+
+	// The new primary is not in the topo, so the RPC fails after its semi-sync changes.
+	newPrimary := &topodatapb.TabletAlias{Cell: "cell1", Uid: 200}
+	err := tm.SetReplicationSource(ctx, newPrimary, 0, "", false, true, 0)
+	require.Error(t, err)
+
+	require.True(t, daemon.disabledSourceSemiSync)
+	assert.False(t, daemon.servingWhenDisabled, "source-side semi-sync was disabled while the query service served")
+	assert.True(t, fakeMysqlDaemon.SuperReadOnly.Load())
+	assert.Equal(t, topodatapb.TabletType_REPLICA, tm.Tablet().Type)
+}
+
+// retryingIOMysqld reports a receiver that is retrying an unreachable source: Connecting with an
+// IO error, as MySQL shows it while the source is down or partitioned, until it is stopped.
+type retryingIOMysqld struct {
+	*mysqlctl.FakeMysqlDaemon
+	stopped bool
+}
+
+func (m *retryingIOMysqld) ReplicationStatus(ctx context.Context) (replication.ReplicationStatus, error) {
+	rs, err := m.FakeMysqlDaemon.ReplicationStatus(ctx)
+	rs.IOState = replication.ReplicationStateConnecting
+	rs.LastIOError = "error reconnecting to source 'vt_repl@p:3306' - retry-time: 10 retries: 3 message: Can't connect to MySQL server (111)"
+	if m.stopped {
+		rs.IOState = replication.ReplicationStateStopped
+	}
+	rs.SQLState = replication.ReplicationStateRunning
+	return rs, err
+}
+
+func (m *retryingIOMysqld) StopIOThread(ctx context.Context) error {
+	m.stopped = true
+	return m.FakeMysqlDaemon.StopIOThread(ctx)
+}
+
+// TestStopReplicationAndGetStatusStopsRetryingIOThread checks that the IOTHREADONLY stop that ERS
+// sends to every replica also stops a receiver that is retrying the old primary. Left running, it
+// reconnects with semi-sync ACKs enabled once the old primary is reachable again, and ACKs the old
+// primary's blocked commits although ERS counted the replica as revoked.
+func TestStopReplicationAndGetStatusStopsRetryingIOThread(t *testing.T) {
+	fmd := newTestMysqlDaemon(t, 1)
+	fmd.Replicating = true
+	fmd.IOThreadRunning = true
+	fmd.Version = "Ver 8.0.35"
+	fmd.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA IO_THREAD"}
+
+	tm := newTestReplicationTM(newTestTablet(t, 100, "ks", "0", nil), &retryingIOMysqld{FakeMysqlDaemon: fmd}, nil)
+
+	resp, err := tm.StopReplicationAndGetStatus(t.Context(), replicationdatapb.StopReplicationMode_IOTHREADONLY)
+	require.NoError(t, err)
+	require.NoError(t, fmd.CheckSuperQueryList())
+	assert.Equal(t, int32(replication.ReplicationStateConnecting), resp.Status.Before.IoState)
+	assert.Equal(t, int32(replication.ReplicationStateStopped), resp.Status.After.IoState)
+}
+
+// TestChangeTypeDrainedStopsSemiSyncAcks checks that a tablet changed to DRAINED stops sending
+// semi-sync ACKs even when the caller asks for them (VTOrc's errant GTID recovery before v25).
+func TestChangeTypeDrainedStopsSemiSyncAcks(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, "cell1")
+	tm := newTestTM(t, ts, 1, "ks", "0", nil)
+	t.Cleanup(tm.Stop)
+	fakeMysqlDaemon := tm.MysqlDaemon.(*mysqlctl.FakeMysqlDaemon)
+	fakeMysqlDaemon.DB().SetNeverFail(true)
+
+	require.NoError(t, tm.ChangeType(ctx, topodatapb.TabletType_REPLICA, true))
+	require.True(t, fakeMysqlDaemon.SemiSyncReplicaEnabled)
+
+	require.NoError(t, tm.ChangeType(ctx, topodatapb.TabletType_DRAINED, true))
+	assert.Equal(t, topodatapb.TabletType_DRAINED, tm.Tablet().Type)
+	assert.False(t, fakeMysqlDaemon.SemiSyncReplicaEnabled)
 }

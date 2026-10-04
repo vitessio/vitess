@@ -2061,7 +2061,7 @@ func TestReplicaIOThreadWasRunning(t *testing.T) {
 					SqlState:    int32(replication.ReplicationStateStopped),
 				},
 			},
-			expected: false,
+			expected: true,
 		},
 		{
 			name: "only sql thread running",

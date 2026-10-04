@@ -1,0 +1,5 @@
+tla2tools.jar
+out/
+states/
+*_TTrace_*
+*.summary
