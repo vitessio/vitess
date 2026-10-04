@@ -749,9 +749,81 @@ End to end, on the same binaries: `TestGroupReplicationLifecycle` (new primary i
 
 ### Still open
 
-- A restart of the candidate's mysqld after VTOrc chose it makes the tablet refuse the bootstrap; if the restart cost the candidate transactions that another voter holds, VTOrc then chooses that voter, but the intent written for the first one fences a bootstrap on any other tablet for its two minutes. A refusal that VTOrc can tell from other failures could withdraw the intent.
+- A restart of the candidate's mysqld after VTOrc chose it makes the tablet refuse the bootstrap; if the restart cost the candidate transactions that another voter holds, VTOrc then chooses that voter, but the intent written for the first one fences a bootstrap on any other tablet for its two minutes. Fixed when the refusal is definitive: see "Withdrawing the intent of a refused bootstrap".
 - If the relay log's received set lists transactions that the applier cannot apply, the candidate refuses every bootstrap, and VTOrc keeps choosing it; the shard then needs an operator. Not seen in the lab or in chaos.
 - The token check is skipped when the tablet's topology does not answer within a second (`stale_rpc_timeout` in the model).
+
+## Withdrawing the intent of a refused bootstrap
+
+### The delay
+
+A live bootstrap intent fences a bootstrap on any other voter for two minutes (`GroupReplicationBootstrapIntentFence`), so that the group of a bootstrap whose reply was lost can still be adopted. Since "Bootstrap candidate" (47d5e41), the candidate's tablet refuses a bootstrap when MySQL lacks a transaction that the request requires, as after a restart of mysqld that discarded its relay log. That refusal is correct, but the intent still named the candidate: VTOrc's next pass chose the voter that held the lost transactions, and the fence refused it until the intent expired. The TLA+ model shows the stuck state (`refusal_stuck`, below); `TestGroupReplicationWithdrawsRefusedBootstrapIntent` reproduces it on MySQL 8.4 (see "Results").
+
+### Fix (b8c4855, model 1641439)
+
+The tablet reports a refusal as **definitive** when it proves that the request did not, and never will, start MySQL's bootstrap, and VTOrc then withdraws its intent at once. The design is in "Bootstrap intent" of `doc/design-docs/GroupReplication.md`.
+
+**Which refusals qualify.**
+
+| Refusal | Definitive | Why |
+|---|---|---|
+| MySQL lacks a transaction of `required_gtid_set`, decided under the action lock, with MySQL in no group and no `START GROUP_REPLICATION` in `performance_schema.processlist` (also after the RPC stopped a `START` that was in progress, once MySQL accepted the `STOP`) | yes | Every `START` of the tablet runs under the action lock, which the RPC holds until it returns; MySQL starts none on its own (`group_replication_start_on_boot` and auto-rejoin are off); VTOrc sends one RPC per intent. |
+| The same, while a `START` runs, or when the status read fails | no | A `START` that an earlier RPC issued before its client gave up can still form a group of one. |
+| A superseded intent or another incarnation (token check) | no | The intent is not the caller's any more; the compare-and-swap would be a no-op anyway. |
+| MySQL is already an active member | no | It may be the group of an earlier bootstrap of the same intent, which VTOrc adopts. |
+| `UNAVAILABLE` after waiting 10s for a `START` in progress, configuration or topology errors, a timeout, a lost reply, a transport error, a canceled context | no | The request, or an earlier one, may still start a group. |
+
+**The signal.** A new optional request field, `StartGroupReplicationRequest.report_definitive_refusal`, asks the tablet to report a definitive refusal in a new response field, `StartGroupReplicationResponse.definitive_refusal`, instead of as an error: gRPC returns one or the other. The tablet manager returns it as a typed error (`tmclient.GroupBootstrapRefusedError`, code `FAILED_PRECONDITION`), `grpctmserver` turns it into the response field only when the request asked for it, and `grpctmclient` turns the field back into the typed error. No error string is matched. A tablet that does not know the request field refuses with an error, and a VTOrc that does not set it gets one: both keep the intent, as before.
+
+**The withdrawal** (`reparentutil.WithdrawGroupReplicationBootstrapIntent`) runs under the shard lock that the recovery holds, re-checked first as for every other intent write, and is a compare-and-swap: it removes the intent only while the shard record holds the same token, for the incarnation it was recorded for. A newer intent, which another VTOrc wrote after this one's lease expired, and an incarnation recorded since, stay as they are; the write is then a no-op. A stalled VTOrc whose lease expired fails the lock check and writes nothing; one whose lease expires between the check and the write can only remove its own intent, after its own target refused definitively.
+
+**After a withdrawal, the refused target cannot bootstrap from that intent.** Its tablet refused under the action lock, so the RPC did not start MySQL; no `START` ran at the refusal, and none can start without the action lock. VTOrc sent that token in one RPC only (the gRPC client does not retry). An RPC of an older intent that still waits for the tablet's lock is refused by the token check, since the shard record no longer holds its token, unless the tablet's topology does not answer within a second, which skips the check as before (`stale_rpc_timeout`). Withdrawing does not change that exposure: an RPC that skips the check could already bootstrap next to the live intent's own bootstrap.
+
+### The model
+
+`GRSafety.tla` models the definitive refusal (reply -2, only on the GTID check with no `START` running), the withdrawal with its compare-and-swap (`WITHDRAW_ON_REFUSAL`), and two unsafe variants that validate the conditions (README, "Withdrawing a refused intent"):
+
+| Configuration | What | Outcome |
+|---|---|---|
+| `withdraw_any` | VTOrc withdraws after any error or timeout (`WITHDRAW_ANY_FAILURE`) | `NoDualBootstrap` violated, 14 states: the RPC times out while MySQL's bootstrap of s1 runs; VTOrc withdraws, bootstraps s2, and s1's bootstrap completes |
+| `withdraw_starting` | the tablet reports its `UNAVAILABLE` after waiting for a `START` as definitive (`DEFINITIVE_WHILE_STARTING`) | `NoDualBootstrap` violated, 19 states: a bootstrap `START` of an earlier RPC still runs on s2 when the next RPC gives up waiting for it; VTOrc withdraws, bootstraps s1, and s2's `START` completes |
+| `refusal_stuck` | stuck-state check, without the withdrawal | deadlock, 14 states: the candidate restarts and refuses; the voter that holds the transaction is fenced until the intent expires |
+| `refusal_withdraw` | as `refusal_stuck`, with the withdrawal, every invariant | no stuck state, no violation: 5.4M states, exhaustive |
+| `withdraw_orcs` | two VTOrcs, lease expiry, two crashes (a definitive refusal is reachable), every invariant | no violation, 23.9M states, exhaustive (22 minutes) |
+
+`current`, `tablet`, `orcs`, `orcs_stall`, `stale_rec`, `stale_rpc_fixed`, `s7d_r3_adopt` and the `integrated` simulation pass with the withdrawal on (README, "Results"). The model also had an artifact that weakened `NoDualBootstrap`: the provenance of a bootstrap `START` (the recorded incarnation it started from) was overwritten by a later RPC that waited for it, and cleared when that RPC gave up; it is now kept for as long as the `START` runs.
+
+### Tests
+
+Each fails without its change (checked by mutation: the start-in-progress check removed, the refusal never marked, the token or active-member refusals marked definitive; VTOrc not withdrawing, withdrawing on any error, not asking for the report; the compare-and-swap without the token, without the incarnation, without the lock check; `grpctmserver` not converting or ignoring the request field, `grpctmclient` not converting): `TestBootstrapRefusalForMissingTransactionsIsDefinitive`, `TestBootstrapRefusalIsNotDefinitiveWhileStartInProgress`, `TestBootstrapGroupReplicationWithdrawsIntentOfDefinitiveRefusal` (a definitive refusal, a plain refusal, a timeout, a transport error, a canceled context; the next pass bootstraps the voter that holds the lost transaction only after a definitive refusal), `TestWithdrawGroupReplicationBootstrapIntent`, and the `tmrpctest` round trip. They pass 20 times in a row under `-race` (the `tmrpctest` suite in 20 separate runs: its fake keeps package-level flags that fail any `-count` above 1, before this change too).
+
+`TestGroupReplicationWithdrawsRefusedBootstrapIntent` (end to end, MySQL 8.4.11, three voters, VTOrc): the primary commits 100 rows while the candidate's applier is blocked (`FLUSH TABLES WITH READ LOCK`), and the candidate leaves its group with them in its relay log; an intent of an earlier pass names the candidate; the group loses its last member. VTOrc chooses the candidate again and sends the bootstrap, which waits for the candidate's action lock (`SleepTablet`, 25s) while its mysqld is killed and restarted by `mysqld_safe` (`relay_log_recovery` discards the backlog). The tablet then refuses.
+
+### Results
+
+**End to end** (`TestGroupReplicationWithdrawsRefusedBootstrapIntent`, one run each):
+
+| Binaries | VTOrc's intent → bootstrap of the primary recorded | Refusal → bootstrap |
+|---|---|---|
+| Before (8a5fdb3) | 121.2s | 99.8s: the intent fenced the primary until it expired |
+| After (b8c4855) | 24.2s (of which 21s is the test's hold of the candidate's lock) | 1.7s: VTOrc withdrew the intent and bootstrapped the primary on its next pass, 0.4s after the refusal |
+
+`TestGroupReplicationLifecycle` (new primary in the topology 6.6s after the primary's mysqld was killed) and `TestGroupReplicationMigratesShardByShard` pass.
+
+**Chaos** (binaries of b8c4855, one host, runs one after the other, `/home/ubuntu/chaos-fixes3/`, `CHAOS_DURABILITY=group_replication_cross_cell`). "Before" is the latest runs in "Bootstrap candidate and superseded bootstrap intents".
+
+| Scenario | Before | After | Acked writes lost | Violations |
+|---|---|---|---|---|
+| G12, a voter rejoins while the primary's cell is isolated (`CHAOS_RACE_OFFSETS=500ms`, 6 cycles) | 1 run: unavailable 145.9s; 3 cycles lost the majority (outage 36.8s, 32.9s, 35.9s each) | 1 run: unavailable 186.4s, longest gap 43.6s; 4 cycles lost the majority (40.8s, 35.9s, 35.4s, 43.6s) and 2 kept it. VTOrc bootstrapped 4 times; no bootstrap was refused, so nothing was withdrawn | 0/14753 | 0 |
+| S7d, flapping primary | 2 runs: unavailable 44.2s and 60.0s, longest gap 35.2s and 51.0s | 1 run: unavailable 42.6s (4 outages, 9.0–15.1s), longest gap 15.1s; the group kept its majority, no bootstrap | 0/4392 | 0 |
+
+Neither scenario produces a definitive refusal: in both, the candidate holds every transaction in its binlog. The runs check that the change costs nothing elsewhere; the outage of a cycle that loses the majority is as before (35–44s, dominated by MySQL's leaves in ERROR), and G12's total grows with the number of such cycles, which the race offset leaves to chance (3 of 6 before, 4 of 6 now).
+
+### Still open
+
+- **A bootstrap RPC that fails without a definitive refusal still fences the other voters for two minutes.** The most likely form of the delay is a candidate whose mysqld is down, or restarting, when the RPC arrives: the tablet's first MySQL read fails, and VTOrc cannot tell that failure from a lost reply. Likewise when the candidate restarts after an RPC that failed: VTOrc no longer chooses it (it lacks the transactions), so no RPC is ever refused. The model shows that state (`WaitsForExpiry` accepts it as the designed wait). A follow-up could send the bootstrap again to the target of a live intent that is reachable but no longer a candidate, with a fresh intent for the same target: its tablet refuses definitively, since it lacks the required set, and the next pass chooses the right voter. It is safe by the tablet's checks, but changes the candidate rule, and is not done here.
+- **A candidate whose applier cannot apply its relay log** applies it for up to `groupReplicationRelayLogApplyTimeout` (30s), the same as VTOrc's RPC timeout (`--wait-replicas-timeout`, 30s): VTOrc times out first, and the intent stays. Bounding the apply by the RPC's deadline, minus a margin, would let the definitive refusal arrive. The end-to-end test avoids the apply: the restart discards the relay log, and the refusal is immediate.
+- The token check is skipped when the tablet's topology does not answer within a second (`stale_rpc_timeout`), as before.
 
 ## Not tested
 
