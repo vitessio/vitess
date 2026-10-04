@@ -4853,8 +4853,12 @@ type StartGroupReplicationRequest struct {
 	// expected_incarnation is the shard record's group replication incarnation for which the caller
 	// recorded the bootstrap intent. It is only checked with bootstrap_intent_token.
 	ExpectedIncarnation string `protobuf:"bytes,4,opt,name=expected_incarnation,json=expectedIncarnation,proto3" json:"expected_incarnation,omitempty"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	// report_definitive_refusal, for a bootstrap, asks the tablet to report a definitive refusal in
+	// StartGroupReplicationResponse.definitive_refusal instead of as an error. A tablet that does not
+	// know the field refuses with an error, as before.
+	ReportDefinitiveRefusal bool `protobuf:"varint,5,opt,name=report_definitive_refusal,json=reportDefinitiveRefusal,proto3" json:"report_definitive_refusal,omitempty"`
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
 }
 
 func (x *StartGroupReplicationRequest) Reset() {
@@ -4915,12 +4919,26 @@ func (x *StartGroupReplicationRequest) GetExpectedIncarnation() string {
 	return ""
 }
 
+func (x *StartGroupReplicationRequest) GetReportDefinitiveRefusal() bool {
+	if x != nil {
+		return x.ReportDefinitiveRefusal
+	}
+	return false
+}
+
 type StartGroupReplicationResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// status is the tablet's group replication status after it started group replication.
-	Status        *replicationdata.GroupReplicationStatus `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Status *replicationdata.GroupReplicationStatus `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"`
+	// definitive_refusal is set, only when the request asked for it (report_definitive_refusal), when
+	// the tablet refused the bootstrap in a way that proves that the request did not, and never will,
+	// start a group: MySQL lacks a transaction of required_gtid_set, which the tablet found under its
+	// action lock while no START GROUP_REPLICATION ran. It explains the refusal; status is then empty.
+	// The caller may then withdraw the bootstrap intent it recorded for the request. Every other
+	// failure is an error, after which the request may still have started a group.
+	DefinitiveRefusal string `protobuf:"bytes,2,opt,name=definitive_refusal,json=definitiveRefusal,proto3" json:"definitive_refusal,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *StartGroupReplicationResponse) Reset() {
@@ -4958,6 +4976,13 @@ func (x *StartGroupReplicationResponse) GetStatus() *replicationdata.GroupReplic
 		return x.Status
 	}
 	return nil
+}
+
+func (x *StartGroupReplicationResponse) GetDefinitiveRefusal() string {
+	if x != nil {
+		return x.DefinitiveRefusal
+	}
+	return ""
 }
 
 type StopGroupReplicationRequest struct {
@@ -9068,14 +9093,16 @@ const file_tabletmanagerdata_proto_rawDesc = "" +
 	"\x19ReplicaWasPromotedRequest\"\x1c\n" +
 	"\x1aReplicaWasPromotedResponse\"#\n" +
 	"!ResetReplicationParametersRequest\"$\n" +
-	"\"ResetReplicationParametersResponse\"\xd1\x01\n" +
+	"\"ResetReplicationParametersResponse\"\x8d\x02\n" +
 	"\x1cStartGroupReplicationRequest\x12\x1c\n" +
 	"\tbootstrap\x18\x01 \x01(\bR\tbootstrap\x12*\n" +
 	"\x11required_gtid_set\x18\x02 \x01(\tR\x0frequiredGtidSet\x124\n" +
 	"\x16bootstrap_intent_token\x18\x03 \x01(\tR\x14bootstrapIntentToken\x121\n" +
-	"\x14expected_incarnation\x18\x04 \x01(\tR\x13expectedIncarnation\"`\n" +
+	"\x14expected_incarnation\x18\x04 \x01(\tR\x13expectedIncarnation\x12:\n" +
+	"\x19report_definitive_refusal\x18\x05 \x01(\bR\x17reportDefinitiveRefusal\"\x8f\x01\n" +
 	"\x1dStartGroupReplicationResponse\x12?\n" +
-	"\x06status\x18\x01 \x01(\v2'.replicationdata.GroupReplicationStatusR\x06status\"\x1d\n" +
+	"\x06status\x18\x01 \x01(\v2'.replicationdata.GroupReplicationStatusR\x06status\x12-\n" +
+	"\x12definitive_refusal\x18\x02 \x01(\tR\x11definitiveRefusal\"\x1d\n" +
 	"\x1bStopGroupReplicationRequest\"_\n" +
 	"\x1cStopGroupReplicationResponse\x12?\n" +
 	"\x06status\x18\x01 \x01(\v2'.replicationdata.GroupReplicationStatusR\x06status\"\x13\n" +

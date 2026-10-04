@@ -32,6 +32,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
+	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -256,4 +257,84 @@ func TestBootstrapIntentCheckDoesNotWaitForCutOffTopo(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, fmd.GroupReplicationBootstrapped)
 	assert.Less(t, time.Since(start), 3*groupReplicationTopoReadTimeout+3*time.Second, "the bootstrap must not wait for the topology")
+}
+
+// TestBootstrapRefusalForMissingTransactionsIsDefinitive checks which refusals of a bootstrap the
+// tablet reports as definitive (tmclient.GroupBootstrapRefusedError), after which VTOrc withdraws the
+// bootstrap intent it recorded for the request: only the refusal for a transaction that MySQL lacks,
+// decided while no START GROUP_REPLICATION runs, also when the RPC first stopped a START that was in
+// progress when it came. A refusal of a superseded intent, whose withdrawal would be a no-op anyway,
+// and of a member that is already active, possibly in the group that an earlier RPC of the same intent
+// bootstrapped, which VTOrc is to adopt, are not definitive.
+func TestBootstrapRefusalForMissingTransactionsIsDefinitive(t *testing.T) {
+	withGroupReplication(t)
+	ctx := t.Context()
+	tm, fmd, _, ts := newLegitimacyTestTM(t)
+	fmd.StartGroupReplicationError = nil
+	require.NoError(t, fmd.ConfigureGroupReplication(ctx, mysql.GroupReplicationConfig{GroupName: policy.GroupName("ks", "0")}))
+	setExecutedAndReceived(t, fmd, bootstrapTestGroupUUID+":1-10", "")
+	setBootstrapIntentToken(t, ts, "token-1")
+	request := func(token string) *tabletmanagerdatapb.StartGroupReplicationRequest {
+		req := intentRequest(token, "1780000001")
+		req.RequiredGtidSet = bootstrapTestGroupUUID + ":1-15"
+		return req
+	}
+
+	_, err := tm.StartGroupReplication(ctx, request("token-1"))
+	requireCode(t, err, vtrpcpb.Code_FAILED_PRECONDITION)
+	assert.True(t, tmclient.IsGroupBootstrapRefused(err), "MySQL lacks 11-15 and runs no START: %v", err)
+
+	// A superseded intent.
+	_, err = tm.StartGroupReplication(ctx, request("token-0"))
+	requireCode(t, err, vtrpcpb.Code_FAILED_PRECONDITION)
+	assert.False(t, tmclient.IsGroupBootstrapRefused(err), "%v", err)
+
+	// A START that was in progress when the RPC came, the bootstrap of an earlier RPC whose client gave
+	// up, ends, and MySQL accepts the STOP that the tablet then issues: nothing runs any more.
+	release := blockedStart(t, fmd)
+	fmd.StopGroupReplicationHook = func() { release() }
+	t.Cleanup(func() { fmd.StopGroupReplicationHook = nil })
+	_, err = tm.StartGroupReplication(ctx, request("token-1"))
+	requireCode(t, err, vtrpcpb.Code_FAILED_PRECONDITION)
+	assert.True(t, tmclient.IsGroupBootstrapRefused(err), "the START ended before the refusal: %v", err)
+	assert.Contains(t, err.Error(), bootstrapTestGroupUUID+":11-15")
+	start, _, _ := fmd.GroupReplicationCalls()
+	assert.Equal(t, 1, start, "only the START of the earlier RPC")
+
+	// MySQL is already an active member: the group of an earlier bootstrap, which VTOrc adopts.
+	fmd.StopGroupReplicationHook = nil
+	status := tmStatus(t, fmd)
+	status.MemberState = mysql.GroupMemberStateOnline
+	fmd.SetGroupReplicationStatus(status)
+	_, err = tm.StartGroupReplication(ctx, request("token-1"))
+	requireCode(t, err, vtrpcpb.Code_FAILED_PRECONDITION)
+	assert.False(t, tmclient.IsGroupBootstrapRefused(err), "%v", err)
+}
+
+// TestBootstrapRefusalIsNotDefinitiveWhileStartInProgress checks that the tablet does not report a
+// refusal as definitive while MySQL runs a START GROUP_REPLICATION, which MySQL lists in its
+// processlist for as long as it runs, also after its client gave up: that START can still form a
+// group of one. Were VTOrc to withdraw the intent, it could bootstrap another voter next to it, and
+// could no longer adopt the group that START forms. MySQL accepts some of the configuration while a
+// START runs, so only the processlist tells.
+func TestBootstrapRefusalIsNotDefinitiveWhileStartInProgress(t *testing.T) {
+	withGroupReplication(t)
+	ctx := t.Context()
+	tm, fmd, _, ts := newLegitimacyTestTM(t)
+	fmd.StartGroupReplicationError = nil
+	require.NoError(t, fmd.ConfigureGroupReplication(ctx, mysql.GroupReplicationConfig{GroupName: policy.GroupName("ks", "0")}))
+	setExecutedAndReceived(t, fmd, bootstrapTestGroupUUID+":1-10", "")
+	status := tmStatus(t, fmd)
+	status.StartInProgress = true
+	fmd.SetGroupReplicationStatus(status)
+	setBootstrapIntentToken(t, ts, "token-1")
+
+	req := intentRequest("token-1", "1780000001")
+	req.RequiredGtidSet = bootstrapTestGroupUUID + ":1-15"
+	_, err := tm.StartGroupReplication(ctx, req)
+	requireCode(t, err, vtrpcpb.Code_FAILED_PRECONDITION)
+	assert.Contains(t, err.Error(), bootstrapTestGroupUUID+":11-15")
+	assert.False(t, tmclient.IsGroupBootstrapRefused(err), "a START runs: %v", err)
+	start, _, _ := fmd.GroupReplicationCalls()
+	assert.Zero(t, start)
 }

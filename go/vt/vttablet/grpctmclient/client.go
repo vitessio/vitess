@@ -1487,6 +1487,9 @@ func (client *Client) StartGroupReplication(ctx context.Context, tablet *topodat
 	if err != nil {
 		return nil, vterrors.FromGRPC(err)
 	}
+	if refusal := response.GetDefinitiveRefusal(); refusal != "" {
+		return nil, tmclient.NewGroupBootstrapRefusedError(vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, refusal))
+	}
 	return response.Status, nil
 }
 

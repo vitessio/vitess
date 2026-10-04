@@ -39,6 +39,7 @@ import (
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
 	"vitess.io/vitess/go/vt/vtorc/inst"
+	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	tmcmock "vitess.io/vitess/go/vt/vttablet/tmclient/mock"
 
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
@@ -1154,6 +1155,146 @@ func TestBootstrapGroupReplicationRequiresEveryTransaction(t *testing.T) {
 	assert.Equal(t, intent.GetToken(), req.GetBootstrapIntentToken())
 	assert.Equal(t, intent.GetPreviousIncarnation(), req.GetExpectedIncarnation())
 	assert.Eventually(t, func() bool { return joins.Load() == 2 }, 30*time.Second, 10*time.Millisecond)
+}
+
+// TestBootstrapGroupReplicationWithdrawsIntentOfDefinitiveRefusal checks what VTOrc does with the
+// bootstrap intent when the bootstrap RPC fails. The TLA+ model's refusal_stuck configuration
+// (doc/design-docs/group_replication_tla) shows the delay this avoids: the group's primary, 101,
+// crashed after its group decided 16, which voters 100 and 102 received without applying; VTOrc chose
+// 100 (equal sets, lowest alias), whose mysqld then restarted and discarded its relay log, so that its
+// tablet refused the bootstrap. Only 102 can bootstrap the group now, but the intent recorded for 100
+// fenced a bootstrap on any other tablet for GroupReplicationBootstrapIntentFence.
+//
+// A definitive refusal proves that the RPC did not, and never will, start a group on 100: VTOrc
+// withdraws the intent at once, and its next pass bootstraps 102. Any other failure, a refusal that
+// the tablet did not report as definitive, a timeout, a transport error or a canceled context, may
+// hide a bootstrap that still runs on 100: the intent must stay, and keep fencing 102 until it is
+// adopted or expires.
+func TestBootstrapGroupReplicationWithdrawsIntentOfDefinitiveRefusal(t *testing.T) {
+	const groupName = "6f1c2c2e-5a8e-4b8e-9d3a-7c1f0b6e2a41"
+	offline := func(position, received string) *replicationdatapb.FullStatus {
+		return &replicationdatapb.FullStatus{
+			PrimaryStatus: &replicationdatapb.PrimaryStatus{Position: "MySQL56/" + position},
+			GroupReplicationStatus: &replicationdatapb.GroupReplicationStatus{
+				PluginActive:           true,
+				MemberState:            mysql.GroupMemberStateOffline,
+				ReceivedTransactionSet: received,
+			},
+		}
+	}
+	refusal := vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "refusing to bootstrap the replication group: MySQL has not executed %s:11-16", groupName)
+	tests := []struct {
+		name      string
+		err       error
+		withdrawn bool
+	}{
+		{name: "definitive refusal", err: tmclient.NewGroupBootstrapRefusedError(refusal), withdrawn: true},
+		{name: "refusal that is not definitive", err: refusal},
+		{name: "timeout", err: vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "context deadline exceeded")},
+		{name: "transport error", err: vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "connection error: connection refused")},
+		{name: "canceled", err: context.Canceled},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tablets := []*topodatapb.Tablet{
+				recoveryTablet("zone1", 100, topodatapb.TabletType_REPLICA),
+				recoveryTablet("zone2", 101, topodatapb.TabletType_REPLICA),
+				recoveryTablet("zone3", 102, topodatapb.TabletType_REPLICA),
+			}
+			// What VTOrc reads on its first pass, and on its second, after 100's mysqld restarted.
+			statuses := [][]*replicationdatapb.FullStatus{{
+				offline(groupName+":1-10", groupName+":1-16"),
+				offline(groupName+":1-15", ""),
+				offline(groupName+":1-10", groupName+":1-16"),
+			}, {
+				offline(groupName+":1-10", ""),
+				offline(groupName+":1-15", ""),
+				offline(groupName+":1-10", groupName+":1-16"),
+			}}
+			mockTMC := groupReplicationRecoveryTest(t, tablets...)
+			inst.GroupReplicationConditions.Reset()
+			setVoters(t, tablets...)
+			var pass atomic.Int32
+			var joins atomic.Int32
+			var refusedRequest atomic.Pointer[tabletmanagerdatapb.StartGroupReplicationRequest]
+			for i, tablet := range tablets {
+				mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(tablet)).
+					DoAndReturn(func(context.Context, *topodatapb.Tablet) (*replicationdatapb.FullStatus, error) {
+						return statuses[pass.Load()][i], nil
+					}).AnyTimes()
+				bootstraps, joinTimes := 0, 0
+				switch {
+				case tablet.Alias.Uid == 100:
+					mockTMC.EXPECT().StartGroupReplication(gomock.Any(), sameTablet(tablet), startRequest(true)).
+						DoAndReturn(func(_ context.Context, _ *topodatapb.Tablet, req *tabletmanagerdatapb.StartGroupReplicationRequest) (*replicationdatapb.GroupReplicationStatus, error) {
+							refusedRequest.Store(req)
+							return nil, tt.err
+						}).Times(1)
+				case tablet.Alias.Uid == 102 && tt.withdrawn:
+					bootstraps = 1
+				}
+				if tt.withdrawn && tablet.Alias.Uid != 102 {
+					joinTimes = 1
+				}
+				if tablet.Alias.Uid != 100 {
+					mockTMC.EXPECT().StartGroupReplication(gomock.Any(), sameTablet(tablet), startRequest(true)).
+						Return(&replicationdatapb.GroupReplicationStatus{ViewId: "1790000123:1"}, nil).Times(bootstraps)
+				}
+				mockTMC.EXPECT().StartGroupReplication(gomock.Any(), sameTablet(tablet), startRequest(false)).
+					DoAndReturn(func(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.StartGroupReplicationRequest) (*replicationdatapb.GroupReplicationStatus, error) {
+						joins.Add(1)
+						return &replicationdatapb.GroupReplicationStatus{ViewId: "1790000123:2"}, nil
+					}).Times(joinTimes)
+			}
+			analysisEntry := &inst.DetectionAnalysis{
+				Analysis:              inst.GroupNotBootstrapped,
+				AnalyzedInstanceAlias: tablets[0].Alias,
+				AnalyzedKeyspace:      "ks",
+				AnalyzedShard:         "0",
+			}
+			bootstrap := func() (*TopologyRecovery, error) {
+				lockedCtx, unlock, err := ts.LockShard(t.Context(), "ks", "0", "test")
+				require.NoError(t, err)
+				defer unlock(&err)
+				attempted, topologyRecovery, err := bootstrapGroupReplication(lockedCtx, analysisEntry, log.NewPrefixedLogger("test"))
+				assert.True(t, attempted)
+				return topologyRecovery, err
+			}
+
+			_, err := bootstrap()
+			require.Error(t, err)
+			req := refusedRequest.Load()
+			require.NotNil(t, req)
+			assert.True(t, req.GetReportDefinitiveRefusal(), "VTOrc must ask the tablet to report a definitive refusal")
+			si, err := ts.GetShard(t.Context(), "ks", "0")
+			require.NoError(t, err)
+			if tt.withdrawn {
+				assert.Nil(t, si.GroupReplicationBootstrapIntent, "the refused intent must be withdrawn")
+			} else {
+				require.NotNil(t, si.GroupReplicationBootstrapIntent, "the intent must stay")
+				assert.Equal(t, req.GetBootstrapIntentToken(), si.GroupReplicationBootstrapIntent.GetToken())
+			}
+
+			// The next pass, after 100's mysqld restarted: only 102 holds 16.
+			pass.Store(1)
+			topologyRecovery, err := bootstrap()
+			if !tt.withdrawn {
+				assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err), "the intent of 100 fences 102: %v", err)
+				si, err = ts.GetShard(t.Context(), "ks", "0")
+				require.NoError(t, err)
+				assert.Equal(t, req.GetBootstrapIntentToken(), si.GroupReplicationBootstrapIntent.GetToken())
+				assert.Empty(t, si.GroupReplicationIncarnation)
+				return
+			}
+			require.NoError(t, err)
+			require.NotNil(t, topologyRecovery)
+			assert.EqualValues(t, 102, topologyRecovery.SuccessorAlias.Uid)
+			si, err = ts.GetShard(t.Context(), "ks", "0")
+			require.NoError(t, err)
+			assert.Equal(t, "1790000123", si.GroupReplicationIncarnation)
+			assert.Eventually(t, func() bool { return joins.Load() == 2 }, 30*time.Second, 10*time.Millisecond)
+		})
+	}
 }
 
 func TestGetCheckAndRecoverFunctionCodeGroupVotersOutOfDate(t *testing.T) {

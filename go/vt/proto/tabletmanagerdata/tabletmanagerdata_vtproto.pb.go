@@ -2010,6 +2010,7 @@ func (m *StartGroupReplicationRequest) CloneVT() *StartGroupReplicationRequest {
 	r.RequiredGtidSet = m.RequiredGtidSet
 	r.BootstrapIntentToken = m.BootstrapIntentToken
 	r.ExpectedIncarnation = m.ExpectedIncarnation
+	r.ReportDefinitiveRefusal = m.ReportDefinitiveRefusal
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -2026,6 +2027,7 @@ func (m *StartGroupReplicationResponse) CloneVT() *StartGroupReplicationResponse
 		return (*StartGroupReplicationResponse)(nil)
 	}
 	r := new(StartGroupReplicationResponse)
+	r.DefinitiveRefusal = m.DefinitiveRefusal
 	if rhs := m.Status; rhs != nil {
 		if vtpb, ok := interface{}(rhs).(interface {
 			CloneVT() *replicationdata.GroupReplicationStatus
@@ -8225,6 +8227,16 @@ func (m *StartGroupReplicationRequest) MarshalToSizedBufferVT(dAtA []byte) (int,
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.ReportDefinitiveRefusal {
+		i--
+		if m.ReportDefinitiveRefusal {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x28
+	}
 	if len(m.ExpectedIncarnation) > 0 {
 		i -= len(m.ExpectedIncarnation)
 		copy(dAtA[i:], m.ExpectedIncarnation)
@@ -8288,6 +8300,13 @@ func (m *StartGroupReplicationResponse) MarshalToSizedBufferVT(dAtA []byte) (int
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if len(m.DefinitiveRefusal) > 0 {
+		i -= len(m.DefinitiveRefusal)
+		copy(dAtA[i:], m.DefinitiveRefusal)
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.DefinitiveRefusal)))
+		i--
+		dAtA[i] = 0x12
 	}
 	if m.Status != nil {
 		if vtmsg, ok := interface{}(m.Status).(interface {
@@ -14096,6 +14115,9 @@ func (m *StartGroupReplicationRequest) SizeVT() (n int) {
 	if l > 0 {
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
+	if m.ReportDefinitiveRefusal {
+		n += 2
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -14114,6 +14136,10 @@ func (m *StartGroupReplicationResponse) SizeVT() (n int) {
 		} else {
 			l = proto.Size(m.Status)
 		}
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	l = len(m.DefinitiveRefusal)
+	if l > 0 {
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	n += len(m.unknownFields)
@@ -25180,6 +25206,26 @@ func (m *StartGroupReplicationRequest) UnmarshalVT(dAtA []byte) error {
 			}
 			m.ExpectedIncarnation = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
+		case 5:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ReportDefinitiveRefusal", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.ReportDefinitiveRefusal = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
@@ -25274,6 +25320,38 @@ func (m *StartGroupReplicationResponse) UnmarshalVT(dAtA []byte) error {
 					return err
 				}
 			}
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field DefinitiveRefusal", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.DefinitiveRefusal = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex

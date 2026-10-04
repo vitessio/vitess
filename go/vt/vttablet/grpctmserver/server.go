@@ -31,6 +31,7 @@ import (
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager"
+	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -646,6 +647,13 @@ func (s *server) StartGroupReplication(ctx context.Context, request *tabletmanag
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.StartGroupReplicationResponse{}
 	response.Status, err = s.tm.StartGroupReplication(ctx, request)
+	if request.GetReportDefinitiveRefusal() && tmclient.IsGroupBootstrapRefused(err) {
+		// gRPC returns an error or a response, not both: the definitive refusal travels in the
+		// response, which only a caller that asked for it reads (see tmclient.GroupBootstrapRefusedError).
+		response.Status = nil
+		response.DefinitiveRefusal = err.Error()
+		return response, nil
+	}
 	return response, err
 }
 

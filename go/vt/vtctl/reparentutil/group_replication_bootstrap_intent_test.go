@@ -362,3 +362,87 @@ func TestRecordGroupReplicationBootstrapKeepsNewerIntent(t *testing.T) {
 	require.NoError(t, RecordGroupReplicationBootstrap(ctx, ts, "ks", "0", first, newIncarnation))
 	assert.Nil(t, readShard(t, ts).GroupReplicationBootstrapIntent)
 }
+
+// TestWithdrawGroupReplicationBootstrapIntent checks the compare-and-swap with which VTOrc withdraws
+// its bootstrap intent once the intent's target refused the bootstrap definitively: it removes the
+// intent only while the shard record holds the same token, for the incarnation it was recorded for.
+// A newer intent, which another VTOrc recorded after the caller's shard lock expired, and an
+// incarnation recorded since, stay as they are; a caller that lost its shard lock writes nothing.
+func TestWithdrawGroupReplicationBootstrapIntent(t *testing.T) {
+	const recorded = "1790000001"
+	now := time.Now()
+	target := intentTestTablet(100)
+
+	t.Run("its own intent", func(t *testing.T) {
+		ctx, ts := intentTestShard(t, recorded)
+		intent, err := WriteGroupReplicationBootstrapIntent(ctx, ts, "ks", "0", target.Alias, recorded, now)
+		require.NoError(t, err)
+		withdrawn, err := WithdrawGroupReplicationBootstrapIntent(ctx, ts, "ks", "0", intent)
+		require.NoError(t, err)
+		assert.True(t, withdrawn)
+		si := readShard(t, ts)
+		assert.Nil(t, si.GroupReplicationBootstrapIntent)
+		assert.Equal(t, recorded, si.GroupReplicationIncarnation)
+		// The intent no longer fences a bootstrap on another tablet.
+		_, err = WriteGroupReplicationBootstrapIntent(ctx, ts, "ks", "0", intentTestTablet(101).Alias, recorded, now.Add(time.Second))
+		require.NoError(t, err)
+		// Withdrawing it again changes nothing.
+		withdrawn, err = WithdrawGroupReplicationBootstrapIntent(ctx, ts, "ks", "0", intent)
+		require.NoError(t, err)
+		assert.False(t, withdrawn)
+		assert.True(t, topoproto.TabletAliasEqual(intentTestTablet(101).Alias, readShard(t, ts).GroupReplicationBootstrapIntent.GetTarget()))
+	})
+
+	t.Run("a newer intent", func(t *testing.T) {
+		ctx, ts := intentTestShard(t, recorded)
+		first, err := WriteGroupReplicationBootstrapIntent(ctx, ts, "ks", "0", target.Alias, recorded, now)
+		require.NoError(t, err)
+		// Another VTOrc chose the same target again and replaced the intent.
+		second, err := WriteGroupReplicationBootstrapIntent(ctx, ts, "ks", "0", target.Alias, recorded, now.Add(time.Second))
+		require.NoError(t, err)
+		withdrawn, err := WithdrawGroupReplicationBootstrapIntent(ctx, ts, "ks", "0", first)
+		require.NoError(t, err)
+		assert.False(t, withdrawn)
+		assert.Equal(t, second.GetToken(), readShard(t, ts).GroupReplicationBootstrapIntent.GetToken(), "the newer intent must stay")
+	})
+
+	t.Run("an incarnation recorded since", func(t *testing.T) {
+		ctx, ts := intentTestShard(t, recorded)
+		intent, err := WriteGroupReplicationBootstrapIntent(ctx, ts, "ks", "0", target.Alias, recorded, now)
+		require.NoError(t, err)
+		// A component that does not know intents recorded another incarnation, and left the intent.
+		_, err = ts.UpdateShardFields(ctx, "ks", "0", func(si *topo.ShardInfo) error {
+			si.GroupReplicationIncarnation = "1790000002"
+			return nil
+		})
+		require.NoError(t, err)
+		withdrawn, err := WithdrawGroupReplicationBootstrapIntent(ctx, ts, "ks", "0", intent)
+		require.NoError(t, err)
+		assert.False(t, withdrawn)
+		si := readShard(t, ts)
+		assert.Equal(t, "1790000002", si.GroupReplicationIncarnation)
+		assert.Equal(t, intent.GetToken(), si.GroupReplicationBootstrapIntent.GetToken())
+
+		// The incarnation recorded for the intent cleared it; withdrawing writes nothing.
+		require.NoError(t, WriteGroupReplicationIncarnation(ctx, ts, "ks", "0", "1790000002", "1790000003"))
+		withdrawn, err = WithdrawGroupReplicationBootstrapIntent(ctx, ts, "ks", "0", intent)
+		require.NoError(t, err)
+		assert.False(t, withdrawn)
+		assert.Equal(t, "1790000003", readShard(t, ts).GroupReplicationIncarnation)
+	})
+
+	t.Run("without the shard lock", func(t *testing.T) {
+		ctx, ts := intentTestShard(t, recorded)
+		intent, err := WriteGroupReplicationBootstrapIntent(ctx, ts, "ks", "0", target.Alias, recorded, now)
+		require.NoError(t, err)
+		_, err = WithdrawGroupReplicationBootstrapIntent(t.Context(), ts, "ks", "0", intent)
+		require.Error(t, err)
+		assert.Equal(t, intent.GetToken(), readShard(t, ts).GroupReplicationBootstrapIntent.GetToken())
+	})
+
+	t.Run("without a token", func(t *testing.T) {
+		ctx, ts := intentTestShard(t, recorded)
+		_, err := WithdrawGroupReplicationBootstrapIntent(ctx, ts, "ks", "0", &topodatapb.GroupReplicationBootstrapIntent{PreviousIncarnation: recorded})
+		assert.Equal(t, vtrpcpb.Code_INVALID_ARGUMENT, vterrors.Code(err), "%v", err)
+	})
+}

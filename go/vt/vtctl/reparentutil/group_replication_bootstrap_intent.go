@@ -221,3 +221,39 @@ func RecordGroupReplicationBootstrap(ctx context.Context, ts *topo.Server, keysp
 	}
 	return writeGroupReplicationIncarnation(ctx, ts, keyspace, shard, intent.GetPreviousIncarnation(), incarnation, intent.GetToken())
 }
+
+// WithdrawGroupReplicationBootstrapIntent removes the caller's bootstrap intent from the shard
+// record, once the intent's target refused the bootstrap definitively (see
+// tmclient.GroupBootstrapRefusedError): the tablet proved, under its action lock, that the RPC did
+// not start MySQL's bootstrap and never will, and no other RPC carries the intent's token. The
+// intent then fences nothing, and the caller can bootstrap the group on another voter on its next
+// pass, instead of waiting GroupReplicationBootstrapIntentFence for it to expire.
+//
+// The caller must hold the shard lock, which is re-checked first, as for the other writes of the
+// intent. The write is a compare-and-swap: it removes the intent only while the shard record still
+// holds it, the same token, for the incarnation it was recorded for. A newer intent, written by
+// another VTOrc that took the shard lock after the caller's lease expired, and an incarnation
+// recorded since, are left as they are. It returns whether it removed the intent.
+func WithdrawGroupReplicationBootstrapIntent(ctx context.Context, ts *topo.Server, keyspace, shard string, intent *topodatapb.GroupReplicationBootstrapIntent) (bool, error) {
+	if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
+		return false, vterrors.Wrap(err, lostTopologyLockMsg)
+	}
+	if intent.GetToken() == "" {
+		return false, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot withdraw a bootstrap intent of %s/%s without a token", keyspace, shard)
+	}
+	withdrawn := false
+	_, err := ts.UpdateShardFields(ctx, keyspace, shard, func(si *topo.ShardInfo) error {
+		withdrawn = false
+		current := si.GroupReplicationBootstrapIntent
+		if current.GetToken() != intent.GetToken() || si.GroupReplicationIncarnation != intent.GetPreviousIncarnation() {
+			return topo.NewError(topo.NoUpdateNeeded, keyspace+"/"+shard)
+		}
+		si.GroupReplicationBootstrapIntent = nil
+		withdrawn = true
+		return nil
+	})
+	if err != nil {
+		return false, vterrors.Wrapf(err, "failed to withdraw the group replication bootstrap intent %s of shard %s/%s", intent.GetToken(), keyspace, shard)
+	}
+	return withdrawn, nil
+}

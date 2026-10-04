@@ -38,6 +38,7 @@ import (
 	"vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
@@ -45,6 +46,7 @@ import (
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // fakeRPCTM implements tabletmanager.RPCTM and fills in all
@@ -1361,23 +1363,50 @@ var testGroupReplicationStatus = &replicationdatapb.GroupReplicationStatus{
 }
 
 var testStartGroupReplicationRequest = &tabletmanagerdatapb.StartGroupReplicationRequest{
-	Bootstrap:            true,
-	RequiredGtidSet:      "8a94f357-aab4-11df-86ab-c80aa9429562:1-15",
-	BootstrapIntentToken: "1791099930472903533-241bf83d03a12194",
-	ExpectedIncarnation:  "17908000000000000",
+	Bootstrap:               true,
+	RequiredGtidSet:         "8a94f357-aab4-11df-86ab-c80aa9429562:1-15",
+	BootstrapIntentToken:    "1791099930472903533-241bf83d03a12194",
+	ExpectedIncarnation:     "17908000000000000",
+	ReportDefinitiveRefusal: true,
 }
+
+// testRefusedGTIDSet is a required GTID set that the fake tablet refuses definitively.
+const testRefusedGTIDSet = "8a94f357-aab4-11df-86ab-c80aa9429562:1-16"
+
+const testDefinitiveRefusal = "refusing to bootstrap the replication group: MySQL has not executed 8a94f357-aab4-11df-86ab-c80aa9429562:16"
 
 func (fra *fakeRPCTM) StartGroupReplication(ctx context.Context, req *tabletmanagerdatapb.StartGroupReplicationRequest) (*replicationdatapb.GroupReplicationStatus, error) {
 	if fra.panics {
 		panic(errors.New("test-triggered panic"))
 	}
+	if req.GetRequiredGtidSet() == testRefusedGTIDSet {
+		return nil, tmclient.NewGroupBootstrapRefusedError(vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, testDefinitiveRefusal))
+	}
 	compare(fra.t, "StartGroupReplication request", req, testStartGroupReplicationRequest)
 	return testGroupReplicationStatus, nil
 }
 
+// tmRPCTestStartGroupReplication also checks that a definitive refusal of a bootstrap reaches the
+// client as a tmclient.GroupBootstrapRefusedError when the request asks for it, and as a plain error
+// otherwise, as from a tablet that does not know the field (the fake's HandleRPCPanic does not carry
+// the error's code over gRPC, as TabletManager.HandleRPCPanic does).
 func tmRPCTestStartGroupReplication(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	status, err := client.StartGroupReplication(ctx, tablet, testStartGroupReplicationRequest)
 	compareError(t, "StartGroupReplication", err, status, testGroupReplicationStatus)
+
+	refused := testStartGroupReplicationRequest.CloneVT()
+	refused.RequiredGtidSet = testRefusedGTIDSet
+	status, err = client.StartGroupReplication(ctx, tablet, refused)
+	assert.Nil(t, status)
+	assert.True(t, tmclient.IsGroupBootstrapRefused(err), "StartGroupReplication must report a definitive refusal: %v", err)
+	assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err), "%v", err)
+	require.ErrorContains(t, err, testDefinitiveRefusal)
+
+	refused.ReportDefinitiveRefusal = false
+	status, err = client.StartGroupReplication(ctx, tablet, refused)
+	assert.Nil(t, status)
+	assert.False(t, tmclient.IsGroupBootstrapRefused(err), "a caller that did not ask gets a plain error: %v", err)
+	require.ErrorContains(t, err, testDefinitiveRefusal)
 }
 
 func tmRPCTestStartGroupReplicationPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {

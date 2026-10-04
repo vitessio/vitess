@@ -36,6 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/inst"
+	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -381,7 +382,12 @@ type groupBootstrapCandidate struct {
 // reparentutil.WriteGroupReplicationBootstrapIntent), which a recent intent for another tablet
 // refuses. If the bootstrap RPC fails, the group the bootstrap may have created anyway is adopted
 // right away, or on a later pass (GroupBootstrapNotRecorded); the incarnation is recorded with a
-// compare-and-swap against the one the intent was recorded for.
+// compare-and-swap against the one the intent was recorded for. If the tablet refused the bootstrap
+// definitively instead (tmclient.GroupBootstrapRefusedError: its MySQL lacks a required transaction,
+// typically because a restart of mysqld discarded its relay log, and no START GROUP_REPLICATION
+// runs), there is nothing to adopt: the intent is withdrawn right away (see
+// reparentutil.WithdrawGroupReplicationBootstrapIntent), so that the next pass can bootstrap the
+// voter that holds those transactions, rather than wait for the intent to expire.
 func bootstrapGroupReplication(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logger *log.PrefixedLogger) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
 	topologyRecovery, err = AttemptRecoveryRegistration(analysisEntry)
 	if topologyRecovery == nil {
@@ -440,11 +446,16 @@ func bootstrapGroupReplication(ctx context.Context, analysisEntry *inst.Detectio
 	_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("bootstrapping the replication group on %s, which has the most advanced GTID set %s (intent %s)", aliasString, candidate.gtidSet, intent.GetToken()))
 	var incarnation string
 	groupStatus, err := startGroupReplication(ctx, candidate.tablet, &tabletmanagerdatapb.StartGroupReplicationRequest{
-		Bootstrap:            true,
-		RequiredGtidSet:      required.String(),
-		BootstrapIntentToken: intent.GetToken(),
-		ExpectedIncarnation:  shardInfo.GetGroupReplicationIncarnation(),
+		Bootstrap:               true,
+		RequiredGtidSet:         required.String(),
+		BootstrapIntentToken:    intent.GetToken(),
+		ExpectedIncarnation:     shardInfo.GetGroupReplicationIncarnation(),
+		ReportDefinitiveRefusal: true,
 	})
+	if tmclient.IsGroupBootstrapRefused(err) {
+		withdrawGroupReplicationBootstrapIntent(ctx, analysisEntry, intent, aliasString, err, topologyRecovery, logger)
+		return true, topologyRecovery, err
+	}
 	if err != nil {
 		// The bootstrap may have happened although its reply was lost, for example because the
 		// tablet was cut off again while MySQL's START ran. Its group is adopted if it is the
@@ -477,6 +488,26 @@ func bootstrapGroupReplication(ctx context.Context, analysisEntry *inst.Detectio
 	_ = inst.AuditOperation(BootstrapGroupReplicationRecoveryName, candidate.tablet.Alias, "bootstrapped the replication group")
 	_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("%s: bootstrapped the replication group on %s", BootstrapGroupReplicationRecoveryName, aliasString))
 	return true, topologyRecovery, nil
+}
+
+// withdrawGroupReplicationBootstrapIntent withdraws the bootstrap intent of a bootstrap that its
+// target refused definitively (refusal), under the shard lock that the recovery holds: a
+// compare-and-swap on the intent's token, which leaves a newer intent, or an incarnation recorded
+// since, as they are. A failure only costs time: the intent then expires.
+func withdrawGroupReplicationBootstrapIntent(ctx context.Context, analysisEntry *inst.DetectionAnalysis, intent *topodatapb.GroupReplicationBootstrapIntent,
+	aliasString string, refusal error, topologyRecovery *TopologyRecovery, logger *log.PrefixedLogger,
+) {
+	withdrawn, err := reparentutil.WithdrawGroupReplicationBootstrapIntent(ctx, ts, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard, intent)
+	switch {
+	case err != nil:
+		logger.Warn("failed to withdraw the bootstrap intent of a refused bootstrap", slog.String("intent", intent.GetToken()), slog.Any("error", err))
+		_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("%s refused the bootstrap definitively (%v), but its intent %s could not be withdrawn: %v", aliasString, refusal, intent.GetToken(), err))
+	case withdrawn:
+		saveShardRecord(ctx, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard, logger)
+		_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("%s refused the bootstrap definitively (%v): withdrew its intent %s", aliasString, refusal, intent.GetToken()))
+	default:
+		_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("%s refused the bootstrap definitively (%v); the shard record no longer holds its intent %s", aliasString, refusal, intent.GetToken()))
+	}
 }
 
 // saveShardRecord refreshes VTOrc's copy of the shard record from the topology.

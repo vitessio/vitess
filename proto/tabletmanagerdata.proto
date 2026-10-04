@@ -543,11 +543,22 @@ message StartGroupReplicationRequest {
   // expected_incarnation is the shard record's group replication incarnation for which the caller
   // recorded the bootstrap intent. It is only checked with bootstrap_intent_token.
   string expected_incarnation = 4;
+  // report_definitive_refusal, for a bootstrap, asks the tablet to report a definitive refusal in
+  // StartGroupReplicationResponse.definitive_refusal instead of as an error. A tablet that does not
+  // know the field refuses with an error, as before.
+  bool report_definitive_refusal = 5;
 }
 
 message StartGroupReplicationResponse {
   // status is the tablet's group replication status after it started group replication.
   replicationdata.GroupReplicationStatus status = 1;
+  // definitive_refusal is set, only when the request asked for it (report_definitive_refusal), when
+  // the tablet refused the bootstrap in a way that proves that the request did not, and never will,
+  // start a group: MySQL lacks a transaction of required_gtid_set, which the tablet found under its
+  // action lock while no START GROUP_REPLICATION ran. It explains the refusal; status is then empty.
+  // The caller may then withdraw the bootstrap intent it recorded for the request. Every other
+  // failure is an error, after which the request may still have started a group.
+  string definitive_refusal = 2;
 }
 
 message StopGroupReplicationRequest {

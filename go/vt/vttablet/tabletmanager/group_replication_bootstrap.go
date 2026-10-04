@@ -21,9 +21,11 @@ import (
 	"log/slog"
 	"time"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -131,7 +133,8 @@ func (tm *TabletManager) checkGroupBootstrapIntentLocked(ctx context.Context, ch
 // what is missing, the tablet applies it first, without the group, so that the bootstrap starts
 // from a binlog that holds every required transaction, which no restart can lose. Otherwise, a
 // restart discarded them since the caller read MySQL's status: the bootstrap would lose them, and
-// the caller must choose again.
+// the caller must choose again. That refusal is definitive (see refuseGroupBootstrapLocked) when no
+// START GROUP_REPLICATION runs on MySQL.
 func (tm *TabletManager) checkGroupBootstrapLocked(ctx context.Context, checks *groupBootstrapChecks) error {
 	if err := tm.checkGroupBootstrapIntentLocked(ctx, checks); err != nil {
 		return err
@@ -173,9 +176,38 @@ func (tm *TabletManager) checkGroupBootstrapLocked(ctx context.Context, checks *
 			return nil
 		}
 	}
-	return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+	return tm.refuseGroupBootstrapLocked(ctx, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
 		"refusing to bootstrap the replication group: MySQL has not executed %s, which its caller found on a voter (executed %s, received %s); a restart of mysqld may have discarded its relay log since",
-		required.Difference(executed), executed, received)
+		required.Difference(executed), executed, received))
+}
+
+// refuseGroupBootstrapLocked returns refusal, the refusal of a bootstrap because MySQL lacks a
+// transaction that the request requires, as a definitive refusal (tmclient.GroupBootstrapRefusedError)
+// if MySQL is not an active member and no START GROUP_REPLICATION runs on it, as a fresh read of its
+// status under the action lock finds. It returns refusal as it is otherwise, or if the read fails.
+//
+// A definitive refusal tells the caller that the request did not start a group and never will, so
+// that it may withdraw the bootstrap intent it recorded for it (see
+// reparentutil.WithdrawGroupReplicationBootstrapIntent): the intent then no longer fences a bootstrap
+// on another voter, which holds the transactions that this MySQL lost. This holds only while no START
+// runs: MySQL keeps running a START whose client gave up, an earlier bootstrap or join of the tablet,
+// and such a START can still form a group of one; withdrawing its intent would then let the caller
+// bootstrap a second group, which VTOrc could no longer adopt. Every START of the tablet runs under the
+// action lock, which this RPC holds until it returns, and MySQL starts none on its own
+// (group_replication_start_on_boot and auto-rejoin are off; see Mysqld.StartGroupReplication), so
+// none can start after the read either.
+func (tm *TabletManager) refuseGroupBootstrapLocked(ctx context.Context, refusal error) error {
+	status, err := tm.groupReplicationStatus(ctx)
+	if err != nil {
+		log.Warn("Failed to read the group replication status before refusing the bootstrap, the refusal is not definitive", slog.Any("error", err))
+		return refusal
+	}
+	if status.GetStartInProgress() || mysql.IsGroupMemberActive(status) {
+		log.Warn("A START GROUP_REPLICATION runs on MySQL, or MySQL is in a group: the refusal of the bootstrap is not definitive",
+			slog.Bool("start_in_progress", status.GetStartInProgress()), slog.String("member_state", status.GetMemberState()))
+		return refusal
+	}
+	return tmclient.NewGroupBootstrapRefusedError(refusal)
 }
 
 // executedGTIDSet returns MySQL's executed GTID set.
