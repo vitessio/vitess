@@ -2660,15 +2660,17 @@ func TestSettingsRejectUnsafeConnectionCharsets(t *testing.T) {
 	defer tsv.StopService()
 
 	for _, setting := range []string{"set character_set_client = 'gbk'", "set names 'sjis'", "set collation_connection = 'cp932_japanese_ci'"} {
-		_, _, err := tsv.te.ReserveBegin(ctx, &querypb.ExecuteOptions{}, []string{setting})
-		require.ErrorContains(t, err, "unsupported connection character set")
-		_, err = tsv.te.Reserve(ctx, &querypb.ExecuteOptions{}, 0, []string{setting})
-		require.ErrorContains(t, err, "unsupported connection character set")
-		_, err = tsv.qe.GetConnSetting(ctx, []string{setting})
-		require.ErrorContains(t, err, "unsupported connection character set")
-		_, err = tsv.Execute(ctx, nil, tsv.sm.Target(), setting, nil, 0, 0, nil)
-		require.ErrorContains(t, err, "unsupported connection character set")
-		assert.Zero(t, db.GetQueryCalledNum(setting), "a rejected setting must not reach the backend")
+		t.Run(setting, func(t *testing.T) {
+			_, _, err := tsv.te.ReserveBegin(ctx, &querypb.ExecuteOptions{}, []string{setting})
+			require.ErrorContains(t, err, "unsupported connection character set")
+			_, err = tsv.te.Reserve(ctx, &querypb.ExecuteOptions{}, 0, []string{setting})
+			require.ErrorContains(t, err, "unsupported connection character set")
+			_, err = tsv.qe.GetConnSetting(ctx, []string{setting})
+			require.ErrorContains(t, err, "unsupported connection character set")
+			_, err = tsv.Execute(ctx, nil, tsv.sm.Target(), setting, nil, 0, 0, nil)
+			require.ErrorContains(t, err, "unsupported connection character set")
+			assert.Zero(t, db.GetQueryCalledNum(setting), "a rejected setting must not reach the backend")
+		})
 	}
 
 	safeSetting := "set character_set_client = 'utf8mb4'"
