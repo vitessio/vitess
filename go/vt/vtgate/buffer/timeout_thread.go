@@ -34,12 +34,9 @@ type timeoutThread struct {
 	stopChan chan struct{}
 	wg       sync.WaitGroup
 
-	// mu guards access to "queueNotEmpty" between this thread and callers of
-	// notifyQueueNotEmpty().
-	mu sync.Mutex
-	// queueNotEmpty will be closed to notify the timeout thread when the queue
-	// state changes from empty to non-empty. After it's closed, a new object will
-	// be assigned to this field.
+	// queueNotEmpty holds a pending notification that the queue state changed
+	// from empty to non-empty. It has a buffer of one, so a notification sent
+	// after the thread found the queue empty, but before it waits, is not lost.
 	queueNotEmpty chan struct{}
 }
 
@@ -48,7 +45,7 @@ func newTimeoutThread(sb *shardBuffer, maxFailoverDuration time.Duration) *timeo
 		sb:            sb,
 		maxDuration:   time.NewTimer(maxFailoverDuration),
 		stopChan:      make(chan struct{}),
-		queueNotEmpty: make(chan struct{}),
+		queueNotEmpty: make(chan struct{}, 1),
 	}
 }
 
@@ -64,12 +61,11 @@ func (tt *timeoutThread) stop() {
 }
 
 func (tt *timeoutThread) notifyQueueNotEmpty() {
-	tt.mu.Lock()
-	defer tt.mu.Unlock()
-
-	close(tt.queueNotEmpty)
-	// Create a new channel which will be used by the next notify call.
-	tt.queueNotEmpty = make(chan struct{})
+	select {
+	case tt.queueNotEmpty <- struct{}{}:
+	default:
+		// A notification is already pending.
+	}
 }
 
 func (tt *timeoutThread) run() {
@@ -78,35 +74,18 @@ func (tt *timeoutThread) run() {
 
 	// While this thread is running, it can be in two states:
 	for {
-		// Get the notification channel before looking at the queue. If an entry
-		// is buffered after oldestEntry() saw an empty queue, notifyQueueNotEmpty()
-		// closes this channel and waitForNonEmptyQueue() returns immediately.
-		// Getting the channel after oldestEntry() would miss that notification and
-		// leave the entry buffered past its window.
-		queueNotEmpty := tt.currentQueueNotEmpty()
 		if e := tt.sb.oldestEntry(); e != nil {
 			// 1. queue not empty: Wait for the oldest entry to exceed the window.
 			if stopped := tt.waitForEntry(e); stopped {
 				return
 			}
 		} else {
-			if tt.sb.testHookQueueEmpty != nil {
-				tt.sb.testHookQueueEmpty()
-			}
 			// 2. queue empty: Wait for an entry to show up.
-			if stopped := tt.waitForNonEmptyQueue(queueNotEmpty); stopped {
+			if stopped := tt.waitForNonEmptyQueue(); stopped {
 				return
 			}
 		}
 	}
-}
-
-// currentQueueNotEmpty returns the channel which the next notifyQueueNotEmpty()
-// call will close.
-func (tt *timeoutThread) currentQueueNotEmpty() chan struct{} {
-	tt.mu.Lock()
-	defer tt.mu.Unlock()
-	return tt.queueNotEmpty
 }
 
 // waitForEntry blocks until "e" exceeds its buffering window or buffering stops
@@ -140,10 +119,12 @@ func (tt *timeoutThread) waitForEntry(e *entry) bool {
 	}
 }
 
-// waitForNonEmptyQueue blocks until "queueNotEmpty" is closed because the
-// buffer queue got a new element or the timeout thread should be stopped.
+// waitForNonEmptyQueue blocks until the buffer queue gets a new element or
+// the timeout thread should be stopped.
 // It returns true if the timeout thread should stop.
-func (tt *timeoutThread) waitForNonEmptyQueue(queueNotEmpty chan struct{}) bool {
+// A pending notification may be stale, i.e. the entry was already handled. In
+// that case, the next iteration finds the queue empty and waits again.
+func (tt *timeoutThread) waitForNonEmptyQueue() bool {
 	select {
 	// a) Always check these channels, regardless of the state.
 	case <-tt.maxDuration.C:
@@ -154,7 +135,7 @@ func (tt *timeoutThread) waitForNonEmptyQueue(queueNotEmpty chan struct{}) bool 
 		// Failover ended before timeout. Do nothing.
 		return true
 	// b) State-specific check.
-	case <-queueNotEmpty:
+	case <-tt.queueNotEmpty:
 		// At least one entry present. Check its timeout in the next iteration.
 		return false
 	}

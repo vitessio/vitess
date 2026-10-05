@@ -19,7 +19,7 @@ waits) are separate steps, so TLC explores every interleaving between them.
 | `SlotConservation` | invariant | every buffer slot is free, queued, or pending release: no leaks |
 | `QueueWellFormed` | invariant | the queue only holds blocked requests and is empty unless buffering |
 | `BufferingHasTimeoutThread` | invariant | a live timeout thread exists while buffering |
-| `TimeoutThreadNotBlind` | invariant | the timeout thread never sleeps on a stale `queueNotEmpty` channel while entries are queued |
+| `TimeoutThreadNotBlind` | invariant | the timeout thread never waits for a non-empty queue without a pending wakeup while entries are queued |
 | `ShutdownIsFinal` | invariant | after `Shutdown()` returns nothing runs and buffering never restarts |
 | `AllRequestsComplete`, `ShutdownCompletes` | liveness | every request and `Shutdown()` eventually finish |
 | `WindowEnforced` | liveness | an entry is evicted after its window without relying on the max-failover-duration timer |
@@ -45,13 +45,15 @@ each takes a few minutes on four cores.
 
 Setting one of the `Bug*` constants to `TRUE` re-introduces a past bug:
 
-* `BugLostWakeup`: the timeout thread read `tt.queueNotEmpty` after
-  `oldestEntry()` had released `sb.mu`. A request buffered in between was not
-  evicted after `--buffer-window`. It stayed buffered until the failover ended
-  or `--buffer-max-failover-duration` passed. Violates `TimeoutThreadNotBlind`
-  and `WindowEnforced`.
+* `BugLostWakeup`: `notifyQueueNotEmpty()` closed `tt.queueNotEmpty` and
+  replaced it with a new channel, and the timeout thread read the channel
+  after `oldestEntry()` had released `sb.mu`. A request buffered in between
+  was not evicted after `--buffer-window`. It stayed buffered until the
+  failover ended or `--buffer-max-failover-duration` passed. Violates
+  `TimeoutThreadNotBlind` and `WindowEnforced`.
 * `BugNoStoppedRecheck`: no `Buffer.stopped` check under `sb.mu` (#19954).
-  Violates `ShutdownIsFinal`.
+  Violates `ShutdownIsFinal`, and `NoRuntimeErrors` because a drain started
+  by the restarted buffering calls `sb.wg.Add` while `Shutdown()` waits.
 * `BugRemoveNoRelease`: `remove()` does not release the buffer slot of a
   canceled request. Violates `SlotConservation`.
 

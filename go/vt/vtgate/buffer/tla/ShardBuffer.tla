@@ -26,7 +26,7 @@ CONSTANTS
     FairMaxDuration,      \* TRUE: max-failover-duration timer eventually fires
     \* The Bug* constants re-introduce past bugs to show that the model catches
     \* them. They must all be FALSE to model the current code.
-    BugLostWakeup,        \* TRUE: timeout thread reads queueNotEmpty after oldestEntry()
+    BugLostWakeup,        \* TRUE: queueNotEmpty is closed and replaced on each notification
     BugNoStoppedRecheck,  \* TRUE: no Buffer.stopped re-check under sb.mu (#19954)
     BugRemoveNoRelease    \* TRUE: remove() does not release the buffer slot
 
@@ -50,17 +50,18 @@ VARIABLES
     ttEntry,      \* entry the timeout thread is waiting on
     ttStop,       \* tt.stopChan closed
     maxFired,     \* tt.maxDuration timer fired
-    snapCurrent,  \* the queueNotEmpty channel the timeout thread holds is still open
+    token,        \* a notification is pending in tt.queueNotEmpty (buffer of one)
+    snapCurrent,  \* BugLostWakeup: the queueNotEmpty channel the thread holds is still open
     shPc,         \* Buffer.Shutdown progress
     errs          \* runtime failures observed (panics, misuse)
 
 vars == <<state, stopped, queue, sema, done, bufCtxDone, ctxCanceled, expired,
           pc, att, fd, waiters, drainPc, drainQ, drainInflight,
-          ttPc, ttEntry, ttStop, maxFired, snapCurrent, shPc, errs>>
+          ttPc, ttEntry, ttStop, maxFired, token, snapCurrent, shPc, errs>>
 
 reqVars   == <<pc, att, fd>>
 entryVars == <<done, bufCtxDone, ctxCanceled, expired>>
-ttVars    == <<ttPc, ttEntry, ttStop, maxFired, snapCurrent>>
+ttVars    == <<ttPc, ttEntry, ttStop, maxFired, token, snapCurrent>>
 drainVars == <<drainPc, drainQ, drainInflight>>
 
 Cur(r) == <<r, att[r]>>
@@ -115,6 +116,7 @@ Init ==
     /\ ttEntry = NoEntry
     /\ ttStop = FALSE
     /\ maxFired = FALSE
+    /\ token = FALSE
     /\ snapCurrent = FALSE
     /\ shPc = "none"
     /\ errs = {}
@@ -187,6 +189,7 @@ ReqSlow(r) ==
                 THEN \* bufferFullError
                      /\ queue' = q0
                      /\ pc' = [pc EXCEPT ![r] = "end"]
+                     /\ token' = IF starting THEN FALSE ELSE token
                      /\ snapCurrent' = IF starting THEN FALSE ELSE snapCurrent
                      /\ errs' = errs \cup startErr
                      /\ UNCHANGED <<sema, done, waiters>>
@@ -199,6 +202,8 @@ ReqSlow(r) ==
                      /\ errs' = errs \cup startErr
                                      \cup (IF full THEN CloseErr(h) \cup WGAddErr(TRUE) ELSE {})
                      \* len(queue) == 1 -> notifyQueueNotEmpty()
+                     /\ token' = IF Len(q1) = 0 THEN TRUE
+                                ELSE IF starting THEN FALSE ELSE token
                      /\ snapCurrent' = IF starting \/ Len(q1) = 0 THEN FALSE ELSE snapCurrent
                      /\ pc' = [pc EXCEPT ![r] = "wait"]
              /\ UNCHANGED drainVars
@@ -269,51 +274,37 @@ WaiterFinish(w) ==
 -----------------------------------------------------------------------------
 (* Timeout thread: timeoutThread.run() *)
 
-\* Top of the for loop.
-\*   Current code:  queueNotEmpty := tt.currentQueueNotEmpty(), then
-\*                  e := sb.oldestEntry().
-\*   BugLostWakeup: e := sb.oldestEntry() first and only if e == nil read
-\*                  tt.queueNotEmpty, after sb.mu was released.
+\* The timeout thread wakes up from waitForNonEmptyQueue().
+\*   Current code:  a notification is pending in the one-slot channel.
+\*   BugLostWakeup: the channel it read was closed by a later notification.
+Woken == IF BugLostWakeup THEN ~snapCurrent ELSE token
+
+\* Top of the for loop: e := sb.oldestEntry().
 TTLoop ==
     /\ ttPc = "loop"
-    /\ IF ~BugLostWakeup
-       THEN /\ snapCurrent' = TRUE
-            /\ ttPc' = "check"
-            /\ UNCHANGED ttEntry
-       ELSE /\ IF queue # <<>>
-               THEN /\ ttEntry' = Head(queue)
-                    /\ ttPc' = "waitEntry"
-               ELSE /\ ttPc' = "snap"
-                    /\ UNCHANGED ttEntry
-            /\ UNCHANGED snapCurrent
-    /\ UNCHANGED <<reqVars, state, stopped, queue, sema, entryVars, waiters,
-                   drainVars, ttStop, maxFired, shPc, errs>>
-
-\* oldestEntry() after reading queueNotEmpty.
-TTCheck ==
-    /\ ttPc = "check"
     /\ IF queue # <<>>
        THEN /\ ttEntry' = Head(queue)
             /\ ttPc' = "waitEntry"
-       ELSE /\ ttPc' = "waitNE"
+       ELSE /\ ttPc' = IF BugLostWakeup THEN "snap" ELSE "waitNE"
             /\ UNCHANGED ttEntry
     /\ UNCHANGED <<reqVars, state, stopped, queue, sema, entryVars, waiters,
-                   drainVars, ttStop, maxFired, snapCurrent, shPc, errs>>
+                   drainVars, ttStop, maxFired, token, snapCurrent, shPc, errs>>
 
-\* BugLostWakeup only: read tt.queueNotEmpty after oldestEntry() saw an empty queue.
+\* BugLostWakeup only: waitForNonEmptyQueue() reads tt.queueNotEmpty after
+\* oldestEntry() saw an empty queue and released sb.mu.
 TTSnap ==
     /\ ttPc = "snap"
     /\ snapCurrent' = TRUE
     /\ ttPc' = "waitNE"
     /\ UNCHANGED <<reqVars, state, stopped, queue, sema, entryVars, waiters,
-                   drainVars, ttEntry, ttStop, maxFired, shPc, errs>>
+                   drainVars, ttEntry, ttStop, maxFired, token, shPc, errs>>
 
-\* select in waitForNonEmptyQueue()
+\* select in waitForNonEmptyQueue(). Receiving consumes the pending notification.
 TTWaitNE ==
     /\ ttPc = "waitNE"
-    /\ \/ maxFired /\ ttPc' = "stopBuf"
-       \/ ttStop /\ ttPc' = "none"
-       \/ ~snapCurrent /\ ttPc' = "loop"
+    /\ \/ maxFired /\ ttPc' = "stopBuf" /\ UNCHANGED token
+       \/ ttStop /\ ttPc' = "none" /\ UNCHANGED token
+       \/ Woken /\ ttPc' = "loop" /\ token' = FALSE
     /\ UNCHANGED <<reqVars, state, stopped, queue, sema, entryVars, waiters,
                    drainVars, ttEntry, ttStop, maxFired, snapCurrent, shPc, errs>>
 
@@ -325,7 +316,7 @@ TTWaitEntry ==
        \/ done[ttEntry] /\ ttPc' = "loop" /\ ttEntry' = NoEntry
        \/ expired[ttEntry] /\ ttPc' = "evict" /\ UNCHANGED ttEntry
     /\ UNCHANGED <<reqVars, state, stopped, queue, sema, entryVars, waiters,
-                   drainVars, ttStop, maxFired, snapCurrent, shPc, errs>>
+                   drainVars, ttStop, maxFired, token, snapCurrent, shPc, errs>>
 
 \* evictOldestEntry()
 TTEvict ==
@@ -339,7 +330,7 @@ TTEvict ==
     /\ ttPc' = "loop"
     /\ ttEntry' = NoEntry
     /\ UNCHANGED <<reqVars, state, stopped, sema, bufCtxDone, ctxCanceled, expired,
-                   drainVars, ttStop, maxFired, snapCurrent, shPc>>
+                   drainVars, ttStop, maxFired, token, snapCurrent, shPc>>
 
 \* stopBufferingDueToMaxDuration(), then the thread returns.
 TTStopBuf ==
@@ -347,7 +338,7 @@ TTStopBuf ==
     /\ StopBufferingLocked
     /\ ttPc' = "none"
     /\ UNCHANGED <<reqVars, stopped, sema, entryVars, waiters,
-                   ttEntry, ttStop, maxFired, snapCurrent, shPc>>
+                   ttEntry, ttStop, maxFired, token, snapCurrent, shPc>>
 
 \* The --buffer-max-failover-duration timer fires.
 MaxDurationFires ==
@@ -355,7 +346,7 @@ MaxDurationFires ==
     /\ ~maxFired
     /\ maxFired' = TRUE
     /\ UNCHANGED <<reqVars, state, stopped, queue, sema, entryVars, waiters,
-                   drainVars, ttPc, ttEntry, ttStop, snapCurrent, shPc, errs>>
+                   drainVars, ttPc, ttEntry, ttStop, token, snapCurrent, shPc, errs>>
 
 -----------------------------------------------------------------------------
 (* Keyspace event: recordKeyspaceEvent() -> stopBufferingLocked() *)
@@ -373,7 +364,7 @@ DrainStopTT ==
     /\ ttStop' = TRUE
     /\ drainPc' = "waitTT"
     /\ UNCHANGED <<reqVars, state, stopped, queue, sema, entryVars, waiters,
-                   drainQ, drainInflight, ttPc, ttEntry, maxFired, snapCurrent, shPc, errs>>
+                   drainQ, drainInflight, ttPc, ttEntry, maxFired, token, snapCurrent, shPc, errs>>
 
 \* ... tt.wg.Wait()
 DrainWaitTT ==
@@ -442,7 +433,7 @@ ShutdownWait ==
 ReqStep(r) == ReqStart(r) \/ ReqSlow(r) \/ ReqWait(r) \/ ReqRemove(r)
               \/ ReqRetry(r) \/ ReqEnd(r)
 
-TTStep == TTLoop \/ TTCheck \/ TTSnap \/ TTWaitNE \/ TTWaitEntry \/ TTEvict \/ TTStopBuf
+TTStep == TTLoop \/ TTSnap \/ TTWaitNE \/ TTWaitEntry \/ TTEvict \/ TTStopBuf
 
 DrainStep == DrainStopTT \/ DrainWaitTT \/ DrainUnblock \/ DrainFinish
              \/ \E e \in Entries : DrainRelease(e)
@@ -504,13 +495,13 @@ QueueWellFormed ==
 BufferingHasTimeoutThread ==
     state = "buffering" => (ttPc # "none" /\ ~ttStop)
 
-\* The timeout thread never sleeps on an already-replaced (still open)
-\* queueNotEmpty channel while there are entries whose window it must enforce.
+\* The timeout thread never waits for the queue to become non-empty without a
+\* pending wakeup while there are entries whose window it must enforce.
 \* If this is violated, no further notifyQueueNotEmpty() will arrive (it only
 \* fires on the empty->non-empty transition) and buffered requests are held
 \* past --buffer-window until max-failover-duration or the failover ends.
 TimeoutThreadNotBlind ==
-    (ttPc = "waitNE" /\ snapCurrent /\ ~maxFired /\ ~ttStop) => queue = <<>>
+    (ttPc = "waitNE" /\ ~Woken /\ ~maxFired /\ ~ttStop) => queue = <<>>
 
 \* After Shutdown() returns nothing is running and buffering is over for good.
 ShutdownIsFinal ==

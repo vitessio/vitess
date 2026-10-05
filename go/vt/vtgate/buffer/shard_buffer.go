@@ -126,11 +126,6 @@ type shardBuffer struct {
 	// wg tracks all pending Go routines. waitForShutdown() will use this field to
 	// block on them.
 	wg sync.WaitGroup
-
-	// testHookQueueEmpty is called by the timeout thread after it found the queue
-	// empty and before it waits for the queue to become non-empty. It is only
-	// set by tests and must be set before buffering starts.
-	testHookQueueEmpty func()
 }
 
 func newShardBufferHealthCheck(buf *Buffer, mode bufferMode, keyspace, shard string) *shardBuffer {
