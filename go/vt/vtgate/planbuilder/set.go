@@ -306,17 +306,26 @@ func resolveDestination(vschema plancontext.VSchema) (*vindexes.Keyspace, key.Sh
 	return keyspace, dest, nil
 }
 
-// isSysVarName reports whether name can be the name of a MySQL system variable: letters,
-// digits and underscores, with dots separating the prefix of a component variable such as
-// validate_password.length. A back-tick quoted name can hold any other character, which
+// isSysVarName reports whether name can be the name of a MySQL system variable: one
+// identifier, or two joined by a dot, as in the component variable validate_password.length
+// or the key cache variable hot$cache.key_buffer_size. Each identifier is letters, digits,
+// underscores and dollar signs. A back-tick quoted name can hold any other character, which
 // MySQL rejects as an unknown system variable. The caller passes the lowercased name.
 func isSysVarName(name string) bool {
-	if name == "" {
+	prefix, suffix, dotted := strings.Cut(name, ".")
+	if dotted && !isSysVarIdent(suffix) {
 		return false
 	}
-	for i := 0; i < len(name); i++ {
-		c := name[i]
-		if !(c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '_' || c == '.') {
+	return isSysVarIdent(prefix)
+}
+
+func isSysVarIdent(ident string) bool {
+	if ident == "" {
+		return false
+	}
+	for i := 0; i < len(ident); i++ {
+		c := ident[i]
+		if !(c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '_' || c == '$') {
 			return false
 		}
 	}
