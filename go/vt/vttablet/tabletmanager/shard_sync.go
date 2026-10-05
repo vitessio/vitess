@@ -155,11 +155,16 @@ func (tm *TabletManager) shardSyncLoop(ctx context.Context, notifyChan <-chan st
 				// We already have an active watch. Nothing to do.
 				continue
 			}
-			if err := shardWatch.start(tm.TopoServer, tablet.Keyspace, tablet.Shard); err != nil {
+			current, err := shardWatch.start(tm.TopoServer, tablet.Keyspace, tablet.Shard)
+			if err != nil {
 				log.Error(fmt.Sprintf("Failed to start shard watch: %v", err))
 				// Start retry timer and go back to sleep.
 				retryChan = time.After(shardSyncRetryDelay)
 				continue
+			}
+			if current != nil && current.Value != nil {
+				// The record as the watch started: the voter list may have changed before.
+				tm.noteShardGroupFields(current.Value)
 			}
 		default:
 			// If we're not primary, stop watching the shard record,
