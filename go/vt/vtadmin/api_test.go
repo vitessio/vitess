@@ -26,6 +26,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
@@ -5391,6 +5392,39 @@ type ServeHTTPResponse struct {
 
 type ServeHTTPResult struct {
 	Clusters []*vtadminpb.Cluster `json:"clusters"`
+}
+
+// TestHandlerRestrictsMutatingRoutesToPOST checks that the routes that change
+// cluster state match only POST, and the CORS preflight, so that a cross-site
+// GET, such as a top-level navigation carrying a session cookie, cannot reach
+// them.
+func TestHandlerRestrictsMutatingRoutesToPOST(t *testing.T) {
+	api := NewAPI(vtenv.NewTestEnv(), nil, Options{})
+	router, ok := api.Handler().(*mux.Router)
+	require.True(t, ok)
+
+	for name, path := range map[string]string{
+		"API.PingTablet":            "/api/tablet/zone1-0000000100/ping",
+		"API.RunHealthCheck":        "/api/tablet/zone1-0000000100/healthcheck",
+		"API.ConcludeTransaction":   "/api/transaction/c0/dtid1/conclude",
+		"API.StartWorkflow":         "/api/workflow/c0/ks/wf/start",
+		"API.StopWorkflow":          "/api/workflow/c0/ks/wf/stop",
+		"API.WorkflowSwitchTraffic": "/api/workflow/c0/switchtraffic",
+		"API.WorkflowDelete":        "/api/workflow/c0/delete",
+		"API.MoveTablesComplete":    "/api/movetables/c0/complete",
+	} {
+		t.Run(name, func(t *testing.T) {
+			for _, method := range []string{http.MethodPost, http.MethodOptions} {
+				var match mux.RouteMatch
+				require.True(t, router.Match(httptest.NewRequest(method, path, nil), &match), method)
+				require.Equal(t, name, match.Route.GetName(), method)
+			}
+			for _, method := range []string{http.MethodGet, http.MethodHead, http.MethodPut, http.MethodDelete} {
+				var match mux.RouteMatch
+				require.False(t, router.Match(httptest.NewRequest(method, path, nil), &match), method)
+			}
+		})
+	}
 }
 
 func TestServeHTTP(t *testing.T) {
