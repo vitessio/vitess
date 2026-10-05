@@ -992,6 +992,29 @@ func TestQueryExecutorPlanNextvalCommitFailureKeepsCache(t *testing.T) {
 	seq := qre.plan.Table.SequenceInfo
 	require.Zero(t, seq.NextVal)
 	require.Zero(t, seq.LastVal)
+
+	// Refill from the table on the retry. Another writer moved next_id to 4.
+	db.AddQuery("select next_id, cache from seq where id = 0 for update", &sqltypes.Result{
+		Fields: []*querypb.Field{{Type: sqltypes.Int64}, {Type: sqltypes.Int64}},
+		Rows:   [][]sqltypes.Value{{sqltypes.NewInt64(4), sqltypes.NewInt64(3)}},
+	})
+	db.AddQuery("update seq set next_id = 7 where id = 0", &sqltypes.Result{})
+	db.DeleteRejectedQuery("commit")
+
+	qre = newTestQueryExecutor(ctx, tsv, "select next value from seq", 0)
+	got, err := qre.Execute()
+	require.NoError(t, err)
+
+	want := &sqltypes.Result{
+		Fields: []*querypb.Field{{
+			Name: "nextval",
+			Type: sqltypes.Int64,
+		}},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt64(4),
+		}},
+	}
+	require.Truef(t, got.Equal(want), "qre.Execute() =\n%#v, want:\n%#v", got, want)
 }
 
 func TestQueryExecutorMessageStreamACL(t *testing.T) {
