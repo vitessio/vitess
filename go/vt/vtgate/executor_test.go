@@ -2210,8 +2210,11 @@ func TestLockPlansStayOnSameKeyspaceAfterServingBlip(t *testing.T) {
 	hc.BroadcastAll()
 	require.ElementsMatch(t, []string{KsTestSharded, KsTestUnsharded}, gw.GetServingKeyspaces())
 
-	_, err := exec(executor, econtext.NewSafeSession(nil), "select get_lock('lock name', 10) from dual")
+	session := econtext.NewSafeSession(nil)
+	_, err := exec(executor, session, "select get_lock('lock name', 10) from dual")
 	require.NoError(t, err)
+	require.NotNil(t, session.LockSession)
+	require.Equal(t, KsTestSharded, session.LockSession.Target.Keyspace)
 	require.NotEmpty(t, sbc1.Queries)
 	require.Empty(t, sbclookup.Queries)
 
@@ -2219,8 +2222,6 @@ func TestLockPlansStayOnSameKeyspaceAfterServingBlip(t *testing.T) {
 	require.ElementsMatch(t, []string{KsTestUnsharded}, gw.GetServingKeyspaces())
 
 	sbc1.Queries = nil
-	// Plan only. Executing here would target the down keyspace and wait out
-	// the failover buffer. The cached plan is what a later RELEASE_LOCK uses.
 	releasePlan, _ := getPlanCached(t, t.Context(), executor, econtext.NewSafeSession(nil), "select release_lock('lock name') from dual", sqlparser.MarginComments{}, nil, false)
 	lock, ok := releasePlan.Instructions.(*engine.Lock)
 	require.True(t, ok)
@@ -2228,19 +2229,9 @@ func TestLockPlansStayOnSameKeyspaceAfterServingBlip(t *testing.T) {
 	require.Empty(t, sbc1.Queries)
 	require.Empty(t, sbclookup.Queries)
 
-	setServing(KsTestSharded, true)
-	require.ElementsMatch(t, []string{KsTestSharded, KsTestUnsharded}, gw.GetServingKeyspaces())
-
-	sbc1.Queries = nil
-	sbclookup.Queries = nil
-	session := econtext.NewSafeSession(nil)
-	_, err = exec(executor, session, "select get_lock('lock name', 10) from dual")
-	require.NoError(t, err)
-	require.NotNil(t, session.LockSession)
-	require.Equal(t, KsTestSharded, session.LockSession.Target.Keyspace)
-
 	_, err = exec(executor, session, "select release_lock('lock name') from dual")
 	require.NoError(t, err)
+	require.Nil(t, session.LockSession)
 	require.Empty(t, sbclookup.Queries)
 	require.NotEmpty(t, sbc1.Queries)
 }
