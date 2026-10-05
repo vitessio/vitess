@@ -1283,13 +1283,13 @@ func TestQueryExecutorTableAclPassthroughDenied(t *testing.T) {
 					assert.Equal(t, calledBefore, db.GetQueryCalledNum(tc.query), "the backend must not see a statement the ACL denied")
 					return
 				}
-				allowedKey := strings.Join([]string{"undetermined-table-set", "all", tc.planID.String(), "u4"}, ".")
+				allowedKey := strings.Join([]string{"undetermined-table-set", "", tc.planID.String(), "u4"}, ".")
 				allowedBefore := tsv.stats.TableaclAllowed.Counts()[allowedKey]
 				calledBefore := db.GetQueryCalledNum(tc.query)
 				_, err := qre.Execute()
 				require.NoError(t, err, "a caller with every role on every table must be able to run the statement under strict table ACL")
 				assert.Equal(t, calledBefore+1, db.GetQueryCalledNum(tc.query), "the statement must reach the backend")
-				assert.Equal(t, allowedBefore+1, tsv.stats.TableaclAllowed.Counts()[allowedKey], "the access must be counted as allowed for the group covering every table")
+				assert.Equal(t, allowedBefore+1, tsv.stats.TableaclAllowed.Counts()[allowedKey], "the access must be counted as allowed, under the same empty table group as a denial")
 			})
 
 			for _, user := range []string{"u3", "u5"} {
@@ -1298,10 +1298,15 @@ func TestQueryExecutorTableAclPassthroughDenied(t *testing.T) {
 					tsv := newServer(t, enableStrictTableACL)
 					userCtx := callerid.NewContext(t.Context(), nil, &querypb.VTGateCallerID{Username: user})
 					qre := newTestQueryExecutor(userCtx, tsv, tc.query, 0)
+					// The series keeps the empty table group it shipped with,
+					// so an alert on it still matches with a "%" group.
+					deniedKey := strings.Join([]string{"undetermined-table-set", "", tc.planID.String(), user}, ".")
+					deniedBefore := tsv.stats.TableaclDenied.Counts()[deniedKey]
 					calledBefore := db.GetQueryCalledNum(tc.query)
 					_, err := qre.Execute()
 					require.EqualError(t, err, tc.planID.String()+" command denied to user '"+user+"' for a table set that cannot be determined (ACL check error)")
 					assert.Equal(t, calledBefore, db.GetQueryCalledNum(tc.query), "the backend must not see a statement the ACL denied")
+					assert.Equal(t, deniedBefore+1, tsv.stats.TableaclDenied.Counts()[deniedKey], "the denial must be counted under an empty table group")
 				})
 			}
 		})
