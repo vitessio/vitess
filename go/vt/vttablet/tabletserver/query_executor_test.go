@@ -967,6 +967,33 @@ func TestQueryExecutorPlanNextval(t *testing.T) {
 	require.Truef(t, got.Equal(want), "qre.Execute() =\n%#v, want:\n%#v", got, want)
 }
 
+// TestQueryExecutorPlanNextvalCommitFailureKeepsCache verifies that a failed
+// refill COMMIT leaves the sequence cache unchanged.
+func TestQueryExecutorPlanNextvalCommitFailureKeepsCache(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+
+	db.AddQuery("select next_id, cache from seq where id = 0 for update", &sqltypes.Result{
+		Fields: []*querypb.Field{{Type: sqltypes.Int64}, {Type: sqltypes.Int64}},
+		Rows:   [][]sqltypes.Value{{sqltypes.NewInt64(1), sqltypes.NewInt64(3)}},
+	})
+	db.AddQuery("update seq set next_id = 4 where id = 0", &sqltypes.Result{})
+	db.AddRejectedQuery("commit", errors.New("commit failed"))
+
+	ctx := t.Context()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	defer tsv.StopService()
+
+	qre := newTestQueryExecutor(ctx, tsv, "select next value from seq", 0)
+	_, err := qre.Execute()
+	require.ErrorContains(t, err, "commit failed")
+
+	// The table still has next_id = 1, so the cache must not hold 1 to 4.
+	seq := qre.plan.Table.SequenceInfo
+	require.Zero(t, seq.NextVal)
+	require.Zero(t, seq.LastVal)
+}
+
 func TestQueryExecutorMessageStreamACL(t *testing.T) {
 	ctx := t.Context()
 	aclName := fmt.Sprintf("simpleacl-test-%d", rand.Int64())

@@ -1216,6 +1216,9 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 	t.SequenceInfo.Lock()
 	defer t.SequenceInfo.Unlock()
 	if t.SequenceInfo.NextVal == 0 || t.SequenceInfo.NextVal+inc > t.SequenceInfo.LastVal {
+		// Stage the new cache range. Publish it only after the COMMIT succeeds.
+		// The sequence table keeps the old next_id when the COMMIT fails.
+		nextVal, lastVal := t.SequenceInfo.NextVal, t.SequenceInfo.LastVal
 		_, err := qre.execAsTransaction(func(conn *StatefulConnection) (*sqltypes.Result, error) {
 			query := fmt.Sprintf("select next_id, cache from %s where id = 0 for update", sqlparser.String(tableName))
 			qr, err := qre.execStatefulConn(conn, query, false)
@@ -1232,13 +1235,13 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 			// If LastVal does not match next ID, then either:
 			// VTTablet just started, and we're initializing the cache, or
 			// Someone reset the id underneath us.
-			if t.SequenceInfo.LastVal != nextID {
-				if nextID < t.SequenceInfo.LastVal {
-					log.Warn(fmt.Sprintf("Sequence next ID value %v is below the currently cached max %v, updating it to max", nextID, t.SequenceInfo.LastVal))
-					nextID = t.SequenceInfo.LastVal
+			if lastVal != nextID {
+				if nextID < lastVal {
+					log.Warn(fmt.Sprintf("Sequence next ID value %v is below the currently cached max %v, updating it to max", nextID, lastVal))
+					nextID = lastVal
 				}
-				t.SequenceInfo.NextVal = nextID
-				t.SequenceInfo.LastVal = nextID
+				nextVal = nextID
+				lastVal = nextID
 			}
 			cache, err := qr.Rows[0][1].ToCastInt64()
 			if err != nil {
@@ -1248,7 +1251,7 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid cache value for sequence %s: %d", tableName, cache)
 			}
 			newLast := nextID + cache
-			for newLast < t.SequenceInfo.NextVal+inc {
+			for newLast < nextVal+inc {
 				newLast += cache
 			}
 			query = fmt.Sprintf("update %s set next_id = %d where id = 0", sqlparser.String(tableName), newLast)
@@ -1256,12 +1259,15 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 			if err != nil {
 				return nil, err
 			}
-			t.SequenceInfo.LastVal = newLast
+			lastVal = newLast
 			return nil, nil
 		})
 		if err != nil {
 			return nil, err
 		}
+
+		t.SequenceInfo.NextVal = nextVal
+		t.SequenceInfo.LastVal = lastVal
 	}
 	ret := t.SequenceInfo.NextVal
 	t.SequenceInfo.NextVal += inc
