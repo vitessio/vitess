@@ -150,8 +150,8 @@ func TestUpdateGroupReplicationVotersCompareAndSwap(t *testing.T) {
 			setVoters(t, primary, voter2)
 			var want *topo.ShardInfo
 
-			mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(primary)).Return(groupMemberStatus(primary, primary, primary), nil)
-			mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(voter2)).Return(nil, errors.New("unreachable"))
+			mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(primary)).Return(groupMemberStatus(primary, primary, primary), nil).AnyTimes()
+			mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(voter2)).Return(nil, errors.New("unreachable")).AnyTimes()
 			mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(spare2)).DoAndReturn(
 				func(ctx context.Context, _ *topodatapb.Tablet) (*replicationdatapb.FullStatus, error) {
 					si, err := ts.UpdateShardFields(ctx, "ks", "0", func(si *topo.ShardInfo) error {
@@ -161,7 +161,7 @@ func TestUpdateGroupReplicationVotersCompareAndSwap(t *testing.T) {
 					require.NoError(t, err)
 					want = si
 					return notMemberStatus(spare2), nil
-				})
+				}).AnyTimes()
 			mockTMC.EXPECT().StartGroupReplication(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
 
 			analysisEntry := &inst.DetectionAnalysis{

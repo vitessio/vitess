@@ -1,0 +1,193 @@
+/*
+Copyright 2026 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package logic
+
+import (
+	"context"
+	"errors"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
+
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtorc/config"
+	"vitess.io/vitess/go/vt/vtorc/inst"
+
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+)
+
+// TestUpdateGroupReplicationVotersRechecksBeforeWrite reproduces the TLA+ model's voters_split traces:
+// VTOrc selected new voters on statuses that it read, and wrote them later. Meanwhile the voter that
+// it dropped as failed came back, rejoined, was elected, acknowledged a transaction that the kept
+// voters had not received, and failed again, or the group died: the bootstrap from the kept voters
+// lost that transaction. Right before the write, VTOrc checks again, on statuses read then, that the
+// group is still active with quorum, that no voter dropped as unreachable is back, and that a voter
+// dropped for another reason runs no join and holds no transaction that the kept voters lack.
+//
+// Of three voters, one per cell, the one of zone3 failed; the other tablet of zone3 takes its seat,
+// unless the second read of the statuses, right before the write, shows otherwise. A voter that is
+// still unreachable is replaced (TestUpdateGroupReplicationVotersReplacesFailedVoterWithSpare).
+func TestUpdateGroupReplicationVotersRechecksBeforeWrite(t *testing.T) {
+	prevGrace := config.GetGroupReplicationVoterReplacementGracePeriod()
+	t.Cleanup(func() {
+		config.SetGroupReplicationVoterReplacementGracePeriod(prevGrace)
+		inst.UnreachableGroupTablets.Reset()
+	})
+	errUnreachable := errors.New("unreachable")
+	primary := recoveryTablet("zone1", 101, topodatapb.TabletType_PRIMARY)
+	voter2 := recoveryTablet("zone2", 200, topodatapb.TabletType_REPLICA)
+	voter3 := recoveryTablet("zone3", 300, topodatapb.TabletType_REPLICA)
+	spare3 := recoveryTablet("zone3", 301, topodatapb.TabletType_REPLICA)
+	rdonly3 := recoveryTablet("zone3", 300, topodatapb.TabletType_RDONLY)
+	online := func(tablet *topodatapb.Tablet) *replicationdatapb.FullStatus {
+		return withPosition(groupMemberStatus(tablet, primary, primary, voter2), "1-10")
+	}
+	tests := []struct {
+		name string
+		// third is voter zone3-300's tablet: REPLICA, or RDONLY, which the policy keeps out of the group.
+		third *topodatapb.Tablet
+		// selected and recheck are the statuses of the tablets at the selection and right before
+		// the write, by uid; a missing entry is unreachable.
+		selected, recheck map[uint32]*replicationdatapb.FullStatus
+		// seenAfterSelection makes VTOrc's discovery reach zone3-300 after the selection read.
+		seenAfterSelection bool
+		wantVoters         []string
+		wantErr            string
+	}{{
+		name:     "the group died before the write",
+		third:    voter3,
+		selected: map[uint32]*replicationdatapb.FullStatus{101: online(primary), 200: online(voter2), 301: notMemberStatus(spare3)},
+		recheck: map[uint32]*replicationdatapb.FullStatus{
+			101: withPosition(errorStatus(primary), "1-10"), 200: withPosition(errorStatus(voter2), "1-10"), 301: notMemberStatus(spare3),
+		},
+		wantErr: "no member of the shard's replication group is active with quorum",
+	}, {
+		name:     "the voter dropped as unreachable rejoined",
+		third:    voter3,
+		selected: map[uint32]*replicationdatapb.FullStatus{101: online(primary), 200: online(voter2), 301: notMemberStatus(spare3)},
+		recheck: map[uint32]*replicationdatapb.FullStatus{
+			101: online(primary), 200: online(voter2), 300: withPosition(groupMemberStatus(voter3, primary, primary, voter2, voter3), "1-11"), 301: notMemberStatus(spare3),
+		},
+		wantErr: "dropped as unreachable, answers again",
+	}, {
+		name:     "the voter dropped as unreachable is back, its join START in progress",
+		third:    voter3,
+		selected: map[uint32]*replicationdatapb.FullStatus{101: online(primary), 200: online(voter2), 301: notMemberStatus(spare3)},
+		recheck: map[uint32]*replicationdatapb.FullStatus{
+			101: online(primary), 200: online(voter2), 300: startInProgress(voter3), 301: notMemberStatus(spare3),
+		},
+		wantErr: "dropped as unreachable, answers again",
+	}, {
+		name:               "the voter dropped as unreachable was reached since the selection, and failed again",
+		third:              voter3,
+		selected:           map[uint32]*replicationdatapb.FullStatus{101: online(primary), 200: online(voter2), 301: notMemberStatus(spare3)},
+		recheck:            map[uint32]*replicationdatapb.FullStatus{101: online(primary), 200: online(voter2), 301: notMemberStatus(spare3)},
+		seenAfterSelection: true,
+		wantErr:            "was reached",
+	}, {
+		name:     "a voter dropped as no longer eligible has a transaction that the kept voters lack",
+		third:    rdonly3,
+		selected: map[uint32]*replicationdatapb.FullStatus{101: online(primary), 200: online(voter2), 300: withPosition(notMemberStatus(rdonly3), "1-10"), 301: notMemberStatus(spare3)},
+		recheck: map[uint32]*replicationdatapb.FullStatus{
+			101: online(primary), 200: online(voter2), 300: withPosition(notMemberStatus(rdonly3), "1-11"), 301: notMemberStatus(spare3),
+		},
+		wantErr: "has transactions that the kept voters lack",
+	}, {
+		name:     "a voter dropped as no longer eligible runs a START",
+		third:    rdonly3,
+		selected: map[uint32]*replicationdatapb.FullStatus{101: online(primary), 200: online(voter2), 300: withPosition(notMemberStatus(rdonly3), "1-10"), 301: notMemberStatus(spare3)},
+		recheck: map[uint32]*replicationdatapb.FullStatus{
+			101: online(primary), 200: online(voter2), 300: withPosition(startInProgress(rdonly3), "1-10"), 301: notMemberStatus(spare3),
+		},
+		wantErr: "runs a START GROUP_REPLICATION",
+	}, {
+		name:       "a voter dropped as no longer eligible, whose transactions the kept voters hold, is replaced",
+		third:      rdonly3,
+		selected:   map[uint32]*replicationdatapb.FullStatus{101: online(primary), 200: online(voter2), 300: withPosition(notMemberStatus(rdonly3), "1-10"), 301: notMemberStatus(spare3)},
+		recheck:    map[uint32]*replicationdatapb.FullStatus{101: online(primary), 200: online(voter2), 300: withPosition(notMemberStatus(rdonly3), "1-10"), 301: notMemberStatus(spare3)},
+		wantVoters: []string{"zone1-0000000101", "zone2-0000000200", "zone3-0000000301"},
+	}}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			inst.UnreachableGroupTablets.Reset()
+			config.SetGroupReplicationVoterReplacementGracePeriod(0)
+			mockTMC := groupReplicationRecoveryTestWithPolicy(t, policy.DurabilityGroupReplicationCrossCell, primary, voter2, tt.third, spare3)
+			setVoters(t, primary, voter2, voter3)
+			setIncarnation(t, "")
+			for _, tablet := range []*topodatapb.Tablet{primary, voter2, tt.third, spare3} {
+				calls := 0
+				mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(tablet)).DoAndReturn(
+					func(context.Context, *topodatapb.Tablet) (*replicationdatapb.FullStatus, error) {
+						calls++
+						statuses := tt.recheck
+						if calls == 1 {
+							statuses = tt.selected
+							if tt.seenAfterSelection && tablet.Alias.Uid == 301 {
+								// VTOrc's discovery reaches zone3-300 while the recovery runs, more than
+								// a second after the selection read.
+								time.Sleep(2100 * time.Millisecond)
+								assert.NoError(t, inst.WriteInstance(&inst.Instance{InstanceAlias: voter3.Alias, Hostname: voter3.MysqlHostname, Port: int(voter3.MysqlPort)}, true, nil))
+							}
+						}
+						if status, ok := statuses[tablet.Alias.Uid]; ok {
+							return status, nil
+						}
+						return nil, errUnreachable
+					}).AnyTimes()
+			}
+			mockTMC.EXPECT().StartGroupReplication(gomock.Any(), sameTablet(spare3), gomock.Any()).Return(&replicationdatapb.GroupReplicationStatus{}, nil).AnyTimes()
+
+			_, _, err := updateGroupReplicationVoters(t.Context(), &inst.DetectionAnalysis{
+				Analysis:              inst.GroupVotersOutOfDate,
+				AnalyzedInstanceAlias: primary.Alias,
+				AnalyzedKeyspace:      "ks",
+				AnalyzedShard:         "0",
+			}, log.NewPrefixedLogger("test"))
+			if tt.wantErr == "" {
+				require.NoError(t, err)
+				assert.Equal(t, tt.wantVoters, readVoters(t))
+				return
+			}
+			require.Error(t, err)
+			assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+			require.ErrorContains(t, err, tt.wantErr)
+			assert.Equal(t, []string{"zone1-0000000101", "zone2-0000000200", "zone3-0000000300"}, readVoters(t), "the voters must stay as they are")
+		})
+	}
+}
+
+// errorStatus is the status of a member that left its group in the ERROR state.
+func errorStatus(tablet *topodatapb.Tablet) *replicationdatapb.FullStatus {
+	status := notMemberStatus(tablet)
+	status.GroupReplicationStatus.MemberState = mysql.GroupMemberStateError
+	return status
+}
+
+// startInProgress is the status of a member whose START GROUP_REPLICATION runs.
+func startInProgress(tablet *topodatapb.Tablet) *replicationdatapb.FullStatus {
+	status := notMemberStatus(tablet)
+	status.GroupReplicationStatus.StartInProgress = true
+	return withPosition(status, "1-10")
+}

@@ -300,6 +300,12 @@ func setVoters(t *testing.T, tablets ...*topodatapb.Tablet) {
 	require.NoError(t, err)
 }
 
+// withPosition sets the executed GTID set of a status, in the test's group, to the given intervals.
+func withPosition(status *replicationdatapb.FullStatus, intervals string) *replicationdatapb.FullStatus {
+	status.PrimaryStatus = &replicationdatapb.PrimaryStatus{Position: "MySQL56/6f1c2c2e-5a8e-4b8e-9d3a-7c1f0b6e2a41:" + intervals}
+	return status
+}
+
 // setIncarnation records the incarnation of the replication group of shard ks/0.
 func setIncarnation(t *testing.T, incarnation string) {
 	_, err := ts.UpdateShardFields(t.Context(), "ks", "0", func(si *topo.ShardInfo) error {
@@ -1489,9 +1495,9 @@ func TestUpdateGroupReplicationVoters(t *testing.T) {
 			voters:  []*topodatapb.Tablet{primary, crossCellVoter},
 			setup: func(t *testing.T, e expectations) {
 				// The group elected the replica, which is not a voter.
-				e.mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(replica)).Return(groupMemberStatus(replica, replica, primary, replica, crossCellVoter), nil).Times(2)
-				e.mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(primary)).Return(groupMemberStatus(primary, replica, primary, replica, crossCellVoter), nil)
-				e.mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(crossCellVoter)).Return(groupMemberStatus(crossCellVoter, replica, primary, replica, crossCellVoter), nil)
+				e.mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(replica)).Return(withPosition(groupMemberStatus(replica, replica, primary, replica, crossCellVoter), "1-10"), nil).AnyTimes()
+				e.mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(primary)).Return(withPosition(groupMemberStatus(primary, replica, primary, replica, crossCellVoter), "1-10"), nil).AnyTimes()
+				e.mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(crossCellVoter)).Return(withPosition(groupMemberStatus(crossCellVoter, replica, primary, replica, crossCellVoter), "1-10"), nil).AnyTimes()
 				e.mockTMC.EXPECT().StopGroupReplication(gomock.Any(), sameTablet(replica)).Times(0)
 				e.mockTMC.EXPECT().StopGroupReplication(gomock.Any(), sameTablet(primary)).Return(&replicationdatapb.GroupReplicationStatus{}, nil)
 				e.mockTMC.EXPECT().SetReplicationSource(gomock.Any(), sameTablet(primary), replica.Alias, int64(0), "", true, false, 4.0).Return(nil)

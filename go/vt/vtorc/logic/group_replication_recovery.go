@@ -1068,6 +1068,7 @@ func updateGroupReplicationVoters(ctx context.Context, analysisEntry *inst.Detec
 		return false, topologyRecovery, err
 	}
 
+	selectedAt := time.Now()
 	statuses := readShardTabletStatuses(ctx, tabletInfos)
 	// Only the shard's legitimate group counts: a member of a group of another incarnation has
 	// no quorum and is no primary here, and the group primary holds a majority of the voters.
@@ -1117,6 +1118,16 @@ func updateGroupReplicationVoters(ctx context.Context, analysisEntry *inst.Detec
 		// one's expired, may have written a list since, on statuses that this selection did not
 		// see. The selection is then stale, and the next recovery selects again.
 		incarnation := shardInfo.GroupReplicationIncarnation
+		// The statuses that the selection read may be stale by now: check again what the change
+		// relies on, right before the write and with nothing in between (recheckVoterChange).
+		if len(current) > 0 {
+			if err := recheckVoterChange(ctx, shardInfo, current, selection.Voters, tabletInfos, statuses, selectedAt); err != nil {
+				message := fmt.Sprintf("not changing the voters of %s from [%s] to [%s]: %v", keyspaceShard, formatAliases(current), formatAliases(selection.Voters), err)
+				logger.Warn(message)
+				_ = AuditTopologyRecovery(topologyRecovery, message)
+				return true, topologyRecovery, err
+			}
+		}
 		_, err = ts.UpdateShardFields(ctx, keyspace, shard, func(si *topo.ShardInfo) error {
 			if !inst.SameGroupReplicationVoters(si.GroupReplicationVoters, current) || si.GroupReplicationIncarnation != incarnation {
 				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
@@ -1176,6 +1187,100 @@ func updateGroupReplicationVoters(ctx context.Context, analysisEntry *inst.Detec
 	}
 	_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("%s: the voters of %s are [%s]", UpdateGroupReplicationVotersRecoveryName, keyspaceShard, formatAliases(selection.Voters)))
 	return true, topologyRecovery, nil
+}
+
+// recheckVoterChange checks, right before VTOrc writes a new voter list, that the change from current
+// to proposed is still safe, on statuses of the shard's tablets read now. VTOrc selected the list on
+// statuses that it read earlier (selected, at selectedAt), and a voter that it dropped as failed may
+// have come back, rejoined, been elected and acknowledged a transaction that the kept voters lack,
+// and failed again meanwhile; the bootstrap that follows from the kept voters would lose it (the TLA+
+// model's voters_split). It returns a FAILED_PRECONDITION error unless all of these hold:
+//   - group: a member of the shard's recorded incarnation is active with quorum in its view, the
+//     condition under which VTOrc changes the voters at all (the model's VOTERS_NEED_GROUP), read
+//     now: the group may have died since. A majority of the current voters in that view is not
+//     required: replacing failed voters with spares that must join first is allowed (see
+//     inst.voterChangeRefusal);
+//   - reachable: no voter that the selection dropped as unreachable answers now, nor did VTOrc reach
+//     it since the selection read the statuses;
+//   - dropped: a voter that the selection dropped for another reason (it is no longer eligible, or
+//     its cell has a voter already) runs no START GROUP_REPLICATION, is not active in a group of
+//     another incarnation, and has executed or received no transaction that the kept voters, those
+//     that answer, have not.
+func recheckVoterChange(ctx context.Context, shardInfo *topo.ShardInfo, current, proposed []*topodatapb.TabletAlias, tabletInfos []*topo.TabletInfo,
+	selected []*shardTabletStatus, selectedAt time.Time,
+) error {
+	fresh := readShardTabletStatuses(ctx, tabletInfos)
+	byAlias := make(map[string]*shardTabletStatus, len(fresh))
+	for _, st := range fresh {
+		byAlias[topoproto.TabletAliasString(st.tablet.Alias)] = st
+	}
+	legitimate := legitimateGroupOf(shardInfo, fresh)
+	groupUp := false
+	for _, st := range fresh {
+		if st.err != nil {
+			continue
+		}
+		gs := st.status.GetGroupReplicationStatus()
+		// As for the selection: an active member, not in a group of another incarnation, with quorum.
+		if mysql.IsGroupMemberActive(gs) && !legitimate.IsForeignIncarnation(gs) && gs.GetHasQuorum() {
+			groupUp = true
+			break
+		}
+	}
+	if !groupUp {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no member of the shard's replication group is active with quorum any more")
+	}
+
+	// kept is the union of the transactions that the kept voters that answer executed or received;
+	// a kept voter whose transactions cannot be read only makes it smaller.
+	var kept replication.GTIDSet = replication.Mysql56GTIDSet{}
+	for _, st := range fresh {
+		if st.err != nil || !policy.IsVoter(proposed, st.tablet.Alias) {
+			continue
+		}
+		if _, all, err := memberGTIDSets(st.status); err == nil {
+			kept = kept.Union(all)
+		}
+	}
+	for _, sel := range selected {
+		alias := topoproto.TabletAliasString(sel.tablet.Alias)
+		if !policy.IsVoter(current, sel.tablet.Alias) || policy.IsVoter(proposed, sel.tablet.Alias) {
+			continue
+		}
+		now := byAlias[alias]
+		if sel.err != nil {
+			// Dropped as unreachable.
+			if now != nil && now.err == nil {
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "voter %s, dropped as unreachable, answers again", alias)
+			}
+			// VTOrc's discovery may have reached it in between: it came back, and may have failed again.
+			if instance, _, err := inst.ReadInstance(sel.tablet.Alias); err == nil && instance != nil && instance.SecondsSinceLastSeen.Valid &&
+				float64(instance.SecondsSinceLastSeen.Int64)+1 < time.Since(selectedAt).Seconds() {
+				// The age has a granularity of a second: a sighting within the second after the
+				// selection is not told apart from one right before it, and the read above covers now.
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "voter %s, dropped as unreachable, was reached %ds ago, since the selection", alias, instance.SecondsSinceLastSeen.Int64)
+			}
+			continue
+		}
+		if now == nil || now.err != nil {
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "voter %s, which the selection dropped, does not answer: its transactions cannot be checked", alias)
+		}
+		gs := now.status.GetGroupReplicationStatus()
+		if gs.GetStartInProgress() {
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "voter %s, which the selection dropped, runs a START GROUP_REPLICATION", alias)
+		}
+		if legitimate.IsForeignIncarnation(gs) {
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "voter %s, which the selection dropped, is active in group incarnation %s", alias, policy.GroupIncarnation(gs.GetViewId()))
+		}
+		_, all, err := memberGTIDSets(now.status)
+		if err != nil {
+			return vterrors.Wrapf(err, "cannot read the transactions of voter %s", alias)
+		}
+		if !kept.Contains(all) {
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "voter %s, which the selection dropped, has transactions that the kept voters lack (%s; kept voters %s)", alias, all.String(), kept.String())
+		}
+	}
+	return nil
 }
 
 // leaveGroupReplication makes an active member that is no longer a voter leave its group, and
