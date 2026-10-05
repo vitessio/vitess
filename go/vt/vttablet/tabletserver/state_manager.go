@@ -473,6 +473,9 @@ func (sm *stateManager) servePrimary() error {
 	// te to quickly transition into RW, but olap and stateless
 	// queries can continue serving.
 	sm.statefulql.TerminateAll()
+
+	// Kill in-flight COMMITs with the stateful queries. A COMMIT also runs on a
+	// stateful connection.
 	sm.te.TerminateActiveCommits()
 	sm.te.AcceptReadWrite()
 	sm.messager.Open()
@@ -608,6 +611,11 @@ func (sm *stateManager) handleShutdownGracePeriod(wg *sync.WaitGroup) {
 	}
 }
 
+// terminateAllQueries starts a goroutine that, after the shutdown grace period,
+// rejects new queries and COMMITs, kills running queries and COMMITs, and rolls
+// back prepared transactions. The returned function stops the goroutine if the
+// grace period has not ended. If the cleanup has started, the function waits
+// until the cleanup is complete.
 func (sm *stateManager) terminateAllQueries(wg *sync.WaitGroup) func() {
 	if sm.shutdownGracePeriod == 0 {
 		return func() {}
@@ -623,6 +631,7 @@ func (sm *stateManager) terminateAllQueries(wg *sync.WaitGroup) func() {
 			return
 		}
 
+		// Stop if the transition ended as the grace period expired.
 		if ctx.Err() != nil {
 			return
 		}

@@ -31,7 +31,8 @@ import (
 	tmc "vitess.io/vitess/go/vt/vttablet/grpctmclient"
 )
 
-const schema = `
+// blockedCommitSchema is the schema of the keyspace in the blocked COMMIT test.
+const blockedCommitSchema = `
 	create table test(
 		id bigint,
 		msg varchar(64),
@@ -39,7 +40,8 @@ const schema = `
 	) Engine=InnoDB;
 `
 
-const vschema = `
+// blockedCommitVSchema is the vschema of the keyspace in the blocked COMMIT test.
+const blockedCommitVSchema = `
 	{
 		"sharded": false,
 		"tables": {
@@ -88,8 +90,8 @@ func testChangeTypePrimaryWithBlockedCommit(t *testing.T, tabletType topodatapb.
 
 	keyspace := cluster.Keyspace{
 		Name:             "ks",
-		SchemaSQL:        schema,
-		VSchema:          vschema,
+		SchemaSQL:        blockedCommitSchema,
+		VSchema:          blockedCommitVSchema,
 		DurabilityPolicy: policy.DurabilitySemiSync,
 	}
 

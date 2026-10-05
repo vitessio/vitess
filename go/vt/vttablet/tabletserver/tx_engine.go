@@ -154,8 +154,8 @@ func NewTxEngine(env tabletenv.Env, dxNotifier func()) *TxEngine {
 	return te
 }
 
-// SetClusterAction sets the cluster action on the active commits query list. When set to no-queries,
-// active commits are not allowed to be added.
+// SetClusterAction sets the cluster action on activeCommits. With
+// ClusterActionNoQueries, new COMMITs are rejected.
 func (te *TxEngine) SetClusterAction(ca ClusterActionState) {
 	te.activeCommits.SetClusterAction(ca)
 }
@@ -325,11 +325,13 @@ func (te *TxEngine) Commit(ctx context.Context, transactionID int64) (int64, str
 	return connID, query, err
 }
 
-// commit commits the transaction.
+// commit commits the transaction on conn and tracks the COMMIT in
+// activeCommits, which lets the shutdown grace period kill it. If
+// activeCommits rejects new COMMITs, commit kills the transaction and
+// releases conn. An autocommit transaction sends no COMMIT and is not tracked.
 func (te *TxEngine) commit(ctx context.Context, conn *StatefulConnection) (string, error) {
-	// An autocommit transaction never sends a COMMIT to MySQL: every statement
-	// was already durably committed. There is nothing to track or interrupt, and
-	// rejecting it during shutdown would report failure for applied writes.
+	// Skip the gate for an autocommit transaction. MySQL already committed
+	// each statement, and a rejection would report failure for applied writes.
 	if conn.IsInTransaction() && conn.TxProperties().Autocommit {
 		return te.txPool.Commit(ctx, conn)
 	}
@@ -343,16 +345,17 @@ func (te *TxEngine) commit(ctx context.Context, conn *StatefulConnection) (strin
 	return te.txPool.Commit(ctx, conn)
 }
 
-// addActiveCommit adds a commit to the active commit list. Returns a function that should be deferred
-// by the caller to remove the query from the active commit list on completion.
+// addActiveCommit adds the COMMIT on conn to activeCommits and returns a
+// function that removes it. If activeCommits rejects new COMMITs, it kills the
+// transaction, releases conn, and returns the error. The caller must not use
+// conn after an error.
 func (te *TxEngine) addActiveCommit(ctx context.Context, conn *StatefulConnection) (func(), error) {
 	qd := NewQueryDetail(ctx, conn)
 	if err := te.activeCommits.Add(qd); err != nil {
-		// If we've received an error here, it means a shutdown is in progress, and
-		// we should close the connection and its transaction before releasing it.
+		// Kill the transaction. The shutdown grace period has ended.
 		conn.Close()
 
-		// If we were in a transaction, also clean it up before releasing the connection.
+		// Conclude the transaction before the connection is released.
 		if conn.IsInTransaction() {
 			te.txPool.txComplete(conn, tx.TxKill)
 		}
