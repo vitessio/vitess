@@ -48,13 +48,16 @@ import (
 // fences a bootstrap on another tablet; InitPrimary's bootstrap ignored it.
 //
 // The first subtest relies on the fake MySQL, in which no tablet is a member of VTOrc's group and none
-// logged a GTID: on MySQL 8.4 the tablet on which VTOrc bootstrapped the group is an active member, and
-// its bootstrap logged a view-change GTID, which other checks catch as well. The second subtest is the race that remains with view-change GTIDs: VTOrc's
-// bootstrap RPC timed out while MySQL's START still ran, before it logged anything, so that no tablet
-// shows a GTID or an active member yet, and only the live intent tells that a group is being created.
-// The model shows that a guard on the live intent alone is not enough either (init_orc_vgtid: the intent
-// expired, and a voter joined VTOrc's unrecorded group and left it): the initial promotion also refuses
-// while any tablet is an active member (TestPlannedReparentGroupReplicationInitialPromotionRefusals).
+// logged a GTID for it. On MySQL 8.4.11, with group_replication_view_change_uuid left at AUTOMATIC as
+// Vitess leaves it, neither a bootstrap nor a join logs a view-change GTID either (raw lab of three
+// instances, outside Vitess), so the elect's GTID checks do not see VTOrc's group; only the recorded
+// incarnation, or the active member that VTOrc's bootstrap target is while its MySQL runs the group,
+// does. The second subtest is the race that remains whatever MySQL logs: VTOrc's bootstrap RPC timed
+// out while MySQL's START still ran, so that no incarnation is recorded and no tablet reports an
+// active member yet, and only the live intent tells that a group is being created. A guard on the live
+// intent alone is not enough (the model's init_orc_vgtid: the intent expired, and a voter joined
+// VTOrc's unrecorded group and left it): the initial promotion also refuses while any tablet is an
+// active member (TestPlannedReparentGroupReplicationInitialPromotionRefusals).
 func TestPlannedReparentGroupReplicationInitialPromotionAfterBootstrap(t *testing.T) {
 	for _, tt := range []struct {
 		name  string
