@@ -394,6 +394,26 @@ func TestGetDetectionAnalysisGroupReplication(t *testing.T) {
 			notWant: []AnalysisCode{GroupVotersOutOfDate},
 		},
 		{
+			name: "the group primary's view lacks the voter majority: the voters it lacks keep their seats",
+			rows: func() []*test.InfoForRecoveryAnalysis {
+				// The two other voters left the view cleanly, which kept MySQL's view quorum, and
+				// have been unreachable for longer than the grace period.
+				var rows []*test.InfoForRecoveryAnalysis
+				for _, tablet := range []*topodatapb.Tablet{replica, replica2} {
+					failed := grRow(tablet, gr)
+					failed.LastCheckValid = 0
+					failed.IsPrimary = 0
+					failed.ReplicationStopped = 0
+					failed.PrimaryTabletInfo = primary
+					rows = append(rows, failed)
+				}
+				return append(rows, sees(member(grRow(primary, gr), mysql.GroupMemberStateOnline, mysql.GroupMemberRolePrimary, true, primary), primary))
+			},
+			voters:           []*topodatapb.Tablet{primary, replica, replica2},
+			voterGracePeriod: -1,
+			notWant:          []AnalysisCode{GroupVotersOutOfDate},
+		},
+		{
 			name: "an unreachable voter whose MySQL is still an active member keeps its seat",
 			rows: func() []*test.InfoForRecoveryAnalysis {
 				// Its vttablet is down, but the group primary still sees its MySQL ONLINE.

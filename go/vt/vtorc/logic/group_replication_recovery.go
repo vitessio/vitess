@@ -988,6 +988,7 @@ func updateGroupReplicationVoters(ctx context.Context, analysisEntry *inst.Detec
 		if legitimate.IsForeignIncarnation(gs) {
 			observations[i].HasQuorum = false
 			observations[i].PrimaryUUID = ""
+			observations[i].Foreign = true
 		}
 		observations[i].GroupPrimary = observations[i].GroupPrimary && legitimate.IsLegitimatePrimary(gs)
 		if observations[i].Active && observations[i].HasQuorum {
@@ -1001,9 +1002,27 @@ func updateGroupReplicationVoters(ctx context.Context, analysisEntry *inst.Detec
 	if len(selection.Voters) == 0 {
 		return true, topologyRecovery, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no tablet of %s can be a voter", keyspaceShard)
 	}
+	if selection.KeptReason != "" {
+		// The list stays as it is until the missing voters are back, or a view holds their
+		// majority. A member that is not a voter still leaves the group below, as the analysis
+		// expects (GroupVotersOutOfDate): that changes no voter majority.
+		message := fmt.Sprintf("the voters of %s keep their seats: %s", keyspaceShard, selection.KeptReason)
+		logger.Warn(message)
+		_ = AuditTopologyRecovery(topologyRecovery, message)
+	}
 
 	if !inst.SameGroupReplicationVoters(selection.Voters, current) {
+		// The write is a compare-and-swap on the voters and the incarnation that the selection
+		// was made against: another VTOrc, whose shard lock expired or that took it after this
+		// one's expired, may have written a list since, on statuses that this selection did not
+		// see. The selection is then stale, and the next recovery selects again.
+		incarnation := shardInfo.GroupReplicationIncarnation
 		_, err = ts.UpdateShardFields(ctx, keyspace, shard, func(si *topo.ShardInfo) error {
+			if !inst.SameGroupReplicationVoters(si.GroupReplicationVoters, current) || si.GroupReplicationIncarnation != incarnation {
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+					"the shard record of %s changed concurrently (voters [%s], incarnation %q; expected voters [%s], incarnation %q): not writing the voters [%s]",
+					keyspaceShard, formatAliases(si.GroupReplicationVoters), si.GroupReplicationIncarnation, formatAliases(current), incarnation, formatAliases(selection.Voters))
+			}
 			si.GroupReplicationVoters = selection.Voters
 			return nil
 		})
