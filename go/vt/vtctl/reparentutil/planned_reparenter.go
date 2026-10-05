@@ -446,8 +446,13 @@ func (pr *PlannedReparenter) performInitialPromotion(
 //   - a bootstrap intent is live (LiveGroupReplicationBootstrapIntent): a component bootstrapped
 //     the group, or is bootstrapping it, and its incarnation is not recorded yet;
 //   - an incarnation is recorded: the group was bootstrapped;
-//   - a tablet's MySQL is an active member of a group, for example of a bootstrap whose intent
-//     expired, or of a previous initial promotion that failed after InitPrimary bootstrapped it.
+//   - a tablet's MySQL is an active member of the shard's group (policy.GroupName), for example of
+//     a bootstrap whose intent expired, or of a previous initial promotion that failed after
+//     InitPrimary bootstrapped it.
+//
+// A tablet whose MySQL is an active member of another group does not tell that the shard has a
+// group, but the initial promotion still refuses, with its own error: InitPrimary cannot bootstrap
+// the shard's group on such a tablet, nor make it join, and waiting for VTOrc would not help.
 //
 // It reads the shard record and the status of every tablet under the shard lock, after
 // verifyAllTabletsReachable. A tablet whose status cannot be read fails the check.
@@ -476,6 +481,7 @@ func (pr *PlannedReparenter) checkShardHasNoGroup(ctx context.Context, keyspace,
 		aliases = append(aliases, alias)
 	}
 	slices.Sort(aliases)
+	groupName := policy.GroupName(keyspace, shard)
 	for _, alias := range aliases {
 		res := statuses[alias]
 		if res.err != nil {
@@ -483,6 +489,11 @@ func (pr *PlannedReparenter) checkShardHasNoGroup(ctx context.Context, keyspace,
 		}
 		if res.isActiveMember() {
 			gs := res.groupStatus()
+			if name := gs.GetGroupName(); name != "" && name != groupName {
+				return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION,
+					"tablet %v of shard %s/%s is %s in replication group %s (view %s), which is not the shard's group %s: InitPrimary would leave it there, and could not bootstrap the shard's group on it; stop Group Replication on its MySQL, then run PlannedReparentShard again",
+					alias, keyspace, shard, gs.GetMemberState(), name, gs.GetViewId(), groupName)
+			}
 			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION,
 				"tablet %v of shard %s/%s is already %s in replication group %s (view %s): the shard has a group; %s",
 				alias, keyspace, shard, gs.GetMemberState(), gs.GetGroupName(), gs.GetViewId(), advice)

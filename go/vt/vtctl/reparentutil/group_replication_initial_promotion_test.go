@@ -136,6 +136,8 @@ func TestPlannedReparentGroupReplicationInitialPromotionRefusals(t *testing.T) {
 		setup func(t *testing.T, c *fakeGRCluster)
 		// wantErr is a part of the error; empty means that the initial promotion runs.
 		wantErr string
+		// wantAdvice is the advice the error ends with, if not to wait for VTOrc's promotion.
+		wantAdvice string
 	}{{
 		name:    "a bootstrap intent is live",
 		setup:   intent(0),
@@ -152,6 +154,16 @@ func TestPlannedReparentGroupReplicationInitialPromotionRefusals(t *testing.T) {
 		name:    "a voter is a RECOVERING member of a group",
 		setup:   member(mysql.GroupMemberStateRecovering),
 		wantErr: "tablet zone2-0000000200 of shard ks/- is already RECOVERING in replication group",
+	}, {
+		name: "a voter is an ONLINE member of another shard's group",
+		setup: func(t *testing.T, c *fakeGRCluster) {
+			member("")(t, c)
+			c.mu.Lock()
+			defer c.mu.Unlock()
+			c.tablets[alias200].groupName = policy.GroupName("ks", "-80")
+		},
+		wantErr:    "tablet zone2-0000000200 of shard ks/- is ONLINE in replication group " + policy.GroupName("ks", "-80") + " (view 1790000000:1), which is not the shard's group " + policy.GroupName("ks", "-"),
+		wantAdvice: "stop Group Replication on its MySQL, then run PlannedReparentShard again",
 	}, {
 		name:  "the bootstrap intent expired, and no tablet is in a group",
 		setup: intent(GroupReplicationBootstrapIntentFence + time.Second),
@@ -179,7 +191,12 @@ func TestPlannedReparentGroupReplicationInitialPromotionRefusals(t *testing.T) {
 			require.Error(t, err)
 			assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
 			require.ErrorContains(t, err, tt.wantErr)
-			require.ErrorContains(t, err, "wait until the group's primary tablet is PRIMARY (VTOrc promotes it), then run PlannedReparentShard again")
+			advice := "wait until the group's primary tablet is PRIMARY (VTOrc promotes it), then run PlannedReparentShard again"
+			if tt.wantAdvice != "" {
+				advice = tt.wantAdvice
+				assert.NotContains(t, err.Error(), "the shard has a group", "a member of another group does not tell that the shard has one")
+			}
+			require.ErrorContains(t, err, advice)
 			assert.Empty(t, c.mutatingCalls(), "the initial promotion must change nothing")
 			assert.Equal(t, []string{alias101, alias200, alias300}, c.voters(t))
 		})
