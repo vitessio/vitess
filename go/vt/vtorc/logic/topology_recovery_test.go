@@ -2564,3 +2564,73 @@ func TestFixReplicaHeartbeatInterval(t *testing.T) {
 		})
 	}
 }
+
+// TestRecoverErrantGTIDDetectedDrainsWithoutSemiSync checks that a tablet drained for errant GTIDs
+// is told to stop sending semi-sync ACKs. ERS neither waits for a DRAINED tablet nor promotes it,
+// so a write that only a DRAINED tablet ACKed is lost in a failover.
+func TestRecoverErrantGTIDDetectedDrainsWithoutSemiSync(t *testing.T) {
+	orcDB, cached, err := db.OpenVTOrcWithCache()
+	require.NoError(t, err)
+	if !cached {
+		t.Cleanup(func() {
+			require.NoError(t, orcDB.Close())
+		})
+	}
+	for _, table := range []string{"topology_recovery_steps", "topology_recovery", "recovery_detection", "vitess_tablet", "vitess_keyspace"} {
+		_, err = orcDB.Exec("delete from " + table)
+		require.NoError(t, err)
+	}
+
+	const (
+		keyspace = "ks"
+		shard    = "0"
+	)
+	primaryTablet := &topodatapb.Tablet{
+		Alias:                &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+		Hostname:             "primary",
+		MysqlHostname:        "primary",
+		MysqlPort:            3306,
+		Keyspace:             keyspace,
+		Shard:                shard,
+		Type:                 topodatapb.TabletType_PRIMARY,
+		PrimaryTermStartTime: &vttimepb.Time{Seconds: 1000},
+		PortMap:              map[string]int32{"vt": 15100, "grpc": 15101},
+	}
+	errantTablet := &topodatapb.Tablet{
+		Alias:         &topodatapb.TabletAlias{Cell: "zone2", Uid: 200},
+		Hostname:      "errant",
+		MysqlHostname: "errant",
+		MysqlPort:     3306,
+		Keyspace:      keyspace,
+		Shard:         shard,
+		Type:          topodatapb.TabletType_REPLICA,
+		PortMap:       map[string]int32{"vt": 15200, "grpc": 15201},
+	}
+	require.NoError(t, inst.SaveTablet(primaryTablet))
+	require.NoError(t, inst.SaveTablet(errantTablet))
+	keyspaceInfo := &topo.KeyspaceInfo{
+		Keyspace: &topodatapb.Keyspace{DurabilityPolicy: policy.DurabilitySemiSync},
+	}
+	keyspaceInfo.SetKeyspaceName(keyspace)
+	require.NoError(t, inst.SaveKeyspace(keyspaceInfo))
+
+	oldTMC := tmc
+	t.Cleanup(func() { tmc = oldTMC })
+	mockTMC := tmcmock.NewMockTabletManagerClient(gomock.NewController(t))
+	// The tablet was a semi-sync REPLICA; as DRAINED it must not ACK.
+	mockTMC.EXPECT().
+		ChangeType(gomock.Any(), gomock.Any(), topodatapb.TabletType_DRAINED, false).
+		Return(nil).
+		Times(1)
+	tmc = mockTMC
+
+	analysisEntry := &inst.DetectionAnalysis{
+		Analysis:              inst.ErrantGTIDDetected,
+		AnalyzedInstanceAlias: errantTablet.Alias,
+		AnalyzedKeyspace:      keyspace,
+		AnalyzedShard:         shard,
+	}
+	attempted, _, err := recoverErrantGTIDDetected(t.Context(), analysisEntry, log.NewPrefixedLogger("test-errant-gtid"))
+	require.NoError(t, err)
+	require.True(t, attempted)
+}

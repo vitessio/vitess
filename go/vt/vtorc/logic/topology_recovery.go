@@ -1714,6 +1714,11 @@ func recoverErrantGTIDDetected(ctx context.Context, analysisEntry *inst.Detectio
 		return false, topologyRecovery, err
 	}
 
-	err = changeTabletType(ctx, analyzedTablet, topodatapb.TabletType_DRAINED, policy.IsReplicaSemiSync(durabilityPolicy, primaryTablet, analyzedTablet))
+	// Check the durability rules for the DRAINED tablet, not for the REPLICA it was: a DRAINED
+	// tablet must not send semi-sync ACKs. ERS neither waits for it nor promotes it, so an ACK it
+	// sends can acknowledge a write that a failover then loses.
+	drainedTablet := analyzedTablet.CloneVT()
+	drainedTablet.Type = topodatapb.TabletType_DRAINED
+	err = changeTabletType(ctx, analyzedTablet, topodatapb.TabletType_DRAINED, policy.IsReplicaSemiSync(durabilityPolicy, primaryTablet, drainedTablet))
 	return true, topologyRecovery, err
 }
