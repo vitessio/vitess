@@ -994,7 +994,7 @@ func TestQueryExecutorPlanNextvalCommitFailureKeepsCache(t *testing.T) {
 	require.Zero(t, seq.NextVal)
 	require.Zero(t, seq.LastVal)
 
-	// Refill from the table on the retry. Another writer moved next_id to 4.
+	// Make the retry read next_id = 4 from the table. A stale cache returns 1.
 	db.AddQuery("select next_id, cache from seq where id = 0 for update", &sqltypes.Result{
 		Fields: []*querypb.Field{{Type: sqltypes.Int64}, {Type: sqltypes.Int64}},
 		Rows:   [][]sqltypes.Value{{sqltypes.NewInt64(4), sqltypes.NewInt64(3)}},
