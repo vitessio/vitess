@@ -1217,7 +1217,7 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 	defer t.SequenceInfo.Unlock()
 	if t.SequenceInfo.NextVal == 0 || t.SequenceInfo.NextVal+inc > t.SequenceInfo.LastVal {
 		// Stage the new cache range. Publish it only after the COMMIT succeeds.
-		// The sequence table keeps the old next_id when the COMMIT fails.
+		// The sequence table can keep the old next_id when the COMMIT fails.
 		nextVal, lastVal := t.SequenceInfo.NextVal, t.SequenceInfo.LastVal
 		_, err := qre.execAsTransaction(func(conn *StatefulConnection) (*sqltypes.Result, error) {
 			query := fmt.Sprintf("select next_id, cache from %s where id = 0 for update", sqlparser.String(tableName))
