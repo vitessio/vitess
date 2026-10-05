@@ -160,13 +160,14 @@ func TestActiveCommits(t *testing.T) {
 
 	commitStarted := make(chan struct{})
 	releaseCommit := make(chan struct{})
+	t.Cleanup(func() { close(releaseCommit) })
 
+	var once sync.Once
 	db.AddQuery("commit", &sqltypes.Result{})
 	db.SetBeforeFunc("commit", func() {
-		close(commitStarted)
+		once.Do(func() { close(commitStarted) })
 
-		// Block the commit so the active commit list has a real connection to terminate. This emulates
-		// the commit stuck on semi-sync in MySQL.
+		// Block the COMMIT until cleanup, like a COMMIT stuck on semi-sync in MySQL.
 		<-releaseCommit
 	})
 
@@ -179,18 +180,20 @@ func TestActiveCommits(t *testing.T) {
 		errc <- err
 	}()
 
-	// Make sure the commit has started.
-	<-commitStarted
+	select {
+	case <-commitStarted:
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "COMMIT did not start")
+	}
 
-	// Try to terminate active commits.
 	txEngine.TerminateActiveCommits()
 
-	// Allow the BeforeFunc to continue.
-	close(releaseCommit)
-
-	// We expect the commit to be terminated.
-	err = <-errc
-	require.ErrorContains(t, err, "QueryList.TerminateAll()")
+	select {
+	case err := <-errc:
+		require.ErrorContains(t, err, "QueryList.TerminateAll()")
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "COMMIT stayed blocked after TerminateActiveCommits")
+	}
 }
 
 // TestCommitRejectedByClusterActionRecordsKill verifies that COMMIT requests rejected
