@@ -52,7 +52,9 @@ import (
 // must parse as a SET statement, with no subquery when rejectSubqueries is set (see
 // rejectSettingSubqueries), and sql_mode values must be constants: the settings paths
 // apply their statements with no verification afterwards, so a value that cannot be
-// judged upfront is rejected rather than applied unchecked.
+// judged upfront is rejected rather than applied unchecked. Settings that would switch
+// the connection to an unsafe character set are rejected too (see
+// validateSetExprsCharset).
 func ValidateSettingsSQLMode(settings []string, parser *sqlparser.Parser, rejectSubqueries bool) error {
 	for _, setting := range settings {
 		stmt, err := parser.Parse(setting)
@@ -69,6 +71,9 @@ func ValidateSettingsSQLMode(settings []string, parser *sqlparser.Parser, reject
 			}
 		}
 		if err := validateConstantSetExprsSQLMode(set.Exprs); err != nil {
+			return err
+		}
+		if err := validateSetExprsCharset(set.Exprs); err != nil {
 			return err
 		}
 	}

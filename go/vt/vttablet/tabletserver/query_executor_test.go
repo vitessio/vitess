@@ -2647,6 +2647,39 @@ func TestReserveSettingsRejectUnsupportedSQLModes(t *testing.T) {
 	require.NoError(t, tsv.te.Release(ctx, connID))
 }
 
+// A connection starts out in a character set Vitess can parse safely, and a
+// session must not be able to switch it to one it cannot: not through
+// connection settings, which a VTGate gRPC client controls through its session's
+// system variables, on the settings-pool path or either reservation path, and
+// not through a SET statement sent to the query service.
+func TestSettingsRejectUnsafeConnectionCharsets(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+	ctx := t.Context()
+	tsv := newTestTabletServer(ctx, enableStrictTableACL, db)
+	defer tsv.StopService()
+
+	for _, setting := range []string{"set character_set_client = 'gbk'", "set names 'sjis'", "set collation_connection = 'cp932_japanese_ci'"} {
+		_, _, err := tsv.te.ReserveBegin(ctx, &querypb.ExecuteOptions{}, []string{setting})
+		require.ErrorContains(t, err, "unsupported connection character set")
+		_, err = tsv.te.Reserve(ctx, &querypb.ExecuteOptions{}, 0, []string{setting})
+		require.ErrorContains(t, err, "unsupported connection character set")
+		_, err = tsv.qe.GetConnSetting(ctx, []string{setting})
+		require.ErrorContains(t, err, "unsupported connection character set")
+		_, err = tsv.Execute(ctx, nil, tsv.sm.Target(), setting, nil, 0, 0, nil)
+		require.ErrorContains(t, err, "unsupported connection character set")
+		assert.Zero(t, db.GetQueryCalledNum(setting), "a rejected setting must not reach the backend")
+	}
+
+	safeSetting := "set character_set_client = 'utf8mb4'"
+	db.AddQuery(safeSetting, &sqltypes.Result{})
+	connID, _, err := tsv.te.ReserveBegin(ctx, &querypb.ExecuteOptions{}, []string{safeSetting})
+	require.NoError(t, err)
+	require.NoError(t, tsv.te.Release(ctx, connID))
+	_, err = tsv.qe.GetConnSetting(ctx, []string{safeSetting})
+	require.NoError(t, err)
+}
+
 // A setting is applied with no table ACL check, so under strict table ACL one
 // that would read a table through a subquery is rejected before it reaches the
 // backend, on the settings-pool path and on both reservation paths alike.

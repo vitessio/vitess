@@ -61,4 +61,13 @@ func TestParseConnectionCharset(t *testing.T) {
 	// a MySQL version that does not have it.
 	_, ok = NewEnvironment("5.7.31").ConnectionCharset(CollationUtf8mb4ID)
 	require.True(t, ok)
+
+	// A SET statement names a character set or collation, which need not be one
+	// Vitess implements either.
+	for _, name := range []string{"utf8mb4", "UTF8MB4", "utf8mb4_ja_0900_as_cs", "utf8", "utf8_general_ci", "binary", "latin1_swedish_ci", "tis620"} {
+		require.True(t, IsConnectionCharsetName(name), "name %q", name)
+	}
+	for _, name := range []string{"sjis", "cp932_japanese_ci", "gbk", "gbk_chinese_ci", "big5", "gb18030", "ucs2", "utf16le", "no_such_charset"} {
+		require.False(t, IsConnectionCharsetName(name), "name %q", name)
+	}
 }

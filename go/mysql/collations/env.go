@@ -350,6 +350,28 @@ func (env *Environment) ConnectionCharset(id ID) (charset string, ok bool) {
 	return charset, connectionCharsets[charset]
 }
 
+// IsConnectionCharsetName reports whether name, a character set or a collation
+// name as a SET statement gives it, belongs to one of the character sets that
+// can be used for a connection. Like ConnectionCharset, it knows every name
+// MySQL defines, in any version, whether or not Vitess implements it.
+func IsConnectionCharsetName(name string) bool {
+	charset, ok := charsetsByName()[strings.ToLower(name)]
+	return ok && connectionCharsets[charset]
+}
+
+// charsetsByName maps every character set and collation name MySQL defines to
+// its character set.
+var charsetsByName = sync.OnceValue(func() map[string]string {
+	byName := make(map[string]string)
+	for _, vi := range globalVersionInfo {
+		for _, alias := range vi.alias {
+			byName[alias.name] = alias.charset
+			byName[alias.charset] = alias.charset
+		}
+	}
+	return byName
+})
+
 func (env *Environment) AllCollationIDs() []ID {
 	all := make([]ID, 0, len(env.byID))
 	for v := range env.byID {
