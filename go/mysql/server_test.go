@@ -878,9 +878,9 @@ func TestServer(t *testing.T) {
 	params.Charset = 95 // cp932_japanese_ci
 	_, err = Connect(ctx, params)
 	require.ErrorContains(t, err, `unsupported connection character set "cp932": use utf8mb4`)
-	params.Charset = 100 // not a collation MySQL defines
+	params.Charset = 100 // not a collation MySQL defines, so there is no name to report
 	_, err = Connect(ctx, params)
-	require.ErrorContains(t, err, "unsupported connection character set with collation id 100: use utf8mb4")
+	require.ErrorContains(t, err, "unsupported connection character set: use utf8mb4")
 	params.Charset = collations.CollationUtf8mb4ID
 	c, err := Connect(ctx, params)
 	require.NoError(t, err)

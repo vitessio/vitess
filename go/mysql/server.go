@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -495,14 +494,13 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 	// asks for a character set where that is not safe; see
 	// collations.Environment.ConnectionCharset.
 	if charset, ok := l.handler.Env().CollationEnv().ConnectionCharset(c.CharacterSet); !ok {
-		if charset == "" {
-			// Not a collation MySQL defines, so there is no name to report.
-			charset = fmt.Sprintf("with collation id %d", c.CharacterSet)
-		} else {
-			charset = strconv.Quote(charset)
+		msg := "unsupported connection character set: use utf8mb4"
+		if charset != "" {
+			// Not every collation the client may ask for is one MySQL defines,
+			// and only those have a name to report.
+			msg = fmt.Sprintf("unsupported connection character set %q: use utf8mb4", charset)
 		}
-		c.writeErrorPacket(sqlerror.ERUnknownCharacterSet, sqlerror.SSClientError,
-			"unsupported connection character set %s: use utf8mb4", charset)
+		c.writeErrorPacket(sqlerror.ERUnknownCharacterSet, sqlerror.SSClientError, "%s", msg)
 		return
 	}
 
