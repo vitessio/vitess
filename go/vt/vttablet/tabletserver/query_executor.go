@@ -1232,8 +1232,8 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 			if err != nil {
 				return nil, vterrors.Wrapf(err, "error loading sequence %s", tableName)
 			}
-			// Reset the staged range when the cached last value differs from next_id.
-			// The cache is empty after a start or a reset, or another writer changed next_id.
+			// Start the staged range at next_id when next_id differs from the cached last value.
+			// The two differ when the cache is empty or when a write outside this cache changed next_id.
 			if lastVal != nextID {
 				if nextID < lastVal {
 					log.Warn(fmt.Sprintf("Sequence next ID value %v is below the currently cached max %v, updating it to max", nextID, lastVal))
