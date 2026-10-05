@@ -19,7 +19,7 @@ package collations
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // TestParseConnectionCharset checks that only character sets whose multibyte
@@ -30,11 +30,11 @@ func TestParseConnectionCharset(t *testing.T) {
 
 	for _, name := range []string{"", "utf8mb4", "UTF8MB4", "utf8mb4_bin", "utf8", "utf8mb3", "latin1", "ascii", "binary", "cp1251", "ujis", "eucjpms", "euckr", "gb2312"} {
 		_, err := env.ParseConnectionCharset(name)
-		assert.NoError(t, err, "connection charset %q", name)
+		require.NoError(t, err, "connection charset %q", name)
 	}
 
 	for _, name := range []string{"sjis", "sjis_bin", "cp932", "cp932_japanese_ci", "gb18030_unicode_520_ci", "gbk", "big5", "ucs2", "utf16", "utf16le", "utf16_bin", "utf32"} {
 		_, err := env.ParseConnectionCharset(name)
-		assert.ErrorContains(t, err, "unsupported connection charset", "connection charset %q", name)
+		require.ErrorContains(t, err, "unsupported connection charset", "connection charset %q", name)
 	}
 }
