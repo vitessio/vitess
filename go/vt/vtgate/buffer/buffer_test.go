@@ -672,6 +672,66 @@ func testWindow1(t *testing.T, fail failover) {
 	require.NoError(t, waitForPoolSlots(b, 1))
 }
 
+// TestWindowRequestBufferedWhileTimeoutThreadSeesEmptyQueue tests that a request
+// which is buffered after the timeout thread found the queue empty, but before
+// it started waiting for the queue to become non-empty, is still evicted when
+// it exceeds its buffering window.
+func TestWindowRequestBufferedWhileTimeoutThreadSeesEmptyQueue(t *testing.T) {
+	resetVariables()
+	defer checkVariables(t)
+
+	cfg := NewDefaultConfig()
+	cfg.Enabled = true
+	cfg.Window = 100 * time.Millisecond
+	// Only the window may unblock the second request, not the max duration.
+	cfg.MaxFailoverDuration = 10 * time.Minute
+	b := New(cfg)
+	t.Cleanup(b.Shutdown)
+
+	// When the timeout thread finds the queue empty for the first time, buffer
+	// the second request before the thread waits for the queue to become
+	// non-empty.
+	sb := b.getOrCreateBuffer(keyspace, shard)
+	var stopped2 chan error
+	refilled := make(chan struct{})
+	hookCalled := false
+	sb.testHookQueueEmpty = func() {
+		if hookCalled {
+			return
+		}
+		hookCalled = true
+		stopped2 = issueRequest(t.Context(), t, b, failoverErr)
+		assert.NoError(t, waitForRequestsInFlight(b, 1))
+		close(refilled)
+	}
+
+	// The first request exceeds its window. Afterwards, the timeout thread
+	// finds the queue empty.
+	stopped1 := issueRequest(t.Context(), t, b, failoverErr)
+	require.NoError(t, <-stopped1)
+	require.Eventually(t, func() bool {
+		select {
+		case <-refilled:
+			return true
+		default:
+			return false
+		}
+	}, 30*time.Second, 10*time.Millisecond)
+
+	// The second request must exceed its window as well.
+	require.Eventually(t, func() bool {
+		select {
+		case err := <-stopped2:
+			assert.NoError(t, err)
+			return true
+		default:
+			return false
+		}
+	}, 30*time.Second, 10*time.Millisecond, "second request was not evicted after its buffering window")
+	require.NoError(t, waitForRequestsExceededWindow(2))
+	assert.Equal(t, stateBuffering, sb.testGetState())
+}
+
 // TestShutdown tests that Buffer.Shutdown() unblocks any pending bufferings
 // immediately.
 func TestShutdown(t *testing.T) {

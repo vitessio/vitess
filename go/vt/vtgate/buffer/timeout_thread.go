@@ -78,18 +78,35 @@ func (tt *timeoutThread) run() {
 
 	// While this thread is running, it can be in two states:
 	for {
+		// Get the notification channel before looking at the queue. If an entry
+		// is buffered after oldestEntry() saw an empty queue, notifyQueueNotEmpty()
+		// closes this channel and waitForNonEmptyQueue() returns immediately.
+		// Getting the channel after oldestEntry() would miss that notification and
+		// leave the entry buffered past its window.
+		queueNotEmpty := tt.currentQueueNotEmpty()
 		if e := tt.sb.oldestEntry(); e != nil {
 			// 1. queue not empty: Wait for the oldest entry to exceed the window.
 			if stopped := tt.waitForEntry(e); stopped {
 				return
 			}
 		} else {
+			if tt.sb.testHookQueueEmpty != nil {
+				tt.sb.testHookQueueEmpty()
+			}
 			// 2. queue empty: Wait for an entry to show up.
-			if stopped := tt.waitForNonEmptyQueue(); stopped {
+			if stopped := tt.waitForNonEmptyQueue(queueNotEmpty); stopped {
 				return
 			}
 		}
 	}
+}
+
+// currentQueueNotEmpty returns the channel which the next notifyQueueNotEmpty()
+// call will close.
+func (tt *timeoutThread) currentQueueNotEmpty() chan struct{} {
+	tt.mu.Lock()
+	defer tt.mu.Unlock()
+	return tt.queueNotEmpty
 }
 
 // waitForEntry blocks until "e" exceeds its buffering window or buffering stops
@@ -123,14 +140,10 @@ func (tt *timeoutThread) waitForEntry(e *entry) bool {
 	}
 }
 
-// waitForNonEmptyQueue blocks until the buffer queue gets a new element or
-// the timeout thread should be stopped.
+// waitForNonEmptyQueue blocks until "queueNotEmpty" is closed because the
+// buffer queue got a new element or the timeout thread should be stopped.
 // It returns true if the timeout thread should stop.
-func (tt *timeoutThread) waitForNonEmptyQueue() bool {
-	tt.mu.Lock()
-	queueNotEmpty := tt.queueNotEmpty
-	tt.mu.Unlock()
-
+func (tt *timeoutThread) waitForNonEmptyQueue(queueNotEmpty chan struct{}) bool {
 	select {
 	// a) Always check these channels, regardless of the state.
 	case <-tt.maxDuration.C:
