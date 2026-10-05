@@ -5195,6 +5195,24 @@ func TestVExplain(t *testing.T) {
 			expectedError: vtadminerrors.ErrInvalidRequest,
 		},
 		{
+			name: "returns an error if the explained SELECT consumes sequence values",
+			req: &vtadminpb.VExplainRequest{
+				ClusterId: "c0",
+				Keyspace:  "commerce",
+				Sql:       "vexplain trace select next 1 values from seq",
+			},
+			expectedError: vtadminerrors.ErrInvalidRequest,
+		},
+		{
+			name: "returns an error if the explained SELECT takes an advisory lock",
+			req: &vtadminpb.VExplainRequest{
+				ClusterId: "c0",
+				Keyspace:  "commerce",
+				Sql:       "vexplain all select get_lock('l', 1)",
+			},
+			expectedError: vtadminerrors.ErrInvalidRequest,
+		},
+		{
 			name: "runs VExplain given a valid request in a valid topology",
 			keyspaces: []*vtctldatapb.Keyspace{
 				{

@@ -2602,20 +2602,24 @@ func (api *API) ValidateVersionShard(ctx context.Context, req *vtadminpb.Validat
 	return res, nil
 }
 
-// isReadOnlySelect reports whether stmt is a SELECT that does not write its result
-// anywhere with INTO, such as a file on the database host with INTO OUTFILE.
+// isReadOnlySelect reports whether stmt is a SELECT that cannot change anything
+// when it runs: one that does not write its result with INTO (such as to a file on
+// the database host with INTO OUTFILE), consume sequence values with SELECT NEXT ...
+// VALUES, or acquire or release advisory locks. VTGate treats the last two the same
+// way for VEXPLAIN MYSQLPLAN.
 func isReadOnlySelect(stmt sqlparser.Statement) bool {
 	if _, ok := stmt.(sqlparser.SelectStatement); !ok {
 		return false
 	}
-	hasInto := false
+	readOnly := true
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
-		if _, ok := node.(*sqlparser.SelectInto); ok {
-			hasInto = true
+		switch node.(type) {
+		case *sqlparser.SelectInto, *sqlparser.Nextval, *sqlparser.LockingFunc:
+			readOnly = false
 		}
-		return !hasInto, nil
+		return readOnly, nil
 	}, stmt)
-	return !hasInto
+	return readOnly
 }
 
 // VExplain is part of the vtadminpb.VTAdminServer interface.
@@ -2665,9 +2669,10 @@ func (api *API) VExplain(ctx context.Context, req *vtadminpb.VExplainRequest) (*
 
 	// VExplain is authorized as a read, but VEXPLAIN QUERIES, ALL and TRACE run
 	// the statement they explain. Only accept a statement that cannot change
-	// anything, whatever the VEXPLAIN type, so that VExplain cannot modify data.
+	// anything, whatever the VEXPLAIN type, so that VExplain cannot modify data or
+	// server state.
 	if !isReadOnlySelect(vexplainStmt.Statement) {
-		return nil, fmt.Errorf("%w: VExplain only explains SELECT statements without INTO", errors.ErrInvalidRequest)
+		return nil, fmt.Errorf("%w: VExplain only explains SELECT statements that cannot change anything", errors.ErrInvalidRequest)
 	}
 
 	// Canonicalize the SQL using the AST, to prevent use of raw user input.
