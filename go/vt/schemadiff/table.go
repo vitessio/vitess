@@ -533,6 +533,7 @@ func (c *CreateTableEntity) IndexDefinitionEntitiesMap() map[string]*IndexDefini
 // - table option case (upper/lower/special)
 // The function returns this receiver as courtesy
 func (c *CreateTableEntity) normalize() *CreateTableEntity {
+	c.normalizeSerialColumns() // expand SERIAL before its implicit key is normalized
 	c.normalizePrimaryKeyColumns()
 	c.normalizeForeignKeyIndexes() // implicitly add missing indexes for foreign keys
 	c.normalizeKeys()              // assign names to keys
@@ -846,6 +847,53 @@ func newPrimaryKeyIndexDefinitionSingleColumn(name sqlparser.IdentifierCI) *sqlp
 		Columns: []*sqlparser.IndexColumn{{Column: name}},
 	}
 	return index
+}
+
+// normalizeSerialColumns expands a SERIAL column into what MySQL stores for it.
+// SERIAL is an alias for BIGINT UNSIGNED NOT NULL AUTO_INCREMENT UNIQUE, and MySQL
+// keeps its unique key as a key of the table, so `create table t (id serial)`
+// turns into `create table t (id bigint unsigned not null auto_increment, unique
+// key (id))`, where the key is named like any other unnamed key. An inline UNIQUE
+// on the column is the same key, so it is folded into it; any other inline key,
+// such as a PRIMARY KEY, is kept and normalized as usual.
+//
+// MySQL adds SERIAL's key where the column is defined, so when the table's own
+// keys are written after its columns, SERIAL's keys come first and are named
+// first: `create table t (id serial, x int, unique key (id, x))` has the keys
+// `id (id)` and `id_2 (id, x)`. They are placed after the primary key, which
+// stays first.
+func (c *CreateTableEntity) normalizeSerialColumns() {
+	var serialKeys []*sqlparser.IndexDefinition
+	for _, col := range c.TableSpec.Columns {
+		if !strings.EqualFold(col.Type.Type, "serial") {
+			continue
+		}
+		col.Type.Type = "bigint"
+		col.Type.Unsigned = true
+		if col.Type.Options == nil {
+			col.Type.Options = &sqlparser.ColumnTypeOptions{}
+		}
+		if col.Type.Options.Null == nil {
+			// an explicit NULL after SERIAL wins in MySQL
+			col.Type.Options.Null = new(false)
+		}
+		col.Type.Options.Autoincrement = true
+		if col.Type.Options.KeyOpt == sqlparser.ColKeyUnique || col.Type.Options.KeyOpt == sqlparser.ColKeyUniqueKey {
+			col.Type.Options.KeyOpt = sqlparser.ColKeyNone
+		}
+		serialKeys = append(serialKeys, &sqlparser.IndexDefinition{
+			Info:    &sqlparser.IndexInfo{Type: sqlparser.IndexTypeUnique},
+			Columns: []*sqlparser.IndexColumn{{Column: col.Name}},
+		})
+	}
+	if len(serialKeys) == 0 {
+		return
+	}
+	pos := 0
+	for pos < len(c.TableSpec.Indexes) && c.TableSpec.Indexes[pos].Info.Type == sqlparser.IndexTypePrimary {
+		pos++
+	}
+	c.TableSpec.Indexes = slices.Insert(c.TableSpec.Indexes, pos, serialKeys...)
 }
 
 func (c *CreateTableEntity) normalizePrimaryKeyColumns() {
@@ -2578,7 +2626,12 @@ func (c *CreateTableEntity) Apply(diff EntityDiff) (Entity, error) {
 //   - drop check constraints for a single specific column if that column
 //     is the only referenced column in that check constraint.
 //   - add implicit keys for foreign key constraint, if needed
+//   - expand SERIAL columns, adding their unique keys
 func (c *CreateTableEntity) postApplyNormalize() error {
+	// an added or modified SERIAL column brings its unique key, which the
+	// validation and the implicit foreign key keys below must see
+	c.normalizeSerialColumns()
+
 	// reduce or remove keys based on existing column list
 	// (a column may have been removed)postApplyNormalize
 	columnExists := map[string]bool{}
