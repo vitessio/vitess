@@ -202,13 +202,16 @@ func (c *Connector) Connect(ctx context.Context) (*mysql.Conn, error) {
 	// sql_mode, and Vitess-formatted SQL must always be lexed under the default
 	// rules it was serialized with. Strip the lexer modes from the session's
 	// current value, preserving its runtime modes — including any the server's own
-	// connection initialization applied (see sqlmode.NeutralizeSessionQuery).
+	// connection initialization applied (see sqlmode.NeutralizeSessionQuery). That
+	// initialization can also change the character set, which Vitess can only parse
+	// and escape safely in the one the connection negotiated, so the same statement
+	// restores it (see sqlmode.SessionSetupQuery).
 	//
 	// The setup stays bounded by the context like the dial and handshake are: a
 	// backend that stalls after the handshake must not hang the caller. Closing the
 	// connection when the context ends fails the pending exchange right away.
 	stop := context.AfterFunc(ctx, conn.Close)
-	_, err = conn.ExecuteFetch(sqlmode.NeutralizeSessionQuery, 0, false)
+	_, err = conn.ExecuteFetch(sessionSetupQuery(params.Charset), 0, false)
 	if !stop() {
 		// the context ended and the connection is closed, whatever the query
 		// returned; report the context error like mysql.Connect does for the dial
@@ -219,6 +222,22 @@ func (c *Connector) Connect(ctx context.Context) (*mysql.Conn, error) {
 		return nil, vterrors.Wrapf(err, "failed to neutralize the connection's sql_mode")
 	}
 	return conn, nil
+}
+
+// sessionSetupQuery returns the statement that sets up a new connection's session for
+// the collation it negotiated, or only neutralizes its sql_mode when it negotiated
+// none and so uses the server's default.
+func sessionSetupQuery(collation collations.ID) string {
+	if collation == collations.Unknown {
+		return sqlmode.NeutralizeSessionQuery
+	}
+	env := collations.MySQL8()
+	charset, _ := env.ConnectionCharset(collation)
+	name := env.LookupName(collation)
+	if charset == "" || name == "" {
+		return sqlmode.NeutralizeSessionQuery
+	}
+	return sqlmode.SessionSetupQuery(charset, name)
 }
 
 // MysqlParams returns the connections params

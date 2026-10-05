@@ -28,11 +28,12 @@ import (
 	"vitess.io/vitess/go/mysql/sqlmode"
 )
 
-// NeutralizeSessionQuery — the statement the dbconfigs Connector runs on every
-// connection Vitess creates (pinned in the dbconfigs tests) — neutralizes the session
-// sql_mode from the session's own current value, not from the global: the server's
-// connection initialization (init_connect) runs before it, and the runtime modes it
-// applies must survive. Only the lexer modes are stripped.
+// SessionSetupQuery — the statement the dbconfigs Connector runs on every connection
+// Vitess creates (pinned in the dbconfigs tests) — neutralizes the session sql_mode
+// from the session's own current value, not from the global: the server's connection
+// initialization (init_connect) runs before it, and the runtime modes it applies must
+// survive. Only the lexer modes are stripped. The same statement restores the
+// character set the connection negotiated, which init_connect can also change.
 func TestNeutralizeSessionQueryPreservesInitConnect(t *testing.T) {
 	ctx := t.Context()
 	admin, err := mysql.Connect(ctx, &connParams)
@@ -51,7 +52,8 @@ func TestNeutralizeSessionQueryPreservesInitConnect(t *testing.T) {
 
 	// ALLOW_INVALID_DATES is a runtime mode absent from the test server's global
 	// value; ANSI_QUOTES is a lexer mode. init_connect applies both to the session.
-	_, err = admin.ExecuteFetch(`set global init_connect = "SET SESSION sql_mode = CONCAT(@@sql_mode, ',ALLOW_INVALID_DATES,ANSI_QUOTES')"`, 0, false)
+	// It also switches the character set, which SessionSetupQuery restores.
+	_, err = admin.ExecuteFetch(`set global init_connect = "SET SESSION sql_mode = CONCAT(@@sql_mode, ',ALLOW_INVALID_DATES,ANSI_QUOTES'); SET NAMES latin1"`, 0, false)
 	require.NoError(t, err)
 
 	// init_connect only runs for users without connection-admin privileges
@@ -74,9 +76,18 @@ func TestNeutralizeSessionQueryPreservesInitConnect(t *testing.T) {
 	rawMode := qr.Rows[0][0].ToString()
 	require.Contains(t, rawMode, "ALLOW_INVALID_DATES")
 	require.Contains(t, rawMode, "ANSI_QUOTES")
-
-	_, err = conn.ExecuteFetch(sqlmode.NeutralizeSessionQuery, 0, false)
+	qr, err = conn.ExecuteFetch("select @@session.character_set_client", 1, false)
 	require.NoError(t, err)
+	require.Equal(t, "latin1", qr.Rows[0][0].ToString())
+
+	_, err = conn.ExecuteFetch(sqlmode.SessionSetupQuery("utf8mb4", "utf8mb4_0900_ai_ci"), 0, false)
+	require.NoError(t, err)
+
+	// the character set the connection negotiated is restored in the same statement
+	qr, err = conn.ExecuteFetch("select @@session.character_set_client, @@session.character_set_connection, @@session.character_set_results, @@session.collation_connection", 1, false)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"utf8mb4", "utf8mb4", "utf8mb4", "utf8mb4_0900_ai_ci"},
+		[]string{qr.Rows[0][0].ToString(), qr.Rows[0][1].ToString(), qr.Rows[0][2].ToString(), qr.Rows[0][3].ToString()})
 
 	qr, err = conn.ExecuteFetch("select @@session.sql_mode", 1, false)
 	require.NoError(t, err)

@@ -17,6 +17,7 @@ limitations under the License.
 package sqlmode
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -243,4 +244,13 @@ func TestNeutralizeSessionQuery(t *testing.T) {
 			assert.Contains(t, NeutralizeSessionQuery, "'"+mn.name+"'")
 		}
 	}
+
+	// a connection that negotiated a character set restores it in the same statement,
+	// since the server's connection initialization can change it too
+	setup := SessionSetupQuery("utf8mb4", "utf8mb4_0900_ai_ci")
+	assert.Equal(t, "set names 'utf8mb4' collate 'utf8mb4_0900_ai_ci', "+strings.TrimPrefix(NeutralizeSessionQuery, "set "), setup)
+	assert.Equal(t, NeutralizeSessionQuery, SessionSetupQuery("", ""))
+	assert.True(t, IsSessionSetupQuery(setup))
+	assert.True(t, IsSessionSetupQuery(strings.ToUpper(NeutralizeSessionQuery)))
+	assert.False(t, IsSessionSetupQuery("set names 'utf8mb4'"))
 }

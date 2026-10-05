@@ -404,6 +404,15 @@ func TestConnectorConnectNeutralizesSQLMode(t *testing.T) {
 	t.Cleanup(conn.Close)
 
 	require.Equal(t, 1, db.GetQueryCalledNum(sqlmode.NeutralizeSessionQuery))
+
+	// a connection that negotiated a character set restores it in the same statement
+	params := db.ConnParams()
+	params.Charset = collations.CollationUtf8mb4ID
+	charsetConnector := New(params)
+	conn, err = charsetConnector.Connect(t.Context())
+	require.NoError(t, err)
+	t.Cleanup(conn.Close)
+	require.Equal(t, 1, db.GetQueryCalledNum(sqlmode.SessionSetupQuery("utf8mb4", "utf8mb4_0900_ai_ci")))
 }
 
 // stallingHandler completes the handshake but never answers a query until released,
