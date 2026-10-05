@@ -2602,6 +2602,22 @@ func (api *API) ValidateVersionShard(ctx context.Context, req *vtadminpb.Validat
 	return res, nil
 }
 
+// isReadOnlySelect reports whether stmt is a SELECT that does not write its result
+// anywhere with INTO, such as a file on the database host with INTO OUTFILE.
+func isReadOnlySelect(stmt sqlparser.Statement) bool {
+	if _, ok := stmt.(sqlparser.SelectStatement); !ok {
+		return false
+	}
+	hasInto := false
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+		if _, ok := node.(*sqlparser.SelectInto); ok {
+			hasInto = true
+		}
+		return !hasInto, nil
+	}, stmt)
+	return !hasInto
+}
+
 // VExplain is part of the vtadminpb.VTAdminServer interface.
 func (api *API) VExplain(ctx context.Context, req *vtadminpb.VExplainRequest) (*vtadminpb.VExplainResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "API.VExplain")
@@ -2647,11 +2663,11 @@ func (api *API) VExplain(ctx context.Context, req *vtadminpb.VExplainRequest) (*
 		return nil, vterrors.VT09017("Invalid VExplain statement")
 	}
 
-	// VExplain is authorized as a read, but VEXPLAIN QUERIES and VEXPLAIN ALL
-	// run the statement they explain, and VTGate runs DML that way when this
-	// directive is set. Refuse it, so that VExplain cannot modify data.
-	if vexplainStmt.GetParsedComments().Directives().IsSet(sqlparser.DirectiveVExplainRunDMLQueries) {
-		return nil, fmt.Errorf("%w: the %s directive is not supported", errors.ErrInvalidRequest, sqlparser.DirectiveVExplainRunDMLQueries)
+	// VExplain is authorized as a read, but VEXPLAIN QUERIES, ALL and TRACE run
+	// the statement they explain. Only accept a statement that cannot change
+	// anything, whatever the VEXPLAIN type, so that VExplain cannot modify data.
+	if !isReadOnlySelect(vexplainStmt.Statement) {
+		return nil, fmt.Errorf("%w: VExplain only explains SELECT statements without INTO", errors.ErrInvalidRequest)
 	}
 
 	// Canonicalize the SQL using the AST, to prevent use of raw user input.
