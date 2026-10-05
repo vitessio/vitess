@@ -17,7 +17,7 @@ Result: possibly acknowledged writes lost, and every time an old primary with er
 
 ### Proposed fix
 
-Fixed on branch `claude/practical-dijkstra-ucvu74` (commit `1a8de59`); PR not opened yet. This draft documents the bug for the PR.
+Fixed on branch `claude/practical-dijkstra-ucvu74`; PR not opened yet. This draft documents the bug for the PR.
 
 The fix: on a PRIMARY tablet, `setReplicationSourceLocked` first runs the locked part of `DemotePrimary(force)`: stop serving (killing the sessions still waiting after the shutdown grace period), disable source-side semi-sync, set `super_read_only`. Only then does it change the type. The errant check now sees the released commits, and the tablet ends up `super_read_only`.
 

@@ -11,7 +11,7 @@
 
 ### Proposed fix
 
-Fixed on branch `claude/practical-dijkstra-ucvu74` (commit `1a8de59`); PR not opened yet. This draft documents the bug for the PR.
+Fixed on branch `claude/practical-dijkstra-ucvu74`; PR not opened yet. This draft documents the bug for the PR.
 
 The fix: stop the receiver unless it is already stopped (`IOState != Stopped`), and make ERS's abort cleanup restart such a receiver (`replicaIOThreadWasRunning`).
 

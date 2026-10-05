@@ -11,7 +11,7 @@ VTOrc's `recoverErrantGTIDDetected` changes the tablet to DRAINED with `policy.I
 
 ### Proposed fix
 
-Fixed on branch `claude/practical-dijkstra-ucvu74` (commit `1a8de59`); PR not opened yet. This draft documents the bug for the PR.
+Fixed on branch `claude/practical-dijkstra-ucvu74`; PR not opened yet. This draft documents the bug for the PR.
 
 The fix: VTOrc evaluates the durability rules for the DRAINED type (as vtctld's `ChangeTabletType` already does), and a tablet never enables replica-side semi-sync as DRAINED, which also covers VTOrcs one version back.
 

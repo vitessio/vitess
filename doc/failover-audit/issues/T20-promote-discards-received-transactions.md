@@ -11,7 +11,7 @@
 
 ### Proposed fix
 
-Fixed on branch `claude/practical-dijkstra-ucvu74` (commit `1a8de59`); PR not opened yet. This draft documents the bug for the PR.
+Fixed on branch `claude/practical-dijkstra-ucvu74`; PR not opened yet. This draft documents the bug for the PR.
 
 The fix: before the reset, `Promote` stops the receiver and waits for the applier to execute everything received (`WAIT_FOR_EXECUTED_GTID_SET` on the relay log position); it refuses with FAILED_PRECONDITION when unapplied transactions exist and the applier is stopped. GTID flavors only.
 

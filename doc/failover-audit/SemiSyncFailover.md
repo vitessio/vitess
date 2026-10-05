@@ -28,7 +28,7 @@ Checks:
 - convergence within 2 minutes: one primary, read-only replicas, the semi-sync settings of the policy;
 - errant GTIDs. A tablet that VTOrc drained for errant GTIDs is reported, not counted as a violation: the deployment is expected to replace it.
 
-Commands: `go/test/endtoend/vtorc/chaos/chaos_matrix.sh` with `CHAOS_PROFILE=semisync-3vtorc|semisync-1vtorc` and `CHAOS_PRIMARY_CELL`, run as root. `chaos_summary.py` builds the tables below.
+Reproducing: `go/test/endtoend/vtorc/chaos/README.md` lists the prerequisites, how to build the binaries of `main` and of this branch, and the plan (`chaos_plan.sh main`, `probe`, `fixed`) that produced the tables below; `chaos_summary.py` builds them. The model's runs are reproduced with `doc/design-docs/semi_sync_tla/run.sh`.
 
 ## Summary
 
@@ -115,7 +115,7 @@ No probe got an OK from a deposed primary. Every probe routed to the old primary
 
 ### With the fixes
 
-The fixed binaries are this branch at `efdccc8`. The scenarios that failed on `main` because of B1, 3A or B6 were run twice per profile:
+The fixed binaries are this branch's Vitess code, which has not changed since these runs (see `go/test/endtoend/vtorc/chaos/README.md` for how to build them). The scenarios that failed on `main` because of B1, 3A or B6 were run twice per profile:
 
 | Scenario | fixed-3vtorc-1 | fixed-3vtorc-2 | fixed-1vtorc-1 | fixed-1vtorc-2 |
 |---|---|---|---|---|

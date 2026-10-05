@@ -13,6 +13,7 @@
 #   VT_MYSQL_ROOT   MySQL installation (default /home/user/mysql84).
 #   ETCD_DIR        directory containing the etcd binary (default /home/user/vtlab/bin).
 #   RUN_USER        unprivileged user to run as (default ubuntu).
+#   CHAOS_CGROUP2_MOUNT  cgroup v2 mount point (default: detected, see below).
 #   CHAOS_PROFILE   deployment profile: audit (default), semisync-3vtorc or semisync-1vtorc (see profile.go).
 #   CHAOS_VTORC_CELLS, CHAOS_PRIMARY_CELL, CHAOS_CELL_TOPO=per-cell override the profile.
 #   CHAOS_TEST_BIN, CHAOS_SKIP_BUILD=1 run an already compiled test binary.
@@ -31,7 +32,21 @@ source build.env >/dev/null
 # Our own binaries first; ETCD_DIR may contain other (older) Vitess binaries.
 export PATH="$VTROOT/bin:$VT_MYSQL_ROOT/bin:${ETCD_DIR:-/home/user/vtlab/bin}:/usr/local/go/bin:/usr/local/bin:$PATH"
 
-CG=/sys/fs/cgroup/unified/chaos
+# The cgroup v2 hierarchy: /sys/fs/cgroup on a cgroup v2 host, /sys/fs/cgroup/unified on a hybrid
+# v1/v2 host. The test binary reads the same CHAOS_CGROUP2_MOUNT.
+if [ -z "${CHAOS_CGROUP2_MOUNT:-}" ]; then
+  if [ "$(stat -fc %T /sys/fs/cgroup 2>/dev/null)" = cgroup2fs ]; then
+    CHAOS_CGROUP2_MOUNT=/sys/fs/cgroup
+  else
+    CHAOS_CGROUP2_MOUNT=/sys/fs/cgroup/unified
+  fi
+fi
+if [ "$(stat -fc %T "$CHAOS_CGROUP2_MOUNT" 2>/dev/null)" != cgroup2fs ]; then
+  echo "no cgroup v2 hierarchy at $CHAOS_CGROUP2_MOUNT; set CHAOS_CGROUP2_MOUNT" >&2
+  exit 2
+fi
+export CHAOS_CGROUP2_MOUNT
+CG=$CHAOS_CGROUP2_MOUNT/chaos
 RESULTS=${CHAOS_RESULTS_DIR:-/home/$RUN_USER/chaos-results}
 BIN=${CHAOS_TEST_BIN:-/home/$RUN_USER/e2e-bins/chaos.test}
 
@@ -52,7 +67,7 @@ chown "$RUN_USER" "$(dirname "$BIN")" "$BIN" "$RESULTS" "$VTDATAROOT" /home/$RUN
 echo $$ > "$CG/harness/cgroup.procs"
 
 cd go/test/endtoend/vtorc/chaos
-env HOME=/home/$RUN_USER USER=$RUN_USER TMPDIR=/home/$RUN_USER/tmp CHAOS_E2E=1 CHAOS_RESULTS_DIR="$RESULTS" \
+env HOME=/home/$RUN_USER USER=$RUN_USER TMPDIR=/home/$RUN_USER/tmp CHAOS_E2E=1 CHAOS_RESULTS_DIR="$RESULTS" CHAOS_CGROUP2_MOUNT="$CHAOS_CGROUP2_MOUNT" \
   setpriv --reuid="$RUN_USER" --regid="$RUN_USER" --init-groups \
   --inh-caps=+net_admin,+net_raw --ambient-caps=+net_admin,+net_raw \
   "$BIN" "$@"
