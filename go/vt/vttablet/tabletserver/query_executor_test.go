@@ -971,7 +971,7 @@ func TestQueryExecutorPlanNextval(t *testing.T) {
 // refill COMMIT leaves the sequence cache unchanged.
 func TestQueryExecutorPlanNextvalCommitFailureKeepsCache(t *testing.T) {
 	db := setUpQueryExecutorTest(t)
-	defer db.Close()
+	t.Cleanup(db.Close)
 
 	db.AddQuery("select next_id, cache from seq where id = 0 for update", &sqltypes.Result{
 		Fields: []*querypb.Field{{Type: sqltypes.Int64}, {Type: sqltypes.Int64}},
@@ -982,13 +982,13 @@ func TestQueryExecutorPlanNextvalCommitFailureKeepsCache(t *testing.T) {
 
 	ctx := t.Context()
 	tsv := newTestTabletServer(ctx, noFlags, db)
-	defer tsv.StopService()
+	t.Cleanup(tsv.StopService)
 
 	qre := newTestQueryExecutor(ctx, tsv, "select next value from seq", 0)
 	_, err := qre.Execute()
 	require.ErrorContains(t, err, "commit failed")
 
-	// The table still has next_id = 1, so the cache must not hold 1 to 4.
+	// Check that the cache stays empty. The table still holds next_id = 1.
 	seq := qre.plan.Table.SequenceInfo
 	require.Zero(t, seq.NextVal)
 	require.Zero(t, seq.LastVal)
