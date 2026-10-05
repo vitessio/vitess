@@ -17,6 +17,7 @@ limitations under the License.
 package tabletmanager
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -135,6 +136,9 @@ func TestDemotePrimaryRevertWithoutGroupReplication(t *testing.T) {
 		// fail makes the demotion fail; superReadOnly is whether it sets super_read_only first.
 		fail          func(fmd *mysqlctl.FakeMysqlDaemon)
 		superReadOnly bool
+		// cancelAtReadOnly ends the demotion's context when it sets super_read_only, as when the
+		// caller gives up: the revert still reads the policy to choose its path.
+		cancelAtReadOnly bool
 	}{{
 		name: "a tablet without Group Replication, the demotion fails after super_read_only",
 		newTM: func(t *testing.T) (*TabletManager, *mysqlctl.FakeMysqlDaemon) {
@@ -169,6 +173,15 @@ func TestDemotePrimaryRevertWithoutGroupReplication(t *testing.T) {
 		fail: func(fmd *mysqlctl.FakeMysqlDaemon) {
 			fmd.GroupReplicationError = errors.New("lost connection to MySQL server during query")
 		},
+	}, {
+		name: "a tablet with Group Replication in a semi-sync shard, the demotion's caller gives up after super_read_only",
+		newTM: func(t *testing.T) (*TabletManager, *mysqlctl.FakeMysqlDaemon) {
+			withGroupReplication(t)
+			return newGroupReplicationTestTM(t, newGroupReplicationTopo(t, policy.DurabilitySemiSync), 1, nil)
+		},
+		fail:             func(fmd *mysqlctl.FakeMysqlDaemon) { fmd.PrimaryStatusError = errors.New("context canceled") },
+		superReadOnly:    true,
+		cancelAtReadOnly: true,
 	}}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -179,8 +192,17 @@ func TestDemotePrimaryRevertWithoutGroupReplication(t *testing.T) {
 			fmd.SuperReadOnly.Store(false)
 			fmd.ReadOnly = false
 			tt.fail(fmd)
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			if tt.cancelAtReadOnly {
+				fmd.SetSuperReadOnlyHook = func(on bool) {
+					if on {
+						cancel()
+					}
+				}
+			}
 
-			_, err := tm.DemotePrimary(t.Context(), false)
+			_, err := tm.DemotePrimary(ctx, false)
 			require.Error(t, err)
 			assert.False(t, fmd.SuperReadOnly.Load())
 			assert.False(t, fmd.ReadOnly)

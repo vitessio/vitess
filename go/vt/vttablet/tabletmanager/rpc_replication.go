@@ -921,7 +921,11 @@ func (tm *TabletManager) demotionRevertNeedsGroupDecision(ctx context.Context) b
 	if !groupReplicationEnabled() {
 		return false
 	}
-	durability, err := tm.durabilityForGroupChange(ctx, time.Now().Add(groupReplicationTopoReadTimeout))
+	// The demotion's caller may have given up: the revert still has to know the shard's policy, so
+	// the read does not inherit its cancellation, only a short bound of its own.
+	readCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), groupReplicationTopoReadTimeout)
+	defer cancel()
+	durability, err := tm.durabilityForGroupChange(readCtx, time.Now().Add(groupReplicationTopoReadTimeout))
 	if err != nil {
 		log.Warn("Group replication: cannot read the durability policy, the failed demotion is reverted only on a decision on the serving invariant", slog.Any("error", err))
 		return true
