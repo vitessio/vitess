@@ -39,7 +39,8 @@ EXPECTED=(
   prs_stale_fix_primary:NoLostAck
   prs_lease_expiry:NoLostAck
   prs_fixed:pass
-  prs_faults_fixed:pass
+  prs_crash_fixed:pass
+  prs_cut_fixed:pass
 )
 
 expected_of() {
