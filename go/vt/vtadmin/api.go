@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"maps"
 	"math"
+	"net"
 	"net/http"
 	"net/http/pprof"
 	"net/url"
@@ -370,15 +371,23 @@ func (api *API) WithCluster(c *cluster.Cluster, id string) dynamic.API {
 // top-level POST made shortly after it was set. CORS does not help either, since it
 // only keeps the page from reading the response.
 //
-// A request is accepted when it is not state-changing, when it comes from one of
+// A request is accepted when it is not state-changing, when its Origin is one of
 // the configured CORS origins, when the browser reports it as same-origin or
 // user-initiated (Sec-Fetch-Site), or, from a browser that sends no fetch metadata,
-// when its Origin matches the host it was sent to. A request without an Origin or
+// when its Origin is the origin it was sent to. A request without an Origin or
 // fetch metadata does not come from a browser and is accepted.
+//
+// Only an explicitly configured origin is trusted: a "*" CORS origin lets any page
+// read responses, and must not also let any page change cluster state. The origin a
+// request was sent to is taken from the connection, so behind a proxy that
+// terminates TLS, browsers without fetch metadata are only accepted from the
+// public origin when it is configured as a CORS origin.
 func rejectCrossSiteRequests(allowedOrigins []string) mux.MiddlewareFunc {
 	allowed := make(map[string]bool, len(allowedOrigins))
 	for _, origin := range allowedOrigins {
-		allowed[strings.ToLower(origin)] = true
+		if normalized, ok := normalizeOrigin(origin); ok {
+			allowed[normalized] = true
+		}
 	}
 
 	isAllowed := func(r *http.Request) bool {
@@ -387,7 +396,8 @@ func rejectCrossSiteRequests(allowedOrigins []string) mux.MiddlewareFunc {
 			return true
 		}
 		origin := r.Header.Get("Origin")
-		if origin != "" && (allowed["*"] || allowed[strings.ToLower(origin)]) {
+		normalizedOrigin, validOrigin := normalizeOrigin(origin)
+		if validOrigin && allowed[normalizedOrigin] {
 			return true
 		}
 		switch r.Header.Get("Sec-Fetch-Site") {
@@ -397,8 +407,12 @@ func rejectCrossSiteRequests(allowedOrigins []string) mux.MiddlewareFunc {
 			if origin == "" {
 				return true
 			}
-			u, err := url.Parse(origin)
-			return err == nil && strings.EqualFold(u.Host, r.Host)
+			scheme := "http"
+			if r.TLS != nil {
+				scheme = "https"
+			}
+			requestOrigin, ok := normalizeOrigin(scheme + "://" + r.Host)
+			return validOrigin && ok && normalizedOrigin == requestOrigin
 		}
 		return false
 	}
@@ -412,6 +426,28 @@ func rejectCrossSiteRequests(allowedOrigins []string) mux.MiddlewareFunc {
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+// normalizeOrigin returns origin as a lowercase scheme://host:port, with the
+// scheme's default port made explicit, so that two spellings of one origin compare
+// equal. It reports false for anything that is not an http or https origin,
+// including "*" and "null".
+func normalizeOrigin(origin string) (string, bool) {
+	u, err := url.Parse(origin)
+	if err != nil || u.Host == "" || u.User != nil || (u.Path != "" && u.Path != "/") || u.RawQuery != "" || u.Fragment != "" {
+		return "", false
+	}
+	scheme := strings.ToLower(u.Scheme)
+	port := u.Port()
+	switch {
+	case scheme == "http" && port == "":
+		port = "80"
+	case scheme == "https" && port == "":
+		port = "443"
+	case scheme != "http" && scheme != "https":
+		return "", false
+	}
+	return scheme + "://" + net.JoinHostPort(strings.ToLower(u.Hostname()), port), true
 }
 
 // Handler handles all routes under "/api" (see above)
