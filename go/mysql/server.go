@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -492,10 +493,16 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 
 	// Vitess parses and escapes SQL text byte by byte, so refuse a client that
 	// asks for a character set where that is not safe; see
-	// collations.Environment.IsConnectionCharset.
-	if !l.handler.Env().CollationEnv().IsConnectionCharset(c.CharacterSet) {
+	// collations.Environment.ConnectionCharset.
+	if charset, ok := l.handler.Env().CollationEnv().ConnectionCharset(c.CharacterSet); !ok {
+		if charset == "" {
+			// Not a collation MySQL defines, so there is no name to report.
+			charset = fmt.Sprintf("with collation id %d", c.CharacterSet)
+		} else {
+			charset = strconv.Quote(charset)
+		}
 		c.writeErrorPacket(sqlerror.ERUnknownCharacterSet, sqlerror.SSClientError,
-			"unsupported connection character set (collation id %d): use utf8mb4", c.CharacterSet)
+			"unsupported connection character set %s: use utf8mb4", charset)
 		return
 	}
 

@@ -41,14 +41,24 @@ func TestParseConnectionCharset(t *testing.T) {
 
 	// A client can ask for any collation in its handshake, including ones Vitess
 	// does not implement, such as gbk_chinese_ci and tis620_thai_ci.
-	for _, id := range []ID{Unknown, CollationUtf8mb4ID, CollationBinaryID, 8 /* latin1_swedish_ci */, 18 /* tis620_thai_ci */} {
-		require.True(t, env.IsConnectionCharset(id), "collation %d", id)
+	for id, want := range map[ID]string{Unknown: "", CollationUtf8mb4ID: "utf8mb4", CollationBinaryID: "binary", 8 /* latin1_swedish_ci */ : "latin1", 18 /* tis620_thai_ci */ : "tis620"} {
+		charset, ok := env.ConnectionCharset(id)
+		require.True(t, ok, "collation %d", id)
+		require.Equal(t, want, charset, "collation %d", id)
 	}
-	for _, id := range []ID{13 /* sjis_japanese_ci */, 95 /* cp932_japanese_ci */, 28 /* gbk_chinese_ci */, 1 /* big5_chinese_ci */, 248 /* gb18030_chinese_ci */, 250 /* gb18030_unicode_520_ci */, 35 /* ucs2_general_ci */, 54 /* utf16_general_ci */} {
-		require.False(t, env.IsConnectionCharset(id), "collation %d", id)
+	for id, want := range map[ID]string{13 /* sjis_japanese_ci */ : "sjis", 95 /* cp932_japanese_ci */ : "cp932", 28 /* gbk_chinese_ci */ : "gbk", 1 /* big5_chinese_ci */ : "big5", 248 /* gb18030_chinese_ci */ : "gb18030", 250 /* gb18030_unicode_520_ci */ : "gb18030", 35 /* ucs2_general_ci */ : "ucs2", 54 /* utf16_general_ci */ : "utf16"} {
+		charset, ok := env.ConnectionCharset(id)
+		require.False(t, ok, "collation %d", id)
+		require.Equal(t, want, charset, "collation %d", id)
 	}
+
+	// An ID that MySQL does not define is refused, with no name to report.
+	charset, ok := env.ConnectionCharset(4000)
+	require.False(t, ok)
+	require.Empty(t, charset)
 
 	// A MySQL 8.0 client's default collation is accepted by an environment for
 	// a MySQL version that does not have it.
-	require.True(t, NewEnvironment("5.7.31").IsConnectionCharset(CollationUtf8mb4ID))
+	_, ok = NewEnvironment("5.7.31").ConnectionCharset(CollationUtf8mb4ID)
+	require.True(t, ok)
 }
