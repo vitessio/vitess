@@ -137,27 +137,52 @@ What remains:
 - S11k still loses about 500 acknowledged writes: `relay_log_recovery=1` is a configuration problem that these fixes do not address.
 - P2 still takes 70–103s to fail over. That is 3C, not fixed here.
 
+## PlannedReparentShard
+
+The PRS scenarios (`prs_test.go`) ran with the binaries of `main` and of this branch, under both profiles (`chaos_plan.sh prs main|fixed`). PRS demotes the primary, waits for the primary-elect to catch up, promotes it and repoints the other tablets, all under the shard lock. That lock is an etcd lease that only `CheckShardLocked` renews, at PRS's phase boundaries, so it lasts 30s past each check.
+
+| Scenario | main, 3 VTOrcs | main, 1 VTOrc | fixed, 3 VTOrcs | fixed, 1 VTOrc |
+|---|---|---|---|---|
+| R1: PRS under load | down 1.45s | down 1.22s | down 1.39s | down 1.29s |
+| R2: the wait after the demotion outlives the lock | PRS fails; down 30.80s | PRS fails; down 30.92s | PRS fails; down 30.88s | PRS fails; down 31.28s |
+| R2b: the catch-up outlives the lock | PRS fails; no outage | PRS fails; no outage | PRS fails; no outage | PRS fails; no outage |
+| R3: `DemotePrimary`'s response is lost | PRS fails; down 11.24s | PRS fails; down 15.55s | PRS fails; down 15.20s | PRS fails; down 15.28s |
+| R5: a replica's vttablet restarts during PRS | down 1.43s | down 1.25s | down 1.48s | down 1.24s |
+
+No run lost an acknowledged write. This branch's binaries behave like `main`: none of its fixes is on PRS's path except `Promote`'s relay log apply, which PRS's own wait already makes a no-op.
+
+- **R2 (T25).** A transaction held open on the primary keeps `DemotePrimary` in its shutdown grace period; meanwhile the primary-elect gets `SOURCE_DELAY=35`, and the transaction commits. PRS (`--wait-replicas-timeout 60s`) then waits about 35s for the primary-elect to reach the demoted position, and the lease, last renewed before the demotion, expires. VTOrc gets the lock and runs `fixPrimary` (`UndoDemotePrimary`) on the demoted primary about 31s into the outage, while PRS is still waiting; PRS's next check fails ("lost topology lock, aborting: node doesn't exist: lease") and it returns without undoing the demotion. Without VTOrc the primary would stay demoted.
+- **R2b (T25).** With the primary-elect 35s behind before PRS starts, the catch-up outlives the lease and PRS aborts after 36s, before the demotion. `--wait-replicas-timeout` above about 30s has no effect.
+- **R3 (T26).** PRS returns as soon as `DemotePrimary` fails, and runs `UndoDemotePrimary` only when its later wait fails. Here the tablet completes the demotion but vtctld, cut off from it, never gets the response: the primary stays demoted until VTOrc's `fixPrimary` runs once PRS releases the lock.
+- **R5.** PRS succeeds in about 2.4s. Right after it, VTOrc queued `PrimaryIsReadOnly` and `PrimaryHasPrimary` for the old primary from its stale view; its re-check under the lock, which refreshes the tablet records, found both "no longer valid".
+
 ## TLA+ model
 
 See `doc/design-docs/semi_sync_tla/README.md` for the model, its bounds and every counterexample.
 
 | Configuration | Bug | Invariant violated | Distinct states |
 |---|---|---|---|
-| `b1_srs_ack` | B1 | `NoUnbackedAck` | 35,296 |
-| `n1_retrying_io` | N1 | `NoLostAck` | 129,921 |
-| `s11_relay_recovery` | S11 | `NoLostAck` | 149,108 |
-| `stale_fix_replica` | B3 | `NoLostAck` | 367,090 |
-| `ers_stale_record` | B4 | `NoErrantServingReplica` | 3,684,055 |
-| `b5_stale_repoint` | B5 | `NoLostAck` | 5,476,865 |
-| `detached_repoint` | B5' | `NoLostAck` | 5,249,764 |
-| `b7_abort_leaves_repoint` | B7 | `NoErrantServingReplica` | 4,558,128 |
-| `s12_startup_repoint` | S12 | `NoLostAck` | 16,221 |
-| `orcs2_lease_expiry` | B8 | `NoLostAck` | 46,255,026 |
-| `current_fixed` | none (all fixes, one VTOrc) | passes, complete | 7,105,556 |
-| `s12_fixed` | none (with vttablet restarts) | passes, complete | 345,384 |
-| `orcs2_no_expiry` | none (two VTOrcs, no lease expiry) | passes, complete | 10,280,620 |
+| `b1_srs_ack` | B1 | `NoUnbackedAck` | 18,014 |
+| `n1_retrying_io` | N1 | `NoLostAck` | 60,735 |
+| `s11_relay_recovery` | S11 | `NoLostAck` | 66,053 |
+| `stale_fix_replica` | B3 | `NoLostAck` | 106,280 |
+| `ers_stale_record` | B4 | `NoErrantServingReplica` | 1,140,449 |
+| `b5_stale_repoint` | B5 | `NoLostAck` | 1,531,854 |
+| `detached_repoint` | B5' | `NoLostAck` | 1,531,892 |
+| `b7_abort_leaves_repoint` | B7 | `NoErrantServingReplica` | 1,295,940 |
+| `s12_startup_repoint` | S12 | `NoLostAck` | 7,492 |
+| `orcs2_lease_expiry` | B8 | `NoLostAck` | 5,615,927 |
+| `prs_stale_fix_primary` | B10: a PRS that fails after `PromoteReplica`, then a stale `fixPrimary` | `NoLostAck` | 754 |
+| `prs_lease_expiry` | B9: PRS's lease expires during its journal wait; VTOrc's ERS runs concurrently | `NoLostAck` | 20,692 |
+| `current_fixed` | none (all fixes, one VTOrc) | passes, complete | 1,839,194 |
+| `s12_fixed` | none (with vttablet restarts) | passes, complete | 91,736 |
+| `orcs2_no_expiry` | none (two VTOrcs, no lease expiry) | passes, complete | 534,334 |
+| `prs_fixed` | none (all fixes, one PRS) | passes, complete | 64,733 |
+| `prs_crash_fixed` | none (all fixes, one PRS, a crash) | passes, complete | 443,819 |
+| `prs_cut_fixed` | none (all fixes, one PRS, a network fault) | passes, complete | 781,042 |
+| `prs_faults_fixed` | none (all fixes, one PRS, a crash and a network fault) | passes, complete | 10,900,429 |
 
-Bounds: 3 tablets, 2 transactions (1 with two VTOrcs), one crash, one network fault, 2 ERS attempts. The fixed model is the code with every fix that has a switch; four of those fixes are in this branch (see "Fixes"). Losing an acknowledged write needs only one fault in every counterexample above, plus the race.
+The configurations that violate an invariant ran with one TLC worker, which makes their state counts reproducible. The model resets a finished reparent's bookkeeping and declares the symmetry of t2/t3 and of the VTOrcs, which shrinks the state space about 4× (19× with two VTOrcs) without removing behaviors (model README, "State space"). Bounds: 3 tablets, 2 transactions (1 with two VTOrcs), one crash, one network fault, 2 ERS attempts (1 with PRS), one PRS in the `prs_*` configurations. The fixed model is the code with every fix that has a switch; four of those fixes are in this branch (see "Fixes"). Losing an acknowledged write needs only one fault in every counterexample above, plus the race.
 
 ## Fixes in this branch
 
@@ -183,9 +208,10 @@ The E2E reruns with the fixed binaries are in the table above.
 2. S12: `initializeReplication` must not repoint or start replication while a reparent holds the shard lock.
 3. B5': ERS should cancel or await its `SetReplicationSource` RPCs before it releases the shard lock.
 4. B3/B4: `fixReplica` and ERS should refuse while a tablet holds a newer primary term than their target. VTOrc should pass `ExpectedPrimaryAlias`.
-5. 3B/B8: renew the etcd lease until unlock. `fixPrimary` should not undo a forced demotion.
-6. S11 in code: repoint without discarding the relay log (receiver-only `CHANGE`), and drain the applier before unavoidable discards (audit §2).
-7. B7: repoint replicas to the candidate only once it is promoted, or restore them on abort.
+5. 3B/B8/B9/T25: renew the etcd lease until unlock; today it also caps every PRS phase at about 30s and can leave the primary demoted (R2). `fixPrimary` should not undo a forced demotion, nor run while another tablet holds a newer term (B10).
+6. T26: PRS should run `UndoDemotePrimary` when `DemotePrimary` returns an error, and when its lock check after the demotion fails.
+7. S11 in code: repoint without discarding the relay log (receiver-only `CHANGE`), and drain the applier before unavoidable discards (audit §2).
+8. B7: repoint replicas to the candidate only once it is promoted, or restore them on abort.
 
 ## What VTOrc does that it should not
 

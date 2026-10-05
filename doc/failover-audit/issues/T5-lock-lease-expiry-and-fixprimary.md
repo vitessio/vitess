@@ -26,8 +26,8 @@ The first ERS's repoint RPCs (T3) then point a replica at that re-enabled old pr
 
 ## Reproduction Steps
 
-1. `cd doc/design-docs/semi_sync_tla && ./run.sh orcs2_lease_expiry` violates `NoLostAck` (21 steps; 46M states, about 40 min with 2 workers).
-2. The same model without lease expiry (`./run.sh orcs2_no_expiry`) passes exhaustively (10.3M states).
+1. `cd doc/design-docs/semi_sync_tla && ./run.sh orcs2_lease_expiry` violates `NoLostAck` (21 steps; 5.6M states, about 12 min with one worker).
+2. The same model without lease expiry (`./run.sh orcs2_no_expiry`) passes exhaustively (534,334 states).
 3. E2E, the lease part: `CHAOS_PROFILE=semisync-3vtorc chaos_matrix.sh TestS8VTOrcCutFromTopoDuringERS` fails over only after 30.4s. The same lease cuts PlannedReparentShard short (T25).
 4. The `fixPrimary` part without a lease expiry: `./run.sh prs_stale_fix_primary` violates `NoLostAck` (finding B10). A PRS that fails after `PromoteReplica` leaves the old primary demoted, still PRIMARY with the older term, and `fixPrimary` makes it writable again. In chaos run R5, VTOrc's re-check under the lock, which refreshes the tablet records, rejected that stale `PrimaryIsReadOnly` after a successful PRS, so in practice the window is the time before the new primary's tablet record is published.
 

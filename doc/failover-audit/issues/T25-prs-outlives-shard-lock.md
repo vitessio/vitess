@@ -27,7 +27,7 @@
 
 1. `CHAOS_PROFILE=semisync-3vtorc go/test/endtoend/vtorc/chaos/chaos_matrix.sh TestR2PRSOutlivesShardLock` (as root). A transaction held open on the primary keeps `DemotePrimary` in its shutdown grace period while the primary-elect gets `SOURCE_DELAY=35`; the transaction then commits, so the primary-elect needs about 35s to reach the demoted position. PRS runs with `--wait-replicas-timeout 60s`.
 2. `TestR2bPRSCatchupOutlivesShardLock`: the primary-elect applies 35s behind before PRS starts.
-3. Model: `cd doc/design-docs/semi_sync_tla && ./run.sh prs_lease_expiry` violates `NoLostAck` (38,090 states).
+3. Model: `cd doc/design-docs/semi_sync_tla && ./run.sh prs_lease_expiry` violates `NoLostAck` (20,692 states).
 
 ## Binary Version
 

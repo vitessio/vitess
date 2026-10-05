@@ -41,6 +41,7 @@ EXPECTED=(
   prs_fixed:pass
   prs_crash_fixed:pass
   prs_cut_fixed:pass
+  prs_faults_fixed:pass
 )
 
 expected_of() {
