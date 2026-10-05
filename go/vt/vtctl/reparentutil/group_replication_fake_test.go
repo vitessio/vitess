@@ -78,6 +78,9 @@ type fakeGRTablet struct {
 	// incarnation overrides the incarnation of the group the member reports, to simulate a
 	// member alone in a group it formed on its own.
 	incarnation string
+	// groupName overrides the group name the tablet reports, to simulate a member of another
+	// shard's group.
+	groupName string
 }
 
 // fakeGRCluster is a TabletManagerClient that simulates a shard running asynchronous
@@ -197,6 +200,9 @@ func (c *fakeGRCluster) groupStatus(ft *fakeGRTablet) *replicationdatapb.GroupRe
 		PluginActive: true,
 		GroupName:    policy.GroupName(c.keyspace, "-"),
 		MemberState:  mysql.GroupMemberStateOffline,
+	}
+	if ft.groupName != "" {
+		gs.GroupName = ft.groupName
 	}
 	if !ft.member {
 		return gs

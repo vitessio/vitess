@@ -19,6 +19,7 @@ package reparentutil
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strconv"
 	"sync"
 	"time"
@@ -28,6 +29,7 @@ import (
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/logutil"
@@ -358,6 +360,14 @@ func (pr *PlannedReparenter) performInitialPromotion(
 ) (string, error) {
 	primaryElectAliasStr := topoproto.TabletAliasString(primaryElect.Alias)
 
+	// Under a group replication policy, InitPrimary bootstraps a group: only on a shard that has
+	// none yet.
+	if policy.IsGroupReplication(opts.durability) {
+		if err := pr.checkShardHasNoGroup(ctx, keyspace, shard, tabletMap); err != nil {
+			return "", err
+		}
+	}
+
 	// Unlike the other PRS paths, initial promotion calls InitPrimary directly and
 	// never catches the primary-elect up to another tablet's position — there is no
 	// current primary to catch up to. The election may have preferred this candidate
@@ -424,6 +434,72 @@ func (pr *PlannedReparenter) performInitialPromotion(
 	}
 
 	return rp, nil
+}
+
+// checkShardHasNoGroup returns a FAILED_PRECONDITION error when the shard, which has neither a
+// primary tablet nor a primary term, already has a replication group, or may be getting one: the
+// initial promotion's InitPrimary would bootstrap a second group next to it, and record its
+// incarnation over the first one's. That is the case on a new shard whose group VTOrc bootstraps on
+// its own (GroupVotersOutOfDate, GroupNotBootstrapped): until a majority of its voters joined the
+// group, no tablet is PRIMARY, and a PlannedReparentShard that takes the shard lock in between
+// would take the initial promotion path. The shard has a group, or is getting one, when:
+//   - a bootstrap intent is live (LiveGroupReplicationBootstrapIntent): a component bootstrapped
+//     the group, or is bootstrapping it, and its incarnation is not recorded yet;
+//   - an incarnation is recorded: the group was bootstrapped;
+//   - a tablet's MySQL is an active member of the shard's group (policy.GroupName), for example of
+//     a bootstrap whose intent expired, or of a previous initial promotion that failed after
+//     InitPrimary bootstrapped it.
+//
+// A tablet whose MySQL is an active member of another group does not tell that the shard has a
+// group, but the initial promotion still refuses, with its own error: InitPrimary cannot bootstrap
+// the shard's group on such a tablet, nor make it join, and waiting for VTOrc would not help.
+//
+// It reads the shard record and the status of every tablet under the shard lock, after
+// verifyAllTabletsReachable. A tablet whose status cannot be read fails the check.
+func (pr *PlannedReparenter) checkShardHasNoGroup(ctx context.Context, keyspace, shard string, tabletMap map[string]*topo.TabletInfo) error {
+	const advice = "PlannedReparentShard cannot initialize it with a new group: wait until the group's primary tablet is PRIMARY (VTOrc promotes it), then run PlannedReparentShard again to choose the primary"
+	si, err := pr.ts.GetShard(ctx, keyspace, shard)
+	if err != nil {
+		return vterrors.Wrapf(err, "cannot read the shard record of %s/%s", keyspace, shard)
+	}
+	if intent := LiveGroupReplicationBootstrapIntent(si.Shard, time.Now()); intent != nil {
+		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION,
+			"shard %s/%s has a live bootstrap intent for its replication group, on tablet %v since %v: the group is being bootstrapped; %s",
+			keyspace, shard, topoproto.TabletAliasString(intent.GetTarget()), protoutil.TimeFromProto(intent.GetTime()).UTC().Format(time.RFC3339), advice)
+	}
+	if incarnation := si.GetGroupReplicationIncarnation(); incarnation != "" {
+		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION,
+			"shard %s/%s already has a replication group: the shard record lists its incarnation %s; %s", keyspace, shard, incarnation, advice)
+	}
+	tablets := make([]*topodatapb.Tablet, 0, len(tabletMap))
+	for _, info := range tabletMap {
+		tablets = append(tablets, info.Tablet)
+	}
+	statuses := fetchFullStatuses(ctx, pr.tmc, tablets, topo.RemoteOperationTimeout)
+	aliases := make([]string, 0, len(statuses))
+	for alias := range statuses {
+		aliases = append(aliases, alias)
+	}
+	slices.Sort(aliases)
+	groupName := policy.GroupName(keyspace, shard)
+	for _, alias := range aliases {
+		res := statuses[alias]
+		if res.err != nil {
+			return vterrors.Wrapf(res.err, "cannot verify that no tablet of shard %s/%s is a member of a replication group", keyspace, shard)
+		}
+		if res.isActiveMember() {
+			gs := res.groupStatus()
+			if name := gs.GetGroupName(); name != "" && name != groupName {
+				return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION,
+					"tablet %v of shard %s/%s is %s in replication group %s (view %s), which is not the shard's group %s: InitPrimary would leave it there, and could not bootstrap the shard's group on it; stop Group Replication on its MySQL, then run PlannedReparentShard again",
+					alias, keyspace, shard, gs.GetMemberState(), name, gs.GetViewId(), groupName)
+			}
+			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION,
+				"tablet %v of shard %s/%s is already %s in replication group %s (view %s): the shard has a group; %s",
+				alias, keyspace, shard, gs.GetMemberState(), gs.GetGroupName(), gs.GetViewId(), advice)
+		}
+	}
+	return nil
 }
 
 // selectInitialVoters selects the voters of a group replication shard that never had a

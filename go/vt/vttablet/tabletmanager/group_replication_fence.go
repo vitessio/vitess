@@ -311,6 +311,12 @@ func (tm *TabletManager) groupReplicationFenceReason(status *replicationdatapb.G
 	if rec == nil || len(rec.voters) == 0 || !tm.cachedPolicyIsGroupReplication(rec) {
 		return ""
 	}
+	// Only a voter takes writes (see groupReplicationServingReason): a primary that the voter list
+	// dropped is fenced as soon as the tablet reads the list (the shard watch), not on its next
+	// decision. Not while the tablet bootstraps a group or pauses: those end with a decision.
+	if !policy.IsVoter(rec.voters, tm.tabletAlias) && tm.groupReplicationFence.bootstraps.Load() == 0 && !tm.tmState.servingPaused() {
+		return groupReplicationNotVoter
+	}
 	if !viewKnown {
 		if tm.groupReplicationFence.bootstraps.Load() > 0 || tm.tmState.servingPaused() {
 			return ""
@@ -529,20 +535,21 @@ func (rec *shardGroupRecord) adoptableByIntent(self *topodatapb.TabletAlias, inc
 	return true
 }
 
+// noteShardFromWatch records a shard record that the shard watch delivered.
+func (tm *TabletManager) noteShardFromWatch(si *topodatapb.Shard) {
+	if si != nil {
+		tm.groupReplicationTopo.noteShard(si, true, 0)
+	}
+}
+
 // noteShardGroupFields updates the shard's group record that the tablet read last with the shard
 // record si, read for another purpose (the durability policy, the voters): the fence check decides
 // on the freshest record without reading the topology itself. A bootstrap reads the shard record
-// right after VTOrc recorded its intent, for example. The tablet records are kept.
-func (tm *TabletManager) noteShardGroupFields(si *topodatapb.Shard) {
-	last := tm.groupReplicationTopo.lastRecord()
-	if last == nil || si == nil {
-		return
+// right after VTOrc recorded its intent, for example. The tablet records are kept. readGen is what
+// groupReplicationTopo.readGeneration returned before the read: a record that the shard watch
+// delivered since is newer, and stands.
+func (tm *TabletManager) noteShardGroupFields(si *topodatapb.Shard, readGen uint64) {
+	if si != nil {
+		tm.groupReplicationTopo.noteShard(si, false, readGen)
 	}
-	rec := *last
-	rec.incarnation = si.GetGroupReplicationIncarnation()
-	rec.voters = si.GetGroupReplicationVoters()
-	rec.primaryAlias = si.GetPrimaryAlias()
-	rec.durabilityPolicy = si.GetDurabilityPolicy()
-	rec.intent = reparentutil.CurrentGroupReplicationBootstrapIntent(si)
-	tm.groupReplicationTopo.setRecord(&rec)
 }

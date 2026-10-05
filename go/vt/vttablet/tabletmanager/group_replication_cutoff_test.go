@@ -318,3 +318,34 @@ func TestStartGroupReplicationBootstrapDoesNotWaitForCutOffTopo(t *testing.T) {
 	assert.ElementsMatch(t, []string{"mysql2:3306", "mysql3:3306"}, fmd.GroupReplicationConfig.Seeds, "the seeds come from the tablet records read last")
 	assert.Equal(t, want.MemberWeight, fmd.GroupReplicationConfig.MemberWeight, "the weight comes from the durability policy read last")
 }
+
+// TestStartGroupReplicationJoinDoesNotWaitForCutOffTopo checks that a join that the
+// StartGroupReplication RPC requests does not wait for a topology that does not answer: VTOrc's joins
+// after a bootstrap recover the shard's group, typically right after a partition. The join reads its
+// peers' status first, to contact the active members first (refreshActiveGroupSeeds); that read of the
+// shard record waits at most groupReplicationTopoReadTimeout, and the join then uses the record and the
+// seeds that the tablet read last.
+func TestStartGroupReplicationJoinDoesNotWaitForCutOffTopo(t *testing.T) {
+	withGroupReplication(t)
+	ctx := t.Context()
+	tm, fmd, f, _ := newCutOffTestTM(t)
+	// The tablet read the shard's group and its policy, as its sync loop does every few seconds.
+	_, err := tm.readShardGroupRecord(ctx, nil)
+	require.NoError(t, err)
+	_, err = tm.shardDurability(ctx)
+	require.NoError(t, err)
+
+	fmd.SetGroupReplicationStatus(groupStatus(testServerUUID(1), groupMember(testServerUUID(1), mysql.GroupMemberStateError, "")))
+	fmd.StartGroupReplicationError = nil
+	fmd.ExpectedExecuteSuperQueryList = []string{resetDefaultChannel}
+	f.cut()
+
+	rpcCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	start := time.Now()
+	_, err = tm.StartGroupReplication(rpcCtx, startRequest(false))
+	elapsed := time.Since(start)
+	require.NoError(t, err)
+	assert.False(t, fmd.GroupReplicationBootstrapped)
+	assert.Less(t, elapsed, 2*groupReplicationTopoReadTimeout+3*time.Second, "the join must not wait for the topology")
+}

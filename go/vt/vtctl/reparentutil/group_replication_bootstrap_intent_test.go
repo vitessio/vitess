@@ -446,3 +446,28 @@ func TestWithdrawGroupReplicationBootstrapIntent(t *testing.T) {
 		assert.Equal(t, vtrpcpb.Code_INVALID_ARGUMENT, vterrors.Code(err), "%v", err)
 	})
 }
+
+// TestRecordUnrecordedGroupReplicationIncarnation checks the compare-and-swap with which VTOrc records a
+// group that runs while the shard record lists no incarnation: it fails while another incarnation is
+// recorded or a bootstrap intent is live, whose bootstrap may still create another group, and it records
+// the group, clearing an intent that expired.
+func TestRecordUnrecordedGroupReplicationIncarnation(t *testing.T) {
+	ctx, ts := intentTestShard(t, "")
+	now := time.Now()
+	_, err := WriteGroupReplicationBootstrapIntent(ctx, ts, "ks", "0", intentTestTablet(100).Alias, "", now)
+	require.NoError(t, err)
+
+	err = RecordUnrecordedGroupReplicationIncarnation(ctx, ts, "ks", "0", "1790000002", now)
+	assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err), "%v", err)
+	assert.Empty(t, readShard(t, ts).GroupReplicationIncarnation, "a live intent fences the record")
+
+	later := now.Add(GroupReplicationBootstrapIntentFence + time.Second)
+	require.NoError(t, RecordUnrecordedGroupReplicationIncarnation(ctx, ts, "ks", "0", "1790000002", later))
+	si := readShard(t, ts)
+	assert.Equal(t, "1790000002", si.GroupReplicationIncarnation)
+	assert.Nil(t, si.GroupReplicationBootstrapIntent, "the record clears the expired intent")
+
+	err = RecordUnrecordedGroupReplicationIncarnation(ctx, ts, "ks", "0", "1790000003", later)
+	assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err), "%v", err)
+	assert.Equal(t, "1790000002", readShard(t, ts).GroupReplicationIncarnation)
+}

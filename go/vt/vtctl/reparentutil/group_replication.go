@@ -278,6 +278,39 @@ func RecordGroupReplicationIncarnation(ctx context.Context, ts *topo.Server, tmc
 	return incarnation, nil
 }
 
+// RecordUnrecordedGroupReplicationIncarnation records the incarnation of a running group while the
+// shard record lists none, for VTOrc's adoption of a group that nobody recorded. It is a
+// compare-and-swap: it fails with FAILED_PRECONDITION if the shard record lists an incarnation
+// (another one), or holds a live bootstrap intent. It clears an expired intent. The caller must hold
+// the shard lock, which is re-checked first.
+func RecordUnrecordedGroupReplicationIncarnation(ctx context.Context, ts *topo.Server, keyspace, shard, incarnation string, now time.Time) error {
+	if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
+		return vterrors.Wrap(err, lostTopologyLockMsg)
+	}
+	_, err := ts.UpdateShardFields(ctx, keyspace, shard, func(si *topo.ShardInfo) error {
+		if si.GroupReplicationIncarnation == incarnation {
+			return topo.NewError(topo.NoUpdateNeeded, keyspace+"/"+shard)
+		}
+		if si.GroupReplicationIncarnation != "" {
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "the shard record of %s/%s lists the group replication incarnation %q: it changed concurrently, not recording %q",
+				keyspace, shard, si.GroupReplicationIncarnation, incarnation)
+		}
+		if LiveGroupReplicationBootstrapIntent(si.Shard, now) != nil {
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "the shard record of %s/%s holds a live bootstrap intent: not recording %q", keyspace, shard, incarnation)
+		}
+		si.GroupReplicationIncarnation = incarnation
+		si.GroupReplicationBootstrapIntent = nil
+		return nil
+	})
+	if err != nil {
+		if vterrors.Code(err) == vtrpcpb.Code_FAILED_PRECONDITION {
+			return err
+		}
+		return vterrors.Wrapf(err, "failed to store the group replication incarnation of shard %s/%s", keyspace, shard)
+	}
+	return nil
+}
+
 // WriteGroupReplicationIncarnation stores the incarnation of the shard's legitimate replication
 // group in the shard record; an empty incarnation clears it. It is a compare-and-swap: it fails
 // with FAILED_PRECONDITION unless the shard record lists the expected incarnation, the one the

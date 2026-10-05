@@ -61,6 +61,9 @@ func (tm *TabletManager) StartGroupReplication(ctx context.Context, req *tabletm
 	if err := checkGroupReplicationEnabled(); err != nil {
 		return nil, err
 	}
+	if !bootstrap {
+		tm.refreshActiveGroupSeeds(ctx)
+	}
 	if err := tm.lock(ctx); err != nil {
 		return nil, err
 	}
@@ -96,6 +99,40 @@ func (tm *TabletManager) StartGroupReplication(ctx context.Context, req *tabletm
 		return nil, err
 	}
 	return tm.waitForGroupMemberOnline(ctx)
+}
+
+// refreshActiveGroupSeeds reads which peers are active members of the shard's group, before a join
+// that the StartGroupReplication RPC requests, so that MySQL contacts them first (see preferSeeds),
+// as it does for the tablet's own joins, which check that first (checkLegitimateGroupToJoin). Right
+// after a bootstrap, that is the bootstrapped member. The sorted seeds otherwise put first whichever
+// peer's address sorts first, which may be a member whose own START is stuck: MySQL then waited for
+// its group communication engine for 30s before it tried the next seed (the G12 chaos run). Peers
+// that are not active members come after the active ones; none is left out, since the read may miss
+// a member that is active. The read does not hold the action lock. Like the join's other topology
+// reads, it waits at most groupReplicationTopoReadTimeout for the shard record when the tablet read it
+// before, and then uses the record it read last; the peers' statuses wait at most
+// groupReplicationPeerTimeout. A PRIMARY tablet skips it: its join is refused
+// (refuseJoinOnPrimaryLocked), or its MySQL is in its group already.
+func (tm *TabletManager) refreshActiveGroupSeeds(ctx context.Context) {
+	if tm.Tablet().Type == topodatapb.TabletType_PRIMARY {
+		return
+	}
+	last := tm.groupReplicationTopo.lastRecord()
+	readCtx, cancel := withTopoReadDeadline(ctx, time.Now().Add(groupReplicationTopoReadTimeout), last != nil)
+	rec, err := tm.readShardGroupRecord(readCtx, last)
+	cancel()
+	if err != nil {
+		if last == nil || ctx.Err() != nil {
+			log.Warn("Group replication: cannot read the shard record, the join contacts its seeds in their sorted order", slog.Any("error", err))
+			return
+		}
+		log.Warn("Group replication: the topology did not answer in time, the join orders its seeds on the shard record read last", slog.Any("error", err))
+		rec = last
+	}
+	if !tm.legitimateGroupActiveElsewhere(ctx, rec) {
+		// No peer was seen active: forget the peers that were, a while ago.
+		tm.groupReplicationPeers.setActiveSeeds(nil)
+	}
 }
 
 // StopGroupReplication makes the tablet's MySQL leave its shard's replication group. MySQL

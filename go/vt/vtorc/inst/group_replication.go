@@ -17,6 +17,7 @@ limitations under the License.
 package inst
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 	"sync"
@@ -158,8 +159,13 @@ type VoterObservation struct {
 	// server_uuid of the group primary in its view.
 	HasQuorum   bool
 	PrimaryUUID string
-	// ActiveMemberUUIDs are the server_uuids of the members that this member sees as active.
+	// ActiveMemberUUIDs are the server_uuids of the members that this member sees as active, and
+	// OnlineMemberUUIDs those it sees as ONLINE.
 	ActiveMemberUUIDs []string
+	OnlineMemberUUIDs []string
+	// Foreign is true when the member is active in a group of another incarnation than the one
+	// the shard record lists.
+	Foreign bool
 }
 
 // NewVoterObservation returns the observation of a tablet from its FullStatus. A nil status means
@@ -179,6 +185,7 @@ func NewVoterObservation(tablet *topodatapb.Tablet, status *replicationdatapb.Fu
 		HasQuorum:         gr.GetHasQuorum(),
 		PrimaryUUID:       gr.GetPrimaryUuid(),
 		ActiveMemberUUIDs: ActiveGroupMemberUUIDs(gr),
+		OnlineMemberUUIDs: OnlineGroupMemberUUIDs(gr),
 	}
 }
 
@@ -190,6 +197,10 @@ type GroupVoterSelection struct {
 	GroupPrimary *topodatapb.TabletAlias
 	// Candidates are the tablets of the shard, as SelectVoters saw them.
 	Candidates []policy.VoterCandidate
+	// KeptReason is set when SelectVoters chose other voters, but a view of the shard's group that
+	// lacks a majority of the current voters would hold a majority of them: Voters are then the
+	// current voters, and KeptReason says why (see voterChangeRefusal).
+	KeptReason string
 }
 
 // IsActive returns whether the tablet's MySQL is an active member of the shard's group, as far as
@@ -216,6 +227,10 @@ func (s *GroupVoterSelection) IsActive(alias *topodatapb.TabletAlias) bool {
 //     voter in its cell while it is still a member.
 //   - A voter that takes a backup or restores one keeps its seat, although its tablet type makes
 //     it ineligible while it does.
+//   - The current voters are kept when a view of the group that lacks a majority of them would hold
+//     a majority of the selected voters (see voterChangeRefusal). The selection is the only place
+//     that decides the list: the analysis (GroupVotersOutOfDate) and the recovery that writes it
+//     both use it.
 func SelectGroupReplicationVoters(durability policy.GroupReplicationDurabler, current []*topodatapb.TabletAlias, observations []*VoterObservation, now time.Time) *GroupVoterSelection {
 	reportedActive := make(map[string]bool)
 	var groupPrimary *topodatapb.TabletAlias
@@ -268,7 +283,113 @@ func SelectGroupReplicationVoters(durability policy.GroupReplicationDurabler, cu
 		selection.Candidates = append(selection.Candidates, candidate)
 	}
 	selection.Voters = policy.SelectVoters(durability, current, groupPrimary, selection.Candidates)
+	if reason := voterChangeRefusal(current, selection.Voters, observations); reason != "" {
+		selection.Voters = slices.Clone(current)
+		slices.SortFunc(selection.Voters, func(a, b *topodatapb.TabletAlias) int {
+			return strings.Compare(topoproto.TabletAliasString(a), topoproto.TabletAliasString(b))
+		})
+		selection.KeptReason = reason
+	}
 	return selection
+}
+
+// voterChangeRefusal returns why the voter list must not change from current to proposed, or ""
+// if it may. A view of the shard's group that lacks a majority of the current voters does not
+// serve, and must not serve after the change either: VTOrc never writes a list under which such a
+// view would hold a majority of the new voters. Otherwise a group whose view shrank to a minority of
+// its voters, through clean leaves that keep MySQL's view quorum, would serve again once the voters
+// it lacks were unreachable for the replacement grace period, and acknowledge writes on fewer
+// hosts than a majority of the voters ("Group shrink fails closed" in the design). Replacing a
+// failed voter with a spare is allowed: the view that lacks a voter majority gains a majority only
+// once the spare joins it, through distributed recovery, which gives the spare the group's history.
+//
+// A current list that is empty (no voter selected yet) has no majority to keep. Only the views of
+// the shard's group count: a member of another incarnation (Foreign) never serves. A view is what a
+// reachable active member reports; a current voter counts in it when it is ONLINE there, as for the
+// serving invariant, and a new voter when it is ONLINE or RECOVERING there. VTOrc cannot see a view
+// of members that are all unreachable: a new voter that is unreachable and that no reachable member
+// reports active could be in any view, so it counts in every view, and the change is refused when
+// such voters alone would hold a majority of the new list.
+func voterChangeRefusal(current, proposed []*topodatapb.TabletAlias, observations []*VoterObservation) string {
+	if len(current) == 0 || SameGroupReplicationVoters(current, proposed) {
+		return ""
+	}
+	byAlias := make(map[string]*VoterObservation, len(observations))
+	reported := make(map[string]bool)
+	for _, o := range observations {
+		if o.Tablet.GetAlias() == nil {
+			continue
+		}
+		byAlias[topoproto.TabletAliasString(o.Tablet.Alias)] = o
+		if !o.Reachable || !o.Active {
+			continue
+		}
+		reported[o.ServerUUID] = true
+		for _, uuid := range o.ActiveMemberUUIDs {
+			reported[uuid] = true
+		}
+	}
+	uuidOf := func(alias *topodatapb.TabletAlias) string {
+		if o := byAlias[topoproto.TabletAliasString(alias)]; o != nil {
+			return o.ServerUUID
+		}
+		return ""
+	}
+	unseen := make(map[string]bool)
+	for _, alias := range proposed {
+		o := byAlias[topoproto.TabletAliasString(alias)]
+		if o == nil || (!o.Reachable && (o.ServerUUID == "" || !reported[o.ServerUUID])) {
+			unseen[topoproto.TabletAliasString(alias)] = true
+		}
+	}
+	currentMajority, proposedMajority := len(current)/2+1, len(proposed)/2+1
+	if len(unseen) >= proposedMajority {
+		return fmt.Sprintf("%d of the %d new voters [%s] are unreachable and no reachable member reports them active, so a view that VTOrc cannot see could hold their majority",
+			len(unseen), len(proposed), aliasesString(proposed))
+	}
+	for _, o := range observations {
+		if o.Tablet.GetAlias() == nil || !o.Reachable || !o.Active || o.Foreign {
+			continue
+		}
+		online := make(map[string]bool, len(o.OnlineMemberUUIDs))
+		for _, uuid := range o.OnlineMemberUUIDs {
+			online[uuid] = true
+		}
+		active := map[string]bool{o.ServerUUID: true}
+		for _, uuid := range o.ActiveMemberUUIDs {
+			active[uuid] = true
+		}
+		currentIn := 0
+		for _, alias := range current {
+			if uuid := uuidOf(alias); uuid != "" && online[uuid] {
+				currentIn++
+			}
+		}
+		if currentIn >= currentMajority {
+			continue
+		}
+		proposedIn := 0
+		for _, alias := range proposed {
+			if uuid := uuidOf(alias); unseen[topoproto.TabletAliasString(alias)] || (uuid != "" && active[uuid]) {
+				proposedIn++
+			}
+		}
+		if proposedIn >= proposedMajority {
+			return fmt.Sprintf("the group view of %s holds %d of the %d current voters [%s], not a majority, and would hold %d of the %d new voters [%s], a majority",
+				topoproto.TabletAliasString(o.Tablet.Alias), currentIn, len(current), aliasesString(current), proposedIn, len(proposed), aliasesString(proposed))
+		}
+	}
+	return ""
+}
+
+// aliasesString returns the tablet aliases, sorted and separated by commas.
+func aliasesString(aliases []*topodatapb.TabletAlias) string {
+	strs := make([]string, 0, len(aliases))
+	for _, alias := range aliases {
+		strs = append(strs, topoproto.TabletAliasString(alias))
+	}
+	slices.Sort(strs)
+	return strings.Join(strs, ", ")
 }
 
 // SameGroupReplicationVoters returns whether the two lists hold the same voters, in any order.
@@ -480,6 +601,8 @@ func computeGroupReplicationVoters(state *groupReplicationShardState, durability
 			HasQuorum:         row.hasQuorum,
 			PrimaryUUID:       row.primaryUUID,
 			ActiveMemberUUIDs: row.activeMemberUUIDs,
+			OnlineMemberUUIDs: OnlineGroupMemberUUIDs(row.status),
+			Foreign:           row.foreign,
 		})
 	}
 	selection := SelectGroupReplicationVoters(grd, state.voters, observations, now)
@@ -537,6 +660,29 @@ func applyGroupReplicationShardState(a *DetectionAnalysis, state *groupReplicati
 	a.isGroupVotersReporter = state.votersOutOfDate && topoproto.TabletAliasEqual(state.votersReporter, a.AnalyzedInstanceAlias)
 }
 
+// replicatesThroughGroup returns whether the analyzed tablet replicates through its shard's group
+// rather than asynchronously from the primary, so that the asynchronous replication analyses
+// (NotConnectedToPrimary, ReplicationStopped, ConnectedToWrongPrimary, ReplicaMisconfigured and the
+// replica semi-sync ones), whose recovery points the default replication channel at the primary, do
+// not apply to it: an active group member, and under a group replication policy a voter, also while
+// it is out of its group, joining it, or in the ERROR state. Configuring the default channel on a
+// voter makes the replication lag poller read that channel once the voter is back in its group, and
+// the voter then serves no replica reads (G13 chaos run). While no voter is listed, every tablet that
+// the policy allows in the group counts as a voter. A tablet that is not a voter replicates
+// asynchronously, and keeps the analyses.
+func replicatesThroughGroup(a *DetectionAnalysis, ca *clusterAnalysis) bool {
+	if a.IsGroupMemberActive {
+		return true
+	}
+	if !policy.IsGroupReplication(ca.durability) {
+		return false
+	}
+	if len(a.ShardGroupVoters) == 0 {
+		return policy.IsGroupMember(ca.durability, &topodatapb.Tablet{Alias: a.AnalyzedInstanceAlias, Type: a.TabletType})
+	}
+	return a.IsGroupVoter
+}
+
 // isGroupSecondary returns whether the analyzed tablet's MySQL is an active group member that is
 // not the group's primary. Such a member is read-only, and it must not be a shard primary.
 func isGroupSecondary(a *DetectionAnalysis) bool {
@@ -583,8 +729,15 @@ func matchGroupNotBootstrapped(a *DetectionAnalysis, ca *clusterAnalysis) bool {
 // than the shard record lists: a bootstrap whose reply was lost. VTOrc adopts the group after it
 // checked it again under the shard lock (see reparentutil.AdoptGroupReplicationBootstrap). The
 // tablet trusts the group it bootstrapped for a minute, and then leaves it.
+//
+// It also matches the primary of a group while the shard record lists no incarnation, without an
+// intent for it: a group that nobody recorded, for example one that the initial promotion of
+// PlannedReparentShard bootstrapped and failed to record. No voter joins such a group
+// (matchGroupMemberNotOnline), so VTOrc records it, when it is the only group the shard can have
+// (see logic.adoptUnrecordedGroup).
 func matchGroupBootstrapNotRecorded(a *DetectionAnalysis, ca *clusterAnalysis) bool {
-	return policy.IsGroupReplication(ca.durability) && a.LastCheckValid && a.IsGroupBootstrapIntentTarget &&
+	return policy.IsGroupReplication(ca.durability) && a.LastCheckValid &&
+		(a.IsGroupBootstrapIntentTarget || a.ShardGroupIncarnation == "") &&
 		a.IsGroupPrimary && a.GroupViewIncarnation != "" && a.GroupViewIncarnation != a.ShardGroupIncarnation
 }
 
@@ -603,8 +756,14 @@ func matchGroupBootstrapNotRecorded(a *DetectionAnalysis, ca *clusterAnalysis) b
 // A PRIMARY tablet never matches: its MySQL out of its group makes it a stale primary, which the
 // tablet demotes on its own first, and the tablet refuses a join meanwhile (a join holds its action
 // lock for up to a minute, which keeps the demotion from running).
+//
+// Nor does it match while the shard record lists no incarnation: every group then counts as the
+// shard's group, also one that a join formed on its own when the member it joined left (the TLA+
+// model's init_orc_lost). The component that bootstraps the group records its incarnation, and then
+// makes the voters join it; VTOrc adopts and records a bootstrap whose reply was lost
+// (GroupBootstrapNotRecorded).
 func matchGroupMemberNotOnline(a *DetectionAnalysis, ca *clusterAnalysis) bool {
-	return policy.IsGroupReplication(ca.durability) && a.IsGroupVoter &&
+	return policy.IsGroupReplication(ca.durability) && a.IsGroupVoter && a.ShardGroupIncarnation != "" &&
 		a.TabletType != topodatapb.TabletType_PRIMARY && a.CurrentTabletType != topodatapb.TabletType_PRIMARY &&
 		a.LastCheckValid && !a.IsGroupMemberActive && !a.IsGroupMemberForeign && a.ShardGroupLegitimateActiveMembers > 0
 }

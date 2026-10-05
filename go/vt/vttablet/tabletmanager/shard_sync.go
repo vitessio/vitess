@@ -90,6 +90,11 @@ func (tm *TabletManager) shardSyncLoop(ctx context.Context, notifyChan <-chan st
 			log.Info("Change in shard record")
 
 			if event != nil {
+				if event.Err == nil && event.Value != nil {
+					// The fence check decides on the voters and the incarnation that the tablet read
+					// last: a primary that the voter list dropped is fenced right away.
+					tm.noteShardFromWatch(event.Value)
+				}
 				if event.Err != nil {
 					// The watch failed. Stop it so we start a new one if needed.
 					log.Error(fmt.Sprintf("Shard watch failed: %v", event.Err))
@@ -150,11 +155,16 @@ func (tm *TabletManager) shardSyncLoop(ctx context.Context, notifyChan <-chan st
 				// We already have an active watch. Nothing to do.
 				continue
 			}
-			if err := shardWatch.start(tm.TopoServer, tablet.Keyspace, tablet.Shard); err != nil {
+			current, err := shardWatch.start(tm.TopoServer, tablet.Keyspace, tablet.Shard)
+			if err != nil {
 				log.Error(fmt.Sprintf("Failed to start shard watch: %v", err))
 				// Start retry timer and go back to sleep.
 				retryChan = time.After(shardSyncRetryDelay)
 				continue
+			}
+			if current != nil && current.Value != nil {
+				// The record as the watch started: the voter list may have changed before.
+				tm.noteShardFromWatch(current.Value)
 			}
 		default:
 			// If we're not primary, stop watching the shard record,

@@ -223,6 +223,7 @@ func (tm *TabletManager) shardDurability(ctx context.Context) (policy.Durabler, 
 // shard record sets another one.
 func (tm *TabletManager) resolveShardDurability(ctx context.Context) (policy.Durabler, string, error) {
 	tablet := tm.Tablet()
+	readGen := tm.groupReplicationTopo.readGeneration()
 	si, err := tm.TopoServer.GetShard(ctx, tablet.Keyspace, tablet.Shard)
 	if err != nil {
 		return nil, "", vterrors.Wrapf(err, "cannot read the durability policy of shard %v/%v", tablet.Keyspace, tablet.Shard)
@@ -236,7 +237,7 @@ func (tm *TabletManager) resolveShardDurability(ctx context.Context) (policy.Dur
 		return nil, "", vterrors.Wrapf(err, "cannot get durability policy %v", durabilityName)
 	}
 	tm.groupReplicationTopo.setDurability(durabilityName)
-	tm.noteShardGroupFields(si.Shard)
+	tm.noteShardGroupFields(si.Shard, readGen)
 	return durability, si.GetDurabilityPolicy(), nil
 }
 
@@ -1055,6 +1056,14 @@ const (
 	// groupReplicationElectionInProgress: MySQL is the group's primary, but the primary election that
 	// made it the primary still runs. Group Replication sets super_read_only when it ends.
 	groupReplicationElectionInProgress = "MySQL's replication group is still electing it its primary"
+	// groupReplicationNotVoter: MySQL is the group's primary, but the tablet is not a listed voter.
+	groupReplicationNotVoter = "MySQL is the primary of its replication group, but its tablet is not a voter of the shard's group"
+	// groupReplicationDemotionRevertUndecided: DemotePrimary failed, and its revert could not decide
+	// whether the tablet may serve (revertDemotionWithGroupDecisionLocked).
+	groupReplicationDemotionRevertUndecided = "the revert of a failed demotion could not decide whether the tablet serves"
+	// groupReplicationDemotionRevertFailed: DemotePrimary failed, and its revert could not make MySQL
+	// writable again.
+	groupReplicationDemotionRevertFailed = "the revert of a failed demotion could not make MySQL writable"
 )
 
 // groupReplicationServingReason returns why a PRIMARY tablet must not serve as the primary of its
@@ -1090,6 +1099,13 @@ func (tm *TabletManager) groupReplicationServingReason(ctx context.Context, dura
 	}
 	if !mysql.IsGroupPrimary(status) {
 		return groupReplicationNotGroupPrimary
+	}
+	// Only a voter serves: a member that is not one counts in the certification majority of its view,
+	// which then need not hold a majority of the voters, and a bootstrap from the voters would lose
+	// what it acknowledged. VTOrc gives the group primary a seat (policy.SelectVoters), and the
+	// tablet serves then.
+	if !policy.IsVoter(rec.voters, tm.tabletAlias) {
+		return groupReplicationNotVoter
 	}
 	if rec.incarnation != "" && policy.GroupIncarnation(status.GetViewId()) != rec.incarnation {
 		return groupReplicationUnrecordedIncarnation
@@ -1189,12 +1205,12 @@ func (tm *TabletManager) applyGroupReplicationServingDecisionLocked(ctx context.
 // in the shard record.
 func (tm *TabletManager) groupReplicationVoters(ctx context.Context) ([]*topodatapb.TabletAlias, error) {
 	tablet := tm.Tablet()
+	readGen := tm.groupReplicationTopo.readGeneration()
 	si, err := tm.TopoServer.GetShard(ctx, tablet.Keyspace, tablet.Shard)
 	if err != nil {
 		return nil, vterrors.Wrapf(err, "cannot read shard %v/%v", tablet.Keyspace, tablet.Shard)
 	}
-	tm.groupReplicationTopo.setVoters(si.GetGroupReplicationVoters())
-	tm.noteShardGroupFields(si.Shard)
+	tm.noteShardGroupFields(si.Shard, readGen)
 	return si.GetGroupReplicationVoters(), nil
 }
 

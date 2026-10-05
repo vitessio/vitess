@@ -103,15 +103,19 @@ func findGroupWithQuorum(statuses map[string]*fullStatusResult, legitimate *poli
 
 // groupPromotionEligibility returns an error when the tablet cannot be the shard's primary
 // after an emergency reparent of a group replication shard: it must be reachable, an ONLINE
-// member of the group in the view of the quorum, allowed by the durability policy and, with
+// member of the group in the view of the quorum, a listed voter when voters are listed (a tablet that
+// is not one does not serve as PRIMARY), allowed by the durability policy and, with
 // PreventCrossCellPromotion, in the cell of the previous primary.
-func groupPromotionEligibility(res *fullStatusResult, gv *groupReplicationView, prevPrimary *topodatapb.Tablet, opts EmergencyReparentOptions) error {
+func groupPromotionEligibility(res *fullStatusResult, gv *groupReplicationView, voters []*topodatapb.TabletAlias, prevPrimary *topodatapb.Tablet, opts EmergencyReparentOptions) error {
 	alias := topoproto.TabletAliasString(res.tablet.Alias)
 	if res.err != nil {
 		return vterrors.Wrapf(res.err, "tablet %v is not reachable", alias)
 	}
 	if !res.isOnlineMember() || res.groupStatus().GroupName != gv.groupName || policy.GroupIncarnation(res.groupStatus().ViewId) != gv.incarnation || !memberIsOnlineInView(gv.view, res.status.ServerUuid) {
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "tablet %v is not an ONLINE member of the shard's replication group", alias)
+	}
+	if len(voters) > 0 && !policy.IsVoter(voters, res.tablet.Alias) {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "tablet %v is not a voter of the shard's replication group, and would not serve as its primary", alias)
 	}
 	if policy.PromotionRule(opts.durability, res.tablet) == promotionrule.MustNot {
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "tablet %v must not be promoted according to the durability policy", alias)
@@ -127,25 +131,25 @@ func groupPromotionEligibility(res *fullStatusResult, gv *groupReplicationView, 
 // requested one if NewPrimaryAlias is set, otherwise the group's own primary, otherwise
 // (when the group's primary is not eligible or its tablet is unreachable) the eligible
 // ONLINE member with the highest member weight.
-func chooseGroupReplicationPrimary(statuses map[string]*fullStatusResult, gv *groupReplicationView, prevPrimary *topodatapb.Tablet, opts EmergencyReparentOptions) (*fullStatusResult, error) {
+func chooseGroupReplicationPrimary(statuses map[string]*fullStatusResult, gv *groupReplicationView, voters []*topodatapb.TabletAlias, prevPrimary *topodatapb.Tablet, opts EmergencyReparentOptions) (*fullStatusResult, error) {
 	if opts.NewPrimaryAlias != nil {
 		requested, ok := statuses[topoproto.TabletAliasString(opts.NewPrimaryAlias)]
 		if !ok {
 			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "requested primary %v is not a tablet of the shard, or is ignored",
 				topoproto.TabletAliasString(opts.NewPrimaryAlias))
 		}
-		if err := groupPromotionEligibility(requested, gv, prevPrimary, opts); err != nil {
+		if err := groupPromotionEligibility(requested, gv, voters, prevPrimary, opts); err != nil {
 			return nil, vterrors.Wrapf(err, "requested primary %v cannot be promoted", topoproto.TabletAliasString(opts.NewPrimaryAlias))
 		}
 		return requested, nil
 	}
-	if gv.primary != nil && groupPromotionEligibility(gv.primary, gv, prevPrimary, opts) == nil {
+	if gv.primary != nil && groupPromotionEligibility(gv.primary, gv, voters, prevPrimary, opts) == nil {
 		return gv.primary, nil
 	}
 
 	var candidates []*fullStatusResult
 	for _, res := range statuses {
-		if groupPromotionEligibility(res, gv, prevPrimary, opts) == nil {
+		if groupPromotionEligibility(res, gv, voters, prevPrimary, opts) == nil {
 			candidates = append(candidates, res)
 		}
 	}
@@ -247,7 +251,7 @@ func (erp *EmergencyReparenter) reparentShardLockedGroupReplication(ctx context.
 	if err != nil {
 		return err
 	}
-	newPrimary, err := chooseGroupReplicationPrimary(statuses, gv, prevPrimary, opts)
+	newPrimary, err := chooseGroupReplicationPrimary(statuses, gv, ev.ShardInfo.GroupReplicationVoters, prevPrimary, opts)
 	if err != nil {
 		return err
 	}

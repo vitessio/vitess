@@ -415,3 +415,43 @@ func TestEmergencyReparentGroupReplicationRepointsNonVoters(t *testing.T) {
 	assert.Equal(t, alias200, c.tablet(alias101).source)
 	assert.False(t, c.tablet(alias101).member)
 }
+
+// TestEmergencyReparentGroupReplicationPromotesOnlyVoters checks that ERS makes only a listed voter the
+// shard's primary: a tablet that is not one does not serve as PRIMARY (the tablet's serving rule), so ERS
+// would report success while nothing serves. When the group elected a member that is not a voter, ERS
+// moves the group's primary to an eligible voter; a requested primary that is not a voter is refused
+// before anything changes.
+func TestEmergencyReparentGroupReplicationPromotesOnlyVoters(t *testing.T) {
+	newShard := func(t *testing.T) (*fakeGRCluster, *topo.Server) {
+		c, ts := newFakeGRCluster(t, "group_replication",
+			fakeGRTabletSpec{cell: "zone1", uid: 100, tabletType: topodatapb.TabletType_PRIMARY},
+			fakeGRTabletSpec{cell: "zone1", uid: 101, tabletType: topodatapb.TabletType_REPLICA},
+			fakeGRTabletSpec{cell: "zone2", uid: 200, tabletType: topodatapb.TabletType_REPLICA},
+		)
+		c.formGroup(t, "group_replication")
+		// zone1-101 completed a join after the voter list dropped it, and the group elected it.
+		c.setVoters(t, aliasP, alias200)
+		c.groupPrimary = alias101
+		return c, ts
+	}
+	t.Run("the group's primary is not a voter", func(t *testing.T) {
+		c, ts := newShard(t)
+		erp := NewEmergencyReparenter(ts, c, logutil.NewMemoryLogger())
+		ev, err := erp.ReparentShard(t.Context(), "ks", "-", EmergencyReparentOptions{WaitReplicasTimeout: 30 * time.Second})
+		require.NoError(t, err)
+		assert.Contains(t, []string{aliasP, alias200}, topoproto.TabletAliasString(ev.NewPrimary.Alias))
+		assert.NotContains(t, callsWithPrefix(c.mutatingCalls(), "PromoteReplica"), "PromoteReplica("+alias101+")")
+	})
+	t.Run("a requested primary that is not a voter", func(t *testing.T) {
+		c, ts := newShard(t)
+		erp := NewEmergencyReparenter(ts, c, logutil.NewMemoryLogger())
+		_, err := erp.ReparentShard(t.Context(), "ks", "-", EmergencyReparentOptions{
+			NewPrimaryAlias:     mustAlias(t, alias101),
+			WaitReplicasTimeout: 30 * time.Second,
+		})
+		require.Error(t, err)
+		assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+		require.ErrorContains(t, err, "not a voter")
+		assert.Empty(t, c.mutatingCalls())
+	})
+}

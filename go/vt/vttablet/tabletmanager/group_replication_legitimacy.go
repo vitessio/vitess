@@ -156,6 +156,8 @@ type shardGroupRecord struct {
 // voter of the shard record.
 func (tm *TabletManager) readShardGroupRecord(ctx context.Context, prev *shardGroupRecord) (*shardGroupRecord, error) {
 	tablet := tm.Tablet()
+	// A record that the shard watch delivers while this read is on its way is newer (storeRecord).
+	readGen := tm.groupReplicationTopo.readGeneration()
 	si, err := tm.TopoServer.GetShard(ctx, tablet.Keyspace, tablet.Shard)
 	if err != nil {
 		return nil, vterrors.Wrapf(err, "cannot read shard %v/%v", tablet.Keyspace, tablet.Shard)
@@ -168,10 +170,9 @@ func (tm *TabletManager) readShardGroupRecord(ctx context.Context, prev *shardGr
 		intent:           reparentutil.CurrentGroupReplicationBootstrapIntent(si.Shard),
 		tablets:          make(map[string]*topodatapb.Tablet),
 	}
-	tm.groupReplicationTopo.setVoters(rec.voters)
 	if prev != nil && time.Since(prev.tabletsRead) < groupReplicationTabletsCacheTTL && tm.identifiesVoters(rec.voters, prev.tablets) {
 		rec.tablets, rec.tabletsRead = prev.tablets, prev.tabletsRead
-		tm.groupReplicationTopo.setRecord(rec)
+		tm.groupReplicationTopo.storeRecord(rec, readGen)
 		return rec, nil
 	}
 	rec.tabletsRead = time.Now()
@@ -188,7 +189,7 @@ func (tm *TabletManager) readShardGroupRecord(ctx context.Context, prev *shardGr
 			rec.tablets[alias] = ti.Tablet
 		}
 	}
-	tm.groupReplicationTopo.setRecord(rec)
+	tm.groupReplicationTopo.storeRecord(rec, readGen)
 	return rec, nil
 }
 
@@ -393,19 +394,34 @@ func (tm *TabletManager) legitimateGroupActiveElsewhere(ctx context.Context, rec
 	return true
 }
 
-// checkLegitimateGroupToJoin returns an error unless another tablet of the shard reports an
-// active member of the shard's legitimate group. Joins that the tablet starts on its own, at
-// startup and in the sync loop, call it first.
+// checkLegitimateGroupToJoin returns an error unless the shard record lists the incarnation of the
+// shard's group and another tablet of the shard reports an active member of that group. Joins that
+// the tablet starts on its own, at startup and in the sync loop, call it first.
+//
+// While the shard record lists no incarnation, every group counts as the shard's group, also the
+// group of a bootstrap whose incarnation is not recorded yet, and a group of one that a join formed
+// when the member it joined left (the TLA+ model's init_orc_lost): a join on the tablet's own could
+// make such a group a majority of the voters, whose primary serves, and whose writes the incarnation
+// recorded later does not hold. The component that bootstraps the group records its incarnation and
+// then makes the voters join (VTOrc, the migration), or the voters join on their own once it is
+// recorded (PlannedReparentShard's initial promotion).
 func (tm *TabletManager) checkLegitimateGroupToJoin(ctx context.Context) error {
 	rec, err := tm.readShardGroupRecord(ctx, nil)
 	if err != nil {
 		return err
+	}
+	if rec.incarnation == "" {
+		return errNoRecordedIncarnationToJoin
 	}
 	if !tm.legitimateGroupActiveElsewhere(ctx, rec) {
 		return errNoLegitimateGroupToJoin
 	}
 	return nil
 }
+
+// errNoRecordedIncarnationToJoin is returned when the shard record lists no incarnation of the
+// shard's group (see checkLegitimateGroupToJoin).
+var errNoRecordedIncarnationToJoin = vterrors.New(vtrpcpb.Code_UNAVAILABLE, "the shard record lists no incarnation of the shard's replication group; not joining until the bootstrap of the group is recorded")
 
 // errNoLegitimateGroupToJoin is returned when no other tablet of the shard reports an active
 // member of the shard's legitimate group.
