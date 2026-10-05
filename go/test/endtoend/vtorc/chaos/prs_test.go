@@ -101,6 +101,33 @@ func (s *Scenario) setSourceDelay(n *Node, seconds int) {
 	s.Log.Add("fault", fmt.Sprintf("SOURCE_DELAY=%d on %s", seconds, n.Tablet.Alias))
 }
 
+// heldTx is a transaction held open on the primary through vtgate; it has inserted the row id.
+type heldTx struct {
+	*sql.Tx
+	db *sql.DB
+	id int64
+}
+
+// holdTransaction opens a transaction on the primary through vtgate, inserts a row and leaves it
+// open. While it is open, DemotePrimary waits for it (up to the shutdown grace period).
+func (s *Scenario) holdTransaction() *heldTx {
+	db, err := sql.Open("mysql", fmt.Sprintf("root@tcp(127.0.0.1:%d)/%s", s.CI.VtgateProcess.MySQLServerPort, keyspaceName))
+	if err != nil {
+		s.t.Fatal(err)
+	}
+	s.t.Cleanup(func() { _ = db.Close() })
+	tx, err := db.BeginTx(context.Background(), nil)
+	if err != nil {
+		s.t.Fatal(err)
+	}
+	id := s.W.next.Add(1)
+	if _, err := tx.Exec(fmt.Sprintf("insert into %s (id, worker, src) values (?, -3, @@global.server_uuid)", tableName), id); err != nil {
+		s.t.Fatal(err)
+	}
+	s.Log.Add("fault", fmt.Sprintf("transaction with id %d held open on the primary", id))
+	return &heldTx{Tx: tx, db: db, id: id}
+}
+
 // orcFixedPrimary reports the VTOrc log lines in which fixPrimary undid a demotion.
 func (s *Scenario) orcFixedPrimary() {
 	if l := s.GrepLogs("will fix primary to read-write", 5); l != "" {
@@ -131,20 +158,7 @@ func TestR1PRSUnderLoad(t *testing.T) {
 func TestR2PRSOutlivesShardLock(t *testing.T) {
 	runScenario(t, "R2-prs-outlives-shard-lock", Options{}, func(s *Scenario) {
 		cand := s.Replicas()[0]
-		db, err := sql.Open("mysql", fmt.Sprintf("root@tcp(127.0.0.1:%d)/%s", s.CI.VtgateProcess.MySQLServerPort, keyspaceName))
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer db.Close()
-		tx, err := db.BeginTx(context.Background(), nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-		id := s.W.next.Add(1)
-		if _, err := tx.Exec(fmt.Sprintf("insert into %s (id, worker, src) values (?, -3, @@global.server_uuid)", tableName), id); err != nil {
-			t.Fatal(err)
-		}
-		s.Log.Add("fault", fmt.Sprintf("transaction with id %d held open on the primary", id))
+		tx := s.holdTransaction()
 		s.MarkFault()
 		ch := s.startPRS(cand, "60s")
 		d, ok := s.WaitFor("demotion started (writes fail)", 30*time.Second, func() bool { return s.W.failing.Load() })
@@ -152,7 +166,7 @@ func TestR2PRSOutlivesShardLock(t *testing.T) {
 		s.setSourceDelay(cand, 35)
 		cerr := tx.Commit()
 		s.Log.Add("fault", fmt.Sprintf("held transaction committed: err=%v", cerr))
-		s.R.outcome("held transaction id %d commit during the demotion: err=%v", id, cerr)
+		s.R.outcome("held transaction id %d commit during the demotion: err=%v", tx.id, cerr)
 		r := <-ch
 		s.reportPRS(r)
 		s.orcFixedPrimary()
@@ -162,8 +176,8 @@ func TestR2PRSOutlivesShardLock(t *testing.T) {
 		s.Sleep(20*time.Second, "recovery")
 		if p := s.topoPrimary(); p != nil {
 			ids, err := p.ids()
-			_, present := ids[id]
-			s.R.outcome("held transaction id %d on the final primary %s: %v (err=%v)", id, p.Tablet.Alias, present, err)
+			_, present := ids[tx.id]
+			s.R.outcome("held transaction id %d on the final primary %s: %v (err=%v)", tx.id, p.Tablet.Alias, present, err)
 		}
 	})
 }
@@ -186,20 +200,22 @@ func TestR2bPRSCatchupOutlivesShardLock(t *testing.T) {
 	})
 }
 
-// R3: the response to PRS's DemotePrimary is lost: vtctld is cut off from the primary as soon as
-// its demotion is under way (super_read_only on), so the tablet finishes demoting itself but PRS
-// sees DemotePrimary time out. PRS returns that error without UndoDemotePrimary, which it only runs
-// when the wait for the primary-elect fails, so the primary stays demoted until VTOrc's fixPrimary
-// undoes it.
+// R3: the response to PRS's DemotePrimary is lost. A client holds a transaction open on the
+// primary, so DemotePrimary waits for it (the shutdown grace period) after it stopped serving.
+// While it waits, vtctld is cut off from the primary, and the transaction is rolled back: the
+// tablet finishes demoting itself, but its response never reaches PRS, which sees DemotePrimary
+// time out. PRS returns that error without UndoDemotePrimary, which it only runs when the wait for
+// the primary-elect fails, so the primary stays demoted until VTOrc's fixPrimary undoes it.
 func TestR3PRSDemoteResponseLost(t *testing.T) {
 	runScenario(t, "R3-prs-demote-response-lost", Options{WriteProbe: true}, func(s *Scenario) {
 		cand := s.Replicas()[0]
+		tx := s.holdTransaction()
 		ch := s.startPRS(cand, "15s")
-		_, ok := s.WaitFor("old primary demoted", 40*time.Second, func() bool { return s.superReadOnly(s.OldPrimary) })
-		if ok {
-			s.MarkFault()
-			s.Block("infra", s.OldPrimary.Group)
-		}
+		d, ok := s.WaitFor("demotion started (writes fail)", 30*time.Second, func() bool { return s.W.failing.Load() })
+		s.R.timing("writes started failing after %.1fs (seen=%v)", d.Seconds(), ok)
+		s.MarkFault()
+		s.Block("infra", s.OldPrimary.Group)
+		s.R.outcome("held transaction rolled back during the demotion: err=%v", tx.Rollback())
 		r := <-ch
 		s.reportPRS(r)
 		s.Sleep(20*time.Second, "VTOrc reacts while vtctld cannot reach the old primary")
