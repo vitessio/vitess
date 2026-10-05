@@ -51,17 +51,9 @@ import (
 const relayLogSafeCnf = "# S13: keep unapplied relay log events across restarts\nrelay_log_recovery = 0\nsync_relay_log = 1\n"
 
 // useRelayLogSafeConfig makes the mysqlds of the next cluster run with relay_log_recovery=0 and
-// sync_relay_log=1.
+// sync_relay_log=1, after the profile's own settings (see NewChaos).
 func useRelayLogSafeConfig(t *testing.T) {
-	if os.Getenv("EXTRA_MY_CNF") != "" {
-		return
-	}
-	f := path.Join(os.TempDir(), fmt.Sprintf("s13-relaylog-safe-%d.cnf", os.Getpid()))
-	if err := os.WriteFile(f, []byte(relayLogSafeCnf), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { os.Remove(f) })
-	t.Setenv("EXTRA_MY_CNF", f)
+	t.Setenv("CHAOS_RELAY_LOG_SAFE", "1")
 }
 
 // checkRelayLogConfig reports the relay log settings of every mysqld.
@@ -269,23 +261,20 @@ func (s *Scenario) tearRelayLog(n *Node, executed string, pick func(unapplied []
 			res.DroppedIDs = append(res.DroppedIDs, tr.IDs...)
 		}
 	}
-	onBoundary := false
-	for _, e := range evs {
-		if e.Pos == offset {
-			onBoundary = true
-		}
-	}
 	if err := os.Truncate(file, offset); err != nil {
 		return nil, err
 	}
+	// mysqlbinlog decides whether the cut is inside an event. The decoded positions cannot: with
+	// binlog_transaction_compression, the rows events are inside a Transaction_payload event and
+	// mysqlbinlog prints them at the payload's position, so they look like empty events.
 	_, _, stderr, _ := parseRelayLog(file)
-	res.Verified = !onBoundary && strings.Contains(stderr, "Could not read entry")
+	res.Verified = strings.Contains(stderr, "truncated in the middle of event") || strings.Contains(stderr, "Could not read entry")
 	s.Log.Add("fault", fmt.Sprintf("TORE relay log %s of %s at offset %d (size was %d) inside %s event [%d,%d) of %s; %d later transactions dropped; mysqlbinlog: %s",
 		path.Base(file), n.Tablet.Alias, offset, res.OldSize, rows.Type, rows.Pos, rows.End, target.GTID, len(res.Dropped), strings.TrimSpace(stderr)))
 	s.R.outcome("tear: %s cut at %d/%d inside %s [%d,%d) of trx %s (%d/%d unapplied); %d transactions after it dropped; verified torn=%v (mysqlbinlog: %q)",
 		path.Base(file), offset, res.OldSize, rows.Type, rows.Pos, rows.End, target.GTID, i+1, len(unapplied), len(res.Dropped), res.Verified, strings.TrimSpace(stderr))
 	if !res.Verified {
-		s.R.violation("HARNESS: tear not verified (on boundary=%v, mysqlbinlog stderr %q)", onBoundary, stderr)
+		s.R.violation("HARNESS: tear not verified (mysqlbinlog stderr %q)", stderr)
 	}
 	return res, nil
 }

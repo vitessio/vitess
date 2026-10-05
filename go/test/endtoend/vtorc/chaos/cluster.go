@@ -237,12 +237,26 @@ func NewChaos(t *testing.T, name string, opts Options) *Chaos {
 		ci.VtTabletExtraArgs = append(ci.VtTabletExtraArgs, "--heartbeat-enable", "--heartbeat-interval", "1s")
 	}
 	ci.VtTabletExtraArgs = append(ci.VtTabletExtraArgs, prof.TabletExtraArgs...)
+	// mysqlctl reads EXTRA_MY_CNF, a colon-separated list of files appended to my.cnf in order
+	// (a later setting wins), from its environment; the restarts of the fault injection inherit
+	// it too. The profile's settings come first, so that a scenario's own file (S13) and
+	// CHAOS_RELAY_LOG_SAFE override them.
+	var cnfs []string
 	if prof.ExtraMyCnf != "" {
-		// mysqlctl reads EXTRA_MY_CNF from its environment; the restarts of the fault
-		// injection inherit it too.
 		cnf := path.Join(c.wrapDir, "profile.cnf")
 		require.NoError(t, os.WriteFile(cnf, []byte(prof.ExtraMyCnf), 0o644))
-		t.Setenv("EXTRA_MY_CNF", cnf)
+		cnfs = append(cnfs, cnf)
+	}
+	if extra := os.Getenv("EXTRA_MY_CNF"); extra != "" {
+		cnfs = append(cnfs, extra)
+	}
+	if os.Getenv("CHAOS_RELAY_LOG_SAFE") == "1" {
+		cnf := path.Join(c.wrapDir, "relay-log-safe.cnf")
+		require.NoError(t, os.WriteFile(cnf, []byte(relayLogSafeCnf), 0o644))
+		cnfs = append(cnfs, cnf)
+	}
+	if len(cnfs) > 0 {
+		t.Setenv("EXTRA_MY_CNF", strings.Join(cnfs, ":"))
 	}
 	keyspace := &cluster.Keyspace{Name: keyspaceName, DurabilityPolicy: prof.Durability}
 	shard := cluster.Shard{Name: shardName}
