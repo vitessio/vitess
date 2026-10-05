@@ -2602,24 +2602,21 @@ func (api *API) ValidateVersionShard(ctx context.Context, req *vtadminpb.Validat
 	return res, nil
 }
 
-// isReadOnlySelect reports whether stmt is a SELECT that cannot change anything
-// when it runs: one that does not write its result with INTO (such as to a file on
-// the database host with INTO OUTFILE), consume sequence values with SELECT NEXT ...
-// VALUES, or acquire or release advisory locks. VTGate treats the last two the same
-// way for VEXPLAIN MYSQLPLAN.
-func isReadOnlySelect(stmt sqlparser.Statement) bool {
-	if _, ok := stmt.(sqlparser.SelectStatement); !ok {
-		return false
-	}
-	readOnly := true
+// hasSideEffectsBeyondTables reports whether stmt does something that a read-only
+// transaction does not prevent: write its result to a file on the database host
+// with SELECT ... INTO OUTFILE or DUMPFILE, consume sequence values with SELECT NEXT
+// ... VALUES (which vttablet runs in a transaction of its own), or acquire or
+// release advisory locks.
+func hasSideEffectsBeyondTables(stmt sqlparser.Statement) bool {
+	found := false
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
 		switch node.(type) {
 		case *sqlparser.SelectInto, *sqlparser.Nextval, *sqlparser.LockingFunc:
-			readOnly = false
+			found = true
 		}
-		return readOnly, nil
+		return !found, nil
 	}, stmt)
-	return readOnly
+	return found
 }
 
 // VExplain is part of the vtadminpb.VTAdminServer interface.
@@ -2668,11 +2665,11 @@ func (api *API) VExplain(ctx context.Context, req *vtadminpb.VExplainRequest) (*
 	}
 
 	// VExplain is authorized as a read, but VEXPLAIN QUERIES, ALL and TRACE run
-	// the statement they explain. Only accept a statement that cannot change
-	// anything, whatever the VEXPLAIN type, so that VExplain cannot modify data or
-	// server state.
-	if !isReadOnlySelect(vexplainStmt.Statement) {
-		return nil, fmt.Errorf("%w: VExplain only explains SELECT statements that cannot change anything", errors.ErrInvalidRequest)
+	// the statement they explain. The VTGate proxy runs those in a read-only
+	// transaction, which keeps them from changing any table; refuse the side
+	// effects that a read-only transaction does not prevent.
+	if hasSideEffectsBeyondTables(vexplainStmt.Statement) {
+		return nil, fmt.Errorf("%w: VExplain does not run statements with INTO, sequence next-values or advisory lock functions", errors.ErrInvalidRequest)
 	}
 
 	// Canonicalize the SQL using the AST, to prevent use of raw user input.

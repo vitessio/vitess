@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"fmt"
 	"strings"
 	"sync"
@@ -189,9 +190,40 @@ func (vtgate *VTGateProxy) VExplain(ctx context.Context, query string, vexplainS
 
 	vtadminproto.AnnotateClusterSpan(vtgate.cluster, span)
 
-	rows, err := vtgate.conn.QueryContext(vtgate.getQueryContext(ctx), query)
-	if err != nil {
-		return nil, err
+	ctx = vtgate.getQueryContext(ctx)
+	var rows *sql.Rows
+	switch vexplainStmt.Type {
+	case sqlparser.QueriesVExplainType, sqlparser.AllVExplainType, sqlparser.TraceVExplainType:
+		// These types run the statement they explain. Run it in a read-only
+		// transaction, which is always rolled back, so that it cannot change any
+		// table, including through a stored function that runs with its definer's
+		// privileges. The transaction needs its own connection, so that the
+		// statements share one VTGate session.
+		conn, err := vtgate.conn.Conn(ctx)
+		if err != nil {
+			return nil, err
+		}
+		defer conn.Close()
+		if _, err := conn.ExecContext(ctx, "start transaction read only"); err != nil {
+			return nil, err
+		}
+		defer func() {
+			if _, err := conn.ExecContext(ctx, "rollback"); err != nil {
+				// Never return a connection that may still be in the transaction
+				// to the pool.
+				_ = conn.Raw(func(any) error { return driver.ErrBadConn })
+			}
+		}()
+		rows, err = conn.QueryContext(ctx, query)
+		if err != nil {
+			return nil, err
+		}
+	default:
+		var err error
+		rows, err = vtgate.conn.QueryContext(ctx, query)
+		if err != nil {
+			return nil, err
+		}
 	}
 	defer rows.Close()
 

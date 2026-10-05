@@ -17,6 +17,7 @@ limitations under the License.
 package vtsql
 
 import (
+	"database/sql"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -24,8 +25,11 @@ import (
 
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/grpcclient"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtadmin/vtsql/fakevtsql"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
@@ -78,4 +82,40 @@ func Test_getQueryContext(t *testing.T) {
 	assert.NotEqual(t, callerctx, outctx, "getQueryContext should override an existing callerid in the context")
 	assertEffectiveCaller(t, callerid.EffectiveCallerIDFromContext(outctx), "efuser", "vtadmin", "")
 	assertImmediateCaller(t, callerid.ImmediateCallerIDFromContext(outctx), "imuser")
+}
+
+// TestVExplainRunsExecutingTypesReadOnly checks that the VEXPLAIN types that run
+// the statement they explain (QUERIES, ALL and TRACE) run it on one connection
+// inside a read-only transaction that is then rolled back, so that it cannot
+// change any table, even through a stored function running with its definer's
+// privileges, while the types that do not run it use no transaction.
+func TestVExplainRunsExecutingTypesReadOnly(t *testing.T) {
+	parser := sqlparser.NewTestParser()
+	for _, tc := range []struct {
+		query string
+		want  []string
+	}{{
+		query: "vexplain all select * from customers",
+		want: []string{
+			"1: start transaction read only",
+			"1: vexplain all select * from customers",
+			"1: rollback",
+		},
+	}, {
+		query: "vexplain mysqlplan select * from customers",
+		want:  []string{"1: vexplain mysqlplan select * from customers"},
+	}} {
+		t.Run(tc.query, func(t *testing.T) {
+			log := &fakevtsql.StatementLog{}
+			db := sql.OpenDB(&fakevtsql.Connector{Log: log})
+			t.Cleanup(func() { db.Close() })
+			proxy := &VTGateProxy{conn: db, cluster: &vtadminpb.Cluster{Id: "c0", Name: "cluster0"}}
+
+			stmt, err := parser.Parse(tc.query)
+			require.NoError(t, err)
+			_, err = proxy.VExplain(t.Context(), tc.query, stmt.(*sqlparser.VExplainStmt))
+			require.NoError(t, err)
+			require.Equal(t, tc.want, log.Statements())
+		})
+	}
 }

@@ -5159,33 +5159,6 @@ func TestVExplain(t *testing.T) {
 			expectedError: vtadminerrors.ErrInvalidRequest,
 		},
 		{
-			name: "returns an error if the statement asks VTGate to run DML",
-			req: &vtadminpb.VExplainRequest{
-				ClusterId: "c0",
-				Keyspace:  "commerce",
-				Sql:       "vexplain /*vt+ EXECUTE_DML_QUERIES */ queries delete from customers where id = 1",
-			},
-			expectedError: vtadminerrors.ErrInvalidRequest,
-		},
-		{
-			name: "returns an error if a VEXPLAIN TRACE would run DML",
-			req: &vtadminpb.VExplainRequest{
-				ClusterId: "c0",
-				Keyspace:  "commerce",
-				Sql:       "vexplain trace delete from customers where id = 1",
-			},
-			expectedError: vtadminerrors.ErrInvalidRequest,
-		},
-		{
-			name: "returns an error if the explained statement is not a SELECT",
-			req: &vtadminpb.VExplainRequest{
-				ClusterId: "c0",
-				Keyspace:  "commerce",
-				Sql:       "vexplain plan delete from customers where id = 1",
-			},
-			expectedError: vtadminerrors.ErrInvalidRequest,
-		},
-		{
 			name: "returns an error if the explained SELECT writes its result with INTO",
 			req: &vtadminpb.VExplainRequest{
 				ClusterId: "c0",
