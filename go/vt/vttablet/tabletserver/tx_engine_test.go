@@ -145,6 +145,122 @@ func TestTxEngineClose(t *testing.T) {
 	assert.EqualValues(t, 1, te.txPool.env.Stats().KillCounters.Counts()["ReservedConnection"])
 }
 
+// TestActiveCommits verifies that TxEngine can interrupt an active COMMIT during shutdown.
+func TestActiveCommits(t *testing.T) {
+	db := fakesqldb.New(t)
+	db.AddQueryPattern(".*", &sqltypes.Result{})
+	db.ResetQueryLog()
+	t.Cleanup(func() { db.Close() })
+
+	txEngine := setupTxEngine(db)
+	txEngine.AcceptReadWrite()
+	t.Cleanup(func() { txEngine.Close() })
+
+	ctx := t.Context()
+
+	commitStarted := make(chan struct{})
+	releaseCommit := make(chan struct{})
+
+	db.AddQuery("commit", &sqltypes.Result{})
+	db.SetBeforeFunc("commit", func() {
+		close(commitStarted)
+
+		// Block the commit so the active commit list has a real connection to terminate. This emulates
+		// the commit stuck on semi-sync in MySQL.
+		<-releaseCommit
+	})
+
+	txID, _, _, err := txEngine.Begin(ctx, 0, nil, &querypb.ExecuteOptions{})
+	require.NoError(t, err)
+
+	errc := make(chan error, 1)
+	go func() {
+		_, _, err := txEngine.Commit(ctx, txID)
+		errc <- err
+	}()
+
+	// Make sure the commit has started.
+	<-commitStarted
+
+	// Try to terminate active commits.
+	txEngine.TerminateActiveCommits()
+
+	// Allow the BeforeFunc to continue.
+	close(releaseCommit)
+
+	// We expect the commit to be terminated.
+	err = <-errc
+	require.ErrorContains(t, err, "QueryList.TerminateAll()")
+}
+
+// TestCommitRejectedByClusterActionRecordsKill verifies that COMMIT requests rejected
+// during shutdown are accounted as killed transactions rather than successful commits.
+func TestCommitRejectedByClusterActionRecordsKill(t *testing.T) {
+	db := fakesqldb.New(t)
+	db.AddQueryPattern(".*", &sqltypes.Result{})
+	t.Cleanup(func() { db.Close() })
+
+	txEngine := setupTxEngine(db)
+	txEngine.AcceptReadWrite()
+	t.Cleanup(func() { txEngine.Close() })
+
+	ctx := t.Context()
+
+	txID, _, _, err := txEngine.Begin(ctx, 0, nil, &querypb.ExecuteOptions{})
+	require.NoError(t, err)
+
+	txStats := txEngine.txPool.txStats.Counts()
+	initialCommits := txStats["TabletServerTest.commit"]
+	initialKills := txStats["TabletServerTest.kill"]
+
+	db.ResetQueryLog()
+
+	txEngine.SetClusterAction(ClusterActionInProgress)
+	txEngine.SetClusterAction(ClusterActionNoQueries)
+
+	_, _, err = txEngine.Commit(ctx, txID)
+	require.ErrorContains(t, err, vterrors.ShuttingDown)
+
+	require.NotContains(t, db.QueryLog(), "commit")
+
+	txStats = txEngine.txPool.txStats.Counts()
+	require.Equal(t, initialCommits, txStats["TabletServerTest.commit"])
+	require.Equal(t, initialKills+1, txStats["TabletServerTest.kill"])
+
+	_, err = txEngine.txPool.GetAndLock(ctx, txID, "after aborted commit")
+	require.ErrorContains(t, err, "kill")
+	require.NotContains(t, err.Error(), "transaction committed")
+}
+
+// TestAutocommitCommitAllowedDuringClusterAction verifies that a COMMIT for an autocommit
+// transaction succeeds during shutdown: every statement is already durably committed in
+// MySQL, so rejecting the RPC would invite the client to retry already-applied writes.
+func TestAutocommitCommitAllowedDuringClusterAction(t *testing.T) {
+	db := fakesqldb.New(t)
+	db.AddQueryPattern(".*", &sqltypes.Result{})
+	t.Cleanup(func() { db.Close() })
+
+	txEngine := setupTxEngine(db)
+	txEngine.AcceptReadWrite()
+	t.Cleanup(func() { txEngine.Close() })
+
+	ctx := t.Context()
+
+	txID, _, _, err := txEngine.Begin(ctx, 0, nil, &querypb.ExecuteOptions{
+		TransactionIsolation: querypb.ExecuteOptions_AUTOCOMMIT,
+	})
+	require.NoError(t, err)
+
+	initialKills := txEngine.txPool.txStats.Counts()["TabletServerTest.kill"]
+
+	txEngine.SetClusterAction(ClusterActionInProgress)
+	txEngine.SetClusterAction(ClusterActionNoQueries)
+
+	_, _, err = txEngine.Commit(ctx, txID)
+	require.NoError(t, err)
+	require.Equal(t, initialKills, txEngine.txPool.txStats.Counts()["TabletServerTest.kill"])
+}
+
 func TestTxEngineBegin(t *testing.T) {
 	ctx := t.Context()
 	db := setUpQueryExecutorTest(t)
