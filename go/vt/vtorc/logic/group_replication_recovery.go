@@ -60,6 +60,10 @@ const (
 	AdoptGroupReplicationBootstrapRecoveryName string = "AdoptGroupReplicationBootstrap"
 )
 
+// voterSelectionNow is the clock of the voter selection's read of the statuses, which the re-check
+// compares with VTOrc's sightings of the voters (recheckVoterChange). Tests set it.
+var voterSelectionNow = time.Now
+
 // groupVoterRecheckTimeout bounds the read of each tablet's status in the re-check right before a
 // voter write (recheckVoterChange): the statuses on which it decides must be fresh at the write.
 var groupVoterRecheckTimeout = 2 * time.Second
@@ -1072,7 +1076,7 @@ func updateGroupReplicationVoters(ctx context.Context, analysisEntry *inst.Detec
 		return false, topologyRecovery, err
 	}
 
-	selectedAt := time.Now()
+	selectedAt := voterSelectionNow()
 	statuses := readShardTabletStatuses(ctx, tabletInfos)
 	// Only the shard's legitimate group counts: a member of a group of another incarnation has
 	// no quorum and is no primary here, and the group primary holds a majority of the voters.
@@ -1298,7 +1302,13 @@ func recheckVoterChange(ctx context.Context, shardInfo *topo.ShardInfo, current,
 				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "voter %s, dropped as unreachable, answers again", alias)
 			}
 			// VTOrc's discovery may have reached it in between: it came back, and may have failed again.
-			if instance, _, err := inst.ReadInstance(sel.tablet.Alias); err == nil && instance != nil && instance.SecondsSinceLastSeen.Valid &&
+			// Fail closed when that cannot be told; a voter that VTOrc never discovered was not reached.
+			instance, _, err := inst.ReadInstance(sel.tablet.Alias)
+			if err != nil {
+				return vterrors.Wrapf(vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, err.Error()),
+					"cannot tell whether voter %s, dropped as unreachable, was reached since the selection", alias)
+			}
+			if instance != nil && instance.SecondsSinceLastSeen.Valid &&
 				float64(instance.SecondsSinceLastSeen.Int64)+1 < time.Since(selectedAt).Seconds() {
 				// The age has a granularity of a second: a sighting within the second after the
 				// selection is not told apart from one right before it, and the read above covers now.

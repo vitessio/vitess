@@ -32,6 +32,7 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtorc/config"
+	"vitess.io/vitess/go/vt/vtorc/db"
 	"vitess.io/vitess/go/vt/vtorc/inst"
 
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
@@ -74,8 +75,10 @@ func TestUpdateGroupReplicationVotersRechecksBeforeWrite(t *testing.T) {
 		selected, recheck map[uint32]*replicationdatapb.FullStatus
 		// seenAfterSelection makes VTOrc's discovery reach zone3-300 after the selection read.
 		seenAfterSelection bool
-		wantVoters         []string
-		wantErr            string
+		// instancesUnreadable makes VTOrc's backend fail its reads of instances at the re-check.
+		instancesUnreadable bool
+		wantVoters          []string
+		wantErr             string
 	}{{
 		name:     "the group died before the write",
 		third:    voter3,
@@ -118,6 +121,14 @@ func TestUpdateGroupReplicationVotersRechecksBeforeWrite(t *testing.T) {
 		seenAfterSelection: true,
 		wantErr:            "was reached",
 	}, {
+		// Whether VTOrc reached the voter since the selection cannot be told: the write is refused.
+		name:                "VTOrc's backend fails to tell whether the voter dropped as unreachable was reached since",
+		third:               voter3,
+		selected:            map[uint32]*replicationdatapb.FullStatus{101: online(primary), 200: online(voter2), 301: notMemberStatus(spare3)},
+		recheck:             map[uint32]*replicationdatapb.FullStatus{101: online(primary), 200: online(voter2), 301: notMemberStatus(spare3)},
+		instancesUnreadable: true,
+		wantErr:             "cannot tell whether voter zone3-0000000300",
+	}, {
 		name:     "a voter dropped as no longer eligible has a transaction that the kept voters lack",
 		third:    rdonly3,
 		selected: map[uint32]*replicationdatapb.FullStatus{101: online(primary), 200: online(voter2), 300: withPosition(notMemberStatus(rdonly3), "1-10"), 301: notMemberStatus(spare3)},
@@ -147,6 +158,15 @@ func TestUpdateGroupReplicationVotersRechecksBeforeWrite(t *testing.T) {
 			mockTMC := groupReplicationRecoveryTestWithPolicy(t, policy.DurabilityGroupReplicationCrossCell, primary, voter2, tt.third, spare3)
 			setVoters(t, primary, voter2, voter3)
 			setIncarnation(t, "")
+			if tt.seenAfterSelection {
+				// The selection read the statuses 3s ago, as VTOrc's clock tells.
+				prevNow := voterSelectionNow
+				voterSelectionNow = func() time.Time { return time.Now().Add(-3 * time.Second) }
+				t.Cleanup(func() { voterSelectionNow = prevNow })
+			}
+			if tt.instancesUnreadable {
+				t.Cleanup(db.ClearVTOrcDatabase)
+			}
 			for _, tablet := range []*topodatapb.Tablet{primary, voter2, tt.third, spare3} {
 				calls := 0
 				mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(tablet)).DoAndReturn(
@@ -156,11 +176,12 @@ func TestUpdateGroupReplicationVotersRechecksBeforeWrite(t *testing.T) {
 						if calls == 1 {
 							statuses = tt.selected
 							if tt.seenAfterSelection && tablet.Alias.Uid == 301 {
-								// VTOrc's discovery reaches zone3-300 while the recovery runs, more than
-								// a second after the selection read.
-								time.Sleep(2100 * time.Millisecond)
+								// VTOrc's discovery reaches zone3-300 while the recovery runs.
 								assert.NoError(t, inst.WriteInstance(&inst.Instance{InstanceAlias: voter3.Alias, Hostname: voter3.MysqlHostname, Port: int(voter3.MysqlPort)}, true, nil))
 							}
+						} else if tt.instancesUnreadable && tablet.Alias.Uid == 301 {
+							_, err := db.ExecVTOrc("DROP TABLE database_instance")
+							assert.NoError(t, err)
 						}
 						if status, ok := statuses[tablet.Alias.Uid]; ok {
 							return status, nil
