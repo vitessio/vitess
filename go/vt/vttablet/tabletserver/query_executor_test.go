@@ -1311,6 +1311,21 @@ func TestQueryExecutorTableAclPassthroughDenied(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, calledBefore+1, db.GetQueryCalledNum(query), "the statement must reach the backend")
 	})
+
+	// A plan checks every table against the configuration it was built with,
+	// like the tables it names in plan.Authorized; a reload clears the plan
+	// cache instead. So a statement planned under the "%" group still runs
+	// after a reload that removed it, rather than mix the two configurations.
+	t.Run("the group covering every table is resolved when the plan is built", func(t *testing.T) {
+		useAllTablesConfig(t)
+		const query = "do (select email from test_table where pk = 3 limit 1)"
+		tsv := newServer(t, enableStrictTableACL)
+		qre := newTestQueryExecutor(adminCtx, tsv, query, 0)
+		require.True(t, qre.plan.TablesUndetermined)
+		require.NoError(t, tableacl.InitFromProto(config))
+		_, err := qre.Execute()
+		require.NoError(t, err, "the plan must be checked against the configuration it was built with")
+	})
 }
 
 // TestQueryExecutorTableAclCTEBypass guards against GHSA-mv22-c3rp-c6m4: a

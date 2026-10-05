@@ -986,7 +986,7 @@ func (qre *QueryExecutor) checkAccess(authorized *tableacl.ACLResult, tableName 
 // caller read. Such a caller may run the statement whatever it touches. Any
 // other caller is denied under strict table ACL.
 func (qre *QueryExecutor) checkUndeterminedTableAccess(callerID *querypb.VTGateCallerID) error {
-	authorized := tableacl.AuthorizedForAllTables()
+	authorized := qre.plan.AuthorizedUndetermined
 	var aclState acl.ACLState
 	defer func() {
 		// There is no table to name; label the denial so operators can tell
