@@ -61,6 +61,9 @@ func (tm *TabletManager) StartGroupReplication(ctx context.Context, req *tabletm
 	if err := checkGroupReplicationEnabled(); err != nil {
 		return nil, err
 	}
+	if !bootstrap {
+		tm.refreshActiveGroupSeeds(ctx)
+	}
 	if err := tm.lock(ctx); err != nil {
 		return nil, err
 	}
@@ -96,6 +99,26 @@ func (tm *TabletManager) StartGroupReplication(ctx context.Context, req *tabletm
 		return nil, err
 	}
 	return tm.waitForGroupMemberOnline(ctx)
+}
+
+// refreshActiveGroupSeeds reads which peers are active members of the shard's group, before a join
+// that the StartGroupReplication RPC requests, so that MySQL contacts them first (see preferSeeds),
+// as it does for the tablet's own joins, which check that first (checkLegitimateGroupToJoin). Right
+// after a bootstrap, that is the bootstrapped member. The sorted seeds otherwise put first whichever
+// peer's address sorts first, which may be a member whose own START is stuck: MySQL then waited for
+// its group communication engine for 30s before it tried the next seed (the G12 chaos run). Peers
+// that are not active members come after the active ones; none is left out, since the read may miss
+// a member that is active. The read does not hold the action lock.
+func (tm *TabletManager) refreshActiveGroupSeeds(ctx context.Context) {
+	rec, err := tm.readShardGroupRecord(ctx, tm.groupReplicationTopo.lastRecord())
+	if err != nil {
+		log.Warn("Group replication: cannot read the shard record, the join contacts its seeds in their sorted order", slog.Any("error", err))
+		return
+	}
+	if !tm.legitimateGroupActiveElsewhere(ctx, rec) {
+		// No peer was seen active: forget the peers that were, a while ago.
+		tm.groupReplicationPeers.setActiveSeeds(nil)
+	}
 }
 
 // StopGroupReplication makes the tablet's MySQL leave its shard's replication group. MySQL
