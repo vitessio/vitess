@@ -26,6 +26,7 @@
         - [Preserve Materialize target data on cancel by default](#vreplication-materialize-cancel-data-protection)
         - [Online DDL migrations are no longer failed by recoverable vreplication errors](#onlineddl-vrepl-auto-resume)
         - [VStream: `before_data_columns` bitmap for partial before images](#vstream-before-data-columns)
+        - [VStream: client-supplied `TableLastPK` values are validated](#vstream-lastpk-validation)
     - **[VTGate](#minor-changes-vtgate)**
         - [Ingress bytes in query LogStats](#vtgate-logstats-ingress-bytes)
         - [New controls for cross-keyspace reads](#vtgate-cross-keyspace-reads)
@@ -261,6 +262,20 @@ When MySQL runs with `binlog_row_image=NOBLOB`, it omits BLOB/TEXT columns that 
 `RowChange` now has an additional `before_data_columns` bitmap, set only when the before image is partial (and `--vreplication-experimental-flags` allows NOBLOB row images, which is the default). A bit is set for every column that is present in the before image, in the order of the columns emitted by the stream's filter (after projection). Note that the existing `data_columns` bitmap for the after image remains in the source table's column order for compatibility with existing consumers; aligning the two is tracked in [#21075](https://github.com/vitessio/vitess/issues/21075). The field is additive: VReplication ignores it and consumers that do not know about it are unaffected.
 
 See [#21065](https://github.com/vitessio/vitess/issues/21065) for details.
+
+#### <a id="vstream-lastpk-validation"/>VStream: client-supplied `TableLastPK` values are validated</a>
+
+A VStream request can include a `TableLastPK` for each table, to resume that table's copy phase from a given primary key. vttablet wrote these values into the copy-phase snapshot query using the column types the client declared, and wrote numeric values without quoting. A VStream client could therefore inject SQL into that query. See [GHSA-73pp-99vw-h5g8](https://github.com/vitessio/vitess/security/advisories/GHSA-73pp-99vw-h5g8).
+
+vttablet now checks each value against the table's own primary key column before it builds the query:
+
+- The value must be valid for the column's type.
+- The declared type and the column type must agree on whether the value is quoted. For example, a numeric type declared for a `VARCHAR` column is rejected.
+- A value for a numeric column must be a plain numeric literal. `NaN`, `Inf`, and values with surrounding whitespace are rejected.
+
+`NULL` values are accepted. A request with a value that fails these checks is rejected with `INVALID_ARGUMENT` before the query reaches MySQL. Clients that resume from the `lastpk` in the VGTID events a VStream sent them are unaffected. Clients that build `TableLastPK` values themselves must declare field types that match the table's primary key columns.
+
+See [#21377](https://github.com/vitessio/vitess/pull/21377) for details.
 
 ### <a id="minor-changes-vtgate"/>VTGate</a>
 
