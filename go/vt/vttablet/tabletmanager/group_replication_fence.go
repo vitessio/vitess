@@ -311,6 +311,12 @@ func (tm *TabletManager) groupReplicationFenceReason(status *replicationdatapb.G
 	if rec == nil || len(rec.voters) == 0 || !tm.cachedPolicyIsGroupReplication(rec) {
 		return ""
 	}
+	// Only a voter takes writes (see groupReplicationServingReason): a primary that the voter list
+	// dropped is fenced as soon as the tablet reads the list (the shard watch), not on its next
+	// decision. Not while the tablet bootstraps a group or pauses: those end with a decision.
+	if !policy.IsVoter(rec.voters, tm.tabletAlias) && tm.groupReplicationFence.bootstraps.Load() == 0 && !tm.tmState.servingPaused() {
+		return groupReplicationNotVoter
+	}
 	if !viewKnown {
 		if tm.groupReplicationFence.bootstraps.Load() > 0 || tm.tmState.servingPaused() {
 			return ""

@@ -154,3 +154,40 @@ func TestGroupReplicationLeaveAsNonVoterReadsVotersFresh(t *testing.T) {
 	_, stops, _ := fmd.GroupReplicationCalls()
 	assert.Zero(t, stops, "a tablet that VTOrc gave a seat stays in the group")
 }
+
+// TestGroupReplicationVoterListDropFencesServingPrimary reproduces the TLA+ model's
+// voters_split_nonvoter trace on the tablet: the primary decided to serve while it was a voter, and a
+// voter list written later drops it. The serving decision is not taken again by itself: the tablet
+// reads the new list from its shard watch, and the fence check makes MySQL read-only and stops serving
+// right away, as for a lost voter majority.
+func TestGroupReplicationVoterListDropFencesServingPrimary(t *testing.T) {
+	withGroupReplication(t)
+	ctx := t.Context()
+	tm, fmd, _, ts := newLegitimacyTestTM(t)
+	fmd.SetGroupReplicationStatus(nonVoterView(1))
+	setTabletType(t, tm, topodatapb.TabletType_PRIMARY)
+	s := newGroupReplicationSync(tm)
+	s.reconcile(ctx)
+	qsc := tm.QueryServiceControl.(*tabletservermock.Controller)
+	require.True(t, qsc.IsServing())
+	require.False(t, fmd.SuperReadOnly.Load())
+
+	// A voter list that drops tablet 1 is written; the tablet learns it from its shard watch.
+	setGroupReplicationVoters(t, ts, 2, 3)
+	assert.Eventually(t, func() bool {
+		s.checkFence(ctx)
+		return fmd.SuperReadOnly.Load()
+	}, 30*time.Second, 50*time.Millisecond, "MySQL must be fenced")
+	assert.Eventually(t, func() bool { return !qsc.IsServing() }, 30*time.Second, 10*time.Millisecond)
+	reason, _ := tm.tmState.GroupReplicationNotServingState()
+	assert.Equal(t, groupReplicationNotVoter, reason)
+}
+
+// TestMemberMayLeave checks which members leave their group when their tablet is not a voter: an
+// active member that is not the group primary, when its group keeps a majority of its members
+// without it. The group primary stays, also before its tablet became PRIMARY.
+func TestMemberMayLeave(t *testing.T) {
+	assert.True(t, memberMayLeave(nonVoterView(2)))
+	assert.False(t, memberMayLeave(nonVoterView(1)), "the group primary stays")
+	assert.False(t, memberMayLeave(groupStatus(testServerUUID(1), groupMember(testServerUUID(1), mysql.GroupMemberStateOffline, ""))), "not a member")
+}

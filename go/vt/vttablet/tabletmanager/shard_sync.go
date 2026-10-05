@@ -90,6 +90,11 @@ func (tm *TabletManager) shardSyncLoop(ctx context.Context, notifyChan <-chan st
 			log.Info("Change in shard record")
 
 			if event != nil {
+				if event.Err == nil && event.Value != nil {
+					// The fence check decides on the voters and the incarnation that the tablet read
+					// last: a primary that the voter list dropped is fenced right away.
+					tm.noteShardGroupFields(event.Value)
+				}
 				if event.Err != nil {
 					// The watch failed. Stop it so we start a new one if needed.
 					log.Error(fmt.Sprintf("Shard watch failed: %v", event.Err))
