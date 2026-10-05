@@ -265,8 +265,73 @@ func (s *groupReplicationSync) reconcile(ctx context.Context) {
 		s.demoteStalePrimary(ctx, durability)
 		tablet = tm.Tablet()
 	}
+	if s.shouldLeaveAsNonVoter(ctx, status, durability, tablet) {
+		s.leaveAsNonVoter(ctx)
+		return
+	}
 	if s.shouldRejoin(ctx, status, durability, tablet) {
 		s.rejoin(ctx)
+	}
+}
+
+// shouldLeaveAsNonVoter returns whether MySQL is an active member of its group while the tablet is
+// not a listed voter, so that it must leave the group: such a member counts in the certification
+// majority of its view, which then need not hold a majority of the voters, and the group may elect it.
+// A join that started while the tablet was a voter completes after the list dropped it (MySQL
+// finishes a START whose client gave up), and VTOrc's GroupVotersOutOfDate only makes it leave on its
+// next pass. The group primary stays: VTOrc gives it a seat, and its tablet does not serve until then
+// (groupReplicationNotVoter). Nor does a member leave whose group would not keep a majority of its
+// members without it: MySQL's leave then waits for a majority that is not there. Nor a PRIMARY or
+// transitional tablet, nor one that takes a backup.
+func (s *groupReplicationSync) shouldLeaveAsNonVoter(ctx context.Context, status *replicationdatapb.GroupReplicationStatus, durability policy.Durabler, tablet *topodatapb.Tablet) bool {
+	if !policy.IsGroupReplication(durability) || !memberMayLeave(status) {
+		return false
+	}
+	if tablet.Type == topodatapb.TabletType_PRIMARY || isTransitionalTabletType(tablet.Type) || s.tm.IsBackupRunning() {
+		return false
+	}
+	voters, err := s.getVoters(ctx)
+	if err != nil || len(voters) == 0 {
+		return false
+	}
+	return !policy.IsVoter(voters, tablet.Alias)
+}
+
+// memberMayLeave returns whether MySQL is an active member of its group, not the group primary, and
+// the group keeps a majority of its members ONLINE without it.
+func memberMayLeave(status *replicationdatapb.GroupReplicationStatus) bool {
+	if !mysql.IsGroupMemberActive(status) || mysql.IsGroupPrimary(status) {
+		return false
+	}
+	onlineWithout := mysql.OnlineGroupMembers(status)
+	if status.GetMemberState() == mysql.GroupMemberStateOnline {
+		onlineWithout--
+	}
+	return 2*onlineWithout > len(status.GetMembers())
+}
+
+// leaveAsNonVoter makes MySQL leave its group, under the action lock, after it read MySQL's status and
+// the voter list again, fresh: a tablet that VTOrc gave a seat meanwhile stays, so that the leave does
+// not undo VTOrc's change. The tablet then replicates asynchronously, as every tablet that is not a
+// voter, once VTOrc points it at the primary (NotConnectedToPrimary).
+func (s *groupReplicationSync) leaveAsNonVoter(ctx context.Context) {
+	tm := s.tm
+	if !tm.actionSema.TryAcquire(1) {
+		return
+	}
+	defer tm.unlock()
+	status, err := tm.groupReplicationStatus(ctx)
+	if err != nil || !memberMayLeave(status) {
+		return
+	}
+	rec, err := s.getRecord(ctx, true)
+	if err != nil || len(rec.voters) == 0 || policy.IsVoter(rec.voters, tm.tabletAlias) {
+		return
+	}
+	log.Warn("Group replication sync: MySQL is an active member of its group, but the tablet is not a voter: leaving the group",
+		slog.String("group", status.GetGroupName()), slog.String("view_id", status.GetViewId()), slog.String("state", status.GetMemberState()))
+	if _, err := tm.stopGroupReplicationLocked(ctx); err != nil {
+		log.Error("Group replication sync: failed to leave the group as a tablet that is not a voter", slog.Any("error", err))
 	}
 }
 

@@ -935,7 +935,8 @@ func TestGroupReplicationSyncRejoinsOnlyVoters(t *testing.T) {
 	assert.False(t, fmd.GroupReplicationBootstrapped)
 	require.NoError(t, fmd.CheckSuperQueryList())
 
-	// A member that is no longer a voter stays in the group.
+	// A member that is no longer a voter leaves the group (TestGroupReplicationSyncLeavesAsNonVoter),
+	// when the group keeps a majority of its members without it: here it would not.
 	setGroupReplicationVoters(t, ts, 2)
 	s.votersRead = time.Time{}
 	s.reconcile(ctx)

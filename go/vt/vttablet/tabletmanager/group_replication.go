@@ -1055,6 +1055,8 @@ const (
 	// groupReplicationElectionInProgress: MySQL is the group's primary, but the primary election that
 	// made it the primary still runs. Group Replication sets super_read_only when it ends.
 	groupReplicationElectionInProgress = "MySQL's replication group is still electing it its primary"
+	// groupReplicationNotVoter: MySQL is the group's primary, but the tablet is not a listed voter.
+	groupReplicationNotVoter = "MySQL is the primary of its replication group, but its tablet is not a voter of the shard's group"
 	// groupReplicationDemotionRevertUndecided: DemotePrimary failed, and its revert could not decide
 	// whether the tablet may serve (revertDemotionWithGroupDecisionLocked).
 	groupReplicationDemotionRevertUndecided = "the revert of a failed demotion could not decide whether the tablet serves"
@@ -1096,6 +1098,13 @@ func (tm *TabletManager) groupReplicationServingReason(ctx context.Context, dura
 	}
 	if !mysql.IsGroupPrimary(status) {
 		return groupReplicationNotGroupPrimary
+	}
+	// Only a voter serves: a member that is not one counts in the certification majority of its view,
+	// which then need not hold a majority of the voters, and a bootstrap from the voters would lose
+	// what it acknowledged. VTOrc gives the group primary a seat (policy.SelectVoters), and the
+	// tablet serves then.
+	if !policy.IsVoter(rec.voters, tm.tabletAlias) {
+		return groupReplicationNotVoter
 	}
 	if rec.incarnation != "" && policy.GroupIncarnation(status.GetViewId()) != rec.incarnation {
 		return groupReplicationUnrecordedIncarnation
