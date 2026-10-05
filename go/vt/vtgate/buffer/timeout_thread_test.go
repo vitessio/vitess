@@ -24,10 +24,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestTimeoutThreadNotificationBeforeWaitIsNotLost tests that a request which
-// is buffered after the timeout thread found the queue empty, but before the
-// thread waits for the queue to become non-empty, wakes up the thread.
-// Otherwise, the request would stay buffered past its window.
+// TestTimeoutThreadNotificationBeforeWaitIsNotLost tests that a notification
+// that the queue became non-empty, sent before the timeout thread waits for it,
+// is not lost. This happens when a request is buffered after the thread found
+// the queue empty. If the notification were lost, the request would stay
+// buffered past its window.
 func TestTimeoutThreadNotificationBeforeWaitIsNotLost(t *testing.T) {
 	cfg := NewDefaultConfig()
 	cfg.Enabled = true
@@ -43,8 +44,23 @@ func TestTimeoutThreadNotificationBeforeWaitIsNotLost(t *testing.T) {
 	})
 
 	// The thread found the queue empty. Then a request is buffered and the
-	// queue becomes non-empty.
-	tt.notifyQueueNotEmpty()
+	// queue becomes non-empty. Then the queue becomes empty and non-empty again.
+	// The second notification finds the first one still pending and must not
+	// block, because it is sent while holding sb.mu.
+	notified := make(chan struct{})
+	go func() {
+		tt.notifyQueueNotEmpty()
+		tt.notifyQueueNotEmpty()
+		close(notified)
+	}()
+	require.Eventually(t, func() bool {
+		select {
+		case <-notified:
+			return true
+		default:
+			return false
+		}
+	}, 30*time.Second, 10*time.Millisecond, "notifyQueueNotEmpty() blocked")
 
 	// Now the thread waits for the queue to become non-empty.
 	stoppedCh := make(chan bool, 1)

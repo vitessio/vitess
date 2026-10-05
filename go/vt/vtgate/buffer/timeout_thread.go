@@ -60,6 +60,8 @@ func (tt *timeoutThread) stop() {
 	tt.wg.Wait()
 }
 
+// notifyQueueNotEmpty tells the thread that the queue state changed from empty
+// to non-empty. It is called while holding sb.mu and therefore never blocks.
 func (tt *timeoutThread) notifyQueueNotEmpty() {
 	select {
 	case tt.queueNotEmpty <- struct{}{}:
