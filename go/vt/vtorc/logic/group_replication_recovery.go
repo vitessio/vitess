@@ -60,6 +60,10 @@ const (
 	AdoptGroupReplicationBootstrapRecoveryName string = "AdoptGroupReplicationBootstrap"
 )
 
+// groupVoterRecheckTimeout bounds the read of each tablet's status in the re-check right before a
+// voter write (recheckVoterChange): the statuses on which it decides must be fresh at the write.
+var groupVoterRecheckTimeout = 2 * time.Second
+
 // groupReplicationCellTimeout bounds the read of the shard's tablet records in each cell, in the
 // group replication recoveries that can do with the tablets of the cells that answer. The topology
 // server of a cell that is cut off does not answer until the caller gives up: read under one
@@ -1210,7 +1214,11 @@ func updateGroupReplicationVoters(ctx context.Context, analysisEntry *inst.Detec
 func recheckVoterChange(ctx context.Context, shardInfo *topo.ShardInfo, current, proposed []*topodatapb.TabletAlias, tabletInfos []*topo.TabletInfo,
 	selected []*shardTabletStatus, selectedAt time.Time,
 ) error {
-	fresh := readShardTabletStatuses(ctx, tabletInfos)
+	// A tablet that does not answer within groupVoterRecheckTimeout counts as unreachable: the
+	// statuses of the others must still be fresh at the write.
+	recheckCtx, cancel := context.WithTimeout(ctx, groupVoterRecheckTimeout)
+	fresh := readShardTabletStatuses(recheckCtx, tabletInfos)
+	cancel()
 	byAlias := make(map[string]*shardTabletStatus, len(fresh))
 	for _, st := range fresh {
 		byAlias[topoproto.TabletAliasString(st.tablet.Alias)] = st

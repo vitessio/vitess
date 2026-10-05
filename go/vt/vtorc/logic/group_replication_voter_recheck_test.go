@@ -19,6 +19,7 @@ package logic
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -245,4 +246,67 @@ func TestUpdateGroupReplicationVotersKeepsPrimaryElectedSinceSelection(t *testin
 func withPrimaryUUID(status *replicationdatapb.FullStatus, uuid string) *replicationdatapb.FullStatus {
 	status.GroupReplicationStatus.PrimaryUuid = uuid
 	return status
+}
+
+// TestUpdateGroupReplicationVotersRecheckIsFreshAtWrite checks that the statuses on which the re-check
+// right before the voter write decides are fresh when the write happens: the re-check does not wait
+// for a tablet that does not answer, typically the voter that the selection dropped as unreachable,
+// longer than groupVoterRecheckTimeout. Waiting for it up to the RPC's timeout (15s) left a window as
+// long between the decisive reads and the write, in which the trace of voters_split fits.
+func TestUpdateGroupReplicationVotersRecheckIsFreshAtWrite(t *testing.T) {
+	prevGrace := config.GetGroupReplicationVoterReplacementGracePeriod()
+	t.Cleanup(func() {
+		config.SetGroupReplicationVoterReplacementGracePeriod(prevGrace)
+		inst.UnreachableGroupTablets.Reset()
+	})
+	inst.UnreachableGroupTablets.Reset()
+	config.SetGroupReplicationVoterReplacementGracePeriod(0)
+	primary := recoveryTablet("zone1", 101, topodatapb.TabletType_PRIMARY)
+	voter2 := recoveryTablet("zone2", 200, topodatapb.TabletType_REPLICA)
+	voter3 := recoveryTablet("zone3", 300, topodatapb.TabletType_REPLICA)
+	spare3 := recoveryTablet("zone3", 301, topodatapb.TabletType_REPLICA)
+	mockTMC := groupReplicationRecoveryTestWithPolicy(t, policy.DurabilityGroupReplicationCrossCell, primary, voter2, voter3, spare3)
+	setVoters(t, primary, voter2, voter3)
+	setIncarnation(t, "")
+	var mu sync.Mutex
+	var lastRead time.Time
+	answer := func(status *replicationdatapb.FullStatus) func(context.Context, *topodatapb.Tablet) (*replicationdatapb.FullStatus, error) {
+		return func(context.Context, *topodatapb.Tablet) (*replicationdatapb.FullStatus, error) {
+			mu.Lock()
+			defer mu.Unlock()
+			lastRead = time.Now()
+			return status, nil
+		}
+	}
+	mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(primary)).DoAndReturn(answer(withPosition(groupMemberStatus(primary, primary, primary, voter2), "1-10"))).AnyTimes()
+	mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(voter2)).DoAndReturn(answer(withPosition(groupMemberStatus(voter2, primary, primary, voter2), "1-10"))).AnyTimes()
+	mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(spare3)).DoAndReturn(answer(notMemberStatus(spare3))).AnyTimes()
+	// The dropped voter fails right away at the selection, and then does not answer at all.
+	voter3Calls := 0
+	mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(voter3)).DoAndReturn(
+		func(ctx context.Context, _ *topodatapb.Tablet) (*replicationdatapb.FullStatus, error) {
+			mu.Lock()
+			voter3Calls++
+			first := voter3Calls == 1
+			mu.Unlock()
+			if first {
+				return nil, errors.New("connection refused")
+			}
+			<-ctx.Done()
+			return nil, ctx.Err()
+		}).AnyTimes()
+	mockTMC.EXPECT().StartGroupReplication(gomock.Any(), sameTablet(spare3), gomock.Any()).Return(&replicationdatapb.GroupReplicationStatus{}, nil).AnyTimes()
+
+	_, _, err := updateGroupReplicationVoters(t.Context(), &inst.DetectionAnalysis{
+		Analysis:              inst.GroupVotersOutOfDate,
+		AnalyzedInstanceAlias: primary.Alias,
+		AnalyzedKeyspace:      "ks",
+		AnalyzedShard:         "0",
+	}, log.NewPrefixedLogger("test"))
+	require.NoError(t, err)
+	assert.Equal(t, []string{"zone1-0000000101", "zone2-0000000200", "zone3-0000000301"}, readVoters(t))
+	mu.Lock()
+	age := time.Since(lastRead)
+	mu.Unlock()
+	assert.Less(t, age, groupVoterRecheckTimeout+time.Second, "the statuses of the re-check must be fresh at the write")
 }
