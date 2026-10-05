@@ -979,12 +979,12 @@ func TestQueryExecutorPlanNextvalCommitFailureKeepsCache(t *testing.T) {
 		Rows:   [][]sqltypes.Value{{sqltypes.NewInt64(1), sqltypes.NewInt64(3)}},
 	})
 	db.AddQuery("update seq set next_id = 4 where id = 0", &sqltypes.Result{})
-	db.AddRejectedQuery("commit", errors.New("commit failed"))
 
 	ctx := t.Context()
 	tsv := newTestTabletServer(ctx, noFlags, db)
 	t.Cleanup(tsv.StopService)
 
+	db.AddRejectedQuery("commit", errors.New("commit failed"))
 	qre := newTestQueryExecutor(ctx, tsv, "select next value from seq", 0)
 	_, err := qre.Execute()
 	require.ErrorContains(t, err, "commit failed")
