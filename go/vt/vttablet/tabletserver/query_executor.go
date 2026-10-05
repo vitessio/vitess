@@ -1232,9 +1232,8 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 			if err != nil {
 				return nil, vterrors.Wrapf(err, "error loading sequence %s", tableName)
 			}
-			// If LastVal does not match next ID, then either:
-			// VTTablet just started, and we're initializing the cache, or
-			// Someone reset the id underneath us.
+			// Reset the staged range when the cached last value differs from next_id.
+			// The cache is empty after a start or a reset, or another writer changed next_id.
 			if lastVal != nextID {
 				if nextID < lastVal {
 					log.Warn(fmt.Sprintf("Sequence next ID value %v is below the currently cached max %v, updating it to max", nextID, lastVal))
