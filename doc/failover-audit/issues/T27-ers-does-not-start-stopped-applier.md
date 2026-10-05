@@ -49,6 +49,9 @@ S11k: Recovery for DeadPrimary on ks/0: ERS - EmergencyReparent candidate zone1-
 S11k: failed EmergencyReparentShard: all candidates failed to apply relay logs within the provided waitReplicasTimeout (30s)   (25 times)
 S11k: after-restart zone1-0000000100: io=No sql=No Retrieved=...:1-1326 Executed=...:1-826 (500 acknowledged writes unapplied)
 S11ka (applier started): failover happened=true after 1.2s; 497 tagged acked writes, 0 LOST
+With the fix: S11k failover happened=true after 0.8s; 500 tagged acked writes, 0 LOST
+With the fix: vttablet zone1-0000000100: starting the stopped replication applier to apply the relay log
+With the fix: S13-T3b failover happened=true after 1.0s; 197 of 397 LOST (the tear removed acknowledged transactions, as in S13-T3)
 ```
 
 Full context: `doc/failover-audit/SemiSyncFailover.md`, "Keeping the relay log".

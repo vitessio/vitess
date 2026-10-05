@@ -34,4 +34,4 @@ There are two kinds of draft:
 | T24 | P2 | [Extend the TLA+ model](T24-extend-tla-model.md) | follow-up | open |
 | T25 | P1 | [PlannedReparentShard outlives its shard lock](T25-prs-outlives-shard-lock.md) | vitessio/vitess | open |
 | T26 | P2 | [PlannedReparentShard leaves the primary demoted when DemotePrimary errors](T26-prs-demote-error-leaves-primary-demoted.md) | vitessio/vitess | open |
-| T27 | P0 | [EmergencyReparentShard never starts a candidate's stopped applier](T27-ers-does-not-start-stopped-applier.md) | vitessio/vitess | open |
+| T27 | in review | [EmergencyReparentShard never starts a candidate's stopped applier](T27-ers-does-not-start-stopped-applier.md) | vitessio/vitess | fixed on the branch, PR to open |
