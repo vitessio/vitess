@@ -362,12 +362,65 @@ func (api *API) WithCluster(c *cluster.Cluster, id string) dynamic.API {
 	return dynamicAPI
 }
 
+// rejectCrossSiteRequests refuses a state-changing request that a browser sent on
+// behalf of a page from another site, so that a page cannot use a VTAdmin
+// operator's session cookie to change cluster state. Restricting those routes to
+// POST is not enough on its own: a browser sends a cookie with SameSite=None on a
+// cross-site form POST, and one without a SameSite attribute on a cross-site
+// top-level POST made shortly after it was set. CORS does not help either, since it
+// only keeps the page from reading the response.
+//
+// A request is accepted when it is not state-changing, when it comes from one of
+// the configured CORS origins, when the browser reports it as same-origin or
+// user-initiated (Sec-Fetch-Site), or, from a browser that sends no fetch metadata,
+// when its Origin matches the host it was sent to. A request without an Origin or
+// fetch metadata does not come from a browser and is accepted.
+func rejectCrossSiteRequests(allowedOrigins []string) mux.MiddlewareFunc {
+	allowed := make(map[string]bool, len(allowedOrigins))
+	for _, origin := range allowedOrigins {
+		allowed[strings.ToLower(origin)] = true
+	}
+
+	isAllowed := func(r *http.Request) bool {
+		switch r.Method {
+		case http.MethodGet, http.MethodHead, http.MethodOptions:
+			return true
+		}
+		origin := r.Header.Get("Origin")
+		if origin != "" && (allowed["*"] || allowed[strings.ToLower(origin)]) {
+			return true
+		}
+		switch r.Header.Get("Sec-Fetch-Site") {
+		case "same-origin", "none":
+			return true
+		case "":
+			if origin == "" {
+				return true
+			}
+			u, err := url.Parse(origin)
+			return err == nil && strings.EqualFold(u.Host, r.Host)
+		}
+		return false
+	}
+
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if !isAllowed(r) {
+				http.Error(w, "cross-site request refused", http.StatusForbidden)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
 // Handler handles all routes under "/api" (see above)
 func (api *API) Handler() http.Handler {
 	router := mux.NewRouter().PathPrefix("/api").Subrouter()
 
 	router.Use(handlers.CORS(
 		handlers.AllowCredentials(), handlers.AllowedOrigins(api.options.HTTPOpts.CORSOrigins), handlers.AllowedMethods([]string{"GET", "HEAD", "POST", "PUT", "DELETE", "OPTIONS"})))
+	router.Use(rejectCrossSiteRequests(api.options.HTTPOpts.CORSOrigins))
 
 	httpAPI := vtadminhttp.NewAPI(api, api.options.HTTPOpts)
 

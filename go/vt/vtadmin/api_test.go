@@ -17,6 +17,7 @@ limitations under the License.
 package vtadmin
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -25,6 +26,10 @@ import (
 	"net/url"
 	"os"
 	"testing"
+
+	"google.golang.org/grpc"
+
+	vtadminhttp "vitess.io/vitess/go/vt/vtadmin/http"
 
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
@@ -5423,6 +5428,81 @@ func TestHandlerRestrictsMutatingRoutesToPOST(t *testing.T) {
 				var match mux.RouteMatch
 				require.False(t, router.Match(httptest.NewRequest(method, path, nil), &match), method)
 			}
+		})
+	}
+}
+
+// countingVtctldClient counts the WorkflowUpdate calls that reach the vtctld.
+type countingVtctldClient struct {
+	*fakevtctldclient.VtctldClient
+	workflowUpdates int
+}
+
+func (c *countingVtctldClient) WorkflowUpdate(ctx context.Context, req *vtctldatapb.WorkflowUpdateRequest, opts ...grpc.CallOption) (*vtctldatapb.WorkflowUpdateResponse, error) {
+	c.workflowUpdates++
+	return &vtctldatapb.WorkflowUpdateResponse{}, nil
+}
+
+// TestHandlerRejectsCrossSiteRequests checks that a state-changing request a
+// browser sends on behalf of a page from another site is refused before it reaches
+// the vtctld, whatever the SameSite attribute of the session cookie it carries,
+// while same-origin requests, requests from a configured CORS origin and requests
+// from non-browser clients still go through.
+func TestHandlerRejectsCrossSiteRequests(t *testing.T) {
+	vtctld := &countingVtctldClient{VtctldClient: &fakevtctldclient.VtctldClient{}}
+	c := vtadmintestutil.BuildCluster(t, vtadmintestutil.TestClusterConfig{
+		Cluster:      &vtadminpb.Cluster{Id: "c0", Name: "cluster0"},
+		VtctldClient: vtctld,
+	})
+	api := NewAPI(vtenv.NewTestEnv(), []*cluster.Cluster{c}, Options{
+		HTTPOpts: vtadminhttp.Options{CORSOrigins: []string{"https://vtadmin-web.example.com"}},
+	})
+	handler := api.Handler()
+
+	for _, tc := range []struct {
+		name    string
+		headers map[string]string
+		allowed bool
+	}{{
+		name:    "a cross-site form post",
+		headers: map[string]string{"Origin": "https://attacker.example", "Sec-Fetch-Site": "cross-site"},
+	}, {
+		name:    "a same-site post from another origin",
+		headers: map[string]string{"Origin": "https://other.example.com", "Sec-Fetch-Site": "same-site"},
+	}, {
+		name:    "a post from another origin without fetch metadata",
+		headers: map[string]string{"Origin": "https://attacker.example"},
+	}, {
+		name:    "a post from a configured CORS origin",
+		headers: map[string]string{"Origin": "https://vtadmin-web.example.com", "Sec-Fetch-Site": "cross-site"},
+		allowed: true,
+	}, {
+		name:    "a same-origin post",
+		headers: map[string]string{"Origin": "http://vtadmin.example.com", "Sec-Fetch-Site": "same-origin"},
+		allowed: true,
+	}, {
+		name:    "a same-origin post without fetch metadata",
+		headers: map[string]string{"Origin": "http://vtadmin.example.com"},
+		allowed: true,
+	}, {
+		name:    "a post from a non-browser client",
+		allowed: true,
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			before := vtctld.workflowUpdates
+			req := httptest.NewRequest(http.MethodPost, "http://vtadmin.example.com/api/workflow/c0/ks/wf/stop", nil)
+			for name, value := range tc.headers {
+				req.Header.Set(name, value)
+			}
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, req)
+
+			if tc.allowed {
+				assert.Equal(t, before+1, vtctld.workflowUpdates, "the request must reach the vtctld")
+				return
+			}
+			assert.Equal(t, http.StatusForbidden, w.Code)
+			assert.Equal(t, before, vtctld.workflowUpdates, "a refused request must not reach the vtctld")
 		})
 	}
 }
