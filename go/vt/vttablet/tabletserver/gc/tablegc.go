@@ -33,6 +33,7 @@ import (
 	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/mysql/sqlerror"
 
+	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/dbconnpool"
@@ -79,19 +80,14 @@ func registerGCFlags(fs *pflag.FlagSet) {
 }
 
 var (
-	// The table name is written into %a as it stands -- sqlparser.BuildParsedQuery
-	// writes the argument verbatim, and sqlPurgeTable does not even quote it -- on a
-	// connection that negotiates CLIENT_MULTI_STATEMENTS. Nothing escapes it because
-	// nothing needs to: the collector only ever operates on a table whose name
-	// schema.AnalyzeGCTableName accepted, which requires the whole
-	// _vt_<hint>_<32 hex>_<14 digits>_ shape (schema.InternalTableNameExpression) and
-	// so cannot hold a back quote. A caller that reaches these without going through
-	// that gate has to escape the name itself, the way
-	// schema.GenerateRenameStatementWithUUID does for the name it builds.
+	// The table name is escaped by the caller with sqlescape.EscapeID before it is
+	// written into %a, which sqlparser.BuildParsedQuery does verbatim. The name
+	// passed schema.AnalyzeGCTableName, but that is no guarantee: its [0-f] ranges
+	// also accept punctuation such as ';' and the back quote.
 	sqlPurgeTable   = `delete from %a limit 50`
 	sqlShowVtTables = `show full tables like '\_vt\_%'`
-	sqlDropTable    = "drop table if exists `%a`"
-	sqlDropView     = "drop view if exists `%a`"
+	sqlDropTable    = "drop table if exists %a"
+	sqlDropView     = "drop view if exists %a"
 )
 
 type gcTable struct {
@@ -621,7 +617,7 @@ func (collector *TableGC) purge(ctx context.Context) (tableName string, err erro
 		// OK, we're clear to go!
 
 		// Issue a DELETE
-		parsed := sqlparser.BuildParsedQuery(sqlPurgeTable, tableName)
+		parsed := sqlparser.BuildParsedQuery(sqlPurgeTable, sqlescape.EscapeID(tableName))
 		res, err := conn.ExecuteFetch(parsed.Query, 1, true)
 		if err != nil {
 			return tableName, err
@@ -646,7 +642,7 @@ func (collector *TableGC) dropTable(ctx context.Context, tableName string, isBas
 	if !isBaseTable {
 		sqlDrop = sqlDropView
 	}
-	parsed := sqlparser.BuildParsedQuery(sqlDrop, tableName)
+	parsed := sqlparser.BuildParsedQuery(sqlDrop, sqlescape.EscapeID(tableName))
 
 	// Disable foreign key checks so we can drop a table that is still referenced by another
 	// (also-doomed) table's foreign key, regardless of the order in which the GC drops them. The
