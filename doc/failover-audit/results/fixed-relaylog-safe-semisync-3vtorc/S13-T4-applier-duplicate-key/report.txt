@@ -1,0 +1,106 @@
+==== SCENARIO S13-T4-applier-duplicate-key ====
+-- OUTCOME (11)
+   P=zone3-0000000300 R1=zone1-0000000100
+   applier stuck=true Last_SQL_Errno=1062 Last_SQL_Error="Coordinator stopped because there were error(s) in the worker(s). The most recent failure being: Worker 2 failed executing transaction '80067e40-c0f6-11f1-b388-02fc00000001:527' at source log vt-0000000300-bin.000001, end_log_pos 175128. See error log and/or performance_schema.replication_applier_status_by_worker table for more details about this failure or others, if any."
+   VTOrc in the first 66s: 0 'will fix replica' lines, 56 finished ReplicationStopped recoveries on R1
+   vttablet 'discarding the relay log' lines on R1: 0
+   R1 healed=true 3.6s after the conflicting row was removed
+   data zone1-0000000100 vs primary zone3-0000000300: gtid_executed equal=true checksum 716514746 vs 716514746 equal=true
+   data zone2-0000000200 vs primary zone3-0000000300: gtid_executed equal=true checksum 716514746 vs 716514746 equal=true
+   writes: total=7492 acked=7492 failed/unknown=0
+   vtgate primary reads after fault: 699, failed 0, answered by old primary: 699, after another member was elected: 0, after the topo primary changed: 0
+   old primary zone3-0000000300 -> new primary zone3-0000000300
+   durability: all 7492 acked writes present on primary zone3-0000000300
+-- TIMINGS (7)
+   longest write gap: 0.08s (from +28.32s to +28.40s relative to fault)
+   unavailable (no acked write for >= 1s): 0.00s in total, 0 outages []; writers stopped at +69.95s
+   topo shard primary never changed from zone3-0000000300
+   old primary zone3-0000000300 vttablet reported PRIMARY for the whole scenario
+   old primary zone3-0000000300 mysqld super_read_only never ON after the fault
+   vtgate primary reads answered by the old primary until +69.90s after the fault
+   converged 0.0s after heal/stop-writes; primary=zone3-0000000300
+-- VIOLATIONS (0)
+-- NOTES (83)
+   zone1-0000000100 relay_log_recovery=0 sync_relay_log=1 sync_binlog=1 skip_replica_start=1
+   zone2-0000000200 relay_log_recovery=0 sync_relay_log=1 sync_binlog=1 skip_replica_start=1
+   zone3-0000000300 relay_log_recovery=0 sync_relay_log=1 sync_binlog=1 skip_replica_start=1
+   mysqld error log of zone1-0000000100: 2026-10-05T19:54:11.680412Z 24 [ERROR] [MY-010584] [Repl] Replica SQL for channel '': Worker 2 failed executing transaction '80067e40-c0f6-11f1-b388-02fc00000001:527' at source log vt-0000000300-bin.000001, end_log_pos 175128; Could not execute Write_rows event on table vt_ks.chaos_t; Duplicate entry '-4242' for key 'chaos_t.PRIMARY', Error_code: 1062; handler error HA_ERR_FOUND_DUPP_KEY; the event's source log vt-0000000300-bin.000001, end_log_pos 175128, Error_code: MY-001062 || 2026-10-05T19:54:11.681051Z 22 [Warning] [MY-010584] [Repl] Replica SQL for channel '': ... The replica coordinator and worker threads are stopped, possibly leaving data in inconsistent state. A restart should restore consistency automatically, although using non-transactional storage for data or info tables or DDL queries could lead to problems. In such cases you have to examine your data (see documentation for details). Error_code: MY-001756
+   stuck zone1-0000000100: io=Yes sql=No Retrieved="80067e40-c0f6-11f1-b388-02fc00000001:1-536" Executed="80067e40-c0f6-11f1-b388-02fc00000001:1-526" unapplied="80067e40-c0f6-11f1-b388-02fc00000001:527-536" relay_log_recovery=OFF
+   R1 replication state changes during 60s: 60
+     +0s io=Yes sql=No errno=1062 relay=vt-0000000100-relay-bin.000002:172473 retrieved=80067e40-c0f6-11f1-b388-02fc00000001:1-539
+     +1s io=Yes sql=Yes errno=0 relay=vt-0000000100-relay-bin.000002:172473 retrieved=80067e40-c0f6-11f1-b388-02fc00000001:1-635
+     +2s io=Yes sql=No errno=3030 relay=vt-0000000100-relay-bin.000002:172473 retrieved=80067e40-c0f6-11f1-b388-02fc00000001:1-747
+     +3s io=Yes sql=No errno=3030 relay=vt-0000000100-relay-bin.000002:172473 retrieved=80067e40-c0f6-11f1-b388-02fc00000001:1-847
+     +5s io=Yes sql=Yes errno=0 relay=vt-0000000100-relay-bin.000002:172473 retrieved=80067e40-c0f6-11f1-b388-02fc00000001:1-935
+     +6s io=Yes sql=No errno=1062 relay=vt-0000000100-relay-bin.000002:172473 retrieved=80067e40-c0f6-11f1-b388-02fc00000001:1-1155
+     +7s io=Yes sql=No errno=3030 relay=vt-0000000100-relay-bin.000002:172473 retrieved=80067e40-c0f6-11f1-b388-02fc00000001:1-1255
+     +8s io=Yes sql=No errno=1062 relay=vt-0000000100-relay-bin.000002:172473 retrieved=80067e40-c0f6-11f1-b388-02fc00000001:1-1355
+     +10s io=Yes sql=Yes errno=0 relay=vt-0000000100-relay-bin.000002:172473 retrieved=80067e40-c0f6-11f1-b388-02fc00000001:1-1435
+     +11s io=Yes sql=No errno=1062 relay=vt-0000000100-relay-bin.000002:172473 retrieved=80067e40-c0f6-11f1-b388-02fc00000001:1-1651
+     +12s io=Yes sql=No errno=1062 relay=vt-0000000100-relay-bin.000002:172473 retrieved=80067e40-c0f6-11f1-b388-02fc00000001:1-1751
+     +13s io=Yes sql=No errno=1062 relay=vt-0000000100-relay-bin.000002:172473 retrieved=80067e40-c0f6-11f1-b388-02fc00000001:1-1851
+     +14s io=Yes sql=Yes errno=0 relay=vt-0000000100-relay-bin.000002:172473 retrieved=80067e40-c0f6-11f1-b388-02fc00000001:1-1947
+     +15s io=Yes sql=No errno=1062 relay=vt-0000000100-relay-bin.000002:172473 retrieved=80067e40-c0f6-11f1-b388-02fc00000001:1-2054
+     +17s io=Yes sql=Yes errno=0 relay=vt-0000000100-relay-bin.000002:172473 retrieved=80067e40-c0f6-11f1-b388-02fc00000001:1-2135
+     +18s io=Yes sql=No errno=3030 relay=vt-0000000100-relay-bin.000002:172473 retrieved=80067e40-c0f6-11f1-b388-02fc00000001:1-2351
+     +19s io=Yes sql=No errno=3030 relay=vt-0000000100-relay-bin.000002:172473 retrieved=80067e40-c0f6-11f1-b388-02fc00000001:1-2451
+     +20s io=Yes sql=No errno=1062 relay=vt-0000000100-relay-bin.000002:172473 retrieved=80067e40-c0f6-11f1-b388-02fc00000001:1-2551
+     +21s io=Yes sql=No errno=1062 relay=vt-0000000100-relay-bin.000002:172473 retrieved=80067e40-c0f6-11f1-b388-02fc00000001:1-2651
+     +22s io=Yes sql=No errno=3030 relay=vt-0000000100-relay-bin.000002:172473 retrieved=80067e40-c0f6-11f1-b388-02fc00000001:1-2751
+     +23s io=Yes sql=No errno=1062 relay=vt-0000000100-relay-bin.000002:172473 retrieved=80067e40-c0f6-11f1-b388-02fc00000001:1-2851
+     +24s io=Yes sql=No errno=3030 relay=vt-0000000100-relay-bin.000002:172473 retrieved=80067e40-c0f6-11f1-b388-02fc00000001:1-2951
+     +25s io=Yes sql=No errno=3030 relay=vt-0000000100-relay-bin.000002:172473 retrieved=80067e40-c0f6-11f1-b388-02fc00000001:1-3051
+     +26s io=Yes sql=No errno=3030 relay=vt-0000000100-relay-bin.000002:172473 retrieved=80067e40-c0f6-11f1-b388-02fc00000001:1-3151
+     +27s io=Yes sql=No errno=3030 relay=vt-0000000100-relay-bin.000002:172473 retrieved=80067e40-c0f6-11f1-b388-02fc00000001:1-3251
+     +28s io=Yes sql=No errno=1062 relay=vt-0000000100-relay-bin.000002:172473 retrieved=80067e40-c0f6-11f1-b388-02fc00000001:1-3351
+     +29s io=Yes sql=No errno=3030 relay=vt-0000000100-relay-bin.000002:172473 retrieved=80067e40-c0f6-11f1-b388-02fc00000001:1-3451
+     +30s io=Yes sql=No errno=3030 relay=vt-0000000100-relay-bin.000002:172473 retrieved=80067e40-c0f6-11f1-b388-02fc00000001:1-3551
+     +31s io=Yes sql=No errno=3030 relay=vt-0000000100-relay-bin.000002:172473 retrieved=80067e40-c0f6-11f1-b388-02fc00000001:1-3651
+     +32s io=Yes sql=No errno=3030 relay=vt-0000000100-relay-bin.000002:172473 retrieved=80067e40-c0f6-11f1-b388-02fc00000001:1-3751
+   vtorc-zone2: 2026-10-05 19:54:12.762 UTC INF logic/topology_recovery.go:1182 Recovery for ReplicationStopped on ks/0: executeCheckAndRecoverFunction: proceeding with recovery on zone1-0000000100; isRecoverable?: true
+   vtorc-zone2: 2026-10-05 19:54:12.762 UTC INF logic/topology_recovery.go:1184 Recovery for ReplicationStopped on ks/0: Analysis: ReplicationStopped, FixReplica zone1-0000000100
+   vtorc-zone2: 2026-10-05 19:54:12.913 UTC INF topo/locks.go:219 Unlocking shard ks/0 for successful action VTOrc Recovery for ReplicationStopped on zone1-0000000100
+   vtorc-zone1: 2026-10-05 19:54:12.943 UTC INF logic/topology_recovery.go:1182 Recovery for ReplicationStopped on ks/0: executeCheckAndRecoverFunction: proceeding with recovery on zone1-0000000100; isRecoverable?: true
+   vtorc-zone1: 2026-10-05 19:54:12.943 UTC INF logic/topology_recovery.go:1184 Recovery for ReplicationStopped on ks/0: Analysis: ReplicationStopped, FixReplica zone1-0000000100
+   vtorc-zone1: 2026-10-05 19:54:13.043 UTC INF topo/locks.go:219 Unlocking shard ks/0 for successful action VTOrc Recovery for ReplicationStopped on zone1-0000000100
+   vtorc-zone3: 2026-10-05 19:54:13.761 UTC INF logic/topology_recovery.go:1182 Recovery for ReplicationStopped on ks/0: executeCheckAndRecoverFunction: proceeding with recovery on zone1-0000000100; isRecoverable?: true
+   vtorc-zone3: 2026-10-05 19:54:13.761 UTC INF logic/topology_recovery.go:1184 Recovery for ReplicationStopped on ks/0: Analysis: ReplicationStopped, FixReplica zone1-0000000100
+   vtorc-zone2: 2026-10-05 19:55:15.767 UTC INF logic/topology_recovery.go:1184 Recovery for ReplicationStopped on ks/0: Analysis: ReplicationStopped, FixReplica zone1-0000000100
+   vtorc-zone2: 2026-10-05 19:55:15.855 UTC INF topo/locks.go:219 Unlocking shard ks/0 for successful action VTOrc Recovery for ReplicationStopped on zone1-0000000100
+   vtorc-zone1: 2026-10-05 19:55:16.760 UTC INF logic/topology_recovery.go:1182 Recovery for ReplicationStopped on ks/0: executeCheckAndRecoverFunction: proceeding with recovery on zone1-0000000100; isRecoverable?: true
+   vtorc-zone1: 2026-10-05 19:55:16.760 UTC INF logic/topology_recovery.go:1184 Recovery for ReplicationStopped on ks/0: Analysis: ReplicationStopped, FixReplica zone1-0000000100
+   vtorc-zone1: 2026-10-05 19:55:16.858 UTC INF topo/locks.go:219 Unlocking shard ks/0 for successful action VTOrc Recovery for ReplicationStopped on zone1-0000000100
+   vtorc-zone3: 2026-10-05 19:55:17.771 UTC INF logic/topology_recovery.go:1182 Recovery for ReplicationStopped on ks/0: executeCheckAndRecoverFunction: proceeding with recovery on zone1-0000000100; isRecoverable?: true
+   vtorc-zone3: 2026-10-05 19:55:17.771 UTC INF logic/topology_recovery.go:1184 Recovery for ReplicationStopped on ks/0: Analysis: ReplicationStopped, FixReplica zone1-0000000100
+   vtorc-zone3: 2026-10-05 19:55:17.859 UTC INF topo/locks.go:219 Unlocking shard ks/0 for successful action VTOrc Recovery for ReplicationStopped on zone1-0000000100
+   vttablet zone1-0000000100: 2026-10-05 19:54:12.768 UTC INF tabletmanager/rpc_replication.go:905 SetReplicationSource: parent: cell:"zone3" uid:300  position:  force: true semiSync: true timeCreatedNS: 0
+   vttablet zone1-0000000100: 2026-10-05 19:54:12.777 UTC INF mysqlctl/query.go:148 exec STOP REPLICA
+   vttablet zone1-0000000100: 2026-10-05 19:54:12.781 UTC INF mysqlctl/query.go:148 exec START REPLICA
+   vttablet zone1-0000000100: 2026-10-05 19:54:12.949 UTC INF tabletmanager/rpc_replication.go:905 SetReplicationSource: parent: cell:"zone3" uid:300  position:  force: true semiSync: true timeCreatedNS: 0
+   vttablet zone1-0000000100: 2026-10-05 19:54:12.959 UTC INF mysqlctl/query.go:148 exec STOP REPLICA
+   vttablet zone1-0000000100: 2026-10-05 19:54:12.961 UTC INF mysqlctl/query.go:148 exec START REPLICA
+   vttablet zone1-0000000100: 2026-10-05 19:54:13.766 UTC INF tabletmanager/rpc_replication.go:905 SetReplicationSource: parent: cell:"zone3" uid:300  position:  force: true semiSync: true timeCreatedNS: 0
+   vttablet zone1-0000000100: 2026-10-05 19:54:13.775 UTC INF mysqlctl/query.go:148 exec STOP REPLICA
+   vttablet zone1-0000000100: 2026-10-05 19:54:13.777 UTC INF mysqlctl/query.go:148 exec START REPLICA
+   vttablet zone1-0000000100: 2026-10-05 19:54:15.767 UTC INF tabletmanager/rpc_replication.go:905 SetReplicationSource: parent: cell:"zone3" uid:300  position:  force: true semiSync: true timeCreatedNS: 0
+   vttablet zone1-0000000100: 2026-10-05 19:54:15.776 UTC INF mysqlctl/query.go:148 exec STOP REPLICA
+   vttablet zone1-0000000100: 2026-10-05 19:54:15.778 UTC INF mysqlctl/query.go:148 exec START REPLICA
+   vttablet zone1-0000000100: 2026-10-05 19:55:13.767 UTC INF tabletmanager/rpc_replication.go:905 SetReplicationSource: parent: cell:"zone3" uid:300  position:  force: true semiSync: true timeCreatedNS: 0
+   vttablet zone1-0000000100: 2026-10-05 19:55:13.775 UTC INF mysqlctl/query.go:148 exec STOP REPLICA
+   vttablet zone1-0000000100: 2026-10-05 19:55:13.776 UTC INF mysqlctl/query.go:148 exec START REPLICA
+   vttablet zone1-0000000100: 2026-10-05 19:55:15.771 UTC INF tabletmanager/rpc_replication.go:905 SetReplicationSource: parent: cell:"zone3" uid:300  position:  force: true semiSync: true timeCreatedNS: 0
+   vttablet zone1-0000000100: 2026-10-05 19:55:15.778 UTC INF mysqlctl/query.go:148 exec STOP REPLICA
+   vttablet zone1-0000000100: 2026-10-05 19:55:15.780 UTC INF mysqlctl/query.go:148 exec START REPLICA
+   vttablet zone1-0000000100: 2026-10-05 19:55:16.766 UTC INF tabletmanager/rpc_replication.go:905 SetReplicationSource: parent: cell:"zone3" uid:300  position:  force: true semiSync: true timeCreatedNS: 0
+   vttablet zone1-0000000100: 2026-10-05 19:55:16.774 UTC INF mysqlctl/query.go:148 exec STOP REPLICA
+   vttablet zone1-0000000100: 2026-10-05 19:55:16.776 UTC INF mysqlctl/query.go:148 exec START REPLICA
+   vttablet zone1-0000000100: 2026-10-05 19:55:17.776 UTC INF tabletmanager/rpc_replication.go:905 SetReplicationSource: parent: cell:"zone3" uid:300  position:  force: true semiSync: true timeCreatedNS: 0
+   vttablet zone1-0000000100: 2026-10-05 19:55:17.784 UTC INF mysqlctl/query.go:148 exec STOP REPLICA
+   vttablet zone1-0000000100: 2026-10-05 19:55:17.786 UTC INF mysqlctl/query.go:148 exec START REPLICA
+   rows on primary by committing server: map[zone3-0000000300:7493]
+   vtorc-zone1: 20 successful action VTOrc Recovery for ReplicationStopped on zone1-0000000100
+   vtorc-zone1: 1 successful action VTOrc Recovery for ClusterHasNoPrimary on zone1-0000000100
+   vtorc-zone2: 20 successful action VTOrc Recovery for ReplicationStopped on zone1-0000000100
+   vtorc-zone2: 1 successful action VTOrc Recovery for ClusterHasNoPrimary on zone1-0000000100
+   vtorc-zone3: 18 successful action VTOrc Recovery for ReplicationStopped on zone1-0000000100
+   vtorc-zone3: 1 successful action VTOrc Recovery for ClusterHasNoPrimary on zone1-0000000100

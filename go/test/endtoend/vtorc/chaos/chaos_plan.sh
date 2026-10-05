@@ -14,6 +14,9 @@
 #                          the PlannedReparentShard scenarios (prs_test.go) under both profiles,
 #                          with the binaries of main or of this branch (the argument only names
 #                          the results directories).
+#   chaos_plan.sh relaylog the relay log scenarios S11, S11k, S11ka and S13 with relay_log_recovery=0
+#                          and sync_relay_log=1 (CHAOS_RELAY_LOG_SAFE=1) under semisync-3vtorc.
+#                          Binaries of this branch.
 #
 # Results go to $CHAOS_PLAN_RESULTS/<run>/ (default /home/$RUN_USER/chaos-results), one directory
 # per profile and run; chaos_summary.py turns them into the report's tables.
@@ -38,6 +41,9 @@ RELAY="TestS11RelayLogDiscardGraceful TestS11kRelayLogDiscardKill9 TestS11bRelay
 PROBE="TestP1IsolatedPrimaryAcksAfterFailover TestP2ReplicationPartitionAcksOnDeposedPrimary"
 FIXED_3="$PROBE TestS3IsolatePrimary TestS7dFlappingPrimaryLong TestS9iPrimaryCellPartition TestS11kRelayLogDiscardKill9"
 FIXED_1="$PROBE TestS3IsolatePrimary"
+RELAY_SAFE="TestS11RelayLogDiscardGraceful TestS11kRelayLogDiscardKill9 TestS11kaRelayLogKill9ApplierStarted
+  TestS13T1TornLastTrx TestS13T1bTornLastTrxVTOrcFirst TestS13T2TornAckedTrx TestS13T2bTornAckedTrxVTOrcFirst
+  TestS13T3TornAckedTrxPrimaryDies TestS13T3bTornAckedTrxPrimaryDiesVTOrcFirst TestS13T4ApplierDuplicateKey"
 PRS="TestR1PRSUnderLoad TestR2PRSOutlivesShardLock TestR2bPRSCatchupOutlivesShardLock
   TestR3PRSDemoteResponseLost TestR5PRSReplicaRestart"
 
@@ -81,8 +87,11 @@ prs)
   run "$2-prs-semisync-3vtorc" semisync-3vtorc "" $PRS
   run "$2-prs-semisync-1vtorc" semisync-1vtorc zone1 $PRS
   ;;
+relaylog)
+  CHAOS_RELAY_LOG_SAFE=1 run fixed-relaylog-safe-semisync-3vtorc semisync-3vtorc "" $RELAY_SAFE
+  ;;
 *)
-  echo "usage: $0 main|probe|fixed|prs" >&2
+  echo "usage: $0 main|probe|fixed|prs|relaylog" >&2
   exit 2
   ;;
 esac

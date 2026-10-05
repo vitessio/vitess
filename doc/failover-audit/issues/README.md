@@ -8,7 +8,7 @@ There are two kinds of draft:
 
 | Task | Priority | Draft | Destination | Status |
 |---|---|---|---|---|
-| T1 | P0 | [Stop replicas discarding ACKed transactions on restart](T1-relay-log-recovery-config.md) | deployment (mysqld config) | open |
+| T1 | P0 | [Stop replicas discarding ACKed transactions on restart](T1-relay-log-recovery-config.md) | deployment (mysqld config) | open, after T27 |
 | T2 | P0 | [Replica restart during ERS repoints to the old primary](T2-replica-restart-repoints-during-ers.md) | vitessio/vitess | open |
 | T3 | P0 | [ERS's repoints outlive the shard lock](T3-ers-detached-repoints-outlive-lock.md) | vitessio/vitess | open |
 | T4 | P0 | [fixReplica repoints to a replaced primary](T4-fixreplica-stale-primary-view.md) | vitessio/vitess | open |
@@ -30,7 +30,8 @@ There are two kinds of draft:
 | T20 | in review | [PromoteReplica discards received transactions](T20-promote-discards-received-transactions.md) | vitessio/vitess | fixed on the branch, PR to open |
 | T21 | P2 | [Re-run the chaos matrix on MySQL 8.0](T21-rerun-on-mysql-80.md) | follow-up | open |
 | T22 | P2 | [Confirm the profile's assumptions](T22-confirm-profile-assumptions.md) | follow-up | open |
-| T23 | P2 | [Fix the remaining harness artifacts](T23-harness-artifacts.md) | follow-up | open |
+| T23 | P2 | [Fix the remaining harness artifacts](T23-harness-artifacts.md) | follow-up | partly fixed |
 | T24 | P2 | [Extend the TLA+ model](T24-extend-tla-model.md) | follow-up | open |
 | T25 | P1 | [PlannedReparentShard outlives its shard lock](T25-prs-outlives-shard-lock.md) | vitessio/vitess | open |
 | T26 | P2 | [PlannedReparentShard leaves the primary demoted when DemotePrimary errors](T26-prs-demote-error-leaves-primary-demoted.md) | vitessio/vitess | open |
+| T27 | P0 | [EmergencyReparentShard never starts a candidate's stopped applier](T27-ers-does-not-start-stopped-applier.md) | vitessio/vitess | open |

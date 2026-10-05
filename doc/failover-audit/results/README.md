@@ -15,6 +15,7 @@ One `report.txt` per scenario and run, as `go/test/endtoend/vtorc/chaos` writes 
 | `main-prs-semisync-1vtorc` | `prs main` | `semisync-1vtorc`, primary in `zone1` | `main` |
 | `fixed-prs-semisync-3vtorc` | `prs fixed` | `semisync-3vtorc` | this branch |
 | `fixed-prs-semisync-1vtorc` | `prs fixed` | `semisync-1vtorc`, primary in `zone1` | this branch |
+| `fixed-relaylog-safe-semisync-3vtorc` | S11, S11k, S11ka, S13-T* with `CHAOS_RELAY_LOG_SAFE=1` (`relay_log_recovery=0`, `sync_relay_log=1`) | `semisync-3vtorc` | this branch |
 
 Paths in the reports (`/home/ubuntu/...`, `/home/user/...`) are those of the test host.
 

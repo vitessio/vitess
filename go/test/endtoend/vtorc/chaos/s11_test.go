@@ -93,9 +93,17 @@ func (s *Scenario) reportTagged(tagged []int64) {
 
 // delayApplier makes the node's applier lag by an hour (SOURCE_DELAY) while its receiver keeps
 // writing (and acking) the relay log. Unlike a table lock it does not block STOP REPLICA or a
-// graceful mysqld shutdown.
+// graceful mysqld shutdown. It also starts the applier. The CHANGE runs with the receiver
+// running: with both threads stopped (after a restart, skip_replica_start), MySQL would purge
+// the relay log. A receiver started only for that is stopped again.
 func (s *Scenario) delayApplier(n *Node, seconds int) {
-	for _, q := range []string{"stop replica sql_thread", fmt.Sprintf("change replication source to source_delay = %d", seconds), "start replica sql_thread"} {
+	rs, _ := n.replicaStatus()
+	ioStopped := rs != nil && rs["Replica_IO_Running"] == "No"
+	qs := []string{"stop replica sql_thread", fmt.Sprintf("change replication source to source_delay = %d", seconds), "start replica sql_thread"}
+	if ioStopped {
+		qs = append(append([]string{"start replica io_thread"}, qs...), "stop replica io_thread")
+	}
+	for _, q := range qs {
 		if _, err := n.db.Exec(q); err != nil {
 			s.t.Fatalf("%s on %s: %v", q, n.Tablet.Alias, err)
 		}
@@ -104,8 +112,12 @@ func (s *Scenario) delayApplier(n *Node, seconds int) {
 }
 
 // s11 runs the relay-log-discard scenario. restart is how R1's mysqld is restarted. With
-// useDelay the applier is held back with SOURCE_DELAY, otherwise with LOCK TABLES.
-func s11(t *testing.T, name string, useDelay bool, restart func(s *Scenario, r1 *Node)) {
+// useDelay the applier is held back with SOURCE_DELAY, otherwise with LOCK TABLES. Either way the
+// hold ends with R1's restart: the delay is removed as soon as R1 is back (which starts its
+// applier), and the table lock dies with the restart. With startApplier the applier is started
+// after the restart; otherwise, with LOCK TABLES, nothing starts it (skip_replica_start) unless
+// Vitess does.
+func s11(t *testing.T, name string, useDelay, startApplier bool, restart func(s *Scenario, r1 *Node)) {
 	runScenario(t, name, Options{}, func(s *Scenario) {
 		r1, r2 := s.Replicas()[0], s.Replicas()[1]
 		s.R.outcome("P=%s R1=%s (sole acker, applier blocked) R2=%s (not receiving)", s.OldPrimary.Tablet.Alias, r1.Tablet.Alias, r2.Tablet.Alias)
@@ -139,13 +151,16 @@ func s11(t *testing.T, name string, useDelay bool, restart func(s *Scenario, r1 
 			_ = lockConn.Close()
 		}
 		s.relayState(r1, "after-restart")
+		if useDelay {
+			s.delayApplier(r1, 0)
+		} else if startApplier {
+			_, err := r1.db.Exec("start replica sql_thread")
+			s.Log.Add("fault", fmt.Sprintf("START REPLICA SQL_THREAD on R1 err=%v", err))
+		}
 		// 5. Restore R2's connectivity (P is dead anyway) and let VTOrc run ERS.
 		s.Heal()
 		d, ok := s.WaitFor("new primary in topo", 120*time.Second, s.PrimaryChanged(s.OldPrimary))
 		s.R.outcome("failover happened=%v after %.1fs", ok, d.Seconds())
-		if useDelay && s.topoPrimary() != r1 {
-			s.delayApplier(r1, 0)
-		}
 		if ok {
 			s.reportTagged(tagged)
 			s.R.note("ERS log: %s", strings.ReplaceAll(s.GrepLogs(`ERS - |Recovery for DeadPrimary on ks/0: (Analysis|ERS)`, 30), "\n", " || "))
@@ -158,7 +173,7 @@ func s11(t *testing.T, name string, useDelay bool, restart func(s *Scenario, r1 
 
 // S11: graceful mysqld restart of R1 (mysqlctl shutdown + start) right before P is killed.
 func TestS11RelayLogDiscardGraceful(t *testing.T) {
-	s11(t, "S11-relaylog-discard-graceful-restart", true, func(s *Scenario, r1 *Node) {
+	s11(t, "S11-relaylog-discard-graceful-restart", true, false, func(s *Scenario, r1 *Node) {
 		s.Log.Add("fault", "mysqlctl shutdown R1 "+r1.Tablet.Alias)
 		err := r1.Tablet.MysqlctlProcess.Stop()
 		s.Log.Add("fault", fmt.Sprintf("R1 mysqld stopped err=%v", err))
@@ -169,12 +184,21 @@ func TestS11RelayLogDiscardGraceful(t *testing.T) {
 
 // S11k: kill -9 of R1's mysqld (then start) right before P is killed.
 func TestS11kRelayLogDiscardKill9(t *testing.T) {
-	s11(t, "S11k-relaylog-discard-kill9", false, func(s *Scenario, r1 *Node) {
-		s.KillMysqld(r1, true)
-		s.KillMysqld(s.OldPrimary, true)
-		time.Sleep(time.Second)
-		_ = s.RestartMysqld(r1)
-	})
+	s11(t, "S11k-relaylog-discard-kill9", false, false, kill9R1ThenP)
+}
+
+// S11ka: like S11k, but R1's applier is started after its restart, as ERS should do before it
+// waits for a candidate's relay log (with relay_log_recovery=0 the backlog survives the restart,
+// and nothing else starts the applier).
+func TestS11kaRelayLogKill9ApplierStarted(t *testing.T) {
+	s11(t, "S11ka-relaylog-kill9-applier-started", false, true, kill9R1ThenP)
+}
+
+func kill9R1ThenP(s *Scenario, r1 *Node) {
+	s.KillMysqld(r1, true)
+	s.KillMysqld(s.OldPrimary, true)
+	time.Sleep(time.Second)
+	_ = s.RestartMysqld(r1)
 }
 
 // s11b: no restart. With transactions unapplied on R1 (SOURCE_DELAY) and R2 not receiving,

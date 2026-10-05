@@ -156,6 +156,27 @@ No run lost an acknowledged write. This branch's binaries behave like `main`: no
 - **R3 (T26).** PRS returns as soon as `DemotePrimary` fails, and runs `UndoDemotePrimary` only when its later wait fails. Here the tablet completes the demotion but vtctld, cut off from it, never gets the response: the primary stays demoted until VTOrc's `fixPrimary` runs once PRS releases the lock.
 - **R5.** PRS succeeds in about 2.4s. Right after it, VTOrc queued `PrimaryIsReadOnly` and `PrimaryHasPrimary` for the old primary from its stale view; its re-check under the lock, which refreshes the tablet records, found both "no longer valid".
 
+## Keeping the relay log: relay_log_recovery=0 and sync_relay_log=1
+
+S11 loses acknowledged writes because a replica restart with `relay_log_recovery=1` discards the relay log, the only other copy of those writes. The scenarios below ran with this branch's binaries, `semisync-3vtorc`, and `relay_log_recovery=0` and `sync_relay_log=1` (`CHAOS_RELAY_LOG_SAFE=1`; reports in `results/fixed-relaylog-safe-semisync-3vtorc`). The S13 scenarios tear the newest relay log of the replica that holds the acknowledged backlog, inside an event, after a `kill -9` (mysqlbinlog confirms "truncated in the middle of event").
+
+| Scenario | Result |
+|---|---|
+| S11: graceful restart of the only acker, then the primary dies | failover 2.8s; 0 of 500 acknowledged writes lost |
+| S11ka: `kill -9` of the acker, then the primary dies; the acker's applier is started after its restart | failover 1.2s; 0 of 497 lost |
+| S11k: the same, but nothing starts the acker's applier | **no failover** for the whole run (T27) |
+| S13-T1/T1b: the last, unacknowledged transaction torn; primary alive | the applier does not stop on the tear; VTOrc's repair re-fetches it, 2–6s after VTOrc may act; nothing lost |
+| S13-T2/T2b: the tear also drops 201 complete, acknowledged transactions; primary alive | re-fetched from the primary; nothing lost |
+| S13-T3: the same tear, then the primary dies | 198 acknowledged writes lost |
+| S13-T3b: like T3, nothing starts the acker's applier | **no failover** (T27) |
+| S13-T4: the applier stops on a duplicate key | VTOrc's repairs cannot fix a data error (expected); healed once the row was removed |
+
+- **The relay log survives, and nothing acknowledged is lost** as long as the acker's applier runs: S11 and S11ka, the same scenarios that lose about 500 writes with `relay_log_recovery=1`.
+- **A torn relay log is not a problem.** MySQL 8.4's applier does not stop on a tail cut inside an event, and the receiver fetches the cut transactions again. A host crash can only tear what was not yet fsynced; with `sync_relay_log=1` that is at most the event being written, which the replica has not acknowledged yet. T2 and T3 cut acknowledged transactions on purpose, which is what `sync_relay_log` above 1 plus a host crash can do: T3 shows that `sync_relay_log=1` is what makes the acknowledgement survive a host crash.
+- **T27: ERS never starts a stopped applier.** After a mysqld restart, replication stays stopped (`skip_replica_start`), and vttablet cannot repoint to a dead primary. ERS's relay log wait (`WaitForRelayLogsToApply`, a `WaitForPosition`) waits for the applier without starting it, so every ERS fails ("all candidates failed to apply relay logs within the provided waitReplicasTimeout") and the shard has no primary. With `relay_log_recovery=1` this does not show, because the restart discarded the relay log: there is nothing to wait for, and the writes are lost instead.
+
+The harness had to be fixed for these runs (T23): the profile's my.cnf silently replaced S13's settings, so S13 had run with `relay_log_recovery=1`; S11's `SOURCE_DELAY` reset ran `CHANGE REPLICATION SOURCE` with both threads stopped, which purges the relay log; and the tear check misread compressed transactions.
+
 ## TLA+ model
 
 See `doc/design-docs/semi_sync_tla/README.md` for the model, its bounds and every counterexample.
@@ -198,20 +219,21 @@ The E2E reruns with the fixed binaries are in the table above.
 ## Recommendations
 
 **Deployment configuration, now.**
-- Set `relay_log_recovery=0` and `sync_relay_log=1` in the tablets' my.cnf. This closes S11, the loss path reproduced most often (500 writes per run). Cost: an fsync per relay log event on replicas, which adds to commit latency under semi-sync. Measure it.
+- Once T27 is fixed, set `relay_log_recovery=0` and `sync_relay_log=1` in the tablets' my.cnf (see "Keeping the relay log"). This closes S11, the loss path reproduced most often (500 writes per run); a torn relay log after a host crash heals by itself. Before T27 is fixed, `relay_log_recovery=0` turns S11's loss into a shard without a primary. Cost: an fsync per relay log event on replicas, which adds to commit latency under semi-sync. Measure it.
 - Consider VTOrc's `--emergency-reparent-require-primary-position`. It makes some of these losses fail closed.
 - **One VTOrc:** the single VTOrc is a single point of failover. With it in the primary's cell, a cell loss or partition meant no failover in V4, S9, S9i and S8. Run a standby VTOrc in another cell (three VTOrcs, one per cell), or at least keep the VTOrc out of the primary's cell.
 - **Three VTOrcs:** they contend for one shard lock. S4 and P2 show it starving the one recovery that matters (3C). The lock lease is not renewed (3B), which B8 and S8 (30s failover) depend on.
 
 **Vitess, next.** In order of severity:
-1. 3C: do not run `fixReplica` against a primary that its replicas cannot reach, or let shard-wide recoveries preempt it.
-2. S12: `initializeReplication` must not repoint or start replication while a reparent holds the shard lock.
-3. B5': ERS should cancel or await its `SetReplicationSource` RPCs before it releases the shard lock.
-4. B3/B4: `fixReplica` and ERS should refuse while a tablet holds a newer primary term than their target. VTOrc should pass `ExpectedPrimaryAlias`.
-5. 3B/B8/B9/T25: renew the etcd lease until unlock; today it also caps every PRS phase at about 30s and can leave the primary demoted (R2). `fixPrimary` should not undo a forced demotion, nor run while another tablet holds a newer term (B10).
-6. T26: PRS should run `UndoDemotePrimary` when `DemotePrimary` returns an error, and when its lock check after the demotion fails.
-7. S11 in code: repoint without discarding the relay log (receiver-only `CHANGE`), and drain the applier before unavoidable discards (audit §2).
-8. B7: repoint replicas to the candidate only once it is promoted, or restore them on abort.
+1. T27: ERS's relay log wait should start a candidate's stopped applier. It is what keeps `relay_log_recovery=0` from closing S11, and with it a replica restart can leave the shard without a primary.
+2. 3C: do not run `fixReplica` against a primary that its replicas cannot reach, or let shard-wide recoveries preempt it.
+3. S12: `initializeReplication` must not repoint or start replication while a reparent holds the shard lock.
+4. B5': ERS should cancel or await its `SetReplicationSource` RPCs before it releases the shard lock.
+5. B3/B4: `fixReplica` and ERS should refuse while a tablet holds a newer primary term than their target. VTOrc should pass `ExpectedPrimaryAlias`.
+6. 3B/B8/B9/T25: renew the etcd lease until unlock; today it also caps every PRS phase at about 30s and can leave the primary demoted (R2). `fixPrimary` should not undo a forced demotion, nor run while another tablet holds a newer term (B10).
+7. T26: PRS should run `UndoDemotePrimary` when `DemotePrimary` returns an error, and when its lock check after the demotion fails.
+8. S11 in code: repoint without discarding the relay log (receiver-only `CHANGE`), and drain the applier before unavoidable discards (audit §2).
+9. B7: repoint replicas to the candidate only once it is promoted, or restore them on abort.
 
 ## What VTOrc does that it should not
 

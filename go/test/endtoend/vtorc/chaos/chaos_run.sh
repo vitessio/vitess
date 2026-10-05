@@ -20,6 +20,7 @@
 #   CHAOS_TABLET_EXTRA_ARGS extra vttablet flags (space separated) for every tablet.
 #   CHAOS_WRITE_PROBE=1 also runs a write probe: transactions that wait up to 60s for their
 #                   outcome, to measure how long a primary that cannot commit blocks its clients.
+#   CHAOS_RELAY_LOG_SAFE=1 runs every mysqld with relay_log_recovery=0 and sync_relay_log=1.
 # The per-run VTDATAROOT is deleted afterwards, unless CHAOS_KEEP_DATA=1.
 set -uo pipefail
 

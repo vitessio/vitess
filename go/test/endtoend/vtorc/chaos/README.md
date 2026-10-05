@@ -14,7 +14,7 @@ Every simulated node runs in its own cgroup v2 leaf, and iptables drops traffic 
 | `workload.go`, `observer.go`, `invariants.go` | The write workload, the observer that samples every tablet, and the checks. |
 | `chaos_run.sh` | Runs the test binary as root, with the cgroups and capabilities the harness needs. |
 | `chaos_matrix.sh` | Runs a list of scenarios one by one under a profile. |
-| `chaos_plan.sh` | The scenario plan behind the report, in three phases (below). |
+| `chaos_plan.sh` | The scenario plan behind the report, in phases (below). |
 | `chaos_summary.py` | Turns the results of the matrix into the report's tables. |
 
 ## Prerequisites
@@ -71,6 +71,7 @@ go/test/endtoend/vtorc/chaos/chaos_plan.sh prs main
 # 2. With the binaries of this branch in bin/:
 go/test/endtoend/vtorc/chaos/chaos_plan.sh fixed
 go/test/endtoend/vtorc/chaos/chaos_plan.sh prs fixed
+go/test/endtoend/vtorc/chaos/chaos_plan.sh relaylog
 # 3. The tables:
 go/test/endtoend/vtorc/chaos/chaos_summary.py /home/ubuntu/chaos-results/main-semisync-3vtorc \
   /home/ubuntu/chaos-results/main-semisync-1vtorc-colo /home/ubuntu/chaos-results/main-semisync-1vtorc-remote
@@ -80,7 +81,7 @@ Each scenario writes `report.txt` (outcome, timings, violations, notes) and copi
 
 Expect timing variation between runs. Most of the report's failover times and outage lengths come from a single run, and P2's failover time ranged from 25s to 103s over its eight runs.
 
-The `main` phase ran with a harness build from shortly before this branch's first commit. The one later change that affects its reports: DRAINED tablets are no longer checked for catching up with the primary, so a rerun does not report the "did not catch up" violations that the report lists as artifacts. The `probe` and `fixed` phases ran with the harness as it is here, apart from the profile names. S11b and the S13 scenarios still report harness artifacts, also described in the report.
+The `main` phase ran with a harness build from shortly before this branch's first commit. The one later change that affects its reports: DRAINED tablets are no longer checked for catching up with the primary, so a rerun does not report the "did not catch up" violations that the report lists as artifacts. The `probe` and `fixed` phases ran with the harness as it is here, apart from the profile names. S11b still reports a harness artifact (T23). The S13 scenarios always run with `relay_log_recovery=0` and `sync_relay_log=1`; the `relaylog` phase sets `CHAOS_RELAY_LOG_SAFE=1` so that S11, S11k and S11ka do too.
 
 ## One scenario
 
