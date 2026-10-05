@@ -983,8 +983,9 @@ func (qre *QueryExecutor) checkAccess(authorized *tableacl.ACLResult, tableName 
 // group that covers every table ("%"), and then only for a caller who holds
 // every role in it, since the statement may read, write or alter any of them;
 // the roles are granted separately, so being an ADMIN alone does not let a
-// caller read. Such a caller may run the statement whatever it touches. Any
-// other caller is denied under strict table ACL.
+// caller read. CALL and LOAD DATA are not covered even then, as they can act
+// beyond any table (see TabletPlan.buildAuthorized). Any other caller is
+// denied under strict table ACL.
 func (qre *QueryExecutor) checkUndeterminedTableAccess(callerID *querypb.VTGateCallerID) error {
 	authorized := qre.plan.AuthorizedUndetermined
 	var aclState acl.ACLState

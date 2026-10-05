@@ -105,7 +105,14 @@ func (ep *TabletPlan) buildAuthorized() {
 	}
 	// Resolved with 'Authorized', so that one plan checks every table against
 	// the same configuration; a reload clears the plan cache.
-	if ep.TablesUndetermined {
+	switch {
+	case !ep.TablesUndetermined:
+	case ep.PlanID == planbuilder.PlanCallProc || ep.PlanID == planbuilder.PlanLoad:
+		// A CALL can run a SQL SECURITY DEFINER procedure with its definer's
+		// privileges, and LOAD DATA INFILE reads files on the server. Table ACL
+		// grants neither, so not even every role on every table covers them.
+		ep.AuthorizedUndetermined = &tableacl.ACLResult{ACL: tacl.DenyAllACL{}}
+	default:
 		ep.AuthorizedUndetermined = tableacl.AuthorizedForAllTables()
 	}
 }

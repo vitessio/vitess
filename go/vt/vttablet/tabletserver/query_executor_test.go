@@ -1143,17 +1143,22 @@ func TestQueryExecutorTableAclPassthroughDenied(t *testing.T) {
 
 	// A subquery-reading DO, a stored-procedure CALL, and a LOAD DATA: one per
 	// tablet plan type whose statement the parser leaves opaque.
+	// allTablesRuns tells whether a caller holding every role on every table
+	// may run the statement. A CALL can run a SQL SECURITY DEFINER procedure
+	// with its definer's privileges, and LOAD DATA INFILE reads files on the
+	// server, neither of which table ACL grants, so both stay exempt-only.
 	cases := []struct {
-		name   string
-		query  string
-		planID planbuilder.PlanType
+		name          string
+		query         string
+		planID        planbuilder.PlanType
+		allTablesRuns bool
 	}{
-		{"do with table subquery", "do (select email from test_table where pk = 3 limit 1)", planbuilder.PlanOtherAdmin},
-		{"call stored procedure", "call test_proc()", planbuilder.PlanCallProc},
+		{"do with table subquery", "do (select email from test_table where pk = 3 limit 1)", planbuilder.PlanOtherAdmin, true},
+		{"call stored procedure", "call test_proc()", planbuilder.PlanCallProc, false},
 		// LOAD DATA is the same gap on the write side: the parser discards
 		// everything after LOAD DATA, and the stock init_db.sql grants vt_app
 		// the FILE privilege, so a server-side INFILE into a denied table runs.
-		{"load data into table", "load data infile '/var/lib/mysql-files/x.csv' into table test_table", planbuilder.PlanLoad},
+		{"load data into table", "load data infile '/var/lib/mysql-files/x.csv' into table test_table", planbuilder.PlanLoad, false},
 	}
 
 	// test_table is readable only by "superuser"; the caller "u2" is in no group.
@@ -1266,11 +1271,18 @@ func TestQueryExecutorTableAclPassthroughDenied(t *testing.T) {
 			// A caller holding every role in a group that covers every table may
 			// do anything to any table the statement could touch, so its
 			// unknown table set does not matter. One that lacks a role does not.
-			t.Run("a caller with every role on every table runs", func(t *testing.T) {
+			t.Run("a caller with every role on every table", func(t *testing.T) {
 				useAllTablesConfig(t)
 				tsv := newServer(t, enableStrictTableACL)
 				qre := newTestQueryExecutor(adminCtx, tsv, tc.query, 0)
 				require.True(t, qre.plan.TablesUndetermined)
+				if !tc.allTablesRuns {
+					calledBefore := db.GetQueryCalledNum(tc.query)
+					_, err := qre.Execute()
+					require.EqualError(t, err, tc.planID.String()+" command denied to user 'u4' for a table set that cannot be determined (ACL check error)")
+					assert.Equal(t, calledBefore, db.GetQueryCalledNum(tc.query), "the backend must not see a statement the ACL denied")
+					return
+				}
 				allowedKey := strings.Join([]string{"undetermined-table-set", "all", tc.planID.String(), "u4"}, ".")
 				allowedBefore := tsv.stats.TableaclAllowed.Counts()[allowedKey]
 				calledBefore := db.GetQueryCalledNum(tc.query)
