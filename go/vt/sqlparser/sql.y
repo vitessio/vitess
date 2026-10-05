@@ -1780,33 +1780,37 @@ default_optional:
   }
 
 character_set:
-  default_optional charset_or_character_set equal_opt ID
+  default_optional charset_or_character_set equal_opt sql_id
   {
-    $$ = DatabaseOption{Type:CharacterSetType, Value:string($4), IsDefault:$1}
+    $$ = DatabaseOption{Type:CharacterSetType, Value:$4.String(), IsDefault:$1}
   }
 | default_optional charset_or_character_set equal_opt STRING
   {
-    $$ = DatabaseOption{Type:CharacterSetType, Value:encodeSQLString($4), IsDefault:$1}
+    $$ = DatabaseOption{Type:CharacterSetType, Value:string($4), IsDefault:$1}
+  }
+| default_optional charset_or_character_set equal_opt BINARY
+  {
+    $$ = DatabaseOption{Type:CharacterSetType, Value:string($4), IsDefault:$1}
   }
 
 collate:
-  default_optional COLLATE equal_opt ID
+  default_optional COLLATE equal_opt sql_id
   {
-    $$ = DatabaseOption{Type:CollateType, Value:string($4), IsDefault:$1}
+    $$ = DatabaseOption{Type:CollateType, Value:$4.String(), IsDefault:$1}
   }
 | default_optional COLLATE equal_opt STRING
   {
-    $$ = DatabaseOption{Type:CollateType, Value:encodeSQLString($4), IsDefault:$1}
+    $$ = DatabaseOption{Type:CollateType, Value:string($4), IsDefault:$1}
+  }
+| default_optional COLLATE equal_opt BINARY
+  {
+    $$ = DatabaseOption{Type:CollateType, Value:string($4), IsDefault:$1}
   }
 
 encryption:
-  default_optional ENCRYPTION equal_opt ID
+  default_optional ENCRYPTION equal_opt STRING
   {
     $$ = DatabaseOption{Type:EncryptionType, Value:string($4), IsDefault:$1}
-  }
-| default_optional ENCRYPTION equal_opt STRING
-  {
-    $$ = DatabaseOption{Type:EncryptionType, Value:encodeSQLString($4), IsDefault:$1}
   }
 
 create_like:
@@ -1946,7 +1950,11 @@ column_attribute_list_opt:
   }
 | column_attribute_list_opt COLLATE STRING
   {
-    $1.Collate = encodeSQLString($3)
+    if $3 == "" {
+      yylex.Error("collation name cannot be empty")
+      return 1
+    }
+    $1.Collate = string($3)
   }
 | column_attribute_list_opt COLLATE ci_identifier
   {
@@ -2748,7 +2756,11 @@ charset_opt:
   }
 | charset_or_character_set STRING binary_opt
   {
-    $$ = ColumnCharset{Name: encodeSQLString($2), Binary: $3}
+    if $2 == "" {
+      yylex.Error("charset name cannot be empty")
+      return 1
+    }
+    $$ = ColumnCharset{Name: string($2), Binary: $3}
   }
 | charset_or_character_set BINARY
   {
@@ -2793,13 +2805,21 @@ collate_opt:
   {
     $$ = ""
   }
-| COLLATE ci_identifier
+| COLLATE sql_id
   {
     $$ = string($2.String())
   }
 | COLLATE STRING
   {
-    $$ = encodeSQLString($2)
+    if $2 == "" {
+      yylex.Error("collation name cannot be empty")
+      return 1
+    }
+    $$ = string($2)
+  }
+| COLLATE BINARY
+  {
+    $$ = string($2)
   }
 
 index_definition:
@@ -3221,6 +3241,10 @@ table_option:
   }
 | ENGINE equal_opt table_alias
   {
+    if $3.String() == "" {
+      yylex.Error("engine name cannot be empty")
+      return 1
+    }
     $$ = &TableOption{Name:string($1), String:$3.String(), CaseSensitive: true}
   }
 | ENGINE_ATTRIBUTE equal_opt STRING
@@ -3285,7 +3309,7 @@ table_option:
   }
 | TABLESPACE equal_opt sql_id storage_opt
   {
-    $$ = &TableOption{Name:string($1), String: ($3.String() + $4), CaseSensitive: true}
+    $$ = &TableOption{Name:string($1), String:$3.String(), Storage:$4, CaseSensitive: true}
   }
 | UNION equal_opt '(' table_name_list ')'
   {
@@ -4450,6 +4474,10 @@ partition_storage_opt:
 partition_engine:
   partition_storage_opt ENGINE equal_opt table_alias
   {
+    if $4.String() == "" {
+      yylex.Error("engine name cannot be empty")
+      return 1
+    }
     $$ = &PartitionEngine{Storage:$1, Name: $4.String()}
   }
 
@@ -4486,6 +4514,10 @@ partition_min_rows:
 partition_tablespace_name:
   TABLESPACE equal_opt table_alias
   {
+    if $3.String() == "" {
+      yylex.Error("tablespace name cannot be empty")
+      return 1
+    }
     $$ = $3.String()
   }
 
@@ -7954,6 +7986,10 @@ charset:
   }
 | STRING
   {
+    if $1 == "" {
+      yylex.Error("charset or collation name cannot be empty")
+      return 1
+    }
     $$ = string($1)
   }
 | BINARY

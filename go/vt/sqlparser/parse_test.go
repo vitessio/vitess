@@ -64,7 +64,7 @@ var validSQL = []struct {
 	output: "create table t (\n\tid int primary key,\n\tdt datetime default (now() + 1)\n)",
 }, {
 	input:  "create table x (e enum('red','yellow') null collate 'utf8_bin')",
-	output: "create table x (\n\te enum('red', 'yellow') collate 'utf8_bin' null\n)",
+	output: "create table x (\n\te enum('red', 'yellow') collate utf8_bin null\n)",
 }, {
 	input:  "create table 3t2 (c1 bigint not null, c2 text, primary key(c1))",
 	output: "create table `3t2` (\n\tc1 bigint not null,\n\tc2 text,\n\tprimary key (c1)\n)",
@@ -590,7 +590,7 @@ var validSQL = []struct {
 	partialDDL: true,
 }, {
 	input:  "alter database charset charset = 'utf16'",
-	output: "alter database `charset` character set 'utf16'",
+	output: "alter database `charset` character set utf16",
 }, {
 	input:  "create table t(id int unique)",
 	output: "create table t (\n\tid int unique\n)",
@@ -1787,14 +1787,16 @@ var validSQL = []struct {
 }, {
 	input: "alter database d character set geostd8",
 }, {
-	input: "alter database d default collate 'utf8_bin'",
+	input:  "alter database d default collate 'utf8_bin'",
+	output: "alter database d default collate utf8_bin",
 }, {
-	input: "alter database default collate 'utf8_bin'",
+	input:  "alter database default collate 'utf8_bin'",
+	output: "alter database default collate utf8_bin",
 }, {
 	input: "alter database d upgrade data directory name",
 }, {
 	input:  "alter database d collate = 'utf8_bin'",
-	output: "alter database d collate 'utf8_bin'",
+	output: "alter database d collate utf8_bin",
 }, {
 	input:  "alter schema d default character set = geostd8",
 	output: "alter database d default character set geostd8",
@@ -1803,10 +1805,10 @@ var validSQL = []struct {
 	output: "alter database d character set geostd8",
 }, {
 	input:  "alter schema d default collate = 'utf8_bin'",
-	output: "alter database d default collate 'utf8_bin'",
+	output: "alter database d default collate utf8_bin",
 }, {
 	input:  "alter schema d collate = 'utf8_bin' character set = geostd8 character set = geostd8",
-	output: "alter database d collate 'utf8_bin' character set geostd8 character set geostd8",
+	output: "alter database d collate utf8_bin character set geostd8 character set geostd8",
 }, {
 	input:  `DROP INDEX Indexes ON mydb.mytable`,
 	output: "alter table mydb.mytable drop key `Indexes`",
@@ -3111,7 +3113,8 @@ var validSQL = []struct {
 	input:  "create schema if not exists test_db",
 	output: "create database if not exists test_db",
 }, {
-	input: "create database test_db default collate 'utf8mb4_general_ci' collate utf8mb4_general_ci",
+	input:  "create database test_db default collate 'utf8mb4_general_ci' collate utf8mb4_general_ci",
+	output: "create database test_db default collate utf8mb4_general_ci collate utf8mb4_general_ci",
 }, {
 	input: "create database test_db character set geostd8",
 }, {
@@ -5037,7 +5040,8 @@ func TestSelectInto(t *testing.T) {
 		input:  "select * from (select * from t union select * from t2) as t3 where t3.name in (select col from t4) into outfile s3 'out_file_name'",
 		output: "select * from (select * from t union select * from t2) as t3 where t3.`name` in (select col from t4) into outfile s3 'out_file_name'",
 	}, {
-		input: `select * from TestPerson into outfile s3 's3://test-bucket/export_import/export/users.csv' character set 'utf8' overwrite on`,
+		input:  `select * from TestPerson into outfile s3 's3://test-bucket/export_import/export/users.csv' character set 'utf8' overwrite on`,
+		output: `select * from TestPerson into outfile s3 's3://test-bucket/export_import/export/users.csv' character set utf8 overwrite on`,
 	}, {
 		input: `select * from t1 into outfile '/tmp/foo.csv' fields escaped by '\\' terminated by '\n'`,
 	}, {

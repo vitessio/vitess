@@ -75,6 +75,7 @@
         - [Connections whose certificate revocation cannot be checked against a configured CRL are rejected](#vttls-crl-fail-closed)
         - [Optional gRPC TLS: connections are counted by transport](#grpc-optional-tls-connections)
         - [ORCA metrics now report QPS and EPS](#grpc-orca-qps)
+        - [Charset and collation names are quoted when regenerated](#sqlparser-charset-name-quoting)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -847,3 +848,17 @@ See [#21161](https://github.com/vitessio/vitess/issues/21161) for details.
 With `--grpc-enable-orca-metrics`, gRPC servers now report QPS and EPS in their ORCA load reports, alongside CPU and memory utilization. QPS is the rate of gRPC messages sent plus failed calls: one per unary response or stream message, and one per call that fails, so long-lived streams such as `VStream` keep counting while they send. EPS is the rate of calls whose gRPC handler returns an error; query errors that VTGate returns inside a successful response, as `Execute` does, are not counted. Health checks and ORCA reports are not counted.
 
 Clients using gRPC's standard `weighted_round_robin` policy with `enableOobLoadReport: true` ignore reports without QPS, so they previously fell back to plain round robin. After upgrading a server that has `--grpc-enable-orca-metrics` set, those clients switch to weighted routing with no configuration change. The policy weighs each server by its QPS, CPU utilization, and error rate.
+
+#### <a id="sqlparser-charset-name-quoting"/>Charset and collation names are quoted when regenerated</a>
+
+A charset, collation, engine, tablespace or full-text parser name is now decoded when parsed, and written back as a single token when Vitess regenerates the statement: bare when it is a plain name, back-quoted otherwise.
+
+User-visible consequences:
+
+- **A quoted name is normalized.** `COLLATE 'utf8_bin'` regenerates as `COLLATE utf8_bin` — the quoted and unquoted spellings mean the same name, and the decoded form is what is stored. Anything comparing the printed form of these statements byte for byte sees the new spelling.
+- **A name that is a keyword is quoted instead.** Names are written back in whatever form the position they sit in can read. Only a non-reserved keyword such as `memory` stays bare; any other word the parser treats as a keyword comes back back-quoted, whether it is a reserved word such as `select`, a keyword such as `cast` that the parser does not accept as an identifier, or a charset introducer such as `_utf8mb4`. A name in a position that only accepts a plain identifier is quoted even when it is a non-reserved keyword: ``WITH PARSER `memory` `` keeps its quoting where `ENGINE memory` does not. Real charset and collation names are unaffected, and `binary` is still bare where the grammar has a `BINARY` alternative, except directly before the `BINARY` attribute: `CHARACTER SET 'binary' BINARY` regenerates as ``CHARACTER SET `binary` BINARY``.
+- **`COLLATE binary` in an expression is quoted.** `expr COLLATE binary` regenerates as ``expr COLLATE `binary` ``, because MySQL's expression `COLLATE` only accepts `binary` quoted. Column, table and database `COLLATE binary` and `CHARACTER SET binary` stay bare.
+- **An empty charset, collation, engine or partition tablespace name is rejected.** `CHARACTER SET ''` and `COLLATE ''` on a column, a table, `ALTER TABLE ... CONVERT TO`, `CAST`/`CONVERT`, `CONVERT ... USING`, `CHAR ... USING`, `SELECT ... INTO OUTFILE` and an expression, `ENGINE ''` on a table or a partition, and a partition's `TABLESPACE ''` no longer parse. An empty name in these positions is indistinguishable from the clause being absent, so it would previously have been dropped or mangled and a statement MySQL rejects could have become a valid, different one. Non-DDL statements get the error directly; DDL falls back to a partial parse, so the client's own text is forwarded and MySQL rejects it. `SET NAMES ... COLLATE ''` and `SET CHARACTER SET ... COLLATE ''`, which used to parse and discard the collation, are now parse errors too; MySQL rejects both. `CREATE`/`ALTER DATABASE ... CHARACTER SET ''` and `COLLATE ''` are unchanged: they still parse and are written back as `''`.
+- **`ENCRYPTION` requires a quoted value.** `CREATE`/`ALTER DATABASE ... ENCRYPTION N` no longer fully parses, matching MySQL, which only accepts `'Y'` or `'N'` as a quoted string. Such a statement now falls back to a partial parse rather than being regenerated into a spelling MySQL would refuse.
+
+For anything building a `sqlparser.TableOption` directly, `String` now holds one name only: `TABLESPACE`'s optional trailing `STORAGE` clause moved to the new `Storage` field, because a value holding two clauses cannot be quoted as a name.

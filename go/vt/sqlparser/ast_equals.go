@@ -8575,6 +8575,7 @@ func (cmp *Comparator) RefOfTableOption(a, b *TableOption) bool {
 	return a.Name == b.Name &&
 		a.String == b.String &&
 		a.CaseSensitive == b.CaseSensitive &&
+		a.Storage == b.Storage &&
 		cmp.RefOfLiteral(a.Value, b.Value) &&
 		cmp.TableNames(a.Tables, b.Tables)
 }
