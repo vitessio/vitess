@@ -36,7 +36,7 @@ func TestParseConnectionCharset(t *testing.T) {
 
 	for _, name := range []string{"sjis", "sjis_bin", "cp932", "cp932_japanese_ci", "gb18030_unicode_520_ci", "gbk", "big5", "ucs2", "utf16", "utf16le", "utf16_bin", "utf32"} {
 		_, err := env.ParseConnectionCharset(name)
-		require.ErrorContains(t, err, "unsupported connection charset", "connection charset %q", name)
+		require.ErrorContains(t, err, "unsupported connection character set", "connection charset %q", name)
 	}
 
 	// A client can ask for any collation in its handshake, including ones Vitess
