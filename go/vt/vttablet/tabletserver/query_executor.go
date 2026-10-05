@@ -942,8 +942,10 @@ func (qre *QueryExecutor) checkPermissions() error {
 	// a table the planner did derive by name, and a dry run records it. The
 	// planner flags such statements in the one switch that must account for
 	// every statement type (BuildPermissions), so this needs no list of its
-	// own. The exempt ACL applied above stays as the escape hatch for
-	// operators who need these statements.
+	// own. Two kinds of caller can still run them: one in the exempt ACL
+	// applied above, and one holding every role in a table group that covers
+	// every table ("%"), except for CALL and LOAD DATA, which stay exempt-only
+	// (see checkUndeterminedTableAccess).
 	if qre.plan.TablesUndetermined {
 		return qre.checkUndeterminedTableAccess(callerID)
 	}
