@@ -1,6 +1,7 @@
 #!/bin/bash
 # Runs TLC on the configurations of GRSafety.tla and checks each outcome against the expected one:
-# "pass" (no error), "deadlock" (the stuck-state check), or the invariant that must be violated.
+# "pass" (no error), "deadlock" (the stuck-state check), "liveness" (a temporal property violated), or the invariant
+# that must be violated.
 #
 # Usage: ./run.sh [config ...]      (default: every configuration below, in order)
 #
@@ -54,10 +55,63 @@ EXPECTED=(
   tablet_tx2:pass
   integrated:pass
   integrated_core:pass
+  # second milestone: validation and findings (each stops at its first violation)
+  voters_nogroup:NoLostAck
+  voters_nosettle:NoLostAck
+  voters_minority:NoVoterMinority
+  voters_split_slow:NoLostAck
+  voters_split_drop:NoLostAck
+  voters_split_noreach:NoLostAck
+  voters_split_nonvoter:NoLostAck
+  undo_nocheck:NoLostAck
+  setrw_nocheck:NoLostAck
+  prs_demote_fail:NoDecisionAck
+  prs_demote_restart:NoLostAck
+  prs_demote_fence:FenceNotUndone
+  init_rerun:NoDualBootstrap
+  init_fault:OneWritablePrimary
+  init_direct:NoLostAck
+  init_orc:NoDualBootstrap
+  init_orc_lost:NoLostAck
+  init_orc_vgtid:NoDualBootstrap
+  init_guard_intent:NoDualBootstrap
+  init_guard_noint:NoDualBootstrap
+  init_orc_unrec:NoLostAck
+  # second milestone: the current design
+  voters:pass
+  voters_fixed:pass
+  prs:pass
+  ers:pass
+  setrw:pass
+  init_alone:pass
+  live:pass
+  live_init:pass
+  live_init_prs:pass
+  live_init_prs_fail:liveness
+  live_init_prs_adopt:pass
+  live_voters:pass
+  live_voters_fence:pass
+  init_direct_ro:pass
+  voters_split:pass
+  voters_split1:pass
+  voters_split_prompt:pass
+  voters_code:pass
+  # second milestone: the fixes of the three findings
+  prs_fixed:pass
+  prs_fixed_restart:pass
+  init_orc_fixed:pass
+  init_orc_fixed_vgtid:pass
+  init_orc_guard:pass
+  init_fault_fixed:pass
+  init_orc_adopt:pass
+  fixed:pass
 )
 
 # Too large to explore exhaustively: random behaviors with a fixed seed (-simulate).
-SIMULATED=(tablet_tx2 integrated integrated_core)
+SIMULATED=(tablet_tx2 integrated integrated_core voters_split fixed init_orc_guard)
+
+# Temporal properties: the module GRLiveness.tla, which adds fairness to GRSafety.tla.
+LIVENESS=(live live_init live_init_prs live_init_prs_fail live_init_prs_adopt live_voters live_voters_fence)
 
 expected_of() {
   for e in "${EXPECTED[@]}"; do
@@ -76,14 +130,17 @@ for c in "${configs[@]}"; do
   want=$(expected_of "$c")
   if [ -z "$want" ]; then echo "$c: unknown configuration" >&2; failed=1; continue; fi
   args=(-workers auto -noGenerateSpecTE -config "$c.cfg" -metadir "$OUT/states/$c")
-  # Every configuration but the stuck-state check ignores states without successors (budgets used up).
-  [ "$want" != deadlock ] && args+=(-deadlock)
+  # A configuration without the stuck-state check (STUCK_CHECK) ignores states without successors (budgets
+  # used up); one with it reports them, as a deadlock, unless Done marks them healthy.
+  grep -q '^  STUCK_CHECK = TRUE$' "$c.cfg" || args+=(-deadlock)
   sim=no
   for x in "${SIMULATED[@]}"; do [ "$x" = "$c" ] && sim=yes; done
   [ $sim = yes ] && args+=(-simulate "num=${TLC_SIM_TRACES:-100000}" -depth 120 -seed 1)
+  module=GRSafety.tla
+  for x in "${LIVENESS[@]}"; do [ "$x" = "$c" ] && module=GRLiveness.tla; done
   rm -rf "$OUT/states/$c"
   start=$(date +%s)
-  java -XX:+UseParallelGC -Xmx"$HEAP" -cp "$JAR" tlc2.TLC "${args[@]}" GRSafety.tla > "$OUT/$c.out" 2>&1
+  java -XX:+UseParallelGC -Xmx"$HEAP" -cp "$JAR" tlc2.TLC "${args[@]}" "$module" > "$OUT/$c.out" 2>&1
   secs=$(( $(date +%s) - start ))
   rm -rf "$OUT/states/$c"
   states=$(grep -Eo '[0-9,]+ distinct states found' "$OUT/$c.out" | tail -1)
@@ -96,11 +153,12 @@ for c in "${configs[@]}"; do
     pass)     if [ $sim = yes ]; then grep -q '^Finished in' "$OUT/$c.out" && ! grep -q '^Error:' "$OUT/$c.out"
               else grep -q 'Model checking completed. No error has been found.' "$OUT/$c.out"; fi ;;
     deadlock) grep -q 'Error: Deadlock reached.' "$OUT/$c.out" ;;
+    liveness) grep -Eq '^Error: Temporal propert(ies were|y [A-Za-z]+ was) violated' "$OUT/$c.out" ;;
     *)        grep -q "Error: Invariant $want is violated." "$OUT/$c.out" ;;
   esac
   if [ $? -eq 0 ]; then result=ok; else result=UNEXPECTED; failed=1; fi
   trace=$(grep -Ec '^State [0-9]+: ' "$OUT/$c.out")
-  found=$(grep -Eo '^Error: (Invariant [A-Za-z]+ is violated|Deadlock reached)' "$OUT/$c.out" | head -1 | sed 's/^Error: //')
+  found=$(grep -Eo '^Error: (Invariant [A-Za-z]+ is violated|Deadlock reached|Temporal properties were violated|Temporal property [A-Za-z]+ was violated)' "$OUT/$c.out" | head -1 | sed 's/^Error: //')
   if [ -n "$found" ]; then outcome="$found, counterexample of $trace states"; else outcome="no error"; fi
   printf '%-20s expected %-16s %-10s %6ss  %s, %s, %s\n' "$c" "$want" "$result" "$secs" "${states:-?}" "$depth" "$outcome"
 done

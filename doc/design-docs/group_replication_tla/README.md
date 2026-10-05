@@ -2,7 +2,7 @@
 
 `GRSafety.tla` models one shard of Vitess's Group Replication support (design: `doc/design-docs/GroupReplication.md`; every bug found so far: `doc/failover-audit/GroupReplication.md`). It covers MySQL Group Replication as far as safety needs it, the voters' vttablets (sync loop, fence check, bootstrap RPC), and up to two VTOrcs with a shard lock whose lease can expire. The model follows the code on the `group-replication-prototype` branch, not an idealized design. Each fix is a `CONSTANT` switch, so the model can check the design with the fix and reproduce the bug without it.
 
-It is the first milestone. It is a bounded model check, not a proof. The bounds, and everything the model leaves out, are listed below.
+The first milestone covered the bootstrap protocol and the tablets' serving decisions. The second (see "Second milestone") adds voter replacement, `PlannedReparentShard`, `EmergencyReparentShard` and the initial promotion, the RPCs that make MySQL writable (`DemotePrimary` and its revert, `UndoDemotePrimary`, `SetReadWrite`), mysqld restarts under a running vttablet, a shard that never had a primary, and a liveness check with fairness (`GRLiveness.tla`). It found six problems in the code (findings 3 to 8); their fixes are on branch `gr-fixes5`, pending merge, and the model checks each of them. It is a bounded model check, not a proof. The bounds, and everything the model leaves out, are listed below.
 
 ## Running it
 
@@ -11,11 +11,11 @@ TLA2TOOLS_JAR=/path/to/tla2tools.jar ./run.sh              # every configuration
 TLA2TOOLS_JAR=/path/to/tla2tools.jar ./run.sh new1 orcs    # some of them
 ```
 
-`run.sh` runs TLC with `-workers auto` and prints, per configuration, whether the outcome matches the expected one (no error, a deadlock for the stuck-state check, or a violation of the named invariant), with the time, the distinct states, the depth and the trace length. It exits non-zero on an unexpected outcome. `TLA2TOOLS_JAR` defaults to `tla2tools.jar` next to the script, which `.gitignore` keeps out of the repository; download it from the TLA+ releases (the runs below used a nightly TLC, 2026.10.02). `TLC_HEAP` (default `8g`) sets the Java heap, `TLC_OUT` (default `out/`) the output directory, and `TLC_SIM_TRACES` (default 100,000 per worker) the behaviors of the configurations that run in simulation (`SIMULATED` in `run.sh`). The TLC outputs keep the full counterexample traces. The whole suite takes about two and a half hours on 4 cores.
+`run.sh` runs TLC with `-workers auto` and prints, per configuration, whether the outcome matches the expected one (no error, a deadlock for the stuck-state check, or a violation of the named invariant), with the time, the distinct states, the depth and the trace length. It exits non-zero on an unexpected outcome. A configuration with the stuck-state check (`STUCK_CHECK`) runs with TLC's deadlock check, which reports a state without successors that `Done` does not mark as a healthy end state; every other configuration ignores states without successors (its budgets are used up). `live` checks the liveness module `GRLiveness.tla`. `TLA2TOOLS_JAR` defaults to `tla2tools.jar` next to the script, which `.gitignore` keeps out of the repository; download it from the TLA+ releases (the runs below used a nightly TLC, 2026.10.02). `TLC_HEAP` (default `8g`) sets the Java heap, `TLC_OUT` (default `out/`) the output directory, and `TLC_SIM_TRACES` (default 100,000 per worker) the behaviors of the configurations that run in simulation (`SIMULATED` in `run.sh`). The TLC outputs keep the full counterexample traces. The whole suite takes about four hours on 4 cores.
 
 ## What is modeled
 
-**Voters.** Three servers, each a host with a mysqld and a vttablet; all three are the shard's voters, which never change. A host crash takes down both.
+**Voters.** Three servers, each a host with a mysqld and a vttablet. All three are the shard's voters; in the first milestone the list never changes (voter replacement: "Second milestone"). A host crash takes down both.
 
 **MySQL and Group Replication.**
 - A group incarnation `i` has a view, a primary and a history `hist[i]`: the data of the member that bootstrapped it, plus every transaction decided in it. A commit is decided once a majority of the *current view* accepts it (MySQL's view quorum), and is acknowledged right away.
@@ -49,6 +49,7 @@ TLA2TOOLS_JAR=/path/to/tla2tools.jar ./run.sh new1 orcs    # some of them
 | `NoAsyncVoter` | No voter replicates on the default channel (NEW-3). |
 | `NoDualBootstrap` | No two live groups were bootstrapped on different tablets from the same recorded incarnation. Checked under the timing assumption `INTENT_OUTLASTS_BOOT` (below), and with the shard record answering the tablet (`TOKEN_TOPO_TIMEOUT` off). It is a structural property: a second group is read-only, not served and never recorded, so it costs availability, not data (see Finding 2). |
 | `NoMinorityAck` | No write is acknowledged by a view that holds fewer than a majority of the voters. **Expected to be violated.** |
+| `NoVoterMinority` | No voter write lets a live view of the recorded incarnation that held fewer than a majority of the old voters hold a majority of the new ones (second milestone). |
 
 **`NoMinorityAck` is a documented, expected violation.** The probe defined it as "every acknowledged write was accepted by a view holding a majority of the voters". MySQL's quorum is that of the current view, not of the voters: when voters leave cleanly, a serving primary alone in its view keeps quorum and keeps committing, and it was writable before its view shrank, so nothing in MySQL fences it. The fence check sets `super_read_only` within about 150ms, and the sync loop stops serving within a second; the writes in between are acknowledged on one voter (G11: 4–20 writes). They are not lost: they are decided in the recorded incarnation (`NoLostAck` holds), and a group that later loses its majority is bootstrapped again only with every voter reachable, on the voter that holds them. The `minority` configuration shows the 4-step trace: a commit, a crash and a clean leave shrink the primary's view to itself, and the next commit is acknowledged by one voter. This is the same trade-off as a semi-sync primary that acknowledges before its replica stores the transaction; `paxos_single_leader` does not change it.
 
@@ -259,9 +260,223 @@ The RPC's failure is not a definitive refusal, and VTOrc no longer chooses s2, s
 
 **What remains.** A re-probe that fails without a definitive refusal keeps the intent, as the first RPC did; VTOrc re-probes on each pass while the target answers, at most once per pass. While the target does not answer, or runs a `START`, the intent fences the other voters until it expires.
 
+## Second milestone
+
+### What it adds
+
+- **Voter replacement** (`VOTERS`, VTOrc's `GroupVotersOutOfDate`). The shard record lists the voters (`voters`), and the tablets, VTOrc, PRS and ERS count the voter majority against the list it holds now. A host that is down for the replacement grace period has failed (`GraceExpire`; with `GRACE_SETTLES`, only once the live group of the recorded incarnation has a primary whose election ended after the host went down). VTOrc, under the shard lock, while a member of the recorded incarnation is active with quorum (`VOTERS_NEED_GROUP`), writes a list without some failed voters (`OVotRead`); with `VOT_SPLIT`, the write is a separate step (`OVotWrite`), so that the statuses can change and the lease expire in between. A member that is no longer a voter leaves the group when the group keeps a majority of its members without it (`VLeave`). The model has no spare tablet: a voter is replaced only by a smaller list.
+- **PlannedReparentShard** (`PRS`): the preflight under the shard lock, `DemotePrimary` on the current primary (it stops serving and sets `super_read_only`), the wait for the primary-elect (`UndoDemotePrimary` on the old primary when it fails), `PromoteReplica` (`group_replication_set_as_primary` on a member that is not the group's primary, then the promotion's decision), the reparent journal. With `DEMOTE_FAIL`, the demotion's last step, the read of the primary status, fails after `super_read_only` was set, and the handler's deferred reverts run.
+- **EmergencyReparentShard** (`ERS`): a reachable member of the legitimate group with quorum that reports its primary; that primary, or another ONLINE member of its view, is promoted with `PromoteReplica`. ERS demotes nobody.
+- **The RPCs that make MySQL writable**: `UndoDemotePrimary`, sent by VTOrc's `PrimaryIsReadOnly` recovery, and `SetReadOnly(false)` (`SetReadWrite`), each a decision under the action lock in three steps, like the sync loop's.
+- **The initial promotion** (`INIT_EMPTY`, `INIT_PRS`): a shard that never had a primary, with no group and nothing recorded, every MySQL read-only. PRS's `performInitialPromotion` calls `InitPrimary`, which bootstraps a group of one and makes MySQL writable before its decision to serve (the exception, `INIT_WRITABLE`), and records the new incarnation with a compare-and-swap. VTOrc bootstraps the same shard on its own (`GroupNotBootstrapped`). Until the first incarnation is recorded, the incarnation is unknown, and the code then applies the voter rule only (`policy.LegitimateGroup.inIncarnation`).
+- **Environment**: a writable MySQL outside of any group takes writes on its own (`STANDALONE`; one in the ERROR state does not, since its `before_commit` hook refuses them); mysqld restarts while its vttablet keeps running, its state and its RPCs (`MYSQLD_RESTART`), and comes back OFFLINE and `super_read_only`; with `VIEW_GTIDS`, the bootstrap of a group logs a view change event with a GTID in its member's binlog and in the group's history.
+- **Liveness** (`GRLiveness.tla`, below).
+
+`NoVoterMinority` is the new invariant: no voter write lets a live view of the recorded incarnation that held fewer than a majority of the old voters hold a majority of the new ones, with members that were listed voters already. A member that is in the view but not listed joined it through distributed recovery, which gave it the group's history: listing it again is not a shrink. VTOrc's rule (`VOTERS_KEEP_MINORITY`, below) is stricter: it counts every member of the view.
+
+`EventuallyServes` (`GRLiveness.tla`) is the liveness property: once the faults stop (their budgets are finite), the shard ends with a serving primary of its legitimate group, `<>[](Healthy \/ Bound)`, where `Bound` holds when no live group of the recorded incarnation holds the voter majority and the bounds forbid a new intent or incarnation, which the code is not limited by. Every step of the tablets, MySQL and VTOrc is weakly fair, the completion of a join strongly fair. Faults, clients, the outcomes MySQL may choose (a join that fails or ends in a group of its own, a lost RPC) and the operator's reparents are not fair.
+
+Switches. Fixes that are in the code at f528e9a (`TRUE`): `VOTERS_NEED_GROUP`, `PRS_LEGIT` (PRS's preflight requires the primary-elect in the legitimate group, and ERS's `findGroupWithQuorum` counts only members of it), `UNDO_CHECK` and `UNDO_MATCH` (40305e2), `SETRW_CHECK`. The fixes of findings 3 to 8, implemented on branch `gr-fixes5` (`FALSE` or `{}` is the code at f528e9a): `VOTERS_KEEP_MINORITY` and `VOT_CAS` (finding 3), `DEMOTE_REVERT_DECISION` (finding 4), `INIT_GUARD` (finding 5, a set of parts: `"intent"`, `"inc"`, `"active"`), `JOIN_WAITS_RECORD` and `ADOPT_UNRECORDED` (finding 6), `VOT_REVALIDATE` (finding 7, a set of parts: `"dropped"`, `"reachable"`, `"group"`, `"primary"`), `PRIMARY_MUST_BE_VOTER`, `FENCE_ON_DROP` and `NONVOTER_LEAVES` (finding 8). Environment and modes: `VOTERS`, `VOT_SPLIT`, `PRS`, `ERS`, `DEMOTE_FAIL`, `INIT_EMPTY`, `INIT_PRS`, `INIT_WRITABLE` (`FALSE`: `InitPrimary` leaves MySQL read-only until a decision lets the tablet serve), `STANDALONE`, `MYSQLD_RESTART`, `LOOP_RUNS` (the sync loop serves again at most once per run, after the run read MySQL's status), `INIT_STABLE` (no fault while the initial promotion runs), `DIRECT_WRITES` (`FALSE`: clients write only through vtgate, to a serving PRIMARY), `GRACE_SETTLES`, `VIEW_GTIDS` (MySQL 8.4.11 logs no view change GTID in the lab, so `FALSE` is the realistic setting and `TRUE` a variant), `INIT_RECORD_FAIL` (the initial promotion's write of the incarnation may fail), `VOT_PROMPT` (timing: no host that a pending voter write drops restarts before the write). Bounds: `MaxVot` (voter writes), `MaxPrs` (reparents), `MaxUndo`, `MaxSetRW`.
+
+### Configurations and bounds
+
+Each configuration's header says what it checks. The second milestone adds four families; every one has one VTOrc and atomic decisions (`SPLIT = FALSE`), and new incarnations and intents are lowered to keep the reparents exhaustive:
+
+| Family | Bounds | Checks |
+|---|---|---|
+| `voters` | `MaxInc = 2`, 1 intent, 1 transaction, 2 crashes, 1 leave, 1 loss of majority, 1 voter write | voter replacement; `voters_split1` splits the read from the write |
+| `reparent` | no new incarnation, 1 transaction, 1 reparent, 1 crash or mysqld restart, 1 leave, no loss of majority, 1 `UndoDemotePrimary`, standalone commits; `setrw`: 1 `SetReadWrite` and no reparent; with a failing `DemotePrimary`: 2 leaves and no crash, or 1 crash or mysqld restart and no leave, no `UndoDemotePrimary` | PRS, ERS, `DemotePrimary` and its revert, `UndoDemotePrimary`, `SetReadWrite` |
+| `init` | an empty shard, 1 transaction, 2 initial promotions, 1 crash, 1 leave, 1 loss of majority, standalone commits; alone: `MaxInc = 3`; next to VTOrc: `MaxInc = 2`, 1 intent | the initial promotion, alone or next to VTOrc's bootstrap of the shard |
+| `live` | no transaction, `MaxInc = 2`; `live`: 1 crash, 1 loss of majority, 1 intent; `live_init*`: an empty shard, 1 crash, no loss, 2 intents, 1 initial promotion; `live_voters*`: 2 crashes, no loss, 1 voter write, split; no symmetry (TLC's liveness checking does not support it) | `EventuallyServes` |
+
+The bounds of a family that finds a bug are those of the configuration that checks its fix, so that the fix is checked against the scenario.
+
+### Results
+
+Validation, each fix off, exhaustive, stopped at the first violation (the code at f528e9a unless noted):
+
+| Configuration | Bug | Switched off | Outcome | States | Time | Distinct states explored |
+|---|---|---|---|---|---|---|
+| `voters_minority` | finding 3: a voter write that a minority view survives | `VOTERS_KEEP_MINORITY` | `NoVoterMinority` violated | 7 | 2s | 2,892 |
+| `voters_nogroup` | voter write while no member of the group is active with quorum | `VOTERS_NEED_GROUP` | `NoLostAck` violated | 12 | 5s | 47,319 |
+| `voters_nosettle` | a failed voter dropped before the live group applied its write | `GRACE_SETTLES` (timing) | `NoLostAck` violated | 13 | 5s | 38,396 |
+| `voters_split_slow` | finding 7: a voter write on stale statuses | `VOT_REVALIDATE` | `NoLostAck` violated | 22 | 1m43 | 1,658,173 |
+| `voters_split_drop` | finding 7, re-read of the dropped voters only | `"reachable"`, `"group"` | `NoLostAck` violated | 22 | 1m46 | 1,684,467 |
+| `voters_split_noreach` | finding 7, without the grace criterion re-evaluated (finding 8 shape) | `"reachable"` | `NoLostAck` violated | 22 | 1m55 | 1,768,657 |
+| `voters_split_nonvoter` | finding 8 candidate alone: a primary must be a voter | `"reachable"`; `PRIMARY_MUST_BE_VOTER` on | `NoLostAck` violated | 22 | 2m00 | 1,859,310 |
+| `undo_nocheck` | `UndoDemotePrimary` without the serving invariant (40305e2) | `UNDO_CHECK`, `UNDO_MATCH` | `NoLostAck` violated | 7 | 6s | 91,455 |
+| `setrw_nocheck` | `SetReadWrite` without the serving invariant | `SETRW_CHECK` | `NoLostAck` violated | 7 | 2s | 4,381 |
+| `prs_demote_fail` | finding 4: the revert of a failed `DemotePrimary` serves without a decision | `DEMOTE_REVERT_DECISION` | `NoDecisionAck` violated | 7 | 1s | 2,529 |
+| `prs_demote_fence` | finding 4: the revert lifts a fence | `DEMOTE_REVERT_DECISION` | `FenceNotUndone` violated | 9 | 2s | 6,600 |
+| `prs_demote_restart` | finding 4: the revert makes an OFFLINE MySQL writable | `DEMOTE_REVERT_DECISION` | `NoLostAck` violated | 6 | 1s | 1,135 |
+| `init_orc` | finding 5: the initial promotion next to VTOrc's bootstrap | `INIT_GUARD` | `NoDualBootstrap` violated | 12 | 2s | 2,291 |
+| `init_orc_vgtid` | finding 5, with view change GTIDs | `INIT_GUARD` | `NoDualBootstrap` violated | 10 | 2s | 2,187 |
+| `init_guard_noint` | finding 5, guard without the live intent | `"intent"` | `NoDualBootstrap` violated | 10 | 2s | 1,579 |
+| `init_guard_intent` | finding 5, guard without the active members | `"active"` | `NoDualBootstrap` violated | 16 | 3s | 17,993 |
+| `init_orc_lost` | finding 6 on the code | `JOIN_WAITS_RECORD` | `NoLostAck` violated | 16 | 9s | 133,765 |
+| `init_orc_unrec` | finding 6 with the fixes of findings 3 to 5 | `JOIN_WAITS_RECORD` | `NoLostAck` violated | 18 | 4s | 35,303 |
+| `init_fault` | finding 6 on the initial promotion (faults during it) | `INIT_STABLE`, `JOIN_WAITS_RECORD` | `OneWritablePrimary` violated | 21 | 9s | 108,099 |
+| `init_rerun` | a failed initial promotion run again on another voter (no write at risk) | `INIT_GUARD`, `JOIN_WAITS_RECORD` | `NoDualBootstrap` violated | 11 | 2s | 2,182 |
+| `init_direct` | a write acknowledged by the `InitPrimary` target before its incarnation is recorded (direct clients) | the exception (`INIT_WRITABLE`) | `NoLostAck` violated | 20 | 6s | 78,415 |
+| `live_init_prs_fail` | finding 6's fix: a failed incarnation write leaves a group nobody records | `ADOPT_UNRECORDED` | `EventuallyServes` violated | 14 | 4s | 4,718 |
+
+Current design, with the fixes of findings 3 to 5 (`VOTERS_KEEP_MINORITY`, `VOT_CAS`, `DEMOTE_REVERT_DECISION`, `INIT_GUARD`) unless noted:
+
+| Configuration | Family | Bounds | Mode | Result | Distinct states | Depth | Time |
+|---|---|---|---|---|---|---|---|
+| `voters` | `voters` | the code, every invariant but `NoVoterMinority` | exhaustive | no error | 2,473,645 | 48 | 2m55 |
+| `voters_fixed` | `voters` | 1 voter write, 2 crashes, 1 leave | exhaustive | no error | 2,465,042 | 48 | 2m52 |
+| `voters_split1` | `voters` | as `voters_fixed`, the read and the write split | exhaustive | no error | 4,149,334 | 51 | 6m00 |
+| `voters_split_prompt` | `voters` | as `voters_split1`, the code without the re-read, under `VOT_PROMPT` | exhaustive | no error | 2,527,122 | 48 | 3m07 |
+| `voters_code` | `voters` | as `voters_split1`, with every rule shipped for findings 7 and 8 | exhaustive | no error | 4,149,334 | 51 | 5m00 |
+| `voters_split` | `voters` | 2 VTOrcs, 2 voter writes, 1 lease expiry, split | simulation | no error | 400,000 traces, 10,327,337 states, mean length 18 | - | 4m01 |
+| `prs` | `reparent` | 1 PRS, 1 `UndoDemotePrimary`, 1 crash or mysqld restart, 1 leave, no new incarnation | exhaustive | no error | 11,085,041 | 45 | 10m30 |
+| `ers` | `reparent` | as `prs`, with an ERS | exhaustive | no error | 6,807,588 | 42 | 6m49 |
+| `setrw` | `reparent` | 1 `SetReadWrite`, no reparent | exhaustive | no error | 157,684 | 27 | 12s |
+| `prs_fixed` | `reparent` | a failing demotion, 2 leaves | exhaustive | no error | 1,241,538 | 40 | 1m36 |
+| `prs_fixed_restart` | `reparent` | a failing demotion, 1 crash or mysqld restart | exhaustive | no error | 73,672 | 30 | 8s |
+| `init_alone` | `init` | the initial promotion alone, `INIT_STABLE`, view change GTIDs | exhaustive | no error | 253,075 | 43 | 23s |
+| `init_direct_ro` | `init` | `InitPrimary` read-only until it serves (`INIT_WRITABLE` off), direct clients, with the fixes, `NoLostAck` | exhaustive | no error | 347,809 | 44 | 22s |
+| `init_orc_guard` | `init` | next to VTOrc, without `JOIN_WAITS_RECORD`, `NoDualBootstrap` | simulation | no error | 400,000 traces, 11,014,189 states, mean length 18 | - | 3m00 |
+| `init_orc_fixed` | `init` | next to VTOrc, with `JOIN_WAITS_RECORD` | exhaustive | no error | 6,282,978 | 61 | 7m08 |
+| `init_orc_fixed_vgtid` | `init` | as `init_orc_fixed`, view change GTIDs | exhaustive | no error | 6,720,329 | 61 | 7m23 |
+| `init_fault_fixed` | `init` | faults during the initial promotion, with `JOIN_WAITS_RECORD` | exhaustive | no error | 279,905 | 44 | 19s |
+| `init_orc_adopt` | `init` | as `init_orc_fixed`, a failing incarnation write, `ADOPT_UNRECORDED` | exhaustive | no error | 6,942,486 | 61 | 7m29 |
+| `live` | `live` | 1 crash, 1 loss of majority, 1 re-bootstrap | exhaustive | no error | 70,749 | 38 | 35s |
+| `live_init` | `live` | an empty shard that VTOrc initializes, `JOIN_WAITS_RECORD` | exhaustive | no error | 109,337 | 47 | 56s |
+| `live_init_prs` | `live` | as `live_init`, with an initial promotion | exhaustive | no error | 376,104 | 50 | 3m31 |
+| `live_init_prs_adopt` | `live` | as `live_init_prs`, a failing incarnation write, `ADOPT_UNRECORDED` | exhaustive | no error | 583,320 | 53 | 6m03 |
+| `live_voters` | `live` | a voter fails and is replaced, the shipped voter rules, 2 crashes | exhaustive | no error | 102,714 | 40 | 46s |
+| `live_voters_fence` | `live` | as `live_voters`, a re-read without `"reachable"` and `"primary"`: the list can drop the primary, which is fenced | exhaustive | no error | 128,892 | 43 | 56s |
+| `fixed` | all | every second-milestone feature and fix, 2 of each fault | simulation | no error | 400,000 traces, 15,700,929 states, mean length 27 | - | 5m46 |
+
+Until this milestone, `run.sh` passed `-deadlock`, which disables TLC's deadlock check, to every configuration expected to pass: the stuck-state checks of `s7d_r3_adopt`, `refusal_withdraw` and `reprobe` did not run. They run now, and find no stuck state, with the first milestone's state counts (801,537; 5,359,373; 5,371,499). ERS without its legitimacy check (`PRS_LEGIT` off) finds no violation in 10 minutes (7.4M states, depth 18, not exhaustive): the promotion's serving decision refuses what the check would; the check is defense in depth. Each run of the second milestone was capped at 15 minutes (the machine was shared): `current` explored 8,461,130 of its 9,545,958 states without error before the cap, and `tablet`, `orcs_stall` and `withdraw_orcs` (13, 17 and 23 minutes in the first milestone) were not run again; no action of the second milestone is enabled in them, and every other first-milestone configuration that passes reproduces its count exactly.
+
+## Finding 3 (fixed on `gr-fixes5`, pending merge): a voter write that a minority view survives
+
+VTOrc's `GroupVotersOutOfDate` recovery writes a new voter list when `SelectGroupReplicationVoters` drops failed voters, once a member of the recorded incarnation is active with quorum in its view (`groupUp` in `updateGroupReplicationVoters`). MySQL's quorum is that of the view, not of the voters: a view that shrank through clean leaves keeps it. `voters_minority` (`NoVoterMinority`, 7 states):
+
+```
+ 1. Init          s1 is the primary of incarnation 1 {s1, s2, s3}; voters {s1, s2, s3}
+ 2. Commit(s1)    transaction 1 is acknowledged
+ 3. Crash(s2)     the view is {s1, s3}
+ 4. Leave(s3)     a clean leave: the view {s1} keeps its quorum, and lacks the voter majority (s1 does not serve)
+ 5. Crash(s3)
+ 6. GraceExpire   s2 and s3 have been unreachable for the replacement grace period
+ 7. OVotRead(o1)  s1 is active with quorum: VTOrc writes the voters {s1}
+```
+
+s1 then holds the voter majority of the list, and serves: every write is acknowledged by one host until the others rejoin. `voters` (the code, every other invariant) finds no lost write in its bounds, since s1 holds everything the group decided: the cost is durability, one copy of every acknowledged write. `TestUpdateGroupReplicationVotersKeepsSeatsOfMinorityView` reproduces it on the Go code.
+
+**The fix** (`VOTERS_KEEP_MINORITY`, `VOT_CAS`): VTOrc never writes a list under which a view that lacks a majority of the current voters would hold a majority of the new ones (`voterChangeRefusal` in `SelectGroupReplicationVoters`); the write is a compare-and-swap on the list and the incarnation the selection read. In the code, a current voter counts in a view when it is ONLINE there, a new one when it is ONLINE or RECOVERING, and a new voter that is unreachable and that no reachable member reports active counts in every view, since VTOrc cannot see a view of unreachable members; the replacement of a failed voter by a spare in its cell stays allowed. The model has no spare tablet and VTOrc sees every view, so the rule is the ground-truth `MinorToMajor`. `voters_fixed` (every invariant) and `voters_split1` (the read and the write separate) find no violation. With one VTOrc the compare-and-swap never fails; two VTOrcs with a split write and a lease expiry (`voters_split`, simulation) find no violation either, and no configuration with three tablets violates `NoVoterMinority` without it (2 VTOrcs, 1.1M states in 200s, not exhaustive): it needs a spare tablet, which the model does not have.
+
+Two conditions of the code are needed too: without `VOTERS_NEED_GROUP`, a failed voter that holds an acknowledged write loses its seat (`voters_nogroup`, `NoLostAck`), and without the timing assumption `GRACE_SETTLES` (the one-minute grace outlasts the election of the live group's primary) so does a failed voter whose write the new primary did not apply yet (`voters_nosettle`, `NoLostAck`).
+
+## Finding 4 (fixed on `gr-fixes5`, pending merge): `DemotePrimary`'s revert skips the serving decision
+
+When `demotePrimary` fails after it set `super_read_only` (its last step, the read of the primary status), its deferred reverts run: `redoPreparedTransactionsAndSetReadWrite`, whose only group check is `checkGroupAllowsReadWrite` (not a secondary, no election running), then `SetServingUnlessGroupReplicationNotServing`, which consults only the not-serving reasons. Neither checks the serving invariant or the fence. `prs_demote_fail` (`NoDecisionAck`, 7 states):
+
+```
+ 1. Init          s1 is the primary of incarnation 1 {s1, s2, s3}
+ 2. Leave(s2)
+ 3. PBegin        PRS from s1 to s3
+ 4. Leave(s3)     s1's view is {s1}: quorum, no voter majority
+ 5. PDemote       s1 stops serving, super_read_only; the read of the primary status will fail
+ 6. PDemoteFail   the revert: MySQL writable (s1 is its group's primary, no election), the tablet serves
+ 7. Commit(s1)    acknowledged by one voter, on a decision that never checked the voter majority
+```
+
+The same revert lifts a fence decided during the demotion (`prs_demote_fence`, `FenceNotUndone`), and after a mysqld restart during the demotion makes an OFFLINE MySQL writable and serves it, which then takes writes outside of any group (`prs_demote_restart`, `NoLostAck`, 6 states). `TestDemotePrimaryRevertKeepsServingInvariant` reproduces it on the Go code.
+
+**The fix** (`DEMOTE_REVERT_DECISION`, `revertDemotionWithGroupDecisionLocked`): under Group Replication the revert is a serving decision under the action lock, as `UndoDemotePrimary` and every promotion are: it waits for the end of an election, takes the fence snapshot, decides on MySQL's status read under the lock, and makes MySQL writable, and the tablet serve, only if the decision allows it and no fence was decided since the snapshot. Otherwise the tablet stays PRIMARY, not serving, MySQL read-only, and the sync loop serves again once a decision allows it. `prs_fixed` (the same bounds, every invariant) finds no violation.
+
+## Finding 5 (fixed on `gr-fixes5`, pending merge): the initial promotion next to VTOrc's bootstrap
+
+On a shard that never had a primary, PRS takes the initial promotion path: no tablet is PRIMARY and the shard record has no primary term. VTOrc bootstraps such a shard too (`GroupNotBootstrapped`), and until a majority of the voters joined its group no tablet is PRIMARY. A PRS that takes the shard lock in between calls `InitPrimary`, which bootstraps a second group next to VTOrc's. `init_orc` (`NoDualBootstrap`, 12 states), and also with the view change GTIDs that would make a bootstrapped member's binlog differ from the others' (`VIEW_GTIDS`; `init_orc_vgtid`, 10 states, through a bootstrap `START` that has not logged its view change yet):
+
+```
+ 2. Crash(s1)       (with Restart, no part in the scenario: with several workers the trace can be
+ 3. Restart(s1)      longer than the shortest one)
+ 4. OBegin(o1)      VTOrc chooses s1 on the empty shard
+ 5. OIntent(o1)     the intent for s1, and the bootstrap RPC
+ 6. HBoot1(s1)      MySQL's bootstrap START runs on s1
+ 7. OTimeout(o1)    the RPC times out; VTOrc keeps the intent
+ 8. OAdopt(o1)      nothing to adopt yet; VTOrc releases the shard lock
+ 9. BootComplete(s1)  VTOrc's group {s1}, not recorded yet
+10. PIBegin         PRS: no PRIMARY tablet, no primary term, every tablet reachable, s2's executed set contains
+                    every tablet's: the initial promotion of s2
+11. IP1(s2)         InitPrimary bootstraps s2
+12. BootComplete(s2)  a second group, from the same (empty) recorded incarnation
+```
+
+`TestPlannedReparentGroupReplicationInitialPromotionAfterBootstrap` reproduces it on the Go code.
+
+**The fix** (`INIT_GUARD`, `checkShardHasNoGroup` in `performInitialPromotion`): under a group replication policy, the initial promotion refuses while a bootstrap intent is live, an incarnation is recorded, or any tablet's MySQL is an active member of a group, read under the shard lock. Each part is needed: without the live intent, the trace above (`init_guard_noint`, 10 states); without the active members, an intent that expired while its target's group exists unrecorded, which another voter joined and left, so that it holds that group's view change and passes the containment check (`init_guard_intent`, 16 states). With all three, `init_orc_guard` finds no two groups (`NoDualBootstrap`, 400,000 simulated behaviors); the other invariants fail through finding 6, whose fix `init_orc_fixed` adds.
+
+## Finding 6 (fix on `gr-fixes5`, pending merge): a stray group serves before the first incarnation is recorded
+
+While the shard record lists no incarnation, any group counts as the shard's group for the tablets (`inIncarnation` returns true), and the tablets rejoin one on their own (`legitimateGroupActiveElsewhere`). With every fix of findings 3 to 5 on, `init_orc_unrec` (`NoLostAck`, 18 states; `init_orc_lost` on the code, 16 states):
+
+```
+ 2-3. Crash(s1), Restart(s1)  (no part in the scenario)
+ 4. OBegin(o1)      VTOrc chooses s1 on the empty shard
+ 5. OIntent(o1)     the intent for s1, and the bootstrap RPC
+ 6. HBoot1(s1)
+ 7. BootComplete(s1)  incarnation 1 {s1}; the RPC's reply is on its way
+ 8. JoinStart(s2)   s2's sync loop: s1 is active in a group, and no incarnation is recorded
+ 9. Leave(s1)       s1 leaves (or crashes): no live group is left
+10. JoinStray(s2)   s2's join ends alone in a new group, incarnation 2
+11. ElectEnd(s2)
+12. JoinStart(s3)   s3 joins s2's group: no incarnation is recorded
+13. JoinComplete(s3)  {s2, s3}: the voter majority
+14-16. PrSnap, PrRead, PrAct(s2)  s2 is promoted and serves: the voter rule holds, the incarnation is unknown
+17. Commit(s2)      transaction 1 is acknowledged in incarnation 2
+18. OReply(o1)      VTOrc records incarnation 1 (compare-and-swap on the empty incarnation and its token):
+                    the acknowledged write is not in the recorded group's history
+```
+
+The tablets of incarnation 2 then find it foreign and leave it, and the write is lost. It needs VTOrc to record the bootstrap after the stray group formed, which MySQL took 9–20s to do in the lab: a VTOrc stall or a slow topology write between the RPC's reply and the record, which no timeout bounds. The initial promotion has the same window: `init_fault` (`OneWritablePrimary`) finds it when the `InitPrimary` target leaves its group before PRS records it, which `init_alone` excludes with the assumption `INIT_STABLE`; and with the fix of finding 5, a second initial promotion that runs while a voter's join is still starting (not yet an active member) makes its target writable next to the stray group that join forms (`OneWritablePrimary`, 21 states). With clients that write to MySQL directly and `InitPrimary` read-only until it serves, the initial promotion's own group serves under the unknown incarnation, loses its majority, and a stray group of a join serves without the write (`NoLostAck`, 23 states, `init_direct_ro` without the fix). The earlier `init_orc_lost` configuration had recorded this trace as an expected violation without noticing that it contains no reparent; it is a finding.
+
+**The fix** (`JOIN_WAITS_RECORD`): while the shard record lists no incarnation, no join starts: not the tablet's own (at startup, in the sync loop), not VTOrc's `GroupMemberNotOnline` recovery, not a join of a new voter by VTOrc's voter update. The joins that follow a recorded bootstrap (VTOrc's, the migration's) are unchanged, and so are `InitPrimary` and the serving decisions. In the model every join is `JoinStart`, and voter replacement has no spare to join, so the rule is one condition. With it and the fixes of findings 3 to 5, `init_orc_fixed`, `init_orc_fixed_vgtid` and `init_fault_fixed` (as `init_fault`, without `INIT_STABLE`) find no violation, and the shard still initializes: `live_init` (VTOrc's bootstrap) and `live_init_prs` (with an initial promotion next to it) satisfy `EventuallyServes`. Two narrower versions are not enough: one that waits only while a bootstrap intent is live misses the initial promotion, which writes no intent, and one that also waits while the shard never had a primary term misses a target that `InitPrimary` made PRIMARY before PRS recorded the incarnation.
+
+**What remains: a group that nobody records.** VTOrc's group needs no join to be recorded: its reply, or its adoption, which needs only the intent in the shard record, expired or not. The initial promotion's group does: when PRS's write of the incarnation fails after `InitPrimary` bootstrapped its target (a topology error, the reparent's deadline; `INIT_RECORD_FAIL`), the group has no intent to adopt, the voters may not join it, the guard of finding 5 refuses another initial promotion while its member is active, and VTOrc bootstraps only a shard with no active voter. `live_init_prs_fail` violates `EventuallyServes` (13 states, then stuttering): `PIBegin`, `IP1(s2)`, `BootComplete(s2)`, `ElectEnd(s2)`, `IP2(s2)` (MySQL writable, the exception), `PrRead`, `PrAct(s2)` (PRIMARY, not serving: one voter), `PIRecord` fails, and nothing is enabled that leads to a serving primary. The code before the fix let the voters join that group, under the unknown incarnation. **The fix** (`ADOPT_UNRECORDED`, `adoptUnrecordedGroup` on `gr-fixes5`): VTOrc records the incarnation of a group that nobody recorded, under the shard lock, when it is the only group the shard can have: no incarnation recorded and no live intent, its primary ONLINE with quorum, every voter answering, no tablet running a `START` or active in another group, and the primary holding every transaction a voter executed or received; the write is a compare-and-swap on the empty incarnation and the absence of a live intent. With it, `live_init_prs_adopt` satisfies `EventuallyServes` (583,320 states), and `init_orc_adopt` (as `init_orc_fixed`, with the failing write) finds no violation (6,942,486 states).
+
+## Finding 7 (fix on `gr-fixes5`, pending merge): a voter write on stale statuses
+
+With the read of the statuses and the write of the list as separate steps (`VOT_SPLIT`), and the fixes of finding 3 on, `voters_split_slow` (`NoLostAck`, 22 states):
+
+```
+ 2. Crash(s2)
+ 3. GraceExpire       s2 has failed
+ 4. OVotRead(o1)      VTOrc selects the voters {s1, s3}, under the shard lock
+ 5. Restart(s2)
+ 6. JoinStart(s2)
+ 7. JoinComplete(s2)  s2 is back in the group
+ 8. Leave(s1)
+ 9. Elect(1)
+10. ElectEnd(s2)      s2 is the primary
+11-13. PrSnap, PrRead, PrAct(s2)  s2 serves
+14. Commit(s2)        transaction 1 is acknowledged: decided with s3, received by s2 only
+15. Crash(s2)         {s3} loses its majority
+16. LeaveDead(1)
+17. OVotWrite(o1)     the list {s1, s3}: the compare-and-swap holds, the list and the incarnation did not change
+18-22. OBegin, OIntent, HBoot1, BootComplete, OReply(o1)  every listed voter is reachable: VTOrc bootstraps
+                      s1, which lacks transaction 1, and records it
+```
+
+The compare-and-swap of finding 3 compares the list and the incarnation, which did not change; the statuses the selection was made on did. It needs VTOrc to stall between its read and its write, under the shard lock, for longer than s2's restart, rejoin, election, commit and second failure.
+
+**The fix** (`VOT_REVALIDATE`, `recheckVoterChange`): right before the compare-and-swap, VTOrc reads again, and refuses the write unless a member of the recorded incarnation is still active with quorum in its view (`"group"`, the condition of `VOTERS_NEED_GROUP`, without the voter majority, which would refuse the replacements finding 3 allows); no voter dropped as unreachable answers now or was reached since the selection (`"reachable"`); and no voter dropped for another reason runs a `START`, is active in a foreign incarnation, does not answer, or holds transactions beyond the kept voters' union (`"dropped"`; an active voter of the legitimate group may be dropped, since `SelectVoters` drops one when a non-voter primary takes its cell's seat, and it leaves in the same recovery). The re-read and the write are one step in the model: the residual assumption is no stall between them. `voters_split1` (every invariant) finds no violation. Each part is needed: with `"dropped"` alone, the trace above (`voters_split_drop`, 22 states: s2 is down again at the write); with `"dropped"` and `"group"`, s2 is back and promoted as a voter before the write, and the write drops the group's primary (`voters_split_noreach`, 22 states). Under the timing assumption that no host the list drops restarts between the read and the write (`VOT_PROMPT`), the code without the re-read passes too (`voters_split_prompt`).
+
+## Finding 8 (fix on `gr-fixes5`, pending merge): a primary that is not a voter
+
+A join checks voter status when it starts; MySQL finishes a `START` whose client gave up, and only `GroupVotersOutOfDate` makes a member that is no longer a voter leave, when the group keeps a majority without it. Meanwhile Group Replication may elect it, and it counts in the view's majority. The serving invariant requires a majority of the voters ONLINE in the primary's view, not that the primary is a voter: a non-voter primary acknowledges a write that no voter holds in its binlog, and the bootstrap, which requires only the listed voters, loses it. In the model the only way a voter loses its seat while it is active is the stale write of finding 7: `voters_split_noreach` is the trace (s2, back and promoted while still a voter, is dropped by the write and acknowledges a write as a non-voter primary); the code reaches the state through paths the three-tablet model has no spare tablet for. A tablet that serves as PRIMARY only if its own MySQL is a listed voter (`PRIMARY_MUST_BE_VOTER`) is not enough on its own: in that trace s2 keeps serving, its MySQL writable, after the write until its next decision (`voters_split_nonvoter`, `NoLostAck`, 22 states). In the model, the `"reachable"` part of finding 7's re-read is what closes it.
+
+**The fix as shipped** keeps more as defense in depth: the re-read also refuses to drop the current primary of the live group (`"primary"`); a PRIMARY tablet whose server is no longer a listed voter is fenced at the next fence check (`FENCE_ON_DROP`); a tablet serves as PRIMARY only on a voter's MySQL (`PRIMARY_MUST_BE_VOTER`); and an active non-voter leaves its group on the tablet's own (`NONVOTER_LEAVES`). `voters_code`, with all of them, finds no violation (4,149,334 states, the same as `voters_split1`: the re-read refuses before the other rules act), and with them a failed voter is still replaced and the shard ends with a serving primary (`live_voters`, `EventuallyServes`, 102,714 states; `live_voters_fence`, with a re-read weak enough that the list drops the primary, so that the fence on a dropped primary fires, also ends with a serving primary, 128,892 states).
+
 ## Conformance: actions and the code they model
 
-Paths are relative to `go/vt/`; line numbers are on `group-replication-prototype` at the commit that adds this model.
+Paths are relative to `go/vt/`; line numbers are on `group-replication-prototype` at the commit that adds this model, and for the second milestone's rows at f528e9a. The fixes on `gr-fixes5` are named by function: their lines may move before the merge.
 
 | Action | Code | Abstractions |
 |---|---|---|
@@ -289,19 +504,42 @@ Paths are relative to `go/vt/`; line numbers are on `group-replication-prototype
 | `OLeaseExpire` | etcd lease (`topo/etcd2topo/lock.go:247`) | At most once (`MaxExpire`). |
 | `OIntentExpire` | `GroupReplicationBootstrapIntentFence` (2 minutes) | With `INTENT_OUTLASTS_BOOT`, only while no recovery or bootstrap is in flight. |
 | `StaleTopo`, `AsyncApply` | `reconcileStaleTopoPrimary` (`vtorc/logic/topology_recovery.go:1677`), `forceDemotePrimary`, `setReplicationSource`, `setReplicationSourceLocked` (`vttablet/tabletmanager/rpc_replication.go:1091`) | The tablet follows the type VTOrc writes into the topology. |
+| `VotGroupUp`, `OVotRead`, `OVotWrite` | `updateGroupReplicationVoters` (`vtorc/logic/group_replication_recovery.go:937`), `matchGroupVotersOutOfDate`, `computeGroupReplicationVoters`, `SelectGroupReplicationVoters` (`vtorc/inst/group_replication.go:615`, `:463`, `:219`), `policy.SelectVoters` (`vtctl/reparentutil/policy/group_replication.go:269`); with `VOTERS_KEEP_MINORITY` and `VOT_CAS`, `voterChangeRefusal` and the compare-and-swap in `updateGroupReplicationVoters` (`gr-fixes5`) | Every tablet that has not failed keeps its seat (three tablets, one per cell); the selection may drop any subset of the failed voters. VTOrc sees every view (no unreachable member that is up). With `VOT_SPLIT`, the selection and the write are separate steps; otherwise one. |
+| `GraceExpire` | `GetGroupReplicationVoterReplacementGracePeriod` (`vtorc/inst/group_replication.go:249`) | No clocks: one expiry marks every host that is down then as failed, and only once the live group settled (`GRACE_SETTLES`). |
+| `VLeave` | `leaveGroupReplication` (`vtorc/logic/group_replication_recovery.go:1061`) | `StopGroupReplication` under the action lock in one step; the asynchronous replication that follows is left out. |
+| `PBegin` | `preflightChecks` (`vtctl/reparentutil/planned_reparenter.go:163`), `checkGroupReplicationPrimaryElect` (`vtctl/reparentutil/group_replication.go:138`) | Every tablet up; the elect a listed voter in the current primary's group. |
+| `PDemote`, `PDemoteEnd`, `PDemoteFail` | `demotePrimary` (`vttablet/tabletmanager/rpc_replication.go:667`) and its deferred reverts (`:849`) | The only failure modeled is the last step's (the read of the primary status), after `super_read_only`. Semi-sync is left out. |
+| `DrSnap`, `DrRead`, `DrAct` | `revertDemotionWithGroupDecisionLocked` (`vttablet/tabletmanager/rpc_replication.go`, `gr-fixes5`) | Only with `DEMOTE_REVERT_DECISION`. The redo of prepared transactions is left out (no two-phase commit). |
+| `PWait` | `performGracefulPromotion` (`vtctl/reparentutil/planned_reparenter.go:251`): `WaitForPosition`, then `UndoDemotePrimary` on failure | The catch-up is "the elect executed what the old primary executed". |
+| `PPromote`, `PPromote2`, `PEnd` | `PromoteReplica` (`vttablet/tabletmanager/rpc_replication.go:1389`), `promoteGroupMemberLocked`, `waitForGroupPrimaryElected` (`vttablet/tabletmanager/group_replication.go:939`, `:757`), `PopulateReparentJournal` (`rpc_replication.go:533`) | `group_replication_set_as_primary` takes effect at once. The journal is a write that succeeds only where MySQL accepts commits; a client's commit covers it. |
+| `PAbort` | an RPC of the reparent that fails | Its tablet is down, or its handler ended with a crash. |
+| `EBegin` | `reparentShardLockedGroupReplication`, `findGroupWithQuorum`, `chooseGroupReplicationPrimary` (`vtctl/reparentutil/emergency_reparenter_gr.go:214`, `:64`, `:130`) | One member's view stands for all: the code's failure when members disagree only removes behaviors. Member weights, `PreventCrossCellPromotion` and `SetReplicationSource` of the replicas are left out. |
+| `OUndo`, `UdSnap`, `UdRead`, `UdAct` | `fixPrimary` (`vtorc/logic/topology_recovery.go:1573`), `tabletUndoDemotePrimary` (`vtorc/logic/tablet_discovery.go:461`), `UndoDemotePrimary` (`vttablet/tabletmanager/rpc_replication.go:896`) | The recovery's shard lock only orders it with other recoveries, and is left out. |
+| `RwSnap`, `RwRead`, `RwAct` | `SetReadOnly` (`vttablet/tabletmanager/rpc_actions.go:79`), `checkGroupAllowsReadWrite` (`vttablet/tabletmanager/group_replication.go:345`), `redoPreparedTransactionsAndSetReadWrite` (`vttablet/tabletmanager/tm_init.go:978`) | Called at any time on any tablet, at most `MaxSetRW` times. |
+| `PIBegin`, `IP1`, `IP2`, `PIRecord` | `performInitialPromotion`, `selectInitialVoters` (`vtctl/reparentutil/planned_reparenter.go:350`, `:432`), `InitPrimary` (`vttablet/tabletmanager/rpc_replication.go:459`), `bootstrapGroupForInitPrimaryLocked` (`vttablet/tabletmanager/group_replication.go:984`), `RecordGroupReplicationIncarnation` (`vtctl/reparentutil/group_replication.go:264`); with `INIT_GUARD`, `checkShardHasNoGroup` (`gr-fixes5`) | The voters are all three already. `stopOngoingGroupStartLocked` is left out of `InitPrimary`: a `START` in progress refuses it. |
+| `CommitAlone` | MySQL with Group Replication stopped (OFFLINE) and `super_read_only` off | Only with `STANDALONE`; never in the ERROR state. |
+| `MysqldRestart` | mysqld killed or restarted under a running vttablet (NEW-6) | Uses the crash budget; not while the tablet runs a `START` of its own. |
+| `JoinStart` with `JOIN_WAITS_RECORD` | `checkLegitimateGroupToJoin` (`vttablet/tabletmanager/group_replication_legitimacy.go:399`), `matchGroupMemberNotOnline`, and VTOrc's voter update (`gr-fixes5`) | No join while the shard record lists no incarnation; every join of the model is `JoinStart`. |
+| `OVotWrite` with `VOT_REVALIDATE` | `recheckVoterChange` (`vtorc/logic/group_replication_recovery.go`, `gr-fixes5`) | The re-read and the compare-and-swap are one step: no stall between them. Every dropped voter was dropped as failed, so `"reachable"` decides before `"dropped"`; the time since VTOrc last reached a voter is `ovot.back`. |
+| `FenceDrop` | the fence check of a PRIMARY tablet that is no longer a listed voter (`gr-fixes5`) | Atomic; any time after the list changed, except during a bootstrap. |
+| `NLeave` | the sync loop's leave of an active non-voter (`gr-fixes5`) | A clean `STOP`, any time. |
+| `OAdoptUnrec` | `adoptUnrecordedGroup`, `matchGroupBootstrapNotRecorded`, `RecordUnrecordedGroupReplicationIncarnation` (`vtorc/logic/group_replication_recovery.go`, `vtorc/inst/group_replication.go`, `vtctl/reparentutil/group_replication.go`, `gr-fixes5`) | The statuses and the compare-and-swap in one step. |
 
 ## What the model does not cover
 
-- Liveness, beyond the stuck-state checks of S7d r3, of a refused intent and of a stale intent. No fairness, no timing: every timeout is a nondeterministic step, so the model cannot say how long an outage lasts.
-- PRS, ERS, `InitPrimary` and `InitShardPrimary` (and so the `InitPrimary` exception, which is writable before it serves), `UndoDemotePrimary`, `SetReadWrite`, `DemotePrimary` except through `StaleTopoPrimary`, the migration (`MigrateReplicationMode`) and its pauses, voter replacement (`GroupVotersOutOfDate`), the group primary move (NEW-4), backups.
+- Liveness beyond the `live*` configurations (one VTOrc, no transaction, at most two crashes, one loss of majority or one voter write, one initial promotion, no PRS or ERS of a running shard) and the stuck-state checks of S7d r3, of a refused intent and of a stale intent. No timing: every timeout is a step that fairness eventually takes, so the model cannot say how long an outage lasts.
+- `InitShardPrimary` (its `InitPrimary` is the initial promotion's), the migration (`MigrateReplicationMode`) and its pauses, the group primary move (NEW-4), backups. PRS's catch-up is "the elect executed what the old primary executed"; ERS's `SetReplicationSource` on the other tablets, member weights and the cross-cell rules are left out.
+- Voter replacement by another tablet: the model has three tablets, all voters, so a voter can only be dropped. The same-cell replacement that the voter rule allows, a spare that joins, and the voter compare-and-swap between two VTOrcs (which needs a spare to fail) are not checked. VTOrc sees every view: the code's rule for a new voter that is unreachable and in a view VTOrc cannot see is not exercised.
 - vtgate. Clients write to any MySQL that accepts commits, which is stronger than vtgate's routing; the probe's routing variants are not repeated.
-- The durability policy: the shard is always under a Group Replication policy with all three voters listed. `offline_mode`, semi-sync, two-phase commit, heartbeats and replication lag are left out.
-- MySQL: member weights, RECOVERING, ERROR states that wedge a member (NEW-5), auto-rejoin, certification, flow control, the 1–2s blocks of status reads during a `START`, a partition that does not cut the whole group in two, more than one partition at a time.
-- Bounds: exhaustively, at most one crash, one leave, one loss of majority and one lease expiry per behavior, one transaction, two intents and two new incarnations (one in the `tablet` family); by simulation only, two of each fault, two transactions, three intents and three new incarnations. Bugs that need more are outside the checked space, and simulation samples its space.
+- The durability policy: the shard is always under a Group Replication policy. `offline_mode`, semi-sync, two-phase commit (and so the redo of prepared transactions), heartbeats and replication lag are left out.
+- MySQL: member weights, RECOVERING, ERROR states that wedge a member (NEW-5), auto-rejoin, certification, flow control, the 1–2s blocks of status reads during a `START`, a partition that does not cut the whole group in two, more than one partition at a time, the view change events of joins and leaves.
+- Timing: VTOrc's re-read before a voter write and the write are one step, and so are `adoptUnrecordedGroup`'s reads and its write; a stall between them is not modeled. The 15-minute cap per run kept `current` (8.5M of 9.5M states explored, no error) and `tablet`, `orcs_stall` and `withdraw_orcs` from being run again exhaustively in the second milestone; no action of the second milestone is enabled in them.
+- Bounds: exhaustively, at most one crash, one leave, one loss of majority and one lease expiry per behavior, one transaction, two intents and two new incarnations (one in the `tablet`, `voters` and `reparent` families; two crashes, two leaves or one voter write and one reparent where a family says so); by simulation only, two of each fault, two transactions, three intents and three new incarnations. Bugs that need more are outside the checked space, and simulation samples its space.
 
 ## Next milestone
 
-- PRS and ERS with the reparent journal, `DemotePrimary`/`UndoDemotePrimary`, `SetReadWrite`, and `InitPrimary`'s exception (writable before it serves); voter replacement (`GroupVotersOutOfDate`), which changes the voters the invariants count.
-- Liveness with fairness: every voter back eventually leads to a serving legitimate primary, which needs a smaller model or a liveness-specific abstraction.
+- Re-check the fixes once `gr-fixes5` is merged, against its final code and line numbers; `init_alone` without `INIT_STABLE` now that finding 6 is fixed.
+- A fourth tablet: the voter replacement by a spare, the voter compare-and-swap between two VTOrcs, and the code's rule for unreachable new voters, with VTOrc's partial view of the statuses.
 - Partial partitions (a majority that cannot reach the primary, asymmetric VTOrc reachability) and the semantics of a member that is ONLINE without quorum.
-- More exhaustive coverage: two transactions in the `tablet` family through further symmetry or a `VIEW`, and leaves in the `orcs` family.
+- Liveness with the reparents and voter replacement (a failed demotion that the revert refuses ends with a serving primary), and a liveness validation: every known stuck state so far ends with an intent's expiry, which the bounds count.
+- More exhaustive coverage: two transactions in the `tablet` family through further symmetry or a `VIEW`, leaves in the `orcs` family, and the integrated second-milestone configuration (`fixed`) beyond simulation.
