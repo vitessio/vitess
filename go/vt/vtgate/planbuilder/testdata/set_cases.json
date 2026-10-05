@@ -680,5 +680,44 @@
         ]
       }
     }
+  },
+  {
+    "comment": "global variable name that cannot be a system variable is rejected",
+    "query": "set @@`global.version = 1 union select sleep(5) -- ` = 1",
+    "plan": "VT05006: unknown system variable '@@global.`version = 1 union select sleep(5) -- ` = 1'"
+  },
+  {
+    "comment": "global variable name that cannot be a system variable is rejected with set global",
+    "query": "set global `version = 1 union select sleep(5) -- ` = 1",
+    "plan": "VT05006: unknown system variable '@@global.`version = 1 union select sleep(5) -- ` = 1'"
+  },
+  {
+    "comment": "global component variable name is planned as check and ignore",
+    "query": "set @@global.validate_password.length = 8",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SET",
+      "Original": "set @@global.validate_password.length = 8",
+      "Instructions": {
+        "OperatorType": "Set",
+        "Ops": [
+          {
+            "Type": "SysVarCheckAndIgnore",
+            "Name": "validate_password.length",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "TargetDestination": {},
+            "Expr": "8"
+          }
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "SingleRow"
+          }
+        ]
+      }
+    }
   }
 ]
