@@ -49,16 +49,41 @@ const vschema = `
 `
 
 // TestChangeTypePrimaryCompletesWithBlockedCommit verifies that a primary
-// tablet can leave serving while a COMMIT is in flight.
+// tablet can leave serving while a COMMIT is blocked on a semi-sync ACK.
+// SPARE stops the query service. REPLICA keeps it serving read-only, which is
+// the transition that SetReplicationSource does on a demoted primary.
 func TestChangeTypePrimaryCompletesWithBlockedCommit(t *testing.T) {
 	if topoFlavor := *clusterInstance.TopoFlavorString(); topoFlavor != "etcd2" {
 		t.Skipf("requires etcd2 topology, got %s", topoFlavor)
 	}
 
-	clusterInstance := cluster.NewCluster(cell, hostname)
-	defer clusterInstance.Teardown()
+	for _, tabletType := range []topodatapb.TabletType{
+		topodatapb.TabletType_SPARE,
+		topodatapb.TabletType_REPLICA,
+	} {
+		t.Run(tabletType.String(), func(t *testing.T) {
+			testChangeTypePrimaryWithBlockedCommit(t, tabletType)
+		})
+	}
+}
 
-	err := clusterInstance.StartTopo()
+// testChangeTypePrimaryWithBlockedCommit starts a cluster, blocks a COMMIT on
+// the primary on a semi-sync ACK, and changes the primary to tabletType. It
+// checks that the change completes and that the shutdown grace period kills
+// the COMMIT.
+func testChangeTypePrimaryWithBlockedCommit(t *testing.T, tabletType topodatapb.TabletType) {
+	localCluster := cluster.NewCluster(cell, hostname)
+	defer localCluster.Teardown()
+
+	// Raise the query and transaction timeouts. Otherwise they end the blocked
+	// COMMIT before the ChangeType deadline, and the change completes without
+	// the fix.
+	localCluster.VtTabletExtraArgs = append(localCluster.VtTabletExtraArgs,
+		"--queryserver-config-query-timeout", "10m",
+		"--queryserver-config-transaction-timeout", "10m",
+	)
+
+	err := localCluster.StartTopo()
 	require.NoError(t, err)
 
 	keyspace := cluster.Keyspace{
@@ -68,25 +93,25 @@ func TestChangeTypePrimaryCompletesWithBlockedCommit(t *testing.T) {
 		DurabilityPolicy: policy.DurabilitySemiSync,
 	}
 
-	err = clusterInstance.StartUnshardedKeyspace(keyspace, 1, false, clusterInstance.Cell)
+	err = localCluster.StartUnshardedKeyspace(keyspace, 1, false, localCluster.Cell)
 	require.NoError(t, err)
 
-	err = clusterInstance.StartVtgate()
+	err = localCluster.StartVtgate()
 	require.NoError(t, err)
 
 	ctx := t.Context()
 
 	conn, err := mysql.Connect(ctx, &mysql.ConnParams{
-		Host: clusterInstance.Hostname,
-		Port: clusterInstance.VtgateMySQLPort,
+		Host: localCluster.Hostname,
+		Port: localCluster.VtgateMySQLPort,
 	})
 	require.NoError(t, err)
 	defer conn.Close()
 
-	require.NotEmpty(t, clusterInstance.Keyspaces)
-	require.NotEmpty(t, clusterInstance.Keyspaces[0].Shards)
+	require.NotEmpty(t, localCluster.Keyspaces)
+	require.NotEmpty(t, localCluster.Keyspaces[0].Shards)
 
-	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
+	tablets := localCluster.Keyspaces[0].Shards[0].Vttablets
 	require.NotEmpty(t, tablets)
 
 	var primary *cluster.Vttablet
@@ -156,18 +181,18 @@ func TestChangeTypePrimaryCompletesWithBlockedCommit(t *testing.T) {
 		return false
 	}, 30*time.Second, 100*time.Millisecond, "query with state not in processlist")
 
-	oldPrimary, err := clusterInstance.VtctldClientProcess.GetTablet(primary.Alias)
+	oldPrimary, err := localCluster.VtctldClientProcess.GetTablet(primary.Alias)
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
-	tmClient := tmc.NewClient()
-	defer tmClient.Close()
+	localTMClient := tmc.NewClient()
+	defer localTMClient.Close()
 
-	// Change the primary to spare, which should stop the query service and drain any
-	// active queries, including the COMMIT.
-	err = tmClient.ChangeType(ctx, oldPrimary, topodatapb.TabletType_SPARE, false)
+	// Change the primary type. The transition drains active queries, including
+	// the COMMIT.
+	err = localTMClient.ChangeType(ctx, oldPrimary, tabletType, false)
 	require.NoError(t, err)
 
 	require.Eventually(t, func() bool {
