@@ -64,6 +64,8 @@ func TestAdoptUnrecordedGroup(t *testing.T) {
 		unreachable uint32
 		// liveIntent records a live bootstrap intent for another tablet.
 		liveIntent bool
+		// noRecord is the voter whose tablet record is deleted, if any.
+		noRecord   uint32
 		wantRecord bool
 	}{{
 		name:       "the only group, whose primary holds every voter's transactions, is recorded",
@@ -101,6 +103,10 @@ func TestAdoptUnrecordedGroup(t *testing.T) {
 		name:       "a bootstrap intent for another tablet is live",
 		edit:       primaryOf,
 		liveIntent: true,
+	}, {
+		name:     "a voter has no tablet record",
+		edit:     primaryOf,
+		noRecord: 102,
 	}}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -116,6 +122,9 @@ func TestAdoptUnrecordedGroup(t *testing.T) {
 			}
 			mockTMC, tablets := bootstrapIntentTestWithErr(t, "", edit, tt.unreachable)
 			target := tablets[1]
+			if tt.noRecord != 0 {
+				require.NoError(t, ts.DeleteTablet(t.Context(), &topodatapb.TabletAlias{Cell: "zone3", Uid: tt.noRecord}))
+			}
 			if tt.liveIntent {
 				_, err := ts.UpdateShardFields(t.Context(), "ks", "0", func(si *topo.ShardInfo) error {
 					si.GroupReplicationBootstrapIntent = &topodatapb.GroupReplicationBootstrapIntent{

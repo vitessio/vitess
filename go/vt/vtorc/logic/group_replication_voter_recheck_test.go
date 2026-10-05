@@ -331,3 +331,50 @@ func TestUpdateGroupReplicationVotersRecheckIsFreshAtWrite(t *testing.T) {
 	mu.Unlock()
 	assert.Less(t, age, groupVoterRecheckTimeout+time.Second, "the statuses of the re-check must be fresh at the write")
 }
+
+// TestUpdateGroupReplicationVotersRechecksVoterWithoutTabletRecord checks that the re-check before a
+// voter write also covers a dropped voter whose tablet record is gone: the tablet list that the
+// recovery reads skips it, and VTOrc no longer knows its server_uuid, but its MySQL may still run. Here
+// the group's members report a member ONLINE again right before the write that no tablet of the shard
+// accounts for: it may be that voter, and the write is refused.
+func TestUpdateGroupReplicationVotersRechecksVoterWithoutTabletRecord(t *testing.T) {
+	prevGrace := config.GetGroupReplicationVoterReplacementGracePeriod()
+	t.Cleanup(func() {
+		config.SetGroupReplicationVoterReplacementGracePeriod(prevGrace)
+		inst.UnreachableGroupTablets.Reset()
+	})
+	inst.UnreachableGroupTablets.Reset()
+	config.SetGroupReplicationVoterReplacementGracePeriod(0)
+	primary := recoveryTablet("zone1", 101, topodatapb.TabletType_PRIMARY)
+	voter2 := recoveryTablet("zone2", 200, topodatapb.TabletType_REPLICA)
+	voter3 := recoveryTablet("zone3", 300, topodatapb.TabletType_REPLICA)
+	spare3 := recoveryTablet("zone3", 301, topodatapb.TabletType_REPLICA)
+	// zone3-300 has no tablet record.
+	mockTMC := groupReplicationRecoveryTestWithPolicy(t, policy.DurabilityGroupReplicationCrossCell, primary, voter2, spare3)
+	setVoters(t, primary, voter2, voter3)
+	setIncarnation(t, "")
+	for _, tablet := range []*topodatapb.Tablet{primary, voter2} {
+		calls := 0
+		mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(tablet)).DoAndReturn(
+			func(context.Context, *topodatapb.Tablet) (*replicationdatapb.FullStatus, error) {
+				calls++
+				if calls == 1 {
+					return withPosition(groupMemberStatus(tablet, primary, primary, voter2), "1-10"), nil
+				}
+				return withPosition(groupMemberStatus(tablet, primary, primary, voter2, voter3), "1-10"), nil
+			}).AnyTimes()
+	}
+	mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(spare3)).Return(notMemberStatus(spare3), nil).AnyTimes()
+	mockTMC.EXPECT().StartGroupReplication(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+
+	_, _, err := updateGroupReplicationVoters(t.Context(), &inst.DetectionAnalysis{
+		Analysis:              inst.GroupVotersOutOfDate,
+		AnalyzedInstanceAlias: primary.Alias,
+		AnalyzedKeyspace:      "ks",
+		AnalyzedShard:         "0",
+	}, log.NewPrefixedLogger("test"))
+	require.Error(t, err)
+	assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+	require.ErrorContains(t, err, "zone3-0000000300")
+	assert.Equal(t, []string{"zone1-0000000101", "zone2-0000000200", "zone3-0000000300"}, readVoters(t))
+}
