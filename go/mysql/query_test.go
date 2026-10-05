@@ -353,11 +353,11 @@ func TestComStmtExecute(t *testing.T) {
 // MySQL-protocol client had the same splice as a gRPC caller.
 func TestComStmtExecuteDecimalParameterIsValidated(t *testing.T) {
 	listener, sConn, cConn := createSocketPair(t)
-	defer func() {
+	t.Cleanup(func() {
 		listener.Close()
 		sConn.Close()
 		cConn.Close()
-	}()
+	})
 
 	prepare := &PrepareData{
 		StatementID: 1,

@@ -3353,8 +3353,8 @@ func TestReservedConnKeepAliveBatch(t *testing.T) {
 func TestTabletServerValidatesBindVariables(t *testing.T) {
 	ctx := t.Context()
 	db, tsv := setupTabletServerTest(t, ctx, "")
-	defer tsv.StopService()
-	defer db.Close()
+	t.Cleanup(tsv.StopService)
+	t.Cleanup(db.Close)
 
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	const sql = "select :v from test_table limit 1"
@@ -3483,8 +3483,8 @@ func TestTabletServerValidatesBindVariablesBeforeHotRowProtection(t *testing.T) 
 	cfg := tabletenv.NewDefaultConfig()
 	cfg.HotRowProtection.Mode = tabletenv.Enable
 	db, tsv := setupTabletServerTestCustom(t, ctx, cfg, "", vtenv.NewTestEnv())
-	defer tsv.StopService()
-	defer db.Close()
+	t.Cleanup(tsv.StopService)
+	t.Cleanup(db.Close)
 
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 

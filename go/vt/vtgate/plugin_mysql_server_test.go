@@ -1199,7 +1199,7 @@ func TestComStmtExecuteRejectsMalformedDecimalParameter(t *testing.T) {
 	th := &testHandler{}
 	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), th, 0, 0, false, false, 0, 0, false)
 	require.NoError(t, err)
-	defer listener.Close()
+	t.Cleanup(func() { listener.Close() })
 
 	mysqlConn := mysql.GetTestServerConn(listener)
 	mysqlConn.ConnectionID = 1
