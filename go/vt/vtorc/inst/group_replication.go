@@ -660,6 +660,29 @@ func applyGroupReplicationShardState(a *DetectionAnalysis, state *groupReplicati
 	a.isGroupVotersReporter = state.votersOutOfDate && topoproto.TabletAliasEqual(state.votersReporter, a.AnalyzedInstanceAlias)
 }
 
+// replicatesThroughGroup returns whether the analyzed tablet replicates through its shard's group
+// rather than asynchronously from the primary, so that the asynchronous replication analyses
+// (NotConnectedToPrimary, ReplicationStopped, ConnectedToWrongPrimary, ReplicaMisconfigured and the
+// replica semi-sync ones), whose recovery points the default replication channel at the primary, do
+// not apply to it: an active group member, and under a group replication policy a voter, also while
+// it is out of its group, joining it, or in the ERROR state. Configuring the default channel on a
+// voter makes the replication lag poller read that channel once the voter is back in its group, and
+// the voter then serves no replica reads (G13 chaos run). While no voter is listed, every tablet that
+// the policy allows in the group counts as a voter. A tablet that is not a voter replicates
+// asynchronously, and keeps the analyses.
+func replicatesThroughGroup(a *DetectionAnalysis, ca *clusterAnalysis) bool {
+	if a.IsGroupMemberActive {
+		return true
+	}
+	if !policy.IsGroupReplication(ca.durability) {
+		return false
+	}
+	if len(a.ShardGroupVoters) == 0 {
+		return policy.IsGroupMember(ca.durability, &topodatapb.Tablet{Alias: a.AnalyzedInstanceAlias, Type: a.TabletType})
+	}
+	return a.IsGroupVoter
+}
+
 // isGroupSecondary returns whether the analyzed tablet's MySQL is an active group member that is
 // not the group's primary. Such a member is read-only, and it must not be a shard primary.
 func isGroupSecondary(a *DetectionAnalysis) bool {

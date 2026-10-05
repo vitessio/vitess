@@ -462,12 +462,13 @@ func TestGetDetectionAnalysisGroupReplication(t *testing.T) {
 					grRow(replica2, gr),
 				}
 			},
+			// While no voter is listed, every tablet that the policy allows in the group counts as a
+			// voter, which replicates through the group: no asynchronous replication analysis.
 			want: map[string]AnalysisCode{
 				"zone1-0000000100": GroupVotersOutOfDate,
-				"zone1-0000000102": NotConnectedToPrimary,
 			},
 			wantDesiredVoters: []*topodatapb.Tablet{replica, replica2},
-			notWant:           []AnalysisCode{GroupNotBootstrapped},
+			notWant:           []AnalysisCode{GroupNotBootstrapped, NotConnectedToPrimary},
 		},
 		{
 			name:   "one cell holds a majority of the online members without the cross-cell policy",

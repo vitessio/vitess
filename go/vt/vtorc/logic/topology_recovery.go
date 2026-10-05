@@ -1650,10 +1650,27 @@ func fixReplica(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logg
 		return false, topologyRecovery, err
 	}
 
+	// A voter of a shard's replication group replicates through the group, also while it is out of
+	// it or joining it: configuring its default channel would run asynchronous replication next to
+	// its membership, which the replication lag poller then reads (the G13 chaos run). It is only made
+	// read-only if it is writable; its tablet or GroupMemberNotOnline makes it join the group. The
+	// analyses do not match a voter (inst.replicatesThroughGroup); this is the recovery's own check.
+	groupVoter := policy.IsGroupReplication(durabilityPolicy) && isGroupReplicationVoter(ctx, durabilityPolicy, analyzedTablet)
+	if groupVoter && analysisEntry.Analysis != inst.ReplicaIsWritable {
+		message := fmt.Sprintf("%v is a voter of the shard's replication group: not configuring asynchronous replication on it (%v)", analysisEntry.AnalyzedInstanceAlias, analysisEntry.Analysis)
+		logger.Info(message)
+		_ = AuditTopologyRecovery(topologyRecovery, message)
+		return false, topologyRecovery, nil
+	}
+
 	err = setReadOnly(ctx, analyzedTablet)
 	if err != nil {
 		logger.Info(fmt.Sprintf("Could not set the tablet %v to readonly - %v", analysisEntry.AnalyzedInstanceAlias, err))
 		return true, topologyRecovery, err
+	}
+	if groupVoter {
+		_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("%v is a voter of the shard's replication group: made it read-only, not configuring asynchronous replication on it", analysisEntry.AnalyzedInstanceAlias))
+		return true, topologyRecovery, nil
 	}
 
 	err = setReplicationSource(ctx, analyzedTablet, primaryTablet, policy.IsReplicaSemiSync(durabilityPolicy, primaryTablet, analyzedTablet), float64(analysisEntry.ReplicaNetTimeout)/2)

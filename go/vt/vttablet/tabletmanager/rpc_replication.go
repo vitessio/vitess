@@ -1245,6 +1245,14 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 	if mysql.IsGroupMemberActive(groupStatus) {
 		return tm.setGroupMemberReplicationSourceLocked(ctx, groupStatus, parentAlias, timeCreatedNS, waitPosition, semiSync)
 	}
+	// Nor through the default channel while it is joining its group: a START GROUP_REPLICATION still
+	// runs, and completes the join on its own, also after the client that started it gave up. The
+	// default channel configured meanwhile would run asynchronous replication next to the membership,
+	// which the replication lag poller then reads (the G13 chaos run).
+	if groupStatus.GetStartInProgress() {
+		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot replicate from %v: a START GROUP_REPLICATION runs, MySQL is joining replication group %s",
+			topoproto.TabletAliasString(parentAlias), groupStatus.GetGroupName())
+	}
 
 	// See if we were replicating at all, and should be replicating.
 	wasReplicating := false
