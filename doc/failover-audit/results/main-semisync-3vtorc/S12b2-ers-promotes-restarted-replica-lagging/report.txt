@@ -1,0 +1,68 @@
+==== SCENARIO S12b2-ers-promotes-restarted-replica-lagging ====
+-- OUTCOME (15)
+   P=zone1-0000000100 R1=zone2-0000000200 (restarted, promoted) R2=zone3-0000000300 (behind, vttablet stopped during ERS stop phase) lagApplier=true
+   R1 repointed to P by its restarted vttablet: true (after 0.2s)
+   ERS took 13.4s, err=<nil>
+   topo primary right after ERS: zone2-0000000200; vttablet types: zone1-0000000100=PRIMARY zone2-0000000200=PRIMARY zone3-0000000300=REPLICA
+   acked after revocation: 1232 writes acked in [13:01:34.783, 13:01:48.008]
+   acked after R1 restart until ERS end: 1232
+   after settle: zone1-0000000100 errant="aca124f4-bff3-11f1-9e82-02fc00000001:638-1874" (1237 trx) err=<nil> tables=[1236 `vt_ks`.`chaos_t`;      1 `_vt`.`semisync_heartbeat`;] super_read_only=1 no replica status
+   after settle: zone3-0000000300 errant="ac9f5b07-bff3-11f1-90a9-02fc00000001:4460-4471" (12 trx) err=<nil> tables=[12 `vt_ks`.`chaos_t`;] super_read_only=1 source_port=19712 (primary 19712) io=Yes sql=Yes io_err=""
+   acked after revocation (before invariant checks): 1232 tagged acked writes, 1232 LOST on primary zone2-0000000200: [881001265 881001266 881001267 881001268 881001269 881001270 881001271 881001272 881001273 881001274 881001275 881001276 881001277 881001278 881001279 881001280 881001281 881001282 881001283 881001284 881001285 881001286 881001287 881001288 881001289 881001290 881001291 881001292 881001293 881001294]
+   acked after revocation (writers stopped): 1232 tagged acked writes, 1232 LOST on primary zone2-0000000200: [881001265 881001266 881001267 881001268 881001269 881001270 881001271 881001272 881001273 881001274 881001275 881001276 881001277 881001278 881001279 881001280 881001281 881001282 881001283 881001284 881001285 881001286 881001287 881001288 881001289 881001290 881001291 881001292 881001293 881001294]
+   writes: total=6428 acked=6312 failed/unknown=116
+   vtgate primary reads after fault: 555, failed 0, answered by old primary: 422, after another member was elected: 421, after the topo primary changed: 419
+   old primary zone1-0000000100 -> new primary zone2-0000000200
+   zone1-0000000100 DRAINED by VTOrc with errant GTIDs (not on primary zone2-0000000200): aca124f4-bff3-11f1-9e82-02fc00000001:638-1874(from zone1-0000000100)
+   no write issued after the topo primary change was committed by the deposed primary
+-- TIMINGS (11)
+   longest write gap: 3.04s (from +13.28s to +16.32s relative to fault)
+   unavailable (no acked write for >= 1s): 5.22s in total, 3 outages [1.2s at +-7.4s, 1.0s at +0.0s, 3.0s at +13.3s]; writers stopped at +55.59s
+   topo shard primary changed to zone2-0000000200 at +13.64s
+   old primary zone1-0000000100 vttablet stopped reporting PRIMARY at +26.60s (vttablet=REPLICA read_only=true super_read_only=true)
+   old primary zone1-0000000100 mysqld stopped being writable (read_only or down) at +26.60s
+   old primary zone1-0000000100 mysqld super_read_only ON at +26.60s
+   another tablet's vttablet reported PRIMARY at +13.40s
+   vtgate primary reads answered by the old primary until +55.49s after the fault
+   stale primary reads (old primary, after another member was elected): last at +55.49s
+   first failed write started at +13.31s
+   converged 0.0s after heal/stop-writes; primary=zone2-0000000200
+-- VIOLATIONS (3)
+   SPLIT BRAIN TWO WRITABLE PRIMARIES (read_only=OFF and vttablet type PRIMARY): zone1-0000000100 & zone2-0000000200 from 13:01:47.779 to 13:02:00.976 (67 samples)
+   zone1-0000000100 did not catch up to primary's gtid_executed within 30s (err=<nil>)
+   DURABILITY: 1232/6312 acked writes missing on new primary zone2-0000000200: id=881001265 acked at 13:01:35.646 present-on=[zone1-0000000100(src=zone1-0000000100)]; id=881001266 acked at 13:01:35.647 present-on=[zone1-0000000100(src=zone1-0000000100)]; id=881001267 acked at 13:01:35.646 present-on=[zone1-0000000100(src=zone1-0000000100)]; id=881001268 acked at 13:01:35.646 present-on=[zone1-0000000100(src=zone1-0000000100)]; id=881001269 acked at 13:01:35.651 present-on=[zone1-0000000100(src=zone1-0000000100)]; id=881001270 acked at 13:01:35.652 present-on=[zone1-0000000100(src=zone1-0000000100)]; id=881001271 acked at 13:01:35.652 present-on=[zone1-0000000100(src=zone1-0000000100)]; id=881001272 acked at 13:01:35.652 present-on=[zone1-0000000100(src=zone1-0000000100)]; id=881001273 acked at 13:01:35.657 present-on=[zone1-0000000100(src=zone1-0000000100)]; id=881001274 acked at 13:01:35.657 present-on=[zone1-0000000100(src=zone1-0000000100)]; id=881001275 acked at 13:01:35.656 present-on=[zone1-0000000100(src=zone1-0000000100)]; id=881001276 acked at 13:01:35.657 present-on=[zone1-0000000100(src=zone1-0000000100)]; id=881001277 acked at 13:01:35.697 present-on=[zone1-0000000100(src=zone1-0000000100)]; id=881001278 acked at 13:01:35.697 present-on=[zone1-0000000100(src=zone1-0000000100)]; id=881001279 acked at 13:01:35.697 present-on=[zone1-0000000100(src=zone1-0000000100)]; id=881001280 acked at 13:01:35.697 present-on=[zone1-0000000100(src=zone1-0000000100)]; id=881001281 acked at 13:01:35.736 present-on=[zone1-0000000100(src=zone1-0000000100)]; id=881001282 acked at 13:01:35.737 present-on=[zone1-0000000100(src=zone1-0000000100)]; id=881001283 acked at 13:01:35.737 present-on=[zone1-0000000100(src=zone1-0000000100)]; id=881001284 acked at 13:01:35.737 present-on=[zone1-0000000100(src=zone1-0000000100)]
+-- NOTES (34)
+   after-ERS-stop zone2-0000000200: io=No sql=Yes Retrieved="aca124f4-bff3-11f1-9e82-02fc00000001:1-637" Executed="ac9f5b07-bff3-11f1-90a9-02fc00000001:1-542,aca124f4-bff3-11f1-9e82-02fc00000001:1-637" unapplied="" relay_log_recovery=ON
+   P semi-sync after revocation: clients=2 yes_tx=333 no_tx=0 status=ON wait_sessions=1
+   restarting zone2-0000000200 vttablet with --restore-from-backup=false
+   P semi-sync while R1 was acking: [clients=3 yes_tx=333 no_tx=0 status=ON wait_sessions=1] -> [clients=2 yes_tx=855 no_tx=0 status=ON wait_sessions=0]
+   R1-before-R2-resume zone2-0000000200: io=Yes sql=Yes Retrieved="aca124f4-bff3-11f1-9e82-02fc00000001:638-1649" Executed="ac9f5b07-bff3-11f1-90a9-02fc00000001:1-542,aca124f4-bff3-11f1-9e82-02fc00000001:1-637" unapplied="aca124f4-bff3-11f1-9e82-02fc00000001:638-1649" relay_log_recovery=ON
+   vtctld: 2026-10-04 13:01:34.633 UTC INF syslogger/syslogger.go:133 ks/0 [reparent <nil> -> <nil>] reading all tablets ()
+   vtctld: 2026-10-04 13:01:34.637 UTC INF syslogger/syslogger.go:133 ks/0 [reparent <nil> -> <nil>] stop replication on all replicas ()
+   vtctld: 2026-10-04 13:01:47.709 UTC INF syslogger/syslogger.go:133 ks/0 [reparent <nil> -> <nil>] reparenting all tablets ()
+   vtctld: 2026-10-04 13:01:47.983 UTC INF syslogger/syslogger.go:133 ks/0 [reparent <nil> -> zone2-0000000200] finished EmergencyReparentShard ()
+   ERS: W1004 13:01:47.696471 replication.go:500] failed to get replication status from zone1-0000000100: Code: CANCELED
+   ERS: rpc error: code = Canceled desc = context canceled while waiting for connections to become ready
+   ERS: I1004 13:01:47.697685 replication.go:179] excluding 1 candidate(s) strictly behind the most-advanced received relay log position from the relay-log-apply wait: zone3-0000000300 (still repointed after promotion); waiting on: zone2-0000000200
+   ERS: I1004 13:01:47.708714 emergency_reparenter.go:911] started finding the intermediate source
+   ERS: I1004 13:01:47.708757 emergency_reparenter.go:948] finding intermediate source - sorted replica: cell:"zone2" uid:200
+   ERS: I1004 13:01:47.708779 emergency_reparenter.go:948] finding intermediate source - sorted replica: cell:"zone3" uid:300
+   ERS: I1004 13:01:47.708790 emergency_reparenter.go:602] intermediate source selected - cell:"zone2" uid:200
+   ERS: I1004 13:01:47.708807 emergency_reparenter.go:633] intermediate source is ideal candidate- true
+   ERS: I1004 13:01:47.709503 emergency_reparenter.go:1135] setting new primary on replica zone3-0000000300
+   ERS: I1004 13:01:47.709586 emergency_reparenter.go:1135] setting new primary on replica zone1-0000000100
+   ERS: I1004 13:01:47.858846 emergency_reparenter.go:1110] starting promotion for the new primary - zone2-0000000200
+   ERS: I1004 13:01:47.977281 emergency_reparenter.go:1117] populating reparent journal on new primary zone2-0000000200
+   R1 vttablet log: 2026-10-04 13:01:34.897 UTC INF tabletmanager/tm_init.go:1186 Getting a new durability policy for semi_sync || 2026-10-04 13:01:47.860 UTC INF tabletmanager/rpc_replication.go:1190 PromoteReplica || 2026-10-04 13:01:47.975 UTC INF tabletmanager/rpc_server.go:83 TabletManager.PromoteReplica(semiSync:true)(on zone2-0000000200 from ): (*tabletmanagerdata.PromoteReplicaResponse)(nil)
+   P mysqld log (dump threads since fault): 
+   after settle: primary zone2-0000000200 _vt.heartbeat rows=0 err=<nil> (vttablet heartbeat env="")
+   two mysqld with read_only=OFF: zone1-0000000100 & zone2-0000000200 from 13:01:47.779 to 13:02:00.976 (67 samples)
+   errant GTIDs aca124f4-bff3-11f1-9e82-02fc00000001:638-1874 first observed on zone1-0000000100 at 13:02:01.179 (+26.60s after fault)
+   zone1-0000000100 has 1236 rows not on primary (unacked commits): [881001265 881001266 881001267 881001268 881001269 881001270 881001271 881001272 881001273 881001274]
+   rows on primary by committing server: map[zone1-0000000100:636 zone2-0000000200:4444]
+   vtorc-zone1: 1 successful action VTOrc Recovery for ErrantGTIDDetected on zone1-0000000100
+   vtorc-zone1: 1 successful action VTOrc Recovery for ClusterHasNoPrimary on zone1-0000000100
+   vtorc-zone2: 2 successful action VTOrc Recovery for ErrantGTIDDetected on zone1-0000000100
+   vtorc-zone2: 1 successful action VTOrc Recovery for ClusterHasNoPrimary on zone1-0000000100
+   vtorc-zone3: 1 successful action VTOrc Recovery for ErrantGTIDDetected on zone1-0000000100
+   vtorc-zone3: 1 successful action VTOrc Recovery for ClusterHasNoPrimary on zone1-0000000100

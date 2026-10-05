@@ -1,0 +1,50 @@
+==== SCENARIO S4-replication-partition ====
+-- OUTCOME (5)
+   failover happened=false after 60.1s (+12s)
+   writes: total=3116 acked=2908 failed/unknown=208
+   vtgate primary reads after fault: 1071, failed 0, answered by old primary: 1071, after another member was elected: 0, after the topo primary changed: 0
+   old primary zone3-0000000300 -> new primary zone3-0000000300
+   durability: all 2908 acked writes present on primary zone3-0000000300
+-- TIMINGS (8)
+   longest write gap: 83.12s (from +0.01s to +83.13s relative to fault)
+   unavailable (no acked write for >= 1s): 83.12s in total, 1 outages [83.1s at +0.0s]; writers stopped at +107.13s
+   topo shard primary never changed from zone3-0000000300
+   old primary zone3-0000000300 vttablet reported PRIMARY for the whole scenario
+   old primary zone3-0000000300 mysqld super_read_only never ON after the fault
+   vtgate primary reads answered by the old primary until +107.10s after the fault
+   first failed write started at +0.04s
+   converged 0.0s after heal/stop-writes; primary=zone3-0000000300
+-- VIOLATIONS (0)
+-- NOTES (32)
+   rows on primary by committing server: map[zone3-0000000300:2968]
+   vtorc-zone1: 2 action VTOrc Recovery for ReplicationStopped on zone2-0000000200 with error Code
+   vtorc-zone1: 2 action VTOrc Recovery for ReplicationStopped on zone1-0000000100 with error Code
+   vtorc-zone1: 1 successful action VTOrc Recovery for PrimarySemiSyncBlocked on zone3-0000000300
+   vtorc-zone1: 1 successful action VTOrc Recovery for ClusterHasNoPrimary on zone1-0000000100
+   vtorc-zone1 ERS-err: 2026-10-04 10:40:34.184 UTC ERR logic/topology_recovery.go:1049 Recovery for PrimarySemiSyncBlocked on ks/0: Failed to lock shard, aborting recovery: node already exists: lock already exists at path keyspaces/ks/shards/0
+   vtorc-zone1 ERS-err: 2026-10-04 10:40:35.180 UTC ERR logic/topology_recovery.go:1049 Recovery for PrimarySemiSyncBlocked on ks/0: Failed to lock shard, aborting recovery: node already exists: lock already exists at path keyspaces/ks/shards/0
+   vtorc-zone1 ERS-err: 2026-10-04 10:40:36.182 UTC ERR logic/topology_recovery.go:1049 Recovery for PrimarySemiSyncBlocked on ks/0: Failed to lock shard, aborting recovery: node already exists: lock already exists at path keyspaces/ks/shards/0
+   vtorc-zone1 ERS-err: 2026-10-04 10:40:37.179 UTC ERR logic/topology_recovery.go:1049 Recovery for PrimarySemiSyncBlocked on ks/0: Failed to lock shard, aborting recovery: node already exists: lock already exists at path keyspaces/ks/shards/0
+   vtorc-zone1 ERS-err: 2026-10-04 10:40:38.186 UTC ERR logic/topology_recovery.go:1049 Recovery for PrimarySemiSyncBlocked on ks/0: Failed to lock shard, aborting recovery: node already exists: lock already exists at path keyspaces/ks/shards/0
+   vtorc-zone1 ERS-err: 2026-10-04 10:40:39.182 UTC ERR logic/topology_recovery.go:1049 Recovery for PrimarySemiSyncBlocked on ks/0: Failed to lock shard, aborting recovery: node already exists: lock already exists at path keyspaces/ks/shards/0
+   vtorc-zone1 ERS-err: 2026-10-04 10:40:40.184 UTC ERR logic/topology_recovery.go:1049 Recovery for PrimarySemiSyncBlocked on ks/0: Failed to lock shard, aborting recovery: node already exists: lock already exists at path keyspaces/ks/shards/0
+   vtorc-zone1 ERS-err: 2026-10-04 10:40:41.184 UTC ERR logic/topology_recovery.go:1049 Recovery for PrimarySemiSyncBlocked on ks/0: Failed to lock shard, aborting recovery: node already exists: lock already exists at path keyspaces/ks/shards/0
+   vtorc-zone2: 1 successful action VTOrc Recovery for ClusterHasNoPrimary on zone1-0000000100
+   vtorc-zone2: 1 action VTOrc Recovery for ReplicationStopped on zone1-0000000100 with error Code
+   vtorc-zone2 ERS-err: 2026-10-04 10:40:34.184 UTC ERR logic/topology_recovery.go:1049 Recovery for PrimarySemiSyncBlocked on ks/0: Failed to lock shard, aborting recovery: node already exists: lock already exists at path keyspaces/ks/shards/0
+   vtorc-zone2 ERS-err: 2026-10-04 10:40:35.183 UTC ERR logic/topology_recovery.go:1049 Recovery for PrimarySemiSyncBlocked on ks/0: Failed to lock shard, aborting recovery: node already exists: lock already exists at path keyspaces/ks/shards/0
+   vtorc-zone2 ERS-err: 2026-10-04 10:40:36.182 UTC ERR logic/topology_recovery.go:1049 Recovery for PrimarySemiSyncBlocked on ks/0: Failed to lock shard, aborting recovery: node already exists: lock already exists at path keyspaces/ks/shards/0
+   vtorc-zone2 ERS-err: 2026-10-04 10:40:37.187 UTC ERR logic/topology_recovery.go:1049 Recovery for PrimarySemiSyncBlocked on ks/0: Failed to lock shard, aborting recovery: node already exists: lock already exists at path keyspaces/ks/shards/0
+   vtorc-zone2 ERS-err: 2026-10-04 10:40:38.183 UTC ERR logic/topology_recovery.go:1049 Recovery for PrimarySemiSyncBlocked on ks/0: Failed to lock shard, aborting recovery: node already exists: lock already exists at path keyspaces/ks/shards/0
+   vtorc-zone2 ERS-err: 2026-10-04 10:40:39.182 UTC ERR logic/topology_recovery.go:1049 Recovery for PrimarySemiSyncBlocked on ks/0: Failed to lock shard, aborting recovery: node already exists: lock already exists at path keyspaces/ks/shards/0
+   vtorc-zone2 ERS-err: 2026-10-04 10:40:40.184 UTC ERR logic/topology_recovery.go:1049 Recovery for PrimarySemiSyncBlocked on ks/0: Failed to lock shard, aborting recovery: node already exists: lock already exists at path keyspaces/ks/shards/0
+   vtorc-zone2 ERS-err: 2026-10-04 10:40:41.184 UTC ERR logic/topology_recovery.go:1049 Recovery for PrimarySemiSyncBlocked on ks/0: Failed to lock shard, aborting recovery: node already exists: lock already exists at path keyspaces/ks/shards/0
+   vtorc-zone3: 1 successful action VTOrc Recovery for ClusterHasNoPrimary on zone1-0000000100
+   vtorc-zone3 ERS-err: 2026-10-04 10:40:34.205 UTC ERR logic/topology_recovery.go:1049 Recovery for PrimarySemiSyncBlocked on ks/0: Failed to lock shard, aborting recovery: node already exists: lock already exists at path keyspaces/ks/shards/0
+   vtorc-zone3 ERS-err: 2026-10-04 10:40:35.202 UTC ERR logic/topology_recovery.go:1049 Recovery for PrimarySemiSyncBlocked on ks/0: Failed to lock shard, aborting recovery: node already exists: lock already exists at path keyspaces/ks/shards/0
+   vtorc-zone3 ERS-err: 2026-10-04 10:40:36.205 UTC ERR logic/topology_recovery.go:1049 Recovery for PrimarySemiSyncBlocked on ks/0: Failed to lock shard, aborting recovery: node already exists: lock already exists at path keyspaces/ks/shards/0
+   vtorc-zone3 ERS-err: 2026-10-04 10:40:37.200 UTC ERR logic/topology_recovery.go:1049 Recovery for PrimarySemiSyncBlocked on ks/0: Failed to lock shard, aborting recovery: node already exists: lock already exists at path keyspaces/ks/shards/0
+   vtorc-zone3 ERS-err: 2026-10-04 10:40:38.212 UTC ERR logic/topology_recovery.go:1049 Recovery for PrimarySemiSyncBlocked on ks/0: Failed to lock shard, aborting recovery: node already exists: lock already exists at path keyspaces/ks/shards/0
+   vtorc-zone3 ERS-err: 2026-10-04 10:40:39.205 UTC ERR logic/topology_recovery.go:1049 Recovery for PrimarySemiSyncBlocked on ks/0: Failed to lock shard, aborting recovery: node already exists: lock already exists at path keyspaces/ks/shards/0
+   vtorc-zone3 ERS-err: 2026-10-04 10:40:40.202 UTC ERR logic/topology_recovery.go:1049 Recovery for PrimarySemiSyncBlocked on ks/0: Failed to lock shard, aborting recovery: node already exists: lock already exists at path keyspaces/ks/shards/0
+   vtorc-zone3 ERS-err: 2026-10-04 10:40:41.202 UTC ERR logic/topology_recovery.go:1049 Recovery for PrimarySemiSyncBlocked on ks/0: Failed to lock shard, aborting recovery: node already exists: lock already exists at path keyspaces/ks/shards/0

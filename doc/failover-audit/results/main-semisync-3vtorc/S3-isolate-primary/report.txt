@@ -1,0 +1,52 @@
+==== SCENARIO S3-isolate-primary ====
+-- OUTCOME (7)
+   failover happened=true after 11.5s
+   writes: total=4128 acked=4024 failed/unknown=104
+   vtgate primary reads after fault: 367, failed 15, answered by old primary: 0, after another member was elected: 0, after the topo primary changed: 0
+   old primary zone1-0000000100 -> new primary zone2-0000000200
+   zone1-0000000100 DRAINED by VTOrc with errant GTIDs (not on primary zone2-0000000200): 6ef8fd1b-bfdf-11f1-9a29-02fc00000001:527-545(from zone1-0000000100)
+   durability: all 4024 acked writes present on primary zone2-0000000200
+   no write issued after the topo primary change was committed by the deposed primary
+-- TIMINGS (9)
+   longest write gap: 11.36s (from +0.01s to +11.37s relative to fault)
+   unavailable (no acked write for >= 1s): 11.36s in total, 1 outages [11.4s at +0.0s]; writers stopped at +46.57s
+   topo shard primary changed to zone2-0000000200 at +11.50s
+   old primary zone1-0000000100 vttablet stopped reporting PRIMARY at +22.40s (vttablet=REPLICA read_only=false super_read_only=false)
+   old primary zone1-0000000100 mysqld stopped being writable (read_only or down) at +32.61s
+   old primary zone1-0000000100 mysqld super_read_only never ON after the fault
+   another tablet's vttablet reported PRIMARY at +11.40s
+   vtgate primary reads: none answered by the old primary after the fault
+   first failed write started at +0.04s
+-- VIOLATIONS (3)
+   SPLIT BRAIN TWO WRITABLE PRIMARIES (read_only=OFF and vttablet type PRIMARY): zone1-0000000100 & zone2-0000000200 from 10:36:44.686 to 10:36:55.681 (56 samples)
+   CONVERGENCE: not converged after 2m0s: zone1-0000000100 super_read_only=0 err=<nil>
+   SEMISYNC: primary zone2-0000000200 has 2 semi-sync clients, want 1
+-- NOTES (28)
+   two mysqld with read_only=OFF: zone1-0000000100 & zone2-0000000200 from 10:36:44.686 to 10:37:05.884 (107 samples)
+   errant GTIDs 6ef8fd1b-bfdf-11f1-9a29-02fc00000001:527-545 first observed on zone1-0000000100 at 10:37:05.884 (+32.40s after fault)
+   zone1-0000000100 has 4 rows not on primary (unacked commits): [188000501 188000502 188000503 188000504]
+   rows on primary by committing server: map[zone1-0000000100:500 zone2-0000000200:3524]
+   vtorc-zone1: 1 successful action VTOrc Recovery for ReplicaIsWritable on zone1-0000000100
+   vtorc-zone1: 1 successful action VTOrc Recovery for ClusterHasNoPrimary on zone1-0000000100
+   vtorc-zone1 ERS-err: 2026-10-04 10:36:42.550 UTC ERR logic/topology_recovery.go:1049 Recovery for DeadPrimary on ks/0: Failed to lock shard, aborting recovery: node already exists: lock already exists at path keyspaces/ks/shards/0
+   vtorc-zone1 ERS-err: 2026-10-04 10:36:43.550 UTC ERR logic/topology_recovery.go:1049 Recovery for DeadPrimary on ks/0: Failed to lock shard, aborting recovery: node already exists: lock already exists at path keyspaces/ks/shards/0
+   vtorc-zone1 ERS-err: 2026-10-04 10:36:44.550 UTC ERR logic/topology_recovery.go:1049 Recovery for DeadPrimary on ks/0: Failed to lock shard, aborting recovery: node already exists: lock already exists at path keyspaces/ks/shards/0
+   vtorc-zone1 ERS-err: 2026-10-04 10:36:45.556 UTC ERR logic/topology_recovery.go:1049 Recovery for DeadPrimary on ks/0: Failed to lock shard, aborting recovery: node already exists: lock already exists at path keyspaces/ks/shards/0
+   vtorc-zone1 ERS-err: 2026-10-04 10:36:46.548 UTC WRN logic/topology_recovery.go:952 Recovery for DeadPrimaryWithoutReplicas on ks/0: Skipping recovery for problem: DeadPrimaryWithoutReplicas, recovery: NoRecoveryAction, reason: , aborting recovery
+   vtorc-zone1 ERS-err: 2026-10-04 10:36:46.548 UTC WRN logic/topology_recovery.go:958 Recovery for DeadPrimaryWithoutReplicas on ks/0: executeCheckAndRecoverFunction: ignoring analysisEntry that has no action plan: tablet: zone1-0000000100
+   vtorc-zone2: 2 successful action VTOrc Recovery for ErrantGTIDDetected on zone1-0000000100
+   vtorc-zone2: 1 successful action VTOrc Recovery for ReplicaIsWritable on zone1-0000000100
+   vtorc-zone2: 1 successful action VTOrc Recovery for DeadPrimary on zone1-0000000100
+   vtorc-zone2: 1 successful action VTOrc Recovery for ClusterHasNoPrimary on zone1-0000000100
+   vtorc-zone2 ERS-err: 2026-10-04 10:36:43.541 UTC ERR logic/topology_recovery.go:1049 Recovery for DeadPrimary on ks/0: Failed to lock shard, aborting recovery: node already exists: lock already exists at path keyspaces/ks/shards/0
+   vtorc-zone2 ERS-err: 2026-10-04 10:36:44.540 UTC ERR logic/topology_recovery.go:1049 Recovery for DeadPrimary on ks/0: Failed to lock shard, aborting recovery: node already exists: lock already exists at path keyspaces/ks/shards/0
+   vtorc-zone2 ERS-err: 2026-10-04 10:36:45.542 UTC ERR logic/topology_recovery.go:1049 Recovery for DeadPrimary on ks/0: Failed to lock shard, aborting recovery: node already exists: lock already exists at path keyspaces/ks/shards/0
+   vtorc-zone2 ERS-err: 2026-10-04 10:36:46.539 UTC WRN logic/topology_recovery.go:952 Recovery for DeadPrimaryWithoutReplicas on ks/0: Skipping recovery for problem: DeadPrimaryWithoutReplicas, recovery: NoRecoveryAction, reason: , aborting recovery
+   vtorc-zone2 ERS-err: 2026-10-04 10:36:46.539 UTC WRN logic/topology_recovery.go:958 Recovery for DeadPrimaryWithoutReplicas on ks/0: executeCheckAndRecoverFunction: ignoring analysisEntry that has no action plan: tablet: zone1-0000000100
+   vtorc-zone3: 1 successful action VTOrc Recovery for ErrantGTIDDetected on zone1-0000000100
+   vtorc-zone3: 1 successful action VTOrc Recovery for DeadPrimary on zone1-0000000100
+   vtorc-zone3: 1 successful action VTOrc Recovery for ClusterHasNoPrimary on zone1-0000000100
+   vtorc-zone3: 1 action VTOrc Recovery for ReplicaIsWritable on zone1-0000000100 with error Code
+   vtorc-zone3 ERS-err: 2026-10-04 10:36:43.540 UTC ERR logic/topology_recovery.go:1049 Recovery for DeadPrimary on ks/0: Failed to lock shard, aborting recovery: node already exists: lock already exists at path keyspaces/ks/shards/0
+   vtorc-zone3 ERS-err: 2026-10-04 10:36:44.544 UTC ERR logic/topology_recovery.go:1049 Recovery for DeadPrimary on ks/0: Failed to lock shard, aborting recovery: node already exists: lock already exists at path keyspaces/ks/shards/0
+   vtorc-zone3 ERS-err: 2026-10-04 10:36:44.585 UTC WRN logic/topology_recovery.go:377 Recovery for DeadPrimary on ks/0: ERS - failed to get replication status from zone1-0000000100: Code: CANCELED

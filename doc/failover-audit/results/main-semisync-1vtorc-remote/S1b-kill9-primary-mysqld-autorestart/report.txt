@@ -1,0 +1,26 @@
+==== SCENARIO S1b-kill9-primary-mysqld-autorestart ====
+-- OUTCOME (6)
+   failover happened=true after 2.8s
+   writes: total=2276 acked=2004 failed/unknown=272
+   vtgate primary reads after fault: 179, failed 24, answered by old primary: 4, after another member was elected: 0, after the topo primary changed: 0
+   old primary zone2-0000000200 -> new primary zone1-0000000100
+   durability: all 2004 acked writes present on primary zone1-0000000100
+   no write issued after the topo primary change was committed by the deposed primary
+-- TIMINGS (10)
+   longest write gap: 2.81s (from +-0.03s to +2.78s relative to fault)
+   unavailable (no acked write for >= 1s): 2.81s in total, 1 outages [2.8s at +-0.0s]; writers stopped at +17.84s
+   topo shard primary changed to zone1-0000000100 at +3.00s
+   old primary zone2-0000000200 vttablet stopped reporting PRIMARY at +2.61s (vttablet=REPLICA read_only=true super_read_only=true)
+   old primary zone2-0000000200 mysqld stopped being writable (read_only or down) at +0.10s
+   old primary zone2-0000000200 mysqld super_read_only ON at +1.80s
+   another tablet's vttablet reported PRIMARY at +2.80s
+   vtgate primary reads answered by the old primary until +2.50s after the fault
+   first failed write started at +0.00s
+   converged 0.0s after heal/stop-writes; primary=zone1-0000000100
+-- VIOLATIONS (0)
+-- NOTES (5)
+   rows on primary by committing server: map[zone1-0000000100:1508 zone2-0000000200:496]
+   vtorc-zone1: 1 successful action VTOrc Recovery for PrimaryHasPrimary on zone1-0000000100
+   vtorc-zone1: 1 successful action VTOrc Recovery for DeadPrimary on zone2-0000000200
+   vtorc-zone1: 1 successful action VTOrc Recovery for ClusterHasNoPrimary on zone1-0000000100
+   vtorc-zone1 ERS-err: 2026-10-04 12:05:27.709 UTC WRN logic/topology_recovery.go:377 Recovery for DeadPrimary on ks/0: ERS - replica zone2-0000000200 thinks it's primary but we failed to demote it: Code: CANCELED

@@ -1,0 +1,50 @@
+==== SCENARIO S13-T1-torn-last-trx ====
+-- OUTCOME (13)
+   P=zone1-0000000100 R1=zone2-0000000200 R2=zone3-0000000300 opts={pickAcked:false confirmStuck:true soleAckerPrimaryDies:false}
+   writes acked while R1's applier was blocked: 400
+   tear: vt-0000000200-relay-bin.000002 cut at 305099/305332 inside Write_rows [305099,305099) of trx 39961a33-bff4-11f1-b318-02fc00000001:926 (404/404 unapplied); 0 transactions after it dropped; verified torn=false (mysqlbinlog: "ERROR: Could not read entry at offset 305090: Error in log format or read error 1.\nERROR: binlog truncated in the middle of event; consider out of disk space")
+   applier stuck=false Last_SQL_Errno= Last_SQL_Error=""
+   R1 healed=true 34.4s after its mysqld start, 1.1s after VTOrc recoveries were (re)enabled (replicating from P, applier running, has the cut GTIDs)
+   CUT: 1 rows cut from R1's relay log, 1 of them acked to the client, 0 of those LOST on primary zone1-0000000100 []
+   TAGGED (acked while R1's applier was blocked): 400 tagged acked writes, 0 LOST on primary zone1-0000000100: []
+   data zone2-0000000200 vs primary zone1-0000000100: gtid_executed equal=true checksum 4048509590 vs 4048509590 equal=true
+   data zone3-0000000300 vs primary zone1-0000000100: gtid_executed equal=true checksum 4048509590 vs 4048509590 equal=true
+   writes: total=4680 acked=4680 failed/unknown=0
+   vtgate primary reads after fault: 378, failed 0, answered by old primary: 378, after another member was elected: 0, after the topo primary changed: 0
+   old primary zone1-0000000100 -> new primary zone1-0000000100
+   durability: all 4680 acked writes present on primary zone1-0000000100
+-- TIMINGS (8)
+   R1 mysqld up 3.1s after start
+   longest write gap: 0.09s (from +0.15s to +0.24s relative to fault)
+   unavailable (no acked write for >= 1s): 0.00s in total, 0 outages []; writers stopped at +37.82s
+   topo shard primary never changed from zone1-0000000100
+   old primary zone1-0000000100 vttablet reported PRIMARY for the whole scenario
+   old primary zone1-0000000100 mysqld super_read_only never ON after the fault
+   vtgate primary reads answered by the old primary until +37.79s after the fault
+   converged 0.0s after heal/stop-writes; primary=zone1-0000000100
+-- VIOLATIONS (4)
+   HARNESS: zone1-0000000100 runs relay_log_recovery=1 sync_relay_log=10000, want 0 and 1
+   HARNESS: zone2-0000000200 runs relay_log_recovery=1 sync_relay_log=10000, want 0 and 1
+   HARNESS: zone3-0000000300 runs relay_log_recovery=1 sync_relay_log=10000, want 0 and 1
+   HARNESS: tear not verified (on boundary=true, mysqlbinlog stderr "ERROR: Could not read entry at offset 305090: Error in log format or read error 1.\nERROR: binlog truncated in the middle of event; consider out of disk space\n")
+-- NOTES (20)
+   zone1-0000000100 relay_log_recovery=1 sync_relay_log=10000 sync_binlog=1 skip_replica_start=1
+   zone2-0000000200 relay_log_recovery=1 sync_relay_log=10000 sync_binlog=1 skip_replica_start=1
+   zone3-0000000300 relay_log_recovery=1 sync_relay_log=10000 sync_binlog=1 skip_replica_start=1
+   before-kill zone2-0000000200: io=Yes sql=Yes Retrieved="39961a33-bff4-11f1-b318-02fc00000001:1-922" Executed="39961a33-bff4-11f1-b318-02fc00000001:1-522" unapplied="39961a33-bff4-11f1-b318-02fc00000001:523-922" relay_log_recovery=ON
+   relay log vt-0000000200-relay-bin.000002: 5465 events, 926 transactions, 404 complete unapplied (first 39961a33-bff4-11f1-b318-02fc00000001:523, last 39961a33-bff4-11f1-b318-02fc00000001:926)
+   after-restart zone2-0000000200: io=No sql=No Retrieved="" Executed="39961a33-bff4-11f1-b318-02fc00000001:1-522" unapplied="" relay_log_recovery=ON
+   mysqld error log of zone2-0000000200: 2026-10-04T13:05:29.782152Z 0 [Warning] [MY-010539] [Repl] Recovery from source pos 172307 and file vt-0000000100-bin.000001 for channel ''. Previous relay log pos and relay log file had been set to 172540, /home/ubuntu/chaos-vtdataroot/vtroot_20101/vt_0000000200/relay-logs/vt-0000000200-relay-bin.000002 respectively.
+   stuck zone2-0000000200: io=No sql=Yes Retrieved="" Executed="39961a33-bff4-11f1-b318-02fc00000001:1-522" unapplied="" relay_log_recovery=ON
+   healed zone2-0000000200: io=Yes sql=Yes Retrieved="39961a33-bff4-11f1-b318-02fc00000001:523-4398" Executed="39961a33-bff4-11f1-b318-02fc00000001:1-1088" unapplied="39961a33-bff4-11f1-b318-02fc00000001:1089-4398" relay_log_recovery=ON
+   vtorc-zone2: 2026-10-04 13:06:01.404 UTC INF logic/topology_recovery.go:1182 Recovery for ReplicaSemiSyncMustBeSet on ks/0: executeCheckAndRecoverFunction: proceeding with recovery on zone2-0000000200; isRecoverable?: true
+   vtorc-zone2: 2026-10-04 13:06:01.405 UTC INF logic/topology_recovery.go:1184 Recovery for ReplicaSemiSyncMustBeSet on ks/0: Analysis: ReplicaSemiSyncMustBeSet, FixReplica zone2-0000000200
+   vtorc-zone2: 2026-10-04 13:06:01.575 UTC INF topo/locks.go:219 Unlocking shard ks/0 for successful action VTOrc Recovery for ReplicaSemiSyncMustBeSet on zone2-0000000200
+   vttablet zone2-0000000200: 2026-10-04 13:06:01.410 UTC INF tabletmanager/rpc_replication.go:900 SetReplicationSource: parent: cell:"zone1" uid:100  position:  force: true semiSync: true timeCreatedNS: 0
+   vttablet zone2-0000000200: 2026-10-04 13:06:01.427 UTC INF mysqlctl/query.go:148 exec STOP REPLICA
+   vttablet zone2-0000000200: 2026-10-04 13:06:01.431 UTC INF mysqlctl/query.go:148 exec START REPLICA
+   rows on primary by committing server: map[zone1-0000000100:4680]
+   vtorc-zone1: 1 successful action VTOrc Recovery for ClusterHasNoPrimary on zone1-0000000100
+   vtorc-zone2: 1 successful action VTOrc Recovery for ReplicaSemiSyncMustBeSet on zone2-0000000200
+   vtorc-zone2: 1 successful action VTOrc Recovery for ClusterHasNoPrimary on zone1-0000000100
+   vtorc-zone3: 1 successful action VTOrc Recovery for ClusterHasNoPrimary on zone1-0000000100

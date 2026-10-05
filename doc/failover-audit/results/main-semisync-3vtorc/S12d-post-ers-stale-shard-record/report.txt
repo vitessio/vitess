@@ -1,0 +1,62 @@
+==== SCENARIO S12d-post-ers-stale-shard-record ====
+-- OUTCOME (12)
+   P=zone1-0000000100 R1=zone2-0000000200 (restarted) R2=zone3-0000000300 (ERS target) lagR1=false
+   ERS took 0.3s, err=<nil>
+   after ERS: shard record primary=zone3-0000000300; vttablet types: zone1-0000000100=PRIMARY zone2-0000000200=REPLICA zone3-0000000300=PRIMARY; R1 replicating from R2=true
+   after R1 restart: shard record primary=zone1-0000000100; R1 source port=19915 io=Yes (P=19909 R2=19915); R1 vttablet=DOWN
+   acked after R1 restart: 1004 writes acked in [13:03:36.809, 13:03:46.846]
+   acked after R1 restart: 1004 tagged acked writes, 0 LOST on primary zone3-0000000300: []
+   writes: total=5457 acked=5453 failed/unknown=4
+   vtgate primary reads after fault: 34, failed 0, answered by old primary: 3, after another member was elected: 0, after the topo primary changed: 0
+   old primary zone1-0000000100 -> new primary zone3-0000000300
+   zone1-0000000100 DRAINED by VTOrc with errant GTIDs (not on primary zone3-0000000300): f5e10751-bff3-11f1-93a1-02fc00000001:835-851(from zone1-0000000100)
+   durability: all 5453 acked writes present on primary zone3-0000000300
+   no write issued after the topo primary change was committed by the deposed primary
+-- TIMINGS (10)
+   longest write gap: 3.04s (from +0.04s to +3.08s relative to fault)
+   unavailable (no acked write for >= 1s): 4.04s in total, 2 outages [3.0s at +0.0s, 1.0s at +13.6s]; writers stopped at +50.46s
+   topo shard primary changed to zone3-0000000300 at +0.45s
+   old primary zone1-0000000100 vttablet stopped reporting PRIMARY at +26.55s (vttablet=REPLICA read_only=true super_read_only=true)
+   old primary zone1-0000000100 mysqld stopped being writable (read_only or down) at +26.55s
+   old primary zone1-0000000100 mysqld super_read_only ON at +26.55s
+   another tablet's vttablet reported PRIMARY at +0.36s
+   vtgate primary reads answered by the old primary until +0.25s after the fault
+   first failed write started at +0.07s
+   converged 0.0s after heal/stop-writes; primary=zone3-0000000300
+-- VIOLATIONS (2)
+   SPLIT BRAIN TWO WRITABLE PRIMARIES (read_only=OFF and vttablet type PRIMARY): zone1-0000000100 & zone3-0000000300 from 13:03:33.584 to 13:03:59.782 (132 samples)
+   zone1-0000000100 did not catch up to primary's gtid_executed within 30s (err=<nil>)
+-- NOTES (33)
+   vtctld: 2026-10-04 13:03:33.477 UTC INF syslogger/syslogger.go:133 ks/0 [reparent <nil> -> <nil>] reading all tablets ()
+   vtctld: 2026-10-04 13:03:33.481 UTC INF syslogger/syslogger.go:133 ks/0 [reparent <nil> -> <nil>] stop replication on all replicas ()
+   vtctld: 2026-10-04 13:03:33.503 UTC INF syslogger/syslogger.go:133 ks/0 [reparent <nil> -> <nil>] reparenting all tablets ()
+   vtctld: 2026-10-04 13:03:33.767 UTC INF syslogger/syslogger.go:133 ks/0 [reparent <nil> -> zone3-0000000300] finished EmergencyReparentShard ()
+   ERS: W1004 13:03:33.494035 replication.go:500] failed to get replication status from zone1-0000000100: Code: CANCELED
+   ERS: rpc error: code = Canceled desc = context canceled while waiting for connections to become ready
+   ERS: I1004 13:03:33.502016 emergency_reparenter.go:911] started finding the intermediate source
+   ERS: I1004 13:03:33.502062 emergency_reparenter.go:948] finding intermediate source - sorted replica: cell:"zone2" uid:200
+   ERS: I1004 13:03:33.502066 emergency_reparenter.go:948] finding intermediate source - sorted replica: cell:"zone3" uid:300
+   ERS: I1004 13:03:33.502076 emergency_reparenter.go:602] intermediate source selected - cell:"zone3" uid:300
+   ERS: I1004 13:03:33.502094 emergency_reparenter.go:633] intermediate source is ideal candidate- true
+   ERS: I1004 13:03:33.503398 emergency_reparenter.go:1135] setting new primary on replica zone2-0000000200
+   ERS: I1004 13:03:33.503417 emergency_reparenter.go:1135] setting new primary on replica zone1-0000000100
+   ERS: I1004 13:03:33.658377 emergency_reparenter.go:1110] starting promotion for the new primary - zone3-0000000300
+   ERS: I1004 13:03:33.757806 emergency_reparenter.go:1117] populating reparent journal on new primary zone3-0000000300
+   R1-before-restart zone2-0000000200: io=Yes sql=Yes Retrieved="f5dd45c8-bff3-11f1-8c9a-02fc00000001:1-33" Executed="f5dd45c8-bff3-11f1-8c9a-02fc00000001:1-30,f5e10751-bff3-11f1-93a1-02fc00000001:1-834" unapplied="" relay_log_recovery=ON
+   R1 gtid_executed before restart: f5dd45c8-bff3-11f1-8c9a-02fc00000001:1-33,f5e10751-bff3-11f1-93a1-02fc00000001:1-834
+   restarting zone2-0000000200 vttablet with --restore-from-backup=false
+   R1 vttablet log: 2026-10-04 13:03:36.934 UTC INF tabletmanager/tm_init.go:1186 Getting a new durability policy for semi_sync || Error: failed to parse --tablet-path or initialize DB credentials: Code: FAILED_PRECONDITION || Errant GTID detected - f5dd45c8-bff3-11f1-8c9a-02fc00000001:1-45; Primary GTID - f5e10751-bff3-11f1-93a1-02fc00000001:1-834, Replica GTID - f5dd45c8-bff3-11f1-8c9a-02fc00000001:1-45,f5e10751-bff3-11f1-93a1-02fc00000001:1-834 ||       --config-file-not-found-handling ConfigFileNotFoundHandling        Behavior when a config file is not found. (Options: error, exit, ignore, warn) (default warn) ||       --vreplication-retry-delay duration                                delay before retrying a failed workflow event in the replication phase (default 5s) || 2026-10-04 13:03:36.954 UTC ERR vttablet/vttablet.go:32 failed to parse --tablet-path or initialize DB credentials: Code: FAILED_PRECONDITION || Errant GTID detected - f5dd45c8-bff3-11f1-8c9a-02fc00000001:1-45; Primary GTID - f5e10751-bff3-11f1-93a1-02fc00000001:1-834, Replica GTID - f5dd45c8-bff3-11f1-8c9a-02fc00000001:1-45,f5e10751-bff3-11f1-93a1-02fc00000001:1-834
+   P semi-sync: clients=0 yes_tx=435 no_tx=0 status=ON wait_sessions=1; R2 semi-sync: clients=1 yes_tx=529 no_tx=0 status=ON wait_sessions=0
+   R1-after-restart zone2-0000000200: io=Yes sql=Yes Retrieved="f5dd45c8-bff3-11f1-8c9a-02fc00000001:1-1037" Executed="f5dd45c8-bff3-11f1-8c9a-02fc00000001:1-1037,f5e10751-bff3-11f1-93a1-02fc00000001:1-834" unapplied="" relay_log_recovery=ON
+   restarting zone2-0000000200 vttablet with --restore-from-backup=false
+   two mysqld with read_only=OFF: zone1-0000000100 & zone3-0000000300 from 13:03:33.584 to 13:03:59.782 (132 samples)
+   errant GTIDs f5e10751-bff3-11f1-93a1-02fc00000001:835-851 first observed on zone1-0000000100 at 13:03:59.982 (+26.55s after fault)
+   zone1-0000000100 has 4 rows not on primary (unacked commits): [5000809 5000810 5000811 5000812]
+   rows on primary by committing server: map[zone1-0000000100:808 zone3-0000000300:4645]
+   vtorc-zone1: 2 successful action VTOrc Recovery for StaleTopoPrimary on zone1-0000000100
+   vtorc-zone1: 1 successful action VTOrc Recovery for ErrantGTIDDetected on zone1-0000000100
+   vtorc-zone1: 1 successful action VTOrc Recovery for ClusterHasNoPrimary on zone1-0000000100
+   vtorc-zone2: 1 successful action VTOrc Recovery for ClusterHasNoPrimary on zone1-0000000100
+   vtorc-zone3: 2 successful action VTOrc Recovery for ErrantGTIDDetected on zone1-0000000100
+   vtorc-zone3: 1 successful action VTOrc Recovery for StaleTopoPrimary on zone1-0000000100
+   vtorc-zone3: 1 successful action VTOrc Recovery for ClusterHasNoPrimary on zone1-0000000100

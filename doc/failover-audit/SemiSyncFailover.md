@@ -28,7 +28,7 @@ Checks:
 - convergence within 2 minutes: one primary, read-only replicas, the semi-sync settings of the policy;
 - errant GTIDs. A tablet that VTOrc drained for errant GTIDs is reported, not counted as a violation: the deployment is expected to replace it.
 
-Reproducing: `go/test/endtoend/vtorc/chaos/README.md` lists the prerequisites, how to build the binaries of `main` and of this branch, and the plan (`chaos_plan.sh main`, `probe`, `fixed`) that produced the tables below; `chaos_summary.py` builds them. The model's runs are reproduced with `doc/design-docs/semi_sync_tla/run.sh`.
+Reproducing: `go/test/endtoend/vtorc/chaos/README.md` lists the prerequisites, how to build the binaries of `main` and of this branch, and the plan (`chaos_plan.sh main`, `probe`, `fixed`) that produced the tables below; `chaos_summary.py` builds them from the per-scenario reports in `results/`. The model's runs are reproduced with `doc/design-docs/semi_sync_tla/run.sh`.
 
 ## Summary
 

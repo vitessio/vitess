@@ -1,0 +1,39 @@
+==== SCENARIO S7b-kill-during-failover ====
+-- OUTCOME (6)
+   killed zone1-0000000100 mysqld as soon as its vttablet reported PRIMARY (topo primary then: zone2-0000000200)
+   failover to last replica happened=false after 90.2s
+   writes: total=13352 acked=3328 failed/unknown=10024
+   vtgate primary reads after fault: 1006, failed 1002, answered by old primary: 4, after another member was elected: 0, after the topo primary changed: 3
+   old primary zone2-0000000200 -> new primary zone2-0000000200
+   durability: all 3328 acked writes present on primary zone2-0000000200
+-- TIMINGS (9)
+   longest write gap: 100.40s (from +-0.03s to +100.37s relative to fault)
+   unavailable (no acked write for >= 1s): 100.40s in total, 1 outages [100.4s at +-0.0s]; writers stopped at +128.66s
+   topo shard primary changed to zone1-0000000100 at +2.50s
+   old primary zone2-0000000200 vttablet reported PRIMARY for the whole scenario
+   old primary zone2-0000000200 mysqld stopped being writable (read_only or down) at +0.20s
+   old primary zone2-0000000200 mysqld super_read_only ON at +100.00s
+   vtgate primary reads answered by the old primary until +100.50s after the fault
+   first failed write started at +0.00s
+   converged 0.0s after heal/stop-writes; primary=zone2-0000000200
+-- VIOLATIONS (1)
+   16 writes issued after the topo primary changed were acked by the DEPOSED primary zone2-0000000200: [828010521 828010522 828010523 828010524 828010525 828010526 828010527 828010528 828010529 828010530]
+-- NOTES (18)
+   rows on primary by committing server: map[zone2-0000000200:3328]
+   vtorc-zone1: 50 action VTOrc Recovery for DeadPrimary on zone1-0000000100 with error error when getting replication status for alias zone2-0000000200
+   vtorc-zone1: 46 action VTOrc Recovery for DeadPrimary on zone1-0000000100 with error error when getting replication status for alias zone1-0000000100
+   vtorc-zone1: 2 successful action VTOrc Recovery for StaleTopoPrimary on zone1-0000000100
+   vtorc-zone1: 1 successful action VTOrc Recovery for ReplicationStopped on zone1-0000000100
+   vtorc-zone1: 1 successful action VTOrc Recovery for PrimaryHasPrimary on zone2-0000000200
+   vtorc-zone1: 1 successful action VTOrc Recovery for PrimaryHasPrimary on zone1-0000000100
+   vtorc-zone1: 1 successful action VTOrc Recovery for DeadPrimary on zone1-0000000100
+   vtorc-zone1: 1 successful action VTOrc Recovery for ClusterHasNoPrimary on zone1-0000000100
+   vtorc-zone1: 1 action VTOrc Recovery for DeadPrimary on zone2-0000000200 with error Code
+   vtorc-zone1 ERS-err: 2026-10-04 12:27:16.060 UTC WRN logic/topology_recovery.go:377 Recovery for DeadPrimary on ks/0: ERS - failed to get replication status from zone2-0000000200: Code: UNAVAILABLE
+   vtorc-zone1 ERS-err: 2026-10-04 12:27:16.361 UTC ERR logic/topology_recovery.go:379 Recovery for DeadPrimary on ks/0: ERS - failed to promote zone1-0000000100 to primary
+   vtorc-zone1 ERS-err: 2026-10-04 12:27:16.362 UTC ERR logic/topology_recovery.go:403 Recovery for DeadPrimary on ks/0: Error running ERS - Code: UNAVAILABLE
+   vtorc-zone1 ERS-err: 2026-10-04 12:27:16.362 UTC ERR logic/topology_recovery.go:1194 Recovery for DeadPrimary on ks/0: Failed to recover: Code: UNAVAILABLE
+   vtorc-zone1 ERS-err: 2026-10-04 12:27:18.063 UTC WRN logic/topology_recovery.go:377 Recovery for DeadPrimary on ks/0: ERS - failed to get replication status from zone2-0000000200: Code: UNAVAILABLE
+   vtorc-zone1 ERS-err: 2026-10-04 12:27:18.063 UTC WRN logic/topology_recovery.go:377 Recovery for DeadPrimary on ks/0: ERS - failed to get replication status from zone1-0000000100: Code: UNAVAILABLE
+   vtorc-zone1 ERS-err: 2026-10-04 12:27:18.068 UTC ERR logic/topology_recovery.go:403 Recovery for DeadPrimary on ks/0: Error running ERS - error when getting replication status for alias zone2-0000000200: rpc error: code = Unavailable desc = TabletManager.StopReplicationAndGetStatus on zone2-0000000200: before status failed: net.Dial(/home/ubuntu/chaos-vtdataroot/vtroot_16901/vt_0000000200/mysql.sock) to local server f
+   vtorc-zone1 ERS-err: 2026-10-04 12:27:18.069 UTC ERR logic/topology_recovery.go:1194 Recovery for DeadPrimary on ks/0: Failed to recover: error when getting replication status for alias zone2-0000000200: rpc error: code = Unavailable desc = TabletManager.StopReplicationAndGetStatus on zone2-0000000200: before status failed: net.Dial(/home/ubuntu/chaos-vtdataroot/vtroot_16901/vt_0000000200/mysql.sock) to local server f

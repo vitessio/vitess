@@ -1,0 +1,28 @@
+==== SCENARIO S9-primary-cell-outage-kill ====
+-- OUTCOME (6)
+   failover happened=true after 3.8s
+   writes: total=4688 acked=4312 failed/unknown=376
+   vtgate primary reads after fault: 419, failed 37, answered by old primary: 0, after another member was elected: 0, after the topo primary changed: 0
+   old primary zone2-0000000200 -> new primary zone1-0000000100
+   durability: all 4312 acked writes present on primary zone1-0000000100
+   no write issued after the topo primary change was committed by the deposed primary
+-- TIMINGS (10)
+   longest write gap: 3.80s (from +-0.04s to +3.77s relative to fault)
+   unavailable (no acked write for >= 1s): 3.80s in total, 1 outages [3.8s at +-0.0s]; writers stopped at +41.91s
+   topo shard primary changed to zone1-0000000100 at +3.75s
+   old primary zone2-0000000200 vttablet stopped reporting PRIMARY at +0.09s (vttablet=DOWN mysql=DOWN)
+   old primary zone2-0000000200 mysqld stopped being writable (read_only or down) at +0.09s
+   old primary zone2-0000000200 mysqld super_read_only ON at +16.20s
+   another tablet's vttablet reported PRIMARY at +3.80s
+   vtgate primary reads: none answered by the old primary after the fault
+   first failed write started at +0.04s
+   converged 0.0s after heal/stop-writes; primary=zone1-0000000100
+-- VIOLATIONS (0)
+-- NOTES (7)
+   rows on primary by committing server: map[zone1-0000000100:3816 zone2-0000000200:496]
+   vtorc-zone1: 1 successful action VTOrc Recovery for StaleTopoPrimary on zone2-0000000200
+   vtorc-zone1: 1 successful action VTOrc Recovery for PrimaryHasPrimary on zone2-0000000200
+   vtorc-zone1: 1 successful action VTOrc Recovery for NotConnectedToPrimary on zone2-0000000200
+   vtorc-zone1: 1 successful action VTOrc Recovery for DeadPrimary on zone2-0000000200
+   vtorc-zone1: 1 successful action VTOrc Recovery for ClusterHasNoPrimary on zone1-0000000100
+   vtorc-zone1 ERS-err: 2026-10-04 12:41:54.627 UTC WRN logic/topology_recovery.go:377 Recovery for DeadPrimary on ks/0: ERS - failed to get replication status from zone2-0000000200: Code: CANCELED

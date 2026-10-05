@@ -1,0 +1,37 @@
+==== SCENARIO S8b-vtorc-cut-from-topo-before ====
+-- OUTCOME (7)
+   failover happened=true after 2.4s
+   writes: total=4592 acked=4360 failed/unknown=232
+   vtgate primary reads after fault: 365, failed 23, answered by old primary: 0, after another member was elected: 0, after the topo primary changed: 0
+   old primary zone1-0000000100 -> new primary zone2-0000000200
+   zone1-0000000100 DRAINED by VTOrc with errant GTIDs (not on primary zone2-0000000200): 55c1c019-bfe3-11f1-b66d-02fc00000001:1018(from zone1-0000000100)
+   durability: all 4360 acked writes present on primary zone2-0000000200
+   no write issued after the topo primary change was committed by the deposed primary
+-- TIMINGS (10)
+   longest write gap: 2.41s (from +0.01s to +2.41s relative to fault)
+   unavailable (no acked write for >= 1s): 2.41s in total, 1 outages [2.4s at +0.0s]; writers stopped at +36.56s
+   topo shard primary changed to zone2-0000000200 at +2.49s
+   old primary zone1-0000000100 vttablet stopped reporting PRIMARY at +17.20s (vttablet=DRAINED read_only=true super_read_only=true)
+   old primary zone1-0000000100 mysqld stopped being writable (read_only or down) at +0.11s
+   old primary zone1-0000000100 mysqld super_read_only ON at +16.01s
+   another tablet's vttablet reported PRIMARY at +2.41s
+   vtgate primary reads: none answered by the old primary after the fault
+   first failed write started at +0.03s
+   converged 0.0s after heal/stop-writes; primary=zone2-0000000200
+-- VIOLATIONS (1)
+   zone1-0000000100 did not catch up to primary's gtid_executed within 30s (err=<nil>)
+-- NOTES (14)
+   errant GTIDs 55c1c019-bfe3-11f1-b66d-02fc00000001:1018 first observed on zone1-0000000100 at 11:04:51.317 (+16.01s after fault)
+   zone1-0000000100 has 1 rows not on primary (unacked commits): [865000991]
+   rows on primary by committing server: map[zone1-0000000100:991 zone2-0000000200:3370]
+   vtorc-zone1: 11 action VTOrc Recovery for ReplicaIsWritable on zone1-0000000100 with error Code
+   vtorc-zone1: 2 successful action VTOrc Recovery for StaleTopoPrimary on zone1-0000000100
+   vtorc-zone1: 1 successful action VTOrc Recovery for ReplicaIsWritable on zone1-0000000100
+   vtorc-zone1: 1 successful action VTOrc Recovery for ErrantGTIDDetected on zone1-0000000100
+   vtorc-zone1: 1 successful action VTOrc Recovery for DeadPrimary on zone1-0000000100
+   vtorc-zone1: 1 successful action VTOrc Recovery for ClusterHasNoPrimary on zone1-0000000100
+   vtorc-zone1 ERS-err: 2026-10-04 11:04:37.382 UTC WRN logic/topology_recovery.go:377 Recovery for DeadPrimary on ks/0: ERS - failed to get replication status from zone1-0000000100: Code: UNAVAILABLE
+   vtorc-zone2: 1 successful action VTOrc Recovery for ReplicaIsWritable on zone1-0000000100
+   vtorc-zone3: 1 successful action VTOrc Recovery for UnreachablePrimary on zone1-0000000100
+   vtorc-zone3: 1 successful action VTOrc Recovery for DeadPrimary on zone1-0000000100
+   vtorc-zone3: 1 successful action VTOrc Recovery for ClusterHasNoPrimary on zone1-0000000100

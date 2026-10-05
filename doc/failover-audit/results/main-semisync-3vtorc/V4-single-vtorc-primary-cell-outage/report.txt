@@ -1,0 +1,23 @@
+==== SCENARIO V4-single-vtorc-primary-cell-outage ====
+-- OUTCOME (5)
+   failover with the only VTOrc down happened=false after 60.2s
+   writes: total=9804 acked=3160 failed/unknown=6644
+   vtgate primary reads after fault: 933, failed 665, answered by old primary: 268, after another member was elected: 0, after the topo primary changed: 0
+   old primary zone1-0000000100 -> new primary zone1-0000000100
+   durability: all 3160 acked writes present on primary zone1-0000000100
+-- TIMINGS (9)
+   longest write gap: 66.48s (from +-0.03s to +66.45s relative to fault)
+   unavailable (no acked write for >= 1s): 66.48s in total, 1 outages [66.5s at +-0.0s]; writers stopped at +93.26s
+   topo shard primary never changed from zone1-0000000100
+   old primary zone1-0000000100 vttablet stopped reporting PRIMARY at +0.10s (vttablet=DOWN mysql=DOWN)
+   old primary zone1-0000000100 mysqld stopped being writable (read_only or down) at +0.10s
+   old primary zone1-0000000100 mysqld super_read_only ON at +62.60s
+   vtgate primary reads answered by the old primary until +93.20s after the fault
+   first failed write started at +0.00s
+   converged 0.0s after heal/stop-writes; primary=zone1-0000000100
+-- VIOLATIONS (0)
+-- NOTES (4)
+   rows on primary by committing server: map[zone1-0000000100:3160]
+   vtorc-zone1: 1 successful action VTOrc Recovery for ReplicationStopped on zone3-0000000300
+   vtorc-zone1: 1 successful action VTOrc Recovery for ReplicationStopped on zone2-0000000200
+   vtorc-zone1: 1 successful action VTOrc Recovery for PrimaryIsReadOnly on zone1-0000000100

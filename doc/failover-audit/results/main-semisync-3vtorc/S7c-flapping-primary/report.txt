@@ -1,0 +1,21 @@
+==== SCENARIO S7c-flapping-primary ====
+-- OUTCOME (4)
+   writes: total=5016 acked=4557 failed/unknown=459
+   vtgate primary reads after fault: 469, failed 56, answered by old primary: 413, after another member was elected: 0, after the topo primary changed: 0
+   old primary zone1-0000000100 -> new primary zone1-0000000100
+   durability: all 4557 acked writes present on primary zone1-0000000100
+-- TIMINGS (8)
+   longest write gap: 6.05s (from +0.01s to +6.06s relative to fault)
+   unavailable (no acked write for >= 1s): 33.90s in total, 6 outages [6.1s at +0.0s, 5.3s at +9.1s, 5.1s at +18.2s, 6.0s at +27.2s, 6.0s at +36.3s, 5.3s at +45.4s]; writers stopped at +74.40s
+   topo shard primary never changed from zone1-0000000100
+   old primary zone1-0000000100 vttablet reported PRIMARY for the whole scenario
+   old primary zone1-0000000100 mysqld super_read_only never ON after the fault
+   vtgate primary reads answered by the old primary until +74.30s after the fault
+   first failed write started at +0.04s
+   converged 0.0s after heal/stop-writes; primary=zone1-0000000100
+-- VIOLATIONS (0)
+-- NOTES (4)
+   rows on primary by committing server: map[zone1-0000000100:4586]
+   vtorc-zone1: 1 successful action VTOrc Recovery for ClusterHasNoPrimary on zone1-0000000100
+   vtorc-zone2: 1 successful action VTOrc Recovery for ClusterHasNoPrimary on zone1-0000000100
+   vtorc-zone3: 1 successful action VTOrc Recovery for ClusterHasNoPrimary on zone1-0000000100

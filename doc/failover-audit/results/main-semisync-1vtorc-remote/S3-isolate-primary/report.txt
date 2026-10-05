@@ -1,0 +1,36 @@
+==== SCENARIO S3-isolate-primary ====
+-- OUTCOME (7)
+   failover happened=true after 12.9s
+   writes: total=4272 acked=4008 failed/unknown=264
+   vtgate primary reads after fault: 382, failed 32, answered by old primary: 0, after another member was elected: 0, after the topo primary changed: 0
+   old primary zone2-0000000200 -> new primary zone1-0000000100
+   zone2-0000000200 DRAINED by VTOrc with errant GTIDs (not on primary zone1-0000000100): 35d8a849-bfec-11f1-adec-02fc00000001:504-522(from zone2-0000000200)
+   durability: all 4008 acked writes present on primary zone1-0000000100
+   no write issued after the topo primary change was committed by the deposed primary
+-- TIMINGS (9)
+   longest write gap: 12.91s (from +0.02s to +12.93s relative to fault)
+   unavailable (no acked write for >= 1s): 12.91s in total, 1 outages [12.9s at +0.0s]; writers stopped at +47.98s
+   topo shard primary changed to zone1-0000000100 at +13.00s
+   old primary zone2-0000000200 vttablet stopped reporting PRIMARY at +24.20s (vttablet=REPLICA read_only=false super_read_only=false)
+   old primary zone2-0000000200 mysqld stopped being writable (read_only or down) at +34.41s
+   old primary zone2-0000000200 mysqld super_read_only never ON after the fault
+   another tablet's vttablet reported PRIMARY at +13.01s
+   vtgate primary reads: none answered by the old primary after the fault
+   first failed write started at +0.04s
+-- VIOLATIONS (3)
+   SPLIT BRAIN TWO WRITABLE PRIMARIES (read_only=OFF and vttablet type PRIMARY): zone1-0000000100 & zone2-0000000200 from 12:08:16.722 to 12:08:27.909 (57 samples)
+   CONVERGENCE: not converged after 2m0s: zone2-0000000200 super_read_only=0 err=<nil>
+   SEMISYNC: primary zone1-0000000100 has 2 semi-sync clients, want 1
+-- NOTES (12)
+   two mysqld with read_only=OFF: zone1-0000000100 & zone2-0000000200 from 12:08:16.722 to 12:08:38.117 (108 samples)
+   errant GTIDs 35d8a849-bfec-11f1-adec-02fc00000001:504-522 first observed on zone2-0000000200 at 12:08:37.918 (+34.21s after fault)
+   zone2-0000000200 has 4 rows not on primary (unacked commits): [678000501 678000502 678000503 678000504]
+   rows on primary by committing server: map[zone1-0000000100:3508 zone2-0000000200:500]
+   vtorc-zone1: 2 successful action VTOrc Recovery for ErrantGTIDDetected on zone2-0000000200
+   vtorc-zone1: 1 successful action VTOrc Recovery for PrimaryHasPrimary on zone1-0000000100
+   vtorc-zone1: 1 successful action VTOrc Recovery for DeadPrimary on zone2-0000000200
+   vtorc-zone1: 1 successful action VTOrc Recovery for ClusterHasNoPrimary on zone1-0000000100
+   vtorc-zone1: 1 action VTOrc Recovery for ReplicaIsWritable on zone2-0000000200 with error Code
+   vtorc-zone1 ERS-err: 2026-10-04 12:08:15.304 UTC ERR logic/topology_recovery.go:1049 Recovery for DeadPrimary on ks/0: Failed to lock shard, aborting recovery: node already exists: lock already exists at path keyspaces/ks/shards/0
+   vtorc-zone1 ERS-err: 2026-10-04 12:08:16.304 UTC ERR logic/topology_recovery.go:1049 Recovery for DeadPrimary on ks/0: Failed to lock shard, aborting recovery: node already exists: lock already exists at path keyspaces/ks/shards/0
+   vtorc-zone1 ERS-err: 2026-10-04 12:08:16.361 UTC WRN logic/topology_recovery.go:377 Recovery for DeadPrimary on ks/0: ERS - failed to get replication status from zone2-0000000200: Code: CANCELED

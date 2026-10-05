@@ -1,0 +1,47 @@
+==== SCENARIO S12a-ers-replica-restart-3tablets ====
+-- OUTCOME (14)
+   P=zone1-0000000100 R1=zone2-0000000200 (restarted) held=[zone3-0000000300]
+   R1 repointed to P by its restarted vttablet: true (after 0.2s)
+   ERS took 25.6s, err=exit status 1
+   topo primary right after ERS: zone1-0000000100; vttablet types: zone1-0000000100=PRIMARY zone2-0000000200=REPLICA zone3-0000000300=REPLICA
+   acked after revocation: 2440 writes acked in [12:57:48.942, 12:58:14.369]
+   acked between R1 restart and lock release: 424
+   after settle: zone2-0000000200 errant="" (0 trx) err=<nil> tables=[] super_read_only=1 source_port=19309 (primary 19309) io=Yes sql=Yes io_err=""
+   after settle: zone3-0000000300 errant="" (0 trx) err=<nil> tables=[] super_read_only=1 source_port=19309 (primary 19309) io=Yes sql=Yes io_err=""
+   acked after revocation (before invariant checks): 2440 tagged acked writes, 0 LOST on primary zone1-0000000100: []
+   acked after revocation (writers stopped): 2440 tagged acked writes, 0 LOST on primary zone1-0000000100: []
+   writes: total=7752 acked=7752 failed/unknown=0
+   vtgate primary reads after fault: 677, failed 0, answered by old primary: 677, after another member was elected: 0, after the topo primary changed: 0
+   old primary zone1-0000000100 -> new primary zone1-0000000100
+   durability: all 7752 acked writes present on primary zone1-0000000100
+-- TIMINGS (7)
+   longest write gap: 1.24s (from +0.05s to +1.29s relative to fault)
+   unavailable (no acked write for >= 1s): 1.24s in total, 1 outages [1.2s at +0.0s]; writers stopped at +67.67s
+   topo shard primary never changed from zone1-0000000100
+   old primary zone1-0000000100 vttablet reported PRIMARY for the whole scenario
+   old primary zone1-0000000100 mysqld super_read_only never ON after the fault
+   vtgate primary reads answered by the old primary until +67.66s after the fault
+   converged 0.0s after heal/stop-writes; primary=zone1-0000000100
+-- VIOLATIONS (0)
+-- NOTES (21)
+   P semi-sync after revocation: clients=2 yes_tx=579 no_tx=0 status=ON wait_sessions=1
+   after-ERS-stop zone2-0000000200: io=No sql=Yes Retrieved="272b4445-bff3-11f1-938a-02fc00000001:1-826" Executed="272b4445-bff3-11f1-938a-02fc00000001:1-826" unapplied="" relay_log_recovery=ON
+   after-ERS-stop zone3-0000000300: io=No sql=Yes Retrieved="272b4445-bff3-11f1-938a-02fc00000001:1-1134" Executed="272b4445-bff3-11f1-938a-02fc00000001:1-826" unapplied="272b4445-bff3-11f1-938a-02fc00000001:827-1134" relay_log_recovery=ON
+   restarting zone2-0000000200 vttablet with --restore-from-backup=false
+   P semi-sync: 5s apart: [clients=1 yes_tx=579 no_tx=0 status=ON wait_sessions=1] -> [clients=1 yes_tx=809 no_tx=0 status=ON wait_sessions=0]
+   R1-after-restart zone2-0000000200: io=Yes sql=Yes Retrieved="272b4445-bff3-11f1-938a-02fc00000001:827-1558" Executed="272b4445-bff3-11f1-938a-02fc00000001:1-1558" unapplied="" relay_log_recovery=ON
+   vtctld: 2026-10-04 12:57:48.787 UTC INF syslogger/syslogger.go:133 ks/0 [reparent <nil> -> <nil>] reading all tablets ()
+   vtctld: 2026-10-04 12:57:48.792 UTC INF syslogger/syslogger.go:133 ks/0 [reparent <nil> -> <nil>] stop replication on all replicas ()
+   vtctld: 2026-10-04 12:57:54.328 UTC INF syslogger/syslogger.go:133 ks/0 [reparent <nil> -> <nil>] reparenting all tablets ()
+   vtctld: 2026-10-04 12:58:14.330 UTC INF syslogger/syslogger.go:133 ks/0 [reparent <nil> -> <nil>] failed EmergencyReparentShard: not enough semi-sync ackers were reachable to guarantee the promotion of zone3-0000000300 can make progress: tablet zone2-0000000200 SetReplicationSource failed: rpc error: code = FailedPrecondition desc = TabletManager.SetReplicationSource on zone2-0000000200: Errant GTID detected - 272b4445-bff3-11f1-938a-02fc00000001:1135-15
+   vtctld: not enough semi-sync ackers were reachable to guarantee the promotion of zone3-0000000300 can make progress
+   ERS: {"time":"2026-10-04T12:58:14.336748591Z","level":"ERROR","source":{"function":"main.main","file":"/home/user/vitess/go/cmd/vtctldclient/main.go","line":63},"msg":"rpc error: code = Unknown desc = not enough semi-sync ackers were reachable to guarantee the promotion of zone3-0000000300 can make progress: tablet zone2-0000000200 SetReplicationSource failed: rpc error: code = FailedPrecondition desc = TabletManager.SetReplicationSource on zone2-0000000200: Errant GTID detected - 272b4445-bff3-11f1-
+   R1 vttablet log: 2026-10-04 12:57:49.076 UTC INF tabletmanager/tm_init.go:1186 Getting a new durability policy for semi_sync || 2026-10-04 12:57:54.330 UTC INF tabletmanager/rpc_replication.go:900 SetReplicationSource: parent: cell:"zone3" uid:300  position:  force: true semiSync: true timeCreatedNS: 0 || 2026-10-04 12:57:54.340 UTC WRN tabletmanager/rpc_server.go:79 TabletManager.SetReplicationSource(parent:{cell:"zone3" uid:300} force_start_replication:true semiSync:true)(on zone2-0000000200 from ) error: Errant GTID detected - 272b4445-bff3-11f1-938a-02fc00000001:1135-1570; Primary GTID - 272b4445-bff3-11f1-938a-02fc00000001:1-1134, Replica GTID - 272b4445-bff3-11f1-938a-02fc00000001:1-1570
+   P mysqld log (dump threads since fault): 
+   after settle: primary zone1-0000000100 _vt.heartbeat rows=0 err=<nil> (vttablet heartbeat env="")
+   rows on primary by committing server: map[zone1-0000000100:7752]
+   vtorc-zone1: 1 successful action VTOrc Recovery for ReplicationStopped on zone3-0000000300
+   vtorc-zone1: 1 successful action VTOrc Recovery for ClusterHasNoPrimary on zone1-0000000100
+   vtorc-zone2: 1 successful action VTOrc Recovery for ReplicationStopped on zone3-0000000300
+   vtorc-zone2: 1 successful action VTOrc Recovery for ClusterHasNoPrimary on zone1-0000000100
+   vtorc-zone3: 1 successful action VTOrc Recovery for ClusterHasNoPrimary on zone1-0000000100

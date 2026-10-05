@@ -1,0 +1,17 @@
+# Chaos run reports
+
+One `report.txt` per scenario and run, as `go/test/endtoend/vtorc/chaos` writes them: outcome, timings, violations and notes. They are the data behind the tables in `../SemiSyncFailover.md`. The component logs are not included.
+
+| Directory | `chaos_plan.sh` phase | Profile | Binaries |
+|---|---|---|---|
+| `main-semisync-3vtorc` | `main` | `semisync-3vtorc` | `main` (`fb653f2`) |
+| `main-semisync-1vtorc-colo` | `main` | `semisync-1vtorc`, primary in the VTOrc's cell (`zone1`) | `main` |
+| `main-semisync-1vtorc-remote` | `main` | `semisync-1vtorc`, primary in `zone2` | `main` |
+| `main-probe-semisync-3vtorc-{1,2}` | `probe` | `semisync-3vtorc` | `main` |
+| `main-probe-semisync-1vtorc-{1,2}` | `probe` | `semisync-1vtorc`, primary in `zone1` | `main` |
+| `fixed-semisync-3vtorc-{1,2}` | `fixed` | `semisync-3vtorc` | this branch |
+| `fixed-semisync-1vtorc-{1,2}` | `fixed` | `semisync-1vtorc`, primary in `zone1` | this branch |
+
+Paths in the reports (`/home/ubuntu/...`, `/home/user/...`) are those of the test host.
+
+`go/test/endtoend/vtorc/chaos/chaos_summary.py <directory>...` rebuilds the report's tables from them; `go/test/endtoend/vtorc/chaos/README.md` describes how to rerun them.

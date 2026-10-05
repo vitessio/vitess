@@ -1,0 +1,39 @@
+==== SCENARIO S7d-flapping-primary-long ====
+-- OUTCOME (5)
+   writes: total=4665 acked=4368 failed/unknown=297
+   vtgate primary reads after fault: 75, failed 25, answered by old primary: 2, after another member was elected: 1, after the topo primary changed: 1
+   old primary zone1-0000000100 -> new primary zone2-0000000200
+   durability: all 4368 acked writes present on primary zone2-0000000200
+   no write issued after the topo primary change was committed by the deposed primary
+-- TIMINGS (10)
+   longest write gap: 11.48s (from +48.21s to +59.69s relative to fault)
+   unavailable (no acked write for >= 1s): 45.70s in total, 4 outages [11.4s at +0.0s, 11.4s at +16.1s, 11.4s at +32.1s, 11.5s at +48.2s]; writers stopped at +84.24s
+   topo shard primary changed to zone2-0000000200 at +11.50s
+   old primary zone1-0000000100 vttablet stopped reporting PRIMARY at +12.01s (vttablet=REPLICA read_only=false super_read_only=false)
+   old primary zone1-0000000100 mysqld stopped being writable (read_only or down) at +12.61s
+   old primary zone1-0000000100 mysqld super_read_only never ON after the fault
+   another tablet's vttablet reported PRIMARY at +11.41s
+   vtgate primary reads answered by the old primary until +27.50s after the fault
+   stale primary reads (old primary, after another member was elected): last at +27.50s
+   first failed write started at +0.04s
+-- VIOLATIONS (1)
+   CONVERGENCE: not converged after 2m0s: zone1-0000000100 super_read_only=0 err=<nil>
+-- NOTES (18)
+   two mysqld with read_only=OFF: zone1-0000000100 & zone2-0000000200 from 11:47:58.424 to 11:47:58.815 (4 samples)
+   two mysqld with read_only=OFF: zone1-0000000100 & zone2-0000000200 from 11:48:14.413 to 11:48:15.021 (4 samples)
+   two mysqld with read_only=OFF: zone1-0000000100 & zone2-0000000200 from 11:48:46.620 to 11:48:47.814 (8 samples)
+   rows on primary by committing server: map[zone1-0000000100:1440 zone2-0000000200:2932]
+   vtorc-zone1: 2 successful action VTOrc Recovery for ReplicaIsWritable on zone1-0000000100
+   vtorc-zone1: 2 successful action VTOrc Recovery for DeadPrimary on zone1-0000000100
+   vtorc-zone1: 1 successful action VTOrc Recovery for UnreachablePrimary on zone1-0000000100
+   vtorc-zone1: 1 successful action VTOrc Recovery for ReplicaIsWritable on zone2-0000000200
+   vtorc-zone1: 1 successful action VTOrc Recovery for PrimaryTabletDeleted on zone1-0000000100
+   vtorc-zone1: 1 successful action VTOrc Recovery for PrimaryHasPrimary on zone3-0000000300
+   vtorc-zone1: 1 successful action VTOrc Recovery for DeadPrimary on zone2-0000000200
+   vtorc-zone1: 1 successful action VTOrc Recovery for ClusterHasNoPrimary on zone1-0000000100
+   vtorc-zone1 ERS-err: 2026-10-04 11:47:57.516 UTC WRN logic/topology_recovery.go:377 Recovery for DeadPrimary on ks/0: ERS - failed to get replication status from zone1-0000000100: Code: CANCELED
+   vtorc-zone1 ERS-err: 2026-10-04 11:48:13.562 UTC WRN logic/topology_recovery.go:377 Recovery for DeadPrimary on ks/0: ERS - failed to get replication status from zone2-0000000200: Code: CANCELED
+   vtorc-zone1 ERS-err: 2026-10-04 11:48:28.948 UTC ERR logic/topology_recovery.go:1049 Recovery for DeadPrimary on ks/0: Failed to lock shard, aborting recovery: node already exists: lock already exists at path keyspaces/ks/shards/0
+   vtorc-zone1 ERS-err: 2026-10-04 11:48:29.943 UTC ERR logic/topology_recovery.go:1049 Recovery for DeadPrimary on ks/0: Failed to lock shard, aborting recovery: node already exists: lock already exists at path keyspaces/ks/shards/0
+   vtorc-zone1 ERS-err: 2026-10-04 11:48:45.689 UTC WRN logic/topology_recovery.go:377 Recovery for DeadPrimary on ks/0: ERS - failed to get replication status from zone1-0000000100: Code: CANCELED
+   vtorc-zone1 ERS-err: 2026-10-04 11:48:45.945 UTC ERR logic/topology_recovery.go:1049 Recovery for DeadPrimary on ks/0: Failed to lock shard, aborting recovery: node already exists: lock already exists at path keyspaces/ks/shards/0

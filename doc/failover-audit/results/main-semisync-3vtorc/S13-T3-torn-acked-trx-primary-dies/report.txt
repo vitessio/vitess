@@ -1,0 +1,70 @@
+==== SCENARIO S13-T3-torn-acked-trx-primary-dies ====
+-- OUTCOME (14)
+   P=zone3-0000000300 R1=zone1-0000000100 R2=zone2-0000000200 opts={pickAcked:true confirmStuck:true soleAckerPrimaryDies:true}
+   writes acked while R1's applier was blocked: 400
+   tear: vt-0000000100-relay-bin.000002 cut at 338835/403383 inside Write_rows [338835,338835) of trx 8f22f9f5-bff4-11f1-841a-02fc00000001:1027 (201/400 unapplied); 199 transactions after it dropped; verified torn=false (mysqlbinlog: "ERROR: Could not read entry at offset 338822: Error in log format or read error 1.\nERROR: binlog truncated in the middle of event; consider out of disk space")
+   applier stuck=false Last_SQL_Errno= Last_SQL_Error=""
+   failover happened=true after 1.0s; new primary zone1-0000000100
+   TAGGED (acked while only P and R1's relay log had them): 400 tagged acked writes, 400 LOST on primary zone1-0000000100: [262000801 262000802 262000803 262000804 262000805 262000806 262000807 262000808 262000809 262000810 262000811 262000812 262000813 262000814 262000815 262000816 262000817 262000818 262000819 262000820 262000821 262000822 262000823 262000824 262000825 262000826 262000827 262000828 262000829 262000830]
+   CUT: 200 rows cut from R1's relay log, 200 of them acked to the client, 200 of those LOST on primary zone1-0000000100 [262001004 262001003 262001001 262001002 262001005 262001008 262001007 262001006 262001009 262001011]
+   after old primary restart: zone2-0000000200 errant="" (0 trx) err=<nil> tables=[] super_read_only=1 source_port=20509 (primary 20509) io=Yes sql=Yes io_err=""
+   after old primary restart: zone3-0000000300 errant="8f22f9f5-bff4-11f1-841a-02fc00000001:827-1230" (404 trx) err=<nil> tables=[404 `vt_ks`.`chaos_t`;] super_read_only=1 no replica status
+   writes: total=9056 acked=5624 failed/unknown=3432
+   vtgate primary reads after fault: 789, failed 344, answered by old primary: 3, after another member was elected: 0, after the topo primary changed: 0
+   old primary zone3-0000000300 -> new primary zone1-0000000100
+   zone3-0000000300 DRAINED by VTOrc with errant GTIDs (not on primary zone1-0000000100): 8f22f9f5-bff4-11f1-841a-02fc00000001:827-1230(from zone3-0000000300)
+   no write issued after the topo primary change was committed by the deposed primary
+-- TIMINGS (11)
+   R1 mysqld up 3.1s after start
+   longest write gap: 34.73s (from +-0.02s to +34.71s relative to fault)
+   unavailable (no acked write for >= 1s): 34.73s in total, 1 outages [34.7s at +-0.0s]; writers stopped at +78.89s
+   topo shard primary changed to zone1-0000000100 at +34.72s
+   old primary zone3-0000000300 vttablet stopped reporting PRIMARY at +46.37s (vttablet=DRAINED read_only=true super_read_only=true)
+   old primary zone3-0000000300 mysqld stopped being writable (read_only or down) at +0.41s
+   old primary zone3-0000000300 mysqld super_read_only ON at +45.37s
+   another tablet's vttablet reported PRIMARY at +34.78s
+   vtgate primary reads answered by the old primary until +0.27s after the fault
+   first failed write started at +0.01s
+   converged 0.0s after heal/stop-writes; primary=zone1-0000000100
+-- VIOLATIONS (6)
+   HARNESS: zone1-0000000100 runs relay_log_recovery=1 sync_relay_log=10000, want 0 and 1
+   HARNESS: zone2-0000000200 runs relay_log_recovery=1 sync_relay_log=10000, want 0 and 1
+   HARNESS: zone3-0000000300 runs relay_log_recovery=1 sync_relay_log=10000, want 0 and 1
+   HARNESS: tear not verified (on boundary=true, mysqlbinlog stderr "ERROR: Could not read entry at offset 338822: Error in log format or read error 1.\nERROR: binlog truncated in the middle of event; consider out of disk space\n")
+   zone3-0000000300 did not catch up to primary's gtid_executed within 30s (err=<nil>)
+   DURABILITY: 400/5624 acked writes missing on new primary zone1-0000000100: id=262000801 acked at 13:07:50.602 present-on=[zone3-0000000300(src=zone3-0000000300)]; id=262000802 acked at 13:07:50.605 present-on=[zone3-0000000300(src=zone3-0000000300)]; id=262000803 acked at 13:07:50.605 present-on=[zone3-0000000300(src=zone3-0000000300)]; id=262000804 acked at 13:07:50.605 present-on=[zone3-0000000300(src=zone3-0000000300)]; id=262000805 acked at 13:07:50.636 present-on=[zone3-0000000300(src=zone3-0000000300)]; id=262000806 acked at 13:07:50.635 present-on=[zone3-0000000300(src=zone3-0000000300)]; id=262000807 acked at 13:07:50.636 present-on=[zone3-0000000300(src=zone3-0000000300)]; id=262000808 acked at 13:07:50.636 present-on=[zone3-0000000300(src=zone3-0000000300)]; id=262000809 acked at 13:07:50.677 present-on=[zone3-0000000300(src=zone3-0000000300)]; id=262000810 acked at 13:07:50.677 present-on=[zone3-0000000300(src=zone3-0000000300)]; id=262000811 acked at 13:07:50.676 present-on=[zone3-0000000300(src=zone3-0000000300)]; id=262000812 acked at 13:07:50.677 present-on=[zone3-0000000300(src=zone3-0000000300)]; id=262000813 acked at 13:07:50.718 present-on=[zone3-0000000300(src=zone3-0000000300)]; id=262000814 acked at 13:07:50.718 present-on=[zone3-0000000300(src=zone3-0000000300)]; id=262000815 acked at 13:07:50.718 present-on=[zone3-0000000300(src=zone3-0000000300)]; id=262000816 acked at 13:07:50.716 present-on=[zone3-0000000300(src=zone3-0000000300)]; id=262000817 acked at 13:07:50.758 present-on=[zone3-0000000300(src=zone3-0000000300)]; id=262000818 acked at 13:07:50.758 present-on=[zone3-0000000300(src=zone3-0000000300)]; id=262000819 acked at 13:07:50.759 present-on=[zone3-0000000300(src=zone3-0000000300)]; id=262000820 acked at 13:07:50.757 present-on=[zone3-0000000300(src=zone3-0000000300)]
+-- NOTES (34)
+   zone1-0000000100 relay_log_recovery=1 sync_relay_log=10000 sync_binlog=1 skip_replica_start=1
+   zone2-0000000200 relay_log_recovery=1 sync_relay_log=10000 sync_binlog=1 skip_replica_start=1
+   zone3-0000000300 relay_log_recovery=1 sync_relay_log=10000 sync_binlog=1 skip_replica_start=1
+   before-kill zone1-0000000100: io=Yes sql=Yes Retrieved="8f22f9f5-bff4-11f1-841a-02fc00000001:1-1226" Executed="8f22f9f5-bff4-11f1-841a-02fc00000001:1-826" unapplied="8f22f9f5-bff4-11f1-841a-02fc00000001:827-1226" relay_log_recovery=ON
+   relay log vt-0000000100-relay-bin.000002: 7265 events, 1226 transactions, 400 complete unapplied (first 8f22f9f5-bff4-11f1-841a-02fc00000001:827, last 8f22f9f5-bff4-11f1-841a-02fc00000001:1226)
+   after-restart zone1-0000000100: io=No sql=No Retrieved="" Executed="8f22f9f5-bff4-11f1-841a-02fc00000001:1-826" unapplied="" relay_log_recovery=ON
+   mysqld error log of zone1-0000000100: 2026-10-04T13:07:57.304186Z 0 [Warning] [MY-010539] [Repl] Recovery from source pos 273858 and file vt-0000000300-bin.000001 for channel ''. Previous relay log pos and relay log file had been set to 274091, /home/ubuntu/chaos-vtdataroot/vtroot_20501/vt_0000000100/relay-logs/vt-0000000100-relay-bin.000002 respectively.
+   stuck zone1-0000000100: io=No sql=Yes Retrieved="" Executed="8f22f9f5-bff4-11f1-841a-02fc00000001:1-826" unapplied="" relay_log_recovery=ON
+   ERS log: 2026-10-04 13:08:28.946 UTC INF logic/topology_recovery.go:1184 Recovery for DeadPrimary on ks/0: Analysis: DeadPrimary, RecoverDeadPrimary zone3-0000000300 || 2026-10-04 13:08:28.946 UTC INF logic/topology_recovery.go:357 Recovery for DeadPrimary on ks/0: Analysis: DeadPrimary, RecoverDeadPrimary cell:"zone3" uid:300 || 2026-10-04 13:08:28.947 UTC INF logic/topology_recovery.go:381 Recovery for DeadPrimary on ks/0: ERS - will initiate emergency reparent shard in keyspace - ks, shard - 0 || 2026-10-04 13:08:28.949 UTC INF logic/topology_recovery.go:381 Recovery for DeadPrimary on ks/0: ERS - Getting a new durability policy for semi_sync || 2026-10-04 13:08:28.958 UTC INF logic/topology_recovery.go:381 Recovery for DeadPrimary on ks/0: ERS - getting replication position from zone1-0000000100 || 2026-10-04 13:08:28.958 UTC INF logic/topology_recovery.go:381 Recovery for DeadPrimary on ks/0: ERS - getting replication position from zone2-0000000200 || 2026-10-04 13:08:28.958 UTC INF logic/topology_recovery.go:381 Recovery for DeadPrimary on ks/0: ERS - getting replication position from zone3-0000000300 || 2026-10-04 13:08:28.962 UTC WRN logic/topology_recovery.go:377 Recovery for DeadPrimary on ks/0: ERS - failed to get replication status from zone3-0000000300: Code: UNAVAILABLE || 2026-10-04 13:08:28.972 UTC INF logic/topology_recovery.go:381 Recovery for DeadPrimary on ks/0: ERS - excluding 1 candidate(s) strictly behind the most-advanced received relay log position from the relay-log-apply wait: zone2-0000000200 (still repointed after promotion); waiting on: zone1-0000000100 || 2026-10-04 13:08:28.975 UTC INF logic/topology_recovery.go:381 Recovery for DeadPrimary on ks/0: ERS - EmergencyReparent candidate zone1-0000000100 applied all of its received relay logs || 2026-10-04 13:08:28.985 UTC INF logic/topology_recovery.go:381 Recovery for DeadPrimary on ks/0: ERS - started finding the intermediate source || 2026-10-04 13:08:28.986 UTC INF logic/topology_recovery.go:381 Recovery for DeadPrimary on ks/0: ERS - finding intermediate source - sorted replica: cell:"zone1" uid:100 || 2026-10-04 13:08:28.986 UTC INF logic/topology_recovery.go:381 Recovery for DeadPrimary on ks/0: ERS - finding intermediate source - sorted replica: cell:"zone2" uid:200 || 2026-10-04 13:08:28.986 UTC INF logic/topology_recovery.go:381 Recovery for DeadPrimary on ks/0: ERS - intermediate source selected - cell:"zone1" uid:100 || 2026-10-04 13:08:28.986 UTC INF logic/topology_recovery.go:381 Recovery for DeadPrimary on ks/0: ERS - found better candidate - cell:"zone1" uid:100 || 2026-10-04 13:08:28.986 UTC INF logic/topology_recovery.go:381 Recovery for DeadPrimary on ks/0: ERS - intermediate source is ideal candidate- true || 2026-10-04 13:08:28.987 UTC INF logic/topology_recovery.go:381 Recovery for DeadPrimary on ks/0: ERS - setting new primary on replica zone3-0000000300 || 2026-10-04 13:08:28.987 UTC INF logic/topology_recovery.go:381 Recovery for DeadPrimary on ks/0: ERS - setting new primary on replica zone2-0000000200 || 2026-10-04 13:08:29.146 UTC INF logic/topology_recovery.go:381 Recovery for DeadPrimary on ks/0: ERS - starting promotion for the new primary - zone1-0000000100 || 2026-10-04 13:08:29.281 UTC INF logic/topology_recovery.go:381 Recovery for DeadPrimary on ks/0: ERS - populating reparent journal on new primary zone1-0000000100 || 
+   after old primary restart: primary zone1-0000000100 _vt.heartbeat rows=0 err=<nil> (vttablet heartbeat env="")
+   vttablet zone1-0000000100: 2026-10-04 13:08:29.151 UTC INF mysqlctl/query.go:148 exec STOP REPLICA
+   vttablet zone1-0000000100: 2026-10-04 13:08:29.158 UTC INF mysqlctl/query.go:148 exec RESET REPLICA ALL
+   errant GTIDs 8f22f9f5-bff4-11f1-841a-02fc00000001:827-1230 first observed on zone3-0000000300 at 13:08:39.959 (+45.37s after fault)
+   zone3-0000000300 has 404 rows not on primary (unacked commits): [262000801 262000802 262000803 262000804 262000805 262000806 262000807 262000808 262000809 262000810]
+   rows on primary by committing server: map[zone1-0000000100:4424 zone3-0000000300:800]
+   vtorc-zone1: 6 action VTOrc Recovery for ReplicaIsWritable on zone3-0000000300 with error Code
+   vtorc-zone1: 2 successful action VTOrc Recovery for ErrantGTIDDetected on zone3-0000000300
+   vtorc-zone1: 1 successful action VTOrc Recovery for StaleTopoPrimary on zone3-0000000300
+   vtorc-zone1: 1 successful action VTOrc Recovery for ReplicaIsWritable on zone3-0000000300
+   vtorc-zone1: 1 successful action VTOrc Recovery for DeadPrimary on zone3-0000000300
+   vtorc-zone1: 1 successful action VTOrc Recovery for ClusterHasNoPrimary on zone1-0000000100
+   vtorc-zone2: 6 action VTOrc Recovery for ReplicaIsWritable on zone3-0000000300 with error Code
+   vtorc-zone2: 1 successful action VTOrc Recovery for StaleTopoPrimary on zone3-0000000300
+   vtorc-zone2: 1 successful action VTOrc Recovery for ErrantGTIDDetected on zone3-0000000300
+   vtorc-zone2: 1 successful action VTOrc Recovery for DeadPrimary on zone3-0000000300
+   vtorc-zone2: 1 successful action VTOrc Recovery for ClusterHasNoPrimary on zone1-0000000100
+   vtorc-zone2 ERS-err: 2026-10-04 13:08:28.927 UTC ERR logic/topology_recovery.go:1049 Recovery for DeadPrimary on ks/0: Failed to lock shard, aborting recovery: node already exists: lock already exists at path keyspaces/ks/shards/0
+   vtorc-zone3: 4 action VTOrc Recovery for ReplicaIsWritable on zone3-0000000300 with error Code
+   vtorc-zone3: 1 successful action VTOrc Recovery for StaleTopoPrimary on zone3-0000000300
+   vtorc-zone3: 1 successful action VTOrc Recovery for ReplicaIsWritable on zone3-0000000300
+   vtorc-zone3: 1 successful action VTOrc Recovery for ErrantGTIDDetected on zone3-0000000300
+   vtorc-zone3: 1 successful action VTOrc Recovery for DeadPrimary on zone3-0000000300
+   vtorc-zone3: 1 successful action VTOrc Recovery for ClusterHasNoPrimary on zone1-0000000100
+   vtorc-zone3 ERS-err: 2026-10-04 13:08:28.962 UTC WRN logic/topology_recovery.go:377 Recovery for DeadPrimary on ks/0: ERS - failed to get replication status from zone3-0000000300: Code: UNAVAILABLE

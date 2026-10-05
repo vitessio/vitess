@@ -1,0 +1,19 @@
+==== SCENARIO S6-one-vtorc-cut-from-primary ====
+-- OUTCOME (4)
+   writes: total=5512 acked=5512 failed/unknown=0
+   vtgate primary reads after fault: 502, failed 0, answered by old primary: 502, after another member was elected: 0, after the topo primary changed: 0
+   old primary zone1-0000000100 -> new primary zone1-0000000100
+   durability: all 5512 acked writes present on primary zone1-0000000100
+-- TIMINGS (7)
+   longest write gap: 0.08s (from +0.53s to +0.61s relative to fault)
+   unavailable (no acked write for >= 1s): 0.00s in total, 0 outages []; writers stopped at +50.13s
+   topo shard primary never changed from zone1-0000000100
+   old primary zone1-0000000100 vttablet reported PRIMARY for the whole scenario
+   old primary zone1-0000000100 mysqld super_read_only never ON after the fault
+   vtgate primary reads answered by the old primary until +50.10s after the fault
+   converged 0.0s after heal/stop-writes; primary=zone1-0000000100
+-- VIOLATIONS (0)
+-- NOTES (3)
+   rows on primary by committing server: map[zone1-0000000100:5512]
+   vtorc-zone1: 1 successful action VTOrc Recovery for PrimaryHasPrimary on zone1-0000000100
+   vtorc-zone1: 1 successful action VTOrc Recovery for ClusterHasNoPrimary on zone1-0000000100
