@@ -411,7 +411,11 @@ func TestGetDetectionAnalysisGroupReplication(t *testing.T) {
 			},
 			voters:           []*topodatapb.Tablet{primary, replica, replica2},
 			voterGracePeriod: -1,
-			notWant:          []AnalysisCode{GroupVotersOutOfDate},
+			// The primary's view lacks the voter majority, so it is no legitimate group primary
+			// (ClusterHasNoPrimary, which hides any GroupVotersOutOfDate): the selection itself must
+			// keep the three voters, where the policy alone would select the primary only.
+			notWant:           []AnalysisCode{GroupVotersOutOfDate},
+			wantDesiredVoters: []*topodatapb.Tablet{replica, primary, replica2},
 		},
 		{
 			name: "an unreachable voter whose MySQL is still an active member keeps its seat",
