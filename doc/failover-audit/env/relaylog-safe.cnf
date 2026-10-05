@@ -1,0 +1,5 @@
+# Keep received-but-unapplied (possibly semi-sync acknowledged) relay log events across mysqld
+# restarts, and make an acknowledgement mean the event is on disk. Pass with EXTRA_MY_CNF.
+# Only for vttablets that start a stopped applier during EmergencyReparentShard; see the README.
+relay_log_recovery = 0
+sync_relay_log = 1

@@ -1,4 +1,4 @@
-source /tmp/claude-0/-home-user-vitess/c1d2d1ed-3e94-5708-8646-dafcf8718844/scratchpad/relaylog/lib.sh
+source "${RELAYLOG_DIR:-$HOME/relaylog-work}/lib.sh"
 N=3
 echo "=== E4e: lock mode; STOP IO_THREAD only; CHANGE to R2 (receiver options only, no AUTO_POSITION clause); kill P; START IO from R2; release lock"
 reset_env >/dev/null 2>&1; MODE=lock make_T 1000 2>&1 | egrep "commit returned|Retrieved|Executed_Gtid"

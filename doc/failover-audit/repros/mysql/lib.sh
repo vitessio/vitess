@@ -1,4 +1,4 @@
-B=/tmp/claude-0/-home-user-vitess/c1d2d1ed-3e94-5708-8646-dafcf8718844/scratchpad/relaylog
+B="${RELAYLOG_DIR:-$HOME/relaylog-work}"
 cd $B
 C=$B/ctl.sh
 q(){ n=$1; shift; echo "[$n]> $*" >&2; mysql -uroot -S $B/$n/mysql.sock -N -e "$*"; }

@@ -58,6 +58,33 @@ Realistic triggers: a lagging replica is restarted during an incident (operator,
 
 Recommendation: 1 and 2, plus 3 for the self-heal and shutdown paths. Together they close every loss path reproduced here. After an incident caused by `relay_log_recovery`, the old relay files often remain on disk for a while, and the lost transactions may be recoverable manually with `mysqlbinlog`.
 
+### Later findings on the restart path
+
+- **`relay_log_recovery=ON` discards on every startup, not only after corruption** (MYSQL, source). MySQL 8.0's "Handling an Unexpected Halt of a Replica" says the setting "ignores the existing relay log files, in case they are corrupted or inconsistent" and "starts a new relay log file and fetches transactions from the source beginning at the replication SQL thread position". The corruption wording is the reason to enable it, not a condition. A clean `mysqladmin shutdown` and restart logs `[MY-010539] Recovery from source pos …` and empties `Retrieved_Gtid_Set`. Vitess's own shutdown preparation (`sync_relay_log=1`, `FLUSH RELAY LOGS`) does not change this.
+- **`GTID_ONLY=1` does not help** (MYSQL, source). In the 8.0.46 source, `Relay_log_info::rli_init_info` (`sql/rpl_rli.cc` ~1784) calls `init_recovery` whenever recovery is on, and `recover_relay_log` (`sql/rpl_replica.cc:1095`) skips only the file/position bookkeeping for `GTID_ONLY` channels before it always starts a fresh relay log and clears the retrieved GTID set. With `GTID_ONLY=1`: recovery on logs `[MY-013836] Relay log recovery on channel with GTID_ONLY=1` and lost all three acked transactions; recovery off kept and applied them. The 8.0.46 replication source has no relay log sanitization, which matches the torn-tail result.
+- **Turning recovery off needs an ERS change first** (E2E, S13 T0: 4 of 4 runs). With `relay_log_recovery=0` and Vitess's `skip_replica_start`, a replica that restarts with unapplied relay log comes up with its applier stopped (vttablet only starts replication at startup if it can reach the primary). If the primary is dead, ERS picks that replica as the most advanced and waits for an applier that never runs: `failed to apply relay logs: DEADLINE_EXCEEDED` every 30 s, no failover in 120 s, writes down about 150 s until the old primary came back. ERS only uses `StopReplicationAndGetStatus` in `IOTHREADONLY` mode (`reparentutil/replication.go:471`), and vttablet returns early in that mode without touching a stopped applier (`rpc_replication.go:1116-1125`). Fix: in that mode, start the applier (`START REPLICA SQL_THREAD`) when it is stopped and there are received but unapplied GTIDs. That is safe with a torn tail: the applier stops exactly after the last complete transaction.
+- **VTOrc already heals a torn relay log** (E2E, S13, `relay_log_recovery=0`, `sync_relay_log=1`, fix-branch binaries). A stopped applier is `ReplicationStopped` (or, right after a mysqld restart, `ReplicaSemiSyncMustBeSet`, because the semi-sync flag is not persisted) → `fixReplica` under the shard lock → `SetReplicationSource`. Tears in the last (never acked) transaction and in about 200 already acked transactions were healed in 2–6 s with 0 acked writes lost and identical checksums, on fix-branch and main binaries alike. MySQL leaves the torn transaction and everything after it out of `Retrieved_Gtid_Set`, so the fix branch's loss check passes, and it also cannot see what was torn.
+- **`sync_relay_log=1` is required** (E2E, S13 T3). When the tear cut into acked transactions, R1 was the only acker and the primary died before the repair, ERS promoted R1 in about 1 s and 201 and 202 acked writes were lost without any error; the only later signal was the returning old primary's errant GTIDs.
+- **VTOrc has no backoff for applier data errors** (E2E, S13 T4). A duplicate-key error made the three VTOrcs run `fixReplica` 58–59 times a minute, each logged as successful and each re-downloading a growing backlog. A distinct analysis for relay-log corruption (`MY-013121`, `MY-010818`) and backoff with an alert for data errors are missing.
+
+### Status of the fix
+
+Branch `claude/preserve-relay-logs-on-repoint` implements item 2: `repointReplication` in `go/vt/vttablet/tabletmanager/relay_log.go` stops only the receiver and changes only receiver options for MySQL 8.0+ replicas with auto-position, refuses discards that would lose transactions the new source lacks (including the `RESET REPLICA` self-heal paths), and adds the `--replication-preserve-relay-logs` kill switch (default on). Chaos S11c went from 500 acked writes lost to 0; S11/S11k (restart path) still lose, as expected. Open items on that branch: the tablet-startup path still discards other servers' relay-log transactions that the new source lacks with only a warning (exercised by S12 d2), the loss check can refuse transiently because of the source's own in-flight transactions, and MySQL 8.4 is untested. The receiver-only repoint keeps a replica's `SOURCE_DELAY` and its delay semantics (MYSQL, `verify_delayed_replica.sh`).
+
+### Rolling this out to mixed-version clusters
+
+The changes have to work while vttablet, VTOrc and vtctld run different versions. That holds if the fix lives in vttablet, inside RPCs that already exist, and `relay_log_recovery=0` is only enabled on tablets that already run that vttablet:
+
+| Combination | Result |
+|---|---|
+| Old ERS caller (VTOrc or vtctld), new vttablet with `relay_log_recovery=0` | Works: the new vttablet starts the applier inside `StopReplicationAndGetStatus(IOTHREADONLY)`, which every ERS version calls |
+| New ERS caller, old vttablet with `relay_log_recovery=1` | Unchanged: the relay log is discarded at startup, so there is never a stopped applier with content to wait on |
+| One new (recovery off) and one old (recovery on) replica in a shard | ERS waits on the most advanced replica, usually the new one, which applies its relay log in the stop phase |
+| Old or new VTOrc repairing a torn relay log on a new vttablet | Both use `fixReplica` → `SetReplicationSource`; the new vttablet's loss check makes it safe |
+| **Old vttablet with `relay_log_recovery=0`** | **Unsafe: the S13 T0 outage.** Configuration must never change before the binary |
+
+Release N ships the applier start in the ERS stop phase, the relay-log-preserving repoint, an opt-in way to render `relay_log_recovery=0` and set `sync_relay_log=1`, and the VTOrc analysis and backoff; the shipped `my.cnf` keeps `relay_log_recovery=1`. Release N+1 changes the shipped default, once every vttablet in the supported version window has the applier start. mysqld only picks the setting up when it restarts under the new binary, so only a custom `my.cnf` can create the unsafe combination.
+
 ## 3. Other confirmed issues
 
 ### A. Old primary rejoins with errant GTIDs and `super_read_only=OFF` (E2E ×4: S3 ×2, S7d, V2)
@@ -96,15 +123,66 @@ After taking the shard lock VTOrc re-reads tablet records, but `refreshTabletsIn
 - **`--ignore-replicas` bypasses revocation** (UNIT, 4+ tablets only). The lowered success target lets a lone primary error return before `haveRevoked` runs (`replication.go:564-601`); an ignored acker keeps ACKing. Not reachable with 3 tablets.
 - **Semi-sync fallback prevented only by `my.cnf`** (CODE). vttablet sets only `*_enabled` (`mysqlctl/replication.go:1250-1271`); with MySQL's default 10 s timeout a slow pair of replicas silently turns the primary async.
 - **Primary term timestamps are wall-clock** (PLAUSIBLE). `PrimaryTermStartTime = time.Now()` on the promoted host (`tm_state.go:215`) and is compared by `shard_sync`, tablet startup and vtgate. Skew larger than the gap between two failovers can pick the wrong side. Fix: set the new term to max(now, previous term + ε).
-- **Replica startup repoints from the shard record without the lock** (PLAUSIBLE). `initializeReplication` (`tm_init.go:1146+`) can reconnect to the old primary in the window before the new primary's `shard_sync` updates the shard record, and ACK its blocked commits.
+- **Replica startup repoints from the shard record without the lock**: confirmed, see G.
 - **`InitPrimary` goes read-write before enabling semi-sync** (PLAUSIBLE). `rpc_replication.go:454` vs `:460`; ERS uses it when `ShardInfo.PrimaryAlias == nil`.
 - **`IncapacitatedPrimary` uses a single vantage point** (CODE). It needs only VTOrc's own failed polls and a successful ping (`analysis_problem.go:214`), then runs PRS with ERS fallback (`topology_recovery.go:424-452`). A lossy link from any one VTOrc can fail over a healthy primary.
 - **In-flight unacked commits become errant on the old primary** (E2E S8b; expected). With `change-tablets-with-errant-gtid-to-drained=false` the tablet stays a non-replicating REPLICA until someone rebuilds it.
 - **`PreventCrossCellPromotion` makes ERS impossible** with one tablet per cell (`emergency_reparenter.go:1360`).
 
+### G. A replica restarted during ERS repoints to the old primary and acks its writes (E2E: S12, every variant twice)
+
+`initializeReplication` (`tm_init.go:1146-1244`) reads the shard record without a lock, checks only *executed* GTIDs against that primary, and repoints with semi-sync acking on. ERS never writes the shard record (only the new primary's `shard_sync` does, `shard_sync.go:181`). So a replica whose vttablet restarts after ERS stopped its receiver, but before promotion, reconnects to the old primary P and acks P's commits, if P is alive and reachable from that replica but not from the ERS caller (an operator's ERS from a vtctld cut off from P, VTOrc's `IncapacitatedPrimary` over a lossy link, or a flapping partition). The restart only takes this path without `--restore-from-backup`/`--restore-with-clone`; with them, a tablet with data goes through the restore path and leaves replication stopped.
+
+| Variant | ERS | Acked writes lost | Notes |
+|---|---|---|---|
+| 3 tablets, the other replica is the candidate | Aborted after about 26 s (the restarted replica's repoint is refused, and it is the only acker) | 0 | P stays primary, no divergence; same with heartbeats on |
+| 3 tablets, restarted replica promoted, applier keeping up | Succeeded | 0 | 4–5 unacked commits left on P |
+| **3 tablets, restarted replica promoted, applier lagging** | Succeeded | **1,204 and 1,208** | Promotion's `RESET REPLICA ALL` discards what it acked but had not applied |
+| **4 tablets** | Succeeded with another replica acking | **532 and 504** | P and the restarted replica diverge; VTOrc's repair of it fails in a loop |
+| After promotion, stale shard record, replica caught up | – | 0 | The replica's vttablet refuses and exits (crash loop until the record is fixed) |
+| After promotion, stale shard record, replica lagging | – | 0 only because clients timed out after 3 s | The executed-only check passes; the replica repoints to the deposed P, its relay log (with the new primary's writes) is purged, the new primary loses its only acker and stalls |
+
+Fix: in `initializeReplication`, skip the repoint while a reparent holds the shard lock (non-blocking try-lock) or unless the target's own tablet record is PRIMARY with the shard record's term, leaving replication to VTOrc; and run the errant-GTID check against received GTIDs, as `SetReplicationSource` does.
+
+### H. An isolated old primary could not be demoted after the partition healed (E2E: S3 with heartbeats, 1 run; root cause open)
+
+With vttablet heartbeats on and no client writes, the isolated old primary's binlog held 16 unacked transactions (1 on `_vt.heartbeat`, then one `_vt.semisync_heartbeat` write per second from the semi-sync monitor; none on client tables). They were not in `gtid_executed` while blocked; they become errant GTIDs as soon as they complete (semi-sync turned off by a forced demotion or by A's race, or crash recovery). After the heal, `DemotePrimary(force)` and VTOrc's `SetReadOnly` kept hanging or timing out, the tablet stayed `read_only=OFF`, `super_read_only=OFF` with source semi-sync on, and the cluster never converged. The heartbeat writer could not cancel its own stuck write (`You are not owner of thread`, errno 1095). An older S3 run without heartbeats also left `super_read_only` off. Likely cause, unverified: setting `read_only` waits behind the commits blocked on semi-sync, and demotion never reaches the step that turns semi-sync off.
+
+Because most production deployments run with `--heartbeat-enable`, almost every failover with an isolated (not crashed) old primary leaves it with transactions nobody else has, and A's race is hit on nearly every such failover. Mitigations beyond fixing A: stop the heartbeat writer while semi-sync is blocked (the semi-sync monitor knows), consider injecting empty transactions on the new primary for errant GTIDs that touched only `_vt.heartbeat`/`_vt.semisync_heartbeat`, and automate the rebuild or drain of old primaries with errant GTIDs.
+
 ### Checked and held up
 
 S1 (primary mysqld killed, 1.6-2.3 s failover), S2 (hang then resume; old primary self-demotes in about 25 ms, no dual writes accepted), S5/S5b (primary crash with the acking replica hung or isolated: ERS refuses, no loss), S6/S6b (VTOrcs cut from the primary: no failover), S7/S7b/S7c (double failure and short flapping: correct refusals), S8 and S10 (VTOrc or global etcd stalled during ERS: completes safely). Unit-tested ERS cases that held: acker timing out during stop, relay-log wait timeout on the holder of the latest write, lost `PromoteReplica` response, `SetReplicationSource` failure on the only acker, half-promoted primaries.
+
+## Prioritized fixes
+
+Ranked by impact (lost acknowledged writes, then silent divergence, then lost availability), then by effort. Evidence: E2E, UNIT, MYSQL, CODE, PLAUSIBLE as in the legend.
+
+| # | Issue | Evidence | Effort | Status |
+|---|---|---|---|---|
+| 1 | Relay log discarded when a replica is repointed (section 2) | E2E | done | Fixed on `claude/preserve-relay-logs-on-repoint`; leftovers in #16 |
+| 2 | Old primary rejoins with errant GTIDs and `super_read_only=OFF` (A); hit on nearly every isolated-primary failover with heartbeats | E2E | small | open |
+| 3 | Relay log discarded on replica mysqld restart, `relay_log_recovery=1` (section 2) | E2E | medium: applier start in the ERS stop phase first, then `relay_log_recovery=0` + `sync_relay_log=1`, VTOrc relay-log analysis, applier drain at shutdown; staged rollout | open |
+| 4 | Replica restarted during ERS repoints to the old primary (G) | E2E | small–medium | open |
+| 5 | Old primary cannot be demoted after the heal (H) | E2E, 1 run | investigate | open |
+| 6 | No fallback to async is guaranteed only by `my.cnf` (F) | CODE | small | open |
+| 7 | Unreachable cell-local topo blocks ERS (B) | E2E | small–medium | open |
+| 8 | Shard lock lease expires under a running ERS; ERS runs overlap (B) | E2E, UNIT | medium | open |
+| 9 | VTOrc acts on stale data after a partial topo read; no `ExpectedPrimaryAlias` (D) | UNIT | small | open |
+| 10 | vtgate forgets the highest primary term (E) | UNIT | small | open |
+| 11 | Replication-only partition delays ERS by 70–80 s (C) | E2E | small–medium | open |
+| 12 | Wall-clock primary terms (F) | PLAUSIBLE | small | open |
+| 13 | ERS abort leaves `Connecting` IO threads stopped (F) | UNIT | small | open |
+| 14 | `IncapacitatedPrimary` uses one VTOrc's view (F) | CODE | small–medium | open |
+| 15 | A delayed RDONLY/SPARE tablet can be ERS's intermediate source and stall it for the delay (`util.go:448-450` only excludes BACKUP, RESTORE, DRAINED) | CODE | small–medium | open |
+| 16 | Fix-branch leftovers: startup still discards other servers' relay-log transactions; transient refusal on the source's in-flight transactions | E2E (S12 d2), CODE | small | open |
+| 17 | No VTOrc analysis or backoff for relay-log corruption and applier data errors (S13 T4) | E2E | small | open |
+| 18 | `InitPrimary` goes read-write before enabling semi-sync (F) | PLAUSIBLE | small | open |
+| 19 | A hung mysqld blocks `StopReplicationAndGetStatus` with no timeout | PLAUSIBLE | small–medium | open |
+| 20 | `--ignore-replicas` bypasses revocation, 4+ tablets (F) | UNIT | small | open |
+| 21 | `PreventCrossCellPromotion` makes ERS impossible with one tablet per cell (F) | CODE | tiny | open |
+| 22 | An isolated old primary serves stale reads indefinitely (section 1) | CODE | large | by design |
+| 23 | Unacked in-flight commits become errant GTIDs on the old primary (F, H) | E2E | operational | expected |
 
 ## 4. Running VTOrc in only one of the three cells
 
@@ -132,6 +210,58 @@ Place the single VTOrc in a non-primary cell and move it off the primary's cell 
 
 ## 5. Reproducing
 
-- Chaos harness: `go/test/endtoend/vtorc/chaos/`. Run as root with MySQL 8.0, etcd and built binaries: `go/test/endtoend/vtorc/chaos/chaos_run.sh -test.run '^TestS11kRelayLogDiscardKill9$' -test.v -test.timeout 20m`. It creates cgroups, drops to an unprivileged user with `CAP_NET_ADMIN`, and sets `CHAOS_E2E=1` (tests skip without it).
-- Unit reproductions: `repros/unit/`. Each file documents current behaviour (it passes on HEAD while the issue exists). Copy it back to the package named in the file name, dropping the `.txt` suffix, and run `go test -run <name>`. The etcd tests need an `etcd` binary on `PATH`.
-- MySQL experiments: `repros/mysql/` (scripts used for the relay-log table above; paths are specific to the audit environment).
+Everything below runs as root on a Linux host (tested on Ubuntu 24.04 with MySQL 8.0.46 and etcd v3.6.7). Branches: this audit branch `claude/vitess-failover-validation-nm4msw` (harness, scripts, report) and `claude/preserve-relay-logs-on-repoint` (the fix).
+
+### Environment
+
+```
+E2E_SETUP=1 source doc/failover-audit/env/e2e_env.sh   # once: MySQL, etcd, Vitess binaries, user "vitess"
+source doc/failover-audit/env/e2e_env.sh               # later shells
+```
+
+`e2e_env.sh` also defines `e2e_clean` (stops leftovers, removes the harness's iptables chains and per-cluster data) and `e2e_run <pkg> [go test flags]` for other e2e packages. Vitess servers refuse to run as root, so tests are compiled as root and run as `$RUN_USER` (default `vitess`) with `CAP_NET_ADMIN`/`CAP_NET_RAW`.
+
+### Chaos harness (`go/test/endtoend/vtorc/chaos/`)
+
+```
+doc/failover-audit/env/run_chaos.sh <label> '<test regex>'
+```
+
+It cleans up, runs the scenarios, prints each `report.txt` and keeps everything in `/home/vitess/chaos-results/<label>/<scenario>/` (`report.txt`, `events.txt`, `logs/`) plus `run.log`. The cluster has 3 cells with one tablet each, `cross_cell` durability, one etcd per cell plus a global one, one VTOrc per cell and a vtgate; nodes are partitioned with per-node cgroup v2 leaves and iptables (`CHAOS_MARK`/`CHAOS_DROP` chains only). Switches:
+
+| Variable | Effect |
+|---|---|
+| `BINDIR=<dir>` | Binaries the cluster runs (default `$VTROOT/bin`), e.g. a `make build` of the fix branch in another worktree |
+| `RELAYLOG_SAFE=1` | Every tablet's mysqld gets `env/relaylog-safe.cnf` (`relay_log_recovery=0`, `sync_relay_log=1`); S13 sets this up itself |
+| `CHAOS_VTTABLET_HEARTBEAT=1` | vttablets run with `--heartbeat-enable --heartbeat-interval 1s` |
+| `CHAOS_S11_CLEAR_DELAY=1` | S11b/S11c clear R1's one-hour apply delay before the primary dies (needed with fix-branch binaries, otherwise ERS waits an hour for the kept relay log) |
+| `S12_RESTORE_FROM_BACKUP=1` | S12 keeps `--restore-from-backup` on the restarted replica |
+| `CHAOS_CGROUP_V2_MOUNT` | cgroup v2 mount (default `/sys/fs/cgroup/unified` if present, else `/sys/fs/cgroup`; only the hybrid layout was tested) |
+
+| Validation | Command |
+|---|---|
+| Baseline failovers (S1–S10, V1–V3) | `run_chaos.sh base '^TestS([1-9]\|10)[a-z]?[A-Z]\|^TestV[1-3]'` (22 tests; or one at a time, e.g. `'^TestS3IsolatePrimary$'`) |
+| Relay-log loss on restart / repoint, main (S11*) | `run_chaos.sh s11 '^TestS11'` (S11, S11k, S11c lose 500 acked writes) |
+| Repoint fix, S11c 500 → 0 | worktree of `claude/preserve-relay-logs-on-repoint`, `make build` there, then `BINDIR=<worktree>/bin CHAOS_S11_CLEAR_DELAY=1 run_chaos.sh s11c-fix '^TestS11cRelayLogDiscardFixReplicaCut$'` |
+| Replica restart during ERS (S12) | `run_chaos.sh s12 '^TestS12'`; heartbeats: `CHAOS_VTTABLET_HEARTBEAT=1 run_chaos.sh s3hb '^TestS3hbIsolatePrimaryNoWorkload$'` |
+| Torn relay logs healed by VTOrc (S13) | `BINDIR=<fix worktree>/bin run_chaos.sh s13 '^TestS13'` |
+| Restart path with `relay_log_recovery=0` (S13 T0 outage) | `BINDIR=<fix worktree>/bin RELAYLOG_SAFE=1 run_chaos.sh t0 '^TestS11kRelayLogDiscardKill9$\|^TestS11RelayLogDiscardGraceful$'` |
+
+In the table above, `\|` is Markdown escaping: type a plain `|` in the regex.
+
+### MySQL-only experiments (`repros/mysql/`)
+
+```
+doc/failover-audit/repros/mysql/setup.sh          # three mysqld instances and snapshots in $RELAYLOG_DIR (default ~/relaylog-work)
+MODE=sqlstop N=3 bash ~/relaylog-work/e1.sh graceful                        # restart discards the relay log
+MODE=sqlstop N=3 bash ~/relaylog-work/e1.sh graceful relay_log_recovery=0   # kept and applied
+MODE=sqlstop N=3 bash ~/relaylog-work/verify_gtid_only.sh graceful relay_log_recovery=1
+cd ~/relaylog-work && ./verify_receiver_only_change.sh V1      # V1..V6
+cd ~/relaylog-work && ./verify_delayed_replica.sh
+```
+
+`ex.sh` (E3–E6), `e2torn.sh` (torn tails), `e4d.sh`/`e4e.sh` (receiver-only CHANGE options) cover the rest of the table in section 2. They use ports 45001–45003 on 127.0.0.1 and kill only the mysqld processes they started. The MySQL source used for the `GTID_ONLY` check is `apt-get source mysql-server-8.0` (needs `deb-src` entries); the relevant code is in `sql/rpl_replica.cc` and `sql/rpl_rli.cc`.
+
+### Unit reproductions (`repros/unit/`)
+
+Each file documents current behaviour (it passes on HEAD while the issue exists). Copy it back to the package named in the file name, dropping the `.txt` suffix, and run `go test -run <name>`. The etcd tests need an `etcd` binary on `PATH`.

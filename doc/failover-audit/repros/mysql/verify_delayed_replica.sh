@@ -1,5 +1,5 @@
 #!/bin/bash
-source /tmp/claude-0/-home-user-vitess/c1d2d1ed-3e94-5708-8646-dafcf8718844/scratchpad/relaylog/lib.sh
+source "${RELAYLOG_DIR:-$HOME/relaylog-work}/lib.sh"
 recv_only(){ echo "CHANGE REPLICATION SOURCE TO SOURCE_HOST='127.0.0.1', SOURCE_PORT=$1, SOURCE_USER='vt_repl', SOURCE_PASSWORD='replpw', SOURCE_CONNECT_RETRY=10, GET_SOURCE_PUBLIC_KEY=1, SOURCE_HEARTBEAT_PERIOD=2"; }
 d(){ mysql -uroot -S $B/R1/mysql.sock -e "SHOW REPLICA STATUS\G" | egrep " Source_Port|SQL_Delay|SQL_Remaining_Delay|Replica_SQL_Running:|Replica_IO_Running:|Retrieved_Gtid|Executed_Gtid" | tr -s ' ' | tr '\n' ';'; echo; }
 rows(){ q R1 "select coalesce(group_concat(id),'-') from t.t where id>=1000" 2>/dev/null; }

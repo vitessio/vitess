@@ -1,6 +1,6 @@
 #!/bin/bash
 # usage: mkcnf.sh name port serverid [extra lines...]
-B=/tmp/claude-0/-home-user-vitess/c1d2d1ed-3e94-5708-8646-dafcf8718844/scratchpad/relaylog
+B="${RELAYLOG_DIR:-$HOME/relaylog-work}"
 n=$1; port=$2; sid=$3; shift 3
 d=$B/$n
 mkdir -p $d/data $d/tmp $d/logs

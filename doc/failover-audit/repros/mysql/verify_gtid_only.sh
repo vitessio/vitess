@@ -1,9 +1,11 @@
-# usage: MODE=lock|sqlstop N=3 bash e1.sh graceful|kill9|prep  [extra R1 cnf lines...]
+# usage: MODE=lock|sqlstop N=3 bash verify_gtid_only.sh graceful|kill9|prep [extra R1 cnf lines...]
+# Same as e1.sh, but R1 replicates with GTID_ONLY=1 (MySQL 8.0.27+). Run with "relay_log_recovery=1"
+# (discards: MY-013836) and "relay_log_recovery=0" (keeps and applies) as the extra cnf line.
 source "${RELAYLOG_DIR:-$HOME/relaylog-work}/lib.sh"
 how=$1; shift
 echo "=== MODE=${MODE:-lock} N=${N:-1} restart=$how R1 extra cnf: $*"
 reset_env "$@" >/dev/null 2>&1; q R1 "select @@relay_log_recovery, @@sync_relay_log, @@replica_parallel_workers"
-make_T 1000
+q R1 "STOP REPLICA; CHANGE REPLICATION SOURCE TO GTID_ONLY=1, REQUIRE_ROW_FORMAT=1; START REPLICA"; mysql -uroot -S R1/mysql.sock -N -e "select CHANNEL_NAME, GTID_ONLY from performance_schema.replication_connection_configuration"; make_T 1000
 echo "--- kill -9 P"; $C kill9 P
 case $how in
 graceful) echo "--- mysqladmin shutdown R1"; $C stop R1;;

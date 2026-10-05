@@ -1,5 +1,5 @@
 #!/bin/bash
-B=/tmp/claude-0/-home-user-vitess/c1d2d1ed-3e94-5708-8646-dafcf8718844/scratchpad/relaylog
+B="${RELAYLOG_DIR:-$HOME/relaylog-work}"
 cmd=$1; n=$2; d=$B/$n
 case $cmd in
 init) /usr/sbin/mysqld --defaults-file=$d/my.cnf --initialize-insecure --user=root ;;

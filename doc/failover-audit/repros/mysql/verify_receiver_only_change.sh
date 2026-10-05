@@ -1,7 +1,7 @@
 #!/bin/bash
 # Independent verification: can we switch replication source with the applier running
 # (receiver stopped, receiver-only CHANGE) without losing relay-log content?
-source /tmp/claude-0/-home-user-vitess/c1d2d1ed-3e94-5708-8646-dafcf8718844/scratchpad/relaylog/lib.sh
+source "${RELAYLOG_DIR:-$HOME/relaylog-work}/lib.sh"
 recv_only(){ echo "CHANGE REPLICATION SOURCE TO SOURCE_HOST='127.0.0.1', SOURCE_PORT=$1, SOURCE_USER='vt_repl', SOURCE_PASSWORD='replpw', SOURCE_CONNECT_RETRY=10, GET_SOURCE_PUBLIC_KEY=1, SOURCE_HEARTBEAT_PERIOD=2"; }
 brief(){ mysql -uroot -S $B/$1/mysql.sock -e "SHOW REPLICA STATUS\G" | egrep "Source_Port|Replica_IO_Running:|Replica_SQL_Running:|Retrieved_Gtid_Set|Executed_Gtid_Set|Last_SQL_Error:|Last_IO_Error:" | tr -s ' '; }
 checksum(){ q $1 "SELECT COUNT(*), COALESCE(SUM(v),0), COALESCE(SUM(LENGTH(pad)),0), COALESCE(SUM(LENGTH(b)),0) FROM t.t" 2>/dev/null; }

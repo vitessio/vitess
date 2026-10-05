@@ -1,4 +1,4 @@
-source /tmp/claude-0/-home-user-vitess/c1d2d1ed-3e94-5708-8646-dafcf8718844/scratchpad/relaylog/lib.sh
+source "${RELAYLOG_DIR:-$HOME/relaylog-work}/lib.sh"
 wait_retrieved(){ # poll until R1 retrieved set contains :1-6 ; print elapsed
   local t0=$(date +%s.%N)
   for i in $(seq 400); do r=$(q R1 "select received_transaction_set from performance_schema.replication_connection_status" 2>/dev/null); case "$r" in *:1-6*|*-6) echo "re-fetched ($r) after $(echo "$(date +%s.%N)-$t0"|bc)s"; return;; esac; sleep 0.05; done; echo "NOT re-fetched within 20s ($r)"; }

@@ -41,14 +41,26 @@ import (
 // are ever touched; unrelated iptables rules are left alone.
 
 const (
-	cgroupV2Mount  = "/sys/fs/cgroup/unified"
 	cgroupRelRoot  = "chaos"
 	chaosMarkChain = "CHAOS_MARK"
 	chaosDropChain = "CHAOS_DROP"
 	harnessGroup   = "harness"
 )
 
-var cgroupRoot = path.Join(cgroupV2Mount, cgroupRelRoot)
+var cgroupRoot = path.Join(cgroupV2Mount(), cgroupRelRoot)
+
+// cgroupV2Mount returns where the cgroup v2 hierarchy is mounted: $CHAOS_CGROUP_V2_MOUNT if set
+// (chaos_run.sh exports the mount it prepared), else /sys/fs/cgroup/unified on hosts with the
+// hybrid v1/v2 layout, else /sys/fs/cgroup on hosts with the unified v2 layout.
+func cgroupV2Mount() string {
+	if m := os.Getenv("CHAOS_CGROUP_V2_MOUNT"); m != "" {
+		return m
+	}
+	if _, err := os.Stat("/sys/fs/cgroup/unified/cgroup.procs"); err == nil {
+		return "/sys/fs/cgroup/unified"
+	}
+	return "/sys/fs/cgroup"
+}
 
 // Group is one simulated network endpoint (a cgroup leaf) with the TCP ports it listens on.
 type Group struct {

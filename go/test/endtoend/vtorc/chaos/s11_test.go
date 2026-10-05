@@ -20,6 +20,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -208,6 +209,14 @@ func s11b(t *testing.T, name string, cutR1 bool) {
 		s.R.outcome("VTOrc ReplicaSemiSyncMustBeSet recovery finished=%v", n != nil)
 		s.Sleep(2*time.Second, "let R1's IO thread reconnect if it can")
 		s.relayState(r1, "after-fixreplica")
+		if os.Getenv("CHAOS_S11_CLEAR_DELAY") == "1" {
+			// With a vttablet that keeps the relay log across the repoint, R1 still holds the
+			// acked transactions here, behind a one-hour SOURCE_DELAY that would make ERS wait
+			// for its relay log for an hour. Clear the delay first; the receiver keeps running,
+			// so MySQL keeps the relay log. With a vttablet that discarded the relay log this
+			// changes nothing: the transactions are already gone.
+			s.delayApplier(r1, 0)
+		}
 		s.MarkFault()
 		s.KillMysqld(s.OldPrimary, true)
 		s.Heal()

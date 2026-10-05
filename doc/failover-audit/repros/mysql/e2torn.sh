@@ -1,5 +1,5 @@
 # usage: bash e2torn.sh <sync_relay_log> <trials>
-source /tmp/claude-0/-home-user-vitess/c1d2d1ed-3e94-5708-8646-dafcf8718844/scratchpad/relaylog/lib.sh
+source "${RELAYLOG_DIR:-$HOME/relaylog-work}/lib.sh"
 sync=$1; trials=$2
 echo "=== E2torn: relay_log_recovery=0 sync_relay_log=$sync; kill -9 R1 under heavy load (P up, R2 up)"
 reset_env relay_log_recovery=0 sync_relay_log=$sync >/dev/null 2>&1

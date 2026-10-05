@@ -5,16 +5,32 @@
 #   go/test/endtoend/vtorc/chaos/chaos_run.sh -test.run '^TestS1KillPrimaryMysqld$' -test.v -test.timeout 30m
 #
 # Arguments are passed verbatim to the compiled test binary (use -test.* flag names).
-# Reports and log copies go to $CHAOS_RESULTS_DIR (default /home/vitess/chaos-results).
+# Reports and log copies go to $CHAOS_RESULTS_DIR (default /home/$RUN_USER/chaos-results).
+#
+# Environment:
+#   VTROOT        Vitess checkout whose harness is compiled (default: the checkout this script is in)
+#   BINDIR        Vitess binaries the cluster runs (default: $VTROOT/bin), e.g. a build of another branch
+#   RUN_USER      unprivileged user the test runs as (default: vitess); it must own $VTDATAROOT
+#   EXTRA_MY_CNF  extra my.cnf file(s) for every tablet's mysqld (read by mysqlctl), e.g.
+#                 doc/failover-audit/env/relaylog-safe.cnf
+#   CHAOS_CGROUP_V2_MOUNT  cgroup v2 mount (default: /sys/fs/cgroup/unified if present, else /sys/fs/cgroup)
 set -euo pipefail
 
-VTROOT=${VTROOT:-/home/user/vitess}
+VTROOT=${VTROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../../.." && pwd)}
 cd "$VTROOT"
 source build.env >/dev/null
-export PATH="$VTROOT/bin:/usr/local/bin:$PATH"
+export PATH="${BINDIR:-$VTROOT/bin}:/usr/local/bin:$PATH"
 
 RUN_USER=${RUN_USER:-vitess}
-CG=/sys/fs/cgroup/unified/chaos
+if [ -z "${CHAOS_CGROUP_V2_MOUNT:-}" ]; then
+  if [ -e /sys/fs/cgroup/unified/cgroup.procs ]; then
+    CHAOS_CGROUP_V2_MOUNT=/sys/fs/cgroup/unified
+  else
+    CHAOS_CGROUP_V2_MOUNT=/sys/fs/cgroup
+  fi
+fi
+export CHAOS_CGROUP_V2_MOUNT
+CG=$CHAOS_CGROUP_V2_MOUNT/chaos
 RESULTS=${CHAOS_RESULTS_DIR:-/home/$RUN_USER/chaos-results}
 BIN=/home/$RUN_USER/e2e-bins/chaos.test
 
@@ -34,6 +50,7 @@ echo $$ > "$CG/harness/cgroup.procs"
 
 cd go/test/endtoend/vtorc/chaos
 exec env HOME=/home/$RUN_USER USER=$RUN_USER TMPDIR=/home/$RUN_USER/tmp CHAOS_E2E=1 CHAOS_RESULTS_DIR="$RESULTS" \
+  CHAOS_CGROUP_V2_MOUNT="$CHAOS_CGROUP_V2_MOUNT" \
   setpriv --reuid="$RUN_USER" --regid="$RUN_USER" --init-groups \
   --inh-caps=+net_admin,+net_raw --ambient-caps=+net_admin,+net_raw \
   "$BIN" "$@"
