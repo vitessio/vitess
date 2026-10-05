@@ -39,11 +39,11 @@ var connectionCharsetVariables = map[string]bool{
 // validateSetExprsCharset rejects a session-scope assignment that would switch a
 // connection to a character set that Vitess cannot parse and escape safely (see
 // collations.IsConnectionCharsetName). A connection only starts out in a safe
-// character set: these assignments can still reach the vttablet as connection
-// settings, which a VTGate gRPC client controls through its session's system
-// variables, or as SET statements from clients that talk to the query service
-// directly. VTGate itself never sends them, so only a constant naming a safe
-// character set or collation is accepted, plus NULL for character_set_results,
+// character set: these assignments can still reach the vttablet as SET
+// statements from clients that talk to the query service directly (connection
+// settings refuse them outright, see rejectSettingCharsetExprs). VTGate itself
+// never sends them, so only a constant naming a safe character set or collation
+// is accepted, plus NULL for character_set_results,
 // which only turns result conversion off. DEFAULT and non-constant values
 // resolve to a character set that cannot be judged here, and are rejected.
 func validateSetExprsCharset(exprs sqlparser.SetExprs) error {
@@ -73,6 +73,21 @@ func validateSetExprsCharset(exprs sqlparser.SetExprs) error {
 			}
 		}
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported connection character set %s for %s: use utf8mb4", sqlparser.String(expr.Expr), name)
+	}
+	return nil
+}
+
+// rejectSettingCharsetExprs refuses a connection setting that changes the
+// character set, whatever the value. A pooled connection's settings are undone
+// with DEFAULT, which takes the server's global value, and that need not be a
+// character set Vitess can parse safely. VTGate never sends these variables as
+// settings: it handles SET NAMES and SET CHARACTER SET itself and never applies
+// the character set variables.
+func rejectSettingCharsetExprs(exprs sqlparser.SetExprs) error {
+	for _, expr := range exprs {
+		if connectionCharsetVariables[expr.Var.Name.Lowered()] {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "the connection character set cannot be changed through connection settings: %s", expr.Var.Name.String())
+		}
 	}
 	return nil
 }

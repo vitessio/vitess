@@ -440,7 +440,7 @@ func BuildSettingQuery(settings []string, parser *sqlparser.Parser, rejectSubque
 		if err := validateConstantSetExprsSQLMode(set.Exprs); err != nil {
 			return "", "", err
 		}
-		if err := validateSetExprsCharset(set.Exprs); err != nil {
+		if err := rejectSettingCharsetExprs(set.Exprs); err != nil {
 			return "", "", err
 		}
 		setExprs = append(setExprs, set.Exprs...)

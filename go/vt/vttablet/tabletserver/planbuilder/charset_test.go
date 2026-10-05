@@ -27,8 +27,10 @@ import (
 
 // TestSetExprsRejectUnsafeCharsets checks that a connection cannot be switched to
 // a character set Vitess cannot parse safely through any of the paths that apply
-// a SET to it: connection settings, settings applied directly on a reserved
-// connection, and SET statements.
+// a SET to it. SET statements accept a safe character set. Connection settings,
+// whether built into a settings query or applied directly on a reserved
+// connection, refuse every character set change: their reset would restore the
+// server's global character set, which need not be safe.
 func TestSetExprsRejectUnsafeCharsets(t *testing.T) {
 	parser := vtenv.NewTestEnv().Parser()
 
@@ -59,24 +61,23 @@ func TestSetExprsRejectUnsafeCharsets(t *testing.T) {
 		"set character_set_client = null",
 	}
 
+	const settingsErr = "the connection character set cannot be changed through connection settings"
 	for _, setting := range accepted {
 		t.Run(setting, func(t *testing.T) {
-			require.NoError(t, ValidateSettingsSQLMode([]string{setting}, parser, true))
 			stmt, err := parser.Parse(setting)
 			require.NoError(t, err)
 			_, err = analyzeSet(stmt.(*sqlparser.Set))
 			require.NoError(t, err)
-			if stmt.(*sqlparser.Set).Exprs[0].Var.Scope != sqlparser.GlobalScope {
-				_, _, err = BuildSettingQuery([]string{setting}, parser, true)
-				require.NoError(t, err)
-			}
+			_, _, err = BuildSettingQuery([]string{setting}, parser, true)
+			require.ErrorContains(t, err, settingsErr)
+			require.ErrorContains(t, ValidateSettingsSQLMode([]string{setting}, parser, true), settingsErr)
 		})
 	}
 	for _, setting := range rejected {
 		t.Run(setting, func(t *testing.T) {
 			_, _, err := BuildSettingQuery([]string{setting}, parser, true)
-			require.ErrorContains(t, err, "unsupported connection character set")
-			require.ErrorContains(t, ValidateSettingsSQLMode([]string{setting}, parser, true), "unsupported connection character set")
+			require.ErrorContains(t, err, settingsErr)
+			require.ErrorContains(t, ValidateSettingsSQLMode([]string{setting}, parser, true), settingsErr)
 			stmt, err := parser.Parse(setting)
 			require.NoError(t, err)
 			_, err = analyzeSet(stmt.(*sqlparser.Set))
