@@ -279,7 +279,7 @@ func (env *Environment) ParseConnectionCharset(csname string) (ID, error) {
 	if collid == 0 || collid > 255 {
 		return 0, fmt.Errorf("unsupported connection charset: %q", csname)
 	}
-	if !connectionCharsets[env.byCharsetName[collid]] {
+	if _, ok := env.ConnectionCharset(collid); !ok {
 		return 0, fmt.Errorf("unsupported connection charset: %q: its multibyte characters can contain ASCII bytes such as a quote or backslash, which Vitess cannot parse or escape safely; use utf8mb4 instead", csname)
 	}
 	return collid, nil
