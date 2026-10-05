@@ -95,10 +95,9 @@ type vstreamer struct {
 	stopPos        string
 	commitParent   int64
 	sequenceNumber int64
-	// eventGTID and eventGTIDString are set together by setEventGTID.
-	// eventGTIDString caches eventGTID.String() for stamping EventGtid.
-	eventGTID       replication.GTID
-	eventGTIDString string
+	// eventGTID is the formatted GTID of the current transaction, or empty
+	// outside one. It is set by setEventGTID and stamped on each VEvent.
+	eventGTID string
 
 	phase   string
 	vse     *Engine
@@ -187,12 +186,11 @@ func (vs *vstreamer) SetVSchema(vschema *localVSchema) {
 	}
 }
 
-// setEventGTID sets eventGTID and its cached string together.
+// setEventGTID formats gtid into eventGTID, or clears it if gtid is nil.
 func (vs *vstreamer) setEventGTID(gtid replication.GTID) {
-	vs.eventGTID = gtid
-	vs.eventGTIDString = ""
+	vs.eventGTID = ""
 	if gtid != nil {
-		vs.eventGTIDString = gtid.String()
+		vs.eventGTID = gtid.String()
 	}
 }
 
@@ -902,7 +900,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 		vevent.CurrentTime = timeNowUnixNano
 		vevent.SequenceNumber = vs.sequenceNumber
 		vevent.CommitParent = vs.commitParent
-		vevent.EventGtid = vs.eventGTIDString
+		vevent.EventGtid = vs.eventGTID
 	}
 	return vevents, nil
 }
