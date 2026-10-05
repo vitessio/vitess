@@ -1195,6 +1195,7 @@ func updateGroupReplicationVoters(ctx context.Context, analysisEntry *inst.Detec
 // have come back, rejoined, been elected and acknowledged a transaction that the kept voters lack,
 // and failed again meanwhile; the bootstrap that follows from the kept voters would lose it (the TLA+
 // model's voters_split). It returns a FAILED_PRECONDITION error unless all of these hold:
+//   - primary: no voter that the selection dropped is the primary of that group now;
 //   - group: a member of the shard's recorded incarnation is active with quorum in its view, the
 //     condition under which VTOrc changes the voters at all (the model's VOTERS_NEED_GROUP), read
 //     now: the group may have died since. A majority of the current voters in that view is not
@@ -1216,6 +1217,8 @@ func recheckVoterChange(ctx context.Context, shardInfo *topo.ShardInfo, current,
 	}
 	legitimate := legitimateGroupOf(shardInfo, fresh)
 	groupUp := false
+	// primaries are the server_uuids of the group's primary, as the members of the group report it.
+	primaries := make(map[string]bool)
 	for _, st := range fresh {
 		if st.err != nil {
 			continue
@@ -1224,13 +1227,25 @@ func recheckVoterChange(ctx context.Context, shardInfo *topo.ShardInfo, current,
 		// As for the selection: an active member, not in a group of another incarnation, with quorum.
 		if mysql.IsGroupMemberActive(gs) && !legitimate.IsForeignIncarnation(gs) && gs.GetHasQuorum() {
 			groupUp = true
-			break
+			if gs.GetPrimaryUuid() != "" {
+				primaries[gs.GetPrimaryUuid()] = true
+			}
+			if mysql.IsGroupPrimary(gs) {
+				primaries[st.status.GetServerUuid()] = true
+			}
 		}
 	}
 	if !groupUp {
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no member of the shard's replication group is active with quorum any more")
 	}
 
+	// knownUUIDs are the server_uuids of the tablets that answered.
+	knownUUIDs := make(map[string]bool, len(fresh))
+	for _, st := range fresh {
+		if st.err == nil && st.status.GetServerUuid() != "" {
+			knownUUIDs[st.status.GetServerUuid()] = true
+		}
+	}
 	// kept is the union of the transactions that the kept voters that answer executed or received;
 	// a kept voter whose transactions cannot be read only makes it smaller.
 	var kept replication.GTIDSet = replication.Mysql56GTIDSet{}
@@ -1248,6 +1263,27 @@ func recheckVoterChange(ctx context.Context, shardInfo *topo.ShardInfo, current,
 			continue
 		}
 		now := byAlias[alias]
+		// The group may have elected the dropped voter since the selection, which keeps the group
+		// primary's seat: a primary that the list drops would keep serving on the decision it took
+		// as a voter.
+		uuid := ""
+		if now != nil && now.err == nil {
+			uuid = now.status.GetServerUuid()
+		} else if instance, _, err := inst.ReadInstance(sel.tablet.Alias); err == nil && instance != nil {
+			uuid = instance.ServerUUID
+		}
+		if uuid != "" && primaries[uuid] {
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "voter %s, which the selection dropped, is the primary of the shard's replication group now", alias)
+		}
+		if uuid == "" {
+			// Fail closed: without its server_uuid, the dropped voter could be a primary that no
+			// tablet that answers accounts for.
+			for primary := range primaries {
+				if !knownUUIDs[primary] {
+					return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot tell whether voter %s, which the selection dropped, is the primary %s of the shard's replication group now", alias, primary)
+				}
+			}
+		}
 		if sel.err != nil {
 			// Dropped as unreachable.
 			if now != nil && now.err == nil {

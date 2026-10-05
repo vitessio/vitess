@@ -84,6 +84,16 @@ func TestUpdateGroupReplicationVotersRechecksBeforeWrite(t *testing.T) {
 		},
 		wantErr: "no member of the shard's replication group is active with quorum",
 	}, {
+		// The members report a primary that no tablet that answers accounts for, and VTOrc never saw the
+		// server_uuid of the dropped voter: it may be that primary.
+		name:     "the group's primary may be the voter dropped as unreachable",
+		third:    voter3,
+		selected: map[uint32]*replicationdatapb.FullStatus{101: online(primary), 200: online(voter2), 301: notMemberStatus(spare3)},
+		recheck: map[uint32]*replicationdatapb.FullStatus{
+			101: withPrimaryUUID(online(primary), "00000000-0000-0000-0000-00000000dead"), 200: online(voter2), 301: notMemberStatus(spare3),
+		},
+		wantErr: "cannot tell whether voter zone3-0000000300",
+	}, {
 		name:     "the voter dropped as unreachable rejoined",
 		third:    voter3,
 		selected: map[uint32]*replicationdatapb.FullStatus{101: online(primary), 200: online(voter2), 301: notMemberStatus(spare3)},
@@ -190,4 +200,49 @@ func startInProgress(tablet *topodatapb.Tablet) *replicationdatapb.FullStatus {
 	status := notMemberStatus(tablet)
 	status.GroupReplicationStatus.StartInProgress = true
 	return withPosition(status, "1-10")
+}
+
+// TestUpdateGroupReplicationVotersKeepsPrimaryElectedSinceSelection reproduces the TLA+ model's
+// voters_split_nonvoter trace: the selection drops a voter of a cell whose other tablet, not a voter,
+// is the group primary (the group primary keeps its seat), and the group elects the dropped voter
+// before the write. A list that drops the current primary would leave it serving on the decision it took
+// as a voter: the write is refused, and the next selection keeps its seat.
+func TestUpdateGroupReplicationVotersKeepsPrimaryElectedSinceSelection(t *testing.T) {
+	primary := recoveryTablet("zone1", 101, topodatapb.TabletType_PRIMARY)
+	replica := recoveryTablet("zone1", 100, topodatapb.TabletType_REPLICA)
+	crossCellVoter := recoveryTablet("zone2", 200, topodatapb.TabletType_REPLICA)
+	mockTMC := groupReplicationRecoveryTestWithPolicy(t, policy.DurabilityGroupReplicationCrossCell, primary, replica, crossCellVoter)
+	setVoters(t, primary, crossCellVoter)
+	for _, tablet := range []*topodatapb.Tablet{primary, replica, crossCellVoter} {
+		calls := 0
+		mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(tablet)).DoAndReturn(
+			func(context.Context, *topodatapb.Tablet) (*replicationdatapb.FullStatus, error) {
+				calls++
+				// At the selection, the group primary is the replica, which is not a voter; right
+				// before the write, the group elected zone1-101 again.
+				groupPrimary := replica
+				if calls > 1 {
+					groupPrimary = primary
+				}
+				return withPosition(groupMemberStatus(tablet, groupPrimary, primary, replica, crossCellVoter), "1-10"), nil
+			}).AnyTimes()
+	}
+	mockTMC.EXPECT().StopGroupReplication(gomock.Any(), gomock.Any()).Times(0)
+
+	_, _, err := updateGroupReplicationVoters(t.Context(), &inst.DetectionAnalysis{
+		Analysis:              inst.GroupVotersOutOfDate,
+		AnalyzedInstanceAlias: primary.Alias,
+		AnalyzedKeyspace:      "ks",
+		AnalyzedShard:         "0",
+	}, log.NewPrefixedLogger("test"))
+	require.Error(t, err)
+	assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+	require.ErrorContains(t, err, "is the primary of the shard's replication group now")
+	assert.Equal(t, []string{"zone1-0000000101", "zone2-0000000200"}, readVoters(t))
+}
+
+// withPrimaryUUID sets the group primary that a member reports.
+func withPrimaryUUID(status *replicationdatapb.FullStatus, uuid string) *replicationdatapb.FullStatus {
+	status.GroupReplicationStatus.PrimaryUuid = uuid
+	return status
 }
