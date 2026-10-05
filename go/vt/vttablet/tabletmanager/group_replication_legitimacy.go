@@ -156,6 +156,8 @@ type shardGroupRecord struct {
 // voter of the shard record.
 func (tm *TabletManager) readShardGroupRecord(ctx context.Context, prev *shardGroupRecord) (*shardGroupRecord, error) {
 	tablet := tm.Tablet()
+	// A record that the shard watch delivers while this read is on its way is newer (storeRecord).
+	readGen := tm.groupReplicationTopo.readGeneration()
 	si, err := tm.TopoServer.GetShard(ctx, tablet.Keyspace, tablet.Shard)
 	if err != nil {
 		return nil, vterrors.Wrapf(err, "cannot read shard %v/%v", tablet.Keyspace, tablet.Shard)
@@ -168,10 +170,9 @@ func (tm *TabletManager) readShardGroupRecord(ctx context.Context, prev *shardGr
 		intent:           reparentutil.CurrentGroupReplicationBootstrapIntent(si.Shard),
 		tablets:          make(map[string]*topodatapb.Tablet),
 	}
-	tm.groupReplicationTopo.setVoters(rec.voters)
 	if prev != nil && time.Since(prev.tabletsRead) < groupReplicationTabletsCacheTTL && tm.identifiesVoters(rec.voters, prev.tablets) {
 		rec.tablets, rec.tabletsRead = prev.tablets, prev.tabletsRead
-		tm.groupReplicationTopo.setRecord(rec)
+		tm.groupReplicationTopo.storeRecord(rec, readGen)
 		return rec, nil
 	}
 	rec.tabletsRead = time.Now()
@@ -188,7 +189,7 @@ func (tm *TabletManager) readShardGroupRecord(ctx context.Context, prev *shardGr
 			rec.tablets[alias] = ti.Tablet
 		}
 	}
-	tm.groupReplicationTopo.setRecord(rec)
+	tm.groupReplicationTopo.storeRecord(rec, readGen)
 	return rec, nil
 }
 

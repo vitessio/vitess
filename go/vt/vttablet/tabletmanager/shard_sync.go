@@ -93,7 +93,7 @@ func (tm *TabletManager) shardSyncLoop(ctx context.Context, notifyChan <-chan st
 				if event.Err == nil && event.Value != nil {
 					// The fence check decides on the voters and the incarnation that the tablet read
 					// last: a primary that the voter list dropped is fenced right away.
-					tm.noteShardGroupFields(event.Value)
+					tm.noteShardFromWatch(event.Value)
 				}
 				if event.Err != nil {
 					// The watch failed. Stop it so we start a new one if needed.
@@ -164,7 +164,7 @@ func (tm *TabletManager) shardSyncLoop(ctx context.Context, notifyChan <-chan st
 			}
 			if current != nil && current.Value != nil {
 				// The record as the watch started: the voter list may have changed before.
-				tm.noteShardGroupFields(current.Value)
+				tm.noteShardFromWatch(current.Value)
 			}
 		default:
 			// If we're not primary, stop watching the shard record,

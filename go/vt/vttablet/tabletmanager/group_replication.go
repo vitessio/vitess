@@ -223,6 +223,7 @@ func (tm *TabletManager) shardDurability(ctx context.Context) (policy.Durabler, 
 // shard record sets another one.
 func (tm *TabletManager) resolveShardDurability(ctx context.Context) (policy.Durabler, string, error) {
 	tablet := tm.Tablet()
+	readGen := tm.groupReplicationTopo.readGeneration()
 	si, err := tm.TopoServer.GetShard(ctx, tablet.Keyspace, tablet.Shard)
 	if err != nil {
 		return nil, "", vterrors.Wrapf(err, "cannot read the durability policy of shard %v/%v", tablet.Keyspace, tablet.Shard)
@@ -236,7 +237,7 @@ func (tm *TabletManager) resolveShardDurability(ctx context.Context) (policy.Dur
 		return nil, "", vterrors.Wrapf(err, "cannot get durability policy %v", durabilityName)
 	}
 	tm.groupReplicationTopo.setDurability(durabilityName)
-	tm.noteShardGroupFields(si.Shard)
+	tm.noteShardGroupFields(si.Shard, readGen)
 	return durability, si.GetDurabilityPolicy(), nil
 }
 
@@ -1204,12 +1205,12 @@ func (tm *TabletManager) applyGroupReplicationServingDecisionLocked(ctx context.
 // in the shard record.
 func (tm *TabletManager) groupReplicationVoters(ctx context.Context) ([]*topodatapb.TabletAlias, error) {
 	tablet := tm.Tablet()
+	readGen := tm.groupReplicationTopo.readGeneration()
 	si, err := tm.TopoServer.GetShard(ctx, tablet.Keyspace, tablet.Shard)
 	if err != nil {
 		return nil, vterrors.Wrapf(err, "cannot read shard %v/%v", tablet.Keyspace, tablet.Shard)
 	}
-	tm.groupReplicationTopo.setVoters(si.GetGroupReplicationVoters())
-	tm.noteShardGroupFields(si.Shard)
+	tm.noteShardGroupFields(si.Shard, readGen)
 	return si.GetGroupReplicationVoters(), nil
 }
 

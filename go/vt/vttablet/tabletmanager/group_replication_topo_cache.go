@@ -25,6 +25,7 @@ import (
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -50,12 +51,59 @@ type groupReplicationTopoCache struct {
 	// record is the shard's group record that the tablet read last (readShardGroupRecord), if any.
 	// Its tablet records are reused by the next read while they identify every voter.
 	record *shardGroupRecord
+	// generation counts the shard records that the shard watch delivered. A reader captures it
+	// before it reads the shard record, and stores the shard fields it read only if no watched
+	// record arrived meanwhile: that one is newer (see storeRecord, noteShard).
+	generation uint64
 }
 
-func (c *groupReplicationTopoCache) setRecord(rec *shardGroupRecord) {
+// readGeneration returns the generation to capture before reading the shard record.
+func (c *groupReplicationTopoCache) readGeneration() uint64 {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	return c.generation
+}
+
+// storeRecord records a group record that the caller read after it captured readGen. If the shard
+// watch delivered a record since, the shard fields of that newer record are kept, in the stored
+// record and in rec, which the caller then uses; only the tablet records of rec are taken.
+func (c *groupReplicationTopoCache) storeRecord(rec *shardGroupRecord, readGen uint64) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.generation != readGen && c.record != nil {
+		rec.incarnation = c.record.incarnation
+		rec.voters = c.record.voters
+		rec.primaryAlias = c.record.primaryAlias
+		rec.durabilityPolicy = c.record.durabilityPolicy
+		rec.intent = c.record.intent
+	} else {
+		c.voters, c.hasVoters = rec.voters, true
+	}
 	c.record = rec
+}
+
+// noteShard records the group fields of a shard record: one that the shard watch delivered
+// (fromWatch), which starts a new generation, or one that a reader read after it captured readGen,
+// which is dropped if the watch delivered a record since. It returns whether it recorded them.
+func (c *groupReplicationTopoCache) noteShard(si *topodatapb.Shard, fromWatch bool, readGen uint64) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if fromWatch {
+		c.generation++
+	} else if c.generation != readGen {
+		return false
+	}
+	c.voters, c.hasVoters = si.GetGroupReplicationVoters(), true
+	if c.record != nil {
+		rec := *c.record
+		rec.incarnation = si.GetGroupReplicationIncarnation()
+		rec.voters = si.GetGroupReplicationVoters()
+		rec.primaryAlias = si.GetPrimaryAlias()
+		rec.durabilityPolicy = si.GetDurabilityPolicy()
+		rec.intent = reparentutil.CurrentGroupReplicationBootstrapIntent(si)
+		c.record = &rec
+	}
+	return true
 }
 
 func (c *groupReplicationTopoCache) lastRecord() *shardGroupRecord {
@@ -74,12 +122,6 @@ func (c *groupReplicationTopoCache) lastDurability() (string, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.durability, c.hasDurability
-}
-
-func (c *groupReplicationTopoCache) setVoters(voters []*topodatapb.TabletAlias) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.voters, c.hasVoters = voters, true
 }
 
 func (c *groupReplicationTopoCache) lastVoters() ([]*topodatapb.TabletAlias, bool) {
