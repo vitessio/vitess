@@ -968,7 +968,8 @@ func TestQueryExecutorPlanNextval(t *testing.T) {
 }
 
 // TestQueryExecutorPlanNextvalCommitFailureKeepsCache verifies that a failed
-// refill COMMIT leaves the sequence cache unchanged.
+// refill COMMIT leaves the sequence cache unchanged and that the next call
+// refills the cache from the sequence table.
 func TestQueryExecutorPlanNextvalCommitFailureKeepsCache(t *testing.T) {
 	db := setUpQueryExecutorTest(t)
 	t.Cleanup(db.Close)
