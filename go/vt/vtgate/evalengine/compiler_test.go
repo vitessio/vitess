@@ -871,6 +871,19 @@ func TestCompilerSingle(t *testing.T) {
 			expression: `GREATEST(JSON_OBJECT(), JSON_ARRAY())`,
 			result:     `VARCHAR("{}")`,
 		},
+		{
+			// UPPER over a JSON value case-maps the document's text.
+			expression: `UPPER(column0)`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`{"a": "b"}`))},
+			result:     `VARCHAR("{\"A\": \"B\"}")`,
+			typeWanted: evalengine.NewTypeEx(sqltypes.VarChar, collations.CollationUtf8mb4ID, true, 0, 0, nil),
+		},
+		{
+			// LOWER over a JSON value returns text, so the comparison is not a JSON comparison.
+			expression: `LOWER(column0) = '{"a": "b"}'`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`{"a": "b"}`))},
+			result:     `INT64(1)`,
+		},
 	}
 
 	tz, _ := time.LoadLocation("Europe/Madrid")
