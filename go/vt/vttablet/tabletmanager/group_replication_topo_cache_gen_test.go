@@ -81,44 +81,63 @@ func (c *shardReadHookConn) Get(ctx context.Context, filePath string) ([]byte, t
 // TestGroupReplicationTopoCacheKeepsWatchedRecord checks that a slow read of the shard record does not
 // overwrite a newer record that the shard watch delivered meanwhile: the read's shard fields are older,
 // and the fence check would decide on them until the next read. Here VTOrc writes a voter list that drops
-// the tablet while the tablet's sync loop reads the shard record; the watch delivers the new list before
-// the read returns the old one.
+// the tablet while the tablet reads the shard record, either for its group record (the sync loop's
+// read) or for another purpose that also updates the cached fields (the voters a join reads); the watch
+// delivers the new list before the read returns the old one.
 func TestGroupReplicationTopoCacheKeepsWatchedRecord(t *testing.T) {
-	withGroupReplication(t)
-	ctx := t.Context()
-	_, mf := memorytopo.NewServerAndFactory(ctx, "cell1")
-	f := &shardReadHookFactory{Factory: mf}
-	ts, err := topo.NewWithFactory(f, "", "")
-	require.NoError(t, err)
-	t.Cleanup(ts.Close)
-	require.NoError(t, ts.CreateKeyspace(ctx, "ks", &topodatapb.Keyspace{DurabilityPolicy: policy.DurabilityGroupReplication}))
-	setGroupReplicationVoters(t, ts, 1, 2, 3)
-	setGroupReplicationIncarnation(t, ts, "1780000001")
-	addPeerTablets(t, ts, 2, 3)
-	tm, _ := newGroupReplicationTestTM(t, ts, 1, nil)
-	_, err = tm.readShardGroupRecord(ctx, nil)
-	require.NoError(t, err)
+	for _, tt := range []struct {
+		name string
+		read func(ctx context.Context, tm *TabletManager) error
+	}{{
+		name: "a read of the group record",
+		read: func(ctx context.Context, tm *TabletManager) error {
+			_, err := tm.readShardGroupRecord(ctx, tm.groupReplicationTopo.lastRecord())
+			return err
+		},
+	}, {
+		name: "a read of the voters",
+		read: func(ctx context.Context, tm *TabletManager) error {
+			_, err := tm.groupReplicationVoters(ctx)
+			return err
+		},
+	}} {
+		t.Run(tt.name, func(t *testing.T) {
+			withGroupReplication(t)
+			ctx := t.Context()
+			_, mf := memorytopo.NewServerAndFactory(ctx, "cell1")
+			f := &shardReadHookFactory{Factory: mf}
+			ts, err := topo.NewWithFactory(f, "", "")
+			require.NoError(t, err)
+			t.Cleanup(ts.Close)
+			require.NoError(t, ts.CreateKeyspace(ctx, "ks", &topodatapb.Keyspace{DurabilityPolicy: policy.DurabilityGroupReplication}))
+			setGroupReplicationVoters(t, ts, 1, 2, 3)
+			setGroupReplicationIncarnation(t, ts, "1780000001")
+			addPeerTablets(t, ts, 2, 3)
+			tm, _ := newGroupReplicationTestTM(t, ts, 1, nil)
+			_, err = tm.readShardGroupRecord(ctx, nil)
+			require.NoError(t, err)
 
-	f.setHook(func() {
-		si, err := ts.UpdateShardFields(ctx, "ks", "0", func(si *topo.ShardInfo) error {
-			si.GroupReplicationVoters = []*topodatapb.TabletAlias{{Cell: "cell1", Uid: 2}, {Cell: "cell1", Uid: 3}}
-			return nil
+			f.setHook(func() {
+				si, err := ts.UpdateShardFields(ctx, "ks", "0", func(si *topo.ShardInfo) error {
+					si.GroupReplicationVoters = []*topodatapb.TabletAlias{{Cell: "cell1", Uid: 2}, {Cell: "cell1", Uid: 3}}
+					return nil
+				})
+				require.NoError(t, err)
+				tm.noteShardFromWatch(si.Shard)
+			})
+			require.NoError(t, tt.read(ctx, tm))
+
+			want := []string{"cell1-0000000002", "cell1-0000000003"}
+			aliases := func(voters []*topodatapb.TabletAlias) []string {
+				var list []string
+				for _, v := range voters {
+					list = append(list, topoproto.TabletAliasString(v))
+				}
+				return list
+			}
+			assert.Equal(t, want, aliases(tm.groupReplicationTopo.lastRecord().voters), "the record the fence check decides on")
+			voters, _ := tm.groupReplicationTopo.lastVoters()
+			assert.Equal(t, want, aliases(voters), "the voters a join falls back to")
 		})
-		require.NoError(t, err)
-		tm.noteShardFromWatch(si.Shard)
-	})
-	_, err = tm.readShardGroupRecord(ctx, tm.groupReplicationTopo.lastRecord())
-	require.NoError(t, err)
-
-	want := []string{"cell1-0000000002", "cell1-0000000003"}
-	aliases := func(voters []*topodatapb.TabletAlias) []string {
-		var list []string
-		for _, v := range voters {
-			list = append(list, topoproto.TabletAliasString(v))
-		}
-		return list
 	}
-	assert.Equal(t, want, aliases(tm.groupReplicationTopo.lastRecord().voters), "the record the fence check decides on")
-	voters, _ := tm.groupReplicationTopo.lastVoters()
-	assert.Equal(t, want, aliases(voters), "the voters a join falls back to")
 }
