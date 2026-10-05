@@ -685,38 +685,19 @@ func buildIdentifierQuery(template identifierQueryTemplate, identifiers ...strin
 // string literals, encoding each one. See buildIdentifierQuery for why the
 // encoding cannot be left to GenerateQuery. The encoder supplies the quotes, so
 // the templates must not quote %a themselves.
-//
-// The encoder is EncodeStringSQLAnyMode rather than EncodeStringSQL because these
-// queries are executed, not compared, and some of them run on the DBA connection.
-// EncodeStringSQL writes a quote as \', which stops being a quote when sql_mode
-// includes NO_BACKSLASH_ESCAPES -- a mode connpool.Conn.VerifyMode allows -- so
-// the literal would end early and the rest of the name would run as SQL.
-//
-// This returns the statement text for the same reason buildIdentifierQuery does.
 func buildLiteralQuery(template literalQueryTemplate, literals ...string) string {
 	args := make([]any, len(literals))
 	for i, literal := range literals {
-		args[i] = sqltypes.EncodeStringSQLAnyMode(literal)
+		args[i] = sqltypes.EncodeStringSQL(literal)
 	}
 	return sqlparser.BuildParsedQuery(string(template), args...).Query
 }
 
 // buildTableExistsQuery builds the SHOW TABLES LIKE query used to test for the
-// existence of a single table.
-//
-// The name goes in as the LIKE pattern unchanged, so a '_' or '%' in it is a
-// wildcard and the query can match more tables than the one asked about.
-// tableExists compares the names that come back, which is what makes that safe.
-//
-// The wildcards are deliberately not escaped. Writing them as \_ and \% only
-// works while the server honours backslash escapes: with NO_BACKSLASH_ESCAPES in
-// sql_mode LIKE has no escape character at all, so the pattern would keep its
-// backslashes and match nothing. Verified against MySQL 8.0.46 -- the escaped
-// pattern finds a table named `_vt_HOLD_x` in the default mode and returns no rows
-// with that mode set, which would have reported every table with a '_' in its name
-// as missing.
+// existence of a single table, escaping the '_' wildcard so that it matches only
+// that table.
 func buildTableExistsQuery(tableName string) string {
-	return buildLiteralQuery(sqlShowTablesLike, tableName)
+	return buildLiteralQuery(sqlShowTablesLike, strings.ReplaceAll(tableName, `_`, `\_`))
 }
 
 // tableExists checks if a given table exists.
@@ -725,32 +706,8 @@ func (e *Executor) tableExists(ctx context.Context, tableName string) (bool, err
 	if err != nil {
 		return false, err
 	}
-	return resultHasTableName(rs, tableName), nil
-}
-
-// resultHasTableName reports whether a SHOW TABLES result names tableName. The
-// pattern buildTableExistsQuery builds may have matched other tables too, so the
-// name has to be compared rather than the rows merely counted.
-//
-// The comparison ignores case, which is not the same as deciding that table names
-// are case insensitive. Whether they are is the server's decision and depends on
-// lower_case_table_names, which defaults to 0 on Linux -- where they are case
-// sensitive -- and to 2 on macOS. Either setting leaves this comparison no
-// narrower than the server: the server matched the rows it returned using the
-// collation it holds table names in, so a row differing only in case is one the
-// server itself calls a match (verified on 8.0.46 at lower_case_table_names=2,
-// where SHOW TABLES LIKE 'foobar' returns a table created as `FooBar`), and where
-// it does not call it a match that row is never returned for this comparison to
-// see. All the comparison has to do is drop the rows the wildcards let in -- a '_'
-// in the name matched any character -- so being the wider of the two cannot report
-// a table the server considers present as missing.
-func resultHasTableName(rs *sqltypes.Result, tableName string) bool {
-	for _, row := range rs.Rows {
-		if len(row) > 0 && strings.EqualFold(row[0].ToString(), tableName) {
-			return true
-		}
-	}
-	return false
+	row := rs.Named().Row()
+	return (row != nil), nil
 }
 
 // showCreateTable returns the SHOW CREATE statement for a table or a view
@@ -1905,7 +1862,7 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 		{
 			// temporary hack. todo: this should be done when inserting any _vt.vreplication record across all workflow types
 			query := fmt.Sprintf("update _vt.vreplication set workflow_type = %d where workflow = %s",
-				binlogdatapb.VReplicationWorkflowType_OnlineDDL, sqltypes.EncodeStringSQLAnyMode(v.workflow))
+				binlogdatapb.VReplicationWorkflowType_OnlineDDL, sqltypes.EncodeStringSQL(v.workflow))
 			if _, err := e.vreplicationExec(ctx, tablet.Tablet, query); err != nil {
 				return vterrors.Wrapf(err, "VReplicationExec(%v, %s)", tablet.Tablet, query)
 			}

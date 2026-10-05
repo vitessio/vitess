@@ -907,11 +907,7 @@ func encodeBytesSQLStringBuilder(val []byte, buf *strings.Builder) {
 	buf.WriteByte('\'')
 }
 
-// BufEncodeStringSQL encodes the string into a strings.Builder.
-//
-// A quote is written as \', which is a quote only where the server honours
-// backslash escapes. Where the value may be read back with NO_BACKSLASH_ESCAPES
-// in sql_mode, use EncodeStringSQLAnyMode instead.
+// BufEncodeStringSQL encodes the string into a strings.Builder
 func BufEncodeStringSQL(buf *strings.Builder, val string) {
 	buf.WriteByte('\'')
 	for idx, ch := range val {
@@ -935,83 +931,9 @@ func BufEncodeStringSQL(buf *strings.Builder, val string) {
 }
 
 // EncodeStringSQL encodes the string as a SQL string.
-//
-// See EncodeStringSQLAnyMode for the variant to use where sql_mode may include
-// NO_BACKSLASH_ESCAPES.
 func EncodeStringSQL(val string) string {
 	var buf strings.Builder
 	BufEncodeStringSQL(&buf, val)
-	return buf.String()
-}
-
-// EncodeStringSQLAnyMode encodes the string as a SQL string literal that mysqld
-// reads the same way whichever escaping rule is in force.
-//
-// EncodeStringSQL will not do where that matters. It writes a quote as \', which
-// is a quote only where the server honours backslash escapes; with
-// NO_BACKSLASH_ESCAPES in sql_mode -- which connpool.Conn.VerifyMode permits,
-// since it only asks for a strict mode -- mysqld reads that backslash as an
-// ordinary character, the literal ends at the quote, and the rest is parsed as
-// SQL. On a connection that negotiates CLIENT_MULTI_STATEMENTS, as the DBA
-// connection does, that runs.
-//
-// So the only rules used here are the ones that mean the same thing under both:
-//
-//   - A quote is doubled, which is the escape SQL itself defines.
-//   - A byte that has a backslash escape form -- NUL, \b, \n, \r, \t, ctrl-Z --
-//     is written raw rather than in that form. The escape reads back as a
-//     backslash and a letter under NO_BACKSLASH_ESCAPES, losing the byte; the raw
-//     byte is itself in either mode. None of them can end a literal, so raw is
-//     safe as well as faithful.
-//   - Bytes are copied one at a time rather than by rune, so a value that is not
-//     valid UTF-8 survives instead of becoming U+FFFD.
-//
-// A backslash is the one byte with no reading that holds in both, and it is
-// treated the way MySQL's own literals treat it. Before a '%' or a '_' it is left
-// single, because mysqld keeps such a pair as its two characters in either mode --
-// which is also what leaves a LIKE wildcard escaped. Anywhere else it is doubled:
-// wrong under NO_BACKSLASH_ESCAPES, where the value comes back holding both, but a
-// lone trailing backslash would otherwise swallow the closing quote under the
-// default mode. That makes the doubling the security-relevant choice, and the one
-// rule here whose value is mode-dependent.
-//
-// Both comparisons and executed text want this encoder: a comparison against a
-// value the server decoded differently silently matches nothing.
-//
-// What it does not do is make the literal independent of the connection's
-// character set, and no textual escaping can. Where that character set is a
-// multibyte one whose trail bytes include 0x5C -- sjis and cp932, of those this
-// build accepts; gbk, big5 and gb18030 are rejected by
-// collations.Environment.ParseConnectionCharset -- mysqld's lexer consumes a lead
-// byte together with the byte that follows it before looking for an escape. A lead
-// byte sitting just before a backslash therefore swallows it, and the backslash
-// after that escapes what should have been the closing quote. Verified on 8.0.46:
-// for such a value every string-literal encoder in this file, this one included,
-// ends its literal early on an sjis connection, and none of them does on utf8mb4.
-// Closing that needs an encoding with no delimiter to escape, such as a hex
-// literal, or a connection charset that is single byte or UTF-8. It is not
-// something this function can decide, since it is not told the charset.
-func EncodeStringSQLAnyMode(val string) string {
-	var buf strings.Builder
-	buf.Grow(len(val) + 2)
-	buf.WriteByte('\'')
-	for i := 0; i < len(val); i++ {
-		switch c := val[i]; c {
-		case '\'':
-			buf.WriteString("''")
-		case '\\':
-			// Single only when it is escaping a LIKE wildcard, so the pair reaches
-			// the server as the two characters that were written.
-			if i+1 < len(val) && (val[i+1] == '%' || val[i+1] == '_') {
-				buf.WriteByte(c)
-			} else {
-				buf.WriteString(`\\`)
-			}
-		default:
-			buf.WriteByte(c)
-		}
-	}
-	buf.WriteByte('\'')
 	return buf.String()
 }
 

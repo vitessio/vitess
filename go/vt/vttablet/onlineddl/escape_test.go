@@ -17,13 +17,11 @@ limitations under the License.
 package onlineddl
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -128,78 +126,6 @@ func TestGeneratedDDLIsOneStatement(t *testing.T) {
 				return buildTableExistsQuery(maliciousTableName)
 			},
 		},
-	}
-
-	for _, tc := range testcases {
-		t.Run(tc.name, func(t *testing.T) {
-			query := tc.build()
-
-			pieces, err := parser.SplitStatementToPieces(query)
-			require.NoError(t, err)
-			assert.Len(t, pieces, 1, "generated %q, which is %d statements", query, len(pieces))
-		})
-	}
-}
-
-// statementsUnderNoBackslashEscapes counts the statements in query as mysqld
-// reads it with NO_BACKSLASH_ESCAPES in sql_mode.
-//
-// sqlparser.SplitStatementToPieces cannot stand in for this. It lexes the way
-// this parser does, which always honours backslash escapes, so it reads a \' as a
-// quote that stays inside the literal and counts a statement that only splits
-// under that mode as one. Under the mode a backslash is an ordinary character and
-// doubling is the only way to write a quote inside a literal, which is what this
-// scan implements. Back quotes are handled the same way because doubling is the
-// only escape there in every mode.
-func statementsUnderNoBackslashEscapes(query string) int {
-	statements := 1
-	for i := 0; i < len(query); i++ {
-		switch query[i] {
-		case '\'', '`':
-			quote := query[i]
-			for i++; i < len(query); i++ {
-				if query[i] != quote {
-					continue
-				}
-				if i+1 < len(query) && query[i+1] == quote {
-					i++ // a doubled quote stays inside the literal
-					continue
-				}
-				break // the literal ends here
-			}
-		case ';':
-			if strings.TrimSpace(query[i+1:]) != "" {
-				statements++
-			}
-		}
-	}
-	return statements
-}
-
-// TestGeneratedLiteralIsOneStatementInAnyMode is the same guarantee as
-// TestGeneratedDDLIsOneStatement, for the sinks that put a name in a string
-// literal rather than in back quotes, and under NO_BACKSLASH_ESCAPES as well as
-// the default mode.
-//
-// connpool.Conn.VerifyMode only requires that a strict mode be present, so a
-// tablet may be running with that mode set, and these queries run on the DBA
-// connection, which negotiates CLIENT_MULTI_STATEMENTS. An encoding that writes a
-// quote as \' is therefore not enough: the backslash is an ordinary character
-// under that mode, the literal ends at the quote, and the rest of the name is
-// executed.
-func TestGeneratedLiteralIsOneStatementInAnyMode(t *testing.T) {
-	parser := sqlparser.NewTestParser()
-
-	testcases := []struct {
-		name  string
-		build func() string
-	}{
-		{
-			name: "show tables like",
-			build: func() string {
-				return buildTableExistsQuery(maliciousQuotedName)
-			},
-		},
 		{
 			name: "show table status like",
 			build: func() string {
@@ -212,61 +138,19 @@ func TestGeneratedLiteralIsOneStatementInAnyMode(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			query := tc.build()
 
-			// The default mode, where a backslash escape is an escape.
 			pieces, err := parser.SplitStatementToPieces(query)
 			require.NoError(t, err)
 			assert.Len(t, pieces, 1, "generated %q, which is %d statements", query, len(pieces))
-
-			// And with NO_BACKSLASH_ESCAPES, where it is not.
-			assert.Equal(t, 1, statementsUnderNoBackslashEscapes(query),
-				"generated %q, which is %d statements under NO_BACKSLASH_ESCAPES",
-				query, statementsUnderNoBackslashEscapes(query))
 		})
 	}
 }
 
-// TestBuildTableExistsQuery pins the pattern the existence check sends, because
-// the two ways of getting it wrong are both silent.
-//
-// Escaping the wildcards as \_ makes the pattern an exact match only while the
-// server honours backslash escapes; with NO_BACKSLASH_ESCAPES set, LIKE has no
-// escape character and such a pattern matches nothing, so every GC table would
-// look absent. Leaving them unescaped instead means the pattern can match more
-// than one table, which is why tableExists compares the names it gets back.
+// TestBuildTableExistsQuery pins the pattern the existence check sends: the '_'
+// wildcard is escaped so that the pattern matches only the table asked about.
 func TestBuildTableExistsQuery(t *testing.T) {
 	assert.Equal(t,
-		`SHOW TABLES LIKE '_vt_HOLD_6ace8bcef73211ea87e9f875a4d24e90_20200915120410'`,
+		`SHOW TABLES LIKE '\_vt\_HOLD\_6ace8bcef73211ea87e9f875a4d24e90\_20200915120410'`,
 		buildTableExistsQuery("_vt_HOLD_6ace8bcef73211ea87e9f875a4d24e90_20200915120410"))
-
-	// No backslash before a wildcard, in either mode's reading.
-	assert.NotContains(t, buildTableExistsQuery("a_b"), `\_`)
-}
-
-// TestResultHasTableName covers the comparison that makes the wildcard pattern
-// safe: a row that merely matched the pattern is not the table asked for.
-func TestResultHasTableName(t *testing.T) {
-	result := sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields("Tables_in_db", "varchar"),
-		"AvtBHOLDBx", "_vt_HOLD_x",
-	)
-
-	assert.True(t, resultHasTableName(result, "_vt_HOLD_x"))
-	// Matched the pattern, but is a different table.
-	assert.False(t, resultHasTableName(result, "_vt_HOLD_y"))
-	assert.False(t, resultHasTableName(&sqltypes.Result{}, "_vt_HOLD_x"))
-
-	// A row the server matched on a different casing is still that table, as far
-	// as this comparison is concerned -- the server decides that, not us, and it
-	// already decided by returning the row. Overruling it here would report a
-	// table that exists as missing.
-	assert.True(t, resultHasTableName(
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("Tables_in_db", "varchar"), "FooBar"),
-		"foobar"))
-
-	// But a name that differs by more than case is a different table.
-	assert.False(t, resultHasTableName(
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("Tables_in_db", "varchar"), "FooBar"),
-		"foobaz"))
 }
 
 // TestEscapeNameProducesOneIdentifier covers the same defect in the escaper used

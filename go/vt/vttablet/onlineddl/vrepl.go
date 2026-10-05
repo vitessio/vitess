@@ -241,16 +241,12 @@ func (v *VRepl) readTableStatus(ctx context.Context, conn *dbconnpool.DBConnecti
 	if err != nil {
 		return 0, err
 	}
-	// The name goes into the LIKE pattern as it stands, so a '_' or '%' in it is a
-	// wildcard and other tables can come back too; see buildTableExistsQuery for why
-	// escaping the wildcards is not an option. Find the row that names this table
-	// rather than taking the first one, or the row count belongs to another table.
-	for _, row := range rs.Named().Rows {
-		if strings.EqualFold(row.AsString("Name", ""), tableName) {
-			return row.ToInt64("Rows")
-		}
+	row := rs.Named().Row()
+	if row == nil {
+		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Cannot SHOW TABLE STATUS LIKE '%s'", tableName)
 	}
-	return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Cannot SHOW TABLE STATUS LIKE '%s'", tableName)
+	tableRows, err = row.ToInt64("Rows")
+	return tableRows, err
 }
 
 func (v *VRepl) analyzeAlter() error {
