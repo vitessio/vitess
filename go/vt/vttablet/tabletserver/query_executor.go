@@ -78,10 +78,6 @@ const (
 	resetLastIDValue  = 18446744073709547416
 	userLabelDisabled = "UserLabelDisabled"
 
-	// unsafeAnnotationPrincipal replaces a caller principal that is not safe
-	// to embed in the annotation comment; see isSafeAnnotationPrincipal.
-	unsafeAnnotationPrincipal = "unsafe-principal"
-
 	// sessionWaitTimeoutProbeTimeout caps the best-effort probe of a reserved
 	// connection's @@session.wait_timeout, run before a temporary-table DDL
 	// until a capture succeeds; see captureSessionWaitTimeout.
@@ -1520,20 +1516,44 @@ func (qre *QueryExecutor) execRollbackToSavepoint(conn *StatefulConnection, sql 
 	return qr, nil
 }
 
-// isSafeAnnotationPrincipal reports whether the caller principal can be
+// escapeAnnotationPrincipal returns the caller principal in a form that can be
 // embedded in the annotation comment that prefixes queries sent to MySQL. The
-// principal can be chosen by the client, so it is limited to characters that
-// cannot close the comment and change the statement that MySQL runs.
-func isSafeAnnotationPrincipal(principal string) bool {
-	for i := 0; i < len(principal); i++ {
-		switch c := principal[i]; {
+// principal can be chosen by the client, so every byte outside a small
+// identifier-safe set is percent-encoded. In particular, '*' is always encoded,
+// so the principal cannot close the comment and change the statement that
+// MySQL runs.
+func escapeAnnotationPrincipal(principal string) string {
+	isSafe := func(c byte) bool {
+		switch {
 		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9':
+			return true
 		case c == '_', c == '-', c == '.', c == '@', c == ':', c == '/':
-		default:
-			return false
+			return true
 		}
+		return false
 	}
-	return true
+	i := 0
+	for i < len(principal) && isSafe(principal[i]) {
+		i++
+	}
+	if i == len(principal) {
+		return principal
+	}
+	const hexDigits = "0123456789ABCDEF"
+	var buf strings.Builder
+	buf.Grow(len(principal) + 2*(len(principal)-i))
+	buf.WriteString(principal[:i])
+	for ; i < len(principal); i++ {
+		c := principal[i]
+		if isSafe(c) {
+			buf.WriteByte(c)
+			continue
+		}
+		buf.WriteByte('%')
+		buf.WriteByte(hexDigits[c>>4])
+		buf.WriteByte(hexDigits[c&0x0F])
+	}
+	return buf.String()
 }
 
 func (qre *QueryExecutor) generateFinalSQL(parsedQuery *sqlparser.ParsedQuery, bindVars map[string]*querypb.BindVariable) (string, string, error) {
@@ -1546,9 +1566,7 @@ func (qre *QueryExecutor) generateFinalSQL(parsedQuery *sqlparser.ParsedQuery, b
 		if username == "" {
 			username = callerid.GetUsername(callerid.ImmediateCallerIDFromContext(qre.ctx))
 		}
-		if !isSafeAnnotationPrincipal(username) {
-			username = unsafeAnnotationPrincipal
-		}
+		username = escapeAnnotationPrincipal(username)
 		var buf strings.Builder
 		tabletTypeStr := qre.tsv.sm.target.TabletType.String()
 		buf.Grow(8 + len(username) + len(tabletTypeStr))
