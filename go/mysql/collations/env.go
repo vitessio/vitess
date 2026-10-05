@@ -328,6 +328,21 @@ var connectionCharsets = map[string]bool{
 	"macce":    true,
 	"macroman": true,
 	"swe7":     true,
+	"tis620":   true,
+}
+
+// IsConnectionCharset reports whether the collation a client asked for in its
+// connection handshake belongs to one of the character sets that can be used
+// for a connection. The collation does not have to be one that Vitess
+// implements, nor one that exists in this environment's MySQL version: a
+// collation ID names the same character set in every version. Unknown means
+// that the client did not ask for one.
+func (env *Environment) IsConnectionCharset(id ID) bool {
+	if id == Unknown {
+		return true
+	}
+	aliases := globalVersionInfo[id].alias
+	return len(aliases) > 0 && connectionCharsets[aliases[0].charset]
 }
 
 func (env *Environment) AllCollationIDs() []ID {

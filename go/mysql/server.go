@@ -490,6 +490,15 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 		defer connCountByTLSVer.Add(versionNoTLS, -1)
 	}
 
+	// Vitess parses and escapes SQL text byte by byte, so refuse a client that
+	// asks for a character set where that is not safe; see
+	// collations.Environment.IsConnectionCharset.
+	if !l.handler.Env().CollationEnv().IsConnectionCharset(c.CharacterSet) {
+		c.writeErrorPacket(sqlerror.ERUnknownCharacterSet, sqlerror.SSClientError,
+			"unsupported connection character set (collation id %d): use utf8mb4", c.CharacterSet)
+		return
+	}
+
 	// See what auth method the AuthServer wants to use for that user.
 	negotiatedAuthMethod, err := negotiateAuthMethod(c, l.authServer, user, clientAuthMethod)
 

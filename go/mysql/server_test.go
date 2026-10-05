@@ -872,6 +872,17 @@ func TestServer(t *testing.T) {
 	assert.Contains(t, output, "28000")
 	assert.Contains(t, output, "Access denied", "Unexpected output for invalid password: %v", output)
 
+	// Character set check: a client that asks for a character set Vitess cannot
+	// parse safely is refused, here cp932, whose second byte can be a backslash.
+	params.Uname = "user1"
+	params.Charset = 95 // cp932_japanese_ci
+	_, err = Connect(ctx, params)
+	require.ErrorContains(t, err, "unsupported connection character set")
+	params.Charset = collations.CollationUtf8mb4ID
+	c, err := Connect(ctx, params)
+	require.NoError(t, err)
+	c.Close()
+
 	// Uncomment to leave setup up for a while, to run tests manually.
 	//	fmt.Printf("Listening to server on host '%v' port '%v'.\n", host, port)
 	//	time.Sleep(60 * time.Minute)

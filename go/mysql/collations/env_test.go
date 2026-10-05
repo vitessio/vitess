@@ -24,7 +24,8 @@ import (
 
 // TestParseConnectionCharset checks that only character sets whose multibyte
 // characters never contain ASCII bytes can be used for a connection, whether
-// they are named by character set or by collation.
+// they are named by character set or by collation, or asked for by collation ID
+// in a client handshake.
 func TestParseConnectionCharset(t *testing.T) {
 	env := MySQL8()
 
@@ -37,4 +38,17 @@ func TestParseConnectionCharset(t *testing.T) {
 		_, err := env.ParseConnectionCharset(name)
 		require.ErrorContains(t, err, "unsupported connection charset", "connection charset %q", name)
 	}
+
+	// A client can ask for any collation in its handshake, including ones Vitess
+	// does not implement, such as gbk_chinese_ci and tis620_thai_ci.
+	for _, id := range []ID{Unknown, CollationUtf8mb4ID, CollationBinaryID, 8 /* latin1_swedish_ci */, 18 /* tis620_thai_ci */} {
+		require.True(t, env.IsConnectionCharset(id), "collation %d", id)
+	}
+	for _, id := range []ID{13 /* sjis_japanese_ci */, 95 /* cp932_japanese_ci */, 28 /* gbk_chinese_ci */, 1 /* big5_chinese_ci */, 248 /* gb18030_chinese_ci */, 250 /* gb18030_unicode_520_ci */, 35 /* ucs2_general_ci */, 54 /* utf16_general_ci */} {
+		require.False(t, env.IsConnectionCharset(id), "collation %d", id)
+	}
+
+	// A MySQL 8.0 client's default collation is accepted by an environment for
+	// a MySQL version that does not have it.
+	require.True(t, NewEnvironment("5.7.31").IsConnectionCharset(CollationUtf8mb4ID))
 }
