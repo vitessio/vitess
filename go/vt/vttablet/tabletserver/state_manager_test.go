@@ -28,9 +28,12 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtenv"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
@@ -1039,4 +1042,159 @@ func (te *testTableGC) Open() error {
 func (te *testTableGC) Close() {
 	te.order = order.Add(1)
 	te.state = testStateClosed
+}
+
+// TestServeNonPrimaryKillsBlockedCommit verifies that a PRIMARY to
+// REPLICA transition completes while a COMMIT is blocked in MySQL.
+func TestServeNonPrimaryKillsBlockedCommit(t *testing.T) {
+	db := fakesqldb.New(t)
+	db.AddQueryPattern(".*", &sqltypes.Result{})
+	t.Cleanup(func() { db.Close() })
+
+	te := setupTxEngine(db)
+
+	sm := newTestStateManager()
+	sm.te = te
+	t.Cleanup(sm.StopService)
+
+	require.NoError(t, sm.SetServingType(topodatapb.TabletType_PRIMARY, testNow, StateServing, ""))
+
+	commitStarted := make(chan struct{})
+	releaseCommit := make(chan struct{})
+	t.Cleanup(func() { close(releaseCommit) })
+
+	var once sync.Once
+	db.AddQuery("commit", &sqltypes.Result{})
+	db.SetBeforeFunc("commit", func() {
+		once.Do(func() { close(commitStarted) })
+		<-releaseCommit
+	})
+
+	txID, _, _, err := te.Begin(t.Context(), 0, nil, &querypb.ExecuteOptions{})
+	require.NoError(t, err)
+
+	commitErr := make(chan error, 1)
+	go func() {
+		_, _, err := te.Commit(t.Context(), txID)
+		commitErr <- err
+	}()
+	<-commitStarted
+
+	sm.shutdownGracePeriod = 10 * time.Millisecond
+
+	transitionErr := make(chan error, 1)
+	go func() {
+		transitionErr <- sm.SetServingType(topodatapb.TabletType_REPLICA, testNow, StateServing, "")
+	}()
+
+	select {
+	case err := <-transitionErr:
+		require.NoError(t, err)
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "PRIMARY to REPLICA transition hung on a blocked COMMIT")
+	}
+
+	require.ErrorContains(t, <-commitErr, "QueryList.TerminateAll()")
+}
+
+// gateTxEngine forwards cluster actions to a real QueryList and records the
+// cleanup calls made by the state manager.
+type gateTxEngine struct {
+	// ql is the commit list that receives the forwarded cluster actions.
+	ql *QueryList
+
+	// terminateCalls counts the TerminateActiveCommits calls.
+	terminateCalls atomic.Int64
+
+	// terminated is closed on the grace-period sweep's TerminateActiveCommits call.
+	terminated chan struct{}
+
+	// releaseRollback unblocks RollbackPrepared when closed.
+	releaseRollback chan struct{}
+
+	// addErr is the result of the commit registration in AcceptReadOnly.
+	addErr error
+}
+
+// AcceptReadWrite satisfies txEngine. The test does not need it.
+func (te *gateTxEngine) AcceptReadWrite() {}
+
+// AcceptReadOnly waits for the grace-period sweep, then tries to register a
+// new commit, as a COMMIT racing the transition would.
+func (te *gateTxEngine) AcceptReadOnly() {
+	select {
+	case <-te.terminated:
+	case <-time.After(30 * time.Second):
+		return
+	}
+
+	te.addErr = te.ql.Add(NewQueryDetail(nil, &killableConn{id: 99}))
+}
+
+// Close satisfies txEngine. The test does not need it.
+func (te *gateTxEngine) Close() {}
+
+// RollbackPrepared blocks until the test releases it.
+func (te *gateTxEngine) RollbackPrepared() {
+	<-te.releaseRollback
+}
+
+// SetClusterAction forwards the cluster action to the commit list.
+func (te *gateTxEngine) SetClusterAction(ca ClusterActionState) {
+	te.ql.SetClusterAction(ca)
+}
+
+// TerminateActiveCommits signals the second call. The first call comes from
+// servePrimary.
+func (te *gateTxEngine) TerminateActiveCommits() {
+	if te.terminateCalls.Add(1) == 2 {
+		close(te.terminated)
+	}
+}
+
+// TestServeNonPrimaryGatesCommitsAndWaitsForSweep verifies that
+// serveNonPrimary rejects new commits after the sweep and does not return
+// before the sweep finishes.
+func TestServeNonPrimaryGatesCommitsAndWaitsForSweep(t *testing.T) {
+	sm := newTestStateManager()
+	te := &gateTxEngine{
+		ql:              NewQueryList("active-commits", sqlparser.NewTestParser()),
+		terminated:      make(chan struct{}),
+		releaseRollback: make(chan struct{}),
+	}
+	sm.te = te
+	t.Cleanup(sm.StopService)
+
+	var releaseOnce sync.Once
+	release := func() { releaseOnce.Do(func() { close(te.releaseRollback) }) }
+	t.Cleanup(release)
+
+	require.NoError(t, sm.SetServingType(topodatapb.TabletType_PRIMARY, testNow, StateServing, ""))
+	sm.shutdownGracePeriod = 10 * time.Millisecond
+
+	done := make(chan error, 1)
+	go func() {
+		done <- sm.SetServingType(topodatapb.TabletType_REPLICA, testNow, StateServing, "")
+	}()
+
+	select {
+	case <-te.terminated:
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "grace-period sweep did not terminate active commits")
+	}
+
+	// Check the transition is still waiting on the sweep. RollbackPrepared is blocked.
+	assert.Never(t, func() bool { return len(done) > 0 }, 200*time.Millisecond, 10*time.Millisecond)
+
+	release()
+
+	select {
+	case err := <-done:
+		require.NoError(t, err)
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "transition did not finish")
+	}
+
+	require.ErrorContains(t, te.addErr, vterrors.ShuttingDown)
+	require.NoError(t, te.ql.Add(NewQueryDetail(nil, &killableConn{id: 100})))
 }
