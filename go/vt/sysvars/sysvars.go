@@ -57,8 +57,9 @@ var (
 	off     = "0"
 	utf8mb4 = "'utf8mb4'"
 
-	ForeignKeyChecks = "foreign_key_checks"
-	UniqueChecks     = "unique_checks"
+	ForeignKeyChecks     = "foreign_key_checks"
+	UniqueChecks         = "unique_checks"
+	CTEMaxRecursionDepth = "cte_max_recursion_depth"
 
 	Autocommit                  = SystemVariable{Name: "autocommit", IsBoolean: true, Default: on}
 	SQLMode                     = SystemVariable{Name: "sql_mode", SupportSetVar: true}
@@ -191,6 +192,7 @@ var (
 		{Name: "transaction_write_set_extraction"},
 	}
 	UseReservedConn = []SystemVariable{
+		{Name: CTEMaxRecursionDepth, SupportSetVar: true},
 		{Name: "default_week_format"},
 		{Name: "end_markers_in_json", IsBoolean: true, SupportSetVar: true},
 		{Name: "eq_range_index_dive_limit", SupportSetVar: true},
