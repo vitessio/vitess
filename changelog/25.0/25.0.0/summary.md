@@ -60,6 +60,7 @@
         - [ApplySchema session variables](#vttablet-applyschema-session-variables)
         - [Table ACL: statements whose tables cannot be determined are denied under strict table ACL](#vttablet-table-acl-undetermined-table-set)
         - [Table ACL: reads embedded in non-SELECT statements are now checked](#vttablet-table-acl-embedded-reads)
+        - [Online DDL escapes table names in the statements it runs](#onlineddl-escape-table-identifiers)
     - **[VTCtld](#minor-changes-vtctld)**
         - [MySQL version-aware reparent candidate election](#vtctld-version-aware-reparent)
     - **[Backup/Restore](#minor-changes-backup)**
@@ -685,6 +686,14 @@ Connection settings — the SET statements vtgate attaches to a session's querie
 **Compatibility note:** a v24 vtgate still stores a targeted session's `SET` expression as written. Against a vttablet with this change running strict table ACL without dry run, a v24 vtgate session that runs `SET @@var = (<subquery>)` while targeted has that setting rejected on every later query until the client reconnects. Upgrade vtgate before vttablet, or avoid subqueries in targeted `SET` statements during the upgrade. Without strict table ACL nothing changes for such a session.
 
 See [#21139](https://github.com/vitessio/vitess/pull/21139) for details.
+
+#### <a id="onlineddl-escape-table-identifiers"/>Online DDL escapes table names in the statements it runs</a>
+
+Online DDL builds statements such as `DROP TABLE`, `RENAME TABLE`, `LOCK TABLES`, `SHOW CREATE TABLE` and `SHOW TABLES LIKE` from templates. Each template supplied its own quotes around the migration's table name, but the name itself was not escaped. A table name containing a back quote or single quote could close that quoting and append SQL. Several of these statements run on the tablet's DBA connection, which accepts multiple statements. Any user allowed to submit an Online DDL migration could therefore run arbitrary SQL as the DBA user. That SQL bypassed vtgate routing and table ACLs and could reach every schema on that `mysqld`. See [GHSA-8w3p-4xg5-rm9w](https://github.com/vitessio/vitess/security/advisories/GHSA-8w3p-4xg5-rm9w).
+
+vttablet now escapes table names as identifiers and encodes string arguments as literals before writing them into these statements. The table lifecycle (table GC) statements that rename, purge and drop tables escape their table names the same way.
+
+See [#21381](https://github.com/vitessio/vitess/pull/21381) for details.
 
 
 ### <a id="minor-changes-vtctld"/>VTCtld</a>
