@@ -177,7 +177,10 @@ func TestUpdateGroupReplicationVotersRechecksBeforeWrite(t *testing.T) {
 							statuses = tt.selected
 							if tt.seenAfterSelection && tablet.Alias.Uid == 301 {
 								// VTOrc's discovery reaches zone3-300 while the recovery runs.
-								assert.NoError(t, inst.WriteInstance(&inst.Instance{InstanceAlias: voter3.Alias, Hostname: voter3.MysqlHostname, Port: int(voter3.MysqlPort)}, true, nil))
+								// The mock may run outside the test's goroutine: report the failure, don't stop the test here.
+								if err := inst.WriteInstance(&inst.Instance{InstanceAlias: voter3.Alias, Hostname: voter3.MysqlHostname, Port: int(voter3.MysqlPort)}, true, nil); !assert.NoError(t, err) {
+									return nil, err
+								}
 							}
 						} else if tt.instancesUnreadable && tablet.Alias.Uid == 301 {
 							_, err := db.ExecVTOrc("DROP TABLE database_instance")
