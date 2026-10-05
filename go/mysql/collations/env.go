@@ -262,6 +262,8 @@ func (env *Environment) DefaultConnectionCharset() ID {
 // handshake.
 // - empty, in which case the default connection charset for this MySQL version
 // is returned.
+//
+// Only the character sets in connectionCharsets are accepted.
 func (env *Environment) ParseConnectionCharset(csname string) (ID, error) {
 	if csname == "" {
 		return env.DefaultConnectionCharset(), nil
@@ -277,7 +279,55 @@ func (env *Environment) ParseConnectionCharset(csname string) (ID, error) {
 	if collid == 0 || collid > 255 {
 		return 0, fmt.Errorf("unsupported connection charset: %q", csname)
 	}
+	if !connectionCharsets[env.byCharsetName[collid]] {
+		return 0, fmt.Errorf("unsupported connection charset: %q: its multibyte characters can contain ASCII bytes such as a quote or backslash, which Vitess cannot parse or escape safely; use utf8mb4 instead", csname)
+	}
 	return collid, nil
+}
+
+// connectionCharsets are the character sets that can be used for a connection.
+//
+// Vitess parses and escapes SQL text byte by byte, so a byte below 0x80 must
+// always be the ASCII character it encodes. That holds for single-byte character
+// sets and for multibyte ones whose multibyte characters only use bytes from
+// 0x80 up. It does not hold for sjis, cp932, gbk, big5 and gb18030, where the
+// second byte of a character can be a quote, a backslash or a back quote, nor for
+// ucs2, utf16, utf16le and utf32, which MySQL does not accept as a client
+// character set anyway.
+var connectionCharsets = map[string]bool{
+	"utf8mb4": true,
+	"utf8mb3": true,
+	"utf8":    true,
+	"ujis":    true,
+	"eucjpms": true,
+	"euckr":   true,
+	"gb2312":  true,
+
+	"armscii8": true,
+	"ascii":    true,
+	"binary":   true,
+	"cp1250":   true,
+	"cp1251":   true,
+	"cp1256":   true,
+	"cp1257":   true,
+	"cp850":    true,
+	"cp852":    true,
+	"cp866":    true,
+	"dec8":     true,
+	"geostd8":  true,
+	"greek":    true,
+	"hebrew":   true,
+	"hp8":      true,
+	"keybcs2":  true,
+	"koi8r":    true,
+	"koi8u":    true,
+	"latin1":   true,
+	"latin2":   true,
+	"latin5":   true,
+	"latin7":   true,
+	"macce":    true,
+	"macroman": true,
+	"swe7":     true,
 }
 
 func (env *Environment) AllCollationIDs() []ID {
