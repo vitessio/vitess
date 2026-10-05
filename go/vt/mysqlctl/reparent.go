@@ -22,14 +22,19 @@ This file contains the reparenting methods for mysqlctl.
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"vitess.io/vitess/go/constants/sidecar"
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/replication"
-	"vitess.io/vitess/go/vt/sqlparser"
-
+	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
+
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // GenerateInitialBinlogEntry is used to create a binlog entry when
@@ -91,12 +96,52 @@ func (mysqld *Mysqld) WaitForReparentJournal(ctx context.Context, timeCreatedNS 
 }
 
 // Promote will promote this server to be the new primary.
+// applyReceivedTransactions stops the receiver of a replica and waits until its applier executed
+// every transaction it received, so that the RESET REPLICA ALL of a promotion discards none of
+// them. A semi-sync replica ACKs a transaction once it is in its relay log; a transaction that
+// arrived after ERS waited for the relay log to apply (a receiver ERS did not stop, or that a
+// concurrent repoint restarted) may be acknowledged to its client, and would be lost. It fails if
+// such transactions exist and the applier is stopped. It only checks GTID-based replication.
+func (mysqld *Mysqld) applyReceivedTransactions(ctx context.Context, conn *dbconnpool.PooledDBConnection) error {
+	status, err := conn.Conn.ShowReplicationStatus()
+	if errors.Is(err, mysql.ErrNotReplica) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if status.IOState != replication.ReplicationStateStopped {
+		if err := mysqld.executeSuperQueryListConn(ctx, conn, []string{conn.Conn.StopIOThreadCommand()}); err != nil {
+			return err
+		}
+		if status, err = conn.Conn.ShowReplicationStatus(); err != nil {
+			return err
+		}
+	}
+	if !status.RelayLogPosition.MatchesFlavor(replication.Mysql56FlavorID) || status.Position.AtLeast(status.RelayLogPosition) {
+		return nil
+	}
+	if !status.SQLHealthy() {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+			"cannot promote: the replica received transactions that it has not applied (executed %v, received %v) and its applier is not running",
+			status.Position, status.RelayLogPosition)
+	}
+	if err := conn.Conn.WaitUntilPosition(ctx, status.RelayLogPosition); err != nil {
+		return vterrors.Wrapf(err, "cannot promote: waiting for the applier to execute the received transactions %v", status.RelayLogPosition)
+	}
+	return nil
+}
+
 func (mysqld *Mysqld) Promote(ctx context.Context, hookExtraEnv map[string]string) (replication.Position, error) {
 	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
 	if err != nil {
 		return replication.Position{}, err
 	}
 	defer conn.Recycle()
+
+	if err := mysqld.applyReceivedTransactions(ctx, conn); err != nil {
+		return replication.Position{}, err
+	}
 
 	// Since we handle replication, just stop it.
 	cmds := []string{

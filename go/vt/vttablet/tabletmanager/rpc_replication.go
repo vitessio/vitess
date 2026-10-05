@@ -605,6 +605,11 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 		return nil, err
 	}
 	defer tm.unlock()
+	return tm.demotePrimaryLocked(ctx, revertPartialFailure, force)
+}
+
+// demotePrimaryLocked implements demotePrimary. The caller must hold the action lock.
+func (tm *TabletManager) demotePrimaryLocked(ctx context.Context, revertPartialFailure bool, force bool) (primaryStatus *replicationdatapb.PrimaryStatus, finalErr error) {
 	defer tm.QueryServiceControl.SetDemotePrimaryStalled(false)
 
 	finishCtx, cancel := context.WithCancel(context.Background())
@@ -933,8 +938,19 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 	// steps fail below.
 	// Note it is important to check for PRIMARY here so that we don't
 	// unintentionally change the type of RDONLY tablets
+	//
+	// A PRIMARY tablet may still serve writes that wait for a semi-sync ACK: an ERS that could
+	// not demote it (it was unreachable, or the demotion was cancelled) repoints it once it is
+	// reachable again. Demote it the way DemotePrimary(force) does before anything changes
+	// semi-sync: stop serving, which kills the sessions that still wait after the shutdown grace
+	// period, then disable source-side semi-sync and set super_read_only. Disabling semi-sync
+	// first would complete those commits and acknowledge them to their clients although no
+	// replica has them, and the new primary never will.
 	tablet := tm.Tablet()
 	if tablet.Type == topodatapb.TabletType_PRIMARY {
+		if _, err := tm.demotePrimaryLocked(ctx, false /* revertPartialFailure */, true /* force */); err != nil {
+			return vterrors.Wrap(err, "failed to demote the primary before repointing it")
+		}
 		if err := tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_REPLICA, DBActionNone); err != nil {
 			return err
 		}

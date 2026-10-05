@@ -126,6 +126,13 @@ func (tm *TabletManager) ChangeType(ctx context.Context, tabletType topodatapb.T
 	}
 	defer tm.unlock()
 
+	// No durability policy lets a DRAINED tablet ACK: ERS neither waits for it nor promotes it,
+	// so a write that only it ACKed would be lost. VTOrc versions before v25 ask a tablet drained
+	// for errant GTIDs to keep ACKing.
+	if tabletType == topodatapb.TabletType_DRAINED {
+		semiSync = false
+	}
+
 	semiSyncAction, err := tm.convertBoolToSemiSyncAction(ctx, semiSync)
 	if err != nil {
 		return err
