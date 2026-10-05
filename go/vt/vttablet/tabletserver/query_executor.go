@@ -1518,42 +1518,11 @@ func (qre *QueryExecutor) execRollbackToSavepoint(conn *StatefulConnection, sql 
 
 // escapeAnnotationPrincipal returns the caller principal in a form that can be
 // embedded in the annotation comment that prefixes queries sent to MySQL. The
-// principal can be chosen by the client, so every byte outside a small
-// identifier-safe set is percent-encoded. In particular, '*' is always encoded,
-// so the principal cannot close the comment and change the statement that
-// MySQL runs.
+// principal can be chosen by the client, and "*/" is the only sequence that
+// ends the comment, so it is escaped as "*\/", which MySQL reads as ordinary
+// comment text.
 func escapeAnnotationPrincipal(principal string) string {
-	isSafe := func(c byte) bool {
-		switch {
-		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9':
-			return true
-		case c == '_', c == '-', c == '.', c == '@', c == ':', c == '/':
-			return true
-		}
-		return false
-	}
-	i := 0
-	for i < len(principal) && isSafe(principal[i]) {
-		i++
-	}
-	if i == len(principal) {
-		return principal
-	}
-	const hexDigits = "0123456789ABCDEF"
-	var buf strings.Builder
-	buf.Grow(len(principal) + 2*(len(principal)-i))
-	buf.WriteString(principal[:i])
-	for ; i < len(principal); i++ {
-		c := principal[i]
-		if isSafe(c) {
-			buf.WriteByte(c)
-			continue
-		}
-		buf.WriteByte('%')
-		buf.WriteByte(hexDigits[c>>4])
-		buf.WriteByte(hexDigits[c&0x0F])
-	}
-	return buf.String()
+	return strings.ReplaceAll(principal, "*/", `*\/`)
 }
 
 func (qre *QueryExecutor) generateFinalSQL(parsedQuery *sqlparser.ParsedQuery, bindVars map[string]*querypb.BindVariable) (string, string, error) {

@@ -465,18 +465,18 @@ func TestQueryExecutorQueryAnnotation(t *testing.T) {
 		principal:  "app-user_1@example.com",
 	}, {
 		// A principal that closes the comment must not replace the query: its
-		// unsafe bytes are percent-encoded.
+		// "*/" is escaped.
 		input: "select * from t",
 		dbResponses: []dbResponse{{
 			query:  "select * from t limit 10001",
 			result: selectResult,
 		}, {
-			query:  "/* %2A/%20select%20%2A%20from%20secret%20--%20@PRIMARY */ select * from t limit 10001",
+			query:  "/* *\\/ select * from secret -- @PRIMARY */ select * from t limit 10001",
 			result: selectResult,
 		}},
 		resultWant: selectResult,
 		planWant:   "Select",
-		logWant:    "/* %2A/%20select%20%2A%20from%20secret%20--%20@PRIMARY */ select * from t limit 10001",
+		logWant:    "/* *\\/ select * from secret -- @PRIMARY */ select * from t limit 10001",
 		principal:  "*/ select * from secret -- ",
 	}}
 	for _, tcase := range testcases {
