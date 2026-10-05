@@ -32,3 +32,5 @@ There are two kinds of draft:
 | T22 | P2 | [Confirm the profile's assumptions](T22-confirm-profile-assumptions.md) | follow-up | open |
 | T23 | P2 | [Fix the remaining harness artifacts](T23-harness-artifacts.md) | follow-up | open |
 | T24 | P2 | [Extend the TLA+ model](T24-extend-tla-model.md) | follow-up | open |
+| T25 | P1 | [PlannedReparentShard outlives its shard lock](T25-prs-outlives-shard-lock.md) | vitessio/vitess | open |
+| T26 | P2 | [PlannedReparentShard leaves the primary demoted when DemotePrimary errors](T26-prs-demote-error-leaves-primary-demoted.md) | vitessio/vitess | open |

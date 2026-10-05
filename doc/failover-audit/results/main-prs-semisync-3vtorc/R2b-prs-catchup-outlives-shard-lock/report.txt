@@ -1,0 +1,24 @@
+==== SCENARIO R2b-prs-catchup-outlives-shard-lock ====
+-- OUTCOME (5)
+   PRS returned after 36.4s, error: {"time":"2026-10-05T08:15:44.349234712Z","level":"ERROR","source":{"function":"main.main","file":"/home/user/vitess-main/go/cmd/vtctldclient/main.go","line":63},"msg":"rpc error: code = Unknown desc = lost topology lock, aborting: node doesn't exist: lease"}
+   writes: total=6164 acked=6164 failed/unknown=0
+   vtgate primary reads after fault: 565, failed 0, answered by old primary: 565, after another member was elected: 0, after the topo primary changed: 0
+   old primary zone2-0000000200 -> new primary zone2-0000000200
+   durability: all 6164 acked writes present on primary zone2-0000000200
+-- TIMINGS (7)
+   longest write gap: 0.09s (from +25.34s to +25.42s relative to fault)
+   unavailable (no acked write for >= 1s): 0.00s in total, 0 outages []; writers stopped at +56.56s
+   topo shard primary never changed from zone2-0000000200
+   old primary zone2-0000000200 vttablet reported PRIMARY for the whole scenario
+   old primary zone2-0000000200 mysqld super_read_only never ON after the fault
+   vtgate primary reads answered by the old primary until +56.49s after the fault
+   converged 0.0s after heal/stop-writes; primary=zone2-0000000200
+-- VIOLATIONS (0)
+-- NOTES (7)
+   after PRS zone1-0000000100: tablet record REPLICA, super_read_only=ON
+   after PRS zone2-0000000200: tablet record PRIMARY, super_read_only=OFF
+   after PRS zone3-0000000300: tablet record REPLICA, super_read_only=ON
+   rows on primary by committing server: map[zone2-0000000200:6164]
+   vtorc-zone1: 1 successful action VTOrc Recovery for ClusterHasNoPrimary on zone1-0000000100
+   vtorc-zone2: 1 successful action VTOrc Recovery for ClusterHasNoPrimary on zone1-0000000100
+   vtorc-zone3: 1 successful action VTOrc Recovery for ClusterHasNoPrimary on zone1-0000000100

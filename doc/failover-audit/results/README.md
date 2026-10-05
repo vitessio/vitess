@@ -11,6 +11,10 @@ One `report.txt` per scenario and run, as `go/test/endtoend/vtorc/chaos` writes 
 | `main-probe-semisync-1vtorc-{1,2}` | `probe` | `semisync-1vtorc`, primary in `zone1` | `main` |
 | `fixed-semisync-3vtorc-{1,2}` | `fixed` | `semisync-3vtorc` | this branch |
 | `fixed-semisync-1vtorc-{1,2}` | `fixed` | `semisync-1vtorc`, primary in `zone1` | this branch |
+| `main-prs-semisync-3vtorc` | `prs main` | `semisync-3vtorc` | `main` |
+| `main-prs-semisync-1vtorc` | `prs main` | `semisync-1vtorc`, primary in `zone1` | `main` |
+| `fixed-prs-semisync-3vtorc` | `prs fixed` | `semisync-3vtorc` | this branch |
+| `fixed-prs-semisync-1vtorc` | `prs fixed` | `semisync-1vtorc`, primary in `zone1` | this branch |
 
 Paths in the reports (`/home/ubuntu/...`, `/home/user/...`) are those of the test host.
 

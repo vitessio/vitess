@@ -1,0 +1,32 @@
+==== SCENARIO R2-prs-outlives-shard-lock ====
+-- OUTCOME (8)
+   held transaction id 824000501 commit during the demotion: err=<nil>
+   PRS returned after 36.5s, error: {"time":"2026-10-05T08:27:45.539576675Z","level":"ERROR","source":{"function":"main.main","file":"/home/user/vitess/go/cmd/vtctldclient/main.go","line":63},"msg":"rpc error: code = Unknown desc = lost topology lock, aborting: node doesn't exist: lease"}
+   VTOrc fixPrimary (UndoDemotePrimary) ran: 2026-10-05 08:27:40.079 UTC INF logic/topology_recovery.go:1453 Recovery for PrimaryIsReadOnly on ks/0: Analysis: PrimaryIsReadOnly, will fix primary to read-write cell:"zone3" uid:300
+   held transaction id 824000501 on the final primary zone3-0000000300: true (err=<nil>)
+   writes: total=6162 acked=3078 failed/unknown=3084
+   vtgate primary reads after fault: 566, failed 308, answered by old primary: 258, after another member was elected: 0, after the topo primary changed: 0
+   old primary zone3-0000000300 -> new primary zone3-0000000300
+   durability: all 3078 acked writes present on primary zone3-0000000300
+-- TIMINGS (10)
+   writes started failing after 0.4s (seen=true)
+   longest write gap: 30.88s (from +0.28s to +31.16s relative to fault)
+   unavailable (no acked write for >= 1s): 30.88s in total, 1 outages [30.9s at +0.3s]; writers stopped at +56.66s
+   topo shard primary never changed from zone3-0000000300
+   old primary zone3-0000000300 vttablet reported PRIMARY for the whole scenario
+   old primary zone3-0000000300 mysqld stopped being writable (read_only or down) at +1.50s
+   old primary zone3-0000000300 mysqld super_read_only ON at +1.50s
+   vtgate primary reads answered by the old primary until +56.59s after the fault
+   first failed write started at +0.31s
+   converged 0.0s after heal/stop-writes; primary=zone3-0000000300
+-- VIOLATIONS (0)
+-- NOTES (9)
+   after PRS zone1-0000000100: tablet record REPLICA, super_read_only=ON
+   after PRS zone2-0000000200: tablet record REPLICA, super_read_only=ON
+   after PRS zone3-0000000300: tablet record PRIMARY, super_read_only=OFF
+   rows on primary by committing server: map[zone3-0000000300:3079]
+   vtorc-zone1: 1 successful action VTOrc Recovery for ClusterHasNoPrimary on zone1-0000000100
+   vtorc-zone2: 1 successful action VTOrc Recovery for PrimaryIsReadOnly on zone3-0000000300
+   vtorc-zone2: 1 successful action VTOrc Recovery for ClusterHasNoPrimary on zone1-0000000100
+   vtorc-zone3: 1 successful action VTOrc Recovery for PrimaryIsReadOnly on zone3-0000000300
+   vtorc-zone3: 1 successful action VTOrc Recovery for ClusterHasNoPrimary on zone1-0000000100

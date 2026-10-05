@@ -1,0 +1,32 @@
+==== SCENARIO R1-prs-under-load ====
+-- OUTCOME (6)
+   PRS returned after 1.7s, error: none
+   writes: total=1652 acked=1536 failed/unknown=116
+   vtgate primary reads after fault: 118, failed 12, answered by old primary: 2, after another member was elected: 0, after the topo primary changed: 0
+   old primary zone2-0000000200 -> new primary zone1-0000000100
+   durability: all 1567 acked writes present on primary zone1-0000000100
+   no write issued after the topo primary change was committed by the deposed primary
+-- TIMINGS (12)
+   longest write gap: 1.45s (from +0.17s to +1.62s relative to fault)
+   unavailable (no acked write for >= 1s): 1.45s in total, 1 outages [1.4s at +0.2s]; writers stopped at +11.74s
+   topo shard primary changed to zone1-0000000100 at +1.50s
+   old primary zone2-0000000200 vttablet stopped reporting PRIMARY at +1.21s (vttablet=REPLICA read_only=true super_read_only=true)
+   old primary zone2-0000000200 mysqld stopped being writable (read_only or down) at +1.17s
+   old primary zone2-0000000200 mysqld super_read_only ON at +1.17s
+   another tablet's vttablet reported PRIMARY at +1.41s
+   write probe: 24 transactions after the fault, 3 routed to the old primary (3 inferred from reads), last one started at +1.00s: acked 1, failed 2 [errno 1105 x2]
+   write probe: failed transactions routed to the old primary waited min 0.00s, median 0.01s, max 0.01s (max 0.01s for those started in the first second); the last returned at +1.00s
+   vtgate primary reads answered by the old primary until +0.10s after the fault
+   first failed write started at +0.20s
+   converged 0.0s after heal/stop-writes; primary=zone1-0000000100
+-- VIOLATIONS (0)
+-- NOTES (9)
+   after PRS zone1-0000000100: tablet record PRIMARY, super_read_only=OFF
+   after PRS zone2-0000000200: tablet record REPLICA, super_read_only=ON
+   after PRS zone3-0000000300: tablet record REPLICA, super_read_only=ON
+   rows on primary by committing server: map[zone1-0000000100:1041 zone2-0000000200:526]
+   vtorc-zone1: 1 successful action VTOrc Recovery for PrimaryTabletDeleted on zone1-0000000100
+   vtorc-zone1: 1 successful action VTOrc Recovery for ClusterHasNoPrimary on zone1-0000000100
+   vtorc-zone2: 1 successful action VTOrc Recovery for PrimaryTabletDeleted on zone1-0000000100
+   vtorc-zone2: 1 successful action VTOrc Recovery for ClusterHasNoPrimary on zone1-0000000100
+   vtorc-zone3: 1 successful action VTOrc Recovery for PrimaryTabletDeleted on zone1-0000000100

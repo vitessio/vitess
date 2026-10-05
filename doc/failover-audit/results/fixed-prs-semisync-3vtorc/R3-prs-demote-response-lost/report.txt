@@ -1,0 +1,33 @@
+==== SCENARIO R3-prs-demote-response-lost ====
+-- OUTCOME (7)
+   held transaction rolled back during the demotion: err=<nil>
+   PRS returned after 15.2s, error: {"time":"2026-10-05T08:42:55.223145575Z","level":"ERROR","source":{"function":"main.main","file":"/home/user/vitess/go/cmd/vtctldclient/main.go","line":63},"msg":"rpc error: code = Unknown desc = failed to DemotePrimary on current primary zone1-0000000100: Code: DEADLINE_EXCEEDED\nrpc error: code = DeadlineExceeded desc = context deadline exceeded\n: rpc error: code = DeadlineExceeded desc = context deadline exceeded"}
+   VTOrc fixPrimary (UndoDemotePrimary) ran: 2026-10-05 08:42:55.349 UTC INF logic/topology_recovery.go:1453 Recovery for PrimaryIsReadOnly on ks/0: Analysis: PrimaryIsReadOnly, will fix primary to read-write cell:"zone1" uid:100
+   writes: total=5528 acked=4012 failed/unknown=1516
+   vtgate primary reads after fault: 498, failed 150, answered by old primary: 348, after another member was elected: 0, after the topo primary changed: 0
+   old primary zone1-0000000100 -> new primary zone1-0000000100
+   durability: all 4092 acked writes present on primary zone1-0000000100
+-- TIMINGS (12)
+   writes started failing after 0.4s (seen=true)
+   longest write gap: 15.20s (from +-0.16s to +15.03s relative to fault)
+   unavailable (no acked write for >= 1s): 15.20s in total, 1 outages [15.2s at +-0.2s]; writers stopped at +49.87s
+   topo shard primary never changed from zone1-0000000100
+   old primary zone1-0000000100 vttablet reported PRIMARY for the whole scenario
+   old primary zone1-0000000100 mysqld stopped being writable (read_only or down) at +0.84s
+   old primary zone1-0000000100 mysqld super_read_only ON at +0.84s
+   write probe: 100 transactions after the fault, 100 routed to the old primary (58 inferred from reads), last one started at +49.59s: acked 70, failed 30 [errno 1105 x30]
+   write probe: failed transactions routed to the old primary waited min 0.00s, median 0.00s, max 0.01s (max 0.00s for those started in the first second); the last returned at +49.60s
+   vtgate primary reads answered by the old primary until +49.79s after the fault
+   first failed write started at +0.02s
+   converged 0.0s after heal/stop-writes; primary=zone1-0000000100
+-- VIOLATIONS (0)
+-- NOTES (9)
+   after PRS zone1-0000000100: tablet record PRIMARY, super_read_only=ON
+   after PRS zone2-0000000200: tablet record REPLICA, super_read_only=ON
+   after PRS zone3-0000000300: tablet record REPLICA, super_read_only=ON
+   rows on primary by committing server: map[zone1-0000000100:4092]
+   vtorc-zone1: 1 successful action VTOrc Recovery for PrimaryIsReadOnly on zone1-0000000100
+   vtorc-zone1: 1 successful action VTOrc Recovery for ClusterHasNoPrimary on zone1-0000000100
+   vtorc-zone2: 1 successful action VTOrc Recovery for ClusterHasNoPrimary on zone1-0000000100
+   vtorc-zone3: 1 successful action VTOrc Recovery for PrimaryIsReadOnly on zone1-0000000100
+   vtorc-zone3: 1 successful action VTOrc Recovery for ClusterHasNoPrimary on zone1-0000000100

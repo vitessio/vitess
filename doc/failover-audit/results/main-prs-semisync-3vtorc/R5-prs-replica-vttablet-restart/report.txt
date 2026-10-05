@@ -1,0 +1,29 @@
+==== SCENARIO R5-prs-replica-vttablet-restart ====
+-- OUTCOME (6)
+   PRS returned after 2.3s, error: none
+   writes: total=2720 acked=2600 failed/unknown=120
+   vtgate primary reads after fault: 212, failed 2, answered by old primary: 0, after another member was elected: 0, after the topo primary changed: 0
+   old primary zone1-0000000100 -> new primary zone2-0000000200
+   durability: all 2600 acked writes present on primary zone2-0000000200
+   no write issued after the topo primary change was committed by the deposed primary
+-- TIMINGS (10)
+   longest write gap: 1.43s (from +-1.00s to +0.43s relative to fault)
+   unavailable (no acked write for >= 1s): 1.43s in total, 1 outages [1.4s at +-1.0s]; writers stopped at +21.20s
+   topo shard primary changed to zone2-0000000200 at +0.34s
+   old primary zone1-0000000100 vttablet stopped reporting PRIMARY at +0.05s (vttablet=REPLICA read_only=true super_read_only=true)
+   old primary zone1-0000000100 mysqld stopped being writable (read_only or down) at +0.00s
+   old primary zone1-0000000100 mysqld super_read_only ON at +0.00s
+   another tablet's vttablet reported PRIMARY at +0.24s
+   vtgate primary reads: none answered by the old primary after the fault
+   first failed write started at +0.03s
+   converged 0.0s after heal/stop-writes; primary=zone2-0000000200
+-- VIOLATIONS (0)
+-- NOTES (8)
+   after PRS zone1-0000000100: tablet record REPLICA, super_read_only=ON
+   after PRS zone2-0000000200: tablet record PRIMARY, super_read_only=OFF
+   after PRS zone3-0000000300: tablet record REPLICA, super_read_only=ON
+   rows on primary by committing server: map[zone1-0000000100:516 zone2-0000000200:2084]
+   vtorc-zone1: 1 successful action VTOrc Recovery for PrimaryHasPrimary on zone1-0000000100
+   vtorc-zone1: 1 successful action VTOrc Recovery for ClusterHasNoPrimary on zone1-0000000100
+   vtorc-zone3: 1 successful action VTOrc Recovery for PrimaryHasPrimary on zone1-0000000100
+   vtorc-zone3: 1 successful action VTOrc Recovery for ClusterHasNoPrimary on zone1-0000000100
