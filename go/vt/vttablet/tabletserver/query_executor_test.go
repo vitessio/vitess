@@ -1125,7 +1125,10 @@ func TestQueryExecutorTableAclNoPermission(t *testing.T) {
 // them under strict table ACL, bypassing the table ACL entirely
 // (GHSA-w6mx-2f8x-pqf4). Under strict ACL these must now be denied for a
 // non-exempt caller; an exempt caller, a dry run, and strict ACL off must
-// still run them.
+// still run them. The one non-exempt caller that may run them is one holding
+// every role in a table group covering every table ("%"), and then only DO and
+// a partially parsed CREATE TABLE among those here: CALL and LOAD DATA can act
+// beyond any table, so they stay denied for it.
 func TestQueryExecutorTableAclPassthroughDenied(t *testing.T) {
 	aclName := fmt.Sprintf("simpleacl-test-%d", rand.Int64())
 	tableacl.Register(aclName, &simpleacl.Factory{})
