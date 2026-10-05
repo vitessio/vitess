@@ -2,8 +2,9 @@
 (***************************************************************************)
 (* Safety model of unplanned failover with MySQL semi-sync replication in  *)
 (* Vitess: one shard of three tablets (mysqld + vttablet), the shard       *)
-(* record and its lock, clients through vtgate, and one or two VTOrcs that *)
-(* run EmergencyReparentShard (ERS) and the single-tablet recoveries.      *)
+(* record and its lock, clients through vtgate, one or two VTOrcs that run *)
+(* EmergencyReparentShard (ERS) and the single-tablet recoveries, and an   *)
+(* operator's PlannedReparentShard (PRS).                                  *)
 (*                                                                         *)
 (* It follows the code on main (see README.md next to this file for the Go *)
 (* code each action models, the abstractions, and what is left out).       *)
@@ -24,6 +25,7 @@ CONSTANTS
     MaxExpire,      \* bound: shard lock leases that expire under a live holder
     MaxTabletRestart, \* bound: vttablet restarts of a replica (initializeReplication)
     MaxERS,         \* bound: ERS attempts (all VTOrcs together)
+    MaxPRS,         \* bound: PRS attempts by the operator
     \* --- the code on main (TRUE) or a fix (FALSE) ---
     RELAY_LOG_RECOVERY, \* relay_log_recovery=1: a mysqld restart drops the unapplied relay log
     REPOINT_DISCARDS,   \* STOP REPLICA + CHANGE REPLICATION SOURCE drops the unapplied relay log
@@ -86,18 +88,27 @@ VARIABLES
     cand,       \* per VTOrc: the tablet ERS promotes
     repointed,  \* per VTOrc: tablets that acknowledged the ERS's SetReplicationSource
     pending,    \* outstanding SetReplicationSource RPCs (they outlive the ERS)
+    \* --- the operator's PRS ---
+    prs,        \* PRS phase
+    prsOld,     \* the primary PRS demotes
+    prsCand,    \* the primary-elect
+    prsPos,     \* the position the primary-elect must reach (snapshot, then demotion)
+    prsPend,    \* tablets whose SetReplicationSource to the primary-elect has not returned
     \* --- bounds ---
-    nTx, nCrash, nCut, nExpire, nRestart, nERS
+    nTx, nCrash, nCut, nExpire, nRestart, nERS, nPRS
 
 vars == <<up, binlog, relay, src, io, ssSrc, ssRep, ro, wait, origin, live, acked, unbacked,
           ttype, serving, tterm, shardPrimary, term, lock, cut,
           phase, ersOld, ersId, reached, pos, cand, repointed, pending,
-          nTx, nCrash, nCut, nExpire, nRestart, nERS>>
+          prs, prsOld, prsCand, prsPos, prsPend,
+          nTx, nCrash, nCut, nExpire, nRestart, nERS, nPRS>>
 mysqlVars == <<up, binlog, relay, src, io, ssSrc, ssRep, ro, wait>>
 clientVars == <<origin, live, acked, unbacked>>
 tabletVars == <<ttype, serving, tterm>>
 orcVars == <<phase, ersOld, ersId, reached, pos, cand, repointed, pending>>
 boundVars == <<nTx, nCrash, nCut, nExpire, nRestart, nERS>>
+\* Every action outside the PRS section leaves these unchanged (see Next).
+prsVars == <<prs, prsOld, prsCand, prsPos, prsPend, nPRS>>
 
 -----------------------------------------------------------------------------
 (* Helpers *)
@@ -156,7 +167,8 @@ Init ==
     /\ cand = [o \in Orcs |-> None]
     /\ repointed = [o \in Orcs |-> {}]
     /\ pending = {}
-    /\ nTx = 0 /\ nCrash = 0 /\ nCut = 0 /\ nExpire = 0 /\ nRestart = 0 /\ nERS = 0
+    /\ prs = "idle" /\ prsOld = None /\ prsCand = None /\ prsPos = {} /\ prsPend = {}
+    /\ nTx = 0 /\ nCrash = 0 /\ nCut = 0 /\ nExpire = 0 /\ nRestart = 0 /\ nERS = 0 /\ nPRS = 0
 
 -----------------------------------------------------------------------------
 (* Clients and MySQL replication *)
@@ -514,9 +526,18 @@ ERSUnlock(o) ==
     /\ UNCHANGED <<mysqlVars, clientVars, tabletVars, shardPrimary, term, cut,
                    ersOld, ersId, reached, pos, cand, repointed, boundVars>>
 
-\* The lease of the shard lock expires under a holder that keeps going.
+\* The lease of the shard lock expires under a holder that keeps going. Nothing renews the lease
+\* (topo.Lock cancels the KeepAlive's context when it returns) except CheckShardLocked
+\* (KeepAliveOnce). PRS checks the lock right before each of its quick steps, so its lease can only
+\* run out while it waits: for the snapshot, for the primary-elect after the demotion, or for the
+\* journal's ACK after the promotion.
+PRSWaiting ==
+    \/ prs \in {"snapshot", "wait"}
+    \/ prs = "reparent" /\ ttype[prsCand] = "PRIMARY"
+
 Expire ==
     /\ nExpire < MaxExpire /\ lock # None
+    /\ lock = "op" => PRSWaiting
     /\ nExpire' = nExpire + 1
     /\ lock' = None
     /\ UNCHANGED <<mysqlVars, clientVars, tabletVars, shardPrimary, term, cut, orcVars,
@@ -592,7 +613,159 @@ DrainErrant(o, t) ==
                    shardPrimary, term, cut>>
 
 -----------------------------------------------------------------------------
-Next ==
+(* PlannedReparentShard, run by an operator through vtctld (planned_reparenter.go, the graceful
+   promotion: the shard record's primary is healthy). vtctld reaches every tablet; network faults
+   between it and the tablets are not modeled. The shard lock is the topo lease: Expire can end
+   it under PRS like under ERS, and CheckShardLocked (KeepAliveOnce) fails once it has. *)
+
+\* What a PRS step leaves alone: the lock (except PRSStart and PRSUnlock), the shard record,
+\* the network, VTOrc and the other bounds.
+PRSKeep == UNCHANGED <<lock, shardPrimary, term, cut, orcVars, boundVars>>
+
+\* PRS takes the shard lock; every tablet must answer (verifyAllTabletsReachable). The
+\* primary-elect is any REPLICA that can make forward progress (canEstablishForTablet): another
+\* tablet can ACK for it.
+PRSStart ==
+    LET p == shardPrimary IN
+    /\ prs = "idle" /\ nPRS < MaxPRS /\ lock = None
+    /\ p # None /\ ttype[p] = "PRIMARY" /\ \A u \in Tablets : tterm[u] <= tterm[p]
+    /\ \A t \in Tablets : up[t]
+    /\ \E c \in Tablets \ {p} :
+          /\ ttype[c] = "REPLICA"
+          /\ \E a \in Tablets \ {c} : ttype[a] \in {"PRIMARY", "REPLICA"}
+          /\ prsCand' = c
+    /\ lock' = "op" /\ prs' = "catchup" /\ prsOld' = p /\ nPRS' = nPRS + 1
+    /\ UNCHANGED <<mysqlVars, clientVars, tabletVars, prsPos, prsPend,
+                   shardPrimary, term, cut, orcVars, boundVars>>
+
+\* CheckShardLocked, then SetReplicationSource(primary-elect, primary, snapshot position,
+\* forceStart): make sure it replicates from the primary; PRS then waits for the snapshot.
+PRSCatchup ==
+    LET c == prsCand  p == prsOld IN
+    /\ prs = "catchup" /\ lock = "op"
+    /\ up[c] /\ up[p] /\ Link(c, p)
+    /\ SRSEffects(c, p, FALSE)
+    /\ prsPos' = Committed(p)
+    /\ prs' = "snapshot"
+    /\ UNCHANGED <<up, binlog, origin, tterm, prsOld, prsCand, prsPend, nPRS>>
+    /\ PRSKeep
+
+\* The primary-elect reached the snapshot.
+PRSSnapshot ==
+    /\ prs = "snapshot" /\ prsPos \subseteq Rng(binlog[prsCand])
+    /\ prs' = "demote"
+    /\ UNCHANGED <<mysqlVars, clientVars, tabletVars, prsOld, prsCand, prsPos, prsPend, nPRS>>
+    /\ PRSKeep
+
+\* CheckShardLocked, then DemotePrimary(force=false): stop serving, wait for semi-sync to be
+\* unblocked (it does not disable it while commits wait for an ACK), super_read_only, disable
+\* source-side semi-sync; its position is the binlog.
+PRSDemote ==
+    LET p == prsOld IN
+    /\ prs = "demote" /\ lock = "op" /\ up[p] /\ wait[p] = {}
+    /\ DemoteEffects(p)
+    /\ prsPos' = Rng(binlog[p])
+    /\ prs' = "wait"
+    /\ UNCHANGED <<up, binlog, relay, src, io, ssRep, origin, acked, unbacked, ttype, tterm,
+                   prsOld, prsCand, prsPend, nPRS>>
+    /\ PRSKeep
+
+\* DemotePrimary times out while commits wait for an ACK: the sessions it killed got an error,
+\* and it reverts to serving. PRS fails.
+PRSDemoteTimeout ==
+    LET p == prsOld IN
+    /\ prs = "demote" /\ up[p] /\ wait[p] # {}
+    /\ live' = live \ wait[p]
+    /\ prs' = "unlock"
+    /\ UNCHANGED <<mysqlVars, origin, acked, unbacked, tabletVars, prsOld, prsCand, prsPos, prsPend, nPRS>>
+    /\ PRSKeep
+
+\* WaitForPosition: the primary-elect executed everything up to the demotion. Then
+\* CheckShardLocked: if the lock is gone, PRS returns an error and leaves the old primary demoted.
+PRSWaitDone ==
+    /\ prs = "wait" /\ up[prsCand] /\ prsPos \subseteq Rng(binlog[prsCand])
+    /\ IF lock = "op"
+         THEN /\ prs' = "reparent"
+              /\ prsPend' = Tablets \ {prsCand}
+         ELSE /\ prs' = "unlock"
+              /\ UNCHANGED prsPend
+    /\ UNCHANGED <<mysqlVars, clientVars, tabletVars, prsOld, prsCand, prsPos, nPRS>>
+    /\ PRSKeep
+
+\* WaitForPosition times out: UndoDemotePrimary (without checking the lock) makes the old primary
+\* serve again, with source-side semi-sync, read-write.
+PRSWaitTimeout ==
+    LET p == prsOld IN
+    /\ prs = "wait"
+    /\ IF up[p]
+         THEN /\ ssSrc' = [ssSrc EXCEPT ![p] = TRUE]
+              /\ ro' = [ro EXCEPT ![p] = FALSE]
+              /\ serving' = [serving EXCEPT ![p] = TRUE]
+         ELSE UNCHANGED <<ssSrc, ro, serving>>
+    /\ prs' = "unlock"
+    /\ UNCHANGED <<up, binlog, relay, src, io, ssRep, wait, clientVars, ttype, tterm,
+                   prsOld, prsCand, prsPos, prsPend, nPRS>>
+    /\ PRSKeep
+
+\* reparentTablets: SetReplicationSource(t, primary-elect) on every other tablet, the old primary
+\* included, concurrently with PromoteReplica on the primary-elect. No lock check.
+PRSRepoint(t) ==
+    LET c == prsCand IN
+    /\ prs = "reparent" /\ t \in prsPend
+    /\ up[t] /\ up[c] /\ Link(t, c)
+    /\ SRSEffects(t, c, FALSE)
+    /\ prsPend' = prsPend \ {t}
+    /\ UNCHANGED <<up, binlog, origin, tterm, prs, prsOld, prsCand, prsPos, nPRS>>
+    /\ PRSKeep
+
+PRSPromote ==
+    LET c == prsCand IN
+    /\ prs = "reparent" /\ ttype[c] = "REPLICA" /\ up[c]
+    /\ src' = [src EXCEPT ![c] = None]
+    /\ io' = [io EXCEPT ![c] = FALSE]
+    /\ relay' = [relay EXCEPT ![c] = <<>>]
+    /\ binlog' = [binlog EXCEPT ![c] = IF PROMOTE_DISCARDS THEN @
+                     ELSE @ \o SelectSeq(relay[c], LAMBDA x : x \notin Rng(binlog[c]))]
+    /\ ssSrc' = [ssSrc EXCEPT ![c] = TRUE]
+    /\ ro' = [ro EXCEPT ![c] = FALSE]
+    /\ ttype' = [ttype EXCEPT ![c] = "PRIMARY"]
+    /\ serving' = [serving EXCEPT ![c] = TRUE]
+    /\ tterm' = [tterm EXCEPT ![c] = Max({tterm[u] : u \in Tablets} \cup {term}) + 1]
+    /\ UNCHANGED <<up, ssRep, wait, clientVars, prs, prsOld, prsCand, prsPos, prsPend, nPRS>>
+    /\ PRSKeep
+
+\* PopulateReparentJournal on the promoted primary-elect returns once a semi-sync replica ACKed
+\* it, and every SetReplicationSource returned: PRS succeeded.
+PRSJournal ==
+    LET c == prsCand IN
+    /\ prs = "reparent" /\ prsPend = {} /\ ttype[c] = "PRIMARY" /\ up[c]
+    /\ \E a \in Ackers(c) : src[a] = c /\ ssRep[a] /\ Connected(a)
+    /\ prs' = "unlock"
+    /\ UNCHANGED <<mysqlVars, clientVars, tabletVars, prsOld, prsCand, prsPos, prsPend, nPRS>>
+    /\ PRSKeep
+
+\* Any step can fail or time out; reparentTablets cancels its outstanding RPCs.
+PRSFail ==
+    /\ prs \in {"catchup", "snapshot", "reparent"}
+    /\ prs' = "unlock"
+    /\ prsPend' = {}
+    /\ UNCHANGED <<mysqlVars, clientVars, tabletVars, prsOld, prsCand, prsPos, nPRS>>
+    /\ PRSKeep
+
+PRSUnlock ==
+    /\ prs = "unlock"
+    /\ prs' = "done"
+    /\ lock' = IF lock = "op" THEN None ELSE lock
+    /\ UNCHANGED <<mysqlVars, clientVars, tabletVars, shardPrimary, term, cut, orcVars, boundVars,
+                   prsOld, prsCand, prsPos, prsPend, nPRS>>
+
+PRSNext ==
+    \/ PRSStart \/ PRSCatchup \/ PRSSnapshot \/ PRSDemote \/ PRSDemoteTimeout
+    \/ PRSWaitDone \/ PRSWaitTimeout \/ PRSPromote \/ PRSJournal \/ PRSFail \/ PRSUnlock
+    \/ \E t \in Tablets : PRSRepoint(t)
+
+-----------------------------------------------------------------------------
+OtherNext ==
     \/ \E t \in Tablets :
           \/ Write(t) \/ Receive(t) \/ Apply(t) \/ Crash(t) \/ Restart(t)
           \/ PublishPrimary(t) \/ SelfDemote(t) \/ TabletRestart(t)
@@ -608,6 +781,11 @@ Next ==
           \/ \E t \in Tablets : FixReplica(o, t) \/ FixReplicaWritable(o, t)
                                 \/ StaleTopoPrimary(o, t) \/ DrainErrant(o, t)
 
+Next ==
+    \/ /\ UNCHANGED prsVars
+       /\ OtherNext
+    \/ PRSNext
+
 Spec == Init /\ [][Next]_vars
 
 -----------------------------------------------------------------------------
@@ -615,7 +793,7 @@ Spec == Init /\ [][Next]_vars
 
 TypeOK ==
     /\ shardPrimary \in Tablets \cup {None}
-    /\ lock \in Orcs \cup {None}
+    /\ lock \in Orcs \cup {None, "op"}
     /\ acked \subseteq Txs /\ live \subseteq Txs
 
 \* The newest primary: the tablet with the highest primary term. The shard record follows it
@@ -635,8 +813,8 @@ NoUnbackedAck == unbacked = {}
 CanAck(t) == Writable(t) /\ (~ssSrc[t] \/ \E r \in Tablets : src[r] = t /\ ssRep[r] /\ Connected(r))
 OneAckingPrimary == \A a, b \in Tablets : CanAck(a) /\ CanAck(b) => a = b
 
-\* No reparent or repoint is in flight.
-Quiescent == pending = {} /\ \A o \in Orcs : phase[o] = "idle"
+\* No reparent or repoint is in flight (ERS or PRS).
+Quiescent == pending = {} /\ \A o \in Orcs : phase[o] = "idle" /\ prs \in {"idle", "done"}
 
 \* Once nothing is in flight, a serving REPLICA that replicates holds no transaction that the
 \* newest primary lacks.

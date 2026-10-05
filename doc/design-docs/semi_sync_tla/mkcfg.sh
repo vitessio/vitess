@@ -3,12 +3,12 @@
 # one VTOrc, small bounds) with the given overrides.
 name=$1; shift
 declare -A v=(
-  [Orcs]="{o1}" [MaxTx]=2 [MaxCrash]=1 [MaxCut]=1 [MaxExpire]=0 [MaxTabletRestart]=0 [MaxERS]=2
+  [Orcs]="{o1}" [MaxTx]=2 [MaxCrash]=1 [MaxCut]=1 [MaxExpire]=0 [MaxTabletRestart]=0 [MaxERS]=2 [MaxPRS]=0
   [RELAY_LOG_RECOVERY]=TRUE [REPOINT_DISCARDS]=TRUE [SRS_KEEPS_SESSIONS]=TRUE [SRS_STALE_ERRANT]=TRUE
   [SRS_KEEPS_WRITABLE]=TRUE [STARTUP_REPOINT]=TRUE [RETRYING_IO]=TRUE [ERS_STALE_RECORD]=TRUE [DETACHED_REPOINT]=TRUE [PROMOTE_DISCARDS]=TRUE [FIX_REPLICA_STALE]=TRUE [FIX_PRIMARY_STALE]=TRUE
   [INVARIANTS]="TypeOK NoLostAck NoUnbackedAck OneAckingPrimary NoErrantServingReplica"
 )
-order=(Orcs MaxTx MaxCrash MaxCut MaxExpire MaxTabletRestart MaxERS RELAY_LOG_RECOVERY REPOINT_DISCARDS
+order=(Orcs MaxTx MaxCrash MaxCut MaxExpire MaxTabletRestart MaxERS MaxPRS RELAY_LOG_RECOVERY REPOINT_DISCARDS
   SRS_KEEPS_SESSIONS SRS_STALE_ERRANT SRS_KEEPS_WRITABLE STARTUP_REPOINT RETRYING_IO ERS_STALE_RECORD DETACHED_REPOINT PROMOTE_DISCARDS FIX_REPLICA_STALE FIX_PRIMARY_STALE)
 for kv in "$@"; do v[${kv%%=*}]=${kv#*=}; done
 {

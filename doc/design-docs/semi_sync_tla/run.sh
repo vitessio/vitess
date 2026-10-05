@@ -36,6 +36,10 @@ EXPECTED=(
   s12_fixed:pass
   orcs2_lease_expiry:NoLostAck
   orcs2_no_expiry:pass
+  prs_stale_fix_primary:NoLostAck
+  prs_lease_expiry:NoLostAck
+  prs_fixed:pass
+  prs_faults_fixed:pass
 )
 
 expected_of() {

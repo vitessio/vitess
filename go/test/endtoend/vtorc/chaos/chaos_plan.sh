@@ -10,6 +10,10 @@
 #                          semisync-1vtorc (colo). Binaries of main.
 #   chaos_plan.sh fixed    the scenarios that failed on main because of B1, 3A or B6, twice per
 #                          profile. Binaries of this branch.
+#   chaos_plan.sh prs main|fixed
+#                          the PlannedReparentShard scenarios (prs_test.go) under both profiles,
+#                          with the binaries of main or of this branch (the argument only names
+#                          the results directories).
 #
 # Results go to $CHAOS_PLAN_RESULTS/<run>/ (default /home/$RUN_USER/chaos-results), one directory
 # per profile and run; chaos_summary.py turns them into the report's tables.
@@ -34,6 +38,8 @@ RELAY="TestS11RelayLogDiscardGraceful TestS11kRelayLogDiscardKill9 TestS11bRelay
 PROBE="TestP1IsolatedPrimaryAcksAfterFailover TestP2ReplicationPartitionAcksOnDeposedPrimary"
 FIXED_3="$PROBE TestS3IsolatePrimary TestS7dFlappingPrimaryLong TestS9iPrimaryCellPartition TestS11kRelayLogDiscardKill9"
 FIXED_1="$PROBE TestS3IsolatePrimary"
+PRS="TestR1PRSUnderLoad TestR2PRSOutlivesShardLock TestR2bPRSCatchupOutlivesShardLock
+  TestR3PRSDemoteResponseLost TestR5PRSReplicaRestart"
 
 # run <results dir> <profile> <primary cell or ""> <scenarios...>
 run() {
@@ -64,8 +70,19 @@ fixed)
     run fixed-semisync-1vtorc-$i semisync-1vtorc zone1 $FIXED_1
   done
   ;;
+prs)
+  case "${2:-}" in
+  main | fixed) ;;
+  *)
+    echo "usage: $0 prs main|fixed" >&2
+    exit 2
+    ;;
+  esac
+  run "$2-prs-semisync-3vtorc" semisync-3vtorc "" $PRS
+  run "$2-prs-semisync-1vtorc" semisync-1vtorc zone1 $PRS
+  ;;
 *)
-  echo "usage: $0 main|probe|fixed" >&2
+  echo "usage: $0 main|probe|fixed|prs" >&2
   exit 2
   ;;
 esac

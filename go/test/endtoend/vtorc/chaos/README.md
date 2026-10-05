@@ -8,7 +8,7 @@ Every simulated node runs in its own cgroup v2 leaf, and iptables drops traffic 
 
 | File | What it does |
 |---|---|
-| `scenarios_test.go`, `s11_test.go`, `s12_test.go`, `s13_test.go`, `vtorc_single_test.go`, `model_scenarios_test.go` | The scenarios. The comment above each test describes its fault and what it checks. |
+| `scenarios_test.go`, `s11_test.go`, `s12_test.go`, `s13_test.go`, `vtorc_single_test.go`, `model_scenarios_test.go`, `prs_test.go` | The scenarios. The comment above each test describes its fault and what it checks. `prs_test.go` holds the PlannedReparentShard scenarios (R1, R2, R2b, R3, R5). |
 | `profile.go` | The deployment profiles: `audit`, `semisync-3vtorc`, `semisync-1vtorc`. |
 | `cluster.go`, `faults.go`, `netfault.go` | The cluster and the fault injection. |
 | `workload.go`, `observer.go`, `invariants.go` | The write workload, the observer that samples every tablet, and the checks. |
@@ -67,8 +67,10 @@ source build.env && for b in vttablet vtctld vtctldclient vtgate vtorc mysqlctl 
 # 1. With the binaries of main in bin/:
 go/test/endtoend/vtorc/chaos/chaos_plan.sh main     # several hours
 go/test/endtoend/vtorc/chaos/chaos_plan.sh probe
+go/test/endtoend/vtorc/chaos/chaos_plan.sh prs main
 # 2. With the binaries of this branch in bin/:
 go/test/endtoend/vtorc/chaos/chaos_plan.sh fixed
+go/test/endtoend/vtorc/chaos/chaos_plan.sh prs fixed
 # 3. The tables:
 go/test/endtoend/vtorc/chaos/chaos_summary.py /home/ubuntu/chaos-results/main-semisync-3vtorc \
   /home/ubuntu/chaos-results/main-semisync-1vtorc-colo /home/ubuntu/chaos-results/main-semisync-1vtorc-remote
