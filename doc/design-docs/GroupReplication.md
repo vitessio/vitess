@@ -254,6 +254,7 @@ The group fails over by itself when a majority survives. ERS in GR mode must uph
 
 1. Lock the shard and collect `FullStatus` from all tablets, time-bound.
 2. If a reachable member reports that it is ONLINE, PRIMARY and has quorum, in the shard's legitimate group (recorded incarnation, majority of the voters ONLINE in its view), the group has already elected. Promote that tablet in topo (`PromoteReplica`, which is only a type change there) and write the reparent journal. If `--new-primary` names another member, follow with a PRS-style switch. Tablets that are not voters are re-pointed as async replicas; voters that are not active are left to rejoin the group.
+   Only a listed voter becomes the shard's primary, as only a voter serves: if the group elected a member that is not a voter, ERS makes an eligible voter the group's primary instead, and a `--new-primary` that is not a voter is refused with `FAILED_PRECONDITION`.
 3. If no reachable member has quorum, ERS fails, unless the operator passes `--group-replication-force-quorum` (not implemented in the prototype). That choice needs a human, like `--allow-split-brain-promotion`: it would pick the member with the most advanced *received* GTID set and use `group_replication_force_members`. Even that member may lack transactions that a majority accepted and the old primary acknowledged (see "What an acknowledged commit guarantees"), which is why it needs a human.
 
 ### VTOrc
