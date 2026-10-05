@@ -1295,6 +1295,25 @@ func TestQueryExecutorTableAclPassthroughDenied(t *testing.T) {
 				assert.Equal(t, allowedBefore+1, tsv.stats.TableaclAllowed.Counts()[allowedKey], "the access must be counted as allowed, under the same empty table group as a denial")
 			})
 
+			// A dry run records what enforcement would do, so the access of a
+			// caller holding every role on every table is allowed, not a
+			// pseudo-denial.
+			if tc.allTablesRuns {
+				t.Run("a dry run counts a caller with every role on every table as allowed", func(t *testing.T) {
+					useAllTablesConfig(t)
+					tsv := newServer(t, enableStrictTableACL)
+					tsv.qe.enableTableACLDryRun = true
+					qre := newTestQueryExecutor(adminCtx, tsv, tc.query, 0)
+					key := strings.Join([]string{"undetermined-table-set", "", tc.planID.String(), "u4"}, ".")
+					allowedBefore := tsv.stats.TableaclAllowed.Counts()[key]
+					pseudoBefore := tsv.stats.TableaclPseudoDenied.Counts()[key]
+					_, err := qre.Execute()
+					require.NoError(t, err)
+					assert.Equal(t, allowedBefore+1, tsv.stats.TableaclAllowed.Counts()[key], "the access must be counted as allowed")
+					assert.Equal(t, pseudoBefore, tsv.stats.TableaclPseudoDenied.Counts()[key], "the access must not be counted as a pseudo-denial")
+				})
+			}
+
 			for _, user := range []string{"u3", "u5"} {
 				t.Run("a caller lacking a role on every table is denied/"+user, func(t *testing.T) {
 					useAllTablesConfig(t)
@@ -1316,7 +1335,7 @@ func TestQueryExecutorTableAclPassthroughDenied(t *testing.T) {
 	}
 
 	// A CREATE TABLE the parser only partially parses names the table it
-	// creates, but its body is opaque and may copy rows from other tables. An
+	// creates, but its body is opaque and may copy rows from other tables. A
 	// caller holding every role in a group covering every table may read those
 	// tables too, so the statement runs for it.
 	t.Run("a partially parsed CREATE TABLE runs for a caller with every role on every table", func(t *testing.T) {
@@ -1330,6 +1349,22 @@ func TestQueryExecutorTableAclPassthroughDenied(t *testing.T) {
 		_, err := qre.Execute()
 		require.NoError(t, err)
 		assert.Equal(t, calledBefore+1, db.GetQueryCalledNum(query), "the statement must reach the backend")
+	})
+
+	// An ADMIN alone passes the check on the table a partially parsed CREATE
+	// TABLE names, so only the undetermined check keeps it from reading
+	// test_table through the statement's opaque body.
+	t.Run("a partially parsed CREATE TABLE is denied for a caller that is only an admin", func(t *testing.T) {
+		useAllTablesConfig(t)
+		const query = "create table ct (select pk from test_table)"
+		tsv := newServer(t, enableStrictTableACL)
+		userCtx := callerid.NewContext(t.Context(), nil, &querypb.VTGateCallerID{Username: "u5"})
+		qre := newTestQueryExecutor(userCtx, tsv, query, 0)
+		require.True(t, qre.plan.TablesUndetermined)
+		calledBefore := db.GetQueryCalledNum(query)
+		_, err := qre.Execute()
+		require.EqualError(t, err, "DDL command denied to user 'u5' for a table set that cannot be determined (ACL check error)")
+		assert.Equal(t, calledBefore, db.GetQueryCalledNum(query), "the backend must not see a statement the ACL denied")
 	})
 
 	// A plan checks every table against the configuration it was built with,
