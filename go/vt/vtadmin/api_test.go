@@ -5159,6 +5159,15 @@ func TestVExplain(t *testing.T) {
 			expectedError: vtadminerrors.ErrInvalidRequest,
 		},
 		{
+			name: "returns an error if the statement asks VTGate to run DML",
+			req: &vtadminpb.VExplainRequest{
+				ClusterId: "c0",
+				Keyspace:  "commerce",
+				Sql:       "vexplain /*vt+ EXECUTE_DML_QUERIES */ queries delete from customers where id = 1",
+			},
+			expectedError: vtadminerrors.ErrInvalidRequest,
+		},
+		{
 			name: "runs VExplain given a valid request in a valid topology",
 			keyspaces: []*vtctldatapb.Keyspace{
 				{

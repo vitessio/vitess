@@ -2647,6 +2647,13 @@ func (api *API) VExplain(ctx context.Context, req *vtadminpb.VExplainRequest) (*
 		return nil, vterrors.VT09017("Invalid VExplain statement")
 	}
 
+	// VExplain is authorized as a read, but VEXPLAIN QUERIES and VEXPLAIN ALL
+	// run the statement they explain, and VTGate runs DML that way when this
+	// directive is set. Refuse it, so that VExplain cannot modify data.
+	if vexplainStmt.GetParsedComments().Directives().IsSet(sqlparser.DirectiveVExplainRunDMLQueries) {
+		return nil, fmt.Errorf("%w: the %s directive is not supported", errors.ErrInvalidRequest, sqlparser.DirectiveVExplainRunDMLQueries)
+	}
+
 	// Canonicalize the SQL using the AST, to prevent use of raw user input.
 	canonicalQuery := sqlparser.String(vexplainStmt)
 	response, err := c.DB.VExplain(ctx, canonicalQuery, vexplainStmt)
