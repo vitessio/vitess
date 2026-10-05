@@ -22,6 +22,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -42,76 +43,190 @@ import (
 // the number of trials per mode.
 const failoverBenchEnv = "VT_UNPLANNED_FAILOVER_TRIALS"
 
-// ackedWrite is an insert that vtgate acknowledged.
-type ackedWrite struct {
-	id              uint64
-	start, finished time.Time
+// failoverBufferEnv selects vtgate's buffering in TestUnplannedFailoverTimes: "on" (the default,
+// --enable-buffer), "off", or "both".
+const failoverBufferEnv = "VT_UNPLANNED_FAILOVER_BUFFER"
+
+const (
+	// clientWriteInterval is how often the client sends a write, whether or not the earlier ones
+	// returned.
+	clientWriteInterval = 50 * time.Millisecond
+	// clientWriteTimeout is how long the client waits for a write before it gives up on it, longer
+	// than a buffered failover takes: a write to a frozen primary never returns.
+	clientWriteTimeout = 20 * time.Second
+)
+
+// clientWrite is an insert sent through vtgate, and its outcome.
+type clientWrite struct {
+	id         uint64
+	start, end time.Time
+	err        error
 }
 
-// ackingWriter inserts rows through vtgate and records every acknowledged insert.
-type ackingWriter struct {
+func (w clientWrite) acked() bool { return w.err == nil }
+
+// clientWriter sends an insert through vtgate every clientWriteInterval, each in its own
+// goroutine, so that writes stuck on a failed primary do not hold back the next ones, as
+// independent clients would. Each write gives up after clientWriteTimeout.
+type clientWriter struct {
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
 	mu     sync.Mutex
-	acked  []ackedWrite
+	writes []clientWrite
+	idle   chan *mysql.Conn
 }
 
-func startAckingWriter(t *testing.T, tc *testCluster) *ackingWriter {
+func startClientWriter(t *testing.T, tc *testCluster) *clientWriter {
 	ctx, cancel := context.WithCancel(t.Context())
-	w := &ackingWriter{cancel: cancel}
+	w := &clientWriter{cancel: cancel, idle: make(chan *mysql.Conn, 1000)}
 	params := mysql.ConnParams{Host: tc.Hostname, Port: tc.VtgateMySQLPort}
+	// The writes in flight outlive the stop of the writer, until their own timeout.
+	writeCtx := context.WithoutCancel(ctx)
 	w.wg.Go(func() {
-		var conn *mysql.Conn
-		for ctx.Err() == nil {
-			if conn == nil {
-				var err error
-				if conn, err = mysql.Connect(ctx, &params); err != nil {
-					time.Sleep(20 * time.Millisecond)
-					continue
-				}
+		ticker := time.NewTicker(clientWriteInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				w.wg.Go(func() { w.write(writeCtx, &params) })
 			}
-			start := time.Now()
-			// Like a real client, give up on a write after a timeout: a write to a frozen
-			// primary never returns.
-			timeout := time.AfterFunc(2*time.Second, conn.Close)
-			qr, err := conn.ExecuteFetch("insert into writes (val) values ('x')", 0, false)
-			timeout.Stop()
-			if err != nil {
-				conn.Close()
-				conn = nil
-				time.Sleep(20 * time.Millisecond)
-				continue
-			}
-			w.mu.Lock()
-			w.acked = append(w.acked, ackedWrite{id: qr.InsertID, start: start, finished: time.Now()})
-			w.mu.Unlock()
-			time.Sleep(10 * time.Millisecond)
-		}
-		if conn != nil {
-			conn.Close()
 		}
 	})
 	return w
 }
 
-func (w *ackingWriter) stop() []ackedWrite {
-	w.cancel()
-	w.wg.Wait()
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	return w.acked
-}
-
-// firstWriteStartedAfter returns the first acknowledged write that was sent after t.
-func (w *ackingWriter) firstWriteStartedAfter(t time.Time) (ackedWrite, bool) {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	for _, a := range w.acked {
-		if a.start.After(t) {
-			return a, true
+func (w *clientWriter) write(ctx context.Context, params *mysql.ConnParams) {
+	start := time.Now()
+	ctx, cancel := context.WithDeadline(ctx, start.Add(clientWriteTimeout))
+	defer cancel()
+	record := func(id uint64, err error) {
+		w.mu.Lock()
+		w.writes = append(w.writes, clientWrite{id: id, start: start, end: time.Now(), err: err})
+		w.mu.Unlock()
+	}
+	var conn *mysql.Conn
+	select {
+	case conn = <-w.idle:
+	default:
+		var err error
+		if conn, err = mysql.Connect(ctx, params); err != nil {
+			record(0, err)
+			return
 		}
 	}
-	return ackedWrite{}, false
+	timeout := context.AfterFunc(ctx, conn.Close)
+	qr, err := conn.ExecuteFetch("insert into writes (val) values ('x')", 0, false)
+	if !timeout() || err != nil {
+		if err == nil {
+			err = ctx.Err()
+		}
+		conn.Close()
+		record(0, err)
+		return
+	}
+	record(qr.InsertID, nil)
+	select {
+	case w.idle <- conn:
+	default:
+		conn.Close()
+	}
+}
+
+// stop stops sending writes, waits for the writes in flight, and returns every write.
+func (w *clientWriter) stop() []clientWrite {
+	w.cancel()
+	w.wg.Wait()
+	close(w.idle)
+	for conn := range w.idle {
+		conn.Close()
+	}
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	slices.SortFunc(w.writes, func(a, b clientWrite) int { return a.start.Compare(b.start) })
+	return w.writes
+}
+
+// firstAckedAfter returns the end of the first acknowledged write that was sent after t.
+func (w *clientWriter) firstAckedAfter(t time.Time) (time.Time, bool) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	var first time.Time
+	for _, wr := range w.writes {
+		if wr.acked() && wr.start.After(t) && (first.IsZero() || wr.end.Before(first)) {
+			first = wr.end
+		}
+	}
+	return first, !first.IsZero()
+}
+
+// bufferVars returns vtgate's buffer counters, flattened: one value per variable and key.
+func bufferVars(tc *testCluster) map[string]float64 {
+	vars := tc.VtgateProcess.GetVars()
+	out := make(map[string]float64)
+	for name, v := range vars {
+		if !strings.HasPrefix(name, "Buffer") {
+			continue
+		}
+		switch v := v.(type) {
+		case float64:
+			out[name] = v
+		case map[string]any:
+			for k, x := range v {
+				if f, ok := x.(float64); ok {
+					out[name+"."+k] = f
+				}
+			}
+		}
+	}
+	return out
+}
+
+// bufferDelta returns the counters that changed between two readings of bufferVars.
+func bufferDelta(before, after map[string]float64) map[string]float64 {
+	d := make(map[string]float64)
+	for k, v := range after {
+		if v != before[k] && !strings.Contains(k, "Size") && !strings.Contains(k, "Window") && !strings.Contains(k, "Duration") {
+			d[k] = v - before[k]
+		}
+	}
+	return d
+}
+
+// sumVars sums the counters of a variable over its keys.
+func sumVars(d map[string]float64, name string) float64 {
+	var s float64
+	for k, v := range d {
+		if k == name || strings.HasPrefix(k, name+".") {
+			s += v
+		}
+	}
+	return s
+}
+
+// vtgateBufferLog returns vtgate's log lines about its buffer and keyspace events logged at or
+// after since.
+func vtgateBufferLog(tc *testCluster, since time.Time) []string {
+	data, err := os.ReadFile(tc.VtgateProcess.ErrorLog)
+	if err != nil {
+		return []string{err.Error()}
+	}
+	from := since.UTC().Format("2006-01-02 15:04:05.000")
+	var lines []string
+	for line := range strings.SplitSeq(string(data), "\n") {
+		i := strings.Index(line, "20")
+		if i < 0 || len(line) < i+23 || line[i:i+23] < from {
+			continue
+		}
+		for _, pat := range []string{"buffering for shard", "Stopping buffering", "Draining finished", "CausedByFailover", "Keyspace Event received", "is now consistent", "not buffering"} {
+			if strings.Contains(line, pat) {
+				lines = append(lines, strings.TrimSpace(line[i:]))
+				break
+			}
+		}
+	}
+	return lines
 }
 
 // killHost simulates the crash of the host of a tablet: mysqld_safe, mysqld and vttablet die
@@ -143,22 +258,43 @@ func freezeMysqld(t *testing.T, tablet *cluster.Vttablet) {
 }
 
 type failoverResult struct {
-	scenario       string
-	mode           string
-	topo, write    time.Duration
-	ackedLost      int
-	ackedBeforeCnt int
+	scenario, mode, buffer string
+	// topo is the time until the new primary is in the topology, firstAck the time until the
+	// first write sent after the crash is acknowledged.
+	topo, firstAck time.Duration
+	// The writes sent from 1s before the crash until the measurement ended, and how they ended.
+	sent, failed, timedOut int
+	// buffered is how many requests vtgate buffered (BufferRequestsBuffered), bufferStarts how
+	// many bufferings it started.
+	buffered, bufferStarts int
+	// longestAcked is the longest time an acknowledged write took, longestFailed the longest
+	// time a write took to fail.
+	longestAcked, longestFailed time.Duration
+	ackedLost, acked            int
 }
 
 // TestUnplannedFailoverTimes compares how long an unplanned failover takes with cross-cell
-// semi-sync and VTOrc, and with Group Replication. It crashes the primary's host and measures
-// the time until the new primary is in the topology, and until a write sent through vtgate
-// after the crash succeeds. It also checks that no acknowledged write was lost. It only runs
-// when VT_UNPLANNED_FAILOVER_TRIALS is set to the number of trials per mode.
+// semi-sync and VTOrc, and with Group Replication, and what clients see meanwhile. It crashes the
+// primary's host, or freezes its mysqld, while a client sends a write through vtgate every 50ms,
+// each giving up after 20s. It measures the time until the new primary is in the topology and
+// until a write sent after the crash is acknowledged, the writes that failed, the writes vtgate
+// buffered, and the longest write; and checks that no acknowledged write was lost. vtgate runs
+// with or without --enable-buffer (VT_UNPLANNED_FAILOVER_BUFFER). It only runs when
+// VT_UNPLANNED_FAILOVER_TRIALS is set to the number of trials per mode.
 func TestUnplannedFailoverTimes(t *testing.T) {
 	trials, _ := strconv.Atoi(os.Getenv(failoverBenchEnv))
 	if trials <= 0 {
 		t.Skipf("set %s to the number of trials per mode to run this benchmark", failoverBenchEnv)
+	}
+	buffers := []string{"buffer on"}
+	switch os.Getenv(failoverBufferEnv) {
+	case "", "on":
+	case "off":
+		buffers = []string{"buffer off"}
+	case "both":
+		buffers = []string{"buffer on", "buffer off"}
+	default:
+		t.Fatalf("%s must be on, off or both", failoverBufferEnv)
 	}
 
 	vtorcDefaultPoll := vtorcConfig
@@ -184,73 +320,118 @@ func TestUnplannedFailoverTimes(t *testing.T) {
 	var results []failoverResult
 	for _, scenario := range scenarios {
 		for _, mode := range modes {
-			for trial := 1; trial <= trials; trial++ {
-				t.Run(fmt.Sprintf("%s/%s/%d", scenario.name, mode.name, trial), func(t *testing.T) {
-					opts := defaultClusterOptions()
-					opts.vtorc = mode.vtorc
-					tc := setupCluster(t, opts)
-					primary := tc.replicas[0]
-					if mode.groupReplication {
-						out, err := tc.VtctldClientProcess.ExecuteCommandWithOutput("MigrateReplicationMode",
-							"--durability-policy", policy.DurabilityGroupReplicationCrossCell, keyspaceName)
-						require.NoError(t, err, out)
-						waitForGroup(t, tc, primary, tc.replicas)
-					}
-
-					w := startAckingWriter(t, tc)
-					// Let VTOrc discover the healthy shard and the writes reach a steady state.
-					time.Sleep(10 * time.Second)
-
-					scenario.crash(t, primary)
-					// Measure from the moment the crash is complete: writes sent before may still
-					// have reached the old primary.
-					killed := time.Now()
-
-					var newPrimary string
-					require.Eventually(t, func() bool {
-						newPrimary = shardPrimary(t, tc)
-						return newPrimary != "" && newPrimary != primary.Alias
-					}, 2*waitTimeout, 50*time.Millisecond)
-					topoTime := time.Since(killed)
-
-					var first ackedWrite
-					require.Eventually(t, func() bool {
-						var ok bool
-						first, ok = w.firstWriteStartedAfter(killed)
-						return ok
-					}, 2*waitTimeout, 50*time.Millisecond)
-					acked := w.stop()
-
-					// Every write acknowledged before the crash must be on the new primary.
-					var newPrimaryTablet *cluster.Vttablet
-					for _, v := range tc.replicas {
-						if v.Alias == newPrimary {
-							newPrimaryTablet = v
+			for _, buffer := range buffers {
+				for trial := 1; trial <= trials; trial++ {
+					t.Run(fmt.Sprintf("%s/%s/%s/%d", scenario.name, mode.name, buffer, trial), func(t *testing.T) {
+						opts := defaultClusterOptions()
+						opts.vtorc = mode.vtorc
+						opts.noBuffer = buffer == "buffer off"
+						tc := setupCluster(t, opts)
+						primary := tc.replicas[0]
+						if mode.groupReplication {
+							out, err := tc.VtctldClientProcess.ExecuteCommandWithOutput("MigrateReplicationMode",
+								"--durability-policy", policy.DurabilityGroupReplicationCrossCell, keyspaceName)
+							require.NoError(t, err, out)
+							waitForGroup(t, tc, primary, tc.replicas)
 						}
-					}
-					require.NotNil(t, newPrimaryTablet)
-					qr, err := newPrimaryTablet.VttabletProcess.QueryTablet("select id from writes", keyspaceName, true)
-					require.NoError(t, err)
-					present := make(map[uint64]bool, len(qr.Rows))
-					for _, row := range qr.Rows {
-						id, err := row[0].ToCastUint64()
-						require.NoError(t, err)
-						present[id] = true
-					}
-					result := failoverResult{scenario: scenario.name, mode: mode.name, topo: topoTime, write: first.finished.Sub(killed)}
-					for _, a := range acked {
-						if a.finished.Before(killed) {
-							result.ackedBeforeCnt++
-							if !present[a.id] {
-								result.ackedLost++
+
+						w := startClientWriter(t, tc)
+						// Let VTOrc discover the healthy shard, the writes reach a steady state, and
+						// vtgate's buffer forget the migration's pause.
+						time.Sleep(10 * time.Second)
+						varsBefore := bufferVars(tc)
+
+						scenario.crash(t, primary)
+						// Measure from the moment the crash is complete: writes sent before may still
+						// have reached the old primary.
+						killed := time.Now()
+
+						var newPrimary string
+						require.Eventually(t, func() bool {
+							newPrimary = shardPrimary(t, tc)
+							return newPrimary != "" && newPrimary != primary.Alias
+						}, 2*waitTimeout, 50*time.Millisecond)
+						topoTime := time.Since(killed)
+
+						var firstAck time.Time
+						require.Eventually(t, func() bool {
+							var ok bool
+							firstAck, ok = w.firstAckedAfter(killed)
+							return ok
+						}, 2*waitTimeout, 50*time.Millisecond)
+						// Keep writing for 5s after the failover, then let the writes in flight end.
+						time.Sleep(5 * time.Second)
+						measured := time.Now()
+						writes := w.stop()
+						delta := bufferDelta(varsBefore, bufferVars(tc))
+
+						// Every acknowledged write must be on the new primary.
+						var newPrimaryTablet *cluster.Vttablet
+						for _, v := range tc.replicas {
+							if v.Alias == newPrimary {
+								newPrimaryTablet = v
 							}
 						}
-					}
-					assert.Zero(t, result.ackedLost, "acknowledged writes were lost")
-					t.Logf("%s, %s: new primary %s in topo after %v, first write sent after the crash acknowledged after %v, %d/%d writes acknowledged before the crash lost",
-						scenario.name, mode.name, newPrimary, result.topo, result.write, result.ackedLost, result.ackedBeforeCnt)
-					results = append(results, result)
-				})
+						require.NotNil(t, newPrimaryTablet)
+						qr, err := newPrimaryTablet.VttabletProcess.QueryTablet("select id from writes", keyspaceName, true)
+						require.NoError(t, err)
+						present := make(map[uint64]bool, len(qr.Rows))
+						for _, row := range qr.Rows {
+							id, err := row[0].ToCastUint64()
+							require.NoError(t, err)
+							present[id] = true
+						}
+						result := failoverResult{
+							scenario: scenario.name, mode: mode.name, buffer: buffer,
+							topo: topoTime, firstAck: firstAck.Sub(killed),
+							buffered:     int(sumVars(delta, "BufferRequestsBuffered")),
+							bufferStarts: int(sumVars(delta, "BufferStarts")),
+						}
+						errs := make(map[string]int)
+						for _, wr := range writes {
+							if wr.acked() {
+								result.acked++
+								if !present[wr.id] {
+									result.ackedLost++
+								}
+							}
+							if wr.start.Before(killed.Add(-time.Second)) || wr.start.After(measured) {
+								continue
+							}
+							result.sent++
+							d := wr.end.Sub(wr.start)
+							if wr.acked() {
+								result.longestAcked = max(result.longestAcked, d)
+								continue
+							}
+							result.failed++
+							result.longestFailed = max(result.longestFailed, d)
+							if d >= clientWriteTimeout {
+								result.timedOut++
+							}
+							msg := wr.err.Error()
+							if len(msg) > 160 {
+								msg = msg[:160]
+							}
+							errs[msg]++
+						}
+						assert.Zero(t, result.ackedLost, "acknowledged writes were lost")
+						t.Logf("%s, %s, %s: new primary %s in topo after %v, first write sent after the crash acknowledged after %v; "+
+							"%d writes sent from 1s before the crash, %d failed (%d timed out after %v), longest acknowledged write %v, longest failed write %v; "+
+							"vtgate buffered %d requests in %d bufferings; %d/%d acknowledged writes lost",
+							scenario.name, mode.name, buffer, newPrimary, result.topo, result.firstAck,
+							result.sent, result.failed, result.timedOut, clientWriteTimeout, result.longestAcked, result.longestFailed,
+							result.buffered, result.bufferStarts, result.ackedLost, result.acked)
+						t.Logf("vtgate buffer counters that changed: %v", delta)
+						for msg, n := range errs {
+							t.Logf("failed writes: %d x %s", n, msg)
+						}
+						for _, line := range vtgateBufferLog(tc, killed.Add(-time.Second)) {
+							t.Logf("vtgate: %s", line)
+						}
+						results = append(results, result)
+					})
+				}
 			}
 		}
 	}
@@ -259,12 +440,17 @@ func TestUnplannedFailoverTimes(t *testing.T) {
 		if results[i].scenario != results[j].scenario {
 			return results[i].scenario < results[j].scenario
 		}
-		return results[i].mode < results[j].mode
+		if results[i].mode != results[j].mode {
+			return results[i].mode < results[j].mode
+		}
+		return results[i].buffer < results[j].buffer
 	})
 	var b strings.Builder
-	b.WriteString("\n| Scenario | Mode | New primary in topo | First write after crash acknowledged | Acknowledged writes lost |\n|---|---|---|---|---|\n")
+	b.WriteString("\n| Scenario | Mode | Buffer | New primary in topo | First write after crash acknowledged | Writes sent / failed (timed out) | Buffered (bufferings) | Longest acknowledged write | Longest failed write | Acknowledged writes lost |\n|---|---|---|---|---|---|---|---|---|---|\n")
 	for _, r := range results {
-		fmt.Fprintf(&b, "| %s | %s | %.1fs | %.1fs | %d of %d |\n", r.scenario, r.mode, r.topo.Seconds(), r.write.Seconds(), r.ackedLost, r.ackedBeforeCnt)
+		fmt.Fprintf(&b, "| %s | %s | %s | %.1fs | %.1fs | %d / %d (%d) | %d (%d) | %.2fs | %.2fs | %d of %d |\n", r.scenario, r.mode, r.buffer,
+			r.topo.Seconds(), r.firstAck.Seconds(), r.sent, r.failed, r.timedOut, r.buffered, r.bufferStarts,
+			r.longestAcked.Seconds(), r.longestFailed.Seconds(), r.ackedLost, r.acked)
 	}
 	t.Log(b.String())
 }

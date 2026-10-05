@@ -80,6 +80,8 @@ type clusterOptions struct {
 	// replica reads to the REPLICA tablets of the other cells too: it only routes them to
 	// tablets of its own cell or cell alias.
 	cellsAlias bool
+	// noBuffer runs vtgate without --enable-buffer.
+	noBuffer bool
 }
 
 // defaultClusterOptions is the recommended layout: one REPLICA tablet in each of three cells,
@@ -162,12 +164,14 @@ func setupCluster(t *testing.T, opts clusterOptions) *testCluster {
 	_, err = tc.replicas[0].VttabletProcess.QueryTablet(schemaSQL, keyspaceName, true)
 	require.NoError(t, err)
 
-	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
-		"--enable-buffer",
-		"--buffer-window", "30s",
-		"--buffer-max-failover-duration", "30s",
-		"--buffer-min-time-between-failovers", "1s",
-	)
+	if !opts.noBuffer {
+		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
+			"--enable-buffer",
+			"--buffer-window", "30s",
+			"--buffer-max-failover-duration", "30s",
+			"--buffer-min-time-between-failovers", "1s",
+		)
+	}
 	if opts.cellsAlias {
 		out, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("AddCellsAlias", "--cells", strings.Join(cells, ","), "all")
 		require.NoError(t, err, out)
