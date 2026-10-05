@@ -95,11 +95,12 @@ func TestUpdateGroupReplicationVotersReplacesFailedVoterWithSpare(t *testing.T) 
 	spare3 := recoveryTablet("zone3", 301, topodatapb.TabletType_REPLICA)
 	mockTMC := groupReplicationRecoveryTestWithPolicy(t, policy.DurabilityGroupReplicationCrossCell, primary, voter2, voter3, spare3)
 	setVoters(t, primary, voter2, voter3)
+	setIncarnation(t, "1790000001")
 
-	mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(primary)).Return(groupMemberStatus(primary, primary, primary, voter2), nil)
-	mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(voter2)).Return(groupMemberStatus(voter2, primary, primary, voter2), nil)
-	mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(voter3)).Return(nil, errors.New("unreachable"))
-	mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(spare3)).Return(notMemberStatus(spare3), nil)
+	mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(primary)).Return(groupMemberStatus(primary, primary, primary, voter2), nil).AnyTimes()
+	mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(voter2)).Return(groupMemberStatus(voter2, primary, primary, voter2), nil).AnyTimes()
+	mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(voter3)).Return(nil, errors.New("unreachable")).AnyTimes()
+	mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(spare3)).Return(notMemberStatus(spare3), nil).AnyTimes()
 	mockTMC.EXPECT().StartGroupReplication(gomock.Any(), sameTablet(spare3), startRequest(false)).Return(&replicationdatapb.GroupReplicationStatus{}, nil)
 
 	analysisEntry := &inst.DetectionAnalysis{

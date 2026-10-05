@@ -247,11 +247,16 @@ func TestGetDetectionAnalysisGroupReplication(t *testing.T) {
 			voters: []*topodatapb.Tablet{primary, replica},
 			rows: func() []*test.InfoForRecoveryAnalysis {
 				groupPrimary := member(grRow(primary, gr), mysql.GroupMemberStateOnline, mysql.GroupMemberRolePrimary, true, primary)
+				groupPrimary.GroupViewID = "1790000001:2"
 				offline := member(grRow(replica, gr), mysql.GroupMemberStateOffline, "", false, nil)
 				asyncReplica := grRow(rdonly, gr)
 				asyncReplica.IsPrimary = 0
 				asyncReplica.PrimaryTabletInfo = primary
-				return []*test.InfoForRecoveryAnalysis{groupPrimary, offline, asyncReplica}
+				rows := []*test.InfoForRecoveryAnalysis{groupPrimary, offline, asyncReplica}
+				for _, row := range rows {
+					row.ShardGroupReplicationIncarnation = "1790000001"
+				}
+				return rows
 			},
 			want: map[string]AnalysisCode{
 				"zone1-0000000100": GroupMemberNotOnline,
@@ -605,7 +610,28 @@ func TestGetDetectionAnalysisGroupReplicationLegitimateGroup(t *testing.T) {
 		want map[string]AnalysisCode
 		// notWant are analyses that must not be reported, when the others do not matter.
 		notWant []AnalysisCode
+		// unrecorded leaves the shard record without an incarnation.
+		unrecorded bool
 	}{{
+		// VTOrc bootstrapped the group and has not recorded its incarnation yet: every group would
+		// count as the shard's group, also one that a join formed on its own when the member it
+		// joined left (the TLA+ model's init_orc_lost). The voters join once the bootstrap is recorded.
+		name: "no incarnation recorded: the voters do not join",
+		rows: func() []*test.InfoForRecoveryAnalysis {
+			bootstrapped := sees(member(grRow(crossCellReplica, gr), mysql.GroupMemberStateOnline, mysql.GroupMemberRolePrimary, true, crossCellReplica), crossCellReplica)
+			bootstrapped.GroupViewID = recorded + ":1"
+			bootstrapped.IsPrimary = 0
+			replicaRow := member(grRow(replica, gr), mysql.GroupMemberStateOffline, "", false, nil)
+			replicaRow.IsPrimary = 0
+			primaryRow := member(grRow(grTablet("zone1", 101, topodatapb.TabletType_REPLICA), gr), mysql.GroupMemberStateOffline, "", false, nil)
+			primaryRow.IsPrimary = 0
+			return []*test.InfoForRecoveryAnalysis{primaryRow, replicaRow, bootstrapped}
+		},
+		unrecorded: true,
+		notWant:    []AnalysisCode{GroupMemberNotOnline},
+		// VTOrc records the group first, if it is the only one (logic.adoptUnrecordedGroup).
+		want: map[string]AnalysisCode{"zone1-0000000101": ClusterHasNoPrimary, "zone2-0000000200": GroupBootstrapNotRecorded},
+	}, {
 		name: "member alone in a new incarnation is not promoted",
 		rows: func() []*test.InfoForRecoveryAnalysis {
 			// The old primary's tablet demoted itself and its MySQL left the group.
@@ -680,7 +706,9 @@ func TestGetDetectionAnalysisGroupReplicationLegitimateGroup(t *testing.T) {
 			rows := tt.rows()
 			for _, row := range rows {
 				row.ShardGroupReplicationVoters = voterList(primary, replica, crossCellReplica)
-				row.ShardGroupReplicationIncarnation = recorded
+				if !tt.unrecorded {
+					row.ShardGroupReplicationIncarnation = recorded
+				}
 			}
 			got := analysisCodes(runAnalysis(t, rows))
 			if tt.want != nil {

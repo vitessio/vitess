@@ -306,6 +306,12 @@ func checkLegitimateGroupActive(ctx context.Context, tablet *topodatapb.Tablet) 
 	if err != nil {
 		return vterrors.Wrapf(err, "failed to read the shard record of %s", topoproto.KeyspaceShardString(tablet.Keyspace, tablet.Shard))
 	}
+	// While the shard record lists no incarnation, every group would count as the shard's group (see
+	// matchGroupMemberNotOnline): the voters join once the bootstrap is recorded.
+	if shardInfo.GetGroupReplicationIncarnation() == "" {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "the shard record of %s lists no incarnation of its replication group: the voters join once its bootstrap is recorded",
+			topoproto.KeyspaceShardString(tablet.Keyspace, tablet.Shard))
+	}
 	// One active member of the legitimate group is enough, in any cell that answers.
 	tabletInfos, _, err := getReachableShardTablets(ctx, tablet.Keyspace, tablet.Shard)
 	if err != nil {
@@ -635,6 +641,93 @@ func saveShardRecord(ctx context.Context, keyspace, shard string, logger *log.Pr
 	}
 }
 
+// adoptUnrecordedGroup records the incarnation of the group whose primary is the given tablet, while
+// the shard record lists no incarnation and holds no bootstrap intent for that tablet: a group that
+// PlannedReparentShard's initial promotion bootstrapped with InitPrimary and failed to record, or a
+// bootstrap of VTOrc whose reply was lost and whose intent was replaced since. No voter joins a
+// group whose incarnation is not recorded (checkLegitimateGroupToJoin, matchGroupMemberNotOnline), so
+// without this the shard would never get the majority of its voters back.
+//
+// It records the group only when it is the only group that the shard can have, which makes the
+// record equivalent to a bootstrap of VTOrc on its primary (bootstrapGroupReplication):
+//   - no bootstrap intent is live: another bootstrap may be running;
+//   - every voter's tablet answers;
+//   - no tablet runs a START GROUP_REPLICATION, and none is an active member of a group of another
+//     incarnation;
+//   - the primary executed every transaction that a voter executed or received.
+//
+// The write is a compare-and-swap on the empty incarnation and the absence of a live intent, under
+// the shard lock that the recovery holds.
+func adoptUnrecordedGroup(ctx context.Context, keyspace, shard string, shardInfo *topo.ShardInfo, tablet *topodatapb.Tablet) (string, error) {
+	keyspaceShard := topoproto.KeyspaceShardString(keyspace, shard)
+	aliasString := topoproto.TabletAliasString(tablet.Alias)
+	if shardInfo.GetGroupReplicationIncarnation() != "" {
+		return "", vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "the shard record of %s lists the incarnation %s", keyspaceShard, shardInfo.GetGroupReplicationIncarnation())
+	}
+	if intent := reparentutil.LiveGroupReplicationBootstrapIntent(shardInfo.Shard, time.Now()); intent != nil {
+		return "", vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "the shard record of %s holds a live bootstrap intent for %s", keyspaceShard, topoproto.TabletAliasString(intent.GetTarget()))
+	}
+	voters := shardInfo.GroupReplicationVoters
+	if len(voters) == 0 {
+		return "", vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "the shard record of %s lists no voters", keyspaceShard)
+	}
+	tabletInfos, err := getShardTablets(ctx, keyspace, shard)
+	if err != nil {
+		return "", err
+	}
+	statuses := readShardTabletStatuses(ctx, tabletInfos)
+	var primary *shardTabletStatus
+	for _, st := range statuses {
+		if topoproto.TabletAliasEqual(st.tablet.Alias, tablet.Alias) {
+			primary = st
+		}
+	}
+	if primary == nil || primary.err != nil {
+		return "", vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot read the status of %s", aliasString)
+	}
+	gs := primary.status.GetGroupReplicationStatus()
+	incarnation := policy.GroupIncarnation(gs.GetViewId())
+	if !mysql.IsGroupPrimary(gs) || gs.GetGroupName() != policy.GroupName(keyspace, shard) || incarnation == "" {
+		return "", vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "the MySQL of %s is not the primary of the shard's group with quorum (group %s, member %s %s, view %q)",
+			aliasString, gs.GetGroupName(), gs.GetMemberState(), gs.GetMemberRole(), gs.GetViewId())
+	}
+	primaryExecuted, _, err := memberGTIDSets(primary.status)
+	if err != nil {
+		return "", vterrors.Wrapf(err, "cannot read the transactions of %s", aliasString)
+	}
+	for _, st := range statuses {
+		alias := topoproto.TabletAliasString(st.tablet.Alias)
+		isVoter := policy.IsVoter(voters, st.tablet.Alias)
+		if st.err != nil {
+			if isVoter {
+				return "", vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "voter %s does not answer (%v): another group cannot be ruled out", alias, st.err)
+			}
+			continue
+		}
+		other := st.status.GetGroupReplicationStatus()
+		if other.GetStartInProgress() {
+			return "", vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "a START GROUP_REPLICATION runs on %s", alias)
+		}
+		if mysql.IsGroupMemberActive(other) && policy.GroupIncarnation(other.GetViewId()) != incarnation {
+			return "", vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s is active in group incarnation %q, not %s", alias, policy.GroupIncarnation(other.GetViewId()), incarnation)
+		}
+		if !isVoter || st == primary {
+			continue
+		}
+		_, all, err := memberGTIDSets(st.status)
+		if err != nil {
+			return "", vterrors.Wrapf(err, "cannot read the transactions of voter %s", alias)
+		}
+		if !primaryExecuted.Contains(all) {
+			return "", vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "voter %s executed or received transactions that %s did not execute (%s, primary %s)", alias, aliasString, all.String(), primaryExecuted.String())
+		}
+	}
+	if err := reparentutil.RecordUnrecordedGroupReplicationIncarnation(ctx, ts, keyspace, shard, incarnation, time.Now()); err != nil {
+		return "", err
+	}
+	return incarnation, nil
+}
+
 // adoptGroupReplicationBootstrap records the incarnation of the group that a bootstrap created when
 // the bootstrap's reply was lost (GroupBootstrapNotRecorded): VTOrc, this one or another, recorded
 // a bootstrap intent for the analyzed tablet, and the tablet's MySQL is now the primary of a group
@@ -665,7 +758,8 @@ func adoptGroupReplicationBootstrap(ctx context.Context, analysisEntry *inst.Det
 		return false, topologyRecovery, vterrors.Wrapf(err, "failed to read the shard record of %s", topoproto.KeyspaceShardString(analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard))
 	}
 	intent := reparentutil.CurrentGroupReplicationBootstrapIntent(shardInfo.Shard)
-	if intent == nil || !topoproto.TabletAliasEqual(intent.GetTarget(), analysisEntry.AnalyzedInstanceAlias) {
+	forIntent := intent != nil && topoproto.TabletAliasEqual(intent.GetTarget(), analysisEntry.AnalyzedInstanceAlias)
+	if !forIntent && shardInfo.GetGroupReplicationIncarnation() != "" {
 		_ = AuditTopologyRecovery(topologyRecovery, "the shard record holds no bootstrap intent for "+aliasString)
 		return false, topologyRecovery, nil
 	}
@@ -673,8 +767,14 @@ func adoptGroupReplicationBootstrap(ctx context.Context, analysisEntry *inst.Det
 	if err != nil {
 		return false, topologyRecovery, err
 	}
-	incarnation, err := reparentutil.AdoptGroupReplicationBootstrap(ctx, ts, tmc, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard,
-		shardInfo.GetGroupReplicationIncarnation(), intent, tablet)
+	var incarnation string
+	if forIntent {
+		incarnation, err = reparentutil.AdoptGroupReplicationBootstrap(ctx, ts, tmc, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard,
+			shardInfo.GetGroupReplicationIncarnation(), intent, tablet)
+	} else {
+		// No incarnation is recorded, and no intent names the tablet: a group that nobody recorded.
+		incarnation, err = adoptUnrecordedGroup(ctx, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard, shardInfo, tablet)
+	}
 	if err != nil {
 		_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("not adopting the group of %s: %v", aliasString, err))
 		return true, topologyRecovery, err
@@ -1047,6 +1147,10 @@ func updateGroupReplicationVoters(ctx context.Context, analysisEntry *inst.Detec
 		aliasString := topoproto.TabletAliasString(o.Tablet.Alias)
 		isVoter := policy.IsVoter(selection.Voters, o.Tablet.Alias)
 		switch {
+		case isVoter && !policy.IsVoter(current, o.Tablet.Alias) && o.Reachable && !o.Active && shardInfo.GroupReplicationIncarnation == "":
+			// Every group would count as the shard's group (see matchGroupMemberNotOnline): the new
+			// voter joins once the bootstrap is recorded.
+			_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("not starting group replication on the new voter %s: the shard record lists no incarnation", aliasString))
 		case isVoter && !policy.IsVoter(current, o.Tablet.Alias) && o.Reachable && !o.Active:
 			_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("starting group replication on the new voter %s", aliasString))
 			if _, err := startGroupReplication(ctx, o.Tablet, &tabletmanagerdatapb.StartGroupReplicationRequest{}); err != nil {

@@ -300,6 +300,15 @@ func setVoters(t *testing.T, tablets ...*topodatapb.Tablet) {
 	require.NoError(t, err)
 }
 
+// setIncarnation records the incarnation of the replication group of shard ks/0.
+func setIncarnation(t *testing.T, incarnation string) {
+	_, err := ts.UpdateShardFields(t.Context(), "ks", "0", func(si *topo.ShardInfo) error {
+		si.GroupReplicationIncarnation = incarnation
+		return nil
+	})
+	require.NoError(t, err)
+}
+
 // readVoters returns the voters recorded for shard ks/0.
 func readVoters(t *testing.T) []string {
 	si, err := ts.GetShard(t.Context(), "ks", "0")
@@ -492,8 +501,13 @@ func TestStartGroupReplicationOnMember(t *testing.T) {
 		name      string
 		other     *replicationdatapb.FullStatus
 		wantStart bool
+		// unrecorded leaves the shard record without an incarnation.
+		unrecorded bool
 	}{
 		{name: "the group is active on another tablet", other: online("1790000001:5"), wantStart: true},
+		// A bootstrap whose incarnation is not recorded yet (the TLA+ model's init_orc_lost): VTOrc
+		// joins the voters once it recorded it.
+		{name: "the shard record lists no incarnation", other: online("1790000001:5"), unrecorded: true},
 		{name: "no other member is active", other: offline},
 		{name: "the other member is in a group of another incarnation", other: online("1799999999:1")},
 	}
@@ -502,13 +516,15 @@ func TestStartGroupReplicationOnMember(t *testing.T) {
 			member := recoveryTablet("zone1", 100, topodatapb.TabletType_REPLICA)
 			other := recoveryTablet("zone1", 101, topodatapb.TabletType_PRIMARY)
 			mockTMC := groupReplicationRecoveryTest(t, other, member)
-			_, err := ts.UpdateShardFields(t.Context(), "ks", "0", func(si *topo.ShardInfo) error {
-				si.GroupReplicationIncarnation = "1790000001"
-				return nil
-			})
-			require.NoError(t, err)
-			mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(other)).Return(tt.other, nil)
-			mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(member)).Return(offline, nil)
+			if !tt.unrecorded {
+				_, err := ts.UpdateShardFields(t.Context(), "ks", "0", func(si *topo.ShardInfo) error {
+					si.GroupReplicationIncarnation = "1790000001"
+					return nil
+				})
+				require.NoError(t, err)
+			}
+			mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(other)).Return(tt.other, nil).MaxTimes(1)
+			mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(member)).Return(offline, nil).MaxTimes(1)
 			starts := 0
 			if tt.wantStart {
 				starts = 1
@@ -1387,16 +1403,35 @@ func TestUpdateGroupReplicationVoters(t *testing.T) {
 		setup       func(t *testing.T, e expectations)
 		wantVoters  []string
 		wantErrCode vtrpcpb.Code
+		// recorded records an incarnation in the shard record, in which the statuses' views (without
+		// a view id) are not foreign.
+		recorded bool
 	}{
+		{
+			// Every group would count as the shard's group (the TLA+ model's init_orc_lost): the new
+			// voter joins once the bootstrap is recorded.
+			name:        "no incarnation recorded: a tablet of its cell replaces the failed voter, but does not join yet",
+			tablets:     []*topodatapb.Tablet{primary, crossCellVoter, crossCellReplica},
+			voters:      []*topodatapb.Tablet{primary, crossCellVoter},
+			gracePeriod: 0,
+			setup: func(t *testing.T, e expectations) {
+				e.mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(primary)).Return(groupMemberStatus(primary, primary, primary), nil).AnyTimes()
+				e.mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(crossCellVoter)).Return(nil, errUnreachable).AnyTimes()
+				e.mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(crossCellReplica)).Return(notMemberStatus(crossCellReplica), nil).AnyTimes()
+				e.mockTMC.EXPECT().StartGroupReplication(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+			},
+			wantVoters: []string{"zone1-0000000101", "zone2-0000000201"},
+		},
 		{
 			name:        "a voter failed for longer than the grace period: a tablet of its cell replaces it and joins",
 			tablets:     []*topodatapb.Tablet{primary, crossCellVoter, crossCellReplica},
 			voters:      []*topodatapb.Tablet{primary, crossCellVoter},
 			gracePeriod: 0,
+			recorded:    true,
 			setup: func(t *testing.T, e expectations) {
-				e.mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(primary)).Return(groupMemberStatus(primary, primary, primary), nil)
-				e.mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(crossCellVoter)).Return(nil, errUnreachable)
-				e.mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(crossCellReplica)).Return(notMemberStatus(crossCellReplica), nil)
+				e.mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(primary)).Return(groupMemberStatus(primary, primary, primary), nil).AnyTimes()
+				e.mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(crossCellVoter)).Return(nil, errUnreachable).AnyTimes()
+				e.mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(crossCellReplica)).Return(notMemberStatus(crossCellReplica), nil).AnyTimes()
 				e.mockTMC.EXPECT().StartGroupReplication(gomock.Any(), sameTablet(crossCellReplica), startRequest(false)).Return(&replicationdatapb.GroupReplicationStatus{}, nil)
 			},
 			wantVoters: []string{"zone1-0000000101", "zone2-0000000201"},
@@ -1492,6 +1527,9 @@ func TestUpdateGroupReplicationVoters(t *testing.T) {
 			config.SetGroupReplicationVoterReplacementGracePeriod(tt.gracePeriod)
 			mockTMC := groupReplicationRecoveryTestWithPolicy(t, policy.DurabilityGroupReplicationCrossCell, tt.tablets...)
 			setVoters(t, tt.voters...)
+			if tt.recorded {
+				setIncarnation(t, "1790000001")
+			}
 			tt.setup(t, expectations{mockTMC: mockTMC})
 
 			analysisEntry := &inst.DetectionAnalysis{

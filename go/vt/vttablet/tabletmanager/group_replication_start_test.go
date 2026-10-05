@@ -212,8 +212,10 @@ func TestGroupReplicationSyncDoesNotRejoinWhileStartInProgress(t *testing.T) {
 	withGroupReplication(t)
 	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplication)
 	setGroupReplicationVoters(t, ts, 1, 2)
+	// The shard record lists the incarnation of the group the peer is active in.
+	setGroupReplicationIncarnation(t, ts, "1780000001")
 	addPeerTablets(t, ts, 2)
-	tm, fmd := newGroupReplicationTestTMWithPeers(t, ts, 1, activeGroupPeers(2), func(fmd *mysqlctl.FakeMysqlDaemon) {
+	tm, fmd := newGroupReplicationTestTMWithPeers(t, ts, 1, activeGroupPeersIn("1780000001", 2), func(fmd *mysqlctl.FakeMysqlDaemon) {
 		fmd.StartGroupReplicationError = errors.New("no seed reachable")
 	})
 	status := groupStatus(testServerUUID(1), groupMember(testServerUUID(1), mysql.GroupMemberStateOffline, ""))

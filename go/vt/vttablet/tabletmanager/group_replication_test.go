@@ -642,8 +642,10 @@ func TestStopAndStartReplicationOnGroupMember(t *testing.T) {
 	withGroupReplication(t)
 	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplication)
 	setGroupReplicationVoters(t, ts, 1, 2)
+	// The shard record lists the incarnation of the group the peer is active in.
+	setGroupReplicationIncarnation(t, ts, "1780000001")
 	addPeerTablets(t, ts, 2)
-	tm, fmd := newGroupReplicationTestTMWithPeers(t, ts, 1, activeGroupPeers(2), func(fmd *mysqlctl.FakeMysqlDaemon) {
+	tm, fmd := newGroupReplicationTestTMWithPeers(t, ts, 1, activeGroupPeersIn("1780000001", 2), func(fmd *mysqlctl.FakeMysqlDaemon) {
 		// The tablet joins its group at startup.
 		fmd.ExpectedExecuteSuperQueryList = []string{resetDefaultChannel, resetDefaultChannel}
 	})
@@ -753,8 +755,10 @@ func TestStartJoinsGroup(t *testing.T) {
 	})
 	require.NoError(t, err)
 	setGroupReplicationVoters(t, ts, 1, 2)
+	// The shard record lists the incarnation of the group the peer is active in.
+	setGroupReplicationIncarnation(t, ts, "1780000001")
 
-	_, fmd := newGroupReplicationTestTMWithPeers(t, ts, 1, activeGroupPeers(2), func(fmd *mysqlctl.FakeMysqlDaemon) {
+	_, fmd := newGroupReplicationTestTMWithPeers(t, ts, 1, activeGroupPeersIn("1780000001", 2), func(fmd *mysqlctl.FakeMysqlDaemon) {
 		fmd.ExpectedExecuteSuperQueryList = []string{resetDefaultChannel}
 		fmd.SetReplicationSourceFunc = func(context.Context, string, int32, float64, bool, bool) error {
 			return errors.New("the default channel must not be configured on a group member")
@@ -772,8 +776,10 @@ func TestStartSucceedsWhenGroupJoinFails(t *testing.T) {
 	withGroupReplication(t)
 	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplication)
 	setGroupReplicationVoters(t, ts, 1, 2)
+	// The shard record lists the incarnation of the group the peer is active in.
+	setGroupReplicationIncarnation(t, ts, "1780000001")
 	addPeerTablets(t, ts, 2)
-	tm, fmd := newGroupReplicationTestTMWithPeers(t, ts, 1, activeGroupPeers(2), func(fmd *mysqlctl.FakeMysqlDaemon) {
+	tm, fmd := newGroupReplicationTestTMWithPeers(t, ts, 1, activeGroupPeersIn("1780000001", 2), func(fmd *mysqlctl.FakeMysqlDaemon) {
 		fmd.StartGroupReplicationError = errors.New("no seed reachable")
 	})
 	start, _, _ := fmd.GroupReplicationCalls()
@@ -904,8 +910,10 @@ func TestGroupReplicationSyncRejoinsOnlyVoters(t *testing.T) {
 	ctx := t.Context()
 	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplication)
 	setGroupReplicationVoters(t, ts, 2)
+	// The shard record lists the incarnation of the group the peer is active in.
+	setGroupReplicationIncarnation(t, ts, "1780000001")
 	addPeerTablets(t, ts, 2)
-	tm, fmd := newGroupReplicationTestTMWithPeers(t, ts, 1, activeGroupPeers(2), nil)
+	tm, fmd := newGroupReplicationTestTMWithPeers(t, ts, 1, activeGroupPeersIn("1780000001", 2), nil)
 	s := newGroupReplicationSync(tm)
 
 	s.reconcile(ctx)
@@ -1064,8 +1072,10 @@ func TestGroupReplicationSyncRejoinsWithBackoff(t *testing.T) {
 	ctx := t.Context()
 	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplication)
 	setGroupReplicationVoters(t, ts, 1, 2)
+	// The shard record lists the incarnation of the group the peer is active in.
+	setGroupReplicationIncarnation(t, ts, "1780000001")
 	addPeerTablets(t, ts, 2)
-	tm, fmd := newGroupReplicationTestTMWithPeers(t, ts, 1, activeGroupPeers(2), func(fmd *mysqlctl.FakeMysqlDaemon) {
+	tm, fmd := newGroupReplicationTestTMWithPeers(t, ts, 1, activeGroupPeersIn("1780000001", 2), func(fmd *mysqlctl.FakeMysqlDaemon) {
 		fmd.StartGroupReplicationError = errors.New("no seed reachable")
 	})
 	s := newGroupReplicationSync(tm)

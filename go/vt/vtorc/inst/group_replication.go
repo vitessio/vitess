@@ -706,8 +706,15 @@ func matchGroupNotBootstrapped(a *DetectionAnalysis, ca *clusterAnalysis) bool {
 // than the shard record lists: a bootstrap whose reply was lost. VTOrc adopts the group after it
 // checked it again under the shard lock (see reparentutil.AdoptGroupReplicationBootstrap). The
 // tablet trusts the group it bootstrapped for a minute, and then leaves it.
+//
+// It also matches the primary of a group while the shard record lists no incarnation, without an
+// intent for it: a group that nobody recorded, for example one that the initial promotion of
+// PlannedReparentShard bootstrapped and failed to record. No voter joins such a group
+// (matchGroupMemberNotOnline), so VTOrc records it, when it is the only group the shard can have
+// (see logic.adoptUnrecordedGroup).
 func matchGroupBootstrapNotRecorded(a *DetectionAnalysis, ca *clusterAnalysis) bool {
-	return policy.IsGroupReplication(ca.durability) && a.LastCheckValid && a.IsGroupBootstrapIntentTarget &&
+	return policy.IsGroupReplication(ca.durability) && a.LastCheckValid &&
+		(a.IsGroupBootstrapIntentTarget || a.ShardGroupIncarnation == "") &&
 		a.IsGroupPrimary && a.GroupViewIncarnation != "" && a.GroupViewIncarnation != a.ShardGroupIncarnation
 }
 
@@ -726,8 +733,14 @@ func matchGroupBootstrapNotRecorded(a *DetectionAnalysis, ca *clusterAnalysis) b
 // A PRIMARY tablet never matches: its MySQL out of its group makes it a stale primary, which the
 // tablet demotes on its own first, and the tablet refuses a join meanwhile (a join holds its action
 // lock for up to a minute, which keeps the demotion from running).
+//
+// Nor does it match while the shard record lists no incarnation: every group then counts as the
+// shard's group, also one that a join formed on its own when the member it joined left (the TLA+
+// model's init_orc_lost). The component that bootstraps the group records its incarnation, and then
+// makes the voters join it; VTOrc adopts and records a bootstrap whose reply was lost
+// (GroupBootstrapNotRecorded).
 func matchGroupMemberNotOnline(a *DetectionAnalysis, ca *clusterAnalysis) bool {
-	return policy.IsGroupReplication(ca.durability) && a.IsGroupVoter &&
+	return policy.IsGroupReplication(ca.durability) && a.IsGroupVoter && a.ShardGroupIncarnation != "" &&
 		a.TabletType != topodatapb.TabletType_PRIMARY && a.CurrentTabletType != topodatapb.TabletType_PRIMARY &&
 		a.LastCheckValid && !a.IsGroupMemberActive && !a.IsGroupMemberForeign && a.ShardGroupLegitimateActiveMembers > 0
 }
