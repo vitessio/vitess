@@ -1055,6 +1055,12 @@ const (
 	// groupReplicationElectionInProgress: MySQL is the group's primary, but the primary election that
 	// made it the primary still runs. Group Replication sets super_read_only when it ends.
 	groupReplicationElectionInProgress = "MySQL's replication group is still electing it its primary"
+	// groupReplicationDemotionRevertUndecided: DemotePrimary failed, and its revert could not decide
+	// whether the tablet may serve (revertDemotionWithGroupDecisionLocked).
+	groupReplicationDemotionRevertUndecided = "the revert of a failed demotion could not decide whether the tablet serves"
+	// groupReplicationDemotionRevertFailed: DemotePrimary failed, and its revert could not make MySQL
+	// writable again.
+	groupReplicationDemotionRevertFailed = "the revert of a failed demotion could not make MySQL writable"
 )
 
 // groupReplicationServingReason returns why a PRIMARY tablet must not serve as the primary of its

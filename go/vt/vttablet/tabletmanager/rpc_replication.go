@@ -708,6 +708,26 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 		return nil, err
 	}
 
+	// Under a group replication policy, the revert of a partial failure makes MySQL writable and the
+	// tablet serve only on a decision on the serving invariant (revertDemotionWithGroupDecisionLocked);
+	// stoppedServing and setReadOnly say what it has to revert. Otherwise the reverts below run as
+	// they always did. It runs last, after the semi-sync reverts. useGroupRevert decides once, when
+	// the first revert runs: the deferred functions run one after the other.
+	groupRevertDecided, groupRevert := false, false
+	useGroupRevert := func() bool {
+		if !groupRevertDecided {
+			groupRevertDecided = true
+			groupRevert = tm.demotionRevertNeedsGroupDecision(ctx)
+		}
+		return groupRevert
+	}
+	stoppedServing, setReadOnly := false, false
+	defer func() {
+		if finalErr != nil && revertPartialFailure && useGroupRevert() {
+			tm.revertDemotionWithGroupDecisionLocked(ctx, tablet, setReadOnly && !wasReadOnly, stoppedServing && wasServing)
+		}
+	}()
+
 	log.Info(
 		"captured initial state",
 		slog.String("tablet", topoproto.TabletAliasString(tablet.Alias)),
@@ -733,8 +753,9 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 		if err := tm.QueryServiceControl.SetServingType(tablet.Type, protoutil.TimeFromProto(tablet.PrimaryTermStartTime).UTC(), false, "demotion in progress"); err != nil {
 			return nil, vterrors.Wrap(err, "SetServingType(serving=false) failed")
 		}
+		stoppedServing = true
 		defer func() {
-			if finalErr != nil && revertPartialFailure && wasServing {
+			if finalErr != nil && revertPartialFailure && wasServing && !useGroupRevert() {
 				log.Info("reverting query service to serving")
 				// A PRIMARY that must not serve for its replication group stays not serving.
 				if err := tm.tmState.SetServingUnlessGroupReplicationNotServing(tablet.Type, protoutil.TimeFromProto(tablet.PrimaryTermStartTime).UTC()); err != nil {
@@ -840,9 +861,10 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 	} else {
 		log.Info("enabled super_read_only")
 	}
+	setReadOnly = true
 
 	defer func() {
-		if finalErr != nil && revertPartialFailure && !wasReadOnly {
+		if finalErr != nil && revertPartialFailure && !wasReadOnly && !useGroupRevert() {
 			// We need to redo the prepared transactions in read only mode using the dba user to ensure we don't lose them.
 			// setting read_only OFF will also set super_read_only OFF if it was set
 			log.Info("reverting read-only by redoing prepared transactions")
@@ -888,6 +910,98 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 	}
 
 	return protoStatus, nil
+}
+
+// demotionRevertNeedsGroupDecision returns whether the revert of a failed DemotePrimary goes through
+// the decision on the serving invariant (revertDemotionWithGroupDecisionLocked): on a tablet that
+// supports Group Replication, under a group replication durability policy, or when the policy cannot
+// be read. A tablet that does not support Group Replication, or whose shard uses another policy,
+// reverts as a semi-sync shard does.
+func (tm *TabletManager) demotionRevertNeedsGroupDecision(ctx context.Context) bool {
+	if !groupReplicationEnabled() {
+		return false
+	}
+	durability, err := tm.durabilityForGroupChange(ctx, time.Now().Add(groupReplicationTopoReadTimeout))
+	if err != nil {
+		log.Warn("Group replication: cannot read the durability policy, the failed demotion is reverted only on a decision on the serving invariant", slog.Any("error", err))
+		return true
+	}
+	return policy.IsGroupReplication(durability)
+}
+
+// revertDemotionWithGroupDecisionLocked reverts a DemotePrimary that failed after it stopped the
+// query service or made MySQL super_read_only, on a tablet that supports Group Replication. It runs
+// under the action lock, after the semi-sync reverts. Like UndoDemotePrimary and every promotion
+// (changeTypeLocked), it makes MySQL writable and the tablet serve only on a decision on the serving
+// invariant: it waits for the end of a primary election, takes the fence snapshot, decides on
+// MySQL's status read under the lock (applyGroupReplicationServingDecisionLocked), and makes MySQL
+// writable, redoing the prepared transactions, only if the tablet may serve and no fence was decided
+// since the snapshot, which it then settles. A tablet that may not serve stays as the demotion left
+// it: PRIMARY, not serving, with MySQL read-only and the reason recorded; the sync loop makes it serve
+// again (serveAgain) once the decision allows it, and redoes the prepared transactions then. The
+// reparent that called DemotePrimary fails either way.
+//
+// makeWritable is set when the demotion made a writable MySQL super_read_only, serve when it stopped
+// the query service of a serving tablet.
+func (tm *TabletManager) revertDemotionWithGroupDecisionLocked(ctx context.Context, tablet *topodatapb.Tablet, makeWritable, serve bool) {
+	if !makeWritable && !serve {
+		return
+	}
+	log.Info("reverting the failed demotion through the group replication serving decision",
+		slog.Bool("make_writable", makeWritable), slog.Bool("serve", serve))
+	termStart := protoutil.TimeFromProto(tablet.PrimaryTermStartTime).UTC()
+	tm.waitForGroupElectionEnd(ctx)
+	fence := &tm.groupReplicationFence
+	fences := fence.snapshot()
+	reason, status, err := tm.applyGroupReplicationServingDecisionLocked(ctx, nil)
+	if err != nil {
+		reason = groupReplicationDemotionRevertUndecided
+		log.Warn("Group replication: cannot decide whether the tablet serves after the failed demotion, it stays read-only and does not serve", slog.Any("error", err))
+		if err := tm.tmState.SetGroupReplicationNotServing(ctx, reason); err != nil {
+			log.Warn(fmt.Sprintf("SetGroupReplicationNotServing failed during revert: %v", err))
+		}
+	}
+	if reason == "" && fence.decidedSince(fences) {
+		reason = fence.lastReason()
+		log.Warn("Group replication: MySQL was fenced while the tablet decided to serve after the failed demotion", slog.String("reason", reason))
+		if err := tm.tmState.SetGroupReplicationNotServing(ctx, reason); err != nil {
+			log.Warn(fmt.Sprintf("SetGroupReplicationNotServing failed during revert: %v", err))
+		}
+	}
+	if reason != "" {
+		// The tablet stays PRIMARY: it does not serve, and MySQL stays read-only. The decision that
+		// lets it serve again makes MySQL writable, and redoes the prepared transactions.
+		if makeWritable {
+			tm.groupReplicationRedoPending.Store(true)
+		}
+		log.Warn("Group replication: the failed demotion is not reverted, the tablet does not serve", slog.String("reason", reason),
+			slog.String("member_state", status.GetMemberState()), slog.String("view_id", status.GetViewId()))
+		return
+	}
+	if makeWritable {
+		log.Info("reverting read-only by redoing prepared transactions")
+		if err := tm.redoPreparedTransactionsAndSetReadWrite(ctx); err != nil {
+			log.Warn(fmt.Sprintf("RedoPreparedTransactionsAndSetReadWrite failed during revert: %v", err))
+			tm.groupReplicationRedoPending.Store(true)
+			if err := tm.tmState.SetGroupReplicationNotServing(ctx, groupReplicationDemotionRevertFailed); err != nil {
+				log.Warn(fmt.Sprintf("SetGroupReplicationNotServing failed during revert: %v", err))
+			}
+			return
+		}
+		tm.groupReplicationRedoPending.Store(false)
+	}
+	// MySQL takes writes from now on, unless a fence was decided meanwhile: MySQL is then fenced
+	// again, and the tablet does not serve.
+	if !tm.settleGroupReplicationFenceLocked(ctx, fences) {
+		return
+	}
+	if serve {
+		log.Info("reverting query service to serving")
+		// A reason set since the decision stands.
+		if err := tm.tmState.SetServingUnlessGroupReplicationNotServing(tablet.Type, termStart); err != nil {
+			log.Warn(fmt.Sprintf("SetServingType(serving=true) failed during revert: %v", err))
+		}
+	}
 }
 
 // UndoDemotePrimary reverts a previous call to DemotePrimary
