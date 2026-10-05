@@ -681,7 +681,7 @@ func adoptUnrecordedGroup(ctx context.Context, keyspace, shard string, shardInfo
 	}
 	tabletInfos, err := getShardTablets(ctx, keyspace, shard)
 	if err != nil {
-		return "", err
+		return "", vterrors.Wrapf(err, "cannot read the tablets of %s to check its unrecorded group", keyspaceShard)
 	}
 	statuses := readShardTabletStatuses(ctx, tabletInfos)
 	var primary *shardTabletStatus
@@ -709,7 +709,7 @@ func adoptUnrecordedGroup(ctx context.Context, keyspace, shard string, shardInfo
 	}
 	primaryExecuted, _, err := memberGTIDSets(primary.status)
 	if err != nil {
-		return "", vterrors.Wrapf(err, "cannot read the transactions of %s", aliasString)
+		return "", vterrors.Wrapf(vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, err.Error()), "cannot read the transactions of %s", aliasString)
 	}
 	for _, st := range statuses {
 		alias := topoproto.TabletAliasString(st.tablet.Alias)
@@ -732,7 +732,7 @@ func adoptUnrecordedGroup(ctx context.Context, keyspace, shard string, shardInfo
 		}
 		_, all, err := memberGTIDSets(st.status)
 		if err != nil {
-			return "", vterrors.Wrapf(err, "cannot read the transactions of voter %s", alias)
+			return "", vterrors.Wrapf(vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, err.Error()), "cannot read the transactions of voter %s", alias)
 		}
 		if !primaryExecuted.Contains(all) {
 			return "", vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "voter %s executed or received transactions that %s did not execute (%s, primary %s)", alias, aliasString, all.String(), primaryExecuted.String())

@@ -104,6 +104,14 @@ func TestAdoptUnrecordedGroup(t *testing.T) {
 		edit:       primaryOf,
 		liveIntent: true,
 	}, {
+		name: "a voter's transactions cannot be read",
+		edit: func(tablet *topodatapb.Tablet, status *replicationdatapb.FullStatus) {
+			primaryOf(tablet, status)
+			if tablet.Alias.Uid == 100 {
+				status.PrimaryStatus.Position = "MySQL56/not-a-gtid-set"
+			}
+		},
+	}, {
 		name:     "a voter has no tablet record",
 		edit:     primaryOf,
 		noRecord: 102,
