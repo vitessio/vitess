@@ -284,3 +284,59 @@ func TestRecurseCTEConfigurableRecursionLimit(t *testing.T) {
 		}))
 	})
 }
+
+// TestRecurseCTERecursionLimitCountsLevels verifies that the guard counts
+// recursion levels, as MySQL does, not rows: a level whose frontier holds
+// several rows consumes a single iteration.
+func TestRecurseCTERecursionLimitCountsLevels(t *testing.T) {
+	fields := sqltypes.MakeTestFields("col1", "int64")
+
+	// Seed yields 3 rows; the Term yields one row per input row, so every
+	// level has 3 rows, and the recursion stops after 4 levels.
+	const levels, width = 4, 3
+	newTerm := func() *fakePrimitive {
+		results := make([]*sqltypes.Result, 0, levels*width+width)
+		for i := range levels * width {
+			results = append(results, sqltypes.MakeTestResult(fields, strconv.Itoa(i+10)))
+		}
+		for range width {
+			results = append(results, sqltypes.MakeTestResult(fields))
+		}
+		return &fakePrimitive{results: results, noLog: true}
+	}
+	newCTE := func() *RecurseCTE {
+		return &RecurseCTE{
+			Seed: &fakePrimitive{results: []*sqltypes.Result{sqltypes.MakeTestResult(fields, "1", "2", "3")}},
+			Term: newTerm(),
+			Vars: map[string]int{"col1": 0},
+		}
+	}
+	bv := map[string]*querypb.BindVariable{}
+
+	// The recursion needs levels+1 iterations: the last one processes the
+	// final frontier and finds no rows, and MySQL counts it too. A limit of
+	// levels+1 lets the whole recursion run even though it executes
+	// (levels+1)*width Term queries.
+	vc := &noopVCursor{systemVariables: map[string]string{sysvars.CTEMaxRecursionDepth: strconv.Itoa(levels + 1)}}
+	res, err := newCTE().TryExecute(t.Context(), vc, bv, true)
+	require.NoError(t, err)
+	require.Len(t, res.Rows, width+levels*width)
+
+	res, err = wrapStreamExecute(newCTE(), vc, bv, true)
+	require.NoError(t, err)
+	require.Len(t, res.Rows, width+levels*width)
+
+	// A limit of levels aborts when the last iteration starts, reporting
+	// levels+1 as MySQL does; every row before it was delivered.
+	vc = &noopVCursor{systemVariables: map[string]string{sysvars.CTEMaxRecursionDepth: strconv.Itoa(levels)}}
+	_, err = newCTE().TryExecute(t.Context(), vc, bv, true)
+	require.ErrorContains(t, err, fmt.Sprintf("Recursive query aborted after %d iterations", levels+1))
+
+	var streamed []sqltypes.Row
+	err = newCTE().TryStreamExecute(t.Context(), vc, bv, true, func(r *sqltypes.Result) error {
+		streamed = append(streamed, r.Rows...)
+		return nil
+	})
+	require.ErrorContains(t, err, fmt.Sprintf("Recursive query aborted after %d iterations", levels+1))
+	require.Len(t, streamed, width+levels*width)
+}

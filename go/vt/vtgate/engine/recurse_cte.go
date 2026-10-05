@@ -88,8 +88,14 @@ func (r *RecurseCTE) TryExecute(ctx context.Context, vcursor VCursor, bindVars m
 	recurseRows := res.Rows
 	joinVars := make(map[string]*querypb.BindVariable)
 	maxDepth := maxRecurseDepth(vcursor)
-	var loops uint64
+	var iterations uint64
 	for len(recurseRows) > 0 {
+		// Like MySQL, one iteration is one recursion level: the whole frontier
+		// produced by the previous level, however many rows it holds.
+		iterations++
+		if iterations > maxDepth {
+			return nil, vterrors.VT09030(iterations)
+		}
 		// copy over the results from the previous recursion
 		theseRows := recurseRows
 		recurseRows = nil
@@ -100,11 +106,6 @@ func (r *RecurseCTE) TryExecute(ctx context.Context, vcursor VCursor, bindVars m
 			// check if the context is done - we might be in a long running recursion
 			if err := ctx.Err(); err != nil {
 				return nil, err
-			}
-			loops++
-			if loops > maxDepth {
-				// Like MySQL, report the iteration count that exceeded the limit.
-				return nil, vterrors.VT09030(loops)
 			}
 			rresult, err := vcursor.ExecutePrimitive(ctx, r.Term, combineVars(bindVars, joinVars), false)
 			if err != nil {
@@ -149,8 +150,15 @@ func (r *RecurseCTE) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 	// would nest a live stream per level and exhaust the connection pool.
 	joinVars := make(map[string]*querypb.BindVariable)
 	maxDepth := maxRecurseDepth(vcursor)
-	var loops uint64
+	var iterations uint64
 	for len(recurseRows) > 0 {
+		// Like MySQL, one iteration is one recursion level: the whole frontier
+		// produced by the previous level, however many rows it holds. Streamed
+		// rows cannot be unsent, so the guard fires before the level starts.
+		iterations++
+		if iterations > maxDepth {
+			return vterrors.VT09030(iterations)
+		}
 		// copy over the results from the previous recursion
 		theseRows := recurseRows
 		recurseRows = nil
@@ -161,11 +169,6 @@ func (r *RecurseCTE) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 			// check if the context is done - we might be in a long running recursion
 			if err := ctx.Err(); err != nil {
 				return err
-			}
-			loops++
-			if loops > maxDepth {
-				// Like MySQL, report the iteration count that exceeded the limit.
-				return vterrors.VT09030(loops)
 			}
 			err := vcursor.StreamExecutePrimitive(ctx, r.Term, combineVars(bindVars, joinVars), false, func(result *sqltypes.Result) error {
 				mu.Lock()
