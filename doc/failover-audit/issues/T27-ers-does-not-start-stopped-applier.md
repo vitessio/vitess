@@ -14,7 +14,11 @@ With `relay_log_recovery=1`, the Vitess default, this does not show: the restart
 
 ### Proposed fix
 
-In the tablet's `StopReplicationAndGetStatus` with `IOTHREADONLY`, after stopping the receiver, start the applier if it is stopped without an error (`START REPLICA SQL_THREAD`), so that ERS's relay log wait can complete. The receiver stays stopped, so the replica does not reconnect to the old primary. An applier stopped by an error stays stopped and the wait fails as today.
+In the tablet's `StopReplicationAndGetStatus` with `IOTHREADONLY`, after stopping the receiver, start the applier if it is stopped without an error while the relay log holds unapplied transactions (`START REPLICA SQL_THREAD`), so that ERS's relay log wait can complete. The receiver stays stopped, so the replica neither fetches from nor acknowledges the old primary. An applier stopped by an error stays stopped and the wait fails as today, as does one on a tablet that is taking a backup. Only ERS sends `IOTHREADONLY`.
+
+ERS still sees the replica's replication as stopped before the reparent (`Before`), so it does not count the replica as a semi-sync acker. When ERS repoints it, the tablet finds its applier running and restarts replication, as VTOrc's `ReplicationStopped` recovery would.
+
+Implemented on branch `claude/practical-dijkstra-ucvu74` (`startIdleApplierLocked` in `go/vt/vttablet/tabletmanager/rpc_replication.go`, with `Mysqld.StartSQLThread`), with the unit test `TestStopReplicationAndGetStatusStartsStoppedApplier`.
 
 ### How to test the fix
 

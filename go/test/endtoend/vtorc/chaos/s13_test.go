@@ -48,8 +48,6 @@ import (
 // Every S13 test runs its cluster with relay_log_recovery=0 and sync_relay_log=1 (via
 // EXTRA_MY_CNF, which mysqlctl appends to my.cnf), unless EXTRA_MY_CNF is already set.
 
-const relayLogSafeCnf = "# S13: keep unapplied relay log events across restarts\nrelay_log_recovery = 0\nsync_relay_log = 1\n"
-
 // useRelayLogSafeConfig makes the mysqlds of the next cluster run with relay_log_recovery=0 and
 // sync_relay_log=1, after the profile's own settings (see NewChaos).
 func useRelayLogSafeConfig(t *testing.T) {

@@ -49,6 +49,10 @@ const (
 	tableName    = "chaos_t"
 )
 
+// relayLogSafeCnf keeps unapplied relay log events across mysqld restarts, and fsyncs each one
+// before the replica acknowledges it. NewChaos appends it with CHAOS_RELAY_LOG_SAFE=1.
+const relayLogSafeCnf = "relay_log_recovery = 0\nsync_relay_log = 1\n"
+
 var cells = []string{"zone1", "zone2", "zone3"}
 
 // Node is one cell of the reference deployment: one tablet (mysqld + vttablet) and one VTOrc,

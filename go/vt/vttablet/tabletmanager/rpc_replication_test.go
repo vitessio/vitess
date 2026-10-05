@@ -1751,6 +1751,82 @@ func TestStopReplicationAndGetStatusStopsRetryingIOThread(t *testing.T) {
 	assert.Equal(t, int32(replication.ReplicationStateStopped), resp.Status.After.IoState)
 }
 
+// stoppedApplierMysqld reports both replication threads stopped, as they are after a mysqld
+// restart with skip_replica_start, and records which threads the tablet starts.
+type stoppedApplierMysqld struct {
+	*mysqlctl.FakeMysqlDaemon
+	lastSQLError    string
+	startedApplier  bool
+	startedReceiver bool
+}
+
+func (m *stoppedApplierMysqld) ReplicationStatus(ctx context.Context) (replication.ReplicationStatus, error) {
+	rs, err := m.FakeMysqlDaemon.ReplicationStatus(ctx)
+	rs.IOState = replication.ReplicationStateStopped
+	rs.SQLState = replication.ReplicationStateStopped
+	if m.startedApplier {
+		rs.SQLState = replication.ReplicationStateRunning
+	}
+	rs.LastSQLError = m.lastSQLError
+	return rs, err
+}
+
+func (m *stoppedApplierMysqld) StartSQLThread(context.Context) error {
+	m.startedApplier = true
+	return nil
+}
+
+func (m *stoppedApplierMysqld) StartReplication(context.Context, map[string]string) error {
+	m.startedReceiver = true
+	return nil
+}
+
+// TestStopReplicationAndGetStatusStartsStoppedApplier checks that the IOTHREADONLY stop that ERS
+// sends to every replica starts an applier that is stopped without an error while the relay log
+// holds unapplied transactions. ERS then waits for the relay log to be applied without starting
+// the applier itself, so a replica restarted with acknowledged transactions in its relay log
+// (relay_log_recovery=0) blocked every ERS until it timed out. The receiver must stay stopped.
+func TestStopReplicationAndGetStatusStartsStoppedApplier(t *testing.T) {
+	executed, err := replication.DecodePosition("MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-826")
+	require.NoError(t, err)
+	received, err := replication.DecodePosition("MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-1326")
+	require.NoError(t, err)
+
+	tests := []struct {
+		name         string
+		relayLog     replication.Position
+		lastSQLError string
+		wantStarted  bool
+	}{
+		{name: "unapplied relay log", relayLog: received, wantStarted: true},
+		{name: "applier stopped by an error", relayLog: received, lastSQLError: "Could not execute Write_rows event on table ks.t; Duplicate entry '1' for key 't.PRIMARY'"},
+		{name: "relay log applied", relayLog: executed},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fmd := newTestMysqlDaemon(t, 1)
+			fmd.Version = "Ver 8.4.6"
+			fmd.CurrentPrimaryPosition = executed
+			fmd.CurrentRelayLogPosition = tt.relayLog
+			mysqld := &stoppedApplierMysqld{FakeMysqlDaemon: fmd, lastSQLError: tt.lastSQLError}
+			tm := newTestReplicationTM(newTestTablet(t, 100, "ks", "0", nil), mysqld, nil)
+
+			resp, err := tm.StopReplicationAndGetStatus(t.Context(), replicationdatapb.StopReplicationMode_IOTHREADONLY)
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantStarted, mysqld.startedApplier)
+			assert.False(t, mysqld.startedReceiver, "the receiver was started")
+			assert.Equal(t, int32(replication.ReplicationStateStopped), resp.Status.Before.SqlState)
+			assert.Equal(t, int32(replication.ReplicationStateStopped), resp.Status.After.IoState)
+			wantSQLState := replication.ReplicationStateStopped
+			if tt.wantStarted {
+				wantSQLState = replication.ReplicationStateRunning
+			}
+			assert.Equal(t, int32(wantSQLState), resp.Status.After.SqlState)
+			assert.Equal(t, replication.EncodePosition(tt.relayLog), resp.Status.After.RelayLogPosition)
+		})
+	}
+}
+
 // TestChangeTypeDrainedStopsSemiSyncAcks checks that a tablet changed to DRAINED stops sending
 // semi-sync ACKs even when the caller asks for them (VTOrc's errant GTID recovery before v25).
 func TestChangeTypeDrainedStopsSemiSyncAcks(t *testing.T) {
