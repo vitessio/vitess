@@ -197,6 +197,15 @@ func TestTableACLAuthorize(t *testing.T) {
 	require.True(t, allTablesACL.IsMember(&querypb.VTGateCallerID{Username: "u3"}), "user u3 should hold every role on every table")
 	require.False(t, allTablesACL.IsMember(&querypb.VTGateCallerID{Username: "u1"}), "user u1 should not hold every role on every table")
 	require.False(t, allTablesACL.IsMember(&querypb.VTGateCallerID{Username: "u2"}), "user u2 should not hold every role on every table")
+
+	// The rule must not rely on ValidateProto rejecting entries that overlap
+	// "%": if a stricter group ever governed some tables alongside it, holding
+	// every role in the "%" group would no longer cover those tables.
+	denyAll := map[Role]acl.ACL{READER: acl.DenyAllACL{}, WRITER: acl.DenyAllACL{}, ADMIN: acl.DenyAllACL{}}
+	tacl.entries = append(tacl.entries, aclEntry{tableNameOrPrefix: "secret", groupName: "secret", acl: denyAll})
+	allTablesACL = tacl.AuthorizedForAllTables()
+	require.False(t, allTablesACL.IsMember(&querypb.VTGateCallerID{Username: "u3"}), "a group covering every table alongside another group must not cover every table")
+	require.Empty(t, allTablesACL.GroupName)
 }
 
 func TestFailedToCreateACL(t *testing.T) {

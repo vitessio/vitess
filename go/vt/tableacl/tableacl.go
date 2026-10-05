@@ -289,24 +289,13 @@ func AuthorizedForAllTables() *ACLResult {
 func (tacl *tableACL) AuthorizedForAllTables() *ACLResult {
 	tacl.RLock()
 	defer tacl.RUnlock()
-	for _, entry := range tacl.entries {
-		if entry.tableNameOrPrefix != "%" {
-			continue
-		}
-		roles := make(allRolesACL, 0, NumRoles)
-		for role := range NumRoles {
-			roleACL, ok := entry.acl[role]
-			if !ok {
-				roles = nil
-				break
-			}
-			roles = append(roles, roleACL)
-		}
-		if roles == nil {
-			break
-		}
+	// A "%" entry overlaps every other entry, so ValidateProto only accepts it
+	// alone. The rule is checked here as well rather than relied on: alongside
+	// any other group, some tables would be governed by that group instead.
+	if len(tacl.entries) == 1 && tacl.entries[0].tableNameOrPrefix == "%" {
+		entry := tacl.entries[0]
 		return &ACLResult{
-			ACL:       roles,
+			ACL:       allRolesACL{entry.acl[READER], entry.acl[WRITER], entry.acl[ADMIN]},
 			GroupName: entry.groupName,
 		}
 	}
