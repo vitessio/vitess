@@ -523,8 +523,14 @@ ERSUnlock(o) ==
     \* the fix: cancel the outstanding repoints before releasing the lock
     /\ pending' = IF DETACHED_REPOINT THEN pending
                   ELSE {m \in pending : m.ers # ersId[o] \/ m.orc # o}
-    /\ UNCHANGED <<mysqlVars, clientVars, tabletVars, shardPrimary, term, cut,
-                   ersOld, ersId, reached, pos, cand, repointed, boundVars>>
+    \* Nothing reads the ERS's own bookkeeping again before the next ERSLock overwrites it. Reset
+    \* it, so that states that differ only in what a finished ERS left behind are one state.
+    /\ ersOld' = [ersOld EXCEPT ![o] = None]
+    /\ reached' = [reached EXCEPT ![o] = {}]
+    /\ pos' = [pos EXCEPT ![o] = [t \in Tablets |-> {}]]
+    /\ cand' = [cand EXCEPT ![o] = None]
+    /\ repointed' = [repointed EXCEPT ![o] = {}]
+    /\ UNCHANGED <<mysqlVars, clientVars, tabletVars, shardPrimary, term, cut, ersId, boundVars>>
 
 \* The lease of the shard lock expires under a holder that keeps going. Nothing renews the lease
 \* (topo.Lock cancels the KeepAlive's context when it returns) except CheckShardLocked
@@ -756,8 +762,9 @@ PRSUnlock ==
     /\ prs = "unlock"
     /\ prs' = "done"
     /\ lock' = IF lock = "op" THEN None ELSE lock
-    /\ UNCHANGED <<mysqlVars, clientVars, tabletVars, shardPrimary, term, cut, orcVars, boundVars,
-                   prsOld, prsCand, prsPos, prsPend, nPRS>>
+    \* As for ERS: nothing reads PRS's bookkeeping once it is done.
+    /\ prsOld' = None /\ prsCand' = None /\ prsPos' = {} /\ prsPend' = {}
+    /\ UNCHANGED <<mysqlVars, clientVars, tabletVars, shardPrimary, term, cut, orcVars, boundVars, nPRS>>
 
 PRSNext ==
     \/ PRSStart \/ PRSCatchup \/ PRSSnapshot \/ PRSDemote \/ PRSDemoteTimeout
@@ -822,4 +829,14 @@ NoErrantServingReplica ==
     Quiescent => \A t \in Tablets :
         (ttype[t] = "REPLICA" /\ t # Newest /\ src[t] # None)
             => ErrantVs(Rng(binlog[t]), Newest) = {}
+-----------------------------------------------------------------------------
+(* Symmetry (the SYMMETRY of every configuration). The tablets other than the initial primary
+   start alike, and so do the VTOrcs; no action prefers one of them, so permuting them maps
+   behaviors to behaviors. The one CHOOSE over tablets, Newest, has a unique answer: every
+   promotion takes a term above all others, and only InitPrimary starts with one. TLC then
+   explores one state per class of permuted states. *)
+Symmetry ==
+    {[x \in Tablets \cup Orcs |-> IF x \in Tablets THEN p[x] ELSE q[x]] :
+        p \in {f \in [Tablets -> Tablets] : f[InitPrimary] = InitPrimary /\ \A a, b \in Tablets : a # b => f[a] # f[b]},
+        q \in Permutations(Orcs)}
 =============================================================================

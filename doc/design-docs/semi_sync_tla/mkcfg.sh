@@ -20,5 +20,6 @@ for kv in "$@"; do v[${kv%%=*}]=${kv#*=}; done
   for k in "${order[@]}"; do echo "    $k = ${v[$k]}"; done
   echo "SPECIFICATION Spec"
   echo "INVARIANTS ${v[INVARIANTS]}"
+  echo "SYMMETRY Symmetry"
   echo "CHECK_DEADLOCK FALSE"
 } > "$(dirname "$0")/$name.cfg"
