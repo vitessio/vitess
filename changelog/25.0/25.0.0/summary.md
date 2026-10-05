@@ -465,7 +465,7 @@ SET cte_max_recursion_depth = 5000;
 WITH RECURSIVE cte AS (SELECT 1 AS n UNION ALL SELECT n + 1 FROM cte WHERE n < 4000) SELECT COUNT(*) FROM cte;
 ```
 
-The default remains 1000 when the variable is not set. The error raised when the limit is exceeded now reports the limit in effect.
+The default remains 1000 when the variable is not set. The error raised when the limit is exceeded now reports the iteration count that exceeded it, as MySQL does (for example `Recursive query aborted after 1001 iterations.` at the default).
 
 See [#20433](https://github.com/vitessio/vitess/issues/20433) for details.
 

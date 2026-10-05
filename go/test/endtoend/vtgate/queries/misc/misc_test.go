@@ -1058,7 +1058,7 @@ func TestRecursiveCTEMaxRecursionDepth(t *testing.T) {
 		t.Run(workload, func(t *testing.T) {
 			utils.Exec(t, mcmp.VtConn, "set workload = "+workload)
 			_, err := mcmp.VtConn.ExecuteFetch(unbounded, 1000, false)
-			require.ErrorContains(t, err, "Recursive query aborted after 10 iterations")
+			require.ErrorContains(t, err, "Recursive query aborted after 11 iterations")
 		})
 	}
 

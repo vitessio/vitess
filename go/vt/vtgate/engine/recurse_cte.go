@@ -103,7 +103,8 @@ func (r *RecurseCTE) TryExecute(ctx context.Context, vcursor VCursor, bindVars m
 			}
 			loops++
 			if loops > maxDepth {
-				return nil, vterrors.VT09030(maxDepth)
+				// Like MySQL, report the iteration count that exceeded the limit.
+				return nil, vterrors.VT09030(loops)
 			}
 			rresult, err := vcursor.ExecutePrimitive(ctx, r.Term, combineVars(bindVars, joinVars), false)
 			if err != nil {
@@ -163,7 +164,8 @@ func (r *RecurseCTE) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 			}
 			loops++
 			if loops > maxDepth {
-				return vterrors.VT09030(maxDepth)
+				// Like MySQL, report the iteration count that exceeded the limit.
+				return vterrors.VT09030(loops)
 			}
 			err := vcursor.StreamExecutePrimitive(ctx, r.Term, combineVars(bindVars, joinVars), false, func(result *sqltypes.Result) error {
 				mu.Lock()

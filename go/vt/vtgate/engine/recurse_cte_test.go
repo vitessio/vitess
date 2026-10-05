@@ -131,9 +131,9 @@ func TestRecurseDualQuery(t *testing.T) {
 
 // TestRecurseCTERecursionLimit verifies that the recursion-depth guard is
 // enforced on both the buffered and streaming execution paths. The buffered
-// path aborts after 1000 iterations with VT09030 ("Recursive query aborted
-// after 1000 iterations."); the streaming path must enforce the same guard
-// rather than recursing unbounded.
+// path aborts once the 1000-iteration default is exceeded with VT09030
+// ("Recursive query aborted after 1001 iterations."); the streaming path must
+// enforce the same guard rather than recursing unbounded.
 func TestRecurseCTERecursionLimit(t *testing.T) {
 	fields := sqltypes.MakeTestFields("col1", "int64")
 
@@ -208,8 +208,8 @@ func TestRecurseCTEStreamConcurrentDelivery(t *testing.T) {
 
 // TestRecurseCTEConfigurableRecursionLimit verifies that the recursion guard
 // honors the session's cte_max_recursion_depth system variable on both the
-// buffered and streaming paths, and that the error names the limit that was
-// applied.
+// buffered and streaming paths, and that the error reports the iteration
+// count that exceeded the limit, as MySQL does.
 func TestRecurseCTEConfigurableRecursionLimit(t *testing.T) {
 	fields := sqltypes.MakeTestFields("col1", "int64")
 
@@ -241,7 +241,7 @@ func TestRecurseCTEConfigurableRecursionLimit(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			vc := &noopVCursor{systemVariables: map[string]string{sysvars.CTEMaxRecursionDepth: tc.value}}
-			wantErr := fmt.Sprintf("Recursive query aborted after %d iterations", tc.limit)
+			wantErr := fmt.Sprintf("Recursive query aborted after %d iterations", tc.limit+1)
 
 			_, cte := newCTE()
 			_, err := cte.TryExecute(t.Context(), vc, bv, true)
