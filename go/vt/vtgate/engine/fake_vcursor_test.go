@@ -467,9 +467,6 @@ var (
 type loggingVCursor struct {
 	noopVCursor
 
-	// vexplainLogs is what GetVExplainLogs returns.
-	vexplainLogs []ExecuteEntry
-
 	shards          []string
 	shardForKsid    []string
 	curShardForKsid int
@@ -1113,8 +1110,4 @@ func printResolvedShardsBindVars(rss []*srvtopo.ResolvedShard, bvs []map[string]
 		fmt.Fprintf(buf, "%s.%s: {%v} ", rs.Target.Keyspace, rs.Target.Shard, deprecatedPrintBindVars(bvs[i]))
 	}
 	return buf.String()
-}
-
-func (f *loggingVCursor) GetVExplainLogs() []ExecuteEntry {
-	return f.vexplainLogs
 }
