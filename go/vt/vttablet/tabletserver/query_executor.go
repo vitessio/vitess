@@ -1048,6 +1048,15 @@ func (qre *QueryExecutor) execRollbackToSavepoint(conn *StatefulConnection, sql 
 	return qr, nil
 }
 
+// escapeAnnotationPrincipal returns the caller principal in a form that can be
+// embedded in the annotation comment that prefixes queries sent to MySQL. The
+// principal can be chosen by the client, and "*/" is the only sequence that
+// ends the comment, so it is escaped as "*\/", which MySQL reads as ordinary
+// comment text.
+func escapeAnnotationPrincipal(principal string) string {
+	return strings.ReplaceAll(principal, "*/", `*\/`)
+}
+
 func (qre *QueryExecutor) generateFinalSQL(parsedQuery *sqlparser.ParsedQuery, bindVars map[string]*querypb.BindVariable) (string, string, error) {
 	query, err := parsedQuery.GenerateQuery(bindVars, nil)
 	if err != nil {
@@ -1058,6 +1067,7 @@ func (qre *QueryExecutor) generateFinalSQL(parsedQuery *sqlparser.ParsedQuery, b
 		if username == "" {
 			username = callerid.GetUsername(callerid.ImmediateCallerIDFromContext(qre.ctx))
 		}
+		username = escapeAnnotationPrincipal(username)
 		var buf strings.Builder
 		tabletTypeStr := qre.tsv.sm.target.TabletType.String()
 		buf.Grow(8 + len(username) + len(tabletTypeStr))
