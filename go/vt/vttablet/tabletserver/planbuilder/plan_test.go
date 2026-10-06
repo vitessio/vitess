@@ -456,7 +456,7 @@ func TestSettingsRejectSubqueries(t *testing.T) {
 					assert.NotEmpty(t, resetQuery)
 				}
 
-				err = ValidateSettings(settings, parser, strictTableACL)
+				err = ValidateSettingsSQLMode(settings, parser, strictTableACL)
 				if rejected {
 					require.EqualError(t, err, expectedErr)
 				} else {
