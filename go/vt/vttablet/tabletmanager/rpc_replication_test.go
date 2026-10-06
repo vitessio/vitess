@@ -1787,7 +1787,7 @@ func (d *drainSemiSyncMysqlDaemon) StartReplication(ctx context.Context, hookExt
 }
 
 func TestChangeTypeDrainedRevokesSemiSyncBeforePublishing(t *testing.T) {
-	for _, stage := range []string{"semi-sync update", "receiver restart"} {
+	for _, stage := range []string{"semi-sync update", "status read", "status cancellation", "receiver restart"} {
 		t.Run(stage, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 			t.Cleanup(cancel)
@@ -1807,7 +1807,15 @@ func TestChangeTypeDrainedRevokesSemiSyncBeforePublishing(t *testing.T) {
 				fake.IOThreadRunning = true
 				fake.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA", "START REPLICA"}
 				daemon.acking = true
-				daemon.stopError = injectedErr
+				switch stage {
+				case "status read":
+					fake.ReplicationStatusError = injectedErr
+				case "status cancellation":
+					injectedErr = context.Canceled
+					fake.ReplicationStatusError = injectedErr
+				case "receiver restart":
+					daemon.stopError = injectedErr
+				}
 			}
 
 			require.ErrorContains(t, tm.ChangeType(ctx, topodatapb.TabletType_DRAINED, true), injectedErr.Error())
@@ -1815,19 +1823,41 @@ func TestChangeTypeDrainedRevokesSemiSyncBeforePublishing(t *testing.T) {
 			ti, err := ts.GetTablet(ctx, tm.Tablet().Alias)
 			require.NoError(t, err)
 			assert.Equal(t, topodatapb.TabletType_REPLICA, ti.Type)
+			if stage != "semi-sync update" {
+				assert.True(t, daemon.acking)
+				assert.Zero(t, fake.ExpectedExecuteSuperQueryCurrent)
+			}
 
 			daemon.setError, daemon.stopError = nil, nil
+			fake.ReplicationStatusError = nil
 			require.NoError(t, tm.ChangeType(ctx, topodatapb.TabletType_DRAINED, true))
 			assert.Equal(t, topodatapb.TabletType_REPLICA, daemon.typeAtRevoke)
 			assert.Equal(t, topodatapb.TabletType_DRAINED, tm.Tablet().Type)
 			assert.False(t, fake.SemiSyncReplicaEnabled)
-			if stage == "receiver restart" {
+			if stage != "semi-sync update" {
 				assert.Equal(t, topodatapb.TabletType_REPLICA, daemon.typeAtRestart)
 				assert.False(t, daemon.acking)
 				require.NoError(t, fake.CheckSuperQueryList())
 			}
 		})
 	}
+}
+
+func TestChangeTypeDrainedWithoutReplication(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	t.Cleanup(cancel)
+	ts := memorytopo.NewServer(ctx, "cell1")
+	tm := newTestTM(t, ts, 1, "ks", "0", nil)
+	t.Cleanup(tm.Stop)
+	daemon := tm.MysqlDaemon.(*mysqlctl.FakeMysqlDaemon)
+	daemon.DB().SetNeverFail(true)
+	require.NoError(t, tm.ChangeType(ctx, topodatapb.TabletType_REPLICA, true))
+	daemon.ReplicationStatusError = mysql.ErrNotReplica
+
+	require.NoError(t, tm.ChangeType(ctx, topodatapb.TabletType_DRAINED, true))
+	assert.Equal(t, topodatapb.TabletType_DRAINED, tm.Tablet().Type)
+	assert.False(t, daemon.SemiSyncReplicaEnabled)
+	assert.Zero(t, daemon.ExpectedExecuteSuperQueryCurrent)
 }
 
 func TestChangeTypeDrainedRepairsAcknowledgementsWithoutReclaiming(t *testing.T) {
