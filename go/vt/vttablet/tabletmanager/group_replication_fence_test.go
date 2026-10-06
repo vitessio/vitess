@@ -510,6 +510,9 @@ func TestGroupReplicationFenceCheckFollowsMigrationBack(t *testing.T) {
 		s.reconcile(ctx)
 		s.checkFence(ctx)
 
+		// The shard watch would deliver the new policy to the cache at any time: stop it, so that the
+		// fence check decides under the policy the sync loop read last.
+		tm.stopShardSync()
 		setShardDurabilityPolicy(t, ts, policy.DurabilitySemiSync)
 		fmd.SetGroupReplicationStatus(primaryView(recordedIncarnation))
 		s.checkFence(ctx)
