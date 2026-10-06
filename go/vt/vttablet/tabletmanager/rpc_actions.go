@@ -126,9 +126,7 @@ func (tm *TabletManager) ChangeType(ctx context.Context, tabletType topodatapb.T
 	}
 	defer tm.unlock()
 
-	// No durability policy lets a DRAINED tablet ACK: ERS neither waits for it nor promotes it,
-	// so a write that only it ACKed would be lost. VTOrc versions before v25 ask a tablet drained
-	// for errant GTIDs to keep ACKing.
+	// DRAINED tablets must not ACK, even when an older caller requests semi-sync.
 	if tabletType == topodatapb.TabletType_DRAINED {
 		semiSync = false
 	}
@@ -143,13 +141,29 @@ func (tm *TabletManager) ChangeType(ctx context.Context, tabletType topodatapb.T
 
 // changeTypeLocked changes the tablet type under a lock
 func (tm *TabletManager) changeTypeLocked(ctx context.Context, tabletType topodatapb.TabletType, action DBAction, semiSync SemiSyncAction) error {
-	// We don't want to allow multiple callers to claim a tablet as drained.
+	if tabletType == topodatapb.TabletType_DRAINED {
+		// Stop serving before disabling source-side semi-sync releases blocked commits.
+		if tm.Tablet().Type == topodatapb.TabletType_PRIMARY {
+			if _, err := tm.demotePrimaryLocked(ctx, false /* revertPartialFailure */, true /* force */); err != nil {
+				return vterrors.Wrapf(err, "failed to demote the primary before draining")
+			}
+		}
+		// Disable ACKs before failover excludes this tablet. Failed updates remain
+		// retryable; already-drained tablets are repaired before rejecting another claim.
+		if err := tm.fixSemiSyncAndReplication(ctx, tabletType, semiSync); err != nil {
+			return vterrors.Wrapf(err, "failed to revoke semi-sync acknowledgements before draining")
+		}
+	}
+	// Reject duplicate claims of a DRAINED tablet.
 	if tabletType == topodatapb.TabletType_DRAINED && tm.Tablet().Type == topodatapb.TabletType_DRAINED {
 		return fmt.Errorf("Tablet: %v, is already drained", tm.tabletAlias)
 	}
 
 	if err := tm.tmState.ChangeTabletType(ctx, tabletType, action); err != nil {
 		return err
+	}
+	if tabletType == topodatapb.TabletType_DRAINED {
+		return nil
 	}
 
 	// Let's see if we need to fix semi-sync acking.
