@@ -79,18 +79,31 @@ const (
 	// another incarnation than the shard record lists: the bootstrap happened, but its reply was
 	// lost before the incarnation was recorded. VTOrc adopts the group.
 	GroupBootstrapNotRecorded AnalysisCode = "GroupBootstrapNotRecorded"
-	// GroupVotersOutOfDate describes a shard whose recorded voters differ from the voters that its
-	// durability policy selects: no voter is selected yet, a voter failed for longer than
-	// --group-replication-voter-replacement-grace-period, a cell misses a voter, or a tablet that
-	// is not a voter is an active member. It is reported on a single tablet of the shard.
+	// GroupVotersOutOfDate describes a shard whose voters VTOrc changes (see PlanGroupVoters): no
+	// voter is listed yet (InitialVoters), a voter failed and a spare of its cell takes its seat
+	// (SwapVoter), a cell with an eligible tablet has no voter (GrowVoter), or a voter whose tablet
+	// record was deleted has no spare and leaves the list (RemoveVoter). It is reported on a single
+	// tablet of the shard.
 	GroupVotersOutOfDate AnalysisCode = "GroupVotersOutOfDate"
-	// GroupVotersBelowTarget describes a shard whose voters are not selected yet, while its PRIMARY and
-	// REPLICA tablets that the durability policy allows as voters are in fewer than
-	// policy.MinGroupReplicationCells cells: with one voter per cell, its group would keep no majority
-	// when one of its voters fails. VTOrc writes no voter list, and so bootstraps no group, until the
-	// shard has eligible tablets in enough cells. It is reported on a single tablet of the shard, and
-	// has no recovery.
+	// GroupPrimaryNotVoter describes the tablet whose MySQL is the primary of its shard's legitimate
+	// replication group while it is not a voter. It does not serve; VTOrc moves the group primary to
+	// an ONLINE voter of its view.
+	GroupPrimaryNotVoter AnalysisCode = "GroupPrimaryNotVoter"
+	// GroupVotersBelowTarget describes a shard whose group has fewer voters than cells with an
+	// eligible tablet, or fewer than policy.MinGroupReplicationCells, and that VTOrc cannot grow now:
+	// for example, its tablets that may be voters are in too few cells, so that VTOrc writes no initial
+	// voter list and bootstraps no group. It is reported on a single tablet of the shard, and has no
+	// recovery.
 	GroupVotersBelowTarget AnalysisCode = "GroupVotersBelowTarget"
+	// GroupVoterUnreplaceable describes a shard with a voter that failed (unreachable for
+	// --group-replication-voter-replacement-grace-period, and active in no view of the group) whose
+	// cell has no valid spare. It is reported on a single tablet of the shard, and has no recovery.
+	GroupVoterUnreplaceable AnalysisCode = "GroupVoterUnreplaceable"
+	// GroupVoterRecordDeleted describes a shard with a voter whose tablet record was deleted while its
+	// MySQL is still active in the group, or still in the view of the group primary while its cell has
+	// no spare: VTOrc only replaces or removes such a voter once it left the group. It is reported on a
+	// single tablet of the shard, and has no recovery.
+	GroupVoterRecordDeleted AnalysisCode = "GroupVoterRecordDeleted"
 	// GroupQuorumLost describes a shard whose group has active members, none of which has quorum.
 	// The group cannot commit. VTOrc does not act; forcing a new membership is an operator decision.
 	GroupQuorumLost AnalysisCode = "GroupQuorumLost"
@@ -272,13 +285,10 @@ type DetectionAnalysis struct {
 	// shardReachableNonMemberPrimary is true when VTOrc reached a PRIMARY tablet of the shard whose
 	// MySQL is not an active group member.
 	shardReachableNonMemberPrimary bool
-	// isGroupVotersReporter is true when the shard's voters are out of date and the analyzed
-	// tablet is the one on which GroupVotersOutOfDate is reported.
-	isGroupVotersReporter bool
-	// isGroupVotersBelowTargetReporter is true when the shard has no voter list and VTOrc selects
-	// none, because its tablets that may be voters are in too few cells, and the analyzed tablet is
-	// the one on which GroupVotersBelowTarget is reported.
-	isGroupVotersBelowTargetReporter bool
+	// groupVoterAnalysis is the shard-wide voter analysis of the analyzed tablet's shard, when it is
+	// reported on the analyzed tablet (see PlanGroupVoters), and GroupVoterReason says why.
+	groupVoterAnalysis AnalysisCode
+	GroupVoterReason   string
 
 	QuorumDetail *QuorumResult `json:",omitempty"`
 }

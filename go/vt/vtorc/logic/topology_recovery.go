@@ -202,6 +202,9 @@ const (
 	bootstrapGroupReplicationFunc
 	// updateGroupReplicationVotersFunc updates the voters of a shard's replication group.
 	updateGroupReplicationVotersFunc
+	// moveGroupPrimaryToVoterFunc moves the primary of a shard's replication group, which is not a
+	// voter, to a voter.
+	moveGroupPrimaryToVoterFunc
 	// adoptGroupReplicationBootstrapFunc records the incarnation of a group whose bootstrap's
 	// reply was lost.
 	adoptGroupReplicationBootstrapFunc
@@ -792,6 +795,8 @@ func getCheckAndRecoverFunctionCode(analysisEntry *inst.DetectionAnalysis) (reco
 		recoveryFunc = adoptGroupReplicationBootstrapFunc
 	case inst.GroupVotersOutOfDate:
 		recoveryFunc = updateGroupReplicationVotersFunc
+	case inst.GroupPrimaryNotVoter:
+		recoveryFunc = moveGroupPrimaryToVoterFunc
 	case inst.ErrantGTIDDetected:
 		if !config.ConvertTabletWithErrantGTIDs() {
 			log.Info(fmt.Sprintf("VTOrc not configured to do anything on detecting errant GTIDs, skipping recovering %v", analysisCode))
@@ -865,7 +870,7 @@ func hasActionableRecovery(recoveryFunctionCode recoveryFunction) bool {
 	case reconcileStaleTopoPrimaryFunc:
 		return true
 	case promoteGroupPrimaryFunc, startGroupReplicationFunc, bootstrapGroupReplicationFunc, updateGroupReplicationVotersFunc,
-		adoptGroupReplicationBootstrapFunc:
+		adoptGroupReplicationBootstrapFunc, moveGroupPrimaryToVoterFunc:
 		return true
 	default:
 		return false
@@ -911,6 +916,8 @@ func getCheckAndRecoverFunction(recoveryFunctionCode recoveryFunction) (
 		return bootstrapGroupReplication
 	case updateGroupReplicationVotersFunc:
 		return updateGroupReplicationVoters
+	case moveGroupPrimaryToVoterFunc:
+		return moveGroupPrimaryToVoter
 	case adoptGroupReplicationBootstrapFunc:
 		return adoptGroupReplicationBootstrap
 	default:
@@ -956,6 +963,8 @@ func getRecoverFunctionName(recoveryFunctionCode recoveryFunction) string {
 		return BootstrapGroupReplicationRecoveryName
 	case updateGroupReplicationVotersFunc:
 		return UpdateGroupReplicationVotersRecoveryName
+	case moveGroupPrimaryToVoterFunc:
+		return MoveGroupPrimaryToVoterRecoveryName
 	case adoptGroupReplicationBootstrapFunc:
 		return AdoptGroupReplicationBootstrapRecoveryName
 	default:
@@ -1005,6 +1014,9 @@ func recoveryRunsWithoutShardPrimary(recoveryFunctionCode recoveryFunction) bool
 		// The voters of a group that is not bootstrapped yet are selected before the shard has a
 		// primary.
 		return true
+	case moveGroupPrimaryToVoterFunc:
+		// The group primary that is not a voter does not serve, and its tablet may not be PRIMARY.
+		return true
 	case startGroupReplicationFunc:
 		// A group that was just bootstrapped, or that lost the majority of its voters, only gets
 		// a primary tablet once enough voters have joined it: its primary is not followed before
@@ -1023,7 +1035,7 @@ func recoveryRunsWithoutShardPrimary(recoveryFunctionCode recoveryFunction) bool
 // its own deadline, and work with the cells that answer.
 func isGroupReplicationTabletRecovery(recoveryFunctionCode recoveryFunction) bool {
 	switch recoveryFunctionCode {
-	case promoteGroupPrimaryFunc, startGroupReplicationFunc, updateGroupReplicationVotersFunc, adoptGroupReplicationBootstrapFunc:
+	case promoteGroupPrimaryFunc, startGroupReplicationFunc, updateGroupReplicationVotersFunc, adoptGroupReplicationBootstrapFunc, moveGroupPrimaryToVoterFunc:
 		return true
 	default:
 		return false

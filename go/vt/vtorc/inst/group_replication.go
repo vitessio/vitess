@@ -17,7 +17,6 @@ limitations under the License.
 package inst
 
 import (
-	"fmt"
 	"slices"
 	"strings"
 	"sync"
@@ -141,265 +140,6 @@ func splitGroupMemberUUIDs(value string) []string {
 // runs every --recovery-poll-duration (1s by default), well within the forget period.
 var UnreachableGroupTablets = NewConditionTracker(10 * time.Second)
 
-// VoterObservation is what VTOrc knows about one tablet of a shard when it selects the voting
-// members of the shard's replication group.
-type VoterObservation struct {
-	Tablet *topodatapb.Tablet
-	// Reachable is true when VTOrc reached the tablet on its last check, so the member state below
-	// is current.
-	Reachable bool
-	// ServerUUID is the server_uuid of the tablet's MySQL, as last seen. It identifies the tablet
-	// in the group membership that the other members report.
-	ServerUUID string
-	// Active is true when the tablet's MySQL is an active (ONLINE or RECOVERING) group member.
-	Active bool
-	// GroupPrimary is true when the tablet's MySQL is the ONLINE primary of a group with quorum.
-	GroupPrimary bool
-	// HasQuorum is true when the member sees a majority of its group, and PrimaryUUID is the
-	// server_uuid of the group primary in its view.
-	HasQuorum   bool
-	PrimaryUUID string
-	// ActiveMemberUUIDs are the server_uuids of the members that this member sees as active, and
-	// OnlineMemberUUIDs those it sees as ONLINE.
-	ActiveMemberUUIDs []string
-	OnlineMemberUUIDs []string
-	// Foreign is true when the member is active in a group of another incarnation than the one
-	// the shard record lists.
-	Foreign bool
-}
-
-// NewVoterObservation returns the observation of a tablet from its FullStatus. A nil status means
-// that the tablet is unreachable; lastServerUUID is then the server_uuid of its MySQL as VTOrc last
-// saw it.
-func NewVoterObservation(tablet *topodatapb.Tablet, status *replicationdatapb.FullStatus, lastServerUUID string) *VoterObservation {
-	if status == nil {
-		return &VoterObservation{Tablet: tablet, ServerUUID: lastServerUUID}
-	}
-	gr := status.GetGroupReplicationStatus()
-	return &VoterObservation{
-		Tablet:            tablet,
-		Reachable:         true,
-		ServerUUID:        status.GetServerUuid(),
-		Active:            mysql.IsGroupMemberActive(gr),
-		GroupPrimary:      mysql.IsGroupPrimary(gr),
-		HasQuorum:         gr.GetHasQuorum(),
-		PrimaryUUID:       gr.GetPrimaryUuid(),
-		ActiveMemberUUIDs: ActiveGroupMemberUUIDs(gr),
-		OnlineMemberUUIDs: OnlineGroupMemberUUIDs(gr),
-	}
-}
-
-// GroupVoterSelection is the result of SelectGroupReplicationVoters.
-type GroupVoterSelection struct {
-	// Voters are the voting members that the shard's group should have, sorted by alias.
-	Voters []*topodatapb.TabletAlias
-	// GroupPrimary is the tablet whose MySQL is the group's primary, if it is known.
-	GroupPrimary *topodatapb.TabletAlias
-	// Candidates are the tablets of the shard, as SelectVoters saw them.
-	Candidates []policy.VoterCandidate
-	// KeptReason is set when SelectVoters chose other voters, but a view of the shard's group that
-	// lacks a majority of the current voters would hold a majority of them: Voters are then the
-	// current voters, and KeptReason says why (see voterChangeRefusal).
-	KeptReason string
-	// BelowTarget is set when no voter is listed yet and SelectVoters chose fewer than
-	// policy.MinGroupReplicationCells voters, one per cell: the shard's group would keep no majority
-	// when one of them fails. Voters is then empty, and BelowTarget says why (GroupVotersBelowTarget).
-	BelowTarget string
-}
-
-// IsActive returns whether the tablet's MySQL is an active member of the shard's group, as far as
-// VTOrc knows. The MySQL of an unreachable tablet is active when a reachable member sees it as
-// active.
-func (s *GroupVoterSelection) IsActive(alias *topodatapb.TabletAlias) bool {
-	for _, c := range s.Candidates {
-		if topoproto.TabletAliasEqual(c.Tablet.GetAlias(), alias) {
-			return c.Active
-		}
-	}
-	return false
-}
-
-// SelectGroupReplicationVoters returns the voting members that a shard's group should have, given
-// its current voters and what VTOrc knows about the shard's tablets. See policy.SelectVoters.
-//
-//   - A tablet is Active when its MySQL is an active member of the group. For an unreachable
-//     tablet, that is when a reachable active member sees its server_uuid as active: its MySQL
-//     still runs Group Replication even though its vttablet is down.
-//   - A tablet is Failed when it has been unreachable for at least
-//     --group-replication-voter-replacement-grace-period and is not Active. A voter that restarts,
-//     or whose MySQL is still in the group, keeps its seat, so the group never gets a second
-//     voter in its cell while it is still a member.
-//   - A voter that takes a backup or restores one keeps its seat, although its tablet type makes
-//     it ineligible while it does.
-//   - No initial list has fewer than policy.MinGroupReplicationCells voters: while no voter is listed
-//     and the shard's tablets that may be voters are in fewer cells, Voters is empty and BelowTarget
-//     says why.
-//   - The current voters are kept when a view of the group that lacks a majority of them would hold
-//     a majority of the selected voters (see voterChangeRefusal). The selection is the only place
-//     that decides the list: the analysis (GroupVotersOutOfDate) and the recovery that writes it
-//     both use it.
-func SelectGroupReplicationVoters(durability policy.GroupReplicationDurabler, current []*topodatapb.TabletAlias, observations []*VoterObservation, now time.Time) *GroupVoterSelection {
-	reportedActive := make(map[string]bool)
-	var groupPrimary *topodatapb.TabletAlias
-	primaryUUID := ""
-	for _, o := range observations {
-		if !o.Reachable || !o.Active {
-			continue
-		}
-		for _, uuid := range o.ActiveMemberUUIDs {
-			reportedActive[uuid] = true
-		}
-		if o.GroupPrimary && groupPrimary == nil {
-			groupPrimary = o.Tablet.GetAlias()
-		}
-		if o.HasQuorum && o.PrimaryUUID != "" {
-			primaryUUID = o.PrimaryUUID
-		}
-	}
-	if groupPrimary == nil && primaryUUID != "" {
-		// The group primary's tablet is unreachable, but its MySQL is still the primary of the
-		// members with quorum. It keeps its seat.
-		for _, o := range observations {
-			if o.ServerUUID == primaryUUID {
-				groupPrimary = o.Tablet.GetAlias()
-				break
-			}
-		}
-	}
-
-	selection := &GroupVoterSelection{GroupPrimary: groupPrimary}
-	gracePeriod := config.GetGroupReplicationVoterReplacementGracePeriod()
-	for _, o := range observations {
-		if o.Tablet.GetAlias() == nil {
-			continue
-		}
-		candidate := policy.VoterCandidate{Tablet: o.Tablet, Active: o.Active}
-		if !o.Reachable {
-			candidate.Active = o.ServerUUID != "" && reportedActive[o.ServerUUID]
-			unreachableFor := UnreachableGroupTablets.Observe(topoproto.TabletAliasString(o.Tablet.Alias), now)
-			candidate.Failed = !candidate.Active && unreachableFor >= gracePeriod
-		}
-		switch o.Tablet.GetType() {
-		case topodatapb.TabletType_BACKUP, topodatapb.TabletType_RESTORE:
-			if policy.IsVoter(current, o.Tablet.Alias) {
-				tablet := o.Tablet.CloneVT()
-				tablet.Type = topodatapb.TabletType_REPLICA
-				candidate.Tablet = tablet
-			}
-		}
-		selection.Candidates = append(selection.Candidates, candidate)
-	}
-	selection.Voters = policy.SelectVoters(durability, current, groupPrimary, selection.Candidates)
-	if len(current) == 0 && len(selection.Voters) < policy.MinGroupReplicationCells {
-		cells := make([]string, 0, len(selection.Voters))
-		for _, voter := range selection.Voters {
-			cells = append(cells, voter.Cell)
-		}
-		selection.BelowTarget = fmt.Sprintf("the durability policy selects %d voters ([%s]), one per cell with a PRIMARY or REPLICA tablet that has not failed (cells [%s]); "+
-			"the shard needs them in at least %d cells, so that its replication group keeps a majority when one voter fails",
-			len(selection.Voters), formatGroupReplicationVoters(selection.Voters), strings.Join(cells, ", "), policy.MinGroupReplicationCells)
-		selection.Voters = nil
-		return selection
-	}
-	if reason := voterChangeRefusal(current, selection.Voters, observations); reason != "" {
-		selection.Voters = slices.Clone(current)
-		slices.SortFunc(selection.Voters, func(a, b *topodatapb.TabletAlias) int {
-			return strings.Compare(topoproto.TabletAliasString(a), topoproto.TabletAliasString(b))
-		})
-		selection.KeptReason = reason
-	}
-	return selection
-}
-
-// voterChangeRefusal returns why the voter list must not change from current to proposed, or ""
-// if it may. A view of the shard's group that lacks a majority of the current voters does not
-// serve, and must not serve after the change either: VTOrc never writes a list under which such a
-// view would hold a majority of the new voters. Otherwise a group whose view shrank to a minority of
-// its voters, through clean leaves that keep MySQL's view quorum, would serve again once the voters
-// it lacks were unreachable for the replacement grace period, and acknowledge writes on fewer
-// hosts than a majority of the voters ("Group shrink fails closed" in the design). Replacing a
-// failed voter with a spare is allowed: the view that lacks a voter majority gains a majority only
-// once the spare joins it, through distributed recovery, which gives the spare the group's history.
-//
-// A current list that is empty (no voter selected yet) has no majority to keep. Only the views of
-// the shard's group count: a member of another incarnation (Foreign) never serves. A view is what a
-// reachable active member reports; a current voter counts in it when it is ONLINE there, as for the
-// serving invariant, and a new voter when it is ONLINE or RECOVERING there. VTOrc cannot see a view
-// of members that are all unreachable: a new voter that is unreachable and that no reachable member
-// reports active could be in any view, so it counts in every view, and the change is refused when
-// such voters alone would hold a majority of the new list.
-func voterChangeRefusal(current, proposed []*topodatapb.TabletAlias, observations []*VoterObservation) string {
-	if len(current) == 0 || SameGroupReplicationVoters(current, proposed) {
-		return ""
-	}
-	byAlias := make(map[string]*VoterObservation, len(observations))
-	reported := make(map[string]bool)
-	for _, o := range observations {
-		if o.Tablet.GetAlias() == nil {
-			continue
-		}
-		byAlias[topoproto.TabletAliasString(o.Tablet.Alias)] = o
-		if !o.Reachable || !o.Active {
-			continue
-		}
-		reported[o.ServerUUID] = true
-		for _, uuid := range o.ActiveMemberUUIDs {
-			reported[uuid] = true
-		}
-	}
-	uuidOf := func(alias *topodatapb.TabletAlias) string {
-		if o := byAlias[topoproto.TabletAliasString(alias)]; o != nil {
-			return o.ServerUUID
-		}
-		return ""
-	}
-	unseen := make(map[string]bool)
-	for _, alias := range proposed {
-		o := byAlias[topoproto.TabletAliasString(alias)]
-		if o == nil || (!o.Reachable && (o.ServerUUID == "" || !reported[o.ServerUUID])) {
-			unseen[topoproto.TabletAliasString(alias)] = true
-		}
-	}
-	currentMajority, proposedMajority := len(current)/2+1, len(proposed)/2+1
-	if len(unseen) >= proposedMajority {
-		return fmt.Sprintf("%d of the %d new voters [%s] are unreachable and no reachable member reports them active, so a view that VTOrc cannot see could hold their majority",
-			len(unseen), len(proposed), aliasesString(proposed))
-	}
-	for _, o := range observations {
-		if o.Tablet.GetAlias() == nil || !o.Reachable || !o.Active || o.Foreign {
-			continue
-		}
-		online := make(map[string]bool, len(o.OnlineMemberUUIDs))
-		for _, uuid := range o.OnlineMemberUUIDs {
-			online[uuid] = true
-		}
-		active := map[string]bool{o.ServerUUID: true}
-		for _, uuid := range o.ActiveMemberUUIDs {
-			active[uuid] = true
-		}
-		currentIn := 0
-		for _, alias := range current {
-			if uuid := uuidOf(alias); uuid != "" && online[uuid] {
-				currentIn++
-			}
-		}
-		if currentIn >= currentMajority {
-			continue
-		}
-		proposedIn := 0
-		for _, alias := range proposed {
-			if uuid := uuidOf(alias); unseen[topoproto.TabletAliasString(alias)] || (uuid != "" && active[uuid]) {
-				proposedIn++
-			}
-		}
-		if proposedIn >= proposedMajority {
-			return fmt.Sprintf("the group view of %s holds %d of the %d current voters [%s], not a majority, and would hold %d of the %d new voters [%s], a majority",
-				topoproto.TabletAliasString(o.Tablet.Alias), currentIn, len(current), aliasesString(current), proposedIn, len(proposed), aliasesString(proposed))
-		}
-	}
-	return ""
-}
-
 // aliasesString returns the tablet aliases, sorted and separated by commas.
 func aliasesString(aliases []*topodatapb.TabletAlias) string {
 	strs := make([]string, 0, len(aliases))
@@ -489,22 +229,17 @@ type groupReplicationShardState struct {
 	unreachableVotingMembers uint
 	// cellMajority is the cell that holds a majority of the ONLINE members, if any.
 	cellMajority string
-	// desiredVoters are the voters that the shard's group should have. They are only computed
-	// when VTOrc may change the voters: the group is active and has quorum, or no voter has been
-	// selected yet.
+	// desiredVoters is the voter list that VTOrc writes next (GroupVotersOutOfDate), if any.
 	desiredVoters []*topodatapb.TabletAlias
-	// votersOutOfDate is true when the voters must be updated (GroupVotersOutOfDate): the desired
-	// voters differ from the recorded ones, or a reachable member other than the group primary is
-	// not a desired voter and must leave the group.
-	votersOutOfDate bool
-	// votersReporter is the tablet on which GroupVotersOutOfDate is reported: the group primary's
-	// tablet if VTOrc reached it, else the reachable tablet with the lowest alias. Only PRIMARY and
-	// replica type tablets qualify, because only they are analyzed. GroupVotersBelowTarget is
-	// reported on the same tablet.
+	// voterAnalysis is the shard-wide voter analysis (GroupVotersOutOfDate, GroupPrimaryNotVoter, or
+	// one of the alerts), and voterReason says why. See PlanGroupVoters.
+	voterAnalysis AnalysisCode
+	voterReason   string
+	// votersReporter is the tablet on which voterAnalysis is reported: the group primary that is not a
+	// voter for GroupPrimaryNotVoter; otherwise the group primary's tablet if VTOrc reached it, else
+	// the reachable tablet with the lowest alias. Only PRIMARY and replica type tablets qualify,
+	// because only they are analyzed.
 	votersReporter *topodatapb.TabletAlias
-	// votersBelowTarget is true when no voter is listed and VTOrc selects none, because the shard's
-	// tablets that may be voters are in too few cells (GroupVotersBelowTarget).
-	votersBelowTarget bool
 }
 
 // computeGroupReplicationShardState aggregates the Group Replication state of the tablets of a
@@ -566,7 +301,7 @@ func computeGroupReplicationShardState(durability policy.Durabler, incarnation s
 			state.unreachableVotingMembers++
 		}
 	}
-	computeGroupReplicationVoters(state, durability, rows, now)
+	computeGroupReplicationVoters(state, durability, incarnation, rows, now)
 	return state
 }
 
@@ -599,55 +334,81 @@ func applyGroupLegitimacy(state *groupReplicationShardState, incarnation string,
 	}
 }
 
-// computeGroupReplicationVoters decides whether the voters of the shard's group must be updated.
-// VTOrc only changes the voters of an active group that has quorum: a group without quorum
-// cannot admit new members, and its missing voters must keep their seats to restore it. The only
-// exception is a shard whose voters have not been selected yet.
-func computeGroupReplicationVoters(state *groupReplicationShardState, durability policy.Durabler, rows []*groupReplicationRow, now time.Time) {
+// computeGroupReplicationVoters plans, on VTOrc's stored state, the change of the shard's voters, or
+// the alert, that the analysis reports (see PlanGroupVoters). That state lacks the members' executed
+// GTID sets and their primary_election_in_progress: the recovery reads the shard again under the shard
+// lock, and decides on that read.
+func computeGroupReplicationVoters(state *groupReplicationShardState, durability policy.Durabler, incarnation string, rows []*groupReplicationRow, now time.Time) {
 	grd, ok := policy.AsGroupReplication(durability)
 	if !ok {
 		return
 	}
-	groupUp := state.activeMembers > 0 && state.quorumMembers > 0
-	if !groupUp && len(state.voters) > 0 {
-		return
+	in := &VoterPlanInput{
+		Durability:  grd,
+		Voters:      state.voters,
+		Incarnation: incarnation,
+		GracePeriod: config.GetGroupReplicationVoterReplacementGracePeriod(),
 	}
-	observations := make([]*VoterObservation, 0, len(rows))
+	recorded := make(map[string]bool, len(rows))
 	for _, row := range rows {
-		observations = append(observations, &VoterObservation{
-			Tablet:            row.tablet,
-			Reachable:         row.valid,
-			ServerUUID:        row.serverUUID,
-			Active:            row.active,
-			GroupPrimary:      row.groupPrimary,
-			HasQuorum:         row.hasQuorum,
-			PrimaryUUID:       row.primaryUUID,
-			ActiveMemberUUIDs: row.activeMemberUUIDs,
-			OnlineMemberUUIDs: OnlineGroupMemberUUIDs(row.status),
-			Foreign:           row.foreign,
-		})
+		alias := topoproto.TabletAliasString(row.tablet.GetAlias())
+		recorded[alias] = true
+		vt := &VoterTablet{Tablet: row.tablet, Reachable: row.valid, ServerUUID: row.serverUUID}
+		if row.valid {
+			vt.Status = analysisGroupStatus(row)
+		} else {
+			vt.LastActive = row.active
+			vt.UnreachableFor = UnreachableGroupTablets.Observe(alias, now)
+		}
+		in.Tablets = append(in.Tablets, vt)
 	}
-	selection := SelectGroupReplicationVoters(grd, state.voters, observations, now)
-	if selection.BelowTarget != "" {
-		state.votersBelowTarget = true
-		state.votersReporter = groupVotersReporter(rows)
-		return
-	}
-	if len(selection.Voters) == 0 {
-		// An empty list means that no voter was selected. Never write one.
-		return
-	}
-	state.desiredVoters = selection.Voters
-	state.votersOutOfDate = !SameGroupReplicationVoters(selection.Voters, state.voters)
-	for _, row := range rows {
-		// A member that is not a voter leaves the group and replicates asynchronously.
-		if groupUp && row.valid && row.active && !row.groupPrimary && !policy.IsVoter(selection.Voters, row.tablet.GetAlias()) {
-			state.votersOutOfDate = true
+	for _, voter := range state.voters {
+		alias := topoproto.TabletAliasString(voter)
+		if recorded[alias] {
+			continue
+		}
+		if in.DeletedVoters == nil {
+			in.DeletedVoters = make(map[string]string)
+		}
+		in.DeletedVoters[alias] = ""
+		if instance, _, err := ReadInstance(voter); err == nil && instance != nil {
+			in.DeletedVoters[alias] = instance.ServerUUID
 		}
 	}
-	if state.votersOutOfDate {
+	plan := PlanGroupVoters(in)
+	state.voterReason = plan.Reason
+	switch {
+	case plan.Action.ChangesVoters():
+		state.voterAnalysis = GroupVotersOutOfDate
+		state.desiredVoters = plan.Voters
+		state.votersReporter = groupVotersReporter(rows)
+	case plan.Action == VoterActionMovePrimary:
+		state.voterAnalysis = GroupPrimaryNotVoter
+		state.votersReporter = plan.GroupPrimary.GetAlias()
+	case plan.Alert != "":
+		state.voterAnalysis = plan.Alert
 		state.votersReporter = groupVotersReporter(rows)
 	}
+}
+
+// analysisGroupStatus returns the group replication status of a reachable member as VTOrc stored it:
+// its view lists the members it saw ONLINE, and those it saw active but not ONLINE as RECOVERING.
+func analysisGroupStatus(row *groupReplicationRow) *replicationdatapb.GroupReplicationStatus {
+	status := row.status.CloneVT()
+	if status == nil {
+		status = &replicationdatapb.GroupReplicationStatus{}
+	}
+	status.StartInProgress = row.startInProgress
+	online := make(map[string]bool, len(status.Members))
+	for _, m := range status.Members {
+		online[m.GetMemberUuid()] = true
+	}
+	for _, uuid := range row.activeMemberUUIDs {
+		if !online[uuid] {
+			status.Members = append(status.Members, &replicationdatapb.GroupReplicationMember{MemberUuid: uuid, State: mysql.GroupMemberStateRecovering})
+		}
+	}
+	return status
 }
 
 // groupVotersReporter returns the tablet on which the shard-wide voter analyses are reported: the
@@ -690,8 +451,10 @@ func applyGroupReplicationShardState(a *DetectionAnalysis, state *groupReplicati
 	a.shardGroupAnyActive = state.anyActive
 	a.shardGroupAnyMember = state.anyMember
 	a.shardReachableNonMemberPrimary = state.reachableNonMemberPrimary
-	a.isGroupVotersReporter = state.votersOutOfDate && topoproto.TabletAliasEqual(state.votersReporter, a.AnalyzedInstanceAlias)
-	a.isGroupVotersBelowTargetReporter = state.votersBelowTarget && topoproto.TabletAliasEqual(state.votersReporter, a.AnalyzedInstanceAlias)
+	if topoproto.TabletAliasEqual(state.votersReporter, a.AnalyzedInstanceAlias) {
+		a.groupVoterAnalysis = state.voterAnalysis
+		a.GroupVoterReason = state.voterReason
+	}
 }
 
 // replicatesThroughGroup returns whether the analyzed tablet replicates through its shard's group
@@ -806,7 +569,13 @@ func matchGroupMemberNotOnline(a *DetectionAnalysis, ca *clusterAnalysis) bool {
 // updated. The analysis is reported on a single tablet of the shard, the group primary's if
 // VTOrc reached it.
 func matchGroupVotersOutOfDate(a *DetectionAnalysis, ca *clusterAnalysis) bool {
-	return policy.IsGroupReplication(ca.durability) && a.LastCheckValid && a.isGroupVotersReporter
+	return matchGroupVoterAnalysis(a, ca, GroupVotersOutOfDate)
+}
+
+// matchGroupVoterAnalysis returns whether the shard-wide voter analysis of the analyzed tablet's shard
+// is code, and is reported on the analyzed tablet (see PlanGroupVoters).
+func matchGroupVoterAnalysis(a *DetectionAnalysis, ca *clusterAnalysis, code AnalysisCode) bool {
+	return policy.IsGroupReplication(ca.durability) && a.LastCheckValid && a.groupVoterAnalysis == code
 }
 
 // matchGroupPrimaryNotInTopo returns whether the analyzed tablet's MySQL is the primary of the
@@ -818,6 +587,11 @@ func matchGroupVotersOutOfDate(a *DetectionAnalysis, ca *clusterAnalysis) bool {
 // group that runs next to a working primary outside of it is left alone.
 func matchGroupPrimaryNotInTopo(a *DetectionAnalysis, ca *clusterAnalysis, now time.Time) bool {
 	if !a.LastCheckValid || !a.IsLegitimateGroupPrimary {
+		return false
+	}
+	// A group primary that is not a voter does not serve: VTOrc moves the group primary to a voter
+	// instead (GroupPrimaryNotVoter).
+	if policy.IsGroupReplication(ca.durability) && len(a.ShardGroupVoters) > 0 && !a.IsGroupVoter {
 		return false
 	}
 	if !policy.IsGroupReplication(ca.durability) && a.shardReachableNonMemberPrimary {

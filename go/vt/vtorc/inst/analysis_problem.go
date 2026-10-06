@@ -233,6 +233,18 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 	},
 	{
 		Meta: &DetectionAnalysisProblemMeta{
+			Analysis:    GroupPrimaryNotVoter,
+			Description: "Tablet's MySQL is the primary of the shard's replication group, but the tablet is not a voter",
+			Priority:    detectionAnalysisPriorityCritical,
+		},
+		// The tablet does not serve: the group primary moves to a voter, whose tablet becomes the
+		// shard primary in the same step. GroupPrimaryNotInTopo does not match such a tablet.
+		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
+			return matchGroupVoterAnalysis(a, ca, GroupPrimaryNotVoter)
+		},
+	},
+	{
+		Meta: &DetectionAnalysisProblemMeta{
 			Analysis:    GroupPrimaryNotInTopo,
 			Description: "Tablet's MySQL is the group primary, but the tablet is not the shard primary",
 			Priority:    detectionAnalysisPriorityCritical,
@@ -284,7 +296,7 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 	{
 		Meta: &DetectionAnalysisProblemMeta{
 			Analysis:    GroupVotersOutOfDate,
-			Description: "The voters of the shard's replication group differ from the voters that its durability policy selects",
+			Description: "VTOrc changes the voters of the shard's replication group: it selects them, swaps a failed one, grows the group into a cell, or removes a voter whose tablet record was deleted",
 			Priority:    detectionAnalysisPriorityHigh,
 		},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
@@ -603,11 +615,31 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 	{
 		Meta: &DetectionAnalysisProblemMeta{
 			Analysis:    GroupVotersBelowTarget,
-			Description: "The shard's replication group has no voters, and its tablets that may be voters are in too few cells to select them",
+			Description: "The shard's replication group has fewer voters than cells with an eligible tablet, or fewer than three, and VTOrc cannot add one",
 			Priority:    detectionAnalysisPriorityMedium,
 		},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
-			return policy.IsGroupReplication(ca.durability) && a.LastCheckValid && a.isGroupVotersBelowTargetReporter
+			return matchGroupVoterAnalysis(a, ca, GroupVotersBelowTarget)
+		},
+	},
+	{
+		Meta: &DetectionAnalysisProblemMeta{
+			Analysis:    GroupVoterUnreplaceable,
+			Description: "A voter of the shard's replication group failed, and its cell has no valid spare",
+			Priority:    detectionAnalysisPriorityMedium,
+		},
+		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
+			return matchGroupVoterAnalysis(a, ca, GroupVoterUnreplaceable)
+		},
+	},
+	{
+		Meta: &DetectionAnalysisProblemMeta{
+			Analysis:    GroupVoterRecordDeleted,
+			Description: "A voter of the shard's replication group has no tablet record, but its MySQL is still in the group",
+			Priority:    detectionAnalysisPriorityMedium,
+		},
+		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
+			return matchGroupVoterAnalysis(a, ca, GroupVoterRecordDeleted)
 		},
 	},
 	{
