@@ -181,7 +181,8 @@ func (c *CloneExecutor) validateRecipient(ctx context.Context, mysqld MysqlDaemo
 // all prerequisites for cloning. This is called from ExecuteClone to verify the
 // donor before attempting the clone operation.
 func (c *CloneExecutor) validateDonorRemote(ctx context.Context) error {
-	conn, err := mysql.Connect(ctx, c.donorConnParams())
+	connector := dbconfigs.New(c.donorConnParams())
+	conn, err := connector.Connect(ctx)
 	if err != nil {
 		return vterrors.Wrapf(err, "failed to connect to donor %s:%d", c.DonorHost, c.DonorPort)
 	}
