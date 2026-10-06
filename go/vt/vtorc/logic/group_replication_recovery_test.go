@@ -253,13 +253,20 @@ func groupReplicationRecoveryTest(t *testing.T, tablets ...*topodatapb.Tablet) *
 // groupReplicationRecoveryTestWithPolicy is groupReplicationRecoveryTest with the given
 // durability policy.
 func groupReplicationRecoveryTestWithPolicy(t *testing.T, durability string, tablets ...*topodatapb.Tablet) *tmcmock.MockTabletManagerClient {
-	// The backend is shared by the tests of the package; only its tables are cleared.
+	// The backend is shared by the tests of the package; only its tables are cleared, before and
+	// after the test. A tablet left behind would be forgotten by the next test that refreshes the
+	// tablets of the package's shards, and VTOrc then ignores its alias for a while
+	// (inst.ForgetInstance), also in the next run of this test (-count).
 	orcDB, _, err := db.OpenVTOrcWithCache()
 	require.NoError(t, err)
-	for _, table := range []string{"topology_recovery_steps", "topology_recovery", "recovery_detection", "vitess_tablet", "vitess_keyspace", "database_instance", "vitess_deleted_group_voter"} {
-		_, err = orcDB.Exec("delete from " + table)
-		require.NoError(t, err)
+	clearTables := func() {
+		for _, table := range []string{"topology_recovery_steps", "topology_recovery", "recovery_detection", "vitess_tablet", "vitess_keyspace", "database_instance", "vitess_deleted_group_voter"} {
+			_, err := orcDB.Exec("delete from " + table)
+			require.NoError(t, err)
+		}
 	}
+	clearTables()
+	t.Cleanup(clearTables)
 
 	keyspaceInfo := &topo.KeyspaceInfo{Keyspace: &topodatapb.Keyspace{DurabilityPolicy: durability}}
 	keyspaceInfo.SetKeyspaceName("ks")
