@@ -27,6 +27,7 @@ import (
 	"go.uber.org/mock/gomock"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
@@ -191,6 +192,50 @@ func TestUpdateGroupReplicationVoters(t *testing.T) {
 		},
 		wantVoters: []string{"zone1-0000000101", "zone2-0000000200", "zone3-0000000300"},
 		wantErr:    "voter zone3-0000000300 has no tablet record, but its server_uuid is unknown, and the active member 00000000-0000-0000-0000-000000000300 is the MySQL of no tablet that answers",
+	}, {
+		name:     "RemoveVoterNoGroup: no group runs, and a voter has no tablet record",
+		tablets:  []*topodatapb.Tablet{primary, voter2},
+		voters:   []*topodatapb.Tablet{primary, voter2, voter3},
+		recorded: true,
+		setup: func(t *testing.T, m *tmcmock.MockTabletManagerClient) {
+			m.EXPECT().FullStatus(gomock.Any(), sameTablet(primary)).Return(spareStatus(primary, "1-10"), nil)
+			m.EXPECT().FullStatus(gomock.Any(), sameTablet(voter2)).Return(spareStatus(voter2, "1-9"), nil)
+		},
+		wantVoters: []string{"zone1-0000000101", "zone2-0000000200"},
+	}, {
+		// The bootstrap would include a voter that answers: it is not removed, although its tablet
+		// record is gone.
+		name:     "RemoveVoterNoGroup: the deleted voter's vttablet answers at the address VTOrc last knew",
+		tablets:  []*topodatapb.Tablet{primary, voter2},
+		voters:   []*topodatapb.Tablet{primary, voter2, voter3},
+		recorded: true,
+		setup: func(t *testing.T, m *tmcmock.MockTabletManagerClient) {
+			require.NoError(t, inst.SaveTablet(voter3))
+			m.EXPECT().FullStatus(gomock.Any(), sameTablet(primary)).Return(spareStatus(primary, "1-10"), nil)
+			m.EXPECT().FullStatus(gomock.Any(), sameTablet(voter2)).Return(spareStatus(voter2, "1-9"), nil)
+			m.EXPECT().FullStatus(gomock.Any(), sameTablet(voter3)).Return(spareStatus(voter3, "1-11"), nil)
+		},
+		wantVoters: []string{"zone1-0000000101", "zone2-0000000200", "zone3-0000000300"},
+		wantErr:    "voter zone3-0000000300 has no tablet record, but its tablet answers",
+	}, {
+		name:     "RemoveVoterNoGroup: a bootstrap intent is live",
+		tablets:  []*topodatapb.Tablet{primary, voter2},
+		voters:   []*topodatapb.Tablet{primary, voter2, voter3},
+		recorded: true,
+		setup: func(t *testing.T, m *tmcmock.MockTabletManagerClient) {
+			_, err := ts.UpdateShardFields(t.Context(), "ks", "0", func(si *topo.ShardInfo) error {
+				si.GroupReplicationBootstrapIntent = &topodatapb.GroupReplicationBootstrapIntent{
+					Target: primary.Alias, Time: protoutil.TimeToProto(time.Now()), Token: "1790000002-0123456789abcdef",
+					PreviousIncarnation: voterTestIncarnation,
+				}
+				return nil
+			})
+			require.NoError(t, err)
+			m.EXPECT().FullStatus(gomock.Any(), sameTablet(primary)).Return(spareStatus(primary, "1-10"), nil)
+			m.EXPECT().FullStatus(gomock.Any(), sameTablet(voter2)).Return(spareStatus(voter2, "1-9"), nil)
+		},
+		wantVoters: []string{"zone1-0000000101", "zone2-0000000200", "zone3-0000000300"},
+		wantErr:    "no voter is the reachable primary",
 	}, {
 		name:     "GrowVoter: a cell with an eligible tablet has no voter",
 		tablets:  []*topodatapb.Tablet{primary, voter2, voter3},

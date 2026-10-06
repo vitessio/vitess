@@ -46,8 +46,12 @@ const (
 	// VoterActionGrow gives a seat to a spare of a cell that has no voter.
 	VoterActionGrow VoterAction = "GrowVoter"
 	// VoterActionRemove removes a voter whose tablet record was deleted, and whose cell has no spare.
-	// It is the only change that shrinks the list.
+	// With RemoveVoterNoGroup, it is the only change that shrinks the list.
 	VoterActionRemove VoterAction = "RemoveVoter"
+	// VoterActionRemoveNoGroup removes a voter whose tablet record was deleted while no group runs, so
+	// that the group can be bootstrapped from the other voters (GroupNotBootstrapped needs every voter
+	// reachable).
+	VoterActionRemoveNoGroup VoterAction = "RemoveVoterNoGroup"
 	// VoterActionMovePrimary moves the primary of the shard's group, which is not a voter, to a voter.
 	// The list does not change.
 	VoterActionMovePrimary VoterAction = "MoveGroupPrimaryToVoter"
@@ -56,7 +60,7 @@ const (
 // ChangesVoters returns whether the action writes a new voter list.
 func (a VoterAction) ChangesVoters() bool {
 	switch a {
-	case VoterActionInitial, VoterActionSwap, VoterActionGrow, VoterActionRemove:
+	case VoterActionInitial, VoterActionSwap, VoterActionGrow, VoterActionRemove, VoterActionRemoveNoGroup:
 		return true
 	}
 	return false
@@ -96,6 +100,9 @@ type VoterPlanInput struct {
 	// DeletedVotersAnswering are the deleted voters whose vttablet answered FullStatus, at the address
 	// that VTOrc last knew. Such a voter is not failed: the bootstrap would include it.
 	DeletedVotersAnswering map[string]bool
+	// BootstrapIntentLive is true when the shard record holds a bootstrap intent younger than
+	// reparentutil.GroupReplicationBootstrapIntentFence. Only the recovery reads it.
+	BootstrapIntentLive bool
 	// GracePeriod is --group-replication-voter-replacement-grace-period: a voter that is unreachable
 	// for that long gets swapped.
 	GracePeriod time.Duration
@@ -150,6 +157,11 @@ type voterPlanner struct {
 //     P2 (v's MySQL is active in no view) and P3 (x is a valid spare).
 //   - RemoveVoter(v): v's tablet record was deleted and its cell has no spare. It needs P1, P2, and v
 //     in no view of p. It is the only change that shrinks the list.
+//   - RemoveVoterNoGroup(v): v's tablet record was deleted while no group runs: no reachable tablet is an
+//     active member of any incarnation or runs a START GROUP_REPLICATION, no bootstrap intent is live,
+//     and v's vttablet does not answer (P2): a voter that answers would be part of the bootstrap. The group is then bootstrapped from the other voters (GroupNotBootstrapped), which needs
+//     every voter reachable. The operator accepts the loss of the transactions that only v held, as
+//     with a forced EmergencyReparentShard. At least one voter stays.
 //   - GrowVoter(x): a cell with an eligible tablet has no voter. It needs P1, P3, and a majority of
 //     the grown list among the voters ONLINE in p's view.
 //
@@ -163,6 +175,9 @@ func PlanGroupVoters(in *VoterPlanInput) *VoterPlan {
 		return p.planInitial()
 	}
 	if plan := p.planMovePrimary(); plan != nil {
+		return plan
+	}
+	if plan := p.planRemoveNoGroup(); plan != nil {
 		return plan
 	}
 	var alerts []*VoterPlan
@@ -351,6 +366,32 @@ func (p *voterPlanner) planInitial() *VoterPlan {
 		}
 	}
 	return &VoterPlan{Action: VoterActionInitial, Voters: voters, Reason: "no voter is listed and no member is active"}
+}
+
+// planRemoveNoGroup returns RemoveVoterNoGroup for the first voter whose tablet record was deleted,
+// while no group runs. A reachable tablet that is an active member, of any incarnation, or that runs a
+// START GROUP_REPLICATION, or a live bootstrap intent, means that a group may run or be starting.
+func (p *voterPlanner) planRemoveNoGroup() *VoterPlan {
+	if len(p.in.DeletedVoters) == 0 || len(p.in.Voters) < 2 || p.in.BootstrapIntentLive {
+		return nil
+	}
+	for _, vt := range p.in.Tablets {
+		if vt.Reachable && (mysql.IsGroupMemberActive(vt.Status) || vt.Status.GetStartInProgress()) {
+			return nil
+		}
+	}
+	for _, alias := range sortedAliasKeys(p.in.DeletedVoters) {
+		voter, err := topoproto.ParseTabletAlias(alias)
+		if err != nil || p.activeAnywhere(alias, p.in.DeletedVoters[alias]) != "" {
+			continue
+		}
+		voters := withoutAlias(p.in.Voters, voter)
+		return &VoterPlan{
+			Action: VoterActionRemoveNoGroup, Voters: voters, Removed: voter,
+			Reason: fmt.Sprintf("voter %s has no tablet record and no group runs: removing it leaves %d voters, from which the group is bootstrapped", alias, len(voters)),
+		}
+	}
+	return nil
 }
 
 // planMovePrimary returns MoveGroupPrimaryToVoter when the primary of the shard's legitimate group

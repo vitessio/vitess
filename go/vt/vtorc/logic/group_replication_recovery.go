@@ -1171,6 +1171,8 @@ func readGroupVoterState(ctx context.Context, keyspace, shard string) (*groupVot
 		Incarnation: shardInfo.GetGroupReplicationIncarnation(),
 		GracePeriod: config.GetGroupReplicationVoterReplacementGracePeriod(),
 		Fresh:       true,
+		// The bootstrap intent's age is measured on this VTOrc's clock, as the bootstrap does.
+		BootstrapIntentLive: reparentutil.LiveGroupReplicationBootstrapIntent(shardInfo.Shard, now) != nil,
 	}
 	for _, st := range statuses {
 		alias := topoproto.TabletAliasString(st.tablet.Alias)

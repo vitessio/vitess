@@ -583,6 +583,19 @@ func TestGetDetectionAnalysisGroupReplication(t *testing.T) {
 			want:             map[string]AnalysisCode{"zone1-0000000101": GroupVoterUnreplaceable},
 		},
 		{
+			name: "no group runs and a voter has no tablet record: it is removed, so that the group can be bootstrapped",
+			rows: func() []*test.InfoForRecoveryAnalysis {
+				return inIncarnation("1790000001",
+					member(grRow(replica, gr), mysql.GroupMemberStateOffline, "", false, nil),
+					member(grRow(crossCellReplica, gr), mysql.GroupMemberStateOffline, "", false, nil),
+				)
+			},
+			voters:            []*topodatapb.Tablet{replica, crossCellReplica, thirdCellReplica},
+			want:              map[string]AnalysisCode{"zone2-0000000200": GroupVotersOutOfDate},
+			wantDesiredVoters: []*topodatapb.Tablet{replica, crossCellReplica},
+			notWant:           []AnalysisCode{GroupNotBootstrapped},
+		},
+		{
 			name: "active members of a shard with a semi-sync policy get no asynchronous replication analysis",
 			rows: func() []*test.InfoForRecoveryAnalysis {
 				groupPrimary := member(grRow(primary, policy.DurabilitySemiSync), mysql.GroupMemberStateOnline, mysql.GroupMemberRolePrimary, true, primary)

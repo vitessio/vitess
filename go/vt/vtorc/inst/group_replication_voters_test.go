@@ -486,3 +486,89 @@ func TestPlanGroupVotersInitial(t *testing.T) {
 		})
 	}
 }
+
+// TestPlanGroupVotersRemoveNoGroup checks each precondition of RemoveVoterNoGroup: a voter whose tablet
+// record was deleted leaves the list while no group runs, so that the group can be bootstrapped from
+// the other voters.
+func TestPlanGroupVotersRemoveNoGroup(t *testing.T) {
+	removeC := []string{"zone1-0000000101", "zone2-0000000200"}
+	tests := []struct {
+		name  string
+		setup func(t *testing.T, f *planFixture)
+		// want is the new list; nil means that nothing is removed.
+		want []string
+	}{{
+		name:  "no group runs, and a voter's tablet record was deleted: it is removed",
+		setup: func(t *testing.T, f *planFixture) {},
+		want:  removeC,
+	}, {
+		name: "its server_uuid is unknown: it is removed too, since no member is active",
+		setup: func(t *testing.T, f *planFixture) {
+			f.in.DeletedVoters["zone3-0000000300"] = ""
+		},
+		want: removeC,
+	}, {
+		name: "the deleted voter's vttablet answers at the address VTOrc last knew",
+		setup: func(t *testing.T, f *planFixture) {
+			f.in.DeletedVotersAnswering = map[string]bool{"zone3-0000000300": true}
+		},
+	}, {
+		name: "a reachable tablet is an active member",
+		setup: func(t *testing.T, f *planFixture) {
+			f.tablet(f.a).Status = f.member(f.a, f.a)
+		},
+	}, {
+		name: "a reachable tablet is an active member of another incarnation",
+		setup: func(t *testing.T, f *planFixture) {
+			f.tablet(f.b).Status = f.member(f.b, f.b)
+			f.tablet(f.b).Status.ViewId = "1790000009:1"
+		},
+	}, {
+		name: "a START GROUP_REPLICATION runs on a reachable tablet",
+		setup: func(t *testing.T, f *planFixture) {
+			f.tablet(f.b).Status.StartInProgress = true
+		},
+	}, {
+		name: "a bootstrap intent is live",
+		setup: func(t *testing.T, f *planFixture) {
+			f.in.BootstrapIntentLive = true
+		},
+	}, {
+		name: "the voter has a tablet record, and is unreachable",
+		setup: func(t *testing.T, f *planFixture) {
+			delete(f.in.DeletedVoters, "zone3-0000000300")
+			f.add(t, f.c, nil, "1-10")
+			f.fail(f.c, time.Hour)
+		},
+	}, {
+		name: "the last voter is not removed",
+		setup: func(t *testing.T, f *planFixture) {
+			f.in.Voters = []*topodatapb.TabletAlias{f.c.Alias}
+		},
+	}}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newPlanFixture(t)
+			// The group lost its majority: no member is active, and voter c is dead for good; the
+			// operator deleted its tablet record.
+			for _, vt := range f.in.Tablets {
+				vt.Status = &replicationdatapb.GroupReplicationStatus{PluginActive: true, MemberState: mysql.GroupMemberStateOffline}
+			}
+			f.deleteRecord(f.c, true)
+			tt.setup(t, f)
+			plan := PlanGroupVoters(f.in)
+			if tt.want == nil {
+				assert.NotEqual(t, VoterActionRemoveNoGroup, plan.Action, plan.Reason)
+				assert.False(t, plan.Action.ChangesVoters(), plan.Reason)
+				return
+			}
+			require.Equal(t, VoterActionRemoveNoGroup, plan.Action, plan.Reason)
+			var voters []string
+			for _, voter := range plan.Voters {
+				voters = append(voters, topoproto.TabletAliasString(voter))
+			}
+			assert.Equal(t, tt.want, voters)
+			assert.Equal(t, "zone3-0000000300", topoproto.TabletAliasString(plan.Removed))
+		})
+	}
+}
