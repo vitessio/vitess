@@ -1078,7 +1078,12 @@ func TestServeNonPrimaryKillsBlockedCommit(t *testing.T) {
 		_, _, err := te.Commit(t.Context(), txID)
 		commitErr <- err
 	}()
-	<-commitStarted
+
+	select {
+	case <-commitStarted:
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "COMMIT did not start")
+	}
 
 	sm.shutdownGracePeriod = 10 * time.Millisecond
 
@@ -1094,7 +1099,12 @@ func TestServeNonPrimaryKillsBlockedCommit(t *testing.T) {
 		require.FailNow(t, "PRIMARY to REPLICA transition hung on a blocked COMMIT")
 	}
 
-	require.ErrorContains(t, <-commitErr, "QueryList.TerminateAll()")
+	select {
+	case err := <-commitErr:
+		require.ErrorContains(t, err, "QueryList.TerminateAll()")
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "COMMIT stayed blocked after the transition")
+	}
 }
 
 // gateTxEngine forwards cluster actions to a real QueryList and records the
