@@ -191,19 +191,12 @@ func TestTableACLAuthorize(t *testing.T) {
 	}
 
 	readerACL := tacl.Authorized("test_data_any", READER)
-<<<<<<< HEAD
 	if !readerACL.IsMember(&querypb.VTGateCallerID{Username: "u1"}) {
 		t.Fatalf("user u1 should have reader permission to table test_data_any")
 	}
 	if !readerACL.IsMember(&querypb.VTGateCallerID{Username: "u2"}) {
 		t.Fatalf("user u2 should have reader permission to table test_data_any")
 	}
-||||||| parent of 4d6f7368f3 (VTTablet: let callers with every role on every table run statements whose tables cannot be determined (#21349))
-	require.True(t, readerACL.IsMember(&querypb.VTGateCallerID{Username: "u1"}), "user u1 should have reader permission to table test_data_any")
-	require.True(t, readerACL.IsMember(&querypb.VTGateCallerID{Username: "u2"}), "user u2 should have reader permission to table test_data_any")
-=======
-	require.True(t, readerACL.IsMember(&querypb.VTGateCallerID{Username: "u1"}), "user u1 should have reader permission to table test_data_any")
-	require.True(t, readerACL.IsMember(&querypb.VTGateCallerID{Username: "u2"}), "user u2 should have reader permission to table test_data_any")
 
 	// No group covers every table, not even one with a prefix, so no one holds
 	// every role on all of them.
@@ -237,7 +230,6 @@ func TestTableACLAuthorize(t *testing.T) {
 	allTablesACL = tacl.AuthorizedForAllTables()
 	require.False(t, allTablesACL.IsMember(&querypb.VTGateCallerID{Username: "u3"}), "a group covering every table alongside another group must not cover every table")
 	require.Empty(t, allTablesACL.GroupName)
->>>>>>> 4d6f7368f3 (VTTablet: let callers with every role on every table run statements whose tables cannot be determined (#21349))
 }
 
 func TestFailedToCreateACL(t *testing.T) {
