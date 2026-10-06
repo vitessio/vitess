@@ -129,7 +129,7 @@ func TestGeneratedDDLIsOneStatement(t *testing.T) {
 		{
 			name: "show table status like",
 			build: func() string {
-				return buildLiteralQuery(sqlShowTableStatus, maliciousQuotedName)
+				return buildTableStatusQuery(maliciousQuotedName)
 			},
 		},
 	}
@@ -145,13 +145,15 @@ func TestGeneratedDDLIsOneStatement(t *testing.T) {
 	}
 }
 
-// TestBuildTableExistsQuery pins the patterns that the existence check sends.
-// The '%' and '_' wildcards and the '\' escape character can all appear in a
-// table name, and each is escaped so that the pattern matches only the table
-// asked about: otherwise c%d would also match cxyd, and the existence check
-// would see two tables. The string literal doubles each '\' of the pattern
-// except before '%' and '_', which MySQL keeps in a string literal, so LIKE
-// receives the pattern as built.
+// TestBuildTableExistsQuery pins the patterns that the existence check and the
+// table status query send. The '%' and '_' wildcards and the '\' escape
+// character can all appear in a table name, and each is escaped so that the
+// pattern matches only the table asked about: otherwise c%d would also match
+// cxyd, and the existence check would see two tables, and an ALTER of a_b would
+// fail whenever a table axb exists, as the status query must return exactly one
+// row. The string literal doubles each '\' of the pattern except before '%'
+// and '_', which MySQL keeps in a string literal, so LIKE receives the pattern
+// as built.
 func TestBuildTableExistsQuery(t *testing.T) {
 	for _, tc := range []struct {
 		tableName string
@@ -165,6 +167,7 @@ func TestBuildTableExistsQuery(t *testing.T) {
 	} {
 		t.Run(tc.tableName, func(t *testing.T) {
 			assert.Equal(t, "SHOW TABLES LIKE "+tc.pattern, buildTableExistsQuery(tc.tableName))
+			assert.Equal(t, "SHOW TABLE STATUS LIKE "+tc.pattern, buildTableStatusQuery(tc.tableName))
 		})
 	}
 }

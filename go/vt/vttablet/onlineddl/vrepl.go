@@ -236,7 +236,7 @@ func (v *VRepl) executeAnalyzeTable(ctx context.Context, conn *dbconnpool.DBConn
 
 // readTableStatus reads table status information
 func (v *VRepl) readTableStatus(ctx context.Context, conn *dbconnpool.DBConnection, tableName string) (tableRows int64, err error) {
-	statusQuery := buildLiteralQuery(sqlShowTableStatus, tableName)
+	statusQuery := buildTableStatusQuery(tableName)
 	rs, err := conn.ExecuteFetch(statusQuery, -1, true)
 	if err != nil {
 		return 0, err

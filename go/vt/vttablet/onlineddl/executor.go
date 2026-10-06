@@ -704,6 +704,13 @@ func buildTableExistsQuery(tableName string) string {
 	return buildLiteralQuery(sqlShowTablesLike, likePatternEscaper.Replace(tableName))
 }
 
+// buildTableStatusQuery builds the SHOW TABLE STATUS LIKE query for a single
+// table, with a pattern that matches only that table: its caller requires
+// exactly one row.
+func buildTableStatusQuery(tableName string) string {
+	return buildLiteralQuery(sqlShowTableStatus, likePatternEscaper.Replace(tableName))
+}
+
 // tableExists checks if a given table exists.
 func (e *Executor) tableExists(ctx context.Context, tableName string) (bool, error) {
 	rs, err := e.execQuery(ctx, buildTableExistsQuery(tableName))
