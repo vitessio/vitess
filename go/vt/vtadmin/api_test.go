@@ -40,6 +40,7 @@ import (
 	"vitess.io/vitess/go/vt/vtadmin/cluster"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery/fakediscovery"
 	vtadminerrors "vitess.io/vitess/go/vt/vtadmin/errors"
+	"vitess.io/vitess/go/vt/vtadmin/rbac"
 	vtadmintestutil "vitess.io/vitess/go/vt/vtadmin/testutil"
 	"vitess.io/vitess/go/vt/vtadmin/vtctldclient/fakevtctldclient"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver"
@@ -5132,6 +5133,8 @@ func TestVExplain(t *testing.T) {
 		tabletSchemas map[string]*tabletmanagerdatapb.SchemaDefinition
 		tablets       []*vtadminpb.Tablet
 		req           *vtadminpb.VExplainRequest
+		// actions, when set, are the only actions the actor may take on VExplain.
+		actions       []string
 		expectedError error
 	}{
 		{
@@ -5157,6 +5160,16 @@ func TestVExplain(t *testing.T) {
 				Keyspace:  "commerce",
 			},
 			expectedError: vtadminerrors.ErrInvalidRequest,
+		},
+		{
+			name: "returns an error if a VEXPLAIN that runs its statement is not authorized to execute",
+			req: &vtadminpb.VExplainRequest{
+				ClusterId: "c0",
+				Keyspace:  "commerce",
+				Sql:       "vexplain all select * from customers",
+			},
+			actions:       []string{"get"},
+			expectedError: vtadminerrors.ErrUnauthorized,
 		},
 		{
 			name: "returns an error if a VEXPLAIN that runs its statement is given DML",
@@ -5266,6 +5279,7 @@ func TestVExplain(t *testing.T) {
 				Keyspace:  "commerce",
 				Sql:       "vexplain all select * from customers",
 			},
+			actions: []string{"get", "execute"},
 		},
 		{
 			name: "runs VExplain MYSQLPLAN given a valid request in a valid topology",
@@ -5339,6 +5353,7 @@ func TestVExplain(t *testing.T) {
 				Keyspace:  "commerce",
 				Sql:       "vexplain mysqlplan select * from customers",
 			},
+			actions: []string{"get"},
 		},
 	}
 
@@ -5394,7 +5409,25 @@ func TestVExplain(t *testing.T) {
 					}),
 				}
 
-				api := NewAPI(vtenv.NewTestEnv(), clusters, Options{})
+				opts := Options{}
+				if tt.actions != nil {
+					opts.RBAC = &rbac.Config{
+						Rules: []*struct {
+							Resource string
+							Actions  []string
+							Subjects []string
+							Clusters []string
+						}{{
+							Resource: string(rbac.VExplainResource),
+							Actions:  tt.actions,
+							Subjects: []string{"user:allowed"},
+							Clusters: []string{"*"},
+						}},
+					}
+					require.NoError(t, opts.RBAC.Reify())
+					ctx = rbac.NewContext(ctx, &rbac.Actor{Name: "allowed"})
+				}
+				api := NewAPI(vtenv.NewTestEnv(), clusters, opts)
 				resp, err := api.VExplain(ctx, tt.req)
 
 				if tt.expectedError != nil {

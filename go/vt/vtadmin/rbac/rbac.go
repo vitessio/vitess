@@ -69,6 +69,7 @@ const (
 	CompleteAction Action = "complete"
 	CreateAction   Action = "create"
 	DeleteAction   Action = "delete"
+	ExecuteAction  Action = "execute"
 	GetAction      Action = "get"
 	PingAction     Action = "ping"
 	PutAction      Action = "put"

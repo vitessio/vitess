@@ -2664,8 +2664,11 @@ func (api *API) VExplain(ctx context.Context, req *vtadminpb.VExplainRequest) (*
 		return nil, vterrors.VT09017("Invalid VExplain statement")
 	}
 
-	// VExplain is authorized as a read, but VEXPLAIN QUERIES, ALL and TRACE run
-	// the statement they explain. The VTGate proxy runs those in a read-only
+	// VEXPLAIN QUERIES, ALL and TRACE run the statement they explain, and a
+	// statement can call stored functions with effects that nothing short of not
+	// running it prevents, such as taking advisory locks. So running them is
+	// authorized separately from reading a plan. As a defense in depth for
+	// actors authorized to run them, the VTGate proxy runs them in a read-only
 	// transaction, which keeps them from changing any table. Refuse what a
 	// read-only transaction does not prevent: a statement other than a SELECT,
 	// whose execution can take sequence values before it fails (an INSERT into a
@@ -2673,6 +2676,9 @@ func (api *API) VExplain(ctx context.Context, req *vtadminpb.VExplainRequest) (*
 	// hasSideEffectsBeyondTables.
 	switch vexplainStmt.Type {
 	case sqlparser.QueriesVExplainType, sqlparser.AllVExplainType, sqlparser.TraceVExplainType:
+		if !api.authz.IsAuthorized(ctx, c.ID, rbac.VExplainResource, rbac.ExecuteAction) {
+			return nil, fmt.Errorf("%w: VEXPLAIN %s runs the statement, which requires the %s action on %s", errors.ErrUnauthorized, vexplainStmt.Type.ToString(), rbac.ExecuteAction, rbac.VExplainResource)
+		}
 		if _, ok := vexplainStmt.Statement.(sqlparser.SelectStatement); !ok {
 			return nil, fmt.Errorf("%w: VEXPLAIN %s only runs SELECT statements; use VEXPLAIN PLAN for other statements", errors.ErrInvalidRequest, vexplainStmt.Type.ToString())
 		}
