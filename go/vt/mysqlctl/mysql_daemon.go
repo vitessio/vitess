@@ -91,6 +91,9 @@ type MysqlDaemon interface {
 	// DisableGroupReplicationSuperReadOnlyAction disables mysql_disable_super_read_only_if_primary in
 	// the configuration of the member's group; only the writable primary of the group may.
 	DisableGroupReplicationSuperReadOnlyAction(ctx context.Context) error
+	// SetGroupReplicationMemberWeight sets the member's group_replication_member_weight, which a
+	// member of a group uses in the group's next primary election.
+	SetGroupReplicationMemberWeight(ctx context.Context, weight int) error
 	StartGroupReplication(ctx context.Context, bootstrap bool) error
 	// ApplyGroupReplicationRelayLog applies, on a member that is not in a group, the transactions
 	// that it received from its last group and had not applied when it left, until its executed

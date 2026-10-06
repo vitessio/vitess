@@ -249,6 +249,9 @@ type FakeMysqlDaemon struct {
 	// GroupReplicationConfig is the last configuration passed to ConfigureGroupReplication.
 	GroupReplicationConfig mysql.GroupReplicationConfig
 
+	// SetGroupReplicationMemberWeightCalls counts the calls of SetGroupReplicationMemberWeight.
+	SetGroupReplicationMemberWeightCalls int
+
 	// GroupReplicationBootstrapped is set when StartGroupReplication bootstrapped a group.
 	GroupReplicationBootstrapped bool
 
@@ -1308,6 +1311,21 @@ func (fmd *FakeMysqlDaemon) GroupReplicationMemberActions(ctx context.Context) (
 		return nil, fmd.GroupReplicationError
 	}
 	return &mysql.GroupReplicationMemberActions{SuperReadOnlyActionEnabled: !fmd.SuperReadOnlyActionDisabled, ConfigurationVersion: fmd.memberActionsVersion + 1}, nil
+}
+
+// SetGroupReplicationMemberWeight is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) SetGroupReplicationMemberWeight(ctx context.Context, weight int) error {
+	fmd.mu.Lock()
+	defer fmd.mu.Unlock()
+	if fmd.GroupReplicationError != nil {
+		return fmd.GroupReplicationError
+	}
+	if fmd.GroupReplication == nil {
+		fmd.GroupReplication = &replicationdatapb.GroupReplicationStatus{MemberState: mysql.GroupMemberStateOffline}
+	}
+	fmd.GroupReplication.MemberWeight = int32(weight)
+	fmd.SetGroupReplicationMemberWeightCalls++
+	return nil
 }
 
 // DisableGroupReplicationSuperReadOnlyAction is part of the MysqlDaemon interface. Like MySQL, it

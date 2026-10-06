@@ -258,6 +258,7 @@ func (s *groupReplicationSync) reconcile(ctx context.Context) {
 		s.enforceSemiSync(ctx, status, durability, tablet)
 	}
 	s.enforceVoterMajority(ctx, status, durability, tablet, gen)
+	s.applyMemberWeight(ctx, status, durability, tablet)
 	if tablet.Type == topodatapb.TabletType_PRIMARY && mysql.IsGroupPrimary(status) && !status.GetPrimaryElectionInProgress() {
 		s.disableSuperReadOnlyActionOnline(ctx, status)
 	}
@@ -673,6 +674,35 @@ func (s *groupReplicationSync) enforceSemiSync(ctx context.Context, status *repl
 		enabled = want
 	}
 	s.setTwoPCAllowed(twoPCDurable(status, enabled))
+}
+
+// applyMemberWeight sets the member weight of the tablet's MySQL to the weight that the shard's group
+// replication policy gives the tablet, while MySQL is an active member whose weight differs. MySQL
+// applies group_replication_member_weight from a join's configuration only: a member that joined
+// while the shard's policy was not a group replication policy yet, during a conversion, or before
+// its type changed, kept another weight until its next join. The variable is dynamic, and the
+// group's next primary election uses the new weight. The change takes the action lock, without
+// waiting, so that it never runs during an RPC that configures and starts Group Replication.
+func (s *groupReplicationSync) applyMemberWeight(ctx context.Context, status *replicationdatapb.GroupReplicationStatus, durability policy.Durabler, tablet *topodatapb.Tablet) {
+	grd, ok := policy.AsGroupReplication(durability)
+	if !ok || !mysql.IsGroupMemberActive(status) {
+		return
+	}
+	tm := s.tm
+	want := tm.groupMemberWeight(grd, tablet)
+	if int32(want) == status.GetMemberWeight() {
+		return
+	}
+	if !tm.actionSema.TryAcquire(1) {
+		return
+	}
+	defer tm.unlock()
+	log.Info("Group replication sync: setting the member weight of the shard's policy",
+		slog.Int("weight", want),
+		slog.Int("previous_weight", int(status.GetMemberWeight())))
+	if err := tm.MysqlDaemon.SetGroupReplicationMemberWeight(ctx, want); err != nil {
+		log.Warn("Group replication sync: cannot set the member weight", slog.Any("error", err))
+	}
 }
 
 // groupReplicationVoterMajorityLost is the reason for which a PRIMARY tablet does not serve while
