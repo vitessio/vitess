@@ -35,3 +35,11 @@ v24.0.4 began denying, under strict table ACL (`--queryserver-config-strict-tabl
 These checks are counted under the `undetermined-table-set` `TableName` label, in `TableACLDenied`, or in `TableACLAllowed` for a caller with every role on every table. With dry-run (`--queryserver-config-enable-table-acl-dry-run`), only the statements the check would deny increment `TableACLPseudoDenied`.
 
 See [#21349](https://github.com/vitessio/vitess/pull/21349) for details.
+
+### Online DDL escapes table names in the statements it runs
+
+Online DDL builds statements such as `DROP TABLE`, `RENAME TABLE`, `LOCK TABLES`, `SHOW CREATE TABLE` and `SHOW TABLES LIKE` from templates. Each template supplied its own quotes around the migration's table name, but the name itself was not escaped. A table name containing a back quote or single quote could close that quoting and append SQL. Several of these statements run on the tablet's DBA connection, which accepts multiple statements. Any user allowed to submit an Online DDL migration could therefore run arbitrary SQL as the DBA user. That SQL bypassed vtgate routing and table ACLs and could reach every schema on that `mysqld`. See [GHSA-8w3p-4xg5-rm9w](https://github.com/vitessio/vitess/security/advisories/GHSA-8w3p-4xg5-rm9w).
+
+vttablet now escapes table names as identifiers and encodes string arguments as literals before writing them into these statements. The table lifecycle (table GC) statements that rename, purge and drop tables escape their table names the same way.
+
+See [#21381](https://github.com/vitessio/vitess/pull/21381) for details.
