@@ -460,17 +460,11 @@ func TestQueryExecutorQueryAnnotation(t *testing.T) {
 			callerID := &querypb.VTGateCallerID{
 				Username: "u1",
 			}
-<<<<<<< HEAD
-			ctx := callerid.NewContext(context.Background(), nil, callerID)
-||||||| parent of f722c1fcfa (tabletserver: escape */ in the principal of query annotations (#21369))
-			ctx := callerid.NewContext(t.Context(), nil, callerID)
-=======
 			var effectiveCallerID *vtrpcpb.CallerID
 			if tcase.principal != "" {
 				effectiveCallerID = &vtrpcpb.CallerID{Principal: tcase.principal}
 			}
-			ctx := callerid.NewContext(t.Context(), effectiveCallerID, callerID)
->>>>>>> f722c1fcfa (tabletserver: escape */ in the principal of query annotations (#21369))
+			ctx := callerid.NewContext(context.Background(), effectiveCallerID, callerID)
 			tsv := newTestTabletServer(ctx, noFlags, db)
 			tsv.config.DB.DBName = "ks"
 			tsv.config.AnnotateQueries = true
