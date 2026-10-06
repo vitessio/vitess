@@ -1100,6 +1100,9 @@ func TestServeNonPrimaryKillsBlockedCommit(t *testing.T) {
 // gateTxEngine forwards cluster actions to a real QueryList and records the
 // cleanup calls made by the state manager.
 type gateTxEngine struct {
+	// t supplies the context for the commit registered in AcceptReadOnly.
+	t *testing.T
+
 	// ql is the commit list that receives the forwarded cluster actions.
 	ql *QueryList
 
@@ -1128,7 +1131,7 @@ func (te *gateTxEngine) AcceptReadOnly() {
 		return
 	}
 
-	te.addErr = te.ql.Add(NewQueryDetail(nil, &killableConn{id: 99}))
+	te.addErr = te.ql.Add(NewQueryDetail(te.t.Context(), &killableConn{id: 99}))
 }
 
 // Close satisfies txEngine. The test does not need it.
@@ -1158,6 +1161,7 @@ func (te *gateTxEngine) TerminateActiveCommits() {
 func TestServeNonPrimaryGatesCommitsAndWaitsForSweep(t *testing.T) {
 	sm := newTestStateManager()
 	te := &gateTxEngine{
+		t:               t,
 		ql:              NewQueryList("active-commits", sqlparser.NewTestParser()),
 		terminated:      make(chan struct{}),
 		releaseRollback: make(chan struct{}),
@@ -1196,5 +1200,5 @@ func TestServeNonPrimaryGatesCommitsAndWaitsForSweep(t *testing.T) {
 	}
 
 	require.ErrorContains(t, te.addErr, vterrors.ShuttingDown)
-	require.NoError(t, te.ql.Add(NewQueryDetail(nil, &killableConn{id: 100})))
+	require.NoError(t, te.ql.Add(NewQueryDetail(t.Context(), &killableConn{id: 100})))
 }
