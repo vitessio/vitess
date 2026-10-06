@@ -17,6 +17,9 @@ limitations under the License.
 package grpcvtctldserver
 
 import (
+	"context"
+	"errors"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -28,7 +31,9 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
@@ -112,6 +117,96 @@ func TestSetKeyspaceDurabilityPolicyRefusesReplicationModeChange(t *testing.T) {
 			assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
 			require.ErrorContains(t, err, tt.wantErr)
 			assert.Equal(t, tt.keyspace.DurabilityPolicy, ki.DurabilityPolicy, "the keyspace's policy must not change")
+		})
+	}
+}
+
+// initGateTMC answers FullStatus with a status per tablet, and records the calls that start the
+// initialization of a shard.
+type initGateTMC struct {
+	tmclient.TabletManagerClient
+
+	mu       sync.Mutex
+	statuses map[uint32]*replicationdatapb.FullStatus
+	calls    []string
+}
+
+// FullStatus is part of the tmclient.TabletManagerClient interface.
+func (c *initGateTMC) FullStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.FullStatus, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.statuses[tablet.Alias.Uid], nil
+}
+
+// ResetReplication is part of the tmclient.TabletManagerClient interface.
+func (c *initGateTMC) ResetReplication(ctx context.Context, tablet *topodatapb.Tablet) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.calls = append(c.calls, "ResetReplication")
+	return nil
+}
+
+// InitPrimary is part of the tmclient.TabletManagerClient interface.
+func (c *initGateTMC) InitPrimary(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) (string, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.calls = append(c.calls, "InitPrimary")
+	return "", errors.New("the test stops at InitPrimary")
+}
+
+// TestInitShardPrimaryRefusesTabletWithoutGroupReplication checks that InitShardPrimary, under a
+// group replication policy, refuses before it changes anything a primary-elect, or a tablet that may
+// be a voter, whose vttablet does not run Group Replication (FullStatus field 28) or does not resolve
+// the shard's own policy (field 29): it would initialize a writable primary without a group.
+func TestInitShardPrimaryRefusesTabletWithoutGroupReplication(t *testing.T) {
+	capable := &replicationdatapb.FullStatus{GroupReplicationEnabled: true, ShardDurabilityPolicySupported: true}
+	for _, tt := range []struct {
+		name     string
+		statuses map[uint32]*replicationdatapb.FullStatus
+		// wantErr is a part of the error; empty means that the initialization reaches InitPrimary.
+		wantErr string
+	}{{
+		name:     "the primary-elect does not run Group Replication",
+		statuses: map[uint32]*replicationdatapb.FullStatus{100: {ShardDurabilityPolicySupported: true}, 200: capable},
+		wantErr:  "zone1-0000000100: vttablet does not run Group Replication",
+	}, {
+		name:     "a replica is an older vttablet",
+		statuses: map[uint32]*replicationdatapb.FullStatus{100: capable, 200: {}},
+		wantErr:  "zone1-0000000200: vttablet does not run Group Replication",
+	}, {
+		name:     "both run Group Replication",
+		statuses: map[uint32]*replicationdatapb.FullStatus{100: capable, 200: capable},
+		wantErr:  "the test stops at InitPrimary",
+	}} {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := t.Context()
+			ts := memorytopo.NewServer(ctx, "zone1")
+			t.Cleanup(ts.Close)
+			testutil.AddKeyspaces(ctx, t, ts, &vtctldatapb.Keyspace{Name: "ks", Keyspace: &topodatapb.Keyspace{DurabilityPolicy: policy.DurabilityGroupReplication}})
+			for _, uid := range []uint32{100, 200} {
+				testutil.AddTablet(ctx, t, ts, &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: uid}, Keyspace: "ks", Shard: "-",
+					Type: topodatapb.TabletType_REPLICA, MysqlHostname: "localhost", MysqlPort: int32(uid),
+				}, nil)
+			}
+			tmc := &initGateTMC{statuses: tt.statuses}
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(vtenv.NewTestEnv(), ts)
+			})
+
+			_, err := vtctld.InitShardPrimary(ctx, &vtctldatapb.InitShardPrimaryRequest{
+				Keyspace: "ks", Shard: "-", PrimaryElectTabletAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}, Force: true,
+			})
+			require.Error(t, err)
+			require.ErrorContains(t, err, tt.wantErr)
+			tmc.mu.Lock()
+			defer tmc.mu.Unlock()
+			if tt.wantErr == "the test stops at InitPrimary" {
+				assert.Contains(t, tmc.calls, "InitPrimary")
+				return
+			}
+			assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+			assert.Empty(t, tmc.calls, "the initialization must change nothing")
 		})
 	}
 }

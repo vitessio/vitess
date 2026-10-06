@@ -18,6 +18,8 @@ package reparentutil
 
 import (
 	"context"
+	"fmt"
+	"maps"
 	"slices"
 	"strings"
 	"sync"
@@ -417,4 +419,44 @@ func voterCandidates(tablets []*topodatapb.Tablet, statuses map[string]*fullStat
 		candidates = append(candidates, policy.VoterCandidate{Tablet: tablet, Active: res != nil && res.err == nil && res.isActiveMember()})
 	}
 	return candidates
+}
+
+// CheckGroupReplicationCapabilities returns a FAILED_PRECONDITION error, before an initialization
+// bootstraps a shard's group with InitPrimary, unless the primary-elect and every tablet of the shard
+// that the policy allows as a voter report that their vttablet runs Group Replication
+// (FullStatus.group_replication_enabled, --enable-group-replication) and resolves the shard's own
+// durability policy (FullStatus.shard_durability_policy_supported). A vttablet that does not run
+// Group Replication skips the bootstrap, so that InitPrimary would make MySQL writable without a group,
+// and an older one leaves both fields unset. A tablet that does not answer fails the check. Tablets
+// that the policy does not allow as voters, which replicate asynchronously from the group, need
+// neither.
+func CheckGroupReplicationCapabilities(ctx context.Context, tmc tmclient.TabletManagerClient, grd policy.GroupReplicationDurabler, primaryElect *topodatapb.Tablet, tabletMap map[string]*topo.TabletInfo) error {
+	toRead := []*topodatapb.Tablet{primaryElect}
+	for _, alias := range slices.Sorted(maps.Keys(tabletMap)) {
+		tablet := tabletMap[alias].Tablet
+		if !topoproto.TabletAliasEqual(tablet.Alias, primaryElect.Alias) && grd.IsGroupMember(tablet) {
+			toRead = append(toRead, tablet)
+		}
+	}
+	statuses := fetchFullStatuses(ctx, tmc, toRead, topo.RemoteOperationTimeout)
+	var problems []string
+	for _, tablet := range toRead {
+		alias := topoproto.TabletAliasString(tablet.Alias)
+		res := statuses[alias]
+		switch {
+		case res.err != nil:
+			problems = append(problems, fmt.Sprintf("%v: cannot read its status: %v", alias, res.err))
+		case !res.status.GetGroupReplicationEnabled():
+			problems = append(problems, alias+": vttablet does not run Group Replication; start it with --enable-group-replication")
+		default:
+			if problem := shardDurabilityPolicyProblem(tablet, res); problem != "" {
+				problems = append(problems, problem)
+			}
+		}
+	}
+	if len(problems) > 0 {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot initialize shard %s/%s with a replication group: %s",
+			primaryElect.Keyspace, primaryElect.Shard, strings.Join(problems, "; "))
+	}
+	return nil
 }

@@ -2909,6 +2909,14 @@ func (s *VtctldServer) InitShardPrimaryLocked(
 		logger.Warningf("primary-elect tablet %v is not the only primary in the shard, proceeding anyway as -force was used", topoproto.TabletAliasString(req.PrimaryElectTabletAlias))
 	}
 
+	// Under a group replication policy, InitPrimary bootstraps the shard's group: only on vttablets
+	// that run Group Replication.
+	if grd, ok := policy.AsGroupReplication(durability); ok {
+		if err := reparentutil.CheckGroupReplicationCapabilities(ctx, tmc, grd, primaryElectTabletInfo.Tablet, tabletMap); err != nil {
+			return err
+		}
+	}
+
 	// First phase: reset replication on all tablets. If anyone fails,
 	// we stop. It is probably because it is unreachable, and may leave
 	// an unstable database process in the mix, with a database daemon

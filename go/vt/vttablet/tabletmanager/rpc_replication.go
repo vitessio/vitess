@@ -467,7 +467,8 @@ func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string
 	defer tm.unlock()
 
 	// In a keyspace that uses group replication, the primary is the member that bootstraps the
-	// shard's group. The caller holds the shard lock.
+	// shard's group. The caller holds the shard lock. A vttablet that does not run Group
+	// Replication refuses: it would make MySQL writable without a group.
 	if groupReplicationEnabled() {
 		durability, err := tm.shardDurability(ctx)
 		if err != nil {
@@ -478,6 +479,11 @@ func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string
 				return "", vterrors.Wrapf(err, "failed to bootstrap the group")
 			}
 		}
+	} else if durability, err := tm.shardDurability(ctx); err != nil {
+		log.Warn("InitPrimary: cannot read the shard's durability policy, initializing without Group Replication", slog.Any("error", err))
+	} else if policy.IsGroupReplication(durability) {
+		return "", vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION,
+			"the shard uses a group replication durability policy, but this vttablet does not run Group Replication; start it with --enable-group-replication")
 	}
 	if err := tm.checkGroupAllowsReadWrite(ctx); err != nil {
 		return "", err

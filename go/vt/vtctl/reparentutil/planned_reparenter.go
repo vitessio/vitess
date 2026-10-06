@@ -361,9 +361,12 @@ func (pr *PlannedReparenter) performInitialPromotion(
 	primaryElectAliasStr := topoproto.TabletAliasString(primaryElect.Alias)
 
 	// Under a group replication policy, InitPrimary bootstraps a group: only on a shard that has
-	// none yet.
-	if policy.IsGroupReplication(opts.durability) {
+	// none yet, and only on vttablets that run Group Replication.
+	if grd, ok := policy.AsGroupReplication(opts.durability); ok {
 		if err := pr.checkShardHasNoGroup(ctx, keyspace, shard, tabletMap); err != nil {
+			return "", err
+		}
+		if err := CheckGroupReplicationCapabilities(ctx, pr.tmc, grd, primaryElect, tabletMap); err != nil {
 			return "", err
 		}
 	}

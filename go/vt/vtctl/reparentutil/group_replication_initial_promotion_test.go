@@ -202,3 +202,61 @@ func TestPlannedReparentGroupReplicationInitialPromotionRefusals(t *testing.T) {
 		})
 	}
 }
+
+// TestPlannedReparentInitialPromotionRefusesTabletWithoutGroupReplication checks that the initial
+// promotion of a shard under a group replication policy refuses, before InitPrimary, a primary-elect
+// or a tablet that may be a voter whose vttablet does not run Group Replication
+// (--enable-group-replication, FullStatus field 28) or does not resolve the shard's own policy (field
+// 29): an older vttablet, or one without the flag, would initialize a writable primary without a
+// group. A tablet that may not be a voter, an RDONLY tablet, needs neither.
+func TestPlannedReparentInitialPromotionRefusesTabletWithoutGroupReplication(t *testing.T) {
+	for _, tt := range []struct {
+		name  string
+		specs []fakeGRTabletSpec
+		// wantErr is a part of the error; empty means that the initial promotion runs.
+		wantErr string
+	}{{
+		name: "the primary-elect does not run Group Replication",
+		specs: []fakeGRTabletSpec{
+			{cell: "zone1", uid: 101, tabletType: topodatapb.TabletType_REPLICA, noGR: true},
+			{cell: "zone2", uid: 200, tabletType: topodatapb.TabletType_REPLICA},
+			{cell: "zone3", uid: 300, tabletType: topodatapb.TabletType_REPLICA},
+		},
+		wantErr: "zone1-0000000101: vttablet does not run Group Replication; start it with --enable-group-replication",
+	}, {
+		name: "a tablet that may be a voter does not resolve the shard's own policy",
+		specs: []fakeGRTabletSpec{
+			{cell: "zone1", uid: 101, tabletType: topodatapb.TabletType_REPLICA},
+			{cell: "zone2", uid: 200, tabletType: topodatapb.TabletType_REPLICA, noShardPolicy: true},
+			{cell: "zone3", uid: 300, tabletType: topodatapb.TabletType_REPLICA},
+		},
+		wantErr: "zone2-0000000200: vttablet does not apply the shard's own durability policy",
+	}, {
+		name: "an RDONLY tablet does not run Group Replication",
+		specs: []fakeGRTabletSpec{
+			{cell: "zone1", uid: 101, tabletType: topodatapb.TabletType_REPLICA},
+			{cell: "zone2", uid: 200, tabletType: topodatapb.TabletType_REPLICA},
+			{cell: "zone3", uid: 300, tabletType: topodatapb.TabletType_REPLICA},
+			{cell: "zone1", uid: 102, tabletType: topodatapb.TabletType_RDONLY, noGR: true},
+		},
+	}} {
+		t.Run(tt.name, func(t *testing.T) {
+			c, ts := newFakeGRCluster(t, "group_replication_cross_cell", tt.specs...)
+			pr := NewPlannedReparenter(ts, c, logutil.NewMemoryLogger())
+			_, err := pr.ReparentShard(t.Context(), "ks", "-", PlannedReparentOptions{
+				NewPrimaryAlias:     mustAlias(t, alias101),
+				WaitReplicasTimeout: 30 * time.Second,
+			})
+			if tt.wantErr == "" {
+				require.NoError(t, err)
+				assert.Equal(t, []string{"InitPrimary(" + alias101 + ")"}, callsWithPrefix(c.mutatingCalls(), "InitPrimary"))
+				return
+			}
+			require.Error(t, err)
+			assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+			require.ErrorContains(t, err, tt.wantErr)
+			assert.Empty(t, c.mutatingCalls(), "the initial promotion must change nothing")
+			assert.Empty(t, c.voters(t))
+		})
+	}
+}
