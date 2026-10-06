@@ -145,12 +145,28 @@ func TestGeneratedDDLIsOneStatement(t *testing.T) {
 	}
 }
 
-// TestBuildTableExistsQuery pins the pattern the existence check sends: the '_'
-// wildcard is escaped so that the pattern matches only the table asked about.
+// TestBuildTableExistsQuery pins the patterns that the existence check sends.
+// The '%' and '_' wildcards and the '\' escape character can all appear in a
+// table name, and each is escaped so that the pattern matches only the table
+// asked about: otherwise c%d would also match cxyd, and the existence check
+// would see two tables. The string literal doubles each '\' of the pattern
+// except before '%' and '_', which MySQL keeps in a string literal, so LIKE
+// receives the pattern as built.
 func TestBuildTableExistsQuery(t *testing.T) {
-	assert.Equal(t,
-		`SHOW TABLES LIKE '\_vt\_HOLD\_6ace8bcef73211ea87e9f875a4d24e90\_20200915120410'`,
-		buildTableExistsQuery("_vt_HOLD_6ace8bcef73211ea87e9f875a4d24e90_20200915120410"))
+	for _, tc := range []struct {
+		tableName string
+		pattern   string
+	}{
+		{"_vt_HOLD_6ace8bcef73211ea87e9f875a4d24e90_20200915120410", `'\_vt\_HOLD\_6ace8bcef73211ea87e9f875a4d24e90\_20200915120410'`},
+		{"a_b", `'a\_b'`},
+		{"c%d", `'c\%d'`},
+		{`e\f`, `'e\\\\f'`},
+		{`g\_h`, `'g\\\\\_h'`},
+	} {
+		t.Run(tc.tableName, func(t *testing.T) {
+			assert.Equal(t, "SHOW TABLES LIKE "+tc.pattern, buildTableExistsQuery(tc.tableName))
+		})
+	}
 }
 
 // TestEscapeNameProducesOneIdentifier covers the same defect in the escaper used

@@ -693,11 +693,15 @@ func buildLiteralQuery(template literalQueryTemplate, literals ...string) string
 	return sqlparser.BuildParsedQuery(string(template), args...).Query
 }
 
+// likePatternEscaper escapes a table name for use as a LIKE pattern that matches
+// only that name: the escape character itself first, then the '%' and '_'
+// wildcards, all of which a table name may hold.
+var likePatternEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+
 // buildTableExistsQuery builds the SHOW TABLES LIKE query used to test for the
-// existence of a single table, escaping the '_' wildcard so that it matches only
-// that table.
+// existence of a single table, with a pattern that matches only that table.
 func buildTableExistsQuery(tableName string) string {
-	return buildLiteralQuery(sqlShowTablesLike, strings.ReplaceAll(tableName, `_`, `\_`))
+	return buildLiteralQuery(sqlShowTablesLike, likePatternEscaper.Replace(tableName))
 }
 
 // tableExists checks if a given table exists.
