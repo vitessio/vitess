@@ -160,6 +160,9 @@ type migrationShard struct {
 	// voters are the voting members of the group: the recorded voters, or, when converting
 	// to Group Replication, the voters the preflight selected.
 	voters []*topodatapb.TabletAlias
+	// selectedVoters is the preflight's selection when it differs from the recorded voters, which
+	// the migration keeps on a shard whose group runs under a group replication policy.
+	selectedVoters []*topodatapb.TabletAlias
 	// recordedIncarnation is the group incarnation stored in the shard record when the shard
 	// was read.
 	recordedIncarnation string
@@ -910,6 +913,14 @@ func (s *migrationShard) preflightToGroupReplication(ctx context.Context) error 
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "durability policy %s does not use group replication", s.run.opts.DurabilityPolicy)
 	}
 	s.voters = s.selectVoters(grd)
+	if s.hasGroupReplicationPolicy() && s.groupRuns() && len(s.recordedVoters) > 0 && !votersEqual(s.recordedVoters, s.voters) {
+		// A converted shard is managed by its group replication policy: VTOrc maintains its voters
+		// (GroupVotersOutOfDate), under the rule that keeps a view without a majority of the current
+		// voters from holding a majority of the new list, and with the re-check right before its
+		// write. The migration's own selection applies neither: it keeps the recorded voters.
+		s.selectedVoters = s.voters
+		s.voters = s.recordedVoters
+	}
 	voting := s.voting()
 	if !policy.IsGroupMember(grd, s.primary) {
 		problems = append(problems, fmt.Sprintf("the primary %v would not be a voting member of the group", topoproto.TabletAliasString(s.primary.Alias)))
@@ -1057,16 +1068,12 @@ func (s *migrationShard) toGroupReplication(ctx context.Context) error {
 
 	// The voters are stored before the group exists, so that every tablet and VTOrc agree
 	// on them from the first join.
-	if votersEqual(s.recordedVoters, s.voters) {
+	if s.selectedVoters != nil {
+		s.record(MigrationActionSetVoters, nil, MigrationStepSkipped, fmt.Sprintf(
+			"the group of shard %s/%s runs under a group replication policy: VTOrc maintains the voters of a converted shard, and the migration keeps the recorded voters %s (its own selection would be %s)",
+			s.run.keyspace, s.shard, votersString(s.voters), votersString(s.selectedVoters)))
+	} else if votersEqual(s.recordedVoters, s.voters) {
 		s.record(MigrationActionSetVoters, nil, MigrationStepSkipped, "the shard record already lists the voters "+votersString(s.voters))
-	} else if s.hasGroupReplicationPolicy() && s.groupRuns() {
-		// A converted shard is managed by its group replication policy: VTOrc maintains its voters
-		// (GroupVotersOutOfDate), under the rule that keeps a view without a majority of the current
-		// voters from holding a majority of the new list, and with the re-check right before its
-		// write. The migration's own selection applies neither.
-		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
-			"shard %s/%s is converted and its group runs: VTOrc maintains the voters of a converted shard, and the migration does not change them from %s to %s",
-			s.run.keyspace, s.shard, votersString(s.recordedVoters), votersString(s.voters))
 	} else {
 		err := s.do(ctx, MigrationActionSetVoters, nil, fmt.Sprintf("store the voters %s in the shard record", votersString(s.voters)), func(ctx context.Context) error {
 			return writeGroupReplicationVoters(ctx, s.run.m.ts, s.run.keyspace, s.shard, s.voters)

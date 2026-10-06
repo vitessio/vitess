@@ -412,7 +412,9 @@ func TestEmergencyReparentShardConvertedBack(t *testing.T) {
 // voters from holding a majority of the new list, and the re-check right before its write. Here two
 // of four voters left the group cleanly, and an operator made one of them RDONLY: the migration's
 // selection drops it, and the view of the two remaining members would hold two of the three new
-// voters, so that its primary would serve with half of the voters it had.
+// voters, so that its primary would serve with half of the voters it had. The migration keeps the
+// recorded voters and goes on, so that a run over the whole keyspace still converts the shards
+// that follow.
 func TestMigrateReplicationModeLeavesVotersOfConvertedShardToVTOrc(t *testing.T) {
 	c, ts := newFakeGRCluster(t, "semi_sync",
 		fakeGRTabletSpec{cell: "zone1", uid: 100, tabletType: topodatapb.TabletType_PRIMARY},
@@ -423,6 +425,8 @@ func TestMigrateReplicationModeLeavesVotersOfConvertedShardToVTOrc(t *testing.T)
 	c.formGroup(t, "group_replication")
 	c.setIncarnation(t, "1790000000")
 	c.setShardPolicy(t, "group_replication")
+	// The migration converted the shard: the keyspace names the target, with its source.
+	setKeyspaceRecord(t, ts, "group_replication", "semi_sync")
 	require.Equal(t, []string{aliasP, alias101, alias200, alias300}, c.voters(t))
 	c.mu.Lock()
 	c.tablets[alias200].member = false
@@ -434,12 +438,13 @@ func TestMigrateReplicationModeLeavesVotersOfConvertedShardToVTOrc(t *testing.T)
 	})
 	require.NoError(t, err)
 
-	_, err = migrate(t, newTestMigrator(c, ts), "group_replication", false)
-	require.Error(t, err)
-	assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
-	require.ErrorContains(t, err, "VTOrc maintains the voters of a converted shard")
-	assert.Empty(t, c.mutatingCalls())
+	resp, err := migrate(t, newTestMigrator(c, ts), "group_replication", false)
+	require.NoError(t, err)
 	assert.Equal(t, []string{aliasP, alias101, alias200, alias300}, c.voters(t))
+	idx := stepIndex(resp.Shards[0].Steps, MigrationActionSetVoters, "")
+	require.GreaterOrEqual(t, idx, 0)
+	assert.Equal(t, MigrationStepSkipped, resp.Shards[0].Steps[idx].Status)
+	assert.Contains(t, resp.Shards[0].Steps[idx].Description, "VTOrc maintains the voters of a converted shard")
 }
 
 // setKeyspaceRecord replaces the durability fields of the test keyspace's record.
@@ -514,9 +519,9 @@ func TestMigrateReplicationModeVoterGuardOnAnyGroupReplicationPolicy(t *testing.
 	voters := c.voters(t)
 	require.Len(t, voters, 4)
 
-	_, err := migrate(t, newTestMigrator(c, ts), "group_replication_cross_cell", false)
-	require.Error(t, err)
-	require.ErrorContains(t, err, "VTOrc maintains the voters of a converted shard")
+	resp, err := migrate(t, newTestMigrator(c, ts), "group_replication_cross_cell", false)
+	require.NoError(t, err)
 	assert.Equal(t, voters, c.voters(t))
-	assert.Empty(t, c.mutatingCalls())
+	assert.Empty(t, callsWithPrefix(c.mutatingCalls(), "StopGroupReplication"), "no member leaves its group")
+	assert.Equal(t, MigrationStepSkipped, stepStatuses(resp.Shards[0].Steps)[MigrationActionSetVoters])
 }
