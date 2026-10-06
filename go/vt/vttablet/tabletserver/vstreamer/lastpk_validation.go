@@ -144,17 +144,17 @@ func isDigit(c byte) bool {
 }
 
 // writeLastPKValue writes a value returned by validateLastPK into a statement
-// as a literal that means the same thing whether or not the server's sql_mode
-// includes NO_BACKSLASH_ESCAPES.
+// as a literal.
 //
 // Only a number, which validateLastPK has checked is a plain literal, is written
 // verbatim. Every other type is quoted, so that a type this switch does not
 // know about cannot reach the statement unquoted. Value.EncodeSQL is not used
 // for quoting: it escapes a quote as \', which stops being an escape under
-// NO_BACKSLASH_ESCAPES, so the literal ends early and the rest of the value is
-// read as SQL. VerifyMode only requires that a strict mode be present, so a
-// tablet may be running with it set, and a UNION spliced into the copy-phase
-// query needs no statement separator at all.
+// NO_BACKSLASH_ESCAPES, so the literal would end early and the rest of the value
+// would be read as SQL, and a UNION spliced into the copy-phase query needs no
+// statement separator at all. The row streamer's connection cannot be in that
+// mode, as dbconfigs.Connector.Connect runs sqlmode.NeutralizeSessionQuery, but
+// writeQuotedLiteral stays inside the literal without relying on that.
 func writeLastPKValue(buf *sqlparser.TrackedBuffer, v sqltypes.Value) {
 	switch {
 	case v.IsNull(), v.Type() == sqltypes.Bit:
@@ -176,9 +176,11 @@ func writeLastPKValue(buf *sqlparser.TrackedBuffer, v sqltypes.Value) {
 //
 // Doubling the quote is the escape SQL itself defines, and it holds under every
 // sql_mode, so the literal can never end early. The backslash is doubled so that
-// it stays inert where backslashes *are* escapes. Under NO_BACKSLASH_ESCAPES a
-// value containing a backslash therefore reads back with that backslash doubled:
-// a wrong resume bound for such a key, but never a way out of the literal.
+// it stays inert where backslashes are escapes, which they always are on a
+// connection that sqlmode.NeutralizeSessionQuery has set up, and the literal
+// then reads back exactly. Under NO_BACKSLASH_ESCAPES a value containing a
+// backslash would read back with that backslash doubled: a wrong resume bound
+// for such a key, but never a way out of the literal.
 func writeQuotedLiteral(buf *sqlparser.TrackedBuffer, val []byte) {
 	buf.WriteByte('\'')
 	for _, c := range val {
