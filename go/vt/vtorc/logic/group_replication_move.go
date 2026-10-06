@@ -422,7 +422,7 @@ func moveGroupPrimaryToVoter(ctx context.Context, analysisEntry *inst.DetectionA
 	plan := inst.PlanGroupVoters(read.input)
 	if plan.Action != inst.VoterActionMovePrimary || (!plan.PrimaryRecordDeleted && !topoproto.TabletAliasEqual(plan.GroupPrimary.GetAlias(), analysisEntry.AnalyzedInstanceAlias)) {
 		return true, topologyRecovery, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
-			"the primary of the replication group of %s is a voter with a tablet record, or %s is no longer that primary: %s", keyspaceShard, topoproto.TabletAliasString(analysisEntry.AnalyzedInstanceAlias), plan.Reason)
+			"not moving the group primary of %s: the fresh read does not confirm the move that the analysis of %s proposed: %s", keyspaceShard, topoproto.TabletAliasString(analysisEntry.AnalyzedInstanceAlias), plan.Reason)
 	}
 	groupPrimary := plan.GroupPrimary
 	viewFrom := groupPrimary.Alias

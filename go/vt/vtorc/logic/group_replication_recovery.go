@@ -63,9 +63,10 @@ const (
 	AdoptGroupReplicationBootstrapRecoveryName string = "AdoptGroupReplicationBootstrap"
 )
 
-// groupVoterReadTimeout bounds the read of each tablet's status on which a change of the voters is
-// decided, right before its write: the statuses must still be fresh at the write.
-var groupVoterReadTimeout = 2 * time.Second
+// groupVoterStatusesTimeout bounds the whole read of the tablets' statuses on which a change of the
+// voters is decided, right before its write, so that they are still fresh at the write. The tablets
+// are read concurrently, so each one has up to this long to answer.
+var groupVoterStatusesTimeout = 2 * time.Second
 
 // groupReplicationCellTimeout bounds the read of the shard's tablet records in each cell, in the
 // group replication recoveries that can do with the tablets of the cells that answer. The topology
@@ -1047,10 +1048,10 @@ func memberGTIDSets(status *replicationdatapb.FullStatus) (executed, all replica
 // updateGroupReplicationVoters makes the change of the shard's voters that inst.PlanGroupVoters
 // decides: the initial list, SwapVoter, GrowVoter or RemoveVoter. It runs under the shard lock, and
 // decides on one bounded fresh read, the shard record and the FullStatus of every tablet of the shard
-// (groupVoterReadTimeout each), with nothing in between that read and the compare-and-swap of the
-// voters and the incarnation. A new voter then joins the group. A member that is no longer a voter
-// leaves the group on its own (its tablet's sync loop), and the group primary, if it is not a voter,
-// is moved to one (GroupPrimaryNotVoter).
+// (concurrently, within groupVoterStatusesTimeout), with nothing in between that read and the
+// compare-and-swap of the voters and the incarnation. A new voter then joins the group. A member that
+// is no longer a voter leaves the group on its own (its tablet's sync loop), and the group primary,
+// if it is not a voter, is moved to one (GroupPrimaryNotVoter).
 func updateGroupReplicationVoters(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logger *log.PrefixedLogger) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
 	topologyRecovery, err = AttemptRecoveryRegistration(analysisEntry)
 	if topologyRecovery == nil {
@@ -1111,9 +1112,9 @@ type groupVoterState struct {
 }
 
 // readGroupVoterState reads, once, the shard record and the FullStatus of every tablet of the shard,
-// each within groupVoterReadTimeout, and returns them as the input of inst.PlanGroupVoters. A voter
-// whose tablet record does not exist (topo NoNode) is a deleted voter; one whose record cannot be read
-// fails the read.
+// concurrently within groupVoterStatusesTimeout, and returns them as the input of
+// inst.PlanGroupVoters. A voter whose tablet record does not exist (topo NoNode) is a deleted voter;
+// one whose record cannot be read fails the read.
 func readGroupVoterState(ctx context.Context, keyspace, shard string) (*groupVoterState, error) {
 	keyspaceShard := topoproto.KeyspaceShardString(keyspace, shard)
 	shardInfo, err := ts.GetShard(ctx, keyspace, shard)
@@ -1174,7 +1175,7 @@ func readGroupVoterState(ctx context.Context, keyspace, shard string) (*groupVot
 		}
 		deleted[alias] = dv
 	}
-	readCtx, cancel := context.WithTimeout(ctx, groupVoterReadTimeout)
+	readCtx, cancel := context.WithTimeout(ctx, groupVoterStatusesTimeout)
 	read := readShardTabletStatuses(readCtx, append(slices.Clone(tabletInfos), probes...))
 	cancel()
 	statuses, probed := read[:len(tabletInfos)], read[len(tabletInfos):]

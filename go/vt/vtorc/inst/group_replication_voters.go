@@ -174,11 +174,13 @@ type voterPlanner struct {
 //     P2 (v's MySQL is active in no view) and P3 (x is a valid spare).
 //   - RemoveVoter(v): v's tablet record was deleted and its cell has no spare. It needs P1, P2, and v
 //     in no view of p. It is the only change that shrinks the list.
-//   - RemoveVoterNoGroup(v): v's tablet record was deleted while no group runs: no reachable tablet is an
-//     active member of any incarnation or runs a START GROUP_REPLICATION, no bootstrap intent is live,
-//     and v's vttablet does not answer (P2): a voter that answers would be part of the bootstrap. The group is then bootstrapped from the other voters (GroupNotBootstrapped), which needs
-//     every voter reachable. The operator accepts the loss of the transactions that only v held, as
-//     with a forced EmergencyReparentShard. At least one voter stays.
+//   - RemoveVoterNoGroup(v): v's tablet record was deleted while no group runs: no reachable tablet is
+//     an active member of any incarnation or runs a START GROUP_REPLICATION, and no bootstrap intent
+//     is live. v must be down (DeletedVoter.Down: its probe fails, and VTOrc's discovery has not
+//     reached it for the grace period), and every other voter must answer, in no group and without
+//     a START. The group is then bootstrapped from the other voters (GroupNotBootstrapped). The
+//     operator accepts the loss of the transactions that only v held, as with a forced
+//     EmergencyReparentShard. At least one voter stays.
 //   - GrowVoter(x): a cell with an eligible tablet has no voter. It needs P1, P3, and a majority of
 //     the grown list among the voters ONLINE in p's view.
 //
@@ -587,8 +589,8 @@ func (p *voterPlanner) activeAnywhere(alias, uuid string) string {
 }
 
 // inPrimaryView returns why the voter may be in the view of the primary, by its server_uuid or its
-// MySQL address, or "" when it is in none. When VTOrc does not know the voter's server_uuid, every member of the view must be the MySQL of a
-// tablet that answers.
+// MySQL address, or "" when it is in none. When VTOrc does not know the voter's server_uuid, every
+// member of the view must be the MySQL of a tablet that answers.
 func (p *voterPlanner) inPrimaryView(primary *VoterTablet, alias, uuid string) string {
 	voter := p.groupVoter(alias, uuid)
 	for _, m := range primary.Status.GetMembers() {
