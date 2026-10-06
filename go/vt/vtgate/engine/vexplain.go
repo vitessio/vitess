@@ -223,13 +223,19 @@ func (v *VExplain) convertToVExplainAllResult(ctx context.Context, vcursor VCurs
 		if err != nil {
 			continue
 		}
-		// Explain statement should now succeed
-		res, err := vcursor.ExecuteStandalone(ctx, nil, explainQuery, nil, &srvtopo.ResolvedShard{
-			Target:  entry.Target,
-			Gateway: entry.Gateway,
-		}, false)
-		if err != nil {
+		// Explain statement should now succeed. It runs in the caller's session, as
+		// the explained query did, so that a transaction the caller started covers
+		// both: MySQL can execute stored functions while it optimizes an EXPLAIN,
+		// for example when it materializes a derived table, and a caller that runs
+		// VEXPLAIN ALL in a read-only transaction relies on that transaction to keep
+		// either from writing.
+		rss := []*srvtopo.ResolvedShard{{Target: entry.Target, Gateway: entry.Gateway}}
+		res, errs := vcursor.ExecuteMultiShard(ctx, entry.FiredFrom, rss, []*querypb.BoundQuery{{Sql: explainQuery}}, false, false, false)
+		if err := vterrors.Aggregate(errs); err != nil {
 			return nil, err
+		}
+		if res == nil || len(res.Rows) == 0 || len(res.Rows[0]) == 0 {
+			continue
 		}
 		explainResults[entry.FiredFrom] = res.Rows[0][0].ToString()
 	}

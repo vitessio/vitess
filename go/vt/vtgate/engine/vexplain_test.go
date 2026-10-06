@@ -26,9 +26,11 @@ import (
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
@@ -241,4 +243,42 @@ func TestVExplainMySQLEmptyResultWarns(t *testing.T) {
 	require.Len(t, vc.warnings, 1)
 	assert.Contains(t, vc.warnings[0].Message, "empty EXPLAIN result")
 	assert.Contains(t, vc.warnings[0].Message, "20-")
+}
+
+// fakeGateway stands in for a gateway the logging VCursor never calls.
+type fakeGateway struct {
+	srvtopo.Gateway
+}
+
+// TestVExplainAllRunsExplainInSession checks that VEXPLAIN ALL sends its per-shard
+// EXPLAIN through the caller's session, as it does the explained query, rather than
+// through a standalone one. MySQL can execute stored functions while optimizing an
+// EXPLAIN, so a caller that runs VEXPLAIN ALL in a read-only transaction relies on
+// that transaction covering the EXPLAIN too.
+func TestVExplainAllRunsExplainInSession(t *testing.T) {
+	input := &Send{
+		Keyspace:          &vindexes.Keyspace{Name: "ks"},
+		Query:             "select id from t",
+		TargetDestination: key.DestinationShard("-20"),
+	}
+	explainResult := sqltypes.MakeTestResult(sqltypes.MakeTestFields("EXPLAIN", "varchar"), "{}")
+	vc := &loggingVCursor{
+		shards: []string{"-20"},
+		vexplainLogs: []ExecuteEntry{{
+			Target:    &querypb.Target{Keyspace: "ks", Shard: "-20"},
+			Gateway:   fakeGateway{},
+			Query:     "select id from t",
+			FiredFrom: input,
+		}},
+		results: []*sqltypes.Result{{}, explainResult},
+	}
+	vexplain := &VExplain{Input: input, Type: sqlparser.AllVExplainType}
+
+	_, err := vexplain.TryExecute(t.Context(), vc, nil, true)
+	require.NoError(t, err)
+	require.NotEmpty(t, vc.log)
+	assert.Equal(t, "ExecuteMultiShard ks.-20: explain format = json select id from t {} false false", vc.log[len(vc.log)-1])
+	for _, entry := range vc.log {
+		assert.NotContains(t, entry, "ExecuteStandalone", "the EXPLAIN must not run in a standalone session")
+	}
 }
