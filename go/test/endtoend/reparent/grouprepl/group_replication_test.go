@@ -316,7 +316,8 @@ func isWatcherLag(err error) bool {
 	return err != nil && strings.Contains(err.Error(), vtgateWatcherLagError)
 }
 
-// writer inserts rows through vtgate until stopped and counts the failures.
+// writer inserts rows through vtgate until stopped, counts the failures and remembers the ids of the
+// acknowledged writes.
 type writer struct {
 	cancel   context.CancelFunc
 	wg       sync.WaitGroup
@@ -327,6 +328,7 @@ type writer struct {
 	lastErr error
 	// watcherLag holds the spans of the writes that failed in vtgate's watcher lag, of fail.
 	watcherLag []span
+	acked      []int64
 }
 
 func startWriter(t *testing.T, tc *testCluster) *writer {
@@ -346,7 +348,7 @@ func startWriter(t *testing.T, tc *testCluster) *writer {
 				}
 			}
 			start := time.Now()
-			_, err := conn.ExecuteFetch("insert into writes (val) values ('x')", 0, false)
+			qr, err := conn.ExecuteFetch("insert into writes (val) values ('x')", 0, false)
 			w.observe(time.Since(start))
 			if err != nil {
 				w.failed(span{start: start, end: time.Now()}, err)
@@ -354,6 +356,9 @@ func startWriter(t *testing.T, tc *testCluster) *writer {
 				conn = nil
 				continue
 			}
+			w.mu.Lock()
+			w.acked = append(w.acked, int64(qr.InsertID))
+			w.mu.Unlock()
 			w.ok.Add(1)
 			select {
 			case <-ctx.Done():
@@ -399,6 +404,13 @@ func (w *writer) watcherLagFailures() []span {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	return slices.Clone(w.watcherLag)
+}
+
+// ackedIDs returns the ids of the acknowledged writes.
+func (w *writer) ackedIDs() []int64 {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return slices.Clone(w.acked)
 }
 
 func (w *writer) stop() (ok, fail int64, lastErr error) {
@@ -472,6 +484,29 @@ func rowCount(t *testing.T, tablet *cluster.Vttablet) (int, error) {
 		return 0, err
 	}
 	return qr.Rows[0][0].ToInt()
+}
+
+// requireAckedWrites checks that every acknowledged write, by its id, is in the tablet's MySQL.
+func requireAckedWrites(t *testing.T, tablet *cluster.Vttablet, acked []int64) {
+	t.Helper()
+	conn, err := tablet.VttabletProcess.TabletConn(keyspaceName, true)
+	require.NoError(t, err)
+	defer conn.Close()
+	qr, err := conn.ExecuteFetch("select id from writes", 1000000, false)
+	require.NoError(t, err)
+	present := make(map[int64]bool, len(qr.Rows))
+	for _, row := range qr.Rows {
+		id, err := row[0].ToInt64()
+		require.NoError(t, err)
+		present[id] = true
+	}
+	var lost []int64
+	for _, id := range acked {
+		if !present[id] {
+			lost = append(lost, id)
+		}
+	}
+	assert.Empty(t, lost, "acknowledged writes missing from %s, of %d acknowledged", tablet.Alias, len(acked))
 }
 
 // superReadOnlyActionEnabled returns whether the member action mysql_disable_super_read_only_if_primary

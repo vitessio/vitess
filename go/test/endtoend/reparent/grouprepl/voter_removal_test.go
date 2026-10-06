@@ -116,7 +116,9 @@ func TestGroupReplicationBootstrapsAfterDeletedVoter(t *testing.T) {
 			assert.False(c, mysql.IsGroupMemberActive(status.GroupReplicationStatus), tablet.Alias)
 		}
 	}, waitTimeout, pollInterval)
-	acknowledged, _, _ := w.stop()
+	_, _, _ = w.stop()
+	acknowledged := w.ackedIDs()
+	require.NotEmpty(t, acknowledged)
 
 	// The group stays down while the dead voter is listed: VTOrc bootstraps only when every voter
 	// answers.
@@ -139,9 +141,7 @@ func TestGroupReplicationBootstrapsAfterDeletedVoter(t *testing.T) {
 	waitForGroup(t, tc, newPrimary, []*cluster.Vttablet{primary, zone2})
 
 	// Every write that the group acknowledged is there: the two remaining voters held them all.
-	count, err := rowCount(t, newPrimary)
-	require.NoError(t, err)
-	assert.GreaterOrEqual(t, int64(count), acknowledged)
+	requireAckedWrites(t, newPrimary, acknowledged)
 
 	// And the shard serves writes again.
 	w = startWriter(t, tc)
