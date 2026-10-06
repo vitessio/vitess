@@ -92,13 +92,12 @@ var killGraceTimeout = 5 * time.Second
 // written by an operator, where a single entry may hold several statements
 // separated by a semicolon.
 //
-// The connection is discarded afterwards instead of returning to the pool, like
-// ExecuteSuperQueryListTainted does: it can send a batch, which nothing else
-// drawing on the pool expects, and operator-supplied SQL may have changed
-// session state (e.g. sql_mode) that must not leak into pooled connections.
-// MySQL parses the statements, so an entry holding a compound statement such as
-// CREATE PROCEDURE, whose body carries semicolons of its own, means what it
-// says.
+// The connection is discarded afterwards instead of returning to the pool: it
+// can send a batch, which nothing else drawing on the pool expects, and
+// operator-supplied SQL may have changed session state (e.g. sql_mode) that must
+// not leak into pooled connections. MySQL parses the statements, so an entry
+// holding a compound statement such as CREATE PROCEDURE, whose body carries
+// semicolons of its own, means what it says.
 func (mysqld *Mysqld) ExecuteSuperQueryListMulti(ctx context.Context, queryList []string) error {
 	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
 	if err != nil {
@@ -122,22 +121,6 @@ func (mysqld *Mysqld) ExecuteSuperQueryListMulti(ctx context.Context, queryList 
 			return conn.Conn.ExecuteFetchMultiDrain(query)
 		})
 	})
-}
-
-// ExecuteSuperQueryListTainted executes queries as a super user like
-// ExecuteSuperQueryList, but discards the connection afterwards instead of
-// returning it to the pool. Use it for operator-supplied SQL, whose session
-// state changes (e.g. sql_mode) must not leak into pooled connections.
-func (mysqld *Mysqld) ExecuteSuperQueryListTainted(ctx context.Context, queryList []string) error {
-	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
-	if err != nil {
-		return err
-	}
-	// A closed connection is discarded upon Recycle rather than reused.
-	defer conn.Recycle()
-	defer conn.Close()
-
-	return mysqld.executeSuperQueryListConn(ctx, conn, queryList)
 }
 
 // executeQueryList runs each query through exec, stopping at the first failure.
