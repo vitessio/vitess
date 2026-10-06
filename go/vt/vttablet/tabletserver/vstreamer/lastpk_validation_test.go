@@ -265,7 +265,7 @@ func TestBuildSelectRejectsInjectedLastPK(t *testing.T) {
 }
 
 // outsideStringLiterals returns the parts of q that lie outside string literals
-// when ” doubling is the only escape, which is how mysqld reads a statement
+// when doubled quotes are the only escape, which is how mysqld reads a statement
 // under NO_BACKSLASH_ESCAPES. VerifyMode only requires that a strict mode be
 // present, so a tablet may well be running with that flag set.
 func outsideStringLiterals(q string) string {
@@ -358,7 +358,7 @@ func TestLastPKTextualValuesRoundTrip(t *testing.T) {
 	}
 }
 
-// decodeLiteral undoes both ” doubling and backslash escaping.
+// decodeLiteral undoes both doubled quotes and backslash escaping.
 func decodeLiteral(lit string) string {
 	lit = strings.TrimSuffix(strings.TrimPrefix(strings.TrimSpace(lit), "'"), "'")
 	var out strings.Builder
