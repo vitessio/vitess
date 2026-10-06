@@ -874,13 +874,18 @@ func TestServer(t *testing.T) {
 
 	// Character set check: a client that asks for a character set Vitess cannot
 	// parse safely is refused, here cp932, whose second byte can be a backslash.
+	// Each refusal is counted by character set, so operators can find the clients.
 	params.Uname = "user1"
+	refusedCP932 := connRefusedCharset.Counts()["cp932"]
+	refusedUnknown := connRefusedCharset.Counts()["unknown"]
 	params.Charset = 95 // cp932_japanese_ci
 	_, err = Connect(ctx, params)
 	require.ErrorContains(t, err, `unsupported connection character set "cp932": use utf8mb4`)
+	assert.Equal(t, refusedCP932+1, connRefusedCharset.Counts()["cp932"])
 	params.Charset = 100 // not a collation MySQL defines, so there is no name to report
 	_, err = Connect(ctx, params)
 	require.ErrorContains(t, err, "unsupported connection character set: use utf8mb4")
+	assert.Equal(t, refusedUnknown+1, connRefusedCharset.Counts()["unknown"])
 	params.Charset = collations.CollationUtf8mb4ID
 	c, err := Connect(ctx, params)
 	require.NoError(t, err)
