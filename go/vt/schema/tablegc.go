@@ -122,8 +122,10 @@ func GenerateRenameStatementWithUUID(fromTableName string, state TableGCState, u
 	// fromTableName can be a tenant's table name, which MySQL allows to hold a
 	// back quote, and the online DDL executor runs this statement as-is on the DBA
 	// connection without a re-parse -- so a name that closes its own quoting would
-	// append statements to it. toTableName is generated and cannot, but escaping
-	// both keeps the pair symmetrical.
+	// append statements to it. toTableName needs the same escaping: when TableGC
+	// moves a table to its next state, uuid is what AnalyzeGCTableName parsed out of
+	// the existing table's name, and its [0-f] ranges accept back quotes and ';',
+	// so a hand-made GC table name passes them on to toTableName.
 	return fmt.Sprintf("RENAME TABLE %s TO %s",
 		sqlescape.EscapeID(fromTableName), sqlescape.EscapeID(toTableName)), toTableName, nil
 }

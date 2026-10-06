@@ -306,4 +306,31 @@ func TestGenerateRenameStatementEscapesNames(t *testing.T) {
 			assert.Equal(t, tableName, rename.TablePairs[0].FromTable.Name.String())
 		})
 	}
+
+	// TableGC moves a GC table to its next state with the UUID it parsed out of the
+	// table's name, and the [0-f] ranges of AnalyzeGCTableName accept back quotes
+	// and ';'. So the generated name can hold them too, and must be escaped as well.
+	t.Run("transition of a GC table whose name holds back quotes", func(t *testing.T) {
+		const holdTableName = "_vt_hld_6ace8bcef73211ea`;DROP`TABLE`X`;_20200915120410_"
+		isGCTable, state, uuid, _, err := AnalyzeGCTableName(holdTableName)
+		require.NoError(t, err)
+		require.True(t, isGCTable)
+		require.Equal(t, HoldTableGCState, state)
+
+		statement, toTableName, err := GenerateRenameStatementWithUUID(holdTableName, EvacTableGCState, uuid, time.Now().UTC())
+		require.NoError(t, err)
+		require.Contains(t, toTableName, "`", "the generated name should carry the parsed UUID's back quotes")
+
+		pieces, err := parser.SplitStatementToPieces(statement)
+		require.NoError(t, err)
+		require.Len(t, pieces, 1, "generated %q, which is %d statements", statement, len(pieces))
+
+		stmt, err := parser.Parse(statement)
+		require.NoError(t, err, "generated %q", statement)
+		rename, ok := stmt.(*sqlparser.RenameTable)
+		require.True(t, ok, "generated %q, parsed as %T", statement, stmt)
+		require.Len(t, rename.TablePairs, 1)
+		assert.Equal(t, holdTableName, rename.TablePairs[0].FromTable.Name.String())
+		assert.Equal(t, toTableName, rename.TablePairs[0].ToTable.Name.String())
+	})
 }
