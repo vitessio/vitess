@@ -17,12 +17,16 @@ limitations under the License.
 package tabletmanager
 
 import (
+	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -61,4 +65,32 @@ func TestInitPrimaryRefusesGroupReplicationPolicyWithoutFlag(t *testing.T) {
 			assert.Equal(t, topodatapb.TabletType_REPLICA, tm.Tablet().Type)
 		})
 	}
+}
+
+// TestInitPrimaryWithoutGroupReplicationDoesNotWaitForCutOffTopo checks that the read of the shard's
+// policy that InitPrimary makes on a vttablet without --enable-group-replication, under the action
+// lock, is bounded by the topology read timeout and not only by the caller's deadline: a vttablet
+// cut off from the global topology goes on with its initialization, as it did before it read the
+// policy, instead of holding the action lock until the caller gives up.
+func TestInitPrimaryWithoutGroupReplicationDoesNotWaitForCutOffTopo(t *testing.T) {
+	ctx := t.Context()
+	_, mf := memorytopo.NewServerAndFactory(ctx, "cell1")
+	f := &cutOffTopoFactory{Factory: mf}
+	t.Cleanup(f.heal)
+	ts, err := topo.NewWithFactory(f, "", "")
+	require.NoError(t, err)
+	t.Cleanup(ts.Close)
+	require.NoError(t, ts.CreateKeyspace(ctx, "ks", &topodatapb.Keyspace{DurabilityPolicy: policy.DurabilitySemiSync}))
+	tm, fmd := newGroupReplicationTestTM(t, ts, 1, nil)
+	fmd.SuperReadOnly.Store(true)
+	f.cut()
+
+	rpcCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	start := time.Now()
+	_, err = tm.InitPrimary(rpcCtx, false)
+	elapsed := time.Since(start)
+	assert.Less(t, elapsed, 2*groupReplicationTopoReadTimeout+3*time.Second, "InitPrimary must not wait for the topology")
+	assert.False(t, fmd.SuperReadOnly.Load(), "InitPrimary goes on with the initialization")
+	assert.NotErrorIs(t, err, context.DeadlineExceeded)
 }

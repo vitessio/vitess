@@ -479,11 +479,8 @@ func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string
 				return "", vterrors.Wrapf(err, "failed to bootstrap the group")
 			}
 		}
-	} else if durability, err := tm.shardDurability(ctx); err != nil {
-		log.Warn("InitPrimary: cannot read the shard's durability policy, initializing without Group Replication", slog.Any("error", err))
-	} else if policy.IsGroupReplication(durability) {
-		return "", vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION,
-			"the shard uses a group replication durability policy, but this vttablet does not run Group Replication; start it with --enable-group-replication")
+	} else if err := tm.refuseGroupReplicationPolicyWithoutFlag(ctx); err != nil {
+		return "", err
 	}
 	if err := tm.checkGroupAllowsReadWrite(ctx); err != nil {
 		return "", err
@@ -533,6 +530,26 @@ func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string
 	}
 
 	return replication.EncodePosition(pos), nil
+}
+
+// refuseGroupReplicationPolicyWithoutFlag returns a FAILED_PRECONDITION error if the shard's policy,
+// on a vttablet that does not run Group Replication, is a group replication policy: InitPrimary would
+// make MySQL writable without a group. The read runs under the action lock: it is bounded by
+// groupReplicationTopoReadTimeout, and a policy that cannot be read is logged, and the initialization
+// goes on as it did before the read.
+func (tm *TabletManager) refuseGroupReplicationPolicyWithoutFlag(ctx context.Context) error {
+	readCtx, cancel := context.WithTimeout(ctx, groupReplicationTopoReadTimeout)
+	defer cancel()
+	durability, err := tm.shardDurability(readCtx)
+	if err != nil {
+		log.Warn("InitPrimary: cannot read the shard's durability policy, initializing without Group Replication", slog.Any("error", err))
+		return nil
+	}
+	if policy.IsGroupReplication(durability) {
+		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION,
+			"the shard uses a group replication durability policy, but this vttablet does not run Group Replication; start it with --enable-group-replication")
+	}
+	return nil
 }
 
 // PopulateReparentJournal adds an entry into the reparent_journal table.
