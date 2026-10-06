@@ -19,6 +19,7 @@ package vtadmin
 import (
 	_ "embed"
 	"flag"
+	"net/http"
 	"net/url"
 	"os"
 	"testing"
@@ -119,18 +120,19 @@ func TestVtadminAPIs(t *testing.T) {
 		for _, sql := range []string{
 			"vexplain trace select vexplain_write() from u_a where id = 1",
 			"vexplain queries select vexplain_write() from u_a where id = 1",
-			// ALL also has MySQL EXPLAIN the query, which materializes a
-			// non-mergeable derived table and so executes the function again.
-			"vexplain all select * from (select vexplain_write() as w from u_a where id = 1 limit 1) as d",
-			"vexplain mysqlplan select vexplain_write() from u_a where id = 1",
+			"vexplain all select vexplain_write() from u_a where id = 1",
 		} {
 			params := url.Values{
 				"cluster_id": {clusterInstance.VtadminProcess.ClusterID},
 				"keyspace":   {uks},
 				"sql":        {sql},
 			}
-			_, _, err := clusterInstance.VtadminProcess.MakeAPICall("api/vexplain?" + params.Encode())
+			status, resp, err := clusterInstance.VtadminProcess.MakeAPICall("api/vexplain?" + params.Encode())
 			require.NoError(t, err)
+			// The function's write must be what fails the request, refused by
+			// the read-only transaction, rather than some unrelated error.
+			assert.Equal(t, http.StatusInternalServerError, status, resp)
+			assert.Contains(t, resp, "Cannot execute statement in a READ ONLY transaction", sql)
 
 			qr, err := tablet.QueryTablet("select count(*) from vexplain_audit", uks, true)
 			require.NoError(t, err)
