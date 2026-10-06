@@ -1241,7 +1241,6 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 					nextID = lastVal
 				}
 				nextVal = nextID
-				lastVal = nextID
 			}
 			cache, err := qr.Rows[0][1].ToCastInt64()
 			if err != nil {
