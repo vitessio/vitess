@@ -81,6 +81,8 @@ type fakeGRTablet struct {
 	// groupName overrides the group name the tablet reports, to simulate a member of another
 	// shard's group.
 	groupName string
+	// startInProgress makes the tablet report a START GROUP_REPLICATION in progress.
+	startInProgress bool
 }
 
 // fakeGRCluster is a TabletManagerClient that simulates a shard running asynchronous
@@ -207,6 +209,7 @@ func (c *fakeGRCluster) groupStatus(ft *fakeGRTablet) *replicationdatapb.GroupRe
 	if ft.groupName != "" {
 		gs.GroupName = ft.groupName
 	}
+	gs.StartInProgress = ft.startInProgress
 	if !ft.member {
 		return gs
 	}

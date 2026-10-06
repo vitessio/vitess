@@ -165,6 +165,15 @@ func TestPlannedReparentGroupReplicationInitialPromotionRefusals(t *testing.T) {
 		wantErr:    "tablet zone2-0000000200 of shard ks/- is ONLINE in replication group " + policy.GroupName("ks", "-80") + " (view 1790000000:1), which is not the shard's group " + policy.GroupName("ks", "-"),
 		wantAdvice: "stop Group Replication on its MySQL, then run PlannedReparentShard again",
 	}, {
+		name: "a START GROUP_REPLICATION runs on a voter whose bootstrap intent expired",
+		setup: func(t *testing.T, c *fakeGRCluster) {
+			intent(GroupReplicationBootstrapIntentFence+time.Second)(t, c)
+			c.mu.Lock()
+			defer c.mu.Unlock()
+			c.tablets[alias200].startInProgress = true
+		},
+		wantErr: "a START GROUP_REPLICATION runs on tablet zone2-0000000200 of shard ks/-: it may create the shard's group",
+	}, {
 		name:  "the bootstrap intent expired, and no tablet is in a group",
 		setup: intent(GroupReplicationBootstrapIntentFence + time.Second),
 	}}
