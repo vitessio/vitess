@@ -191,6 +191,8 @@ func TestActiveCommits(t *testing.T) {
 	select {
 	case err := <-errc:
 		require.ErrorContains(t, err, "QueryList.TerminateAll()")
+		require.ErrorContains(t, err, "COMMIT was killed and its outcome is unknown")
+		require.Equal(t, vtrpcpb.Code_CANCELED, vterrors.Code(err))
 	case <-time.After(30 * time.Second):
 		require.FailNow(t, "COMMIT stayed blocked after TerminateActiveCommits")
 	}

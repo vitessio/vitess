@@ -329,6 +329,8 @@ func (te *TxEngine) Commit(ctx context.Context, transactionID int64) (int64, str
 // activeCommits, which lets the shutdown grace period kill it. If
 // activeCommits rejects new COMMITs, commit kills the transaction and
 // releases conn. An autocommit transaction sends no COMMIT and is not tracked.
+// A killed COMMIT may still commit in MySQL, for example after MySQL wrote it
+// to the binlog. Its error says the outcome is unknown.
 func (te *TxEngine) commit(ctx context.Context, conn *StatefulConnection) (string, error) {
 	// Skip the gate for an autocommit transaction. MySQL already committed
 	// each statement, and a rejection would report failure for applied writes.
@@ -336,20 +338,25 @@ func (te *TxEngine) commit(ctx context.Context, conn *StatefulConnection) (strin
 		return te.txPool.Commit(ctx, conn)
 	}
 
-	remove, err := te.addActiveCommit(ctx, conn)
+	qd, err := te.addActiveCommit(ctx, conn)
 	if err != nil {
 		return "", err
 	}
-	defer remove()
+	defer te.activeCommits.Remove(qd)
 
-	return te.txPool.Commit(ctx, conn)
+	query, err := te.txPool.Commit(ctx, conn)
+	if err != nil && qd.terminated.Load() {
+		return query, vterrors.Wrapf(err, "COMMIT was killed and its outcome is unknown")
+	}
+
+	return query, err
 }
 
-// addActiveCommit adds the COMMIT on conn to activeCommits and returns a
-// function that removes it. If activeCommits rejects new COMMITs, it kills the
-// transaction, releases conn, and returns the error. The caller must not use
-// conn after an error.
-func (te *TxEngine) addActiveCommit(ctx context.Context, conn *StatefulConnection) (func(), error) {
+// addActiveCommit adds the COMMIT on conn to activeCommits and returns its
+// QueryDetail, which the caller must remove from activeCommits. If
+// activeCommits rejects new COMMITs, it kills the transaction, releases conn,
+// and returns the error. The caller must not use conn after an error.
+func (te *TxEngine) addActiveCommit(ctx context.Context, conn *StatefulConnection) (*QueryDetail, error) {
 	qd := NewQueryDetail(ctx, conn)
 	if err := te.activeCommits.Add(qd); err != nil {
 		// Kill the transaction. The shutdown grace period has ended.
@@ -365,7 +372,7 @@ func (te *TxEngine) addActiveCommit(ctx context.Context, conn *StatefulConnectio
 		return nil, err
 	}
 
-	return func() { te.activeCommits.Remove(qd) }, nil
+	return qd, nil
 }
 
 // Rollback rolls back the specified transaction.

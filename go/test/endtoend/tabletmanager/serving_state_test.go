@@ -204,4 +204,5 @@ func testChangeTypePrimaryWithBlockedCommit(t *testing.T, tabletType topodatapb.
 	err = <-commitErr
 	require.ErrorContains(t, err, "code = Canceled")
 	require.ErrorContains(t, err, "QueryList.TerminateAll()")
+	require.ErrorContains(t, err, "COMMIT was killed and its outcome is unknown")
 }
