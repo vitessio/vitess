@@ -20,10 +20,16 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -222,6 +228,123 @@ func TestNonLiteralUpdateCascade(t *testing.T) {
 		fmt.Sprintf(`ExecuteMultiShard ks.0: update child set ca = :fkc_upd where (ca) in ::__vals {__vals: %v fkc_upd: %v} true true`, &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: querypb.Type_TUPLE, Value: []byte("\x89\x02\x013")}}}, &querypb.BindVariable{Type: querypb.Type_INT64, Value: []byte("7")}),
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
 		`ExecuteMultiShard ks.0: update parent set cola = colb + 2 where foo = 48 {} true true`,
+	})
+}
+
+// newNonLiteralCascade returns an FkCascade for `update parent set k = <expr>` whose Selection
+// returns rows of (k, k <=> <expr>, <expr>), cascading to child(ck) ON UPDATE CASCADE. k is a
+// unique key of parent.
+func newNonLiteralCascade(typ string, colTypes []evalengine.Type, rows ...string) (*FkCascade, *sqltypes.Result) {
+	selection := sqltypes.MakeTestResult(sqltypes.MakeTestFields("k|k <=> expr|expr", typ+"|int64|"+typ), rows...)
+	unsharded := &RoutingParameters{Opcode: Unsharded, Keyspace: &vindexes.Keyspace{Name: "ks"}}
+	return &FkCascade{
+		Selection: &Route{Query: "select k, k <=> expr, expr from parent for update", RoutingParameters: unsharded},
+		Children: []*FkChild{{
+			BVName:          "fkc_vals",
+			Cols:            []int{0},
+			NonLiteralInfo:  []NonLiteralUpdateInfo{{CompExprCol: 1, UpdateExprCol: 2, UpdateExprBvName: "fkc_upd", FkColIdx: 0}},
+			ParentKeyUnique: true,
+			ColTypes:        colTypes,
+			Exec: &Update{DML: &DML{
+				Query:             "update child set ck = :fkc_upd where (ck) in ::fkc_vals",
+				RoutingParameters: unsharded,
+			}},
+		}},
+		Parent: &Update{DML: &DML{Query: "update parent set k = expr", RoutingParameters: unsharded}},
+	}, selection
+}
+
+// childUpdateLog is the log line of the child update that moves child rows from old to new.
+func childUpdateLog(old, new sqltypes.Value) string {
+	vals := &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{sqltypes.TupleToProto([]sqltypes.Value{old})}}
+	return fmt.Sprintf(`ExecuteMultiShard ks.0: update child set ck = :fkc_upd where (ck) in ::fkc_vals {fkc_upd: %v fkc_vals: %v} true true`, sqltypes.ValueBindVariable(new), vals)
+}
+
+// childUpdateOrder returns the old key of each child update, in the order they ran.
+func childUpdateOrder(t *testing.T, fkc *FkCascade, selection *sqltypes.Result) ([]string, error) {
+	vc := newTestVCursor("0")
+	vc.results = []*sqltypes.Result{selection}
+	_, err := fkc.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, true)
+	var order []string
+	for _, line := range vc.log {
+		for _, row := range selection.Rows {
+			if line == childUpdateLog(row[0], row[2]) {
+				order = append(order, row[0].String())
+			}
+		}
+	}
+	return order, err
+}
+
+// TestNonLiteralUpdateCascadeOrder tests that the child updates of a non-literal update run in an
+// order where each child row is moved once. For `update parent set k = k + 1` over keys 1 and 2,
+// the children of 2 must move to 3 before the children of 1 move to 2. Otherwise the second child
+// update also matches the children that the first one moved to 2.
+func TestNonLiteralUpdateCascadeOrder(t *testing.T) {
+	fkc, selection := newNonLiteralCascade("int64", nil, "1|0|2", "2|0|3")
+
+	vc := newTestVCursor("0")
+	vc.results = []*sqltypes.Result{selection}
+	_, err := fkc.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, true)
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
+		`ExecuteMultiShard ks.0: select k, k <=> expr, expr from parent for update {} false false`,
+		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
+		childUpdateLog(sqltypes.NewInt64(2), sqltypes.NewInt64(3)),
+		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
+		childUpdateLog(sqltypes.NewInt64(1), sqltypes.NewInt64(2)),
+		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
+		`ExecuteMultiShard ks.0: update parent set k = expr {} true true`,
+	})
+}
+
+// TestNonLiteralUpdateCascadeOrderWithNull tests the ordering when keys are NULL. A NULL key
+// matches no child rows, so a row whose new key is NULL must not have to wait for a row whose old
+// key is NULL. Treating NULL as equal to NULL here would report a cycle.
+func TestNonLiteralUpdateCascadeOrderWithNull(t *testing.T) {
+	// 1 -> 2 must wait for 2 -> NULL; NULL -> 1 must wait for 1 -> 2.
+	fkc, selection := newNonLiteralCascade("int64", nil, "1|0|2", "2|0|null", "null|0|1")
+	order, err := childUpdateOrder(t, fkc, selection)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"INT64(2)", "INT64(1)", "NULL"}, order)
+}
+
+// TestNonLiteralUpdateCascadeOrderUsesCollation tests that keys are compared with the column's
+// collation, as MySQL compares them in the child update's IN clause.
+func TestNonLiteralUpdateCascadeOrderUsesCollation(t *testing.T) {
+	env := collations.MySQL8()
+	caseInsensitive := evalengine.NewType(sqltypes.VarChar, env.LookupByName("utf8mb4_0900_ai_ci"))
+	caseSensitive := evalengine.NewType(sqltypes.VarChar, env.LookupByName("utf8mb4_0900_as_cs"))
+
+	// Under a case-insensitive collation 'B' is the old key 'b', so 'b' -> 'c' must run first.
+	fkc, selection := newNonLiteralCascade("varchar", []evalengine.Type{caseInsensitive}, "a|0|B", "b|0|c")
+	order, err := childUpdateOrder(t, fkc, selection)
+	require.NoError(t, err)
+	assert.Equal(t, []string{`VARCHAR("b")`, `VARCHAR("a")`}, order)
+
+	// Under a case-sensitive collation the keys differ, so the Selection order is kept.
+	fkc, selection = newNonLiteralCascade("varchar", []evalengine.Type{caseSensitive}, "a|0|B", "b|0|c")
+	order, err = childUpdateOrder(t, fkc, selection)
+	require.NoError(t, err)
+	assert.Equal(t, []string{`VARCHAR("a")`, `VARCHAR("b")`}, order)
+}
+
+// TestNonLiteralUpdateCascadeCycle tests that an update that moves keys in a cycle fails with a
+// duplicate key error before any child update runs, as MySQL fails the parent update.
+func TestNonLiteralUpdateCascadeCycle(t *testing.T) {
+	fkc, selection := newNonLiteralCascade("int64", nil, "1|0|2", "2|0|1")
+
+	vc := newTestVCursor("0")
+	vc.results = []*sqltypes.Result{selection}
+	_, err := fkc.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, true)
+	require.Error(t, err)
+	assert.Equal(t, vtrpcpb.Code_ALREADY_EXISTS, vterrors.Code(err))
+	assert.Equal(t, vterrors.DupEntry, vterrors.ErrState(err))
+	assert.Equal(t, sqlerror.ERDupEntry, sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError).Number())
+	vc.ExpectLog(t, []string{
+		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
+		`ExecuteMultiShard ks.0: select k, k <=> expr, expr from parent for update {} false false`,
 	})
 }
 

@@ -485,6 +485,7 @@ func createFKCascadeOp(ctx *plancontext.PlanningContext, parentOp Operator, updS
 		// 2. the new value itself.
 		// 3. the bind variable to assign to this value.
 		var nonLiteralUpdateInfo []engine.NonLiteralUpdateInfo
+		var colTypes []evalengine.Type
 		ue := ctx.SemTable.GetUpdateExpressionsForFk(fk.String(targetTbl.VTable))
 		// We only need to store these offsets and add these expressions to SELECT when there are non-literal updates present.
 		if hasNonLiteralUpdate(ue) {
@@ -492,11 +493,16 @@ func createFKCascadeOp(ctx *plancontext.PlanningContext, parentOp Operator, updS
 				// We add the expression and a comparison expression to the SELECT exprssion while storing their offsets.
 				var info engine.NonLiteralUpdateInfo
 				info, selectExprs = addNonLiteralUpdExprToSelect(ctx, targetTbl.VTable, updExpr, selectExprs)
+				info.FkColIdx = fk.ParentColumns.FindColumn(updExpr.Name.Name)
 				nonLiteralUpdateInfo = append(nonLiteralUpdateInfo, info)
 			}
+			// The engine compares the old and new key values of the selected rows to order the child updates.
+			colTypes = getColumnTypes(ctx, targetTbl.VTable, fk.ParentColumns)
 		}
 
 		fkChild := createFkChildForUpdate(ctx, fk, selectOffsets, nonLiteralUpdateInfo, targetTbl.VTable)
+		fkChild.ColTypes = colTypes
+		fkChild.ParentKeyUnique = len(nonLiteralUpdateInfo) > 0 && containsUniqueKey(targetTbl.VTable, fk.ParentColumns)
 		fkChildren = append(fkChildren, fkChild)
 	}
 
@@ -507,6 +513,41 @@ func createFKCascadeOp(ctx *plancontext.PlanningContext, parentOp Operator, updS
 		Children:  fkChildren,
 		Parent:    parentOp,
 	}
+}
+
+// containsUniqueKey returns whether the columns contain the table's primary key or one of its
+// unique keys, so that no two rows have the same values in them.
+func containsUniqueKey(table *vindexes.BaseTable, columns sqlparser.Columns) bool {
+	if len(table.PrimaryKey) > 0 && !slices.ContainsFunc(table.PrimaryKey, func(col sqlparser.IdentifierCI) bool {
+		return columns.FindColumn(col) < 0
+	}) {
+		return true
+	}
+	for _, uniqueKey := range table.UniqueKeys {
+		if len(uniqueKey) > 0 && !slices.ContainsFunc(uniqueKey, func(expr sqlparser.Expr) bool {
+			col, ok := expr.(*sqlparser.ColName)
+			return !ok || columns.FindColumn(col.Name) < 0
+		}) {
+			return true
+		}
+	}
+	return false
+}
+
+// getColumnTypes returns the types of the given columns of the table. A column the schema
+// does not describe gets an invalid type.
+func getColumnTypes(ctx *plancontext.PlanningContext, table *vindexes.BaseTable, columns sqlparser.Columns) []evalengine.Type {
+	collationEnv := ctx.VSchema.Environment().CollationEnv()
+	types := make([]evalengine.Type, len(columns))
+	for i, column := range columns {
+		for _, col := range table.Columns {
+			if column.Equal(col.Name) {
+				types[i] = col.ToEvalengineType(collationEnv)
+				break
+			}
+		}
+	}
+	return types
 }
 
 // hasNonLiteralUpdate checks if any of the update expressions have a non-literal update.

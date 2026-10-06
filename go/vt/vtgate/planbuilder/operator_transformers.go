@@ -246,10 +246,12 @@ func transformFkCascade(ctx *plancontext.PlanningContext, fkc *operators.FkCasca
 
 		childEngine := childLP
 		children = append(children, &engine.FkChild{
-			BVName:         child.BVName,
-			Cols:           child.Cols,
-			NonLiteralInfo: child.NonLiteralInfo,
-			Exec:           childEngine,
+			BVName:          child.BVName,
+			Cols:            child.Cols,
+			NonLiteralInfo:  child.NonLiteralInfo,
+			ParentKeyUnique: child.ParentKeyUnique,
+			ColTypes:        child.ColTypes,
+			Exec:            childEngine,
 		})
 	}
 

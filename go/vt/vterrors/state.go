@@ -79,6 +79,7 @@ const (
 
 	// already exists
 	DbCreateExists
+	DupEntry
 
 	// resource exhausted
 	NetPacketTooLarge

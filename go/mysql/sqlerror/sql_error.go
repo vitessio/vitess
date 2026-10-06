@@ -276,6 +276,7 @@ var stateToMysqlCode = map[vterrors.State]mysqlCode{
 	vterrors.DataOutOfRange:                      {num: ERDataOutOfRange, state: SSDataOutOfRange},
 	vterrors.DbCreateExists:                      {num: ERDbCreateExists, state: SSUnknownSQLState},
 	vterrors.DbDropExists:                        {num: ERDbDropExists, state: SSUnknownSQLState},
+	vterrors.DupEntry:                            {num: ERDupEntry, state: SSConstraintViolation},
 	vterrors.DupFieldName:                        {num: ERDupFieldName, state: SSDupFieldName},
 	vterrors.EmptyQuery:                          {num: EREmptyQuery, state: SSClientError},
 	vterrors.IncorrectGlobalLocalVar:             {num: ERIncorrectGlobalLocalVar, state: SSUnknownSQLState},

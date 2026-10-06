@@ -1021,6 +1021,19 @@ func TestFkQueries(t *testing.T) {
 			},
 		},
 		{
+			// The Selection reads fk_t10 through the unique index on col, so it returns the rows
+			// in col order: '1' -> '2', then '2' -> '3'. MySQL updates fk_t10 in primary key order,
+			// '2' -> '3' first, which is the only order that avoids a duplicate key. The children
+			// of '2' must move to '3' before the children of '1' move to '2'.
+			name: "Non-literal update that moves parent keys onto each other",
+			queries: []string{
+				"insert into fk_t10 (id, col) values (1, '2'), (2, '1')",
+				"insert into fk_t11 (id, col) values (1, '1'), (2, '2')",
+				"insert into fk_t12 (id, col) values (1, '1'), (2, '2')",
+				"update fk_t10 set col = col + 1",
+			},
+		},
+		{
 			name: "Non-literal update with order by",
 			queries: []string{
 				"insert into fk_t10 (id, col) values (1,1),(2,2),(3,3),(4,4),(5,5)",

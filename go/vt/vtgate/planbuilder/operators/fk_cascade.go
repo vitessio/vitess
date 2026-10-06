@@ -20,15 +20,18 @@ import (
 	"slices"
 
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
 // FkChild is used to represent a foreign key child table operation
 type FkChild struct {
-	BVName         string
-	Cols           []int // indexes
-	NonLiteralInfo []engine.NonLiteralUpdateInfo
-	Op             Operator
+	BVName          string
+	Cols            []int // indexes
+	NonLiteralInfo  []engine.NonLiteralUpdateInfo
+	ParentKeyUnique bool
+	ColTypes        []evalengine.Type
+	Op              Operator
 
 	noColumns
 	noPredicates
@@ -86,10 +89,12 @@ func (fkc *FkCascade) Clone(inputs []Operator) Operator {
 		}
 
 		newFkc.Children = append(newFkc.Children, &FkChild{
-			BVName:         fkc.Children[idx-2].BVName,
-			Cols:           slices.Clone(fkc.Children[idx-2].Cols),
-			NonLiteralInfo: slices.Clone(fkc.Children[idx-2].NonLiteralInfo),
-			Op:             operator,
+			BVName:          fkc.Children[idx-2].BVName,
+			Cols:            slices.Clone(fkc.Children[idx-2].Cols),
+			NonLiteralInfo:  slices.Clone(fkc.Children[idx-2].NonLiteralInfo),
+			ParentKeyUnique: fkc.Children[idx-2].ParentKeyUnique,
+			ColTypes:        slices.Clone(fkc.Children[idx-2].ColTypes),
+			Op:              operator,
 		})
 	}
 	return newFkc

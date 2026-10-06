@@ -20,9 +20,15 @@ import (
 	"context"
 	"fmt"
 	"maps"
+	"slices"
+	"strings"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
 // FkChild contains the Child Primitive to be executed collecting the values from the Selection Primitive using the column indexes.
@@ -34,7 +40,14 @@ type FkChild struct {
 	Cols []int
 	// NonLiteralInfo stores the information that is needed to run an update query with non-literal values.
 	NonLiteralInfo []NonLiteralUpdateInfo
-	Exec           Primitive
+	// ParentKeyUnique is true when the foreign key's parent columns contain a primary or unique key.
+	// Only then are the child updates of a non-literal update ordered by key dependencies; see
+	// nonLiteralUpdateOrder.
+	ParentKeyUnique bool
+	// ColTypes are the types of the foreign key's parent columns, in the order of Cols.
+	// They are used to compare key values when ordering the child updates of a non-literal update.
+	ColTypes []evalengine.Type
+	Exec     Primitive
 }
 
 // NonLiteralUpdateInfo stores the information required to process non-literal update queries.
@@ -42,10 +55,12 @@ type FkChild struct {
 // 1. CompExprCol- The index of the comparison expression in the select query to know if the row value is actually being changed or not.
 // 2. UpdateExprCol- The index of the updated expression in the select query.
 // 3. UpdateExprBvName- The bind variable name to store the updated expression into.
+// 4. FkColIdx- The position of the updated column among the foreign key's columns.
 type NonLiteralUpdateInfo struct {
 	CompExprCol      int
 	UpdateExprCol    int
 	UpdateExprBvName string
+	FkColIdx         int
 }
 
 // FkCascade is a primitive that implements foreign key cascading using Selection as values required to execute the FkChild Primitives.
@@ -123,29 +138,13 @@ func (fkc *FkCascade) executeLiteralExprFkChild(ctx context.Context, vcursor VCu
 }
 
 func (fkc *FkCascade) executeNonLiteralExprFkChild(ctx context.Context, vcursor VCursor, in map[string]*querypb.BindVariable, wantfields bool, selectionRes *sqltypes.Result, child *FkChild) error {
-	// For each row in the SELECT we need to run the child primitive.
-	for _, row := range selectionRes.Rows {
+	order, err := nonLiteralUpdateOrder(vcursor, selectionRes.Rows, child)
+	if err != nil {
+		return err
+	}
+	for _, rowIdx := range order {
+		row := selectionRes.Rows[rowIdx]
 		bindVars := maps.Clone(in)
-		// First we check if any of the columns is being updated at all.
-		skipRow := true
-		for _, info := range child.NonLiteralInfo {
-			// We use a null-safe comparison, so the value is guaranteed to be not null.
-			// We check if the column has updated or not.
-			isUnchanged, err := row[info.CompExprCol].ToBool()
-			if err != nil {
-				return err
-			}
-			if !isUnchanged {
-				// If any column has changed, then we can't skip this row.
-				// We need to execute the child primitive.
-				skipRow = false
-				break
-			}
-		}
-		// If none of the columns have changed, then there is no update to cascade, we can move on.
-		if skipRow {
-			continue
-		}
 		// We create a bindVariable that stores the tuple of columns involved in the fk constraint.
 		bv := &querypb.BindVariable{
 			Type: querypb.Type_TUPLE,
@@ -173,6 +172,175 @@ func (fkc *FkCascade) executeNonLiteralExprFkChild(ctx context.Context, vcursor 
 	return nil
 }
 
+// nonLiteralUpdateOrder returns the indexes of the selected rows whose foreign key value changes,
+// in the order their child updates must run.
+//
+// A child update finds the child rows by the parent's old key value: WHERE (cols) IN ((:old)).
+// If row a changes its key to the old key of row b and a's child update runs first, b's child
+// update also matches the child rows that a's update just moved. MySQL updates the parent rows
+// one at a time and checks the unique key after each one, so its UPDATE succeeds only if b gives
+// up its key before a takes it. Running the child updates in that order moves every child row
+// once, as MySQL's own cascade does. If the key changes form a cycle, no such order exists and
+// MySQL fails the parent update with a duplicate key error, so we return that error before
+// running any of this child's updates. vtgate rolls back the writes of the other children.
+//
+// This holds only when the parent key is unique. Without a unique key, MySQL's own cascade
+// matches the children again in the order it updates the rows, so we keep the Selection order.
+func nonLiteralUpdateOrder(vcursor VCursor, rows []sqltypes.Row, child *FkChild) ([]int, error) {
+	var changed []int
+	var oldKeys, newKeys [][]sqltypes.Value
+	for rowIdx, row := range rows {
+		isChanged := false
+		for _, info := range child.NonLiteralInfo {
+			// We use a null-safe comparison, so the value is guaranteed to be not null.
+			isUnchanged, err := row[info.CompExprCol].ToBool()
+			if err != nil {
+				return nil, err
+			}
+			if !isUnchanged {
+				isChanged = true
+				break
+			}
+		}
+		// If none of the columns have changed, then there is no update to cascade.
+		if !isChanged {
+			continue
+		}
+		oldKey := make([]sqltypes.Value, len(child.Cols))
+		for i, colIdx := range child.Cols {
+			oldKey[i] = row[colIdx]
+		}
+		newKey := slices.Clone(oldKey)
+		for _, info := range child.NonLiteralInfo {
+			newKey[info.FkColIdx] = row[info.UpdateExprCol]
+		}
+		changed = append(changed, rowIdx)
+		oldKeys = append(oldKeys, oldKey)
+		newKeys = append(newKeys, newKey)
+	}
+	if !child.ParentKeyUnique || len(changed) < 2 {
+		return changed, nil
+	}
+
+	cmp := keyComparer(vcursor, child.ColTypes)
+
+	// Sort the changed rows by their old key, so that we can look up the rows whose old key
+	// equals another row's new key.
+	byOldKey := make([]int, len(changed))
+	for i := range byOldKey {
+		byOldKey[i] = i
+	}
+	var cmpErr error
+	slices.SortStableFunc(byOldKey, func(a, b int) int {
+		c, err := cmp(oldKeys[a], oldKeys[b])
+		if err != nil && cmpErr == nil {
+			cmpErr = err
+		}
+		return c
+	})
+	if cmpErr != nil {
+		return nil, cmpErr
+	}
+
+	// next[b] lists the rows that must run after row b, because they take b's old key.
+	next := make([][]int, len(changed))
+	waitingFor := make([]int, len(changed))
+	for a, newKey := range newKeys {
+		// A key that contains NULL matches no child rows.
+		if slices.ContainsFunc(newKey, sqltypes.Value.IsNull) {
+			continue
+		}
+		start, _ := slices.BinarySearchFunc(byOldKey, newKey, func(idx int, key []sqltypes.Value) int {
+			c, err := cmp(oldKeys[idx], key)
+			if err != nil && cmpErr == nil {
+				cmpErr = err
+			}
+			return c
+		})
+		for _, b := range byOldKey[start:] {
+			c, err := cmp(oldKeys[b], newKey)
+			if err != nil {
+				return nil, err
+			}
+			if c != 0 {
+				break
+			}
+			if b != a {
+				next[b] = append(next[b], a)
+				waitingFor[a]++
+			}
+		}
+	}
+	if cmpErr != nil {
+		return nil, cmpErr
+	}
+
+	// Kahn's algorithm, keeping the Selection order among rows that are ready.
+	order := make([]int, 0, len(changed))
+	var ready []int
+	for i := range changed {
+		if waitingFor[i] == 0 {
+			ready = append(ready, i)
+		}
+	}
+	for len(ready) > 0 {
+		b := ready[0]
+		ready = ready[1:]
+		order = append(order, changed[b])
+		for _, a := range next[b] {
+			waitingFor[a]--
+			if waitingFor[a] == 0 {
+				ready = append(ready, a)
+			}
+		}
+	}
+	if len(order) < len(changed) {
+		for i := range changed {
+			if waitingFor[i] > 0 {
+				return nil, vterrors.NewErrorf(vtrpcpb.Code_ALREADY_EXISTS, vterrors.DupEntry,
+					"Duplicate entry '%s' for key: the update moves foreign key parent values in a cycle", formatKey(newKeys[i]))
+			}
+		}
+	}
+	return order, nil
+}
+
+// keyComparer returns a function that orders foreign key values column by column, comparing
+// each column with its collation, as the child update's WHERE (cols) IN (...) clause does.
+// NULL sorts first and equals NULL, so callers must not treat keys that contain NULL as equal.
+func keyComparer(vcursor VCursor, colTypes []evalengine.Type) func(a, b []sqltypes.Value) (int, error) {
+	collationEnv := vcursor.Environment().CollationEnv()
+	connCollation := vcursor.ConnCollation()
+	return func(a, b []sqltypes.Value) (int, error) {
+		for i := range a {
+			coll := connCollation
+			var values *evalengine.EnumSetValues
+			if i < len(colTypes) && colTypes[i].Valid() {
+				if c := colTypes[i].Collation(); c != collations.Unknown {
+					coll = c
+				}
+				values = colTypes[i].Values()
+			}
+			c, err := evalengine.NullsafeCompare(a[i], b[i], collationEnv, coll, values)
+			if err != nil {
+				return 0, err
+			}
+			if c != 0 {
+				return c, nil
+			}
+		}
+		return 0, nil
+	}
+}
+
+func formatKey(key []sqltypes.Value) string {
+	parts := make([]string, len(key))
+	for i, v := range key {
+		parts[i] = v.ToString()
+	}
+	return strings.Join(parts, "-")
+}
+
 // TryStreamExecute implements the Primitive interface.
 func (fkc *FkCascade) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	res, err := fkc.TryExecute(ctx, vcursor, bindVars, wantfields)
@@ -198,6 +366,7 @@ func (fkc *FkCascade) Inputs() ([]Primitive, []map[string]any) {
 		}
 		if len(child.NonLiteralInfo) > 0 {
 			childInfoMap["NonLiteralUpdateInfo"] = child.NonLiteralInfo
+			childInfoMap["ParentKeyUnique"] = child.ParentKeyUnique
 		}
 		inputsMap = append(inputsMap, childInfoMap)
 		inputs = append(inputs, child.Exec)

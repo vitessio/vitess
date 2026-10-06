@@ -797,7 +797,8 @@
                   {
                     "CompExprCol": 1,
                     "UpdateExprCol": 2,
-                    "UpdateExprBvName": "fkc_upd"
+                    "UpdateExprBvName": "fkc_upd",
+                    "FkColIdx": 0
                   }
                 ],
                 "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals and (:fkc_upd is null or (col3) not in ((:fkc_upd)))"
@@ -855,7 +856,8 @@
               {
                 "CompExprCol": 1,
                 "UpdateExprCol": 2,
-                "UpdateExprBvName": "fkc_upd"
+                "UpdateExprBvName": "fkc_upd",
+                "FkColIdx": 0
               }
             ],
             "Inputs": [
@@ -907,7 +909,8 @@
               {
                 "CompExprCol": 1,
                 "UpdateExprCol": 2,
-                "UpdateExprBvName": "fkc_upd1"
+                "UpdateExprBvName": "fkc_upd1",
+                "FkColIdx": 0
               }
             ],
             "Inputs": [
@@ -2187,7 +2190,8 @@
               {
                 "CompExprCol": 1,
                 "UpdateExprCol": 2,
-                "UpdateExprBvName": "fkc_upd"
+                "UpdateExprBvName": "fkc_upd",
+                "FkColIdx": 0
               }
             ],
             "Inputs": [
@@ -2278,7 +2282,8 @@
               {
                 "CompExprCol": 2,
                 "UpdateExprCol": 3,
-                "UpdateExprBvName": "fkc_upd"
+                "UpdateExprBvName": "fkc_upd",
+                "FkColIdx": 0
               }
             ],
             "Inputs": [
@@ -2397,12 +2402,14 @@
                   {
                     "CompExprCol": 2,
                     "UpdateExprCol": 3,
-                    "UpdateExprBvName": "fkc_upd"
+                    "UpdateExprBvName": "fkc_upd",
+                    "FkColIdx": 0
                   },
                   {
                     "CompExprCol": 4,
                     "UpdateExprCol": 5,
-                    "UpdateExprBvName": "fkc_upd1"
+                    "UpdateExprBvName": "fkc_upd1",
+                    "FkColIdx": 1
                   }
                 ],
                 "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_multicol_tbl3 set cola = :fkc_upd, colb = :fkc_upd1 where (cola, colb) in ::fkc_vals"
@@ -3865,7 +3872,8 @@
                       {
                         "CompExprCol": 1,
                         "UpdateExprCol": 2,
-                        "UpdateExprBvName": "fkc_upd"
+                        "UpdateExprBvName": "fkc_upd",
+                        "FkColIdx": 0
                       }
                     ],
                     "Query": "update u_tbl3 set col3 = null where (col3) in ::fkc_vals and (:fkc_upd is null or (col3) not in ((:fkc_upd)))"
