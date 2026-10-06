@@ -1301,9 +1301,11 @@ func (tm *TabletManager) fixSemiSyncAndReplication(ctx context.Context, tabletTy
 	// we should restart replication. First, let's make sure
 	// replication is running.
 	status, err := tm.MysqlDaemon.ReplicationStatus(ctx)
-	if err != nil {
-		// Replication is not configured, nothing to do.
+	if errors.Is(err, mysql.ErrNotReplica) {
 		return nil
+	}
+	if err != nil {
+		return vterrors.Wrapf(err, "failed to read replication status")
 	}
 	if !status.IOHealthy() {
 		// IO thread is not running, nothing to do.
