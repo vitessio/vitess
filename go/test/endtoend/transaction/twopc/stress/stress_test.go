@@ -40,6 +40,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 )
 
 // idVals are the primary key values to use while creating insert queries that ensures all the three shards get an insert.
@@ -251,8 +252,6 @@ func TestDisruptions(t *testing.T) {
 // connection is gone but stays in the prepared pool, and redoing the prepared
 // transactions used to wait for it forever.
 func TestRedoAfterUnnoticedMySQLRestart(t *testing.T) {
-	// Reparent all the shards to first tablet being the primary.
-	reparentToFirstTablet(t)
 	conn, closer := start(t)
 	defer closer()
 	defer twopcutil.DeleteFile(twopcutil.DebugDelayCommitShard)
@@ -267,7 +266,8 @@ func TestRedoAfterUnnoticedMySQLRestart(t *testing.T) {
 	// Delay the commit on the third shard, so that its transaction stays prepared across the restart.
 	var wg sync.WaitGroup
 	twopcutil.RunMultiShardCommitWithDelay(t, conn, "30", &wg, append([]string{"begin"}, getMultiShardInsertQueries()...))
-	tablet := clusterInstance.Keyspaces[0].Shards[2].Vttablets[0].VttabletProcess
+	primary := shardPrimary(t, clusterInstance.Keyspaces[0].Shards[2])
+	tablet := primary.VttabletProcess
 	require.Eventually(t, func() bool {
 		qr, err := tablet.QueryTabletWithContext(t.Context(), "select count(*) from _vt.redo_state", keyspaceName, false)
 		return err == nil && qr.Rows[0][0].ToString() == "1"
@@ -277,7 +277,7 @@ func TestRedoAfterUnnoticedMySQLRestart(t *testing.T) {
 	// connections reconnect, and it does not notice the restart.
 	tablet.Stop()
 	defer tablet.Resume()
-	require.NoError(t, mysqlRestartShard3(t))
+	require.NoError(t, restartMySQL(primary))
 	require.Eventually(t, func() bool {
 		qr, err := tablet.QueryTabletWithContext(t.Context(), "select @@global.super_read_only", keyspaceName, false)
 		return err == nil && qr.Rows[0][0].ToString() == "1"
@@ -384,10 +384,26 @@ func vttabletRestartShard3(t *testing.T) error {
 
 // mysqlRestartShard3 restarts MySQL on the first tablet of the third shard.
 func mysqlRestartShard3(t *testing.T) error {
-	shard := clusterInstance.Keyspaces[0].Shards[2]
-	vttablets := shard.Vttablets
-	tablet := vttablets[0]
-	log.Error(fmt.Sprintf("Restarting MySQL for - %v/%v tablet - %v", keyspaceName, shard.Name, tablet.Alias))
+	return restartMySQL(clusterInstance.Keyspaces[0].Shards[2].Vttablets[0])
+}
+
+// shardPrimary returns the current primary of the shard, which an earlier test may have reparented.
+func shardPrimary(t *testing.T, shard cluster.Shard) *cluster.Vttablet {
+	si, err := clusterInstance.VtctldClientProcess.GetShard(keyspaceName, shard.Name)
+	require.NoError(t, err)
+	primaryAlias := topoproto.TabletAliasString(si.Shard.PrimaryAlias)
+	for _, tablet := range shard.Vttablets {
+		if tablet.Alias == primaryAlias {
+			return tablet
+		}
+	}
+	require.FailNow(t, "the shard primary is not one of its tablets", primaryAlias)
+	return nil
+}
+
+// restartMySQL kills the tablet's MySQL, which mysqld_safe then restarts.
+func restartMySQL(tablet *cluster.Vttablet) error {
+	log.Error(fmt.Sprintf("Restarting MySQL for tablet - %v", tablet.Alias))
 	pidFile := path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/mysql.pid", tablet.TabletUID))
 	pidBytes, err := os.ReadFile(pidFile)
 	if err != nil {
