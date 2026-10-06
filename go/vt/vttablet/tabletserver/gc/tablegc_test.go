@@ -29,6 +29,176 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+<<<<<<< HEAD
+||||||| parent of eb32a4e042 (OnlineDDL: Properly escape table identifiers (#21381))
+// newFakeDBTableGC builds a TableGC wired to a fake MySQL, sufficient for exercising purge/dropTable.
+func newFakeDBTableGC(t *testing.T, db *fakesqldb.DB) *TableGC {
+	cfg := tabletenv.NewDefaultConfig()
+	cfg.DB = dbconfigs.NewTestDBConfigs(*db.ConnParams(), *db.ConnParams(), "fakesqldb")
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TableGCTest")
+
+	collector := &TableGC{
+		env:             env,
+		throttlerClient: throttle.NewBackgroundClient(nil, throttlerapp.TableGCName, base.UndefinedScope),
+		purgingTables:   map[string]bool{},
+	}
+	var err error
+	collector.lifecycleStates, err = schema.ParseGCLifecycle("hold,purge,evac,drop")
+	require.NoError(t, err)
+	return collector
+}
+
+// TestDropTableDisablesForeignKeyChecks verifies that dropTable disables foreign key checks before
+// issuing the DROP (and restores them afterwards). This lets the GC drop a table that is still
+// referenced by another (also-doomed) table's foreign key, regardless of the order in which held
+// tables are reclaimed.
+func TestDropTableDisablesForeignKeyChecks(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	db.SetNeverFail(true)
+
+	collector := newFakeDBTableGC(t, db)
+
+	err := collector.dropTable(t.Context(), "_vt_DROP_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_", true)
+	require.NoError(t, err)
+
+	queryLog := strings.ToLower(db.QueryLog())
+	disableIdx := strings.Index(queryLog, "set session foreign_key_checks = 0")
+	dropIdx := strings.Index(queryLog, "drop table if exists")
+	restoreIdx := strings.Index(queryLog, "set session foreign_key_checks = 1")
+
+	require.GreaterOrEqual(t, disableIdx, 0, "foreign_key_checks must be disabled; query log: %s", queryLog)
+	require.GreaterOrEqual(t, dropIdx, 0, "table must be dropped; query log: %s", queryLog)
+	require.GreaterOrEqual(t, restoreIdx, 0, "foreign_key_checks must be restored; query log: %s", queryLog)
+	// foreign_key_checks must be disabled before the drop, and restored after it.
+	assert.Less(t, disableIdx, dropIdx, "foreign_key_checks must be disabled before the drop")
+	assert.Less(t, dropIdx, restoreIdx, "foreign_key_checks must be restored after the drop")
+}
+
+// TestPurgeDisablesForeignKeyChecks verifies that purge disables foreign key checks before deleting
+// rows. This lets the GC purge a doomed parent table's rows even while a doomed child still
+// references them under ON DELETE RESTRICT, without wedging.
+func TestPurgeDisablesForeignKeyChecks(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	db.SetNeverFail(true)
+
+	collector := newFakeDBTableGC(t, db)
+	require.True(t, collector.addPurgingTable("_vt_prg_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_"))
+
+	_, err := collector.purge(t.Context())
+	require.NoError(t, err)
+
+	queryLog := strings.ToLower(db.QueryLog())
+	disableIdx := strings.Index(queryLog, "set session foreign_key_checks = 0")
+	deleteIdx := strings.Index(queryLog, "delete from")
+	restoreIdx := strings.Index(queryLog, "set session foreign_key_checks = 1")
+
+	require.GreaterOrEqual(t, disableIdx, 0, "foreign_key_checks must be disabled; query log: %s", queryLog)
+	require.GreaterOrEqual(t, deleteIdx, 0, "rows must be purged; query log: %s", queryLog)
+	require.GreaterOrEqual(t, restoreIdx, 0, "foreign_key_checks must be restored; query log: %s", queryLog)
+	// foreign_key_checks must be disabled before purging rows, and restored afterwards.
+	assert.Less(t, disableIdx, deleteIdx, "foreign_key_checks must be disabled before purging rows")
+	assert.Less(t, deleteIdx, restoreIdx, "foreign_key_checks must be restored after purging")
+}
+
+=======
+// newFakeDBTableGC builds a TableGC wired to a fake MySQL, sufficient for exercising purge/dropTable.
+func newFakeDBTableGC(t *testing.T, db *fakesqldb.DB) *TableGC {
+	cfg := tabletenv.NewDefaultConfig()
+	cfg.DB = dbconfigs.NewTestDBConfigs(*db.ConnParams(), *db.ConnParams(), "fakesqldb")
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TableGCTest")
+
+	collector := &TableGC{
+		env:             env,
+		throttlerClient: throttle.NewBackgroundClient(nil, throttlerapp.TableGCName, base.UndefinedScope),
+		purgingTables:   map[string]bool{},
+	}
+	var err error
+	collector.lifecycleStates, err = schema.ParseGCLifecycle("hold,purge,evac,drop")
+	require.NoError(t, err)
+	return collector
+}
+
+// TestDropTableDisablesForeignKeyChecks verifies that dropTable disables foreign key checks before
+// issuing the DROP (and restores them afterwards). This lets the GC drop a table that is still
+// referenced by another (also-doomed) table's foreign key, regardless of the order in which held
+// tables are reclaimed.
+func TestDropTableDisablesForeignKeyChecks(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	db.SetNeverFail(true)
+
+	collector := newFakeDBTableGC(t, db)
+
+	err := collector.dropTable(t.Context(), "_vt_DROP_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_", true)
+	require.NoError(t, err)
+
+	queryLog := strings.ToLower(db.QueryLog())
+	disableIdx := strings.Index(queryLog, "set session foreign_key_checks = 0")
+	dropIdx := strings.Index(queryLog, "drop table if exists")
+	restoreIdx := strings.Index(queryLog, "set session foreign_key_checks = 1")
+
+	require.GreaterOrEqual(t, disableIdx, 0, "foreign_key_checks must be disabled; query log: %s", queryLog)
+	require.GreaterOrEqual(t, dropIdx, 0, "table must be dropped; query log: %s", queryLog)
+	require.GreaterOrEqual(t, restoreIdx, 0, "foreign_key_checks must be restored; query log: %s", queryLog)
+	// foreign_key_checks must be disabled before the drop, and restored after it.
+	assert.Less(t, disableIdx, dropIdx, "foreign_key_checks must be disabled before the drop")
+	assert.Less(t, dropIdx, restoreIdx, "foreign_key_checks must be restored after the drop")
+
+	// A name can pass schema.AnalyzeGCTableName and still hold a back quote, since
+	// its [0-f] ranges accept punctuation. It must be dropped as one identifier.
+	isGCTable, _, _, _, err := schema.AnalyzeGCTableName(injectingGCTableName)
+	require.NoError(t, err)
+	require.True(t, isGCTable)
+	db.ResetQueryLog()
+	require.NoError(t, collector.dropTable(t.Context(), injectingGCTableName, true))
+	// The query log is lowercased.
+	assert.Contains(t, db.QueryLog(), strings.ToLower("drop table if exists `_vt_drp_6ace8bcef73211ea``;DROP``TABLE``X``;_20200915120410_`"))
+}
+
+// injectingGCTableName is accepted by schema.AnalyzeGCTableName but holds back
+// quotes and a ';' that would end the identifier if it were not escaped.
+const injectingGCTableName = "_vt_drp_6ace8bcef73211ea`;DROP`TABLE`X`;_20200915120410_"
+
+// TestPurgeDisablesForeignKeyChecks verifies that purge disables foreign key checks before deleting
+// rows. This lets the GC purge a doomed parent table's rows even while a doomed child still
+// references them under ON DELETE RESTRICT, without wedging.
+func TestPurgeDisablesForeignKeyChecks(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	db.SetNeverFail(true)
+
+	collector := newFakeDBTableGC(t, db)
+	require.True(t, collector.addPurgingTable("_vt_prg_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_"))
+
+	_, err := collector.purge(t.Context())
+	require.NoError(t, err)
+
+	queryLog := strings.ToLower(db.QueryLog())
+	disableIdx := strings.Index(queryLog, "set session foreign_key_checks = 0")
+	deleteIdx := strings.Index(queryLog, "delete from")
+	restoreIdx := strings.Index(queryLog, "set session foreign_key_checks = 1")
+
+	require.GreaterOrEqual(t, disableIdx, 0, "foreign_key_checks must be disabled; query log: %s", queryLog)
+	require.GreaterOrEqual(t, deleteIdx, 0, "rows must be purged; query log: %s", queryLog)
+	require.GreaterOrEqual(t, restoreIdx, 0, "foreign_key_checks must be restored; query log: %s", queryLog)
+	// foreign_key_checks must be disabled before purging rows, and restored afterwards.
+	assert.Less(t, disableIdx, deleteIdx, "foreign_key_checks must be disabled before purging rows")
+	assert.Less(t, deleteIdx, restoreIdx, "foreign_key_checks must be restored after purging")
+
+	// The purged table's name must be escaped, even one AnalyzeGCTableName accepts.
+	collector = newFakeDBTableGC(t, db)
+	injectingPurgeTableName := strings.Replace(injectingGCTableName, "_vt_drp_", "_vt_prg_", 1)
+	require.True(t, collector.addPurgingTable(injectingPurgeTableName))
+	db.ResetQueryLog()
+	_, err = collector.purge(t.Context())
+	require.NoError(t, err)
+	// The query log is lowercased.
+	assert.Contains(t, db.QueryLog(), strings.ToLower("delete from `_vt_prg_6ace8bcef73211ea``;DROP``TABLE``X``;_20200915120410_` limit 50"))
+}
+
+>>>>>>> eb32a4e042 (OnlineDDL: Properly escape table identifiers (#21381))
 func TestNextTableToPurge(t *testing.T) {
 	tt := []struct {
 		name   string

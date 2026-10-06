@@ -498,25 +498,19 @@ const (
 			TABLE_SCHEMA=%a AND TABLE_NAME=%a
 			AND REFERENCED_TABLE_NAME IS NOT NULL
 		`
-	sqlShowTablesLike                      = "SHOW TABLES LIKE '%a'"
-	sqlDropTable                           = "DROP TABLE `%a`"
-	sqlDropTableIfExists                   = "DROP TABLE IF EXISTS `%a`"
-	sqlShowTableStatus                     = "SHOW TABLE STATUS LIKE '%a'"
-	sqlAnalyzeTableLocal                   = "ANALYZE NO_WRITE_TO_BINLOG TABLE `%a`"
-	sqlAnalyzeTable                        = "ANALYZE TABLE `%a`"
-	sqlShowCreateTable                     = "SHOW CREATE TABLE `%a`"
 	sqlShowVariablesLikePreserveForeignKey = "show global variables like 'rename_table_preserve_foreign_key'"
 	sqlShowVariablesLikeFastAnalyzeTable   = "show global variables like 'fast_analyze_table'"
 	sqlEnableFastAnalyzeTable              = "set @@fast_analyze_table = 1"
 	sqlDisableFastAnalyzeTable             = "set @@fast_analyze_table = 0"
-	sqlAlterTableAutoIncrement             = "ALTER TABLE `%s` AUTO_INCREMENT=%a"
-	sqlAlterTableExchangePartition         = "ALTER TABLE `%a` EXCHANGE PARTITION `%a` WITH TABLE `%a`"
-	sqlAlterTableRemovePartitioning        = "ALTER TABLE `%a` REMOVE PARTITIONING"
-	sqlAlterTableDropPartition             = "ALTER TABLE `%a` DROP PARTITION `%a`"
-	sqlStartVReplStream                    = "UPDATE _vt.vreplication set state='Running' where db_name=%a and workflow=%a"
-	sqlStopVReplStream                     = "UPDATE _vt.vreplication set state='Stopped' where db_name=%a and workflow=%a"
-	sqlDeleteVReplStream                   = "DELETE FROM _vt.vreplication where db_name=%a and workflow=%a"
-	sqlReadVReplStream                     = `SELECT
+	// sqlAlterTableAutoIncrement is neither of the two template types below: its
+	// %a is a bind variable, filled in by GenerateQuery, and its %s is an
+	// identifier the caller escapes with sqlescape.EscapeID -- which is also why
+	// the template does not quote it.
+	sqlAlterTableAutoIncrement = "ALTER TABLE %s AUTO_INCREMENT=%a"
+	sqlStartVReplStream        = "UPDATE _vt.vreplication set state='Running' where db_name=%a and workflow=%a"
+	sqlStopVReplStream         = "UPDATE _vt.vreplication set state='Stopped' where db_name=%a and workflow=%a"
+	sqlDeleteVReplStream       = "DELETE FROM _vt.vreplication where db_name=%a and workflow=%a"
+	sqlReadVReplStream         = `SELECT
 			id,
 			workflow,
 			source,
@@ -554,11 +548,37 @@ const (
 			_vt.copy_state
 		WHERE vrepl_id=%a
 		`
+<<<<<<< HEAD
 	sqlSwapTables              = "RENAME TABLE `%a` TO `%a`, `%a` TO `%a`, `%a` TO `%a`"
 	sqlRenameTable             = "RENAME TABLE `%a` TO `%a`"
 	sqlLockTwoTablesWrite      = "LOCK TABLES `%a` WRITE, `%a` WRITE"
+||||||| parent of eb32a4e042 (OnlineDDL: Properly escape table identifiers (#21381))
+	// sqlReadCopyStateProgress reads the copy phase's row count and newest
+	// checkpoint id: every committed copy batch inserts a row and GC removes
+	// only older ones, so max(id) advances only with durable progress.
+	sqlReadCopyStateProgress = `SELECT
+			count(*) as cnt,
+			max(id) as maxid
+		FROM
+			_vt.copy_state
+		WHERE vrepl_id=%a
+		`
+	sqlSwapTables              = "RENAME TABLE `%a` TO `%a`, `%a` TO `%a`, `%a` TO `%a`"
+	sqlRenameTable             = "RENAME TABLE `%a` TO `%a`"
+	sqlLockTwoTablesWrite      = "LOCK TABLES `%a` WRITE, `%a` WRITE"
+=======
+	// sqlReadCopyStateProgress reads the copy phase's row count and newest
+	// checkpoint id: every committed copy batch inserts a row and GC removes
+	// only older ones, so max(id) advances only with durable progress.
+	sqlReadCopyStateProgress = `SELECT
+			count(*) as cnt,
+			max(id) as maxid
+		FROM
+			_vt.copy_state
+		WHERE vrepl_id=%a
+		`
+>>>>>>> eb32a4e042 (OnlineDDL: Properly escape table identifiers (#21381))
 	sqlUnlockTables            = "UNLOCK TABLES"
-	sqlCreateSentryTable       = "CREATE TABLE IF NOT EXISTS `%a` (id INT PRIMARY KEY)"
 	sqlFindProcess             = "SELECT id, Info as info FROM information_schema.processlist WHERE id=%a AND Info LIKE %a"
 	sqlFindProcessByInfo       = "SELECT id, Info as info FROM information_schema.processlist WHERE Info LIKE %a and id != connection_id()"
 	sqlProcessWithLocksOnTable = `
@@ -579,4 +599,43 @@ const (
 		where
 			metadata_locks.OBJECT_SCHEMA=database() AND metadata_locks.OBJECT_NAME=%a
 	`
+)
+
+// A bare %a in a template says nothing about how the argument has to be encoded,
+// and the three possibilities are not interchangeable: an identifier, a string
+// literal, or a bind variable. Getting it wrong is not always loud -- passing a
+// template straight to sqlparser.BuildParsedQuery writes the argument in with no
+// quoting at all, which is valid SQL for every ordinary table name and is exactly
+// the shape that let a name carry its own statements.
+//
+// So the class is part of the template's type, and the builder that goes with it
+// is the only thing that accepts it. The constants have to stay explicitly typed:
+// untyped ones would convert to a plain string just as readily, which documents the
+// rule without enforcing it.
+type (
+	// identifierQueryTemplate has %a placeholders that are all identifiers. Build
+	// it with buildIdentifierQuery, which supplies the back quotes -- so these
+	// templates must not quote %a themselves.
+	identifierQueryTemplate string
+
+	// literalQueryTemplate has %a placeholders that are all string literals. Build
+	// it with buildLiteralQuery, which supplies the quotes.
+	literalQueryTemplate string
+)
+
+const (
+	sqlDropTable          identifierQueryTemplate = "DROP TABLE %a"
+	sqlDropTableIfExists  identifierQueryTemplate = "DROP TABLE IF EXISTS %a"
+	sqlAnalyzeTableLocal  identifierQueryTemplate = "ANALYZE NO_WRITE_TO_BINLOG TABLE %a"
+	sqlAnalyzeTable       identifierQueryTemplate = "ANALYZE TABLE %a"
+	sqlShowCreateTable    identifierQueryTemplate = "SHOW CREATE TABLE %a"
+	sqlSwapTables         identifierQueryTemplate = "RENAME TABLE %a TO %a, %a TO %a, %a TO %a"
+	sqlRenameTable        identifierQueryTemplate = "RENAME TABLE %a TO %a"
+	sqlLockTwoTablesWrite identifierQueryTemplate = "LOCK TABLES %a WRITE, %a WRITE"
+	sqlCreateSentryTable  identifierQueryTemplate = "CREATE TABLE IF NOT EXISTS %a (id INT PRIMARY KEY)"
+)
+
+const (
+	sqlShowTablesLike  literalQueryTemplate = "SHOW TABLES LIKE %a"
+	sqlShowTableStatus literalQueryTemplate = "SHOW TABLE STATUS LIKE %a"
 )
