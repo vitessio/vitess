@@ -60,7 +60,7 @@
         - [ApplySchema session variables](#vttablet-applyschema-session-variables)
         - [Table ACL: statements whose tables cannot be determined are denied under strict table ACL](#vttablet-table-acl-undetermined-table-set)
         - [Table ACL: reads embedded in non-SELECT statements are now checked](#vttablet-table-acl-embedded-reads)
-        - [Query annotations include only identifier-safe principals](#vttablet-annotate-queries-safe-principal)
+        - [Query annotations escape `*/` in the caller principal](#vttablet-annotate-queries-escape-principal)
     - **[VTCtld](#minor-changes-vtctld)**
         - [MySQL version-aware reparent candidate election](#vtctld-version-aware-reparent)
     - **[Backup/Restore](#minor-changes-backup)**
@@ -687,11 +687,11 @@ Connection settings — the SET statements vtgate attaches to a session's querie
 
 See [#21139](https://github.com/vitessio/vitess/pull/21139) for details.
 
-#### <a id="vttablet-annotate-queries-safe-principal"/>Query annotations include only identifier-safe principals</a>
+#### <a id="vttablet-annotate-queries-escape-principal"/>Query annotations escape `*/` in the caller principal</a>
 
-With `--queryserver-config-annotate-queries`, vttablet prefixes each query it sends to MySQL with a `/* <principal>@<tablet type> */` comment. The principal comes from the caller ID, which a vtgate gRPC client can set, and vttablet previously wrote it into the comment unchanged. See [GHSA-x56j-8c72-5xgg](https://github.com/vitessio/vitess/security/advisories/GHSA-x56j-8c72-5xgg).
+With `--queryserver-config-annotate-queries`, vttablet prefixes each query it sends to MySQL with a `/* <principal>@<tablet type> */` comment. The principal comes from the caller ID, which a vtgate gRPC client can set. vttablet previously wrote it into the comment unchanged, so a principal containing `*/` could end the comment early and change the SQL that MySQL ran. See [GHSA-x56j-8c72-5xgg](https://github.com/vitessio/vitess/security/advisories/GHSA-x56j-8c72-5xgg).
 
-The annotation now includes the principal only when every character is an ASCII letter, a digit, or one of `_ - . @ : /`. Any other principal is written as `unsafe-principal`, for example `/* unsafe-principal@PRIMARY */`. Queries run as before in both cases. Anything that reads the principal from these comments, such as MySQL query log analysis, sees `unsafe-principal` for those callers instead of their principal.
+vttablet now escapes each `*/` in the principal as `*\/`, which MySQL reads as ordinary comment text, so the principal can no longer end the comment. Principals without `*/` appear in the annotation unchanged. Anything that reads the principal from these comments, such as MySQL query log analysis, sees `*\/` in place of `*/` for principals that contain it.
 
 See [#21369](https://github.com/vitessio/vitess/pull/21369) for details.
 
