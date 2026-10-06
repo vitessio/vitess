@@ -329,8 +329,9 @@ func (te *TxEngine) Commit(ctx context.Context, transactionID int64) (int64, str
 // activeCommits, which lets the shutdown grace period kill it. If
 // activeCommits rejects new COMMITs, commit kills the transaction and
 // releases conn. An autocommit transaction sends no COMMIT and is not tracked.
-// A killed COMMIT may still commit in MySQL, for example after MySQL wrote it
-// to the binlog. Its error says the outcome is unknown.
+// A killed COMMIT that MySQL already wrote to the binlog still commits in
+// MySQL, because KILL does not roll it back. Its error says the outcome is
+// unknown.
 func (te *TxEngine) commit(ctx context.Context, conn *StatefulConnection) (string, error) {
 	// Skip the gate for an autocommit transaction. MySQL already committed
 	// each statement, and a rejection would report failure for applied writes.
