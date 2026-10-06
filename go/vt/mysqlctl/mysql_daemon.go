@@ -126,11 +126,6 @@ type MysqlDaemon interface {
 	// hold several statements separated by a semicolon, no result
 	ExecuteSuperQueryListMulti(ctx context.Context, queryList []string) error
 
-	// ExecuteSuperQueryListTainted executes a list of queries whose session state
-	// changes must not leak into pooled connections; the connection used is
-	// discarded afterwards. Use for operator-supplied SQL.
-	ExecuteSuperQueryListTainted(ctx context.Context, queryList []string) error
-
 	// FetchSuperQuery executes one query, returns the result
 	FetchSuperQuery(ctx context.Context, query string) (*sqltypes.Result, error)
 
