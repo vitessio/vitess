@@ -147,11 +147,40 @@ CONSTANTS
                       \* have
     VOT_PROMPT,     \* timing (VOT_SPLIT): VTOrc writes the voter list before a host that the list drops
                     \* restarts: its read of the statuses and its write are closer than a host restart
-    JOIN_WAITS_RECORD \* (candidate, FALSE = the code) while the shard record lists no incarnation, a tablet
+    JOIN_WAITS_RECORD, \* (fix of finding 6, FALSE = the code) while the shard record lists no incarnation, a tablet
                       \* starts no join on its own: it waits until the bootstrap is recorded (VTOrc joins the
                       \* voters after it records its bootstrap; the voters of an initial promotion join after
                       \* PRS recorded it). A group bootstrapped before incarnations were recorded is not
                       \* rejoined on the tablets' own until one is recorded for it.
+    \* ==== third milestone: the voter redesign (one voter per cell; swap, grow, move, operator) ====
+    Spares,         \* tablets that are not voters at first; each server is a cell of its own, and a spare may
+                    \* replace any voter (which over-approximates "in the voter's cell")
+    Seats,          \* the number of cells with an eligible tablet: GrowVoter adds a voter while fewer are listed
+    VOT_MODE,       \* "select": the voter selection of the code at 8c9013e (OVotRead, OVotWrite); "swap": the
+                    \* redesign (OSwap, OGrow, OMoveToVoter, ORemove)
+    MaxDel,         \* bound: tablet records of voters that an operator deletes (the signal for a shrink)
+    REMOVE_CHECKS,  \* (redesign) the preconditions of RemoveVoter beyond the deleted record: "p1", a settled
+                    \* legitimate source p # v; "noview", v is active in no view (P2) and not in p's view
+    MaxDie,         \* bound: hosts that die for good (never restart)
+    P1_SETTLED,     \* (redesign) P1 requires the source's election to have ended (primary_election_in_progress
+                    \* = false), instead of the timing assumption GRACE_SETTLES
+    SPARE_CHECK,    \* (redesign) P3: the new voter answers, is REPLICA, in no group, runs no START, and executed
+                    \* nothing the source lacks
+    ENV_SPARE_JOIN, \* environment: a tablet that is not a voter can start a join (an operator, an older
+                    \* component)
+    InitDown,       \* directed scenarios: voters that are down at first, their grace period passed
+    InitDeleted,    \* directed scenarios: voters whose tablet record is deleted at first
+    MOVE_FROM_DELETED, \* (REVISION 2b) VTOrc moves the primary role off a voter whose record is deleted
+    DEL_NOT_PRIMARY, \* environment: DeleteTablets refuses a PRIMARY tablet (no --allow-primary): an operator deletes
+                     \* only the record of a tablet that is not PRIMARY
+    NOGROUP_DEL,    \* (redesign, REVISION 2) RemoveVoterNoGroup removes only a voter whose tablet record is deleted
+    DIE_FIRST,      \* scenario: a host dies before any other fault
+    DEL_DEAD,       \* scenario: an operator deletes only the record of a dead voter
+    SEQ_FAULTS      \* liveness scenario: no crash, mysqld restart, leave or loss of majority happens while a listed
+                    \* voter is dead (the other faults come after the repair)
+
+InitVoters == Servers \ Spares
+InitUp == InitVoters \ InitDown
 
 Incs == 1..MaxInc
 Tx   == 1..MaxTx
@@ -221,6 +250,14 @@ VARIABLES
                 \* refusal (an error or a timeout), so that only adoption or the intent's expiry ends it
     \* ---- budgets ----
     nCrash, nLeave, nLoss, nExpire, nProbe,
+    died,       \* hosts that died for good
+    deleted,    \* voters whose tablet record an operator deleted
+    nDie, nDel,
+    lostOK,     \* ghost: transactions whose loss an operator accepted (only deleted voters held them when VTOrc
+                \* removed a deleted voter)
+    delAcked,   \* ghost: transactions that a primary whose record was deleted acknowledged (the accepted window
+                \* of a deletion with AllowPrimary, before VTOrc moves the primary role)
+    delTx,      \* the first transaction acknowledged after the first deletion of a voter's record (0: none yet)
     \* ==== second milestone ====
     voters,     \* Shard.group_replication_voters
     ovot,       \* VOT_SPLIT: [old: the list VTOrc o read, new: the list it selected, and writes next,
@@ -250,7 +287,7 @@ vT == <<ttype, serving, lk, dph, dOK, dGen, dFence, snap, fenced, fcPend, majInc
 vS == <<recInc, intent, nextTok, intExp, newest>>
 vO == <<oph, ocand, oexp, otok, oborn, oreq, orep, orp, lockOwner>>
 vH == <<acked, nextTx, bootFrom, decisionAck, minorityAck, fenceUndone, adopted, wfail>>
-vB == <<nCrash, nLeave, nLoss, nExpire, nProbe>>
+vB == <<nCrash, nLeave, nLoss, nExpire, nProbe, died, deleted, nDie, nDel, delTx, lostOK, delAcked>>
 vN == <<voters, ovot, vMinor, pph, pcur, pel, pprev, dmWasRO, dmWasSrv, dmR, dmF, udReq, gone, everP,
         nVot, nPrs, nUndo, nSetRW, err, ran>>
 vars == <<vM, vT, vS, vO, vH, vB, vN>>
@@ -274,10 +311,11 @@ CanAccept(s) == IsPrimQ(s) /\ ~sro[s] /\ ~electing[s]
 LegitMaj(s)  == IsPrimQ(s) /\ RecOK(grp[s], recInc) /\ VoterMaj(grp[s])
 
 \* groupReplicationServingReason = "" on a status read now, against the record incarnation c
-ServeOK(s, c) == IsPrimQ(s) /\ ~electing[s] /\ (LEGIT => (RecOK(grp[s], c) /\ VoterMaj(grp[s])))
+\* (a tablet whose record is deleted cannot change its type: no promotion, no decision to serve)
+ServeOK(s, c) == IsPrimQ(s) /\ ~electing[s] /\ (LEGIT => (RecOK(grp[s], c) /\ VoterMaj(grp[s]))) /\ s \notin deleted
                  /\ (PRIMARY_MUST_BE_VOTER => s \in voters)
 \* IsLegitimatePrimary for the sync loop's promotion (trusts a group it bootstrapped itself)
-PromoteLegit(s) == IsPrimQ(s) /\ (LEGIT => ((RecOK(grp[s], recInc) \/ grp[s] = recentBoot[s]) /\ VoterMaj(grp[s])))
+PromoteLegit(s) == IsPrimQ(s) /\ (LEGIT => ((RecOK(grp[s], recInc) \/ grp[s] = recentBoot[s]) /\ VoterMaj(grp[s]))) /\ s \notin deleted
                    /\ (PRIMARY_MUST_BE_VOTER => s \in voters)
 
 IntentLive(it) == it.tok # 0 /\ ~(it.tok = intent.tok /\ intExp)
@@ -290,6 +328,10 @@ LegitActiveElsewhere(s) ==
     \E v \in Servers \ {s} : up[v] /\ grp[v] # 0 /\ ~dead[grp[v]] /\ (LEGIT => RecOK(grp[v], recInc))
 
 Data(v) == exec[v] \cup recv[v]
+\* the servers that executed or received transaction t
+Holders(t) == {s \in Servers : t \in exec[s] \cup recv[s]}
+\* the acknowledged transactions that only deleted voters hold
+OnlyDeleted == {t \in acked : Holders(t) # {} /\ Holders(t) \subseteq deleted}
 \* VIEW_GTIDS: the GTID of the view change event that the bootstrap of incarnation i logs
 VGtid(i) == IF VIEW_GTIDS THEN {-i} ELSE {}
 
@@ -325,21 +367,24 @@ Busy == \E s \in Servers : dph[s] # "idle" \/ fcPend[s]
 Free == SPLIT \/ ~Busy
 \* INIT_STABLE: faults wait for the initial promotion to end
 NoFault == INIT_STABLE => pph \notin {"init", "init_run", "init_dec"}
+\* SEQ_FAULTS: faults wait until no listed voter is dead
+SeqOK == SEQ_FAULTS => voters \cap died = {}
 
 ----------------------------------------------------------------------------
 \* The shard's group: incarnation 1 of all three voters, with a serving primary p0. With INIT_EMPTY, a
 \* shard that never had a primary: no group, nothing recorded, every MySQL read-only.
 Init ==
-    \E p0 \in Servers :
+    \* the first primary's record is not deleted (DeleteTablets refuses the PRIMARY)
+    \E p0 \in InitUp \ InitDeleted :
         LET G == ~INIT_EMPTY IN
-        /\ up = [s \in Servers |-> TRUE]
-        /\ grp = [s \in Servers |-> IF G THEN 1 ELSE 0]
+        /\ up = [s \in Servers |-> s \notin InitDown]
+        /\ grp = [s \in Servers |-> IF G /\ s \in InitUp THEN 1 ELSE 0]
         /\ st = [s \in Servers |-> "none"]
         /\ sro = [s \in Servers |-> ~G \/ s # p0]
         /\ electing = [s \in Servers |-> FALSE]
         /\ exec = [s \in Servers |-> {}]
         /\ recv = [s \in Servers |-> {}]
-        /\ view = [i \in Incs |-> IF i = 1 /\ G THEN Servers ELSE {}]
+        /\ view = [i \in Incs |-> IF i = 1 /\ G THEN InitUp ELSE {}]
         /\ prim = [i \in Incs |-> IF i = 1 /\ G THEN p0 ELSE NoServer]
         /\ hist = [i \in Incs |-> {}]
         /\ dead = [i \in Incs |-> FALSE]
@@ -386,7 +431,10 @@ Init ==
         /\ adopted = [k \in Toks |-> {}]
         /\ wfail = FALSE
         /\ nCrash = 0 /\ nLeave = 0 /\ nLoss = 0 /\ nExpire = 0 /\ nProbe = 0
-        /\ voters = Servers
+        /\ died = {} /\ deleted = InitDeleted /\ nDie = 0 /\ nDel = 0
+        /\ delTx = IF InitDeleted # {} THEN 1 ELSE 0
+        /\ lostOK = {} /\ delAcked = {}
+        /\ voters = InitVoters
         /\ ovot = [o \in Orcs |-> NoVot]
         /\ vMinor = FALSE
         /\ pph = "idle" /\ pcur = NoServer /\ pel = NoServer /\ pprev = 0
@@ -395,7 +443,7 @@ Init ==
         /\ dmR = [s \in Servers |-> FALSE]
         /\ dmF = [s \in Servers |-> FALSE]
         /\ udReq = [s \in Servers |-> FALSE]
-        /\ gone = [s \in Servers |-> FALSE]
+        /\ gone = [s \in Servers |-> s \in InitDown \ InitDeleted]
         /\ err = [s \in Servers |-> FALSE]
         /\ ran = [s \in Servers |-> FALSE]
         /\ everP = G
@@ -414,8 +462,10 @@ Commit(p) ==
     /\ nextTx' = nextTx + 1
     /\ minorityAck' = (minorityAck \/ ~VoterMaj(grp[p]))
     /\ decisionAck' = (decisionAck \/ (ttype[p] = "P" /\ serving[p] /\ badServe[p] /\ ~LegitMaj(p)))
+    /\ delAcked' = IF p \in deleted THEN delAcked \cup {nextTx} ELSE delAcked
     /\ UNCHANGED <<up, grp, st, sro, electing, recv, view, prim, dead, nextInc, async>>
-    /\ UNCHANGED <<vT, vS, vO, vB, bootFrom, fenceUndone, adopted, wfail>>
+    /\ UNCHANGED <<vT, vS, vO, bootFrom, fenceUndone, adopted, wfail>>
+    /\ UNCHANGED <<nCrash, nLeave, nLoss, nExpire, nProbe, died, deleted, nDie, nDel, delTx, lostOK>>
     /\ UNCHANGED vN
 
 ----------------------------------------------------------------------------
@@ -453,14 +503,14 @@ LeaveVars(s) ==
 Leave(s) ==
     /\ Free
     /\ up[s] /\ grp[s] # 0 /\ ~dead[grp[s]] /\ nLeave < MaxLeave
-    /\ NoFault
+    /\ NoFault /\ SeqOK
     /\ LeaveVars(s)
     /\ nLeave' = nLeave + 1
     \* STANDALONE: an expulsion leaves MySQL in the ERROR state (a STOP that an operator issues outside
     \* Vitess is left out; Vitess's own STOPs, a restart, leave it OFFLINE)
     /\ err' = [err EXCEPT ![s] = STANDALONE]
     /\ UNCHANGED <<up, st, exec, recv, hist, dead, nextInc, async>>
-    /\ UNCHANGED <<vT, vS, vO, vH, nCrash, nLoss, nExpire, nProbe>>
+    /\ UNCHANGED <<vT, vS, vO, vH, nCrash, nLoss, nExpire, nProbe, died, deleted, nDie, nDel, delTx, lostOK, delAcked>>
     /\ UNCHANGED <<voters, ovot, vMinor, pph, pcur, pel, pprev, dmWasRO, dmWasSrv, dmR, dmF, udReq, gone, everP,
                    nVot, nPrs, nUndo, nSetRW, ran>>
 
@@ -484,11 +534,11 @@ LeaveDead(i) ==
 LoseMajority(i) ==
     /\ Free
     /\ Alive(i) /\ Cardinality(view[i]) >= 2 /\ nLoss < MaxLoss
-    /\ NoFault
+    /\ NoFault /\ SeqOK
     /\ dead' = [dead EXCEPT ![i] = TRUE]
     /\ nLoss' = nLoss + 1
     /\ UNCHANGED <<up, grp, st, sro, electing, exec, recv, view, prim, hist, nextInc, async>>
-    /\ UNCHANGED <<vT, vS, vO, vH, nCrash, nLeave, nExpire, nProbe>>
+    /\ UNCHANGED <<vT, vS, vO, vH, nCrash, nLeave, nExpire, nProbe, died, deleted, nDie, nDel, delTx, lostOK, delAcked>>
     /\ UNCHANGED vN
 
 Elect(i) ==
@@ -515,8 +565,8 @@ ElectEnd(q) ==
     /\ UNCHANGED vN
 
 \* the host dies; relay_log_recovery drops the received backlog; vttablet restarts as REPLICA
-CrashVars(s) ==
-    /\ up[s] /\ nCrash < MaxCrash
+CrashVarsK(s, die) ==
+    /\ up[s] /\ IF die THEN nDie < MaxDie ELSE (nCrash < MaxCrash /\ SeqOK)
     /\ NoFault
     /\ up' = [up EXCEPT ![s] = FALSE]
     /\ IF grp[s] = 0 THEN UNCHANGED <<view, prim, grp, sro, electing, dead>>
@@ -544,15 +594,20 @@ CrashVars(s) ==
     /\ breq' = [breq EXCEPT ![s] = {}]
     /\ bOrc' = [bOrc EXCEPT ![s] = NoReq]
     /\ badServe' = [badServe EXCEPT ![s] = FALSE]
-    /\ nCrash' = nCrash + 1
+    /\ IF die THEN /\ nDie' = nDie + 1 /\ died' = died \cup {s}
+                    /\ UNCHANGED nCrash
+               ELSE /\ nCrash' = nCrash + 1
+                    /\ UNCHANGED <<nDie, died>>
     /\ UNCHANGED <<exec, nextInc, cInc, bPrev>>
     /\ UNCHANGED <<vS, vO, acked, bootFrom, decisionAck, minorityAck, fenceUndone, adopted, wfail,
-                   nLeave, nLoss, nExpire, nProbe>>
+                   nLeave, nLoss, nExpire, nProbe, deleted, nDel, delTx, lostOK, delAcked>>
     \* the RPCs in flight on the tablet end with it
     /\ dmWasRO' = [dmWasRO EXCEPT ![s] = FALSE] /\ dmWasSrv' = [dmWasSrv EXCEPT ![s] = FALSE]
     /\ dmR' = [dmR EXCEPT ![s] = FALSE] /\ dmF' = [dmF EXCEPT ![s] = FALSE]
     /\ udReq' = [udReq EXCEPT ![s] = FALSE]
     /\ UNCHANGED <<voters, ovot, vMinor, pph, pcur, pel, pprev, gone, everP, nVot, nPrs, nUndo, nSetRW, err, ran>>
+
+CrashVars(s) == CrashVarsK(s, FALSE)
 
 Crash(s) ==
     /\ Free
@@ -572,7 +627,7 @@ DecideCrash(p) ==
 
 Restart(s) ==
     /\ Free
-    /\ ~up[s]
+    /\ ~up[s] /\ s \notin died
     /\ VOT_PROMPT => \A o \in Orcs : ~(oph[o] = "vot" /\ s \in ovot[o].old \ ovot[o].new)
     \* a host that a pending voter write drops is back: VTOrc's re-read would see it seen since the selection
     /\ ovot' = [o \in Orcs |-> IF oph[o] = "vot" /\ s \in ovot[o].old \ ovot[o].new
@@ -581,8 +636,10 @@ Restart(s) ==
     /\ sro' = [sro EXCEPT ![s] = TRUE]
     /\ gone' = [gone EXCEPT ![s] = FALSE]
     /\ err' = [err EXCEPT ![s] = FALSE]
+    \* the tablet's start re-creates its tablet record
+    /\ deleted' = deleted \ {s}
     /\ UNCHANGED <<grp, st, electing, exec, recv, view, prim, hist, dead, nextInc, async>>
-    /\ UNCHANGED <<vT, vS, vO, vH, vB>>
+    /\ UNCHANGED <<vT, vS, vO, vH, nCrash, nLeave, nLoss, nExpire, nProbe, died, nDie, nDel, delTx, lostOK, delAcked>>
     /\ UNCHANGED <<voters, vMinor, pph, pcur, pel, pprev, dmWasRO, dmWasSrv, dmR, dmF, udReq, everP,
                    nVot, nPrs, nUndo, nSetRW, ran>>
 
@@ -885,11 +942,9 @@ SaAct(s) ==
 
 \* a join (the sync loop's rejoin, the startup join, VTOrc's GroupMemberNotOnline): a new epoch, the
 \* fence reset, MySQL's START; the applier applies the relay backlog; the default channel is stopped
-JoinStart(s) ==
+JoinBody(s) ==
     /\ Free
     /\ up[s] /\ lk[s] = "free" /\ st[s] = "none" /\ grp[s] = 0 /\ ttype[s] = "R"
-    \* only a listed voter joins the group (isGroupReplicationVoter)
-    /\ s \in voters
     /\ JOIN_GATE => LegitActiveElsewhere(s)
     /\ JOIN_WAITS_RECORD => Rec(s) # 0
     /\ lk' = [lk EXCEPT ![s] = "join"]
@@ -907,6 +962,14 @@ JoinStart(s) ==
     /\ UNCHANGED <<vS, vO, vH, vB>>
     /\ UNCHANGED <<voters, ovot, vMinor, pph, pcur, pel, pprev, dmWasRO, dmWasSrv, dmR, dmF, udReq, gone, everP,
                    nVot, nPrs, nUndo, nSetRW, ran>>
+JoinStart(s) ==
+    \* only a listed voter joins the group (isGroupReplicationVoter)
+    /\ s \in voters
+    /\ JoinBody(s)
+\* ENV_SPARE_JOIN: a tablet that is not a voter starts a join (an operator, an older component); not fair
+EnvJoin(s) ==
+    /\ ENV_SPARE_JOIN /\ s \notin voters
+    /\ JoinBody(s)
 
 \* the joiner gives up while MySQL's START still runs (MySQL keeps running it); a START that ends
 \* releases the lock with its end (JoinComplete, JoinStray, JoinFail)
@@ -1151,7 +1214,7 @@ OBegin(o) ==
                             /\ oborn' = [oborn EXCEPT ![o] = nextInc]
     /\ UNCHANGED <<vM, ttype, serving, lk, dph, dOK, dGen, dFence, snap, fenced, fcPend, majInc,
                    cInc, recentBoot, dmt, bOrc, bPrev, badServe>>
-    /\ UNCHANGED <<vS, vH, nCrash, nLeave, nLoss, nExpire>>
+    /\ UNCHANGED <<vS, vH, nCrash, nLeave, nLoss, nExpire, died, deleted, nDie, nDel, delTx, lostOK, delAcked>>
     /\ UNCHANGED vN
 
 \* WriteGroupReplicationBootstrapIntent (compare-and-swap, the fence), then the bootstrap RPC
@@ -1303,7 +1366,7 @@ OLeaseExpire ==
     /\ lockOwner # NoOrc /\ nExpire < MaxExpire
     /\ lockOwner' = NoOrc
     /\ nExpire' = nExpire + 1
-    /\ UNCHANGED <<vM, vT, vS, oph, ocand, oexp, otok, oborn, oreq, orep, orp, vH, nCrash, nLeave, nLoss, nProbe>>
+    /\ UNCHANGED <<vM, vT, vS, oph, ocand, oexp, otok, oborn, oreq, orep, orp, vH, nCrash, nLeave, nLoss, nProbe, died, deleted, nDie, nDel, delTx, lostOK, delAcked>>
     /\ UNCHANGED vN
 
 \* GroupReplicationBootstrapIntentFence (2 minutes) passes for the oldest live intent
@@ -1369,7 +1432,7 @@ CommitAlone(p) ==
 \* super_read_only. Not while the tablet runs a START of its own, which the restart would end.
 MysqldRestart(s) ==
     /\ Free
-    /\ MYSQLD_RESTART /\ up[s] /\ nCrash < MaxCrash /\ NoFault
+    /\ MYSQLD_RESTART /\ up[s] /\ nCrash < MaxCrash /\ NoFault /\ SeqOK
     /\ lk[s] \notin {"join", "bootw", "boot", "init"}
     /\ IF grp[s] = 0
        THEN /\ sro' = [sro EXCEPT ![s] = TRUE]
@@ -1384,7 +1447,7 @@ MysqldRestart(s) ==
     /\ err' = [err EXCEPT ![s] = FALSE]
     /\ nCrash' = nCrash + 1
     /\ UNCHANGED <<up, exec, hist, nextInc>>
-    /\ UNCHANGED <<vT, vS, vO, vH, nLeave, nLoss, nExpire, nProbe>>
+    /\ UNCHANGED <<vT, vS, vO, vH, nLeave, nLoss, nExpire, nProbe, died, deleted, nDie, nDel, delTx, lostOK, delAcked>>
     /\ UNCHANGED <<voters, ovot, vMinor, vNp, vNd, udReq, gone, everP, vNc, ran>>
 
 ----------------------------------------------------------------------------
@@ -1402,7 +1465,7 @@ VotGroupUp ==
 \* is up, so it keeps its seat. A tablet has failed when it has been unreachable for the replacement
 \* grace period and no reachable member sees it as active; a down host is in no group, and the model
 \* has no clocks: any set of down hosts may have failed. An empty list is never written.
-VotChoices == {Servers \ F : F \in SUBSET {v \in Servers : ~up[v] /\ gone[v]}} \ {{}}
+VotChoices == {InitVoters \ F : F \in SUBSET {v \in InitVoters : ~up[v] /\ gone[v]}} \ {{}}
 
 \* the live group of the recorded incarnation, if any, has a primary whose election ended: it executed
 \* every transaction its group decided
@@ -1439,7 +1502,7 @@ ShrinkToMinor(old, new) ==
 \* write a separate step, so that the statuses can change, and the lease expire, in between.
 OVotRead(o) ==
     /\ Free
-    /\ VOTERS /\ nVot < MaxVot
+    /\ VOTERS /\ VOT_MODE = "select" /\ nVot < MaxVot
     /\ oph[o] = "idle" /\ lockOwner = NoOrc
     /\ VOTERS_NEED_GROUP => VotGroupUp
     /\ \E new \in VotChoices :
@@ -1484,7 +1547,8 @@ OVotWrite(o) ==
                        \A d \in ovot[o].old \ ovot[o].new : ~(up[d] /\ grp[d] # 0 /\ prim[grp[d]] = d)
            w    == cas /\ drop /\ back /\ grpUp /\ keepP IN
        /\ voters' = IF w THEN ovot[o].new ELSE voters
-       /\ vMinor' = (vMinor \/ (w /\ ShrinkToMinor(voters, ovot[o].new)))
+       /\ vMinor' = (vMinor \/ (w /\ IF VOT_MODE = "swap" THEN MinorToMajor(voters, ovot[o].new)
+                                                         ELSE ShrinkToMinor(voters, ovot[o].new)))
     /\ oph' = [oph EXCEPT ![o] = "idle"]
     /\ ovot' = [ovot EXCEPT ![o] = NoVot]
     /\ lockOwner' = Unlock(o)
@@ -1496,7 +1560,7 @@ OVotWrite(o) ==
 \* asynchronously, which the model leaves out
 VLeave(s) ==
     /\ Free
-    /\ VOTERS /\ s \notin voters
+    /\ VOTERS /\ VOT_MODE = "select" /\ s \notin voters
     /\ up[s] /\ lk[s] = "free" /\ grp[s] # 0 /\ ~dead[grp[s]]
     /\ prim[grp[s]] \notin {s, NoServer}
     /\ 2 * (Cardinality(view[grp[s]]) - 1) > Cardinality(view[grp[s]])
@@ -2006,15 +2070,172 @@ OAdoptUnrec ==
     /\ intExp' = FALSE
     /\ UNCHANGED <<vM, vT, nextTok, newest, vO, vH, vB, vN>>
 
-\* every action of the second milestone
+----------------------------------------------------------------------------
+(* Third milestone: the voter redesign (VOT_MODE = "swap"). One voter per cell; VTOrc swaps a failed voter
+   for a spare (SwapVoter), grows the list into a cell without a voter (GrowVoter), moves the primary off a
+   tablet that is not a voter (GroupPrimaryNotVoter); an operator changes one voter at a time
+   (ChangeGroupReplicationVoters). Each is one fresh read under the shard lock, then a compare-and-swap on
+   the list and the incarnation; with VOT_SPLIT the write is a separate step (OVotWrite). *)
+
+\* P1, a settled legitimate source: p is a listed voter, the ONLINE primary with quorum of the recorded
+\* incarnation (recorded: R non-empty), its election ended (P1_SETTLED: primary_election_in_progress = false),
+\* and its view holds a majority of the listed voters
+P1(p) ==
+    /\ p \in voters /\ IsPrimQ(p) /\ recInc # 0 /\ grp[p] = recInc
+    /\ P1_SETTLED => ~electing[p]
+    /\ Cardinality(view[grp[p]] \cap voters) >= MajOf(voters)
+\* the voter v is active in no view: no reachable member reports it (a down host is in no view; the server_uuid
+\* of a deleted record is unknown, and then every active member is a tablet that answers)
+NoView(v) == \A i \in Incs : v \notin view[i]
+\* P2, the voter v is gone: it does not answer and its grace period passed, or its tablet record was deleted
+\* (failed at once); and it is active in no view
+P2(v) == v \in voters /\ ((~up[v] /\ gone[v]) \/ v \in deleted) /\ NoView(v)
+\* P3, a valid spare x for the source p: not a voter, a tablet record, answers, REPLICA, in no group, no START,
+\* and it executed nothing that p lacks (SPARE_CHECK); its cell has no other voter (every server is a cell of its
+\* own)
+P3(x, p) ==
+    /\ x \notin voters /\ x \notin deleted
+    /\ SPARE_CHECK => /\ up[x] /\ ttype[x] = "R" /\ grp[x] = 0 /\ st[x] = "none"
+                      /\ exec[x] \subseteq exec[p]
+\* the decision: the write now (a compare-and-swap that holds, under the lock), or with VOT_SPLIT later
+VotDecide(o, new) ==
+    IF VOT_SPLIT
+    THEN /\ oph' = [oph EXCEPT ![o] = "vot"]
+         /\ ovot' = [ovot EXCEPT ![o] = [old |-> voters, new |-> new, inc |-> recInc, back |-> FALSE]]
+         /\ lockOwner' = o
+         /\ UNCHANGED <<voters, vMinor>>
+    ELSE /\ voters' = new
+         /\ vMinor' = (vMinor \/ MinorToMajor(voters, new))
+         /\ UNCHANGED <<oph, ovot, lockOwner>>
+
+\* SwapVoter(v, x)
+OSwap(o) ==
+    /\ Free
+    /\ VOTERS /\ VOT_MODE = "swap" /\ nVot < MaxVot
+    /\ oph[o] = "idle" /\ lockOwner = NoOrc
+    /\ \E v \in voters, p \in voters, x \in Servers \ voters :
+        /\ v # p /\ P2(v) /\ P1(p) /\ P3(x, p)
+        /\ VotDecide(o, (voters \ {v}) \cup {x})
+    /\ nVot' = nVot + 1
+    /\ gone' = IF nVot + 1 >= MaxVot THEN [s \in Servers |-> FALSE] ELSE gone
+    /\ UNCHANGED <<vM, vT, vS, ocand, oexp, otok, oborn, oreq, orep, orp, vH, vB>>
+    /\ UNCHANGED <<vNp, vNd, udReq, everP, nPrs, nUndo, nSetRW, err, ran>>
+
+\* GrowVoter(x): fewer voters than cells with an eligible tablet; p's view holds a majority of the grown list
+OGrow(o) ==
+    /\ Free
+    /\ VOTERS /\ VOT_MODE = "swap" /\ nVot < MaxVot
+    /\ Cardinality(voters) < Seats
+    /\ oph[o] = "idle" /\ lockOwner = NoOrc
+    /\ \E p \in voters, x \in Servers \ voters :
+        /\ P1(p) /\ Cardinality(view[grp[p]] \cap voters) >= (Cardinality(voters) + 1) \div 2 + 1
+        /\ P3(x, p)
+        /\ VotDecide(o, voters \cup {x})
+    /\ nVot' = nVot + 1
+    /\ UNCHANGED <<vM, vT, vS, ocand, oexp, otok, oborn, oreq, orep, orp, vH, vB>>
+    /\ UNCHANGED <<vNp, vNd, udReq, gone, everP, nPrs, nUndo, nSetRW, err, ran>>
+
+\* GroupPrimaryNotVoter: the primary q of the recorded incarnation is not a voter (it does not serve, with
+\* PRIMARY_MUST_BE_VOTER): group_replication_set_as_primary to an ONLINE voter of its view; the list stays
+\* group_replication_set_as_primary from q to the ONLINE voter t of its view
+MoveBody(q, t) ==
+    /\ prim' = [prim EXCEPT ![grp[q]] = t]
+    /\ electing' = [electing EXCEPT ![t] = TRUE, ![q] = FALSE]
+    /\ sro' = [sro EXCEPT ![q] = TRUE]
+OMoveToVoter ==
+    /\ Free
+    /\ VOTERS /\ VOT_MODE = "swap"
+    /\ lockOwner = NoOrc /\ \E o \in Orcs : oph[o] = "idle"
+    /\ \E q \in Servers, t \in voters \ deleted :
+        /\ IsPrimQ(q) /\ recInc # 0 /\ grp[q] = recInc /\ q \notin voters
+        /\ t \in view[grp[q]] /\ up[t]
+        /\ MoveBody(q, t)
+    /\ UNCHANGED <<up, grp, st, exec, recv, view, hist, dead, nextInc, async>>
+    /\ UNCHANGED <<vT, vS, vO, vH, vB, vN>>
+
+\* REVISION 2b (MOVE_FROM_DELETED): the primary of the live group is a voter whose tablet record is deleted (it
+\* cannot be PRIMARY): VTOrc moves the primary role to another ONLINE voter of its view, as GroupPrimaryNotVoter
+OMoveFromDeleted ==
+    /\ Free
+    /\ VOTERS /\ VOT_MODE = "swap" /\ MOVE_FROM_DELETED
+    /\ lockOwner = NoOrc /\ \E o \in Orcs : oph[o] = "idle"
+    /\ \E q \in voters \cap deleted, t \in voters \ deleted :
+        /\ IsPrimQ(q) /\ recInc # 0 /\ grp[q] = recInc
+        /\ t \in view[grp[q]] /\ up[t]
+        /\ MoveBody(q, t)
+    /\ UNCHANGED <<up, grp, st, exec, recv, view, hist, dead, nextInc, async>>
+    /\ UNCHANGED <<vT, vS, vO, vH, vB, vN>>
+
+\* the operator deletes a voter's tablet record (DeleteTablets, a cell's decommission): the signal for a shrink
+ODelete ==
+    /\ Free
+    /\ VOTERS /\ VOT_MODE = "swap" /\ nDel < MaxDel
+    /\ \E v \in voters \ deleted :
+        /\ DEL_DEAD => v \in died
+        /\ DEL_NOT_PRIMARY => ttype[v] # "P"
+        /\ deleted' = deleted \cup {v}
+    /\ nDel' = nDel + 1
+    /\ delTx' = IF delTx = 0 THEN nextTx ELSE delTx
+    /\ UNCHANGED <<vM, vT, vS, vO, vH, nCrash, nLeave, nLoss, nExpire, nProbe, died, nDie, lostOK, delAcked, vN>>
+
+\* RemoveVoter(v), the only shrink: v's record is deleted, P2 (active in no view), a settled legitimate source
+\* p # v whose view does not hold v, and no spare passes P3 (else SwapVoter)
+ORemove(o) ==
+    /\ Free
+    /\ VOTERS /\ VOT_MODE = "swap" /\ nVot < MaxVot
+    /\ oph[o] = "idle" /\ lockOwner = NoOrc
+    /\ \E v \in voters \cap deleted, p \in voters :
+        /\ "noview" \in REMOVE_CHECKS => NoView(v)
+        /\ "p1" \in REMOVE_CHECKS => /\ v # p /\ P1(p)
+                                     /\ "noview" \in REMOVE_CHECKS => v \notin view[grp[p]]
+        /\ ~\E x \in Servers \ voters : P1(p) /\ P3(x, p)
+        /\ VotDecide(o, voters \ {v})
+    /\ nVot' = nVot + 1
+    /\ lostOK' = lostOK \cup OnlyDeleted
+    /\ UNCHANGED <<vM, vT, vS, ocand, oexp, otok, oborn, oreq, orep, orp, vH>>
+    /\ UNCHANGED <<nCrash, nLeave, nLoss, nExpire, nProbe, died, deleted, nDie, nDel, delTx, delAcked>>
+    /\ UNCHANGED <<vNp, vNd, udReq, gone, everP, nPrs, nUndo, nSetRW, err, ran>>
+
+\* RemoveVoterNoGroup(v) (REVISION 2): no group runs (no tablet that is up is an active member, none runs a
+\* START), every voter whose record is not deleted answers (inactive, no START), no intent is live, and v, a listed voter whose record is deleted (NOGROUP_DEL), does not answer (if it
+\* answered, the bootstrap could include it):
+\* VTOrc removes it, and the bootstrap of GroupNotBootstrapped then needs only the remaining voters. What only
+\* v held is lost: the operator accepted it by deleting the record.
+ORemoveNoGroup(o) ==
+    /\ Free
+    /\ VOTERS /\ VOT_MODE = "swap" /\ nVot < MaxVot
+    /\ oph[o] = "idle" /\ lockOwner = NoOrc
+    /\ \A t \in Servers : up[t] => grp[t] = 0 /\ st[t] = "none"
+    /\ ~IntentLive(intent)
+    /\ \E v \in voters :
+        /\ NOGROUP_DEL => v \in deleted
+        /\ ~up[v]
+        \* every other voter whose record is not deleted answers, inactive, and runs no START
+        /\ \A w \in voters \ (deleted \cup {v}) : up[w] /\ grp[w] = 0 /\ st[w] = "none"
+        /\ Cardinality(voters) >= 2
+        /\ VotDecide(o, voters \ {v})
+    /\ nVot' = nVot + 1
+    /\ lostOK' = lostOK \cup OnlyDeleted
+    /\ UNCHANGED <<vM, vT, vS, ocand, oexp, otok, oborn, oreq, orep, orp, vH>>
+    /\ UNCHANGED <<nCrash, nLeave, nLoss, nExpire, nProbe, died, deleted, nDie, nDel, delTx, delAcked>>
+    /\ UNCHANGED <<vNp, vNd, udReq, gone, everP, nPrs, nUndo, nSetRW, err, ran>>
+
+\* a host dies for good: a crash after which it never restarts
+Die(s) ==
+    /\ Free
+    /\ DIE_FIRST => nCrash = 0 /\ nLeave = 0 /\ nLoss = 0
+    /\ CrashVarsK(s, TRUE)
+    /\ UNCHANGED <<hist, nextTx>>
+
+\* every action of the second and third milestones
 Step2 ==
     \/ \E s \in Servers :
         \/ CommitAlone(s) \/ MysqldRestart(s) \/ VLeave(s) \/ PDemoteEnd(s) \/ PDemoteFail(s) \/ PPromote2(s)
         \/ DrSnap(s) \/ DrRead(s) \/ DrAct(s)
         \/ UdSnap(s) \/ UdRead(s) \/ UdAct(s) \/ RwSnap(s) \/ RwRead(s) \/ RwAct(s) \/ IP1(s) \/ IP2(s)
-        \/ FenceDrop(s) \/ NLeave(s)
-    \/ \E o \in Orcs : OVotRead(o) \/ OVotWrite(o)
-    \/ GraceExpire \/ OAdoptUnrec \/ PBegin \/ EBegin \/ PDemote \/ PWait \/ PPromote \/ PEnd \/ PAbort \/ OUndo \/ PIBegin \/ PIRecord
+        \/ FenceDrop(s) \/ NLeave(s) \/ EnvJoin(s) \/ Die(s)
+    \/ \E o \in Orcs : OVotRead(o) \/ OVotWrite(o) \/ OSwap(o) \/ OGrow(o) \/ ORemove(o) \/ ORemoveNoGroup(o)
+    \/ GraceExpire \/ OAdoptUnrec \/ OMoveToVoter \/ OMoveFromDeleted \/ ODelete \/ PBegin \/ EBegin \/ PDemote \/ PWait \/ PPromote \/ PEnd \/ PAbort \/ OUndo \/ PIBegin \/ PIRecord
 
 ----------------------------------------------------------------------------
 \* STUCK_CHECK: a state is a legitimate end state when a legitimate primary serves, or a bound is reached
@@ -2095,7 +2316,35 @@ NoDualBootstrap ==
          /\ bootFrom[i][1] = bootFrom[j][1] /\ bootFrom[i][2] # bootFrom[j][2])
             => ~(Alive(i) /\ Alive(j))
 
-Symm == Permutations(Servers) \cup Permutations(Orcs)
+\* NoLostAck, except the transactions that only deleted voters hold (REVISION 2: the operator accepted their loss)
+Excused(t) == t \in lostOK \/ (Holders(t) # {} /\ Holders(t) \subseteq deleted)
+NoLostAckExceptDeleted ==
+    LET A == {t \in acked : ~Excused(t)} IN
+    /\ recInc # 0 => A \subseteq hist[recInc]
+    /\ \A p \in Servers : CanAccept(p) => A \subseteq exec[p]
+
+\* NoLostAckAfterDelete, except the transactions that a primary acknowledged after its own record was deleted
+\* (the window of a deletion with AllowPrimary, until VTOrc moves the primary role)
+NoLostAckAfterMove ==
+    LET A == {t \in acked : delTx # 0 /\ t >= delTx} \ delAcked IN
+    /\ recInc # 0 => A \subseteq hist[recInc]
+    /\ \A p \in Servers : CanAccept(p) => A \subseteq exec[p]
+
+\* NoLostAck for the transactions acknowledged after the first deletion of a record
+NoLostAckAfterDelete ==
+    LET A == {t \in acked : delTx # 0 /\ t >= delTx} IN
+    /\ recInc # 0 => A \subseteq hist[recInc]
+    /\ \A p \in Servers : CanAccept(p) => A \subseteq exec[p]
+
+\* the redesign shrinks the list only for a deleted record (RemoveVoter), and grows it only up to the cells
+VoterCount == VOT_MODE = "swap" =>
+                  /\ (nDel = 0 /\ InitDeleted = {}) => Cardinality(voters) >= Cardinality(InitVoters)
+                  /\ Cardinality(voters) <= Seats
+\* a tablet that serves as PRIMARY, and whose MySQL takes writes, is a listed voter (a PRIMARY tablet whose
+\* MySQL left its group is read-only until the sync loop demotes it)
+NoNonVoterServes == \A s \in Servers : (up[s] /\ ttype[s] = "P" /\ serving[s] /\ CanAccept(s)) => s \in voters
+
+Symm == Permutations(InitUp \ InitDeleted) \cup Permutations(Orcs)
 \* for a configuration without VTOrc (Orcs = {})
-SymmS == Permutations(Servers)
+SymmS == Permutations(InitUp \ InitDeleted)
 =============================================================================

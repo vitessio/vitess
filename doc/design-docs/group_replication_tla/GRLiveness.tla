@@ -39,10 +39,13 @@ Fair ==
         /\ WF_vars(OBegin(o)) /\ WF_vars(OIntent(o)) /\ WF_vars(OAdopt(o)) /\ WF_vars(OAdoptLater(o))
         \* the bootstrap RPC ends: its reply, or a timeout
         /\ WF_vars(OReply(o) \/ OTimeout(o))
-        /\ WF_vars(OVotRead(o)) /\ WF_vars(OVotWrite(o))
+        /\ WF_vars(OVotRead(o)) /\ WF_vars(OVotWrite(o)) /\ WF_vars(OSwap(o)) /\ WF_vars(OGrow(o)) /\ WF_vars(ORemove(o)) /\ WF_vars(ORemoveNoGroup(o))
     /\ WF_vars(OIntentExpire) /\ WF_vars(OUndo) /\ WF_vars(GraceExpire)
     /\ WF_vars(PDemote) /\ WF_vars(PWait) /\ WF_vars(PPromote) /\ WF_vars(PEnd) /\ WF_vars(PAbort)
-    /\ WF_vars(PIRecord) /\ WF_vars(OAdoptUnrec)
+    /\ WF_vars(PIRecord) /\ WF_vars(OAdoptUnrec) /\ WF_vars(OMoveToVoter) /\ WF_vars(OMoveFromDeleted)
+    \* the scenario of a deleted record: the operator eventually deletes the record of a dead voter (only with
+    \* DEL_DEAD, MaxDel > 0)
+    /\ DEL_DEAD => WF_vars(ODelete)
 
 LSpec == Spec /\ Fair
 
@@ -52,4 +55,11 @@ LSpec == Spec /\ Fair
 LegitLive == \E i \in Incs : Alive(i) /\ RecOK(i, recInc) /\ VoterMaj(i)
 Bound == (nextInc > MaxInc \/ nextTok > MaxTok) /\ ~LegitLive
 EventuallyServes == <>[](Healthy \/ Bound)
+\* ... or a listed voter died, and VTOrc cannot replace it: no live group of the recorded incarnation holds the
+\* voter majority (P1: an operator runs ERS or the voter change), or no spare is left
+\* (deleting its tablet record is the operator's signal)
+NeedsOperator == \E v \in (voters \cap died) \ deleted : ~LegitLive \/ Servers \ (voters \cup died) = {}
+EventuallyServesOrOp == <>[](Healthy \/ Bound \/ NeedsOperator)
+\* a voter that died and whose record was deleted leaves the list
+EventuallyShrinks == <>[](voters \cap died \cap deleted = {})
 =============================================================================

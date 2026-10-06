@@ -91,6 +91,31 @@ EXPECTED=(
   live_init_prs_adopt:pass
   live_voters:pass
   live_voters_fence:pass
+  # third milestone: the voter redesign
+  swap_nosettle:NoLostAck
+
+  swap_split_slow:NoLostAck
+  delete_remove_nop1:NoVoterMinority
+  live_nospare:liveness
+  live_delete_active:pass
+  delete_nogroup_lost:NoLostAck
+  delete_primary_window:NoLostAckAfterDelete
+  live_delete_active_nomove:liveness
+  delete_nogroup_nodel:NoLostAckExceptDeleted
+  swap_fixed:pass
+  swap_spare_active:pass
+  swap_code:pass
+  grow_fixed:pass
+  swap_split_prompt:pass
+  delete_remove:pass
+  delete_nogroup:pass
+  delete_primary:pass
+  delete_swap:pass
+  delete_remove_noview:pass
+  live_swap:pass
+  live_nospare_op:pass
+  live_nonvoter_primary:pass
+  live_delete:pass
   init_direct_ro:pass
   voters_split:pass
   voters_split1:pass
@@ -108,10 +133,13 @@ EXPECTED=(
 )
 
 # Too large to explore exhaustively: random behaviors with a fixed seed (-simulate).
-SIMULATED=(tablet_tx2 integrated integrated_core voters_split fixed init_orc_guard)
+SIMULATED=(tablet_tx2 integrated integrated_core voters_split fixed init_orc_guard swap_spare_active)
+
+# Simulated configurations with fewer traces per worker than TLC_SIM_TRACES (four tablets, longer traces).
+SIMNUM=(swap_spare_active:40000)
 
 # Temporal properties: the module GRLiveness.tla, which adds fairness to GRSafety.tla.
-LIVENESS=(live live_init live_init_prs live_init_prs_fail live_init_prs_adopt live_voters live_voters_fence)
+LIVENESS=(live live_init live_init_prs live_init_prs_fail live_init_prs_adopt live_voters live_voters_fence live_delete_active live_delete_active_nomove live_swap live_nospare live_nospare_op live_nonvoter_primary live_delete)
 
 expected_of() {
   for e in "${EXPECTED[@]}"; do
@@ -135,7 +163,9 @@ for c in "${configs[@]}"; do
   grep -q '^  STUCK_CHECK = TRUE$' "$c.cfg" || args+=(-deadlock)
   sim=no
   for x in "${SIMULATED[@]}"; do [ "$x" = "$c" ] && sim=yes; done
-  [ $sim = yes ] && args+=(-simulate "num=${TLC_SIM_TRACES:-100000}" -depth 120 -seed 1)
+  num=${TLC_SIM_TRACES:-100000}
+  for x in "${SIMNUM[@]}"; do [ "${x%%:*}" = "$c" ] && num=${x#*:}; done
+  [ $sim = yes ] && args+=(-simulate "num=$num" -depth 120 -seed 1)
   module=GRSafety.tla
   for x in "${LIVENESS[@]}"; do [ "$x" = "$c" ] && module=GRLiveness.tla; done
   rm -rf "$OUT/states/$c"
