@@ -420,11 +420,43 @@ func TestPlanGroupVoters(t *testing.T) {
 		},
 		want: want{action: VoterActionMovePrimary, reason: "is voter zone1-0000000101, whose tablet record was deleted"},
 	}, {
-		name: "MoveGroupPrimaryToVoter: the primary is a voter whose tablet record was deleted, and whose server_uuid is unknown",
+		name: "MoveGroupPrimaryToVoter: the primary is a voter whose tablet record was deleted, and whose server_uuid is unknown, found by its MySQL address",
 		setup: func(t *testing.T, f *planFixture) {
 			f.deleteRecord(f.a, false)
+			for _, vt := range []*VoterTablet{f.tablet(f.b), f.tablet(f.c)} {
+				for _, m := range vt.Status.Members {
+					if m.GetMemberUuid() == planUUID(f.a) {
+						m.Host, m.Port = f.a.MysqlHostname, f.a.MysqlPort
+					}
+				}
+			}
 		},
 		want: want{action: VoterActionMovePrimary, reason: "is voter zone1-0000000101, whose tablet record was deleted"},
+	}, {
+		name: "MoveGroupPrimaryToVoter: the primary is a voter whose tablet record was deleted, of which VTOrc knows nothing, and no other tablet is the primary",
+		setup: func(t *testing.T, f *planFixture) {
+			f.deleteRecord(f.a, false)
+			f.in.DeletedVoters["zone1-0000000101"].Tablet = nil
+		},
+		want: want{action: VoterActionMovePrimary, reason: "is voter zone1-0000000101, whose tablet record was deleted"},
+	}, {
+		// The primary is voter b, whose vttablet is down and whose server_uuid VTOrc does not know, but
+		// whose MySQL address the view reports: it is no deleted voter, and nothing moves.
+		name: "a deleted voter whose server_uuid is unknown, while the primary is a voter with a record whose server_uuid is unknown",
+		setup: func(t *testing.T, f *planFixture) {
+			f.dropFromViews(f.c)
+			f.deleteRecord(f.c, false)
+			f.in.DeletedVoters["zone3-0000000300"].Tablet = nil
+			b := f.tablet(f.b)
+			b.Reachable, b.Status, b.ServerUUID, b.UnreachableFor = false, nil, "", time.Second
+			f.primaryOfTheGroup = f.b
+			a := f.tablet(f.a)
+			a.Status = f.member(f.a, f.a)
+			a.Status.Members = append(a.Status.Members, &replicationdatapb.GroupReplicationMember{
+				MemberUuid: planUUID(f.b), Host: f.b.MysqlHostname, Port: f.b.MysqlPort, State: mysql.GroupMemberStateOnline, Role: mysql.GroupMemberRolePrimary,
+			})
+		},
+		want: want{alert: GroupVoterRecordDeleted, reason: "voter zone3-0000000300 has no tablet record, but its server_uuid is unknown"},
 	}}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
