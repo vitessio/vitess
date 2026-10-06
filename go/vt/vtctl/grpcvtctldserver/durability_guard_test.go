@@ -86,6 +86,19 @@ func TestSetKeyspaceDurabilityPolicyRefusesReplicationModeChange(t *testing.T) {
 		target:   policy.DurabilityNone,
 		wantErr:  "an older vtctld probably changed it",
 	}, {
+		// A policy that this vtctld does not know, for example one of a newer version, may run
+		// either mode: the change is refused while a shard is initialized.
+		name:     "a policy this vtctld does not know, the shard has a primary",
+		keyspace: &topodatapb.Keyspace{DurabilityPolicy: "a_policy_of_a_newer_version"},
+		shard:    initialized,
+		target:   policy.DurabilitySemiSync,
+		wantErr:  "from an unknown replication mode",
+	}, {
+		name:     "a policy this vtctld does not know, no shard is initialized",
+		keyspace: &topodatapb.Keyspace{DurabilityPolicy: "a_policy_of_a_newer_version"},
+		shard:    &topodatapb.Shard{},
+		target:   policy.DurabilitySemiSync,
+	}, {
 		name:     "semi-sync to group replication, no shard is initialized",
 		keyspace: &topodatapb.Keyspace{DurabilityPolicy: policy.DurabilitySemiSync},
 		shard:    &topodatapb.Shard{},
