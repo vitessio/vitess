@@ -2485,6 +2485,45 @@ func TestExecutorRewritesDoubleSlashComments(t *testing.T) {
 	assert.Equal(t, "repair table t1 #/*x*/ , t2", queries[0].Sql)
 }
 
+func TestExecutorCountsDoubleSlashComments(t *testing.T) {
+	executor, _, _, _, _ := createExecutorEnv(t)
+	session := &vtgatepb.Session{TargetString: KsTestUnsharded}
+
+	before := warnings.Counts()["DoubleSlashComment"]
+	_, err := executorExec(t.Context(), executor, session, "select id from music_user_map where id = 1 // x", nil)
+	require.NoError(t, err)
+	assert.Equal(t, before+1, warnings.Counts()["DoubleSlashComment"])
+
+	_, err = executorExec(t.Context(), executor, session, "select id from music_user_map where id = 1 -- x", nil)
+	require.NoError(t, err)
+	assert.Equal(t, before+1, warnings.Counts()["DoubleSlashComment"])
+
+	// A prepared statement is counted when it is executed, not when it is
+	// prepared.
+	_, _, err = executorPrepare(t.Context(), executor, session, "select id from music_user_map where id = ? // x")
+	require.NoError(t, err)
+	assert.Equal(t, before+1, warnings.Counts()["DoubleSlashComment"])
+}
+
+// TestExecutorCountsDoubleSlashCommentsOnceOnRetry checks that a statement
+// that VTGate retries after a denied-tables error is counted once.
+func TestExecutorCountsDoubleSlashCommentsOnceOnRetry(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		executor, sbc1, _, _, ctx := createExecutorEnv(t)
+		sbc1.EphemeralShardErr = errors.New("enforce denied tables")
+
+		oldTimeout := vschemaWaitTimeout
+		vschemaWaitTimeout = 500 * time.Millisecond
+		t.Cleanup(func() { vschemaWaitTimeout = oldTimeout })
+
+		before := warnings.Counts()["DoubleSlashComment"]
+		session := econtext.NewAutocommitSession(&vtgatepb.Session{TargetString: "@primary"})
+		_, err := executorExecSession(ctx, executor, session, "select * from user // x", nil)
+		require.NoError(t, err)
+		assert.Equal(t, before+1, warnings.Counts()["DoubleSlashComment"])
+	})
+}
+
 func TestExecutorSavepointInTx(t *testing.T) {
 	executor, sbc1, sbc2, _, _ := createExecutorEnv(t)
 

@@ -88,7 +88,8 @@ var (
 	commitMode       = stats.NewTimings("CommitModeTimings", "Commit Mode Time", "mode")
 	commitUnresolved = stats.NewCounter("CommitUnresolved", "Atomic Commit failed to conclude after commit decision is made")
 
-	exceedMemoryRowsLogger = logutil.NewThrottledLogger("ExceedMemoryRows", 1*time.Minute)
+	exceedMemoryRowsLogger    = logutil.NewThrottledLogger("ExceedMemoryRows", 1*time.Minute)
+	doubleSlashCommentsLogger = logutil.NewThrottledLogger("DoubleSlashComments", 1*time.Minute)
 
 	errorTransform errorTransformer = nullErrorTransformer{}
 )
@@ -1241,6 +1242,22 @@ func (e *Executor) ParseDestinationTarget(targetString string) (string, topodata
 	return econtext.ParseDestinationTarget(targetString, defaultTabletType, e.VSchema())
 }
 
+// redactedSQL formats as the redacted statement. A throttled logger formats
+// its arguments only for the messages it emits, so the redaction runs only
+// for those.
+type redactedSQL struct {
+	parser *sqlparser.Parser
+	sql    string
+}
+
+func (r redactedSQL) String() string {
+	piiSafeSQL, err := r.parser.RedactSQLQuery(r.sql)
+	if err != nil {
+		return "<unparsable>"
+	}
+	return piiSafeSQL
+}
+
 func (e *Executor) fetchOrCreatePlan(
 	ctx context.Context,
 	safeSession *econtext.SafeSession,
@@ -1259,7 +1276,15 @@ func (e *Executor) fetchOrCreatePlan(
 
 	// Plans can forward the statement text to MySQL as written, so MySQL must
 	// skip every comment that Vitess skips.
-	queryString, _ = e.env.Parser().RewriteDoubleSlashComments(queryString)
+	original := queryString
+	queryString, rewritten := e.env.Parser().RewriteDoubleSlashComments(queryString)
+	// Count each executed statement once: a PREPARE is counted when it is
+	// executed, and a retry after buffering shares the statement's logStats.
+	if rewritten && isExecutePath && !logStats.DoubleSlashComment {
+		logStats.DoubleSlashComment = true
+		warnings.Add("DoubleSlashComment", 1)
+		doubleSlashCommentsLogger.Warningf("%q uses a // comment, which is deprecated and will be removed in a future release; use -- or /* */ instead", redactedSQL{parser: e.env.Parser(), sql: original})
+	}
 	query, comments := sqlparser.SplitMarginComments(queryString)
 	vcursor, _ = e.newVCursor(safeSession, comments, logStats)
 
