@@ -145,8 +145,9 @@ func TestTxEngineClose(t *testing.T) {
 	assert.EqualValues(t, 1, te.txPool.env.Stats().KillCounters.Counts()["ReservedConnection"])
 }
 
-// TestActiveCommits verifies that TxEngine can interrupt an active COMMIT during shutdown.
-func TestActiveCommits(t *testing.T) {
+// TestTerminateActiveCommits verifies that TerminateActiveCommits kills a
+// blocked COMMIT and that the COMMIT reports an unknown outcome.
+func TestTerminateActiveCommits(t *testing.T) {
 	db := fakesqldb.New(t)
 	db.AddQueryPattern(".*", &sqltypes.Result{})
 	db.ResetQueryLog()
