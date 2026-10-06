@@ -194,6 +194,12 @@ func (c *Connector) Connect(ctx context.Context) (*mysql.Conn, error) {
 		ctx, cancel = context.WithTimeout(ctx, time.Duration(params.ConnectTimeoutMs)*time.Millisecond)
 		defer cancel()
 	}
+	if _, ok := collations.MySQL8().ConnectionCharset(params.Charset); !ok {
+		// Vitess parses and escapes SQL text byte by byte, which is not safe in
+		// this character set. A tablet refuses one at startup, so only a direct
+		// caller can ask for it.
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported connection character set (collation %d): use utf8mb4", params.Charset)
+	}
 	conn, err := mysql.Connect(ctx, params)
 	if err != nil {
 		return nil, err
@@ -242,6 +248,7 @@ func sessionSetupQuery(collation collations.ID, withCollation bool) string {
 		return sqlmode.NeutralizeSessionQuery
 	}
 	env := collations.MySQL8()
+	// Connect has refused a collation whose character set is not safe.
 	charset, _ := env.ConnectionCharset(collation)
 	name := env.LookupName(collation)
 	if charset == "" || name == "" {

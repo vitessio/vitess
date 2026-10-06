@@ -424,6 +424,13 @@ func TestConnectorConnectNeutralizesSQLMode(t *testing.T) {
 	t.Cleanup(conn.Close)
 	require.Equal(t, 2, db.GetQueryCalledNum(sqlmode.SessionSetupQuery("utf8mb4", "utf8mb4_0900_ai_ci")))
 	require.Equal(t, 1, db.GetQueryCalledNum(sqlmode.SessionSetupQuery("utf8mb4", "")))
+
+	// A character set that Vitess cannot parse safely is refused rather than set
+	// up, here cp932, whose second byte can be a backslash.
+	params.Charset = 95 // cp932_japanese_ci
+	unsafeConnector := New(params)
+	_, err = unsafeConnector.Connect(t.Context())
+	require.ErrorContains(t, err, "unsupported connection character set (collation 95)")
 }
 
 // stallingHandler completes the handshake but never answers a query until released,
