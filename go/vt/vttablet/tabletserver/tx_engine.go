@@ -19,6 +19,7 @@ package tabletserver
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -131,6 +132,15 @@ func NewTxEngine(env tabletenv.Env, dxNotifier func()) *TxEngine {
 	if config.TwoPCAbandonAge <= 0 {
 		log.Error("2PC abandon age not specified: Disabling 2PC")
 		te.twopcEnabled = false
+	}
+	// A resolver rolls back an abandoned distributed transaction once it is
+	// older than the abandon age. By then, the transaction killer must have
+	// rolled back the participants that are not prepared yet, or a late
+	// Prepare could prepare a transaction that was already rolled back.
+	if txTimeout := config.TxTimeoutForWorkload(querypb.ExecuteOptions_OLTP); te.twopcEnabled && (txTimeout <= 0 || txTimeout >= config.TwoPCAbandonAge) {
+		log.Warn("--twopc-abandon-age is not above the transaction timeout: an abandoned distributed transaction can be rolled back while a participant can still prepare it",
+			slog.Duration("twopc_abandon_age", config.TwoPCAbandonAge),
+			slog.Duration("transaction_timeout", txTimeout))
 	}
 
 	te.abandonAge = config.TwoPCAbandonAge

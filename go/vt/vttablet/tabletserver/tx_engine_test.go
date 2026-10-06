@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -995,4 +996,39 @@ func TestBeginNewDbaConnectionClosesOnFailure(t *testing.T) {
 		require.ErrorContains(t, err, "begin")
 		require.NoError(t, db.WaitForClose(30*time.Second), "dba connection must be closed when begin fails")
 	})
+}
+
+// TestTwoPCAbandonAgeStartupWarning verifies that a --twopc-abandon-age that
+// is not above the transaction timeout logs a startup warning. A resolver can
+// then roll back an abandoned distributed transaction while a participant that
+// has not timed out yet can still prepare it.
+func TestTwoPCAbandonAgeStartupWarning(t *testing.T) {
+	const warning = "--twopc-abandon-age is not above the transaction timeout"
+	cases := []struct {
+		name       string
+		abandonAge time.Duration
+		txTimeout  time.Duration
+		wantWarn   bool
+	}{
+		{name: "above transaction timeout", abandonAge: 15 * time.Minute, txTimeout: 30 * time.Second},
+		{name: "equal to transaction timeout warns", abandonAge: 30 * time.Second, txTimeout: 30 * time.Second, wantWarn: true},
+		{name: "below transaction timeout warns", abandonAge: 10 * time.Second, txTimeout: 30 * time.Second, wantWarn: true},
+		{name: "no transaction timeout warns", abandonAge: 15 * time.Minute, txTimeout: 0, wantWarn: true},
+		{name: "2PC disabled", abandonAge: 0, txTimeout: 30 * time.Second},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			env := newEnv("TabletServerTest")
+			env.Config().TwoPCAbandonAge = tc.abandonAge
+			env.Config().Oltp.TxTimeout = tc.txTimeout
+
+			tl := newTestLogger()
+			defer tl.Close()
+			NewTxEngine(env, nil)
+			warned := slices.ContainsFunc(tl.getLogs(), func(msg string) bool {
+				return strings.Contains(msg, warning)
+			})
+			assert.Equal(t, tc.wantWarn, warned, "startup warning mismatch, logs: %v", tl.getLogs())
+		})
+	}
 }
