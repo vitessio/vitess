@@ -193,10 +193,9 @@ func (vtgate *VTGateProxy) VExplain(ctx context.Context, query string, vexplainS
 	ctx = vtgate.getQueryContext(ctx)
 	var rows *sql.Rows
 	switch vexplainStmt.Type {
-	case sqlparser.QueriesVExplainType, sqlparser.AllVExplainType, sqlparser.TraceVExplainType, sqlparser.MySQLVExplainType:
-		// These types run the statement they explain, or have MySQL EXPLAIN it,
-		// which can execute stored functions too. Run them in a read-only
-		// transaction, which is always rolled back, so that they cannot change any
+	case sqlparser.QueriesVExplainType, sqlparser.AllVExplainType, sqlparser.TraceVExplainType:
+		// These types run the statement they explain. Run it in a read-only
+		// transaction, which is always rolled back, so that it cannot change any
 		// table, including through a stored function that runs with its definer's
 		// privileges. The transaction needs its own connection, so that the
 		// statements share one VTGate session.

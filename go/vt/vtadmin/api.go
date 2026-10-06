@@ -2665,10 +2665,9 @@ func (api *API) VExplain(ctx context.Context, req *vtadminpb.VExplainRequest) (*
 	}
 
 	// VExplain is authorized as a read, but VEXPLAIN QUERIES, ALL and TRACE run
-	// the statement they explain, and MYSQLPLAN and ALL have MySQL EXPLAIN it,
-	// which can execute stored functions. The VTGate proxy runs those types in a
-	// read-only transaction, which keeps them from changing any table. Refuse what
-	// a read-only transaction does not prevent: a statement other than a SELECT,
+	// the statement they explain. The VTGate proxy runs those in a read-only
+	// transaction, which keeps them from changing any table. Refuse what a
+	// read-only transaction does not prevent: a statement other than a SELECT,
 	// whose execution can take sequence values before it fails (an INSERT into a
 	// table with an auto_increment sequence), and the side effects of
 	// hasSideEffectsBeyondTables.
