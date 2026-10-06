@@ -904,6 +904,163 @@ Neither scenario makes an intent stale: in both, the candidate holds every trans
 - While the target does not answer, or runs a `START`, the intent fences the other voters until it expires, as before.
 - The token check is skipped when the tablet's topology does not answer within a second (`stale_rpc_timeout`), as before.
 
+## Chaos sweep (f528e9a)
+
+Every chaos scenario that applies to Group Replication, run again on the binaries of f528e9a (MySQL 8.4.11, the MySQL communication stack, `READ_ONLY`, the 2s unreachable majority timeout, VTOrc failover grace 30s), `CHAOS_DURABILITY=group_replication_cross_cell`, with semi-sync `cross_cell` baselines in the same environment. The runs share one 4-core host with two other workloads and take turns on a CPU lock, so no two chaos runs overlap. G12 runs with `CHAOS_RACE_OFFSETS=500ms`. Not run: S11, S11k, S11b, S11c, S12*, S13* (see "Not tested").
+
+Runs: two per GR scenario (three for the detection scenarios); the plan was three, but the third round was replaced by a round on the binaries of the fixes below, once they are merged ("After the fixes (pending)"). Raw results: `/home/ubuntu/chaos-sweep/<run>/` (report, events, gzipped logs); per-run summaries `/home/user/vtlab/sweep/results.jsonl`, built by `analyze.py`; the table by `table.py`.
+
+Columns: "without an acked write" is the sum of the outages of at least 1s, "longest gap" the longest interval without an acknowledged write (both min / median / max over the runs); "runs that lost the majority" counts runs with an interval of at least 10s in which no tablet was ONLINE in a view of at least two members; "bootstraps" counts VTOrc's bootstrap RPCs; refusals, withdrawals, re-probes and adoptions count VTOrc's log lines for each (see "Withdrawing the intent of a refused bootstrap" and "Re-probing the target of a stale bootstrap intent"). "Earlier" is the latest longest gap reported above for the scenario.
+
+### Results
+
+0 acknowledged writes lost in all 73 GR runs (334,075 acknowledged writes; 64 sweep runs and the 9 detection runs below). Every GR run converged, with all three members ONLINE.
+
+| Scenario | Runs | Without an acked write, min / median / max (s) | Longest gap, min / median / max (s) | New primary in topo (s) | Lost / acked | Violations per run | Runs that lost the majority | Bootstraps per run | Refusals / withdrawals / re-probes / adoptions | Earlier longest gap (s) |
+|---|---|---|---|---|---|---|---|---|---|---|
+| D1 | 3 | 7.2 / 7.4 / 7.8 | 7.24 / 7.40 / 7.76 | 7.2 / 7.5 / 7.8 | 0/9580 | 0, 0, 0 | 0 | 0, 0, 0 | 0 / 0 / 0 / 0 | – |
+| D1h | 3 | 7.3 / 7.4 / 8.0 | 7.33 / 7.36 / 8.00 | 7.2 / 7.5 / 8.0 | 0/12485 | 0, 0, 0 | 0 | 0, 0, 0 | 0 / 0 / 0 / 0 | – |
+| G1x | 2 | 7.7 / 7.7 / 7.8 | 7.65 / 7.72 / 7.79 | 7.0 / 7.4 / 7.8 | 0/6391 | 0, 0 | 0 | 0, 0 | 0 / 0 / 0 / 0 | 7.5 |
+| G3D | 2 | 0.0 / 0.0 / 0.0 | 0.06 / 0.06 / 0.06 | – | 0/4000 | 0, 0 | 0 | 0, 0 | 0 / 0 / 0 / 0 | – |
+| G3E | 2 | 7.8 / 8.4 / 8.9 | 7.82 / 7.83 / 7.83 | 7.5 / 7.5 / 7.5 | 0/9143 | 0, 0 | 0 | 0, 0 | 0 / 0 / 0 / 0 | 8.5 |
+| G9b | 2 | 21.6 / 25.3 / 29.1 | 21.61 / 23.42 / 25.23 | 21.7 / 23.2 / 24.7 | 0/7208 | 0, 0 | 0 | 0, 0 | 0 / 0 / 0 / 0 | 22.2 |
+| G9h | 3 | 19.0 / 23.5 / 26.4 | 18.96 / 23.52 / 26.36 | 19.0 / 23.5 / 26.5 | 0/12331 | 0, 0, 0 | 0 | 0, 0, 0 | 0 / 0 / 0 / 0 | – |
+| G11 | 2 | 105.6 / 107.1 / 108.6 | 105.56 / 107.06 / 108.57 | – | 0/7184 | 0, 0 | 2 | 1, 1 | 0 / 0 / 0 / 0 | 108.9 |
+| G11k | 2 | 111.6 / 113.1 / 114.6 | 111.64 / 113.14 / 114.64 | – | 0/6996 | 0, 0 | 2 | 1, 1 | 0 / 0 / 0 / 0 | 115.6 |
+| G11s | 2 | 112.1 / 112.2 / 112.3 | 112.13 / 112.20 / 112.28 | – | 0/7203 | 0, 0 | 2 | 1, 1 | 0 / 0 / 0 / 0 | – |
+| G12 | 2 | 120.6 / 198.2 / 275.8 | 33.80 / 53.00 / 72.20 | 8.6 / 58.7 / 108.7 | 0/37977 | 0, 0 | 2 | 4, 2 | 0 / 0 / 0 / 0 | 48.8 |
+| G13 | 2 | 0.0 / 0.0 / 0.0 | 0.53 / 0.64 / 0.74 | – | 0/17102 | 0, 0 | 0 | 0, 0 | 0 / 0 / 0 / 0 | – |
+| S1 | 2 | 7.0 / 7.2 / 7.5 | 6.97 / 7.24 / 7.52 | 6.8 / 7.0 / 7.2 | 0/4464 | 0, 0 | 0 | 0, 0 | 0 / 0 / 0 / 0 | 7.9 |
+| S1b | 2 | 6.9 / 7.1 / 7.3 | 6.94 / 7.13 / 7.33 | 6.8 / 7.0 / 7.2 | 0/3776 | 0, 0 | 0 | 0, 0 | 0 / 0 / 0 / 0 | – |
+| S2 | 2 | 9.0 / 9.1 / 9.1 | 9.04 / 9.05 / 9.06 | 6.5 / 6.6 / 6.8 | 0/7332 | 1, 1 | 0 | 0, 0 | 0 / 0 / 0 / 0 | 9.1 |
+| S3 | 2 | 9.0 / 9.0 / 9.1 | 9.04 / 9.04 / 9.05 | 7.5 / 7.6 / 7.8 | 0/7469 | 0, 0 | 0 | 0, 0 | 0 / 0 / 0 / 0 | 9.1 |
+| S3hb | 2 | n/a (no writes) | n/a | 6.5 / 6.9 / 7.2 | 0/978 | 0, 0 | 0 | 0, 0 | 0 / 0 / 0 / 0 | – |
+| S4 | 2 | 7.4 / 7.4 / 7.5 | 7.37 / 7.41 / 7.45 | 7.2 / 7.2 / 7.2 | 0/8768 | 0, 0 | 0 | 0, 0 | 0 / 0 / 0 / 0 | 6.8 |
+| S5 | 2 | 225.5 / 225.5 / 225.6 | 225.49 / 225.53 / 225.57 | 225.0 / 225.1 / 225.2 | 0/4750 | 0, 0 | 2 | 1, 1 | 0 / 0 / 0 / 0 | 225.0 |
+| S5b | 2 | 225.6 / 225.6 / 225.6 | 225.55 / 225.59 / 225.64 | 225.2 | 0/4776 | 0, 0 | 2 | 1, 1 | 0 / 0 / 0 / 0 | 225.0 |
+| S6 | 2 | 0.0 / 0.0 / 0.0 | 0.06 / 0.09 / 0.12 | – | 0/11004 | 0, 0 | 0 | 0, 0 | 0 / 0 / 0 / 0 | – |
+| S6b | 2 | 0.0 / 0.0 / 0.0 | 0.06 / 0.07 / 0.08 | – | 0/11008 | 0, 0 | 0 | 0, 0 | 0 / 0 / 0 / 0 | – |
+| S7 | 2 | 114.8 / 115.6 / 116.5 | 106.92 / 111.70 / 116.48 | 7.5 / 7.8 / 8.0 | 0/4456 | 0, 0 | 2 | 1, 1 | 0 / 0 / 0 / 0 | – |
+| S7b | 2 | 114.5 / 115.7 / 117.0 | 114.48 / 115.75 / 117.01 | 7.2 / 7.5 / 7.8 | 0/4364 | 0, 0 | 2 | 1, 1 | 0 / 0 / 0 / 0 | – |
+| S7c | 2 | 21.1 / 28.0 / 34.9 | 9.22 / 10.28 / 11.33 | 24.0 / 34.9 / 45.8 | 0/9940 | 0, 1 | 0 | 0, 0 | 0 / 0 / 0 / 0 | – |
+| S7d | 2 | 41.2 / 49.8 / 58.5 | 13.36 / 31.40 / 49.44 | 7.8 / 7.9 / 8.0 | 0/7550 | 0, 0 | 1 | 1, 0 | 0 / 0 / 0 / 1 | 69.2 |
+| S8 | 2 | 7.4 / 7.4 / 7.4 | 7.41 / 7.42 / 7.43 | 7.5 / 7.5 / 7.5 | 0/17203 | 0, 0 | 0 | 0, 0 | 0 / 0 / 0 / 0 | 7.7 |
+| S8b | 2 | 7.1 / 7.4 / 7.7 | 7.09 / 7.37 / 7.65 | 6.9 / 7.2 / 7.5 | 0/8340 | 0, 0 | 0 | 0, 0 | 0 / 0 / 0 / 0 | 7.7 |
+| S9 | 2 | 7.7 / 7.7 / 7.7 | 7.65 / 7.69 / 7.73 | 7.5 / 7.6 / 7.8 | 0/8754 | 0, 0 | 0 | 0, 0 | 0 / 0 / 0 / 0 | 7.7 |
+| S9b | 2 | 25.6 / 27.3 / 29.0 | 25.56 / 27.26 / 28.96 | 25.8 / 27.4 / 29.0 | 0/7334 | 0, 0 | 0 | 0, 0 | 0 / 0 / 0 / 0 | 23.1 |
+| S9i | 2 | 9.0 / 10.8 / 12.5 | 9.04 / 9.04 / 9.05 | 7.5 / 7.8 / 8.0 | 0/7341 | 0, 0 | 0 | 0, 0 | 0 / 0 / 0 / 0 | 9.1 |
+| S10 | 2 | 7.5 / 7.6 / 7.8 | 7.45 / 7.61 / 7.76 | 7.5 / 7.6 / 7.8 | 0/18736 | 0, 0 | 0 | 0, 0 | 0 / 0 / 0 / 0 | 7.7 |
+| V1 | 2 | 0.0 / 0.0 / 0.0 | 0.83 / 0.86 / 0.90 | – | 0/17756 | 0, 0 | 0 | 0, 0 | 0 / 0 / 0 / 0 | – |
+| V2 | 2 | 7.7 / 10.1 / 12.6 | 7.28 / 7.47 / 7.67 | 6.9 / 7.1 / 7.4 | 0/12033 | 0, 0 | 0 | 0, 0 | 0 / 0 / 0 / 0 | 7.6 |
+| V3 | 2 | 7.2 / 7.4 / 7.6 | 7.20 / 7.40 / 7.60 | 7.4 / 7.5 / 7.6 | 0/8343 | 0, 0 | 0 | 0, 0 | 0 / 0 / 0 / 0 | 7.4 |
+| semi-sync D1 | 3 | 1.6 / 1.6 / 3.3 | 1.60 / 1.60 / 3.32 | 1.8 / 1.8 / 3.5 | 0/9930 | 0, 0, 0 | – | – | 0 / 0 / 0 / 0 | – |
+| semi-sync D1h | 3 | 90.2 / 90.3 / 90.3 | 90.20 / 90.28 / 90.34 | 90.2 / 90.5 / 90.5 | 0/12640 | 0, 0, 0 | – | – | 0 / 0 / 0 / 0 | – |
+| semi-sync G3D | 1 | 2.2 | 2.24 | 2.2 | 0/7878 | 1 | – | – | 0 / 0 / 0 / 0 | – |
+| semi-sync G3E | 1 | 12.0 | 12.04 | 11.8 | 0/4952 | 5 | – | – | 0 / 0 / 0 / 0 | – |
+| semi-sync S1 | 1 | 1.6 | 1.60 | 1.8 | 0/2216 | 0 | – | – | 0 / 0 / 0 / 0 | – |
+| semi-sync S2 | 1 | 12.1 | 12.05 | 11.2 | 0/3928 | 1 | – | – | 0 / 0 / 0 / 0 | – |
+| semi-sync S3 | 1 | 11.2 | 11.24 | 11.5 | 0/4008 | 2 | – | – | 0 / 0 / 0 / 0 | – |
+| semi-sync S4 | 1 | 73.2 | 73.15 | 70.8 | 0/3760 | 2 | – | – | 0 / 0 / 0 / 0 | – |
+| semi-sync S5 | 1 | 120.3 | 120.35 | 120.5 | 0/3832 | 0 | – | – | 0 / 0 / 0 / 0 | – |
+| semi-sync S5b | 1 | 238.5 | 238.49 | – | 0/1100 | 0 | – | – | 0 / 0 / 0 / 0 | – |
+| semi-sync S7d | 1 | 45.7 | 12.01 | 11.2 | 0/4358 | 4 | – | – | 0 / 0 / 0 / 0 | – |
+| semi-sync S9 | 1 | 187.7 | 186.65 | 186.8 | 0/2916 | 5 | – | – | 0 / 0 / 0 / 0 | – |
+| semi-sync S9b | 1 | 221.5 | 221.50 | – | 0/2684 | 0 | – | – | 0 / 0 / 0 / 0 | – |
+| semi-sync S9i | 1 | 133.6 | 133.60 | 130.8 | 0/2660 | 1 | – | – | 0 / 0 / 0 / 0 | – |
+| semi-sync S10 | 1 | 11.7 | 11.68 | 11.8 | 0/3192 | 0 | – | – | 0 / 0 / 0 / 0 | – |
+| semi-sync V2 | 1 | 93.4 | 93.41 | 90.9 | 0/3184 | 5 | – | – | 0 / 0 / 0 / 0 | – |
+
+The semi-sync rows are baselines in the same environment (one run each; D1 and D1h three; S5's first run failed in the harness's setup, `CreateShard` racing with a vttablet, and was run again).
+
+**Against the audit's numbers** (the "Earlier" column; no run exceeded 1.5× the earlier maximum except G12 r1, below):
+
+- **Single failovers** (S1, S1b, S3, S4, S8, S8b, S9, S9i, S10, V2, V3, G1x, G3E): longest gap 6.9–9.1s, new primary in the topology 6.8–8.0s after the fault, as before. The total without an acknowledged write is larger than the gap in three runs, S9i r1 (12.5s), V2 r1 (12.6s) and G3E r1 (8.9s), from later outages of 1.1–3.6s (V2 r1: client writes failing with `invalid connection` 6s after the new primary served); they were not investigated further.
+- **No failover** (S6, S6b, V1, G3D, G13): no outage of 1s or more; G3D's stale `SetReplicationSource` is still refused (cb582df).
+- **The group cannot elect** (S5, S5b: the primary and an acker down; S7, S7b: two primaries killed in a row; G11, G11s, G11k: a voter leaves, then the primary dies): every run lost the majority, VTOrc bootstrapped once, after every voter was back, on the voter holding every transaction; the outages are the scenarios' own (225s, 115–117s, 106–115s) and match the audit.
+- **Flapping** (S7c, S7d): S7c 21.1s and 34.9s without an acknowledged write (gaps 9.2s and 11.3s); S7d 58.5s and 41.2s (gaps 49.4s and 13.4s); r1 lost the majority once and was bootstrapped, r2 kept it. Within the audit's range (S7d gaps 9.1–69.2s).
+- **NEW-4 moves** (S9b, G9b): 25.6s and 29.0s, 25.2s and 21.6s, against 20.2–23.1s before. The move waits for VTOrc to detect `GroupPrimaryNotInTopo`, which a hung or dead cell topology delays (see "VTOrc detection while another cell's topology server hangs").
+- **G12** (6 cycles each): r1 275.8s without an acknowledged write, longest gap 72.2s; r2 120.6s and 33.8s. Earlier: 159–186s and 43.6–48.8s. r1 is 1.5× the earlier maximum; its three longest outages are SW-2 below. In r2, 2 cycles lost the majority (33.8s, 31.5s) and 4 kept it.
+- **Bootstrap intents**: no bootstrap was refused, no intent was withdrawn, and nothing was re-probed in any run. VTOrc adopted a group once (S7d r1): its bootstrap RPC reached the old primary just before the next isolation, which cut off that tablet's cell; the tablet bootstrapped without checking the intent, since its topology did not answer (the known `stale_rpc_timeout` exposure, "Still open" above; the intent was the current one), and VTOrc, cut off from it, adopted the group 11s later, after the heal.
+
+**Violations.** Three runs reported one violation each, and none lost or committed a write on a deposed primary:
+
+| Run | Violation | Classification |
+|---|---|---|
+| S2 r1 | 2 samples (33ms) of two writable PRIMARY tablets, right after the frozen old primary resumed | The known window ("S2 violation" above): its stale view still shows itself ONLINE primary of 3, its tablet steps down 0.06–0.14s later, and the commits it resumes are rolled back once MySQL learns it was expelled (`errno 3100`, "unable to be certified and will now rollback"). |
+| S2 r2 | 2 samples (25ms), same | Same window. It recurred in 2 of 2 runs (and once in the semi-sync baseline, 198ms). |
+| S7c r2 | 27 samples (5.2s) of two writable PRIMARY tablets | Same mechanism, longer. The isolated primary zone1 was healed after 5.02s; the other members had already suspected it, and expelled it 3.3s after the heal (19:21:57.98) although they saw it reachable again. zone1 never received that view: the next isolation started 0.77s later, and it kept `read_only=OFF`, its tablet PRIMARY and a view of 3 ONLINE members until the following heal, when MySQL put it in ERROR and rolled back its blocked commits (19:22:04.04). The new primary was writable from 19:21:58.97. 5 primary reads answered by zone1 after the election, none after the topology change. |
+
+The semi-sync baselines reproduce the audit's semi-sync findings in this environment, with 0 acknowledged writes lost: S3 11.0s of two writable primaries and the old primary left `super_read_only=OFF`; S4 73.2s down and errant GTIDs; S7d 4 violations; S9 186.7s down, S9i 133.6s and errant GTIDs; S9b no failover, also within the 90s after etcd returned (221.5s without an acknowledged write; the audit saw one 58s after); V2 93.4s down with 3.0s of two writable primaries; G3D the old primary left `super_read_only=OFF`; G3E 21.0s of two writable primaries and an old primary that never reconverged; D1h no failover until the hung topology answered. S2 shows the same short window as GR (198ms). S5 failed over 0.4s after the hung replica resumed (120.3s); S5b did not fail over, also after the replica's isolation healed, until the writers stopped (238.5s).
+
+### Found by the sweep
+
+Both were found by the sweep and are fixed on `gr-fixes5` (pending merge); the numbers above are from f528e9a, before those fixes.
+
+**SW-1. VTOrc configures asynchronous replication on a voter whose join is in progress (G13 r1 and r2).** When a voter is not an active member, VTOrc's `GroupMemberNotOnline` makes it join the group. While a `START GROUP_REPLICATION` runs on it, that analysis does not match (`GroupStartInProgress`), and while VTOrc's own join runs, its recovery is skipped (`GroupJoinInFlight`). The next analysis for the tablet then matches: `NotConnectedToPrimary`, and `ReplicationStopped` after it, which only require that MySQL is not an active member (`analysis_problem.go`). Their recovery, `fixReplica` (`topology_recovery.go`), has no Group Replication guard: it sets the tablet read-only and calls `SetReplicationSource` with the shard primary, which runs `CHANGE REPLICATION SOURCE TO` on the default channel and `START REPLICA`.
+
+In G13 r1 (`/home/ubuntu/chaos-sweep/gr-G13-r1/`), the secondary zone2 was cut off from the other members, left its group, and VTOrc's join of 13:54:54 failed after its 30s deadline, while MySQL's `START` kept running. All three VTOrcs then ran `FixReplica` on zone2 (13:55:24, 13:55:36, 13:55:37), followed by `ReplicationStopped` recoveries (13:55:38, 13:55:39). MySQL configured the default channel and refused to start its threads (`MY-011537`/`MY-011539`: "Can't start replica IO THREAD of channel '' when group replication is running with single-primary mode and the primary member is not known"). zone2 was ONLINE again at 13:55:43, but it answered no replica read until the writers stopped at 13:56:02, 19.7s later; in the earlier G13 run it was back 2s after it was ONLINE. A completed join removes the default channel (`finishGroupJoinLocked`), but this join completed in MySQL after the RPC had failed, so nothing removed it, and the tablet's lag poller only measures a member through the group when MySQL has no default channel (`poller.Status`): it reported the lag of an asynchronous replica whose threads were stopped, growing since its last measurement, above vtgate's `--discovery-low-replication-lag` (5s). Not lost writes or a second primary: MySQL refuses the channel's threads while Group Replication runs. But the member stays out of replica reads, and, after the tablet's unhealthy threshold, unhealthy.
+
+The recovery runs in most scenarios that take a voter out of its group (`/home/user/vtlab/sweep/fixscan.py`, after each scenario's start): `FixReplica` on a voter in 50 of the 73 GR runs of the sweep, 111 times (G12 r1 43, G13 r1 6, G13 r2 7, S7d r2 6), mostly once, while the old primary rejoined. Usually its RPCs waited for the tablet's action lock, which the tablet's own join held, and reached the tablet once MySQL was RECOVERING or ONLINE, and the tablet left the replication source alone ("MySQL is an active group replication member, not changing its replication source"); 6 failed when the tablet's `SetReadOnly` timed out (in S1 r1, after waiting 15s for the action lock, under the shard lock). The default channel was configured in 14 runs (60 times, G12 r1 37), and left configured at the end in both G13 runs: in G13 r2, the cut-off secondary zone3 (configured at 21:35:34) answered no replica read after the heal either, against 289 for the other secondary. The tablet's own step-down from a stale primary (`shard_sync.go`, "Another tablet ... has won primary election", then `SetReplicationSource`) configures the default channel of a voter the same way (S7c r2 zone1 at 19:22:05; S2); there, the join that followed removed it.
+
+**SW-2. VTOrc's join after a bootstrap tries a voter that is stuck in its own join first (G12 r1).** After VTOrc bootstraps a group, it makes the other voters join it right away, through `StartGroupReplication` (d6a5d08). That RPC joins with the tablet's seeds sorted by address (`groupReplicationSeeds`): the tablet only moves the members it saw active to the front (`preferSeeds`) after its own check before a join (`legitimateGroupActiveElsewhere`), which the RPC path does not run. In G12, the voter restarted at the start of each cycle has a `START` that was cut off by the isolation and stays blocked until MySQL gives up on its communication engine (90s). When that voter sorts first, the other voter's join waits for it, and MySQL fails the join after 30s (`[GCS] Timeout while waiting for the group communication engine to be ready!`), then joins through the next seed about 6s later.
+
+In G12 r1 (`/home/ubuntu/chaos-sweep/gr-G12-r1/`), 4 of 6 cycles lost the majority, and VTOrc bootstrapped zone3 (port 18921, sorted last) every time. Each of the 4 joins after a bootstrap whose first seed was the voter stuck in its own join timed out after 30s (zone1 13:40:54 → 13:41:24, online 13:41:32; zone2 13:42:19 → 13:42:49, online 13:42:56; zone1 13:44:08 → 13:44:38, online 13:44:45; zone2 13:46:01 → 13:46:31, online 13:46:37); every join whose first seed was the group's member took 2–4s (`g12seeds.py`). In cycles 4–6 that join was the one that restored the majority: their outages were 68.9s, 68.8s and 72.2s, against 33–49s in the earlier G12 runs; in cycle 3 the restarted voter joined first, and the outage was 39.8s. The audit's earlier G12 outlier (lockwait r2 cycle 4, 42.5s, "Timeout while waiting for the group communication engine to be ready") is the same delay. Which voter is bootstrapped, and so whether the stuck voter sorts first, varies between runs.
+
+### After the fixes (pending)
+
+The third round planned on f528e9a was replaced by a round on the fixed binaries, to run once `gr-fixes5` (its fixes 1–7, SW-1 and SW-2 among them) is merged: one run of every GR scenario above, a second run of G12, G13, S7c, S7d, S9b, G9b and G11/G11s/G11k, and the three detection scenarios, compared with these rounds through the same scripts. What each fix must show: G13 with no `FixReplica` on a voter and no default channel configured (`fixscan.py`), and the cut-off secondary back in replica reads once ONLINE; G12 with no join whose first seed is a voter with a `START` in progress, and no `Timeout while waiting for the group communication engine to be ready` (`g12seeds.py`); everything else within the ranges above, with 0 acknowledged writes lost.
+
+## Buffering during an unplanned failover
+
+`TestUnplannedFailoverTimes` (`go/test/endtoend/reparent/grouprepl`, opt-in with `VT_UNPLANNED_FAILOVER_TRIALS`) now measures what clients see during an unplanned failover, with vtgate's buffering on (`--enable-buffer`, the harness default) or off (`VT_UNPLANNED_FAILOVER_BUFFER=on|off|both`). A client sends an insert through vtgate every 50ms, each on its own connection from a pool and in its own goroutine, so a write stuck on a failed primary does not hold back the next ones, and gives up on a write after 20s. The test kills the primary's host (`mysqld_safe`, `mysqld` and `vttablet`, `SIGKILL`) or freezes its `mysqld` (`SIGSTOP`, vttablet alive), and counts, from 1s before the failure until 5s after the first acknowledged write: the writes that failed, those that timed out, vtgate's buffered requests and bufferings (`BufferRequestsBuffered`, `BufferStarts`), the longest acknowledged write, and the time until the first write sent after the failure was acknowledged. Every acknowledged write is checked on the new primary. Semi-sync is `cross_cell` with VTOrc polling every 1s; Group Replication is `group_replication_cross_cell` after `MigrateReplicationMode`. Binaries of f528e9a, one host, MySQL 8.4.11, every trial run alone (`-keep-data=false`).
+
+| Failure | Policy | vtgate buffer | Trials | New primary in topo | First acknowledged write | Failed writes (timed out after 20s) / sent | Buffered requests (bufferings) | Longest acknowledged write | Acknowledged writes lost |
+|---|---|---|---|---|---|---|---|---|---|
+| Host crash | semi-sync | on | 3 | 2.5–3.4s | 2.5–3.3s | 0 / 170–187 | 49–65 (1) | 2.46–3.26s | 0 of 1083 |
+| Host crash | semi-sync | off | 3 | 3.3–3.4s | 3.3–3.4s | 65–66 (0) / 186–187 | 0 | 0.01–0.02s | 0 of 903 |
+| Host crash | Group Replication | on | 4 | 6.6–7.4s | 6.8–7.6s | 0 / 258–273 | 131–147 (1) | 6.81–7.61s | 0 of 1781 |
+| Host crash | Group Replication | off | 3 | 6.6–7.0s | 7.0–7.4s | 132–140 (0) / 260–270 | 0 | 0.02–0.72s | 0 of 925 |
+| mysqld frozen | semi-sync | on | 3 | 11.4–11.8s | 11.4–11.8s | 228–234 (1) / 348–356 | 0 | 0.02–0.05s | 0 of 902 |
+| mysqld frozen | semi-sync | off | 3 | 11.3–12.3s | 11.3–12.3s | 226–246 (1) / 346–366 | 0 | 0.02–0.47s | 0 of 900 |
+| mysqld frozen | Group Replication | on | 3 | 6.8–7.0s | 7.1–7.6s | 135–140 (1) / 261–273 | 0 | 0.31–0.71s | 0 of 927 |
+| mysqld frozen | Group Replication | off | 4 | 6.5–7.1s | 6.8–7.9s | 130–141 (1–5) / 256–278 | 0 | 0.01–0.81s | 0 of 1230 |
+
+**Host crash.** vtgate buffers the whole failover in both modes, once per failover, and no write fails: vtgate's health check loses the primary's vttablet, its next write fails inside vtgate with `primary is not serving, there may be a reparent operation in progress` (`CLUSTER_EVENT`), which starts the buffering, and the new primary's promotion ends it ("Stopping buffering ... after 2.4–3.2s" with semi-sync, "after 6.5–7.3s" with Group Replication, "due to: a primary promotion has been detected"). Group Replication buffers about twice as many writes, for about twice as long: its failure detection takes 5s (`member_expel_timeout=0` plus the 5s suspicion), where VTOrc detects a host that refuses connections on its next poll. The buffered writes are the longest acknowledged writes, 6.8–7.6s (default `--buffer-window` 30s, `--buffer-max-failover-duration` 30s). Without the buffer the same writes fail at once with `no healthy tablet available for 'keyspace:"ks" shard:"0" tablet_type:PRIMARY'`.
+
+**mysqld frozen: neither mode buffers.** The frozen primary's vttablet is alive and keeps reporting a serving PRIMARY to vtgate's health check, so vtgate keeps sending writes to it. They do not fail with a buffering error: they block in MySQL until vttablet gives up (`DeadlineExceeded`, errno 1317, vttablet's query timeout), and once the blocked transactions fill vttablet's transaction pool, the next ones fail at once with `ResourceExhausted ... transaction pool connection limit exceeded` (errno 1203); the client's own 20s timeout ends one or a few writes per trial. vtgate starts buffering only on an error that signals a failover (`buffer.CausedByFailover`: a `CLUSTER_EVENT` error such as `primary is not serving`), which none of these is. When the new primary's tablet reports PRIMARY with a newer term, vtgate routes to it directly: nothing was buffered, so there is nothing to drain. This is the same with semi-sync, whose failover takes 11.3–12.3s here (VTOrc must time out on the frozen MySQL first) against 6.5–7.1s for Group Replication, so Group Replication fails fewer writes (130–141 against 226–246) only because it fails over sooner.
+
+So Group Replication does buffer, as much as semi-sync, when the primary's vttablet goes away. A frozen MySQL behind a live vttablet is not buffered in either mode; making it buffered would need the old primary's vttablet to stop serving (it cannot read its frozen MySQL; the sync loop's status reads time out after 10s, by when the group has elected another member) or vtgate to buffer on the timeout errors, which is not specific to Group Replication.
+
+The 0.3–0.8s longest acknowledged writes of Group Replication without the buffer and in the freeze trials are writes on the new primary in the seconds after the election, which was not investigated further.
+
+## VTOrc detection while another cell's topology server hangs
+
+The NEW-4 runs above showed VTOrc detecting `GroupPrimaryNotInTopo` 9s after it discovered the elected member while a cell's etcd was down. Three new scenarios (`go/test/endtoend/vtorc/chaos/detection_test.go`) measure the detection with every topology server healthy and while one hangs: `SIGSTOP`, so that requests to it wait instead of failing, which is what a hung or partitioned server does. Each kills the primary's `mysqld` and `mysqld_safe`; the hang starts 10s before and ends 90s after the kill, or once the new primary is in the topology.
+
+- **D1**: every topology server healthy.
+- **D1h**: the etcd of a replica's cell hangs. In GR mode, it is the cell of the member that the group does not elect, so the new primary's own promotion does not depend on it; the semi-sync run hangs the same replica's cell.
+- **G9h** (GR only): the etcd of the elected member's cell hangs, as in G9b, where it was killed.
+
+The times come from the VTOrc logs (`/home/user/vtlab/sweep/det.py`): the first analysis of a primary failure (`DeadPrimary*`), the first `GroupPrimaryNotInTopo`, the first recovery step, and the failed per-cell tablet loads. Binaries of f528e9a, 3 trials each; seconds after the kill.
+
+| Scenario | Policy | New primary in topo | First primary-failure analysis (earliest VTOrc) | Analysis passes | Recovery |
+|---|---|---|---|---|---|
+| D1 | semi-sync | 1.75, 3.5, 1.75 | +1.4, +1.1, +1.4 | – (recovered on the first pass) | ERS at +1.4, +3.1, +1.4 |
+| D1 | GR | 7.5, 7.75, 7.25 | +2.5, +2.8, +2.3 | every 1.0s | none needed: the group elected at +6.7, the tablet promoted itself |
+| D1h | semi-sync | **90.5, 90.2, 90.5** (once etcd resumed) | +6.4, +3.4, +6.4 (other VTOrcs up to +18.4) | 3–24s apart | ERS from +18.4–21.4, blocked until etcd resumed |
+| D1h | GR | 7.2, 8.0, 7.5 | +4.2, +6.2, +5.5 | 0.1–2.9s apart | none needed |
+| G9h | GR | 26.5, 19.0, 23.5 | +3.5, +5.2, +3.5; `GroupPrimaryNotInTopo` at +21.5, +14.2, +18.5 (7.5–14.8s after the election) | 3–15s apart | move at +25.6, +18.2, +22.6 |
+
+0 acknowledged writes lost and 0 violations in every run.
+
+**Cause of the delay: the topology refresh runs inside VTOrc's main loop.** `ContinuousDiscovery` (`go/vt/vtorc/logic/vtorc.go`) selects over the health tick (instance discovery), the recovery tick (analysis and recovery) and the tablet topology tick, and runs the topology refresh (`refreshAllInformation`) synchronously, with a deadline of `--topo-information-refresh-duration` (3s in the end-to-end cluster; the default is 15s). While a cell's topology server hangs, every refresh lasts the whole deadline (`Failed to load tablets from cell zoneN: context deadline exceeded`), and its tick is ready again when it returns, so Go's `select` picks at random between it and the other ticks: analysis passes come every 3s, with runs of several refreshes in a row. In G9h r1, vtorc-zone3 ran no analysis from +3.5s to +15.5s (4 refreshes) and discovered the elected member at +0.5s and then only at +15.5s. With a healthy topology the passes come every 1s. With the default 15s, each blocked refresh would cost up to 15s (not measured).
+
+**Semi-sync: the ERS waits for the hung cell.** In all three semi-sync D1h runs, no VTOrc completed the failover until the harness resumed etcd 90s after the kill, and the new primary was in the topology 0.2–0.5s after it. Each attempt (r1, vtorc-zone3): `DeadPrimary` at +6.4s; the recovery's "Force refreshing all shard tablets" took 15s (the hung cell's `GetShardReplication` until the deadline, after which the reads of the other cells failed on the same expired context); the ERS then started at +21.4s and blocked in `GetTabletMapForShard` (`emergency_reparenter.go:290`, the recovery's context, no per-cell deadline) until etcd resumed; that VTOrc's lease had expired by then (`Error running ERS - node doesn't exist: lease`), and the ERS of another VTOrc, which started later, completed right after etcd resumed. This is the audit's §3B (a failover blocked by an unreachable cell's topology), reproduced with the hung topology server of a replica's cell.
+
+**Group Replication does not wait for it.** The group elects without the topology (+6.7s) and the elected member's tablet promotes itself, so D1h's failover is unchanged (7.2–8.0s against 7.25–7.75s); VTOrc's slower detection does not matter. When the hung cell is the elected member's (G9h), its tablet cannot write its record, and VTOrc must move the group primary (NEW-4): the move waits for the detection of `GroupPrimaryNotInTopo`, which the starved analysis passes delay to 7.5–14.8s after the election, and runs 4.0–4.1s after it (the refresh of the cells that answer and the per-cell read, 2s each, wait for the hung cell's deadline). G9h's failover took 19.0–26.5s; G9b, with the etcd killed, took 21.6s and 25.2s in this sweep (20.2–22.2s before).
+
+Not changed here: running the topology refresh outside the main loop (or giving it a per-cell deadline shorter than the tick) would remove the starvation in both modes, and a per-cell deadline in the semi-sync recovery's refresh and in the ERS's tablet map read would let the semi-sync failover proceed without the hung cell.
+
 ## Not tested
 
 - S11/S11b/S11c and S12/S13 as written: they use `SOURCE_DELAY`, `fixReplica` and the default channel, which GR members do not have. G11/G11k/G11s replace them.
@@ -918,6 +1075,8 @@ CHAOS_DURABILITY=group_replication_cross_cell go/test/endtoend/vtorc/chaos/chaos
 CHAOS_RACE_OFFSETS=500ms CHAOS_DURABILITY=group_replication_cross_cell go/test/endtoend/vtorc/chaos/chaos_run.sh -test.run '^TestG12VoterRejoinsWhilePrimaryCellIsolated$' -test.v -test.timeout 60m
 CHAOS_DURABILITY=group_replication_cross_cell go/test/endtoend/vtorc/chaos/chaos_run.sh -test.run '^TestG13SecondaryCutOffFromGroupReplicaReads$' -test.v -test.timeout 30m   # polling
 CHAOS_VTTABLET_HEARTBEAT=1 CHAOS_DURABILITY=group_replication_cross_cell go/test/endtoend/vtorc/chaos/chaos_run.sh -test.run '^TestG13SecondaryCutOffFromGroupReplicaReads$' -test.v -test.timeout 30m
+CHAOS_DURABILITY=group_replication_cross_cell go/test/endtoend/vtorc/chaos/chaos_run.sh -test.run '^TestG9hPrimaryDiesWhileElectedMembersCellTopoHangs$' -test.v -test.timeout 30m   # also TestD1KillPrimaryDetection, TestD1hKillPrimaryWhileOtherCellTopoHangs
+VT_UNPLANNED_FAILOVER_TRIALS=3 VT_UNPLANNED_FAILOVER_BUFFER=both go test ./go/test/endtoend/reparent/grouprepl -run TestUnplannedFailoverTimes -timeout 4h -args -keep-data=false
 ```
 
 `chaos_run.sh` must run as root; it builds the test binary, drops to `RUN_USER` (default `ubuntu`) with `CAP_NET_ADMIN`, and deletes the run's VTDATAROOT afterwards. `CHAOS_TABLET_EXTRA_ARGS` adds vttablet flags. Reports go to `/home/$RUN_USER/chaos-results/<scenario>/`.
