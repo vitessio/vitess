@@ -526,6 +526,18 @@ func TestPlanGroupVotersRemoveNoGroup(t *testing.T) {
 			f.in.DeletedVoters["zone3-0000000300"].Down = false
 		},
 	}, {
+		// The FullStatus of a live member timed out: a group may run there.
+		name: "another voter does not answer",
+		setup: func(t *testing.T, f *planFixture) {
+			f.fail(f.b, time.Second)
+		},
+	}, {
+		name: "no other voter answers",
+		setup: func(t *testing.T, f *planFixture) {
+			f.fail(f.a, time.Second)
+			f.fail(f.b, time.Second)
+		},
+	}, {
 		name: "a reachable tablet is an active member",
 		setup: func(t *testing.T, f *planFixture) {
 			f.tablet(f.a).Status = f.member(f.a, f.a)

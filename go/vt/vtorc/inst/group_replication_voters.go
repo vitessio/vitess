@@ -389,7 +389,9 @@ func (p *voterPlanner) planInitial() *VoterPlan {
 }
 
 // planRemoveNoGroup returns RemoveVoterNoGroup for the first voter whose tablet record was deleted,
-// while no group runs. A reachable tablet that is an active member, of any incarnation, or that runs a
+// while no group runs. Every other listed voter must answer, in no group and without a START
+// GROUP_REPLICATION: a voter that does not answer may run a group, and the bootstrap that follows
+// needs it anyway. A reachable tablet that is an active member, of any incarnation, or that runs a
 // START GROUP_REPLICATION, or a live bootstrap intent, means that a group may run or be starting.
 func (p *voterPlanner) planRemoveNoGroup() *VoterPlan {
 	if len(p.in.DeletedVoters) == 0 || len(p.in.Voters) < 2 || p.in.BootstrapIntentLive {
@@ -397,6 +399,15 @@ func (p *voterPlanner) planRemoveNoGroup() *VoterPlan {
 	}
 	for _, vt := range p.in.Tablets {
 		if vt.Reachable && (mysql.IsGroupMemberActive(vt.Status) || vt.Status.GetStartInProgress()) {
+			return nil
+		}
+	}
+	for _, voter := range p.in.Voters {
+		alias := topoproto.TabletAliasString(voter)
+		if _, deleted := p.in.DeletedVoters[alias]; deleted {
+			continue
+		}
+		if vt := p.byAlias[alias]; vt == nil || !vt.Reachable {
 			return nil
 		}
 	}
