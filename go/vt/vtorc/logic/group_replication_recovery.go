@@ -188,6 +188,12 @@ func promoteGroupPrimary(ctx context.Context, analysisEntry *inst.DetectionAnaly
 			"the MySQL of %s is not the primary of the shard's replication group (view %s, recorded incarnation %q, %d of %d voters ONLINE)",
 			aliasString, gs.GetViewId(), legitimate.Incarnation, legitimate.OnlineVoters(gs), len(legitimate.Voters))
 	}
+	if !status.GetGroupReplicationEnabled() {
+		// Its MySQL reports the group's state, but the tablet applies neither the serving
+		// invariant nor the fence: it would serve as the shard primary without them.
+		return true, topologyRecovery, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+			"%s does not run Group Replication (--enable-group-replication): it would serve as the shard primary without the serving invariant of the replication group", aliasString)
+	}
 
 	_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("promoting %s, the primary of the replication group, to shard primary", aliasString))
 	// The group, not semi-sync, makes transactions durable.

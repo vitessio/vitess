@@ -165,6 +165,9 @@ func checkGroupReplicationPrimaryElect(ctx context.Context, tmc tmclient.TabletM
 	legitimate := legitimateGroup(incarnation, voters, statuses)
 	electAlias := topoproto.TabletAliasString(primaryElect.Alias)
 	electStatus := statuses[electAlias]
+	if electStatus.err == nil && !electStatus.status.GetGroupReplicationEnabled() {
+		return groupReplicationNotEnabledError(electAlias)
+	}
 
 	if currentPrimary == nil {
 		if electStatus.err != nil {
@@ -459,4 +462,12 @@ func CheckGroupReplicationCapabilities(ctx context.Context, tmc tmclient.TabletM
 			primaryElect.Keyspace, primaryElect.Shard, strings.Join(problems, "; "))
 	}
 	return nil
+}
+
+// groupReplicationNotEnabledError is the error of a promotion to a tablet whose vttablet does not run
+// Group Replication (FullStatus.group_replication_enabled unset): its MySQL may report the group's
+// state, but the tablet applies neither the serving invariant nor the fence.
+func groupReplicationNotEnabledError(alias string) error {
+	return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+		"tablet %v does not run Group Replication (--enable-group-replication): as the primary, it would serve without the serving invariant of the shard's replication group", alias)
 }

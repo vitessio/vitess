@@ -155,6 +155,21 @@ func TestMoveGroupPrimaryOutOfUnreachableCell(t *testing.T) {
 			wantBackoff: true,
 		},
 		{
+			name: "the voter of a cell that answers does not run Group Replication: nothing moves",
+			setup: func(t *testing.T, mockTMC *tmcmock.MockTabletManagerClient, oldPrimary, replica, elected *topodatapb.Tablet) {
+				// Its MySQL is an ONLINE member, but its vttablet runs without --enable-group-replication.
+				status := legitimateMemberStatus(replica, elected, viewID, replica, elected)
+				status.GroupReplicationEnabled = false
+				mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(oldPrimary)).Return(nil, errUnreachable).AnyTimes()
+				mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(replica)).Return(status, nil).AnyTimes()
+				mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(elected)).Return(nil, errUnreachable).AnyTimes()
+				mockTMC.EXPECT().PromoteReplica(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+				mockTMC.EXPECT().ChangeType(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+			},
+			wantErrCode: vtrpcpb.Code_UNAVAILABLE,
+			wantBackoff: true,
+		},
+		{
 			name: "the members that answer are in another incarnation than the recorded one: nothing moves",
 			setup: func(t *testing.T, mockTMC *tmcmock.MockTabletManagerClient, oldPrimary, replica, elected *topodatapb.Tablet) {
 				mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(oldPrimary)).Return(nil, errUnreachable).AnyTimes()
