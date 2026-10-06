@@ -18,12 +18,15 @@ package grouprepl
 
 import (
 	"fmt"
+	"net/http"
 	"os"
 	"path"
+	"slices"
 	"strconv"
 	"strings"
 	"syscall"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -31,6 +34,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
+	"vitess.io/vitess/go/vt/vtorc/inst"
 )
 
 // crashMysqld kills the tablet's mysqld, which mysqld_safe then restarts; vttablet stays up.
@@ -43,12 +47,15 @@ func crashMysqld(t *testing.T, tablet *cluster.Vttablet) {
 	require.NoError(t, syscall.Kill(pid, syscall.SIGKILL))
 }
 
+// voterGracePeriod is VTOrc's --group-replication-voter-replacement-grace-period in migratedCluster.
+const voterGracePeriod = 10 * time.Second
+
 // migratedCluster returns the default cluster, one REPLICA per cell in three cells, converted to
 // group_replication_cross_cell, with its group of three voters running.
 func migratedCluster(t *testing.T) *testCluster {
 	opts := defaultClusterOptions()
 	opts.rdonly = false
-	opts.vtorcExtraArgs = []string{"--group-replication-voter-replacement-grace-period", "10s"}
+	opts.vtorcExtraArgs = []string{"--group-replication-voter-replacement-grace-period", voterGracePeriod.String()}
 	tc := setupCluster(t, opts)
 	out, err := tc.VtctldClientProcess.ExecuteCommandWithOutput("MigrateReplicationMode",
 		"--durability-policy", policy.DurabilityGroupReplicationCrossCell, keyspaceName)
@@ -147,4 +154,86 @@ func TestGroupReplicationBootstrapsAfterDeletedVoter(t *testing.T) {
 	w = startWriter(t, tc)
 	require.Eventually(t, func() bool { return w.ok.Load() > 10 }, waitTimeout, pollInterval)
 	_, _, _ = w.stop()
+}
+
+// mysqlGroupMemberState returns the state of the tablet's MySQL in its replication group, read from
+// MySQL itself: the tablet may have no tablet record.
+func mysqlGroupMemberState(tablet *cluster.Vttablet) (string, error) {
+	qr, err := tablet.VttabletProcess.QueryTablet(
+		"SELECT MEMBER_STATE FROM performance_schema.replication_group_members WHERE MEMBER_ID = @@server_uuid", keyspaceName, false)
+	if err != nil {
+		return "", err
+	}
+	if len(qr.Rows) == 0 {
+		return mysql.GroupMemberStateOffline, nil
+	}
+	return qr.Rows[0][0].ToString(), nil
+}
+
+// TestGroupReplicationKeepsDeletedVoterThatRuns checks that deleting the tablet record of a voter
+// whose vttablet and MySQL still run, while no group runs, neither removes it from the voter list
+// (RemoveVoterNoGroup needs it down) nor lets VTOrc bootstrap the group without it: VTOrc reports
+// GroupVoterRecordDeleted instead. Restarting its vttablet, which records the tablet again, ends it.
+func TestGroupReplicationKeepsDeletedVoterThatRuns(t *testing.T) {
+	tc := migratedCluster(t)
+	primary, zone2, zone3 := tc.replicas[0], tc.replicas[1], tc.replicas[2]
+	voters := slices.Sorted(slices.Values(aliasesOf(tc.replicas)))
+
+	// The mysqld of two voters crash together: the third one loses the majority of its group and
+	// leaves it, and no group runs. The record of the third one is deleted meanwhile, while its
+	// vttablet and MySQL run.
+	crashMysqld(t, primary)
+	crashMysqld(t, zone2)
+	out, err := tc.VtctldClientProcess.ExecuteCommandWithOutput("DeleteTablets", zone3.Alias)
+	require.NoError(t, err, out)
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		for _, tablet := range []*cluster.Vttablet{primary, zone2} {
+			status, err := fullStatus(t, tc, tablet)
+			require.NoError(c, err)
+			assert.False(c, mysql.IsGroupMemberActive(status.GroupReplicationStatus), tablet.Alias)
+		}
+		state, err := mysqlGroupMemberState(zone3)
+		require.NoError(c, err)
+		assert.NotContains(c, []string{mysql.GroupMemberStateOnline, mysql.GroupMemberStateRecovering}, state, zone3.Alias)
+	}, waitTimeout, pollInterval)
+
+	// VTOrc reports the deleted voter that still runs.
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		status, response, err := tc.VTOrcProcesses[0].MakeAPICall("/api/detection-analysis")
+		require.NoError(c, err)
+		assert.Equal(c, http.StatusOK, status)
+		assert.Contains(c, response, string(inst.GroupVoterRecordDeleted))
+	}, waitTimeout, pollInterval)
+
+	// Well past the grace period, the voter is still listed, and no group runs: VTOrc neither removes
+	// it nor bootstraps the group without it.
+	assert.Never(t, func() bool {
+		if !slices.Equal(voters, slices.Sorted(slices.Values(shardVoters(t, tc)))) {
+			return true
+		}
+		for _, tablet := range []*cluster.Vttablet{primary, zone2} {
+			status, err := fullStatus(t, tc, tablet)
+			if err == nil && mysql.IsGroupMemberActive(status.GroupReplicationStatus) {
+				return true
+			}
+		}
+		return false
+	}, 3*voterGracePeriod, pollInterval)
+
+	// The operator restarts its vttablet, which records the tablet again: VTOrc bootstraps the group
+	// of the three voters.
+	require.NoError(t, zone3.VttabletProcess.TearDown())
+	require.NoError(t, zone3.VttabletProcess.Setup())
+	var newPrimary *cluster.Vttablet
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		newPrimary = nil
+		for _, tablet := range tc.replicas {
+			if tablet.Alias == shardPrimary(t, tc) {
+				newPrimary = tablet
+			}
+		}
+		require.NotNil(c, newPrimary)
+	}, waitTimeout, pollInterval)
+	waitForGroup(t, tc, newPrimary, tc.replicas)
+	assert.ElementsMatch(t, voters, shardVoters(t, tc))
 }
