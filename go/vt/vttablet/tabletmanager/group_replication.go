@@ -1202,11 +1202,13 @@ func (tm *TabletManager) applyGroupReplicationServingDecisionLocked(ctx context.
 }
 
 // checkOwnTabletRecord returns a FAILED_PRECONDITION error when the tablet's own tablet record no
-// longer exists. A tablet whose record was deleted must not serve as the primary: deleting it is the
-// operator's signal that VTOrc may drop the tablet from the voters (RemoveVoter, RemoveVoterNoGroup).
-// A tablet that becomes PRIMARY writes its record first, which fails then; one that is PRIMARY
-// already and serves again writes nothing, and checks with this read, bounded by
-// groupReplicationTopoReadTimeout. A topology that does not answer is not a deletion.
+// longer exists. Deleting the record is the operator's signal that VTOrc may drop the tablet from the
+// voters (RemoveVoter, RemoveVoterNoGroup), so a tablet whose record was deleted never becomes
+// PRIMARY, nor serves again as one: becoming PRIMARY writes the record first, which fails then, and
+// serving again (serveAgain, UndoDemotePrimary) writes nothing, so it checks with this read, bounded
+// by groupReplicationTopoReadTimeout. A topology that does not answer is not a deletion. A PRIMARY
+// that still serves when its record is deleted keeps serving: VTOrc moves the group primary away
+// from it (GroupPrimaryNotVoter).
 func (tm *TabletManager) checkOwnTabletRecord(ctx context.Context) error {
 	readCtx, cancel := context.WithTimeout(ctx, groupReplicationTopoReadTimeout)
 	defer cancel()
