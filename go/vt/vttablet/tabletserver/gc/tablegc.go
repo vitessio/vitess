@@ -29,13 +29,7 @@ import (
 	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/mysql/sqlerror"
 
-<<<<<<< HEAD
-||||||| parent of eb32a4e042 (OnlineDDL: Properly escape table identifiers (#21381))
-	"vitess.io/vitess/go/sqltypes"
-=======
 	"vitess.io/vitess/go/sqlescape"
-	"vitess.io/vitess/go/sqltypes"
->>>>>>> eb32a4e042 (OnlineDDL: Properly escape table identifiers (#21381))
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"

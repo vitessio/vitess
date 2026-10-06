@@ -1121,19 +1121,9 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 		// Those queries are unaffected by query rules (ACLs) because they don't go through Vitess.
 		// We therefore hard-rename the table into an agreed upon name, and we won't swap it with
 		// the original table. We will actually make the table disappear, creating a void.
-<<<<<<< HEAD
 		testSuiteBeforeTableName := fmt.Sprintf("%s_before", onlineDDL.Table)
-		parsed := sqlparser.BuildParsedQuery(sqlRenameTable, onlineDDL.Table, testSuiteBeforeTableName)
-		if _, err := e.execQuery(ctx, parsed.Query); err != nil {
-||||||| parent of eb32a4e042 (OnlineDDL: Properly escape table identifiers (#21381))
-		testSuiteBeforeTableName := onlineDDL.Table + "_before"
-		parsed := sqlparser.BuildParsedQuery(sqlRenameTable, onlineDDL.Table, testSuiteBeforeTableName)
-		if _, err := e.execQuery(ctx, parsed.Query); err != nil {
-=======
-		testSuiteBeforeTableName := onlineDDL.Table + "_before"
 		renameBeforeQuery := buildIdentifierQuery(sqlRenameTable, onlineDDL.Table, testSuiteBeforeTableName)
 		if _, err := e.execQuery(ctx, renameBeforeQuery); err != nil {
->>>>>>> eb32a4e042 (OnlineDDL: Properly escape table identifiers (#21381))
 			return err
 		}
 		e.updateMigrationStage(ctx, onlineDDL.UUID, "test suite 'before' table renamed")
@@ -1218,19 +1208,9 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 	{
 		if isVreplicationTestSuite {
 			// this is used in Vitess endtoend testing suite
-<<<<<<< HEAD
 			testSuiteAfterTableName := fmt.Sprintf("%s_after", onlineDDL.Table)
-			parsed := sqlparser.BuildParsedQuery(sqlRenameTable, vreplTable, testSuiteAfterTableName)
-			if _, err := e.execQuery(ctx, parsed.Query); err != nil {
-||||||| parent of eb32a4e042 (OnlineDDL: Properly escape table identifiers (#21381))
-			testSuiteAfterTableName := onlineDDL.Table + "_after"
-			parsed := sqlparser.BuildParsedQuery(sqlRenameTable, vreplTable, testSuiteAfterTableName)
-			if _, err := e.execQuery(ctx, parsed.Query); err != nil {
-=======
-			testSuiteAfterTableName := onlineDDL.Table + "_after"
 			renameAfterQuery := buildIdentifierQuery(sqlRenameTable, vreplTable, testSuiteAfterTableName)
 			if _, err := e.execQuery(ctx, renameAfterQuery); err != nil {
->>>>>>> eb32a4e042 (OnlineDDL: Properly escape table identifiers (#21381))
 				return err
 			}
 			e.updateMigrationStage(ctx, onlineDDL.UUID, "test suite 'after' table renamed")
