@@ -37,5 +37,10 @@
         ]
       }
     }
+  },
+  {
+    "comment": "unsupported sql_mode values are rejected even with system settings disabled",
+    "query": "set sql_mode = 'NO_BACKSLASH_ESCAPES'",
+    "plan": "setting the NO_BACKSLASH_ESCAPES sql_mode is unsupported"
   }
 ]

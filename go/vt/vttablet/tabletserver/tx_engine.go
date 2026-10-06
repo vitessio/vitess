@@ -623,12 +623,13 @@ func (te *TxEngine) stopTransactionWatcher() {
 }
 
 // validateSettings validates the pre-queries of a reservation, which are
-// executed directly on the reserved connection, see planbuilder.ValidateSettings.
+// executed directly on the reserved connection, see
+// planbuilder.ValidateSettingsSQLMode.
 func (te *TxEngine) validateSettings(preQueries []string) error {
 	parser := te.env.Environment().Parser()
 	cfg := te.env.Config()
 	rejectSubqueries := settingsRejectSubqueries(preQueries, parser, cfg.StrictTableACL, cfg.EnableTableACLDryRun, cfg.SanitizeLogMessages)
-	return planbuilder.ValidateSettings(preQueries, parser, rejectSubqueries)
+	return planbuilder.ValidateSettingsSQLMode(preQueries, parser, rejectSubqueries)
 }
 
 // ReserveBegin creates a reserved connection, and in it opens a transaction
