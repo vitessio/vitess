@@ -249,12 +249,14 @@ func (mc *msCluster) shardPrimaryTablet(t *testing.T, shard string) *cluster.Vtt
 // idWriter inserts rows with increasing ids through vtgate, into both shards, and remembers the ids
 // of the writes that were acknowledged.
 type idWriter struct {
-	cancel  context.CancelFunc
-	wg      sync.WaitGroup
-	fail    atomic.Int64
-	mu      sync.Mutex
-	acked   []int64
-	lastErr error
+	cancel context.CancelFunc
+	wg     sync.WaitGroup
+	fail   atomic.Int64
+	// watcherLag counts the failures in vtgate's watcher lag, of fail (see vtgateWatcherLagError).
+	watcherLag atomic.Int64
+	mu         sync.Mutex
+	acked      []int64
+	lastErr    error
 }
 
 func startIDWriter(t *testing.T, mc *msCluster) *idWriter {
@@ -296,6 +298,9 @@ func startIDWriter(t *testing.T, mc *msCluster) *idWriter {
 
 func (w *idWriter) failed(err error) {
 	w.fail.Add(1)
+	if isWatcherLag(err) {
+		w.watcherLag.Add(1)
+	}
 	w.mu.Lock()
 	w.lastErr = err
 	w.mu.Unlock()
@@ -369,7 +374,7 @@ func TestGroupReplicationMigratesShardByShard(t *testing.T) {
 		mc.migrate(t, gr, first)
 		mc.waitForShardGroup(t, first, mc.tablets[first][0])
 		acked, fail, lastErr := w.stop()
-		assert.Zero(t, fail, "writes failed during the migration, last error: %v", lastErr)
+		requireNoFailedWrites(t, fail, w.watcherLag.Load(), lastErr, "during the migration")
 		requireNoLostWrites(t, mc, acked)
 
 		assert.Equal(t, gr, mc.keyspacePolicy(t), "the keyspace names the target policy from the start of the migration")
@@ -430,7 +435,7 @@ func TestGroupReplicationMigratesShardByShard(t *testing.T) {
 			}
 		}
 		acked, fail, lastErr := w.stop()
-		assert.Zero(t, fail, "writes failed during the planned reparents, last error: %v", lastErr)
+		requireNoFailedWrites(t, fail, w.watcherLag.Load(), lastErr, "during the planned reparents")
 		requireNoLostWrites(t, mc, acked)
 	})
 
@@ -441,7 +446,7 @@ func TestGroupReplicationMigratesShardByShard(t *testing.T) {
 		mc.migrate(t, gr, second)
 		mc.waitForShardGroup(t, second, mc.shardPrimaryTablet(t, second))
 		acked, fail, lastErr := w.stop()
-		assert.Zero(t, fail, "writes failed during the migration, last error: %v", lastErr)
+		requireNoFailedWrites(t, fail, w.watcherLag.Load(), lastErr, "during the migration")
 		requireNoLostWrites(t, mc, acked)
 
 		assert.Equal(t, gr, mc.keyspacePolicy(t))
@@ -460,7 +465,7 @@ func TestGroupReplicationMigratesShardByShard(t *testing.T) {
 		mc.migrate(t, semiSync, first)
 		mc.waitForSemiSyncShard(t, first, primary)
 		acked, fail, lastErr := w.stop()
-		assert.Zero(t, fail, "writes failed during the migration back, last error: %v", lastErr)
+		requireNoFailedWrites(t, fail, w.watcherLag.Load(), lastErr, "during the migration back")
 		requireNoLostWrites(t, mc, acked)
 
 		assert.Equal(t, gr, mc.keyspacePolicy(t), "the keyspace keeps its policy while a shard runs its group")
@@ -506,7 +511,7 @@ func TestGroupReplicationMigratesShardByShard(t *testing.T) {
 		mc.migrate(t, semiSync, second)
 		mc.waitForSemiSyncShard(t, second, primary)
 		acked, fail, lastErr := w.stop()
-		assert.Zero(t, fail, "writes failed during the migration back, last error: %v", lastErr)
+		requireNoFailedWrites(t, fail, w.watcherLag.Load(), lastErr, "during the migration back")
 		requireNoLostWrites(t, mc, acked)
 
 		assert.Equal(t, semiSync, mc.keyspacePolicy(t))
