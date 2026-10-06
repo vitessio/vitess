@@ -140,17 +140,24 @@ func (ts *Server) GetKeyspaceDurability(ctx context.Context, keyspace string) (s
 }
 
 // ShardDurabilityPolicy is the single resolver of the durability policy that applies to a shard:
-// the shard's own policy (Shard.durability_policy) if it is set, else its keyspace's. It returns ""
-// if neither is set. MigrateReplicationMode sets a shard's own policy while it converts a keyspace
-// between asynchronous replication and MySQL Group Replication one shard at a time, so that every
-// component manages a converted shard by the policy it was converted to, and the shards that are
-// not converted yet by the keyspace's. Every decision that depends on the durability of a shard
-// resolves its policy here.
-func ShardDurabilityPolicy(keyspacePolicy string, shard *topodatapb.Shard) string {
+// the shard's own policy (Shard.durability_policy) if it is set, else the keyspace's migration
+// source (Keyspace.migration_source_durability_policy) if it is set, else the keyspace's policy.
+// It returns "" if none is set. MigrateReplicationMode sets a shard's own policy while it converts
+// a keyspace between asynchronous replication and MySQL Group Replication one shard at a time, so
+// that every component manages a converted shard by the policy it was converted to, and the shards
+// that are not converted yet by the policy they had. To Group Replication, it first names the
+// target policy in the keyspace record and keeps the policy it converts from as the migration
+// source, so that a component that does not know these fields reads the group replication policy
+// for every shard. Every decision that depends on the durability of a shard resolves its policy
+// here.
+func ShardDurabilityPolicy(keyspace *topodatapb.Keyspace, shard *topodatapb.Shard) string {
 	if shardPolicy := shard.GetDurabilityPolicy(); shardPolicy != "" {
 		return shardPolicy
 	}
-	return keyspacePolicy
+	if source := keyspace.GetMigrationSourceDurabilityPolicy(); source != "" {
+		return source
+	}
+	return keyspace.GetDurabilityPolicy()
 }
 
 // GetShardDurability reads the keyspace and the shard records and returns the durability policy
@@ -172,7 +179,7 @@ func (ts *Server) GetShardInfoDurability(ctx context.Context, si *ShardInfo) (st
 	if err != nil {
 		return "", err
 	}
-	if durability := ShardDurabilityPolicy(keyspaceInfo.GetDurabilityPolicy(), si.Shard); durability != "" {
+	if durability := ShardDurabilityPolicy(keyspaceInfo.Keyspace, si.Shard); durability != "" {
 		return durability, nil
 	}
 	return "none", nil

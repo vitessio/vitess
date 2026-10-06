@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -81,6 +82,8 @@ type fakeGRTablet struct {
 	// groupName overrides the group name the tablet reports, to simulate a member of another
 	// shard's group.
 	groupName string
+	// startInProgress makes the tablet report a START GROUP_REPLICATION in progress.
+	startInProgress bool
 }
 
 // fakeGRCluster is a TabletManagerClient that simulates a shard running asynchronous
@@ -113,10 +116,23 @@ type fakeGRCluster struct {
 	queries    []string
 	// votersAtInitPrimary are the voters the shard record listed when InitPrimary ran.
 	votersAtInitPrimary string
+	// keyspaceAtFirstBootstrap is the keyspace record when the first StartGroupReplication with a
+	// bootstrap ran.
+	keyspaceAtFirstBootstrap *topodatapb.Keyspace
+	// onQuery runs, with the number of queries so far, when ExecuteFetchAsDba runs (the migration's
+	// schema check), under c.mu: it may only change the topology.
+	onQuery func(n int)
+	// onCall runs once when the named call that changes state is made, under c.mu: it may only
+	// change the topology.
+	onCall map[string]func()
 }
 
 func (c *fakeGRCluster) record(call string) error {
 	c.calls = append(c.calls, call)
+	if hook := c.onCall[call]; hook != nil {
+		delete(c.onCall, call)
+		hook()
+	}
 	if c.failOnce[call] {
 		delete(c.failOnce, call)
 		return fmt.Errorf("injected failure of %s", call)
@@ -204,6 +220,7 @@ func (c *fakeGRCluster) groupStatus(ft *fakeGRTablet) *replicationdatapb.GroupRe
 	if ft.groupName != "" {
 		gs.GroupName = ft.groupName
 	}
+	gs.StartInProgress = ft.startInProgress
 	if !ft.member {
 		return gs
 	}
@@ -239,7 +256,7 @@ func (c *fakeGRCluster) groupStatus(ft *fakeGRTablet) *replicationdatapb.GroupRe
 	if ft.incarnation != "" {
 		incarnation = ft.incarnation
 	}
-	gs.ViewId = incarnation + ":" + fmt.Sprint(len(gs.Members))
+	gs.ViewId = incarnation + ":" + strconv.Itoa(len(gs.Members))
 	return gs
 }
 
@@ -294,6 +311,13 @@ func (c *fakeGRCluster) StartGroupReplication(ctx context.Context, tablet *topod
 	name := fmt.Sprintf("StartGroupReplication(%s)", ft.alias)
 	if bootstrap {
 		name = fmt.Sprintf("StartGroupReplication(%s, bootstrap)", ft.alias)
+		if c.keyspaceAtFirstBootstrap == nil {
+			ki, err := c.ts.GetKeyspace(ctx, c.keyspace)
+			if err != nil {
+				return nil, err
+			}
+			c.keyspaceAtFirstBootstrap = ki.CloneVT()
+		}
 	}
 	if err := c.record(name); err != nil {
 		return nil, err
@@ -307,7 +331,7 @@ func (c *fakeGRCluster) StartGroupReplication(ctx context.Context, tablet *topod
 		}
 		c.groupPrimary = ft.alias
 		c.bootstrapSeqs++
-		c.incarnation = fmt.Sprintf("%d", 1790000000+c.bootstrapSeqs)
+		c.incarnation = strconv.Itoa(1790000000 + c.bootstrapSeqs)
 	} else if c.onlineMembers() == 0 {
 		return nil, errors.New("no group to join")
 	}
@@ -425,7 +449,7 @@ func (c *fakeGRCluster) InitPrimary(ctx context.Context, tablet *topodatapb.Tabl
 	ft.superReadOnly = false
 	c.groupPrimary = ft.alias
 	c.bootstrapSeqs++
-	c.incarnation = fmt.Sprintf("%d", 1790000000+c.bootstrapSeqs)
+	c.incarnation = strconv.Itoa(1790000000 + c.bootstrapSeqs)
 	return "", nil
 }
 
@@ -485,6 +509,9 @@ func (c *fakeGRCluster) ExecuteFetchAsDba(ctx context.Context, tablet *topodatap
 		return nil, err
 	}
 	c.queries = append(c.queries, string(req.Query))
+	if c.onQuery != nil {
+		c.onQuery(len(c.queries))
+	}
 	result := sqltypes.MakeTestResult(sqltypes.MakeTestFields("TABLE_SCHEMA|TABLE_NAME|ENGINE", "varchar|varchar|varchar"), c.schemaRows...)
 	return sqltypes.ResultToProto3(result), nil
 }
@@ -544,6 +571,32 @@ type fakeGRTabletSpec struct {
 	// noShardPolicy makes the tablet a vttablet that does not know the shard's own durability
 	// policy.
 	noShardPolicy bool
+}
+
+// addTabletOfOtherShard adds a REPLICA tablet of another shard of the keyspace, which answers
+// FullStatus and is in no group.
+func (c *fakeGRCluster) addTabletOfOtherShard(t *testing.T, cell string, uid uint32, shard string) *fakeGRTablet {
+	tablet := &topodatapb.Tablet{
+		Alias:         &topodatapb.TabletAlias{Cell: cell, Uid: uid},
+		Keyspace:      c.keyspace,
+		Shard:         shard,
+		Type:          topodatapb.TabletType_REPLICA,
+		Hostname:      fmt.Sprintf("host-%d", uid),
+		MysqlHostname: fmt.Sprintf("mysql-%d", uid),
+		MysqlPort:     3306,
+		PortMap:       map[string]int32{"vt": 15000, "grpc": 16000},
+	}
+	require.NoError(t, c.ts.CreateTablet(t.Context(), tablet))
+	alias := topoproto.TabletAliasString(tablet.Alias)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.tabletRecs[alias] = tablet
+	ft := &fakeGRTablet{
+		alias: alias, cell: cell, uuid: fmt.Sprintf("00000000-0000-0000-0000-%012d", uid),
+		version: "8.4.11", gtidMode: "ON", grEnabled: true, shardPolicy: true, superReadOnly: true,
+	}
+	c.tablets[alias] = ft
+	return ft
 }
 
 // newFakeGRCluster creates the keyspace "ks" with shard "-" in a memory topo, with the given

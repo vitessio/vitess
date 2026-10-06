@@ -349,7 +349,10 @@ func TestPromoteGroupPrimary(t *testing.T) {
 		memberRole  string
 		viewID      string
 		incarnation string
-		wantErrCode vtrpcpb.Code
+		// noGroupReplication makes the member's vttablet one that does not run Group Replication
+		// (FullStatus field 28 unset): its tablet would serve without the serving invariant.
+		noGroupReplication bool
+		wantErrCode        vtrpcpb.Code
 	}{
 		{
 			name:       "member is still the group primary",
@@ -365,6 +368,12 @@ func TestPromoteGroupPrimary(t *testing.T) {
 			memberRole:  mysql.GroupMemberRolePrimary,
 			viewID:      "1790000001:4",
 			incarnation: "1790000001",
+		},
+		{
+			name:               "member is the group primary, but its vttablet does not run Group Replication",
+			memberRole:         mysql.GroupMemberRolePrimary,
+			noGroupReplication: true,
+			wantErrCode:        vtrpcpb.Code_FAILED_PRECONDITION,
 		},
 		{
 			// S7d of the Group Replication failover audit: a member formed a new group on its own.
@@ -397,6 +406,7 @@ func TestPromoteGroupPrimary(t *testing.T) {
 					HasQuorum:    true,
 					ViewId:       tt.viewID,
 				},
+				GroupReplicationEnabled: !tt.noGroupReplication,
 			}, nil)
 			promotions := 0
 			if tt.wantErrCode == vtrpcpb.Code_OK {
@@ -455,6 +465,7 @@ func TestPromoteGroupPrimaryWithUnreachableCell(t *testing.T) {
 			PluginActive: true, MemberState: mysql.GroupMemberStateOnline, MemberRole: mysql.GroupMemberRolePrimary,
 			HasQuorum: true, Members: view,
 		},
+		GroupReplicationEnabled: true,
 	}, nil)
 	mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(secondary)).Return(&replicationdatapb.FullStatus{
 		ServerUuid: "uuid-101",
@@ -1369,6 +1380,7 @@ func groupMemberStatus(tablet, groupPrimary *topodatapb.Tablet, online ...*topod
 			HasQuorum:    true,
 			Members:      members,
 		},
+		GroupReplicationEnabled: true,
 	}
 }
 

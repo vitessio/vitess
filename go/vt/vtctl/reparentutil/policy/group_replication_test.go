@@ -84,7 +84,8 @@ func TestCellHoldsMajority(t *testing.T) {
 }
 
 func TestGroupName(t *testing.T) {
-	assert.Equal(t, GroupName("commerce", "0"), GroupName("commerce", "0"))
+	name := GroupName("commerce", "0")
+	assert.Equal(t, name, GroupName("commerce", "0"), "every tablet of the shard computes the same name")
 	assert.NotEqual(t, GroupName("commerce", "0"), GroupName("commerce", "-80"))
 	assert.NotEqual(t, GroupName("commerce", "0"), GroupName("customer", "0"))
 	assert.Len(t, GroupName("commerce", "0"), 36)

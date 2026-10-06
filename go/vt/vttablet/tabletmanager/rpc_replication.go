@@ -467,7 +467,8 @@ func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string
 	defer tm.unlock()
 
 	// In a keyspace that uses group replication, the primary is the member that bootstraps the
-	// shard's group. The caller holds the shard lock.
+	// shard's group. The caller holds the shard lock. A vttablet that does not run Group
+	// Replication refuses: it would make MySQL writable without a group.
 	if groupReplicationEnabled() {
 		durability, err := tm.shardDurability(ctx)
 		if err != nil {
@@ -478,6 +479,8 @@ func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string
 				return "", vterrors.Wrapf(err, "failed to bootstrap the group")
 			}
 		}
+	} else if err := tm.refuseGroupReplicationPolicyWithoutFlag(ctx); err != nil {
+		return "", err
 	}
 	if err := tm.checkGroupAllowsReadWrite(ctx); err != nil {
 		return "", err
@@ -527,6 +530,26 @@ func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string
 	}
 
 	return replication.EncodePosition(pos), nil
+}
+
+// refuseGroupReplicationPolicyWithoutFlag returns a FAILED_PRECONDITION error if the shard's policy,
+// on a vttablet that does not run Group Replication, is a group replication policy: InitPrimary would
+// make MySQL writable without a group. The read runs under the action lock: it is bounded by
+// groupReplicationTopoReadTimeout, and a policy that cannot be read is logged, and the initialization
+// goes on as it did before the read.
+func (tm *TabletManager) refuseGroupReplicationPolicyWithoutFlag(ctx context.Context) error {
+	readCtx, cancel := context.WithTimeout(ctx, groupReplicationTopoReadTimeout)
+	defer cancel()
+	durability, err := tm.shardDurability(readCtx)
+	if err != nil {
+		log.Warn("InitPrimary: cannot read the shard's durability policy, initializing without Group Replication", slog.Any("error", err))
+		return nil
+	}
+	if policy.IsGroupReplication(durability) {
+		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION,
+			"the shard uses a group replication durability policy, but this vttablet does not run Group Replication; start it with --enable-group-replication")
+	}
+	return nil
 }
 
 // PopulateReparentJournal adds an entry into the reparent_journal table.
@@ -918,16 +941,22 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 // be read. A tablet that does not support Group Replication, or whose shard uses another policy,
 // reverts as a semi-sync shard does.
 func (tm *TabletManager) demotionRevertNeedsGroupDecision(ctx context.Context) bool {
+	return tm.shardMayRunGroup(ctx)
+}
+
+// shardMayRunGroup returns whether the tablet's MySQL may be a member of its shard's replication
+// group: the tablet supports Group Replication, and its shard uses a group replication durability
+// policy, or the policy cannot be read. The read does not inherit the caller's cancellation (the
+// caller may have given up, as a demotion's caller does), only a short bound of its own.
+func (tm *TabletManager) shardMayRunGroup(ctx context.Context) bool {
 	if !groupReplicationEnabled() {
 		return false
 	}
-	// The demotion's caller may have given up: the revert still has to know the shard's policy, so
-	// the read does not inherit its cancellation, only a short bound of its own.
 	readCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), groupReplicationTopoReadTimeout)
 	defer cancel()
 	durability, err := tm.durabilityForGroupChange(readCtx, time.Now().Add(groupReplicationTopoReadTimeout))
 	if err != nil {
-		log.Warn("Group replication: cannot read the durability policy, the failed demotion is reverted only on a decision on the serving invariant", slog.Any("error", err))
+		log.Warn("Group replication: cannot read the durability policy, assuming that the shard runs a group", slog.Any("error", err))
 		return true
 	}
 	return policy.IsGroupReplication(durability)

@@ -227,7 +227,9 @@ func syncShardPrimary(ctx context.Context, ts *topo.Server, tablet *topodatapb.T
 // new primary started advertising itself.
 //
 // If active reparents are enabled, we demote our own MySQL to a replica and
-// update our tablet type to REPLICA.
+// update our tablet type to REPLICA. On a tablet whose shard uses a group
+// replication policy, MySQL is a group member: the tablet does not make it
+// replicate from the new primary, and it rejoins its group on its own (see leavesReplicationToGroup).
 //
 // If active reparents are disabled, we don't touch our MySQL.
 // We just directly update our tablet type to REPLICA.
@@ -272,6 +274,20 @@ func (tm *TabletManager) endPrimaryTerm(ctx context.Context, primaryAlias *topod
 	defer cancelDemotePrimary()
 	if _, err := tm.demotePrimary(demotePrimaryCtx, false /* revertPartialFailure */, true /* force */); err != nil {
 		return vterrors.Wrap(err, "failed to demote primary")
+	}
+	if tm.leavesReplicationToGroup(ctx) {
+		// A member of the shard's replication group, whose MySQL is not an active member now: it
+		// must not replicate from the new primary on the default channel. It rejoins its group
+		// through the sync loop, or VTOrc's recovery, as a REPLICA.
+		log.Info("The tablet is a member of the shard's replication group; changing the type to REPLICA without configuring replication.")
+		changeTypeCtx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+		defer cancel()
+		if err := tm.tmState.ChangeTabletType(changeTypeCtx, topodatapb.TabletType_REPLICA, DBActionNone); err != nil {
+			return vterrors.Wrapf(err, "failed to change type to %v", topodatapb.TabletType_REPLICA)
+		}
+		// A new type ends the demotion (see groupReplicationDemoted).
+		tm.groupReplicationDemoted.Store(false)
+		return nil
 	}
 	setPrimaryCtx, cancelSetPrimary := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer cancelSetPrimary()

@@ -29,15 +29,18 @@ import (
 )
 
 type InfoForRecoveryAnalysis struct {
-	TabletInfo                                *topodatapb.Tablet
-	PrimaryTabletInfo                         *topodatapb.Tablet
-	PrimaryTimestamp                          *time.Time
-	Cell                                      string
-	Keyspace                                  string
-	Shard                                     string
-	ShardPrimaryTermTimestamp                 string
-	KeyspaceType                              int
-	DurabilityPolicy                          string
+	TabletInfo                *topodatapb.Tablet
+	PrimaryTabletInfo         *topodatapb.Tablet
+	PrimaryTimestamp          *time.Time
+	Cell                      string
+	Keyspace                  string
+	Shard                     string
+	ShardPrimaryTermTimestamp string
+	KeyspaceType              int
+	DurabilityPolicy          string
+	// KeyspaceMigrationSourceDurabilityPolicy is the keyspace's migration source policy
+	// (Keyspace.migration_source_durability_policy).
+	KeyspaceMigrationSourceDurabilityPolicy   string
 	IsInvalid                                 int
 	IsPrimary                                 int
 	IsCoPrimary                               int
@@ -126,6 +129,7 @@ func (info *InfoForRecoveryAnalysis) ConvertToRowMap() sqlutils.RowMap {
 	rowMap["downtime_end_timestamp"] = sqlutils.CellData{String: info.DowntimeEndTimestamp, Valid: true}
 	rowMap["downtime_remaining_seconds"] = sqlutils.CellData{String: strconv.Itoa(info.DowntimeRemainingSeconds), Valid: true}
 	rowMap["durability_policy"] = sqlutils.CellData{String: info.DurabilityPolicy, Valid: true}
+	rowMap["keyspace_migration_source_durability_policy"] = sqlutils.CellData{String: info.KeyspaceMigrationSourceDurabilityPolicy, Valid: true}
 	rowMap["gtid_errant"] = sqlutils.CellData{String: info.ErrantGTID, Valid: true}
 	rowMap["gtid_mode"] = sqlutils.CellData{String: info.GTIDMode, Valid: true}
 	rowMap["hostname"] = sqlutils.CellData{String: info.Hostname, Valid: true}

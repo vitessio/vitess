@@ -58,7 +58,7 @@ var (
 	cellsNoRecoveryValidated atomic.Bool
 	// shardsToWatch is a map storing the shards for a given keyspace that need to be watched.
 	// We store the key range for all the shards that we want to watch.
-	// This is populated by parsing `--clusters_to_watch` flag.
+	// This is populated by parsing `--clusters-to-watch` flag.
 	shardsToWatch map[string][]*topodatapb.KeyRange
 
 	// ErrNoPrimaryTablet is a fixed error message.
@@ -166,7 +166,7 @@ func validateCellsNoRecovery(ctx context.Context) error {
 	return nil
 }
 
-// initializeShardsToWatch parses the --clusters_to_watch flag-value
+// initializeShardsToWatch parses the --clusters-to-watch flag-value
 // into a map of keyspace/shards.
 func initializeShardsToWatch() error {
 	shardsToWatch = make(map[string][]*topodatapb.KeyRange)
@@ -237,7 +237,7 @@ func OpenTabletDiscovery() <-chan time.Time {
 	if _, err := db.ExecVTOrc("DELETE FROM vitess_tablet"); err != nil {
 		log.Error(err.Error())
 	}
-	// Parse --clusters_to_watch into a filter.
+	// Parse --clusters-to-watch into a filter.
 	err := initializeShardsToWatch()
 	if err != nil {
 		log.Error(fmt.Sprintf("Error parsing --clusters-to-watch: %v", err))

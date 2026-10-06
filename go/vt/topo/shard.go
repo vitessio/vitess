@@ -21,6 +21,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"maps"
 	"path"
 	"slices"
 	"sort"
@@ -744,9 +745,7 @@ func (ts *Server) GetTabletMapAndFailedCellsForShard(ctx context.Context, keyspa
 			tablets, err := ts.GetTabletMapForShardByCell(cellCtx, keyspace, shard, []string{cell})
 			mu.Lock()
 			defer mu.Unlock()
-			for alias, ti := range tablets {
-				result[alias] = ti
-			}
+			maps.Copy(result, tablets)
 			if err == nil {
 				answered++
 				return

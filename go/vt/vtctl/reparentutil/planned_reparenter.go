@@ -361,9 +361,12 @@ func (pr *PlannedReparenter) performInitialPromotion(
 	primaryElectAliasStr := topoproto.TabletAliasString(primaryElect.Alias)
 
 	// Under a group replication policy, InitPrimary bootstraps a group: only on a shard that has
-	// none yet.
-	if policy.IsGroupReplication(opts.durability) {
+	// none yet, and only on vttablets that run Group Replication.
+	if grd, ok := policy.AsGroupReplication(opts.durability); ok {
 		if err := pr.checkShardHasNoGroup(ctx, keyspace, shard, tabletMap); err != nil {
+			return "", err
+		}
+		if err := CheckGroupReplicationCapabilities(ctx, pr.tmc, grd, primaryElect, tabletMap); err != nil {
 			return "", err
 		}
 	}
@@ -448,7 +451,9 @@ func (pr *PlannedReparenter) performInitialPromotion(
 //   - an incarnation is recorded: the group was bootstrapped;
 //   - a tablet's MySQL is an active member of the shard's group (policy.GroupName), for example of
 //     a bootstrap whose intent expired, or of a previous initial promotion that failed after
-//     InitPrimary bootstrapped it.
+//     InitPrimary bootstrapped it;
+//   - a START GROUP_REPLICATION runs on a tablet's MySQL: MySQL finishes a START whose client left,
+//     such as VTOrc's bootstrap RPC that timed out, and it may outlast the bootstrap intent.
 //
 // A tablet whose MySQL is an active member of another group does not tell that the shard has a
 // group, but the initial promotion still refuses, with its own error: InitPrimary cannot bootstrap
@@ -486,6 +491,10 @@ func (pr *PlannedReparenter) checkShardHasNoGroup(ctx context.Context, keyspace,
 		res := statuses[alias]
 		if res.err != nil {
 			return vterrors.Wrapf(res.err, "cannot verify that no tablet of shard %s/%s is a member of a replication group", keyspace, shard)
+		}
+		if res.groupStatus().GetStartInProgress() {
+			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION,
+				"a START GROUP_REPLICATION runs on tablet %v of shard %s/%s: it may create the shard's group; %s", alias, keyspace, shard, advice)
 		}
 		if res.isActiveMember() {
 			gs := res.groupStatus()

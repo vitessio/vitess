@@ -114,6 +114,9 @@ func groupPromotionEligibility(res *fullStatusResult, gv *groupReplicationView, 
 	if !res.isOnlineMember() || res.groupStatus().GroupName != gv.groupName || policy.GroupIncarnation(res.groupStatus().ViewId) != gv.incarnation || !memberIsOnlineInView(gv.view, res.status.ServerUuid) {
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "tablet %v is not an ONLINE member of the shard's replication group", alias)
 	}
+	if !res.status.GetGroupReplicationEnabled() {
+		return groupReplicationNotEnabledError(alias)
+	}
 	if len(voters) > 0 && !policy.IsVoter(voters, res.tablet.Alias) {
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "tablet %v is not a voter of the shard's replication group, and would not serve as its primary", alias)
 	}

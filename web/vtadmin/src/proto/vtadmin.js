@@ -55156,6 +55156,10 @@ export const topodata = $root.topodata = (() => {
          * @property {Array.<topodata.Shard.TabletControl.$Properties>|null} [tablet_controls] Shard tablet_controls
          * @property {boolean|null} [is_primary_serving] Shard is_primary_serving
          * @property {vtorcdata.Shard.$Properties|null} [vtorc_state] Shard vtorc_state
+         * @property {Array.<topodata.TabletAlias.$Properties>|null} [group_replication_voters] Shard group_replication_voters
+         * @property {string|null} [group_replication_incarnation] Shard group_replication_incarnation
+         * @property {topodata.GroupReplicationBootstrapIntent.$Properties|null} [group_replication_bootstrap_intent] Shard group_replication_bootstrap_intent
+         * @property {string|null} [durability_policy] Shard durability_policy
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -55183,6 +55187,7 @@ export const topodata = $root.topodata = (() => {
         const Shard = function (properties) {
             this.source_shards = [];
             this.tablet_controls = [];
+            this.group_replication_voters = [];
             if (properties)
                 for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
                     if (properties[keys[i]] != null && keys[i] !== "__proto__")
@@ -55246,6 +55251,38 @@ export const topodata = $root.topodata = (() => {
         Shard.prototype.vtorc_state = null;
 
         /**
+         * Shard group_replication_voters.
+         * @member {Array.<topodata.TabletAlias.$Properties>} group_replication_voters
+         * @memberof topodata.Shard
+         * @instance
+         */
+        Shard.prototype.group_replication_voters = $util.emptyArray;
+
+        /**
+         * Shard group_replication_incarnation.
+         * @member {string} group_replication_incarnation
+         * @memberof topodata.Shard
+         * @instance
+         */
+        Shard.prototype.group_replication_incarnation = "";
+
+        /**
+         * Shard group_replication_bootstrap_intent.
+         * @member {topodata.GroupReplicationBootstrapIntent.$Properties|null|undefined} group_replication_bootstrap_intent
+         * @memberof topodata.Shard
+         * @instance
+         */
+        Shard.prototype.group_replication_bootstrap_intent = null;
+
+        /**
+         * Shard durability_policy.
+         * @member {string} durability_policy
+         * @memberof topodata.Shard
+         * @instance
+         */
+        Shard.prototype.durability_policy = "";
+
+        /**
          * Creates a new Shard instance using the specified properties.
          * @function create
          * @memberof topodata.Shard
@@ -55293,6 +55330,15 @@ export const topodata = $root.topodata = (() => {
                 $root.vttime.Time.encode(message.primary_term_start_time, writer.uint32(/* id 8, wireType 2 =*/66).fork(), _depth + 1).ldelim();
             if (message.vtorc_state != null && $Object.hasOwnProperty.call(message, "vtorc_state"))
                 $root.vtorcdata.Shard.encode(message.vtorc_state, writer.uint32(/* id 9, wireType 2 =*/74).fork(), _depth + 1).ldelim();
+            if (message.group_replication_voters != null && message.group_replication_voters.length)
+                for (let i = 0; i < message.group_replication_voters.length; ++i)
+                    $root.topodata.TabletAlias.encode(message.group_replication_voters[i], writer.uint32(/* id 10, wireType 2 =*/82).fork(), _depth + 1).ldelim();
+            if (message.group_replication_incarnation != null && $Object.hasOwnProperty.call(message, "group_replication_incarnation") && message.group_replication_incarnation !== "")
+                writer.uint32(/* id 11, wireType 2 =*/90).string(message.group_replication_incarnation);
+            if (message.group_replication_bootstrap_intent != null && $Object.hasOwnProperty.call(message, "group_replication_bootstrap_intent"))
+                $root.topodata.GroupReplicationBootstrapIntent.encode(message.group_replication_bootstrap_intent, writer.uint32(/* id 12, wireType 2 =*/98).fork(), _depth + 1).ldelim();
+            if (message.durability_policy != null && $Object.hasOwnProperty.call(message, "durability_policy") && message.durability_policy !== "")
+                writer.uint32(/* id 13, wireType 2 =*/106).string(message.durability_policy);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -55399,6 +55445,38 @@ export const topodata = $root.topodata = (() => {
                         message.vtorc_state = $root.vtorcdata.Shard.decode(reader, reader.uint32(), $undefined, _depth + 1, message.vtorc_state);
                         continue;
                     }
+                case 10: {
+                        if (wireType !== 2)
+                            break;
+                        if (!(message.group_replication_voters && message.group_replication_voters.length))
+                            message.group_replication_voters = [];
+                        message.group_replication_voters.push($root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        continue;
+                    }
+                case 11: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.group_replication_incarnation = value;
+                        else
+                            delete message.group_replication_incarnation;
+                        continue;
+                    }
+                case 12: {
+                        if (wireType !== 2)
+                            break;
+                        message.group_replication_bootstrap_intent = $root.topodata.GroupReplicationBootstrapIntent.decode(reader, reader.uint32(), $undefined, _depth + 1, message.group_replication_bootstrap_intent);
+                        continue;
+                    }
+                case 13: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.durability_policy = value;
+                        else
+                            delete message.durability_policy;
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -55488,6 +55566,26 @@ export const topodata = $root.topodata = (() => {
                 if (error)
                     return "vtorc_state." + error;
             }
+            if (message.group_replication_voters != null && $Object.hasOwnProperty.call(message, "group_replication_voters")) {
+                if (!$Array.isArray(message.group_replication_voters))
+                    return "group_replication_voters: array expected";
+                for (let i = 0; i < message.group_replication_voters.length; ++i) {
+                    let error = $root.topodata.TabletAlias.verify(message.group_replication_voters[i], _depth + 1);
+                    if (error)
+                        return "group_replication_voters." + error;
+                }
+            }
+            if (message.group_replication_incarnation != null && $Object.hasOwnProperty.call(message, "group_replication_incarnation"))
+                if (!$util.isString(message.group_replication_incarnation))
+                    return "group_replication_incarnation: string expected";
+            if (message.group_replication_bootstrap_intent != null && $Object.hasOwnProperty.call(message, "group_replication_bootstrap_intent")) {
+                let error = $root.topodata.GroupReplicationBootstrapIntent.verify(message.group_replication_bootstrap_intent, _depth + 1);
+                if (error)
+                    return "group_replication_bootstrap_intent." + error;
+            }
+            if (message.durability_policy != null && $Object.hasOwnProperty.call(message, "durability_policy"))
+                if (!$util.isString(message.durability_policy))
+                    return "durability_policy: string expected";
             return null;
         };
 
@@ -55552,6 +55650,27 @@ export const topodata = $root.topodata = (() => {
                     throw $TypeError(".topodata.Shard.vtorc_state: object expected");
                 message.vtorc_state = $root.vtorcdata.Shard.fromObject(object.vtorc_state, _depth + 1);
             }
+            if (object.group_replication_voters) {
+                if (!$Array.isArray(object.group_replication_voters))
+                    throw $TypeError(".topodata.Shard.group_replication_voters: array expected");
+                message.group_replication_voters = $Array(object.group_replication_voters.length);
+                for (let i = 0; i < object.group_replication_voters.length; ++i) {
+                    if (!$util.isObject(object.group_replication_voters[i]))
+                        throw $TypeError(".topodata.Shard.group_replication_voters: object expected");
+                    message.group_replication_voters[i] = $root.topodata.TabletAlias.fromObject(object.group_replication_voters[i], _depth + 1);
+                }
+            }
+            if (object.group_replication_incarnation != null)
+                if (typeof object.group_replication_incarnation !== "string" || object.group_replication_incarnation.length)
+                    message.group_replication_incarnation = $String(object.group_replication_incarnation);
+            if (object.group_replication_bootstrap_intent != null) {
+                if (!$util.isObject(object.group_replication_bootstrap_intent))
+                    throw $TypeError(".topodata.Shard.group_replication_bootstrap_intent: object expected");
+                message.group_replication_bootstrap_intent = $root.topodata.GroupReplicationBootstrapIntent.fromObject(object.group_replication_bootstrap_intent, _depth + 1);
+            }
+            if (object.durability_policy != null)
+                if (typeof object.durability_policy !== "string" || object.durability_policy.length)
+                    message.durability_policy = $String(object.durability_policy);
             return message;
         };
 
@@ -55575,6 +55694,7 @@ export const topodata = $root.topodata = (() => {
             if (options.arrays || options.defaults) {
                 object.source_shards = [];
                 object.tablet_controls = [];
+                object.group_replication_voters = [];
             }
             if (options.defaults) {
                 object.primary_alias = null;
@@ -55582,6 +55702,9 @@ export const topodata = $root.topodata = (() => {
                 object.is_primary_serving = false;
                 object.primary_term_start_time = null;
                 object.vtorc_state = null;
+                object.group_replication_incarnation = "";
+                object.group_replication_bootstrap_intent = null;
+                object.durability_policy = "";
             }
             if (message.primary_alias != null && $Object.hasOwnProperty.call(message, "primary_alias"))
                 object.primary_alias = $root.topodata.TabletAlias.toObject(message.primary_alias, options, _depth + 1);
@@ -55603,6 +55726,17 @@ export const topodata = $root.topodata = (() => {
                 object.primary_term_start_time = $root.vttime.Time.toObject(message.primary_term_start_time, options, _depth + 1);
             if (message.vtorc_state != null && $Object.hasOwnProperty.call(message, "vtorc_state"))
                 object.vtorc_state = $root.vtorcdata.Shard.toObject(message.vtorc_state, options, _depth + 1);
+            if (message.group_replication_voters && message.group_replication_voters.length) {
+                object.group_replication_voters = $Array(message.group_replication_voters.length);
+                for (let j = 0; j < message.group_replication_voters.length; ++j)
+                    object.group_replication_voters[j] = $root.topodata.TabletAlias.toObject(message.group_replication_voters[j], options, _depth + 1);
+            }
+            if (message.group_replication_incarnation != null && $Object.hasOwnProperty.call(message, "group_replication_incarnation"))
+                object.group_replication_incarnation = message.group_replication_incarnation;
+            if (message.group_replication_bootstrap_intent != null && $Object.hasOwnProperty.call(message, "group_replication_bootstrap_intent"))
+                object.group_replication_bootstrap_intent = $root.topodata.GroupReplicationBootstrapIntent.toObject(message.group_replication_bootstrap_intent, options, _depth + 1);
+            if (message.durability_policy != null && $Object.hasOwnProperty.call(message, "durability_policy"))
+                object.durability_policy = message.durability_policy;
             return object;
         };
 
@@ -56505,6 +56639,371 @@ export const topodata = $root.topodata = (() => {
         return Shard;
     })();
 
+    topodata.GroupReplicationBootstrapIntent = (function() {
+
+        /**
+         * Properties of a GroupReplicationBootstrapIntent.
+         * @typedef {Object} topodata.GroupReplicationBootstrapIntent.$Properties
+         * @property {topodata.TabletAlias.$Properties|null} [target] GroupReplicationBootstrapIntent target
+         * @property {vttime.Time.$Properties|null} [time] GroupReplicationBootstrapIntent time
+         * @property {string|null} [previous_incarnation] GroupReplicationBootstrapIntent previous_incarnation
+         * @property {string|null} [token] GroupReplicationBootstrapIntent token
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+
+        /**
+         * Properties of a GroupReplicationBootstrapIntent.
+         * @memberof topodata
+         * @interface IGroupReplicationBootstrapIntent
+         * @augments topodata.GroupReplicationBootstrapIntent.$Properties
+         * @deprecated Use topodata.GroupReplicationBootstrapIntent.$Properties instead.
+         */
+
+        /**
+         * Shape of a GroupReplicationBootstrapIntent.
+         * @typedef {topodata.GroupReplicationBootstrapIntent.$Properties} topodata.GroupReplicationBootstrapIntent.$Shape
+         */
+
+        /**
+         * Constructs a new GroupReplicationBootstrapIntent.
+         * @memberof topodata
+         * @classdesc Represents a GroupReplicationBootstrapIntent.
+         * @constructor
+         * @param {topodata.GroupReplicationBootstrapIntent.$Properties=} [properties] Properties to set
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+        const GroupReplicationBootstrapIntent = function (properties) {
+            if (properties)
+                for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                        this[keys[i]] = properties[keys[i]];
+        };
+
+        /**
+         * GroupReplicationBootstrapIntent target.
+         * @member {topodata.TabletAlias.$Properties|null|undefined} target
+         * @memberof topodata.GroupReplicationBootstrapIntent
+         * @instance
+         */
+        GroupReplicationBootstrapIntent.prototype.target = null;
+
+        /**
+         * GroupReplicationBootstrapIntent time.
+         * @member {vttime.Time.$Properties|null|undefined} time
+         * @memberof topodata.GroupReplicationBootstrapIntent
+         * @instance
+         */
+        GroupReplicationBootstrapIntent.prototype.time = null;
+
+        /**
+         * GroupReplicationBootstrapIntent previous_incarnation.
+         * @member {string} previous_incarnation
+         * @memberof topodata.GroupReplicationBootstrapIntent
+         * @instance
+         */
+        GroupReplicationBootstrapIntent.prototype.previous_incarnation = "";
+
+        /**
+         * GroupReplicationBootstrapIntent token.
+         * @member {string} token
+         * @memberof topodata.GroupReplicationBootstrapIntent
+         * @instance
+         */
+        GroupReplicationBootstrapIntent.prototype.token = "";
+
+        /**
+         * Creates a new GroupReplicationBootstrapIntent instance using the specified properties.
+         * @function create
+         * @memberof topodata.GroupReplicationBootstrapIntent
+         * @static
+         * @param {topodata.GroupReplicationBootstrapIntent.$Properties=} [properties] Properties to set
+         * @returns {topodata.GroupReplicationBootstrapIntent} GroupReplicationBootstrapIntent instance
+         * @type {{
+         *   (properties: topodata.GroupReplicationBootstrapIntent.$Shape): topodata.GroupReplicationBootstrapIntent & topodata.GroupReplicationBootstrapIntent.$Shape;
+         *   (properties?: topodata.GroupReplicationBootstrapIntent.$Properties): topodata.GroupReplicationBootstrapIntent;
+         * }}
+         */
+        GroupReplicationBootstrapIntent.create = function(properties) {
+            return new GroupReplicationBootstrapIntent(properties);
+        };
+
+        /**
+         * Encodes the specified GroupReplicationBootstrapIntent message. Does not implicitly {@link topodata.GroupReplicationBootstrapIntent.verify|verify} messages.
+         * @function encode
+         * @memberof topodata.GroupReplicationBootstrapIntent
+         * @static
+         * @param {topodata.GroupReplicationBootstrapIntent.$Properties} message GroupReplicationBootstrapIntent message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GroupReplicationBootstrapIntent.encode = function (message, writer, _depth) {
+            if (!writer)
+                writer = $Writer.create();
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            if (message.target != null && $Object.hasOwnProperty.call(message, "target"))
+                $root.topodata.TabletAlias.encode(message.target, writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
+            if (message.time != null && $Object.hasOwnProperty.call(message, "time"))
+                $root.vttime.Time.encode(message.time, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
+            if (message.previous_incarnation != null && $Object.hasOwnProperty.call(message, "previous_incarnation") && message.previous_incarnation !== "")
+                writer.uint32(/* id 3, wireType 2 =*/26).string(message.previous_incarnation);
+            if (message.token != null && $Object.hasOwnProperty.call(message, "token") && message.token !== "")
+                writer.uint32(/* id 4, wireType 2 =*/34).string(message.token);
+            if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
+                for (let i = 0; i < message.$unknowns.length; ++i)
+                    writer.raw(message.$unknowns[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified GroupReplicationBootstrapIntent message, length delimited. Does not implicitly {@link topodata.GroupReplicationBootstrapIntent.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof topodata.GroupReplicationBootstrapIntent
+         * @static
+         * @param {topodata.GroupReplicationBootstrapIntent.$Properties} message GroupReplicationBootstrapIntent message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GroupReplicationBootstrapIntent.encodeDelimited = function(message, writer) {
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
+        };
+
+        /**
+         * Decodes a GroupReplicationBootstrapIntent message from the specified reader or buffer.
+         * @function decode
+         * @memberof topodata.GroupReplicationBootstrapIntent
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {topodata.GroupReplicationBootstrapIntent & topodata.GroupReplicationBootstrapIntent.$Shape} GroupReplicationBootstrapIntent
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GroupReplicationBootstrapIntent.decode = function (reader, length, _end, _depth, _target) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $Reader.recursionLimit)
+                throw $Error("max depth exceeded");
+            let end, message, value;
+            if (length === $undefined)
+                end = reader.len;
+            else {
+                end = reader.pos + length;
+                if (end > reader.len)
+                    throw $RangeError("index out of range");
+                length = reader.len;
+                reader.len = end;
+            }
+            message = _target || new $root.topodata.GroupReplicationBootstrapIntent();
+            while (reader.pos < end) {
+                let start = reader.pos;
+                let tag = reader.tag();
+                if (tag === _end) {
+                    _end = $undefined;
+                    break;
+                }
+                let wireType = tag & 7;
+                switch (tag >>>= 3) {
+                case 1: {
+                        if (wireType !== 2)
+                            break;
+                        message.target = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.target);
+                        continue;
+                    }
+                case 2: {
+                        if (wireType !== 2)
+                            break;
+                        message.time = $root.vttime.Time.decode(reader, reader.uint32(), $undefined, _depth + 1, message.time);
+                        continue;
+                    }
+                case 3: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.previous_incarnation = value;
+                        else
+                            delete message.previous_incarnation;
+                        continue;
+                    }
+                case 4: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.token = value;
+                        else
+                            delete message.token;
+                        continue;
+                    }
+                }
+                reader.skipType(wireType, _depth, tag);
+                if (!reader.discardUnknown) {
+                    $util.makeProp(message, "$unknowns", false);
+                    (message.$unknowns || (message.$unknowns = [])).push(reader.raw(start, reader.pos));
+                }
+            }
+            if (length !== $undefined) {
+                if (reader.pos !== end)
+                    throw $RangeError("index out of range");
+                reader.len = length;
+            }
+            if (_end !== $undefined)
+                throw $Error("missing end group");
+            return message;
+        };
+
+        /**
+         * Decodes a GroupReplicationBootstrapIntent message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof topodata.GroupReplicationBootstrapIntent
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {topodata.GroupReplicationBootstrapIntent & topodata.GroupReplicationBootstrapIntent.$Shape} GroupReplicationBootstrapIntent
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GroupReplicationBootstrapIntent.decodeDelimited = function(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a GroupReplicationBootstrapIntent message.
+         * @function verify
+         * @memberof topodata.GroupReplicationBootstrapIntent
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        GroupReplicationBootstrapIntent.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.target != null && $Object.hasOwnProperty.call(message, "target")) {
+                let error = $root.topodata.TabletAlias.verify(message.target, _depth + 1);
+                if (error)
+                    return "target." + error;
+            }
+            if (message.time != null && $Object.hasOwnProperty.call(message, "time")) {
+                let error = $root.vttime.Time.verify(message.time, _depth + 1);
+                if (error)
+                    return "time." + error;
+            }
+            if (message.previous_incarnation != null && $Object.hasOwnProperty.call(message, "previous_incarnation"))
+                if (!$util.isString(message.previous_incarnation))
+                    return "previous_incarnation: string expected";
+            if (message.token != null && $Object.hasOwnProperty.call(message, "token"))
+                if (!$util.isString(message.token))
+                    return "token: string expected";
+            return null;
+        };
+
+        /**
+         * Creates a GroupReplicationBootstrapIntent message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof topodata.GroupReplicationBootstrapIntent
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {topodata.GroupReplicationBootstrapIntent} GroupReplicationBootstrapIntent
+         */
+        GroupReplicationBootstrapIntent.fromObject = function (object, _depth) {
+            if (object instanceof $root.topodata.GroupReplicationBootstrapIntent)
+                return object;
+            if (!$util.isObject(object))
+                throw $TypeError(".topodata.GroupReplicationBootstrapIntent: object expected");
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let message = new $root.topodata.GroupReplicationBootstrapIntent();
+            if (object.target != null) {
+                if (!$util.isObject(object.target))
+                    throw $TypeError(".topodata.GroupReplicationBootstrapIntent.target: object expected");
+                message.target = $root.topodata.TabletAlias.fromObject(object.target, _depth + 1);
+            }
+            if (object.time != null) {
+                if (!$util.isObject(object.time))
+                    throw $TypeError(".topodata.GroupReplicationBootstrapIntent.time: object expected");
+                message.time = $root.vttime.Time.fromObject(object.time, _depth + 1);
+            }
+            if (object.previous_incarnation != null)
+                if (typeof object.previous_incarnation !== "string" || object.previous_incarnation.length)
+                    message.previous_incarnation = $String(object.previous_incarnation);
+            if (object.token != null)
+                if (typeof object.token !== "string" || object.token.length)
+                    message.token = $String(object.token);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a GroupReplicationBootstrapIntent message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof topodata.GroupReplicationBootstrapIntent
+         * @static
+         * @param {topodata.GroupReplicationBootstrapIntent} message GroupReplicationBootstrapIntent
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        GroupReplicationBootstrapIntent.toObject = function (message, options, _depth) {
+            if (!options)
+                options = {};
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let object = {};
+            if (options.defaults) {
+                object.target = null;
+                object.time = null;
+                object.previous_incarnation = "";
+                object.token = "";
+            }
+            if (message.target != null && $Object.hasOwnProperty.call(message, "target"))
+                object.target = $root.topodata.TabletAlias.toObject(message.target, options, _depth + 1);
+            if (message.time != null && $Object.hasOwnProperty.call(message, "time"))
+                object.time = $root.vttime.Time.toObject(message.time, options, _depth + 1);
+            if (message.previous_incarnation != null && $Object.hasOwnProperty.call(message, "previous_incarnation"))
+                object.previous_incarnation = message.previous_incarnation;
+            if (message.token != null && $Object.hasOwnProperty.call(message, "token"))
+                object.token = message.token;
+            return object;
+        };
+
+        /**
+         * Converts this GroupReplicationBootstrapIntent to JSON.
+         * @function toJSON
+         * @memberof topodata.GroupReplicationBootstrapIntent
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        GroupReplicationBootstrapIntent.prototype.toJSON = function() {
+            return GroupReplicationBootstrapIntent.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        /**
+         * Gets the type url for GroupReplicationBootstrapIntent
+         * @function getTypeUrl
+         * @memberof topodata.GroupReplicationBootstrapIntent
+         * @static
+         * @param {string} [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns {string} The type url
+         */
+        GroupReplicationBootstrapIntent.getTypeUrl = function(prefix) {
+            if (prefix === $undefined)
+                prefix = "type.googleapis.com";
+            return prefix + "/topodata.GroupReplicationBootstrapIntent";
+        };
+
+        return GroupReplicationBootstrapIntent;
+    })();
+
     topodata.Keyspace = (function() {
 
         /**
@@ -56518,6 +57017,7 @@ export const topodata = $root.topodata = (() => {
          * @property {string|null} [sidecar_db_name] Keyspace sidecar_db_name
          * @property {vtorcdata.Keyspace.$Properties|null} [vtorc_state] Keyspace vtorc_state
          * @property {querythrottler.Config.$Properties|null} [query_throttler_config] Keyspace query_throttler_config
+         * @property {string|null} [migration_source_durability_policy] Keyspace migration_source_durability_policy
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -56614,6 +57114,14 @@ export const topodata = $root.topodata = (() => {
         Keyspace.prototype.query_throttler_config = null;
 
         /**
+         * Keyspace migration_source_durability_policy.
+         * @member {string} migration_source_durability_policy
+         * @memberof topodata.Keyspace
+         * @instance
+         */
+        Keyspace.prototype.migration_source_durability_policy = "";
+
+        /**
          * Creates a new Keyspace instance using the specified properties.
          * @function create
          * @memberof topodata.Keyspace
@@ -56661,6 +57169,8 @@ export const topodata = $root.topodata = (() => {
                 $root.vtorcdata.Keyspace.encode(message.vtorc_state, writer.uint32(/* id 11, wireType 2 =*/90).fork(), _depth + 1).ldelim();
             if (message.query_throttler_config != null && $Object.hasOwnProperty.call(message, "query_throttler_config"))
                 $root.querythrottler.Config.encode(message.query_throttler_config, writer.uint32(/* id 12, wireType 2 =*/98).fork(), _depth + 1).ldelim();
+            if (message.migration_source_durability_policy != null && $Object.hasOwnProperty.call(message, "migration_source_durability_policy") && message.migration_source_durability_policy !== "")
+                writer.uint32(/* id 13, wireType 2 =*/106).string(message.migration_source_durability_policy);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -56778,6 +57288,15 @@ export const topodata = $root.topodata = (() => {
                         message.query_throttler_config = $root.querythrottler.Config.decode(reader, reader.uint32(), $undefined, _depth + 1, message.query_throttler_config);
                         continue;
                     }
+                case 13: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.migration_source_durability_policy = value;
+                        else
+                            delete message.migration_source_durability_policy;
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -56858,6 +57377,9 @@ export const topodata = $root.topodata = (() => {
                 if (error)
                     return "query_throttler_config." + error;
             }
+            if (message.migration_source_durability_policy != null && $Object.hasOwnProperty.call(message, "migration_source_durability_policy"))
+                if (!$util.isString(message.migration_source_durability_policy))
+                    return "migration_source_durability_policy: string expected";
             return null;
         };
 
@@ -56922,6 +57444,9 @@ export const topodata = $root.topodata = (() => {
                     throw $TypeError(".topodata.Keyspace.query_throttler_config: object expected");
                 message.query_throttler_config = $root.querythrottler.Config.fromObject(object.query_throttler_config, _depth + 1);
             }
+            if (object.migration_source_durability_policy != null)
+                if (typeof object.migration_source_durability_policy !== "string" || object.migration_source_durability_policy.length)
+                    message.migration_source_durability_policy = $String(object.migration_source_durability_policy);
             return message;
         };
 
@@ -56951,6 +57476,7 @@ export const topodata = $root.topodata = (() => {
                 object.sidecar_db_name = "";
                 object.vtorc_state = null;
                 object.query_throttler_config = null;
+                object.migration_source_durability_policy = "";
             }
             if (message.keyspace_type != null && $Object.hasOwnProperty.call(message, "keyspace_type"))
                 object.keyspace_type = options.enums === $String ? $root.topodata.KeyspaceType[message.keyspace_type] === $undefined ? message.keyspace_type : $root.topodata.KeyspaceType[message.keyspace_type] : message.keyspace_type;
@@ -56968,6 +57494,8 @@ export const topodata = $root.topodata = (() => {
                 object.vtorc_state = $root.vtorcdata.Keyspace.toObject(message.vtorc_state, options, _depth + 1);
             if (message.query_throttler_config != null && $Object.hasOwnProperty.call(message, "query_throttler_config"))
                 object.query_throttler_config = $root.querythrottler.Config.toObject(message.query_throttler_config, options, _depth + 1);
+            if (message.migration_source_durability_policy != null && $Object.hasOwnProperty.call(message, "migration_source_durability_policy"))
+                object.migration_source_durability_policy = message.migration_source_durability_policy;
             return object;
         };
 
@@ -94989,6 +95517,1214 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         };
 
         return ResetReplicationParametersResponse;
+    })();
+
+    tabletmanagerdata.StartGroupReplicationRequest = (function() {
+
+        /**
+         * Properties of a StartGroupReplicationRequest.
+         * @typedef {Object} tabletmanagerdata.StartGroupReplicationRequest.$Properties
+         * @property {boolean|null} [bootstrap] StartGroupReplicationRequest bootstrap
+         * @property {string|null} [required_gtid_set] StartGroupReplicationRequest required_gtid_set
+         * @property {string|null} [bootstrap_intent_token] StartGroupReplicationRequest bootstrap_intent_token
+         * @property {string|null} [expected_incarnation] StartGroupReplicationRequest expected_incarnation
+         * @property {boolean|null} [report_definitive_refusal] StartGroupReplicationRequest report_definitive_refusal
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+
+        /**
+         * Properties of a StartGroupReplicationRequest.
+         * @memberof tabletmanagerdata
+         * @interface IStartGroupReplicationRequest
+         * @augments tabletmanagerdata.StartGroupReplicationRequest.$Properties
+         * @deprecated Use tabletmanagerdata.StartGroupReplicationRequest.$Properties instead.
+         */
+
+        /**
+         * Shape of a StartGroupReplicationRequest.
+         * @typedef {tabletmanagerdata.StartGroupReplicationRequest.$Properties} tabletmanagerdata.StartGroupReplicationRequest.$Shape
+         */
+
+        /**
+         * Constructs a new StartGroupReplicationRequest.
+         * @memberof tabletmanagerdata
+         * @classdesc Represents a StartGroupReplicationRequest.
+         * @constructor
+         * @param {tabletmanagerdata.StartGroupReplicationRequest.$Properties=} [properties] Properties to set
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+        const StartGroupReplicationRequest = function (properties) {
+            if (properties)
+                for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                        this[keys[i]] = properties[keys[i]];
+        };
+
+        /**
+         * StartGroupReplicationRequest bootstrap.
+         * @member {boolean} bootstrap
+         * @memberof tabletmanagerdata.StartGroupReplicationRequest
+         * @instance
+         */
+        StartGroupReplicationRequest.prototype.bootstrap = false;
+
+        /**
+         * StartGroupReplicationRequest required_gtid_set.
+         * @member {string} required_gtid_set
+         * @memberof tabletmanagerdata.StartGroupReplicationRequest
+         * @instance
+         */
+        StartGroupReplicationRequest.prototype.required_gtid_set = "";
+
+        /**
+         * StartGroupReplicationRequest bootstrap_intent_token.
+         * @member {string} bootstrap_intent_token
+         * @memberof tabletmanagerdata.StartGroupReplicationRequest
+         * @instance
+         */
+        StartGroupReplicationRequest.prototype.bootstrap_intent_token = "";
+
+        /**
+         * StartGroupReplicationRequest expected_incarnation.
+         * @member {string} expected_incarnation
+         * @memberof tabletmanagerdata.StartGroupReplicationRequest
+         * @instance
+         */
+        StartGroupReplicationRequest.prototype.expected_incarnation = "";
+
+        /**
+         * StartGroupReplicationRequest report_definitive_refusal.
+         * @member {boolean} report_definitive_refusal
+         * @memberof tabletmanagerdata.StartGroupReplicationRequest
+         * @instance
+         */
+        StartGroupReplicationRequest.prototype.report_definitive_refusal = false;
+
+        /**
+         * Creates a new StartGroupReplicationRequest instance using the specified properties.
+         * @function create
+         * @memberof tabletmanagerdata.StartGroupReplicationRequest
+         * @static
+         * @param {tabletmanagerdata.StartGroupReplicationRequest.$Properties=} [properties] Properties to set
+         * @returns {tabletmanagerdata.StartGroupReplicationRequest} StartGroupReplicationRequest instance
+         * @type {{
+         *   (properties: tabletmanagerdata.StartGroupReplicationRequest.$Shape): tabletmanagerdata.StartGroupReplicationRequest & tabletmanagerdata.StartGroupReplicationRequest.$Shape;
+         *   (properties?: tabletmanagerdata.StartGroupReplicationRequest.$Properties): tabletmanagerdata.StartGroupReplicationRequest;
+         * }}
+         */
+        StartGroupReplicationRequest.create = function(properties) {
+            return new StartGroupReplicationRequest(properties);
+        };
+
+        /**
+         * Encodes the specified StartGroupReplicationRequest message. Does not implicitly {@link tabletmanagerdata.StartGroupReplicationRequest.verify|verify} messages.
+         * @function encode
+         * @memberof tabletmanagerdata.StartGroupReplicationRequest
+         * @static
+         * @param {tabletmanagerdata.StartGroupReplicationRequest.$Properties} message StartGroupReplicationRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        StartGroupReplicationRequest.encode = function (message, writer, _depth) {
+            if (!writer)
+                writer = $Writer.create();
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            if (message.bootstrap != null && $Object.hasOwnProperty.call(message, "bootstrap") && message.bootstrap !== false)
+                writer.uint32(/* id 1, wireType 0 =*/8).bool(message.bootstrap);
+            if (message.required_gtid_set != null && $Object.hasOwnProperty.call(message, "required_gtid_set") && message.required_gtid_set !== "")
+                writer.uint32(/* id 2, wireType 2 =*/18).string(message.required_gtid_set);
+            if (message.bootstrap_intent_token != null && $Object.hasOwnProperty.call(message, "bootstrap_intent_token") && message.bootstrap_intent_token !== "")
+                writer.uint32(/* id 3, wireType 2 =*/26).string(message.bootstrap_intent_token);
+            if (message.expected_incarnation != null && $Object.hasOwnProperty.call(message, "expected_incarnation") && message.expected_incarnation !== "")
+                writer.uint32(/* id 4, wireType 2 =*/34).string(message.expected_incarnation);
+            if (message.report_definitive_refusal != null && $Object.hasOwnProperty.call(message, "report_definitive_refusal") && message.report_definitive_refusal !== false)
+                writer.uint32(/* id 5, wireType 0 =*/40).bool(message.report_definitive_refusal);
+            if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
+                for (let i = 0; i < message.$unknowns.length; ++i)
+                    writer.raw(message.$unknowns[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified StartGroupReplicationRequest message, length delimited. Does not implicitly {@link tabletmanagerdata.StartGroupReplicationRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof tabletmanagerdata.StartGroupReplicationRequest
+         * @static
+         * @param {tabletmanagerdata.StartGroupReplicationRequest.$Properties} message StartGroupReplicationRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        StartGroupReplicationRequest.encodeDelimited = function(message, writer) {
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
+        };
+
+        /**
+         * Decodes a StartGroupReplicationRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof tabletmanagerdata.StartGroupReplicationRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {tabletmanagerdata.StartGroupReplicationRequest & tabletmanagerdata.StartGroupReplicationRequest.$Shape} StartGroupReplicationRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        StartGroupReplicationRequest.decode = function (reader, length, _end, _depth, _target) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $Reader.recursionLimit)
+                throw $Error("max depth exceeded");
+            let end, message, value;
+            if (length === $undefined)
+                end = reader.len;
+            else {
+                end = reader.pos + length;
+                if (end > reader.len)
+                    throw $RangeError("index out of range");
+                length = reader.len;
+                reader.len = end;
+            }
+            message = _target || new $root.tabletmanagerdata.StartGroupReplicationRequest();
+            while (reader.pos < end) {
+                let start = reader.pos;
+                let tag = reader.tag();
+                if (tag === _end) {
+                    _end = $undefined;
+                    break;
+                }
+                let wireType = tag & 7;
+                switch (tag >>>= 3) {
+                case 1: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.bool())
+                            message.bootstrap = value;
+                        else
+                            delete message.bootstrap;
+                        continue;
+                    }
+                case 2: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.required_gtid_set = value;
+                        else
+                            delete message.required_gtid_set;
+                        continue;
+                    }
+                case 3: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.bootstrap_intent_token = value;
+                        else
+                            delete message.bootstrap_intent_token;
+                        continue;
+                    }
+                case 4: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.expected_incarnation = value;
+                        else
+                            delete message.expected_incarnation;
+                        continue;
+                    }
+                case 5: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.bool())
+                            message.report_definitive_refusal = value;
+                        else
+                            delete message.report_definitive_refusal;
+                        continue;
+                    }
+                }
+                reader.skipType(wireType, _depth, tag);
+                if (!reader.discardUnknown) {
+                    $util.makeProp(message, "$unknowns", false);
+                    (message.$unknowns || (message.$unknowns = [])).push(reader.raw(start, reader.pos));
+                }
+            }
+            if (length !== $undefined) {
+                if (reader.pos !== end)
+                    throw $RangeError("index out of range");
+                reader.len = length;
+            }
+            if (_end !== $undefined)
+                throw $Error("missing end group");
+            return message;
+        };
+
+        /**
+         * Decodes a StartGroupReplicationRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof tabletmanagerdata.StartGroupReplicationRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {tabletmanagerdata.StartGroupReplicationRequest & tabletmanagerdata.StartGroupReplicationRequest.$Shape} StartGroupReplicationRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        StartGroupReplicationRequest.decodeDelimited = function(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a StartGroupReplicationRequest message.
+         * @function verify
+         * @memberof tabletmanagerdata.StartGroupReplicationRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        StartGroupReplicationRequest.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.bootstrap != null && $Object.hasOwnProperty.call(message, "bootstrap"))
+                if (typeof message.bootstrap !== "boolean")
+                    return "bootstrap: boolean expected";
+            if (message.required_gtid_set != null && $Object.hasOwnProperty.call(message, "required_gtid_set"))
+                if (!$util.isString(message.required_gtid_set))
+                    return "required_gtid_set: string expected";
+            if (message.bootstrap_intent_token != null && $Object.hasOwnProperty.call(message, "bootstrap_intent_token"))
+                if (!$util.isString(message.bootstrap_intent_token))
+                    return "bootstrap_intent_token: string expected";
+            if (message.expected_incarnation != null && $Object.hasOwnProperty.call(message, "expected_incarnation"))
+                if (!$util.isString(message.expected_incarnation))
+                    return "expected_incarnation: string expected";
+            if (message.report_definitive_refusal != null && $Object.hasOwnProperty.call(message, "report_definitive_refusal"))
+                if (typeof message.report_definitive_refusal !== "boolean")
+                    return "report_definitive_refusal: boolean expected";
+            return null;
+        };
+
+        /**
+         * Creates a StartGroupReplicationRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof tabletmanagerdata.StartGroupReplicationRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {tabletmanagerdata.StartGroupReplicationRequest} StartGroupReplicationRequest
+         */
+        StartGroupReplicationRequest.fromObject = function (object, _depth) {
+            if (object instanceof $root.tabletmanagerdata.StartGroupReplicationRequest)
+                return object;
+            if (!$util.isObject(object))
+                throw $TypeError(".tabletmanagerdata.StartGroupReplicationRequest: object expected");
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let message = new $root.tabletmanagerdata.StartGroupReplicationRequest();
+            if (object.bootstrap != null)
+                if (object.bootstrap)
+                    message.bootstrap = $Boolean(object.bootstrap);
+            if (object.required_gtid_set != null)
+                if (typeof object.required_gtid_set !== "string" || object.required_gtid_set.length)
+                    message.required_gtid_set = $String(object.required_gtid_set);
+            if (object.bootstrap_intent_token != null)
+                if (typeof object.bootstrap_intent_token !== "string" || object.bootstrap_intent_token.length)
+                    message.bootstrap_intent_token = $String(object.bootstrap_intent_token);
+            if (object.expected_incarnation != null)
+                if (typeof object.expected_incarnation !== "string" || object.expected_incarnation.length)
+                    message.expected_incarnation = $String(object.expected_incarnation);
+            if (object.report_definitive_refusal != null)
+                if (object.report_definitive_refusal)
+                    message.report_definitive_refusal = $Boolean(object.report_definitive_refusal);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a StartGroupReplicationRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof tabletmanagerdata.StartGroupReplicationRequest
+         * @static
+         * @param {tabletmanagerdata.StartGroupReplicationRequest} message StartGroupReplicationRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        StartGroupReplicationRequest.toObject = function (message, options, _depth) {
+            if (!options)
+                options = {};
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let object = {};
+            if (options.defaults) {
+                object.bootstrap = false;
+                object.required_gtid_set = "";
+                object.bootstrap_intent_token = "";
+                object.expected_incarnation = "";
+                object.report_definitive_refusal = false;
+            }
+            if (message.bootstrap != null && $Object.hasOwnProperty.call(message, "bootstrap"))
+                object.bootstrap = message.bootstrap;
+            if (message.required_gtid_set != null && $Object.hasOwnProperty.call(message, "required_gtid_set"))
+                object.required_gtid_set = message.required_gtid_set;
+            if (message.bootstrap_intent_token != null && $Object.hasOwnProperty.call(message, "bootstrap_intent_token"))
+                object.bootstrap_intent_token = message.bootstrap_intent_token;
+            if (message.expected_incarnation != null && $Object.hasOwnProperty.call(message, "expected_incarnation"))
+                object.expected_incarnation = message.expected_incarnation;
+            if (message.report_definitive_refusal != null && $Object.hasOwnProperty.call(message, "report_definitive_refusal"))
+                object.report_definitive_refusal = message.report_definitive_refusal;
+            return object;
+        };
+
+        /**
+         * Converts this StartGroupReplicationRequest to JSON.
+         * @function toJSON
+         * @memberof tabletmanagerdata.StartGroupReplicationRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        StartGroupReplicationRequest.prototype.toJSON = function() {
+            return StartGroupReplicationRequest.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        /**
+         * Gets the type url for StartGroupReplicationRequest
+         * @function getTypeUrl
+         * @memberof tabletmanagerdata.StartGroupReplicationRequest
+         * @static
+         * @param {string} [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns {string} The type url
+         */
+        StartGroupReplicationRequest.getTypeUrl = function(prefix) {
+            if (prefix === $undefined)
+                prefix = "type.googleapis.com";
+            return prefix + "/tabletmanagerdata.StartGroupReplicationRequest";
+        };
+
+        return StartGroupReplicationRequest;
+    })();
+
+    tabletmanagerdata.StartGroupReplicationResponse = (function() {
+
+        /**
+         * Properties of a StartGroupReplicationResponse.
+         * @typedef {Object} tabletmanagerdata.StartGroupReplicationResponse.$Properties
+         * @property {replicationdata.GroupReplicationStatus.$Properties|null} [status] StartGroupReplicationResponse status
+         * @property {string|null} [definitive_refusal] StartGroupReplicationResponse definitive_refusal
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+
+        /**
+         * Properties of a StartGroupReplicationResponse.
+         * @memberof tabletmanagerdata
+         * @interface IStartGroupReplicationResponse
+         * @augments tabletmanagerdata.StartGroupReplicationResponse.$Properties
+         * @deprecated Use tabletmanagerdata.StartGroupReplicationResponse.$Properties instead.
+         */
+
+        /**
+         * Shape of a StartGroupReplicationResponse.
+         * @typedef {tabletmanagerdata.StartGroupReplicationResponse.$Properties} tabletmanagerdata.StartGroupReplicationResponse.$Shape
+         */
+
+        /**
+         * Constructs a new StartGroupReplicationResponse.
+         * @memberof tabletmanagerdata
+         * @classdesc Represents a StartGroupReplicationResponse.
+         * @constructor
+         * @param {tabletmanagerdata.StartGroupReplicationResponse.$Properties=} [properties] Properties to set
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+        const StartGroupReplicationResponse = function (properties) {
+            if (properties)
+                for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                        this[keys[i]] = properties[keys[i]];
+        };
+
+        /**
+         * StartGroupReplicationResponse status.
+         * @member {replicationdata.GroupReplicationStatus.$Properties|null|undefined} status
+         * @memberof tabletmanagerdata.StartGroupReplicationResponse
+         * @instance
+         */
+        StartGroupReplicationResponse.prototype.status = null;
+
+        /**
+         * StartGroupReplicationResponse definitive_refusal.
+         * @member {string} definitive_refusal
+         * @memberof tabletmanagerdata.StartGroupReplicationResponse
+         * @instance
+         */
+        StartGroupReplicationResponse.prototype.definitive_refusal = "";
+
+        /**
+         * Creates a new StartGroupReplicationResponse instance using the specified properties.
+         * @function create
+         * @memberof tabletmanagerdata.StartGroupReplicationResponse
+         * @static
+         * @param {tabletmanagerdata.StartGroupReplicationResponse.$Properties=} [properties] Properties to set
+         * @returns {tabletmanagerdata.StartGroupReplicationResponse} StartGroupReplicationResponse instance
+         * @type {{
+         *   (properties: tabletmanagerdata.StartGroupReplicationResponse.$Shape): tabletmanagerdata.StartGroupReplicationResponse & tabletmanagerdata.StartGroupReplicationResponse.$Shape;
+         *   (properties?: tabletmanagerdata.StartGroupReplicationResponse.$Properties): tabletmanagerdata.StartGroupReplicationResponse;
+         * }}
+         */
+        StartGroupReplicationResponse.create = function(properties) {
+            return new StartGroupReplicationResponse(properties);
+        };
+
+        /**
+         * Encodes the specified StartGroupReplicationResponse message. Does not implicitly {@link tabletmanagerdata.StartGroupReplicationResponse.verify|verify} messages.
+         * @function encode
+         * @memberof tabletmanagerdata.StartGroupReplicationResponse
+         * @static
+         * @param {tabletmanagerdata.StartGroupReplicationResponse.$Properties} message StartGroupReplicationResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        StartGroupReplicationResponse.encode = function (message, writer, _depth) {
+            if (!writer)
+                writer = $Writer.create();
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            if (message.status != null && $Object.hasOwnProperty.call(message, "status"))
+                $root.replicationdata.GroupReplicationStatus.encode(message.status, writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
+            if (message.definitive_refusal != null && $Object.hasOwnProperty.call(message, "definitive_refusal") && message.definitive_refusal !== "")
+                writer.uint32(/* id 2, wireType 2 =*/18).string(message.definitive_refusal);
+            if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
+                for (let i = 0; i < message.$unknowns.length; ++i)
+                    writer.raw(message.$unknowns[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified StartGroupReplicationResponse message, length delimited. Does not implicitly {@link tabletmanagerdata.StartGroupReplicationResponse.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof tabletmanagerdata.StartGroupReplicationResponse
+         * @static
+         * @param {tabletmanagerdata.StartGroupReplicationResponse.$Properties} message StartGroupReplicationResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        StartGroupReplicationResponse.encodeDelimited = function(message, writer) {
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
+        };
+
+        /**
+         * Decodes a StartGroupReplicationResponse message from the specified reader or buffer.
+         * @function decode
+         * @memberof tabletmanagerdata.StartGroupReplicationResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {tabletmanagerdata.StartGroupReplicationResponse & tabletmanagerdata.StartGroupReplicationResponse.$Shape} StartGroupReplicationResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        StartGroupReplicationResponse.decode = function (reader, length, _end, _depth, _target) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $Reader.recursionLimit)
+                throw $Error("max depth exceeded");
+            let end, message, value;
+            if (length === $undefined)
+                end = reader.len;
+            else {
+                end = reader.pos + length;
+                if (end > reader.len)
+                    throw $RangeError("index out of range");
+                length = reader.len;
+                reader.len = end;
+            }
+            message = _target || new $root.tabletmanagerdata.StartGroupReplicationResponse();
+            while (reader.pos < end) {
+                let start = reader.pos;
+                let tag = reader.tag();
+                if (tag === _end) {
+                    _end = $undefined;
+                    break;
+                }
+                let wireType = tag & 7;
+                switch (tag >>>= 3) {
+                case 1: {
+                        if (wireType !== 2)
+                            break;
+                        message.status = $root.replicationdata.GroupReplicationStatus.decode(reader, reader.uint32(), $undefined, _depth + 1, message.status);
+                        continue;
+                    }
+                case 2: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.definitive_refusal = value;
+                        else
+                            delete message.definitive_refusal;
+                        continue;
+                    }
+                }
+                reader.skipType(wireType, _depth, tag);
+                if (!reader.discardUnknown) {
+                    $util.makeProp(message, "$unknowns", false);
+                    (message.$unknowns || (message.$unknowns = [])).push(reader.raw(start, reader.pos));
+                }
+            }
+            if (length !== $undefined) {
+                if (reader.pos !== end)
+                    throw $RangeError("index out of range");
+                reader.len = length;
+            }
+            if (_end !== $undefined)
+                throw $Error("missing end group");
+            return message;
+        };
+
+        /**
+         * Decodes a StartGroupReplicationResponse message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof tabletmanagerdata.StartGroupReplicationResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {tabletmanagerdata.StartGroupReplicationResponse & tabletmanagerdata.StartGroupReplicationResponse.$Shape} StartGroupReplicationResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        StartGroupReplicationResponse.decodeDelimited = function(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a StartGroupReplicationResponse message.
+         * @function verify
+         * @memberof tabletmanagerdata.StartGroupReplicationResponse
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        StartGroupReplicationResponse.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.status != null && $Object.hasOwnProperty.call(message, "status")) {
+                let error = $root.replicationdata.GroupReplicationStatus.verify(message.status, _depth + 1);
+                if (error)
+                    return "status." + error;
+            }
+            if (message.definitive_refusal != null && $Object.hasOwnProperty.call(message, "definitive_refusal"))
+                if (!$util.isString(message.definitive_refusal))
+                    return "definitive_refusal: string expected";
+            return null;
+        };
+
+        /**
+         * Creates a StartGroupReplicationResponse message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof tabletmanagerdata.StartGroupReplicationResponse
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {tabletmanagerdata.StartGroupReplicationResponse} StartGroupReplicationResponse
+         */
+        StartGroupReplicationResponse.fromObject = function (object, _depth) {
+            if (object instanceof $root.tabletmanagerdata.StartGroupReplicationResponse)
+                return object;
+            if (!$util.isObject(object))
+                throw $TypeError(".tabletmanagerdata.StartGroupReplicationResponse: object expected");
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let message = new $root.tabletmanagerdata.StartGroupReplicationResponse();
+            if (object.status != null) {
+                if (!$util.isObject(object.status))
+                    throw $TypeError(".tabletmanagerdata.StartGroupReplicationResponse.status: object expected");
+                message.status = $root.replicationdata.GroupReplicationStatus.fromObject(object.status, _depth + 1);
+            }
+            if (object.definitive_refusal != null)
+                if (typeof object.definitive_refusal !== "string" || object.definitive_refusal.length)
+                    message.definitive_refusal = $String(object.definitive_refusal);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a StartGroupReplicationResponse message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof tabletmanagerdata.StartGroupReplicationResponse
+         * @static
+         * @param {tabletmanagerdata.StartGroupReplicationResponse} message StartGroupReplicationResponse
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        StartGroupReplicationResponse.toObject = function (message, options, _depth) {
+            if (!options)
+                options = {};
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let object = {};
+            if (options.defaults) {
+                object.status = null;
+                object.definitive_refusal = "";
+            }
+            if (message.status != null && $Object.hasOwnProperty.call(message, "status"))
+                object.status = $root.replicationdata.GroupReplicationStatus.toObject(message.status, options, _depth + 1);
+            if (message.definitive_refusal != null && $Object.hasOwnProperty.call(message, "definitive_refusal"))
+                object.definitive_refusal = message.definitive_refusal;
+            return object;
+        };
+
+        /**
+         * Converts this StartGroupReplicationResponse to JSON.
+         * @function toJSON
+         * @memberof tabletmanagerdata.StartGroupReplicationResponse
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        StartGroupReplicationResponse.prototype.toJSON = function() {
+            return StartGroupReplicationResponse.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        /**
+         * Gets the type url for StartGroupReplicationResponse
+         * @function getTypeUrl
+         * @memberof tabletmanagerdata.StartGroupReplicationResponse
+         * @static
+         * @param {string} [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns {string} The type url
+         */
+        StartGroupReplicationResponse.getTypeUrl = function(prefix) {
+            if (prefix === $undefined)
+                prefix = "type.googleapis.com";
+            return prefix + "/tabletmanagerdata.StartGroupReplicationResponse";
+        };
+
+        return StartGroupReplicationResponse;
+    })();
+
+    tabletmanagerdata.StopGroupReplicationRequest = (function() {
+
+        /**
+         * Properties of a StopGroupReplicationRequest.
+         * @typedef {Object} tabletmanagerdata.StopGroupReplicationRequest.$Properties
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+
+        /**
+         * Properties of a StopGroupReplicationRequest.
+         * @memberof tabletmanagerdata
+         * @interface IStopGroupReplicationRequest
+         * @augments tabletmanagerdata.StopGroupReplicationRequest.$Properties
+         * @deprecated Use tabletmanagerdata.StopGroupReplicationRequest.$Properties instead.
+         */
+
+        /**
+         * Shape of a StopGroupReplicationRequest.
+         * @typedef {tabletmanagerdata.StopGroupReplicationRequest.$Properties} tabletmanagerdata.StopGroupReplicationRequest.$Shape
+         */
+
+        /**
+         * Constructs a new StopGroupReplicationRequest.
+         * @memberof tabletmanagerdata
+         * @classdesc Represents a StopGroupReplicationRequest.
+         * @constructor
+         * @param {tabletmanagerdata.StopGroupReplicationRequest.$Properties=} [properties] Properties to set
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+        const StopGroupReplicationRequest = function (properties) {
+            if (properties)
+                for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                        this[keys[i]] = properties[keys[i]];
+        };
+
+        /**
+         * Creates a new StopGroupReplicationRequest instance using the specified properties.
+         * @function create
+         * @memberof tabletmanagerdata.StopGroupReplicationRequest
+         * @static
+         * @param {tabletmanagerdata.StopGroupReplicationRequest.$Properties=} [properties] Properties to set
+         * @returns {tabletmanagerdata.StopGroupReplicationRequest} StopGroupReplicationRequest instance
+         * @type {{
+         *   (properties: tabletmanagerdata.StopGroupReplicationRequest.$Shape): tabletmanagerdata.StopGroupReplicationRequest & tabletmanagerdata.StopGroupReplicationRequest.$Shape;
+         *   (properties?: tabletmanagerdata.StopGroupReplicationRequest.$Properties): tabletmanagerdata.StopGroupReplicationRequest;
+         * }}
+         */
+        StopGroupReplicationRequest.create = function(properties) {
+            return new StopGroupReplicationRequest(properties);
+        };
+
+        /**
+         * Encodes the specified StopGroupReplicationRequest message. Does not implicitly {@link tabletmanagerdata.StopGroupReplicationRequest.verify|verify} messages.
+         * @function encode
+         * @memberof tabletmanagerdata.StopGroupReplicationRequest
+         * @static
+         * @param {tabletmanagerdata.StopGroupReplicationRequest.$Properties} message StopGroupReplicationRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        StopGroupReplicationRequest.encode = function (message, writer, _depth) {
+            if (!writer)
+                writer = $Writer.create();
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
+                for (let i = 0; i < message.$unknowns.length; ++i)
+                    writer.raw(message.$unknowns[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified StopGroupReplicationRequest message, length delimited. Does not implicitly {@link tabletmanagerdata.StopGroupReplicationRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof tabletmanagerdata.StopGroupReplicationRequest
+         * @static
+         * @param {tabletmanagerdata.StopGroupReplicationRequest.$Properties} message StopGroupReplicationRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        StopGroupReplicationRequest.encodeDelimited = function(message, writer) {
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
+        };
+
+        /**
+         * Decodes a StopGroupReplicationRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof tabletmanagerdata.StopGroupReplicationRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {tabletmanagerdata.StopGroupReplicationRequest & tabletmanagerdata.StopGroupReplicationRequest.$Shape} StopGroupReplicationRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        StopGroupReplicationRequest.decode = function (reader, length, _end, _depth, _target) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $Reader.recursionLimit)
+                throw $Error("max depth exceeded");
+            let end, message;
+            if (length === $undefined)
+                end = reader.len;
+            else {
+                end = reader.pos + length;
+                if (end > reader.len)
+                    throw $RangeError("index out of range");
+                length = reader.len;
+                reader.len = end;
+            }
+            message = _target || new $root.tabletmanagerdata.StopGroupReplicationRequest();
+            while (reader.pos < end) {
+                let start = reader.pos;
+                let tag = reader.tag();
+                if (tag === _end) {
+                    _end = $undefined;
+                    break;
+                }
+                reader.skipType(tag & 7, _depth, tag);
+                if (!reader.discardUnknown) {
+                    $util.makeProp(message, "$unknowns", false);
+                    (message.$unknowns || (message.$unknowns = [])).push(reader.raw(start, reader.pos));
+                }
+            }
+            if (length !== $undefined) {
+                if (reader.pos !== end)
+                    throw $RangeError("index out of range");
+                reader.len = length;
+            }
+            if (_end !== $undefined)
+                throw $Error("missing end group");
+            return message;
+        };
+
+        /**
+         * Decodes a StopGroupReplicationRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof tabletmanagerdata.StopGroupReplicationRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {tabletmanagerdata.StopGroupReplicationRequest & tabletmanagerdata.StopGroupReplicationRequest.$Shape} StopGroupReplicationRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        StopGroupReplicationRequest.decodeDelimited = function(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a StopGroupReplicationRequest message.
+         * @function verify
+         * @memberof tabletmanagerdata.StopGroupReplicationRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        StopGroupReplicationRequest.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            return null;
+        };
+
+        /**
+         * Creates a StopGroupReplicationRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof tabletmanagerdata.StopGroupReplicationRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {tabletmanagerdata.StopGroupReplicationRequest} StopGroupReplicationRequest
+         */
+        StopGroupReplicationRequest.fromObject = function (object, _depth) {
+            if (object instanceof $root.tabletmanagerdata.StopGroupReplicationRequest)
+                return object;
+            if (!$util.isObject(object))
+                throw $TypeError(".tabletmanagerdata.StopGroupReplicationRequest: object expected");
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            return new $root.tabletmanagerdata.StopGroupReplicationRequest();
+        };
+
+        /**
+         * Creates a plain object from a StopGroupReplicationRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof tabletmanagerdata.StopGroupReplicationRequest
+         * @static
+         * @param {tabletmanagerdata.StopGroupReplicationRequest} message StopGroupReplicationRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        StopGroupReplicationRequest.toObject = function () {
+            return {};
+        };
+
+        /**
+         * Converts this StopGroupReplicationRequest to JSON.
+         * @function toJSON
+         * @memberof tabletmanagerdata.StopGroupReplicationRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        StopGroupReplicationRequest.prototype.toJSON = function() {
+            return StopGroupReplicationRequest.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        /**
+         * Gets the type url for StopGroupReplicationRequest
+         * @function getTypeUrl
+         * @memberof tabletmanagerdata.StopGroupReplicationRequest
+         * @static
+         * @param {string} [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns {string} The type url
+         */
+        StopGroupReplicationRequest.getTypeUrl = function(prefix) {
+            if (prefix === $undefined)
+                prefix = "type.googleapis.com";
+            return prefix + "/tabletmanagerdata.StopGroupReplicationRequest";
+        };
+
+        return StopGroupReplicationRequest;
+    })();
+
+    tabletmanagerdata.StopGroupReplicationResponse = (function() {
+
+        /**
+         * Properties of a StopGroupReplicationResponse.
+         * @typedef {Object} tabletmanagerdata.StopGroupReplicationResponse.$Properties
+         * @property {replicationdata.GroupReplicationStatus.$Properties|null} [status] StopGroupReplicationResponse status
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+
+        /**
+         * Properties of a StopGroupReplicationResponse.
+         * @memberof tabletmanagerdata
+         * @interface IStopGroupReplicationResponse
+         * @augments tabletmanagerdata.StopGroupReplicationResponse.$Properties
+         * @deprecated Use tabletmanagerdata.StopGroupReplicationResponse.$Properties instead.
+         */
+
+        /**
+         * Shape of a StopGroupReplicationResponse.
+         * @typedef {tabletmanagerdata.StopGroupReplicationResponse.$Properties} tabletmanagerdata.StopGroupReplicationResponse.$Shape
+         */
+
+        /**
+         * Constructs a new StopGroupReplicationResponse.
+         * @memberof tabletmanagerdata
+         * @classdesc Represents a StopGroupReplicationResponse.
+         * @constructor
+         * @param {tabletmanagerdata.StopGroupReplicationResponse.$Properties=} [properties] Properties to set
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+        const StopGroupReplicationResponse = function (properties) {
+            if (properties)
+                for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                        this[keys[i]] = properties[keys[i]];
+        };
+
+        /**
+         * StopGroupReplicationResponse status.
+         * @member {replicationdata.GroupReplicationStatus.$Properties|null|undefined} status
+         * @memberof tabletmanagerdata.StopGroupReplicationResponse
+         * @instance
+         */
+        StopGroupReplicationResponse.prototype.status = null;
+
+        /**
+         * Creates a new StopGroupReplicationResponse instance using the specified properties.
+         * @function create
+         * @memberof tabletmanagerdata.StopGroupReplicationResponse
+         * @static
+         * @param {tabletmanagerdata.StopGroupReplicationResponse.$Properties=} [properties] Properties to set
+         * @returns {tabletmanagerdata.StopGroupReplicationResponse} StopGroupReplicationResponse instance
+         * @type {{
+         *   (properties: tabletmanagerdata.StopGroupReplicationResponse.$Shape): tabletmanagerdata.StopGroupReplicationResponse & tabletmanagerdata.StopGroupReplicationResponse.$Shape;
+         *   (properties?: tabletmanagerdata.StopGroupReplicationResponse.$Properties): tabletmanagerdata.StopGroupReplicationResponse;
+         * }}
+         */
+        StopGroupReplicationResponse.create = function(properties) {
+            return new StopGroupReplicationResponse(properties);
+        };
+
+        /**
+         * Encodes the specified StopGroupReplicationResponse message. Does not implicitly {@link tabletmanagerdata.StopGroupReplicationResponse.verify|verify} messages.
+         * @function encode
+         * @memberof tabletmanagerdata.StopGroupReplicationResponse
+         * @static
+         * @param {tabletmanagerdata.StopGroupReplicationResponse.$Properties} message StopGroupReplicationResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        StopGroupReplicationResponse.encode = function (message, writer, _depth) {
+            if (!writer)
+                writer = $Writer.create();
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            if (message.status != null && $Object.hasOwnProperty.call(message, "status"))
+                $root.replicationdata.GroupReplicationStatus.encode(message.status, writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
+            if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
+                for (let i = 0; i < message.$unknowns.length; ++i)
+                    writer.raw(message.$unknowns[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified StopGroupReplicationResponse message, length delimited. Does not implicitly {@link tabletmanagerdata.StopGroupReplicationResponse.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof tabletmanagerdata.StopGroupReplicationResponse
+         * @static
+         * @param {tabletmanagerdata.StopGroupReplicationResponse.$Properties} message StopGroupReplicationResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        StopGroupReplicationResponse.encodeDelimited = function(message, writer) {
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
+        };
+
+        /**
+         * Decodes a StopGroupReplicationResponse message from the specified reader or buffer.
+         * @function decode
+         * @memberof tabletmanagerdata.StopGroupReplicationResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {tabletmanagerdata.StopGroupReplicationResponse & tabletmanagerdata.StopGroupReplicationResponse.$Shape} StopGroupReplicationResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        StopGroupReplicationResponse.decode = function (reader, length, _end, _depth, _target) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $Reader.recursionLimit)
+                throw $Error("max depth exceeded");
+            let end, message, value;
+            if (length === $undefined)
+                end = reader.len;
+            else {
+                end = reader.pos + length;
+                if (end > reader.len)
+                    throw $RangeError("index out of range");
+                length = reader.len;
+                reader.len = end;
+            }
+            message = _target || new $root.tabletmanagerdata.StopGroupReplicationResponse();
+            while (reader.pos < end) {
+                let start = reader.pos;
+                let tag = reader.tag();
+                if (tag === _end) {
+                    _end = $undefined;
+                    break;
+                }
+                let wireType = tag & 7;
+                switch (tag >>>= 3) {
+                case 1: {
+                        if (wireType !== 2)
+                            break;
+                        message.status = $root.replicationdata.GroupReplicationStatus.decode(reader, reader.uint32(), $undefined, _depth + 1, message.status);
+                        continue;
+                    }
+                }
+                reader.skipType(wireType, _depth, tag);
+                if (!reader.discardUnknown) {
+                    $util.makeProp(message, "$unknowns", false);
+                    (message.$unknowns || (message.$unknowns = [])).push(reader.raw(start, reader.pos));
+                }
+            }
+            if (length !== $undefined) {
+                if (reader.pos !== end)
+                    throw $RangeError("index out of range");
+                reader.len = length;
+            }
+            if (_end !== $undefined)
+                throw $Error("missing end group");
+            return message;
+        };
+
+        /**
+         * Decodes a StopGroupReplicationResponse message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof tabletmanagerdata.StopGroupReplicationResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {tabletmanagerdata.StopGroupReplicationResponse & tabletmanagerdata.StopGroupReplicationResponse.$Shape} StopGroupReplicationResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        StopGroupReplicationResponse.decodeDelimited = function(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a StopGroupReplicationResponse message.
+         * @function verify
+         * @memberof tabletmanagerdata.StopGroupReplicationResponse
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        StopGroupReplicationResponse.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.status != null && $Object.hasOwnProperty.call(message, "status")) {
+                let error = $root.replicationdata.GroupReplicationStatus.verify(message.status, _depth + 1);
+                if (error)
+                    return "status." + error;
+            }
+            return null;
+        };
+
+        /**
+         * Creates a StopGroupReplicationResponse message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof tabletmanagerdata.StopGroupReplicationResponse
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {tabletmanagerdata.StopGroupReplicationResponse} StopGroupReplicationResponse
+         */
+        StopGroupReplicationResponse.fromObject = function (object, _depth) {
+            if (object instanceof $root.tabletmanagerdata.StopGroupReplicationResponse)
+                return object;
+            if (!$util.isObject(object))
+                throw $TypeError(".tabletmanagerdata.StopGroupReplicationResponse: object expected");
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let message = new $root.tabletmanagerdata.StopGroupReplicationResponse();
+            if (object.status != null) {
+                if (!$util.isObject(object.status))
+                    throw $TypeError(".tabletmanagerdata.StopGroupReplicationResponse.status: object expected");
+                message.status = $root.replicationdata.GroupReplicationStatus.fromObject(object.status, _depth + 1);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a StopGroupReplicationResponse message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof tabletmanagerdata.StopGroupReplicationResponse
+         * @static
+         * @param {tabletmanagerdata.StopGroupReplicationResponse} message StopGroupReplicationResponse
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        StopGroupReplicationResponse.toObject = function (message, options, _depth) {
+            if (!options)
+                options = {};
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let object = {};
+            if (options.defaults)
+                object.status = null;
+            if (message.status != null && $Object.hasOwnProperty.call(message, "status"))
+                object.status = $root.replicationdata.GroupReplicationStatus.toObject(message.status, options, _depth + 1);
+            return object;
+        };
+
+        /**
+         * Converts this StopGroupReplicationResponse to JSON.
+         * @function toJSON
+         * @memberof tabletmanagerdata.StopGroupReplicationResponse
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        StopGroupReplicationResponse.prototype.toJSON = function() {
+            return StopGroupReplicationResponse.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        /**
+         * Gets the type url for StopGroupReplicationResponse
+         * @function getTypeUrl
+         * @memberof tabletmanagerdata.StopGroupReplicationResponse
+         * @static
+         * @param {string} [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns {string} The type url
+         */
+        StopGroupReplicationResponse.getTypeUrl = function(prefix) {
+            if (prefix === $undefined)
+                prefix = "type.googleapis.com";
+            return prefix + "/tabletmanagerdata.StopGroupReplicationResponse";
+        };
+
+        return StopGroupReplicationResponse;
     })();
 
     tabletmanagerdata.FullStatusRequest = (function() {
@@ -160948,6 +162684,9 @@ export const replicationdata = $root.replicationdata = (() => {
          * @property {boolean|null} [semi_sync_blocked] FullStatus semi_sync_blocked
          * @property {topodata.TabletType|null} [tablet_type] FullStatus tablet_type
          * @property {Array.<replicationdata.ShardPeerHealth.$Properties>|null} [shard_peer_health] FullStatus shard_peer_health
+         * @property {replicationdata.GroupReplicationStatus.$Properties|null} [group_replication_status] FullStatus group_replication_status
+         * @property {boolean|null} [group_replication_enabled] FullStatus group_replication_enabled
+         * @property {boolean|null} [shard_durability_policy_supported] FullStatus shard_durability_policy_supported
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -161189,6 +162928,30 @@ export const replicationdata = $root.replicationdata = (() => {
         FullStatus.prototype.shard_peer_health = $util.emptyArray;
 
         /**
+         * FullStatus group_replication_status.
+         * @member {replicationdata.GroupReplicationStatus.$Properties|null|undefined} group_replication_status
+         * @memberof replicationdata.FullStatus
+         * @instance
+         */
+        FullStatus.prototype.group_replication_status = null;
+
+        /**
+         * FullStatus group_replication_enabled.
+         * @member {boolean} group_replication_enabled
+         * @memberof replicationdata.FullStatus
+         * @instance
+         */
+        FullStatus.prototype.group_replication_enabled = false;
+
+        /**
+         * FullStatus shard_durability_policy_supported.
+         * @member {boolean} shard_durability_policy_supported
+         * @memberof replicationdata.FullStatus
+         * @instance
+         */
+        FullStatus.prototype.shard_durability_policy_supported = false;
+
+        /**
          * Creates a new FullStatus instance using the specified properties.
          * @function create
          * @memberof replicationdata.FullStatus
@@ -161273,6 +163036,12 @@ export const replicationdata = $root.replicationdata = (() => {
             if (message.shard_peer_health != null && message.shard_peer_health.length)
                 for (let i = 0; i < message.shard_peer_health.length; ++i)
                     $root.replicationdata.ShardPeerHealth.encode(message.shard_peer_health[i], writer.uint32(/* id 26, wireType 2 =*/210).fork(), _depth + 1).ldelim();
+            if (message.group_replication_status != null && $Object.hasOwnProperty.call(message, "group_replication_status"))
+                $root.replicationdata.GroupReplicationStatus.encode(message.group_replication_status, writer.uint32(/* id 27, wireType 2 =*/218).fork(), _depth + 1).ldelim();
+            if (message.group_replication_enabled != null && $Object.hasOwnProperty.call(message, "group_replication_enabled") && message.group_replication_enabled !== false)
+                writer.uint32(/* id 28, wireType 0 =*/224).bool(message.group_replication_enabled);
+            if (message.shard_durability_policy_supported != null && $Object.hasOwnProperty.call(message, "shard_durability_policy_supported") && message.shard_durability_policy_supported !== false)
+                writer.uint32(/* id 29, wireType 0 =*/232).bool(message.shard_durability_policy_supported);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -161554,6 +163323,30 @@ export const replicationdata = $root.replicationdata = (() => {
                         message.shard_peer_health.push($root.replicationdata.ShardPeerHealth.decode(reader, reader.uint32(), $undefined, _depth + 1));
                         continue;
                     }
+                case 27: {
+                        if (wireType !== 2)
+                            break;
+                        message.group_replication_status = $root.replicationdata.GroupReplicationStatus.decode(reader, reader.uint32(), $undefined, _depth + 1, message.group_replication_status);
+                        continue;
+                    }
+                case 28: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.bool())
+                            message.group_replication_enabled = value;
+                        else
+                            delete message.group_replication_enabled;
+                        continue;
+                    }
+                case 29: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.bool())
+                            message.shard_durability_policy_supported = value;
+                        else
+                            delete message.shard_durability_policy_supported;
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -161692,6 +163485,17 @@ export const replicationdata = $root.replicationdata = (() => {
                         return "shard_peer_health." + error;
                 }
             }
+            if (message.group_replication_status != null && $Object.hasOwnProperty.call(message, "group_replication_status")) {
+                let error = $root.replicationdata.GroupReplicationStatus.verify(message.group_replication_status, _depth + 1);
+                if (error)
+                    return "group_replication_status." + error;
+            }
+            if (message.group_replication_enabled != null && $Object.hasOwnProperty.call(message, "group_replication_enabled"))
+                if (typeof message.group_replication_enabled !== "boolean")
+                    return "group_replication_enabled: boolean expected";
+            if (message.shard_durability_policy_supported != null && $Object.hasOwnProperty.call(message, "shard_durability_policy_supported"))
+                if (typeof message.shard_durability_policy_supported !== "boolean")
+                    return "shard_durability_policy_supported: boolean expected";
             return null;
         };
 
@@ -161858,6 +163662,17 @@ export const replicationdata = $root.replicationdata = (() => {
                     message.shard_peer_health[i] = $root.replicationdata.ShardPeerHealth.fromObject(object.shard_peer_health[i], _depth + 1);
                 }
             }
+            if (object.group_replication_status != null) {
+                if (!$util.isObject(object.group_replication_status))
+                    throw $TypeError(".replicationdata.FullStatus.group_replication_status: object expected");
+                message.group_replication_status = $root.replicationdata.GroupReplicationStatus.fromObject(object.group_replication_status, _depth + 1);
+            }
+            if (object.group_replication_enabled != null)
+                if (object.group_replication_enabled)
+                    message.group_replication_enabled = $Boolean(object.group_replication_enabled);
+            if (object.shard_durability_policy_supported != null)
+                if (object.shard_durability_policy_supported)
+                    message.shard_durability_policy_supported = $Boolean(object.shard_durability_policy_supported);
             return message;
         };
 
@@ -161910,6 +163725,9 @@ export const replicationdata = $root.replicationdata = (() => {
                 object.disk_stalled = false;
                 object.semi_sync_blocked = false;
                 object.tablet_type = options.enums === $String ? "UNKNOWN" : 0;
+                object.group_replication_status = null;
+                object.group_replication_enabled = false;
+                object.shard_durability_policy_supported = false;
             }
             if (message.server_id != null && $Object.hasOwnProperty.call(message, "server_id"))
                 object.server_id = message.server_id;
@@ -161971,6 +163789,12 @@ export const replicationdata = $root.replicationdata = (() => {
                 for (let j = 0; j < message.shard_peer_health.length; ++j)
                     object.shard_peer_health[j] = $root.replicationdata.ShardPeerHealth.toObject(message.shard_peer_health[j], options, _depth + 1);
             }
+            if (message.group_replication_status != null && $Object.hasOwnProperty.call(message, "group_replication_status"))
+                object.group_replication_status = $root.replicationdata.GroupReplicationStatus.toObject(message.group_replication_status, options, _depth + 1);
+            if (message.group_replication_enabled != null && $Object.hasOwnProperty.call(message, "group_replication_enabled"))
+                object.group_replication_enabled = message.group_replication_enabled;
+            if (message.shard_durability_policy_supported != null && $Object.hasOwnProperty.call(message, "shard_durability_policy_supported"))
+                object.shard_durability_policy_supported = message.shard_durability_policy_supported;
             return object;
         };
 
@@ -162000,6 +163824,1098 @@ export const replicationdata = $root.replicationdata = (() => {
         };
 
         return FullStatus;
+    })();
+
+    replicationdata.GroupReplicationMember = (function() {
+
+        /**
+         * Properties of a GroupReplicationMember.
+         * @typedef {Object} replicationdata.GroupReplicationMember.$Properties
+         * @property {string|null} [member_uuid] GroupReplicationMember member_uuid
+         * @property {string|null} [host] GroupReplicationMember host
+         * @property {number|null} [port] GroupReplicationMember port
+         * @property {string|null} [state] GroupReplicationMember state
+         * @property {string|null} [role] GroupReplicationMember role
+         * @property {string|null} [version] GroupReplicationMember version
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+
+        /**
+         * Properties of a GroupReplicationMember.
+         * @memberof replicationdata
+         * @interface IGroupReplicationMember
+         * @augments replicationdata.GroupReplicationMember.$Properties
+         * @deprecated Use replicationdata.GroupReplicationMember.$Properties instead.
+         */
+
+        /**
+         * Shape of a GroupReplicationMember.
+         * @typedef {replicationdata.GroupReplicationMember.$Properties} replicationdata.GroupReplicationMember.$Shape
+         */
+
+        /**
+         * Constructs a new GroupReplicationMember.
+         * @memberof replicationdata
+         * @classdesc Represents a GroupReplicationMember.
+         * @constructor
+         * @param {replicationdata.GroupReplicationMember.$Properties=} [properties] Properties to set
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+        const GroupReplicationMember = function (properties) {
+            if (properties)
+                for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                        this[keys[i]] = properties[keys[i]];
+        };
+
+        /**
+         * GroupReplicationMember member_uuid.
+         * @member {string} member_uuid
+         * @memberof replicationdata.GroupReplicationMember
+         * @instance
+         */
+        GroupReplicationMember.prototype.member_uuid = "";
+
+        /**
+         * GroupReplicationMember host.
+         * @member {string} host
+         * @memberof replicationdata.GroupReplicationMember
+         * @instance
+         */
+        GroupReplicationMember.prototype.host = "";
+
+        /**
+         * GroupReplicationMember port.
+         * @member {number} port
+         * @memberof replicationdata.GroupReplicationMember
+         * @instance
+         */
+        GroupReplicationMember.prototype.port = 0;
+
+        /**
+         * GroupReplicationMember state.
+         * @member {string} state
+         * @memberof replicationdata.GroupReplicationMember
+         * @instance
+         */
+        GroupReplicationMember.prototype.state = "";
+
+        /**
+         * GroupReplicationMember role.
+         * @member {string} role
+         * @memberof replicationdata.GroupReplicationMember
+         * @instance
+         */
+        GroupReplicationMember.prototype.role = "";
+
+        /**
+         * GroupReplicationMember version.
+         * @member {string} version
+         * @memberof replicationdata.GroupReplicationMember
+         * @instance
+         */
+        GroupReplicationMember.prototype.version = "";
+
+        /**
+         * Creates a new GroupReplicationMember instance using the specified properties.
+         * @function create
+         * @memberof replicationdata.GroupReplicationMember
+         * @static
+         * @param {replicationdata.GroupReplicationMember.$Properties=} [properties] Properties to set
+         * @returns {replicationdata.GroupReplicationMember} GroupReplicationMember instance
+         * @type {{
+         *   (properties: replicationdata.GroupReplicationMember.$Shape): replicationdata.GroupReplicationMember & replicationdata.GroupReplicationMember.$Shape;
+         *   (properties?: replicationdata.GroupReplicationMember.$Properties): replicationdata.GroupReplicationMember;
+         * }}
+         */
+        GroupReplicationMember.create = function(properties) {
+            return new GroupReplicationMember(properties);
+        };
+
+        /**
+         * Encodes the specified GroupReplicationMember message. Does not implicitly {@link replicationdata.GroupReplicationMember.verify|verify} messages.
+         * @function encode
+         * @memberof replicationdata.GroupReplicationMember
+         * @static
+         * @param {replicationdata.GroupReplicationMember.$Properties} message GroupReplicationMember message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GroupReplicationMember.encode = function (message, writer, _depth) {
+            if (!writer)
+                writer = $Writer.create();
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            if (message.member_uuid != null && $Object.hasOwnProperty.call(message, "member_uuid") && message.member_uuid !== "")
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.member_uuid);
+            if (message.host != null && $Object.hasOwnProperty.call(message, "host") && message.host !== "")
+                writer.uint32(/* id 2, wireType 2 =*/18).string(message.host);
+            if (message.port != null && $Object.hasOwnProperty.call(message, "port") && message.port !== 0)
+                writer.uint32(/* id 3, wireType 0 =*/24).int32(message.port);
+            if (message.state != null && $Object.hasOwnProperty.call(message, "state") && message.state !== "")
+                writer.uint32(/* id 4, wireType 2 =*/34).string(message.state);
+            if (message.role != null && $Object.hasOwnProperty.call(message, "role") && message.role !== "")
+                writer.uint32(/* id 5, wireType 2 =*/42).string(message.role);
+            if (message.version != null && $Object.hasOwnProperty.call(message, "version") && message.version !== "")
+                writer.uint32(/* id 6, wireType 2 =*/50).string(message.version);
+            if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
+                for (let i = 0; i < message.$unknowns.length; ++i)
+                    writer.raw(message.$unknowns[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified GroupReplicationMember message, length delimited. Does not implicitly {@link replicationdata.GroupReplicationMember.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof replicationdata.GroupReplicationMember
+         * @static
+         * @param {replicationdata.GroupReplicationMember.$Properties} message GroupReplicationMember message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GroupReplicationMember.encodeDelimited = function(message, writer) {
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
+        };
+
+        /**
+         * Decodes a GroupReplicationMember message from the specified reader or buffer.
+         * @function decode
+         * @memberof replicationdata.GroupReplicationMember
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {replicationdata.GroupReplicationMember & replicationdata.GroupReplicationMember.$Shape} GroupReplicationMember
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GroupReplicationMember.decode = function (reader, length, _end, _depth, _target) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $Reader.recursionLimit)
+                throw $Error("max depth exceeded");
+            let end, message, value;
+            if (length === $undefined)
+                end = reader.len;
+            else {
+                end = reader.pos + length;
+                if (end > reader.len)
+                    throw $RangeError("index out of range");
+                length = reader.len;
+                reader.len = end;
+            }
+            message = _target || new $root.replicationdata.GroupReplicationMember();
+            while (reader.pos < end) {
+                let start = reader.pos;
+                let tag = reader.tag();
+                if (tag === _end) {
+                    _end = $undefined;
+                    break;
+                }
+                let wireType = tag & 7;
+                switch (tag >>>= 3) {
+                case 1: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.member_uuid = value;
+                        else
+                            delete message.member_uuid;
+                        continue;
+                    }
+                case 2: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.host = value;
+                        else
+                            delete message.host;
+                        continue;
+                    }
+                case 3: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.int32())
+                            message.port = value;
+                        else
+                            delete message.port;
+                        continue;
+                    }
+                case 4: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.state = value;
+                        else
+                            delete message.state;
+                        continue;
+                    }
+                case 5: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.role = value;
+                        else
+                            delete message.role;
+                        continue;
+                    }
+                case 6: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.version = value;
+                        else
+                            delete message.version;
+                        continue;
+                    }
+                }
+                reader.skipType(wireType, _depth, tag);
+                if (!reader.discardUnknown) {
+                    $util.makeProp(message, "$unknowns", false);
+                    (message.$unknowns || (message.$unknowns = [])).push(reader.raw(start, reader.pos));
+                }
+            }
+            if (length !== $undefined) {
+                if (reader.pos !== end)
+                    throw $RangeError("index out of range");
+                reader.len = length;
+            }
+            if (_end !== $undefined)
+                throw $Error("missing end group");
+            return message;
+        };
+
+        /**
+         * Decodes a GroupReplicationMember message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof replicationdata.GroupReplicationMember
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {replicationdata.GroupReplicationMember & replicationdata.GroupReplicationMember.$Shape} GroupReplicationMember
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GroupReplicationMember.decodeDelimited = function(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a GroupReplicationMember message.
+         * @function verify
+         * @memberof replicationdata.GroupReplicationMember
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        GroupReplicationMember.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.member_uuid != null && $Object.hasOwnProperty.call(message, "member_uuid"))
+                if (!$util.isString(message.member_uuid))
+                    return "member_uuid: string expected";
+            if (message.host != null && $Object.hasOwnProperty.call(message, "host"))
+                if (!$util.isString(message.host))
+                    return "host: string expected";
+            if (message.port != null && $Object.hasOwnProperty.call(message, "port"))
+                if (!$util.isInteger(message.port))
+                    return "port: integer expected";
+            if (message.state != null && $Object.hasOwnProperty.call(message, "state"))
+                if (!$util.isString(message.state))
+                    return "state: string expected";
+            if (message.role != null && $Object.hasOwnProperty.call(message, "role"))
+                if (!$util.isString(message.role))
+                    return "role: string expected";
+            if (message.version != null && $Object.hasOwnProperty.call(message, "version"))
+                if (!$util.isString(message.version))
+                    return "version: string expected";
+            return null;
+        };
+
+        /**
+         * Creates a GroupReplicationMember message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof replicationdata.GroupReplicationMember
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {replicationdata.GroupReplicationMember} GroupReplicationMember
+         */
+        GroupReplicationMember.fromObject = function (object, _depth) {
+            if (object instanceof $root.replicationdata.GroupReplicationMember)
+                return object;
+            if (!$util.isObject(object))
+                throw $TypeError(".replicationdata.GroupReplicationMember: object expected");
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let message = new $root.replicationdata.GroupReplicationMember();
+            if (object.member_uuid != null)
+                if (typeof object.member_uuid !== "string" || object.member_uuid.length)
+                    message.member_uuid = $String(object.member_uuid);
+            if (object.host != null)
+                if (typeof object.host !== "string" || object.host.length)
+                    message.host = $String(object.host);
+            if (object.port != null)
+                if ($Number(object.port) !== 0)
+                    message.port = object.port | 0;
+            if (object.state != null)
+                if (typeof object.state !== "string" || object.state.length)
+                    message.state = $String(object.state);
+            if (object.role != null)
+                if (typeof object.role !== "string" || object.role.length)
+                    message.role = $String(object.role);
+            if (object.version != null)
+                if (typeof object.version !== "string" || object.version.length)
+                    message.version = $String(object.version);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a GroupReplicationMember message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof replicationdata.GroupReplicationMember
+         * @static
+         * @param {replicationdata.GroupReplicationMember} message GroupReplicationMember
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        GroupReplicationMember.toObject = function (message, options, _depth) {
+            if (!options)
+                options = {};
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let object = {};
+            if (options.defaults) {
+                object.member_uuid = "";
+                object.host = "";
+                object.port = 0;
+                object.state = "";
+                object.role = "";
+                object.version = "";
+            }
+            if (message.member_uuid != null && $Object.hasOwnProperty.call(message, "member_uuid"))
+                object.member_uuid = message.member_uuid;
+            if (message.host != null && $Object.hasOwnProperty.call(message, "host"))
+                object.host = message.host;
+            if (message.port != null && $Object.hasOwnProperty.call(message, "port"))
+                object.port = message.port;
+            if (message.state != null && $Object.hasOwnProperty.call(message, "state"))
+                object.state = message.state;
+            if (message.role != null && $Object.hasOwnProperty.call(message, "role"))
+                object.role = message.role;
+            if (message.version != null && $Object.hasOwnProperty.call(message, "version"))
+                object.version = message.version;
+            return object;
+        };
+
+        /**
+         * Converts this GroupReplicationMember to JSON.
+         * @function toJSON
+         * @memberof replicationdata.GroupReplicationMember
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        GroupReplicationMember.prototype.toJSON = function() {
+            return GroupReplicationMember.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        /**
+         * Gets the type url for GroupReplicationMember
+         * @function getTypeUrl
+         * @memberof replicationdata.GroupReplicationMember
+         * @static
+         * @param {string} [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns {string} The type url
+         */
+        GroupReplicationMember.getTypeUrl = function(prefix) {
+            if (prefix === $undefined)
+                prefix = "type.googleapis.com";
+            return prefix + "/replicationdata.GroupReplicationMember";
+        };
+
+        return GroupReplicationMember;
+    })();
+
+    replicationdata.GroupReplicationStatus = (function() {
+
+        /**
+         * Properties of a GroupReplicationStatus.
+         * @typedef {Object} replicationdata.GroupReplicationStatus.$Properties
+         * @property {boolean|null} [plugin_active] GroupReplicationStatus plugin_active
+         * @property {string|null} [group_name] GroupReplicationStatus group_name
+         * @property {string|null} [member_state] GroupReplicationStatus member_state
+         * @property {string|null} [member_role] GroupReplicationStatus member_role
+         * @property {string|null} [primary_uuid] GroupReplicationStatus primary_uuid
+         * @property {string|null} [view_id] GroupReplicationStatus view_id
+         * @property {Array.<replicationdata.GroupReplicationMember.$Properties>|null} [members] GroupReplicationStatus members
+         * @property {boolean|null} [has_quorum] GroupReplicationStatus has_quorum
+         * @property {string|null} [received_transaction_set] GroupReplicationStatus received_transaction_set
+         * @property {boolean|null} [single_primary_mode] GroupReplicationStatus single_primary_mode
+         * @property {number|null} [member_weight] GroupReplicationStatus member_weight
+         * @property {boolean|null} [paxos_single_leader] GroupReplicationStatus paxos_single_leader
+         * @property {boolean|null} [start_in_progress] GroupReplicationStatus start_in_progress
+         * @property {boolean|null} [primary_election_in_progress] GroupReplicationStatus primary_election_in_progress
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+
+        /**
+         * Properties of a GroupReplicationStatus.
+         * @memberof replicationdata
+         * @interface IGroupReplicationStatus
+         * @augments replicationdata.GroupReplicationStatus.$Properties
+         * @deprecated Use replicationdata.GroupReplicationStatus.$Properties instead.
+         */
+
+        /**
+         * Shape of a GroupReplicationStatus.
+         * @typedef {replicationdata.GroupReplicationStatus.$Properties} replicationdata.GroupReplicationStatus.$Shape
+         */
+
+        /**
+         * Constructs a new GroupReplicationStatus.
+         * @memberof replicationdata
+         * @classdesc Represents a GroupReplicationStatus.
+         * @constructor
+         * @param {replicationdata.GroupReplicationStatus.$Properties=} [properties] Properties to set
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+        const GroupReplicationStatus = function (properties) {
+            this.members = [];
+            if (properties)
+                for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                        this[keys[i]] = properties[keys[i]];
+        };
+
+        /**
+         * GroupReplicationStatus plugin_active.
+         * @member {boolean} plugin_active
+         * @memberof replicationdata.GroupReplicationStatus
+         * @instance
+         */
+        GroupReplicationStatus.prototype.plugin_active = false;
+
+        /**
+         * GroupReplicationStatus group_name.
+         * @member {string} group_name
+         * @memberof replicationdata.GroupReplicationStatus
+         * @instance
+         */
+        GroupReplicationStatus.prototype.group_name = "";
+
+        /**
+         * GroupReplicationStatus member_state.
+         * @member {string} member_state
+         * @memberof replicationdata.GroupReplicationStatus
+         * @instance
+         */
+        GroupReplicationStatus.prototype.member_state = "";
+
+        /**
+         * GroupReplicationStatus member_role.
+         * @member {string} member_role
+         * @memberof replicationdata.GroupReplicationStatus
+         * @instance
+         */
+        GroupReplicationStatus.prototype.member_role = "";
+
+        /**
+         * GroupReplicationStatus primary_uuid.
+         * @member {string} primary_uuid
+         * @memberof replicationdata.GroupReplicationStatus
+         * @instance
+         */
+        GroupReplicationStatus.prototype.primary_uuid = "";
+
+        /**
+         * GroupReplicationStatus view_id.
+         * @member {string} view_id
+         * @memberof replicationdata.GroupReplicationStatus
+         * @instance
+         */
+        GroupReplicationStatus.prototype.view_id = "";
+
+        /**
+         * GroupReplicationStatus members.
+         * @member {Array.<replicationdata.GroupReplicationMember.$Properties>} members
+         * @memberof replicationdata.GroupReplicationStatus
+         * @instance
+         */
+        GroupReplicationStatus.prototype.members = $util.emptyArray;
+
+        /**
+         * GroupReplicationStatus has_quorum.
+         * @member {boolean} has_quorum
+         * @memberof replicationdata.GroupReplicationStatus
+         * @instance
+         */
+        GroupReplicationStatus.prototype.has_quorum = false;
+
+        /**
+         * GroupReplicationStatus received_transaction_set.
+         * @member {string} received_transaction_set
+         * @memberof replicationdata.GroupReplicationStatus
+         * @instance
+         */
+        GroupReplicationStatus.prototype.received_transaction_set = "";
+
+        /**
+         * GroupReplicationStatus single_primary_mode.
+         * @member {boolean} single_primary_mode
+         * @memberof replicationdata.GroupReplicationStatus
+         * @instance
+         */
+        GroupReplicationStatus.prototype.single_primary_mode = false;
+
+        /**
+         * GroupReplicationStatus member_weight.
+         * @member {number} member_weight
+         * @memberof replicationdata.GroupReplicationStatus
+         * @instance
+         */
+        GroupReplicationStatus.prototype.member_weight = 0;
+
+        /**
+         * GroupReplicationStatus paxos_single_leader.
+         * @member {boolean} paxos_single_leader
+         * @memberof replicationdata.GroupReplicationStatus
+         * @instance
+         */
+        GroupReplicationStatus.prototype.paxos_single_leader = false;
+
+        /**
+         * GroupReplicationStatus start_in_progress.
+         * @member {boolean} start_in_progress
+         * @memberof replicationdata.GroupReplicationStatus
+         * @instance
+         */
+        GroupReplicationStatus.prototype.start_in_progress = false;
+
+        /**
+         * GroupReplicationStatus primary_election_in_progress.
+         * @member {boolean} primary_election_in_progress
+         * @memberof replicationdata.GroupReplicationStatus
+         * @instance
+         */
+        GroupReplicationStatus.prototype.primary_election_in_progress = false;
+
+        /**
+         * Creates a new GroupReplicationStatus instance using the specified properties.
+         * @function create
+         * @memberof replicationdata.GroupReplicationStatus
+         * @static
+         * @param {replicationdata.GroupReplicationStatus.$Properties=} [properties] Properties to set
+         * @returns {replicationdata.GroupReplicationStatus} GroupReplicationStatus instance
+         * @type {{
+         *   (properties: replicationdata.GroupReplicationStatus.$Shape): replicationdata.GroupReplicationStatus & replicationdata.GroupReplicationStatus.$Shape;
+         *   (properties?: replicationdata.GroupReplicationStatus.$Properties): replicationdata.GroupReplicationStatus;
+         * }}
+         */
+        GroupReplicationStatus.create = function(properties) {
+            return new GroupReplicationStatus(properties);
+        };
+
+        /**
+         * Encodes the specified GroupReplicationStatus message. Does not implicitly {@link replicationdata.GroupReplicationStatus.verify|verify} messages.
+         * @function encode
+         * @memberof replicationdata.GroupReplicationStatus
+         * @static
+         * @param {replicationdata.GroupReplicationStatus.$Properties} message GroupReplicationStatus message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GroupReplicationStatus.encode = function (message, writer, _depth) {
+            if (!writer)
+                writer = $Writer.create();
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            if (message.plugin_active != null && $Object.hasOwnProperty.call(message, "plugin_active") && message.plugin_active !== false)
+                writer.uint32(/* id 1, wireType 0 =*/8).bool(message.plugin_active);
+            if (message.group_name != null && $Object.hasOwnProperty.call(message, "group_name") && message.group_name !== "")
+                writer.uint32(/* id 2, wireType 2 =*/18).string(message.group_name);
+            if (message.member_state != null && $Object.hasOwnProperty.call(message, "member_state") && message.member_state !== "")
+                writer.uint32(/* id 3, wireType 2 =*/26).string(message.member_state);
+            if (message.member_role != null && $Object.hasOwnProperty.call(message, "member_role") && message.member_role !== "")
+                writer.uint32(/* id 4, wireType 2 =*/34).string(message.member_role);
+            if (message.primary_uuid != null && $Object.hasOwnProperty.call(message, "primary_uuid") && message.primary_uuid !== "")
+                writer.uint32(/* id 5, wireType 2 =*/42).string(message.primary_uuid);
+            if (message.view_id != null && $Object.hasOwnProperty.call(message, "view_id") && message.view_id !== "")
+                writer.uint32(/* id 6, wireType 2 =*/50).string(message.view_id);
+            if (message.members != null && message.members.length)
+                for (let i = 0; i < message.members.length; ++i)
+                    $root.replicationdata.GroupReplicationMember.encode(message.members[i], writer.uint32(/* id 7, wireType 2 =*/58).fork(), _depth + 1).ldelim();
+            if (message.has_quorum != null && $Object.hasOwnProperty.call(message, "has_quorum") && message.has_quorum !== false)
+                writer.uint32(/* id 8, wireType 0 =*/64).bool(message.has_quorum);
+            if (message.received_transaction_set != null && $Object.hasOwnProperty.call(message, "received_transaction_set") && message.received_transaction_set !== "")
+                writer.uint32(/* id 9, wireType 2 =*/74).string(message.received_transaction_set);
+            if (message.single_primary_mode != null && $Object.hasOwnProperty.call(message, "single_primary_mode") && message.single_primary_mode !== false)
+                writer.uint32(/* id 10, wireType 0 =*/80).bool(message.single_primary_mode);
+            if (message.member_weight != null && $Object.hasOwnProperty.call(message, "member_weight") && message.member_weight !== 0)
+                writer.uint32(/* id 11, wireType 0 =*/88).int32(message.member_weight);
+            if (message.paxos_single_leader != null && $Object.hasOwnProperty.call(message, "paxos_single_leader") && message.paxos_single_leader !== false)
+                writer.uint32(/* id 12, wireType 0 =*/96).bool(message.paxos_single_leader);
+            if (message.start_in_progress != null && $Object.hasOwnProperty.call(message, "start_in_progress") && message.start_in_progress !== false)
+                writer.uint32(/* id 13, wireType 0 =*/104).bool(message.start_in_progress);
+            if (message.primary_election_in_progress != null && $Object.hasOwnProperty.call(message, "primary_election_in_progress") && message.primary_election_in_progress !== false)
+                writer.uint32(/* id 14, wireType 0 =*/112).bool(message.primary_election_in_progress);
+            if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
+                for (let i = 0; i < message.$unknowns.length; ++i)
+                    writer.raw(message.$unknowns[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified GroupReplicationStatus message, length delimited. Does not implicitly {@link replicationdata.GroupReplicationStatus.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof replicationdata.GroupReplicationStatus
+         * @static
+         * @param {replicationdata.GroupReplicationStatus.$Properties} message GroupReplicationStatus message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GroupReplicationStatus.encodeDelimited = function(message, writer) {
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
+        };
+
+        /**
+         * Decodes a GroupReplicationStatus message from the specified reader or buffer.
+         * @function decode
+         * @memberof replicationdata.GroupReplicationStatus
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {replicationdata.GroupReplicationStatus & replicationdata.GroupReplicationStatus.$Shape} GroupReplicationStatus
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GroupReplicationStatus.decode = function (reader, length, _end, _depth, _target) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $Reader.recursionLimit)
+                throw $Error("max depth exceeded");
+            let end, message, value;
+            if (length === $undefined)
+                end = reader.len;
+            else {
+                end = reader.pos + length;
+                if (end > reader.len)
+                    throw $RangeError("index out of range");
+                length = reader.len;
+                reader.len = end;
+            }
+            message = _target || new $root.replicationdata.GroupReplicationStatus();
+            while (reader.pos < end) {
+                let start = reader.pos;
+                let tag = reader.tag();
+                if (tag === _end) {
+                    _end = $undefined;
+                    break;
+                }
+                let wireType = tag & 7;
+                switch (tag >>>= 3) {
+                case 1: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.bool())
+                            message.plugin_active = value;
+                        else
+                            delete message.plugin_active;
+                        continue;
+                    }
+                case 2: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.group_name = value;
+                        else
+                            delete message.group_name;
+                        continue;
+                    }
+                case 3: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.member_state = value;
+                        else
+                            delete message.member_state;
+                        continue;
+                    }
+                case 4: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.member_role = value;
+                        else
+                            delete message.member_role;
+                        continue;
+                    }
+                case 5: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.primary_uuid = value;
+                        else
+                            delete message.primary_uuid;
+                        continue;
+                    }
+                case 6: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.view_id = value;
+                        else
+                            delete message.view_id;
+                        continue;
+                    }
+                case 7: {
+                        if (wireType !== 2)
+                            break;
+                        if (!(message.members && message.members.length))
+                            message.members = [];
+                        message.members.push($root.replicationdata.GroupReplicationMember.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        continue;
+                    }
+                case 8: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.bool())
+                            message.has_quorum = value;
+                        else
+                            delete message.has_quorum;
+                        continue;
+                    }
+                case 9: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.received_transaction_set = value;
+                        else
+                            delete message.received_transaction_set;
+                        continue;
+                    }
+                case 10: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.bool())
+                            message.single_primary_mode = value;
+                        else
+                            delete message.single_primary_mode;
+                        continue;
+                    }
+                case 11: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.int32())
+                            message.member_weight = value;
+                        else
+                            delete message.member_weight;
+                        continue;
+                    }
+                case 12: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.bool())
+                            message.paxos_single_leader = value;
+                        else
+                            delete message.paxos_single_leader;
+                        continue;
+                    }
+                case 13: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.bool())
+                            message.start_in_progress = value;
+                        else
+                            delete message.start_in_progress;
+                        continue;
+                    }
+                case 14: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.bool())
+                            message.primary_election_in_progress = value;
+                        else
+                            delete message.primary_election_in_progress;
+                        continue;
+                    }
+                }
+                reader.skipType(wireType, _depth, tag);
+                if (!reader.discardUnknown) {
+                    $util.makeProp(message, "$unknowns", false);
+                    (message.$unknowns || (message.$unknowns = [])).push(reader.raw(start, reader.pos));
+                }
+            }
+            if (length !== $undefined) {
+                if (reader.pos !== end)
+                    throw $RangeError("index out of range");
+                reader.len = length;
+            }
+            if (_end !== $undefined)
+                throw $Error("missing end group");
+            return message;
+        };
+
+        /**
+         * Decodes a GroupReplicationStatus message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof replicationdata.GroupReplicationStatus
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {replicationdata.GroupReplicationStatus & replicationdata.GroupReplicationStatus.$Shape} GroupReplicationStatus
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GroupReplicationStatus.decodeDelimited = function(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a GroupReplicationStatus message.
+         * @function verify
+         * @memberof replicationdata.GroupReplicationStatus
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        GroupReplicationStatus.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.plugin_active != null && $Object.hasOwnProperty.call(message, "plugin_active"))
+                if (typeof message.plugin_active !== "boolean")
+                    return "plugin_active: boolean expected";
+            if (message.group_name != null && $Object.hasOwnProperty.call(message, "group_name"))
+                if (!$util.isString(message.group_name))
+                    return "group_name: string expected";
+            if (message.member_state != null && $Object.hasOwnProperty.call(message, "member_state"))
+                if (!$util.isString(message.member_state))
+                    return "member_state: string expected";
+            if (message.member_role != null && $Object.hasOwnProperty.call(message, "member_role"))
+                if (!$util.isString(message.member_role))
+                    return "member_role: string expected";
+            if (message.primary_uuid != null && $Object.hasOwnProperty.call(message, "primary_uuid"))
+                if (!$util.isString(message.primary_uuid))
+                    return "primary_uuid: string expected";
+            if (message.view_id != null && $Object.hasOwnProperty.call(message, "view_id"))
+                if (!$util.isString(message.view_id))
+                    return "view_id: string expected";
+            if (message.members != null && $Object.hasOwnProperty.call(message, "members")) {
+                if (!$Array.isArray(message.members))
+                    return "members: array expected";
+                for (let i = 0; i < message.members.length; ++i) {
+                    let error = $root.replicationdata.GroupReplicationMember.verify(message.members[i], _depth + 1);
+                    if (error)
+                        return "members." + error;
+                }
+            }
+            if (message.has_quorum != null && $Object.hasOwnProperty.call(message, "has_quorum"))
+                if (typeof message.has_quorum !== "boolean")
+                    return "has_quorum: boolean expected";
+            if (message.received_transaction_set != null && $Object.hasOwnProperty.call(message, "received_transaction_set"))
+                if (!$util.isString(message.received_transaction_set))
+                    return "received_transaction_set: string expected";
+            if (message.single_primary_mode != null && $Object.hasOwnProperty.call(message, "single_primary_mode"))
+                if (typeof message.single_primary_mode !== "boolean")
+                    return "single_primary_mode: boolean expected";
+            if (message.member_weight != null && $Object.hasOwnProperty.call(message, "member_weight"))
+                if (!$util.isInteger(message.member_weight))
+                    return "member_weight: integer expected";
+            if (message.paxos_single_leader != null && $Object.hasOwnProperty.call(message, "paxos_single_leader"))
+                if (typeof message.paxos_single_leader !== "boolean")
+                    return "paxos_single_leader: boolean expected";
+            if (message.start_in_progress != null && $Object.hasOwnProperty.call(message, "start_in_progress"))
+                if (typeof message.start_in_progress !== "boolean")
+                    return "start_in_progress: boolean expected";
+            if (message.primary_election_in_progress != null && $Object.hasOwnProperty.call(message, "primary_election_in_progress"))
+                if (typeof message.primary_election_in_progress !== "boolean")
+                    return "primary_election_in_progress: boolean expected";
+            return null;
+        };
+
+        /**
+         * Creates a GroupReplicationStatus message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof replicationdata.GroupReplicationStatus
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {replicationdata.GroupReplicationStatus} GroupReplicationStatus
+         */
+        GroupReplicationStatus.fromObject = function (object, _depth) {
+            if (object instanceof $root.replicationdata.GroupReplicationStatus)
+                return object;
+            if (!$util.isObject(object))
+                throw $TypeError(".replicationdata.GroupReplicationStatus: object expected");
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let message = new $root.replicationdata.GroupReplicationStatus();
+            if (object.plugin_active != null)
+                if (object.plugin_active)
+                    message.plugin_active = $Boolean(object.plugin_active);
+            if (object.group_name != null)
+                if (typeof object.group_name !== "string" || object.group_name.length)
+                    message.group_name = $String(object.group_name);
+            if (object.member_state != null)
+                if (typeof object.member_state !== "string" || object.member_state.length)
+                    message.member_state = $String(object.member_state);
+            if (object.member_role != null)
+                if (typeof object.member_role !== "string" || object.member_role.length)
+                    message.member_role = $String(object.member_role);
+            if (object.primary_uuid != null)
+                if (typeof object.primary_uuid !== "string" || object.primary_uuid.length)
+                    message.primary_uuid = $String(object.primary_uuid);
+            if (object.view_id != null)
+                if (typeof object.view_id !== "string" || object.view_id.length)
+                    message.view_id = $String(object.view_id);
+            if (object.members) {
+                if (!$Array.isArray(object.members))
+                    throw $TypeError(".replicationdata.GroupReplicationStatus.members: array expected");
+                message.members = $Array(object.members.length);
+                for (let i = 0; i < object.members.length; ++i) {
+                    if (!$util.isObject(object.members[i]))
+                        throw $TypeError(".replicationdata.GroupReplicationStatus.members: object expected");
+                    message.members[i] = $root.replicationdata.GroupReplicationMember.fromObject(object.members[i], _depth + 1);
+                }
+            }
+            if (object.has_quorum != null)
+                if (object.has_quorum)
+                    message.has_quorum = $Boolean(object.has_quorum);
+            if (object.received_transaction_set != null)
+                if (typeof object.received_transaction_set !== "string" || object.received_transaction_set.length)
+                    message.received_transaction_set = $String(object.received_transaction_set);
+            if (object.single_primary_mode != null)
+                if (object.single_primary_mode)
+                    message.single_primary_mode = $Boolean(object.single_primary_mode);
+            if (object.member_weight != null)
+                if ($Number(object.member_weight) !== 0)
+                    message.member_weight = object.member_weight | 0;
+            if (object.paxos_single_leader != null)
+                if (object.paxos_single_leader)
+                    message.paxos_single_leader = $Boolean(object.paxos_single_leader);
+            if (object.start_in_progress != null)
+                if (object.start_in_progress)
+                    message.start_in_progress = $Boolean(object.start_in_progress);
+            if (object.primary_election_in_progress != null)
+                if (object.primary_election_in_progress)
+                    message.primary_election_in_progress = $Boolean(object.primary_election_in_progress);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a GroupReplicationStatus message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof replicationdata.GroupReplicationStatus
+         * @static
+         * @param {replicationdata.GroupReplicationStatus} message GroupReplicationStatus
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        GroupReplicationStatus.toObject = function (message, options, _depth) {
+            if (!options)
+                options = {};
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let object = {};
+            if (options.arrays || options.defaults)
+                object.members = [];
+            if (options.defaults) {
+                object.plugin_active = false;
+                object.group_name = "";
+                object.member_state = "";
+                object.member_role = "";
+                object.primary_uuid = "";
+                object.view_id = "";
+                object.has_quorum = false;
+                object.received_transaction_set = "";
+                object.single_primary_mode = false;
+                object.member_weight = 0;
+                object.paxos_single_leader = false;
+                object.start_in_progress = false;
+                object.primary_election_in_progress = false;
+            }
+            if (message.plugin_active != null && $Object.hasOwnProperty.call(message, "plugin_active"))
+                object.plugin_active = message.plugin_active;
+            if (message.group_name != null && $Object.hasOwnProperty.call(message, "group_name"))
+                object.group_name = message.group_name;
+            if (message.member_state != null && $Object.hasOwnProperty.call(message, "member_state"))
+                object.member_state = message.member_state;
+            if (message.member_role != null && $Object.hasOwnProperty.call(message, "member_role"))
+                object.member_role = message.member_role;
+            if (message.primary_uuid != null && $Object.hasOwnProperty.call(message, "primary_uuid"))
+                object.primary_uuid = message.primary_uuid;
+            if (message.view_id != null && $Object.hasOwnProperty.call(message, "view_id"))
+                object.view_id = message.view_id;
+            if (message.members && message.members.length) {
+                object.members = $Array(message.members.length);
+                for (let j = 0; j < message.members.length; ++j)
+                    object.members[j] = $root.replicationdata.GroupReplicationMember.toObject(message.members[j], options, _depth + 1);
+            }
+            if (message.has_quorum != null && $Object.hasOwnProperty.call(message, "has_quorum"))
+                object.has_quorum = message.has_quorum;
+            if (message.received_transaction_set != null && $Object.hasOwnProperty.call(message, "received_transaction_set"))
+                object.received_transaction_set = message.received_transaction_set;
+            if (message.single_primary_mode != null && $Object.hasOwnProperty.call(message, "single_primary_mode"))
+                object.single_primary_mode = message.single_primary_mode;
+            if (message.member_weight != null && $Object.hasOwnProperty.call(message, "member_weight"))
+                object.member_weight = message.member_weight;
+            if (message.paxos_single_leader != null && $Object.hasOwnProperty.call(message, "paxos_single_leader"))
+                object.paxos_single_leader = message.paxos_single_leader;
+            if (message.start_in_progress != null && $Object.hasOwnProperty.call(message, "start_in_progress"))
+                object.start_in_progress = message.start_in_progress;
+            if (message.primary_election_in_progress != null && $Object.hasOwnProperty.call(message, "primary_election_in_progress"))
+                object.primary_election_in_progress = message.primary_election_in_progress;
+            return object;
+        };
+
+        /**
+         * Converts this GroupReplicationStatus to JSON.
+         * @function toJSON
+         * @memberof replicationdata.GroupReplicationStatus
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        GroupReplicationStatus.prototype.toJSON = function() {
+            return GroupReplicationStatus.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        /**
+         * Gets the type url for GroupReplicationStatus
+         * @function getTypeUrl
+         * @memberof replicationdata.GroupReplicationStatus
+         * @static
+         * @param {string} [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns {string} The type url
+         */
+        GroupReplicationStatus.getTypeUrl = function(prefix) {
+            if (prefix === $undefined)
+                prefix = "type.googleapis.com";
+            return prefix + "/replicationdata.GroupReplicationStatus";
+        };
+
+        return GroupReplicationStatus;
     })();
 
     return replicationdata;
@@ -192696,6 +195612,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {boolean|null} [wait_for_all_tablets] EmergencyReparentShardRequest wait_for_all_tablets
          * @property {topodata.TabletAlias.$Properties|null} [expected_primary] EmergencyReparentShardRequest expected_primary
          * @property {boolean|null} [allow_split_brain_promotion] EmergencyReparentShardRequest allow_split_brain_promotion
+         * @property {string|null} [required_position] EmergencyReparentShardRequest required_position
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -192801,6 +195718,14 @@ export const vtctldata = $root.vtctldata = (() => {
         EmergencyReparentShardRequest.prototype.allow_split_brain_promotion = false;
 
         /**
+         * EmergencyReparentShardRequest required_position.
+         * @member {string} required_position
+         * @memberof vtctldata.EmergencyReparentShardRequest
+         * @instance
+         */
+        EmergencyReparentShardRequest.prototype.required_position = "";
+
+        /**
          * Creates a new EmergencyReparentShardRequest instance using the specified properties.
          * @function create
          * @memberof vtctldata.EmergencyReparentShardRequest
@@ -192851,6 +195776,8 @@ export const vtctldata = $root.vtctldata = (() => {
                 $root.topodata.TabletAlias.encode(message.expected_primary, writer.uint32(/* id 8, wireType 2 =*/66).fork(), _depth + 1).ldelim();
             if (message.allow_split_brain_promotion != null && $Object.hasOwnProperty.call(message, "allow_split_brain_promotion") && message.allow_split_brain_promotion !== false)
                 writer.uint32(/* id 9, wireType 0 =*/72).bool(message.allow_split_brain_promotion);
+            if (message.required_position != null && $Object.hasOwnProperty.call(message, "required_position") && message.required_position !== "")
+                writer.uint32(/* id 10, wireType 2 =*/82).string(message.required_position);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -192979,6 +195906,15 @@ export const vtctldata = $root.vtctldata = (() => {
                             delete message.allow_split_brain_promotion;
                         continue;
                     }
+                case 10: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.required_position = value;
+                        else
+                            delete message.required_position;
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -193066,6 +196002,9 @@ export const vtctldata = $root.vtctldata = (() => {
             if (message.allow_split_brain_promotion != null && $Object.hasOwnProperty.call(message, "allow_split_brain_promotion"))
                 if (typeof message.allow_split_brain_promotion !== "boolean")
                     return "allow_split_brain_promotion: boolean expected";
+            if (message.required_position != null && $Object.hasOwnProperty.call(message, "required_position"))
+                if (!$util.isString(message.required_position))
+                    return "required_position: string expected";
             return null;
         };
 
@@ -193127,6 +196066,9 @@ export const vtctldata = $root.vtctldata = (() => {
             if (object.allow_split_brain_promotion != null)
                 if (object.allow_split_brain_promotion)
                     message.allow_split_brain_promotion = $Boolean(object.allow_split_brain_promotion);
+            if (object.required_position != null)
+                if (typeof object.required_position !== "string" || object.required_position.length)
+                    message.required_position = $String(object.required_position);
             return message;
         };
 
@@ -193158,6 +196100,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 object.wait_for_all_tablets = false;
                 object.expected_primary = null;
                 object.allow_split_brain_promotion = false;
+                object.required_position = "";
             }
             if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
                 object.keyspace = message.keyspace;
@@ -193180,6 +196123,8 @@ export const vtctldata = $root.vtctldata = (() => {
                 object.expected_primary = $root.topodata.TabletAlias.toObject(message.expected_primary, options, _depth + 1);
             if (message.allow_split_brain_promotion != null && $Object.hasOwnProperty.call(message, "allow_split_brain_promotion"))
                 object.allow_split_brain_promotion = message.allow_split_brain_promotion;
+            if (message.required_position != null && $Object.hasOwnProperty.call(message, "required_position"))
+                object.required_position = message.required_position;
             return object;
         };
 
@@ -223580,6 +226525,1560 @@ export const vtctldata = $root.vtctldata = (() => {
         };
 
         return MigrateCompleteResponse;
+    })();
+
+    vtctldata.MigrateReplicationModeRequest = (function() {
+
+        /**
+         * Properties of a MigrateReplicationModeRequest.
+         * @typedef {Object} vtctldata.MigrateReplicationModeRequest.$Properties
+         * @property {string|null} [keyspace] MigrateReplicationModeRequest keyspace
+         * @property {string|null} [shard] MigrateReplicationModeRequest shard
+         * @property {string|null} [durability_policy] MigrateReplicationModeRequest durability_policy
+         * @property {boolean|null} [dry_run] MigrateReplicationModeRequest dry_run
+         * @property {vttime.Duration.$Properties|null} [wait_timeout] MigrateReplicationModeRequest wait_timeout
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+
+        /**
+         * Properties of a MigrateReplicationModeRequest.
+         * @memberof vtctldata
+         * @interface IMigrateReplicationModeRequest
+         * @augments vtctldata.MigrateReplicationModeRequest.$Properties
+         * @deprecated Use vtctldata.MigrateReplicationModeRequest.$Properties instead.
+         */
+
+        /**
+         * Shape of a MigrateReplicationModeRequest.
+         * @typedef {vtctldata.MigrateReplicationModeRequest.$Properties} vtctldata.MigrateReplicationModeRequest.$Shape
+         */
+
+        /**
+         * Constructs a new MigrateReplicationModeRequest.
+         * @memberof vtctldata
+         * @classdesc Represents a MigrateReplicationModeRequest.
+         * @constructor
+         * @param {vtctldata.MigrateReplicationModeRequest.$Properties=} [properties] Properties to set
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+        const MigrateReplicationModeRequest = function (properties) {
+            if (properties)
+                for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                        this[keys[i]] = properties[keys[i]];
+        };
+
+        /**
+         * MigrateReplicationModeRequest keyspace.
+         * @member {string} keyspace
+         * @memberof vtctldata.MigrateReplicationModeRequest
+         * @instance
+         */
+        MigrateReplicationModeRequest.prototype.keyspace = "";
+
+        /**
+         * MigrateReplicationModeRequest shard.
+         * @member {string} shard
+         * @memberof vtctldata.MigrateReplicationModeRequest
+         * @instance
+         */
+        MigrateReplicationModeRequest.prototype.shard = "";
+
+        /**
+         * MigrateReplicationModeRequest durability_policy.
+         * @member {string} durability_policy
+         * @memberof vtctldata.MigrateReplicationModeRequest
+         * @instance
+         */
+        MigrateReplicationModeRequest.prototype.durability_policy = "";
+
+        /**
+         * MigrateReplicationModeRequest dry_run.
+         * @member {boolean} dry_run
+         * @memberof vtctldata.MigrateReplicationModeRequest
+         * @instance
+         */
+        MigrateReplicationModeRequest.prototype.dry_run = false;
+
+        /**
+         * MigrateReplicationModeRequest wait_timeout.
+         * @member {vttime.Duration.$Properties|null|undefined} wait_timeout
+         * @memberof vtctldata.MigrateReplicationModeRequest
+         * @instance
+         */
+        MigrateReplicationModeRequest.prototype.wait_timeout = null;
+
+        /**
+         * Creates a new MigrateReplicationModeRequest instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.MigrateReplicationModeRequest
+         * @static
+         * @param {vtctldata.MigrateReplicationModeRequest.$Properties=} [properties] Properties to set
+         * @returns {vtctldata.MigrateReplicationModeRequest} MigrateReplicationModeRequest instance
+         * @type {{
+         *   (properties: vtctldata.MigrateReplicationModeRequest.$Shape): vtctldata.MigrateReplicationModeRequest & vtctldata.MigrateReplicationModeRequest.$Shape;
+         *   (properties?: vtctldata.MigrateReplicationModeRequest.$Properties): vtctldata.MigrateReplicationModeRequest;
+         * }}
+         */
+        MigrateReplicationModeRequest.create = function(properties) {
+            return new MigrateReplicationModeRequest(properties);
+        };
+
+        /**
+         * Encodes the specified MigrateReplicationModeRequest message. Does not implicitly {@link vtctldata.MigrateReplicationModeRequest.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.MigrateReplicationModeRequest
+         * @static
+         * @param {vtctldata.MigrateReplicationModeRequest.$Properties} message MigrateReplicationModeRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        MigrateReplicationModeRequest.encode = function (message, writer, _depth) {
+            if (!writer)
+                writer = $Writer.create();
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
+            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard") && message.shard !== "")
+                writer.uint32(/* id 2, wireType 2 =*/18).string(message.shard);
+            if (message.durability_policy != null && $Object.hasOwnProperty.call(message, "durability_policy") && message.durability_policy !== "")
+                writer.uint32(/* id 3, wireType 2 =*/26).string(message.durability_policy);
+            if (message.dry_run != null && $Object.hasOwnProperty.call(message, "dry_run") && message.dry_run !== false)
+                writer.uint32(/* id 4, wireType 0 =*/32).bool(message.dry_run);
+            if (message.wait_timeout != null && $Object.hasOwnProperty.call(message, "wait_timeout"))
+                $root.vttime.Duration.encode(message.wait_timeout, writer.uint32(/* id 5, wireType 2 =*/42).fork(), _depth + 1).ldelim();
+            if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
+                for (let i = 0; i < message.$unknowns.length; ++i)
+                    writer.raw(message.$unknowns[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified MigrateReplicationModeRequest message, length delimited. Does not implicitly {@link vtctldata.MigrateReplicationModeRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.MigrateReplicationModeRequest
+         * @static
+         * @param {vtctldata.MigrateReplicationModeRequest.$Properties} message MigrateReplicationModeRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        MigrateReplicationModeRequest.encodeDelimited = function(message, writer) {
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
+        };
+
+        /**
+         * Decodes a MigrateReplicationModeRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.MigrateReplicationModeRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.MigrateReplicationModeRequest & vtctldata.MigrateReplicationModeRequest.$Shape} MigrateReplicationModeRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        MigrateReplicationModeRequest.decode = function (reader, length, _end, _depth, _target) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $Reader.recursionLimit)
+                throw $Error("max depth exceeded");
+            let end, message, value;
+            if (length === $undefined)
+                end = reader.len;
+            else {
+                end = reader.pos + length;
+                if (end > reader.len)
+                    throw $RangeError("index out of range");
+                length = reader.len;
+                reader.len = end;
+            }
+            message = _target || new $root.vtctldata.MigrateReplicationModeRequest();
+            while (reader.pos < end) {
+                let start = reader.pos;
+                let tag = reader.tag();
+                if (tag === _end) {
+                    _end = $undefined;
+                    break;
+                }
+                let wireType = tag & 7;
+                switch (tag >>>= 3) {
+                case 1: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.keyspace = value;
+                        else
+                            delete message.keyspace;
+                        continue;
+                    }
+                case 2: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.shard = value;
+                        else
+                            delete message.shard;
+                        continue;
+                    }
+                case 3: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.durability_policy = value;
+                        else
+                            delete message.durability_policy;
+                        continue;
+                    }
+                case 4: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.bool())
+                            message.dry_run = value;
+                        else
+                            delete message.dry_run;
+                        continue;
+                    }
+                case 5: {
+                        if (wireType !== 2)
+                            break;
+                        message.wait_timeout = $root.vttime.Duration.decode(reader, reader.uint32(), $undefined, _depth + 1, message.wait_timeout);
+                        continue;
+                    }
+                }
+                reader.skipType(wireType, _depth, tag);
+                if (!reader.discardUnknown) {
+                    $util.makeProp(message, "$unknowns", false);
+                    (message.$unknowns || (message.$unknowns = [])).push(reader.raw(start, reader.pos));
+                }
+            }
+            if (length !== $undefined) {
+                if (reader.pos !== end)
+                    throw $RangeError("index out of range");
+                reader.len = length;
+            }
+            if (_end !== $undefined)
+                throw $Error("missing end group");
+            return message;
+        };
+
+        /**
+         * Decodes a MigrateReplicationModeRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.MigrateReplicationModeRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.MigrateReplicationModeRequest & vtctldata.MigrateReplicationModeRequest.$Shape} MigrateReplicationModeRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        MigrateReplicationModeRequest.decodeDelimited = function(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a MigrateReplicationModeRequest message.
+         * @function verify
+         * @memberof vtctldata.MigrateReplicationModeRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        MigrateReplicationModeRequest.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+                if (!$util.isString(message.keyspace))
+                    return "keyspace: string expected";
+            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard"))
+                if (!$util.isString(message.shard))
+                    return "shard: string expected";
+            if (message.durability_policy != null && $Object.hasOwnProperty.call(message, "durability_policy"))
+                if (!$util.isString(message.durability_policy))
+                    return "durability_policy: string expected";
+            if (message.dry_run != null && $Object.hasOwnProperty.call(message, "dry_run"))
+                if (typeof message.dry_run !== "boolean")
+                    return "dry_run: boolean expected";
+            if (message.wait_timeout != null && $Object.hasOwnProperty.call(message, "wait_timeout")) {
+                let error = $root.vttime.Duration.verify(message.wait_timeout, _depth + 1);
+                if (error)
+                    return "wait_timeout." + error;
+            }
+            return null;
+        };
+
+        /**
+         * Creates a MigrateReplicationModeRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.MigrateReplicationModeRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.MigrateReplicationModeRequest} MigrateReplicationModeRequest
+         */
+        MigrateReplicationModeRequest.fromObject = function (object, _depth) {
+            if (object instanceof $root.vtctldata.MigrateReplicationModeRequest)
+                return object;
+            if (!$util.isObject(object))
+                throw $TypeError(".vtctldata.MigrateReplicationModeRequest: object expected");
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let message = new $root.vtctldata.MigrateReplicationModeRequest();
+            if (object.keyspace != null)
+                if (typeof object.keyspace !== "string" || object.keyspace.length)
+                    message.keyspace = $String(object.keyspace);
+            if (object.shard != null)
+                if (typeof object.shard !== "string" || object.shard.length)
+                    message.shard = $String(object.shard);
+            if (object.durability_policy != null)
+                if (typeof object.durability_policy !== "string" || object.durability_policy.length)
+                    message.durability_policy = $String(object.durability_policy);
+            if (object.dry_run != null)
+                if (object.dry_run)
+                    message.dry_run = $Boolean(object.dry_run);
+            if (object.wait_timeout != null) {
+                if (!$util.isObject(object.wait_timeout))
+                    throw $TypeError(".vtctldata.MigrateReplicationModeRequest.wait_timeout: object expected");
+                message.wait_timeout = $root.vttime.Duration.fromObject(object.wait_timeout, _depth + 1);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a MigrateReplicationModeRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.MigrateReplicationModeRequest
+         * @static
+         * @param {vtctldata.MigrateReplicationModeRequest} message MigrateReplicationModeRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        MigrateReplicationModeRequest.toObject = function (message, options, _depth) {
+            if (!options)
+                options = {};
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let object = {};
+            if (options.defaults) {
+                object.keyspace = "";
+                object.shard = "";
+                object.durability_policy = "";
+                object.dry_run = false;
+                object.wait_timeout = null;
+            }
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+                object.keyspace = message.keyspace;
+            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard"))
+                object.shard = message.shard;
+            if (message.durability_policy != null && $Object.hasOwnProperty.call(message, "durability_policy"))
+                object.durability_policy = message.durability_policy;
+            if (message.dry_run != null && $Object.hasOwnProperty.call(message, "dry_run"))
+                object.dry_run = message.dry_run;
+            if (message.wait_timeout != null && $Object.hasOwnProperty.call(message, "wait_timeout"))
+                object.wait_timeout = $root.vttime.Duration.toObject(message.wait_timeout, options, _depth + 1);
+            return object;
+        };
+
+        /**
+         * Converts this MigrateReplicationModeRequest to JSON.
+         * @function toJSON
+         * @memberof vtctldata.MigrateReplicationModeRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        MigrateReplicationModeRequest.prototype.toJSON = function() {
+            return MigrateReplicationModeRequest.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        /**
+         * Gets the type url for MigrateReplicationModeRequest
+         * @function getTypeUrl
+         * @memberof vtctldata.MigrateReplicationModeRequest
+         * @static
+         * @param {string} [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns {string} The type url
+         */
+        MigrateReplicationModeRequest.getTypeUrl = function(prefix) {
+            if (prefix === $undefined)
+                prefix = "type.googleapis.com";
+            return prefix + "/vtctldata.MigrateReplicationModeRequest";
+        };
+
+        return MigrateReplicationModeRequest;
+    })();
+
+    vtctldata.ReplicationModeMigrationStep = (function() {
+
+        /**
+         * Properties of a ReplicationModeMigrationStep.
+         * @typedef {Object} vtctldata.ReplicationModeMigrationStep.$Properties
+         * @property {string|null} [action] ReplicationModeMigrationStep action
+         * @property {topodata.TabletAlias.$Properties|null} [tablet] ReplicationModeMigrationStep tablet
+         * @property {string|null} [description] ReplicationModeMigrationStep description
+         * @property {string|null} [status] ReplicationModeMigrationStep status
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+
+        /**
+         * Properties of a ReplicationModeMigrationStep.
+         * @memberof vtctldata
+         * @interface IReplicationModeMigrationStep
+         * @augments vtctldata.ReplicationModeMigrationStep.$Properties
+         * @deprecated Use vtctldata.ReplicationModeMigrationStep.$Properties instead.
+         */
+
+        /**
+         * Shape of a ReplicationModeMigrationStep.
+         * @typedef {vtctldata.ReplicationModeMigrationStep.$Properties} vtctldata.ReplicationModeMigrationStep.$Shape
+         */
+
+        /**
+         * Constructs a new ReplicationModeMigrationStep.
+         * @memberof vtctldata
+         * @classdesc Represents a ReplicationModeMigrationStep.
+         * @constructor
+         * @param {vtctldata.ReplicationModeMigrationStep.$Properties=} [properties] Properties to set
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+        const ReplicationModeMigrationStep = function (properties) {
+            if (properties)
+                for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                        this[keys[i]] = properties[keys[i]];
+        };
+
+        /**
+         * ReplicationModeMigrationStep action.
+         * @member {string} action
+         * @memberof vtctldata.ReplicationModeMigrationStep
+         * @instance
+         */
+        ReplicationModeMigrationStep.prototype.action = "";
+
+        /**
+         * ReplicationModeMigrationStep tablet.
+         * @member {topodata.TabletAlias.$Properties|null|undefined} tablet
+         * @memberof vtctldata.ReplicationModeMigrationStep
+         * @instance
+         */
+        ReplicationModeMigrationStep.prototype.tablet = null;
+
+        /**
+         * ReplicationModeMigrationStep description.
+         * @member {string} description
+         * @memberof vtctldata.ReplicationModeMigrationStep
+         * @instance
+         */
+        ReplicationModeMigrationStep.prototype.description = "";
+
+        /**
+         * ReplicationModeMigrationStep status.
+         * @member {string} status
+         * @memberof vtctldata.ReplicationModeMigrationStep
+         * @instance
+         */
+        ReplicationModeMigrationStep.prototype.status = "";
+
+        /**
+         * Creates a new ReplicationModeMigrationStep instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.ReplicationModeMigrationStep
+         * @static
+         * @param {vtctldata.ReplicationModeMigrationStep.$Properties=} [properties] Properties to set
+         * @returns {vtctldata.ReplicationModeMigrationStep} ReplicationModeMigrationStep instance
+         * @type {{
+         *   (properties: vtctldata.ReplicationModeMigrationStep.$Shape): vtctldata.ReplicationModeMigrationStep & vtctldata.ReplicationModeMigrationStep.$Shape;
+         *   (properties?: vtctldata.ReplicationModeMigrationStep.$Properties): vtctldata.ReplicationModeMigrationStep;
+         * }}
+         */
+        ReplicationModeMigrationStep.create = function(properties) {
+            return new ReplicationModeMigrationStep(properties);
+        };
+
+        /**
+         * Encodes the specified ReplicationModeMigrationStep message. Does not implicitly {@link vtctldata.ReplicationModeMigrationStep.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.ReplicationModeMigrationStep
+         * @static
+         * @param {vtctldata.ReplicationModeMigrationStep.$Properties} message ReplicationModeMigrationStep message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        ReplicationModeMigrationStep.encode = function (message, writer, _depth) {
+            if (!writer)
+                writer = $Writer.create();
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            if (message.action != null && $Object.hasOwnProperty.call(message, "action") && message.action !== "")
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.action);
+            if (message.tablet != null && $Object.hasOwnProperty.call(message, "tablet"))
+                $root.topodata.TabletAlias.encode(message.tablet, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
+            if (message.description != null && $Object.hasOwnProperty.call(message, "description") && message.description !== "")
+                writer.uint32(/* id 3, wireType 2 =*/26).string(message.description);
+            if (message.status != null && $Object.hasOwnProperty.call(message, "status") && message.status !== "")
+                writer.uint32(/* id 4, wireType 2 =*/34).string(message.status);
+            if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
+                for (let i = 0; i < message.$unknowns.length; ++i)
+                    writer.raw(message.$unknowns[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified ReplicationModeMigrationStep message, length delimited. Does not implicitly {@link vtctldata.ReplicationModeMigrationStep.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.ReplicationModeMigrationStep
+         * @static
+         * @param {vtctldata.ReplicationModeMigrationStep.$Properties} message ReplicationModeMigrationStep message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        ReplicationModeMigrationStep.encodeDelimited = function(message, writer) {
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
+        };
+
+        /**
+         * Decodes a ReplicationModeMigrationStep message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.ReplicationModeMigrationStep
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.ReplicationModeMigrationStep & vtctldata.ReplicationModeMigrationStep.$Shape} ReplicationModeMigrationStep
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        ReplicationModeMigrationStep.decode = function (reader, length, _end, _depth, _target) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $Reader.recursionLimit)
+                throw $Error("max depth exceeded");
+            let end, message, value;
+            if (length === $undefined)
+                end = reader.len;
+            else {
+                end = reader.pos + length;
+                if (end > reader.len)
+                    throw $RangeError("index out of range");
+                length = reader.len;
+                reader.len = end;
+            }
+            message = _target || new $root.vtctldata.ReplicationModeMigrationStep();
+            while (reader.pos < end) {
+                let start = reader.pos;
+                let tag = reader.tag();
+                if (tag === _end) {
+                    _end = $undefined;
+                    break;
+                }
+                let wireType = tag & 7;
+                switch (tag >>>= 3) {
+                case 1: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.action = value;
+                        else
+                            delete message.action;
+                        continue;
+                    }
+                case 2: {
+                        if (wireType !== 2)
+                            break;
+                        message.tablet = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.tablet);
+                        continue;
+                    }
+                case 3: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.description = value;
+                        else
+                            delete message.description;
+                        continue;
+                    }
+                case 4: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.status = value;
+                        else
+                            delete message.status;
+                        continue;
+                    }
+                }
+                reader.skipType(wireType, _depth, tag);
+                if (!reader.discardUnknown) {
+                    $util.makeProp(message, "$unknowns", false);
+                    (message.$unknowns || (message.$unknowns = [])).push(reader.raw(start, reader.pos));
+                }
+            }
+            if (length !== $undefined) {
+                if (reader.pos !== end)
+                    throw $RangeError("index out of range");
+                reader.len = length;
+            }
+            if (_end !== $undefined)
+                throw $Error("missing end group");
+            return message;
+        };
+
+        /**
+         * Decodes a ReplicationModeMigrationStep message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.ReplicationModeMigrationStep
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.ReplicationModeMigrationStep & vtctldata.ReplicationModeMigrationStep.$Shape} ReplicationModeMigrationStep
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        ReplicationModeMigrationStep.decodeDelimited = function(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a ReplicationModeMigrationStep message.
+         * @function verify
+         * @memberof vtctldata.ReplicationModeMigrationStep
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        ReplicationModeMigrationStep.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.action != null && $Object.hasOwnProperty.call(message, "action"))
+                if (!$util.isString(message.action))
+                    return "action: string expected";
+            if (message.tablet != null && $Object.hasOwnProperty.call(message, "tablet")) {
+                let error = $root.topodata.TabletAlias.verify(message.tablet, _depth + 1);
+                if (error)
+                    return "tablet." + error;
+            }
+            if (message.description != null && $Object.hasOwnProperty.call(message, "description"))
+                if (!$util.isString(message.description))
+                    return "description: string expected";
+            if (message.status != null && $Object.hasOwnProperty.call(message, "status"))
+                if (!$util.isString(message.status))
+                    return "status: string expected";
+            return null;
+        };
+
+        /**
+         * Creates a ReplicationModeMigrationStep message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.ReplicationModeMigrationStep
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.ReplicationModeMigrationStep} ReplicationModeMigrationStep
+         */
+        ReplicationModeMigrationStep.fromObject = function (object, _depth) {
+            if (object instanceof $root.vtctldata.ReplicationModeMigrationStep)
+                return object;
+            if (!$util.isObject(object))
+                throw $TypeError(".vtctldata.ReplicationModeMigrationStep: object expected");
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let message = new $root.vtctldata.ReplicationModeMigrationStep();
+            if (object.action != null)
+                if (typeof object.action !== "string" || object.action.length)
+                    message.action = $String(object.action);
+            if (object.tablet != null) {
+                if (!$util.isObject(object.tablet))
+                    throw $TypeError(".vtctldata.ReplicationModeMigrationStep.tablet: object expected");
+                message.tablet = $root.topodata.TabletAlias.fromObject(object.tablet, _depth + 1);
+            }
+            if (object.description != null)
+                if (typeof object.description !== "string" || object.description.length)
+                    message.description = $String(object.description);
+            if (object.status != null)
+                if (typeof object.status !== "string" || object.status.length)
+                    message.status = $String(object.status);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a ReplicationModeMigrationStep message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.ReplicationModeMigrationStep
+         * @static
+         * @param {vtctldata.ReplicationModeMigrationStep} message ReplicationModeMigrationStep
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        ReplicationModeMigrationStep.toObject = function (message, options, _depth) {
+            if (!options)
+                options = {};
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let object = {};
+            if (options.defaults) {
+                object.action = "";
+                object.tablet = null;
+                object.description = "";
+                object.status = "";
+            }
+            if (message.action != null && $Object.hasOwnProperty.call(message, "action"))
+                object.action = message.action;
+            if (message.tablet != null && $Object.hasOwnProperty.call(message, "tablet"))
+                object.tablet = $root.topodata.TabletAlias.toObject(message.tablet, options, _depth + 1);
+            if (message.description != null && $Object.hasOwnProperty.call(message, "description"))
+                object.description = message.description;
+            if (message.status != null && $Object.hasOwnProperty.call(message, "status"))
+                object.status = message.status;
+            return object;
+        };
+
+        /**
+         * Converts this ReplicationModeMigrationStep to JSON.
+         * @function toJSON
+         * @memberof vtctldata.ReplicationModeMigrationStep
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        ReplicationModeMigrationStep.prototype.toJSON = function() {
+            return ReplicationModeMigrationStep.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        /**
+         * Gets the type url for ReplicationModeMigrationStep
+         * @function getTypeUrl
+         * @memberof vtctldata.ReplicationModeMigrationStep
+         * @static
+         * @param {string} [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns {string} The type url
+         */
+        ReplicationModeMigrationStep.getTypeUrl = function(prefix) {
+            if (prefix === $undefined)
+                prefix = "type.googleapis.com";
+            return prefix + "/vtctldata.ReplicationModeMigrationStep";
+        };
+
+        return ReplicationModeMigrationStep;
+    })();
+
+    vtctldata.ReplicationModeMigrationShardResult = (function() {
+
+        /**
+         * Properties of a ReplicationModeMigrationShardResult.
+         * @typedef {Object} vtctldata.ReplicationModeMigrationShardResult.$Properties
+         * @property {string|null} [shard] ReplicationModeMigrationShardResult shard
+         * @property {Array.<vtctldata.ReplicationModeMigrationStep.$Properties>|null} [steps] ReplicationModeMigrationShardResult steps
+         * @property {string|null} [replication_mode] ReplicationModeMigrationShardResult replication_mode
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+
+        /**
+         * Properties of a ReplicationModeMigrationShardResult.
+         * @memberof vtctldata
+         * @interface IReplicationModeMigrationShardResult
+         * @augments vtctldata.ReplicationModeMigrationShardResult.$Properties
+         * @deprecated Use vtctldata.ReplicationModeMigrationShardResult.$Properties instead.
+         */
+
+        /**
+         * Shape of a ReplicationModeMigrationShardResult.
+         * @typedef {vtctldata.ReplicationModeMigrationShardResult.$Properties} vtctldata.ReplicationModeMigrationShardResult.$Shape
+         */
+
+        /**
+         * Constructs a new ReplicationModeMigrationShardResult.
+         * @memberof vtctldata
+         * @classdesc Represents a ReplicationModeMigrationShardResult.
+         * @constructor
+         * @param {vtctldata.ReplicationModeMigrationShardResult.$Properties=} [properties] Properties to set
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+        const ReplicationModeMigrationShardResult = function (properties) {
+            this.steps = [];
+            if (properties)
+                for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                        this[keys[i]] = properties[keys[i]];
+        };
+
+        /**
+         * ReplicationModeMigrationShardResult shard.
+         * @member {string} shard
+         * @memberof vtctldata.ReplicationModeMigrationShardResult
+         * @instance
+         */
+        ReplicationModeMigrationShardResult.prototype.shard = "";
+
+        /**
+         * ReplicationModeMigrationShardResult steps.
+         * @member {Array.<vtctldata.ReplicationModeMigrationStep.$Properties>} steps
+         * @memberof vtctldata.ReplicationModeMigrationShardResult
+         * @instance
+         */
+        ReplicationModeMigrationShardResult.prototype.steps = $util.emptyArray;
+
+        /**
+         * ReplicationModeMigrationShardResult replication_mode.
+         * @member {string} replication_mode
+         * @memberof vtctldata.ReplicationModeMigrationShardResult
+         * @instance
+         */
+        ReplicationModeMigrationShardResult.prototype.replication_mode = "";
+
+        /**
+         * Creates a new ReplicationModeMigrationShardResult instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.ReplicationModeMigrationShardResult
+         * @static
+         * @param {vtctldata.ReplicationModeMigrationShardResult.$Properties=} [properties] Properties to set
+         * @returns {vtctldata.ReplicationModeMigrationShardResult} ReplicationModeMigrationShardResult instance
+         * @type {{
+         *   (properties: vtctldata.ReplicationModeMigrationShardResult.$Shape): vtctldata.ReplicationModeMigrationShardResult & vtctldata.ReplicationModeMigrationShardResult.$Shape;
+         *   (properties?: vtctldata.ReplicationModeMigrationShardResult.$Properties): vtctldata.ReplicationModeMigrationShardResult;
+         * }}
+         */
+        ReplicationModeMigrationShardResult.create = function(properties) {
+            return new ReplicationModeMigrationShardResult(properties);
+        };
+
+        /**
+         * Encodes the specified ReplicationModeMigrationShardResult message. Does not implicitly {@link vtctldata.ReplicationModeMigrationShardResult.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.ReplicationModeMigrationShardResult
+         * @static
+         * @param {vtctldata.ReplicationModeMigrationShardResult.$Properties} message ReplicationModeMigrationShardResult message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        ReplicationModeMigrationShardResult.encode = function (message, writer, _depth) {
+            if (!writer)
+                writer = $Writer.create();
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard") && message.shard !== "")
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.shard);
+            if (message.steps != null && message.steps.length)
+                for (let i = 0; i < message.steps.length; ++i)
+                    $root.vtctldata.ReplicationModeMigrationStep.encode(message.steps[i], writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
+            if (message.replication_mode != null && $Object.hasOwnProperty.call(message, "replication_mode") && message.replication_mode !== "")
+                writer.uint32(/* id 3, wireType 2 =*/26).string(message.replication_mode);
+            if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
+                for (let i = 0; i < message.$unknowns.length; ++i)
+                    writer.raw(message.$unknowns[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified ReplicationModeMigrationShardResult message, length delimited. Does not implicitly {@link vtctldata.ReplicationModeMigrationShardResult.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.ReplicationModeMigrationShardResult
+         * @static
+         * @param {vtctldata.ReplicationModeMigrationShardResult.$Properties} message ReplicationModeMigrationShardResult message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        ReplicationModeMigrationShardResult.encodeDelimited = function(message, writer) {
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
+        };
+
+        /**
+         * Decodes a ReplicationModeMigrationShardResult message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.ReplicationModeMigrationShardResult
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.ReplicationModeMigrationShardResult & vtctldata.ReplicationModeMigrationShardResult.$Shape} ReplicationModeMigrationShardResult
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        ReplicationModeMigrationShardResult.decode = function (reader, length, _end, _depth, _target) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $Reader.recursionLimit)
+                throw $Error("max depth exceeded");
+            let end, message, value;
+            if (length === $undefined)
+                end = reader.len;
+            else {
+                end = reader.pos + length;
+                if (end > reader.len)
+                    throw $RangeError("index out of range");
+                length = reader.len;
+                reader.len = end;
+            }
+            message = _target || new $root.vtctldata.ReplicationModeMigrationShardResult();
+            while (reader.pos < end) {
+                let start = reader.pos;
+                let tag = reader.tag();
+                if (tag === _end) {
+                    _end = $undefined;
+                    break;
+                }
+                let wireType = tag & 7;
+                switch (tag >>>= 3) {
+                case 1: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.shard = value;
+                        else
+                            delete message.shard;
+                        continue;
+                    }
+                case 2: {
+                        if (wireType !== 2)
+                            break;
+                        if (!(message.steps && message.steps.length))
+                            message.steps = [];
+                        message.steps.push($root.vtctldata.ReplicationModeMigrationStep.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        continue;
+                    }
+                case 3: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.replication_mode = value;
+                        else
+                            delete message.replication_mode;
+                        continue;
+                    }
+                }
+                reader.skipType(wireType, _depth, tag);
+                if (!reader.discardUnknown) {
+                    $util.makeProp(message, "$unknowns", false);
+                    (message.$unknowns || (message.$unknowns = [])).push(reader.raw(start, reader.pos));
+                }
+            }
+            if (length !== $undefined) {
+                if (reader.pos !== end)
+                    throw $RangeError("index out of range");
+                reader.len = length;
+            }
+            if (_end !== $undefined)
+                throw $Error("missing end group");
+            return message;
+        };
+
+        /**
+         * Decodes a ReplicationModeMigrationShardResult message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.ReplicationModeMigrationShardResult
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.ReplicationModeMigrationShardResult & vtctldata.ReplicationModeMigrationShardResult.$Shape} ReplicationModeMigrationShardResult
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        ReplicationModeMigrationShardResult.decodeDelimited = function(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a ReplicationModeMigrationShardResult message.
+         * @function verify
+         * @memberof vtctldata.ReplicationModeMigrationShardResult
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        ReplicationModeMigrationShardResult.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard"))
+                if (!$util.isString(message.shard))
+                    return "shard: string expected";
+            if (message.steps != null && $Object.hasOwnProperty.call(message, "steps")) {
+                if (!$Array.isArray(message.steps))
+                    return "steps: array expected";
+                for (let i = 0; i < message.steps.length; ++i) {
+                    let error = $root.vtctldata.ReplicationModeMigrationStep.verify(message.steps[i], _depth + 1);
+                    if (error)
+                        return "steps." + error;
+                }
+            }
+            if (message.replication_mode != null && $Object.hasOwnProperty.call(message, "replication_mode"))
+                if (!$util.isString(message.replication_mode))
+                    return "replication_mode: string expected";
+            return null;
+        };
+
+        /**
+         * Creates a ReplicationModeMigrationShardResult message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.ReplicationModeMigrationShardResult
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.ReplicationModeMigrationShardResult} ReplicationModeMigrationShardResult
+         */
+        ReplicationModeMigrationShardResult.fromObject = function (object, _depth) {
+            if (object instanceof $root.vtctldata.ReplicationModeMigrationShardResult)
+                return object;
+            if (!$util.isObject(object))
+                throw $TypeError(".vtctldata.ReplicationModeMigrationShardResult: object expected");
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let message = new $root.vtctldata.ReplicationModeMigrationShardResult();
+            if (object.shard != null)
+                if (typeof object.shard !== "string" || object.shard.length)
+                    message.shard = $String(object.shard);
+            if (object.steps) {
+                if (!$Array.isArray(object.steps))
+                    throw $TypeError(".vtctldata.ReplicationModeMigrationShardResult.steps: array expected");
+                message.steps = $Array(object.steps.length);
+                for (let i = 0; i < object.steps.length; ++i) {
+                    if (!$util.isObject(object.steps[i]))
+                        throw $TypeError(".vtctldata.ReplicationModeMigrationShardResult.steps: object expected");
+                    message.steps[i] = $root.vtctldata.ReplicationModeMigrationStep.fromObject(object.steps[i], _depth + 1);
+                }
+            }
+            if (object.replication_mode != null)
+                if (typeof object.replication_mode !== "string" || object.replication_mode.length)
+                    message.replication_mode = $String(object.replication_mode);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a ReplicationModeMigrationShardResult message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.ReplicationModeMigrationShardResult
+         * @static
+         * @param {vtctldata.ReplicationModeMigrationShardResult} message ReplicationModeMigrationShardResult
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        ReplicationModeMigrationShardResult.toObject = function (message, options, _depth) {
+            if (!options)
+                options = {};
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let object = {};
+            if (options.arrays || options.defaults)
+                object.steps = [];
+            if (options.defaults) {
+                object.shard = "";
+                object.replication_mode = "";
+            }
+            if (message.shard != null && $Object.hasOwnProperty.call(message, "shard"))
+                object.shard = message.shard;
+            if (message.steps && message.steps.length) {
+                object.steps = $Array(message.steps.length);
+                for (let j = 0; j < message.steps.length; ++j)
+                    object.steps[j] = $root.vtctldata.ReplicationModeMigrationStep.toObject(message.steps[j], options, _depth + 1);
+            }
+            if (message.replication_mode != null && $Object.hasOwnProperty.call(message, "replication_mode"))
+                object.replication_mode = message.replication_mode;
+            return object;
+        };
+
+        /**
+         * Converts this ReplicationModeMigrationShardResult to JSON.
+         * @function toJSON
+         * @memberof vtctldata.ReplicationModeMigrationShardResult
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        ReplicationModeMigrationShardResult.prototype.toJSON = function() {
+            return ReplicationModeMigrationShardResult.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        /**
+         * Gets the type url for ReplicationModeMigrationShardResult
+         * @function getTypeUrl
+         * @memberof vtctldata.ReplicationModeMigrationShardResult
+         * @static
+         * @param {string} [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns {string} The type url
+         */
+        ReplicationModeMigrationShardResult.getTypeUrl = function(prefix) {
+            if (prefix === $undefined)
+                prefix = "type.googleapis.com";
+            return prefix + "/vtctldata.ReplicationModeMigrationShardResult";
+        };
+
+        return ReplicationModeMigrationShardResult;
+    })();
+
+    vtctldata.MigrateReplicationModeResponse = (function() {
+
+        /**
+         * Properties of a MigrateReplicationModeResponse.
+         * @typedef {Object} vtctldata.MigrateReplicationModeResponse.$Properties
+         * @property {string|null} [keyspace] MigrateReplicationModeResponse keyspace
+         * @property {Array.<vtctldata.ReplicationModeMigrationShardResult.$Properties>|null} [shards] MigrateReplicationModeResponse shards
+         * @property {string|null} [durability_policy] MigrateReplicationModeResponse durability_policy
+         * @property {Array.<vtctldata.ReplicationModeMigrationStep.$Properties>|null} [keyspace_steps] MigrateReplicationModeResponse keyspace_steps
+         * @property {Array.<logutil.Event.$Properties>|null} [events] MigrateReplicationModeResponse events
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+
+        /**
+         * Properties of a MigrateReplicationModeResponse.
+         * @memberof vtctldata
+         * @interface IMigrateReplicationModeResponse
+         * @augments vtctldata.MigrateReplicationModeResponse.$Properties
+         * @deprecated Use vtctldata.MigrateReplicationModeResponse.$Properties instead.
+         */
+
+        /**
+         * Shape of a MigrateReplicationModeResponse.
+         * @typedef {vtctldata.MigrateReplicationModeResponse.$Properties} vtctldata.MigrateReplicationModeResponse.$Shape
+         */
+
+        /**
+         * Constructs a new MigrateReplicationModeResponse.
+         * @memberof vtctldata
+         * @classdesc Represents a MigrateReplicationModeResponse.
+         * @constructor
+         * @param {vtctldata.MigrateReplicationModeResponse.$Properties=} [properties] Properties to set
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+        const MigrateReplicationModeResponse = function (properties) {
+            this.shards = [];
+            this.keyspace_steps = [];
+            this.events = [];
+            if (properties)
+                for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                        this[keys[i]] = properties[keys[i]];
+        };
+
+        /**
+         * MigrateReplicationModeResponse keyspace.
+         * @member {string} keyspace
+         * @memberof vtctldata.MigrateReplicationModeResponse
+         * @instance
+         */
+        MigrateReplicationModeResponse.prototype.keyspace = "";
+
+        /**
+         * MigrateReplicationModeResponse shards.
+         * @member {Array.<vtctldata.ReplicationModeMigrationShardResult.$Properties>} shards
+         * @memberof vtctldata.MigrateReplicationModeResponse
+         * @instance
+         */
+        MigrateReplicationModeResponse.prototype.shards = $util.emptyArray;
+
+        /**
+         * MigrateReplicationModeResponse durability_policy.
+         * @member {string} durability_policy
+         * @memberof vtctldata.MigrateReplicationModeResponse
+         * @instance
+         */
+        MigrateReplicationModeResponse.prototype.durability_policy = "";
+
+        /**
+         * MigrateReplicationModeResponse keyspace_steps.
+         * @member {Array.<vtctldata.ReplicationModeMigrationStep.$Properties>} keyspace_steps
+         * @memberof vtctldata.MigrateReplicationModeResponse
+         * @instance
+         */
+        MigrateReplicationModeResponse.prototype.keyspace_steps = $util.emptyArray;
+
+        /**
+         * MigrateReplicationModeResponse events.
+         * @member {Array.<logutil.Event.$Properties>} events
+         * @memberof vtctldata.MigrateReplicationModeResponse
+         * @instance
+         */
+        MigrateReplicationModeResponse.prototype.events = $util.emptyArray;
+
+        /**
+         * Creates a new MigrateReplicationModeResponse instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.MigrateReplicationModeResponse
+         * @static
+         * @param {vtctldata.MigrateReplicationModeResponse.$Properties=} [properties] Properties to set
+         * @returns {vtctldata.MigrateReplicationModeResponse} MigrateReplicationModeResponse instance
+         * @type {{
+         *   (properties: vtctldata.MigrateReplicationModeResponse.$Shape): vtctldata.MigrateReplicationModeResponse & vtctldata.MigrateReplicationModeResponse.$Shape;
+         *   (properties?: vtctldata.MigrateReplicationModeResponse.$Properties): vtctldata.MigrateReplicationModeResponse;
+         * }}
+         */
+        MigrateReplicationModeResponse.create = function(properties) {
+            return new MigrateReplicationModeResponse(properties);
+        };
+
+        /**
+         * Encodes the specified MigrateReplicationModeResponse message. Does not implicitly {@link vtctldata.MigrateReplicationModeResponse.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.MigrateReplicationModeResponse
+         * @static
+         * @param {vtctldata.MigrateReplicationModeResponse.$Properties} message MigrateReplicationModeResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        MigrateReplicationModeResponse.encode = function (message, writer, _depth) {
+            if (!writer)
+                writer = $Writer.create();
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
+            if (message.shards != null && message.shards.length)
+                for (let i = 0; i < message.shards.length; ++i)
+                    $root.vtctldata.ReplicationModeMigrationShardResult.encode(message.shards[i], writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
+            if (message.durability_policy != null && $Object.hasOwnProperty.call(message, "durability_policy") && message.durability_policy !== "")
+                writer.uint32(/* id 3, wireType 2 =*/26).string(message.durability_policy);
+            if (message.keyspace_steps != null && message.keyspace_steps.length)
+                for (let i = 0; i < message.keyspace_steps.length; ++i)
+                    $root.vtctldata.ReplicationModeMigrationStep.encode(message.keyspace_steps[i], writer.uint32(/* id 4, wireType 2 =*/34).fork(), _depth + 1).ldelim();
+            if (message.events != null && message.events.length)
+                for (let i = 0; i < message.events.length; ++i)
+                    $root.logutil.Event.encode(message.events[i], writer.uint32(/* id 5, wireType 2 =*/42).fork(), _depth + 1).ldelim();
+            if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
+                for (let i = 0; i < message.$unknowns.length; ++i)
+                    writer.raw(message.$unknowns[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified MigrateReplicationModeResponse message, length delimited. Does not implicitly {@link vtctldata.MigrateReplicationModeResponse.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.MigrateReplicationModeResponse
+         * @static
+         * @param {vtctldata.MigrateReplicationModeResponse.$Properties} message MigrateReplicationModeResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        MigrateReplicationModeResponse.encodeDelimited = function(message, writer) {
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
+        };
+
+        /**
+         * Decodes a MigrateReplicationModeResponse message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.MigrateReplicationModeResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.MigrateReplicationModeResponse & vtctldata.MigrateReplicationModeResponse.$Shape} MigrateReplicationModeResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        MigrateReplicationModeResponse.decode = function (reader, length, _end, _depth, _target) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $Reader.recursionLimit)
+                throw $Error("max depth exceeded");
+            let end, message, value;
+            if (length === $undefined)
+                end = reader.len;
+            else {
+                end = reader.pos + length;
+                if (end > reader.len)
+                    throw $RangeError("index out of range");
+                length = reader.len;
+                reader.len = end;
+            }
+            message = _target || new $root.vtctldata.MigrateReplicationModeResponse();
+            while (reader.pos < end) {
+                let start = reader.pos;
+                let tag = reader.tag();
+                if (tag === _end) {
+                    _end = $undefined;
+                    break;
+                }
+                let wireType = tag & 7;
+                switch (tag >>>= 3) {
+                case 1: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.keyspace = value;
+                        else
+                            delete message.keyspace;
+                        continue;
+                    }
+                case 2: {
+                        if (wireType !== 2)
+                            break;
+                        if (!(message.shards && message.shards.length))
+                            message.shards = [];
+                        message.shards.push($root.vtctldata.ReplicationModeMigrationShardResult.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        continue;
+                    }
+                case 3: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.durability_policy = value;
+                        else
+                            delete message.durability_policy;
+                        continue;
+                    }
+                case 4: {
+                        if (wireType !== 2)
+                            break;
+                        if (!(message.keyspace_steps && message.keyspace_steps.length))
+                            message.keyspace_steps = [];
+                        message.keyspace_steps.push($root.vtctldata.ReplicationModeMigrationStep.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        continue;
+                    }
+                case 5: {
+                        if (wireType !== 2)
+                            break;
+                        if (!(message.events && message.events.length))
+                            message.events = [];
+                        message.events.push($root.logutil.Event.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        continue;
+                    }
+                }
+                reader.skipType(wireType, _depth, tag);
+                if (!reader.discardUnknown) {
+                    $util.makeProp(message, "$unknowns", false);
+                    (message.$unknowns || (message.$unknowns = [])).push(reader.raw(start, reader.pos));
+                }
+            }
+            if (length !== $undefined) {
+                if (reader.pos !== end)
+                    throw $RangeError("index out of range");
+                reader.len = length;
+            }
+            if (_end !== $undefined)
+                throw $Error("missing end group");
+            return message;
+        };
+
+        /**
+         * Decodes a MigrateReplicationModeResponse message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.MigrateReplicationModeResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.MigrateReplicationModeResponse & vtctldata.MigrateReplicationModeResponse.$Shape} MigrateReplicationModeResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        MigrateReplicationModeResponse.decodeDelimited = function(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a MigrateReplicationModeResponse message.
+         * @function verify
+         * @memberof vtctldata.MigrateReplicationModeResponse
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        MigrateReplicationModeResponse.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+                if (!$util.isString(message.keyspace))
+                    return "keyspace: string expected";
+            if (message.shards != null && $Object.hasOwnProperty.call(message, "shards")) {
+                if (!$Array.isArray(message.shards))
+                    return "shards: array expected";
+                for (let i = 0; i < message.shards.length; ++i) {
+                    let error = $root.vtctldata.ReplicationModeMigrationShardResult.verify(message.shards[i], _depth + 1);
+                    if (error)
+                        return "shards." + error;
+                }
+            }
+            if (message.durability_policy != null && $Object.hasOwnProperty.call(message, "durability_policy"))
+                if (!$util.isString(message.durability_policy))
+                    return "durability_policy: string expected";
+            if (message.keyspace_steps != null && $Object.hasOwnProperty.call(message, "keyspace_steps")) {
+                if (!$Array.isArray(message.keyspace_steps))
+                    return "keyspace_steps: array expected";
+                for (let i = 0; i < message.keyspace_steps.length; ++i) {
+                    let error = $root.vtctldata.ReplicationModeMigrationStep.verify(message.keyspace_steps[i], _depth + 1);
+                    if (error)
+                        return "keyspace_steps." + error;
+                }
+            }
+            if (message.events != null && $Object.hasOwnProperty.call(message, "events")) {
+                if (!$Array.isArray(message.events))
+                    return "events: array expected";
+                for (let i = 0; i < message.events.length; ++i) {
+                    let error = $root.logutil.Event.verify(message.events[i], _depth + 1);
+                    if (error)
+                        return "events." + error;
+                }
+            }
+            return null;
+        };
+
+        /**
+         * Creates a MigrateReplicationModeResponse message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.MigrateReplicationModeResponse
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.MigrateReplicationModeResponse} MigrateReplicationModeResponse
+         */
+        MigrateReplicationModeResponse.fromObject = function (object, _depth) {
+            if (object instanceof $root.vtctldata.MigrateReplicationModeResponse)
+                return object;
+            if (!$util.isObject(object))
+                throw $TypeError(".vtctldata.MigrateReplicationModeResponse: object expected");
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let message = new $root.vtctldata.MigrateReplicationModeResponse();
+            if (object.keyspace != null)
+                if (typeof object.keyspace !== "string" || object.keyspace.length)
+                    message.keyspace = $String(object.keyspace);
+            if (object.shards) {
+                if (!$Array.isArray(object.shards))
+                    throw $TypeError(".vtctldata.MigrateReplicationModeResponse.shards: array expected");
+                message.shards = $Array(object.shards.length);
+                for (let i = 0; i < object.shards.length; ++i) {
+                    if (!$util.isObject(object.shards[i]))
+                        throw $TypeError(".vtctldata.MigrateReplicationModeResponse.shards: object expected");
+                    message.shards[i] = $root.vtctldata.ReplicationModeMigrationShardResult.fromObject(object.shards[i], _depth + 1);
+                }
+            }
+            if (object.durability_policy != null)
+                if (typeof object.durability_policy !== "string" || object.durability_policy.length)
+                    message.durability_policy = $String(object.durability_policy);
+            if (object.keyspace_steps) {
+                if (!$Array.isArray(object.keyspace_steps))
+                    throw $TypeError(".vtctldata.MigrateReplicationModeResponse.keyspace_steps: array expected");
+                message.keyspace_steps = $Array(object.keyspace_steps.length);
+                for (let i = 0; i < object.keyspace_steps.length; ++i) {
+                    if (!$util.isObject(object.keyspace_steps[i]))
+                        throw $TypeError(".vtctldata.MigrateReplicationModeResponse.keyspace_steps: object expected");
+                    message.keyspace_steps[i] = $root.vtctldata.ReplicationModeMigrationStep.fromObject(object.keyspace_steps[i], _depth + 1);
+                }
+            }
+            if (object.events) {
+                if (!$Array.isArray(object.events))
+                    throw $TypeError(".vtctldata.MigrateReplicationModeResponse.events: array expected");
+                message.events = $Array(object.events.length);
+                for (let i = 0; i < object.events.length; ++i) {
+                    if (!$util.isObject(object.events[i]))
+                        throw $TypeError(".vtctldata.MigrateReplicationModeResponse.events: object expected");
+                    message.events[i] = $root.logutil.Event.fromObject(object.events[i], _depth + 1);
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a MigrateReplicationModeResponse message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.MigrateReplicationModeResponse
+         * @static
+         * @param {vtctldata.MigrateReplicationModeResponse} message MigrateReplicationModeResponse
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        MigrateReplicationModeResponse.toObject = function (message, options, _depth) {
+            if (!options)
+                options = {};
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let object = {};
+            if (options.arrays || options.defaults) {
+                object.shards = [];
+                object.keyspace_steps = [];
+                object.events = [];
+            }
+            if (options.defaults) {
+                object.keyspace = "";
+                object.durability_policy = "";
+            }
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+                object.keyspace = message.keyspace;
+            if (message.shards && message.shards.length) {
+                object.shards = $Array(message.shards.length);
+                for (let j = 0; j < message.shards.length; ++j)
+                    object.shards[j] = $root.vtctldata.ReplicationModeMigrationShardResult.toObject(message.shards[j], options, _depth + 1);
+            }
+            if (message.durability_policy != null && $Object.hasOwnProperty.call(message, "durability_policy"))
+                object.durability_policy = message.durability_policy;
+            if (message.keyspace_steps && message.keyspace_steps.length) {
+                object.keyspace_steps = $Array(message.keyspace_steps.length);
+                for (let j = 0; j < message.keyspace_steps.length; ++j)
+                    object.keyspace_steps[j] = $root.vtctldata.ReplicationModeMigrationStep.toObject(message.keyspace_steps[j], options, _depth + 1);
+            }
+            if (message.events && message.events.length) {
+                object.events = $Array(message.events.length);
+                for (let j = 0; j < message.events.length; ++j)
+                    object.events[j] = $root.logutil.Event.toObject(message.events[j], options, _depth + 1);
+            }
+            return object;
+        };
+
+        /**
+         * Converts this MigrateReplicationModeResponse to JSON.
+         * @function toJSON
+         * @memberof vtctldata.MigrateReplicationModeResponse
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        MigrateReplicationModeResponse.prototype.toJSON = function() {
+            return MigrateReplicationModeResponse.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        /**
+         * Gets the type url for MigrateReplicationModeResponse
+         * @function getTypeUrl
+         * @memberof vtctldata.MigrateReplicationModeResponse
+         * @static
+         * @param {string} [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns {string} The type url
+         */
+        MigrateReplicationModeResponse.getTypeUrl = function(prefix) {
+            if (prefix === $undefined)
+                prefix = "type.googleapis.com";
+            return prefix + "/vtctldata.MigrateReplicationModeResponse";
+        };
+
+        return MigrateReplicationModeResponse;
     })();
 
     vtctldata.MountRegisterRequest = (function() {

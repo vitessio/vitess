@@ -188,6 +188,12 @@ func promoteGroupPrimary(ctx context.Context, analysisEntry *inst.DetectionAnaly
 			"the MySQL of %s is not the primary of the shard's replication group (view %s, recorded incarnation %q, %d of %d voters ONLINE)",
 			aliasString, gs.GetViewId(), legitimate.Incarnation, legitimate.OnlineVoters(gs), len(legitimate.Voters))
 	}
+	if !status.GetGroupReplicationEnabled() {
+		// Its MySQL reports the group's state, but the tablet applies neither the serving
+		// invariant nor the fence: it would serve as the shard primary without them.
+		return true, topologyRecovery, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+			"%s does not run Group Replication (--enable-group-replication): it would serve as the shard primary without the serving invariant of the replication group", aliasString)
+	}
 
 	_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("promoting %s, the primary of the replication group, to shard primary", aliasString))
 	// The group, not semi-sync, makes transactions durable.
@@ -607,7 +613,7 @@ func finishGroupBootstrap(ctx context.Context, analysisEntry *inst.DetectionAnal
 	// Until VTOrc refreshes its copy of the shard record, its analysis would take the new group
 	// for a foreign one, and not make the other voters join it.
 	saveShardRecord(ctx, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard, logger)
-	_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("recorded the group incarnation %s", incarnation))
+	_ = AuditTopologyRecovery(topologyRecovery, "recorded the group incarnation "+incarnation)
 	joinVotersAfterBootstrap(voters, tabletInfos, bootstrapped, logger)
 	_ = inst.AuditOperation(BootstrapGroupReplicationRecoveryName, bootstrapped.Alias, "bootstrapped the replication group")
 	_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("%s: bootstrapped the replication group on %s", BootstrapGroupReplicationRecoveryName, topoproto.TabletAliasString(bootstrapped.Alias)))
@@ -1179,14 +1185,14 @@ func updateGroupReplicationVoters(ctx context.Context, analysisEntry *inst.Detec
 			// voter joins once the bootstrap is recorded.
 			_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("not starting group replication on the new voter %s: the shard record lists no incarnation", aliasString))
 		case isVoter && !policy.IsVoter(current, o.Tablet.Alias) && o.Reachable && !o.Active:
-			_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("starting group replication on the new voter %s", aliasString))
+			_ = AuditTopologyRecovery(topologyRecovery, "starting group replication on the new voter "+aliasString)
 			if _, err := startGroupReplication(ctx, o.Tablet, &tabletmanagerdatapb.StartGroupReplicationRequest{}); err != nil {
 				errs = append(errs, vterrors.Wrapf(err, "failed to start group replication on the new voter %s", aliasString))
 			}
 		case isVoter || topoproto.TabletAliasEqual(o.Tablet.Alias, selection.GroupPrimary) || !selection.IsActive(o.Tablet.Alias):
 		case !o.Reachable:
 			// Its MySQL still runs Group Replication, but only its vttablet could make it leave.
-			message := fmt.Sprintf("%s is no longer a voter, but it is unreachable while its MySQL is still an active member of the group: it stays in the group", aliasString)
+			message := aliasString + " is no longer a voter, but it is unreachable while its MySQL is still an active member of the group: it stays in the group"
 			logger.Warn(message)
 			_ = AuditTopologyRecovery(topologyRecovery, message)
 		case groupPrimary == nil:

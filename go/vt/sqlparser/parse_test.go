@@ -1895,6 +1895,18 @@ var validSQL = []struct {
 	output:     "create table a",
 	partialDDL: true,
 }, {
+	// SERIAL is an alias for BIGINT UNSIGNED NOT NULL AUTO_INCREMENT UNIQUE
+	input:  "create table if not exists __drizzle_migrations (id serial primary key, hash text not null, created_at bigint)",
+	output: "create table if not exists __drizzle_migrations (\n\tid serial primary key,\n\t`hash` text not null,\n\tcreated_at bigint\n)",
+}, {
+	// SERIAL is not a reserved keyword
+	input:  "create table serial (serial serial)",
+	output: "create table `serial` (\n\t`serial` serial\n)",
+}, {
+	input: "alter table t add column s serial",
+}, {
+	input: "alter table t modify column id serial first",
+}, {
 	input:  "create table a (b1 bool not null primary key, b2 boolean not null)",
 	output: "create table a (\n\tb1 bool not null primary key,\n\tb2 boolean not null\n)",
 }, {

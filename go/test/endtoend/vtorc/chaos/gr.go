@@ -38,7 +38,7 @@ func (g GRState) String() string {
 	if !g.OK {
 		return "gr=?"
 	}
-	s := fmt.Sprintf("gr=%s", g.State)
+	s := "gr=" + g.State
 	if g.Role != "" {
 		s += "/" + g.Role
 	}

@@ -411,6 +411,8 @@ func groupPrimaryMoveTarget(durability policy.Durabler, grd policy.GroupReplicat
 			!legitimate.IsLegitimateMember(gs) || policy.GroupIncarnation(gs.GetViewId()) != incarnation ||
 			!isOnlineInView(view, st.status.GetServerUuid()):
 			reason = "not an ONLINE member of the shard's legitimate group"
+		case !st.status.GetGroupReplicationEnabled():
+			reason = "its vttablet does not run Group Replication (--enable-group-replication)"
 		case groupPrimaryMoves.holdRemaining(alias, now) > 0:
 			reason = fmt.Sprintf("the group primary was moved away from it less than %v ago", groupPrimaryMoveHoldPeriod)
 		}

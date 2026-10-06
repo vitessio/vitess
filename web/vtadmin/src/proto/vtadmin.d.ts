@@ -21915,6 +21915,18 @@ export namespace topodata {
         /** Shard vtorc_state. */
         vtorc_state?: (vtorcdata.Shard.$Properties|null);
 
+        /** Shard group_replication_voters. */
+        group_replication_voters: topodata.TabletAlias.$Properties[];
+
+        /** Shard group_replication_incarnation. */
+        group_replication_incarnation: string;
+
+        /** Shard group_replication_bootstrap_intent. */
+        group_replication_bootstrap_intent?: (topodata.GroupReplicationBootstrapIntent.$Properties|null);
+
+        /** Shard durability_policy. */
+        durability_policy: string;
+
         /**
          * Creates a new Shard instance using the specified properties.
          * @param [properties] Properties to set
@@ -22019,6 +22031,18 @@ export namespace topodata {
 
             /** Shard vtorc_state */
             vtorc_state?: (vtorcdata.Shard.$Properties|null);
+
+            /** Shard group_replication_voters */
+            group_replication_voters?: (topodata.TabletAlias.$Properties[]|null);
+
+            /** Shard group_replication_incarnation */
+            group_replication_incarnation?: (string|null);
+
+            /** Shard group_replication_bootstrap_intent */
+            group_replication_bootstrap_intent?: (topodata.GroupReplicationBootstrapIntent.$Properties|null);
+
+            /** Shard durability_policy */
+            durability_policy?: (string|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
@@ -22311,6 +22335,141 @@ export namespace topodata {
     }
 
     /**
+     * Properties of a GroupReplicationBootstrapIntent.
+     * @deprecated Use topodata.GroupReplicationBootstrapIntent.$Properties instead.
+     */
+    interface IGroupReplicationBootstrapIntent extends topodata.GroupReplicationBootstrapIntent.$Properties {
+    }
+
+    /** Represents a GroupReplicationBootstrapIntent. */
+    class GroupReplicationBootstrapIntent {
+
+        /**
+         * Constructs a new GroupReplicationBootstrapIntent.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: topodata.GroupReplicationBootstrapIntent.$Properties);
+
+        /** Unknown fields preserved while decoding when enabled */
+        $unknowns?: Uint8Array[];
+
+        /** GroupReplicationBootstrapIntent target. */
+        target?: (topodata.TabletAlias.$Properties|null);
+
+        /** GroupReplicationBootstrapIntent time. */
+        time?: (vttime.Time.$Properties|null);
+
+        /** GroupReplicationBootstrapIntent previous_incarnation. */
+        previous_incarnation: string;
+
+        /** GroupReplicationBootstrapIntent token. */
+        token: string;
+
+        /**
+         * Creates a new GroupReplicationBootstrapIntent instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GroupReplicationBootstrapIntent instance
+         */
+        static create(properties: topodata.GroupReplicationBootstrapIntent.$Shape): topodata.GroupReplicationBootstrapIntent & topodata.GroupReplicationBootstrapIntent.$Shape;
+        static create(properties?: topodata.GroupReplicationBootstrapIntent.$Properties): topodata.GroupReplicationBootstrapIntent;
+
+        /**
+         * Encodes the specified GroupReplicationBootstrapIntent message. Does not implicitly {@link topodata.GroupReplicationBootstrapIntent.verify|verify} messages.
+         * @param message GroupReplicationBootstrapIntent message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encode(message: topodata.GroupReplicationBootstrapIntent.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GroupReplicationBootstrapIntent message, length delimited. Does not implicitly {@link topodata.GroupReplicationBootstrapIntent.verify|verify} messages.
+         * @param message GroupReplicationBootstrapIntent message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encodeDelimited(message: topodata.GroupReplicationBootstrapIntent.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GroupReplicationBootstrapIntent message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns {topodata.GroupReplicationBootstrapIntent & topodata.GroupReplicationBootstrapIntent.$Shape} GroupReplicationBootstrapIntent
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.GroupReplicationBootstrapIntent & topodata.GroupReplicationBootstrapIntent.$Shape;
+
+        /**
+         * Decodes a GroupReplicationBootstrapIntent message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns {topodata.GroupReplicationBootstrapIntent & topodata.GroupReplicationBootstrapIntent.$Shape} GroupReplicationBootstrapIntent
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.GroupReplicationBootstrapIntent & topodata.GroupReplicationBootstrapIntent.$Shape;
+
+        /**
+         * Verifies a GroupReplicationBootstrapIntent message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GroupReplicationBootstrapIntent message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GroupReplicationBootstrapIntent
+         */
+        static fromObject(object: { [k: string]: any }): topodata.GroupReplicationBootstrapIntent;
+
+        /**
+         * Creates a plain object from a GroupReplicationBootstrapIntent message. Also converts values to other types if specified.
+         * @param message GroupReplicationBootstrapIntent
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        static toObject(message: topodata.GroupReplicationBootstrapIntent, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GroupReplicationBootstrapIntent to JSON.
+         * @returns JSON object
+         */
+        toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the type url for GroupReplicationBootstrapIntent
+         * @param [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns The type url
+         */
+        static getTypeUrl(prefix?: string): string;
+    }
+
+    namespace GroupReplicationBootstrapIntent {
+
+        /** Properties of a GroupReplicationBootstrapIntent. */
+        interface $Properties {
+
+            /** GroupReplicationBootstrapIntent target */
+            target?: (topodata.TabletAlias.$Properties|null);
+
+            /** GroupReplicationBootstrapIntent time */
+            time?: (vttime.Time.$Properties|null);
+
+            /** GroupReplicationBootstrapIntent previous_incarnation */
+            previous_incarnation?: (string|null);
+
+            /** GroupReplicationBootstrapIntent token */
+            token?: (string|null);
+
+            /** Unknown fields preserved while decoding when enabled */
+            $unknowns?: Uint8Array[];
+        }
+
+        /** Shape of a GroupReplicationBootstrapIntent. */
+        type $Shape = topodata.GroupReplicationBootstrapIntent.$Properties;
+    }
+
+    /**
      * Properties of a Keyspace.
      * @deprecated Use topodata.Keyspace.$Properties instead.
      */
@@ -22352,6 +22511,9 @@ export namespace topodata {
 
         /** Keyspace query_throttler_config. */
         query_throttler_config?: (querythrottler.Config.$Properties|null);
+
+        /** Keyspace migration_source_durability_policy. */
+        migration_source_durability_policy: string;
 
         /**
          * Creates a new Keyspace instance using the specified properties.
@@ -22460,6 +22622,9 @@ export namespace topodata {
 
             /** Keyspace query_throttler_config */
             query_throttler_config?: (querythrottler.Config.$Properties|null);
+
+            /** Keyspace migration_source_durability_policy */
+            migration_source_durability_policy?: (string|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
@@ -37886,6 +38051,498 @@ export namespace tabletmanagerdata {
 
         /** Shape of a ResetReplicationParametersResponse. */
         type $Shape = tabletmanagerdata.ResetReplicationParametersResponse.$Properties;
+    }
+
+    /**
+     * Properties of a StartGroupReplicationRequest.
+     * @deprecated Use tabletmanagerdata.StartGroupReplicationRequest.$Properties instead.
+     */
+    interface IStartGroupReplicationRequest extends tabletmanagerdata.StartGroupReplicationRequest.$Properties {
+    }
+
+    /** Represents a StartGroupReplicationRequest. */
+    class StartGroupReplicationRequest {
+
+        /**
+         * Constructs a new StartGroupReplicationRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.StartGroupReplicationRequest.$Properties);
+
+        /** Unknown fields preserved while decoding when enabled */
+        $unknowns?: Uint8Array[];
+
+        /** StartGroupReplicationRequest bootstrap. */
+        bootstrap: boolean;
+
+        /** StartGroupReplicationRequest required_gtid_set. */
+        required_gtid_set: string;
+
+        /** StartGroupReplicationRequest bootstrap_intent_token. */
+        bootstrap_intent_token: string;
+
+        /** StartGroupReplicationRequest expected_incarnation. */
+        expected_incarnation: string;
+
+        /** StartGroupReplicationRequest report_definitive_refusal. */
+        report_definitive_refusal: boolean;
+
+        /**
+         * Creates a new StartGroupReplicationRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns StartGroupReplicationRequest instance
+         */
+        static create(properties: tabletmanagerdata.StartGroupReplicationRequest.$Shape): tabletmanagerdata.StartGroupReplicationRequest & tabletmanagerdata.StartGroupReplicationRequest.$Shape;
+        static create(properties?: tabletmanagerdata.StartGroupReplicationRequest.$Properties): tabletmanagerdata.StartGroupReplicationRequest;
+
+        /**
+         * Encodes the specified StartGroupReplicationRequest message. Does not implicitly {@link tabletmanagerdata.StartGroupReplicationRequest.verify|verify} messages.
+         * @param message StartGroupReplicationRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encode(message: tabletmanagerdata.StartGroupReplicationRequest.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified StartGroupReplicationRequest message, length delimited. Does not implicitly {@link tabletmanagerdata.StartGroupReplicationRequest.verify|verify} messages.
+         * @param message StartGroupReplicationRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encodeDelimited(message: tabletmanagerdata.StartGroupReplicationRequest.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a StartGroupReplicationRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns {tabletmanagerdata.StartGroupReplicationRequest & tabletmanagerdata.StartGroupReplicationRequest.$Shape} StartGroupReplicationRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.StartGroupReplicationRequest & tabletmanagerdata.StartGroupReplicationRequest.$Shape;
+
+        /**
+         * Decodes a StartGroupReplicationRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns {tabletmanagerdata.StartGroupReplicationRequest & tabletmanagerdata.StartGroupReplicationRequest.$Shape} StartGroupReplicationRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.StartGroupReplicationRequest & tabletmanagerdata.StartGroupReplicationRequest.$Shape;
+
+        /**
+         * Verifies a StartGroupReplicationRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a StartGroupReplicationRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns StartGroupReplicationRequest
+         */
+        static fromObject(object: { [k: string]: any }): tabletmanagerdata.StartGroupReplicationRequest;
+
+        /**
+         * Creates a plain object from a StartGroupReplicationRequest message. Also converts values to other types if specified.
+         * @param message StartGroupReplicationRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        static toObject(message: tabletmanagerdata.StartGroupReplicationRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this StartGroupReplicationRequest to JSON.
+         * @returns JSON object
+         */
+        toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the type url for StartGroupReplicationRequest
+         * @param [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns The type url
+         */
+        static getTypeUrl(prefix?: string): string;
+    }
+
+    namespace StartGroupReplicationRequest {
+
+        /** Properties of a StartGroupReplicationRequest. */
+        interface $Properties {
+
+            /** StartGroupReplicationRequest bootstrap */
+            bootstrap?: (boolean|null);
+
+            /** StartGroupReplicationRequest required_gtid_set */
+            required_gtid_set?: (string|null);
+
+            /** StartGroupReplicationRequest bootstrap_intent_token */
+            bootstrap_intent_token?: (string|null);
+
+            /** StartGroupReplicationRequest expected_incarnation */
+            expected_incarnation?: (string|null);
+
+            /** StartGroupReplicationRequest report_definitive_refusal */
+            report_definitive_refusal?: (boolean|null);
+
+            /** Unknown fields preserved while decoding when enabled */
+            $unknowns?: Uint8Array[];
+        }
+
+        /** Shape of a StartGroupReplicationRequest. */
+        type $Shape = tabletmanagerdata.StartGroupReplicationRequest.$Properties;
+    }
+
+    /**
+     * Properties of a StartGroupReplicationResponse.
+     * @deprecated Use tabletmanagerdata.StartGroupReplicationResponse.$Properties instead.
+     */
+    interface IStartGroupReplicationResponse extends tabletmanagerdata.StartGroupReplicationResponse.$Properties {
+    }
+
+    /** Represents a StartGroupReplicationResponse. */
+    class StartGroupReplicationResponse {
+
+        /**
+         * Constructs a new StartGroupReplicationResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.StartGroupReplicationResponse.$Properties);
+
+        /** Unknown fields preserved while decoding when enabled */
+        $unknowns?: Uint8Array[];
+
+        /** StartGroupReplicationResponse status. */
+        status?: (replicationdata.GroupReplicationStatus.$Properties|null);
+
+        /** StartGroupReplicationResponse definitive_refusal. */
+        definitive_refusal: string;
+
+        /**
+         * Creates a new StartGroupReplicationResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns StartGroupReplicationResponse instance
+         */
+        static create(properties: tabletmanagerdata.StartGroupReplicationResponse.$Shape): tabletmanagerdata.StartGroupReplicationResponse & tabletmanagerdata.StartGroupReplicationResponse.$Shape;
+        static create(properties?: tabletmanagerdata.StartGroupReplicationResponse.$Properties): tabletmanagerdata.StartGroupReplicationResponse;
+
+        /**
+         * Encodes the specified StartGroupReplicationResponse message. Does not implicitly {@link tabletmanagerdata.StartGroupReplicationResponse.verify|verify} messages.
+         * @param message StartGroupReplicationResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encode(message: tabletmanagerdata.StartGroupReplicationResponse.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified StartGroupReplicationResponse message, length delimited. Does not implicitly {@link tabletmanagerdata.StartGroupReplicationResponse.verify|verify} messages.
+         * @param message StartGroupReplicationResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encodeDelimited(message: tabletmanagerdata.StartGroupReplicationResponse.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a StartGroupReplicationResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns {tabletmanagerdata.StartGroupReplicationResponse & tabletmanagerdata.StartGroupReplicationResponse.$Shape} StartGroupReplicationResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.StartGroupReplicationResponse & tabletmanagerdata.StartGroupReplicationResponse.$Shape;
+
+        /**
+         * Decodes a StartGroupReplicationResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns {tabletmanagerdata.StartGroupReplicationResponse & tabletmanagerdata.StartGroupReplicationResponse.$Shape} StartGroupReplicationResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.StartGroupReplicationResponse & tabletmanagerdata.StartGroupReplicationResponse.$Shape;
+
+        /**
+         * Verifies a StartGroupReplicationResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a StartGroupReplicationResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns StartGroupReplicationResponse
+         */
+        static fromObject(object: { [k: string]: any }): tabletmanagerdata.StartGroupReplicationResponse;
+
+        /**
+         * Creates a plain object from a StartGroupReplicationResponse message. Also converts values to other types if specified.
+         * @param message StartGroupReplicationResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        static toObject(message: tabletmanagerdata.StartGroupReplicationResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this StartGroupReplicationResponse to JSON.
+         * @returns JSON object
+         */
+        toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the type url for StartGroupReplicationResponse
+         * @param [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns The type url
+         */
+        static getTypeUrl(prefix?: string): string;
+    }
+
+    namespace StartGroupReplicationResponse {
+
+        /** Properties of a StartGroupReplicationResponse. */
+        interface $Properties {
+
+            /** StartGroupReplicationResponse status */
+            status?: (replicationdata.GroupReplicationStatus.$Properties|null);
+
+            /** StartGroupReplicationResponse definitive_refusal */
+            definitive_refusal?: (string|null);
+
+            /** Unknown fields preserved while decoding when enabled */
+            $unknowns?: Uint8Array[];
+        }
+
+        /** Shape of a StartGroupReplicationResponse. */
+        type $Shape = tabletmanagerdata.StartGroupReplicationResponse.$Properties;
+    }
+
+    /**
+     * Properties of a StopGroupReplicationRequest.
+     * @deprecated Use tabletmanagerdata.StopGroupReplicationRequest.$Properties instead.
+     */
+    interface IStopGroupReplicationRequest extends tabletmanagerdata.StopGroupReplicationRequest.$Properties {
+    }
+
+    /** Represents a StopGroupReplicationRequest. */
+    class StopGroupReplicationRequest {
+
+        /**
+         * Constructs a new StopGroupReplicationRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.StopGroupReplicationRequest.$Properties);
+
+        /** Unknown fields preserved while decoding when enabled */
+        $unknowns?: Uint8Array[];
+
+        /**
+         * Creates a new StopGroupReplicationRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns StopGroupReplicationRequest instance
+         */
+        static create(properties: tabletmanagerdata.StopGroupReplicationRequest.$Shape): tabletmanagerdata.StopGroupReplicationRequest & tabletmanagerdata.StopGroupReplicationRequest.$Shape;
+        static create(properties?: tabletmanagerdata.StopGroupReplicationRequest.$Properties): tabletmanagerdata.StopGroupReplicationRequest;
+
+        /**
+         * Encodes the specified StopGroupReplicationRequest message. Does not implicitly {@link tabletmanagerdata.StopGroupReplicationRequest.verify|verify} messages.
+         * @param message StopGroupReplicationRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encode(message: tabletmanagerdata.StopGroupReplicationRequest.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified StopGroupReplicationRequest message, length delimited. Does not implicitly {@link tabletmanagerdata.StopGroupReplicationRequest.verify|verify} messages.
+         * @param message StopGroupReplicationRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encodeDelimited(message: tabletmanagerdata.StopGroupReplicationRequest.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a StopGroupReplicationRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns {tabletmanagerdata.StopGroupReplicationRequest & tabletmanagerdata.StopGroupReplicationRequest.$Shape} StopGroupReplicationRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.StopGroupReplicationRequest & tabletmanagerdata.StopGroupReplicationRequest.$Shape;
+
+        /**
+         * Decodes a StopGroupReplicationRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns {tabletmanagerdata.StopGroupReplicationRequest & tabletmanagerdata.StopGroupReplicationRequest.$Shape} StopGroupReplicationRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.StopGroupReplicationRequest & tabletmanagerdata.StopGroupReplicationRequest.$Shape;
+
+        /**
+         * Verifies a StopGroupReplicationRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a StopGroupReplicationRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns StopGroupReplicationRequest
+         */
+        static fromObject(object: { [k: string]: any }): tabletmanagerdata.StopGroupReplicationRequest;
+
+        /**
+         * Creates a plain object from a StopGroupReplicationRequest message. Also converts values to other types if specified.
+         * @param message StopGroupReplicationRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        static toObject(message: tabletmanagerdata.StopGroupReplicationRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this StopGroupReplicationRequest to JSON.
+         * @returns JSON object
+         */
+        toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the type url for StopGroupReplicationRequest
+         * @param [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns The type url
+         */
+        static getTypeUrl(prefix?: string): string;
+    }
+
+    namespace StopGroupReplicationRequest {
+
+        /** Properties of a StopGroupReplicationRequest. */
+        interface $Properties {
+
+            /** Unknown fields preserved while decoding when enabled */
+            $unknowns?: Uint8Array[];
+        }
+
+        /** Shape of a StopGroupReplicationRequest. */
+        type $Shape = tabletmanagerdata.StopGroupReplicationRequest.$Properties;
+    }
+
+    /**
+     * Properties of a StopGroupReplicationResponse.
+     * @deprecated Use tabletmanagerdata.StopGroupReplicationResponse.$Properties instead.
+     */
+    interface IStopGroupReplicationResponse extends tabletmanagerdata.StopGroupReplicationResponse.$Properties {
+    }
+
+    /** Represents a StopGroupReplicationResponse. */
+    class StopGroupReplicationResponse {
+
+        /**
+         * Constructs a new StopGroupReplicationResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.StopGroupReplicationResponse.$Properties);
+
+        /** Unknown fields preserved while decoding when enabled */
+        $unknowns?: Uint8Array[];
+
+        /** StopGroupReplicationResponse status. */
+        status?: (replicationdata.GroupReplicationStatus.$Properties|null);
+
+        /**
+         * Creates a new StopGroupReplicationResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns StopGroupReplicationResponse instance
+         */
+        static create(properties: tabletmanagerdata.StopGroupReplicationResponse.$Shape): tabletmanagerdata.StopGroupReplicationResponse & tabletmanagerdata.StopGroupReplicationResponse.$Shape;
+        static create(properties?: tabletmanagerdata.StopGroupReplicationResponse.$Properties): tabletmanagerdata.StopGroupReplicationResponse;
+
+        /**
+         * Encodes the specified StopGroupReplicationResponse message. Does not implicitly {@link tabletmanagerdata.StopGroupReplicationResponse.verify|verify} messages.
+         * @param message StopGroupReplicationResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encode(message: tabletmanagerdata.StopGroupReplicationResponse.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified StopGroupReplicationResponse message, length delimited. Does not implicitly {@link tabletmanagerdata.StopGroupReplicationResponse.verify|verify} messages.
+         * @param message StopGroupReplicationResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encodeDelimited(message: tabletmanagerdata.StopGroupReplicationResponse.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a StopGroupReplicationResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns {tabletmanagerdata.StopGroupReplicationResponse & tabletmanagerdata.StopGroupReplicationResponse.$Shape} StopGroupReplicationResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.StopGroupReplicationResponse & tabletmanagerdata.StopGroupReplicationResponse.$Shape;
+
+        /**
+         * Decodes a StopGroupReplicationResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns {tabletmanagerdata.StopGroupReplicationResponse & tabletmanagerdata.StopGroupReplicationResponse.$Shape} StopGroupReplicationResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.StopGroupReplicationResponse & tabletmanagerdata.StopGroupReplicationResponse.$Shape;
+
+        /**
+         * Verifies a StopGroupReplicationResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a StopGroupReplicationResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns StopGroupReplicationResponse
+         */
+        static fromObject(object: { [k: string]: any }): tabletmanagerdata.StopGroupReplicationResponse;
+
+        /**
+         * Creates a plain object from a StopGroupReplicationResponse message. Also converts values to other types if specified.
+         * @param message StopGroupReplicationResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        static toObject(message: tabletmanagerdata.StopGroupReplicationResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this StopGroupReplicationResponse to JSON.
+         * @returns JSON object
+         */
+        toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the type url for StopGroupReplicationResponse
+         * @param [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns The type url
+         */
+        static getTypeUrl(prefix?: string): string;
+    }
+
+    namespace StopGroupReplicationResponse {
+
+        /** Properties of a StopGroupReplicationResponse. */
+        interface $Properties {
+
+            /** StopGroupReplicationResponse status */
+            status?: (replicationdata.GroupReplicationStatus.$Properties|null);
+
+            /** Unknown fields preserved while decoding when enabled */
+            $unknowns?: Uint8Array[];
+        }
+
+        /** Shape of a StopGroupReplicationResponse. */
+        type $Shape = tabletmanagerdata.StopGroupReplicationResponse.$Properties;
     }
 
     /**
@@ -61165,6 +61822,15 @@ export namespace replicationdata {
         /** FullStatus shard_peer_health. */
         shard_peer_health: replicationdata.ShardPeerHealth.$Properties[];
 
+        /** FullStatus group_replication_status. */
+        group_replication_status?: (replicationdata.GroupReplicationStatus.$Properties|null);
+
+        /** FullStatus group_replication_enabled. */
+        group_replication_enabled: boolean;
+
+        /** FullStatus shard_durability_policy_supported. */
+        shard_durability_policy_supported: boolean;
+
         /**
          * Creates a new FullStatus instance using the specified properties.
          * @param [properties] Properties to set
@@ -61327,12 +61993,363 @@ export namespace replicationdata {
             /** FullStatus shard_peer_health */
             shard_peer_health?: (replicationdata.ShardPeerHealth.$Properties[]|null);
 
+            /** FullStatus group_replication_status */
+            group_replication_status?: (replicationdata.GroupReplicationStatus.$Properties|null);
+
+            /** FullStatus group_replication_enabled */
+            group_replication_enabled?: (boolean|null);
+
+            /** FullStatus shard_durability_policy_supported */
+            shard_durability_policy_supported?: (boolean|null);
+
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
         /** Shape of a FullStatus. */
         type $Shape = replicationdata.FullStatus.$Properties;
+    }
+
+    /**
+     * Properties of a GroupReplicationMember.
+     * @deprecated Use replicationdata.GroupReplicationMember.$Properties instead.
+     */
+    interface IGroupReplicationMember extends replicationdata.GroupReplicationMember.$Properties {
+    }
+
+    /** Represents a GroupReplicationMember. */
+    class GroupReplicationMember {
+
+        /**
+         * Constructs a new GroupReplicationMember.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: replicationdata.GroupReplicationMember.$Properties);
+
+        /** Unknown fields preserved while decoding when enabled */
+        $unknowns?: Uint8Array[];
+
+        /** GroupReplicationMember member_uuid. */
+        member_uuid: string;
+
+        /** GroupReplicationMember host. */
+        host: string;
+
+        /** GroupReplicationMember port. */
+        port: number;
+
+        /** GroupReplicationMember state. */
+        state: string;
+
+        /** GroupReplicationMember role. */
+        role: string;
+
+        /** GroupReplicationMember version. */
+        version: string;
+
+        /**
+         * Creates a new GroupReplicationMember instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GroupReplicationMember instance
+         */
+        static create(properties: replicationdata.GroupReplicationMember.$Shape): replicationdata.GroupReplicationMember & replicationdata.GroupReplicationMember.$Shape;
+        static create(properties?: replicationdata.GroupReplicationMember.$Properties): replicationdata.GroupReplicationMember;
+
+        /**
+         * Encodes the specified GroupReplicationMember message. Does not implicitly {@link replicationdata.GroupReplicationMember.verify|verify} messages.
+         * @param message GroupReplicationMember message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encode(message: replicationdata.GroupReplicationMember.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GroupReplicationMember message, length delimited. Does not implicitly {@link replicationdata.GroupReplicationMember.verify|verify} messages.
+         * @param message GroupReplicationMember message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encodeDelimited(message: replicationdata.GroupReplicationMember.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GroupReplicationMember message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns {replicationdata.GroupReplicationMember & replicationdata.GroupReplicationMember.$Shape} GroupReplicationMember
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): replicationdata.GroupReplicationMember & replicationdata.GroupReplicationMember.$Shape;
+
+        /**
+         * Decodes a GroupReplicationMember message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns {replicationdata.GroupReplicationMember & replicationdata.GroupReplicationMember.$Shape} GroupReplicationMember
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): replicationdata.GroupReplicationMember & replicationdata.GroupReplicationMember.$Shape;
+
+        /**
+         * Verifies a GroupReplicationMember message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GroupReplicationMember message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GroupReplicationMember
+         */
+        static fromObject(object: { [k: string]: any }): replicationdata.GroupReplicationMember;
+
+        /**
+         * Creates a plain object from a GroupReplicationMember message. Also converts values to other types if specified.
+         * @param message GroupReplicationMember
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        static toObject(message: replicationdata.GroupReplicationMember, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GroupReplicationMember to JSON.
+         * @returns JSON object
+         */
+        toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the type url for GroupReplicationMember
+         * @param [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns The type url
+         */
+        static getTypeUrl(prefix?: string): string;
+    }
+
+    namespace GroupReplicationMember {
+
+        /** Properties of a GroupReplicationMember. */
+        interface $Properties {
+
+            /** GroupReplicationMember member_uuid */
+            member_uuid?: (string|null);
+
+            /** GroupReplicationMember host */
+            host?: (string|null);
+
+            /** GroupReplicationMember port */
+            port?: (number|null);
+
+            /** GroupReplicationMember state */
+            state?: (string|null);
+
+            /** GroupReplicationMember role */
+            role?: (string|null);
+
+            /** GroupReplicationMember version */
+            version?: (string|null);
+
+            /** Unknown fields preserved while decoding when enabled */
+            $unknowns?: Uint8Array[];
+        }
+
+        /** Shape of a GroupReplicationMember. */
+        type $Shape = replicationdata.GroupReplicationMember.$Properties;
+    }
+
+    /**
+     * Properties of a GroupReplicationStatus.
+     * @deprecated Use replicationdata.GroupReplicationStatus.$Properties instead.
+     */
+    interface IGroupReplicationStatus extends replicationdata.GroupReplicationStatus.$Properties {
+    }
+
+    /** Represents a GroupReplicationStatus. */
+    class GroupReplicationStatus {
+
+        /**
+         * Constructs a new GroupReplicationStatus.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: replicationdata.GroupReplicationStatus.$Properties);
+
+        /** Unknown fields preserved while decoding when enabled */
+        $unknowns?: Uint8Array[];
+
+        /** GroupReplicationStatus plugin_active. */
+        plugin_active: boolean;
+
+        /** GroupReplicationStatus group_name. */
+        group_name: string;
+
+        /** GroupReplicationStatus member_state. */
+        member_state: string;
+
+        /** GroupReplicationStatus member_role. */
+        member_role: string;
+
+        /** GroupReplicationStatus primary_uuid. */
+        primary_uuid: string;
+
+        /** GroupReplicationStatus view_id. */
+        view_id: string;
+
+        /** GroupReplicationStatus members. */
+        members: replicationdata.GroupReplicationMember.$Properties[];
+
+        /** GroupReplicationStatus has_quorum. */
+        has_quorum: boolean;
+
+        /** GroupReplicationStatus received_transaction_set. */
+        received_transaction_set: string;
+
+        /** GroupReplicationStatus single_primary_mode. */
+        single_primary_mode: boolean;
+
+        /** GroupReplicationStatus member_weight. */
+        member_weight: number;
+
+        /** GroupReplicationStatus paxos_single_leader. */
+        paxos_single_leader: boolean;
+
+        /** GroupReplicationStatus start_in_progress. */
+        start_in_progress: boolean;
+
+        /** GroupReplicationStatus primary_election_in_progress. */
+        primary_election_in_progress: boolean;
+
+        /**
+         * Creates a new GroupReplicationStatus instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GroupReplicationStatus instance
+         */
+        static create(properties: replicationdata.GroupReplicationStatus.$Shape): replicationdata.GroupReplicationStatus & replicationdata.GroupReplicationStatus.$Shape;
+        static create(properties?: replicationdata.GroupReplicationStatus.$Properties): replicationdata.GroupReplicationStatus;
+
+        /**
+         * Encodes the specified GroupReplicationStatus message. Does not implicitly {@link replicationdata.GroupReplicationStatus.verify|verify} messages.
+         * @param message GroupReplicationStatus message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encode(message: replicationdata.GroupReplicationStatus.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GroupReplicationStatus message, length delimited. Does not implicitly {@link replicationdata.GroupReplicationStatus.verify|verify} messages.
+         * @param message GroupReplicationStatus message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encodeDelimited(message: replicationdata.GroupReplicationStatus.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GroupReplicationStatus message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns {replicationdata.GroupReplicationStatus & replicationdata.GroupReplicationStatus.$Shape} GroupReplicationStatus
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): replicationdata.GroupReplicationStatus & replicationdata.GroupReplicationStatus.$Shape;
+
+        /**
+         * Decodes a GroupReplicationStatus message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns {replicationdata.GroupReplicationStatus & replicationdata.GroupReplicationStatus.$Shape} GroupReplicationStatus
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): replicationdata.GroupReplicationStatus & replicationdata.GroupReplicationStatus.$Shape;
+
+        /**
+         * Verifies a GroupReplicationStatus message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GroupReplicationStatus message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GroupReplicationStatus
+         */
+        static fromObject(object: { [k: string]: any }): replicationdata.GroupReplicationStatus;
+
+        /**
+         * Creates a plain object from a GroupReplicationStatus message. Also converts values to other types if specified.
+         * @param message GroupReplicationStatus
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        static toObject(message: replicationdata.GroupReplicationStatus, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GroupReplicationStatus to JSON.
+         * @returns JSON object
+         */
+        toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the type url for GroupReplicationStatus
+         * @param [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns The type url
+         */
+        static getTypeUrl(prefix?: string): string;
+    }
+
+    namespace GroupReplicationStatus {
+
+        /** Properties of a GroupReplicationStatus. */
+        interface $Properties {
+
+            /** GroupReplicationStatus plugin_active */
+            plugin_active?: (boolean|null);
+
+            /** GroupReplicationStatus group_name */
+            group_name?: (string|null);
+
+            /** GroupReplicationStatus member_state */
+            member_state?: (string|null);
+
+            /** GroupReplicationStatus member_role */
+            member_role?: (string|null);
+
+            /** GroupReplicationStatus primary_uuid */
+            primary_uuid?: (string|null);
+
+            /** GroupReplicationStatus view_id */
+            view_id?: (string|null);
+
+            /** GroupReplicationStatus members */
+            members?: (replicationdata.GroupReplicationMember.$Properties[]|null);
+
+            /** GroupReplicationStatus has_quorum */
+            has_quorum?: (boolean|null);
+
+            /** GroupReplicationStatus received_transaction_set */
+            received_transaction_set?: (string|null);
+
+            /** GroupReplicationStatus single_primary_mode */
+            single_primary_mode?: (boolean|null);
+
+            /** GroupReplicationStatus member_weight */
+            member_weight?: (number|null);
+
+            /** GroupReplicationStatus paxos_single_leader */
+            paxos_single_leader?: (boolean|null);
+
+            /** GroupReplicationStatus start_in_progress */
+            start_in_progress?: (boolean|null);
+
+            /** GroupReplicationStatus primary_election_in_progress */
+            primary_election_in_progress?: (boolean|null);
+
+            /** Unknown fields preserved while decoding when enabled */
+            $unknowns?: Uint8Array[];
+        }
+
+        /** Shape of a GroupReplicationStatus. */
+        type $Shape = replicationdata.GroupReplicationStatus.$Properties;
     }
 }
 
@@ -72126,6 +73143,9 @@ export namespace vtctldata {
         /** EmergencyReparentShardRequest allow_split_brain_promotion. */
         allow_split_brain_promotion: boolean;
 
+        /** EmergencyReparentShardRequest required_position. */
+        required_position: string;
+
         /**
          * Creates a new EmergencyReparentShardRequest instance using the specified properties.
          * @param [properties] Properties to set
@@ -72236,6 +73256,9 @@ export namespace vtctldata {
 
             /** EmergencyReparentShardRequest allow_split_brain_promotion */
             allow_split_brain_promotion?: (boolean|null);
+
+            /** EmergencyReparentShardRequest required_position */
+            required_position?: (string|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
@@ -83982,6 +85005,552 @@ export namespace vtctldata {
 
         /** Shape of a MigrateCompleteResponse. */
         type $Shape = vtctldata.MigrateCompleteResponse.$Properties;
+    }
+
+    /**
+     * Properties of a MigrateReplicationModeRequest.
+     * @deprecated Use vtctldata.MigrateReplicationModeRequest.$Properties instead.
+     */
+    interface IMigrateReplicationModeRequest extends vtctldata.MigrateReplicationModeRequest.$Properties {
+    }
+
+    /** Represents a MigrateReplicationModeRequest. */
+    class MigrateReplicationModeRequest {
+
+        /**
+         * Constructs a new MigrateReplicationModeRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.MigrateReplicationModeRequest.$Properties);
+
+        /** Unknown fields preserved while decoding when enabled */
+        $unknowns?: Uint8Array[];
+
+        /** MigrateReplicationModeRequest keyspace. */
+        keyspace: string;
+
+        /** MigrateReplicationModeRequest shard. */
+        shard: string;
+
+        /** MigrateReplicationModeRequest durability_policy. */
+        durability_policy: string;
+
+        /** MigrateReplicationModeRequest dry_run. */
+        dry_run: boolean;
+
+        /** MigrateReplicationModeRequest wait_timeout. */
+        wait_timeout?: (vttime.Duration.$Properties|null);
+
+        /**
+         * Creates a new MigrateReplicationModeRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns MigrateReplicationModeRequest instance
+         */
+        static create(properties: vtctldata.MigrateReplicationModeRequest.$Shape): vtctldata.MigrateReplicationModeRequest & vtctldata.MigrateReplicationModeRequest.$Shape;
+        static create(properties?: vtctldata.MigrateReplicationModeRequest.$Properties): vtctldata.MigrateReplicationModeRequest;
+
+        /**
+         * Encodes the specified MigrateReplicationModeRequest message. Does not implicitly {@link vtctldata.MigrateReplicationModeRequest.verify|verify} messages.
+         * @param message MigrateReplicationModeRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encode(message: vtctldata.MigrateReplicationModeRequest.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified MigrateReplicationModeRequest message, length delimited. Does not implicitly {@link vtctldata.MigrateReplicationModeRequest.verify|verify} messages.
+         * @param message MigrateReplicationModeRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encodeDelimited(message: vtctldata.MigrateReplicationModeRequest.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a MigrateReplicationModeRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns {vtctldata.MigrateReplicationModeRequest & vtctldata.MigrateReplicationModeRequest.$Shape} MigrateReplicationModeRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.MigrateReplicationModeRequest & vtctldata.MigrateReplicationModeRequest.$Shape;
+
+        /**
+         * Decodes a MigrateReplicationModeRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns {vtctldata.MigrateReplicationModeRequest & vtctldata.MigrateReplicationModeRequest.$Shape} MigrateReplicationModeRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.MigrateReplicationModeRequest & vtctldata.MigrateReplicationModeRequest.$Shape;
+
+        /**
+         * Verifies a MigrateReplicationModeRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a MigrateReplicationModeRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns MigrateReplicationModeRequest
+         */
+        static fromObject(object: { [k: string]: any }): vtctldata.MigrateReplicationModeRequest;
+
+        /**
+         * Creates a plain object from a MigrateReplicationModeRequest message. Also converts values to other types if specified.
+         * @param message MigrateReplicationModeRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        static toObject(message: vtctldata.MigrateReplicationModeRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this MigrateReplicationModeRequest to JSON.
+         * @returns JSON object
+         */
+        toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the type url for MigrateReplicationModeRequest
+         * @param [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns The type url
+         */
+        static getTypeUrl(prefix?: string): string;
+    }
+
+    namespace MigrateReplicationModeRequest {
+
+        /** Properties of a MigrateReplicationModeRequest. */
+        interface $Properties {
+
+            /** MigrateReplicationModeRequest keyspace */
+            keyspace?: (string|null);
+
+            /** MigrateReplicationModeRequest shard */
+            shard?: (string|null);
+
+            /** MigrateReplicationModeRequest durability_policy */
+            durability_policy?: (string|null);
+
+            /** MigrateReplicationModeRequest dry_run */
+            dry_run?: (boolean|null);
+
+            /** MigrateReplicationModeRequest wait_timeout */
+            wait_timeout?: (vttime.Duration.$Properties|null);
+
+            /** Unknown fields preserved while decoding when enabled */
+            $unknowns?: Uint8Array[];
+        }
+
+        /** Shape of a MigrateReplicationModeRequest. */
+        type $Shape = vtctldata.MigrateReplicationModeRequest.$Properties;
+    }
+
+    /**
+     * Properties of a ReplicationModeMigrationStep.
+     * @deprecated Use vtctldata.ReplicationModeMigrationStep.$Properties instead.
+     */
+    interface IReplicationModeMigrationStep extends vtctldata.ReplicationModeMigrationStep.$Properties {
+    }
+
+    /** Represents a ReplicationModeMigrationStep. */
+    class ReplicationModeMigrationStep {
+
+        /**
+         * Constructs a new ReplicationModeMigrationStep.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.ReplicationModeMigrationStep.$Properties);
+
+        /** Unknown fields preserved while decoding when enabled */
+        $unknowns?: Uint8Array[];
+
+        /** ReplicationModeMigrationStep action. */
+        action: string;
+
+        /** ReplicationModeMigrationStep tablet. */
+        tablet?: (topodata.TabletAlias.$Properties|null);
+
+        /** ReplicationModeMigrationStep description. */
+        description: string;
+
+        /** ReplicationModeMigrationStep status. */
+        status: string;
+
+        /**
+         * Creates a new ReplicationModeMigrationStep instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ReplicationModeMigrationStep instance
+         */
+        static create(properties: vtctldata.ReplicationModeMigrationStep.$Shape): vtctldata.ReplicationModeMigrationStep & vtctldata.ReplicationModeMigrationStep.$Shape;
+        static create(properties?: vtctldata.ReplicationModeMigrationStep.$Properties): vtctldata.ReplicationModeMigrationStep;
+
+        /**
+         * Encodes the specified ReplicationModeMigrationStep message. Does not implicitly {@link vtctldata.ReplicationModeMigrationStep.verify|verify} messages.
+         * @param message ReplicationModeMigrationStep message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encode(message: vtctldata.ReplicationModeMigrationStep.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ReplicationModeMigrationStep message, length delimited. Does not implicitly {@link vtctldata.ReplicationModeMigrationStep.verify|verify} messages.
+         * @param message ReplicationModeMigrationStep message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encodeDelimited(message: vtctldata.ReplicationModeMigrationStep.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ReplicationModeMigrationStep message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns {vtctldata.ReplicationModeMigrationStep & vtctldata.ReplicationModeMigrationStep.$Shape} ReplicationModeMigrationStep
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.ReplicationModeMigrationStep & vtctldata.ReplicationModeMigrationStep.$Shape;
+
+        /**
+         * Decodes a ReplicationModeMigrationStep message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns {vtctldata.ReplicationModeMigrationStep & vtctldata.ReplicationModeMigrationStep.$Shape} ReplicationModeMigrationStep
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.ReplicationModeMigrationStep & vtctldata.ReplicationModeMigrationStep.$Shape;
+
+        /**
+         * Verifies a ReplicationModeMigrationStep message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ReplicationModeMigrationStep message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ReplicationModeMigrationStep
+         */
+        static fromObject(object: { [k: string]: any }): vtctldata.ReplicationModeMigrationStep;
+
+        /**
+         * Creates a plain object from a ReplicationModeMigrationStep message. Also converts values to other types if specified.
+         * @param message ReplicationModeMigrationStep
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        static toObject(message: vtctldata.ReplicationModeMigrationStep, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ReplicationModeMigrationStep to JSON.
+         * @returns JSON object
+         */
+        toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the type url for ReplicationModeMigrationStep
+         * @param [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns The type url
+         */
+        static getTypeUrl(prefix?: string): string;
+    }
+
+    namespace ReplicationModeMigrationStep {
+
+        /** Properties of a ReplicationModeMigrationStep. */
+        interface $Properties {
+
+            /** ReplicationModeMigrationStep action */
+            action?: (string|null);
+
+            /** ReplicationModeMigrationStep tablet */
+            tablet?: (topodata.TabletAlias.$Properties|null);
+
+            /** ReplicationModeMigrationStep description */
+            description?: (string|null);
+
+            /** ReplicationModeMigrationStep status */
+            status?: (string|null);
+
+            /** Unknown fields preserved while decoding when enabled */
+            $unknowns?: Uint8Array[];
+        }
+
+        /** Shape of a ReplicationModeMigrationStep. */
+        type $Shape = vtctldata.ReplicationModeMigrationStep.$Properties;
+    }
+
+    /**
+     * Properties of a ReplicationModeMigrationShardResult.
+     * @deprecated Use vtctldata.ReplicationModeMigrationShardResult.$Properties instead.
+     */
+    interface IReplicationModeMigrationShardResult extends vtctldata.ReplicationModeMigrationShardResult.$Properties {
+    }
+
+    /** Represents a ReplicationModeMigrationShardResult. */
+    class ReplicationModeMigrationShardResult {
+
+        /**
+         * Constructs a new ReplicationModeMigrationShardResult.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.ReplicationModeMigrationShardResult.$Properties);
+
+        /** Unknown fields preserved while decoding when enabled */
+        $unknowns?: Uint8Array[];
+
+        /** ReplicationModeMigrationShardResult shard. */
+        shard: string;
+
+        /** ReplicationModeMigrationShardResult steps. */
+        steps: vtctldata.ReplicationModeMigrationStep.$Properties[];
+
+        /** ReplicationModeMigrationShardResult replication_mode. */
+        replication_mode: string;
+
+        /**
+         * Creates a new ReplicationModeMigrationShardResult instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ReplicationModeMigrationShardResult instance
+         */
+        static create(properties: vtctldata.ReplicationModeMigrationShardResult.$Shape): vtctldata.ReplicationModeMigrationShardResult & vtctldata.ReplicationModeMigrationShardResult.$Shape;
+        static create(properties?: vtctldata.ReplicationModeMigrationShardResult.$Properties): vtctldata.ReplicationModeMigrationShardResult;
+
+        /**
+         * Encodes the specified ReplicationModeMigrationShardResult message. Does not implicitly {@link vtctldata.ReplicationModeMigrationShardResult.verify|verify} messages.
+         * @param message ReplicationModeMigrationShardResult message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encode(message: vtctldata.ReplicationModeMigrationShardResult.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ReplicationModeMigrationShardResult message, length delimited. Does not implicitly {@link vtctldata.ReplicationModeMigrationShardResult.verify|verify} messages.
+         * @param message ReplicationModeMigrationShardResult message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encodeDelimited(message: vtctldata.ReplicationModeMigrationShardResult.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ReplicationModeMigrationShardResult message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns {vtctldata.ReplicationModeMigrationShardResult & vtctldata.ReplicationModeMigrationShardResult.$Shape} ReplicationModeMigrationShardResult
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.ReplicationModeMigrationShardResult & vtctldata.ReplicationModeMigrationShardResult.$Shape;
+
+        /**
+         * Decodes a ReplicationModeMigrationShardResult message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns {vtctldata.ReplicationModeMigrationShardResult & vtctldata.ReplicationModeMigrationShardResult.$Shape} ReplicationModeMigrationShardResult
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.ReplicationModeMigrationShardResult & vtctldata.ReplicationModeMigrationShardResult.$Shape;
+
+        /**
+         * Verifies a ReplicationModeMigrationShardResult message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ReplicationModeMigrationShardResult message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ReplicationModeMigrationShardResult
+         */
+        static fromObject(object: { [k: string]: any }): vtctldata.ReplicationModeMigrationShardResult;
+
+        /**
+         * Creates a plain object from a ReplicationModeMigrationShardResult message. Also converts values to other types if specified.
+         * @param message ReplicationModeMigrationShardResult
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        static toObject(message: vtctldata.ReplicationModeMigrationShardResult, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ReplicationModeMigrationShardResult to JSON.
+         * @returns JSON object
+         */
+        toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the type url for ReplicationModeMigrationShardResult
+         * @param [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns The type url
+         */
+        static getTypeUrl(prefix?: string): string;
+    }
+
+    namespace ReplicationModeMigrationShardResult {
+
+        /** Properties of a ReplicationModeMigrationShardResult. */
+        interface $Properties {
+
+            /** ReplicationModeMigrationShardResult shard */
+            shard?: (string|null);
+
+            /** ReplicationModeMigrationShardResult steps */
+            steps?: (vtctldata.ReplicationModeMigrationStep.$Properties[]|null);
+
+            /** ReplicationModeMigrationShardResult replication_mode */
+            replication_mode?: (string|null);
+
+            /** Unknown fields preserved while decoding when enabled */
+            $unknowns?: Uint8Array[];
+        }
+
+        /** Shape of a ReplicationModeMigrationShardResult. */
+        type $Shape = vtctldata.ReplicationModeMigrationShardResult.$Properties;
+    }
+
+    /**
+     * Properties of a MigrateReplicationModeResponse.
+     * @deprecated Use vtctldata.MigrateReplicationModeResponse.$Properties instead.
+     */
+    interface IMigrateReplicationModeResponse extends vtctldata.MigrateReplicationModeResponse.$Properties {
+    }
+
+    /** Represents a MigrateReplicationModeResponse. */
+    class MigrateReplicationModeResponse {
+
+        /**
+         * Constructs a new MigrateReplicationModeResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.MigrateReplicationModeResponse.$Properties);
+
+        /** Unknown fields preserved while decoding when enabled */
+        $unknowns?: Uint8Array[];
+
+        /** MigrateReplicationModeResponse keyspace. */
+        keyspace: string;
+
+        /** MigrateReplicationModeResponse shards. */
+        shards: vtctldata.ReplicationModeMigrationShardResult.$Properties[];
+
+        /** MigrateReplicationModeResponse durability_policy. */
+        durability_policy: string;
+
+        /** MigrateReplicationModeResponse keyspace_steps. */
+        keyspace_steps: vtctldata.ReplicationModeMigrationStep.$Properties[];
+
+        /** MigrateReplicationModeResponse events. */
+        events: logutil.Event.$Properties[];
+
+        /**
+         * Creates a new MigrateReplicationModeResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns MigrateReplicationModeResponse instance
+         */
+        static create(properties: vtctldata.MigrateReplicationModeResponse.$Shape): vtctldata.MigrateReplicationModeResponse & vtctldata.MigrateReplicationModeResponse.$Shape;
+        static create(properties?: vtctldata.MigrateReplicationModeResponse.$Properties): vtctldata.MigrateReplicationModeResponse;
+
+        /**
+         * Encodes the specified MigrateReplicationModeResponse message. Does not implicitly {@link vtctldata.MigrateReplicationModeResponse.verify|verify} messages.
+         * @param message MigrateReplicationModeResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encode(message: vtctldata.MigrateReplicationModeResponse.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified MigrateReplicationModeResponse message, length delimited. Does not implicitly {@link vtctldata.MigrateReplicationModeResponse.verify|verify} messages.
+         * @param message MigrateReplicationModeResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encodeDelimited(message: vtctldata.MigrateReplicationModeResponse.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a MigrateReplicationModeResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns {vtctldata.MigrateReplicationModeResponse & vtctldata.MigrateReplicationModeResponse.$Shape} MigrateReplicationModeResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.MigrateReplicationModeResponse & vtctldata.MigrateReplicationModeResponse.$Shape;
+
+        /**
+         * Decodes a MigrateReplicationModeResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns {vtctldata.MigrateReplicationModeResponse & vtctldata.MigrateReplicationModeResponse.$Shape} MigrateReplicationModeResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.MigrateReplicationModeResponse & vtctldata.MigrateReplicationModeResponse.$Shape;
+
+        /**
+         * Verifies a MigrateReplicationModeResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a MigrateReplicationModeResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns MigrateReplicationModeResponse
+         */
+        static fromObject(object: { [k: string]: any }): vtctldata.MigrateReplicationModeResponse;
+
+        /**
+         * Creates a plain object from a MigrateReplicationModeResponse message. Also converts values to other types if specified.
+         * @param message MigrateReplicationModeResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        static toObject(message: vtctldata.MigrateReplicationModeResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this MigrateReplicationModeResponse to JSON.
+         * @returns JSON object
+         */
+        toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the type url for MigrateReplicationModeResponse
+         * @param [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns The type url
+         */
+        static getTypeUrl(prefix?: string): string;
+    }
+
+    namespace MigrateReplicationModeResponse {
+
+        /** Properties of a MigrateReplicationModeResponse. */
+        interface $Properties {
+
+            /** MigrateReplicationModeResponse keyspace */
+            keyspace?: (string|null);
+
+            /** MigrateReplicationModeResponse shards */
+            shards?: (vtctldata.ReplicationModeMigrationShardResult.$Properties[]|null);
+
+            /** MigrateReplicationModeResponse durability_policy */
+            durability_policy?: (string|null);
+
+            /** MigrateReplicationModeResponse keyspace_steps */
+            keyspace_steps?: (vtctldata.ReplicationModeMigrationStep.$Properties[]|null);
+
+            /** MigrateReplicationModeResponse events */
+            events?: (logutil.Event.$Properties[]|null);
+
+            /** Unknown fields preserved while decoding when enabled */
+            $unknowns?: Uint8Array[];
+        }
+
+        /** Shape of a MigrateReplicationModeResponse. */
+        type $Shape = vtctldata.MigrateReplicationModeResponse.$Properties;
     }
 
     /**

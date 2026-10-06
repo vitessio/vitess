@@ -455,3 +455,61 @@ func TestEmergencyReparentGroupReplicationPromotesOnlyVoters(t *testing.T) {
 		assert.Empty(t, c.mutatingCalls())
 	})
 }
+
+// TestEmergencyReparentRefusesGroupPrimaryWithoutGroupReplicationEnabled checks that ERS on a group
+// replication shard does not promote a member whose vttablet does not run Group Replication
+// (--enable-group-replication, FullStatus field 28): its MySQL reports the group's state, but the
+// tablet applies neither the serving invariant nor the fence, so that it would serve as a primary
+// whose view may have lost the voter majority.
+func TestEmergencyReparentRefusesGroupPrimaryWithoutGroupReplicationEnabled(t *testing.T) {
+	newShard := func(t *testing.T) (*fakeGRCluster, *topo.Server) {
+		c, ts := newFakeGRCluster(t, "group_replication",
+			fakeGRTabletSpec{cell: "zone1", uid: 100, tabletType: topodatapb.TabletType_PRIMARY},
+			fakeGRTabletSpec{cell: "zone1", uid: 101, tabletType: topodatapb.TabletType_REPLICA, noGR: true},
+			fakeGRTabletSpec{cell: "zone2", uid: 200, tabletType: topodatapb.TabletType_REPLICA},
+		)
+		c.formGroup(t, "group_replication")
+		c.tablets[aliasP].unreachable = true
+		c.groupPrimary = alias101
+		return c, ts
+	}
+	t.Run("the group's primary", func(t *testing.T) {
+		c, ts := newShard(t)
+		erp := NewEmergencyReparenter(ts, c, logutil.NewMemoryLogger())
+		ev, err := erp.ReparentShard(t.Context(), "ks", "-", EmergencyReparentOptions{WaitReplicasTimeout: 30 * time.Second})
+		require.NoError(t, err)
+		assert.Equal(t, alias200, topoproto.TabletAliasString(ev.NewPrimary.Alias))
+		assert.NotContains(t, callsWithPrefix(c.mutatingCalls(), "PromoteReplica"), "PromoteReplica("+alias101+")")
+	})
+	t.Run("a requested primary", func(t *testing.T) {
+		c, ts := newShard(t)
+		erp := NewEmergencyReparenter(ts, c, logutil.NewMemoryLogger())
+		_, err := erp.ReparentShard(t.Context(), "ks", "-", EmergencyReparentOptions{
+			NewPrimaryAlias:     mustAlias(t, alias101),
+			WaitReplicasTimeout: 30 * time.Second,
+		})
+		require.Error(t, err)
+		assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+		require.ErrorContains(t, err, "does not run Group Replication")
+		assert.Empty(t, c.mutatingCalls())
+	})
+}
+
+// TestPlannedReparentRefusesElectWithoutGroupReplicationEnabled checks that PRS on a group
+// replication shard refuses, before it demotes the primary, a primary-elect whose vttablet does not
+// run Group Replication (FullStatus field 28), although its MySQL is an ONLINE member of the group.
+func TestPlannedReparentRefusesElectWithoutGroupReplicationEnabled(t *testing.T) {
+	c, ts := newFakeGRCluster(t, "group_replication", migrationTestShard()...)
+	c.formGroup(t, "group_replication")
+	c.tablets[alias300].grEnabled = false
+	pr := NewPlannedReparenter(ts, c, logutil.NewMemoryLogger())
+
+	_, err := pr.ReparentShard(t.Context(), "ks", "-", PlannedReparentOptions{
+		NewPrimaryAlias:     mustAlias(t, alias300),
+		WaitReplicasTimeout: 30 * time.Second,
+	})
+	require.Error(t, err)
+	assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+	require.ErrorContains(t, err, "does not run Group Replication")
+	assert.Empty(t, c.mutatingCalls())
+}

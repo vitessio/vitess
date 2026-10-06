@@ -648,9 +648,11 @@ type FullStatus struct {
 	// group_replication_enabled is true when the tablet runs with --enable-group-replication, and so
 	// can make its MySQL a member of its shard's group.
 	GroupReplicationEnabled bool `protobuf:"varint,28,opt,name=group_replication_enabled,json=groupReplicationEnabled,proto3" json:"group_replication_enabled,omitempty"`
-	// shard_durability_policy_supported is true when the tablet applies its shard's own durability
-	// policy (topodata.Shard.durability_policy) over its keyspace's. MigrateReplicationMode
-	// requires it on every voter.
+	// shard_durability_policy_supported is true when the tablet resolves its shard's durability policy
+	// as topo.ShardDurabilityPolicy does: the shard's own policy (topodata.Shard.durability_policy),
+	// else its keyspace's migration source (topodata.Keyspace.migration_source_durability_policy),
+	// else its keyspace's policy. MigrateReplicationMode requires it on every tablet of the keyspace
+	// that answers, and the initialization of a group on the primary-elect and the voters.
 	ShardDurabilityPolicySupported bool `protobuf:"varint,29,opt,name=shard_durability_policy_supported,json=shardDurabilityPolicySupported,proto3" json:"shard_durability_policy_supported,omitempty"`
 	unknownFields                  protoimpl.UnknownFields
 	sizeCache                      protoimpl.SizeCache
