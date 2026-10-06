@@ -50,13 +50,16 @@ java -XX:+UseParallelGC -cp tla2tools.jar tlc2.TLC -workers auto -config MCTwoPC
 | Config | Bounds | Expected result |
 |---|---|---|
 | `MCTwoPC.cfg` | 2 RMs, 1 restart, 1 resolution | Atomicity holds (2.3M states, about 1 minute on 4 cores) |
+| `MCTwoPCLarge.cfg` | 2 RMs, 1 restart, 2 resolutions | Atomicity holds (25M states, about 10 minutes on 4 cores) |
 | `MCTwoPCDeep.cfg` | 1 RM, 2 resolvers, 2 restarts, 2 resolutions | Atomicity holds (2.1M states) |
 | `MCTwoPCNoRedoFix.cfg` | as Deep, without the redo-pending fix | `NoLostCommit` is violated |
 | `MCTwoPCOrphan.cfg` | as Deep, no non-retryable failures | `NoOrphanPrepare` is violated |
 | `MCTwoPCLocks.cfg` | as Orphan | `LocksHeld` is violated |
 
 The atomicity configs check `CommitNeedsDecision`, `DecisionConsistent`,
-`CommitDurable` and `NoLostCommit`.
+`CommitDurable` and `NoLostCommit`. The state space grows quickly with the
+bounds: with two RMs, each further resolution attempt multiplies it by about
+ten, so larger bounds call for a single RM or a longer run.
 
 ## Findings
 
