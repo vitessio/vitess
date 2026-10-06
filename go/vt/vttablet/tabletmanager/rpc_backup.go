@@ -139,44 +139,7 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 				return
 			}
 
-			// Find the correct primary tablet and set the replication source,
-			// since the primary could have changed while we executed the backup which can
-			// also affect whether we want to send semi sync acks or not.
-			tabletInfo, err := tm.TopoServer.GetTablet(bgCtx, tablet.Alias)
-			if err != nil {
-				l.Errorf("Failed to fetch updated tablet info, error: %v", err)
-				return
-			}
-
-			// Do not do anything for primary tablets or when active reparenting is disabled
-			if mysqlctl.DisableActiveReparents || tabletInfo.Type == topodatapb.TabletType_PRIMARY {
-				return
-			}
-
-			shardPrimary, err := topotools.GetShardPrimaryForTablet(bgCtx, tm.TopoServer, tablet.Tablet)
-			if err != nil {
-				return
-			}
-
-			durabilityName, err := tm.TopoServer.GetShardDurability(bgCtx, tablet.Keyspace, tablet.Shard)
-			if err != nil {
-				l.Errorf("Failed to get durability policy, error: %v", err)
-				return
-			}
-			durability, err := policy.GetDurabilityPolicy(durabilityName)
-			if err != nil {
-				l.Errorf("Failed to get durability with name %v, error: %v", durabilityName, err)
-			}
-
-			isSemiSync := policy.IsReplicaSemiSync(durability, shardPrimary.Tablet, tabletInfo.Tablet)
-			semiSyncAction, err := tm.convertBoolToSemiSyncAction(bgCtx, isSemiSync)
-			if err != nil {
-				l.Errorf("Failed to convert bool to semisync action, error: %v", err)
-				return
-			}
-			if err := tm.setReplicationSourceLocked(bgCtx, shardPrimary.Alias, 0, "", false, semiSyncAction, 0); err != nil {
-				l.Errorf("Failed to set replication source, error: %v", err)
-			}
+			tm.restoreReplicationAfterBackupLocked(bgCtx, tablet.Tablet, l)
 		}()
 	}
 
@@ -185,6 +148,49 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 	returnErr := mysqlctl.Backup(ctx, backupParams)
 
 	return returnErr
+}
+
+// restoreReplicationAfterBackupLocked points the tablet at the shard's primary again after an
+// offline backup, under the action lock: the primary could have changed while the backup ran, which
+// can also change whether the tablet sends semi-sync acks. It does nothing on a primary tablet, when
+// active reparents are disabled, or when the shard's durability policy cannot be resolved.
+func (tm *TabletManager) restoreReplicationAfterBackupLocked(ctx context.Context, tablet *topodatapb.Tablet, l logutil.Logger) {
+	tabletInfo, err := tm.TopoServer.GetTablet(ctx, tablet.Alias)
+	if err != nil {
+		l.Errorf("Failed to fetch updated tablet info, error: %v", err)
+		return
+	}
+
+	// Do not do anything for primary tablets or when active reparenting is disabled
+	if mysqlctl.DisableActiveReparents || tabletInfo.Type == topodatapb.TabletType_PRIMARY {
+		return
+	}
+
+	shardPrimary, err := topotools.GetShardPrimaryForTablet(ctx, tm.TopoServer, tablet)
+	if err != nil {
+		return
+	}
+
+	durabilityName, err := tm.TopoServer.GetShardDurability(ctx, tablet.Keyspace, tablet.Shard)
+	if err != nil {
+		l.Errorf("Failed to get durability policy, error: %v", err)
+		return
+	}
+	durability, err := policy.GetDurabilityPolicy(durabilityName)
+	if err != nil {
+		l.Errorf("Failed to get durability with name %v, error: %v", durabilityName, err)
+		return
+	}
+
+	isSemiSync := policy.IsReplicaSemiSync(durability, shardPrimary.Tablet, tabletInfo.Tablet)
+	semiSyncAction, err := tm.convertBoolToSemiSyncAction(ctx, isSemiSync)
+	if err != nil {
+		l.Errorf("Failed to convert bool to semisync action, error: %v", err)
+		return
+	}
+	if err := tm.setReplicationSourceLocked(ctx, shardPrimary.Alias, 0, "", false, semiSyncAction, 0); err != nil {
+		l.Errorf("Failed to set replication source, error: %v", err)
+	}
 }
 
 // RestoreFromBackup deletes all local data and then restores the data from the latest backup [at
