@@ -26,6 +26,7 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vterrors"
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -241,9 +242,9 @@ func TestBuildSelectRejectsInjectedLastPK(t *testing.T) {
 		return &rowStreamer{
 			lastpk:    lastpk,
 			pkColumns: []int{0},
-			// NoTimeouts keeps buildSelect from reaching for rs.config, which a
+			// buildSelect reads the copy phase duration from rs.config, which a
 			// real streamer receives from the engine.
-			options: &binlogdatapb.VStreamOptions{NoTimeouts: true},
+			config: vttablet.GetDefaultVReplicationConfig(),
 			plan: &Plan{
 				Table: &Table{Name: "t1", Fields: fields},
 			},
@@ -330,7 +331,7 @@ func TestLastPKValuesSurviveNoBackslashEscapes(t *testing.T) {
 			rs := &rowStreamer{
 				lastpk:    []sqltypes.Value{clientValue(tc.typ, tc.payload)},
 				pkColumns: []int{0},
-				options:   &binlogdatapb.VStreamOptions{NoTimeouts: true},
+				config:    vttablet.GetDefaultVReplicationConfig(),
 				plan:      &Plan{Table: &Table{Name: "t1", Fields: fields}},
 			}
 			query, err := rs.buildSelect(table)
@@ -380,7 +381,7 @@ func TestLastPKValuesRoundTrip(t *testing.T) {
 			rs := &rowStreamer{
 				lastpk:    []sqltypes.Value{tc.value},
 				pkColumns: []int{0},
-				options:   &binlogdatapb.VStreamOptions{NoTimeouts: true},
+				config:    vttablet.GetDefaultVReplicationConfig(),
 				plan:      &Plan{Table: &Table{Name: "t1", Fields: fields}},
 			}
 			query, err := rs.buildSelect(table)
