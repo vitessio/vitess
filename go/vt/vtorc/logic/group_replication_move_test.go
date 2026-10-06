@@ -317,7 +317,7 @@ func TestMoveGroupPrimaryWaitsForGracePeriod(t *testing.T) {
 func TestGroupPrimaryMoveTarget(t *testing.T) {
 	t.Cleanup(groupPrimaryMoves.reset)
 	groupPrimaryMoves.reset()
-	durability, err := policy.GetDurabilityPolicy(policy.DurabilityGroupReplication)
+	durability, err := policy.GetDurabilityPolicy(policy.DurabilityGroupReplicationCrossCell)
 	require.NoError(t, err)
 	grd, ok := policy.AsGroupReplication(durability)
 	require.True(t, ok)

@@ -70,8 +70,8 @@ type GroupVoter struct {
 	MysqlPort int32
 }
 
-// matches returns whether the member of a membership view is the voter's MySQL.
-func (v GroupVoter) matches(m *replicationdatapb.GroupReplicationMember) bool {
+// Matches returns whether the member of a membership view is the voter's MySQL.
+func (v GroupVoter) Matches(m *replicationdatapb.GroupReplicationMember) bool {
 	if v.ServerUUID != "" && m.GetMemberUuid() == v.ServerUUID {
 		return true
 	}
@@ -130,7 +130,7 @@ func (g *LegitimateGroup) OnlineVoters(status *replicationdatapb.GroupReplicatio
 	online := 0
 	for _, voter := range g.Voters {
 		for _, m := range status.GetMembers() {
-			if m.GetState() == mysql.GroupMemberStateOnline && voter.matches(m) {
+			if m.GetState() == mysql.GroupMemberStateOnline && voter.Matches(m) {
 				online++
 				break
 			}

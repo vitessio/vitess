@@ -242,6 +242,11 @@ func (ts *tmState) ChangeTabletType(ctx context.Context, tabletType topodatapb.T
 
 		// Update the tablet record first.
 		_, err := topotools.ChangeType(ctx, ts.tm.TopoServer, ts.tm.tabletAlias, tabletType, primaryTermStartTime)
+		if topo.IsErrType(err, topo.NoNode) {
+			// The tablet record was deleted: the write failed for good, and the tablet must not
+			// become PRIMARY. Retrying would only hold the action lock until the caller gives up.
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "the tablet record of %s does not exist: the tablet does not become PRIMARY", topoproto.TabletAliasString(ts.tm.tabletAlias))
+		}
 		if err != nil {
 			log.Error(fmt.Sprintf("Error changing type in topo record for tablet %s :- %v\nWill keep trying to read from the toposerver", topoproto.TabletAliasString(ts.tm.tabletAlias), err))
 			// In case of a topo error, we aren't sure if the data has been written or not.

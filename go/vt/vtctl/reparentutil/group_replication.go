@@ -427,8 +427,23 @@ func voterCandidates(tablets []*topodatapb.Tablet, statuses map[string]*fullStat
 	return candidates
 }
 
+// CheckGroupReplicationCells returns a FAILED_PRECONDITION error unless the tablets that the policy
+// allows as voters are in at least policy.MinGroupReplicationCells cells. With one voter per cell, a
+// group of fewer voters keeps no majority when one of them fails.
+func CheckGroupReplicationCells(grd policy.GroupReplicationDurabler, policyName, keyspace, shard string, tablets []*topodatapb.Tablet) error {
+	cells := policy.EligibleCells(grd, tablets)
+	if len(cells) >= policy.MinGroupReplicationCells {
+		return nil
+	}
+	return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+		"shard %s/%s has PRIMARY or REPLICA tablets, which %s allows as voters, in %d cells (%s); with one voter per cell, its replication group needs them in at least %d cells, so that it keeps a majority when one voter fails",
+		keyspace, shard, policyName, len(cells), strings.Join(cells, ", "), policy.MinGroupReplicationCells)
+}
+
 // CheckGroupReplicationCapabilities returns a FAILED_PRECONDITION error, before an initialization
-// bootstraps a shard's group with InitPrimary, unless the primary-elect and every tablet of the shard
+// bootstraps a shard's group with InitPrimary, unless the shard has tablets that the policy allows as
+// voters in at least policy.MinGroupReplicationCells cells (CheckGroupReplicationCells), and unless
+// the primary-elect and every tablet of the shard
 // that the policy allows as a voter report that their vttablet runs Group Replication
 // (FullStatus.group_replication_enabled, --enable-group-replication) and resolves the shard's own
 // durability policy (FullStatus.shard_durability_policy_supported). A vttablet that does not run
@@ -436,7 +451,15 @@ func voterCandidates(tablets []*topodatapb.Tablet, statuses map[string]*fullStat
 // and an older one leaves both fields unset. A tablet that does not answer fails the check. Tablets
 // that the policy does not allow as voters, which replicate asynchronously from the group, need
 // neither.
-func CheckGroupReplicationCapabilities(ctx context.Context, tmc tmclient.TabletManagerClient, grd policy.GroupReplicationDurabler, primaryElect *topodatapb.Tablet, tabletMap map[string]*topo.TabletInfo) error {
+func CheckGroupReplicationCapabilities(ctx context.Context, tmc tmclient.TabletManagerClient, grd policy.GroupReplicationDurabler, policyName string, primaryElect *topodatapb.Tablet, tabletMap map[string]*topo.TabletInfo) error {
+	tablets := make([]*topodatapb.Tablet, 0, len(tabletMap)+1)
+	tablets = append(tablets, primaryElect)
+	for _, info := range tabletMap {
+		tablets = append(tablets, info.Tablet)
+	}
+	if err := CheckGroupReplicationCells(grd, policyName, primaryElect.Keyspace, primaryElect.Shard, tablets); err != nil {
+		return err
+	}
 	toRead := []*topodatapb.Tablet{primaryElect}
 	for _, alias := range slices.Sorted(maps.Keys(tabletMap)) {
 		tablet := tabletMap[alias].Tablet

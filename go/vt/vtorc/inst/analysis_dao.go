@@ -313,7 +313,8 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		MIN(primary_instance.gr_active_member_uuids) AS gr_active_member_uuids,
 		MIN(primary_instance.gr_online_member_uuids) AS gr_online_member_uuids,
 		MIN(primary_instance.gr_view_id) AS gr_view_id,
-		MIN(primary_instance.gr_start_in_progress) AS gr_start_in_progress
+		MIN(primary_instance.gr_start_in_progress) AS gr_start_in_progress,
+		MAX(vitess_deleted_group_voter.alias IS NOT NULL) AS is_deleted_group_voter
 	FROM
 		vitess_tablet
 		JOIN vitess_keyspace ON (
@@ -338,6 +339,9 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		)
 		LEFT JOIN database_instance_stale_binlog_coordinates ON (
 			vitess_tablet.alias = database_instance_stale_binlog_coordinates.alias
+		)
+		LEFT JOIN vitess_deleted_group_voter ON (
+			vitess_tablet.alias = vitess_deleted_group_voter.alias
 		)
 		SHARD_OBSERVER_JOIN
 	WHERE
@@ -409,6 +413,7 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 			primaryUUID:       m.GetString("gr_primary_uuid"),
 			activeMemberUUIDs: splitGroupMemberUUIDs(m.GetString("gr_active_member_uuids")),
 			startInProgress:   m.GetBool("gr_start_in_progress"),
+			deleted:           m.GetBool("is_deleted_group_voter"),
 			status: groupRowStatus(m.GetBool("gr_plugin_active"), m.GetString("gr_member_state"), m.GetString("gr_member_role"),
 				m.GetBool("gr_has_quorum"), m.GetString("gr_primary_uuid"), m.GetString("gr_view_id"), splitGroupMemberUUIDs(m.GetString("gr_online_member_uuids"))),
 		})
@@ -421,6 +426,11 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 			grVoters[grKeyspaceShard] = voters
 		}
 
+		// A voter whose tablet record was deleted only counts towards its shard's Group Replication
+		// state: VTOrc repairs nothing on it.
+		if m.GetBool("is_deleted_group_voter") {
+			return nil
+		}
 		// We don't want to run any fixes on any non-replica type tablet.
 		if tablet.Type != topodatapb.TabletType_PRIMARY && !topo.IsReplicaType(tablet.Type) {
 			return nil

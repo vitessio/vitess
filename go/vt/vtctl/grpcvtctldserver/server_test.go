@@ -11838,7 +11838,7 @@ func TestMigrateReplicationMode(t *testing.T) {
 		{
 			name:               "dry run",
 			req:                &vtctldatapb.MigrateReplicationModeRequest{Keyspace: "ks1", DurabilityPolicy: policy.DurabilitySemiSync, DryRun: true},
-			expectedDurability: policy.DurabilityGroupReplication,
+			expectedDurability: policy.DurabilityGroupReplicationCrossCell,
 		},
 	}
 
@@ -11848,7 +11848,7 @@ func TestMigrateReplicationMode(t *testing.T) {
 
 			ctx := t.Context()
 			ts := memorytopo.NewServer(ctx, "zone1")
-			testutil.AddKeyspaces(ctx, t, ts, &vtctldatapb.Keyspace{Name: "ks1", Keyspace: &topodatapb.Keyspace{DurabilityPolicy: policy.DurabilityGroupReplication}})
+			testutil.AddKeyspaces(ctx, t, ts, &vtctldatapb.Keyspace{Name: "ks1", Keyspace: &topodatapb.Keyspace{DurabilityPolicy: policy.DurabilityGroupReplicationCrossCell}})
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
 				return NewVtctldServer(vtenv.NewTestEnv(), ts)

@@ -39,6 +39,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/utils"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
 	"vitess.io/vitess/go/vt/vtorc/inst"
@@ -436,7 +437,21 @@ func refreshTablets(tablets []*topo.TabletInfo, query string, args []any, loader
 	}
 	wg.Wait()
 
-	// Forget tablets that were removed.
+	// A tablet that has a record again is no deleted voter any more.
+	if deleted, err := inst.ReadDeletedGroupVoters(); err == nil {
+		for alias := range deleted {
+			if !latestInstances[alias] {
+				continue
+			}
+			if tabletAlias, err := topoproto.ParseTabletAlias(alias); err == nil {
+				if err := inst.UnmarkDeletedGroupVoter(tabletAlias); err != nil {
+					log.Error(err.Error())
+				}
+			}
+		}
+	}
+
+	// Forget tablets that were removed, except the listed voters of a replication group.
 	toForget := make([]*topodatapb.TabletAlias, 0)
 	err := db.QueryVTOrc(query, args, func(row sqlutils.RowMap) error {
 		tabletAliasString := row.GetString("alias")
@@ -451,10 +466,43 @@ func refreshTablets(tablets []*topo.TabletInfo, query string, args []any, loader
 		log.Error(err.Error())
 	}
 	for _, tabletAlias := range toForget {
+		if keepDeletedGroupVoter(tabletAlias) {
+			continue
+		}
 		if err := inst.ForgetInstance(tabletAlias); err != nil {
 			log.Error(err.Error())
 		}
+		if err := inst.UnmarkDeletedGroupVoter(tabletAlias); err != nil {
+			log.Error(err.Error())
+		}
 	}
+}
+
+// keepDeletedGroupVoter returns whether VTOrc keeps what it knows about a tablet whose tablet record is
+// gone, and marks it (inst.MarkDeletedGroupVoter): a listed voter of its shard's replication group.
+// VTOrc then keeps discovering it at the address it last knew, and the voter changes use its
+// server_uuid, its address and when VTOrc last reached it: a deleted voter that VTOrc forgot could not
+// be told from one that is down, and its removal could lose what it acknowledged. While the shard
+// record cannot be read, the tablet is kept, unmarked.
+func keepDeletedGroupVoter(alias *topodatapb.TabletAlias) bool {
+	tablet, err := inst.ReadTablet(alias)
+	if err != nil || tablet == nil {
+		return false
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
+	defer cancel()
+	si, err := ts.GetShard(ctx, tablet.Keyspace, tablet.Shard)
+	if err != nil {
+		log.Warn(fmt.Sprintf("Not forgetting %s, whose tablet record is gone, until the record of its shard can be read: %v", topoproto.TabletAliasString(alias), err))
+		return true
+	}
+	if !policy.IsVoter(si.GetGroupReplicationVoters(), alias) {
+		return false
+	}
+	if err := inst.MarkDeletedGroupVoter(alias); err != nil {
+		log.Error(err.Error())
+	}
+	return true
 }
 
 // tabletUndoDemotePrimary calls the said RPC for the given tablet.

@@ -152,7 +152,7 @@ func TestMigrateReplicationModeBackClearsMigrationSource(t *testing.T) {
 	c, ts := newFakeGRCluster(t, "semi_sync", migrationTestShard()...)
 	addOtherShard(t, ts)
 	m := newTestMigrator(c, ts)
-	_, err := migrateShards(t, m, "group_replication", false, "-")
+	_, err := migrateShards(t, m, "group_replication_cross_cell", false, "-")
 	require.NoError(t, err)
 	require.Equal(t, "semi_sync", keyspaceRecord(t, ts).MigrationSourceDurabilityPolicy)
 
@@ -169,7 +169,7 @@ func TestMigrateReplicationModeBackClearsMigrationSource(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, c.violationsSoFar())
 	require.NotNil(t, atLastLeave, "the primary left its group")
-	assert.Equal(t, &topodatapb.Keyspace{DurabilityPolicy: "group_replication", MigrationSourceDurabilityPolicy: "semi_sync"}, atLastLeave,
+	assert.Equal(t, &topodatapb.Keyspace{DurabilityPolicy: "group_replication_cross_cell", MigrationSourceDurabilityPolicy: "semi_sync"}, atLastLeave,
 		"the keyspace keeps the group replication policy until the shard has left its group")
 	assert.Equal(t, &topodatapb.Keyspace{DurabilityPolicy: "semi_sync"}, keyspaceRecord(t, ts))
 	assert.Empty(t, c.shardPolicy(t))
@@ -233,8 +233,8 @@ func TestMigrateReplicationModeRefusesOlderTabletsInKeyspace(t *testing.T) {
 // its own before its group shrinks, so that its primary re-enables semi-sync before it leaves its
 // group, and the keyspace keeps the Group Replication policy that the other shard still runs.
 func TestMigrateReplicationModeConvertsOneShardBack(t *testing.T) {
-	c, ts := newFakeGRCluster(t, "group_replication", migrationTestShard()...)
-	c.formGroup(t, "group_replication")
+	c, ts := newFakeGRCluster(t, "group_replication_cross_cell", migrationTestShard()...)
+	c.formGroup(t, "group_replication_cross_cell")
 	c.setIncarnation(t, "1790000000")
 	addOtherShard(t, ts)
 	m := newTestMigrator(c, ts)
@@ -243,8 +243,8 @@ func TestMigrateReplicationModeConvertsOneShardBack(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, c.violationsSoFar())
 
-	assert.Equal(t, "group_replication", keyspaceDurability(t, ts), "the keyspace keeps its policy while a shard still runs its group")
-	assert.Equal(t, "group_replication", shardDurability(t, ts, otherShard))
+	assert.Equal(t, "group_replication_cross_cell", keyspaceDurability(t, ts), "the keyspace keeps its policy while a shard still runs its group")
+	assert.Equal(t, "group_replication_cross_cell", shardDurability(t, ts, otherShard))
 	assert.Equal(t, "semi_sync", c.shardPolicy(t))
 	assert.Equal(t, "semi_sync", shardDurability(t, ts, "-"))
 	assert.Empty(t, c.voters(t))
@@ -284,7 +284,7 @@ func TestMigrateReplicationModeRefusesTabletsWithoutShardPolicy(t *testing.T) {
 	t.Run("to group replication", func(t *testing.T) {
 		c, ts := newFakeGRCluster(t, "semi_sync", specs()...)
 		addOtherShard(t, ts)
-		_, err := migrateShards(t, newTestMigrator(c, ts), "group_replication", false, "-")
+		_, err := migrateShards(t, newTestMigrator(c, ts), "group_replication_cross_cell", false, "-")
 		require.Error(t, err)
 		assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
 		require.ErrorContains(t, err, problem)
@@ -293,8 +293,8 @@ func TestMigrateReplicationModeRefusesTabletsWithoutShardPolicy(t *testing.T) {
 	})
 
 	t.Run("back to semi-sync", func(t *testing.T) {
-		c, ts := newFakeGRCluster(t, "group_replication", specs()...)
-		c.formGroup(t, "group_replication")
+		c, ts := newFakeGRCluster(t, "group_replication_cross_cell", specs()...)
+		c.formGroup(t, "group_replication_cross_cell")
 		addOtherShard(t, ts)
 		_, err := migrateShards(t, newTestMigrator(c, ts), "semi_sync", false, "-")
 		require.Error(t, err)
@@ -309,7 +309,7 @@ func TestMigrateReplicationModeRefusesTabletsWithoutShardPolicy(t *testing.T) {
 // policy and its removal, and changes neither.
 func TestMigrateReplicationModeDryRunPlansShardPolicy(t *testing.T) {
 	c, ts := newFakeGRCluster(t, "semi_sync", migrationTestShard()...)
-	resp, err := migrate(t, newTestMigrator(c, ts), "group_replication", true)
+	resp, err := migrate(t, newTestMigrator(c, ts), "group_replication_cross_cell", true)
 	require.NoError(t, err)
 	assert.Empty(t, c.mutatingCalls())
 	assert.Empty(t, c.shardPolicy(t))
@@ -323,16 +323,17 @@ func TestMigrateReplicationModeDryRunPlansShardPolicy(t *testing.T) {
 
 // newConvertedShardOfSemiSyncKeyspace is newFailedGroupShard in a keyspace whose policy is still
 // semi_sync, as while MigrateReplicationMode converts its shards one at a time: the shard was
-// converted, and has the group_replication policy as its own.
+// converted, and has the group_replication_cross_cell policy as its own.
 func newConvertedShardOfSemiSyncKeyspace(t *testing.T) (*fakeGRCluster, *topo.Server) {
 	c, ts := newFakeGRCluster(t, "semi_sync",
 		fakeGRTabletSpec{cell: "zone1", uid: 100, tabletType: topodatapb.TabletType_PRIMARY},
 		fakeGRTabletSpec{cell: "zone1", uid: 101, tabletType: topodatapb.TabletType_REPLICA},
 		fakeGRTabletSpec{cell: "zone2", uid: 200, tabletType: topodatapb.TabletType_REPLICA},
+		fakeGRTabletSpec{cell: "zone3", uid: 300, tabletType: topodatapb.TabletType_REPLICA},
 		fakeGRTabletSpec{cell: "zone1", uid: 102, tabletType: topodatapb.TabletType_RDONLY},
 	)
-	c.formGroup(t, "group_replication")
-	c.setShardPolicy(t, "group_replication")
+	c.formGroup(t, "group_replication_cross_cell")
+	c.setShardPolicy(t, "group_replication_cross_cell")
 	c.tablets[aliasP].unreachable = true
 	c.groupPrimary = alias200
 	return c, ts
@@ -380,8 +381,8 @@ func TestPlannedReparentConvertedShardOfSemiSyncKeyspace(t *testing.T) {
 
 	t.Run("not an online member", func(t *testing.T) {
 		c, ts := newFakeGRCluster(t, "semi_sync", migrationTestShard()...)
-		c.formGroup(t, "group_replication")
-		c.setShardPolicy(t, "group_replication")
+		c.formGroup(t, "group_replication_cross_cell")
+		c.setShardPolicy(t, "group_replication_cross_cell")
 		c.tablets[alias300].member = false
 		pr := NewPlannedReparenter(ts, c, logutil.NewMemoryLogger())
 
@@ -401,7 +402,7 @@ func TestPlannedReparentConvertedShardOfSemiSyncKeyspace(t *testing.T) {
 // and ERS takes the asynchronous path, which the fake does not simulate, instead of looking for a
 // group that no longer exists.
 func TestEmergencyReparentShardConvertedBack(t *testing.T) {
-	c, ts := newFakeGRCluster(t, "group_replication",
+	c, ts := newFakeGRCluster(t, "group_replication_cross_cell",
 		fakeGRTabletSpec{cell: "zone1", uid: 100, tabletType: topodatapb.TabletType_PRIMARY},
 		fakeGRTabletSpec{cell: "zone1", uid: 101, tabletType: topodatapb.TabletType_REPLICA},
 		fakeGRTabletSpec{cell: "zone2", uid: 200, tabletType: topodatapb.TabletType_REPLICA},
@@ -417,14 +418,11 @@ func TestEmergencyReparentShardConvertedBack(t *testing.T) {
 }
 
 // TestMigrateReplicationModeLeavesVotersOfConvertedShardToVTOrc checks that a migration run again on
-// a shard that it converted, whose group runs, does not change the shard's voters: VTOrc maintains
-// them (GroupVotersOutOfDate) under the rule that keeps a view without a majority of the current
-// voters from holding a majority of the new list, and the re-check right before its write. Here two
-// of four voters left the group cleanly, and an operator made one of them RDONLY: the migration's
-// selection drops it, and the view of the two remaining members would hold two of the three new
-// voters, so that its primary would serve with half of the voters it had. The migration keeps the
-// recorded voters and goes on, so that a run over the whole keyspace still converts the shards
-// that follow.
+// a shard that it converted, whose group runs, does not change the shard's voters, which VTOrc
+// maintains. Here two of the three voters left the group cleanly, and an operator made one of them
+// RDONLY: the migration's selection drops it, and would list two voters, of which the remaining view
+// holds one. The migration keeps the recorded voters and goes on, so that a run over the whole
+// keyspace still converts the shards that follow.
 func TestMigrateReplicationModeLeavesVotersOfConvertedShardToVTOrc(t *testing.T) {
 	c, ts := newFakeGRCluster(t, "semi_sync",
 		fakeGRTabletSpec{cell: "zone1", uid: 100, tabletType: topodatapb.TabletType_PRIMARY},
@@ -432,12 +430,12 @@ func TestMigrateReplicationModeLeavesVotersOfConvertedShardToVTOrc(t *testing.T)
 		fakeGRTabletSpec{cell: "zone2", uid: 200, tabletType: topodatapb.TabletType_REPLICA},
 		fakeGRTabletSpec{cell: "zone3", uid: 300, tabletType: topodatapb.TabletType_REPLICA},
 	)
-	c.formGroup(t, "group_replication")
+	c.formGroup(t, "group_replication_cross_cell")
 	c.setIncarnation(t, "1790000000")
-	c.setShardPolicy(t, "group_replication")
+	c.setShardPolicy(t, "group_replication_cross_cell")
 	// The migration converted the shard: the keyspace names the target, with its source.
-	setKeyspaceRecord(t, ts, "group_replication", "semi_sync")
-	require.Equal(t, []string{aliasP, alias101, alias200, alias300}, c.voters(t))
+	setKeyspaceRecord(t, ts, "group_replication_cross_cell", "semi_sync")
+	require.Equal(t, []string{aliasP, alias200, alias300}, c.voters(t))
 	c.mu.Lock()
 	c.tablets[alias200].member = false
 	c.tablets[alias300].member = false
@@ -448,9 +446,9 @@ func TestMigrateReplicationModeLeavesVotersOfConvertedShardToVTOrc(t *testing.T)
 	})
 	require.NoError(t, err)
 
-	resp, err := migrate(t, newTestMigrator(c, ts), "group_replication", false)
+	resp, err := migrate(t, newTestMigrator(c, ts), "group_replication_cross_cell", false)
 	require.NoError(t, err)
-	assert.Equal(t, []string{aliasP, alias101, alias200, alias300}, c.voters(t))
+	assert.Equal(t, []string{aliasP, alias200, alias300}, c.voters(t))
 	idx := stepIndex(resp.Shards[0].Steps, MigrationActionSetVoters, "")
 	require.GreaterOrEqual(t, idx, 0)
 	assert.Equal(t, MigrationStepSkipped, resp.Shards[0].Steps[idx].Status)
@@ -471,24 +469,10 @@ func setKeyspaceRecord(t *testing.T, ts *topo.Server, durability, source string)
 
 // TestMigrateReplicationModeRefusesSameReplicationMode checks that MigrateReplicationMode refuses to
 // switch a keyspace between two policies of the replication mode it already runs, which
-// SetKeyspaceDurabilityPolicy does: from group_replication to group_replication_cross_cell, it would
-// keep group_replication as the keyspace's migration source, which is no asynchronous policy, and
-// select the voters of every running group again for the target policy, outside the rules that
-// keep a minority view from serving. A run again to the keyspace's own policy is still allowed.
+// SetKeyspaceDurabilityPolicy does, and that a run again to the keyspace's own policy is still
+// allowed. group_replication_cross_cell is the only group replication policy, so the refused switches
+// are between asynchronous policies.
 func TestMigrateReplicationModeRefusesSameReplicationMode(t *testing.T) {
-	t.Run("group replication to another group replication policy", func(t *testing.T) {
-		c, ts := newFakeGRCluster(t, "group_replication", migrationTestShard()...)
-		c.formGroup(t, "group_replication")
-		c.setIncarnation(t, "1790000000")
-		voters := c.voters(t)
-		_, err := migrate(t, newTestMigrator(c, ts), "group_replication_cross_cell", false)
-		require.Error(t, err)
-		assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
-		require.ErrorContains(t, err, "use SetKeyspaceDurabilityPolicy")
-		assert.Empty(t, c.mutatingCalls())
-		assert.Equal(t, voters, c.voters(t))
-		assert.Equal(t, &topodatapb.Keyspace{DurabilityPolicy: "group_replication"}, keyspaceRecord(t, ts))
-	})
 	t.Run("semi-sync to another asynchronous policy", func(t *testing.T) {
 		c, ts := newFakeGRCluster(t, "semi_sync", migrationTestShard()...)
 		_, err := migrate(t, newTestMigrator(c, ts), "none", false)
@@ -497,43 +481,14 @@ func TestMigrateReplicationModeRefusesSameReplicationMode(t *testing.T) {
 		require.ErrorContains(t, err, "use SetKeyspaceDurabilityPolicy")
 		assert.Empty(t, c.mutatingCalls())
 	})
-	t.Run("an interrupted migration to another group replication policy", func(t *testing.T) {
-		c, ts := newFakeGRCluster(t, "semi_sync", migrationTestShard()...)
-		setKeyspaceRecord(t, ts, "group_replication", "semi_sync")
-		_, err := migrate(t, newTestMigrator(c, ts), "group_replication_cross_cell", false)
-		require.Error(t, err)
-		assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
-		assert.Empty(t, c.mutatingCalls())
-	})
 	t.Run("again to the keyspace's own policy", func(t *testing.T) {
-		c, ts := newFakeGRCluster(t, "group_replication", migrationTestShard()...)
-		c.formGroup(t, "group_replication")
+		c, ts := newFakeGRCluster(t, "group_replication_cross_cell", migrationTestShard()...)
+		c.formGroup(t, "group_replication_cross_cell")
 		c.setIncarnation(t, "1790000000")
-		_, err := migrate(t, newTestMigrator(c, ts), "group_replication", false)
+		_, err := migrate(t, newTestMigrator(c, ts), "group_replication_cross_cell", false)
 		require.NoError(t, err)
 		assert.Empty(t, c.mutatingCalls())
 	})
-}
-
-// TestMigrateReplicationModeVoterGuardOnAnyGroupReplicationPolicy checks that the migration leaves the
-// voters of a shard whose group runs to VTOrc whenever the shard's policy is a group replication
-// policy, not only the migration's target: here the shard has group_replication as its own policy,
-// and the keyspace names group_replication_cross_cell, whose one voter per cell would drop a voter
-// of the running group.
-func TestMigrateReplicationModeVoterGuardOnAnyGroupReplicationPolicy(t *testing.T) {
-	c, ts := newFakeGRCluster(t, "semi_sync", migrationTestShard()...)
-	c.formGroup(t, "group_replication")
-	c.setIncarnation(t, "1790000000")
-	c.setShardPolicy(t, "group_replication")
-	setKeyspaceRecord(t, ts, "group_replication_cross_cell", "semi_sync")
-	voters := c.voters(t)
-	require.Len(t, voters, 4)
-
-	resp, err := migrate(t, newTestMigrator(c, ts), "group_replication_cross_cell", false)
-	require.NoError(t, err)
-	assert.Equal(t, voters, c.voters(t))
-	assert.Empty(t, callsWithPrefix(c.mutatingCalls(), "StopGroupReplication"), "no member leaves its group")
-	assert.Equal(t, MigrationStepSkipped, stepStatuses(resp.Shards[0].Steps)[MigrationActionSetVoters])
 }
 
 // TestMigrateReplicationModeConcurrentDirections checks the invariant that the keyspace's policy names
@@ -549,15 +504,15 @@ func TestMigrateReplicationModeConcurrentDirections(t *testing.T) {
 				setKeyspaceRecord(t, ts, "semi_sync", "")
 			}
 		}
-		_, err := migrate(t, newTestMigrator(c, ts), "group_replication", false)
+		_, err := migrate(t, newTestMigrator(c, ts), "group_replication_cross_cell", false)
 		require.Error(t, err)
 		assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
 		require.ErrorContains(t, err, "does not name a group replication policy")
 		assert.Empty(t, callsWithPrefix(c.mutatingCalls(), "StartGroupReplication"), "no group is bootstrapped")
 	})
 	t.Run("the backward run does not switch the keyspace while a shard gets a group", func(t *testing.T) {
-		c, ts := newFakeGRCluster(t, "group_replication", migrationTestShard()...)
-		c.formGroup(t, "group_replication")
+		c, ts := newFakeGRCluster(t, "group_replication_cross_cell", migrationTestShard()...)
+		c.formGroup(t, "group_replication_cross_cell")
 		c.setIncarnation(t, "1790000000")
 		// While the shard is converted back, a migration to Group Replication creates another shard
 		// and stores its voters, before its bootstrap.
@@ -573,7 +528,7 @@ func TestMigrateReplicationModeConcurrentDirections(t *testing.T) {
 		require.Error(t, err)
 		assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
 		require.ErrorContains(t, err, otherShard)
-		assert.Equal(t, "group_replication", keyspaceRecord(t, ts).DurabilityPolicy, "the keyspace keeps the group replication policy")
+		assert.Equal(t, "group_replication_cross_cell", keyspaceRecord(t, ts).DurabilityPolicy, "the keyspace keeps the group replication policy")
 	})
 }
 
@@ -585,15 +540,15 @@ func TestMigrateReplicationModeWarnsOfSourceNextToAsyncPolicy(t *testing.T) {
 	c, ts := newFakeGRCluster(t, "semi_sync", migrationTestShard()...)
 	setKeyspaceRecord(t, ts, "semi_sync", "semi_sync")
 	m := newTestMigrator(c, ts)
-	_, err := migrate(t, m, "group_replication", true)
+	_, err := migrate(t, m, "group_replication_cross_cell", true)
 	require.NoError(t, err)
 	logs := m.logger.(*logutil.MemoryLogger).String()
 	assert.Contains(t, logs, "an older vtctld probably changed it")
 	assert.Contains(t, logs, "run MigrateReplicationMode to a group replication policy again")
 
-	_, err = migrate(t, m, "group_replication", false)
+	_, err = migrate(t, m, "group_replication_cross_cell", false)
 	require.NoError(t, err)
-	assert.Equal(t, &topodatapb.Keyspace{DurabilityPolicy: "group_replication"}, keyspaceRecord(t, ts), "the migration names the target policy again, and ends")
+	assert.Equal(t, &topodatapb.Keyspace{DurabilityPolicy: "group_replication_cross_cell"}, keyspaceRecord(t, ts), "the migration names the target policy again, and ends")
 
 	// Run back to the source policy instead, the migration ends with the source removed.
 	c, ts = newFakeGRCluster(t, "semi_sync", migrationTestShard()...)
@@ -610,7 +565,7 @@ func TestMigrateReplicationModeWarnsOfSourceNextToAsyncPolicy(t *testing.T) {
 func TestMigrateReplicationModeRefusesKeyspaceWithoutPolicy(t *testing.T) {
 	c, ts := newFakeGRCluster(t, "semi_sync", migrationTestShard()...)
 	setKeyspaceRecord(t, ts, "", "")
-	_, err := migrate(t, newTestMigrator(c, ts), "group_replication", false)
+	_, err := migrate(t, newTestMigrator(c, ts), "group_replication_cross_cell", false)
 	require.Error(t, err)
 	assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
 	require.ErrorContains(t, err, "set one with SetKeyspaceDurabilityPolicy first")
@@ -626,7 +581,7 @@ func TestMigrateReplicationModeReportsCheckBeforeKeyspaceStep(t *testing.T) {
 	t.Run("refused", func(t *testing.T) {
 		c, ts := newFakeGRCluster(t, "semi_sync", migrationTestShard()...)
 		c.schemaRows = []string{"app|nopk|InnoDB"}
-		resp, err := migrate(t, newTestMigrator(c, ts), "group_replication", false)
+		resp, err := migrate(t, newTestMigrator(c, ts), "group_replication_cross_cell", false)
 		require.Error(t, err)
 		assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
 		require.ErrorContains(t, err, "the preflight of shard ks/- refused the migration")
@@ -638,7 +593,7 @@ func TestMigrateReplicationModeReportsCheckBeforeKeyspaceStep(t *testing.T) {
 	t.Run("converted", func(t *testing.T) {
 		c, ts := newFakeGRCluster(t, "semi_sync", migrationTestShard()...)
 		m := newTestMigrator(c, ts)
-		_, err := migrate(t, m, "group_replication", false)
+		_, err := migrate(t, m, "group_replication_cross_cell", false)
 		require.NoError(t, err)
 		assert.NotContains(t, m.logger.(*logutil.MemoryLogger).String(), "(planned)", "the dry run's steps are not logged")
 	})
@@ -650,7 +605,7 @@ func TestMigrateReplicationModeReportsCheckBeforeKeyspaceStep(t *testing.T) {
 func TestMigrateReplicationModeDryRunKeepsPlannedSource(t *testing.T) {
 	c, ts := newFakeGRCluster(t, "semi_sync", migrationTestShard()...)
 	addOtherShard(t, ts)
-	resp, err := migrateShards(t, newTestMigrator(c, ts), "group_replication", true, "-")
+	resp, err := migrateShards(t, newTestMigrator(c, ts), "group_replication_cross_cell", true, "-")
 	require.NoError(t, err)
 	idx := stepIndex(resp.KeyspaceSteps, MigrationActionKeepDurabilityPolicy, "")
 	require.GreaterOrEqual(t, idx, 0)
@@ -662,7 +617,7 @@ func TestMigrateReplicationModeDryRunKeepsPlannedSource(t *testing.T) {
 func TestWriteKeyspacePolicyRefusesUnknownSource(t *testing.T) {
 	_, ts := newFakeGRCluster(t, "semi_sync", migrationTestShard()...)
 	_, err := writeKeyspacePolicy(t.Context(), ts, "ks", func(ks *topodatapb.Keyspace) error {
-		ks.DurabilityPolicy = "group_replication"
+		ks.DurabilityPolicy = "group_replication_cross_cell"
 		ks.MigrationSourceDurabilityPolicy = "not_a_policy"
 		return nil
 	})

@@ -164,7 +164,7 @@ func TestPromoteReplicaFailsWhenOfflineModeStays(t *testing.T) {
 // left.
 func TestSetReplicationSourceLiftsOfflineModeOnFormerMember(t *testing.T) {
 	withGroupReplication(t)
-	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplication)
+	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplicationCrossCell)
 	setGroupReplicationVoters(t, ts, 2)
 	tm, fmd := newGroupReplicationTestTM(t, ts, 1, nil)
 	setShardPrimary(t, ts, tm, fmd)

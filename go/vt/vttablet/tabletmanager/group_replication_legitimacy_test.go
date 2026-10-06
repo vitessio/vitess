@@ -119,7 +119,7 @@ func withViewID(status *replicationdatapb.GroupReplicationStatus, viewID string)
 // joins fail, so that only the sync loop changes its state.
 func newLegitimacyTestTM(t *testing.T) (*TabletManager, *mysqlctl.FakeMysqlDaemon, *grPeersTMC, *topo.Server) {
 	t.Helper()
-	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplication)
+	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplicationCrossCell)
 	setGroupReplicationVoters(t, ts, 1, 2, 3)
 	setGroupReplicationIncarnation(t, ts, "1780000001")
 	addPeerTablets(t, ts, 2, 3)
@@ -450,7 +450,7 @@ func activeGroupPeers(uids ...uint32) *grPeersTMC {
 func TestGroupReplicationSyncRejoinsOnlyAnActiveGroup(t *testing.T) {
 	withGroupReplication(t)
 	ctx := t.Context()
-	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplication)
+	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplicationCrossCell)
 	setGroupReplicationVoters(t, ts, 1, 2, 3)
 	setGroupReplicationIncarnation(t, ts, "1780000001")
 	addPeerTablets(t, ts, 2, 3)
@@ -495,7 +495,7 @@ func TestGroupReplicationSyncRejoinsOnlyAnActiveGroup(t *testing.T) {
 // START has been seen to end in a group of its own (S7d after the legitimacy fixes).
 func TestStartGroupReplicationJoinStopsOngoingStart(t *testing.T) {
 	withGroupReplication(t)
-	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplication)
+	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplicationCrossCell)
 	tm, fmd := newGroupReplicationTestTM(t, ts, 1, nil)
 	fmd.ConfigureGroupReplicationErrors = []error{
 		sqlerror.NewSQLError(mysqlErrGroupReplicationCommandOngoing, sqlerror.SSUnknownSQLState, "This option cannot be set while START or STOP GROUP_REPLICATION is ongoing."),
@@ -523,7 +523,7 @@ func TestPreferSeeds(t *testing.T) {
 // minutes when no group exists. The tablet stops it and bootstraps.
 func TestStartGroupReplicationBootstrapStopsOngoingStart(t *testing.T) {
 	withGroupReplication(t)
-	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplication)
+	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplicationCrossCell)
 	setGroupReplicationVoters(t, ts, 1)
 	tm, fmd := newGroupReplicationTestTM(t, ts, 1, nil)
 	fmd.ConfigureGroupReplicationErrors = []error{
@@ -545,7 +545,7 @@ func TestStartGroupReplicationBootstrapStopsOngoingStart(t *testing.T) {
 // that is RECOVERING without a group, a join that found no member, instead of refusing it.
 func TestStartGroupReplicationBootstrapStopsJoinWithoutGroup(t *testing.T) {
 	withGroupReplication(t)
-	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplication)
+	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplicationCrossCell)
 	setGroupReplicationVoters(t, ts, 1)
 	tm, fmd := newGroupReplicationTestTM(t, ts, 1, nil)
 	recovering := groupStatus(testServerUUID(1), groupMember(testServerUUID(1), mysql.GroupMemberStateRecovering, ""))
@@ -583,11 +583,11 @@ func TestGroupReplicationSyncDemotesStalePrimary(t *testing.T) {
 		pluginOff   bool
 		wantDemoted bool
 	}{
-		{name: "voter restarted", durability: policy.DurabilityGroupReplication, voters: []uint32{1, 2, 3}, wantDemoted: true},
-		{name: "voter restarted without the plugin", durability: policy.DurabilityGroupReplication, voters: []uint32{1, 2, 3}, pluginOff: true, wantDemoted: true},
+		{name: "voter restarted", durability: policy.DurabilityGroupReplicationCrossCell, voters: []uint32{1, 2, 3}, wantDemoted: true},
+		{name: "voter restarted without the plugin", durability: policy.DurabilityGroupReplicationCrossCell, voters: []uint32{1, 2, 3}, pluginOff: true, wantDemoted: true},
 		{name: "migration: policy is not group replication", durability: policy.DurabilitySemiSync, voters: []uint32{1, 2, 3}},
-		{name: "migration: no voter listed", durability: policy.DurabilityGroupReplication},
-		{name: "not a voter", durability: policy.DurabilityGroupReplication, voters: []uint32{2, 3}},
+		{name: "migration: no voter listed", durability: policy.DurabilityGroupReplicationCrossCell},
+		{name: "not a voter", durability: policy.DurabilityGroupReplicationCrossCell, voters: []uint32{2, 3}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

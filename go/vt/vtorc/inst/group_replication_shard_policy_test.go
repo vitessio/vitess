@@ -51,8 +51,9 @@ func TestGetDetectionAnalysisShardPolicy(t *testing.T) {
 	replica := grTablet("zone1", 100, topodatapb.TabletType_REPLICA)
 	replica2 := grTablet("zone1", 102, topodatapb.TabletType_REPLICA)
 	crossCellReplica := grTablet("zone2", 200, topodatapb.TabletType_REPLICA)
+	thirdCellReplica := grTablet("zone3", 300, topodatapb.TabletType_REPLICA)
 	semiSync := policy.DurabilitySemiSync
-	gr := policy.DurabilityGroupReplication
+	gr := policy.DurabilityGroupReplicationCrossCell
 
 	// row is the analysis row of a tablet of the shard, whose keyspace has the policy
 	// keyspacePolicy and the shard its own policy shardPolicy.
@@ -71,12 +72,12 @@ func TestGetDetectionAnalysisShardPolicy(t *testing.T) {
 	}{
 		{
 			name:   "converted shard: a voter whose MySQL left the group rejoins it",
-			voters: []*topodatapb.Tablet{primary, replica, replica2},
+			voters: []*topodatapb.Tablet{primary, crossCellReplica, thirdCellReplica},
 			rows: func() []*test.InfoForRecoveryAnalysis {
 				rows := []*test.InfoForRecoveryAnalysis{
 					member(row(primary, semiSync, gr), mysql.GroupMemberStateOnline, mysql.GroupMemberRolePrimary, true, primary),
-					member(row(replica, semiSync, gr), mysql.GroupMemberStateOffline, "", false, nil),
-					member(row(replica2, semiSync, gr), mysql.GroupMemberStateOnline, mysql.GroupMemberRoleSecondary, true, primary),
+					member(row(crossCellReplica, semiSync, gr), mysql.GroupMemberStateOffline, "", false, nil),
+					member(row(thirdCellReplica, semiSync, gr), mysql.GroupMemberStateOnline, mysql.GroupMemberRoleSecondary, true, primary),
 				}
 				// The migration recorded the incarnation of the group it bootstrapped.
 				rows[0].GroupViewID, rows[2].GroupViewID = "1790000001:3", "1790000001:3"
@@ -85,15 +86,15 @@ func TestGetDetectionAnalysisShardPolicy(t *testing.T) {
 				}
 				return rows
 			},
-			want: map[string]AnalysisCode{"zone1-0000000100": GroupMemberNotOnline},
+			want: map[string]AnalysisCode{"zone2-0000000200": GroupMemberNotOnline},
 		},
 		{
 			name:   "converted shard: no member is active, the group is bootstrapped",
-			voters: []*topodatapb.Tablet{replica, replica2, crossCellReplica},
+			voters: []*topodatapb.Tablet{replica, thirdCellReplica, crossCellReplica},
 			rows: func() []*test.InfoForRecoveryAnalysis {
 				return []*test.InfoForRecoveryAnalysis{
 					member(row(replica, semiSync, gr), mysql.GroupMemberStateOffline, "", false, nil),
-					member(row(replica2, semiSync, gr), mysql.GroupMemberStateOffline, "", false, nil),
+					member(row(thirdCellReplica, semiSync, gr), mysql.GroupMemberStateOffline, "", false, nil),
 					member(row(crossCellReplica, semiSync, gr), mysql.GroupMemberStateOffline, "", false, nil),
 				}
 			},

@@ -46,7 +46,7 @@ func (weightedGroupReplication) MemberWeight(*topodatapb.Tablet) int { return 75
 
 func init() {
 	policy.RegisterDurability(weightedGroupReplicationPolicy, func() policy.Durabler {
-		d, err := policy.GetDurabilityPolicy(policy.DurabilityGroupReplication)
+		d, err := policy.GetDurabilityPolicy(policy.DurabilityGroupReplicationCrossCell)
 		if err != nil {
 			panic(err)
 		}
@@ -103,7 +103,7 @@ func aloneInView() *replicationdatapb.GroupReplicationStatus {
 // otherwise it acknowledges writes that exist on a single voter.
 func TestGroupReplicationSyncFailsClosedInConvertedShard(t *testing.T) {
 	withGroupReplication(t)
-	tm, fmd, _, _ := newConvertedShardTestTM(t, policy.DurabilitySemiSync, policy.DurabilityGroupReplication)
+	tm, fmd, _, _ := newConvertedShardTestTM(t, policy.DurabilitySemiSync, policy.DurabilityGroupReplicationCrossCell)
 	setTabletType(t, tm, topodatapb.TabletType_PRIMARY)
 	qsc := tm.QueryServiceControl.(*tabletservermock.Controller)
 	require.True(t, qsc.IsServing())
@@ -119,7 +119,7 @@ func TestGroupReplicationSyncFailsClosedInConvertedShard(t *testing.T) {
 // its keyspace's is still group_replication, keeps serving as its group shrinks to the primary.
 func TestGroupReplicationSyncServesInShardConvertedBack(t *testing.T) {
 	withGroupReplication(t)
-	tm, fmd, _, _ := newConvertedShardTestTM(t, policy.DurabilityGroupReplication, policy.DurabilitySemiSync)
+	tm, fmd, _, _ := newConvertedShardTestTM(t, policy.DurabilityGroupReplicationCrossCell, policy.DurabilitySemiSync)
 	setTabletType(t, tm, topodatapb.TabletType_PRIMARY)
 	qsc := tm.QueryServiceControl.(*tabletservermock.Controller)
 	require.True(t, qsc.IsServing())
@@ -136,7 +136,7 @@ func TestGroupReplicationSyncServesInShardConvertedBack(t *testing.T) {
 func TestGroupReplicationSyncRejoinsVoterOfConvertedShard(t *testing.T) {
 	t.Run("rejoin", func(t *testing.T) {
 		withGroupReplication(t)
-		tm, fmd, _, _ := newConvertedShardTestTM(t, policy.DurabilitySemiSync, policy.DurabilityGroupReplication)
+		tm, fmd, _, _ := newConvertedShardTestTM(t, policy.DurabilitySemiSync, policy.DurabilityGroupReplicationCrossCell)
 		tm.tmc = activeGroupPeersIn("1780000001", 2, 3)
 		fmd.StartGroupReplicationError = nil
 		fmd.ExpectedExecuteSuperQueryList = []string{resetDefaultChannel}
@@ -150,7 +150,7 @@ func TestGroupReplicationSyncRejoinsVoterOfConvertedShard(t *testing.T) {
 
 	t.Run("stale primary", func(t *testing.T) {
 		withGroupReplication(t)
-		tm, fmd, _, ts := newConvertedShardTestTM(t, policy.DurabilitySemiSync, policy.DurabilityGroupReplication)
+		tm, fmd, _, ts := newConvertedShardTestTM(t, policy.DurabilitySemiSync, policy.DurabilityGroupReplicationCrossCell)
 		setTabletType(t, tm, topodatapb.TabletType_PRIMARY)
 		fmd.SetSuperReadOnlyError = errors.New("MySQL must be left alone")
 		fmd.SetGroupReplicationStatus(groupStatus(testServerUUID(1), groupMember(testServerUUID(1), mysql.GroupMemberStateOffline, "")))
@@ -177,7 +177,7 @@ func TestGroupReplicationSyncFollowsShardPolicyChange(t *testing.T) {
 	s.reconcile(t.Context())
 	require.True(t, qsc.IsServing(), "a group that is being formed under a semi-sync policy does not need its voters")
 
-	setShardDurabilityPolicy(t, ts, policy.DurabilityGroupReplication)
+	setShardDurabilityPolicy(t, ts, policy.DurabilityGroupReplicationCrossCell)
 	// The loop reads the shard record again, as it does every few seconds, well before its cached
 	// policy expires.
 	s.recordRead = time.Time{}

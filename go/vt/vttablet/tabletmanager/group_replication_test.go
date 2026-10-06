@@ -212,7 +212,7 @@ func TestGroupReplicationConfig(t *testing.T) {
 	groupReplicationAutorejoinTries = 3
 
 	ctx := t.Context()
-	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplication)
+	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplicationCrossCell)
 	peers := []*topodatapb.Tablet{{
 		// Other tablets reach MySQL at its mysql hostname and port.
 		Alias: &topodatapb.TabletAlias{Cell: "cell1", Uid: 2}, Keyspace: "ks", Shard: "0", Type: topodatapb.TabletType_REPLICA,
@@ -640,7 +640,7 @@ func TestSetReplicationSourceWaitsForGroupPrimarySwitch(t *testing.T) {
 
 func TestStopAndStartReplicationOnGroupMember(t *testing.T) {
 	withGroupReplication(t)
-	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplication)
+	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplicationCrossCell)
 	setGroupReplicationVoters(t, ts, 1, 2)
 	// The shard record lists the incarnation of the group the peer is active in.
 	setGroupReplicationIncarnation(t, ts, "1780000001")
@@ -691,7 +691,7 @@ func TestResetReplicationParametersOnGroupMember(t *testing.T) {
 // replication bootstraps the shard's group on the new primary.
 func TestInitPrimaryBootstrapsGroup(t *testing.T) {
 	withGroupReplication(t)
-	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplication)
+	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplicationCrossCell)
 	tm, fmd := newGroupReplicationTestTM(t, ts, 1, func(fmd *mysqlctl.FakeMysqlDaemon) {
 		// No other member is reachable when the tablet starts.
 		fmd.StartGroupReplicationError = errors.New("no seed reachable")
@@ -741,7 +741,7 @@ func TestFixSemiSyncSupersededByGroup(t *testing.T) {
 func TestStartJoinsGroup(t *testing.T) {
 	withGroupReplication(t)
 	ctx := t.Context()
-	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplication)
+	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplicationCrossCell)
 	// The shard has a primary, which an asynchronous replica would replicate from.
 	primary := &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{Cell: "cell1", Uid: 2}, Keyspace: "ks", Shard: "0", Type: topodatapb.TabletType_PRIMARY,
@@ -774,7 +774,7 @@ func TestStartJoinsGroup(t *testing.T) {
 
 func TestStartSucceedsWhenGroupJoinFails(t *testing.T) {
 	withGroupReplication(t)
-	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplication)
+	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplicationCrossCell)
 	setGroupReplicationVoters(t, ts, 1, 2)
 	// The shard record lists the incarnation of the group the peer is active in.
 	setGroupReplicationIncarnation(t, ts, "1780000001")
@@ -829,7 +829,7 @@ func TestStartReplicatesAsynchronouslyWhenNotVoter(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			withGroupReplication(t)
-			ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplication)
+			ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplicationCrossCell)
 			setGroupReplicationVoters(t, ts, tc.voters...)
 			tm, fmd := newGroupReplicationTestTM(t, ts, 1, nil)
 			start, _, _ := fmd.GroupReplicationCalls()
@@ -857,7 +857,7 @@ func TestStartReplicatesAsynchronouslyWhenNotVoter(t *testing.T) {
 // configures asynchronous replication when it starts: removing a member is VTOrc's decision.
 func TestStartLeavesActiveNonVoterAlone(t *testing.T) {
 	withGroupReplication(t)
-	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplication)
+	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplicationCrossCell)
 	setGroupReplicationVoters(t, ts, 2, 3)
 	superQueries := 0
 	tm, fmd := newGroupReplicationTestTM(t, ts, 1, func(fmd *mysqlctl.FakeMysqlDaemon) {
@@ -889,7 +889,7 @@ func TestStartLeavesActiveNonVoterAlone(t *testing.T) {
 // asynchronous meaning on a tablet that is neither an active member of its group nor a voter.
 func TestStartReplicationOnNonVoter(t *testing.T) {
 	withGroupReplication(t)
-	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplication)
+	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplicationCrossCell)
 	setGroupReplicationVoters(t, ts, 2)
 	tm, fmd := newGroupReplicationTestTM(t, ts, 1, nil)
 	fmd.ExpectedExecuteSuperQueryList = []string{"START REPLICA", "STOP REPLICA"}
@@ -908,7 +908,7 @@ func TestStartReplicationOnNonVoter(t *testing.T) {
 func TestGroupReplicationSyncRejoinsOnlyVoters(t *testing.T) {
 	withGroupReplication(t)
 	ctx := t.Context()
-	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplication)
+	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplicationCrossCell)
 	setGroupReplicationVoters(t, ts, 2)
 	// The shard record lists the incarnation of the group the peer is active in.
 	setGroupReplicationIncarnation(t, ts, "1780000001")
@@ -952,7 +952,7 @@ func TestGroupReplicationSyncRejoinsOnlyVoters(t *testing.T) {
 func TestCheckPrimaryShipUnderGroupReplication(t *testing.T) {
 	withGroupReplication(t)
 	ctx := t.Context()
-	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplication)
+	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplicationCrossCell)
 	tablet := newTestTablet(t, 1, "ks", "0", nil)
 	tablet.Type = topodatapb.TabletType_PRIMARY
 	tablet.PrimaryTermStartTime = protoutil.TimeToProto(time.Now())
@@ -992,7 +992,7 @@ func TestEndPrimaryTermOnGroupMember(t *testing.T) {
 func TestGroupReplicationSyncPromotesGroupPrimary(t *testing.T) {
 	withGroupReplication(t)
 	ctx := t.Context()
-	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplication)
+	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplicationCrossCell)
 	tm, fmd := newGroupReplicationTestTM(t, ts, 1, func(fmd *mysqlctl.FakeMysqlDaemon) {
 		fmd.StartGroupReplicationError = errors.New("no seed reachable")
 	})
@@ -1027,7 +1027,7 @@ func TestGroupReplicationSyncPromotesGroupPrimary(t *testing.T) {
 func TestGroupReplicationSyncDemotesFormerPrimary(t *testing.T) {
 	withGroupReplication(t)
 	ctx := t.Context()
-	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplication)
+	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplicationCrossCell)
 	tm, fmd := newGroupReplicationTestTM(t, ts, 1, func(fmd *mysqlctl.FakeMysqlDaemon) {
 		fmd.StartGroupReplicationError = errors.New("no seed reachable")
 	})
@@ -1054,7 +1054,7 @@ func TestGroupReplicationSyncDemotesFormerPrimary(t *testing.T) {
 func TestGroupReplicationSyncDemotesPrimaryWithoutQuorum(t *testing.T) {
 	withGroupReplication(t)
 	ctx := t.Context()
-	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplication)
+	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplicationCrossCell)
 	tm, fmd := newGroupReplicationTestTM(t, ts, 1, func(fmd *mysqlctl.FakeMysqlDaemon) {
 		fmd.StartGroupReplicationError = errors.New("no seed reachable")
 	})
@@ -1071,7 +1071,7 @@ func TestGroupReplicationSyncDemotesPrimaryWithoutQuorum(t *testing.T) {
 func TestGroupReplicationSyncRejoinsWithBackoff(t *testing.T) {
 	withGroupReplication(t)
 	ctx := t.Context()
-	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplication)
+	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplicationCrossCell)
 	setGroupReplicationVoters(t, ts, 1, 2)
 	// The shard record lists the incarnation of the group the peer is active in.
 	setGroupReplicationIncarnation(t, ts, "1780000001")
@@ -1121,29 +1121,29 @@ func TestGroupReplicationSyncDoesNotRejoin(t *testing.T) {
 		tabletType: topodatapb.TabletType_REPLICA,
 	}, {
 		name:       "tablet is not a voter",
-		durability: policy.DurabilityGroupReplication,
+		durability: policy.DurabilityGroupReplicationCrossCell,
 		tabletType: topodatapb.TabletType_REPLICA,
 		voters:     []uint32{2},
 	}, {
 		name:       "voters are not selected yet",
-		durability: policy.DurabilityGroupReplication,
+		durability: policy.DurabilityGroupReplicationCrossCell,
 		tabletType: topodatapb.TabletType_REPLICA,
 		voters:     []uint32{},
 	}, {
 		name:       "tablet is being backed up",
-		durability: policy.DurabilityGroupReplication,
+		durability: policy.DurabilityGroupReplicationCrossCell,
 		tabletType: topodatapb.TabletType_BACKUP,
 	}, {
 		name:       "tablet is drained",
-		durability: policy.DurabilityGroupReplication,
+		durability: policy.DurabilityGroupReplicationCrossCell,
 		tabletType: topodatapb.TabletType_DRAINED,
 	}, {
 		name:       "primary serves on its own",
-		durability: policy.DurabilityGroupReplication,
+		durability: policy.DurabilityGroupReplicationCrossCell,
 		tabletType: topodatapb.TabletType_PRIMARY,
 	}, {
 		name:       "group replication was stopped explicitly",
-		durability: policy.DurabilityGroupReplication,
+		durability: policy.DurabilityGroupReplicationCrossCell,
 		tabletType: topodatapb.TabletType_REPLICA,
 		suspended:  true,
 	}}
@@ -1204,7 +1204,7 @@ func TestGroupReplicationSyncEnforcesSemiSync(t *testing.T) {
 func TestGroupReplicationSyncLoop(t *testing.T) {
 	withGroupReplication(t)
 	groupReplicationSyncInterval = 10 * time.Millisecond
-	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplication)
+	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplicationCrossCell)
 	tm, _ := newGroupReplicationTestTM(t, ts, 1, func(fmd *mysqlctl.FakeMysqlDaemon) {
 		fmd.StartGroupReplicationError = errors.New("no seed reachable")
 		fmd.SetGroupReplicationStatus(groupStatus(testServerUUID(1),

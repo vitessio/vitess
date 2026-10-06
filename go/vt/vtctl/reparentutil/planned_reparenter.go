@@ -76,6 +76,8 @@ type PlannedReparentOptions struct {
 
 	lockAction string
 	durability policy.Durabler
+	// durabilityName is the name of durability, for the errors that name the policy.
+	durabilityName string
 }
 
 // NewPlannedReparenter returns a new PlannedReparenter object, ready to perform
@@ -366,7 +368,7 @@ func (pr *PlannedReparenter) performInitialPromotion(
 		if err := pr.checkShardHasNoGroup(ctx, keyspace, shard, tabletMap); err != nil {
 			return "", err
 		}
-		if err := CheckGroupReplicationCapabilities(ctx, pr.tmc, grd, primaryElect, tabletMap); err != nil {
+		if err := CheckGroupReplicationCapabilities(ctx, pr.tmc, grd, opts.durabilityName, primaryElect, tabletMap); err != nil {
 			return "", err
 		}
 	}
@@ -513,7 +515,9 @@ func (pr *PlannedReparenter) checkShardHasNoGroup(ctx context.Context, keyspace,
 
 // selectInitialVoters selects the voters of a group replication shard that never had a
 // primary and stores them in the shard record, under the shard lock. The primary-elect keeps
-// its seat; recorded voters are kept where possible. No tablet is an active member yet.
+// its seat; recorded voters are kept where possible. No tablet is an active member yet. The shard
+// has tablets that may be voters in at least policy.MinGroupReplicationCells cells
+// (CheckGroupReplicationCapabilities), so the list has a voter in each of them.
 func (pr *PlannedReparenter) selectInitialVoters(
 	ctx context.Context,
 	keyspace string,
@@ -538,10 +542,6 @@ func (pr *PlannedReparenter) selectInitialVoters(
 	voters := policy.SelectVoters(durability, recordedVoters, primaryElect.Alias, candidates)
 	if !policy.IsVoter(voters, primaryElect.Alias) {
 		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "primary-elect tablet %v is not among the selected voters %s", primaryElectAliasStr, votersString(voters))
-	}
-	if len(voters) < minimumGroupReplicationMembers {
-		pr.logger.Warningf("shard %s/%s has only %d eligible voters (%s); a group needs at least %d members to survive the failure of one",
-			keyspace, shard, len(voters), votersString(voters), minimumGroupReplicationMembers)
 	}
 	pr.logger.Infof("storing the group replication voters %s of shard %s/%s", votersString(voters), keyspace, shard)
 	return writeGroupReplicationVoters(ctx, pr.ts, keyspace, shard, voters)
@@ -943,6 +943,7 @@ func (pr *PlannedReparenter) reparentShardLocked(
 	if err != nil {
 		return err
 	}
+	opts.durabilityName = shardDurability
 
 	ev.ShardInfo = *shardInfo
 

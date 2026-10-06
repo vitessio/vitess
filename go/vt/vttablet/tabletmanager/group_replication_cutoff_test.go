@@ -48,6 +48,9 @@ type cutOffTopoFactory struct {
 	mu sync.Mutex
 	// healed is closed when the partition heals. It is nil while the topology answers.
 	healed chan struct{}
+	// tabletsOnly limits the partition to the requests for tablet records, like a slow cell
+	// topology server while the global one answers.
+	tabletsOnly bool
 	// refused makes every request for a tablet record fail right away, like a topology server
 	// that refuses connections.
 	refused bool
@@ -76,6 +79,15 @@ func (f *cutOffTopoFactory) cut() {
 	}
 }
 
+// cutTablets makes every request for a tablet record wait until heal, while the other requests
+// are answered.
+func (f *cutOffTopoFactory) cutTablets() {
+	f.cut()
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.tabletsOnly = true
+}
+
 func (f *cutOffTopoFactory) heal() {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -84,12 +96,16 @@ func (f *cutOffTopoFactory) heal() {
 		f.healed = nil
 	}
 	f.refused = false
+	f.tabletsOnly = false
 }
 
 // wait blocks while the topology is cut off, until ctx ends or the partition heals.
 func (f *cutOffTopoFactory) wait(ctx context.Context, filePath string) error {
 	f.mu.Lock()
 	healed := f.healed
+	if f.tabletsOnly && !strings.HasPrefix(filePath, topo.TabletsPath+"/") {
+		healed = nil
+	}
 	refused := f.refused && strings.HasPrefix(filePath, topo.TabletsPath+"/")
 	if refused {
 		f.refusals++
@@ -175,7 +191,7 @@ func newCutOffTestTM(t *testing.T) (*TabletManager, *mysqlctl.FakeMysqlDaemon, *
 	ts, err := topo.NewWithFactory(f, "", "")
 	require.NoError(t, err)
 	t.Cleanup(ts.Close)
-	require.NoError(t, ts.CreateKeyspace(ctx, "ks", &topodatapb.Keyspace{DurabilityPolicy: policy.DurabilityGroupReplication}))
+	require.NoError(t, ts.CreateKeyspace(ctx, "ks", &topodatapb.Keyspace{DurabilityPolicy: policy.DurabilityGroupReplicationCrossCell}))
 	setGroupReplicationVoters(t, ts, 1, 2, 3)
 	setGroupReplicationIncarnation(t, ts, "1780000001")
 	addPeerTablets(t, ts, 2, 3)

@@ -1102,7 +1102,7 @@ func (tm *TabletManager) groupReplicationServingReason(ctx context.Context, dura
 	}
 	// Only a voter serves: a member that is not one counts in the certification majority of its view,
 	// which then need not hold a majority of the voters, and a bootstrap from the voters would lose
-	// what it acknowledged. VTOrc gives the group primary a seat (policy.SelectVoters), and the
+	// what it acknowledged. VTOrc moves the group primary to a voter (GroupPrimaryNotVoter), whose
 	// tablet serves then.
 	if !policy.IsVoter(rec.voters, tm.tabletAlias) {
 		return groupReplicationNotVoter
@@ -1199,6 +1199,23 @@ func (tm *TabletManager) applyGroupReplicationServingDecisionLocked(ctx context.
 		return reason, status, nil
 	}
 	return "", status, nil
+}
+
+// checkOwnTabletRecord returns a FAILED_PRECONDITION error when the tablet's own tablet record no
+// longer exists. Deleting the record is the operator's signal that VTOrc may drop the tablet from the
+// voters (RemoveVoter, RemoveVoterNoGroup), so a tablet whose record was deleted never becomes
+// PRIMARY, nor serves again as one: becoming PRIMARY writes the record first, which fails then, and
+// serving again (serveAgain, UndoDemotePrimary) writes nothing, so it checks with this read, bounded
+// by groupReplicationTopoReadTimeout. A topology that does not answer is not a deletion. A PRIMARY
+// that still serves when its record is deleted keeps serving: VTOrc moves the group primary away
+// from it (GroupPrimaryNotVoter).
+func (tm *TabletManager) checkOwnTabletRecord(ctx context.Context) error {
+	readCtx, cancel := context.WithTimeout(ctx, groupReplicationTopoReadTimeout)
+	defer cancel()
+	if _, err := tm.TopoServer.GetTablet(readCtx, tm.tabletAlias); topo.IsErrType(err, topo.NoNode) {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "the tablet record of %s does not exist: the tablet does not serve as the primary", topoproto.TabletAliasString(tm.tabletAlias))
+	}
+	return nil
 }
 
 // groupReplicationVoters returns the voting members of the tablet's shard's group, as recorded

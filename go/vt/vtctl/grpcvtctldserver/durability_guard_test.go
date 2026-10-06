@@ -59,11 +59,11 @@ func TestSetKeyspaceDurabilityPolicyRefusesReplicationModeChange(t *testing.T) {
 		name:     "semi-sync to group replication, the shard has a primary",
 		keyspace: &topodatapb.Keyspace{DurabilityPolicy: policy.DurabilitySemiSync},
 		shard:    initialized,
-		target:   policy.DurabilityGroupReplication,
+		target:   policy.DurabilityGroupReplicationCrossCell,
 		wantErr:  "use MigrateReplicationMode",
 	}, {
 		name:     "group replication to semi-sync, the shard has a group",
-		keyspace: &topodatapb.Keyspace{DurabilityPolicy: policy.DurabilityGroupReplication},
+		keyspace: &topodatapb.Keyspace{DurabilityPolicy: policy.DurabilityGroupReplicationCrossCell},
 		shard:    &topodatapb.Shard{GroupReplicationVoters: []*topodatapb.TabletAlias{primary}, GroupReplicationIncarnation: "1790000000"},
 		target:   policy.DurabilitySemiSync,
 		wantErr:  "use MigrateReplicationMode",
@@ -71,11 +71,11 @@ func TestSetKeyspaceDurabilityPolicyRefusesReplicationModeChange(t *testing.T) {
 		name:     "semi-sync to group replication, the shard has its own policy",
 		keyspace: &topodatapb.Keyspace{DurabilityPolicy: policy.DurabilitySemiSync},
 		shard:    &topodatapb.Shard{DurabilityPolicy: policy.DurabilitySemiSync},
-		target:   policy.DurabilityGroupReplication,
+		target:   policy.DurabilityGroupReplicationCrossCell,
 		wantErr:  "use MigrateReplicationMode",
 	}, {
 		name:     "a migration is in progress",
-		keyspace: &topodatapb.Keyspace{DurabilityPolicy: policy.DurabilityGroupReplication, MigrationSourceDurabilityPolicy: policy.DurabilitySemiSync},
+		keyspace: &topodatapb.Keyspace{DurabilityPolicy: policy.DurabilityGroupReplicationCrossCell, MigrationSourceDurabilityPolicy: policy.DurabilitySemiSync},
 		shard:    &topodatapb.Shard{},
 		target:   policy.DurabilityGroupReplicationCrossCell,
 		wantErr:  "MigrateReplicationMode is converting keyspace ks",
@@ -102,10 +102,10 @@ func TestSetKeyspaceDurabilityPolicyRefusesReplicationModeChange(t *testing.T) {
 		name:     "semi-sync to group replication, no shard is initialized",
 		keyspace: &topodatapb.Keyspace{DurabilityPolicy: policy.DurabilitySemiSync},
 		shard:    &topodatapb.Shard{},
-		target:   policy.DurabilityGroupReplication,
+		target:   policy.DurabilityGroupReplicationCrossCell,
 	}, {
 		name:     "group replication to group replication, the shard has a group",
-		keyspace: &topodatapb.Keyspace{DurabilityPolicy: policy.DurabilityGroupReplication},
+		keyspace: &topodatapb.Keyspace{DurabilityPolicy: policy.DurabilityGroupReplicationCrossCell},
 		shard:    &topodatapb.Shard{PrimaryAlias: primary, GroupReplicationVoters: []*topodatapb.TabletAlias{primary}, GroupReplicationIncarnation: "1790000000"},
 		target:   policy.DurabilityGroupReplicationCrossCell,
 	}, {
@@ -176,36 +176,60 @@ func (c *initGateTMC) InitPrimary(ctx context.Context, tablet *topodatapb.Tablet
 // TestInitShardPrimaryRefusesTabletWithoutGroupReplication checks that InitShardPrimary, under a
 // group replication policy, refuses before it changes anything a primary-elect, or a tablet that may
 // be a voter, whose vttablet does not run Group Replication (FullStatus field 28) or does not resolve
-// the shard's own policy (field 29): it would initialize a writable primary without a group.
+// the shard's own policy (field 29): it would initialize a writable primary without a group. It also
+// refuses a shard whose PRIMARY or REPLICA tablets are in fewer than three cells: with one voter per
+// cell, its group would keep no majority when one of its voters fails.
 func TestInitShardPrimaryRefusesTabletWithoutGroupReplication(t *testing.T) {
 	capable := &replicationdatapb.FullStatus{GroupReplicationEnabled: true, ShardDurabilityPolicySupported: true}
+	allCapable := map[uint32]*replicationdatapb.FullStatus{100: capable, 200: capable, 300: capable}
+	threeCells := []*topodatapb.TabletAlias{{Cell: "zone1", Uid: 100}, {Cell: "zone2", Uid: 200}, {Cell: "zone3", Uid: 300}}
 	for _, tt := range []struct {
 		name     string
+		tablets  []*topodatapb.TabletAlias
+		rdonly   uint32
 		statuses map[uint32]*replicationdatapb.FullStatus
 		// wantErr is a part of the error; empty means that the initialization reaches InitPrimary.
 		wantErr string
 	}{{
 		name:     "the primary-elect does not run Group Replication",
-		statuses: map[uint32]*replicationdatapb.FullStatus{100: {ShardDurabilityPolicySupported: true}, 200: capable},
+		tablets:  threeCells,
+		statuses: map[uint32]*replicationdatapb.FullStatus{100: {ShardDurabilityPolicySupported: true}, 200: capable, 300: capable},
 		wantErr:  "zone1-0000000100: vttablet does not run Group Replication",
 	}, {
 		name:     "a replica is an older vttablet",
-		statuses: map[uint32]*replicationdatapb.FullStatus{100: capable, 200: {}},
-		wantErr:  "zone1-0000000200: vttablet does not run Group Replication",
+		tablets:  threeCells,
+		statuses: map[uint32]*replicationdatapb.FullStatus{100: capable, 200: {}, 300: capable},
+		wantErr:  "zone2-0000000200: vttablet does not run Group Replication",
 	}, {
-		name:     "both run Group Replication",
-		statuses: map[uint32]*replicationdatapb.FullStatus{100: capable, 200: capable},
+		name:     "the replicas are in two cells",
+		tablets:  []*topodatapb.TabletAlias{{Cell: "zone1", Uid: 100}, {Cell: "zone2", Uid: 200}, {Cell: "zone1", Uid: 300}},
+		statuses: allCapable,
+		wantErr:  "shard ks/- has PRIMARY or REPLICA tablets, which group_replication_cross_cell allows as voters, in 2 cells (zone1, zone2); with one voter per cell, its replication group needs them in at least 3 cells",
+	}, {
+		name:     "the third cell has only an RDONLY tablet",
+		tablets:  threeCells,
+		rdonly:   300,
+		statuses: allCapable,
+		wantErr:  "in 2 cells (zone1, zone2)",
+	}, {
+		name:     "every tablet runs Group Replication, in three cells",
+		tablets:  threeCells,
+		statuses: allCapable,
 		wantErr:  "the test stops at InitPrimary",
 	}} {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := t.Context()
-			ts := memorytopo.NewServer(ctx, "zone1")
+			ts := memorytopo.NewServer(ctx, "zone1", "zone2", "zone3")
 			t.Cleanup(ts.Close)
-			testutil.AddKeyspaces(ctx, t, ts, &vtctldatapb.Keyspace{Name: "ks", Keyspace: &topodatapb.Keyspace{DurabilityPolicy: policy.DurabilityGroupReplication}})
-			for _, uid := range []uint32{100, 200} {
+			testutil.AddKeyspaces(ctx, t, ts, &vtctldatapb.Keyspace{Name: "ks", Keyspace: &topodatapb.Keyspace{DurabilityPolicy: policy.DurabilityGroupReplicationCrossCell}})
+			for _, alias := range tt.tablets {
+				tabletType := topodatapb.TabletType_REPLICA
+				if alias.Uid == tt.rdonly {
+					tabletType = topodatapb.TabletType_RDONLY
+				}
 				testutil.AddTablet(ctx, t, ts, &topodatapb.Tablet{
-					Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: uid}, Keyspace: "ks", Shard: "-",
-					Type: topodatapb.TabletType_REPLICA, MysqlHostname: "localhost", MysqlPort: int32(uid),
+					Alias: alias, Keyspace: "ks", Shard: "-",
+					Type: tabletType, MysqlHostname: "localhost", MysqlPort: int32(alias.Uid),
 				}, nil)
 			}
 			tmc := &initGateTMC{statuses: tt.statuses}

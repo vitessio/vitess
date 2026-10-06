@@ -40,8 +40,8 @@ func TestShardDurabilityPolicy(t *testing.T) {
 	}
 	assert.Equal(t, "semi_sync", topo.ShardDurabilityPolicy(ks("semi_sync"), nil))
 	assert.Equal(t, "semi_sync", topo.ShardDurabilityPolicy(ks("semi_sync"), &topodatapb.Shard{}))
-	assert.Equal(t, "group_replication", topo.ShardDurabilityPolicy(ks("semi_sync"), &topodatapb.Shard{DurabilityPolicy: "group_replication"}))
-	assert.Equal(t, "group_replication", topo.ShardDurabilityPolicy(ks(""), &topodatapb.Shard{DurabilityPolicy: "group_replication"}))
+	assert.Equal(t, "group_replication_cross_cell", topo.ShardDurabilityPolicy(ks("semi_sync"), &topodatapb.Shard{DurabilityPolicy: "group_replication_cross_cell"}))
+	assert.Equal(t, "group_replication_cross_cell", topo.ShardDurabilityPolicy(ks(""), &topodatapb.Shard{DurabilityPolicy: "group_replication_cross_cell"}))
 	assert.Empty(t, topo.ShardDurabilityPolicy(ks(""), &topodatapb.Shard{}))
 	assert.Empty(t, topo.ShardDurabilityPolicy(nil, nil))
 }

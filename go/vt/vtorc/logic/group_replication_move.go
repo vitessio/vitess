@@ -20,6 +20,7 @@ import (
 	"cmp"
 	"context"
 	"fmt"
+	"log/slog"
 	"slices"
 	"strings"
 	"sync"
@@ -349,12 +350,25 @@ func moveGroupPrimaryOutOfUnreachableCell(ctx context.Context, analysisEntry *in
 		return nil, vterrors.New(vtrpcpb.Code_UNAVAILABLE, message)
 	}
 
+	_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("the topology server of cell %s does not answer, so %s, the primary of the replication group, cannot become PRIMARY: making %s the group primary",
+		cell, groupPrimaryAlias, topoproto.TabletAliasString(target.Alias)))
+	return target, moveGroupPrimary(ctx, analysisEntry, durability, groupPrimary, target,
+		fmt.Sprintf("the topology server of its cell %s does not answer", cell), topologyRecovery, logger)
+}
+
+// moveGroupPrimary makes target the primary of the shard's replication group, away from groupPrimary,
+// and its tablet the shard primary, as a planned reparent does, under the shard lock. why says why the
+// group primary moves away from groupPrimary.
+func moveGroupPrimary(ctx context.Context, analysisEntry *inst.DetectionAnalysis, durability policy.Durabler, groupPrimary, target *topodatapb.Tablet, why string,
+	topologyRecovery *TopologyRecovery, logger *log.PrefixedLogger,
+) error {
+	keyspace, shard := groupPrimary.Keyspace, groupPrimary.Shard
+	keyspaceShard := topoproto.KeyspaceShardString(keyspace, shard)
+	groupPrimaryAlias := topoproto.TabletAliasString(groupPrimary.Alias)
 	if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
-		return nil, vterrors.Wrapf(err, "lost the lock of %s before moving the group primary", keyspaceShard)
+		return vterrors.Wrapf(err, "lost the lock of %s before moving the group primary", keyspaceShard)
 	}
 	targetAlias := topoproto.TabletAliasString(target.Alias)
-	_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("the topology server of cell %s does not answer, so %s, the primary of the replication group, cannot become PRIMARY: making %s the group primary",
-		cell, groupPrimaryAlias, targetAlias))
 	// PromoteReplica on an ONLINE member runs group_replication_set_as_primary, which waits for the
 	// member to apply its backlog, and then makes its tablet PRIMARY: like the emergency reparent of
 	// a group, it gets the replica wait timeout.
@@ -362,20 +376,88 @@ func moveGroupPrimaryOutOfUnreachableCell(ctx context.Context, analysisEntry *in
 	defer cancel()
 	position, err := tmc.PromoteReplica(promoteCtx, target, policy.SemiSyncAckers(durability, target) > 0)
 	if err != nil {
-		return nil, vterrors.Wrapf(err, "failed to make %s the primary of the replication group of %s", targetAlias, keyspaceShard)
+		return vterrors.Wrapf(err, "failed to make %s the primary of the replication group of %s", targetAlias, keyspaceShard)
 	}
 	groupPrimaryMoves.recordMoveAway(groupPrimaryAlias, time.Now())
 	_ = inst.AuditOperation(PromoteGroupPrimaryRecoveryName, target.Alias,
-		fmt.Sprintf("moved the primary of the replication group away from %s, whose cell %s's topology server does not answer", groupPrimaryAlias, cell))
-	logger.Info(fmt.Sprintf("moved the primary of the replication group of %s from %s to %s: the topology server of cell %s does not answer", keyspaceShard, groupPrimaryAlias, targetAlias, cell))
+		fmt.Sprintf("moved the primary of the replication group away from %s: %s", groupPrimaryAlias, why))
+	logger.Info(fmt.Sprintf("moved the primary of the replication group of %s from %s to %s: %s", keyspaceShard, groupPrimaryAlias, targetAlias, why))
 
 	// Record the reparent in the journal, like a reparent does. The tablet is already the shard
 	// primary; a failure here is reported but does not undo the move.
 	if err := tmc.PopulateReparentJournal(promoteCtx, target, time.Now().UnixNano(), getLockAction(target.Alias, analysisEntry.Analysis), target.Alias, position); err != nil {
-		return target, vterrors.Wrapf(err, "made %s the primary of the replication group, but failed to write the reparent journal", targetAlias)
+		return vterrors.Wrapf(err, "made %s the primary of the replication group, but failed to write the reparent journal", targetAlias)
 	}
-	_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("%s: moved the primary of the replication group from %s to %s", PromoteGroupPrimaryRecoveryName, groupPrimaryAlias, targetAlias))
-	return target, nil
+	_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("moved the primary of the replication group from %s to %s", groupPrimaryAlias, targetAlias))
+	return nil
+}
+
+// moveGroupPrimaryToVoter moves the primary of the shard's legitimate replication group, whose tablet
+// is not a voter, to an ONLINE voter of its view (GroupPrimaryNotVoter). Such a primary does not
+// serve: a member that is not a voter counts in the certification majority of its view, which then
+// need not hold a majority of the voters. The voter list does not change. It decides on one fresh
+// read of the shard under the shard lock (see readGroupVoterState), and the target is chosen as for
+// the move out of a cell whose topology server does not answer (groupPrimaryMoveTarget).
+func moveGroupPrimaryToVoter(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logger *log.PrefixedLogger) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
+	topologyRecovery, err = AttemptRecoveryRegistration(analysisEntry)
+	if topologyRecovery == nil {
+		message := fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another %s.", analysisEntry.AnalyzedInstanceAlias, MoveGroupPrimaryToVoterRecoveryName)
+		logger.Warn(message)
+		_ = AuditTopologyRecovery(topologyRecovery, message)
+		return false, nil, err
+	}
+	var promoted *inst.Instance
+	defer func() {
+		if err := resolveRecovery(topologyRecovery, promoted); err != nil {
+			logger.Error("failed to resolve recovery", slog.String("recovery", MoveGroupPrimaryToVoterRecoveryName), slog.Any("error", err))
+		}
+	}()
+
+	keyspace, shard := analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard
+	keyspaceShard := topoproto.KeyspaceShardString(keyspace, shard)
+	read, err := readGroupVoterState(ctx, keyspace, shard)
+	if err != nil {
+		return false, topologyRecovery, err
+	}
+	plan := inst.PlanGroupVoters(read.input)
+	if plan.Action != inst.VoterActionMovePrimary || (!plan.PrimaryRecordDeleted && !topoproto.TabletAliasEqual(plan.GroupPrimary.GetAlias(), analysisEntry.AnalyzedInstanceAlias)) {
+		return true, topologyRecovery, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+			"not moving the group primary of %s: the fresh read does not confirm the move that the analysis of %s proposed: %s", keyspaceShard, topoproto.TabletAliasString(analysisEntry.AnalyzedInstanceAlias), plan.Reason)
+	}
+	groupPrimary := plan.GroupPrimary
+	viewFrom := groupPrimary.Alias
+	if plan.PrimaryRecordDeleted {
+		// Only the alias of a voter whose tablet record was deleted is known, and the view is that of
+		// a member of the primary's view.
+		groupPrimary = &topodatapb.Tablet{Alias: groupPrimary.Alias, Keyspace: keyspace, Shard: shard}
+		viewFrom = plan.ViewFrom
+	}
+	var view *replicationdatapb.GroupReplicationStatus
+	for _, st := range read.statuses {
+		if topoproto.TabletAliasEqual(st.tablet.Alias, viewFrom) {
+			view = st.status.GetGroupReplicationStatus()
+		}
+	}
+	grd, _ := policy.AsGroupReplication(read.durability)
+	legitimate := legitimateGroupOf(read.shardInfo, read.statuses)
+	target, rejected := groupPrimaryMoveTarget(read.durability, grd, read.input.Voters, groupPrimary, legitimate, view, read.statuses, nil, time.Now())
+	if target == nil {
+		message := fmt.Sprintf("%s, and no voter of %s can become the group primary (%s)", plan.Reason, keyspaceShard, strings.Join(rejected, "; "))
+		logger.Warn(message)
+		_ = AuditTopologyRecovery(topologyRecovery, message)
+		return true, topologyRecovery, vterrors.New(vtrpcpb.Code_UNAVAILABLE, message)
+	}
+	_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("%s: %s: making the voter %s the group primary",
+		MoveGroupPrimaryToVoterRecoveryName, plan.Reason, topoproto.TabletAliasString(target.Alias)))
+	why := "it is not a voter"
+	if plan.PrimaryRecordDeleted {
+		why = "its tablet record was deleted"
+	}
+	if err := moveGroupPrimary(ctx, analysisEntry, read.durability, groupPrimary, target, why, topologyRecovery, logger); err != nil {
+		return true, topologyRecovery, err
+	}
+	promoted = &inst.Instance{InstanceAlias: target.Alias}
+	return true, topologyRecovery, nil
 }
 
 // groupPrimaryMoveTarget returns the member that the group primary is moved to, or nil and why

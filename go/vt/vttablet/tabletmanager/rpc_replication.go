@@ -1080,6 +1080,11 @@ func (tm *TabletManager) UndoDemotePrimary(ctx context.Context, semiSync bool) e
 		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot undo the demotion: %s (member %s %s, view %s)",
 			reason, groupStatus.GetMemberState(), groupStatus.GetMemberRole(), groupStatus.GetViewId())
 	}
+	if groupReplicationEnabled() {
+		if err := tm.checkOwnTabletRecord(ctx); err != nil {
+			return vterrors.Wrapf(err, "cannot undo the demotion")
+		}
+	}
 	if mysql.IsGroupPrimary(groupStatus) {
 		if err := tm.liftOfflineMode(ctx, "MySQL is the primary of its group and serves again"); err != nil {
 			return err

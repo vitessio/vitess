@@ -1031,17 +1031,9 @@ func (s *migrationShard) preflightToGroupReplication(ctx context.Context) error 
 		problems = append(problems, fmt.Sprintf("the primary %v would not be a voting member of the group", topoproto.TabletAliasString(s.primary.Alias)))
 	}
 	if len(voting) < minimumGroupReplicationMembers {
-		problem := fmt.Sprintf("the group would have %d voting members (%s) in cells %s; at least %d are required",
-			len(voting), votersString(s.voters), strings.Join(votingCells(voting), ", "), minimumGroupReplicationMembers)
-		if perCell := grd.MaxVotersPerCell(); perCell > 0 {
-			allowed := fmt.Sprintf("%d voters", perCell)
-			if perCell == 1 {
-				allowed = "one voter"
-			}
-			problem += fmt.Sprintf("; %s allows %s per cell, so the shard needs eligible PRIMARY or REPLICA tablets in at least %d cells",
-				s.run.opts.DurabilityPolicy, allowed, (minimumGroupReplicationMembers+perCell-1)/perCell)
-		}
-		problems = append(problems, problem)
+		problems = append(problems, fmt.Sprintf("the group would have %d voting members (%s) in cells %s; at least %d are required, and %s allows one voter per cell, so the shard needs eligible PRIMARY or REPLICA tablets in at least %d cells",
+			len(voting), votersString(s.voters), strings.Join(votingCells(voting), ", "), minimumGroupReplicationMembers,
+			s.run.opts.DurabilityPolicy, policy.MinGroupReplicationCells))
 	}
 	if len(voting) > policy.MaxGroupReplicationMembers {
 		problems = append(problems, fmt.Sprintf("the group would have %d voting members; at most %d are allowed",
@@ -1058,10 +1050,9 @@ func (s *migrationShard) preflightToGroupReplication(ctx context.Context) error 
 			problems = append(problems, fmt.Sprintf("%v: the tablet record has no MySQL port, through which the other members would reach it", alias))
 		}
 	}
-	if grd.RequiresCrossCellMajority() {
-		if cell, holds := policy.CellHoldsMajority(voting); holds {
-			problems = append(problems, fmt.Sprintf("cell %s would hold a majority of the voting members, which %s does not allow", cell, s.run.opts.DurabilityPolicy))
-		}
+	if cell, holds := policy.CellHoldsMajority(voting); holds {
+		// Only recorded voters that the migration keeps can be in one cell.
+		problems = append(problems, fmt.Sprintf("cell %s would hold a majority of the voting members, which %s does not allow", cell, s.run.opts.DurabilityPolicy))
 	}
 
 	// An existing group must be the primary's group: a re-run continues it, but a group

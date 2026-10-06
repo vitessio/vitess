@@ -269,3 +269,60 @@ func TestPlannedReparentInitialPromotionRefusesTabletWithoutGroupReplication(t *
 		})
 	}
 }
+
+// TestPlannedReparentInitialPromotionRequiresThreeCells checks that the initial promotion of a shard
+// under group_replication_cross_cell refuses, before it changes anything, a shard whose PRIMARY or
+// REPLICA tablets are in fewer than three cells: with one voter per cell, its group would have at most
+// two voters and keep no majority when one of them fails. An RDONLY tablet, which may not be a voter,
+// does not count for its cell.
+func TestPlannedReparentInitialPromotionRequiresThreeCells(t *testing.T) {
+	for _, tt := range []struct {
+		name  string
+		specs []fakeGRTabletSpec
+		// wantErr is a part of the error; empty means that the initial promotion runs.
+		wantErr string
+	}{{
+		name: "the eligible tablets are in two cells",
+		specs: []fakeGRTabletSpec{
+			{cell: "zone1", uid: 101, tabletType: topodatapb.TabletType_REPLICA},
+			{cell: "zone1", uid: 102, tabletType: topodatapb.TabletType_REPLICA},
+			{cell: "zone2", uid: 200, tabletType: topodatapb.TabletType_REPLICA},
+		},
+		wantErr: "shard ks/- has PRIMARY or REPLICA tablets, which group_replication_cross_cell allows as voters, in 2 cells (zone1, zone2); with one voter per cell, its replication group needs them in at least 3 cells",
+	}, {
+		name: "the third cell has only an RDONLY tablet",
+		specs: []fakeGRTabletSpec{
+			{cell: "zone1", uid: 101, tabletType: topodatapb.TabletType_REPLICA},
+			{cell: "zone2", uid: 200, tabletType: topodatapb.TabletType_REPLICA},
+			{cell: "zone3", uid: 300, tabletType: topodatapb.TabletType_RDONLY},
+		},
+		wantErr: "in 2 cells (zone1, zone2)",
+	}, {
+		name: "the eligible tablets are in three cells",
+		specs: []fakeGRTabletSpec{
+			{cell: "zone1", uid: 101, tabletType: topodatapb.TabletType_REPLICA},
+			{cell: "zone2", uid: 200, tabletType: topodatapb.TabletType_REPLICA},
+			{cell: "zone3", uid: 300, tabletType: topodatapb.TabletType_REPLICA},
+		},
+	}} {
+		t.Run(tt.name, func(t *testing.T) {
+			c, ts := newFakeGRCluster(t, policy.DurabilityGroupReplicationCrossCell, tt.specs...)
+			pr := NewPlannedReparenter(ts, c, logutil.NewMemoryLogger())
+			_, err := pr.ReparentShard(t.Context(), "ks", "-", PlannedReparentOptions{
+				NewPrimaryAlias:     mustAlias(t, alias101),
+				WaitReplicasTimeout: 30 * time.Second,
+			})
+			if tt.wantErr == "" {
+				require.NoError(t, err)
+				assert.Equal(t, []string{"InitPrimary(" + alias101 + ")"}, callsWithPrefix(c.mutatingCalls(), "InitPrimary"))
+				assert.Equal(t, []string{alias101, alias200, alias300}, c.voters(t))
+				return
+			}
+			require.Error(t, err)
+			assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+			require.ErrorContains(t, err, tt.wantErr)
+			assert.Empty(t, c.mutatingCalls(), "the initial promotion must change nothing")
+			assert.Empty(t, c.voters(t))
+		})
+	}
+}

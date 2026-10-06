@@ -249,12 +249,15 @@ func (mc *msCluster) shardPrimaryTablet(t *testing.T, shard string) *cluster.Vtt
 // idWriter inserts rows with increasing ids through vtgate, into both shards, and remembers the ids
 // of the writes that were acknowledged.
 type idWriter struct {
-	cancel  context.CancelFunc
-	wg      sync.WaitGroup
-	fail    atomic.Int64
-	mu      sync.Mutex
-	acked   []int64
-	lastErr error
+	cancel context.CancelFunc
+	wg     sync.WaitGroup
+	fail   atomic.Int64
+	mu     sync.Mutex
+	acked  []int64
+	// watcherLag holds the spans of the writes that failed in vtgate's watcher lag, of fail (see
+	// vtgateWatcherLagError).
+	watcherLag []span
+	lastErr    error
 }
 
 func startIDWriter(t *testing.T, mc *msCluster) *idWriter {
@@ -267,14 +270,16 @@ func startIDWriter(t *testing.T, mc *msCluster) *idWriter {
 		for ctx.Err() == nil {
 			if conn == nil {
 				var err error
+				start := time.Now()
 				if conn, err = mysql.Connect(ctx, &params); err != nil {
-					w.failed(err)
+					w.failed(span{start: start, end: time.Now()}, err)
 					continue
 				}
 			}
 			id := mc.lastID.Add(1)
+			start := time.Now()
 			if _, err := conn.ExecuteFetch(fmt.Sprintf("insert into writes (id, val) values (%d, 'x')", id), 0, false); err != nil {
-				w.failed(err)
+				w.failed(span{start: start, end: time.Now()}, err)
 				conn.Close()
 				conn = nil
 				continue
@@ -294,12 +299,23 @@ func startIDWriter(t *testing.T, mc *msCluster) *idWriter {
 	return w
 }
 
-func (w *idWriter) failed(err error) {
+// failed records a failed write, sent and failed within s.
+func (w *idWriter) failed(s span, err error) {
 	w.fail.Add(1)
 	w.mu.Lock()
+	if isWatcherLag(err) {
+		w.watcherLag = append(w.watcherLag, s)
+	}
 	w.lastErr = err
 	w.mu.Unlock()
 	time.Sleep(50 * time.Millisecond)
+}
+
+// watcherLagFailures returns the spans of the writes that failed in vtgate's watcher lag.
+func (w *idWriter) watcherLagFailures() []span {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return slices.Clone(w.watcherLag)
 }
 
 // ackedCount returns the number of acknowledged writes so far.
@@ -366,10 +382,10 @@ func TestGroupReplicationMigratesShardByShard(t *testing.T) {
 		mc.waitBufferCooldown(t)
 		defer func() { mc.lastBuffering = time.Now() }()
 		w := startIDWriter(t, mc)
-		mc.migrate(t, gr, first)
+		migration := timed(func() { mc.migrate(t, gr, first) })
 		mc.waitForShardGroup(t, first, mc.tablets[first][0])
 		acked, fail, lastErr := w.stop()
-		assert.Zero(t, fail, "writes failed during the migration, last error: %v", lastErr)
+		requireNoFailedWrites(t, fail, w.watcherLagFailures(), []span{migration}, lastErr, "during the migration")
 		requireNoLostWrites(t, mc, acked)
 
 		assert.Equal(t, gr, mc.keyspacePolicy(t), "the keyspace names the target policy from the start of the migration")
@@ -416,13 +432,19 @@ func TestGroupReplicationMigratesShardByShard(t *testing.T) {
 		mc.waitBufferCooldown(t)
 		defer func() { mc.lastBuffering = time.Now() }()
 		w := startIDWriter(t, mc)
+		// Each shard's primary pauses once, in its own planned reparent.
+		var reparents []span
 		for _, shard := range msShards {
 			current := mc.shardPrimaryTablet(t, shard)
 			target := mc.tablets[shard][0]
 			if target == current {
 				target = mc.tablets[shard][1]
 			}
-			require.NoError(t, mc.VtctldClientProcess.PlannedReparentShard(msKeyspace, shard, target.Alias))
+			var err error
+			reparents = append(reparents, timed(func() {
+				err = mc.VtctldClientProcess.PlannedReparentShard(msKeyspace, shard, target.Alias)
+			}))
+			require.NoError(t, err)
 			if shard == first {
 				mc.waitForShardGroup(t, shard, target)
 			} else {
@@ -430,7 +452,7 @@ func TestGroupReplicationMigratesShardByShard(t *testing.T) {
 			}
 		}
 		acked, fail, lastErr := w.stop()
-		assert.Zero(t, fail, "writes failed during the planned reparents, last error: %v", lastErr)
+		requireNoFailedWrites(t, fail, w.watcherLagFailures(), reparents, lastErr, "during the planned reparents")
 		requireNoLostWrites(t, mc, acked)
 	})
 
@@ -438,10 +460,10 @@ func TestGroupReplicationMigratesShardByShard(t *testing.T) {
 		mc.waitBufferCooldown(t)
 		defer func() { mc.lastBuffering = time.Now() }()
 		w := startIDWriter(t, mc)
-		mc.migrate(t, gr, second)
+		migration := timed(func() { mc.migrate(t, gr, second) })
 		mc.waitForShardGroup(t, second, mc.shardPrimaryTablet(t, second))
 		acked, fail, lastErr := w.stop()
-		assert.Zero(t, fail, "writes failed during the migration, last error: %v", lastErr)
+		requireNoFailedWrites(t, fail, w.watcherLagFailures(), []span{migration}, lastErr, "during the migration")
 		requireNoLostWrites(t, mc, acked)
 
 		assert.Equal(t, gr, mc.keyspacePolicy(t))
@@ -457,10 +479,10 @@ func TestGroupReplicationMigratesShardByShard(t *testing.T) {
 		defer func() { mc.lastBuffering = time.Now() }()
 		w := startIDWriter(t, mc)
 		primary := mc.shardPrimaryTablet(t, first)
-		mc.migrate(t, semiSync, first)
+		migration := timed(func() { mc.migrate(t, semiSync, first) })
 		mc.waitForSemiSyncShard(t, first, primary)
 		acked, fail, lastErr := w.stop()
-		assert.Zero(t, fail, "writes failed during the migration back, last error: %v", lastErr)
+		requireNoFailedWrites(t, fail, w.watcherLagFailures(), []span{migration}, lastErr, "during the migration back")
 		requireNoLostWrites(t, mc, acked)
 
 		assert.Equal(t, gr, mc.keyspacePolicy(t), "the keyspace keeps its policy while a shard runs its group")
@@ -503,10 +525,10 @@ func TestGroupReplicationMigratesShardByShard(t *testing.T) {
 		defer func() { mc.lastBuffering = time.Now() }()
 		w := startIDWriter(t, mc)
 		primary := mc.shardPrimaryTablet(t, second)
-		mc.migrate(t, semiSync, second)
+		migration := timed(func() { mc.migrate(t, semiSync, second) })
 		mc.waitForSemiSyncShard(t, second, primary)
 		acked, fail, lastErr := w.stop()
-		assert.Zero(t, fail, "writes failed during the migration back, last error: %v", lastErr)
+		requireNoFailedWrites(t, fail, w.watcherLagFailures(), []span{migration}, lastErr, "during the migration back")
 		requireNoLostWrites(t, mc, acked)
 
 		assert.Equal(t, semiSync, mc.keyspacePolicy(t))

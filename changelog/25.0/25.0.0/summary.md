@@ -121,10 +121,7 @@ See [#19918](https://github.com/vitessio/vitess/issues/19918).
 
 A shard can now replicate with MySQL Group Replication in single-primary mode instead of asynchronous replication with semi-sync. The group acknowledges a commit once a majority of its voting members accepted it, fences a primary that lost its majority, and elects a new primary on its own; Vitess keeps the topology, vtgate's routing and buffering, `PlannedReparentShard`, `EmergencyReparentShard` and VTOrc in step with the group.
 
-Group Replication is selected with a durability policy, like `semi_sync` and `cross_cell`:
-
-- `group_replication`: up to nine voting members, any cell.
-- `group_replication_cross_cell`: one voting member per cell; the shard keeps its primary through the loss of a cell.
+Group Replication is selected with the `group_replication_cross_cell` durability policy, like `semi_sync` and `cross_cell`: one voting member per cell, up to nine, so the shard keeps its primary through the loss of a cell. A shard needs `PRIMARY` or `REPLICA` tablets in at least three cells: `PlannedReparentShard`, `InitShardPrimary` and `MigrateReplicationMode` refuse a shard with fewer, and VTOrc reports it as `GroupVotersBelowTarget` instead of starting its group.
 
 Additional `REPLICA` tablets and all `RDONLY` tablets replicate asynchronously from the group's primary.
 
@@ -132,7 +129,8 @@ To use it:
 
 - Start every `vttablet` of the keyspace with `--enable-group-replication` (MySQL 8.4 with the `group_replication` plugin). The tablet derives the group's configuration from the topology and applies `--group-replication-consistency` (default `BEFORE_ON_PRIMARY_FAILOVER`), `--group-replication-exit-state-action` (default `READ_ONLY`) and `--group-replication-autorejoin-tries` (default `0`) before its MySQL joins the group.
 - Convert an existing semi-sync keyspace online, shard by shard, with `vtctldclient MigrateReplicationMode`, which also converts it back. The keyspace's durability policy changes before the first shard is converted, so components that do not support Group Replication stop acting on the keyspace.
-- VTOrc waits `--group-replication-failover-grace-period` (default `30s`) for the group to elect a new primary before it runs an emergency reparent, and replaces a voting member that has been unreachable for `--group-replication-voter-replacement-grace-period` (default `1m`).
+- VTOrc waits `--group-replication-failover-grace-period` (default `30s`) for the group to elect a new primary before it runs an emergency reparent. It gives the seat of a voting member that has been unreachable for `--group-replication-voter-replacement-grace-period` (default `1m`) to another `REPLICA` of its cell, and gives a seat to a `REPLICA` of a cell that has no voting member; otherwise it reports `GroupVoterUnreplaceable` or `GroupVotersBelowTarget`.
+- To remove a voting member for good, for example to decommission its cell, delete its tablet record with `vtctldclient DeleteTablets`: VTOrc swaps it for another `REPLICA` of its cell, or removes it from the group. This also unblocks a shard whose group lost its majority while that member is gone for good: VTOrc bootstraps the group from the remaining members. Transactions that only the deleted member held are lost, as with a forced `EmergencyReparentShard`; a member whose MySQL is still in the group is kept, with the alert `GroupVoterRecordDeleted`. Deleting the record of the live primary needs `DeleteTablets --allow-primary`: VTOrc then moves the primary role to another member, within about one recovery cycle, and what the deleted primary acknowledged until then can be lost if it crashes before and the group is then bootstrapped without it.
 
 Upgrade every `vtctld`, VTOrc and `vttablet` before converting a keyspace, and keep at least one VTOrc of this version running. Do not downgrade a component that serves a Group Replication keyspace: convert the keyspace back to semi-sync first. `SetKeyspaceDurabilityPolicy` refuses to switch an initialized keyspace between semi-sync and Group Replication; use `MigrateReplicationMode`.
 

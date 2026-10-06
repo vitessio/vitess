@@ -257,7 +257,67 @@ func waitForGroup(t *testing.T, tc *testCluster, primary *cluster.Vttablet, memb
 	}, waitTimeout, pollInterval)
 }
 
-// writer inserts rows through vtgate until stopped and counts the failures.
+// vtgateWatcherLagError is the error with which vtgate fails a write that it routes after its health
+// check saw the primary stop serving, but before its keyspace event watcher did: the gateway finds no
+// serving primary, the watcher does not ask for buffering yet, and the gateway's retries, which do not
+// wait, all fail the same way. The window is the watcher's processing lag behind the health check, and
+// opens at every planned pause of the primary (see "The migration's pauses and vtgate's buffer" in the
+// design). Upstream's TestInconsistentStateDetectedBuffering (go/vt/vtgate) reproduces it.
+const vtgateWatcherLagError = "inconsistent state detected, primary is serving but initially found no available tablet"
+
+// maxWatcherLagFailures is how many writes a planned pause of the primary may fail with
+// vtgateWatcherLagError: the writers send one write at a time, and the window opens once per pause.
+const maxWatcherLagFailures = 1
+
+// span is a stretch of time: the call that makes a planned pause of the primary, or a write, from
+// when it was sent until it failed.
+type span struct{ start, end time.Time }
+
+// overlaps returns whether the two spans share an instant.
+func (s span) overlaps(o span) bool {
+	return !s.end.Before(o.start) && !o.end.Before(s.start)
+}
+
+// timed runs f, a call that makes one planned pause of the primary, such as a planned reparent or a
+// migration step, and returns its span: the pause starts and ends within it.
+func timed(f func()) span {
+	start := time.Now()
+	f()
+	return span{start: start, end: time.Now()}
+}
+
+// requireNoFailedWrites checks that no write failed during the planned pauses of the primary, other
+// than in vtgate's watcher lag (vtgateWatcherLagError), which the design does not cover: such a
+// failure must overlap the call that made one of the pauses, and each pause may cause at most
+// maxWatcherLagFailures of them.
+func requireNoFailedWrites(t *testing.T, fail int64, watcherLag []span, pauses []span, lastErr error, during string) {
+	t.Helper()
+	require.NotEmpty(t, pauses)
+	assert.Zero(t, fail-int64(len(watcherLag)), "writes failed %s, last error: %v", during, lastErr)
+	perPause := make([]int, len(pauses))
+	for _, w := range watcherLag {
+		i := slices.IndexFunc(pauses, w.overlaps)
+		if !assert.NotEqual(t, -1, i, "a write failed %s in vtgate's watcher lag outside the planned pauses of the primary: sent %v, failed %v, pauses %v",
+			during, w.start, w.end, pauses) {
+			continue
+		}
+		perPause[i]++
+	}
+	for i, n := range perPause {
+		assert.LessOrEqual(t, n, maxWatcherLagFailures, "writes failed %s in vtgate's watcher lag during pause %d of %d", during, i+1, len(pauses))
+	}
+	if len(watcherLag) > 0 {
+		t.Logf("%d writes failed %s in vtgate's watcher lag (%d pauses): %s", len(watcherLag), during, len(pauses), vtgateWatcherLagError)
+	}
+}
+
+// isWatcherLag returns whether a write failed in vtgate's watcher lag.
+func isWatcherLag(err error) bool {
+	return err != nil && strings.Contains(err.Error(), vtgateWatcherLagError)
+}
+
+// writer inserts rows through vtgate until stopped, counts the failures and remembers the ids of the
+// acknowledged writes.
 type writer struct {
 	cancel   context.CancelFunc
 	wg       sync.WaitGroup
@@ -266,6 +326,9 @@ type writer struct {
 	longest atomic.Int64
 	mu      sync.Mutex
 	lastErr error
+	// watcherLag holds the spans of the writes that failed in vtgate's watcher lag, of fail.
+	watcherLag []span
+	acked      []int64
 }
 
 func startWriter(t *testing.T, tc *testCluster) *writer {
@@ -277,21 +340,25 @@ func startWriter(t *testing.T, tc *testCluster) *writer {
 		for ctx.Err() == nil {
 			if conn == nil {
 				var err error
+				start := time.Now()
 				conn, err = mysql.Connect(ctx, &params)
 				if err != nil {
-					w.record(err)
+					w.failed(span{start: start, end: time.Now()}, err)
 					continue
 				}
 			}
 			start := time.Now()
-			_, err := conn.ExecuteFetch("insert into writes (val) values ('x')", 0, false)
+			qr, err := conn.ExecuteFetch("insert into writes (val) values ('x')", 0, false)
 			w.observe(time.Since(start))
 			if err != nil {
-				w.record(err)
+				w.failed(span{start: start, end: time.Now()}, err)
 				conn.Close()
 				conn = nil
 				continue
 			}
+			w.mu.Lock()
+			w.acked = append(w.acked, int64(qr.InsertID))
+			w.mu.Unlock()
 			w.ok.Add(1)
 			select {
 			case <-ctx.Done():
@@ -320,12 +387,30 @@ func (w *writer) longestWrite() time.Duration {
 	return time.Duration(w.longest.Load())
 }
 
-func (w *writer) record(err error) {
+// failed records a failed write, sent and failed within s.
+func (w *writer) failed(s span, err error) {
 	w.fail.Add(1)
 	w.mu.Lock()
+	if isWatcherLag(err) {
+		w.watcherLag = append(w.watcherLag, s)
+	}
 	w.lastErr = err
 	w.mu.Unlock()
 	time.Sleep(50 * time.Millisecond)
+}
+
+// watcherLagFailures returns the spans of the writes that failed in vtgate's watcher lag.
+func (w *writer) watcherLagFailures() []span {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return slices.Clone(w.watcherLag)
+}
+
+// ackedIDs returns the ids of the acknowledged writes.
+func (w *writer) ackedIDs() []int64 {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return slices.Clone(w.acked)
 }
 
 func (w *writer) stop() (ok, fail int64, lastErr error) {
@@ -370,11 +455,11 @@ func bufferStats(t *testing.T, tc *testCluster) (starts int, stops map[string]in
 // checkMigrationWrites checks that no write failed during a migration step, and that none waited
 // for long: vtgate buffered the writes only while the primary paused, and never until
 // --buffer-max-failover-duration.
-func checkMigrationWrites(t *testing.T, tc *testCluster, w *writer, startsBefore int, stopsBefore map[string]int) {
+func checkMigrationWrites(t *testing.T, tc *testCluster, w *writer, migration span, startsBefore int, stopsBefore map[string]int) {
 	t.Helper()
 	ok, fail, lastErr := w.stop()
 	assert.Positive(t, ok)
-	assert.Zero(t, fail, "writes failed during the migration, last error: %v", lastErr)
+	requireNoFailedWrites(t, fail, w.watcherLagFailures(), []span{migration}, lastErr, "during the migration")
 	starts, stops := bufferStats(t, tc)
 	t.Logf("longest write %v, %d writes, vtgate buffered %d times, stopped buffering: %v (before: %v)",
 		w.longestWrite(), ok, starts-startsBefore, stops, stopsBefore)
@@ -399,6 +484,29 @@ func rowCount(t *testing.T, tablet *cluster.Vttablet) (int, error) {
 		return 0, err
 	}
 	return qr.Rows[0][0].ToInt()
+}
+
+// requireAckedWrites checks that every acknowledged write, by its id, is in the tablet's MySQL.
+func requireAckedWrites(t *testing.T, tablet *cluster.Vttablet, acked []int64) {
+	t.Helper()
+	conn, err := tablet.VttabletProcess.TabletConn(keyspaceName, true)
+	require.NoError(t, err)
+	defer conn.Close()
+	qr, err := conn.ExecuteFetch("select id from writes", 1000000, false)
+	require.NoError(t, err)
+	present := make(map[int64]bool, len(qr.Rows))
+	for _, row := range qr.Rows {
+		id, err := row[0].ToInt64()
+		require.NoError(t, err)
+		present[id] = true
+	}
+	var lost []int64
+	for _, id := range acked {
+		if !present[id] {
+			lost = append(lost, id)
+		}
+	}
+	assert.Empty(t, lost, "acknowledged writes missing from %s, of %d acknowledged", tablet.Alias, len(acked))
 }
 
 // superReadOnlyActionEnabled returns whether the member action mysql_disable_super_read_only_if_primary
@@ -457,12 +565,16 @@ func TestGroupReplicationLifecycle(t *testing.T) {
 	t.Run("migrate from semi-sync to group replication without failing writes", func(t *testing.T) {
 		startsBefore, stopsBefore := bufferStats(t, tc)
 		w := startWriter(t, tc)
-		out, err := tc.VtctldClientProcess.ExecuteCommandWithOutput("MigrateReplicationMode",
-			"--durability-policy", policy.DurabilityGroupReplicationCrossCell, keyspaceName)
+		var out string
+		var err error
+		migration := timed(func() {
+			out, err = tc.VtctldClientProcess.ExecuteCommandWithOutput("MigrateReplicationMode",
+				"--durability-policy", policy.DurabilityGroupReplicationCrossCell, keyspaceName)
+		})
 		require.NoError(t, err, out)
 		waitForGroup(t, tc, primary, tc.replicas)
-		// The primary pauses while its MySQL bootstraps the group.
-		checkMigrationWrites(t, tc, w, startsBefore, stopsBefore)
+		// The primary pauses once, while its MySQL bootstraps the group.
+		checkMigrationWrites(t, tc, w, migration, startsBefore, stopsBefore)
 
 		ks, err := tc.VtctldClientProcess.GetKeyspace(keyspaceName)
 		require.NoError(t, err)
@@ -492,12 +604,16 @@ func TestGroupReplicationLifecycle(t *testing.T) {
 	t.Run("planned reparent switches the group primary", func(t *testing.T) {
 		w := startWriter(t, tc)
 		newPrimary := tc.replicas[1]
-		require.NoError(t, tc.VtctldClientProcess.PlannedReparentShard(keyspaceName, shardName, newPrimary.Alias))
+		var err error
+		reparent := timed(func() {
+			err = tc.VtctldClientProcess.PlannedReparentShard(keyspaceName, shardName, newPrimary.Alias)
+		})
+		require.NoError(t, err)
 		waitForGroup(t, tc, newPrimary, tc.replicas)
 		primary = newPrimary
 		ok, fail, lastErr := w.stop()
 		// vtgate buffers writes while the primary switches.
-		assert.Zero(t, fail, "writes failed during the planned reparent, last error: %v", lastErr)
+		requireNoFailedWrites(t, fail, w.watcherLagFailures(), []span{reparent}, lastErr, "during the planned reparent")
 		assert.Positive(t, ok)
 		waitForRowCounts(t, tc, primary)
 	})
@@ -549,8 +665,12 @@ func TestGroupReplicationLifecycle(t *testing.T) {
 	t.Run("migrate back to semi-sync without failing writes", func(t *testing.T) {
 		startsBefore, stopsBefore := bufferStats(t, tc)
 		w := startWriter(t, tc)
-		out, err := tc.VtctldClientProcess.ExecuteCommandWithOutput("MigrateReplicationMode",
-			"--durability-policy", policy.DurabilityCrossCell, keyspaceName)
+		var out string
+		var err error
+		migration := timed(func() {
+			out, err = tc.VtctldClientProcess.ExecuteCommandWithOutput("MigrateReplicationMode",
+				"--durability-policy", policy.DurabilityCrossCell, keyspaceName)
+		})
 		require.NoError(t, err, out)
 
 		require.EventuallyWithT(t, func(c *assert.CollectT) {
@@ -567,8 +687,8 @@ func TestGroupReplicationLifecycle(t *testing.T) {
 				assert.Equal(c, int32(primary.MySQLPort), status.ReplicationStatus.SourcePort, voter.Alias)
 			}
 		}, waitTimeout, pollInterval)
-		// The primary pauses while its MySQL leaves the group.
-		checkMigrationWrites(t, tc, w, startsBefore, stopsBefore)
+		// The primary pauses once, while its MySQL leaves the group.
+		checkMigrationWrites(t, tc, w, migration, startsBefore, stopsBefore)
 		waitForRowCounts(t, tc, primary)
 	})
 }

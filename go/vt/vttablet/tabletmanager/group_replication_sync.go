@@ -278,9 +278,9 @@ func (s *groupReplicationSync) reconcile(ctx context.Context) {
 // not a listed voter, so that it must leave the group: such a member counts in the certification
 // majority of its view, which then need not hold a majority of the voters, and the group may elect it.
 // A join that started while the tablet was a voter completes after the list dropped it (MySQL
-// finishes a START whose client gave up), and VTOrc's GroupVotersOutOfDate only makes it leave on its
-// next pass. The group primary stays: VTOrc gives it a seat, and its tablet does not serve until then
-// (groupReplicationNotVoter). Nor does a member leave whose group would not keep a majority of its
+// finishes a START whose client gave up); VTOrc never makes a member leave. The group primary stays:
+// VTOrc moves the group primary to a voter (GroupPrimaryNotVoter), and its tablet does not serve
+// meanwhile (groupReplicationNotVoter). Nor does a member leave whose group would not keep a majority of its
 // members without it: MySQL's leave then waits for a majority that is not there. Nor a PRIMARY or
 // transitional tablet, nor one that takes a backup.
 func (s *groupReplicationSync) shouldLeaveAsNonVoter(ctx context.Context, status *replicationdatapb.GroupReplicationStatus, durability policy.Durabler, tablet *topodatapb.Tablet) bool {
@@ -311,8 +311,8 @@ func memberMayLeave(status *replicationdatapb.GroupReplicationStatus) bool {
 }
 
 // leaveAsNonVoter makes MySQL leave its group, under the action lock, after it read MySQL's status and
-// the voter list again, fresh: a tablet that VTOrc gave a seat meanwhile stays, so that the leave does
-// not undo VTOrc's change. The tablet then replicates asynchronously, as every tablet that is not a
+// the voter list again, fresh: a tablet that the list gained meanwhile stays, so that the leave does
+// not undo the change. The tablet then replicates asynchronously, as every tablet that is not a
 // voter, once VTOrc points it at the primary (NotConnectedToPrimary).
 func (s *groupReplicationSync) leaveAsNonVoter(ctx context.Context) {
 	tm := s.tm
@@ -847,6 +847,11 @@ func (s *groupReplicationSync) servingReason(ctx context.Context, status *replic
 // holds it may be changing MySQL's group (a bootstrap), and the next run decides after it.
 func (s *groupReplicationSync) serveAgain(ctx context.Context, durability policy.Durabler, rec *shardGroupRecord) {
 	tm := s.tm
+	// Read before the action lock, so that it is never held across a topology read.
+	if err := tm.checkOwnTabletRecord(ctx); err != nil {
+		log.Warn("Group replication sync: the primary does not serve again", slog.Any("error", err))
+		return
+	}
 	if !tm.actionSema.TryAcquire(1) {
 		return
 	}

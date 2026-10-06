@@ -70,9 +70,9 @@ func TestGroupReplicationNonVoterGroupPrimaryDoesNotServe(t *testing.T) {
 	reason, _ := tm.tmState.GroupReplicationNotServingState()
 	assert.Equal(t, groupReplicationNotVoter, reason)
 	_, stops, _ := fmd.GroupReplicationCalls()
-	assert.Zero(t, stops, "the group primary does not leave its group: VTOrc gives it a seat")
+	assert.Zero(t, stops, "the group primary does not leave its group: VTOrc moves the group primary to a voter")
 
-	// VTOrc gave tablet 1 a seat.
+	// The voter list gains tablet 1 (for example, an operator rewrote it).
 	setGroupReplicationVoters(t, ts, 1, 2)
 	s.recordRead = time.Time{}
 	s.reconcile(ctx)
@@ -144,7 +144,7 @@ func TestGroupReplicationLeaveAsNonVoterReadsVotersFresh(t *testing.T) {
 	setGroupReplicationVoters(t, ts, 2, 3)
 	fmd.SetGroupReplicationStatus(nonVoterView(2))
 	s := newGroupReplicationSync(tm)
-	// The loop read the voters before VTOrc gave tablet 1 a seat.
+	// The loop read the voters before the list gained tablet 1.
 	voters, err := s.getVoters(t.Context())
 	require.NoError(t, err)
 	require.Len(t, voters, 2)
@@ -152,7 +152,7 @@ func TestGroupReplicationLeaveAsNonVoterReadsVotersFresh(t *testing.T) {
 
 	s.reconcile(t.Context())
 	_, stops, _ := fmd.GroupReplicationCalls()
-	assert.Zero(t, stops, "a tablet that VTOrc gave a seat stays in the group")
+	assert.Zero(t, stops, "a tablet that the list gained stays in the group")
 }
 
 // TestGroupReplicationVoterListDropFencesServingPrimary reproduces the TLA+ model's
