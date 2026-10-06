@@ -611,6 +611,31 @@ func TestGetDetectionAnalysisGroupReplication(t *testing.T) {
 			notWant:           []AnalysisCode{GroupNotBootstrapped},
 		},
 		{
+			// The production state of TestGroupReplicationBootstrapsAfterDeletedVoter: the primary's
+			// tablet demoted itself when its group lost the majority, so the shard has a primary term
+			// but no PRIMARY tablet, and VTOrc's last check of the deleted voter, before it died, saw an
+			// ONLINE member. That stale state must not make the shard look like it has a group: the
+			// emergency reparent of PrimaryTabletDeleted, which wins over the voter change, cannot
+			// succeed while no group runs.
+			name: "no group runs and a voter that is down has no tablet record, as last seen ONLINE, while the shard has no PRIMARY tablet: it is removed",
+			rows: func() []*test.InfoForRecoveryAnalysis {
+				rows := inIncarnation("1790000001",
+					member(grRow(replica, gr), mysql.GroupMemberStateError, "", false, nil),
+					member(grRow(crossCellReplica, gr), mysql.GroupMemberStateOffline, "", false, nil),
+					member(deletedVoter(thirdCellReplica, gr, false), mysql.GroupMemberStateOnline, mysql.GroupMemberRoleSecondary, true, replica),
+				)
+				for _, row := range rows {
+					row.ShardPrimaryTermTimestamp = "2026-09-30 18:10:00.000000 +0000 UTC"
+				}
+				return rows
+			},
+			voterGracePeriod:  -1,
+			voters:            []*topodatapb.Tablet{replica, crossCellReplica, thirdCellReplica},
+			want:              map[string]AnalysisCode{"zone2-0000000200": GroupVotersOutOfDate},
+			wantDesiredVoters: []*topodatapb.Tablet{replica, crossCellReplica},
+			notWant:           []AnalysisCode{PrimaryTabletDeleted, ClusterHasNoPrimary},
+		},
+		{
 			// VTOrc keeps discovering it, and reaches it: its tablet gets no analysis of its own.
 			name: "no group runs and a voter whose vttablet runs has no tablet record: an alert, it stays",
 			rows: func() []*test.InfoForRecoveryAnalysis {

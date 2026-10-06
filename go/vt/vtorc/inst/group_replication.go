@@ -209,6 +209,7 @@ type groupReplicationShardState struct {
 	// group must not be bootstrapped. Nor right away while a START runs: its member reports OFFLINE,
 	// for up to about a minute when it finds no group, and can still end as the primary of a group
 	// of its own, next to the one a bootstrap creates; MySQL also refuses to stop it until it ends.
+	// A voter whose tablet record was deleted counts only while VTOrc reaches it.
 	anyActive bool
 	// anyMember is anyActive without the STARTs in progress: whether any tablet last reported an
 	// active member.
@@ -264,11 +265,17 @@ func computeGroupReplicationShardState(durability policy.Durabler, incarnation s
 		if row.valid && !row.deleted {
 			reachable[topoproto.TabletAliasString(row.tablet.GetAlias())] = true
 		}
-		if row.active {
+		// The state that VTOrc last saw on a voter whose tablet record was deleted, and that it no longer
+		// reaches, is not a member: the operator's deletion hands it to the voter planner, which removes
+		// it once it is down (DeletedVoter.Down) or keeps it with an alert. It would otherwise make a
+		// shard where no group runs look like one with a group, whose missing PRIMARY tablet an
+		// emergency reparent would replace, in vain and ahead of the voter change.
+		staleDeleted := row.deleted && !row.valid
+		if row.active && !staleDeleted {
 			state.anyActive = true
 			state.anyMember = true
 		}
-		if row.startInProgress && GroupStartInProgressBlocksBootstrap(row.tablet.GetAlias(), now) {
+		if row.startInProgress && !staleDeleted && GroupStartInProgressBlocksBootstrap(row.tablet.GetAlias(), now) {
 			state.anyActive = true
 		}
 		if row.valid && !row.active && row.tablet.GetType() == topodatapb.TabletType_PRIMARY {
