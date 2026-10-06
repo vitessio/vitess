@@ -316,16 +316,8 @@ func (rs *rowStreamer) buildSelect(st *binlogdatapb.MinimalTable) (string, error
 					writeLastPKValue(buf, lastpk[i])
 					buf.Myprintf(" and ")
 				}
-<<<<<<< HEAD
 				buf.Myprintf("%v > ", sqlparser.NewIdentifierCI(rs.plan.Table.Fields[rs.pkColumns[lastcol]].Name))
-				rs.lastpk[lastcol].EncodeSQL(buf)
-||||||| parent of 937bb2274c (VStreamer: Validate provided LastPK value (#21377))
-				buf.Myprintf("%v > ", sqlparser.NewIdentifierCI(rs.plan.Table.Fields[pkCol].Name))
-				rs.lastpk[lastcol].EncodeSQL(buf)
-=======
-				buf.Myprintf("%v > ", sqlparser.NewIdentifierCI(rs.plan.Table.Fields[pkCol].Name))
 				writeLastPKValue(buf, lastpk[lastcol])
->>>>>>> 937bb2274c (VStreamer: Validate provided LastPK value (#21377))
 				buf.Myprintf(")")
 			}
 		}
