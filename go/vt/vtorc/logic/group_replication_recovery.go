@@ -1122,6 +1122,9 @@ func updateGroupReplicationVoters(ctx context.Context, analysisEntry *inst.Detec
 		return true, topologyRecovery, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "the replication group of %s is not active with quorum, its voters must keep their seats", keyspaceShard)
 	}
 	selection := inst.SelectGroupReplicationVoters(grd, current, observations, time.Now())
+	if selection.BelowTarget != "" {
+		return true, topologyRecovery, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "not selecting the voters of %s: %s", keyspaceShard, selection.BelowTarget)
+	}
 	if len(selection.Voters) == 0 {
 		return true, topologyRecovery, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no tablet of %s can be a voter", keyspaceShard)
 	}

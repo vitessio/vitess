@@ -201,6 +201,10 @@ type GroupVoterSelection struct {
 	// lacks a majority of the current voters would hold a majority of them: Voters are then the
 	// current voters, and KeptReason says why (see voterChangeRefusal).
 	KeptReason string
+	// BelowTarget is set when no voter is listed yet and SelectVoters chose fewer than
+	// policy.MinGroupReplicationCells voters, one per cell: the shard's group would keep no majority
+	// when one of them fails. Voters is then empty, and BelowTarget says why (GroupVotersBelowTarget).
+	BelowTarget string
 }
 
 // IsActive returns whether the tablet's MySQL is an active member of the shard's group, as far as
@@ -227,6 +231,9 @@ func (s *GroupVoterSelection) IsActive(alias *topodatapb.TabletAlias) bool {
 //     voter in its cell while it is still a member.
 //   - A voter that takes a backup or restores one keeps its seat, although its tablet type makes
 //     it ineligible while it does.
+//   - No initial list has fewer than policy.MinGroupReplicationCells voters: while no voter is listed
+//     and the shard's tablets that may be voters are in fewer cells, Voters is empty and BelowTarget
+//     says why.
 //   - The current voters are kept when a view of the group that lacks a majority of them would hold
 //     a majority of the selected voters (see voterChangeRefusal). The selection is the only place
 //     that decides the list: the analysis (GroupVotersOutOfDate) and the recovery that writes it
@@ -283,6 +290,17 @@ func SelectGroupReplicationVoters(durability policy.GroupReplicationDurabler, cu
 		selection.Candidates = append(selection.Candidates, candidate)
 	}
 	selection.Voters = policy.SelectVoters(durability, current, groupPrimary, selection.Candidates)
+	if len(current) == 0 && len(selection.Voters) < policy.MinGroupReplicationCells {
+		cells := make([]string, 0, len(selection.Voters))
+		for _, voter := range selection.Voters {
+			cells = append(cells, voter.Cell)
+		}
+		selection.BelowTarget = fmt.Sprintf("the durability policy selects %d voters ([%s]), one per cell with a PRIMARY or REPLICA tablet that has not failed (cells [%s]); "+
+			"the shard needs them in at least %d cells, so that its replication group keeps a majority when one voter fails",
+			len(selection.Voters), formatGroupReplicationVoters(selection.Voters), strings.Join(cells, ", "), policy.MinGroupReplicationCells)
+		selection.Voters = nil
+		return selection
+	}
 	if reason := voterChangeRefusal(current, selection.Voters, observations); reason != "" {
 		selection.Voters = slices.Clone(current)
 		slices.SortFunc(selection.Voters, func(a, b *topodatapb.TabletAlias) int {
@@ -481,8 +499,12 @@ type groupReplicationShardState struct {
 	votersOutOfDate bool
 	// votersReporter is the tablet on which GroupVotersOutOfDate is reported: the group primary's
 	// tablet if VTOrc reached it, else the reachable tablet with the lowest alias. Only PRIMARY and
-	// replica type tablets qualify, because only they are analyzed.
+	// replica type tablets qualify, because only they are analyzed. GroupVotersBelowTarget is
+	// reported on the same tablet.
 	votersReporter *topodatapb.TabletAlias
+	// votersBelowTarget is true when no voter is listed and VTOrc selects none, because the shard's
+	// tablets that may be voters are in too few cells (GroupVotersBelowTarget).
+	votersBelowTarget bool
 }
 
 // computeGroupReplicationShardState aggregates the Group Replication state of the tablets of a
@@ -606,6 +628,11 @@ func computeGroupReplicationVoters(state *groupReplicationShardState, durability
 		})
 	}
 	selection := SelectGroupReplicationVoters(grd, state.voters, observations, now)
+	if selection.BelowTarget != "" {
+		state.votersBelowTarget = true
+		state.votersReporter = groupVotersReporter(rows)
+		return
+	}
 	if len(selection.Voters) == 0 {
 		// An empty list means that no voter was selected. Never write one.
 		return
@@ -618,22 +645,28 @@ func computeGroupReplicationVoters(state *groupReplicationShardState, durability
 			state.votersOutOfDate = true
 		}
 	}
-	if !state.votersOutOfDate {
-		return
+	if state.votersOutOfDate {
+		state.votersReporter = groupVotersReporter(rows)
 	}
-	// Only PRIMARY and replica type tablets are analyzed.
+}
+
+// groupVotersReporter returns the tablet on which the shard-wide voter analyses are reported: the
+// group primary's tablet if VTOrc reached it, else the reachable tablet with the lowest alias. Only
+// PRIMARY and replica type tablets qualify, because only they are analyzed.
+func groupVotersReporter(rows []*groupReplicationRow) *topodatapb.TabletAlias {
+	var reporter *topodatapb.TabletAlias
 	for _, row := range rows {
 		if !row.valid || (row.tablet.GetType() != topodatapb.TabletType_PRIMARY && !topo.IsReplicaType(row.tablet.GetType())) {
 			continue
 		}
 		if row.groupPrimary {
-			state.votersReporter = row.tablet.GetAlias()
-			return
+			return row.tablet.GetAlias()
 		}
-		if state.votersReporter == nil || topoproto.TabletAliasString(row.tablet.GetAlias()) < topoproto.TabletAliasString(state.votersReporter) {
-			state.votersReporter = row.tablet.GetAlias()
+		if reporter == nil || topoproto.TabletAliasString(row.tablet.GetAlias()) < topoproto.TabletAliasString(reporter) {
+			reporter = row.tablet.GetAlias()
 		}
 	}
+	return reporter
 }
 
 // applyGroupReplicationShardState copies the shard-wide Group Replication state into an analysis.
@@ -658,6 +691,7 @@ func applyGroupReplicationShardState(a *DetectionAnalysis, state *groupReplicati
 	a.shardGroupAnyMember = state.anyMember
 	a.shardReachableNonMemberPrimary = state.reachableNonMemberPrimary
 	a.isGroupVotersReporter = state.votersOutOfDate && topoproto.TabletAliasEqual(state.votersReporter, a.AnalyzedInstanceAlias)
+	a.isGroupVotersBelowTargetReporter = state.votersBelowTarget && topoproto.TabletAliasEqual(state.votersReporter, a.AnalyzedInstanceAlias)
 }
 
 // replicatesThroughGroup returns whether the analyzed tablet replicates through its shard's group

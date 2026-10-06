@@ -602,6 +602,16 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 	},
 	{
 		Meta: &DetectionAnalysisProblemMeta{
+			Analysis:    GroupVotersBelowTarget,
+			Description: "The shard's replication group has no voters, and its tablets that may be voters are in too few cells to select them",
+			Priority:    detectionAnalysisPriorityMedium,
+		},
+		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
+			return policy.IsGroupReplication(ca.durability) && a.LastCheckValid && a.isGroupVotersBelowTargetReporter
+		},
+	},
+	{
+		Meta: &DetectionAnalysisProblemMeta{
 			Analysis:    GroupCellMajority,
 			Description: "A single cell holds a majority of the ONLINE members of the shard's replication group",
 			Priority:    detectionAnalysisPriorityLow,

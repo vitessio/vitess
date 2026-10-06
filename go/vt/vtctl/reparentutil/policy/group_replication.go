@@ -17,6 +17,7 @@ limitations under the License.
 package policy
 
 import (
+	"slices"
 	"sort"
 
 	"github.com/google/uuid"
@@ -116,6 +117,22 @@ func IsGroupMember(durability Durabler, tablet *topodatapb.Tablet) bool {
 		return false
 	}
 	return grd.IsGroupMember(tablet)
+}
+
+// EligibleCells returns the sorted names of the cells that have a tablet the policy allows as a
+// voter. With one voter per cell, a shard's group has at most that many voters.
+func EligibleCells(durability GroupReplicationDurabler, tablets []*topodatapb.Tablet) []string {
+	var cells []string
+	for _, tablet := range tablets {
+		if tablet == nil || tablet.Alias == nil || !durability.IsGroupMember(tablet) {
+			continue
+		}
+		if !slices.Contains(cells, tablet.Alias.Cell) {
+			cells = append(cells, tablet.Alias.Cell)
+		}
+	}
+	slices.Sort(cells)
+	return cells
 }
 
 // groupNameNamespace is the UUIDv5 namespace of Vitess group replication group names.

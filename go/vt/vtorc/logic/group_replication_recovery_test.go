@@ -178,6 +178,12 @@ func TestGetCheckAndRecoverFunctionCodeGroupReplication(t *testing.T) {
 			wantFunc:      noRecoveryFunc,
 			wantSkipCode:  RecoverySkipNoRecoveryAction,
 		},
+		{
+			name:          "GroupVotersBelowTarget has no recovery",
+			analysisEntry: entry(inst.GroupVotersBelowTarget, 0, ""),
+			wantFunc:      noRecoveryFunc,
+			wantSkipCode:  RecoverySkipNoRecoveryAction,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1408,6 +1414,7 @@ func TestUpdateGroupReplicationVoters(t *testing.T) {
 	replica := recoveryTablet("zone1", 100, topodatapb.TabletType_REPLICA)
 	crossCellVoter := recoveryTablet("zone2", 200, topodatapb.TabletType_REPLICA)
 	crossCellReplica := recoveryTablet("zone2", 201, topodatapb.TabletType_REPLICA)
+	thirdCellReplica := recoveryTablet("zone3", 300, topodatapb.TabletType_REPLICA)
 
 	type expectations struct {
 		mockTMC *tmcmock.MockTabletManagerClient
@@ -1530,13 +1537,26 @@ func TestUpdateGroupReplicationVoters(t *testing.T) {
 		},
 		{
 			name:    "no voter is selected and no group exists: the voters are selected",
+			tablets: []*topodatapb.Tablet{replica, primary, crossCellVoter, thirdCellReplica},
+			setup: func(t *testing.T, e expectations) {
+				for _, tablet := range []*topodatapb.Tablet{replica, primary, crossCellVoter, thirdCellReplica} {
+					e.mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(tablet)).Return(notMemberStatus(tablet), nil)
+				}
+			},
+			wantVoters: []string{"zone1-0000000100", "zone2-0000000200", "zone3-0000000300"},
+		},
+		{
+			// With one voter per cell, a group of two voters keeps no majority when one of them fails:
+			// the shard needs eligible tablets in three cells, and VTOrc writes no initial list until it
+			// has them (GroupVotersBelowTarget).
+			name:    "no voter is selected and the eligible tablets are in two cells: no voter is written",
 			tablets: []*topodatapb.Tablet{replica, primary, crossCellVoter},
 			setup: func(t *testing.T, e expectations) {
 				for _, tablet := range []*topodatapb.Tablet{replica, primary, crossCellVoter} {
 					e.mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(tablet)).Return(notMemberStatus(tablet), nil)
 				}
 			},
-			wantVoters: []string{"zone1-0000000100", "zone2-0000000200"},
+			wantErrCode: vtrpcpb.Code_FAILED_PRECONDITION,
 		},
 	}
 	for _, tt := range tests {

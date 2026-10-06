@@ -84,6 +84,13 @@ const (
 	// --group-replication-voter-replacement-grace-period, a cell misses a voter, or a tablet that
 	// is not a voter is an active member. It is reported on a single tablet of the shard.
 	GroupVotersOutOfDate AnalysisCode = "GroupVotersOutOfDate"
+	// GroupVotersBelowTarget describes a shard whose voters are not selected yet, while its PRIMARY and
+	// REPLICA tablets that the durability policy allows as voters are in fewer than
+	// policy.MinGroupReplicationCells cells: with one voter per cell, its group would keep no majority
+	// when one of its voters fails. VTOrc writes no voter list, and so bootstraps no group, until the
+	// shard has eligible tablets in enough cells. It is reported on a single tablet of the shard, and
+	// has no recovery.
+	GroupVotersBelowTarget AnalysisCode = "GroupVotersBelowTarget"
 	// GroupQuorumLost describes a shard whose group has active members, none of which has quorum.
 	// The group cannot commit. VTOrc does not act; forcing a new membership is an operator decision.
 	GroupQuorumLost AnalysisCode = "GroupQuorumLost"
@@ -268,6 +275,10 @@ type DetectionAnalysis struct {
 	// isGroupVotersReporter is true when the shard's voters are out of date and the analyzed
 	// tablet is the one on which GroupVotersOutOfDate is reported.
 	isGroupVotersReporter bool
+	// isGroupVotersBelowTargetReporter is true when the shard has no voter list and VTOrc selects
+	// none, because its tablets that may be voters are in too few cells, and the analyzed tablet is
+	// the one on which GroupVotersBelowTarget is reported.
+	isGroupVotersBelowTargetReporter bool
 
 	QuorumDetail *QuorumResult `json:",omitempty"`
 }

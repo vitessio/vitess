@@ -2912,7 +2912,7 @@ func (s *VtctldServer) InitShardPrimaryLocked(
 	// Under a group replication policy, InitPrimary bootstraps the shard's group: only on vttablets
 	// that run Group Replication.
 	if grd, ok := policy.AsGroupReplication(durability); ok {
-		if err := reparentutil.CheckGroupReplicationCapabilities(ctx, tmc, grd, primaryElectTabletInfo.Tablet, tabletMap); err != nil {
+		if err := reparentutil.CheckGroupReplicationCapabilities(ctx, tmc, grd, durabilityName, primaryElectTabletInfo.Tablet, tabletMap); err != nil {
 			return err
 		}
 	}

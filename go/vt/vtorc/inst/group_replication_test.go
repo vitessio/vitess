@@ -454,10 +454,38 @@ func TestGetDetectionAnalysisGroupReplication(t *testing.T) {
 					member(grRow(primary, crossCell), mysql.GroupMemberStateOnline, mysql.GroupMemberRolePrimary, true, primary),
 					member(grRow(sameCellReplica, crossCell), mysql.GroupMemberStateOnline, mysql.GroupMemberRoleSecondary, true, primary),
 					member(grRow(crossCellReplica, crossCell), mysql.GroupMemberStateOnline, mysql.GroupMemberRoleSecondary, true, primary),
+					member(grRow(thirdCellReplica, crossCell), mysql.GroupMemberStateOnline, mysql.GroupMemberRoleSecondary, true, primary),
 				}
 			},
 			want:              map[string]AnalysisCode{"zone1-0000000101": GroupVotersOutOfDate},
-			wantDesiredVoters: []*topodatapb.Tablet{primary, crossCellReplica},
+			wantDesiredVoters: []*topodatapb.Tablet{primary, crossCellReplica, thirdCellReplica},
+		},
+		{
+			// With one voter per cell, the group would have two voters, and keep no majority when one
+			// of them fails: VTOrc alerts, and selects no voter.
+			name: "no voter is selected in an active group whose eligible tablets are in two cells: an alert, no voter",
+			rows: func() []*test.InfoForRecoveryAnalysis {
+				return []*test.InfoForRecoveryAnalysis{
+					member(grRow(primary, crossCell), mysql.GroupMemberStateOnline, mysql.GroupMemberRolePrimary, true, primary),
+					member(grRow(sameCellReplica, crossCell), mysql.GroupMemberStateOnline, mysql.GroupMemberRoleSecondary, true, primary),
+					member(grRow(crossCellReplica, crossCell), mysql.GroupMemberStateOnline, mysql.GroupMemberRoleSecondary, true, primary),
+				}
+			},
+			want:              map[string]AnalysisCode{"zone1-0000000101": GroupVotersBelowTarget},
+			wantDesiredVoters: []*topodatapb.Tablet{},
+		},
+		{
+			name: "no voter is selected, no member is active, and the eligible tablets are in two cells: an alert, no voter",
+			rows: func() []*test.InfoForRecoveryAnalysis {
+				return []*test.InfoForRecoveryAnalysis{
+					grRow(replica, gr),
+					grRow(crossCellReplica, gr),
+					grRow(crossCellReplica2, gr),
+				}
+			},
+			want:              map[string]AnalysisCode{"zone2-0000000200": GroupVotersBelowTarget},
+			wantDesiredVoters: []*topodatapb.Tablet{},
+			notWant:           []AnalysisCode{GroupVotersOutOfDate, GroupNotBootstrapped},
 		},
 		{
 			name: "no voter is selected and no member is active: they are selected before the group is bootstrapped",
