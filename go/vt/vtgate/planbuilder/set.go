@@ -21,6 +21,7 @@ import (
 	"strconv"
 	"strings"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/sqlmode"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -216,6 +217,36 @@ func validateSQLModePlan(inner planFunc) planFunc {
 					}
 				}
 			}
+		}
+		return inner(expr, vschema, ec)
+	}
+}
+
+// validateConnectionCharsetPlan wraps the planFunc of a connection character set
+// variable with a plan-time check of a constant value: a character set or collation
+// that Vitess cannot parse and escape safely is refused (see
+// collations.IsConnectionCharsetName), as VTTablet refuses it, rather than answered
+// with OK. NULL, which only turns result conversion off, and non-constant values,
+// whose character set cannot be judged here, are left to the wrapped planFunc.
+func validateConnectionCharsetPlan(inner planFunc) planFunc {
+	return func(expr *sqlparser.SetExpr, vschema plancontext.VSchema, ec *expressionConverter) (engine.SetOp, error) {
+		var name string
+		switch value := expr.Expr.(type) {
+		case *sqlparser.Literal:
+			if value.Type != sqlparser.StrVal {
+				return inner(expr, vschema, ec)
+			}
+			name = value.Val
+		case *sqlparser.ColName:
+			if !value.Qualifier.IsEmpty() {
+				return inner(expr, vschema, ec)
+			}
+			name = value.Name.String()
+		default:
+			return inner(expr, vschema, ec)
+		}
+		if !collations.IsConnectionCharsetName(name) {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported connection character set %s for %s: use utf8mb4", sqlparser.String(expr.Expr), expr.Var.Name.Lowered())
 		}
 		return inner(expr, vschema, ec)
 	}
