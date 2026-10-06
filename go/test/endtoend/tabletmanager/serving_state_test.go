@@ -75,7 +75,7 @@ func TestChangeTypePrimaryCompletesWithBlockedCommit(t *testing.T) {
 // the COMMIT.
 func testChangeTypePrimaryWithBlockedCommit(t *testing.T, tabletType topodatapb.TabletType) {
 	localCluster := cluster.NewCluster(cell, hostname)
-	defer localCluster.Teardown()
+	t.Cleanup(localCluster.Teardown)
 
 	// Raise the query and transaction timeouts. Otherwise they end the blocked
 	// COMMIT before the ChangeType deadline, and the change completes without
@@ -83,6 +83,7 @@ func testChangeTypePrimaryWithBlockedCommit(t *testing.T, tabletType topodatapb.
 	localCluster.VtTabletExtraArgs = append(localCluster.VtTabletExtraArgs,
 		"--queryserver-config-query-timeout", "10m",
 		"--queryserver-config-transaction-timeout", "10m",
+		"--shutdown-grace-period", "3s",
 	)
 
 	err := localCluster.StartTopo()
@@ -108,7 +109,7 @@ func testChangeTypePrimaryWithBlockedCommit(t *testing.T, tabletType topodatapb.
 		Port: localCluster.VtgateMySQLPort,
 	})
 	require.NoError(t, err)
-	defer conn.Close()
+	t.Cleanup(conn.Close)
 
 	require.NotEmpty(t, localCluster.Keyspaces)
 	require.NotEmpty(t, localCluster.Keyspaces[0].Shards)
@@ -181,16 +182,16 @@ func testChangeTypePrimaryWithBlockedCommit(t *testing.T, tabletType topodatapb.
 		}
 
 		return false
-	}, 30*time.Second, 100*time.Millisecond, "query with state not in processlist")
+	}, 30*time.Second, 100*time.Millisecond, "COMMIT never waited for a semi-sync ACK")
 
 	oldPrimary, err := localCluster.VtctldClientProcess.GetTablet(primary.Alias)
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
+	t.Cleanup(cancel)
 
 	localTMClient := tmc.NewClient()
-	defer localTMClient.Close()
+	t.Cleanup(localTMClient.Close)
 
 	// Change the primary type. The transition drains active queries, including
 	// the COMMIT.
