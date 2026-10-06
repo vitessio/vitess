@@ -908,7 +908,7 @@ Neither scenario makes an intent stale: in both, the candidate holds every trans
 
 Every chaos scenario that applies to Group Replication, run again on the binaries of f528e9a (MySQL 8.4.11, the MySQL communication stack, `READ_ONLY`, the 2s unreachable majority timeout, VTOrc failover grace 30s), `CHAOS_DURABILITY=group_replication_cross_cell`, with semi-sync `cross_cell` baselines in the same environment. The runs share one 4-core host with two other workloads and take turns on a CPU lock, so no two chaos runs overlap. G12 runs with `CHAOS_RACE_OFFSETS=500ms`. Not run: S11, S11k, S11b, S11c, S12*, S13* (see "Not tested").
 
-Runs: two per GR scenario (three for the detection scenarios); the plan was three, but the third round was replaced by a round on the binaries of the fixes below, once they are merged ("After the fixes (pending)"). Raw results: `/home/ubuntu/chaos-sweep/<run>/` (report, events, gzipped logs); per-run summaries `/home/user/vtlab/sweep/results.jsonl`, built by `analyze.py`; the table by `table.py`.
+Runs: two per GR scenario (three for the detection scenarios); the plan was three, but the third round was replaced by a round on the binaries of the merged fixes ("After the fixes (0f85e80)"). Raw results: `/home/ubuntu/chaos-sweep/<run>/` (report, events, gzipped logs); per-run summaries `/home/user/vtlab/sweep/results.jsonl`, built by `analyze.py`; the table by `table.py`.
 
 Columns: "without an acked write" is the sum of the outages of at least 1s, "longest gap" the longest interval without an acknowledged write (both min / median / max over the runs); "runs that lost the majority" counts runs with an interval of at least 10s in which no tablet was ONLINE in a view of at least two members; "bootstraps" counts VTOrc's bootstrap RPCs; refusals, withdrawals, re-probes and adoptions count VTOrc's log lines for each (see "Withdrawing the intent of a refused bootstrap" and "Re-probing the target of a stale bootstrap intent"). "Earlier" is the latest longest gap reported above for the scenario.
 
@@ -1006,9 +1006,55 @@ The recovery runs in most scenarios that take a voter out of its group (`/home/u
 
 In G12 r1 (`/home/ubuntu/chaos-sweep/gr-G12-r1/`), 4 of 6 cycles lost the majority, and VTOrc bootstrapped zone3 (port 18921, sorted last) every time. Each of the 4 joins after a bootstrap whose first seed was the voter stuck in its own join timed out after 30s (zone1 13:40:54 → 13:41:24, online 13:41:32; zone2 13:42:19 → 13:42:49, online 13:42:56; zone1 13:44:08 → 13:44:38, online 13:44:45; zone2 13:46:01 → 13:46:31, online 13:46:37); every join whose first seed was the group's member took 2–4s (`g12seeds.py`). In cycles 4–6 that join was the one that restored the majority: their outages were 68.9s, 68.8s and 72.2s, against 33–49s in the earlier G12 runs; in cycle 3 the restarted voter joined first, and the outage was 39.8s. The audit's earlier G12 outlier (lockwait r2 cycle 4, 42.5s, "Timeout while waiting for the group communication engine to be ready") is the same delay. Which voter is bootstrapped, and so whether the stuck voter sorts first, varies between runs.
 
-### After the fixes (pending)
+### After the fixes (0f85e80)
 
-The third round planned on f528e9a was replaced by a round on the fixed binaries (fixes 1–8, SW-1 and SW-2 among them, and the fixes of their review): one run of every GR scenario above, a second run of G12, G13, S7c, S7d, S9b, G9b and G11/G11s/G11k, and the three detection scenarios, compared with these rounds through the same scripts. What each fix must show: G13 with no `FixReplica` on a voter and no default channel configured (`fixscan.py`), and the cut-off secondary back in replica reads once ONLINE; G12 with no join whose first seed is a voter with a `START` in progress, and no `Timeout while waiting for the group communication engine to be ready` (`g12seeds.py`); everything else within the ranges above, with 0 acknowledged writes lost.
+The round on the merged fixes (fixes 1–8, SW-1 and SW-2 among them; binaries of 0f85e80): one run of every GR scenario, a second run of G12, G13, S7c, S7d, S9b, G9b, G11, G11s and G11k, and one run of each detection scenario, 44 runs (G11s r1 failed in the harness's setup, `CreateShard` racing with a vttablet, and was run again). **0 acknowledged writes lost** (206,355). Same host, scripts and checks as above (`table.py f`, `cmp.py`, `fixscan2.py`, `g12seeds.py`, `det.py` in `/home/user/vtlab/sweep/`).
+
+| Scenario | f528e9a: longest gap (s) | 0f85e80: longest gap (s) | f528e9a: without an acked write (s) | 0f85e80: without an acked write (s) | 0f85e80: lost / acked, violations |
+|---|---|---|---|---|---|
+| D1 | 7.4, 7.8, 7.2 | 7.0 | 7.4, 7.8, 7.2 | 7.0 | 0/3240, 0 |
+| D1h | 7.3, 8.0, 7.4 | 7.7 | 7.3, 8.0, 7.4 | 7.7 | 0/4176, 0 |
+| G1x | 7.7, 7.8 | 7.5 | 7.7, 7.8 | 7.5 | 0/3088, 0 |
+| G3D | 0.1, 0.1 | 0.1 | 0.0, 0.0 | 0.0 | 0/2000, 0 |
+| G3E | 7.8, 7.8 | 7.5 | 8.9, 7.8 | 7.5 | 0/4940, 0 |
+| G9b | 25.2, 21.6 | 24.6, 23.4 | 29.1, 21.6 | 24.6, 23.4 | 0/7533, 0, 0 |
+| G9h | 26.4, 19.0, 23.5 | 23.4 | 26.4, 19.0, 23.5 | 23.4 | 0/4160, 0 |
+| G11 | 105.6, 108.6 | 108.8, 109.5 | 105.6, 108.6 | 108.8, 109.5 | 0/7137, 0, 0 |
+| G11k | 114.6, 111.6 | 111.6, 114.5 | 114.6, 111.6 | 111.6, 114.5 | 0/7096, 0, 0 |
+| G11s | 112.1, 112.3 | 101.5, 113.2 | 112.1, 112.3 | 108.4, 113.2 | 0/7424, 0, 0 |
+| G12 | 72.2, 33.8 | 43.6, 35.8 | 275.8, 120.6 | 184.0, 104.7 | 0/28226, 0, 0 |
+| G13 | 0.5, 0.7 | 0.9, 0.9 | 0.0, 0.0 | 0.0, 0.0 | 0/16714, 0, 0 |
+| S1 | 7.5, 7.0 | 7.2 | 7.5, 7.0 | 7.2 | 0/2212, 0 |
+| S1b | 6.9, 7.3 | 7.4 | 6.9, 7.3 | 7.4 | 0/1916, 0 |
+| S2 | 9.1, 9.0 | 9.1 | 9.1, 9.0 | 9.1 | 0/3760, 1 |
+| S3 | 9.1, 9.0 | 9.0 | 9.1, 9.0 | 9.0 | 0/3660, 0 |
+| S3hb | n/a, n/a | n/a | n/a, n/a | n/a | 0/500, 0 |
+| S4 | 7.4, 7.5 | 7.5 | 7.4, 7.5 | 7.5 | 0/4360, 0 |
+| S5 | 225.5, 225.6 | 225.9 | 225.5, 225.6 | 225.9 | 0/1627, 0 |
+| S5b | 225.6, 225.6 | 223.6 | 225.6, 225.6 | 223.6 | 0/2480, 0 |
+| S6 | 0.1, 0.1 | 0.1 | 0.0, 0.0 | 0.0 | 0/5520, 0 |
+| S6b | 0.1, 0.1 | 0.1 | 0.0, 0.0 | 0.0 | 0/5520, 0 |
+| S7 | 106.9, 116.5 | 114.7 | 114.8, 116.5 | 114.7 | 0/2132, 0 |
+| S7b | 117.0, 114.5 | 115.9 | 117.0, 114.5 | 115.9 | 0/2445, 0 |
+| S7c | 9.2, 11.3 | 8.9, 6.2 | 21.1, 34.9 | 34.5, 35.0 | 0/8537, 1, 0 |
+| S7d | 49.4, 13.4 | 9.7, 32.1 | 58.5, 41.2 | 37.9, 52.8 | 0/8396, 0, 0 |
+| S8 | 7.4, 7.4 | 7.4 | 7.4, 7.4 | 7.4 | 0/9028, 0 |
+| S8b | 7.1, 7.7 | 7.7 | 7.1, 7.7 | 7.7 | 0/4100, 0 |
+| S9 | 7.7, 7.7 | 7.2 | 7.7, 7.7 | 7.2 | 0/4216, 0 |
+| S9b | 25.6, 29.0 | 24.7, 7.5 | 25.6, 29.0 | 25.7, 7.5 | 0/7353, 0, 0 |
+| S9i | 9.1, 9.0 | 9.0 | 12.5, 9.0 | 9.0 | 0/3820, 0 |
+| S10 | 7.8, 7.5 | 7.4 | 7.8, 7.5 | 7.4 | 0/9484, 0 |
+| V1 | 0.8, 0.9 | 0.7 | 0.0, 0.0 | 0.0 | 0/8904, 0 |
+| V2 | 7.3, 7.7 | 7.7 | 12.6, 7.7 | 7.7 | 0/6463, 0 |
+| V3 | 7.6, 7.2 | 7.3 | 7.6, 7.2 | 7.3 | 0/4188, 0 |
+
+**SW-1 (fix 5).** G13: no `FixReplica` and no default channel configured in either run, and the cut-off secondary answered replica reads again right after it was ONLINE (r1: 108 reads from +57.6s; r2: from 0.4s after it was ONLINE, 196 reads), where both runs on f528e9a served none. Over the round, `FixReplica` ran on a tablet 2 times in 2 runs, against 111 times in 50 of 73 runs before, and configured the default channel in those 2 (49 times in 6 runs before); no channel was left configured. Both were the old primary of S8 and S10, back after 73s and 78s down: VTOrc had removed it from the voter list after the voter replacement grace period (1 minute; S8: list {zone1, zone3} from 01:35:46), so the asynchronous analyses applied to it as to a non-voter. The VTOrc's `fixReplica` reached its tablet 0.4s after mysqld was back, before any join (Group Replication not running), so MySQL accepted `CHANGE REPLICATION SOURCE` and `START REPLICA` (S8 01:35:58.30, S10 01:45:02.08): the old primary replicated asynchronously from the new one for about 0.1s, until VTOrc's join, 0.09–0.13s later and at the same moment as its `GroupVotersOutOfDate` recovery, stopped the channel; the completed join removed it. No harm in these runs, but a former voter is repaired as an asynchronous replica until it is listed again.
+
+**SW-1b (open).** The tablet's own step-down from a stale primary configured the default channel 8 times in 4 runs (S3 r1, S9i r1, S7d r1 4, S7d r2 2), against 11 times in 10 of 73 runs before; each was removed by the join that followed.
+
+**SW-2 (fix 6).** G12 r1: VTOrc bootstrapped zone3, the address sorted last, in each of the 5 cycles that lost the majority (as in f528e9a's r1), and every join after a bootstrap now contacted zone3 first and was ONLINE in 1.7–3.6s; those cycles cost 43.6s, 32.8s, 26.9s, 31.7s and 29.7s (68.9–72.2s for the same seed order before). r2: one cycle lost the majority, 35.8s. The only `Timeout while waiting for the group communication engine to be ready` (r1, 00:45:15) ended the join of the restarted voter that the cycle's isolation interrupts by design, not a join after a bootstrap. G12 in total: 184.0s and 104.7s without an acknowledged write (275.8s and 120.6s before).
+
+**Violations.** S2 r1: the known window, 2 samples (3ms). S7c r1: the same stale view as S7c r2 before, 2 samples (199ms): the old primary was expelled 1.1s after a heal and its tablet stepped down 0.4s later. None committed a write. Every other scenario stayed within its range on f528e9a; the detection runs are unchanged (D1 6.75s, D1h 7.74s, G9h 23.5s with `GroupPrimaryNotInTopo` 11.9s after the election): fixes 1–8 do not touch VTOrc's main loop.
 
 ## Buffering during an unplanned failover
 
