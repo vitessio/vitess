@@ -545,7 +545,10 @@ func (r *migrationRun) addKeyspaceStep(resp *vtctldatapb.MigrateReplicationModeR
 }
 
 // SetKeyspaceDurabilityPolicy validates the durability policy and stores it in the keyspace
-// record, under the keyspace lock.
+// record, under the keyspace lock. It refuses, with FAILED_PRECONDITION, to change the replication
+// mode (asynchronous replication or MySQL Group Replication) of a keyspace that has an initialized
+// shard, which only MigrateReplicationMode does safely, and any change while MigrateReplicationMode
+// converts the keyspace (checkDurabilityPolicyChange).
 func SetKeyspaceDurabilityPolicy(ctx context.Context, ts *topo.Server, keyspace, durabilityPolicy string) (ki *topo.KeyspaceInfo, err error) {
 	ctx, unlock, lockErr := ts.LockKeyspace(ctx, keyspace, "SetKeyspaceDurabilityPolicy")
 	if lockErr != nil {
@@ -560,11 +563,76 @@ func SetKeyspaceDurabilityPolicy(ctx context.Context, ts *topo.Server, keyspace,
 	if !policy.CheckDurabilityPolicyExists(durabilityPolicy) {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "durability policy <%v> is not a valid policy. Please register it as a policy first", durabilityPolicy)
 	}
+	if err = checkDurabilityPolicyChange(ctx, ts, ki, durabilityPolicy); err != nil {
+		return nil, err
+	}
 	ki.DurabilityPolicy = durabilityPolicy
 	if err = ts.UpdateKeyspace(ctx, ki); err != nil {
 		return nil, err
 	}
 	return ki, nil
+}
+
+// checkDurabilityPolicyChange returns a FAILED_PRECONDITION error if the keyspace's durability
+// policy may not be set to durabilityPolicy outside MigrateReplicationMode: while a migration converts
+// the keyspace (it has a migration source), or when the change switches the replication mode and a
+// shard of the keyspace is initialized. Switched by the keyspace record alone, the shards' tablets
+// would apply the other mode's rules to MySQL that runs the first one: a semi-sync primary would
+// stop serving as a group primary that has no group, and a group's members would be repaired as
+// asynchronous replicas. The caller holds the keyspace lock, which a new shard's creation takes too.
+func checkDurabilityPolicyChange(ctx context.Context, ts *topo.Server, ki *topo.KeyspaceInfo, durabilityPolicy string) error {
+	keyspace := ki.KeyspaceName()
+	if source := ki.GetMigrationSourceDurabilityPolicy(); source != "" {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+			"MigrateReplicationMode is converting keyspace %s from %s to %s: run MigrateReplicationMode again to finish the migration, or to convert the keyspace back",
+			keyspace, source, ki.GetDurabilityPolicy())
+	}
+	current := cmp.Or(ki.GetDurabilityPolicy(), policy.DurabilityNone)
+	currentMode, known := replicationModeOf(current)
+	targetMode, _ := replicationModeOf(durabilityPolicy)
+	if known && currentMode == targetMode {
+		return nil
+	}
+	shards, err := ts.GetShardNames(ctx, keyspace)
+	if err != nil {
+		return vterrors.Wrapf(err, "failed to list the shards of keyspace %s", keyspace)
+	}
+	slices.Sort(shards)
+	for _, shard := range shards {
+		si, err := ts.GetShard(ctx, keyspace, shard)
+		if err != nil {
+			return vterrors.Wrapf(err, "failed to read shard %s/%s", keyspace, shard)
+		}
+		if !shardInitialized(si.Shard) {
+			continue
+		}
+		from := currentMode.String()
+		if !known {
+			from = "an unknown replication mode"
+		}
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+			"cannot change the durability policy of keyspace %s from %s to %s: the replication mode would change from %s to %s, and shard %s/%s is initialized; use MigrateReplicationMode, which converts the shards one at a time",
+			keyspace, current, durabilityPolicy, from, targetMode, keyspace, shard)
+	}
+	return nil
+}
+
+// replicationModeOf returns the replication mode of the durability policy, and whether the policy
+// is known.
+func replicationModeOf(durabilityPolicy string) (policy.ReplicationMode, bool) {
+	durability, err := policy.GetDurabilityPolicy(durabilityPolicy)
+	if err != nil {
+		return policy.ReplicationModeAsync, false
+	}
+	return policy.GetReplicationMode(durability), true
+}
+
+// shardInitialized returns whether the shard had a primary, has a replication group's state, or has
+// its own durability policy.
+func shardInitialized(shard *topodatapb.Shard) bool {
+	return shard.GetPrimaryAlias() != nil || shard.GetPrimaryTermStartTime() != nil ||
+		len(shard.GetGroupReplicationVoters()) > 0 || shard.GetGroupReplicationIncarnation() != "" ||
+		shard.GetGroupReplicationBootstrapIntent() != nil || shard.GetDurabilityPolicy() != ""
 }
 
 // migrateShard converts one shard, under its shard lock unless this is a dry run.
