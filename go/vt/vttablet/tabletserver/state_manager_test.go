@@ -1106,8 +1106,8 @@ type gateTxEngine struct {
 	// ql is the commit list that receives the forwarded cluster actions.
 	ql *QueryList
 
-	// terminateCalls counts the TerminateActiveCommits calls.
-	terminateCalls atomic.Int64
+	// terminatedOnce guards the close of terminated.
+	terminatedOnce sync.Once
 
 	// terminated is closed on the grace-period sweep's TerminateActiveCommits call.
 	terminated chan struct{}
@@ -1147,11 +1147,15 @@ func (te *gateTxEngine) SetClusterAction(ca ClusterActionState) {
 	te.ql.SetClusterAction(ca)
 }
 
-// TerminateActiveCommits signals the second call. The first call comes from
-// servePrimary.
+// TerminateActiveCommits signals the grace-period sweep, which is the call
+// made after the commit list stops accepting new commits.
 func (te *gateTxEngine) TerminateActiveCommits() {
-	if te.terminateCalls.Add(1) == 2 {
-		close(te.terminated)
+	te.ql.mu.Lock()
+	ca := te.ql.ca
+	te.ql.mu.Unlock()
+
+	if ca == ClusterActionNoQueries {
+		te.terminatedOnce.Do(func() { close(te.terminated) })
 	}
 }
 

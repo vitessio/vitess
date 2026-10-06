@@ -473,10 +473,6 @@ func (sm *stateManager) servePrimary() error {
 	// te to quickly transition into RW, but olap and stateless
 	// queries can continue serving.
 	sm.statefulql.TerminateAll()
-
-	// Kill in-flight COMMITs with the stateful queries. A COMMIT also runs on a
-	// stateful connection.
-	sm.te.TerminateActiveCommits()
 	sm.te.AcceptReadWrite()
 	sm.messager.Open()
 	sm.throttler.Open()
