@@ -1,4 +1,4 @@
----------------------------------- MODULE MC ----------------------------------
+---------------------------------- MODULE MCFkLocking ----------------------------------
 EXTENDS FkLocking
 
 \* The two Vitess cascades on GP race with each other and with two statements
