@@ -181,6 +181,9 @@ type groupReplicationRow struct {
 	activeMemberUUIDs []string
 	// startInProgress is true when a START GROUP_REPLICATION ran on the tablet's MySQL, as last seen.
 	startInProgress bool
+	// deleted is true when the tablet is a voter whose tablet record was deleted, which VTOrc keeps
+	// discovering (see inst.MarkDeletedGroupVoter).
+	deleted bool
 	// status is the member's group replication status, as far as VTOrc stores it.
 	status *replicationdatapb.GroupReplicationStatus
 	// foreign is true when the member is active in a group of another incarnation than the one
@@ -257,7 +260,8 @@ func computeGroupReplicationShardState(durability policy.Durabler, incarnation s
 	reachable := make(map[string]bool)
 	var onlineTablets []*topodatapb.Tablet
 	for _, row := range rows {
-		if row.valid {
+		// A voter whose tablet record was deleted counts as unreachable: no recovery can use it.
+		if row.valid && !row.deleted {
 			reachable[topoproto.TabletAliasString(row.tablet.GetAlias())] = true
 		}
 		if row.active {
@@ -353,6 +357,14 @@ func computeGroupReplicationVoters(state *groupReplicationShardState, durability
 	for _, row := range rows {
 		alias := topoproto.TabletAliasString(row.tablet.GetAlias())
 		recorded[alias] = true
+		if row.deleted {
+			// VTOrc kept the voter whose record was deleted, and discovers it at the address it knew.
+			if in.DeletedVoters == nil {
+				in.DeletedVoters = make(map[string]*DeletedVoter)
+			}
+			in.DeletedVoters[alias] = &DeletedVoter{Alias: row.tablet.GetAlias(), Tablet: row.tablet, ServerUUID: row.serverUUID, Down: !row.valid}
+			continue
+		}
 		vt := &VoterTablet{Tablet: row.tablet, Reachable: row.valid, ServerUUID: row.serverUUID}
 		if row.valid {
 			vt.Status = analysisGroupStatus(row)
@@ -367,13 +379,11 @@ func computeGroupReplicationVoters(state *groupReplicationShardState, durability
 		if recorded[alias] {
 			continue
 		}
+		// VTOrc knows nothing about this voter: it is not down.
 		if in.DeletedVoters == nil {
-			in.DeletedVoters = make(map[string]string)
+			in.DeletedVoters = make(map[string]*DeletedVoter)
 		}
-		in.DeletedVoters[alias] = ""
-		if instance, _, err := ReadInstance(voter); err == nil && instance != nil {
-			in.DeletedVoters[alias] = instance.ServerUUID
-		}
+		in.DeletedVoters[alias] = &DeletedVoter{Alias: voter}
 	}
 	plan := PlanGroupVoters(in)
 	state.voterReason = plan.Reason
@@ -417,11 +427,12 @@ func analysisGroupStatus(row *groupReplicationRow) *replicationdatapb.GroupRepli
 
 // groupVotersReporter returns the tablet on which the shard-wide voter analyses are reported: the
 // group primary's tablet if VTOrc reached it, else the reachable tablet with the lowest alias. Only
-// PRIMARY and replica type tablets qualify, because only they are analyzed.
+// PRIMARY and replica type tablets with a tablet record qualify, because only they are analyzed.
 func groupVotersReporter(rows []*groupReplicationRow) *topodatapb.TabletAlias {
 	var reporter *topodatapb.TabletAlias
 	for _, row := range rows {
-		if !row.valid || (row.tablet.GetType() != topodatapb.TabletType_PRIMARY && !topo.IsReplicaType(row.tablet.GetType())) {
+		// A voter whose tablet record was deleted is not analyzed.
+		if !row.valid || row.deleted || (row.tablet.GetType() != topodatapb.TabletType_PRIMARY && !topo.IsReplicaType(row.tablet.GetType())) {
 			continue
 		}
 		if row.groupPrimary {

@@ -97,8 +97,10 @@ func TestUpdateGroupReplicationVoters(t *testing.T) {
 		voters      []*topodatapb.Tablet
 		recorded    bool
 		gracePeriod time.Duration
-		setup       func(t *testing.T, m *tmcmock.MockTabletManagerClient)
-		wantVoters  []string
+		// deleted are the tablets whose record the operator deletes before the recovery.
+		deleted    []*topodatapb.Tablet
+		setup      func(t *testing.T, m *tmcmock.MockTabletManagerClient)
+		wantVoters []string
 		// wantErr is a part of the FAILED_PRECONDITION error; empty means that the change is written.
 		wantErr string
 	}{{
@@ -160,21 +162,25 @@ func TestUpdateGroupReplicationVoters(t *testing.T) {
 		wantVoters: []string{"zone1-0000000101", "zone2-0000000200", "zone3-0000000300"},
 		wantErr:    "zone2-0000000201: it executed transactions that the primary lacks",
 	}, {
-		name:     "RemoveVoter: a voter has no tablet record, is in no view, and its cell has no spare",
-		tablets:  []*topodatapb.Tablet{primary, voter2},
+		name:     "RemoveVoter: a voter has no tablet record, is down and in no view, and its cell has no spare",
+		tablets:  []*topodatapb.Tablet{primary, voter2, voter3},
 		voters:   []*topodatapb.Tablet{primary, voter2, voter3},
+		deleted:  []*topodatapb.Tablet{voter3},
 		recorded: true,
 		setup: func(t *testing.T, m *tmcmock.MockTabletManagerClient) {
+			m.EXPECT().FullStatus(gomock.Any(), sameTablet(voter3)).Return(nil, errUnreachable).AnyTimes()
 			m.EXPECT().FullStatus(gomock.Any(), sameTablet(primary)).Return(settledMember(primary, primary, "1-10", primary, voter2), nil)
 			m.EXPECT().FullStatus(gomock.Any(), sameTablet(voter2)).Return(settledMember(voter2, primary, "1-10", primary, voter2), nil)
 		},
 		wantVoters: []string{"zone1-0000000101", "zone2-0000000200"},
 	}, {
-		name:     "SwapVoter: a voter has no tablet record and is in no view; the spare of its cell takes its seat",
-		tablets:  []*topodatapb.Tablet{primary, voter2, spare3},
+		name:     "SwapVoter: a voter has no tablet record, is down and in no view; the spare of its cell takes its seat",
+		tablets:  []*topodatapb.Tablet{primary, voter2, spare3, voter3},
 		voters:   []*topodatapb.Tablet{primary, voter2, voter3},
+		deleted:  []*topodatapb.Tablet{voter3},
 		recorded: true,
 		setup: func(t *testing.T, m *tmcmock.MockTabletManagerClient) {
+			m.EXPECT().FullStatus(gomock.Any(), sameTablet(voter3)).Return(nil, errUnreachable).AnyTimes()
 			m.EXPECT().FullStatus(gomock.Any(), sameTablet(primary)).Return(settledMember(primary, primary, "1-10", primary, voter2), nil)
 			m.EXPECT().FullStatus(gomock.Any(), sameTablet(voter2)).Return(settledMember(voter2, primary, "1-10", primary, voter2), nil)
 			m.EXPECT().FullStatus(gomock.Any(), sameTablet(spare3)).Return(spareStatus(spare3, "1-10"), nil)
@@ -182,22 +188,26 @@ func TestUpdateGroupReplicationVoters(t *testing.T) {
 		},
 		wantVoters: []string{"zone1-0000000101", "zone2-0000000200", "zone3-0000000301"},
 	}, {
-		name:     "a voter has no tablet record, but its MySQL is still ONLINE in the group: it stays",
-		tablets:  []*topodatapb.Tablet{primary, voter2},
+		name:     "a voter has no tablet record and its vttablet is down, but its MySQL is still ONLINE in the group: it stays",
+		tablets:  []*topodatapb.Tablet{primary, voter2, voter3},
 		voters:   []*topodatapb.Tablet{primary, voter2, voter3},
+		deleted:  []*topodatapb.Tablet{voter3},
 		recorded: true,
 		setup: func(t *testing.T, m *tmcmock.MockTabletManagerClient) {
+			m.EXPECT().FullStatus(gomock.Any(), sameTablet(voter3)).Return(nil, errUnreachable).AnyTimes()
 			m.EXPECT().FullStatus(gomock.Any(), sameTablet(primary)).Return(settledMember(primary, primary, "1-10", primary, voter2, voter3), nil)
 			m.EXPECT().FullStatus(gomock.Any(), sameTablet(voter2)).Return(settledMember(voter2, primary, "1-10", primary, voter2, voter3), nil)
 		},
 		wantVoters: []string{"zone1-0000000101", "zone2-0000000200", "zone3-0000000300"},
 		wantErr:    "voter zone3-0000000300 has no tablet record, but its server_uuid is unknown, and the active member 00000000-0000-0000-0000-000000000300 is the MySQL of no tablet that answers",
 	}, {
-		name:     "RemoveVoterNoGroup: no group runs, and a voter has no tablet record",
-		tablets:  []*topodatapb.Tablet{primary, voter2},
+		name:     "RemoveVoterNoGroup: no group runs, and a voter that is down has no tablet record",
+		tablets:  []*topodatapb.Tablet{primary, voter2, voter3},
 		voters:   []*topodatapb.Tablet{primary, voter2, voter3},
+		deleted:  []*topodatapb.Tablet{voter3},
 		recorded: true,
 		setup: func(t *testing.T, m *tmcmock.MockTabletManagerClient) {
+			m.EXPECT().FullStatus(gomock.Any(), sameTablet(voter3)).Return(nil, errUnreachable).AnyTimes()
 			m.EXPECT().FullStatus(gomock.Any(), sameTablet(primary)).Return(spareStatus(primary, "1-10"), nil)
 			m.EXPECT().FullStatus(gomock.Any(), sameTablet(voter2)).Return(spareStatus(voter2, "1-9"), nil)
 		},
@@ -206,23 +216,25 @@ func TestUpdateGroupReplicationVoters(t *testing.T) {
 		// The bootstrap would include a voter that answers: it is not removed, although its tablet
 		// record is gone.
 		name:     "RemoveVoterNoGroup: the deleted voter's vttablet answers at the address VTOrc last knew",
-		tablets:  []*topodatapb.Tablet{primary, voter2},
+		tablets:  []*topodatapb.Tablet{primary, voter2, voter3},
 		voters:   []*topodatapb.Tablet{primary, voter2, voter3},
+		deleted:  []*topodatapb.Tablet{voter3},
 		recorded: true,
 		setup: func(t *testing.T, m *tmcmock.MockTabletManagerClient) {
-			require.NoError(t, inst.SaveTablet(voter3))
 			m.EXPECT().FullStatus(gomock.Any(), sameTablet(primary)).Return(spareStatus(primary, "1-10"), nil)
 			m.EXPECT().FullStatus(gomock.Any(), sameTablet(voter2)).Return(spareStatus(voter2, "1-9"), nil)
-			m.EXPECT().FullStatus(gomock.Any(), sameTablet(voter3)).Return(spareStatus(voter3, "1-11"), nil)
+			m.EXPECT().FullStatus(gomock.Any(), sameTablet(voter3)).Return(spareStatus(voter3, "1-11"), nil).AnyTimes()
 		},
 		wantVoters: []string{"zone1-0000000101", "zone2-0000000200", "zone3-0000000300"},
-		wantErr:    "voter zone3-0000000300 has no tablet record, but its tablet answers",
+		wantErr:    "voter zone3-0000000300 has no tablet record, but VTOrc cannot tell that its vttablet is down",
 	}, {
 		name:     "RemoveVoterNoGroup: a bootstrap intent is live",
-		tablets:  []*topodatapb.Tablet{primary, voter2},
+		tablets:  []*topodatapb.Tablet{primary, voter2, voter3},
 		voters:   []*topodatapb.Tablet{primary, voter2, voter3},
+		deleted:  []*topodatapb.Tablet{voter3},
 		recorded: true,
 		setup: func(t *testing.T, m *tmcmock.MockTabletManagerClient) {
+			m.EXPECT().FullStatus(gomock.Any(), sameTablet(voter3)).Return(nil, errUnreachable).AnyTimes()
 			_, err := ts.UpdateShardFields(t.Context(), "ks", "0", func(si *topo.ShardInfo) error {
 				si.GroupReplicationBootstrapIntent = &topodatapb.GroupReplicationBootstrapIntent{
 					Target: primary.Alias, Time: protoutil.TimeToProto(time.Now()), Token: "1790000002-0123456789abcdef",
@@ -278,6 +290,14 @@ func TestUpdateGroupReplicationVoters(t *testing.T) {
 				setIncarnation(t, voterTestIncarnation)
 			}
 			tt.setup(t, mockTMC)
+			// The operator deletes the records, and VTOrc refreshes the shard's tablet records before
+			// the recovery, as executeCheckAndRecoverFunction does.
+			for _, tablet := range tt.deleted {
+				require.NoError(t, ts.DeleteTablet(t.Context(), tablet.Alias))
+			}
+			if len(tt.deleted) > 0 {
+				refreshReachableTabletInfoOfShard(t.Context(), "ks", "0")
+			}
 
 			attempted, topologyRecovery, err := updateGroupReplicationVoters(lockedShard(t), voterRecoveryEntry(tt.tablets[0], inst.GroupVotersOutOfDate), log.NewPrefixedLogger("test"))
 			require.True(t, attempted)
@@ -402,4 +422,44 @@ func TestMoveGroupPrimaryOffDeletedVoter(t *testing.T) {
 	require.True(t, attempted)
 	require.NotNil(t, topologyRecovery)
 	assert.Equal(t, []string{"zone1-0000000101", "zone2-0000000200", "zone3-0000000300"}, readVoters(t))
+}
+
+// TestUpdateGroupReplicationVotersKeepsLiveDeletedVoter checks, on the state that production reaches,
+// that a voter whose tablet record was deleted while its vttablet and MySQL still run is not removed:
+// VTOrc refreshes the shard's tablet records before every recovery, and that refresh used to forget
+// the deleted voter, its last tablet record and its server_uuid, so that the recovery could neither
+// probe it nor tell it from a dead one. Here no group runs, and the deleted voter answers.
+func TestUpdateGroupReplicationVotersKeepsLiveDeletedVoter(t *testing.T) {
+	prevGrace := config.GetGroupReplicationVoterReplacementGracePeriod()
+	t.Cleanup(func() {
+		config.SetGroupReplicationVoterReplacementGracePeriod(prevGrace)
+		inst.UnreachableGroupTablets.Reset()
+	})
+	inst.UnreachableGroupTablets.Reset()
+	config.SetGroupReplicationVoterReplacementGracePeriod(0)
+	primary := recoveryTablet("zone1", 101, topodatapb.TabletType_PRIMARY)
+	voter2 := recoveryTablet("zone2", 200, topodatapb.TabletType_REPLICA)
+	voter3 := recoveryTablet("zone3", 300, topodatapb.TabletType_REPLICA)
+	mockTMC := groupReplicationRecoveryTestWithPolicy(t, policy.DurabilityGroupReplicationCrossCell, primary, voter2, voter3)
+	setVoters(t, primary, voter2, voter3)
+	setIncarnation(t, voterTestIncarnation)
+	// VTOrc discovered every voter, server_uuid included.
+	for _, tablet := range []*topodatapb.Tablet{primary, voter2, voter3} {
+		require.NoError(t, inst.WriteInstance(&inst.Instance{
+			InstanceAlias: tablet.Alias, Hostname: tablet.MysqlHostname, Port: int(tablet.MysqlPort), ServerUUID: voterTestUUID(tablet),
+		}, true, nil))
+	}
+	mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(primary)).Return(spareStatus(primary, "1-10"), nil).AnyTimes()
+	mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(voter2)).Return(spareStatus(voter2, "1-9"), nil).AnyTimes()
+	mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(voter3)).Return(spareStatus(voter3, "1-11"), nil).AnyTimes()
+
+	// The operator deletes the record of voter3, whose vttablet and MySQL still run, and VTOrc
+	// refreshes the shard's tablet records before the recovery, as executeCheckAndRecoverFunction does.
+	require.NoError(t, ts.DeleteTablet(t.Context(), voter3.Alias))
+	refreshReachableTabletInfoOfShard(t.Context(), "ks", "0")
+
+	_, _, err := updateGroupReplicationVoters(lockedShard(t), voterRecoveryEntry(primary, inst.GroupVotersOutOfDate), log.NewPrefixedLogger("test"))
+	require.Error(t, err)
+	assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+	assert.Equal(t, []string{"zone1-0000000101", "zone2-0000000200", "zone3-0000000300"}, readVoters(t), "a deleted voter that still runs must keep its seat")
 }

@@ -86,6 +86,19 @@ type VoterTablet struct {
 	Executed replication.GTIDSet
 }
 
+// DeletedVoter is a voter whose tablet record no longer exists.
+type DeletedVoter struct {
+	Alias *topodatapb.TabletAlias
+	// Tablet is the last tablet record of the voter that VTOrc kept, and ServerUUID the server_uuid of
+	// its MySQL that VTOrc last saw: nil and "" when VTOrc does not know them.
+	Tablet     *topodatapb.Tablet
+	ServerUUID string
+	// Down is true when VTOrc knows that the voter's vttablet is down: it probed it at the address it
+	// kept, and the probe failed. A deleted voter that VTOrc has no address for, or did not probe, is
+	// not down: it may be running, and hold transactions that the other voters lack.
+	Down bool
+}
+
 // VoterPlanInput is the state of a shard from which PlanGroupVoters decides.
 type VoterPlanInput struct {
 	Durability policy.GroupReplicationDurabler
@@ -94,12 +107,8 @@ type VoterPlanInput struct {
 	Incarnation string
 	// Tablets are the shard's tablets that have a tablet record.
 	Tablets []*VoterTablet
-	// DeletedVoters are the voters whose tablet record no longer exists, by alias, with the
-	// server_uuid that VTOrc last saw for their MySQL, or "" when it does not know it.
-	DeletedVoters map[string]string
-	// DeletedVotersAnswering are the deleted voters whose vttablet answered FullStatus, at the address
-	// that VTOrc last knew. Such a voter is not failed: the bootstrap would include it.
-	DeletedVotersAnswering map[string]bool
+	// DeletedVoters are the voters whose tablet record no longer exists, by alias.
+	DeletedVoters map[string]*DeletedVoter
 	// BootstrapIntentLive is true when the shard record holds a bootstrap intent younger than
 	// reparentutil.GroupReplicationBootstrapIntentFence. Only the recovery reads it.
 	BootstrapIntentLive bool
@@ -194,7 +203,7 @@ func PlanGroupVoters(in *VoterPlanInput) *VoterPlan {
 		if err != nil {
 			continue
 		}
-		uuid := in.DeletedVoters[alias]
+		uuid := in.DeletedVoters[alias].ServerUUID
 		if reason := p.activeAnywhere(alias, uuid); reason != "" {
 			alerts = append(alerts, &VoterPlan{
 				Alert:  GroupVoterRecordDeleted,
@@ -327,7 +336,12 @@ func newVoterPlanner(in *VoterPlanInput) *voterPlanner {
 			p.answering[vt.ServerUUID] = true
 		}
 	}
-	maps.Copy(uuids, in.DeletedVoters)
+	for alias, dv := range in.DeletedVoters {
+		uuids[alias] = dv.ServerUUID
+		if dv.Tablet != nil {
+			tablets[alias] = dv.Tablet
+		}
+	}
 	p.legitimate = policy.NewLegitimateGroup(in.Incarnation, in.Voters, tablets, uuids)
 	for _, vt := range in.Tablets {
 		if !vt.Reachable || !p.legitimate.IsLegitimateMember(vt.Status) {
@@ -387,7 +401,7 @@ func (p *voterPlanner) planRemoveNoGroup() *VoterPlan {
 	}
 	for _, alias := range sortedAliasKeys(p.in.DeletedVoters) {
 		voter, err := topoproto.ParseTabletAlias(alias)
-		if err != nil || p.activeAnywhere(alias, p.in.DeletedVoters[alias]) != "" {
+		if err != nil || p.activeAnywhere(alias, p.in.DeletedVoters[alias].ServerUUID) != "" {
 			continue
 		}
 		voters := withoutAlias(p.in.Voters, voter)
@@ -423,7 +437,7 @@ func (p *voterPlanner) planMovePrimary() *VoterPlan {
 		}
 		primaryUUID := st.GetPrimaryUuid()
 		for _, alias := range sortedAliasKeys(p.in.DeletedVoters) {
-			uuid := p.in.DeletedVoters[alias]
+			uuid := p.in.DeletedVoters[alias].ServerUUID
 			if uuid != primaryUUID && (uuid != "" || p.recordedUUID(primaryUUID)) {
 				continue
 			}
@@ -483,8 +497,11 @@ func (p *voterPlanner) settledPrimary() (*VoterTablet, string) {
 // server_uuid, every member that a reachable member reports active must be the MySQL of a tablet
 // that answers.
 func (p *voterPlanner) activeAnywhere(alias, uuid string) string {
-	if vt := p.byAlias[alias]; (vt != nil && vt.Reachable) || p.in.DeletedVotersAnswering[alias] {
+	if vt := p.byAlias[alias]; vt != nil && vt.Reachable {
 		return "its tablet answers"
+	}
+	if dv := p.in.DeletedVoters[alias]; dv != nil && !dv.Down {
+		return "VTOrc cannot tell that its vttablet is down: it answers, or VTOrc has no address for it"
 	}
 	if uuid != "" {
 		if p.active[uuid] {
@@ -615,6 +632,6 @@ func sortAliases(aliases []*topodatapb.TabletAlias) []*topodatapb.TabletAlias {
 	return aliases
 }
 
-func sortedAliasKeys(m map[string]string) []string {
+func sortedAliasKeys[V any](m map[string]V) []string {
 	return slices.Sorted(maps.Keys(m))
 }

@@ -121,6 +121,17 @@ func inIncarnation(incarnation string, rows ...*test.InfoForRecoveryAnalysis) []
 	return rows
 }
 
+// deletedVoter returns the row of a voter whose tablet record was deleted, which VTOrc keeps
+// discovering: reachable or not.
+func deletedVoter(tablet *topodatapb.Tablet, durability string, reachable bool) *test.InfoForRecoveryAnalysis {
+	row := grRow(tablet, durability)
+	row.IsDeletedGroupVoter = 1
+	if !reachable {
+		row.LastCheckValid = 0
+	}
+	return row
+}
+
 // voterList formats the voters of a shard as they are stored in the database.
 func voterList(tablets ...*topodatapb.Tablet) string {
 	var aliases []*topodatapb.TabletAlias
@@ -536,11 +547,12 @@ func TestGetDetectionAnalysisGroupReplication(t *testing.T) {
 			want:   map[string]AnalysisCode{"zone1-0000000101": GroupPrimaryNotVoter},
 		},
 		{
-			name: "a voter has no tablet record and is in no view, and its cell has no spare: it is removed",
+			name: "a voter has no tablet record, is down and in no view, and its cell has no spare: it is removed",
 			rows: func() []*test.InfoForRecoveryAnalysis {
 				return inIncarnation("1790000001",
 					member(grRow(primary, crossCell), mysql.GroupMemberStateOnline, mysql.GroupMemberRolePrimary, true, primary),
 					member(grRow(crossCellReplica, crossCell), mysql.GroupMemberStateOnline, mysql.GroupMemberRoleSecondary, true, primary),
+					deletedVoter(thirdCellReplica, crossCell, false),
 				)
 			},
 			voters:            []*topodatapb.Tablet{primary, crossCellReplica, thirdCellReplica},
@@ -583,7 +595,48 @@ func TestGetDetectionAnalysisGroupReplication(t *testing.T) {
 			want:             map[string]AnalysisCode{"zone1-0000000101": GroupVoterUnreplaceable},
 		},
 		{
-			name: "no group runs and a voter has no tablet record: it is removed, so that the group can be bootstrapped",
+			name: "no group runs and a voter that is down has no tablet record: it is removed, so that the group can be bootstrapped",
+			rows: func() []*test.InfoForRecoveryAnalysis {
+				return inIncarnation("1790000001",
+					member(grRow(replica, gr), mysql.GroupMemberStateOffline, "", false, nil),
+					member(grRow(crossCellReplica, gr), mysql.GroupMemberStateOffline, "", false, nil),
+					deletedVoter(thirdCellReplica, gr, false),
+				)
+			},
+			voters:            []*topodatapb.Tablet{replica, crossCellReplica, thirdCellReplica},
+			want:              map[string]AnalysisCode{"zone2-0000000200": GroupVotersOutOfDate},
+			wantDesiredVoters: []*topodatapb.Tablet{replica, crossCellReplica},
+			notWant:           []AnalysisCode{GroupNotBootstrapped},
+		},
+		{
+			// VTOrc keeps discovering it, and reaches it: its tablet gets no analysis of its own.
+			name: "no group runs and a voter whose vttablet runs has no tablet record: an alert, it stays",
+			rows: func() []*test.InfoForRecoveryAnalysis {
+				return inIncarnation("1790000001",
+					member(grRow(replica, gr), mysql.GroupMemberStateOffline, "", false, nil),
+					member(grRow(crossCellReplica, gr), mysql.GroupMemberStateOffline, "", false, nil),
+					member(deletedVoter(thirdCellReplica, gr, true), mysql.GroupMemberStateOffline, "", false, nil),
+				)
+			},
+			voters:            []*topodatapb.Tablet{replica, crossCellReplica, thirdCellReplica},
+			want:              map[string]AnalysisCode{"zone2-0000000200": GroupVoterRecordDeleted},
+			wantDesiredVoters: []*topodatapb.Tablet{},
+		},
+		{
+			// The deleted voter has the lowest alias, but gets no analysis: the alert goes elsewhere.
+			name: "the alert of a deleted voter is not reported on it",
+			rows: func() []*test.InfoForRecoveryAnalysis {
+				return inIncarnation("1790000001",
+					member(grRow(replica, gr), mysql.GroupMemberStateOffline, "", false, nil),
+					member(grRow(crossCellReplica, gr), mysql.GroupMemberStateOffline, "", false, nil),
+					member(deletedVoter(grTablet("zone0", 400, topodatapb.TabletType_REPLICA), gr, true), mysql.GroupMemberStateOffline, "", false, nil),
+				)
+			},
+			voters: []*topodatapb.Tablet{replica, crossCellReplica, grTablet("zone0", 400, topodatapb.TabletType_REPLICA)},
+			want:   map[string]AnalysisCode{"zone2-0000000200": GroupVoterRecordDeleted},
+		},
+		{
+			name: "no group runs and a voter that VTOrc knows nothing about has no tablet record: it stays",
 			rows: func() []*test.InfoForRecoveryAnalysis {
 				return inIncarnation("1790000001",
 					member(grRow(replica, gr), mysql.GroupMemberStateOffline, "", false, nil),
@@ -591,9 +644,8 @@ func TestGetDetectionAnalysisGroupReplication(t *testing.T) {
 				)
 			},
 			voters:            []*topodatapb.Tablet{replica, crossCellReplica, thirdCellReplica},
-			want:              map[string]AnalysisCode{"zone2-0000000200": GroupVotersOutOfDate},
-			wantDesiredVoters: []*topodatapb.Tablet{replica, crossCellReplica},
-			notWant:           []AnalysisCode{GroupNotBootstrapped},
+			want:              map[string]AnalysisCode{"zone2-0000000200": GroupVoterRecordDeleted},
+			wantDesiredVoters: []*topodatapb.Tablet{},
 		},
 		{
 			name: "active members of a shard with a semi-sync policy get no asynchronous replication analysis",

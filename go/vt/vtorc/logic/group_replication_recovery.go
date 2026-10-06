@@ -1136,10 +1136,11 @@ func readGroupVoterState(ctx context.Context, keyspace, shard string) (*groupVot
 	for _, ti := range tabletInfos {
 		recorded[topoproto.TabletAliasString(ti.Alias)] = true
 	}
-	// A voter whose tablet record does not exist (topo NoNode) is a deleted voter. Its vttablet is
-	// probed in the same read at the address VTOrc last knew, if it knows one: a deleted voter that
-	// answers is not failed.
-	deleted := make(map[string]string)
+	// A voter whose tablet record does not exist (topo NoNode) is a deleted voter. VTOrc keeps its last
+	// tablet record and server_uuid (see keepDeletedGroupVoter), and probes its vttablet in the same
+	// read at that address: it is down only if the probe fails. A deleted voter that VTOrc has no
+	// address for is not down.
+	deleted := make(map[string]*inst.DeletedVoter)
 	var probes []*topo.TabletInfo
 	for _, voter := range shardInfo.GetGroupReplicationVoters() {
 		alias := topoproto.TabletAliasString(voter)
@@ -1151,13 +1152,15 @@ func readGroupVoterState(ctx context.Context, keyspace, shard string) (*groupVot
 		} else if !topo.IsErrType(err, topo.NoNode) {
 			return nil, vterrors.Wrapf(err, "failed to read the tablet record of voter %s of %s", alias, keyspaceShard)
 		}
-		deleted[alias] = ""
+		dv := &inst.DeletedVoter{Alias: voter}
 		if instance, _, err := inst.ReadInstance(voter); err == nil && instance != nil {
-			deleted[alias] = instance.ServerUUID
+			dv.ServerUUID = instance.ServerUUID
 		}
 		if cached, err := inst.ReadTablet(voter); err == nil && cached != nil {
+			dv.Tablet = cached
 			probes = append(probes, &topo.TabletInfo{Tablet: cached})
 		}
+		deleted[alias] = dv
 	}
 	readCtx, cancel := context.WithTimeout(ctx, groupVoterReadTimeout)
 	read := readShardTabletStatuses(readCtx, append(slices.Clone(tabletInfos), probes...))
@@ -1196,12 +1199,11 @@ func readGroupVoterState(ctx context.Context, keyspace, shard string) (*groupVot
 		in.DeletedVoters = deleted
 	}
 	for _, st := range probed {
+		dv := deleted[topoproto.TabletAliasString(st.tablet.Alias)]
 		if st.err == nil {
-			if in.DeletedVotersAnswering == nil {
-				in.DeletedVotersAnswering = make(map[string]bool)
-			}
-			in.DeletedVotersAnswering[topoproto.TabletAliasString(st.tablet.Alias)] = true
+			dv.ServerUUID = st.status.GetServerUuid()
 		}
+		dv.Down = st.err != nil
 	}
 	return &groupVoterState{keyspace: keyspace, shard: shard, shardInfo: shardInfo, durability: durability, statuses: statuses, input: in}, nil
 }

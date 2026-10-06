@@ -150,11 +150,12 @@ func (f *planFixture) deleteRecord(tablet *topodatapb.Tablet, knownUUID bool) {
 		return
 	}
 	if f.in.DeletedVoters == nil {
-		f.in.DeletedVoters = make(map[string]string)
+		f.in.DeletedVoters = make(map[string]*DeletedVoter)
 	}
-	f.in.DeletedVoters[topoproto.TabletAliasString(tablet.Alias)] = ""
+	// VTOrc kept its tablet record, and its probe failed.
+	f.in.DeletedVoters[topoproto.TabletAliasString(tablet.Alias)] = &DeletedVoter{Alias: tablet.Alias, Tablet: tablet, Down: true}
 	if knownUUID {
-		f.in.DeletedVoters[topoproto.TabletAliasString(tablet.Alias)] = planUUID(tablet)
+		f.in.DeletedVoters[topoproto.TabletAliasString(tablet.Alias)].ServerUUID = planUUID(tablet)
 	}
 }
 
@@ -331,9 +332,9 @@ func TestPlanGroupVoters(t *testing.T) {
 		setup: func(t *testing.T, f *planFixture) {
 			f.dropFromViews(f.c)
 			f.deleteRecord(f.c, true)
-			f.in.DeletedVotersAnswering = map[string]bool{"zone3-0000000300": true}
+			f.in.DeletedVoters["zone3-0000000300"].Down = false
 		},
-		want: want{alert: GroupVoterRecordDeleted, reason: "voter zone3-0000000300 has no tablet record, but its tablet answers"},
+		want: want{alert: GroupVoterRecordDeleted, reason: "voter zone3-0000000300 has no tablet record, but VTOrc cannot tell that its vttablet is down"},
 	}, {
 		name: "P2: a deleted voter whose server_uuid is unknown, while an active member is the MySQL of no tablet that answers",
 		setup: func(t *testing.T, f *planFixture) {
@@ -516,13 +517,13 @@ func TestPlanGroupVotersRemoveNoGroup(t *testing.T) {
 	}, {
 		name: "its server_uuid is unknown: it is removed too, since no member is active",
 		setup: func(t *testing.T, f *planFixture) {
-			f.in.DeletedVoters["zone3-0000000300"] = ""
+			f.in.DeletedVoters["zone3-0000000300"].ServerUUID = ""
 		},
 		want: removeC,
 	}, {
 		name: "the deleted voter's vttablet answers at the address VTOrc last knew",
 		setup: func(t *testing.T, f *planFixture) {
-			f.in.DeletedVotersAnswering = map[string]bool{"zone3-0000000300": true}
+			f.in.DeletedVoters["zone3-0000000300"].Down = false
 		},
 	}, {
 		name: "a reachable tablet is an active member",

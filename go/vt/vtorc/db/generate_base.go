@@ -32,6 +32,7 @@ var TableNames = []string{
 	"primary_health",
 	"vitess_keyspace",
 	"vitess_shard",
+	"vitess_deleted_group_voter",
 }
 
 // vtorcBackend is a list of SQL statements required to build the vtorc backend
@@ -324,6 +325,14 @@ CREATE TABLE vitess_shard (
 	group_replication_bootstrap_target varchar(512) NOT NULL DEFAULT '',
 	durability_policy varchar(512) NOT NULL DEFAULT '',
 	PRIMARY KEY (keyspace, shard)
+)`,
+	`
+DROP TABLE IF EXISTS vitess_deleted_group_voter
+`,
+	`
+CREATE TABLE vitess_deleted_group_voter (
+	alias varchar(256) NOT NULL,
+	PRIMARY KEY (alias)
 )`,
 	`
 CREATE INDEX source_host_port_idx_database_instance_database_instance on database_instance (source_host, source_port)
