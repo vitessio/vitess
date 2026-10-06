@@ -87,6 +87,8 @@ func TestUpdateGroupReplicationVoters(t *testing.T) {
 	primary := recoveryTablet("zone1", 101, topodatapb.TabletType_PRIMARY)
 	voter2 := recoveryTablet("zone2", 200, topodatapb.TabletType_REPLICA)
 	spare2 := recoveryTablet("zone2", 201, topodatapb.TabletType_REPLICA)
+	// rdonly2 is voter2's alias as a RDONLY tablet.
+	rdonly2 := recoveryTablet("zone2", 200, topodatapb.TabletType_RDONLY)
 	voter3 := recoveryTablet("zone3", 300, topodatapb.TabletType_REPLICA)
 	spare3 := recoveryTablet("zone3", 301, topodatapb.TabletType_REPLICA)
 
@@ -114,6 +116,22 @@ func TestUpdateGroupReplicationVoters(t *testing.T) {
 			m.EXPECT().FullStatus(gomock.Any(), sameTablet(voter2)).Return(nil, errUnreachable)
 			m.EXPECT().FullStatus(gomock.Any(), sameTablet(spare2)).Return(spareStatus(spare2, "1-5"), nil)
 			m.EXPECT().FullStatus(gomock.Any(), sameTablet(voter3)).Return(settledMember(voter3, primary, "1-10", primary, voter3), nil)
+			m.EXPECT().StartGroupReplication(gomock.Any(), sameTablet(spare2), startRequest(false)).Return(&replicationdatapb.GroupReplicationStatus{}, nil)
+		},
+		wantVoters: []string{"zone1-0000000101", "zone2-0000000201", "zone3-0000000300"},
+	}, {
+		// The operator changed voter2 to RDONLY: its MySQL is still ONLINE in the group, and it is
+		// replaced right away, whatever the grace period. Its tablet then leaves the group.
+		name:        "SwapVoter: a voter changed to RDONLY; the spare of its cell takes its seat at once, while the voter is still ONLINE",
+		tablets:     []*topodatapb.Tablet{primary, rdonly2, spare2, voter3},
+		voters:      []*topodatapb.Tablet{primary, rdonly2, voter3},
+		recorded:    true,
+		gracePeriod: time.Hour,
+		setup: func(t *testing.T, m *tmcmock.MockTabletManagerClient) {
+			m.EXPECT().FullStatus(gomock.Any(), sameTablet(primary)).Return(settledMember(primary, primary, "1-10", primary, rdonly2, voter3), nil)
+			m.EXPECT().FullStatus(gomock.Any(), sameTablet(rdonly2)).Return(settledMember(rdonly2, primary, "1-10", primary, rdonly2, voter3), nil)
+			m.EXPECT().FullStatus(gomock.Any(), sameTablet(spare2)).Return(spareStatus(spare2, "1-5"), nil)
+			m.EXPECT().FullStatus(gomock.Any(), sameTablet(voter3)).Return(settledMember(voter3, primary, "1-10", primary, rdonly2, voter3), nil)
 			m.EXPECT().StartGroupReplication(gomock.Any(), sameTablet(spare2), startRequest(false)).Return(&replicationdatapb.GroupReplicationStatus{}, nil)
 		},
 		wantVoters: []string{"zone1-0000000101", "zone2-0000000201", "zone3-0000000300"},

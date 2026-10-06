@@ -283,12 +283,15 @@ func (s *groupReplicationSync) reconcile(ctx context.Context) {
 // VTOrc moves the group primary to a voter (GroupPrimaryNotVoter), and its tablet does not serve
 // meanwhile (groupReplicationNotVoter). Nor does a member leave whose group would not keep a majority of its
 // members without it: MySQL's leave then waits for a majority that is not there. Nor a PRIMARY or
-// transitional tablet, nor one that takes a backup.
+// BACKUP or RESTORE tablet, nor one that takes a backup.
 func (s *groupReplicationSync) shouldLeaveAsNonVoter(ctx context.Context, status *replicationdatapb.GroupReplicationStatus, durability policy.Durabler, tablet *topodatapb.Tablet) bool {
 	if !policy.IsGroupReplication(durability) || !memberMayLeave(status) {
 		return false
 	}
-	if tablet.Type == topodatapb.TabletType_PRIMARY || isTransitionalTabletType(tablet.Type) || s.tm.IsBackupRunning() {
+	// A DRAINED tablet leaves too: VTOrc gives the seat of a voter that changed to DRAINED to a spare
+	// of its cell, and the member must not stay in the certification majority without a seat.
+	if tablet.Type == topodatapb.TabletType_PRIMARY || tablet.Type == topodatapb.TabletType_BACKUP || tablet.Type == topodatapb.TabletType_RESTORE ||
+		s.tm.IsBackupRunning() {
 		return false
 	}
 	voters, err := s.getVoters(ctx)

@@ -123,7 +123,7 @@ A shard can now replicate with MySQL Group Replication in single-primary mode in
 
 Group Replication is selected with the `group_replication_cross_cell` durability policy, like `semi_sync` and `cross_cell`: one voting member per cell, up to nine, so the shard keeps its primary through the loss of a cell. A shard needs `PRIMARY` or `REPLICA` tablets in at least three cells: `PlannedReparentShard`, `InitShardPrimary` and `MigrateReplicationMode` refuse a shard with fewer, and VTOrc reports it as `GroupVotersBelowTarget` instead of starting its group.
 
-Additional `REPLICA` tablets and all `RDONLY` tablets replicate asynchronously from the group's primary.
+Additional `REPLICA` tablets and all `RDONLY` tablets replicate asynchronously from the group's primary. A voting member whose tablet type changes to one that the policy does not allow as a voter (`RDONLY`, `DRAINED`) gives its seat to another `REPLICA` of its cell right away, and leaves the group.
 
 To use it:
 

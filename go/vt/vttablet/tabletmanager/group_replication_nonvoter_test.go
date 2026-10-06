@@ -88,15 +88,34 @@ func TestGroupReplicationNonVoterGroupPrimaryDoesNotServe(t *testing.T) {
 // would not keep a majority of its members without it.
 func TestGroupReplicationSyncLeavesAsNonVoter(t *testing.T) {
 	tests := []struct {
-		name      string
-		voters    []uint32
-		status    *replicationdatapb.GroupReplicationStatus
-		wantLeave bool
+		name       string
+		voters     []uint32
+		status     *replicationdatapb.GroupReplicationStatus
+		tabletType topodatapb.TabletType
+		wantLeave  bool
 	}{{
 		name:      "a secondary that is not a voter leaves",
 		voters:    []uint32{2, 3},
 		status:    nonVoterView(2),
 		wantLeave: true,
+	}, {
+		// VTOrc gave the seat of a voter whose type changed to RDONLY or DRAINED to a spare.
+		name:       "a RDONLY secondary that is not a voter leaves",
+		voters:     []uint32{2, 3},
+		status:     nonVoterView(2),
+		tabletType: topodatapb.TabletType_RDONLY,
+		wantLeave:  true,
+	}, {
+		name:       "a DRAINED secondary that is not a voter leaves",
+		voters:     []uint32{2, 3},
+		status:     nonVoterView(2),
+		tabletType: topodatapb.TabletType_DRAINED,
+		wantLeave:  true,
+	}, {
+		name:       "a secondary that takes a backup stays",
+		voters:     []uint32{2, 3},
+		status:     nonVoterView(2),
+		tabletType: topodatapb.TabletType_BACKUP,
 	}, {
 		name:   "a secondary that is a voter stays",
 		voters: []uint32{1, 2, 3},
@@ -119,6 +138,9 @@ func TestGroupReplicationSyncLeavesAsNonVoter(t *testing.T) {
 			tm, fmd, _, ts := newLegitimacyTestTM(t)
 			setGroupReplicationVoters(t, ts, tt.voters...)
 			fmd.SetGroupReplicationStatus(tt.status)
+			if tt.tabletType != topodatapb.TabletType_UNKNOWN {
+				setTabletType(t, tm, tt.tabletType)
+			}
 			s := newGroupReplicationSync(tm)
 
 			s.reconcile(t.Context())
