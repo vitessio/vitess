@@ -822,6 +822,99 @@ func TestQueryExecutorPlanNextval(t *testing.T) {
 	}
 }
 
+// TestQueryExecutorPlanNextvalCommitFailureKeepsCache verifies that a failed
+// refill COMMIT leaves the sequence cache unchanged and that the next call
+// refills the cache from the sequence table.
+func TestQueryExecutorPlanNextvalCommitFailureKeepsCache(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	t.Cleanup(db.Close)
+
+	db.AddQuery("select next_id, cache from seq where id = 0 for update", &sqltypes.Result{
+		Fields: []*querypb.Field{{Type: sqltypes.Int64}, {Type: sqltypes.Int64}},
+		Rows:   [][]sqltypes.Value{{sqltypes.NewInt64(1), sqltypes.NewInt64(3)}},
+	})
+	db.AddQuery("update seq set next_id = 4 where id = 0", &sqltypes.Result{})
+
+	ctx := t.Context()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	t.Cleanup(tsv.StopService)
+
+	db.AddRejectedQuery("commit", errors.New("commit failed"))
+	qre := newTestQueryExecutor(ctx, tsv, "select next value from seq", 0)
+	_, err := qre.Execute()
+	require.ErrorContains(t, err, "commit failed")
+
+	// Check that the cache stays empty. The table still holds next_id = 1.
+	seq := qre.plan.Table.SequenceInfo
+	require.Zero(t, seq.NextVal)
+	require.Zero(t, seq.LastVal)
+
+	// Make the retry read next_id = 4 from the table. A stale cache returns 1.
+	db.AddQuery("select next_id, cache from seq where id = 0 for update", &sqltypes.Result{
+		Fields: []*querypb.Field{{Type: sqltypes.Int64}, {Type: sqltypes.Int64}},
+		Rows:   [][]sqltypes.Value{{sqltypes.NewInt64(4), sqltypes.NewInt64(3)}},
+	})
+	db.AddQuery("update seq set next_id = 7 where id = 0", &sqltypes.Result{})
+	db.DeleteRejectedQuery("commit")
+
+	qre = newTestQueryExecutor(ctx, tsv, "select next value from seq", 0)
+	got, err := qre.Execute()
+	require.NoError(t, err)
+
+	want := &sqltypes.Result{
+		Fields: []*querypb.Field{{
+			Name: "nextval",
+			Type: sqltypes.Int64,
+		}},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt64(4),
+		}},
+	}
+	require.Truef(t, got.Equal(want), "qre.Execute() =\n%#v, want:\n%#v", got, want)
+}
+
+// TestQueryExecutorPlanNextvalPartialRefillCommitFailureKeepsCache verifies
+// that a failed refill COMMIT on a non-empty cache leaves the cached range
+// unchanged. The refill starts from the cached last value, which equals the
+// next_id in the sequence table.
+func TestQueryExecutorPlanNextvalPartialRefillCommitFailureKeepsCache(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	t.Cleanup(db.Close)
+
+	db.AddQuery("select next_id, cache from seq where id = 0 for update", &sqltypes.Result{
+		Fields: []*querypb.Field{{Type: sqltypes.Int64}, {Type: sqltypes.Int64}},
+		Rows:   [][]sqltypes.Value{{sqltypes.NewInt64(1), sqltypes.NewInt64(3)}},
+	})
+	db.AddQuery("update seq set next_id = 4 where id = 0", &sqltypes.Result{})
+
+	ctx := t.Context()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	t.Cleanup(tsv.StopService)
+
+	// Use up the cached range [1, 4). The table now holds next_id = 4.
+	for range 3 {
+		qre := newTestQueryExecutor(ctx, tsv, "select next value from seq", 0)
+		_, err := qre.Execute()
+		require.NoError(t, err)
+	}
+
+	db.AddQuery("select next_id, cache from seq where id = 0 for update", &sqltypes.Result{
+		Fields: []*querypb.Field{{Type: sqltypes.Int64}, {Type: sqltypes.Int64}},
+		Rows:   [][]sqltypes.Value{{sqltypes.NewInt64(4), sqltypes.NewInt64(3)}},
+	})
+	db.AddQuery("update seq set next_id = 7 where id = 0", &sqltypes.Result{})
+	db.AddRejectedQuery("commit", errors.New("commit failed"))
+
+	qre := newTestQueryExecutor(ctx, tsv, "select next value from seq", 0)
+	_, err := qre.Execute()
+	require.ErrorContains(t, err, "commit failed")
+
+	// Check that the cache keeps the used up range. A stale cache holds LastVal = 7.
+	seq := qre.plan.Table.SequenceInfo
+	require.EqualValues(t, 4, seq.NextVal)
+	require.EqualValues(t, 4, seq.LastVal)
+}
+
 func TestQueryExecutorMessageStreamACL(t *testing.T) {
 	ctx := t.Context()
 	aclName := fmt.Sprintf("simpleacl-test-%d", rand.Int64())
