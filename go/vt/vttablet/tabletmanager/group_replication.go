@@ -1102,7 +1102,7 @@ func (tm *TabletManager) groupReplicationServingReason(ctx context.Context, dura
 	}
 	// Only a voter serves: a member that is not one counts in the certification majority of its view,
 	// which then need not hold a majority of the voters, and a bootstrap from the voters would lose
-	// what it acknowledged. VTOrc gives the group primary a seat (policy.SelectVoters), and the
+	// what it acknowledged. VTOrc moves the group primary to a voter (GroupPrimaryNotVoter), whose
 	// tablet serves then.
 	if !policy.IsVoter(rec.voters, tm.tabletAlias) {
 		return groupReplicationNotVoter
@@ -1199,6 +1199,21 @@ func (tm *TabletManager) applyGroupReplicationServingDecisionLocked(ctx context.
 		return reason, status, nil
 	}
 	return "", status, nil
+}
+
+// checkOwnTabletRecord returns a FAILED_PRECONDITION error when the tablet's own tablet record no
+// longer exists. A tablet whose record was deleted must not serve as the primary: deleting it is the
+// operator's signal that VTOrc may drop the tablet from the voters (RemoveVoter, RemoveVoterNoGroup).
+// A tablet that becomes PRIMARY writes its record first, which fails then; one that is PRIMARY
+// already and serves again writes nothing, and checks with this read, bounded by
+// groupReplicationTopoReadTimeout. A topology that does not answer is not a deletion.
+func (tm *TabletManager) checkOwnTabletRecord(ctx context.Context) error {
+	readCtx, cancel := context.WithTimeout(ctx, groupReplicationTopoReadTimeout)
+	defer cancel()
+	if _, err := tm.TopoServer.GetTablet(readCtx, tm.tabletAlias); topo.IsErrType(err, topo.NoNode) {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "the tablet record of %s does not exist: the tablet does not serve as the primary", topoproto.TabletAliasString(tm.tabletAlias))
+	}
+	return nil
 }
 
 // groupReplicationVoters returns the voting members of the tablet's shard's group, as recorded
