@@ -566,3 +566,29 @@ func TestMigrateReplicationModeConcurrentDirections(t *testing.T) {
 		assert.Equal(t, "group_replication", keyspaceRecord(t, ts).DurabilityPolicy, "the keyspace keeps the group replication policy")
 	})
 }
+
+// TestMigrateReplicationModeWarnsOfSourceNextToAsyncPolicy checks a keyspace record with a migration
+// source next to an asynchronous policy, which only an older vtctld's SetKeyspaceDurabilityPolicy
+// writes: the migration says so in a warning, and, run again to Group Replication, names the target
+// policy in the keyspace record again.
+func TestMigrateReplicationModeWarnsOfSourceNextToAsyncPolicy(t *testing.T) {
+	c, ts := newFakeGRCluster(t, "semi_sync", migrationTestShard()...)
+	setKeyspaceRecord(t, ts, "semi_sync", "semi_sync")
+	m := newTestMigrator(c, ts)
+	_, err := migrate(t, m, "group_replication", true)
+	require.NoError(t, err)
+	logs := m.logger.(*logutil.MemoryLogger).String()
+	assert.Contains(t, logs, "an older vtctld probably changed it")
+	assert.Contains(t, logs, "run MigrateReplicationMode to a group replication policy again")
+
+	_, err = migrate(t, m, "group_replication", false)
+	require.NoError(t, err)
+	assert.Equal(t, &topodatapb.Keyspace{DurabilityPolicy: "group_replication"}, keyspaceRecord(t, ts), "the migration names the target policy again, and ends")
+
+	// Run back to the source policy instead, the migration ends with the source removed.
+	c, ts = newFakeGRCluster(t, "semi_sync", migrationTestShard()...)
+	setKeyspaceRecord(t, ts, "semi_sync", "semi_sync")
+	_, err = migrate(t, newTestMigrator(c, ts), "semi_sync", false)
+	require.NoError(t, err)
+	assert.Equal(t, &topodatapb.Keyspace{DurabilityPolicy: "semi_sync"}, keyspaceRecord(t, ts))
+}

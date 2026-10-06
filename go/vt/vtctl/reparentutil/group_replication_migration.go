@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -215,6 +216,9 @@ func (m *ReplicationModeMigrator) Migrate(ctx context.Context, keyspace string, 
 		return resp, err
 	}
 	resp.DurabilityPolicy = currentName
+	if warning := sourceNextToAsyncPolicyWarning(ki); warning != "" {
+		m.logger.Warningf("%s", warning)
+	}
 	// A switch between two policies of the replication mode that the keyspace runs needs no
 	// conversion: SetKeyspaceDurabilityPolicy makes it. Converted, every running group's voters
 	// would be selected again for the target policy, outside VTOrc's rules, and a migration to Group
@@ -582,7 +586,7 @@ func writeShardDurabilityPolicy(ctx context.Context, ts *topo.Server, keyspace, 
 func (r *migrationRun) setKeyspacePolicy(ctx context.Context, resp *vtctldatapb.MigrateReplicationModeResponse, currentName string) error {
 	desc := fmt.Sprintf("set the durability policy of keyspace %s from %s to %s", r.keyspace, currentName, r.opts.DurabilityPolicy)
 	switch {
-	case currentName == r.opts.DurabilityPolicy:
+	case currentName == r.opts.DurabilityPolicy && r.keyspaceRecord.GetMigrationSourceDurabilityPolicy() == "":
 		r.addKeyspaceStep(resp, MigrationActionSetDurabilityPolicy, MigrationStepSkipped, fmt.Sprintf("keyspace %s already has durability policy %s", r.keyspace, currentName))
 	case r.opts.DryRun:
 		r.addKeyspaceStep(resp, MigrationActionSetDurabilityPolicy, MigrationStepPlanned, desc)
@@ -639,6 +643,23 @@ func SetKeyspaceDurabilityPolicy(ctx context.Context, ts *topo.Server, keyspace,
 	return ki, nil
 }
 
+// sourceNextToAsyncPolicyWarning describes a keyspace record whose migration source is set while its
+// policy is not a group replication policy, "" otherwise. A migration only writes a source together
+// with a group replication policy, and an older vtctld's SetKeyspaceDurabilityPolicy, which does not
+// know the source, can switch the policy next to it: the keyspace's shards that run a group are then
+// read as asynchronous shards by the components that do not know the source either.
+func sourceNextToAsyncPolicyWarning(ki *topo.KeyspaceInfo) string {
+	source := ki.GetMigrationSourceDurabilityPolicy()
+	if source == "" {
+		return ""
+	}
+	if durability, err := policy.GetDurabilityPolicy(ki.GetDurabilityPolicy()); err == nil && policy.IsGroupReplication(durability) {
+		return ""
+	}
+	return fmt.Sprintf("keyspace %s has the migration source %s next to durability policy %q, which is not a group replication policy: an older vtctld probably changed it with SetKeyspaceDurabilityPolicy; run MigrateReplicationMode to a group replication policy again to name it in the keyspace record again, or back to %s to reverse the migration",
+		ki.KeyspaceName(), source, ki.GetDurabilityPolicy(), source)
+}
+
 // checkDurabilityPolicyChange returns a FAILED_PRECONDITION error if the keyspace's durability
 // policy may not be set to durabilityPolicy outside MigrateReplicationMode: while a migration converts
 // the keyspace (it has a migration source), or when the change switches the replication mode and a
@@ -649,6 +670,10 @@ func SetKeyspaceDurabilityPolicy(ctx context.Context, ts *topo.Server, keyspace,
 func checkDurabilityPolicyChange(ctx context.Context, ts *topo.Server, ki *topo.KeyspaceInfo, durabilityPolicy string) error {
 	keyspace := ki.KeyspaceName()
 	if source := ki.GetMigrationSourceDurabilityPolicy(); source != "" {
+		if warning := sourceNextToAsyncPolicyWarning(ki); warning != "" {
+			log.Warn(warning)
+			return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, warning)
+		}
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
 			"MigrateReplicationMode is converting keyspace %s from %s to %s: run MigrateReplicationMode again to finish the migration, or to convert the keyspace back",
 			keyspace, source, ki.GetDurabilityPolicy())

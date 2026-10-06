@@ -80,6 +80,12 @@ func TestSetKeyspaceDurabilityPolicyRefusesReplicationModeChange(t *testing.T) {
 		target:   policy.DurabilityGroupReplicationCrossCell,
 		wantErr:  "MigrateReplicationMode is converting keyspace ks",
 	}, {
+		name:     "a migration source next to an asynchronous policy",
+		keyspace: &topodatapb.Keyspace{DurabilityPolicy: policy.DurabilitySemiSync, MigrationSourceDurabilityPolicy: policy.DurabilitySemiSync},
+		shard:    &topodatapb.Shard{},
+		target:   policy.DurabilityNone,
+		wantErr:  "an older vtctld probably changed it",
+	}, {
 		name:     "semi-sync to group replication, no shard is initialized",
 		keyspace: &topodatapb.Keyspace{DurabilityPolicy: policy.DurabilitySemiSync},
 		shard:    &topodatapb.Shard{},

@@ -400,7 +400,7 @@ What must be followed by operators, since no component can check it:
 
 - Upgrade vtctld, VTOrc and all vttablets before the first `MigrateReplicationMode`. VTOrc registers nowhere, so the migration cannot see which VTOrcs run; older VTOrcs stop managing the keyspace from step 0 (or misbehave, if they know Group Replication but not the migration source).
 - Never downgrade a component that serves a Group Replication keyspace. Migrate the keyspace back to semi-sync first; the rollback ends with the keyspace on the asynchronous policy and no shard policy.
-- Never run `SetKeyspaceDurabilityPolicy` from an older vtctld on a Group Replication keyspace: it does not have the guard below.
+- Never run `SetKeyspaceDurabilityPolicy` from an older vtctld on a Group Replication keyspace: it does not have the guard below. If one did during a migration, the keyspace record has a migration source next to an asynchronous policy: `MigrateReplicationMode` and `SetKeyspaceDurabilityPolicy` say so in a warning, and running `MigrateReplicationMode` to the Group Replication policy again names it in the keyspace record again (or, back to the source policy, ends with the source removed).
 - A later release must give any change in the semantics of a Group Replication policy a new policy name, so that this release fails safe on it.
 
 The fields are optional and additive (field 13 of `Shard`, field 13 of `Keyspace`, field 29 of `FullStatus`): older readers skip them, and with no shard having a policy of its own and no migration source, every component behaves as before.
