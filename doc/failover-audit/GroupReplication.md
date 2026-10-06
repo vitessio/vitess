@@ -994,7 +994,7 @@ The semi-sync baselines reproduce the audit's semi-sync findings in this environ
 
 ### Found by the sweep
 
-Both were found by the sweep and are fixed (SW-1: a73499e, fix 5; SW-2: faba13e, fix 6; see "Findings of the second model milestone and the chaos sweep: eight fixes"); the numbers above are from f528e9a, before those fixes. Not fixed yet: the tablet's own step-down below (`endPrimaryTerm`).
+Both were found by the sweep and are fixed (SW-1: a73499e, fix 5; SW-2: faba13e, fix 6; see "Findings of the second model milestone and the chaos sweep: eight fixes"); the numbers above are from f528e9a, before those fixes. The tablet's own step-down below (`endPrimaryTerm`, SW-1b) is fixed by a2edda7 (see "Before a draft PR").
 
 **SW-1. VTOrc configures asynchronous replication on a voter whose join is in progress (G13 r1 and r2).** When a voter is not an active member, VTOrc's `GroupMemberNotOnline` makes it join the group. While a `START GROUP_REPLICATION` runs on it, that analysis does not match (`GroupStartInProgress`), and while VTOrc's own join runs, its recovery is skipped (`GroupJoinInFlight`). The next analysis for the tablet then matches: `NotConnectedToPrimary`, and `ReplicationStopped` after it, which only require that MySQL is not an active member (`analysis_problem.go`). Their recovery, `fixReplica` (`topology_recovery.go`), has no Group Replication guard: it sets the tablet read-only and calls `SetReplicationSource` with the shard primary, which runs `CHANGE REPLICATION SOURCE TO` on the default channel and `START REPLICA`.
 
@@ -1248,6 +1248,69 @@ Whether a G12 cycle keeps the majority depends on when the joiner is admitted re
 - **Fix 7's residual assumption** (the model's `VOT_PROMPT`): the window between the re-check's reads and the compare-and-swap is shorter than a host restart, a rejoin, an election and a crash. The re-check waits at most `groupVoterRecheckTimeout` (2s) for each tablet's status, so a status it decides on is at most about 2s old when the write starts (it used to wait up to the RPC timeout, 15s, for a tablet that did not answer); then come only reads of VTOrc's own backend, and the write's own round trip to the global topology, which a stalled VTOrc or a slow topology server can still stretch. VTOrc's sighting of a dropped voter has a granularity of a second.
 - **Fix 4:** a group bootstrapped before incarnations were recorded gets no voter back on the tablets' own until `GroupBootstrapNotRecorded` records it, which needs every voter to answer. A group that runs unrecorded while a voter does not answer waits for it.
 - **Fix 8:** a non-voter that the group elects is a PRIMARY that does not serve until VTOrc gives it a seat (one `GroupVotersOutOfDate` pass, under the cell limit by dropping the voter of its cell). Its tablet type changes, so vtgate buffers meanwhile.
-- **The voter list's other writers:** PlannedReparentShard's initial promotion and the migration write the list without fix 1's rule or fix 7's re-check; both write it only while no group runs (fix 3, the migration's preflight).
-- **`InitShardPrimary`** (deprecated, `--force`) still runs `InitPrimary` on a shard whose group VTOrc may be bootstrapping: fix 3 covers PlannedReparentShard only.
+- **The voter list's other writers:** PlannedReparentShard's initial promotion and the migration write the list without fix 1's rule or fix 7's re-check. See "Before a draft PR" for why the initial promotion does not need them, and for the migration's re-run on a converted shard, which no longer changes the voters (093bbf8).
+- **`InitShardPrimary`** (deprecated, `--force`) still runs `InitPrimary` on a shard whose group VTOrc may be bootstrapping: fix 3 covers PlannedReparentShard only. It now checks the tablets' Group Replication capabilities (4320577), but not `checkShardHasNoGroup`.
 - **One run per scenario:** the chaos results are single runs on one host, as before.
+
+## Before a draft PR (gr-predraft)
+
+The work before a draft PR: the catch-up with main, the step-down of SW-1b, the mixed-version guard, the voter list's other writers, and CI hygiene. Each code change has a test that fails without it.
+
+### Catch-up with main (914b2f4)
+
+21 commits of main since e5e0091 were merged. The conflicts were VTOrc's flag help text (both sides added flags) and the generated vtctldata vtproto code, regenerated with the Makefile's protoc command; that regeneration also brought the vtproto code of replicationdata, tabletmanagerdata and topodata back to the form the Makefile generates (the branch had them in another form). main's new VTOrc option `--emergency-reparent-require-primary-position` reads the durability policy: it now resolves the shard's policy, not only the keyspace's. `TestGroupReplicationFenceCheckFollowsMigrationBack` failed once in 30 runs after the merge: its premise (a fence decided under a stale policy) does not hold once the shard watch delivers the new policy, which it can since 121646e; the subtest now stops the shard sync first (1b2a975, 300 of 300 runs pass).
+
+ERS on a group ignores main's new `--required-position`: the group's primary holds every transaction the group certified, and VTOrc never sets it for a group, whose policy has no semi-sync. Refusing it there (as `--allow-split-brain-promotion` is) or checking it against the candidates is left open.
+
+### A step-down that configured asynchronous replication on a voter (SW-1b, a2edda7; and 93e95dc)
+
+**The problem.** `endPrimaryTerm` runs when a PRIMARY tablet sees in the shard record that another tablet is the primary. When its MySQL was not an active group member (the sweep's S7c r2 zone1 at 19:22:05, and S2: a voter whose MySQL was in the ERROR state), it demoted MySQL and then made it replicate from the new primary on the default channel, next to the membership it rejoined. The end of an offline backup did the same on a voter whose MySQL the backup had restarted.
+
+**Fix.** Under a group replication policy, or when the policy cannot be read on a tablet that runs Group Replication, the step-down demotes MySQL (`super_read_only`, not serving) and changes the type to REPLICA without configuring replication, leaving the join to the sync loop or VTOrc. After a backup, a listed voter, or while no voter is listed a tablet that the policy allows in the group, is left alone. Other shards, and the tablets of a group's shard that are not voters, are unchanged. `TestEndPrimaryTermOnInactiveGroupReplicationMember` (the ERROR and OFFLINE states, and a semi-sync control), `TestRestoreReplicationAfterBackupOnGroupMember`.
+
+### Mixed versions
+
+The design (a planning report, `/home/user/vtlab/guard-design.md`) was checked against the code before it was implemented:
+
+- An unknown policy name already fails safe in an older VTOrc (the analysis returns nothing for the shard) and in an older vtctld (the reparents return the policy's error); a non-primary vttablet exits at start on it.
+- The half-migrated keyspace was the gap: its record still named the semi-sync policy while a shard ran a group, which an older vtctld or VTOrc would have managed as a semi-sync shard, and the migration's preflight only checked the voters of the converted shard.
+- A vttablet without `--enable-group-replication` reports its MySQL's group state (FullStatus field 27, collected by mysqld whatever the flag), so that ERS, PRS and VTOrc could promote it, while its fence and serving invariant are off. Its `InitPrimary` under a group replication policy skipped the bootstrap and made MySQL writable without a group, and `checkGroupReplicationPrimaryElect` checks nothing on a shard that was never initialized.
+- After an offline backup, a vttablet dereferenced the nil policy of a name it did not know (a panic, also on the base).
+
+The changes, one commit each:
+
+- **A. The keyspace record names the target policy before a shard runs a group** (53b4299, fe2bc51). `Keyspace.migration_source_durability_policy` (field 13, additive) is the policy of every shard that has no policy of its own; `topo.ShardDurabilityPolicy` resolves the shard's own policy, else the migration source, else the keyspace's policy, and VTOrc stores the source with its copy of the keyspace record. The migration's step 0, before the first shard is converted, names the target policy in the keyspace record and keeps the old one as the source, in one write under the keyspace lock, after a keyspace-wide preflight (every tablet that answers reports field 29) and a dry run of the requested shards (a refused migration leaves the keyspace record as it was). Step 8 removes the source once every shard has the target policy as its own, checked again under the keyspace lock. The migration back clears a source left by an interrupted migration in its final keyspace write. `TestShardDurabilityPolicyMigrationSource`, `TestGetDetectionAnalysisShardPolicy` (a shard not converted yet), `TestGetShardDurabilityPolicyMigrationSource`, `TestMigrateReplicationModeHidesKeyspaceFromOlderComponents`, `TestMigrateReplicationModeRefusesOlderTabletsInKeyspace`, `TestMigrateReplicationModeBackClearsMigrationSource`; mutations of step 0, the keyspace preflight, the removal of the source and the migration back's clearing fail them.
+- **B. `SetKeyspaceDurabilityPolicy`** (35b15e3) refuses, under the keyspace lock, a replication mode switch while a shard is initialized, and any change while a migration source is set. `TestSetKeyspaceDurabilityPolicyRefusesReplicationModeChange`. The check is in `reparentutil.SetKeyspaceDurabilityPolicy`, which the vtctld handler calls, rather than in the handler: it reads the shards under the same lock as the write.
+- **C. Capability checks before a group is initialized** (4320577): PRS's initial promotion and `InitShardPrimary` require fields 28 and 29 on the primary-elect and on every tablet that the policy allows as a voter (the voters are selected after the check, so it covers every possible voter), and the tablet's `InitPrimary` refuses a group replication policy without the flag. `TestPlannedReparentInitialPromotionRefusesTabletWithoutGroupReplication`, `TestInitShardPrimaryRefusesTabletWithoutGroupReplication`, `TestInitPrimaryRefusesGroupReplicationPolicyWithoutFlag`.
+- **D. Field 28 on every promotion** (89b80aa): ERS, the PRS primary-elect check, VTOrc's `PromoteGroupPrimary`, and VTOrc's choice of a member to move the group primary to. `TestEmergencyReparentRefusesGroupPrimaryWithoutGroupReplicationEnabled`, `TestPlannedReparentRefusesElectWithoutGroupReplicationEnabled`, a case of `TestPromoteGroupPrimary` and of `TestMoveGroupPrimaryOutOfUnreachableCell`.
+- **E. The nil policy after a backup** (bdd0c2e): the tablet returns after the error. `TestRestoreReplicationAfterBackupWithUnknownDurabilityPolicy` (a panic before).
+- **Documentation** (fc06bc8): the design document's "Upgrade requirement", "Where a policy can be set", and the migration's keyspace steps. FullStatus field 29 now means that the vttablet resolves both the shard's own policy and the migration source: both come in the same release, so no new field was added.
+
+What no component can check, and the design document states as operator rules: upgrade every component before the first migration and run at least one upgraded VTOrc; never downgrade a component that serves a Group Replication keyspace without migrating it back; never run `SetKeyspaceDurabilityPolicy` from an older vtctld on such a keyspace; and a later release gives any change in a Group Replication policy's semantics a new policy name.
+
+### The voter list's other writers
+
+**PlannedReparentShard's initial promotion** selects and stores the voters only after `checkShardHasNoGroup`, under the shard lock: every tablet answered, none is an active member of the shard's group, no bootstrap intent is live and no incarnation is recorded. Fix 1's rule constrains a list relative to the views of the shard's group, and fix 7's re-check the voters that a selection dropped from a running group: with no active member, no view exists, and every list passes both. No group can form between the check and the write: a bootstrap needs the shard lock (VTOrc) or is this promotion's own `InitPrimary`, a tablet never bootstraps on its own, and no tablet joins while no incarnation is recorded (fix 4). One way was left: a `START GROUP_REPLICATION` that still runs, such as VTOrc's bootstrap whose RPC timed out, after its intent's two-minute fence expired. The check now refuses while a tablet reports a `START` in progress (f7f6b12, a case of `TestPlannedReparentGroupReplicationInitialPromotionRefusals`).
+
+**The migration** stores the voters it selected (keeping every recorded voter that is still eligible) before its bootstrap, or, on a re-run, when the selection differs from the record. On a shard that is not converted yet, the list governs nothing until the conversion ends, when every voter is ONLINE in the group: the shard is managed by the semi-sync policy until then, so neither rule is needed. On a shard that it converted, whose group runs, a re-run could change the list without them. A trace: four voters, two of which left the group cleanly; an operator makes one of those RDONLY; the re-run selects three voters, two of which are the remaining view, whose primary then serves with half of the voters it had, which fix 1 refuses. On a converted shard whose group runs, the migration now refuses to change the voters (093bbf8, `TestMigrateReplicationModeLeavesVotersOfConvertedShardToVTOrc`): VTOrc maintains them.
+
+### CI hygiene
+
+- `make proto`: the Go code regenerated with the Makefile's protoc command and the vtctldclient code leave no diff; the vtadmin-web types, which `make proto` also generates, lacked the branch's topodata fields and were regenerated from the package lock (e7fb653).
+- `make generate_ci_workflows` no longer exists on main: the end-to-end workflow takes its matrix from `test/config.json`, and `go run ./go/tools/ci-config` (the CI check of that file) reports it clean.
+- golangci-lint (the pinned version, no issue limits) is clean on the 30 packages the branch changes (2dc44cb).
+- The chaos tests (`go/test/endtoend/vtorc/chaos`) are not in `test/config.json`; the end-to-end runner (`tools/e2e_test_runner.sh`) excludes `go/test/endtoend`, and the scenarios skip without `CHAOS_E2E`.
+- MySQL in CI: the `ers_prs_newfeatures_heavy` shard, which runs `reparent/grouprepl`, has no `xtrabackup` need, so `cluster_endtoend.yml` uses `.github/actions/setup-mysql` with flavor `mysql-8.4`. On amd64 (`ubuntu-24.04`, or the larger x86-64 runner), that installs `mysql-server` from the MySQL APT repository's `mysql-8.4-lts` channel; its `mysql-community-server-core_8.4.11-1ubuntu24.04_amd64.deb` ships `/usr/lib/mysql/plugin/group_replication.so` (checked by listing the package). On arm64, the action installs Ubuntu's `mysql-server` instead (8.0), which was not checked.
+
+### Validation
+
+- **Unit tests** (`go/vt/vtorc/...`, `go/vt/vtctl/reparentutil/...`, `go/vt/vtctl/grpcvtctldserver/...`, `go/vt/vttablet/tabletmanager`, `go/vt/topo/...`) pass, except failures that the environment causes: `TestWaitForDBAGrants`, `consultopo` (no consul binary) and `zk2topo` (the ZooKeeper server cannot start). The new and changed tests pass under `-race -count=10`.
+- **End to end** (MySQL 8.4.11): `TestGroupReplicationLifecycle` 66s (a new primary in the topology 6.8s after the primary's mysqld was killed) and `TestGroupReplicationMigratesShardByShard` 111s, which now checks the keyspace record's migration source while one shard is converted and its removal: pass.
+- Every new commit compiles, and passes the repository's lint hook, on its own.
+
+### Still open
+
+- ERS on a group ignores `--required-position` (see "Catch-up with main").
+- The design's operator rules (upgrade order, no downgrade, no `SetKeyspaceDurabilityPolicy` from an older vtctld) cannot be checked by any component.
+- `InitShardPrimary` does not run `checkShardHasNoGroup` (see the previous "Still open").
+- The chaos scenarios were not run again for these changes.
