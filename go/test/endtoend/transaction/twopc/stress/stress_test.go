@@ -245,6 +245,60 @@ func TestDisruptions(t *testing.T) {
 	}
 }
 
+// TestRedoAfterUnnoticedMySQLRestart tests that a transaction prepared on a
+// shard is committed when the shard's MySQL restarts without its vttablet
+// noticing, and the primary is then made writable, as VTOrc does. The prepared
+// connection is gone but stays in the prepared pool, and redoing the prepared
+// transactions used to wait for it forever.
+func TestRedoAfterUnnoticedMySQLRestart(t *testing.T) {
+	// Reparent all the shards to first tablet being the primary.
+	reparentToFirstTablet(t)
+	conn, closer := start(t)
+	defer closer()
+	defer twopcutil.DeleteFile(twopcutil.DebugDelayCommitShard)
+	defer twopcutil.DeleteFile(twopcutil.DebugDelayCommitTime)
+	// Keep VTOrc from reparenting while vttablet is paused, and from making
+	// the primary writable before the test does.
+	for _, vtorc := range clusterInstance.VTOrcProcesses {
+		vtorc.DisableGlobalRecoveries(t)
+		defer vtorc.EnableGlobalRecoveries(t)
+	}
+
+	// Delay the commit on the third shard, so that its transaction stays prepared across the restart.
+	var wg sync.WaitGroup
+	twopcutil.RunMultiShardCommitWithDelay(t, conn, "30", &wg, append([]string{"begin"}, getMultiShardInsertQueries()...))
+	tablet := clusterInstance.Keyspaces[0].Shards[2].Vttablets[0].VttabletProcess
+	require.Eventually(t, func() bool {
+		qr, err := tablet.QueryTabletWithContext(t.Context(), "select count(*) from _vt.redo_state", keyspaceName, false)
+		return err == nil && qr.Rows[0][0].ToString() == "1"
+	}, 30*time.Second, 100*time.Millisecond, "the transaction should be prepared on the third shard")
+
+	// Pause vttablet while MySQL restarts. When it resumes, its pooled
+	// connections reconnect, and it does not notice the restart.
+	tablet.Stop()
+	defer tablet.Resume()
+	require.NoError(t, mysqlRestartShard3(t))
+	require.Eventually(t, func() bool {
+		qr, err := tablet.QueryTabletWithContext(t.Context(), "select @@global.super_read_only", keyspaceName, false)
+		return err == nil && qr.Rows[0][0].ToString() == "1"
+	}, 60*time.Second, 100*time.Millisecond, "MySQL should restart in super-read-only mode")
+	tablet.Resume()
+
+	// Make the primary writable, which redoes the prepared transactions first.
+	setWritable := make(chan error, 1)
+	go func() {
+		setWritable <- clusterInstance.VtctldClientProcess.ExecuteCommand("SetWritable", tablet.TabletPath, "true")
+	}()
+	require.Eventually(t, func() bool {
+		return len(setWritable) > 0
+	}, 60*time.Second, 100*time.Millisecond, "making the primary writable should not wait for the prepared transaction")
+	require.NoError(t, <-setWritable)
+
+	// Wait for the commit to have returned, and for the transaction to be committed on all the shards.
+	wg.Wait()
+	twopcutil.WaitForResults(t, &vtParams, "select id, col from twopc_t1 where col = 4 order by id", `[[INT64(4) INT64(4)] [INT64(6) INT64(4)] [INT64(9) INT64(4)]]`, 60*time.Second)
+}
+
 // getMultiShardInsertQueries gets the queries that will cause one insert on all the shards.
 func getMultiShardInsertQueries() []string {
 	var queries []string
