@@ -214,6 +214,12 @@ func TestCommitRejectedByClusterActionRecordsKill(t *testing.T) {
 	txID, _, _, err := txEngine.Begin(ctx, 0, nil, &querypb.ExecuteOptions{})
 	require.NoError(t, err)
 
+	conn, err := txEngine.txPool.GetAndLock(ctx, txID, "inspect")
+	require.NoError(t, err)
+
+	dbConn := conn.UnderlyingDBConn().Conn
+	conn.Unlock()
+
 	txStats := txEngine.txPool.txStats.Counts()
 	initialCommits := txStats["TabletServerTest.commit"]
 	initialKills := txStats["TabletServerTest.kill"]
@@ -225,6 +231,7 @@ func TestCommitRejectedByClusterActionRecordsKill(t *testing.T) {
 
 	_, _, err = txEngine.Commit(ctx, txID)
 	require.ErrorContains(t, err, vterrors.ShuttingDown)
+	require.True(t, dbConn.IsClosed(), "a rejected COMMIT must close the MySQL connection to roll back the transaction")
 
 	require.NotContains(t, db.QueryLog(), "commit")
 
@@ -235,6 +242,26 @@ func TestCommitRejectedByClusterActionRecordsKill(t *testing.T) {
 	_, err = txEngine.txPool.GetAndLock(ctx, txID, "after aborted commit")
 	require.ErrorContains(t, err, "kill")
 	require.NotContains(t, err.Error(), "transaction committed")
+}
+
+// TestCommitRemovesActiveCommit verifies that a finished COMMIT leaves
+// activeCommits empty.
+func TestCommitRemovesActiveCommit(t *testing.T) {
+	db := fakesqldb.New(t)
+	db.AddQueryPattern(".*", &sqltypes.Result{})
+	t.Cleanup(func() { db.Close() })
+
+	txEngine := setupTxEngine(db)
+	txEngine.AcceptReadWrite()
+	t.Cleanup(func() { txEngine.Close() })
+
+	txID, _, _, err := txEngine.Begin(t.Context(), 0, nil, &querypb.ExecuteOptions{})
+	require.NoError(t, err)
+
+	_, _, err = txEngine.Commit(t.Context(), txID)
+	require.NoError(t, err)
+
+	require.Empty(t, txEngine.activeCommits.AppendQueryzRows(nil))
 }
 
 // TestAutocommitCommitAllowedDuringClusterAction verifies that a COMMIT for an autocommit
