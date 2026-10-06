@@ -130,3 +130,54 @@ func TestGroupReplicationDeletedTabletRecordNeverServesAsPrimary(t *testing.T) {
 		})
 	}
 }
+
+// TestGroupReplicationPrimaryServesAgainWhileTabletRecordReadHangs checks that a PRIMARY tablet
+// whose own tablet record cannot be read, because its cell's topology server does not answer, serves
+// again once its MySQL is the legitimate primary again: the read of its record before it serves
+// again (checkOwnTabletRecord) waits at most groupReplicationTopoReadTimeout, and only a record that
+// is gone (topo NoNode) keeps it from serving, not a topology that does not answer.
+func TestGroupReplicationPrimaryServesAgainWhileTabletRecordReadHangs(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		act  func(ctx context.Context, tm *TabletManager) error
+	}{{
+		name: "the sync loop makes the PRIMARY tablet serve again",
+		act: func(ctx context.Context, tm *TabletManager) error {
+			newGroupReplicationSync(tm).reconcile(ctx)
+			return nil
+		},
+	}, {
+		name: "UndoDemotePrimary",
+		act: func(ctx context.Context, tm *TabletManager) error {
+			return tm.UndoDemotePrimary(ctx, false)
+		},
+	}} {
+		t.Run(tt.name, func(t *testing.T) {
+			withGroupReplication(t)
+			tm, fmd, f, _ := newCutOffTestTM(t)
+			qsc := tm.QueryServiceControl.(*tabletservermock.Controller)
+			setTabletType(t, tm, topodatapb.TabletType_PRIMARY)
+			// The primary lost the majority of its voters: it does not serve, and MySQL is fenced.
+			fmd.SetGroupReplicationStatus(withViewID(groupStatus(testServerUUID(1),
+				groupMember(testServerUUID(1), mysql.GroupMemberStateOnline, mysql.GroupMemberRolePrimary)), "1780000001:20"))
+			newGroupReplicationSync(tm).reconcile(t.Context())
+			require.False(t, qsc.IsServing())
+			fmd.SuperReadOnly.Store(true)
+			fmd.ReadOnly = true
+
+			// The voters are back in its view, while the tablet records cannot be read.
+			fmd.SetGroupReplicationStatus(legitimatePrimaryView("1780000001:21"))
+			f.cutTablets()
+
+			ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+			defer cancel()
+			start := time.Now()
+			err := tt.act(ctx, tm)
+			assert.Less(t, time.Since(start), groupReplicationTopoReadTimeout+5*time.Second, "the tablet must not wait for the topology")
+			require.NoError(t, err)
+			assert.Equal(t, topodatapb.TabletType_PRIMARY, tm.Tablet().Type)
+			assert.True(t, qsc.IsServing(), "a topology that does not answer is not a deleted record")
+			assert.False(t, fmd.SuperReadOnly.Load(), "MySQL must be writable again")
+		})
+	}
+}
