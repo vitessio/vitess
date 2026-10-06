@@ -592,3 +592,18 @@ func TestMigrateReplicationModeWarnsOfSourceNextToAsyncPolicy(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, &topodatapb.Keyspace{DurabilityPolicy: "semi_sync"}, keyspaceRecord(t, ts))
 }
+
+// TestMigrateReplicationModeRefusesKeyspaceWithoutPolicy checks that a migration refuses a keyspace
+// whose record names no durability policy: VTOrc does not manage such a keyspace, and step 0 would
+// keep "none" as its migration source, so that VTOrc would start to recover the shards that are not
+// converted yet.
+func TestMigrateReplicationModeRefusesKeyspaceWithoutPolicy(t *testing.T) {
+	c, ts := newFakeGRCluster(t, "semi_sync", migrationTestShard()...)
+	setKeyspaceRecord(t, ts, "", "")
+	_, err := migrate(t, newTestMigrator(c, ts), "group_replication", false)
+	require.Error(t, err)
+	assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+	require.ErrorContains(t, err, "set one with SetKeyspaceDurabilityPolicy first")
+	assert.Empty(t, c.mutatingCalls())
+	assert.Equal(t, &topodatapb.Keyspace{}, keyspaceRecord(t, ts))
+}

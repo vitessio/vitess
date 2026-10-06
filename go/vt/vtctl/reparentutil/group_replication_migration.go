@@ -216,6 +216,12 @@ func (m *ReplicationModeMigrator) Migrate(ctx context.Context, keyspace string, 
 		return resp, err
 	}
 	resp.DurabilityPolicy = currentName
+	if ki.GetDurabilityPolicy() == "" {
+		// VTOrc does not manage a keyspace without a policy; step 0 would keep "none" as the
+		// migration source, and VTOrc would start to recover the shards not converted yet.
+		return resp, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+			"keyspace %s has no durability policy: set one with SetKeyspaceDurabilityPolicy first, then run MigrateReplicationMode", keyspace)
+	}
 	if warning := sourceNextToAsyncPolicyWarning(ki); warning != "" {
 		m.logger.Warningf("%s", warning)
 	}
