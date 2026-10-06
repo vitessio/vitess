@@ -25,87 +25,74 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-// validateLastPK checks the lastpk values a client sent us before they are
-// written into the copy-phase snapshot query.
+// validateLastPK checks the lastpk values a client sent us and returns them
+// typed as the table's own primary key columns, ready to be written into the
+// copy-phase snapshot query with writeLastPKValue.
 //
 // A lastpk arrives as a querypb.QueryResult on the VStream request, and
 // sqltypes.MakeRowTrusted builds each value from the type the client declared
 // together with the client's raw bytes; it does not check one against the other.
-// buildSelect then writes those values into the WHERE clause with
-// Value.EncodeSQL, which quotes and escapes only the Null, binary, quoted and
-// Bit types. For anything else it writes the bytes verbatim, so a client that
-// declares a numeric type can put arbitrary SQL into the statement.
+// A lastpk is a resume token that Vitess hands out with each column's own type,
+// so a value of another type is a bug or an attack, and is rejected rather than
+// coerced; only a number declared with another numeric type is accepted. The
+// values are then retyped from the table, so that how one is written into the
+// statement never depends on a type the client chose.
 //
 // lastpk is positional: lastpk[i] belongs to the column named by pkColumns[i],
 // which is how buildSelect pairs them.
-func validateLastPK(lastpk []sqltypes.Value, fields []*querypb.Field, pkColumns []int) error {
+func validateLastPK(lastpk []sqltypes.Value, fields []*querypb.Field, pkColumns []int) ([]sqltypes.Value, error) {
+	values := make([]sqltypes.Value, len(pkColumns))
 	for i, pkCol := range pkColumns {
 		if i >= len(lastpk) {
 			// The caller checks the arity; stop rather than index out of range.
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
 				"lastpk has %d values, fewer than the %d primary key columns", len(lastpk), len(pkColumns))
 		}
 		if pkCol < 0 || pkCol >= len(fields) {
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL,
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL,
 				"primary key column index %d is out of range for a table with %d columns", pkCol, len(fields))
 		}
-		if err := validateLastPKValue(lastpk[i], fields[pkCol]); err != nil {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+		value, err := validateLastPKValue(lastpk[i], fields[pkCol])
+		if err != nil {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
 				"invalid lastpk value for column %s: %v", fields[pkCol].Name, err)
 		}
+		values[i] = value
 	}
-	return nil
+	return values, nil
 }
 
 // validateLastPKValue checks one lastpk value against the column it will be
-// compared with.
-func validateLastPKValue(v sqltypes.Value, field *querypb.Field) error {
+// compared with, and returns it typed as that column.
+func validateLastPKValue(v sqltypes.Value, field *querypb.Field) (sqltypes.Value, error) {
 	if v.IsNull() {
-		// EncodeSQL writes the null literal, which cannot carry a payload.
-		return nil
+		// The null literal cannot carry a payload.
+		return v, nil
 	}
-
-	// The value has to belong to the column, not merely to the type the client
-	// declared for it. NewValue parses the bytes for the column's own type and
-	// rejects them when they do not fit.
-	if _, err := sqltypes.NewValue(field.Type, v.Raw()); err != nil {
-		return err
-	}
-
-	// The declared type, not the column type, is what EncodeSQL switches on, so
-	// the two have to agree about whether the value gets quoted. Otherwise a
-	// client could declare a numeric type for a textual column and have its
-	// bytes written verbatim.
-	if isEscapedByEncodeSQL(v.Type()) != isEscapedByEncodeSQL(field.Type) {
-		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+	// A number may be declared with another numeric type, as a client building
+	// its own lastpk may use a 64-bit integer for any integer column: it is
+	// parsed again as the column's type below, so the declared type decides
+	// nothing.
+	if v.Type() != field.Type && !(sqltypes.IsNumber(v.Type()) && sqltypes.IsNumber(field.Type)) {
+		return sqltypes.Value{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
 			"declared type %v does not match the column type %v", v.Type(), field.Type)
 	}
-
-	if isEscapedByEncodeSQL(v.Type()) {
-		// EncodeSQL quotes and escapes it, so the bytes cannot end the literal.
-		return nil
+	// NewValue parses the bytes for the column's type and rejects them when they
+	// do not fit.
+	value, err := sqltypes.NewValue(field.Type, v.Raw())
+	if err != nil {
+		return sqltypes.Value{}, err
 	}
-
-	// EncodeSQL writes this type verbatim, so the bytes have to be a literal on
-	// their own. Parsing alone is not enough: decimal.NewFromMySQL stops
-	// scanning once the integral part exceeds MySQL's precision, and
-	// fastparse accepts Go's NaN and Inf words, so a payload can parse and still
-	// carry a tail.
-	if !isPlainNumericLiteral(v.Raw()) {
-		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
-			"%q is not a numeric literal", v.Raw())
+	// writeLastPKValue writes a number verbatim, so its bytes have to be a
+	// literal on their own. Parsing alone is not enough, as NewValue keeps the
+	// bytes it was given: decimal.NewFromMySQL stops scanning once the integral
+	// part exceeds MySQL's precision, and fastparse accepts Go's NaN and Inf
+	// words, so a payload can parse and still carry a tail.
+	if sqltypes.IsNumber(value.Type()) && !isPlainNumericLiteral(value.Raw()) {
+		return sqltypes.Value{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+			"%q is not a numeric literal", value.Raw())
 	}
-	return nil
-}
-
-// isEscapedByEncodeSQL reports whether Value.EncodeSQL quotes and escapes a
-// value of this type rather than writing its bytes verbatim. It mirrors the
-// switch in Value.EncodeSQL; keep the two in step.
-func isEscapedByEncodeSQL(typ querypb.Type) bool {
-	return typ == sqltypes.Null ||
-		sqltypes.IsBinary(typ) ||
-		sqltypes.IsQuoted(typ) ||
-		typ == sqltypes.Bit
+	return value, nil
 }
 
 // isPlainNumericLiteral reports whether val is exactly
@@ -156,28 +143,31 @@ func isDigit(c byte) bool {
 	return c >= '0' && c <= '9'
 }
 
-// writeLastPKValue writes a validated lastpk value into a statement as a literal
-// that means the same thing whether or not the server's sql_mode includes
-// NO_BACKSLASH_ESCAPES.
+// writeLastPKValue writes a value returned by validateLastPK into a statement
+// as a literal that means the same thing whether or not the server's sql_mode
+// includes NO_BACKSLASH_ESCAPES.
 //
-// Value.EncodeSQL cannot be used for the quoted and binary types: it escapes a
-// quote as \', which stops being an escape under that mode, so the literal ends
-// early and the rest of the value is read as SQL. VerifyMode only requires that
-// a strict mode be present, so a tablet may be running with it set, and a UNION
-// spliced into the copy-phase query needs no statement separator at all.
+// Only a number, which validateLastPK has checked is a plain literal, is written
+// verbatim. Every other type is quoted, so that a type this switch does not
+// know about cannot reach the statement unquoted. Value.EncodeSQL is not used
+// for quoting: it escapes a quote as \', which stops being an escape under
+// NO_BACKSLASH_ESCAPES, so the literal ends early and the rest of the value is
+// read as SQL. VerifyMode only requires that a strict mode be present, so a
+// tablet may be running with it set, and a UNION spliced into the copy-phase
+// query needs no statement separator at all.
 func writeLastPKValue(buf *sqlparser.TrackedBuffer, v sqltypes.Value) {
 	switch {
+	case v.IsNull(), v.Type() == sqltypes.Bit:
+		// The null literal and b'0101', neither of which can carry a payload.
+		v.EncodeSQL(buf)
+	case sqltypes.IsNumber(v.Type()):
+		buf.Write(v.Raw())
 	case v.IsBinary():
 		// Keep the introducer so the comparison keeps its binary semantics.
 		buf.WriteString("_binary")
 		writeQuotedLiteral(buf, v.Raw())
-	case isEscapedByEncodeSQL(v.Type()) && v.Type() != sqltypes.Bit:
-		writeQuotedLiteral(buf, v.Raw())
 	default:
-		// Null writes the null literal and Bit writes b'0101', neither of which
-		// can carry a payload. Everything else has been validated as a plain
-		// numeric literal, so writing it verbatim is safe.
-		v.EncodeSQL(buf)
+		writeQuotedLiteral(buf, v.Raw())
 	}
 }
 

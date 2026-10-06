@@ -103,6 +103,22 @@ func TestValidateLastPKRejectsInjection(t *testing.T) {
 			},
 		},
 		{
+			// A quoted type declared for another quoted type would be escaped
+			// either way, but a lastpk is a token Vitess hands out with the
+			// column's own type, so any other type is a bug or an attack.
+			name:   "client declares varbinary for a varchar column",
+			fields: []*querypb.Field{field("name", querypb.Type_VARCHAR)},
+			lastpk: []sqltypes.Value{clientValue(querypb.Type_VARBINARY, "abc")},
+		},
+		{
+			// A number declared for a numeric column is parsed again as the
+			// column's type, so a decimal declared for an integer column must
+			// still be an integer.
+			name:   "client declares a decimal for an int32 column",
+			fields: []*querypb.Field{field("id", querypb.Type_INT32)},
+			lastpk: []sqltypes.Value{clientValue(querypb.Type_DECIMAL, "1.5")},
+		},
+		{
 			name: "injection in the second pk column",
 			fields: []*querypb.Field{
 				field("a", querypb.Type_INT64),
@@ -122,7 +138,7 @@ func TestValidateLastPKRejectsInjection(t *testing.T) {
 				pkColumns[i] = i
 			}
 
-			err := validateLastPK(tc.lastpk, tc.fields, pkColumns)
+			_, err := validateLastPK(tc.lastpk, tc.fields, pkColumns)
 			assert.Error(t, err, "lastpk %v was accepted for fields %v", tc.lastpk, tc.fields)
 		})
 	}
@@ -182,6 +198,13 @@ func TestValidateLastPKAcceptsRealValues(t *testing.T) {
 			},
 		},
 		{
+			// A client building its own lastpk may use a 64-bit integer for any
+			// integer column.
+			name:   "client declares int64 for an int32 column",
+			fields: []*querypb.Field{field("id", querypb.Type_INT32)},
+			lastpk: []sqltypes.Value{clientValue(querypb.Type_INT64, "7")},
+		},
+		{
 			name:   "timestamp",
 			fields: []*querypb.Field{field("t", querypb.Type_TIMESTAMP)},
 			lastpk: []sqltypes.Value{clientValue(querypb.Type_TIMESTAMP, "2026-08-04 12:00:00")},
@@ -195,7 +218,12 @@ func TestValidateLastPKAcceptsRealValues(t *testing.T) {
 				pkColumns[i] = i
 			}
 
-			require.NoError(t, validateLastPK(tc.lastpk, tc.fields, pkColumns))
+			values, err := validateLastPK(tc.lastpk, tc.fields, pkColumns)
+			require.NoError(t, err)
+			for i, value := range values {
+				assert.Equal(t, tc.fields[i].Type, value.Type())
+				assert.Equal(t, tc.lastpk[i].Raw(), value.Raw())
+			}
 		})
 	}
 }
@@ -271,12 +299,6 @@ func outsideStringLiterals(q string) string {
 // and the rest of the value becomes SQL. A UNION is enough on its own, so this
 // does not even need CLIENT_MULTI_STATEMENTS.
 func TestLastPKValuesSurviveNoBackslashEscapes(t *testing.T) {
-	fields := []*querypb.Field{
-		field("name", querypb.Type_VARCHAR),
-		field("v", querypb.Type_VARCHAR),
-	}
-	table := &binlogdatapb.MinimalTable{Name: "t1", Fields: fields, PKColumns: []int64{0}}
-
 	for _, tc := range []struct {
 		name    string
 		typ     querypb.Type
@@ -289,6 +311,9 @@ func TestLastPKValuesSurviveNoBackslashEscapes(t *testing.T) {
 		{"timestamp breakout", querypb.Type_TIMESTAMP, `') union select 1 #`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			// The column has the declared type, so the value reaches the writer.
+			fields := []*querypb.Field{field("name", tc.typ), field("v", querypb.Type_VARCHAR)}
+			table := &binlogdatapb.MinimalTable{Name: "t1", Fields: fields, PKColumns: []int64{0}}
 			rs := &rowStreamer{
 				lastpk:    []sqltypes.Value{clientValue(tc.typ, tc.payload)},
 				pkColumns: []int{0},
@@ -296,9 +321,7 @@ func TestLastPKValuesSurviveNoBackslashEscapes(t *testing.T) {
 				plan:      &Plan{Table: &Table{Name: "t1", Fields: fields}},
 			}
 			query, err := rs.buildSelect(table)
-			if err != nil {
-				return // rejected outright is also fine
-			}
+			require.NoError(t, err)
 			outside := strings.ToLower(outsideStringLiterals(query))
 			assert.NotContains(t, outside, "union",
 				"under NO_BACKSLASH_ESCAPES the literal ends early; built %q", query)

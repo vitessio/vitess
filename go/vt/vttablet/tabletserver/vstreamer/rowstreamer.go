@@ -293,11 +293,12 @@ func (rs *rowStreamer) buildSelect(st *binlogdatapb.MinimalTable) (string, error
 			return "", fmt.Errorf("cannot build a row streamer plan for the %s table as a lastpk value was provided (%v) and the number of primary key values within it (%d) does not match the number of primary key columns in the table (%d)",
 				st.Name, rs.lastpk, len(rs.lastpk), len(rs.pkColumns))
 		}
-		// A lastpk can come straight from a client's VStream request, and the
-		// values below are written into the statement with EncodeSQL, which does
-		// not quote every type. Check them against the table's own columns before
-		// any of them reaches the query.
-		if err := validateLastPK(rs.lastpk, rs.plan.Table.Fields, rs.pkColumns); err != nil {
+		// A lastpk can come straight from a client's VStream request, with types
+		// the client chose. Check the values against the table's own columns, and
+		// write the copies typed as those columns, before any of them reaches the
+		// query.
+		lastpk, err := validateLastPK(rs.lastpk, rs.plan.Table.Fields, rs.pkColumns)
+		if err != nil {
 			return "", err
 		}
 		buf.WriteString(" where ")
@@ -313,11 +314,11 @@ func (rs *rowStreamer) buildSelect(st *binlogdatapb.MinimalTable) (string, error
 				prefix = " or "
 				for i, pk := range rs.pkColumns[:lastcol] {
 					buf.Myprintf("%v = ", sqlparser.NewIdentifierCI(rs.plan.Table.Fields[pk].Name))
-					writeLastPKValue(buf, rs.lastpk[i])
+					writeLastPKValue(buf, lastpk[i])
 					buf.Myprintf(" and ")
 				}
 				buf.Myprintf("%v > ", sqlparser.NewIdentifierCI(rs.plan.Table.Fields[pkCol].Name))
-				writeLastPKValue(buf, rs.lastpk[lastcol])
+				writeLastPKValue(buf, lastpk[lastcol])
 				buf.Myprintf(")")
 			}
 		}
