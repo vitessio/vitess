@@ -147,6 +147,10 @@ type VoterPlan struct {
 	Reason string
 }
 
+// deletedVoterAdvice tells the operator how to end GroupVoterRecordDeleted. A deleted voter that runs
+// cannot be part of a bootstrap either, which needs the tablet records of every voter.
+const deletedVoterAdvice = "it keeps its seat; stop its vttablet and MySQL to let VTOrc replace or remove it, or restart its vttablet, which records the tablet again"
+
 // voterPlanner holds what PlanGroupVoters derives from its input.
 type voterPlanner struct {
 	in         *VoterPlanInput
@@ -208,7 +212,7 @@ func PlanGroupVoters(in *VoterPlanInput) *VoterPlan {
 		if reason := p.activeAnywhere(alias, uuid); reason != "" {
 			alerts = append(alerts, &VoterPlan{
 				Alert:  GroupVoterRecordDeleted,
-				Reason: fmt.Sprintf("voter %s has no tablet record, but %s: it keeps its seat until its MySQL leaves the group", alias, reason),
+				Reason: fmt.Sprintf("voter %s has no tablet record, but %s: %s", alias, reason, deletedVoterAdvice),
 			})
 			continue
 		}
@@ -220,7 +224,7 @@ func PlanGroupVoters(in *VoterPlanInput) *VoterPlan {
 		} else if reason := p.inPrimaryView(primary, alias, uuid); reason != "" {
 			alerts = append(alerts, &VoterPlan{
 				Alert:  GroupVoterRecordDeleted,
-				Reason: fmt.Sprintf("voter %s has no tablet record and no spare in its cell (%s), but %s", alias, rejected, reason),
+				Reason: fmt.Sprintf("voter %s has no tablet record and no spare in its cell (%s), but %s: %s", alias, rejected, reason, deletedVoterAdvice),
 			})
 		} else {
 			voters := withoutAlias(in.Voters, voter)
@@ -513,7 +517,7 @@ func (p *voterPlanner) activeAnywhere(alias, uuid string) string {
 		return "its tablet answers"
 	}
 	if dv := p.in.DeletedVoters[alias]; dv != nil && !dv.Down {
-		return "VTOrc cannot tell that its vttablet is down: it answers, or VTOrc has no address for it"
+		return "VTOrc cannot tell that its vttablet is down (it answers, VTOrc reached it within the grace period, or VTOrc has no address for it)"
 	}
 	if uuid != "" {
 		if p.active[uuid] {

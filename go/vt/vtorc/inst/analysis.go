@@ -100,9 +100,11 @@ const (
 	// cell has no valid spare. It is reported on a single tablet of the shard, and has no recovery.
 	GroupVoterUnreplaceable AnalysisCode = "GroupVoterUnreplaceable"
 	// GroupVoterRecordDeleted describes a shard with a voter whose tablet record was deleted while its
-	// MySQL is still active in the group, or still in the view of the group primary while its cell has
-	// no spare: VTOrc only replaces or removes such a voter once it left the group. It is reported on a
-	// single tablet of the shard, and has no recovery.
+	// MySQL is still active in the group, its vttablet may still run, or it is still in the view of the
+	// group primary while its cell has no spare: VTOrc only replaces or removes such a voter once it is
+	// down and left the group. The operator stops its vttablet and MySQL, or restarts its vttablet,
+	// which records the tablet again. It is reported on a single tablet of the shard, and has no
+	// recovery.
 	GroupVoterRecordDeleted AnalysisCode = "GroupVoterRecordDeleted"
 	// GroupQuorumLost describes a shard whose group has active members, none of which has quorum.
 	// The group cannot commit. VTOrc does not act; forcing a new membership is an operator decision.

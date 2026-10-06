@@ -334,7 +334,9 @@ func TestPlanGroupVoters(t *testing.T) {
 			f.deleteRecord(f.c, true)
 			f.in.DeletedVoters["zone3-0000000300"].Down = false
 		},
-		want: want{alert: GroupVoterRecordDeleted, reason: "voter zone3-0000000300 has no tablet record, but VTOrc cannot tell that its vttablet is down"},
+		want: want{alert: GroupVoterRecordDeleted, reason: "voter zone3-0000000300 has no tablet record, but VTOrc cannot tell that its vttablet is down " +
+			"(it answers, VTOrc reached it within the grace period, or VTOrc has no address for it): " +
+			"it keeps its seat; stop its vttablet and MySQL to let VTOrc replace or remove it, or restart its vttablet, which records the tablet again"},
 	}, {
 		name: "P2: a deleted voter whose server_uuid is unknown, while an active member is the MySQL of no tablet that answers",
 		setup: func(t *testing.T, f *planFixture) {
