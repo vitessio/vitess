@@ -85,10 +85,11 @@ func Test_getQueryContext(t *testing.T) {
 }
 
 // TestVExplainRunsExecutingTypesReadOnly checks that the VEXPLAIN types that run
-// the statement they explain (QUERIES, ALL and TRACE) run it on one connection
-// inside a read-only transaction that is then rolled back, so that it cannot
-// change any table, even through a stored function running with its definer's
-// privileges, while the types that do not run it use no transaction.
+// the statement they explain, or have MySQL EXPLAIN it (QUERIES, ALL, TRACE and
+// MYSQLPLAN), do so on one connection inside a read-only transaction that is then
+// rolled back, so that they cannot change any table, even through a stored
+// function running with its definer's privileges, while the types that do
+// neither use no transaction.
 func TestVExplainRunsExecutingTypesReadOnly(t *testing.T) {
 	parser := sqlparser.NewTestParser()
 	for _, tc := range []struct {
@@ -103,7 +104,14 @@ func TestVExplainRunsExecutingTypesReadOnly(t *testing.T) {
 		},
 	}, {
 		query: "vexplain mysqlplan select * from customers",
-		want:  []string{"1: vexplain mysqlplan select * from customers"},
+		want: []string{
+			"1: start transaction read only",
+			"1: vexplain mysqlplan select * from customers",
+			"1: rollback",
+		},
+	}, {
+		query: "vexplain plan select * from customers",
+		want:  []string{"1: vexplain plan select * from customers"},
 	}} {
 		t.Run(tc.query, func(t *testing.T) {
 			log := &fakevtsql.StatementLog{}

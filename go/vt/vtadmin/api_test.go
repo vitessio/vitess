@@ -5159,6 +5159,15 @@ func TestVExplain(t *testing.T) {
 			expectedError: vtadminerrors.ErrInvalidRequest,
 		},
 		{
+			name: "returns an error if a VEXPLAIN that runs its statement is given DML",
+			req: &vtadminpb.VExplainRequest{
+				ClusterId: "c0",
+				Keyspace:  "commerce",
+				Sql:       "vexplain /*vt+ EXECUTE_DML_QUERIES */ queries insert into customers (id) values (1)",
+			},
+			expectedError: vtadminerrors.ErrInvalidRequest,
+		},
+		{
 			name: "returns an error if the explained SELECT writes its result with INTO",
 			req: &vtadminpb.VExplainRequest{
 				ClusterId: "c0",
