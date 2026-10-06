@@ -40,7 +40,6 @@ func TestSetExprsRejectUnsafeCharsets(t *testing.T) {
 		"set character_set_results = null",
 		"set collation_connection = 'utf8mb4_0900_ai_ci'",
 		"set names utf8mb4",
-		"set character set 'latin1'",
 		// the global scope is the operator's domain
 		"set @@global.character_set_client = 'gbk'",
 	}
@@ -51,14 +50,21 @@ func TestSetExprsRejectUnsafeCharsets(t *testing.T) {
 		"set character_set_results = 'big5'",
 		"set collation_connection = 'gb18030_unicode_520_ci'",
 		"set names 'sjis'",
-		"set charset cp932",
-		"set character set utf16",
 		"set sql_safe_updates = 1, character_set_client = 'gbk'",
 		// these resolve to a character set that cannot be judged upfront
 		"set character_set_client = default",
 		"set names default",
 		"set character_set_client = @charset",
 		"set character_set_client = null",
+	}
+
+	// SET CHARACTER SET sets character_set_connection to the database's default
+	// character set, whatever value it is given, so it is refused outright.
+	characterSet := []string{
+		"set character set 'latin1'",
+		"set character set utf8mb4",
+		"set charset cp932",
+		"set character set utf16",
 	}
 
 	const settingsErr = "the connection character set cannot be changed through connection settings"
@@ -82,6 +88,16 @@ func TestSetExprsRejectUnsafeCharsets(t *testing.T) {
 			require.NoError(t, err)
 			_, err = analyzeSet(stmt.(*sqlparser.Set))
 			require.ErrorContains(t, err, "unsupported connection character set")
+		})
+	}
+	for _, setting := range characterSet {
+		t.Run(setting, func(t *testing.T) {
+			_, _, err := BuildSettingQuery([]string{setting}, parser, true)
+			require.ErrorContains(t, err, settingsErr)
+			stmt, err := parser.Parse(setting)
+			require.NoError(t, err)
+			_, err = analyzeSet(stmt.(*sqlparser.Set))
+			require.ErrorContains(t, err, "SET CHARACTER SET is not supported")
 		})
 	}
 }

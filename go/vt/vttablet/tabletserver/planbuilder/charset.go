@@ -58,6 +58,12 @@ func validateSetExprsCharset(exprs sqlparser.SetExprs) error {
 			// the global scope is the operator's domain, not a session's
 			continue
 		}
+		if name == "charset" {
+			// SET CHARACTER SET sets character_set_connection to the current
+			// database's default character set, not to the value it is given, and
+			// that default can be any character set.
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "SET CHARACTER SET is not supported, as it sets the connection character set to the database's default: use SET NAMES utf8mb4")
+		}
 		switch value := expr.Expr.(type) {
 		case *sqlparser.Literal:
 			if value.Type == sqlparser.StrVal && collations.IsConnectionCharsetName(value.Val) {
