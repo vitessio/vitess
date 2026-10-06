@@ -666,6 +666,27 @@ func TestSetTable(t *testing.T) {
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("new", "varchar"),
 			"a",
 		)},
+	}, {
+		testName:     "optimizer_switch value with comment terminator falls back to reserved conn - MySQL80",
+		mysqlVersion: "8.0.0",
+		setOps: []SetOp{
+			&SysVarReservedConn{
+				Name:          "optimizer_switch",
+				Keyspace:      &vindexes.Keyspace{Name: "ks", Sharded: true},
+				Expr:          "'x */ select 1 -- '",
+				SupportSetVar: true,
+			},
+		},
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
+			`ExecuteMultiShard ks.-20: select 'x */ select 1 -- ' from dual where @@optimizer_switch != 'x */ select 1 -- ' {} false false`,
+			"SysVar set with (optimizer_switch,'x */ select 1 -- ')",
+			"SET_VAR can be used",
+			"Needs Reserved Conn",
+		},
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("new", "varchar"),
+			"x */ select 1 -- ",
+		)},
 	}}
 
 	for _, tc := range tests {

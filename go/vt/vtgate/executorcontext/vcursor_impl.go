@@ -250,19 +250,34 @@ func (vc *VCursorImpl) GetSafeSession() *SafeSession {
 	return vc.SafeSession
 }
 
-// PrepareSetVarComment returns the SET_VAR query hint content for the session's system
-// variables. The variables are listed sorted by name, so that the same session renders
-// the same hint on every request: the hint is part of the plan cache key and of the
-// query text sent to the tablets.
+// PrepareSetVarComment builds the body of the /*+ ... */ optimizer hint that
+// carries the session's system variables to MySQL. The variables are listed
+// sorted by name, so that the same session renders the same hint on every
+// request: the hint is part of the plan cache key and of the query text sent
+// to the tablets. A value that cannot be carried in the hint (it would
+// terminate the comment, letting the rest of the value run as statement text)
+// is left out and applied through a reserved connection instead, so the
+// session is marked as needing one.
 func (vc *VCursorImpl) PrepareSetVarComment() string {
 	var keys []string
 	values := make(map[string]string)
+	needsReservedConn := false
 	vc.Session().GetSystemVariables(func(k, v string) {
-		if sysvars.SupportsSetVar(k) {
-			keys = append(keys, k)
-			values[k] = v
+		if !sysvars.SupportsSetVar(k) {
+			return
 		}
+		if !sysvars.IsSafeSetVarValue(v) {
+			needsReservedConn = true
+			return
+		}
+		keys = append(keys, k)
+		values[k] = v
 	})
+	// GetSystemVariables holds the session lock while it iterates, so the
+	// session can only be marked once the visitor has returned.
+	if needsReservedConn {
+		vc.NeedsReservedConn()
+	}
 	sort.Strings(keys)
 
 	res := make([]string, 0, len(keys))
