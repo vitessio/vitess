@@ -494,8 +494,11 @@ func TestPlanGroupVotersInitial(t *testing.T) {
 		name    string
 		tablets []*topodatapb.Tablet
 		active  bool
-		want    []string
-		alert   AnalysisCode
+		// unreachable is the uid of a tablet that does not answer, if any.
+		unreachable uint32
+		incarnation string
+		want        []string
+		alert       AnalysisCode
 	}{{
 		name: "eligible tablets in three cells: one voter per cell",
 		tablets: []*topodatapb.Tablet{
@@ -518,17 +521,38 @@ func TestPlanGroupVotersInitial(t *testing.T) {
 		},
 		active: true,
 		alert:  GroupVotersBelowTarget,
+	}, {
+		// Its MySQL may be an active member: VTOrc cannot tell that no group runs.
+		name: "an eligible tablet does not answer: nothing",
+		tablets: []*topodatapb.Tablet{
+			grTablet("zone1", 101, topodatapb.TabletType_REPLICA), grTablet("zone2", 200, topodatapb.TabletType_REPLICA),
+			grTablet("zone3", 300, topodatapb.TabletType_REPLICA), grTablet("zone3", 301, topodatapb.TabletType_REPLICA),
+		},
+		unreachable: 301,
+	}, {
+		// A group was bootstrapped, and its voter list is gone: not a new shard.
+		name: "an incarnation is recorded: nothing",
+		tablets: []*topodatapb.Tablet{
+			grTablet("zone1", 101, topodatapb.TabletType_REPLICA), grTablet("zone2", 200, topodatapb.TabletType_REPLICA),
+			grTablet("zone3", 300, topodatapb.TabletType_REPLICA),
+		},
+		incarnation: "1790000001",
+		alert:       GroupVotersBelowTarget,
 	}}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			grd, _ := policy.AsGroupReplication(mustDurability(t))
-			in := &VoterPlanInput{Durability: grd, GracePeriod: time.Minute, Fresh: true}
+			in := &VoterPlanInput{Durability: grd, GracePeriod: time.Minute, Fresh: true, Incarnation: tt.incarnation}
 			for i, tablet := range tt.tablets {
 				status := offline()
 				if tt.active && i == 0 {
 					status.MemberState = mysql.GroupMemberStateOnline
 				}
-				in.Tablets = append(in.Tablets, &VoterTablet{Tablet: tablet, Reachable: true, Status: status, ServerUUID: planUUID(tablet)})
+				vt := &VoterTablet{Tablet: tablet, Reachable: true, Status: status, ServerUUID: planUUID(tablet)}
+				if tablet.Alias.Uid == tt.unreachable {
+					vt.Reachable, vt.Status, vt.UnreachableFor = false, nil, time.Hour
+				}
+				in.Tablets = append(in.Tablets, vt)
 			}
 			plan := PlanGroupVoters(in)
 			assert.Equal(t, tt.alert, plan.Alert, plan.Reason)

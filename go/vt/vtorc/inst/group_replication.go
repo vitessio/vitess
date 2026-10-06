@@ -371,7 +371,6 @@ func computeGroupReplicationVoters(state *groupReplicationShardState, durability
 		if row.valid {
 			vt.Status = analysisGroupStatus(row)
 		} else {
-			vt.LastActive = row.active
 			vt.UnreachableFor = UnreachableGroupTablets.Observe(alias, now)
 		}
 		in.Tablets = append(in.Tablets, vt)

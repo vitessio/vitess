@@ -77,9 +77,6 @@ type VoterTablet struct {
 	// ServerUUID is the server_uuid of the tablet's MySQL: as the tablet reported it, or as VTOrc
 	// last saw it.
 	ServerUUID string
-	// LastActive is true when an unreachable tablet's MySQL was an active member when VTOrc last
-	// reached it.
-	LastActive bool
 	// UnreachableFor is how long VTOrc has not reached the tablet.
 	UnreachableFor time.Duration
 	// Executed is the GTID set that the tablet's MySQL executed, when it is known.
@@ -167,8 +164,9 @@ type voterPlanner struct {
 // or the alert it reports instead. Every change is decided on one read of the shard, then written
 // with a compare-and-swap on the voter list and the incarnation (see the design's "Voters"):
 //
-//   - InitialVoters: no voter is listed and no member is active: SelectVoters picks one voter per cell,
-//     at least policy.MinGroupReplicationCells of them (GroupVotersBelowTarget otherwise).
+//   - InitialVoters: no voter is listed, no incarnation is recorded, every tablet that may be a voter
+//     answers, and no member is active: SelectVoters picks one voter per cell, at least
+//     policy.MinGroupReplicationCells of them (GroupVotersBelowTarget otherwise).
 //   - MoveGroupPrimaryToVoter: the primary of the shard's legitimate group is not a voter. It does not
 //     serve; VTOrc moves the group primary to an ONLINE voter of its view.
 //   - SwapVoter(v, x): voter v failed (unreachable for the grace period, or its tablet record was
@@ -364,8 +362,18 @@ func newVoterPlanner(in *VoterPlanInput) *voterPlanner {
 
 // planInitial selects the first voters of a shard, while no member is active.
 func (p *voterPlanner) planInitial() *VoterPlan {
+	if p.in.Incarnation != "" {
+		return &VoterPlan{
+			Alert:  GroupVotersBelowTarget,
+			Reason: fmt.Sprintf("no voter is listed, but the shard record lists the incarnation %q of a group: VTOrc only selects the voters of a shard without a group", p.in.Incarnation),
+		}
+	}
 	for _, vt := range p.sortedTablets() {
-		if (vt.Reachable && mysql.IsGroupMemberActive(vt.Status)) || (!vt.Reachable && vt.LastActive) {
+		if !vt.Reachable && p.in.Durability.IsGroupMember(vt.Tablet) {
+			// Its MySQL may be an active member: VTOrc cannot tell that no group runs.
+			return &VoterPlan{Reason: fmt.Sprintf("no voter is listed, but %s, which may be a voter, does not answer", topoproto.TabletAliasString(vt.Tablet.Alias))}
+		}
+		if vt.Reachable && mysql.IsGroupMemberActive(vt.Status) {
 			return &VoterPlan{
 				Alert:  GroupVotersBelowTarget,
 				Reason: fmt.Sprintf("no voter is listed, but %s is an active group member: VTOrc only selects the voters of a shard without a group", topoproto.TabletAliasString(vt.Tablet.Alias)),
@@ -374,7 +382,7 @@ func (p *voterPlanner) planInitial() *VoterPlan {
 	}
 	candidates := make([]policy.VoterCandidate, 0, len(p.in.Tablets))
 	for _, vt := range p.in.Tablets {
-		candidates = append(candidates, policy.VoterCandidate{Tablet: vt.Tablet, Failed: !vt.Reachable && vt.UnreachableFor >= p.in.GracePeriod})
+		candidates = append(candidates, policy.VoterCandidate{Tablet: vt.Tablet, Failed: !vt.Reachable})
 	}
 	voters := policy.SelectVoters(p.in.Durability, nil, nil, candidates)
 	if len(voters) < policy.MinGroupReplicationCells {
