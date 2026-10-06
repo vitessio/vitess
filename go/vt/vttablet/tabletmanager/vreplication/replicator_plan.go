@@ -204,17 +204,18 @@ type TablePlan struct {
 	// If the plan is an insertIgnore type, then Insert
 	// and Update contain 'insert ignore' statements and
 	// Delete is nil.
+	// MultiDelete is a bulk delete up to its IN list, which is filled
+	// with MultiDeleteValue rendered once per deleted row.
 	Insert           *sqlparser.ParsedQuery
 	Update           *sqlparser.ParsedQuery
 	Delete           *sqlparser.ParsedQuery
 	MultiDelete      *sqlparser.ParsedQuery
+	MultiDeleteValue *sqlparser.ParsedQuery
 	Fields           []*querypb.Field
 	ConvertIntToEnum map[string]bool
 	// PKReferences is used to check if an event changed
 	// a primary key column (row move).
-	PKReferences []string
-	// PKIndices is an array, length = #columns, true if column is part of the PK
-	PKIndices               []bool
+	PKReferences            []string
 	Stats                   *binlogplayer.Stats
 	FieldsToSkip            map[string]bool
 	ConvertCharset          map[string](*binlogdatapb.CharsetConversion)
@@ -849,77 +850,60 @@ func (tp *TablePlan) applyBulkDeleteChanges(rowDeletes []*binlogdatapb.RowChange
 	if (len(tp.TablePlanBuilder.pkCols) + len(tp.TablePlanBuilder.extraSourcePkCols)) != 1 {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "bulk delete is only supported for tables with a single primary key column")
 	}
-	if tp.MultiDelete == nil {
+	if tp.MultiDelete == nil || tp.MultiDeleteValue == nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "plan has no bulk delete query")
 	}
 
-	baseQuerySize := int64(len(tp.MultiDelete.Query))
-	querySize := baseQuerySize
+	deletePrefix := tp.MultiDelete.Query + "("
+	maxQuerySize -= int64(len(deletePrefix) + 1) // Plus 1 for the closing parenthesis
+	values := &strings.Builder{}
 
-	execQuery := func(pkVals *[]sqltypes.Value) (*sqltypes.Result, error) {
-		pksBV, err := sqltypes.BuildBindVariable(*pkVals)
-		if err != nil {
-			return nil, err
-		}
-		query, err := tp.MultiDelete.GenerateQuery(map[string]*querypb.BindVariable{"bulk_pks": pksBV}, nil)
-		if err != nil {
-			return nil, err
-		}
+	execQuery := func(vals *strings.Builder) (*sqltypes.Result, error) {
 		tp.TablePlanBuilder.stats.BulkQueryCount.Add("delete", 1)
-		return executor(query)
+		return executor(deletePrefix + vals.String() + ")")
 	}
 
-	// Derive pkIndex once from the plan, not from per-row vals. PKIndices is sized to
-	// the column count and is populated by the plan builder before this runs, so the
-	// index has no dependency on the shape of any individual row's Before image. The
-	// original per-row search ran the inner `range vals` on iteration 0; an empty
-	// first-row vals (see #20360) left pkIndex at -1 and the subsequent vals[-1]
-	// access panicked. Hoisting the search removes that data dependency. Other panic
-	// surfaces in this loop (e.g. vals[pkIndex] on a short later row) are caught by
-	// the defer/recover wrapper on vp.fetchAndApply's applyEvents goroutine.
-	pkIndex := -1
-	for i, isPK := range tp.PKIndices {
-		if isPK {
-			pkIndex = i
-			break
-		}
-	}
-	// Defensive: PKIndices and Fields are populated separately (the former from
-	// the plan builder's colExprs, the latter from the field event), so guard
-	// against any desync that would leave pkIndex out of range for tp.Fields.
-	if pkIndex < 0 || pkIndex >= len(tp.Fields) {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL,
-			"vreplication: bulk-delete plan for table %s has no valid primary key index (pkIndex=%d, len(Fields)=%d)",
-			tp.TargetName, pkIndex, len(tp.Fields))
-	}
-
-	pkVals := make([]sqltypes.Value, 0, len(rowDeletes))
+	newStmt := true
 	for _, rowDelete := range rowDeletes {
 		// The caller must only route homogeneous delete-shaped events here: a
 		// nil Before image would panic in MakeRowTrusted, an empty one (the
-		// #20360 shape) would panic indexing vals[pkIndex], and a change with
-		// an After image (an insert or update) would be silently applied as a
-		// DELETE, discarding that image. The Get accessors also make a nil
-		// change in the slice error instead of panicking.
+		// #20360 shape) would panic indexing the row in the field loop, and a
+		// change with an After image (an insert or update) would be silently
+		// applied as a DELETE, discarding that image. The Get accessors also
+		// make a nil change in the slice error instead of panicking.
 		if len(rowDelete.GetBefore().GetLengths()) == 0 || rowDelete.GetAfter() != nil {
 			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
 				"vreplication: bulk-delete change for table %s is not delete-shaped (Before image only); a mixed row event must be applied per-change",
 				tp.TargetName)
 		}
+		bindvars := make(map[string]*querypb.BindVariable, len(tp.Fields))
 		vals := sqltypes.MakeRowTrusted(tp.Fields, rowDelete.Before)
-		addedSize := int64(len(vals[pkIndex].Raw()) + 2) // Plus 2 for the comma and space
-		if querySize+addedSize > maxQuerySize {
-			if _, err := execQuery(&pkVals); err != nil {
+		for i, field := range tp.Fields {
+			bindVar, err := tp.bindFieldVal(field, &vals[i])
+			if err != nil {
 				return nil, err
 			}
-			pkVals = nil
-			querySize = baseQuerySize
+			bindvars["b_"+field.Name] = bindVar
 		}
-		pkVals = append(pkVals, vals[pkIndex])
-		querySize += addedSize
+		rowValue := &strings.Builder{}
+		if err := tp.MultiDeleteValue.Append(rowValue, bindvars, nil); err != nil {
+			return nil, err
+		}
+		if !newStmt && int64(values.Len()+2+rowValue.Len()) > maxQuerySize { // Plus 2 for the comma and space
+			if _, err := execQuery(values); err != nil {
+				return nil, err
+			}
+			values.Reset()
+			newStmt = true
+		}
+		if !newStmt {
+			values.WriteString(", ")
+		}
+		values.WriteString(rowValue.String())
+		newStmt = false
 	}
 
-	return execQuery(&pkVals)
+	return execQuery(values)
 }
 
 // applyBulkInsertChanges generates a multi-row INSERT statement from the row

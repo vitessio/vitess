@@ -60,7 +60,6 @@ type tablePlanBuilder struct {
 	colInfos          []*ColumnInfo
 	stats             *binlogplayer.Stats
 	source            *binlogdatapb.BinlogSource
-	pkIndices         []bool
 
 	collationEnv   *collations.Environment
 	workflowConfig *vttablet.VReplicationConfig
@@ -373,8 +372,8 @@ func (tpb *tablePlanBuilder) generate() *TablePlan {
 		Update:                  tpb.generateUpdateStatement(),
 		Delete:                  tpb.generateDeleteStatement(),
 		MultiDelete:             tpb.generateMultiDeleteStatement(),
+		MultiDeleteValue:        tpb.generateMultiDeleteValue(),
 		PKReferences:            pkrefs,
-		PKIndices:               tpb.pkIndices,
 		Stats:                   tpb.stats,
 		FieldsToSkip:            fieldsToSkip,
 		HasExtraSourcePkColumns: len(tpb.extraSourcePkCols) > 0,
@@ -811,11 +810,7 @@ func (tpb *tablePlanBuilder) generateUpdateStatement() *sqlparser.ParsedQuery {
 	buf := sqlparser.NewTrackedBuffer(bvf.formatter)
 	buf.Myprintf("update %v set ", tpb.name)
 	separator := ""
-	tpb.pkIndices = make([]bool, len(tpb.colExprs))
-	for i, cexpr := range tpb.colExprs {
-		if cexpr.isPK {
-			tpb.pkIndices[i] = true
-		}
+	for _, cexpr := range tpb.colExprs {
 		if cexpr.isGrouped || cexpr.isPK || cexpr.isGenerated {
 			continue
 		}
@@ -885,24 +880,37 @@ func (tpb *tablePlanBuilder) generateDeleteStatement() *sqlparser.ParsedQuery {
 	return buf.ParsedQuery()
 }
 
-func (tpb *tablePlanBuilder) generateMultiDeleteStatement() *sqlparser.ParsedQuery {
-	if tpb.workflowConfig.ExperimentalFlags&vttablet.VReplicationExperimentalFlagVPlayerBatching == 0 ||
-		(len(tpb.pkCols)+len(tpb.extraSourcePkCols)) != 1 {
-		return nil
-	}
+func (tpb *tablePlanBuilder) bulkDeleteSupported() bool {
 	// Grouped plans must stay on the per-row path: their delete semantics
 	// are a count-decrementing UPDATE (insertOnDup) or a deliberate no-op
-	// (insertIgnore), never a plain DELETE, and they do not populate
-	// tpb.pkIndices.
-	if tpb.onInsert != insertNormal {
+	// (insertIgnore), never a plain DELETE.
+	return tpb.workflowConfig.ExperimentalFlags&vttablet.VReplicationExperimentalFlagVPlayerBatching != 0 &&
+		len(tpb.pkCols) == 1 && len(tpb.extraSourcePkCols) == 0 && tpb.onInsert == insertNormal
+}
+
+func (tpb *tablePlanBuilder) generateMultiDeleteStatement() *sqlparser.ParsedQuery {
+	if !tpb.bulkDeleteSupported() {
 		return nil
 	}
-	return sqlparser.BuildParsedQuery(
-		"delete from %s where %s in %a",
-		sqlparser.String(tpb.name),
-		sqlparser.String(tpb.pkCols[0].colName),
-		"::bulk_pks",
-	)
+	buf := sqlparser.NewTrackedBuffer(nil)
+	buf.Myprintf("delete from %v where %v in ", tpb.name, tpb.pkCols[0].colName)
+	return buf.ParsedQuery()
+}
+
+// generateMultiDeleteValue renders the PK expression over the before image,
+// as generateWhere does, so the bulk delete targets the same rows.
+func (tpb *tablePlanBuilder) generateMultiDeleteValue() *sqlparser.ParsedQuery {
+	if !tpb.bulkDeleteSupported() {
+		return nil
+	}
+	bvf := &bindvarFormatter{mode: bvBefore}
+	buf := sqlparser.NewTrackedBuffer(bvf.formatter)
+	if _, ok := tpb.pkCols[0].expr.(*sqlparser.ColName); ok {
+		buf.Myprintf("%v", tpb.pkCols[0].expr)
+	} else {
+		buf.Myprintf("(%v)", tpb.pkCols[0].expr)
+	}
+	return buf.ParsedQuery()
 }
 
 func (tpb *tablePlanBuilder) generateWhere(buf *sqlparser.TrackedBuffer, bvf *bindvarFormatter) {
