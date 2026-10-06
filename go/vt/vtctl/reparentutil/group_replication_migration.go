@@ -1036,7 +1036,7 @@ func (s *migrationShard) toGroupReplication(ctx context.Context) error {
 	// The voters are stored before the group exists, so that every tablet and VTOrc agree
 	// on them from the first join.
 	if votersEqual(s.recordedVoters, s.voters) {
-		s.record(MigrationActionSetVoters, nil, MigrationStepSkipped, fmt.Sprintf("the shard record already lists the voters %s", votersString(s.voters)))
+		s.record(MigrationActionSetVoters, nil, MigrationStepSkipped, "the shard record already lists the voters "+votersString(s.voters))
 	} else {
 		err := s.do(ctx, MigrationActionSetVoters, nil, fmt.Sprintf("store the voters %s in the shard record", votersString(s.voters)), func(ctx context.Context) error {
 			return writeGroupReplicationVoters(ctx, s.run.m.ts, s.run.keyspace, s.shard, s.voters)
@@ -1075,7 +1075,7 @@ func (s *migrationShard) toGroupReplication(ctx context.Context) error {
 	// The group Vitess bootstrapped is the shard's legitimate group: record its incarnation, so
 	// that no component follows a group that a member forms on its own later.
 	if incarnation := policy.GroupIncarnation(s.status(primary).groupStatus().GetViewId()); incarnation != "" && incarnation == s.recordedIncarnation {
-		s.record(MigrationActionSetIncarnation, primary, MigrationStepSkipped, fmt.Sprintf("the shard record already lists the group incarnation %s", incarnation))
+		s.record(MigrationActionSetIncarnation, primary, MigrationStepSkipped, "the shard record already lists the group incarnation "+incarnation)
 	} else {
 		err := s.do(ctx, MigrationActionSetIncarnation, primary, fmt.Sprintf("record the incarnation of the group of primary %v in the shard record", primaryAlias), func(ctx context.Context) error {
 			_, err := RecordGroupReplicationIncarnation(ctx, s.run.m.ts, s.run.m.tmc, s.run.keyspace, s.shard, primary, s.recordedIncarnation)

@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -245,7 +246,7 @@ func (c *fakeGRCluster) groupStatus(ft *fakeGRTablet) *replicationdatapb.GroupRe
 	if ft.incarnation != "" {
 		incarnation = ft.incarnation
 	}
-	gs.ViewId = incarnation + ":" + fmt.Sprint(len(gs.Members))
+	gs.ViewId = incarnation + ":" + strconv.Itoa(len(gs.Members))
 	return gs
 }
 
@@ -320,7 +321,7 @@ func (c *fakeGRCluster) StartGroupReplication(ctx context.Context, tablet *topod
 		}
 		c.groupPrimary = ft.alias
 		c.bootstrapSeqs++
-		c.incarnation = fmt.Sprintf("%d", 1790000000+c.bootstrapSeqs)
+		c.incarnation = strconv.Itoa(1790000000 + c.bootstrapSeqs)
 	} else if c.onlineMembers() == 0 {
 		return nil, errors.New("no group to join")
 	}
@@ -438,7 +439,7 @@ func (c *fakeGRCluster) InitPrimary(ctx context.Context, tablet *topodatapb.Tabl
 	ft.superReadOnly = false
 	c.groupPrimary = ft.alias
 	c.bootstrapSeqs++
-	c.incarnation = fmt.Sprintf("%d", 1790000000+c.bootstrapSeqs)
+	c.incarnation = strconv.Itoa(1790000000 + c.bootstrapSeqs)
 	return "", nil
 }
 

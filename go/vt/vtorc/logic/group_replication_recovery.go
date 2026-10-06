@@ -613,7 +613,7 @@ func finishGroupBootstrap(ctx context.Context, analysisEntry *inst.DetectionAnal
 	// Until VTOrc refreshes its copy of the shard record, its analysis would take the new group
 	// for a foreign one, and not make the other voters join it.
 	saveShardRecord(ctx, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard, logger)
-	_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("recorded the group incarnation %s", incarnation))
+	_ = AuditTopologyRecovery(topologyRecovery, "recorded the group incarnation "+incarnation)
 	joinVotersAfterBootstrap(voters, tabletInfos, bootstrapped, logger)
 	_ = inst.AuditOperation(BootstrapGroupReplicationRecoveryName, bootstrapped.Alias, "bootstrapped the replication group")
 	_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("%s: bootstrapped the replication group on %s", BootstrapGroupReplicationRecoveryName, topoproto.TabletAliasString(bootstrapped.Alias)))
@@ -1185,14 +1185,14 @@ func updateGroupReplicationVoters(ctx context.Context, analysisEntry *inst.Detec
 			// voter joins once the bootstrap is recorded.
 			_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("not starting group replication on the new voter %s: the shard record lists no incarnation", aliasString))
 		case isVoter && !policy.IsVoter(current, o.Tablet.Alias) && o.Reachable && !o.Active:
-			_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("starting group replication on the new voter %s", aliasString))
+			_ = AuditTopologyRecovery(topologyRecovery, "starting group replication on the new voter "+aliasString)
 			if _, err := startGroupReplication(ctx, o.Tablet, &tabletmanagerdatapb.StartGroupReplicationRequest{}); err != nil {
 				errs = append(errs, vterrors.Wrapf(err, "failed to start group replication on the new voter %s", aliasString))
 			}
 		case isVoter || topoproto.TabletAliasEqual(o.Tablet.Alias, selection.GroupPrimary) || !selection.IsActive(o.Tablet.Alias):
 		case !o.Reachable:
 			// Its MySQL still runs Group Replication, but only its vttablet could make it leave.
-			message := fmt.Sprintf("%s is no longer a voter, but it is unreachable while its MySQL is still an active member of the group: it stays in the group", aliasString)
+			message := aliasString + " is no longer a voter, but it is unreachable while its MySQL is still an active member of the group: it stays in the group"
 			logger.Warn(message)
 			_ = AuditTopologyRecovery(topologyRecovery, message)
 		case groupPrimary == nil:
