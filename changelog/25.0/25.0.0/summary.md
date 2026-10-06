@@ -9,6 +9,7 @@
         - [Legacy vtctld HTTP API removed](#vtctld-http-api-removed)
     - **[New Support](#new-support)**
         - [VTOrc failover of an unreachable primary `vttablet` via replica quorum](#vtorc-quorum-unreachable-primary)
+        - [MySQL Group Replication as a replication mode (experimental)](#group-replication)
     - **[Breaking Changes](#breaking-changes)**
         - [`--watch-replication-stream` flag removed](#vttablet-watch-replication-stream-removed)
         - [VRLog feature removed](#vttablet-vrlog-removed)
@@ -115,6 +116,29 @@ A graceful `vttablet` shutdown records a shutdown marker in the topology server 
 Note that in this scenario the old primary's MySQL keeps running, and because its `vttablet` is the unreachable component, it cannot be demoted until that `vttablet` comes back and discovers the shard has a new primary. As with any emergency reparent away from an unreachable primary, a semi-sync durability policy (e.g. `semi_sync`) is what prevents the old primary from acknowledging new writes in the meantime; with `none` durability, anything writing directly to the old MySQL (bypassing `vtgate`) could cause a split brain.
 
 See [#19918](https://github.com/vitessio/vitess/issues/19918).
+
+#### <a id="group-replication"/>MySQL Group Replication as a replication mode (experimental)</a>
+
+A shard can now replicate with MySQL Group Replication in single-primary mode instead of asynchronous replication with semi-sync. The group acknowledges a commit once a majority of its voting members accepted it, fences a primary that lost its majority, and elects a new primary on its own; Vitess keeps the topology, vtgate's routing and buffering, `PlannedReparentShard`, `EmergencyReparentShard` and VTOrc in step with the group.
+
+Group Replication is selected with a durability policy, like `semi_sync` and `cross_cell`:
+
+- `group_replication`: up to nine voting members, any cell.
+- `group_replication_cross_cell`: one voting member per cell; the shard keeps its primary through the loss of a cell.
+
+Additional `REPLICA` tablets and all `RDONLY` tablets replicate asynchronously from the group's primary.
+
+To use it:
+
+- Start every `vttablet` of the keyspace with `--enable-group-replication` (MySQL 8.4 with the `group_replication` plugin). The tablet derives the group's configuration from the topology and applies `--group-replication-consistency` (default `BEFORE_ON_PRIMARY_FAILOVER`), `--group-replication-exit-state-action` (default `READ_ONLY`) and `--group-replication-autorejoin-tries` (default `0`) before its MySQL joins the group.
+- Convert an existing semi-sync keyspace online, shard by shard, with `vtctldclient MigrateReplicationMode`, which also converts it back. The keyspace's durability policy changes before the first shard is converted, so components that do not support Group Replication stop acting on the keyspace.
+- VTOrc waits `--group-replication-failover-grace-period` (default `30s`) for the group to elect a new primary before it runs an emergency reparent, and replaces a voting member that has been unreachable for `--group-replication-voter-replacement-grace-period` (default `1m`).
+
+Upgrade every `vtctld`, VTOrc and `vttablet` before converting a keyspace, and keep at least one VTOrc of this version running. Do not downgrade a component that serves a Group Replication keyspace: convert the keyspace back to semi-sync first. `SetKeyspaceDurabilityPolicy` refuses to switch an initialized keyspace between semi-sync and Group Replication; use `MigrateReplicationMode`.
+
+Behaviour that changes with Group Replication: every table needs a primary key; a transaction above `group_replication_transaction_size_limit` is rolled back; a failover takes about 7s (Group Replication's fixed 5s failure detection), against about 3s with semi-sync when the primary's host fails; a shard whose group lost its majority waits until every voting member is reachable again before VTOrc restores it.
+
+See the design document, `doc/design-docs/GroupReplication.md`, for the guarantees and the known gaps.
 
 ### <a id="breaking-changes"/>Breaking Changes</a>
 
