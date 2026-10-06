@@ -118,8 +118,11 @@ func TestMigrateReplicationModeToGroupReplication(t *testing.T) {
 	assert.Equal(t, MigrationStepSkipped, stepStatuses(steps)[MigrationActionSetReplicationSource+" "+alias102])
 	assert.Equal(t, MigrationStepDone, stepStatuses(resp.KeyspaceSteps)[MigrationActionSetDurabilityPolicy])
 
-	require.Len(t, c.queries, 1)
+	// The schema is checked by the dry run that precedes the keyspace record's change, then by the
+	// conversion.
+	require.Len(t, c.queries, 2)
 	assert.Contains(t, c.queries[0], "'_vt'")
+	assert.Contains(t, c.queries[1], "'_vt'")
 }
 
 // TestMigrateReplicationModeDefersLastAcker checks that the only semi-sync acker does not
@@ -231,7 +234,8 @@ func TestMigrateReplicationModeResumes(t *testing.T) {
 	_, err := migrate(t, m, "group_replication", false)
 	require.Error(t, err)
 	require.ErrorContains(t, err, alias300)
-	assert.Equal(t, "semi_sync", keyspaceDurability(t, ts), "the keyspace policy must not change before the shard is converted")
+	assert.Equal(t, "semi_sync", shardDurability(t, ts, "-"), "the shard's policy must not change before the shard is converted")
+	assert.Equal(t, "semi_sync", keyspaceRecord(t, ts).MigrationSourceDurabilityPolicy)
 	assert.True(t, c.tablet(alias200).member)
 	assert.False(t, c.tablet(alias300).member)
 

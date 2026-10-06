@@ -162,6 +162,13 @@ func (mc *msCluster) keyspacePolicy(t *testing.T) string {
 	return ks.Keyspace.DurabilityPolicy
 }
 
+// migrationSource returns the keyspace's migration source (Keyspace.migration_source_durability_policy).
+func (mc *msCluster) migrationSource(t *testing.T) string {
+	ks, err := mc.VtctldClientProcess.GetKeyspace(msKeyspace)
+	require.NoError(t, err)
+	return ks.Keyspace.MigrationSourceDurabilityPolicy
+}
+
 // tabletType returns the type of the tablet in its tablet record.
 func (mc *msCluster) tabletType(t *testing.T, tablet *cluster.Vttablet) topodatapb.TabletType {
 	tab, err := mc.VtctldClientProcess.GetTablet(tablet.Alias)
@@ -341,11 +348,13 @@ func requireNoLostWrites(t *testing.T, mc *msCluster, acked []int64) {
 }
 
 // TestGroupReplicationMigratesShardByShard converts a keyspace of two shards to Group Replication
-// one shard at a time, and back. While the keyspace's policy is still semi-sync, the converted
-// shard is managed as a Group Replication shard: when its primary's mysqld dies, the group elects
-// a new primary, and the old primary rejoins the group as a voter rather than being made an
-// asynchronous replica of it, and PRS takes the Group Replication path on it while it takes the
-// semi-sync path on the other shard. The keyspace policy switches once both shards are converted.
+// one shard at a time, and back. The keyspace record names the Group Replication policy from the
+// start of the migration, and keeps the semi-sync policy as its migration source for the shard that
+// is not converted yet. The converted shard is managed as a Group Replication shard: when its
+// primary's mysqld dies, the group elects a new primary, and the old primary rejoins the group as a
+// voter rather than being made an asynchronous replica of it, and PRS takes the Group Replication
+// path on it while it takes the semi-sync path on the other shard. The migration source is cleared
+// once both shards are converted.
 // Converted back one at a time, the shard that left its group fails over like any semi-sync shard
 // while the keyspace's policy is still Group Replication.
 func TestGroupReplicationMigratesShardByShard(t *testing.T) {
@@ -363,13 +372,14 @@ func TestGroupReplicationMigratesShardByShard(t *testing.T) {
 		assert.Zero(t, fail, "writes failed during the migration, last error: %v", lastErr)
 		requireNoLostWrites(t, mc, acked)
 
-		assert.Equal(t, semiSync, mc.keyspacePolicy(t), "the keyspace keeps its policy while a shard is not converted")
+		assert.Equal(t, gr, mc.keyspacePolicy(t), "the keyspace names the target policy from the start of the migration")
+		assert.Equal(t, semiSync, mc.migrationSource(t), "the shard that is not converted keeps its policy through the migration source")
 		assert.Equal(t, gr, mc.shardRecord(t, first).DurabilityPolicy)
 		assert.Empty(t, mc.shardRecord(t, second).DurabilityPolicy)
 		mc.waitForSemiSyncShard(t, second, mc.tablets[second][0])
 	})
 
-	t.Run("the group replaces the primary of the converted shard while the keyspace is semi-sync", func(t *testing.T) {
+	t.Run("the group replaces the primary of the converted shard while the other shard is semi-sync", func(t *testing.T) {
 		mc.waitBufferCooldown(t)
 		defer func() { mc.lastBuffering = time.Now() }()
 		w := startIDWriter(t, mc)
@@ -399,7 +409,7 @@ func TestGroupReplicationMigratesShardByShard(t *testing.T) {
 		if status.ReplicationStatus != nil {
 			assert.Empty(t, status.ReplicationStatus.SourceHost, "the old primary must not replicate asynchronously next to its group")
 		}
-		assert.Equal(t, semiSync, mc.keyspacePolicy(t))
+		assert.Equal(t, semiSync, mc.migrationSource(t))
 	})
 
 	t.Run("planned reparents take the path of each shard's policy", func(t *testing.T) {
@@ -424,7 +434,7 @@ func TestGroupReplicationMigratesShardByShard(t *testing.T) {
 		requireNoLostWrites(t, mc, acked)
 	})
 
-	t.Run("migrate the second shard: the keyspace policy switches", func(t *testing.T) {
+	t.Run("migrate the second shard: the migration source is cleared", func(t *testing.T) {
 		mc.waitBufferCooldown(t)
 		defer func() { mc.lastBuffering = time.Now() }()
 		w := startIDWriter(t, mc)
@@ -435,6 +445,7 @@ func TestGroupReplicationMigratesShardByShard(t *testing.T) {
 		requireNoLostWrites(t, mc, acked)
 
 		assert.Equal(t, gr, mc.keyspacePolicy(t))
+		assert.Empty(t, mc.migrationSource(t))
 		for _, shard := range msShards {
 			assert.Empty(t, mc.shardRecord(t, shard).DurabilityPolicy, "the keyspace's policy applies to %s", shard)
 		}
@@ -499,6 +510,7 @@ func TestGroupReplicationMigratesShardByShard(t *testing.T) {
 		requireNoLostWrites(t, mc, acked)
 
 		assert.Equal(t, semiSync, mc.keyspacePolicy(t))
+		assert.Empty(t, mc.migrationSource(t))
 		for _, shard := range msShards {
 			assert.Empty(t, mc.shardRecord(t, shard).DurabilityPolicy, "the keyspace's policy applies to %s", shard)
 		}

@@ -58,10 +58,17 @@ func stepIndex(steps []*vtctldatapb.ReplicationModeMigrationStep, action, alias 
 	})
 }
 
+// keyspaceRecord returns the record of the test keyspace.
+func keyspaceRecord(t *testing.T, ts *topo.Server) *topodatapb.Keyspace {
+	ki, err := ts.GetKeyspace(t.Context(), "ks")
+	require.NoError(t, err)
+	return ki.Keyspace
+}
+
 // TestMigrateReplicationModeConvertsOneShardOfSeveral converts one shard of a keyspace whose other
 // shard is not converted: the converted shard gets the target policy as its own, as the last step
-// of its conversion, while the keyspace keeps its policy for the other shard. Once every shard is
-// converted, the keyspace policy switches and the shard's own policy is removed.
+// of its conversion, while the keyspace's migration source keeps the other shard's policy. Once
+// every shard is converted, the migration source is cleared and the shard's own policy is removed.
 func TestMigrateReplicationModeConvertsOneShardOfSeveral(t *testing.T) {
 	c, ts := newFakeGRCluster(t, "semi_sync", migrationTestShard()...)
 	addOtherShard(t, ts)
@@ -71,7 +78,7 @@ func TestMigrateReplicationModeConvertsOneShardOfSeveral(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, c.violationsSoFar())
 
-	assert.Equal(t, "semi_sync", keyspaceDurability(t, ts), "the keyspace keeps its policy while a shard is not converted")
+	assert.Equal(t, "semi_sync", keyspaceRecord(t, ts).MigrationSourceDurabilityPolicy, "the keyspace keeps the policy of the shards that are not converted as its migration source")
 	assert.Equal(t, MigrationStepSkipped, stepStatuses(resp.KeyspaceSteps)[MigrationActionKeepDurabilityPolicy])
 	assert.Equal(t, "group_replication_cross_cell", c.shardPolicy(t))
 	assert.Equal(t, "group_replication_cross_cell", shardDurability(t, ts, "-"))
@@ -94,20 +101,121 @@ func TestMigrateReplicationModeConvertsOneShardOfSeveral(t *testing.T) {
 		assert.Less(t, before, setIdx)
 	}
 
-	// Once the other shard is gone, the shard is the keyspace's only shard: the keyspace switches,
-	// and the shard's own policy, now the keyspace's, is removed.
+	// Once the other shard is gone, the shard is the keyspace's only shard: the migration source is
+	// cleared, and the shard's own policy, now the keyspace's, is removed.
 	require.NoError(t, ts.DeleteShard(t.Context(), "ks", otherShard))
 	c.reset()
 	resp, err = migrateShards(t, m, "group_replication_cross_cell", false)
 	require.NoError(t, err)
 	assert.Empty(t, c.mutatingCalls())
 	assert.Equal(t, "group_replication_cross_cell", keyspaceDurability(t, ts))
+	assert.Empty(t, keyspaceRecord(t, ts).MigrationSourceDurabilityPolicy)
 	assert.Empty(t, c.shardPolicy(t))
 	assert.Equal(t, "group_replication_cross_cell", shardDurability(t, ts, "-"))
 	assert.Equal(t, MigrationStepSkipped, stepStatuses(resp.Shards[0].Steps)[MigrationActionSetShardDurabilityPolicy])
 	keyspaceSteps := stepStatuses(resp.KeyspaceSteps)
-	assert.Equal(t, MigrationStepDone, keyspaceSteps[MigrationActionSetDurabilityPolicy])
+	assert.Equal(t, MigrationStepSkipped, keyspaceSteps[MigrationActionSetDurabilityPolicy], "the first run named the target policy")
+	assert.Equal(t, MigrationStepDone, keyspaceSteps[MigrationActionClearMigrationSource])
 	assert.Equal(t, MigrationStepDone, keyspaceSteps[MigrationActionClearShardDurabilityPolicy])
+}
+
+// TestMigrateReplicationModeHidesKeyspaceFromOlderComponents checks the first step of a migration to
+// Group Replication: before its first bootstrap, it names the target policy in the keyspace record,
+// in one write that keeps the policy it converts from as the keyspace's migration source. A
+// component that does not know the migration source, nor the shard's own policy, then reads the
+// group replication policy for every shard of the keyspace, and fails safe if it does not know it
+// either, instead of managing a shard that runs a group by the semi-sync policy. A component that
+// knows them resolves the same policy for every shard as before.
+func TestMigrateReplicationModeHidesKeyspaceFromOlderComponents(t *testing.T) {
+	c, ts := newFakeGRCluster(t, "semi_sync", migrationTestShard()...)
+	addOtherShard(t, ts)
+	resp, err := migrateShards(t, newTestMigrator(c, ts), "group_replication_cross_cell", false, "-")
+	require.NoError(t, err)
+
+	require.NotNil(t, c.keyspaceAtFirstBootstrap, "the migration bootstrapped a group")
+	assert.Equal(t, "group_replication_cross_cell", c.keyspaceAtFirstBootstrap.DurabilityPolicy, "the keyspace names the target policy before the first bootstrap")
+	assert.Equal(t, "semi_sync", c.keyspaceAtFirstBootstrap.MigrationSourceDurabilityPolicy)
+	assert.Equal(t, MigrationStepDone, stepStatuses(resp.KeyspaceSteps)[MigrationActionSetDurabilityPolicy])
+
+	ks := keyspaceRecord(t, ts)
+	assert.Equal(t, "group_replication_cross_cell", ks.DurabilityPolicy)
+	assert.Equal(t, "semi_sync", ks.MigrationSourceDurabilityPolicy)
+	assert.Equal(t, "group_replication_cross_cell", shardDurability(t, ts, "-"))
+	assert.Equal(t, "semi_sync", shardDurability(t, ts, otherShard))
+}
+
+// TestMigrateReplicationModeBackClearsMigrationSource converts back to semi-sync a keyspace whose
+// migration to Group Replication was interrupted after one shard: the keyspace record keeps the
+// group replication policy until the shard has left its group, then names semi-sync again, in the
+// same write that removes the migration source.
+func TestMigrateReplicationModeBackClearsMigrationSource(t *testing.T) {
+	c, ts := newFakeGRCluster(t, "semi_sync", migrationTestShard()...)
+	addOtherShard(t, ts)
+	m := newTestMigrator(c, ts)
+	_, err := migrateShards(t, m, "group_replication", false, "-")
+	require.NoError(t, err)
+	require.Equal(t, "semi_sync", keyspaceRecord(t, ts).MigrationSourceDurabilityPolicy)
+
+	require.NoError(t, ts.DeleteShard(t.Context(), "ks", otherShard))
+	c.reset()
+	resp, err := migrateShards(t, m, "semi_sync", false)
+	require.NoError(t, err)
+	assert.Empty(t, c.violationsSoFar())
+	assert.Equal(t, &topodatapb.Keyspace{DurabilityPolicy: "semi_sync"}, keyspaceRecord(t, ts))
+	assert.Empty(t, c.shardPolicy(t))
+	assert.Equal(t, MigrationStepDone, stepStatuses(resp.KeyspaceSteps)[MigrationActionSetDurabilityPolicy])
+}
+
+// TestMigrateReplicationModeRefusesOlderTabletsInKeyspace checks that a migration to Group
+// Replication refuses, before it changes anything, a keyspace in which a tablet that answers runs a
+// vttablet that does not resolve the shard's own policy and the keyspace's migration source: once the
+// keyspace names the target policy, such a tablet would manage its shard by it. Every tablet of the
+// keyspace counts, not only the voters of the converted shard. A tablet that does not answer is left
+// out: a vttablet that does not know the policy exits when it starts.
+func TestMigrateReplicationModeRefusesOlderTabletsInKeyspace(t *testing.T) {
+	const problem = "vttablet does not apply the shard's own durability policy"
+	for _, tt := range []struct {
+		name  string
+		setup func(t *testing.T, c *fakeGRCluster)
+		// wantErr is a part of the error; empty means that the migration runs.
+		wantErr string
+	}{{
+		name: "an RDONLY tablet of the converted shard",
+		setup: func(t *testing.T, c *fakeGRCluster) {
+			c.tablets[alias102].shardPolicy = false
+		},
+		wantErr: "zone1-0000000102: " + problem,
+	}, {
+		name: "a tablet of another shard",
+		setup: func(t *testing.T, c *fakeGRCluster) {
+			c.addTabletOfOtherShard(t, "zone2", 210, otherShard).shardPolicy = false
+		},
+		wantErr: "zone2-0000000210: " + problem,
+	}, {
+		name: "a tablet of another shard that does not answer",
+		setup: func(t *testing.T, c *fakeGRCluster) {
+			ft := c.addTabletOfOtherShard(t, "zone2", 210, otherShard)
+			ft.shardPolicy = false
+			ft.unreachable = true
+		},
+	}} {
+		t.Run(tt.name, func(t *testing.T) {
+			c, ts := newFakeGRCluster(t, "semi_sync", migrationTestShard()...)
+			addOtherShard(t, ts)
+			tt.setup(t, c)
+			_, err := migrateShards(t, newTestMigrator(c, ts), "group_replication_cross_cell", false, "-")
+			if tt.wantErr == "" {
+				require.NoError(t, err)
+				assert.Equal(t, "group_replication_cross_cell", shardDurability(t, ts, "-"))
+				return
+			}
+			require.Error(t, err)
+			assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+			require.ErrorContains(t, err, tt.wantErr)
+			assert.Empty(t, c.mutatingCalls())
+			assert.Equal(t, &topodatapb.Keyspace{DurabilityPolicy: "semi_sync"}, keyspaceRecord(t, ts), "the keyspace record must not change")
+		})
+	}
 }
 
 // TestMigrateReplicationModeConvertsOneShardBack converts one shard of a Group Replication keyspace
@@ -198,7 +306,9 @@ func TestMigrateReplicationModeDryRunPlansShardPolicy(t *testing.T) {
 	assert.Equal(t, MigrationStepPlanned, stepStatuses(resp.Shards[0].Steps)[MigrationActionSetShardDurabilityPolicy])
 	keyspaceSteps := stepStatuses(resp.KeyspaceSteps)
 	assert.Equal(t, MigrationStepPlanned, keyspaceSteps[MigrationActionSetDurabilityPolicy])
+	assert.Equal(t, MigrationStepPlanned, keyspaceSteps[MigrationActionClearMigrationSource])
 	assert.Equal(t, MigrationStepPlanned, keyspaceSteps[MigrationActionClearShardDurabilityPolicy])
+	assert.Equal(t, &topodatapb.Keyspace{DurabilityPolicy: "semi_sync"}, keyspaceRecord(t, ts), "a dry run must not change the keyspace record")
 }
 
 // newConvertedShardOfSemiSyncKeyspace is newFailedGroupShard in a keyspace whose policy is still

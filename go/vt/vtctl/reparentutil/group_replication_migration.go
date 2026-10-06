@@ -76,9 +76,13 @@ const (
 	// MigrationActionClearShardDurabilityPolicy removes a shard's own durability policy once the
 	// keyspace has the same policy.
 	MigrationActionClearShardDurabilityPolicy = "clear_shard_durability_policy"
-	minimumGroupReplicationMembers            = 3
-	defaultReplicationModeMigrationWait       = 5 * time.Minute
-	defaultReplicationModeMigrationPollAt     = 500 * time.Millisecond
+	// MigrationActionClearMigrationSource removes the keyspace's migration source
+	// (Keyspace.migration_source_durability_policy) once every shard is converted to Group
+	// Replication.
+	MigrationActionClearMigrationSource   = "clear_migration_source"
+	minimumGroupReplicationMembers        = 3
+	defaultReplicationModeMigrationWait   = 5 * time.Minute
+	defaultReplicationModeMigrationPollAt = 500 * time.Millisecond
 )
 
 // groupReplicationSchemaCheckQuery lists the user tables that Group Replication cannot
@@ -138,8 +142,10 @@ type migrationRun struct {
 	target   policy.Durabler
 	// keyspacePolicy is the keyspace's durability policy when the migration started.
 	keyspacePolicy string
-	// keyspaceRecord is the keyspace record when the migration started.
+	// keyspaceRecord is the keyspace record as the migration read or wrote it last.
 	keyspaceRecord *topodatapb.Keyspace
+	// plannedSource is the migration source that a dry run planned to keep in the keyspace record.
+	plannedSource string
 }
 
 // migrationShard carries the state of the migration of one shard.
@@ -164,18 +170,26 @@ type migrationShard struct {
 }
 
 // Migrate converts the requested shards of the keyspace to the replication mode of the
-// target durability policy, and updates the keyspace durability policy. Both directions work
-// the same way:
+// target durability policy, and updates the keyspace durability policy:
 //
 //   - The shards are converted one at a time, under their shard lock. Each shard's durability
 //     policy (topo.ShardDurabilityPolicy) changes only there, at a fixed step of its conversion:
 //     the migration stores the target policy as the shard's own policy (Shard.durability_policy)
 //     after the shard's conversion to Group Replication, or before its conversion back, before
 //     its group shrinks. Every component then manages a converted shard by the target policy,
-//     and the shards that are not converted yet by the keyspace policy.
-//   - The keyspace policy is switched once it changes the policy of no shard: every shard of
-//     the keyspace is converted and has the target policy. The shards' own policies, which are
-//     the keyspace's from then on, are removed afterwards.
+//     and the shards that are not converted yet by the policy they had.
+//   - To Group Replication, the keyspace record names the target policy before any shard is
+//     converted, in one write that keeps the policy it converts from as the keyspace's migration
+//     source (Keyspace.migration_source_durability_policy): that is the policy of the shards that
+//     are not converted yet. A component that knows neither field then reads the group replication
+//     policy for every shard, and fails safe if it does not know it either, instead of managing a
+//     shard that runs a group by the policy it converts from. Before that write, every tablet of
+//     the keyspace that answers must report that it resolves both fields. The migration source is
+//     cleared once every shard of the keyspace is converted.
+//   - Back to asynchronous replication, the keyspace keeps its group replication policy until
+//     every shard has left its group, and is then switched in one write that also clears a
+//     migration source left by an interrupted migration to Group Replication.
+//   - The shards' own policies, which are the keyspace's from then on, are removed afterwards.
 //
 // The response lists the steps of every shard, even when Migrate fails.
 func (m *ReplicationModeMigrator) Migrate(ctx context.Context, keyspace string, opts MigrateReplicationModeOptions) (*vtctldatapb.MigrateReplicationModeResponse, error) {
@@ -231,6 +245,12 @@ func (r *migrationRun) migrate(ctx context.Context, resp *vtctldatapb.MigrateRep
 	if toGroup {
 		from, to = to, from
 		desc = "group replication"
+		if err := r.preflightKeyspace(ctx, resp, allShards); err != nil {
+			return err
+		}
+		if err := r.nameTargetPolicy(ctx, resp, shards); err != nil {
+			return err
+		}
 	}
 	converted := make(map[string]bool)
 	for _, shard := range shards {
@@ -259,15 +279,166 @@ func (r *migrationRun) migrate(ctx context.Context, resp *vtctldatapb.MigrateRep
 		}
 	}
 	if len(notConverted) > 0 {
+		kept := "durability policy " + r.keyspacePolicy
+		if source := r.keyspaceRecord.GetMigrationSourceDurabilityPolicy(); toGroup && source != "" {
+			kept = "migration source " + source
+		}
 		r.addKeyspaceStep(resp, MigrationActionKeepDurabilityPolicy, MigrationStepSkipped,
-			fmt.Sprintf("keep durability policy %s: shards %s are not converted to %s with durability policy %s yet",
-				r.keyspacePolicy, strings.Join(notConverted, ", "), desc, r.opts.DurabilityPolicy))
+			fmt.Sprintf("keep %s: shards %s are not converted to %s with durability policy %s yet",
+				kept, strings.Join(notConverted, ", "), desc, r.opts.DurabilityPolicy))
 		return nil
 	}
-	if err := r.setKeyspacePolicy(ctx, resp, r.keyspacePolicy); err != nil {
+	if toGroup && (r.keyspaceRecord.GetDurabilityPolicy() == r.opts.DurabilityPolicy || r.plannedSource != "") {
+		if err := r.clearMigrationSource(ctx, resp); err != nil {
+			return err
+		}
+	} else if err := r.setKeyspacePolicy(ctx, resp, r.keyspacePolicy); err != nil {
 		return err
 	}
 	return r.clearShardPolicies(ctx, resp, allShards, converted)
+}
+
+// preflightKeyspace checks, before a migration to Group Replication names the target policy in the
+// keyspace record, that every tablet of the keyspace that answers resolves a shard's policy from the
+// shard's own policy and the keyspace's migration source (FullStatus.shard_durability_policy_supported):
+// another vttablet would manage its shard by the keyspace's policy, the target policy, from then on.
+// A tablet that does not answer is left out, with a warning: a vttablet that does not know the
+// target policy exits when it starts, and one that knows it is the same version as the others.
+func (r *migrationRun) preflightKeyspace(ctx context.Context, resp *vtctldatapb.MigrateReplicationModeResponse, allShards []string) error {
+	var problems []string
+	for _, shard := range allShards {
+		tabletMap, err := r.m.ts.GetTabletMapForShard(ctx, r.keyspace, shard)
+		if err != nil {
+			return vterrors.Wrapf(err, "failed to get tablet map for %s/%s", r.keyspace, shard)
+		}
+		tablets := make([]*topodatapb.Tablet, 0, len(tabletMap))
+		for _, alias := range slices.Sorted(maps.Keys(tabletMap)) {
+			tablets = append(tablets, tabletMap[alias].Tablet)
+		}
+		statuses := fetchFullStatuses(ctx, r.m.tmc, tablets, topo.RemoteOperationTimeout)
+		for _, tablet := range tablets {
+			res := statuses[topoproto.TabletAliasString(tablet.Alias)]
+			if res.err != nil {
+				r.m.logger.Warningf("tablet %v of keyspace %s does not answer, the migration cannot check its vttablet: %v", topoproto.TabletAliasString(tablet.Alias), r.keyspace, res.err)
+				continue
+			}
+			if problem := shardDurabilityPolicyProblem(tablet, res); problem != "" {
+				problems = append(problems, problem)
+			}
+		}
+	}
+	if len(problems) > 0 {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "keyspace %s cannot be converted to group replication: %s", r.keyspace, strings.Join(problems, "; "))
+	}
+	r.addKeyspaceStep(resp, MigrationActionPreflight, MigrationStepDone, fmt.Sprintf("every tablet of keyspace %s that answers resolves the shards' own policies", r.keyspace))
+	return nil
+}
+
+// nameTargetPolicy names the target policy in the keyspace record, and keeps the keyspace's policy
+// as its migration source, in one write under the keyspace lock (see Migrate). A keyspace that
+// names the target policy already keeps its record. Before the write, it checks the conversion of
+// the shards with a dry run, so that a migration that its preflight refuses leaves the keyspace
+// record as it was.
+func (r *migrationRun) nameTargetPolicy(ctx context.Context, resp *vtctldatapb.MigrateReplicationModeResponse, shards []string) error {
+	ks := r.keyspaceRecord
+	if ks.GetDurabilityPolicy() == r.opts.DurabilityPolicy {
+		r.addKeyspaceStep(resp, MigrationActionSetDurabilityPolicy, MigrationStepSkipped, fmt.Sprintf("keyspace %s already has durability policy %s", r.keyspace, r.opts.DurabilityPolicy))
+		return nil
+	}
+	source := cmp.Or(ks.GetMigrationSourceDurabilityPolicy(), r.keyspacePolicy)
+	desc := fmt.Sprintf("set the durability policy of keyspace %s from %s to %s, which applies to its shards as they are converted, and keep %s as its migration source until then",
+		r.keyspace, r.keyspacePolicy, r.opts.DurabilityPolicy, source)
+	if r.opts.DryRun {
+		r.addKeyspaceStep(resp, MigrationActionSetDurabilityPolicy, MigrationStepPlanned, desc)
+		r.plannedSource = source
+		return nil
+	}
+	dry := *r
+	dry.opts.DryRun = true
+	for _, shard := range shards {
+		result := &vtctldatapb.ReplicationModeMigrationShardResult{Shard: shard}
+		if err := dry.migrateShard(ctx, shard, result, true); err != nil {
+			return vterrors.Wrapf(err, "failed to convert shard %s/%s to group replication", r.keyspace, shard)
+		}
+	}
+	ki, err := writeKeyspacePolicy(ctx, r.m.ts, r.keyspace, func(ks *topodatapb.Keyspace) error {
+		if ks.MigrationSourceDurabilityPolicy == "" {
+			ks.MigrationSourceDurabilityPolicy = cmp.Or(ks.DurabilityPolicy, policy.DurabilityNone)
+		}
+		ks.DurabilityPolicy = r.opts.DurabilityPolicy
+		return nil
+	})
+	if err != nil {
+		return vterrors.Wrapf(err, "failed to %s", desc)
+	}
+	r.keyspaceRecord = ki.Keyspace
+	r.addKeyspaceStep(resp, MigrationActionSetDurabilityPolicy, MigrationStepDone, desc)
+	resp.DurabilityPolicy = r.opts.DurabilityPolicy
+	return nil
+}
+
+// clearMigrationSource removes the keyspace's migration source once every shard of the keyspace is
+// converted to Group Replication. Under the keyspace lock, which a new shard's creation also takes,
+// it checks again that every shard of the keyspace has the target policy as its own: the migration
+// source is the policy of a shard that has none.
+func (r *migrationRun) clearMigrationSource(ctx context.Context, resp *vtctldatapb.MigrateReplicationModeResponse) error {
+	source := cmp.Or(r.keyspaceRecord.GetMigrationSourceDurabilityPolicy(), r.plannedSource)
+	if source == "" {
+		r.addKeyspaceStep(resp, MigrationActionClearMigrationSource, MigrationStepSkipped, fmt.Sprintf("keyspace %s has no migration source", r.keyspace))
+		return nil
+	}
+	desc := fmt.Sprintf("remove the migration source %s of keyspace %s, whose shards are all converted", source, r.keyspace)
+	if r.opts.DryRun {
+		r.addKeyspaceStep(resp, MigrationActionClearMigrationSource, MigrationStepPlanned, desc)
+		return nil
+	}
+	ki, err := writeKeyspacePolicy(ctx, r.m.ts, r.keyspace, func(ks *topodatapb.Keyspace) error {
+		shards, err := r.m.ts.GetShardNames(ctx, r.keyspace)
+		if err != nil {
+			return err
+		}
+		for _, shard := range shards {
+			si, err := r.m.ts.GetShard(ctx, r.keyspace, shard)
+			if err != nil {
+				return err
+			}
+			if own := si.GetDurabilityPolicy(); own != r.opts.DurabilityPolicy {
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "shard %s/%s does not have durability policy %s as its own; run the migration again to convert it", r.keyspace, shard, r.opts.DurabilityPolicy)
+			}
+		}
+		ks.MigrationSourceDurabilityPolicy = ""
+		return nil
+	})
+	if err != nil {
+		return vterrors.Wrapf(err, "failed to %s", desc)
+	}
+	r.keyspaceRecord = ki.Keyspace
+	r.addKeyspaceStep(resp, MigrationActionClearMigrationSource, MigrationStepDone, desc)
+	return nil
+}
+
+// writeKeyspacePolicy changes the durability fields of the keyspace record with update, in one
+// write under the keyspace lock.
+func writeKeyspacePolicy(ctx context.Context, ts *topo.Server, keyspace string, update func(ks *topodatapb.Keyspace) error) (ki *topo.KeyspaceInfo, err error) {
+	ctx, unlock, lockErr := ts.LockKeyspace(ctx, keyspace, "MigrateReplicationMode")
+	if lockErr != nil {
+		return nil, lockErr
+	}
+	defer unlock(&err)
+	ki, err = ts.GetKeyspace(ctx, keyspace)
+	if err != nil {
+		return nil, err
+	}
+	if err = update(ki.Keyspace); err != nil {
+		return nil, err
+	}
+	if !policy.CheckDurabilityPolicyExists(ki.DurabilityPolicy) {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "durability policy <%v> is not a valid policy", ki.DurabilityPolicy)
+	}
+	if err = ts.UpdateKeyspace(ctx, ki); err != nil {
+		return nil, err
+	}
+	return ki, nil
 }
 
 // clearShardPolicies removes the shards' own durability policy, which equals the keyspace's now
@@ -353,9 +524,15 @@ func (r *migrationRun) setKeyspacePolicy(ctx context.Context, resp *vtctldatapb.
 	case r.opts.DryRun:
 		r.addKeyspaceStep(resp, MigrationActionSetDurabilityPolicy, MigrationStepPlanned, desc)
 	default:
-		if _, err := SetKeyspaceDurabilityPolicy(ctx, r.m.ts, r.keyspace, r.opts.DurabilityPolicy); err != nil {
+		ki, err := writeKeyspacePolicy(ctx, r.m.ts, r.keyspace, func(ks *topodatapb.Keyspace) error {
+			ks.DurabilityPolicy = r.opts.DurabilityPolicy
+			ks.MigrationSourceDurabilityPolicy = ""
+			return nil
+		})
+		if err != nil {
 			return vterrors.Wrapf(err, "failed to %s", desc)
 		}
+		r.keyspaceRecord = ki.Keyspace
 		r.addKeyspaceStep(resp, MigrationActionSetDurabilityPolicy, MigrationStepDone, desc)
 		resp.DurabilityPolicy = r.opts.DurabilityPolicy
 	}
