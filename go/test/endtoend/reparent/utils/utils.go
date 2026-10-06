@@ -23,6 +23,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -844,6 +845,10 @@ func WaitForTabletToBeServing(ctx context.Context, t *testing.T, clusterInstance
 	}
 }
 
+// optimizerHintRE matches optimizer hint comments (`/*+ ... */`) that vtgate
+// injects after the leading verb of queries sent to vttablet.
+var optimizerHintRE = regexp.MustCompile(`\s*/\*\+.*?\*/`)
+
 // WaitForQueryWithStateInProcesslist waits for a query to be present in the processlist with a specific state.
 func WaitForQueryWithStateInProcesslist(ctx context.Context, t *testing.T, tablet *cluster.Vttablet, sql, state string, timeout time.Duration) {
 	require.Eventually(t, func() bool {
@@ -855,7 +860,7 @@ func WaitForQueryWithStateInProcesslist(ctx context.Context, t *testing.T, table
 			if strings.EqualFold(row[0].ToString(), "Query") {
 				continue
 			}
-			if strings.EqualFold(row[1].ToString(), state) && strings.EqualFold(row[2].ToString(), sql) {
+			if strings.EqualFold(row[1].ToString(), state) && strings.EqualFold(optimizerHintRE.ReplaceAllString(row[2].ToString(), ""), sql) {
 				return true
 			}
 		}

@@ -41,6 +41,7 @@ import (
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/srvtopo/fakesrvtopo"
+	"vitess.io/vitess/go/vt/sysvars"
 
 	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
 
@@ -446,6 +447,7 @@ func TestExecutorAutocommit(t *testing.T) {
 	wantSession := &vtgatepb.Session{TargetString: "@primary", InTransaction: true, FoundRows: 1, RowCount: -1}
 	testSession := session.CloneVT()
 	testSession.ShardSessions = nil
+	delete(testSession.SystemVariables, sysvars.SQLMode.Name)
 	utils.MustMatch(t, wantSession, testSession, "session does not match for autocommit=0")
 
 	logStats := testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select id from main1", 1)
@@ -482,6 +484,7 @@ func TestExecutorAutocommit(t *testing.T) {
 	wantSession = &vtgatepb.Session{InTransaction: true, Autocommit: true, TargetString: "@primary", FoundRows: 0, RowCount: 1}
 	testSession = session.CloneVT()
 	testSession.ShardSessions = nil
+	delete(testSession.SystemVariables, sysvars.SQLMode.Name)
 	utils.MustMatch(t, wantSession, testSession, "session does not match for autocommit=1")
 	got, want = sbclookup.CommitCount.Load(), startCount
 	assert.Equalf(t, want, got, "Commit count: %d, want %d", got, want)
@@ -1684,7 +1687,7 @@ func assertCacheContains(t *testing.T, e *Executor, vc *econtext.VCursorImpl, sq
 			return true
 		})
 	} else {
-		h := buildPlanKey(t.Context(), vc, sql, "")
+		h := buildPlanKey(t.Context(), vc, sql, vc.PrepareSetVarComment())
 		plan, _ = e.plans.Get(h.Hash(), e.epoch.Load())
 	}
 	assert.NotNilf(t, plan, "plan not found for query: %s", sql)
@@ -1802,7 +1805,7 @@ func TestGetPlanCacheSetVarHintOrder(t *testing.T) {
 		SystemVariables: map[string]string{
 			"sql_safe_updates":        "1",
 			"unique_checks":           "0",
-			"sql_mode":                "'ANSI'",
+			"sql_mode":                "'STRICT_ALL_TABLES'",
 			"max_execution_time":      "100",
 			"big_tables":              "1",
 			"join_buffer_size":        "262144",
@@ -1822,7 +1825,7 @@ func TestGetPlanCacheSetVarHintOrder(t *testing.T) {
 	}
 	assert.Equal(t, "select /*+ SET_VAR(big_tables = 1) SET_VAR(div_precision_increment = 6) SET_VAR(group_concat_max_len = 4096) "+
 		"SET_VAR(join_buffer_size = 262144) SET_VAR(max_execution_time = 100) SET_VAR(sort_buffer_size = 262144) "+
-		"SET_VAR(sql_mode = 'ANSI') SET_VAR(sql_safe_updates = 1) SET_VAR(unique_checks = 0) */ id from `user` where id = :id /* INT64 */",
+		"SET_VAR(sql_mode = 'STRICT_ALL_TABLES') SET_VAR(sql_safe_updates = 1) SET_VAR(unique_checks = 0) */ id from `user` where id = :id /* INT64 */",
 		sbc1.Queries[0].Sql)
 }
 
@@ -2562,9 +2565,6 @@ func TestExecutorSavepointInTxWithReservedConn(t *testing.T) {
 	defer executor.queryLogger.Unsubscribe(logChan)
 
 	session := econtext.NewSafeSession(&vtgatepb.Session{Autocommit: true, TargetString: "TestExecutor", EnableSystemSettings: true})
-	sbc1.SetResults([]*sqltypes.Result{
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"), "a|"),
-	})
 	queries := []string{
 		"set sql_mode = ''",
 		"begin",
@@ -2584,7 +2584,6 @@ func TestExecutorSavepointInTxWithReservedConn(t *testing.T) {
 	emptyBV := map[string]*querypb.BindVariable{}
 
 	sbc1WantQueries := []*querypb.BoundQuery{
-		{Sql: "select @@sql_mode orig, '' new", BindVariables: emptyBV},
 		{Sql: "savepoint a", BindVariables: emptyBV},
 		{Sql: "select /*+ SET_VAR(sql_mode = ' ') */ id from `user` where id = 1", BindVariables: emptyBV},
 		{Sql: "savepoint b", BindVariables: emptyBV},
@@ -2600,7 +2599,7 @@ func TestExecutorSavepointInTxWithReservedConn(t *testing.T) {
 
 	utils.MustMatch(t, sbc1WantQueries, sbc1.Queries, "")
 	utils.MustMatch(t, sbc2WantQueries, sbc2.Queries, "")
-	testQueryLog(t, executor, logChan, "TestExecute", "SET", "set @@sql_mode = ''", 1)
+	testQueryLog(t, executor, logChan, "TestExecute", "SET", "set @@sql_mode = ''", 0)
 	testQueryLog(t, executor, logChan, "TestExecute", "BEGIN", "begin", 0)
 	testQueryLog(t, executor, logChan, "TestExecute", "SAVEPOINT", "savepoint a", 0)
 	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select /*+ SET_VAR(sql_mode = ' ') */ id from `user` where id = 1", 1)
@@ -2927,14 +2926,14 @@ func TestExecutorSettingsInTwoPC(t *testing.T) {
 			expectedQueries: [][]string{
 				{
 					"select '+08:00' from dual where @@time_zone != '+08:00'",
+					"set sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION', time_zone = '+08:00'",
 					"set time_zone = '+08:00'",
-					"set time_zone = '+08:00'",
-					"insert into user_extra(user_id) values (1)",
-					"insert into user_extra(user_id) values (2)",
+					"insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into user_extra(user_id) values (1)",
+					"insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into user_extra(user_id) values (2)",
 				},
 				{
-					"set time_zone = '+08:00'",
-					"insert into user_extra(user_id) values (3)",
+					"set sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION', time_zone = '+08:00'",
+					"insert /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ into user_extra(user_id) values (3)",
 				},
 			},
 		},

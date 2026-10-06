@@ -13,8 +13,8 @@
 				"Name": "ks_misc",
 				"Sharded": true
 			},
-			"FieldQuery": "select tbl.unq_col, tbl.nonunq_col from tbl where 1 != 1",
-			"Query": "select tbl.unq_col, tbl.nonunq_col from tbl"
+			"FieldQuery": "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ tbl.unq_col, tbl.nonunq_col from tbl where 1 != 1",
+			"Query": "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ tbl.unq_col, tbl.nonunq_col from tbl"
 		},
 		{
 			"OperatorType": "Route",
@@ -23,8 +23,8 @@
 				"Name": "ks_misc",
 				"Sharded": true
 			},
-			"FieldQuery": "select t1.id2 from t1 where 1 != 1",
-			"Query": "select t1.id2 from t1 where t1.id1 = :tbl_nonunq_col /* INT64 */",
+			"FieldQuery": "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ t1.id2 from t1 where 1 != 1",
+			"Query": "select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION') */ t1.id2 from t1 where t1.id1 = :tbl_nonunq_col /* INT64 */",
 			"Values": [
 				":tbl_nonunq_col"
 			],

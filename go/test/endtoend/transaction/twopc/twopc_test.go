@@ -44,6 +44,13 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/grpctmclient"
 )
 
+const (
+	// vtgateSQLMode is the sql_mode vtgate enforces on the backend connections.
+	vtgateSQLMode = "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION"
+	// sqlModeHint is the optimizer hint vtgate injects after the leading verb of DMLs to pin that sql_mode.
+	sqlModeHint = "/*+ SET_VAR(sql_mode = '" + vtgateSQLMode + "') */"
+)
+
 // TestDynamicConfig tests that transaction mode is dynamically configurable.
 func TestDynamicConfig(t *testing.T) {
 	conn, closer := start(t)
@@ -125,16 +132,16 @@ func TestDTCommit(t *testing.T) {
 			"delete:[VARCHAR(\"dtid-1\") VARCHAR(\"PREPARE\")]",
 		},
 		"ks.redo_statement:-40": {
-			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"set time_zone = '+10:30'\")]",
-			"insert:[VARCHAR(\"dtid-1\") INT64(2) BLOB(\"insert into twopc_user(id, `name`) values (10, 'apa')\")]",
-			"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"set time_zone = '+10:30'\")]",
-			"delete:[VARCHAR(\"dtid-1\") INT64(2) BLOB(\"insert into twopc_user(id, `name`) values (10, 'apa')\")]",
+			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"set sql_mode = '" + vtgateSQLMode + "', time_zone = '+10:30'\")]",
+			"insert:[VARCHAR(\"dtid-1\") INT64(2) BLOB(\"insert " + sqlModeHint + " into twopc_user(id, `name`) values (10, 'apa')\")]",
+			"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"set sql_mode = '" + vtgateSQLMode + "', time_zone = '+10:30'\")]",
+			"delete:[VARCHAR(\"dtid-1\") INT64(2) BLOB(\"insert " + sqlModeHint + " into twopc_user(id, `name`) values (10, 'apa')\")]",
 		},
 		"ks.redo_statement:40-80": {
-			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (8, 'bar')\")]",
-			"insert:[VARCHAR(\"dtid-1\") INT64(2) BLOB(\"set time_zone = '+10:30'\")]",
-			"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (8, 'bar')\")]",
-			"delete:[VARCHAR(\"dtid-1\") INT64(2) BLOB(\"set time_zone = '+10:30'\")]",
+			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert " + sqlModeHint + " into twopc_user(id, `name`) values (8, 'bar')\")]",
+			"insert:[VARCHAR(\"dtid-1\") INT64(2) BLOB(\"set sql_mode = '" + vtgateSQLMode + "', time_zone = '+10:30'\")]",
+			"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert " + sqlModeHint + " into twopc_user(id, `name`) values (8, 'bar')\")]",
+			"delete:[VARCHAR(\"dtid-1\") INT64(2) BLOB(\"set sql_mode = '" + vtgateSQLMode + "', time_zone = '+10:30'\")]",
 		},
 		"ks.twopc_user:-40": {
 			`insert:[INT64(10) VARCHAR("apa")]`,
@@ -172,10 +179,10 @@ func TestDTCommit(t *testing.T) {
 			"delete:[VARCHAR(\"dtid-2\") VARCHAR(\"PREPARE\")]",
 		},
 		"ks.redo_statement:40-80": {
-			"insert:[VARCHAR(\"dtid-2\") INT64(1) BLOB(\"set time_zone = '+10:30'\")]",
-			"insert:[VARCHAR(\"dtid-2\") INT64(2) BLOB(\"update twopc_user set `name` = 'newfoo' where id = 8 limit 10001 /* INT64 */\")]",
-			"delete:[VARCHAR(\"dtid-2\") INT64(1) BLOB(\"set time_zone = '+10:30'\")]",
-			"delete:[VARCHAR(\"dtid-2\") INT64(2) BLOB(\"update twopc_user set `name` = 'newfoo' where id = 8 limit 10001 /* INT64 */\")]",
+			"insert:[VARCHAR(\"dtid-2\") INT64(1) BLOB(\"set sql_mode = '" + vtgateSQLMode + "', time_zone = '+10:30'\")]",
+			"insert:[VARCHAR(\"dtid-2\") INT64(2) BLOB(\"update " + sqlModeHint + " twopc_user set `name` = 'newfoo' where id = 8 limit 10001 /* INT64 */\")]",
+			"delete:[VARCHAR(\"dtid-2\") INT64(1) BLOB(\"set sql_mode = '" + vtgateSQLMode + "', time_zone = '+10:30'\")]",
+			"delete:[VARCHAR(\"dtid-2\") INT64(2) BLOB(\"update " + sqlModeHint + " twopc_user set `name` = 'newfoo' where id = 8 limit 10001 /* INT64 */\")]",
 		},
 		"ks.twopc_user:40-80": {"update:[INT64(8) VARCHAR(\"newfoo\")]"},
 		"ks.twopc_user:80-":   {"update:[INT64(7) VARCHAR(\"newfoo\")]"},
@@ -205,10 +212,10 @@ func TestDTCommit(t *testing.T) {
 			"delete:[VARCHAR(\"dtid-3\") VARCHAR(\"PREPARE\")]",
 		},
 		"ks.redo_statement:-40": {
-			"insert:[VARCHAR(\"dtid-3\") INT64(1) BLOB(\"set time_zone = '+10:30'\")]",
-			"insert:[VARCHAR(\"dtid-3\") INT64(2) BLOB(\"delete from twopc_user where id = 10 limit 10001 /* INT64 */\")]",
-			"delete:[VARCHAR(\"dtid-3\") INT64(1) BLOB(\"set time_zone = '+10:30'\")]",
-			"delete:[VARCHAR(\"dtid-3\") INT64(2) BLOB(\"delete from twopc_user where id = 10 limit 10001 /* INT64 */\")]",
+			"insert:[VARCHAR(\"dtid-3\") INT64(1) BLOB(\"set sql_mode = '" + vtgateSQLMode + "', time_zone = '+10:30'\")]",
+			"insert:[VARCHAR(\"dtid-3\") INT64(2) BLOB(\"delete " + sqlModeHint + " from twopc_user where id = 10 limit 10001 /* INT64 */\")]",
+			"delete:[VARCHAR(\"dtid-3\") INT64(1) BLOB(\"set sql_mode = '" + vtgateSQLMode + "', time_zone = '+10:30'\")]",
+			"delete:[VARCHAR(\"dtid-3\") INT64(2) BLOB(\"delete " + sqlModeHint + " from twopc_user where id = 10 limit 10001 /* INT64 */\")]",
 		},
 		"ks.twopc_user:-40": {"delete:[INT64(10) VARCHAR(\"apa\")]"},
 		"ks.twopc_user:80-": {"delete:[INT64(9) VARCHAR(\"baz\")]"},
@@ -405,8 +412,8 @@ func TestDTCommitDMLOnlyOnRM(t *testing.T) {
 			"delete:[VARCHAR(\"dtid-1\") VARCHAR(\"PREPARE\")]",
 		},
 		"ks.redo_statement:80-": {
-			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (7, 'foo')\")]",
-			"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (7, 'foo')\")]",
+			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert " + sqlModeHint + " into twopc_user(id, `name`) values (7, 'foo')\")]",
+			"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert " + sqlModeHint + " into twopc_user(id, `name`) values (7, 'foo')\")]",
 		},
 		"ks.twopc_user:80-": {"insert:[INT64(7) VARCHAR(\"foo\")]"},
 	}
@@ -435,8 +442,8 @@ func TestDTCommitDMLOnlyOnRM(t *testing.T) {
 			"delete:[VARCHAR(\"dtid-2\") VARCHAR(\"PREPARE\")]",
 		},
 		"ks.redo_statement:80-": {
-			"insert:[VARCHAR(\"dtid-2\") INT64(1) BLOB(\"update twopc_user set `name` = 'newfoo' where id = 7 limit 10001 /* INT64 */\")]",
-			"delete:[VARCHAR(\"dtid-2\") INT64(1) BLOB(\"update twopc_user set `name` = 'newfoo' where id = 7 limit 10001 /* INT64 */\")]",
+			"insert:[VARCHAR(\"dtid-2\") INT64(1) BLOB(\"update " + sqlModeHint + " twopc_user set `name` = 'newfoo' where id = 7 limit 10001 /* INT64 */\")]",
+			"delete:[VARCHAR(\"dtid-2\") INT64(1) BLOB(\"update " + sqlModeHint + " twopc_user set `name` = 'newfoo' where id = 7 limit 10001 /* INT64 */\")]",
 		},
 		"ks.twopc_user:80-": {"update:[INT64(7) VARCHAR(\"newfoo\")]"},
 	}
@@ -465,8 +472,8 @@ func TestDTCommitDMLOnlyOnRM(t *testing.T) {
 			"delete:[VARCHAR(\"dtid-3\") VARCHAR(\"PREPARE\")]",
 		},
 		"ks.redo_statement:80-": {
-			"insert:[VARCHAR(\"dtid-3\") INT64(1) BLOB(\"delete from twopc_user where id = 7 limit 10001 /* INT64 */\")]",
-			"delete:[VARCHAR(\"dtid-3\") INT64(1) BLOB(\"delete from twopc_user where id = 7 limit 10001 /* INT64 */\")]",
+			"insert:[VARCHAR(\"dtid-3\") INT64(1) BLOB(\"delete " + sqlModeHint + " from twopc_user where id = 7 limit 10001 /* INT64 */\")]",
+			"delete:[VARCHAR(\"dtid-3\") INT64(1) BLOB(\"delete " + sqlModeHint + " from twopc_user where id = 7 limit 10001 /* INT64 */\")]",
 		},
 		"ks.twopc_user:80-": {"delete:[INT64(7) VARCHAR(\"newfoo\")]"},
 	}
@@ -550,11 +557,11 @@ func TestDTPrepareFailOnRM(t *testing.T) {
 	}
 	flexiExpectations := map[string][2][]string{
 		"ks.redo_statement:40-80": {{
-			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (8, 'bar')\")]",
-			"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (8, 'bar')\")]",
+			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert " + sqlModeHint + " into twopc_user(id, `name`) values (8, 'bar')\")]",
+			"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert " + sqlModeHint + " into twopc_user(id, `name`) values (8, 'bar')\")]",
 		}, {
-			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (18, 'apa')\")]",
-			"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (18, 'apa')\")]",
+			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert " + sqlModeHint + " into twopc_user(id, `name`) values (18, 'apa')\")]",
+			"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert " + sqlModeHint + " into twopc_user(id, `name`) values (18, 'apa')\")]",
 		}},
 		"ks.twopc_user:40-80": {{
 			"insert:[INT64(8) VARCHAR(\"bar\")]",
@@ -1507,7 +1514,7 @@ func TestReadTransactionStatus(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "PREPARED", res.State)
 	assert.Empty(t, res.Message)
-	assert.Equal(t, []string{"insert into twopc_t1(id, col) values (9, 4)"}, res.Statements)
+	assert.Equal(t, []string{"insert " + sqlModeHint + " into twopc_t1(id, col) values (9, 4)"}, res.Statements)
 
 	// Also try running the RPC from vtctld and verify we see the same values.
 	out, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("DistributedTransaction",
@@ -1515,12 +1522,12 @@ func TestReadTransactionStatus(t *testing.T) {
 		"--dtid="+unresTransaction.Dtid,
 	)
 	require.NoError(t, err)
-	require.Contains(t, out, "insert into twopc_t1(id, col) values (9, 4)")
+	require.Contains(t, out, "insert "+sqlModeHint+" into twopc_t1(id, col) values (9, 4)")
 	require.Contains(t, out, unresTransaction.Dtid)
 
 	// Read the data from vtadmin API, and verify that too has the same information.
 	apiRes := clusterInstance.VtadminProcess.MakeAPICallRetry(t, fmt.Sprintf("/api/transaction/local/%v/info", unresTransaction.Dtid))
-	require.Contains(t, apiRes, "insert into twopc_t1(id, col) values (9, 4)")
+	require.Contains(t, apiRes, "insert "+sqlModeHint+" into twopc_t1(id, col) values (9, 4)")
 	require.Contains(t, apiRes, unresTransaction.Dtid)
 	require.Contains(t, apiRes, strconv.FormatInt(res.TimeCreated, 10))
 

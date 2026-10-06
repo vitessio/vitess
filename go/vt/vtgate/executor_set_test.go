@@ -19,12 +19,16 @@ package vtgate
 import (
 	"fmt"
 	"log/slog"
+	"maps"
+	"strings"
 	"testing"
 
+	mysqlconfig "vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/sysvars"
 	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
 
 	"vitess.io/vitess/go/test/utils"
@@ -353,9 +357,9 @@ func TestExecutorSetOp(t *testing.T) {
 	}{{
 		in: "set big_tables = 1", // ignore
 	}, {
+		// evaluated at VTGate, with no query to a tablet
 		in:      "set sql_mode = 'STRICT_ALL_TABLES,NO_ZERO_DATE'",
 		sysVars: map[string]string{"sql_mode": "'STRICT_ALL_TABLES,NO_ZERO_DATE'"},
-		result:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"), "|STRICT_ALL_TABLES,NO_ZERO_DATE"),
 	}, {
 		// even though the tablet is saying that the value has changed,
 		// useReservedConn is false, so we won't allow this change; the value is
@@ -439,7 +443,14 @@ func TestExecutorSetOp(t *testing.T) {
 			_, err := executorExecSession(ctx, executor, session, tcase.in, nil)
 			require.NoError(t, err)
 			utils.MustMatch(t, tcase.warning, session.Warnings, "")
-			utils.MustMatch(t, tcase.sysVars, session.SystemVariables, "")
+			// a session with system settings enabled is seeded with the default sql_mode;
+			// an explicit expectation for sql_mode in the test case wins
+			wantSysVars := tcase.sysVars
+			if session.EnableSystemSettings {
+				wantSysVars = map[string]string{sysvars.SQLMode.Name: sqltypes.EncodeStringSQL(mysqlconfig.DefaultSQLMode)}
+				maps.Copy(wantSysVars, tcase.sysVars)
+			}
+			utils.MustMatch(t, wantSysVars, session.SystemVariables, "")
 		})
 	}
 }
@@ -648,8 +659,8 @@ func TestSetVar(t *testing.T) {
 		// USE is handled by VTGate and never reaches a tablet.
 		{sql: "use " + KsTestUnsharded},
 		// EXPLAIN carries the hint on the statement it wraps.
-		{sql: "explain select 1 from user", sent: "explain select /*+ SET_VAR(sql_mode = 'only_full_group_by') */ 1 from `user`"},
-		{sql: "explain format=json update user set col = 2", sent: "explain format = json update /*+ SET_VAR(sql_mode = 'only_full_group_by') */ `user` set col = 2"},
+		{sql: "explain select 1 from user", sent: "explain select /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY') */ 1 from `user`"},
+		{sql: "explain format=json update user set col = 2", sent: "explain format = json update /*+ SET_VAR(sql_mode = 'ONLY_FULL_GROUP_BY') */ `user` set col = 2"},
 		// A VALUES statement cannot take the hint, so neither can its EXPLAIN.
 		{sql: "explain values row(1)", rc: true},
 	}
@@ -671,6 +682,269 @@ func TestSetVar(t *testing.T) {
 	}
 }
 
+func TestSQLModeFlag(t *testing.T) {
+	var f sqlModeFlag
+	require.NoError(t, f.Set("no_zero_date,strict_trans_tables"))
+	assert.Equal(t, "STRICT_TRANS_TABLES,NO_ZERO_DATE", f.String())
+	require.NoError(t, f.Set("TRADITIONAL"))
+	assert.Equal(t, "STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,TRADITIONAL,NO_ENGINE_SUBSTITUTION", f.String())
+	require.NoError(t, f.Set(""))
+	assert.Empty(t, f.String())
+	require.EqualError(t, f.Set("BOGUS"), "Variable 'sql_mode' can't be set to the value of 'BOGUS'")
+	// the modes that change how SQL text is interpreted are rejected, like in a SET
+	require.EqualError(t, f.Set("NO_BACKSLASH_ESCAPES"), "setting the NO_BACKSLASH_ESCAPES sql_mode is unsupported")
+	require.EqualError(t, f.Set("strict_trans_tables,ansi"), "setting the ANSI sql_mode is unsupported")
+	// a rejected value leaves the flag as it was
+	assert.Empty(t, f.String())
+}
+
+// TestSetSQLModeExpressions pins how SET sql_mode handles the odder expressions MySQL
+// accepts, with every outcome verified against MySQL 8.0.46. Expressions VTGate can
+// compute itself — @@sql_mode, @@global.sql_mode, user variables, system variables the
+// session has set, literals of every kind — are evaluated locally. A sub-expression it
+// cannot compute, such as RAND() or a system variable the session never set, is
+// fetched from a shard with the session's @@sql_mode passed along; the result is then
+// validated and stored like any other value.
+func TestSetSQLModeExpressions(t *testing.T) {
+	const defaultMode = "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION"
+	tests := []struct {
+		expr        string
+		sessionVars map[string]string
+		shardResult string // what the shard answers the input query with, when one is sent
+		shardQuery  string
+		stored      string
+		err         string
+	}{
+		{expr: "@@sql_mode", stored: "'STRICT_TRANS_TABLES'"},
+		{expr: "@@global.sql_mode", stored: "'" + defaultMode + "'"},
+		{expr: "concat(@@sql_mode, ',ONLY_FULL_GROUP_BY')", stored: "'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES'"},
+		{expr: "@x", stored: "'ONLY_FULL_GROUP_BY'"},
+		{expr: "concat(@@sql_mode, ',', @x)", stored: "'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES'"},
+		{expr: "(select 'ONLY_FULL_GROUP_BY')", stored: "'ONLY_FULL_GROUP_BY'"},
+		{expr: "(select @@sql_mode)", stored: "'STRICT_TRANS_TABLES'"},
+		{expr: "16 + 16", stored: "'ONLY_FULL_GROUP_BY'"},
+		{expr: "32 | 2097152", stored: "'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES'"},
+		// a name list coerces to 0 in arithmetic, as in MySQL
+		{expr: "@@sql_mode | 32", stored: "'ONLY_FULL_GROUP_BY'"},
+		{expr: "cast('32' as unsigned)", stored: "'ONLY_FULL_GROUP_BY'"},
+		{expr: "'only_full_group_by' collate utf8mb4_bin", stored: "'ONLY_FULL_GROUP_BY'"},
+		{expr: "lower('ONLY_FULL_GROUP_BY')", stored: "'ONLY_FULL_GROUP_BY'"},
+		{expr: "_utf8mb4'ONLY_FULL_GROUP_BY'", stored: "'ONLY_FULL_GROUP_BY'"},
+		{expr: "x'4F4E4C595F46554C4C5F47524F55505F4259'", stored: "'ONLY_FULL_GROUP_BY'"},
+		// || is OR in the default mode: 0, the empty mode
+		{expr: "'ONLY_FULL_GROUP_BY' || 'STRICT_TRANS_TABLES'", stored: "''"},
+		{expr: "@@sql_mode = 'x'", stored: "''"},
+		// a system variable the session has set is evaluated locally
+		{expr: "if(@@sql_safe_updates = 1, 'STRICT_TRANS_TABLES', 'ONLY_FULL_GROUP_BY')", sessionVars: map[string]string{"sql_safe_updates": "1"}, stored: "'STRICT_TRANS_TABLES'"},
+
+		{expr: "null", err: "Variable 'sql_mode' can't be set to the value of 'NULL'"},
+		{expr: "4.0", err: "Incorrect argument type to variable 'sql_mode'"},
+		{expr: "@@sql_mode + 0", err: "Incorrect argument type to variable 'sql_mode'"},
+		// a string holding a number is a name, not a bitmask
+		{expr: "cast(32 as char)", err: "Variable 'sql_mode' can't be set to the value of '32'"},
+		{expr: "database()", err: "Variable 'sql_mode' can't be set to the value of 'TestUnsharded'"},
+		// the error carries the value truncated to 200 characters, as MySQL's does
+		{expr: "repeat('a', 1000000)", err: "Variable 'sql_mode' can't be set to the value of '" + strings.Repeat("a", 200) + "'"},
+		// true is 1, REAL_AS_FLOAT, a mode the parser does not honor
+		{expr: "true", err: "setting the REAL_AS_FLOAT sql_mode is unsupported"},
+
+		// sub-expressions VTGate cannot compute are fetched from a shard
+		{expr: "if(rand() < 2, 'STRICT_TRANS_TABLES', '')", shardResult: "STRICT_TRANS_TABLES", shardQuery: "select if(rand() < 2, 'STRICT_TRANS_TABLES', '') from dual", stored: "'STRICT_TRANS_TABLES'"},
+		{expr: "concat(@@sql_mode, if(rand() < 2, ',ONLY_FULL_GROUP_BY', ''))", shardResult: "STRICT_TRANS_TABLES,ONLY_FULL_GROUP_BY", shardQuery: "select concat(:__vtsql_mode, if(rand() < 2, ',ONLY_FULL_GROUP_BY', '')) from dual", stored: "'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES'"},
+		{expr: "if(@@sql_safe_updates = 1, 'STRICT_TRANS_TABLES', 'ONLY_FULL_GROUP_BY')", shardResult: "ONLY_FULL_GROUP_BY", shardQuery: "select if(@@sql_safe_updates = 1, 'STRICT_TRANS_TABLES', 'ONLY_FULL_GROUP_BY') from dual", stored: "'ONLY_FULL_GROUP_BY'"},
+		{expr: "@@time_zone", shardResult: "SYSTEM", shardQuery: "select @@time_zone from dual", err: "Variable 'sql_mode' can't be set to the value of 'SYSTEM'"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.expr, func(t *testing.T) {
+			executor, _, _, lookup, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+			vars := map[string]string{"sql_mode": "'STRICT_TRANS_TABLES'"}
+			maps.Copy(vars, tc.sessionVars)
+			session := econtext.NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: KsTestUnsharded, SystemVariables: vars})
+			_, err := executorExecSession(ctx, executor, session, "set @x = 'ONLY_FULL_GROUP_BY'", nil)
+			require.NoError(t, err)
+			if tc.shardResult != "" {
+				lookup.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("v", "varchar"), tc.shardResult)})
+			}
+			lookup.Queries = nil
+
+			_, err = executorExecSession(ctx, executor, session, "set sql_mode = "+tc.expr, nil)
+			if tc.err != "" {
+				require.EqualError(t, err, tc.err)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tc.stored, session.SystemVariables["sql_mode"])
+			}
+			if tc.shardQuery == "" {
+				assert.Empty(t, lookup.Queries, "no shard query expected")
+				return
+			}
+			require.Len(t, lookup.Queries, 1)
+			assert.Equal(t, tc.shardQuery, lookup.Queries[0].Sql)
+			if bv, ok := lookup.Queries[0].BindVariables["__vtsql_mode"]; ok {
+				// the session's value travels with the query: the snapshot the
+				// expression sees is the session's, not the shard's
+				assert.Equal(t, "STRICT_TRANS_TABLES", string(bv.Value))
+			}
+		})
+	}
+}
+
+// A SET that assigns sql_mode twice evaluates the second expression against the
+// pre-statement value, not the first assignment's: MySQL resolves every expression
+// of a SET before applying any assignment (verified on 8.0.46: from an empty mode,
+// SET sql_mode = 'STRICT_TRANS_TABLES', sql_mode = CONCAT(@@sql_mode, ',NO_ZERO_DATE')
+// ends in NO_ZERO_DATE alone). The @@sql_mode bind variable is filled once per
+// request, which gives exactly that.
+func TestSetSQLModeChainedAssignmentsSeeThePreStatementValue(t *testing.T) {
+	executor, _, _, _, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{
+		EnableSystemSettings: true,
+		TargetString:         KsTestUnsharded,
+		SystemVariables:      map[string]string{"sql_mode": "'STRICT_TRANS_TABLES'"},
+	})
+
+	_, err := executorExecSession(ctx, executor, session, "set sql_mode = '', sql_mode = concat(@@sql_mode, ',NO_ZERO_DATE')", nil)
+	require.NoError(t, err)
+	assert.Equal(t, "'STRICT_TRANS_TABLES,NO_ZERO_DATE'", session.SystemVariables["sql_mode"])
+}
+
+func TestSetSQLModeDefault(t *testing.T) {
+	executor, _, _, _, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: KsTestUnsharded})
+	_, err := executorExecSession(ctx, executor, session, "set sql_mode = 'STRICT_ALL_TABLES,NO_ZERO_DATE'", nil)
+	require.NoError(t, err)
+	require.Equal(t, "'STRICT_ALL_TABLES,NO_ZERO_DATE'", session.SystemVariables[sysvars.SQLMode.Name])
+
+	// DEFAULT restores the configured default the session started with, in canonical form
+	_, err = executorExecSession(ctx, executor, session, "set sql_mode = default", nil)
+	require.NoError(t, err)
+	require.Equal(t, sqltypes.EncodeStringSQL(mysqlconfig.DefaultSQLMode), session.SystemVariables[sysvars.SQLMode.Name])
+}
+
+// An explicitly empty --sql-mode is a valid default: sessions start empty, and
+// DEFAULT restores empty rather than the compiled-in modes.
+func TestSetSQLModeDefaultExplicitlyEmpty(t *testing.T) {
+	saved := defaultSQLMode.mode
+	t.Cleanup(func() { defaultSQLMode.mode = saved })
+	require.NoError(t, defaultSQLMode.Set(""))
+	executor, _, _, _, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: KsTestUnsharded})
+	qr, err := executorExecSession(ctx, executor, session, "select @@sql_mode, @@global.sql_mode", nil)
+	require.NoError(t, err)
+	assert.Equal(t, `[[VARCHAR("") VARCHAR("")]]`, fmt.Sprintf("%v", qr.Rows))
+	require.Equal(t, "''", session.SystemVariables[sysvars.SQLMode.Name])
+
+	_, err = executorExecSession(ctx, executor, session, "set sql_mode = 'STRICT_ALL_TABLES'", nil)
+	require.NoError(t, err)
+	_, err = executorExecSession(ctx, executor, session, "set sql_mode = default", nil)
+	require.NoError(t, err)
+	require.Equal(t, "''", session.SystemVariables[sysvars.SQLMode.Name])
+}
+
+func TestSessionDefaultSQLMode(t *testing.T) {
+	cfg := createExecutorConfigWithNormalizer()
+	cfg.SQLMode = "STRICT_TRANS_TABLES,NO_ZERO_DATE"
+	executor, _, _, lookup, ctx := createExecutorEnvWithConfig(t, cfg)
+
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: KsTestUnsharded})
+
+	// @@sql_mode resolves at the vtgate to the configured default even though the session
+	// never set it, without any shard round trip
+	qr, err := executorExecSession(ctx, executor, session, "select @@sql_mode", nil)
+	require.NoError(t, err)
+	require.Nil(t, lookup.Queries)
+	assert.Equal(t, `[[VARCHAR("STRICT_TRANS_TABLES,NO_ZERO_DATE")]]`, fmt.Sprintf("%v", qr.Rows))
+
+	// expressions over @@sql_mode are evaluated at the vtgate against the session default,
+	// with no shard round trip
+	_, err = executorExecSession(ctx, executor, session, "set sql_mode = concat(@@sql_mode, ',NO_ZERO_IN_DATE')", nil)
+	require.NoError(t, err)
+	require.Nil(t, lookup.Queries)
+	assert.Equal(t, "'STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE'", session.SystemVariables["sql_mode"])
+
+	// @@global.sql_mode is the configured default, never a backend's value
+	qr, err = executorExecSession(ctx, executor, session, "select @@global.sql_mode", nil)
+	require.NoError(t, err)
+	require.Nil(t, lookup.Queries)
+	assert.Equal(t, `[[VARCHAR("STRICT_TRANS_TABLES,NO_ZERO_DATE")]]`, fmt.Sprintf("%v", qr.Rows))
+
+	// setting @@global.sql_mode's value restores the session default
+	_, err = executorExecSession(ctx, executor, session, "set sql_mode = @@global.sql_mode", nil)
+	require.NoError(t, err)
+	require.Nil(t, lookup.Queries)
+	assert.Equal(t, "'STRICT_TRANS_TABLES,NO_ZERO_DATE'", session.SystemVariables["sql_mode"])
+
+	// setting the session default's own value is a no-op: the seeded value is untouched
+	// and no reserved connection is needed
+	session2 := econtext.NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: KsTestUnsharded})
+	_, err = executorExecSession(ctx, executor, session2, "set sql_mode = 'no_zero_date,STRICT_TRANS_TABLES'", nil)
+	require.NoError(t, err)
+	require.Nil(t, lookup.Queries)
+	assert.Equal(t, "'STRICT_TRANS_TABLES,NO_ZERO_DATE'", session2.SystemVariables["sql_mode"])
+	assert.False(t, session2.InReservedConn())
+}
+
+func TestSessionSQLModeSeedingDisabled(t *testing.T) {
+	cfg := createExecutorConfigWithNormalizer()
+	cfg.SystemSettingsDisabled = true
+	executor, _, _, lookup, ctx := createExecutorEnvWithConfig(t, cfg)
+
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{TargetString: KsTestUnsharded})
+
+	// a deployment that opted out of vtgate-managed system settings keeps its backends'
+	// configured sql_mode: no seeding, no SET_VAR hint, no forced settings connection
+	_, err := executorExecSession(ctx, executor, session, "select id from main1", nil)
+	require.NoError(t, err)
+	assert.NotContains(t, session.SystemVariables, "sql_mode")
+	assert.False(t, session.InReservedConn())
+	require.Len(t, lookup.Queries, 1)
+	assert.Equal(t, "select id from main1", lookup.Queries[0].Sql)
+
+	// and reads of the sql_mode are the backends' to answer, in every form
+	lookup.Queries = nil
+	_, err = executorExecSession(ctx, executor, session, "select @@sql_mode, @@global.sql_mode", nil)
+	require.NoError(t, err)
+	require.Len(t, lookup.Queries, 1)
+	assert.Equal(t, "select @@sql_mode, @@global.sql_mode from dual", lookup.Queries[0].Sql)
+
+	lookup.Queries = nil
+	_, err = executorExecSession(ctx, executor, session, "show variables like 'sql_mode'", nil)
+	require.NoError(t, err)
+	require.Len(t, lookup.Queries, 1)
+	assert.Equal(t, "show variables like 'sql_mode'", lookup.Queries[0].Sql)
+	assert.NotContains(t, lookup.Queries[0].BindVariables, "__vtsql_mode")
+}
+
+func TestSetSQLModeRepairsInvalidSessionValue(t *testing.T) {
+	cfg := createExecutorConfigWithNormalizer()
+	cfg.SQLMode = "STRICT_TRANS_TABLES,NO_ZERO_DATE"
+	executor, _, _, lookup, ctx := createExecutorEnvWithConfig(t, cfg)
+
+	// gRPC clients own their session proto, so the stored sql_mode may not be a valid
+	// sql_mode (e.g. state written by a different VTGate version)
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{
+		EnableSystemSettings: true,
+		TargetString:         KsTestUnsharded,
+		SystemVariables:      map[string]string{"sql_mode": "'garbage'"},
+	})
+
+	// setting the configured default must not be treated as a no-op: it must repair the
+	// stored value instead of leaving the garbage in place
+	_, err := executorExecSession(ctx, executor, session, "set sql_mode = 'no_zero_date,STRICT_TRANS_TABLES'", nil)
+	require.NoError(t, err)
+	require.Nil(t, lookup.Queries)
+	assert.Equal(t, "'STRICT_TRANS_TABLES,NO_ZERO_DATE'", session.SystemVariables["sql_mode"])
+	assert.False(t, session.InReservedConn())
+
+	// and the SET_VAR hint must carry the repaired value
+	_, err = executorExecSession(ctx, executor, session, "select id from main1", nil)
+	require.NoError(t, err)
+	require.Len(t, lookup.Queries, 1)
+	assert.Equal(t, "select /*+ SET_VAR(sql_mode = 'STRICT_TRANS_TABLES,NO_ZERO_DATE') */ id from main1", lookup.Queries[0].Sql)
+}
+
 func TestSetVarShowVariables(t *testing.T) {
 	executor, _, _, sbc, ctx := createCustomExecutor(t, "{}", "8.0.0")
 	executor.config.Normalize = true
@@ -678,9 +952,6 @@ func TestSetVarShowVariables(t *testing.T) {
 	session := econtext.NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: KsTestUnsharded})
 
 	sbc.SetResults([]*sqltypes.Result{
-		// select query result for checking any change in system settings
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
-			"|only_full_group_by"),
 		// show query result
 		sqltypes.MakeTestResult(sqltypes.MakeTestFields("Variable_name|Value", "varchar|varchar"),
 			"sql_mode|ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE"),
@@ -693,7 +964,17 @@ func TestSetVarShowVariables(t *testing.T) {
 	qr, err := executorExecSession(ctx, executor, session, "show variables like 'sql_mode'", map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 	assert.False(t, session.InReservedConn(), "reserved connection should not be used")
-	assert.Equal(t, `[[VARCHAR("sql_mode") VARCHAR("only_full_group_by")]]`, fmt.Sprintf("%v", qr.Rows))
+	assert.Equal(t, `[[VARCHAR("sql_mode") VARCHAR("ONLY_FULL_GROUP_BY")]]`, fmt.Sprintf("%v", qr.Rows))
+
+	// the global form reports the configured default the sessions start with, like
+	// @@global.sql_mode does
+	sbc.SetResults([]*sqltypes.Result{
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("Variable_name|Value", "varchar|varchar"),
+			"sql_mode|ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE"),
+	})
+	qr, err = executorExecSession(ctx, executor, session, "show global variables like 'sql_mode'", map[string]*querypb.BindVariable{})
+	require.NoError(t, err)
+	assert.Equal(t, `[[VARCHAR("sql_mode") VARCHAR("`+mysqlconfig.DefaultSQLMode+`")]]`, fmt.Sprintf("%v", qr.Rows))
 }
 
 // TestShowVariablesTargetedSession checks that SHOW VARIABLES in a shard-targeted session
@@ -742,7 +1023,8 @@ func TestShowGlobalVariablesIgnoresSessionValues(t *testing.T) {
 				"version|8.0.40")})
 			qr, err := executorExecSession(ctx, executor, session, "show global variables", map[string]*querypb.BindVariable{})
 			require.NoError(t, err)
-			assert.Equal(t, fmt.Sprintf(`[[VARCHAR("sql_mode") VARCHAR("STRICT_TRANS_TABLES")] [VARCHAR("sql_select_limit") VARCHAR("18446744073709551615")] [VARCHAR("version") VARCHAR(%q)]]`, servenv.AppVersion.MySQLVersion()), fmt.Sprintf("%v", qr.Rows))
+			// the global sql_mode is the configured default the sessions start with
+			assert.Equal(t, fmt.Sprintf(`[[VARCHAR("sql_mode") VARCHAR(%q)] [VARCHAR("sql_select_limit") VARCHAR("18446744073709551615")] [VARCHAR("version") VARCHAR(%q)]]`, mysqlconfig.DefaultSQLMode, servenv.AppVersion.MySQLVersion()), fmt.Sprintf("%v", qr.Rows))
 		})
 	}
 }
@@ -816,4 +1098,28 @@ func TestExecutorTimeZone(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.False(t, qr.Rows[0][0].Equal(qrWith.Rows[0][0]), "%v vs %v", qr.Rows[0][0].ToString(), qrWith.Rows[0][0].ToString())
+}
+
+// A session that has system settings disabled when it would be seeded leaves the
+// sql_mode to the backends, as a deployment running --enable-system-settings=false
+// does: it is not seeded, its queries carry no sql_mode, and @@sql_mode is read from a
+// backend. (A session that disables them later keeps the sql_mode it has, like any
+// other system variable; the reservedconn end-to-end test TestEnableSystemSettings
+// pins that.)
+func TestSQLModeLeftToBackendsWithoutSystemSettings(t *testing.T) {
+	executor, _, _, lookup, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{TargetString: KsTestUnsharded})
+
+	_, err := executorExecSession(ctx, executor, session, "select id from main1", nil)
+	require.NoError(t, err)
+	assert.NotContains(t, session.SystemVariables, sysvars.SQLMode.Name)
+	assert.False(t, session.InReservedConn())
+	require.Len(t, lookup.Queries, 1)
+	assert.Equal(t, "select id from main1", lookup.Queries[0].Sql)
+
+	lookup.Queries = nil
+	_, err = executorExecSession(ctx, executor, session, "select @@sql_mode", nil)
+	require.NoError(t, err)
+	require.Len(t, lookup.Queries, 1, "@@sql_mode is read from a backend")
+	assert.Contains(t, lookup.Queries[0].Sql, "@@sql_mode")
 }

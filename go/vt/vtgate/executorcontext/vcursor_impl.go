@@ -31,7 +31,6 @@ import (
 	"golang.org/x/sync/semaphore"
 
 	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
@@ -89,6 +88,9 @@ type (
 		EnableViews        bool
 		WarnShardedOnly    bool
 		PlannerVersion     plancontext.PlannerVersion
+
+		// SQLMode is the sql_mode every session starts with, in canonical form.
+		SQLMode string
 
 		PreventCrossKeyspaceReads bool
 
@@ -452,10 +454,20 @@ func (vc *VCursorImpl) TimeZone() *time.Location {
 	return vc.SafeSession.TimeZone()
 }
 
+// SQLMode returns the session's current sql_mode: the value the session has set, or the
+// configured default the session started with.
 func (vc *VCursorImpl) SQLMode() string {
-	// TODO: Implement return the current sql_mode.
-	// This is currently hardcoded to the default in MySQL 8.0.
-	return config.DefaultSQLMode
+	if mode, ok := vc.SafeSession.SQLMode(); ok {
+		return mode
+	}
+	return vc.DefaultSQLMode()
+}
+
+// DefaultSQLMode returns the sql_mode sessions start with: the value of the --sql-mode
+// flag, which the executor fills in. The empty mode is a valid default and is returned as
+// such.
+func (vc *VCursorImpl) DefaultSQLMode() string {
+	return vc.config.SQLMode
 }
 
 // MaxMemoryRows returns the maxMemoryRows flag value.

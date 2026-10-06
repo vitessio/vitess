@@ -18,6 +18,7 @@ package dml
 
 import (
 	"fmt"
+	"regexp"
 	"testing"
 
 	"vitess.io/vitess/go/mysql"
@@ -27,6 +28,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// optimizerHintRE matches optimizer hint comments (e.g. /*+ SET_VAR(...) */) that
+// newer vtgate versions may inject into the queries sent to the shards.
+var optimizerHintRE = regexp.MustCompile(`\s*/\*\+.*?\*/`)
 
 // TestUniqueLookupDuplicateEntries should fail if the is duplicate in unique lookup column.
 func TestUniqueLookupDuplicateEntries(t *testing.T) {
@@ -481,6 +486,14 @@ func TestDMLInUnique(t *testing.T) {
 		// strip the first column from each row as it is not deterministic in a VExplain query
 		for i := range qr.Rows {
 			qr.Rows[i] = qr.Rows[i][1:]
+		}
+		for _, row := range qr.Rows {
+			for i, val := range row {
+				s := val.ToString()
+				if stripped := optimizerHintRE.ReplaceAllString(s, ""); stripped != s {
+					row[i] = sqltypes.MakeTrusted(val.Type(), []byte(stripped))
+				}
+			}
 		}
 		assert.NoError(t, sqltypes.RowsEqualsStr(expected, qr.Rows))
 	}
