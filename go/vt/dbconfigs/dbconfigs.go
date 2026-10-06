@@ -228,7 +228,7 @@ func (c *Connector) Connect(ctx context.Context) (*mysql.Conn, error) {
 	}
 	if err != nil {
 		conn.Close()
-		return nil, vterrors.Wrapf(err, "failed to neutralize the connection's sql_mode")
+		return nil, vterrors.Wrapf(err, "failed to set up the connection's session")
 	}
 	return conn, nil
 }
