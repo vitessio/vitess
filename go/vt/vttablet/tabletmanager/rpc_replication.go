@@ -918,16 +918,22 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 // be read. A tablet that does not support Group Replication, or whose shard uses another policy,
 // reverts as a semi-sync shard does.
 func (tm *TabletManager) demotionRevertNeedsGroupDecision(ctx context.Context) bool {
+	return tm.shardMayRunGroup(ctx)
+}
+
+// shardMayRunGroup returns whether the tablet's MySQL may be a member of its shard's replication
+// group: the tablet supports Group Replication, and its shard uses a group replication durability
+// policy, or the policy cannot be read. The read does not inherit the caller's cancellation (the
+// caller may have given up, as a demotion's caller does), only a short bound of its own.
+func (tm *TabletManager) shardMayRunGroup(ctx context.Context) bool {
 	if !groupReplicationEnabled() {
 		return false
 	}
-	// The demotion's caller may have given up: the revert still has to know the shard's policy, so
-	// the read does not inherit its cancellation, only a short bound of its own.
 	readCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), groupReplicationTopoReadTimeout)
 	defer cancel()
 	durability, err := tm.durabilityForGroupChange(readCtx, time.Now().Add(groupReplicationTopoReadTimeout))
 	if err != nil {
-		log.Warn("Group replication: cannot read the durability policy, the failed demotion is reverted only on a decision on the serving invariant", slog.Any("error", err))
+		log.Warn("Group replication: cannot read the durability policy, assuming that the shard runs a group", slog.Any("error", err))
 		return true
 	}
 	return policy.IsGroupReplication(durability)
