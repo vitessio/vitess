@@ -600,6 +600,52 @@ func (plan *Plan) setConvertColumnUsingUTF8(columnName string) {
 	plan.convertUsingUTF8Columns[columnName] = true
 }
 
+// buildConvertTZ checks a convert_tz call from a filter's select list and
+// returns the call that the row streamer writes into its copy query in its
+// place. The filter comes from the client, and the copy query runs with the
+// privileges of the filtered user, so any other argument, such as a subquery or
+// load_file(), would let the client read data the filter does not cover. The
+// call is therefore accepted only in the form VDiff generates: the column it is
+// aliased as, converted between two time zones given as string literals.
+func buildConvertTZ(funcExpr *sqlparser.FuncExpr, column string) (*sqlparser.FuncExpr, error) {
+	unsupported := fmt.Errorf("unsupported convert_tz: %v; only convert_tz(<column>, '<time zone>', '<time zone>') as <column> is supported", sqlparser.String(funcExpr))
+	if len(funcExpr.Exprs) != 3 || !funcExpr.Qualifier.IsEmpty() {
+		return nil, unsupported
+	}
+	colName, ok := funcExpr.Exprs[0].(*sqlparser.ColName)
+	if !ok || !colName.Qualifier.IsEmpty() || !colName.Name.EqualString(column) {
+		return nil, unsupported
+	}
+	timeZones := make([]sqlparser.Expr, 2)
+	for i, expr := range funcExpr.Exprs[1:] {
+		literal, ok := expr.(*sqlparser.Literal)
+		if !ok || literal.Type != sqlparser.StrVal || !isTimeZoneName(literal.Val) {
+			return nil, unsupported
+		}
+		timeZones[i] = sqlparser.NewStrLiteral(literal.Val)
+	}
+	return sqlparser.NewFuncExpr("convert_tz", sqlparser.NewColName(column), timeZones[0], timeZones[1]), nil
+}
+
+// isTimeZoneName reports whether tz can be a time zone that convert_tz accepts:
+// an offset such as +05:30, or a named zone such as UTC or America/New_York.
+// Limiting it to those characters keeps it from needing any escaping in the
+// copy query, whatever the server's sql_mode.
+func isTimeZoneName(tz string) bool {
+	if tz == "" {
+		return false
+	}
+	for _, c := range tz {
+		switch {
+		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9':
+		case c == '+', c == '-', c == ':', c == '/', c == '_', c == '.':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
 // setColumnFuncExpr sets the function expression for the column, which
 // can then be used when building the streamer's query.
 func (plan *Plan) setColumnFuncExpr(columnName string, funcExpr *sqlparser.FuncExpr) {
@@ -918,7 +964,11 @@ func (plan *Plan) analyzeExpr(vschema *localVSchema, selExpr sqlparser.SelectExp
 				return ColExpr{}, err
 			}
 			field := plan.Table.Fields[colnum]
-			plan.setColumnFuncExpr(field.Name, inner)
+			funcExpr, err := buildConvertTZ(inner, field.Name)
+			if err != nil {
+				return ColExpr{}, err
+			}
+			plan.setColumnFuncExpr(field.Name, funcExpr)
 			return ColExpr{
 				ColNum: colnum,
 				Field:  field,
