@@ -835,6 +835,19 @@ func TestRewrites(in *testing.T) {
 		in:       "SELECT * FROM tbl WHERE exists(select col1, col2, count(*) from other_table where foo > bar group by col1, col2 having count(*) > 3)",
 		expected: "SELECT * FROM tbl WHERE exists(select col1, col2, count(*) from other_table where foo > bar group by col1, col2 having count(*) > 3)",
 	}, {
+		// EXISTS in the ON condition of an outer join is left untouched, see #20846
+		in:       "SELECT * FROM t1 LEFT JOIN t2 ON t1.id = t2.id AND exists(select col1 from other_table where foo > bar group by col1)",
+		expected: "SELECT * FROM t1 LEFT JOIN t2 ON t1.id = t2.id AND exists(select col1 from other_table where foo > bar group by col1)",
+	}, {
+		in:       "SELECT * FROM t1 RIGHT JOIN t2 ON t1.id = t2.id AND exists(select col1 from other_table where foo > bar)",
+		expected: "SELECT * FROM t1 RIGHT JOIN t2 ON t1.id = t2.id AND exists(select col1 from other_table where foo > bar)",
+	}, {
+		in:       "SELECT * FROM t1 JOIN t2 ON t1.id = t2.id AND exists(select col1 from other_table where foo > bar group by col1)",
+		expected: "SELECT * FROM t1 JOIN t2 ON t1.id = t2.id AND exists(select 1 from other_table where foo > bar)",
+	}, {
+		in:       "SELECT * FROM t1 LEFT JOIN t2 ON t1.id = t2.id WHERE exists(select col1 from other_table where foo > bar)",
+		expected: "SELECT * FROM t1 LEFT JOIN t2 ON t1.id = t2.id WHERE exists(select 1 from other_table where foo > bar)",
+	}, {
 		in:       "SELECT id, name, salary FROM user_details",
 		expected: "SELECT id, name, salary FROM (select user.id, user.name, user_extra.salary from user join user_extra where user.id = user_extra.user_id) as user_details",
 	}, {

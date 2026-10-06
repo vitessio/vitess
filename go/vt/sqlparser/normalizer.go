@@ -41,13 +41,14 @@ type (
 	//     it ensures that table columns are consistently placed on the left side of comparison expressions. This uniformity
 	//     minimizes the number of distinct patterns the planner must handle, enhancing planning efficiency.
 	normalizer struct {
-		bindVars  map[string]*querypb.BindVariable
-		reserved  *ReservedVars
-		vals      map[Literal]string
-		tupleVals map[string]string
-		err       error
-		inDerived int
-		inSelect  int
+		bindVars      map[string]*querypb.BindVariable
+		reserved      *ReservedVars
+		vals          map[Literal]string
+		tupleVals     map[string]string
+		err           error
+		inDerived     int
+		inSelect      int
+		inOuterJoinOn int
 
 		bindVarNeeds              *BindVarNeeds
 		shouldRewriteDatabaseFunc bool
@@ -172,8 +173,12 @@ func (nz *normalizer) determineQueryRewriteStrategy(in Statement) {
 
 // walkDown processes nodes when traversing down the AST.
 // It handles normalization logic based on node types.
-func (nz *normalizer) walkDown(node, _ SQLNode) bool {
+func (nz *normalizer) walkDown(node, parent SQLNode) bool {
 	switch node := node.(type) {
+	case *JoinCondition:
+		if isOuterJoin(parent) {
+			nz.inOuterJoinOn++
+		}
 	case *Begin, *Commit, *Rollback, *Savepoint, *SRollback, *Release, *OtherAdmin, *Analyze,
 		*PrepareStmt, *ExecuteStmt, *FramePoint, *ColName, TableName, *ConvertType, *CreateProcedure:
 		// These statement do not need normalizing
@@ -251,6 +256,10 @@ func (nz *normalizer) walkUp(cursor *Cursor) bool {
 	}
 
 	switch node := cursor.node.(type) {
+	case *JoinCondition:
+		if isOuterJoin(cursor.Parent()) {
+			nz.inOuterJoinOn--
+		}
 	case *DerivedTable:
 		nz.inDerived--
 	case *Select:
@@ -840,12 +849,24 @@ func (nz *normalizer) existsRewrite(cursor *Cursor, node *ExistsExpr) {
 		return
 	}
 
+	if nz.inOuterJoinOn > 0 {
+		// MySQL can turn the simplified subquery into a semi-join and
+		// return wrong results when it is in the ON condition of an outer join.
+		// See https://github.com/vitessio/vitess/issues/20846
+		return
+	}
+
 	// Simplify the subquery by selecting a constant.
 	// WHERE EXISTS(SELECT 1 FROM ...)
 	sel.SelectExprs = &SelectExprs{
 		Exprs: []SelectExpr{&AliasedExpr{Expr: NewIntLiteral("1")}},
 	}
 	sel.GroupBy = nil
+}
+
+func isOuterJoin(node SQLNode) bool {
+	join, ok := node.(*JoinTableExpr)
+	return ok && !join.Join.IsInner()
 }
 
 // rewriteDistinctableAggr removes DISTINCT from certain aggregations to simplify the plan.
