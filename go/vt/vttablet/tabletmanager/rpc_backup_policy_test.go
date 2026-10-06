@@ -18,6 +18,7 @@ package tabletmanager
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 
@@ -77,4 +78,56 @@ func TestRestoreReplicationAfterBackupWithUnknownDurabilityPolicy(t *testing.T) 
 	mu.Lock()
 	defer mu.Unlock()
 	assert.False(t, sourceSet, "the tablet must leave replication alone")
+}
+
+// TestRestoreReplicationAfterBackupOnGroupMember checks the end of an offline backup in a shard that
+// runs a replication group: a voter, whose MySQL rejoins the group through the sync loop or VTOrc,
+// is not made to replicate from the shard's primary on the default channel next to its group, while
+// a tablet that is not a voter, which replicates asynchronously from the group's primary, is.
+func TestRestoreReplicationAfterBackupOnGroupMember(t *testing.T) {
+	for _, tt := range []struct {
+		name       string
+		voters     []uint32
+		wantSource bool
+	}{
+		{name: "a voter", voters: []uint32{1, 2, 3}},
+		{name: "a tablet that is not a voter", voters: []uint32{2, 3, 4}, wantSource: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			withGroupReplication(t)
+			ctx := t.Context()
+			ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplication)
+			addPeerTablets(t, ts, 2)
+			var mu sync.Mutex
+			sourceSet := false
+			peers := &endTermPeersTMC{grPeersTMC: newGRPeersTMC()}
+			tm, _ := newGroupReplicationTestTMWithPeers(t, ts, 1, peers, func(fmd *mysqlctl.FakeMysqlDaemon) {
+				fmd.StartGroupReplicationError = errors.New("no seed reachable")
+				fmd.ExpectedExecuteSuperQueryList = []string{"START REPLICA"}
+				fmd.SetReplicationSourceFunc = func(ctx context.Context, host string, port int32, heartbeatInterval float64, stopReplicationBefore, startReplicationAfter bool) error {
+					mu.Lock()
+					defer mu.Unlock()
+					sourceSet = true
+					return nil
+				}
+			})
+			setGroupReplicationVoters(t, ts, tt.voters...)
+			_, err := ts.UpdateShardFields(ctx, "ks", "0", func(si *topo.ShardInfo) error {
+				si.PrimaryAlias = &topodatapb.TabletAlias{Cell: "cell1", Uid: 2}
+				return nil
+			})
+			require.NoError(t, err)
+			_, err = ts.UpdateTabletFields(ctx, &topodatapb.TabletAlias{Cell: "cell1", Uid: 2}, func(tablet *topodatapb.Tablet) error {
+				tablet.Type = topodatapb.TabletType_PRIMARY
+				return nil
+			})
+			require.NoError(t, err)
+
+			logger := logutil.NewMemoryLogger()
+			tm.restoreReplicationAfterBackupLocked(ctx, tm.Tablet(), logger)
+			mu.Lock()
+			defer mu.Unlock()
+			assert.Equal(t, tt.wantSource, sourceSet, logger.String())
+		})
+	}
 }

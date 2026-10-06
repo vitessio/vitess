@@ -153,7 +153,10 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 // restoreReplicationAfterBackupLocked points the tablet at the shard's primary again after an
 // offline backup, under the action lock: the primary could have changed while the backup ran, which
 // can also change whether the tablet sends semi-sync acks. It does nothing on a primary tablet, when
-// active reparents are disabled, or when the shard's durability policy cannot be resolved.
+// active reparents are disabled, or when the shard's durability policy cannot be resolved. Nor does
+// it on a member of the shard's replication group (groupMemberOfShard): its MySQL replicates through
+// the group, which it rejoins through the sync loop or VTOrc, and must not replicate on the default
+// channel next to it.
 func (tm *TabletManager) restoreReplicationAfterBackupLocked(ctx context.Context, tablet *topodatapb.Tablet, l logutil.Logger) {
 	tabletInfo, err := tm.TopoServer.GetTablet(ctx, tablet.Alias)
 	if err != nil {
@@ -171,7 +174,12 @@ func (tm *TabletManager) restoreReplicationAfterBackupLocked(ctx context.Context
 		return
 	}
 
-	durabilityName, err := tm.TopoServer.GetShardDurability(ctx, tablet.Keyspace, tablet.Shard)
+	si, err := tm.TopoServer.GetShard(ctx, tablet.Keyspace, tablet.Shard)
+	if err != nil {
+		l.Errorf("Failed to get the shard record, error: %v", err)
+		return
+	}
+	durabilityName, err := tm.TopoServer.GetShardInfoDurability(ctx, si)
 	if err != nil {
 		l.Errorf("Failed to get durability policy, error: %v", err)
 		return
@@ -179,6 +187,10 @@ func (tm *TabletManager) restoreReplicationAfterBackupLocked(ctx context.Context
 	durability, err := policy.GetDurabilityPolicy(durabilityName)
 	if err != nil {
 		l.Errorf("Failed to get durability with name %v, error: %v", durabilityName, err)
+		return
+	}
+	if groupMemberOfShard(durability, si.GroupReplicationVoters, tabletInfo.Tablet) {
+		l.Infof("Not configuring replication after the backup: the tablet is a member of the shard's replication group, which it rejoins on its own")
 		return
 	}
 
@@ -276,4 +288,19 @@ func shutdownTimeout(l logutil.Logger, tm *vttime.Duration) time.Duration {
 		return mysqlShutdownTimeout
 	}
 	return timeout
+}
+
+// groupMemberOfShard returns whether the tablet is a member of its shard's replication group, which
+// replicates through the group and never on the default channel: under a group replication policy, a
+// listed voter, or, while the shard record lists no voter, a tablet that the policy allows in the
+// group (as VTOrc's replicatesThroughGroup). Other tablets of the shard replicate asynchronously from
+// the group's primary.
+func groupMemberOfShard(durability policy.Durabler, voters []*topodatapb.TabletAlias, tablet *topodatapb.Tablet) bool {
+	if !policy.IsGroupReplication(durability) {
+		return false
+	}
+	if len(voters) > 0 {
+		return policy.IsVoter(voters, tablet.Alias)
+	}
+	return policy.IsGroupMember(durability, tablet)
 }
