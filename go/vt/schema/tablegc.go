@@ -22,6 +22,7 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/textutil"
 )
 
@@ -117,7 +118,16 @@ func GenerateRenameStatementWithUUID(fromTableName string, state TableGCState, u
 	if err != nil {
 		return "", "", err
 	}
-	return fmt.Sprintf("RENAME TABLE `%s` TO %s", fromTableName, toTableName), toTableName, nil
+	// Both names are escaped rather than merely wrapped in back quotes.
+	// fromTableName can be a tenant's table name, which MySQL allows to hold a
+	// back quote, and the online DDL executor runs this statement as-is on the DBA
+	// connection without a re-parse -- so a name that closes its own quoting would
+	// append statements to it. toTableName needs the same escaping: when TableGC
+	// moves a table to its next state, uuid is what AnalyzeGCTableName parsed out of
+	// the existing table's name, and its [0-f] ranges accept back quotes and ';',
+	// so a hand-made GC table name passes them on to toTableName.
+	return fmt.Sprintf("RENAME TABLE %s TO %s",
+		sqlescape.EscapeID(fromTableName), sqlescape.EscapeID(toTableName)), toTableName, nil
 }
 
 // GenerateRenameStatement generates a "RENAME TABLE" statement, where a table is renamed to a GC table.
