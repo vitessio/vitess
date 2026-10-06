@@ -269,11 +269,12 @@ A VStream request can include a `TableLastPK` for each table, to resume that tab
 
 vttablet now checks each value against the table's own primary key column before it builds the query:
 
+- The `TableLastPK` must have one value for each primary key column.
+- The declared type must match the column's type, so a numeric type declared for a `VARCHAR` column is rejected. The one exception is a numeric column, which accepts a value declared with any numeric type, such as `INT64` for an `INT32` column.
 - The value must be valid for the column's type.
-- The declared type and the column type must agree on whether the value is quoted. For example, a numeric type declared for a `VARCHAR` column is rejected.
 - A value for a numeric column must be a plain numeric literal. `NaN`, `Inf`, and values with surrounding whitespace are rejected.
 
-`NULL` values are accepted. A request with a value that fails these checks is rejected with `INVALID_ARGUMENT` before the query reaches MySQL. Clients that resume from the `lastpk` in the VGTID events a VStream sent them are unaffected. Clients that build `TableLastPK` values themselves must declare field types that match the table's primary key columns.
+`NULL` values are accepted. vttablet then writes each value with the column's type, not the declared one, and only numeric values are written unquoted. A request that fails these checks is rejected with `INVALID_ARGUMENT` before the query reaches MySQL. Clients that resume from the `lastpk` in the VGTID events a VStream sent them are unaffected. Clients that build `TableLastPK` values themselves must declare field types that match the table's primary key columns, or any numeric type for a numeric column.
 
 See [#21377](https://github.com/vitessio/vitess/pull/21377) for details.
 
