@@ -6,7 +6,7 @@ These models check how vtgate maintains foreign keys when a keyspace uses
 | Model | Question | Result |
 |---|---|---|
 | [`FkLocking`](#fklocking-row-locking) | Do the locks keep FKs intact under concurrent transactions? | **No, under READ COMMITTED** |
-| [`FkNonLiteral`](#fknonliteral-non-literal-updates-and-set-null) | Does a non-literal `UPDATE` cascade the way MySQL does? | **No, for `ON UPDATE CASCADE`.** Yes for `SET NULL` |
+| [`FkNonLiteral`](#fknonliteral-non-literal-updates-and-set-null) | Does a non-literal `UPDATE` cascade the way MySQL does? | **No, for `ON UPDATE CASCADE`**, until the child updates run in dependency order. Yes for `SET NULL` |
 | [`FkCrossShard`](#fkcrossshard-cross-shard-constraints) | Do cross-shard constraints survive a failed commit? | **No, with the default MULTI commit.** Yes with TWOPC |
 | [`FkPartialExec`](#fkpartialexec-partial-failure-in-a-transaction) | Does a failed statement leave writes in the client's transaction? | No |
 
@@ -103,35 +103,54 @@ waited after its check of `c` had already passed.
 ## FkNonLiteral: non-literal updates and SET NULL
 
 Schema: `parent(id PRIMARY KEY, k UNIQUE) ← child(p) ON UPDATE CASCADE | SET NULL`.
-The statement is `UPDATE parent SET k = k + Delta`.
+The statement is `UPDATE parent SET k = <expr>`, where each row can get any
+new key, such as `k + 1` or another column's value.
 
 For a non-literal update, the plan cascades one Selection row at a time
 (`FkCascade.executeNonLiteralExprFkChild`). For each row it runs
 `UPDATE child SET p = :new WHERE p IN ((:old))`, then a separate
 `UPDATE parent` with `foreign_key_checks=OFF`.
 
-MySQL itself cascades each row as it updates it. The Selection is a
-different statement from the UPDATE, so MySQL can return its rows in a
-different order. For example, the Selection reads only `k` and its
-expressions, so the index on `k` covers it. The UPDATE of `k` scans the
-primary key instead.
+MySQL itself cascades each row as it updates it, and checks the unique key
+after each row. The Selection is a different statement from the UPDATE, so
+MySQL can return its rows in a different order. For example, the Selection
+reads only `k` and its expressions, so the index on `k` covers it. The UPDATE
+of `k` scans the primary key instead.
 
-The model enumerates every initial state, every Selection order and every
-UPDATE order (3 parent rows, 3 child rows). It then compares Vitess's result
-with MySQL's:
+The `CascadeOrder` constant picks the order of the per-row child updates:
 
-| Config | Child action | Result |
-|---|---|---|
-| `MCFkNonLiteral_cascade_plus.cfg` | CASCADE, `k + 1` | **Differs from MySQL** |
-| `MCFkNonLiteral_cascade_minus.cfg` | CASCADE, `k - 1` | **Differs from MySQL** |
-| `MCFkNonLiteral_setnull_plus.cfg` | SET NULL, `k + 1` | Matches (331,776 states) |
-| `MCFkNonLiteral_setnull_minus.cfg` | SET NULL, `k - 1` | Matches (331,776 states) |
+- **`selection`:** the order the Selection returns the rows. This is
+  Vitess's behaviour before the fix.
+- **`dependency`:** the fix, in `nonLiteralUpdateOrder`. A row whose new key
+  is another changed row's old key runs after that row. If the keys move in
+  a cycle, no such order exists. The statement then fails with a duplicate
+  key error before any write, as MySQL fails the parent UPDATE.
 
-With CASCADE, a later row's `WHERE p IN ((:old))` also matches the children
-that an earlier row just moved. `FkIntegrity` still holds in every state:
-each child references an existing parent, but sometimes the wrong one.
+Vitess uses the dependency order only when the parent columns contain a
+primary or unique key, as in this model. MySQL 8.0 also allows a foreign key
+to reference a non-unique index. In that case MySQL's own cascade matches
+children again in the order it updates the rows. Vitess then keeps the
+Selection order, which matches MySQL when both statements return rows in the
+same order, for example with `ORDER BY`. The `fk_multicol_t15` cases in
+`TestFkScenarios` cover this.
 
-The example below was run through vtgate:
+The model enumerates every initial state (including NULL keys), every new
+key, every child update order and every UPDATE order. It then compares
+Vitess's result with MySQL's:
+
+| Config | Child action | Order | Result |
+|---|---|---|---|
+| `MCFkNonLiteral_cascade_selection.cfg` | CASCADE | Selection | **Differs from MySQL** |
+| `MCFkNonLiteral_cascade_dependency.cfg` | CASCADE | dependency | Matches (11,226,348 states) |
+| `MCFkNonLiteral_setnull_selection.cfg` | SET NULL | Selection | Matches (17,032,500 states) |
+| `MCFkNonLiteral_setnull_dependency.cfg` | SET NULL | dependency | Matches (11,226,348 states) |
+
+Before the fix, a later row's `WHERE p IN ((:old))` with CASCADE also
+matches the children that an earlier row just moved. `FkIntegrity` still
+holds in every state: each child references an existing parent, but
+sometimes the wrong one.
+
+The example below was run through vtgate before the fix:
 
 ```sql
 -- parent(id, k): (1, 2), (2, 1)    child(id, p): (10, 1), (20, 2)
@@ -141,6 +160,9 @@ UPDATE parent SET k = k + 1;
 -- Result: child 10 points at parent id 1 (k=3).
 -- MySQL's own cascade keeps it on parent id 2 (k=2).
 ```
+
+With the fix, the k=2 row's child update runs first. `TestFkQueries` in
+`go/test/endtoend/vtgate/foreignkey` covers this case.
 
 ## FkCrossShard: cross-shard constraints
 
@@ -213,4 +235,5 @@ query partially succeeds breaks `SavepointBeforeWrites`.
   `sql_mode`), the child and parent values can differ. Testing this needs a
   model of the evalengine, so it belongs in a fuzz test rather than in TLA+.
 - **Non-unique parent keys.** MySQL 8.0 still allows a foreign key to
-  reference a non-unique index.
+  reference a non-unique index. Vitess matches MySQL there only when its
+  Selection returns rows in the order MySQL updates them.
