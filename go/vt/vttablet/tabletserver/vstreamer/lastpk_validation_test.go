@@ -24,9 +24,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // field is a shorthand for a table column of a given type.
@@ -254,6 +256,16 @@ func TestBuildSelectRejectsInjectedLastPK(t *testing.T) {
 		query, err := rs.buildSelect(table)
 		require.Error(t, err, "buildSelect produced %q", query)
 		assert.NotContains(t, query, "mysql.user")
+	})
+
+	t.Run("wrong number of values is an invalid argument", func(t *testing.T) {
+		rs := newStreamer([]sqltypes.Value{
+			clientValue(querypb.Type_INT64, "1"),
+			clientValue(querypb.Type_INT64, "2"),
+		})
+		_, err := rs.buildSelect(table)
+		require.Error(t, err)
+		assert.Equal(t, vtrpcpb.Code_INVALID_ARGUMENT, vterrors.Code(err))
 	})
 
 	t.Run("real value still builds", func(t *testing.T) {

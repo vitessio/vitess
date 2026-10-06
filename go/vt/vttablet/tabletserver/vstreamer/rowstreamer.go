@@ -290,7 +290,7 @@ func (rs *rowStreamer) buildSelect(st *binlogdatapb.MinimalTable) (string, error
 	buf.Myprintf(" from %v%s", sqlparser.NewIdentifierCS(rs.plan.Table.Name), indexHint)
 	if len(rs.lastpk) != 0 { // We're in the Nth copy phase cycle and need to resume
 		if len(rs.lastpk) != len(rs.pkColumns) {
-			return "", fmt.Errorf("cannot build a row streamer plan for the %s table as a lastpk value was provided (%v) and the number of primary key values within it (%d) does not match the number of primary key columns in the table (%d)",
+			return "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot build a row streamer plan for the %s table as a lastpk value was provided (%v) and the number of primary key values within it (%d) does not match the number of primary key columns in the table (%d)",
 				st.Name, rs.lastpk, len(rs.lastpk), len(rs.pkColumns))
 		}
 		// A lastpk can come straight from a client's VStream request, with types
