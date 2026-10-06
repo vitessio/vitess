@@ -158,6 +158,9 @@ type Buffer struct {
 	// since writes only occur once per shard at startup.
 	// Key: string ("<keyspace>/<shard>"), Value: *shardBuffer
 	buffers sync.Map
+	// createMu serializes the creation of shardBuffer objects. Creating one
+	// initializes the stats of its shard, which must happen only once per shard.
+	createMu sync.Mutex
 
 	// stopped is true after Shutdown() was run.
 	stopped atomic.Bool
@@ -226,15 +229,20 @@ func (b *Buffer) getOrCreateBuffer(keyspace, shard string) *shardBuffer {
 		return v.(*shardBuffer)
 	}
 
-	// First access for this shard: create and store atomically.
-	sb := newShardBufferHealthCheck(b, b.config.bufferingMode(keyspace, shard), keyspace, shard)
-	v, loaded := b.buffers.LoadOrStore(key, sb)
-	if loaded {
+	// First access for this shard. Look it up again under createMu because it
+	// could have been created in the meantime. Otherwise, a concurrent caller
+	// would create a second shardBuffer and reset the stats of the shard.
+	b.createMu.Lock()
+	if v, ok := b.buffers.Load(key); ok {
+		b.createMu.Unlock()
 		return v.(*shardBuffer)
 	}
+	sb := newShardBufferHealthCheck(b, b.config.bufferingMode(keyspace, shard), keyspace, shard)
+	b.buffers.Store(key, sb)
+	b.createMu.Unlock()
 
 	// Shutdown may have completed its Range between our stopped check above
-	// and the LoadOrStore, so this buffer would never be visited. Clean it up.
+	// and the Store, so this buffer would never be visited. Clean it up.
 	if b.stopped.Load() {
 		if actual, ok := b.buffers.LoadAndDelete(key); ok && actual == sb {
 			sb.shutdown()

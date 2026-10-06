@@ -701,6 +701,41 @@ func testShutdown1(t *testing.T, fail failover) {
 	require.NoError(t, waitForPoolSlots(b, cfg.Size))
 }
 
+// TestConcurrentFirstRequestsKeepStats tests that requests which concurrently
+// create the buffer for a shard do not reset the shard's stats. Creating the
+// buffer initializes the stats, which must happen only once.
+func TestConcurrentFirstRequestsKeepStats(t *testing.T) {
+	const requests = 8
+	statsKeyJoinedDisabled := statsKeyJoined + "." + skippedDisabled
+
+	// The race needs several requests to miss the buffer for the shard. Repeat
+	// with a new buffer to make that likely.
+	for range 10000 {
+		// Buffering is disabled, so every request is counted as skipped.
+		b := New(NewDefaultConfig())
+		start := make(chan struct{})
+		errs := make([]error, requests)
+		retryDones := make([]RetryDoneFunc, requests)
+		var wg sync.WaitGroup
+		for i := range requests {
+			wg.Go(func() {
+				<-start
+				retryDones[i], errs[i] = b.WaitForFailoverEnd(t.Context(), keyspace, shard, nil, nil)
+			})
+		}
+		close(start)
+		wg.Wait()
+		b.Shutdown()
+
+		for i := range requests {
+			require.NoError(t, errs[i])
+			require.Nil(t, retryDones[i])
+		}
+		require.EqualValues(t, requests, requestsSkipped.Counts()[statsKeyJoinedDisabled],
+			"stats were reset by a concurrent request")
+	}
+}
+
 func TestShutdown_WaitForFailoverEndAfterShutdownIsNoop(t *testing.T) {
 	cfg := NewDefaultConfig()
 	cfg.Enabled = true
