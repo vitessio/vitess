@@ -998,6 +998,9 @@ func (tsv *TabletServer) keepAliveReservedConns(reservedID int64, additional []i
 }
 
 func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, reservedID int64, settings []string, options *querypb.ExecuteOptions) (result *sqltypes.Result, err error) {
+	// Some plans send the statement text to MySQL as written, so MySQL must
+	// skip every comment that Vitess skips.
+	sql, _ = tsv.env.Parser().RewriteDoubleSlashComments(sql)
 	targetType, err := tsv.resolveTargetType(ctx, target)
 	if err != nil {
 		return nil, err
@@ -1099,6 +1102,9 @@ func (tsv *TabletServer) StreamExecute(ctx context.Context, session queryservice
 }
 
 func (tsv *TabletServer) streamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, reservedID int64, settings []string, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
+	// Some plans send the statement text to MySQL as written, so MySQL must
+	// skip every comment that Vitess skips.
+	sql, _ = tsv.env.Parser().RewriteDoubleSlashComments(sql)
 	allowOnShutdown := false
 	var timeout time.Duration
 	if transactionID != 0 {

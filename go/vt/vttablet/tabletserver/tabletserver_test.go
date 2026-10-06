@@ -943,6 +943,25 @@ func TestTabletServerStreamExecute(t *testing.T) {
 		executeSQL, err)
 }
 
+// TestTabletServerRewritesDoubleSlashComments checks that a statement that
+// VTTablet sends to MySQL as written has each "//" comment rewritten to "#/",
+// so that MySQL skips the text that Vitess skipped.
+func TestTabletServerRewritesDoubleSlashComments(t *testing.T) {
+	ctx := t.Context()
+	db, tsv := setupTabletServerTest(t, ctx, "")
+	t.Cleanup(tsv.StopService)
+	t.Cleanup(db.Close)
+
+	db.AddQuery("repair table test_table #/*x*/ , t2", &sqltypes.Result{})
+	db.AddRejectedQuery("repair table test_table //*x*/ , t2", errRejected)
+
+	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
+	_, err := tsv.Execute(ctx, nil, &target, "repair table test_table //*x*/ , t2", nil, 0, 0, nil)
+	require.NoError(t, err)
+	err = tsv.StreamExecute(ctx, nil, &target, "repair table test_table //*x*/ , t2", nil, 0, 0, nil, func(*sqltypes.Result) error { return nil })
+	require.NoError(t, err)
+}
+
 func TestTabletServerStreamExecuteComments(t *testing.T) {
 	ctx := t.Context()
 	db, tsv := setupTabletServerTest(t, ctx, "")

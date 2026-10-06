@@ -221,6 +221,92 @@ a`,
 	}
 }
 
+func TestRewriteDoubleSlashComments(t *testing.T) {
+	testCases := []struct {
+		input  string
+		output string
+	}{{
+		input:  "select 1 from t",
+		output: "select 1 from t",
+	}, {
+		input:  "select 1 from t // x",
+		output: "select 1 from t #/ x",
+	}, {
+		input:  "select 1 from t //x\n",
+		output: "select 1 from t #/x\n",
+	}, {
+		input:  "select 1 from t //",
+		output: "select 1 from t #/",
+	}, {
+		input:  "// x\nselect 1 from t",
+		output: "#/ x\nselect 1 from t",
+	}, {
+		// MySQL reads this as 10 / 2; Vitess reads it as 10.
+		input:  "select 10 //* x */ 2",
+		output: "select 10 #/* x */ 2",
+	}, {
+		// The ; is inside the comment, so it does not end the statement.
+		input:  "select 1 // ; drop table t\n, 2",
+		output: "select 1 #/ ; drop table t\n, 2",
+	}, {
+		input:  "select 1 // a\r\n, 2 /// b\n, 3",
+		output: "select 1 #/ a\r\n, 2 #// b\n, 3",
+	}, {
+		input:  "select 'http://x', `a//b`, \"//\" from t /* // */ -- //\n",
+		output: "select 'http://x', `a//b`, \"//\" from t /* // */ -- //\n",
+	}, {
+		// Inside a versioned comment that Vitess executes, / is division.
+		input:  "select /*!50000 4 //*x*/ 2 */",
+		output: "select /*!50000 4 //*x*/ 2 */",
+	}, {
+		// A versioned comment that Vitess skips is a comment as a whole.
+		input:  "select 1 /*!99999 // x */",
+		output: "select 1 /*!99999 // x */",
+	}, {
+		// Nothing past a lexing error is rewritten.
+		input:  "select 1 // a\n, 'b // c",
+		output: "select 1 #/ a\n, 'b // c",
+	}, {
+		input:  "select 'a // b",
+		output: "select 'a // b",
+	}}
+	parser := NewTestParser()
+	for _, tcase := range testCases {
+		t.Run(tcase.input, func(t *testing.T) {
+			out, rewritten := parser.RewriteDoubleSlashComments(tcase.input)
+			assert.Equal(t, tcase.output, out)
+			assert.Equal(t, tcase.output != tcase.input, rewritten)
+		})
+	}
+}
+
+// TestRewriteDoubleSlashCommentsKeepsStatement checks that the rewrite does
+// not change what Vitess parses.
+func TestRewriteDoubleSlashCommentsKeepsStatement(t *testing.T) {
+	parser := NewTestParser()
+	inputs := []string{
+		"select 1e//+ 2\n from t",
+		"select 1 from t // x",
+		"select 10 //* x */ 2 from t // y\n, 3",
+		"select 1 // ; drop table t\n, 2",
+		"// x\nselect 1 from t",
+		"select 1 from t // a\r\nwhere a = 1 /// b\n",
+	}
+	for _, tcase := range validSQL {
+		inputs = append(inputs, tcase.input)
+	}
+	for _, input := range inputs {
+		want, err := parser.Parse(input)
+		if err != nil {
+			continue
+		}
+		rewritten, _ := parser.RewriteDoubleSlashComments(input)
+		got, err := parser.Parse(rewritten)
+		require.NoError(t, err, rewritten)
+		assert.Equal(t, String(want), String(got), input)
+	}
+}
+
 func TestExtractCommentDirectives(t *testing.T) {
 	testCases := []struct {
 		input string
