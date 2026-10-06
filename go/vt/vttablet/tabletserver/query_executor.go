@@ -613,8 +613,10 @@ func (qre *QueryExecutor) checkPermissions() error {
 	// a table the planner did derive by name, and a dry run records it. The
 	// planner flags such statements in the one switch that must account for
 	// every statement type (BuildPermissions), so this needs no list of its
-	// own. The exempt ACL applied above stays as the escape hatch for
-	// operators who need these statements.
+	// own. Two kinds of caller can still run them: one in the exempt ACL
+	// applied above, and one holding every role in a table group that covers
+	// every table ("%"), except for CALL and LOAD DATA, which stay exempt-only
+	// (see checkUndeterminedTableAccess).
 	if qre.plan.TablesUndetermined {
 		return qre.checkUndeterminedTableAccess(callerID)
 	}
@@ -666,20 +668,32 @@ func (qre *QueryExecutor) checkAccess(authorized *tableacl.ACLResult, tableName 
 
 // checkUndeterminedTableAccess enforces table ACL for a statement whose table
 // set could not be determined at planning time (see checkPermissions). It
-// mirrors checkAccess's dry-run and stats handling, but denies unconditionally
-// under strict table ACL: the tables the planner did derive have already been
-// checked, no grant can cover the ones it could not, and the caller has
-// already been shown to be non-exempt.
+// mirrors checkAccess's dry-run and stats handling. The tables the planner did
+// derive have already been checked, and the caller has already been shown to
+// be non-exempt. The ones it could not derive are covered only by a table
+// group that covers every table ("%"), and then only for a caller who holds
+// every role in it, since the statement may read, write or alter any of them;
+// the roles are granted separately, so being an ADMIN alone does not let a
+// caller read. CALL and LOAD DATA are not covered even then, as they can act
+// beyond any table (see TabletPlan.buildAuthorized). Any other caller is
+// denied under strict table ACL.
 func (qre *QueryExecutor) checkUndeterminedTableAccess(callerID *querypb.VTGateCallerID) error {
+	authorized := qre.plan.AuthorizedUndetermined
 	var aclState acl.ACLState
 	defer func() {
 		// There is no table to name; label the denial so operators can tell
 		// it apart from a per-table one in the TableACL* counters. The label
 		// carries hyphens so that no unquoted table name can share the series.
+		// Its table group stays empty, as it shipped, so that an alert on the
+		// series still matches when a group covers every table.
 		statsKey := qre.generateACLStatsKey("undetermined-table-set", &tableacl.ACLResult{}, callerID)
 		qre.recordACLStats(statsKey, aclState)
 	}()
 
+	if authorized.IsMember(callerID) {
+		aclState = acl.ACLAllow
+		return nil
+	}
 	if qre.tsv.qe.enableTableACLDryRun {
 		aclState = acl.ACLPseudoDenied
 		return nil
@@ -1101,6 +1115,15 @@ func (qre *QueryExecutor) execRollbackToSavepoint(conn *StatefulConnection, sql 
 	return qr, nil
 }
 
+// escapeAnnotationPrincipal returns the caller principal in a form that can be
+// embedded in the annotation comment that prefixes queries sent to MySQL. The
+// principal can be chosen by the client, and "*/" is the only sequence that
+// ends the comment, so it is escaped as "*\/", which MySQL reads as ordinary
+// comment text.
+func escapeAnnotationPrincipal(principal string) string {
+	return strings.ReplaceAll(principal, "*/", `*\/`)
+}
+
 func (qre *QueryExecutor) generateFinalSQL(parsedQuery *sqlparser.ParsedQuery, bindVars map[string]*querypb.BindVariable) (string, string, error) {
 	query, err := parsedQuery.GenerateQuery(bindVars, nil)
 	if err != nil {
@@ -1111,6 +1134,7 @@ func (qre *QueryExecutor) generateFinalSQL(parsedQuery *sqlparser.ParsedQuery, b
 		if username == "" {
 			username = callerid.GetUsername(callerid.ImmediateCallerIDFromContext(qre.ctx))
 		}
+		username = escapeAnnotationPrincipal(username)
 		var buf strings.Builder
 		tabletTypeStr := qre.tsv.sm.target.TabletType.String()
 		buf.Grow(8 + len(username) + len(tabletTypeStr))
