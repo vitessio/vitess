@@ -147,3 +147,27 @@ func TestGetShardDurabilityPolicy(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, policy.IsGroupReplication(durability))
 }
+
+// TestGetShardDurabilityPolicyMigrationSource checks the policy that VTOrc's recoveries resolve for
+// a shard while MigrateReplicationMode converts its keyspace to Group Replication: the keyspace
+// record names the target policy, and its migration source applies to a shard that has no policy of
+// its own.
+func TestGetShardDurabilityPolicyMigrationSource(t *testing.T) {
+	groupReplicationRecoveryTestWithPolicy(t, policy.DurabilityGroupReplication)
+	ki, err := inst.ReadKeyspace("ks")
+	require.NoError(t, err)
+	ki.MigrationSourceDurabilityPolicy = policy.DurabilitySemiSync
+	require.NoError(t, inst.SaveKeyspace(ki))
+
+	durability, err := inst.GetShardDurabilityPolicy("ks", "0")
+	require.NoError(t, err)
+	assert.False(t, policy.IsGroupReplication(durability), "a shard that is not converted has the migration source's policy")
+	durability, err = inst.GetShardRecordDurabilityPolicy("ks", &topodatapb.Shard{})
+	require.NoError(t, err)
+	assert.False(t, policy.IsGroupReplication(durability))
+
+	setShardDurabilityPolicy(t, policy.DurabilityGroupReplication)
+	durability, err = inst.GetShardDurabilityPolicy("ks", "0")
+	require.NoError(t, err)
+	assert.True(t, policy.IsGroupReplication(durability), "a converted shard has its own policy")
+}

@@ -306,6 +306,7 @@ CREATE TABLE vitess_keyspace (
 	keyspace_type smallint(5) NOT NULL,
 	durability_policy varchar(512) NOT NULL,
 	disable_emergency_reparent tinyint NOT NULL,
+	migration_source_durability_policy varchar(512) NOT NULL DEFAULT '',
 	PRIMARY KEY (keyspace)
 )`,
 	`

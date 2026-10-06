@@ -122,6 +122,7 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		vitess_keyspace.keyspace AS keyspace,
 		vitess_keyspace.keyspace_type AS keyspace_type,
 		vitess_keyspace.durability_policy AS durability_policy,
+		vitess_keyspace.migration_source_durability_policy AS keyspace_migration_source_durability_policy,
 		vitess_keyspace.disable_emergency_reparent AS keyspace_disable_emergency_reparent,
 		vitess_shard.primary_timestamp AS shard_primary_term_timestamp,
 		vitess_shard.primary_alias AS shard_primary_alias,
@@ -553,8 +554,12 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 				}
 			}
 			// The shard's own policy applies over the keyspace's: a shard that MigrateReplicationMode
-			// converted while the keyspace is still being migrated is analyzed as converted.
-			durabilityPolicy := topo.ShardDurabilityPolicy(m.GetString("durability_policy"), &topodatapb.Shard{DurabilityPolicy: m.GetString("shard_durability_policy")})
+			// converted while the keyspace is still being migrated is analyzed as converted, and a
+			// shard that it did not convert yet by the keyspace's migration source.
+			durabilityPolicy := topo.ShardDurabilityPolicy(&topodatapb.Keyspace{
+				DurabilityPolicy:                m.GetString("durability_policy"),
+				MigrationSourceDurabilityPolicy: m.GetString("keyspace_migration_source_durability_policy"),
+			}, &topodatapb.Shard{DurabilityPolicy: m.GetString("shard_durability_policy")})
 			if durabilityPolicy == "" {
 				log.Error(fmt.Sprintf("ignoring keyspace %v because no durability_policy is set. Please set it using SetKeyspaceDurabilityPolicy", a.AnalyzedKeyspace))
 				return nil

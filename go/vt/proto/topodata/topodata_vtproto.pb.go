@@ -243,6 +243,7 @@ func (m *Keyspace) CloneVT() *Keyspace {
 	r.SidecarDbName = m.SidecarDbName
 	r.VtorcState = m.VtorcState.CloneVT()
 	r.QueryThrottlerConfig = m.QueryThrottlerConfig.CloneVT()
+	r.MigrationSourceDurabilityPolicy = m.MigrationSourceDurabilityPolicy
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -1238,6 +1239,13 @@ func (m *Keyspace) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if len(m.MigrationSourceDurabilityPolicy) > 0 {
+		i -= len(m.MigrationSourceDurabilityPolicy)
+		copy(dAtA[i:], m.MigrationSourceDurabilityPolicy)
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.MigrationSourceDurabilityPolicy)))
+		i--
+		dAtA[i] = 0x6a
 	}
 	if m.QueryThrottlerConfig != nil {
 		size, err := m.QueryThrottlerConfig.MarshalToSizedBufferVT(dAtA[:i])
@@ -2440,6 +2448,10 @@ func (m *Keyspace) SizeVT() (n int) {
 	}
 	if m.QueryThrottlerConfig != nil {
 		l = m.QueryThrottlerConfig.SizeVT()
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	l = len(m.MigrationSourceDurabilityPolicy)
+	if l > 0 {
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	n += len(m.unknownFields)
@@ -4940,6 +4952,38 @@ func (m *Keyspace) UnmarshalVT(dAtA []byte) error {
 			if err := m.QueryThrottlerConfig.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
+			iNdEx = postIndex
+		case 13:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field MigrationSourceDurabilityPolicy", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.MigrationSourceDurabilityPolicy = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex

@@ -839,8 +839,17 @@ type Keyspace struct {
 	VtorcState *vtorcdata.Keyspace `protobuf:"bytes,11,opt,name=vtorc_state,json=vtorcState,proto3" json:"vtorc_state,omitempty"`
 	// QueryThrottler provides a flexible throttling configuration that supports multiple throttling strategies beyond the standard tablet throttling.
 	QueryThrottlerConfig *querythrottler.Config `protobuf:"bytes,12,opt,name=query_throttler_config,json=queryThrottlerConfig,proto3" json:"query_throttler_config,omitempty"`
-	unknownFields        protoimpl.UnknownFields
-	sizeCache            protoimpl.SizeCache
+	// MigrationSourceDurabilityPolicy is set while MigrateReplicationMode converts the keyspace to a
+	// MySQL Group Replication policy: it is the policy of every shard of the keyspace that has no
+	// policy of its own (Shard.durability_policy), and DurabilityPolicy already names the target
+	// policy. A component that does not know this field therefore reads a group replication policy
+	// for every shard of a keyspace in which a shard may run a group, and fails safe if it does not
+	// know that policy either. A shard's policy is resolved as "its own if set, else this field if
+	// set, else DurabilityPolicy" (topo.ShardDurabilityPolicy). The migration clears it once every
+	// shard is converted.
+	MigrationSourceDurabilityPolicy string `protobuf:"bytes,13,opt,name=migration_source_durability_policy,json=migrationSourceDurabilityPolicy,proto3" json:"migration_source_durability_policy,omitempty"`
+	unknownFields                   protoimpl.UnknownFields
+	sizeCache                       protoimpl.SizeCache
 }
 
 func (x *Keyspace) Reset() {
@@ -927,6 +936,13 @@ func (x *Keyspace) GetQueryThrottlerConfig() *querythrottler.Config {
 		return x.QueryThrottlerConfig
 	}
 	return nil
+}
+
+func (x *Keyspace) GetMigrationSourceDurabilityPolicy() string {
+	if x != nil {
+		return x.MigrationSourceDurabilityPolicy
+	}
+	return ""
 }
 
 // ShardReplication describes the MySQL replication relationships
@@ -2035,7 +2051,7 @@ const file_topodata_proto_rawDesc = "" +
 	"\x06target\x18\x01 \x01(\v2\x15.topodata.TabletAliasR\x06target\x12 \n" +
 	"\x04time\x18\x02 \x01(\v2\f.vttime.TimeR\x04time\x121\n" +
 	"\x14previous_incarnation\x18\x03 \x01(\tR\x13previousIncarnation\x12\x14\n" +
-	"\x05token\x18\x04 \x01(\tR\x05token\"\xd6\x03\n" +
+	"\x05token\x18\x04 \x01(\tR\x05token\"\xa3\x04\n" +
 	"\bKeyspace\x12;\n" +
 	"\rkeyspace_type\x18\x05 \x01(\x0e2\x16.topodata.KeyspaceTypeR\fkeyspaceType\x12#\n" +
 	"\rbase_keyspace\x18\x06 \x01(\tR\fbaseKeyspace\x121\n" +
@@ -2046,7 +2062,8 @@ const file_topodata_proto_rawDesc = "" +
 	" \x01(\tR\rsidecarDbName\x124\n" +
 	"\vvtorc_state\x18\v \x01(\v2\x13.vtorcdata.KeyspaceR\n" +
 	"vtorcState\x12L\n" +
-	"\x16query_throttler_config\x18\f \x01(\v2\x16.querythrottler.ConfigR\x14queryThrottlerConfigJ\x04\b\x01\x10\x02J\x04\b\x02\x10\x03J\x04\b\x03\x10\x04J\x04\b\x04\x10\x05\"\x8b\x01\n" +
+	"\x16query_throttler_config\x18\f \x01(\v2\x16.querythrottler.ConfigR\x14queryThrottlerConfig\x12K\n" +
+	"\"migration_source_durability_policy\x18\r \x01(\tR\x1fmigrationSourceDurabilityPolicyJ\x04\b\x01\x10\x02J\x04\b\x02\x10\x03J\x04\b\x03\x10\x04J\x04\b\x04\x10\x05\"\x8b\x01\n" +
 	"\x10ShardReplication\x125\n" +
 	"\x05nodes\x18\x01 \x03(\v2\x1f.topodata.ShardReplication.NodeR\x05nodes\x1a@\n" +
 	"\x04Node\x128\n" +

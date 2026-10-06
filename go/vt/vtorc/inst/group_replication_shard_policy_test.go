@@ -35,7 +35,8 @@ import (
 // shard converted to Group Replication while the keyspace's policy is still semi_sync gets the
 // Group Replication analyses and none of the semi-sync analyses that would undo its conversion, and
 // a shard converted back while the keyspace's policy is still group_replication gets none of the
-// Group Replication analyses.
+// Group Replication analyses, nor does a shard not converted yet while the keyspace names the target
+// policy and keeps the policy it converts from as its migration source.
 func TestGetDetectionAnalysisShardPolicy(t *testing.T) {
 	resetPrimaryHealthState()
 	oldVoterGrace := config.GetGroupReplicationVoterReplacementGracePeriod()
@@ -125,6 +126,27 @@ func TestGetDetectionAnalysisShardPolicy(t *testing.T) {
 				asyncReplica.SemiSyncReplicaEnabled = 1
 				asyncReplica.PrimaryTabletInfo = primary
 				primaryRow := row(primary, gr, semiSync)
+				primaryRow.SemiSyncPrimaryEnabled = 1
+				primaryRow.CountReplicas = 1
+				primaryRow.CountValidReplicas = 1
+				primaryRow.CountValidReplicatingReplicas = 1
+				return []*test.InfoForRecoveryAnalysis{primaryRow, asyncReplica}
+			},
+			notWant: []AnalysisCode{GroupVotersOutOfDate, GroupNotBootstrapped, PrimarySemiSyncMustNotBeSet, ReplicaSemiSyncMustNotBeSet},
+		},
+		{
+			name: "shard not converted yet: the keyspace names the target policy, and its migration source applies",
+			rows: func() []*test.InfoForRecoveryAnalysis {
+				// MigrateReplicationMode named group_replication in the keyspace record before its
+				// first bootstrap, and kept semi_sync as the migration source.
+				asyncReplica := row(replica, gr, "")
+				asyncReplica.KeyspaceMigrationSourceDurabilityPolicy = semiSync
+				asyncReplica.IsPrimary = 0
+				asyncReplica.ReplicationStopped = 0
+				asyncReplica.SemiSyncReplicaEnabled = 1
+				asyncReplica.PrimaryTabletInfo = primary
+				primaryRow := row(primary, gr, "")
+				primaryRow.KeyspaceMigrationSourceDurabilityPolicy = semiSync
 				primaryRow.SemiSyncPrimaryEnabled = 1
 				primaryRow.CountReplicas = 1
 				primaryRow.CountValidReplicas = 1

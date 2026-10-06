@@ -138,6 +138,8 @@ type migrationRun struct {
 	target   policy.Durabler
 	// keyspacePolicy is the keyspace's durability policy when the migration started.
 	keyspacePolicy string
+	// keyspaceRecord is the keyspace record when the migration started.
+	keyspaceRecord *topodatapb.Keyspace
 }
 
 // migrationShard carries the state of the migration of one shard.
@@ -188,6 +190,10 @@ func (m *ReplicationModeMigrator) Migrate(ctx context.Context, keyspace string, 
 	if err != nil {
 		return resp, err
 	}
+	ki, err := m.ts.GetKeyspace(ctx, keyspace)
+	if err != nil {
+		return resp, err
+	}
 	currentName, err := m.ts.GetKeyspaceDurability(ctx, keyspace)
 	if err != nil {
 		return resp, err
@@ -213,7 +219,7 @@ func (m *ReplicationModeMigrator) Migrate(ctx context.Context, keyspace string, 
 		}
 	}
 
-	run := &migrationRun{m: m, keyspace: keyspace, opts: opts, current: current, target: target, keyspacePolicy: currentName}
+	run := &migrationRun{m: m, keyspace: keyspace, opts: opts, current: current, target: target, keyspacePolicy: currentName, keyspaceRecord: ki.Keyspace}
 	return resp, run.migrate(ctx, resp, shards, allShards, policy.IsGroupReplication(target))
 }
 
@@ -481,7 +487,7 @@ func (r *migrationRun) shardConverted(ctx context.Context, shard string, toGroup
 // hasTargetPolicy returns whether the shard's durability policy, as the shard record read by the
 // migration resolves it, is the target policy.
 func (s *migrationShard) hasTargetPolicy() bool {
-	return topo.ShardDurabilityPolicy(s.run.keyspacePolicy, &topodatapb.Shard{DurabilityPolicy: s.recordedPolicy}) == s.run.opts.DurabilityPolicy
+	return topo.ShardDurabilityPolicy(s.run.keyspaceRecord, &topodatapb.Shard{DurabilityPolicy: s.recordedPolicy}) == s.run.opts.DurabilityPolicy
 }
 
 // setShardPolicy makes the target policy the shard's durability policy: it stores it as the

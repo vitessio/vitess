@@ -374,6 +374,16 @@ message Keyspace {
 
   // QueryThrottler provides a flexible throttling configuration that supports multiple throttling strategies beyond the standard tablet throttling.
   querythrottler.Config query_throttler_config = 12;
+
+  // MigrationSourceDurabilityPolicy is set while MigrateReplicationMode converts the keyspace to a
+  // MySQL Group Replication policy: it is the policy of every shard of the keyspace that has no
+  // policy of its own (Shard.durability_policy), and DurabilityPolicy already names the target
+  // policy. A component that does not know this field therefore reads a group replication policy
+  // for every shard of a keyspace in which a shard may run a group, and fails safe if it does not
+  // know that policy either. A shard's policy is resolved as "its own if set, else this field if
+  // set, else DurabilityPolicy" (topo.ShardDurabilityPolicy). The migration clears it once every
+  // shard is converted.
+  string migration_source_durability_policy = 13;
 }
 
 // ShardReplication describes the MySQL replication relationships
