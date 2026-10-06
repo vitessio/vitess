@@ -43,7 +43,7 @@ func TestInitPrimaryRefusesGroupReplicationPolicyWithoutFlag(t *testing.T) {
 		durability string
 		wantErr    bool
 	}{
-		{durability: policy.DurabilityGroupReplication, wantErr: true},
+		{durability: policy.DurabilityGroupReplicationCrossCell, wantErr: true},
 		{durability: policy.DurabilitySemiSync},
 	} {
 		t.Run(tt.durability, func(t *testing.T) {

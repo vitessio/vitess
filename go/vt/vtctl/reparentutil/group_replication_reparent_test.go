@@ -34,17 +34,19 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-// newFailedGroupShard is a group replication shard of three voting members (primary in zone1,
-// replicas in zone1 and zone2) and an rdonly async replica. The primary is unreachable, and
-// the group elected the zone2 replica.
+// newFailedGroupShard is a group replication shard of three voting members, one per cell (the
+// primary in zone1, replicas in zone2 and zone3), a replica of zone1 that is not a voter and an
+// rdonly replica, which replicate asynchronously from the group's primary. The primary is
+// unreachable, and the group elected the zone2 replica.
 func newFailedGroupShard(t *testing.T) (*fakeGRCluster, *topo.Server) {
-	c, ts := newFakeGRCluster(t, "group_replication",
+	c, ts := newFakeGRCluster(t, "group_replication_cross_cell",
 		fakeGRTabletSpec{cell: "zone1", uid: 100, tabletType: topodatapb.TabletType_PRIMARY},
 		fakeGRTabletSpec{cell: "zone1", uid: 101, tabletType: topodatapb.TabletType_REPLICA},
 		fakeGRTabletSpec{cell: "zone2", uid: 200, tabletType: topodatapb.TabletType_REPLICA},
+		fakeGRTabletSpec{cell: "zone3", uid: 300, tabletType: topodatapb.TabletType_REPLICA},
 		fakeGRTabletSpec{cell: "zone1", uid: 102, tabletType: topodatapb.TabletType_RDONLY},
 	)
-	c.formGroup(t, "group_replication")
+	c.formGroup(t, "group_replication_cross_cell")
 	c.tablets[aliasP].unreachable = true
 	c.groupPrimary = alias200
 	return c, ts
@@ -58,7 +60,7 @@ func mustAlias(t *testing.T, alias string) *topodatapb.TabletAlias {
 
 // TestEmergencyReparentGroupReplicationFollowsGroup checks that ERS on a group replication
 // shard makes the topology follow the primary the group elected: it promotes that tablet,
-// writes the reparent journal, fixes the other member's type, repoints the async replica,
+// writes the reparent journal, fixes the other member's type, repoints the async replicas,
 // and leaves the failed primary alone.
 func TestEmergencyReparentGroupReplicationFollowsGroup(t *testing.T) {
 	c, ts := newFailedGroupShard(t)
@@ -76,6 +78,7 @@ func TestEmergencyReparentGroupReplicationFollowsGroup(t *testing.T) {
 	assert.ElementsMatch(t, []string{
 		"SetReplicationSource(" + alias101 + ", " + alias200 + ", semiSync=false)",
 		"SetReplicationSource(" + alias102 + ", " + alias200 + ", semiSync=false)",
+		"SetReplicationSource(" + alias300 + ", " + alias200 + ", semiSync=false)",
 	}, callsWithPrefix(calls, "SetReplicationSource"))
 	assert.Equal(t, alias200, c.tablet(alias102).source)
 }
@@ -88,13 +91,13 @@ func TestEmergencyReparentGroupReplicationRequestedPrimary(t *testing.T) {
 		c, ts := newFailedGroupShard(t)
 		erp := NewEmergencyReparenter(ts, c, logutil.NewMemoryLogger())
 		ev, err := erp.ReparentShard(t.Context(), "ks", "-", EmergencyReparentOptions{
-			NewPrimaryAlias:     mustAlias(t, alias101),
+			NewPrimaryAlias:     mustAlias(t, alias300),
 			WaitReplicasTimeout: 30 * time.Second,
 		})
 		require.NoError(t, err)
-		assert.Equal(t, alias101, topoproto.TabletAliasString(ev.NewPrimary.Alias))
-		assert.Equal(t, []string{"PromoteReplica(" + alias101 + ")"}, callsWithPrefix(c.mutatingCalls(), "PromoteReplica"))
-		assert.Contains(t, c.mutatingCalls(), "SetReplicationSource("+alias200+", "+alias101+", semiSync=false)")
+		assert.Equal(t, alias300, topoproto.TabletAliasString(ev.NewPrimary.Alias))
+		assert.Equal(t, []string{"PromoteReplica(" + alias300 + ")"}, callsWithPrefix(c.mutatingCalls(), "PromoteReplica"))
+		assert.Contains(t, c.mutatingCalls(), "SetReplicationSource("+alias200+", "+alias300+", semiSync=false)")
 	})
 
 	t.Run("async replica", func(t *testing.T) {
@@ -111,19 +114,19 @@ func TestEmergencyReparentGroupReplicationRequestedPrimary(t *testing.T) {
 	})
 }
 
-// TestEmergencyReparentGroupReplicationPreventCrossCell checks that with
-// PreventCrossCellPromotion, ERS moves the group's primary back to the previous primary's
-// cell instead of following a cross-cell election.
+// TestEmergencyReparentGroupReplicationPreventCrossCell checks PreventCrossCellPromotion: with one
+// voter per cell, the previous primary's cell has no other voter, and ERS refuses to follow the
+// cross-cell election before it changes anything. The zone1 replica, which is not a voter, would
+// not serve as the primary.
 func TestEmergencyReparentGroupReplicationPreventCrossCell(t *testing.T) {
 	c, ts := newFailedGroupShard(t)
 	erp := NewEmergencyReparenter(ts, c, logutil.NewMemoryLogger())
-	ev, err := erp.ReparentShard(t.Context(), "ks", "-", EmergencyReparentOptions{
+	_, err := erp.ReparentShard(t.Context(), "ks", "-", EmergencyReparentOptions{
 		PreventCrossCellPromotion: true,
 		WaitReplicasTimeout:       30 * time.Second,
 	})
-	require.NoError(t, err)
-	assert.Equal(t, alias101, topoproto.TabletAliasString(ev.NewPrimary.Alias))
-	assert.Equal(t, []string{"PromoteReplica(" + alias101 + ")"}, callsWithPrefix(c.mutatingCalls(), "PromoteReplica"))
+	require.Error(t, err)
+	assert.Empty(t, callsWithPrefix(c.mutatingCalls(), "PromoteReplica"))
 }
 
 // TestEmergencyReparentGroupReplicationNoQuorum checks that ERS fails without changing
@@ -158,8 +161,8 @@ func TestEmergencyReparentGroupReplicationRefusesSplitBrainOverride(t *testing.T
 // replication shard refuses a primary-elect that is not an ONLINE member of the primary's
 // group, before it demotes the primary.
 func TestPlannedReparentGroupReplicationRequiresOnlineMember(t *testing.T) {
-	c, ts := newFakeGRCluster(t, "group_replication", migrationTestShard()...)
-	c.formGroup(t, "group_replication")
+	c, ts := newFakeGRCluster(t, "group_replication_cross_cell", migrationTestShard()...)
+	c.formGroup(t, "group_replication_cross_cell")
 	c.tablets[alias300].member = false
 	pr := NewPlannedReparenter(ts, c, logutil.NewMemoryLogger())
 
@@ -189,32 +192,32 @@ func TestPlannedReparentGroupReplicationPreflight(t *testing.T) {
 	}{
 		{
 			name:       "online member",
-			durability: "group_replication",
-			setup:      func(c *fakeGRCluster) { c.formGroup(t, "group_replication") },
+			durability: "group_replication_cross_cell",
+			setup:      func(c *fakeGRCluster) { c.formGroup(t, "group_replication_cross_cell") },
 		},
 		{
 			name:       "recovering member",
-			durability: "group_replication",
+			durability: "group_replication_cross_cell",
 			setup: func(c *fakeGRCluster) {
-				c.formGroup(t, "group_replication")
+				c.formGroup(t, "group_replication_cross_cell")
 				c.tablets[alias200].state = "RECOVERING"
 			},
 			errContain: "state: RECOVERING",
 		},
 		{
 			name:       "primary not in a group",
-			durability: "group_replication",
+			durability: "group_replication_cross_cell",
 			errContain: "current primary zone1-0000000100 is not an active member",
 		},
 		{
 			name:             "no current primary, elect is an online member",
-			durability:       "group_replication",
-			setup:            func(c *fakeGRCluster) { c.formGroup(t, "group_replication") },
+			durability:       "group_replication_cross_cell",
+			setup:            func(c *fakeGRCluster) { c.formGroup(t, "group_replication_cross_cell") },
 			noCurrentPrimary: true,
 		},
 		{
 			name:             "no current primary, no group",
-			durability:       "group_replication",
+			durability:       "group_replication_cross_cell",
 			noCurrentPrimary: true,
 			errContain:       "is not an ONLINE member of a replication group with quorum",
 		},
@@ -318,12 +321,12 @@ func TestEmergencyReparentGroupReplicationFollowsOnlyLegitimateGroup(t *testing.
 	}{{
 		name:              "member alone in a new incarnation",
 		incarnation:       "1790000000",
-		voters:            []string{aliasP, alias101, alias200},
+		voters:            []string{aliasP, alias200, alias300},
 		memberIncarnation: "1799999999",
 	}, {
 		name:              "member alone in the recorded incarnation",
 		incarnation:       "1790000000",
-		voters:            []string{aliasP, alias101, alias200},
+		voters:            []string{aliasP, alias200, alias300},
 		memberIncarnation: "1790000000",
 	}, {
 		name:              "nothing recorded",
@@ -335,7 +338,7 @@ func TestEmergencyReparentGroupReplicationFollowsOnlyLegitimateGroup(t *testing.
 			c, ts := newFailedGroupShard(t)
 			// zone2's member is alone in its group: the others left it.
 			c.tablets[aliasP].member = false
-			c.tablets[alias101].member = false
+			c.tablets[alias300].member = false
 			c.tablets[alias200].incarnation = tt.memberIncarnation
 			c.setIncarnation(t, tt.incarnation)
 			c.setVoters(t, tt.voters...)
@@ -358,8 +361,8 @@ func TestEmergencyReparentGroupReplicationFollowsOnlyLegitimateGroup(t *testing.
 // primaries inside a group that is not the shard's legitimate group.
 func TestPlannedReparentGroupReplicationRequiresLegitimateGroup(t *testing.T) {
 	t.Run("foreign incarnation", func(t *testing.T) {
-		c, ts := newFakeGRCluster(t, "group_replication", migrationTestShard()...)
-		c.formGroup(t, "group_replication")
+		c, ts := newFakeGRCluster(t, "group_replication_cross_cell", migrationTestShard()...)
+		c.formGroup(t, "group_replication_cross_cell")
 		c.setIncarnation(t, "1780000000")
 		pr := NewPlannedReparenter(ts, c, logutil.NewMemoryLogger())
 
@@ -373,13 +376,14 @@ func TestPlannedReparentGroupReplicationRequiresLegitimateGroup(t *testing.T) {
 		assert.Empty(t, c.mutatingCalls())
 	})
 	t.Run("minority of the voters", func(t *testing.T) {
-		c, ts := newFakeGRCluster(t, "group_replication", migrationTestShard()...)
-		c.formGroup(t, "group_replication")
+		c, ts := newFakeGRCluster(t, "group_replication_cross_cell", migrationTestShard()...)
+		c.formGroup(t, "group_replication_cross_cell")
 		c.setIncarnation(t, "1790000000")
-		require.Equal(t, []string{aliasP, alias101, alias200, alias300}, c.voters(t))
-		// Two of the four voters left the group: the other two still have quorum in a view of two.
-		c.tablets[alias101].member = false
+		require.Equal(t, []string{aliasP, alias200, alias300}, c.voters(t))
+		// One of the three voters left the group, and an operator listed a fourth voter, of zone1
+		// (a list that VTOrc would not write): the two members still have quorum in a view of two.
 		c.tablets[alias300].member = false
+		c.setVoters(t, aliasP, alias101, alias200, alias300)
 		pr := NewPlannedReparenter(ts, c, logutil.NewMemoryLogger())
 
 		_, err := pr.ReparentShard(t.Context(), "ks", "-", PlannedReparentOptions{
@@ -423,14 +427,18 @@ func TestEmergencyReparentGroupReplicationRepointsNonVoters(t *testing.T) {
 // before anything changes.
 func TestEmergencyReparentGroupReplicationPromotesOnlyVoters(t *testing.T) {
 	newShard := func(t *testing.T) (*fakeGRCluster, *topo.Server) {
-		c, ts := newFakeGRCluster(t, "group_replication",
+		c, ts := newFakeGRCluster(t, "group_replication_cross_cell",
 			fakeGRTabletSpec{cell: "zone1", uid: 100, tabletType: topodatapb.TabletType_PRIMARY},
 			fakeGRTabletSpec{cell: "zone1", uid: 101, tabletType: topodatapb.TabletType_REPLICA},
 			fakeGRTabletSpec{cell: "zone2", uid: 200, tabletType: topodatapb.TabletType_REPLICA},
+			fakeGRTabletSpec{cell: "zone3", uid: 300, tabletType: topodatapb.TabletType_REPLICA},
 		)
-		c.formGroup(t, "group_replication")
-		// zone1-101 completed a join after the voter list dropped it, and the group elected it.
-		c.setVoters(t, aliasP, alias200)
+		c.formGroup(t, "group_replication_cross_cell")
+		require.Equal(t, []string{aliasP, alias200, alias300}, c.voters(t))
+		// zone1-101, which is not a voter, completed a join that it started while it was one, and
+		// the group elected it.
+		c.tablets[alias101].member = true
+		c.tablets[alias101].source = ""
 		c.groupPrimary = alias101
 		return c, ts
 	}
@@ -439,7 +447,7 @@ func TestEmergencyReparentGroupReplicationPromotesOnlyVoters(t *testing.T) {
 		erp := NewEmergencyReparenter(ts, c, logutil.NewMemoryLogger())
 		ev, err := erp.ReparentShard(t.Context(), "ks", "-", EmergencyReparentOptions{WaitReplicasTimeout: 30 * time.Second})
 		require.NoError(t, err)
-		assert.Contains(t, []string{aliasP, alias200}, topoproto.TabletAliasString(ev.NewPrimary.Alias))
+		assert.Contains(t, []string{aliasP, alias200, alias300}, topoproto.TabletAliasString(ev.NewPrimary.Alias))
 		assert.NotContains(t, callsWithPrefix(c.mutatingCalls(), "PromoteReplica"), "PromoteReplica("+alias101+")")
 	})
 	t.Run("a requested primary that is not a voter", func(t *testing.T) {
@@ -463,14 +471,14 @@ func TestEmergencyReparentGroupReplicationPromotesOnlyVoters(t *testing.T) {
 // whose view may have lost the voter majority.
 func TestEmergencyReparentRefusesGroupPrimaryWithoutGroupReplicationEnabled(t *testing.T) {
 	newShard := func(t *testing.T) (*fakeGRCluster, *topo.Server) {
-		c, ts := newFakeGRCluster(t, "group_replication",
+		c, ts := newFakeGRCluster(t, "group_replication_cross_cell",
 			fakeGRTabletSpec{cell: "zone1", uid: 100, tabletType: topodatapb.TabletType_PRIMARY},
-			fakeGRTabletSpec{cell: "zone1", uid: 101, tabletType: topodatapb.TabletType_REPLICA, noGR: true},
-			fakeGRTabletSpec{cell: "zone2", uid: 200, tabletType: topodatapb.TabletType_REPLICA},
+			fakeGRTabletSpec{cell: "zone2", uid: 200, tabletType: topodatapb.TabletType_REPLICA, noGR: true},
+			fakeGRTabletSpec{cell: "zone3", uid: 300, tabletType: topodatapb.TabletType_REPLICA},
 		)
-		c.formGroup(t, "group_replication")
+		c.formGroup(t, "group_replication_cross_cell")
 		c.tablets[aliasP].unreachable = true
-		c.groupPrimary = alias101
+		c.groupPrimary = alias200
 		return c, ts
 	}
 	t.Run("the group's primary", func(t *testing.T) {
@@ -478,14 +486,14 @@ func TestEmergencyReparentRefusesGroupPrimaryWithoutGroupReplicationEnabled(t *t
 		erp := NewEmergencyReparenter(ts, c, logutil.NewMemoryLogger())
 		ev, err := erp.ReparentShard(t.Context(), "ks", "-", EmergencyReparentOptions{WaitReplicasTimeout: 30 * time.Second})
 		require.NoError(t, err)
-		assert.Equal(t, alias200, topoproto.TabletAliasString(ev.NewPrimary.Alias))
-		assert.NotContains(t, callsWithPrefix(c.mutatingCalls(), "PromoteReplica"), "PromoteReplica("+alias101+")")
+		assert.Equal(t, alias300, topoproto.TabletAliasString(ev.NewPrimary.Alias))
+		assert.NotContains(t, callsWithPrefix(c.mutatingCalls(), "PromoteReplica"), "PromoteReplica("+alias200+")")
 	})
 	t.Run("a requested primary", func(t *testing.T) {
 		c, ts := newShard(t)
 		erp := NewEmergencyReparenter(ts, c, logutil.NewMemoryLogger())
 		_, err := erp.ReparentShard(t.Context(), "ks", "-", EmergencyReparentOptions{
-			NewPrimaryAlias:     mustAlias(t, alias101),
+			NewPrimaryAlias:     mustAlias(t, alias200),
 			WaitReplicasTimeout: 30 * time.Second,
 		})
 		require.Error(t, err)
@@ -499,8 +507,8 @@ func TestEmergencyReparentRefusesGroupPrimaryWithoutGroupReplicationEnabled(t *t
 // replication shard refuses, before it demotes the primary, a primary-elect whose vttablet does not
 // run Group Replication (FullStatus field 28), although its MySQL is an ONLINE member of the group.
 func TestPlannedReparentRefusesElectWithoutGroupReplicationEnabled(t *testing.T) {
-	c, ts := newFakeGRCluster(t, "group_replication", migrationTestShard()...)
-	c.formGroup(t, "group_replication")
+	c, ts := newFakeGRCluster(t, "group_replication_cross_cell", migrationTestShard()...)
+	c.formGroup(t, "group_replication_cross_cell")
 	c.tablets[alias300].grEnabled = false
 	pr := NewPlannedReparenter(ts, c, logutil.NewMemoryLogger())
 

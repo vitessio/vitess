@@ -607,8 +607,7 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 			Priority:    detectionAnalysisPriorityLow,
 		},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
-			grd, ok := policy.AsGroupReplication(ca.durability)
-			return ok && grd.RequiresCrossCellMajority() && a.LastCheckValid && a.IsGroupPrimary && a.ShardGroupCellMajority != ""
+			return policy.IsGroupReplication(ca.durability) && a.LastCheckValid && a.IsGroupPrimary && a.ShardGroupCellMajority != ""
 		},
 	},
 }

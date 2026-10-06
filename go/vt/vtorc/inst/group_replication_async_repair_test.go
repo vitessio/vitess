@@ -47,7 +47,7 @@ func TestGetDetectionAnalysisGroupReplicationVoterNotRepairedAsync(t *testing.T)
 	voter := grTablet("zone1", 101, topodatapb.TabletType_REPLICA)
 	crossCellReplica := grTablet("zone2", 200, topodatapb.TabletType_REPLICA)
 	nonVoter := grTablet("zone1", 102, topodatapb.TabletType_REPLICA)
-	gr := policy.DurabilityGroupReplication
+	gr := policy.DurabilityGroupReplicationCrossCell
 	const recorded = "1790785744160779"
 	asyncRepairs := []AnalysisCode{
 		NotConnectedToPrimary, ReplicationStopped, ConnectedToWrongPrimary, ReplicaMisconfigured,

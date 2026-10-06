@@ -62,7 +62,7 @@ func TestReconcileStaleTopoPrimaryVoterOfConvertedShard(t *testing.T) {
 	stale.PrimaryTermStartTime = &vttimepb.Time{Seconds: 500}
 	mockTMC := groupReplicationRecoveryTestWithPolicy(t, policy.DurabilitySemiSync, primary, stale)
 	setVoters(t, primary, stale)
-	setShardDurabilityPolicy(t, policy.DurabilityGroupReplication)
+	setShardDurabilityPolicy(t, policy.DurabilityGroupReplicationCrossCell)
 
 	mockTMC.EXPECT().DemotePrimary(gomock.Any(), sameTablet(stale), true).Return(&replicationdatapb.PrimaryStatus{}, nil)
 	mockTMC.EXPECT().SetReplicationSource(gomock.Any(), sameTablet(stale), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
@@ -94,7 +94,7 @@ func TestBootstrapGroupReplicationOfConvertedShard(t *testing.T) {
 	}
 	mockTMC := groupReplicationRecoveryTestWithPolicy(t, policy.DurabilitySemiSync, tablets...)
 	setVoters(t, tablets...)
-	setShardDurabilityPolicy(t, policy.DurabilityGroupReplication)
+	setShardDurabilityPolicy(t, policy.DurabilityGroupReplicationCrossCell)
 	for _, tablet := range tablets {
 		mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(tablet)).Return(&replicationdatapb.FullStatus{
 			PrimaryStatus: &replicationdatapb.PrimaryStatus{Position: "MySQL56/" + groupName + ":1-10"},
@@ -142,7 +142,7 @@ func TestGetShardDurabilityPolicy(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, policy.IsGroupReplication(durability), "a shard without its own policy has the keyspace's")
 
-	setShardDurabilityPolicy(t, policy.DurabilityGroupReplication)
+	setShardDurabilityPolicy(t, policy.DurabilityGroupReplicationCrossCell)
 	durability, err = inst.GetShardDurabilityPolicy("ks", "0")
 	require.NoError(t, err)
 	assert.True(t, policy.IsGroupReplication(durability))
@@ -153,7 +153,7 @@ func TestGetShardDurabilityPolicy(t *testing.T) {
 // record names the target policy, and its migration source applies to a shard that has no policy of
 // its own.
 func TestGetShardDurabilityPolicyMigrationSource(t *testing.T) {
-	groupReplicationRecoveryTestWithPolicy(t, policy.DurabilityGroupReplication)
+	groupReplicationRecoveryTestWithPolicy(t, policy.DurabilityGroupReplicationCrossCell)
 	ki, err := inst.ReadKeyspace("ks")
 	require.NoError(t, err)
 	ki.MigrationSourceDurabilityPolicy = policy.DurabilitySemiSync
@@ -166,7 +166,7 @@ func TestGetShardDurabilityPolicyMigrationSource(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, policy.IsGroupReplication(durability))
 
-	setShardDurabilityPolicy(t, policy.DurabilityGroupReplication)
+	setShardDurabilityPolicy(t, policy.DurabilityGroupReplicationCrossCell)
 	durability, err = inst.GetShardDurabilityPolicy("ks", "0")
 	require.NoError(t, err)
 	assert.True(t, policy.IsGroupReplication(durability), "a converted shard has its own policy")

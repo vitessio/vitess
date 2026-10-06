@@ -35,7 +35,7 @@ import (
 // in the shard's group first, as the tablet's own joins do, and the others after them.
 func TestStartGroupReplicationJoinPrefersActiveSeeds(t *testing.T) {
 	withGroupReplication(t)
-	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplication)
+	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplicationCrossCell)
 	setGroupReplicationVoters(t, ts, 1, 2, 3)
 	addPeerTablets(t, ts, 2, 3)
 	peers := newGRPeersTMC()

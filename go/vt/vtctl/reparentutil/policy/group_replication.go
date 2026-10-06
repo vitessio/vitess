@@ -51,13 +51,16 @@ func (m ReplicationMode) String() string {
 }
 
 const (
-	// DurabilityGroupReplication is the name of the durability policy that uses MySQL Group
-	// Replication. Every PRIMARY and REPLICA tablet is a voting member of the shard's group.
-	DurabilityGroupReplication = "group_replication"
-	// DurabilityGroupReplicationCrossCell is like DurabilityGroupReplication but additionally
-	// requires that no single cell holds a majority of the voting members, so that every
-	// durable transaction exists in at least two cells.
+	// DurabilityGroupReplicationCrossCell is the name of the durability policy that uses MySQL
+	// Group Replication, with one voting member per cell: no cell holds a majority of the voting
+	// members, so that every durable transaction exists in at least two cells. It is the only
+	// group replication policy.
 	DurabilityGroupReplicationCrossCell = "group_replication_cross_cell"
+
+	// MinGroupReplicationCells is the number of cells with an eligible tablet that a shard needs
+	// to run a group: with one voter per cell, a group of fewer voters keeps no majority when one
+	// of them fails.
+	MinGroupReplicationCells = 3
 
 	// MaxGroupReplicationMembers is the maximum number of members MySQL allows in a group.
 	MaxGroupReplicationMembers = 9
@@ -82,12 +85,6 @@ type GroupReplicationDurabler interface {
 	// MemberWeight returns the group_replication_member_weight for the tablet. The group
 	// prefers members with a higher weight when it elects a primary on its own.
 	MemberWeight(tablet *topodatapb.Tablet) int
-	// RequiresCrossCellMajority returns whether a majority of the group must span more
-	// than one cell.
-	RequiresCrossCellMajority() bool
-	// MaxVotersPerCell returns how many voting members a cell may have. 0 means no limit
-	// other than MaxGroupReplicationMembers.
-	MaxVotersPerCell() int
 }
 
 // GetReplicationMode returns the replication mode of the durability policy.
@@ -151,20 +148,15 @@ func CellHoldsMajority(members []*topodatapb.Tablet) (string, bool) {
 }
 
 func init() {
-	RegisterDurability(DurabilityGroupReplication, func() Durabler {
-		return &durabilityGroupReplication{}
-	})
 	RegisterDurability(DurabilityGroupReplicationCrossCell, func() Durabler {
-		return &durabilityGroupReplication{crossCell: true}
+		return &durabilityGroupReplication{}
 	})
 }
 
 // durabilityGroupReplication uses MySQL Group Replication in single-primary mode. PRIMARY and
-// REPLICA tablets are voting members of the group; every other tablet type replicates
-// asynchronously from the group's primary and must never be promoted.
-type durabilityGroupReplication struct {
-	crossCell bool
-}
+// REPLICA tablets may be voting members of the group, one per cell; every other tablet replicates
+// asynchronously from the group's primary, and other tablet types must never be promoted.
+type durabilityGroupReplication struct{}
 
 // PromotionRule implements the Durabler interface.
 func (d *durabilityGroupReplication) PromotionRule(tablet *topodatapb.Tablet) promotionrule.CandidatePromotionRule {
@@ -208,22 +200,6 @@ func (d *durabilityGroupReplication) MemberWeight(tablet *topodatapb.Tablet) int
 	return MemberWeightForPromotionRule(d.PromotionRule(tablet))
 }
 
-// MaxVotersPerCell implements the GroupReplicationDurabler interface. The cross-cell policy
-// allows one voter per cell: every durable transaction then exists in two cells, and the
-// group stays small, which keeps commits fast. Other tablets of a cell replicate
-// asynchronously from the primary.
-func (d *durabilityGroupReplication) MaxVotersPerCell() int {
-	if d.crossCell {
-		return 1
-	}
-	return 0
-}
-
-// RequiresCrossCellMajority implements the GroupReplicationDurabler interface.
-func (d *durabilityGroupReplication) RequiresCrossCellMajority() bool {
-	return d.crossCell
-}
-
 // MemberWeightForPromotionRule maps a promotion rule onto group_replication_member_weight,
 // which ranges from 0 to 100 and defaults to 50.
 func MemberWeightForPromotionRule(rule promotionrule.CandidatePromotionRule) int {
@@ -264,7 +240,8 @@ type VoterCandidate struct {
 //  3. Free slots are filled with eligible, non-failed tablets, preferring a better promotion
 //     rule, then the lowest alias.
 //
-// Cells are limited to MaxVotersPerCell voters and the group to MaxGroupReplicationMembers.
+// A cell has at most one voter: every durable transaction then exists in two cells, and the group
+// stays small, which keeps commits fast. The group has at most MaxGroupReplicationMembers voters.
 // groupPrimary is the alias of the group's primary, if known.
 func SelectVoters(durability GroupReplicationDurabler, current []*topodatapb.TabletAlias, groupPrimary *topodatapb.TabletAlias, candidates []VoterCandidate) []*topodatapb.TabletAlias {
 	byAlias := make(map[string]VoterCandidate, len(candidates))
@@ -283,7 +260,7 @@ func SelectVoters(durability GroupReplicationDurabler, current []*topodatapb.Tab
 		if chosen[alias] || len(voters) >= MaxGroupReplicationMembers {
 			return
 		}
-		if limit := durability.MaxVotersPerCell(); limit > 0 && perCell[c.Tablet.Alias.Cell] >= limit {
+		if perCell[c.Tablet.Alias.Cell] >= 1 {
 			return
 		}
 		chosen[alias] = true

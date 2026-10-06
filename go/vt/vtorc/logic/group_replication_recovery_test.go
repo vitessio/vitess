@@ -241,7 +241,7 @@ func cutOffCell(t *testing.T, cell string) {
 // groupReplicationRecoveryTest sets up the VTOrc backend, a memory topology and a mock tablet
 // manager client for a group replication recovery on shard ks/0.
 func groupReplicationRecoveryTest(t *testing.T, tablets ...*topodatapb.Tablet) *tmcmock.MockTabletManagerClient {
-	return groupReplicationRecoveryTestWithPolicy(t, policy.DurabilityGroupReplication, tablets...)
+	return groupReplicationRecoveryTestWithPolicy(t, policy.DurabilityGroupReplicationCrossCell, tablets...)
 }
 
 // groupReplicationRecoveryTestWithPolicy is groupReplicationRecoveryTest with the given

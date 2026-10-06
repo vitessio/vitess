@@ -66,26 +66,26 @@ func TestEndPrimaryTermOnInactiveGroupReplicationMember(t *testing.T) {
 		wantSource string
 	}{{
 		name:       "group replication policy, MySQL in the ERROR state",
-		durability: policy.DurabilityGroupReplication,
+		durability: policy.DurabilityGroupReplicationCrossCell,
 		state:      mysql.GroupMemberStateError,
 	}, {
 		name:       "group replication policy, MySQL not in a group",
-		durability: policy.DurabilityGroupReplication,
+		durability: policy.DurabilityGroupReplicationCrossCell,
 		state:      mysql.GroupMemberStateOffline,
 	}, {
 		name:       "group replication policy, a voter",
-		durability: policy.DurabilityGroupReplication,
+		durability: policy.DurabilityGroupReplicationCrossCell,
 		state:      mysql.GroupMemberStateError,
 		voters:     []uint32{1, 2, 3},
 	}, {
 		name:       "group replication policy, a tablet that is not a voter",
-		durability: policy.DurabilityGroupReplication,
+		durability: policy.DurabilityGroupReplicationCrossCell,
 		state:      mysql.GroupMemberStateOffline,
 		voters:     []uint32{2, 3, 4},
 		wantSource: "mysql2:3306",
 	}, {
 		name:          "a policy that the tablet cannot resolve",
-		durability:    policy.DurabilityGroupReplication,
+		durability:    policy.DurabilityGroupReplicationCrossCell,
 		state:         mysql.GroupMemberStateOffline,
 		voters:        []uint32{2, 3, 4},
 		unknownPolicy: true,

@@ -96,7 +96,7 @@ func TestRestoreReplicationAfterBackupOnGroupMember(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			withGroupReplication(t)
 			ctx := t.Context()
-			ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplication)
+			ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplicationCrossCell)
 			addPeerTablets(t, ts, 2)
 			var mu sync.Mutex
 			sourceSet := false

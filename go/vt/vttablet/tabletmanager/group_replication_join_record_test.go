@@ -40,7 +40,7 @@ import (
 func TestGroupReplicationJoinWaitsForRecordedIncarnation(t *testing.T) {
 	withGroupReplication(t)
 	ctx := t.Context()
-	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplication)
+	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplicationCrossCell)
 	setGroupReplicationVoters(t, ts, 1, 2, 3)
 	addPeerTablets(t, ts, 2, 3)
 	// VTOrc's bootstrap on tablet 2 formed incarnation 1780000001, not recorded yet.

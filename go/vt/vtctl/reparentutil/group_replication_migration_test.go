@@ -125,30 +125,35 @@ func TestMigrateReplicationModeToGroupReplication(t *testing.T) {
 	assert.Contains(t, c.queries[1], "'_vt'")
 }
 
-// TestMigrateReplicationModeDefersLastAcker checks that the only semi-sync acker does not
-// join the group before the group has two ONLINE members: with cross_cell semi-sync, the
-// zone2 replica is the only acker, so the zone1 replicas join first even though cross-cell
-// replicas are preferred.
+// TestMigrateReplicationModeDefersLastAcker checks that the last semi-sync acker does not join the
+// group before the group has two ONLINE members: with cross_cell semi-sync, the voters of zone2 and
+// zone3 are the only ackers (the zone1 replica is in the primary's cell), so the second of them to
+// join waits until the primary disabled semi-sync, which it does once the first one is ONLINE.
 func TestMigrateReplicationModeDefersLastAcker(t *testing.T) {
 	c, ts := newFakeGRCluster(t, "cross_cell",
 		fakeGRTabletSpec{cell: "zone1", uid: 100, tabletType: topodatapb.TabletType_PRIMARY},
 		fakeGRTabletSpec{cell: "zone1", uid: 101, tabletType: topodatapb.TabletType_REPLICA},
-		fakeGRTabletSpec{cell: "zone1", uid: 102, tabletType: topodatapb.TabletType_REPLICA},
 		fakeGRTabletSpec{cell: "zone2", uid: 200, tabletType: topodatapb.TabletType_REPLICA},
+		fakeGRTabletSpec{cell: "zone3", uid: 300, tabletType: topodatapb.TabletType_REPLICA},
 	)
 	require.True(t, c.tablet(alias200).semiSyncReplica)
+	require.True(t, c.tablet(alias300).semiSyncReplica)
 	require.False(t, c.tablet(alias101).semiSyncReplica)
 	m := newTestMigrator(c, ts)
 
-	_, err := migrate(t, m, "group_replication", false)
+	resp, err := migrate(t, m, "group_replication_cross_cell", false)
 	require.NoError(t, err)
 	assert.Empty(t, c.violationsSoFar())
 	assert.Equal(t, []string{
 		"StartGroupReplication(" + aliasP + ", bootstrap)",
-		"StartGroupReplication(" + alias101 + ")",
 		"StartGroupReplication(" + alias200 + ")",
-		"StartGroupReplication(" + alias102 + ")",
+		"StartGroupReplication(" + alias300 + ")",
 	}, callsWithPrefix(c.mutatingCalls(), "StartGroupReplication"))
+	steps := resp.Shards[0].Steps
+	waitIdx := stepIndex(steps, MigrationActionWaitSemiSyncDisabled, aliasP)
+	require.GreaterOrEqual(t, waitIdx, 0)
+	assert.Less(t, stepIndex(steps, MigrationActionJoinGroup, alias200), waitIdx)
+	assert.Less(t, waitIdx, stepIndex(steps, MigrationActionJoinGroup, alias300), "the last acker joins once semi-sync is disabled")
 }
 
 // oneCellTwoReplicasShard is a primary in zone1, two replicas in zone2 and one in zone3.
@@ -207,7 +212,7 @@ func TestMigrateReplicationModeDryRun(t *testing.T) {
 	c, ts := newFakeGRCluster(t, "semi_sync", migrationTestShard()...)
 	m := newTestMigrator(c, ts)
 
-	resp, err := migrate(t, m, "group_replication", true)
+	resp, err := migrate(t, m, "group_replication_cross_cell", true)
 	require.NoError(t, err)
 	assert.Empty(t, c.mutatingCalls())
 	assert.Equal(t, "semi_sync", keyspaceDurability(t, ts))
@@ -217,9 +222,10 @@ func TestMigrateReplicationModeDryRun(t *testing.T) {
 	assert.Equal(t, MigrationStepPlanned, statuses[MigrationActionBootstrapGroup+" "+aliasP])
 	assert.Equal(t, MigrationStepPlanned, statuses[MigrationActionSetVoters])
 	assert.Empty(t, c.voters(t))
-	for _, alias := range []string{alias101, alias200, alias300} {
+	for _, alias := range []string{alias200, alias300} {
 		assert.Equal(t, MigrationStepPlanned, statuses[MigrationActionJoinGroup+" "+alias], alias)
 	}
+	assert.Empty(t, statuses[MigrationActionJoinGroup+" "+alias101], "zone1's other replica is not a voter")
 	assert.Equal(t, MigrationStepPlanned, statuses[MigrationActionWaitSemiSyncDisabled+" "+aliasP])
 	assert.Equal(t, MigrationStepPlanned, stepStatuses(resp.KeyspaceSteps)[MigrationActionSetDurabilityPolicy])
 }
@@ -231,7 +237,7 @@ func TestMigrateReplicationModeResumes(t *testing.T) {
 	m := newTestMigrator(c, ts)
 	c.failOnce["StartGroupReplication("+alias300+")"] = true
 
-	_, err := migrate(t, m, "group_replication", false)
+	_, err := migrate(t, m, "group_replication_cross_cell", false)
 	require.Error(t, err)
 	require.ErrorContains(t, err, alias300)
 	assert.Equal(t, "semi_sync", shardDurability(t, ts, "-"), "the shard's policy must not change before the shard is converted")
@@ -240,20 +246,19 @@ func TestMigrateReplicationModeResumes(t *testing.T) {
 	assert.False(t, c.tablet(alias300).member)
 
 	c.reset()
-	resp, err := migrate(t, m, "group_replication", false)
+	resp, err := migrate(t, m, "group_replication_cross_cell", false)
 	require.NoError(t, err)
 	assert.Empty(t, c.violationsSoFar())
 	assert.Equal(t, []string{
 		"StartGroupReplication(" + alias300 + ")",
-		"StartGroupReplication(" + alias101 + ")",
 	}, callsWithPrefix(c.mutatingCalls(), "StartGroupReplication"))
 	statuses := stepStatuses(resp.Shards[0].Steps)
 	assert.Equal(t, MigrationStepSkipped, statuses[MigrationActionBootstrapGroup+" "+aliasP])
 	assert.Equal(t, MigrationStepSkipped, statuses[MigrationActionJoinGroup+" "+alias200])
-	assert.Equal(t, "group_replication", keyspaceDurability(t, ts))
+	assert.Equal(t, "group_replication_cross_cell", keyspaceDurability(t, ts))
 
 	c.reset()
-	resp, err = migrate(t, m, "group_replication", false)
+	resp, err = migrate(t, m, "group_replication_cross_cell", false)
 	require.NoError(t, err)
 	assert.Empty(t, c.mutatingCalls())
 	for _, step := range resp.Shards[0].Steps {
@@ -276,14 +281,14 @@ func TestMigrateReplicationModePreflight(t *testing.T) {
 	}{
 		{
 			name:       "table without primary key",
-			durability: "group_replication",
+			durability: "group_replication_cross_cell",
 			specs:      migrationTestShard(),
 			setup:      func(c *fakeGRCluster) { c.schemaRows = []string{"app|nopk|InnoDB", "app|legacy|MyISAM"} },
 			errContain: "app.nopk has no primary key",
 		},
 		{
 			name:       "voting tablet without group replication support",
-			durability: "group_replication",
+			durability: "group_replication_cross_cell",
 			specs: []fakeGRTabletSpec{
 				{cell: "zone1", uid: 100, tabletType: topodatapb.TabletType_PRIMARY},
 				{cell: "zone2", uid: 200, tabletType: topodatapb.TabletType_REPLICA, noGR: true},
@@ -293,7 +298,7 @@ func TestMigrateReplicationModePreflight(t *testing.T) {
 		},
 		{
 			name:       "too few voting members",
-			durability: "group_replication",
+			durability: "group_replication_cross_cell",
 			specs: []fakeGRTabletSpec{
 				{cell: "zone1", uid: 100, tabletType: topodatapb.TabletType_PRIMARY},
 				{cell: "zone2", uid: 200, tabletType: topodatapb.TabletType_REPLICA},
@@ -302,7 +307,7 @@ func TestMigrateReplicationModePreflight(t *testing.T) {
 			errContain: "the group would have 2 voting members",
 		},
 		{
-			name:       "fewer than three cells with cross-cell policy",
+			name:       "fewer than three cells with an eligible tablet",
 			durability: "group_replication_cross_cell",
 			specs: []fakeGRTabletSpec{
 				{cell: "zone1", uid: 100, tabletType: topodatapb.TabletType_PRIMARY},
@@ -310,19 +315,19 @@ func TestMigrateReplicationModePreflight(t *testing.T) {
 				{cell: "zone2", uid: 200, tabletType: topodatapb.TabletType_REPLICA},
 				{cell: "zone2", uid: 201, tabletType: topodatapb.TabletType_REPLICA},
 			},
-			errContain: "the group would have 2 voting members (zone1-0000000100, zone2-0000000200) in cells zone1, zone2; at least 3 are required; " +
-				"group_replication_cross_cell allows one voter per cell",
+			errContain: "the group would have 2 voting members (zone1-0000000100, zone2-0000000200) in cells zone1, zone2; at least 3 are required, and " +
+				"group_replication_cross_cell allows one voter per cell, so the shard needs eligible PRIMARY or REPLICA tablets in at least 3 cells",
 		},
 		{
 			name:       "old MySQL version",
-			durability: "group_replication",
+			durability: "group_replication_cross_cell",
 			specs:      migrationTestShard(),
 			setup:      func(c *fakeGRCluster) { c.tablets[alias200].version = "8.0.26" },
 			errContain: `zone2-0000000200: MySQL version "8.0.26"`,
 		},
 		{
 			name:       "unreachable tablet",
-			durability: "group_replication",
+			durability: "group_replication_cross_cell",
 			specs:      migrationTestShard(),
 			setup:      func(c *fakeGRCluster) { c.tablets[alias300].unreachable = true },
 			errContain: "every tablet of shard ks/- must be reachable",
@@ -346,7 +351,7 @@ func TestMigrateReplicationModePreflight(t *testing.T) {
 	t.Run("error code", func(t *testing.T) {
 		c, ts := newFakeGRCluster(t, "semi_sync", migrationTestShard()...)
 		c.schemaRows = []string{"app|nopk|InnoDB"}
-		_, err := migrate(t, newTestMigrator(c, ts), "group_replication", false)
+		_, err := migrate(t, newTestMigrator(c, ts), "group_replication_cross_cell", false)
 		assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
 	})
 }
@@ -357,10 +362,10 @@ func TestMigrateReplicationModePreflight(t *testing.T) {
 // last and becomes writable, and the voters are removed from the shard record. Running it
 // again changes nothing.
 func TestMigrateReplicationModeFromGroupReplication(t *testing.T) {
-	c, ts := newFakeGRCluster(t, "group_replication", migrationTestShard()...)
-	c.formGroup(t, "group_replication")
+	c, ts := newFakeGRCluster(t, "group_replication_cross_cell", migrationTestShard()...)
+	c.formGroup(t, "group_replication_cross_cell")
 	c.setIncarnation(t, "1790000000")
-	require.Equal(t, []string{aliasP, alias101, alias200, alias300}, c.voters(t))
+	require.Equal(t, []string{aliasP, alias200, alias300}, c.voters(t))
 	m := newTestMigrator(c, ts)
 
 	resp, err := migrate(t, m, "semi_sync", false)
@@ -378,8 +383,8 @@ func TestMigrateReplicationModeFromGroupReplication(t *testing.T) {
 	assert.Empty(t, c.shardPolicy(t))
 
 	stops := callsWithPrefix(c.mutatingCalls(), "StopGroupReplication")
-	require.Len(t, stops, 4)
-	assert.Equal(t, "StopGroupReplication("+aliasP+")", stops[3], "the primary must leave last")
+	require.Len(t, stops, 3)
+	assert.Equal(t, "StopGroupReplication("+aliasP+")", stops[2], "the primary must leave last")
 	for _, alias := range []string{alias101, alias200, alias300} {
 		ft := c.tablet(alias)
 		assert.False(t, ft.member, alias)
@@ -403,14 +408,14 @@ func TestMigrateReplicationModeFromGroupReplication(t *testing.T) {
 // TestMigrateReplicationModeFromGroupReplicationDryRun checks that a dry run of the reverse
 // migration changes neither the policy nor the group.
 func TestMigrateReplicationModeFromGroupReplicationDryRun(t *testing.T) {
-	c, ts := newFakeGRCluster(t, "group_replication", migrationTestShard()...)
-	c.formGroup(t, "group_replication")
+	c, ts := newFakeGRCluster(t, "group_replication_cross_cell", migrationTestShard()...)
+	c.formGroup(t, "group_replication_cross_cell")
 	m := newTestMigrator(c, ts)
 
 	resp, err := migrate(t, m, "semi_sync", true)
 	require.NoError(t, err)
 	assert.Empty(t, c.mutatingCalls())
-	assert.Equal(t, "group_replication", keyspaceDurability(t, ts))
+	assert.Equal(t, "group_replication_cross_cell", keyspaceDurability(t, ts))
 	statuses := stepStatuses(resp.Shards[0].Steps)
 	assert.Equal(t, MigrationStepPlanned, statuses[MigrationActionLeaveGroup+" "+aliasP])
 	assert.Equal(t, MigrationStepPlanned, statuses[MigrationActionClearVoters])

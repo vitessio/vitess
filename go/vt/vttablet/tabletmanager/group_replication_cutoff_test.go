@@ -175,7 +175,7 @@ func newCutOffTestTM(t *testing.T) (*TabletManager, *mysqlctl.FakeMysqlDaemon, *
 	ts, err := topo.NewWithFactory(f, "", "")
 	require.NoError(t, err)
 	t.Cleanup(ts.Close)
-	require.NoError(t, ts.CreateKeyspace(ctx, "ks", &topodatapb.Keyspace{DurabilityPolicy: policy.DurabilityGroupReplication}))
+	require.NoError(t, ts.CreateKeyspace(ctx, "ks", &topodatapb.Keyspace{DurabilityPolicy: policy.DurabilityGroupReplicationCrossCell}))
 	setGroupReplicationVoters(t, ts, 1, 2, 3)
 	setGroupReplicationIncarnation(t, ts, "1780000001")
 	addPeerTablets(t, ts, 2, 3)

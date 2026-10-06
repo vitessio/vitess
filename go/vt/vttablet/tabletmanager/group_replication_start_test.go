@@ -152,7 +152,7 @@ func TestBootstrapGivesUpOnStartInProgress(t *testing.T) {
 // first, and a join would hold its action lock for up to a minute meanwhile. A REPLICA joins.
 func TestStartGroupReplicationRefusesJoinOnPrimary(t *testing.T) {
 	withGroupReplication(t)
-	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplication)
+	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplicationCrossCell)
 	setGroupReplicationVoters(t, ts, 1, 2, 3)
 	tm, fmd := newGroupReplicationTestTM(t, ts, 1, func(fmd *mysqlctl.FakeMysqlDaemon) {
 		fmd.StartGroupReplicationError = errors.New("no seed reachable")
@@ -179,7 +179,7 @@ func TestStartGroupReplicationRefusesJoinOnPrimary(t *testing.T) {
 // the tablet's own joins and bootstraps, which MySQL does not list before the START is sent.
 func TestFullStatusReportsStartInProgress(t *testing.T) {
 	withGroupReplication(t)
-	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplication)
+	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplicationCrossCell)
 	tm, fmd := newGroupReplicationTestTM(t, ts, 1, func(fmd *mysqlctl.FakeMysqlDaemon) {
 		fmd.FullStatusData = &replicationdatapb.FullStatus{}
 	})
@@ -210,7 +210,7 @@ func TestFullStatusReportsStartInProgress(t *testing.T) {
 // client gave up: MySQL refuses the new one, and the configuration that precedes it, until it ends.
 func TestGroupReplicationSyncDoesNotRejoinWhileStartInProgress(t *testing.T) {
 	withGroupReplication(t)
-	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplication)
+	ts := newGroupReplicationTopo(t, policy.DurabilityGroupReplicationCrossCell)
 	setGroupReplicationVoters(t, ts, 1, 2)
 	// The shard record lists the incarnation of the group the peer is active in.
 	setGroupReplicationIncarnation(t, ts, "1780000001")

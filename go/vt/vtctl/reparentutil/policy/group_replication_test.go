@@ -30,8 +30,14 @@ func tablet(cell string, uid uint32, typ topodatapb.TabletType) *topodatapb.Tabl
 	return &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: cell, Uid: uid}, Type: typ}
 }
 
+// TestGroupReplicationDurability checks the one group replication policy, group_replication_cross_cell,
+// and that the policy with any number of voters per cell, group_replication, is not registered.
 func TestGroupReplicationDurability(t *testing.T) {
-	for _, name := range []string{DurabilityGroupReplication, DurabilityGroupReplicationCrossCell} {
+	_, err := GetDurabilityPolicy("group_replication")
+	require.Error(t, err, "only group_replication_cross_cell remains")
+	assert.False(t, CheckDurabilityPolicyExists("group_replication"))
+
+	for _, name := range []string{DurabilityGroupReplicationCrossCell} {
 		t.Run(name, func(t *testing.T) {
 			durability, err := GetDurabilityPolicy(name)
 			require.NoError(t, err)
@@ -52,7 +58,6 @@ func TestGroupReplicationDurability(t *testing.T) {
 			require.True(t, ok)
 			assert.Equal(t, 50, grd.MemberWeight(replica))
 			assert.Equal(t, 0, grd.MemberWeight(rdonly))
-			assert.Equal(t, name == DurabilityGroupReplicationCrossCell, grd.RequiresCrossCellMajority())
 		})
 	}
 }
@@ -103,9 +108,6 @@ func TestSelectVoters(t *testing.T) {
 	crossCell, err := GetDurabilityPolicy(DurabilityGroupReplicationCrossCell)
 	require.NoError(t, err)
 	grCrossCell, _ := AsGroupReplication(crossCell)
-	plain, err := GetDurabilityPolicy(DurabilityGroupReplication)
-	require.NoError(t, err)
-	grPlain, _ := AsGroupReplication(plain)
 
 	z1a := tablet("zone1", 101, topodatapb.TabletType_PRIMARY)
 	z1b := tablet("zone1", 102, topodatapb.TabletType_REPLICA)
@@ -130,9 +132,9 @@ func TestSelectVoters(t *testing.T) {
 		assert.Equal(t, aliases(z1a, z2a, z3a), voters)
 	})
 
-	t.Run("the plain policy takes every eligible tablet", func(t *testing.T) {
-		voters := SelectVoters(grPlain, nil, nil, all(nil))
-		assert.Equal(t, aliases(z1a, z1b, z2a, z2b, z3a), voters)
+	t.Run("a list with two voters in a cell keeps one", func(t *testing.T) {
+		voters := SelectVoters(grCrossCell, aliases(z1a, z1b, z2a), nil, all(nil))
+		assert.Equal(t, aliases(z1a, z2a, z3a), voters)
 	})
 
 	t.Run("current voters are kept although a lower alias exists", func(t *testing.T) {

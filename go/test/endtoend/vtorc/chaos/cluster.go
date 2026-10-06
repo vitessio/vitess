@@ -310,10 +310,11 @@ func NewChaos(t *testing.T, name string, opts Options) *Chaos {
 }
 
 // GRMode reports whether the scenarios run with MySQL Group Replication:
-// CHAOS_DURABILITY=group_replication_cross_cell (or group_replication). The cluster is set up
-// with cross_cell semi-sync as usual and then converted online with MigrateReplicationMode.
+// CHAOS_DURABILITY=group_replication_cross_cell, the only group replication policy, with one voter
+// in each of the three cells. The cluster is set up with cross_cell semi-sync as usual and then
+// converted online with MigrateReplicationMode.
 func GRMode() bool {
-	return strings.HasPrefix(os.Getenv("CHAOS_DURABILITY"), "group_replication")
+	return os.Getenv("CHAOS_DURABILITY") == "group_replication_cross_cell"
 }
 
 // migrateToGroupReplication converts the running semi-sync shard to Group Replication and
