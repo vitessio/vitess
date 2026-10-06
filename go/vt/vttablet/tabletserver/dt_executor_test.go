@@ -308,6 +308,27 @@ func TestTxExecutorRollbackRedoFail(t *testing.T) {
 	require.Contains(t, err.Error(), "is not supported")
 }
 
+// TestTxExecutorRollbackRedoFailKeepsPrepared verifies that a RollbackPrepared
+// whose redo log deletion fails keeps the prepared transaction and its row
+// locks, since the redo log would prepare it again on the next redo. A retry
+// that deletes the redo log then rolls the transaction back.
+func TestTxExecutorRollbackRedoFailKeepsPrepared(t *testing.T) {
+	ctx := t.Context()
+	txe, tsv, db, closer := newTestTxExecutor(t, ctx)
+	t.Cleanup(closer)
+	txid := newTxForPrep(ctx, tsv)
+	require.NoError(t, txe.Prepare(txid, "aa"))
+
+	db.AddRejectedQuery("delete from _vt.redo_state where dtid = _binary'aa'", errors.New("delete redo log fail"))
+	err := txe.RollbackPrepared("aa", txid)
+	require.ErrorContains(t, err, "delete redo log fail")
+	require.Contains(t, tsv.te.preparedPool.conns, "aa", "the prepared transaction must be kept while its redo log exists")
+
+	db.DeleteRejectedQuery("delete from _vt.redo_state where dtid = _binary'aa'")
+	require.NoError(t, txe.RollbackPrepared("aa", 0))
+	require.Empty(t, tsv.te.preparedPool.conns)
+}
+
 func TestExecutorCreateTransaction(t *testing.T) {
 	ctx := t.Context()
 	txe, _, db, closer := newTestTxExecutor(t, ctx)

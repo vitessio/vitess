@@ -96,6 +96,9 @@ type TxEngine struct {
 	preparedPool *TxPreparedPool
 	twoPC        *TwoPC
 	dxNotify     func()
+
+	// dtidLocks serializes the 2PC operations on each distributed transaction.
+	dtidLocks *dtidLocks
 }
 
 // TwoPC can be disallowed for various reasons. These are the reasons we keep track off
@@ -139,6 +142,7 @@ func NewTxEngine(env tabletenv.Env, dxNotifier func()) *TxEngine {
 	// the system can deadlock if all connections get moved to
 	// the TxPreparedPool.
 	te.preparedPool = NewTxPreparedPool(config.TxPool.Size-2, te.twopcEnabled)
+	te.dtidLocks = newDTIDLocks()
 	readPool := connpool.NewPool(env, "TxReadPool", tabletenv.ConnPoolConfig{
 		Size:        3,
 		IdleTimeout: env.Config().TxPool.IdleTimeout,

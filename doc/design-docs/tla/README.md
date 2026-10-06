@@ -47,19 +47,37 @@ Download `tla2tools.jar` from the [TLA+ releases](https://github.com/tlaplus/tla
 java -XX:+UseParallelGC -cp tla2tools.jar tlc2.TLC -workers auto -config MCTwoPC.cfg MCTwoPC.tla
 ```
 
+The constants `FixRedoPending`, `FixDTIDLock` and `FixKeepLocks` switch the
+fixes below on or off, so that each config without one shows the problem it
+fixes. `RetryableLockLoss` allows the retryable failures that still release
+row locks (see the last finding).
+
 | Config | Bounds | Expected result |
 |---|---|---|
-| `MCTwoPC.cfg` | 2 RMs, 1 restart, 1 resolution | Atomicity holds (2.3M states, about 1 minute on 4 cores) |
-| `MCTwoPCLarge.cfg` | 2 RMs, 1 restart, 2 resolutions | Atomicity holds (25M states, about 10 minutes on 4 cores) |
-| `MCTwoPCDeep.cfg` | 1 RM, 2 resolvers, 2 restarts, 2 resolutions | Atomicity holds (2.1M states) |
-| `MCTwoPCNoRedoFix.cfg` | as Deep, without the redo-pending fix | `NoLostCommit` is violated |
-| `MCTwoPCOrphan.cfg` | as Deep, no non-retryable failures | `NoOrphanPrepare` is violated |
-| `MCTwoPCLocks.cfg` | as Orphan | `LocksHeld` is violated |
+| `MCTwoPC.cfg` | 2 RMs, 1 restart, 1 resolution | Invariants hold (566K states, under a minute on 4 cores) |
+| `MCTwoPCLarge.cfg` | 2 RMs, 2 restarts, 2 resolutions | Invariants hold (6.7M states, about 2.5 minutes on 4 cores) |
+| `MCTwoPCDeep.cfg` | 1 RM, 2 resolvers, 2 restarts, 2 resolutions | Invariants hold (973K states) |
+| `MCTwoPCLocks.cfg` | as Deep, `RetryableLockLoss = FALSE` | Invariants hold, including `LocksHeld` |
+| `MCTwoPCNoRedoFix.cfg` | as Deep, `FixRedoPending = FALSE` | `NoLostCommit` is violated |
+| `MCTwoPCNoDTIDLock.cfg` | as Deep, `FixDTIDLock = FALSE` | `NoOrphanPrepare` is violated |
+| `MCTwoPCNoKeepLocks.cfg` | as Locks, `FixKeepLocks = FALSE` | `LocksHeld` is violated |
+| `MCTwoPCLockLoss.cfg` | as Deep | `LocksHeld` is violated |
 
-The atomicity configs check `CommitNeedsDecision`, `DecisionConsistent`,
-`CommitDurable` and `NoLostCommit`. The state space grows quickly with the
-bounds: with two RMs, each further resolution attempt multiplies it by about
-ten, so larger bounds call for a single RM or a longer run.
+The first three configs check `CommitNeedsDecision`, `DecisionConsistent`,
+`CommitDurable`, `NoLostCommit` and `NoOrphanPrepare`. The state space grows
+quickly with the bounds: with two RMs, each further resolution attempt
+multiplies it, so larger bounds call for a single RM or a longer run.
+
+### Assumptions
+
+- Semi-sync replication: a commit acknowledged by a primary survives a
+  reparent, so a reparent is modeled as a tablet restart.
+- The abandon age (`--twopc-abandon-age`, 15 minutes by default) is longer than
+  the transaction timeout (`--queryserver-config-transaction-timeout`, 30
+  seconds by default). A resolver therefore acts only after the transaction
+  killer has rolled back every unprepared participant, so a Prepare that
+  arrives late cannot prepare a transaction that a resolver already rolled
+  back. With a shorter abandon age this is not guaranteed.
 
 ## Findings
 
@@ -77,32 +95,49 @@ Found by reading the code and confirmed by `MCTwoPCNoRedoFix.cfg`:
 
 `prepareFromRedo` now reserves the DTID with a redo-pending error, so
 `CommitPrepared` fails until a later redo prepares the transaction again.
-The tests are `TestTabletServerCommitPreparedAfterRetryableRedoFailure` and
+Tests: `TestTabletServerCommitPreparedAfterRetryableRedoFailure` and
 `TestPrepRedoPending`.
 
-### Orphaned prepared transaction after a timed-out Prepare (open)
+### Orphaned prepared transaction after a timed-out Prepare (fixed)
 
-`MCTwoPCOrphan.cfg` finds this interleaving:
+Found by the model and confirmed by `MCTwoPCNoDTIDLock.cfg`:
 
 1. Prepare puts the connection in the prepared pool.
 2. The coordinator times out on Prepare, sets the record to ROLLBACK and sends
    RollbackPrepared.
 3. RollbackPrepared deletes the redo log, which does not exist yet.
 4. The timed-out Prepare saves the redo log.
-5. RollbackPrepared's deferred step rolls back the pooled connection.
+5. RollbackPrepared rolls back the pooled connection.
 6. The record is concluded.
 
-The redo log is left prepared with nothing to resolve it. The next redo
-prepares it again, and it holds its row locks until an operator concludes it.
-It is reported by the `Unresolved` `ResourceManager` gauge.
+The redo log was left prepared with nothing to resolve it. The next redo
+prepared it again, and it held its row locks until an operator concluded it.
 
-This needs Prepare to save its redo log after its caller timed out, which the
-cancelled RPC context makes unlikely. It does not break atomicity.
+Prepare, CommitPrepared and RollbackPrepared now take a per-DTID lock on the
+tablet (`dtidLocks`), so a RollbackPrepared waits for a running Prepare.
+Tests: `TestTabletServerRollbackPreparedWaitsForPrepare` and `TestDTIDLocks`.
 
-### Unlocked rows behind a prepared redo log (accepted by design)
+### Released locks after a failed redo log deletion (fixed)
 
-`MCTwoPCLocks.cfg` shows that a serving RM can have a prepared redo log with no
-connection holding its locks, for example after a retryable redo failure or a
-retryable `CommitPrepared` failure. Other transactions can then change the rows
-before the redo is applied. The design accepts this for availability and
-alerts on it (see "Data Guarantees" in the design document).
+Found by the model and confirmed by `MCTwoPCNoKeepLocks.cfg`: when
+RollbackPrepared failed to delete the redo log, it still rolled back the
+prepared connection. Other transactions could then change the rows, and the
+next redo prepared the transaction again over them.
+
+RollbackPrepared now keeps the prepared transaction when the deletion fails,
+and the retry releases it. Test: `TestTxExecutorRollbackRedoFailKeepsPrepared`.
+
+### Released locks after retryable redo and commit failures (open)
+
+`MCTwoPCLockLoss.cfg` shows that a serving RM can still have a prepared redo
+log with no connection holding its row locks:
+
+- A redo that fails with a retryable error: the tablet starts serving anyway,
+  and the transaction is prepared again only by a later redo.
+- A `CommitPrepared` whose commit fails with a retryable error without being
+  applied: the connection is rolled back and the redo log stays prepared.
+
+Other transactions can change the rows in the meantime, and the later redo
+applies the statements over them. The design accepts this for availability
+and alerts on it (see "Data Guarantees" in the design document).
+`MCTwoPCLocks.cfg` checks that no other path releases the locks.

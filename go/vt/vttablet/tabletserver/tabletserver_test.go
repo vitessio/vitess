@@ -357,6 +357,63 @@ func TestTabletServerCommitPreparedAfterRetryableRedoFailure(t *testing.T) {
 	require.Empty(t, tsv.te.preparedPool.reserved)
 }
 
+// TestTabletServerRollbackPreparedWaitsForPrepare verifies that a
+// RollbackPrepared that arrives while a Prepare for the same DTID is saving
+// its redo log waits for the Prepare to finish. If it ran in between, it would
+// delete the redo log before it was saved and roll back the pooled connection,
+// leaving a prepared redo log that nothing resolves.
+func TestTabletServerRollbackPreparedWaitsForPrepare(t *testing.T) {
+	ctx := t.Context()
+	_, tsv, db, closer := newTestTxExecutor(t, ctx)
+	t.Cleanup(closer)
+	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
+
+	var mu sync.Mutex
+	var redoEvents []string
+	recordRedoEvent := func(event string) {
+		mu.Lock()
+		defer mu.Unlock()
+		redoEvents = append(redoEvents, event)
+	}
+	saving := make(chan struct{})
+	release := make(chan struct{})
+	db.AddQueryPatternWithCallback("insert into _vt\\.redo_state\\(dtid, state, time_created\\) values \\(_binary'aa', 1,.*", &sqltypes.Result{}, func(string) {
+		close(saving)
+		<-release
+		recordRedoEvent("save")
+	})
+	db.SetBeforeFunc("delete from _vt.redo_state where dtid = _binary'aa'", func() {
+		recordRedoEvent("delete")
+	})
+
+	txid := newTxForPrep(ctx, tsv)
+	prepareErr := make(chan error, 1)
+	go func() {
+		prepareErr <- tsv.Prepare(ctx, &target, txid, "aa")
+	}()
+	select {
+	case <-saving:
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "Prepare did not start saving its redo log")
+	}
+
+	rollbackErr := make(chan error, 1)
+	go func() {
+		rollbackErr <- tsv.RollbackPrepared(ctx, &target, "aa", txid)
+	}()
+	require.Eventually(t, func() bool {
+		return len(rollbackErr) > 0 || tsv.te.dtidLocks.waiting("aa") > 0
+	}, 30*time.Second, 10*time.Millisecond, "RollbackPrepared should either finish or wait for the Prepare")
+	close(release)
+
+	require.NoError(t, <-prepareErr)
+	require.NoError(t, <-rollbackErr)
+	mu.Lock()
+	defer mu.Unlock()
+	assert.Equal(t, []string{"save", "delete"}, redoEvents, "the redo log must be deleted after it is saved")
+	assert.Empty(t, tsv.te.preparedPool.conns)
+}
+
 func TestTabletServerCreateTransaction(t *testing.T) {
 	ctx := t.Context()
 	_, tsv, db, closer := newTestTxExecutor(t, ctx)

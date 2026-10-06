@@ -46,12 +46,16 @@ CONSTANTS
     Resolvers,      \* VTGates that resolve the transaction from the MM record
     MaxCrashes,     \* bound on the number of tablet restarts
     MaxResolves,    \* bound on the number of resolution attempts
-    RedoPendingFix, \* TRUE: a retryable redo failure reserves the DTID in the prepared pool
-    NonRetryable    \* TRUE: commits and redos may fail with non-retryable errors
+    FixRedoPending,   \* TRUE: a retryable redo failure reserves the DTID in the prepared pool
+    FixDTIDLock,      \* TRUE: Prepare, CommitPrepared and RollbackPrepared on a DTID are serialized
+    FixKeepLocks,     \* TRUE: RollbackPrepared keeps the prepared transaction if the redo log is not deleted
+    NonRetryable,     \* TRUE: commits and redos may fail with non-retryable errors
+    RetryableLockLoss \* TRUE: redos and commits may fail with retryable errors that release the row locks
 
 ASSUME MM \notin RMs /\ RMs # {}
 ASSUME MaxCrashes \in Nat /\ MaxResolves \in Nat
-ASSUME RedoPendingFix \in BOOLEAN /\ NonRetryable \in BOOLEAN
+ASSUME \A b \in {FixRedoPending, FixDTIDLock, FixKeepLocks, NonRetryable, RetryableLockLoss} :
+           b \in BOOLEAN
 
 Coord   == "coord"
 Tablets == RMs \cup {MM}
@@ -234,6 +238,15 @@ HRollback(h) ==
 -----------------------------------------------------------------------------
 (* Resource manager handlers *)
 
+\* The 2PC operations that take the DTID lock (dtidLocks) on the tablet. A
+\* handler holds the lock from its first step until it replies, so another
+\* operation can start only when no handler on the tablet is past step 1.
+DTOps == {"prepare", "commitPrepared", "rollbackPrepared"}
+
+Busy(r) == \E h \in handlers : h.tgt = r /\ h.op \in DTOps /\ h.step > 1
+
+CanLock(h) == FixDTIDLock => ~Busy(h.tgt)
+
 \* Prepare, in two steps:
 \*  1. lock the transaction, put its connection in the prepared pool and
 \*     check that the connection was not closed,
@@ -245,9 +258,11 @@ HPrepare(h) ==
           \* A Prepare rejected by a query rule or a full pool rolls back the
           \* transaction; the model gets the same states from Kill followed by
           \* this step finding no open transaction.
-          /\ \/ /\ (~up[r] \/ conn[r] # "open")
+          /\ \/ /\ ~up[r]
                 /\ Reply(h, "err") /\ UNCHANGED data
-             \/ /\ up[r] /\ conn[r] = "open"
+             \/ /\ up[r] /\ CanLock(h) /\ conn[r] # "open"
+                /\ Reply(h, "err") /\ UNCHANGED data
+             \/ /\ up[r] /\ CanLock(h) /\ conn[r] = "open"
                 /\ reserved[r] \in {"none", "redoPending"}
                 /\ conn' = [conn EXCEPT ![r] = "pooled"]
                 /\ reserved' = [reserved EXCEPT ![r] = "none"]
@@ -266,14 +281,16 @@ HCommitPrepared(h) ==
     LET r == h.tgt IN
     /\ h.op = "commitPrepared"
     /\ \/ /\ h.step = 1
-          /\ \/ /\ (~up[r] \/ reserved[r] # "none")
+          /\ \/ /\ ~up[r]
                 /\ Reply(h, "err") /\ UNCHANGED data
-             \/ /\ up[r] /\ reserved[r] = "none" /\ conn[r] = "pooled"
+             \/ /\ up[r] /\ CanLock(h) /\ reserved[r] # "none"
+                /\ Reply(h, "err") /\ UNCHANGED data
+             \/ /\ up[r] /\ CanLock(h) /\ reserved[r] = "none" /\ conn[r] = "pooled"
                 /\ conn' = [conn EXCEPT ![r] = "taken"]
                 /\ reserved' = [reserved EXCEPT ![r] = "committing"]
                 /\ Advance(h, TRUE)
                 /\ UNCHANGED <<mmTx, dt, committed, redo>>
-             \/ /\ up[r] /\ reserved[r] = "none" /\ conn[r] # "pooled"
+             \/ /\ up[r] /\ CanLock(h) /\ reserved[r] = "none" /\ conn[r] # "pooled"
                 /\ Reply(h, "ok") /\ UNCHANGED data
        \/ /\ h.step = 2
           /\ \/ \* committed
@@ -289,6 +306,7 @@ HCommitPrepared(h) ==
                 /\ Reply(h, "err")
                 /\ UNCHANGED reserved
              \/ \* retryable failure: rolled back, the reservation stays
+                /\ RetryableLockLoss
                 /\ conn' = [conn EXCEPT ![r] = "none"]
                 /\ Reply(h, "err")
                 /\ UNCHANGED <<committed, redo, reserved>>
@@ -303,28 +321,30 @@ HCommitPrepared(h) ==
 
 \* RollbackPrepared, in two steps:
 \*  1. delete the redo log in a separate transaction,
-\*  2. (deferred, runs even if step 1 failed) FetchForRollback, which drops
-\*     a reservation or rolls back a pooled connection, then roll back the
-\*     original transaction if its id was given.
+\*  2. FetchForRollback, which drops a reservation or rolls back a pooled
+\*     connection, then roll back the original transaction if its id was
+\*     given. Without FixKeepLocks, FetchForRollback also runs when step 1
+\*     failed; with it, the prepared pool is left as it is.
 HRollbackPrepared(h) ==
     LET r == h.tgt IN
     /\ h.op = "rollbackPrepared"
     /\ \/ /\ h.step = 1
           /\ \/ /\ ~up[r]
                 /\ Reply(h, "err") /\ UNCHANGED data
-             \/ /\ up[r]
+             \/ /\ up[r] /\ CanLock(h)
                 /\ redo' = [redo EXCEPT ![r] = "none"]
                 /\ Advance(h, TRUE)
                 /\ UNCHANGED <<mmTx, dt, conn, committed, reserved>>
-             \/ /\ up[r]
+             \/ /\ up[r] /\ CanLock(h)
                 /\ Advance(h, FALSE)
                 /\ UNCHANGED data
        \/ /\ h.step = 2
-          /\ reserved' = [reserved EXCEPT ![r] = "none"]
-          /\ conn' = [conn EXCEPT ![r] =
-                        IF reserved[r] = "none" /\ @ = "pooled" THEN "none"
-                        ELSE IF h.txid /\ @ = "open" THEN "none"
-                        ELSE @]
+          /\ LET fetch == h.rok \/ ~FixKeepLocks IN
+             /\ reserved' = IF fetch THEN [reserved EXCEPT ![r] = "none"] ELSE reserved
+             /\ conn' = [conn EXCEPT ![r] =
+                           IF fetch /\ reserved[r] = "none" /\ @ = "pooled" THEN "none"
+                           ELSE IF h.txid /\ @ = "open" THEN "none"
+                           ELSE @]
           /\ Reply(h, IF h.rok THEN "ok" ELSE "err")
           /\ UNCHANGED <<mmTx, dt, committed, redo>>
 
@@ -364,8 +384,9 @@ Recover(t) ==
                   /\ conn' = [conn EXCEPT ![t] = "pooled"]
                   /\ UNCHANGED <<redo, reserved>>
                \/ \* retryable failure: the redo log stays prepared
+                  /\ RetryableLockLoss
                   /\ reserved' = [reserved EXCEPT ![t] =
-                                    IF RedoPendingFix THEN "redoPending" ELSE "none"]
+                                    IF FixRedoPending THEN "redoPending" ELSE "none"]
                   /\ UNCHANGED <<conn, redo>>
                \/ \* non-retryable failure
                   /\ NonRetryable
@@ -433,6 +454,12 @@ RStep(v) ==
     LET me == cs[v] IN
     \/ /\ me.pc = "idle" /\ resolves < MaxResolves
        /\ up[MM] /\ dt \in {"prepare", "rollback", "commit"}
+       \* Timing assumption: a resolver acts on a record only after the abandon
+       \* age (15 minutes by default), and the transaction killer rolls back
+       \* unprepared transactions after the transaction timeout (30 seconds by
+       \* default). So when a resolver acts, no RM still has an unprepared
+       \* transaction that a late Prepare could prepare.
+       /\ \A r \in RMs : conn[r] # "open"
        /\ resolves' = resolves + 1
        /\ CASE dt = "prepare"  -> Send(v, "setRollback", {MM}, TRUE, "wSetRb")
             [] dt = "rollback" -> Send(v, "rollbackPrepared", RMs, FALSE, "wRb")

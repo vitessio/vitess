@@ -68,6 +68,12 @@ func (dte *DTExecutor) Prepare(transactionID int64, dtid string) error {
 	defer dte.te.env.Stats().QueryTimings.Record("PREPARE", time.Now())
 	dte.logStats.TransactionID = transactionID
 
+	unlock, err := dte.te.dtidLocks.lock(dte.ctx, dtid)
+	if err != nil {
+		return err
+	}
+	defer unlock()
+
 	conn, err := dte.te.txPool.GetAndLock(dte.ctx, transactionID, "for prepare")
 	if err != nil {
 		return err
@@ -148,6 +154,11 @@ func (dte *DTExecutor) CommitPrepared(dtid string) (err error) {
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "2pc is not enabled")
 	}
 	defer dte.te.env.Stats().QueryTimings.Record("COMMIT_PREPARED", time.Now())
+	unlock, err := dte.te.dtidLocks.lock(dte.ctx, dtid)
+	if err != nil {
+		return err
+	}
+	defer unlock()
 	var conn *StatefulConnection
 	conn, err = dte.te.preparedPool.FetchForCommit(dtid)
 	if err != nil {
@@ -200,7 +211,8 @@ func (dte *DTExecutor) CommitPrepared(dtid string) (err error) {
 //
 // If prepare was fully successful, it will also delete the redo log.
 // If the redo log deletion fails, it returns an error indicating that
-// a retry is needed.
+// a retry is needed, and keeps the prepared transaction: the redo log
+// would prepare it again, so its row locks must be held until then.
 //
 // In recovery mode, the original transaction id will not be available.
 // If so, it must be set to 0, and the function will not attempt that
@@ -211,17 +223,27 @@ func (dte *DTExecutor) RollbackPrepared(dtid string, originalID int64) error {
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "2pc is not enabled")
 	}
 	defer dte.te.env.Stats().QueryTimings.Record("ROLLBACK_PREPARED", time.Now())
+	unlock, err := dte.te.dtidLocks.lock(dte.ctx, dtid)
+	if err != nil {
+		return err
+	}
+	defer unlock()
 	defer func() {
-		if preparedConn := dte.te.preparedPool.FetchForRollback(dtid); preparedConn != nil {
-			dte.te.txPool.RollbackAndRelease(dte.ctx, preparedConn)
-		}
+		// A prepared transaction stays locked in the transaction pool, so
+		// this only rolls back a transaction that was not prepared.
 		if originalID != 0 {
 			dte.te.Rollback(dte.ctx, originalID)
 		}
 	}()
-	return dte.inTransaction(func(conn *StatefulConnection) error {
+	if err := dte.inTransaction(func(conn *StatefulConnection) error {
 		return dte.te.twoPC.DeleteRedo(dte.ctx, conn, dtid)
-	})
+	}); err != nil {
+		return err
+	}
+	if preparedConn := dte.te.preparedPool.FetchForRollback(dtid); preparedConn != nil {
+		dte.te.txPool.RollbackAndRelease(dte.ctx, preparedConn)
+	}
+	return nil
 }
 
 // CreateTransaction creates the metadata for a 2PC transaction.
