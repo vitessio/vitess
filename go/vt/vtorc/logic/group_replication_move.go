@@ -420,14 +420,21 @@ func moveGroupPrimaryToVoter(ctx context.Context, analysisEntry *inst.DetectionA
 		return false, topologyRecovery, err
 	}
 	plan := inst.PlanGroupVoters(read.input)
-	if plan.Action != inst.VoterActionMovePrimary || !topoproto.TabletAliasEqual(plan.GroupPrimary.GetAlias(), analysisEntry.AnalyzedInstanceAlias) {
+	if plan.Action != inst.VoterActionMovePrimary || (!plan.PrimaryRecordDeleted && !topoproto.TabletAliasEqual(plan.GroupPrimary.GetAlias(), analysisEntry.AnalyzedInstanceAlias)) {
 		return true, topologyRecovery, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
-			"%s is no longer the primary of the replication group of %s that is not a voter: %s", topoproto.TabletAliasString(analysisEntry.AnalyzedInstanceAlias), keyspaceShard, plan.Reason)
+			"the primary of the replication group of %s is a voter with a tablet record, or %s is no longer that primary: %s", keyspaceShard, topoproto.TabletAliasString(analysisEntry.AnalyzedInstanceAlias), plan.Reason)
 	}
 	groupPrimary := plan.GroupPrimary
+	viewFrom := groupPrimary.Alias
+	if plan.PrimaryRecordDeleted {
+		// Only the alias of a voter whose tablet record was deleted is known, and the view is that of
+		// a member of the primary's view.
+		groupPrimary = &topodatapb.Tablet{Alias: groupPrimary.Alias, Keyspace: keyspace, Shard: shard}
+		viewFrom = plan.ViewFrom
+	}
 	var view *replicationdatapb.GroupReplicationStatus
 	for _, st := range read.statuses {
-		if topoproto.TabletAliasEqual(st.tablet.Alias, groupPrimary.Alias) {
+		if topoproto.TabletAliasEqual(st.tablet.Alias, viewFrom) {
 			view = st.status.GetGroupReplicationStatus()
 		}
 	}
@@ -435,15 +442,18 @@ func moveGroupPrimaryToVoter(ctx context.Context, analysisEntry *inst.DetectionA
 	legitimate := legitimateGroupOf(read.shardInfo, read.statuses)
 	target, rejected := groupPrimaryMoveTarget(read.durability, grd, read.input.Voters, groupPrimary, legitimate, view, read.statuses, nil, time.Now())
 	if target == nil {
-		message := fmt.Sprintf("%s, the primary of the replication group of %s, is not a voter, and no voter can become the group primary (%s)",
-			topoproto.TabletAliasString(groupPrimary.Alias), keyspaceShard, strings.Join(rejected, "; "))
+		message := fmt.Sprintf("%s, and no voter of %s can become the group primary (%s)", plan.Reason, keyspaceShard, strings.Join(rejected, "; "))
 		logger.Warn(message)
 		_ = AuditTopologyRecovery(topologyRecovery, message)
 		return true, topologyRecovery, vterrors.New(vtrpcpb.Code_UNAVAILABLE, message)
 	}
-	_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("%s: %s, the primary of the replication group, is not a voter: making the voter %s the group primary",
-		MoveGroupPrimaryToVoterRecoveryName, topoproto.TabletAliasString(groupPrimary.Alias), topoproto.TabletAliasString(target.Alias)))
-	if err := moveGroupPrimary(ctx, analysisEntry, read.durability, groupPrimary, target, "it is not a voter", topologyRecovery, logger); err != nil {
+	_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("%s: %s: making the voter %s the group primary",
+		MoveGroupPrimaryToVoterRecoveryName, plan.Reason, topoproto.TabletAliasString(target.Alias)))
+	why := "it is not a voter"
+	if plan.PrimaryRecordDeleted {
+		why = "its tablet record was deleted"
+	}
+	if err := moveGroupPrimary(ctx, analysisEntry, read.durability, groupPrimary, target, why, topologyRecovery, logger); err != nil {
 		return true, topologyRecovery, err
 	}
 	promoted = &inst.Instance{InstanceAlias: target.Alias}

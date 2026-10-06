@@ -122,9 +122,14 @@ type VoterPlan struct {
 	// it adds (SwapVoter, GrowVoter, which joins the group after the write).
 	Removed *topodatapb.TabletAlias
 	Added   *topodatapb.Tablet
-	// GroupPrimary is the settled primary p of a list change, or the primary that is not a voter
-	// (MoveGroupPrimaryToVoter).
+	// GroupPrimary is the settled primary p of a list change, or the primary that MoveGroupPrimaryToVoter
+	// moves away from: one that is not a voter, or a voter whose tablet record was deleted, of which only
+	// the alias is known.
 	GroupPrimary *topodatapb.Tablet
+	// PrimaryRecordDeleted is set when MoveGroupPrimaryToVoter moves the primary away from a voter whose
+	// tablet record was deleted, and ViewFrom is then a reachable member of the primary's view.
+	PrimaryRecordDeleted bool
+	ViewFrom             *topodatapb.TabletAlias
 	// Alert is the alert that VTOrc reports when it changes nothing: GroupVoterRecordDeleted,
 	// GroupVoterUnreplaceable or GroupVotersBelowTarget.
 	Alert AnalysisCode
@@ -406,7 +411,44 @@ func (p *voterPlanner) planMovePrimary() *VoterPlan {
 			Reason: topoproto.TabletAliasString(vt.Tablet.Alias) + ", which is not a voter, is the primary of the shard's replication group",
 		}
 	}
+	// A primary whose tablet record was deleted (DeleteTablets --allow-primary) keeps serving and
+	// acknowledging: the deletion does not stop it, and a removal after it crashed would lose those
+	// acknowledgements. Its MySQL is found as the primary that the reachable members of its view
+	// report: by its server_uuid, or, when VTOrc does not know it, as a primary that is the MySQL of
+	// no tablet with a record.
+	for _, vt := range p.sortedTablets() {
+		st := vt.Status
+		if !vt.Reachable || !p.legitimate.IsLegitimateMember(st) || !st.GetHasQuorum() || st.GetPrimaryUuid() == "" || !p.legitimate.HasVoterMajority(st) {
+			continue
+		}
+		primaryUUID := st.GetPrimaryUuid()
+		for _, alias := range sortedAliasKeys(p.in.DeletedVoters) {
+			uuid := p.in.DeletedVoters[alias]
+			if uuid != primaryUUID && (uuid != "" || p.recordedUUID(primaryUUID)) {
+				continue
+			}
+			voter, err := topoproto.ParseTabletAlias(alias)
+			if err != nil {
+				continue
+			}
+			return &VoterPlan{
+				Action: VoterActionMovePrimary, GroupPrimary: &topodatapb.Tablet{Alias: voter}, PrimaryRecordDeleted: true, ViewFrom: vt.Tablet.Alias,
+				Reason: fmt.Sprintf("the primary of the shard's replication group (%s, as %s reports it) is voter %s, whose tablet record was deleted",
+					primaryUUID, topoproto.TabletAliasString(vt.Tablet.Alias), alias),
+			}
+		}
+	}
 	return nil
+}
+
+// recordedUUID returns whether the server_uuid is the MySQL of a tablet that has a tablet record.
+func (p *voterPlanner) recordedUUID(uuid string) bool {
+	for _, vt := range p.in.Tablets {
+		if vt.ServerUUID == uuid {
+			return true
+		}
+	}
+	return false
 }
 
 // settledPrimary returns the settled legitimate primary p (P1): a voter whose MySQL is the ONLINE

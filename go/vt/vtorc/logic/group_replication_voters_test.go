@@ -376,3 +376,30 @@ func TestMoveGroupPrimaryToVoter(t *testing.T) {
 	require.NotNil(t, topologyRecovery)
 	assert.Equal(t, []string{"zone1-0000000102", "zone2-0000000200", "zone3-0000000300"}, readVoters(t))
 }
+
+// TestMoveGroupPrimaryOffDeletedVoter checks that VTOrc moves the primary role away from a voter whose
+// tablet record was deleted (DeleteTablets --allow-primary) while it serves: the deletion does not
+// stop a running primary, which keeps acknowledging writes that a later removal of the voter would
+// lose. The list does not change.
+func TestMoveGroupPrimaryOffDeletedVoter(t *testing.T) {
+	t.Cleanup(groupPrimaryMoves.reset)
+	groupPrimaryMoves.reset()
+	primary := recoveryTablet("zone1", 101, topodatapb.TabletType_PRIMARY)
+	voter2 := recoveryTablet("zone2", 200, topodatapb.TabletType_REPLICA)
+	voter3 := recoveryTablet("zone3", 300, topodatapb.TabletType_REPLICA)
+	// The primary's tablet record is gone.
+	mockTMC := groupReplicationRecoveryTestWithPolicy(t, policy.DurabilityGroupReplicationCrossCell, voter2, voter3)
+	setVoters(t, primary, voter2, voter3)
+	setIncarnation(t, voterTestIncarnation)
+	for _, tablet := range []*topodatapb.Tablet{voter2, voter3} {
+		mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(tablet)).Return(settledMember(tablet, primary, "1-10", primary, voter2, voter3), nil)
+	}
+	mockTMC.EXPECT().PromoteReplica(gomock.Any(), sameTablet(voter2), false).Return("MySQL56/6f1c2c2e-5a8e-4b8e-9d3a-7c1f0b6e2a41:1-10", nil)
+	mockTMC.EXPECT().PopulateReparentJournal(gomock.Any(), sameTablet(voter2), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+
+	attempted, topologyRecovery, err := moveGroupPrimaryToVoter(lockedShard(t), voterRecoveryEntry(voter2, inst.GroupPrimaryNotVoter), log.NewPrefixedLogger("test"))
+	require.NoError(t, err)
+	require.True(t, attempted)
+	require.NotNil(t, topologyRecovery)
+	assert.Equal(t, []string{"zone1-0000000101", "zone2-0000000200", "zone3-0000000300"}, readVoters(t))
+}

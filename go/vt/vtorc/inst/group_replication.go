@@ -385,6 +385,10 @@ func computeGroupReplicationVoters(state *groupReplicationShardState, durability
 	case plan.Action == VoterActionMovePrimary:
 		state.voterAnalysis = GroupPrimaryNotVoter
 		state.votersReporter = plan.GroupPrimary.GetAlias()
+		if plan.PrimaryRecordDeleted {
+			// The primary has no row: the analysis is reported on another tablet.
+			state.votersReporter = groupVotersReporter(rows)
+		}
 	case plan.Alert != "":
 		state.voterAnalysis = plan.Alert
 		state.votersReporter = groupVotersReporter(rows)

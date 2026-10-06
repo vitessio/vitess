@@ -398,6 +398,18 @@ func TestPlanGroupVoters(t *testing.T) {
 			addView(f.tablet(f.a).Status, planUUID(a2), mysql.GroupMemberStateOnline)
 		},
 		want: want{action: VoterActionMovePrimary},
+	}, {
+		name: "MoveGroupPrimaryToVoter: the primary is a voter whose tablet record was deleted",
+		setup: func(t *testing.T, f *planFixture) {
+			f.deleteRecord(f.a, true)
+		},
+		want: want{action: VoterActionMovePrimary, reason: "is voter zone1-0000000101, whose tablet record was deleted"},
+	}, {
+		name: "MoveGroupPrimaryToVoter: the primary is a voter whose tablet record was deleted, and whose server_uuid is unknown",
+		setup: func(t *testing.T, f *planFixture) {
+			f.deleteRecord(f.a, false)
+		},
+		want: want{action: VoterActionMovePrimary, reason: "is voter zone1-0000000101, whose tablet record was deleted"},
 	}}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
