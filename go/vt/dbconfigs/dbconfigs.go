@@ -31,6 +31,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/mysql/sqlmode"
 	"vitess.io/vitess/go/vt/log"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -211,7 +212,15 @@ func (c *Connector) Connect(ctx context.Context) (*mysql.Conn, error) {
 	// backend that stalls after the handshake must not hang the caller. Closing the
 	// connection when the context ends fails the pending exchange right away.
 	stop := context.AfterFunc(ctx, conn.Close)
-	_, err = conn.ExecuteFetch(sessionSetupQuery(params.Charset), 0, false)
+	_, err = conn.ExecuteFetch(sessionSetupQuery(params.Charset, true), 0, false)
+	if sqlErr, ok := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError); ok && sqlErr.Number() == sqlerror.ERUnknownCollation {
+		// The collation comes from the MySQL 8 collation table, and the server may
+		// not have it: MySQL 5.7 and MariaDB lack utf8mb4_0900_ai_ci, for one. Such a
+		// server ignored the collation at the handshake and used its own default
+		// character set, so restore the character set alone, with its default
+		// collation on that server.
+		_, err = conn.ExecuteFetch(sessionSetupQuery(params.Charset, false), 0, false)
+	}
 	if !stop() {
 		// the context ended and the connection is closed, whatever the query
 		// returned; report the context error like mysql.Connect does for the dial
@@ -225,9 +234,10 @@ func (c *Connector) Connect(ctx context.Context) (*mysql.Conn, error) {
 }
 
 // sessionSetupQuery returns the statement that sets up a new connection's session for
-// the collation it negotiated, or only neutralizes its sql_mode when it negotiated
-// none and so uses the server's default.
-func sessionSetupQuery(collation collations.ID) string {
+// the collation it negotiated, naming the collation only when withCollation is set, or
+// only neutralizes its sql_mode when it negotiated none and so uses the server's
+// default.
+func sessionSetupQuery(collation collations.ID, withCollation bool) string {
 	if collation == collations.Unknown {
 		return sqlmode.NeutralizeSessionQuery
 	}
@@ -236,6 +246,9 @@ func sessionSetupQuery(collation collations.ID) string {
 	name := env.LookupName(collation)
 	if charset == "" || name == "" {
 		return sqlmode.NeutralizeSessionQuery
+	}
+	if !withCollation {
+		name = ""
 	}
 	return sqlmode.SessionSetupQuery(charset, name)
 }

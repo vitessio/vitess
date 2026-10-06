@@ -33,6 +33,7 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/mysql/sqlmode"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vtenv"
@@ -413,6 +414,16 @@ func TestConnectorConnectNeutralizesSQLMode(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(conn.Close)
 	require.Equal(t, 1, db.GetQueryCalledNum(sqlmode.SessionSetupQuery("utf8mb4", "utf8mb4_0900_ai_ci")))
+
+	// MySQL 5.7 and MariaDB do not have utf8mb4_0900_ai_ci, so the server refuses
+	// the collation, and the character set is restored alone.
+	db.AddRejectedQuery(sqlmode.SessionSetupQuery("utf8mb4", "utf8mb4_0900_ai_ci"),
+		sqlerror.NewSQLError(sqlerror.ERUnknownCollation, sqlerror.SSUnknownSQLState, "Unknown collation: 'utf8mb4_0900_ai_ci'"))
+	conn, err = charsetConnector.Connect(t.Context())
+	require.NoError(t, err)
+	t.Cleanup(conn.Close)
+	require.Equal(t, 2, db.GetQueryCalledNum(sqlmode.SessionSetupQuery("utf8mb4", "utf8mb4_0900_ai_ci")))
+	require.Equal(t, 1, db.GetQueryCalledNum(sqlmode.SessionSetupQuery("utf8mb4", "")))
 }
 
 // stallingHandler completes the handshake but never answers a query until released,

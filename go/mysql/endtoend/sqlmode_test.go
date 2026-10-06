@@ -80,13 +80,14 @@ func TestNeutralizeSessionQueryPreservesInitConnect(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "latin1", qr.Rows[0][0].ToString())
 
-	_, err = conn.ExecuteFetch(sqlmode.SessionSetupQuery("utf8mb4", "utf8mb4_0900_ai_ci"), 0, false)
+	// utf8mb4_general_ci is a collation that MySQL 5.7, 8.x and MariaDB all have
+	_, err = conn.ExecuteFetch(sqlmode.SessionSetupQuery("utf8mb4", "utf8mb4_general_ci"), 0, false)
 	require.NoError(t, err)
 
 	// the character set the connection negotiated is restored in the same statement
 	qr, err = conn.ExecuteFetch("select @@session.character_set_client, @@session.character_set_connection, @@session.character_set_results, @@session.collation_connection", 1, false)
 	require.NoError(t, err)
-	assert.Equal(t, []string{"utf8mb4", "utf8mb4", "utf8mb4", "utf8mb4_0900_ai_ci"},
+	assert.Equal(t, []string{"utf8mb4", "utf8mb4", "utf8mb4", "utf8mb4_general_ci"},
 		[]string{qr.Rows[0][0].ToString(), qr.Rows[0][1].ToString(), qr.Rows[0][2].ToString(), qr.Rows[0][3].ToString()})
 
 	qr, err = conn.ExecuteFetch("select @@session.sql_mode", 1, false)

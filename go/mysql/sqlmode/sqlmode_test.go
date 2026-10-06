@@ -251,6 +251,9 @@ func TestNeutralizeSessionQuery(t *testing.T) {
 	assert.Equal(t, "set names 'utf8mb4' collate 'utf8mb4_0900_ai_ci', "+strings.TrimPrefix(NeutralizeSessionQuery, "set "), setup)
 	assert.Equal(t, NeutralizeSessionQuery, SessionSetupQuery("", ""))
 	assert.True(t, IsSessionSetupQuery(setup))
+	charsetOnly := SessionSetupQuery("utf8mb4", "")
+	assert.Equal(t, "set names 'utf8mb4', "+neutralizeSessionAssignment, charsetOnly)
+	assert.True(t, IsSessionSetupQuery(charsetOnly))
 	assert.True(t, IsSessionSetupQuery(strings.ToUpper(NeutralizeSessionQuery)))
 	assert.False(t, IsSessionSetupQuery("set names 'utf8mb4'"))
 }

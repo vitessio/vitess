@@ -134,13 +134,17 @@ var neutralizeSessionAssignment = "@@session.sql_mode = " + neutralizedExpr("@@s
 
 // SessionSetupQuery returns the statement that sets up the session of a connection
 // Vitess creates: NeutralizeSessionQuery, preceded in the same statement by SET NAMES
-// with the given character set and collation when charset is not empty. The server's
-// connection initialization (init_connect) runs before it and can change the
-// connection's character set as well as its sql_mode, so the character set the
-// connection negotiated is restored along with the neutralization.
+// with the given character set when charset is not empty, and with the given
+// collation when that is not empty too. The server's connection initialization
+// (init_connect) runs before it and can change the connection's character set as
+// well as its sql_mode, so the character set the connection negotiated is restored
+// along with the neutralization.
 func SessionSetupQuery(charset, collation string) string {
 	if charset == "" {
 		return NeutralizeSessionQuery
+	}
+	if collation == "" {
+		return fmt.Sprintf("set names '%s', %s", charset, neutralizeSessionAssignment)
 	}
 	return fmt.Sprintf("set names '%s' collate '%s', %s", charset, collation, neutralizeSessionAssignment)
 }

@@ -409,7 +409,13 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 	if sqlmode.IsSessionSetupQuery(query) {
 		db.mu.Lock()
 		db.queryCalled[strings.ToLower(query)]++
+		// A test can still reject a setup statement, to stand in for a server
+		// that does not accept it.
+		err, rejected := db.rejectedData[strings.ToLower(query)]
 		db.mu.Unlock()
+		if rejected {
+			return err
+		}
 		return callback(&sqltypes.Result{})
 	}
 
