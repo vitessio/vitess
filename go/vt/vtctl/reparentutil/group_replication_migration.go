@@ -371,12 +371,20 @@ func (r *migrationRun) nameTargetPolicy(ctx context.Context, resp *vtctldatapb.M
 		r.plannedSource = source
 		return nil
 	}
+	// The dry run's steps are not logged: the conversion logs its own. Its results are returned
+	// only if it refuses the migration.
+	quiet := *r.m
+	quiet.logger = logutil.NewCallbackLogger(func(*logutilpb.Event) {})
 	dry := *r
+	dry.m = &quiet
 	dry.opts.DryRun = true
+	var results []*vtctldatapb.ReplicationModeMigrationShardResult
 	for _, shard := range shards {
 		result := &vtctldatapb.ReplicationModeMigrationShardResult{Shard: shard}
+		results = append(results, result)
 		if err := dry.migrateShard(ctx, shard, result, true); err != nil {
-			return vterrors.Wrapf(err, "failed to convert shard %s/%s to group replication", r.keyspace, shard)
+			resp.Shards = append(resp.Shards, results...)
+			return vterrors.Wrapf(err, "the preflight of shard %s/%s refused the migration to group replication, and nothing was changed", r.keyspace, shard)
 		}
 	}
 	ki, err := writeKeyspacePolicy(ctx, r.m.ts, r.keyspace, func(ks *topodatapb.Keyspace) error {

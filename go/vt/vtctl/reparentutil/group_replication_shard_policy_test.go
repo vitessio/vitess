@@ -607,3 +607,29 @@ func TestMigrateReplicationModeRefusesKeyspaceWithoutPolicy(t *testing.T) {
 	assert.Empty(t, c.mutatingCalls())
 	assert.Equal(t, &topodatapb.Keyspace{}, keyspaceRecord(t, ts))
 }
+
+// TestMigrateReplicationModeReportsCheckBeforeKeyspaceStep checks the dry run of the shards'
+// conversion that precedes step 0: a refusal lists the steps of the shard it refused, as every
+// response of Migrate does, and says that nothing changed; and the dry run's steps are not logged
+// next to the conversion's own.
+func TestMigrateReplicationModeReportsCheckBeforeKeyspaceStep(t *testing.T) {
+	t.Run("refused", func(t *testing.T) {
+		c, ts := newFakeGRCluster(t, "semi_sync", migrationTestShard()...)
+		c.schemaRows = []string{"app|nopk|InnoDB"}
+		resp, err := migrate(t, newTestMigrator(c, ts), "group_replication", false)
+		require.Error(t, err)
+		assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+		require.ErrorContains(t, err, "the preflight of shard ks/- refused the migration")
+		assert.NotContains(t, err.Error(), "failed to convert")
+		require.Len(t, resp.Shards, 1)
+		assert.Equal(t, "-", resp.Shards[0].Shard)
+		assert.Empty(t, c.mutatingCalls())
+	})
+	t.Run("converted", func(t *testing.T) {
+		c, ts := newFakeGRCluster(t, "semi_sync", migrationTestShard()...)
+		m := newTestMigrator(c, ts)
+		_, err := migrate(t, m, "group_replication", false)
+		require.NoError(t, err)
+		assert.NotContains(t, m.logger.(*logutil.MemoryLogger).String(), "(planned)", "the dry run's steps are not logged")
+	})
+}
