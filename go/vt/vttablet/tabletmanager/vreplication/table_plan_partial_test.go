@@ -39,12 +39,17 @@ import (
 // event the vstreamer would send for it.
 func buildTestTablePlan(t *testing.T, target, filter string, fields []*querypb.Field) *TablePlan {
 	t.Helper()
+	return buildTestTablePlanWithPK(t, target, filter, fields, []*ColumnInfo{{Name: "id", IsPK: true}})
+}
+
+func buildTestTablePlanWithPK(t *testing.T, target, filter string, fields []*querypb.Field, pkCols []*ColumnInfo) *TablePlan {
+	t.Helper()
 	vttablet.InitVReplicationConfigDefaults()
 	vr := &vreplicator{workflowConfig: vttablet.DefaultVReplicationConfig}
 	rp, err := vr.buildReplicatorPlan(getSource(&binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{Match: target, Filter: filter}},
 	}), map[string][]*ColumnInfo{
-		target: {{Name: "id", IsPK: true}},
+		target: pkCols,
 	}, nil, binlogplayer.NewStats(), collations.MySQL8(), sqlparser.NewTestParser())
 	require.NoError(t, err)
 	// FIELD events carry the source table's name.
@@ -345,6 +350,37 @@ func TestApplyChangePartialGroupedPlans(t *testing.T) {
 		})
 		require.NoError(t, err)
 		assert.Empty(t, executed, "partial update with no writable present columns is a no-op")
+	})
+
+	// Multi-column group by: c3 is grouped but not the PK. The full-image
+	// UPDATE is "set c2=..." only (table_plan_builder.generateUpdateStatement).
+	// The partial UPDATE must use the same SET list, not also assign c3.
+	t.Run("insertOnDup multi-column group by", func(t *testing.T) {
+		tp := buildTestTablePlanWithPK(t, "dst", "select c1, c2, c3 from src group by c3, c1",
+			[]*querypb.Field{
+				{Name: "c1", Type: querypb.Type_INT32},
+				{Name: "c2", Type: querypb.Type_VARBINARY},
+				{Name: "c3", Type: querypb.Type_VARBINARY},
+			},
+			[]*ColumnInfo{{Name: "c1", IsPK: true}},
+		)
+		tp.Stats = binlogplayer.NewStats()
+		require.Equal(t, "update dst set c2=:a_c2 where c1=:b_c1", tp.Update.Query)
+
+		before := &querypb.Row{Lengths: []int64{1, 3, 3}, Values: []byte("1aaaxxx")}
+		after := &querypb.Row{Lengths: []int64{1, 3, 3}, Values: []byte("1bbbyyy")}
+
+		executed, err := applyChangeQueries(t, tp, &binlogdatapb.RowChange{
+			Before: before, After: after, AfterDataColumns: bitmap(true, true, true),
+		})
+		require.NoError(t, err)
+		require.Equal(t, []string{"update dst set c2=_binary'bbb' where c1=1"}, executed, "partial update, all columns present")
+
+		executed, err = applyChangeQueries(t, tp, &binlogdatapb.RowChange{
+			Before: before, After: after, AfterDataColumns: bitmap(true, false, true),
+		})
+		require.NoError(t, err)
+		assert.Empty(t, executed, "only grouped/PK columns present: no-op")
 	})
 }
 

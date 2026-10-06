@@ -388,9 +388,11 @@ func (tpb *tablePlanBuilder) createPartialInsertQuery(dataColumns *binlogdatapb.
 // returns a nil query and no error when none of the writable target columns is
 // present in the image, e.g. when the only change in the source row was to a
 // column that the filter does not select: there is nothing to update on the
-// target and the row event should be treated as a no-op. For a fully grouped
-// plan the UPDATE is an "insert ignore", as in generateUpdateStatement: the
-// first value wins and an existing row is left alone.
+// target and the row event should be treated as a no-op. Grouped columns are
+// not writable, matching generateUpdateStatement, so a partial image that
+// only carries grouped/PK/generated expressions is also a no-op. For a fully
+// grouped plan the UPDATE is an "insert ignore", as in generateUpdateStatement:
+// the first value wins and an existing row is left alone.
 func (tpb *tablePlanBuilder) createPartialUpdateQuery(dataColumns *binlogdatapb.RowChange_Bitmap) (*sqlparser.ParsedQuery, error) {
 	if tpb.onInsert == insertIgnore {
 		return tpb.createPartialInsertQuery(dataColumns)
@@ -404,7 +406,7 @@ func (tpb *tablePlanBuilder) createPartialUpdateQuery(dataColumns *binlogdatapb.
 			log.Error("Ran out of columns trying to generate query for " + tpb.name.CompliantName())
 			return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "unable to create partial update query for "+tpb.name.String())
 		}
-		if cexpr.isPK || cexpr.isGenerated || !isBitSet(dataColumns.Cols, i) {
+		if cexpr.isGrouped || cexpr.isPK || cexpr.isGenerated || !isBitSet(dataColumns.Cols, i) {
 			continue
 		}
 		buf.Myprintf("%s%v=", separator, cexpr.colName)
