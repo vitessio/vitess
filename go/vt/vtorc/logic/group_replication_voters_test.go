@@ -485,3 +485,39 @@ func TestUpdateGroupReplicationVotersKeepsLiveDeletedVoter(t *testing.T) {
 	assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
 	assert.Equal(t, []string{"zone1-0000000101", "zone2-0000000200", "zone3-0000000300"}, readVoters(t), "a deleted voter that still runs must keep its seat")
 }
+
+// TestUpdateGroupReplicationVotersWithCellTopologyDown checks that a voter change does not wait for a
+// cell whose topology server does not answer: the voters of that cell count as unreachable, with a
+// tablet record, and never as deleted. Here the voter of zone2 failed, and the spare of its cell takes
+// its seat while zone3's topology server is cut off.
+func TestUpdateGroupReplicationVotersWithCellTopologyDown(t *testing.T) {
+	prevGrace := config.GetGroupReplicationVoterReplacementGracePeriod()
+	t.Cleanup(func() {
+		config.SetGroupReplicationVoterReplacementGracePeriod(prevGrace)
+		inst.UnreachableGroupTablets.Reset()
+	})
+	inst.UnreachableGroupTablets.Reset()
+	config.SetGroupReplicationVoterReplacementGracePeriod(0)
+	primary := recoveryTablet("zone1", 101, topodatapb.TabletType_PRIMARY)
+	voter2 := recoveryTablet("zone2", 200, topodatapb.TabletType_REPLICA)
+	spare2 := recoveryTablet("zone2", 201, topodatapb.TabletType_REPLICA)
+	voter3 := recoveryTablet("zone3", 300, topodatapb.TabletType_REPLICA)
+	mockTMC := groupReplicationRecoveryTestWithPolicy(t, policy.DurabilityGroupReplicationCrossCell, primary, voter2, spare2, voter3)
+	setVoters(t, primary, voter2, voter3)
+	setIncarnation(t, voterTestIncarnation)
+	// VTOrc discovered every tablet, server_uuid included, before zone3 was cut off.
+	for _, tablet := range []*topodatapb.Tablet{primary, voter2, spare2, voter3} {
+		require.NoError(t, inst.WriteInstance(&inst.Instance{
+			InstanceAlias: tablet.Alias, Hostname: tablet.MysqlHostname, Port: int(tablet.MysqlPort), ServerUUID: voterTestUUID(tablet),
+		}, true, nil))
+	}
+	cutOffCell(t, "zone3")
+	mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(primary)).Return(settledMember(primary, primary, "1-10", primary, voter3), nil)
+	mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(voter2)).Return(nil, errors.New("unreachable"))
+	mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(spare2)).Return(spareStatus(spare2, "1-5"), nil)
+	mockTMC.EXPECT().StartGroupReplication(gomock.Any(), sameTablet(spare2), startRequest(false)).Return(&replicationdatapb.GroupReplicationStatus{}, nil)
+
+	_, _, err := updateGroupReplicationVoters(lockedShard(t), voterRecoveryEntry(primary, inst.GroupVotersOutOfDate), log.NewPrefixedLogger("test"))
+	require.NoError(t, err)
+	assert.Equal(t, []string{"zone1-0000000101", "zone2-0000000201", "zone3-0000000300"}, readVoters(t))
+}

@@ -1128,7 +1128,9 @@ func readGroupVoterState(ctx context.Context, keyspace, shard string) (*groupVot
 	if !ok {
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "the durability policy of shard %s does not use group replication", keyspaceShard)
 	}
-	tabletInfos, err := getShardTablets(ctx, keyspace, shard)
+	// The tablet records of a cell whose topology server does not answer are not waited for: its
+	// voters count as unreachable, with a record, and never as deleted.
+	tabletInfos, failedCells, err := getReachableShardTablets(ctx, keyspace, shard)
 	if err != nil {
 		return nil, err
 	}
@@ -1145,9 +1147,14 @@ func readGroupVoterState(ctx context.Context, keyspace, shard string) (*groupVot
 	deleted := make(map[string]*inst.DeletedVoter)
 	reachedLongAgo := make(map[string]bool)
 	var probes []*topo.TabletInfo
+	var unreadable []*topodatapb.TabletAlias
 	for _, voter := range shardInfo.GetGroupReplicationVoters() {
 		alias := topoproto.TabletAliasString(voter)
 		if recorded[alias] {
+			continue
+		}
+		if slices.Contains(failedCells, voter.GetCell()) {
+			unreadable = append(unreadable, voter)
 			continue
 		}
 		if _, err := ts.GetTablet(ctx, voter); err == nil {
@@ -1197,6 +1204,18 @@ func readGroupVoterState(ctx context.Context, keyspace, shard string) (*groupVot
 			if instance, _, err := inst.ReadInstance(st.tablet.Alias); err == nil && instance != nil {
 				vt.ServerUUID = instance.ServerUUID
 			}
+		}
+		in.Tablets = append(in.Tablets, vt)
+	}
+	for _, voter := range unreadable {
+		// Not read, so not measured: it is not failed either.
+		tablet := &topodatapb.Tablet{Alias: voter, Keyspace: keyspace, Shard: shard}
+		if cached, err := inst.ReadTablet(voter); err == nil && cached != nil {
+			tablet = cached
+		}
+		vt := &inst.VoterTablet{Tablet: tablet}
+		if instance, _, err := inst.ReadInstance(voter); err == nil && instance != nil {
+			vt.ServerUUID = instance.ServerUUID
 		}
 		in.Tablets = append(in.Tablets, vt)
 	}
