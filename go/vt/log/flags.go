@@ -17,6 +17,7 @@ limitations under the License.
 package log
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -71,7 +72,7 @@ func RegisterRemovedClientFlags(fs *pflag.FlagSet) {
 func Init() error {
 	// Fail on --log-structured=false. The caller expects glog log files, which Vitess does not write.
 	if !logStructured {
-		return fmt.Errorf("log: --log-structured=false is not supported, glog was removed in v25")
+		return errors.New("log: --log-structured=false is not supported, glog was removed in v25")
 	}
 
 	var level slog.Level
