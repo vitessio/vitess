@@ -425,6 +425,61 @@ func (r *migrationRun) clearMigrationSource(ctx context.Context, resp *vtctldata
 	return nil
 }
 
+// checkNoShardRunsGroup returns a FAILED_PRECONDITION error, before the keyspace record leaves a
+// group replication policy for the asynchronous target policy, if a shard of the keyspace may run a
+// group: unless its own policy is the target, a shard record that lists voters, an incarnation or a
+// bootstrap intent, or a group replication policy of its own, may be a migration to Group Replication
+// that runs at the same time. The caller holds the keyspace lock, which a new shard's creation takes
+// too; the convertedness of the shards was checked earlier, outside of it.
+func (r *migrationRun) checkNoShardRunsGroup(ctx context.Context) error {
+	if policy.IsGroupReplication(r.target) {
+		return nil
+	}
+	shards, err := r.m.ts.GetShardNames(ctx, r.keyspace)
+	if err != nil {
+		return err
+	}
+	slices.Sort(shards)
+	for _, shard := range shards {
+		si, err := r.m.ts.GetShard(ctx, r.keyspace, shard)
+		if err != nil {
+			return err
+		}
+		own := si.GetDurabilityPolicy()
+		if own == r.opts.DurabilityPolicy {
+			continue
+		}
+		ownDurability, err := policy.GetDurabilityPolicy(own)
+		ownGroup := own != "" && (err != nil || policy.IsGroupReplication(ownDurability))
+		if ownGroup || len(si.GroupReplicationVoters) > 0 || si.GroupReplicationIncarnation != "" || si.GroupReplicationBootstrapIntent != nil {
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+				"shard %s/%s may run a group (its record lists voters, an incarnation, a bootstrap intent or a group replication policy of its own): keyspace %s keeps its group replication policy; run the migration again once no migration to group replication runs",
+				r.keyspace, shard, r.keyspace)
+		}
+	}
+	return nil
+}
+
+// checkKeyspaceNamesGroupPolicy returns a FAILED_PRECONDITION error unless the keyspace record names
+// a group replication policy, as step 0 of a migration to Group Replication left it: a migration back
+// that ran meanwhile may have switched it to an asynchronous policy, and a shard must not run a group
+// in a keyspace whose policy an older component would read as asynchronous. The conversion checks it
+// under the shard lock, and again right before it bootstraps the shard's group.
+func (r *migrationRun) checkKeyspaceNamesGroupPolicy(ctx context.Context) error {
+	ki, err := r.m.ts.GetKeyspace(ctx, r.keyspace)
+	if err != nil {
+		return vterrors.Wrapf(err, "failed to read keyspace %s", r.keyspace)
+	}
+	durability, err := policy.GetDurabilityPolicy(ki.GetDurabilityPolicy())
+	if err != nil || !policy.IsGroupReplication(durability) {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+			"keyspace %s does not name a group replication policy (durability policy %q): a migration back to asynchronous replication may have run meanwhile; run MigrateReplicationMode again",
+			r.keyspace, ki.GetDurabilityPolicy())
+	}
+	r.keyspaceRecord = ki.Keyspace
+	return nil
+}
+
 // writeKeyspacePolicy changes the durability fields of the keyspace record with update, in one
 // write under the keyspace lock.
 func writeKeyspacePolicy(ctx context.Context, ts *topo.Server, keyspace string, update func(ks *topodatapb.Keyspace) error) (ki *topo.KeyspaceInfo, err error) {
@@ -533,6 +588,9 @@ func (r *migrationRun) setKeyspacePolicy(ctx context.Context, resp *vtctldatapb.
 		r.addKeyspaceStep(resp, MigrationActionSetDurabilityPolicy, MigrationStepPlanned, desc)
 	default:
 		ki, err := writeKeyspacePolicy(ctx, r.m.ts, r.keyspace, func(ks *topodatapb.Keyspace) error {
+			if err := r.checkNoShardRunsGroup(ctx); err != nil {
+				return err
+			}
 			ks.DurabilityPolicy = r.opts.DurabilityPolicy
 			ks.MigrationSourceDurabilityPolicy = ""
 			return nil
@@ -654,6 +712,11 @@ func (r *migrationRun) migrateShard(ctx context.Context, shard string, result *v
 		defer unlock(&err)
 	}
 
+	if toGroup && !r.opts.DryRun {
+		if err := r.checkKeyspaceNamesGroupPolicy(ctx); err != nil {
+			return err
+		}
+	}
 	s, err := r.readShard(ctx, shard)
 	if err != nil {
 		return err
@@ -1096,6 +1159,11 @@ func (s *migrationShard) toGroupReplication(ctx context.Context) error {
 		s.record(MigrationActionBootstrapGroup, primary, MigrationStepSkipped, fmt.Sprintf("the group is already running on primary %v", primaryAlias))
 	} else {
 		err := s.do(ctx, MigrationActionBootstrapGroup, primary, fmt.Sprintf("bootstrap the group on primary %v", primaryAlias), func(ctx context.Context) error {
+			// The voters are stored: a migration back that switches the keyspace from now on sees
+			// them, and one that switched it before is seen here.
+			if err := s.run.checkKeyspaceNamesGroupPolicy(ctx); err != nil {
+				return err
+			}
 			startCtx, cancel := context.WithTimeout(ctx, s.run.opts.WaitTimeout)
 			defer cancel()
 			if _, err := s.run.m.tmc.StartGroupReplication(startCtx, primary, &tabletmanagerdatapb.StartGroupReplicationRequest{Bootstrap: true}); err != nil {

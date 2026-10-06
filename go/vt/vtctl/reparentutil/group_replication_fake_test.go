@@ -119,10 +119,20 @@ type fakeGRCluster struct {
 	// keyspaceAtFirstBootstrap is the keyspace record when the first StartGroupReplication with a
 	// bootstrap ran.
 	keyspaceAtFirstBootstrap *topodatapb.Keyspace
+	// onQuery runs, with the number of queries so far, when ExecuteFetchAsDba runs (the migration's
+	// schema check), under c.mu: it may only change the topology.
+	onQuery func(n int)
+	// onCall runs once when the named call that changes state is made, under c.mu: it may only
+	// change the topology.
+	onCall map[string]func()
 }
 
 func (c *fakeGRCluster) record(call string) error {
 	c.calls = append(c.calls, call)
+	if hook := c.onCall[call]; hook != nil {
+		delete(c.onCall, call)
+		hook()
+	}
 	if c.failOnce[call] {
 		delete(c.failOnce, call)
 		return fmt.Errorf("injected failure of %s", call)
@@ -499,6 +509,9 @@ func (c *fakeGRCluster) ExecuteFetchAsDba(ctx context.Context, tablet *topodatap
 		return nil, err
 	}
 	c.queries = append(c.queries, string(req.Query))
+	if c.onQuery != nil {
+		c.onQuery(len(c.queries))
+	}
 	result := sqltypes.MakeTestResult(sqltypes.MakeTestFields("TABLE_SCHEMA|TABLE_NAME|ENGINE", "varchar|varchar|varchar"), c.schemaRows...)
 	return sqltypes.ResultToProto3(result), nil
 }

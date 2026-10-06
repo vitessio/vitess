@@ -525,3 +525,44 @@ func TestMigrateReplicationModeVoterGuardOnAnyGroupReplicationPolicy(t *testing.
 	assert.Empty(t, callsWithPrefix(c.mutatingCalls(), "StopGroupReplication"), "no member leaves its group")
 	assert.Equal(t, MigrationStepSkipped, stepStatuses(resp.Shards[0].Steps)[MigrationActionSetVoters])
 }
+
+// TestMigrateReplicationModeConcurrentDirections checks the invariant that the keyspace's policy names
+// a group replication policy whenever a shard may run a group, when a migration to Group Replication
+// and one back run at the same time.
+func TestMigrateReplicationModeConcurrentDirections(t *testing.T) {
+	t.Run("the forward run does not bootstrap after the keyspace was switched back", func(t *testing.T) {
+		c, ts := newFakeGRCluster(t, "semi_sync", migrationTestShard()...)
+		// The first schema check is the dry run before step 0; by the second, which the conversion
+		// runs under the shard lock, a migration back has switched the keyspace to semi_sync.
+		c.onQuery = func(n int) {
+			if n == 2 {
+				setKeyspaceRecord(t, ts, "semi_sync", "")
+			}
+		}
+		_, err := migrate(t, newTestMigrator(c, ts), "group_replication", false)
+		require.Error(t, err)
+		assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+		require.ErrorContains(t, err, "does not name a group replication policy")
+		assert.Empty(t, callsWithPrefix(c.mutatingCalls(), "StartGroupReplication"), "no group is bootstrapped")
+	})
+	t.Run("the backward run does not switch the keyspace while a shard gets a group", func(t *testing.T) {
+		c, ts := newFakeGRCluster(t, "group_replication", migrationTestShard()...)
+		c.formGroup(t, "group_replication")
+		c.setIncarnation(t, "1790000000")
+		// While the shard is converted back, a migration to Group Replication creates another shard
+		// and stores its voters, before its bootstrap.
+		c.onCall = map[string]func(){"StopGroupReplication(" + aliasP + ")": func() {
+			require.NoError(t, ts.CreateShard(t.Context(), "ks", otherShard))
+			_, err := ts.UpdateShardFields(t.Context(), "ks", otherShard, func(si *topo.ShardInfo) error {
+				si.GroupReplicationVoters = []*topodatapb.TabletAlias{{Cell: "zone1", Uid: 900}}
+				return nil
+			})
+			require.NoError(t, err)
+		}}
+		_, err := migrateShards(t, newTestMigrator(c, ts), "semi_sync", false, "-")
+		require.Error(t, err)
+		assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+		require.ErrorContains(t, err, otherShard)
+		assert.Equal(t, "group_replication", keyspaceRecord(t, ts).DurabilityPolicy, "the keyspace keeps the group replication policy")
+	})
+}
