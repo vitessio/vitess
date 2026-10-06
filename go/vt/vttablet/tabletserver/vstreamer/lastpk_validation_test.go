@@ -17,6 +17,7 @@ limitations under the License.
 package vstreamer
 
 import (
+	"encoding/hex"
 	"strings"
 	"testing"
 
@@ -343,16 +344,41 @@ func TestLastPKValuesSurviveNoBackslashEscapes(t *testing.T) {
 	}
 }
 
-// TestLastPKTextualValuesRoundTrip pins that a textual value still means itself,
-// so the encoding change cannot corrupt a real resume bound.
-func TestLastPKTextualValuesRoundTrip(t *testing.T) {
-	fields := []*querypb.Field{field("name", querypb.Type_VARCHAR)}
-	table := &binlogdatapb.MinimalTable{Name: "t1", Fields: fields, PKColumns: []int64{0}}
-
-	for _, payload := range []string{"abc", "O'Brien", `back\slash`, "quote'and\\backslash", ""} {
-		t.Run(payload, func(t *testing.T) {
+// TestLastPKValuesRoundTrip pins what buildSelect writes for each kind of lastpk
+// value, and checks with mysqld that the literal reads back as the value's bytes,
+// so the encoding cannot corrupt a real resume bound.
+func TestLastPKValuesRoundTrip(t *testing.T) {
+	everyByte := make([]byte, 256)
+	for i := range everyByte {
+		everyByte[i] = byte(i)
+	}
+	for _, tc := range []struct {
+		name    string
+		colType querypb.Type
+		value   sqltypes.Value
+		// literal is what buildSelect writes for the value, when the case pins it.
+		literal string
+		// readBack is the value's bytes as mysqld reads the literal.
+		readBack string
+	}{
+		{"number", querypb.Type_INT64, clientValue(querypb.Type_INT64, "42"), "42", "42"},
+		{"number declared as another numeric type", querypb.Type_INT32, clientValue(querypb.Type_INT64, "7"), "7", "7"},
+		{"null", querypb.Type_VARCHAR, sqltypes.NULL, "null", ""},
+		{"bit", querypb.Type_BIT, clientValue(querypb.Type_BIT, "\x05"), "b'00000101'", "\x05"},
+		{"varbinary keeps its introducer", querypb.Type_VARBINARY, clientValue(querypb.Type_VARBINARY, "a'b"), "_binary'a''b'", "a'b"},
+		{"varchar", querypb.Type_VARCHAR, clientValue(querypb.Type_VARCHAR, "O'Brien"), "'O''Brien'", "O'Brien"},
+		{"varchar with a backslash", querypb.Type_VARCHAR, clientValue(querypb.Type_VARCHAR, `quote'and\backslash`), `'quote''and\\backslash'`, `quote'and\backslash`},
+		{"empty varchar", querypb.Type_VARCHAR, clientValue(querypb.Type_VARCHAR, ""), "''", ""},
+		{"timestamp", querypb.Type_TIMESTAMP, clientValue(querypb.Type_TIMESTAMP, "2026-08-04 12:00:00"), "'2026-08-04 12:00:00'", "2026-08-04 12:00:00"},
+		// NUL, newline and Ctrl-Z are written as they are rather than escaped.
+		{"varchar with control bytes", querypb.Type_VARCHAR, clientValue(querypb.Type_VARCHAR, "a\x00b\nc\x1ad"), "", "a\x00b\nc\x1ad"},
+		{"varbinary with every byte", querypb.Type_VARBINARY, clientValue(querypb.Type_VARBINARY, string(everyByte)), "", string(everyByte)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fields := []*querypb.Field{field("pk", tc.colType)}
+			table := &binlogdatapb.MinimalTable{Name: "t1", Fields: fields, PKColumns: []int64{0}}
 			rs := &rowStreamer{
-				lastpk:    []sqltypes.Value{clientValue(querypb.Type_VARCHAR, payload)},
+				lastpk:    []sqltypes.Value{tc.value},
 				pkColumns: []int{0},
 				options:   &binlogdatapb.VStreamOptions{NoTimeouts: true},
 				plan:      &Plan{Table: &Table{Name: "t1", Fields: fields}},
@@ -360,31 +386,23 @@ func TestLastPKTextualValuesRoundTrip(t *testing.T) {
 			query, err := rs.buildSelect(table)
 			require.NoError(t, err)
 
-			// Recover the literal and check it decodes back to the value under
-			// ordinary sql_mode, where both '' and \' are escapes.
-			start := strings.Index(query, "> '") + 2
-			require.Greater(t, start, 2, "no literal in %q", query)
-			literal := query[start:strings.LastIndex(query, ")")]
-			assert.Equal(t, payload, decodeLiteral(literal), "literal was %s", literal)
+			const before, after = "where (pk > ", ") order by "
+			start := strings.Index(query, before)
+			end := strings.LastIndex(query, after)
+			require.True(t, start >= 0 && end > start, "no lastpk bound in %q", query)
+			literal := query[start+len(before) : end]
+			if tc.literal != "" {
+				assert.Equal(t, tc.literal, literal)
+			}
+
+			qr, err := env.Mysqld.FetchSuperQuery(t.Context(), "select hex(cast("+literal+" as binary))")
+			require.NoError(t, err)
+			require.Len(t, qr.Rows, 1)
+			if tc.value.IsNull() {
+				assert.True(t, qr.Rows[0][0].IsNull(), "literal was %s", literal)
+				return
+			}
+			assert.Equal(t, strings.ToUpper(hex.EncodeToString([]byte(tc.readBack))), qr.Rows[0][0].ToString(), "literal was %s", literal)
 		})
 	}
-}
-
-// decodeLiteral undoes both doubled quotes and backslash escaping.
-func decodeLiteral(lit string) string {
-	lit = strings.TrimSuffix(strings.TrimPrefix(strings.TrimSpace(lit), "'"), "'")
-	var out strings.Builder
-	for i := 0; i < len(lit); i++ {
-		switch {
-		case lit[i] == '\'' && i+1 < len(lit) && lit[i+1] == '\'':
-			out.WriteByte('\'')
-			i++
-		case lit[i] == '\\' && i+1 < len(lit):
-			out.WriteByte(lit[i+1])
-			i++
-		default:
-			out.WriteByte(lit[i])
-		}
-	}
-	return out.String()
 }
