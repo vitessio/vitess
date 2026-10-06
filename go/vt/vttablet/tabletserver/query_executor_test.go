@@ -1018,6 +1018,48 @@ func TestQueryExecutorPlanNextvalCommitFailureKeepsCache(t *testing.T) {
 	require.Truef(t, got.Equal(want), "qre.Execute() =\n%#v, want:\n%#v", got, want)
 }
 
+// TestQueryExecutorPlanNextvalPartialRefillCommitFailureKeepsCache verifies
+// that a failed refill COMMIT on a non-empty cache leaves the cached range
+// unchanged. The refill starts from the cached last value, which equals the
+// next_id in the sequence table.
+func TestQueryExecutorPlanNextvalPartialRefillCommitFailureKeepsCache(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	t.Cleanup(db.Close)
+
+	db.AddQuery("select next_id, cache from seq where id = 0 for update", &sqltypes.Result{
+		Fields: []*querypb.Field{{Type: sqltypes.Int64}, {Type: sqltypes.Int64}},
+		Rows:   [][]sqltypes.Value{{sqltypes.NewInt64(1), sqltypes.NewInt64(3)}},
+	})
+	db.AddQuery("update seq set next_id = 4 where id = 0", &sqltypes.Result{})
+
+	ctx := t.Context()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	t.Cleanup(tsv.StopService)
+
+	// Use up the cached range [1, 4). The table now holds next_id = 4.
+	for range 3 {
+		qre := newTestQueryExecutor(ctx, tsv, "select next value from seq", 0)
+		_, err := qre.Execute()
+		require.NoError(t, err)
+	}
+
+	db.AddQuery("select next_id, cache from seq where id = 0 for update", &sqltypes.Result{
+		Fields: []*querypb.Field{{Type: sqltypes.Int64}, {Type: sqltypes.Int64}},
+		Rows:   [][]sqltypes.Value{{sqltypes.NewInt64(4), sqltypes.NewInt64(3)}},
+	})
+	db.AddQuery("update seq set next_id = 7 where id = 0", &sqltypes.Result{})
+	db.AddRejectedQuery("commit", errors.New("commit failed"))
+
+	qre := newTestQueryExecutor(ctx, tsv, "select next value from seq", 0)
+	_, err := qre.Execute()
+	require.ErrorContains(t, err, "commit failed")
+
+	// Check that the cache keeps the used up range. A stale cache holds LastVal = 7.
+	seq := qre.plan.Table.SequenceInfo
+	require.EqualValues(t, 4, seq.NextVal)
+	require.EqualValues(t, 4, seq.LastVal)
+}
+
 func TestQueryExecutorMessageStreamACL(t *testing.T) {
 	ctx := t.Context()
 	aclName := fmt.Sprintf("simpleacl-test-%d", rand.Int64())
