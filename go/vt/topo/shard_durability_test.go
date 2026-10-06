@@ -30,8 +30,10 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-// TestShardDurabilityPolicy checks the resolver of a shard's durability policy: the shard's own
-// policy if its record sets one, else its keyspace's.
+// TestShardDurabilityPolicy checks the resolver of a shard's durability policy when the keyspace has no
+// migration source: the shard's own policy if its record sets one, else its keyspace's, and "" when
+// neither sets one or neither record is given. TestShardDurabilityPolicyMigrationSource covers the
+// migration source.
 func TestShardDurabilityPolicy(t *testing.T) {
 	ks := func(durability string) *topodatapb.Keyspace {
 		return &topodatapb.Keyspace{DurabilityPolicy: durability}

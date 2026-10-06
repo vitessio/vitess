@@ -158,9 +158,19 @@ func TestMigrateReplicationModeBackClearsMigrationSource(t *testing.T) {
 
 	require.NoError(t, ts.DeleteShard(t.Context(), "ks", otherShard))
 	c.reset()
+	// The keyspace record when the primary, the last member, leaves the group.
+	var atLastLeave *topodatapb.Keyspace
+	c.onCall = map[string]func(){"StopGroupReplication(" + aliasP + ")": func() {
+		ki, err := ts.GetKeyspace(t.Context(), "ks")
+		require.NoError(t, err)
+		atLastLeave = ki.CloneVT()
+	}}
 	resp, err := migrateShards(t, m, "semi_sync", false)
 	require.NoError(t, err)
 	assert.Empty(t, c.violationsSoFar())
+	require.NotNil(t, atLastLeave, "the primary left its group")
+	assert.Equal(t, &topodatapb.Keyspace{DurabilityPolicy: "group_replication", MigrationSourceDurabilityPolicy: "semi_sync"}, atLastLeave,
+		"the keyspace keeps the group replication policy until the shard has left its group")
 	assert.Equal(t, &topodatapb.Keyspace{DurabilityPolicy: "semi_sync"}, keyspaceRecord(t, ts))
 	assert.Empty(t, c.shardPolicy(t))
 	assert.Equal(t, MigrationStepDone, stepStatuses(resp.KeyspaceSteps)[MigrationActionSetDurabilityPolicy])
