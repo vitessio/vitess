@@ -355,7 +355,9 @@ func (te *TxEngine) commit(ctx context.Context, conn *StatefulConnection) (strin
 // addActiveCommit adds the COMMIT on conn to activeCommits and returns its
 // QueryDetail, which the caller must remove from activeCommits. If
 // activeCommits rejects new COMMITs, it kills the transaction, releases conn,
-// and returns the error. The caller must not use conn after an error.
+// and returns the error. After an error, the caller may only release conn
+// again, with Release or TxPool.RollbackAndRelease. Both do nothing on a
+// released connection.
 func (te *TxEngine) addActiveCommit(ctx context.Context, conn *StatefulConnection) (*QueryDetail, error) {
 	qd := NewQueryDetail(ctx, conn)
 	if err := te.activeCommits.Add(qd); err != nil {
