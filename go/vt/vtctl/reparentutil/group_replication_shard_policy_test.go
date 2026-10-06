@@ -643,3 +643,30 @@ func TestMigrateReplicationModeReportsCheckBeforeKeyspaceStep(t *testing.T) {
 		assert.NotContains(t, m.logger.(*logutil.MemoryLogger).String(), "(planned)", "the dry run's steps are not logged")
 	})
 }
+
+// TestMigrateReplicationModeDryRunKeepsPlannedSource checks the step of a dry run that keeps the
+// keyspace's record while a shard is not converted: it names the migration source that the dry run
+// plans to keep, not the keyspace's current policy, which step 0 replaces.
+func TestMigrateReplicationModeDryRunKeepsPlannedSource(t *testing.T) {
+	c, ts := newFakeGRCluster(t, "semi_sync", migrationTestShard()...)
+	addOtherShard(t, ts)
+	resp, err := migrateShards(t, newTestMigrator(c, ts), "group_replication", true, "-")
+	require.NoError(t, err)
+	idx := stepIndex(resp.KeyspaceSteps, MigrationActionKeepDurabilityPolicy, "")
+	require.GreaterOrEqual(t, idx, 0)
+	assert.Contains(t, resp.KeyspaceSteps[idx].Description, "keep migration source semi_sync")
+}
+
+// TestWriteKeyspacePolicyRefusesUnknownSource checks that the keyspace write of a migration refuses a
+// migration source that is not a registered policy, as it refuses such a durability policy.
+func TestWriteKeyspacePolicyRefusesUnknownSource(t *testing.T) {
+	_, ts := newFakeGRCluster(t, "semi_sync", migrationTestShard()...)
+	_, err := writeKeyspacePolicy(t.Context(), ts, "ks", func(ks *topodatapb.Keyspace) error {
+		ks.DurabilityPolicy = "group_replication"
+		ks.MigrationSourceDurabilityPolicy = "not_a_policy"
+		return nil
+	})
+	require.Error(t, err)
+	assert.Equal(t, vtrpcpb.Code_INVALID_ARGUMENT, vterrors.Code(err))
+	assert.Equal(t, &topodatapb.Keyspace{DurabilityPolicy: "semi_sync"}, keyspaceRecord(t, ts))
+}

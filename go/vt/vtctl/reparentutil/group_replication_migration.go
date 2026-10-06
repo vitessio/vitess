@@ -298,7 +298,7 @@ func (r *migrationRun) migrate(ctx context.Context, resp *vtctldatapb.MigrateRep
 	}
 	if len(notConverted) > 0 {
 		kept := "durability policy " + r.keyspacePolicy
-		if source := r.keyspaceRecord.GetMigrationSourceDurabilityPolicy(); toGroup && source != "" {
+		if source := cmp.Or(r.keyspaceRecord.GetMigrationSourceDurabilityPolicy(), r.plannedSource); toGroup && source != "" {
 			kept = "migration source " + source
 		}
 		r.addKeyspaceStep(resp, MigrationActionKeepDurabilityPolicy, MigrationStepSkipped,
@@ -515,6 +515,9 @@ func writeKeyspacePolicy(ctx context.Context, ts *topo.Server, keyspace string, 
 	}
 	if !policy.CheckDurabilityPolicyExists(ki.DurabilityPolicy) {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "durability policy <%v> is not a valid policy", ki.DurabilityPolicy)
+	}
+	if source := ki.MigrationSourceDurabilityPolicy; source != "" && !policy.CheckDurabilityPolicyExists(source) {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "migration source <%v> is not a valid policy", source)
 	}
 	if err = ts.UpdateKeyspace(ctx, ki); err != nil {
 		return nil, err

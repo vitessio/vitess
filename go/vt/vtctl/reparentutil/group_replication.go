@@ -165,13 +165,13 @@ func checkGroupReplicationPrimaryElect(ctx context.Context, tmc tmclient.TabletM
 	legitimate := legitimateGroup(incarnation, voters, statuses)
 	electAlias := topoproto.TabletAliasString(primaryElect.Alias)
 	electStatus := statuses[electAlias]
-	if electStatus.err == nil && !electStatus.status.GetGroupReplicationEnabled() {
-		return groupReplicationNotEnabledError(electAlias)
-	}
 
 	if currentPrimary == nil {
 		if electStatus.err != nil {
 			return vterrors.Wrapf(electStatus.err, "cannot verify the group replication membership of primary-elect %v", electAlias)
+		}
+		if !electStatus.status.GetGroupReplicationEnabled() {
+			return groupReplicationNotEnabledError(electAlias)
 		}
 		gs := electStatus.groupStatus()
 		if !electStatus.isOnlineMember() || !gs.HasQuorum {
@@ -190,6 +190,9 @@ func checkGroupReplicationPrimaryElect(ctx context.Context, tmc tmclient.TabletM
 	}
 	if electStatus.err != nil {
 		return vterrors.Wrapf(electStatus.err, "cannot verify the group replication membership of primary-elect %v", electAlias)
+	}
+	if !electStatus.status.GetGroupReplicationEnabled() {
+		return groupReplicationNotEnabledError(electAlias)
 	}
 
 	primaryGroup := primaryStatus.groupStatus()
