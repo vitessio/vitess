@@ -384,6 +384,11 @@ func IsDimensionCombined(name string) bool {
 	return combinedDimensions[name]
 }
 
+// JoinLabels returns the key that multi-label stats use for the given label values.
+func JoinLabels(labels []string) string {
+	return safeJoinLabels(labels, nil)
+}
+
 // safeJoinLabels joins the label values with ".", but first replaces any existing
 // "." characters in the labels with the proper replacement, to avoid issues parsing
 // them apart later. The function also replaces specific label values with "all"

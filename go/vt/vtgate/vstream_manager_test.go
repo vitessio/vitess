@@ -21,8 +21,10 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"os"
 	"runtime/pprof"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -35,6 +37,7 @@ import (
 
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/test/utils"
+	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -727,7 +730,6 @@ func TestVStreamsMetrics(t *testing.T) {
 	st := getSandboxTopo(ctx, cell, ks, []string{"-20", "20-40"})
 	vsm := newTestVStreamManager(ctx, hc, st, cell)
 	vsm.vstreamsCreated.ResetAll()
-	vsm.vstreamsLag.ResetAll()
 	vsm.vstreamsCount.ResetAll()
 	vsm.vstreamsEventsStreamed.ResetAll()
 	vsm.vstreamsEndedWithErrors.ResetAll()
@@ -767,15 +769,21 @@ func TestVStreamsMetrics(t *testing.T) {
 	defer vstreamCancel()
 
 	receivedResponses := make([]*binlogdatapb.VStreamResponse, 0)
-	err := vsm.VStream(vstreamCtx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{}, func(events []*binlogdatapb.VEvent) error {
-		receivedResponses = append(receivedResponses, &binlogdatapb.VStreamResponse{Events: events})
+	vstreamErr := make(chan error, 1)
+	go func() {
+		vstreamErr <- vsm.VStream(vstreamCtx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{}, func(events []*binlogdatapb.VEvent) error {
+			receivedResponses = append(receivedResponses, &binlogdatapb.VStreamResponse{Events: events})
+			return nil
+		})
+	}()
 
-		if len(receivedResponses) == 2 {
-			vstreamCancel()
-		}
-
-		return nil
-	})
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		lag := vsm.vstreamsLag.Counts()
+		assert.Equal(c, int64(5), lag[expectedLabels1], "Shard -20 should have lag of 5 while streaming")
+		assert.Equal(c, int64(7), lag[expectedLabels2], "Shard 20-40 should have lag of 7 while streaming")
+	}, 10*time.Second, 10*time.Millisecond)
+	vstreamCancel()
+	err := <-vstreamErr
 
 	require.Error(t, err)
 	require.ErrorIs(t, vterrors.UnwrapAll(err), context.Canceled)
@@ -794,10 +802,8 @@ func TestVStreamsMetrics(t *testing.T) {
 	require.Equal(t, int64(1), created[expectedLabels2], "Shard 20-40 should have created 1 stream")
 
 	lag := vsm.vstreamsLag.Counts()
-	require.Contains(t, lag, expectedLabels1, "Should have lag for shard -20")
-	require.Contains(t, lag, expectedLabels2, "Should have lag for shard 20-40")
-	require.Equal(t, int64(5), lag[expectedLabels1], "Shard -20 should have lag of 5")
-	require.Equal(t, int64(7), lag[expectedLabels2], "Shard 20-40 should have lag of 7")
+	require.NotContains(t, lag, expectedLabels1, "Shard -20 should stop reporting lag once its stream ends")
+	require.NotContains(t, lag, expectedLabels2, "Shard 20-40 should stop reporting lag once its stream ends")
 
 	streamed := vsm.vstreamsEventsStreamed.Counts()
 	require.Contains(t, streamed, expectedLabels1, "Should have events streamed for shard -20")
@@ -812,6 +818,119 @@ func TestVStreamsMetrics(t *testing.T) {
 	require.Equal(t, int64(0), errors[expectedLabels2], "Shard 20-40 should have 0 errors")
 }
 
+func TestVStreamsMetricsCallerIDLabel(t *testing.T) {
+	// Each case uses its own cell because the exporter reuses metrics by name
+	// per cell, and the two cases register them with different label counts.
+	testCases := []struct {
+		name                string
+		cell                string
+		includeCaller       bool
+		expectedLagByLabels map[string]int64
+	}{
+		{
+			name:          "caller label enabled reports each caller separately",
+			cell:          "ad",
+			includeCaller: true,
+			expectedLagByLabels: map[string]int64{
+				"TestVStream.-20.PRIMARY.app1": 5,
+				"TestVStream.-20.PRIMARY.app2": 9,
+			},
+		},
+		{
+			name:          "caller label disabled keeps shard labels",
+			cell:          "ae",
+			includeCaller: false,
+			expectedLagByLabels: map[string]int64{
+				"TestVStream.-20.PRIMARY": 9,
+			},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			originalIncludeCaller := vstreamMetricsIncludeCaller
+			vstreamMetricsIncludeCaller = tc.includeCaller
+			t.Cleanup(func() { vstreamMetricsIncludeCaller = originalIncludeCaller })
+
+			ctx := t.Context()
+			ks := "TestVStream"
+			_ = createSandbox(ks)
+			hc := discovery.NewFakeHealthCheck(nil)
+			st := getSandboxTopo(ctx, tc.cell, ks, []string{"-20"})
+			vsm := newTestVStreamManager(ctx, hc, st, tc.cell)
+			sbc := hc.AddTestTablet(tc.cell, "1.1.1.1", 1001, ks, "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
+			addTabletToSandboxTopo(t, ctx, st, ks, "-20", sbc.Tablet())
+
+			vstreamCtx, vstreamCancel := context.WithCancel(ctx)
+			t.Cleanup(vstreamCancel)
+			startCallerStream := func(principal string, lagSeconds int64) {
+				sbc.AddVStreamEvents([]*binlogdatapb.VEvent{
+					{Type: binlogdatapb.VEventType_GTID, Gtid: "gtid01"},
+					{Type: binlogdatapb.VEventType_COMMIT, Timestamp: 10, CurrentTime: (10 + lagSeconds) * 1e9},
+				}, nil)
+				callerCtx := callerid.NewContext(vstreamCtx, callerid.NewEffectiveCallerID(principal, "pod-1", ""), nil)
+				vgtid := &binlogdatapb.VGtid{ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: ks, Shard: "-20", Gtid: "pos"}}}
+				go func() {
+					_ = vsm.VStream(callerCtx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{}, func(events []*binlogdatapb.VEvent) error {
+						return nil
+					})
+				}()
+				require.EventuallyWithT(t, func(c *assert.CollectT) {
+					assert.Contains(c, slices.Collect(maps.Values(vsm.vstreamsLag.Counts())), lagSeconds)
+				}, 30*time.Second, 10*time.Millisecond)
+			}
+			startCallerStream("app1", 5)
+			startCallerStream("app2", 9)
+
+			assert.Equal(t, tc.expectedLagByLabels, vsm.vstreamsLag.Counts())
+			assert.ElementsMatch(t, slices.Collect(maps.Keys(tc.expectedLagByLabels)), slices.Collect(maps.Keys(vsm.vstreamsCreated.Counts())))
+		})
+	}
+}
+
+func TestVStreamLagTrackerReportsMaxLagOfLiveStreams(t *testing.T) {
+	tracker := newVStreamLagTracker()
+	shardLabels := []string{"ks", "-80", "PRIMARY"}
+	otherShardLabels := []string{"ks", "80-", "PRIMARY"}
+
+	caughtUpLag, endCaughtUpStream := tracker.register(shardLabels)
+	behindLag, endBehindStream := tracker.register(shardLabels)
+	otherShardLag, endOtherShardStream := tracker.register(otherShardLabels)
+	caughtUpLag.Store(1)
+	behindLag.Store(120)
+	otherShardLag.Store(3)
+	assert.Equal(t, map[string]int64{"ks.-80.PRIMARY": 120, "ks.80-.PRIMARY": 3}, tracker.maxLagByLabel())
+
+	endBehindStream()
+	assert.Equal(t, map[string]int64{"ks.-80.PRIMARY": 1, "ks.80-.PRIMARY": 3}, tracker.maxLagByLabel())
+
+	endCaughtUpStream()
+	endOtherShardStream()
+	assert.Empty(t, tracker.maxLagByLabel())
+}
+
+func TestVStreamLagTrackerSkipsStreamsWithoutLag(t *testing.T) {
+	tracker := newVStreamLagTracker()
+	shardLabels := []string{"ks", "-80", "PRIMARY"}
+
+	firstLag, endFirstStream := tracker.register(shardLabels)
+	defer endFirstStream()
+	assert.Empty(t, tracker.maxLagByLabel())
+
+	_, endReconnectedStream := tracker.register(shardLabels)
+	defer endReconnectedStream()
+	firstLag.Store(-2)
+	assert.Equal(t, map[string]int64{"ks.-80.PRIMARY": -2}, tracker.maxLagByLabel())
+}
+
+func TestVStreamLagTrackerEscapesDotsInLabels(t *testing.T) {
+	tracker := newVStreamLagTracker()
+	lag, endStream := tracker.register([]string{"my.ks", "-", "REPLICA"})
+	defer endStream()
+	lag.Store(4)
+
+	assert.Equal(t, map[string]int64{"my_ks.-.REPLICA": 4}, tracker.maxLagByLabel())
+}
+
 func TestVStreamsMetricsErrors(t *testing.T) {
 	ctx := t.Context()
 
@@ -823,7 +942,6 @@ func TestVStreamsMetricsErrors(t *testing.T) {
 	st := getSandboxTopo(ctx, cell, ks, []string{"-20", "20-40"})
 	vsm := newTestVStreamManager(ctx, hc, st, cell)
 	vsm.vstreamsCreated.ResetAll()
-	vsm.vstreamsLag.ResetAll()
 	vsm.vstreamsCount.ResetAll()
 	vsm.vstreamsEventsStreamed.ResetAll()
 	vsm.vstreamsEndedWithErrors.ResetAll()
@@ -904,7 +1022,6 @@ func TestVStreamErrorInCallback(t *testing.T) {
 	st := getSandboxTopo(ctx, cell, ks, []string{"-20", "20-40"})
 	vsm := newTestVStreamManager(ctx, hc, st, cell)
 	vsm.vstreamsCreated.ResetAll()
-	vsm.vstreamsLag.ResetAll()
 	vsm.vstreamsCount.ResetAll()
 	vsm.vstreamsEventsStreamed.ResetAll()
 	vsm.vstreamsEndedWithErrors.ResetAll()
@@ -1274,6 +1391,52 @@ func TestVStreamJournalOneToMany(t *testing.T) {
 			}},
 		},
 	}, receivedEvents[2].Events[0])
+}
+
+func TestVStreamsCountDropsShardStreamEndedByJournal(t *testing.T) {
+	ctx := t.Context()
+	// Use a unique cell to avoid parallel tests interfering with each other's metrics
+	cell := "af"
+	ks := "TestVStream"
+	_ = createSandbox(ks)
+	hc := discovery.NewFakeHealthCheck(nil)
+	st := getSandboxTopo(ctx, cell, ks, []string{"-20", "-10", "10-20"})
+	vsm := newTestVStreamManager(ctx, hc, st, cell)
+	sbc0 := hc.AddTestTablet(cell, "1.1.1.1", 1001, ks, "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
+	addTabletToSandboxTopo(t, ctx, st, ks, "-20", sbc0.Tablet())
+	sbc1 := hc.AddTestTablet(cell, "1.1.1.1", 1002, ks, "-10", topodatapb.TabletType_PRIMARY, true, 1, nil)
+	addTabletToSandboxTopo(t, ctx, st, ks, "-10", sbc1.Tablet())
+	sbc2 := hc.AddTestTablet(cell, "1.1.1.1", 1003, ks, "10-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
+	addTabletToSandboxTopo(t, ctx, st, ks, "10-20", sbc2.Tablet())
+
+	sbc0.AddVStreamEvents([]*binlogdatapb.VEvent{
+		{Type: binlogdatapb.VEventType_JOURNAL, Journal: &binlogdatapb.Journal{
+			Id:            1,
+			MigrationType: binlogdatapb.MigrationType_SHARDS,
+			ShardGtids: []*binlogdatapb.ShardGtid{
+				{Keyspace: ks, Shard: "-10", Gtid: "pos10"},
+				{Keyspace: ks, Shard: "10-20", Gtid: "pos1020"},
+			},
+			Participants: []*binlogdatapb.KeyspaceShard{{Keyspace: ks, Shard: "-20"}},
+		}},
+	}, nil)
+	vgtid := &binlogdatapb.VGtid{ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: ks, Shard: "-20", Gtid: "pos"}}}
+
+	vstreamCtx, vstreamCancel := context.WithCancel(ctx)
+	t.Cleanup(vstreamCancel)
+	go func() {
+		_ = vsm.VStream(vstreamCtx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{}, func(events []*binlogdatapb.VEvent) error {
+			return nil
+		})
+	}()
+
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		assert.Equal(c, map[string]int64{
+			"TestVStream.-20.PRIMARY":   0,
+			"TestVStream.-10.PRIMARY":   1,
+			"TestVStream.10-20.PRIMARY": 1,
+		}, vsm.vstreamsCount.Counts())
+	}, 30*time.Second, 10*time.Millisecond)
 }
 
 func TestVStreamJournalManyToOne(t *testing.T) {

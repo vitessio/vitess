@@ -40,6 +40,7 @@
         - [Stricter PROXY protocol v1 header validation](#vtgate-proxy-protocol-v1-strictness)
         - [MySQL-faithful validation and rejection of unsupported `sql_mode` values](#vtgate-sql-mode-rejection)
         - [New `VEXPLAIN MYSQLPLAN` statement](#vtgate-vexplain-mysqlplan)
+        - [VStream metrics report live streams and can include the caller](#vtgate-vstream-metrics)
     - **[Reparent](#minor-changes-reparent)**
         - [`EmergencyReparentShard` no longer waits on replicas that cannot win the election](#ers-lagging-relay-log-wait)
         - [`EmergencyReparentShard` can explicitly recover from split brain](#ers-allow-split-brain-promotion)
@@ -454,6 +455,14 @@ For each `Route` in the plan, the per-shard `EXPLAIN` queries are run concurrent
 Because each per-shard `EXPLAIN` runs on a separate connection, a `VEXPLAIN MYSQLPLAN` issued inside an open transaction reflects the pre-transaction state of each shard rather than any uncommitted changes made in that transaction — the same limitation as `VEXPLAIN ALL`.
 
 Like a plain `EXPLAIN`, the per-shard `EXPLAIN FORMAT=JSON` queries `VEXPLAIN MYSQLPLAN` issues are not subject to table ACL checks on the explained tables, so `VEXPLAIN MYSQLPLAN` can return per-shard plan metadata (index names, row estimates, filtered percentages) for tables the caller could not otherwise read. For the same reason — the tablet plans an `EXPLAIN` without the explained table's identity — query denylist rules that are conditioned on a table name are not enforced against these per-shard `EXPLAIN` queries either; denylist rules conditioned on the query pattern still apply if their pattern matches the `explain format = json ...` query text. Unlike a plain `EXPLAIN`, which reaches a single arbitrary shard, `VEXPLAIN MYSQLPLAN` extends this to every resolved shard of every keyspace in the plan. Deployments that rely on table ACLs or table-scoped query denylist rules to restrict read access should restrict access to `VEXPLAIN MYSQLPLAN` accordingly.
+
+#### <a id="vtgate-vstream-metrics"/>VStream metrics report live streams and can include the caller</a>
+
+`VStreamsLag` now reports, for each keyspace, shard, and tablet type, the highest lag across the VStreams that are currently streaming from that shard. Previously it reported the lag of whichever stream sent an event last, and kept reporting it after every stream for the shard had closed. A shard's series now disappears when its last stream closes, and a newly opened stream is not reported until its first event arrives. Alerts that use `absent()` on `VStreamsLag`, or that fire when lag stays above a threshold, may behave differently.
+
+`VStreamsCount` now also drops streams that end without an error, such as a shard stream ended by a resharding journal event. Previously those streams were counted as active forever.
+
+The new `--vstream-metrics-include-caller` flag adds a `CallerID` label to `VStreamsCreated`, `VStreamsCount`, `VStreamsEventsStreamed`, `VStreamsEndedWithErrors`, `VStreamsLag`, and `VStreamsTransactionsChunked`, so each streaming application can be monitored separately. The label is set to the principal of the effective caller ID in the `VStreamRequest`; streams that do not set one get an empty `CallerID`. Each distinct principal adds a series per keyspace, shard, and tablet type, so clients should set the principal to a logical application name rather than a per-instance ID. The flag is off by default, and the metrics keep their existing labels when it is off.
 
 ### <a id="minor-changes-reparent"/>Reparent</a>
 

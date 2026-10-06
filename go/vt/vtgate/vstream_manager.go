@@ -22,15 +22,18 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"math/rand/v2"
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/exp/maps"
 
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
@@ -53,12 +56,71 @@ type vstreamManager struct {
 	toposerv srvtopo.Server
 	cell     string
 
+	includeCallerInMetrics bool
+
 	vstreamsCreated             *stats.CountersWithMultiLabels
-	vstreamsLag                 *stats.GaugesWithMultiLabels
+	vstreamsLagTracker          *vstreamLagTracker
+	vstreamsLag                 *stats.GaugesFuncWithMultiLabels
 	vstreamsCount               *stats.CountersWithMultiLabels
 	vstreamsEventsStreamed      *stats.CountersWithMultiLabels
 	vstreamsEndedWithErrors     *stats.CountersWithMultiLabels
 	vstreamsTransactionsChunked *stats.CountersWithMultiLabels
+}
+
+// vstreamLagTracker holds the lag of every live shard stream, so that the
+// VStreamsLag gauge only reports streams that are still open. A label is
+// reported as the max lag across its live streams.
+type vstreamLagTracker struct {
+	mu      sync.Mutex
+	streams map[string]map[*atomic.Int64]struct{}
+}
+
+func newVStreamLagTracker() *vstreamLagTracker {
+	return &vstreamLagTracker{streams: make(map[string]map[*atomic.Int64]struct{})}
+}
+
+// noLagYet marks a stream that has not received an event, so it is not
+// reported as caught up before its lag is known.
+const noLagYet = math.MinInt64
+
+// register adds a live stream and returns the value it should store its lag
+// in, along with a func that must be called when the stream ends.
+func (t *vstreamLagTracker) register(labelValues []string) (*atomic.Int64, func()) {
+	key := stats.JoinLabels(labelValues)
+	lag := &atomic.Int64{}
+	lag.Store(noLagYet)
+
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.streams[key] == nil {
+		t.streams[key] = make(map[*atomic.Int64]struct{})
+	}
+	t.streams[key][lag] = struct{}{}
+
+	return lag, func() {
+		t.mu.Lock()
+		defer t.mu.Unlock()
+		delete(t.streams[key], lag)
+		if len(t.streams[key]) == 0 {
+			delete(t.streams, key)
+		}
+	}
+}
+
+func (t *vstreamLagTracker) maxLagByLabel() map[string]int64 {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	maxLags := make(map[string]int64, len(t.streams))
+	for key, lags := range t.streams {
+		maxLag := int64(noLagYet)
+		for lag := range lags {
+			maxLag = max(maxLag, lag.Load())
+		}
+		if maxLag != noLagYet {
+			maxLags[key] = maxLag
+		}
+	}
+	return maxLags
 }
 
 // maxSkewTimeoutSeconds is the maximum allowed skew between two streams when the MinimizeSkew flag is set
@@ -118,6 +180,8 @@ type vstream struct {
 	filter     *binlogdatapb.Filter
 	resolver   *srvtopo.Resolver
 	optCells   string
+
+	callerPrincipal string
 
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
@@ -180,23 +244,45 @@ type journalEvent struct {
 	done         chan struct{}
 }
 
+func vstreamMetricLabelNames(includeCaller bool) []string {
+	labelNames := []string{"Keyspace", "ShardName", "TabletType"}
+	if includeCaller {
+		labelNames = append(labelNames, "CallerID")
+	}
+	return labelNames
+}
+
+func (vs *vstream) metricLabelValues(sgtid *binlogdatapb.ShardGtid) []string {
+	labelValues := []string{sgtid.Keyspace, sgtid.Shard, vs.tabletType.String()}
+	if vs.vsm.includeCallerInMetrics {
+		labelValues = append(labelValues, vs.callerPrincipal)
+	}
+	return labelValues
+}
+
 func newVStreamManager(resolver *srvtopo.Resolver, serv srvtopo.Server, cell string) *vstreamManager {
 	exporter := servenv.NewExporter(cell, "VStreamManager")
-	labels := []string{"Keyspace", "ShardName", "TabletType"}
+	labels := vstreamMetricLabelNames(vstreamMetricsIncludeCaller)
+	lagTracker := newVStreamLagTracker()
 
 	return &vstreamManager{
 		resolver: resolver,
 		toposerv: serv,
 		cell:     cell,
+
+		includeCallerInMetrics: vstreamMetricsIncludeCaller,
+
 		vstreamsCreated: exporter.NewCountersWithMultiLabels(
 			"VStreamsCreated",
 			"Number of vstreams created",
 			labels,
 		),
-		vstreamsLag: exporter.NewGaugesWithMultiLabels(
+		vstreamsLagTracker: lagTracker,
+		vstreamsLag: exporter.NewGaugesFuncWithMultiLabels(
 			"VStreamsLag",
-			"Difference between event current time and the binlog event timestamp",
+			"Max difference between event current time and the binlog event timestamp across active vstreams",
 			labels,
+			lagTracker.maxLagByLabel,
 		),
 		vstreamsCount: exporter.NewCountersWithMultiLabels(
 			"VStreamsCount",
@@ -228,8 +314,10 @@ func (vsm *vstreamManager) VStream(ctx context.Context, tabletType topodatapb.Ta
 	if err != nil {
 		return vterrors.Wrap(err, "failed to resolve vstream parameters")
 	}
+	callerPrincipal := callerid.GetPrincipal(callerid.EffectiveCallerIDFromContext(ctx))
 	log.Info(
 		"VStream flags",
+		slog.String("caller_principal", callerPrincipal),
 		slog.Bool("minimize_skew", flags.GetMinimizeSkew()),
 		slog.Uint64("heartbeat_interval", uint64(flags.GetHeartbeatInterval())),
 		slog.Bool("stop_on_reshard", flags.GetStopOnReshard()),
@@ -262,6 +350,7 @@ func (vsm *vstreamManager) VStream(ctx context.Context, tabletType topodatapb.Ta
 		vgtid:                       vgtid,
 		tabletType:                  tabletType,
 		optCells:                    flags.Cells,
+		callerPrincipal:             callerPrincipal,
 		filter:                      filter,
 		send:                        send,
 		resolver:                    vsm.resolver,
@@ -519,13 +608,14 @@ func (vs *vstream) sendEvents(ctx context.Context) {
 // startOneStream sets up one shard stream.
 func (vs *vstream) startOneStream(ctx context.Context, sgtid *binlogdatapb.ShardGtid) {
 	vs.wg.Go(func() {
-		labelValues := []string{sgtid.Keyspace, sgtid.Shard, vs.tabletType.String()}
+		labelValues := vs.metricLabelValues(sgtid)
 		// Initialize vstreamsEndedWithErrors metric to zero.
 		vs.vsm.vstreamsEndedWithErrors.Add(labelValues, 0)
 		vs.vsm.vstreamsCreated.Add(labelValues, 1)
 		vs.vsm.vstreamsCount.Add(labelValues, 1)
 
 		err := vs.streamFromTablet(ctx, sgtid)
+		vs.vsm.vstreamsCount.Add(labelValues, -1)
 		// Set the error on exit. First one wins.
 		if err != nil {
 			log.Error(fmt.Sprintf("Error in vstream for %+v: %v", sgtid, err))
@@ -536,7 +626,6 @@ func (vs *vstream) startOneStream(ctx context.Context, sgtid *binlogdatapb.Shard
 				// vstream itself.
 				vs.vsm.vstreamsEndedWithErrors.Add(labelValues, 1)
 			}
-			vs.vsm.vstreamsCount.Add(labelValues, -1)
 			vs.once.Do(func() {
 				vs.setError(err, fmt.Sprintf("error starting stream from shard GTID %+v", sgtid))
 				vs.cancel()
@@ -657,7 +746,9 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 	// It will be closed when all journal events converge.
 	var journalDone chan struct{}
 	ignoreTablets := make([]*topodatapb.TabletAlias, 0)
-	labelValues := []string{sgtid.Keyspace, sgtid.Shard, vs.tabletType.String()}
+	labelValues := vs.metricLabelValues(sgtid)
+	streamLag, endStreamLag := vs.vsm.vstreamsLagTracker.register(labelValues)
+	defer endStreamLag()
 
 	errCount := 0
 	for {
@@ -944,8 +1035,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 				default:
 					sendevents = append(sendevents, event)
 				}
-				lag := event.CurrentTime/1e9 - event.Timestamp
-				vs.vsm.vstreamsLag.Set(labelValues, lag)
+				streamLag.Store(event.CurrentTime/1e9 - event.Timestamp)
 			}
 			if len(sendevents) != 0 {
 				eventss = append(eventss, sendevents)
@@ -1074,7 +1164,7 @@ func (vs *vstream) sendAll(ctx context.Context, sgtid *binlogdatapb.ShardGtid, e
 
 // sendEventsLocked sends events assuming vs.mu is already held by the caller.
 func (vs *vstream) sendEventsLocked(ctx context.Context, sgtid *binlogdatapb.ShardGtid, eventss [][]*binlogdatapb.VEvent) error {
-	labelValues := []string{sgtid.Keyspace, sgtid.Shard, vs.tabletType.String()}
+	labelValues := vs.metricLabelValues(sgtid)
 
 	// Send all chunks while holding the lock.
 	for _, events := range eventss {

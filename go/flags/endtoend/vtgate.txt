@@ -245,6 +245,7 @@ Flags:
       --truncate-error-len int                                           truncate errors sent to client if they are longer than this value (0 means do not truncate)
   -v, --version                                                          print binary version
       --vschema-ddl-authorized-users string                              List of users authorized to execute vschema ddl operations, or '%' to allow all users.
+      --vstream-metrics-include-caller                                   Add a CallerID label, set to the effective caller principal, to VStream metrics. Clients should set the principal to a logical application name, not an instance ID, to keep metric cardinality bounded. Streams without a principal get an empty CallerID.
       --vtgate-balancer-mode string                                      Tablet balancer mode (options: cell, prefer-cell, random, session). Defaults to 'cell' which shuffles tablets in the local cell.
       --vtgate-config-terse-errors                                       prevent bind vars from escaping in returned errors
       --warming-reads-concurrency int                                    Number of concurrent warming reads allowed (default 500)
