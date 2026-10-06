@@ -266,8 +266,8 @@ func TestCommitRemovesActiveCommit(t *testing.T) {
 }
 
 // TestAutocommitCommitAllowedDuringClusterAction verifies that a COMMIT for an autocommit
-// transaction succeeds during shutdown: every statement is already durably committed in
-// MySQL, so rejecting the RPC would invite the client to retry already-applied writes.
+// transaction succeeds during shutdown. MySQL already committed every statement, and a
+// rejection would invite the client to retry applied writes.
 func TestAutocommitCommitAllowedDuringClusterAction(t *testing.T) {
 	db := fakesqldb.New(t)
 	db.AddQueryPattern(".*", &sqltypes.Result{})

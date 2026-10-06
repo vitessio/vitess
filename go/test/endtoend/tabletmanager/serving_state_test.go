@@ -152,8 +152,8 @@ func testChangeTypePrimaryWithBlockedCommit(t *testing.T, tabletType topodatapb.
 
 	commitErr := make(chan error, 1)
 
-	// Issue the COMMIT, which should block waiting on semi-sync. The expectation is that
-	// it will be killed after the grace period as part of the `ChangeType` call.
+	// Issue the COMMIT in the background. It blocks on semi-sync until the
+	// grace period of the `ChangeType` transition kills it.
 	go func() {
 		_, err := conn.ExecuteFetch("commit", 0, false)
 		commitErr <- err
