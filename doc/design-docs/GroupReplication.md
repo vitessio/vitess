@@ -23,7 +23,7 @@ This design instead makes GR a **replication mode inside the existing control pl
 
 | Concern | Where it lives | Mechanism |
 |---|---|---|
-| Choose GR | keyspace durability policy; a shard's own policy while its keyspace is migrated | `group_replication`, `group_replication_cross_cell` |
+| Choose GR | keyspace durability policy; a shard's own policy while its keyspace is migrated | `group_replication_cross_cell` |
 | MySQL primitives | `go/mysql`, `mysqlctl.MysqlDaemon` | `GroupReplicationStatus`, `ConfigureGroupReplication`, `StartGroupReplication`, `StopGroupReplication`, `SetGroupReplicationPrimary` |
 | Observability | `FullStatus.group_replication_status` | VTOrc, `GetFullStatus` |
 | Membership lifecycle | vttablet (tabletmanager) | tablet derives its GR config from topo; RPCs `StartGroupReplication`/`StopGroupReplication` |
@@ -79,15 +79,18 @@ type GroupReplicationDurabler interface {
     Durabler; ReplicationModer
     IsGroupMember(*topodatapb.Tablet) bool      // may be a voting member (vs always an async replica)
     MemberWeight(*topodatapb.Tablet) int        // group_replication_member_weight
-    RequiresCrossCellMajority() bool
-    MaxVotersPerCell() int                      // 0 = no limit other than 9 members
 }
 ```
 
-Two policies are registered:
+One policy is registered, `group_replication_cross_cell`. PRIMARY and REPLICA tablets are eligible voters, with **one voter per cell** and at most 9; other types replicate asynchronously from the group's primary, and `SemiSyncAckers()` is 0. No cell can hold a majority of the voting members: every acknowledged transaction has been accepted by a member in another cell, which is the GR equivalent of `cross_cell`; see "What an acknowledged commit guarantees" for what accepted means once the group loses its majority. The other PRIMARY/REPLICA tablets of a cell replicate asynchronously. VTOrc reports a cell majority as a violation. The one-voter-per-cell rule is not a setting of the policy: every component applies it.
 
-- `group_replication`: PRIMARY and REPLICA tablets are eligible voters, up to 9; other types replicate asynchronously from the group's primary. `SemiSyncAckers()` is 0.
-- `group_replication_cross_cell`: the same, but with **one voter per cell**, so no cell can hold a majority of the voting members. Every acknowledged transaction has then been accepted by a member in another cell, which is the GR equivalent of `cross_cell`; see "What an acknowledged commit guarantees" for what accepted means once the group loses its majority. The other PRIMARY/REPLICA tablets of a cell replicate asynchronously. VTOrc reports a cell majority as a violation.
+A shard needs eligible tablets (PRIMARY or REPLICA) in at least three cells (`policy.MinGroupReplicationCells`): with one voter per cell, a group of two voters keeps no majority when one of them fails. Every component that starts a group checks it, before it changes anything:
+
+- the initial promotion of `PlannedReparentShard` and `InitShardPrimary` refuse with `FAILED_PRECONDITION`, and name the cells they found (`reparentutil.CheckGroupReplicationCells`);
+- the preflight of `MigrateReplicationMode` refuses (see "Migration");
+- VTOrc writes no initial voter list, and so bootstraps no group, while its selection has fewer than three voters: it reports `GroupVotersBelowTarget` instead, which has no recovery, until the shard has eligible tablets in a third cell.
+
+An earlier `group_replication` policy without the per-cell limit was removed before any release: with more than one voter in a cell, a cell could hold the majority of the voters, and the loss of that cell lost acknowledged transactions.
 
 Which eligible tablets actually vote is recorded per shard; see "Voters" below.
 
@@ -116,14 +119,14 @@ A group should be small: every commit waits for a majority of the voting members
 - **Who writes it**, always under the shard lock:
   - `MigrateReplicationMode`, before it bootstraps the group, and when converting back, after the last member left the group, it clears the list.
   - `PlannedReparentShard`, on the initial promotion of a shard that never had a primary, before `InitPrimary` bootstraps the group.
-  - VTOrc, when it replaces a voter (below).
+  - VTOrc, when it replaces a voter (below), and when no voter is listed yet (`GroupVotersOutOfDate`): only a list of at least three voters, in three cells; otherwise it reports `GroupVotersBelowTarget` and writes nothing.
 - **Selection** (`policy.SelectVoters(durability, current, groupPrimary, candidates)`). It changes the current voters as little as possible:
   1. The group's primary always keeps its seat; removing it would force a failover.
   2. A current voter is kept while it is eligible (`IsGroupMember`) and has not failed, within the limit of its cell.
   3. Active members come next, so that a tablet already in the group is preferred to one that would have to join.
   4. Free seats go to eligible, non-failed tablets, by promotion rule, then lowest alias.
 
-  Every cell is limited to `MaxVotersPerCell()` voters (1 for `group_replication_cross_cell`), and the group to 9. The result is deterministic, so every writer computes the same list from the same inputs.
+  Every cell is limited to one voter, and the group to 9. The result is deterministic, so every writer computes the same list from the same inputs.
 - **Replacement.** A voter that is unreachable for longer than `--group-replication-voter-replacement-grace-period` (VTOrc flag, default 1m) is considered failed. VTOrc's analysis `GroupVotersOutOfDate` then selects the voters again, with the current list and the group's primary, and stores the new list; the new voter's tablet joins the group, and the old one becomes an asynchronous replica when it comes back. A voter that is only briefly unreachable, for example while it restarts, keeps its seat.
   - **No shrink to a minority view.** VTOrc changes the list only while the group is active with quorum, and MySQL's view quorum counts only the members in the view: after two of three voters left the view cleanly and stayed away past the grace period, a selection on the view `{A}` alone would be `[A]`, and `A` would serve alone (see "Group shrink fails closed"). VTOrc therefore never writes a list under which a view of the shard's group that lacks a majority of the current voters would hold a majority of the new list (`voterChangeRefusal` in `SelectGroupReplicationVoters`, which both the analysis and the recovery use). A current voter counts in a view when it is ONLINE there, as for the serving invariant; a new voter when it is ONLINE or RECOVERING there; a member of another incarnation's group is no view of the shard's group; and a new voter that is unreachable and that no reachable member reports active counts in every view, since VTOrc cannot see the view it may be in. A refused change keeps the current list, and the recovery logs why; members that are not voters still leave the group. Replacing a failed voter with a spare stays allowed: a view that holds the voter majority may change it, and a spare joins a view only through distributed recovery, which gives it the group's history (the TLA+ property `NoVoterMinority` counts only members that were listed voters). The rule fails closed: a view of one voter, whose other voters are gone for good and whose cells have no spare, stays without a serving primary until an operator restores a voter or rewrites the list.
   - **Compare-and-swap.** VTOrc writes the list under the shard lock, as a compare-and-swap on the list and the incarnation that its selection read: a VTOrc whose lock expired, or a component that wrote the list or recorded an incarnation since, makes the write fail with `FAILED_PRECONDITION`, and the next recovery selects again.
@@ -408,8 +411,8 @@ The fields are optional and additive (field 13 of `Shard`, field 13 of `Keyspace
 ### Where a policy can be set
 
 - **`CreateKeyspace`** (vtctld and legacy vtctl) stores any string, as before: a new keyspace has no shard, and the first promotion of each shard checks the tablets' capabilities (above).
-- **`SetKeyspaceDurabilityPolicy`** checks that the policy is registered and, under the keyspace lock, refuses with `FAILED_PRECONDITION`, pointing to `MigrateReplicationMode`, a change that switches between asynchronous replication and Group Replication while a shard of the keyspace is initialized (it had a primary, has a group's voters, incarnation or bootstrap intent, or a policy of its own), and any change while a migration source is set. A keyspace whose shards are not initialized yet, and a change that keeps the replication mode (`semi_sync` to `cross_cell`, `group_replication` to `group_replication_cross_cell`), are still allowed. A current policy that vtctld does not know, for example one that a newer version wrote, counts as another mode: the change is refused while a shard is initialized, which fails safe, since that policy may run either mode.
-- **`MigrateReplicationMode`** writes the shard's own policy at a fixed step of each shard's conversion, and the keyspace record at step 0 and step 8, or at the end of a rollback (see "The shard's policy during a migration"). It only converts between asynchronous replication and Group Replication: a switch between two policies of the mode that the keyspace runs (`group_replication` to `group_replication_cross_cell`) is refused with `FAILED_PRECONDITION` and left to `SetKeyspaceDurabilityPolicy`, so that the migration source is always an asynchronous policy and the voters of a running group are never selected again by the migration. A keyspace without a durability policy is refused too: VTOrc does not manage it, and keeping `none` as its migration source would make VTOrc start to recover its shards. On a shard whose policy is a Group Replication policy and whose group runs, the migration never changes the voters: VTOrc maintains them, and the migration keeps the recorded ones (its step that stores the voters is skipped, and says what its own selection would have been) and goes on with the next shard.
+- **`SetKeyspaceDurabilityPolicy`** checks that the policy is registered and, under the keyspace lock, refuses with `FAILED_PRECONDITION`, pointing to `MigrateReplicationMode`, a change that switches between asynchronous replication and Group Replication while a shard of the keyspace is initialized (it had a primary, has a group's voters, incarnation or bootstrap intent, or a policy of its own), and any change while a migration source is set. A keyspace whose shards are not initialized yet, and a change that keeps the replication mode (`semi_sync` to `cross_cell`), are still allowed. A current policy that vtctld does not know, for example one that a newer version wrote, counts as another mode: the change is refused while a shard is initialized, which fails safe, since that policy may run either mode.
+- **`MigrateReplicationMode`** writes the shard's own policy at a fixed step of each shard's conversion, and the keyspace record at step 0 and step 8, or at the end of a rollback (see "The shard's policy during a migration"). It only converts between asynchronous replication and Group Replication: a switch between two policies of the mode that the keyspace runs (for example from `semi_sync` to `cross_cell`, or between two Group Replication policies that another build registers) is refused with `FAILED_PRECONDITION` and left to `SetKeyspaceDurabilityPolicy`, so that the migration source is always an asynchronous policy and the voters of a running group are never selected again by the migration. A keyspace without a durability policy is refused too: VTOrc does not manage it, and keeping `none` as its migration source would make VTOrc start to recover its shards. On a shard whose policy is a Group Replication policy and whose group runs, the migration never changes the voters: VTOrc maintains them, and the migration keeps the recorded ones (its step that stores the voters is skipped, and says what its own selection would have been) and goes on with the next shard.
 
 ### Audit: decisions that depend on the durability policy
 
@@ -422,7 +425,7 @@ Every decision that reads a durability policy, with its behaviour on a converted
 | vtctld | `InitShardPrimary` bootstraps the group (`grpcvtctldserver` `InitShardPrimaryLocked`) | no bootstrap on a converted shard without a primary | same | yes (rare) |
 | vtctld | replica semi-sync of `SetReplicationSource`, `ReparentTablet`, `StartReplication`, `ChangeTabletType`, `TabletExternallyReparented` (`grpcvtctldserver`, `reparentutil/replication.go`, `wrangler`) | semi-sync acks asked of async replicas whose primary does not use semi-sync | same, on the shards not converted back yet | inconsistent, harmless (the tablet's group rule wins) |
 | vtctld | `MigrateReplicationMode` keyspace switch and order | switched after the last shard; the converted shards had no policy of their own | switched first: the shards not converted back lost the Group Replication rules for the whole rollback | yes (backward) |
-| VTOrc | policy of the detection analysis (`analysis_dao.go`): `GroupNotBootstrapped`, `GroupBootstrapNotRecorded`, `GroupMemberNotOnline`, `GroupVotersOutOfDate`, `GroupCellMajority` | off: a voter that left is not rejoined, a group whose members all left is never bootstrapped, a failed voter is never replaced | off on the shards not converted back | yes |
+| VTOrc | policy of the detection analysis (`analysis_dao.go`): `GroupNotBootstrapped`, `GroupBootstrapNotRecorded`, `GroupMemberNotOnline`, `GroupVotersOutOfDate`, `GroupVotersBelowTarget`, `GroupCellMajority` | off: a voter that left is not rejoined, a group whose members all left is never bootstrapped, a failed voter is never replaced | off on the shards not converted back | yes |
 | VTOrc | `GroupPrimaryNotInTopo` (`group_replication.go`) | runs (every voter is a member, so no primary outside the group) | same | no |
 | VTOrc | semi-sync analyses `ReplicaSemiSyncMustBeSet`/`MustNotBeSet`, `PrimarySemiSyncMustBeSet`/`MustNotBeSet` (`analysis_problem.go`; suppressed on active members) | `ReplicaSemiSyncMustBeSet` turns semi-sync back on for an async replica of another cell, undoing the migration's step 6 | same, on the shards not converted back yet | yes |
 | VTOrc | `StaleTopoPrimary` (`reconcileStaleTopoPrimary`, `isGroupReplicationVoter`) | configures the default channel on the old primary, a voter, after the group elected another primary (NEW-3): it never rejoins | same | yes |
@@ -498,7 +501,7 @@ In every run after the change, MySQL never made itself writable, and every sampl
 
 ## Recommended topology
 
-- Three cells, with one voting member per cell (a group of 3) under `group_replication_cross_cell`. Use five members as 2-2-1 to keep a majority, and so the primary, through two failures.
+- At least three cells with a PRIMARY or REPLICA tablet, under `group_replication_cross_cell`: one voting member per cell, so a group of 3 in three cells. A shard with eligible tablets in fewer than three cells cannot run a group (see "Durability policy and replication mode"). To keep a majority, and so the primary, through two failures, use five cells: a group needs as many cells as voters.
 - Additional REPLICA tablets and all RDONLY tablets replicate asynchronously from the group primary, for read scaling. Under `group_replication_cross_cell` this follows from the one-voter-per-cell rule (see "Voters"); a second REPLICA in a cell is a ready replacement when that cell's voter fails.
 - `group_replication_paxos_single_leader=ON` and `group_replication_member_expel_timeout=0` are always applied (see Fixed settings).
 - Tune flow control so that one slow member does not throttle the primary.
@@ -579,6 +582,7 @@ Implemented in this branch:
 - An end-to-end test on MySQL 8.4.
 
 Known gaps, found while reviewing and testing the prototype:
+- **Three cells, one voter each.** A shard needs eligible tablets in at least three cells, and its group has at most one voter per cell, so a group survives as many failures as a majority of its cells allows: one with three or four cells, two with five. A deployment with two cells, or one that wants two voters in a cell, cannot use Group Replication and keeps semi-sync. A second REPLICA in a cell does not vote; it only replaces the cell's voter.
 - During the migration back, the primary re-enables semi-sync only after its group drops below two ONLINE members. That leaves up to one sync interval with neither group nor semi-sync durability. Enabling semi-sync while the group is still active would close this window; it is harmless when an acker is attached.
 - A voter that changes to a non-eligible type (RDONLY, DRAINED) does not leave the group until VTOrc replaces it in the voter list.
 - PRS cannot promote a tablet that is not a voter; it fails and names the voters. Swapping a non-voter in for a voter as part of the reparent is future work.

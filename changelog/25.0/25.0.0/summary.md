@@ -121,10 +121,7 @@ See [#19918](https://github.com/vitessio/vitess/issues/19918).
 
 A shard can now replicate with MySQL Group Replication in single-primary mode instead of asynchronous replication with semi-sync. The group acknowledges a commit once a majority of its voting members accepted it, fences a primary that lost its majority, and elects a new primary on its own; Vitess keeps the topology, vtgate's routing and buffering, `PlannedReparentShard`, `EmergencyReparentShard` and VTOrc in step with the group.
 
-Group Replication is selected with a durability policy, like `semi_sync` and `cross_cell`:
-
-- `group_replication`: up to nine voting members, any cell.
-- `group_replication_cross_cell`: one voting member per cell; the shard keeps its primary through the loss of a cell.
+Group Replication is selected with the `group_replication_cross_cell` durability policy, like `semi_sync` and `cross_cell`: one voting member per cell, up to nine, so the shard keeps its primary through the loss of a cell. A shard needs `PRIMARY` or `REPLICA` tablets in at least three cells: `PlannedReparentShard`, `InitShardPrimary` and `MigrateReplicationMode` refuse a shard with fewer, and VTOrc reports it as `GroupVotersBelowTarget` instead of starting its group.
 
 Additional `REPLICA` tablets and all `RDONLY` tablets replicate asynchronously from the group's primary.
 
