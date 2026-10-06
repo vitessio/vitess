@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"vitess.io/vitess/go/protoutil"
@@ -27,6 +28,7 @@ import (
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstats"
@@ -288,6 +290,34 @@ func shutdownTimeout(l logutil.Logger, tm *vttime.Duration) time.Duration {
 		return mysqlShutdownTimeout
 	}
 	return timeout
+}
+
+// leavesReplicationToGroup returns whether the tablet, which stops being the shard's primary, must
+// not be made to replicate from the new primary on the default channel: a member of the shard's
+// replication group (groupMemberOfShard), or, on a vttablet that runs Group Replication, a tablet
+// whose shard record or policy cannot be read. A tablet that is not a voter of a group's shard
+// replicates from the group's primary, as such tablets do. The read does not inherit the caller's
+// cancellation, only a short bound of its own.
+func (tm *TabletManager) leavesReplicationToGroup(ctx context.Context) bool {
+	readCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), groupReplicationTopoReadTimeout)
+	defer cancel()
+	tablet := tm.Tablet()
+	si, err := tm.TopoServer.GetShard(readCtx, tablet.Keyspace, tablet.Shard)
+	if err != nil {
+		log.Warn("Cannot read the shard record, so cannot tell whether the tablet is a member of the shard's replication group", slog.Any("error", err))
+		return groupReplicationEnabled()
+	}
+	durabilityName, err := tm.TopoServer.GetShardInfoDurability(readCtx, si)
+	if err != nil {
+		log.Warn("Cannot read the durability policy, so cannot tell whether the tablet is a member of the shard's replication group", slog.Any("error", err))
+		return groupReplicationEnabled()
+	}
+	durability, err := policy.GetDurabilityPolicy(durabilityName)
+	if err != nil {
+		log.Warn("Cannot resolve the durability policy, so cannot tell whether the tablet is a member of the shard's replication group", slog.String("policy", durabilityName), slog.Any("error", err))
+		return groupReplicationEnabled()
+	}
+	return groupMemberOfShard(durability, si.GroupReplicationVoters, tablet)
 }
 
 // groupMemberOfShard returns whether the tablet is a member of its shard's replication group, which

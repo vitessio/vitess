@@ -48,14 +48,20 @@ func (c *endTermPeersTMC) PrimaryStatus(ctx context.Context, tablet *topodatapb.
 // that learns from the shard record that another tablet is the primary, while its MySQL is not an
 // active member of a group (the sweep's S7c r2 and S2: a voter whose MySQL was in the ERROR state).
 // Under a group replication policy, the tablet demotes MySQL (super_read_only, not serving) and
-// becomes a REPLICA, but configures no asynchronous replication on the default channel: the tablet
-// is a group member, which rejoins its group through the sync loop or VTOrc. Under a semi-sync
-// policy, the tablet still replicates from the new primary.
+// becomes a REPLICA, but configures no asynchronous replication on the default channel when the
+// tablet is a member of the shard's group, which rejoins its group through the sync loop or VTOrc: a
+// voter, or while no voter is listed a tablet that the policy allows in the group, or any tablet
+// whose shard's policy cannot be read. A tablet that is not a voter replicates from the new primary,
+// as every tablet that is not a voter does, and so does a tablet under a semi-sync policy.
 func TestEndPrimaryTermOnInactiveGroupReplicationMember(t *testing.T) {
 	for _, tt := range []struct {
 		name       string
 		durability string
 		state      string
+		// voters are the uids of the voters that the shard record lists.
+		voters []uint32
+		// unknownPolicy makes the keyspace's policy one that the tablet does not know.
+		unknownPolicy bool
 		// wantSource is the replication source the tablet configures; empty for none.
 		wantSource string
 	}{{
@@ -66,6 +72,23 @@ func TestEndPrimaryTermOnInactiveGroupReplicationMember(t *testing.T) {
 		name:       "group replication policy, MySQL not in a group",
 		durability: policy.DurabilityGroupReplication,
 		state:      mysql.GroupMemberStateOffline,
+	}, {
+		name:       "group replication policy, a voter",
+		durability: policy.DurabilityGroupReplication,
+		state:      mysql.GroupMemberStateError,
+		voters:     []uint32{1, 2, 3},
+	}, {
+		name:       "group replication policy, a tablet that is not a voter",
+		durability: policy.DurabilityGroupReplication,
+		state:      mysql.GroupMemberStateOffline,
+		voters:     []uint32{2, 3, 4},
+		wantSource: "mysql2:3306",
+	}, {
+		name:          "a policy that the tablet cannot resolve",
+		durability:    policy.DurabilityGroupReplication,
+		state:         mysql.GroupMemberStateOffline,
+		voters:        []uint32{2, 3, 4},
+		unknownPolicy: true,
 	}, {
 		name:       "semi-sync policy",
 		durability: policy.DurabilitySemiSync,
@@ -92,6 +115,19 @@ func TestEndPrimaryTermOnInactiveGroupReplicationMember(t *testing.T) {
 				}
 			})
 			setTabletType(t, tm, topodatapb.TabletType_PRIMARY)
+			if len(tt.voters) > 0 {
+				setGroupReplicationVoters(t, ts, tt.voters...)
+			}
+			if tt.unknownPolicy {
+				lockCtx, unlock, err := ts.LockKeyspace(t.Context(), "ks", "test")
+				require.NoError(t, err)
+				ki, err := ts.GetKeyspace(lockCtx, "ks")
+				require.NoError(t, err)
+				ki.DurabilityPolicy = "a_policy_of_a_newer_version"
+				require.NoError(t, ts.UpdateKeyspace(lockCtx, ki))
+				unlock(&err)
+				require.NoError(t, err)
+			}
 			fmd.SetGroupReplicationStatus(groupStatus(testServerUUID(1),
 				groupMember(testServerUUID(1), tt.state, ""),
 			))
