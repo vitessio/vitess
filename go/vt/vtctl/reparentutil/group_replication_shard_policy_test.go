@@ -405,3 +405,39 @@ func TestEmergencyReparentShardConvertedBack(t *testing.T) {
 	assert.NotContains(t, err.Error(), "replication group", "ERS must not take the group replication path")
 	assert.NotEmpty(t, callsWithPrefix(c.mutatingCalls(), "StopReplicationAndGetStatus"), "ERS takes the asynchronous path")
 }
+
+// TestMigrateReplicationModeLeavesVotersOfConvertedShardToVTOrc checks that a migration run again on
+// a shard that it converted, whose group runs, does not change the shard's voters: VTOrc maintains
+// them (GroupVotersOutOfDate) under the rule that keeps a view without a majority of the current
+// voters from holding a majority of the new list, and the re-check right before its write. Here two
+// of four voters left the group cleanly, and an operator made one of them RDONLY: the migration's
+// selection drops it, and the view of the two remaining members would hold two of the three new
+// voters, so that its primary would serve with half of the voters it had.
+func TestMigrateReplicationModeLeavesVotersOfConvertedShardToVTOrc(t *testing.T) {
+	c, ts := newFakeGRCluster(t, "semi_sync",
+		fakeGRTabletSpec{cell: "zone1", uid: 100, tabletType: topodatapb.TabletType_PRIMARY},
+		fakeGRTabletSpec{cell: "zone1", uid: 101, tabletType: topodatapb.TabletType_REPLICA},
+		fakeGRTabletSpec{cell: "zone2", uid: 200, tabletType: topodatapb.TabletType_REPLICA},
+		fakeGRTabletSpec{cell: "zone3", uid: 300, tabletType: topodatapb.TabletType_REPLICA},
+	)
+	c.formGroup(t, "group_replication")
+	c.setIncarnation(t, "1790000000")
+	c.setShardPolicy(t, "group_replication")
+	require.Equal(t, []string{aliasP, alias101, alias200, alias300}, c.voters(t))
+	c.mu.Lock()
+	c.tablets[alias200].member = false
+	c.tablets[alias300].member = false
+	c.mu.Unlock()
+	_, err := ts.UpdateTabletFields(t.Context(), mustAlias(t, alias300), func(tablet *topodatapb.Tablet) error {
+		tablet.Type = topodatapb.TabletType_RDONLY
+		return nil
+	})
+	require.NoError(t, err)
+
+	_, err = migrate(t, newTestMigrator(c, ts), "group_replication", false)
+	require.Error(t, err)
+	assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+	require.ErrorContains(t, err, "VTOrc maintains the voters of a converted shard")
+	assert.Empty(t, c.mutatingCalls())
+	assert.Equal(t, []string{aliasP, alias101, alias200, alias300}, c.voters(t))
+}
