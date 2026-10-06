@@ -298,7 +298,6 @@ func TestSetTable(t *testing.T) {
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
 			`Needs Reserved Conn`,
-<<<<<<< HEAD
 			`ExecuteMultiShard ks.-20: select dummy_expr from dual {} false false`,
 			`ExecuteMultiShard ks.-20: set x = 123456 {} false false`,
 			`SysVar set with (x,123456)`,
@@ -400,31 +399,6 @@ func TestSetTable(t *testing.T) {
 			`Needs Reserved Conn`,
 			`ExecuteMultiShard ks.-20: select dummy_expr from dual {} false false`,
 			`Reset Reserved Conn`,
-||||||| parent of 5130e1be3e (sql_mode: reject unsupported modes at every layer, neutralize them on every connection (#20883))
-			`SysVar set with (x,dummy_expr)`,
-			`ExecuteMultiShard ks.-20: set x = dummy_expr {} false false`,
-=======
-			`ExecuteMultiShard ks.-20: set x = dummy_expr {} false false`,
-			`SysVar set with (x,dummy_expr)`,
-		},
-	}, {
-		// a failed targeted SET must not leave its value in the session, where the
-		// settings transport would replay it on every subsequent query
-		testName: "targeted set failure does not store the value",
-		setOps: []SetOp{
-			&SysVarReservedConn{
-				Name:              "x",
-				Keyspace:          ks,
-				TargetDestination: key.DestinationAnyShard{},
-				Expr:              "dummy_expr",
-			},
-		},
-		execErr:       errors.New("some random error"),
-		expectedError: "some random error",
-		expectedQueryLog: []string{
-			`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
-			`Needs Reserved Conn`,
-			`ExecuteMultiShard ks.-20: set x = dummy_expr {} false false`,
 		},
 	}, {
 		// a targeted session's SET gets the same sql_mode judgment as an untargeted
@@ -449,7 +423,9 @@ func TestSetTable(t *testing.T) {
 		expectedError: "setting the ANSI sql_mode is unsupported",
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
+			`Needs Reserved Conn`,
 			`ExecuteMultiShard ks.-20: select @@sql_mode orig, concat('AN', 'SI') new {} false false`,
+			`Reset Reserved Conn`,
 		},
 	}, {
 		// the SET carries the judged value rather than the expression: evaluating the
@@ -472,11 +448,10 @@ func TestSetTable(t *testing.T) {
 		)},
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
-			`ExecuteMultiShard ks.-20: select @@sql_mode orig, concat('STRICT_TRANS', '_TABLES') new {} false false`,
 			`Needs Reserved Conn`,
+			`ExecuteMultiShard ks.-20: select @@sql_mode orig, concat('STRICT_TRANS', '_TABLES') new {} false false`,
 			`ExecuteMultiShard ks.-20: set sql_mode = 'STRICT_TRANS_TABLES' {} false false`,
 			`SysVar set with (sql_mode,'STRICT_TRANS_TABLES')`,
->>>>>>> 5130e1be3e (sql_mode: reject unsupported modes at every layer, neutralize them on every connection (#20883))
 		},
 	}, {
 		testName: "sysvar set not modifying setting",
@@ -1037,25 +1012,13 @@ func TestSysVarSetErr(t *testing.T) {
 		},
 	}
 
-<<<<<<< HEAD
 	// the evaluation succeeds and the SET itself fails: it must not leave its
 	// value in the session, so no "SysVar set with"
-||||||| parent of 5130e1be3e (sql_mode: reject unsupported modes at every layer, neutralize them on every connection (#20883))
-=======
-	// the failed SET must not leave its value in the session: no "SysVar set with"
->>>>>>> 5130e1be3e (sql_mode: reject unsupported modes at every layer, neutralize them on every connection (#20883))
 	expectedQueryLog := []string{
 		`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
 		"Needs Reserved Conn",
-<<<<<<< HEAD
 		`ExecuteMultiShard ks.-20: select dummy_expr from dual {} false false`,
 		`ExecuteMultiShard ks.-20: set x = 123456 {} false false`,
-||||||| parent of 5130e1be3e (sql_mode: reject unsupported modes at every layer, neutralize them on every connection (#20883))
-		"SysVar set with (x,dummy_expr)",
-		`ExecuteMultiShard ks.-20: set x = dummy_expr {} false false`,
-=======
-		`ExecuteMultiShard ks.-20: set x = dummy_expr {} false false`,
->>>>>>> 5130e1be3e (sql_mode: reject unsupported modes at every layer, neutralize them on every connection (#20883))
 	}
 
 	set := &Set{

@@ -22,6 +22,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 )
@@ -59,7 +60,7 @@ func TestBuildSettingQueryRejectsUnsupportedSQLModes(t *testing.T) {
 	}}
 	for _, tc := range tests {
 		t.Run(tc.settings[len(tc.settings)-1], func(t *testing.T) {
-			query, resetQuery, err := BuildSettingQuery(tc.settings, parser)
+			query, resetQuery, err := BuildSettingQuery(tc.settings, parser, false)
 			if tc.expectedErr != "" {
 				require.EqualError(t, err, tc.expectedErr)
 				return
@@ -77,11 +78,11 @@ func TestBuildSettingQueryRejectsUnsupportedSQLModes(t *testing.T) {
 func TestBuildSettingQueryResetNeutralizesSQLMode(t *testing.T) {
 	parser := vtenv.NewTestEnv().Parser()
 
-	query, resetQuery, err := BuildSettingQuery([]string{"set sql_mode = 'STRICT_TRANS_TABLES'", "set sql_safe_updates = 1"}, parser)
+	query, resetQuery, err := BuildSettingQuery([]string{"set sql_mode = 'STRICT_TRANS_TABLES'", "set sql_safe_updates = 1"}, parser, false)
 	require.NoError(t, err)
 	assert.Contains(t, query, "sql_mode = 'STRICT_TRANS_TABLES'")
 	assert.Contains(t, resetQuery, "sql_mode = replace(replace(replace(replace(replace(replace(replace(@@global.sql_mode, 'NO_BACKSLASH_ESCAPES', ''), 'HIGH_NOT_PRECEDENCE', ''), 'PIPES_AS_CONCAT', ''), 'REAL_AS_FLOAT', ''), 'IGNORE_SPACE', ''), 'ANSI_QUOTES', ''), 'ANSI', '')")
-	assert.Contains(t, resetQuery, "sql_safe_updates = 'default'")
+	assert.Contains(t, resetQuery, "sql_safe_updates = default")
 }
 
 func TestSetPlanRejectsUnsupportedSQLModes(t *testing.T) {
@@ -176,8 +177,11 @@ func TestSetVarHintSQLModesAreNotJudged(t *testing.T) {
 			require.NoError(t, err)
 			assert.Contains(t, plan.FullQuery.Query, "SET_VAR(sql_mode", "the hint must reach MySQL verbatim")
 
-			// the streaming path builds plans separately
-			plan, err = BuildStreaming(env, statement, tables, "dbName")
+			// the streaming path builds plans separately, for reads only
+			if _, ok := statement.(*sqlparser.Select); !ok {
+				return
+			}
+			plan, err = BuildStreaming(statement, tables)
 			require.NoError(t, err)
 			assert.Contains(t, plan.FullQuery.Query, "SET_VAR(sql_mode", "the hint must reach MySQL verbatim")
 		})

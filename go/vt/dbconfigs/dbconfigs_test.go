@@ -465,7 +465,7 @@ func (h *stallingHandler) ComRegisterReplica(*mysql.Conn, string, uint16, string
 
 func (h *stallingHandler) ComBinlogDump(*mysql.Conn, string, uint32) error { return nil }
 
-func (h *stallingHandler) ComBinlogDumpGTID(*mysql.Conn, string, uint64, replication.GTIDSet, uint16) error {
+func (h *stallingHandler) ComBinlogDumpGTID(*mysql.Conn, string, uint64, replication.GTIDSet) error {
 	return nil
 }
 

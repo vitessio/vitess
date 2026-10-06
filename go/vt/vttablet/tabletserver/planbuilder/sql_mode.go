@@ -45,13 +45,14 @@ import (
 // it does for clients that send the hint to it directly. The hint's effect on execution
 // is a vtgate concern.
 
-// ValidateSettingsSQLMode mirrors BuildSettingQuery's sql_mode validation for settings
-// that are applied without going through BuildSettingQuery — a true reservation executes
-// its settings directly on the tainted connection. Like BuildSettingQuery, every setting
-// must parse as a SET statement, and sql_mode values must be constants: the settings
-// paths apply their statements with no verification afterwards, so a value that cannot
-// be judged upfront is rejected rather than applied unchecked.
-func ValidateSettingsSQLMode(settings []string, parser *sqlparser.Parser) error {
+// ValidateSettingsSQLMode mirrors BuildSettingQuery's validation for settings that are
+// applied without going through BuildSettingQuery — a true reservation executes its
+// settings directly on the tainted connection. Like BuildSettingQuery, every setting
+// must parse as a SET statement, with no subquery when rejectSubqueries is set (see
+// rejectSettingSubqueries), and sql_mode values must be constants: the settings paths
+// apply their statements with no verification afterwards, so a value that cannot be
+// judged upfront is rejected rather than applied unchecked.
+func ValidateSettingsSQLMode(settings []string, parser *sqlparser.Parser, rejectSubqueries bool) error {
 	for _, setting := range settings {
 		stmt, err := parser.Parse(setting)
 		if err != nil {
@@ -60,6 +61,11 @@ func ValidateSettingsSQLMode(settings []string, parser *sqlparser.Parser) error 
 		set, ok := stmt.(*sqlparser.Set)
 		if !ok {
 			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "connection setting is not a SET statement: %s", setting)
+		}
+		if rejectSubqueries {
+			if err := rejectSettingSubqueries(set, setting); err != nil {
+				return err
+			}
 		}
 		if err := validateConstantSetExprsSQLMode(set.Exprs); err != nil {
 			return err

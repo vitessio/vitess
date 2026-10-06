@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log/slog"
 	"strings"
 	"sync"
 	"time"
@@ -1028,8 +1027,8 @@ func (qre *QueryExecutor) execSet(conn *StatefulConnection) (*sqltypes.Result, e
 func (qre *QueryExecutor) undoSQLModeSet(conn *StatefulConnection, prev sqltypes.Value, cause error) {
 	restore := "set sql_mode = " + sqltypes.EncodeStringSQL(prev.ToString())
 	if _, err := qre.execStatefulConn(conn, restore, false); err != nil {
-		log.Warn("closing connection: a failed SET could not be undone by restoring the previous sql_mode",
-			slog.Any("cause", cause), slog.Any("restoreError", err), slog.Int64("connID", conn.ID()))
+		log.Warningf("closing connection %d: a failed SET could not be undone by restoring the previous sql_mode: cause: %v, restore error: %v",
+			conn.ID(), cause, err)
 		conn.Close()
 	}
 }

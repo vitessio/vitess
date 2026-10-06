@@ -23,15 +23,7 @@ package dbconfigs
 import (
 	"context"
 	"encoding/json"
-<<<<<<< HEAD
-||||||| parent of 5130e1be3e (sql_mode: reject unsupported modes at every layer, neutralize them on every connection (#20883))
-	"fmt"
-	"os"
-=======
-	"fmt"
-	"os"
 	"time"
->>>>>>> 5130e1be3e (sql_mode: reject unsupported modes at every layer, neutralize them on every connection (#20883))
 
 	"github.com/spf13/pflag"
 

@@ -69,7 +69,6 @@ func (mysqld *Mysqld) ExecuteSuperQueryList(ctx context.Context, queryList []str
 	return mysqld.executeSuperQueryListConn(ctx, conn, queryList)
 }
 
-<<<<<<< HEAD
 // comSetOption describes the capability exchange in the log line that says
 // what a timeout killed.
 const comSetOption = "COM_SET_OPTION"
@@ -83,12 +82,13 @@ var killGraceTimeout = 5 * time.Second
 // written by an operator, where a single entry may hold several statements
 // separated by a semicolon.
 //
-// The connection is discarded afterwards instead of returning to the pool: it
-// can send a batch, which nothing else drawing on the pool expects, and
-// operator-supplied SQL may have changed session state (e.g. sql_mode) that must
-// not leak into pooled connections. MySQL parses the statements, so an entry
-// holding a compound statement such as CREATE PROCEDURE, whose body carries
-// semicolons of its own, means what it says.
+// The connection is discarded afterwards instead of returning to the pool, like
+// ExecuteSuperQueryListTainted does: it can send a batch, which nothing else
+// drawing on the pool expects, and operator-supplied SQL may have changed
+// session state (e.g. sql_mode) that must not leak into pooled connections.
+// MySQL parses the statements, so an entry holding a compound statement such as
+// CREATE PROCEDURE, whose body carries semicolons of its own, means what it
+// says.
 func (mysqld *Mysqld) ExecuteSuperQueryListMulti(ctx context.Context, queryList []string) error {
 	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
 	if err != nil {
@@ -114,20 +114,6 @@ func (mysqld *Mysqld) ExecuteSuperQueryListMulti(ctx context.Context, queryList 
 	})
 }
 
-// executeQueryList runs each query through exec, stopping at the first failure.
-// name says what exec calls, for the error that failure returns.
-func executeQueryList(queryList []string, name string, exec func(query string) error) error {
-	const LogQueryLengthLimit = 200
-	for _, query := range queryList {
-		log.Infof("exec %s", limitString(redactPassword(query), LogQueryLengthLimit))
-		if err := exec(query); err != nil {
-			log.Errorf("%s(%v) failed: %v", name, redactPassword(query), redactPassword(err.Error()))
-			return fmt.Errorf("%s(%v) failed: %v", name, redactPassword(query), redactPassword(err.Error()))
-		}
-	}
-	return nil
-||||||| parent of 5130e1be3e (sql_mode: reject unsupported modes at every layer, neutralize them on every connection (#20883))
-=======
 // ExecuteSuperQueryListTainted executes queries as a super user like
 // ExecuteSuperQueryList, but discards the connection afterwards instead of
 // returning it to the pool. Use it for operator-supplied SQL, whose session
@@ -142,7 +128,20 @@ func (mysqld *Mysqld) ExecuteSuperQueryListTainted(ctx context.Context, queryLis
 	defer conn.Close()
 
 	return mysqld.executeSuperQueryListConn(ctx, conn, queryList)
->>>>>>> 5130e1be3e (sql_mode: reject unsupported modes at every layer, neutralize them on every connection (#20883))
+}
+
+// executeQueryList runs each query through exec, stopping at the first failure.
+// name says what exec calls, for the error that failure returns.
+func executeQueryList(queryList []string, name string, exec func(query string) error) error {
+	const LogQueryLengthLimit = 200
+	for _, query := range queryList {
+		log.Infof("exec %s", limitString(redactPassword(query), LogQueryLengthLimit))
+		if err := exec(query); err != nil {
+			log.Errorf("%s(%v) failed: %v", name, redactPassword(query), redactPassword(err.Error()))
+			return fmt.Errorf("%s(%v) failed: %v", name, redactPassword(query), redactPassword(err.Error()))
+		}
+	}
+	return nil
 }
 
 func limitString(s string, limit int) string {
