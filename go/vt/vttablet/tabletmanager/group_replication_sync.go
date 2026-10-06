@@ -634,13 +634,14 @@ func (s *groupReplicationSync) demoteStalePrimary(ctx context.Context, durabilit
 }
 
 // enforceSemiSync applies the effective semi-sync setting on the primary: the durability policy
-// asks for semi-sync, and no group with at least two ONLINE members supersedes it. Semi-sync is
+// asks for semi-sync, and no group with at least two ONLINE members supersedes it, unless the shard
+// is being converted back to asynchronous replication (leavingGroup). Semi-sync is
 // only enabled while a replica is connected to acknowledge transactions: with Vitess's infinite
 // semi-sync timeout, enabling it without one would block every commit, for example while a
 // member of a group of two restarts.
 func (s *groupReplicationSync) enforceSemiSync(ctx context.Context, status *replicationdatapb.GroupReplicationStatus, durability policy.Durabler, tablet *topodatapb.Tablet) {
 	tm := s.tm
-	superseded := mysql.GroupSupersedesSemiSync(status)
+	superseded := mysql.GroupSupersedesSemiSync(status) && !s.leavingGroup(durability)
 	want := policy.SemiSyncAckers(durability, tablet) > 0 && !superseded
 	enabled := tm.isPrimarySideSemiSyncEnabled(ctx)
 	if want && !enabled && !s.hasSemiSyncReplicas(ctx) {
@@ -666,8 +667,16 @@ func (s *groupReplicationSync) enforceSemiSync(ctx context.Context, status *repl
 		log.Info("Group replication sync: changing primary semi-sync",
 			slog.Bool("enabled", want),
 			slog.Bool("superseded_by_group", superseded),
+			slog.Bool("leaving_group", s.leavingGroup(durability)),
 			slog.Int("online_members", mysql.OnlineGroupMembers(status)))
-		if err := tm.fixSemiSync(ctx, topodatapb.TabletType_PRIMARY, semiSyncAction); err != nil {
+		fix := tm.fixSemiSync
+		if want && s.leavingGroup(durability) {
+			// fixSemiSync disables semi-sync on a member of a group with two ONLINE members.
+			fix = func(ctx context.Context, tabletType topodatapb.TabletType, _ SemiSyncAction) error {
+				return tm.enableSemiSync(ctx, tabletType)
+			}
+		}
+		if err := fix(ctx, topodatapb.TabletType_PRIMARY, semiSyncAction); err != nil {
 			log.Error("Group replication sync: failed to change semi-sync", slog.Any("error", err))
 			return
 		}
@@ -703,6 +712,18 @@ func (s *groupReplicationSync) applyMemberWeight(ctx context.Context, status *re
 	if err := tm.MysqlDaemon.SetGroupReplicationMemberWeight(ctx, want); err != nil {
 		log.Warn("Group replication sync: cannot set the member weight", slog.Any("error", err))
 	}
+}
+
+// leavingGroup returns whether the shard's own durability policy, which the loop resolved its cached
+// policy with, is not a group replication policy: MigrateReplicationMode stores it before the shard's
+// group shrinks, when it converts the shard back. The group of such a shard no longer supersedes
+// semi-sync: its primary enables semi-sync as soon as an acker replicates from it, while the group
+// still runs, so that it never acknowledges a commit that neither a group majority nor a semi-sync
+// acker holds when the last secondary leaves. The migration to Group Replication never stores an
+// asynchronous policy as the shard's own: its primary disables semi-sync once the group has two
+// ONLINE members, before the last acker joins.
+func (s *groupReplicationSync) leavingGroup(durability policy.Durabler) bool {
+	return s.durabilityShardPolicy != "" && !policy.IsGroupReplication(durability)
 }
 
 // groupReplicationVoterMajorityLost is the reason for which a PRIMARY tablet does not serve while

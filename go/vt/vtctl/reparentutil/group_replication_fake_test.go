@@ -186,9 +186,35 @@ func (c *fakeGRCluster) policyNeedsSemiSync(ft *fakeGRTablet) bool {
 }
 
 // effectiveSemiSync is the tablet loop's rule: semi-sync is required if the policy needs it
-// and the tablet is not an active member of a group with at least two ONLINE members.
+// and the tablet is not an active member of a group with at least two ONLINE members, unless the
+// shard's own policy, which the tablet knows, is the asynchronous policy of a migration back: then
+// the primary enables semi-sync as soon as an acker replicates from it, while the group runs. It
+// enables semi-sync only while an acker replicates, and keeps it.
 func (c *fakeGRCluster) effectiveSemiSync(ft *fakeGRTablet) bool {
-	return ft.primary && c.policyNeedsSemiSync(ft) && !(ft.member && c.onlineMembers() >= 2)
+	if !ft.primary || !c.policyNeedsSemiSync(ft) {
+		return false
+	}
+	superseded := ft.member && c.onlineMembers() >= 2 && !c.leavingGroup(ft)
+	if superseded {
+		return false
+	}
+	return ft.semiSyncPrimary || c.connectedAckers("") > 0 || !ft.member || c.onlineMembers() < 2
+}
+
+// leavingGroup returns whether the tablet knows the shard's own policy, and that policy is not a
+// group replication policy.
+func (c *fakeGRCluster) leavingGroup(ft *fakeGRTablet) bool {
+	if !ft.shardPolicy {
+		return false
+	}
+	si, err := c.ts.GetShard(c.t.Context(), c.keyspace, "-")
+	require.NoError(c.t, err)
+	if si.DurabilityPolicy == "" {
+		return false
+	}
+	d, err := policy.GetDurabilityPolicy(si.DurabilityPolicy)
+	require.NoError(c.t, err)
+	return !policy.IsGroupReplication(d)
 }
 
 // connectedAckers counts the async semi-sync replicas of the primary.
@@ -367,6 +393,10 @@ func (c *fakeGRCluster) StopGroupReplication(ctx context.Context, tablet *topoda
 		}
 	} else if p != nil && c.policyNeedsSemiSync(p) && c.onlineMembers() <= 2 && c.connectedAckers("") == 0 {
 		c.violations = append(c.violations, ft.alias+" left the group while no semi-sync acker replicates from the primary")
+	} else if p != nil && p.member && c.policyNeedsSemiSync(p) && c.onlineMembers() <= 2 && !p.semiSyncPrimary {
+		// The primary's group shrinks to the primary alone: its commits would need neither a group
+		// majority nor a semi-sync acknowledgement until its tablet enables semi-sync.
+		c.violations = append(c.violations, ft.alias+" left the group, leaving the primary alone in it without semi-sync")
 	}
 	ft.member = false
 	if c.groupPrimary == ft.alias {

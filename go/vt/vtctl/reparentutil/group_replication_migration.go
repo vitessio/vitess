@@ -1439,8 +1439,12 @@ func (s *migrationShard) preflightFromGroupReplication() error {
 //     setting, so they can acknowledge once the primary needs semi-sync again.
 //  2. Remove the secondaries from the group one at a time, semi-sync ackers first, and
 //     point each at the primary. Before the last one leaves, wait until enough ackers
-//     replicate with semi-sync. After it left, the group has one member, and the primary's
-//     tablet re-enables semi-sync; wait for that.
+//     replicate with semi-sync, and until the primary's tablet enabled semi-sync, which it
+//     does once an acker replicates from it, while its group still runs: when the last
+//     secondary leaves, a semi-sync acker already holds every commit that the primary
+//     acknowledges, which a group of one member alone does not. If only the last secondary
+//     can acknowledge, the primary enables semi-sync once that one replicates from it; wait
+//     for that.
 //  3. Remove the primary from the group. Its tablet restores read-write; wait for that.
 func (s *migrationShard) fromGroupReplication(ctx context.Context) error {
 	if err := s.preflightFromGroupReplication(); err != nil {
@@ -1474,13 +1478,30 @@ func (s *migrationShard) fromGroupReplication(ctx context.Context) error {
 	})
 
 	acks := policy.SemiSyncAckers(s.run.target, primary)
+	waitSemiSyncEnabled := func(ctx context.Context, what string) error {
+		return s.wait(ctx, MigrationActionWaitSemiSyncEnabled, primary, fmt.Sprintf("primary %v has enabled semi-sync%s", primaryAlias, what),
+			func(res *fullStatusResult) bool { return res.status.SemiSyncPrimaryEnabled })
+	}
+	// semiSyncEnabled is set once the primary enabled semi-sync before its group shrank to it.
+	semiSyncEnabled := false
 	for i, tablet := range secondaries {
-		if i == len(secondaries)-1 && acks > 0 && s.run.opts.DryRun {
-			s.record(MigrationActionWaitSemiSyncAckers, primary, MigrationStepPlanned,
-				fmt.Sprintf("wait until %d semi-sync ackers replicate from primary %v", acks, primaryAlias))
-		} else if i == len(secondaries)-1 && acks > 0 {
-			if err := s.waitForAckers(ctx, acks, tablet); err != nil {
-				return err
+		if i == len(secondaries)-1 && acks > 0 {
+			ackersReplicate := true
+			if s.run.opts.DryRun {
+				s.record(MigrationActionWaitSemiSyncAckers, primary, MigrationStepPlanned,
+					fmt.Sprintf("wait until %d semi-sync ackers replicate from primary %v", acks, primaryAlias))
+			} else {
+				var err error
+				if ackersReplicate, err = s.waitForAckers(ctx, acks, tablet); err != nil {
+					return err
+				}
+			}
+			if ackersReplicate {
+				what := fmt.Sprintf(", before %v leaves its group", topoproto.TabletAliasString(tablet.Alias))
+				if err := waitSemiSyncEnabled(ctx, what); err != nil {
+					return err
+				}
+				semiSyncEnabled = true
 			}
 		}
 		if err := s.ensureAsyncReplica(ctx, tablet, semiSyncFor(tablet)); err != nil {
@@ -1493,10 +1514,8 @@ func (s *migrationShard) fromGroupReplication(ctx context.Context) error {
 		s.record(MigrationActionLeaveGroup, primary, MigrationStepSkipped, fmt.Sprintf("primary %v is not a group member", primaryAlias))
 		return s.clearVoters(ctx)
 	}
-	if acks > 0 {
-		err := s.wait(ctx, MigrationActionWaitSemiSyncEnabled, primary, fmt.Sprintf("primary %v has enabled semi-sync", primaryAlias),
-			func(res *fullStatusResult) bool { return res.status.SemiSyncPrimaryEnabled })
-		if err != nil {
+	if acks > 0 && !semiSyncEnabled {
+		if err := waitSemiSyncEnabled(ctx, ""); err != nil {
 			return err
 		}
 	}
@@ -1534,10 +1553,10 @@ func (s *migrationShard) clearVoters(ctx context.Context) error {
 }
 
 // waitForAckers waits until enough tablets outside the group replicate from the primary
-// with semi-sync, before the last secondary leaves the group. The last secondary itself
-// does not count; if it is needed to reach the count, the wait is skipped because it
-// becomes an acker right after it leaves.
-func (s *migrationShard) waitForAckers(ctx context.Context, acks int, last *topodatapb.Tablet) error {
+// with semi-sync, before the last secondary leaves the group, and returns whether they do. The
+// last secondary itself does not count; if it is needed to reach the count, the wait is skipped
+// because it becomes an acker right after it leaves.
+func (s *migrationShard) waitForAckers(ctx context.Context, acks int, last *topodatapb.Tablet) (bool, error) {
 	var candidates []*topodatapb.Tablet
 	for _, tablet := range s.tablets {
 		if s.isPrimary(tablet) || topoproto.TabletAliasEqual(tablet.Alias, last.Alias) || !policy.IsReplicaSemiSync(s.run.target, s.primary, tablet) {
@@ -1549,13 +1568,13 @@ func (s *migrationShard) waitForAckers(ctx context.Context, acks int, last *topo
 	if len(candidates) < acks {
 		s.record(MigrationActionWaitSemiSyncAckers, s.primary, MigrationStepSkipped,
 			fmt.Sprintf("only %v can provide the semi-sync acknowledgements of primary %v once it leaves the group", topoproto.TabletAliasString(last.Alias), primaryAlias))
-		return nil
+		return false, nil
 	}
 	isAcking := func(res *fullStatusResult) bool {
 		return res.err == nil && !res.isActiveMember() && res.status.SemiSyncReplicaEnabled && replicatesFrom(res, s.primary) &&
 			res.status.ReplicationStatus.IoState == int32(replication.ReplicationStateRunning)
 	}
-	return s.do(ctx, MigrationActionWaitSemiSyncAckers, s.primary,
+	return true, s.do(ctx, MigrationActionWaitSemiSyncAckers, s.primary,
 		fmt.Sprintf("wait until %d semi-sync ackers replicate from primary %v", acks, primaryAlias),
 		func(ctx context.Context) error {
 			waitCtx, cancel := context.WithTimeout(ctx, s.run.opts.WaitTimeout)

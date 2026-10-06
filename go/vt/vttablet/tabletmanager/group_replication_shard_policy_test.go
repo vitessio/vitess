@@ -216,3 +216,54 @@ func TestFullStatusReportsShardDurabilityPolicySupport(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, status.ShardDurabilityPolicySupported)
 }
+
+// TestGroupReplicationSyncEnablesSemiSyncWhileShardLeavesGroup checks that the primary of a shard
+// that MigrateReplicationMode converts back to semi-sync, whose own policy is semi_sync while its
+// group still runs, enables semi-sync as soon as an acker replicates from it, before its group
+// shrinks to the primary alone. It re-enabled semi-sync only once its group had fewer than two
+// ONLINE members: between the last secondary's leave and the loop's next run, the primary
+// acknowledged commits that neither a group majority nor a semi-sync acker held.
+func TestGroupReplicationSyncEnablesSemiSyncWhileShardLeavesGroup(t *testing.T) {
+	twoMembers := func() *replicationdatapb.GroupReplicationStatus {
+		return withViewID(groupStatus(testServerUUID(1),
+			groupMember(testServerUUID(1), mysql.GroupMemberStateOnline, mysql.GroupMemberRolePrimary),
+			groupMember(testServerUUID(3), mysql.GroupMemberStateOnline, mysql.GroupMemberRoleSecondary)), "1780000001:21")
+	}
+	for _, tt := range []struct {
+		name                        string
+		keyspacePolicy, shardPolicy string
+		acker                       bool
+		want                        bool
+	}{{
+		name:           "converted back, an acker replicates: semi-sync is enabled while the group runs",
+		keyspacePolicy: policy.DurabilityGroupReplicationCrossCell,
+		shardPolicy:    policy.DurabilitySemiSync,
+		acker:          true,
+		want:           true,
+	}, {
+		name:           "converted back, no acker replicates yet: semi-sync would block every commit",
+		keyspacePolicy: policy.DurabilityGroupReplicationCrossCell,
+		shardPolicy:    policy.DurabilitySemiSync,
+	}, {
+		// The migration to Group Replication: the shard resolves the keyspace's semi_sync policy,
+		// and the group supersedes semi-sync before the last acker joins it.
+		name:           "converted to Group Replication: the group supersedes semi-sync",
+		keyspacePolicy: policy.DurabilitySemiSync,
+		acker:          true,
+	}} {
+		t.Run(tt.name, func(t *testing.T) {
+			withGroupReplication(t)
+			tm, fmd, _, _ := newConvertedShardTestTM(t, tt.keyspacePolicy, tt.shardPolicy)
+			setTabletType(t, tm, topodatapb.TabletType_PRIMARY)
+			fmd.SetGroupReplicationStatus(twoMembers())
+			fmd.SemiSyncPrimaryEnabled = false
+			if tt.acker {
+				fmd.GlobalStatusVars = map[string]string{"Rpl_semi_sync_source_clients": "1"}
+			}
+
+			newGroupReplicationSync(tm).reconcile(t.Context())
+
+			assert.Equal(t, tt.want, fmd.SemiSyncPrimaryEnabled)
+		})
+	}
+}
