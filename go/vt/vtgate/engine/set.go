@@ -376,8 +376,9 @@ func (svs *SysVarReservedConn) checkAndUpdateSysVar(ctx context.Context, vcursor
 	vcursor.Session().SetSysVar(svs.Name, s)
 
 	// If the condition below is true, we want to use reserved connection instead of SET_VAR query hint.
-	// MySQL supports SET_VAR only in MySQL80 and for a limited set of system variables.
-	if !svs.SupportSetVar || !vcursor.CanUseSetVar() {
+	// MySQL supports SET_VAR only in MySQL80 and for a limited set of system variables, and the
+	// hint cannot carry a value that would terminate the comment it lives in.
+	if !svs.SupportSetVar || !vcursor.CanUseSetVar() || !sysvars.IsSafeSetVarValue(storedValue) {
 		vcursor.Session().NeedsReservedConn()
 		return true, nil
 	}
