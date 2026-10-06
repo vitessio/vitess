@@ -455,6 +455,8 @@ func (te *TxEngine) prepareFromRedo() error {
 				te.env.Stats().RedoPreparedFail.Add("NonRetryable", 1)
 			} else {
 				te.env.Stats().RedoPreparedFail.Add("Retryable", 1)
+				// The redo log stays prepared, so a commit must wait for a later redo to apply it.
+				te.preparedPool.SetRedoPending(preparedTx.Dtid)
 			}
 		} else {
 			preparedCounter++

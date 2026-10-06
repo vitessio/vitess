@@ -28,6 +28,10 @@ import (
 var (
 	errPrepCommitting = vterrors.VT09025("locked for committing")
 	errPrepFailed     = vterrors.VT09025("failed to commit")
+	// errPrepRedoPending marks a transaction whose redo failed with a retryable error.
+	// Its redo log is still prepared, but its writes are not applied, so it cannot be committed
+	// until a later redo prepares it again.
+	errPrepRedoPending = vterrors.VT09025("redo of the prepared transaction is pending")
 )
 
 // TxPreparedPool manages connections for prepared transactions.
@@ -88,7 +92,8 @@ func (pp *TxPreparedPool) Put(c *StatefulConnection, dtid string) error {
 	if !pp.open {
 		return vterrors.VT09025("pool is shutdown")
 	}
-	if _, ok := pp.reserved[dtid]; ok {
+	// A pending redo reservation is replaced by the transaction once its redo succeeds.
+	if err, ok := pp.reserved[dtid]; ok && err != errPrepRedoPending {
 		return vterrors.VT09025("duplicate DTID in Prepare: " + dtid)
 	}
 	if _, ok := pp.conns[dtid]; ok {
@@ -97,6 +102,7 @@ func (pp *TxPreparedPool) Put(c *StatefulConnection, dtid string) error {
 	if len(pp.conns) >= pp.capacity {
 		return vterrors.New(vtrpcpb.Code_RESOURCE_EXHAUSTED, fmt.Sprintf("prepared transactions exceeded limit: %d", pp.capacity))
 	}
+	delete(pp.reserved, dtid)
 	pp.conns[dtid] = c
 	return nil
 }
@@ -150,6 +156,14 @@ func (pp *TxPreparedPool) SetFailed(dtid string) {
 	pp.mu.Lock()
 	defer pp.mu.Unlock()
 	pp.reserved[dtid] = errPrepFailed
+}
+
+// SetRedoPending marks the dtid as awaiting a successful redo,
+// so that it is neither committed nor treated as already committed.
+func (pp *TxPreparedPool) SetRedoPending(dtid string) {
+	pp.mu.Lock()
+	defer pp.mu.Unlock()
+	pp.reserved[dtid] = errPrepRedoPending
 }
 
 // Forget removes the dtid from the reserved list.

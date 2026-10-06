@@ -301,6 +301,62 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 	}, 5*time.Second, 10*time.Millisecond, "prepared transactions should be cleared when transaction engine is turned off")
 }
 
+// TestTabletServerCommitPreparedAfterRetryableRedoFailure verifies that a
+// prepared transaction whose redo failed with a retryable error cannot be
+// reported as committed. Its redo log is still in the Prepared state but its
+// writes were never applied, so a CommitPrepared that succeeded would let the
+// coordinator conclude the distributed transaction without this shard's writes.
+// Once a later redo succeeds, the transaction commits normally.
+func TestTabletServerCommitPreparedAfterRetryableRedoFailure(t *testing.T) {
+	ctx := t.Context()
+	_, tsv, db, closer := newTestTxExecutor(t, ctx)
+	t.Cleanup(closer)
+	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
+	tsv.te.shutdownGracePeriod = 1
+	tsv.sm.shutdownGracePeriod = 1
+	tsv.SetServingType(topodatapb.TabletType_PRIMARY, time.Time{}, false, "")
+
+	redoStatement := "update test_table set `name` = 3 where pk = 1 limit 10001"
+	db.AddQuery(tsv.te.twoPC.readAllRedo, &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Type: sqltypes.VarBinary},
+			{Type: sqltypes.Uint64},
+			{Type: sqltypes.Uint64},
+			{Type: sqltypes.VarBinary},
+			{Type: sqltypes.Text},
+		},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewVarBinary("aa"),
+			sqltypes.NewInt64(RedoStatePrepared),
+			sqltypes.NewVarBinary(""),
+			sqltypes.NewVarBinary(redoStatement),
+			sqltypes.NULL,
+		}},
+	})
+	db.AddRejectedQuery(redoStatement, sqlerror.NewSQLError(sqlerror.CRConnectionError, "", "connection lost during redo"))
+
+	redoFailures := tsv.te.env.Stats().RedoPreparedFail
+	retryableBefore := redoFailures.Counts()["Retryable"]
+	tsv.SetServingType(topodatapb.TabletType_PRIMARY, time.Time{}, true, "")
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		assert.Equal(c, retryableBefore+1, redoFailures.Counts()["Retryable"])
+	}, 30*time.Second, 10*time.Millisecond, "redo should fail with a retryable error")
+	require.Empty(t, tsv.te.preparedPool.conns, "the transaction must not be prepared after a failed redo")
+
+	err := tsv.CommitPrepared(ctx, &target, "aa")
+	require.ErrorContains(t, err, "cannot commit dtid aa", "CommitPrepared must not succeed for a transaction whose redo has not been applied")
+
+	// A later redo, for example when MySQL turns read-write again, re-prepares the transaction.
+	db.DeleteRejectedQuery(redoStatement)
+	db.AddQuery(redoStatement, &sqltypes.Result{})
+	tsv.te.RedoPreparedTransactions()
+	require.Len(t, tsv.te.preparedPool.conns, 1, "the transaction should be prepared once its redo succeeds")
+
+	require.NoError(t, tsv.CommitPrepared(ctx, &target, "aa"))
+	require.Empty(t, tsv.te.preparedPool.conns)
+	require.Empty(t, tsv.te.preparedPool.reserved)
+}
+
 func TestTabletServerCreateTransaction(t *testing.T) {
 	ctx := t.Context()
 	_, tsv, db, closer := newTestTxExecutor(t, ctx)

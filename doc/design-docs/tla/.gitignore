@@ -1,0 +1,4 @@
+# TLC output
+states/
+*_TTrace_*.bin
+*_TTrace_*.tla

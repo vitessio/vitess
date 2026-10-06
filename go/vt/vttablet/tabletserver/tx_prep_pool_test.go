@@ -92,6 +92,28 @@ func TestPrepFetchForCommit(t *testing.T) {
 	assert.Nil(t, got)
 }
 
+// TestPrepRedoPending verifies that a transaction awaiting redo is never
+// reported as committed, can still be rolled back, and is replaced by the
+// connection once its redo succeeds.
+func TestPrepRedoPending(t *testing.T) {
+	pp := createAndOpenPreparedPool(2)
+	pp.SetRedoPending("aa")
+	got, err := pp.FetchForCommit("aa")
+	require.ErrorContains(t, err, "redo of the prepared transaction is pending")
+	assert.Nil(t, got)
+
+	conn := &StatefulConnection{}
+	require.NoError(t, pp.Put(conn, "aa"))
+	assert.NotContains(t, pp.reserved, "aa")
+	got, err = pp.FetchForCommit("aa")
+	require.NoError(t, err)
+	assert.Equal(t, conn, got)
+
+	pp.SetRedoPending("bb")
+	assert.Nil(t, pp.FetchForRollback("bb"))
+	assert.NotContains(t, pp.reserved, "bb")
+}
+
 func TestPrepFetchAll(t *testing.T) {
 	pp := createAndOpenPreparedPool(2)
 	conn1 := &StatefulConnection{}
