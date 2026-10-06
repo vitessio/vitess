@@ -128,35 +128,11 @@ func (m *ShardPeerHealth) CloneVT() *ShardPeerHealth {
 		return (*ShardPeerHealth)(nil)
 	}
 	r := new(ShardPeerHealth)
+	r.TabletAlias = m.TabletAlias.CloneVT()
 	r.ConsecutivePingFailures = m.ConsecutivePingFailures
-	if rhs := m.TabletAlias; rhs != nil {
-		if vtpb, ok := interface{}(rhs).(interface{ CloneVT() *topodata.TabletAlias }); ok {
-			r.TabletAlias = vtpb.CloneVT()
-		} else {
-			r.TabletAlias = proto.Clone(rhs).(*topodata.TabletAlias)
-		}
-	}
-	if rhs := m.LastSuccessfulPing; rhs != nil {
-		if vtpb, ok := interface{}(rhs).(interface{ CloneVT() *vttime.Time }); ok {
-			r.LastSuccessfulPing = vtpb.CloneVT()
-		} else {
-			r.LastSuccessfulPing = proto.Clone(rhs).(*vttime.Time)
-		}
-	}
-	if rhs := m.LastAttemptedPing; rhs != nil {
-		if vtpb, ok := interface{}(rhs).(interface{ CloneVT() *vttime.Time }); ok {
-			r.LastAttemptedPing = vtpb.CloneVT()
-		} else {
-			r.LastAttemptedPing = proto.Clone(rhs).(*vttime.Time)
-		}
-	}
-	if rhs := m.TimeSinceLastAttemptedPing; rhs != nil {
-		if vtpb, ok := interface{}(rhs).(interface{ CloneVT() *vttime.Duration }); ok {
-			r.TimeSinceLastAttemptedPing = vtpb.CloneVT()
-		} else {
-			r.TimeSinceLastAttemptedPing = proto.Clone(rhs).(*vttime.Duration)
-		}
-	}
+	r.LastSuccessfulPing = m.LastSuccessfulPing.CloneVT()
+	r.LastAttemptedPing = m.LastAttemptedPing.CloneVT()
+	r.TimeSinceLastAttemptedPing = m.TimeSinceLastAttemptedPing.CloneVT()
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -741,68 +717,32 @@ func (m *ShardPeerHealth) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		copy(dAtA[i:], m.unknownFields)
 	}
 	if m.TimeSinceLastAttemptedPing != nil {
-		if vtmsg, ok := interface{}(m.TimeSinceLastAttemptedPing).(interface {
-			MarshalToSizedBufferVT([]byte) (int, error)
-		}); ok {
-			size, err := vtmsg.MarshalToSizedBufferVT(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
-		} else {
-			encoded, err := proto.Marshal(m.TimeSinceLastAttemptedPing)
-			if err != nil {
-				return 0, err
-			}
-			i -= len(encoded)
-			copy(dAtA[i:], encoded)
-			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(encoded)))
+		size, err := m.TimeSinceLastAttemptedPing.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
+		i -= size
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x2a
 	}
 	if m.LastAttemptedPing != nil {
-		if vtmsg, ok := interface{}(m.LastAttemptedPing).(interface {
-			MarshalToSizedBufferVT([]byte) (int, error)
-		}); ok {
-			size, err := vtmsg.MarshalToSizedBufferVT(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
-		} else {
-			encoded, err := proto.Marshal(m.LastAttemptedPing)
-			if err != nil {
-				return 0, err
-			}
-			i -= len(encoded)
-			copy(dAtA[i:], encoded)
-			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(encoded)))
+		size, err := m.LastAttemptedPing.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
+		i -= size
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x22
 	}
 	if m.LastSuccessfulPing != nil {
-		if vtmsg, ok := interface{}(m.LastSuccessfulPing).(interface {
-			MarshalToSizedBufferVT([]byte) (int, error)
-		}); ok {
-			size, err := vtmsg.MarshalToSizedBufferVT(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
-		} else {
-			encoded, err := proto.Marshal(m.LastSuccessfulPing)
-			if err != nil {
-				return 0, err
-			}
-			i -= len(encoded)
-			copy(dAtA[i:], encoded)
-			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(encoded)))
+		size, err := m.LastSuccessfulPing.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
+		i -= size
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x1a
 	}
@@ -812,24 +752,12 @@ func (m *ShardPeerHealth) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		dAtA[i] = 0x10
 	}
 	if m.TabletAlias != nil {
-		if vtmsg, ok := interface{}(m.TabletAlias).(interface {
-			MarshalToSizedBufferVT([]byte) (int, error)
-		}); ok {
-			size, err := vtmsg.MarshalToSizedBufferVT(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
-		} else {
-			encoded, err := proto.Marshal(m.TabletAlias)
-			if err != nil {
-				return 0, err
-			}
-			i -= len(encoded)
-			copy(dAtA[i:], encoded)
-			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(encoded)))
+		size, err := m.TabletAlias.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
+		i -= size
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -1540,46 +1468,22 @@ func (m *ShardPeerHealth) SizeVT() (n int) {
 	var l int
 	_ = l
 	if m.TabletAlias != nil {
-		if size, ok := interface{}(m.TabletAlias).(interface {
-			SizeVT() int
-		}); ok {
-			l = size.SizeVT()
-		} else {
-			l = proto.Size(m.TabletAlias)
-		}
+		l = m.TabletAlias.SizeVT()
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	if m.ConsecutivePingFailures != 0 {
 		n += 1 + protohelpers.SizeOfVarint(uint64(m.ConsecutivePingFailures))
 	}
 	if m.LastSuccessfulPing != nil {
-		if size, ok := interface{}(m.LastSuccessfulPing).(interface {
-			SizeVT() int
-		}); ok {
-			l = size.SizeVT()
-		} else {
-			l = proto.Size(m.LastSuccessfulPing)
-		}
+		l = m.LastSuccessfulPing.SizeVT()
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	if m.LastAttemptedPing != nil {
-		if size, ok := interface{}(m.LastAttemptedPing).(interface {
-			SizeVT() int
-		}); ok {
-			l = size.SizeVT()
-		} else {
-			l = proto.Size(m.LastAttemptedPing)
-		}
+		l = m.LastAttemptedPing.SizeVT()
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	if m.TimeSinceLastAttemptedPing != nil {
-		if size, ok := interface{}(m.TimeSinceLastAttemptedPing).(interface {
-			SizeVT() int
-		}); ok {
-			l = size.SizeVT()
-		} else {
-			l = proto.Size(m.TimeSinceLastAttemptedPing)
-		}
+		l = m.TimeSinceLastAttemptedPing.SizeVT()
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	n += len(m.unknownFields)
@@ -2971,16 +2875,8 @@ func (m *ShardPeerHealth) UnmarshalVT(dAtA []byte) error {
 			if m.TabletAlias == nil {
 				m.TabletAlias = &topodata.TabletAlias{}
 			}
-			if unmarshal, ok := interface{}(m.TabletAlias).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.TabletAlias); err != nil {
-					return err
-				}
+			if err := m.TabletAlias.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		case 2:
@@ -3034,16 +2930,8 @@ func (m *ShardPeerHealth) UnmarshalVT(dAtA []byte) error {
 			if m.LastSuccessfulPing == nil {
 				m.LastSuccessfulPing = &vttime.Time{}
 			}
-			if unmarshal, ok := interface{}(m.LastSuccessfulPing).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.LastSuccessfulPing); err != nil {
-					return err
-				}
+			if err := m.LastSuccessfulPing.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		case 4:
@@ -3078,16 +2966,8 @@ func (m *ShardPeerHealth) UnmarshalVT(dAtA []byte) error {
 			if m.LastAttemptedPing == nil {
 				m.LastAttemptedPing = &vttime.Time{}
 			}
-			if unmarshal, ok := interface{}(m.LastAttemptedPing).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.LastAttemptedPing); err != nil {
-					return err
-				}
+			if err := m.LastAttemptedPing.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		case 5:
@@ -3122,16 +3002,8 @@ func (m *ShardPeerHealth) UnmarshalVT(dAtA []byte) error {
 			if m.TimeSinceLastAttemptedPing == nil {
 				m.TimeSinceLastAttemptedPing = &vttime.Duration{}
 			}
-			if unmarshal, ok := interface{}(m.TimeSinceLastAttemptedPing).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.TimeSinceLastAttemptedPing); err != nil {
-					return err
-				}
+			if err := m.TimeSinceLastAttemptedPing.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		default:

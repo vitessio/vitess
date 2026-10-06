@@ -220,6 +220,9 @@ func (ct *ColumnType) SQLType() querypb.Type {
 
 func SQLTypeToQueryType(typeName string, unsigned bool) querypb.Type {
 	switch keywordVals[strings.ToLower(typeName)] {
+	case SERIAL:
+		// SERIAL is an alias for BIGINT UNSIGNED NOT NULL AUTO_INCREMENT UNIQUE.
+		return sqltypes.Uint64
 	case TINYINT:
 		if unsigned {
 			return sqltypes.Uint8

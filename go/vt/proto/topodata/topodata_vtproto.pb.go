@@ -82,7 +82,10 @@ func (m *Tablet) CloneVT() *Tablet {
 	r.DbNameOverride = m.DbNameOverride
 	r.MysqlHostname = m.MysqlHostname
 	r.MysqlPort = m.MysqlPort
+	r.PrimaryTermStartTime = m.PrimaryTermStartTime.CloneVT()
 	r.DefaultConnCollation = m.DefaultConnCollation
+	r.TabletStartTime = m.TabletStartTime.CloneVT()
+	r.TabletShutdownTime = m.TabletShutdownTime.CloneVT()
 	if rhs := m.PortMap; rhs != nil {
 		tmpContainer := make(map[string]int32, len(rhs))
 		for k, v := range rhs {
@@ -96,27 +99,6 @@ func (m *Tablet) CloneVT() *Tablet {
 			tmpContainer[k] = v
 		}
 		r.Tags = tmpContainer
-	}
-	if rhs := m.PrimaryTermStartTime; rhs != nil {
-		if vtpb, ok := interface{}(rhs).(interface{ CloneVT() *vttime.Time }); ok {
-			r.PrimaryTermStartTime = vtpb.CloneVT()
-		} else {
-			r.PrimaryTermStartTime = proto.Clone(rhs).(*vttime.Time)
-		}
-	}
-	if rhs := m.TabletStartTime; rhs != nil {
-		if vtpb, ok := interface{}(rhs).(interface{ CloneVT() *vttime.Time }); ok {
-			r.TabletStartTime = vtpb.CloneVT()
-		} else {
-			r.TabletStartTime = proto.Clone(rhs).(*vttime.Time)
-		}
-	}
-	if rhs := m.TabletShutdownTime; rhs != nil {
-		if vtpb, ok := interface{}(rhs).(interface{ CloneVT() *vttime.Time }); ok {
-			r.TabletShutdownTime = vtpb.CloneVT()
-		} else {
-			r.TabletShutdownTime = proto.Clone(rhs).(*vttime.Time)
-		}
 	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -189,18 +171,13 @@ func (m *Shard) CloneVT() *Shard {
 	}
 	r := new(Shard)
 	r.PrimaryAlias = m.PrimaryAlias.CloneVT()
+	r.PrimaryTermStartTime = m.PrimaryTermStartTime.CloneVT()
 	r.KeyRange = m.KeyRange.CloneVT()
 	r.IsPrimaryServing = m.IsPrimaryServing
+	r.VtorcState = m.VtorcState.CloneVT()
 	r.GroupReplicationIncarnation = m.GroupReplicationIncarnation
 	r.GroupReplicationBootstrapIntent = m.GroupReplicationBootstrapIntent.CloneVT()
 	r.DurabilityPolicy = m.DurabilityPolicy
-	if rhs := m.PrimaryTermStartTime; rhs != nil {
-		if vtpb, ok := interface{}(rhs).(interface{ CloneVT() *vttime.Time }); ok {
-			r.PrimaryTermStartTime = vtpb.CloneVT()
-		} else {
-			r.PrimaryTermStartTime = proto.Clone(rhs).(*vttime.Time)
-		}
-	}
 	if rhs := m.SourceShards; rhs != nil {
 		tmpContainer := make([]*Shard_SourceShard, len(rhs))
 		for k, v := range rhs {
@@ -214,13 +191,6 @@ func (m *Shard) CloneVT() *Shard {
 			tmpContainer[k] = v.CloneVT()
 		}
 		r.TabletControls = tmpContainer
-	}
-	if rhs := m.VtorcState; rhs != nil {
-		if vtpb, ok := interface{}(rhs).(interface{ CloneVT() *vtorcdata.Shard }); ok {
-			r.VtorcState = vtpb.CloneVT()
-		} else {
-			r.VtorcState = proto.Clone(rhs).(*vtorcdata.Shard)
-		}
 	}
 	if rhs := m.GroupReplicationVoters; rhs != nil {
 		tmpContainer := make([]*TabletAlias, len(rhs))
@@ -246,15 +216,9 @@ func (m *GroupReplicationBootstrapIntent) CloneVT() *GroupReplicationBootstrapIn
 	}
 	r := new(GroupReplicationBootstrapIntent)
 	r.Target = m.Target.CloneVT()
+	r.Time = m.Time.CloneVT()
 	r.PreviousIncarnation = m.PreviousIncarnation
 	r.Token = m.Token
-	if rhs := m.Time; rhs != nil {
-		if vtpb, ok := interface{}(rhs).(interface{ CloneVT() *vttime.Time }); ok {
-			r.Time = vtpb.CloneVT()
-		} else {
-			r.Time = proto.Clone(rhs).(*vttime.Time)
-		}
-	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -273,30 +237,12 @@ func (m *Keyspace) CloneVT() *Keyspace {
 	r := new(Keyspace)
 	r.KeyspaceType = m.KeyspaceType
 	r.BaseKeyspace = m.BaseKeyspace
+	r.SnapshotTime = m.SnapshotTime.CloneVT()
 	r.DurabilityPolicy = m.DurabilityPolicy
 	r.ThrottlerConfig = m.ThrottlerConfig.CloneVT()
 	r.SidecarDbName = m.SidecarDbName
-	if rhs := m.SnapshotTime; rhs != nil {
-		if vtpb, ok := interface{}(rhs).(interface{ CloneVT() *vttime.Time }); ok {
-			r.SnapshotTime = vtpb.CloneVT()
-		} else {
-			r.SnapshotTime = proto.Clone(rhs).(*vttime.Time)
-		}
-	}
-	if rhs := m.VtorcState; rhs != nil {
-		if vtpb, ok := interface{}(rhs).(interface{ CloneVT() *vtorcdata.Keyspace }); ok {
-			r.VtorcState = vtpb.CloneVT()
-		} else {
-			r.VtorcState = proto.Clone(rhs).(*vtorcdata.Keyspace)
-		}
-	}
-	if rhs := m.QueryThrottlerConfig; rhs != nil {
-		if vtpb, ok := interface{}(rhs).(interface{ CloneVT() *querythrottler.Config }); ok {
-			r.QueryThrottlerConfig = vtpb.CloneVT()
-		} else {
-			r.QueryThrottlerConfig = proto.Clone(rhs).(*querythrottler.Config)
-		}
-	}
+	r.VtorcState = m.VtorcState.CloneVT()
+	r.QueryThrottlerConfig = m.QueryThrottlerConfig.CloneVT()
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -410,14 +356,8 @@ func (m *ThrottledAppRule) CloneVT() *ThrottledAppRule {
 	r := new(ThrottledAppRule)
 	r.Name = m.Name
 	r.Ratio = m.Ratio
+	r.ExpiresAt = m.ExpiresAt.CloneVT()
 	r.Exempt = m.Exempt
-	if rhs := m.ExpiresAt; rhs != nil {
-		if vtpb, ok := interface{}(rhs).(interface{ CloneVT() *vttime.Time }); ok {
-			r.ExpiresAt = vtpb.CloneVT()
-		} else {
-			r.ExpiresAt = proto.Clone(rhs).(*vttime.Time)
-		}
-	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -528,19 +468,13 @@ func (m *SrvKeyspace) CloneVT() *SrvKeyspace {
 	}
 	r := new(SrvKeyspace)
 	r.ThrottlerConfig = m.ThrottlerConfig.CloneVT()
+	r.QueryThrottlerConfig = m.QueryThrottlerConfig.CloneVT()
 	if rhs := m.Partitions; rhs != nil {
 		tmpContainer := make([]*SrvKeyspace_KeyspacePartition, len(rhs))
 		for k, v := range rhs {
 			tmpContainer[k] = v.CloneVT()
 		}
 		r.Partitions = tmpContainer
-	}
-	if rhs := m.QueryThrottlerConfig; rhs != nil {
-		if vtpb, ok := interface{}(rhs).(interface{ CloneVT() *querythrottler.Config }); ok {
-			r.QueryThrottlerConfig = vtpb.CloneVT()
-		} else {
-			r.QueryThrottlerConfig = proto.Clone(rhs).(*querythrottler.Config)
-		}
 	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -774,48 +708,24 @@ func (m *Tablet) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		copy(dAtA[i:], m.unknownFields)
 	}
 	if m.TabletShutdownTime != nil {
-		if vtmsg, ok := interface{}(m.TabletShutdownTime).(interface {
-			MarshalToSizedBufferVT([]byte) (int, error)
-		}); ok {
-			size, err := vtmsg.MarshalToSizedBufferVT(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
-		} else {
-			encoded, err := proto.Marshal(m.TabletShutdownTime)
-			if err != nil {
-				return 0, err
-			}
-			i -= len(encoded)
-			copy(dAtA[i:], encoded)
-			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(encoded)))
+		size, err := m.TabletShutdownTime.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
+		i -= size
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x1
 		i--
 		dAtA[i] = 0x92
 	}
 	if m.TabletStartTime != nil {
-		if vtmsg, ok := interface{}(m.TabletStartTime).(interface {
-			MarshalToSizedBufferVT([]byte) (int, error)
-		}); ok {
-			size, err := vtmsg.MarshalToSizedBufferVT(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
-		} else {
-			encoded, err := proto.Marshal(m.TabletStartTime)
-			if err != nil {
-				return 0, err
-			}
-			i -= len(encoded)
-			copy(dAtA[i:], encoded)
-			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(encoded)))
+		size, err := m.TabletStartTime.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
+		i -= size
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x1
 		i--
@@ -829,24 +739,12 @@ func (m *Tablet) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		dAtA[i] = 0x80
 	}
 	if m.PrimaryTermStartTime != nil {
-		if vtmsg, ok := interface{}(m.PrimaryTermStartTime).(interface {
-			MarshalToSizedBufferVT([]byte) (int, error)
-		}); ok {
-			size, err := vtmsg.MarshalToSizedBufferVT(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
-		} else {
-			encoded, err := proto.Marshal(m.PrimaryTermStartTime)
-			if err != nil {
-				return 0, err
-			}
-			i -= len(encoded)
-			copy(dAtA[i:], encoded)
-			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(encoded)))
+		size, err := m.PrimaryTermStartTime.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
+		i -= size
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x72
 	}
@@ -1168,46 +1066,22 @@ func (m *Shard) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		}
 	}
 	if m.VtorcState != nil {
-		if vtmsg, ok := interface{}(m.VtorcState).(interface {
-			MarshalToSizedBufferVT([]byte) (int, error)
-		}); ok {
-			size, err := vtmsg.MarshalToSizedBufferVT(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
-		} else {
-			encoded, err := proto.Marshal(m.VtorcState)
-			if err != nil {
-				return 0, err
-			}
-			i -= len(encoded)
-			copy(dAtA[i:], encoded)
-			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(encoded)))
+		size, err := m.VtorcState.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
+		i -= size
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x4a
 	}
 	if m.PrimaryTermStartTime != nil {
-		if vtmsg, ok := interface{}(m.PrimaryTermStartTime).(interface {
-			MarshalToSizedBufferVT([]byte) (int, error)
-		}); ok {
-			size, err := vtmsg.MarshalToSizedBufferVT(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
-		} else {
-			encoded, err := proto.Marshal(m.PrimaryTermStartTime)
-			if err != nil {
-				return 0, err
-			}
-			i -= len(encoded)
-			copy(dAtA[i:], encoded)
-			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(encoded)))
+		size, err := m.PrimaryTermStartTime.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
+		i -= size
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x42
 	}
@@ -1313,24 +1187,12 @@ func (m *GroupReplicationBootstrapIntent) MarshalToSizedBufferVT(dAtA []byte) (i
 		dAtA[i] = 0x1a
 	}
 	if m.Time != nil {
-		if vtmsg, ok := interface{}(m.Time).(interface {
-			MarshalToSizedBufferVT([]byte) (int, error)
-		}); ok {
-			size, err := vtmsg.MarshalToSizedBufferVT(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
-		} else {
-			encoded, err := proto.Marshal(m.Time)
-			if err != nil {
-				return 0, err
-			}
-			i -= len(encoded)
-			copy(dAtA[i:], encoded)
-			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(encoded)))
+		size, err := m.Time.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
+		i -= size
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x12
 	}
@@ -1378,46 +1240,22 @@ func (m *Keyspace) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		copy(dAtA[i:], m.unknownFields)
 	}
 	if m.QueryThrottlerConfig != nil {
-		if vtmsg, ok := interface{}(m.QueryThrottlerConfig).(interface {
-			MarshalToSizedBufferVT([]byte) (int, error)
-		}); ok {
-			size, err := vtmsg.MarshalToSizedBufferVT(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
-		} else {
-			encoded, err := proto.Marshal(m.QueryThrottlerConfig)
-			if err != nil {
-				return 0, err
-			}
-			i -= len(encoded)
-			copy(dAtA[i:], encoded)
-			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(encoded)))
+		size, err := m.QueryThrottlerConfig.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
+		i -= size
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x62
 	}
 	if m.VtorcState != nil {
-		if vtmsg, ok := interface{}(m.VtorcState).(interface {
-			MarshalToSizedBufferVT([]byte) (int, error)
-		}); ok {
-			size, err := vtmsg.MarshalToSizedBufferVT(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
-		} else {
-			encoded, err := proto.Marshal(m.VtorcState)
-			if err != nil {
-				return 0, err
-			}
-			i -= len(encoded)
-			copy(dAtA[i:], encoded)
-			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(encoded)))
+		size, err := m.VtorcState.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
+		i -= size
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x5a
 	}
@@ -1446,24 +1284,12 @@ func (m *Keyspace) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		dAtA[i] = 0x42
 	}
 	if m.SnapshotTime != nil {
-		if vtmsg, ok := interface{}(m.SnapshotTime).(interface {
-			MarshalToSizedBufferVT([]byte) (int, error)
-		}); ok {
-			size, err := vtmsg.MarshalToSizedBufferVT(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
-		} else {
-			encoded, err := proto.Marshal(m.SnapshotTime)
-			if err != nil {
-				return 0, err
-			}
-			i -= len(encoded)
-			copy(dAtA[i:], encoded)
-			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(encoded)))
+		size, err := m.SnapshotTime.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
+		i -= size
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x3a
 	}
@@ -1769,24 +1595,12 @@ func (m *ThrottledAppRule) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		dAtA[i] = 0x20
 	}
 	if m.ExpiresAt != nil {
-		if vtmsg, ok := interface{}(m.ExpiresAt).(interface {
-			MarshalToSizedBufferVT([]byte) (int, error)
-		}); ok {
-			size, err := vtmsg.MarshalToSizedBufferVT(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
-		} else {
-			encoded, err := proto.Marshal(m.ExpiresAt)
-			if err != nil {
-				return 0, err
-			}
-			i -= len(encoded)
-			copy(dAtA[i:], encoded)
-			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(encoded)))
+		size, err := m.ExpiresAt.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
+		i -= size
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x1a
 	}
@@ -2069,24 +1883,12 @@ func (m *SrvKeyspace) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		copy(dAtA[i:], m.unknownFields)
 	}
 	if m.QueryThrottlerConfig != nil {
-		if vtmsg, ok := interface{}(m.QueryThrottlerConfig).(interface {
-			MarshalToSizedBufferVT([]byte) (int, error)
-		}); ok {
-			size, err := vtmsg.MarshalToSizedBufferVT(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
-		} else {
-			encoded, err := proto.Marshal(m.QueryThrottlerConfig)
-			if err != nil {
-				return 0, err
-			}
-			i -= len(encoded)
-			copy(dAtA[i:], encoded)
-			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(encoded)))
+		size, err := m.QueryThrottlerConfig.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
 		}
+		i -= size
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x3a
 	}
@@ -2438,36 +2240,18 @@ func (m *Tablet) SizeVT() (n int) {
 		n += 1 + protohelpers.SizeOfVarint(uint64(m.MysqlPort))
 	}
 	if m.PrimaryTermStartTime != nil {
-		if size, ok := interface{}(m.PrimaryTermStartTime).(interface {
-			SizeVT() int
-		}); ok {
-			l = size.SizeVT()
-		} else {
-			l = proto.Size(m.PrimaryTermStartTime)
-		}
+		l = m.PrimaryTermStartTime.SizeVT()
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	if m.DefaultConnCollation != 0 {
 		n += 2 + protohelpers.SizeOfVarint(uint64(m.DefaultConnCollation))
 	}
 	if m.TabletStartTime != nil {
-		if size, ok := interface{}(m.TabletStartTime).(interface {
-			SizeVT() int
-		}); ok {
-			l = size.SizeVT()
-		} else {
-			l = proto.Size(m.TabletStartTime)
-		}
+		l = m.TabletStartTime.SizeVT()
 		n += 2 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	if m.TabletShutdownTime != nil {
-		if size, ok := interface{}(m.TabletShutdownTime).(interface {
-			SizeVT() int
-		}); ok {
-			l = size.SizeVT()
-		} else {
-			l = proto.Size(m.TabletShutdownTime)
-		}
+		l = m.TabletShutdownTime.SizeVT()
 		n += 2 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	n += len(m.unknownFields)
@@ -2566,23 +2350,11 @@ func (m *Shard) SizeVT() (n int) {
 		n += 2
 	}
 	if m.PrimaryTermStartTime != nil {
-		if size, ok := interface{}(m.PrimaryTermStartTime).(interface {
-			SizeVT() int
-		}); ok {
-			l = size.SizeVT()
-		} else {
-			l = proto.Size(m.PrimaryTermStartTime)
-		}
+		l = m.PrimaryTermStartTime.SizeVT()
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	if m.VtorcState != nil {
-		if size, ok := interface{}(m.VtorcState).(interface {
-			SizeVT() int
-		}); ok {
-			l = size.SizeVT()
-		} else {
-			l = proto.Size(m.VtorcState)
-		}
+		l = m.VtorcState.SizeVT()
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	if len(m.GroupReplicationVoters) > 0 {
@@ -2618,13 +2390,7 @@ func (m *GroupReplicationBootstrapIntent) SizeVT() (n int) {
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	if m.Time != nil {
-		if size, ok := interface{}(m.Time).(interface {
-			SizeVT() int
-		}); ok {
-			l = size.SizeVT()
-		} else {
-			l = proto.Size(m.Time)
-		}
+		l = m.Time.SizeVT()
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	l = len(m.PreviousIncarnation)
@@ -2653,13 +2419,7 @@ func (m *Keyspace) SizeVT() (n int) {
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	if m.SnapshotTime != nil {
-		if size, ok := interface{}(m.SnapshotTime).(interface {
-			SizeVT() int
-		}); ok {
-			l = size.SizeVT()
-		} else {
-			l = proto.Size(m.SnapshotTime)
-		}
+		l = m.SnapshotTime.SizeVT()
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	l = len(m.DurabilityPolicy)
@@ -2675,23 +2435,11 @@ func (m *Keyspace) SizeVT() (n int) {
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	if m.VtorcState != nil {
-		if size, ok := interface{}(m.VtorcState).(interface {
-			SizeVT() int
-		}); ok {
-			l = size.SizeVT()
-		} else {
-			l = proto.Size(m.VtorcState)
-		}
+		l = m.VtorcState.SizeVT()
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	if m.QueryThrottlerConfig != nil {
-		if size, ok := interface{}(m.QueryThrottlerConfig).(interface {
-			SizeVT() int
-		}); ok {
-			l = size.SizeVT()
-		} else {
-			l = proto.Size(m.QueryThrottlerConfig)
-		}
+		l = m.QueryThrottlerConfig.SizeVT()
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	n += len(m.unknownFields)
@@ -2798,13 +2546,7 @@ func (m *ThrottledAppRule) SizeVT() (n int) {
 		n += 9
 	}
 	if m.ExpiresAt != nil {
-		if size, ok := interface{}(m.ExpiresAt).(interface {
-			SizeVT() int
-		}); ok {
-			l = size.SizeVT()
-		} else {
-			l = proto.Size(m.ExpiresAt)
-		}
+		l = m.ExpiresAt.SizeVT()
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	if m.Exempt {
@@ -2929,13 +2671,7 @@ func (m *SrvKeyspace) SizeVT() (n int) {
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	if m.QueryThrottlerConfig != nil {
-		if size, ok := interface{}(m.QueryThrottlerConfig).(interface {
-			SizeVT() int
-		}); ok {
-			l = size.SizeVT()
-		} else {
-			l = proto.Size(m.QueryThrottlerConfig)
-		}
+		l = m.QueryThrottlerConfig.SizeVT()
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	n += len(m.unknownFields)
@@ -3820,16 +3556,8 @@ func (m *Tablet) UnmarshalVT(dAtA []byte) error {
 			if m.PrimaryTermStartTime == nil {
 				m.PrimaryTermStartTime = &vttime.Time{}
 			}
-			if unmarshal, ok := interface{}(m.PrimaryTermStartTime).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.PrimaryTermStartTime); err != nil {
-					return err
-				}
+			if err := m.PrimaryTermStartTime.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		case 16:
@@ -3883,16 +3611,8 @@ func (m *Tablet) UnmarshalVT(dAtA []byte) error {
 			if m.TabletStartTime == nil {
 				m.TabletStartTime = &vttime.Time{}
 			}
-			if unmarshal, ok := interface{}(m.TabletStartTime).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.TabletStartTime); err != nil {
-					return err
-				}
+			if err := m.TabletStartTime.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		case 18:
@@ -3927,16 +3647,8 @@ func (m *Tablet) UnmarshalVT(dAtA []byte) error {
 			if m.TabletShutdownTime == nil {
 				m.TabletShutdownTime = &vttime.Time{}
 			}
-			if unmarshal, ok := interface{}(m.TabletShutdownTime).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.TabletShutdownTime); err != nil {
-					return err
-				}
+			if err := m.TabletShutdownTime.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		default:
@@ -4558,16 +4270,8 @@ func (m *Shard) UnmarshalVT(dAtA []byte) error {
 			if m.PrimaryTermStartTime == nil {
 				m.PrimaryTermStartTime = &vttime.Time{}
 			}
-			if unmarshal, ok := interface{}(m.PrimaryTermStartTime).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.PrimaryTermStartTime); err != nil {
-					return err
-				}
+			if err := m.PrimaryTermStartTime.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		case 9:
@@ -4602,16 +4306,8 @@ func (m *Shard) UnmarshalVT(dAtA []byte) error {
 			if m.VtorcState == nil {
 				m.VtorcState = &vtorcdata.Shard{}
 			}
-			if unmarshal, ok := interface{}(m.VtorcState).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.VtorcState); err != nil {
-					return err
-				}
+			if err := m.VtorcState.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		case 10:
@@ -4867,16 +4563,8 @@ func (m *GroupReplicationBootstrapIntent) UnmarshalVT(dAtA []byte) error {
 			if m.Time == nil {
 				m.Time = &vttime.Time{}
 			}
-			if unmarshal, ok := interface{}(m.Time).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.Time); err != nil {
-					return err
-				}
+			if err := m.Time.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		case 3:
@@ -5077,16 +4765,8 @@ func (m *Keyspace) UnmarshalVT(dAtA []byte) error {
 			if m.SnapshotTime == nil {
 				m.SnapshotTime = &vttime.Time{}
 			}
-			if unmarshal, ok := interface{}(m.SnapshotTime).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.SnapshotTime); err != nil {
-					return err
-				}
+			if err := m.SnapshotTime.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		case 8:
@@ -5221,16 +4901,8 @@ func (m *Keyspace) UnmarshalVT(dAtA []byte) error {
 			if m.VtorcState == nil {
 				m.VtorcState = &vtorcdata.Keyspace{}
 			}
-			if unmarshal, ok := interface{}(m.VtorcState).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.VtorcState); err != nil {
-					return err
-				}
+			if err := m.VtorcState.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		case 12:
@@ -5265,16 +4937,8 @@ func (m *Keyspace) UnmarshalVT(dAtA []byte) error {
 			if m.QueryThrottlerConfig == nil {
 				m.QueryThrottlerConfig = &querythrottler.Config{}
 			}
-			if unmarshal, ok := interface{}(m.QueryThrottlerConfig).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.QueryThrottlerConfig); err != nil {
-					return err
-				}
+			if err := m.QueryThrottlerConfig.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		default:
@@ -5939,16 +5603,8 @@ func (m *ThrottledAppRule) UnmarshalVT(dAtA []byte) error {
 			if m.ExpiresAt == nil {
 				m.ExpiresAt = &vttime.Time{}
 			}
-			if unmarshal, ok := interface{}(m.ExpiresAt).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.ExpiresAt); err != nil {
-					return err
-				}
+			if err := m.ExpiresAt.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		case 4:
@@ -6843,16 +6499,8 @@ func (m *SrvKeyspace) UnmarshalVT(dAtA []byte) error {
 			if m.QueryThrottlerConfig == nil {
 				m.QueryThrottlerConfig = &querythrottler.Config{}
 			}
-			if unmarshal, ok := interface{}(m.QueryThrottlerConfig).(interface {
-				UnmarshalVT([]byte) error
-			}); ok {
-				if err := unmarshal.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-					return err
-				}
-			} else {
-				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.QueryThrottlerConfig); err != nil {
-					return err
-				}
+			if err := m.QueryThrottlerConfig.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		default:

@@ -36,6 +36,7 @@ import (
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/event"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sets"
@@ -478,12 +479,8 @@ func (s *VtctldServer) BackupShard(req *vtctldatapb.BackupShardRequest, stream v
 
 	tablets, stats, err := reparentutil.ShardReplicationStatuses(ctx, s.ts, s.tmc, req.Keyspace, req.Shard)
 	// Instead of return on err directly, only return err when no tablets for backup at all
-	if err != nil {
-		tablets = reparentutil.GetBackupCandidates(tablets, stats)
-		// Only return err when no usable tablet
-		if len(tablets) == 0 {
-			return err
-		}
+	if err != nil && len(reparentutil.GetBackupCandidates(tablets, stats)) == 0 {
+		return err
 	}
 
 	var (
@@ -498,8 +495,8 @@ func (s *VtctldServer) BackupShard(req *vtctldatapb.BackupShardRequest, stream v
 			continue
 		}
 
-		// ignore tablet with an unknown replication lag status
-		if stats[i].ReplicationLagUnknown {
+		// ignore a tablet whose replication lag status is missing or unknown
+		if stats[i] == nil || stats[i].ReplicationLagUnknown {
 			continue
 		}
 
@@ -1317,6 +1314,12 @@ func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldat
 	span.Annotate("shard", req.Shard)
 	span.Annotate("new_primary_alias", topoproto.TabletAliasString(req.NewPrimary))
 	span.Annotate("allow_split_brain_promotion", req.AllowSplitBrainPromotion)
+	span.Annotate("required_position", req.RequiredPosition)
+
+	requiredPosition, err := replication.DecodePositionDefaultFlavor(req.RequiredPosition, replication.Mysql56FlavorID)
+	if err != nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid required position: %s", err.Error())
+	}
 
 	ignoreReplicaAliases := topoproto.TabletAliasList(req.IgnoreReplicas).ToStringSlice()
 	span.Annotate("ignore_replicas", strings.Join(ignoreReplicaAliases, ","))
@@ -1352,6 +1355,7 @@ func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldat
 			AllowSplitBrainPromotion:  req.AllowSplitBrainPromotion,
 			PreventCrossCellPromotion: req.PreventCrossCellPromotion,
 			ExpectedPrimaryAlias:      req.ExpectedPrimary,
+			RequiredPosition:          requiredPosition,
 		},
 	)
 
