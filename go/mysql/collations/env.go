@@ -287,13 +287,16 @@ func (env *Environment) ParseConnectionCharset(csname string) (ID, error) {
 
 // connectionCharsets are the character sets that can be used for a connection.
 //
-// Vitess parses and escapes SQL text byte by byte, so a byte below 0x80 must
-// always be the ASCII character it encodes. That holds for single-byte character
-// sets and for multibyte ones whose multibyte characters only use bytes from
-// 0x80 up. It does not hold for sjis, cp932, gbk, big5 and gb18030, where the
-// second byte of a character can be a quote, a backslash or a back quote, nor for
-// ucs2, utf16, utf16le and utf32, which MySQL does not accept as a client
-// character set anyway.
+// Vitess parses and escapes SQL text byte by byte, so a byte that is a quote, a
+// backslash or a back quote must never be part of a multibyte character, and
+// MySQL must read each such byte as that character. That holds for the
+// character sets below. Some of them reuse other ASCII bytes: euckr accepts the
+// letters as the second byte of a character, and swe7 maps 0x5C and 0x60 to
+// letters of its own, but MySQL still reads those two bytes as a backslash and a
+// back quote in SQL text. It does not hold for sjis, cp932, gbk, big5 and
+// gb18030, where the second byte of a character can be a quote, a backslash or a
+// back quote, nor for ucs2, utf16, utf16le and utf32, which MySQL does not accept
+// as a client character set anyway.
 var connectionCharsets = map[string]bool{
 	"utf8mb4": true,
 	"utf8mb3": true,
