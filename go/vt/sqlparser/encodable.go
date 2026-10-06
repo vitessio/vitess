@@ -45,7 +45,7 @@ func (iv InsertValues) EncodeSQL(buf *strings.Builder) {
 			if j != 0 {
 				buf.WriteString(", ")
 			}
-			bv.EncodeSQL(buf)
+			bv.EncodeSQLExprStringBuilder(buf)
 		}
 		buf.WriteByte(')')
 	}
@@ -75,7 +75,7 @@ func (tpl *TupleEqualityList) encodeAsIn(buf *strings.Builder) {
 		if i != 0 {
 			buf.WriteString(", ")
 		}
-		r[0].EncodeSQL(buf)
+		r[0].EncodeSQLExprStringBuilder(buf)
 	}
 	buf.WriteByte(')')
 }
@@ -92,7 +92,7 @@ func (tpl *TupleEqualityList) encodeAsEquality(buf *strings.Builder) {
 			}
 			Append(buf, c)
 			buf.WriteString(" = ")
-			r[j].EncodeSQL(buf)
+			r[j].EncodeSQLExprStringBuilder(buf)
 		}
 		buf.WriteByte(')')
 	}

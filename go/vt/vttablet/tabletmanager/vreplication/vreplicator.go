@@ -82,7 +82,7 @@ const (
 	setSQLModeQueryf = `SET @@session.sql_mode='%s'`
 
 	sqlCreatePostCopyAction = `insert into _vt.post_copy_action(vrepl_id, table_name, action)
-	values(%a, %a, convert(%a using utf8mb4))`
+	values(%e, %e, convert(%e using utf8mb4))`
 	sqlGetPostCopyActions = `select id, action from _vt.post_copy_action where vrepl_id=%a and
 	table_name=%a`
 	// sqlGetPostCopyActionsForTable gets a write lock on all post_copy_action

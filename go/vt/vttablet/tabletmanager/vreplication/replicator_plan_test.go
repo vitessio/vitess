@@ -54,6 +54,31 @@ type TestTablePlan struct {
 	PKReferences []string `json:",omitempty"`
 }
 
+func TestBindvarFormatterTextRepertoire(t *testing.T) {
+	stmt, err := sqlparser.NewTestParser().Parse("select id, _latin1 :id, id from t")
+	require.NoError(t, err)
+	literal := sqltypes.EncodeStringSQL("é\n")
+	for _, tc := range []struct {
+		mode bindvarMode
+		name string
+	}{
+		{mode: bvBefore, name: "b_id"},
+		{mode: bvAfter, name: "a_id"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			formatter := &bindvarFormatter{mode: tc.mode}
+			buf := sqlparser.NewTrackedBuffer(formatter.formatter)
+			buf.WriteNode(stmt)
+			query, err := buf.ParsedQuery().GenerateQuery(map[string]*querypb.BindVariable{
+				"id":    sqltypes.StringBindVariable("é\n"),
+				tc.name: sqltypes.StringBindVariable("é\n"),
+			}, nil)
+			require.NoError(t, err)
+			assert.Equal(t, "select '' "+literal+", _latin1 "+literal+", '' "+literal+" from t", query)
+		})
+	}
+}
+
 func TestBuildPlayerPlan(t *testing.T) {
 	testcases := []struct {
 		input  *binlogdatapb.Filter
@@ -932,6 +957,23 @@ func TestAppendFromRow(t *testing.T) {
 				},
 			),
 			want: "values (1, 2, 3)",
+		},
+		{
+			name: "text expressions and introducers",
+			tp: &TablePlan{
+				BulkInsertValues: sqlparser.NewParsedQuery(sqlparser.ValTuple{
+					sqlparser.NewArgument("c1"),
+					&sqlparser.IntroducerExpr{CharacterSet: "_latin1", Expr: sqlparser.NewArgument("c2")},
+					sqlparser.NewArgument("c3"),
+				}),
+				Fields: sqltypes.MakeTestFields("c1|c2|c3", "varchar|varchar|varbinary"),
+			},
+			row: sqltypes.RowToProto3([]sqltypes.Value{
+				sqltypes.NewVarChar("é\n"),
+				sqltypes.NewVarChar("\xe9\n"),
+				sqltypes.NewVarBinary("\x81\\"),
+			}),
+			want: "('' '\\\xc3\\\xa9\\n', _latin1 '\\\xe9\\n', _binary'\\\x81\\\\')",
 		},
 		{
 			name: "too few fields",

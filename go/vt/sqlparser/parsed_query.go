@@ -35,6 +35,12 @@ type ParsedQuery struct {
 
 type BindLocation struct {
 	Offset, Length int
+	isExpression   bool
+}
+
+// IsExpression reports whether this bind permits adjacent string literals.
+func (loc BindLocation) IsExpression() bool {
+	return loc.isExpression
 }
 
 // NewParsedQuery returns a ParsedQuery of the ast.
@@ -72,7 +78,7 @@ func (pq *ParsedQuery) Append(buf *strings.Builder, bindVariables map[string]*qu
 			if err != nil {
 				return err
 			}
-			EncodeValue(buf, supplied)
+			encodeValue(buf, supplied, loc.isExpression)
 		}
 		current = loc.Offset + loc.Length
 	}
@@ -91,6 +97,10 @@ func (pq *ParsedQuery) MarshalJSON() ([]byte, error) {
 
 // EncodeValue encodes one bind variable value into the query.
 func EncodeValue(buf *strings.Builder, value *querypb.BindVariable) {
+	encodeValue(buf, value, false)
+}
+
+func encodeValue(buf *strings.Builder, value *querypb.BindVariable, expression bool) {
 	switch value.Type {
 	case querypb.Type_TUPLE:
 		buf.WriteByte('(')
@@ -98,7 +108,7 @@ func EncodeValue(buf *strings.Builder, value *querypb.BindVariable) {
 			if i != 0 {
 				buf.WriteString(", ")
 			}
-			sqltypes.ProtoToValue(bv).EncodeSQLStringBuilder(buf)
+			encodeSQLValue(buf, sqltypes.ProtoToValue(bv), expression)
 		}
 		buf.WriteByte(')')
 	case querypb.Type_ROW_TUPLE:
@@ -107,14 +117,22 @@ func EncodeValue(buf *strings.Builder, value *querypb.BindVariable) {
 				buf.WriteString(", ")
 			}
 			buf.WriteString("row")
-			sqltypes.ProtoToValue(bv).EncodeSQLStringBuilder(buf)
+			encodeSQLValue(buf, sqltypes.ProtoToValue(bv), expression)
 		}
 	case querypb.Type_RAW:
 		v, _ := sqltypes.BindVariableToValue(value)
 		buf.Write(v.Raw())
 	default:
 		v, _ := sqltypes.BindVariableToValue(value)
-		v.EncodeSQLStringBuilder(buf)
+		encodeSQLValue(buf, v, expression)
+	}
+}
+
+func encodeSQLValue(buf *strings.Builder, value sqltypes.Value, expression bool) {
+	if expression {
+		value.EncodeSQLExprStringBuilder(buf)
+	} else {
+		value.EncodeSQLStringBuilder(buf)
 	}
 }
 
@@ -151,9 +169,11 @@ func FetchBindVar(name string, bindVariables map[string]*querypb.BindVariable) (
 
 // ParseAndBind is a one step sweep that binds variables to an input query, in order of placeholders.
 // It is useful when one doesn't have any parser-variables, just bind variables.
+// Use %e in expression positions, and %a under introducers or where the grammar
+// requires a single string token.
 // Example:
 //
-//	query, err := ParseAndBind("select * from tbl where name=%a", sqltypes.StringBindVariable("it's me"))
+//	query, err := ParseAndBind("select * from tbl where name=%e", sqltypes.StringBindVariable("it's me"))
 func ParseAndBind(in string, binds ...*querypb.BindVariable) (query string, err error) {
 	vars := make([]any, len(binds))
 	for i, bv := range binds {

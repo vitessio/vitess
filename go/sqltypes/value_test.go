@@ -400,6 +400,116 @@ func TestEncode(t *testing.T) {
 	}
 }
 
+// TestEncodeSQLHighBytes covers the bytes above ASCII. A run of them is only
+// escaped when a `\` would otherwise land right after it, and a quote ahead of
+// such a run is doubled instead so the run can stay raw -- see
+// encodeBytesSQLBytes2. Binary and text encode identically, because the lexer
+// applies the connection charset to both before it ever sees the introducer.
+func TestEncodeSQLHighBytes(t *testing.T) {
+	testcases := []struct {
+		name string
+		in   string
+		want string
+		// `\%` and `\_` are passed through so MySQL keeps treating them as
+		// literals in LIKE, but DecodeStringSQL rejects them, so those cases
+		// cannot be round-tripped.
+		skipDecode bool
+	}{
+		{name: "empty", want: "''"},
+		// A quote after a high byte is doubled, which leaves the high byte raw.
+		{name: "sjis quote", in: "\x81'", want: "'\x81''" + "'"},
+		{name: "high byte run before quote", in: "\x81\x82'", want: "'\x81\x82''" + "'"},
+		{name: "high byte in word", in: "abcdefg\x81'", want: "'abcdefg\x81''" + "'"},
+		{name: "high byte after words", in: "0123456789abcdef\x81'", want: "'0123456789abcdef\x81''" + "'"},
+		{name: "utf8 before quote", in: "é'", want: "'é''" + "'"},
+		// A `\` has no doubled form, so the run ahead of it is escaped.
+		{name: "sjis backslash", in: "\x81\\", want: "'" + "\\\x81" + "\\\\" + "'"},
+		{name: "high byte before NUL", in: "\x81\x00", want: "'" + "\\\x81" + "\\0" + "'"},
+		{name: "high byte before wildcard escape", in: "\x81\\%", want: "'" + "\\\x81" + "\\%" + "'", skipDecode: true},
+		// A high byte needs no escape ahead of the closing quote: 0x27 is not a
+		// valid trail byte in any client charset.
+		{name: "trailing high byte", in: "abc\x80", want: "'abc\x80'"},
+		{name: "utf8", in: "é", want: "'é'"},
+		// A quote with no high byte before it keeps the `\'` form.
+		{name: "ascii quote", in: "it's", want: "'it" + "\\'" + "s'"},
+		{name: "controls and wildcards", in: "\xff\x00'\\%\\_", want: "'" + "\\\xff" + "\\0" + "\\'" + "\\%\\_" + "'", skipDecode: true},
+	}
+	for _, typ := range []Type{VarBinary, Binary, Blob, VarChar, Char, Text} {
+		for _, tc := range testcases {
+			t.Run(typ.String()+"/"+tc.name, func(t *testing.T) {
+				val := MakeTrusted(typ, []byte(tc.in))
+				var generic, builder strings.Builder
+				var buf bytes2.Buffer
+				generic.WriteString("prefix:")
+				builder.WriteString("prefix:")
+				buf.WriteString("prefix:")
+
+				val.EncodeSQL(&generic)
+				val.EncodeSQLStringBuilder(&builder)
+				val.EncodeSQLBytes2(&buf)
+
+				introducer := ""
+				if val.IsBinary() {
+					introducer = "_binary"
+				}
+				want := "prefix:" + introducer + tc.want
+				assert.Equal(t, want, generic.String(), "EncodeSQL")
+				assert.Equal(t, want, builder.String(), "EncodeSQLStringBuilder")
+				assert.Equal(t, want, buf.String(), "EncodeSQLBytes2")
+				if !tc.skipDecode {
+					decoded, err := DecodeStringSQL(generic.String()[len("prefix:"+introducer):])
+					require.NoError(t, err)
+					assert.Equal(t, tc.in, decoded)
+				}
+			})
+		}
+	}
+}
+
+func TestEncodeSQLExprHighBytes(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		in   Value
+		want string
+	}{
+		{name: "ASCII", in: NewVarChar("it's"), want: "'it\\'s'"},
+		{name: "unescaped Unicode", in: NewVarChar("é"), want: "'é'"},
+		{name: "doubled quote", in: NewVarChar("é'"), want: "'é'''"},
+		{name: "newline", in: NewVarChar("é\n"), want: "'' '\\\xc3\\\xa9\\n'"},
+		{name: "sjis trail backslash", in: NewVarChar("\x81\\"), want: "'' '\\\x81\\\\'"},
+		{name: "later escape", in: NewVarChar("x' é\n"), want: "'x\\' ' '\\\xc3\\\xa9\\n'"},
+		{name: "binary", in: NewVarBinary("\x81\\"), want: "_binary'\\\x81\\\\'"},
+		{name: "tuple", in: TestTuple(NewVarChar("é\n"), NewVarBinary("\x81\\")), want: "('' '\\\xc3\\\xa9\\n', _binary'\\\x81\\\\')"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var buf strings.Builder
+			buf.WriteString("prefix:")
+			tc.in.EncodeSQLExprStringBuilder(&buf)
+			assert.Equal(t, "prefix:"+tc.want, buf.String())
+			if tc.in.Type() != Tuple {
+				var bytesBuf bytes2.Buffer
+				bytesBuf.WriteString("prefix:")
+				tc.in.EncodeSQLExprBytes2(&bytesBuf)
+				assert.Equal(t, "prefix:"+tc.want, bytesBuf.String())
+			}
+		})
+	}
+}
+
+// TestBufEncodeStringSQLKeepsInvalidUTF8 covers the byte-oriented rewrite of
+// BufEncodeStringSQL: it used to walk runes, so a string that was not valid
+// UTF-8 came back as U+FFFD.
+func TestBufEncodeStringSQLKeepsInvalidUTF8(t *testing.T) {
+	for _, in := range []string{"\x81", "\x81'", "é", "plain", "it's"} {
+		t.Run(in, func(t *testing.T) {
+			encoded := EncodeStringSQL(in)
+			decoded, err := DecodeStringSQL(encoded)
+			require.NoError(t, err)
+			assert.Equal(t, in, decoded)
+		})
+	}
+}
+
 // TestEncodeMap ensures DontEscape is not escaped
 func TestEncodeMap(t *testing.T) {
 	assert.Equal(t, DontEscape, SQLEncodeMap[DontEscape])
