@@ -270,8 +270,9 @@ func TestApplyChangePartialLegacyInsertBitmapShort(t *testing.T) {
 // that a row event does not behave differently only because NOBLOB or
 // PARTIAL_JSON marked it partial: a fully grouped plan (insertIgnore, first
 // value wins) uses "insert ignore" for both, and a partially grouped plan
-// (insertOnDup, last value wins) adds "on duplicate key update" over the
-// present columns to its INSERT while its UPDATE stays a plain update.
+// (insertOnDup, last value wins) adds the full "on duplicate key update"
+// clause to its INSERT (VALUES(col) for a column omitted from the INSERT
+// list is that column's default) while its UPDATE stays a plain update.
 func TestApplyChangePartialGroupedPlans(t *testing.T) {
 	fields := []*querypb.Field{
 		{Name: "id", Type: querypb.Type_INT32},
@@ -308,7 +309,7 @@ func TestApplyChangePartialGroupedPlans(t *testing.T) {
 
 		executed, err := applyChangeQueries(t, tp, &binlogdatapb.RowChange{After: after, AfterDataColumns: blobOmitted})
 		require.NoError(t, err)
-		require.Equal(t, []string{"insert into dst(id,val) values (1,_binary'bbb') on duplicate key update val=values(val)"}, executed, "partial insert")
+		require.Equal(t, []string{"insert into dst(id,val) values (1,_binary'bbb') on duplicate key update val=values(val), blb=values(blb)"}, executed, "partial insert")
 
 		executed, err = applyChangeQueries(t, tp, &binlogdatapb.RowChange{Before: before, After: after, AfterDataColumns: blobOmitted})
 		require.NoError(t, err)
@@ -317,6 +318,33 @@ func TestApplyChangePartialGroupedPlans(t *testing.T) {
 		executed, err = applyChangeQueries(t, tp, &binlogdatapb.RowChange{After: afterFull, AfterDataColumns: fullImage})
 		require.NoError(t, err)
 		require.Equal(t, []string{"insert into dst(id,val,blb) values (1,_binary'bbb',_binary'blob1') on duplicate key update val=values(val), blb=values(blb)"}, executed, "full insert, still partial-marked")
+	})
+
+	// Only the blob is selected besides the group key, and it is absent.
+	// The ON DUP clause must still be emitted so a duplicate group key
+	// resets blb to its default (VALUES(blb)) instead of a bare INSERT
+	// that fails with 1062 and stops the workflow.
+	t.Run("insertOnDup blob-only absent", func(t *testing.T) {
+		tp := buildTestTablePlan(t, "dst", "select id, blb from src group by id", []*querypb.Field{
+			{Name: "id", Type: querypb.Type_INT32},
+			{Name: "blb", Type: querypb.Type_BLOB},
+		})
+		tp.Stats = binlogplayer.NewStats()
+
+		executed, err := applyChangeQueries(t, tp, &binlogdatapb.RowChange{
+			After:            &querypb.Row{Lengths: []int64{1, -1}, Values: []byte("1")},
+			AfterDataColumns: bitmap(true, false),
+		})
+		require.NoError(t, err)
+		require.Equal(t, []string{"insert into dst(id) values (1) on duplicate key update blb=values(blb)"}, executed, "partial insert")
+
+		executed, err = applyChangeQueries(t, tp, &binlogdatapb.RowChange{
+			Before:           &querypb.Row{Lengths: []int64{1, -1}, Values: []byte("1")},
+			After:            &querypb.Row{Lengths: []int64{1, -1}, Values: []byte("1")},
+			AfterDataColumns: bitmap(true, false),
+		})
+		require.NoError(t, err)
+		assert.Empty(t, executed, "partial update with no writable present columns is a no-op")
 	})
 }
 
@@ -590,4 +618,28 @@ func TestApplyChangePartialLegacyBitmapMisaligned(t *testing.T) {
 	executed, err = applyChangeQueries(t, tp, &binlogdatapb.RowChange{Before: before, After: after, DataColumns: legacy, AfterDataColumns: projected})
 	require.NoError(t, err)
 	require.Equal(t, []string{"update dst set val2=convert(_binary'bbb' using utf8mb4) where id=1"}, executed)
+}
+
+// TestPartialBitmapsCacheKeyIncludesCount shows that Cols alone is not the
+// bitmap's identity: the same packed byte can mean "only bit 0 is in range"
+// (Count=1) or "both bits are in range" (Count=2). Caching on hex(Cols) would
+// reuse the first mapping for the second.
+func TestPartialBitmapsCacheKeyIncludesCount(t *testing.T) {
+	tp := buildTestTablePlan(t, "dst", "select id, val from src", []*querypb.Field{
+		{Name: "id", Type: querypb.Type_INT32},
+		{Name: "val", Type: querypb.Type_VARBINARY},
+	})
+	// Bits 0 and 1 set in the same byte; Count decides which are in range.
+	sameCols := []byte{0x03}
+	short := &binlogdatapb.RowChange_Bitmap{Count: 1, Cols: sameCols}
+	full := &binlogdatapb.RowChange_Bitmap{Count: 2, Cols: sameCols}
+
+	gotShort, err := tp.mappedDataColumnsFor(short)
+	require.NoError(t, err)
+	gotFull, err := tp.mappedDataColumnsFor(full)
+	require.NoError(t, err)
+
+	assert.Equal(t, []bool{true, false}, bitmapBits(gotShort.target), "Count=1: only id is in range")
+	assert.Equal(t, []bool{true, true}, bitmapBits(gotFull.target), "Count=2: id and val are both present")
+	assert.Len(t, tp.PartialBitmaps, 2)
 }

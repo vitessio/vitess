@@ -19,6 +19,7 @@ package vreplication
 import (
 	"bytes"
 	"encoding/hex"
+	"strconv"
 	"strings"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -155,7 +156,7 @@ func (tp *TablePlan) targetDataColumns(streamed *binlogdatapb.RowChange_Bitmap) 
 // mappedDataColumnsFor returns the cached projection of the streamed bitmap
 // onto the target expressions, computing it on first use.
 func (tp *TablePlan) mappedDataColumnsFor(streamed *binlogdatapb.RowChange_Bitmap) (*mappedDataColumns, error) {
-	key := hex.EncodeToString(streamed.Cols)
+	key := partialBitmapKey(streamed)
 	if mapped, ok := tp.PartialBitmaps[key]; ok {
 		return mapped, nil
 	}
@@ -165,6 +166,13 @@ func (tp *TablePlan) mappedDataColumnsFor(streamed *binlogdatapb.RowChange_Bitma
 	}
 	tp.PartialBitmaps[key] = mapped
 	return mapped, nil
+}
+
+// partialBitmapKey identifies a streamed after-image bitmap. Count is part of
+// the key: Cols is packed to whole bytes, so two bitmaps can share Cols and
+// still differ in which bits are in range.
+func partialBitmapKey(bm *binlogdatapb.RowChange_Bitmap) string {
+	return strconv.FormatInt(bm.Count, 10) + ":" + hex.EncodeToString(bm.Cols)
 }
 
 // checkMixedColExprs rejects a row change when a target expression that uses
@@ -370,26 +378,10 @@ func (tpb *tablePlanBuilder) createPartialInsertQuery(dataColumns *binlogdatapb.
 			return nil, err
 		}
 	}
-	tpb.generatePartialOnDupPart(buf, dataColumns)
+	// Full ON DUP clause: VALUES(col) for a column omitted from the INSERT
+	// list is that column's default, matching the full-image last-value-wins.
+	tpb.generateOnDupPart(buf)
 	return buf.ParsedQuery(), nil
-}
-
-// generatePartialOnDupPart is generateOnDupPart restricted to the columns
-// present in the image, so that a partial INSERT for a grouped plan keeps the
-// "last value wins" semantics of the full statement. Aggregate plans never
-// reach the partial generators (see supportsPartialImages).
-func (tpb *tablePlanBuilder) generatePartialOnDupPart(buf *sqlparser.TrackedBuffer, dataColumns *binlogdatapb.RowChange_Bitmap) {
-	if tpb.onInsert != insertOnDup {
-		return
-	}
-	separator := " on duplicate key update "
-	for ind, cexpr := range tpb.colExprs {
-		if cexpr.isGrouped || cexpr.isPK || cexpr.isGenerated || !isBitSet(dataColumns.Cols, ind) {
-			continue
-		}
-		buf.Myprintf("%s%v=values(%v)", separator, cexpr.colName, cexpr.colName)
-		separator = ", "
-	}
 }
 
 // createPartialUpdateQuery generates the UPDATE for a partial row image. It

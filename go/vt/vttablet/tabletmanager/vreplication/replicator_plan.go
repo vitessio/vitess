@@ -229,7 +229,7 @@ type TablePlan struct {
 	PartialUpdates map[string]*sqlparser.ParsedQuery
 	// PartialBitmaps caches the projection of each distinct AfterDataColumns
 	// bitmap received from the source onto the target column expressions. The
-	// key is the serialized streamed bitmap.
+	// key is Count plus the serialized Cols bytes.
 	PartialBitmaps map[string]*mappedDataColumns
 
 	CollationEnv   *collations.Environment
@@ -610,10 +610,10 @@ func (tp *TablePlan) clearEmptyPartialJSONDataColumns(rowChange *binlogdatapb.Ro
 			// that the column's current JSON value is not lost. AfterDataColumns is
 			// indexed by tp.Fields like this loop; the legacy DataColumns only is
 			// when the filter does not reorder or drop columns.
-			if rowChange.AfterDataColumns != nil && i < len(rowChange.AfterDataColumns.Cols)*8 {
+			if rowChange.AfterDataColumns != nil && int64(i) < rowChange.AfterDataColumns.Count {
 				setBit(rowChange.AfterDataColumns.Cols, i, false)
 			}
-			if rowChange.DataColumns != nil && i < len(rowChange.DataColumns.Cols)*8 {
+			if rowChange.DataColumns != nil && int64(i) < rowChange.DataColumns.Count {
 				setBit(rowChange.DataColumns.Cols, i, false)
 			}
 		}
