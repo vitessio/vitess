@@ -441,3 +441,82 @@ func TestMigrateReplicationModeLeavesVotersOfConvertedShardToVTOrc(t *testing.T)
 	assert.Empty(t, c.mutatingCalls())
 	assert.Equal(t, []string{aliasP, alias101, alias200, alias300}, c.voters(t))
 }
+
+// setKeyspaceRecord replaces the durability fields of the test keyspace's record.
+func setKeyspaceRecord(t *testing.T, ts *topo.Server, durability, source string) {
+	ctx, unlock, err := ts.LockKeyspace(t.Context(), "ks", "test")
+	require.NoError(t, err)
+	ki, err := ts.GetKeyspace(ctx, "ks")
+	require.NoError(t, err)
+	ki.DurabilityPolicy, ki.MigrationSourceDurabilityPolicy = durability, source
+	require.NoError(t, ts.UpdateKeyspace(ctx, ki))
+	unlock(&err)
+	require.NoError(t, err)
+}
+
+// TestMigrateReplicationModeRefusesSameReplicationMode checks that MigrateReplicationMode refuses to
+// switch a keyspace between two policies of the replication mode it already runs, which
+// SetKeyspaceDurabilityPolicy does: from group_replication to group_replication_cross_cell, it would
+// keep group_replication as the keyspace's migration source, which is no asynchronous policy, and
+// select the voters of every running group again for the target policy, outside the rules that
+// keep a minority view from serving. A run again to the keyspace's own policy is still allowed.
+func TestMigrateReplicationModeRefusesSameReplicationMode(t *testing.T) {
+	t.Run("group replication to another group replication policy", func(t *testing.T) {
+		c, ts := newFakeGRCluster(t, "group_replication", migrationTestShard()...)
+		c.formGroup(t, "group_replication")
+		c.setIncarnation(t, "1790000000")
+		voters := c.voters(t)
+		_, err := migrate(t, newTestMigrator(c, ts), "group_replication_cross_cell", false)
+		require.Error(t, err)
+		assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+		require.ErrorContains(t, err, "use SetKeyspaceDurabilityPolicy")
+		assert.Empty(t, c.mutatingCalls())
+		assert.Equal(t, voters, c.voters(t))
+		assert.Equal(t, &topodatapb.Keyspace{DurabilityPolicy: "group_replication"}, keyspaceRecord(t, ts))
+	})
+	t.Run("semi-sync to another asynchronous policy", func(t *testing.T) {
+		c, ts := newFakeGRCluster(t, "semi_sync", migrationTestShard()...)
+		_, err := migrate(t, newTestMigrator(c, ts), "none", false)
+		require.Error(t, err)
+		assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+		require.ErrorContains(t, err, "use SetKeyspaceDurabilityPolicy")
+		assert.Empty(t, c.mutatingCalls())
+	})
+	t.Run("an interrupted migration to another group replication policy", func(t *testing.T) {
+		c, ts := newFakeGRCluster(t, "semi_sync", migrationTestShard()...)
+		setKeyspaceRecord(t, ts, "group_replication", "semi_sync")
+		_, err := migrate(t, newTestMigrator(c, ts), "group_replication_cross_cell", false)
+		require.Error(t, err)
+		assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+		assert.Empty(t, c.mutatingCalls())
+	})
+	t.Run("again to the keyspace's own policy", func(t *testing.T) {
+		c, ts := newFakeGRCluster(t, "group_replication", migrationTestShard()...)
+		c.formGroup(t, "group_replication")
+		c.setIncarnation(t, "1790000000")
+		_, err := migrate(t, newTestMigrator(c, ts), "group_replication", false)
+		require.NoError(t, err)
+		assert.Empty(t, c.mutatingCalls())
+	})
+}
+
+// TestMigrateReplicationModeVoterGuardOnAnyGroupReplicationPolicy checks that the migration leaves the
+// voters of a shard whose group runs to VTOrc whenever the shard's policy is a group replication
+// policy, not only the migration's target: here the shard has group_replication as its own policy,
+// and the keyspace names group_replication_cross_cell, whose one voter per cell would drop a voter
+// of the running group.
+func TestMigrateReplicationModeVoterGuardOnAnyGroupReplicationPolicy(t *testing.T) {
+	c, ts := newFakeGRCluster(t, "semi_sync", migrationTestShard()...)
+	c.formGroup(t, "group_replication")
+	c.setIncarnation(t, "1790000000")
+	c.setShardPolicy(t, "group_replication")
+	setKeyspaceRecord(t, ts, "group_replication_cross_cell", "semi_sync")
+	voters := c.voters(t)
+	require.Len(t, voters, 4)
+
+	_, err := migrate(t, newTestMigrator(c, ts), "group_replication_cross_cell", false)
+	require.Error(t, err)
+	require.ErrorContains(t, err, "VTOrc maintains the voters of a converted shard")
+	assert.Equal(t, voters, c.voters(t))
+	assert.Empty(t, c.mutatingCalls())
+}

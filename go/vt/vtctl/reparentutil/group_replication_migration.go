@@ -138,7 +138,6 @@ type migrationRun struct {
 	m        *ReplicationModeMigrator
 	keyspace string
 	opts     MigrateReplicationModeOptions
-	current  policy.Durabler
 	target   policy.Durabler
 	// keyspacePolicy is the keyspace's durability policy when the migration started.
 	keyspacePolicy string
@@ -213,9 +212,15 @@ func (m *ReplicationModeMigrator) Migrate(ctx context.Context, keyspace string, 
 		return resp, err
 	}
 	resp.DurabilityPolicy = currentName
-	current, err := policy.GetDurabilityPolicy(currentName)
-	if err != nil {
-		return resp, err
+	// A switch between two policies of the replication mode that the keyspace runs needs no
+	// conversion: SetKeyspaceDurabilityPolicy makes it. Converted, every running group's voters
+	// would be selected again for the target policy, outside VTOrc's rules, and a migration to Group
+	// Replication would keep a group replication policy as the keyspace's migration source. A run
+	// again to the keyspace's own policy continues or ends a migration.
+	if currentMode, known := replicationModeOf(currentName); known && currentMode == policy.GetReplicationMode(target) && currentName != opts.DurabilityPolicy {
+		return resp, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+			"keyspace %s already runs %s with durability policy %s: use SetKeyspaceDurabilityPolicy to change it to %s, which runs the same replication mode; MigrateReplicationMode converts a keyspace between asynchronous replication and group replication",
+			keyspace, currentMode, currentName, opts.DurabilityPolicy)
 	}
 
 	allShards, err := m.ts.GetShardNames(ctx, keyspace)
@@ -233,7 +238,7 @@ func (m *ReplicationModeMigrator) Migrate(ctx context.Context, keyspace string, 
 		}
 	}
 
-	run := &migrationRun{m: m, keyspace: keyspace, opts: opts, current: current, target: target, keyspacePolicy: currentName, keyspaceRecord: ki.Keyspace}
+	run := &migrationRun{m: m, keyspace: keyspace, opts: opts, target: target, keyspacePolicy: currentName, keyspaceRecord: ki.Keyspace}
 	return resp, run.migrate(ctx, resp, shards, allShards, policy.IsGroupReplication(target))
 }
 
@@ -771,6 +776,13 @@ func (s *migrationShard) voting() []*topodatapb.Tablet {
 	return voting
 }
 
+// hasGroupReplicationPolicy returns whether the shard's durability policy, as the shard record read by
+// the migration resolves it, is a group replication policy: the shard is managed as a group's shard.
+func (s *migrationShard) hasGroupReplicationPolicy() bool {
+	durability, err := policy.GetDurabilityPolicy(topo.ShardDurabilityPolicy(s.run.keyspaceRecord, &topodatapb.Shard{DurabilityPolicy: s.recordedPolicy}))
+	return err == nil && policy.IsGroupReplication(durability)
+}
+
 // groupRuns returns whether a tablet of the shard is an active member of a group.
 func (s *migrationShard) groupRuns() bool {
 	for _, tablet := range s.tablets {
@@ -1047,7 +1059,7 @@ func (s *migrationShard) toGroupReplication(ctx context.Context) error {
 	// on them from the first join.
 	if votersEqual(s.recordedVoters, s.voters) {
 		s.record(MigrationActionSetVoters, nil, MigrationStepSkipped, "the shard record already lists the voters "+votersString(s.voters))
-	} else if s.hasTargetPolicy() && s.groupRuns() {
+	} else if s.hasGroupReplicationPolicy() && s.groupRuns() {
 		// A converted shard is managed by its group replication policy: VTOrc maintains its voters
 		// (GroupVotersOutOfDate), under the rule that keeps a view without a majority of the current
 		// voters from holding a majority of the new list, and with the re-check right before its

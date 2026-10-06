@@ -11829,8 +11829,8 @@ func TestMigrateReplicationMode(t *testing.T) {
 			expectedCode: vtrpc.Code_NOT_FOUND,
 		},
 		{
-			// Converting to an asynchronous policy sets the keyspace policy first; the
-			// keyspace has no shards to convert.
+			// The keyspace has no shards to convert back from group replication: the
+			// keyspace policy is set right away.
 			name:               "to semi-sync without shards",
 			req:                &vtctldatapb.MigrateReplicationModeRequest{Keyspace: "ks1", DurabilityPolicy: policy.DurabilitySemiSync},
 			expectedDurability: policy.DurabilitySemiSync,
@@ -11838,7 +11838,7 @@ func TestMigrateReplicationMode(t *testing.T) {
 		{
 			name:               "dry run",
 			req:                &vtctldatapb.MigrateReplicationModeRequest{Keyspace: "ks1", DurabilityPolicy: policy.DurabilitySemiSync, DryRun: true},
-			expectedDurability: policy.DurabilityNone,
+			expectedDurability: policy.DurabilityGroupReplication,
 		},
 	}
 
@@ -11848,7 +11848,7 @@ func TestMigrateReplicationMode(t *testing.T) {
 
 			ctx := t.Context()
 			ts := memorytopo.NewServer(ctx, "zone1")
-			testutil.AddKeyspaces(ctx, t, ts, &vtctldatapb.Keyspace{Name: "ks1", Keyspace: &topodatapb.Keyspace{}})
+			testutil.AddKeyspaces(ctx, t, ts, &vtctldatapb.Keyspace{Name: "ks1", Keyspace: &topodatapb.Keyspace{DurabilityPolicy: policy.DurabilityGroupReplication}})
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
 				return NewVtctldServer(vtenv.NewTestEnv(), ts)
