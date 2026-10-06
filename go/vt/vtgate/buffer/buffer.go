@@ -229,9 +229,17 @@ func (b *Buffer) getOrCreateBuffer(keyspace, shard string) *shardBuffer {
 		return v.(*shardBuffer)
 	}
 
-	// First access for this shard. Look it up again under createMu because it
-	// could have been created in the meantime. Otherwise, a concurrent caller
-	// would create a second shardBuffer and reset the stats of the shard.
+	return b.createBuffer(keyspace, shard)
+}
+
+// createBuffer creates the ShardBuffer for the given keyspace and shard after
+// getOrCreateBuffer() did not find it. It returns nil if Buffer is shut down.
+func (b *Buffer) createBuffer(keyspace, shard string) *shardBuffer {
+	key := topoproto.KeyspaceShardString(keyspace, shard)
+
+	// Look the buffer up again under createMu because a concurrent caller could
+	// have created it in the meantime. Creating a second shardBuffer would reset
+	// the stats of the shard.
 	b.createMu.Lock()
 	if v, ok := b.buffers.Load(key); ok {
 		b.createMu.Unlock()
@@ -241,8 +249,9 @@ func (b *Buffer) getOrCreateBuffer(keyspace, shard string) *shardBuffer {
 	b.buffers.Store(key, sb)
 	b.createMu.Unlock()
 
-	// Shutdown may have completed its Range between our stopped check above
-	// and the Store, so this buffer would never be visited. Clean it up.
+	// Shutdown may have completed its Range between the stopped check in
+	// getOrCreateBuffer() and the Store, so this buffer would never be visited.
+	// Clean it up.
 	if b.stopped.Load() {
 		if actual, ok := b.buffers.LoadAndDelete(key); ok && actual == sb {
 			sb.shutdown()
