@@ -232,6 +232,18 @@ func TestPlanGroupVoters(t *testing.T) {
 			addView(f.tablet(f.b).Status, planUUID(f.c), mysql.GroupMemberStateRecovering)
 		},
 	}, {
+		// Its MySQL got a new server_uuid (re-initialized): it is found by its MySQL address, as the
+		// voter majority of P1 finds the voters.
+		name: "P2: a reachable member reports the failed voter's MySQL address ONLINE, under another server_uuid",
+		setup: func(t *testing.T, f *planFixture) {
+			f.fail(f.c, time.Hour)
+			f.tablet(f.b).Status.Members = append(f.tablet(f.b).Status.Members, &replicationdatapb.GroupReplicationMember{
+				MemberUuid: "00000000-0000-0000-0000-000000000399", Host: f.c.MysqlHostname, Port: f.c.MysqlPort, State: mysql.GroupMemberStateOnline,
+			})
+			// That member is the MySQL of a tablet that answers, as far as VTOrc can tell.
+			f.add(t, grTablet("zone4", 399, topodatapb.TabletType_RDONLY), &replicationdatapb.GroupReplicationStatus{}, "1-1").ServerUUID = "00000000-0000-0000-0000-000000000399"
+		},
+	}, {
 		name: "P2: the failed voter's server_uuid is unknown, and an active member is the MySQL of no tablet that answers",
 		setup: func(t *testing.T, f *planFixture) {
 			f.fail(f.c, time.Hour)

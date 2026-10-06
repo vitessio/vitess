@@ -507,11 +507,25 @@ func (p *voterPlanner) settledPrimary() (*VoterTablet, string) {
 	return nil, "no voter is the reachable primary of the shard's replication group"
 }
 
+// groupVoter returns how the voter is found in a membership view: by the server_uuid of its MySQL, or
+// by the MySQL address of its tablet record, as P1's voter majority finds it.
+func (p *voterPlanner) groupVoter(alias, uuid string) policy.GroupVoter {
+	for _, voter := range p.legitimate.Voters {
+		if topoproto.TabletAliasString(voter.Alias) == alias {
+			if voter.ServerUUID == "" {
+				voter.ServerUUID = uuid
+			}
+			return voter
+		}
+	}
+	return policy.GroupVoter{ServerUUID: uuid}
+}
+
 // activeAnywhere returns why the voter's MySQL may be active in a view of the shard's group (not P2),
 // or "" when it is active in none: its tablet does not answer, and no reachable member of the
-// recorded incarnation reports its server_uuid ONLINE or RECOVERING. When VTOrc does not know its
-// server_uuid, every member that a reachable member reports active must be the MySQL of a tablet
-// that answers.
+// recorded incarnation reports it ONLINE or RECOVERING, by its server_uuid or its MySQL address. When
+// VTOrc does not know its server_uuid, every member that a reachable member reports active must be
+// the MySQL of a tablet that answers.
 func (p *voterPlanner) activeAnywhere(alias, uuid string) string {
 	if vt := p.byAlias[alias]; vt != nil && vt.Reachable {
 		return "its tablet answers"
@@ -519,10 +533,18 @@ func (p *voterPlanner) activeAnywhere(alias, uuid string) string {
 	if dv := p.in.DeletedVoters[alias]; dv != nil && !dv.Down {
 		return "VTOrc cannot tell that its vttablet is down (it answers, VTOrc reached it within the grace period, or VTOrc has no address for it)"
 	}
-	if uuid != "" {
-		if p.active[uuid] {
-			return fmt.Sprintf("a reachable member reports its MySQL (%s) active", uuid)
+	voter := p.groupVoter(alias, uuid)
+	for _, vt := range p.sortedTablets() {
+		if !vt.Reachable || !p.legitimate.IsLegitimateMember(vt.Status) {
+			continue
 		}
+		for _, m := range vt.Status.GetMembers() {
+			if (m.GetState() == mysql.GroupMemberStateOnline || m.GetState() == mysql.GroupMemberStateRecovering) && voter.Matches(m) {
+				return fmt.Sprintf("a reachable member reports its MySQL (%s) active", m.GetMemberUuid())
+			}
+		}
+	}
+	if voter.ServerUUID != "" {
 		return ""
 	}
 	for _, member := range slices.Sorted(maps.Keys(p.active)) {
@@ -533,15 +555,16 @@ func (p *voterPlanner) activeAnywhere(alias, uuid string) string {
 	return ""
 }
 
-// inPrimaryView returns why the voter may be in the view of the primary, or "" when it is in none.
-// When VTOrc does not know the voter's server_uuid, every member of the view must be the MySQL of a
+// inPrimaryView returns why the voter may be in the view of the primary, by its server_uuid or its
+// MySQL address, or "" when it is in none. When VTOrc does not know the voter's server_uuid, every member of the view must be the MySQL of a
 // tablet that answers.
 func (p *voterPlanner) inPrimaryView(primary *VoterTablet, alias, uuid string) string {
+	voter := p.groupVoter(alias, uuid)
 	for _, m := range primary.Status.GetMembers() {
 		switch {
-		case uuid != "" && m.GetMemberUuid() == uuid:
+		case voter.Matches(m):
 			return fmt.Sprintf("it is %s in the view of the primary %s", m.GetState(), topoproto.TabletAliasString(primary.Tablet.Alias))
-		case uuid == "" && !p.answering[m.GetMemberUuid()]:
+		case voter.ServerUUID == "" && !p.answering[m.GetMemberUuid()]:
 			return fmt.Sprintf("its server_uuid is unknown, and the member %s of the view of the primary %s is the MySQL of no tablet that answers",
 				m.GetMemberUuid(), topoproto.TabletAliasString(primary.Tablet.Alias))
 		}
