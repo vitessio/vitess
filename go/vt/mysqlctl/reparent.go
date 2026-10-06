@@ -95,13 +95,9 @@ func (mysqld *Mysqld) WaitForReparentJournal(ctx context.Context, timeCreatedNS 
 	}
 }
 
-// Promote will promote this server to be the new primary.
-// applyReceivedTransactions stops the receiver of a replica and waits until its applier executed
-// every transaction it received, so that the RESET REPLICA ALL of a promotion discards none of
-// them. A semi-sync replica ACKs a transaction once it is in its relay log; a transaction that
-// arrived after ERS waited for the relay log to apply (a receiver ERS did not stop, or that a
-// concurrent repoint restarted) may be acknowledged to its client, and would be lost. It fails if
-// such transactions exist and the applier is stopped. It only checks GTID-based replication.
+// applyReceivedTransactions stops the receiver and waits for received MySQL GTIDs
+// to execute before promotion resets replication. Semi-sync replicas may have
+// acknowledged transactions that are still in the relay log.
 func (mysqld *Mysqld) applyReceivedTransactions(ctx context.Context, conn *dbconnpool.PooledDBConnection) error {
 	status, err := conn.Conn.ShowReplicationStatus()
 	if errors.Is(err, mysql.ErrNotReplica) {
@@ -132,6 +128,7 @@ func (mysqld *Mysqld) applyReceivedTransactions(ctx context.Context, conn *dbcon
 	return nil
 }
 
+// Promote promotes this server to primary.
 func (mysqld *Mysqld) Promote(ctx context.Context, hookExtraEnv map[string]string) (replication.Position, error) {
 	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
 	if err != nil {

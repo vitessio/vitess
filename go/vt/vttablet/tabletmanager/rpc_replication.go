@@ -939,13 +939,9 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 	// Note it is important to check for PRIMARY here so that we don't
 	// unintentionally change the type of RDONLY tablets
 	//
-	// A PRIMARY tablet may still serve writes that wait for a semi-sync ACK: an ERS that could
-	// not demote it (it was unreachable, or the demotion was cancelled) repoints it once it is
-	// reachable again. Demote it the way DemotePrimary(force) does before anything changes
-	// semi-sync: stop serving, which kills the sessions that still wait after the shutdown grace
-	// period, then disable source-side semi-sync and set super_read_only. Disabling semi-sync
-	// first would complete those commits and acknowledge them to their clients although no
-	// replica has them, and the new primary never will.
+	// An unreachable primary may still have writes blocked on semi-sync. Demote it
+	// before disabling source-side semi-sync so those clients receive errors, and
+	// read its position only after the blocked commits complete.
 	tablet := tm.Tablet()
 	if tablet.Type == topodatapb.TabletType_PRIMARY {
 		if _, err := tm.demotePrimaryLocked(ctx, false /* revertPartialFailure */, true /* force */); err != nil {
@@ -1247,6 +1243,10 @@ func isPrimaryEligible(tabletType topodatapb.TabletType) bool {
 }
 
 func (tm *TabletManager) fixSemiSync(ctx context.Context, tabletType topodatapb.TabletType, semiSync SemiSyncAction) error {
+	// A delayed repoint may request ACKs after the tablet has been drained.
+	if tabletType == topodatapb.TabletType_DRAINED && semiSync == SemiSyncActionSet {
+		semiSync = SemiSyncActionUnset
+	}
 	switch semiSync {
 	case SemiSyncActionNone:
 		return nil

@@ -1725,3 +1725,149 @@ func TestChangeTypeDrainedStopsSemiSyncAcks(t *testing.T) {
 	assert.Equal(t, topodatapb.TabletType_DRAINED, tm.Tablet().Type)
 	assert.False(t, fakeMysqlDaemon.SemiSyncReplicaEnabled)
 }
+
+// A stale replication repair must not re-enable ACKs on a DRAINED tablet.
+func TestSetReplicationSourceDrainedRejectsStaleSemiSync(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	t.Cleanup(cancel)
+	ts := memorytopo.NewServer(ctx, "cell1")
+	tm := newTestTM(t, ts, 1, "ks", "0", nil)
+	t.Cleanup(tm.Stop)
+	daemon := tm.MysqlDaemon.(*mysqlctl.FakeMysqlDaemon)
+	daemon.DB().SetNeverFail(true)
+	require.NoError(t, tm.ChangeType(ctx, topodatapb.TabletType_REPLICA, true))
+	require.NoError(t, tm.ChangeType(ctx, topodatapb.TabletType_DRAINED, false))
+	require.False(t, daemon.SemiSyncReplicaEnabled)
+
+	err := tm.SetReplicationSource(ctx, &topodatapb.TabletAlias{Cell: "cell1", Uid: 200}, 0, "", false, true, 0)
+	require.Error(t, err, "the parent is absent")
+	assert.Equal(t, topodatapb.TabletType_DRAINED, tm.Tablet().Type)
+	assert.False(t, daemon.SemiSyncReplicaEnabled)
+}
+
+type drainSemiSyncMysqlDaemon struct {
+	*mysqlctl.FakeMysqlDaemon
+	tm            *TabletManager
+	setError      error
+	stopError     error
+	acking        bool
+	typeAtRevoke  topodatapb.TabletType
+	typeAtRestart topodatapb.TabletType
+}
+
+func (d *drainSemiSyncMysqlDaemon) SetSemiSyncEnabled(ctx context.Context, primary, replica bool) error {
+	if !replica {
+		d.typeAtRevoke = d.tm.Tablet().Type
+		if d.setError != nil {
+			return d.setError
+		}
+	}
+	return d.FakeMysqlDaemon.SetSemiSyncEnabled(ctx, primary, replica)
+}
+
+func (d *drainSemiSyncMysqlDaemon) SemiSyncReplicationStatus(ctx context.Context) (bool, error) {
+	// The existing connection still ACKs until replication is restarted.
+	return d.acking, nil
+}
+
+func (d *drainSemiSyncMysqlDaemon) StopReplication(ctx context.Context, hookExtraEnv map[string]string) error {
+	if d.stopError != nil {
+		return d.stopError
+	}
+	return d.FakeMysqlDaemon.StopReplication(ctx, hookExtraEnv)
+}
+
+func (d *drainSemiSyncMysqlDaemon) StartReplication(ctx context.Context, hookExtraEnv map[string]string) error {
+	if err := d.FakeMysqlDaemon.StartReplication(ctx, hookExtraEnv); err != nil {
+		return err
+	}
+	d.typeAtRestart = d.tm.Tablet().Type
+	d.acking = d.SemiSyncReplicaEnabled
+	return nil
+}
+
+func TestChangeTypeDrainedRevokesSemiSyncBeforePublishing(t *testing.T) {
+	for _, stage := range []string{"semi-sync update", "receiver restart"} {
+		t.Run(stage, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+			t.Cleanup(cancel)
+			ts := memorytopo.NewServer(ctx, "cell1")
+			tm := newTestTM(t, ts, 1, "ks", "0", nil)
+			t.Cleanup(tm.Stop)
+			fake := tm.MysqlDaemon.(*mysqlctl.FakeMysqlDaemon)
+			fake.DB().SetNeverFail(true)
+			require.NoError(t, tm.ChangeType(ctx, topodatapb.TabletType_REPLICA, true))
+			daemon := &drainSemiSyncMysqlDaemon{FakeMysqlDaemon: fake, tm: tm}
+			tm.MysqlDaemon = daemon
+			injectedErr := errors.New("injected ACK revocation failure")
+			if stage == "semi-sync update" {
+				daemon.setError = injectedErr
+			} else {
+				fake.Replicating = true
+				fake.IOThreadRunning = true
+				fake.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA", "START REPLICA"}
+				daemon.acking = true
+				daemon.stopError = injectedErr
+			}
+
+			require.ErrorContains(t, tm.ChangeType(ctx, topodatapb.TabletType_DRAINED, true), injectedErr.Error())
+			assert.Equal(t, topodatapb.TabletType_REPLICA, tm.Tablet().Type)
+			ti, err := ts.GetTablet(ctx, tm.Tablet().Alias)
+			require.NoError(t, err)
+			assert.Equal(t, topodatapb.TabletType_REPLICA, ti.Type)
+
+			daemon.setError, daemon.stopError = nil, nil
+			require.NoError(t, tm.ChangeType(ctx, topodatapb.TabletType_DRAINED, true))
+			assert.Equal(t, topodatapb.TabletType_REPLICA, daemon.typeAtRevoke)
+			assert.Equal(t, topodatapb.TabletType_DRAINED, tm.Tablet().Type)
+			assert.False(t, fake.SemiSyncReplicaEnabled)
+			if stage == "receiver restart" {
+				assert.Equal(t, topodatapb.TabletType_REPLICA, daemon.typeAtRestart)
+				assert.False(t, daemon.acking)
+				require.NoError(t, fake.CheckSuperQueryList())
+			}
+		})
+	}
+}
+
+func TestChangeTypeDrainedRepairsAcknowledgementsWithoutReclaiming(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	t.Cleanup(cancel)
+	ts := memorytopo.NewServer(ctx, "cell1")
+	tm := newTestTM(t, ts, 1, "ks", "0", nil)
+	t.Cleanup(tm.Stop)
+	daemon := tm.MysqlDaemon.(*mysqlctl.FakeMysqlDaemon)
+	daemon.DB().SetNeverFail(true)
+	require.NoError(t, tm.ChangeType(ctx, topodatapb.TabletType_REPLICA, true))
+	// Older tablets published DRAINED before disabling ACKs.
+	require.NoError(t, tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_DRAINED, DBActionNone))
+	require.True(t, daemon.SemiSyncReplicaEnabled)
+
+	require.ErrorContains(t, tm.ChangeType(ctx, topodatapb.TabletType_DRAINED, true), "already drained")
+	assert.Equal(t, topodatapb.TabletType_DRAINED, tm.Tablet().Type)
+	assert.False(t, daemon.SemiSyncReplicaEnabled)
+}
+
+func TestChangeTypeDrainedDemotesPrimaryBeforeSemiSync(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	t.Cleanup(cancel)
+	ts := memorytopo.NewServer(ctx, "cell1")
+	tm := newTestTM(t, ts, 1, "ks", "0", nil)
+	t.Cleanup(tm.Stop)
+	require.NoError(t, tm.ChangeType(ctx, topodatapb.TabletType_PRIMARY, true))
+	fake := tm.MysqlDaemon.(*mysqlctl.FakeMysqlDaemon)
+	fake.DB().SetNeverFail(true)
+	require.NoError(t, fake.SetReadOnly(ctx, false))
+	require.NoError(t, fake.SetSemiSyncEnabled(ctx, true, true))
+	daemon := &semiSyncOrderMysqlDaemon{FakeMysqlDaemon: fake, tm: tm}
+	tm.MysqlDaemon = daemon
+	require.True(t, tm.QueryServiceControl.IsServing())
+
+	require.NoError(t, tm.ChangeType(ctx, topodatapb.TabletType_DRAINED, true))
+	require.True(t, daemon.disabledSourceSemiSync)
+	assert.False(t, daemon.servingWhenDisabled)
+	assert.True(t, fake.SuperReadOnly.Load())
+	assert.False(t, fake.SemiSyncPrimaryEnabled)
+	assert.False(t, fake.SemiSyncReplicaEnabled)
+	assert.Equal(t, topodatapb.TabletType_DRAINED, tm.Tablet().Type)
+}

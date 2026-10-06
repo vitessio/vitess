@@ -18,6 +18,7 @@ package mysqlctl
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -104,9 +105,7 @@ func replicaStatusResult(ioRunning, sqlRunning, executed, retrieved string) *sql
 		"old-primary|3306|8bc65c84-3fe4-11ed-a912-257f0fcdd6c9|"+ioRunning+"|"+sqlRunning+"|"+executed+"|"+retrieved)
 }
 
-// TestPromoteAppliesReceivedTransactions checks that a promotion stops the receiver and waits for
-// the applier to execute everything the replica received before RESET REPLICA ALL discards the
-// relay log: the replica may have ACKed those transactions, and they may be acknowledged writes.
+// Promotion must apply the final received GTID set before resetting replication.
 func TestPromoteAppliesReceivedTransactions(t *testing.T) {
 	db := fakesqldb.New(t)
 	t.Cleanup(db.Close)
@@ -114,26 +113,79 @@ func TestPromoteAppliesReceivedTransactions(t *testing.T) {
 	cp := *params
 	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
 
-	db.AddQuery("SELECT 1", &sqltypes.Result{})
-	db.AddQuery("SHOW REPLICA STATUS", replicaStatusResult("Yes", "Yes", "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-5", "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8"))
-	db.AddQuery("STOP REPLICA IO_THREAD", &sqltypes.Result{})
-	db.AddQueryPattern(`SELECT WAIT_FOR_EXECUTED_GTID_SET\('8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8', \d+\)`,
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("w", "int64"), "0"))
-	db.AddQuery("STOP REPLICA", &sqltypes.Result{})
-	db.AddQuery("RESET REPLICA ALL", &sqltypes.Result{})
-	db.AddQuery("FLUSH BINARY LOGS", &sqltypes.Result{})
-	db.AddQuery("SELECT @@global.gtid_executed", sqltypes.MakeTestResult(sqltypes.MakeTestFields("test_field", "varchar"), "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8"))
+	db.OrderMatters()
+	t.Cleanup(db.VerifyAllExecutedOrFail)
+	db.AddExpectedQuery("SELECT 1", nil)
+	db.AddExpectedExecuteFetch(fakesqldb.ExpectedExecuteFetch{
+		Query:       "SHOW REPLICA STATUS",
+		QueryResult: replicaStatusResult("Yes", "Yes", "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-5", "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8"),
+	})
+	db.AddExpectedQuery("STOP REPLICA IO_THREAD", nil)
+	// More transactions arrived between the initial status read and the receiver stop.
+	db.AddExpectedExecuteFetch(fakesqldb.ExpectedExecuteFetch{
+		Query:       "SHOW REPLICA STATUS",
+		QueryResult: replicaStatusResult("No", "Yes", "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-5", "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-10"),
+	})
+	db.AddExpectedExecuteFetch(fakesqldb.ExpectedExecuteFetch{
+		Query:       "SELECT WAIT_FOR_EXECUTED_GTID_SET('8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-10', *",
+		QueryResult: sqltypes.MakeTestResult(sqltypes.MakeTestFields("w", "int64"), "0"),
+	})
+	db.AddExpectedQuery("STOP REPLICA", nil)
+	db.AddExpectedQuery("RESET REPLICA ALL", nil)
+	db.AddExpectedQuery("FLUSH BINARY LOGS", nil)
+	db.AddExpectedExecuteFetch(fakesqldb.ExpectedExecuteFetch{
+		Query:       "SELECT @@global.gtid_executed",
+		QueryResult: sqltypes.MakeTestResult(sqltypes.MakeTestFields("test_field", "varchar"), "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-10"),
+	})
 
 	testMysqld := NewMysqld(dbc)
 	t.Cleanup(testMysqld.Close)
 
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
-	defer cancel()
+	t.Cleanup(cancel)
 	pos, err := testMysqld.Promote(ctx, map[string]string{})
 	require.NoError(t, err)
-	assert.Equal(t, "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8", pos.String())
-	assert.Equal(t, 1, db.GetQueryCalledNum("STOP REPLICA IO_THREAD"))
-	assert.Equal(t, 1, db.GetQueryCalledNum("RESET REPLICA ALL"))
+	assert.Equal(t, "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-10", pos.String())
+}
+
+// A failed applier wait must leave the relay log intact.
+func TestPromotePreservesRelayLogWhenApplierWaitFails(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		result    *sqltypes.Result
+		err       error
+		wantError string
+	}{
+		{name: "timeout", result: sqltypes.MakeTestResult(sqltypes.MakeTestFields("w", "int64"), "1"), wantError: "timed out waiting for position"},
+		{name: "query failure", err: errors.New("injected applier wait failure"), wantError: "injected applier wait failure"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db := fakesqldb.New(t)
+			t.Cleanup(db.Close)
+			db.OrderMatters()
+			t.Cleanup(db.VerifyAllExecutedOrFail)
+			db.AddExpectedQuery("SELECT 1", nil)
+			db.AddExpectedExecuteFetch(fakesqldb.ExpectedExecuteFetch{
+				Query:       "SHOW REPLICA STATUS",
+				QueryResult: replicaStatusResult("No", "Yes", "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-5", "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8"),
+			})
+			// Any STOP, RESET or FLUSH after the failed wait is unexpected.
+			db.AddExpectedExecuteFetch(fakesqldb.ExpectedExecuteFetch{
+				Query:       "SELECT WAIT_FOR_EXECUTED_GTID_SET('8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8', *",
+				QueryResult: tc.result,
+				Error:       tc.err,
+			})
+			cp := *db.ConnParams()
+			mysqld := NewMysqld(dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb"))
+			t.Cleanup(mysqld.Close)
+			ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+			t.Cleanup(cancel)
+
+			pos, err := mysqld.Promote(ctx, nil)
+			require.ErrorContains(t, err, tc.wantError)
+			assert.True(t, pos.IsZero())
+		})
+	}
 }
 
 // TestPromoteRefusesUnappliedTransactionsWithStoppedApplier checks that a promotion fails rather
