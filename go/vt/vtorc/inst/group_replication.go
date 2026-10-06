@@ -362,7 +362,9 @@ func computeGroupReplicationVoters(state *groupReplicationShardState, durability
 			if in.DeletedVoters == nil {
 				in.DeletedVoters = make(map[string]*DeletedVoter)
 			}
-			in.DeletedVoters[alias] = &DeletedVoter{Alias: row.tablet.GetAlias(), Tablet: row.tablet, ServerUUID: row.serverUUID, Down: !row.valid}
+			// Down: VTOrc has not reached it for the grace period, as the recovery decides on its probe.
+			down := !row.valid && UnreachableGroupTablets.Observe(alias, now) >= in.GracePeriod
+			in.DeletedVoters[alias] = &DeletedVoter{Alias: row.tablet.GetAlias(), Tablet: row.tablet, ServerUUID: row.serverUUID, Down: down}
 			continue
 		}
 		vt := &VoterTablet{Tablet: row.tablet, Reachable: row.valid, ServerUUID: row.serverUUID}

@@ -555,6 +555,7 @@ func TestGetDetectionAnalysisGroupReplication(t *testing.T) {
 					deletedVoter(thirdCellReplica, crossCell, false),
 				)
 			},
+			voterGracePeriod:  -1,
 			voters:            []*topodatapb.Tablet{primary, crossCellReplica, thirdCellReplica},
 			want:              map[string]AnalysisCode{"zone1-0000000101": GroupVotersOutOfDate},
 			wantDesiredVoters: []*topodatapb.Tablet{primary, crossCellReplica},
@@ -603,6 +604,7 @@ func TestGetDetectionAnalysisGroupReplication(t *testing.T) {
 					deletedVoter(thirdCellReplica, gr, false),
 				)
 			},
+			voterGracePeriod:  -1,
 			voters:            []*topodatapb.Tablet{replica, crossCellReplica, thirdCellReplica},
 			want:              map[string]AnalysisCode{"zone2-0000000200": GroupVotersOutOfDate},
 			wantDesiredVoters: []*topodatapb.Tablet{replica, crossCellReplica},

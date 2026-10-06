@@ -199,7 +199,7 @@ func TestUpdateGroupReplicationVoters(t *testing.T) {
 			m.EXPECT().FullStatus(gomock.Any(), sameTablet(voter2)).Return(settledMember(voter2, primary, "1-10", primary, voter2, voter3), nil)
 		},
 		wantVoters: []string{"zone1-0000000101", "zone2-0000000200", "zone3-0000000300"},
-		wantErr:    "voter zone3-0000000300 has no tablet record, but its server_uuid is unknown, and the active member 00000000-0000-0000-0000-000000000300 is the MySQL of no tablet that answers",
+		wantErr:    "voter zone3-0000000300 has no tablet record, but a reachable member reports its MySQL (00000000-0000-0000-0000-000000000300) active",
 	}, {
 		name:     "RemoveVoterNoGroup: no group runs, and a voter that is down has no tablet record",
 		tablets:  []*topodatapb.Tablet{primary, voter2, voter3},
@@ -224,6 +224,22 @@ func TestUpdateGroupReplicationVoters(t *testing.T) {
 			m.EXPECT().FullStatus(gomock.Any(), sameTablet(primary)).Return(spareStatus(primary, "1-10"), nil)
 			m.EXPECT().FullStatus(gomock.Any(), sameTablet(voter2)).Return(spareStatus(voter2, "1-9"), nil)
 			m.EXPECT().FullStatus(gomock.Any(), sameTablet(voter3)).Return(spareStatus(voter3, "1-11"), nil).AnyTimes()
+		},
+		wantVoters: []string{"zone1-0000000101", "zone2-0000000200", "zone3-0000000300"},
+		wantErr:    "voter zone3-0000000300 has no tablet record, but VTOrc cannot tell that its vttablet is down",
+	}, {
+		// A dead host whose address no longer answers and a slow vttablet both fail the probe; only
+		// VTOrc's discovery, which keeps reaching a slow one, tells them apart.
+		name:        "RemoveVoterNoGroup: the probe of the deleted voter fails, but VTOrc reached it within the grace period",
+		tablets:     []*topodatapb.Tablet{primary, voter2, voter3},
+		voters:      []*topodatapb.Tablet{primary, voter2, voter3},
+		deleted:     []*topodatapb.Tablet{voter3},
+		recorded:    true,
+		gracePeriod: time.Hour,
+		setup: func(t *testing.T, m *tmcmock.MockTabletManagerClient) {
+			m.EXPECT().FullStatus(gomock.Any(), sameTablet(primary)).Return(spareStatus(primary, "1-10"), nil)
+			m.EXPECT().FullStatus(gomock.Any(), sameTablet(voter2)).Return(spareStatus(voter2, "1-9"), nil)
+			m.EXPECT().FullStatus(gomock.Any(), sameTablet(voter3)).Return(nil, context.DeadlineExceeded).AnyTimes()
 		},
 		wantVoters: []string{"zone1-0000000101", "zone2-0000000200", "zone3-0000000300"},
 		wantErr:    "voter zone3-0000000300 has no tablet record, but VTOrc cannot tell that its vttablet is down",
@@ -288,6 +304,12 @@ func TestUpdateGroupReplicationVoters(t *testing.T) {
 			setVoters(t, tt.voters...)
 			if tt.recorded {
 				setIncarnation(t, voterTestIncarnation)
+			}
+			// VTOrc discovered every tablet a moment ago, server_uuid included.
+			for _, tablet := range tt.tablets {
+				require.NoError(t, inst.WriteInstance(&inst.Instance{
+					InstanceAlias: tablet.Alias, Hostname: tablet.MysqlHostname, Port: int(tablet.MysqlPort), ServerUUID: voterTestUUID(tablet),
+				}, true, nil))
 			}
 			tt.setup(t, mockTMC)
 			// The operator deletes the records, and VTOrc refreshes the shard's tablet records before

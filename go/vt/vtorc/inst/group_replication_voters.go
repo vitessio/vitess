@@ -94,8 +94,9 @@ type DeletedVoter struct {
 	Tablet     *topodatapb.Tablet
 	ServerUUID string
 	// Down is true when VTOrc knows that the voter's vttablet is down: it probed it at the address it
-	// kept, and the probe failed. A deleted voter that VTOrc has no address for, or did not probe, is
-	// not down: it may be running, and hold transactions that the other voters lack.
+	// kept, the probe failed, and VTOrc's discovery last reached it at least the grace period ago. A
+	// deleted voter that VTOrc has no address for, did not probe, or reached recently, is not down: it
+	// may be running, and hold transactions that the other voters lack.
 	Down bool
 }
 

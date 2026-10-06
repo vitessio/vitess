@@ -1138,9 +1138,12 @@ func readGroupVoterState(ctx context.Context, keyspace, shard string) (*groupVot
 	}
 	// A voter whose tablet record does not exist (topo NoNode) is a deleted voter. VTOrc keeps its last
 	// tablet record and server_uuid (see keepDeletedGroupVoter), and probes its vttablet in the same
-	// read at that address: it is down only if the probe fails. A deleted voter that VTOrc has no
-	// address for is not down.
+	// read at that address. It is down only if the probe fails, and VTOrc's discovery last reached it
+	// at least --group-replication-voter-replacement-grace-period ago: a host that is gone and a
+	// vttablet that is only slow both fail the probe, but the discovery keeps reaching a slow one. A
+	// deleted voter that VTOrc has no address or instance for is not down.
 	deleted := make(map[string]*inst.DeletedVoter)
+	reachedLongAgo := make(map[string]bool)
 	var probes []*topo.TabletInfo
 	for _, voter := range shardInfo.GetGroupReplicationVoters() {
 		alias := topoproto.TabletAliasString(voter)
@@ -1155,6 +1158,8 @@ func readGroupVoterState(ctx context.Context, keyspace, shard string) (*groupVot
 		dv := &inst.DeletedVoter{Alias: voter}
 		if instance, _, err := inst.ReadInstance(voter); err == nil && instance != nil {
 			dv.ServerUUID = instance.ServerUUID
+			reachedLongAgo[alias] = !instance.SecondsSinceLastSeen.Valid ||
+				time.Duration(instance.SecondsSinceLastSeen.Int64)*time.Second >= config.GetGroupReplicationVoterReplacementGracePeriod()
 		}
 		if cached, err := inst.ReadTablet(voter); err == nil && cached != nil {
 			dv.Tablet = cached
@@ -1203,7 +1208,7 @@ func readGroupVoterState(ctx context.Context, keyspace, shard string) (*groupVot
 		if st.err == nil {
 			dv.ServerUUID = st.status.GetServerUuid()
 		}
-		dv.Down = st.err != nil
+		dv.Down = st.err != nil && reachedLongAgo[topoproto.TabletAliasString(st.tablet.Alias)]
 	}
 	return &groupVoterState{keyspace: keyspace, shard: shard, shardInfo: shardInfo, durability: durability, statuses: statuses, input: in}, nil
 }
