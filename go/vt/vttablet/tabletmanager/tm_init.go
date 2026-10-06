@@ -922,8 +922,21 @@ func (tm *TabletManager) findMysqlPort(retryInterval time.Duration) {
 
 // redoPreparedTransactionsAndSetReadWrite redoes prepared transactions in read-only mode.
 // We turn off super read only mode, and then redo the transactions. Finally, we turn off read-only mode to allow for further traffic.
+// If MySQL is already read-write, there is nothing to redo, and it does nothing.
 func (tm *TabletManager) redoPreparedTransactionsAndSetReadWrite(ctx context.Context) error {
-	_, err := tm.MysqlDaemon.SetSuperReadOnly(ctx, false)
+	readOnly, err := tm.MysqlDaemon.IsReadOnly(ctx)
+	if err != nil {
+		return vterrors.Wrapf(err, "failed to check whether MySQL is read-only before redoing prepared transactions")
+	}
+	if !readOnly {
+		// A MySQL restart and a demotion both leave MySQL read-only, so no
+		// prepared transaction was lost. Redoing them would stop the
+		// transaction engine and wait for the prepared transactions to be
+		// resolved. A query service that does not serve writes yet redoes them
+		// when it starts to.
+		return nil
+	}
+	_, err = tm.MysqlDaemon.SetSuperReadOnly(ctx, false)
 	if err != nil {
 		// Ignore the error if the sever doesn't support super read only variable.
 		// We should just redo the preapred transactions before we set it to read-write.

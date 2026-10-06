@@ -196,6 +196,9 @@ func (te *TxEngine) transition(state txEngineState) {
 }
 
 // RedoPreparedTransactions acquires the state lock and calls redoPreparedTransactionsLocked.
+// It must only be called while MySQL is read-only, so that the prepared
+// transactions it rolls back cannot be committed and other transactions cannot
+// commit conflicting writes before the redo.
 func (te *TxEngine) RedoPreparedTransactions() {
 	if te.twopcEnabled {
 		te.stateLock.Lock()
@@ -212,6 +215,12 @@ func (te *TxEngine) RedoPreparedTransactions() {
 // failover for our setup tasks if using semi-sync replication.
 func (te *TxEngine) redoPreparedTransactionsLocked() {
 	oldState := te.state
+	// The redo log is the source of truth for the prepared transactions, so
+	// drop what the prepared pool still holds. After a MySQL restart its
+	// connections are gone, and while MySQL is read-only they cannot commit;
+	// the shutdown below would wait for them forever. Stale reservations would
+	// make the redo of their transactions fail as duplicates.
+	te.RollbackPrepared()
 	// We shutdown to ensure no other writes are in progress.
 	te.shutdownLocked()
 	defer func() {

@@ -357,6 +357,79 @@ func TestTabletServerCommitPreparedAfterRetryableRedoFailure(t *testing.T) {
 	require.Empty(t, tsv.te.preparedPool.reserved)
 }
 
+// TestTabletServerRedoReplacesPreparedPool verifies that redoing prepared
+// transactions rebuilds the prepared pool from the redo log. It is called
+// while MySQL is read-only, after a MySQL restart or a demotion, so what the
+// pool still holds is stale: its connections are gone or cannot commit, and
+// its reservations belong to commits that did not happen. Before, the redo
+// waited for those connections forever, and a stale reservation made the redo
+// mark its transaction as failed.
+func TestTabletServerRedoReplacesPreparedPool(t *testing.T) {
+	testCases := []struct {
+		name string
+		// makeStale leaves a stale prepared pool entry for "aa" and returns
+		// the stale connection, if any.
+		makeStale func(t *testing.T, tsv *TabletServer) *StatefulConnection
+	}{{
+		name: "prepared before a MySQL restart",
+		makeStale: func(t *testing.T, tsv *TabletServer) *StatefulConnection {
+			target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
+			txid := newTxForPrep(t.Context(), tsv)
+			require.NoError(t, tsv.Prepare(t.Context(), &target, txid, "aa"))
+			return tsv.te.preparedPool.conns["aa"]
+		},
+	}, {
+		name: "being committed before a MySQL restart",
+		makeStale: func(t *testing.T, tsv *TabletServer) *StatefulConnection {
+			tsv.te.preparedPool.reserved["aa"] = errPrepCommitting
+			return nil
+		},
+	}}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, tsv, db, closer := newTestTxExecutor(t, t.Context())
+			t.Cleanup(closer)
+			// If the redo blocks, rolling back the prepared pool lets it and the cleanup finish.
+			t.Cleanup(tsv.te.RollbackPrepared)
+			staleConn := tc.makeStale(t, tsv)
+			db.AddQuery(tsv.te.twoPC.readAllRedo, &sqltypes.Result{
+				Fields: []*querypb.Field{
+					{Type: sqltypes.VarBinary},
+					{Type: sqltypes.Uint64},
+					{Type: sqltypes.Uint64},
+					{Type: sqltypes.VarBinary},
+					{Type: sqltypes.Text},
+				},
+				Rows: [][]sqltypes.Value{{
+					sqltypes.NewVarBinary("aa"),
+					sqltypes.NewInt64(RedoStatePrepared),
+					sqltypes.NewVarBinary(""),
+					sqltypes.NewVarBinary("update test_table set `name` = 2 where pk = 1 limit 10001"),
+					sqltypes.NULL,
+				}},
+			})
+
+			redone := make(chan struct{})
+			go func() {
+				tsv.te.RedoPreparedTransactions()
+				close(redone)
+			}()
+			require.Eventually(t, func() bool {
+				select {
+				case <-redone:
+					return true
+				default:
+					return false
+				}
+			}, 30*time.Second, 10*time.Millisecond, "redo must not wait for the connections in the prepared pool")
+
+			require.Contains(t, tsv.te.preparedPool.conns, "aa", "the transaction should be prepared from the redo log")
+			assert.NotSame(t, staleConn, tsv.te.preparedPool.conns["aa"], "the transaction should be prepared on a new connection")
+			assert.Empty(t, tsv.te.preparedPool.reserved)
+		})
+	}
+}
+
 // TestTabletServerRollbackPreparedWaitsForPrepare verifies that a
 // RollbackPrepared that arrives while a Prepare for the same DTID is saving
 // its redo log waits for the Prepare to finish. If it ran in between, it would

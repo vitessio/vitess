@@ -1364,3 +1364,28 @@ func TestValidateFlags(t *testing.T) {
 	demotePrimaryLockWaitTimeout = time.Second
 	require.NoError(t, validateFlags())
 }
+
+// TestRedoPreparedTransactionsOnlyWhenReadOnly verifies that prepared
+// transactions are redone only when MySQL is read-only. When MySQL is already
+// read-write, no prepared transaction was lost, and a redo would stop the
+// transaction engine of a serving primary.
+func TestRedoPreparedTransactionsOnlyWhenReadOnly(t *testing.T) {
+	ctx := t.Context()
+	ts := memorytopo.NewServer(ctx, "cell1")
+	tm := newTestTM(t, ts, 1, "ks", "0", nil)
+	t.Cleanup(tm.Stop)
+	mysqld := tm.MysqlDaemon.(*mysqlctl.FakeMysqlDaemon)
+	qsc := tm.QueryServiceControl.(*tabletservermock.Controller)
+
+	mysqld.ReadOnly = false
+	mysqld.SuperReadOnly.Store(false)
+	require.NoError(t, tm.redoPreparedTransactionsAndSetReadWrite(ctx))
+	assert.False(t, qsc.MethodCalled["RedoPreparedTransactions"], "prepared transactions must not be redone while MySQL is read-write")
+
+	mysqld.ReadOnly = true
+	mysqld.SuperReadOnly.Store(true)
+	require.NoError(t, tm.redoPreparedTransactionsAndSetReadWrite(ctx))
+	assert.True(t, qsc.MethodCalled["RedoPreparedTransactions"], "prepared transactions must be redone before MySQL turns read-write")
+	assert.False(t, mysqld.ReadOnly)
+	assert.False(t, mysqld.SuperReadOnly.Load())
+}
