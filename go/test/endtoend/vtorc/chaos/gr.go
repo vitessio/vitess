@@ -83,14 +83,23 @@ func (n *Node) grStateCtx(ctx context.Context) GRState {
 	return g
 }
 
-// grConvergenceProblems is the Group Replication part of convergenceProblems: every tablet is
-// an ONLINE member whose view has all tablets ONLINE and p as the primary.
+// grConvergenceProblems is the Group Replication part of convergenceProblems: every voter that the
+// shard record lists is an ONLINE member whose view has all voters ONLINE and p as the primary, and
+// no voter is a tablet that a scenario took out for good.
 func (c *Chaos) grConvergenceProblems(p *Node) []string {
 	var probs []string
 	puuid := p.serverUUID()
-	for _, n := range c.Nodes {
+	voters, err := c.shardVoters()
+	if err != nil {
+		return []string{fmt.Sprintf("shard record voters: %v", err)}
+	}
+	for _, n := range voters {
+		if c.isGone(n) {
+			probs = append(probs, n.Tablet.Alias+" is gone but still a voter")
+			continue
+		}
 		g := n.grState()
-		if !g.OK || g.State != "ONLINE" || g.PrimaryUUID != puuid || g.Online != len(c.Nodes) {
+		if !g.OK || g.State != "ONLINE" || g.PrimaryUUID != puuid || g.Online != len(voters) {
 			probs = append(probs, fmt.Sprintf("%s: %s primary=%s", n.Tablet.Alias, g, aliasOf(c.nodeByUUIDCached(g.PrimaryUUID))))
 		}
 		// An ONLINE member whose offline_mode was left ON cannot serve: MySQL refuses its
@@ -125,8 +134,8 @@ func (c *Chaos) nodeByUUIDCached(uuid string) *Node {
 }
 
 // grCheckInvariants replaces the semi-sync configuration check in Group Replication mode: the
-// final primary is the ONLINE group primary, every tablet is an ONLINE member, the shard record
-// lists every tablet as a voter, and semi-sync is off on the primary.
+// final primary is the ONLINE group primary, every voter is an ONLINE member, the shard record
+// lists one voter per cell (or wantVoters), none of them gone, and semi-sync is off on the primary.
 func (c *Chaos) grCheckInvariants(r *Report, p *Node) {
 	deadline := time.Now().Add(60 * time.Second)
 	var probs []string
@@ -138,9 +147,10 @@ func (c *Chaos) grCheckInvariants(r *Report, p *Node) {
 		time.Sleep(500 * time.Millisecond)
 	}
 	if len(probs) > 0 {
-		r.violation("GROUP: not every tablet is an ONLINE member of %s's group after 60s: %s", p.Tablet.Alias, strings.Join(probs, "; "))
+		r.violation("GROUP: not every voter is an ONLINE member of %s's group after 60s: %s", p.Tablet.Alias, strings.Join(probs, "; "))
 	} else {
-		r.outcome("group: all %d tablets ONLINE members, primary %s", len(c.Nodes), p.Tablet.Alias)
+		voters, _ := c.shardVoters()
+		r.outcome("group: all %d voters ONLINE members, primary %s", len(voters), p.Tablet.Alias)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -152,8 +162,12 @@ func (c *Chaos) grCheckInvariants(r *Report, p *Node) {
 			}
 		}
 		r.note("shard record voters: %v", voters)
-		if len(voters) != len(c.Nodes) {
-			r.violation("GROUP: shard record lists %d voters, want %d", len(voters), len(c.Nodes))
+		want := c.wantVoters
+		if want == 0 {
+			want = len(cells)
+		}
+		if len(voters) != want {
+			r.violation("GROUP: shard record lists %d voters, want %d", len(voters), want)
 		}
 	}
 	if v := p.variables("rpl_semi_sync_source_enabled")["rpl_semi_sync_source_enabled"]; v == "ON" {

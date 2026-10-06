@@ -162,7 +162,17 @@ func (c *Chaos) convergenceProblems() (*Node, []string) {
 	if ro, err := p.scalar("select @@global.read_only"); err != nil || ro != "0" {
 		probs = append(probs, fmt.Sprintf("primary %s read_only=%s err=%v", p.Tablet.Alias, ro, err))
 	}
-	for _, n := range c.Nodes {
+	isVoter := map[*Node]bool{}
+	if c.gr {
+		voters, err := c.shardVoters()
+		if err != nil {
+			return p, append(probs, fmt.Sprintf("shard record voters: %v", err))
+		}
+		for _, v := range voters {
+			isVoter[v] = true
+		}
+	}
+	for _, n := range c.liveNodes() {
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		ti, err := c.Ts.GetTablet(ctx, n.Tablet.GetAlias())
 		cancel()
@@ -184,8 +194,9 @@ func (c *Chaos) convergenceProblems() (*Node, []string) {
 		if sro, err := n.scalar("select @@global.super_read_only"); err != nil || sro != "1" {
 			probs = append(probs, fmt.Sprintf("%s super_read_only=%s err=%v", n.Tablet.Alias, sro, err))
 		}
-		if c.gr {
-			// Group members replicate through the group's channels, not the default one.
+		if isVoter[n] {
+			// Group members replicate through the group's channels, not the default one. A
+			// tablet that is not a voter replicates asynchronously from the primary.
 			continue
 		}
 		rs, err := n.replicaStatus()
@@ -585,7 +596,7 @@ func (c *Chaos) CheckInvariants(r *Report, w *Workload, o *Observer, opts CheckO
 		r.violation("cannot read primary gtid_executed: %v", err)
 		return
 	}
-	for _, n := range c.Nodes {
+	for _, n := range c.liveNodes() {
 		if n == p {
 			continue
 		}
@@ -604,12 +615,15 @@ func (c *Chaos) CheckInvariants(r *Report, w *Workload, o *Observer, opts CheckO
 	}
 
 	uuids := map[string]string{}
-	for _, n := range c.Nodes {
+	for _, n := range c.liveNodes() {
 		uuids[n.serverUUID()] = n.Tablet.Alias
+	}
+	for n, uuid := range c.gone {
+		uuids[uuid] = n.Tablet.Alias
 	}
 
 	// Errant GTIDs.
-	for _, n := range c.Nodes {
+	for _, n := range c.liveNodes() {
 		if n == p {
 			continue
 		}
@@ -644,7 +658,7 @@ func (c *Chaos) CheckInvariants(r *Report, w *Workload, o *Observer, opts CheckO
 		return
 	}
 	others := map[string]map[int64]string{}
-	for _, n := range c.Nodes {
+	for _, n := range c.liveNodes() {
 		if n != p {
 			if m, err := n.ids(); err == nil {
 				others[n.Tablet.Alias] = m

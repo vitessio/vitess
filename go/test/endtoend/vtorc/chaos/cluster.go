@@ -111,6 +111,12 @@ type Chaos struct {
 
 	// gr is set once the shard runs Group Replication (GRMode, after the migration).
 	gr bool
+
+	// gone holds the tablets that a scenario took out for good (a dead host, a deleted tablet
+	// record), with their server_uuid: the final checks leave them out.
+	gone map[*Node]string
+	// wantVoters is how many voters the shard record must list at the end; 0 means one per cell.
+	wantVoters int
 }
 
 // NewChaos builds the reference deployment:
@@ -326,21 +332,23 @@ func (c *Chaos) migrateToGroupReplication(primary *Node) {
 	out, err := c.CI.VtctldClientProcess.ExecuteCommandWithOutput("MigrateReplicationMode", "--durability-policy", durability, keyspaceName)
 	require.NoError(c.t, err, out)
 	c.Log.Add("setup", fmt.Sprintf("MigrateReplicationMode --durability-policy %s took %.1fs", durability, time.Since(start).Seconds()))
+	// One voter per cell: a tablet in a cell that has a voter already is not a member, and
+	// replicates asynchronously.
 	require.Eventually(c.t, func() bool {
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
-		si, err := c.Ts.GetShard(ctx, keyspaceName, shardName)
-		if err != nil || len(si.GroupReplicationVoters) != len(c.Nodes) {
-			return false
-		}
 		ks, err := c.Ts.GetKeyspace(ctx, keyspaceName)
 		if err != nil || ks.DurabilityPolicy != durability {
 			return false
 		}
+		voters, err := c.shardVoters()
+		if err != nil || len(voters) != len(cells) {
+			return false
+		}
 		puuid := primary.serverUUID()
-		for _, n := range c.Nodes {
+		for _, n := range voters {
 			gs := n.grState()
-			if gs.State != "ONLINE" || gs.PrimaryUUID != puuid || gs.Online != len(c.Nodes) {
+			if gs.State != "ONLINE" || gs.PrimaryUUID != puuid || gs.Online != len(voters) {
 				return false
 			}
 		}
@@ -406,6 +414,51 @@ func (c *Chaos) nodeByAlias(a *topodatapb.TabletAlias) *Node {
 		}
 	}
 	return nil
+}
+
+// MarkGone records that a scenario takes n out for good. Call it while n still runs, so that its
+// server_uuid is known: the final checks then leave n out, and attribute its rows by that uuid.
+func (c *Chaos) MarkGone(n *Node) {
+	if c.gone == nil {
+		c.gone = map[*Node]string{}
+	}
+	c.gone[n] = n.serverUUID()
+	c.Log.Add("scenario", n.Tablet.Alias+" is gone for good: the final checks leave it out")
+}
+
+func (c *Chaos) isGone(n *Node) bool {
+	_, ok := c.gone[n]
+	return ok
+}
+
+// liveNodes returns the nodes that no scenario took out for good.
+func (c *Chaos) liveNodes() []*Node {
+	var live []*Node
+	for _, n := range c.Nodes {
+		if !c.isGone(n) {
+			live = append(live, n)
+		}
+	}
+	return live
+}
+
+// shardVoters returns the nodes that the shard record lists as the voters of its replication group.
+func (c *Chaos) shardVoters() ([]*Node, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	si, err := c.Ts.GetShard(ctx, keyspaceName, shardName)
+	if err != nil {
+		return nil, err
+	}
+	var voters []*Node
+	for _, a := range si.GroupReplicationVoters {
+		n := c.nodeByAlias(a)
+		if n == nil {
+			return nil, fmt.Errorf("voter %s is not a tablet of the harness", topoproto.TabletAliasString(a))
+		}
+		voters = append(voters, n)
+	}
+	return voters, nil
 }
 
 func (c *Chaos) nodeByUUID(uuid string) *Node {
