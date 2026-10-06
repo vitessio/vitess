@@ -624,12 +624,13 @@ func (te *TxEngine) stopTransactionWatcher() {
 }
 
 // validateSettings validates the pre-queries of a reservation, which are
-// executed directly on the reserved connection, see planbuilder.ValidateSettings.
+// executed directly on the reserved connection, see
+// planbuilder.ValidateSettingsSQLMode.
 func (te *TxEngine) validateSettings(preQueries []string) error {
 	parser := te.env.Environment().Parser()
 	cfg := te.env.Config()
 	rejectSubqueries := settingsRejectSubqueries(preQueries, parser, cfg.StrictTableACL, cfg.EnableTableACLDryRun, cfg.SanitizeLogMessages)
-	return planbuilder.ValidateSettings(preQueries, parser, rejectSubqueries)
+	return planbuilder.ValidateSettingsSQLMode(preQueries, parser, rejectSubqueries)
 }
 
 // ReserveBegin creates a reserved connection, and in it opens a transaction
@@ -637,16 +638,9 @@ func (te *TxEngine) ReserveBegin(ctx context.Context, options *querypb.ExecuteOp
 	span, ctx := trace.NewSpan(ctx, "TxEngine.ReserveBegin")
 	defer span.Finish()
 	// The pre-queries are executed directly on the reserved connection, without the
-<<<<<<< HEAD
 	// settings pool's BuildSettingQuery pass, so the settings validation must run here —
 	// before any connection is acquired or state is changed.
 	if err := te.validateSettings(preQueries); err != nil {
-||||||| parent of 5130e1be3e (sql_mode: reject unsupported modes at every layer, neutralize them on every connection (#20883))
-=======
-	// settings pool's BuildSettingQuery pass, so the sql_mode validation must run here —
-	// before any connection is acquired or state is changed.
-	if err := planbuilder.ValidateSettingsSQLMode(preQueries, te.env.Environment().Parser()); err != nil {
->>>>>>> 5130e1be3e (sql_mode: reject unsupported modes at every layer, neutralize them on every connection (#20883))
 		return 0, "", err
 	}
 	err := te.isTxPoolAvailable(te.beginRequests.Add)
@@ -676,12 +670,7 @@ func (te *TxEngine) Reserve(ctx context.Context, options *querypb.ExecuteOptions
 	span, ctx := trace.NewSpan(ctx, "TxEngine.Reserve")
 	defer span.Finish()
 	// see ReserveBegin: validate before any connection is acquired or tainted
-<<<<<<< HEAD
 	if err := te.validateSettings(preQueries); err != nil {
-||||||| parent of 5130e1be3e (sql_mode: reject unsupported modes at every layer, neutralize them on every connection (#20883))
-=======
-	if err := planbuilder.ValidateSettingsSQLMode(preQueries, te.env.Environment().Parser()); err != nil {
->>>>>>> 5130e1be3e (sql_mode: reject unsupported modes at every layer, neutralize them on every connection (#20883))
 		return 0, err
 	}
 	if txID == 0 {

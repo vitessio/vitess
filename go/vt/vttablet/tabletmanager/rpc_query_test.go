@@ -256,7 +256,6 @@ func TestTabletManager_ExecuteFetchCompoundStatement(t *testing.T) {
 	}
 	close(tm._waitForGrantsComplete)
 
-<<<<<<< HEAD
 	const trigger = "create trigger t1_bi before insert on t1 for each row begin set @x = 1; set @y = 2; end"
 	// Three pieces, none of them valid on its own.
 	pieces, err := tm.Env.Parser().SplitStatementToPieces(trigger)
@@ -266,178 +265,13 @@ func TestTabletManager_ExecuteFetchCompoundStatement(t *testing.T) {
 	_, err = tm.ExecuteFetchAsApp(ctx, &tabletmanagerdatapb.ExecuteFetchAsAppRequest{
 		Query:   []byte(trigger),
 		MaxRows: 10,
-||||||| parent of 5130e1be3e (sql_mode: reject unsupported modes at every layer, neutralize them on every connection (#20883))
-	_, err := tm.ExecuteMultiFetchAsDba(ctx, &tabletmanagerdatapb.ExecuteMultiFetchAsDbaRequest{
-		Sql:                     []byte("create /*vt+ allowZeroInDate=true */ table t (id int primary key)"),
-		DbName:                  dbName,
-		MaxRows:                 10,
-		DisableBinlogs:          true,
-		DisableForeignKeyChecks: true,
-		SessionVariables: []*tabletmanagerdatapb.SessionVariable{
-			{Name: "innodb_strict_mode", Value: "off"},
-			{Name: "sql_mode", Value: "ANSI"},
-		},
-=======
-	_, err := tm.ExecuteMultiFetchAsDba(ctx, &tabletmanagerdatapb.ExecuteMultiFetchAsDbaRequest{
-		Sql:                     []byte("create /*vt+ allowZeroInDate=true */ table t (id int primary key)"),
-		DbName:                  dbName,
-		MaxRows:                 10,
-		DisableBinlogs:          true,
-		DisableForeignKeyChecks: true,
-		SessionVariables: []*tabletmanagerdatapb.SessionVariable{
-			{Name: "innodb_strict_mode", Value: "off"},
-			{Name: "sql_mode", Value: "NO_ZERO_DATE"},
-		},
->>>>>>> 5130e1be3e (sql_mode: reject unsupported modes at every layer, neutralize them on every connection (#20883))
 	})
 	require.NoError(t, err)
 
-<<<<<<< HEAD
 	_, err = tm.ExecuteFetchAsAllPrivs(ctx, &tabletmanagerdatapb.ExecuteFetchAsAllPrivsRequest{
 		Query:   []byte(trigger),
 		DbName:  dbName,
 		MaxRows: 10,
-||||||| parent of 5130e1be3e (sql_mode: reject unsupported modes at every layer, neutralize them on every connection (#20883))
-	got := strings.Split(db.QueryLog(), ";")
-	require.Contains(t, got, "use `testdb`")
-	firstVariableIdx := -1
-	secondVariableIdx := -1
-	disableBinlogsIdx := -1
-	disableForeignKeyChecksIdx := -1
-	allowZeroInDateIdx := -1
-	createIdx := -1
-	for i, q := range got {
-		q = strings.ToLower(strings.TrimSpace(q))
-		if q == "set @@session.innodb_strict_mode=x'6f6666'" {
-			firstVariableIdx = i
-		}
-		if q == "set @@session.sql_mode=x'414e5349'" {
-			secondVariableIdx = i
-		}
-		if q == "set sql_log_bin = off" {
-			disableBinlogsIdx = i
-		}
-		if q == "set session foreign_key_checks = off" {
-			disableForeignKeyChecksIdx = i
-		}
-		if strings.Contains(q, "set @@session.sql_mode=replace") {
-			allowZeroInDateIdx = i
-		}
-		if strings.Contains(q, "create /*vt+ allowzeroindate=true */ table t") {
-			createIdx = i
-		}
-	}
-	require.NotEqual(t, -1, firstVariableIdx, "expected first session variable setup in %v", got)
-	require.NotEqual(t, -1, secondVariableIdx, "expected second session variable setup in %v", got)
-	require.NotEqual(t, -1, disableBinlogsIdx, "expected binlogs disabled in %v", got)
-	require.NotEqual(t, -1, disableForeignKeyChecksIdx, "expected foreign key checks disabled in %v", got)
-	require.NotEqual(t, -1, allowZeroInDateIdx, "expected zero-date modes removed in %v", got)
-	require.NotEqual(t, -1, createIdx, "expected schema SQL")
-	assert.Less(t, firstVariableIdx, secondVariableIdx)
-	assert.Less(t, secondVariableIdx, disableBinlogsIdx)
-	assert.Less(t, secondVariableIdx, disableForeignKeyChecksIdx)
-	assert.Less(t, secondVariableIdx, allowZeroInDateIdx)
-	assert.Less(t, disableBinlogsIdx, createIdx)
-	assert.Less(t, disableForeignKeyChecksIdx, createIdx)
-	assert.Less(t, allowZeroInDateIdx, createIdx)
-}
-
-// TestTabletManager_ExecuteMultiFetchAsDbaSessionVariableFailure verifies a
-// failed assignment prevents schema DDL.
-func TestTabletManager_ExecuteMultiFetchAsDbaSessionVariableFailure(t *testing.T) {
-	ctx := t.Context()
-	cp := mysql.ConnParams{}
-	db := fakesqldb.New(t)
-	db.AddQueryPattern(".*", &sqltypes.Result{})
-	db.AddRejectedQuery("set @@session.sql_mode=X'414e5349'", errors.New("cannot set session variable"))
-	daemon := mysqlctl.NewFakeMysqlDaemon(db)
-
-	tm := &TabletManager{
-		MysqlDaemon:            daemon,
-		DBConfigs:              dbconfigs.NewTestDBConfigs(cp, cp, "testdb"),
-		QueryServiceControl:    tabletservermock.NewController(),
-		_waitForGrantsComplete: make(chan struct{}),
-		Env:                    vtenv.NewTestEnv(),
-	}
-	close(tm._waitForGrantsComplete)
-
-	_, err := tm.ExecuteMultiFetchAsDba(ctx, &tabletmanagerdatapb.ExecuteMultiFetchAsDbaRequest{
-		Sql:    []byte("create table t (id int primary key)"),
-		DbName: "testdb",
-		SessionVariables: []*tabletmanagerdatapb.SessionVariable{
-			{Name: "sql_mode", Value: "ANSI"},
-		},
-=======
-	got := strings.Split(db.QueryLog(), ";")
-	require.Contains(t, got, "use `testdb`")
-	firstVariableIdx := -1
-	secondVariableIdx := -1
-	disableBinlogsIdx := -1
-	disableForeignKeyChecksIdx := -1
-	allowZeroInDateIdx := -1
-	createIdx := -1
-	for i, q := range got {
-		q = strings.ToLower(strings.TrimSpace(q))
-		if q == "set @@session.innodb_strict_mode=x'6f6666'" {
-			firstVariableIdx = i
-		}
-		if q == "set @@session.sql_mode=x'4e4f5f5a45524f5f44415445'" {
-			secondVariableIdx = i
-		}
-		if q == "set sql_log_bin = off" {
-			disableBinlogsIdx = i
-		}
-		if q == "set session foreign_key_checks = off" {
-			disableForeignKeyChecksIdx = i
-		}
-		if strings.Contains(q, "set @@session.sql_mode=replace") {
-			allowZeroInDateIdx = i
-		}
-		if strings.Contains(q, "create /*vt+ allowzeroindate=true */ table t") {
-			createIdx = i
-		}
-	}
-	require.NotEqual(t, -1, firstVariableIdx, "expected first session variable setup in %v", got)
-	require.NotEqual(t, -1, secondVariableIdx, "expected second session variable setup in %v", got)
-	require.NotEqual(t, -1, disableBinlogsIdx, "expected binlogs disabled in %v", got)
-	require.NotEqual(t, -1, disableForeignKeyChecksIdx, "expected foreign key checks disabled in %v", got)
-	require.NotEqual(t, -1, allowZeroInDateIdx, "expected zero-date modes removed in %v", got)
-	require.NotEqual(t, -1, createIdx, "expected schema SQL")
-	assert.Less(t, firstVariableIdx, secondVariableIdx)
-	assert.Less(t, secondVariableIdx, disableBinlogsIdx)
-	assert.Less(t, secondVariableIdx, disableForeignKeyChecksIdx)
-	assert.Less(t, secondVariableIdx, allowZeroInDateIdx)
-	assert.Less(t, disableBinlogsIdx, createIdx)
-	assert.Less(t, disableForeignKeyChecksIdx, createIdx)
-	assert.Less(t, allowZeroInDateIdx, createIdx)
-}
-
-// TestTabletManager_ExecuteMultiFetchAsDbaSessionVariableFailure verifies a
-// failed assignment prevents schema DDL.
-func TestTabletManager_ExecuteMultiFetchAsDbaSessionVariableFailure(t *testing.T) {
-	ctx := t.Context()
-	cp := mysql.ConnParams{}
-	db := fakesqldb.New(t)
-	db.AddQueryPattern(".*", &sqltypes.Result{})
-	db.AddRejectedQuery("set @@session.sql_mode=X'4e4f5f5a45524f5f44415445'", errors.New("cannot set session variable"))
-	daemon := mysqlctl.NewFakeMysqlDaemon(db)
-
-	tm := &TabletManager{
-		MysqlDaemon:            daemon,
-		DBConfigs:              dbconfigs.NewTestDBConfigs(cp, cp, "testdb"),
-		QueryServiceControl:    tabletservermock.NewController(),
-		_waitForGrantsComplete: make(chan struct{}),
-		Env:                    vtenv.NewTestEnv(),
-	}
-	close(tm._waitForGrantsComplete)
-
-	_, err := tm.ExecuteMultiFetchAsDba(ctx, &tabletmanagerdatapb.ExecuteMultiFetchAsDbaRequest{
-		Sql:    []byte("create table t (id int primary key)"),
-		DbName: "testdb",
-		SessionVariables: []*tabletmanagerdatapb.SessionVariable{
-			{Name: "sql_mode", Value: "NO_ZERO_DATE"},
-		},
->>>>>>> 5130e1be3e (sql_mode: reject unsupported modes at every layer, neutralize them on every connection (#20883))
 	})
 	require.NoError(t, err)
 

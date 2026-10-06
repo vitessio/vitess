@@ -342,32 +342,6 @@ func hasLockFunc(sel *sqlparser.Select) bool {
 	return found
 }
 
-// ValidateSettings validates connection settings that are applied without going
-// through BuildSettingQuery: a true reservation executes its settings directly
-// on the tainted connection. When rejectSubqueries is set, like
-// BuildSettingQuery, it refuses a setting with a subquery, see
-// rejectSettingSubqueries, and a setting it cannot inspect for one. Otherwise it
-// accepts every setting, as the reservation path always did.
-func ValidateSettings(settings []string, parser *sqlparser.Parser, rejectSubqueries bool) error {
-	if !rejectSubqueries {
-		return nil
-	}
-	for _, setting := range settings {
-		stmt, err := parser.Parse(setting)
-		if err != nil {
-			return vterrors.Wrapf(err, "failed to parse connection setting: %s", setting)
-		}
-		set, ok := stmt.(*sqlparser.Set)
-		if !ok {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "connection setting is not a SET statement: %s", setting)
-		}
-		if err := rejectSettingSubqueries(set, setting); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // rejectSettingSubqueries refuses a connection setting whose expressions embed
 // a subquery. A setting is applied to the connection with no table ACL check,
 // so the tables a subquery reads would go unchecked. Settings carry constants:
@@ -429,20 +403,16 @@ func BuildSettingQuery(settings []string, parser *sqlparser.Parser, rejectSubque
 		if !ok {
 			return "", "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: invalid set statement: %s", setting)
 		}
-<<<<<<< HEAD
 		// settings are applied with no verification and no table ACL check, so a
-		// subquery is refused where the ACL is enforced
+		// subquery is refused where the ACL is enforced, and sql_mode values must
+		// be constants that can be judged here
 		if rejectSubqueries {
 			if err := rejectSettingSubqueries(set, setting); err != nil {
 				return "", "", err
 			}
-||||||| parent of 5130e1be3e (sql_mode: reject unsupported modes at every layer, neutralize them on every connection (#20883))
-=======
-		// settings are applied with no verification afterwards, so sql_mode values
-		// must be constants that can be judged here; vtgates only render constants
+		}
 		if err := validateConstantSetExprsSQLMode(set.Exprs); err != nil {
 			return "", "", err
->>>>>>> 5130e1be3e (sql_mode: reject unsupported modes at every layer, neutralize them on every connection (#20883))
 		}
 		setExprs = append(setExprs, set.Exprs...)
 		for _, sExpr := range set.Exprs {
@@ -450,7 +420,6 @@ func BuildSettingQuery(settings []string, parser *sqlparser.Parser, rejectSubque
 			if sysVar.Scope != sqlparser.SessionScope && sysVar.Scope != sqlparser.NoScope {
 				return "", "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: session scope expected, got: %s", sysVar.Scope.ToString())
 			}
-<<<<<<< HEAD
 			resetExpr := sqlparser.Expr(defaultValue)
 			switch sysVar.Name.Lowered() {
 			case sysvars.ForeignKeyChecks, sysvars.UniqueChecks:
@@ -460,11 +429,7 @@ func BuildSettingQuery(settings []string, parser *sqlparser.Parser, rejectSubque
 				// checks off. Restore the global value explicitly, which is what DEFAULT
 				// means for a session variable.
 				resetExpr = &sqlparser.Variable{Scope: sqlparser.GlobalScope, Name: sysVar.Name}
-||||||| parent of 5130e1be3e (sql_mode: reject unsupported modes at every layer, neutralize them on every connection (#20883))
-			resetSetExprs = append(resetSetExprs, &sqlparser.SetExpr{Var: sysVar, Expr: lDefault})
-=======
-			resetExpr := sqlparser.Expr(lDefault)
-			if sysVar.Name.Lowered() == sysvars.SQLMode.Name {
+			case sysvars.SQLMode.Name:
 				// `default` would re-inherit the server's global sql_mode including its
 				// lexer modes, undoing the neutralization every Vitess-created
 				// connection starts with (see sqlmode.NeutralizeSessionQuery); restore
@@ -473,7 +438,6 @@ func BuildSettingQuery(settings []string, parser *sqlparser.Parser, rejectSubque
 				if err != nil {
 					return "", "", vterrors.Wrapf(err, "[BUG]: failed to parse the sql_mode reset expression")
 				}
->>>>>>> 5130e1be3e (sql_mode: reject unsupported modes at every layer, neutralize them on every connection (#20883))
 			}
 			resetSetExprs = append(resetSetExprs, &sqlparser.SetExpr{Var: sysVar, Expr: resetExpr})
 		}

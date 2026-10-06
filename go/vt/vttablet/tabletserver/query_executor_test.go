@@ -1960,73 +1960,7 @@ const (
 )
 
 // newTestQueryExecutor uses a package level variable testTabletServer defined in tabletserver_test.go
-<<<<<<< HEAD
 
-// A setting is applied with no table ACL check, so under strict table ACL one
-// that would read a table through a subquery is rejected before it reaches the
-// backend, on the settings-pool path and on both reservation paths alike.
-// Without strict table ACL there is nothing for the check to protect, and a
-// vtgate from before the value was sent still sends a targeted session's SET
-// expression as written, so the setting is accepted as it always was. A table
-// ACL dry run accepts it too, as it lets through any request the ACL would deny.
-func TestSettingsWithSubqueryUnderStrictTableACL(t *testing.T) {
-	subquerySetting := "set @@sql_select_limit = (select count(*) from test_table)"
-	settingErr := "connection setting must not contain a subquery: " + subquerySetting
-
-	t.Run("strict table ACL rejects", func(t *testing.T) {
-		db := setUpQueryExecutorTest(t)
-		defer db.Close()
-		ctx := t.Context()
-		tsv := newTestTabletServer(ctx, enableStrictTableACL, db)
-		defer tsv.StopService()
-
-		_, _, err := tsv.te.ReserveBegin(ctx, &querypb.ExecuteOptions{}, []string{subquerySetting})
-		require.EqualError(t, err, settingErr)
-		_, err = tsv.te.Reserve(ctx, &querypb.ExecuteOptions{}, 0, []string{subquerySetting})
-		require.EqualError(t, err, settingErr)
-		_, err = tsv.qe.GetConnSetting(ctx, []string{subquerySetting})
-		require.EqualError(t, err, settingErr)
-		assert.Zero(t, db.GetQueryCalledNum(subquerySetting), "a rejected setting must not reach the backend")
-	})
-
-	for _, tc := range []struct {
-		name  string
-		flags executorFlags
-	}{
-		{"without strict table ACL the setting is applied", noFlags},
-		{"a strict table ACL dry run applies the setting", enableStrictTableACL | enableTableACLDryRun},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			db := setUpQueryExecutorTest(t)
-			defer db.Close()
-			ctx := t.Context()
-			tsv := newTestTabletServer(ctx, tc.flags, db)
-			defer tsv.StopService()
-			db.AddQuery(subquerySetting, &sqltypes.Result{})
-
-			connID, _, err := tsv.te.ReserveBegin(ctx, &querypb.ExecuteOptions{}, []string{subquerySetting})
-			require.NoError(t, err)
-			require.NoError(t, tsv.te.Release(connID))
-			connID, err = tsv.te.Reserve(ctx, &querypb.ExecuteOptions{}, 0, []string{subquerySetting})
-			require.NoError(t, err)
-			require.NoError(t, tsv.te.Release(connID))
-			assert.Equal(t, 2, db.GetQueryCalledNum(subquerySetting), "the setting is applied to each reserved connection")
-			_, err = tsv.qe.GetConnSetting(ctx, []string{subquerySetting})
-			require.NoError(t, err)
-		})
-	}
-
-	// the dry run logs the setting it lets through, and with
-	// --sanitize-log-messages only the variables it sets, never its values
-	t.Run("the dry run log of a setting is sanitized", func(t *testing.T) {
-		parser := sqlparser.NewTestParser()
-		secretSetting := "set @@sql_select_limit = (select count(*) from test_table where token = 'secret')"
-		assert.Equal(t, secretSetting, settingForLog(secretSetting, false, parser))
-		assert.Equal(t, "set @@sql_select_limit [values REDACTED]", settingForLog(secretSetting, true, parser))
-		assert.Equal(t, "[REDACTED]", settingForLog("not a setting 'secret'", true, parser))
-	})
-||||||| parent of 5130e1be3e (sql_mode: reject unsupported modes at every layer, neutralize them on every connection (#20883))
-=======
 // A SET statement whose sql_mode value cannot be judged at plan time (non-constant
 // expression) is executed and the applied value is read back and validated, so a
 // non-constant expression cannot put a dedicated connection into a mode vtgate
@@ -2199,7 +2133,71 @@ func TestReserveSettingsRejectUnsupportedSQLModes(t *testing.T) {
 	connID, _, err := tsv.te.ReserveBegin(ctx, &querypb.ExecuteOptions{}, []string{validSetting})
 	require.NoError(t, err)
 	require.NoError(t, tsv.te.Release(connID))
->>>>>>> 5130e1be3e (sql_mode: reject unsupported modes at every layer, neutralize them on every connection (#20883))
+}
+
+// A setting is applied with no table ACL check, so under strict table ACL one
+// that would read a table through a subquery is rejected before it reaches the
+// backend, on the settings-pool path and on both reservation paths alike.
+// Without strict table ACL there is nothing for the check to protect, and a
+// vtgate from before the value was sent still sends a targeted session's SET
+// expression as written, so the setting is accepted as it always was. A table
+// ACL dry run accepts it too, as it lets through any request the ACL would deny.
+func TestSettingsWithSubqueryUnderStrictTableACL(t *testing.T) {
+	subquerySetting := "set @@sql_select_limit = (select count(*) from test_table)"
+	settingErr := "connection setting must not contain a subquery: " + subquerySetting
+
+	t.Run("strict table ACL rejects", func(t *testing.T) {
+		db := setUpQueryExecutorTest(t)
+		defer db.Close()
+		ctx := t.Context()
+		tsv := newTestTabletServer(ctx, enableStrictTableACL, db)
+		defer tsv.StopService()
+
+		_, _, err := tsv.te.ReserveBegin(ctx, &querypb.ExecuteOptions{}, []string{subquerySetting})
+		require.EqualError(t, err, settingErr)
+		_, err = tsv.te.Reserve(ctx, &querypb.ExecuteOptions{}, 0, []string{subquerySetting})
+		require.EqualError(t, err, settingErr)
+		_, err = tsv.qe.GetConnSetting(ctx, []string{subquerySetting})
+		require.EqualError(t, err, settingErr)
+		assert.Zero(t, db.GetQueryCalledNum(subquerySetting), "a rejected setting must not reach the backend")
+	})
+
+	for _, tc := range []struct {
+		name  string
+		flags executorFlags
+	}{
+		{"without strict table ACL the setting is applied", noFlags},
+		{"a strict table ACL dry run applies the setting", enableStrictTableACL | enableTableACLDryRun},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db := setUpQueryExecutorTest(t)
+			defer db.Close()
+			ctx := t.Context()
+			tsv := newTestTabletServer(ctx, tc.flags, db)
+			defer tsv.StopService()
+			db.AddQuery(subquerySetting, &sqltypes.Result{})
+
+			connID, _, err := tsv.te.ReserveBegin(ctx, &querypb.ExecuteOptions{}, []string{subquerySetting})
+			require.NoError(t, err)
+			require.NoError(t, tsv.te.Release(connID))
+			connID, err = tsv.te.Reserve(ctx, &querypb.ExecuteOptions{}, 0, []string{subquerySetting})
+			require.NoError(t, err)
+			require.NoError(t, tsv.te.Release(connID))
+			assert.Equal(t, 2, db.GetQueryCalledNum(subquerySetting), "the setting is applied to each reserved connection")
+			_, err = tsv.qe.GetConnSetting(ctx, []string{subquerySetting})
+			require.NoError(t, err)
+		})
+	}
+
+	// the dry run logs the setting it lets through, and with
+	// --sanitize-log-messages only the variables it sets, never its values
+	t.Run("the dry run log of a setting is sanitized", func(t *testing.T) {
+		parser := sqlparser.NewTestParser()
+		secretSetting := "set @@sql_select_limit = (select count(*) from test_table where token = 'secret')"
+		assert.Equal(t, secretSetting, settingForLog(secretSetting, false, parser))
+		assert.Equal(t, "set @@sql_select_limit [values REDACTED]", settingForLog(secretSetting, true, parser))
+		assert.Equal(t, "[REDACTED]", settingForLog("not a setting 'secret'", true, parser))
+	})
 }
 
 func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb.DB) *TabletServer {
