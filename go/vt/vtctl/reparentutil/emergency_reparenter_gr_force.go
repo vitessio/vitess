@@ -42,6 +42,14 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
+// GroupReplicationForceStartTimeout bounds the bootstrap of the new group, and the joins of the other
+// surviving voters, in a forced EmergencyReparentShard, unless --wait-replicas-timeout is longer. The
+// members of a group that lost its majority are in the ERROR state, and MySQL's STOP GROUP_REPLICATION,
+// which the bootstrap and the joins run first, waits for the member's group communication engine to exit:
+// 15s in the end-to-end test, up to a hard-coded minute in the lab. A bootstrap that the deadline cancels
+// leaves the shard to VTOrc until the bootstrap intent expires.
+var GroupReplicationForceStartTimeout = 2 * time.Minute
+
 // forcedGroupPlan is what a forced emergency reparent of a group replication shard decides on its read of
 // the shard record and of every tablet's status.
 type forcedGroupPlan struct {
@@ -286,8 +294,7 @@ func (erp *EmergencyReparenter) forceNewGroupReplicationGroup(ctx context.Contex
 	if err != nil {
 		return vterrors.Wrapf(err, "wrote the surviving voters [%s], but not the bootstrap intent: VTOrc bootstraps the group from them", votersString(plan.survivors))
 	}
-	bootstrapTimeout := max(opts.WaitReplicasTimeout, topo.RemoteOperationTimeout)
-	bootstrapCtx, bootstrapCancel := context.WithTimeout(ctx, bootstrapTimeout)
+	bootstrapCtx, bootstrapCancel := context.WithTimeout(ctx, max(opts.WaitReplicasTimeout, GroupReplicationForceStartTimeout))
 	groupStatus, err := erp.tmc.StartGroupReplication(bootstrapCtx, candidate, &tabletmanagerdatapb.StartGroupReplicationRequest{
 		Bootstrap:               true,
 		RequiredGtidSet:         plan.required.String(),
@@ -377,9 +384,9 @@ func writeForcedGroupVoters(ctx context.Context, ts *topo.Server, keyspace, shar
 }
 
 // joinForcedGroup makes the surviving voters other than the candidate join the new group, concurrently,
-// bounded by the replica wait timeout. A failure is logged: VTOrc makes the voter join later.
+// bounded by GroupReplicationForceStartTimeout (or the replica wait timeout, if longer). A failure is logged: VTOrc makes the voter join later.
 func (erp *EmergencyReparenter) joinForcedGroup(ctx context.Context, plan *forcedGroupPlan, opts EmergencyReparentOptions) {
-	joinCtx, joinCancel := context.WithTimeout(ctx, groupReplicationReplicaTimeout(opts))
+	joinCtx, joinCancel := context.WithTimeout(ctx, max(opts.WaitReplicasTimeout, GroupReplicationForceStartTimeout))
 	defer joinCancel()
 	var wg sync.WaitGroup
 	for _, res := range plan.joiners {
