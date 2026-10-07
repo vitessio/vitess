@@ -19,6 +19,8 @@ package tabletmanager
 import (
 	"context"
 	"log/slog"
+	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -26,6 +28,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
 
@@ -91,6 +94,8 @@ type groupReplicationSync struct {
 	// lastIllegitimateLog is when the loop last logged that it does not promote a group primary
 	// that is not legitimate.
 	lastIllegitimateLog time.Time
+	// lastDeposedLog is when the loop last logged that MySQL is a deposed primary (deposedPrimary).
+	lastDeposedLog time.Time
 	// peersFetched is when the loop last asked the voters for their server_uuids.
 	peersFetched time.Time
 
@@ -513,6 +518,10 @@ func (s *groupReplicationSync) promote(ctx context.Context, tabletType topodatap
 			slog.String("tablet_type", tabletType.String()))
 		return
 	}
+	// Before the action lock, which is never held across an RPC to another tablet.
+	if s.deposedPrimary(ctx, nil) {
+		return
+	}
 	if !tm.actionSema.TryAcquire(1) {
 		return
 	}
@@ -565,6 +574,102 @@ func (s *groupReplicationSync) promote(ctx context.Context, tabletType topodatap
 	if err := tm.changeTypeWithGroupRecordLocked(ctx, topodatapb.TabletType_PRIMARY, DBActionSetReadWrite, SemiSyncActionNone, rec); err != nil {
 		log.Error("Group replication sync: failed to promote the tablet to PRIMARY", slog.Any("error", err))
 	}
+}
+
+// deposedPrimary returns whether MySQL, the ONLINE primary with quorum of its view, is a deposed
+// primary that has not learned of its expulsion yet: the shard record names another tablet as the
+// primary, whose MySQL is ONLINE in this member's view, and that tablet answers that its MySQL is the
+// ONLINE primary, with quorum, of a newer view of the same incarnation. A primary that was paused
+// (SIGSTOP) or cut off while the group expelled it and elected another member resumes with its stale
+// view, in which it is still the primary of every voter, until MySQL learns of the expulsion: its
+// tablet must neither become PRIMARY nor serve again on that view, or it writes a newer primary term
+// to the shard record, and the legitimate primary's tablet steps down (endPrimaryTerm). The deposed
+// member's certification fails meanwhile, so it commits nothing; its MySQL stays super_read_only.
+//
+// A recorded primary whose MySQL is in no ONLINE member of the view, the failed primary of a
+// failover, is not asked: the group expelled it, and the new primary's tablet is promoted without
+// waiting for it. One that does not answer within groupReplicationPeerTimeout, or that is not a
+// group primary, or the primary of an older view, does not depose this member either. rec is the
+// shard record to decide on; nil reads it again.
+func (s *groupReplicationSync) deposedPrimary(ctx context.Context, rec *shardGroupRecord) bool {
+	tm := s.tm
+	status, err := tm.groupReplicationStatus(ctx)
+	if err != nil || !mysql.IsGroupPrimary(status) {
+		return false
+	}
+	if rec == nil {
+		if rec, err = s.getRecord(ctx, true); err != nil {
+			return false
+		}
+	}
+	if rec.primaryAlias == nil || topoproto.TabletAliasEqual(rec.primaryAlias, tm.tabletAlias) {
+		return false
+	}
+	alias := topoproto.TabletAliasString(rec.primaryAlias)
+	recorded := rec.tablets[alias]
+	if recorded == nil {
+		return false
+	}
+	// Whether the recorded primary's MySQL is ONLINE in this member's view: found by its server_uuid
+	// or its MySQL address. Without its server_uuid, it may be any ONLINE member that is the MySQL of
+	// no other tablet whose server_uuid the tablet knows. The voters whose server_uuid the tablet
+	// does not know yet are asked first, as for the legitimacy of the view, which does not wait for
+	// a voter that does not answer once the others make a majority.
+	tm.legitimateGroup(ctx, rec, status, true)
+	uuids := tm.knownServerUUIDs(rec)
+	if own, err := tm.MysqlDaemon.GetServerUUID(ctx); err == nil {
+		uuids[topoproto.TabletAliasString(tm.tabletAlias)] = own
+	}
+	voter := policy.GroupVoter{Alias: recorded.Alias, ServerUUID: uuids[alias], MysqlHost: recorded.MysqlHostname, MysqlPort: recorded.MysqlPort}
+	others := make(map[string]bool, len(uuids))
+	for a, uuid := range uuids {
+		if a != alias && uuid != "" {
+			others[uuid] = true
+		}
+	}
+	inView := false
+	for _, m := range status.GetMembers() {
+		if m.GetState() != mysql.GroupMemberStateOnline {
+			continue
+		}
+		if voter.Matches(m) || (voter.ServerUUID == "" && !others[m.GetMemberUuid()]) {
+			inView = true
+		}
+	}
+	if !inView {
+		return false
+	}
+	peer := tm.peerFullStatuses(ctx, []*topodatapb.Tablet{recorded})[alias]
+	peerStatus := peer.GetGroupReplicationStatus()
+	if !mysql.IsGroupPrimary(peerStatus) || policy.GroupIncarnation(peerStatus.GetViewId()) != policy.GroupIncarnation(status.GetViewId()) ||
+		!viewNotOlder(peerStatus.GetViewId(), status.GetViewId()) {
+		return false
+	}
+	if time.Since(s.lastDeposedLog) >= groupReplicationIllegitimateLogInterval {
+		s.lastDeposedLog = time.Now()
+		log.Warn("Group replication sync: MySQL is the primary of a view that the shard's recorded primary has superseded: it is a deposed primary that has not learned of its expulsion yet, and the tablet neither becomes PRIMARY nor serves",
+			slog.String("view_id", status.GetViewId()),
+			slog.String("recorded_primary", alias),
+			slog.String("recorded_primary_view_id", peerStatus.GetViewId()))
+	}
+	return true
+}
+
+// viewNotOlder returns whether the view id a, of the form <incarnation>:<sequence>, is not older than
+// b, of the same incarnation: Group Replication increments the sequence on every view change. An id
+// that cannot be compared counts as not older.
+func viewNotOlder(a, b string) bool {
+	_, seqA, okA := strings.Cut(a, ":")
+	_, seqB, okB := strings.Cut(b, ":")
+	if !okA || !okB {
+		return true
+	}
+	na, errA := strconv.ParseUint(seqA, 10, 64)
+	nb, errB := strconv.ParseUint(seqB, 10, 64)
+	if errA != nil || errB != nil {
+		return true
+	}
+	return na >= nb
 }
 
 // demote changes the tablet type from PRIMARY to REPLICA after MySQL lost the primary role in
@@ -904,6 +1009,9 @@ func (s *groupReplicationSync) serveAgain(ctx context.Context, durability policy
 	// Read before the action lock, so that it is never held across a topology read.
 	if err := tm.checkOwnTabletRecord(ctx); err != nil {
 		log.Warn("Group replication sync: the primary does not serve again", slog.Any("error", err))
+		return
+	}
+	if s.deposedPrimary(ctx, nil) {
 		return
 	}
 	if !tm.actionSema.TryAcquire(1) {
