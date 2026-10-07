@@ -79,6 +79,28 @@ func newVStreamLagTracker() *vstreamLagTracker {
 	return &vstreamLagTracker{streams: make(map[string]map[*atomic.Int64]struct{})}
 }
 
+var (
+	vstreamLagTrackersMu     sync.Mutex
+	vstreamLagTrackersByCell = make(map[string]*vstreamLagTracker)
+)
+
+// vstreamLagTrackerForCell returns the lag tracker behind the cell's exported
+// VStreamsLag gauge. Each new manager replaces that gauge's callback, and SQL
+// VSTREAM creates a manager per request, so all managers must share one
+// tracker or the gauge would only see the newest manager's streams. A vtgate
+// serves one cell, so this is one tracker per process; it is keyed by cell to
+// match the exporter, which scopes the gauge by cell.
+func vstreamLagTrackerForCell(cell string) *vstreamLagTracker {
+	vstreamLagTrackersMu.Lock()
+	defer vstreamLagTrackersMu.Unlock()
+	tracker, ok := vstreamLagTrackersByCell[cell]
+	if !ok {
+		tracker = newVStreamLagTracker()
+		vstreamLagTrackersByCell[cell] = tracker
+	}
+	return tracker
+}
+
 // noLagYet marks a stream that has not received an event, so it is not
 // reported as caught up before its lag is known.
 const noLagYet = math.MinInt64
@@ -263,7 +285,7 @@ func (vs *vstream) metricLabelValues(sgtid *binlogdatapb.ShardGtid) []string {
 func newVStreamManager(resolver *srvtopo.Resolver, serv srvtopo.Server, cell string) *vstreamManager {
 	exporter := servenv.NewExporter(cell, "VStreamManager")
 	labels := vstreamMetricLabelNames(vstreamMetricsIncludeCaller)
-	lagTracker := newVStreamLagTracker()
+	lagTracker := vstreamLagTrackerForCell(cell)
 
 	return &vstreamManager{
 		resolver: resolver,

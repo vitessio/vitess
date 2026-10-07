@@ -19,6 +19,7 @@ package vtgate
 import (
 	"context"
 	"errors"
+	"expvar"
 	"fmt"
 	"log/slog"
 	"maps"
@@ -920,6 +921,25 @@ func TestVStreamLagTrackerSkipsStreamsWithoutLag(t *testing.T) {
 	defer endReconnectedStream()
 	firstLag.Store(-2)
 	assert.Equal(t, map[string]int64{"ks.-80.PRIMARY": -2}, tracker.maxLagByLabel())
+}
+
+func TestVStreamsLagKeepsLiveStreamsWhenAnotherManagerIsCreatedForTheCell(t *testing.T) {
+	ctx := t.Context()
+	cell := "ag"
+	ks := "TestVStream"
+	_ = createSandbox(ks)
+	hc := discovery.NewFakeHealthCheck(nil)
+	st := getSandboxTopo(ctx, cell, ks, []string{"-20"})
+
+	liveStreamManager := newTestVStreamManager(ctx, hc, st, cell)
+	lag, endStream := liveStreamManager.vstreamsLagTracker.register([]string{ks, "-20", "PRIMARY"})
+	t.Cleanup(endStream)
+	lag.Store(7)
+
+	_ = newTestVStreamManager(ctx, hc, st, cell)
+
+	exportedLag := expvar.Get("VStreamsLag").(*stats.GaugesFuncWithMultiLabels).Counts()
+	assert.Equal(t, int64(7), exportedLag[cell+"."+ks+".-20.PRIMARY"])
 }
 
 func TestVStreamLagTrackerEscapesDotsInLabels(t *testing.T) {
