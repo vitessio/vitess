@@ -241,19 +241,21 @@ func (tm *TabletManager) endPrimaryTerm(ctx context.Context, primaryAlias *topod
 	// no return. Instead, we should leave partial results and retry the rest
 	// later.
 	log.Info("Active reparents are enabled; converting MySQL to replica.")
-	demotePrimaryCtx, cancelDemotePrimary := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
-	defer cancelDemotePrimary()
-	if _, err := tm.demotePrimary(demotePrimaryCtx, false /* revertPartialFailure */, true /* force */); err != nil {
-		return vterrors.Wrap(err, "failed to demote primary")
-	}
-	setPrimaryCtx, cancelSetPrimary := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
-	defer cancelSetPrimary()
 	log.Info(fmt.Sprintf("Attempting to reparent self to new primary %v.", primaryAliasStr))
 	if primaryAlias == nil {
+		// Without a new primary to repoint to, demote explicitly before changing type.
+		demotePrimaryCtx, cancelDemotePrimary := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+		defer cancelDemotePrimary()
+		if _, err := tm.demotePrimary(demotePrimaryCtx, false /* revertPartialFailure */, true /* force */); err != nil {
+			return vterrors.Wrap(err, "failed to demote primary")
+		}
 		if err := tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_REPLICA, DBActionNone); err != nil {
 			return err
 		}
 	} else {
+		// Repointing demotes a PRIMARY before changing its type and replication source.
+		setPrimaryCtx, cancelSetPrimary := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+		defer cancelSetPrimary()
 		if err := tm.setReplicationSourceSemiSyncNoAction(setPrimaryCtx, primaryAlias, 0, "", true); err != nil {
 			return vterrors.Wrap(err, "failed to reparent self to new primary")
 		}
