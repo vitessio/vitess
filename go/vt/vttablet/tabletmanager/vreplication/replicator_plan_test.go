@@ -18,6 +18,7 @@ package vreplication
 
 import (
 	"encoding/json"
+	"math"
 	"strings"
 	"testing"
 
@@ -1006,6 +1007,29 @@ func TestAppendFromRow(t *testing.T) {
 			),
 			want: "values (4)",
 		},
+		{
+			// The copy path validates the row before slicing its values, so a
+			// short row fails with a terminal error instead of a panic.
+			// TestValidateRowImage covers the individual malformed shapes.
+			name: "malformed row is rejected before its values are read",
+			tp: &TablePlan{
+				TargetName: "t",
+				BulkInsertValues: sqlparser.BuildParsedQuery("values (%a, %a, %a)",
+					":c1", ":c2", ":c3",
+				),
+				Fields: []*querypb.Field{
+					{Name: "c1", Type: querypb.Type_INT32},
+					{Name: "c2", Type: querypb.Type_INT32},
+					{Name: "c3", Type: querypb.Type_INT32},
+				},
+			},
+			row: sqltypes.RowToProto3(
+				[]sqltypes.Value{
+					sqltypes.NewInt64(1),
+				},
+			),
+			wantErr: "vreplication: copy row for table t is malformed (1 values, expected 3)",
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1060,6 +1084,28 @@ func TestApplyBulkDeleteChanges(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, executed, 1)
 		assert.Equal(t, "delete from t where id in (1, 2)", executed[0])
+	})
+
+	t.Run("malformed Before image is rejected before MakeRowTrusted", func(t *testing.T) {
+		// A Before image with fewer values than the table has fields used to
+		// make vals[pkIndex] index out of range once the PK column sat past
+		// the short row's end. TestValidateRowImage covers the individual
+		// malformed shapes; this pins that the bulk-delete path validates.
+		tp := newTablePlan()
+		tp.PKIndices = []bool{false, true}
+		rowDeletes := []*binlogdatapb.RowChange{{
+			Before: sqltypes.RowToProto3([]sqltypes.Value{
+				sqltypes.NewInt64(1),
+			}),
+		}}
+		var executed []string
+		_, err := tp.applyBulkDeleteChanges(rowDeletes, func(sql string) (*sqltypes.Result, error) {
+			executed = append(executed, sql)
+			return &sqltypes.Result{RowsAffected: 1}, nil
+		}, 1024)
+		require.ErrorContains(t, err, "Before image of bulk-delete change for table t is malformed (1 values, expected 2)")
+		assert.True(t, isUnrecoverableError(err), "malformed row image must be terminal")
+		require.Empty(t, executed)
 	})
 
 	t.Run("insert-shaped change returns an error instead of panicking", func(t *testing.T) {
@@ -1147,6 +1193,38 @@ func TestApplyBulkDeleteChanges(t *testing.T) {
 		assert.True(t, isUnrecoverableError(err), "error must be terminal")
 		assert.Empty(t, executed)
 	})
+}
+
+// TestApplyBulkInsertChangesMalformedRowImage confirms that the bulk-insert
+// path validates a change's After image before MakeRowTrusted indexes it, so
+// a short image fails with a terminal error instead of a panic.
+// TestValidateRowImage covers the individual malformed shapes.
+func TestApplyBulkInsertChangesMalformedRowImage(t *testing.T) {
+	tp := &TablePlan{
+		TargetName:      "t",
+		BulkInsertFront: sqlparser.BuildParsedQuery("insert into t(c1, c2)"),
+		BulkInsertValues: sqlparser.BuildParsedQuery("(%a, %a)",
+			":a_c1", ":a_c2",
+		),
+		Fields: []*querypb.Field{
+			{Name: "c1", Type: querypb.Type_INT32},
+			{Name: "c2", Type: querypb.Type_VARCHAR},
+		},
+		FieldsToSkip:     map[string]bool{},
+		TablePlanBuilder: &tablePlanBuilder{stats: binlogplayer.NewStats()},
+	}
+	rowChanges := []*binlogdatapb.RowChange{
+		{After: sqltypes.RowToProto3([]sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewVarChar("a")})},
+		{After: sqltypes.RowToProto3([]sqltypes.Value{sqltypes.NewInt64(2)})},
+	}
+	var executed []string
+	_, err := tp.applyBulkInsertChanges(rowChanges, func(sql string) (*sqltypes.Result, error) {
+		executed = append(executed, sql)
+		return &sqltypes.Result{RowsAffected: 1}, nil
+	}, 1024)
+	require.ErrorContains(t, err, "After image of bulk-insert change for table t is malformed (1 values, expected 2)")
+	assert.True(t, isUnrecoverableError(err), "malformed row image must be terminal")
+	assert.Empty(t, executed)
 }
 
 func TestApplyBulkInsertChangesMixedShapes(t *testing.T) {
@@ -1242,3 +1320,1345 @@ func TestApplyBulkInsertChangesMixedShapes(t *testing.T) {
 		assert.Empty(t, executed)
 	})
 }
+<<<<<<< HEAD
+||||||| parent of bd122a4f0d (VReplication: validate bulk-delete Before images against the field count (#20976))
+
+func TestMarshalJSONForSQL(t *testing.T) {
+	testCases := []struct {
+		name  string
+		input string
+	}{
+		{
+			name:  "small object",
+			input: `{"key": "value"}`,
+		},
+		{
+			name:  "small array",
+			input: `[1, 2, 3]`,
+		},
+		{
+			name:  "large value uses streaming path",
+			input: `[` + strings.Repeat(`"test",`, 200000) + `"end"]`,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := vjson.MarshalSQLValue([]byte(tc.input))
+			require.NoError(t, err)
+
+			sql := result.RawStr()
+			// Both tree and streaming paths produce JSON_ARRAY/JSON_OBJECT format.
+			assert.True(t, strings.HasPrefix(sql, "JSON_ARRAY(") || strings.HasPrefix(sql, "JSON_OBJECT("),
+				"expected JSON_ARRAY or JSON_OBJECT prefix, got: %.80s...", sql)
+		})
+	}
+}
+
+func TestMarshalJSONForSQLCorrectness(t *testing.T) {
+	testCases := []struct {
+		name     string
+		input    string
+		contains string
+	}{
+		{name: "object", input: `{"key": "value", "num": 42}`, contains: "JSON_OBJECT("},
+		{name: "array of ints", input: `[1, 2, 3, 930701976723823]`, contains: "JSON_ARRAY("},
+		{name: "nested", input: `{"a": [1, {"b": true}], "c": null}`, contains: "JSON_OBJECT("},
+		{name: "special chars", input: `{"bs": "back\\slash", "q": "it's a \"test\""}`, contains: "JSON_OBJECT("},
+		{name: "unicode", input: `{"emoji": "hello \u0041"}`, contains: "JSON_OBJECT("},
+		{name: "empty object", input: `{}`, contains: "JSON_OBJECT()"},
+		{name: "empty array", input: `[]`, contains: "JSON_ARRAY()"},
+		{name: "boolean", input: `true`, contains: "true"},
+		{name: "null", input: `null`, contains: "null"},
+		{name: "number", input: `42`, contains: "42"},
+		{name: "string", input: `"hello world"`, contains: "hello world"},
+		{name: "large integer (original bug #8686)", input: `{"keywordSourceId": 930701976723823}`, contains: "930701976723823"},
+		{name: "control escapes", input: `{"cr": "a\rb", "newline": "a\nb", "tab": "a\tb"}`, contains: "JSON_OBJECT("},
+		{name: "solidus escape", input: `{"path": "a\/b"}`, contains: "JSON_OBJECT("},
+		{name: "surrogate pair", input: `{"emoji": "\uD83D\uDE00"}`, contains: "JSON_OBJECT("},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := vjson.MarshalSQLValue([]byte(tc.input))
+			require.NoError(t, err)
+			assert.Contains(t, result.RawStr(), tc.contains)
+		})
+	}
+
+	// Verify the specific bug from issue #8686: large integers must not
+	// be converted to scientific notation.
+	t.Run("large integer preserved", func(t *testing.T) {
+		raw := []byte(`{"keywordSourceId": 930701976723823}`)
+		result, err := vjson.MarshalSQLValue(raw)
+		require.NoError(t, err)
+		assert.Contains(t, result.RawStr(), "930701976723823")
+		assert.NotContains(t, result.RawStr(), "e+")
+	})
+}
+
+func TestAppendFromRowLargeJSON(t *testing.T) {
+	largeJSON := `[` + strings.Repeat(`12345678,`, 150000) + `0]`
+
+	tp := &TablePlan{
+		BulkInsertValues: sqlparser.BuildParsedQuery("(%a)",
+			":c1",
+		),
+		Fields: []*querypb.Field{
+			{Name: "c1", Type: querypb.Type_JSON},
+		},
+		FieldsToSkip: map[string]bool{},
+	}
+
+	row := sqltypes.RowToProto3([]sqltypes.Value{
+		sqltypes.MakeTrusted(querypb.Type_JSON, []byte(largeJSON)),
+	})
+
+	buf := &bytes2.Buffer{}
+	err := tp.appendFromRow(buf, row)
+	require.NoError(t, err)
+	result := buf.String()
+	// The streaming path produces JSON_ARRAY format, same as the tree encoding.
+	assert.Contains(t, result, "JSON_ARRAY(")
+}
+
+func TestAppendFromRowSmallJSON(t *testing.T) {
+	// Verify that small JSON values use the tree encoding (JSON_OBJECT/JSON_ARRAY).
+	tp := &TablePlan{
+		BulkInsertValues: sqlparser.BuildParsedQuery("(%a)",
+			":c1",
+		),
+		Fields: []*querypb.Field{
+			{Name: "c1", Type: querypb.Type_JSON},
+		},
+		FieldsToSkip: map[string]bool{},
+	}
+
+	row := sqltypes.RowToProto3([]sqltypes.Value{
+		sqltypes.MakeTrusted(querypb.Type_JSON, []byte(`{"key": "value"}`)),
+	})
+
+	buf := &bytes2.Buffer{}
+	err := tp.appendFromRow(buf, row)
+	require.NoError(t, err)
+	result := buf.String()
+	assert.Contains(t, result, "JSON_OBJECT(")
+}
+
+func BenchmarkMarshalJSONForSQL(b *testing.B) {
+	raw := []byte(`[` + strings.Repeat(`12345678,`, 150000) + `0]`)
+	b.ReportAllocs()
+	b.SetBytes(int64(len(raw)))
+	for i := 0; i < b.N; i++ {
+		result, err := vjson.MarshalSQLValue(raw)
+		if err != nil {
+			b.Fatal(err)
+		}
+		if len(result.Raw()) == 0 {
+			b.Fatal("marshalJSONForSQL returned empty SQL")
+		}
+	}
+}
+
+func TestCheckJSONRowSize(t *testing.T) {
+	newTablePlan := func(fields []*querypb.Field) *TablePlan {
+		return &TablePlan{
+			TargetName: "mytable",
+			Fields:     fields,
+		}
+	}
+
+	jsonField := func(name string) *querypb.Field {
+		return &querypb.Field{Name: name, Type: querypb.Type_JSON}
+	}
+	intField := func(name string) *querypb.Field {
+		return &querypb.Field{Name: name, Type: querypb.Type_INT64}
+	}
+	// makeRow builds a *querypb.Row from per-column byte slices. A nil slice
+	// encodes a SQL NULL (Lengths[i] = -1).
+	makeRow := func(cols ...[]byte) *querypb.Row {
+		row := &querypb.Row{}
+		for _, c := range cols {
+			if c == nil {
+				row.Lengths = append(row.Lengths, -1)
+				continue
+			}
+			row.Lengths = append(row.Lengths, int64(len(c)))
+			row.Values = append(row.Values, c...)
+		}
+		return row
+	}
+
+	t.Run("disabled when limit is zero", func(t *testing.T) {
+		tp := newTablePlan([]*querypb.Field{jsonField("j")})
+		row := makeRow([]byte(`{"key":"` + strings.Repeat("x", 1_000_000) + `"}`))
+		require.NoError(t, tp.checkJSONRowSize(row, 0))
+	})
+
+	t.Run("disabled when limit is negative", func(t *testing.T) {
+		tp := newTablePlan([]*querypb.Field{jsonField("j")})
+		row := makeRow([]byte(`{"key":"` + strings.Repeat("x", 1_000_000) + `"}`))
+		require.NoError(t, tp.checkJSONRowSize(row, -1))
+	})
+
+	t.Run("nil row is a no-op", func(t *testing.T) {
+		tp := newTablePlan([]*querypb.Field{jsonField("j")})
+		require.NoError(t, tp.checkJSONRowSize(nil, 100))
+	})
+
+	t.Run("no JSON columns is a no-op", func(t *testing.T) {
+		tp := newTablePlan([]*querypb.Field{intField("id")})
+		row := makeRow([]byte("42"))
+		require.NoError(t, tp.checkJSONRowSize(row, 100))
+	})
+
+	t.Run("empty row is a no-op", func(t *testing.T) {
+		tp := newTablePlan([]*querypb.Field{jsonField("j")})
+		require.NoError(t, tp.checkJSONRowSize(makeRow(), 100))
+	})
+
+	t.Run("NULL JSON column is a no-op", func(t *testing.T) {
+		tp := newTablePlan([]*querypb.Field{jsonField("j")})
+		require.NoError(t, tp.checkJSONRowSize(makeRow(nil), 10))
+	})
+
+	t.Run("under limit passes", func(t *testing.T) {
+		tp := newTablePlan([]*querypb.Field{jsonField("j")})
+		row := makeRow([]byte(`{"k":"v"}`))
+		require.NoError(t, tp.checkJSONRowSize(row, 1000))
+	})
+
+	t.Run("exactly at limit passes", func(t *testing.T) {
+		payload := []byte(`{"k":"v"}`)
+		tp := newTablePlan([]*querypb.Field{jsonField("j")})
+		row := makeRow(payload)
+		require.NoError(t, tp.checkJSONRowSize(row, int64(len(payload))))
+	})
+
+	t.Run("over limit returns error", func(t *testing.T) {
+		tp := newTablePlan([]*querypb.Field{jsonField("j")})
+		row := makeRow([]byte(`{"key":"value"}`))
+		err := tp.checkJSONRowSize(row, 5)
+		require.ErrorContains(t, err, "vreplication: row JSON payload")
+		require.ErrorContains(t, err, "vreplication-max-row-json-bytes=5")
+		require.ErrorContains(t, err, "table=mytable")
+		require.ErrorContains(t, err, "largest_json_column=j")
+	})
+
+	t.Run("multi-column sum triggers error", func(t *testing.T) {
+		tp := newTablePlan([]*querypb.Field{jsonField("j1"), jsonField("j2")})
+		row := makeRow([]byte(`{"a":"bb"}`), []byte(`{"c":"dd"}`))
+		// each is ~10 bytes; limit 15 should fail on their sum
+		err := tp.checkJSONRowSize(row, 15)
+		require.ErrorContains(t, err, "vreplication: row JSON payload")
+	})
+
+	t.Run("multi-column under limit passes", func(t *testing.T) {
+		tp := newTablePlan([]*querypb.Field{jsonField("j1"), jsonField("j2")})
+		row := makeRow([]byte(`{"a":"b"}`), []byte(`{"c":"d"}`))
+		require.NoError(t, tp.checkJSONRowSize(row, 1000))
+	})
+
+	t.Run("non-JSON columns not counted", func(t *testing.T) {
+		tp := newTablePlan([]*querypb.Field{intField("id"), jsonField("j"), intField("ts")})
+		// Only j (9 bytes) counted; id and ts are ints.
+		row := makeRow([]byte("1"), []byte(`{"k":"v"}`), []byte("99"))
+		require.NoError(t, tp.checkJSONRowSize(row, 10))
+		err := tp.checkJSONRowSize(row, 8)
+		require.ErrorContains(t, err, "vreplication: row JSON payload")
+	})
+}
+
+func TestApplyChangeChecksEffectiveJSONSizeForPartialDeleteInsert(t *testing.T) {
+	beforeJSON := []byte(`{"big":"` + strings.Repeat("x", 64) + `"}`)
+	tp := &TablePlan{
+		TargetName: "t",
+		Insert: sqlparser.BuildParsedQuery("insert into t(id, j) values (%a, %a)",
+			":a_id", ":a_j",
+		),
+		Delete: sqlparser.BuildParsedQuery("delete from t where id=%a",
+			":b_id",
+		),
+		Fields: []*querypb.Field{
+			{Name: "id", Type: querypb.Type_INT64},
+			{Name: "j", Type: querypb.Type_JSON},
+		},
+		PKReferences:   []string{"id"},
+		WorkflowConfig: &vttablet.VReplicationConfig{MaxRowJSONBytes: 16},
+	}
+	rowChange := &binlogdatapb.RowChange{
+		Before: &querypb.Row{
+			Lengths: []int64{1, int64(len(beforeJSON))},
+			Values:  append([]byte("1"), beforeJSON...),
+		},
+		After: &querypb.Row{
+			Lengths: []int64{1, 0},
+			Values:  []byte("2"),
+		},
+		DataColumns: &binlogdatapb.RowChange_Bitmap{
+			Count: 2,
+			Cols:  []byte{0x03},
+		},
+		JsonPartialValues: &binlogdatapb.RowChange_Bitmap{
+			Count: 1,
+			Cols:  []byte{0x01},
+		},
+	}
+
+	var executed []string
+	_, err := tp.applyChange(rowChange, func(sql string) (*sqltypes.Result, error) {
+		executed = append(executed, sql)
+		return &sqltypes.Result{RowsAffected: 1}, nil
+	})
+	require.ErrorContains(t, err, "vreplication: row JSON payload")
+	require.Empty(t, executed)
+}
+
+func TestApplyChangeIgnoresSkippedJSONColumnsWhenCheckingUpdateLimit(t *testing.T) {
+	skippedJSON := []byte(`{"big":"` + strings.Repeat("x", 64) + `"}`)
+	tp := &TablePlan{
+		TargetName: "t",
+		Update: sqlparser.BuildParsedQuery("update t set v=%a where id=%a",
+			":a_v", ":b_id",
+		),
+		Fields: []*querypb.Field{
+			{Name: "id", Type: querypb.Type_INT64},
+			{Name: "v", Type: querypb.Type_VARCHAR},
+			{Name: "j_generated", Type: querypb.Type_JSON},
+		},
+		FieldsToSkip: map[string]bool{
+			"j_generated": true,
+		},
+		PKReferences:   []string{"id"},
+		WorkflowConfig: &vttablet.VReplicationConfig{MaxRowJSONBytes: 16},
+	}
+	rowChange := &binlogdatapb.RowChange{
+		Before: &querypb.Row{
+			Lengths: []int64{1, 3, int64(len(skippedJSON))},
+			Values:  append([]byte("1old"), skippedJSON...),
+		},
+		After: &querypb.Row{
+			Lengths: []int64{1, 3, int64(len(skippedJSON))},
+			Values:  append([]byte("1new"), skippedJSON...),
+		},
+	}
+
+	var executed []string
+	_, err := tp.applyChange(rowChange, func(sql string) (*sqltypes.Result, error) {
+		executed = append(executed, sql)
+		return &sqltypes.Result{RowsAffected: 1}, nil
+	})
+	require.NoError(t, err)
+	require.Len(t, executed, 1)
+	assert.Equal(t, "update t set v='new' where id=1", executed[0])
+}
+
+func TestApplyChangeSkipsMarshallingGeneratedJSONColumns(t *testing.T) {
+	// The skipped column's bytes are intentionally not valid JSON:
+	// vjson.MarshalSQLValue errors on this input, so if bindAfterJSONFieldVals
+	// wastefully marshals a FieldsToSkip column, applyChange returns that
+	// error. A passing test proves we bypass the marshal for skipped fields.
+	skippedInvalid := []byte(`not-json`)
+	validJSON := []byte(`{"ok":true}`)
+	tp := &TablePlan{
+		TargetName: "t",
+		Insert: sqlparser.BuildParsedQuery("insert into t(id, j) values (%a, %a)",
+			":a_id", ":a_j",
+		),
+		Fields: []*querypb.Field{
+			{Name: "id", Type: querypb.Type_INT64},
+			{Name: "j_gen", Type: querypb.Type_JSON},
+			{Name: "j", Type: querypb.Type_JSON},
+		},
+		FieldsToSkip: map[string]bool{
+			"j_gen": true,
+		},
+		PKReferences:   []string{"id"},
+		WorkflowConfig: &vttablet.VReplicationConfig{MaxRowJSONBytes: 0},
+	}
+	rowChange := &binlogdatapb.RowChange{
+		After: &querypb.Row{
+			Lengths: []int64{1, int64(len(skippedInvalid)), int64(len(validJSON))},
+			Values:  append(append([]byte("1"), skippedInvalid...), validJSON...),
+		},
+	}
+
+	var executed []string
+	_, err := tp.applyChange(rowChange, func(sql string) (*sqltypes.Result, error) {
+		executed = append(executed, sql)
+		return &sqltypes.Result{RowsAffected: 1}, nil
+	})
+	require.NoError(t, err)
+	require.Len(t, executed, 1)
+	assert.Contains(t, executed[0], "JSON_OBJECT(")
+	assert.NotContains(t, executed[0], "not-json")
+}
+
+func TestApplyChangePartialRebuildSkipsGeneratedJSONColumns(t *testing.T) {
+	// Exercises the DELETE+INSERT partial-rebuild loop. The skipped generated
+	// JSON column has its partial bit set AND an empty AFTER diff, which
+	// routes into the "marshal the BEFORE value" branch. The BEFORE bytes
+	// are intentionally not valid JSON, so vjson.MarshalSQLValue errors if
+	// called. A passing test proves the rebuild loop skips the column
+	// instead of wastefully marshalling it — and keeps jsonIndex aligned
+	// so the non-skipped JSON column's partial bit is read correctly.
+	skippedInvalidBefore := []byte(`not-json`)
+	validBeforeJSON := []byte(`{"k":"before"}`)
+	validAfterJSON := []byte(`{"k":"after"}`)
+
+	beforeVals := append([]byte("1"), skippedInvalidBefore...)
+	beforeVals = append(beforeVals, validBeforeJSON...)
+	afterVals := append([]byte("2"), validAfterJSON...)
+
+	tp := &TablePlan{
+		TargetName: "t",
+		Insert: sqlparser.BuildParsedQuery("insert into t(id, j) values (%a, %a)",
+			":a_id", ":a_j",
+		),
+		Delete: sqlparser.BuildParsedQuery("delete from t where id=%a",
+			":b_id",
+		),
+		Fields: []*querypb.Field{
+			{Name: "id", Type: querypb.Type_INT64},
+			{Name: "j_gen", Type: querypb.Type_JSON},
+			{Name: "j", Type: querypb.Type_JSON},
+		},
+		FieldsToSkip: map[string]bool{
+			"j_gen": true,
+		},
+		PKReferences:   []string{"id"},
+		WorkflowConfig: &vttablet.VReplicationConfig{MaxRowJSONBytes: 0},
+	}
+	rowChange := &binlogdatapb.RowChange{
+		Before: &querypb.Row{
+			Lengths: []int64{1, int64(len(skippedInvalidBefore)), int64(len(validBeforeJSON))},
+			Values:  beforeVals,
+		},
+		After: &querypb.Row{
+			// j_gen has an empty AFTER diff ("column not updated").
+			Lengths: []int64{1, 0, int64(len(validAfterJSON))},
+			Values:  afterVals,
+		},
+		DataColumns: &binlogdatapb.RowChange_Bitmap{
+			Count: 3,
+			Cols:  []byte{0x07},
+		},
+		JsonPartialValues: &binlogdatapb.RowChange_Bitmap{
+			Count: 2,
+			// j_gen is partial (bit 0); j is not (bit 1 unset).
+			Cols: []byte{0x01},
+		},
+	}
+
+	var executed []string
+	_, err := tp.applyChange(rowChange, func(sql string) (*sqltypes.Result, error) {
+		executed = append(executed, sql)
+		return &sqltypes.Result{RowsAffected: 1}, nil
+	})
+	require.NoError(t, err)
+	require.Len(t, executed, 2)
+	assert.Equal(t, "delete from t where id=1", executed[0])
+	assert.Contains(t, executed[1], "insert into t(id, j) values (2,")
+	assert.Contains(t, executed[1], "JSON_OBJECT(")
+	assert.NotContains(t, executed[1], "not-json")
+}
+
+func TestApplyChangeChecksPartialJSONDiffSizeForDeleteInsert(t *testing.T) {
+	beforeJSON := []byte(`{"small":"x"}`)
+	diff := []byte(`JSON_INSERT(%s, _utf8mb4'$.big', CAST(JSON_QUOTE(_utf8mb4'` + strings.Repeat("x", 64) + `') as JSON))`)
+	tp := &TablePlan{
+		TargetName: "t",
+		Insert: sqlparser.BuildParsedQuery("insert into t(id, j) values (%a, %a)",
+			":a_id", ":a_j",
+		),
+		Delete: sqlparser.BuildParsedQuery("delete from t where id=%a",
+			":b_id",
+		),
+		Fields: []*querypb.Field{
+			{Name: "id", Type: querypb.Type_INT64},
+			{Name: "j", Type: querypb.Type_JSON},
+		},
+		PKReferences:   []string{"id"},
+		WorkflowConfig: &vttablet.VReplicationConfig{MaxRowJSONBytes: 16},
+	}
+	rowChange := &binlogdatapb.RowChange{
+		Before: &querypb.Row{
+			Lengths: []int64{1, int64(len(beforeJSON))},
+			Values:  append([]byte("1"), beforeJSON...),
+		},
+		After: &querypb.Row{
+			Lengths: []int64{1, int64(len(diff))},
+			Values:  append([]byte("2"), diff...),
+		},
+		DataColumns: &binlogdatapb.RowChange_Bitmap{
+			Count: 2,
+			Cols:  []byte{0x03},
+		},
+		JsonPartialValues: &binlogdatapb.RowChange_Bitmap{
+			Count: 1,
+			Cols:  []byte{0x01},
+		},
+	}
+
+	var executed []string
+	_, err := tp.applyChange(rowChange, func(sql string) (*sqltypes.Result, error) {
+		executed = append(executed, sql)
+		return &sqltypes.Result{RowsAffected: 1}, nil
+	})
+	require.ErrorContains(t, err, "vreplication: row JSON payload")
+	require.Empty(t, executed)
+}
+
+func TestApplyChangeChecksJSONSizeBeforeMarshalling(t *testing.T) {
+	raw := []byte(`{"big":"` + strings.Repeat("x", 64))
+	tp := &TablePlan{
+		TargetName: "t",
+		Insert: sqlparser.BuildParsedQuery("insert into t(j) values (%a)",
+			":a_j",
+		),
+		Fields: []*querypb.Field{
+			{Name: "j", Type: querypb.Type_JSON},
+		},
+		FieldsToSkip:   map[string]bool{},
+		WorkflowConfig: &vttablet.VReplicationConfig{MaxRowJSONBytes: 16},
+	}
+	rowChange := &binlogdatapb.RowChange{
+		After: &querypb.Row{
+			Lengths: []int64{int64(len(raw))},
+			Values:  raw,
+		},
+	}
+
+	_, err := tp.applyChange(rowChange, func(sql string) (*sqltypes.Result, error) {
+		require.Failf(t, "executor should not be called", "unexpected SQL: %s", sql)
+		return nil, nil
+	})
+	require.ErrorContains(t, err, "vreplication: row JSON payload")
+	require.ErrorContains(t, err, "largest_json_column=j")
+}
+
+func TestApplyChangeFailsFastForLargeExistingJSONWithTinyPartialUpdate(t *testing.T) {
+	beforeJSON := []byte(`{"big":"` + strings.Repeat("x", 1<<20) + `"}`)
+	diff := []byte(`JSON_INSERT(%s, _utf8mb4'$.small', CAST(1 as JSON))`)
+	idCol := &colExpr{
+		colName: sqlparser.NewIdentifierCI("id"),
+		colType: querypb.Type_INT64,
+		expr: &sqlparser.ColName{
+			Name: sqlparser.NewIdentifierCI("id"),
+		},
+		references: map[string]bool{"id": true},
+		isPK:       true,
+	}
+	jsonCol := &colExpr{
+		colName: sqlparser.NewIdentifierCI("j"),
+		colType: querypb.Type_JSON,
+		expr: &sqlparser.ColName{
+			Name: sqlparser.NewIdentifierCI("j"),
+		},
+		references: map[string]bool{"j": true},
+	}
+	stats := binlogplayer.NewStats()
+	tp := &TablePlan{
+		TargetName: "t",
+		Fields: []*querypb.Field{
+			{Name: "id", Type: querypb.Type_INT64},
+			{Name: "j", Type: querypb.Type_JSON},
+		},
+		FieldsToSkip:   map[string]bool{},
+		PKReferences:   []string{"id"},
+		Stats:          stats,
+		PartialUpdates: map[string]*sqlparser.ParsedQuery{},
+		TablePlanBuilder: &tablePlanBuilder{
+			name:     sqlparser.NewIdentifierCS("t"),
+			colExprs: []*colExpr{idCol, jsonCol},
+			pkCols:   []*colExpr{idCol},
+			stats:    stats,
+		},
+		WorkflowConfig: &vttablet.VReplicationConfig{MaxRowJSONBytes: int64(len(diff) + 1)},
+	}
+	rowChange := &binlogdatapb.RowChange{
+		Before: sqltypes.RowToProto3([]sqltypes.Value{
+			sqltypes.NewInt64(1),
+			sqltypes.MakeTrusted(querypb.Type_JSON, beforeJSON),
+		}),
+		After: sqltypes.RowToProto3([]sqltypes.Value{
+			sqltypes.NewInt64(1),
+			sqltypes.MakeTrusted(querypb.Type_JSON, diff),
+		}),
+		DataColumns: &binlogdatapb.RowChange_Bitmap{
+			Count: 2,
+			Cols:  []byte{0x03},
+		},
+		JsonPartialValues: &binlogdatapb.RowChange_Bitmap{
+			Count: 1,
+			Cols:  []byte{0x01},
+		},
+	}
+
+	_, err := tp.applyChange(rowChange, func(sql string) (*sqltypes.Result, error) {
+		require.Failf(t, "executor should not be called", "unexpected SQL: %s", sql)
+		return nil, nil
+	})
+	require.ErrorContains(t, err, "vreplication: row JSON payload")
+	require.ErrorContains(t, err, "largest_json_column=j")
+}
+
+func BenchmarkAppendFromRowLargeJSON(b *testing.B) {
+	raw := []byte(`[` + strings.Repeat(`12345678,`, 150000) + `0]`)
+	tp := &TablePlan{
+		BulkInsertValues: sqlparser.BuildParsedQuery("(%a)",
+			":c1",
+		),
+		Fields: []*querypb.Field{
+			{Name: "c1", Type: querypb.Type_JSON},
+		},
+		FieldsToSkip: map[string]bool{},
+	}
+	row := sqltypes.RowToProto3([]sqltypes.Value{
+		sqltypes.MakeTrusted(querypb.Type_JSON, raw),
+	})
+
+	buf := &bytes2.Buffer{}
+	b.ReportAllocs()
+	b.SetBytes(int64(len(raw)))
+	for i := 0; i < b.N; i++ {
+		buf.Reset()
+		if err := tp.appendFromRow(buf, row); err != nil {
+			b.Fatal(err)
+		}
+		if buf.Len() == 0 {
+			b.Fatal("appendFromRow returned empty SQL")
+		}
+	}
+}
+=======
+
+func TestMarshalJSONForSQL(t *testing.T) {
+	testCases := []struct {
+		name  string
+		input string
+	}{
+		{
+			name:  "small object",
+			input: `{"key": "value"}`,
+		},
+		{
+			name:  "small array",
+			input: `[1, 2, 3]`,
+		},
+		{
+			name:  "large value uses streaming path",
+			input: `[` + strings.Repeat(`"test",`, 200000) + `"end"]`,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := vjson.MarshalSQLValue([]byte(tc.input))
+			require.NoError(t, err)
+
+			sql := result.RawStr()
+			// Both tree and streaming paths produce JSON_ARRAY/JSON_OBJECT format.
+			assert.True(t, strings.HasPrefix(sql, "JSON_ARRAY(") || strings.HasPrefix(sql, "JSON_OBJECT("),
+				"expected JSON_ARRAY or JSON_OBJECT prefix, got: %.80s...", sql)
+		})
+	}
+}
+
+func TestMarshalJSONForSQLCorrectness(t *testing.T) {
+	testCases := []struct {
+		name     string
+		input    string
+		contains string
+	}{
+		{name: "object", input: `{"key": "value", "num": 42}`, contains: "JSON_OBJECT("},
+		{name: "array of ints", input: `[1, 2, 3, 930701976723823]`, contains: "JSON_ARRAY("},
+		{name: "nested", input: `{"a": [1, {"b": true}], "c": null}`, contains: "JSON_OBJECT("},
+		{name: "special chars", input: `{"bs": "back\\slash", "q": "it's a \"test\""}`, contains: "JSON_OBJECT("},
+		{name: "unicode", input: `{"emoji": "hello \u0041"}`, contains: "JSON_OBJECT("},
+		{name: "empty object", input: `{}`, contains: "JSON_OBJECT()"},
+		{name: "empty array", input: `[]`, contains: "JSON_ARRAY()"},
+		{name: "boolean", input: `true`, contains: "true"},
+		{name: "null", input: `null`, contains: "null"},
+		{name: "number", input: `42`, contains: "42"},
+		{name: "string", input: `"hello world"`, contains: "hello world"},
+		{name: "large integer (original bug #8686)", input: `{"keywordSourceId": 930701976723823}`, contains: "930701976723823"},
+		{name: "control escapes", input: `{"cr": "a\rb", "newline": "a\nb", "tab": "a\tb"}`, contains: "JSON_OBJECT("},
+		{name: "solidus escape", input: `{"path": "a\/b"}`, contains: "JSON_OBJECT("},
+		{name: "surrogate pair", input: `{"emoji": "\uD83D\uDE00"}`, contains: "JSON_OBJECT("},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := vjson.MarshalSQLValue([]byte(tc.input))
+			require.NoError(t, err)
+			assert.Contains(t, result.RawStr(), tc.contains)
+		})
+	}
+
+	// Verify the specific bug from issue #8686: large integers must not
+	// be converted to scientific notation.
+	t.Run("large integer preserved", func(t *testing.T) {
+		raw := []byte(`{"keywordSourceId": 930701976723823}`)
+		result, err := vjson.MarshalSQLValue(raw)
+		require.NoError(t, err)
+		assert.Contains(t, result.RawStr(), "930701976723823")
+		assert.NotContains(t, result.RawStr(), "e+")
+	})
+}
+
+func TestAppendFromRowLargeJSON(t *testing.T) {
+	largeJSON := `[` + strings.Repeat(`12345678,`, 150000) + `0]`
+
+	tp := &TablePlan{
+		BulkInsertValues: sqlparser.BuildParsedQuery("(%a)",
+			":c1",
+		),
+		Fields: []*querypb.Field{
+			{Name: "c1", Type: querypb.Type_JSON},
+		},
+		FieldsToSkip: map[string]bool{},
+	}
+
+	row := sqltypes.RowToProto3([]sqltypes.Value{
+		sqltypes.MakeTrusted(querypb.Type_JSON, []byte(largeJSON)),
+	})
+
+	buf := &bytes2.Buffer{}
+	err := tp.appendFromRow(buf, row)
+	require.NoError(t, err)
+	result := buf.String()
+	// The streaming path produces JSON_ARRAY format, same as the tree encoding.
+	assert.Contains(t, result, "JSON_ARRAY(")
+}
+
+func TestAppendFromRowSmallJSON(t *testing.T) {
+	// Verify that small JSON values use the tree encoding (JSON_OBJECT/JSON_ARRAY).
+	tp := &TablePlan{
+		BulkInsertValues: sqlparser.BuildParsedQuery("(%a)",
+			":c1",
+		),
+		Fields: []*querypb.Field{
+			{Name: "c1", Type: querypb.Type_JSON},
+		},
+		FieldsToSkip: map[string]bool{},
+	}
+
+	row := sqltypes.RowToProto3([]sqltypes.Value{
+		sqltypes.MakeTrusted(querypb.Type_JSON, []byte(`{"key": "value"}`)),
+	})
+
+	buf := &bytes2.Buffer{}
+	err := tp.appendFromRow(buf, row)
+	require.NoError(t, err)
+	result := buf.String()
+	assert.Contains(t, result, "JSON_OBJECT(")
+}
+
+func BenchmarkMarshalJSONForSQL(b *testing.B) {
+	raw := []byte(`[` + strings.Repeat(`12345678,`, 150000) + `0]`)
+	b.ReportAllocs()
+	b.SetBytes(int64(len(raw)))
+	for i := 0; i < b.N; i++ {
+		result, err := vjson.MarshalSQLValue(raw)
+		if err != nil {
+			b.Fatal(err)
+		}
+		if len(result.Raw()) == 0 {
+			b.Fatal("marshalJSONForSQL returned empty SQL")
+		}
+	}
+}
+
+func TestCheckJSONRowSize(t *testing.T) {
+	newTablePlan := func(fields []*querypb.Field) *TablePlan {
+		return &TablePlan{
+			TargetName: "mytable",
+			Fields:     fields,
+		}
+	}
+
+	jsonField := func(name string) *querypb.Field {
+		return &querypb.Field{Name: name, Type: querypb.Type_JSON}
+	}
+	intField := func(name string) *querypb.Field {
+		return &querypb.Field{Name: name, Type: querypb.Type_INT64}
+	}
+	// makeRow builds a *querypb.Row from per-column byte slices. A nil slice
+	// encodes a SQL NULL (Lengths[i] = -1).
+	makeRow := func(cols ...[]byte) *querypb.Row {
+		row := &querypb.Row{}
+		for _, c := range cols {
+			if c == nil {
+				row.Lengths = append(row.Lengths, -1)
+				continue
+			}
+			row.Lengths = append(row.Lengths, int64(len(c)))
+			row.Values = append(row.Values, c...)
+		}
+		return row
+	}
+
+	t.Run("disabled when limit is zero", func(t *testing.T) {
+		tp := newTablePlan([]*querypb.Field{jsonField("j")})
+		row := makeRow([]byte(`{"key":"` + strings.Repeat("x", 1_000_000) + `"}`))
+		require.NoError(t, tp.checkJSONRowSize(row, 0))
+	})
+
+	t.Run("disabled when limit is negative", func(t *testing.T) {
+		tp := newTablePlan([]*querypb.Field{jsonField("j")})
+		row := makeRow([]byte(`{"key":"` + strings.Repeat("x", 1_000_000) + `"}`))
+		require.NoError(t, tp.checkJSONRowSize(row, -1))
+	})
+
+	t.Run("nil row is a no-op", func(t *testing.T) {
+		tp := newTablePlan([]*querypb.Field{jsonField("j")})
+		require.NoError(t, tp.checkJSONRowSize(nil, 100))
+	})
+
+	t.Run("no JSON columns is a no-op", func(t *testing.T) {
+		tp := newTablePlan([]*querypb.Field{intField("id")})
+		row := makeRow([]byte("42"))
+		require.NoError(t, tp.checkJSONRowSize(row, 100))
+	})
+
+	t.Run("empty row is a no-op", func(t *testing.T) {
+		tp := newTablePlan([]*querypb.Field{jsonField("j")})
+		require.NoError(t, tp.checkJSONRowSize(makeRow(), 100))
+	})
+
+	t.Run("NULL JSON column is a no-op", func(t *testing.T) {
+		tp := newTablePlan([]*querypb.Field{jsonField("j")})
+		require.NoError(t, tp.checkJSONRowSize(makeRow(nil), 10))
+	})
+
+	t.Run("under limit passes", func(t *testing.T) {
+		tp := newTablePlan([]*querypb.Field{jsonField("j")})
+		row := makeRow([]byte(`{"k":"v"}`))
+		require.NoError(t, tp.checkJSONRowSize(row, 1000))
+	})
+
+	t.Run("exactly at limit passes", func(t *testing.T) {
+		payload := []byte(`{"k":"v"}`)
+		tp := newTablePlan([]*querypb.Field{jsonField("j")})
+		row := makeRow(payload)
+		require.NoError(t, tp.checkJSONRowSize(row, int64(len(payload))))
+	})
+
+	t.Run("over limit returns error", func(t *testing.T) {
+		tp := newTablePlan([]*querypb.Field{jsonField("j")})
+		row := makeRow([]byte(`{"key":"value"}`))
+		err := tp.checkJSONRowSize(row, 5)
+		require.ErrorContains(t, err, "vreplication: row JSON payload")
+		require.ErrorContains(t, err, "vreplication-max-row-json-bytes=5")
+		require.ErrorContains(t, err, "table=mytable")
+		require.ErrorContains(t, err, "largest_json_column=j")
+	})
+
+	t.Run("multi-column sum triggers error", func(t *testing.T) {
+		tp := newTablePlan([]*querypb.Field{jsonField("j1"), jsonField("j2")})
+		row := makeRow([]byte(`{"a":"bb"}`), []byte(`{"c":"dd"}`))
+		// each is ~10 bytes; limit 15 should fail on their sum
+		err := tp.checkJSONRowSize(row, 15)
+		require.ErrorContains(t, err, "vreplication: row JSON payload")
+	})
+
+	t.Run("multi-column under limit passes", func(t *testing.T) {
+		tp := newTablePlan([]*querypb.Field{jsonField("j1"), jsonField("j2")})
+		row := makeRow([]byte(`{"a":"b"}`), []byte(`{"c":"d"}`))
+		require.NoError(t, tp.checkJSONRowSize(row, 1000))
+	})
+
+	t.Run("non-JSON columns not counted", func(t *testing.T) {
+		tp := newTablePlan([]*querypb.Field{intField("id"), jsonField("j"), intField("ts")})
+		// Only j (9 bytes) counted; id and ts are ints.
+		row := makeRow([]byte("1"), []byte(`{"k":"v"}`), []byte("99"))
+		require.NoError(t, tp.checkJSONRowSize(row, 10))
+		err := tp.checkJSONRowSize(row, 8)
+		require.ErrorContains(t, err, "vreplication: row JSON payload")
+	})
+}
+
+// TestValidateRowImage covers every malformed row shape that validateRowImage
+// rejects with a terminal error, and the well-formed shapes it must accept:
+// -1 for an omitted value and 0 for an empty one.
+func TestValidateRowImage(t *testing.T) {
+	tp := &TablePlan{
+		TargetName: "t",
+		Fields: []*querypb.Field{
+			{Name: "id", Type: querypb.Type_INT64},
+			{Name: "v", Type: querypb.Type_VARCHAR},
+		},
+	}
+
+	testCases := []struct {
+		name    string
+		row     *querypb.Row
+		wantErr string
+	}{{
+		name: "well-formed row",
+		row:  sqltypes.RowToProto3([]sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewVarChar("a")}),
+	}, {
+		name: "well-formed row with an omitted and an empty value",
+		row:  &querypb.Row{Lengths: []int64{-1, 0}},
+	}, {
+		name:    "fewer values than fields",
+		row:     sqltypes.RowToProto3([]sqltypes.Value{sqltypes.NewInt64(1)}),
+		wantErr: "row for table t is malformed (1 values, expected 2)",
+	}, {
+		name:    "more values than fields",
+		row:     sqltypes.RowToProto3([]sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewVarChar("a"), sqltypes.NewVarChar("extra")}),
+		wantErr: "row for table t is malformed (3 values, expected 2)",
+	}, {
+		// Only -1 denotes an omitted value. The readers treat any negative
+		// length as NULL, so a corrupted PK length would have produced
+		// "where id in (null)" and silently left the target row in place.
+		name:    "negative length other than -1",
+		row:     &querypb.Row{Lengths: []int64{-2, 1}, Values: []byte("a")},
+		wantErr: "row for table t is malformed (invalid length -2 at column 0)",
+	}, {
+		// A Values buffer shorter than the declared lengths used to make
+		// MakeRowTrusted slice out of range.
+		name:    "Values buffer shorter than the lengths",
+		row:     &querypb.Row{Lengths: []int64{1, 3}, Values: []byte("1a")},
+		wantErr: "row for table t is malformed (length 3 at column 1 exceeds the 1 bytes remaining)",
+	}, {
+		// Two lengths that would overflow an int64 sum must be caught by the
+		// per-column check against the remaining buffer, not slip through a
+		// wrapped total.
+		name:    "lengths that overflow when summed",
+		row:     &querypb.Row{Lengths: []int64{math.MaxInt64, math.MaxInt64}, Values: []byte("1")},
+		wantErr: "row for table t is malformed (length 9223372036854775807 at column 0 exceeds the 1 bytes remaining)",
+	}, {
+		// Values must be exactly the concatenation of the declared lengths. A
+		// length that under-declares a value leaves trailing bytes and would
+		// have made MakeRowTrusted return shifted, truncated values.
+		name:    "trailing bytes after the declared lengths",
+		row:     &querypb.Row{Lengths: []int64{1, 1}, Values: []byte("1ab")},
+		wantErr: "row for table t is malformed (1 trailing bytes after the declared lengths)",
+	}}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tp.validateRowImage(tc.row, "row")
+			if tc.wantErr == "" {
+				require.NoError(t, err)
+				return
+			}
+			require.ErrorContains(t, err, tc.wantErr)
+			assert.True(t, isUnrecoverableError(err), "malformed row image must be terminal")
+		})
+	}
+}
+
+// TestApplyChangeMalformedRowImages confirms that the per-change apply path
+// validates both the Before and the After image before MakeRowTrusted indexes
+// them, so a short image fails with a terminal error instead of a panic.
+// TestValidateRowImage covers the individual malformed shapes.
+func TestApplyChangeMalformedRowImages(t *testing.T) {
+	newTablePlan := func() *TablePlan {
+		return &TablePlan{
+			TargetName: "t",
+			Insert:     sqlparser.BuildParsedQuery("insert into t(id, v) values (%a, %a)", ":a_id", ":a_v"),
+			Delete:     sqlparser.BuildParsedQuery("delete from t where id=%a", ":b_id"),
+			Fields: []*querypb.Field{
+				{Name: "id", Type: querypb.Type_INT64},
+				{Name: "v", Type: querypb.Type_VARCHAR},
+			},
+			PKReferences:   []string{"id"},
+			WorkflowConfig: &vttablet.VReplicationConfig{},
+		}
+	}
+	shortRow := sqltypes.RowToProto3([]sqltypes.Value{sqltypes.NewInt64(1)})
+
+	testCases := []struct {
+		name      string
+		rowChange *binlogdatapb.RowChange
+		wantErr   string
+	}{{
+		name:      "short Before image",
+		rowChange: &binlogdatapb.RowChange{Before: shortRow},
+		wantErr:   "Before image of change for table t is malformed (1 values, expected 2)",
+	}, {
+		name:      "short After image",
+		rowChange: &binlogdatapb.RowChange{After: shortRow},
+		wantErr:   "After image of change for table t is malformed (1 values, expected 2)",
+	}}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var executed []string
+			_, err := newTablePlan().applyChange(tc.rowChange, func(sql string) (*sqltypes.Result, error) {
+				executed = append(executed, sql)
+				return &sqltypes.Result{RowsAffected: 1}, nil
+			})
+			require.ErrorContains(t, err, tc.wantErr)
+			assert.True(t, isUnrecoverableError(err), "malformed row image must be terminal")
+			require.Empty(t, executed)
+		})
+	}
+}
+
+func TestApplyChangeChecksEffectiveJSONSizeForPartialDeleteInsert(t *testing.T) {
+	beforeJSON := []byte(`{"big":"` + strings.Repeat("x", 64) + `"}`)
+	tp := &TablePlan{
+		TargetName: "t",
+		Insert: sqlparser.BuildParsedQuery("insert into t(id, j) values (%a, %a)",
+			":a_id", ":a_j",
+		),
+		Delete: sqlparser.BuildParsedQuery("delete from t where id=%a",
+			":b_id",
+		),
+		Fields: []*querypb.Field{
+			{Name: "id", Type: querypb.Type_INT64},
+			{Name: "j", Type: querypb.Type_JSON},
+		},
+		PKReferences:   []string{"id"},
+		WorkflowConfig: &vttablet.VReplicationConfig{MaxRowJSONBytes: 16},
+	}
+	rowChange := &binlogdatapb.RowChange{
+		Before: &querypb.Row{
+			Lengths: []int64{1, int64(len(beforeJSON))},
+			Values:  append([]byte("1"), beforeJSON...),
+		},
+		After: &querypb.Row{
+			Lengths: []int64{1, 0},
+			Values:  []byte("2"),
+		},
+		DataColumns: &binlogdatapb.RowChange_Bitmap{
+			Count: 2,
+			Cols:  []byte{0x03},
+		},
+		JsonPartialValues: &binlogdatapb.RowChange_Bitmap{
+			Count: 1,
+			Cols:  []byte{0x01},
+		},
+	}
+
+	var executed []string
+	_, err := tp.applyChange(rowChange, func(sql string) (*sqltypes.Result, error) {
+		executed = append(executed, sql)
+		return &sqltypes.Result{RowsAffected: 1}, nil
+	})
+	require.ErrorContains(t, err, "vreplication: row JSON payload")
+	require.Empty(t, executed)
+}
+
+func TestApplyChangeIgnoresSkippedJSONColumnsWhenCheckingUpdateLimit(t *testing.T) {
+	skippedJSON := []byte(`{"big":"` + strings.Repeat("x", 64) + `"}`)
+	tp := &TablePlan{
+		TargetName: "t",
+		Update: sqlparser.BuildParsedQuery("update t set v=%a where id=%a",
+			":a_v", ":b_id",
+		),
+		Fields: []*querypb.Field{
+			{Name: "id", Type: querypb.Type_INT64},
+			{Name: "v", Type: querypb.Type_VARCHAR},
+			{Name: "j_generated", Type: querypb.Type_JSON},
+		},
+		FieldsToSkip: map[string]bool{
+			"j_generated": true,
+		},
+		PKReferences:   []string{"id"},
+		WorkflowConfig: &vttablet.VReplicationConfig{MaxRowJSONBytes: 16},
+	}
+	rowChange := &binlogdatapb.RowChange{
+		Before: &querypb.Row{
+			Lengths: []int64{1, 3, int64(len(skippedJSON))},
+			Values:  append([]byte("1old"), skippedJSON...),
+		},
+		After: &querypb.Row{
+			Lengths: []int64{1, 3, int64(len(skippedJSON))},
+			Values:  append([]byte("1new"), skippedJSON...),
+		},
+	}
+
+	var executed []string
+	_, err := tp.applyChange(rowChange, func(sql string) (*sqltypes.Result, error) {
+		executed = append(executed, sql)
+		return &sqltypes.Result{RowsAffected: 1}, nil
+	})
+	require.NoError(t, err)
+	require.Len(t, executed, 1)
+	assert.Equal(t, "update t set v='new' where id=1", executed[0])
+}
+
+func TestApplyChangeSkipsMarshallingGeneratedJSONColumns(t *testing.T) {
+	// The skipped column's bytes are intentionally not valid JSON:
+	// vjson.MarshalSQLValue errors on this input, so if bindAfterJSONFieldVals
+	// wastefully marshals a FieldsToSkip column, applyChange returns that
+	// error. A passing test proves we bypass the marshal for skipped fields.
+	skippedInvalid := []byte(`not-json`)
+	validJSON := []byte(`{"ok":true}`)
+	tp := &TablePlan{
+		TargetName: "t",
+		Insert: sqlparser.BuildParsedQuery("insert into t(id, j) values (%a, %a)",
+			":a_id", ":a_j",
+		),
+		Fields: []*querypb.Field{
+			{Name: "id", Type: querypb.Type_INT64},
+			{Name: "j_gen", Type: querypb.Type_JSON},
+			{Name: "j", Type: querypb.Type_JSON},
+		},
+		FieldsToSkip: map[string]bool{
+			"j_gen": true,
+		},
+		PKReferences:   []string{"id"},
+		WorkflowConfig: &vttablet.VReplicationConfig{MaxRowJSONBytes: 0},
+	}
+	rowChange := &binlogdatapb.RowChange{
+		After: &querypb.Row{
+			Lengths: []int64{1, int64(len(skippedInvalid)), int64(len(validJSON))},
+			Values:  append(append([]byte("1"), skippedInvalid...), validJSON...),
+		},
+	}
+
+	var executed []string
+	_, err := tp.applyChange(rowChange, func(sql string) (*sqltypes.Result, error) {
+		executed = append(executed, sql)
+		return &sqltypes.Result{RowsAffected: 1}, nil
+	})
+	require.NoError(t, err)
+	require.Len(t, executed, 1)
+	assert.Contains(t, executed[0], "JSON_OBJECT(")
+	assert.NotContains(t, executed[0], "not-json")
+}
+
+func TestApplyChangePartialRebuildSkipsGeneratedJSONColumns(t *testing.T) {
+	// Exercises the DELETE+INSERT partial-rebuild loop. The skipped generated
+	// JSON column has its partial bit set AND an empty AFTER diff, which
+	// routes into the "marshal the BEFORE value" branch. The BEFORE bytes
+	// are intentionally not valid JSON, so vjson.MarshalSQLValue errors if
+	// called. A passing test proves the rebuild loop skips the column
+	// instead of wastefully marshalling it — and keeps jsonIndex aligned
+	// so the non-skipped JSON column's partial bit is read correctly.
+	skippedInvalidBefore := []byte(`not-json`)
+	validBeforeJSON := []byte(`{"k":"before"}`)
+	validAfterJSON := []byte(`{"k":"after"}`)
+
+	beforeVals := append([]byte("1"), skippedInvalidBefore...)
+	beforeVals = append(beforeVals, validBeforeJSON...)
+	afterVals := append([]byte("2"), validAfterJSON...)
+
+	tp := &TablePlan{
+		TargetName: "t",
+		Insert: sqlparser.BuildParsedQuery("insert into t(id, j) values (%a, %a)",
+			":a_id", ":a_j",
+		),
+		Delete: sqlparser.BuildParsedQuery("delete from t where id=%a",
+			":b_id",
+		),
+		Fields: []*querypb.Field{
+			{Name: "id", Type: querypb.Type_INT64},
+			{Name: "j_gen", Type: querypb.Type_JSON},
+			{Name: "j", Type: querypb.Type_JSON},
+		},
+		FieldsToSkip: map[string]bool{
+			"j_gen": true,
+		},
+		PKReferences:   []string{"id"},
+		WorkflowConfig: &vttablet.VReplicationConfig{MaxRowJSONBytes: 0},
+	}
+	rowChange := &binlogdatapb.RowChange{
+		Before: &querypb.Row{
+			Lengths: []int64{1, int64(len(skippedInvalidBefore)), int64(len(validBeforeJSON))},
+			Values:  beforeVals,
+		},
+		After: &querypb.Row{
+			// j_gen has an empty AFTER diff ("column not updated").
+			Lengths: []int64{1, 0, int64(len(validAfterJSON))},
+			Values:  afterVals,
+		},
+		DataColumns: &binlogdatapb.RowChange_Bitmap{
+			Count: 3,
+			Cols:  []byte{0x07},
+		},
+		JsonPartialValues: &binlogdatapb.RowChange_Bitmap{
+			Count: 2,
+			// j_gen is partial (bit 0); j is not (bit 1 unset).
+			Cols: []byte{0x01},
+		},
+	}
+
+	var executed []string
+	_, err := tp.applyChange(rowChange, func(sql string) (*sqltypes.Result, error) {
+		executed = append(executed, sql)
+		return &sqltypes.Result{RowsAffected: 1}, nil
+	})
+	require.NoError(t, err)
+	require.Len(t, executed, 2)
+	assert.Equal(t, "delete from t where id=1", executed[0])
+	assert.Contains(t, executed[1], "insert into t(id, j) values (2,")
+	assert.Contains(t, executed[1], "JSON_OBJECT(")
+	assert.NotContains(t, executed[1], "not-json")
+}
+
+func TestApplyChangeChecksPartialJSONDiffSizeForDeleteInsert(t *testing.T) {
+	beforeJSON := []byte(`{"small":"x"}`)
+	diff := []byte(`JSON_INSERT(%s, _utf8mb4'$.big', CAST(JSON_QUOTE(_utf8mb4'` + strings.Repeat("x", 64) + `') as JSON))`)
+	tp := &TablePlan{
+		TargetName: "t",
+		Insert: sqlparser.BuildParsedQuery("insert into t(id, j) values (%a, %a)",
+			":a_id", ":a_j",
+		),
+		Delete: sqlparser.BuildParsedQuery("delete from t where id=%a",
+			":b_id",
+		),
+		Fields: []*querypb.Field{
+			{Name: "id", Type: querypb.Type_INT64},
+			{Name: "j", Type: querypb.Type_JSON},
+		},
+		PKReferences:   []string{"id"},
+		WorkflowConfig: &vttablet.VReplicationConfig{MaxRowJSONBytes: 16},
+	}
+	rowChange := &binlogdatapb.RowChange{
+		Before: &querypb.Row{
+			Lengths: []int64{1, int64(len(beforeJSON))},
+			Values:  append([]byte("1"), beforeJSON...),
+		},
+		After: &querypb.Row{
+			Lengths: []int64{1, int64(len(diff))},
+			Values:  append([]byte("2"), diff...),
+		},
+		DataColumns: &binlogdatapb.RowChange_Bitmap{
+			Count: 2,
+			Cols:  []byte{0x03},
+		},
+		JsonPartialValues: &binlogdatapb.RowChange_Bitmap{
+			Count: 1,
+			Cols:  []byte{0x01},
+		},
+	}
+
+	var executed []string
+	_, err := tp.applyChange(rowChange, func(sql string) (*sqltypes.Result, error) {
+		executed = append(executed, sql)
+		return &sqltypes.Result{RowsAffected: 1}, nil
+	})
+	require.ErrorContains(t, err, "vreplication: row JSON payload")
+	require.Empty(t, executed)
+}
+
+func TestApplyChangeChecksJSONSizeBeforeMarshalling(t *testing.T) {
+	raw := []byte(`{"big":"` + strings.Repeat("x", 64))
+	tp := &TablePlan{
+		TargetName: "t",
+		Insert: sqlparser.BuildParsedQuery("insert into t(j) values (%a)",
+			":a_j",
+		),
+		Fields: []*querypb.Field{
+			{Name: "j", Type: querypb.Type_JSON},
+		},
+		FieldsToSkip:   map[string]bool{},
+		WorkflowConfig: &vttablet.VReplicationConfig{MaxRowJSONBytes: 16},
+	}
+	rowChange := &binlogdatapb.RowChange{
+		After: &querypb.Row{
+			Lengths: []int64{int64(len(raw))},
+			Values:  raw,
+		},
+	}
+
+	_, err := tp.applyChange(rowChange, func(sql string) (*sqltypes.Result, error) {
+		require.Failf(t, "executor should not be called", "unexpected SQL: %s", sql)
+		return nil, nil
+	})
+	require.ErrorContains(t, err, "vreplication: row JSON payload")
+	require.ErrorContains(t, err, "largest_json_column=j")
+}
+
+func TestApplyChangeFailsFastForLargeExistingJSONWithTinyPartialUpdate(t *testing.T) {
+	beforeJSON := []byte(`{"big":"` + strings.Repeat("x", 1<<20) + `"}`)
+	diff := []byte(`JSON_INSERT(%s, _utf8mb4'$.small', CAST(1 as JSON))`)
+	idCol := &colExpr{
+		colName: sqlparser.NewIdentifierCI("id"),
+		colType: querypb.Type_INT64,
+		expr: &sqlparser.ColName{
+			Name: sqlparser.NewIdentifierCI("id"),
+		},
+		references: map[string]bool{"id": true},
+		isPK:       true,
+	}
+	jsonCol := &colExpr{
+		colName: sqlparser.NewIdentifierCI("j"),
+		colType: querypb.Type_JSON,
+		expr: &sqlparser.ColName{
+			Name: sqlparser.NewIdentifierCI("j"),
+		},
+		references: map[string]bool{"j": true},
+	}
+	stats := binlogplayer.NewStats()
+	tp := &TablePlan{
+		TargetName: "t",
+		Fields: []*querypb.Field{
+			{Name: "id", Type: querypb.Type_INT64},
+			{Name: "j", Type: querypb.Type_JSON},
+		},
+		FieldsToSkip:   map[string]bool{},
+		PKReferences:   []string{"id"},
+		Stats:          stats,
+		PartialUpdates: map[string]*sqlparser.ParsedQuery{},
+		TablePlanBuilder: &tablePlanBuilder{
+			name:     sqlparser.NewIdentifierCS("t"),
+			colExprs: []*colExpr{idCol, jsonCol},
+			pkCols:   []*colExpr{idCol},
+			stats:    stats,
+		},
+		WorkflowConfig: &vttablet.VReplicationConfig{MaxRowJSONBytes: int64(len(diff) + 1)},
+	}
+	rowChange := &binlogdatapb.RowChange{
+		Before: sqltypes.RowToProto3([]sqltypes.Value{
+			sqltypes.NewInt64(1),
+			sqltypes.MakeTrusted(querypb.Type_JSON, beforeJSON),
+		}),
+		After: sqltypes.RowToProto3([]sqltypes.Value{
+			sqltypes.NewInt64(1),
+			sqltypes.MakeTrusted(querypb.Type_JSON, diff),
+		}),
+		DataColumns: &binlogdatapb.RowChange_Bitmap{
+			Count: 2,
+			Cols:  []byte{0x03},
+		},
+		JsonPartialValues: &binlogdatapb.RowChange_Bitmap{
+			Count: 1,
+			Cols:  []byte{0x01},
+		},
+	}
+
+	_, err := tp.applyChange(rowChange, func(sql string) (*sqltypes.Result, error) {
+		require.Failf(t, "executor should not be called", "unexpected SQL: %s", sql)
+		return nil, nil
+	})
+	require.ErrorContains(t, err, "vreplication: row JSON payload")
+	require.ErrorContains(t, err, "largest_json_column=j")
+}
+
+func BenchmarkAppendFromRowLargeJSON(b *testing.B) {
+	raw := []byte(`[` + strings.Repeat(`12345678,`, 150000) + `0]`)
+	tp := &TablePlan{
+		BulkInsertValues: sqlparser.BuildParsedQuery("(%a)",
+			":c1",
+		),
+		Fields: []*querypb.Field{
+			{Name: "c1", Type: querypb.Type_JSON},
+		},
+		FieldsToSkip: map[string]bool{},
+	}
+	row := sqltypes.RowToProto3([]sqltypes.Value{
+		sqltypes.MakeTrusted(querypb.Type_JSON, raw),
+	})
+
+	buf := &bytes2.Buffer{}
+	b.ReportAllocs()
+	b.SetBytes(int64(len(raw)))
+	for i := 0; i < b.N; i++ {
+		buf.Reset()
+		if err := tp.appendFromRow(buf, row); err != nil {
+			b.Fatal(err)
+		}
+		if buf.Len() == 0 {
+			b.Fatal("appendFromRow returned empty SQL")
+		}
+	}
+}
+>>>>>>> bd122a4f0d (VReplication: validate bulk-delete Before images against the field count (#20976))
