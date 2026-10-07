@@ -245,7 +245,7 @@ func parseSchema(sqlSchema string, opts *Options, parser *sqlparser.Parser) ([]s
 		if sql == "" {
 			break
 		}
-		sql, _ = sqlparser.SplitMarginComments(sql)
+		sql, _ = parser.SplitMarginComments(sql)
 		if sql == "" {
 			continue
 		}

@@ -844,12 +844,12 @@ Clients using gRPC's standard `weighted_round_robin` policy with `enableOobLoadR
 
 #### <a id="sqlparser-margin-comment-split"/>Trailing comment detection and whitespace in the SQL parser</a>
 
-`SplitMarginComments`, which separates the leading and trailing comments from a statement, now finds the trailing comments by scanning the statement forward from the start, tracking string literals, quoted identifiers and comments, rather than backward from the end.
+VTGate and VTTablet separate a query's leading and trailing comments from the statement before they plan it, and query rules match those comments. The comments are now found with the same tokenizer the parser uses, so text in a string literal, a quoted identifier, a line comment or a `/*!...*/` versioned comment is never taken for a margin comment.
 
-Three user-visible consequences:
+User-visible consequences:
 
-- **`\v` and `\f` are now a space between two tokens.** MySQL treats them as spaces, because it uses C `isspace`, and now Vitess does too, so `select 1\vfrom t` and `select 0\f` parse where they were rejected before. This affects all parsing, not only comment splitting.
-- **Characters outside MySQL's space set are no longer removed from a statement.** The splitting trimmed with `unicode.IsSpace`, which accepts a no-break space among others. Such a character now stays in the statement and the parser rejects it, which is what MySQL does — `select 0` followed by a no-break space is `unknown column '0 '` to MySQL. Vitess previously removed the character and ran a statement MySQL refuses.
-- **`StripLeadingComments` trims the same set**, so `Preview` (statement-type detection) and `vtexplain` report on the statement as MySQL reads it.
+- **`\v` and `\f` are now a space between two tokens.** MySQL treats them as spaces, and now Vitess does too, so `select 1\vfrom t` and `select 0\f` parse where they were rejected before. This affects all parsing, not only comment detection.
+- **Characters outside MySQL's space set are no longer removed from a statement.** Vitess trimmed statements with `unicode.IsSpace`, which accepts a no-break space among others. Such a character now stays in the statement and the parser rejects it, which is what MySQL does — `select 0` followed by a no-break space is `unknown column '0 '` to MySQL. Vitess previously removed the character and ran a statement MySQL refuses.
+- **Statement-type detection and `vtexplain` trim the same set**, so they report on the statement as MySQL reads it.
 
-Query rules that match `trailingComment` are affected. When the end of a statement cannot be shown to hold only comments and spaces, the text now stays in the statement instead of being split off, and such a rule no longer matches it. Rules keyed on a comment appended after a `/*!...*/` versioned comment, or after a line comment whose body ends in `--`, do still match, as they did before this change.
+Query rules that match `trailingComment` match only comments that end the statement as the parser reads it. A `*/` at the end of a query that does not close a block comment no longer makes the text before it a trailing comment, so such a rule no longer matches it. A `/*!...*/` versioned comment is always part of the statement. Rules keyed on a comment appended after a versioned comment or after a line comment still match.

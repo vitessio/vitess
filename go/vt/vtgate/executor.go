@@ -1257,7 +1257,7 @@ func (e *Executor) fetchOrCreatePlan(
 		return nil, nil, nil, vterrors.VT13001("vschema not initialized")
 	}
 
-	query, comments := sqlparser.SplitMarginComments(queryString)
+	query, comments := e.env.Parser().SplitMarginComments(queryString)
 	vcursor, _ = e.newVCursor(safeSession, comments, logStats)
 
 	var setVarComment string
