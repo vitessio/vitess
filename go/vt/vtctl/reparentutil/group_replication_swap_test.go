@@ -293,21 +293,23 @@ func TestPlannedReparentGroupReplicationSwapAfterDemote(t *testing.T) {
 }
 
 // TestPlannedReparentGroupReplicationSwapWaitsForNewVoters checks that PRS swaps the demoted primary out only once
-// the voters of the new list hold every transaction it executed: otherwise a bootstrap from them would lose one
-// that only the demoted primary held. It fails without changing the voters when they do not catch up in time,
+// the voters of the new list executed every transaction it executed: otherwise a bootstrap from them would lose
+// one that only the demoted primary executed. A transaction that a voter only received does not count. It fails without changing the voters when they do not catch up in time,
 // and the demotion can be undone.
 func TestPlannedReparentGroupReplicationSwapWaitsForNewVoters(t *testing.T) {
 	c, ts := newSwapShard(t)
 	plan, err := planSwap(t, c, ts, alias101)
 	require.NoError(t, err)
 	c.tablets[aliasP].executed = gtids("1-120")
+	// A voter of the new list only received them: its relay log does not count.
+	c.tablets[alias200].received = gtids("101-120")
 	si, err := ts.GetShard(t.Context(), "ks", "-")
 	require.NoError(t, err)
 	pr := NewPlannedReparenter(ts, c, logutil.NewMemoryLogger())
 
 	reverted, err := pr.swapAfterDemote(lockShard(t, ts), &events.Reparent{ShardInfo: *si}, "ks", "-", plan, c.tabletRecs[aliasP], "MySQL56/"+gtids("1-120"),
 		PlannedReparentOptions{WaitReplicasTimeout: time.Second})
-	require.ErrorContains(t, err, "do not hold every transaction that the demoted primary executed")
+	require.ErrorContains(t, err, "did not execute every transaction that the demoted primary executed")
 	require.ErrorContains(t, err, "they lack "+gtids("101-120"))
 	assert.Equal(t, vtrpcpb.Code_DEADLINE_EXCEEDED, vterrors.Code(err))
 	assert.True(t, reverted, "the voters did not change: the demotion can be undone")

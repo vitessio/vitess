@@ -300,13 +300,14 @@ func swapRevertRefusal(plan *groupSwapPlan, statuses map[string]*fullStatusResul
 	return ""
 }
 
-// waitForNewVotersToHold waits, within the replica wait timeout, until the voters of the plan's new list hold,
-// executed or received, every transaction that the demoted primary executed (demotedPosition), and returns the
-// statuses of the last read. The demoted primary no longer commits, and the new list drops it: a bootstrap of
-// the group from the new list, which needs every voter of it (GroupNotBootstrapped), must not lose an
-// acknowledged transaction that only the demoted primary held (the TLA+ model's prs_swap_noholds). The elect,
-// an asynchronous replica of the demoted primary that PRS caught up before the demotion, usually holds them
-// already; the other voters receive them from the group.
+// waitForNewVotersToHold waits, within the replica wait timeout, until the voters of the plan's new list executed
+// every transaction that the demoted primary executed (demotedPosition), and returns the statuses of the last
+// read. The demoted primary no longer commits, and the new list drops it: a bootstrap of the group from the new
+// list, which needs every voter of it (GroupNotBootstrapped), must not lose an acknowledged transaction that only
+// the demoted primary executed (the TLA+ model's prs_swap_noholds). A transaction that a voter only received does
+// not count: a restart of its mysqld discards its relay log (relay_log_recovery). The elect, an asynchronous
+// replica of the demoted primary that PRS caught up before the demotion, usually executed them already; the other
+// voters apply them as the group delivers them.
 func (pr *PlannedReparenter) waitForNewVotersToHold(ctx context.Context, plan *groupSwapPlan, demotedPosition string, opts PlannedReparentOptions) (map[string]*fullStatusResult, error) {
 	position, err := replication.DecodePosition(demotedPosition)
 	if err != nil {
@@ -319,8 +320,8 @@ func (pr *PlannedReparenter) waitForNewVotersToHold(ctx context.Context, plan *g
 		var held replication.GTIDSet = replication.Mysql56GTIDSet{}
 		for _, voter := range plan.newVoters {
 			if res := statuses[topoproto.TabletAliasString(voter)]; res != nil && res.err == nil {
-				if _, all, err := GroupMemberGTIDSets(res.status); err == nil {
-					held = held.Union(all)
+				if executed, _, err := GroupMemberGTIDSets(res.status); err == nil {
+					held = held.Union(executed)
 				}
 			}
 		}
@@ -330,7 +331,7 @@ func (pr *PlannedReparenter) waitForNewVotersToHold(ctx context.Context, plan *g
 		select {
 		case <-waitCtx.Done():
 			return nil, vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED,
-				"the voters of the new list [%s] do not hold every transaction that the demoted primary executed (%s), within %v: they lack %s",
+				"the voters of the new list [%s] did not execute every transaction that the demoted primary executed (%s) within %v: they lack %s",
 				votersString(plan.newVoters), position.GTIDSet, opts.WaitReplicasTimeout, gtidSetDifference(position.GTIDSet, held))
 		case <-time.After(swapHoldPollInterval):
 		}
