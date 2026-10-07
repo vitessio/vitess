@@ -3348,12 +3348,6 @@ func (node *LockingFunc) Format(buf *TrackedBuffer) {
 func (node *Variable) Format(buf *TrackedBuffer) {
 	switch node.Scope {
 	case VariableScope:
-		if node.Name.IsEmpty() {
-			// MySQL accepts an empty user variable name, which only a quoted
-			// name can spell.
-			buf.literal("@''")
-			return
-		}
 		buf.literal("@")
 	case SessionScope:
 		if node.Name.EqualString(TransactionIsolationStr) || node.Name.EqualString(TransactionReadOnlyStr) {

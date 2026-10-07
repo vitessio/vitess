@@ -4872,7 +4872,7 @@ for_opt:
 user_or_role:
   STRING AT_ID
   {
-    $$ = &UserOrRole{Name: new(string($1)), Host: new(string($2))}
+    $$ = &UserOrRole{Name: new(string($1)), Host: new(string(formatUserOrRoleHost($2)))}
   }
 | STRING
   {
@@ -4888,7 +4888,7 @@ user_or_role:
   }
 | ci_identifier AT_ID
   {
-    $$ = &UserOrRole{Name: new(string($1.String())), Host: new(string($2))}
+    $$ = &UserOrRole{Name: new(string($1.String())), Host: new(string(formatUserOrRoleHost($2)))}
   }
 | ci_identifier
   {

@@ -20137,7 +20137,7 @@ yydefault:
 		var yyLOCAL *UserOrRole
 //line sql.y:4874
 		{
-			yyLOCAL = &UserOrRole{Name: new(string(yyDollar[1].str())), Host: new(string(yyDollar[2].str()))}
+			yyLOCAL = &UserOrRole{Name: new(string(yyDollar[1].str())), Host: new(string(formatUserOrRoleHost(yyDollar[2].str())))}
 		}
 		yyVAL.setuserOrRole(yyLOCAL)
 	case 885:
@@ -20169,7 +20169,7 @@ yydefault:
 		var yyLOCAL *UserOrRole
 //line sql.y:4890
 		{
-			yyLOCAL = &UserOrRole{Name: new(string(yyDollar[1].identifierCI().String())), Host: new(string(yyDollar[2].str()))}
+			yyLOCAL = &UserOrRole{Name: new(string(yyDollar[1].identifierCI().String())), Host: new(string(formatUserOrRoleHost(yyDollar[2].str())))}
 		}
 		yyVAL.setuserOrRole(yyLOCAL)
 	case 889:

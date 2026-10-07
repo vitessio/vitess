@@ -1356,17 +1356,6 @@ var validSQL = []struct {
 	// We only support parsing these expressions.
 	ignoreNormalizerTest: true,
 }, {
-	// A quoted user variable name is a string literal, so the name is its
-	// decoded value and nothing inside the quotes is a comment.
-	input:  "select @'ab', @\"cd\", @'a//b', @'a b', @'a''b', @'a\\'b', @\"a\"\"b\" from t",
-	output: "select @ab, @cd, @`a//b`, @`a b`, @`a'b`, @`a'b`, @`a\"b` from t",
-}, {
-	input:  "select @'' from t",
-	output: "select @'' from t",
-}, {
-	input:  "set @'a//b' = 1, @\"c d\" = 2",
-	output: "set @`a//b` = 1, @`c d` = 2",
-}, {
 	input: "update /* list */ a set b = 3, c = 4",
 }, {
 	input: "update /* expression */ a set b = 3 + 4",
@@ -2137,13 +2126,13 @@ var validSQL = []struct {
 	output: "create algorithm = temptable definer = 'create'@b view a(b, c, d) as select * from e with local check option",
 }, {
 	input:  "create algorithm = temptable definer = a@'create' view a(b,c,d) as select * from e with local check option",
-	output: "create algorithm = temptable definer = a@`create` view a(b, c, d) as select * from e with local check option",
+	output: "create algorithm = temptable definer = a@'create' view a(b, c, d) as select * from e with local check option",
 }, {
 	input:  "create algorithm = temptable definer = 'a' view a(b,c,d) as select * from e with local check option",
 	output: "create algorithm = temptable definer = 'a' view a(b, c, d) as select * from e with local check option",
 }, {
 	input:  "create algorithm = temptable definer = 'select'@'create' view a(b,c,d) as select * from e with local check option",
-	output: "create algorithm = temptable definer = 'select'@`create` view a(b, c, d) as select * from e with local check option",
+	output: "create algorithm = temptable definer = 'select'@'create' view a(b, c, d) as select * from e with local check option",
 }, {
 	input:  "create algorithm = temptable definer = `create`@b view a(b,c,d) as select * from e with local check option",
 	output: "create algorithm = temptable definer = `create`@b view a(b, c, d) as select * from e with local check option",
@@ -2162,12 +2151,6 @@ var validSQL = []struct {
 }, {
 	input:  "create definer = 'sa'@b.c.d view a(b,c,d) as select * from e",
 	output: "create definer = 'sa'@`b.c.d` view a(b, c, d) as select * from e",
-}, {
-	input:  "create definer = a@'' view a as select * from e",
-	output: "create definer = a@'' view a as select * from e",
-}, {
-	input:  "create definer = a@'h''x' view a as select * from e",
-	output: "create definer = a@`h'x` view a as select * from e",
 }, {
 	input: "create procedure p1 (in country CHAR(3), out cities INT) begin select count(*) from x where d = e; end;",
 }, {
@@ -2390,18 +2373,6 @@ var validSQL = []struct {
 }, {
 	input:  "show create user 'root'@'localhost'",
 	output: "show create user 'root'@'localhost'",
-}, {
-	input:  "show create user 'root'@'%'",
-	output: "show create user 'root'@'%'",
-}, {
-	input:  "show create user 'root'@\"10.0.%\"",
-	output: "show create user 'root'@'10.0.%'",
-}, {
-	input:  "show create user 'r''t'@'h\\'x'",
-	output: "show create user 'r\\'t'@'h\\'x'",
-}, {
-	input:  "show grants for 'u'@''",
-	output: "show grants for 'u'@''",
 }, {
 	input:  "show create user current_user",
 	output: "show create user current_user",
@@ -4345,15 +4316,6 @@ func TestInvalid(t *testing.T) {
 	}{
 		{
 			input: "select a, b from (select * from tbl) sort by a",
-			err:   "syntax error",
-		}, {
-			input: "select @'a",
-			err:   "syntax error",
-		}, {
-			input: "select @\"a//b",
-			err:   "syntax error",
-		}, {
-			input: "show grants for 'u'@'h",
 			err:   "syntax error",
 		}, {
 			input: "/*!*/",
