@@ -220,10 +220,9 @@ func TestSplitComments(t *testing.T) {
 		outLeadingComments:  "",
 		outTrailingComments: " /*tag*/",
 	}, {
-		// The scan treats every versioned comment as executable, whichever
-		// version it names. MySQL ignores this one, so Vitess keeps more text in
-		// the query than MySQL will run -- the safe direction. Pinned so the
-		// split does not start depending on the version number.
+		// A versioned comment stays in the query whether or not its version
+		// applies: the parser skips this one, but a backend can be newer than the
+		// version the parser reads comments at.
 		input:               "select 1 /*!99999 union select 2 */ /*tag*/",
 		outSQL:              "select 1 /*!99999 union select 2 */",
 		outLeadingComments:  "",
@@ -238,30 +237,25 @@ func TestSplitComments(t *testing.T) {
 		outLeadingComments:  "",
 		outTrailingComments: " /*rule-tag*/",
 	}, {
-		// The same shape, but with a version MySQL ignores. Reading the text
-		// inside as SQL cannot work here: the literal never closes, so that
-		// reading is a lex error and this input only parses at all because the
-		// comment is skipped, which makes the block at the end a real trailing
-		// comment. The scan falls back to the comment reading for exactly this
-		// case, so a query rule for that comment still sees it.
+		// The same shape, but with a version the parser does not apply. The
+		// tokenizer skips such a comment to its first '*/' and gives quotes in it
+		// no meaning, so the comment ends inside the literal, and the block at the
+		// end is a trailing comment.
 		input:               "select 1 /*!99999 '*/ + 2 /*rule-tag*/",
 		outSQL:              "select 1 /*!99999 '*/ + 2",
 		outLeadingComments:  "",
 		outTrailingComments: " /*rule-tag*/",
 	}, {
-		// The same fallback, with SQL after the '*/' that ends the comment. The
-		// SQL stays in the query. Only the block comment at the end is trailing,
-		// so the fallback finds a comment without moving any SQL out of the part
-		// that gets planned and authorized.
+		// The same, with SQL after the '*/' that ends the skipped comment. The SQL
+		// stays in the query, and only the block comment at the end is trailing.
 		input:               "select 1 /*!99999 '*/ union select 2 /*rule-tag*/",
 		outSQL:              "select 1 /*!99999 '*/ union select 2",
 		outLeadingComments:  "",
 		outTrailingComments: " /*rule-tag*/",
 	}, {
-		// The split reads a versioned comment the way the parser does. At the
-		// parser's version this one does not apply, so it ends at the first '*/',
-		// and the rest, "b' */ /*rule-tag*/", is an unterminated literal. The
-		// parser rejects the statement, so nothing is split off it.
+		// A skipped comment ends at its first '*/', inside the literal here, which
+		// leaves "b' */ /*rule-tag*/" with a literal that never closes. The
+		// tokenizer rejects the input, so nothing is split off it.
 		input:               "select 1 /*!99999 'a*/b' */ /*rule-tag*/",
 		outSQL:              "select 1 /*!99999 'a*/b' */ /*rule-tag*/",
 		outLeadingComments:  "",
@@ -320,20 +314,19 @@ func TestSplitComments(t *testing.T) {
 	}
 }
 
-// TestIsSQLSpaceMatchesTokenizer checks IsSQLSpace against the tokenizer's
-// skipBlank for every byte value.
+// TestMarginCommentRulesMatchTokenizer checks the space rules in this file
+// against the tokenizer for every byte value.
 //
-// SplitMarginComments trims spaces with IsSQLSpace, and the parser reads what
-// stays in the query with skipBlank. The two must agree about which bytes are
-// spaces. If they do not, the trim can remove a byte that MySQL reads as part of
-// the statement.
+// trailingCommentStart splits the query, and then the parser reads only the part
+// that stays in the query. The two must agree about which bytes are spaces. If
+// they do not agree, the split can put SQL where nothing parses it.
 //
 // The tokenizer cannot call IsSQLSpace. It reads each byte as a uint16 value, so
 // that eofChar, which is 0x100, stays different from all 256 byte values. A byte
 // with the value 0 is legal in a query, so the tokenizer needs a value outside
 // the range of a byte to mark the end of the text. This test fails if somebody
 // changes one of the two definitions and not the other.
-func TestIsSQLSpaceMatchesTokenizer(t *testing.T) {
+func TestMarginCommentRulesMatchTokenizer(t *testing.T) {
 	parser := NewTestParser()
 
 	for b := range 256 {
@@ -344,6 +337,27 @@ func TestIsSQLSpaceMatchesTokenizer(t *testing.T) {
 		blankTkn.skipBlank()
 		assert.Equal(t, IsSQLSpace(c), blankTkn.Pos == 1,
 			"skipBlank and IsSQLSpace disagree about byte 0x%02x", b)
+
+		// A '--' opens a comment only if a space character comes after it, so
+		// isLineCommentStart must agree with the tokenizer for every byte.
+		lineComment := "--" + string(c)
+		lineTkn := parser.NewStringTokenizer(lineComment)
+		lineTkn.AllowComments = true
+		typ, _ := lineTkn.Scan()
+		assert.Equal(t, isLineCommentStart(lineComment, 0), typ == COMMENT,
+			"isLineCommentStart and the tokenizer disagree about byte 0x%02x", b)
+
+		// '#' and '//' open a comment whatever follows them, unlike '--'. Cover
+		// them too, so the agreement is checked for every spelling of a line
+		// comment rather than only the one with a condition on it.
+		for _, opener := range []string{"#", "//"} {
+			body := opener + string(c)
+			bodyTkn := parser.NewStringTokenizer(body)
+			bodyTkn.AllowComments = true
+			typ, _ := bodyTkn.Scan()
+			assert.Equal(t, isLineCommentStart(body, 0), typ == COMMENT,
+				"isLineCommentStart and the tokenizer disagree about %q followed by byte 0x%02x", opener, b)
+		}
 	}
 }
 
@@ -386,6 +400,59 @@ func TestSQLSpaceCharsMatchMySQL(t *testing.T) {
 		_, err := parser.Parse("select" + c + "1 from t")
 		assert.Error(t, err, "the parser must not accept %q as a space", c)
 	}
+}
+
+// TestCommentScanHelpers covers the boundaries that trailingCommentStart depends
+// on, including the inputs that have no end.
+func TestCommentScanHelpers(t *testing.T) {
+	t.Run("skipQuoted", func(t *testing.T) {
+		tests := []struct {
+			in               string
+			backslashEscapes bool
+			want             int
+		}{
+			{`'a'`, true, 3},
+			{`''`, true, 2},
+			{`'a''b'`, true, 6},   // two quotes together are one quote
+			{`'a\'b'`, true, 6},   // a backslash escapes the quote
+			{`'a\'`, true, -1},    // the escaped quote does not end the text
+			{`'a\\'`, true, 5},    // an escaped backslash does not escape the quote
+			{`'a`, true, -1},      // no end
+			{`'a\`, true, -1},     // a backslash at the end
+			{`"a\"b"`, true, 6},   // a double quote follows the same rules
+			{"`a`", false, 3},     // an identifier has no backslash escapes
+			{"`a``b`", false, 6},  // two backticks together are one backtick
+			{"`a\\`", false, 4},   // a backslash does not escape the backtick
+			{"`a", false, -1},     // no end
+			{`'a /* b'`, true, 8}, // a comment mark in a literal is only text
+		}
+		for _, tc := range tests {
+			t.Run(tc.in, func(t *testing.T) {
+				assert.Equal(t, tc.want, skipQuoted(tc.in, 0, tc.backslashEscapes))
+			})
+		}
+	})
+
+	t.Run("blockCommentEnd", func(t *testing.T) {
+		tests := []struct {
+			in   string
+			want int
+		}{
+			{`/**/`, 4},
+			{`/* a */`, 7},
+			{`/***/`, 5},   // the extra star is part of the text
+			{`/*/`, -1},    // a '/' alone does not close the comment
+			{`/*`, -1},     // no end
+			{`/*a*`, -1},   // a star at the end does not close the comment
+			{`/*a*/b`, 5},  // the index stops after the '*/'
+			{`/*a*/*/`, 5}, // the first '*/' ends the comment
+		}
+		for _, tc := range tests {
+			t.Run(tc.in, func(t *testing.T) {
+				assert.Equal(t, tc.want, blockCommentEnd(tc.in, 0))
+			})
+		}
+	})
 }
 
 func TestStripLeadingComments(t *testing.T) {

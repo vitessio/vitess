@@ -45,17 +45,6 @@ type Tokenizer struct {
 	multi              bool
 	inVersionedComment bool // true when scanning inside a MySQL versioned comment (/*!...*/)
 
-	// scanOnly makes Scan find token boundaries and types without building token
-	// values: identifiers are not looked up as keywords, and string literals and
-	// positional arguments are not decoded. Only a scan that does not feed the
-	// parser can set it.
-	scanOnly bool
-	// skippedEnd is the end of the last versioned-comment bytes that Scan stepped
-	// over without returning a token: a /*!NNNNN opening, the */ that closes a
-	// versioned comment that applies, a comment nested in one, or all of a
-	// versioned comment that does not apply.
-	skippedEnd int
-
 	Pos       int
 	buf       string
 	parser    *Parser
@@ -174,7 +163,6 @@ func (tkn *Tokenizer) Scan() (int, string) {
 		// skip past it and resume normal scanning.
 		if tkn.inVersionedComment && tkn.cur() == '*' && tkn.peek(1) == '/' {
 			tkn.skip(2)
-			tkn.skippedEnd = tkn.Pos
 			tkn.inVersionedComment = false
 			tkn.skipBlank()
 		}
@@ -268,9 +256,6 @@ func (tkn *Tokenizer) Scan() (int, string) {
 				return int(ch), ""
 			case '?':
 				tkn.posVarIndex++
-				if tkn.scanOnly {
-					return VALUE_ARG, ""
-				}
 				buf := make([]byte, 0, 8)
 				buf = append(buf, ":v"...)
 				buf = strconv.AppendInt(buf, int64(tkn.posVarIndex), 10)
@@ -286,7 +271,6 @@ func (tkn *Tokenizer) Scan() (int, string) {
 						if tok, val := tkn.scanCommentType2(); tok == LEX_ERROR {
 							return tok, val
 						}
-						tkn.skippedEnd = tkn.Pos
 						continue
 					}
 					// Not a comment start — return / as division operator.
@@ -303,7 +287,6 @@ func (tkn *Tokenizer) Scan() (int, string) {
 						if tok, val := tkn.scanMySQLSpecificComment(); tok == LEX_ERROR {
 							return tok, val
 						}
-						tkn.skippedEnd = tkn.Pos
 						continue
 					}
 					return tkn.scanCommentType2()
@@ -410,9 +393,6 @@ func (tkn *Tokenizer) scanIdentifier(isVariable bool) (int, string) {
 		tkn.skip(1)
 	}
 	keywordName := tkn.buf[start:tkn.Pos]
-	if tkn.scanOnly {
-		return ID, keywordName
-	}
 	if keywordID, found := keywordLookupTable.LookupString(keywordName); found {
 		return keywordID, keywordName
 	}
@@ -638,9 +618,6 @@ func (tkn *Tokenizer) scanString(delim uint16, typ int) (int, string) {
 			fallthrough
 
 		case '\\':
-			if tkn.scanOnly {
-				return tkn.scanStringSlow(nil, delim, typ)
-			}
 			var buffer strings.Builder
 			buffer.WriteString(tkn.buf[start:tkn.Pos])
 			return tkn.scanStringSlow(&buffer, delim, typ)
@@ -655,14 +632,13 @@ func (tkn *Tokenizer) scanString(delim uint16, typ int) (int, string) {
 
 // scanString scans a string surrounded by the given `delim` and containing escape
 // sequencse. The given `buffer` contains the contents of the string that have
-// been scanned so far. A nil `buffer` finds the end of the string without
-// decoding it, for a scan that only needs token boundaries.
+// been scanned so far.
 func (tkn *Tokenizer) scanStringSlow(buffer *strings.Builder, delim uint16, typ int) (int, string) {
 	for {
 		ch := tkn.cur()
 		if ch == eofChar {
 			// Unterminated string.
-			return LEX_ERROR, builderString(buffer)
+			return LEX_ERROR, buffer.String()
 		}
 
 		if ch != delim && ch != '\\' {
@@ -675,9 +651,7 @@ func (tkn *Tokenizer) scanStringSlow(buffer *strings.Builder, delim uint16, typ 
 				}
 			}
 
-			if buffer != nil {
-				buffer.WriteString(tkn.buf[start:tkn.Pos])
-			}
+			buffer.WriteString(tkn.buf[start:tkn.Pos])
 			if tkn.Pos >= len(tkn.buf) {
 				// Reached the end of the buffer without finding a delim or
 				// escape character.
@@ -690,13 +664,11 @@ func (tkn *Tokenizer) scanStringSlow(buffer *strings.Builder, delim uint16, typ 
 		if ch == '\\' {
 			if tkn.cur() == eofChar {
 				// String terminates mid escape character.
-				return LEX_ERROR, builderString(buffer)
+				return LEX_ERROR, buffer.String()
 			}
 			// Preserve escaping of % and _
 			if tkn.cur() == '%' || tkn.cur() == '_' {
-				if buffer != nil {
-					buffer.WriteByte('\\')
-				}
+				buffer.WriteByte('\\')
 				ch = tkn.cur()
 			} else if decodedChar := sqltypes.SQLDecodeMap[byte(tkn.cur())]; decodedChar == sqltypes.DontEscape {
 				ch = tkn.cur()
@@ -708,21 +680,11 @@ func (tkn *Tokenizer) scanStringSlow(buffer *strings.Builder, delim uint16, typ 
 			break
 		}
 
-		if buffer != nil {
-			buffer.WriteByte(byte(ch))
-		}
+		buffer.WriteByte(byte(ch))
 		tkn.skip(1)
 	}
 
-	return typ, builderString(buffer)
-}
-
-// builderString returns the contents of buffer, or "" for a nil buffer.
-func builderString(buffer *strings.Builder) string {
-	if buffer == nil {
-		return ""
-	}
-	return buffer.String()
+	return typ, buffer.String()
 }
 
 // scanCommentType1 scans a SQL line-comment, which is applied until the end

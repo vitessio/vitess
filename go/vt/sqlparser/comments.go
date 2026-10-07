@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sysvars"
@@ -72,14 +73,433 @@ const (
 
 var ErrInvalidPriority = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Invalid priority value specified in query")
 
+// isSQLSpaceRune reports whether r is a space character for SQL. A character
+// outside the ASCII range is never one.
+func isSQLSpaceRune(r rune) bool {
+	return r < utf8.RuneSelf && IsSQLSpace(byte(r))
+}
+
+// isNonSpace reports whether r is not a space character for SQL.
+func isNonSpace(r rune) bool {
+	return !isSQLSpaceRune(r)
+}
+
+// leadingCommentEnd returns the first index after all leading comments, or
+// 0 if there are no leading comments.
+func leadingCommentEnd(text string) (end int) {
+	hasComment := false
+	pos := 0
+	for pos < len(text) {
+		// Eat up any whitespace. Trailing whitespace will be considered part of
+		// the leading comments.
+		nextVisibleOffset := strings.IndexFunc(text[pos:], isNonSpace)
+		if nextVisibleOffset < 0 {
+			break
+		}
+		pos += nextVisibleOffset
+		remainingText := text[pos:]
+
+		// Found visible characters. Look for '/*' at the beginning
+		// and '*/' somewhere after that.
+		if len(remainingText) < 4 || remainingText[:2] != "/*" || remainingText[2] == '!' {
+			break
+		}
+		commentLength := 4 + strings.Index(remainingText[2:], "*/")
+		if commentLength < 4 {
+			// Missing end comment :/
+			break
+		}
+
+		hasComment = true
+		pos += commentLength
+	}
+
+	if hasComment {
+		return pos
+	}
+	return 0
+}
+
+// trailingCommentStart returns the first index of trailing comments.
+// If there are no trailing comments, returns the length of the input string.
+//
+// A '*/' at the end of the text does not always close a comment. Only the text
+// before the '*/' shows if a comment is open. For example, a '/*' in a string
+// literal does not start a comment. Also, a '--' or a '#' line comment can end
+// with '*/' when no comment is open. For this reason, this function reads the
+// text forward from the start. It does not read the text backward from the end.
+//
+// The callers make a plan for the query that this function returns, and they
+// authorize only that query. Then they add the comments to the query again. If
+// this function makes a comment out of text that is not a comment, that text
+// goes to MySQL, but nothing parses it. For this reason, the scan reads the text
+// the way Tokenizer.Scan does, rule for rule: string literals, quoted
+// identifiers, variables, numbers, line comments, and /*!...*/ comments at the
+// parser's version. FuzzSplitMarginCommentsMatchesTokenizer checks that the
+// split matches the one the tokenizer gives, so a change to the tokenizer that
+// this scan does not follow fails that test.
+func trailingCommentStart(text, version string) (start int) {
+	// contentEnd is the index that comes after the last byte of the query. Only
+	// block comments and spaces come after contentEnd.
+	contentEnd := 0
+	inTrailingComment := false
+	// contentEndsInLineComment records whether the query stops at the end of a
+	// line comment. The guard at the end of this function must know this.
+	contentEndsInLineComment := false
+	// inVersionedComment records whether the scan is inside a /*!...*/ comment.
+	// The '*/' that closes one is part of the query, and the case below has to
+	// read both of its bytes together.
+	inVersionedComment := false
+	pos := 0
+
+	for pos < len(text) {
+		if IsSQLSpace(text[pos]) {
+			// A space does not start a group of trailing comments, and it does
+			// not end one.
+			pos++
+			continue
+		}
+
+		switch {
+		case inVersionedComment && text[pos] == '*' && pos+1 < len(text) && text[pos+1] == '/':
+			// The '*/' that closes a versioned comment. Read both bytes here,
+			// before the line comment check: reading only the '*' would leave the
+			// '/' to pair with the next comment's '/*' and look like a '//' line
+			// comment, which would swallow a real trailing comment.
+			//
+			// This case is reached only inside a versioned comment, so a '*/'
+			// elsewhere still ends an ordinary comment and a '*' elsewhere is
+			// still ordinary SQL.
+			pos += 2
+			contentEnd = pos
+			inVersionedComment = false
+			inTrailingComment = false
+			contentEndsInLineComment = false
+
+		case isBlockCommentStart(text, pos) && inVersionedComment:
+			// Inside a versioned comment the tokenizer reads any '/*', even a
+			// '/*!', as a nested comment that ends at the first '*/'. It stays
+			// in the query with the versioned comment around it.
+			end := blockCommentEnd(text, pos)
+			if end < 0 {
+				return len(text)
+			}
+			pos = end
+
+		case isBlockCommentStart(text, pos) && text[pos+2] == '!':
+			// A /*!...*/ comment holds SQL that MySQL can run, so it is part of
+			// the query and never a margin comment. Where it ends depends on
+			// whether its version applies, the same way it does for the
+			// tokenizer: see versionedCommentEnd.
+			end, applies := versionedCommentEnd(text, pos, version)
+			if end < 0 {
+				// The comment has no end. Do not split the text.
+				return len(text)
+			}
+			pos = end
+			contentEnd = pos
+			inVersionedComment = applies
+			inTrailingComment = false
+			contentEndsInLineComment = false
+
+		case isBlockCommentStart(text, pos):
+			end := blockCommentEnd(text, pos)
+			if end < 0 {
+				// The comment has no end. Do not split the text.
+				return len(text)
+			}
+			inTrailingComment = true
+			pos = end
+
+		case isLineCommentStart(text, pos) && (!inVersionedComment || text[pos] != '/'):
+			// Inside a versioned comment the tokenizer reads '//' as two '/'
+			// operators, not as a line comment.
+			newline := strings.IndexByte(text[pos:], '\n')
+			if newline < 0 {
+				// The line comment continues to the end of the text. Therefore
+				// the text does not end with a block comment.
+				return len(text)
+			}
+			// Stop before the newline character. This character ends the line
+			// comment. Therefore it must stay with the comments after a split.
+			contentEnd = pos + newline
+			pos += newline + 1
+			inTrailingComment = false
+			contentEndsInLineComment = true
+
+		case isLetter(uint16(text[pos])) || isDigit(uint16(text[pos])) || text[pos] == ':' ||
+			(text[pos] == '.' && pos+1 < len(text) && isDigit(uint16(text[pos+1]))):
+			// A word, a number or a bind variable. Read it whole, as the
+			// tokenizer does: a number can take a '-' after its exponent, which
+			// must not be read as the start of a '--' comment.
+			end := wordEnd(text, pos)
+			if end < 0 {
+				return len(text)
+			}
+			pos = end
+			contentEnd = pos
+			inTrailingComment = false
+			contentEndsInLineComment = false
+
+		case text[pos] == '@':
+			end := variableEnd(text, pos)
+			if end < 0 {
+				return len(text)
+			}
+			pos = end
+			contentEnd = pos
+			inTrailingComment = false
+			contentEndsInLineComment = false
+
+		case text[pos] == '\'' || text[pos] == '"' || text[pos] == '`':
+			// A backslash escapes a byte in a string literal. In a quoted
+			// identifier, a backslash is not an escape character.
+			end := skipQuoted(text, pos, text[pos] != '`')
+			if end < 0 {
+				// The literal has no end. All of the text after it is in the
+				// literal.
+				return len(text)
+			}
+			pos = end
+			contentEnd = pos
+			inTrailingComment = false
+			contentEndsInLineComment = false
+
+		default:
+			pos++
+			contentEnd = pos
+			inTrailingComment = false
+			contentEndsInLineComment = false
+		}
+	}
+
+	if !inTrailingComment {
+		return len(text)
+	}
+	// After we remove the comments, the parser must read the text before them in
+	// the same way. A '--' starts a comment only when a space or the end of the
+	// text comes after it. Therefore "select 0--" is "select 0". But
+	// "select 0--/**/" has two minus signs and no number to subtract. If we
+	// split "select 0--/**/", the query "select 0--" makes a good plan. But the
+	// full text is a syntax error after we add the comment again.
+	//
+	// This cannot hide a second statement. Only comments and spaces come after
+	// the '--'. Therefore the full text never has a number for the two minus
+	// signs, and MySQL always rejects it. We keep the text together for a
+	// different reason. We must not authorize one statement and then send a
+	// different statement.
+	//
+	// A line comment can also end with '--', as in "select 1 -- body--". Those
+	// two characters are already inside the comment, and the newline that ends
+	// the comment stays with the trailing comments. Therefore the query reads
+	// the same way with the comments and without them, and this guard must
+	// ignore that case. If it does not, the trailing comment never reaches
+	// MarginComments.Trailing, and a query rule for that comment stops working.
+	if !contentEndsInLineComment && strings.HasSuffix(text[:contentEnd], "--") {
+		return len(text)
+	}
+	return contentEnd
+}
+
+// versionedCommentEnd reads the /*!...*/ comment that starts at pos the way
+// Tokenizer.scanMySQLSpecificComment does. When the comment's version applies,
+// the text inside is SQL: end is the index after the opening, and the caller
+// reads on until the closing '*/'. When it does not apply, the whole comment is
+// skipped: end is the index after its closing '*/', which is the first '*/'
+// outside a comment nested in it. Quotes inside such a comment mean nothing. end
+// is -1 when the comment has no end.
+//
+// The version is the five digits after '/*!'. With fewer digits, the comment
+// has no version and always applies.
+func versionedCommentEnd(text string, pos int, version string) (end int, applies bool) {
+	pos += 3
+	digits := 0
+	for digits < 5 && pos+digits < len(text) && isDigit(uint16(text[pos+digits])) {
+		digits++
+	}
+	commentVersion := ""
+	if digits == 5 {
+		commentVersion = text[pos : pos+5]
+		pos += 5
+	}
+	if version >= commentVersion {
+		return pos, true
+	}
+	for pos < len(text) {
+		switch {
+		case text[pos] == '/' && pos+1 < len(text) && text[pos+1] == '*':
+			// A nested comment. Its first '*/' ends it.
+			offset := strings.Index(text[pos+2:], "*/")
+			if offset < 0 {
+				return -1, false
+			}
+			pos += 2 + offset + 2
+		case text[pos] == '*' && pos+1 < len(text) && text[pos+1] == '/':
+			return pos + 2, false
+		default:
+			pos++
+		}
+	}
+	return -1, false
+}
+
+// wordEnd returns the index after the identifier, keyword, number or bind
+// variable that starts at pos, read the way Tokenizer.Scan reads one. It returns
+// -1 where the tokenizer reports an error.
+func wordEnd(text string, pos int) int {
+	at := func(i int) uint16 {
+		if i < len(text) {
+			return uint16(text[i])
+		}
+		return eofChar
+	}
+	mantissa := func(i, base int) int {
+		for digitVal(at(i)) < base {
+			i++
+		}
+		return i
+	}
+	letters := func(i int, extra func(uint16) bool) int {
+		for isLetter(at(i)) || isDigit(at(i)) || extra(at(i)) {
+			i++
+		}
+		return i
+	}
+	none := func(uint16) bool { return false }
+
+	switch ch := at(pos); {
+	case ch == ':':
+		// scanBindVarOrAssignmentExpression.
+		pos++
+		switch {
+		case isDigit(at(pos)):
+			return mantissa(pos, 10)
+		case at(pos) == '=':
+			return pos + 1
+		case at(pos) == ':':
+			pos++
+		}
+		if !isLetter(at(pos)) {
+			return -1
+		}
+		return letters(pos, func(c uint16) bool { return c == '.' })
+	case isLetter(ch):
+		// scanIdentifier. A hex or bit literal (x'..', b'..') and N'..' start
+		// with a letter too: the letter ends here and the quote that follows is
+		// read as a quoted string, which ends where the literal does.
+		return letters(pos+1, none)
+	}
+
+	// scanNumber.
+	float := false
+	if at(pos) == '.' {
+		float = true
+		pos = mantissa(pos+1, 10)
+	} else {
+		if at(pos) == '0' && (at(pos+1) == 'x' || at(pos+1) == 'X') {
+			return numberTail(text, mantissa(pos+2, 16), false)
+		}
+		if at(pos) == '0' && (at(pos+1) == 'b' || at(pos+1) == 'B') {
+			return numberTail(text, mantissa(pos+2, 2), false)
+		}
+		pos = mantissa(pos, 10)
+		if at(pos) == '.' {
+			float = true
+			pos = mantissa(pos+1, 10)
+		}
+	}
+	if at(pos) == 'e' || at(pos) == 'E' {
+		float = true
+		pos++
+		if at(pos) == '+' || at(pos) == '-' {
+			pos++
+		}
+		pos = mantissa(pos, 10)
+	}
+	return numberTail(text, pos, float)
+}
+
+// numberTail finishes a number the way the end of Tokenizer.scanNumber does: a
+// letter right after an integer turns the whole token into an identifier, and a
+// letter right after a decimal or float number is an error.
+func numberTail(text string, pos int, float bool) int {
+	if pos >= len(text) || !isLetter(uint16(text[pos])) {
+		return pos
+	}
+	if float {
+		return -1
+	}
+	for pos < len(text) && (isLetter(uint16(text[pos])) || isDigit(uint16(text[pos]))) {
+		pos++
+	}
+	return pos
+}
+
+// variableEnd returns the index after the user or system variable that starts
+// with the '@' at pos, read the way Tokenizer.Scan reads one: '@' or '@@', then
+// either a backtick-quoted name, or one byte of any kind followed by letters,
+// digits, '.', and quote characters. It returns -1 where the tokenizer reports
+// an error.
+func variableEnd(text string, pos int) int {
+	pos++
+	if pos < len(text) && text[pos] == '@' {
+		pos++
+	}
+	if pos >= len(text) {
+		return -1
+	}
+	if text[pos] == '`' {
+		if pos+1 < len(text) && text[pos+1] == '`' {
+			// An empty quoted name.
+			return -1
+		}
+		return skipQuoted(text, pos, false)
+	}
+	pos++
+	for pos < len(text) {
+		ch := uint16(text[pos])
+		if !isLetter(ch) && !isDigit(ch) && !isCarat(ch) {
+			break
+		}
+		pos++
+	}
+	return pos
+}
+
+// isBlockCommentStart reports whether a block comment starts at pos.
+func isBlockCommentStart(text string, pos int) bool {
+	return pos+2 < len(text) && text[pos] == '/' && text[pos+1] == '*'
+}
+
+// isLineCommentStart reports whether a line comment starts at pos. It uses the
+// same rules as the tokenizer. A '#' or a '//' always starts a line comment. A
+// '--' starts a line comment only when a space or the end of the text comes
+// after it.
+func isLineCommentStart(text string, pos int) bool {
+	if text[pos] == '#' {
+		return true
+	}
+	if pos+1 >= len(text) {
+		return false
+	}
+	if text[pos] == '/' && text[pos+1] == '/' {
+		return true
+	}
+	if text[pos] != '-' || text[pos+1] != '-' {
+		return false
+	}
+	return pos+2 >= len(text) || IsSQLSpace(text[pos+2])
+}
+
 // sqlSpaceChars holds the characters that MySQL treats as a space between two
 // tokens: space, tab, newline, vertical tab, form feed and carriage return.
 //
-// This string is the only place in this file that spells out the set.
-// IsSQLSpace reads it through sqlSpaceTable, and the trims in SplitMarginComments
-// take it as a cutset. Tokenizer.skipBlank and the '--' rule in Tokenizer.Scan
-// repeat the set because they read a uint16 rather than a byte, and
-// TestIsSQLSpaceMatchesTokenizer checks that skipBlank stays equal to it.
+// This string is the only place that spells out the set. IsSQLSpace reads it
+// through sqlSpaceTable, and the trims in SplitMarginComments take it as a
+// cutset, so no second copy can drift from this one. Tokenizer.skipBlank and the
+// '--' rule in Tokenizer.Scan repeat the set because they read a uint16 rather
+// than a byte, and TestMarginCommentRulesMatchTokenizer checks that all of them
+// stay equal.
 //
 // Do not use unicode.IsSpace instead. That function also accepts a no-break space
 // and other characters that MySQL does not accept, and then Vitess would remove a
@@ -104,6 +524,76 @@ func IsSQLSpace(c byte) bool {
 	return sqlSpaceTable[c]
 }
 
+// blockCommentEnd returns the index that comes after the '*/' at the end of the
+// block comment that starts at pos. It returns -1 if the comment has no end. A
+// block comment cannot contain a second block comment. Therefore the first '*/'
+// ends the comment.
+func blockCommentEnd(text string, pos int) int {
+	offset := strings.Index(text[pos+2:], "*/")
+	if offset < 0 {
+		return -1
+	}
+	return pos + 2 + offset + 2
+}
+
+// skipQuoted returns the index that comes after the delimiter at the end of the
+// string literal or the quoted identifier that starts at pos. It returns -1 if
+// there is no end. Two delimiters together are one delimiter in the text. When
+// backslashEscapes is true, a backslash makes the next byte part of the text.
+// Give true for a '..' or a ".." literal. Give false for a `..` identifier,
+// because a backslash is not an escape character in an identifier.
+//
+// A literal can be long, for example a JSON blob in an INSERT statement.
+// Therefore the code searches for the delimiter with IndexByte instead of a loop
+// over each byte. A backslash can hide the delimiter, but a backslash is rare.
+// Therefore the code looks for one only one time for each candidate, and then it
+// calls walkQuoted.
+func skipQuoted(text string, pos int, backslashEscapes bool) int {
+	delim := text[pos]
+	for i := pos + 1; i < len(text); {
+		rel := strings.IndexByte(text[i:], delim)
+		if rel < 0 {
+			return -1
+		}
+		end := i + rel
+
+		if backslashEscapes && strings.IndexByte(text[i:end], '\\') >= 0 {
+			// This delimiter can be escaped, and so can the next one. A walk
+			// from here reads each byte one time. A new search would read the
+			// same bytes again for every backslash.
+			return walkQuoted(text, i, delim)
+		}
+
+		if end+1 < len(text) && text[end+1] == delim {
+			i = end + 2 // two delimiters together, so this is not the end
+			continue
+		}
+		return end + 1
+	}
+	return -1
+}
+
+// walkQuoted completes skipQuoted for a literal that contains a backslash. It
+// reads one byte at a time from pos, which is always the start of a byte that no
+// backslash escapes.
+func walkQuoted(text string, pos int, delim byte) int {
+	for pos < len(text) {
+		switch c := text[pos]; {
+		case c == '\\':
+			// Step over the backslash and the byte that it escapes. A backslash
+			// at the end moves pos past the end, and then the loop stops.
+			pos += 2
+		case c != delim:
+			pos++
+		case pos+1 < len(text) && text[pos+1] == delim:
+			pos += 2 // two delimiters together, so this is not the end
+		default:
+			return pos + 1
+		}
+	}
+	return -1
+}
+
 // MarginComments holds the leading and trailing comments that surround a query.
 type MarginComments struct {
 	Leading  string
@@ -111,154 +601,36 @@ type MarginComments struct {
 }
 
 // SplitMarginComments pulls out any leading or trailing comments from a raw sql
-// query, using a parser at the default MySQL version.
-//
-// Callers that plan or authorize the query must use Parser.SplitMarginComments
-// with the parser that parses the query, so that both read the text the same way.
+// query, reading /*!...*/ comments at the default MySQL version. It is for
+// callers that only display a query. Callers that plan or authorize the query
+// use Parser.SplitMarginComments with the parser that parses it.
 func SplitMarginComments(sql string) (query string, comments MarginComments) {
 	return defaultMarginParser.SplitMarginComments(sql)
 }
 
-var defaultMarginParser = NewTestParser()
+// defaultMarginParser reads versioned comments for SplitMarginComments at the
+// default MySQL version.
+var defaultMarginParser = func() *Parser {
+	parser, err := New(Options{})
+	if err != nil {
+		panic(err)
+	}
+	return parser
+}()
 
 // SplitMarginComments pulls out any leading or trailing comments from a raw sql
-// query. This function also trims leading (if there's a comment) and trailing
-// whitespace.
-//
-// The callers plan and authorize only the query this returns, and then add the
-// comments back before the text goes to MySQL. Nothing parses the comments, so
-// they must not hold anything MySQL reads as SQL. To make sure of that, the
-// split reads sql with the same tokenizer the parser uses, rather than with a
-// separate scan that would have to agree with it about literals, quoted
-// identifiers and comments.
+// query, and trims leading (if there's a comment) and trailing whitespace. It
+// reads a /*!...*/ comment at the parser's MySQL version, as the parser does, so
+// callers that plan or authorize the query must split it with the parser that
+// parses it.
 func (p *Parser) SplitMarginComments(sql string) (query string, comments MarginComments) {
-	start, end := p.statementBounds(sql)
-	return splitAt(sql, start, end)
-}
-
-// splitAt splits sql into the margins before start and after end and the query
-// between them, and trims the spaces around each part and a ';' at either end
-// of the query.
-func splitAt(sql string, start, end int) (query string, comments MarginComments) {
+	trailingStart := trailingCommentStart(sql, p.version)
+	leadingEnd := leadingCommentEnd(sql[:trailingStart])
 	comments = MarginComments{
-		Leading:  strings.TrimLeft(sql[:start], sqlSpaceChars),
-		Trailing: strings.TrimRight(sql[end:], sqlSpaceChars),
+		Leading:  strings.TrimLeft(sql[:leadingEnd], sqlSpaceChars),
+		Trailing: strings.TrimRight(sql[trailingStart:], sqlSpaceChars),
 	}
-	return strings.Trim(sql[start:end], sqlSpaceChars+";"), comments
-}
-
-// statementBounds returns the part [start, end) of sql that is not a margin
-// comment. Only block comments and spaces come before start or after end.
-//
-// Only a text that ends with '*/' can have a trailing margin, and only the
-// trailing margin needs the tokenizer: whether a '*/' at the end closes a
-// comment depends on everything before it. Any other text is split at its
-// leading comments alone, which leadingCommentsEnd finds without the tokenizer.
-func (p *Parser) statementBounds(sql string) (start, end int) {
-	end = len(sql)
-	for end > 0 && IsSQLSpace(sql[end-1]) {
-		end--
-	}
-	if !strings.HasSuffix(sql[:end], "*/") {
-		return leadingCommentsEnd(sql[:end]), end
-	}
-	start, end, _ = p.scannedBounds(sql)
-	return start, end
-}
-
-// leadingCommentsEnd returns the index of the first byte of text that is not a
-// space or part of a block comment at the start of text. With nothing before
-// it, a '/*' always opens a comment and the first '*/' after it closes the
-// comment, so this needs no tokenizer. A /*!...*/ comment is part of the
-// statement, and so is a comment with no end, which the parser rejects.
-func leadingCommentsEnd(text string) int {
-	pos := 0
-	for {
-		for pos < len(text) && IsSQLSpace(text[pos]) {
-			pos++
-		}
-		rest := text[pos:]
-		if !strings.HasPrefix(rest, "/*") || strings.HasPrefix(rest, "/*!") {
-			return pos
-		}
-		closeAt := strings.Index(rest[2:], "*/")
-		if closeAt < 0 {
-			return pos
-		}
-		pos += 2 + closeAt + 2
-	}
-}
-
-// scannedBounds is statementBounds for any text, read with the tokenizer. ok
-// is false when the tokenizer reports an error.
-//
-// Everything the tokenizer reads, other than a block comment token and the
-// spaces around it, counts as part of the statement:
-//
-//   - A line comment. A margin is re-attached as is, and a trailing line comment
-//     would swallow what a caller appends after it. Its newline stays outside,
-//     because the newline ends the comment when the margin is re-attached.
-//   - A /*!...*/ comment, whether or not its version applies. MySQL can run
-//     what is inside such a comment, and a backend can be newer than the
-//     version this parser uses, so it must never land in a margin. Scan steps
-//     over the comment's opening and closing, or over all of it when the version
-//     does not apply, without returning a token, and records where in
-//     skippedEnd.
-//
-// If the tokenizer reports an error, there is no split: the parser reads all of
-// sql and rejects it.
-func (p *Parser) scannedBounds(sql string) (start, end int, ok bool) {
-	tkn := &Tokenizer{buf: sql, parser: p, scanOnly: true}
-	start = -1
-	// keep extends the statement over sql[from:to].
-	keep := func(from, to int) {
-		if start < 0 {
-			start = from
-		}
-		end = to
-	}
-	// lastTyp is the type of the last token kept in the statement.
-	var lastTyp int
-	for {
-		before, skipped := tkn.Pos, tkn.skippedEnd
-		typ, val := tkn.Scan()
-		if typ == LEX_ERROR {
-			return 0, len(sql), false
-		}
-		if tkn.skippedEnd != skipped {
-			// Scan stepped over versioned-comment bytes before this token. Only
-			// spaces come before them, because a comment would be a token.
-			from := before
-			for IsSQLSpace(sql[from]) {
-				from++
-			}
-			keep(from, tkn.skippedEnd)
-		}
-		switch {
-		case typ == 0:
-			if start < 0 {
-				// Only comments and spaces. They all go to Trailing.
-				return 0, 0, true
-			}
-			// A '--' starts a comment when the text ends after it, but not when
-			// a block comment follows it, as in "select 0--/**/". The callers
-			// parse the query alone, so cutting there would plan "select 0" for
-			// a statement MySQL reads as two minus signs. This is the only token
-			// that the end of the text turns into a comment.
-			if lastTyp == '-' && strings.HasSuffix(sql[:end], "--") {
-				return 0, len(sql), true
-			}
-			return start, end, true
-		case typ == COMMENT && strings.HasPrefix(val, "/*"):
-			// A block comment: a margin, if nothing but comments follows it.
-		case typ == COMMENT:
-			keep(tkn.currStart, tkn.currStart+len(strings.TrimSuffix(val, "\n")))
-			lastTyp = typ
-		default:
-			keep(tkn.currStart, tkn.Pos)
-			lastTyp = typ
-		}
-	}
+	return strings.Trim(sql[leadingEnd:trailingStart], sqlSpaceChars+";"), comments
 }
 
 // StripLeadingComments trims the SQL string and removes any leading comments

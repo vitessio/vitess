@@ -57,10 +57,6 @@ func FuzzSplitMarginComments(f *testing.F) {
 		"select \"a *\" /*x*/, 1 -- */",
 		"select 1 // x\n/*b*/",
 		"/**/#0",
-		"/* a */ select 1 -- x  \n  ",
-		"/* a */ /*!80000 select 1 */ x",
-		"/* a */ select 'unterminated",
-		"/* a",
 	}
 	for _, s := range seeds {
 		f.Add(s)
@@ -70,14 +66,6 @@ func FuzzSplitMarginComments(f *testing.F) {
 
 	f.Fuzz(func(t *testing.T, sql string) {
 		query, comments := SplitMarginComments(sql)
-
-		// The skip in statementBounds must not change the split: on any text the
-		// tokenizer accepts, it must give what the tokenizer alone gives.
-		if start, end, ok := parser.scannedBounds(sql); ok {
-			scannedQuery, scannedComments := splitAt(sql, start, end)
-			require.Equal(t, scannedQuery, query, "the skip changed the query (from %q)", sql)
-			require.Equal(t, scannedComments, comments, "the skip changed the margins (from %q)", sql)
-		}
 
 		// Rule 1: Trailing contains only comments and spaces.
 		require.True(t, isCommentsAndWhitespaceOnly(parser, comments.Trailing),

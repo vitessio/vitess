@@ -844,7 +844,7 @@ Clients using gRPC's standard `weighted_round_robin` policy with `enableOobLoadR
 
 #### <a id="sqlparser-margin-comment-split"/>Trailing comment detection and whitespace in the SQL parser</a>
 
-VTGate and VTTablet separate a query's leading and trailing comments from the statement before they plan it, and query rules match those comments. The comments are now found with the same tokenizer the parser uses, so text in a string literal, a quoted identifier, a line comment or a `/*!...*/` versioned comment is never taken for a margin comment.
+VTGate and VTTablet separate a query's leading and trailing comments from the statement before they plan it, and query rules match those comments. The comments are now found by reading the query the way the parser does, so text in a string literal, a quoted identifier, a line comment or a `/*!...*/` versioned comment is never taken for a margin comment.
 
 User-visible consequences:
 
