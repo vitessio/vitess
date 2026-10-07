@@ -82,6 +82,83 @@ func (tm *TabletManager) executeMultiFetchAsDba(
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
 		return nil, err
 	}
+<<<<<<< HEAD
+||||||| parent of 5a40693878 (sqlparser: rewrite `//` comments to `#/` before statement text reaches MySQL (#21410))
+
+	// Parse, validate, and gate before acquiring an mysqld connection so a
+	// rejected batch does not cost us a connection acquire and the SET
+	// sql_log_bin / foreign_key_checks / USE round-trips that follow.
+	// countCreate also includes CREATE VIEW; the gate ignores non-table
+	// statements internally. Unparseable statements that look like
+	// persistent CREATE TABLE/VIEW statements are treated as worst-case
+	// potential schema object creations in their original execution order.
+	queries, parsedStmts, parseable, countCreate, allowZeroInDate, err := analyzeExecuteFetchAsDbaMultiQuery(sql, tm.Env.Parser())
+	if err != nil {
+		return nil, err
+	}
+	if validateQueries != nil {
+		if err := validateQueries(queries, countCreate); err != nil {
+			return nil, err
+		}
+	}
+	if countCreate > 0 || !parseable {
+		if err := schema.CheckCreateTableLimitForParsedStatements(tm.schemaEngine(), tm.Env.Parser(), queries, parsedStmts); err != nil {
+			return nil, err
+		}
+	}
+	if err := ddlschema.ValidateSessionVariables(sessionVariables); err != nil {
+		return nil, err
+	}
+	sessionVariableQueries := make([]string, 0, len(sessionVariables))
+	for _, variable := range sessionVariables {
+		query, err := variable.SetStatement()
+		if err != nil {
+			return nil, err
+		}
+		sessionVariableQueries = append(sessionVariableQueries, query)
+	}
+
+=======
+
+	// The statements are split and checked with Vitess's tokenizer and then
+	// sent to MySQL as written, so MySQL must skip every comment that Vitess
+	// skips.
+	sql, _ = tm.Env.Parser().RewriteDoubleSlashComments(sql)
+
+	// Parse, validate, and gate before acquiring an mysqld connection so a
+	// rejected batch does not cost us a connection acquire and the SET
+	// sql_log_bin / foreign_key_checks / USE round-trips that follow.
+	// countCreate also includes CREATE VIEW; the gate ignores non-table
+	// statements internally. Unparseable statements that look like
+	// persistent CREATE TABLE/VIEW statements are treated as worst-case
+	// potential schema object creations in their original execution order.
+	queries, parsedStmts, parseable, countCreate, allowZeroInDate, err := analyzeExecuteFetchAsDbaMultiQuery(sql, tm.Env.Parser())
+	if err != nil {
+		return nil, err
+	}
+	if validateQueries != nil {
+		if err := validateQueries(queries, countCreate); err != nil {
+			return nil, err
+		}
+	}
+	if countCreate > 0 || !parseable {
+		if err := schema.CheckCreateTableLimitForParsedStatements(tm.schemaEngine(), tm.Env.Parser(), queries, parsedStmts); err != nil {
+			return nil, err
+		}
+	}
+	if err := ddlschema.ValidateSessionVariables(sessionVariables); err != nil {
+		return nil, err
+	}
+	sessionVariableQueries := make([]string, 0, len(sessionVariables))
+	for _, variable := range sessionVariables {
+		query, err := variable.SetStatement()
+		if err != nil {
+			return nil, err
+		}
+		sessionVariableQueries = append(sessionVariableQueries, query)
+	}
+
+>>>>>>> 5a40693878 (sqlparser: rewrite `//` comments to `#/` before statement text reaches MySQL (#21410))
 	// Get a connection.
 	conn, err := tm.MysqlDaemon.GetDbaConnection(ctx)
 	if err != nil {
@@ -234,6 +311,33 @@ func (tm *TabletManager) ExecuteFetchAsAllPrivs(ctx context.Context, req *tablet
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
 		return nil, err
 	}
+<<<<<<< HEAD
+||||||| parent of 5a40693878 (sqlparser: rewrite `//` comments to `#/` before statement text reaches MySQL (#21410))
+	// Replace any provided sidecar database qualifiers with the correct one,
+	// then gate before opening the mysqld connection so a rejected batch
+	// does not cost a connection acquire and a USE round-trip.
+	uq, err := tm.Env.Parser().ReplaceTableQualifiers(string(req.Query), sidecar.DefaultName, sidecar.GetName())
+	if err != nil {
+		return nil, err
+	}
+	if err := checkCreateTableLimitForSQL(tm.Env.Parser(), tm.schemaEngine(), uq); err != nil {
+		return nil, err
+	}
+=======
+	// Replace any provided sidecar database qualifiers with the correct one,
+	// then gate before opening the mysqld connection so a rejected batch
+	// does not cost a connection acquire and a USE round-trip.
+	// The query is checked with Vitess's tokenizer and then sent to MySQL as
+	// written, so MySQL must skip every comment that Vitess skips.
+	query, _ := tm.Env.Parser().RewriteDoubleSlashComments(string(req.Query))
+	uq, err := tm.Env.Parser().ReplaceTableQualifiers(query, sidecar.DefaultName, sidecar.GetName())
+	if err != nil {
+		return nil, err
+	}
+	if err := checkCreateTableLimitForSQL(tm.Env.Parser(), tm.schemaEngine(), uq); err != nil {
+		return nil, err
+	}
+>>>>>>> 5a40693878 (sqlparser: rewrite `//` comments to `#/` before statement text reaches MySQL (#21410))
 	// get a connection
 	conn, err := tm.MysqlDaemon.GetAllPrivsConnection(ctx)
 	if err != nil {
@@ -268,6 +372,33 @@ func (tm *TabletManager) ExecuteFetchAsApp(ctx context.Context, req *tabletmanag
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
 		return nil, err
 	}
+<<<<<<< HEAD
+||||||| parent of 5a40693878 (sqlparser: rewrite `//` comments to `#/` before statement text reaches MySQL (#21410))
+	// Replace any provided sidecar database qualifiers with the correct one,
+	// then gate before opening the mysqld connection so a rejected batch
+	// does not cost a connection acquire.
+	uq, err := tm.Env.Parser().ReplaceTableQualifiers(string(req.Query), sidecar.DefaultName, sidecar.GetName())
+	if err != nil {
+		return nil, err
+	}
+	if err := checkCreateTableLimitForSQL(tm.Env.Parser(), tm.schemaEngine(), uq); err != nil {
+		return nil, err
+	}
+=======
+	// Replace any provided sidecar database qualifiers with the correct one,
+	// then gate before opening the mysqld connection so a rejected batch
+	// does not cost a connection acquire.
+	// The query is checked with Vitess's tokenizer and then sent to MySQL as
+	// written, so MySQL must skip every comment that Vitess skips.
+	query, _ := tm.Env.Parser().RewriteDoubleSlashComments(string(req.Query))
+	uq, err := tm.Env.Parser().ReplaceTableQualifiers(query, sidecar.DefaultName, sidecar.GetName())
+	if err != nil {
+		return nil, err
+	}
+	if err := checkCreateTableLimitForSQL(tm.Env.Parser(), tm.schemaEngine(), uq); err != nil {
+		return nil, err
+	}
+>>>>>>> 5a40693878 (sqlparser: rewrite `//` comments to `#/` before statement text reaches MySQL (#21410))
 	// get a connection
 	conn, err := tm.MysqlDaemon.GetAppConnection(ctx)
 	if err != nil {
