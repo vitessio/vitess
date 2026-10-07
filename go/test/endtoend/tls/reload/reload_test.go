@@ -208,6 +208,8 @@ func TestTLSReload(t *testing.T) {
 	oldCert, newCert := certificateOf(t, oldCerts.ServerCert), certificateOf(t, newCerts.ServerCert)
 
 	t.Run("SIGHUP", func(t *testing.T) {
+		require.NotContains(t, clusterInstance.VtGateExtraArgs, "--tls-reload-interval",
+			"this step must run with the interval reload disabled, or vtgate could pick up the new files before the SIGHUP it checks for")
 		require.NoError(t, servesCerts(t, oldCerts, oldCert), "vtgate must serve the certificates it started with")
 
 		// A MySQL connection established before the reload.
