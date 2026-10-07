@@ -1540,11 +1540,17 @@ func (node *Literal) Format(buf *TrackedBuffer) {
 	case HexVal:
 		buf.astPrintf(node, "X'%#s'", node.Val)
 	case DateVal:
-		buf.astPrintf(node, "date'%#s'", node.Val)
+		// The value is the decoded string literal the tokenizer read, so it must be
+		// encoded like a string literal: printing it verbatim would let a quote in
+		// it close the literal.
+		buf.literal("date")
+		sqltypes.MakeTrusted(sqltypes.VarChar, node.Bytes()).EncodeSQL(buf)
 	case TimeVal:
-		buf.astPrintf(node, "time'%#s'", node.Val)
+		buf.literal("time")
+		sqltypes.MakeTrusted(sqltypes.VarChar, node.Bytes()).EncodeSQL(buf)
 	case TimestampVal:
-		buf.astPrintf(node, "timestamp'%#s'", node.Val)
+		buf.literal("timestamp")
+		sqltypes.MakeTrusted(sqltypes.VarChar, node.Bytes()).EncodeSQL(buf)
 	default:
 		panic("unexpected")
 	}
