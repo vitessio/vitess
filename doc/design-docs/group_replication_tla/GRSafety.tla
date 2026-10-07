@@ -187,8 +187,16 @@ CONSTANTS
                     \* of the same incarnation with quorum in its view and another ONLINE primary
     READ_VIEWS,     \* (fourth milestone) P2 reads the views of the reachable members, as the code does (TRUE),
                     \* or the ground truth: v active in no view, and no isolated MySQL believes in one (FALSE)
-    SEQ_FAULTS      \* liveness scenario: no crash, mysqld restart, leave or loss of majority happens while a listed
+    SEQ_FAULTS,     \* liveness scenario: no crash, mysqld restart, leave or loss of majority happens while a listed
                     \* voter is dead (the other faults come after the repair)
+    \* ==== forced EmergencyReparentShard (--group-replication-force-new-group) ====
+    FORCE,          \* the operator runs the forced reparent: it drops the voters that do not answer, and the group is
+                    \* bootstrapped from the others
+    FORCE_DOWN,     \* the operator's assertion holds: every voter that the forced reparent drops is down (FALSE: a
+                    \* dropped voter may run, cut off from the vtctld but not from the topology)
+    JOIN_SPARE      \* (JoinSpareBeforeGrow) a group of a single voter grows: its spare joins the group first, and
+                    \* GrowVoter seats it once it is ONLINE in the primary's view; a member that is not a voter
+                    \* leaves only while its group keeps a majority without it (memberMayLeave)
 
 InitVoters == Servers \ Spares
 InitUp == InitVoters \ InitDown
@@ -268,7 +276,8 @@ VARIABLES
                 \* removed a deleted voter)
     delAcked,   \* ghost: transactions that a primary whose record was deleted acknowledged (the accepted window
                 \* of a deletion with AllowPrimary, before VTOrc moves the primary role)
-    delTx,      \* the first transaction acknowledged after the first deletion of a voter's record (0: none yet)
+    delTx,      \* the first transaction acknowledged after the first deletion of a voter's record (0: none yet), or after
+                \* the forced reparent (FORCE)
     \* ==== second milestone ====
     voters,     \* Shard.group_replication_voters
     ovot,       \* VOT_SPLIT: [old: the list VTOrc o read, new: the list it selected, and writes next,
@@ -2115,6 +2124,10 @@ NLeave(s) ==
     /\ Free
     /\ NONVOTER_LEAVES /\ s \notin voters
     /\ up[s] /\ lk[s] = "free" /\ grp[s] # 0 /\ ~dead[grp[s]]
+    \* memberMayLeave (JOIN_SPARE only, which the earlier configurations leave out): not the group primary, and the
+    \* group keeps a majority of its members ONLINE without it
+    /\ JOIN_SPARE => /\ prim[grp[s]] # s
+                     /\ 2 * (Cardinality(view[grp[s]]) - 1) > Cardinality(view[grp[s]] \cup unr[grp[s]])
     /\ LeaveVars(s)
     /\ fenced' = [fenced EXCEPT ![s] = FALSE]
     /\ fcPend' = [fcPend EXCEPT ![s] = FALSE]
@@ -2204,8 +2217,13 @@ OGrow(o) ==
     /\ Cardinality(voters) < Seats
     /\ oph[o] = "idle" /\ lockOwner = NoOrc
     /\ \E p \in voters, x \in Servers \ voters :
-        /\ P1(p) /\ Cardinality(MyOnl(p) \cap voters) >= (Cardinality(voters) + 1) \div 2 + 1
-        /\ P3(x, p)
+        /\ P1(p)
+        /\ IF JOIN_SPARE /\ Cardinality(voters) = 1 /\ x \in MyOnl(p)
+           \* the spare joined p's group (JoinSpareBeforeGrow): P3 accepts it ONLINE in p's view
+           THEN /\ grp[x] = grp[p] /\ st[x] = "none" /\ x \notin deleted /\ ttype[x] = "R" /\ exec[x] \subseteq exec[p]
+                /\ Cardinality(MyOnl(p) \cap (voters \cup {x})) >= MajOf(voters \cup {x})
+           ELSE /\ Cardinality(MyOnl(p) \cap voters) >= (Cardinality(voters) + 1) \div 2 + 1
+                /\ P3(x, p)
         /\ VotDecide(o, voters \cup {x})
     /\ nVot' = nVot + 1
     /\ UNCHANGED <<vM, vT, vS, ocand, oexp, otok, oborn, oreq, orep, orp, vH, vB>>
@@ -2297,6 +2315,45 @@ ORemoveNoGroup(o) ==
     /\ UNCHANGED <<nCrash, nLeave, nLoss, nExpire, nProbe, died, deleted, nDie, nDel, delTx, delAcked>>
     /\ UNCHANGED <<vNp, vNd, udReq, gone, everP, nPrs, nUndo, nSetRW, err, ran>>
 
+\* (forced ERS) EmergencyReparentShard --group-replication-force-new-group, under the shard lock: no tablet that
+\* answers is an active member or runs a START, no intent is live, and some voters U do not answer; at least one
+\* voter answers. It drops U from the voters (a compare-and-swap on the list and the incarnation it read), and
+\* bootstraps the group from the other voters the way GroupNotBootstrapped does (bootstrap intent, required set,
+\* token, compare-and-swap of the incarnation): the model lets VTOrc's bootstrap, the same mechanism, do that
+\* part. With FORCE_DOWN, every voter in U is down (the operator's assertion); without it, a voter in U may run,
+\* cut off from the vtctld but not from the topology. delTx marks the first transaction acknowledged after the
+\* force. The accepted loss is what no voter of the new list holds (Excused): a transaction acknowledged before
+\* the force that a surviving voter held only in its relay log, which a restart of its mysqld discarded before
+\* the bootstrap, is in it, as if that restart had come before the force.
+OForce(o) ==
+    /\ Free
+    /\ FORCE /\ VOT_MODE = "swap" /\ nVot < MaxVot
+    /\ oph[o] = "idle" /\ lockOwner = NoOrc
+    /\ ~IntentLive(intent)
+    /\ \E U \in SUBSET voters :
+        /\ U # {} /\ U # voters
+        /\ FORCE_DOWN => \A v \in U : ~up[v]
+        /\ \A t \in Servers \ U : up[t] => grp[t] = 0 /\ st[t] = "none"
+        /\ \A w \in voters \ U : up[w]
+        /\ VotDecide(o, voters \ U)
+    /\ nVot' = nVot + 1
+    /\ delTx' = IF delTx = 0 THEN nextTx ELSE delTx
+    /\ UNCHANGED <<vM, vT, vS, ocand, oexp, otok, oborn, oreq, orep, orp, vH>>
+    /\ UNCHANGED <<nCrash, nLeave, nLoss, nExpire, nProbe, died, deleted, nDie, nDel, lostOK, delAcked>>
+    /\ UNCHANGED <<vNp, vNd, udReq, gone, everP, nPrs, nUndo, nSetRW, err, ran>>
+
+\* (JOIN_SPARE) JoinSpareBeforeGrow: a group of a single voter p, alone in its view, cannot hold a majority of
+\* the grown list (two of two) before the new voter is in it. Under the shard lock, VTOrc makes a valid spare x
+\* (P3) join p's group first, as a member that is not a voter; the list does not change.
+OJoinSpare(o) ==
+    /\ JOIN_SPARE /\ VOTERS /\ VOT_MODE = "swap"
+    /\ Cardinality(voters) = 1 /\ Cardinality(voters) < Seats
+    /\ oph[o] = "idle" /\ lockOwner = NoOrc
+    /\ \E p \in voters, x \in Servers \ voters :
+        /\ P1(p) /\ MyMem(p) = {p}
+        /\ P3(x, p)
+        /\ JoinBody(x)
+
 \* a host dies for good: a crash after which it never restarts
 Die(s) ==
     /\ Free
@@ -2311,7 +2368,7 @@ Step2 ==
         \/ DrSnap(s) \/ DrRead(s) \/ DrAct(s)
         \/ UdSnap(s) \/ UdRead(s) \/ UdAct(s) \/ RwSnap(s) \/ RwRead(s) \/ RwAct(s) \/ IP1(s) \/ IP2(s)
         \/ FenceDrop(s) \/ NLeave(s) \/ EnvJoin(s) \/ Die(s)
-    \/ \E o \in Orcs : OVotRead(o) \/ OVotWrite(o) \/ OSwap(o) \/ OGrow(o) \/ ORemove(o) \/ ORemoveNoGroup(o)
+    \/ \E o \in Orcs : OVotRead(o) \/ OVotWrite(o) \/ OSwap(o) \/ OGrow(o) \/ ORemove(o) \/ ORemoveNoGroup(o) \/ OForce(o) \/ OJoinSpare(o)
     \/ GraceExpire \/ OAdoptUnrec \/ OMoveToVoter \/ OMoveFromDeleted \/ ODelete \/ PBegin \/ EBegin \/ PDemote \/ PWait \/ PPromote \/ PEnd \/ PAbort \/ OUndo \/ PIBegin \/ PIRecord
 
 ----------------------------------------------------------------------------
@@ -2503,7 +2560,9 @@ NoDualBootstrap ==
             => ~(Alive(i) /\ Alive(j))
 
 \* NoLostAck, except the transactions that only deleted voters hold (REVISION 2: the operator accepted their loss)
-Excused(t) == t \in lostOK \/ (Holders(t) # {} /\ Holders(t) \subseteq deleted)
+Excused(t) == \/ t \in lostOK \/ (Holders(t) # {} /\ Holders(t) \subseteq deleted)
+              \* (forced ERS) acknowledged before the force, and no voter of the new list holds it
+              \/ (FORCE /\ delTx # 0 /\ t < delTx /\ Holders(t) \cap voters = {})
 NoLostAckExceptDeleted ==
     LET A == {t \in acked : ~Excused(t)} IN
     /\ recInc # 0 => A \subseteq hist[recInc]
@@ -2529,6 +2588,9 @@ NoStalePrimaryRecorded == ~stRec
 \* (fourth milestone) reachability witnesses, not properties: each is violated in a state where the scenario
 \* it names is reachable (witness configurations)
 \* an isolated member that VTOrc reads as a settled legitimate source (P1 on a stale view)
+\* (JOIN_SPARE) witness: a spare that is not a voter is in the group of the single voter
+WitJoinSpare == ~(\E p \in voters, x \in Servers \ voters :
+                    Cardinality(voters) = 1 /\ grp[x] # 0 /\ grp[x] = grp[p] /\ x \in view[grp[x]])
 WitStaleP1 == ~\E p \in Servers : Stale(p) /\ P1(p)
 \* a voter that P2 reads as active in no view while the majority side still lists it UNREACHABLE
 WitP2Unreach == ~\E v \in voters : P2(v) /\ \E i \in Incs : v \in unr[i]
@@ -2552,7 +2614,7 @@ WitGrowStale == ~\E p \in voters, x \in Servers \ voters :
 
 \* the redesign shrinks the list only for a deleted record (RemoveVoter), and grows it only up to the cells
 VoterCount == VOT_MODE = "swap" =>
-                  /\ (nDel = 0 /\ InitDeleted = {}) => Cardinality(voters) >= Cardinality(InitVoters)
+                  /\ (nDel = 0 /\ InitDeleted = {} /\ ~FORCE) => Cardinality(voters) >= Cardinality(InitVoters)
                   /\ Cardinality(voters) <= Seats
 \* a tablet that serves as PRIMARY, and whose MySQL takes writes, is a listed voter (a PRIMARY tablet whose
 \* MySQL left its group is read-only until the sync loop demotes it)

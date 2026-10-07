@@ -612,6 +612,30 @@ The soak found a primary that is paused, or cut off and healed before it learns 
 
 The partition timeouts (`Detect`, `Heal`, `Expel`, `Block`) are strongly fair in `GRLiveness.tla`: they are MySQL's timers, which run while the tablets' atomic decisions come and go; with weak fairness, the alternating promotions above kept `Detect` intermittently disabled and `live_flag1` reported a spurious `EventuallyServes` violation.
 
+## Fifth milestone: forced ERS and a group of a single voter
+
+`EmergencyReparentShard --group-replication-force-new-group` starts a new group from the voters that answer once the group lost its majority and its members left it, and VTOrc grows a group of a single voter back (JoinSpareBeforeGrow, then GrowVoter). See "Forced ERS" and "Voters" in the design.
+
+### What the model adds
+
+- `OForce(o)` (`FORCE`): under the shard lock, while no tablet that is up is an active member or runs a `START` and no intent is live, the forced reparent drops a set `U` of voters, neither empty nor all of them, keeping the voters outside `U`, which must be up. It is the voter write (atomic, like `ORemoveNoGroup`); the bootstrap that follows is VTOrc's `OBegin`/`OIntent`/`OReply` path, which the code's force path reuses (intent, required set, token, compare-and-swap of the incarnation, adoption, withdrawal). With `FORCE_DOWN`, every voter in `U` is down: the operator's assertion. Without it, a voter in `U` may run, cut off from the vtctld only: it reads the shard record (the model's tablets read the current record unless `STALE_REC`).
+- The accepted loss (`Excused`): a transaction acknowledged before the force (`delTx` marks the first one after it) that no voter of the new list holds. The first run of `force_down` checked a static set instead, what no surviving voter held at the force, and found a transaction that a survivor held only in its relay log, discarded by a restart of its mysqld after the force (14 states): the same loss as if that restart had come before the force, so the rule is dynamic. A transaction acknowledged after the force is never excused (`NoLostAckAfterDelete`), nor one that a voter of the new list executed.
+- `OJoinSpare(o)` (`JOIN_SPARE`): a group of a single voter `p`, alone in its view, with P1: a valid spare `x` (P3) starts its join (`JoinBody`); the list does not change. `OGrow` then accepts, for a group of a single voter only, a spare ONLINE in `p`'s view, of `p`'s incarnation, with no `START` and nothing `p` lacks, and checks the majority of the grown list in `p`'s view with it. `NLeave` gains the code's `memberMayLeave` under `JOIN_SPARE`: a member that is not a voter leaves only if it is not the group primary and its group keeps a majority of its members ONLINE without it.
+
+### Results
+
+| Configuration | Checks | Outcome | Distinct states | Depth | Time |
+|---|---|---|---|---|---|
+| `force_down` | forced reparent, the dropped voters down; two crashes, one leave, one loss of majority; every invariant, `NoLostAckExceptDeleted` and `NoLostAckAfterDelete` | no error (exhaustive) | 3,933,299 | 49 | 8m52 |
+| `force_grow` | as `force_down`, with `JOIN_SPARE` and a second voter write: a dropped voter that restarts joins the single voter's group and takes a seat | no error (exhaustive) | 4,664,795 | 50 | 10m45 |
+| `wit_force_grow` | witness: a spare that is not a voter is in the single voter's group (`WitJoinSpare`) | violated, 15 states | 146,110 | 15 | 19s |
+| `force_lost` | as `force_down`, checking `NoLostAck`: the accepted loss | violated, 12 states | 26,700 | 12 | 7s |
+| `force_live` | a dropped voter runs, cut off from the vtctld only | `NoNonVoterServes` violated, 3 states | 155 | 5 | 1s |
+
+- **The accepted loss** (`force_lost`): s1, the primary, commits a write that no other member received yet, leaves the group and crashes; s2 crashes, and the group of s2 and s3 loses its majority; the operator drops s1 and s2, and the group is bootstrapped from s3: the write is lost, which is what the operator accepts.
+- **A dropped voter that runs** (`force_live`): the forced reparent drops voters whose group still runs, cut off from the vtctld; their primary serves while it is no longer a voter, until its tablet reads the new list (`FenceDrop`, the code's `groupReplicationNotVoter`), next to the new group. A tablet that cannot reach the topology server does not read it at all, which the model leaves out: that is why the operator must make sure that the dropped voters are down.
+- **Growth from a single voter**: a simulation of `force_grow` reaches a group of two voters, both ONLINE in the recorded incarnation, after the force left one (26 states: s1 and s2 dropped, s3 bootstrapped, s1 restarts, joins as a spare, and takes the seat).
+
 ## Conformance: actions and the code they model
 
 Paths are relative to `go/vt/`; line numbers are on `group-replication-prototype` at the commit that adds this model, and for the second milestone's rows at f528e9a. The fixes on `gr-fixes5` are named by function: their lines may move before the merge.
@@ -666,6 +690,8 @@ Paths are relative to `go/vt/`; line numbers are on `group-replication-prototype
 | `Isolate`, `Detect`, `Expel`, `Block`, `Heal`, `PClean` | MySQL Group Replication: XCom's failure detector, expulsion (`group_replication_member_expel_timeout`), `group_replication_unreachable_majority_timeout`; `replication_group_members` as `fillGroupReplicationMemberStatus` reads it (`mysql/group_replication.go`) | Fourth milestone. A cut isolates a minority side of a view; its members keep their old view (ONLINE, with quorum, until `Detect`); the majority side lists them UNREACHABLE until it expels them. Commits, deliveries, elections, joins and expulsions need the real quorum. `Block` is final. |
 | `MyMem`, `MyOnl`, `MyPrim`, `MyQuorum`, `IsPrimQ`; `P1`, `NoViewRead`, `MyMem(p)` in `ORemove`, `P3` | `IsGroupPrimary`, `HasQuorum`; `settledPrimary`, `activeAnywhere`, `inPrimaryView`, `spare` (`vtorc/inst/group_replication_voters.go`) | Each MySQL's own view, which VTOrc and the tablets read; `RealPrimQ` and `CanAccept` are the ground truth. `READ_VIEWS` selects the code's P2. |
 | `EndTerm`; `PROMOTE_CHECK` in `PrSnap` | `endPrimaryTerm` on an active member (`vttablet/tabletmanager/shard_sync.go`); the proposed check before `groupReplicationSync.promote` (FLAG 1) | Only the tablet type changes; MySQL stays writable. The check reads the recorded tablet's status in the same step as the promotion's snapshot (atomic decisions). |
+| `OForce` | `forceNewGroupReplicationGroup`, `planForcedGroup`, `writeForcedGroupVoters` (`vtctl/reparentutil/emergency_reparenter_gr_force.go`) | The read and the voter write are one step; the bootstrap is VTOrc's actions, which the force path reuses. |
+| `OJoinSpare`; `OGrow` and `NLeave` with `JOIN_SPARE` | JoinSpareBeforeGrow and `spare(..., joined)` in `PlanGroupVoters` (`vtorc/inst/group_replication_voters.go`), `updateGroupReplicationVoters` (`vtorc/logic/group_replication_recovery.go`); `memberMayLeave` (`vttablet/tabletmanager/group_replication_sync.go`) | The decision and the start of the join are one step; the join's end is `JoinComplete`. |
 
 ## What the model does not cover
 
