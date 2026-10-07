@@ -39,12 +39,14 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/semisyncmonitor"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
 	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
 
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 func newTestReplicationTM(tablet *topodatapb.Tablet, mysqlDaemon mysqlctl.MysqlDaemon, ts *topo.Server) *TabletManager {
@@ -1878,7 +1880,9 @@ func TestChangeTypeDrainedRepairsAcknowledgementsWithoutReclaiming(t *testing.T)
 	assert.False(t, daemon.SemiSyncReplicaEnabled)
 }
 
-func TestChangeTypeDrainedDemotesPrimaryBeforeSemiSync(t *testing.T) {
+// TestChangeTypeDrainedRejectsPrimary checks that draining a primary is rejected
+// before changing its tablet type, serving state, or MySQL durability settings.
+func TestChangeTypeDrainedRejectsPrimary(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	t.Cleanup(cancel)
 	ts := memorytopo.NewServer(ctx, "cell1")
@@ -1893,11 +1897,13 @@ func TestChangeTypeDrainedDemotesPrimaryBeforeSemiSync(t *testing.T) {
 	tm.MysqlDaemon = daemon
 	require.True(t, tm.QueryServiceControl.IsServing())
 
-	require.NoError(t, tm.ChangeType(ctx, topodatapb.TabletType_DRAINED, true))
-	require.True(t, daemon.disabledSourceSemiSync)
-	assert.False(t, daemon.servingWhenDisabled)
-	assert.True(t, fake.SuperReadOnly.Load())
-	assert.False(t, fake.SemiSyncPrimaryEnabled)
-	assert.False(t, fake.SemiSyncReplicaEnabled)
-	assert.Equal(t, topodatapb.TabletType_DRAINED, tm.Tablet().Type)
+	err := tm.ChangeType(ctx, topodatapb.TabletType_DRAINED, true)
+	require.ErrorContains(t, err, "reparent the shard first")
+	assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+	assert.False(t, daemon.disabledSourceSemiSync)
+	assert.True(t, tm.QueryServiceControl.IsServing())
+	assert.False(t, fake.SuperReadOnly.Load())
+	assert.True(t, fake.SemiSyncPrimaryEnabled)
+	assert.True(t, fake.SemiSyncReplicaEnabled)
+	assert.Equal(t, topodatapb.TabletType_PRIMARY, tm.Tablet().Type)
 }
