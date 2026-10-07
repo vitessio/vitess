@@ -2337,7 +2337,7 @@ func TestSettingsRejectUnsafeConnectionCharsets(t *testing.T) {
 	for _, setting := range []string{"set character_set_client = 'gbk'", "set names 'sjis'", "set collation_connection = 'cp932_japanese_ci'"} {
 		t.Run(setting, func(t *testing.T) {
 			assertSettingRefused(t, setting)
-			_, err := tsv.Execute(ctx, nil, tsv.sm.Target(), setting, nil, 0, 0, nil)
+			_, err := tsv.Execute(ctx, tsv.sm.Target(), setting, nil, 0, 0, nil)
 			require.ErrorContains(t, err, "unsupported connection character set")
 			assert.Zero(t, db.GetQueryCalledNum(setting), "a rejected setting must not reach the backend")
 		})
