@@ -119,6 +119,7 @@ EXPECTED=(
   force_down:pass
   force_grow:pass
   prs_swap:pass
+  prs_swap_core:pass
   prs_swap_nodemoted:NoNonVoterServes
   prs_swap_noholds:NoLostAck
   prs_swap_norevertcheck:NoVoterMinority
