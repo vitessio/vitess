@@ -1709,6 +1709,33 @@ func TestSetReplicationSourceDemotesPrimaryBeforeSemiSync(t *testing.T) {
 	assert.Equal(t, topodatapb.TabletType_REPLICA, tm.Tablet().Type)
 }
 
+// TestChangeTypeReportsStatusErrorAfterPublishing checks that non-DRAINED type
+// changes report replication status failures after publishing the requested type.
+func TestChangeTypeReportsStatusErrorAfterPublishing(t *testing.T) {
+	for _, tabletType := range []topodatapb.TabletType{topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY} {
+		t.Run(tabletType.String(), func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+			t.Cleanup(cancel)
+			ts := memorytopo.NewServer(ctx, "cell1")
+			tm := newTestTM(t, ts, 1, "ks", "0", nil)
+			t.Cleanup(tm.Stop)
+			fake := tm.MysqlDaemon.(*mysqlctl.FakeMysqlDaemon)
+			fake.DB().SetNeverFail(true)
+			require.NoError(t, tm.ChangeType(ctx, topodatapb.TabletType_SPARE, false))
+			injectedErr := errors.New("injected replication status failure")
+			fake.ReplicationStatusError = injectedErr
+
+			err := tm.ChangeType(ctx, tabletType, true)
+			require.ErrorContains(t, err, injectedErr.Error())
+			require.ErrorContains(t, err, "failed to read replication status")
+			assert.Equal(t, tabletType, tm.Tablet().Type)
+			ti, err := ts.GetTablet(ctx, tm.Tablet().Alias)
+			require.NoError(t, err)
+			assert.Equal(t, tabletType, ti.Type)
+		})
+	}
+}
+
 // TestChangeTypeDrainedStopsSemiSyncAcks checks that a tablet changed to DRAINED stops sending
 // semi-sync ACKs even when the caller asks for them (VTOrc's errant GTID recovery before v25).
 func TestChangeTypeDrainedStopsSemiSyncAcks(t *testing.T) {
