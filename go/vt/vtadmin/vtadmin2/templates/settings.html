@@ -1,0 +1,38 @@
+{{ define "settings.html" }}
+{{ template "layout" . }}
+{{ end }}
+
+{{ define "content" }}
+{{ $d := .Data }}
+<div class="toolbar">
+  <h1>Settings</h1>
+</div>
+
+<div class="card">
+  <form method="POST" action="/settings" class="form-grid">
+    <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+    <label>
+      Theme
+      <select name="theme">
+        <option value="system"{{ if eq $d.Theme "system" }} selected{{ end }}>System</option>
+        <option value="light"{{ if eq $d.Theme "light" }} selected{{ end }}>Light</option>
+        <option value="dark"{{ if eq $d.Theme "dark" }} selected{{ end }}>Dark</option>
+      </select>
+      <span class="muted">System follows your operating system preference.</span>
+    </label>
+    <label>
+      Default cluster
+      <select name="default_cluster">
+        <option value="">None</option>
+        {{ range $d.Clusters }}
+        <option value="{{ .GetId }}"{{ if eq .GetId $d.DefaultCluster }} selected{{ end }}>{{ .GetName }} ({{ .GetId }})</option>
+        {{ end }}
+      </select>
+      <span class="muted">Pre-selects this cluster on pages that filter by cluster.</span>
+    </label>
+    <div>
+      <button type="submit" class="button">Save settings</button>
+    </div>
+  </form>
+</div>
+{{ end }}
