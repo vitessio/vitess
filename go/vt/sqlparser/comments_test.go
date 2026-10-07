@@ -269,6 +269,14 @@ func TestRewriteDoubleSlashComments(t *testing.T) {
 	}, {
 		input:  "select 'a // b",
 		output: "select 'a // b",
+	}, {
+		input:  "select @'ab' // x\n",
+		output: "select @'ab' #/ x\n",
+	}, {
+		// Vitess cannot read this quoted user variable name whole, so it is
+		// a lexing error and nothing in it or after it is rewritten.
+		input:  "do @'a//b' := 1 // x\n",
+		output: "do @'a//b' := 1 // x\n",
 	}}
 	parser := NewTestParser()
 	for _, tcase := range testCases {
