@@ -280,7 +280,7 @@ func (env *Environment) ParseConnectionCharset(csname string) (ID, error) {
 		return 0, fmt.Errorf("unsupported connection character set: %q", csname)
 	}
 	if _, ok := env.ConnectionCharset(collid); !ok {
-		return 0, fmt.Errorf("unsupported connection character set: %q: its multibyte characters can contain ASCII bytes such as a quote or backslash, which Vitess cannot parse or escape safely; use utf8mb4 instead", csname)
+		return 0, fmt.Errorf("unsupported connection character set: %q: its multibyte characters can contain a backslash or back quote byte, which Vitess cannot parse or escape safely; use utf8mb4 instead", csname)
 	}
 	return collid, nil
 }
@@ -294,8 +294,8 @@ func (env *Environment) ParseConnectionCharset(csname string) (ID, error) {
 // letters as the second byte of a character, and swe7 maps 0x5C and 0x60 to
 // letters of its own, but MySQL still reads those two bytes as a backslash and a
 // back quote in SQL text. It does not hold for sjis, cp932, gbk, big5 and
-// gb18030, where the second byte of a character can be a quote, a backslash or a
-// back quote, nor for ucs2, utf16, utf16le and utf32, which MySQL does not accept
+// gb18030, where the second byte of a character can be a backslash or a back
+// quote, nor for ucs2, utf16, utf16le and utf32, which MySQL does not accept
 // as a client character set anyway.
 var connectionCharsets = map[string]bool{
 	"utf8mb4": true,
