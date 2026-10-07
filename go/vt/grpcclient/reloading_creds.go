@@ -87,8 +87,15 @@ func (c *reloadingCreds) ServerHandshake(rawConn net.Conn) (net.Conn, credential
 	return c.current().ServerHandshake(rawConn)
 }
 
+// Info returns the protocol info of the credentials in use. It does
+// not rebuild them: the server name and security level it reports are
+// fixed by the paths and mode the credentials were built with, which
+// no reload changes, and a metadata call must not cost the disk reads
+// and signature checks that a rebuild does.
 func (c *reloadingCreds) Info() credentials.ProtocolInfo {
-	return c.current().Info()
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.creds.Info()
 }
 
 func (c *reloadingCreds) Clone() credentials.TransportCredentials {
