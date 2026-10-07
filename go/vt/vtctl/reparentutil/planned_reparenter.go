@@ -331,7 +331,7 @@ func (pr *PlannedReparenter) performGracefulPromotion(
 	var swapErr error
 	if swap := opts.grSwap; swap != nil && swap.afterDemote {
 		event.DispatchUpdate(ev, "swapping the primary-elect in as a voter for the demoted primary")
-		reverted, err := pr.swapAfterDemote(ctx, ev, keyspace, shard, swap, currentPrimary.Tablet, opts)
+		reverted, err := pr.swapAfterDemote(ctx, ev, keyspace, shard, swap, currentPrimary.Tablet, primaryStatus.Position, opts)
 		if err != nil && !reverted {
 			// The old primary is no longer a voter: the demotion is not undone (it would not serve).
 			return vterrors.Wrapf(err, "failed to swap primary-elect tablet %v in as a voter; the demoted primary %v is no longer a voter, and VTOrc moves the group primary to a voter",

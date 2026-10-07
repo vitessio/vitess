@@ -22,9 +22,11 @@ import (
 	"maps"
 	"slices"
 	"strings"
+	"time"
 
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools/events"
@@ -223,8 +225,9 @@ func (pr *PlannedReparenter) swapInElect(ctx context.Context, ev *events.Reparen
 	return nil
 }
 
-// swapAfterDemote swaps the elect in for the demoted current primary (see planGroupReplicationSwap): it checks
-// the swap again on a fresh read, writes the new voters, and makes the elect join the group. On a failure after
+// swapAfterDemote swaps the elect in for the demoted current primary (see planGroupReplicationSwap): it waits
+// until the voters of the new list hold what the demoted primary executed (waitForNewVotersToHold), checks the
+// swap again on that read, writes the new voters, and makes the elect join the group. On a failure after
 // the write, if the elect is not ONLINE in the group after all, it stops the elect's join and writes the old
 // voters back (a compare-and-swap on the new ones), so
 // that the caller can undo the demotion of a primary that is a voter again, unless a member's view of the
@@ -234,9 +237,12 @@ func (pr *PlannedReparenter) swapInElect(ctx context.Context, ev *events.Reparen
 // and VTOrc moves the group primary to a voter (GroupPrimaryNotVoter). It returns whether the old voters are
 // listed again.
 func (pr *PlannedReparenter) swapAfterDemote(ctx context.Context, ev *events.Reparent, keyspace, shard string, plan *groupSwapPlan,
-	currentPrimary *topodatapb.Tablet, opts PlannedReparentOptions,
+	currentPrimary *topodatapb.Tablet, demotedPosition string, opts PlannedReparentOptions,
 ) (reverted bool, err error) {
-	statuses := fetchFullStatuses(ctx, pr.tmc, plan.tablets, topo.RemoteOperationTimeout)
+	statuses, err := pr.waitForNewVotersToHold(ctx, plan, demotedPosition, opts)
+	if err != nil {
+		return true, err
+	}
 	if err := checkGroupSwap(plan, statuses, currentPrimary); err != nil {
 		return true, err
 	}
@@ -293,6 +299,46 @@ func swapRevertRefusal(plan *groupSwapPlan, statuses map[string]*fullStatusResul
 	}
 	return ""
 }
+
+// waitForNewVotersToHold waits, within the replica wait timeout, until the voters of the plan's new list hold,
+// executed or received, every transaction that the demoted primary executed (demotedPosition), and returns the
+// statuses of the last read. The demoted primary no longer commits, and the new list drops it: a bootstrap of
+// the group from the new list, which needs every voter of it (GroupNotBootstrapped), must not lose an
+// acknowledged transaction that only the demoted primary held (the TLA+ model's prs_swap_noholds). The elect,
+// an asynchronous replica of the demoted primary that PRS caught up before the demotion, usually holds them
+// already; the other voters receive them from the group.
+func (pr *PlannedReparenter) waitForNewVotersToHold(ctx context.Context, plan *groupSwapPlan, demotedPosition string, opts PlannedReparentOptions) (map[string]*fullStatusResult, error) {
+	position, err := replication.DecodePosition(demotedPosition)
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "failed to decode the position %q of the demoted primary", demotedPosition)
+	}
+	waitCtx, waitCancel := context.WithTimeout(ctx, opts.WaitReplicasTimeout)
+	defer waitCancel()
+	for {
+		statuses := fetchFullStatuses(waitCtx, pr.tmc, plan.tablets, topo.RemoteOperationTimeout)
+		var held replication.GTIDSet = replication.Mysql56GTIDSet{}
+		for _, voter := range plan.newVoters {
+			if res := statuses[topoproto.TabletAliasString(voter)]; res != nil && res.err == nil {
+				if _, all, err := GroupMemberGTIDSets(res.status); err == nil {
+					held = held.Union(all)
+				}
+			}
+		}
+		if position.GTIDSet == nil || held.Contains(position.GTIDSet) {
+			return statuses, nil
+		}
+		select {
+		case <-waitCtx.Done():
+			return nil, vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED,
+				"the voters of the new list [%s] do not hold every transaction that the demoted primary executed (%s), within %v: they lack %s",
+				votersString(plan.newVoters), position.GTIDSet, opts.WaitReplicasTimeout, gtidSetDifference(position.GTIDSet, held))
+		case <-time.After(swapHoldPollInterval):
+		}
+	}
+}
+
+// swapHoldPollInterval is how often waitForNewVotersToHold reads the voters' statuses again.
+var swapHoldPollInterval = 100 * time.Millisecond
 
 // electOnlineInGroup returns whether the elect's MySQL is ONLINE in a view of the shard's recorded incarnation.
 func electOnlineInGroup(plan *groupSwapPlan, elect *fullStatusResult) bool {
