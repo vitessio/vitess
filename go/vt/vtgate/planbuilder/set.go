@@ -230,22 +230,31 @@ func validateSQLModePlan(inner planFunc) planFunc {
 // whose character set cannot be judged here, are left to the wrapped planFunc.
 func validateConnectionCharsetPlan(inner planFunc) planFunc {
 	return func(expr *sqlparser.SetExpr, vschema plancontext.VSchema, ec *expressionConverter) (engine.SetOp, error) {
-		var name string
+		var safe bool
 		switch value := expr.Expr.(type) {
 		case *sqlparser.Literal:
-			if value.Type != sqlparser.StrVal {
+			switch value.Type {
+			case sqlparser.StrVal:
+				safe = collations.IsConnectionCharsetName(value.Val)
+			case sqlparser.IntVal:
+				// MySQL also accepts a collation ID, and refuses 0 and an ID it
+				// does not define.
+				id, err := strconv.ParseUint(value.Val, 10, 16)
+				if err == nil && id != 0 {
+					_, safe = vschema.Environment().CollationEnv().ConnectionCharset(collations.ID(id))
+				}
+			default:
 				return inner(expr, vschema, ec)
 			}
-			name = value.Val
 		case *sqlparser.ColName:
 			if !value.Qualifier.IsEmpty() {
 				return inner(expr, vschema, ec)
 			}
-			name = value.Name.String()
+			safe = collations.IsConnectionCharsetName(value.Name.String())
 		default:
 			return inner(expr, vschema, ec)
 		}
-		if !collations.IsConnectionCharsetName(name) {
+		if !safe {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported connection character set %s for %s: use utf8mb4", sqlparser.String(expr.Expr), expr.Var.Name.Lowered())
 		}
 		return inner(expr, vschema, ec)
