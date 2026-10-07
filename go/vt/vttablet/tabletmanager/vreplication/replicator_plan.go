@@ -665,6 +665,53 @@ func (tp *TablePlan) bindAfterJSONFieldVals(rowChange *binlogdatapb.RowChange, a
 	return nil
 }
 
+// validateRowImage checks that a row (a change's Before or After image, or a
+// copy-phase row) is consistent with the table plan before its values are
+// read: one length per field, each length either -1 (an omitted value) or a
+// byte count the Values buffer can still satisfy. A shorter row would make
+// the per-field loops index out of range, a longer one would make
+// MakeRowTrusted index fields out of range, and a short Values buffer would
+// make the value slicing go out of range. Negative lengths other than -1 are
+// rejected as well: the readers treat them as NULL, which for a PK column
+// turns a delete into a silent no-op. Lengths are checked one at a time
+// against the remaining buffer so that adding them up cannot overflow, and
+// they must consume the buffer exactly: Values is defined as the
+// concatenation of the row's values, so trailing bytes mean a length
+// under-declares a value and the remaining values would be applied shifted.
+// The vstreamer derives the field event and every row from the same plan, so
+// a mismatch is a malformed stream payload that replaying the same event
+// cannot repair: the error is terminal, like the shape checks on the bulk
+// paths. what names the row for the error message, e.g. "Before image of
+// bulk-delete change" or "copy row".
+func (tp *TablePlan) validateRowImage(row *querypb.Row, what string) error {
+	if len(row.Lengths) != len(tp.Fields) {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+			"vreplication: %s for table %s is malformed (%d values, expected %d)",
+			what, tp.TargetName, len(row.Lengths), len(tp.Fields))
+	}
+	remaining := int64(len(row.Values))
+	for i, length := range row.Lengths {
+		switch {
+		case length < -1:
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+				"vreplication: %s for table %s is malformed (invalid length %d at column %d)",
+				what, tp.TargetName, length, i)
+		case length > remaining:
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+				"vreplication: %s for table %s is malformed (length %d at column %d exceeds the %d bytes remaining)",
+				what, tp.TargetName, length, i, remaining)
+		case length > 0:
+			remaining -= length
+		}
+	}
+	if remaining != 0 {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+			"vreplication: %s for table %s is malformed (%d trailing bytes after the declared lengths)",
+			what, tp.TargetName, remaining)
+	}
+	return nil
+}
+
 func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor func(string) (*sqltypes.Result, error)) (*sqltypes.Result, error) {
 	// MakeRowTrusted is needed here because Proto3ToResult is not convenient.
 	var (
@@ -674,6 +721,9 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 	bindvars := make(map[string]*querypb.BindVariable, len(tp.Fields))
 	if rowChange.Before != nil {
 		before = true
+		if err := tp.validateRowImage(rowChange.Before, "Before image of change"); err != nil {
+			return nil, err
+		}
 		vals := sqltypes.MakeRowTrusted(tp.Fields, rowChange.Before)
 		for i, field := range tp.Fields {
 			bindVar, err := tp.bindFieldVal(field, &vals[i])
@@ -685,6 +735,9 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 	}
 	if rowChange.After != nil {
 		after = true
+		if err := tp.validateRowImage(rowChange.After, "After image of change"); err != nil {
+			return nil, err
+		}
 		afterVals = sqltypes.MakeRowTrusted(tp.Fields, rowChange.After)
 		for i, field := range tp.Fields {
 			bindVar, err := tp.bindFieldVal(field, &afterVals[i])
@@ -906,6 +959,9 @@ func (tp *TablePlan) applyBulkDeleteChanges(rowDeletes []*binlogdatapb.RowChange
 				"vreplication: bulk-delete change for table %s is not delete-shaped (Before image only); a mixed row event must be applied per-change",
 				tp.TargetName)
 		}
+		if err := tp.validateRowImage(rowDelete.Before, "Before image of bulk-delete change"); err != nil {
+			return nil, err
+		}
 		vals := sqltypes.MakeRowTrusted(tp.Fields, rowDelete.Before)
 		addedSize := int64(len(vals[pkIndex].Raw()) + 2) // Plus 2 for the comma and space
 		if querySize+addedSize > maxQuerySize {
@@ -963,6 +1019,12 @@ func (tp *TablePlan) applyBulkInsertChanges(rowInserts []*binlogdatapb.RowChange
 			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
 				"vreplication: bulk-insert change for table %s is not insert-shaped (After image only); a mixed row event must be applied per-change",
 				tp.TargetName)
+		}
+		// Validate before the JSON size check so that a corrupted length on a
+		// JSON column is reported as a malformed image rather than as a row
+		// size violation, matching applyChange.
+		if err := tp.validateRowImage(rowInsert.After, "After image of bulk-insert change"); err != nil {
+			return nil, err
 		}
 		if limit > 0 {
 			if err := tp.checkInsertJSONRowSize(rowInsert.After, nil, nil, limit); err != nil {
@@ -1071,9 +1133,8 @@ func (tp *TablePlan) appendFromRow(buf *bytes2.Buffer, row *querypb.Row) error {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "wrong number of fields: got %d fields for %d bind locations",
 			len(tp.Fields), len(bindLocations))
 	}
-	if len(row.Lengths) < len(tp.Fields) {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "wrong number of lengths: got %d lengths for %d fields",
-			len(row.Lengths), len(tp.Fields))
+	if err := tp.validateRowImage(row, "copy row"); err != nil {
+		return err
 	}
 
 	// Bind field values to locations.
