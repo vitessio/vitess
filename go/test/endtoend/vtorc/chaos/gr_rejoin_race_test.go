@@ -40,7 +40,13 @@ import (
 //
 // CHAOS_RACE_CYCLES (default 6) is the number of cycles, CHAOS_RACE_OFFSETS (default
 // "0.5s,1.5s,2.5s") the offsets after the joiner's START, used in turn, and CHAOS_RACE_ISOLATION
-// (default 20s) how long the primary's cell stays isolated.
+// (default 20s) how long the primary's cell stays isolated. With a fixed offset, whether the group
+// admitted the joiner before the cut depends on the host's load. CHAOS_RACE_TRIGGER instead cuts on
+// the observed join: "before-admission" right after the joiner's START, before the other voter
+// lists it, and "after-admission" once the other voter lists it ONLINE or RECOVERING ("offset", the
+// default, keeps the fixed offsets). Each cycle reports when the other voter first listed the
+// joiner, the joiner's InnoDB initialization, and the CPU pressure (/proc/pressure/cpu) over the
+// cycle; a cycle with CPU stalls above underLoadShare is flagged as taken under load.
 func TestG12VoterRejoinsWhilePrimaryCellIsolated(t *testing.T) {
 	requireGR(t)
 	cycles := 6
@@ -70,12 +76,29 @@ func TestG12VoterRejoinsWhilePrimaryCellIsolated(t *testing.T) {
 		}
 		isolation = d
 	}
+	trigger, err := raceTrigger()
+	if err != nil {
+		t.Fatal(err)
+	}
 	runScenario(t, "G12-voter-rejoin-primary-cell-isolated", Options{}, func(s *Scenario) {
+		var kept, underLoad, unexpected int
 		for i := range cycles {
-			if !s.rejoinRaceCycle(i+1, offsets[i%len(offsets)], isolation) {
+			res, ok := s.rejoinRaceCycle(i+1, trigger, offsets[i%len(offsets)], isolation)
+			if res.kept {
+				kept++
+			}
+			if res.underLoad {
+				underLoad++
+			}
+			if res.unexpected {
+				unexpected++
+			}
+			if !ok {
 				break
 			}
 		}
+		s.R.outcome("G12 trigger=%s: majority kept in %d of %d cycles; %d cycles taken under load; %d cycles with an unexpected outcome",
+			trigger, kept, cycles, underLoad, unexpected)
 		s.Sleep(5*time.Second, "settle")
 	})
 }
@@ -86,6 +109,8 @@ const (
 	myGRViewChanged   = "MY-011503" // Group membership changed to ...
 	myGRMajorityLeave = "MY-011711" // leaves after group_replication_unreachable_majority_timeout
 	myGRNoDonor       = "MY-015084" // No donor available to provide the certification information
+	myInnoDBInitStart = "MY-013576" // InnoDB initialization has started
+	myInnoDBInitEnd   = "MY-013577" // InnoDB initialization has ended
 )
 
 // errLogLine is one line of a MySQL error log.
@@ -214,13 +239,19 @@ func windowOutage(recs []WriteRecord, from, to time.Time) (time.Duration, time.D
 	return longest, total
 }
 
-// rejoinRaceCycle runs one cycle of G12 with the given offset and isolation. It returns false when
-// the cluster did not converge, and the scenario should stop.
-func (s *Scenario) rejoinRaceCycle(k int, offset, isolation time.Duration) bool {
+// raceResult is the outcome of one G12 cycle.
+type raceResult struct {
+	kept, underLoad, unexpected bool
+}
+
+// rejoinRaceCycle runs one cycle of G12 with the given trigger, offset and isolation. It returns
+// false when the cluster did not converge, and the scenario should stop.
+func (s *Scenario) rejoinRaceCycle(k int, trigger string, offset, isolation time.Duration) (raceResult, bool) {
+	var res raceResult
 	_, probs, _ := s.WaitConverged(240 * time.Second)
 	if len(probs) > 0 {
 		s.R.violation("cycle %d: cluster not converged before the cycle: %s", k, strings.Join(probs, "; "))
-		return false
+		return res, false
 	}
 	p := s.topoPrimary()
 	var secondaries []*Node
@@ -231,7 +262,9 @@ func (s *Scenario) rejoinRaceCycle(k int, offset, isolation time.Duration) bool 
 	}
 	joiner, other := secondaries[k%2], secondaries[(k+1)%2]
 	tag := fmt.Sprintf("cycle %d", k)
-	s.Log.Add("race", fmt.Sprintf("%s: offset %v, primary %s, joiner %s, other %s", tag, offset, p.Tablet.Alias, joiner.Tablet.Alias, other.Tablet.Alias))
+	s.Log.Add("race", fmt.Sprintf("%s: trigger %s, offset %v, primary %s, joiner %s, other %s", tag, trigger, offset, p.Tablet.Alias, joiner.Tablet.Alias, other.Tablet.Alias))
+	joinerUUID := joiner.serverUUID()
+	psiStart := readCPUPressure()
 	logs := map[*Node]string{}
 	offs := map[*Node]int64{}
 	for _, n := range s.Nodes {
@@ -244,20 +277,32 @@ func (s *Scenario) rejoinRaceCycle(k int, offset, isolation time.Duration) bool 
 	s.Log.Add("race", fmt.Sprintf("%s: mysqld of %s shut down err=%v", tag, joiner.Tablet.Alias, err))
 	if err := s.RestartMysqld(joiner); err != nil {
 		s.R.violation("%s: cannot restart mysqld of %s: %v", tag, joiner.Tablet.Alias, err)
-		return false
+		return res, false
 	}
 	start, ok := waitErrLog(logs[joiner], offs[joiner], myGRStarting, 120*time.Second)
 	if !ok {
 		s.R.violation("%s: %s did not start group replication within 120s of its restart", tag, joiner.Tablet.Alias)
-		return false
+		return res, false
 	}
+	watch := watchAdmission(other, joinerUUID)
+	defer watch.stop()
 	s.Log.Add("race", fmt.Sprintf("%s: %s START GROUP_REPLICATION at %s", tag, joiner.Tablet.Alias, start.T.Local().Format("15:04:05.000000")))
 
 	// Isolate the primary's cell: its tablet, VTOrc and etcd keep reaching each other, nothing
 	// outside the cell (vtgate included) reaches them. The tablets are cut first, so the group's
 	// partition starts at the offset.
-	time.Sleep(time.Until(start.T.Add(offset)))
+	switch trigger {
+	case raceTriggerOffset:
+		time.Sleep(time.Until(start.T.Add(offset)))
+	case raceTriggerAfterAdmission:
+		if !watch.waitActive(60 * time.Second) {
+			s.R.note("%s: %s did not list %s as ONLINE or RECOVERING within 60s of its START; cutting anyway", tag, other.Tablet.Alias, joiner.Tablet.Alias)
+		}
+	case raceTriggerBeforeAdmission:
+		// Right away: the START was just logged.
+	}
 	iso := time.Now()
+	psiCut := readCPUPressure()
 	if s.Fault.IsZero() {
 		s.MarkFault()
 	}
@@ -287,6 +332,9 @@ func (s *Scenario) rejoinRaceCycle(k int, offset, isolation time.Duration) bool 
 	s.Heal()
 	_, probs, took := s.WaitConverged(240 * time.Second)
 	converged := time.Now()
+	psiEnd := readCPUPressure()
+	watch.stop()
+	listed, listedState, active := watch.times()
 	s.Sleep(5*time.Second, tag+": converged; settle")
 
 	// Outcome, from the error logs and the observer.
@@ -377,10 +425,53 @@ func (s *Scenario) rejoinRaceCycle(k int, offset, isolation time.Duration) bool 
 	if len(errState) == 0 {
 		errState = []string{"none"}
 	}
-	line := fmt.Sprintf("CYCLE %d offset=%v actual=START+%.3fs primary=%s joiner=%s other=%s joiner_admitted=%s majority=%s other_left=%d joiner_left=%d joiner_alone_views=%d no_donor=%d error_states=[%s] outage_longest=%.2fs outage_total=%.2fs converged=%s",
-		k, offset, iso.Sub(start.T).Seconds(), p.Tablet.Alias, joiner.Tablet.Alias, other.Tablet.Alias, admitted, keptStr,
-		otherLeft, joinerLeft, alone, noDonor, strings.Join(errState, "; "), longest.Seconds(), total.Seconds(), convStr)
+	// When the other voter first listed the joiner, relative to its START, and whether that was
+	// before the cut.
+	rel := func(t time.Time) string {
+		if t.IsZero() {
+			return "never"
+		}
+		return fmt.Sprintf("START+%.2fs", t.Sub(start.T).Seconds())
+	}
+	listedStr := rel(listed)
+	if !listed.IsZero() {
+		listedStr += " (" + listedState + ")"
+	}
+	// The joiner's InnoDB initialization after its restart.
+	innodb := "?"
+	var innoStart time.Time
+	for _, l := range byNode[joiner] {
+		switch l.Code {
+		case myInnoDBInitStart:
+			innoStart = l.T
+		case myInnoDBInitEnd:
+			if !innoStart.IsZero() {
+				innodb = fmt.Sprintf("%.2fs", l.T.Sub(innoStart).Seconds())
+			}
+		}
+	}
+	share := stallShare(psiStart, psiEnd)
+	res.kept = !kept.IsZero()
+	res.underLoad = share > underLoadShare
+	load := fmt.Sprintf("cpu_stall=%.1f%% avg10_at_cut=%.2f", 100*share, psiCut.avg10)
+	if res.underLoad {
+		load += " UNDER_LOAD"
+		s.R.note("%s taken under load: CPU stalls %.1f%% of the cycle (avg10 %.2f at the cut)", tag, 100*share, psiCut.avg10)
+	}
+	expected := ""
+	switch {
+	case trigger == raceTriggerAfterAdmission && !res.kept, trigger == raceTriggerBeforeAdmission && res.kept:
+		res.unexpected = true
+		expected = " UNEXPECTED"
+		s.R.note("%s: trigger %s, majority %s: unexpected", tag, trigger, keptStr)
+	case trigger == raceTriggerBeforeAdmission && !listed.IsZero() && listed.Before(iso):
+		expected = " CUT_AFTER_LISTED"
+		s.R.note("%s: trigger %s, but %s listed %s at %s, before the cut", tag, trigger, other.Tablet.Alias, joiner.Tablet.Alias, rel(listed))
+	}
+	line := fmt.Sprintf("CYCLE %d trigger=%s offset=%v actual=START+%.3fs primary=%s joiner=%s other=%s listed_by_other=%s active_at_other=%s joiner_innodb_init=%s joiner_admitted=%s majority=%s%s other_left=%d joiner_left=%d joiner_alone_views=%d no_donor=%d error_states=[%s] outage_longest=%.2fs outage_total=%.2fs converged=%s %s",
+		k, trigger, offset, iso.Sub(start.T).Seconds(), p.Tablet.Alias, joiner.Tablet.Alias, other.Tablet.Alias, listedStr, rel(active), innodb, admitted, keptStr, expected,
+		otherLeft, joinerLeft, alone, noDonor, strings.Join(errState, "; "), longest.Seconds(), total.Seconds(), convStr, load)
 	s.Log.Add("race", line)
 	s.R.outcome("%s", line)
-	return len(probs) == 0
+	return res, len(probs) == 0
 }

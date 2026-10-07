@@ -1124,6 +1124,8 @@ CHAOS_VTTABLET_HEARTBEAT=1 CHAOS_DURABILITY=group_replication_cross_cell go/test
 CHAOS_DURABILITY=group_replication_cross_cell go/test/endtoend/vtorc/chaos/chaos_run.sh -test.run '^TestG9hPrimaryDiesWhileElectedMembersCellTopoHangs$' -test.v -test.timeout 30m   # also TestD1KillPrimaryDetection, TestD1hKillPrimaryWhileOtherCellTopoHangs
 VT_UNPLANNED_FAILOVER_TRIALS=3 VT_UNPLANNED_FAILOVER_BUFFER=both go test ./go/test/endtoend/reparent/grouprepl -run TestUnplannedFailoverTimes -timeout 4h -args -keep-data=false
 CHAOS_DURABILITY=group_replication_cross_cell go/test/endtoend/vtorc/chaos/chaos_run.sh -test.run '^TestV[SD]' -test.v -test.timeout 30m   # voter swap and deletion
+CHAOS_RACE_TRIGGER=after-admission CHAOS_DURABILITY=group_replication_cross_cell go/test/endtoend/vtorc/chaos/chaos_run.sh -test.run '^TestG12VoterRejoinsWhilePrimaryCellIsolated$' -test.v -test.timeout 60m   # or before-admission
+CHAOS_SOAK_DURATION=2h CHAOS_SOAK_SEED=20261006 CHAOS_DURABILITY=group_replication_cross_cell go/test/endtoend/vtorc/chaos/chaos_run.sh -test.run '^TestSoakMixedFaults$' -test.v -test.timeout 3h
 ```
 
 `chaos_run.sh` must run as root; it builds the test binary, drops to `RUN_USER` (default `ubuntu`) with `CAP_NET_ADMIN`, and deletes the run's VTDATAROOT afterwards. `CHAOS_TABLET_EXTRA_ARGS` adds vttablet flags. Reports go to `/home/$RUN_USER/chaos-results/<scenario>/`.
@@ -1433,6 +1435,92 @@ One round of chaos runs on the binaries of 1121406 (the voter redesign above; `g
 
 **G13** is unchanged: the cut-off secondary was ONLINE 13.7s after the heal and answered replica reads 1.5s later.
 
-**G12.** No join waited for a voter stuck in its own join first, and MySQL logged no `Timeout while waiting for the group communication engine to be ready` (`g12seeds.py`). But all 12 cycles of the two runs lost the majority, at 29.7–40.7s each (26.9–43.6s on 0f85e80), so G12 took 212.7s and 204.8s without an acknowledged write. On f528e9a and 0f85e80, 12 of the 24 cycles at the same 500ms offset kept the majority (r1 2, r2 4, f1 1, f2 5); 0 of 12 here is unlikely by chance (Fisher p≈0.003). A cycle keeps the majority only if the group admits the restarted voter while the primary's cell is cut off, which MySQL decides. **It is not a regression: the kept-cycle rate depends on the host's load.** A bisect on the same idle host the same day lost every cycle on every build: 0f85e80 0 of 12 (two runs), 914b2f4 (the main catch-up) 0 of 6, c2c245d (the work before a draft PR) 0 of 12, against 6 of 12 for 0f85e80 the day before, when other workloads shared the host. Every lost cycle looks the same on every build: the restarted voter's first connection failure 1.8–5.6s after its `START`, no view during the cut, then alone in a new incarnation 23–40s after its `START`; in the kept cycles of the day before, it was in a view with the other voter 6.6–7.3s after its `START`, where the primary was expelled. Comparing G12 across days needs a baseline run on the same day, or a sweep of the offset around 500ms (per-cycle tables: `/home/user/vtlab/bisect/cycles.py`, runs `/home/ubuntu/chaos-sweep/gr-G12-b*`).
+**G12.** No join waited for a voter stuck in its own join first, and MySQL logged no `Timeout while waiting for the group communication engine to be ready` (`g12seeds.py`). But all 12 cycles of the two runs lost the majority, at 29.7–40.7s each (26.9–43.6s on 0f85e80), so G12 took 212.7s and 204.8s without an acknowledged write. On f528e9a and 0f85e80, 12 of the 24 cycles at the same 500ms offset kept the majority (r1 2, r2 4, f1 1, f2 5); 0 of 12 here is unlikely by chance (Fisher p≈0.003). A cycle keeps the majority only if the group admits the restarted voter while the primary's cell is cut off, which MySQL decides. **It is not a regression: the kept-cycle rate depends on the host's load.** A bisect on the same idle host the same day lost every cycle on every build: 0f85e80 0 of 12 (two runs), 914b2f4 (the main catch-up) 0 of 6, c2c245d (the work before a draft PR) 0 of 12, against 6 of 12 for 0f85e80 the day before, when other workloads shared the host. Every lost cycle looks the same on every build: the restarted voter's first connection failure 1.8–5.6s after its `START`, no view during the cut, then alone in a new incarnation 23–40s after its `START`; in the kept cycles of the day before, it was in a view with the other voter 6.6–7.3s after its `START`, where the primary was expelled. Comparing G12 across days needs a baseline run on the same day, or a sweep of the offset around 500ms (per-cycle tables: `/home/user/vtlab/bisect/cycles.py`, runs `/home/ubuntu/chaos-sweep/gr-G12-b*`); G12 now also has triggers on the observed join that do not depend on the load (see "G12 triggered on the observed join").
 
 **Violations.** One: S2's known window, 2 samples (22ms) right after the frozen old primary resumed. S7c had none this time.
+
+## G12 triggered on the observed join (eef8d6c)
+
+G12 cuts off the primary's cell a fixed offset after the restarted voter's (the joiner's) `START GROUP_REPLICATION`. Whether the group admitted the joiner by then is MySQL's race, and its outcome depends on the host's load: the same build kept the majority in 6 of 12 cycles on a loaded host and in 0 of 12 on an idle one (see "Chaos round on the voter redesign"). G12 now also cuts on the observed join (`CHAOS_RACE_TRIGGER`, the fixed offsets stay the default):
+
+- `before-admission`: right after the joiner's `START` is logged, before the other voter lists the joiner in `performance_schema.replication_group_members`.
+- `after-admission`: once the other voter lists the joiner ONLINE or RECOVERING.
+
+Each cycle also reports when the other voter first listed the joiner and in which state, the joiner's InnoDB initialization after its restart (from its error log), and the CPU pressure over the cycle (`/proc/pressure/cpu`, the share of time some task waited for a CPU, and `avg10` at the cut); a cycle with stalls above 20% is flagged as taken under load. The scenario alone stalls 5–11% of a cycle on this 4-core host; the runs below used a 5% threshold, which flagged every cycle, and the threshold was raised after them.
+
+Binaries of eef8d6c, two runs of each mode, 6 cycles each, on a host that other workloads shared between the runs (the CPU lock kept them out of the runs):
+
+| Trigger | Cut after the joiner's `START` | Other voter lists the joiner | Majority kept | Longest outage per cycle | CPU stall per cycle |
+|---|---|---|---|---|---|
+| `after-admission` | 1.0–4.6s | at the cut (RECOVERING) | **12 of 12** | 9.0–10.5s | 8.8–11.1% |
+| `before-admission` | 0.004–0.68s | 32–51s after `START`, after the heal | **0 of 12** | 31.9–42.6s | 5.3–8.9% |
+
+Both as expected: a joiner that the other voter lists as RECOVERING votes, and the two expel the primary and elect the other voter 6.6–9.7s after the cut; a joiner cut off before the other voter lists it never enters a view during the cut, and the group loses its majority. The joiner's InnoDB initialization took 0.18–0.53s in every cycle, so it does not explain a slow join. The cut of `before-admission` comes up to 0.68s after the logged `START`, the delay with which the harness reads the error log; the other voter had not listed the joiner at the cut in any cycle. The fixed offset of 500ms sits inside the 1.0–4.6s that admission takes, which is why its outcome depends on the load. Comparing builds on G12 should use these triggers.
+
+## Soak
+
+`TestSoakMixedFaults` (`go/test/endtoend/vtorc/chaos/soak_test.go`) keeps one cluster under the usual writers, primary reader and observer for `CHAOS_SOAK_DURATION` (default 2h). It loops over faults drawn at random (`CHAOS_SOAK_SEED`) from the other scenarios' primitives, each on the primary or on a random other tablet, half and half:
+
+- `kill-mysqld`: down for 10–30s, then restarted;
+- `crash-mysqld`: `mysqld_safe` restarts it;
+- `pause`: `SIGSTOP` of `mysqld` and `vttablet` for 5–25s;
+- `isolate-tablet`: for 5–25s;
+- `isolate-cell`: the tablet, VTOrc and etcd of the cell, for 10–25s;
+- `kill-vttablet`: down for 5–15s;
+- `kill-vtorc`: down for 10–30s;
+- `flap`: isolated 5s and healed 4s, three times.
+
+After each fault the cluster must converge within 5 minutes; then 5–15s of steady state; at the end, the usual checks.
+
+One run, binaries of eef8d6c, `group_replication_cross_cell`, seed 20261006, 2 hours:
+
+| | |
+|---|---|
+| Faults | 221: crash-mysqld 30, flap 28, isolate-cell 28, isolate-tablet 26, kill-mysqld 21, kill-vtorc 30, kill-vttablet 30, pause 28 |
+| Primary changes | 70 |
+| Acknowledged writes | 589,292, **none lost** (44,186 writes failed or timed out during the faults) |
+| Convergence after a fault | at most 20.5s after the heal (a restarted mysqld that rejoins); every fault converged, and the cluster converged at the end with all three voters ONLINE |
+| Default channel configured on a voter, `FixReplica` on a voter | none (`fixscan2.py`) |
+| Violations | 24 windows of two writable PRIMARY tablets, 1–3 observer samples each (at most 0.4s), from 18 faults: all 14 pauses of the primary (20 windows), 3 of the 15 flaps of the primary, and one flap of a replica (fault 45, below). No write was committed by a deposed primary. Each is a stale-view window, but the deposed tablet's re-promotion (below) is new |
+| Two `mysqld` with `read_only=OFF` (notes) | 43: after isolating the primary (22; the isolated one has no majority), after pausing it (16), during flaps (5) |
+
+Longest gap without an acknowledged write per fault, on the primary: 7.4–9.1s for a dead, paused or isolated primary (the group's 5s detection), 6.9s on average for a flap (11 of 15 flaps of the primary were too short for an election), 10.0s on average and up to 15.8s for a killed vttablet of the primary (no failover: the group's primary is alive, and writes resume when its vttablet is back after 5–15s), 0.2s for a killed VTOrc. On another tablet: at most 3.1s, except one flap.
+
+**The 24 windows.** In each, the deposed primary D still had its last view of three members, taken before the fault; the others had decided to expel D before the window; D's `mysqld` went to ERROR (`MY-011505`) 1–21s after the window and rolled back 5–85 blocked commits (errno 3100). No insert committed on D after its expulsion: the 9 inserts that returned OK from D in a window (faults 50, 53, 150) were sent less than 6ms before the `SIGSTOP` and returned after the `SIGCONT`; they committed before the freeze. The final rows per committing server agree with the query log (zone1 279,104 rows for 279,094 OK and 231 that committed but returned an error; zone2 310,748 for 310,740 and 290), no row is missing on the primary, no GTID is errant, and no rejoin was refused. The binlogs went with the run's vtroot, so GTID sets per window could not be compared.
+
+| # | Window (samples) | Fault | Deposed D / other | D last view before window | Expulsion of D decided | D in ERROR | D tablet REPLICA | Rollbacks on D (errno 3100) | Inserts OK from D after its expulsion |
+|---|---|---|---|---|---|---|---|---|---|
+| 1 | 21:39:35.938–21:39:35.955 (2) | 1 pause on zone1 (primary zone1) | zone1 / zone2 | 21:39:08.544 (3 members) | 21:39:21.419 | 21:39:38.939 | 21:39:36.043 | 9 | 0 |
+| 2 | 21:39:36.445–21:39:36.445 (1) | 1 pause on zone1 (primary zone1) | zone1 / zone2 | 21:39:08.544 (3 members) | 21:39:21.419 | 21:39:38.939 | 21:39:37.445 | 9 | 0 |
+| 3 | 21:39:37.044–21:39:37.244 (2) | 1 pause on zone1 (primary zone1) | zone1 / zone2 | 21:39:08.544 (3 members) | 21:39:21.419 | 21:39:38.939 | 21:39:37.445 | 9 | 0 |
+| 4 | 21:45:49.848–21:45:50.046 (2) | 14 pause on zone2 (primary zone2) | zone2 / zone1 | 21:45:26.737 (3 members) | 21:45:46.099 | 21:45:53.033 | 21:45:50.042 | 13 | 0 |
+| 5 | 21:58:51.244–21:58:51.644 (3) | 38 pause on zone2 (primary zone2) | zone2 / zone1 | 21:58:18.249 (3 members) | 21:58:36.147 | 21:58:54.494 | 21:58:52.043 | 5 | 0 |
+| 6 | 21:58:52.042–21:58:52.042 (1) | 38 pause on zone2 (primary zone2) | zone2 / zone1 | 21:58:18.249 (3 members) | 21:58:36.147 | 21:58:54.494 | 21:58:52.043 | 5 | 0 |
+| 7 | 22:02:11.046–22:02:11.046 (1) | 45 flap on zone3 (primary zone2) | zone2 / zone1 | 22:01:52.576 (3 members) | 22:02:10.289 | 22:02:13.075 | 22:02:11.046 | 5 | 0 |
+| 8 | 22:05:13.251–22:05:13.461 (2) | 50 pause on zone2 (primary zone2) | zone2 / zone1 | 22:04:46.093 (3 members) | 22:05:05.095 | 22:05:16.346 | 22:05:13.455 | 9 | 4 (committed before the SIGSTOP) |
+| 9 | 22:07:09.249–22:07:09.644 (3) | 53 pause on zone2 (primary zone2) | zone2 / zone1 | 22:06:43.194 (3 members) | 22:07:03.842 | 22:07:12.477 | 22:07:09.642 | 21 | 4 (committed before the SIGSTOP) |
+| 10 | 22:19:12.269–22:19:12.276 (2) | 76 pause on zone1 (primary zone1) | zone1 / zone2 | 22:18:54.896 (3 members) | 22:19:09.690 | 22:19:15.328 | 22:19:12.455 | 13 | 0 |
+| 11 | 22:19:43.645–22:19:43.645 (1) | 77 flap on zone2 (primary zone2) | zone2 / zone1 | 22:19:17.164 (3 members) | 22:19:42.906 | 22:19:45.531 | 22:19:43.645 | 13 | 0 |
+| 12 | 22:38:55.861–22:38:55.861 (1) | 112 flap on zone1 (primary zone1) | zone1 / zone2 | 22:38:15.307 (3 members) | 22:38:54.895 | 22:38:57.194 | 22:38:56.045 | 13 | 0 |
+| 13 | 22:41:12.652–22:41:12.848 (2) | 116 pause on zone2 (primary zone2) | zone2 / zone1 | 22:40:33.563 (3 members) | 22:40:54.562 | 22:41:15.678 | 22:41:12.761 | 5 | 0 |
+| 14 | 22:41:13.244–22:41:13.244 (1) | 116 pause on zone2 (primary zone2) | zone2 / zone1 | 22:40:33.563 (3 members) | 22:40:54.562 | 22:41:15.678 | 22:41:16.045 | 5 | 0 |
+| 15 | 22:53:57.843–22:53:58.055 (2) | 137 pause on zone2 (primary zone2) | zone2 / zone1 | 22:53:21.274 (3 members) | 22:53:42.860 | 22:54:00.945 | 22:53:57.998 | 85 | 0 |
+| 16 | 22:53:58.647–22:53:58.851 (2) | 137 pause on zone2 (primary zone2) | zone2 / zone1 | 22:53:21.274 (3 members) | 22:53:42.860 | 22:54:00.945 | 22:53:59.847 | 85 | 0 |
+| 17 | 22:53:59.845–22:53:59.845 (1) | 137 pause on zone2 (primary zone2) | zone2 / zone1 | 22:53:21.274 (3 members) | 22:53:42.860 | 22:54:00.945 | 22:53:59.847 | 85 | 0 |
+| 18 | 22:56:09.770–22:56:09.770 (1) | 142 pause on zone1 (primary zone1) | zone1 / zone2 | 22:55:51.680 (3 members) | 22:56:07.574 | 22:56:12.805 | 22:56:09.849 | 13 | 0 |
+| 19 | 23:00:33.048–23:00:33.251 (2) | 150 pause on zone2 (primary zone2) | zone2 / zone1 | 23:00:08.728 (3 members) | 23:00:32.484 | 23:00:35.552 | 23:00:33.248 | 12 | 1 (committed before the SIGSTOP) |
+| 20 | 23:20:42.450–23:20:42.450 (1) | 187 pause on zone1 (primary zone1) | zone1 / zone2 | 23:20:21.231 (3 members) | 23:20:41.782 | 23:20:44.946 | 23:20:42.647 | 13 | 0 |
+| 21 | 23:21:20.254–23:21:20.254 (1) | 188 flap on zone2 (primary zone2) | zone2 / zone1 | 23:21:11.859 (3 members) | 23:21:19.910 | 23:21:22.422 | 23:21:22.446 | 5 | 0 |
+| 22 | 23:24:41.743–23:24:41.743 (1) | 193 pause on zone1 (primary zone1) | zone1 / zone2 | 23:24:12.696 (3 members) | 23:24:30.652 | 23:24:44.746 | 23:24:41.747 | 13 | 0 |
+| 23 | 23:27:50.498–23:27:50.508 (2) | 199 pause on zone1 (primary zone1) | zone1 / zone2 | 23:27:29.058 (3 members) | 23:27:50.047 | 23:27:53.569 | 23:27:50.643 | 13 | 0 |
+| 24 | 23:32:55.114–23:32:55.114 (1) | 209 pause on zone1 (primary zone1) | zone1 / zone2 | 23:32:34.210 (3 members) | 23:32:51.442 | 23:32:58.138 | 23:32:55.242 | 13 | 0 |
+
+**A finding: the deposed tablet re-promotes itself, and the shard record flips.** In the known class (S2, S7c) the deposed tablet steps down 0.06–0.14s after its `mysqld` resumes, and the shard record keeps the new primary. In the soak, after a paused primary resumed, its tablet often went the other way: its `mysqld` still showed itself ONLINE and PRIMARY in a view of three members, the tablet served as PRIMARY on that view and wrote the shard record with a newer term, and the legitimate primary's tablet then stepped down to REPLICA (its `mysqld` stays writable). The two tablets traded the shard record until GR put the stale member in ERROR, for up to about 3s; the shard record named, for example, zone2, zone1, zone2, zone1 at 22:41:13.140, 13.390, 15.890, 16.390 (fault 116), and zone2, zone1, zone2, zone1 at 22:53:59.143, 59.890, 22:54:01.142, 01.890 (fault 137). This split one window into two or three (faults 1, 38, 116, 137). Writes stayed safe, since certification blocks the expelled member's commits, but routing and the shard record pointed at an expelled member, and the legitimate primary served as REPLICA. Evidence: the observer's samples of tablet types and of the shard record; the vttablet and VTOrc logs of those moments were lost (see below).
+
+**Why 24, when the chaos sweep saw 2 in 73 runs.** The fault mix: every pause of the primary opens the S2 window (as S2 did 3 of 3), the soak paused the primary 14 times, and the re-promotion splits windows. The faults did not overlap: each was followed by convergence and 5–15s of steady state. Isolating the primary (22 faults) gave notes only: the isolated `mysqld` stays writable, but its view lacks a majority.
+
+**The 43 notes** count moments with two `mysqld` at `read_only=OFF`. The second writable `mysqld` is one of: an isolated old primary (no majority); a deposed primary whose tablet stepped down before GR put it in ERROR; or the legitimate primary while the stale tablet's re-promotion forced its tablet to REPLICA (zone1 at 22:41:13.043: tablet REPLICA, `read_only=OFF`, ONLINE and PRIMARY in a view of 2). In each, `read_only=OFF` remains from a promotion; no `mysqld` became writable without one.
+
+**A second finding: a replica's isolation expelled the primary.** Fault 45 isolated the secondary zone3 for 5s, as the first round of a flap. When the network healed (22:02:09.288), zone3 logged the primary zone2 as unreachable and reachable again in the same millisecond, and one second later zone1 and zone3 expelled zone2 (`Members removed from the group: vm:7518`, 22:02:10.289) and elected zone1. zone2 never received that view. For 0.75s its tablet, which had stepped down, served as PRIMARY again on its stale view of three ONLINE members (the re-promotion above): the observer saw it PRIMARY at 22:02:13.256, and the shard record named it from 22:02:13.394 to 22:02:14.142. MySQL then put zone2 in ERROR and rolled back its blocked commits (22:02:13.075), and the tablet stepped down. The isolated member seems to have proposed expelling a member it had suspected while it was cut off, and the others accepted (`member_expel_timeout=0`); this is MySQL's behavior, and it happened once in the 43 faults that isolated a replica (14 isolate-tablet, 16 isolate-cell, 13 flaps of three 5s isolations). It cost an unneeded failover (7.0s without acknowledged writes) and one violation sample. The vttablet and VTOrc logs of that moment were lost: a restarted vttablet or VTOrc overwrote its log. The harness now keeps the earlier log of a restarted vttablet or VTOrc (`<name>-until-<time>.txt`).
+
+**Limitations.** One run, one seed: zone3 never became primary, so every window is between zone1 and zone2. The vttablet and VTOrc logs of the re-promotions and of fault 45 were lost (a restarted vttablet or VTOrc overwrote its log), so the re-promotion is shown by the observer's samples, not by the tablet's own log; the binlogs went with the vtroot, so the evidence that the deposed side committed nothing in a window is the query log, the final rows and the `mysqld` error logs, not a comparison of GTID sets. The harness now keeps the earlier log of a restarted vttablet or VTOrc (`<name>-until-<time>.txt`); a rerun after the re-promotion fix, with S2 and S7c twice each, is planned for comparison.

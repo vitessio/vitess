@@ -97,8 +97,21 @@ func (c *Chaos) KillNode(n *Node) {
 	c.Log.Add("fault", fmt.Sprintf("kill -9 all processes of %s pids=%v", n.Tablet.Alias, p))
 }
 
+// keepLog renames a process's log before the process restarts, which would truncate it: the saved
+// logs then hold every incarnation, the earlier ones as <name>-until-<time>.txt.
+func (c *Chaos) keepLog(file string) {
+	if file == "" {
+		return
+	}
+	kept := strings.TrimSuffix(file, ".txt") + "-until-" + time.Now().Format("150405.000") + ".txt"
+	if err := os.Rename(file, kept); err == nil {
+		c.Log.Add("heal", "kept the log of the earlier process as "+path.Base(kept))
+	}
+}
+
 // RestartVttablet restarts a killed vttablet.
 func (c *Chaos) RestartVttablet(n *Node) error {
+	c.keepLog(n.Tablet.VttabletProcess.ErrorLog)
 	_ = n.Tablet.VttabletProcess.Kill()
 	n.Tablet.VttabletProcess.ServingStatus = ""
 	err := n.Tablet.VttabletProcess.Setup()
@@ -198,6 +211,7 @@ func (c *Chaos) RestartEtcd(n *Node) error {
 
 // RestartOrc restarts a cell's VTOrc (after it was killed).
 func (c *Chaos) RestartOrc(n *Node) error {
+	c.keepLog(path.Join(n.Orc.LogDir, n.Orc.LogFileName))
 	err := n.Orc.Setup()
 	c.Log.Add("heal", fmt.Sprintf("vtorc of %s restarted err=%v", n.Cell, err))
 	return err
