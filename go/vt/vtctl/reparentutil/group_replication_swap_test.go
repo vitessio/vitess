@@ -226,12 +226,14 @@ func TestPlannedReparentGroupReplicationSwapIn(t *testing.T) {
 // TestPlannedReparentGroupReplicationSwapAfterDemote checks the swap of a primary-elect for the demoted primary,
 // the voter of its cell: on a fresh read, the new voters, then the join. When the join fails, PRS stops it and
 // writes the old voters back, so that the demotion can be undone; but not when a voter left the group meanwhile,
-// so that the primary's view lacks a majority of the new voters and would hold one of the old ones.
+// so that the primary's view lacks a majority of the new voters and would hold one of the old ones. When the
+// join's RPC fails although the elect joined, the reparent goes on.
 func TestPlannedReparentGroupReplicationSwapAfterDemote(t *testing.T) {
 	tests := []struct {
 		name         string
 		joinFails    bool
 		voterLeaves  bool
+		electJoined  bool
 		wantReverted bool
 		wantVoters   []string
 	}{{
@@ -242,6 +244,11 @@ func TestPlannedReparentGroupReplicationSwapAfterDemote(t *testing.T) {
 		joinFails:    true,
 		wantReverted: true,
 		wantVoters:   []string{aliasP, alias200, alias300},
+	}, {
+		name:        "the join's RPC fails, but the elect joined",
+		joinFails:   true,
+		electJoined: true,
+		wantVoters:  []string{alias101, alias200, alias300},
 	}, {
 		name:        "the join fails while a voter leaves the group",
 		joinFails:   true,
@@ -258,8 +265,11 @@ func TestPlannedReparentGroupReplicationSwapAfterDemote(t *testing.T) {
 			if tt.joinFails {
 				c.failOnce[join] = true
 			}
-			if tt.voterLeaves {
+			switch {
+			case tt.voterLeaves:
 				c.onCall = map[string]func(){join: func() { c.tablets[alias200].member = false }}
+			case tt.electJoined:
+				c.onCall = map[string]func(){join: func() { c.tablets[alias101].member = true }}
 			}
 			si, err := ts.GetShard(t.Context(), "ks", "-")
 			require.NoError(t, err)
@@ -269,7 +279,7 @@ func TestPlannedReparentGroupReplicationSwapAfterDemote(t *testing.T) {
 			reverted, err := pr.swapAfterDemote(lockShard(t, ts), ev, "ks", "-", plan, c.tabletRecs[aliasP], PlannedReparentOptions{WaitReplicasTimeout: 30 * time.Second})
 			assert.Equal(t, tt.wantVoters, c.voters(t))
 			assert.Equal(t, tt.wantVoters, aliasStrings(ev.ShardInfo.GroupReplicationVoters))
-			if !tt.joinFails {
+			if !tt.joinFails || tt.electJoined {
 				require.NoError(t, err)
 				assert.Equal(t, []string{join}, c.mutatingCalls())
 				return

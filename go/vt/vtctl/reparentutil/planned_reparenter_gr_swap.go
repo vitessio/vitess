@@ -225,7 +225,8 @@ func (pr *PlannedReparenter) swapInElect(ctx context.Context, ev *events.Reparen
 
 // swapAfterDemote swaps the elect in for the demoted current primary (see planGroupReplicationSwap): it checks
 // the swap again on a fresh read, writes the new voters, and makes the elect join the group. On a failure after
-// the write, it stops the elect's join and writes the old voters back (a compare-and-swap on the new ones), so
+// the write, if the elect is not ONLINE in the group after all, it stops the elect's join and writes the old
+// voters back (a compare-and-swap on the new ones), so
 // that the caller can undo the demotion of a primary that is a voter again, unless a member's view of the
 // shard's group lacks a majority of the new voters and holds one of the old ones: a voter left the group
 // meanwhile, and the old list would give that view a majority it does not have under the new one (the TLA+
@@ -243,10 +244,17 @@ func (pr *PlannedReparenter) swapAfterDemote(ctx context.Context, ev *events.Rep
 	if err == nil || !votersEqual(ev.ShardInfo.GroupReplicationVoters, plan.newVoters) {
 		return err != nil, err
 	}
+	electAlias := topoproto.TabletAliasString(plan.elect.Alias)
+	// The join's RPC failed, but the join may have completed: the elect, a voter now, may even be the group's
+	// primary already, if the old primary failed meanwhile. The reparent then goes on.
+	if electOnlineInGroup(plan, fetchFullStatus(ctx, pr.tmc, plan.elect, topo.RemoteOperationTimeout)) {
+		pr.logger.Warningf("the join of primary-elect %v returned an error, but its MySQL is ONLINE in the shard's group: going on (%v)", electAlias, err)
+		return false, nil
+	}
 	undoCtx, undoCancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
 	defer undoCancel()
 	if _, stopErr := pr.tmc.StopGroupReplication(undoCtx, plan.elect); stopErr != nil {
-		pr.logger.Warningf("failed to stop the join of primary-elect %v: %v", topoproto.TabletAliasString(plan.elect.Alias), stopErr)
+		pr.logger.Warningf("failed to stop the join of primary-elect %v: %v", electAlias, stopErr)
 	}
 	if reason := swapRevertRefusal(plan, fetchFullStatuses(ctx, pr.tmc, plan.tablets, topo.RemoteOperationTimeout)); reason != "" {
 		pr.logger.Warningf("not writing the old voters [%s] back: %s; the old primary %v is not a voter, and VTOrc moves the group primary to a voter",
@@ -260,12 +268,19 @@ func (pr *PlannedReparenter) swapAfterDemote(ctx context.Context, ev *events.Rep
 	return true, err
 }
 
-// swapRevertRefusal returns why the old voters of plan must not be written back over its new ones, or "": a
-// reachable member's view of the recorded incarnation lacks a majority of the new voters but holds one of the
-// old voters.
+// swapRevertRefusal returns why the old voters of plan must not be written back over its new ones, or "": the
+// elect's MySQL may still be in the group (its status cannot be read, it is an active member, or a START runs);
+// or a reachable member's view of the recorded incarnation lacks a majority of the new voters but holds one of
+// the old voters.
 func swapRevertRefusal(plan *groupSwapPlan, statuses map[string]*fullStatusResult) string {
 	current := legitimateGroup(plan.incarnation, plan.newVoters, statuses)
 	old := legitimateGroup(plan.incarnation, plan.voters, statuses)
+	electAlias := topoproto.TabletAliasString(plan.elect.Alias)
+	if elect := statuses[electAlias]; elect == nil || elect.err != nil {
+		return fmt.Sprintf("the status of primary-elect %v cannot be read: it may be in the group", electAlias)
+	} else if mysql.IsGroupMemberActive(elect.groupStatus()) || elect.groupStatus().GetStartInProgress() {
+		return fmt.Sprintf("the MySQL of primary-elect %v is still %s in a group", electAlias, elect.groupStatus().GetMemberState())
+	}
 	for _, alias := range slices.Sorted(maps.Keys(statuses)) {
 		res := statuses[alias]
 		if res.err != nil || !res.isActiveMember() || !current.IsLegitimateMember(res.groupStatus()) {
@@ -277,6 +292,11 @@ func swapRevertRefusal(plan *groupSwapPlan, statuses map[string]*fullStatusResul
 		}
 	}
 	return ""
+}
+
+// electOnlineInGroup returns whether the elect's MySQL is ONLINE in a view of the shard's recorded incarnation.
+func electOnlineInGroup(plan *groupSwapPlan, elect *fullStatusResult) bool {
+	return elect.err == nil && elect.isOnlineMember() && policy.GroupIncarnation(elect.groupStatus().GetViewId()) == plan.incarnation
 }
 
 // withoutVoter returns the voters without the given one.
