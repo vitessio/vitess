@@ -2656,10 +2656,10 @@ func TestReserveSettingsRejectUnsupportedSQLModes(t *testing.T) {
 // global character set.
 func TestSettingsRejectUnsafeConnectionCharsets(t *testing.T) {
 	db := setUpQueryExecutorTest(t)
-	defer db.Close()
+	t.Cleanup(db.Close)
 	ctx := t.Context()
 	tsv := newTestTabletServer(ctx, enableStrictTableACL, db)
-	defer tsv.StopService()
+	t.Cleanup(tsv.StopService)
 
 	assertSettingRefused := func(t *testing.T, setting string) {
 		const settingsErr = "the connection character set cannot be changed through connection settings"
