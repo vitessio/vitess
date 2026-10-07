@@ -1166,13 +1166,18 @@ func readGroupVoterState(ctx context.Context, keyspace, shard string) (*groupVot
 		recorded[topoproto.TabletAliasString(ti.Alias)] = true
 	}
 	// A voter whose tablet record does not exist (topo NoNode) is a deleted voter. VTOrc keeps its last
-	// tablet record and server_uuid (see keepDeletedGroupVoter), and probes its vttablet in the same
-	// read at that address. It is down only if the probe fails, and VTOrc's discovery last reached it
-	// at least --group-replication-voter-replacement-grace-period ago: a host that is gone and a
-	// vttablet that is only slow both fail the probe, but the discovery keeps reaching a slow one. A
-	// deleted voter that VTOrc has no address or instance for is not down.
+	// tablet record and server_uuid (see keepDeletedGroupVoter), or, when it does not, as after it
+	// restarted, uses those that the voter published in the shard record
+	// (Shard.group_replication_voter_identities), and probes its vttablet in the same read at that
+	// address. It is down only if the probe fails, and VTOrc's discovery last reached it at least
+	// --group-replication-voter-replacement-grace-period ago: a host that is gone and a vttablet that
+	// is only slow both fail the probe, but the discovery keeps reaching a slow one. When VTOrc's
+	// discovery never reached it, the grace period runs from the first failed probe or analysis that
+	// VTOrc observed (inst.UnreachableGroupTablets). A deleted voter that VTOrc has no address for is
+	// not down.
 	deleted := make(map[string]*inst.DeletedVoter)
 	reachedLongAgo := make(map[string]bool)
+	identities := policy.GroupVoterIdentities(shardInfo.Shard)
 	var probes []*topo.TabletInfo
 	var unreadable []*topodatapb.TabletAlias
 	for _, voter := range shardInfo.GetGroupReplicationVoters() {
@@ -1189,15 +1194,20 @@ func readGroupVoterState(ctx context.Context, keyspace, shard string) (*groupVot
 		} else if !topo.IsErrType(err, topo.NoNode) {
 			return nil, vterrors.Wrapf(err, "failed to read the tablet record of voter %s of %s", alias, keyspaceShard)
 		}
-		dv := &inst.DeletedVoter{Alias: voter}
-		if instance, _, err := inst.ReadInstance(voter); err == nil && instance != nil {
-			dv.ServerUUID = instance.ServerUUID
-			reachedLongAgo[alias] = !instance.SecondsSinceLastSeen.Valid ||
-				time.Duration(instance.SecondsSinceLastSeen.Int64)*time.Second >= config.GetGroupReplicationVoterReplacementGracePeriod()
+		dv := &inst.DeletedVoter{Alias: voter, ServerUUID: identities[alias].GetServerUuid()}
+		if instance, _, err := inst.ReadInstance(voter); err == nil && instance != nil && instance.SecondsSinceLastSeen.Valid {
+			if instance.ServerUUID != "" {
+				dv.ServerUUID = instance.ServerUUID
+			}
+			reachedLongAgo[alias] = time.Duration(instance.SecondsSinceLastSeen.Int64)*time.Second >= config.GetGroupReplicationVoterReplacementGracePeriod()
 		}
 		if cached, err := inst.ReadTablet(voter); err == nil && cached != nil {
 			dv.Tablet = cached
-			probes = append(probes, &topo.TabletInfo{Tablet: cached})
+		} else if published := identities[alias].GetTablet(); published != nil {
+			dv.Tablet = published
+		}
+		if dv.Tablet != nil {
+			probes = append(probes, &topo.TabletInfo{Tablet: dv.Tablet})
 		}
 		deleted[alias] = dv
 	}
@@ -1250,11 +1260,17 @@ func readGroupVoterState(ctx context.Context, keyspace, shard string) (*groupVot
 		in.DeletedVoters = deleted
 	}
 	for _, st := range probed {
-		dv := deleted[topoproto.TabletAliasString(st.tablet.Alias)]
+		alias := topoproto.TabletAliasString(st.tablet.Alias)
+		dv := deleted[alias]
 		if st.err == nil {
 			dv.ServerUUID = st.status.GetServerUuid()
+			continue
 		}
-		dv.Down = st.err != nil && reachedLongAgo[topoproto.TabletAliasString(st.tablet.Alias)]
+		longAgo, seen := reachedLongAgo[alias]
+		if !seen {
+			longAgo = inst.UnreachableGroupTablets.Observe(alias, now) >= config.GetGroupReplicationVoterReplacementGracePeriod()
+		}
+		dv.Down = longAgo
 	}
 	return &groupVoterState{keyspace: keyspace, shard: shard, shardInfo: shardInfo, durability: durability, statuses: statuses, input: in}, nil
 }

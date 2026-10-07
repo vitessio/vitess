@@ -561,6 +561,53 @@ func TestGetDetectionAnalysisGroupReplication(t *testing.T) {
 			wantDesiredVoters: []*topodatapb.Tablet{primary, crossCellReplica},
 		},
 		{
+			// After VTOrc restarted, it restored the deleted voter from the identity that the voter
+			// published, but never reached its MySQL: it identifies the voter in the views by the
+			// server_uuid that the voter published. The view holds a member whose tablet does not
+			// answer, so without that server_uuid VTOrc could not tell that it is not the deleted voter.
+			name: "after a VTOrc restart, a deleted voter that VTOrc never reached is identified by the server_uuid it published: it is removed",
+			rows: func() []*test.InfoForRecoveryAnalysis {
+				unreachable := member(grRow(crossCellReplica, crossCell), mysql.GroupMemberStateOnline, mysql.GroupMemberRoleSecondary, true, primary)
+				unreachable.LastCheckValid = 0
+				restored := deletedVoter(thirdCellReplica, crossCell, false)
+				restored.ServerUUID = ""
+				rows := inIncarnation("1790000001",
+					sees(member(grRow(primary, crossCell), mysql.GroupMemberStateOnline, mysql.GroupMemberRolePrimary, true, primary), primary, crossCellReplica),
+					unreachable,
+					restored,
+				)
+				for _, row := range rows {
+					row.ShardGroupReplicationVoterUUIDs = formatGroupVoterUUIDs(map[string]*topodatapb.GroupReplicationVoterIdentity{
+						topoproto.TabletAliasString(thirdCellReplica.Alias): {ServerUuid: serverUUID(thirdCellReplica)},
+					})
+				}
+				return rows
+			},
+			voterGracePeriod:  -1,
+			voters:            []*topodatapb.Tablet{primary, crossCellReplica, thirdCellReplica},
+			want:              map[string]AnalysisCode{"zone1-0000000101": GroupVotersOutOfDate},
+			wantDesiredVoters: []*topodatapb.Tablet{primary, crossCellReplica},
+		},
+		{
+			// The same, but the voter published no identity: VTOrc cannot tell it from the member
+			// whose tablet does not answer.
+			name: "after a VTOrc restart, a deleted voter that VTOrc never reached and that published no server_uuid: an alert",
+			rows: func() []*test.InfoForRecoveryAnalysis {
+				unreachable := member(grRow(crossCellReplica, crossCell), mysql.GroupMemberStateOnline, mysql.GroupMemberRoleSecondary, true, primary)
+				unreachable.LastCheckValid = 0
+				restored := deletedVoter(thirdCellReplica, crossCell, false)
+				restored.ServerUUID = ""
+				return inIncarnation("1790000001",
+					sees(member(grRow(primary, crossCell), mysql.GroupMemberStateOnline, mysql.GroupMemberRolePrimary, true, primary), primary, crossCellReplica),
+					unreachable,
+					restored,
+				)
+			},
+			voterGracePeriod: -1,
+			voters:           []*topodatapb.Tablet{primary, crossCellReplica, thirdCellReplica},
+			want:             map[string]AnalysisCode{"zone1-0000000101": GroupVoterRecordDeleted},
+		},
+		{
 			name: "a voter has no tablet record, and a member of the group is the MySQL of no tablet: an alert",
 			rows: func() []*test.InfoForRecoveryAnalysis {
 				rows := inIncarnation("1790000001",

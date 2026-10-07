@@ -18,6 +18,7 @@ package inst
 
 import (
 	"errors"
+	"slices"
 	"strings"
 	"time"
 
@@ -26,6 +27,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vtorc/db"
 )
 
@@ -138,9 +140,9 @@ func SaveShard(shard *topo.ShardInfo) error {
 	_, err := db.ExecVTOrc(`
 		replace	into vitess_shard (
 			keyspace, shard, primary_alias, primary_timestamp, disable_emergency_reparent, group_replication_voters,
-			group_replication_incarnation, group_replication_bootstrap_target, durability_policy
+			group_replication_voter_uuids, group_replication_incarnation, group_replication_bootstrap_target, durability_policy
 		) values (
-			?, ?, ?, ?, ?, ?, ?, ?, ?
+			?, ?, ?, ?, ?, ?, ?, ?, ?, ?
 		)`,
 		shard.Keyspace(),
 		shard.ShardName(),
@@ -148,6 +150,7 @@ func SaveShard(shard *topo.ShardInfo) error {
 		getShardPrimaryTermStartTime(shard),
 		disableEmergencyReparent,
 		formatGroupReplicationVoters(shard.GroupReplicationVoters),
+		formatGroupVoterUUIDs(policy.GroupVoterIdentities(shard.Shard)),
 		shard.GroupReplicationIncarnation,
 		groupReplicationBootstrapTarget(shard.Shard),
 		shard.GetDurabilityPolicy(),
@@ -268,6 +271,34 @@ func parseGroupReplicationVoters(value string) ([]*topodatapb.TabletAlias, error
 		voters = append(voters, alias)
 	}
 	return voters, nil
+}
+
+// formatGroupVoterUUIDs formats the server_uuids that the listed voters of a shard published (see
+// policy.GroupVoterIdentities) to be stored in the database, as alias=server_uuid pairs.
+func formatGroupVoterUUIDs(identities map[string]*topodatapb.GroupReplicationVoterIdentity) string {
+	pairs := make([]string, 0, len(identities))
+	for alias, identity := range identities {
+		if identity.GetServerUuid() != "" {
+			pairs = append(pairs, alias+"="+identity.GetServerUuid())
+		}
+	}
+	slices.Sort(pairs)
+	return strings.Join(pairs, ",")
+}
+
+// parseGroupVoterUUIDs parses the server_uuids that the listed voters of a shard published, by alias,
+// as formatGroupVoterUUIDs stores them.
+func parseGroupVoterUUIDs(value string) map[string]string {
+	uuids := make(map[string]string)
+	if value == "" {
+		return uuids
+	}
+	for pair := range strings.SplitSeq(value, ",") {
+		if alias, uuid, ok := strings.Cut(pair, "="); ok {
+			uuids[alias] = uuid
+		}
+	}
+	return uuids
 }
 
 // getShardPrimaryAliasString gets the shard primary alias to be stored as a string in the database.

@@ -21927,6 +21927,9 @@ export namespace topodata {
         /** Shard durability_policy. */
         durability_policy: string;
 
+        /** Shard group_replication_voter_identities. */
+        group_replication_voter_identities: topodata.GroupReplicationVoterIdentity.$Properties[];
+
         /**
          * Creates a new Shard instance using the specified properties.
          * @param [properties] Properties to set
@@ -22043,6 +22046,9 @@ export namespace topodata {
 
             /** Shard durability_policy */
             durability_policy?: (string|null);
+
+            /** Shard group_replication_voter_identities */
+            group_replication_voter_identities?: (topodata.GroupReplicationVoterIdentity.$Properties[]|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
@@ -22332,6 +22338,129 @@ export namespace topodata {
             /** Shape of a TabletControl. */
             type $Shape = topodata.Shard.TabletControl.$Properties;
         }
+    }
+
+    /**
+     * Properties of a GroupReplicationVoterIdentity.
+     * @deprecated Use topodata.GroupReplicationVoterIdentity.$Properties instead.
+     */
+    interface IGroupReplicationVoterIdentity extends topodata.GroupReplicationVoterIdentity.$Properties {
+    }
+
+    /** Represents a GroupReplicationVoterIdentity. */
+    class GroupReplicationVoterIdentity {
+
+        /**
+         * Constructs a new GroupReplicationVoterIdentity.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: topodata.GroupReplicationVoterIdentity.$Properties);
+
+        /** Unknown fields preserved while decoding when enabled */
+        $unknowns?: Uint8Array[];
+
+        /** GroupReplicationVoterIdentity tablet. */
+        tablet?: (topodata.Tablet.$Properties|null);
+
+        /** GroupReplicationVoterIdentity server_uuid. */
+        server_uuid: string;
+
+        /**
+         * Creates a new GroupReplicationVoterIdentity instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GroupReplicationVoterIdentity instance
+         */
+        static create(properties: topodata.GroupReplicationVoterIdentity.$Shape): topodata.GroupReplicationVoterIdentity & topodata.GroupReplicationVoterIdentity.$Shape;
+        static create(properties?: topodata.GroupReplicationVoterIdentity.$Properties): topodata.GroupReplicationVoterIdentity;
+
+        /**
+         * Encodes the specified GroupReplicationVoterIdentity message. Does not implicitly {@link topodata.GroupReplicationVoterIdentity.verify|verify} messages.
+         * @param message GroupReplicationVoterIdentity message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encode(message: topodata.GroupReplicationVoterIdentity.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GroupReplicationVoterIdentity message, length delimited. Does not implicitly {@link topodata.GroupReplicationVoterIdentity.verify|verify} messages.
+         * @param message GroupReplicationVoterIdentity message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encodeDelimited(message: topodata.GroupReplicationVoterIdentity.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GroupReplicationVoterIdentity message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns {topodata.GroupReplicationVoterIdentity & topodata.GroupReplicationVoterIdentity.$Shape} GroupReplicationVoterIdentity
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.GroupReplicationVoterIdentity & topodata.GroupReplicationVoterIdentity.$Shape;
+
+        /**
+         * Decodes a GroupReplicationVoterIdentity message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns {topodata.GroupReplicationVoterIdentity & topodata.GroupReplicationVoterIdentity.$Shape} GroupReplicationVoterIdentity
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.GroupReplicationVoterIdentity & topodata.GroupReplicationVoterIdentity.$Shape;
+
+        /**
+         * Verifies a GroupReplicationVoterIdentity message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GroupReplicationVoterIdentity message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GroupReplicationVoterIdentity
+         */
+        static fromObject(object: { [k: string]: any }): topodata.GroupReplicationVoterIdentity;
+
+        /**
+         * Creates a plain object from a GroupReplicationVoterIdentity message. Also converts values to other types if specified.
+         * @param message GroupReplicationVoterIdentity
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        static toObject(message: topodata.GroupReplicationVoterIdentity, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GroupReplicationVoterIdentity to JSON.
+         * @returns JSON object
+         */
+        toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the type url for GroupReplicationVoterIdentity
+         * @param [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns The type url
+         */
+        static getTypeUrl(prefix?: string): string;
+    }
+
+    namespace GroupReplicationVoterIdentity {
+
+        /** Properties of a GroupReplicationVoterIdentity. */
+        interface $Properties {
+
+            /** GroupReplicationVoterIdentity tablet */
+            tablet?: (topodata.Tablet.$Properties|null);
+
+            /** GroupReplicationVoterIdentity server_uuid */
+            server_uuid?: (string|null);
+
+            /** Unknown fields preserved while decoding when enabled */
+            $unknowns?: Uint8Array[];
+        }
+
+        /** Shape of a GroupReplicationVoterIdentity. */
+        type $Shape = topodata.GroupReplicationVoterIdentity.$Properties;
     }
 
     /**

@@ -251,13 +251,17 @@ type groupReplicationShardState struct {
 // in a group of another incarnation than the recorded one neither has quorum nor is a primary
 // for VTOrc, and the group primary is the primary of a view that holds a majority of the
 // shard's voters.
-func computeGroupReplicationShardState(durability policy.Durabler, incarnation string, voters []*topodatapb.TabletAlias, rows []*groupReplicationRow, now time.Time) *groupReplicationShardState {
+//
+// voterUUIDs are the server_uuids that the listed voters published in the shard record, by alias (see
+// policy.GroupVoterIdentities). They identify a voter whose tablet record was deleted when VTOrc has
+// not seen its MySQL, as after VTOrc restarted.
+func computeGroupReplicationShardState(durability policy.Durabler, incarnation string, voters []*topodatapb.TabletAlias, voterUUIDs map[string]string, rows []*groupReplicationRow, now time.Time) *groupReplicationShardState {
 	state := &groupReplicationShardState{
 		voters:         voters,
 		votingMembers:  uint(len(voters)),
 		foreignMembers: make(map[string]bool),
 	}
-	applyGroupLegitimacy(state, incarnation, voters, rows)
+	applyGroupLegitimacy(state, incarnation, voters, voterUUIDs, rows)
 	reachable := make(map[string]bool)
 	var onlineTablets []*topodatapb.Tablet
 	for _, row := range rows {
@@ -312,20 +316,29 @@ func computeGroupReplicationShardState(durability policy.Durabler, incarnation s
 			state.unreachableVotingMembers++
 		}
 	}
-	computeGroupReplicationVoters(state, durability, incarnation, rows, now)
+	computeGroupReplicationVoters(state, durability, incarnation, voterUUIDs, rows, now)
 	return state
 }
 
 // applyGroupLegitimacy restricts the group primary and the quorum of the rows to the shard's
 // legitimate group. The voters are identified in the views by the server_uuids that VTOrc last
-// saw on their tablets, and by their MySQL addresses.
-func applyGroupLegitimacy(state *groupReplicationShardState, incarnation string, voters []*topodatapb.TabletAlias, rows []*groupReplicationRow) {
+// saw on their tablets, by those that the voters whose tablet record was deleted published, and by
+// their MySQL addresses.
+func applyGroupLegitimacy(state *groupReplicationShardState, incarnation string, voters []*topodatapb.TabletAlias, voterUUIDs map[string]string, rows []*groupReplicationRow) {
 	tablets := make(map[string]*topodatapb.Tablet, len(rows))
 	uuids := make(map[string]string, len(rows))
+	for _, voter := range voters {
+		alias := topoproto.TabletAliasString(voter)
+		if uuid := voterUUIDs[alias]; uuid != "" {
+			uuids[alias] = uuid
+		}
+	}
 	for _, row := range rows {
 		alias := topoproto.TabletAliasString(row.tablet.GetAlias())
 		tablets[alias] = row.tablet
-		uuids[alias] = row.serverUUID
+		if row.serverUUID != "" || !row.deleted {
+			uuids[alias] = row.serverUUID
+		}
 	}
 	legitimate := policy.NewLegitimateGroup(incarnation, voters, tablets, uuids)
 	for _, row := range rows {
@@ -349,7 +362,7 @@ func applyGroupLegitimacy(state *groupReplicationShardState, incarnation string,
 // the alert, that the analysis reports (see PlanGroupVoters). That state lacks the members' executed
 // GTID sets and their primary_election_in_progress: the recovery reads the shard again under the shard
 // lock, and decides on that read.
-func computeGroupReplicationVoters(state *groupReplicationShardState, durability policy.Durabler, incarnation string, rows []*groupReplicationRow, now time.Time) {
+func computeGroupReplicationVoters(state *groupReplicationShardState, durability policy.Durabler, incarnation string, voterUUIDs map[string]string, rows []*groupReplicationRow, now time.Time) {
 	grd, ok := policy.AsGroupReplication(durability)
 	if !ok {
 		return
@@ -371,7 +384,12 @@ func computeGroupReplicationVoters(state *groupReplicationShardState, durability
 			}
 			// Down: VTOrc has not reached it for the grace period, as the recovery decides on its probe.
 			down := !row.valid && UnreachableGroupTablets.Observe(alias, now) >= in.GracePeriod
-			in.DeletedVoters[alias] = &DeletedVoter{Alias: row.tablet.GetAlias(), Tablet: row.tablet, ServerUUID: row.serverUUID, Down: down}
+			uuid := row.serverUUID
+			if uuid == "" {
+				// VTOrc has not seen its MySQL, as after VTOrc restarted: the voter published it.
+				uuid = voterUUIDs[alias]
+			}
+			in.DeletedVoters[alias] = &DeletedVoter{Alias: row.tablet.GetAlias(), Tablet: row.tablet, ServerUUID: uuid, Down: down}
 			continue
 		}
 		vt := &VoterTablet{Tablet: row.tablet, Reachable: row.valid, ServerUUID: row.serverUUID}
@@ -387,11 +405,11 @@ func computeGroupReplicationVoters(state *groupReplicationShardState, durability
 		if recorded[alias] {
 			continue
 		}
-		// VTOrc knows nothing about this voter: it is not down.
+		// VTOrc has no tablet for this voter: it is not down.
 		if in.DeletedVoters == nil {
 			in.DeletedVoters = make(map[string]*DeletedVoter)
 		}
-		in.DeletedVoters[alias] = &DeletedVoter{Alias: voter}
+		in.DeletedVoters[alias] = &DeletedVoter{Alias: voter, ServerUUID: voterUUIDs[alias]}
 	}
 	plan := PlanGroupVoters(in)
 	state.voterReason = plan.Reason

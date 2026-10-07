@@ -55160,6 +55160,7 @@ export const topodata = $root.topodata = (() => {
          * @property {string|null} [group_replication_incarnation] Shard group_replication_incarnation
          * @property {topodata.GroupReplicationBootstrapIntent.$Properties|null} [group_replication_bootstrap_intent] Shard group_replication_bootstrap_intent
          * @property {string|null} [durability_policy] Shard durability_policy
+         * @property {Array.<topodata.GroupReplicationVoterIdentity.$Properties>|null} [group_replication_voter_identities] Shard group_replication_voter_identities
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -55188,6 +55189,7 @@ export const topodata = $root.topodata = (() => {
             this.source_shards = [];
             this.tablet_controls = [];
             this.group_replication_voters = [];
+            this.group_replication_voter_identities = [];
             if (properties)
                 for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
                     if (properties[keys[i]] != null && keys[i] !== "__proto__")
@@ -55283,6 +55285,14 @@ export const topodata = $root.topodata = (() => {
         Shard.prototype.durability_policy = "";
 
         /**
+         * Shard group_replication_voter_identities.
+         * @member {Array.<topodata.GroupReplicationVoterIdentity.$Properties>} group_replication_voter_identities
+         * @memberof topodata.Shard
+         * @instance
+         */
+        Shard.prototype.group_replication_voter_identities = $util.emptyArray;
+
+        /**
          * Creates a new Shard instance using the specified properties.
          * @function create
          * @memberof topodata.Shard
@@ -55339,6 +55349,9 @@ export const topodata = $root.topodata = (() => {
                 $root.topodata.GroupReplicationBootstrapIntent.encode(message.group_replication_bootstrap_intent, writer.uint32(/* id 12, wireType 2 =*/98).fork(), _depth + 1).ldelim();
             if (message.durability_policy != null && $Object.hasOwnProperty.call(message, "durability_policy") && message.durability_policy !== "")
                 writer.uint32(/* id 13, wireType 2 =*/106).string(message.durability_policy);
+            if (message.group_replication_voter_identities != null && message.group_replication_voter_identities.length)
+                for (let i = 0; i < message.group_replication_voter_identities.length; ++i)
+                    $root.topodata.GroupReplicationVoterIdentity.encode(message.group_replication_voter_identities[i], writer.uint32(/* id 14, wireType 2 =*/114).fork(), _depth + 1).ldelim();
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -55477,6 +55490,14 @@ export const topodata = $root.topodata = (() => {
                             delete message.durability_policy;
                         continue;
                     }
+                case 14: {
+                        if (wireType !== 2)
+                            break;
+                        if (!(message.group_replication_voter_identities && message.group_replication_voter_identities.length))
+                            message.group_replication_voter_identities = [];
+                        message.group_replication_voter_identities.push($root.topodata.GroupReplicationVoterIdentity.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -55586,6 +55607,15 @@ export const topodata = $root.topodata = (() => {
             if (message.durability_policy != null && $Object.hasOwnProperty.call(message, "durability_policy"))
                 if (!$util.isString(message.durability_policy))
                     return "durability_policy: string expected";
+            if (message.group_replication_voter_identities != null && $Object.hasOwnProperty.call(message, "group_replication_voter_identities")) {
+                if (!$Array.isArray(message.group_replication_voter_identities))
+                    return "group_replication_voter_identities: array expected";
+                for (let i = 0; i < message.group_replication_voter_identities.length; ++i) {
+                    let error = $root.topodata.GroupReplicationVoterIdentity.verify(message.group_replication_voter_identities[i], _depth + 1);
+                    if (error)
+                        return "group_replication_voter_identities." + error;
+                }
+            }
             return null;
         };
 
@@ -55671,6 +55701,16 @@ export const topodata = $root.topodata = (() => {
             if (object.durability_policy != null)
                 if (typeof object.durability_policy !== "string" || object.durability_policy.length)
                     message.durability_policy = $String(object.durability_policy);
+            if (object.group_replication_voter_identities) {
+                if (!$Array.isArray(object.group_replication_voter_identities))
+                    throw $TypeError(".topodata.Shard.group_replication_voter_identities: array expected");
+                message.group_replication_voter_identities = $Array(object.group_replication_voter_identities.length);
+                for (let i = 0; i < object.group_replication_voter_identities.length; ++i) {
+                    if (!$util.isObject(object.group_replication_voter_identities[i]))
+                        throw $TypeError(".topodata.Shard.group_replication_voter_identities: object expected");
+                    message.group_replication_voter_identities[i] = $root.topodata.GroupReplicationVoterIdentity.fromObject(object.group_replication_voter_identities[i], _depth + 1);
+                }
+            }
             return message;
         };
 
@@ -55695,6 +55735,7 @@ export const topodata = $root.topodata = (() => {
                 object.source_shards = [];
                 object.tablet_controls = [];
                 object.group_replication_voters = [];
+                object.group_replication_voter_identities = [];
             }
             if (options.defaults) {
                 object.primary_alias = null;
@@ -55737,6 +55778,11 @@ export const topodata = $root.topodata = (() => {
                 object.group_replication_bootstrap_intent = $root.topodata.GroupReplicationBootstrapIntent.toObject(message.group_replication_bootstrap_intent, options, _depth + 1);
             if (message.durability_policy != null && $Object.hasOwnProperty.call(message, "durability_policy"))
                 object.durability_policy = message.durability_policy;
+            if (message.group_replication_voter_identities && message.group_replication_voter_identities.length) {
+                object.group_replication_voter_identities = $Array(message.group_replication_voter_identities.length);
+                for (let j = 0; j < message.group_replication_voter_identities.length; ++j)
+                    object.group_replication_voter_identities[j] = $root.topodata.GroupReplicationVoterIdentity.toObject(message.group_replication_voter_identities[j], options, _depth + 1);
+            }
             return object;
         };
 
@@ -56637,6 +56683,312 @@ export const topodata = $root.topodata = (() => {
         })();
 
         return Shard;
+    })();
+
+    topodata.GroupReplicationVoterIdentity = (function() {
+
+        /**
+         * Properties of a GroupReplicationVoterIdentity.
+         * @typedef {Object} topodata.GroupReplicationVoterIdentity.$Properties
+         * @property {topodata.Tablet.$Properties|null} [tablet] GroupReplicationVoterIdentity tablet
+         * @property {string|null} [server_uuid] GroupReplicationVoterIdentity server_uuid
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+
+        /**
+         * Properties of a GroupReplicationVoterIdentity.
+         * @memberof topodata
+         * @interface IGroupReplicationVoterIdentity
+         * @augments topodata.GroupReplicationVoterIdentity.$Properties
+         * @deprecated Use topodata.GroupReplicationVoterIdentity.$Properties instead.
+         */
+
+        /**
+         * Shape of a GroupReplicationVoterIdentity.
+         * @typedef {topodata.GroupReplicationVoterIdentity.$Properties} topodata.GroupReplicationVoterIdentity.$Shape
+         */
+
+        /**
+         * Constructs a new GroupReplicationVoterIdentity.
+         * @memberof topodata
+         * @classdesc Represents a GroupReplicationVoterIdentity.
+         * @constructor
+         * @param {topodata.GroupReplicationVoterIdentity.$Properties=} [properties] Properties to set
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+        const GroupReplicationVoterIdentity = function (properties) {
+            if (properties)
+                for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                        this[keys[i]] = properties[keys[i]];
+        };
+
+        /**
+         * GroupReplicationVoterIdentity tablet.
+         * @member {topodata.Tablet.$Properties|null|undefined} tablet
+         * @memberof topodata.GroupReplicationVoterIdentity
+         * @instance
+         */
+        GroupReplicationVoterIdentity.prototype.tablet = null;
+
+        /**
+         * GroupReplicationVoterIdentity server_uuid.
+         * @member {string} server_uuid
+         * @memberof topodata.GroupReplicationVoterIdentity
+         * @instance
+         */
+        GroupReplicationVoterIdentity.prototype.server_uuid = "";
+
+        /**
+         * Creates a new GroupReplicationVoterIdentity instance using the specified properties.
+         * @function create
+         * @memberof topodata.GroupReplicationVoterIdentity
+         * @static
+         * @param {topodata.GroupReplicationVoterIdentity.$Properties=} [properties] Properties to set
+         * @returns {topodata.GroupReplicationVoterIdentity} GroupReplicationVoterIdentity instance
+         * @type {{
+         *   (properties: topodata.GroupReplicationVoterIdentity.$Shape): topodata.GroupReplicationVoterIdentity & topodata.GroupReplicationVoterIdentity.$Shape;
+         *   (properties?: topodata.GroupReplicationVoterIdentity.$Properties): topodata.GroupReplicationVoterIdentity;
+         * }}
+         */
+        GroupReplicationVoterIdentity.create = function(properties) {
+            return new GroupReplicationVoterIdentity(properties);
+        };
+
+        /**
+         * Encodes the specified GroupReplicationVoterIdentity message. Does not implicitly {@link topodata.GroupReplicationVoterIdentity.verify|verify} messages.
+         * @function encode
+         * @memberof topodata.GroupReplicationVoterIdentity
+         * @static
+         * @param {topodata.GroupReplicationVoterIdentity.$Properties} message GroupReplicationVoterIdentity message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GroupReplicationVoterIdentity.encode = function (message, writer, _depth) {
+            if (!writer)
+                writer = $Writer.create();
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            if (message.tablet != null && $Object.hasOwnProperty.call(message, "tablet"))
+                $root.topodata.Tablet.encode(message.tablet, writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
+            if (message.server_uuid != null && $Object.hasOwnProperty.call(message, "server_uuid") && message.server_uuid !== "")
+                writer.uint32(/* id 2, wireType 2 =*/18).string(message.server_uuid);
+            if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
+                for (let i = 0; i < message.$unknowns.length; ++i)
+                    writer.raw(message.$unknowns[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified GroupReplicationVoterIdentity message, length delimited. Does not implicitly {@link topodata.GroupReplicationVoterIdentity.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof topodata.GroupReplicationVoterIdentity
+         * @static
+         * @param {topodata.GroupReplicationVoterIdentity.$Properties} message GroupReplicationVoterIdentity message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GroupReplicationVoterIdentity.encodeDelimited = function(message, writer) {
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
+        };
+
+        /**
+         * Decodes a GroupReplicationVoterIdentity message from the specified reader or buffer.
+         * @function decode
+         * @memberof topodata.GroupReplicationVoterIdentity
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {topodata.GroupReplicationVoterIdentity & topodata.GroupReplicationVoterIdentity.$Shape} GroupReplicationVoterIdentity
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GroupReplicationVoterIdentity.decode = function (reader, length, _end, _depth, _target) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $Reader.recursionLimit)
+                throw $Error("max depth exceeded");
+            let end, message, value;
+            if (length === $undefined)
+                end = reader.len;
+            else {
+                end = reader.pos + length;
+                if (end > reader.len)
+                    throw $RangeError("index out of range");
+                length = reader.len;
+                reader.len = end;
+            }
+            message = _target || new $root.topodata.GroupReplicationVoterIdentity();
+            while (reader.pos < end) {
+                let start = reader.pos;
+                let tag = reader.tag();
+                if (tag === _end) {
+                    _end = $undefined;
+                    break;
+                }
+                let wireType = tag & 7;
+                switch (tag >>>= 3) {
+                case 1: {
+                        if (wireType !== 2)
+                            break;
+                        message.tablet = $root.topodata.Tablet.decode(reader, reader.uint32(), $undefined, _depth + 1, message.tablet);
+                        continue;
+                    }
+                case 2: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.server_uuid = value;
+                        else
+                            delete message.server_uuid;
+                        continue;
+                    }
+                }
+                reader.skipType(wireType, _depth, tag);
+                if (!reader.discardUnknown) {
+                    $util.makeProp(message, "$unknowns", false);
+                    (message.$unknowns || (message.$unknowns = [])).push(reader.raw(start, reader.pos));
+                }
+            }
+            if (length !== $undefined) {
+                if (reader.pos !== end)
+                    throw $RangeError("index out of range");
+                reader.len = length;
+            }
+            if (_end !== $undefined)
+                throw $Error("missing end group");
+            return message;
+        };
+
+        /**
+         * Decodes a GroupReplicationVoterIdentity message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof topodata.GroupReplicationVoterIdentity
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {topodata.GroupReplicationVoterIdentity & topodata.GroupReplicationVoterIdentity.$Shape} GroupReplicationVoterIdentity
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GroupReplicationVoterIdentity.decodeDelimited = function(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a GroupReplicationVoterIdentity message.
+         * @function verify
+         * @memberof topodata.GroupReplicationVoterIdentity
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        GroupReplicationVoterIdentity.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.tablet != null && $Object.hasOwnProperty.call(message, "tablet")) {
+                let error = $root.topodata.Tablet.verify(message.tablet, _depth + 1);
+                if (error)
+                    return "tablet." + error;
+            }
+            if (message.server_uuid != null && $Object.hasOwnProperty.call(message, "server_uuid"))
+                if (!$util.isString(message.server_uuid))
+                    return "server_uuid: string expected";
+            return null;
+        };
+
+        /**
+         * Creates a GroupReplicationVoterIdentity message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof topodata.GroupReplicationVoterIdentity
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {topodata.GroupReplicationVoterIdentity} GroupReplicationVoterIdentity
+         */
+        GroupReplicationVoterIdentity.fromObject = function (object, _depth) {
+            if (object instanceof $root.topodata.GroupReplicationVoterIdentity)
+                return object;
+            if (!$util.isObject(object))
+                throw $TypeError(".topodata.GroupReplicationVoterIdentity: object expected");
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let message = new $root.topodata.GroupReplicationVoterIdentity();
+            if (object.tablet != null) {
+                if (!$util.isObject(object.tablet))
+                    throw $TypeError(".topodata.GroupReplicationVoterIdentity.tablet: object expected");
+                message.tablet = $root.topodata.Tablet.fromObject(object.tablet, _depth + 1);
+            }
+            if (object.server_uuid != null)
+                if (typeof object.server_uuid !== "string" || object.server_uuid.length)
+                    message.server_uuid = $String(object.server_uuid);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a GroupReplicationVoterIdentity message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof topodata.GroupReplicationVoterIdentity
+         * @static
+         * @param {topodata.GroupReplicationVoterIdentity} message GroupReplicationVoterIdentity
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        GroupReplicationVoterIdentity.toObject = function (message, options, _depth) {
+            if (!options)
+                options = {};
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let object = {};
+            if (options.defaults) {
+                object.tablet = null;
+                object.server_uuid = "";
+            }
+            if (message.tablet != null && $Object.hasOwnProperty.call(message, "tablet"))
+                object.tablet = $root.topodata.Tablet.toObject(message.tablet, options, _depth + 1);
+            if (message.server_uuid != null && $Object.hasOwnProperty.call(message, "server_uuid"))
+                object.server_uuid = message.server_uuid;
+            return object;
+        };
+
+        /**
+         * Converts this GroupReplicationVoterIdentity to JSON.
+         * @function toJSON
+         * @memberof topodata.GroupReplicationVoterIdentity
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        GroupReplicationVoterIdentity.prototype.toJSON = function() {
+            return GroupReplicationVoterIdentity.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        /**
+         * Gets the type url for GroupReplicationVoterIdentity
+         * @function getTypeUrl
+         * @memberof topodata.GroupReplicationVoterIdentity
+         * @static
+         * @param {string} [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns {string} The type url
+         */
+        GroupReplicationVoterIdentity.getTypeUrl = function(prefix) {
+            if (prefix === $undefined)
+                prefix = "type.googleapis.com";
+            return prefix + "/topodata.GroupReplicationVoterIdentity";
+        };
+
+        return GroupReplicationVoterIdentity;
     })();
 
     topodata.GroupReplicationBootstrapIntent = (function() {
