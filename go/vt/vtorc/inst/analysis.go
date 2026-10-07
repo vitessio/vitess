@@ -81,9 +81,9 @@ const (
 	GroupBootstrapNotRecorded AnalysisCode = "GroupBootstrapNotRecorded"
 	// GroupVotersOutOfDate describes a shard whose voters VTOrc changes (see PlanGroupVoters): no
 	// voter is listed yet (InitialVoters), a voter failed and a spare of its cell takes its seat
-	// (SwapVoter), a cell with an eligible tablet has no voter (GrowVoter), or a voter whose tablet
-	// record was deleted has no spare and leaves the list (RemoveVoter). It is reported on a single
-	// tablet of the shard.
+	// (SwapVoter), a cell with an eligible tablet has no voter (GrowVoter, after the spare joined the
+	// group when it has a single voter: JoinSpareBeforeGrow), or a voter whose tablet record was deleted
+	// has no spare and leaves the list (RemoveVoter). It is reported on a single tablet of the shard.
 	GroupVotersOutOfDate AnalysisCode = "GroupVotersOutOfDate"
 	// GroupPrimaryNotVoter describes the tablet whose MySQL is the primary of its shard's legitimate
 	// replication group while it is not a voter. It does not serve; VTOrc moves the group primary to

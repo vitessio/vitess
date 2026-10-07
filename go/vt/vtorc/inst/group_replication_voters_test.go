@@ -387,7 +387,7 @@ func TestPlanGroupVoters(t *testing.T) {
 			f.add(t, d, &replicationdatapb.GroupReplicationStatus{}, "1-3")
 			f.fail(f.c, 10*time.Second)
 		},
-		want: want{alert: GroupVotersBelowTarget, reason: "holds 2 voters ONLINE, fewer than a majority of the 4 voters it would have"},
+		want: want{alert: GroupVotersBelowTarget, reason: "holds 2 of the 4 voters it would have ONLINE, not a majority"},
 	}, {
 		name: "GrowVoter needs P3: the tablet of the new cell executed a transaction that the primary lacks",
 		setup: func(t *testing.T, f *planFixture) {
@@ -473,6 +473,94 @@ func TestPlanGroupVoters(t *testing.T) {
 			if tt.want.removed != "" {
 				assert.Equal(t, tt.want.removed, topoproto.TabletAliasString(plan.Removed))
 			}
+			if tt.want.added != "" {
+				require.NotNil(t, plan.Added)
+				assert.Equal(t, tt.want.added, topoproto.TabletAliasString(plan.Added.Alias))
+			}
+			if tt.want.reason != "" {
+				assert.Contains(t, plan.Reason, tt.want.reason)
+			}
+		})
+	}
+}
+
+// TestPlanGroupVotersSingleVoter checks how a group of a single voter grows: its primary's view holds a
+// majority of the grown list only once the new voter is in it, so the spare joins the group first
+// (JoinSpareBeforeGrow), and GrowVoter gives it the seat once it is ONLINE in the primary's view. Only a
+// group of a single voter accepts a spare that is in a group, only one spare joins at a time, and only a
+// spare in the primary's view of the recorded incarnation counts.
+func TestPlanGroupVotersSingleVoter(t *testing.T) {
+	type want struct {
+		action VoterAction
+		voters []string
+		added  string
+		alert  AnalysisCode
+		reason string
+	}
+	offline := func() *replicationdatapb.GroupReplicationStatus {
+		return &replicationdatapb.GroupReplicationStatus{PluginActive: true, MemberState: mysql.GroupMemberStateOffline}
+	}
+	tests := []struct {
+		name  string
+		setup func(t *testing.T, f *planFixture)
+		want  want
+	}{{
+		name:  "JoinSpareBeforeGrow: the spare of the first cell without a voter joins the group",
+		setup: func(t *testing.T, f *planFixture) {},
+		want:  want{action: VoterActionJoinSpare, voters: []string{"zone1-0000000101"}, added: "zone2-0000000200", reason: "joins the group before it takes the seat"},
+	}, {
+		name: "GrowVoter: the spare is ONLINE in the primary's view",
+		setup: func(t *testing.T, f *planFixture) {
+			f.tablet(f.a).Status = f.member(f.a, f.a, f.b)
+			f.tablet(f.b).Status = f.member(f.b, f.a, f.b)
+		},
+		want: want{action: VoterActionGrow, voters: []string{"zone1-0000000101", "zone2-0000000200"}, added: "zone2-0000000200"},
+	}, {
+		name: "the spare is still recovering: no other spare joins meanwhile",
+		setup: func(t *testing.T, f *planFixture) {
+			f.tablet(f.a).Status = f.member(f.a, f.a)
+			addView(f.tablet(f.a).Status, planUUID(f.b), mysql.GroupMemberStateRecovering)
+			f.tablet(f.b).Status = f.member(f.b, f.a)
+			f.tablet(f.b).Status.MemberState = mysql.GroupMemberStateRecovering
+			addView(f.tablet(f.b).Status, planUUID(f.b), mysql.GroupMemberStateRecovering)
+		},
+		want: want{alert: GroupVotersBelowTarget, reason: "holds 1 of the 2 voters it would have ONLINE, not a majority"},
+	}, {
+		name: "a spare ONLINE in a group of another incarnation does not count, another spare of its cell joins",
+		setup: func(t *testing.T, f *planFixture) {
+			f.tablet(f.b).Status = f.member(f.b, f.b)
+			f.tablet(f.b).Status.ViewId = "1790000099:1"
+		},
+		want: want{action: VoterActionJoinSpare, voters: []string{"zone1-0000000101"}, added: "zone2-0000000201"},
+	}, {
+		name: "with two voters, a spare in the primary's view is not valid (P3), and an idle spare takes the seat",
+		setup: func(t *testing.T, f *planFixture) {
+			f.in.Voters = []*topodatapb.TabletAlias{f.a.Alias, f.b.Alias}
+			f.tablet(f.a).Status = f.member(f.a, f.a, f.b, f.c)
+			f.tablet(f.b).Status = f.member(f.b, f.a, f.b, f.c)
+			f.tablet(f.c).Status = f.member(f.c, f.a, f.b, f.c)
+		},
+		want: want{action: VoterActionGrow, voters: []string{"zone1-0000000101", "zone2-0000000200", "zone3-0000000301"}, added: "zone3-0000000301"},
+	}}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newPlanFixture(t)
+			// The group lost the voters of zone2 and zone3: a is its only voter, alone in its view, and
+			// the other tablets are idle replicas.
+			f.in.Voters = []*topodatapb.TabletAlias{f.a.Alias}
+			f.tablet(f.a).Status = f.member(f.a, f.a)
+			f.tablet(f.b).Status, f.tablet(f.c).Status = offline(), offline()
+			f.tablet(f.b).Executed, f.tablet(f.c).Executed = planGTIDs(t, "1-5"), planGTIDs(t, "1-5")
+			tt.setup(t, f)
+
+			plan := PlanGroupVoters(f.in)
+			assert.Equal(t, tt.want.action, plan.Action, plan.Reason)
+			assert.Equal(t, tt.want.alert, plan.Alert, plan.Reason)
+			var voters []string
+			for _, voter := range plan.Voters {
+				voters = append(voters, topoproto.TabletAliasString(voter))
+			}
+			assert.Equal(t, tt.want.voters, voters)
 			if tt.want.added != "" {
 				require.NotNil(t, plan.Added)
 				assert.Equal(t, tt.want.added, topoproto.TabletAliasString(plan.Added.Alias))

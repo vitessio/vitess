@@ -17,6 +17,7 @@ limitations under the License.
 package grouprepl
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -24,6 +25,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 )
 
 // TestGroupReplicationForceNewGroup checks the forced EmergencyReparentShard of a shard whose group lost its
@@ -69,4 +71,61 @@ func TestGroupReplicationForceNewGroup(t *testing.T) {
 	w = startWriter(t, tc)
 	require.Eventually(t, func() bool { return w.ok.Load() > 10 }, waitTimeout, pollInterval)
 	_, _, _ = w.stop()
+}
+
+// TestGroupReplicationGrowsFromSingleVoter checks that a group left with a single voter grows again
+// without a pause of the writes: a forced EmergencyReparentShard keeps one voter of three, and VTOrc
+// makes the spare of zone2, an asynchronous replica, join the group first (JoinSpareBeforeGrow), then
+// gives it the seat (GrowVoter), while the primary keeps serving.
+func TestGroupReplicationGrowsFromSingleVoter(t *testing.T) {
+	opts := defaultClusterOptions()
+	opts.rdonly = false
+	opts.replicaCells = []string{cells[0], cells[1], cells[2], cells[1]}
+	tc := setupCluster(t, opts)
+	out, err := tc.VtctldClientProcess.ExecuteCommandWithOutput("MigrateReplicationMode",
+		"--durability-policy", policy.DurabilityGroupReplicationCrossCell, keyspaceName)
+	require.NoError(t, err, out)
+	primary := tc.replicas[0]
+	var voters, spares []*cluster.Vttablet
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		voters, spares = nil, nil
+		listed := shardVoters(t, tc)
+		assert.Len(c, listed, 3)
+		for _, tablet := range tc.replicas {
+			if slices.Contains(listed, tablet.Alias) {
+				voters = append(voters, tablet)
+			} else {
+				spares = append(spares, tablet)
+			}
+		}
+	}, waitTimeout, pollInterval)
+	waitForGroup(t, tc, primary, voters)
+	require.Len(t, spares, 1)
+	spare := spares[0]
+
+	// The voters of zone2 and zone3 die; the forced reparent keeps the primary as the only voter.
+	for _, voter := range voters {
+		if voter != primary {
+			killHost(t, voter)
+		}
+	}
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		status, err := fullStatus(t, tc, primary)
+		require.NoError(c, err)
+		assert.False(c, mysql.IsGroupMemberActive(status.GroupReplicationStatus))
+	}, waitTimeout, pollInterval)
+	out, err = tc.VtctldClientProcess.ExecuteCommandWithOutput("EmergencyReparentShard",
+		"--group-replication-force-new-group", keyspaceName+"/"+shardName)
+	require.NoError(t, err, out)
+	require.Equal(t, []string{primary.Alias}, shardVoters(t, tc))
+
+	// The writes go on while the spare joins and takes the seat of zone2.
+	w := startWriter(t, tc)
+	require.Eventually(t, func() bool { return w.ok.Load() > 10 }, waitTimeout, pollInterval)
+	waitForGroup(t, tc, primary, []*cluster.Vttablet{primary, spare})
+	before := w.ok.Load()
+	require.Eventually(t, func() bool { return w.ok.Load() > before+10 }, waitTimeout, pollInterval)
+	ok, fail, lastErr := w.stop()
+	assert.Positive(t, ok)
+	assert.Zero(t, fail, "writes failed while the group grew from a single voter, last error: %v", lastErr)
 }

@@ -1061,7 +1061,8 @@ func chooseGroupBootstrapCandidate(ctx context.Context, voters []*topodatapb.Tab
 }
 
 // updateGroupReplicationVoters makes the change of the shard's voters that inst.PlanGroupVoters
-// decides: the initial list, SwapVoter, GrowVoter or RemoveVoter. It runs under the shard lock, and
+// decides: the initial list, SwapVoter, GrowVoter or RemoveVoter, or the join of the spare that a
+// group of a single voter grows with (JoinSpareBeforeGrow). It runs under the shard lock, and
 // decides on one bounded fresh read, the shard record and the FullStatus of every tablet of the shard
 // (concurrently, within groupVoterStatusesTimeout), with nothing in between that read and the
 // compare-and-swap of the voters and the incarnation. A new voter then joins the group. A member that
@@ -1088,6 +1089,16 @@ func updateGroupReplicationVoters(ctx context.Context, analysisEntry *inst.Detec
 		return false, topologyRecovery, err
 	}
 	plan := inst.PlanGroupVoters(read.input)
+	if plan.Action == inst.VoterActionJoinSpare {
+		// The list does not change: the spare joins the group first, and GrowVoter gives it the seat
+		// once it is ONLINE in the primary's view.
+		aliasString := topoproto.TabletAliasString(plan.Added.Alias)
+		_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("%s: %s: %s", UpdateGroupReplicationVotersRecoveryName, plan.Action, plan.Reason))
+		if _, err := startGroupReplication(ctx, plan.Added, &tabletmanagerdatapb.StartGroupReplicationRequest{}); err != nil {
+			return true, topologyRecovery, vterrors.Wrapf(err, "failed to start group replication on %s, the spare that joins the group of %s before it takes a seat", aliasString, keyspaceShard)
+		}
+		return true, topologyRecovery, nil
+	}
 	if !plan.Action.ChangesVoters() {
 		reason := plan.Reason
 		if reason == "" {
