@@ -282,6 +282,10 @@ func (vs *vstream) metricLabelValues(sgtid *binlogdatapb.ShardGtid) []string {
 	return labelValues
 }
 
+func vstreamCallerPrincipal(ctx context.Context) string {
+	return callerid.GetPrincipal(callerid.EffectiveCallerIDFromContext(ctx))
+}
+
 func newVStreamManager(resolver *srvtopo.Resolver, serv srvtopo.Server, cell string) *vstreamManager {
 	exporter := servenv.NewExporter(cell, "VStreamManager")
 	labels := vstreamMetricLabelNames(vstreamMetricsIncludeCaller)
@@ -336,7 +340,7 @@ func (vsm *vstreamManager) VStream(ctx context.Context, tabletType topodatapb.Ta
 	if err != nil {
 		return vterrors.Wrap(err, "failed to resolve vstream parameters")
 	}
-	callerPrincipal := callerid.GetPrincipal(callerid.EffectiveCallerIDFromContext(ctx))
+	callerPrincipal := vstreamCallerPrincipal(ctx)
 	log.Info(
 		"VStream flags",
 		slog.String("caller_principal", callerPrincipal),

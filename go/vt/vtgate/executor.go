@@ -1885,6 +1885,15 @@ func (e *Executor) ExecuteVStream(ctx context.Context, rss []*srvtopo.ResolvedSh
 }
 
 func (e *Executor) startVStream(ctx context.Context, rss []*srvtopo.ResolvedShard, filter *binlogdatapb.Filter, gtid string, callback func(evs []*binlogdatapb.VEvent) error) error {
+	vs, err := e.newSQLVStream(ctx, rss, filter, gtid, callback)
+	if err != nil {
+		return err
+	}
+	_ = vs.stream(ctx)
+	return nil
+}
+
+func (e *Executor) newSQLVStream(ctx context.Context, rss []*srvtopo.ResolvedShard, filter *binlogdatapb.Filter, gtid string, callback func(evs []*binlogdatapb.VEvent) error) (*vstream, error) {
 	shardGtids := make([]*binlogdatapb.ShardGtid, 0, len(rss))
 	for _, rs := range rss {
 		shardGtid := &binlogdatapb.ShardGtid{
@@ -1899,13 +1908,14 @@ func (e *Executor) startVStream(ctx context.Context, rss []*srvtopo.ResolvedShar
 	}
 	ts, err := e.serv.GetTopoServer()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	vsm := newVStreamManager(e.resolver.resolver, e.serv, e.cell)
-	vs := &vstream{
+	return &vstream{
 		vgtid:              vgtid,
 		tabletType:         topodatapb.TabletType_PRIMARY,
+		callerPrincipal:    vstreamCallerPrincipal(ctx),
 		filter:             filter,
 		send:               callback,
 		resolver:           e.resolver.resolver,
@@ -1916,9 +1926,7 @@ func (e *Executor) startVStream(ctx context.Context, rss []*srvtopo.ResolvedShar
 		eventCh:            make(chan []*binlogdatapb.VEvent),
 		ts:                 ts,
 		copyCompletedShard: make(map[string]struct{}),
-	}
-	_ = vs.stream(ctx)
-	return nil
+	}, nil
 }
 
 func (e *Executor) checkThatPlanIsValid(stmt sqlparser.Statement, plan *engine.Plan) error {
