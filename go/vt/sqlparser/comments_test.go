@@ -17,6 +17,7 @@ limitations under the License.
 package sqlparser
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -263,7 +264,7 @@ func TestRewriteDoubleSlashComments(t *testing.T) {
 		input:  "select 1 /*!99999 // x */",
 		output: "select 1 /*!99999 // x */",
 	}, {
-		// Nothing past a lexing error is rewritten.
+		// An unterminated string runs to the end of the text.
 		input:  "select 1 // a\n, 'b // c",
 		output: "select 1 #/ a\n, 'b // c",
 	}, {
@@ -274,9 +275,13 @@ func TestRewriteDoubleSlashComments(t *testing.T) {
 		output: "select @'ab' #/ x\n",
 	}, {
 		// Vitess cannot read this quoted user variable name whole, so it is
-		// a lexing error and nothing in it or after it is rewritten.
+		// a lexing error. The tokenizer then reads the quoted name as a
+		// string, as MySQL does, and the comment after it is rewritten.
 		input:  "do @'a//b' := 1 // x\n",
-		output: "do @'a//b' := 1 // x\n",
+		output: "do @'a//b' := 1 #/ x\n",
+	}, {
+		input:  "select 1; select @'a b', 1 // ; select 2\n, 3",
+		output: "select 1; select @'a b', 1 #/ ; select 2\n, 3",
 	}}
 	parser := NewTestParser()
 	for _, tcase := range testCases {
@@ -312,6 +317,42 @@ func TestRewriteDoubleSlashCommentsKeepsStatement(t *testing.T) {
 		got, err := parser.Parse(rewritten)
 		require.NoError(t, err, rewritten)
 		assert.Equal(t, String(want), String(got), input)
+	}
+}
+
+// TestRewriteDoubleSlashCommentsLeavesNoComment checks that, after the rewrite,
+// the tokenizer reads no "//" comment and splits the text into the same
+// statements, also in text that does not lex or parse.
+func TestRewriteDoubleSlashCommentsLeavesNoComment(t *testing.T) {
+	parser := NewTestParser()
+	inputs := []string{
+		"SELECT @'a b', 10 //*x*/ 2",
+		"select 1; select @'a b', 1 // ; select 2\n, 3",
+		"select @'a//b' // x\n; select 1 // y",
+		"select :1x // a\n; select 2 // b",
+	}
+	for _, tcase := range validSQL {
+		inputs = append(inputs, tcase.input)
+	}
+	for _, tcase := range invalidSQL {
+		inputs = append(inputs, tcase.input)
+	}
+	for _, input := range inputs {
+		rewritten, _ := parser.RewriteDoubleSlashComments(input)
+		tokenizer := parser.NewStringTokenizer(rewritten)
+		for {
+			typ, val := tokenizer.Scan()
+			if typ == 0 {
+				break
+			}
+			if typ == COMMENT {
+				assert.False(t, strings.HasPrefix(val, "//"), "%q left %q", input, val)
+			}
+		}
+		want, wantErr := parser.SplitStatementToPieces(input)
+		got, gotErr := parser.SplitStatementToPieces(rewritten)
+		assert.Equal(t, wantErr, gotErr, input)
+		assert.Len(t, got, len(want), input)
 	}
 }
 

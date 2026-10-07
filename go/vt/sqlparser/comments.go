@@ -219,11 +219,18 @@ func (p *Parser) RewriteDoubleSlashComments(sql string) (string, bool) {
 	var buf strings.Builder
 	copied := 0
 	for {
+		pos := tokenizer.Pos
 		typ, val := tokenizer.Scan()
 		switch typ {
-		case 0, LEX_ERROR:
-			// The parser rejects text the tokenizer cannot read, so there
-			// is nothing past a lexing error to rewrite.
+		case LEX_ERROR:
+			// Some callers forward text that does not parse, and split it
+			// with a tokenizer that reads on past a lexing error. Read on
+			// too, so that MySQL skips every comment that tokenizer skips.
+			if tokenizer.Pos > pos {
+				continue
+			}
+			fallthrough
+		case 0:
 			if copied == 0 {
 				return sql, false
 			}
