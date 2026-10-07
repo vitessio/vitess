@@ -425,6 +425,15 @@ func TestConnectorConnectNeutralizesSQLMode(t *testing.T) {
 	require.Equal(t, 2, db.GetQueryCalledNum(sqlmode.SessionSetupQuery("utf8mb4", "utf8mb4_0900_ai_ci")))
 	require.Equal(t, 1, db.GetQueryCalledNum(sqlmode.SessionSetupQuery("utf8mb4", "")))
 
+	// A safe collation that Vitess does not implement has no name to restore, so
+	// its character set is restored alone: here tis620_thai_ci.
+	params.Charset = 18 // tis620_thai_ci
+	tis620Connector := New(params)
+	conn, err = tis620Connector.Connect(t.Context())
+	require.NoError(t, err)
+	t.Cleanup(conn.Close)
+	require.Equal(t, 1, db.GetQueryCalledNum(sqlmode.SessionSetupQuery("tis620", "")))
+
 	// A character set that Vitess cannot parse safely is refused rather than set
 	// up, here cp932, whose second byte can be a backslash.
 	params.Charset = 95 // cp932_japanese_ci

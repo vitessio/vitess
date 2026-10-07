@@ -250,12 +250,11 @@ func sessionSetupQuery(collation collations.ID, withCollation bool) string {
 	env := collations.MySQL8()
 	// Connect has refused a collation whose character set is not safe.
 	charset, _ := env.ConnectionCharset(collation)
-	name := env.LookupName(collation)
-	if charset == "" || name == "" {
-		return sqlmode.NeutralizeSessionQuery
-	}
-	if !withCollation {
-		name = ""
+	var name string
+	if withCollation {
+		// A collation that Vitess does not implement has no name here, and its
+		// character set is restored alone, with its default collation.
+		name = env.LookupName(collation)
 	}
 	return sqlmode.SessionSetupQuery(charset, name)
 }
