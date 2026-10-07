@@ -217,15 +217,26 @@ func (c *Connector) Connect(ctx context.Context) (*mysql.Conn, error) {
 	// The setup stays bounded by the context like the dial and handshake are: a
 	// backend that stalls after the handshake must not hang the caller. Closing the
 	// connection when the context ends fails the pending exchange right away.
+	collation := params.Charset
+	if collation == collations.Unknown {
+		// The connection asked for no character set, so its session uses the
+		// server's default, which the server announced in its handshake and its
+		// connection initialization can still change: judge and restore that one.
+		collation = conn.CharacterSet
+		if _, ok := collations.MySQL8().ConnectionCharset(collation); !ok {
+			conn.Close()
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported connection character set (collation %d), the server's default: use utf8mb4", collation)
+		}
+	}
 	stop := context.AfterFunc(ctx, conn.Close)
-	_, err = conn.ExecuteFetch(sessionSetupQuery(params.Charset, true), 0, false)
+	_, err = conn.ExecuteFetch(sessionSetupQuery(collation, true), 0, false)
 	if sqlErr, ok := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError); ok && sqlErr.Number() == sqlerror.ERUnknownCollation {
 		// The collation comes from the MySQL 8 collation table, and the server may
 		// not have it: MySQL 5.7 and MariaDB lack utf8mb4_0900_ai_ci, for one. Such a
 		// server ignored the collation at the handshake and used its own default
 		// character set, so restore the character set alone, with its default
 		// collation on that server.
-		_, err = conn.ExecuteFetch(sessionSetupQuery(params.Charset, false), 0, false)
+		_, err = conn.ExecuteFetch(sessionSetupQuery(collation, false), 0, false)
 	}
 	if !stop() {
 		// the context ended and the connection is closed, whatever the query

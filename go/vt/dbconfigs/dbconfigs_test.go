@@ -404,7 +404,9 @@ func TestConnectorConnectNeutralizesSQLMode(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(conn.Close)
 
-	require.Equal(t, 1, db.GetQueryCalledNum(sqlmode.NeutralizeSessionQuery))
+	// A connection that asked for no character set restores the server's
+	// default, which the fake server announces as utf8mb4.
+	require.Equal(t, 1, db.GetQueryCalledNum(sqlmode.SessionSetupQuery("utf8mb4", "utf8mb4_0900_ai_ci")))
 
 	// a connection that negotiated a character set restores it in the same statement
 	params := db.ConnParams()
@@ -413,7 +415,7 @@ func TestConnectorConnectNeutralizesSQLMode(t *testing.T) {
 	conn, err = charsetConnector.Connect(t.Context())
 	require.NoError(t, err)
 	t.Cleanup(conn.Close)
-	require.Equal(t, 1, db.GetQueryCalledNum(sqlmode.SessionSetupQuery("utf8mb4", "utf8mb4_0900_ai_ci")))
+	require.Equal(t, 2, db.GetQueryCalledNum(sqlmode.SessionSetupQuery("utf8mb4", "utf8mb4_0900_ai_ci")))
 
 	// MySQL 5.7 and MariaDB do not have utf8mb4_0900_ai_ci, so the server refuses
 	// the collation, and the character set is restored alone.
@@ -422,7 +424,7 @@ func TestConnectorConnectNeutralizesSQLMode(t *testing.T) {
 	conn, err = charsetConnector.Connect(t.Context())
 	require.NoError(t, err)
 	t.Cleanup(conn.Close)
-	require.Equal(t, 2, db.GetQueryCalledNum(sqlmode.SessionSetupQuery("utf8mb4", "utf8mb4_0900_ai_ci")))
+	require.Equal(t, 3, db.GetQueryCalledNum(sqlmode.SessionSetupQuery("utf8mb4", "utf8mb4_0900_ai_ci")))
 	require.Equal(t, 1, db.GetQueryCalledNum(sqlmode.SessionSetupQuery("utf8mb4", "")))
 
 	// A safe collation that Vitess does not implement has no name to restore, so
