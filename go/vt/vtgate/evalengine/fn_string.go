@@ -604,6 +604,9 @@ func (call *builtinChangeCase) eval(env *ExpressionEnv) (eval, error) {
 	case *evalBytes:
 		b = e
 
+	case *evalJSON:
+		b = newEvalText(e.ToRawBytes(), collationJSON)
+
 	default:
 		b, err = evalToVarchar(e, call.collate, true)
 		if err != nil {
@@ -636,6 +639,9 @@ func (call *builtinChangeCase) compile(c *compiler) (ctype, error) {
 	col := str.Col
 	switch {
 	case str.isTextual():
+	case str.Type == sqltypes.TypeJSON:
+		c.asm.Convert_xc(1, sqltypes.VarChar, collationJSON.Collation, nil)
+		col = collationJSON
 	default:
 		c.asm.Convert_xc(1, sqltypes.VarChar, c.collation, nil)
 		col = typedCoercionCollation(sqltypes.VarChar, c.collation)
