@@ -160,7 +160,8 @@ CONSTANTS
                     \* redesign (OSwap, OGrow, OMoveToVoter, ORemove)
     MaxDel,         \* bound: tablet records of voters that an operator deletes (the signal for a shrink)
     REMOVE_CHECKS,  \* (redesign) the preconditions of RemoveVoter beyond the deleted record: "p1", a settled
-                    \* legitimate source p # v; "noview", v is active in no view (P2) and not in p's view
+                    \* legitimate source p # v; "noview", v is active in no view (P2) and not in p's view;
+                    \* "p2", P2 only (fourth milestone)
     MaxDie,         \* bound: hosts that die for good (never restart)
     P1_SETTLED,     \* (redesign) P1 requires the source's election to have ended (primary_election_in_progress
                     \* = false), instead of the timing assumption GRACE_SETTLES
@@ -176,6 +177,16 @@ CONSTANTS
     NOGROUP_DEL,    \* (redesign, REVISION 2) RemoveVoterNoGroup removes only a voter whose tablet record is deleted
     DIE_FIRST,      \* scenario: a host dies before any other fault
     DEL_DEAD,       \* scenario: an operator deletes only the record of a dead voter
+    MaxPart,        \* (fourth milestone) bound: partial partitions (a minority side of a view isolated)
+    END_TERM,       \* (FLAG 1) endPrimaryTerm on an active member: a PRIMARY tablet whose shard record names another
+                    \* tablet with a newer term becomes REPLICA and leaves MySQL as it is (writable)
+    PROMOTE_CHECK,  \* (FLAG 1, the fix) before the sync loop promotes its tablet while the shard record names another
+                    \* tablet, it reads that tablet's status, and refuses if it is the ONLINE primary of a quorum
+                    \* view of the same incarnation
+    PROMOTE_CHECK_ALL, \* (FLAG 1, a wider fix) ... and refuses if any other tablet of the shard reads as an active member
+                    \* of the same incarnation with quorum in its view and another ONLINE primary
+    READ_VIEWS,     \* (fourth milestone) P2 reads the views of the reachable members, as the code does (TRUE),
+                    \* or the ground truth: v active in no view, and no isolated MySQL believes in one (FALSE)
     SEQ_FAULTS      \* liveness scenario: no crash, mysqld restart, leave or loss of majority happens while a listed
                     \* voter is dead (the other faults come after the repair)
 
@@ -279,7 +290,20 @@ VARIABLES
     err,        \* STANDALONE: MySQL is out of its group in the ERROR state (expelled, or its group lost its
                 \* majority), not stopped: Group Replication refuses its commits
     everP,      \* a tablet has been PRIMARY (the shard record's primary term is set)
-    nVot, nPrs, nUndo, nSetRW
+    nVot, nPrs, nUndo, nSetRW,
+    \* ==== fourth milestone: partial partitions ====
+    staleIn,    \* the incarnation whose old view an isolated (stale) member still believes in, 0 for none: it
+                \* reports itself ONLINE in that view, without quorum, and sees only its own side ONLINE
+    side,       \* the side of the partition an isolated member is on
+    sonl,       \* the members an isolated member reports ONLINE: its whole old view until it detects the
+                \* partition (a hung or isolated primary still believes in a majority view), then its side
+    smem,       \* the membership an isolated member reports (its old view, ONLINE and UNREACHABLE)
+    sprim,      \* the primary an isolated member reports (the primary of its old view)
+    unr,        \* members of incarnation i's membership that its majority side sees UNREACHABLE: isolated, not
+                \* expelled yet; they count against the quorum
+    nPart,
+    stRec       \* (FLAG 1) ghost: the shard record was written to name a member outside every view with quorum,
+                \* while another member was the legitimate primary
 
 vM ==<<up, grp, st, sro, electing, exec, recv, view, prim, hist, dead, nextInc, async>>
 vT == <<ttype, serving, lk, dph, dOK, dGen, dFence, snap, fenced, fcPend, majInc, cInc,
@@ -290,7 +314,8 @@ vH == <<acked, nextTx, bootFrom, decisionAck, minorityAck, fenceUndone, adopted,
 vB == <<nCrash, nLeave, nLoss, nExpire, nProbe, died, deleted, nDie, nDel, delTx, lostOK, delAcked>>
 vN == <<voters, ovot, vMinor, pph, pcur, pel, pprev, dmWasRO, dmWasSrv, dmR, dmF, udReq, gone, everP,
         nVot, nPrs, nUndo, nSetRW, err, ran>>
-vars == <<vM, vT, vS, vO, vH, vB, vN>>
+vP == <<staleIn, side, sonl, smem, sprim, unr, nPart, stRec>>
+vars == <<vM, vT, vS, vO, vH, vB, vN, vP>>
 
 ----------------------------------------------------------------------------
 (* Helpers *)
@@ -304,18 +329,38 @@ VoterMaj(i)  == VoterMajIn(voters, i)
 RecOK(i, c)  == c = 0 \/ i = c
 Alive(i)     == view[i] # {} /\ ~dead[i]
 \* mysql.IsGroupPrimary: ONLINE primary of a group with quorum
-IsPrimQ(s)   == up[s] /\ grp[s] # 0 /\ prim[grp[s]] = s /\ ~dead[grp[s]]
-\* MySQL accepts a commit that it can acknowledge
-CanAccept(s) == IsPrimQ(s) /\ ~sro[s] /\ ~electing[s]
+\* the majority side of incarnation i has XCom quorum: a majority of its membership (ONLINE and UNREACHABLE)
+QuorumOK(i)  == 2 * Cardinality(view[i]) > Cardinality(view[i] \cup unr[i])
+\* s is an isolated member that still believes in its old view of its incarnation (no real quorum)
+Stale(s)     == staleIn[s] # 0 /\ grp[s] = staleIn[s] /\ s \notin view[grp[s]] /\ up[s]
+\* what the MySQL of s reports (replication_group_members): an active member, its membership, the members
+\* ONLINE in it, the ONLINE primary, and HasQuorum (more than half of its members ONLINE); a member of the
+\* majority side sees the isolated members UNREACHABLE. Equal to the ground truth without partitions.
+MyActive(s) == up[s] /\ grp[s] # 0 /\ (s \in view[grp[s]] \/ Stale(s))
+MyMem(s)    == IF grp[s] = 0 THEN {} ELSE IF Stale(s) THEN smem[s] ELSE view[grp[s]] \cup unr[grp[s]]
+MyOnl(s)    == IF grp[s] = 0 THEN {} ELSE IF Stale(s) THEN sonl[s] ELSE view[grp[s]]
+MyPrim(s)   == IF grp[s] = 0 THEN NoServer
+               ELSE LET q == IF Stale(s) THEN sprim[s] ELSE prim[grp[s]] IN IF q \in MyOnl(s) THEN q ELSE NoServer
+MyQuorum(s) == IF Stale(s) THEN 2 * Cardinality(sonl[s]) > Cardinality(smem[s])
+               ELSE ~dead[grp[s]] /\ QuorumOK(grp[s])
+\* a majority of the listed voters ONLINE in the view of s (policy.HasVoterMajority)
+MyVoterMaj(s) == Cardinality(MyOnl(s) \cap voters) >= MajOf(voters)
+\* ground truth: s is the primary of a view with quorum
+RealPrimQ(s) == up[s] /\ grp[s] # 0 /\ prim[grp[s]] = s /\ ~dead[grp[s]] /\ s \in view[grp[s]] /\ QuorumOK(grp[s])
+\* mysql.IsGroupPrimary, as s reports it: the ONLINE primary of its view, with quorum in it (an isolated
+\* primary that has not detected the partition yet reports it too)
+IsPrimQ(s)   == MyActive(s) /\ MyPrim(s) = s /\ MyQuorum(s)
+\* MySQL accepts a commit that it can acknowledge: certification needs XCom's real quorum
+CanAccept(s) == RealPrimQ(s) /\ ~sro[s] /\ ~electing[s]
 \* ground truth: the primary of the shard's legitimate group, with the voter majority
-LegitMaj(s)  == IsPrimQ(s) /\ RecOK(grp[s], recInc) /\ VoterMaj(grp[s])
+LegitMaj(s)  == RealPrimQ(s) /\ RecOK(grp[s], recInc) /\ VoterMaj(grp[s])
 
 \* groupReplicationServingReason = "" on a status read now, against the record incarnation c
 \* (a tablet whose record is deleted cannot change its type: no promotion, no decision to serve)
-ServeOK(s, c) == IsPrimQ(s) /\ ~electing[s] /\ (LEGIT => (RecOK(grp[s], c) /\ VoterMaj(grp[s]))) /\ s \notin deleted
+ServeOK(s, c) == IsPrimQ(s) /\ ~electing[s] /\ (LEGIT => (RecOK(grp[s], c) /\ MyVoterMaj(s))) /\ s \notin deleted
                  /\ (PRIMARY_MUST_BE_VOTER => s \in voters)
 \* IsLegitimatePrimary for the sync loop's promotion (trusts a group it bootstrapped itself)
-PromoteLegit(s) == IsPrimQ(s) /\ (LEGIT => ((RecOK(grp[s], recInc) \/ grp[s] = recentBoot[s]) /\ VoterMaj(grp[s]))) /\ s \notin deleted
+PromoteLegit(s) == IsPrimQ(s) /\ (LEGIT => ((RecOK(grp[s], recInc) \/ grp[s] = recentBoot[s]) /\ MyVoterMaj(s))) /\ s \notin deleted
                    /\ (PRIMARY_MUST_BE_VOTER => s \in voters)
 
 IntentLive(it) == it.tok # 0 /\ ~(it.tok = intent.tok /\ intExp)
@@ -448,6 +493,9 @@ Init ==
         /\ ran = [s \in Servers |-> FALSE]
         /\ everP = G
         /\ nVot = 0 /\ nPrs = 0 /\ nUndo = 0 /\ nSetRW = 0
+        /\ staleIn = [x \in Servers |-> 0] /\ side = [x \in Servers |-> {}]
+        /\ sonl = [x \in Servers |-> {}] /\ smem = [x \in Servers |-> {}] /\ sprim = [x \in Servers |-> NoServer]
+        /\ unr = [i \in Incs |-> {}] /\ nPart = 0 /\ stRec = FALSE
 
 ----------------------------------------------------------------------------
 (* Clients: through vtgate, or directly to MySQL *)
@@ -474,7 +522,7 @@ Commit(p) ==
 \* XCom delivers the decided transactions to a member that is still in the view (relay log)
 Deliver(s) ==
     /\ Free
-    /\ up[s] /\ grp[s] # 0 /\ ~dead[grp[s]]
+    /\ up[s] /\ grp[s] # 0 /\ ~dead[grp[s]] /\ s \in view[grp[s]] /\ QuorumOK(grp[s])
     /\ ~(hist[grp[s]] \subseteq Data(s))
     /\ recv' = [recv EXCEPT ![s] = @ \cup (hist[grp[s]] \ exec[s])]
     /\ UNCHANGED <<up, grp, st, sro, electing, exec, view, prim, hist, dead, nextInc, async>>
@@ -494,7 +542,8 @@ Apply(s) ==
 \* s is out of its group (exit state action READ_ONLY)
 LeaveVars(s) ==
     /\ view' = [view EXCEPT ![grp[s]] = @ \ {s}]
-    /\ prim' = [prim EXCEPT ![grp[s]] = IF @ = s THEN NoServer ELSE @]
+    \* (an isolated member's leave does not reach the majority side: it stays UNREACHABLE there)
+    /\ prim' = [prim EXCEPT ![grp[s]] = IF @ = s /\ s \in view[grp[s]] THEN NoServer ELSE @]
     /\ grp' = [grp EXCEPT ![s] = 0]
     /\ sro' = [sro EXCEPT ![s] = TRUE]
     /\ electing' = [electing EXCEPT ![s] = FALSE]
@@ -543,7 +592,7 @@ LoseMajority(i) ==
 
 Elect(i) ==
     /\ Free
-    /\ Alive(i) /\ prim[i] = NoServer
+    /\ Alive(i) /\ prim[i] = NoServer /\ QuorumOK(i)
     /\ \E q \in view[i] :
         /\ prim' = [prim EXCEPT ![i] = q]
         /\ electing' = [electing EXCEPT ![q] = TRUE]
@@ -555,7 +604,7 @@ Elect(i) ==
 \* and Group Replication sets super_read_only, or clears it if the member action is enabled
 ElectEnd(q) ==
     /\ Free
-    /\ up[q] /\ electing[q] /\ grp[q] # 0 /\ ~dead[grp[q]]
+    /\ up[q] /\ electing[q] /\ grp[q] # 0 /\ ~dead[grp[q]] /\ q \in view[grp[q]] /\ QuorumOK(grp[q])
     /\ exec' = [exec EXCEPT ![q] = @ \cup recv[q] \cup hist[grp[q]]]
     /\ recv' = [recv EXCEPT ![q] = {}]
     /\ electing' = [electing EXCEPT ![q] = FALSE]
@@ -573,8 +622,8 @@ CrashVarsK(s, die) ==
        ELSE LET i == grp[s] IN
             /\ LeaveVars(s)
             \* the others outvote the dead member only with a majority of the old view
-            /\ dead' = [dead EXCEPT ![i] = @ \/ ~(2 * (Cardinality(view[i]) - 1) > Cardinality(view[i]))
-                                               \/ Cardinality(view[i]) = 1]
+            /\ dead' = [dead EXCEPT ![i] = @ \/ (s \in view[i] /\ (~(2 * (Cardinality(view[i]) - 1) > Cardinality(view[i] \cup unr[i]))
+                                                                 \/ Cardinality(view[i]) = 1))]
     /\ st' = [st EXCEPT ![s] = "none"]
     /\ recv' = [recv EXCEPT ![s] = {}]
     /\ async' = [async EXCEPT ![s] = NoServer]
@@ -648,7 +697,9 @@ JoinComplete(s) ==
     /\ Free
     /\ up[s] /\ st[s] = "join"
     /\ \E i \in Incs :
-        /\ Alive(i) /\ prim[i] # NoServer /\ exec[s] \subseteq hist[i]
+        /\ Alive(i) /\ prim[i] \in view[i] /\ exec[s] \subseteq hist[i] /\ QuorumOK(i)
+        \* (a member that the view still lists UNREACHABLE cannot join again)
+        /\ s \notin unr[i]
         /\ grp' = [grp EXCEPT ![s] = i]
         /\ view' = [view EXCEPT ![i] = @ \cup {s}]
         /\ exec' = [exec EXCEPT ![s] = @ \cup exec[prim[i]]]
@@ -839,6 +890,11 @@ LeaveForeign(s) ==
 PrSnap(s) ==
     /\ Free
     /\ up[s] /\ lk[s] = "free" /\ ttype[s] = "R" /\ PromoteLegit(s)
+    \* PROMOTE_CHECK: the tablet the shard record names is not the ONLINE primary of a quorum view of the same
+    \* incarnation, as its status reads (a tablet that does not answer does not refuse)
+    /\ PROMOTE_CHECK => ~(newest \notin {s, NoServer} /\ IsPrimQ(newest) /\ grp[newest] = grp[s])
+    /\ PROMOTE_CHECK_ALL => ~\E t \in Servers \ {s} : MyActive(t) /\ grp[t] = grp[s] /\ MyQuorum(t)
+                                                    /\ MyPrim(t) \notin {s, NoServer}
     /\ lk' = [lk EXCEPT ![s] = "sync"]
     /\ dph' = [dph EXCEPT ![s] = "pr_snap"]
     /\ dGen' = [dGen EXCEPT ![s] = FALSE]
@@ -992,7 +1048,7 @@ Armed(s) == ttype[s] = "P" \/ fenced[s] \/ lk[s] \in {"join", "bootw", "boot", "
 FenceReason(s) ==
     LET i == grp[s]
         recorded == ~LEGIT \/ RecOK(i, Rec(s))
-        maj == VoterMaj(i)
+        maj == MyVoterMaj(s)
         notServable == ~maj \/ ~recorded
     IN  IF ~IsPrimQ(s) \/ lk[s] \in {"bootw", "boot"} THEN FALSE
         ELSE IF lk[s] = "join" THEN ~maj       \* no view id during the tablet's own START
@@ -1004,7 +1060,7 @@ FenceReason(s) ==
 
 NewMajInc(s) ==
     LET i == grp[s] IN
-    IF ttype[s] = "P" /\ IsPrimQ(s) /\ lk[s] \notin {"join", "bootw", "boot"} /\ VoterMaj(i) /\ (~LEGIT \/ RecOK(i, Rec(s)))
+    IF ttype[s] = "P" /\ IsPrimQ(s) /\ lk[s] \notin {"join", "bootw", "boot"} /\ MyVoterMaj(s) /\ (~LEGIT \/ RecOK(i, Rec(s)))
     THEN i ELSE majInc[s]
 
 \* the check reads MySQL; re-deciding a fence that holds is left out (it only refuses more decisions)
@@ -1401,6 +1457,22 @@ StaleTopo(t) ==
     /\ UNCHANGED <<vS, vO, vH, vB>>
     /\ UNCHANGED vN
 
+\* (FLAG 1) shardSyncLoop's endPrimaryTerm: the shard record names another tablet with a newer primary term; on
+\* an active member (MySQL ONLINE or RECOVERING in its own view) only the tablet type follows, and MySQL is left
+\* as it is, writable if it was
+EndTerm(t) ==
+    /\ Free
+    /\ END_TERM
+    /\ up[t] /\ ttype[t] = "P" /\ newest # t /\ lk[t] = "free" /\ MyActive(t)
+    /\ ttype' = [ttype EXCEPT ![t] = "R"]
+    /\ serving' = [serving EXCEPT ![t] = FALSE]
+    /\ badServe' = [badServe EXCEPT ![t] = FALSE]
+    /\ majInc' = [majInc EXCEPT ![t] = 0]
+    /\ snap' = [snap EXCEPT ![t] = "np"]
+    /\ UNCHANGED <<vM, lk, dph, dOK, dGen, dFence, fenced, fcPend, cInc, recentBoot, dmt, breq, bOrc, bPrev>>
+    /\ UNCHANGED <<vS, vO, vH, vB>>
+    /\ UNCHANGED vN
+
 ----------------------------------------------------------------------------
 (* Second milestone *)
 
@@ -1439,8 +1511,8 @@ MysqldRestart(s) ==
             /\ UNCHANGED <<view, prim, grp, electing, dead>>
        ELSE LET i == grp[s] IN
             /\ LeaveVars(s)
-            /\ dead' = [dead EXCEPT ![i] = @ \/ ~(2 * (Cardinality(view[i]) - 1) > Cardinality(view[i]))
-                                               \/ Cardinality(view[i]) = 1]
+            /\ dead' = [dead EXCEPT ![i] = @ \/ (s \in view[i] /\ (~(2 * (Cardinality(view[i]) - 1) > Cardinality(view[i] \cup unr[i]))
+                                                                 \/ Cardinality(view[i]) = 1))]
     /\ st' = [st EXCEPT ![s] = "none"]
     /\ recv' = [recv EXCEPT ![s] = {}]
     /\ async' = [async EXCEPT ![s] = NoServer]
@@ -1458,7 +1530,7 @@ MysqldRestart(s) ==
 \* member of the recorded incarnation is active with quorum in its view (a member of another incarnation
 \* has no quorum for VTOrc). The quorum is MySQL's, of the member's view: not the voter majority.
 VotGroupUp ==
-    \E s \in Servers : up[s] /\ grp[s] # 0 /\ ~dead[grp[s]] /\ RecOK(grp[s], recInc)
+    \E s \in Servers : MyActive(s) /\ RecOK(grp[s], recInc) /\ MyQuorum(s)
 
 \* SelectVoters with three tablets, one per cell (group_replication_cross_cell), or with every eligible
 \* tablet a voter (group_replication): every tablet that has not failed has a seat; the group primary
@@ -2083,10 +2155,14 @@ OAdoptUnrec ==
 P1(p) ==
     /\ p \in voters /\ IsPrimQ(p) /\ recInc # 0 /\ grp[p] = recInc
     /\ P1_SETTLED => ~electing[p]
-    /\ Cardinality(view[grp[p]] \cap voters) >= MajOf(voters)
+    /\ MyVoterMaj(p)
 \* the voter v is active in no view: no reachable member reports it (a down host is in no view; the server_uuid
 \* of a deleted record is unknown, and then every active member is a tablet that answers)
-NoView(v) == \A i \in Incs : v \notin view[i]
+\* READ_VIEWS (activeAnywhere): v's tablet does not answer (P2 needs it down, or its record deleted), and no
+\* reachable member of the recorded incarnation (a tablet with a record, whose MySQL is ONLINE in its own
+\* view) reports v ONLINE; a member the view lists UNREACHABLE is not active
+NoViewRead(v) == \A t \in Servers \ deleted : MyActive(t) /\ RecOK(grp[t], recInc) => v \notin MyOnl(t)
+NoView(v) == IF READ_VIEWS THEN NoViewRead(v) ELSE (\A i \in Incs : v \notin view[i]) /\ ~Stale(v)
 \* P2, the voter v is gone: it does not answer and its grace period passed, or its tablet record was deleted
 \* (failed at once); and it is active in no view
 P2(v) == v \in voters /\ ((~up[v] /\ gone[v]) \/ v \in deleted) /\ NoView(v)
@@ -2095,7 +2171,7 @@ P2(v) == v \in voters /\ ((~up[v] /\ gone[v]) \/ v \in deleted) /\ NoView(v)
 \* own)
 P3(x, p) ==
     /\ x \notin voters /\ x \notin deleted
-    /\ SPARE_CHECK => /\ up[x] /\ ttype[x] = "R" /\ grp[x] = 0 /\ st[x] = "none"
+    /\ SPARE_CHECK => /\ up[x] /\ ttype[x] = "R" /\ grp[x] = 0 /\ st[x] = "none" /\ ~err[x]
                       /\ exec[x] \subseteq exec[p]
 \* the decision: the write now (a compare-and-swap that holds, under the lock), or with VOT_SPLIT later
 VotDecide(o, new) ==
@@ -2128,7 +2204,7 @@ OGrow(o) ==
     /\ Cardinality(voters) < Seats
     /\ oph[o] = "idle" /\ lockOwner = NoOrc
     /\ \E p \in voters, x \in Servers \ voters :
-        /\ P1(p) /\ Cardinality(view[grp[p]] \cap voters) >= (Cardinality(voters) + 1) \div 2 + 1
+        /\ P1(p) /\ Cardinality(MyOnl(p) \cap voters) >= (Cardinality(voters) + 1) \div 2 + 1
         /\ P3(x, p)
         /\ VotDecide(o, voters \cup {x})
     /\ nVot' = nVot + 1
@@ -2147,7 +2223,7 @@ OMoveToVoter ==
     /\ VOTERS /\ VOT_MODE = "swap"
     /\ lockOwner = NoOrc /\ \E o \in Orcs : oph[o] = "idle"
     /\ \E q \in Servers, t \in voters \ deleted :
-        /\ IsPrimQ(q) /\ recInc # 0 /\ grp[q] = recInc /\ q \notin voters
+        /\ RealPrimQ(q) /\ recInc # 0 /\ grp[q] = recInc /\ q \notin voters
         /\ t \in view[grp[q]] /\ up[t]
         /\ MoveBody(q, t)
     /\ UNCHANGED <<up, grp, st, exec, recv, view, hist, dead, nextInc, async>>
@@ -2160,7 +2236,7 @@ OMoveFromDeleted ==
     /\ VOTERS /\ VOT_MODE = "swap" /\ MOVE_FROM_DELETED
     /\ lockOwner = NoOrc /\ \E o \in Orcs : oph[o] = "idle"
     /\ \E q \in voters \cap deleted, t \in voters \ deleted :
-        /\ IsPrimQ(q) /\ recInc # 0 /\ grp[q] = recInc
+        /\ RealPrimQ(q) /\ recInc # 0 /\ grp[q] = recInc
         /\ t \in view[grp[q]] /\ up[t]
         /\ MoveBody(q, t)
     /\ UNCHANGED <<up, grp, st, exec, recv, view, hist, dead, nextInc, async>>
@@ -2185,9 +2261,10 @@ ORemove(o) ==
     /\ VOTERS /\ VOT_MODE = "swap" /\ nVot < MaxVot
     /\ oph[o] = "idle" /\ lockOwner = NoOrc
     /\ \E v \in voters \cap deleted, p \in voters :
-        /\ "noview" \in REMOVE_CHECKS => NoView(v)
+        /\ ("noview" \in REMOVE_CHECKS \/ "p2" \in REMOVE_CHECKS) => NoView(v)
         /\ "p1" \in REMOVE_CHECKS => /\ v # p /\ P1(p)
-                                     /\ "noview" \in REMOVE_CHECKS => v \notin view[grp[p]]
+                                     \* inPrimaryView: v is in p's view in no state (UNREACHABLE included)
+                                     /\ "noview" \in REMOVE_CHECKS => v \notin MyMem(p)
         /\ ~\E x \in Servers \ voters : P1(p) /\ P3(x, p)
         /\ VotDecide(o, voters \ {v})
     /\ nVot' = nVot + 1
@@ -2264,14 +2341,123 @@ Step ==
         \/ PrSnap(s) \/ PrRead(s) \/ PrAct(s) \/ SaSnap(s) \/ SaRead(s) \/ SaAct(s)
         \/ JoinStart(s) \/ JoinRelease(s) \/ FcRead(s) \/ FcAct(s)
         \/ HBoot1(s) \/ HBootGo(s) \/ HBootGiveUp(s) \/ HBootAbort(s)
-        \/ StaleTopo(s)
+        \/ StaleTopo(s) \/ EndTerm(s)
     \/ \E i \in Incs : LoseMajority(i) \/ Elect(i) \/ LeaveDead(i)
     \/ \E o \in Orcs : OBegin(o) \/ OIntent(o) \/ OReply(o) \/ OTimeout(o) \/ OAdopt(o) \/ OAdoptLater(o)
     \/ OLeaseExpire \/ OIntentExpire
     \/ Step2
     \/ Done
 
-Next == Step
+----------------------------------------------------------------------------
+(* Fourth milestone: partial partitions, more than one view of an incarnation. A minority side S of the
+   view of incarnation i is cut off (Isolate): the majority side sees its members UNREACHABLE (unr: they still
+   count in the membership, against the quorum) until it expels them (Expel). Each isolated member keeps its
+   old view: until it detects the partition (Detect) it still reports its old view ONLINE, with quorum, and its
+   old primary (a hung or isolated primary that believes it is in a majority view); then it reports only its
+   side ONLINE, without quorum. XCom gives quorum to one side at most: commits, deliveries, elections, joins
+   and expulsions need the real quorum of the current membership (QuorumOK), and certification blocks the
+   isolated side. VTOrc and the tablets read each MySQL's own view (MyOnl, MyMem, MyPrim, MyQuorum). The
+   partition heals (Heal): a member that was not expelled is back in the view and catches up; one that was,
+   or that gave up (unreachable_majority_timeout), leaves its group. A majority side without quorum blocks,
+   and its members leave later (Block, then LeaveDead), unless the partition heals first. *)
+
+Isolate(i, S) ==
+    /\ Free
+    /\ nPart < MaxPart /\ Alive(i)
+    /\ S # {} /\ S \subseteq view[i] /\ S # view[i]
+    \* the isolated side has no quorum of its own: a minority, or half, of the membership
+    /\ 2 * Cardinality(S) <= Cardinality(view[i] \cup unr[i])
+    /\ \A x \in S : up[x]
+    /\ view' = [view EXCEPT ![i] = @ \ S]
+    /\ unr' = [unr EXCEPT ![i] = @ \cup S]
+    /\ staleIn' = [x \in Servers |-> IF x \in S THEN i ELSE staleIn[x]]
+    /\ side' = [x \in Servers |-> IF x \in S THEN S ELSE side[x]]
+    /\ sonl' = [x \in Servers |-> IF x \in S THEN view[i] ELSE sonl[x]]
+    /\ smem' = [x \in Servers |-> IF x \in S THEN view[i] \cup unr[i] ELSE smem[x]]
+    /\ sprim' = [x \in Servers |-> IF x \in S THEN prim[i] ELSE sprim[x]]
+    /\ nPart' = nPart + 1 /\ UNCHANGED stRec
+    /\ UNCHANGED <<up, grp, st, sro, electing, exec, recv, prim, hist, dead, nextInc, async>>
+    /\ UNCHANGED <<vT, vS, vO, vH, vB, vN>>
+
+\* an isolated member detects the partition: the members it cannot reach are UNREACHABLE in its view
+Detect(x) ==
+    /\ Free
+    /\ Stale(x) /\ sonl[x] # sonl[x] \cap side[x]
+    /\ sonl' = [sonl EXCEPT ![x] = @ \cap side[x]]
+    /\ UNCHANGED <<vM, vT, vS, vO, vH, vB, vN, staleIn, side, smem, sprim, unr, nPart, stRec>>
+
+\* the majority side, with quorum, expels an UNREACHABLE member; an expelled primary is replaced by an election
+Expel(i, x) ==
+    /\ Free
+    /\ x \in unr[i] /\ Alive(i) /\ QuorumOK(i)
+    /\ unr' = [unr EXCEPT ![i] = @ \ {x}]
+    /\ prim' = IF prim[i] = x THEN [prim EXCEPT ![i] = NoServer] ELSE prim
+    /\ UNCHANGED <<up, grp, st, sro, electing, exec, recv, view, hist, dead, nextInc, async>>
+    /\ UNCHANGED <<vT, vS, vO, vH, vB, vN, staleIn, side, sonl, smem, sprim, nPart, stRec>>
+
+\* a view without quorum blocks; unreachable_majority_timeout then makes its members leave (LeaveDead)
+Block(i) ==
+    /\ Free
+    /\ Alive(i) /\ ~QuorumOK(i)
+    /\ dead' = [dead EXCEPT ![i] = TRUE]
+    /\ UNCHANGED <<up, grp, st, sro, electing, exec, recv, view, prim, hist, nextInc, async>>
+    /\ UNCHANGED <<vT, vS, vO, vH, vB, vN, vP>>
+
+\* an isolated member's partition heals: back in the view if it was not expelled (it receives what it
+\* missed); or it leaves its group (expelled, or unreachable_majority_timeout), in the ERROR state
+HealVars(x) == /\ staleIn' = [staleIn EXCEPT ![x] = 0] /\ side' = [side EXCEPT ![x] = {}]
+               /\ sonl' = [sonl EXCEPT ![x] = {}] /\ smem' = [smem EXCEPT ![x] = {}]
+               /\ sprim' = [sprim EXCEPT ![x] = NoServer]
+Heal(x) ==
+    /\ Free
+    /\ Stale(x)
+    /\ LET i == staleIn[x] IN
+       \/ /\ x \in unr[i] /\ Alive(i)
+          /\ view' = [view EXCEPT ![i] = @ \cup {x}]
+          /\ unr' = [unr EXCEPT ![i] = @ \ {x}]
+          /\ recv' = [recv EXCEPT ![x] = @ \cup (hist[i] \ exec[x])]
+          /\ UNCHANGED <<grp, sro, electing, err>>
+       \/ /\ grp' = [grp EXCEPT ![x] = 0]
+          /\ sro' = [sro EXCEPT ![x] = TRUE]
+          /\ electing' = [electing EXCEPT ![x] = FALSE]
+          /\ err' = [err EXCEPT ![x] = STANDALONE]
+          /\ UNCHANGED <<view, unr, recv>>
+    /\ HealVars(x)
+    /\ UNCHANGED <<up, st, exec, prim, hist, dead, nextInc, async>>
+    /\ UNCHANGED <<vT, vS, vO, vH, vB, nPart, stRec>>
+    /\ UNCHANGED <<voters, ovot, vMinor, pph, pcur, pel, pprev, dmWasRO, dmWasSrv, dmR, dmF, udReq, gone, everP,
+                   nVot, nPrs, nUndo, nSetRW, ran>>
+
+\* the steps that end a part of a partition (liveness: GRLiveness)
+PartEnd ==
+    \/ \E i \in Incs, x \in Servers : Expel(i, x)
+    \/ \E i \in Incs : Block(i)
+    \/ \E x \in Servers : Detect(x) \/ Heal(x)
+
+PartStep ==
+    \/ \E i \in Incs, S \in SUBSET Servers : Isolate(i, S)
+    \/ \E i \in Incs, x \in Servers : Expel(i, x)
+    \/ \E i \in Incs : Block(i)
+    \/ \E x \in Servers : Detect(x) \/ Heal(x)
+
+\* after any other step: an isolated member that crashed, left its group or rejoined holds no old view any
+\* more, and a view that emptied lists no UNREACHABLE member (without partitions: UNCHANGED vP)
+Over(x) == staleIn[x] # 0 /\ (~up'[x] \/ grp'[x] # staleIn[x] \/ x \in view'[staleIn[x]])
+PClean ==
+    /\ staleIn' = [x \in Servers |-> IF Over(x) THEN 0 ELSE staleIn[x]]
+    /\ side' = [x \in Servers |-> IF Over(x) THEN {} ELSE side[x]]
+    /\ sonl' = [x \in Servers |-> IF Over(x) THEN {} ELSE sonl[x]]
+    /\ smem' = [x \in Servers |-> IF Over(x) THEN {} ELSE smem[x]]
+    /\ sprim' = [x \in Servers |-> IF Over(x) THEN NoServer ELSE sprim[x]]
+    /\ unr' = [i \in Incs |-> IF view'[i] = {} THEN {} ELSE unr[i]]
+    /\ UNCHANGED nPart
+    \* FLAG 1: a promotion records a member outside every view with quorum while another member is the
+    \* legitimate primary
+    /\ stRec' = (stRec \/ (newest' # newest /\ newest' # NoServer
+                           /\ ~(\E i \in Incs : newest' \in view[i] /\ QuorumOK(i) /\ ~dead[i])
+                           /\ \E q \in Servers \ {newest'} : LegitMaj(q)))
+
+Next == (Step /\ PClean) \/ PartStep
 
 Spec == Init /\ [][Next]_vars
 
@@ -2335,6 +2521,34 @@ NoLostAckAfterDelete ==
     LET A == {t \in acked : delTx # 0 /\ t >= delTx} IN
     /\ recInc # 0 => A \subseteq hist[recInc]
     /\ \A p \in Servers : CanAccept(p) => A \subseteq exec[p]
+
+\* FLAG 1: the shard record never comes to name a member outside every view with quorum while another member
+\* is the legitimate primary (routing, not a lost write: certification blocks the stale side)
+NoStalePrimaryRecorded == ~stRec
+
+\* (fourth milestone) reachability witnesses, not properties: each is violated in a state where the scenario
+\* it names is reachable (witness configurations)
+\* an isolated member that VTOrc reads as a settled legitimate source (P1 on a stale view)
+WitStaleP1 == ~\E p \in Servers : Stale(p) /\ P1(p)
+\* a voter that P2 reads as active in no view while the majority side still lists it UNREACHABLE
+WitP2Unreach == ~\E v \in voters : P2(v) /\ \E i \in Incs : v \in unr[i]
+\* a deleted voter that P1 and P2 let RemoveVoter remove, which only "not in p's view" refuses
+WitPview == ~\E v \in voters \cap deleted, p \in voters : v # p /\ P1(p) /\ NoView(v) /\ v \in MyMem(p)
+\* SwapVoter's P1 and P2 hold, and a tablet that is not a voter is an active member, isolated or not (what P3
+\* refuses)
+WitActiveSpare == ~\E v, p \in voters, x \in Servers \ voters :
+                      v # p /\ P2(v) /\ P1(p) /\ x \notin deleted /\ MyActive(x)
+WitStaleSpare == ~\E v, p \in voters, x \in Servers \ voters :
+                      v # p /\ P2(v) /\ P1(p) /\ x \notin deleted /\ Stale(x)
+\* SwapVoter's P1, P2 and P3 hold with an isolated source
+WitSwapStale == ~\E v, p \in voters, x \in Servers \ voters : v # p /\ P2(v) /\ P1(p) /\ Stale(p) /\ P3(x, p)
+\* RemoveVoter's every check holds with an isolated source
+WitRemoveStale == ~\E v \in voters \cap deleted, p \in voters : v # p /\ P1(p) /\ Stale(p) /\ NoView(v) /\ v \notin MyMem(p)
+\* FLAG 1: the legitimate primary serves while the isolated old primary still believes it is the primary
+WitServesDuringStale == ~\E x \in Servers : Stale(x) /\ sprim[x] = x /\ x \in MyOnl(x) /\ Healthy
+\* GrowVoter's P1 holds on an isolated source
+WitGrowStale == ~\E p \in voters, x \in Servers \ voters :
+                      Cardinality(voters) < Seats /\ Stale(p) /\ P1(p) /\ P3(x, p)
 
 \* the redesign shrinks the list only for a deleted record (RemoveVoter), and grows it only up to the cells
 VoterCount == VOT_MODE = "swap" =>

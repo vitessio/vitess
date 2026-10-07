@@ -8,11 +8,13 @@
 # TLA2TOOLS_JAR  path of tla2tools.jar (default: tla2tools.jar next to this script; never commit it)
 # TLC_HEAP       Java heap (default 8g)
 # TLC_OUT        directory for the TLC outputs and state files (default: out/ next to this script)
+# TLC_WORKERS    TLC workers (default auto)
 # TLC_SIM_TRACES traces per worker for the simulated configurations (default 100000; seed 1, depth 120)
 set -u
 cd "$(dirname "$0")"
 JAR=${TLA2TOOLS_JAR:-$PWD/tla2tools.jar}
 HEAP=${TLC_HEAP:-8g}
+WORKERS=${TLC_WORKERS:-auto}
 OUT=${TLC_OUT:-$PWD/out}
 if [ ! -f "$JAR" ]; then
   echo "tla2tools.jar not found at $JAR: set TLA2TOOLS_JAR (https://github.com/tlaplus/tlaplus/releases)" >&2
@@ -121,6 +123,25 @@ EXPECTED=(
   voters_split1:pass
   voters_split_prompt:pass
   voters_code:pass
+  # fourth milestone: partial partitions
+  remove_partial:pass
+  remove_partial_noview:pass
+  grow_partial:pass
+  swap_partial:pass
+  swap_partial_nop3:NoVoterMinority
+  swap_partial_crash:pass
+  swap_partial_nop3_crash:NoVoterMinority
+  swap_partial_nop3_lost:pass
+  flag1_stale:NoStalePrimaryRecorded
+  flag1_safety:pass
+  flag1_fixed:pass
+  flag1_safety_faults:pass
+  flag1_fixed_faults:NoStalePrimaryRecorded
+  flag1_fixed_all:pass
+  flag1_fixed_all_faults:pass
+  live_flag1:pass
+  live_flag1_fixed:pass
+  live_flag1_fixed_all:pass
   # second milestone: the fixes of the three findings
   prs_fixed:pass
   prs_fixed_restart:pass
@@ -139,7 +160,7 @@ SIMULATED=(tablet_tx2 integrated integrated_core voters_split fixed init_orc_gua
 SIMNUM=(swap_spare_active:40000)
 
 # Temporal properties: the module GRLiveness.tla, which adds fairness to GRSafety.tla.
-LIVENESS=(live live_init live_init_prs live_init_prs_fail live_init_prs_adopt live_voters live_voters_fence live_delete_active live_delete_active_nomove live_swap live_nospare live_nospare_op live_nonvoter_primary live_delete)
+LIVENESS=(live live_init live_init_prs live_init_prs_fail live_init_prs_adopt live_voters live_voters_fence live_delete_active live_delete_active_nomove live_swap live_nospare live_nospare_op live_nonvoter_primary live_delete live_flag1 live_flag1_fixed live_flag1_fixed_all)
 
 expected_of() {
   for e in "${EXPECTED[@]}"; do
@@ -157,7 +178,7 @@ failed=0
 for c in "${configs[@]}"; do
   want=$(expected_of "$c")
   if [ -z "$want" ]; then echo "$c: unknown configuration" >&2; failed=1; continue; fi
-  args=(-workers auto -noGenerateSpecTE -config "$c.cfg" -metadir "$OUT/states/$c")
+  args=(-workers "$WORKERS" -noGenerateSpecTE -config "$c.cfg" -metadir "$OUT/states/$c")
   # A configuration without the stuck-state check (STUCK_CHECK) ignores states without successors (budgets
   # used up); one with it reports them, as a deadlock, unless Done marks them healthy.
   grep -q '^  STUCK_CHECK = TRUE$' "$c.cfg" || args+=(-deadlock)

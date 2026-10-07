@@ -14,38 +14,48 @@
 (***************************************************************************)
 EXTENDS GRSafety
 
+\* the steps of the tablets, MySQL and VTOrc come with the clean-up of the partition state (Next)
+WFP(A) == WF_vars(A /\ PClean)
+SFP(A) == SF_vars(A /\ PClean)
+
 Fair ==
     /\ \A s \in Servers :
-        /\ WF_vars(Deliver(s)) /\ WF_vars(Apply(s)) /\ WF_vars(ElectEnd(s)) /\ WF_vars(Restart(s))
-        /\ WF_vars(BootComplete(s)) /\ WF_vars(AsyncApply(s)) /\ WF_vars(RefreshRec(s))
-        /\ WF_vars(BootGraceExpire(s))
-        /\ WF_vars(SyncRead(s)) /\ WF_vars(SyncStop(s)) /\ WF_vars(SyncDemote(s)) /\ WF_vars(LeaveForeign(s))
-        /\ WF_vars(PrSnap(s)) /\ WF_vars(PrRead(s)) /\ WF_vars(PrAct(s))
-        /\ WF_vars(SaSnap(s)) /\ WF_vars(SaRead(s)) /\ WF_vars(SaAct(s))
-        /\ WF_vars(JoinStart(s)) /\ WF_vars(JoinRelease(s))
+        /\ WFP(Deliver(s)) /\ WFP(Apply(s)) /\ WFP(ElectEnd(s)) /\ WFP(Restart(s))
+        /\ WFP(BootComplete(s)) /\ WFP(AsyncApply(s)) /\ WFP(RefreshRec(s))
+        /\ WFP(BootGraceExpire(s))
+        /\ WFP(SyncRead(s)) /\ WFP(SyncStop(s)) /\ WFP(SyncDemote(s)) /\ WFP(LeaveForeign(s))
+        /\ WFP(PrSnap(s)) /\ WFP(PrRead(s)) /\ WFP(PrAct(s))
+        /\ WFP(SaSnap(s)) /\ WFP(SaRead(s)) /\ WFP(SaAct(s))
+        /\ WFP(JoinStart(s)) /\ WFP(JoinRelease(s))
         \* a START ends: it joins a live group (strongly fair), or fails, or forms a group of its own
-        /\ SF_vars(JoinComplete(s)) /\ WF_vars(JoinFail(s) \/ JoinStray(s))
-        /\ WF_vars(FcRead(s)) /\ WF_vars(FcAct(s))
-        /\ WF_vars(HBoot1(s)) /\ WF_vars(HBootGo(s)) /\ WF_vars(HBootGiveUp(s)) /\ WF_vars(HBootAbort(s))
-        /\ WF_vars(StaleTopo(s))
-        /\ WF_vars(VLeave(s))
-        /\ WF_vars(PDemoteEnd(s) \/ PDemoteFail(s) \/ DrSnap(s)) /\ WF_vars(DrRead(s)) /\ WF_vars(DrAct(s)) /\ WF_vars(PPromote2(s))
-        /\ WF_vars(UdSnap(s)) /\ WF_vars(UdRead(s)) /\ WF_vars(UdAct(s))
-        /\ WF_vars(RwRead(s)) /\ WF_vars(RwAct(s))
-        /\ WF_vars(IP1(s)) /\ WF_vars(IP2(s))
-        /\ WF_vars(FenceDrop(s)) /\ WF_vars(NLeave(s))
-    /\ \A i \in Incs : WF_vars(Elect(i)) /\ WF_vars(LeaveDead(i))
+        /\ SFP(JoinComplete(s)) /\ WFP(JoinFail(s) \/ JoinStray(s))
+        /\ WFP(FcRead(s)) /\ WFP(FcAct(s))
+        /\ WFP(HBoot1(s)) /\ WFP(HBootGo(s)) /\ WFP(HBootGiveUp(s)) /\ WFP(HBootAbort(s))
+        /\ WFP(StaleTopo(s)) /\ WFP(EndTerm(s))
+        /\ WFP(VLeave(s))
+        /\ WFP(PDemoteEnd(s) \/ PDemoteFail(s) \/ DrSnap(s)) /\ WFP(DrRead(s)) /\ WFP(DrAct(s)) /\ WFP(PPromote2(s))
+        /\ WFP(UdSnap(s)) /\ WFP(UdRead(s)) /\ WFP(UdAct(s))
+        /\ WFP(RwRead(s)) /\ WFP(RwAct(s))
+        /\ WFP(IP1(s)) /\ WFP(IP2(s))
+        /\ WFP(FenceDrop(s)) /\ WFP(NLeave(s))
+    /\ \A i \in Incs : WFP(Elect(i)) /\ WFP(LeaveDead(i))
     /\ \A o \in Orcs :
-        /\ WF_vars(OBegin(o)) /\ WF_vars(OIntent(o)) /\ WF_vars(OAdopt(o)) /\ WF_vars(OAdoptLater(o))
+        /\ WFP(OBegin(o)) /\ WFP(OIntent(o)) /\ WFP(OAdopt(o)) /\ WFP(OAdoptLater(o))
         \* the bootstrap RPC ends: its reply, or a timeout
-        /\ WF_vars(OReply(o) \/ OTimeout(o))
-        /\ WF_vars(OVotRead(o)) /\ WF_vars(OVotWrite(o)) /\ WF_vars(OSwap(o)) /\ WF_vars(OGrow(o)) /\ WF_vars(ORemove(o)) /\ WF_vars(ORemoveNoGroup(o))
-    /\ WF_vars(OIntentExpire) /\ WF_vars(OUndo) /\ WF_vars(GraceExpire)
-    /\ WF_vars(PDemote) /\ WF_vars(PWait) /\ WF_vars(PPromote) /\ WF_vars(PEnd) /\ WF_vars(PAbort)
-    /\ WF_vars(PIRecord) /\ WF_vars(OAdoptUnrec) /\ WF_vars(OMoveToVoter) /\ WF_vars(OMoveFromDeleted)
+        /\ WFP(OReply(o) \/ OTimeout(o))
+        /\ WFP(OVotRead(o)) /\ WFP(OVotWrite(o)) /\ WFP(OSwap(o)) /\ WFP(OGrow(o)) /\ WFP(ORemove(o)) /\ WFP(ORemoveNoGroup(o))
+    /\ WFP(OIntentExpire) /\ WFP(OUndo) /\ WFP(GraceExpire)
+    /\ WFP(PDemote) /\ WFP(PWait) /\ WFP(PPromote) /\ WFP(PEnd) /\ WFP(PAbort)
+    /\ WFP(PIRecord) /\ WFP(OAdoptUnrec) /\ WFP(OMoveToVoter) /\ WFP(OMoveFromDeleted)
     \* the scenario of a deleted record: the operator eventually deletes the record of a dead voter (only with
     \* DEL_DEAD, MaxDel > 0)
-    /\ DEL_DEAD => WF_vars(ODelete)
+    /\ DEL_DEAD => WFP(ODelete)
+    \* (fourth milestone) XCom expels an unreachable member, a view without quorum times out, an isolated
+    \* member detects its partition, and the partition heals. These are timeouts of MySQL, which happen while the
+    \* tablets' atomic decisions come and go (Free): strongly fair, so that a cycle of decisions (FLAG 1's
+    \* alternating promotions) cannot postpone them for ever. One condition for all of them: each such step
+    \* ends a part of a partition for good, so they cannot be taken infinitely often
+    /\ SF_vars(PartEnd)
 
 LSpec == Spec /\ Fair
 
