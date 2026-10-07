@@ -25,6 +25,45 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
+// validateLastPKShape checks that a lastpk QueryResult a client sent us can be
+// decoded. sqltypes.Proto3ToResult builds the row with MakeRowTrusted, which
+// indexes the fields with each of the row's lengths and slices the row's values
+// by them without checking either, so a malformed QueryResult would panic
+// instead of failing.
+func validateLastPKShape(qr *querypb.QueryResult) error {
+	if len(qr.Rows) != 1 {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "lastpk has %d rows, expected 1", len(qr.Rows))
+	}
+	row := qr.Rows[0]
+	if row == nil {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "lastpk row is nil")
+	}
+	if len(row.Lengths) != len(qr.Fields) {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+			"lastpk row has %d values, but there are %d fields", len(row.Lengths), len(qr.Fields))
+	}
+	for i, field := range qr.Fields {
+		if field == nil {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "lastpk field %d is nil", i)
+		}
+	}
+	// A length of -1 is a NULL value, which takes no bytes.
+	remaining := int64(len(row.Values))
+	for i, length := range row.Lengths {
+		if length < -1 {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "lastpk value %d has an invalid length %d", i, length)
+		}
+		if length > remaining {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+				"lastpk value %d has length %d, but only %d bytes of values remain", i, length, remaining)
+		}
+		if length > 0 {
+			remaining -= length
+		}
+	}
+	return nil
+}
+
 // validateLastPK checks the lastpk values a client sent us and returns them
 // typed as the table's own primary key columns, ready to be written into the
 // copy-phase snapshot query with writeLastPKValue.
