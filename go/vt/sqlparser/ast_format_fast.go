@@ -4336,6 +4336,12 @@ func (node *LockingFunc) FormatFast(buf *TrackedBuffer) {
 func (node *Variable) FormatFast(buf *TrackedBuffer) {
 	switch node.Scope {
 	case VariableScope:
+		if node.Name.IsEmpty() {
+			// MySQL accepts an empty user variable name, which only a quoted
+			// name can spell.
+			buf.WriteString("@''")
+			return
+		}
 		buf.WriteString("@")
 	case SessionScope:
 		if node.Name.EqualString(TransactionIsolationStr) || node.Name.EqualString(TransactionReadOnlyStr) {

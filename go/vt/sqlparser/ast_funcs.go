@@ -1006,7 +1006,7 @@ func NewVariableExpression(str string, at AtCount) *Variable {
 
 func createIdentifierCI(str string) IdentifierCI {
 	size := len(str)
-	if str[0] == '`' && str[size-1] == '`' {
+	if size > 1 && str[0] == '`' && str[size-1] == '`' {
 		str = str[1 : size-1]
 	}
 	return NewIdentifierCI(str)
@@ -2329,28 +2329,15 @@ func (ty ShowCommandType) ToString() string {
 	}
 }
 
-// formatUserOrRoleHost extracts the host from an AT_ID token value.
-// AT_ID values may be quoted (e.g., 'localhost') or unquoted (e.g., localhost).
-func formatUserOrRoleHost(atID string) string {
-	host := atID
-	if len(host) > 0 && host[0] == '\'' && host[len(host)-1] == '\'' {
-		host = host[1 : len(host)-1]
-	}
-	return host
-}
-
 func (node *UserOrRole) formatTo(buf *TrackedBuffer) {
 	if node.Name == nil {
 		buf.WriteString("current_user")
 		return
 	}
-	buf.WriteString("'")
-	buf.WriteString(*node.Name)
-	buf.WriteString("'")
+	buf.WriteString(encodeSQLString(*node.Name))
 	if node.Host != nil {
-		buf.WriteString("@'")
-		buf.WriteString(*node.Host)
-		buf.WriteString("'")
+		buf.WriteByte('@')
+		buf.WriteString(encodeSQLString(*node.Host))
 	}
 }
 
@@ -2462,8 +2449,8 @@ func formatIdentifier(id string) string {
 }
 
 func formatAddress(address string) string {
-	if len(address) > 0 && address[0] == '\'' {
-		return address
+	if address == "" {
+		return "''"
 	}
 	buf := NewTrackedBuffer(nil)
 	formatID(buf, address, NoAt)

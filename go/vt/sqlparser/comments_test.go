@@ -269,6 +269,13 @@ func TestRewriteDoubleSlashComments(t *testing.T) {
 	}, {
 		input:  "select 'a // b",
 		output: "select 'a // b",
+	}, {
+		// A quoted user variable name or account host is a string literal.
+		input:  "do @'a//b' := 1, @\"c//d\" // e\n",
+		output: "do @'a//b' := 1, @\"c//d\" #/ e\n",
+	}, {
+		input:  "show grants for 'u'@'h//x' // y\n",
+		output: "show grants for 'u'@'h//x' #/ y\n",
 	}}
 	parser := NewTestParser()
 	for _, tcase := range testCases {

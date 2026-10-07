@@ -180,6 +180,13 @@ func (tkn *Tokenizer) Scan() (int, string) {
 			if tkn.cur() == '`' {
 				tkn.skip(1)
 				tID, tBytes = tkn.scanLiteralIdentifier()
+			} else if tokenID == AT_ID && (tkn.cur() == '\'' || tkn.cur() == '"') {
+				// After a single '@', MySQL reads a quoted user variable name or
+				// account host as a string literal, so the name is its decoded
+				// value and nothing inside the quotes is a comment.
+				delim := tkn.cur()
+				tkn.skip(1)
+				tID, tBytes = tkn.scanString(delim, STRING)
 			} else if tkn.cur() == eofChar {
 				return LEX_ERROR, ""
 			} else {
