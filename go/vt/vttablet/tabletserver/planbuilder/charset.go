@@ -88,9 +88,13 @@ func validateSetExprsCharset(exprs sqlparser.SetExprs) error {
 // with DEFAULT, which takes the server's global value, and that need not be a
 // character set Vitess can parse safely. VTGate never sends these variables as
 // settings: it handles SET NAMES and SET CHARACTER SET itself and never applies
-// the character set variables.
+// the character set variables. A user-defined variable that only shares one of
+// their names changes no connection setting and is left alone.
 func rejectSettingCharsetExprs(exprs sqlparser.SetExprs) error {
 	for _, expr := range exprs {
+		if expr.Var.Scope == sqlparser.VariableScope {
+			continue
+		}
 		if connectionCharsetVariables[expr.Var.Name.Lowered()] {
 			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "the connection character set cannot be changed through connection settings: %s", expr.Var.Name.String())
 		}

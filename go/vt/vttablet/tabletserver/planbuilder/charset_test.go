@@ -67,7 +67,26 @@ func TestSetExprsRejectUnsafeCharsets(t *testing.T) {
 		"set character set utf16",
 	}
 
+	// user-defined variables named like the connection character set variables
+	// change no connection setting, so a reserved connection's pre-queries may
+	// assign them
+	userVariables := []string{
+		"set @charset = 'latin1'",
+		"set @character_set_client = 'gbk'",
+		"set @names = 'sjis'",
+		"set @collation_connection = 'cp932_japanese_ci'",
+	}
+
 	const settingsErr = "the connection character set cannot be changed through connection settings"
+	for _, setting := range userVariables {
+		t.Run(setting, func(t *testing.T) {
+			require.NoError(t, ValidateSettingsSQLMode([]string{setting}, parser, true))
+			stmt, err := parser.Parse(setting)
+			require.NoError(t, err)
+			_, err = analyzeSet(stmt.(*sqlparser.Set))
+			require.NoError(t, err)
+		})
+	}
 	for _, setting := range accepted {
 		t.Run(setting, func(t *testing.T) {
 			stmt, err := parser.Parse(setting)
