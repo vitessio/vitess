@@ -462,7 +462,7 @@ Like a plain `EXPLAIN`, the per-shard `EXPLAIN FORMAT=JSON` queries `VEXPLAIN MY
 
 `VStreamsCount` now also drops streams that end without an error, such as a shard stream ended by a resharding journal event. Previously those streams were counted as active forever.
 
-The new `--vstream-metrics-include-caller` flag adds a `CallerID` label to `VStreamsCreated`, `VStreamsCount`, `VStreamsEventsStreamed`, `VStreamsEndedWithErrors`, `VStreamsLag`, and `VStreamsTransactionsChunked`, so each streaming application can be monitored separately. The label is set to the principal of the effective caller ID in the `VStreamRequest`; streams that do not set one get an empty `CallerID`. Each distinct principal adds a series per keyspace, shard, and tablet type, so clients should set the principal to a logical application name rather than a per-instance ID. The flag is off by default, and the metrics keep their existing labels when it is off.
+The new `--vstream-metrics-include-caller` flag adds a `CallerID` label to `VStreamsCreated`, `VStreamsCount`, `VStreamsEventsStreamed`, `VStreamsEndedWithErrors`, `VStreamsLag`, and `VStreamsTransactionsChunked`, so each streaming application can be monitored separately. The label is set to the principal of the effective caller ID in the `VStreamRequest`; streams that do not set one get an empty `CallerID`. Each distinct principal adds a series per keyspace, shard, and tablet type. For example, if each client instance sets its own principal, the number of series grows with the number of instances, so consider the cardinality before enabling the flag. The flag is off by default, and the metrics keep their existing labels when it is off.
 
 ### <a id="minor-changes-reparent"/>Reparent</a>
 
