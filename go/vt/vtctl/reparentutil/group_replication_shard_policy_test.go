@@ -359,8 +359,8 @@ func TestEmergencyReparentConvertedShardOfSemiSyncKeyspace(t *testing.T) {
 
 // TestPlannedReparentConvertedShardOfSemiSyncKeyspace checks that PRS on a shard that was converted
 // to Group Replication, while its keyspace's policy is still semi_sync, takes the Group Replication
-// path: a tablet that is not a voter is refused before anything changes, and without a requested
-// primary only the voters are elected.
+// path: a tablet that is not a voter takes the swap path, which refuses it before anything changes while no
+// group incarnation is recorded, and without a requested primary only the voters are elected.
 func TestPlannedReparentConvertedShardOfSemiSyncKeyspace(t *testing.T) {
 	t.Run("not a voter", func(t *testing.T) {
 		c, ts := newFakeGRCluster(t, "semi_sync", migrationTestShard()...)
@@ -375,7 +375,7 @@ func TestPlannedReparentConvertedShardOfSemiSyncKeyspace(t *testing.T) {
 		})
 		require.Error(t, err)
 		assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
-		require.ErrorContains(t, err, "only voters can be promoted")
+		require.ErrorContains(t, err, "primary-elect zone1-0000000101 is not a voter, and the shard record lists no group incarnation")
 		assert.Empty(t, c.mutatingCalls())
 	})
 

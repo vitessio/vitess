@@ -112,9 +112,11 @@ type fakeGRCluster struct {
 	incarnation   string
 	bootstrapSeqs int
 	// noQuorum makes every member report that its view has no quorum.
-	noQuorum   bool
-	calls      []string
-	violations []string
+	noQuorum bool
+	// electionInProgress makes every member report that the election of the group primary runs.
+	electionInProgress bool
+	calls              []string
+	violations         []string
 	// failOnce fails the named call ("StartGroupReplication(zone3-0000000300)") once.
 	failOnce   map[string]bool
 	schemaRows []string
@@ -284,6 +286,7 @@ func (c *fakeGRCluster) groupStatus(ft *fakeGRTablet) *replicationdatapb.GroupRe
 		}
 	}
 	gs.HasQuorum = !c.noQuorum && online > len(gs.Members)/2
+	gs.PrimaryElectionInProgress = c.electionInProgress
 	incarnation := c.incarnation
 	if ft.incarnation != "" {
 		incarnation = ft.incarnation
