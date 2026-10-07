@@ -941,6 +941,97 @@ func TestTabletServerStreamExecute(t *testing.T) {
 	}
 }
 
+// TestTabletServerRewritesDoubleSlashComments checks that a statement that
+// VTTablet sends to MySQL as written has each "//" comment rewritten to "#/",
+// so that MySQL skips the text that Vitess skipped.
+func TestTabletServerRewritesDoubleSlashComments(t *testing.T) {
+	ctx := t.Context()
+	db, tsv := setupTabletServerTest(t, ctx, "")
+	t.Cleanup(tsv.StopService)
+	t.Cleanup(db.Close)
+
+	db.AddQuery("repair table test_table #/*x*/ , t2", &sqltypes.Result{})
+	db.AddRejectedQuery("repair table test_table //*x*/ , t2", errRejected)
+
+	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
+	_, err := tsv.Execute(ctx, nil, &target, "repair table test_table //*x*/ , t2", nil, 0, 0, nil)
+	require.NoError(t, err)
+	err = tsv.StreamExecute(ctx, nil, &target, "repair table test_table //*x*/ , t2", nil, 0, 0, nil, func(*sqltypes.Result) error { return nil })
+	require.NoError(t, err)
+}
+
+// TestTabletServerRewritesDoubleSlashCommentsInSetupQueries checks that the
+// settings of a reserved connection and the queries run right after BEGIN,
+// which VTTablet sends to MySQL as written, have each "//" comment rewritten
+// to "#/".
+func TestTabletServerRewritesDoubleSlashCommentsInSetupQueries(t *testing.T) {
+	ctx := t.Context()
+	db, tsv := setupTabletServerTest(t, ctx, "")
+	t.Cleanup(tsv.StopService)
+	t.Cleanup(db.Close)
+
+	db.AddQuery("set sql_mode = '' #/ x", &sqltypes.Result{})
+	db.AddRejectedQuery("set sql_mode = '' // x", errRejected)
+	// The settings pool runs the setting rendered from the parsed statement.
+	db.AddQuery("set sql_mode = ''", &sqltypes.Result{})
+	db.AddQuery("savepoint a #/ x", &sqltypes.Result{})
+	db.AddRejectedQuery("savepoint a // x", errRejected)
+	db.AddQuery("select 1 from dual limit 10001", &sqltypes.Result{})
+	// A temporary table needs a reserved connection, which is set up with
+	// the settings as written rather than through the settings pool.
+	db.AddQueryPattern("create temporary table .*", &sqltypes.Result{})
+	db.AddQuery("select @@session.wait_timeout", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("@@session.wait_timeout", "int64"),
+		"28800",
+	))
+
+	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
+	settings := []string{"set sql_mode = '' // x"}
+	postBeginQueries := []string{"savepoint a // x"}
+
+	state, _, err := tsv.ReserveExecute(ctx, nil, &target, settings, "create temporary table temp_t(id int)", nil, 0, nil)
+	require.NoError(t, err)
+	require.NoError(t, tsv.Release(ctx, &target, 0, state.ReservedID))
+
+	txState, _, err := tsv.BeginExecute(ctx, nil, &target, postBeginQueries, "select 1", nil, 0, nil)
+	require.NoError(t, err)
+	_, err = tsv.Rollback(ctx, &target, txState.TransactionID)
+	require.NoError(t, err)
+
+	reservedTxState, _, err := tsv.ReserveBeginExecute(ctx, nil, &target, settings, postBeginQueries, "create temporary table temp_t(id int)", nil, nil)
+	require.NoError(t, err)
+	require.NoError(t, tsv.Release(ctx, &target, reservedTxState.TransactionID, reservedTxState.ReservedID))
+
+	assert.Equal(t, 2, db.GetQueryCalledNum("set sql_mode = '' #/ x"), "query log: %s", db.QueryLog())
+	assert.Positive(t, db.GetQueryCalledNum("savepoint a #/ x"), "query log: %s", db.QueryLog())
+}
+
+// TestTabletServerTxSerializerKeyRewritesDoubleSlashComments checks that hot
+// row protection plans a statement with a "//" comment under the same plan
+// cache entry as its execution, which plans the rewritten text.
+func TestTabletServerTxSerializerKeyRewritesDoubleSlashComments(t *testing.T) {
+	ctx := t.Context()
+	db, tsv := setupTabletServerTest(t, ctx, "")
+	t.Cleanup(tsv.StopService)
+	t.Cleanup(db.Close)
+
+	logStats := tabletenv.NewLogStats(ctx, "TestTxSerializerKey", streamlog.NewQueryLogConfigForTest())
+	key, table := tsv.computeTxSerializerKey(ctx, logStats, "update test_table set name_string = 'x' where pk = 1 // x", nil)
+	assert.Equal(t, "test_table where pk = 1", key)
+	assert.Equal(t, "test_table", table)
+
+	// execute plans the rewritten text without its margin comments. The plan
+	// cache admits a key only once it has been seen before, so plan again
+	// until it does.
+	query, _ := sqlparser.SplitMarginComments("update test_table set name_string = 'x' where pk = 1 #/ x")
+	planKey := PlanCacheKey(tsv.qe.getPlanCacheKey(query, false))
+	assert.Eventually(t, func() bool {
+		tsv.computeTxSerializerKey(ctx, logStats, "update test_table set name_string = 'x' where pk = 1 // x", nil)
+		_, ok := tsv.qe.plans.Get(planKey, tsv.qe.schema.Load().epoch)
+		return ok
+	}, 30*time.Second, 10*time.Millisecond, "the hot row key should plan the rewritten statement")
+}
+
 func TestTabletServerStreamExecuteComments(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

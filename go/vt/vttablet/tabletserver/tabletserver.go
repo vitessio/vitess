@@ -578,7 +578,7 @@ func (tsv *TabletServer) begin(
 			if err != nil {
 				return err
 			}
-			for _, query := range postBeginQueries {
+			for _, query := range rewriteDoubleSlashComments(tsv.env.Parser(), postBeginQueries) {
 				plan, err := tsv.qe.GetPlan(ctx, logStats, query, true, false)
 				if err != nil {
 					return err
@@ -916,6 +916,9 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sq
 }
 
 func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, reservedID int64, settings []string, options *querypb.ExecuteOptions) (result *sqltypes.Result, err error) {
+	// Some plans send the statement text to MySQL as written, so MySQL must
+	// skip every comment that Vitess skips.
+	sql, _ = tsv.env.Parser().RewriteDoubleSlashComments(sql)
 	targetType, err := tsv.resolveTargetType(ctx, target)
 	if err != nil {
 		return nil, err
@@ -1012,6 +1015,9 @@ func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Targ
 }
 
 func (tsv *TabletServer) streamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, reservedID int64, settings []string, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
+	// Some plans send the statement text to MySQL as written, so MySQL must
+	// skip every comment that Vitess skips.
+	sql, _ = tsv.env.Parser().RewriteDoubleSlashComments(sql)
 	allowOnShutdown := false
 	var timeout time.Duration
 	if transactionID != 0 {
@@ -1159,6 +1165,8 @@ func (tsv *TabletServer) beginWaitForSameRangeTransactions(ctx context.Context, 
 // the query and bind variables or the table name is empty.
 func (tsv *TabletServer) computeTxSerializerKey(ctx context.Context, logStats *tabletenv.LogStats, sql string, bindVariables map[string]*querypb.BindVariable) (string, string) {
 	// Strip trailing comments so we don't pollute the query cache.
+	// Plan the text that execute plans, so that both share a plan cache entry.
+	sql, _ = tsv.env.Parser().RewriteDoubleSlashComments(sql)
 	sql, _ = sqlparser.SplitMarginComments(sql)
 	plan, err := tsv.qe.GetPlan(ctx, logStats, sql, false, false)
 	if err != nil {
@@ -1366,7 +1374,7 @@ func (tsv *TabletServer) ReserveBeginExecute(ctx context.Context, target *queryp
 				return err
 			}
 
-			for _, query := range postBeginQueries {
+			for _, query := range rewriteDoubleSlashComments(tsv.env.Parser(), postBeginQueries) {
 				plan, err := tsv.qe.GetPlan(ctx, logStats, query, true, false)
 				if err != nil {
 					return err
