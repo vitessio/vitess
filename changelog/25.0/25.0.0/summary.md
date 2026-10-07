@@ -16,6 +16,7 @@
         - [VTOrc `--cell` flag is now required](#vtorc-cell-required)
         - [`BackupHandle` interface gains `Wait()` method](#backup-handle-wait-method)
         - [VTOrc: `--cells-to-watch` removed in favor of `--cells-no-recovery`](#vtorc-cells-no-recovery)
+        - [Connection character sets restricted](#vttablet-connection-charsets-restricted)
     - **[Deprecations](#deprecations)**
         - [CLI Flags](#deprecated-cli-flags)
         - [Legacy streaming-path plan types in query rules](#deprecated-selectstream-rule-plan)
@@ -179,6 +180,12 @@ The replacement, `--cells-no-recovery`, is a deny-list for *recovery actions onl
 **Migration:** drop `--cells-to-watch` from your vtorc invocation. If you previously used it for true cell-isolated deployments, the new flag is not a like-for-like replacement (vtorc will now discover and watch all cells); discuss your scenario in the linked issue if the new flag does not cover your needs. If you are upgrading from v24.0.0 specifically and have `--cells-to-watch` in your vtorc flags, note that this flag was already removed in v24.0.1; replace it with `--cells-no-recovery` before upgrading.
 
 See [#20021](https://github.com/vitessio/vitess/issues/20021) for details.
+
+#### <a id="vttablet-connection-charsets-restricted"/>Connection character sets restricted</a>
+
+`--db-charset`, and the other places a MySQL connection character set is configured, no longer accept `sjis`, `cp932`, `gb18030`, `gbk`, `big5`, `ucs2`, `utf16`, `utf16le` or `utf32`, whether given as a character set or as one of its collations. A tablet configured with one of them fails to start, VTGate refuses a `SET` of `character_set_client`, `character_set_connection`, `character_set_results` or `collation_connection` to one of them, or to a name that is not a character set or collation, which it used to answer with OK and ignore, and VTTablet refuses a setting or `SET` statement that would switch a session's connection to one of them. A client may still ask for one of them at the handshake: VTGate reads its statements byte by byte, as the tablet's connection to MySQL does, so they cannot break out of a literal.
+
+Vitess parses and escapes SQL text byte by byte, and in these character sets the second byte of a character can be a backslash or a back quote, so text in them was misparsed or corrupted on its way through Vitess. Use `utf8mb4` as the connection character set instead. Tables and columns can still be declared with any of these character sets; MySQL converts between them and the connection character set.
 
 ### <a id="deprecations"/>Deprecations</a>
 
