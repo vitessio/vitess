@@ -932,16 +932,16 @@ func (tm *TabletManager) setReplicationSourceSemiSyncNoAction(ctx context.Contex
 }
 
 func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool, semiSync SemiSyncAction, heartbeatInterval float64) (err error) {
-	// Change our type to REPLICA if we used to be PRIMARY.
-	// Being sent SetReplicationSource means another PRIMARY has been successfully promoted,
-	// so we convert to REPLICA first, since we want to do it even if other
-	// steps fail below.
-	// Note it is important to check for PRIMARY here so that we don't
-	// unintentionally change the type of RDONLY tablets
+	// Being sent SetReplicationSource means another PRIMARY has been promoted.
+	// If we are still PRIMARY, demote before changing our type to REPLICA. A
+	// failed demotion leaves the type unchanged; after a successful demotion,
+	// change the type even if the subsequent replication setup fails.
+	// Only change PRIMARY tablets so RDONLY tablets retain their type.
 	//
-	// An unreachable primary may still have writes blocked on semi-sync. Demote it
-	// before disabling source-side semi-sync so those clients receive errors, and
-	// read its position only after the blocked commits complete.
+	// A primary that ERS could not reach may still have writes blocked on semi-sync
+	// when it later handles this RPC. Demote it before disabling source-side
+	// semi-sync so those clients receive errors, and read its position only after
+	// the blocked commits complete.
 	tablet := tm.Tablet()
 	if tablet.Type == topodatapb.TabletType_PRIMARY {
 		if _, err := tm.demotePrimaryLocked(ctx, false /* revertPartialFailure */, true /* force */); err != nil {
