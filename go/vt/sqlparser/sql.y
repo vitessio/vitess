@@ -4703,6 +4703,274 @@ for_opt:
 | FOR
   {}
 
+<<<<<<< HEAD
+||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+user_or_role:
+  STRING AT_ID
+  {
+    $$ = &UserOrRole{Name: new(string($1)), Host: new(string(formatUserOrRoleHost($2)))}
+  }
+| STRING
+  {
+    $$ = &UserOrRole{Name: new(string($1))}
+  }
+| CURRENT_USER openb closeb
+  {
+    $$ = new(UserOrRole)
+  }
+| CURRENT_USER
+  {
+    $$ = new(UserOrRole)
+  }
+| ci_identifier AT_ID
+  {
+    $$ = &UserOrRole{Name: new(string($1.String())), Host: new(string(formatUserOrRoleHost($2)))}
+  }
+| ci_identifier
+  {
+    $$ = &UserOrRole{Name: new(string($1.String()))}
+  }
+
+show_grants_opt:
+  /* empty */
+  {
+    $$ = nil
+  }
+| FOR user_or_role
+  {
+    $$ = $2
+  }
+
+user_or_role_list:
+  user_or_role
+  {
+    $$ = []UserOrRole{*$1}
+  }
+| user_or_role_list ',' user_or_role
+  {
+    $$ = append($1, *$3)
+  }
+
+show_profile_types_opt:
+  /* empty */
+  {
+    $$ = nil
+  }
+| show_profile_type_list
+  {
+    $$ = $1
+  }
+
+show_profile_type_list:
+  show_profile_type
+  {
+    $$ = []string{$1}
+  }
+| show_profile_type_list ',' show_profile_type
+  {
+    $$ = append($1, $3)
+  }
+
+show_profile_type:
+  ALL
+  {
+    $$ = "all"
+  }
+| MEMORY
+  {
+    $$ = "memory"
+  }
+| ci_identifier
+  {
+    $$ = $1.String()
+  }
+| ci_identifier ci_identifier
+  {
+    $$ = $1.String() + " " + $2.String()
+  }
+
+for_query_opt:
+  /* empty */
+  {
+    $$ = nil
+  }
+| FOR QUERY INTEGRAL
+  {
+    $$ = NewIntLiteral($3)
+  }
+
+binlog_in_opt:
+  /* empty */
+  {
+    $$ = ""
+  }
+| IN STRING
+  {
+    $$ = string($2)
+  }
+
+binlog_from_opt:
+  /* empty */
+  {
+    $$ = nil
+  }
+| FROM INTEGRAL
+  {
+    $$ = NewIntLiteral($2)
+  }
+
+show_for_channel_opt:
+  /* empty */
+  {
+    $$ = ""
+  }
+| FOR CHANNEL ci_identifier
+  {
+    $$ = $3.String()
+  }
+| FOR CHANNEL STRING
+  {
+    $$ = string($3)
+  }
+
+=======
+user_or_role:
+  STRING AT_ID
+  {
+    $$ = &UserOrRole{Name: new(string($1)), Host: new(string(formatUserOrRoleHost($2)))}
+  }
+| STRING
+  {
+    $$ = &UserOrRole{Name: new(string($1))}
+  }
+| CURRENT_USER openb closeb
+  {
+    $$ = new(UserOrRole)
+  }
+| CURRENT_USER
+  {
+    $$ = new(UserOrRole)
+  }
+| ci_identifier AT_ID
+  {
+    $$ = &UserOrRole{Name: new(string($1.String())), Host: new(string(formatUserOrRoleHost($2)))}
+  }
+| ci_identifier
+  {
+    $$ = &UserOrRole{Name: new(string($1.String()))}
+  }
+
+show_grants_opt:
+  /* empty */
+  {
+    $$ = nil
+  }
+| FOR user_or_role
+  {
+    $$ = $2
+  }
+
+user_or_role_list:
+  user_or_role
+  {
+    $$ = []UserOrRole{*$1}
+  }
+| user_or_role_list ',' user_or_role
+  {
+    $$ = append($1, *$3)
+  }
+
+show_profile_types_opt:
+  /* empty */
+  {
+    $$ = nil
+  }
+| show_profile_type_list
+  {
+    $$ = $1
+  }
+
+show_profile_type_list:
+  show_profile_type
+  {
+    $$ = []string{$1}
+  }
+| show_profile_type_list ',' show_profile_type
+  {
+    $$ = append($1, $3)
+  }
+
+show_profile_type:
+  ALL
+  {
+    $$ = "all"
+  }
+| MEMORY
+  {
+    $$ = "memory"
+  }
+| ci_identifier
+  {
+    $$ = $1.Lowered()
+    if !isShowProfileType($$) {
+      yylex.Error("unknown profile type")
+      return 1
+    }
+  }
+| ci_identifier ci_identifier
+  {
+    $$ = $1.Lowered() + " " + $2.Lowered()
+    if !isShowProfileType($$) {
+      yylex.Error("unknown profile type")
+      return 1
+    }
+  }
+
+for_query_opt:
+  /* empty */
+  {
+    $$ = nil
+  }
+| FOR QUERY INTEGRAL
+  {
+    $$ = NewIntLiteral($3)
+  }
+
+binlog_in_opt:
+  /* empty */
+  {
+    $$ = ""
+  }
+| IN STRING
+  {
+    $$ = string($2)
+  }
+
+binlog_from_opt:
+  /* empty */
+  {
+    $$ = nil
+  }
+| FROM INTEGRAL
+  {
+    $$ = NewIntLiteral($2)
+  }
+
+show_for_channel_opt:
+  /* empty */
+  {
+    $$ = ""
+  }
+| FOR CHANNEL ci_identifier
+  {
+    $$ = $3.String()
+  }
+| FOR CHANNEL STRING
+  {
+    $$ = string($3)
+  }
+
+>>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
 extended_opt:
   /* empty */
   {
