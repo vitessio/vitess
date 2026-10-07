@@ -65,6 +65,7 @@ jobs:
               - 'bootstrap.sh'
               - '.github/workflows/cluster_endtoend_disk_health_monitor.yml'
               - '.github/actions/setup-mysql/action.yml'
+              - '.github/actions/setup-go/action.yml'
 
       - name: Set up Go
         if: steps.changes.outputs.end_to_end == 'true'
@@ -93,7 +94,6 @@ jobs:
           sudo apt-get -qq install -y mysql-shell
           sudo apt-get -qq install -y make unzip g++ etcd-client etcd-server curl git wget xz-utils libncurses6 fuse3
           sudo service etcd stop
-          go mod download
 
       - name: Setup launchable dependencies
         if: |

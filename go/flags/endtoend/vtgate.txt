@@ -32,7 +32,7 @@ Flags:
       --bind-address string                                              Bind address for the server. If empty, the server will listen on all available unicast and anycast IP addresses of the local system.
       --binlog-dump-authorized-users string                              Comma-separated list of users authorized to execute binlog dump operations, or '%' to allow all users.
       --buffer-drain-concurrency int                                     Maximum number of requests retried simultaneously. More concurrency will increase the load on the PRIMARY vttablet when draining the buffer. (default 1)
-      --buffer-keyspace-shards string                                    If not empty, limit buffering to these entries (comma separated). Entry format: keyspace or keyspace/shard. Requires --enable_buffer=true.
+      --buffer-keyspace-shards string                                    If not empty, limit buffering to these entries (comma separated). Entry format: keyspace or keyspace/shard. Requires --enable-buffer=true.
       --buffer-max-failover-duration duration                            Stop buffering completely if a failover takes longer than this duration. (default 20s)
       --buffer-min-time-between-failovers duration                       Minimum time between the end of a failover and the start of the next one (tracked per shard). Faster consecutive failovers will not trigger buffering. (default 1m0s)
       --buffer-size int                                                  Maximum number of buffered requests in flight (across all ongoing failovers). (default 1000)
@@ -51,7 +51,7 @@ Flags:
       --ddl-strategy string                                              Set default strategy for DDL statements. Override with @@ddl_strategy session variable (default "direct")
       --default-tablet-type topodatapb.TabletType                        The default tablet type to set for queries, when one is not explicitly selected. (default PRIMARY)
       --denied-system-variables strings                                  Comma-separated list of system variables that clients are not allowed to SET; attempts return an unsupported error. Names are matched case-insensitively.
-      --discovery-high-replication-lag-minimum-serving duration          Threshold above which replication lag is considered too high when applying the min_number_serving_vttablets flag. (default 2h0m0s)
+      --discovery-high-replication-lag-minimum-serving duration          Threshold above which replication lag is considered too high when applying the --min-number-serving-vttablets flag. (default 2h0m0s)
       --discovery-low-replication-lag duration                           Threshold below which replication lag is considered low enough to be healthy. (default 30s)
       --emit-stats                                                       If set, emit stats to push-based monitoring and stats backends
       --enable-balancer                                                  (DEPRECATED: use --vtgate-balancer-mode instead) Enable the tablet balancer to evenly spread query load for a given tablet type
@@ -69,7 +69,7 @@ Flags:
       --gateway-initial-tablet-timeout duration                          At startup, the tabletGateway will wait up to this duration to get at least one tablet per keyspace/shard/tablet type (default 30s)
       --grpc-auth-mode string                                            Which auth plugin implementation to use (eg: static)
       --grpc-auth-mtls-allowed-substrings string                         List of substrings of at least one of the client certificate names (separated by colon).
-      --grpc-auth-static-client-creds string                             When using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server.
+      --grpc-auth-static-client-creds string                             When using --grpc-auth-mode=static in the server, this file provides the credentials to use to authenticate with server.
       --grpc-auth-static-password-file string                            JSON File to read the users/passwords from.
       --grpc-bind-address string                                         Bind address for gRPC calls. If empty, listen on all addresses.
       --grpc-ca string                                                   server CA to use for gRPC connections, requires TLS, and enforces client certificate check
@@ -77,7 +77,7 @@ Flags:
       --grpc-compression string                                          Which protocol to use for compressing gRPC. Default: nothing. Supported: snappy
       --grpc-crl string                                                  path to a certificate revocation list in PEM format, client certificates will be further verified against this file during TLS handshake
       --grpc-dial-concurrency-limit int                                  Maximum concurrency of grpc dial operations. This should be less than the golang max thread limit of 10000. (default 1024)
-      --grpc-enable-optional-tls                                         enable optional TLS mode when a server accepts both TLS and plain-text connections on the same port
+      --grpc-enable-optional-tls                                         enable optional TLS mode when a server accepts both TLS and plain-text connections on the same port; plain-text connections are served unauthenticated, even with --grpc-ca
       --grpc-enable-orca-metrics                                         gRPC server option to enable sending ORCA metrics to clients for load balancing
       --grpc-enable-tracing                                              Enable gRPC tracing.
       --grpc-initial-conn-window-size int                                gRPC initial connection window size
@@ -97,8 +97,8 @@ Flags:
       --grpc-server-keepalive-enforcement-policy-permit-without-stream   gRPC server permit client keepalive pings even when there are no active streams (RPCs)
       --grpc-server-keepalive-time duration                              After a duration of this time, if the server doesn't see any activity, it pings the client to see if the transport is still alive. (default 10s)
       --grpc-server-keepalive-timeout duration                           After having pinged for keepalive check, the server waits for a duration of Timeout and if no activity is seen even after that the connection is closed. (default 10s)
-      --grpc-use-effective-callerid                                      If set, and SSL is not used, will set the immediate caller id from the effective caller id's principal.
-      --grpc-use-effective-groups                                        If set, and SSL is not used, will set the immediate caller's security groups from the effective caller id's groups.
+      --grpc-use-effective-callerid                                      If set, and no username is available from a verified client certificate, sets the immediate caller ID from the client-supplied effective caller ID's principal. This also applies to TLS connections without a verified client certificate. Only enable for trusted clients: they can claim any principal.
+      --grpc-use-effective-groups                                        If set with --grpc-use-effective-callerid, and no username is available from a verified client certificate, copies non-empty client-supplied effective caller ID groups to the immediate caller's security groups. This also applies to TLS connections without a verified client certificate. Only enable for trusted clients: they can claim any groups.
       --grpc-use-static-authentication-callerid                          If set, will set the immediate caller id to the username authenticated by the static auth plugin.
       --healthcheck-retry-delay duration                                 health check retry delay (default 2ms)
       --healthcheck-timeout duration                                     the health check timeout period (default 1m0s)
@@ -119,7 +119,7 @@ Flags:
       --max-payload-size int                                             The threshold for query payloads in bytes. A payload greater than this threshold will result in a failure to handle the query.
       --max-stack-size int                                               configure the maximum stack size in bytes (default 67108864)
       --message-stream-grace-period duration                             the amount of time to give for a vttablet to resume if it ends a message stream, usually because of a reparent. (default 30s)
-      --min-number-serving-vttablets int                                 The minimum number of vttablets for each replicating tablet_type (e.g. replica, rdonly) that will be continue to be used even with replication lag above discovery_low_replication_lag, but still below discovery_high_replication_lag_minimum_serving. (default 2)
+      --min-number-serving-vttablets int                                 The minimum number of vttablets for each replicating tablet_type (e.g. replica, rdonly) that will be continue to be used even with replication lag above --discovery-low-replication-lag, but still below --discovery-high-replication-lag-minimum-serving. (default 2)
       --mysql-allow-clear-text-without-tls                               If set, the server will allow the use of a clear text password over non-SSL connections.
       --mysql-auth-server-impl string                                    Which auth server implementation to use. Options: none, ldap, clientcert, static, vault. (default "static")
       --mysql-auth-server-static-file string                             JSON File to read the users/passwords from.

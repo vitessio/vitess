@@ -60,9 +60,34 @@ func TestAddQueryHint(t *testing.T) {
 			err:       "Query hint comment is malformed",
 		},
 		{
+			// MySQL honors only the first optimizer hint comment and reads any later
+			// one as an ordinary comment, so the hint joins the first and the later
+			// one is kept as it is.
 			comments:  Comments{"/* toto */", "/*+ SET_VAR(bb) */", "/*+ SET_VAR(cc) */"},
 			queryHint: "SET_VAR(aa)",
-			err:       "Must have only one query hint",
+			expected:  Comments{"/*+ SET_VAR(bb) SET_VAR(aa) */", "/* toto */", "/*+ SET_VAR(cc) */"},
+		},
+		{
+			comments:  Comments{"/*+ MAX_EXECUTION_TIME(100) */", "/*+ NO_BKA(t) */"},
+			queryHint: "SET_VAR(aa)",
+			expected:  Comments{"/*+ MAX_EXECUTION_TIME(100) SET_VAR(aa) */", "/*+ NO_BKA(t) */"},
+		},
+		{
+			// the hint in a later comment is not honored, so it still joins the first
+			comments:  Comments{"/*+ SET_VAR(bb) */", "/*+ SET_VAR(aa) */"},
+			queryHint: "SET_VAR(aa)",
+			expected:  Comments{"/*+ SET_VAR(bb) SET_VAR(aa) */", "/*+ SET_VAR(aa) */"},
+		},
+		{
+			// a later hint comment is kept as it is, so it is not checked for its end
+			comments:  Comments{"/*+ SET_VAR(bb) */", "/*+ SET_VAR(cc) "},
+			queryHint: "SET_VAR(aa)",
+			expected:  Comments{"/*+ SET_VAR(bb) SET_VAR(aa) */", "/*+ SET_VAR(cc) "},
+		},
+		{
+			comments:  Comments{"/*+ SET_VAR(bb) ", "/*+ SET_VAR(cc) */"},
+			queryHint: "SET_VAR(aa)",
+			err:       "Query hint comment is malformed",
 		},
 		{
 			comments:  Comments{"/*+ SET_VAR(bb) */"},
@@ -120,6 +145,11 @@ func TestSQLTypeToQueryType(t *testing.T) {
 		{
 			input:  "decimal",
 			output: sqltypes.Decimal,
+		},
+		{
+			// SERIAL is an alias for BIGINT UNSIGNED NOT NULL AUTO_INCREMENT UNIQUE
+			input:  "serial",
+			output: sqltypes.Uint64,
 		},
 	}
 

@@ -3143,3 +3143,83 @@ func TestBuildSetStringValue64thMember(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "v1,v64", got.ToString())
 }
+
+// TestEventGTIDAcrossBinlogRotation checks that every event of a transaction
+// carries that transaction's own GTID in EventGtid, both for back-to-back
+// transactions in one binlog file and across a binlog rotation, where the
+// vstreamer clears its current GTID.
+func TestEventGTIDAcrossBinlogRotation(t *testing.T) {
+	execStatement(t, "create table event_gtid_rotation(id int, val varbinary(128), primary key(id))")
+	defer execStatement(t, "drop table event_gtid_rotation")
+
+	decode := func(pos string) replication.Position {
+		t.Helper()
+		p, err := replication.DecodePosition(pos)
+		require.NoError(t, err)
+		return p
+	}
+	startPos := primaryPosition(t)
+	positions := []replication.Position{decode(startPos)}
+
+	execStatement(t, "insert into event_gtid_rotation values (1, 'aaa')")
+	positions = append(positions, decode(primaryPosition(t)))
+	execStatement(t, "insert into event_gtid_rotation values (2, 'bbb')")
+	positions = append(positions, decode(primaryPosition(t)))
+	execStatement(t, "flush binary logs")
+	execStatement(t, "insert into event_gtid_rotation values (3, 'ccc')")
+	positions = append(positions, decode(primaryPosition(t)))
+
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "event_gtid_rotation",
+			Filter: "select * from event_gtid_rotation",
+		}},
+	}
+	wg, ch := startStream(ctx, t, filter, startPos, nil)
+	defer wg.Wait()
+	defer cancel()
+
+	var trx [][]*binlogdatapb.VEvent
+	var cur []*binlogdatapb.VEvent
+	for len(trx) < len(positions)-1 {
+		select {
+		case evs, ok := <-ch:
+			require.True(t, ok, "stream ended after %d transactions", len(trx))
+			for _, ev := range evs {
+				if ev.Type == binlogdatapb.VEventType_HEARTBEAT {
+					continue
+				}
+				cur = append(cur, ev)
+				if ev.Type == binlogdatapb.VEventType_COMMIT {
+					trx = append(trx, cur)
+					cur = nil
+				}
+			}
+		case <-ctx.Done():
+			require.FailNow(t, "timed out", "got %d transactions: %v", len(trx), trx)
+		}
+	}
+
+	flavor := positions[0].GTIDSet.Flavor()
+	seen := make(map[string]bool)
+	for i, events := range trx {
+		before, after := positions[i], positions[i+1]
+		gtid := events[0].EventGtid
+		require.NotEmpty(t, gtid, "transaction %d: first event %v has no EventGtid", i, events[0])
+		parsed, err := replication.ParseGTID(flavor, gtid)
+		require.NoError(t, err)
+		require.True(t, after.GTIDSet.ContainsGTID(parsed), "transaction %d: %s is not in %s", i, gtid, after)
+		require.False(t, before.GTIDSet.ContainsGTID(parsed), "transaction %d: %s is already in %s", i, gtid, before)
+
+		sawRow := false
+		for _, ev := range events {
+			require.Equal(t, gtid, ev.EventGtid, "transaction %d: %v event", i, ev.Type)
+			sawRow = sawRow || ev.Type == binlogdatapb.VEventType_ROW
+		}
+		require.True(t, sawRow, "transaction %d has no ROW event: %v", i, events)
+		require.False(t, seen[gtid], "transaction %d reuses %s", i, gtid)
+		seen[gtid] = true
+	}
+}

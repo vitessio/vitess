@@ -63,6 +63,10 @@ type TabletPlan struct {
 	Original   string
 	Rules      *rules.Rules
 	Authorized []*tableacl.ACLResult
+	// AuthorizedUndetermined is the runtime part for 'TablesUndetermined':
+	// the ACL a caller must be a member of to run a statement whose tables
+	// cannot be determined. It is nil when the tables are determined.
+	AuthorizedUndetermined *tableacl.ACLResult
 
 	QueryCount   uint64
 	Time         uint64
@@ -98,6 +102,18 @@ func (ep *TabletPlan) buildAuthorized() {
 	ep.Authorized = make([]*tableacl.ACLResult, len(ep.Permissions))
 	for i, perm := range ep.Permissions {
 		ep.Authorized[i] = tableacl.Authorized(perm.TableName, perm.Role)
+	}
+	// Resolved with 'Authorized', so that one plan checks every table against
+	// the same configuration; a reload clears the plan cache.
+	switch {
+	case !ep.TablesUndetermined:
+	case ep.PlanID == planbuilder.PlanCallProc || ep.PlanID == planbuilder.PlanLoad:
+		// A CALL can run a SQL SECURITY DEFINER procedure with its definer's
+		// privileges, and LOAD DATA INFILE reads files on the server. Table ACL
+		// grants neither, so not even every role on every table covers them.
+		ep.AuthorizedUndetermined = &tableacl.ACLResult{ACL: tacl.DenyAllACL{}}
+	default:
+		ep.AuthorizedUndetermined = tableacl.AuthorizedForAllTables()
 	}
 }
 
@@ -550,13 +566,62 @@ func (qe *QueryEngine) GetConnSetting(ctx context.Context, settings []string) (*
 	cacheKey := SettingsCacheKey(buf.String())
 	connSetting, _, err := qe.settings.GetOrLoad(cacheKey, 0, func() (*smartconnpool.Setting, error) {
 		// build the setting queries
-		query, resetQuery, err := planbuilder.BuildSettingQuery(settings, qe.env.Environment().Parser())
+		parser := qe.env.Environment().Parser()
+		rejectSubqueries, dryRunSetting := settingsRejectSubqueries(settings, parser, qe.strictTableACL, qe.enableTableACLDryRun)
+		query, resetQuery, err := planbuilder.BuildSettingQuery(settings, parser, rejectSubqueries)
 		if err != nil {
 			return nil, err
 		}
+		logDryRunSetting(dryRunSetting, qe.env.Config().SanitizeLogMessages, parser)
 		return smartconnpool.NewSetting(query, resetQuery), nil
 	})
 	return connSetting, err
+}
+
+var logSettingSubqueryDryRun = logutil.NewThrottledLogger("SettingSubqueryDryRun", 1*time.Minute)
+
+// settingsRejectSubqueries reports whether connection settings with a subquery
+// are refused. They are under strict table ACL, as a setting is applied with no
+// table ACL check (see planbuilder.SettingWithSubquery). A dry run lets them
+// through, as it does any request the table ACL would deny, and returns the
+// setting that the ACL would refuse without it, for the caller to log with
+// logDryRunSetting once the rest of the settings validation has passed.
+func settingsRejectSubqueries(settings []string, parser *sqlparser.Parser, strictTableACL, dryRun bool) (reject bool, dryRunSetting string) {
+	if !dryRun {
+		return strictTableACL, ""
+	}
+	return false, planbuilder.SettingWithSubquery(settings, parser)
+}
+
+// logDryRunSetting logs a connection setting with a subquery that a table ACL
+// dry run let through, redacted when sanitize is set. It does nothing when
+// setting is empty.
+func logDryRunSetting(setting string, sanitize bool, parser *sqlparser.Parser) {
+	if setting == "" {
+		return
+	}
+	logSettingSubqueryDryRun.Warningf("table ACL dry run: allowing a connection setting with a subquery, which strict table ACL rejects: %s", settingForLog(setting, sanitize, parser))
+}
+
+// settingForLog returns a connection setting as it may be logged. With
+// sanitize (--sanitize-log-messages), only the variables it sets are kept: a
+// setting has no bind variables, so its values, such as the literals in a
+// subquery's filter, are in its text, and the redaction of a query does not
+// apply to a SET statement.
+func settingForLog(setting string, sanitize bool, parser *sqlparser.Parser) string {
+	if !sanitize {
+		return parser.TruncateForLog(setting)
+	}
+	stmt, err := parser.Parse(setting)
+	set, ok := stmt.(*sqlparser.Set)
+	if err != nil || !ok {
+		return "[REDACTED]"
+	}
+	names := make([]string, 0, len(set.Exprs))
+	for _, expr := range set.Exprs {
+		names = append(names, sqlparser.String(expr.Var))
+	}
+	return parser.TruncateForLog("set " + strings.Join(names, ", ") + " [values REDACTED]")
 }
 
 // ClearQueryPlanCache should be called if query plan cache is potentially obsolete

@@ -16,7 +16,10 @@ limitations under the License.
 
 package sysvars
 
-import "sync"
+import (
+	"strings"
+	"sync"
+)
 
 // This information lives here, because it's needed from the vtgate planbuilder, the vtgate engine,
 // and the AST rewriter, that happens to live in sqlparser.
@@ -58,6 +61,7 @@ var (
 	utf8mb4 = "'utf8mb4'"
 
 	ForeignKeyChecks = "foreign_key_checks"
+	UniqueChecks     = "unique_checks"
 
 	Autocommit                  = SystemVariable{Name: "autocommit", IsBoolean: true, Default: on}
 	SQLMode                     = SystemVariable{Name: "sql_mode", SupportSetVar: true}
@@ -233,7 +237,7 @@ var (
 		{Name: "transaction_isolation", Case: SCUpper},
 		{Name: "transaction_prealloc_size"},
 		{Name: "tx_isolation", Case: SCUpper},
-		{Name: "unique_checks", IsBoolean: true, SupportSetVar: true},
+		{Name: UniqueChecks, IsBoolean: true, SupportSetVar: true},
 		{Name: "updatable_views_with_limit", IsBoolean: true, SupportSetVar: true},
 	}
 	CheckAndIgnore = []SystemVariable{
@@ -300,18 +304,29 @@ func SupportsSetVar(name string) bool {
 	return sys.SupportSetVar
 }
 
-// GetInterestingVariables is used to return all the variables that may be listed in a SHOW VARIABLES command.
-func GetInterestingVariables() []string {
-	var res []string
+// IsSafeSetVarValue reports whether a system variable value can be carried
+// in a SET_VAR optimizer hint. The hint lives inside a /*+ ... */ comment and
+// nothing inside a block comment can escape the sequence that terminates it,
+// so such a value has to be applied through a reserved connection instead.
+func IsSafeSetVarValue(value string) bool {
+	return !strings.Contains(value, "*/")
+}
+
+// GetInterestingVariables returns the variables whose values VTGate substitutes in the
+// output of a SHOW VARIABLES command: the server identity VTGate advertises and, for the
+// session scope, the variables whose session values may not have reached the MySQL
+// connection. A SHOW GLOBAL VARIABLES reports the global values, which the session's
+// values must not replace.
+func GetInterestingVariables(global bool) []string {
+	// version, version comment and socket describe the server VTGate presents itself as
+	res := []string{Version.Name, VersionComment.Name, Socket.Name}
+	if global {
+		return res
+	}
 	// Add all the vitess aware variables
 	for _, variable := range VitessAware {
 		res = append(res, variable.Name)
 	}
-	// Also add version and version comment
-	res = append(res, Version.Name)
-	res = append(res, VersionComment.Name)
-	res = append(res, Socket.Name)
-
 	for _, variable := range UseReservedConn {
 		if variable.SupportSetVar {
 			res = append(res, variable.Name)

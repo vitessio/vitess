@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Runs any hooks in misc/git/commit-msg.*, and exits if any of them fail.
 set -e

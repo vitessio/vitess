@@ -7,6 +7,10 @@ on:
     tags: "**"
   pull_request:
     branches: "**"
+concurrency:
+  group: format('{0}-{1}', ${{ github.ref }}, 'docker_ci')
+  cancel-in-progress: true
+
 permissions: read-all
 
 env:

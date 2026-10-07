@@ -655,11 +655,14 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) (err error) {
 
 	// If we have a transaction id, stream on the txPool connection; otherwise
 	// stream on a stream pool connection. Each branch holds the concrete
-	// connection it must clean up. For a stored procedure call, a mid-stream
-	// error closes that connection — it may have left trailing resultsets or the
-	// final OK packet unread, or already be killed, and the client is gone, so we
-	// close rather than attempt a drain-and-recover — while a clean stream runs
-	// the post-stream safety checks.
+	// connection it must clean up. For a stored procedure call on the
+	// transaction connection, a mid-stream error closes that connection — it may
+	// have left trailing resultsets or the final OK packet unread, or already be
+	// killed, and the client is gone, so we close rather than attempt a
+	// drain-and-recover — while a clean stream runs the post-stream safety
+	// checks. A stored procedure call always costs the connection it ran on,
+	// whatever the outcome: a pooled one right away (see execCallProc), a
+	// transaction's one when the transaction releases it (see execProc).
 	if qre.connID != 0 {
 		txConn, err := qre.tsv.te.txPool.GetAndLock(qre.ctx, qre.connID, "for streaming query")
 		if err != nil {
@@ -679,6 +682,10 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) (err error) {
 		}
 
 		conn := txConn.UnderlyingDBConn()
+		if qre.plan.PlanID == p.PlanCallProc {
+			// see execProc: the procedure body may leave session state behind
+			txConn.MarkSessionDiverged()
+		}
 		err = qre.execStreamSQL(conn, true /* isStateful */, txConn.IsInTransaction(), sql, streamCallback)
 		if qre.plan.PlanID == p.PlanCallProc {
 			if err != nil {
@@ -712,26 +719,27 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) (err error) {
 	}
 	defer dbConn.Recycle()
 
+	if qre.plan.PlanID == p.PlanCallProc {
+		// The connection is never reused after a CALL (see execCallProc),
+		// whatever the outcome: a transaction the procedure leaked dies with it
+		// (the CALL still reports it, as the client's procedure is at fault),
+		// and a mid-stream error may have left it with unread packets. Deferred
+		// before the stream runs so a callback panic cannot recycle it dirty.
+		defer qre.discardPooledConnAfterCall(dbConn)
+	}
 	err = qre.execStreamSQL(dbConn, false /* isStateful */, false /* insideTxn */, sql, streamCallback)
 	if qre.plan.PlanID == p.PlanCallProc {
 		if err != nil {
-			dbConn.Close()
 			return err
 		}
 		trailing, multipleResultsets, err := qre.streamedCallProcTrailingStatus(dbConn.Conn)
 		if err != nil {
-			dbConn.Close()
 			return err
-		}
-		// The procedure must not leak a transaction onto the pooled connection.
-		leakedTx := trailing.IsInTransaction()
-		if leakedTx {
-			dbConn.Close()
 		}
 		if multipleResultsets {
 			return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "Multi-Resultset not supported in stored procedure")
 		}
-		if leakedTx {
+		if trailing.IsInTransaction() {
 			return vterrors.New(vtrpcpb.Code_CANCELED, "Transaction not concluded inside the stored procedure, leaking transaction from stored procedure is not allowed")
 		}
 		return nil
@@ -919,23 +927,27 @@ func (qre *QueryExecutor) checkPermissions() error {
 		return nil
 	}
 
-	// Fail closed for a statement whose table set the planner could not
-	// determine (DO, CALL, REPAIR, OPTIMIZE, LOAD DATA). It is forwarded to
-	// MySQL as opaque text and can still read or modify tables, but no
-	// permission could be derived for it, so the per-table loop below has
-	// nothing to iterate and would let any authenticated caller run it under
-	// strict table ACL. The planner flags such statements in the one switch
-	// that must account for every statement type (BuildPermissions), so this
-	// needs no list of its own. The exempt ACL applied above stays as the
-	// escape hatch for operators who need these statements.
-	if qre.plan.TablesUndetermined {
-		return qre.checkUndeterminedTableAccess(callerID)
-	}
-
 	for i, auth := range qre.plan.Authorized {
 		if err := qre.checkAccess(auth, qre.plan.Permissions[i].TableName, callerID); err != nil {
 			return err
 		}
+	}
+
+	// Fail closed for a statement whose table set the planner could not
+	// determine (DO, CALL, REPAIR, OPTIMIZE, LOAD DATA, a partially parsed
+	// CREATE TABLE). It is forwarded to MySQL as opaque text and can still
+	// read or modify tables the permissions above do not name, so the
+	// per-table loop alone would let any authenticated caller run it under
+	// strict table ACL. It runs after the loop so that a caller is denied on
+	// a table the planner did derive by name, and a dry run records it. The
+	// planner flags such statements in the one switch that must account for
+	// every statement type (BuildPermissions), so this needs no list of its
+	// own. Two kinds of caller can still run them: one in the exempt ACL
+	// applied above, and one holding every role in a table group that covers
+	// every table ("%"), except for CALL and LOAD DATA, which stay exempt-only
+	// (see checkUndeterminedTableAccess).
+	if qre.plan.TablesUndetermined {
+		return qre.checkUndeterminedTableAccess(callerID)
 	}
 
 	return nil
@@ -967,19 +979,32 @@ func (qre *QueryExecutor) checkAccess(authorized *tableacl.ACLResult, tableName 
 
 // checkUndeterminedTableAccess enforces table ACL for a statement whose table
 // set could not be determined at planning time (see checkPermissions). It
-// mirrors checkAccess's dry-run and stats handling, but denies unconditionally
-// under strict table ACL: there is no table whose grants could authorize the
-// caller, and the caller has already been shown to be non-exempt.
+// mirrors checkAccess's dry-run and stats handling. The tables the planner did
+// derive have already been checked, and the caller has already been shown to
+// be non-exempt. The ones it could not derive are covered only by a table
+// group that covers every table ("%"), and then only for a caller who holds
+// every role in it, since the statement may read, write or alter any of them;
+// the roles are granted separately, so being an ADMIN alone does not let a
+// caller read. CALL and LOAD DATA are not covered even then, as they can act
+// beyond any table (see TabletPlan.buildAuthorized). Any other caller is
+// denied under strict table ACL.
 func (qre *QueryExecutor) checkUndeterminedTableAccess(callerID *querypb.VTGateCallerID) error {
+	authorized := qre.plan.AuthorizedUndetermined
 	var aclState acl.ACLState
 	defer func() {
 		// There is no table to name; label the denial so operators can tell
 		// it apart from a per-table one in the TableACL* counters. The label
 		// carries hyphens so that no unquoted table name can share the series.
+		// Its table group stays empty, as it shipped, so that an alert on the
+		// series still matches when a group covers every table.
 		statsKey := qre.generateACLStatsKey("undetermined-table-set", &tableacl.ACLResult{}, callerID)
 		qre.recordACLStats(statsKey, aclState)
 	}()
 
+	if authorized.IsMember(callerID) {
+		aclState = acl.ACLAllow
+		return nil
+	}
 	if qre.tsv.qe.enableTableACLDryRun {
 		aclState = acl.ACLPseudoDenied
 		return nil
@@ -1205,6 +1230,9 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 	t.SequenceInfo.Lock()
 	defer t.SequenceInfo.Unlock()
 	if t.SequenceInfo.NextVal == 0 || t.SequenceInfo.NextVal+inc > t.SequenceInfo.LastVal {
+		// Stage the new cache range and write it to SequenceInfo after the COMMIT succeeds.
+		// A failed COMMIT can leave the old next_id in the sequence table.
+		nextVal, lastVal := t.SequenceInfo.NextVal, t.SequenceInfo.LastVal
 		_, err := qre.execAsTransaction(func(conn *StatefulConnection) (*sqltypes.Result, error) {
 			query := fmt.Sprintf("select next_id, cache from %s where id = 0 for update", sqlparser.String(tableName))
 			qr, err := qre.execStatefulConn(conn, query, false)
@@ -1218,16 +1246,15 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 			if err != nil {
 				return nil, vterrors.Wrapf(err, "error loading sequence %s", tableName)
 			}
-			// If LastVal does not match next ID, then either:
-			// VTTablet just started, and we're initializing the cache, or
-			// Someone reset the id underneath us.
-			if t.SequenceInfo.LastVal != nextID {
-				if nextID < t.SequenceInfo.LastVal {
-					log.Warn(fmt.Sprintf("Sequence next ID value %v is below the currently cached max %v, updating it to max", nextID, t.SequenceInfo.LastVal))
-					nextID = t.SequenceInfo.LastVal
+			// Start the staged range at next_id when next_id differs from the cached last value.
+			// The two differ when the cache is empty, when a write outside this cache changed next_id,
+			// or when an earlier refill's COMMIT applied but returned an error.
+			if lastVal != nextID {
+				if nextID < lastVal {
+					log.Warn(fmt.Sprintf("Sequence next ID value %v is below the currently cached max %v, updating it to max", nextID, lastVal))
+					nextID = lastVal
 				}
-				t.SequenceInfo.NextVal = nextID
-				t.SequenceInfo.LastVal = nextID
+				nextVal = nextID
 			}
 			cache, err := qr.Rows[0][1].ToCastInt64()
 			if err != nil {
@@ -1237,7 +1264,7 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid cache value for sequence %s: %d", tableName, cache)
 			}
 			newLast := nextID + cache
-			for newLast < t.SequenceInfo.NextVal+inc {
+			for newLast < nextVal+inc {
 				newLast += cache
 			}
 			query = fmt.Sprintf("update %s set next_id = %d where id = 0", sqlparser.String(tableName), newLast)
@@ -1245,12 +1272,15 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 			if err != nil {
 				return nil, err
 			}
-			t.SequenceInfo.LastVal = newLast
+			lastVal = newLast
 			return nil, nil
 		})
 		if err != nil {
 			return nil, err
 		}
+
+		t.SequenceInfo.NextVal = nextVal
+		t.SequenceInfo.LastVal = lastVal
 	}
 	ret := t.SequenceInfo.NextVal
 	t.SequenceInfo.NextVal += inc
@@ -1505,6 +1535,15 @@ func (qre *QueryExecutor) execRollbackToSavepoint(conn *StatefulConnection, sql 
 	return qr, nil
 }
 
+// escapeAnnotationPrincipal returns the caller principal in a form that can be
+// embedded in the annotation comment that prefixes queries sent to MySQL. The
+// principal can be chosen by the client, and "*/" is the only sequence that
+// ends the comment, so it is escaped as "*\/", which MySQL reads as ordinary
+// comment text.
+func escapeAnnotationPrincipal(principal string) string {
+	return strings.ReplaceAll(principal, "*/", `*\/`)
+}
+
 func (qre *QueryExecutor) generateFinalSQL(parsedQuery *sqlparser.ParsedQuery, bindVars map[string]*querypb.BindVariable) (string, string, error) {
 	query, err := parsedQuery.GenerateQuery(bindVars, nil)
 	if err != nil {
@@ -1515,6 +1554,7 @@ func (qre *QueryExecutor) generateFinalSQL(parsedQuery *sqlparser.ParsedQuery, b
 		if username == "" {
 			username = callerid.GetUsername(callerid.ImmediateCallerIDFromContext(qre.ctx))
 		}
+		username = escapeAnnotationPrincipal(username)
 		var buf strings.Builder
 		tabletTypeStr := qre.tsv.sm.target.TabletType.String()
 		buf.Grow(8 + len(username) + len(tabletTypeStr))
@@ -1558,8 +1598,21 @@ func (qre *QueryExecutor) execCallProc() (*sqltypes.Result, error) {
 	defer conn.Recycle()
 	sql, _, err := qre.generateFinalSQL(qre.plan.FullQuery, qre.bindVars)
 	if err != nil {
+		// Nothing reached MySQL, so the connection's session is untouched.
 		return nil, err
 	}
+	// A procedure body can leave session state behind (SET SESSION, a temporary
+	// table) that the tablet's statement classification cannot see, and a pooled
+	// connection is shared with every later borrower: the connection is closed
+	// rather than returned to the pool, whatever the CALL's outcome. Closing is
+	// the one cleanup that restores every piece of a fresh connection's state —
+	// COM_RESET_CONNECTION restores globals, losing the negotiated charset and
+	// anything init_connect applied. The recycle that follows then opens the
+	// replacement synchronously, before this returns: the CALL request pays for
+	// the connect and session setup, and it runs on the pool's lifetime context
+	// rather than this request's, so a cancelled or timed-out CALL still waits
+	// for it and only --db-connect-timeout-ms bounds the wait.
+	defer qre.discardPooledConnAfterCall(conn)
 
 	qr, err := qre.execDBConn(conn.Conn, sql, true)
 	if errors.Is(err, mysql.ErrExecuteFetchMultipleResults) {
@@ -1570,7 +1623,6 @@ func (qre *QueryExecutor) execCallProc() (*sqltypes.Result, error) {
 	}
 	if !qr.IsMoreResultsExists() {
 		if qr.IsInTransaction() {
-			conn.Close()
 			return nil, vterrors.New(vtrpcpb.Code_CANCELED, "Transaction not concluded inside the stored procedure, leaking transaction from stored procedure is not allowed")
 		}
 		return qr, nil
@@ -1582,12 +1634,35 @@ func (qre *QueryExecutor) execCallProc() (*sqltypes.Result, error) {
 	return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "Multi-Resultset not supported in stored procedure")
 }
 
+// discardPooledConnAfterCall closes a pooled connection a CALL ran on (see
+// execCallProc) so it is not reused; Discard counts the loss on the pool that
+// owns the connection, and on no pool for the appdebug user's standalone one.
+// A timed-out CALL is discarded like any other: KILL QUERY leaves the
+// connection open, and this policy is what then closes it. Skipped only for a
+// connection something else already closed — a kill that had to escalate to
+// the connection, or a reconnect that already failed — since that loss is not
+// this policy's to report. A connection the server dropped mid-query comes
+// back with the client-side flag still clear, and is discarded here like any
+// other.
+func (qre *QueryExecutor) discardPooledConnAfterCall(conn *connpool.PooledConn) {
+	if conn.Conn.IsClosed() {
+		return
+	}
+	conn.Discard()
+}
+
 func (qre *QueryExecutor) execProc(conn *StatefulConnection) (*sqltypes.Result, error) {
 	beforeInTx := conn.IsInTransaction()
 	sql, _, err := qre.generateFinalSQL(qre.plan.FullQuery, qre.bindVars)
 	if err != nil {
 		return nil, err
 	}
+	// A procedure body can leave session state behind that the statement's plan
+	// cannot see (a SET SESSION, SET NAMES, a temporary table), whatever the
+	// CALL's outcome. A pooled connection is discarded after a CALL for that
+	// reason (see execCallProc); a transaction's connection is discarded when the
+	// transaction releases it, rather than recycled for the next one.
+	conn.MarkSessionDiverged()
 	qr, err := qre.execStatefulConn(conn, sql, true)
 	if err != nil {
 		// A stored procedure can start a transaction that Vitess does not

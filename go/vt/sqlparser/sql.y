@@ -375,7 +375,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %token <str> UNRESOLVED TRANSACTIONS
 
 // Type Tokens
-%token <str> BIT TINYINT SMALLINT MEDIUMINT INT INTEGER BIGINT INTNUM
+%token <str> BIT TINYINT SMALLINT MEDIUMINT INT INTEGER BIGINT INTNUM SERIAL
 %token <str> REAL DOUBLE FLOAT_TYPE FLOAT4_TYPE FLOAT8_TYPE DECIMAL_TYPE NUMERIC
 %token <str> TIME TIMESTAMP DATETIME YEAR
 %token <str> CHAR VARCHAR BOOL CHARACTER VARBINARY NCHAR
@@ -1154,20 +1154,29 @@ query_expression:
   }
 | with_clause query_expression_parens limit_clause
   {
-    $2.SetWith($1)
+    // A parenthesized query expression is its own scope. When it carries its
+    // own with clause, MySQL keeps that one and ignores the outer clause.
+    if $2.GetWith() == nil {
+      $2.SetWith($1)
+    }
     $2.SetLimit($3)
     $$ = $2
   }
 | with_clause query_expression_parens order_by_clause limit_opt
   {
-    $2.SetWith($1)
+    if $2.GetWith() == nil {
+      $2.SetWith($1)
+    }
     $2.SetOrderBy($3)
     $2.SetLimit($4)
     $$ = $2
   }
 | with_clause query_expression_parens
   {
-    $2.SetWith($1)
+    if $2.GetWith() == nil {
+      $2.SetWith($1)
+    }
+    $$ = $2
   }
 | SELECT comment_opt cache_opt NEXT num_val for_from table_name
   {
@@ -2416,6 +2425,12 @@ column_type:
 | char_type
 | time_type
 | spatial_type
+| SERIAL
+  {
+    // SERIAL is MySQL's alias for BIGINT UNSIGNED NOT NULL AUTO_INCREMENT UNIQUE.
+    // It takes no length and no UNSIGNED or ZEROFILL.
+    $$ = &ColumnType{Type: string($1)}
+  }
 
 numeric_type:
   int_type length_opt
@@ -9472,6 +9487,7 @@ non_reserved_keyword:
 | SECURITY
 | SEQUENCE
 | SESSION
+| SERIAL
 | SERIALIZABLE
 | SHARE
 | SHARED

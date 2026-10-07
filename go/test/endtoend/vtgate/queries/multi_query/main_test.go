@@ -78,6 +78,10 @@ func TestMain(m *testing.M) {
 		}
 
 		vtParams = clusterInstance.GetVTParams(keyspaceName)
+		// This suite exists to compare how vtgate and MySQL handle a query that
+		// carries several statements, so both of its connections have to be
+		// able to send one. No other suite gets that from the cluster helpers.
+		vtParams.EnableMultiStatements = true
 
 		// create mysql instance and connection parameters
 		conn, closer, err := utils.NewMySQL(clusterInstance, keyspaceName, schemaSQL)
@@ -87,6 +91,7 @@ func TestMain(m *testing.M) {
 		}
 		defer closer()
 		mysqlParams = conn
+		mysqlParams.EnableMultiStatements = true
 		return m.Run()
 	}()
 	os.Exit(exitCode)

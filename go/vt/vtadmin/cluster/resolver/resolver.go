@@ -296,6 +296,15 @@ func (b *builder) Scheme() string {
 	return b.scheme
 }
 
+// OverrideAuthority is part of the grpcresolver.AuthorityOverrider interface.
+//
+// Dial targets are "{clusterID}://{component}/", which leaves the endpoint empty,
+// and grpc derives :authority from the endpoint. An empty :authority is invalid
+// HTTP/2, so any proxy that validates headers closes the connection.
+func (b *builder) OverrideAuthority(target grpcresolver.Target) string {
+	return target.URL.Host
+}
+
 // Debug implements debug.Debuggable for builder.
 func (b *builder) Debug() map[string]any {
 	b.m.Lock()

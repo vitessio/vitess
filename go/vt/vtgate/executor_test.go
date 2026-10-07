@@ -1791,6 +1791,41 @@ func TestGetPlanCacheNormalized(t *testing.T) {
 	})
 }
 
+// TestGetPlanCacheSetVarHintOrder checks that a session carrying several variables
+// in the SET_VAR hint plans the same query once: the hint is part of the plan cache
+// key and of the query sent to the tablet, so it must render the same way on every
+// request.
+func TestGetPlanCacheSetVarHintOrder(t *testing.T) {
+	r, sbc1, _, _, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+	session := econtext.NewSafeSession(&vtgatepb.Session{
+		TargetString: "@primary",
+		SystemVariables: map[string]string{
+			"sql_safe_updates":        "1",
+			"unique_checks":           "0",
+			"sql_mode":                "'ANSI'",
+			"max_execution_time":      "100",
+			"big_tables":              "1",
+			"join_buffer_size":        "262144",
+			"sort_buffer_size":        "262144",
+			"group_concat_max_len":    "4096",
+			"div_precision_increment": "6",
+		},
+	})
+
+	const query = "select id from `user` where id = 1"
+	for i := range 20 {
+		_, err := executorExecSession(t.Context(), r, session, query, nil)
+		require.NoError(t, err)
+		require.Equal(t, 1, r.plans.Len(), "request %d added a plan cache entry", i+1)
+		require.Len(t, sbc1.Queries, i+1)
+		require.Equal(t, sbc1.Queries[0].Sql, sbc1.Queries[i].Sql, "request %d sent different query text", i+1)
+	}
+	assert.Equal(t, "select /*+ SET_VAR(big_tables = 1) SET_VAR(div_precision_increment = 6) SET_VAR(group_concat_max_len = 4096) "+
+		"SET_VAR(join_buffer_size = 262144) SET_VAR(max_execution_time = 100) SET_VAR(sort_buffer_size = 262144) "+
+		"SET_VAR(sql_mode = 'ANSI') SET_VAR(sql_safe_updates = 1) SET_VAR(unique_checks = 0) */ id from `user` where id = :id /* INT64 */",
+		sbc1.Queries[0].Sql)
+}
+
 func TestGetPlanNormalized(t *testing.T) {
 	r, _, _, _, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 
@@ -2435,6 +2470,19 @@ func TestExecutorOtherAdmin(t *testing.T) {
 			assert.Emptyf(t, diff, "stmt: %s\ntc: %+v\n-want,+got:\n%s", stmt, tc, diff)
 		}
 	}
+}
+
+// TestExecutorRewritesDoubleSlashComments checks that a statement that vtgate
+// forwards as written reaches the tablet with each "//" comment rewritten to
+// "#/", so that MySQL skips the text that Vitess skipped.
+func TestExecutorRewritesDoubleSlashComments(t *testing.T) {
+	executor, _, _, sbclookup, _ := createExecutorEnv(t)
+
+	_, err := executorExec(t.Context(), executor, &vtgatepb.Session{TargetString: KsTestUnsharded}, "repair table t1 //*x*/ , t2\n", nil)
+	require.NoError(t, err)
+	queries := sbclookup.GetQueries()
+	require.Len(t, queries, 1)
+	assert.Equal(t, "repair table t1 #/*x*/ , t2", queries[0].Sql)
 }
 
 func TestExecutorSavepointInTx(t *testing.T) {

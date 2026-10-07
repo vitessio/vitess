@@ -546,6 +546,19 @@ var validSQL = []struct {
 	input:  "select timestamp'2012-12-31 11:30:45'",
 	output: "select timestamp'2012-12-31 11:30:45' from dual",
 }, {
+	// a quote in a temporal literal is escaped, so it cannot close the literal;
+	// the normalizer rejects these values as invalid temporal values
+	input:                `select date '2020-01-01\' union select user() -- '`,
+	output:               `select date'2020-01-01\' union select user() -- ' from dual`,
+	ignoreNormalizerTest: true,
+}, {
+	input:                "select time '12:34:56'' union select user() -- '",
+	output:               `select time'12:34:56\' union select user() -- ' from dual`,
+	ignoreNormalizerTest: true,
+}, {
+	input:  `set @@optimizer_switch = timestamp '2012-12-31 11:30:45\\'`,
+	output: `set @@optimizer_switch = timestamp'2012-12-31 11:30:45\\'`,
+}, {
 	input:  "select * from information_schema.columns",
 	output: "select * from information_schema.`columns`",
 }, {
@@ -1894,6 +1907,18 @@ var validSQL = []struct {
 	input:      "create table a (a int, b char, c garbage)",
 	output:     "create table a",
 	partialDDL: true,
+}, {
+	// SERIAL is an alias for BIGINT UNSIGNED NOT NULL AUTO_INCREMENT UNIQUE
+	input:  "create table if not exists __drizzle_migrations (id serial primary key, hash text not null, created_at bigint)",
+	output: "create table if not exists __drizzle_migrations (\n\tid serial primary key,\n\t`hash` text not null,\n\tcreated_at bigint\n)",
+}, {
+	// SERIAL is not a reserved keyword
+	input:  "create table serial (serial serial)",
+	output: "create table `serial` (\n\t`serial` serial\n)",
+}, {
+	input: "alter table t add column s serial",
+}, {
+	input: "alter table t modify column id serial first",
 }, {
 	input:  "create table a (b1 bool not null primary key, b2 boolean not null)",
 	output: "create table a (\n\tb1 bool not null primary key,\n\tb2 boolean not null\n)",
@@ -4188,6 +4213,52 @@ var validSQL = []struct {
 }, {
 	input:  "SELECT 1,2 UNION SELECT * from (VALUES ROW(10,15)) t",
 	output: "select 1, 2 from dual union select * from (values row(10, 15)) as t",
+}, {
+	input:  "with x as (select 1) (select * from x)",
+	output: "with x as (select 1 from dual) select * from x",
+}, {
+	input:  "with x as (select 1) ((select * from x))",
+	output: "with x as (select 1 from dual) select * from x",
+}, {
+	input:  "with recursive x as (select 1) (select * from x)",
+	output: "with recursive x as (select 1 from dual) select * from x",
+}, {
+	input:  "with x as (select 1) (select * from x union select 2)",
+	output: "with x as (select 1 from dual) select * from x union select 2 from dual",
+}, {
+	input:  "with x as (select 1) (values row(1))",
+	output: "with x as (select 1 from dual) values row(1)",
+}, {
+	input:  "with x as (select 1) ((select 2) union (select 3))",
+	output: "with x as (select 1 from dual) select 2 from dual union select 3 from dual",
+}, {
+	// A parenthesized query expression is its own scope: when it carries its
+	// own WITH clause, MySQL keeps the inner clause and ignores the outer one.
+	input:  "with x as (select 1) (with y as (select 2) select * from y)",
+	output: "with y as (select 2 from dual) select * from y",
+}, {
+	input:  "with x as (select 1) (with y as (select 2) select * from y) limit 1",
+	output: "with y as (select 2 from dual) select * from y limit 1",
+}, {
+	input:  "with x as (select 1) (with y as (select 2) select * from y) order by 1 limit 1",
+	output: "with y as (select 2 from dual) select * from y order by 1 asc limit 1",
+}, {
+	input:  "with x as (select 1) ((with y as (select 2) select * from y))",
+	output: "with y as (select 2 from dual) select * from y",
+}, {
+	// The outer CTE is not in scope inside the parentheses, so x resolves to a
+	// base table rather than to the outer definition.
+	input:  "with x as (select 1) (with y as (select 2) select * from x)",
+	output: "with y as (select 2 from dual) select * from x",
+}, {
+	input:  "with y as (select 1) (with y as (select 2) select * from y)",
+	output: "with y as (select 2 from dual) select * from y",
+}, {
+	input:  "with x as (select 1 as a) (with y as (select 2 as a) select * from y union select * from x)",
+	output: "with y as (select 2 as a from dual) select * from y union select * from x",
+}, {
+	input:  "with x as (select 1) (with y as (select 2) values row(1))",
+	output: "with y as (select 2 from dual) values row(1)",
 }}
 
 func TestValid(t *testing.T) {
@@ -6527,6 +6598,14 @@ var invalidSQL = []struct {
 	input  string
 	output string
 }{{
+	// MySQL reads a quoted user variable name to its closing quote, and
+	// Vitess reads one only if it holds nothing an identifier cannot.
+	input:  "select @'a//b'",
+	output: "syntax error at position 9",
+}, {
+	input:  "select @\"a b\" from t",
+	output: "syntax error at position 9",
+}, {
 	// MySQL only accepts a text literal or a user defined variable as the
 	// statement text of a PREPARE; a positional parameter is a syntax error.
 	input:  "prepare stmt1 from ?",

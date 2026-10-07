@@ -47,6 +47,7 @@ import (
 	"vitess.io/vitess/go/vt/callerid"
 	hk "vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
+	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/proto/vttime"
 	"vitess.io/vitess/go/vt/topo"
@@ -1294,6 +1295,89 @@ func (tc *requireCallerIDTMClient) ExecuteQuery(ctx context.Context, tablet *top
 		return nil, vterrors.Errorf(vtrpc.Code_UNAUTHENTICATED, "missing caller id")
 	}
 	return tc.TabletManagerClient.ExecuteQuery(ctx, tablet, req)
+}
+
+// TestBackupShardStatsAlignment checks each tablet is read with its own status.
+// It repeats because ShardReplicationStatuses builds its slice from a map.
+func TestBackupShardStatsAlignment(t *testing.T) {
+	t.Parallel()
+
+	const runs = 20
+
+	for range runs {
+		ctx := t.Context()
+		ts := memorytopo.NewServer(ctx, "zone1")
+		tmc := &testutil.TabletManagerClient{
+			Backups: map[string]struct {
+				Events        []*logutilpb.Event
+				EventInterval time.Duration
+				EventJitter   time.Duration
+				ErrorAfter    time.Duration
+			}{
+				"zone1-0000000101": {Events: []*logutilpb.Event{{}, {}, {}}},
+			},
+			PrimaryPositionResults: map[string]struct {
+				Position string
+				Error    error
+			}{
+				"zone1-0000000200": {Position: "some-position"},
+			},
+			ReplicationStatusResults: map[string]struct {
+				Position *replicationdatapb.Status
+				Error    error
+			}{
+				// This tablet makes ShardReplicationStatuses return an error with a nil status.
+				"zone1-0000000100": {Error: assert.AnError},
+				"zone1-0000000101": {Position: &replicationdatapb.Status{ReplicationLagSeconds: 1}},
+			},
+		}
+		tablets := []*topodatapb.Tablet{
+			{
+				Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+				Keyspace: "ks",
+				Shard:    "-",
+				Type:     topodatapb.TabletType_REPLICA,
+			},
+			{
+				Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+				Keyspace: "ks",
+				Shard:    "-",
+				Type:     topodatapb.TabletType_REPLICA,
+			},
+			{
+				Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 200},
+				Keyspace: "ks",
+				Shard:    "-",
+				Type:     topodatapb.TabletType_PRIMARY,
+			},
+		}
+
+		testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{AlsoSetShardPrimary: true}, tablets...)
+		vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+			return NewVtctldServer(vtenv.NewTestEnv(), ts)
+		})
+
+		client := localvtctldclient.New(vtctld)
+		stream, err := client.BackupShard(ctx, &vtctldatapb.BackupShardRequest{Keyspace: "ks", Shard: "-"})
+		require.NoError(t, err)
+
+		var responses []*vtctldatapb.BackupResponse
+		for {
+			resp, recvErr := stream.Recv()
+			if recvErr != nil {
+				err = recvErr
+				break
+			}
+			responses = append(responses, resp)
+		}
+
+		// The healthy replica must be backed up, whatever order the tablets came back in.
+		require.ErrorIs(t, err, io.EOF, "expected Recv loop to end with io.EOF")
+		require.Len(t, responses, 3, "expected 3 messages from backupclient stream")
+		for _, resp := range responses {
+			require.Equal(t, 101, int(resp.TabletAlias.Uid))
+		}
+	}
 }
 
 func TestCancelSchemaMigration(t *testing.T) {
@@ -4954,6 +5038,97 @@ func TestEmergencyReparentShard(t *testing.T) {
 			testutil.AssertEmergencyReparentShardResponsesEqual(t, tt.expected, resp)
 		})
 	}
+}
+
+// TestEmergencyReparentShardRequiredPosition checks that vtctld decodes the
+// required position, with or without the flavor prefix, and gives it to ERS.
+// No replica has the position, and ERS rejects the reparent.
+func TestEmergencyReparentShardRequiredPosition(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	ts := memorytopo.NewServer(ctx, "zone1")
+	tablets := []*topodatapb.Tablet{
+		{
+			Alias:                &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+			Type:                 topodatapb.TabletType_PRIMARY,
+			PrimaryTermStartTime: &vttime.Time{Seconds: 100},
+			Keyspace:             "testkeyspace",
+			Shard:                "-",
+		},
+		{
+			Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 200},
+			Type:     topodatapb.TabletType_REPLICA,
+			Keyspace: "testkeyspace",
+			Shard:    "-",
+		},
+	}
+	testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{
+		AlsoSetShardPrimary:  true,
+		ForceSetShardPrimary: true,
+	}, tablets...)
+
+	const received = "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5"
+	tmc := &testutil.TabletManagerClient{
+		StopReplicationAndGetStatusResults: map[string]struct {
+			StopStatus *replicationdatapb.StopReplicationStatus
+			Error      error
+		}{
+			"zone1-0000000100": {Error: mysql.ErrNotReplica},
+			"zone1-0000000200": {
+				StopStatus: &replicationdatapb.StopReplicationStatus{
+					Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+					After: &replicationdatapb.Status{
+						SourceUuid:       "3e11fa47-71ca-11e1-9e33-c80aa9429562",
+						RelayLogPosition: received,
+						Position:         received,
+					},
+				},
+			},
+		},
+		// Leave every wait unconfigured. ERS must fail before any relay log wait.
+		StartReplicationResults: map[string]error{"zone1-0000000200": nil},
+	}
+	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+		return NewVtctldServer(vtenv.NewTestEnv(), ts)
+	})
+
+	const missing = "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-100"
+	for _, tc := range []struct {
+		name     string
+		required string
+	}{
+		{name: "with flavor prefix", required: missing},
+		{name: "bare GTID set", required: strings.TrimPrefix(missing, "MySQL56/")},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := vtctld.EmergencyReparentShard(ctx, &vtctldatapb.EmergencyReparentShardRequest{
+				Keyspace:            "testkeyspace",
+				Shard:               "-",
+				WaitReplicasTimeout: protoutil.DurationToProto(time.Millisecond * 10),
+				RequiredPosition:    tc.required,
+			})
+			require.ErrorContains(t, err, "required position "+strings.TrimPrefix(missing, "MySQL56/"))
+			assert.Equal(t, vtrpc.Code_FAILED_PRECONDITION, vterrors.Code(err))
+		})
+	}
+}
+
+// TestEmergencyReparentShardInvalidRequiredPosition checks validation before topology access.
+func TestEmergencyReparentShardInvalidRequiredPosition(t *testing.T) {
+	t.Parallel()
+
+	// Leave topology and the tablet client nil. A reparent attempt panics,
+	// and the recovered error fails the message check below.
+	server := &VtctldServer{}
+	resp, err := server.EmergencyReparentShard(t.Context(), &vtctldatapb.EmergencyReparentShardRequest{
+		Keyspace:         "ks",
+		Shard:            "0",
+		RequiredPosition: "not-a-position",
+	})
+	require.ErrorContains(t, err, `invalid required position: invalid MySQL 5.6 GTID set ("not-a-position")`)
+	assert.Equal(t, vtrpc.Code_INVALID_ARGUMENT, vterrors.Code(err))
+	assert.Nil(t, resp)
 }
 
 // TestEmergencyReparentShardResponsePreservesReqOnEarlyFailure is a regression
@@ -14101,6 +14276,28 @@ func TestValidateSchemaKeyspace(t *testing.T) {
 		},
 	}
 
+	semanticSchemaLeft := &tabletmanagerdatapb.SchemaDefinition{
+		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
+			Name: "t",
+			Schema: "CREATE TABLE `t` (\n" +
+				"  `id` varchar(10) COLLATE utf8mb4_general_ci NOT NULL,\n" +
+				"  `note` varchar(20) COLLATE utf8mb4_general_ci DEFAULT NULL\n" +
+				") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci",
+			Type: tmutils.TableBaseTable,
+		}},
+	}
+
+	semanticSchemaRight := &tabletmanagerdatapb.SchemaDefinition{
+		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
+			Name: "t",
+			Schema: "CREATE TABLE `t` (\n" +
+				"  `id` varchar(10) COLLATE utf8mb4_general_ci NOT NULL,\n" +
+				"  `note` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL\n" +
+				") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci",
+			Type: tmutils.TableBaseTable,
+		}},
+	}
+
 	// we need to run this on each test case or they will pollute each other
 	setupSchema := func(tablet *topodatapb.TabletAlias, schema *tabletmanagerdatapb.SchemaDefinition) {
 		tmc.GetSchemaResults[topoproto.TabletAliasString(tablet)] = struct {
@@ -14139,6 +14336,28 @@ func TestValidateSchemaKeyspace(t *testing.T) {
 					Cell: "zone1",
 					Uid:  101,
 				}, schema1)
+			},
+		},
+		{
+			name: "semantically equivalent schemas",
+			req: &vtctldatapb.ValidateSchemaKeyspaceRequest{
+				Keyspace: "ks1",
+			},
+			expected: &vtctldatapb.ValidateSchemaKeyspaceResponse{
+				Results: []string{},
+				ResultsByShard: map[string]*vtctldatapb.ValidateShardResponse{
+					"-": {Results: []string{}},
+				},
+			},
+			setup: func() {
+				setupSchema(&topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				}, semanticSchemaLeft)
+				setupSchema(&topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  101,
+				}, semanticSchemaRight)
 			},
 		},
 		{

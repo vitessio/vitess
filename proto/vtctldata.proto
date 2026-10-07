@@ -760,6 +760,13 @@ message EmergencyReparentShardRequest {
   // are detected. NewPrimary is required and must be an upfront undominated candidate.
   // Transactions only present on losing histories will not be preserved.
   bool allow_split_brain_promotion = 9;
+
+  // RequiredPosition is the minimum MySQL GTID set, for example <uuid>:1-100,
+  // that the new primary must have. The reparent fails if no candidate has
+  // received it, either applied or still in its relay log. The check supports
+  // MySQL GTID shards only. On any other shard, the reparent fails only after it
+  // stops replication and demotes a reachable primary. Empty means no requirement.
+  string required_position = 10;
 }
 
 message EmergencyReparentShardResponse {
