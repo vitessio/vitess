@@ -738,7 +738,7 @@ func adoptUnrecordedGroup(ctx context.Context, keyspace, shard string, shardInfo
 		return "", vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "the MySQL of %s is not the primary of the shard's group with quorum (group %s, member %s %s, view %q)",
 			aliasString, gs.GetGroupName(), gs.GetMemberState(), gs.GetMemberRole(), gs.GetViewId())
 	}
-	primaryExecuted, _, err := memberGTIDSets(primary.status)
+	primaryExecuted, _, err := reparentutil.GroupMemberGTIDSets(primary.status)
 	if err != nil {
 		return "", vterrors.Wrapf(vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, err.Error()), "cannot read the transactions of %s", aliasString)
 	}
@@ -761,7 +761,7 @@ func adoptUnrecordedGroup(ctx context.Context, keyspace, shard string, shardInfo
 		if !isVoter || st == primary {
 			continue
 		}
-		_, all, err := memberGTIDSets(st.status)
+		_, all, err := reparentutil.GroupMemberGTIDSets(st.status)
 		if err != nil {
 			return "", vterrors.Wrapf(vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, err.Error()), "cannot read the transactions of voter %s", alias)
 		}
@@ -996,7 +996,7 @@ func chooseGroupBootstrapCandidate(ctx context.Context, voters []*topodatapb.Tab
 		if !isMember {
 			continue
 		}
-		executed, gtidSet, err := memberGTIDSets(ts.status)
+		executed, gtidSet, err := reparentutil.GroupMemberGTIDSets(ts.status)
 		if err != nil {
 			return nil, nil, nil, vterrors.Wrapf(err, "failed to read the GTID set of %s", aliasString)
 		}
@@ -1060,33 +1060,9 @@ func chooseGroupBootstrapCandidate(ctx context.Context, voters []*topodatapb.Tab
 	return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no voter has all the transactions of the others, bootstrapping any of them would lose transactions: %s", strings.Join(sets, "; "))
 }
 
-// memberGTIDSets returns the transactions that a member executed, and those it executed or received
-// from its group.
-func memberGTIDSets(status *replicationdatapb.FullStatus) (executed, all replication.GTIDSet, err error) {
-	if status.GetPrimaryStatus() == nil {
-		return nil, nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "the tablet did not report its executed GTID set")
-	}
-	position, err := replication.DecodePosition(status.GetPrimaryStatus().GetPosition())
-	if err != nil {
-		return nil, nil, err
-	}
-	executed = position.GTIDSet
-	if executed == nil {
-		executed = replication.Mysql56GTIDSet{}
-	}
-	all = executed
-	if received := status.GetGroupReplicationStatus().GetReceivedTransactionSet(); received != "" {
-		receivedSet, err := replication.ParseMysql56GTIDSet(received)
-		if err != nil {
-			return nil, nil, err
-		}
-		all = executed.Union(receivedSet)
-	}
-	return executed, all, nil
-}
-
 // updateGroupReplicationVoters makes the change of the shard's voters that inst.PlanGroupVoters
-// decides: the initial list, SwapVoter, GrowVoter or RemoveVoter. It runs under the shard lock, and
+// decides: the initial list, SwapVoter, GrowVoter or RemoveVoter, or the join of the spare that a
+// group of a single voter grows with (JoinSpareBeforeGrow). It runs under the shard lock, and
 // decides on one bounded fresh read, the shard record and the FullStatus of every tablet of the shard
 // (concurrently, within groupVoterStatusesTimeout), with nothing in between that read and the
 // compare-and-swap of the voters and the incarnation. A new voter then joins the group. A member that
@@ -1113,6 +1089,16 @@ func updateGroupReplicationVoters(ctx context.Context, analysisEntry *inst.Detec
 		return false, topologyRecovery, err
 	}
 	plan := inst.PlanGroupVoters(read.input)
+	if plan.Action == inst.VoterActionJoinSpare {
+		// The list does not change: the spare joins the group first, and GrowVoter gives it the seat
+		// once it is ONLINE in the primary's view.
+		aliasString := topoproto.TabletAliasString(plan.Added.Alias)
+		_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("%s: %s: %s", UpdateGroupReplicationVotersRecoveryName, plan.Action, plan.Reason))
+		if _, err := startGroupReplication(ctx, plan.Added, &tabletmanagerdatapb.StartGroupReplicationRequest{}); err != nil {
+			return true, topologyRecovery, vterrors.Wrapf(err, "failed to start group replication on %s, the spare that joins the group of %s before it takes a seat", aliasString, keyspaceShard)
+		}
+		return true, topologyRecovery, nil
+	}
 	if !plan.Action.ChangesVoters() {
 		reason := plan.Reason
 		if reason == "" {
@@ -1237,7 +1223,7 @@ func readGroupVoterState(ctx context.Context, keyspace, shard string) (*groupVot
 			vt.Reachable = true
 			vt.Status = st.status.GetGroupReplicationStatus()
 			vt.ServerUUID = st.status.GetServerUuid()
-			if executed, _, err := memberGTIDSets(st.status); err == nil {
+			if executed, _, err := reparentutil.GroupMemberGTIDSets(st.status); err == nil {
 				vt.Executed = executed
 			}
 		} else {

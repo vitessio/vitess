@@ -195613,6 +195613,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {topodata.TabletAlias.$Properties|null} [expected_primary] EmergencyReparentShardRequest expected_primary
          * @property {boolean|null} [allow_split_brain_promotion] EmergencyReparentShardRequest allow_split_brain_promotion
          * @property {string|null} [required_position] EmergencyReparentShardRequest required_position
+         * @property {boolean|null} [group_replication_force_new_group] EmergencyReparentShardRequest group_replication_force_new_group
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -195726,6 +195727,14 @@ export const vtctldata = $root.vtctldata = (() => {
         EmergencyReparentShardRequest.prototype.required_position = "";
 
         /**
+         * EmergencyReparentShardRequest group_replication_force_new_group.
+         * @member {boolean} group_replication_force_new_group
+         * @memberof vtctldata.EmergencyReparentShardRequest
+         * @instance
+         */
+        EmergencyReparentShardRequest.prototype.group_replication_force_new_group = false;
+
+        /**
          * Creates a new EmergencyReparentShardRequest instance using the specified properties.
          * @function create
          * @memberof vtctldata.EmergencyReparentShardRequest
@@ -195778,6 +195787,8 @@ export const vtctldata = $root.vtctldata = (() => {
                 writer.uint32(/* id 9, wireType 0 =*/72).bool(message.allow_split_brain_promotion);
             if (message.required_position != null && $Object.hasOwnProperty.call(message, "required_position") && message.required_position !== "")
                 writer.uint32(/* id 10, wireType 2 =*/82).string(message.required_position);
+            if (message.group_replication_force_new_group != null && $Object.hasOwnProperty.call(message, "group_replication_force_new_group") && message.group_replication_force_new_group !== false)
+                writer.uint32(/* id 11, wireType 0 =*/88).bool(message.group_replication_force_new_group);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -195915,6 +195926,15 @@ export const vtctldata = $root.vtctldata = (() => {
                             delete message.required_position;
                         continue;
                     }
+                case 11: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.bool())
+                            message.group_replication_force_new_group = value;
+                        else
+                            delete message.group_replication_force_new_group;
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -196005,6 +196025,9 @@ export const vtctldata = $root.vtctldata = (() => {
             if (message.required_position != null && $Object.hasOwnProperty.call(message, "required_position"))
                 if (!$util.isString(message.required_position))
                     return "required_position: string expected";
+            if (message.group_replication_force_new_group != null && $Object.hasOwnProperty.call(message, "group_replication_force_new_group"))
+                if (typeof message.group_replication_force_new_group !== "boolean")
+                    return "group_replication_force_new_group: boolean expected";
             return null;
         };
 
@@ -196069,6 +196092,9 @@ export const vtctldata = $root.vtctldata = (() => {
             if (object.required_position != null)
                 if (typeof object.required_position !== "string" || object.required_position.length)
                     message.required_position = $String(object.required_position);
+            if (object.group_replication_force_new_group != null)
+                if (object.group_replication_force_new_group)
+                    message.group_replication_force_new_group = $Boolean(object.group_replication_force_new_group);
             return message;
         };
 
@@ -196101,6 +196127,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 object.expected_primary = null;
                 object.allow_split_brain_promotion = false;
                 object.required_position = "";
+                object.group_replication_force_new_group = false;
             }
             if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
                 object.keyspace = message.keyspace;
@@ -196125,6 +196152,8 @@ export const vtctldata = $root.vtctldata = (() => {
                 object.allow_split_brain_promotion = message.allow_split_brain_promotion;
             if (message.required_position != null && $Object.hasOwnProperty.call(message, "required_position"))
                 object.required_position = message.required_position;
+            if (message.group_replication_force_new_group != null && $Object.hasOwnProperty.call(message, "group_replication_force_new_group"))
+                object.group_replication_force_new_group = message.group_replication_force_new_group;
             return object;
         };
 

@@ -55,6 +55,10 @@ const (
 	// VoterActionMovePrimary moves the primary of the shard's group, which is not a voter, to a voter.
 	// The list does not change.
 	VoterActionMovePrimary VoterAction = "MoveGroupPrimaryToVoter"
+	// VoterActionJoinSpare makes the spare that GrowVoter would add join the group of a shard with a
+	// single voter, before the grow: a group of one voter grows only once its primary's view holds
+	// the new voter ONLINE. The list does not change.
+	VoterActionJoinSpare VoterAction = "JoinSpareBeforeGrow"
 )
 
 // ChangesVoters returns whether the action writes a new voter list.
@@ -193,6 +197,14 @@ type voterPlanner struct {
 //     EmergencyReparentShard. At least one voter stays.
 //   - GrowVoter(x): a cell with an eligible tablet has no voter. It needs P1, P3, and a majority of
 //     the grown list among the voters ONLINE in p's view.
+//   - JoinSpareBeforeGrow(x): GrowVoter for a group of a single voter p, whose view cannot hold a
+//     majority of the grown list (two of two) before x is in it. x, a valid spare (P3), joins p's
+//     group first, as a member that is not a voter; the list does not change. Once x is ONLINE in p's
+//     view, GrowVoter gives it the seat: P3 then accepts a spare whose MySQL is ONLINE in p's view of
+//     the recorded incarnation, instead of one in no group, for a group of a single voter only. Until
+//     the grow, MySQL counts x in its majority: if x fails, p loses it, and VTOrc bootstraps p's
+//     group again (every voter answers). x's tablet does not leave the group as a member that is not
+//     a voter, since a group of two would lose its majority without it (memberMayLeave).
 //
 // When none applies, it reports, in this order: GroupVoterRecordDeleted (a voter whose tablet record
 // was deleted is still active), GroupVoterUnreplaceable (a failed or ineligible voter has no valid
@@ -230,7 +242,7 @@ func PlanGroupVoters(in *VoterPlanInput) *VoterPlan {
 		if primary == nil {
 			continue
 		}
-		if spare, rejected := p.spare(voter.GetCell(), voter, primary); spare != nil {
+		if spare, rejected := p.spare(voter.GetCell(), voter, primary, false); spare != nil {
 			return p.swap(voter, spare, primary, fmt.Sprintf("voter %s has no tablet record and its MySQL is active in no view", alias))
 		} else if reason := p.inPrimaryView(primary, alias, uuid); reason != "" {
 			alerts = append(alerts, &VoterPlan{
@@ -267,7 +279,7 @@ func PlanGroupVoters(in *VoterPlanInput) *VoterPlan {
 			}
 			continue
 		}
-		spare, rejected := p.spare(vt.Tablet.Alias.Cell, vt.Tablet.Alias, primary)
+		spare, rejected := p.spare(vt.Tablet.Alias.Cell, vt.Tablet.Alias, primary, false)
 		if spare == nil {
 			alerts = append(alerts, &VoterPlan{
 				Alert:  GroupVoterUnreplaceable,
@@ -303,7 +315,7 @@ func PlanGroupVoters(in *VoterPlanInput) *VoterPlan {
 			// Its vttablet is down, but its MySQL is still in the group: it keeps its seat.
 			continue
 		}
-		spare, rejected := p.spare(vt.Tablet.Alias.Cell, vt.Tablet.Alias, primary)
+		spare, rejected := p.spare(vt.Tablet.Alias.Cell, vt.Tablet.Alias, primary, false)
 		if spare == nil {
 			alerts = append(alerts, &VoterPlan{
 				Alert:  GroupVoterUnreplaceable,
@@ -327,7 +339,9 @@ func PlanGroupVoters(in *VoterPlanInput) *VoterPlan {
 			})
 			break
 		}
-		spare, rejected := p.spare(cell, nil, primary)
+		// A group of a single voter grows with a spare that joined it already (JoinSpareBeforeGrow).
+		single := len(in.Voters) == 1
+		spare, rejected := p.spare(cell, nil, primary, single)
 		if spare == nil {
 			alerts = append(alerts, &VoterPlan{
 				Alert:  GroupVotersBelowTarget,
@@ -335,16 +349,26 @@ func PlanGroupVoters(in *VoterPlanInput) *VoterPlan {
 			})
 			continue
 		}
-		grown := len(in.Voters) + 1
-		if online := p.legitimate.OnlineVoters(primary.Status); online < grown/2+1 {
+		// The voters of the grown list ONLINE in p's view: the spare counts if it joined p's group.
+		voters := sortAliases(append(slices.Clone(in.Voters), spare.Tablet.Alias))
+		grown := policy.NewLegitimateGroup(in.Incarnation, voters, p.tablets, p.uuids)
+		if online := grown.OnlineVoters(primary.Status); online < grown.VoterMajority() {
+			// One spare joins at a time, while p is alone in its view: every member that joins counts in
+			// MySQL's majority.
+			if single && !mysql.IsGroupMemberActive(spare.Status) && len(primary.Status.GetMembers()) == 1 {
+				return &VoterPlan{
+					Action: VoterActionJoinSpare, Voters: in.Voters, Added: spare.Tablet, GroupPrimary: primary.Tablet,
+					Reason: fmt.Sprintf("cell %s has an eligible tablet but no voter, and the group has a single voter: %s joins the group before it takes the seat",
+						cell, topoproto.TabletAliasString(spare.Tablet.Alias)),
+				}
+			}
 			alerts = append(alerts, &VoterPlan{
 				Alert: GroupVotersBelowTarget,
-				Reason: fmt.Sprintf("cell %s has no voter; %s could take the seat, but the view of the primary %s holds %d voters ONLINE, fewer than a majority of the %d voters it would have",
-					cell, topoproto.TabletAliasString(spare.Tablet.Alias), topoproto.TabletAliasString(primary.Tablet.Alias), online, grown),
+				Reason: fmt.Sprintf("cell %s has no voter; %s could take the seat, but the view of the primary %s holds %d of the %d voters it would have ONLINE, not a majority",
+					cell, topoproto.TabletAliasString(spare.Tablet.Alias), topoproto.TabletAliasString(primary.Tablet.Alias), online, len(voters)),
 			})
 			continue
 		}
-		voters := sortAliases(append(slices.Clone(in.Voters), spare.Tablet.Alias))
 		return &VoterPlan{
 			Action: VoterActionGrow, Voters: voters, Added: spare.Tablet, GroupPrimary: primary.Tablet,
 			Reason: fmt.Sprintf("cell %s has an eligible tablet but no voter", cell),
@@ -668,8 +692,9 @@ func (p *voterPlanner) inPrimaryView(primary *VoterTablet, alias, uuid string) s
 // the cell is not one. A valid spare is not a voter; the policy allows it as a voter and it is a
 // REPLICA; it answers; its MySQL is not an active member, runs no START GROUP_REPLICATION and is in
 // no other group; it executed nothing that the primary lacks; and no other voter of the new list is
-// in its cell.
-func (p *voterPlanner) spare(cell string, replaced *topodatapb.TabletAlias, primary *VoterTablet) (*VoterTablet, string) {
+// in its cell. With joined, a spare whose MySQL is ONLINE in the primary's view, of the recorded
+// incarnation, is valid too (JoinSpareBeforeGrow), and preferred.
+func (p *voterPlanner) spare(cell string, replaced *topodatapb.TabletAlias, primary *VoterTablet, joined bool) (*VoterTablet, string) {
 	base := p.in.Voters
 	if replaced != nil {
 		base = withoutAlias(base, replaced)
@@ -682,11 +707,15 @@ func (p *voterPlanner) spare(cell string, replaced *topodatapb.TabletAlias, prim
 		}
 		reason := ""
 		gs := vt.Status
+		inView := joined && vt.Reachable && p.onlineInPrimaryView(vt, primary)
 		switch {
 		case vt.Tablet.Type != topodatapb.TabletType_REPLICA || !p.in.Durability.IsGroupMember(vt.Tablet):
 			reason = "not a REPLICA that the policy allows as a voter"
 		case !vt.Reachable:
 			reason = "unreachable"
+		case inView:
+			// It joined the primary's group (JoinSpareBeforeGrow): MySQL refused its join if it held a
+			// transaction that the group lacks.
 		case mysql.IsGroupMemberActive(gs):
 			reason = "an active group member"
 		case gs.GetStartInProgress():
@@ -713,9 +742,28 @@ func (p *voterPlanner) spare(cell string, replaced *topodatapb.TabletAlias, prim
 		return nil, strings.Join(rejected, "; ")
 	}
 	slices.SortStableFunc(spares, func(a, b *VoterTablet) int {
+		if aIn, bIn := mysql.IsGroupMemberActive(a.Status), mysql.IsGroupMemberActive(b.Status); aIn != bIn {
+			if aIn {
+				return -1
+			}
+			return 1
+		}
 		return cmp.Compare(p.in.Durability.MemberWeight(b.Tablet), p.in.Durability.MemberWeight(a.Tablet))
 	})
 	return spares[0], ""
+}
+
+// onlineInPrimaryView returns whether the tablet's MySQL is ONLINE in the primary's view, as a member
+// of the recorded incarnation that reports the same primary, with no START GROUP_REPLICATION running.
+func (p *voterPlanner) onlineInPrimaryView(vt *VoterTablet, primary *VoterTablet) bool {
+	gs := vt.Status
+	if gs.GetMemberState() != mysql.GroupMemberStateOnline || gs.GetStartInProgress() || vt.ServerUUID == "" ||
+		policy.GroupIncarnation(gs.GetViewId()) != p.in.Incarnation || gs.GetPrimaryUuid() != primary.Status.GetPrimaryUuid() {
+		return false
+	}
+	return slices.ContainsFunc(primary.Status.GetMembers(), func(m *replicationdatapb.GroupReplicationMember) bool {
+		return m.GetMemberUuid() == vt.ServerUUID && m.GetState() == mysql.GroupMemberStateOnline
+	})
 }
 
 // swap returns the SwapVoter plan that gives the seat of voter to spare.

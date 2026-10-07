@@ -1315,6 +1315,7 @@ func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldat
 	span.Annotate("new_primary_alias", topoproto.TabletAliasString(req.NewPrimary))
 	span.Annotate("allow_split_brain_promotion", req.AllowSplitBrainPromotion)
 	span.Annotate("required_position", req.RequiredPosition)
+	span.Annotate("group_replication_force_new_group", req.GroupReplicationForceNewGroup)
 
 	requiredPosition, err := replication.DecodePositionDefaultFlavor(req.RequiredPosition, replication.Mysql56FlavorID)
 	if err != nil {
@@ -1348,14 +1349,15 @@ func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldat
 		req.Keyspace,
 		req.Shard,
 		reparentutil.EmergencyReparentOptions{
-			NewPrimaryAlias:           req.NewPrimary,
-			IgnoreReplicas:            sets.New(ignoreReplicaAliases...),
-			WaitReplicasTimeout:       waitReplicasTimeout,
-			WaitAllTablets:            req.WaitForAllTablets,
-			AllowSplitBrainPromotion:  req.AllowSplitBrainPromotion,
-			PreventCrossCellPromotion: req.PreventCrossCellPromotion,
-			ExpectedPrimaryAlias:      req.ExpectedPrimary,
-			RequiredPosition:          requiredPosition,
+			NewPrimaryAlias:               req.NewPrimary,
+			IgnoreReplicas:                sets.New(ignoreReplicaAliases...),
+			WaitReplicasTimeout:           waitReplicasTimeout,
+			WaitAllTablets:                req.WaitForAllTablets,
+			AllowSplitBrainPromotion:      req.AllowSplitBrainPromotion,
+			PreventCrossCellPromotion:     req.PreventCrossCellPromotion,
+			ExpectedPrimaryAlias:          req.ExpectedPrimary,
+			RequiredPosition:              requiredPosition,
+			GroupReplicationForceNewGroup: req.GroupReplicationForceNewGroup,
 		},
 	)
 

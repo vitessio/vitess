@@ -101,6 +101,9 @@ EXPECTED=(
   live_nospare:liveness
   live_delete_active:pass
   delete_nogroup_lost:NoLostAck
+  force_live:NoNonVoterServes
+  force_lost:NoLostAck
+  wit_force_grow:WitJoinSpare
   delete_primary_window:NoLostAckAfterDelete
   live_delete_active_nomove:liveness
   delete_nogroup_nodel:NoLostAckExceptDeleted
@@ -111,6 +114,8 @@ EXPECTED=(
   swap_split_prompt:pass
   delete_remove:pass
   delete_nogroup:pass
+  force_down:pass
+  force_grow:pass
   delete_primary:pass
   delete_swap:pass
   delete_remove_noview:pass

@@ -84,6 +84,11 @@ type fakeGRTablet struct {
 	groupName string
 	// startInProgress makes the tablet report a START GROUP_REPLICATION in progress.
 	startInProgress bool
+	// executed and received, if set, are the GTID sets that MySQL executed and received from its
+	// group, reported in FullStatus.
+	executed, received string
+	// refuseBootstrap makes the tablet refuse a bootstrap definitively.
+	refuseBootstrap bool
 }
 
 // fakeGRCluster is a TabletManagerClient that simulates a shard running asynchronous
@@ -247,6 +252,7 @@ func (c *fakeGRCluster) groupStatus(ft *fakeGRTablet) *replicationdatapb.GroupRe
 		gs.GroupName = ft.groupName
 	}
 	gs.StartInProgress = ft.startInProgress
+	gs.ReceivedTransactionSet = ft.received
 	if !ft.member {
 		return gs
 	}
@@ -309,6 +315,9 @@ func (c *fakeGRCluster) FullStatus(ctx context.Context, tablet *topodatapb.Table
 		// A tablet that knows the shard's own durability policy reports it.
 		ShardDurabilityPolicySupported: ft.shardPolicy,
 	}
+	if ft.executed != "" {
+		fs.PrimaryStatus = &replicationdatapb.PrimaryStatus{Position: "MySQL56/" + ft.executed}
+	}
 	if ft.source != "" {
 		src := c.tabletRecs[ft.source]
 		fs.ReplicationStatus = &replicationdatapb.Status{
@@ -350,6 +359,9 @@ func (c *fakeGRCluster) StartGroupReplication(ctx context.Context, tablet *topod
 	}
 	if ft.member {
 		return c.groupStatus(ft), nil
+	}
+	if bootstrap && ft.refuseBootstrap {
+		return nil, tmclient.NewGroupBootstrapRefusedError(fmt.Errorf("MySQL of %s lacks a required transaction", ft.alias))
 	}
 	if bootstrap {
 		if len(c.members()) > 0 {

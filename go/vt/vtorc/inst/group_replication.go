@@ -396,7 +396,7 @@ func computeGroupReplicationVoters(state *groupReplicationShardState, durability
 	plan := PlanGroupVoters(in)
 	state.voterReason = plan.Reason
 	switch {
-	case plan.Action.ChangesVoters():
+	case plan.Action.ChangesVoters() || plan.Action == VoterActionJoinSpare:
 		state.voterAnalysis = GroupVotersOutOfDate
 		state.desiredVoters = plan.Voters
 		state.votersReporter = groupVotersReporter(rows)

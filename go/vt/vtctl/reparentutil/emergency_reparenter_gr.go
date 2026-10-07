@@ -93,7 +93,8 @@ func findGroupWithQuorum(statuses map[string]*fullStatusResult, legitimate *poli
 	if gv == nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE,
 			"no reachable member of the replication group has quorum in the shard's legitimate group (its recorded incarnation, with a majority of the shard's voters ONLINE); the group cannot elect a primary. "+
-				"Restore enough members for a majority; forcing a new quorum (group_replication_force_members) is not supported by EmergencyReparentShard")
+				"Restore enough members for a majority, or, once the members left the group, force a new group from the voters that answer with --group-replication-force-new-group, "+
+				"which loses the transactions that only the other voters held")
 	}
 	for _, alias := range slices.Sorted(maps.Keys(statuses)) {
 		res := statuses[alias]
@@ -229,7 +230,8 @@ func replicationWasRunning(status *replicationdatapb.FullStatus) bool {
 //
 //  1. Collect FullStatus from every tablet, bounded by WaitReplicasTimeout.
 //  2. Find the quorum: reachable ONLINE members with quorum must agree on the group and its
-//     primary. Without quorum ERS fails; forcing a new quorum needs an operator.
+//     primary. Without quorum ERS fails, unless the operator forces a new group
+//     (GroupReplicationForceNewGroup, see forceNewGroupReplicationGroup).
 //  3. Choose the new primary: NewPrimaryAlias, the group's primary, or the best eligible
 //     ONLINE member. The choice must be an ONLINE member of the group and pass the durability
 //     policy and cross-cell checks.
@@ -274,6 +276,18 @@ func (erp *EmergencyReparenter) reparentShardLockedGroupReplication(ctx context.
 	}
 
 	gv, err := findGroupWithQuorum(statuses, legitimateGroup(ev.ShardInfo.GroupReplicationIncarnation, ev.ShardInfo.GroupReplicationVoters, statuses))
+	if opts.GroupReplicationForceNewGroup {
+		switch {
+		case err == nil:
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+				"the replication group has quorum (primary server_uuid %s, view %s): it elects its primary on its own; run EmergencyReparentShard without --group-replication-force-new-group",
+				gv.primaryUUID, gv.view.GetViewId())
+		case vterrors.Code(err) != vtrpcpb.Code_UNAVAILABLE:
+			// The members with quorum disagree: a group with quorum still runs.
+			return err
+		}
+		return erp.forceNewGroupReplicationGroup(ctx, ev, keyspace, shard, prevPrimary, statuses, opts)
+	}
 	if err != nil {
 		return err
 	}
