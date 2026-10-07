@@ -101,7 +101,11 @@ func TestGroupReplicationPlannedReparentToNonVoter(t *testing.T) {
 		}
 		require.NotNil(t, zone1Voter)
 		require.NoError(t, tc.VtctldClientProcess.PlannedReparentShard(keyspaceName, shardName, zone1Voter.Alias))
+		moved := time.Now()
 		waitForGroup(t, tc, zone1Voter, voters)
+		// vtgate does not buffer the shard's writes again within --buffer-min-time-between-failovers
+		// of that reparent.
+		require.Eventually(t, func() bool { return time.Since(moved) > msBufferCooldown }, waitTimeout, pollInterval)
 		voters = reparentTo(t, spareOf[cells[0]])
 	})
 }
