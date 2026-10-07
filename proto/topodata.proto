@@ -310,6 +310,25 @@ message Shard {
   // shard of a keyspace that is half migrated: vtctld, VTOrc and vttablet must all know it
   // before a migration starts.
   string durability_policy = 13;
+
+  // group_replication_voter_identities are how VTOrc finds the listed voters of the shard's MySQL
+  // Group Replication group after their tablet records were deleted, also after VTOrc restarted:
+  // a voter whose record is gone may still run, and hold acknowledged transactions that the other
+  // voters lack, so VTOrc removes it only once it knows the voter is down, and identifies it in
+  // the group's views by its server_uuid. Each voter's vttablet writes its own entry while it is
+  // listed, without the shard lock, and drops the entries of tablets that are no longer listed.
+  // Readers only use the entries of listed voters.
+  repeated GroupReplicationVoterIdentity group_replication_voter_identities = 14;
+}
+
+// GroupReplicationVoterIdentity is what a voter of a shard's MySQL Group Replication group
+// published about itself (see Shard.group_replication_voter_identities).
+message GroupReplicationVoterIdentity {
+  // tablet holds the parts of the voter's tablet record that address it: its alias, keyspace,
+  // shard, hostname, port map, and MySQL hostname and port.
+  Tablet tablet = 1;
+  // server_uuid is the server_uuid of the voter's MySQL.
+  string server_uuid = 2;
 }
 
 // GroupReplicationBootstrapIntent is a bootstrap of a shard's MySQL Group Replication group that

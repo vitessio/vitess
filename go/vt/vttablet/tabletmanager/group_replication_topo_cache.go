@@ -76,6 +76,7 @@ func (c *groupReplicationTopoCache) storeRecord(rec *shardGroupRecord, readGen u
 		rec.primaryAlias = c.record.primaryAlias
 		rec.durabilityPolicy = c.record.durabilityPolicy
 		rec.intent = c.record.intent
+		rec.identities = c.record.identities
 	} else {
 		c.voters, c.hasVoters = rec.voters, true
 	}
@@ -101,6 +102,7 @@ func (c *groupReplicationTopoCache) noteShard(si *topodatapb.Shard, fromWatch bo
 		rec.primaryAlias = si.GetPrimaryAlias()
 		rec.durabilityPolicy = si.GetDurabilityPolicy()
 		rec.intent = reparentutil.CurrentGroupReplicationBootstrapIntent(si)
+		rec.identities = si.GetGroupReplicationVoterIdentities()
 		c.record = &rec
 	}
 	return true

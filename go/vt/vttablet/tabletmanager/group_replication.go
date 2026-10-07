@@ -85,6 +85,9 @@ var (
 	// groupReplicationVoterUUIDWarmInterval is how often the sync loop asks, in the background,
 	// the voters whose server_uuid the tablet does not know yet for it.
 	groupReplicationVoterUUIDWarmInterval = 30 * time.Second
+	// groupReplicationVoterIdentityInterval is how often the sync loop checks the tablet's voter
+	// identity in the shard record, and publishes it when it is missing or outdated.
+	groupReplicationVoterIdentityInterval = 10 * time.Second
 	// groupReplicationStatusTimeout bounds every read of the group replication status.
 	groupReplicationStatusTimeout = 10 * time.Second
 	// groupReplicationRejoinGateInterval is how long the sync loop waits before it checks again

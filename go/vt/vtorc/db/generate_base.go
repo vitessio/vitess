@@ -321,6 +321,7 @@ CREATE TABLE vitess_shard (
 	primary_timestamp varchar(512) NOT NULL,
 	disable_emergency_reparent tinyint NOT NULL,
 	group_replication_voters text NOT NULL DEFAULT '',
+	group_replication_voter_uuids text NOT NULL DEFAULT '',
 	group_replication_incarnation varchar(128) NOT NULL DEFAULT '',
 	group_replication_bootstrap_target varchar(512) NOT NULL DEFAULT '',
 	durability_policy varchar(512) NOT NULL DEFAULT '',

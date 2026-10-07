@@ -158,6 +158,7 @@ func refreshAllShards(ctx context.Context, keyspaceName string) error {
 			log.Error(err.Error())
 			return err
 		}
+		restoreDeletedGroupVoters(ctx, shardInfo)
 		savedShards[shardInfo.ShardName()] = true
 	}
 

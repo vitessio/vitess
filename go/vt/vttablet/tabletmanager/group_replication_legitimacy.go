@@ -145,6 +145,8 @@ type shardGroupRecord struct {
 	// intent is the shard's bootstrap intent, if it applies to the recorded incarnation (see
 	// reparentutil.CurrentGroupReplicationBootstrapIntent).
 	intent *topodatapb.GroupReplicationBootstrapIntent
+	// identities are the voter identities that the shard record holds (see publishVoterIdentity).
+	identities []*topodatapb.GroupReplicationVoterIdentity
 	// tablets are the tablet records of the shard, by alias, read at tabletsRead.
 	tablets     map[string]*topodatapb.Tablet
 	tabletsRead time.Time
@@ -168,6 +170,7 @@ func (tm *TabletManager) readShardGroupRecord(ctx context.Context, prev *shardGr
 		primaryAlias:     si.PrimaryAlias,
 		durabilityPolicy: si.GetDurabilityPolicy(),
 		intent:           reparentutil.CurrentGroupReplicationBootstrapIntent(si.Shard),
+		identities:       si.GetGroupReplicationVoterIdentities(),
 		tablets:          make(map[string]*topodatapb.Tablet),
 	}
 	if prev != nil && time.Since(prev.tabletsRead) < groupReplicationTabletsCacheTTL && tm.identifiesVoters(rec.voters, prev.tablets) {

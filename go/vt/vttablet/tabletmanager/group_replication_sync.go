@@ -113,6 +113,9 @@ type groupReplicationSync struct {
 	// uuidsWarmed is when the loop last asked the voters whose server_uuid the tablet does not
 	// know for it in the background.
 	uuidsWarmed time.Time
+	// identityChecked is when the loop last checked the tablet's voter identity in the shard record
+	// (publishVoterIdentity).
+	identityChecked time.Time
 
 	// wake makes the loop run right away, and refresh makes its next run read the shard record and
 	// the durability policy from the topology. The fence check (checkFence), which runs in its own
@@ -256,6 +259,7 @@ func (s *groupReplicationSync) reconcile(ctx context.Context) {
 		log.Warn("Group replication sync: cannot read the durability policy", slog.Any("error", err))
 		return
 	}
+	s.publishVoterIdentity(ctx, durability)
 	tablet = tm.Tablet()
 	if tablet.Type == topodatapb.TabletType_PRIMARY && mysql.IsGroupPrimary(status) {
 		s.enforceSemiSync(ctx, status, durability, tablet)
@@ -1172,6 +1176,45 @@ func (s *groupReplicationSync) warmVoterServerUUIDs(ctx context.Context) {
 		base = ctx
 	}
 	go s.tm.fetchPeerServerUUIDs(base, missing, func() bool { return false })
+}
+
+// publishVoterIdentity writes the tablet's voter identity (policy.NewGroupVoterIdentity) to the
+// shard record while the record lists the tablet as a voter, and holds no identity for it or an
+// outdated one, or holds identities of tablets that are no longer listed. VTOrc finds a voter whose
+// tablet record was deleted by it, also after VTOrc restarted (see
+// Shard.group_replication_voter_identities). The write takes no shard lock: it re-checks on the
+// record it updates that the tablet is listed, and changes nothing else. It checks at most every
+// groupReplicationVoterIdentityInterval, which is longer than the cache of the shard record, so that a
+// check does not repeat a write that the cached record does not show yet.
+func (s *groupReplicationSync) publishVoterIdentity(ctx context.Context, durability policy.Durabler) {
+	tm := s.tm
+	if _, ok := policy.AsGroupReplication(durability); !ok || time.Since(s.identityChecked) < groupReplicationVoterIdentityInterval {
+		return
+	}
+	s.identityChecked = time.Now()
+	rec, err := s.getRecord(ctx, false)
+	if err != nil || !policy.IsVoter(rec.voters, tm.tabletAlias) {
+		return
+	}
+	serverUUID, err := tm.MysqlDaemon.GetServerUUID(ctx)
+	if err != nil || serverUUID == "" {
+		return
+	}
+	identity := policy.NewGroupVoterIdentity(tm.Tablet(), serverUUID)
+	cached := &topodatapb.Shard{GroupReplicationVoters: rec.voters, GroupReplicationVoterIdentities: rec.identities}
+	if !policy.SetGroupVoterIdentity(cached, identity) {
+		return
+	}
+	tablet := tm.Tablet()
+	_, err = tm.TopoServer.UpdateShardFields(ctx, tablet.Keyspace, tablet.Shard, func(si *topo.ShardInfo) error {
+		if !policy.SetGroupVoterIdentity(si.Shard, identity) {
+			return topo.NewError(topo.NoUpdateNeeded, si.Keyspace()+"/"+si.ShardName())
+		}
+		return nil
+	})
+	if err != nil {
+		log.Warn("Group replication sync: cannot publish the voter identity in the shard record", slog.Any("error", err))
+	}
 }
 
 // isForeignGroup returns whether MySQL is an active member of a group of another incarnation

@@ -33,6 +33,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vtorc/inst"
 )
@@ -90,6 +91,44 @@ func TestGroupReplicationRemovesDeletedVoter(t *testing.T) {
 	require.Eventually(t, func() bool { return w.ok.Load() > 10 }, waitTimeout, pollInterval)
 	_, fail, lastErr = w.stop()
 	assert.Zero(t, fail, "last error: %v", lastErr)
+}
+
+// TestGroupReplicationRemovesDeletedVoterAfterVTOrcRestart checks that VTOrc removes a dead voter
+// whose tablet record was deleted while VTOrc was down: a restarted VTOrc never saw the voter, and finds
+// it by the identity that the voter's vttablet published in the shard record, its address and its
+// MySQL's server_uuid. Without it, VTOrc could not tell that the voter is down, and would keep it.
+func TestGroupReplicationRemovesDeletedVoterAfterVTOrcRestart(t *testing.T) {
+	tc := migratedCluster(t)
+	primary, zone2, zone3 := tc.replicas[0], tc.replicas[1], tc.replicas[2]
+	// Every voter published its identity.
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		var published []string
+		for _, identity := range shardRecord(t, tc.TopoProcess.Server).GetGroupReplicationVoterIdentities() {
+			if identity.GetServerUuid() != "" {
+				published = append(published, topoproto.TabletAliasString(identity.GetTablet().GetAlias()))
+			}
+		}
+		assert.ElementsMatch(c, aliasesOf(tc.replicas), published)
+	}, waitTimeout, pollInterval)
+
+	// While VTOrc is down, the host of zone3's voter dies, and the operator deletes its tablet record.
+	vtorc := tc.VTOrcProcesses[0]
+	require.NoError(t, vtorc.TearDown())
+	killHost(t, zone3)
+	out, err := tc.VtctldClientProcess.ExecuteCommandWithOutput("DeleteTablets", zone3.Alias)
+	require.NoError(t, err, out)
+	vtorc.LogFileName = "vtorc-restarted-stderr.txt"
+	require.NoError(t, vtorc.Setup())
+
+	// The restarted VTOrc removes the voter, once it failed its probes for the grace period.
+	w := startWriter(t, tc)
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		assert.ElementsMatch(c, []string{primary.Alias, zone2.Alias}, shardVoters(t, tc))
+	}, waitTimeout+voterGracePeriod, pollInterval)
+	waitForGroup(t, tc, primary, []*cluster.Vttablet{primary, zone2})
+	ok, fail, lastErr := w.stop()
+	assert.Positive(t, ok)
+	assert.Zero(t, fail, "writes failed while a voter was removed, last error: %v", lastErr)
 }
 
 // TestGroupReplicationBootstrapsAfterDeletedVoter checks that deleting the tablet record of a dead

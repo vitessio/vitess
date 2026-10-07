@@ -128,6 +128,7 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		vitess_shard.primary_alias AS shard_primary_alias,
 		vitess_shard.disable_emergency_reparent AS shard_disable_emergency_reparent,
 		vitess_shard.group_replication_voters AS shard_group_replication_voters,
+		vitess_shard.group_replication_voter_uuids AS shard_group_replication_voter_uuids,
 		vitess_shard.group_replication_incarnation AS shard_group_replication_incarnation,
 		vitess_shard.group_replication_bootstrap_target AS shard_group_replication_bootstrap_target,
 		vitess_shard.durability_policy AS shard_durability_policy,
@@ -386,6 +387,7 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 	grRows := make(map[string][]*groupReplicationRow)
 	grVoters := make(map[string][]*topodatapb.TabletAlias)
 	grIncarnations := make(map[string]string)
+	grVoterUUIDs := make(map[string]map[string]string)
 	var rows []*analysisRow
 	err := db.Db.QueryVTOrc(query, args, func(m sqlutils.RowMap) error {
 		a := &DetectionAnalysis{
@@ -418,6 +420,7 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 				m.GetBool("gr_has_quorum"), m.GetString("gr_primary_uuid"), m.GetString("gr_view_id"), splitGroupMemberUUIDs(m.GetString("gr_online_member_uuids"))),
 		})
 		grIncarnations[grKeyspaceShard] = m.GetString("shard_group_replication_incarnation")
+		grVoterUUIDs[grKeyspaceShard] = parseGroupVoterUUIDs(m.GetString("shard_group_replication_voter_uuids"))
 		if _, ok := grVoters[grKeyspaceShard]; !ok {
 			voters, err := parseGroupReplicationVoters(m.GetString("shard_group_replication_voters"))
 			if err != nil {
@@ -606,7 +609,7 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 	now := time.Now()
 	for keyspaceShard, shardRows := range grRows {
 		if ca := clusters[keyspaceShard]; ca != nil && ca.durability != nil {
-			ca.groupReplication = computeGroupReplicationShardState(ca.durability, grIncarnations[keyspaceShard], grVoters[keyspaceShard], shardRows, now)
+			ca.groupReplication = computeGroupReplicationShardState(ca.durability, grIncarnations[keyspaceShard], grVoters[keyspaceShard], grVoterUUIDs[keyspaceShard], shardRows, now)
 		}
 	}
 	analyzeRow := func(row *analysisRow) {

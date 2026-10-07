@@ -43,6 +43,7 @@ import (
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
 	"vitess.io/vitess/go/vt/vtorc/inst"
+	"vitess.io/vitess/go/vt/vtorc/process"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 )
 
@@ -503,6 +504,47 @@ func keepDeletedGroupVoter(alias *topodatapb.TabletAlias) bool {
 		log.Error(err.Error())
 	}
 	return true
+}
+
+// restoreDeletedGroupVoters gives VTOrc back the listed voters of the shard's replication group whose
+// tablet record is gone and that it does not keep (keepDeletedGroupVoter), as after VTOrc restarted.
+// Each voter published its identity in the shard record (Shard.group_replication_voter_identities):
+// VTOrc stores the tablet record held there, marks it as a deleted voter (inst.MarkDeletedGroupVoter),
+// and discovers it at that address. The voter planner then removes it once it is down for the grace
+// period, measured from VTOrc's restart, and identifies it in the group's views by the server_uuid it
+// published until VTOrc reaches its MySQL. A voter whose tablet record exists, or cannot be read, is
+// left to the tablet discovery, as is every voter until VTOrc's first discovery cycle completed: the
+// tablet records are read concurrently with the shard records.
+func restoreDeletedGroupVoters(ctx context.Context, si *topo.ShardInfo) {
+	if !process.FirstDiscoveryCycleComplete.Load() {
+		return
+	}
+	for _, identity := range policy.GroupVoterIdentities(si.Shard) {
+		tablet := identity.GetTablet()
+		if !shouldWatchTablet(tablet) {
+			continue
+		}
+		if _, err := inst.ReadTablet(tablet.Alias); err == nil {
+			continue
+		} else if !errors.Is(err, inst.ErrTabletAliasNil) {
+			log.Error(err.Error())
+			continue
+		}
+		getCtx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+		_, err := ts.GetTablet(getCtx, tablet.Alias)
+		cancel()
+		if !topo.IsErrType(err, topo.NoNode) {
+			continue
+		}
+		if err := inst.SaveTablet(tablet); err != nil {
+			log.Error(err.Error())
+			continue
+		}
+		if err := inst.MarkDeletedGroupVoter(tablet.Alias); err != nil {
+			log.Error(err.Error())
+		}
+		log.Info(fmt.Sprintf("Restored voter %s of %s/%s, whose tablet record is gone, from the identity it published in the shard record", topoproto.TabletAliasString(tablet.Alias), si.Keyspace(), si.ShardName()))
+	}
 }
 
 // tabletUndoDemotePrimary calls the said RPC for the given tablet.
