@@ -104,6 +104,8 @@ EXPECTED=(
   force_live:NoNonVoterServes
   force_lost:NoLostAck
   wit_force_grow:WitJoinSpare
+  wit_prs_swap:WitPrsSwapDemoted
+  wit_prs_swap_serves:WitPrsSwap
   delete_primary_window:NoLostAckAfterDelete
   live_delete_active_nomove:liveness
   delete_nogroup_nodel:NoLostAckExceptDeleted
@@ -116,6 +118,13 @@ EXPECTED=(
   delete_nogroup:pass
   force_down:pass
   force_grow:pass
+  prs_swap:pass
+  prs_swap_core:pass
+  prs_swap_nodemoted:NoNonVoterServes
+  prs_swap_noholds:NoLostAck
+  prs_swap_norevertcheck:NoVoterMinority
+  swap_live:pass
+  swap_live_small:pass
   delete_primary:pass
   delete_swap:pass
   delete_remove_noview:pass

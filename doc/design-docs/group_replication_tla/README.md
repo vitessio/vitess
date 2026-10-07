@@ -636,6 +636,39 @@ The partition timeouts (`Detect`, `Heal`, `Expel`, `Block`) are strongly fair in
 - **A dropped voter that runs** (`force_live`): the forced reparent drops voters whose group still runs, cut off from the vtctld; their primary serves while it is no longer a voter, until its tablet reads the new list (`FenceDrop`, the code's `groupReplicationNotVoter`), next to the new group. A tablet that cannot reach the topology server does not read it at all, which the model leaves out: that is why the operator must make sure that the dropped voters are down.
 - **Growth from a single voter**: a simulation of `force_grow` reaches a group of two voters, both ONLINE in the recorded incarnation, after the force left one (26 states: s1 and s2 dropped, s3 bootstrapped, s1 restarts, joins as a spare, and takes the seat).
 
+## Sixth milestone: PlannedReparentShard to a tablet that is not a voter
+
+PRS promotes a spare `x` by swapping it in first: for the voter `v` of its cell, or into a new seat (see "To a tablet that is not a voter" in the design). The model checks it against the faults of the voter redesign's family (a fourth tablet as the spare, one crash, one leave, one loss of majority, one re-bootstrap), and VTOrc's swap of a live voter, which the code does for a voter whose tablet type the policy no longer allows.
+
+### What the model adds
+
+- `PBeginSwap` (`PRS_SWAP`): PRS's preflight for a spare, under the shard lock: every tablet up, the current primary `cur` the settled legitimate primary (P1), `x` a valid spare (P3), and `v` any voter (each server is a cell of its own) or none (a grow). For `v # cur`, the voter write (atomic with the read, like VTOrc's) with the new list's majority in `cur`'s view without `v` and `x` (`SwapMajority`), then `PSwapJoin` waits for `x` to be ONLINE in the recorded group and the reparent goes on (`PDemote`, `PWait`, `PPromote`). For `v = cur`, the reparent demotes `cur` first.
+- `PSwapDemoted`: after the demotion, on a fresh read, the swap of `cur` for `x`, with `SwapMajority`, P3, the demotion holding (`SWAP_DEMOTED`: `dmt`, the tablet's `groupReplicationDemoted`, and `super_read_only`) and the voters of the new list having executed what `cur` executed (`SWAP_HOLDS`). Then `PSwapJoin`, and `PWait` and `PPromote` promote `x`. When `x` does not join (and is not ONLINE in a view), PRS writes the old list back (`SWAP_REVERT_CHECK`: unless a view that lacks a majority of the new list would hold one of the old list) and undoes the demotion.
+- `OSwapLive` (`SWAP_LIVE`): VTOrc's swap of a live voter `v`: P1 with `p # v`, P3, `SwapMajority`, no P2.
+
+### Results
+
+The PRS-swap configurations have four tablets and the fault budget of the voter redesign's family, plus a PRS: their state spaces outgrow what this machine's disk holds for TLC's queue (about 5 GB free), so they are checked up to 16–17 million states each, without an error, and by simulation. The three checks that the swap of the demoted primary needs are each found again, exhaustively up to their depth, with the check off.
+
+| Configuration | Checks | Outcome | Distinct states | Depth | Time |
+|---|---|---|---|---|---|
+| `prs_swap` | PRS to a spare, both cases, `DemotePrimary` may fail, writes to a MySQL out of its group; every invariant | no error; not exhaustive: TLC's queue filled the disk | 16,111,721 | - | 37m46 |
+| `prs_swap_core` | as `prs_swap`, without the failed demotion and the writes out of the group | no error; not exhaustive: TLC's queue (4.5M states) filled the disk | 16,721,214 | - | 37m57 |
+| `prs_swap`, simulated | 204,332 random behaviors of up to 120 steps (4 workers, 20 minutes) | no error | 25,024,955 checked | mean 27 | 21m |
+| `swap_live_small` | VTOrc's swap of a live voter; one crash, one leave, no loss of majority; every invariant | no error (exhaustive) | 466,937 | 32 | 1m35 |
+| `swap_live` | as `swap_live_small`, with a loss of majority and a re-bootstrap | no error; not exhaustive (stopped at 31 minutes, its queue growing) | 12,382,963 | - | 31m39 |
+| `wit_prs_swap` | witness: PRS swaps the demoted primary out (`WitPrsSwapDemoted`) | violated, 5 states | 3,218 | 8 | 3s |
+| `wit_prs_swap_serves` | witness: a spare that PRS swapped in serves as the primary (`WitPrsSwap`) | violated, 10 states | 242,858 | 12 | 41s |
+| `prs_swap_norevertcheck` | `SWAP_REVERT_CHECK` off | `NoVoterMinority` violated, 7 states | 25,394 | 9 | 6s |
+| `prs_swap_noholds` | `SWAP_HOLDS` off | `NoLostAck` violated, 15 states | 2,295,803 | 17 | 4m42 |
+| `prs_swap_nodemoted` | `SWAP_DEMOTED` off | `NoNonVoterServes` violated, 18 states | 8,818,560 | 20 | 19m12 |
+
+Each of the three checks of the swap of the demoted primary was found by the model, in this order, before the code had it:
+
+- **The revert** (`prs_swap_norevertcheck`): the swap's join fails after a voter left the group; writing the old list back gives the view of the old primary and the remaining voter a majority of the old list that it lacks under the new one. A first version of the revert also wrote the old list back while `x` had joined and been elected after the old primary crashed (`NoNonVoterServes`, 14 states): PRS now reads `x`'s status after a failed join RPC, and goes on if `x` is ONLINE.
+- **The new voters' transactions** (`prs_swap_noholds`): the old primary, the only voter that executed an acknowledged write, is swapped out, the swap fails, the old primary crashes, and VTOrc bootstraps the group from the new list, which no longer needs it. A first version of the wait counted a copy in a voter's relay log, which a restart of its mysqld discards (`NoLostAck`, 17 states).
+- **The demotion** (`prs_swap_nodemoted`): the primary crashes and restarts as a REPLICA before PRS demotes it, so the demotion does not hold; its sync loop makes it serve again as the group's primary, and the swap then drops it from the voters.
+
 ## Conformance: actions and the code they model
 
 Paths are relative to `go/vt/`; line numbers are on `group-replication-prototype` at the commit that adds this model, and for the second milestone's rows at f528e9a. The fixes on `gr-fixes5` are named by function: their lines may move before the merge.
@@ -692,6 +725,8 @@ Paths are relative to `go/vt/`; line numbers are on `group-replication-prototype
 | `EndTerm`; `PROMOTE_CHECK` in `PrSnap` | `endPrimaryTerm` on an active member (`vttablet/tabletmanager/shard_sync.go`); the proposed check before `groupReplicationSync.promote` (FLAG 1) | Only the tablet type changes; MySQL stays writable. The check reads the recorded tablet's status in the same step as the promotion's snapshot (atomic decisions). |
 | `OForce` | `forceNewGroupReplicationGroup`, `planForcedGroup`, `writeForcedGroupVoters` (`vtctl/reparentutil/emergency_reparenter_gr_force.go`) | The read and the voter write are one step; the bootstrap is VTOrc's actions, which the force path reuses. |
 | `OJoinSpare`; `OGrow` and `NLeave` with `JOIN_SPARE` | JoinSpareBeforeGrow and `spare(..., joined)` in `PlanGroupVoters` (`vtorc/inst/group_replication_voters.go`), `updateGroupReplicationVoters` (`vtorc/logic/group_replication_recovery.go`); `memberMayLeave` (`vttablet/tabletmanager/group_replication_sync.go`) | The decision and the start of the join are one step; the join's end is `JoinComplete`. |
+| `PBeginSwap`, `PSwapDemoted`, `PSwapJoin` | `planGroupReplicationSwap`, `checkGroupSwap`, `swapInElect`, `swapAfterDemote`, `waitForNewVotersToHold`, `swapRevertRefusal` (`vtctl/reparentutil/planned_reparenter_gr_swap.go`), `performGracefulPromotion` | Each decision and its voter write are one step (the code's read and compare-and-swap, under the shard lock); the spare does not replicate asynchronously, so only the other voters can hold the demoted primary's transactions. |
+| `OSwapLive` | the swap of an ineligible voter in `PlanGroupVoters` (`vtorc/inst/group_replication_voters.go`) | Any voter can be swapped: the model has no tablet types. |
 
 ## What the model does not cover
 

@@ -147,6 +147,11 @@ message FullStatus {
   // else its keyspace's policy. MigrateReplicationMode requires it on every tablet of the keyspace
   // that answers, and the initialization of a group on the primary-elect and the voters.
   bool shard_durability_policy_supported = 29;
+  // group_replication_demoted is true while a DemotePrimary of the tablet, which was PRIMARY, holds: the
+  // group replication sync loop does not make the tablet serve again, nor its MySQL writable, until
+  // UndoDemotePrimary or a change of the tablet type. PlannedReparentShard requires it before it drops the
+  // demoted primary from the voters of its shard's group.
+  bool group_replication_demoted = 30;
 }
 
 // GroupReplicationMember is one member of a MySQL Group Replication group, as seen by the

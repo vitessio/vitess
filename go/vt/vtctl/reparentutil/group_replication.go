@@ -129,8 +129,9 @@ func memberIsOnlineInView(view *replicationdatapb.GroupReplicationStatus, server
 // the listed voters. A planned reparent never moves the shard to a group that formed on its own.
 //
 // Only a voter, a tablet listed in the shard record's voters, can be promoted: the other
-// tablets replicate asynchronously and are not members of the group. Swapping a non-voter in
-// for a voter is not supported yet. An empty list (voters not selected yet) skips this check.
+// tablets replicate asynchronously and are not members of the group. PRS swaps a primary-elect
+// that is not a voter in first (planGroupReplicationSwap), and checks it here once it is one. An
+// empty list (voters not selected yet) skips this check.
 //
 // A shard that never had a primary is initialized with InitPrimary, which bootstraps the
 // group, so there is nothing to check. A shard whose primary is unknown can only promote an
@@ -147,8 +148,7 @@ func checkGroupReplicationPrimaryElect(ctx context.Context, tmc tmclient.TabletM
 	}
 	if len(voters) > 0 && !policy.IsVoter(voters, primaryElect.Alias) {
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
-			"primary-elect %v is not a voting member of the shard's replication group; only voters can be promoted (voters: %s). "+
-				"Promoting a tablet that is not a voter is not supported yet",
+			"primary-elect %v is not a voting member of the shard's replication group; only voters can be promoted (voters: %s)",
 			topoproto.TabletAliasString(primaryElect.Alias), votersString(voters))
 	}
 

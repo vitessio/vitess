@@ -177,6 +177,7 @@ func (m *FullStatus) CloneVT() *FullStatus {
 	r.GroupReplicationStatus = m.GroupReplicationStatus.CloneVT()
 	r.GroupReplicationEnabled = m.GroupReplicationEnabled
 	r.ShardDurabilityPolicySupported = m.ShardDurabilityPolicySupported
+	r.GroupReplicationDemoted = m.GroupReplicationDemoted
 	if rhs := m.ShardPeerHealth; rhs != nil {
 		tmpContainer := make([]*ShardPeerHealth, len(rhs))
 		for k, v := range rhs {
@@ -793,6 +794,18 @@ func (m *FullStatus) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.GroupReplicationDemoted {
+		i--
+		if m.GroupReplicationDemoted {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x1
+		i--
+		dAtA[i] = 0xf0
 	}
 	if m.ShardDurabilityPolicySupported {
 		i--
@@ -1595,6 +1608,9 @@ func (m *FullStatus) SizeVT() (n int) {
 		n += 3
 	}
 	if m.ShardDurabilityPolicySupported {
+		n += 3
+	}
+	if m.GroupReplicationDemoted {
 		n += 3
 	}
 	n += len(m.unknownFields)
@@ -3794,6 +3810,26 @@ func (m *FullStatus) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.ShardDurabilityPolicySupported = bool(v != 0)
+		case 30:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field GroupReplicationDemoted", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.GroupReplicationDemoted = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])

@@ -205,6 +205,7 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 	// Every decision of the tablet that depends on the durability policy resolves the shard's own
 	// policy over its keyspace's (shardDurability). MigrateReplicationMode requires it on the voters.
 	status.ShardDurabilityPolicySupported = true
+	status.GroupReplicationDemoted = tm.groupReplicationDemoted.Load()
 	return status, nil
 }
 

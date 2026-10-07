@@ -194,9 +194,19 @@ CONSTANTS
                     \* bootstrapped from the others
     FORCE_DOWN,     \* the operator's assertion holds: every voter that the forced reparent drops is down (FALSE: a
                     \* dropped voter may run, cut off from the vtctld but not from the topology)
-    JOIN_SPARE      \* (JoinSpareBeforeGrow) a group of a single voter grows: its spare joins the group first, and
+    JOIN_SPARE,     \* (JoinSpareBeforeGrow) a group of a single voter grows: its spare joins the group first, and
                     \* GrowVoter seats it once it is ONLINE in the primary's view; a member that is not a voter
                     \* leaves only while its group keeps a majority without it (memberMayLeave)
+    \* ==== PlannedReparentShard to a tablet that is not a voter ====
+    PRS_SWAP,       \* PRS promotes a spare x: it swaps x in for a live voter v other than the primary, or grows the
+                    \* list with x, then x joins and the reparent goes on; for v the primary, it demotes the primary
+                    \* first, then swaps, x joins, and PRS promotes x
+    SWAP_LIVE,      \* VTOrc's swap of a live voter (an ineligible tablet type), without P2
+    SWAP_REVERT_CHECK, \* (fix, TRUE = code) PRS writes the old list back after a failed swap of the demoted primary only
+                    \* if no view that lacks a majority of the new list holds one of the old list
+    SWAP_HOLDS,     \* (fix, TRUE = code) PRS swaps the demoted primary out only once the voters of the new list executed
+                    \* every transaction it executed
+    SWAP_DEMOTED    \* (fix, TRUE = code) ... and only while its demotion holds (groupReplicationDemoted, super_read_only)
 
 InitVoters == Servers \ Spares
 InitUp == InitVoters \ InitDown
@@ -1824,6 +1834,8 @@ DrAct(c) ==
 PWait ==
     /\ Free
     /\ pph = "demoted"
+    \* PRS_SWAP: an elect that is not a voter yet is swapped in first (PSwapDemoted)
+    /\ pel \in voters
     /\ \/ /\ up[pel] /\ exec[pcur] \subseteq exec[pel]
           /\ pph' = "promote"
           /\ UNCHANGED <<pcur, pel, pprev, lockOwner, udReq>>
@@ -2354,6 +2366,114 @@ OJoinSpare(o) ==
         /\ P3(x, p)
         /\ JoinBody(x)
 
+\* ---- PRS_SWAP: PlannedReparentShard to a tablet x that is not a voter (checkGroupReplicationSwap) ----
+\* The new list's majority in the primary's view, without the voter it drops and without x, which is in no view
+SwapMajority(cur, drop, new) == Cardinality(MyOnl(cur) \cap (voters \ {drop})) >= MajOf(new)
+
+\* PRS's preflight for an elect x that is not a voter, on one read under the shard lock: every tablet up, the
+\* current primary cur is the PRIMARY tablet and the settled legitimate primary (P1), x is a valid spare (P3).
+\* v is the voter x replaces (the voter of x's cell; any voter, since each server is a cell of its own), or
+\* NoServer when x's cell has no voter (a grow). For v # cur, PRS writes the new list now (a compare-and-swap)
+\* and waits for x to join; for v = cur, it demotes cur first (PSwapDemoted).
+PBeginSwap ==
+    /\ Free
+    /\ PRS /\ PRS_SWAP /\ nPrs < MaxPrs /\ nVot < MaxVot /\ pph = "idle" /\ lockOwner = NoOrc /\ everP
+    /\ \A v \in Servers : up[v]
+    /\ \E x \in Servers \ voters, cur \in voters, v \in voters \cup {NoServer} :
+        /\ ttype[cur] = "P" /\ P1(cur) /\ P3(x, cur)
+        /\ v = NoServer => Cardinality(voters) < Seats
+        /\ pcur' = cur /\ pel' = x
+        /\ IF v = cur
+           THEN /\ pph' = "begun"
+                /\ UNCHANGED <<voters, vMinor, nVot>>
+           ELSE /\ SwapMajority(cur, v, (voters \ {v}) \cup {x})
+                /\ voters' = (voters \ {v}) \cup {x}
+                /\ vMinor' = (vMinor \/ MinorToMajor(voters, voters'))
+                /\ nVot' = nVot + 1
+                /\ pph' = "swap_join"
+    /\ lockOwner' = Prs
+    /\ nPrs' = nPrs + 1
+    /\ UNCHANGED <<vM, vT, vS, oph, ocand, oexp, otok, oborn, oreq, orep, orp, vH, vB>>
+    /\ UNCHANGED <<ovot, pprev, vNd, udReq, gone, everP, nUndo, nSetRW, err, ran>>
+
+\* x is the elect and cur, demoted, is the voter it replaces: a fresh read under the lock, then the new list
+\* (a compare-and-swap); cur's tablet no longer serves as PRIMARY of a list without it, and it was demoted. PRS
+\* waits until the voters of the new list hold every transaction cur executed (SWAP_HOLDS): x, an asynchronous
+\* replica of cur in the code (in the model, a spare does not replicate), or the other voters, which the group
+\* delivers them to.
+PSwapDemoted ==
+    /\ Free
+    /\ PRS_SWAP /\ pph = "demoted" /\ pel \notin voters
+    /\ nVot < MaxVot
+    /\ LET new == (voters \ {pcur}) \cup {pel} IN
+       \/ /\ up[pcur] /\ IsPrimQ(pcur) /\ up[pel] /\ P3(pel, pcur)
+          /\ SwapMajority(pcur, pcur, new)
+          \* SWAP_HOLDS: the voters of the new list executed what the demoted primary executed (it no longer commits):
+          \* a bootstrap from them, which needs every voter of the new list, loses none of its transactions. A copy in
+          \* a relay log does not count: a restart of its mysqld discards it (the first version, which counted it,
+          \* lost a write in prs_swap: 17 states)
+          /\ SWAP_HOLDS => exec[pcur] \subseteq UNION {exec[w] : w \in new}
+          \* SWAP_DEMOTED: the demotion holds: DemotePrimary demoted a PRIMARY tablet (groupReplicationDemoted, which
+          \* FullStatus reports), whose type has not changed since, so that its sync loop does not make it serve
+          \* again, and MySQL is super_read_only. A demotion of a tablet that a crash had made a REPLICA does not
+          \* hold: its sync loop promoted it again before the swap dropped it (prs_swap_nodemoted)
+          /\ SWAP_DEMOTED => dmt[pcur] /\ sro[pcur]
+          /\ voters' = new
+          /\ vMinor' = (vMinor \/ MinorToMajor(voters, new))
+          /\ nVot' = nVot + 1
+          /\ pph' = "swap_join2"
+          /\ UNCHANGED <<pcur, pel, pprev, lockOwner, udReq>>
+       \* the checks fail: PRS undoes the demotion, as when the elect does not catch up
+       \/ /\ udReq' = [udReq EXCEPT ![pcur] = up[pcur] \/ @]
+          /\ PFree
+          /\ UNCHANGED <<voters, vMinor, nVot>>
+    /\ UNCHANGED <<vM, vT, vS, oph, ocand, oexp, otok, oborn, oreq, orep, orp, vH, vB>>
+    /\ UNCHANGED <<ovot, vNd, gone, everP, nPrs, nUndo, nSetRW, err, ran>>
+
+\* PRS waits for x, now a voter, to be ONLINE in the shard's recorded group (its join is the tablet's own JoinStart, or
+\* PRS's StartGroupReplication: the same JoinBody), then goes on with the reparent: it reads x's status, also when the
+\* join's RPC failed. Or the reparent fails. After a swap for another voter or a grow, the new list stays (x joins
+\* later). After the swap of the demoted primary, PRS stops x's join and writes the old list back (a compare-and-swap
+\* on the new one) and undoes the demotion, unless x is ONLINE in a view (its join completed: PRS goes on instead),
+\* or a view that lacks a majority of the new list would hold one of the old list (SWAP_REVERT_CHECK): then the new
+\* list stays, the old primary is not a voter and does not serve, and VTOrc moves the group primary
+\* (GroupPrimaryNotVoter). The code checks the views of the members it reads. A START that PRS stops may still
+\* complete in the model (it does not model the stop): its member is not a voter, and leaves (NLeave).
+XOnline(x) == up[x] /\ grp[x] # 0 /\ x \in view[grp[x]] /\ RecOK(grp[x], recInc)
+PSwapJoin ==
+    /\ Free
+    /\ pph \in {"swap_join", "swap_join2"}
+    /\ \/ /\ XOnline(pel)
+          /\ pph' = IF pph = "swap_join" THEN "begun" ELSE "demoted"
+          /\ UNCHANGED <<pcur, pel, pprev, lockOwner, voters, vMinor, udReq>>
+       \/ /\ pph = "swap_join"
+          /\ PFree
+          /\ UNCHANGED <<voters, vMinor, udReq>>
+       \/ /\ pph = "swap_join2"
+          /\ LET rev == (voters \ {pel}) \cup {pcur}
+                 ok  == /\ pel \in voters /\ pcur \notin voters /\ ~XOnline(pel)
+                        /\ (SWAP_REVERT_CHECK => ~MinorToMajor(voters, rev))
+             IN /\ voters' = IF ok THEN rev ELSE voters
+                /\ vMinor' = (vMinor \/ (ok /\ MinorToMajor(voters, rev)))
+                /\ udReq' = IF ok THEN [udReq EXCEPT ![pcur] = up[pcur] \/ @] ELSE udReq
+          /\ PFree
+    /\ UNCHANGED <<vM, vT, vS, oph, ocand, oexp, otok, oborn, oreq, orep, orp, vH, vB>>
+    /\ UNCHANGED <<ovot, vNd, gone, everP, vNc, err, ran>>
+
+\* SWAP_LIVE: VTOrc's swap of a voter v that is alive, for an ineligible tablet type: P1 with p # v, P3, and a
+\* majority of the new list ONLINE in p's view without v (the spare is in no view); no P2
+OSwapLive(o) ==
+    /\ Free
+    /\ SWAP_LIVE /\ VOTERS /\ VOT_MODE = "swap" /\ nVot < MaxVot
+    /\ oph[o] = "idle" /\ lockOwner = NoOrc
+    /\ \E v \in voters, p \in voters, x \in Servers \ voters :
+        /\ v # p /\ P1(p) /\ P3(x, p)
+        /\ SwapMajority(p, v, (voters \ {v}) \cup {x})
+        /\ VotDecide(o, (voters \ {v}) \cup {x})
+    /\ nVot' = nVot + 1
+    /\ UNCHANGED <<vM, vT, vS, ocand, oexp, otok, oborn, oreq, orep, orp, vH, vB>>
+    /\ UNCHANGED <<vNp, vNd, udReq, gone, everP, nPrs, nUndo, nSetRW, err, ran>>
+
 \* a host dies for good: a crash after which it never restarts
 Die(s) ==
     /\ Free
@@ -2368,8 +2488,8 @@ Step2 ==
         \/ DrSnap(s) \/ DrRead(s) \/ DrAct(s)
         \/ UdSnap(s) \/ UdRead(s) \/ UdAct(s) \/ RwSnap(s) \/ RwRead(s) \/ RwAct(s) \/ IP1(s) \/ IP2(s)
         \/ FenceDrop(s) \/ NLeave(s) \/ EnvJoin(s) \/ Die(s)
-    \/ \E o \in Orcs : OVotRead(o) \/ OVotWrite(o) \/ OSwap(o) \/ OGrow(o) \/ ORemove(o) \/ ORemoveNoGroup(o) \/ OForce(o) \/ OJoinSpare(o)
-    \/ GraceExpire \/ OAdoptUnrec \/ OMoveToVoter \/ OMoveFromDeleted \/ ODelete \/ PBegin \/ EBegin \/ PDemote \/ PWait \/ PPromote \/ PEnd \/ PAbort \/ OUndo \/ PIBegin \/ PIRecord
+    \/ \E o \in Orcs : OVotRead(o) \/ OVotWrite(o) \/ OSwap(o) \/ OGrow(o) \/ ORemove(o) \/ ORemoveNoGroup(o) \/ OForce(o) \/ OJoinSpare(o) \/ OSwapLive(o)
+    \/ GraceExpire \/ OAdoptUnrec \/ OMoveToVoter \/ OMoveFromDeleted \/ ODelete \/ PBegin \/ PBeginSwap \/ PSwapDemoted \/ PSwapJoin \/ EBegin \/ PDemote \/ PWait \/ PPromote \/ PEnd \/ PAbort \/ OUndo \/ PIBegin \/ PIRecord
 
 ----------------------------------------------------------------------------
 \* STUCK_CHECK: a state is a legitimate end state when a legitimate primary serves, or a bound is reached
@@ -2591,6 +2711,9 @@ NoStalePrimaryRecorded == ~stRec
 \* (JOIN_SPARE) witness: a spare that is not a voter is in the group of the single voter
 WitJoinSpare == ~(\E p \in voters, x \in Servers \ voters :
                     Cardinality(voters) = 1 /\ grp[x] # 0 /\ grp[x] = grp[p] /\ x \in view[grp[x]])
+\* (PRS_SWAP) witnesses: a spare is the serving primary after PRS swapped it in; PRS swapped the demoted primary out
+WitPrsSwap == ~(\E x \in Spares : x \in voters /\ ttype[x] = "P" /\ serving[x])
+WitPrsSwapDemoted == pph # "swap_join2"
 WitStaleP1 == ~\E p \in Servers : Stale(p) /\ P1(p)
 \* a voter that P2 reads as active in no view while the majority side still lists it UNREACHABLE
 WitP2Unreach == ~\E v \in voters : P2(v) /\ \E i \in Incs : v \in unr[i]

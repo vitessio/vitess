@@ -89,6 +89,8 @@ type fakeGRTablet struct {
 	executed, received string
 	// refuseBootstrap makes the tablet refuse a bootstrap definitively.
 	refuseBootstrap bool
+	// demoted is set by DemotePrimary on the primary, and reported in FullStatus.
+	demoted bool
 }
 
 // fakeGRCluster is a TabletManagerClient that simulates a shard running asynchronous
@@ -112,9 +114,11 @@ type fakeGRCluster struct {
 	incarnation   string
 	bootstrapSeqs int
 	// noQuorum makes every member report that its view has no quorum.
-	noQuorum   bool
-	calls      []string
-	violations []string
+	noQuorum bool
+	// electionInProgress makes every member report that the election of the group primary runs.
+	electionInProgress bool
+	calls              []string
+	violations         []string
 	// failOnce fails the named call ("StartGroupReplication(zone3-0000000300)") once.
 	failOnce   map[string]bool
 	schemaRows []string
@@ -284,6 +288,7 @@ func (c *fakeGRCluster) groupStatus(ft *fakeGRTablet) *replicationdatapb.GroupRe
 		}
 	}
 	gs.HasQuorum = !c.noQuorum && online > len(gs.Members)/2
+	gs.PrimaryElectionInProgress = c.electionInProgress
 	incarnation := c.incarnation
 	if ft.incarnation != "" {
 		incarnation = ft.incarnation
@@ -314,6 +319,7 @@ func (c *fakeGRCluster) FullStatus(ctx context.Context, tablet *topodatapb.Table
 		GroupReplicationEnabled:     ft.grEnabled,
 		// A tablet that knows the shard's own durability policy reports it.
 		ShardDurabilityPolicySupported: ft.shardPolicy,
+		GroupReplicationDemoted:        ft.demoted,
 	}
 	if ft.executed != "" {
 		fs.PrimaryStatus = &replicationdatapb.PrimaryStatus{Position: "MySQL56/" + ft.executed}
@@ -525,6 +531,9 @@ func (c *fakeGRCluster) GetGlobalStatusVars(ctx context.Context, tablet *topodat
 func (c *fakeGRCluster) DemotePrimary(ctx context.Context, tablet *topodatapb.Tablet, force bool) (*replicationdatapb.PrimaryStatus, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if ft, err := c.get(tablet); err == nil && ft.primary {
+		ft.demoted, ft.superReadOnly = true, true
+	}
 	return &replicationdatapb.PrimaryStatus{}, c.record(fmt.Sprintf("DemotePrimary(%s)", topoproto.TabletAliasString(tablet.Alias)))
 }
 

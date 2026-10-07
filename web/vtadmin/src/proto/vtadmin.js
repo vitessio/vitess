@@ -162687,6 +162687,7 @@ export const replicationdata = $root.replicationdata = (() => {
          * @property {replicationdata.GroupReplicationStatus.$Properties|null} [group_replication_status] FullStatus group_replication_status
          * @property {boolean|null} [group_replication_enabled] FullStatus group_replication_enabled
          * @property {boolean|null} [shard_durability_policy_supported] FullStatus shard_durability_policy_supported
+         * @property {boolean|null} [group_replication_demoted] FullStatus group_replication_demoted
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -162952,6 +162953,14 @@ export const replicationdata = $root.replicationdata = (() => {
         FullStatus.prototype.shard_durability_policy_supported = false;
 
         /**
+         * FullStatus group_replication_demoted.
+         * @member {boolean} group_replication_demoted
+         * @memberof replicationdata.FullStatus
+         * @instance
+         */
+        FullStatus.prototype.group_replication_demoted = false;
+
+        /**
          * Creates a new FullStatus instance using the specified properties.
          * @function create
          * @memberof replicationdata.FullStatus
@@ -163042,6 +163051,8 @@ export const replicationdata = $root.replicationdata = (() => {
                 writer.uint32(/* id 28, wireType 0 =*/224).bool(message.group_replication_enabled);
             if (message.shard_durability_policy_supported != null && $Object.hasOwnProperty.call(message, "shard_durability_policy_supported") && message.shard_durability_policy_supported !== false)
                 writer.uint32(/* id 29, wireType 0 =*/232).bool(message.shard_durability_policy_supported);
+            if (message.group_replication_demoted != null && $Object.hasOwnProperty.call(message, "group_replication_demoted") && message.group_replication_demoted !== false)
+                writer.uint32(/* id 30, wireType 0 =*/240).bool(message.group_replication_demoted);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -163347,6 +163358,15 @@ export const replicationdata = $root.replicationdata = (() => {
                             delete message.shard_durability_policy_supported;
                         continue;
                     }
+                case 30: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.bool())
+                            message.group_replication_demoted = value;
+                        else
+                            delete message.group_replication_demoted;
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -163496,6 +163516,9 @@ export const replicationdata = $root.replicationdata = (() => {
             if (message.shard_durability_policy_supported != null && $Object.hasOwnProperty.call(message, "shard_durability_policy_supported"))
                 if (typeof message.shard_durability_policy_supported !== "boolean")
                     return "shard_durability_policy_supported: boolean expected";
+            if (message.group_replication_demoted != null && $Object.hasOwnProperty.call(message, "group_replication_demoted"))
+                if (typeof message.group_replication_demoted !== "boolean")
+                    return "group_replication_demoted: boolean expected";
             return null;
         };
 
@@ -163673,6 +163696,9 @@ export const replicationdata = $root.replicationdata = (() => {
             if (object.shard_durability_policy_supported != null)
                 if (object.shard_durability_policy_supported)
                     message.shard_durability_policy_supported = $Boolean(object.shard_durability_policy_supported);
+            if (object.group_replication_demoted != null)
+                if (object.group_replication_demoted)
+                    message.group_replication_demoted = $Boolean(object.group_replication_demoted);
             return message;
         };
 
@@ -163728,6 +163754,7 @@ export const replicationdata = $root.replicationdata = (() => {
                 object.group_replication_status = null;
                 object.group_replication_enabled = false;
                 object.shard_durability_policy_supported = false;
+                object.group_replication_demoted = false;
             }
             if (message.server_id != null && $Object.hasOwnProperty.call(message, "server_id"))
                 object.server_id = message.server_id;
@@ -163795,6 +163822,8 @@ export const replicationdata = $root.replicationdata = (() => {
                 object.group_replication_enabled = message.group_replication_enabled;
             if (message.shard_durability_policy_supported != null && $Object.hasOwnProperty.call(message, "shard_durability_policy_supported"))
                 object.shard_durability_policy_supported = message.shard_durability_policy_supported;
+            if (message.group_replication_demoted != null && $Object.hasOwnProperty.call(message, "group_replication_demoted"))
+                object.group_replication_demoted = message.group_replication_demoted;
             return object;
         };
 

@@ -78,6 +78,9 @@ type PlannedReparentOptions struct {
 	durability policy.Durabler
 	// durabilityName is the name of durability, for the errors that name the policy.
 	durabilityName string
+	// grSwap is the change of the voters that promotes a primary-elect that is not a voter of the
+	// shard's replication group (see planGroupReplicationSwap).
+	grSwap *groupSwapPlan
 }
 
 // NewPlannedReparenter returns a new PlannedReparenter object, ready to perform
@@ -244,7 +247,15 @@ func (pr *PlannedReparenter) preflightChecks(
 		for _, info := range tabletMap {
 			tablets = append(tablets, info.Tablet)
 		}
-		if err := checkGroupReplicationPrimaryElect(ctx, pr.tmc, shardInitialized, ev.ShardInfo.GroupReplicationIncarnation, ev.ShardInfo.GroupReplicationVoters, tablets, currentPrimaryTablet, newPrimaryTabletInfo.Tablet); err != nil {
+		voters := ev.ShardInfo.GroupReplicationVoters
+		grd, isGroup := policy.AsGroupReplication(opts.durability)
+		if isGroup && len(voters) > 0 && !policy.IsVoter(voters, newPrimaryTabletInfo.Alias) {
+			// The primary-elect takes the seat of the voter of its cell, or a new seat, first.
+			opts.grSwap, err = planGroupReplicationSwap(ctx, pr, ev.ShardInfo.Shard, grd, tablets, currentPrimaryTablet, newPrimaryTabletInfo.Tablet)
+			if err != nil {
+				return true, err
+			}
+		} else if err := checkGroupReplicationPrimaryElect(ctx, pr.tmc, shardInitialized, ev.ShardInfo.GroupReplicationIncarnation, voters, tablets, currentPrimaryTablet, newPrimaryTabletInfo.Tablet); err != nil {
 			return true, err
 		}
 	}
@@ -315,17 +326,36 @@ func (pr *PlannedReparenter) performGracefulPromotion(
 		return vterrors.Wrapf(err, "failed to DemotePrimary on current primary %v: %v", currentPrimary.AliasString(), err)
 	}
 
+	// A primary-elect that is not a voter takes the seat of the demoted primary, the voter of its cell, and
+	// joins the group, while writes pause; on a failure, the old voters are written back.
+	var swapErr error
+	if swap := opts.grSwap; swap != nil && swap.afterDemote {
+		event.DispatchUpdate(ev, "swapping the primary-elect in as a voter for the demoted primary")
+		reverted, err := pr.swapAfterDemote(ctx, ev, keyspace, shard, swap, currentPrimary.Tablet, primaryStatus.Position, opts)
+		if err != nil && !reverted {
+			// The old primary is no longer a voter: the demotion is not undone (it would not serve).
+			return vterrors.Wrapf(err, "failed to swap primary-elect tablet %v in as a voter; the demoted primary %v is no longer a voter, and VTOrc moves the group primary to a voter",
+				primaryElectAliasStr, currentPrimary.AliasString())
+		}
+		swapErr = err
+	}
+
 	// Wait for the primary-elect to catch up to the position we demoted the
 	// current primary at. If it fails to catch up within WaitReplicasTimeout,
 	// we will try to roll back to the original primary before aborting.
 	waitCtx, waitCancel := context.WithTimeout(ctx, opts.WaitReplicasTimeout)
 	defer waitCancel()
 
-	waitErr := pr.tmc.WaitForPosition(waitCtx, primaryElect, primaryStatus.Position)
+	waitErr := swapErr
+	if waitErr == nil {
+		waitErr = pr.tmc.WaitForPosition(waitCtx, primaryElect, primaryStatus.Position)
+	}
 
 	// Do some wrapping of errors to get the right codes and callstacks.
 	var finalWaitErr error
 	switch {
+	case swapErr != nil:
+		finalWaitErr = vterrors.Wrapf(swapErr, "failed to swap primary-elect tablet %v in as a voter", primaryElectAliasStr)
 	case waitErr != nil:
 		finalWaitErr = vterrors.Wrapf(waitErr, "primary-elect tablet %v failed to catch up with replication %v", primaryElectAliasStr, primaryStatus.Position)
 	case ctx.Err() == context.DeadlineExceeded:
@@ -979,6 +1009,17 @@ func (pr *PlannedReparenter) reparentShardLocked(
 	}
 
 	currentPrimary := FindCurrentPrimary(tabletMap, pr.logger)
+	if swap := opts.grSwap; swap != nil && !swap.afterDemote {
+		// The primary-elect takes the seat of a voter other than the current primary, or a new seat, and
+		// joins the group, while the primary keeps serving; then the reparent goes on as for a voter.
+		if err := pr.swapInElect(ctx, ev, keyspace, shard, swap, opts); err != nil {
+			return err
+		}
+		if err := checkGroupReplicationPrimaryElect(ctx, pr.tmc, true, ev.ShardInfo.GroupReplicationIncarnation, ev.ShardInfo.GroupReplicationVoters,
+			swap.tablets, currentPrimary.Tablet, ev.NewPrimary); err != nil {
+			return vterrors.Wrapf(err, "swapped primary-elect %v in as a voter, but cannot promote it", topoproto.TabletAliasString(ev.NewPrimary.Alias))
+		}
+	}
 	reparentJournalPos := ""
 	// promoteReplicaRequired is a boolean that is used to store whether we need to call
 	// `PromoteReplica` when we reparent the tablets. This is required to be done when we are doing

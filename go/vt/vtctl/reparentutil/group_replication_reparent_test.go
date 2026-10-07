@@ -264,8 +264,9 @@ func TestPlannedReparentGroupReplicationPreflight(t *testing.T) {
 	}
 }
 
-// TestPlannedReparentGroupReplicationRequiresVoter checks that PRS refuses to promote a
-// tablet that is not a listed voter, and names the voters, before it changes anything.
+// TestPlannedReparentGroupReplicationRequiresVoter checks that PRS does not swap a tablet that is not a voter in
+// while the shard record lists no group incarnation (VTOrc has not recorded the group yet), before it changes
+// anything.
 func TestPlannedReparentGroupReplicationRequiresVoter(t *testing.T) {
 	c, ts := newFakeGRCluster(t, "group_replication_cross_cell", migrationTestShard()...)
 	c.formGroup(t, "group_replication_cross_cell")
@@ -278,7 +279,7 @@ func TestPlannedReparentGroupReplicationRequiresVoter(t *testing.T) {
 	})
 	require.Error(t, err)
 	assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
-	require.ErrorContains(t, err, "only voters can be promoted (voters: zone1-0000000100, zone2-0000000200, zone3-0000000300)")
+	require.ErrorContains(t, err, "primary-elect zone1-0000000101 is not a voter, and the shard record lists no group incarnation")
 	assert.Empty(t, c.mutatingCalls())
 }
 
