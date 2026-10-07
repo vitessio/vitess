@@ -17,6 +17,7 @@ limitations under the License.
 package tabletmanager
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -64,47 +65,80 @@ func peerPrimary(uid int, viewID string) *replicationdatapb.FullStatus {
 	}
 }
 
+// peerSecondary returns the FullStatus of cell1-<uid> as an ONLINE secondary, with quorum, of a view of
+// the recorded incarnation with the given id, whose primary is cell1-<primary>.
+func peerSecondary(uid, primary int, viewID string) *replicationdatapb.FullStatus {
+	return &replicationdatapb.FullStatus{
+		ServerUuid: testServerUUID(uid),
+		GroupReplicationStatus: withViewID(groupStatus(testServerUUID(uid),
+			groupMember(testServerUUID(primary), mysql.GroupMemberStateOnline, mysql.GroupMemberRolePrimary),
+			groupMember(testServerUUID(uid), mysql.GroupMemberStateOnline, mysql.GroupMemberRoleSecondary)), viewID),
+	}
+}
+
 // TestGroupReplicationSyncDoesNotPromoteDeposedPrimary reproduces FLAG 1 of the soak: a primary that
 // was paused (SIGSTOP) while the group expelled it and elected another member resumes with its stale
 // view, in which it is still the ONLINE primary, with quorum, of the three voters, in the recorded
 // incarnation, until MySQL learns of its expulsion. Its tablet, which stepped down when the shard
 // record named the new primary, promoted itself again on that view and wrote a newer primary term to
 // the shard record, and the legitimate primary's tablet then stepped down: the two flipped the shard
-// record for up to about 3s. The tablet now asks the recorded primary first, when its own view holds
-// that primary's MySQL ONLINE: a recorded primary that answers as the ONLINE primary, with quorum, of
-// a newer view of the same incarnation makes the tablet stale, and it stays as it is.
+// record for up to about 3s. The tablet now asks every other tablet of the shard first: one that
+// reports an active member of the same incarnation, with quorum, whose view has another ONLINE
+// primary, keeps it as it is (the TLA+ model's PROMOTE_CHECK_ALL).
 func TestGroupReplicationSyncDoesNotPromoteDeposedPrimary(t *testing.T) {
 	for _, tt := range []struct {
 		name string
-		// peer is what the recorded primary cell1-2 reports; nil means that it does not answer.
-		peer        *replicationdatapb.FullStatus
-		wantPrimary bool
+		// recorded is the shard record's primary.
+		recorded uint32
+		// peers are what cell1-2 and cell1-3 report; nil means that the tablet does not answer.
+		peer2, peer3 *replicationdatapb.FullStatus
+		wantPrimary  bool
 	}{{
-		name: "the recorded primary answers as the primary of a newer view: the tablet is stale, and stays REPLICA",
-		peer: peerPrimary(2, "1780000001:6"),
+		name:     "the recorded primary answers as the primary of the group: the tablet stays REPLICA",
+		recorded: 2,
+		peer2:    peerPrimary(2, "1780000001:6"),
+		peer3:    peerSecondary(3, 2, "1780000001:6"),
 	}, {
-		name:        "the recorded primary does not answer: the tablet is promoted, as in a failover",
+		// The narrow check that asked only the recorded primary failed here (flag1_fixed_faults): the
+		// shard record names cell1-3, a REPLICA, and cell1-2 is the primary of the newer view.
+		name:     "the recorded primary is a replica, and another tablet is the primary of the group: the tablet stays REPLICA",
+		recorded: 3,
+		peer2:    peerPrimary(2, "1780000001:6"),
+		peer3:    &replicationdatapb.FullStatus{ServerUuid: testServerUUID(3), GroupReplicationStatus: withViewID(groupStatus(testServerUUID(3)), "")},
+	}, {
+		name:        "no other tablet answers: the tablet is promoted, as in a failover",
+		recorded:    2,
 		wantPrimary: true,
 	}, {
-		name: "the recorded primary answers, but is no longer a group primary: the tablet is promoted",
-		peer: &replicationdatapb.FullStatus{ServerUuid: testServerUUID(2), GroupReplicationStatus: withViewID(groupStatus(testServerUUID(2),
+		name:     "the other tablets answer, but none is an active member: the tablet is promoted",
+		recorded: 2,
+		peer2: &replicationdatapb.FullStatus{ServerUuid: testServerUUID(2), GroupReplicationStatus: withViewID(groupStatus(testServerUUID(2),
 			groupMember(testServerUUID(2), mysql.GroupMemberStateError, "")), "1780000001:4")},
 		wantPrimary: true,
 	}, {
-		name:        "the recorded primary answers as the primary of an older view: the tablet's view is the newer one, and it is promoted",
-		peer:        peerPrimary(2, "1780000001:4"),
+		name:        "the other tablets report this member as their primary: the tablet is promoted",
+		recorded:    2,
+		peer2:       peerSecondary(2, 1, "1780000001:5"),
+		peer3:       peerSecondary(3, 1, "1780000001:5"),
 		wantPrimary: true,
 	}} {
 		t.Run(tt.name, func(t *testing.T) {
 			withGroupReplication(t)
 			tm, fmd, peers, ts := newLegitimacyTestTM(t)
-			recordShardPrimary(t, ts, 2)
-			if tt.peer != nil {
-				peers.set(2, tt.peer)
-			} else {
-				peers.mu.Lock()
-				delete(peers.statuses, "cell1-0000000002")
-				peers.mu.Unlock()
+			recordShardPrimary(t, ts, tt.recorded)
+			// The tablet learned the voters' server_uuids before, as its sync loop does: legitimacy does
+			// not depend on whether they answer now.
+			tm.groupReplicationPeers.setServerUUID("cell1-0000000002", testServerUUID(2))
+			tm.groupReplicationPeers.setServerUUID("cell1-0000000003", testServerUUID(3))
+			peers.mu.Lock()
+			delete(peers.statuses, "cell1-0000000002")
+			delete(peers.statuses, "cell1-0000000003")
+			peers.mu.Unlock()
+			if tt.peer2 != nil {
+				peers.set(2, tt.peer2)
+			}
+			if tt.peer3 != nil {
+				peers.set(3, tt.peer3)
 			}
 			fmd.SetGroupReplicationStatus(staleView())
 			fmd.SuperReadOnly.Store(true)
@@ -119,24 +153,54 @@ func TestGroupReplicationSyncDoesNotPromoteDeposedPrimary(t *testing.T) {
 			assert.True(t, fmd.SuperReadOnly.Load(), "MySQL must stay super_read_only")
 			si, err := ts.GetShard(t.Context(), "ks", "0")
 			require.NoError(t, err)
-			assert.Equal(t, "cell1-0000000002", topoproto.TabletAliasString(si.PrimaryAlias), "the shard record keeps the legitimate primary")
+			assert.Equal(t, fmt.Sprintf("cell1-%010d", tt.recorded), topoproto.TabletAliasString(si.PrimaryAlias), "the shard record is not changed")
 		})
 	}
 }
 
-// TestGroupReplicationSyncPromotesWithoutAskingExpelledPrimary checks that the check of the recorded
-// primary does not delay a failover: the recorded primary, frozen, is in no view of the new primary,
-// whose tablet is promoted without asking it.
-func TestGroupReplicationSyncPromotesWithoutAskingExpelledPrimary(t *testing.T) {
+// TestGroupReplicationSyncLegitimatePrimaryWaitsForDeposedMember checks the price of the check: while
+// a deposed member still reports itself the primary of its stale view, with quorum, the legitimate
+// primary's tablet is not promoted either. It is once the deposed member learned of its expulsion.
+func TestGroupReplicationSyncLegitimatePrimaryWaitsForDeposedMember(t *testing.T) {
+	withGroupReplication(t)
+	tm, fmd, peers, ts := newLegitimacyTestTM(t)
+	recordShardPrimary(t, ts, 2)
+	// Tablet 1's MySQL is the legitimate primary of the newer view, with voter 3; cell1-2's MySQL,
+	// the old primary, still reports its stale view of the three voters.
+	fmd.SetGroupReplicationStatus(withViewID(groupStatus(testServerUUID(1),
+		groupMember(testServerUUID(1), mysql.GroupMemberStateOnline, mysql.GroupMemberRolePrimary),
+		groupMember(testServerUUID(3), mysql.GroupMemberStateOnline, mysql.GroupMemberRoleSecondary)), "1780000001:6"))
+	peers.set(2, &replicationdatapb.FullStatus{ServerUuid: testServerUUID(2), GroupReplicationStatus: withViewID(groupStatus(testServerUUID(2),
+		groupMember(testServerUUID(1), mysql.GroupMemberStateOnline, mysql.GroupMemberRoleSecondary),
+		groupMember(testServerUUID(2), mysql.GroupMemberStateOnline, mysql.GroupMemberRolePrimary),
+		groupMember(testServerUUID(3), mysql.GroupMemberStateOnline, mysql.GroupMemberRoleSecondary)), "1780000001:5")})
+	peers.set(3, peerSecondary(3, 1, "1780000001:6"))
+	s := newGroupReplicationSync(tm)
+
+	s.reconcile(t.Context())
+	assert.Equal(t, topodatapb.TabletType_REPLICA, tm.Tablet().Type, "the legitimate primary waits while the deposed member claims its stale view")
+
+	// The deposed member learned of its expulsion.
+	peers.set(2, &replicationdatapb.FullStatus{ServerUuid: testServerUUID(2), GroupReplicationStatus: withViewID(groupStatus(testServerUUID(2),
+		groupMember(testServerUUID(2), mysql.GroupMemberStateError, "")), "")})
+	s.reconcile(t.Context())
+	assert.Equal(t, topodatapb.TabletType_PRIMARY, tm.Tablet().Type)
+}
+
+// TestGroupReplicationSyncPromotionWaitsBoundedForFrozenTablet checks that a tablet that does not answer,
+// such as the frozen old primary of a failover, delays the promotion of the new primary by at most
+// groupReplicationPeerTimeout, and does not prevent it.
+func TestGroupReplicationSyncPromotionWaitsBoundedForFrozenTablet(t *testing.T) {
 	withGroupReplication(t)
 	oldPeerTimeout := groupReplicationPeerTimeout
-	groupReplicationPeerTimeout = 10 * time.Second
+	groupReplicationPeerTimeout = time.Second
 	t.Cleanup(func() { groupReplicationPeerTimeout = oldPeerTimeout })
 	tm, fmd, peers, ts := newLegitimacyTestTM(t)
 	recordShardPrimary(t, ts, 2)
 	peers.mu.Lock()
 	peers.frozen = map[string]bool{"cell1-0000000002": true}
 	peers.mu.Unlock()
+	peers.set(3, peerSecondary(3, 1, "1780000001:6"))
 	fmd.SetGroupReplicationStatus(withViewID(groupStatus(testServerUUID(1),
 		groupMember(testServerUUID(1), mysql.GroupMemberStateOnline, mysql.GroupMemberRolePrimary),
 		groupMember(testServerUUID(3), mysql.GroupMemberStateOnline, mysql.GroupMemberRoleSecondary)), "1780000001:6"))
@@ -144,7 +208,7 @@ func TestGroupReplicationSyncPromotesWithoutAskingExpelledPrimary(t *testing.T) 
 	start := time.Now()
 	newGroupReplicationSync(tm).reconcile(t.Context())
 	assert.Equal(t, topodatapb.TabletType_PRIMARY, tm.Tablet().Type)
-	assert.Less(t, time.Since(start), 5*time.Second, "the promotion must not wait for the expelled primary")
+	assert.Less(t, time.Since(start), groupReplicationPeerTimeout+5*time.Second, "the promotion waits for the frozen tablet at most groupReplicationPeerTimeout")
 }
 
 // TestGroupReplicationSyncDeposedPrimaryDoesNotServeAgain checks the same for a PRIMARY tablet that
