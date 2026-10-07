@@ -42,6 +42,9 @@ func TestSetExprsRejectUnsafeCharsets(t *testing.T) {
 		"set names utf8mb4",
 		// the global scope is the operator's domain
 		"set @@global.character_set_client = 'gbk'",
+		// MySQL also accepts a collation ID
+		"set collation_connection = 255",
+		"set character_set_client = 33",
 	}
 	rejected := []string{
 		"set character_set_client = 'gbk'",
@@ -56,6 +59,12 @@ func TestSetExprsRejectUnsafeCharsets(t *testing.T) {
 		"set names default",
 		"set character_set_client = @charset",
 		"set character_set_client = null",
+		// a collation ID of an unsafe character set, 0, one MySQL does not
+		// define, and one out of range
+		"set collation_connection = 95",
+		"set collation_connection = 0",
+		"set collation_connection = 100",
+		"set collation_connection = 70000",
 	}
 
 	// SET CHARACTER SET sets character_set_connection to the database's default
