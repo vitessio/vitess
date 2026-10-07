@@ -4350,8 +4350,16 @@ type EmergencyReparentShardRequest struct {
 	// MySQL GTID shards only. On any other shard, the reparent fails only after it
 	// stops replication and demotes a reachable primary. Empty means no requirement.
 	RequiredPosition string `protobuf:"bytes,10,opt,name=required_position,json=requiredPosition,proto3" json:"required_position,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// GroupReplicationForceNewGroup applies to a shard whose durability policy uses
+	// MySQL Group Replication, once its group has lost its majority and its members
+	// have left it. It drops the voters that do not answer from the shard record,
+	// and bootstraps a new group from the voters that answer. Transactions that only
+	// the dropped voters held are lost. The operator must make sure that the dropped
+	// voters are down: one that still runs, cut off from the vtctld and from the
+	// topology server, keeps serving its clients.
+	GroupReplicationForceNewGroup bool `protobuf:"varint,11,opt,name=group_replication_force_new_group,json=groupReplicationForceNewGroup,proto3" json:"group_replication_force_new_group,omitempty"`
+	unknownFields                 protoimpl.UnknownFields
+	sizeCache                     protoimpl.SizeCache
 }
 
 func (x *EmergencyReparentShardRequest) Reset() {
@@ -4452,6 +4460,13 @@ func (x *EmergencyReparentShardRequest) GetRequiredPosition() string {
 		return x.RequiredPosition
 	}
 	return ""
+}
+
+func (x *EmergencyReparentShardRequest) GetGroupReplicationForceNewGroup() bool {
+	if x != nil {
+		return x.GroupReplicationForceNewGroup
+	}
+	return false
 }
 
 type EmergencyReparentShardResponse struct {
@@ -18181,7 +18196,7 @@ const file_vtctldata_proto_rawDesc = "" +
 	"\x14DeleteTabletsRequest\x12<\n" +
 	"\x0etablet_aliases\x18\x01 \x03(\v2\x15.topodata.TabletAliasR\rtabletAliases\x12#\n" +
 	"\rallow_primary\x18\x02 \x01(\bR\fallowPrimary\"\x17\n" +
-	"\x15DeleteTabletsResponse\"\xaf\x04\n" +
+	"\x15DeleteTabletsResponse\"\xf9\x04\n" +
 	"\x1dEmergencyReparentShardRequest\x12\x1a\n" +
 	"\bkeyspace\x18\x01 \x01(\tR\bkeyspace\x12\x14\n" +
 	"\x05shard\x18\x02 \x01(\tR\x05shard\x126\n" +
@@ -18194,7 +18209,8 @@ const file_vtctldata_proto_rawDesc = "" +
 	"\x10expected_primary\x18\b \x01(\v2\x15.topodata.TabletAliasR\x0fexpectedPrimary\x12=\n" +
 	"\x1ballow_split_brain_promotion\x18\t \x01(\bR\x18allowSplitBrainPromotion\x12+\n" +
 	"\x11required_position\x18\n" +
-	" \x01(\tR\x10requiredPosition\"\xbc\x01\n" +
+	" \x01(\tR\x10requiredPosition\x12H\n" +
+	"!group_replication_force_new_group\x18\v \x01(\bR\x1dgroupReplicationForceNewGroup\"\xbc\x01\n" +
 	"\x1eEmergencyReparentShardResponse\x12\x1a\n" +
 	"\bkeyspace\x18\x01 \x01(\tR\bkeyspace\x12\x14\n" +
 	"\x05shard\x18\x02 \x01(\tR\x05shard\x12@\n" +

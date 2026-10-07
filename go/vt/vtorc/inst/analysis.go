@@ -107,7 +107,9 @@ const (
 	// recovery.
 	GroupVoterRecordDeleted AnalysisCode = "GroupVoterRecordDeleted"
 	// GroupQuorumLost describes a shard whose group has active members, none of which has quorum.
-	// The group cannot commit. VTOrc does not act; forcing a new membership is an operator decision.
+	// The group cannot commit. VTOrc does not act: once the members left the group, an operator who
+	// made sure the other voters are down can force a new group from the voters that answer
+	// (EmergencyReparentShard --group-replication-force-new-group), losing what only the others held.
 	GroupQuorumLost AnalysisCode = "GroupQuorumLost"
 	// GroupCellMajority describes a shard with the group_replication_cross_cell durability policy
 	// whose ONLINE group members are in the majority in a single cell.

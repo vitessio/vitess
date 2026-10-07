@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
@@ -496,4 +497,29 @@ func CheckGroupReplicationCapabilities(ctx context.Context, tmc tmclient.TabletM
 func groupReplicationNotEnabledError(alias string) error {
 	return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
 		"tablet %v does not run Group Replication (--enable-group-replication): as the primary, it would serve without the serving invariant of the shard's replication group", alias)
+}
+
+// GroupMemberGTIDSets returns the transactions that a member executed, and those it executed or received
+// from its group.
+func GroupMemberGTIDSets(status *replicationdatapb.FullStatus) (executed, all replication.GTIDSet, err error) {
+	if status.GetPrimaryStatus() == nil {
+		return nil, nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "the tablet did not report its executed GTID set")
+	}
+	position, err := replication.DecodePosition(status.GetPrimaryStatus().GetPosition())
+	if err != nil {
+		return nil, nil, err
+	}
+	executed = position.GTIDSet
+	if executed == nil {
+		executed = replication.Mysql56GTIDSet{}
+	}
+	all = executed
+	if received := status.GetGroupReplicationStatus().GetReceivedTransactionSet(); received != "" {
+		receivedSet, err := replication.ParseMysql56GTIDSet(received)
+		if err != nil {
+			return nil, nil, err
+		}
+		all = executed.Union(receivedSet)
+	}
+	return executed, all, nil
 }

@@ -73146,6 +73146,9 @@ export namespace vtctldata {
         /** EmergencyReparentShardRequest required_position. */
         required_position: string;
 
+        /** EmergencyReparentShardRequest group_replication_force_new_group. */
+        group_replication_force_new_group: boolean;
+
         /**
          * Creates a new EmergencyReparentShardRequest instance using the specified properties.
          * @param [properties] Properties to set
@@ -73259,6 +73262,9 @@ export namespace vtctldata {
 
             /** EmergencyReparentShardRequest required_position */
             required_position?: (string|null);
+
+            /** EmergencyReparentShardRequest group_replication_force_new_group */
+            group_replication_force_new_group?: (boolean|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];

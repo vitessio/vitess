@@ -767,6 +767,15 @@ message EmergencyReparentShardRequest {
   // MySQL GTID shards only. On any other shard, the reparent fails only after it
   // stops replication and demotes a reachable primary. Empty means no requirement.
   string required_position = 10;
+
+  // GroupReplicationForceNewGroup applies to a shard whose durability policy uses
+  // MySQL Group Replication, once its group has lost its majority and its members
+  // have left it. It drops the voters that do not answer from the shard record,
+  // and bootstraps a new group from the voters that answer. Transactions that only
+  // the dropped voters held are lost. The operator must make sure that the dropped
+  // voters are down: one that still runs, cut off from the vtctld and from the
+  // topology server, keeps serving its clients.
+  bool group_replication_force_new_group = 11;
 }
 
 message EmergencyReparentShardResponse {
