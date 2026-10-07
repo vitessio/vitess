@@ -547,6 +547,19 @@ var (
 		input:  "select timestamp'2012-12-31 11:30:45'",
 		output: "select timestamp'2012-12-31 11:30:45' from dual",
 	}, {
+		// a quote in a temporal literal is escaped, so it cannot close the literal;
+		// the normalizer rejects these values as invalid temporal values
+		input:                `select date '2020-01-01\' union select user() -- '`,
+		output:               `select date'2020-01-01\' union select user() -- ' from dual`,
+		ignoreNormalizerTest: true,
+	}, {
+		input:                "select time '12:34:56'' union select user() -- '",
+		output:               `select time'12:34:56\' union select user() -- ' from dual`,
+		ignoreNormalizerTest: true,
+	}, {
+		input:  `set @@optimizer_switch = timestamp '2012-12-31 11:30:45\\'`,
+		output: `set @@optimizer_switch = timestamp'2012-12-31 11:30:45\\'`,
+	}, {
 		input:  "select * from information_schema.columns",
 		output: "select * from information_schema.`columns`",
 	}, {
