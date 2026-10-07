@@ -62,7 +62,10 @@ func registerTLSReloadFlags(fs *pflag.FlagSet) {
 // startClientTLSReload waits for a TLS client of the process to load
 // its files, and from then on reloads them on every SIGHUP, and every
 // interval if it is positive, until the process terminates. SIGHUP is
-// left alone in a process that has no TLS client.
+// left alone in a process that has no TLS client. A cached ServerConfig
+// load arms the reload as well; its servers read their files anew, so
+// what a reload updates for them is only the cache that ServerConfig
+// serves from.
 func startClientTLSReload(interval time.Duration) {
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})

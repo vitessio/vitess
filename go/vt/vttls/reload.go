@@ -50,8 +50,10 @@ var (
 	// when last seen valid under that CA.
 	watchedCRLs sync.Map
 	// lastValidCRLs maps the CRL files ClientConfig used to the CRLs
-	// last loaded from them, and staleCRLWarnings holds the files and
-	// errors that it held those CRLs against peers for.
+	// last loaded from them, and staleCRLWarnings holds each file
+	// whose CRLs it held against peers for, with the error it warned
+	// about then: the warning repeats when the failure changes, or
+	// when the file breaks again after having worked.
 	lastValidCRLs, staleCRLWarnings sync.Map
 
 	reloadMu              sync.Mutex
@@ -67,7 +69,11 @@ var (
 
 // CachedFilesInUse returns a channel that is closed once ClientConfig
 // or ServerConfig first loads a file, from when on ReloadCachedFiles
-// has files to read again.
+// has files to read again. A ServerConfig load arms it too, rather
+// than leaving a config built with it holding files that nothing
+// reloads: the Vitess servers read their files anew through
+// ReadServerConfig, so what a reload then updates is only the cache
+// that ServerConfig, kept for its other callers, serves from.
 func CachedFilesInUse() <-chan struct{} {
 	return cachedFilesInUse
 }
@@ -273,7 +279,13 @@ func caPoolEntry(ca string) entryID { return entryID("CA pool " + ca) }
 func caCertificatesEntry(ca string) entryID {
 	return entryID("CA certificates " + ca)
 }
-func crlEntry(w crlWatch) entryID { return entryID(fmt.Sprintf("CRL %s under CA %s", w.crl, w.ca)) }
+
+func crlEntry(w crlWatch) entryID {
+	if w.ca == "" {
+		return entryID("CRL " + w.crl)
+	}
+	return entryID("CRL " + w.crl + " under CA " + w.ca)
+}
 
 // fileSets maps the entries a configuration was built from, joined, to
 // those entries, and fileSetsRegistered counts them. See
@@ -478,6 +490,7 @@ func clientCRLChecker(crl, ca string) (*crlChecker, error) {
 			if checker, err = newCRLCheckerFrom(crls, issuers); err == nil {
 				lastValidCRLs.Store(crl, crls)
 				watchCRL(crlWatch{crl: crl, ca: ca}, sha256.Sum256(body))
+				staleCRLWarnings.Delete(crl)
 				return checker, nil
 			}
 		}
@@ -490,7 +503,8 @@ func clientCRLChecker(crl, ca string) (*crlChecker, error) {
 	if lastErr != nil {
 		return nil, err
 	}
-	if _, warned := staleCRLWarnings.LoadOrStore(crl+"\x00"+err.Error(), struct{}{}); !warned {
+	if warned, warnedFor := staleCRLWarnings.Load(crl); !warnedFor || warned.(string) != err.Error() {
+		staleCRLWarnings.Store(crl, err.Error())
 		log.Warn(fmt.Sprintf("Cannot use the CRL file %s, so the CRLs last loaded from it stay in use: %v", crl, err))
 	}
 	return checker, nil
