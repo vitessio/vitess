@@ -624,9 +624,6 @@ func (te *TxEngine) stopTransactionWatcher() {
 	te.ticks.Stop()
 }
 
-// validateSettings validates the pre-queries of a reservation, which are
-// executed directly on the reserved connection, see
-// planbuilder.ValidateSettingsSQLMode.
 // rewriteDoubleSlashComments returns queries with each "//" comment rewritten
 // to "#/", for queries that are executed as written, so that MySQL skips the
 // comments that Vitess skips. It copies queries only if one of them changes.
@@ -648,6 +645,9 @@ func rewriteDoubleSlashComments(parser *sqlparser.Parser, queries []string) []st
 	return rewritten
 }
 
+// validateSettings validates the pre-queries of a reservation, which are
+// executed directly on the reserved connection, see
+// planbuilder.ValidateSettingsSQLMode.
 func (te *TxEngine) validateSettings(preQueries []string) error {
 	parser := te.env.Environment().Parser()
 	cfg := te.env.Config()
