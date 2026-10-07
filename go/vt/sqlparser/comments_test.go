@@ -17,12 +17,8 @@ limitations under the License.
 package sqlparser
 
 import (
-<<<<<<< HEAD
 	"fmt"
-||||||| parent of 5a40693878 (sqlparser: rewrite `//` comments to `#/` before statement text reaches MySQL (#21410))
-=======
 	"strings"
->>>>>>> 5a40693878 (sqlparser: rewrite `//` comments to `#/` before statement text reaches MySQL (#21410))
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -227,7 +223,6 @@ a`,
 	}
 }
 
-<<<<<<< HEAD
 func TestExtractMysqlComment(t *testing.T) {
 	var testCases = []struct {
 		input, outSQL, outVersion string
@@ -255,8 +250,9 @@ func TestExtractMysqlComment(t *testing.T) {
 		if gotSQL != testCase.outSQL {
 			t.Errorf("test input: '%s', got SQL\n%+v, want\n%+v", testCase.input, gotSQL, testCase.outSQL)
 		}
-||||||| parent of 5a40693878 (sqlparser: rewrite `//` comments to `#/` before statement text reaches MySQL (#21410))
-=======
+	}
+}
+
 func TestRewriteDoubleSlashComments(t *testing.T) {
 	testCases := []struct {
 		input  string
@@ -388,7 +384,6 @@ func TestRewriteDoubleSlashCommentsLeavesNoComment(t *testing.T) {
 		got, gotErr := parser.SplitStatementToPieces(rewritten)
 		assert.Equal(t, wantErr, gotErr, input)
 		assert.Len(t, got, len(want), input)
->>>>>>> 5a40693878 (sqlparser: rewrite `//` comments to `#/` before statement text reaches MySQL (#21410))
 	}
 }
 

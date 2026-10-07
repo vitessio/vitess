@@ -954,9 +954,7 @@ func TestTabletServerRewritesDoubleSlashComments(t *testing.T) {
 	db.AddRejectedQuery("repair table test_table //*x*/ , t2", errRejected)
 
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
-	_, err := tsv.Execute(ctx, nil, &target, "repair table test_table //*x*/ , t2", nil, 0, 0, nil)
-	require.NoError(t, err)
-	err = tsv.StreamExecute(ctx, nil, &target, "repair table test_table //*x*/ , t2", nil, 0, 0, nil, func(*sqltypes.Result) error { return nil })
+	_, err := tsv.Execute(ctx, &target, "repair table test_table //*x*/ , t2", nil, 0, 0, nil)
 	require.NoError(t, err)
 }
 
@@ -977,9 +975,11 @@ func TestTabletServerRewritesDoubleSlashCommentsInSetupQueries(t *testing.T) {
 	db.AddQuery("savepoint a #/ x", &sqltypes.Result{})
 	db.AddRejectedQuery("savepoint a // x", errRejected)
 	db.AddQuery("select 1 from dual limit 10001", &sqltypes.Result{})
-	// A temporary table needs a reserved connection, which is set up with
-	// the settings as written rather than through the settings pool.
+	// A temporary table and a lock function need a reserved connection, which
+	// is set up with the settings as written rather than through the settings
+	// pool.
 	db.AddQueryPattern("create temporary table .*", &sqltypes.Result{})
+	db.AddQueryPattern("select get_lock.*", &sqltypes.Result{})
 	db.AddQuery("select @@session.wait_timeout", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("@@session.wait_timeout", "int64"),
 		"28800",
@@ -989,16 +989,16 @@ func TestTabletServerRewritesDoubleSlashCommentsInSetupQueries(t *testing.T) {
 	settings := []string{"set sql_mode = '' // x"}
 	postBeginQueries := []string{"savepoint a // x"}
 
-	state, _, err := tsv.ReserveExecute(ctx, nil, &target, settings, "create temporary table temp_t(id int)", nil, 0, nil)
+	state, _, err := tsv.ReserveExecute(ctx, &target, settings, "create temporary table temp_t(id int)", nil, 0, nil)
 	require.NoError(t, err)
 	require.NoError(t, tsv.Release(ctx, &target, 0, state.ReservedID))
 
-	txState, _, err := tsv.BeginExecute(ctx, nil, &target, postBeginQueries, "select 1", nil, 0, nil)
+	txState, _, err := tsv.BeginExecute(ctx, &target, postBeginQueries, "select 1", nil, 0, nil)
 	require.NoError(t, err)
 	_, err = tsv.Rollback(ctx, &target, txState.TransactionID)
 	require.NoError(t, err)
 
-	reservedTxState, _, err := tsv.ReserveBeginExecute(ctx, nil, &target, settings, postBeginQueries, "create temporary table temp_t(id int)", nil, nil)
+	reservedTxState, _, err := tsv.ReserveBeginExecute(ctx, &target, settings, postBeginQueries, "select get_lock('l', 1) from dual", nil, nil)
 	require.NoError(t, err)
 	require.NoError(t, tsv.Release(ctx, &target, reservedTxState.TransactionID, reservedTxState.ReservedID))
 
