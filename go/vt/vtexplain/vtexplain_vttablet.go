@@ -551,7 +551,7 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 	// sqlmode.NeutralizeSessionQuery) is connection state, not query execution: it is
 	// answered without being recorded, so the explain output only shows the queries the
 	// statement under explanation caused.
-	if strings.EqualFold(query, sqlmode.NeutralizeSessionQuery) {
+	if sqlmode.IsSessionSetupQuery(query) {
 		return callback(&sqltypes.Result{})
 	}
 

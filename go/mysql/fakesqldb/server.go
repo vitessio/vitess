@@ -408,10 +408,16 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 	// ordered expectations nor with per-test query registration. It counts in
 	// GetQueryCalledNum so coverage tests can assert it ran, but stays out of the
 	// query log, which tests use to assert the queries they are actually about.
-	if strings.EqualFold(query, sqlmode.NeutralizeSessionQuery) {
+	if sqlmode.IsSessionSetupQuery(query) {
 		db.mu.Lock()
 		db.queryCalled[strings.ToLower(query)]++
+		// A test can still reject a setup statement, to stand in for a server
+		// that does not accept it.
+		err, rejected := db.rejectedData[strings.ToLower(query)]
 		db.mu.Unlock()
+		if rejected {
+			return err
+		}
 		return callback(&sqltypes.Result{})
 	}
 
