@@ -22,6 +22,7 @@ import (
 
 	"vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -166,7 +167,7 @@ type RPCTM interface {
 
 	// Backup / restore related methods
 
-	Backup(ctx context.Context, logger logutil.Logger, request *tabletmanagerdatapb.BackupRequest) error
+	Backup(ctx context.Context, logger logutil.Logger, request *tabletmanagerdatapb.BackupRequest) (mysqlctl.BackupOutcome, error)
 
 	RestoreFromBackup(ctx context.Context, logger logutil.Logger, request *tabletmanagerdatapb.RestoreFromBackupRequest) error
 

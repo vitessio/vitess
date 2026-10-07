@@ -16,6 +16,7 @@
         - [VTOrc `--cell` flag is now required](#vtorc-cell-required)
         - [`BackupHandle` interface gains `Wait()` method](#backup-handle-wait-method)
         - [VTOrc: `--cells-to-watch` removed in favor of `--cells-no-recovery`](#vtorc-cells-no-recovery)
+        - [`TabletManagerClient.Backup` now returns a manifest/status stream](#tmclient-backup-stream)
     - **[Deprecations](#deprecations)**
         - [CLI Flags](#deprecated-cli-flags)
         - [Legacy streaming-path plan types in query rules](#deprecated-selectstream-rule-plan)
@@ -67,6 +68,7 @@
         - [Slow clean mysqld shutdowns no longer fail backups](#backup-mysqld-shutdown-timeout)
         - [Parallel S3 downloads during restore](#vttablet-s3-parallel-downloads)
         - [lz4 engine: library upgrade and `--compression-level` mapping](#backup-lz4-v4)
+        - [Backup commands surface the MANIFEST and empty-incremental status](#backup-manifest-output)
     - **[VTAdmin](#minor-changes-vtadmin)**
         - [vtadmin-web updated to node v22.23.2 (LTS)](#vtadmin-updated-node)
     - **[General](#minor-changes-general)**
@@ -179,6 +181,18 @@ The replacement, `--cells-no-recovery`, is a deny-list for *recovery actions onl
 **Migration:** drop `--cells-to-watch` from your vtorc invocation. If you previously used it for true cell-isolated deployments, the new flag is not a like-for-like replacement (vtorc will now discover and watch all cells); discuss your scenario in the linked issue if the new flag does not cover your needs. If you are upgrading from v24.0.0 specifically and have `--cells-to-watch` in your vtorc flags, note that this flag was already removed in v24.0.1; replace it with `--cells-no-recovery` before upgrading.
 
 See [#20021](https://github.com/vitessio/vitess/issues/20021) for details.
+
+#### <a id="tmclient-backup-stream"/>`TabletManagerClient.Backup` now returns a manifest/status stream</a>
+
+The `tmclient.TabletManagerClient.Backup` method now returns a `tmclient.BackupStream` instead of a `logutil.EventStream`. Each message on the stream is either a log-event message (as before) or a terminal message carrying the backup's raw MANIFEST JSON, its `backup_name`, and an outcome `Status` (`USABLE` or `EMPTY`). Correspondingly, the internal `RPCTM.Backup` method and `mysqlctl.Backup` now return `(mysqlctl.BackupOutcome, error)` instead of just `error`; `BackupOutcome` carries the backup's `Name`, `Manifest` and `Result`.
+
+The wire protocol is backward and forward compatible: the new `BackupResponse.manifest`, `BackupResponse.status`, and `BackupResponse.backup_name` proto fields are additive, and an older server that never sets them leaves `status` at `STATUS_UNSPECIFIED`, which callers treat as "unknown / unchanged behaviour".
+
+The `BackupEngine` interface is **not** changed. Engines can optionally report the MANIFEST they write by setting the new `BackupParams.ManifestOut` pointer, which lets `mysqlctl.Backup` skip reading the manifest back from storage (a `ListBackups` plus a `GET`, since the write handle returned by `StartBackup` cannot be read from). All in-tree engines do this; engines that do not simply fall back to the storage read, so out-of-tree engines keep working unchanged.
+
+**Impact**: This is a source-level Go API change; the wire protocol is unchanged. Any out-of-tree implementation or caller of `tmclient.TabletManagerClient` or `tabletmanager.RPCTM`, or any caller of `mysqlctl.Backup`, must update the signature. Callers that only consumed log events can call `Recv()` on the new stream and read `resp.Event` exactly as before.
+
+See [#21243](https://github.com/vitessio/vitess/pull/21243) for details.
 
 ### <a id="deprecations"/>Deprecations</a>
 
@@ -761,6 +775,18 @@ The `lz4` compression engine now uses the `pierrec/lz4/v4` library instead of `p
 The upgrade changes how `--compression-level` is interpreted for the lz4 engine. Values `0` and `1`, including the default of `1`, select the fast compressor. Values `2` through `9` now select lz4's named hash-chain levels (`Level2` through `Level9`) instead of using the raw value as the hash-chain search depth, so higher values produce a better ratio at more CPU cost. Values above `9` and negative values, which previously requested an unlimited search, select `Level9`. Other compression engines are not affected.
 
 See [#20778](https://github.com/vitessio/vitess/pull/20778) for details.
+
+#### <a id="backup-manifest-output"/>Backup commands surface the MANIFEST and empty-incremental status</a>
+
+The `vtctldclient Backup` and `BackupShard` commands can now report a backup's outcome and MANIFEST directly, instead of requiring callers to scrape it from the log stream:
+
+- With the new `--json`/`-j` flag, a JSON object with the backup's outcome status (`USABLE`, `EMPTY`, or `UNKNOWN`), the backup's name, and its MANIFEST is written to stdout, while log events go to stderr, so the output can be parsed by tooling. `backup_name` is a typed field, so callers that only need to identify the backup do not have to parse the manifest -- which also covers engines that do not record a name inside their MANIFEST.
+- Without `--json`, no MANIFEST is printed; progress streams as log events as before, followed by a final `backup completed` line.
+- An incremental backup that finds no new data to back up (an "empty" backup) completes successfully. In `--json` mode it reports status `EMPTY` and exits with **code 2** so scripts can skip follow-up work by checking `$?`. Without `--json`, an empty backup behaves as before and exits `0`, so existing automation is unaffected.
+
+This is carried by three additive fields on the `BackupResponse` proto messages (`manifest`, `status`, and `backup_name`); see the [related breaking change](#tmclient-backup-stream) for the Go API impact. The change is safe for mixed-version (rolling upgrade and downgrade) clusters in both directions: a newer `vtctldclient`/`vtctld` talking to an older peer that does not populate these fields reports status `UNKNOWN` and preserves the previous behaviour, and the terminal stream message a newer `vttablet` sends carries an ordinary completion log event so an older `vtctld` handles it normally instead of choking on it.
+
+See [#21243](https://github.com/vitessio/vitess/pull/21243) for details.
 
 ### <a id="minor-changes-vtadmin"/>VTAdmin</a>
 

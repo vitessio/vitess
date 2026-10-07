@@ -43,6 +43,8 @@ import (
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/wrangler"
+
+	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
 )
 
 var (
@@ -94,6 +96,26 @@ func init() {
 
 		fs.SetNormalizeFunc(utils.NormalizeUnderscoresToDashes)
 	})
+}
+
+// runVtctldCommand runs args through the vtctldclient command tree against an
+// in-process vtctld and returns vtctl's exit code. A non-nil error always comes
+// with exit code 255.
+func runVtctldCommand(ctx context.Context, server vtctlservicepb.VtctldServer, args []string) (int, error) {
+	localvtctldclient.SetServer(server)
+	command.VtctldClientProtocol = "local"
+
+	os.Args = append([]string{"vtctldclient"}, args...)
+	if err := command.Root.ExecuteContext(ctx); err != nil {
+		return 255, err
+	}
+	// Backup/BackupShard --json report an empty incremental backup as a success
+	// with a distinct exit code; honour it here too so that
+	// `vtctl VtctldCommand Backup --json` matches vtctldclient.
+	if command.EmptyBackup() {
+		return command.EmptyBackupExitCode, nil
+	}
+	return 0, nil
 }
 
 // signal handling, centralized here
@@ -167,14 +189,12 @@ func main() {
 		// New behavior. Strip off the prefix, and set things up to run through
 		// the vtctldclient command tree, using the localvtctldclient (in-process)
 		// client.
-		vtctld := grpcvtctldserver.NewVtctldServer(env, ts)
-		localvtctldclient.SetServer(vtctld)
-		command.VtctldClientProtocol = "local"
-
-		os.Args = append([]string{"vtctldclient"}, args[1:]...)
-		if err := command.Root.ExecuteContext(ctx); err != nil {
+		code, err := runVtctldCommand(ctx, grpcvtctldserver.NewVtctldServer(env, ts), args[1:])
+		if err != nil {
 			log.Error(fmt.Sprintf("action failed: %v %v", action, err))
-			exit.Return(255)
+		}
+		if code != 0 {
+			exit.Return(code)
 		}
 	case strings.EqualFold(action, "LegacyVtctlCommand"):
 		// Strip off the prefix (being used for compatibility) and fallthrough

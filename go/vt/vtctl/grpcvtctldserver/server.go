@@ -46,6 +46,7 @@ import (
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/dtids"
+	"vitess.io/vitess/go/vt/grpccommon"
 	hk "vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
@@ -556,18 +557,36 @@ func (s *VtctldServer) backupTablet(ctx context.Context, tablet *topodatapb.Tabl
 
 	logger := logutil.NewConsoleLogger()
 	for {
-		event, err := logStream.Recv()
+		tmResp, err := logStream.Recv()
 		switch err {
 		case nil:
-			logutil.LogEvent(logger, event)
+			if tmResp.Event != nil {
+				logutil.LogEvent(logger, tmResp.Event)
+			}
+			// Forward log events as well as the terminal message carrying the
+			// backup's MANIFEST and outcome status.
 			resp := &vtctldatapb.BackupResponse{
 				TabletAlias: tablet.Alias,
 				Keyspace:    tablet.Keyspace,
 				Shard:       tablet.Shard,
-				Event:       event,
+				Event:       tmResp.Event,
+				Manifest:    tmResp.Manifest,
+				Status:      tmResp.Status,
+				BackupName:  tmResp.BackupName,
+			}
+			// This message is slightly larger than the tablet's, so a manifest that
+			// just fit there can overflow here and fail the whole RPC. Drop it the
+			// same way the tablet does.
+			if maxSize := grpccommon.MaxMessageSize(); resp.SizeVT() > maxSize {
+				logger.Warningf("backup MANIFEST exceeds --grpc-max-message-size (%d bytes); forwarding backup %v from %v without it",
+					maxSize, resp.BackupName, topoproto.TabletAliasString(resp.TabletAlias))
+				resp.Manifest = ""
 			}
 			if err := stream.Send(resp); err != nil {
-				logger.Errorf("failed to send stream response %+v: %v", resp, err)
+				// resp.Manifest is deliberately omitted: it can be megabytes, and
+				// an oversized message is a likely reason Send failed here.
+				logger.Errorf("failed to send stream response (tablet=%v keyspace=%v shard=%v status=%v backup_name=%v): %v",
+					topoproto.TabletAliasString(resp.TabletAlias), resp.Keyspace, resp.Shard, resp.Status, resp.BackupName, err)
 			}
 		case io.EOF:
 			return nil

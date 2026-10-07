@@ -63,4 +63,10 @@ func main() {
 		log.Error(fmt.Sprint(err))
 		exit.Return(1)
 	}
+	// An empty incremental backup is a successful outcome, so it is reported
+	// out-of-band rather than as an error -- that way cobra runs the root
+	// command's cleanup before we exit with its distinct code.
+	if command.EmptyBackup() {
+		exit.Return(command.EmptyBackupExitCode)
+	}
 }

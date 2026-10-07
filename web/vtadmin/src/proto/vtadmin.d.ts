@@ -39380,6 +39380,15 @@ export namespace tabletmanagerdata {
         /** BackupResponse event. */
         event?: (logutil.Event.$Properties|null);
 
+        /** BackupResponse manifest. */
+        manifest: string;
+
+        /** BackupResponse status. */
+        status: tabletmanagerdata.BackupResponse.Status;
+
+        /** BackupResponse backup_name. */
+        backup_name: string;
+
         /**
          * Creates a new BackupResponse instance using the specified properties.
          * @param [properties] Properties to set
@@ -39467,12 +39476,34 @@ export namespace tabletmanagerdata {
             /** BackupResponse event */
             event?: (logutil.Event.$Properties|null);
 
+            /** BackupResponse manifest */
+            manifest?: (string|null);
+
+            /** BackupResponse status */
+            status?: (tabletmanagerdata.BackupResponse.Status|null);
+
+            /** BackupResponse backup_name */
+            backup_name?: (string|null);
+
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
         /** Shape of a BackupResponse. */
         type $Shape = tabletmanagerdata.BackupResponse.$Properties;
+
+        /** Status enum. */
+        enum Status {
+
+            /** STATUS_UNSPECIFIED value */
+            STATUS_UNSPECIFIED = 0,
+
+            /** USABLE value */
+            USABLE = 1,
+
+            /** EMPTY value */
+            EMPTY = 2
+        }
     }
 
     /**
@@ -68085,6 +68116,15 @@ export namespace vtctldata {
         /** BackupResponse event. */
         event?: (logutil.Event.$Properties|null);
 
+        /** BackupResponse manifest. */
+        manifest: string;
+
+        /** BackupResponse status. */
+        status: tabletmanagerdata.BackupResponse.Status;
+
+        /** BackupResponse backup_name. */
+        backup_name: string;
+
         /**
          * Creates a new BackupResponse instance using the specified properties.
          * @param [properties] Properties to set
@@ -68180,6 +68220,15 @@ export namespace vtctldata {
 
             /** BackupResponse event */
             event?: (logutil.Event.$Properties|null);
+
+            /** BackupResponse manifest */
+            manifest?: (string|null);
+
+            /** BackupResponse status */
+            status?: (tabletmanagerdata.BackupResponse.Status|null);
+
+            /** BackupResponse backup_name */
+            backup_name?: (string|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];

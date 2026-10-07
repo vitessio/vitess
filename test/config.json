@@ -227,6 +227,25 @@
       ],
       "Needs": []
     },
+    "backup_e2e_old_vtctld": {
+      "File": "unused.go",
+      "Packages": [
+        "vitess.io/vitess/go/test/endtoend/backup/vtctlbackup"
+      ],
+      "Args": [
+        "-run",
+        "^TestBuiltinBackup$",
+        "-timeout",
+        "20m"
+      ],
+      "Command": [],
+      "Manual": false,
+      "Shard": "",
+      "Tags": [
+        "upgrade_downgrade_backups_e2e_old_vtctld"
+      ],
+      "Needs": []
+    },
     "backup_xtrabackup": {
       "File": "unused.go",
       "Packages": [

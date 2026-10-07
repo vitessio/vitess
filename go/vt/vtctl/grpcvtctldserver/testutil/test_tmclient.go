@@ -29,6 +29,7 @@ import (
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/timer"
 	hk "vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/log"
@@ -192,6 +193,10 @@ type TabletManagerClient struct {
 		EventInterval time.Duration
 		EventJitter   time.Duration
 		ErrorAfter    time.Duration
+		// Manifest and Status, if set, are sent as the terminal Backup stream
+		// message after all Events, mirroring a real tablet.
+		Manifest string
+		Status   tabletmanagerdatapb.BackupResponse_Status
 	}
 	// Backing Up - keyed by tablet alias.
 	TabletsBackupState map[string]bool
@@ -412,10 +417,10 @@ type TabletManagerClient struct {
 
 type backupStreamAdapter struct {
 	*grpcshim.BidiStream
-	ch chan *logutilpb.Event
+	ch chan *tabletmanagerdatapb.BackupResponse
 }
 
-func (stream *backupStreamAdapter) Recv() (*logutilpb.Event, error) {
+func (stream *backupStreamAdapter) Recv() (*tabletmanagerdatapb.BackupResponse, error) {
 	select {
 	case <-stream.Context().Done():
 		return nil, stream.Context().Err()
@@ -428,7 +433,7 @@ func (stream *backupStreamAdapter) Recv() (*logutilpb.Event, error) {
 	}
 }
 
-func (stream *backupStreamAdapter) Send(msg *logutilpb.Event) error {
+func (stream *backupStreamAdapter) Send(msg *tabletmanagerdatapb.BackupResponse) error {
 	select {
 	case <-stream.Context().Done():
 		return stream.Context().Err()
@@ -440,7 +445,7 @@ func (stream *backupStreamAdapter) Send(msg *logutilpb.Event) error {
 }
 
 // Backup is part of the tmclient.TabletManagerClient interface.
-func (fake *TabletManagerClient) Backup(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.BackupRequest) (logutil.EventStream, error) {
+func (fake *TabletManagerClient) Backup(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.BackupRequest) (tmclient.BackupStream, error) {
 	if tablet.Type == topodatapb.TabletType_PRIMARY && !req.AllowPrimary {
 		return nil, errors.New("cannot backup primary with allowPrimary=false")
 	}
@@ -453,7 +458,7 @@ func (fake *TabletManagerClient) Backup(ctx context.Context, tablet *topodatapb.
 
 	stream := &backupStreamAdapter{
 		BidiStream: grpcshim.NewBidiStream(ctx),
-		ch:         make(chan *logutilpb.Event, len(testdata.Events)),
+		ch:         make(chan *tabletmanagerdatapb.BackupResponse, len(testdata.Events)+1),
 	}
 	go func() {
 		if testdata.EventInterval == 0 {
@@ -492,8 +497,24 @@ func (fake *TabletManagerClient) Backup(ctx context.Context, tablet *topodatapb.
 		defer stream.CloseWithError(nil)
 
 		for _, event := range testdata.Events {
-			stream.ch <- event
+			stream.ch <- &tabletmanagerdatapb.BackupResponse{Event: event}
 			<-ticker.C
+		}
+
+		// Send the terminal message carrying the manifest and outcome status, as
+		// a real tablet does at the end of a successful backup. Like a real
+		// tablet, it also carries a completion log event: older peers dereference
+		// Event unconditionally, so grpctmserver never sends a nil one.
+		if testdata.Manifest != "" || testdata.Status != tabletmanagerdatapb.BackupResponse_STATUS_UNSPECIFIED {
+			stream.ch <- &tabletmanagerdatapb.BackupResponse{
+				Event: &logutilpb.Event{
+					Time:  protoutil.TimeToProto(time.Now()),
+					Level: logutilpb.Level_INFO,
+					Value: fmt.Sprintf("backup completed: %s", testdata.Status),
+				},
+				Manifest: testdata.Manifest,
+				Status:   testdata.Status,
+			}
 		}
 
 		// Wait for the error goroutine to finish. Note that if ErrorAfter

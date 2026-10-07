@@ -124,7 +124,12 @@ func registerBackupFlags(fs *pflag.FlagSet) {
 // - uses the BackupStorage service to store a new backup
 // - shuts down Mysqld during the backup
 // - remember if we were replicating, restore the exact same state
-func Backup(ctx context.Context, params BackupParams) error {
+//
+// On success it returns a BackupOutcome describing the backup: its name, the raw
+// JSON contents of its MANIFEST, and its classification (BackupUsable or
+// BackupEmpty). This lets callers identify and log the backup without scraping log
+// lines. For an empty backup the name and manifest are "".
+func Backup(ctx context.Context, params BackupParams) (BackupOutcome, error) {
 	if params.Stats == nil {
 		params.Stats = backupstats.NoStats()
 	}
@@ -135,7 +140,7 @@ func Backup(ctx context.Context, params BackupParams) error {
 	// Start the backup with the BackupStorage.
 	bs, err := backupstorage.GetBackupStorage()
 	if err != nil {
-		return vterrors.Wrap(err, "unable to get backup storage")
+		return BackupOutcome{Result: BackupUnusable}, vterrors.Wrap(err, "unable to get backup storage")
 	}
 	defer bs.Close()
 
@@ -153,7 +158,7 @@ func Backup(ctx context.Context, params BackupParams) error {
 
 	bh, err := bs.StartBackup(ctx, backupDir, name)
 	if err != nil {
-		return vterrors.Wrap(err, "StartBackup failed")
+		return BackupOutcome{Result: BackupUnusable}, vterrors.Wrap(err, "StartBackup failed")
 	}
 	params.Logger.Infof("Starting backup %v", bh.Name())
 
@@ -163,6 +168,10 @@ func Backup(ctx context.Context, params BackupParams) error {
 		backupstats.Component(backupstats.BackupEngine),
 		backupstats.Implementation(textutil.Title(backupEngineImplementation)),
 	)
+	// Ask the engine for the MANIFEST it writes, so we do not have to read it back
+	// from storage. Engines that do not report it fall back to that read below.
+	var engineManifest string
+	beParams.ManifestOut = &engineManifest
 	var be BackupEngine
 	if isIncrementalBackup(beParams) {
 		// Incremental backups are always done via 'builtin' engine, which copies
@@ -171,7 +180,7 @@ func Backup(ctx context.Context, params BackupParams) error {
 	} else {
 		be, err = GetBackupEngine(params.BackupEngine)
 		if err != nil {
-			return vterrors.Wrap(err, "failed to find backup engine")
+			return BackupOutcome{Result: BackupUnusable}, vterrors.Wrap(err, "failed to find backup engine")
 		}
 	}
 
@@ -200,13 +209,67 @@ func Backup(ctx context.Context, params BackupParams) error {
 			// finish error, return the backup error.
 			logger.Errorf2(finishErr, "failed to finish backup: %v")
 		}
-		return err
+		return BackupOutcome{Result: backupResult}, err
 	}
-
-	// The backup worked, so just return the finish error, if any.
+	// The backup engine ran; record its duration whether or not finalizing the
+	// backup succeeded, matching the stats emitted before the manifest/result
+	// return values were introduced.
 	backupstats.DeprecatedBackupDurationS.Set(int64(time.Since(startTs).Seconds()))
 	params.Stats.Scope(backupstats.Operation("Backup")).TimedIncrement(time.Since(startTs))
-	return finishErr
+
+	if finishErr != nil {
+		// The backup engine succeeded but finalizing the backup (EndBackup/
+		// AbortBackup) failed, so the backup is not usable.
+		return BackupOutcome{Result: BackupUnusable}, finishErr
+	}
+
+	outcome := BackupOutcome{Result: backupResult}
+	if backupResult != BackupUsable {
+		// An empty backup stores nothing, so it has neither a name nor a manifest.
+		return outcome, nil
+	}
+	outcome.Name = name
+	outcome.Manifest = engineManifest
+
+	// Engines that do not report their MANIFEST leave it empty; fall back to reading
+	// it back from storage for them. This is best-effort either way: the backup has
+	// already succeeded, so a read failure is logged rather than failing the backup.
+	// The read error is kept in a local so it can never leak out as a backup failure.
+	if outcome.Manifest == "" {
+		readManifest, readErr := readBackupManifest(ctx, bs, backupDir, name)
+		if readErr != nil {
+			logger.Warningf("backup %v succeeded but reading its MANIFEST failed: %v", name, readErr)
+		} else {
+			outcome.Manifest = readManifest
+		}
+	}
+	return outcome, nil
+}
+
+// readBackupManifest re-reads the raw MANIFEST file of a just-completed backup
+// from storage and returns its contents as a JSON string. The returned string is
+// the file's bytes verbatim, so it preserves engine-specific fields.
+func readBackupManifest(ctx context.Context, bs backupstorage.BackupStorage, backupDir, name string) (string, error) {
+	bhs, err := bs.ListBackups(ctx, backupDir)
+	if err != nil {
+		return "", vterrors.Wrap(err, "ListBackups failed")
+	}
+	for _, bh := range bhs {
+		if bh.Name() != name {
+			continue
+		}
+		file, err := bh.ReadFile(ctx, backupManifestFileName)
+		if err != nil {
+			return "", vterrors.Wrapf(err, "can't read %v", backupManifestFileName)
+		}
+		defer file.Close()
+		data, err := io.ReadAll(file)
+		if err != nil {
+			return "", vterrors.Wrapf(err, "can't read %v contents", backupManifestFileName)
+		}
+		return string(data), nil
+	}
+	return "", vterrors.Errorf(vtrpc.Code_NOT_FOUND, "backup %v not found in %v after it was taken", name, backupDir)
 }
 
 // ParseBackupName parses the backup name for a given dir/name, according to

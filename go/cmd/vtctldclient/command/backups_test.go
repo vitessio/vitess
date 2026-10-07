@@ -17,16 +17,22 @@ limitations under the License.
 package command
 
 import (
+	"errors"
 	"testing"
 	"time"
 
+	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/protoutil"
+	"vitess.io/vitess/go/vt/vtctl/localvtctldclient"
 
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
 )
 
 func TestBackupCommand_InitSQLFlags(t *testing.T) {
@@ -259,6 +265,109 @@ func TestBackupCommand_BuildsCorrectRequest(t *testing.T) {
 				}
 				assert.Equal(t, tc.wantFailOnError, initSQLFailOnError)
 			}
+		})
+	}
+}
+
+// fakeBackupServer streams canned responses from Backup and BackupShard, then
+// returns err.
+type fakeBackupServer struct {
+	vtctlservicepb.UnimplementedVtctldServer
+	resps []*vtctldatapb.BackupResponse
+	err   error
+}
+
+func (s *fakeBackupServer) Backup(_ *vtctldatapb.BackupRequest, stream vtctlservicepb.Vtctld_BackupServer) error {
+	return s.send(stream)
+}
+
+func (s *fakeBackupServer) BackupShard(_ *vtctldatapb.BackupShardRequest, stream vtctlservicepb.Vtctld_BackupShardServer) error {
+	return s.send(stream)
+}
+
+func (s *fakeBackupServer) send(stream vtctlservicepb.Vtctld_BackupServer) error {
+	for _, resp := range s.resps {
+		if err := stream.Send(resp); err != nil {
+			return err
+		}
+	}
+	return s.err
+}
+
+// TestBackupCommands_JSONOutputWiring runs Backup and BackupShard end to end
+// against a local server to check each command passes its own --json flag.
+func TestBackupCommands_JSONOutputWiring(t *testing.T) {
+	originalProtocol := VtctldClientProtocol
+	VtctldClientProtocol = "local"
+	t.Cleanup(func() {
+		Root.SetArgs(nil)
+		VtctldClientProtocol = originalProtocol
+		backupOptions.OutputJSON = false
+		backupShardOptions.OutputJSON = false
+	})
+
+	testCases := []struct {
+		name      string
+		args      []string
+		streamErr error
+		wantEmpty bool
+		wantErr   string
+	}{
+		{
+			name:      "Backup --json empty",
+			args:      []string{"Backup", "--json", "zone1-100"},
+			wantEmpty: true,
+		},
+		{
+			name:      "BackupShard --json empty",
+			args:      []string{"BackupShard", "--json", "ks/0"},
+			wantEmpty: true,
+		},
+		{
+			name:      "BackupShard empty without --json",
+			args:      []string{"BackupShard", "ks/0"},
+			wantEmpty: false,
+		},
+		{
+			name:      "Backup stream error",
+			args:      []string{"Backup", "--json", "zone1-100"},
+			streamErr: errors.New("tablet went away"),
+			wantErr:   "tablet went away",
+		},
+		{
+			name:      "BackupShard stream error",
+			args:      []string{"BackupShard", "--json", "ks/0"},
+			streamErr: errors.New("tablet went away"),
+			wantErr:   "tablet went away",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Flag-bound globals persist across Root.Execute calls.
+			backupOptions.OutputJSON = false
+			backupShardOptions.OutputJSON = false
+			backupOptions.InitSQLQueries = nil
+			backupOptions.InitSQLTabletTypes = nil
+			backupOptions.InitSQLTimeout = 0
+			backupOptions.InitSQLFailOnError = false
+			for _, cmd := range []*cobra.Command{Backup, BackupShard} {
+				cmd.Flags().Lookup("json").Changed = false
+			}
+
+			localvtctldclient.SetServer(&fakeBackupServer{
+				resps: []*vtctldatapb.BackupResponse{{Status: tabletmanagerdatapb.BackupResponse_EMPTY}},
+				err:   tc.streamErr,
+			})
+			Root.SetArgs(tc.args)
+
+			err := Root.Execute()
+			if tc.wantErr != "" {
+				require.ErrorContains(t, err, tc.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tc.wantEmpty, EmptyBackup())
 		})
 	}
 }
