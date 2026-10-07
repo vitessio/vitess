@@ -2315,78 +2315,23 @@ func (ty ShowCommandType) ToString() string {
 	}
 }
 
-<<<<<<< HEAD
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-// formatUserOrRoleHost extracts the host from an AT_ID token value.
-// AT_ID values may be quoted (e.g., 'localhost') or unquoted (e.g., localhost).
-func formatUserOrRoleHost(atID string) string {
-	host := atID
-	if len(host) > 0 && host[0] == '\'' && host[len(host)-1] == '\'' {
-		host = host[1 : len(host)-1]
+// isShowOtherCommand reports whether name, a word of a SHOW statement that
+// ShowOther keeps as its command, is a plain word. ShowOther writes its command
+// back unquoted, so a back-quoted identifier holding anything else, such as a ';'
+// and more SQL, would print as more than one statement. Every SHOW command MySQL
+// accepts is a plain word, and MySQL rejects a back-quoted one.
+func isShowOtherCommand(name string) bool {
+	if name == "" {
+		return false
 	}
-	return host
+	for _, c := range name {
+		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '_') {
+			return false
+		}
+	}
+	return true
 }
 
-func (node *UserOrRole) formatTo(buf *TrackedBuffer) {
-	if node.Name == nil {
-		buf.WriteString("current_user")
-		return
-	}
-	buf.WriteString("'")
-	buf.WriteString(*node.Name)
-	buf.WriteString("'")
-	if node.Host != nil {
-		buf.WriteString("@'")
-		buf.WriteString(*node.Host)
-		buf.WriteString("'")
-	}
-}
-
-=======
-// formatUserOrRoleHost extracts the host from an AT_ID token value.
-// AT_ID values may be quoted (e.g., 'localhost') or unquoted (e.g., localhost).
-func formatUserOrRoleHost(atID string) string {
-	// The tokenizer keeps a quoted host's quotes, and a doubled quote inside it
-	// stands for the quote itself (see Tokenizer.quotedNameIsIdentifier). Read it
-	// as the host it names, which UserOrRole.formatTo encodes again.
-	if len(atID) >= 2 && (atID[0] == '\'' || atID[0] == '"') && atID[len(atID)-1] == atID[0] {
-		quote := atID[:1]
-		return strings.ReplaceAll(atID[1:len(atID)-1], quote+quote, quote)
-	}
-	return atID
-}
-
-func (node *UserOrRole) formatTo(buf *TrackedBuffer) {
-	if node.Name == nil {
-		buf.WriteString("current_user")
-		return
-	}
-	buf.WriteString(encodeSQLString(*node.Name))
-	if node.Host != nil {
-		buf.WriteByte('@')
-		buf.WriteString(encodeSQLString(*node.Host))
-	}
-}
-
-// showProfileTypes are the types SHOW PROFILE accepts, in lowercase. ALL and MEMORY
-// have productions of their own.
-var showProfileTypes = map[string]bool{
-	"block io":         true,
-	"context switches": true,
-	"cpu":              true,
-	"ipc":              true,
-	"page faults":      true,
-	"source":           true,
-	"swaps":            true,
-}
-
-// isShowProfileType reports whether name, in lowercase, is a SHOW PROFILE type.
-// Only those are accepted, since they are written back unquoted.
-func isShowProfileType(name string) bool {
-	return showProfileTypes[name]
-}
-
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
 // ToString returns the DropKeyType as a string
 func (key DropKeyType) ToString() string {
 	switch key {
