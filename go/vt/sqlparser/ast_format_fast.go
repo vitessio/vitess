@@ -3142,7 +3142,7 @@ func (node *ShowCreate) FormatFast(buf *TrackedBuffer) {
 // FormatFast formats the node.
 func (node *ShowEngine) FormatFast(buf *TrackedBuffer) {
 	buf.WriteString("show engine ")
-	buf.WriteString(node.EngineName)
+	formatID(buf, node.EngineName, NoAt)
 	buf.WriteByte(' ')
 	buf.WriteString(node.Action)
 }

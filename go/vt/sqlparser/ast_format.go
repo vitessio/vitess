@@ -2419,7 +2419,9 @@ func (node *ShowCreate) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *ShowEngine) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "show engine %s %s", node.EngineName, node.Action)
+	buf.astPrintf(node, "show engine ")
+	formatID(buf, node.EngineName, NoAt)
+	buf.astPrintf(node, " %s", node.Action)
 }
 
 // Format formats the node.
