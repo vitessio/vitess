@@ -27,7 +27,10 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-var _ Conn = (*StatsConn)(nil)
+var (
+	_ Conn               = (*StatsConn)(nil)
+	_ LinearizableGetter = (*StatsConn)(nil)
+)
 
 var (
 	topoStatsConnTimings = stats.NewMultiTimings(
@@ -132,6 +135,29 @@ func (st *StatsConn) Get(ctx context.Context, filePath string) ([]byte, Version,
 	if err != nil {
 		topoStatsConnErrors.Add(statsKey, int64(1))
 		return bytes, version, err
+	}
+	return bytes, version, err
+}
+
+// GetLinearizable is part of the LinearizableGetter interface. It returns a
+// NoImplementation error if the wrapped Conn doesn't implement it.
+func (st *StatsConn) GetLinearizable(ctx context.Context, filePath string) ([]byte, Version, error) {
+	getter, ok := st.conn.(LinearizableGetter)
+	if !ok {
+		return nil, nil, vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "the topo implementation of cell %v does not support linearizable reads", st.cell)
+	}
+	startTime := time.Now()
+	statsKey := []string{"GetLinearizable", st.cell}
+	if err := st.readSem.Acquire(ctx, 1); err != nil {
+		return nil, nil, err
+	}
+	defer st.readSem.Release(1)
+	topoStatsConnReadWaitTimings.Record(statsKey, startTime)
+	startTime = time.Now() // reset
+	defer topoStatsConnTimings.Record(statsKey, startTime)
+	bytes, version, err := getter.GetLinearizable(ctx, filePath)
+	if err != nil {
+		topoStatsConnErrors.Add(statsKey, int64(1))
 	}
 	return bytes, version, err
 }
