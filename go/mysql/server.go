@@ -66,12 +66,6 @@ var (
 	connRefuse = stats.NewCounter("MysqlServerConnRefused", "Connections refused by MySQL server")
 	connSlow   = stats.NewCounter("MysqlServerConnSlow", "Connections that took more than the configured mysql-slow-connect-warn-threshold to establish")
 
-	// connRefusedCharset counts the clients refused for asking for a connection
-	// character set that is not safe, so that operators can find the clients they
-	// have to move to utf8mb4. Its labels are those few character sets, and
-	// "unknown" for a collation MySQL does not define.
-	connRefusedCharset = stats.NewCountersWithSingleLabel("MysqlServerConnRefusedCharset", "Connections refused by MySQL server for an unsupported connection character set", "charset")
-
 	connCountByTLSVer = stats.NewGaugesWithSingleLabel("MysqlServerConnCountByTLSVer", "Active MySQL server connections by TLS version", "tls")
 	connCountPerUser  = stats.NewGaugesWithSingleLabel("MysqlServerConnCountPerUser", "Active MySQL server connections per user", "count")
 	_                 = stats.NewGaugeFunc("MysqlServerConnCountUnauthenticated", "Active MySQL server connections that haven't authenticated yet", func() int64 {
@@ -494,23 +488,6 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 		}
 		connCountByTLSVer.Add(versionNoTLS, 1)
 		defer connCountByTLSVer.Add(versionNoTLS, -1)
-	}
-
-	// Vitess parses and escapes SQL text byte by byte, so refuse a client that
-	// asks for a character set where that is not safe; see
-	// collations.Environment.ConnectionCharset.
-	if charset, ok := l.handler.Env().CollationEnv().ConnectionCharset(c.CharacterSet); !ok {
-		msg := "unsupported connection character set: use utf8mb4"
-		label := "unknown"
-		if charset != "" {
-			label = charset
-			// Not every collation the client may ask for is one MySQL defines,
-			// and only those have a name to report.
-			msg = fmt.Sprintf("unsupported connection character set %q: use utf8mb4", charset)
-		}
-		connRefusedCharset.Add(label, 1)
-		c.writeErrorPacket(sqlerror.ERUnknownCharacterSet, sqlerror.SSClientError, "%s", msg)
-		return
 	}
 
 	// See what auth method the AuthServer wants to use for that user.
