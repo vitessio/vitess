@@ -1997,17 +1997,17 @@ func (node *Literal) FormatFast(buf *TrackedBuffer) {
 		buf.WriteString(node.Val)
 		buf.WriteByte('\'')
 	case DateVal:
-		buf.WriteString("date'")
-		buf.WriteString(node.Val)
-		buf.WriteByte('\'')
+		// The value is the decoded string literal the tokenizer read, so it must be
+		// encoded like a string literal: printing it verbatim would let a quote in
+		// it close the literal.
+		buf.WriteString("date")
+		sqltypes.MakeTrusted(sqltypes.VarChar, node.Bytes()).EncodeSQL(buf)
 	case TimeVal:
-		buf.WriteString("time'")
-		buf.WriteString(node.Val)
-		buf.WriteByte('\'')
+		buf.WriteString("time")
+		sqltypes.MakeTrusted(sqltypes.VarChar, node.Bytes()).EncodeSQL(buf)
 	case TimestampVal:
-		buf.WriteString("timestamp'")
-		buf.WriteString(node.Val)
-		buf.WriteByte('\'')
+		buf.WriteString("timestamp")
+		sqltypes.MakeTrusted(sqltypes.VarChar, node.Bytes()).EncodeSQL(buf)
 	default:
 		panic("unexpected")
 	}
