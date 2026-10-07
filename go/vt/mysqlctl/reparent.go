@@ -104,14 +104,14 @@ func (mysqld *Mysqld) applyReceivedTransactions(ctx context.Context, conn *dbcon
 		return nil
 	}
 	if err != nil {
-		return err
+		return vterrors.Wrapf(err, "cannot promote: failed to read replication status")
 	}
 	if status.IOState != replication.ReplicationStateStopped {
 		if err := mysqld.executeSuperQueryListConn(ctx, conn, []string{conn.Conn.StopIOThreadCommand()}); err != nil {
-			return err
+			return vterrors.Wrapf(err, "cannot promote: failed to stop the replication receiver")
 		}
 		if status, err = conn.Conn.ShowReplicationStatus(); err != nil {
-			return err
+			return vterrors.Wrapf(err, "cannot promote: failed to read replication status after stopping the receiver")
 		}
 	}
 	if !status.RelayLogPosition.MatchesFlavor(replication.Mysql56FlavorID) || status.Position.AtLeast(status.RelayLogPosition) {
