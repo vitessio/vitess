@@ -6598,6 +6598,14 @@ var invalidSQL = []struct {
 	input  string
 	output string
 }{{
+	// MySQL reads a quoted user variable name to its closing quote, and
+	// Vitess reads one only if it holds nothing an identifier cannot.
+	input:  "select @'a//b'",
+	output: "syntax error at position 9",
+}, {
+	input:  "select @\"a b\" from t",
+	output: "syntax error at position 9",
+}, {
 	// MySQL only accepts a text literal or a user defined variable as the
 	// statement text of a PREPARE; a positional parameter is a syntax error.
 	input:  "prepare stmt1 from ?",

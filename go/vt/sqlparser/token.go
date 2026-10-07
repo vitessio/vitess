@@ -180,6 +180,13 @@ func (tkn *Tokenizer) Scan() (int, string) {
 			if tkn.cur() == '`' {
 				tkn.skip(1)
 				tID, tBytes = tkn.scanLiteralIdentifier()
+			} else if tokenID == AT_ID && (tkn.cur() == '\'' || tkn.cur() == '"') && !tkn.quotedNameIsIdentifier() {
+				// MySQL reads a quoted name after a single '@' to its closing
+				// quote, so nothing inside the quotes is a comment. Vitess
+				// reads the name as an identifier that includes the quotes,
+				// which stops at the first character an identifier cannot
+				// hold. Rather than read such a name in part, reject it.
+				return LEX_ERROR, ""
 			} else if tkn.cur() == eofChar {
 				return LEX_ERROR, ""
 			} else {
@@ -378,6 +385,28 @@ func (tkn *Tokenizer) skipBlank() {
 		tkn.skip(1)
 		ch = tkn.cur()
 	}
+}
+
+// quotedNameIsIdentifier reports whether the quoted name at the cursor, read
+// to its closing quote as MySQL reads it, consists of characters that
+// scanIdentifier reads as part of a variable name, so that scanIdentifier
+// reads the whole name.
+func (tkn *Tokenizer) quotedNameIsIdentifier() bool {
+	delim := tkn.buf[tkn.Pos]
+	for i := tkn.Pos + 1; i < len(tkn.buf); i++ {
+		ch := uint16(tkn.buf[i])
+		if ch == uint16(delim) && (i+1 == len(tkn.buf) || tkn.buf[i+1] != delim) {
+			return true
+		}
+		if !isLetter(ch) && !isDigit(ch) && !isCarat(ch) {
+			return false
+		}
+		if ch == uint16(delim) {
+			// A doubled quote stands for the quote itself.
+			i++
+		}
+	}
+	return false
 }
 
 // scanIdentifier scans a language keyword or @-encased variable
