@@ -44,6 +44,179 @@ func clientValue(typ querypb.Type, val string) sqltypes.Value {
 	return sqltypes.MakeTrusted(typ, []byte(val))
 }
 
+// TestDecodeLastPK checks that DecodeLastPK decodes a well-formed lastpk
+// QueryResult, and rejects a malformed one with INVALID_ARGUMENT instead of
+// panicking in sqltypes.MakeRowTrusted, which trusts the row's shape.
+func TestDecodeLastPK(t *testing.T) {
+	idField := field("id", querypb.Type_INT64)
+	nameField := field("name", querypb.Type_VARCHAR)
+	binField := field("b", querypb.Type_VARBINARY)
+	testcases := []struct {
+		name    string
+		qr      *querypb.QueryResult
+		want    []sqltypes.Value
+		wantErr string
+	}{
+		{
+			name: "one value",
+			qr: &querypb.QueryResult{
+				Fields: []*querypb.Field{idField},
+				Rows:   []*querypb.Row{{Lengths: []int64{1}, Values: []byte("5")}},
+			},
+			want: []sqltypes.Value{sqltypes.NewInt64(5)},
+		},
+		{
+			name: "a NULL value and a string",
+			qr: &querypb.QueryResult{
+				Fields: []*querypb.Field{idField, nameField},
+				Rows:   []*querypb.Row{{Lengths: []int64{-1, 3}, Values: []byte("abc")}},
+			},
+			want: []sqltypes.Value{sqltypes.NULL, sqltypes.NewVarChar("abc")},
+		},
+		{
+			name: "only a NULL value",
+			qr: &querypb.QueryResult{
+				Fields: []*querypb.Field{nameField},
+				Rows:   []*querypb.Row{{Lengths: []int64{-1}}},
+			},
+			want: []sqltypes.Value{sqltypes.NULL},
+		},
+		{
+			name: "an empty string",
+			qr: &querypb.QueryResult{
+				Fields: []*querypb.Field{nameField},
+				Rows:   []*querypb.Row{sqltypes.RowToProto3([]sqltypes.Value{sqltypes.NewVarChar("")})},
+			},
+			want: []sqltypes.Value{sqltypes.NewVarChar("")},
+		},
+		{
+			name: "a binary key value",
+			qr: &querypb.QueryResult{
+				Fields: []*querypb.Field{binField},
+				Rows:   []*querypb.Row{{Lengths: []int64{3}, Values: []byte("\x00\xff\x01")}},
+			},
+			want: []sqltypes.Value{sqltypes.NewVarBinary("\x00\xff\x01")},
+		},
+		{
+			// A lastpk built by sqltypes.RowToProto3 round-trips.
+			name: "built by RowToProto3",
+			qr: &querypb.QueryResult{
+				Fields: []*querypb.Field{idField, nameField, binField},
+				Rows: []*querypb.Row{sqltypes.RowToProto3([]sqltypes.Value{
+					sqltypes.NewInt64(7), sqltypes.NULL, sqltypes.NewVarBinary("x\x00y"),
+				})},
+			},
+			want: []sqltypes.Value{sqltypes.NewInt64(7), sqltypes.NULL, sqltypes.NewVarBinary("x\x00y")},
+		},
+		{
+			name: "no rows",
+			qr: &querypb.QueryResult{
+				Fields: []*querypb.Field{idField},
+			},
+			wantErr: "lastpk row count is 0, expected 1",
+		},
+		{
+			name: "two rows",
+			qr: &querypb.QueryResult{
+				Fields: []*querypb.Field{idField},
+				Rows: []*querypb.Row{
+					{Lengths: []int64{1}, Values: []byte("1")},
+					{Lengths: []int64{1}, Values: []byte("2")},
+				},
+			},
+			wantErr: "lastpk row count is 2, expected 1",
+		},
+		{
+			name: "nil row",
+			qr: &querypb.QueryResult{
+				Fields: []*querypb.Field{idField},
+				Rows:   []*querypb.Row{nil},
+			},
+			wantErr: "lastpk row is nil",
+		},
+		{
+			name: "more lengths than fields",
+			qr: &querypb.QueryResult{
+				Fields: []*querypb.Field{idField},
+				Rows:   []*querypb.Row{{Lengths: []int64{1, 1}, Values: []byte("1")}},
+			},
+			wantErr: "lastpk value count 2 does not match field count 1",
+		},
+		{
+			name: "fewer lengths than fields",
+			qr: &querypb.QueryResult{
+				Fields: []*querypb.Field{idField, nameField},
+				Rows:   []*querypb.Row{{Lengths: []int64{1}, Values: []byte("1")}},
+			},
+			wantErr: "lastpk value count 1 does not match field count 2",
+		},
+		{
+			name: "nil field",
+			qr: &querypb.QueryResult{
+				Fields: []*querypb.Field{nil},
+				Rows:   []*querypb.Row{{Lengths: []int64{1}, Values: []byte("1")}},
+			},
+			wantErr: "lastpk field 0 is nil",
+		},
+		{
+			name: "negative length other than NULL",
+			qr: &querypb.QueryResult{
+				Fields: []*querypb.Field{idField},
+				Rows:   []*querypb.Row{{Lengths: []int64{-2}}},
+			},
+			wantErr: "lastpk value 0 has an invalid length -2",
+		},
+		{
+			name: "length past the values",
+			qr: &querypb.QueryResult{
+				Fields: []*querypb.Field{idField},
+				Rows:   []*querypb.Row{{Lengths: []int64{10}, Values: []byte("1")}},
+			},
+			wantErr: "lastpk value 0 has length 10, past the end of the values (remaining length 1)",
+		},
+		{
+			name: "second length past the values",
+			qr: &querypb.QueryResult{
+				Fields: []*querypb.Field{idField, nameField},
+				Rows:   []*querypb.Row{{Lengths: []int64{1, 3}, Values: []byte("1ab")}},
+			},
+			wantErr: "lastpk value 1 has length 3, past the end of the values (remaining length 2)",
+		},
+		{
+			// A NULL takes no bytes, so it must not add to the bytes left for
+			// the values after it.
+			name: "a NULL then a length past the values",
+			qr: &querypb.QueryResult{
+				Fields: []*querypb.Field{idField, nameField},
+				Rows:   []*querypb.Row{{Lengths: []int64{-1, 4}, Values: []byte("abc")}},
+			},
+			wantErr: "lastpk value 1 has length 4, past the end of the values (remaining length 3)",
+		},
+		{
+			// Decoding would take "3" and resume after the wrong key.
+			name: "values that no length covers",
+			qr: &querypb.QueryResult{
+				Fields: []*querypb.Field{idField},
+				Rows:   []*querypb.Row{{Lengths: []int64{1}, Values: []byte("3999")}},
+			},
+			wantErr: "lastpk values are longer than their lengths cover (unused length 3)",
+		},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := DecodeLastPK(tc.qr)
+			if tc.wantErr != "" {
+				require.ErrorContains(t, err, tc.wantErr)
+				assert.Equal(t, vtrpcpb.Code_INVALID_ARGUMENT, vterrors.Code(err))
+				assert.Nil(t, got)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, got)
+		})
+	}
+}
+
 // TestValidateLastPKRejectsInjection covers a client-supplied lastpk being
 // spliced into the copy-phase WHERE clause.
 //

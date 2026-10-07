@@ -1436,11 +1436,10 @@ func (tsv *TabletServer) VStreamRows(ctx context.Context, request *binlogdatapb.
 	}
 	var row []sqltypes.Value
 	if request.Lastpk != nil {
-		r := sqltypes.Proto3ToResult(request.Lastpk)
-		if len(r.Rows) != 1 {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected lastpk input: %v", request.Lastpk)
+		var err error
+		if row, err = vstreamer.DecodeLastPK(request.Lastpk); err != nil {
+			return err
 		}
-		row = r.Rows[0]
 	}
 	return tsv.vstreamer.StreamRows(ctx, request.Query, row, send, request.Options)
 }

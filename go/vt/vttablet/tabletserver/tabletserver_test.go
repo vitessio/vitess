@@ -70,6 +70,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/vttablet/tmclienttest"
 
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	querythrottlerpb "vitess.io/vitess/go/vt/proto/querythrottler"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -951,6 +952,29 @@ func TestTabletServerStreamExecute(t *testing.T) {
 	err := tsv.StreamExecute(ctx, nil, &target, executeSQL, nil, 0, 0, nil, callback)
 	require.NoErrorf(t, err, "TabletServer.StreamExecute should success: %s, but get error: %v",
 		executeSQL, err)
+}
+
+// TestTabletServerVStreamRowsMalformedLastPK checks that VStreamRows rejects a
+// lastpk whose length runs past its values with INVALID_ARGUMENT, rather than
+// panicking when sqltypes.Proto3ToResult slices the values.
+func TestTabletServerVStreamRowsMalformedLastPK(t *testing.T) {
+	db, tsv := setupTabletServerTest(t, t.Context(), "")
+	t.Cleanup(db.Close)
+	t.Cleanup(tsv.StopService)
+
+	request := &binlogdatapb.VStreamRowsRequest{
+		Target: &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY},
+		Query:  "select * from test_table",
+		Lastpk: &querypb.QueryResult{
+			Fields: []*querypb.Field{{Name: "pk", Type: sqltypes.Int64}},
+			Rows:   []*querypb.Row{{Lengths: []int64{10}, Values: []byte("1")}},
+		},
+	}
+	err := tsv.VStreamRows(t.Context(), request, func(*binlogdatapb.VStreamRowsResponse) error {
+		return nil
+	})
+	require.ErrorContains(t, err, "lastpk value 0 has length 10")
+	assert.Equal(t, vtrpcpb.Code_INVALID_ARGUMENT, vterrors.Code(err))
 }
 
 // TestTabletServerRewritesDoubleSlashComments checks that a statement that
