@@ -221,7 +221,7 @@ func (p *Parser) RewriteDoubleSlashComments(sql string) (string, bool) {
 	for {
 		typ, val := tokenizer.Scan()
 		switch typ {
-		case 0, eofChar, LEX_ERROR:
+		case 0, LEX_ERROR:
 			// The parser rejects text the tokenizer cannot read, so there
 			// is nothing past a lexing error to rewrite.
 			if copied == 0 {
