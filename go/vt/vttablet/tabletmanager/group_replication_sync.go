@@ -19,8 +19,6 @@ package tabletmanager
 import (
 	"context"
 	"log/slog"
-	"strconv"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -641,8 +639,7 @@ func (s *groupReplicationSync) deposedPrimary(ctx context.Context, rec *shardGro
 	}
 	peer := tm.peerFullStatuses(ctx, []*topodatapb.Tablet{recorded})[alias]
 	peerStatus := peer.GetGroupReplicationStatus()
-	if !mysql.IsGroupPrimary(peerStatus) || policy.GroupIncarnation(peerStatus.GetViewId()) != policy.GroupIncarnation(status.GetViewId()) ||
-		!viewNotOlder(peerStatus.GetViewId(), status.GetViewId()) {
+	if !policy.SupersedesGroupView(peerStatus, status) {
 		return false
 	}
 	if time.Since(s.lastDeposedLog) >= groupReplicationIllegitimateLogInterval {
@@ -653,23 +650,6 @@ func (s *groupReplicationSync) deposedPrimary(ctx context.Context, rec *shardGro
 			slog.String("recorded_primary_view_id", peerStatus.GetViewId()))
 	}
 	return true
-}
-
-// viewNotOlder returns whether the view id a, of the form <incarnation>:<sequence>, is not older than
-// b, of the same incarnation: Group Replication increments the sequence on every view change. An id
-// that cannot be compared counts as not older.
-func viewNotOlder(a, b string) bool {
-	_, seqA, okA := strings.Cut(a, ":")
-	_, seqB, okB := strings.Cut(b, ":")
-	if !okA || !okB {
-		return true
-	}
-	na, errA := strconv.ParseUint(seqA, 10, 64)
-	nb, errB := strconv.ParseUint(seqB, 10, 64)
-	if errA != nil || errB != nil {
-		return true
-	}
-	return na >= nb
 }
 
 // demote changes the tablet type from PRIMARY to REPLICA after MySQL lost the primary role in
