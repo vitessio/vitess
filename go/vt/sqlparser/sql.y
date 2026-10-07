@@ -4847,11 +4847,19 @@ show_profile_type:
   }
 | ci_identifier
   {
-    $$ = $1.String()
+    $$ = $1.Lowered()
+    if !isShowProfileType($$) {
+      yylex.Error("unknown profile type")
+      return 1
+    }
   }
 | ci_identifier ci_identifier
   {
-    $$ = $1.String() + " " + $2.String()
+    $$ = $1.Lowered() + " " + $2.Lowered()
+    if !isShowProfileType($$) {
+      yylex.Error("unknown profile type")
+      return 1
+    }
   }
 
 for_query_opt:
