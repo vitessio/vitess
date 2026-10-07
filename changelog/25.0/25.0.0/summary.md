@@ -45,10 +45,13 @@
         - [`EmergencyReparentShard` can explicitly recover from split brain](#ers-allow-split-brain-promotion)
         - [Reparent candidate ordering now respects partially ordered GTID histories](#reparent-gtid-candidate-ordering)
         - [`EmergencyReparentShard` can require a position on the new primary](#ers-required-position)
+        - [Reparents refuse shards containing unmanaged tablets](#reparent-unmanaged-tablets)
     - **[VTOrc](#minor-changes-vtorc)**
         - [VTOrc can require the last known primary position in an emergency reparent](#vtorc-emergency-reparent-require-primary-position)
+        - [VTOrc no longer watches `--unmanaged` tablets](#vtorc-unmanaged-tablets)
     - **[VTTablet](#minor-changes-vttablet)**
         - [VTTablet rejects unsupported `sql_mode` values](#vttablet-reject-unsupported-sql-modes)
+        - [Unmanaged tablets reject replication and reparent RPCs](#vttablet-unmanaged-rpc-guard)
         - [Consolidator Reject on Waiter Cap](#vttablet-consolidator-reject-on-cap)
         - [Query timeouts no longer kill reserved connections outside transactions](#vttablet-reserved-conn-kill-query)
         - [Query timeout for state-changing statements on the streaming path](#vttablet-stream-query-timeout)
@@ -499,6 +502,12 @@ The check runs in vtctld. An older vtctld ignores `--required-position` and runs
 
 See [#21109](https://github.com/vitessio/vitess/issues/21109).
 
+#### <a id="reparent-unmanaged-tablets"/>Reparents refuse shards containing unmanaged tablets</a>
+
+`EmergencyReparentShard`, `PlannedReparentShard` and `InitShardPrimary` now error, before issuing any RPC, if the shard's recorded primary, or any tablet its replication records list, was started with `--unmanaged`. Vitess cannot revoke writes from or repoint a tablet it does not manage, so ERS cannot guarantee no other tablet still accepts writes, and PRS would promote the new primary and only then report failure.
+
+**Impact**: a shard mixing managed and unmanaged tablets can no longer be reparented at all, by either VTOrc or `vtctldclient`; unmanaged tablets belong in a keyspace of their own. Records written by older `vttablet` versions decode as managed, so the refusal begins once an unmanaged `vttablet` restarts on v25 and publishes its mode, even if the other tablets in the shard have not been upgraded.
+
 ### <a id="minor-changes-vtorc"/>VTOrc</a>
 
 #### <a id="vtorc-emergency-reparent-require-primary-position"/>VTOrc can require the last known primary position in an emergency reparent</a>
@@ -519,6 +528,12 @@ VTOrc can only require a position that it had observed on the primary before the
 
 See [#21109](https://github.com/vitessio/vitess/issues/21109).
 
+#### <a id="vtorc-unmanaged-tablets"/>VTOrc no longer watches `--unmanaged` tablets</a>
+
+A `vttablet` started with `--unmanaged` now records that in its topology record, via a new `mysql_mode` field, and VTOrc skips those tablets entirely: never written to its backend, never probed, analysed or recovered. Previously nothing outside the `vttablet` process knew a tablet was unmanaged, so VTOrc — which filters only on `--clusters-to-watch` — would flag one replicating from outside Vitess (`ReplicaIsWritable`, `NotConnectedToPrimary`) and "repair" it, issuing `SetReadOnly` and `SetReplicationSource` against a MySQL it had been told not to manage.
+
+**Impact**: these tablets disappear from VTOrc's API, UI and tablet counts. The `--clusters-to-watch` exclusions used to carve them out are only safe to remove once every unmanaged `vttablet` and every VTOrc watching them run v25, since a tablet only declares itself unmanaged when it restarts, a record written by an older `vttablet` reads back as managed, and an older VTOrc ignores the field entirely. Restore the exclusions before downgrading either component.
+
 ### <a id="minor-changes-vttablet"/>VTTablet</a>
 
 #### <a id="vttablet-reject-unsupported-sql-modes"/>VTTablet rejects unsupported `sql_mode` values</a>
@@ -536,6 +551,12 @@ The server's own configuration is covered as well. MySQL lexes every statement u
 Two consequences are deliberate. Connections that serve `ExecuteFetchAsDba`-style admin RPCs also start neutralized: operator-supplied statements run with the server's lexer modes stripped, and a multi-statement batch can still set the session `sql_mode` explicitly. Connections to *external* MySQL servers (vreplication sources, point-in-time recovery) are neutralized too, because Vitess sends them the same Vitess-formatted SQL. Statements that an operator's `sql_mode`-sensitive tooling sends outside Vitess are unaffected: the neutralization is session-scoped and never touches the global value.
 
 **Impact**: During a rolling upgrade, VTTablets are typically upgraded before VTGates. A session that set a now-rejected `sql_mode`, such as `ANSI`, through a not-yet-upgraded VTGate will start receiving errors from upgraded VTTablets. Such sessions were already unreliable, because VTGate parses queries without honoring these modes. Queries now always run with the server's lexer modes stripped from the session, so Vitess-formatted SQL parses consistently regardless of the backend's global configuration.
+
+#### <a id="vttablet-unmanaged-rpc-guard"/>Unmanaged tablets reject replication and reparent RPCs</a>
+
+A `vttablet` started with `--unmanaged` now refuses the tabletmanager RPCs that would change replication on its external MySQL, or promote or demote it, returning `FAILED_PRECONDITION` to every caller. Those are `StopReplication`, `StopReplicationMinimum`, `StartReplication`, `RestartReplication`, `StartReplicationUntilAfter`, `ResetReplication`, `ResetReplicationParameters`, `SetReplicationSource`, `StopReplicationAndGetStatus`, `InitPrimary`, `InitReplica`, `PopulateReparentJournal`, `DemotePrimary`, `UndoDemotePrimary`, `PromoteReplica`, `SetReadOnly` and `SetReadWrite`. Read-only RPCs are unaffected, and `ChangeType` stays available so `TabletExternallyReparented` keeps working, though it now only moves the topology record. A backup's drain phase likewise leaves semi-sync on the external MySQL alone.
+
+**Impact**: anyone deliberately driving these RPCs against an unmanaged tablet, for example via `vtctldclient`, now gets an error instead of a silent change to the external MySQL.
 
 #### <a id="vttablet-consolidator-reject-on-cap"/>Consolidator Reject on Waiter Cap</a>
 
