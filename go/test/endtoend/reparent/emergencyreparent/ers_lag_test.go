@@ -206,10 +206,9 @@ func TestERSFiltersReplicaBehindOnRelayLogReceipt(t *testing.T) {
 	err = utils.CheckInsertedValues(t.Context(), t, newPrimary, insertedVal)
 	require.NoError(t, err)
 
-	// ERS starts tablets[1]'s SQL thread, so repointing restarts both threads.
-	// Wait for the asynchronous repoint before clearing the apply delay.
+	// Wait for the asynchronous repoint before checking the backlog and clearing
+	// the apply delay. Older VTTablets leave this replica's threads stopped.
 	waitForReplicationSource(t, tablets[1], newPrimary)
-	utils.CheckReplicationStatus(t.Context(), t, tablets[1], true, true)
 	res := utils.RunSQL(t.Context(), t, `select msg from vt_insert_test`, tablets[1])
 	assert.Len(t, res.Rows, 1, "the excluded replica must still have an unapplied backlog")
 
