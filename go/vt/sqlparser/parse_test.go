@@ -6561,48 +6561,6 @@ var invalidSQL = []struct {
 	input  string
 	output string
 }{{
-<<<<<<< HEAD
-||||||| parent of 5a40693878 (sqlparser: rewrite `//` comments to `#/` before statement text reaches MySQL (#21410))
-	// MySQL only accepts a text literal or a user defined variable as the
-	// statement text of a PREPARE; a positional parameter is a syntax error.
-	input:  "prepare stmt1 from ?",
-	output: "syntax error at position 21 near ':v1'",
-}, {
-	input:  "alter vitess_migration cancel context ''",
-	output: "migration context cannot be empty at position 41",
-}, {
-	// MySQL's own error text (1791)
-	input:  "explain format = bogus select * from t",
-	output: "Unknown EXPLAIN format name: 'bogus' at position 23 near 'bogus'",
-}, {
-	input:  "explain format = 'bogus' select * from t",
-	output: "Unknown EXPLAIN format name: 'bogus' at position 25 near 'bogus'",
-}, {
-	input:  "alter vitess_migration cleanup context ''",
-	output: "migration context cannot be empty at position 42",
-}, {
-	input:  "alter vitess_migration launch context ''",
-	output: "migration context cannot be empty at position 41",
-}, {
-	input:  "alter vitess_migration complete context ''",
-	output: "migration context cannot be empty at position 43",
-}, {
-	input:  "alter vitess_migration postpone complete context ''",
-	output: "migration context cannot be empty at position 52",
-}, {
-	input:  "alter vitess_migration force_cutover context ''",
-	output: "migration context cannot be empty at position 48",
-}, {
-	input:  "alter vitess_migration throttle context ''",
-	output: "migration context cannot be empty at position 43",
-}, {
-	input:  "alter vitess_migration throttle context '' expire '1h' ratio 0.7",
-	output: "migration context cannot be empty at position 65 near '0.7'",
-}, {
-	input:  "alter vitess_migration unthrottle context ''",
-	output: "migration context cannot be empty at position 45",
-}, {
-=======
 	// MySQL reads a quoted user variable name to its closing quote, and
 	// Vitess reads one only if it holds nothing an identifier cannot.
 	input:  "select @'a//b'",
@@ -6611,46 +6569,6 @@ var invalidSQL = []struct {
 	input:  "select @\"a b\" from t",
 	output: "syntax error at position 9",
 }, {
-	// MySQL only accepts a text literal or a user defined variable as the
-	// statement text of a PREPARE; a positional parameter is a syntax error.
-	input:  "prepare stmt1 from ?",
-	output: "syntax error at position 21 near ':v1'",
-}, {
-	input:  "alter vitess_migration cancel context ''",
-	output: "migration context cannot be empty at position 41",
-}, {
-	// MySQL's own error text (1791)
-	input:  "explain format = bogus select * from t",
-	output: "Unknown EXPLAIN format name: 'bogus' at position 23 near 'bogus'",
-}, {
-	input:  "explain format = 'bogus' select * from t",
-	output: "Unknown EXPLAIN format name: 'bogus' at position 25 near 'bogus'",
-}, {
-	input:  "alter vitess_migration cleanup context ''",
-	output: "migration context cannot be empty at position 42",
-}, {
-	input:  "alter vitess_migration launch context ''",
-	output: "migration context cannot be empty at position 41",
-}, {
-	input:  "alter vitess_migration complete context ''",
-	output: "migration context cannot be empty at position 43",
-}, {
-	input:  "alter vitess_migration postpone complete context ''",
-	output: "migration context cannot be empty at position 52",
-}, {
-	input:  "alter vitess_migration force_cutover context ''",
-	output: "migration context cannot be empty at position 48",
-}, {
-	input:  "alter vitess_migration throttle context ''",
-	output: "migration context cannot be empty at position 43",
-}, {
-	input:  "alter vitess_migration throttle context '' expire '1h' ratio 0.7",
-	output: "migration context cannot be empty at position 65 near '0.7'",
-}, {
-	input:  "alter vitess_migration unthrottle context ''",
-	output: "migration context cannot be empty at position 45",
-}, {
->>>>>>> 5a40693878 (sqlparser: rewrite `//` comments to `#/` before statement text reaches MySQL (#21410))
 	input:  "select : from t",
 	output: "syntax error at position 9 near ':'",
 }, {

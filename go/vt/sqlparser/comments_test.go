@@ -17,12 +17,8 @@ limitations under the License.
 package sqlparser
 
 import (
-<<<<<<< HEAD
 	"fmt"
-||||||| parent of 5a40693878 (sqlparser: rewrite `//` comments to `#/` before statement text reaches MySQL (#21410))
-=======
 	"strings"
->>>>>>> 5a40693878 (sqlparser: rewrite `//` comments to `#/` before statement text reaches MySQL (#21410))
 	"testing"
 
 	"github.com/stretchr/testify/assert"
