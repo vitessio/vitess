@@ -226,8 +226,8 @@ func (pr *PlannedReparenter) swapInElect(ctx context.Context, ev *events.Reparen
 }
 
 // swapAfterDemote swaps the elect in for the demoted current primary (see planGroupReplicationSwap): it waits
-// until the voters of the new list hold what the demoted primary executed (waitForNewVotersToHold), checks the
-// swap again on that read, writes the new voters, and makes the elect join the group. On a failure after
+// until the voters of the new list hold what the demoted primary executed (waitForNewVotersToHold), checks that
+// the demotion holds, checks the swap again on that read, writes the new voters, and makes the elect join the group. On a failure after
 // the write, if the elect is not ONLINE in the group after all, it stops the elect's join and writes the old
 // voters back (a compare-and-swap on the new ones), so
 // that the caller can undo the demotion of a primary that is a voter again, unless a member's view of the
@@ -242,6 +242,16 @@ func (pr *PlannedReparenter) swapAfterDemote(ctx context.Context, ev *events.Rep
 	statuses, err := pr.waitForNewVotersToHold(ctx, plan, demotedPosition, opts)
 	if err != nil {
 		return true, err
+	}
+	// The demotion must hold: dropped from the voters, a tablet that its sync loop made serve again would serve
+	// as a primary that is not a voter, and commit what the new voters lack. DemotePrimary demoted a PRIMARY
+	// tablet, whose type has not changed since (the tablet reports groupReplicationDemoted), and MySQL is
+	// super_read_only (the TLA+ model's prs_swap_nodemoted).
+	if res := statuses[topoproto.TabletAliasString(currentPrimary.Alias)]; res == nil || res.err != nil ||
+		!res.status.GetGroupReplicationDemoted() || !res.status.GetSuperReadOnly() {
+		return true, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+			"the demotion of the current primary %v does not hold (its tablet was not PRIMARY when it was demoted, its type changed since, or MySQL is writable): not dropping it from the voters",
+			topoproto.TabletAliasString(currentPrimary.Alias))
 	}
 	if err := checkGroupSwap(plan, statuses, currentPrimary); err != nil {
 		return true, err

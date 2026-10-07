@@ -271,6 +271,8 @@ func TestPlannedReparentGroupReplicationSwapAfterDemote(t *testing.T) {
 			case tt.electJoined:
 				c.onCall = map[string]func(){join: func() { c.tablets[alias101].member = true }}
 			}
+			// DemotePrimary demoted the PRIMARY tablet.
+			c.tablets[aliasP].demoted, c.tablets[aliasP].superReadOnly = true, true
 			si, err := ts.GetShard(t.Context(), "ks", "-")
 			require.NoError(t, err)
 			ev := &events.Reparent{ShardInfo: *si}
@@ -313,6 +315,27 @@ func TestPlannedReparentGroupReplicationSwapWaitsForNewVoters(t *testing.T) {
 	require.ErrorContains(t, err, "they lack "+gtids("101-120"))
 	assert.Equal(t, vtrpcpb.Code_DEADLINE_EXCEEDED, vterrors.Code(err))
 	assert.True(t, reverted, "the voters did not change: the demotion can be undone")
+	assert.Equal(t, []string{aliasP, alias200, alias300}, c.voters(t))
+	assert.Empty(t, c.mutatingCalls())
+}
+
+// TestPlannedReparentGroupReplicationSwapNeedsDemotion checks that PRS drops the demoted primary from the voters only
+// while its demotion holds: a tablet whose demotion did not take (it was not PRIMARY when demoted, or its type
+// changed since) may serve again, as a primary that is not a voter. The voters do not change.
+func TestPlannedReparentGroupReplicationSwapNeedsDemotion(t *testing.T) {
+	c, ts := newSwapShard(t)
+	plan, err := planSwap(t, c, ts, alias101)
+	require.NoError(t, err)
+	c.tablets[aliasP].superReadOnly = true
+	si, err := ts.GetShard(t.Context(), "ks", "-")
+	require.NoError(t, err)
+	pr := NewPlannedReparenter(ts, c, logutil.NewMemoryLogger())
+
+	reverted, err := pr.swapAfterDemote(lockShard(t, ts), &events.Reparent{ShardInfo: *si}, "ks", "-", plan, c.tabletRecs[aliasP], "MySQL56/"+gtids("1-100"),
+		PlannedReparentOptions{WaitReplicasTimeout: 30 * time.Second})
+	require.ErrorContains(t, err, "the demotion of the current primary zone1-0000000100 does not hold")
+	assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+	assert.True(t, reverted)
 	assert.Equal(t, []string{aliasP, alias200, alias300}, c.voters(t))
 	assert.Empty(t, c.mutatingCalls())
 }

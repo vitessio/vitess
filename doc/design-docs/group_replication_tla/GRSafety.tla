@@ -204,8 +204,9 @@ CONSTANTS
     SWAP_LIVE,      \* VTOrc's swap of a live voter (an ineligible tablet type), without P2
     SWAP_REVERT_CHECK, \* (fix, TRUE = code) PRS writes the old list back after a failed swap of the demoted primary only
                     \* if no view that lacks a majority of the new list holds one of the old list
-    SWAP_HOLDS      \* (fix, TRUE = code) PRS swaps the demoted primary out only once the voters of the new list executed
+    SWAP_HOLDS,     \* (fix, TRUE = code) PRS swaps the demoted primary out only once the voters of the new list executed
                     \* every transaction it executed
+    SWAP_DEMOTED    \* (fix, TRUE = code) ... and only while its demotion holds (groupReplicationDemoted, super_read_only)
 
 InitVoters == Servers \ Spares
 InitUp == InitVoters \ InitDown
@@ -2412,6 +2413,11 @@ PSwapDemoted ==
           \* a relay log does not count: a restart of its mysqld discards it (the first version, which counted it,
           \* lost a write in prs_swap: 17 states)
           /\ SWAP_HOLDS => exec[pcur] \subseteq UNION {exec[w] : w \in new}
+          \* SWAP_DEMOTED: the demotion holds: DemotePrimary demoted a PRIMARY tablet (groupReplicationDemoted, which
+          \* FullStatus reports), whose type has not changed since, so that its sync loop does not make it serve
+          \* again, and MySQL is super_read_only. A demotion of a tablet that a crash had made a REPLICA does not
+          \* hold: its sync loop promoted it again before the swap dropped it (prs_swap_nodemoted)
+          /\ SWAP_DEMOTED => dmt[pcur] /\ sro[pcur]
           /\ voters' = new
           /\ vMinor' = (vMinor \/ MinorToMajor(voters, new))
           /\ nVot' = nVot + 1

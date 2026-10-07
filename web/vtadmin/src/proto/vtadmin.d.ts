@@ -61831,6 +61831,9 @@ export namespace replicationdata {
         /** FullStatus shard_durability_policy_supported. */
         shard_durability_policy_supported: boolean;
 
+        /** FullStatus group_replication_demoted. */
+        group_replication_demoted: boolean;
+
         /**
          * Creates a new FullStatus instance using the specified properties.
          * @param [properties] Properties to set
@@ -62001,6 +62004,9 @@ export namespace replicationdata {
 
             /** FullStatus shard_durability_policy_supported */
             shard_durability_policy_supported?: (boolean|null);
+
+            /** FullStatus group_replication_demoted */
+            group_replication_demoted?: (boolean|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];

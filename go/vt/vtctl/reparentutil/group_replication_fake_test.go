@@ -89,6 +89,8 @@ type fakeGRTablet struct {
 	executed, received string
 	// refuseBootstrap makes the tablet refuse a bootstrap definitively.
 	refuseBootstrap bool
+	// demoted is set by DemotePrimary on the primary, and reported in FullStatus.
+	demoted bool
 }
 
 // fakeGRCluster is a TabletManagerClient that simulates a shard running asynchronous
@@ -317,6 +319,7 @@ func (c *fakeGRCluster) FullStatus(ctx context.Context, tablet *topodatapb.Table
 		GroupReplicationEnabled:     ft.grEnabled,
 		// A tablet that knows the shard's own durability policy reports it.
 		ShardDurabilityPolicySupported: ft.shardPolicy,
+		GroupReplicationDemoted:        ft.demoted,
 	}
 	if ft.executed != "" {
 		fs.PrimaryStatus = &replicationdatapb.PrimaryStatus{Position: "MySQL56/" + ft.executed}
@@ -528,6 +531,9 @@ func (c *fakeGRCluster) GetGlobalStatusVars(ctx context.Context, tablet *topodat
 func (c *fakeGRCluster) DemotePrimary(ctx context.Context, tablet *topodatapb.Tablet, force bool) (*replicationdatapb.PrimaryStatus, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if ft, err := c.get(tablet); err == nil && ft.primary {
+		ft.demoted, ft.superReadOnly = true, true
+	}
 	return &replicationdatapb.PrimaryStatus{}, c.record(fmt.Sprintf("DemotePrimary(%s)", topoproto.TabletAliasString(tablet.Alias)))
 }
 
