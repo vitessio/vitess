@@ -30,6 +30,7 @@ import (
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // DBAction is used to tell ChangeTabletType whether to call SetReadOnly on change to
@@ -142,16 +143,14 @@ func (tm *TabletManager) ChangeType(ctx context.Context, tabletType topodatapb.T
 // changeTypeLocked changes the tablet type under a lock
 func (tm *TabletManager) changeTypeLocked(ctx context.Context, tabletType topodatapb.TabletType, action DBAction, semiSync SemiSyncAction) error {
 	if tabletType == topodatapb.TabletType_DRAINED {
-		// Stop serving before disabling source-side semi-sync releases blocked commits.
+		// Reparent operations must demote primaries and update the shard record.
 		if tm.Tablet().Type == topodatapb.TabletType_PRIMARY {
-			if _, err := tm.demotePrimaryLocked(ctx, false /* revertPartialFailure */, true /* force */); err != nil {
-				return vterrors.Wrapf(err, "failed to demote the primary before draining")
-			}
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot change tablet type from PRIMARY to DRAINED: reparent the shard first")
 		}
 		// Disable ACKs before failover excludes this tablet. Failed updates remain
 		// retryable; already-drained tablets are repaired before rejecting another claim.
 		if err := tm.fixSemiSyncAndReplication(ctx, tabletType, semiSync); err != nil {
-			return vterrors.Wrapf(err, "failed to revoke semi-sync acknowledgements before draining")
+			return vterrors.Wrap(err, "failed to revoke semi-sync acknowledgements before draining")
 		}
 	}
 	// Reject duplicate claims of a DRAINED tablet.
