@@ -9219,13 +9219,7 @@ var yyPgo = [...]int16{
 	1848, 141, 2786, 223,
 }
 
-<<<<<<< HEAD
-//line sql.y:9558
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:9694
-=======
-//line sql.y:9702
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:9566
 type yyData = [6]uintptr
 
 var yyZeroData yyData
@@ -20014,13 +20008,7 @@ yydefault:
 	case 892:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL string
-<<<<<<< HEAD
-//line sql.y:4853
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:4952
-=======
-//line sql.y:4956
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:4857
 		{
 			yyLOCAL = yyDollar[1].identifierCI().Lowered() + " " + yyDollar[2].identifierCI().Lowered()
 			if !isShowProfileType(yyLOCAL) {
@@ -20032,13 +20020,7 @@ yydefault:
 	case 893:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL *Literal
-<<<<<<< HEAD
-//line sql.y:4859
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:4958
-=======
-//line sql.y:4966
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:4867
 		{
 			yyLOCAL = nil
 		}
@@ -20046,13 +20028,7 @@ yydefault:
 	case 894:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL *Literal
-<<<<<<< HEAD
-//line sql.y:4863
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:4962
-=======
-//line sql.y:4970
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:4871
 		{
 			yyLOCAL = NewIntLiteral(yyDollar[3].str())
 		}
@@ -20060,13 +20036,7 @@ yydefault:
 	case 895:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL string
-<<<<<<< HEAD
-//line sql.y:4869
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:4968
-=======
-//line sql.y:4976
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:4877
 		{
 			yyLOCAL = ""
 		}
@@ -20074,13 +20044,7 @@ yydefault:
 	case 896:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL string
-<<<<<<< HEAD
-//line sql.y:4873
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:4972
-=======
-//line sql.y:4980
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:4881
 		{
 			yyLOCAL = string(yyDollar[2].str())
 		}
@@ -20088,13 +20052,7 @@ yydefault:
 	case 897:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:4879
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:4978
-=======
-//line sql.y:4986
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:4887
 		{
 			yyLOCAL = nil
 		}
@@ -20102,13 +20060,7 @@ yydefault:
 	case 898:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:4883
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:4982
-=======
-//line sql.y:4990
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:4891
 		{
 			yyLOCAL = NewIntLiteral(yyDollar[2].str())
 		}
@@ -20116,13 +20068,7 @@ yydefault:
 	case 899:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL string
-<<<<<<< HEAD
-//line sql.y:4889
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:4988
-=======
-//line sql.y:4996
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:4897
 		{
 			yyLOCAL = ""
 		}
@@ -20130,13 +20076,7 @@ yydefault:
 	case 900:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL string
-<<<<<<< HEAD
-//line sql.y:4893
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:4992
-=======
-//line sql.y:5000
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:4901
 		{
 			yyLOCAL = yyDollar[3].identifierCI().String()
 		}
@@ -20144,13 +20084,7 @@ yydefault:
 	case 901:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL string
-<<<<<<< HEAD
-//line sql.y:4897
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:4996
-=======
-//line sql.y:5004
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:4905
 		{
 			yyLOCAL = string(yyDollar[3].str())
 		}
@@ -20158,13 +20092,7 @@ yydefault:
 	case 902:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL string
-<<<<<<< HEAD
-//line sql.y:4903
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5002
-=======
-//line sql.y:5010
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:4911
 		{
 			yyLOCAL = ""
 		}
@@ -20172,13 +20100,7 @@ yydefault:
 	case 903:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL string
-<<<<<<< HEAD
-//line sql.y:4907
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5006
-=======
-//line sql.y:5014
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:4915
 		{
 			yyLOCAL = "extended "
 		}
@@ -20186,13 +20108,7 @@ yydefault:
 	case 904:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL bool
-<<<<<<< HEAD
-//line sql.y:4913
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5012
-=======
-//line sql.y:5020
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:4921
 		{
 			yyLOCAL = false
 		}
@@ -20200,13 +20116,7 @@ yydefault:
 	case 905:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL bool
-<<<<<<< HEAD
-//line sql.y:4917
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5016
-=======
-//line sql.y:5024
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:4925
 		{
 			yyLOCAL = true
 		}
@@ -20214,13 +20124,7 @@ yydefault:
 	case 906:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL string
-<<<<<<< HEAD
-//line sql.y:4923
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5022
-=======
-//line sql.y:5030
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:4931
 		{
 			yyLOCAL = string(yyDollar[1].str())
 		}
@@ -20228,13 +20132,7 @@ yydefault:
 	case 907:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL string
-<<<<<<< HEAD
-//line sql.y:4927
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5026
-=======
-//line sql.y:5034
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:4935
 		{
 			yyLOCAL = string(yyDollar[1].str())
 		}
@@ -20242,13 +20140,7 @@ yydefault:
 	case 908:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL IdentifierCS
-<<<<<<< HEAD
-//line sql.y:4933
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5032
-=======
-//line sql.y:5040
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:4941
 		{
 			yyLOCAL = NewIdentifierCS("")
 		}
@@ -20256,13 +20148,7 @@ yydefault:
 	case 909:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL IdentifierCS
-<<<<<<< HEAD
-//line sql.y:4937
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5036
-=======
-//line sql.y:5044
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:4945
 		{
 			yyLOCAL = yyDollar[2].identifierCS()
 		}
@@ -20270,13 +20156,7 @@ yydefault:
 	case 910:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL IdentifierCS
-<<<<<<< HEAD
-//line sql.y:4941
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5040
-=======
-//line sql.y:5048
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:4949
 		{
 			yyLOCAL = yyDollar[2].identifierCS()
 		}
@@ -20284,13 +20164,7 @@ yydefault:
 	case 911:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL *ShowFilter
-<<<<<<< HEAD
-//line sql.y:4947
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5046
-=======
-//line sql.y:5054
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:4955
 		{
 			yyLOCAL = nil
 		}
@@ -20298,13 +20172,7 @@ yydefault:
 	case 912:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL *ShowFilter
-<<<<<<< HEAD
-//line sql.y:4951
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5050
-=======
-//line sql.y:5058
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:4959
 		{
 			yyLOCAL = &ShowFilter{Like: string(yyDollar[2].str())}
 		}
@@ -20312,13 +20180,7 @@ yydefault:
 	case 913:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL *ShowFilter
-<<<<<<< HEAD
-//line sql.y:4955
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5054
-=======
-//line sql.y:5062
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:4963
 		{
 			yyLOCAL = &ShowFilter{Filter: yyDollar[2].expr()}
 		}
@@ -20326,13 +20188,7 @@ yydefault:
 	case 914:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL *ShowFilter
-<<<<<<< HEAD
-//line sql.y:4961
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5060
-=======
-//line sql.y:5068
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:4969
 		{
 			yyLOCAL = nil
 		}
@@ -20340,13 +20196,7 @@ yydefault:
 	case 915:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL *ShowFilter
-<<<<<<< HEAD
-//line sql.y:4965
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5064
-=======
-//line sql.y:5072
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:4973
 		{
 			yyLOCAL = &ShowFilter{Like: string(yyDollar[2].str())}
 		}
@@ -20354,13 +20204,7 @@ yydefault:
 	case 916:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL struct{}
-<<<<<<< HEAD
-//line sql.y:4971
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5070
-=======
-//line sql.y:5078
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:4979
 		{
 			yyLOCAL = struct{}{}
 		}
@@ -20368,13 +20212,7 @@ yydefault:
 	case 917:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL struct{}
-<<<<<<< HEAD
-//line sql.y:4975
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5074
-=======
-//line sql.y:5082
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:4983
 		{
 			yyLOCAL = struct{}{}
 		}
@@ -20382,13 +20220,7 @@ yydefault:
 	case 918:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL struct{}
-<<<<<<< HEAD
-//line sql.y:4979
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5078
-=======
-//line sql.y:5086
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:4987
 		{
 			yyLOCAL = struct{}{}
 		}
@@ -20396,13 +20228,7 @@ yydefault:
 	case 919:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL string
-<<<<<<< HEAD
-//line sql.y:4985
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5084
-=======
-//line sql.y:5092
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:4993
 		{
 			yyLOCAL = string(yyDollar[1].str())
 		}
@@ -20410,13 +20236,7 @@ yydefault:
 	case 920:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL string
-<<<<<<< HEAD
-//line sql.y:4989
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5088
-=======
-//line sql.y:5096
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:4997
 		{
 			yyLOCAL = string(yyDollar[1].str())
 		}
@@ -20424,13 +20244,7 @@ yydefault:
 	case 921:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL Statement
-<<<<<<< HEAD
-//line sql.y:4995
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5094
-=======
-//line sql.y:5102
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5003
 		{
 			yyLOCAL = &Use{DBName: yyDollar[2].identifierCS()}
 		}
@@ -20438,13 +20252,7 @@ yydefault:
 	case 922:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Statement
-<<<<<<< HEAD
-//line sql.y:4999
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5098
-=======
-//line sql.y:5106
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5007
 		{
 			yyLOCAL = &Use{DBName: IdentifierCS{v: ""}}
 		}
@@ -20452,13 +20260,7 @@ yydefault:
 	case 923:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL Statement
-<<<<<<< HEAD
-//line sql.y:5003
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5102
-=======
-//line sql.y:5110
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5011
 		{
 			yyLOCAL = &Use{DBName: NewIdentifierCS(yyDollar[2].identifierCS().String() + "@" + string(yyDollar[3].str()))}
 		}
@@ -20466,13 +20268,7 @@ yydefault:
 	case 924:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IdentifierCS
-<<<<<<< HEAD
-//line sql.y:5010
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5109
-=======
-//line sql.y:5117
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5018
 		{
 			yyLOCAL = NewIdentifierCS(string(yyDollar[1].str()))
 		}
@@ -20480,13 +20276,7 @@ yydefault:
 	case 925:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IdentifierCS
-<<<<<<< HEAD
-//line sql.y:5014
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5113
-=======
-//line sql.y:5121
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5022
 		{
 			yyLOCAL = NewIdentifierCS("@" + string(yyDollar[1].str()))
 		}
@@ -20494,13 +20284,7 @@ yydefault:
 	case 926:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IdentifierCS
-<<<<<<< HEAD
-//line sql.y:5018
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5117
-=======
-//line sql.y:5125
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5026
 		{
 			yyLOCAL = NewIdentifierCS("@@" + string(yyDollar[1].str()))
 		}
@@ -20508,13 +20292,7 @@ yydefault:
 	case 927:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IdentifierCS
-<<<<<<< HEAD
-//line sql.y:5022
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5121
-=======
-//line sql.y:5129
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5030
 		{
 			yyLOCAL = NewIdentifierCS(string(yyDollar[1].str()))
 		}
@@ -20522,13 +20300,7 @@ yydefault:
 	case 928:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Statement
-<<<<<<< HEAD
-//line sql.y:5029
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5128
-=======
-//line sql.y:5136
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5037
 		{
 			yyLOCAL = &Begin{Type: BeginStmt}
 		}
@@ -20536,13 +20308,7 @@ yydefault:
 	case 929:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL Statement
-<<<<<<< HEAD
-//line sql.y:5033
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5132
-=======
-//line sql.y:5140
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5041
 		{
 			yyLOCAL = &Begin{Type: StartTransactionStmt, TxAccessModes: yyDollar[3].txAccessModes()}
 		}
@@ -20550,13 +20316,7 @@ yydefault:
 	case 930:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL []TxAccessMode
-<<<<<<< HEAD
-//line sql.y:5038
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5137
-=======
-//line sql.y:5145
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5046
 		{
 			yyLOCAL = nil
 		}
@@ -20564,13 +20324,7 @@ yydefault:
 	case 931:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL []TxAccessMode
-<<<<<<< HEAD
-//line sql.y:5042
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5141
-=======
-//line sql.y:5149
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5050
 		{
 			yyLOCAL = yyDollar[1].txAccessModes()
 		}
@@ -20578,13 +20332,7 @@ yydefault:
 	case 932:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL []TxAccessMode
-<<<<<<< HEAD
-//line sql.y:5048
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5147
-=======
-//line sql.y:5155
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5056
 		{
 			yyLOCAL = []TxAccessMode{yyDollar[1].txAccessMode()}
 		}
@@ -20592,13 +20340,7 @@ yydefault:
 	case 933:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL []TxAccessMode
-<<<<<<< HEAD
-//line sql.y:5052
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5151
-=======
-//line sql.y:5159
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5060
 		{
 			yyLOCAL = append(yyDollar[1].txAccessModes(), yyDollar[3].txAccessMode())
 		}
@@ -20606,13 +20348,7 @@ yydefault:
 	case 934:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL TxAccessMode
-<<<<<<< HEAD
-//line sql.y:5058
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5157
-=======
-//line sql.y:5165
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5066
 		{
 			yyLOCAL = WithConsistentSnapshot
 		}
@@ -20620,13 +20356,7 @@ yydefault:
 	case 935:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL TxAccessMode
-<<<<<<< HEAD
-//line sql.y:5062
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5161
-=======
-//line sql.y:5169
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5070
 		{
 			yyLOCAL = ReadWrite
 		}
@@ -20634,13 +20364,7 @@ yydefault:
 	case 936:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL TxAccessMode
-<<<<<<< HEAD
-//line sql.y:5066
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5165
-=======
-//line sql.y:5173
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5074
 		{
 			yyLOCAL = ReadOnly
 		}
@@ -20648,13 +20372,7 @@ yydefault:
 	case 937:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Statement
-<<<<<<< HEAD
-//line sql.y:5073
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5172
-=======
-//line sql.y:5180
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5081
 		{
 			yyLOCAL = &Commit{}
 		}
@@ -20662,13 +20380,7 @@ yydefault:
 	case 938:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Statement
-<<<<<<< HEAD
-//line sql.y:5079
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5178
-=======
-//line sql.y:5186
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5087
 		{
 			yyLOCAL = &Rollback{}
 		}
@@ -20676,13 +20388,7 @@ yydefault:
 	case 939:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		var yyLOCAL Statement
-<<<<<<< HEAD
-//line sql.y:5083
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5182
-=======
-//line sql.y:5190
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5091
 		{
 			yyLOCAL = &SRollback{Name: yyDollar[5].identifierCI()}
 		}
@@ -20690,13 +20396,7 @@ yydefault:
 	case 940:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL struct{}
-<<<<<<< HEAD
-//line sql.y:5088
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5187
-=======
-//line sql.y:5195
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5096
 		{
 			yyLOCAL = struct{}{}
 		}
@@ -20704,13 +20404,7 @@ yydefault:
 	case 941:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL struct{}
-<<<<<<< HEAD
-//line sql.y:5090
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5189
-=======
-//line sql.y:5197
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5098
 		{
 			yyLOCAL = struct{}{}
 		}
@@ -20718,13 +20412,7 @@ yydefault:
 	case 942:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL struct{}
-<<<<<<< HEAD
-//line sql.y:5093
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5192
-=======
-//line sql.y:5200
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5101
 		{
 			yyLOCAL = struct{}{}
 		}
@@ -20732,13 +20420,7 @@ yydefault:
 	case 943:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL struct{}
-<<<<<<< HEAD
-//line sql.y:5095
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5194
-=======
-//line sql.y:5202
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5103
 		{
 			yyLOCAL = struct{}{}
 		}
@@ -20746,13 +20428,7 @@ yydefault:
 	case 944:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL Statement
-<<<<<<< HEAD
-//line sql.y:5099
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5198
-=======
-//line sql.y:5206
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5107
 		{
 			yyLOCAL = &Savepoint{Name: yyDollar[2].identifierCI()}
 		}
@@ -20760,13 +20436,7 @@ yydefault:
 	case 945:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL Statement
-<<<<<<< HEAD
-//line sql.y:5105
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5204
-=======
-//line sql.y:5212
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5113
 		{
 			yyLOCAL = &Release{Name: yyDollar[3].identifierCI()}
 		}
@@ -20774,13 +20444,7 @@ yydefault:
 	case 946:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL ExplainType
-<<<<<<< HEAD
-//line sql.y:5110
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5209
-=======
-//line sql.y:5217
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5118
 		{
 			yyLOCAL = EmptyType
 		}
@@ -20788,13 +20452,7 @@ yydefault:
 	case 947:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL ExplainType
-<<<<<<< HEAD
-//line sql.y:5114
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5213
-=======
-//line sql.y:5221
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5122
 		{
 			yyLOCAL = JSONType
 		}
@@ -20802,13 +20460,7 @@ yydefault:
 	case 948:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL ExplainType
-<<<<<<< HEAD
-//line sql.y:5118
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5226
-=======
-//line sql.y:5234
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5126
 		{
 			yyLOCAL = TreeType
 		}
@@ -20816,7 +20468,7 @@ yydefault:
 	case 949:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL ExplainType
-//line sql.y:5122
+//line sql.y:5130
 		{
 			yyLOCAL = TraditionalType
 		}
@@ -20824,13 +20476,7 @@ yydefault:
 	case 950:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL ExplainType
-<<<<<<< HEAD
-//line sql.y:5126
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5236
-=======
-//line sql.y:5244
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5134
 		{
 			yyLOCAL = AnalyzeType
 		}
@@ -20838,13 +20484,7 @@ yydefault:
 	case 951:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL VExplainType
-<<<<<<< HEAD
-//line sql.y:5131
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5241
-=======
-//line sql.y:5249
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5139
 		{
 			yyLOCAL = PlanVExplainType
 		}
@@ -20852,13 +20492,7 @@ yydefault:
 	case 952:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL VExplainType
-<<<<<<< HEAD
-//line sql.y:5135
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5245
-=======
-//line sql.y:5253
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5143
 		{
 			yyLOCAL = PlanVExplainType
 		}
@@ -20866,13 +20500,7 @@ yydefault:
 	case 953:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL VExplainType
-<<<<<<< HEAD
-//line sql.y:5139
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5249
-=======
-//line sql.y:5257
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5147
 		{
 			yyLOCAL = AllVExplainType
 		}
@@ -20880,13 +20508,7 @@ yydefault:
 	case 954:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL VExplainType
-<<<<<<< HEAD
-//line sql.y:5143
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5253
-=======
-//line sql.y:5261
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5151
 		{
 			yyLOCAL = QueriesVExplainType
 		}
@@ -20894,13 +20516,7 @@ yydefault:
 	case 955:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL VExplainType
-<<<<<<< HEAD
-//line sql.y:5147
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5257
-=======
-//line sql.y:5265
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5155
 		{
 			yyLOCAL = TraceVExplainType
 		}
@@ -20908,49 +20524,15 @@ yydefault:
 	case 956:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL VExplainType
-<<<<<<< HEAD
-//line sql.y:5151
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5261
-=======
-//line sql.y:5269
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5159
 		{
 			yyLOCAL = KeysVExplainType
 		}
 		yyVAL.setvexplainType(yyLOCAL)
-<<<<<<< HEAD
 	case 957:
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-	case 965:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL VExplainType
-//line sql.y:5265
-		{
-			yyLOCAL = MySQLVExplainType
-		}
-		yyVAL.setvexplainType(yyLOCAL)
-	case 966:
-=======
-	case 965:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL VExplainType
-//line sql.y:5273
-		{
-			yyLOCAL = MySQLVExplainType
-		}
-		yyVAL.setvexplainType(yyLOCAL)
-	case 966:
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL string
-<<<<<<< HEAD
-//line sql.y:5157
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5271
-=======
-//line sql.y:5279
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5165
 		{
 			yyLOCAL = yyDollar[1].str()
 		}
@@ -20958,13 +20540,7 @@ yydefault:
 	case 958:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL string
-<<<<<<< HEAD
-//line sql.y:5161
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5275
-=======
-//line sql.y:5283
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5169
 		{
 			yyLOCAL = yyDollar[1].str()
 		}
@@ -20972,13 +20548,7 @@ yydefault:
 	case 959:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL string
-<<<<<<< HEAD
-//line sql.y:5165
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5279
-=======
-//line sql.y:5287
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5173
 		{
 			yyLOCAL = yyDollar[1].str()
 		}
@@ -20986,13 +20556,7 @@ yydefault:
 	case 960:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Statement
-<<<<<<< HEAD
-//line sql.y:5171
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5285
-=======
-//line sql.y:5293
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5179
 		{
 			yyLOCAL = yyDollar[1].tableStmt()
 		}
@@ -21000,13 +20564,7 @@ yydefault:
 	case 961:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Statement
-<<<<<<< HEAD
-//line sql.y:5175
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5289
-=======
-//line sql.y:5297
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5183
 		{
 			yyLOCAL = yyDollar[1].statement()
 		}
@@ -21014,13 +20572,7 @@ yydefault:
 	case 962:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Statement
-<<<<<<< HEAD
-//line sql.y:5179
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5293
-=======
-//line sql.y:5301
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5187
 		{
 			yyLOCAL = yyDollar[1].statement()
 		}
@@ -21028,13 +20580,7 @@ yydefault:
 	case 963:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Statement
-<<<<<<< HEAD
-//line sql.y:5183
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5297
-=======
-//line sql.y:5305
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5191
 		{
 			yyLOCAL = yyDollar[1].statement()
 		}
@@ -21042,13 +20588,7 @@ yydefault:
 	case 964:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL string
-<<<<<<< HEAD
-//line sql.y:5188
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5302
-=======
-//line sql.y:5310
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5196
 		{
 			yyLOCAL = ""
 		}
@@ -21056,13 +20596,7 @@ yydefault:
 	case 965:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL string
-<<<<<<< HEAD
-//line sql.y:5192
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5306
-=======
-//line sql.y:5314
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5200
 		{
 			yyLOCAL = yyDollar[1].identifierCI().val
 		}
@@ -21070,13 +20604,7 @@ yydefault:
 	case 966:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL string
-<<<<<<< HEAD
-//line sql.y:5196
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5310
-=======
-//line sql.y:5318
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5204
 		{
 			yyLOCAL = encodeSQLString(yyDollar[1].str())
 		}
@@ -21084,13 +20612,7 @@ yydefault:
 	case 967:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Statement
-<<<<<<< HEAD
-//line sql.y:5202
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5316
-=======
-//line sql.y:5324
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5210
 		{
 			yyLOCAL = &ExplainTab{Table: yyDollar[3].tableName(), Wild: yyDollar[4].str()}
 		}
@@ -21098,13 +20620,7 @@ yydefault:
 	case 968:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Statement
-<<<<<<< HEAD
-//line sql.y:5206
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5320
-=======
-//line sql.y:5328
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5214
 		{
 			yyLOCAL = &ExplainStmt{Type: yyDollar[3].explainType(), Statement: yyDollar[4].statement(), Comments: Comments(yyDollar[2].strs()).Parsed()}
 		}
@@ -21112,13 +20628,7 @@ yydefault:
 	case 969:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Statement
-<<<<<<< HEAD
-//line sql.y:5212
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5326
-=======
-//line sql.y:5334
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5220
 		{
 			yyLOCAL = &VExplainStmt{Type: yyDollar[3].vexplainType(), Statement: yyDollar[4].statement(), Comments: Comments(yyDollar[2].strs()).Parsed()}
 		}
@@ -21126,13 +20636,7 @@ yydefault:
 	case 970:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL Statement
-<<<<<<< HEAD
-//line sql.y:5218
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5332
-=======
-//line sql.y:5340
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5226
 		{
 			yyLOCAL = &OtherAdmin{}
 		}
@@ -21140,13 +20644,7 @@ yydefault:
 	case 971:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL Statement
-<<<<<<< HEAD
-//line sql.y:5222
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5336
-=======
-//line sql.y:5344
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5230
 		{
 			yyLOCAL = &OtherAdmin{}
 		}
@@ -21154,13 +20652,7 @@ yydefault:
 	case 972:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL Statement
-<<<<<<< HEAD
-//line sql.y:5228
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5342
-=======
-//line sql.y:5350
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5236
 		{
 			yyLOCAL = &LockTables{Tables: yyDollar[3].tableAndLockTypes()}
 		}
@@ -21168,13 +20660,7 @@ yydefault:
 	case 973:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL TableAndLockTypes
-<<<<<<< HEAD
-//line sql.y:5234
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5348
-=======
-//line sql.y:5356
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5242
 		{
 			yyLOCAL = TableAndLockTypes{yyDollar[1].tableAndLockType()}
 		}
@@ -21182,13 +20668,7 @@ yydefault:
 	case 974:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL TableAndLockTypes
-<<<<<<< HEAD
-//line sql.y:5238
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5352
-=======
-//line sql.y:5360
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5246
 		{
 			yyLOCAL = append(yyDollar[1].tableAndLockTypes(), yyDollar[3].tableAndLockType())
 		}
@@ -21196,13 +20676,7 @@ yydefault:
 	case 975:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL *TableAndLockType
-<<<<<<< HEAD
-//line sql.y:5244
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5358
-=======
-//line sql.y:5366
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5252
 		{
 			yyLOCAL = &TableAndLockType{Table: yyDollar[1].aliasedTableName(), Lock: yyDollar[2].lockType()}
 		}
@@ -21210,13 +20684,7 @@ yydefault:
 	case 976:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL LockType
-<<<<<<< HEAD
-//line sql.y:5250
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5364
-=======
-//line sql.y:5372
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5258
 		{
 			yyLOCAL = Read
 		}
@@ -21224,13 +20692,7 @@ yydefault:
 	case 977:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL LockType
-<<<<<<< HEAD
-//line sql.y:5254
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5368
-=======
-//line sql.y:5376
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5262
 		{
 			yyLOCAL = ReadLocal
 		}
@@ -21238,13 +20700,7 @@ yydefault:
 	case 978:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL LockType
-<<<<<<< HEAD
-//line sql.y:5258
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5372
-=======
-//line sql.y:5380
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5266
 		{
 			yyLOCAL = Write
 		}
@@ -21252,13 +20708,7 @@ yydefault:
 	case 979:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL LockType
-<<<<<<< HEAD
-//line sql.y:5262
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5376
-=======
-//line sql.y:5384
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5270
 		{
 			yyLOCAL = LowPriorityWrite
 		}
@@ -21266,13 +20716,7 @@ yydefault:
 	case 980:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL Statement
-<<<<<<< HEAD
-//line sql.y:5268
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5382
-=======
-//line sql.y:5390
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5276
 		{
 			yyLOCAL = &UnlockTables{}
 		}
@@ -21280,13 +20724,7 @@ yydefault:
 	case 981:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Statement
-<<<<<<< HEAD
-//line sql.y:5274
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5388
-=======
-//line sql.y:5396
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5282
 		{
 			yyLOCAL = &RevertMigration{Comments: Comments(yyDollar[2].strs()).Parsed(), UUID: string(yyDollar[4].str())}
 		}
@@ -21294,13 +20732,7 @@ yydefault:
 	case 982:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL Statement
-<<<<<<< HEAD
-//line sql.y:5280
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5394
-=======
-//line sql.y:5402
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5288
 		{
 			yyLOCAL = &Flush{IsLocal: yyDollar[2].boolean(), FlushOptions: yyDollar[3].strs()}
 		}
@@ -21308,13 +20740,7 @@ yydefault:
 	case 983:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL Statement
-<<<<<<< HEAD
-//line sql.y:5284
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5398
-=======
-//line sql.y:5406
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5292
 		{
 			yyLOCAL = &Flush{IsLocal: yyDollar[2].boolean()}
 		}
@@ -21322,13 +20748,7 @@ yydefault:
 	case 984:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Statement
-<<<<<<< HEAD
-//line sql.y:5288
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5402
-=======
-//line sql.y:5410
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5296
 		{
 			yyLOCAL = &Flush{IsLocal: yyDollar[2].boolean(), WithLock: true}
 		}
@@ -21336,13 +20756,7 @@ yydefault:
 	case 985:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Statement
-<<<<<<< HEAD
-//line sql.y:5292
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5406
-=======
-//line sql.y:5414
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5300
 		{
 			yyLOCAL = &Flush{IsLocal: yyDollar[2].boolean(), TableNames: yyDollar[4].tableNames()}
 		}
@@ -21350,13 +20764,7 @@ yydefault:
 	case 986:
 		yyDollar = yyS[yypt-7 : yypt+1]
 		var yyLOCAL Statement
-<<<<<<< HEAD
-//line sql.y:5296
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5410
-=======
-//line sql.y:5418
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5304
 		{
 			yyLOCAL = &Flush{IsLocal: yyDollar[2].boolean(), TableNames: yyDollar[4].tableNames(), WithLock: true}
 		}
@@ -21364,13 +20772,7 @@ yydefault:
 	case 987:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Statement
-<<<<<<< HEAD
-//line sql.y:5300
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5414
-=======
-//line sql.y:5422
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5308
 		{
 			yyLOCAL = &Flush{IsLocal: yyDollar[2].boolean(), TableNames: yyDollar[4].tableNames(), ForExport: true}
 		}
@@ -21378,13 +20780,7 @@ yydefault:
 	case 988:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL []string
-<<<<<<< HEAD
-//line sql.y:5306
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5420
-=======
-//line sql.y:5428
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5314
 		{
 			yyLOCAL = []string{yyDollar[1].str()}
 		}
@@ -21392,13 +20788,7 @@ yydefault:
 	case 989:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL []string
-<<<<<<< HEAD
-//line sql.y:5310
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5424
-=======
-//line sql.y:5432
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5318
 		{
 			yyLOCAL = append(yyDollar[1].strs(), yyDollar[3].str())
 		}
@@ -21406,13 +20796,7 @@ yydefault:
 	case 990:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL string
-<<<<<<< HEAD
-//line sql.y:5316
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5430
-=======
-//line sql.y:5438
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5324
 		{
 			yyLOCAL = string(yyDollar[1].str()) + " " + string(yyDollar[2].str())
 		}
@@ -21420,7 +20804,7 @@ yydefault:
 	case 991:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL string
-//line sql.y:5320
+//line sql.y:5328
 		{
 			yyLOCAL = string(yyDollar[1].str()) + " " + string(yyDollar[2].str())
 		}
@@ -21428,7 +20812,7 @@ yydefault:
 	case 992:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL string
-//line sql.y:5324
+//line sql.y:5332
 		{
 			yyLOCAL = string(yyDollar[1].str()) + " " + string(yyDollar[2].str())
 		}
@@ -21436,7 +20820,7 @@ yydefault:
 	case 993:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL string
-//line sql.y:5328
+//line sql.y:5336
 		{
 			yyLOCAL = string(yyDollar[1].str()) + " " + string(yyDollar[2].str())
 		}
@@ -21444,7 +20828,7 @@ yydefault:
 	case 994:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL string
-//line sql.y:5332
+//line sql.y:5340
 		{
 			yyLOCAL = string(yyDollar[1].str())
 		}
@@ -21452,7 +20836,7 @@ yydefault:
 	case 995:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL string
-//line sql.y:5336
+//line sql.y:5344
 		{
 			yyLOCAL = string(yyDollar[1].str())
 		}
@@ -21460,7 +20844,7 @@ yydefault:
 	case 996:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL string
-//line sql.y:5340
+//line sql.y:5348
 		{
 			yyLOCAL = string(yyDollar[1].str())
 		}
@@ -21468,7 +20852,7 @@ yydefault:
 	case 997:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL string
-//line sql.y:5344
+//line sql.y:5352
 		{
 			yyLOCAL = string(yyDollar[1].str()) + " " + string(yyDollar[2].str()) + yyDollar[3].str()
 		}
@@ -21476,7 +20860,7 @@ yydefault:
 	case 998:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL string
-//line sql.y:5348
+//line sql.y:5356
 		{
 			yyLOCAL = string(yyDollar[1].str()) + " " + string(yyDollar[2].str())
 		}
@@ -21484,7 +20868,7 @@ yydefault:
 	case 999:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL string
-//line sql.y:5352
+//line sql.y:5360
 		{
 			yyLOCAL = string(yyDollar[1].str())
 		}
@@ -21492,13 +20876,7 @@ yydefault:
 	case 1000:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL string
-<<<<<<< HEAD
-//line sql.y:5356
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5434
-=======
-//line sql.y:5442
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5364
 		{
 			yyLOCAL = string(yyDollar[1].str())
 		}
@@ -21506,63 +20884,31 @@ yydefault:
 	case 1001:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL string
-<<<<<<< HEAD
-//line sql.y:5360
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5438
-=======
-//line sql.y:5446
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5368
 		{
 			yyLOCAL = string(yyDollar[1].str())
 		}
 		yyVAL.setstr(yyLOCAL)
 	case 1002:
-<<<<<<< HEAD
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL bool
-//line sql.y:5365
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-		yyDollar = yyS[yypt-2 : yypt+1]
-		var yyLOCAL string
-//line sql.y:5442
-=======
-		yyDollar = yyS[yypt-2 : yypt+1]
-		var yyLOCAL string
-//line sql.y:5450
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5373
 		{
 			yyLOCAL = false
 		}
 		yyVAL.setboolean(yyLOCAL)
 	case 1003:
 		yyDollar = yyS[yypt-1 : yypt+1]
-<<<<<<< HEAD
 		var yyLOCAL bool
-//line sql.y:5369
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-		var yyLOCAL string
-//line sql.y:5446
-=======
-		var yyLOCAL string
-//line sql.y:5454
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5377
 		{
 			yyLOCAL = true
 		}
 		yyVAL.setboolean(yyLOCAL)
 	case 1004:
 		yyDollar = yyS[yypt-1 : yypt+1]
-<<<<<<< HEAD
 		var yyLOCAL bool
-//line sql.y:5373
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-		var yyLOCAL string
-//line sql.y:5450
-=======
-		var yyLOCAL string
-//line sql.y:5458
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5381
 		{
 			yyLOCAL = true
 		}
@@ -21570,13 +20916,7 @@ yydefault:
 	case 1005:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL string
-<<<<<<< HEAD
-//line sql.y:5378
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5454
-=======
-//line sql.y:5462
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5386
 		{
 			yyLOCAL = ""
 		}
@@ -21584,103 +20924,21 @@ yydefault:
 	case 1006:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL string
-<<<<<<< HEAD
-//line sql.y:5382
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5458
-=======
-//line sql.y:5466
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5390
 		{
 			yyLOCAL = " " + string(yyDollar[1].str()) + " " + string(yyDollar[2].str()) + " " + yyDollar[3].identifierCI().String()
 		}
 		yyVAL.setstr(yyLOCAL)
 	case 1007:
-<<<<<<< HEAD
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-		yyDollar = yyS[yypt-2 : yypt+1]
-		var yyLOCAL string
-//line sql.y:5462
-		{
-			yyLOCAL = string(yyDollar[1].str()) + " " + string(yyDollar[2].str())
-		}
-		yyVAL.setstr(yyLOCAL)
-	case 1008:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL string
-//line sql.y:5466
-		{
-			yyLOCAL = string(yyDollar[1].str())
-		}
-		yyVAL.setstr(yyLOCAL)
-	case 1009:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL string
-//line sql.y:5470
-		{
-			yyLOCAL = string(yyDollar[1].str())
-		}
-		yyVAL.setstr(yyLOCAL)
-	case 1010:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL string
-//line sql.y:5474
-		{
-			yyLOCAL = string(yyDollar[1].str())
-		}
-		yyVAL.setstr(yyLOCAL)
-	case 1011:
-=======
-		yyDollar = yyS[yypt-2 : yypt+1]
-		var yyLOCAL string
-//line sql.y:5470
-		{
-			yyLOCAL = string(yyDollar[1].str()) + " " + string(yyDollar[2].str())
-		}
-		yyVAL.setstr(yyLOCAL)
-	case 1008:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL string
-//line sql.y:5474
-		{
-			yyLOCAL = string(yyDollar[1].str())
-		}
-		yyVAL.setstr(yyLOCAL)
-	case 1009:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL string
-//line sql.y:5478
-		{
-			yyLOCAL = string(yyDollar[1].str())
-		}
-		yyVAL.setstr(yyLOCAL)
-	case 1010:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL string
-//line sql.y:5482
-		{
-			yyLOCAL = string(yyDollar[1].str())
-		}
-		yyVAL.setstr(yyLOCAL)
-	case 1011:
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
 		yyDollar = yyS[yypt-0 : yypt+1]
-<<<<<<< HEAD
-//line sql.y:5387
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-		var yyLOCAL bool
-//line sql.y:5479
-=======
-		var yyLOCAL bool
-//line sql.y:5487
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5395
 		{
 			setAllowComments(yylex, true)
 		}
 	case 1008:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL []string
-//line sql.y:5391
+//line sql.y:5399
 		{
 			yyLOCAL = yyDollar[2].strs()
 			setAllowComments(yylex, false)
@@ -21689,7 +20947,7 @@ yydefault:
 	case 1009:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL []string
-//line sql.y:5397
+//line sql.y:5405
 		{
 			yyLOCAL = nil
 		}
@@ -21697,7 +20955,7 @@ yydefault:
 	case 1010:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL []string
-//line sql.y:5401
+//line sql.y:5409
 		{
 			yyLOCAL = append(yyDollar[1].strs(), yyDollar[2].str())
 		}
@@ -21705,13 +20963,7 @@ yydefault:
 	case 1011:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL bool
-<<<<<<< HEAD
-//line sql.y:5407
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5483
-=======
-//line sql.y:5491
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5415
 		{
 			yyLOCAL = true
 		}
@@ -21719,8 +20971,7 @@ yydefault:
 	case 1012:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL bool
-<<<<<<< HEAD
-//line sql.y:5411
+//line sql.y:5419
 		{
 			yyLOCAL = false
 		}
@@ -21728,12 +20979,7 @@ yydefault:
 	case 1013:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL bool
-//line sql.y:5415
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5487
-=======
-//line sql.y:5495
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5423
 		{
 			yyLOCAL = true
 		}
@@ -21741,173 +20987,15 @@ yydefault:
 	case 1014:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL string
-<<<<<<< HEAD
-//line sql.y:5420
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5492
-=======
-//line sql.y:5500
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5428
 		{
 			yyLOCAL = ""
 		}
 		yyVAL.setstr(yyLOCAL)
 	case 1015:
-<<<<<<< HEAD
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-		yyDollar = yyS[yypt-3 : yypt+1]
-		var yyLOCAL string
-//line sql.y:5496
-		{
-			yyLOCAL = " " + string(yyDollar[1].str()) + " " + string(yyDollar[2].str()) + " " + yyDollar[3].identifierCI().String()
-		}
-		yyVAL.setstr(yyLOCAL)
-	case 1016:
-		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:5501
-		{
-			setAllowComments(yylex, true)
-		}
-	case 1017:
-		yyDollar = yyS[yypt-2 : yypt+1]
-		var yyLOCAL []string
-//line sql.y:5505
-		{
-			yyLOCAL = yyDollar[2].strs()
-			setAllowComments(yylex, false)
-		}
-		yyVAL.setstrs(yyLOCAL)
-	case 1018:
-		yyDollar = yyS[yypt-0 : yypt+1]
-		var yyLOCAL []string
-//line sql.y:5511
-		{
-			yyLOCAL = nil
-		}
-		yyVAL.setstrs(yyLOCAL)
-	case 1019:
-		yyDollar = yyS[yypt-2 : yypt+1]
-		var yyLOCAL []string
-//line sql.y:5515
-		{
-			yyLOCAL = append(yyDollar[1].strs(), yyDollar[2].str())
-		}
-		yyVAL.setstrs(yyLOCAL)
-	case 1020:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL bool
-//line sql.y:5521
-		{
-			yyLOCAL = true
-		}
-		yyVAL.setboolean(yyLOCAL)
-	case 1021:
-		yyDollar = yyS[yypt-2 : yypt+1]
-		var yyLOCAL bool
-//line sql.y:5525
-		{
-			yyLOCAL = false
-		}
-		yyVAL.setboolean(yyLOCAL)
-	case 1022:
-		yyDollar = yyS[yypt-2 : yypt+1]
-		var yyLOCAL bool
-//line sql.y:5529
-		{
-			yyLOCAL = true
-		}
-		yyVAL.setboolean(yyLOCAL)
-	case 1023:
-		yyDollar = yyS[yypt-0 : yypt+1]
-		var yyLOCAL string
-//line sql.y:5534
-		{
-			yyLOCAL = ""
-		}
-		yyVAL.setstr(yyLOCAL)
-	case 1024:
-=======
-		yyDollar = yyS[yypt-3 : yypt+1]
-		var yyLOCAL string
-//line sql.y:5504
-		{
-			yyLOCAL = " " + string(yyDollar[1].str()) + " " + string(yyDollar[2].str()) + " " + yyDollar[3].identifierCI().String()
-		}
-		yyVAL.setstr(yyLOCAL)
-	case 1016:
-		yyDollar = yyS[yypt-0 : yypt+1]
-//line sql.y:5509
-		{
-			setAllowComments(yylex, true)
-		}
-	case 1017:
-		yyDollar = yyS[yypt-2 : yypt+1]
-		var yyLOCAL []string
-//line sql.y:5513
-		{
-			yyLOCAL = yyDollar[2].strs()
-			setAllowComments(yylex, false)
-		}
-		yyVAL.setstrs(yyLOCAL)
-	case 1018:
-		yyDollar = yyS[yypt-0 : yypt+1]
-		var yyLOCAL []string
-//line sql.y:5519
-		{
-			yyLOCAL = nil
-		}
-		yyVAL.setstrs(yyLOCAL)
-	case 1019:
-		yyDollar = yyS[yypt-2 : yypt+1]
-		var yyLOCAL []string
-//line sql.y:5523
-		{
-			yyLOCAL = append(yyDollar[1].strs(), yyDollar[2].str())
-		}
-		yyVAL.setstrs(yyLOCAL)
-	case 1020:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL bool
-//line sql.y:5529
-		{
-			yyLOCAL = true
-		}
-		yyVAL.setboolean(yyLOCAL)
-	case 1021:
-		yyDollar = yyS[yypt-2 : yypt+1]
-		var yyLOCAL bool
-//line sql.y:5533
-		{
-			yyLOCAL = false
-		}
-		yyVAL.setboolean(yyLOCAL)
-	case 1022:
-		yyDollar = yyS[yypt-2 : yypt+1]
-		var yyLOCAL bool
-//line sql.y:5537
-		{
-			yyLOCAL = true
-		}
-		yyVAL.setboolean(yyLOCAL)
-	case 1023:
-		yyDollar = yyS[yypt-0 : yypt+1]
-		var yyLOCAL string
-//line sql.y:5542
-		{
-			yyLOCAL = ""
-		}
-		yyVAL.setstr(yyLOCAL)
-	case 1024:
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL string
-<<<<<<< HEAD
-//line sql.y:5424
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5538
-=======
-//line sql.y:5546
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5432
 		{
 			yyLOCAL = SQLNoCacheStr
 		}
@@ -21915,13 +21003,7 @@ yydefault:
 	case 1016:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL string
-<<<<<<< HEAD
-//line sql.y:5428
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5542
-=======
-//line sql.y:5550
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5436
 		{
 			yyLOCAL = SQLCacheStr
 		}
@@ -21929,13 +21011,7 @@ yydefault:
 	case 1017:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL bool
-<<<<<<< HEAD
-//line sql.y:5433
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5547
-=======
-//line sql.y:5555
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5441
 		{
 			yyLOCAL = false
 		}
@@ -21943,13 +21019,7 @@ yydefault:
 	case 1018:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL bool
-<<<<<<< HEAD
-//line sql.y:5437
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5551
-=======
-//line sql.y:5559
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5445
 		{
 			yyLOCAL = true
 		}
@@ -21957,13 +21027,7 @@ yydefault:
 	case 1019:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL bool
-<<<<<<< HEAD
-//line sql.y:5441
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5555
-=======
-//line sql.y:5563
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5449
 		{
 			yyLOCAL = true
 		}
@@ -21971,13 +21035,7 @@ yydefault:
 	case 1020:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		var yyLOCAL Statement
-<<<<<<< HEAD
-//line sql.y:5447
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5561
-=======
-//line sql.y:5569
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5455
 		{
 			yyLOCAL = &PrepareStmt{Name: yyDollar[3].identifierCI(), Comments: Comments(yyDollar[2].strs()).Parsed(), Statement: yyDollar[5].expr()}
 		}
@@ -21985,13 +21043,7 @@ yydefault:
 	case 1021:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		var yyLOCAL Statement
-<<<<<<< HEAD
-//line sql.y:5451
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5565
-=======
-//line sql.y:5573
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5459
 		{
 			yyLOCAL = &PrepareStmt{
 				Name:      yyDollar[3].identifierCI(),
@@ -22003,13 +21055,7 @@ yydefault:
 	case 1022:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Statement
-<<<<<<< HEAD
-//line sql.y:5461
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5575
-=======
-//line sql.y:5583
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5469
 		{
 			yyLOCAL = &ExecuteStmt{Name: yyDollar[3].identifierCI(), Comments: Comments(yyDollar[2].strs()).Parsed(), Arguments: yyDollar[4].variables()}
 		}
@@ -22017,13 +21063,7 @@ yydefault:
 	case 1023:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL []*Variable
-<<<<<<< HEAD
-//line sql.y:5466
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5580
-=======
-//line sql.y:5588
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5474
 		{
 			yyLOCAL = nil
 		}
@@ -22031,13 +21071,7 @@ yydefault:
 	case 1024:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL []*Variable
-<<<<<<< HEAD
-//line sql.y:5470
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5584
-=======
-//line sql.y:5592
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5478
 		{
 			yyLOCAL = yyDollar[2].variables()
 		}
@@ -22045,13 +21079,7 @@ yydefault:
 	case 1025:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Statement
-<<<<<<< HEAD
-//line sql.y:5476
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5590
-=======
-//line sql.y:5598
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5484
 		{
 			yyLOCAL = &DeallocateStmt{Comments: Comments(yyDollar[2].strs()).Parsed(), Name: yyDollar[4].identifierCI()}
 		}
@@ -22059,13 +21087,7 @@ yydefault:
 	case 1026:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Statement
-<<<<<<< HEAD
-//line sql.y:5480
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5594
-=======
-//line sql.y:5602
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5488
 		{
 			yyLOCAL = &DeallocateStmt{Comments: Comments(yyDollar[2].strs()).Parsed(), Name: yyDollar[4].identifierCI()}
 		}
@@ -22073,13 +21095,7 @@ yydefault:
 	case 1027:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL []string
-<<<<<<< HEAD
-//line sql.y:5485
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5599
-=======
-//line sql.y:5607
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5493
 		{
 			yyLOCAL = nil
 		}
@@ -22087,13 +21103,7 @@ yydefault:
 	case 1028:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL []string
-<<<<<<< HEAD
-//line sql.y:5489
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5603
-=======
-//line sql.y:5611
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5497
 		{
 			yyLOCAL = yyDollar[1].strs()
 		}
@@ -22101,13 +21111,7 @@ yydefault:
 	case 1029:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL []string
-<<<<<<< HEAD
-//line sql.y:5495
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5609
-=======
-//line sql.y:5617
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5503
 		{
 			yyLOCAL = []string{yyDollar[1].str()}
 		}
@@ -22115,13 +21119,7 @@ yydefault:
 	case 1030:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL []string
-<<<<<<< HEAD
-//line sql.y:5499
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5613
-=======
-//line sql.y:5621
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5507
 		{
 			yyLOCAL = append(yyDollar[1].strs(), yyDollar[2].str())
 		}
@@ -22129,7 +21127,7 @@ yydefault:
 	case 1031:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL string
-//line sql.y:5505
+//line sql.y:5513
 		{
 			yyLOCAL = SQLNoCacheStr
 		}
@@ -22137,7 +21135,7 @@ yydefault:
 	case 1032:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL string
-//line sql.y:5509
+//line sql.y:5517
 		{
 			yyLOCAL = SQLCacheStr
 		}
@@ -22145,7 +21143,7 @@ yydefault:
 	case 1033:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL string
-//line sql.y:5513
+//line sql.y:5521
 		{
 			yyLOCAL = DistinctStr
 		}
@@ -22153,7 +21151,7 @@ yydefault:
 	case 1034:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL string
-//line sql.y:5517
+//line sql.y:5525
 		{
 			yyLOCAL = DistinctStr
 		}
@@ -22161,7 +21159,7 @@ yydefault:
 	case 1035:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL string
-//line sql.y:5521
+//line sql.y:5529
 		{
 			yyLOCAL = HighPriorityStr
 		}
@@ -22169,7 +21167,7 @@ yydefault:
 	case 1036:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL string
-//line sql.y:5525
+//line sql.y:5533
 		{
 			yyLOCAL = StraightJoinHint
 		}
@@ -22177,7 +21175,7 @@ yydefault:
 	case 1037:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL string
-//line sql.y:5529
+//line sql.y:5537
 		{
 			yyLOCAL = SQLBufferResultStr
 		}
@@ -22185,7 +21183,7 @@ yydefault:
 	case 1038:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL string
-//line sql.y:5533
+//line sql.y:5541
 		{
 			yyLOCAL = SQLSmallResultStr
 		}
@@ -22193,7 +21191,7 @@ yydefault:
 	case 1039:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL string
-//line sql.y:5537
+//line sql.y:5545
 		{
 			yyLOCAL = SQLBigResultStr
 		}
@@ -22201,13 +21199,7 @@ yydefault:
 	case 1040:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL string
-<<<<<<< HEAD
-//line sql.y:5541
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5619
-=======
-//line sql.y:5627
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5549
 		{
 			yyLOCAL = SQLCalcFoundRowsStr
 		}
@@ -22215,157 +21207,7 @@ yydefault:
 	case 1041:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL string
-<<<<<<< HEAD
-//line sql.y:5545
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5623
-		{
-			yyLOCAL = SQLCacheStr
-		}
-		yyVAL.setstr(yyLOCAL)
-	case 1042:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL string
-//line sql.y:5627
-		{
-			yyLOCAL = DistinctStr
-		}
-		yyVAL.setstr(yyLOCAL)
-	case 1043:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL string
-//line sql.y:5631
-		{
-			yyLOCAL = DistinctStr
-		}
-		yyVAL.setstr(yyLOCAL)
-	case 1044:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL string
-//line sql.y:5635
-		{
-			yyLOCAL = HighPriorityStr
-		}
-		yyVAL.setstr(yyLOCAL)
-	case 1045:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL string
-//line sql.y:5639
-		{
-			yyLOCAL = StraightJoinHint
-		}
-		yyVAL.setstr(yyLOCAL)
-	case 1046:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL string
-//line sql.y:5643
-		{
-			yyLOCAL = SQLBufferResultStr
-		}
-		yyVAL.setstr(yyLOCAL)
-	case 1047:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL string
-//line sql.y:5647
-		{
-			yyLOCAL = SQLSmallResultStr
-		}
-		yyVAL.setstr(yyLOCAL)
-	case 1048:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL string
-//line sql.y:5651
-		{
-			yyLOCAL = SQLBigResultStr
-		}
-		yyVAL.setstr(yyLOCAL)
-	case 1049:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL string
-//line sql.y:5655
-		{
-			yyLOCAL = SQLCalcFoundRowsStr
-		}
-		yyVAL.setstr(yyLOCAL)
-	case 1050:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL string
-//line sql.y:5659
-=======
-//line sql.y:5631
-		{
-			yyLOCAL = SQLCacheStr
-		}
-		yyVAL.setstr(yyLOCAL)
-	case 1042:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL string
-//line sql.y:5635
-		{
-			yyLOCAL = DistinctStr
-		}
-		yyVAL.setstr(yyLOCAL)
-	case 1043:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL string
-//line sql.y:5639
-		{
-			yyLOCAL = DistinctStr
-		}
-		yyVAL.setstr(yyLOCAL)
-	case 1044:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL string
-//line sql.y:5643
-		{
-			yyLOCAL = HighPriorityStr
-		}
-		yyVAL.setstr(yyLOCAL)
-	case 1045:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL string
-//line sql.y:5647
-		{
-			yyLOCAL = StraightJoinHint
-		}
-		yyVAL.setstr(yyLOCAL)
-	case 1046:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL string
-//line sql.y:5651
-		{
-			yyLOCAL = SQLBufferResultStr
-		}
-		yyVAL.setstr(yyLOCAL)
-	case 1047:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL string
-//line sql.y:5655
-		{
-			yyLOCAL = SQLSmallResultStr
-		}
-		yyVAL.setstr(yyLOCAL)
-	case 1048:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL string
-//line sql.y:5659
-		{
-			yyLOCAL = SQLBigResultStr
-		}
-		yyVAL.setstr(yyLOCAL)
-	case 1049:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL string
-//line sql.y:5663
-		{
-			yyLOCAL = SQLCalcFoundRowsStr
-		}
-		yyVAL.setstr(yyLOCAL)
-	case 1050:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL string
-//line sql.y:5667
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5553
 		{
 			yyLOCAL = AllStr // These are not picked up by NewSelect, and so ALL will be dropped. But this is OK, since it's redundant anyway
 		}
@@ -22373,13 +21215,7 @@ yydefault:
 	case 1042:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL *SelectExprs
-<<<<<<< HEAD
-//line sql.y:5551
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5665
-=======
-//line sql.y:5673
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5559
 		{
 			yyLOCAL = &SelectExprs{Exprs: []SelectExpr{&StarExpr{}}}
 		}
@@ -22387,13 +21223,7 @@ yydefault:
 	case 1043:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL *SelectExprs
-<<<<<<< HEAD
-//line sql.y:5555
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5669
-=======
-//line sql.y:5677
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5563
 		{
 			yyLOCAL = &SelectExprs{Exprs: []SelectExpr{yyDollar[1].selectExpr()}}
 		}
@@ -22401,13 +21231,7 @@ yydefault:
 	case 1044:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL *SelectExprs
-<<<<<<< HEAD
-//line sql.y:5559
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5673
-=======
-//line sql.y:5681
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5567
 		{
 			res := yyDollar[1].selectExprs()
 			res.Exprs = append(res.Exprs, yyDollar[3].selectExpr())
@@ -22417,13 +21241,7 @@ yydefault:
 	case 1045:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL SelectExpr
-<<<<<<< HEAD
-//line sql.y:5567
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5681
-=======
-//line sql.y:5689
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5575
 		{
 			yyLOCAL = &AliasedExpr{Expr: yyDollar[1].expr(), As: yyDollar[2].identifierCI()}
 		}
@@ -22431,13 +21249,7 @@ yydefault:
 	case 1046:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL SelectExpr
-<<<<<<< HEAD
-//line sql.y:5571
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5702
-=======
-//line sql.y:5710
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5579
 		{
 			yyLOCAL = &StarExpr{TableName: TableName{Name: yyDollar[1].identifierCS()}}
 		}
@@ -22445,13 +21257,7 @@ yydefault:
 	case 1047:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		var yyLOCAL SelectExpr
-<<<<<<< HEAD
-//line sql.y:5575
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5706
-=======
-//line sql.y:5714
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5583
 		{
 			yyLOCAL = &StarExpr{TableName: TableName{Qualifier: yyDollar[1].identifierCS(), Name: yyDollar[3].identifierCS()}}
 		}
@@ -22459,13 +21265,7 @@ yydefault:
 	case 1048:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL IdentifierCI
-<<<<<<< HEAD
-//line sql.y:5580
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5711
-=======
-//line sql.y:5719
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5588
 		{
 			yyLOCAL = IdentifierCI{}
 		}
@@ -22473,13 +21273,7 @@ yydefault:
 	case 1049:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IdentifierCI
-<<<<<<< HEAD
-//line sql.y:5584
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5715
-=======
-//line sql.y:5723
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5592
 		{
 			yyLOCAL = yyDollar[1].identifierCI()
 		}
@@ -22487,13 +21281,7 @@ yydefault:
 	case 1050:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL IdentifierCI
-<<<<<<< HEAD
-//line sql.y:5588
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5719
-=======
-//line sql.y:5727
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5596
 		{
 			yyLOCAL = yyDollar[2].identifierCI()
 		}
@@ -22501,13 +21289,7 @@ yydefault:
 	case 1052:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IdentifierCI
-<<<<<<< HEAD
-//line sql.y:5595
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5726
-=======
-//line sql.y:5734
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5603
 		{
 			yyLOCAL = NewIdentifierCI(string(yyDollar[1].str()))
 		}
@@ -22515,49 +21297,15 @@ yydefault:
 	case 1053:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL TableExprs
-<<<<<<< HEAD
-//line sql.y:5600
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5731
-=======
-//line sql.y:5739
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5608
 		{
 			yyLOCAL = TableExprs{&AliasedTableExpr{Expr: TableName{Name: NewIdentifierCS("dual")}}}
 		}
 		yyVAL.settableExprs(yyLOCAL)
-<<<<<<< HEAD
 	case 1054:
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-	case 1063:
-		yyDollar = yyS[yypt-2 : yypt+1]
-		var yyLOCAL TableExprs
-//line sql.y:5734
-		{
-			yyLOCAL = nil
-		}
-		yyVAL.settableExprs(yyLOCAL)
-	case 1064:
-=======
-	case 1063:
-		yyDollar = yyS[yypt-2 : yypt+1]
-		var yyLOCAL TableExprs
-//line sql.y:5742
-		{
-			yyLOCAL = nil
-		}
-		yyVAL.settableExprs(yyLOCAL)
-	case 1064:
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL TableExprs
-<<<<<<< HEAD
-//line sql.y:5604
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5738
-=======
-//line sql.y:5746
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5612
 		{
 			yyLOCAL = yyDollar[1].tableExprs()
 		}
@@ -22565,13 +21313,7 @@ yydefault:
 	case 1055:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL TableExprs
-<<<<<<< HEAD
-//line sql.y:5610
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5744
-=======
-//line sql.y:5752
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5618
 		{
 			yyLOCAL = yyDollar[2].tableExprs()
 		}
@@ -22579,13 +21321,7 @@ yydefault:
 	case 1056:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL TableExprs
-<<<<<<< HEAD
-//line sql.y:5616
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5750
-=======
-//line sql.y:5758
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5624
 		{
 			yyLOCAL = TableExprs{yyDollar[1].tableExpr()}
 		}
@@ -22593,13 +21329,7 @@ yydefault:
 	case 1057:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL TableExprs
-<<<<<<< HEAD
-//line sql.y:5620
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5754
-=======
-//line sql.y:5762
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5628
 		{
 			yyLOCAL = append(yyDollar[1].tableExprs(), yyDollar[3].tableExpr())
 		}
@@ -22607,13 +21337,7 @@ yydefault:
 	case 1060:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL TableExpr
-<<<<<<< HEAD
-//line sql.y:5630
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5764
-=======
-//line sql.y:5772
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5638
 		{
 			yyLOCAL = yyDollar[1].aliasedTableName()
 		}
@@ -22621,13 +21345,7 @@ yydefault:
 	case 1061:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL TableExpr
-<<<<<<< HEAD
-//line sql.y:5634
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5768
-=======
-//line sql.y:5776
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5642
 		{
 			yyLOCAL = &AliasedTableExpr{Expr: yyDollar[1].derivedTable(), As: yyDollar[3].identifierCS(), Columns: yyDollar[4].columns()}
 		}
@@ -22635,13 +21353,7 @@ yydefault:
 	case 1062:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL TableExpr
-<<<<<<< HEAD
-//line sql.y:5638
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5772
-=======
-//line sql.y:5780
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5646
 		{
 			yyLOCAL = &ParenTableExpr{Exprs: yyDollar[2].tableExprs()}
 		}
@@ -22649,13 +21361,7 @@ yydefault:
 	case 1063:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL TableExpr
-<<<<<<< HEAD
-//line sql.y:5642
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5776
-=======
-//line sql.y:5784
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5650
 		{
 			yyLOCAL = yyDollar[1].tableExpr()
 		}
@@ -22663,13 +21369,7 @@ yydefault:
 	case 1064:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL *DerivedTable
-<<<<<<< HEAD
-//line sql.y:5648
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5782
-=======
-//line sql.y:5790
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5656
 		{
 			yyLOCAL = &DerivedTable{Lateral: false, Select: yyDollar[1].tableStmt()}
 		}
@@ -22677,13 +21377,7 @@ yydefault:
 	case 1065:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL *DerivedTable
-<<<<<<< HEAD
-//line sql.y:5652
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5786
-=======
-//line sql.y:5794
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5660
 		{
 			yyLOCAL = &DerivedTable{Lateral: true, Select: yyDollar[2].tableStmt()}
 		}
@@ -22691,13 +21385,7 @@ yydefault:
 	case 1066:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL *AliasedTableExpr
-<<<<<<< HEAD
-//line sql.y:5658
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5792
-=======
-//line sql.y:5800
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5666
 		{
 			yyLOCAL = &AliasedTableExpr{Expr: yyDollar[1].tableName(), As: yyDollar[2].identifierCS(), Hints: yyDollar[3].indexHints()}
 		}
@@ -22705,13 +21393,7 @@ yydefault:
 	case 1067:
 		yyDollar = yyS[yypt-7 : yypt+1]
 		var yyLOCAL *AliasedTableExpr
-<<<<<<< HEAD
-//line sql.y:5662
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5796
-=======
-//line sql.y:5804
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5670
 		{
 			yyLOCAL = &AliasedTableExpr{Expr: yyDollar[1].tableName(), Partitions: yyDollar[4].partitions(), As: yyDollar[6].identifierCS(), Hints: yyDollar[7].indexHints()}
 		}
@@ -22719,13 +21401,7 @@ yydefault:
 	case 1068:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL Columns
-<<<<<<< HEAD
-//line sql.y:5667
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5801
-=======
-//line sql.y:5809
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5675
 		{
 			yyLOCAL = nil
 		}
@@ -22733,7 +21409,7 @@ yydefault:
 	case 1069:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL Columns
-//line sql.y:5671
+//line sql.y:5679
 		{
 			yyLOCAL = yyDollar[2].columns()
 		}
@@ -22741,7 +21417,7 @@ yydefault:
 	case 1070:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL Columns
-//line sql.y:5676
+//line sql.y:5684
 		{
 			yyLOCAL = nil
 		}
@@ -22749,7 +21425,7 @@ yydefault:
 	case 1071:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Columns
-//line sql.y:5680
+//line sql.y:5688
 		{
 			yyLOCAL = yyDollar[1].columns()
 		}
@@ -22757,7 +21433,7 @@ yydefault:
 	case 1072:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Columns
-//line sql.y:5686
+//line sql.y:5694
 		{
 			yyLOCAL = Columns{yyDollar[1].identifierCI()}
 		}
@@ -22765,7 +21441,7 @@ yydefault:
 	case 1073:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL Columns
-//line sql.y:5690
+//line sql.y:5698
 		{
 			yyLOCAL = append(yyDollar[1].columns(), yyDollar[3].identifierCI())
 		}
@@ -22773,7 +21449,7 @@ yydefault:
 	case 1074:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL []*Variable
-//line sql.y:5696
+//line sql.y:5704
 		{
 			yyLOCAL = []*Variable{yyDollar[1].variable()}
 		}
@@ -22781,7 +21457,7 @@ yydefault:
 	case 1075:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL []*Variable
-//line sql.y:5700
+//line sql.y:5708
 		{
 			yyLOCAL = append(yyDollar[1].variables(), yyDollar[3].variable())
 		}
@@ -22789,7 +21465,7 @@ yydefault:
 	case 1076:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Columns
-//line sql.y:5706
+//line sql.y:5714
 		{
 			yyLOCAL = Columns{yyDollar[1].identifierCI()}
 		}
@@ -22797,7 +21473,7 @@ yydefault:
 	case 1077:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Columns
-//line sql.y:5710
+//line sql.y:5718
 		{
 			yyLOCAL = Columns{NewIdentifierCI(string(yyDollar[1].str()))}
 		}
@@ -22805,7 +21481,7 @@ yydefault:
 	case 1078:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL Columns
-//line sql.y:5714
+//line sql.y:5722
 		{
 			yyLOCAL = append(yyDollar[1].columns(), yyDollar[3].identifierCI())
 		}
@@ -22813,173 +21489,7 @@ yydefault:
 	case 1079:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL Columns
-<<<<<<< HEAD
-//line sql.y:5718
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5805
-		{
-			yyLOCAL = yyDollar[2].columns()
-		}
-		yyVAL.setcolumns(yyLOCAL)
-	case 1080:
-		yyDollar = yyS[yypt-0 : yypt+1]
-		var yyLOCAL Columns
-//line sql.y:5810
-		{
-			yyLOCAL = nil
-		}
-		yyVAL.setcolumns(yyLOCAL)
-	case 1081:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL Columns
-//line sql.y:5814
-		{
-			yyLOCAL = yyDollar[1].columns()
-		}
-		yyVAL.setcolumns(yyLOCAL)
-	case 1082:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL Columns
-//line sql.y:5820
-		{
-			yyLOCAL = Columns{yyDollar[1].identifierCI()}
-		}
-		yyVAL.setcolumns(yyLOCAL)
-	case 1083:
-		yyDollar = yyS[yypt-3 : yypt+1]
-		var yyLOCAL Columns
-//line sql.y:5824
-		{
-			yyLOCAL = append(yyDollar[1].columns(), yyDollar[3].identifierCI())
-		}
-		yyVAL.setcolumns(yyLOCAL)
-	case 1084:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL []*Variable
-//line sql.y:5830
-		{
-			yyLOCAL = []*Variable{yyDollar[1].variable()}
-		}
-		yyVAL.setvariables(yyLOCAL)
-	case 1085:
-		yyDollar = yyS[yypt-3 : yypt+1]
-		var yyLOCAL []*Variable
-//line sql.y:5834
-		{
-			yyLOCAL = append(yyDollar[1].variables(), yyDollar[3].variable())
-		}
-		yyVAL.setvariables(yyLOCAL)
-	case 1086:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL Columns
-//line sql.y:5840
-		{
-			yyLOCAL = Columns{yyDollar[1].identifierCI()}
-		}
-		yyVAL.setcolumns(yyLOCAL)
-	case 1087:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL Columns
-//line sql.y:5844
-		{
-			yyLOCAL = Columns{NewIdentifierCI(string(yyDollar[1].str()))}
-		}
-		yyVAL.setcolumns(yyLOCAL)
-	case 1088:
-		yyDollar = yyS[yypt-3 : yypt+1]
-		var yyLOCAL Columns
-//line sql.y:5848
-		{
-			yyLOCAL = append(yyDollar[1].columns(), yyDollar[3].identifierCI())
-		}
-		yyVAL.setcolumns(yyLOCAL)
-	case 1089:
-		yyDollar = yyS[yypt-3 : yypt+1]
-		var yyLOCAL Columns
-//line sql.y:5852
-=======
-//line sql.y:5813
-		{
-			yyLOCAL = yyDollar[2].columns()
-		}
-		yyVAL.setcolumns(yyLOCAL)
-	case 1080:
-		yyDollar = yyS[yypt-0 : yypt+1]
-		var yyLOCAL Columns
-//line sql.y:5818
-		{
-			yyLOCAL = nil
-		}
-		yyVAL.setcolumns(yyLOCAL)
-	case 1081:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL Columns
-//line sql.y:5822
-		{
-			yyLOCAL = yyDollar[1].columns()
-		}
-		yyVAL.setcolumns(yyLOCAL)
-	case 1082:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL Columns
-//line sql.y:5828
-		{
-			yyLOCAL = Columns{yyDollar[1].identifierCI()}
-		}
-		yyVAL.setcolumns(yyLOCAL)
-	case 1083:
-		yyDollar = yyS[yypt-3 : yypt+1]
-		var yyLOCAL Columns
-//line sql.y:5832
-		{
-			yyLOCAL = append(yyDollar[1].columns(), yyDollar[3].identifierCI())
-		}
-		yyVAL.setcolumns(yyLOCAL)
-	case 1084:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL []*Variable
-//line sql.y:5838
-		{
-			yyLOCAL = []*Variable{yyDollar[1].variable()}
-		}
-		yyVAL.setvariables(yyLOCAL)
-	case 1085:
-		yyDollar = yyS[yypt-3 : yypt+1]
-		var yyLOCAL []*Variable
-//line sql.y:5842
-		{
-			yyLOCAL = append(yyDollar[1].variables(), yyDollar[3].variable())
-		}
-		yyVAL.setvariables(yyLOCAL)
-	case 1086:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL Columns
-//line sql.y:5848
-		{
-			yyLOCAL = Columns{yyDollar[1].identifierCI()}
-		}
-		yyVAL.setcolumns(yyLOCAL)
-	case 1087:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL Columns
-//line sql.y:5852
-		{
-			yyLOCAL = Columns{NewIdentifierCI(string(yyDollar[1].str()))}
-		}
-		yyVAL.setcolumns(yyLOCAL)
-	case 1088:
-		yyDollar = yyS[yypt-3 : yypt+1]
-		var yyLOCAL Columns
-//line sql.y:5856
-		{
-			yyLOCAL = append(yyDollar[1].columns(), yyDollar[3].identifierCI())
-		}
-		yyVAL.setcolumns(yyLOCAL)
-	case 1089:
-		yyDollar = yyS[yypt-3 : yypt+1]
-		var yyLOCAL Columns
-//line sql.y:5860
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5726
 		{
 			yyLOCAL = append(yyDollar[1].columns(), NewIdentifierCI(string(yyDollar[3].str())))
 		}
@@ -22987,13 +21497,7 @@ yydefault:
 	case 1080:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Partitions
-<<<<<<< HEAD
-//line sql.y:5724
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5858
-=======
-//line sql.y:5866
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5732
 		{
 			yyLOCAL = Partitions{yyDollar[1].identifierCI()}
 		}
@@ -23001,13 +21505,7 @@ yydefault:
 	case 1081:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL Partitions
-<<<<<<< HEAD
-//line sql.y:5728
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5862
-=======
-//line sql.y:5870
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5736
 		{
 			yyLOCAL = append(yyDollar[1].partitions(), yyDollar[3].identifierCI())
 		}
@@ -23015,13 +21513,7 @@ yydefault:
 	case 1082:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL TableExpr
-<<<<<<< HEAD
-//line sql.y:5741
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5875
-=======
-//line sql.y:5883
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5749
 		{
 			yyLOCAL = &JoinTableExpr{LeftExpr: yyDollar[1].tableExpr(), Join: yyDollar[2].joinType(), RightExpr: yyDollar[3].tableExpr(), Condition: yyDollar[4].joinCondition()}
 		}
@@ -23029,13 +21521,7 @@ yydefault:
 	case 1083:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL TableExpr
-<<<<<<< HEAD
-//line sql.y:5745
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5879
-=======
-//line sql.y:5887
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5753
 		{
 			yyLOCAL = &JoinTableExpr{LeftExpr: yyDollar[1].tableExpr(), Join: yyDollar[2].joinType(), RightExpr: yyDollar[3].tableExpr(), Condition: yyDollar[4].joinCondition()}
 		}
@@ -23043,13 +21529,7 @@ yydefault:
 	case 1084:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL TableExpr
-<<<<<<< HEAD
-//line sql.y:5749
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5883
-=======
-//line sql.y:5891
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5757
 		{
 			yyLOCAL = &JoinTableExpr{LeftExpr: yyDollar[1].tableExpr(), Join: yyDollar[2].joinType(), RightExpr: yyDollar[3].tableExpr(), Condition: yyDollar[4].joinCondition()}
 		}
@@ -23057,13 +21537,7 @@ yydefault:
 	case 1085:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL TableExpr
-<<<<<<< HEAD
-//line sql.y:5753
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5887
-=======
-//line sql.y:5895
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5761
 		{
 			yyLOCAL = &JoinTableExpr{LeftExpr: yyDollar[1].tableExpr(), Join: yyDollar[2].joinType(), RightExpr: yyDollar[3].tableExpr()}
 		}
@@ -23071,13 +21545,7 @@ yydefault:
 	case 1086:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL *JoinCondition
-<<<<<<< HEAD
-//line sql.y:5759
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5893
-=======
-//line sql.y:5901
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5767
 		{
 			yyLOCAL = &JoinCondition{On: yyDollar[2].expr()}
 		}
@@ -23085,13 +21553,7 @@ yydefault:
 	case 1087:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL *JoinCondition
-<<<<<<< HEAD
-//line sql.y:5761
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5895
-=======
-//line sql.y:5903
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5769
 		{
 			yyLOCAL = &JoinCondition{Using: yyDollar[3].columns()}
 		}
@@ -23099,13 +21561,7 @@ yydefault:
 	case 1088:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL *JoinCondition
-<<<<<<< HEAD
-//line sql.y:5765
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5899
-=======
-//line sql.y:5907
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5773
 		{
 			yyLOCAL = &JoinCondition{}
 		}
@@ -23113,13 +21569,7 @@ yydefault:
 	case 1089:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL *JoinCondition
-<<<<<<< HEAD
-//line sql.y:5767
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5901
-=======
-//line sql.y:5909
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5775
 		{
 			yyLOCAL = yyDollar[1].joinCondition()
 		}
@@ -23127,13 +21577,7 @@ yydefault:
 	case 1090:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL *JoinCondition
-<<<<<<< HEAD
-//line sql.y:5771
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5905
-=======
-//line sql.y:5913
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5779
 		{
 			yyLOCAL = &JoinCondition{}
 		}
@@ -23141,13 +21585,7 @@ yydefault:
 	case 1091:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL *JoinCondition
-<<<<<<< HEAD
-//line sql.y:5773
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5907
-=======
-//line sql.y:5915
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5781
 		{
 			yyLOCAL = &JoinCondition{On: yyDollar[2].expr()}
 		}
@@ -23155,13 +21593,7 @@ yydefault:
 	case 1092:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL struct{}
-<<<<<<< HEAD
-//line sql.y:5776
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5910
-=======
-//line sql.y:5918
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5784
 		{
 			yyLOCAL = struct{}{}
 		}
@@ -23169,13 +21601,7 @@ yydefault:
 	case 1093:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL struct{}
-<<<<<<< HEAD
-//line sql.y:5778
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5912
-=======
-//line sql.y:5920
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5786
 		{
 			yyLOCAL = struct{}{}
 		}
@@ -23183,13 +21609,7 @@ yydefault:
 	case 1094:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL IdentifierCS
-<<<<<<< HEAD
-//line sql.y:5781
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5915
-=======
-//line sql.y:5923
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5789
 		{
 			yyLOCAL = NewIdentifierCS("")
 		}
@@ -23197,13 +21617,7 @@ yydefault:
 	case 1095:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IdentifierCS
-<<<<<<< HEAD
-//line sql.y:5785
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5919
-=======
-//line sql.y:5927
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5793
 		{
 			yyLOCAL = yyDollar[1].identifierCS()
 		}
@@ -23211,13 +21625,7 @@ yydefault:
 	case 1096:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL IdentifierCS
-<<<<<<< HEAD
-//line sql.y:5789
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5923
-=======
-//line sql.y:5931
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5797
 		{
 			yyLOCAL = yyDollar[2].identifierCS()
 		}
@@ -23225,13 +21633,7 @@ yydefault:
 	case 1098:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IdentifierCS
-<<<<<<< HEAD
-//line sql.y:5796
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5930
-=======
-//line sql.y:5938
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5804
 		{
 			yyLOCAL = NewIdentifierCS(string(yyDollar[1].str()))
 		}
@@ -23239,13 +21641,7 @@ yydefault:
 	case 1099:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL JoinType
-<<<<<<< HEAD
-//line sql.y:5802
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5936
-=======
-//line sql.y:5944
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5810
 		{
 			yyLOCAL = NormalJoinType
 		}
@@ -23253,13 +21649,7 @@ yydefault:
 	case 1100:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL JoinType
-<<<<<<< HEAD
-//line sql.y:5806
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5940
-=======
-//line sql.y:5948
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5814
 		{
 			yyLOCAL = NormalJoinType
 		}
@@ -23267,13 +21657,7 @@ yydefault:
 	case 1101:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL JoinType
-<<<<<<< HEAD
-//line sql.y:5810
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5944
-=======
-//line sql.y:5952
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5818
 		{
 			yyLOCAL = NormalJoinType
 		}
@@ -23281,13 +21665,7 @@ yydefault:
 	case 1102:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL JoinType
-<<<<<<< HEAD
-//line sql.y:5816
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5950
-=======
-//line sql.y:5958
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5824
 		{
 			yyLOCAL = StraightJoinType
 		}
@@ -23295,13 +21673,7 @@ yydefault:
 	case 1103:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL JoinType
-<<<<<<< HEAD
-//line sql.y:5822
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5956
-=======
-//line sql.y:5964
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5830
 		{
 			yyLOCAL = LeftJoinType
 		}
@@ -23309,13 +21681,7 @@ yydefault:
 	case 1104:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL JoinType
-<<<<<<< HEAD
-//line sql.y:5826
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5960
-=======
-//line sql.y:5968
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5834
 		{
 			yyLOCAL = LeftJoinType
 		}
@@ -23323,13 +21689,7 @@ yydefault:
 	case 1105:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL JoinType
-<<<<<<< HEAD
-//line sql.y:5830
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5964
-=======
-//line sql.y:5972
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5838
 		{
 			yyLOCAL = RightJoinType
 		}
@@ -23337,13 +21697,7 @@ yydefault:
 	case 1106:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL JoinType
-<<<<<<< HEAD
-//line sql.y:5834
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5968
-=======
-//line sql.y:5976
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5842
 		{
 			yyLOCAL = RightJoinType
 		}
@@ -23351,13 +21705,7 @@ yydefault:
 	case 1107:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL JoinType
-<<<<<<< HEAD
-//line sql.y:5840
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5974
-=======
-//line sql.y:5982
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5848
 		{
 			yyLOCAL = NaturalJoinType
 		}
@@ -23365,13 +21713,7 @@ yydefault:
 	case 1108:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL JoinType
-<<<<<<< HEAD
-//line sql.y:5844
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5978
-=======
-//line sql.y:5986
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5852
 		{
 			if yyDollar[2].joinType() == LeftJoinType {
 				yyLOCAL = NaturalLeftJoinType
@@ -23383,13 +21725,7 @@ yydefault:
 	case 1109:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL TableName
-<<<<<<< HEAD
-//line sql.y:5854
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5988
-=======
-//line sql.y:5996
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5862
 		{
 			yyLOCAL = yyDollar[2].tableName()
 		}
@@ -23397,13 +21733,7 @@ yydefault:
 	case 1110:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL TableName
-<<<<<<< HEAD
-//line sql.y:5858
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5992
-=======
-//line sql.y:6000
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5866
 		{
 			yyLOCAL = yyDollar[1].tableName()
 		}
@@ -23411,13 +21741,7 @@ yydefault:
 	case 1111:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL TableName
-<<<<<<< HEAD
-//line sql.y:5864
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:5998
-=======
-//line sql.y:6006
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5872
 		{
 			yyLOCAL = TableName{Name: yyDollar[1].identifierCS()}
 		}
@@ -23425,13 +21749,7 @@ yydefault:
 	case 1112:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL TableName
-<<<<<<< HEAD
-//line sql.y:5868
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6002
-=======
-//line sql.y:6010
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5876
 		{
 			yyLOCAL = TableName{Qualifier: yyDollar[1].identifierCS(), Name: yyDollar[3].identifierCS()}
 		}
@@ -23439,13 +21757,7 @@ yydefault:
 	case 1113:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL TableName
-<<<<<<< HEAD
-//line sql.y:5874
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6008
-=======
-//line sql.y:6016
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5882
 		{
 			yyLOCAL = TableName{Name: yyDollar[1].identifierCS()}
 		}
@@ -23453,13 +21765,7 @@ yydefault:
 	case 1114:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL IndexHints
-<<<<<<< HEAD
-//line sql.y:5879
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6013
-=======
-//line sql.y:6021
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5887
 		{
 			yyLOCAL = nil
 		}
@@ -23467,13 +21773,7 @@ yydefault:
 	case 1115:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IndexHints
-<<<<<<< HEAD
-//line sql.y:5883
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6017
-=======
-//line sql.y:6025
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5891
 		{
 			yyLOCAL = yyDollar[1].indexHints()
 		}
@@ -23481,13 +21781,7 @@ yydefault:
 	case 1116:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IndexHints
-<<<<<<< HEAD
-//line sql.y:5889
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6023
-=======
-//line sql.y:6031
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5897
 		{
 			yyLOCAL = IndexHints{yyDollar[1].indexHint()}
 		}
@@ -23495,13 +21789,7 @@ yydefault:
 	case 1117:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL IndexHints
-<<<<<<< HEAD
-//line sql.y:5893
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6027
-=======
-//line sql.y:6035
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5901
 		{
 			yyLOCAL = append(yyDollar[1].indexHints(), yyDollar[2].indexHint())
 		}
@@ -23509,13 +21797,7 @@ yydefault:
 	case 1118:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL *IndexHint
-<<<<<<< HEAD
-//line sql.y:5899
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6033
-=======
-//line sql.y:6041
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5907
 		{
 			yyLOCAL = &IndexHint{Type: UseOp, ForType: yyDollar[3].indexHintForType(), Indexes: yyDollar[5].columns()}
 		}
@@ -23523,13 +21805,7 @@ yydefault:
 	case 1119:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		var yyLOCAL *IndexHint
-<<<<<<< HEAD
-//line sql.y:5903
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6037
-=======
-//line sql.y:6045
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5911
 		{
 			yyLOCAL = &IndexHint{Type: UseOp, ForType: yyDollar[3].indexHintForType()}
 		}
@@ -23537,13 +21813,7 @@ yydefault:
 	case 1120:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL *IndexHint
-<<<<<<< HEAD
-//line sql.y:5907
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6041
-=======
-//line sql.y:6049
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5915
 		{
 			yyLOCAL = &IndexHint{Type: IgnoreOp, ForType: yyDollar[3].indexHintForType(), Indexes: yyDollar[5].columns()}
 		}
@@ -23551,13 +21821,7 @@ yydefault:
 	case 1121:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL *IndexHint
-<<<<<<< HEAD
-//line sql.y:5911
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6045
-=======
-//line sql.y:6053
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5919
 		{
 			yyLOCAL = &IndexHint{Type: ForceOp, ForType: yyDollar[3].indexHintForType(), Indexes: yyDollar[5].columns()}
 		}
@@ -23565,13 +21829,7 @@ yydefault:
 	case 1122:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		var yyLOCAL *IndexHint
-<<<<<<< HEAD
-//line sql.y:5915
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6049
-=======
-//line sql.y:6057
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5923
 		{
 			yyLOCAL = &IndexHint{Type: UseVindexOp, Indexes: yyDollar[4].columns()}
 		}
@@ -23579,13 +21837,7 @@ yydefault:
 	case 1123:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		var yyLOCAL *IndexHint
-<<<<<<< HEAD
-//line sql.y:5919
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6053
-=======
-//line sql.y:6061
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5927
 		{
 			yyLOCAL = &IndexHint{Type: IgnoreVindexOp, Indexes: yyDollar[4].columns()}
 		}
@@ -23593,13 +21845,7 @@ yydefault:
 	case 1124:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL IndexHintForType
-<<<<<<< HEAD
-//line sql.y:5924
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6058
-=======
-//line sql.y:6066
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5932
 		{
 			yyLOCAL = NoForType
 		}
@@ -23607,13 +21853,7 @@ yydefault:
 	case 1125:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL IndexHintForType
-<<<<<<< HEAD
-//line sql.y:5928
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6062
-=======
-//line sql.y:6070
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5936
 		{
 			yyLOCAL = JoinForType
 		}
@@ -23621,13 +21861,7 @@ yydefault:
 	case 1126:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL IndexHintForType
-<<<<<<< HEAD
-//line sql.y:5932
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6066
-=======
-//line sql.y:6074
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5940
 		{
 			yyLOCAL = OrderByForType
 		}
@@ -23635,13 +21869,7 @@ yydefault:
 	case 1127:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL IndexHintForType
-<<<<<<< HEAD
-//line sql.y:5936
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6070
-=======
-//line sql.y:6078
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5944
 		{
 			yyLOCAL = GroupByForType
 		}
@@ -23649,13 +21877,7 @@ yydefault:
 	case 1128:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:5942
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6076
-=======
-//line sql.y:6084
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5950
 		{
 			yyLOCAL = nil
 		}
@@ -23663,13 +21885,7 @@ yydefault:
 	case 1129:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:5946
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6080
-=======
-//line sql.y:6088
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5954
 		{
 			yyLOCAL = yyDollar[2].expr()
 		}
@@ -23677,13 +21893,7 @@ yydefault:
 	case 1130:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:5953
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6087
-=======
-//line sql.y:6095
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5961
 		{
 			yyLOCAL = &OrExpr{Left: yyDollar[1].expr(), Right: yyDollar[3].expr()}
 		}
@@ -23691,13 +21901,7 @@ yydefault:
 	case 1131:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:5957
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6091
-=======
-//line sql.y:6099
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:5965
 		{
 			yyLOCAL = &XorExpr{Left: yyDollar[1].expr(), Right: yyDollar[3].expr()}
 		}
@@ -23705,7 +21909,7 @@ yydefault:
 	case 1132:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL Expr
-//line sql.y:5961
+//line sql.y:5969
 		{
 			yyLOCAL = &AndExpr{Left: yyDollar[1].expr(), Right: yyDollar[3].expr()}
 		}
@@ -23713,7 +21917,7 @@ yydefault:
 	case 1133:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL Expr
-//line sql.y:5965
+//line sql.y:5973
 		{
 			yyLOCAL = &NotExpr{Expr: yyDollar[2].expr()}
 		}
@@ -23721,7 +21925,7 @@ yydefault:
 	case 1134:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL Expr
-//line sql.y:5969
+//line sql.y:5977
 		{
 			yyLOCAL = &IsExpr{Left: yyDollar[1].expr(), Right: yyDollar[3].isExprOperator()}
 		}
@@ -23729,7 +21933,7 @@ yydefault:
 	case 1135:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Expr
-//line sql.y:5973
+//line sql.y:5981
 		{
 			yyLOCAL = yyDollar[1].expr()
 		}
@@ -23737,7 +21941,7 @@ yydefault:
 	case 1136:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL Expr
-//line sql.y:5977
+//line sql.y:5985
 		{
 			yyLOCAL = &AssignmentExpr{Left: yyDollar[1].variable(), Right: yyDollar[3].expr()}
 		}
@@ -23745,25 +21949,25 @@ yydefault:
 	case 1137:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-//line sql.y:5981
+//line sql.y:5989
 		{
 			yyLOCAL = &MemberOfExpr{Value: yyDollar[1].expr(), JSONArr: yyDollar[5].expr()}
 		}
 		yyVAL.setexpr(yyLOCAL)
 	case 1138:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:5987
+//line sql.y:5995
 		{
 		}
 	case 1139:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:5990
+//line sql.y:5998
 		{
 		}
 	case 1140:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL Expr
-//line sql.y:5995
+//line sql.y:6003
 		{
 			yyLOCAL = &IsExpr{Left: yyDollar[1].expr(), Right: IsNullOp}
 		}
@@ -23771,7 +21975,7 @@ yydefault:
 	case 1141:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-//line sql.y:5999
+//line sql.y:6007
 		{
 			yyLOCAL = &IsExpr{Left: yyDollar[1].expr(), Right: IsNotNullOp}
 		}
@@ -23779,161 +21983,7 @@ yydefault:
 	case 1142:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6003
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6095
-		{
-			yyLOCAL = &AndExpr{Left: yyDollar[1].expr(), Right: yyDollar[3].expr()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1143:
-		yyDollar = yyS[yypt-2 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:6099
-		{
-			yyLOCAL = &NotExpr{Expr: yyDollar[2].expr()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1144:
-		yyDollar = yyS[yypt-3 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:6103
-		{
-			yyLOCAL = &IsExpr{Left: yyDollar[1].expr(), Right: yyDollar[3].isExprOperator()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1145:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:6107
-		{
-			yyLOCAL = yyDollar[1].expr()
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1146:
-		yyDollar = yyS[yypt-3 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:6111
-		{
-			yyLOCAL = &AssignmentExpr{Left: yyDollar[1].variable(), Right: yyDollar[3].expr()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1147:
-		yyDollar = yyS[yypt-6 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:6115
-		{
-			yyLOCAL = &MemberOfExpr{Value: yyDollar[1].expr(), JSONArr: yyDollar[5].expr()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1148:
-		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:6121
-		{
-		}
-	case 1149:
-		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:6124
-		{
-		}
-	case 1150:
-		yyDollar = yyS[yypt-3 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:6129
-		{
-			yyLOCAL = &IsExpr{Left: yyDollar[1].expr(), Right: IsNullOp}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1151:
-		yyDollar = yyS[yypt-4 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:6133
-		{
-			yyLOCAL = &IsExpr{Left: yyDollar[1].expr(), Right: IsNotNullOp}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1152:
-		yyDollar = yyS[yypt-3 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:6137
-=======
-//line sql.y:6103
-		{
-			yyLOCAL = &AndExpr{Left: yyDollar[1].expr(), Right: yyDollar[3].expr()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1143:
-		yyDollar = yyS[yypt-2 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:6107
-		{
-			yyLOCAL = &NotExpr{Expr: yyDollar[2].expr()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1144:
-		yyDollar = yyS[yypt-3 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:6111
-		{
-			yyLOCAL = &IsExpr{Left: yyDollar[1].expr(), Right: yyDollar[3].isExprOperator()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1145:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:6115
-		{
-			yyLOCAL = yyDollar[1].expr()
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1146:
-		yyDollar = yyS[yypt-3 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:6119
-		{
-			yyLOCAL = &AssignmentExpr{Left: yyDollar[1].variable(), Right: yyDollar[3].expr()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1147:
-		yyDollar = yyS[yypt-6 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:6123
-		{
-			yyLOCAL = &MemberOfExpr{Value: yyDollar[1].expr(), JSONArr: yyDollar[5].expr()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1148:
-		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:6129
-		{
-		}
-	case 1149:
-		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:6132
-		{
-		}
-	case 1150:
-		yyDollar = yyS[yypt-3 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:6137
-		{
-			yyLOCAL = &IsExpr{Left: yyDollar[1].expr(), Right: IsNullOp}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1151:
-		yyDollar = yyS[yypt-4 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:6141
-		{
-			yyLOCAL = &IsExpr{Left: yyDollar[1].expr(), Right: IsNotNullOp}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1152:
-		yyDollar = yyS[yypt-3 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:6145
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6011
 		{
 			yyLOCAL = &ComparisonExpr{Left: yyDollar[1].expr(), Operator: yyDollar[2].comparisonExprOperator(), Right: yyDollar[3].expr()}
 		}
@@ -23941,13 +21991,7 @@ yydefault:
 	case 1143:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6007
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6141
-=======
-//line sql.y:6149
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6015
 		{
 			yyLOCAL = &ComparisonExpr{Left: yyDollar[1].expr(), Operator: yyDollar[2].comparisonExprOperator(), Modifier: Any, Right: yyDollar[4].subquery()}
 		}
@@ -23955,13 +21999,7 @@ yydefault:
 	case 1144:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6011
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6145
-=======
-//line sql.y:6153
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6019
 		{
 			yyLOCAL = &ComparisonExpr{Left: yyDollar[1].expr(), Operator: yyDollar[2].comparisonExprOperator(), Modifier: Any, Right: yyDollar[4].subquery()}
 		}
@@ -23969,13 +22007,7 @@ yydefault:
 	case 1145:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6015
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6149
-=======
-//line sql.y:6157
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6023
 		{
 			yyLOCAL = &ComparisonExpr{Left: yyDollar[1].expr(), Operator: yyDollar[2].comparisonExprOperator(), Modifier: All, Right: yyDollar[4].subquery()}
 		}
@@ -23983,13 +22015,7 @@ yydefault:
 	case 1146:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6019
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6153
-=======
-//line sql.y:6161
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6027
 		{
 			yyLOCAL = yyDollar[1].expr()
 		}
@@ -23997,13 +22023,7 @@ yydefault:
 	case 1147:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6025
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6159
-=======
-//line sql.y:6167
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6033
 		{
 			yyLOCAL = &ComparisonExpr{Left: yyDollar[1].expr(), Operator: InOp, Right: yyDollar[3].colTuple()}
 		}
@@ -24011,13 +22031,7 @@ yydefault:
 	case 1148:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6029
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6163
-=======
-//line sql.y:6171
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6037
 		{
 			yyLOCAL = &ComparisonExpr{Left: yyDollar[1].expr(), Operator: NotInOp, Right: yyDollar[4].colTuple()}
 		}
@@ -24025,13 +22039,7 @@ yydefault:
 	case 1149:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6033
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6167
-=======
-//line sql.y:6175
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6041
 		{
 			yyLOCAL = &BetweenExpr{Left: yyDollar[1].expr(), IsBetween: true, From: yyDollar[3].expr(), To: yyDollar[5].expr()}
 		}
@@ -24039,13 +22047,7 @@ yydefault:
 	case 1150:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6037
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6171
-=======
-//line sql.y:6179
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6045
 		{
 			yyLOCAL = &BetweenExpr{Left: yyDollar[1].expr(), IsBetween: false, From: yyDollar[4].expr(), To: yyDollar[6].expr()}
 		}
@@ -24053,7 +22055,7 @@ yydefault:
 	case 1151:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL Expr
-//line sql.y:6041
+//line sql.y:6049
 		{
 			yyLOCAL = &ComparisonExpr{Left: yyDollar[1].expr(), Operator: LikeOp, Right: yyDollar[3].expr()}
 		}
@@ -24061,7 +22063,7 @@ yydefault:
 	case 1152:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-//line sql.y:6045
+//line sql.y:6053
 		{
 			yyLOCAL = &ComparisonExpr{Left: yyDollar[1].expr(), Operator: NotLikeOp, Right: yyDollar[4].expr()}
 		}
@@ -24069,7 +22071,7 @@ yydefault:
 	case 1153:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		var yyLOCAL Expr
-//line sql.y:6049
+//line sql.y:6057
 		{
 			yyLOCAL = &ComparisonExpr{Left: yyDollar[1].expr(), Operator: LikeOp, Right: yyDollar[3].expr(), Escape: yyDollar[5].expr()}
 		}
@@ -24077,7 +22079,7 @@ yydefault:
 	case 1154:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-//line sql.y:6053
+//line sql.y:6061
 		{
 			yyLOCAL = &ComparisonExpr{Left: yyDollar[1].expr(), Operator: NotLikeOp, Right: yyDollar[4].expr(), Escape: yyDollar[6].expr()}
 		}
@@ -24085,7 +22087,7 @@ yydefault:
 	case 1155:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL Expr
-//line sql.y:6057
+//line sql.y:6065
 		{
 			yyLOCAL = &ComparisonExpr{Left: yyDollar[1].expr(), Operator: RegexpOp, Right: yyDollar[3].expr()}
 		}
@@ -24093,7 +22095,7 @@ yydefault:
 	case 1156:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-//line sql.y:6061
+//line sql.y:6069
 		{
 			yyLOCAL = &ComparisonExpr{Left: yyDollar[1].expr(), Operator: NotRegexpOp, Right: yyDollar[4].expr()}
 		}
@@ -24101,25 +22103,25 @@ yydefault:
 	case 1157:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Expr
-//line sql.y:6065
+//line sql.y:6073
 		{
 			yyLOCAL = yyDollar[1].expr()
 		}
 		yyVAL.setexpr(yyLOCAL)
 	case 1158:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:6071
+//line sql.y:6079
 		{
 		}
 	case 1159:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:6074
+//line sql.y:6082
 		{
 		}
 	case 1160:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL Expr
-//line sql.y:6080
+//line sql.y:6088
 		{
 			yyLOCAL = &BinaryExpr{Left: yyDollar[1].expr(), Operator: BitOrOp, Right: yyDollar[3].expr()}
 		}
@@ -24127,13 +22129,7 @@ yydefault:
 	case 1161:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6084
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6175
-=======
-//line sql.y:6183
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6092
 		{
 			yyLOCAL = &BinaryExpr{Left: yyDollar[1].expr(), Operator: BitAndOp, Right: yyDollar[3].expr()}
 		}
@@ -24141,13 +22137,7 @@ yydefault:
 	case 1162:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6088
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6179
-=======
-//line sql.y:6187
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6096
 		{
 			yyLOCAL = &BinaryExpr{Left: yyDollar[1].expr(), Operator: ShiftLeftOp, Right: yyDollar[3].expr()}
 		}
@@ -24155,13 +22145,7 @@ yydefault:
 	case 1163:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6092
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6183
-=======
-//line sql.y:6191
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6100
 		{
 			yyLOCAL = &BinaryExpr{Left: yyDollar[1].expr(), Operator: ShiftRightOp, Right: yyDollar[3].expr()}
 		}
@@ -24169,13 +22153,7 @@ yydefault:
 	case 1164:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6096
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6187
-=======
-//line sql.y:6195
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6104
 		{
 			yyLOCAL = &BinaryExpr{Left: yyDollar[1].expr(), Operator: PlusOp, Right: yyDollar[3].expr()}
 		}
@@ -24183,13 +22161,7 @@ yydefault:
 	case 1165:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6100
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6191
-=======
-//line sql.y:6199
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6108
 		{
 			yyLOCAL = &BinaryExpr{Left: yyDollar[1].expr(), Operator: MinusOp, Right: yyDollar[3].expr()}
 		}
@@ -24197,13 +22169,7 @@ yydefault:
 	case 1166:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6104
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6195
-=======
-//line sql.y:6203
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6112
 		{
 			yyLOCAL = &IntervalDateExpr{Syntax: IntervalDateExprBinaryAdd, Date: yyDollar[1].expr(), Unit: yyDollar[5].intervalType(), Interval: yyDollar[4].expr()}
 		}
@@ -24211,45 +22177,23 @@ yydefault:
 	case 1167:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6108
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6199
-=======
-//line sql.y:6207
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6116
 		{
 			yyLOCAL = &IntervalDateExpr{Syntax: IntervalDateExprBinarySub, Date: yyDollar[1].expr(), Unit: yyDollar[5].intervalType(), Interval: yyDollar[4].expr()}
 		}
 		yyVAL.setexpr(yyLOCAL)
 	case 1168:
-<<<<<<< HEAD
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL Expr
-//line sql.y:6112
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:6205
-=======
-		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:6213
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6120
 		{
 			yyLOCAL = &BinaryExpr{Left: yyDollar[1].expr(), Operator: MultOp, Right: yyDollar[3].expr()}
 		}
 		yyVAL.setexpr(yyLOCAL)
 	case 1169:
-<<<<<<< HEAD
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL Expr
-//line sql.y:6116
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:6208
-=======
-		yyDollar = yyS[yypt-1 : yypt+1]
-//line sql.y:6216
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6124
 		{
 			yyLOCAL = &BinaryExpr{Left: yyDollar[1].expr(), Operator: DivOp, Right: yyDollar[3].expr()}
 		}
@@ -24257,13 +22201,7 @@ yydefault:
 	case 1170:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6120
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6214
-=======
-//line sql.y:6222
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6128
 		{
 			yyLOCAL = &BinaryExpr{Left: yyDollar[1].expr(), Operator: ModOp, Right: yyDollar[3].expr()}
 		}
@@ -24271,13 +22209,7 @@ yydefault:
 	case 1171:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6124
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6218
-=======
-//line sql.y:6226
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6132
 		{
 			yyLOCAL = &BinaryExpr{Left: yyDollar[1].expr(), Operator: IntDivOp, Right: yyDollar[3].expr()}
 		}
@@ -24285,13 +22217,7 @@ yydefault:
 	case 1172:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6128
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6222
-=======
-//line sql.y:6230
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6136
 		{
 			yyLOCAL = &BinaryExpr{Left: yyDollar[1].expr(), Operator: ModOp, Right: yyDollar[3].expr()}
 		}
@@ -24299,13 +22225,7 @@ yydefault:
 	case 1173:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6132
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6226
-=======
-//line sql.y:6234
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6140
 		{
 			yyLOCAL = &BinaryExpr{Left: yyDollar[1].expr(), Operator: BitXorOp, Right: yyDollar[3].expr()}
 		}
@@ -24313,13 +22233,7 @@ yydefault:
 	case 1174:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6136
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6230
-=======
-//line sql.y:6238
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6144
 		{
 			yyLOCAL = yyDollar[1].expr()
 		}
@@ -24327,13 +22241,7 @@ yydefault:
 	case 1175:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6142
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6234
-=======
-//line sql.y:6242
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6150
 		{
 			yyLOCAL = yyDollar[1].expr()
 		}
@@ -24341,13 +22249,7 @@ yydefault:
 	case 1176:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6146
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6238
-=======
-//line sql.y:6246
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6154
 		{
 			yyLOCAL = yyDollar[1].expr()
 		}
@@ -24355,13 +22257,7 @@ yydefault:
 	case 1177:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6150
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6242
-=======
-//line sql.y:6250
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6158
 		{
 			yyLOCAL = yyDollar[1].expr()
 		}
@@ -24369,13 +22265,7 @@ yydefault:
 	case 1178:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6154
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6246
-=======
-//line sql.y:6254
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6162
 		{
 			yyLOCAL = yyDollar[1].expr()
 		}
@@ -24383,13 +22273,7 @@ yydefault:
 	case 1179:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6158
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6250
-=======
-//line sql.y:6258
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6166
 		{
 			yyLOCAL = &CollateExpr{Expr: yyDollar[1].expr(), Collation: yyDollar[3].str()}
 		}
@@ -24397,13 +22281,7 @@ yydefault:
 	case 1180:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6162
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6254
-=======
-//line sql.y:6262
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6170
 		{
 			yyLOCAL = yyDollar[1].expr()
 		}
@@ -24411,13 +22289,7 @@ yydefault:
 	case 1181:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6166
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6258
-=======
-//line sql.y:6266
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6174
 		{
 			yyLOCAL = yyDollar[1].expr()
 		}
@@ -24425,13 +22297,7 @@ yydefault:
 	case 1182:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6170
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6262
-=======
-//line sql.y:6270
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6178
 		{
 			yyLOCAL = yyDollar[1].variable()
 		}
@@ -24439,13 +22305,7 @@ yydefault:
 	case 1183:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6174
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6266
-=======
-//line sql.y:6274
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6182
 		{
 			yyLOCAL = yyDollar[2].expr() // TODO: do we really want to ignore unary '+' before any kind of literals?
 		}
@@ -24453,13 +22313,7 @@ yydefault:
 	case 1184:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6178
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6270
-=======
-//line sql.y:6278
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6186
 		{
 			yyLOCAL = &UnaryExpr{Operator: UMinusOp, Expr: yyDollar[2].expr()}
 		}
@@ -24467,13 +22321,7 @@ yydefault:
 	case 1185:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6182
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6276
-=======
-//line sql.y:6284
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6190
 		{
 			yyLOCAL = &UnaryExpr{Operator: TildaOp, Expr: yyDollar[2].expr()}
 		}
@@ -24481,13 +22329,7 @@ yydefault:
 	case 1186:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6186
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6280
-=======
-//line sql.y:6288
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6194
 		{
 			yyLOCAL = &UnaryExpr{Operator: BangOp, Expr: yyDollar[2].expr()}
 		}
@@ -24495,13 +22337,7 @@ yydefault:
 	case 1187:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6190
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6284
-=======
-//line sql.y:6292
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6198
 		{
 			yyLOCAL = yyDollar[1].subquery()
 		}
@@ -24509,13 +22345,7 @@ yydefault:
 	case 1188:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6194
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6288
-=======
-//line sql.y:6296
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6202
 		{
 			yyLOCAL = yyDollar[1].expr()
 		}
@@ -24523,13 +22353,7 @@ yydefault:
 	case 1189:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6198
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6292
-=======
-//line sql.y:6300
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6206
 		{
 			yyLOCAL = &ExistsExpr{Subquery: yyDollar[2].subquery()}
 		}
@@ -24537,13 +22361,7 @@ yydefault:
 	case 1190:
 		yyDollar = yyS[yypt-7 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6202
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6296
-=======
-//line sql.y:6304
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6210
 		{
 			yyLOCAL = &MatchExpr{Columns: yyDollar[2].colNames(), Expr: yyDollar[5].expr(), Option: yyDollar[6].matchExprOption()}
 		}
@@ -24551,13 +22369,7 @@ yydefault:
 	case 1191:
 		yyDollar = yyS[yypt-7 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6206
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6300
-=======
-//line sql.y:6308
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6214
 		{
 			yyLOCAL = &CastExpr{Expr: yyDollar[3].expr(), Type: yyDollar[5].convertType(), Array: yyDollar[6].boolean()}
 		}
@@ -24565,13 +22377,7 @@ yydefault:
 	case 1192:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6210
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6304
-=======
-//line sql.y:6312
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6218
 		{
 			yyLOCAL = &ConvertExpr{Expr: yyDollar[3].expr(), Type: yyDollar[5].convertType()}
 		}
@@ -24579,13 +22385,7 @@ yydefault:
 	case 1193:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6214
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6308
-=======
-//line sql.y:6316
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6222
 		{
 			yyLOCAL = &ConvertUsingExpr{Expr: yyDollar[3].expr(), Type: yyDollar[5].str()}
 		}
@@ -24593,173 +22393,7 @@ yydefault:
 	case 1194:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6218
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6312
-		{
-			yyLOCAL = &UnaryExpr{Operator: UMinusOp, Expr: yyDollar[2].expr()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1195:
-		yyDollar = yyS[yypt-2 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:6316
-		{
-			yyLOCAL = &UnaryExpr{Operator: TildaOp, Expr: yyDollar[2].expr()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1196:
-		yyDollar = yyS[yypt-2 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:6320
-		{
-			yyLOCAL = &UnaryExpr{Operator: BangOp, Expr: yyDollar[2].expr()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1197:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:6324
-		{
-			yyLOCAL = yyDollar[1].subquery()
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1198:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:6328
-		{
-			yyLOCAL = yyDollar[1].expr()
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1199:
-		yyDollar = yyS[yypt-2 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:6332
-		{
-			yyLOCAL = &ExistsExpr{Subquery: yyDollar[2].subquery()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1200:
-		yyDollar = yyS[yypt-7 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:6336
-		{
-			yyLOCAL = &MatchExpr{Columns: yyDollar[2].colNames(), Expr: yyDollar[5].expr(), Option: yyDollar[6].matchExprOption()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1201:
-		yyDollar = yyS[yypt-7 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:6340
-		{
-			yyLOCAL = &CastExpr{Expr: yyDollar[3].expr(), Type: yyDollar[5].convertType(), Array: yyDollar[6].boolean()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1202:
-		yyDollar = yyS[yypt-6 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:6344
-		{
-			yyLOCAL = &ConvertExpr{Expr: yyDollar[3].expr(), Type: yyDollar[5].convertType()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1203:
-		yyDollar = yyS[yypt-6 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:6348
-		{
-			yyLOCAL = &ConvertUsingExpr{Expr: yyDollar[3].expr(), Type: yyDollar[5].str()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1204:
-		yyDollar = yyS[yypt-2 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:6352
-=======
-//line sql.y:6320
-		{
-			yyLOCAL = &UnaryExpr{Operator: UMinusOp, Expr: yyDollar[2].expr()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1195:
-		yyDollar = yyS[yypt-2 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:6324
-		{
-			yyLOCAL = &UnaryExpr{Operator: TildaOp, Expr: yyDollar[2].expr()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1196:
-		yyDollar = yyS[yypt-2 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:6328
-		{
-			yyLOCAL = &UnaryExpr{Operator: BangOp, Expr: yyDollar[2].expr()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1197:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:6332
-		{
-			yyLOCAL = yyDollar[1].subquery()
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1198:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:6336
-		{
-			yyLOCAL = yyDollar[1].expr()
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1199:
-		yyDollar = yyS[yypt-2 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:6340
-		{
-			yyLOCAL = &ExistsExpr{Subquery: yyDollar[2].subquery()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1200:
-		yyDollar = yyS[yypt-7 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:6344
-		{
-			yyLOCAL = &MatchExpr{Columns: yyDollar[2].colNames(), Expr: yyDollar[5].expr(), Option: yyDollar[6].matchExprOption()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1201:
-		yyDollar = yyS[yypt-7 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:6348
-		{
-			yyLOCAL = &CastExpr{Expr: yyDollar[3].expr(), Type: yyDollar[5].convertType(), Array: yyDollar[6].boolean()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1202:
-		yyDollar = yyS[yypt-6 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:6352
-		{
-			yyLOCAL = &ConvertExpr{Expr: yyDollar[3].expr(), Type: yyDollar[5].convertType()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1203:
-		yyDollar = yyS[yypt-6 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:6356
-		{
-			yyLOCAL = &ConvertUsingExpr{Expr: yyDollar[3].expr(), Type: yyDollar[5].str()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1204:
-		yyDollar = yyS[yypt-2 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:6360
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6226
 		{
 			// From: https://dev.mysql.com/doc/refman/8.0/en/cast-functions.html#operator_binary
 			// To convert a string expression to a binary string, these constructs are equivalent:
@@ -24771,13 +22405,7 @@ yydefault:
 	case 1195:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6226
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6360
-=======
-//line sql.y:6368
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6234
 		{
 			yyLOCAL = &Default{ColName: yyDollar[2].str()}
 		}
@@ -24785,13 +22413,7 @@ yydefault:
 	case 1196:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6230
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6364
-=======
-//line sql.y:6372
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6238
 		{
 			yyLOCAL = &IntervalDateExpr{Syntax: IntervalDateExprBinaryAddLeft, Date: yyDollar[5].expr(), Unit: yyDollar[3].intervalType(), Interval: yyDollar[2].expr()}
 		}
@@ -24799,13 +22421,7 @@ yydefault:
 	case 1197:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6234
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6368
-=======
-//line sql.y:6376
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6242
 		{
 			yyLOCAL = &IntervalFuncExpr{Expr: yyDollar[3].expr(), Exprs: yyDollar[5].exprs()}
 		}
@@ -24813,13 +22429,7 @@ yydefault:
 	case 1198:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6238
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6372
-=======
-//line sql.y:6380
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6246
 		{
 			yyLOCAL = &JSONExtractExpr{JSONDoc: yyDollar[1].expr(), PathList: []Expr{yyDollar[3].expr()}}
 		}
@@ -24827,13 +22437,7 @@ yydefault:
 	case 1199:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6242
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6376
-=======
-//line sql.y:6384
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6250
 		{
 			yyLOCAL = &JSONUnquoteExpr{JSONValue: &JSONExtractExpr{JSONDoc: yyDollar[1].expr(), PathList: []Expr{yyDollar[3].expr()}}}
 		}
@@ -24841,13 +22445,7 @@ yydefault:
 	case 1200:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL []*ColName
-<<<<<<< HEAD
-//line sql.y:6248
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6382
-=======
-//line sql.y:6390
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6256
 		{
 			yyLOCAL = yyDollar[1].colNames()
 		}
@@ -24855,13 +22453,7 @@ yydefault:
 	case 1201:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL []*ColName
-<<<<<<< HEAD
-//line sql.y:6252
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6386
-=======
-//line sql.y:6394
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6260
 		{
 			yyLOCAL = yyDollar[2].colNames()
 		}
@@ -24869,13 +22461,7 @@ yydefault:
 	case 1202:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL []*ColName
-<<<<<<< HEAD
-//line sql.y:6258
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6392
-=======
-//line sql.y:6400
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6266
 		{
 			yyLOCAL = []*ColName{yyDollar[1].colName()}
 		}
@@ -24883,13 +22469,7 @@ yydefault:
 	case 1203:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL []*ColName
-<<<<<<< HEAD
-//line sql.y:6262
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6396
-=======
-//line sql.y:6404
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6270
 		{
 			yyLOCAL = append(yyDollar[1].colNames(), yyDollar[3].colName())
 		}
@@ -24897,13 +22477,7 @@ yydefault:
 	case 1204:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL TrimType
-<<<<<<< HEAD
-//line sql.y:6268
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6402
-=======
-//line sql.y:6410
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6276
 		{
 			yyLOCAL = BothTrimType
 		}
@@ -24911,13 +22485,7 @@ yydefault:
 	case 1205:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL TrimType
-<<<<<<< HEAD
-//line sql.y:6272
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6406
-=======
-//line sql.y:6414
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6280
 		{
 			yyLOCAL = LeadingTrimType
 		}
@@ -24925,13 +22493,7 @@ yydefault:
 	case 1206:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL TrimType
-<<<<<<< HEAD
-//line sql.y:6276
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6410
-=======
-//line sql.y:6418
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6284
 		{
 			yyLOCAL = TrailingTrimType
 		}
@@ -24939,13 +22501,7 @@ yydefault:
 	case 1207:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL FrameUnitType
-<<<<<<< HEAD
-//line sql.y:6282
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6416
-=======
-//line sql.y:6424
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6290
 		{
 			yyLOCAL = FrameRowsType
 		}
@@ -24953,13 +22509,7 @@ yydefault:
 	case 1208:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL FrameUnitType
-<<<<<<< HEAD
-//line sql.y:6286
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6420
-=======
-//line sql.y:6428
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6294
 		{
 			yyLOCAL = FrameRangeType
 		}
@@ -24967,13 +22517,7 @@ yydefault:
 	case 1209:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL ArgumentLessWindowExprType
-<<<<<<< HEAD
-//line sql.y:6293
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6427
-=======
-//line sql.y:6435
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6301
 		{
 			yyLOCAL = CumeDistExprType
 		}
@@ -24981,13 +22525,7 @@ yydefault:
 	case 1210:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL ArgumentLessWindowExprType
-<<<<<<< HEAD
-//line sql.y:6297
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6431
-=======
-//line sql.y:6439
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6305
 		{
 			yyLOCAL = DenseRankExprType
 		}
@@ -24995,13 +22533,7 @@ yydefault:
 	case 1211:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL ArgumentLessWindowExprType
-<<<<<<< HEAD
-//line sql.y:6301
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6435
-=======
-//line sql.y:6443
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6309
 		{
 			yyLOCAL = PercentRankExprType
 		}
@@ -25009,13 +22541,7 @@ yydefault:
 	case 1212:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL ArgumentLessWindowExprType
-<<<<<<< HEAD
-//line sql.y:6305
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6439
-=======
-//line sql.y:6447
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6313
 		{
 			yyLOCAL = RankExprType
 		}
@@ -25023,13 +22549,7 @@ yydefault:
 	case 1213:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL ArgumentLessWindowExprType
-<<<<<<< HEAD
-//line sql.y:6309
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6443
-=======
-//line sql.y:6451
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6317
 		{
 			yyLOCAL = RowNumberExprType
 		}
@@ -25037,13 +22557,7 @@ yydefault:
 	case 1214:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL *FramePoint
-<<<<<<< HEAD
-//line sql.y:6315
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6449
-=======
-//line sql.y:6457
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6323
 		{
 			yyLOCAL = &FramePoint{Type: CurrentRowType}
 		}
@@ -25051,13 +22565,7 @@ yydefault:
 	case 1215:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL *FramePoint
-<<<<<<< HEAD
-//line sql.y:6319
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6453
-=======
-//line sql.y:6461
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6327
 		{
 			yyLOCAL = &FramePoint{Type: UnboundedPrecedingType}
 		}
@@ -25065,13 +22573,7 @@ yydefault:
 	case 1216:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL *FramePoint
-<<<<<<< HEAD
-//line sql.y:6323
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6457
-=======
-//line sql.y:6465
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6331
 		{
 			yyLOCAL = &FramePoint{Type: UnboundedFollowingType}
 		}
@@ -25079,13 +22581,7 @@ yydefault:
 	case 1217:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL *FramePoint
-<<<<<<< HEAD
-//line sql.y:6327
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6461
-=======
-//line sql.y:6469
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6335
 		{
 			yyLOCAL = &FramePoint{Type: ExprPrecedingType, Expr: yyDollar[1].expr()}
 		}
@@ -25093,13 +22589,7 @@ yydefault:
 	case 1218:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL *FramePoint
-<<<<<<< HEAD
-//line sql.y:6331
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6465
-=======
-//line sql.y:6473
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6339
 		{
 			yyLOCAL = &FramePoint{Type: ExprPrecedingType, Expr: yyDollar[2].expr(), Unit: yyDollar[3].intervalType()}
 		}
@@ -25107,13 +22597,7 @@ yydefault:
 	case 1219:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL *FramePoint
-<<<<<<< HEAD
-//line sql.y:6335
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6469
-=======
-//line sql.y:6477
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6343
 		{
 			yyLOCAL = &FramePoint{Type: ExprFollowingType, Expr: yyDollar[1].expr()}
 		}
@@ -25121,13 +22605,7 @@ yydefault:
 	case 1220:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL *FramePoint
-<<<<<<< HEAD
-//line sql.y:6339
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6473
-=======
-//line sql.y:6481
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6347
 		{
 			yyLOCAL = &FramePoint{Type: ExprFollowingType, Expr: yyDollar[2].expr(), Unit: yyDollar[3].intervalType()}
 		}
@@ -25135,13 +22613,7 @@ yydefault:
 	case 1221:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL *FrameClause
-<<<<<<< HEAD
-//line sql.y:6344
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6478
-=======
-//line sql.y:6486
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6352
 		{
 			yyLOCAL = nil
 		}
@@ -25149,13 +22621,7 @@ yydefault:
 	case 1222:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL *FrameClause
-<<<<<<< HEAD
-//line sql.y:6348
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6482
-=======
-//line sql.y:6490
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6356
 		{
 			yyLOCAL = yyDollar[1].frameClause()
 		}
@@ -25163,13 +22629,7 @@ yydefault:
 	case 1223:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL *FrameClause
-<<<<<<< HEAD
-//line sql.y:6354
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6488
-=======
-//line sql.y:6496
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6362
 		{
 			yyLOCAL = &FrameClause{Unit: yyDollar[1].frameUnitType(), Start: yyDollar[2].framePoint()}
 		}
@@ -25177,13 +22637,7 @@ yydefault:
 	case 1224:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		var yyLOCAL *FrameClause
-<<<<<<< HEAD
-//line sql.y:6358
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6492
-=======
-//line sql.y:6500
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6366
 		{
 			yyLOCAL = &FrameClause{Unit: yyDollar[1].frameUnitType(), Start: yyDollar[3].framePoint(), End: yyDollar[5].framePoint()}
 		}
@@ -25191,13 +22645,7 @@ yydefault:
 	case 1225:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL []Expr
-<<<<<<< HEAD
-//line sql.y:6363
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6497
-=======
-//line sql.y:6505
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6371
 		{
 			yyLOCAL = nil
 		}
@@ -25205,13 +22653,7 @@ yydefault:
 	case 1226:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL []Expr
-<<<<<<< HEAD
-//line sql.y:6367
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6501
-=======
-//line sql.y:6509
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6375
 		{
 			yyLOCAL = yyDollar[3].exprs()
 		}
@@ -25219,13 +22661,7 @@ yydefault:
 	case 1227:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL IdentifierCI
-<<<<<<< HEAD
-//line sql.y:6372
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6506
-=======
-//line sql.y:6514
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6380
 		{
 			yyLOCAL = IdentifierCI{}
 		}
@@ -25233,13 +22669,7 @@ yydefault:
 	case 1228:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IdentifierCI
-<<<<<<< HEAD
-//line sql.y:6376
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6510
-=======
-//line sql.y:6518
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6384
 		{
 			yyLOCAL = yyDollar[1].identifierCI()
 		}
@@ -25247,13 +22677,7 @@ yydefault:
 	case 1229:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL *WindowSpecification
-<<<<<<< HEAD
-//line sql.y:6382
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6516
-=======
-//line sql.y:6524
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6390
 		{
 			yyLOCAL = &WindowSpecification{Name: yyDollar[1].identifierCI(), PartitionClause: yyDollar[2].exprs(), OrderClause: yyDollar[3].orderBy(), FrameClause: yyDollar[4].frameClause()}
 		}
@@ -25261,13 +22685,7 @@ yydefault:
 	case 1230:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL *OverClause
-<<<<<<< HEAD
-//line sql.y:6388
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6522
-=======
-//line sql.y:6530
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6396
 		{
 			yyLOCAL = &OverClause{WindowSpec: yyDollar[3].windowSpecification()}
 		}
@@ -25275,13 +22693,7 @@ yydefault:
 	case 1231:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL *OverClause
-<<<<<<< HEAD
-//line sql.y:6392
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6526
-=======
-//line sql.y:6534
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6400
 		{
 			yyLOCAL = &OverClause{WindowName: yyDollar[2].identifierCI()}
 		}
@@ -25289,13 +22701,7 @@ yydefault:
 	case 1232:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL *OverClause
-<<<<<<< HEAD
-//line sql.y:6398
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6532
-=======
-//line sql.y:6540
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6406
 		{
 			yyLOCAL = yyDollar[1].overClause()
 		}
@@ -25303,13 +22709,7 @@ yydefault:
 	case 1233:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL *OverClause
-<<<<<<< HEAD
-//line sql.y:6402
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6536
-=======
-//line sql.y:6544
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6410
 		{
 			yyLOCAL = nil
 		}
@@ -25317,13 +22717,7 @@ yydefault:
 	case 1234:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL *NullTreatmentClause
-<<<<<<< HEAD
-//line sql.y:6407
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6541
-=======
-//line sql.y:6549
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6415
 		{
 			yyLOCAL = nil
 		}
@@ -25331,13 +22725,7 @@ yydefault:
 	case 1236:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL *NullTreatmentClause
-<<<<<<< HEAD
-//line sql.y:6414
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6548
-=======
-//line sql.y:6556
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6422
 		{
 			yyLOCAL = &NullTreatmentClause{yyDollar[1].nullTreatmentType()}
 		}
@@ -25345,13 +22733,7 @@ yydefault:
 	case 1237:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL NullTreatmentType
-<<<<<<< HEAD
-//line sql.y:6420
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6554
-=======
-//line sql.y:6562
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6428
 		{
 			yyLOCAL = RespectNullsType
 		}
@@ -25359,13 +22741,7 @@ yydefault:
 	case 1238:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL NullTreatmentType
-<<<<<<< HEAD
-//line sql.y:6424
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6558
-=======
-//line sql.y:6566
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6432
 		{
 			yyLOCAL = IgnoreNullsType
 		}
@@ -25373,13 +22749,7 @@ yydefault:
 	case 1239:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL FirstOrLastValueExprType
-<<<<<<< HEAD
-//line sql.y:6430
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6564
-=======
-//line sql.y:6572
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6438
 		{
 			yyLOCAL = FirstValueExprType
 		}
@@ -25387,13 +22757,7 @@ yydefault:
 	case 1240:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL FirstOrLastValueExprType
-<<<<<<< HEAD
-//line sql.y:6434
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6568
-=======
-//line sql.y:6576
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6442
 		{
 			yyLOCAL = LastValueExprType
 		}
@@ -25401,13 +22765,7 @@ yydefault:
 	case 1241:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL FromFirstLastType
-<<<<<<< HEAD
-//line sql.y:6440
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6574
-=======
-//line sql.y:6582
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6448
 		{
 			yyLOCAL = FromFirstType
 		}
@@ -25415,13 +22773,7 @@ yydefault:
 	case 1242:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL FromFirstLastType
-<<<<<<< HEAD
-//line sql.y:6444
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6578
-=======
-//line sql.y:6586
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6452
 		{
 			yyLOCAL = FromLastType
 		}
@@ -25429,13 +22781,7 @@ yydefault:
 	case 1243:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL *FromFirstLastClause
-<<<<<<< HEAD
-//line sql.y:6449
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6583
-=======
-//line sql.y:6591
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6457
 		{
 			yyLOCAL = nil
 		}
@@ -25443,13 +22789,7 @@ yydefault:
 	case 1245:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL *FromFirstLastClause
-<<<<<<< HEAD
-//line sql.y:6456
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6590
-=======
-//line sql.y:6598
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6464
 		{
 			yyLOCAL = &FromFirstLastClause{yyDollar[1].fromFirstLastType()}
 		}
@@ -25457,13 +22797,7 @@ yydefault:
 	case 1246:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL LagLeadExprType
-<<<<<<< HEAD
-//line sql.y:6462
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6596
-=======
-//line sql.y:6604
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6470
 		{
 			yyLOCAL = LagExprType
 		}
@@ -25471,13 +22805,7 @@ yydefault:
 	case 1247:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL LagLeadExprType
-<<<<<<< HEAD
-//line sql.y:6466
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6600
-=======
-//line sql.y:6608
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6474
 		{
 			yyLOCAL = LeadExprType
 		}
@@ -25485,13 +22813,7 @@ yydefault:
 	case 1248:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		var yyLOCAL *WindowDefinition
-<<<<<<< HEAD
-//line sql.y:6472
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6606
-=======
-//line sql.y:6614
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6480
 		{
 			yyLOCAL = &WindowDefinition{Name: yyDollar[1].identifierCI(), WindowSpec: yyDollar[4].windowSpecification()}
 		}
@@ -25499,13 +22821,7 @@ yydefault:
 	case 1249:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL WindowDefinitions
-<<<<<<< HEAD
-//line sql.y:6478
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6612
-=======
-//line sql.y:6620
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6486
 		{
 			yyLOCAL = WindowDefinitions{yyDollar[1].windowDefinition()}
 		}
@@ -25513,13 +22829,7 @@ yydefault:
 	case 1250:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL WindowDefinitions
-<<<<<<< HEAD
-//line sql.y:6482
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6616
-=======
-//line sql.y:6624
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6490
 		{
 			yyLOCAL = append(yyDollar[1].windowDefinitions(), yyDollar[3].windowDefinition())
 		}
@@ -25527,13 +22837,7 @@ yydefault:
 	case 1251:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL string
-<<<<<<< HEAD
-//line sql.y:6488
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6622
-=======
-//line sql.y:6630
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6496
 		{
 			yyLOCAL = ""
 		}
@@ -25541,13 +22845,7 @@ yydefault:
 	case 1252:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL string
-<<<<<<< HEAD
-//line sql.y:6492
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6626
-=======
-//line sql.y:6634
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6500
 		{
 			yyLOCAL = string(yyDollar[2].identifierCI().String())
 		}
@@ -25555,13 +22853,7 @@ yydefault:
 	case 1253:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL BoolVal
-<<<<<<< HEAD
-//line sql.y:6498
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6632
-=======
-//line sql.y:6640
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6506
 		{
 			yyLOCAL = BoolVal(true)
 		}
@@ -25569,13 +22861,7 @@ yydefault:
 	case 1254:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL BoolVal
-<<<<<<< HEAD
-//line sql.y:6502
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6636
-=======
-//line sql.y:6644
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6510
 		{
 			yyLOCAL = BoolVal(false)
 		}
@@ -25583,13 +22869,7 @@ yydefault:
 	case 1255:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IsExprOperator
-<<<<<<< HEAD
-//line sql.y:6509
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6643
-=======
-//line sql.y:6651
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6517
 		{
 			yyLOCAL = IsTrueOp
 		}
@@ -25597,13 +22877,7 @@ yydefault:
 	case 1256:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL IsExprOperator
-<<<<<<< HEAD
-//line sql.y:6513
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6647
-=======
-//line sql.y:6655
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6521
 		{
 			yyLOCAL = IsNotTrueOp
 		}
@@ -25611,13 +22885,7 @@ yydefault:
 	case 1257:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IsExprOperator
-<<<<<<< HEAD
-//line sql.y:6517
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6651
-=======
-//line sql.y:6659
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6525
 		{
 			yyLOCAL = IsFalseOp
 		}
@@ -25625,13 +22893,7 @@ yydefault:
 	case 1258:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL IsExprOperator
-<<<<<<< HEAD
-//line sql.y:6521
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6655
-=======
-//line sql.y:6663
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6529
 		{
 			yyLOCAL = IsNotFalseOp
 		}
@@ -25639,13 +22901,7 @@ yydefault:
 	case 1259:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL ComparisonExprOperator
-<<<<<<< HEAD
-//line sql.y:6527
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6661
-=======
-//line sql.y:6669
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6535
 		{
 			yyLOCAL = yyDollar[1].comparisonExprOperator()
 		}
@@ -25653,13 +22909,7 @@ yydefault:
 	case 1260:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL ComparisonExprOperator
-<<<<<<< HEAD
-//line sql.y:6531
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6665
-=======
-//line sql.y:6673
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6539
 		{
 			yyLOCAL = NullSafeEqualOp
 		}
@@ -25667,13 +22917,7 @@ yydefault:
 	case 1261:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL ComparisonExprOperator
-<<<<<<< HEAD
-//line sql.y:6537
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6671
-=======
-//line sql.y:6679
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6545
 		{
 			yyLOCAL = EqualOp
 		}
@@ -25681,13 +22925,7 @@ yydefault:
 	case 1262:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL ComparisonExprOperator
-<<<<<<< HEAD
-//line sql.y:6541
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6675
-=======
-//line sql.y:6683
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6549
 		{
 			yyLOCAL = LessThanOp
 		}
@@ -25695,13 +22933,7 @@ yydefault:
 	case 1263:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL ComparisonExprOperator
-<<<<<<< HEAD
-//line sql.y:6545
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6679
-=======
-//line sql.y:6687
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6553
 		{
 			yyLOCAL = GreaterThanOp
 		}
@@ -25709,13 +22941,7 @@ yydefault:
 	case 1264:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL ComparisonExprOperator
-<<<<<<< HEAD
-//line sql.y:6549
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6683
-=======
-//line sql.y:6691
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6557
 		{
 			yyLOCAL = LessEqualOp
 		}
@@ -25723,13 +22949,7 @@ yydefault:
 	case 1265:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL ComparisonExprOperator
-<<<<<<< HEAD
-//line sql.y:6553
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6687
-=======
-//line sql.y:6695
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6561
 		{
 			yyLOCAL = GreaterEqualOp
 		}
@@ -25737,13 +22957,7 @@ yydefault:
 	case 1266:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL ComparisonExprOperator
-<<<<<<< HEAD
-//line sql.y:6557
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6691
-=======
-//line sql.y:6699
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6565
 		{
 			yyLOCAL = NotEqualOp
 		}
@@ -25751,13 +22965,7 @@ yydefault:
 	case 1267:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL ColTuple
-<<<<<<< HEAD
-//line sql.y:6563
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6697
-=======
-//line sql.y:6705
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6571
 		{
 			yyLOCAL = yyDollar[1].valTuple()
 		}
@@ -25765,13 +22973,7 @@ yydefault:
 	case 1268:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL ColTuple
-<<<<<<< HEAD
-//line sql.y:6567
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6701
-=======
-//line sql.y:6709
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6575
 		{
 			yyLOCAL = yyDollar[1].subquery()
 		}
@@ -25779,13 +22981,7 @@ yydefault:
 	case 1269:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL ColTuple
-<<<<<<< HEAD
-//line sql.y:6571
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6705
-=======
-//line sql.y:6713
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6579
 		{
 			yyLOCAL = ListArg(yyDollar[1].str()[2:])
 			markBindVariable(yylex, yyDollar[1].str()[2:])
@@ -25794,13 +22990,7 @@ yydefault:
 	case 1270:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL *Subquery
-<<<<<<< HEAD
-//line sql.y:6578
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6712
-=======
-//line sql.y:6720
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6586
 		{
 			yyLOCAL = &Subquery{yyDollar[1].tableStmt()}
 		}
@@ -25808,13 +22998,7 @@ yydefault:
 	case 1271:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL []Expr
-<<<<<<< HEAD
-//line sql.y:6584
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6718
-=======
-//line sql.y:6726
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6592
 		{
 			yyLOCAL = []Expr{yyDollar[1].expr()}
 		}
@@ -25822,13 +23006,7 @@ yydefault:
 	case 1272:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL []Expr
-<<<<<<< HEAD
-//line sql.y:6588
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6722
-=======
-//line sql.y:6730
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6596
 		{
 			yyLOCAL = append(yyDollar[1].exprs(), yyDollar[3].expr())
 		}
@@ -25836,13 +23014,7 @@ yydefault:
 	case 1273:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6598
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6732
-=======
-//line sql.y:6740
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6606
 		{
 			yyLOCAL = &FuncExpr{Name: yyDollar[1].identifierCI(), Exprs: yyDollar[3].exprs()}
 		}
@@ -25850,13 +23022,7 @@ yydefault:
 	case 1274:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6602
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6736
-=======
-//line sql.y:6744
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6610
 		{
 			yyLOCAL = &FuncExpr{Qualifier: yyDollar[1].identifierCS(), Name: yyDollar[3].identifierCI(), Exprs: yyDollar[5].exprs()}
 		}
@@ -25864,13 +23030,7 @@ yydefault:
 	case 1275:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6612
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6746
-=======
-//line sql.y:6754
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6620
 		{
 			yyLOCAL = &FuncExpr{Name: NewIdentifierCI("left"), Exprs: yyDollar[3].exprs()}
 		}
@@ -25878,13 +23038,7 @@ yydefault:
 	case 1276:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6616
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6750
-=======
-//line sql.y:6758
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6624
 		{
 			yyLOCAL = &FuncExpr{Name: NewIdentifierCI("right"), Exprs: yyDollar[3].exprs()}
 		}
@@ -25892,13 +23046,7 @@ yydefault:
 	case 1277:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6620
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6754
-=======
-//line sql.y:6762
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6628
 		{
 			yyLOCAL = &SubstrExpr{Name: yyDollar[3].expr(), From: yyDollar[5].expr(), To: yyDollar[7].expr()}
 		}
@@ -25906,13 +23054,7 @@ yydefault:
 	case 1278:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6624
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6758
-=======
-//line sql.y:6766
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6632
 		{
 			yyLOCAL = &SubstrExpr{Name: yyDollar[3].expr(), From: yyDollar[5].expr(), To: yyDollar[7].expr()}
 		}
@@ -25920,13 +23062,7 @@ yydefault:
 	case 1279:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6628
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6762
-=======
-//line sql.y:6770
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6636
 		{
 			yyLOCAL = &SubstrExpr{Name: yyDollar[3].expr(), From: yyDollar[5].expr()}
 		}
@@ -25934,13 +23070,7 @@ yydefault:
 	case 1280:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6632
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6766
-=======
-//line sql.y:6774
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6640
 		{
 			yyLOCAL = &SubstrExpr{Name: yyDollar[3].expr(), From: yyDollar[5].expr(), To: yyDollar[7].expr()}
 		}
@@ -25948,13 +23078,7 @@ yydefault:
 	case 1281:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6636
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6770
-=======
-//line sql.y:6778
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6644
 		{
 			yyLOCAL = &SubstrExpr{Name: yyDollar[3].expr(), From: yyDollar[5].expr()}
 		}
@@ -25962,13 +23086,7 @@ yydefault:
 	case 1282:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6640
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6774
-=======
-//line sql.y:6782
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6648
 		{
 			yyLOCAL = &CaseExpr{Expr: yyDollar[2].expr(), Whens: yyDollar[3].whens(), Else: yyDollar[4].expr()}
 		}
@@ -25976,13 +23094,7 @@ yydefault:
 	case 1283:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6644
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6778
-=======
-//line sql.y:6786
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6652
 		{
 			yyLOCAL = &ValuesFuncExpr{Name: yyDollar[3].colName()}
 		}
@@ -25990,13 +23102,7 @@ yydefault:
 	case 1284:
 		yyDollar = yyS[yypt-10 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6648
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6782
-=======
-//line sql.y:6790
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6656
 		{
 			yyLOCAL = &InsertExpr{Str: yyDollar[3].expr(), Pos: yyDollar[5].expr(), Len: yyDollar[7].expr(), NewStr: yyDollar[9].expr()}
 		}
@@ -26004,13 +23110,7 @@ yydefault:
 	case 1285:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6652
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6786
-=======
-//line sql.y:6794
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6660
 		{
 			yyLOCAL = &FuncExpr{Name: NewIdentifierCI(yyDollar[1].str())}
 		}
@@ -26018,13 +23118,7 @@ yydefault:
 	case 1286:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6663
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6797
-=======
-//line sql.y:6805
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6671
 		{
 			yyLOCAL = &FuncExpr{Name: NewIdentifierCI("utc_date")}
 		}
@@ -26032,13 +23126,7 @@ yydefault:
 	case 1287:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6667
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6801
-=======
-//line sql.y:6809
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6675
 		{
 			yyLOCAL = yyDollar[1].expr()
 		}
@@ -26046,13 +23134,7 @@ yydefault:
 	case 1288:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6673
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6807
-=======
-//line sql.y:6815
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6681
 		{
 			yyLOCAL = &FuncExpr{Name: NewIdentifierCI("current_date")}
 		}
@@ -26060,13 +23142,7 @@ yydefault:
 	case 1289:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6677
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6811
-=======
-//line sql.y:6819
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6685
 		{
 			yyLOCAL = &FuncExpr{Name: NewIdentifierCI("curdate")}
 		}
@@ -26074,13 +23150,7 @@ yydefault:
 	case 1290:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6681
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6815
-=======
-//line sql.y:6823
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6689
 		{
 			yyLOCAL = &CurTimeFuncExpr{Name: NewIdentifierCI("utc_time"), Fsp: yyDollar[2].integer()}
 		}
@@ -26088,13 +23158,7 @@ yydefault:
 	case 1291:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6686
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6820
-=======
-//line sql.y:6828
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6694
 		{
 			yyLOCAL = &CurTimeFuncExpr{Name: NewIdentifierCI("curtime"), Fsp: yyDollar[2].integer()}
 		}
@@ -26102,13 +23166,7 @@ yydefault:
 	case 1292:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6691
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6825
-=======
-//line sql.y:6833
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6699
 		{
 			yyLOCAL = &CurTimeFuncExpr{Name: NewIdentifierCI("current_time"), Fsp: yyDollar[2].integer()}
 		}
@@ -26116,7 +23174,7 @@ yydefault:
 	case 1293:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		var yyLOCAL Expr
-//line sql.y:6695
+//line sql.y:6703
 		{
 			yyLOCAL = &CountStar{OverClause: yyDollar[5].overClause()}
 		}
@@ -26124,7 +23182,7 @@ yydefault:
 	case 1294:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-//line sql.y:6699
+//line sql.y:6707
 		{
 			yyLOCAL = &Count{Distinct: yyDollar[3].boolean(), Args: yyDollar[4].exprs(), OverClause: yyDollar[6].overClause()}
 		}
@@ -26132,7 +23190,7 @@ yydefault:
 	case 1295:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-//line sql.y:6703
+//line sql.y:6711
 		{
 			yyLOCAL = &Max{Distinct: yyDollar[3].boolean(), Arg: yyDollar[4].expr(), OverClause: yyDollar[6].overClause()}
 		}
@@ -26140,7 +23198,7 @@ yydefault:
 	case 1296:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-//line sql.y:6707
+//line sql.y:6715
 		{
 			yyLOCAL = &Min{Distinct: yyDollar[3].boolean(), Arg: yyDollar[4].expr(), OverClause: yyDollar[6].overClause()}
 		}
@@ -26148,7 +23206,7 @@ yydefault:
 	case 1297:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-//line sql.y:6711
+//line sql.y:6719
 		{
 			yyLOCAL = &Sum{Distinct: yyDollar[3].boolean(), Arg: yyDollar[4].expr(), OverClause: yyDollar[6].overClause()}
 		}
@@ -26156,7 +23214,7 @@ yydefault:
 	case 1298:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-//line sql.y:6715
+//line sql.y:6723
 		{
 			yyLOCAL = &Avg{Distinct: yyDollar[3].boolean(), Arg: yyDollar[4].expr(), OverClause: yyDollar[6].overClause()}
 		}
@@ -26164,7 +23222,7 @@ yydefault:
 	case 1299:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		var yyLOCAL Expr
-//line sql.y:6719
+//line sql.y:6727
 		{
 			yyLOCAL = &BitAnd{Arg: yyDollar[3].expr(), OverClause: yyDollar[5].overClause()}
 		}
@@ -26172,7 +23230,7 @@ yydefault:
 	case 1300:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		var yyLOCAL Expr
-//line sql.y:6723
+//line sql.y:6731
 		{
 			yyLOCAL = &BitOr{Arg: yyDollar[3].expr(), OverClause: yyDollar[5].overClause()}
 		}
@@ -26180,7 +23238,7 @@ yydefault:
 	case 1301:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		var yyLOCAL Expr
-//line sql.y:6727
+//line sql.y:6735
 		{
 			yyLOCAL = &BitXor{Arg: yyDollar[3].expr(), OverClause: yyDollar[5].overClause()}
 		}
@@ -26188,7 +23246,7 @@ yydefault:
 	case 1302:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		var yyLOCAL Expr
-//line sql.y:6731
+//line sql.y:6739
 		{
 			yyLOCAL = &Std{Arg: yyDollar[3].expr(), OverClause: yyDollar[5].overClause()}
 		}
@@ -26196,13 +23254,7 @@ yydefault:
 	case 1303:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6735
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6829
-=======
-//line sql.y:6837
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6743
 		{
 			yyLOCAL = &StdDev{Arg: yyDollar[3].expr(), OverClause: yyDollar[5].overClause()}
 		}
@@ -26210,13 +23262,7 @@ yydefault:
 	case 1304:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6739
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6833
-=======
-//line sql.y:6841
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6747
 		{
 			yyLOCAL = &StdPop{Arg: yyDollar[3].expr(), OverClause: yyDollar[5].overClause()}
 		}
@@ -26224,13 +23270,7 @@ yydefault:
 	case 1305:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6743
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6837
-=======
-//line sql.y:6845
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6751
 		{
 			yyLOCAL = &StdSamp{Arg: yyDollar[3].expr(), OverClause: yyDollar[5].overClause()}
 		}
@@ -26238,13 +23278,7 @@ yydefault:
 	case 1306:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6747
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6841
-=======
-//line sql.y:6849
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6755
 		{
 			yyLOCAL = &VarPop{Arg: yyDollar[3].expr(), OverClause: yyDollar[5].overClause()}
 		}
@@ -26252,13 +23286,7 @@ yydefault:
 	case 1307:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6751
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6845
-=======
-//line sql.y:6853
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6759
 		{
 			yyLOCAL = &VarSamp{Arg: yyDollar[3].expr(), OverClause: yyDollar[5].overClause()}
 		}
@@ -26266,13 +23294,7 @@ yydefault:
 	case 1308:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6755
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6849
-=======
-//line sql.y:6857
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6763
 		{
 			yyLOCAL = &Variance{Arg: yyDollar[3].expr(), OverClause: yyDollar[5].overClause()}
 		}
@@ -26280,13 +23302,7 @@ yydefault:
 	case 1309:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6759
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6853
-=======
-//line sql.y:6861
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6767
 		{
 			yyLOCAL = &GroupConcatExpr{Distinct: yyDollar[3].boolean(), Exprs: yyDollar[4].exprs(), OrderBy: yyDollar[5].orderBy(), Separator: yyDollar[6].str(), Limit: yyDollar[7].limit()}
 		}
@@ -26294,13 +23310,7 @@ yydefault:
 	case 1310:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6763
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6857
-=======
-//line sql.y:6865
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6771
 		{
 			yyLOCAL = &AnyValue{Arg: yyDollar[3].expr()}
 		}
@@ -26308,13 +23318,7 @@ yydefault:
 	case 1311:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6767
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6861
-=======
-//line sql.y:6869
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6775
 		{
 			yyLOCAL = &IntervalDateExpr{Syntax: IntervalDateExprTimestampadd, Date: yyDollar[7].expr(), Interval: yyDollar[5].expr(), Unit: yyDollar[3].intervalType()}
 		}
@@ -26322,13 +23326,7 @@ yydefault:
 	case 1312:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6771
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6865
-=======
-//line sql.y:6873
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6779
 		{
 			yyLOCAL = &TimestampDiffExpr{Unit: yyDollar[3].intervalType(), Expr1: yyDollar[5].expr(), Expr2: yyDollar[7].expr()}
 		}
@@ -26336,13 +23334,7 @@ yydefault:
 	case 1313:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6775
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6869
-=======
-//line sql.y:6877
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6783
 		{
 			yyLOCAL = &ExtractFuncExpr{IntervalType: yyDollar[3].intervalType(), Expr: yyDollar[5].expr()}
 		}
@@ -26350,13 +23342,7 @@ yydefault:
 	case 1314:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6779
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6873
-=======
-//line sql.y:6881
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6787
 		{
 			yyLOCAL = &WeightStringFuncExpr{Expr: yyDollar[3].expr(), As: yyDollar[4].convertType()}
 		}
@@ -26364,13 +23350,7 @@ yydefault:
 	case 1315:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6783
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6877
-=======
-//line sql.y:6885
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6791
 		{
 			yyLOCAL = &JSONPrettyExpr{JSONVal: yyDollar[3].expr()}
 		}
@@ -26378,13 +23358,7 @@ yydefault:
 	case 1316:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6787
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6881
-=======
-//line sql.y:6889
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6795
 		{
 			yyLOCAL = &JSONStorageFreeExpr{JSONVal: yyDollar[3].expr()}
 		}
@@ -26392,13 +23366,7 @@ yydefault:
 	case 1317:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6791
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6885
-=======
-//line sql.y:6893
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6799
 		{
 			yyLOCAL = &JSONStorageSizeExpr{JSONVal: yyDollar[3].expr()}
 		}
@@ -26406,13 +23374,7 @@ yydefault:
 	case 1318:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6795
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6889
-=======
-//line sql.y:6897
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6803
 		{
 			yyLOCAL = &JSONArrayAgg{Expr: yyDollar[3].expr(), OverClause: yyDollar[5].overClause()}
 		}
@@ -26420,13 +23382,7 @@ yydefault:
 	case 1319:
 		yyDollar = yyS[yypt-7 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6799
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6893
-=======
-//line sql.y:6901
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6807
 		{
 			yyLOCAL = &JSONObjectAgg{Key: yyDollar[3].expr(), Value: yyDollar[5].expr(), OverClause: yyDollar[7].overClause()}
 		}
@@ -26434,13 +23390,7 @@ yydefault:
 	case 1320:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6803
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6897
-=======
-//line sql.y:6905
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6811
 		{
 			yyLOCAL = &TrimFuncExpr{TrimFuncType: LTrimType, Type: LeadingTrimType, StringArg: yyDollar[3].expr()}
 		}
@@ -26448,13 +23398,7 @@ yydefault:
 	case 1321:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6807
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6901
-=======
-//line sql.y:6909
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6815
 		{
 			yyLOCAL = &TrimFuncExpr{TrimFuncType: RTrimType, Type: TrailingTrimType, StringArg: yyDollar[3].expr()}
 		}
@@ -26462,13 +23406,7 @@ yydefault:
 	case 1322:
 		yyDollar = yyS[yypt-7 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6811
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6905
-=======
-//line sql.y:6913
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6819
 		{
 			yyLOCAL = &TrimFuncExpr{Type: yyDollar[3].trimType(), TrimArg: yyDollar[4].expr(), StringArg: yyDollar[6].expr()}
 		}
@@ -26476,13 +23414,7 @@ yydefault:
 	case 1323:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6815
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6909
-=======
-//line sql.y:6917
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6823
 		{
 			yyLOCAL = &TrimFuncExpr{StringArg: yyDollar[3].expr()}
 		}
@@ -26490,13 +23422,7 @@ yydefault:
 	case 1324:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6819
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6913
-=======
-//line sql.y:6921
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6827
 		{
 			yyLOCAL = &CharExpr{Exprs: yyDollar[3].exprs()}
 		}
@@ -26504,13 +23430,7 @@ yydefault:
 	case 1325:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6823
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6917
-=======
-//line sql.y:6925
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6831
 		{
 			yyLOCAL = &CharExpr{Exprs: yyDollar[3].exprs(), Charset: yyDollar[5].str()}
 		}
@@ -26518,13 +23438,7 @@ yydefault:
 	case 1326:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6827
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6921
-=======
-//line sql.y:6929
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6835
 		{
 			yyLOCAL = &TrimFuncExpr{TrimArg: yyDollar[3].expr(), StringArg: yyDollar[5].expr()}
 		}
@@ -26532,13 +23446,7 @@ yydefault:
 	case 1327:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6831
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6925
-=======
-//line sql.y:6933
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6839
 		{
 			yyLOCAL = &LocateExpr{SubStr: yyDollar[3].expr(), Str: yyDollar[5].expr()}
 		}
@@ -26546,13 +23454,7 @@ yydefault:
 	case 1328:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6835
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6929
-=======
-//line sql.y:6937
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6843
 		{
 			yyLOCAL = &LocateExpr{SubStr: yyDollar[3].expr(), Str: yyDollar[5].expr(), Pos: yyDollar[7].expr()}
 		}
@@ -26560,13 +23462,7 @@ yydefault:
 	case 1329:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6839
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6933
-=======
-//line sql.y:6941
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6847
 		{
 			yyLOCAL = &LocateExpr{SubStr: yyDollar[3].expr(), Str: yyDollar[5].expr()}
 		}
@@ -26574,13 +23470,7 @@ yydefault:
 	case 1330:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6843
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6937
-=======
-//line sql.y:6945
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6851
 		{
 			yyLOCAL = &LockingFunc{Type: GetLock, Name: yyDollar[3].expr(), Timeout: yyDollar[5].expr()}
 		}
@@ -26588,13 +23478,7 @@ yydefault:
 	case 1331:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6847
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6941
-=======
-//line sql.y:6949
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6855
 		{
 			yyLOCAL = &LockingFunc{Type: IsFreeLock, Name: yyDollar[3].expr()}
 		}
@@ -26602,13 +23486,7 @@ yydefault:
 	case 1332:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6851
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6945
-=======
-//line sql.y:6953
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6859
 		{
 			yyLOCAL = &LockingFunc{Type: IsUsedLock, Name: yyDollar[3].expr()}
 		}
@@ -26616,13 +23494,7 @@ yydefault:
 	case 1333:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6855
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6949
-=======
-//line sql.y:6957
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6863
 		{
 			yyLOCAL = &LockingFunc{Type: ReleaseAllLocks}
 		}
@@ -26630,13 +23502,7 @@ yydefault:
 	case 1334:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6859
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6953
-=======
-//line sql.y:6961
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6867
 		{
 			yyLOCAL = &LockingFunc{Type: ReleaseLock, Name: yyDollar[3].expr()}
 		}
@@ -26644,13 +23510,7 @@ yydefault:
 	case 1335:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6863
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6957
-=======
-//line sql.y:6965
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6871
 		{
 			yyLOCAL = &JSONSchemaValidFuncExpr{Schema: yyDollar[3].expr(), Document: yyDollar[5].expr()}
 		}
@@ -26658,13 +23518,7 @@ yydefault:
 	case 1336:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6867
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6961
-=======
-//line sql.y:6969
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6875
 		{
 			yyLOCAL = &JSONSchemaValidationReportFuncExpr{Schema: yyDollar[3].expr(), Document: yyDollar[5].expr()}
 		}
@@ -26672,13 +23526,7 @@ yydefault:
 	case 1337:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6871
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6965
-=======
-//line sql.y:6973
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6879
 		{
 			yyLOCAL = &JSONArrayExpr{Params: yyDollar[3].exprs()}
 		}
@@ -26686,13 +23534,7 @@ yydefault:
 	case 1338:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6875
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6969
-=======
-//line sql.y:6977
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6883
 		{
 			yyLOCAL = &GeomFormatExpr{FormatType: BinaryFormat, Geom: yyDollar[3].expr()}
 		}
@@ -26700,13 +23542,7 @@ yydefault:
 	case 1339:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6879
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6973
-=======
-//line sql.y:6981
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6887
 		{
 			yyLOCAL = &GeomFormatExpr{FormatType: BinaryFormat, Geom: yyDollar[3].expr(), AxisOrderOpt: yyDollar[5].expr()}
 		}
@@ -26714,13 +23550,7 @@ yydefault:
 	case 1340:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6883
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6977
-=======
-//line sql.y:6985
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6891
 		{
 			yyLOCAL = &GeomFormatExpr{FormatType: TextFormat, Geom: yyDollar[3].expr()}
 		}
@@ -26728,13 +23558,7 @@ yydefault:
 	case 1341:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6887
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6981
-=======
-//line sql.y:6989
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6895
 		{
 			yyLOCAL = &GeomFormatExpr{FormatType: TextFormat, Geom: yyDollar[3].expr(), AxisOrderOpt: yyDollar[5].expr()}
 		}
@@ -26742,13 +23566,7 @@ yydefault:
 	case 1342:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6891
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6985
-=======
-//line sql.y:6993
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6899
 		{
 			yyLOCAL = &GeomPropertyFuncExpr{Property: IsEmpty, Geom: yyDollar[3].expr()}
 		}
@@ -26756,13 +23574,7 @@ yydefault:
 	case 1343:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6895
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6989
-=======
-//line sql.y:6997
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6903
 		{
 			yyLOCAL = &GeomPropertyFuncExpr{Property: IsSimple, Geom: yyDollar[3].expr()}
 		}
@@ -26770,13 +23582,7 @@ yydefault:
 	case 1344:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6899
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6993
-=======
-//line sql.y:7001
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6907
 		{
 			yyLOCAL = &GeomPropertyFuncExpr{Property: Dimension, Geom: yyDollar[3].expr()}
 		}
@@ -26784,13 +23590,7 @@ yydefault:
 	case 1345:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6903
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:6997
-=======
-//line sql.y:7005
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6911
 		{
 			yyLOCAL = &GeomPropertyFuncExpr{Property: Envelope, Geom: yyDollar[3].expr()}
 		}
@@ -26798,13 +23598,7 @@ yydefault:
 	case 1346:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6907
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7001
-=======
-//line sql.y:7009
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6915
 		{
 			yyLOCAL = &GeomPropertyFuncExpr{Property: GeometryType, Geom: yyDollar[3].expr()}
 		}
@@ -26812,13 +23606,7 @@ yydefault:
 	case 1347:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6911
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7005
-=======
-//line sql.y:7013
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6919
 		{
 			yyLOCAL = &PointPropertyFuncExpr{Property: Latitude, Point: yyDollar[3].expr()}
 		}
@@ -26826,13 +23614,7 @@ yydefault:
 	case 1348:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6915
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7009
-=======
-//line sql.y:7017
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6923
 		{
 			yyLOCAL = &PointPropertyFuncExpr{Property: Latitude, Point: yyDollar[3].expr(), ValueToSet: yyDollar[5].expr()}
 		}
@@ -26840,13 +23622,7 @@ yydefault:
 	case 1349:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6919
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7013
-=======
-//line sql.y:7021
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6927
 		{
 			yyLOCAL = &PointPropertyFuncExpr{Property: Longitude, Point: yyDollar[3].expr()}
 		}
@@ -26854,13 +23630,7 @@ yydefault:
 	case 1350:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6923
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7017
-=======
-//line sql.y:7025
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6931
 		{
 			yyLOCAL = &PointPropertyFuncExpr{Property: Longitude, Point: yyDollar[3].expr(), ValueToSet: yyDollar[5].expr()}
 		}
@@ -26868,13 +23638,7 @@ yydefault:
 	case 1351:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6927
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7021
-=======
-//line sql.y:7029
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6935
 		{
 			yyLOCAL = &LinestrPropertyFuncExpr{Property: EndPoint, Linestring: yyDollar[3].expr()}
 		}
@@ -26882,13 +23646,7 @@ yydefault:
 	case 1352:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6931
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7025
-=======
-//line sql.y:7033
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6939
 		{
 			yyLOCAL = &LinestrPropertyFuncExpr{Property: IsClosed, Linestring: yyDollar[3].expr()}
 		}
@@ -26896,13 +23654,7 @@ yydefault:
 	case 1353:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6935
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7029
-=======
-//line sql.y:7037
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6943
 		{
 			yyLOCAL = &LinestrPropertyFuncExpr{Property: Length, Linestring: yyDollar[3].expr()}
 		}
@@ -26910,13 +23662,7 @@ yydefault:
 	case 1354:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6939
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7033
-=======
-//line sql.y:7041
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6947
 		{
 			yyLOCAL = &LinestrPropertyFuncExpr{Property: Length, Linestring: yyDollar[3].expr(), PropertyDefArg: yyDollar[5].expr()}
 		}
@@ -26924,13 +23670,7 @@ yydefault:
 	case 1355:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6943
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7037
-=======
-//line sql.y:7045
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6951
 		{
 			yyLOCAL = &LinestrPropertyFuncExpr{Property: NumPoints, Linestring: yyDollar[3].expr()}
 		}
@@ -26938,13 +23678,7 @@ yydefault:
 	case 1356:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6947
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7041
-=======
-//line sql.y:7049
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6955
 		{
 			yyLOCAL = &LinestrPropertyFuncExpr{Property: PointN, Linestring: yyDollar[3].expr(), PropertyDefArg: yyDollar[5].expr()}
 		}
@@ -26952,13 +23686,7 @@ yydefault:
 	case 1357:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6951
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7045
-=======
-//line sql.y:7053
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6959
 		{
 			yyLOCAL = &LinestrPropertyFuncExpr{Property: StartPoint, Linestring: yyDollar[3].expr()}
 		}
@@ -26966,13 +23694,7 @@ yydefault:
 	case 1358:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6955
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7049
-=======
-//line sql.y:7057
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6963
 		{
 			yyLOCAL = &PointPropertyFuncExpr{Property: XCordinate, Point: yyDollar[3].expr()}
 		}
@@ -26980,13 +23702,7 @@ yydefault:
 	case 1359:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6959
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7053
-=======
-//line sql.y:7061
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6967
 		{
 			yyLOCAL = &PointPropertyFuncExpr{Property: XCordinate, Point: yyDollar[3].expr(), ValueToSet: yyDollar[5].expr()}
 		}
@@ -26994,13 +23710,7 @@ yydefault:
 	case 1360:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6963
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7057
-=======
-//line sql.y:7065
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6971
 		{
 			yyLOCAL = &PointPropertyFuncExpr{Property: YCordinate, Point: yyDollar[3].expr()}
 		}
@@ -27008,13 +23718,7 @@ yydefault:
 	case 1361:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6967
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7061
-=======
-//line sql.y:7069
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6975
 		{
 			yyLOCAL = &PointPropertyFuncExpr{Property: YCordinate, Point: yyDollar[3].expr(), ValueToSet: yyDollar[5].expr()}
 		}
@@ -27022,13 +23726,7 @@ yydefault:
 	case 1362:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6971
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7065
-=======
-//line sql.y:7073
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6979
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: GeometryFromText, WktText: yyDollar[3].expr()}
 		}
@@ -27036,13 +23734,7 @@ yydefault:
 	case 1363:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6975
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7069
-=======
-//line sql.y:7077
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6983
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: GeometryFromText, WktText: yyDollar[3].expr(), Srid: yyDollar[5].expr()}
 		}
@@ -27050,13 +23742,7 @@ yydefault:
 	case 1364:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6979
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7073
-=======
-//line sql.y:7081
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6987
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: GeometryFromText, WktText: yyDollar[3].expr(), Srid: yyDollar[5].expr(), AxisOrderOpt: yyDollar[7].expr()}
 		}
@@ -27064,13 +23750,7 @@ yydefault:
 	case 1365:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6983
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7077
-=======
-//line sql.y:7085
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6991
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: GeometryCollectionFromText, WktText: yyDollar[3].expr()}
 		}
@@ -27078,13 +23758,7 @@ yydefault:
 	case 1366:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6987
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7081
-=======
-//line sql.y:7089
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6995
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: GeometryCollectionFromText, WktText: yyDollar[3].expr(), Srid: yyDollar[5].expr()}
 		}
@@ -27092,13 +23766,7 @@ yydefault:
 	case 1367:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6991
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7085
-=======
-//line sql.y:7093
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:6999
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: GeometryCollectionFromText, WktText: yyDollar[3].expr(), Srid: yyDollar[5].expr(), AxisOrderOpt: yyDollar[7].expr()}
 		}
@@ -27106,13 +23774,7 @@ yydefault:
 	case 1368:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6995
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7089
-=======
-//line sql.y:7097
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7003
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: LineStringFromText, WktText: yyDollar[3].expr()}
 		}
@@ -27120,173 +23782,7 @@ yydefault:
 	case 1369:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:6999
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7093
-		{
-			yyLOCAL = &PointPropertyFuncExpr{Property: XCordinate, Point: yyDollar[3].expr(), ValueToSet: yyDollar[5].expr()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1370:
-		yyDollar = yyS[yypt-4 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7097
-		{
-			yyLOCAL = &PointPropertyFuncExpr{Property: YCordinate, Point: yyDollar[3].expr()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1371:
-		yyDollar = yyS[yypt-6 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7101
-		{
-			yyLOCAL = &PointPropertyFuncExpr{Property: YCordinate, Point: yyDollar[3].expr(), ValueToSet: yyDollar[5].expr()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1372:
-		yyDollar = yyS[yypt-4 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7105
-		{
-			yyLOCAL = &GeomFromTextExpr{Type: GeometryFromText, WktText: yyDollar[3].expr()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1373:
-		yyDollar = yyS[yypt-6 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7109
-		{
-			yyLOCAL = &GeomFromTextExpr{Type: GeometryFromText, WktText: yyDollar[3].expr(), Srid: yyDollar[5].expr()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1374:
-		yyDollar = yyS[yypt-8 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7113
-		{
-			yyLOCAL = &GeomFromTextExpr{Type: GeometryFromText, WktText: yyDollar[3].expr(), Srid: yyDollar[5].expr(), AxisOrderOpt: yyDollar[7].expr()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1375:
-		yyDollar = yyS[yypt-4 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7117
-		{
-			yyLOCAL = &GeomFromTextExpr{Type: GeometryCollectionFromText, WktText: yyDollar[3].expr()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1376:
-		yyDollar = yyS[yypt-6 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7121
-		{
-			yyLOCAL = &GeomFromTextExpr{Type: GeometryCollectionFromText, WktText: yyDollar[3].expr(), Srid: yyDollar[5].expr()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1377:
-		yyDollar = yyS[yypt-8 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7125
-		{
-			yyLOCAL = &GeomFromTextExpr{Type: GeometryCollectionFromText, WktText: yyDollar[3].expr(), Srid: yyDollar[5].expr(), AxisOrderOpt: yyDollar[7].expr()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1378:
-		yyDollar = yyS[yypt-4 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7129
-		{
-			yyLOCAL = &GeomFromTextExpr{Type: LineStringFromText, WktText: yyDollar[3].expr()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1379:
-		yyDollar = yyS[yypt-6 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7133
-=======
-//line sql.y:7101
-		{
-			yyLOCAL = &PointPropertyFuncExpr{Property: XCordinate, Point: yyDollar[3].expr(), ValueToSet: yyDollar[5].expr()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1370:
-		yyDollar = yyS[yypt-4 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7105
-		{
-			yyLOCAL = &PointPropertyFuncExpr{Property: YCordinate, Point: yyDollar[3].expr()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1371:
-		yyDollar = yyS[yypt-6 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7109
-		{
-			yyLOCAL = &PointPropertyFuncExpr{Property: YCordinate, Point: yyDollar[3].expr(), ValueToSet: yyDollar[5].expr()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1372:
-		yyDollar = yyS[yypt-4 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7113
-		{
-			yyLOCAL = &GeomFromTextExpr{Type: GeometryFromText, WktText: yyDollar[3].expr()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1373:
-		yyDollar = yyS[yypt-6 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7117
-		{
-			yyLOCAL = &GeomFromTextExpr{Type: GeometryFromText, WktText: yyDollar[3].expr(), Srid: yyDollar[5].expr()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1374:
-		yyDollar = yyS[yypt-8 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7121
-		{
-			yyLOCAL = &GeomFromTextExpr{Type: GeometryFromText, WktText: yyDollar[3].expr(), Srid: yyDollar[5].expr(), AxisOrderOpt: yyDollar[7].expr()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1375:
-		yyDollar = yyS[yypt-4 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7125
-		{
-			yyLOCAL = &GeomFromTextExpr{Type: GeometryCollectionFromText, WktText: yyDollar[3].expr()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1376:
-		yyDollar = yyS[yypt-6 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7129
-		{
-			yyLOCAL = &GeomFromTextExpr{Type: GeometryCollectionFromText, WktText: yyDollar[3].expr(), Srid: yyDollar[5].expr()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1377:
-		yyDollar = yyS[yypt-8 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7133
-		{
-			yyLOCAL = &GeomFromTextExpr{Type: GeometryCollectionFromText, WktText: yyDollar[3].expr(), Srid: yyDollar[5].expr(), AxisOrderOpt: yyDollar[7].expr()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1378:
-		yyDollar = yyS[yypt-4 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7137
-		{
-			yyLOCAL = &GeomFromTextExpr{Type: LineStringFromText, WktText: yyDollar[3].expr()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1379:
-		yyDollar = yyS[yypt-6 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7141
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7007
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: LineStringFromText, WktText: yyDollar[3].expr(), Srid: yyDollar[5].expr()}
 		}
@@ -27294,13 +23790,7 @@ yydefault:
 	case 1370:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7003
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7137
-=======
-//line sql.y:7145
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7011
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: LineStringFromText, WktText: yyDollar[3].expr(), Srid: yyDollar[5].expr(), AxisOrderOpt: yyDollar[7].expr()}
 		}
@@ -27308,13 +23798,7 @@ yydefault:
 	case 1371:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7007
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7141
-=======
-//line sql.y:7149
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7015
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: MultiLinestringFromText, WktText: yyDollar[3].expr()}
 		}
@@ -27322,13 +23806,7 @@ yydefault:
 	case 1372:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7011
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7145
-=======
-//line sql.y:7153
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7019
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: MultiLinestringFromText, WktText: yyDollar[3].expr(), Srid: yyDollar[5].expr()}
 		}
@@ -27336,13 +23814,7 @@ yydefault:
 	case 1373:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7015
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7149
-=======
-//line sql.y:7157
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7023
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: MultiLinestringFromText, WktText: yyDollar[3].expr(), Srid: yyDollar[5].expr(), AxisOrderOpt: yyDollar[7].expr()}
 		}
@@ -27350,13 +23822,7 @@ yydefault:
 	case 1374:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7019
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7153
-=======
-//line sql.y:7161
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7027
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: MultiPointFromText, WktText: yyDollar[3].expr()}
 		}
@@ -27364,13 +23830,7 @@ yydefault:
 	case 1375:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7023
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7157
-=======
-//line sql.y:7165
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7031
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: MultiPointFromText, WktText: yyDollar[3].expr(), Srid: yyDollar[5].expr()}
 		}
@@ -27378,13 +23838,7 @@ yydefault:
 	case 1376:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7027
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7161
-=======
-//line sql.y:7169
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7035
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: MultiPointFromText, WktText: yyDollar[3].expr(), Srid: yyDollar[5].expr(), AxisOrderOpt: yyDollar[7].expr()}
 		}
@@ -27392,13 +23846,7 @@ yydefault:
 	case 1377:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7031
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7165
-=======
-//line sql.y:7173
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7039
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: MultiPolygonFromText, WktText: yyDollar[3].expr()}
 		}
@@ -27406,13 +23854,7 @@ yydefault:
 	case 1378:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7035
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7169
-=======
-//line sql.y:7177
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7043
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: MultiPolygonFromText, WktText: yyDollar[3].expr(), Srid: yyDollar[5].expr()}
 		}
@@ -27420,13 +23862,7 @@ yydefault:
 	case 1379:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7039
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7173
-=======
-//line sql.y:7181
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7047
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: MultiPolygonFromText, WktText: yyDollar[3].expr(), Srid: yyDollar[5].expr(), AxisOrderOpt: yyDollar[7].expr()}
 		}
@@ -27434,13 +23870,7 @@ yydefault:
 	case 1380:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7043
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7177
-=======
-//line sql.y:7185
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7051
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: PointFromText, WktText: yyDollar[3].expr()}
 		}
@@ -27448,13 +23878,7 @@ yydefault:
 	case 1381:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7047
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7181
-=======
-//line sql.y:7189
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7055
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: PointFromText, WktText: yyDollar[3].expr(), Srid: yyDollar[5].expr()}
 		}
@@ -27462,13 +23886,7 @@ yydefault:
 	case 1382:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7051
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7185
-=======
-//line sql.y:7193
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7059
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: PointFromText, WktText: yyDollar[3].expr(), Srid: yyDollar[5].expr(), AxisOrderOpt: yyDollar[7].expr()}
 		}
@@ -27476,13 +23894,7 @@ yydefault:
 	case 1383:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7055
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7189
-=======
-//line sql.y:7197
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7063
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: PolygonFromText, WktText: yyDollar[3].expr()}
 		}
@@ -27490,13 +23902,7 @@ yydefault:
 	case 1384:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7059
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7193
-=======
-//line sql.y:7201
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7067
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: PolygonFromText, WktText: yyDollar[3].expr(), Srid: yyDollar[5].expr()}
 		}
@@ -27504,13 +23910,7 @@ yydefault:
 	case 1385:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7063
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7197
-=======
-//line sql.y:7205
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7071
 		{
 			yyLOCAL = &GeomFromTextExpr{Type: PolygonFromText, WktText: yyDollar[3].expr(), Srid: yyDollar[5].expr(), AxisOrderOpt: yyDollar[7].expr()}
 		}
@@ -27518,13 +23918,7 @@ yydefault:
 	case 1386:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7067
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7201
-=======
-//line sql.y:7209
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7075
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: GeometryFromWKB, WkbBlob: yyDollar[3].expr()}
 		}
@@ -27532,13 +23926,7 @@ yydefault:
 	case 1387:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7071
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7205
-=======
-//line sql.y:7213
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7079
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: GeometryFromWKB, WkbBlob: yyDollar[3].expr(), Srid: yyDollar[5].expr()}
 		}
@@ -27546,13 +23934,7 @@ yydefault:
 	case 1388:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7075
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7209
-=======
-//line sql.y:7217
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7083
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: GeometryFromWKB, WkbBlob: yyDollar[3].expr(), Srid: yyDollar[5].expr(), AxisOrderOpt: yyDollar[7].expr()}
 		}
@@ -27560,13 +23942,7 @@ yydefault:
 	case 1389:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7079
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7213
-=======
-//line sql.y:7221
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7087
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: GeometryCollectionFromWKB, WkbBlob: yyDollar[3].expr()}
 		}
@@ -27574,13 +23950,7 @@ yydefault:
 	case 1390:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7083
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7217
-=======
-//line sql.y:7225
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7091
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: GeometryCollectionFromWKB, WkbBlob: yyDollar[3].expr(), Srid: yyDollar[5].expr()}
 		}
@@ -27588,13 +23958,7 @@ yydefault:
 	case 1391:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7087
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7221
-=======
-//line sql.y:7229
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7095
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: GeometryCollectionFromWKB, WkbBlob: yyDollar[3].expr(), Srid: yyDollar[5].expr(), AxisOrderOpt: yyDollar[7].expr()}
 		}
@@ -27602,13 +23966,7 @@ yydefault:
 	case 1392:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7091
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7225
-=======
-//line sql.y:7233
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7099
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: LineStringFromWKB, WkbBlob: yyDollar[3].expr()}
 		}
@@ -27616,13 +23974,7 @@ yydefault:
 	case 1393:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7095
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7229
-=======
-//line sql.y:7237
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7103
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: LineStringFromWKB, WkbBlob: yyDollar[3].expr(), Srid: yyDollar[5].expr()}
 		}
@@ -27630,13 +23982,7 @@ yydefault:
 	case 1394:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7099
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7233
-=======
-//line sql.y:7241
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7107
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: LineStringFromWKB, WkbBlob: yyDollar[3].expr(), Srid: yyDollar[5].expr(), AxisOrderOpt: yyDollar[7].expr()}
 		}
@@ -27644,13 +23990,7 @@ yydefault:
 	case 1395:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7103
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7237
-=======
-//line sql.y:7245
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7111
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: MultiLinestringFromWKB, WkbBlob: yyDollar[3].expr()}
 		}
@@ -27658,13 +23998,7 @@ yydefault:
 	case 1396:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7107
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7241
-=======
-//line sql.y:7249
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7115
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: MultiLinestringFromWKB, WkbBlob: yyDollar[3].expr(), Srid: yyDollar[5].expr()}
 		}
@@ -27672,13 +24006,7 @@ yydefault:
 	case 1397:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7111
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7245
-=======
-//line sql.y:7253
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7119
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: MultiLinestringFromWKB, WkbBlob: yyDollar[3].expr(), Srid: yyDollar[5].expr(), AxisOrderOpt: yyDollar[7].expr()}
 		}
@@ -27686,13 +24014,7 @@ yydefault:
 	case 1398:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7115
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7249
-=======
-//line sql.y:7257
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7123
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: MultiPointFromWKB, WkbBlob: yyDollar[3].expr()}
 		}
@@ -27700,13 +24022,7 @@ yydefault:
 	case 1399:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7119
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7253
-=======
-//line sql.y:7261
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7127
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: MultiPointFromWKB, WkbBlob: yyDollar[3].expr(), Srid: yyDollar[5].expr()}
 		}
@@ -27714,13 +24030,7 @@ yydefault:
 	case 1400:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7123
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7257
-=======
-//line sql.y:7265
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7131
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: MultiPointFromWKB, WkbBlob: yyDollar[3].expr(), Srid: yyDollar[5].expr(), AxisOrderOpt: yyDollar[7].expr()}
 		}
@@ -27728,7 +24038,7 @@ yydefault:
 	case 1401:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-//line sql.y:7127
+//line sql.y:7135
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: MultiPolygonFromWKB, WkbBlob: yyDollar[3].expr()}
 		}
@@ -27736,7 +24046,7 @@ yydefault:
 	case 1402:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-//line sql.y:7131
+//line sql.y:7139
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: MultiPolygonFromWKB, WkbBlob: yyDollar[3].expr(), Srid: yyDollar[5].expr()}
 		}
@@ -27744,7 +24054,7 @@ yydefault:
 	case 1403:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
-//line sql.y:7135
+//line sql.y:7143
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: MultiPolygonFromWKB, WkbBlob: yyDollar[3].expr(), Srid: yyDollar[5].expr(), AxisOrderOpt: yyDollar[7].expr()}
 		}
@@ -27752,7 +24062,7 @@ yydefault:
 	case 1404:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-//line sql.y:7139
+//line sql.y:7147
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: PointFromWKB, WkbBlob: yyDollar[3].expr()}
 		}
@@ -27760,7 +24070,7 @@ yydefault:
 	case 1405:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-//line sql.y:7143
+//line sql.y:7151
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: PointFromWKB, WkbBlob: yyDollar[3].expr(), Srid: yyDollar[5].expr()}
 		}
@@ -27768,7 +24078,7 @@ yydefault:
 	case 1406:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
-//line sql.y:7147
+//line sql.y:7155
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: PointFromWKB, WkbBlob: yyDollar[3].expr(), Srid: yyDollar[5].expr(), AxisOrderOpt: yyDollar[7].expr()}
 		}
@@ -27776,7 +24086,7 @@ yydefault:
 	case 1407:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-//line sql.y:7151
+//line sql.y:7159
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: PolygonFromWKB, WkbBlob: yyDollar[3].expr()}
 		}
@@ -27784,7 +24094,7 @@ yydefault:
 	case 1408:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-//line sql.y:7155
+//line sql.y:7163
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: PolygonFromWKB, WkbBlob: yyDollar[3].expr(), Srid: yyDollar[5].expr()}
 		}
@@ -27792,7 +24102,7 @@ yydefault:
 	case 1409:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
-//line sql.y:7159
+//line sql.y:7167
 		{
 			yyLOCAL = &GeomFromWKBExpr{Type: PolygonFromWKB, WkbBlob: yyDollar[3].expr(), Srid: yyDollar[5].expr(), AxisOrderOpt: yyDollar[7].expr()}
 		}
@@ -27800,7 +24110,7 @@ yydefault:
 	case 1410:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-//line sql.y:7163
+//line sql.y:7171
 		{
 			yyLOCAL = &PolygonPropertyFuncExpr{Property: Area, Polygon: yyDollar[3].expr()}
 		}
@@ -27808,13 +24118,7 @@ yydefault:
 	case 1411:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7167
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7261
-=======
-//line sql.y:7269
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7175
 		{
 			yyLOCAL = &PolygonPropertyFuncExpr{Property: Centroid, Polygon: yyDollar[3].expr()}
 		}
@@ -27822,13 +24126,7 @@ yydefault:
 	case 1412:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7171
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7265
-=======
-//line sql.y:7273
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7179
 		{
 			yyLOCAL = &PolygonPropertyFuncExpr{Property: ExteriorRing, Polygon: yyDollar[3].expr()}
 		}
@@ -27836,13 +24134,7 @@ yydefault:
 	case 1413:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7175
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7269
-=======
-//line sql.y:7277
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7183
 		{
 			yyLOCAL = &PolygonPropertyFuncExpr{Property: InteriorRingN, Polygon: yyDollar[3].expr(), PropertyDefArg: yyDollar[5].expr()}
 		}
@@ -27850,13 +24142,7 @@ yydefault:
 	case 1414:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7179
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7273
-=======
-//line sql.y:7281
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7187
 		{
 			yyLOCAL = &PolygonPropertyFuncExpr{Property: NumInteriorRings, Polygon: yyDollar[3].expr()}
 		}
@@ -27864,13 +24150,7 @@ yydefault:
 	case 1415:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7183
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7277
-=======
-//line sql.y:7285
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7191
 		{
 			yyLOCAL = &GeomCollPropertyFuncExpr{Property: GeometryN, GeomColl: yyDollar[3].expr(), PropertyDefArg: yyDollar[5].expr()}
 		}
@@ -27878,13 +24158,7 @@ yydefault:
 	case 1416:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7187
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7281
-=======
-//line sql.y:7289
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7195
 		{
 			yyLOCAL = &GeomCollPropertyFuncExpr{Property: NumGeometries, GeomColl: yyDollar[3].expr()}
 		}
@@ -27892,13 +24166,7 @@ yydefault:
 	case 1417:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7191
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7285
-=======
-//line sql.y:7293
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7199
 		{
 			yyLOCAL = &GeoHashFromLatLongExpr{Longitude: yyDollar[3].expr(), Latitude: yyDollar[5].expr(), MaxLength: yyDollar[7].expr()}
 		}
@@ -27906,13 +24174,7 @@ yydefault:
 	case 1418:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7195
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7289
-=======
-//line sql.y:7297
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7203
 		{
 			yyLOCAL = &GeoHashFromPointExpr{Point: yyDollar[3].expr(), MaxLength: yyDollar[5].expr()}
 		}
@@ -27920,13 +24182,7 @@ yydefault:
 	case 1419:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7199
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7293
-=======
-//line sql.y:7301
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7207
 		{
 			yyLOCAL = &GeomFromGeoHashExpr{GeomType: LatitudeFromHash, GeoHash: yyDollar[3].expr()}
 		}
@@ -27934,13 +24190,7 @@ yydefault:
 	case 1420:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7203
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7297
-=======
-//line sql.y:7305
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7211
 		{
 			yyLOCAL = &GeomFromGeoHashExpr{GeomType: LongitudeFromHash, GeoHash: yyDollar[3].expr()}
 		}
@@ -27948,13 +24198,7 @@ yydefault:
 	case 1421:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7207
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7301
-=======
-//line sql.y:7309
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7215
 		{
 			yyLOCAL = &GeomFromGeoHashExpr{GeomType: PointFromHash, GeoHash: yyDollar[3].expr(), SridOpt: yyDollar[5].expr()}
 		}
@@ -27962,13 +24206,7 @@ yydefault:
 	case 1422:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7211
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7305
-=======
-//line sql.y:7313
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7219
 		{
 			yyLOCAL = &GeomFromGeoJSONExpr{GeoJSON: yyDollar[3].expr()}
 		}
@@ -27976,13 +24214,7 @@ yydefault:
 	case 1423:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7215
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7309
-=======
-//line sql.y:7317
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7223
 		{
 			yyLOCAL = &GeomFromGeoJSONExpr{GeoJSON: yyDollar[3].expr(), HigherDimHandlerOpt: yyDollar[5].expr()}
 		}
@@ -27990,13 +24222,7 @@ yydefault:
 	case 1424:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7219
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7313
-=======
-//line sql.y:7321
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7227
 		{
 			yyLOCAL = &GeomFromGeoJSONExpr{GeoJSON: yyDollar[3].expr(), HigherDimHandlerOpt: yyDollar[5].expr(), Srid: yyDollar[7].expr()}
 		}
@@ -28004,13 +24230,7 @@ yydefault:
 	case 1425:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7223
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7317
-=======
-//line sql.y:7325
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7231
 		{
 			yyLOCAL = &GeoJSONFromGeomExpr{Geom: yyDollar[3].expr()}
 		}
@@ -28018,13 +24238,7 @@ yydefault:
 	case 1426:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7227
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7321
-=======
-//line sql.y:7329
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7235
 		{
 			yyLOCAL = &GeoJSONFromGeomExpr{Geom: yyDollar[3].expr(), MaxDecimalDigits: yyDollar[5].expr()}
 		}
@@ -28032,13 +24246,7 @@ yydefault:
 	case 1427:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7231
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7325
-=======
-//line sql.y:7333
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7239
 		{
 			yyLOCAL = &GeoJSONFromGeomExpr{Geom: yyDollar[3].expr(), MaxDecimalDigits: yyDollar[5].expr(), Bitmask: yyDollar[7].expr()}
 		}
@@ -28046,13 +24254,7 @@ yydefault:
 	case 1428:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7235
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7329
-=======
-//line sql.y:7337
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7243
 		{
 			yyLOCAL = &JSONObjectExpr{Params: yyDollar[3].jsonObjectParams()}
 		}
@@ -28060,173 +24262,7 @@ yydefault:
 	case 1429:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7239
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7333
-		{
-			yyLOCAL = &GeomFromGeoHashExpr{GeomType: LatitudeFromHash, GeoHash: yyDollar[3].expr()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1430:
-		yyDollar = yyS[yypt-4 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7337
-		{
-			yyLOCAL = &GeomFromGeoHashExpr{GeomType: LongitudeFromHash, GeoHash: yyDollar[3].expr()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1431:
-		yyDollar = yyS[yypt-6 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7341
-		{
-			yyLOCAL = &GeomFromGeoHashExpr{GeomType: PointFromHash, GeoHash: yyDollar[3].expr(), SridOpt: yyDollar[5].expr()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1432:
-		yyDollar = yyS[yypt-4 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7345
-		{
-			yyLOCAL = &GeomFromGeoJSONExpr{GeoJSON: yyDollar[3].expr()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1433:
-		yyDollar = yyS[yypt-6 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7349
-		{
-			yyLOCAL = &GeomFromGeoJSONExpr{GeoJSON: yyDollar[3].expr(), HigherDimHandlerOpt: yyDollar[5].expr()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1434:
-		yyDollar = yyS[yypt-8 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7353
-		{
-			yyLOCAL = &GeomFromGeoJSONExpr{GeoJSON: yyDollar[3].expr(), HigherDimHandlerOpt: yyDollar[5].expr(), Srid: yyDollar[7].expr()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1435:
-		yyDollar = yyS[yypt-4 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7357
-		{
-			yyLOCAL = &GeoJSONFromGeomExpr{Geom: yyDollar[3].expr()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1436:
-		yyDollar = yyS[yypt-6 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7361
-		{
-			yyLOCAL = &GeoJSONFromGeomExpr{Geom: yyDollar[3].expr(), MaxDecimalDigits: yyDollar[5].expr()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1437:
-		yyDollar = yyS[yypt-8 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7365
-		{
-			yyLOCAL = &GeoJSONFromGeomExpr{Geom: yyDollar[3].expr(), MaxDecimalDigits: yyDollar[5].expr(), Bitmask: yyDollar[7].expr()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1438:
-		yyDollar = yyS[yypt-4 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7369
-		{
-			yyLOCAL = &JSONObjectExpr{Params: yyDollar[3].jsonObjectParams()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1439:
-		yyDollar = yyS[yypt-4 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7373
-=======
-//line sql.y:7341
-		{
-			yyLOCAL = &GeomFromGeoHashExpr{GeomType: LatitudeFromHash, GeoHash: yyDollar[3].expr()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1430:
-		yyDollar = yyS[yypt-4 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7345
-		{
-			yyLOCAL = &GeomFromGeoHashExpr{GeomType: LongitudeFromHash, GeoHash: yyDollar[3].expr()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1431:
-		yyDollar = yyS[yypt-6 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7349
-		{
-			yyLOCAL = &GeomFromGeoHashExpr{GeomType: PointFromHash, GeoHash: yyDollar[3].expr(), SridOpt: yyDollar[5].expr()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1432:
-		yyDollar = yyS[yypt-4 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7353
-		{
-			yyLOCAL = &GeomFromGeoJSONExpr{GeoJSON: yyDollar[3].expr()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1433:
-		yyDollar = yyS[yypt-6 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7357
-		{
-			yyLOCAL = &GeomFromGeoJSONExpr{GeoJSON: yyDollar[3].expr(), HigherDimHandlerOpt: yyDollar[5].expr()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1434:
-		yyDollar = yyS[yypt-8 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7361
-		{
-			yyLOCAL = &GeomFromGeoJSONExpr{GeoJSON: yyDollar[3].expr(), HigherDimHandlerOpt: yyDollar[5].expr(), Srid: yyDollar[7].expr()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1435:
-		yyDollar = yyS[yypt-4 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7365
-		{
-			yyLOCAL = &GeoJSONFromGeomExpr{Geom: yyDollar[3].expr()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1436:
-		yyDollar = yyS[yypt-6 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7369
-		{
-			yyLOCAL = &GeoJSONFromGeomExpr{Geom: yyDollar[3].expr(), MaxDecimalDigits: yyDollar[5].expr()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1437:
-		yyDollar = yyS[yypt-8 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7373
-		{
-			yyLOCAL = &GeoJSONFromGeomExpr{Geom: yyDollar[3].expr(), MaxDecimalDigits: yyDollar[5].expr(), Bitmask: yyDollar[7].expr()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1438:
-		yyDollar = yyS[yypt-4 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7377
-		{
-			yyLOCAL = &JSONObjectExpr{Params: yyDollar[3].jsonObjectParams()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1439:
-		yyDollar = yyS[yypt-4 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7381
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7247
 		{
 			yyLOCAL = &JSONQuoteExpr{StringArg: yyDollar[3].expr()}
 		}
@@ -28234,13 +24270,7 @@ yydefault:
 	case 1430:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7243
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7377
-=======
-//line sql.y:7385
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7251
 		{
 			yyLOCAL = &JSONContainsExpr{Target: yyDollar[3].expr(), Candidate: yyDollar[5].exprs()[0], PathList: yyDollar[5].exprs()[1:]}
 		}
@@ -28248,13 +24278,7 @@ yydefault:
 	case 1431:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7247
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7381
-=======
-//line sql.y:7389
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7255
 		{
 			yyLOCAL = &JSONContainsPathExpr{JSONDoc: yyDollar[3].expr(), OneOrAll: yyDollar[5].expr(), PathList: yyDollar[7].exprs()}
 		}
@@ -28262,13 +24286,7 @@ yydefault:
 	case 1432:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7251
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7385
-=======
-//line sql.y:7393
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7259
 		{
 			yyLOCAL = &JSONExtractExpr{JSONDoc: yyDollar[3].expr(), PathList: yyDollar[5].exprs()}
 		}
@@ -28276,7 +24294,7 @@ yydefault:
 	case 1433:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-//line sql.y:7255
+//line sql.y:7263
 		{
 			yyLOCAL = &JSONKeysExpr{JSONDoc: yyDollar[3].expr()}
 		}
@@ -28284,7 +24302,7 @@ yydefault:
 	case 1434:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-//line sql.y:7259
+//line sql.y:7267
 		{
 			yyLOCAL = &JSONKeysExpr{JSONDoc: yyDollar[3].expr(), Path: yyDollar[5].expr()}
 		}
@@ -28292,7 +24310,7 @@ yydefault:
 	case 1435:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-//line sql.y:7263
+//line sql.y:7271
 		{
 			yyLOCAL = &JSONOverlapsExpr{JSONDoc1: yyDollar[3].expr(), JSONDoc2: yyDollar[5].expr()}
 		}
@@ -28300,7 +24318,7 @@ yydefault:
 	case 1436:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
-//line sql.y:7267
+//line sql.y:7275
 		{
 			yyLOCAL = &JSONSearchExpr{JSONDoc: yyDollar[3].expr(), OneOrAll: yyDollar[5].expr(), SearchStr: yyDollar[7].expr()}
 		}
@@ -28308,7 +24326,7 @@ yydefault:
 	case 1437:
 		yyDollar = yyS[yypt-10 : yypt+1]
 		var yyLOCAL Expr
-//line sql.y:7271
+//line sql.y:7279
 		{
 			yyLOCAL = &JSONSearchExpr{JSONDoc: yyDollar[3].expr(), OneOrAll: yyDollar[5].expr(), SearchStr: yyDollar[7].expr(), EscapeChar: yyDollar[9].exprs()[0], PathList: yyDollar[9].exprs()[1:]}
 		}
@@ -28316,7 +24334,7 @@ yydefault:
 	case 1438:
 		yyDollar = yyS[yypt-7 : yypt+1]
 		var yyLOCAL Expr
-//line sql.y:7275
+//line sql.y:7283
 		{
 			yyLOCAL = &JSONValueExpr{JSONDoc: yyDollar[3].expr(), Path: yyDollar[5].expr(), ReturningType: yyDollar[6].convertType()}
 		}
@@ -28324,7 +24342,7 @@ yydefault:
 	case 1439:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
-//line sql.y:7279
+//line sql.y:7287
 		{
 			yyLOCAL = &JSONValueExpr{JSONDoc: yyDollar[3].expr(), Path: yyDollar[5].expr(), ReturningType: yyDollar[6].convertType(), EmptyOnResponse: yyDollar[7].jtOnResponse()}
 		}
@@ -28332,7 +24350,7 @@ yydefault:
 	case 1440:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
-//line sql.y:7283
+//line sql.y:7291
 		{
 			yyLOCAL = &JSONValueExpr{JSONDoc: yyDollar[3].expr(), Path: yyDollar[5].expr(), ReturningType: yyDollar[6].convertType(), ErrorOnResponse: yyDollar[7].jtOnResponse()}
 		}
@@ -28340,7 +24358,7 @@ yydefault:
 	case 1441:
 		yyDollar = yyS[yypt-9 : yypt+1]
 		var yyLOCAL Expr
-//line sql.y:7287
+//line sql.y:7295
 		{
 			yyLOCAL = &JSONValueExpr{JSONDoc: yyDollar[3].expr(), Path: yyDollar[5].expr(), ReturningType: yyDollar[6].convertType(), EmptyOnResponse: yyDollar[7].jtOnResponse(), ErrorOnResponse: yyDollar[8].jtOnResponse()}
 		}
@@ -28348,7 +24366,7 @@ yydefault:
 	case 1442:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-//line sql.y:7291
+//line sql.y:7299
 		{
 			yyLOCAL = &JSONAttributesExpr{Type: DepthAttributeType, JSONDoc: yyDollar[3].expr()}
 		}
@@ -28356,173 +24374,7 @@ yydefault:
 	case 1443:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7295
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7389
-		{
-			yyLOCAL = &JSONKeysExpr{JSONDoc: yyDollar[3].expr()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1444:
-		yyDollar = yyS[yypt-6 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7393
-		{
-			yyLOCAL = &JSONKeysExpr{JSONDoc: yyDollar[3].expr(), Path: yyDollar[5].expr()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1445:
-		yyDollar = yyS[yypt-6 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7397
-		{
-			yyLOCAL = &JSONOverlapsExpr{JSONDoc1: yyDollar[3].expr(), JSONDoc2: yyDollar[5].expr()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1446:
-		yyDollar = yyS[yypt-8 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7401
-		{
-			yyLOCAL = &JSONSearchExpr{JSONDoc: yyDollar[3].expr(), OneOrAll: yyDollar[5].expr(), SearchStr: yyDollar[7].expr()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1447:
-		yyDollar = yyS[yypt-10 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7405
-		{
-			yyLOCAL = &JSONSearchExpr{JSONDoc: yyDollar[3].expr(), OneOrAll: yyDollar[5].expr(), SearchStr: yyDollar[7].expr(), EscapeChar: yyDollar[9].exprs()[0], PathList: yyDollar[9].exprs()[1:]}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1448:
-		yyDollar = yyS[yypt-7 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7409
-		{
-			yyLOCAL = &JSONValueExpr{JSONDoc: yyDollar[3].expr(), Path: yyDollar[5].expr(), ReturningType: yyDollar[6].convertType()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1449:
-		yyDollar = yyS[yypt-8 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7413
-		{
-			yyLOCAL = &JSONValueExpr{JSONDoc: yyDollar[3].expr(), Path: yyDollar[5].expr(), ReturningType: yyDollar[6].convertType(), EmptyOnResponse: yyDollar[7].jtOnResponse()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1450:
-		yyDollar = yyS[yypt-8 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7417
-		{
-			yyLOCAL = &JSONValueExpr{JSONDoc: yyDollar[3].expr(), Path: yyDollar[5].expr(), ReturningType: yyDollar[6].convertType(), ErrorOnResponse: yyDollar[7].jtOnResponse()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1451:
-		yyDollar = yyS[yypt-9 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7421
-		{
-			yyLOCAL = &JSONValueExpr{JSONDoc: yyDollar[3].expr(), Path: yyDollar[5].expr(), ReturningType: yyDollar[6].convertType(), EmptyOnResponse: yyDollar[7].jtOnResponse(), ErrorOnResponse: yyDollar[8].jtOnResponse()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1452:
-		yyDollar = yyS[yypt-4 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7425
-		{
-			yyLOCAL = &JSONAttributesExpr{Type: DepthAttributeType, JSONDoc: yyDollar[3].expr()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1453:
-		yyDollar = yyS[yypt-4 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7429
-=======
-//line sql.y:7397
-		{
-			yyLOCAL = &JSONKeysExpr{JSONDoc: yyDollar[3].expr()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1444:
-		yyDollar = yyS[yypt-6 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7401
-		{
-			yyLOCAL = &JSONKeysExpr{JSONDoc: yyDollar[3].expr(), Path: yyDollar[5].expr()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1445:
-		yyDollar = yyS[yypt-6 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7405
-		{
-			yyLOCAL = &JSONOverlapsExpr{JSONDoc1: yyDollar[3].expr(), JSONDoc2: yyDollar[5].expr()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1446:
-		yyDollar = yyS[yypt-8 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7409
-		{
-			yyLOCAL = &JSONSearchExpr{JSONDoc: yyDollar[3].expr(), OneOrAll: yyDollar[5].expr(), SearchStr: yyDollar[7].expr()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1447:
-		yyDollar = yyS[yypt-10 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7413
-		{
-			yyLOCAL = &JSONSearchExpr{JSONDoc: yyDollar[3].expr(), OneOrAll: yyDollar[5].expr(), SearchStr: yyDollar[7].expr(), EscapeChar: yyDollar[9].exprs()[0], PathList: yyDollar[9].exprs()[1:]}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1448:
-		yyDollar = yyS[yypt-7 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7417
-		{
-			yyLOCAL = &JSONValueExpr{JSONDoc: yyDollar[3].expr(), Path: yyDollar[5].expr(), ReturningType: yyDollar[6].convertType()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1449:
-		yyDollar = yyS[yypt-8 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7421
-		{
-			yyLOCAL = &JSONValueExpr{JSONDoc: yyDollar[3].expr(), Path: yyDollar[5].expr(), ReturningType: yyDollar[6].convertType(), EmptyOnResponse: yyDollar[7].jtOnResponse()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1450:
-		yyDollar = yyS[yypt-8 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7425
-		{
-			yyLOCAL = &JSONValueExpr{JSONDoc: yyDollar[3].expr(), Path: yyDollar[5].expr(), ReturningType: yyDollar[6].convertType(), ErrorOnResponse: yyDollar[7].jtOnResponse()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1451:
-		yyDollar = yyS[yypt-9 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7429
-		{
-			yyLOCAL = &JSONValueExpr{JSONDoc: yyDollar[3].expr(), Path: yyDollar[5].expr(), ReturningType: yyDollar[6].convertType(), EmptyOnResponse: yyDollar[7].jtOnResponse(), ErrorOnResponse: yyDollar[8].jtOnResponse()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1452:
-		yyDollar = yyS[yypt-4 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7433
-		{
-			yyLOCAL = &JSONAttributesExpr{Type: DepthAttributeType, JSONDoc: yyDollar[3].expr()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1453:
-		yyDollar = yyS[yypt-4 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7437
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7303
 		{
 			yyLOCAL = &JSONAttributesExpr{Type: ValidAttributeType, JSONDoc: yyDollar[3].expr()}
 		}
@@ -28530,13 +24382,7 @@ yydefault:
 	case 1444:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7299
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7433
-=======
-//line sql.y:7441
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7307
 		{
 			yyLOCAL = &JSONAttributesExpr{Type: TypeAttributeType, JSONDoc: yyDollar[3].expr()}
 		}
@@ -28544,13 +24390,7 @@ yydefault:
 	case 1445:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7303
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7437
-=======
-//line sql.y:7445
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7311
 		{
 			yyLOCAL = &JSONAttributesExpr{Type: LengthAttributeType, JSONDoc: yyDollar[3].expr()}
 		}
@@ -28558,13 +24398,7 @@ yydefault:
 	case 1446:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7307
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7441
-=======
-//line sql.y:7449
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7315
 		{
 			yyLOCAL = &JSONAttributesExpr{Type: LengthAttributeType, JSONDoc: yyDollar[3].expr(), Path: yyDollar[5].expr()}
 		}
@@ -28572,13 +24406,7 @@ yydefault:
 	case 1447:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7311
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7445
-=======
-//line sql.y:7453
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7319
 		{
 			yyLOCAL = &JSONValueModifierExpr{Type: JSONArrayAppendType, JSONDoc: yyDollar[3].expr(), Params: yyDollar[5].jsonObjectParams()}
 		}
@@ -28586,13 +24414,7 @@ yydefault:
 	case 1448:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7315
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7449
-=======
-//line sql.y:7457
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7323
 		{
 			yyLOCAL = &JSONValueModifierExpr{Type: JSONArrayInsertType, JSONDoc: yyDollar[3].expr(), Params: yyDollar[5].jsonObjectParams()}
 		}
@@ -28600,13 +24422,7 @@ yydefault:
 	case 1449:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7319
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7453
-=======
-//line sql.y:7461
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7327
 		{
 			yyLOCAL = &JSONValueModifierExpr{Type: JSONInsertType, JSONDoc: yyDollar[3].expr(), Params: yyDollar[5].jsonObjectParams()}
 		}
@@ -28614,13 +24430,7 @@ yydefault:
 	case 1450:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7323
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7457
-=======
-//line sql.y:7465
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7331
 		{
 			yyLOCAL = &JSONValueModifierExpr{Type: JSONReplaceType, JSONDoc: yyDollar[3].expr(), Params: yyDollar[5].jsonObjectParams()}
 		}
@@ -28628,13 +24438,7 @@ yydefault:
 	case 1451:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7327
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7461
-=======
-//line sql.y:7469
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7335
 		{
 			yyLOCAL = &JSONValueModifierExpr{Type: JSONSetType, JSONDoc: yyDollar[3].expr(), Params: yyDollar[5].jsonObjectParams()}
 		}
@@ -28642,7 +24446,7 @@ yydefault:
 	case 1452:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-//line sql.y:7331
+//line sql.y:7339
 		{
 			yyLOCAL = &JSONValueMergeExpr{Type: JSONMergeType, JSONDoc: yyDollar[3].expr(), JSONDocList: yyDollar[5].exprs()}
 		}
@@ -28650,7 +24454,7 @@ yydefault:
 	case 1453:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-//line sql.y:7335
+//line sql.y:7343
 		{
 			yyLOCAL = &JSONValueMergeExpr{Type: JSONMergePatchType, JSONDoc: yyDollar[3].expr(), JSONDocList: yyDollar[5].exprs()}
 		}
@@ -28658,7 +24462,7 @@ yydefault:
 	case 1454:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-//line sql.y:7339
+//line sql.y:7347
 		{
 			yyLOCAL = &JSONValueMergeExpr{Type: JSONMergePreserveType, JSONDoc: yyDollar[3].expr(), JSONDocList: yyDollar[5].exprs()}
 		}
@@ -28666,7 +24470,7 @@ yydefault:
 	case 1455:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-//line sql.y:7343
+//line sql.y:7351
 		{
 			yyLOCAL = &JSONRemoveExpr{JSONDoc: yyDollar[3].expr(), PathList: yyDollar[5].exprs()}
 		}
@@ -28674,7 +24478,7 @@ yydefault:
 	case 1456:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-//line sql.y:7347
+//line sql.y:7355
 		{
 			yyLOCAL = &JSONUnquoteExpr{JSONValue: yyDollar[3].expr()}
 		}
@@ -28682,7 +24486,7 @@ yydefault:
 	case 1457:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-//line sql.y:7351
+//line sql.y:7359
 		{
 			yyLOCAL = &MultiPolygonExpr{PolygonParams: yyDollar[3].exprs()}
 		}
@@ -28690,7 +24494,7 @@ yydefault:
 	case 1458:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-//line sql.y:7355
+//line sql.y:7363
 		{
 			yyLOCAL = &MultiPointExpr{PointParams: yyDollar[3].exprs()}
 		}
@@ -28698,7 +24502,7 @@ yydefault:
 	case 1459:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-//line sql.y:7359
+//line sql.y:7367
 		{
 			yyLOCAL = &MultiLinestringExpr{LinestringParams: yyDollar[3].exprs()}
 		}
@@ -28706,7 +24510,7 @@ yydefault:
 	case 1460:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-//line sql.y:7363
+//line sql.y:7371
 		{
 			yyLOCAL = &PolygonExpr{LinestringParams: yyDollar[3].exprs()}
 		}
@@ -28714,7 +24518,7 @@ yydefault:
 	case 1461:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-//line sql.y:7367
+//line sql.y:7375
 		{
 			yyLOCAL = &LineStringExpr{PointParams: yyDollar[3].exprs()}
 		}
@@ -28722,13 +24526,7 @@ yydefault:
 	case 1462:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7371
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7465
-=======
-//line sql.y:7473
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7379
 		{
 			yyLOCAL = &PointExpr{XCordinate: yyDollar[3].expr(), YCordinate: yyDollar[5].expr()}
 		}
@@ -28736,13 +24534,7 @@ yydefault:
 	case 1463:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7375
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7469
-=======
-//line sql.y:7477
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7383
 		{
 			yyLOCAL = &ArgumentLessWindowExpr{Type: yyDollar[1].argumentLessWindowExprType(), OverClause: yyDollar[4].overClause()}
 		}
@@ -28750,13 +24542,7 @@ yydefault:
 	case 1464:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7379
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7473
-=======
-//line sql.y:7481
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7387
 		{
 			yyLOCAL = &FirstOrLastValueExpr{Type: yyDollar[1].firstOrLastValueExprType(), Expr: yyDollar[3].expr(), NullTreatmentClause: yyDollar[5].nullTreatmentClause(), OverClause: yyDollar[6].overClause()}
 		}
@@ -28764,13 +24550,7 @@ yydefault:
 	case 1465:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7383
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7477
-=======
-//line sql.y:7485
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7391
 		{
 			yyLOCAL = &NtileExpr{N: yyDollar[3].expr(), OverClause: yyDollar[5].overClause()}
 		}
@@ -28778,13 +24558,7 @@ yydefault:
 	case 1466:
 		yyDollar = yyS[yypt-9 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7387
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7481
-=======
-//line sql.y:7489
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7395
 		{
 			yyLOCAL = &NTHValueExpr{Expr: yyDollar[3].expr(), N: yyDollar[5].expr(), FromFirstLastClause: yyDollar[7].fromFirstLastClause(), NullTreatmentClause: yyDollar[8].nullTreatmentClause(), OverClause: yyDollar[9].overClause()}
 		}
@@ -28792,13 +24566,7 @@ yydefault:
 	case 1467:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7391
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7485
-=======
-//line sql.y:7493
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7399
 		{
 			yyLOCAL = &LagLeadExpr{Type: yyDollar[1].lagLeadExprType(), Expr: yyDollar[3].expr(), NullTreatmentClause: yyDollar[5].nullTreatmentClause(), OverClause: yyDollar[6].overClause()}
 		}
@@ -28806,13 +24574,7 @@ yydefault:
 	case 1468:
 		yyDollar = yyS[yypt-9 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7395
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7489
-=======
-//line sql.y:7497
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7403
 		{
 			yyLOCAL = &LagLeadExpr{Type: yyDollar[1].lagLeadExprType(), Expr: yyDollar[3].expr(), N: yyDollar[5].expr(), Default: yyDollar[6].expr(), NullTreatmentClause: yyDollar[8].nullTreatmentClause(), OverClause: yyDollar[9].overClause()}
 		}
@@ -28820,13 +24582,7 @@ yydefault:
 	case 1469:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7399
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7493
-=======
-//line sql.y:7501
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7407
 		{
 			yyLOCAL = &IntervalDateExpr{Syntax: IntervalDateExprAdddate, Date: yyDollar[3].expr(), Interval: yyDollar[6].expr(), Unit: yyDollar[7].intervalType()}
 		}
@@ -28834,13 +24590,7 @@ yydefault:
 	case 1470:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7403
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7497
-=======
-//line sql.y:7505
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7411
 		{
 			yyLOCAL = &IntervalDateExpr{Syntax: IntervalDateExprAdddate, Date: yyDollar[3].expr(), Interval: yyDollar[5].expr(), Unit: IntervalNone}
 		}
@@ -28848,13 +24598,7 @@ yydefault:
 	case 1471:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7407
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7501
-=======
-//line sql.y:7509
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7415
 		{
 			yyLOCAL = &IntervalDateExpr{Syntax: IntervalDateExprDateAdd, Date: yyDollar[3].expr(), Interval: yyDollar[6].expr(), Unit: yyDollar[7].intervalType()}
 		}
@@ -28862,13 +24606,7 @@ yydefault:
 	case 1472:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7411
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7505
-=======
-//line sql.y:7513
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7419
 		{
 			yyLOCAL = &IntervalDateExpr{Syntax: IntervalDateExprDateSub, Date: yyDollar[3].expr(), Interval: yyDollar[6].expr(), Unit: yyDollar[7].intervalType()}
 		}
@@ -28876,13 +24614,7 @@ yydefault:
 	case 1473:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7415
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7509
-=======
-//line sql.y:7517
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7423
 		{
 			yyLOCAL = &IntervalDateExpr{Syntax: IntervalDateExprSubdate, Date: yyDollar[3].expr(), Interval: yyDollar[6].expr(), Unit: yyDollar[7].intervalType()}
 		}
@@ -28890,173 +24622,7 @@ yydefault:
 	case 1474:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7419
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7513
-		{
-			yyLOCAL = &FirstOrLastValueExpr{Type: yyDollar[1].firstOrLastValueExprType(), Expr: yyDollar[3].expr(), NullTreatmentClause: yyDollar[5].nullTreatmentClause(), OverClause: yyDollar[6].overClause()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1475:
-		yyDollar = yyS[yypt-5 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7517
-		{
-			yyLOCAL = &NtileExpr{N: yyDollar[3].expr(), OverClause: yyDollar[5].overClause()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1476:
-		yyDollar = yyS[yypt-9 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7521
-		{
-			yyLOCAL = &NTHValueExpr{Expr: yyDollar[3].expr(), N: yyDollar[5].expr(), FromFirstLastClause: yyDollar[7].fromFirstLastClause(), NullTreatmentClause: yyDollar[8].nullTreatmentClause(), OverClause: yyDollar[9].overClause()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1477:
-		yyDollar = yyS[yypt-6 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7525
-		{
-			yyLOCAL = &LagLeadExpr{Type: yyDollar[1].lagLeadExprType(), Expr: yyDollar[3].expr(), NullTreatmentClause: yyDollar[5].nullTreatmentClause(), OverClause: yyDollar[6].overClause()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1478:
-		yyDollar = yyS[yypt-9 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7529
-		{
-			yyLOCAL = &LagLeadExpr{Type: yyDollar[1].lagLeadExprType(), Expr: yyDollar[3].expr(), N: yyDollar[5].expr(), Default: yyDollar[6].expr(), NullTreatmentClause: yyDollar[8].nullTreatmentClause(), OverClause: yyDollar[9].overClause()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1479:
-		yyDollar = yyS[yypt-8 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7533
-		{
-			yyLOCAL = &IntervalDateExpr{Syntax: IntervalDateExprAdddate, Date: yyDollar[3].expr(), Interval: yyDollar[6].expr(), Unit: yyDollar[7].intervalType()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1480:
-		yyDollar = yyS[yypt-6 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7537
-		{
-			yyLOCAL = &IntervalDateExpr{Syntax: IntervalDateExprAdddate, Date: yyDollar[3].expr(), Interval: yyDollar[5].expr(), Unit: IntervalNone}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1481:
-		yyDollar = yyS[yypt-8 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7541
-		{
-			yyLOCAL = &IntervalDateExpr{Syntax: IntervalDateExprDateAdd, Date: yyDollar[3].expr(), Interval: yyDollar[6].expr(), Unit: yyDollar[7].intervalType()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1482:
-		yyDollar = yyS[yypt-8 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7545
-		{
-			yyLOCAL = &IntervalDateExpr{Syntax: IntervalDateExprDateSub, Date: yyDollar[3].expr(), Interval: yyDollar[6].expr(), Unit: yyDollar[7].intervalType()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1483:
-		yyDollar = yyS[yypt-8 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7549
-		{
-			yyLOCAL = &IntervalDateExpr{Syntax: IntervalDateExprSubdate, Date: yyDollar[3].expr(), Interval: yyDollar[6].expr(), Unit: yyDollar[7].intervalType()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1484:
-		yyDollar = yyS[yypt-6 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7553
-=======
-//line sql.y:7521
-		{
-			yyLOCAL = &FirstOrLastValueExpr{Type: yyDollar[1].firstOrLastValueExprType(), Expr: yyDollar[3].expr(), NullTreatmentClause: yyDollar[5].nullTreatmentClause(), OverClause: yyDollar[6].overClause()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1475:
-		yyDollar = yyS[yypt-5 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7525
-		{
-			yyLOCAL = &NtileExpr{N: yyDollar[3].expr(), OverClause: yyDollar[5].overClause()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1476:
-		yyDollar = yyS[yypt-9 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7529
-		{
-			yyLOCAL = &NTHValueExpr{Expr: yyDollar[3].expr(), N: yyDollar[5].expr(), FromFirstLastClause: yyDollar[7].fromFirstLastClause(), NullTreatmentClause: yyDollar[8].nullTreatmentClause(), OverClause: yyDollar[9].overClause()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1477:
-		yyDollar = yyS[yypt-6 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7533
-		{
-			yyLOCAL = &LagLeadExpr{Type: yyDollar[1].lagLeadExprType(), Expr: yyDollar[3].expr(), NullTreatmentClause: yyDollar[5].nullTreatmentClause(), OverClause: yyDollar[6].overClause()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1478:
-		yyDollar = yyS[yypt-9 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7537
-		{
-			yyLOCAL = &LagLeadExpr{Type: yyDollar[1].lagLeadExprType(), Expr: yyDollar[3].expr(), N: yyDollar[5].expr(), Default: yyDollar[6].expr(), NullTreatmentClause: yyDollar[8].nullTreatmentClause(), OverClause: yyDollar[9].overClause()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1479:
-		yyDollar = yyS[yypt-8 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7541
-		{
-			yyLOCAL = &IntervalDateExpr{Syntax: IntervalDateExprAdddate, Date: yyDollar[3].expr(), Interval: yyDollar[6].expr(), Unit: yyDollar[7].intervalType()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1480:
-		yyDollar = yyS[yypt-6 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7545
-		{
-			yyLOCAL = &IntervalDateExpr{Syntax: IntervalDateExprAdddate, Date: yyDollar[3].expr(), Interval: yyDollar[5].expr(), Unit: IntervalNone}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1481:
-		yyDollar = yyS[yypt-8 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7549
-		{
-			yyLOCAL = &IntervalDateExpr{Syntax: IntervalDateExprDateAdd, Date: yyDollar[3].expr(), Interval: yyDollar[6].expr(), Unit: yyDollar[7].intervalType()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1482:
-		yyDollar = yyS[yypt-8 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7553
-		{
-			yyLOCAL = &IntervalDateExpr{Syntax: IntervalDateExprDateSub, Date: yyDollar[3].expr(), Interval: yyDollar[6].expr(), Unit: yyDollar[7].intervalType()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1483:
-		yyDollar = yyS[yypt-8 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7557
-		{
-			yyLOCAL = &IntervalDateExpr{Syntax: IntervalDateExprSubdate, Date: yyDollar[3].expr(), Interval: yyDollar[6].expr(), Unit: yyDollar[7].intervalType()}
-		}
-		yyVAL.setexpr(yyLOCAL)
-	case 1484:
-		yyDollar = yyS[yypt-6 : yypt+1]
-		var yyLOCAL Expr
-//line sql.y:7561
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7427
 		{
 			yyLOCAL = &IntervalDateExpr{Syntax: IntervalDateExprSubdate, Date: yyDollar[3].expr(), Interval: yyDollar[5].expr(), Unit: IntervalNone}
 		}
@@ -29064,13 +24630,7 @@ yydefault:
 	case 1479:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7429
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7563
-=======
-//line sql.y:7571
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7437
 		{
 			yyLOCAL = yyDollar[1].expr()
 		}
@@ -29078,13 +24638,7 @@ yydefault:
 	case 1480:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7433
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7567
-=======
-//line sql.y:7575
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7441
 		{
 			yyLOCAL = NewIntLiteral(yyDollar[1].str())
 		}
@@ -29092,13 +24646,7 @@ yydefault:
 	case 1481:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7437
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7571
-=======
-//line sql.y:7579
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7445
 		{
 			yyLOCAL = yyDollar[1].variable()
 		}
@@ -29106,13 +24654,7 @@ yydefault:
 	case 1482:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7441
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7575
-=======
-//line sql.y:7583
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7449
 		{
 			yyLOCAL = parseBindVariable(yylex, yyDollar[1].str()[1:])
 		}
@@ -29120,13 +24662,7 @@ yydefault:
 	case 1483:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7446
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7580
-=======
-//line sql.y:7588
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7454
 		{
 			yyLOCAL = nil
 		}
@@ -29134,13 +24670,7 @@ yydefault:
 	case 1484:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7450
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7584
-=======
-//line sql.y:7592
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7458
 		{
 			yyLOCAL = yyDollar[2].expr()
 		}
@@ -29148,13 +24678,7 @@ yydefault:
 	case 1485:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7456
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7590
-=======
-//line sql.y:7598
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7464
 		{
 			yyLOCAL = &RegexpInstrExpr{Expr: yyDollar[3].expr(), Pattern: yyDollar[5].expr()}
 		}
@@ -29162,13 +24686,7 @@ yydefault:
 	case 1486:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7460
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7594
-=======
-//line sql.y:7602
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7468
 		{
 			yyLOCAL = &RegexpInstrExpr{Expr: yyDollar[3].expr(), Pattern: yyDollar[5].expr(), Position: yyDollar[7].expr()}
 		}
@@ -29176,13 +24694,7 @@ yydefault:
 	case 1487:
 		yyDollar = yyS[yypt-10 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7464
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7598
-=======
-//line sql.y:7606
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7472
 		{
 			yyLOCAL = &RegexpInstrExpr{Expr: yyDollar[3].expr(), Pattern: yyDollar[5].expr(), Position: yyDollar[7].expr(), Occurrence: yyDollar[9].expr()}
 		}
@@ -29190,13 +24702,7 @@ yydefault:
 	case 1488:
 		yyDollar = yyS[yypt-12 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7468
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7602
-=======
-//line sql.y:7610
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7476
 		{
 			yyLOCAL = &RegexpInstrExpr{Expr: yyDollar[3].expr(), Pattern: yyDollar[5].expr(), Position: yyDollar[7].expr(), Occurrence: yyDollar[9].expr(), ReturnOption: yyDollar[11].expr()}
 		}
@@ -29204,13 +24710,7 @@ yydefault:
 	case 1489:
 		yyDollar = yyS[yypt-14 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7472
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7606
-=======
-//line sql.y:7614
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7480
 		{
 			// Match type is kept expression as TRIM( ' m  ') is accepted
 			yyLOCAL = &RegexpInstrExpr{Expr: yyDollar[3].expr(), Pattern: yyDollar[5].expr(), Position: yyDollar[7].expr(), Occurrence: yyDollar[9].expr(), ReturnOption: yyDollar[11].expr(), MatchType: yyDollar[13].expr()}
@@ -29219,13 +24719,7 @@ yydefault:
 	case 1490:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7477
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7611
-=======
-//line sql.y:7619
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7485
 		{
 			yyLOCAL = &RegexpLikeExpr{Expr: yyDollar[3].expr(), Pattern: yyDollar[5].expr()}
 		}
@@ -29233,13 +24727,7 @@ yydefault:
 	case 1491:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7481
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7615
-=======
-//line sql.y:7623
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7489
 		{
 			yyLOCAL = &RegexpLikeExpr{Expr: yyDollar[3].expr(), Pattern: yyDollar[5].expr(), MatchType: yyDollar[7].expr()}
 		}
@@ -29247,13 +24735,7 @@ yydefault:
 	case 1492:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7485
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7619
-=======
-//line sql.y:7627
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7493
 		{
 			yyLOCAL = &RegexpReplaceExpr{Expr: yyDollar[3].expr(), Pattern: yyDollar[5].expr(), Repl: yyDollar[7].expr()}
 		}
@@ -29261,13 +24743,7 @@ yydefault:
 	case 1493:
 		yyDollar = yyS[yypt-10 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7489
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7623
-=======
-//line sql.y:7631
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7497
 		{
 			yyLOCAL = &RegexpReplaceExpr{Expr: yyDollar[3].expr(), Pattern: yyDollar[5].expr(), Repl: yyDollar[7].expr(), Position: yyDollar[9].expr()}
 		}
@@ -29275,13 +24751,7 @@ yydefault:
 	case 1494:
 		yyDollar = yyS[yypt-12 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7493
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7627
-=======
-//line sql.y:7635
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7501
 		{
 			yyLOCAL = &RegexpReplaceExpr{Expr: yyDollar[3].expr(), Pattern: yyDollar[5].expr(), Repl: yyDollar[7].expr(), Position: yyDollar[9].expr(), Occurrence: yyDollar[11].expr()}
 		}
@@ -29289,13 +24759,7 @@ yydefault:
 	case 1495:
 		yyDollar = yyS[yypt-14 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7497
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7631
-=======
-//line sql.y:7639
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7505
 		{
 			// Match type is kept expression as TRIM( ' m  ') is accepted
 			yyLOCAL = &RegexpReplaceExpr{Expr: yyDollar[3].expr(), Pattern: yyDollar[5].expr(), Repl: yyDollar[7].expr(), Position: yyDollar[9].expr(), Occurrence: yyDollar[11].expr(), MatchType: yyDollar[13].expr()}
@@ -29304,13 +24768,7 @@ yydefault:
 	case 1496:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7502
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7636
-=======
-//line sql.y:7644
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7510
 		{
 			yyLOCAL = &RegexpSubstrExpr{Expr: yyDollar[3].expr(), Pattern: yyDollar[5].expr()}
 		}
@@ -29318,13 +24776,7 @@ yydefault:
 	case 1497:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7506
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7640
-=======
-//line sql.y:7648
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7514
 		{
 			yyLOCAL = &RegexpSubstrExpr{Expr: yyDollar[3].expr(), Pattern: yyDollar[5].expr(), Position: yyDollar[7].expr()}
 		}
@@ -29332,13 +24784,7 @@ yydefault:
 	case 1498:
 		yyDollar = yyS[yypt-10 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7510
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7644
-=======
-//line sql.y:7652
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7518
 		{
 			yyLOCAL = &RegexpSubstrExpr{Expr: yyDollar[3].expr(), Pattern: yyDollar[5].expr(), Position: yyDollar[7].expr(), Occurrence: yyDollar[9].expr()}
 		}
@@ -29346,13 +24792,7 @@ yydefault:
 	case 1499:
 		yyDollar = yyS[yypt-12 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7514
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7648
-=======
-//line sql.y:7656
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7522
 		{
 			// Match type is kept expression as TRIM( ' m  ') is accepted
 			yyLOCAL = &RegexpSubstrExpr{Expr: yyDollar[3].expr(), Pattern: yyDollar[5].expr(), Position: yyDollar[7].expr(), Occurrence: yyDollar[9].expr(), MatchType: yyDollar[11].expr()}
@@ -29361,13 +24801,7 @@ yydefault:
 	case 1500:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7521
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7655
-=======
-//line sql.y:7663
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7529
 		{
 			yyLOCAL = &ExtractValueExpr{Fragment: yyDollar[3].expr(), XPathExpr: yyDollar[5].expr()}
 		}
@@ -29375,13 +24809,7 @@ yydefault:
 	case 1501:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7525
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7659
-=======
-//line sql.y:7667
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7533
 		{
 			yyLOCAL = &UpdateXMLExpr{Target: yyDollar[3].expr(), XPathExpr: yyDollar[5].expr(), NewXML: yyDollar[7].expr()}
 		}
@@ -29389,13 +24817,7 @@ yydefault:
 	case 1502:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7531
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7665
-=======
-//line sql.y:7673
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7539
 		{
 			yyLOCAL = &PerformanceSchemaFuncExpr{Type: FormatBytesType, Argument: yyDollar[3].expr()}
 		}
@@ -29403,13 +24825,7 @@ yydefault:
 	case 1503:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7535
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7669
-=======
-//line sql.y:7677
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7543
 		{
 			yyLOCAL = &PerformanceSchemaFuncExpr{Type: FormatPicoTimeType, Argument: yyDollar[3].expr()}
 		}
@@ -29417,13 +24833,7 @@ yydefault:
 	case 1504:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7539
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7673
-=======
-//line sql.y:7681
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7547
 		{
 			yyLOCAL = &PerformanceSchemaFuncExpr{Type: PsCurrentThreadIDType}
 		}
@@ -29431,13 +24841,7 @@ yydefault:
 	case 1505:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7543
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7677
-=======
-//line sql.y:7685
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7551
 		{
 			yyLOCAL = &PerformanceSchemaFuncExpr{Type: PsThreadIDType, Argument: yyDollar[3].expr()}
 		}
@@ -29445,13 +24849,7 @@ yydefault:
 	case 1506:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7549
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7683
-=======
-//line sql.y:7691
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7557
 		{
 			yyLOCAL = &GTIDFuncExpr{Type: GTIDSubsetType, Set1: yyDollar[3].expr(), Set2: yyDollar[5].expr()}
 		}
@@ -29459,13 +24857,7 @@ yydefault:
 	case 1507:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7553
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7687
-=======
-//line sql.y:7695
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7561
 		{
 			yyLOCAL = &GTIDFuncExpr{Type: GTIDSubtractType, Set1: yyDollar[3].expr(), Set2: yyDollar[5].expr()}
 		}
@@ -29473,13 +24865,7 @@ yydefault:
 	case 1508:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7557
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7691
-=======
-//line sql.y:7699
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7565
 		{
 			yyLOCAL = &GTIDFuncExpr{Type: WaitForExecutedGTIDSetType, Set1: yyDollar[3].expr()}
 		}
@@ -29487,13 +24873,7 @@ yydefault:
 	case 1509:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7561
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7695
-=======
-//line sql.y:7703
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7569
 		{
 			yyLOCAL = &GTIDFuncExpr{Type: WaitForExecutedGTIDSetType, Set1: yyDollar[3].expr(), Timeout: yyDollar[5].expr()}
 		}
@@ -29501,13 +24881,7 @@ yydefault:
 	case 1510:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7565
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7699
-=======
-//line sql.y:7707
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7573
 		{
 			yyLOCAL = &GTIDFuncExpr{Type: WaitUntilSQLThreadAfterGTIDSType, Set1: yyDollar[3].expr()}
 		}
@@ -29515,13 +24889,7 @@ yydefault:
 	case 1511:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7569
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7703
-=======
-//line sql.y:7711
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7577
 		{
 			yyLOCAL = &GTIDFuncExpr{Type: WaitUntilSQLThreadAfterGTIDSType, Set1: yyDollar[3].expr(), Timeout: yyDollar[5].expr()}
 		}
@@ -29529,13 +24897,7 @@ yydefault:
 	case 1512:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7573
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7707
-=======
-//line sql.y:7715
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7581
 		{
 			yyLOCAL = &GTIDFuncExpr{Type: WaitUntilSQLThreadAfterGTIDSType, Set1: yyDollar[3].expr(), Timeout: yyDollar[5].expr(), Channel: yyDollar[7].expr()}
 		}
@@ -29543,13 +24905,7 @@ yydefault:
 	case 1513:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL *ConvertType
-<<<<<<< HEAD
-//line sql.y:7578
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7712
-=======
-//line sql.y:7720
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7586
 		{
 			yyLOCAL = nil
 		}
@@ -29557,13 +24913,7 @@ yydefault:
 	case 1514:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL *ConvertType
-<<<<<<< HEAD
-//line sql.y:7582
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7716
-=======
-//line sql.y:7724
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7590
 		{
 			yyLOCAL = yyDollar[2].convertType()
 		}
@@ -29571,7 +24921,7 @@ yydefault:
 	case 1515:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
-//line sql.y:7588
+//line sql.y:7596
 		{
 			yyLOCAL = IntervalDayHour
 		}
@@ -29579,7 +24929,7 @@ yydefault:
 	case 1516:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
-//line sql.y:7592
+//line sql.y:7600
 		{
 			yyLOCAL = IntervalDayMicrosecond
 		}
@@ -29587,7 +24937,7 @@ yydefault:
 	case 1517:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
-//line sql.y:7596
+//line sql.y:7604
 		{
 			yyLOCAL = IntervalDayMinute
 		}
@@ -29595,7 +24945,7 @@ yydefault:
 	case 1518:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
-//line sql.y:7600
+//line sql.y:7608
 		{
 			yyLOCAL = IntervalDaySecond
 		}
@@ -29603,7 +24953,7 @@ yydefault:
 	case 1519:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
-//line sql.y:7604
+//line sql.y:7612
 		{
 			yyLOCAL = IntervalHourMicrosecond
 		}
@@ -29611,7 +24961,7 @@ yydefault:
 	case 1520:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
-//line sql.y:7608
+//line sql.y:7616
 		{
 			yyLOCAL = IntervalHourMinute
 		}
@@ -29619,7 +24969,7 @@ yydefault:
 	case 1521:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
-//line sql.y:7612
+//line sql.y:7620
 		{
 			yyLOCAL = IntervalHourSecond
 		}
@@ -29627,7 +24977,7 @@ yydefault:
 	case 1522:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
-//line sql.y:7616
+//line sql.y:7624
 		{
 			yyLOCAL = IntervalMinuteMicrosecond
 		}
@@ -29635,7 +24985,7 @@ yydefault:
 	case 1523:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
-//line sql.y:7620
+//line sql.y:7628
 		{
 			yyLOCAL = IntervalMinuteSecond
 		}
@@ -29643,7 +24993,7 @@ yydefault:
 	case 1524:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
-//line sql.y:7624
+//line sql.y:7632
 		{
 			yyLOCAL = IntervalSecondMicrosecond
 		}
@@ -29651,13 +25001,7 @@ yydefault:
 	case 1525:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
-<<<<<<< HEAD
-//line sql.y:7628
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7722
-=======
-//line sql.y:7730
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7636
 		{
 			yyLOCAL = IntervalYearMonth
 		}
@@ -29665,13 +25009,7 @@ yydefault:
 	case 1526:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
-<<<<<<< HEAD
-//line sql.y:7632
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7726
-=======
-//line sql.y:7734
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7640
 		{
 			yyLOCAL = IntervalDay
 		}
@@ -29679,13 +25017,7 @@ yydefault:
 	case 1527:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
-<<<<<<< HEAD
-//line sql.y:7636
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7730
-=======
-//line sql.y:7738
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7644
 		{
 			yyLOCAL = IntervalWeek
 		}
@@ -29693,13 +25025,7 @@ yydefault:
 	case 1528:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
-<<<<<<< HEAD
-//line sql.y:7640
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7734
-=======
-//line sql.y:7742
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7648
 		{
 			yyLOCAL = IntervalHour
 		}
@@ -29707,13 +25033,7 @@ yydefault:
 	case 1529:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
-<<<<<<< HEAD
-//line sql.y:7644
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7738
-=======
-//line sql.y:7746
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7652
 		{
 			yyLOCAL = IntervalMinute
 		}
@@ -29721,13 +25041,7 @@ yydefault:
 	case 1530:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
-<<<<<<< HEAD
-//line sql.y:7648
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7742
-=======
-//line sql.y:7750
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7656
 		{
 			yyLOCAL = IntervalMonth
 		}
@@ -29735,13 +25049,7 @@ yydefault:
 	case 1531:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
-<<<<<<< HEAD
-//line sql.y:7652
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7746
-=======
-//line sql.y:7754
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7660
 		{
 			yyLOCAL = IntervalQuarter
 		}
@@ -29749,13 +25057,7 @@ yydefault:
 	case 1532:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
-<<<<<<< HEAD
-//line sql.y:7656
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7750
-=======
-//line sql.y:7758
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7664
 		{
 			yyLOCAL = IntervalSecond
 		}
@@ -29763,13 +25065,7 @@ yydefault:
 	case 1533:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
-<<<<<<< HEAD
-//line sql.y:7660
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7754
-=======
-//line sql.y:7762
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7668
 		{
 			yyLOCAL = IntervalMicrosecond
 		}
@@ -29777,13 +25073,7 @@ yydefault:
 	case 1534:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
-<<<<<<< HEAD
-//line sql.y:7664
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7758
-=======
-//line sql.y:7766
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7672
 		{
 			yyLOCAL = IntervalYear
 		}
@@ -29791,13 +25081,7 @@ yydefault:
 	case 1535:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
-<<<<<<< HEAD
-//line sql.y:7670
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7762
-=======
-//line sql.y:7770
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7678
 		{
 			yyLOCAL = IntervalDay
 		}
@@ -29805,13 +25089,7 @@ yydefault:
 	case 1536:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
-<<<<<<< HEAD
-//line sql.y:7674
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7766
-=======
-//line sql.y:7774
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7682
 		{
 			yyLOCAL = IntervalWeek
 		}
@@ -29819,13 +25097,7 @@ yydefault:
 	case 1537:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
-<<<<<<< HEAD
-//line sql.y:7678
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7770
-=======
-//line sql.y:7778
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7686
 		{
 			yyLOCAL = IntervalHour
 		}
@@ -29833,13 +25105,7 @@ yydefault:
 	case 1538:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
-<<<<<<< HEAD
-//line sql.y:7682
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7774
-=======
-//line sql.y:7782
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7690
 		{
 			yyLOCAL = IntervalMinute
 		}
@@ -29847,13 +25113,7 @@ yydefault:
 	case 1539:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
-<<<<<<< HEAD
-//line sql.y:7686
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7778
-=======
-//line sql.y:7786
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7694
 		{
 			yyLOCAL = IntervalMonth
 		}
@@ -29861,13 +25121,7 @@ yydefault:
 	case 1540:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
-<<<<<<< HEAD
-//line sql.y:7690
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7782
-=======
-//line sql.y:7790
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7698
 		{
 			yyLOCAL = IntervalQuarter
 		}
@@ -29875,13 +25129,7 @@ yydefault:
 	case 1541:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
-<<<<<<< HEAD
-//line sql.y:7694
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7786
-=======
-//line sql.y:7794
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7702
 		{
 			yyLOCAL = IntervalSecond
 		}
@@ -29889,13 +25137,7 @@ yydefault:
 	case 1542:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
-<<<<<<< HEAD
-//line sql.y:7698
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7790
-=======
-//line sql.y:7798
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7706
 		{
 			yyLOCAL = IntervalMicrosecond
 		}
@@ -29903,13 +25145,7 @@ yydefault:
 	case 1543:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
-<<<<<<< HEAD
-//line sql.y:7702
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7794
-=======
-//line sql.y:7802
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7710
 		{
 			yyLOCAL = IntervalYear
 		}
@@ -29917,13 +25153,7 @@ yydefault:
 	case 1544:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
-<<<<<<< HEAD
-//line sql.y:7706
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7798
-=======
-//line sql.y:7806
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7714
 		{
 			yyLOCAL = IntervalDay
 		}
@@ -29931,13 +25161,7 @@ yydefault:
 	case 1545:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
-<<<<<<< HEAD
-//line sql.y:7710
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7804
-=======
-//line sql.y:7812
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7718
 		{
 			yyLOCAL = IntervalWeek
 		}
@@ -29945,13 +25169,7 @@ yydefault:
 	case 1546:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
-<<<<<<< HEAD
-//line sql.y:7714
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7808
-=======
-//line sql.y:7816
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7722
 		{
 			yyLOCAL = IntervalHour
 		}
@@ -29959,13 +25177,7 @@ yydefault:
 	case 1547:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
-<<<<<<< HEAD
-//line sql.y:7718
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7812
-=======
-//line sql.y:7820
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7726
 		{
 			yyLOCAL = IntervalMinute
 		}
@@ -29973,13 +25185,7 @@ yydefault:
 	case 1548:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
-<<<<<<< HEAD
-//line sql.y:7722
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7816
-=======
-//line sql.y:7824
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7730
 		{
 			yyLOCAL = IntervalMonth
 		}
@@ -29987,13 +25193,7 @@ yydefault:
 	case 1549:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
-<<<<<<< HEAD
-//line sql.y:7726
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7820
-=======
-//line sql.y:7828
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7734
 		{
 			yyLOCAL = IntervalQuarter
 		}
@@ -30001,13 +25201,7 @@ yydefault:
 	case 1550:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
-<<<<<<< HEAD
-//line sql.y:7730
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7824
-=======
-//line sql.y:7832
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7738
 		{
 			yyLOCAL = IntervalSecond
 		}
@@ -30015,13 +25209,7 @@ yydefault:
 	case 1551:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
-<<<<<<< HEAD
-//line sql.y:7734
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7828
-=======
-//line sql.y:7836
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7742
 		{
 			yyLOCAL = IntervalMicrosecond
 		}
@@ -30029,195 +25217,15 @@ yydefault:
 	case 1552:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IntervalType
-<<<<<<< HEAD
-//line sql.y:7738
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7832
-		{
-			yyLOCAL = IntervalMicrosecond
-		}
-		yyVAL.setintervalType(yyLOCAL)
-	case 1553:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL IntervalType
-//line sql.y:7836
-=======
-//line sql.y:7840
-		{
-			yyLOCAL = IntervalMicrosecond
-		}
-		yyVAL.setintervalType(yyLOCAL)
-	case 1553:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL IntervalType
-//line sql.y:7844
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7746
 		{
 			yyLOCAL = IntervalYear
 		}
 		yyVAL.setintervalType(yyLOCAL)
-<<<<<<< HEAD
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-	case 1554:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL IntervalType
-//line sql.y:7840
-		{
-			yyLOCAL = IntervalDay
-		}
-		yyVAL.setintervalType(yyLOCAL)
-=======
-	case 1554:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL IntervalType
-//line sql.y:7848
-		{
-			yyLOCAL = IntervalDay
-		}
-		yyVAL.setintervalType(yyLOCAL)
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
 	case 1555:
-<<<<<<< HEAD
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL IntervalType
-//line sql.y:7844
-		{
-			yyLOCAL = IntervalWeek
-		}
-		yyVAL.setintervalType(yyLOCAL)
-	case 1556:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL IntervalType
-//line sql.y:7848
-		{
-			yyLOCAL = IntervalHour
-		}
-		yyVAL.setintervalType(yyLOCAL)
-	case 1557:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL IntervalType
-//line sql.y:7852
-		{
-			yyLOCAL = IntervalMinute
-		}
-		yyVAL.setintervalType(yyLOCAL)
-	case 1558:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL IntervalType
-//line sql.y:7856
-		{
-			yyLOCAL = IntervalMonth
-		}
-		yyVAL.setintervalType(yyLOCAL)
-	case 1559:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL IntervalType
-//line sql.y:7860
-		{
-			yyLOCAL = IntervalQuarter
-		}
-		yyVAL.setintervalType(yyLOCAL)
-	case 1560:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL IntervalType
-//line sql.y:7864
-		{
-			yyLOCAL = IntervalSecond
-		}
-		yyVAL.setintervalType(yyLOCAL)
-	case 1561:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL IntervalType
-//line sql.y:7868
-		{
-			yyLOCAL = IntervalMicrosecond
-		}
-		yyVAL.setintervalType(yyLOCAL)
-	case 1562:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL IntervalType
-//line sql.y:7872
-		{
-			yyLOCAL = IntervalYear
-		}
-		yyVAL.setintervalType(yyLOCAL)
-	case 1565:
-=======
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL IntervalType
-//line sql.y:7852
-		{
-			yyLOCAL = IntervalWeek
-		}
-		yyVAL.setintervalType(yyLOCAL)
-	case 1556:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL IntervalType
-//line sql.y:7856
-		{
-			yyLOCAL = IntervalHour
-		}
-		yyVAL.setintervalType(yyLOCAL)
-	case 1557:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL IntervalType
-//line sql.y:7860
-		{
-			yyLOCAL = IntervalMinute
-		}
-		yyVAL.setintervalType(yyLOCAL)
-	case 1558:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL IntervalType
-//line sql.y:7864
-		{
-			yyLOCAL = IntervalMonth
-		}
-		yyVAL.setintervalType(yyLOCAL)
-	case 1559:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL IntervalType
-//line sql.y:7868
-		{
-			yyLOCAL = IntervalQuarter
-		}
-		yyVAL.setintervalType(yyLOCAL)
-	case 1560:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL IntervalType
-//line sql.y:7872
-		{
-			yyLOCAL = IntervalSecond
-		}
-		yyVAL.setintervalType(yyLOCAL)
-	case 1561:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL IntervalType
-//line sql.y:7876
-		{
-			yyLOCAL = IntervalMicrosecond
-		}
-		yyVAL.setintervalType(yyLOCAL)
-	case 1562:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL IntervalType
-//line sql.y:7880
-		{
-			yyLOCAL = IntervalYear
-		}
-		yyVAL.setintervalType(yyLOCAL)
-	case 1565:
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL int
-<<<<<<< HEAD
-//line sql.y:7748
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7882
-=======
-//line sql.y:7890
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7756
 		{
 			yyLOCAL = 0
 		}
@@ -30225,13 +25233,7 @@ yydefault:
 	case 1556:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL int
-<<<<<<< HEAD
-//line sql.y:7752
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7886
-=======
-//line sql.y:7894
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7760
 		{
 			yyLOCAL = 0
 		}
@@ -30239,13 +25241,7 @@ yydefault:
 	case 1557:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL int
-<<<<<<< HEAD
-//line sql.y:7756
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7890
-=======
-//line sql.y:7898
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7764
 		{
 			yyLOCAL = convertStringToInt(yyDollar[2].str())
 		}
@@ -30253,13 +25249,7 @@ yydefault:
 	case 1558:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7766
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7900
-=======
-//line sql.y:7908
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7774
 		{
 			yyLOCAL = &FuncExpr{Name: NewIdentifierCI("if"), Exprs: yyDollar[3].exprs()}
 		}
@@ -30267,13 +25257,7 @@ yydefault:
 	case 1559:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7770
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7904
-=======
-//line sql.y:7912
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7778
 		{
 			yyLOCAL = &FuncExpr{Name: NewIdentifierCI("database"), Exprs: yyDollar[3].exprs()}
 		}
@@ -30281,13 +25265,7 @@ yydefault:
 	case 1560:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7774
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7908
-=======
-//line sql.y:7916
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7782
 		{
 			yyLOCAL = &FuncExpr{Name: NewIdentifierCI("schema"), Exprs: yyDollar[3].exprs()}
 		}
@@ -30295,13 +25273,7 @@ yydefault:
 	case 1561:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7778
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7912
-=======
-//line sql.y:7920
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7786
 		{
 			yyLOCAL = &FuncExpr{Name: NewIdentifierCI("mod"), Exprs: yyDollar[3].exprs()}
 		}
@@ -30309,13 +25281,7 @@ yydefault:
 	case 1562:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7782
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7916
-=======
-//line sql.y:7924
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7790
 		{
 			yyLOCAL = &FuncExpr{Name: NewIdentifierCI("replace"), Exprs: yyDollar[3].exprs()}
 		}
@@ -30323,13 +25289,7 @@ yydefault:
 	case 1563:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL MatchExprOption
-<<<<<<< HEAD
-//line sql.y:7788
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7922
-=======
-//line sql.y:7930
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7796
 		{
 			yyLOCAL = NoOption
 		}
@@ -30337,13 +25297,7 @@ yydefault:
 	case 1564:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL MatchExprOption
-<<<<<<< HEAD
-//line sql.y:7792
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7926
-=======
-//line sql.y:7934
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7800
 		{
 			yyLOCAL = BooleanModeOpt
 		}
@@ -30351,13 +25305,7 @@ yydefault:
 	case 1565:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL MatchExprOption
-<<<<<<< HEAD
-//line sql.y:7796
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7930
-=======
-//line sql.y:7938
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7804
 		{
 			yyLOCAL = NaturalLanguageModeOpt
 		}
@@ -30365,13 +25313,7 @@ yydefault:
 	case 1566:
 		yyDollar = yyS[yypt-7 : yypt+1]
 		var yyLOCAL MatchExprOption
-<<<<<<< HEAD
-//line sql.y:7800
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7934
-=======
-//line sql.y:7942
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7808
 		{
 			yyLOCAL = NaturalLanguageModeWithQueryExpansionOpt
 		}
@@ -30379,13 +25321,7 @@ yydefault:
 	case 1567:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL MatchExprOption
-<<<<<<< HEAD
-//line sql.y:7804
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7938
-=======
-//line sql.y:7946
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7812
 		{
 			yyLOCAL = QueryExpansionOpt
 		}
@@ -30393,13 +25329,7 @@ yydefault:
 	case 1568:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL string
-<<<<<<< HEAD
-//line sql.y:7810
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7944
-=======
-//line sql.y:7952
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7818
 		{
 			yyLOCAL = string(yyDollar[1].identifierCI().String())
 		}
@@ -30407,13 +25337,7 @@ yydefault:
 	case 1569:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL string
-<<<<<<< HEAD
-//line sql.y:7814
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7948
-=======
-//line sql.y:7956
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7822
 		{
 			yyLOCAL = string(yyDollar[1].str())
 		}
@@ -30421,13 +25345,7 @@ yydefault:
 	case 1570:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL string
-<<<<<<< HEAD
-//line sql.y:7818
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7952
-=======
-//line sql.y:7960
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7826
 		{
 			yyLOCAL = string(yyDollar[1].str())
 		}
@@ -30435,13 +25353,7 @@ yydefault:
 	case 1571:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL *ConvertType
-<<<<<<< HEAD
-//line sql.y:7824
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7958
-=======
-//line sql.y:7966
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7832
 		{
 			yyLOCAL = nil
 		}
@@ -30449,13 +25361,7 @@ yydefault:
 	case 1572:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		var yyLOCAL *ConvertType
-<<<<<<< HEAD
-//line sql.y:7828
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7962
-=======
-//line sql.y:7970
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7836
 		{
 			yyLOCAL = &ConvertType{Type: string(yyDollar[2].str()), Length: ptr.Of(convertStringToInt(yyDollar[4].str()))}
 		}
@@ -30463,13 +25369,7 @@ yydefault:
 	case 1573:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		var yyLOCAL *ConvertType
-<<<<<<< HEAD
-//line sql.y:7832
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7966
-=======
-//line sql.y:7974
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7840
 		{
 			yyLOCAL = &ConvertType{Type: string(yyDollar[2].str()), Length: ptr.Of(convertStringToInt(yyDollar[4].str()))}
 		}
@@ -30477,13 +25377,7 @@ yydefault:
 	case 1574:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL *ConvertType
-<<<<<<< HEAD
-//line sql.y:7838
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7972
-=======
-//line sql.y:7980
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7846
 		{
 			yyLOCAL = &ConvertType{Type: string(yyDollar[1].str()), Length: yyDollar[2].intPtr()}
 		}
@@ -30491,13 +25385,7 @@ yydefault:
 	case 1575:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL *ConvertType
-<<<<<<< HEAD
-//line sql.y:7842
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7976
-=======
-//line sql.y:7984
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7850
 		{
 			yyLOCAL = &ConvertType{Type: string(yyDollar[1].str()), Length: yyDollar[2].intPtr(), Charset: yyDollar[3].columnCharset()}
 		}
@@ -30505,13 +25393,7 @@ yydefault:
 	case 1576:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL *ConvertType
-<<<<<<< HEAD
-//line sql.y:7846
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7980
-=======
-//line sql.y:7988
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7854
 		{
 			yyLOCAL = &ConvertType{Type: string(yyDollar[1].str())}
 		}
@@ -30519,13 +25401,7 @@ yydefault:
 	case 1577:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL *ConvertType
-<<<<<<< HEAD
-//line sql.y:7850
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7984
-=======
-//line sql.y:7992
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7858
 		{
 			yyLOCAL = &ConvertType{Type: string(yyDollar[1].str()), Length: yyDollar[2].intPtr()}
 		}
@@ -30533,13 +25409,7 @@ yydefault:
 	case 1578:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL *ConvertType
-<<<<<<< HEAD
-//line sql.y:7854
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:7988
-=======
-//line sql.y:7996
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7862
 		{
 			yyLOCAL = &ConvertType{Type: string(yyDollar[1].str())}
 			yyLOCAL.Length = yyDollar[2].LengthScaleOption().Length
@@ -30549,7 +25419,7 @@ yydefault:
 	case 1579:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL *ConvertType
-//line sql.y:7860
+//line sql.y:7868
 		{
 			yyLOCAL = &ConvertType{Type: string(yyDollar[1].str())}
 		}
@@ -30557,7 +25427,7 @@ yydefault:
 	case 1580:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL *ConvertType
-//line sql.y:7864
+//line sql.y:7872
 		{
 			yyLOCAL = &ConvertType{Type: string(yyDollar[1].str()), Length: yyDollar[2].intPtr()}
 		}
@@ -30565,7 +25435,7 @@ yydefault:
 	case 1581:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL *ConvertType
-//line sql.y:7868
+//line sql.y:7876
 		{
 			yyLOCAL = &ConvertType{Type: string(yyDollar[1].str())}
 		}
@@ -30573,7 +25443,7 @@ yydefault:
 	case 1582:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL *ConvertType
-//line sql.y:7872
+//line sql.y:7880
 		{
 			yyLOCAL = &ConvertType{Type: string(yyDollar[1].str())}
 		}
@@ -30581,7 +25451,7 @@ yydefault:
 	case 1583:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL *ConvertType
-//line sql.y:7876
+//line sql.y:7884
 		{
 			yyLOCAL = &ConvertType{Type: string(yyDollar[1].str()), Length: yyDollar[2].intPtr()}
 		}
@@ -30589,7 +25459,7 @@ yydefault:
 	case 1584:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL *ConvertType
-//line sql.y:7880
+//line sql.y:7888
 		{
 			yyLOCAL = &ConvertType{Type: string(yyDollar[1].str())}
 		}
@@ -30597,7 +25467,7 @@ yydefault:
 	case 1585:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL *ConvertType
-//line sql.y:7884
+//line sql.y:7892
 		{
 			yyLOCAL = &ConvertType{Type: string(yyDollar[1].str())}
 		}
@@ -30605,7 +25475,7 @@ yydefault:
 	case 1586:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL *ConvertType
-//line sql.y:7888
+//line sql.y:7896
 		{
 			yyLOCAL = &ConvertType{Type: string(yyDollar[1].str()), Length: yyDollar[2].intPtr()}
 		}
@@ -30613,7 +25483,7 @@ yydefault:
 	case 1587:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL *ConvertType
-//line sql.y:7892
+//line sql.y:7900
 		{
 			yyLOCAL = &ConvertType{Type: string(yyDollar[1].str())}
 		}
@@ -30621,185 +25491,15 @@ yydefault:
 	case 1588:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL *ConvertType
-//line sql.y:7896
+//line sql.y:7904
 		{
 			yyLOCAL = &ConvertType{Type: string(yyDollar[1].str())}
 		}
 		yyVAL.setconvertType(yyLOCAL)
 	case 1589:
-<<<<<<< HEAD
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL *ConvertType
-//line sql.y:7994
-		{
-			yyLOCAL = &ConvertType{Type: string(yyDollar[1].str())}
-		}
-		yyVAL.setconvertType(yyLOCAL)
-	case 1590:
-		yyDollar = yyS[yypt-2 : yypt+1]
-		var yyLOCAL *ConvertType
-//line sql.y:7998
-		{
-			yyLOCAL = &ConvertType{Type: string(yyDollar[1].str()), Length: yyDollar[2].intPtr()}
-		}
-		yyVAL.setconvertType(yyLOCAL)
-	case 1591:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL *ConvertType
-//line sql.y:8002
-		{
-			yyLOCAL = &ConvertType{Type: string(yyDollar[1].str())}
-		}
-		yyVAL.setconvertType(yyLOCAL)
-	case 1592:
-		yyDollar = yyS[yypt-2 : yypt+1]
-		var yyLOCAL *ConvertType
-//line sql.y:8006
-		{
-			yyLOCAL = &ConvertType{Type: string(yyDollar[1].str())}
-		}
-		yyVAL.setconvertType(yyLOCAL)
-	case 1593:
-		yyDollar = yyS[yypt-2 : yypt+1]
-		var yyLOCAL *ConvertType
-//line sql.y:8010
-		{
-			yyLOCAL = &ConvertType{Type: string(yyDollar[1].str()), Length: yyDollar[2].intPtr()}
-		}
-		yyVAL.setconvertType(yyLOCAL)
-	case 1594:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL *ConvertType
-//line sql.y:8014
-		{
-			yyLOCAL = &ConvertType{Type: string(yyDollar[1].str())}
-		}
-		yyVAL.setconvertType(yyLOCAL)
-	case 1595:
-		yyDollar = yyS[yypt-2 : yypt+1]
-		var yyLOCAL *ConvertType
-//line sql.y:8018
-		{
-			yyLOCAL = &ConvertType{Type: string(yyDollar[1].str())}
-		}
-		yyVAL.setconvertType(yyLOCAL)
-	case 1596:
-		yyDollar = yyS[yypt-2 : yypt+1]
-		var yyLOCAL *ConvertType
-//line sql.y:8022
-		{
-			yyLOCAL = &ConvertType{Type: string(yyDollar[1].str()), Length: yyDollar[2].intPtr()}
-		}
-		yyVAL.setconvertType(yyLOCAL)
-	case 1597:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL *ConvertType
-//line sql.y:8026
-		{
-			yyLOCAL = &ConvertType{Type: string(yyDollar[1].str())}
-		}
-		yyVAL.setconvertType(yyLOCAL)
-	case 1598:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL *ConvertType
-//line sql.y:8030
-		{
-			yyLOCAL = &ConvertType{Type: string(yyDollar[1].str())}
-		}
-		yyVAL.setconvertType(yyLOCAL)
-	case 1599:
-=======
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL *ConvertType
-//line sql.y:8002
-		{
-			yyLOCAL = &ConvertType{Type: string(yyDollar[1].str())}
-		}
-		yyVAL.setconvertType(yyLOCAL)
-	case 1590:
-		yyDollar = yyS[yypt-2 : yypt+1]
-		var yyLOCAL *ConvertType
-//line sql.y:8006
-		{
-			yyLOCAL = &ConvertType{Type: string(yyDollar[1].str()), Length: yyDollar[2].intPtr()}
-		}
-		yyVAL.setconvertType(yyLOCAL)
-	case 1591:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL *ConvertType
-//line sql.y:8010
-		{
-			yyLOCAL = &ConvertType{Type: string(yyDollar[1].str())}
-		}
-		yyVAL.setconvertType(yyLOCAL)
-	case 1592:
-		yyDollar = yyS[yypt-2 : yypt+1]
-		var yyLOCAL *ConvertType
-//line sql.y:8014
-		{
-			yyLOCAL = &ConvertType{Type: string(yyDollar[1].str())}
-		}
-		yyVAL.setconvertType(yyLOCAL)
-	case 1593:
-		yyDollar = yyS[yypt-2 : yypt+1]
-		var yyLOCAL *ConvertType
-//line sql.y:8018
-		{
-			yyLOCAL = &ConvertType{Type: string(yyDollar[1].str()), Length: yyDollar[2].intPtr()}
-		}
-		yyVAL.setconvertType(yyLOCAL)
-	case 1594:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL *ConvertType
-//line sql.y:8022
-		{
-			yyLOCAL = &ConvertType{Type: string(yyDollar[1].str())}
-		}
-		yyVAL.setconvertType(yyLOCAL)
-	case 1595:
-		yyDollar = yyS[yypt-2 : yypt+1]
-		var yyLOCAL *ConvertType
-//line sql.y:8026
-		{
-			yyLOCAL = &ConvertType{Type: string(yyDollar[1].str())}
-		}
-		yyVAL.setconvertType(yyLOCAL)
-	case 1596:
-		yyDollar = yyS[yypt-2 : yypt+1]
-		var yyLOCAL *ConvertType
-//line sql.y:8030
-		{
-			yyLOCAL = &ConvertType{Type: string(yyDollar[1].str()), Length: yyDollar[2].intPtr()}
-		}
-		yyVAL.setconvertType(yyLOCAL)
-	case 1597:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL *ConvertType
-//line sql.y:8034
-		{
-			yyLOCAL = &ConvertType{Type: string(yyDollar[1].str())}
-		}
-		yyVAL.setconvertType(yyLOCAL)
-	case 1598:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL *ConvertType
-//line sql.y:8038
-		{
-			yyLOCAL = &ConvertType{Type: string(yyDollar[1].str())}
-		}
-		yyVAL.setconvertType(yyLOCAL)
-	case 1599:
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL bool
-<<<<<<< HEAD
-//line sql.y:7902
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8036
-=======
-//line sql.y:8044
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7910
 		{
 			yyLOCAL = false
 		}
@@ -30807,13 +25507,7 @@ yydefault:
 	case 1590:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL bool
-<<<<<<< HEAD
-//line sql.y:7906
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8040
-=======
-//line sql.y:8048
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7914
 		{
 			yyLOCAL = true
 		}
@@ -30821,13 +25515,7 @@ yydefault:
 	case 1591:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7911
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8045
-=======
-//line sql.y:8053
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7919
 		{
 			yyLOCAL = nil
 		}
@@ -30835,13 +25523,7 @@ yydefault:
 	case 1592:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7915
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8049
-=======
-//line sql.y:8057
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7923
 		{
 			yyLOCAL = yyDollar[1].expr()
 		}
@@ -30849,13 +25531,7 @@ yydefault:
 	case 1593:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL string
-<<<<<<< HEAD
-//line sql.y:7920
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8054
-=======
-//line sql.y:8062
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7928
 		{
 			yyLOCAL = string("")
 		}
@@ -30863,13 +25539,7 @@ yydefault:
 	case 1594:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL string
-<<<<<<< HEAD
-//line sql.y:7924
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8058
-=======
-//line sql.y:8066
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7932
 		{
 			yyLOCAL = encodeSQLString(yyDollar[2].str())
 		}
@@ -30877,13 +25547,7 @@ yydefault:
 	case 1595:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL []*When
-<<<<<<< HEAD
-//line sql.y:7930
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8064
-=======
-//line sql.y:8072
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7938
 		{
 			yyLOCAL = []*When{yyDollar[1].when()}
 		}
@@ -30891,13 +25555,7 @@ yydefault:
 	case 1596:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL []*When
-<<<<<<< HEAD
-//line sql.y:7934
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8068
-=======
-//line sql.y:8076
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7942
 		{
 			yyLOCAL = append(yyDollar[1].whens(), yyDollar[2].when())
 		}
@@ -30905,13 +25563,7 @@ yydefault:
 	case 1597:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL *When
-<<<<<<< HEAD
-//line sql.y:7940
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8074
-=======
-//line sql.y:8082
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7948
 		{
 			yyLOCAL = &When{Cond: yyDollar[2].expr(), Val: yyDollar[4].expr()}
 		}
@@ -30919,13 +25571,7 @@ yydefault:
 	case 1598:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7945
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8079
-=======
-//line sql.y:8087
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7953
 		{
 			yyLOCAL = nil
 		}
@@ -30933,13 +25579,7 @@ yydefault:
 	case 1599:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7949
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8083
-=======
-//line sql.y:8091
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7957
 		{
 			yyLOCAL = yyDollar[2].expr()
 		}
@@ -30947,13 +25587,7 @@ yydefault:
 	case 1600:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL *ColName
-<<<<<<< HEAD
-//line sql.y:7955
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8089
-=======
-//line sql.y:8097
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7963
 		{
 			yyLOCAL = &ColName{Name: yyDollar[1].identifierCI()}
 		}
@@ -30961,13 +25595,7 @@ yydefault:
 	case 1601:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL *ColName
-<<<<<<< HEAD
-//line sql.y:7959
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8093
-=======
-//line sql.y:8101
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7967
 		{
 			yyLOCAL = &ColName{Name: NewIdentifierCI(string(yyDollar[1].str()))}
 		}
@@ -30975,13 +25603,7 @@ yydefault:
 	case 1602:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL *ColName
-<<<<<<< HEAD
-//line sql.y:7963
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8097
-=======
-//line sql.y:8105
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7971
 		{
 			yyLOCAL = &ColName{Qualifier: TableName{Name: yyDollar[1].identifierCS()}, Name: yyDollar[3].identifierCI()}
 		}
@@ -30989,13 +25611,7 @@ yydefault:
 	case 1603:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		var yyLOCAL *ColName
-<<<<<<< HEAD
-//line sql.y:7967
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8101
-=======
-//line sql.y:8109
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7975
 		{
 			yyLOCAL = &ColName{Qualifier: TableName{Qualifier: yyDollar[1].identifierCS(), Name: yyDollar[3].identifierCS()}, Name: yyDollar[5].identifierCI()}
 		}
@@ -31003,13 +25619,7 @@ yydefault:
 	case 1604:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7973
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8107
-=======
-//line sql.y:8115
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7981
 		{
 			yyLOCAL = yyDollar[1].colName()
 		}
@@ -31017,13 +25627,7 @@ yydefault:
 	case 1605:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7977
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8111
-=======
-//line sql.y:8119
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7985
 		{
 			yyLOCAL = &Offset{V: convertStringToInt(yyDollar[1].str())}
 		}
@@ -31031,13 +25635,7 @@ yydefault:
 	case 1606:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7983
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8117
-=======
-//line sql.y:8125
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:7991
 		{
 			// TODO(sougou): Deprecate this construct.
 			if yyDollar[1].identifierCI().Lowered() != "value" {
@@ -31050,13 +25648,7 @@ yydefault:
 	case 1607:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7992
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8126
-=======
-//line sql.y:8134
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8000
 		{
 			yyLOCAL = NewIntLiteral(yyDollar[1].str())
 		}
@@ -31064,13 +25656,7 @@ yydefault:
 	case 1608:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:7996
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8130
-=======
-//line sql.y:8138
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8004
 		{
 			yyLOCAL = parseBindVariable(yylex, yyDollar[1].str()[1:])
 		}
@@ -31078,13 +25664,7 @@ yydefault:
 	case 1609:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL *GroupBy
-<<<<<<< HEAD
-//line sql.y:8001
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8135
-=======
-//line sql.y:8143
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8009
 		{
 			yyLOCAL = nil
 		}
@@ -31092,13 +25672,7 @@ yydefault:
 	case 1610:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL *GroupBy
-<<<<<<< HEAD
-//line sql.y:8005
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8139
-=======
-//line sql.y:8147
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8013
 		{
 			yyLOCAL = &GroupBy{Exprs: yyDollar[3].exprs(), WithRollup: yyDollar[4].boolean()}
 		}
@@ -31106,13 +25680,7 @@ yydefault:
 	case 1611:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL bool
-<<<<<<< HEAD
-//line sql.y:8010
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8144
-=======
-//line sql.y:8152
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8018
 		{
 			yyLOCAL = false
 		}
@@ -31120,13 +25688,7 @@ yydefault:
 	case 1612:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL bool
-<<<<<<< HEAD
-//line sql.y:8014
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8148
-=======
-//line sql.y:8156
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8022
 		{
 			yyLOCAL = true
 		}
@@ -31134,13 +25696,7 @@ yydefault:
 	case 1613:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:8020
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8154
-=======
-//line sql.y:8162
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8028
 		{
 			yyLOCAL = nil
 		}
@@ -31148,13 +25704,7 @@ yydefault:
 	case 1614:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:8024
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8158
-=======
-//line sql.y:8166
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8032
 		{
 			yyLOCAL = yyDollar[2].expr()
 		}
@@ -31162,13 +25712,7 @@ yydefault:
 	case 1615:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL *NamedWindow
-<<<<<<< HEAD
-//line sql.y:8030
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8164
-=======
-//line sql.y:8172
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8038
 		{
 			yyLOCAL = &NamedWindow{yyDollar[2].windowDefinitions()}
 		}
@@ -31176,13 +25720,7 @@ yydefault:
 	case 1616:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL NamedWindows
-<<<<<<< HEAD
-//line sql.y:8036
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8170
-=======
-//line sql.y:8178
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8044
 		{
 			yyLOCAL = NamedWindows{yyDollar[1].namedWindow()}
 		}
@@ -31190,13 +25728,7 @@ yydefault:
 	case 1617:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL NamedWindows
-<<<<<<< HEAD
-//line sql.y:8040
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8174
-=======
-//line sql.y:8182
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8048
 		{
 			yyLOCAL = append(yyDollar[1].namedWindows(), yyDollar[3].namedWindow())
 		}
@@ -31204,13 +25736,7 @@ yydefault:
 	case 1618:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL NamedWindows
-<<<<<<< HEAD
-//line sql.y:8045
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8179
-=======
-//line sql.y:8187
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8053
 		{
 			yyLOCAL = nil
 		}
@@ -31218,13 +25744,7 @@ yydefault:
 	case 1619:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL NamedWindows
-<<<<<<< HEAD
-//line sql.y:8049
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8183
-=======
-//line sql.y:8191
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8057
 		{
 			yyLOCAL = yyDollar[1].namedWindows()
 		}
@@ -31232,13 +25752,7 @@ yydefault:
 	case 1620:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL OrderBy
-<<<<<<< HEAD
-//line sql.y:8054
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8188
-=======
-//line sql.y:8196
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8062
 		{
 			yyLOCAL = nil
 		}
@@ -31246,13 +25760,7 @@ yydefault:
 	case 1621:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL OrderBy
-<<<<<<< HEAD
-//line sql.y:8058
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8192
-=======
-//line sql.y:8200
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8066
 		{
 			yyLOCAL = yyDollar[1].orderBy()
 		}
@@ -31260,13 +25768,7 @@ yydefault:
 	case 1622:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL OrderBy
-<<<<<<< HEAD
-//line sql.y:8064
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8198
-=======
-//line sql.y:8206
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8072
 		{
 			yyLOCAL = yyDollar[3].orderBy()
 		}
@@ -31274,13 +25776,7 @@ yydefault:
 	case 1623:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL OrderBy
-<<<<<<< HEAD
-//line sql.y:8070
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8204
-=======
-//line sql.y:8212
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8078
 		{
 			yyLOCAL = OrderBy{yyDollar[1].order()}
 		}
@@ -31288,13 +25784,7 @@ yydefault:
 	case 1624:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL OrderBy
-<<<<<<< HEAD
-//line sql.y:8074
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8208
-=======
-//line sql.y:8216
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8082
 		{
 			yyLOCAL = append(yyDollar[1].orderBy(), yyDollar[3].order())
 		}
@@ -31302,13 +25792,7 @@ yydefault:
 	case 1625:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL *Order
-<<<<<<< HEAD
-//line sql.y:8080
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8214
-=======
-//line sql.y:8222
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8088
 		{
 			yyLOCAL = &Order{Expr: yyDollar[1].expr(), Direction: yyDollar[2].orderDirection()}
 		}
@@ -31316,13 +25800,7 @@ yydefault:
 	case 1626:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL OrderDirection
-<<<<<<< HEAD
-//line sql.y:8085
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8219
-=======
-//line sql.y:8227
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8093
 		{
 			yyLOCAL = AscOrder
 		}
@@ -31330,13 +25808,7 @@ yydefault:
 	case 1627:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL OrderDirection
-<<<<<<< HEAD
-//line sql.y:8089
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8223
-=======
-//line sql.y:8231
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8097
 		{
 			yyLOCAL = AscOrder
 		}
@@ -31344,13 +25816,7 @@ yydefault:
 	case 1628:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL OrderDirection
-<<<<<<< HEAD
-//line sql.y:8093
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8227
-=======
-//line sql.y:8235
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8101
 		{
 			yyLOCAL = DescOrder
 		}
@@ -31358,13 +25824,7 @@ yydefault:
 	case 1629:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL *Limit
-<<<<<<< HEAD
-//line sql.y:8098
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8232
-=======
-//line sql.y:8240
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8106
 		{
 			yyLOCAL = nil
 		}
@@ -31372,13 +25832,7 @@ yydefault:
 	case 1630:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL *Limit
-<<<<<<< HEAD
-//line sql.y:8102
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8236
-=======
-//line sql.y:8244
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8110
 		{
 			yyLOCAL = yyDollar[1].limit()
 		}
@@ -31386,13 +25840,7 @@ yydefault:
 	case 1631:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL *Limit
-<<<<<<< HEAD
-//line sql.y:8108
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8242
-=======
-//line sql.y:8250
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8116
 		{
 			yyLOCAL = &Limit{Rowcount: yyDollar[2].expr()}
 		}
@@ -31400,13 +25848,7 @@ yydefault:
 	case 1632:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL *Limit
-<<<<<<< HEAD
-//line sql.y:8112
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8246
-=======
-//line sql.y:8254
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8120
 		{
 			yyLOCAL = &Limit{Offset: yyDollar[2].expr(), Rowcount: yyDollar[4].expr()}
 		}
@@ -31414,13 +25856,7 @@ yydefault:
 	case 1633:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL *Limit
-<<<<<<< HEAD
-//line sql.y:8116
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8250
-=======
-//line sql.y:8258
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8124
 		{
 			yyLOCAL = &Limit{Offset: yyDollar[4].expr(), Rowcount: yyDollar[2].expr()}
 		}
@@ -31428,13 +25864,7 @@ yydefault:
 	case 1634:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL []AlterOption
-<<<<<<< HEAD
-//line sql.y:8121
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8255
-=======
-//line sql.y:8263
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8129
 		{
 			yyLOCAL = nil
 		}
@@ -31442,13 +25872,7 @@ yydefault:
 	case 1635:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL []AlterOption
-<<<<<<< HEAD
-//line sql.y:8125
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8259
-=======
-//line sql.y:8267
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8133
 		{
 			yyLOCAL = []AlterOption{yyDollar[1].alterOption(), yyDollar[2].alterOption()}
 		}
@@ -31456,13 +25880,7 @@ yydefault:
 	case 1636:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL []AlterOption
-<<<<<<< HEAD
-//line sql.y:8129
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8263
-=======
-//line sql.y:8271
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8137
 		{
 			yyLOCAL = []AlterOption{yyDollar[1].alterOption(), yyDollar[2].alterOption()}
 		}
@@ -31470,13 +25888,7 @@ yydefault:
 	case 1637:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL []AlterOption
-<<<<<<< HEAD
-//line sql.y:8133
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8267
-=======
-//line sql.y:8275
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8141
 		{
 			yyLOCAL = []AlterOption{yyDollar[1].alterOption()}
 		}
@@ -31484,13 +25896,7 @@ yydefault:
 	case 1638:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL []AlterOption
-<<<<<<< HEAD
-//line sql.y:8137
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8271
-=======
-//line sql.y:8279
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8145
 		{
 			yyLOCAL = []AlterOption{yyDollar[1].alterOption()}
 		}
@@ -31498,13 +25904,7 @@ yydefault:
 	case 1639:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL AlterOption
-<<<<<<< HEAD
-//line sql.y:8144
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8278
-=======
-//line sql.y:8286
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8152
 		{
 			yyLOCAL = &LockOption{Type: DefaultType}
 		}
@@ -31512,13 +25912,7 @@ yydefault:
 	case 1640:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL AlterOption
-<<<<<<< HEAD
-//line sql.y:8148
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8282
-=======
-//line sql.y:8290
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8156
 		{
 			yyLOCAL = &LockOption{Type: NoneType}
 		}
@@ -31526,13 +25920,7 @@ yydefault:
 	case 1641:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL AlterOption
-<<<<<<< HEAD
-//line sql.y:8152
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8286
-=======
-//line sql.y:8294
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8160
 		{
 			yyLOCAL = &LockOption{Type: SharedType}
 		}
@@ -31540,13 +25928,7 @@ yydefault:
 	case 1642:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL AlterOption
-<<<<<<< HEAD
-//line sql.y:8156
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8290
-=======
-//line sql.y:8298
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8164
 		{
 			yyLOCAL = &LockOption{Type: ExclusiveType}
 		}
@@ -31554,7 +25936,7 @@ yydefault:
 	case 1643:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL AlterOption
-//line sql.y:8162
+//line sql.y:8170
 		{
 			yyLOCAL = AlgorithmValue(yyDollar[3].str())
 		}
@@ -31562,7 +25944,7 @@ yydefault:
 	case 1644:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL AlterOption
-//line sql.y:8166
+//line sql.y:8174
 		{
 			yyLOCAL = AlgorithmValue(yyDollar[3].str())
 		}
@@ -31570,7 +25952,7 @@ yydefault:
 	case 1645:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL AlterOption
-//line sql.y:8170
+//line sql.y:8178
 		{
 			yyLOCAL = AlgorithmValue(yyDollar[3].str())
 		}
@@ -31578,7 +25960,7 @@ yydefault:
 	case 1646:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL AlterOption
-//line sql.y:8174
+//line sql.y:8182
 		{
 			yyLOCAL = AlgorithmValue(yyDollar[3].str())
 		}
@@ -31586,7 +25968,7 @@ yydefault:
 	case 1647:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL string
-//line sql.y:8179
+//line sql.y:8187
 		{
 			yyLOCAL = ""
 		}
@@ -31594,7 +25976,7 @@ yydefault:
 	case 1649:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL string
-//line sql.y:8186
+//line sql.y:8194
 		{
 			yyLOCAL = string(yyDollar[3].str())
 		}
@@ -31602,7 +25984,7 @@ yydefault:
 	case 1650:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL string
-//line sql.y:8190
+//line sql.y:8198
 		{
 			yyLOCAL = string(yyDollar[3].str())
 		}
@@ -31610,7 +25992,7 @@ yydefault:
 	case 1651:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL string
-//line sql.y:8194
+//line sql.y:8202
 		{
 			yyLOCAL = string(yyDollar[3].str())
 		}
@@ -31618,169 +26000,15 @@ yydefault:
 	case 1652:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL string
-//line sql.y:8199
+//line sql.y:8207
 		{
 			yyLOCAL = ""
 		}
 		yyVAL.setstr(yyLOCAL)
 	case 1653:
 		yyDollar = yyS[yypt-3 : yypt+1]
-<<<<<<< HEAD
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-		var yyLOCAL AlterOption
-//line sql.y:8296
-		{
-			yyLOCAL = AlgorithmValue(yyDollar[3].str())
-		}
-		yyVAL.setalterOption(yyLOCAL)
-	case 1654:
-		yyDollar = yyS[yypt-3 : yypt+1]
-		var yyLOCAL AlterOption
-//line sql.y:8300
-		{
-			yyLOCAL = AlgorithmValue(yyDollar[3].str())
-		}
-		yyVAL.setalterOption(yyLOCAL)
-	case 1655:
-		yyDollar = yyS[yypt-3 : yypt+1]
-		var yyLOCAL AlterOption
-//line sql.y:8304
-		{
-			yyLOCAL = AlgorithmValue(yyDollar[3].str())
-		}
-		yyVAL.setalterOption(yyLOCAL)
-	case 1656:
-		yyDollar = yyS[yypt-3 : yypt+1]
-		var yyLOCAL AlterOption
-//line sql.y:8308
-		{
-			yyLOCAL = AlgorithmValue(yyDollar[3].str())
-		}
-		yyVAL.setalterOption(yyLOCAL)
-	case 1657:
-		yyDollar = yyS[yypt-0 : yypt+1]
-=======
-		var yyLOCAL AlterOption
-//line sql.y:8304
-		{
-			yyLOCAL = AlgorithmValue(yyDollar[3].str())
-		}
-		yyVAL.setalterOption(yyLOCAL)
-	case 1654:
-		yyDollar = yyS[yypt-3 : yypt+1]
-		var yyLOCAL AlterOption
-//line sql.y:8308
-		{
-			yyLOCAL = AlgorithmValue(yyDollar[3].str())
-		}
-		yyVAL.setalterOption(yyLOCAL)
-	case 1655:
-		yyDollar = yyS[yypt-3 : yypt+1]
-		var yyLOCAL AlterOption
-//line sql.y:8312
-		{
-			yyLOCAL = AlgorithmValue(yyDollar[3].str())
-		}
-		yyVAL.setalterOption(yyLOCAL)
-	case 1656:
-		yyDollar = yyS[yypt-3 : yypt+1]
-		var yyLOCAL AlterOption
-//line sql.y:8316
-		{
-			yyLOCAL = AlgorithmValue(yyDollar[3].str())
-		}
-		yyVAL.setalterOption(yyLOCAL)
-	case 1657:
-		yyDollar = yyS[yypt-0 : yypt+1]
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
 		var yyLOCAL string
-<<<<<<< HEAD
-//line sql.y:8203
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8313
-		{
-			yyLOCAL = ""
-		}
-		yyVAL.setstr(yyLOCAL)
-	case 1659:
-		yyDollar = yyS[yypt-3 : yypt+1]
-		var yyLOCAL string
-//line sql.y:8320
-		{
-			yyLOCAL = string(yyDollar[3].str())
-		}
-		yyVAL.setstr(yyLOCAL)
-	case 1660:
-		yyDollar = yyS[yypt-3 : yypt+1]
-		var yyLOCAL string
-//line sql.y:8324
-		{
-			yyLOCAL = string(yyDollar[3].str())
-		}
-		yyVAL.setstr(yyLOCAL)
-	case 1661:
-		yyDollar = yyS[yypt-3 : yypt+1]
-		var yyLOCAL string
-//line sql.y:8328
-		{
-			yyLOCAL = string(yyDollar[3].str())
-		}
-		yyVAL.setstr(yyLOCAL)
-	case 1662:
-		yyDollar = yyS[yypt-0 : yypt+1]
-		var yyLOCAL string
-//line sql.y:8333
-		{
-			yyLOCAL = ""
-		}
-		yyVAL.setstr(yyLOCAL)
-	case 1663:
-		yyDollar = yyS[yypt-3 : yypt+1]
-		var yyLOCAL string
-//line sql.y:8337
-=======
-//line sql.y:8321
-		{
-			yyLOCAL = ""
-		}
-		yyVAL.setstr(yyLOCAL)
-	case 1659:
-		yyDollar = yyS[yypt-3 : yypt+1]
-		var yyLOCAL string
-//line sql.y:8328
-		{
-			yyLOCAL = string(yyDollar[3].str())
-		}
-		yyVAL.setstr(yyLOCAL)
-	case 1660:
-		yyDollar = yyS[yypt-3 : yypt+1]
-		var yyLOCAL string
-//line sql.y:8332
-		{
-			yyLOCAL = string(yyDollar[3].str())
-		}
-		yyVAL.setstr(yyLOCAL)
-	case 1661:
-		yyDollar = yyS[yypt-3 : yypt+1]
-		var yyLOCAL string
-//line sql.y:8336
-		{
-			yyLOCAL = string(yyDollar[3].str())
-		}
-		yyVAL.setstr(yyLOCAL)
-	case 1662:
-		yyDollar = yyS[yypt-0 : yypt+1]
-		var yyLOCAL string
-//line sql.y:8341
-		{
-			yyLOCAL = ""
-		}
-		yyVAL.setstr(yyLOCAL)
-	case 1663:
-		yyDollar = yyS[yypt-3 : yypt+1]
-		var yyLOCAL string
-//line sql.y:8345
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8211
 		{
 			yyLOCAL = yyDollar[3].str()
 		}
@@ -31788,13 +26016,7 @@ yydefault:
 	case 1654:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL string
-<<<<<<< HEAD
-//line sql.y:8209
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8343
-=======
-//line sql.y:8351
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8217
 		{
 			yyLOCAL = string(yyDollar[1].str())
 		}
@@ -31802,13 +26024,7 @@ yydefault:
 	case 1655:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL string
-<<<<<<< HEAD
-//line sql.y:8213
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8347
-=======
-//line sql.y:8355
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8221
 		{
 			yyLOCAL = string(yyDollar[1].str())
 		}
@@ -31816,13 +26032,7 @@ yydefault:
 	case 1656:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL string
-<<<<<<< HEAD
-//line sql.y:8218
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8352
-=======
-//line sql.y:8360
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8226
 		{
 			yyLOCAL = ""
 		}
@@ -31830,13 +26040,7 @@ yydefault:
 	case 1657:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL string
-<<<<<<< HEAD
-//line sql.y:8222
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8356
-=======
-//line sql.y:8364
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8230
 		{
 			yyLOCAL = yyDollar[2].str()
 		}
@@ -31844,13 +26048,7 @@ yydefault:
 	case 1658:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL string
-<<<<<<< HEAD
-//line sql.y:8227
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8361
-=======
-//line sql.y:8369
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8235
 		{
 			yyLOCAL = "cascaded"
 		}
@@ -31858,13 +26056,7 @@ yydefault:
 	case 1659:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL string
-<<<<<<< HEAD
-//line sql.y:8231
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8365
-=======
-//line sql.y:8373
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8239
 		{
 			yyLOCAL = string(yyDollar[1].str())
 		}
@@ -31872,13 +26064,7 @@ yydefault:
 	case 1660:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL string
-<<<<<<< HEAD
-//line sql.y:8235
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8369
-=======
-//line sql.y:8377
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8243
 		{
 			yyLOCAL = string(yyDollar[1].str())
 		}
@@ -31886,13 +26072,7 @@ yydefault:
 	case 1661:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL []*ProcParameter
-<<<<<<< HEAD
-//line sql.y:8240
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8374
-=======
-//line sql.y:8382
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8248
 		{
 			yyLOCAL = nil
 		}
@@ -31900,13 +26080,7 @@ yydefault:
 	case 1662:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL []*ProcParameter
-<<<<<<< HEAD
-//line sql.y:8244
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8378
-=======
-//line sql.y:8386
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8252
 		{
 			yyLOCAL = yyDollar[1].procParams()
 		}
@@ -31914,13 +26088,7 @@ yydefault:
 	case 1663:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL []*ProcParameter
-<<<<<<< HEAD
-//line sql.y:8250
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8384
-=======
-//line sql.y:8392
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8258
 		{
 			yyLOCAL = []*ProcParameter{yyDollar[1].procParam()}
 		}
@@ -31928,13 +26096,7 @@ yydefault:
 	case 1664:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL []*ProcParameter
-<<<<<<< HEAD
-//line sql.y:8254
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8388
-=======
-//line sql.y:8396
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8262
 		{
 			yyLOCAL = append(yyDollar[1].procParams(), yyDollar[3].procParam())
 		}
@@ -31942,13 +26104,7 @@ yydefault:
 	case 1665:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL *ProcParameter
-<<<<<<< HEAD
-//line sql.y:8260
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8394
-=======
-//line sql.y:8402
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8268
 		{
 			yyLOCAL = &ProcParameter{Mode: yyDollar[1].procParamMode(), Name: yyDollar[2].identifierCI(), Type: yyDollar[3].columnType()}
 		}
@@ -31956,13 +26112,7 @@ yydefault:
 	case 1666:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL ProcParameterMode
-<<<<<<< HEAD
-//line sql.y:8265
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8399
-=======
-//line sql.y:8407
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8273
 		{
 			yyLOCAL = InMode
 		}
@@ -31970,13 +26120,7 @@ yydefault:
 	case 1667:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL ProcParameterMode
-<<<<<<< HEAD
-//line sql.y:8269
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8403
-=======
-//line sql.y:8411
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8277
 		{
 			yyLOCAL = InMode
 		}
@@ -31984,13 +26128,7 @@ yydefault:
 	case 1668:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL ProcParameterMode
-<<<<<<< HEAD
-//line sql.y:8273
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8407
-=======
-//line sql.y:8415
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8281
 		{
 			yyLOCAL = InoutMode
 		}
@@ -31998,13 +26136,7 @@ yydefault:
 	case 1669:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL ProcParameterMode
-<<<<<<< HEAD
-//line sql.y:8277
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8411
-=======
-//line sql.y:8419
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8285
 		{
 			yyLOCAL = OutMode
 		}
@@ -32012,13 +26144,7 @@ yydefault:
 	case 1670:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL *Definer
-<<<<<<< HEAD
-//line sql.y:8282
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8416
-=======
-//line sql.y:8424
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8290
 		{
 			yyLOCAL = nil
 		}
@@ -32026,13 +26152,7 @@ yydefault:
 	case 1672:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL *Definer
-<<<<<<< HEAD
-//line sql.y:8289
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8423
-=======
-//line sql.y:8431
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8297
 		{
 			yyLOCAL = yyDollar[3].definer()
 		}
@@ -32040,13 +26160,7 @@ yydefault:
 	case 1673:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL *Definer
-<<<<<<< HEAD
-//line sql.y:8295
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8429
-=======
-//line sql.y:8437
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8303
 		{
 			yyLOCAL = &Definer{
 				Name: string(yyDollar[1].str()),
@@ -32056,13 +26170,7 @@ yydefault:
 	case 1674:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL *Definer
-<<<<<<< HEAD
-//line sql.y:8301
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8435
-=======
-//line sql.y:8443
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8309
 		{
 			yyLOCAL = &Definer{
 				Name: string(yyDollar[1].str()),
@@ -32072,13 +26180,7 @@ yydefault:
 	case 1675:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL *Definer
-<<<<<<< HEAD
-//line sql.y:8307
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8441
-=======
-//line sql.y:8449
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8315
 		{
 			yyLOCAL = &Definer{
 				Name:    yyDollar[1].str(),
@@ -32089,13 +26191,7 @@ yydefault:
 	case 1676:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL string
-<<<<<<< HEAD
-//line sql.y:8316
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8450
-=======
-//line sql.y:8458
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8324
 		{
 			yyLOCAL = encodeSQLString(yyDollar[1].str())
 		}
@@ -32103,13 +26199,7 @@ yydefault:
 	case 1677:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL string
-<<<<<<< HEAD
-//line sql.y:8320
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8454
-=======
-//line sql.y:8462
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8328
 		{
 			yyLOCAL = formatIdentifier(yyDollar[1].str())
 		}
@@ -32117,13 +26207,7 @@ yydefault:
 	case 1678:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL string
-<<<<<<< HEAD
-//line sql.y:8325
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8459
-=======
-//line sql.y:8467
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8333
 		{
 			yyLOCAL = ""
 		}
@@ -32131,13 +26215,7 @@ yydefault:
 	case 1679:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL string
-<<<<<<< HEAD
-//line sql.y:8329
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8463
-=======
-//line sql.y:8471
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8337
 		{
 			yyLOCAL = formatAddress(yyDollar[1].str())
 		}
@@ -32145,13 +26223,7 @@ yydefault:
 	case 1680:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL Lock
-<<<<<<< HEAD
-//line sql.y:8335
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8469
-=======
-//line sql.y:8477
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8343
 		{
 			yyLOCAL = ForUpdateLock
 		}
@@ -32159,13 +26231,7 @@ yydefault:
 	case 1681:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL Lock
-<<<<<<< HEAD
-//line sql.y:8339
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8473
-=======
-//line sql.y:8481
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8347
 		{
 			yyLOCAL = ForUpdateLockNoWait
 		}
@@ -32173,13 +26239,7 @@ yydefault:
 	case 1682:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Lock
-<<<<<<< HEAD
-//line sql.y:8343
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8477
-=======
-//line sql.y:8485
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8351
 		{
 			yyLOCAL = ForUpdateLockSkipLocked
 		}
@@ -32187,13 +26247,7 @@ yydefault:
 	case 1683:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL Lock
-<<<<<<< HEAD
-//line sql.y:8347
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8481
-=======
-//line sql.y:8489
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8355
 		{
 			yyLOCAL = ForShareLock
 		}
@@ -32201,13 +26255,7 @@ yydefault:
 	case 1684:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL Lock
-<<<<<<< HEAD
-//line sql.y:8351
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8485
-=======
-//line sql.y:8493
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8359
 		{
 			yyLOCAL = ForShareLockNoWait
 		}
@@ -32215,13 +26263,7 @@ yydefault:
 	case 1685:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Lock
-<<<<<<< HEAD
-//line sql.y:8355
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8489
-=======
-//line sql.y:8497
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8363
 		{
 			yyLOCAL = ForShareLockSkipLocked
 		}
@@ -32229,13 +26271,7 @@ yydefault:
 	case 1686:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL Lock
-<<<<<<< HEAD
-//line sql.y:8359
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8493
-=======
-//line sql.y:8501
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8367
 		{
 			yyLOCAL = ShareModeLock
 		}
@@ -32243,13 +26279,7 @@ yydefault:
 	case 1687:
 		yyDollar = yyS[yypt-9 : yypt+1]
 		var yyLOCAL *SelectInto
-<<<<<<< HEAD
-//line sql.y:8365
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8499
-=======
-//line sql.y:8507
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8373
 		{
 			yyLOCAL = &SelectInto{Type: IntoOutfileS3, FileName: encodeSQLString(yyDollar[4].str()), Charset: yyDollar[5].columnCharset(), FormatOption: yyDollar[6].str(), ExportOption: yyDollar[7].str(), Manifest: yyDollar[8].str(), Overwrite: yyDollar[9].str()}
 		}
@@ -32257,13 +26287,7 @@ yydefault:
 	case 1688:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL *SelectInto
-<<<<<<< HEAD
-//line sql.y:8369
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8503
-=======
-//line sql.y:8511
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8377
 		{
 			yyLOCAL = &SelectInto{Type: IntoDumpfile, FileName: encodeSQLString(yyDollar[3].str()), Charset: ColumnCharset{}, FormatOption: "", ExportOption: "", Manifest: "", Overwrite: ""}
 		}
@@ -32271,13 +26295,7 @@ yydefault:
 	case 1689:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		var yyLOCAL *SelectInto
-<<<<<<< HEAD
-//line sql.y:8373
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8507
-=======
-//line sql.y:8515
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8381
 		{
 			yyLOCAL = &SelectInto{Type: IntoOutfile, FileName: encodeSQLString(yyDollar[3].str()), Charset: yyDollar[4].columnCharset(), FormatOption: "", ExportOption: yyDollar[5].str(), Manifest: "", Overwrite: ""}
 		}
@@ -32285,13 +26303,7 @@ yydefault:
 	case 1690:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL *SelectInto
-<<<<<<< HEAD
-//line sql.y:8377
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8511
-=======
-//line sql.y:8519
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8385
 		{
 			yyLOCAL = &SelectInto{Type: IntoVariables, VarList: yyDollar[2].variables()}
 		}
@@ -32299,13 +26311,7 @@ yydefault:
 	case 1691:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL []*Variable
-<<<<<<< HEAD
-//line sql.y:8383
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8517
-=======
-//line sql.y:8525
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8391
 		{
 			yyLOCAL = append(yyDollar[1].variables(), yyDollar[3].variable())
 		}
@@ -32313,13 +26319,7 @@ yydefault:
 	case 1692:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL []*Variable
-<<<<<<< HEAD
-//line sql.y:8387
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8521
-=======
-//line sql.y:8529
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8395
 		{
 			yyLOCAL = []*Variable{yyDollar[1].variable()}
 		}
@@ -32327,13 +26327,7 @@ yydefault:
 	case 1693:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL *Variable
-<<<<<<< HEAD
-//line sql.y:8393
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8527
-=======
-//line sql.y:8535
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8401
 		{
 			yyLOCAL = yyDollar[1].variable()
 		}
@@ -32341,13 +26335,7 @@ yydefault:
 	case 1694:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL *Variable
-<<<<<<< HEAD
-//line sql.y:8397
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8531
-=======
-//line sql.y:8539
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8405
 		{
 			yyLOCAL = &Variable{Name: createIdentifierCI(yyDollar[1].str()), Scope: NoScope}
 		}
@@ -32355,13 +26343,7 @@ yydefault:
 	case 1695:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL string
-<<<<<<< HEAD
-//line sql.y:8402
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8536
-=======
-//line sql.y:8544
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8410
 		{
 			yyLOCAL = ""
 		}
@@ -32369,13 +26351,7 @@ yydefault:
 	case 1696:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL string
-<<<<<<< HEAD
-//line sql.y:8406
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8540
-=======
-//line sql.y:8548
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8414
 		{
 			yyLOCAL = " format csv" + yyDollar[3].str()
 		}
@@ -32383,13 +26359,7 @@ yydefault:
 	case 1697:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL string
-<<<<<<< HEAD
-//line sql.y:8410
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8544
-=======
-//line sql.y:8552
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8418
 		{
 			yyLOCAL = " format text" + yyDollar[3].str()
 		}
@@ -32397,13 +26367,7 @@ yydefault:
 	case 1698:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL string
-<<<<<<< HEAD
-//line sql.y:8415
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8549
-=======
-//line sql.y:8557
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8423
 		{
 			yyLOCAL = ""
 		}
@@ -32411,7 +26375,7 @@ yydefault:
 	case 1699:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL string
-//line sql.y:8419
+//line sql.y:8427
 		{
 			yyLOCAL = " header"
 		}
@@ -32419,7 +26383,7 @@ yydefault:
 	case 1700:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL string
-//line sql.y:8424
+//line sql.y:8432
 		{
 			yyLOCAL = ""
 		}
@@ -32427,7 +26391,7 @@ yydefault:
 	case 1701:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL string
-//line sql.y:8428
+//line sql.y:8436
 		{
 			yyLOCAL = " manifest on"
 		}
@@ -32435,7 +26399,7 @@ yydefault:
 	case 1702:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL string
-//line sql.y:8432
+//line sql.y:8440
 		{
 			yyLOCAL = " manifest off"
 		}
@@ -32443,7 +26407,7 @@ yydefault:
 	case 1703:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL string
-//line sql.y:8437
+//line sql.y:8445
 		{
 			yyLOCAL = ""
 		}
@@ -32451,7 +26415,7 @@ yydefault:
 	case 1704:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL string
-//line sql.y:8441
+//line sql.y:8449
 		{
 			yyLOCAL = " overwrite on"
 		}
@@ -32459,7 +26423,7 @@ yydefault:
 	case 1705:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL string
-//line sql.y:8445
+//line sql.y:8453
 		{
 			yyLOCAL = " overwrite off"
 		}
@@ -32467,7 +26431,7 @@ yydefault:
 	case 1706:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL string
-//line sql.y:8451
+//line sql.y:8459
 		{
 			yyLOCAL = yyDollar[1].str() + yyDollar[2].str()
 		}
@@ -32475,7 +26439,7 @@ yydefault:
 	case 1707:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL string
-//line sql.y:8456
+//line sql.y:8464
 		{
 			yyLOCAL = ""
 		}
@@ -32483,7 +26447,7 @@ yydefault:
 	case 1708:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL string
-//line sql.y:8460
+//line sql.y:8468
 		{
 			yyLOCAL = " lines" + yyDollar[2].str()
 		}
@@ -32491,13 +26455,7 @@ yydefault:
 	case 1709:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL string
-<<<<<<< HEAD
-//line sql.y:8466
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8553
-=======
-//line sql.y:8561
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8474
 		{
 			yyLOCAL = yyDollar[1].str()
 		}
@@ -32505,13 +26463,7 @@ yydefault:
 	case 1710:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL string
-<<<<<<< HEAD
-//line sql.y:8470
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8558
-=======
-//line sql.y:8566
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8478
 		{
 			yyLOCAL = yyDollar[1].str() + yyDollar[2].str()
 		}
@@ -32519,13 +26471,7 @@ yydefault:
 	case 1711:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL string
-<<<<<<< HEAD
-//line sql.y:8476
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8562
-=======
-//line sql.y:8570
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8484
 		{
 			yyLOCAL = " starting by " + encodeSQLString(yyDollar[3].str())
 		}
@@ -32533,13 +26479,7 @@ yydefault:
 	case 1712:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL string
-<<<<<<< HEAD
-//line sql.y:8480
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8566
-=======
-//line sql.y:8574
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8488
 		{
 			yyLOCAL = " terminated by " + encodeSQLString(yyDollar[3].str())
 		}
@@ -32547,13 +26487,7 @@ yydefault:
 	case 1713:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL string
-<<<<<<< HEAD
-//line sql.y:8485
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8571
-=======
-//line sql.y:8579
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8493
 		{
 			yyLOCAL = ""
 		}
@@ -32561,13 +26495,7 @@ yydefault:
 	case 1714:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL string
-<<<<<<< HEAD
-//line sql.y:8489
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8575
-=======
-//line sql.y:8583
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8497
 		{
 			yyLOCAL = " " + yyDollar[1].str() + yyDollar[2].str()
 		}
@@ -32575,13 +26503,7 @@ yydefault:
 	case 1715:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL string
-<<<<<<< HEAD
-//line sql.y:8495
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8579
-=======
-//line sql.y:8587
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8503
 		{
 			yyLOCAL = yyDollar[1].str()
 		}
@@ -32589,13 +26511,7 @@ yydefault:
 	case 1716:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL string
-<<<<<<< HEAD
-//line sql.y:8499
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8585
-=======
-//line sql.y:8593
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8507
 		{
 			yyLOCAL = yyDollar[1].str() + yyDollar[2].str()
 		}
@@ -32603,191 +26519,15 @@ yydefault:
 	case 1717:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL string
-<<<<<<< HEAD
-//line sql.y:8505
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8590
-=======
-//line sql.y:8598
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8513
 		{
 			yyLOCAL = " terminated by " + encodeSQLString(yyDollar[3].str())
 		}
 		yyVAL.setstr(yyLOCAL)
 	case 1718:
-<<<<<<< HEAD
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-		yyDollar = yyS[yypt-2 : yypt+1]
-		var yyLOCAL string
-//line sql.y:8594
-		{
-			yyLOCAL = " lines" + yyDollar[2].str()
-		}
-		yyVAL.setstr(yyLOCAL)
-	case 1719:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL string
-//line sql.y:8600
-		{
-			yyLOCAL = yyDollar[1].str()
-		}
-		yyVAL.setstr(yyLOCAL)
-	case 1720:
-		yyDollar = yyS[yypt-2 : yypt+1]
-		var yyLOCAL string
-//line sql.y:8604
-		{
-			yyLOCAL = yyDollar[1].str() + yyDollar[2].str()
-		}
-		yyVAL.setstr(yyLOCAL)
-	case 1721:
-		yyDollar = yyS[yypt-3 : yypt+1]
-		var yyLOCAL string
-//line sql.y:8610
-		{
-			yyLOCAL = " starting by " + encodeSQLString(yyDollar[3].str())
-		}
-		yyVAL.setstr(yyLOCAL)
-	case 1722:
-		yyDollar = yyS[yypt-3 : yypt+1]
-		var yyLOCAL string
-//line sql.y:8614
-		{
-			yyLOCAL = " terminated by " + encodeSQLString(yyDollar[3].str())
-		}
-		yyVAL.setstr(yyLOCAL)
-	case 1723:
-		yyDollar = yyS[yypt-0 : yypt+1]
-		var yyLOCAL string
-//line sql.y:8619
-		{
-			yyLOCAL = ""
-		}
-		yyVAL.setstr(yyLOCAL)
-	case 1724:
-		yyDollar = yyS[yypt-2 : yypt+1]
-		var yyLOCAL string
-//line sql.y:8623
-		{
-			yyLOCAL = " " + yyDollar[1].str() + yyDollar[2].str()
-		}
-		yyVAL.setstr(yyLOCAL)
-	case 1725:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL string
-//line sql.y:8629
-		{
-			yyLOCAL = yyDollar[1].str()
-		}
-		yyVAL.setstr(yyLOCAL)
-	case 1726:
-		yyDollar = yyS[yypt-2 : yypt+1]
-		var yyLOCAL string
-//line sql.y:8633
-		{
-			yyLOCAL = yyDollar[1].str() + yyDollar[2].str()
-		}
-		yyVAL.setstr(yyLOCAL)
-	case 1727:
-		yyDollar = yyS[yypt-3 : yypt+1]
-		var yyLOCAL string
-//line sql.y:8639
-		{
-			yyLOCAL = " terminated by " + encodeSQLString(yyDollar[3].str())
-		}
-		yyVAL.setstr(yyLOCAL)
-	case 1728:
-=======
-		yyDollar = yyS[yypt-2 : yypt+1]
-		var yyLOCAL string
-//line sql.y:8602
-		{
-			yyLOCAL = " lines" + yyDollar[2].str()
-		}
-		yyVAL.setstr(yyLOCAL)
-	case 1719:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL string
-//line sql.y:8608
-		{
-			yyLOCAL = yyDollar[1].str()
-		}
-		yyVAL.setstr(yyLOCAL)
-	case 1720:
-		yyDollar = yyS[yypt-2 : yypt+1]
-		var yyLOCAL string
-//line sql.y:8612
-		{
-			yyLOCAL = yyDollar[1].str() + yyDollar[2].str()
-		}
-		yyVAL.setstr(yyLOCAL)
-	case 1721:
-		yyDollar = yyS[yypt-3 : yypt+1]
-		var yyLOCAL string
-//line sql.y:8618
-		{
-			yyLOCAL = " starting by " + encodeSQLString(yyDollar[3].str())
-		}
-		yyVAL.setstr(yyLOCAL)
-	case 1722:
-		yyDollar = yyS[yypt-3 : yypt+1]
-		var yyLOCAL string
-//line sql.y:8622
-		{
-			yyLOCAL = " terminated by " + encodeSQLString(yyDollar[3].str())
-		}
-		yyVAL.setstr(yyLOCAL)
-	case 1723:
-		yyDollar = yyS[yypt-0 : yypt+1]
-		var yyLOCAL string
-//line sql.y:8627
-		{
-			yyLOCAL = ""
-		}
-		yyVAL.setstr(yyLOCAL)
-	case 1724:
-		yyDollar = yyS[yypt-2 : yypt+1]
-		var yyLOCAL string
-//line sql.y:8631
-		{
-			yyLOCAL = " " + yyDollar[1].str() + yyDollar[2].str()
-		}
-		yyVAL.setstr(yyLOCAL)
-	case 1725:
-		yyDollar = yyS[yypt-1 : yypt+1]
-		var yyLOCAL string
-//line sql.y:8637
-		{
-			yyLOCAL = yyDollar[1].str()
-		}
-		yyVAL.setstr(yyLOCAL)
-	case 1726:
-		yyDollar = yyS[yypt-2 : yypt+1]
-		var yyLOCAL string
-//line sql.y:8641
-		{
-			yyLOCAL = yyDollar[1].str() + yyDollar[2].str()
-		}
-		yyVAL.setstr(yyLOCAL)
-	case 1727:
-		yyDollar = yyS[yypt-3 : yypt+1]
-		var yyLOCAL string
-//line sql.y:8647
-		{
-			yyLOCAL = " terminated by " + encodeSQLString(yyDollar[3].str())
-		}
-		yyVAL.setstr(yyLOCAL)
-	case 1728:
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL string
-<<<<<<< HEAD
-//line sql.y:8509
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8643
-=======
-//line sql.y:8651
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8517
 		{
 			yyLOCAL = yyDollar[1].str() + " enclosed by " + encodeSQLString(yyDollar[4].str())
 		}
@@ -32795,13 +26535,7 @@ yydefault:
 	case 1719:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL string
-<<<<<<< HEAD
-//line sql.y:8513
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8647
-=======
-//line sql.y:8655
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8521
 		{
 			yyLOCAL = " escaped by " + encodeSQLString(yyDollar[3].str())
 		}
@@ -32809,13 +26543,7 @@ yydefault:
 	case 1720:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL string
-<<<<<<< HEAD
-//line sql.y:8518
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8652
-=======
-//line sql.y:8660
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8526
 		{
 			yyLOCAL = ""
 		}
@@ -32823,13 +26551,7 @@ yydefault:
 	case 1721:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL string
-<<<<<<< HEAD
-//line sql.y:8522
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8656
-=======
-//line sql.y:8664
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8530
 		{
 			yyLOCAL = " optionally"
 		}
@@ -32837,13 +26559,7 @@ yydefault:
 	case 1722:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL *Insert
-<<<<<<< HEAD
-//line sql.y:8535
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8669
-=======
-//line sql.y:8677
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8543
 		{
 			yyLOCAL = &Insert{Rows: yyDollar[2].values(), RowAlias: yyDollar[3].rowAlias()}
 		}
@@ -32851,13 +26567,7 @@ yydefault:
 	case 1723:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL *Insert
-<<<<<<< HEAD
-//line sql.y:8539
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8673
-=======
-//line sql.y:8681
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8547
 		{
 			yyLOCAL = &Insert{Rows: yyDollar[1].tableStmt()}
 		}
@@ -32865,13 +26575,7 @@ yydefault:
 	case 1724:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		var yyLOCAL *Insert
-<<<<<<< HEAD
-//line sql.y:8543
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8677
-=======
-//line sql.y:8685
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8551
 		{
 			yyLOCAL = &Insert{Columns: yyDollar[2].columns(), Rows: yyDollar[5].values(), RowAlias: yyDollar[6].rowAlias()}
 		}
@@ -32879,13 +26583,7 @@ yydefault:
 	case 1725:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		var yyLOCAL *Insert
-<<<<<<< HEAD
-//line sql.y:8547
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8681
-=======
-//line sql.y:8689
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8555
 		{
 			yyLOCAL = &Insert{Columns: []IdentifierCI{}, Rows: yyDollar[4].values(), RowAlias: yyDollar[5].rowAlias()}
 		}
@@ -32893,13 +26591,7 @@ yydefault:
 	case 1726:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL *Insert
-<<<<<<< HEAD
-//line sql.y:8551
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8685
-=======
-//line sql.y:8693
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8559
 		{
 			yyLOCAL = &Insert{Columns: yyDollar[2].columns(), Rows: yyDollar[4].tableStmt()}
 		}
@@ -32907,13 +26599,7 @@ yydefault:
 	case 1729:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Columns
-<<<<<<< HEAD
-//line sql.y:8561
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8695
-=======
-//line sql.y:8703
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8569
 		{
 			yyLOCAL = Columns{yyDollar[1].identifierCI()}
 		}
@@ -32921,13 +26607,7 @@ yydefault:
 	case 1730:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL Columns
-<<<<<<< HEAD
-//line sql.y:8565
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8699
-=======
-//line sql.y:8707
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8573
 		{
 			yyLOCAL = Columns{yyDollar[3].identifierCI()}
 		}
@@ -32935,13 +26615,7 @@ yydefault:
 	case 1731:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL Columns
-<<<<<<< HEAD
-//line sql.y:8569
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8703
-=======
-//line sql.y:8711
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8577
 		{
 			yyLOCAL = append(yyDollar[1].columns(), yyDollar[3].identifierCI())
 		}
@@ -32949,13 +26623,7 @@ yydefault:
 	case 1732:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		var yyLOCAL Columns
-<<<<<<< HEAD
-//line sql.y:8573
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8707
-=======
-//line sql.y:8715
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8581
 		{
 			yyLOCAL = append(yyDollar[1].columns(), yyDollar[5].identifierCI())
 		}
@@ -32963,13 +26631,7 @@ yydefault:
 	case 1733:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL *RowAlias
-<<<<<<< HEAD
-//line sql.y:8578
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8712
-=======
-//line sql.y:8720
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8586
 		{
 			yyLOCAL = nil
 		}
@@ -32977,13 +26639,7 @@ yydefault:
 	case 1734:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL *RowAlias
-<<<<<<< HEAD
-//line sql.y:8582
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8716
-=======
-//line sql.y:8724
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8590
 		{
 			yyLOCAL = &RowAlias{TableName: yyDollar[2].identifierCS()}
 		}
@@ -32991,13 +26647,7 @@ yydefault:
 	case 1735:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		var yyLOCAL *RowAlias
-<<<<<<< HEAD
-//line sql.y:8586
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8720
-=======
-//line sql.y:8728
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8594
 		{
 			yyLOCAL = &RowAlias{TableName: yyDollar[2].identifierCS(), Columns: yyDollar[4].columns()}
 		}
@@ -33005,13 +26655,7 @@ yydefault:
 	case 1736:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL UpdateExprs
-<<<<<<< HEAD
-//line sql.y:8591
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8725
-=======
-//line sql.y:8733
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8599
 		{
 			yyLOCAL = nil
 		}
@@ -33019,13 +26663,7 @@ yydefault:
 	case 1737:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		var yyLOCAL UpdateExprs
-<<<<<<< HEAD
-//line sql.y:8595
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8729
-=======
-//line sql.y:8737
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8603
 		{
 			yyLOCAL = yyDollar[5].updateExprs()
 		}
@@ -33033,13 +26671,7 @@ yydefault:
 	case 1738:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Values
-<<<<<<< HEAD
-//line sql.y:8601
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8735
-=======
-//line sql.y:8743
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8609
 		{
 			yyLOCAL = Values{yyDollar[1].valTuple()}
 		}
@@ -33047,13 +26679,7 @@ yydefault:
 	case 1739:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL Values
-<<<<<<< HEAD
-//line sql.y:8605
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8739
-=======
-//line sql.y:8747
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8613
 		{
 			yyLOCAL = append(yyDollar[1].values(), yyDollar[3].valTuple())
 		}
@@ -33061,13 +26687,7 @@ yydefault:
 	case 1740:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Values
-<<<<<<< HEAD
-//line sql.y:8611
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8745
-=======
-//line sql.y:8753
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8619
 		{
 			yyLOCAL = Values{yyDollar[1].valTuple()}
 		}
@@ -33075,13 +26695,7 @@ yydefault:
 	case 1741:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL Values
-<<<<<<< HEAD
-//line sql.y:8615
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8749
-=======
-//line sql.y:8757
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8623
 		{
 			yyLOCAL = append(yyDollar[1].values(), yyDollar[3].valTuple())
 		}
@@ -33089,13 +26703,7 @@ yydefault:
 	case 1742:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL ValTuple
-<<<<<<< HEAD
-//line sql.y:8621
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8755
-=======
-//line sql.y:8763
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8629
 		{
 			yyLOCAL = yyDollar[1].valTuple()
 		}
@@ -33103,13 +26711,7 @@ yydefault:
 	case 1743:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL ValTuple
-<<<<<<< HEAD
-//line sql.y:8625
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8759
-=======
-//line sql.y:8767
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8633
 		{
 			yyLOCAL = ValTuple{}
 		}
@@ -33117,13 +26719,7 @@ yydefault:
 	case 1744:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL ValTuple
-<<<<<<< HEAD
-//line sql.y:8631
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8765
-=======
-//line sql.y:8773
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8639
 		{
 			yyLOCAL = yyDollar[1].valTuple()
 		}
@@ -33131,13 +26727,7 @@ yydefault:
 	case 1745:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL ValTuple
-<<<<<<< HEAD
-//line sql.y:8635
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8769
-=======
-//line sql.y:8777
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8643
 		{
 			yyLOCAL = ValTuple{}
 		}
@@ -33145,13 +26735,7 @@ yydefault:
 	case 1746:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL ValTuple
-<<<<<<< HEAD
-//line sql.y:8641
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8775
-=======
-//line sql.y:8783
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8649
 		{
 			yyLOCAL = ValTuple(yyDollar[2].exprs())
 		}
@@ -33159,13 +26743,7 @@ yydefault:
 	case 1747:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		var yyLOCAL ValTuple
-<<<<<<< HEAD
-//line sql.y:8647
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8781
-=======
-//line sql.y:8789
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8655
 		{
 			yyLOCAL = ValTuple(yyDollar[3].exprs())
 		}
@@ -33173,13 +26751,7 @@ yydefault:
 	case 1750:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:8657
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8791
-=======
-//line sql.y:8799
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8665
 		{
 			if len(yyDollar[1].valTuple()) == 1 {
 				yyLOCAL = yyDollar[1].valTuple()[0]
@@ -33191,13 +26763,7 @@ yydefault:
 	case 1751:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL UpdateExprs
-<<<<<<< HEAD
-//line sql.y:8667
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8801
-=======
-//line sql.y:8809
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8675
 		{
 			yyLOCAL = UpdateExprs{yyDollar[1].updateExpr()}
 		}
@@ -33205,13 +26771,7 @@ yydefault:
 	case 1752:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL UpdateExprs
-<<<<<<< HEAD
-//line sql.y:8671
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8805
-=======
-//line sql.y:8813
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8679
 		{
 			yyLOCAL = append(yyDollar[1].updateExprs(), yyDollar[3].updateExpr())
 		}
@@ -33219,13 +26779,7 @@ yydefault:
 	case 1753:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL *UpdateExpr
-<<<<<<< HEAD
-//line sql.y:8677
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8811
-=======
-//line sql.y:8819
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8685
 		{
 			yyLOCAL = &UpdateExpr{Name: yyDollar[1].colName(), Expr: yyDollar[3].expr()}
 		}
@@ -33233,13 +26787,7 @@ yydefault:
 	case 1755:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL string
-<<<<<<< HEAD
-//line sql.y:8684
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8818
-=======
-//line sql.y:8826
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8692
 		{
 			yyLOCAL = "charset"
 		}
@@ -33247,13 +26795,7 @@ yydefault:
 	case 1758:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:8694
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8828
-=======
-//line sql.y:8836
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8702
 		{
 			yyLOCAL = NewStrLiteral(yyDollar[1].identifierCI().String())
 		}
@@ -33261,13 +26803,7 @@ yydefault:
 	case 1759:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:8698
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8832
-=======
-//line sql.y:8840
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8706
 		{
 			yyLOCAL = NewStrLiteral(yyDollar[1].str())
 		}
@@ -33275,13 +26811,7 @@ yydefault:
 	case 1760:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:8702
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8836
-=======
-//line sql.y:8844
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8710
 		{
 			yyLOCAL = NewStrLiteral("binary")
 		}
@@ -33289,13 +26819,7 @@ yydefault:
 	case 1761:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Expr
-<<<<<<< HEAD
-//line sql.y:8706
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8840
-=======
-//line sql.y:8848
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8714
 		{
 			yyLOCAL = &Default{}
 		}
@@ -33303,13 +26827,7 @@ yydefault:
 	case 1764:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL bool
-<<<<<<< HEAD
-//line sql.y:8715
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8849
-=======
-//line sql.y:8857
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8723
 		{
 			yyLOCAL = false
 		}
@@ -33317,13 +26835,7 @@ yydefault:
 	case 1765:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL bool
-<<<<<<< HEAD
-//line sql.y:8717
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8851
-=======
-//line sql.y:8859
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8725
 		{
 			yyLOCAL = true
 		}
@@ -33331,13 +26843,7 @@ yydefault:
 	case 1766:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL bool
-<<<<<<< HEAD
-//line sql.y:8720
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8854
-=======
-//line sql.y:8862
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8728
 		{
 			yyLOCAL = false
 		}
@@ -33345,13 +26851,7 @@ yydefault:
 	case 1767:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL bool
-<<<<<<< HEAD
-//line sql.y:8722
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8856
-=======
-//line sql.y:8864
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8730
 		{
 			yyLOCAL = true
 		}
@@ -33359,13 +26859,7 @@ yydefault:
 	case 1768:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL bool
-<<<<<<< HEAD
-//line sql.y:8725
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8859
-=======
-//line sql.y:8867
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8733
 		{
 			yyLOCAL = false
 		}
@@ -33373,13 +26867,7 @@ yydefault:
 	case 1769:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL bool
-<<<<<<< HEAD
-//line sql.y:8727
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8861
-=======
-//line sql.y:8869
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8735
 		{
 			yyLOCAL = true
 		}
@@ -33387,13 +26875,7 @@ yydefault:
 	case 1770:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL Ignore
-<<<<<<< HEAD
-//line sql.y:8730
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8864
-=======
-//line sql.y:8872
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8738
 		{
 			yyLOCAL = false
 		}
@@ -33401,13 +26883,7 @@ yydefault:
 	case 1771:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL Ignore
-<<<<<<< HEAD
-//line sql.y:8732
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8866
-=======
-//line sql.y:8874
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8740
 		{
 			yyLOCAL = true
 		}
@@ -33415,13 +26891,7 @@ yydefault:
 	case 1772:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL IgnoreOrReplaceType
-<<<<<<< HEAD
-//line sql.y:8736
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8870
-=======
-//line sql.y:8878
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8744
 		{
 			yyLOCAL = NoIgnoreOrReplace
 		}
@@ -33429,13 +26899,7 @@ yydefault:
 	case 1773:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IgnoreOrReplaceType
-<<<<<<< HEAD
-//line sql.y:8738
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8872
-=======
-//line sql.y:8880
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8746
 		{
 			yyLOCAL = IgnoreType
 		}
@@ -33443,13 +26907,7 @@ yydefault:
 	case 1774:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IgnoreOrReplaceType
-<<<<<<< HEAD
-//line sql.y:8740
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8874
-=======
-//line sql.y:8882
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8748
 		{
 			yyLOCAL = ReplaceType
 		}
@@ -33457,13 +26915,7 @@ yydefault:
 	case 1775:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL struct{}
-<<<<<<< HEAD
-//line sql.y:8743
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8877
-=======
-//line sql.y:8885
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8751
 		{
 			yyLOCAL = struct{}{}
 		}
@@ -33471,13 +26923,7 @@ yydefault:
 	case 1776:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL struct{}
-<<<<<<< HEAD
-//line sql.y:8745
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8879
-=======
-//line sql.y:8887
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8753
 		{
 			yyLOCAL = struct{}{}
 		}
@@ -33485,13 +26931,7 @@ yydefault:
 	case 1777:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL struct{}
-<<<<<<< HEAD
-//line sql.y:8747
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8881
-=======
-//line sql.y:8889
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8755
 		{
 			yyLOCAL = struct{}{}
 		}
@@ -33499,13 +26939,7 @@ yydefault:
 	case 1778:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		var yyLOCAL Statement
-<<<<<<< HEAD
-//line sql.y:8751
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8885
-=======
-//line sql.y:8893
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8759
 		{
 			yyLOCAL = &CallProc{Name: yyDollar[2].tableName(), Params: yyDollar[4].exprs()}
 		}
@@ -33513,13 +26947,7 @@ yydefault:
 	case 1779:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL []Expr
-<<<<<<< HEAD
-//line sql.y:8756
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8890
-=======
-//line sql.y:8898
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8764
 		{
 			yyLOCAL = nil
 		}
@@ -33527,13 +26955,7 @@ yydefault:
 	case 1780:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL []Expr
-<<<<<<< HEAD
-//line sql.y:8760
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8894
-=======
-//line sql.y:8902
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8768
 		{
 			yyLOCAL = yyDollar[1].exprs()
 		}
@@ -33541,13 +26963,7 @@ yydefault:
 	case 1781:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL []*IndexOption
-<<<<<<< HEAD
-//line sql.y:8765
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8899
-=======
-//line sql.y:8907
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8773
 		{
 			yyLOCAL = nil
 		}
@@ -33555,13 +26971,7 @@ yydefault:
 	case 1782:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL []*IndexOption
-<<<<<<< HEAD
-//line sql.y:8767
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8901
-=======
-//line sql.y:8909
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8775
 		{
 			yyLOCAL = []*IndexOption{yyDollar[1].indexOption()}
 		}
@@ -33569,13 +26979,7 @@ yydefault:
 	case 1783:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		var yyLOCAL *IndexOption
-<<<<<<< HEAD
-//line sql.y:8771
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8905
-=======
-//line sql.y:8913
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8779
 		{
 			yyLOCAL = &IndexOption{Name: string(yyDollar[1].str()), String: string(yyDollar[2].identifierCI().String())}
 		}
@@ -33583,13 +26987,7 @@ yydefault:
 	case 1784:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IdentifierCI
-<<<<<<< HEAD
-//line sql.y:8777
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8911
-=======
-//line sql.y:8919
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8785
 		{
 			yyLOCAL = yyDollar[1].identifierCI()
 		}
@@ -33597,13 +26995,7 @@ yydefault:
 	case 1785:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IdentifierCI
-<<<<<<< HEAD
-//line sql.y:8781
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8915
-=======
-//line sql.y:8923
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8789
 		{
 			yyLOCAL = NewIdentifierCI(string(yyDollar[1].str()))
 		}
@@ -33611,13 +27003,7 @@ yydefault:
 	case 1787:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IdentifierCI
-<<<<<<< HEAD
-//line sql.y:8788
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8922
-=======
-//line sql.y:8930
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8796
 		{
 			yyLOCAL = NewIdentifierCI(string(yyDollar[1].str()))
 		}
@@ -33625,13 +27011,7 @@ yydefault:
 	case 1788:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IdentifierCS
-<<<<<<< HEAD
-//line sql.y:8794
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8928
-=======
-//line sql.y:8936
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8802
 		{
 			yyLOCAL = NewIdentifierCS(string(yyDollar[1].str()))
 		}
@@ -33639,13 +27019,7 @@ yydefault:
 	case 1789:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IdentifierCS
-<<<<<<< HEAD
-//line sql.y:8798
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8932
-=======
-//line sql.y:8940
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8806
 		{
 			yyLOCAL = NewIdentifierCS(string(yyDollar[1].str()))
 		}
@@ -33653,13 +27027,7 @@ yydefault:
 	case 1790:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL IdentifierCS
-<<<<<<< HEAD
-//line sql.y:8804
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8938
-=======
-//line sql.y:8946
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8812
 		{
 			yyLOCAL = NewIdentifierCS("")
 		}
@@ -33667,13 +27035,7 @@ yydefault:
 	case 1791:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IdentifierCS
-<<<<<<< HEAD
-//line sql.y:8808
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8942
-=======
-//line sql.y:8950
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8816
 		{
 			yyLOCAL = yyDollar[1].identifierCS()
 		}
@@ -33681,13 +27043,7 @@ yydefault:
 	case 1793:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL IdentifierCS
-<<<<<<< HEAD
-//line sql.y:8815
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8949
-=======
-//line sql.y:8957
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8823
 		{
 			yyLOCAL = NewIdentifierCS(string(yyDollar[1].str()))
 		}
@@ -33695,13 +27051,7 @@ yydefault:
 	case 1794:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		var yyLOCAL Statement
-<<<<<<< HEAD
-//line sql.y:8821
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8955
-=======
-//line sql.y:8963
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8829
 		{
 			yyLOCAL = &Kill{Type: yyDollar[2].killType(), ProcesslistID: convertStringToUInt64(yyDollar[3].str())}
 		}
@@ -33709,13 +27059,7 @@ yydefault:
 	case 1795:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		var yyLOCAL KillType
-<<<<<<< HEAD
-//line sql.y:8827
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8961
-=======
-//line sql.y:8969
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8835
 		{
 			yyLOCAL = ConnectionType
 		}
@@ -33723,13 +27067,7 @@ yydefault:
 	case 1796:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL KillType
-<<<<<<< HEAD
-//line sql.y:8831
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8965
-=======
-//line sql.y:8973
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8839
 		{
 			yyLOCAL = ConnectionType
 		}
@@ -33737,48 +27075,24 @@ yydefault:
 	case 1797:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		var yyLOCAL KillType
-<<<<<<< HEAD
-//line sql.y:8835
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:8969
-=======
-//line sql.y:8977
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:8843
 		{
 			yyLOCAL = QueryType
 		}
 		yyVAL.setkillType(yyLOCAL)
 	case 2478:
 		yyDollar = yyS[yypt-1 : yypt+1]
-<<<<<<< HEAD
-//line sql.y:9544
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:9680
-=======
-//line sql.y:9688
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:9552
 		{
 		}
 	case 2479:
 		yyDollar = yyS[yypt-1 : yypt+1]
-<<<<<<< HEAD
-//line sql.y:9549
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:9685
-=======
-//line sql.y:9693
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:9557
 		{
 		}
 	case 2480:
 		yyDollar = yyS[yypt-0 : yypt+1]
-<<<<<<< HEAD
-//line sql.y:9553
-||||||| parent of 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
-//line sql.y:9689
-=======
-//line sql.y:9697
->>>>>>> 70443a0115 (sqlparser: escape the user, host and engine names that SHOW statements print (#21464))
+//line sql.y:9561
 		{
 			skipToEnd(yylex)
 		}
