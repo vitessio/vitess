@@ -648,12 +648,15 @@ PRS promotes a spare `x` by swapping it in first: for the voter `v` of its cell,
 
 ### Results
 
+The PRS-swap configurations have four tablets and the fault budget of the voter redesign's family, plus a PRS: their state spaces outgrow what this machine's disk holds for TLC's queue (about 5 GB free), so they are checked up to 16–17 million states each, without an error, and by simulation. The three checks that the swap of the demoted primary needs are each found again, exhaustively up to their depth, with the check off.
+
 | Configuration | Checks | Outcome | Distinct states | Depth | Time |
 |---|---|---|---|---|---|
-| `prs_swap` | PRS to a spare, both cases, `DemotePrimary` may fail, writes to a MySQL out of its group; every invariant | no error, stopped with its queue growing (bounded) | 16,111,721 | - | 37m46 |
-| `prs_swap_core` | as `prs_swap`, without the failed demotion and the writes out of the group | PENDING | | | |
+| `prs_swap` | PRS to a spare, both cases, `DemotePrimary` may fail, writes to a MySQL out of its group; every invariant | no error; not exhaustive: TLC's queue filled the disk | 16,111,721 | - | 37m46 |
+| `prs_swap_core` | as `prs_swap`, without the failed demotion and the writes out of the group | no error; not exhaustive: TLC's queue (4.5M states) filled the disk | 16,721,214 | - | 37m57 |
+| `prs_swap`, simulated | 204,332 random behaviors of up to 120 steps (4 workers, 20 minutes) | no error | 25,024,955 checked | mean 27 | 21m |
 | `swap_live_small` | VTOrc's swap of a live voter; one crash, one leave, no loss of majority; every invariant | no error (exhaustive) | 466,937 | 32 | 1m35 |
-| `swap_live` | as `swap_live_small`, with a loss of majority and a re-bootstrap | no error, stopped with its queue growing (bounded) | 12,382,963 | - | 31m39 |
+| `swap_live` | as `swap_live_small`, with a loss of majority and a re-bootstrap | no error; not exhaustive (stopped at 31 minutes, its queue growing) | 12,382,963 | - | 31m39 |
 | `wit_prs_swap` | witness: PRS swaps the demoted primary out (`WitPrsSwapDemoted`) | violated, 5 states | 3,218 | 8 | 3s |
 | `wit_prs_swap_serves` | witness: a spare that PRS swapped in serves as the primary (`WitPrsSwap`) | violated, 10 states | 242,858 | 12 | 41s |
 | `prs_swap_norevertcheck` | `SWAP_REVERT_CHECK` off | `NoVoterMinority` violated, 7 states | 25,394 | 9 | 6s |
