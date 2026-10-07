@@ -832,6 +832,74 @@ func TestRebuildTopoGraphs(t *testing.T) {
 			},
 		},
 		{
+			name:      "Deleted keyspace with leftover files in the cell is skipped",
+			keyspaces: []string{"ks1"},
+			setupFunc: func(ctx context.Context, ts *topo.Server, factory *memorytopo.Factory) error {
+				// Leave a ShardReplication record behind in the cell, without a
+				// keyspace record in the global topo.
+				return ts.UpdateShardReplicationFields(ctx, cell, "ks1", "0", func(sr *topodatapb.ShardReplication) error {
+					sr.Nodes = append(sr.Nodes, &topodatapb.ShardReplication_Node{TabletAlias: &topodatapb.TabletAlias{Cell: cell, Uid: 100}})
+					return nil
+				})
+			},
+			checkFunc: func(t *testing.T, ctx context.Context, ts *topo.Server, factory *memorytopo.Factory) {
+				// The leftover files are gone, so the cell no longer lists the keyspace.
+				keyspaces, err := ts.GetSrvKeyspaceNames(ctx, cell)
+				require.NoError(t, err)
+				require.Empty(t, keyspaces)
+				_, err = ts.GetKeyspace(ctx, "ks1")
+				require.True(t, topo.IsErrType(err, topo.NoNode))
+				srvVSchema, err := ts.GetSrvVSchema(ctx, cell)
+				require.NoError(t, err)
+				require.Empty(t, srvVSchema.Keyspaces)
+			},
+		},
+		{
+			name:      "Keyspace to watch that does not exist is skipped",
+			keyspaces: []string{"ks1", "ks2"},
+			setupFunc: func(ctx context.Context, ts *topo.Server, factory *memorytopo.Factory) error {
+				// Only ks1 exists, and both its srving keyspace and srving vschema are built.
+				_, err := ts.GetOrCreateShard(ctx, "ks1", "-")
+				if err != nil {
+					return err
+				}
+				err = ts.UpdateSrvKeyspace(ctx, cell, "ks1", &topodatapb.SrvKeyspace{})
+				if err != nil {
+					return err
+				}
+				return ts.UpdateSrvVSchema(ctx, cell, &vschemapb.SrvVSchema{
+					Keyspaces: map[string]*vschemapb.Keyspace{
+						"ks1": {
+							// We mark the keyspace as sharded to know if the srving vschema is rebuilt.
+							// If it is rebuilt, the keyspace will be marked as unsharded.
+							Sharded: true,
+						},
+					},
+				})
+			},
+			checkFunc: func(t *testing.T, ctx context.Context, ts *topo.Server, factory *memorytopo.Factory) {
+				// ks2 gets no srving keyspace, and its absence from the srving
+				// vschema doesn't cause a rebuild.
+				_, err := ts.GetSrvKeyspace(ctx, cell, "ks2")
+				require.True(t, topo.IsErrType(err, topo.NoNode))
+				_, err = ts.GetKeyspace(ctx, "ks2")
+				require.True(t, topo.IsErrType(err, topo.NoNode))
+				srvVSchema, err := ts.GetSrvVSchema(ctx, cell)
+				require.NoError(t, err)
+				require.Len(t, srvVSchema.Keyspaces, 1)
+				require.True(t, srvVSchema.Keyspaces["ks1"].Sharded)
+			},
+		},
+		{
+			name:      "Error in reading keyspace",
+			keyspaces: []string{"ks1"},
+			setupFunc: func(ctx context.Context, ts *topo.Server, factory *memorytopo.Factory) error {
+				factory.AddOperationError(memorytopo.Get, "keyspaces/ks1/Keyspace$", errors.New("simulated topo error"))
+				return nil
+			},
+			wantErr: "vtgate Init: failed to read Keyspace: simulated topo error",
+		},
+		{
 			name:      "Error in reading srving vschema",
 			keyspaces: []string{},
 			setupFunc: func(ctx context.Context, ts *topo.Server, factory *memorytopo.Factory) error {

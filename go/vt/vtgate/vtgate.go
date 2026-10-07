@@ -474,11 +474,28 @@ func Init(
 }
 
 func rebuildTopoGraphs(ctx context.Context, topoServer *topo.Server, cell string, keyspaces []string) error {
+	existingKeyspaces := make([]string, 0, len(keyspaces))
 	for _, ks := range keyspaces {
 		_, err := topoServer.GetSrvKeyspace(ctx, cell, ks)
 		switch {
 		case err == nil:
 		case topo.IsErrType(err, topo.NoNode):
+			// A keyspace that has been deleted from the global topo can still be
+			// listed here, through leftover files in this cell or through
+			// --keyspaces-to-watch. There is nothing to serve for it, so clear
+			// what is left in this cell and skip it.
+			_, err := topoServer.GetKeyspace(ctx, ks)
+			switch {
+			case err == nil:
+			case topo.IsErrType(err, topo.NoNode):
+				log.Warn(fmt.Sprintf("Keyspace %v does not exist in the global topo, skipping it", ks))
+				if err := topoServer.DeleteOrphanedKeyspaceFiles(ctx, cell, ks); err != nil {
+					return vterrors.Wrap(err, "vtgate Init: failed to delete orphaned keyspace files")
+				}
+				continue
+			default:
+				return vterrors.Wrap(err, "vtgate Init: failed to read Keyspace")
+			}
 			log.Info(fmt.Sprintf("Rebuilding Serving Keyspace %v", ks))
 			if err := topotools.RebuildKeyspace(ctx, logutil.NewConsoleLogger(), topoServer, ks, []string{cell}, false); err != nil {
 				return vterrors.Wrap(err, "vtgate Init: failed to RebuildKeyspace")
@@ -486,12 +503,13 @@ func rebuildTopoGraphs(ctx context.Context, topoServer *topo.Server, cell string
 		default:
 			return vterrors.Wrap(err, "vtgate Init: failed to read SrvKeyspace")
 		}
+		existingKeyspaces = append(existingKeyspaces, ks)
 	}
 
 	srvVSchema, err := topoServer.GetSrvVSchema(ctx, cell)
 	switch {
 	case err == nil:
-		for _, ks := range keyspaces {
+		for _, ks := range existingKeyspaces {
 			if _, exists := srvVSchema.GetKeyspaces()[ks]; !exists {
 				log.Info("Rebuilding Serving Vschema")
 				if err := topoServer.RebuildSrvVSchema(ctx, []string{cell}); err != nil {
