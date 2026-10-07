@@ -843,10 +843,12 @@ func TestRebuildTopoGraphs(t *testing.T) {
 				})
 			},
 			checkFunc: func(t *testing.T, ctx context.Context, ts *topo.Server, factory *memorytopo.Factory) {
-				// The leftover files are gone, so the cell no longer lists the keyspace.
-				keyspaces, err := ts.GetSrvKeyspaceNames(ctx, cell)
+				// The leftover files are left in place, and no srving keyspace is built.
+				sr, err := ts.GetShardReplication(ctx, cell, "ks1", "0")
 				require.NoError(t, err)
-				require.Empty(t, keyspaces)
+				require.Len(t, sr.Nodes, 1)
+				_, err = ts.GetSrvKeyspace(ctx, cell, "ks1")
+				require.True(t, topo.IsErrType(err, topo.NoNode))
 				_, err = ts.GetKeyspace(ctx, "ks1")
 				require.True(t, topo.IsErrType(err, topo.NoNode))
 				srvVSchema, err := ts.GetSrvVSchema(ctx, cell)

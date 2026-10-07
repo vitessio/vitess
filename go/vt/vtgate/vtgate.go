@@ -482,16 +482,15 @@ func rebuildTopoGraphs(ctx context.Context, topoServer *topo.Server, cell string
 		case topo.IsErrType(err, topo.NoNode):
 			// A keyspace that has been deleted from the global topo can still be
 			// listed here, through leftover files in this cell or through
-			// --keyspaces-to-watch. There is nothing to serve for it, so clear
-			// what is left in this cell and skip it.
+			// --keyspaces-to-watch. There is nothing to serve for it, so skip it.
+			// Its leftover files stay in place: nothing stops the keyspace from
+			// being created again between this read and a delete, so removing
+			// them is left to the operator.
 			_, err := topoServer.GetKeyspace(ctx, ks)
 			switch {
 			case err == nil:
 			case topo.IsErrType(err, topo.NoNode):
-				log.Warn(fmt.Sprintf("Keyspace %v does not exist in the global topo, skipping it", ks))
-				if err := topoServer.DeleteOrphanedKeyspaceFiles(ctx, cell, ks); err != nil {
-					return vterrors.Wrap(err, "vtgate Init: failed to delete orphaned keyspace files")
-				}
+				log.Warn(fmt.Sprintf("Keyspace %v is listed for cell %v but does not exist in the global topo, skipping it", ks, cell))
 				continue
 			default:
 				return vterrors.Wrap(err, "vtgate Init: failed to read Keyspace")
