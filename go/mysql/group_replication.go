@@ -211,6 +211,13 @@ func DisableGroupReplicationSuperReadOnlyActionCommand() string {
 	return fmt.Sprintf("SELECT group_replication_disable_member_action('%s', '%s')", GroupReplicationSuperReadOnlyAction, groupReplicationMemberActionEvent)
 }
 
+// SetGroupReplicationMemberWeightCommand returns the statement that sets the member's weight in its
+// group's primary elections. The variable is dynamic: a member of a group uses the new weight in the
+// group's next election.
+func SetGroupReplicationMemberWeightCommand(weight int) string {
+	return fmt.Sprintf("SET GLOBAL group_replication_member_weight = %d", weight)
+}
+
 // EnableGroupReplicationSuperReadOnlyActionCommand returns the statement that enables
 // GroupReplicationSuperReadOnlyAction (see DisableGroupReplicationSuperReadOnlyActionCommand).
 func EnableGroupReplicationSuperReadOnlyActionCommand() string {
@@ -340,7 +347,7 @@ func ConfigureGroupReplicationCommands(cfg GroupReplicationConfig) []string {
 		"SET GLOBAL group_replication_group_name = " + sqltypes.EncodeStringSQL(cfg.GroupName),
 		"SET GLOBAL group_replication_local_address = " + sqltypes.EncodeStringSQL(cfg.LocalAddress),
 		"SET GLOBAL group_replication_group_seeds = " + sqltypes.EncodeStringSQL(strings.Join(cfg.Seeds, ",")),
-		fmt.Sprintf("SET GLOBAL group_replication_member_weight = %d", cfg.MemberWeight),
+		SetGroupReplicationMemberWeightCommand(cfg.MemberWeight),
 		// The recovery channel authenticates as the replication user, which uses
 		// caching_sha2_password. Without TLS it needs the source's public key.
 		"SET GLOBAL group_replication_recovery_get_public_key = ON",

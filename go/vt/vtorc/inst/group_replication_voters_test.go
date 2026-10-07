@@ -667,3 +667,95 @@ func TestPlanGroupVotersRemoveNoGroup(t *testing.T) {
 		})
 	}
 }
+
+// TestPlanGroupVotersIneligibleVoter checks the swap of a voter whose tablet type changed to one that
+// the policy does not allow as a voter: right away, without the grace period, and without P2, since
+// its MySQL is alive and may be active; under P1 and P3, and only while the primary's view holds a
+// majority of the new list ONLINE without it. It is never removed without a spare.
+func TestPlanGroupVotersIneligibleVoter(t *testing.T) {
+	swapC := []string{"zone1-0000000101", "zone2-0000000200", "zone3-0000000301"}
+	tests := []struct {
+		name   string
+		setup  func(t *testing.T, f *planFixture)
+		action VoterAction
+		voters []string
+		alert  AnalysisCode
+		reason string
+	}{{
+		name:   "a voter changed to RDONLY, ONLINE in every view, with a spare in its cell: SwapVoter right away",
+		setup:  func(t *testing.T, f *planFixture) { f.c.Type = topodatapb.TabletType_RDONLY },
+		action: VoterActionSwap,
+		voters: swapC,
+		reason: "voter zone3-0000000300 is a RDONLY tablet, which the durability policy does not allow as a voter",
+	}, {
+		name:   "a voter changed to DRAINED: SwapVoter",
+		setup:  func(t *testing.T, f *planFixture) { f.c.Type = topodatapb.TabletType_DRAINED },
+		action: VoterActionSwap,
+		voters: swapC,
+	}, {
+		name: "a voter changed to RDONLY whose tablet does not answer: SwapVoter, without the grace period",
+		setup: func(t *testing.T, f *planFixture) {
+			f.c.Type = topodatapb.TabletType_RDONLY
+			f.fail(f.c, time.Second)
+		},
+		action: VoterActionSwap,
+		voters: swapC,
+	}, {
+		name: "P1: the election of the primary is in progress",
+		setup: func(t *testing.T, f *planFixture) {
+			f.c.Type = topodatapb.TabletType_RDONLY
+			f.tablet(f.a).Status.PrimaryElectionInProgress = true
+		},
+		reason: "the election of the group primary zone1-0000000101 is in progress",
+	}, {
+		name: "P3: the spare runs a START GROUP_REPLICATION; no spare, so an alert, and the voter keeps its seat",
+		setup: func(t *testing.T, f *planFixture) {
+			f.c.Type = topodatapb.TabletType_RDONLY
+			f.tablet(f.c2).Status.StartInProgress = true
+		},
+		alert:  GroupVoterUnreplaceable,
+		reason: "voter zone3-0000000300 is a RDONLY tablet, which the durability policy does not allow as a voter, but its cell has no valid spare (zone3-0000000301: a START GROUP_REPLICATION runs)",
+	}, {
+		name: "P3: no other tablet in its cell: an alert, never a removal",
+		setup: func(t *testing.T, f *planFixture) {
+			f.c.Type = topodatapb.TabletType_RDONLY
+			f.in.Tablets = slices.DeleteFunc(f.in.Tablets, func(vt *VoterTablet) bool { return vt.Tablet == f.c2 })
+		},
+		alert:  GroupVoterUnreplaceable,
+		reason: "its cell has no valid spare (no other tablet in the cell)",
+	}, {
+		// V' = {a, b, c2}: c2 joins after the write, and b is not ONLINE in the view of a, which holds
+		// a and c, a majority of V, but only a of V'. Removing c, which is active, would leave the
+		// primary with a minority of its voters until c2 joins.
+		name: "the primary's view holds a minority of the new list without the voter: wait",
+		setup: func(t *testing.T, f *planFixture) {
+			f.c.Type = topodatapb.TabletType_RDONLY
+			f.fail(f.b, 10*time.Second)
+		},
+		reason: "the view of the group primary zone1-0000000101 holds 1 of the 3 voters of the new list [zone1-0000000101, zone2-0000000200, zone3-0000000301] ONLINE, not a majority",
+	}, {
+		name: "the voter is the group primary: it is not replaced while it is",
+		setup: func(t *testing.T, f *planFixture) {
+			f.a.Type = topodatapb.TabletType_RDONLY
+		},
+		reason: "voter zone1-0000000101 is a RDONLY tablet, which the durability policy does not allow as a voter, but it is the primary of the shard's replication group",
+	}}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newPlanFixture(t)
+			tt.setup(t, f)
+			plan := PlanGroupVoters(f.in)
+			assert.Equal(t, tt.action, plan.Action, plan.Reason)
+			assert.Equal(t, tt.alert, plan.Alert, plan.Reason)
+			var voters []string
+			for _, voter := range plan.Voters {
+				voters = append(voters, topoproto.TabletAliasString(voter))
+			}
+			assert.Equal(t, tt.voters, voters)
+			assert.NotEqual(t, VoterActionRemove, plan.Action)
+			if tt.reason != "" {
+				assert.Contains(t, plan.Reason, tt.reason)
+			}
+		})
+	}
+}

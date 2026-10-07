@@ -158,6 +158,10 @@ type voterPlanner struct {
 	active map[string]bool
 	// answering are the server_uuids of the tablets that answered.
 	answering map[string]bool
+	// tablets and uuids are the tablet records and the server_uuids, by alias, from which the
+	// legitimate group identifies the voters in a view.
+	tablets map[string]*topodatapb.Tablet
+	uuids   map[string]string
 }
 
 // PlanGroupVoters decides the change that VTOrc makes to the voters of a shard's replication group,
@@ -172,6 +176,12 @@ type voterPlanner struct {
 //   - SwapVoter(v, x): voter v failed (unreachable for the grace period, or its tablet record was
 //     deleted) and x is a spare of its cell. It needs P1 (a settled legitimate primary p other than v),
 //     P2 (v's MySQL is active in no view) and P3 (x is a valid spare).
+//   - SwapVoter(v, x) for an ineligible voter: v's tablet type changed to one that the policy does not
+//     allow as a voter (RDONLY, DRAINED). Right away, without the grace period, and without P2: v is
+//     alive, and its MySQL may be active. It needs P1 with p other than v, P3, and, since removing an
+//     active member lowers the count of the new list in p's view, a majority of the new list ONLINE
+//     in p's view without v (the spare is in no view). Without a spare: GroupVoterUnreplaceable; the
+//     list never shrinks for it. Once the list no longer holds it, its tablet leaves the group.
 //   - RemoveVoter(v): v's tablet record was deleted and its cell has no spare. It needs P1, P2, and v
 //     in no view of p. It is the only change that shrinks the list.
 //   - RemoveVoterNoGroup(v): v's tablet record was deleted while no group runs: no reachable tablet is
@@ -185,7 +195,8 @@ type voterPlanner struct {
 //     the grown list among the voters ONLINE in p's view.
 //
 // When none applies, it reports, in this order: GroupVoterRecordDeleted (a voter whose tablet record
-// was deleted is still active), GroupVoterUnreplaceable (a failed voter has no valid spare) and
+// was deleted is still active), GroupVoterUnreplaceable (a failed or ineligible voter has no valid
+// spare) and
 // GroupVotersBelowTarget (fewer voters than cells with an eligible tablet, or fewer than
 // policy.MinGroupReplicationCells).
 func PlanGroupVoters(in *VoterPlanInput) *VoterPlan {
@@ -236,10 +247,53 @@ func PlanGroupVoters(in *VoterPlanInput) *VoterPlan {
 		}
 	}
 
+	// Voters whose tablet type the policy does not allow as a voter: replaced right away.
+	var waiting string
+	for _, vt := range p.sortedTablets() {
+		if !policy.IsVoter(in.Voters, vt.Tablet.Alias) || in.Durability.IsGroupMember(vt.Tablet) {
+			continue
+		}
+		alias := topoproto.TabletAliasString(vt.Tablet.Alias)
+		why := fmt.Sprintf("voter %s is a %s tablet, which the durability policy does not allow as a voter", alias, vt.Tablet.Type)
+		if primary == nil {
+			if waiting == "" {
+				waiting = fmt.Sprintf("%s, but %s", why, notSettled)
+			}
+			continue
+		}
+		if topoproto.TabletAliasEqual(primary.Tablet.Alias, vt.Tablet.Alias) {
+			if waiting == "" {
+				waiting = why + ", but it is the primary of the shard's replication group"
+			}
+			continue
+		}
+		spare, rejected := p.spare(vt.Tablet.Alias.Cell, vt.Tablet.Alias, primary)
+		if spare == nil {
+			alerts = append(alerts, &VoterPlan{
+				Alert:  GroupVoterUnreplaceable,
+				Reason: fmt.Sprintf("%s, but its cell has no valid spare (%s)", why, rejected),
+			})
+			continue
+		}
+		voters := sortAliases(append(withoutAlias(in.Voters, vt.Tablet.Alias), spare.Tablet.Alias))
+		// The spare is in no view, so the new list's majority is the old one's; but its MySQL may be
+		// active, and the primary keeps a majority of the new list's voters until the spare joins only
+		// if its view holds them without it.
+		next := policy.NewLegitimateGroup(in.Incarnation, voters, p.tablets, p.uuids)
+		if online := next.OnlineVoters(primary.Status); online < next.VoterMajority() {
+			if waiting == "" {
+				waiting = fmt.Sprintf("%s, and %s could take its seat, but the view of the group primary %s holds %d of the %d voters of the new list [%s] ONLINE, not a majority",
+					why, topoproto.TabletAliasString(spare.Tablet.Alias), topoproto.TabletAliasString(primary.Tablet.Alias), online, len(voters), aliasesString(voters))
+			}
+			continue
+		}
+		return p.swap(vt.Tablet.Alias, spare, primary, why)
+	}
+
 	// Voters that failed: unreachable for the grace period.
 	for _, vt := range p.sortedTablets() {
 		alias := topoproto.TabletAliasString(vt.Tablet.Alias)
-		if !policy.IsVoter(in.Voters, vt.Tablet.Alias) || vt.Reachable || vt.UnreachableFor < in.GracePeriod {
+		if !policy.IsVoter(in.Voters, vt.Tablet.Alias) || !in.Durability.IsGroupMember(vt.Tablet) || vt.Reachable || vt.UnreachableFor < in.GracePeriod {
 			continue
 		}
 		if primary == nil {
@@ -317,6 +371,9 @@ func PlanGroupVoters(in *VoterPlanInput) *VoterPlan {
 			}
 		}
 	}
+	if waiting != "" {
+		return &VoterPlan{Reason: waiting}
+	}
 	if primary == nil {
 		return &VoterPlan{Reason: notSettled}
 	}
@@ -347,6 +404,7 @@ func newVoterPlanner(in *VoterPlanInput) *voterPlanner {
 			tablets[alias] = dv.Tablet
 		}
 	}
+	p.tablets, p.uuids = tablets, uuids
 	p.legitimate = policy.NewLegitimateGroup(in.Incarnation, in.Voters, tablets, uuids)
 	for _, vt := range in.Tablets {
 		if !vt.Reachable || !p.legitimate.IsLegitimateMember(vt.Status) {

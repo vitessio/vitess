@@ -1617,18 +1617,7 @@ func (tm *TabletManager) fixSemiSync(ctx context.Context, tabletType topodatapb.
 				slog.String("group", groupStatus.GroupName))
 			return tm.fixSemiSync(ctx, tabletType, SemiSyncActionUnset)
 		}
-		if tm.SemiSyncMonitor != nil {
-			// We want to enable the semi-sync monitor only if the tablet is going to start
-			// expecting semi-sync ACKs.
-			if tabletType == topodatapb.TabletType_PRIMARY {
-				tm.SemiSyncMonitor.Open()
-			} else {
-				tm.SemiSyncMonitor.Close()
-			}
-		}
-		// Always enable replica-side since it doesn't hurt to keep it on for a primary.
-		// The primary-side needs to be off for a replica, or else it will get stuck.
-		return tm.MysqlDaemon.SetSemiSyncEnabled(ctx, tabletType == topodatapb.TabletType_PRIMARY, true)
+		return tm.enableSemiSync(ctx, tabletType)
 	case SemiSyncActionUnset:
 		// The nil check is required for vtcombo, which doesn't run the semi-sync monitor
 		// but does try to turn off semi-sync.
@@ -1639,6 +1628,23 @@ func (tm *TabletManager) fixSemiSync(ctx context.Context, tabletType topodatapb.
 	default:
 		return vterrors.Errorf(vtrpc.Code_INTERNAL, "Unknown SemiSyncAction - %v", semiSync)
 	}
+}
+
+// enableSemiSync enables semi-sync for a tablet of the given type, whatever group MySQL is in: the
+// replica side always, and the primary side on a PRIMARY.
+func (tm *TabletManager) enableSemiSync(ctx context.Context, tabletType topodatapb.TabletType) error {
+	if tm.SemiSyncMonitor != nil {
+		// We want to enable the semi-sync monitor only if the tablet is going to start
+		// expecting semi-sync ACKs.
+		if tabletType == topodatapb.TabletType_PRIMARY {
+			tm.SemiSyncMonitor.Open()
+		} else {
+			tm.SemiSyncMonitor.Close()
+		}
+	}
+	// Always enable replica-side since it doesn't hurt to keep it on for a primary.
+	// The primary-side needs to be off for a replica, or else it will get stuck.
+	return tm.MysqlDaemon.SetSemiSyncEnabled(ctx, tabletType == topodatapb.TabletType_PRIMARY, true)
 }
 
 func (tm *TabletManager) isPrimarySideSemiSyncEnabled(ctx context.Context) bool {

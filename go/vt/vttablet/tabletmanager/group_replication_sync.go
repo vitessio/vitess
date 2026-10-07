@@ -26,6 +26,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
 
@@ -91,6 +92,8 @@ type groupReplicationSync struct {
 	// lastIllegitimateLog is when the loop last logged that it does not promote a group primary
 	// that is not legitimate.
 	lastIllegitimateLog time.Time
+	// lastDeposedLog is when the loop last logged that MySQL is a deposed primary (deposedPrimary).
+	lastDeposedLog time.Time
 	// peersFetched is when the loop last asked the voters for their server_uuids.
 	peersFetched time.Time
 
@@ -258,6 +261,7 @@ func (s *groupReplicationSync) reconcile(ctx context.Context) {
 		s.enforceSemiSync(ctx, status, durability, tablet)
 	}
 	s.enforceVoterMajority(ctx, status, durability, tablet, gen)
+	s.applyMemberWeight(ctx, status, durability, tablet)
 	if tablet.Type == topodatapb.TabletType_PRIMARY && mysql.IsGroupPrimary(status) && !status.GetPrimaryElectionInProgress() {
 		s.disableSuperReadOnlyActionOnline(ctx, status)
 	}
@@ -282,12 +286,15 @@ func (s *groupReplicationSync) reconcile(ctx context.Context) {
 // VTOrc moves the group primary to a voter (GroupPrimaryNotVoter), and its tablet does not serve
 // meanwhile (groupReplicationNotVoter). Nor does a member leave whose group would not keep a majority of its
 // members without it: MySQL's leave then waits for a majority that is not there. Nor a PRIMARY or
-// transitional tablet, nor one that takes a backup.
+// BACKUP or RESTORE tablet, nor one that takes a backup.
 func (s *groupReplicationSync) shouldLeaveAsNonVoter(ctx context.Context, status *replicationdatapb.GroupReplicationStatus, durability policy.Durabler, tablet *topodatapb.Tablet) bool {
 	if !policy.IsGroupReplication(durability) || !memberMayLeave(status) {
 		return false
 	}
-	if tablet.Type == topodatapb.TabletType_PRIMARY || isTransitionalTabletType(tablet.Type) || s.tm.IsBackupRunning() {
+	// A DRAINED tablet leaves too: VTOrc gives the seat of a voter that changed to DRAINED to a spare
+	// of its cell, and the member must not stay in the certification majority without a seat.
+	if tablet.Type == topodatapb.TabletType_PRIMARY || tablet.Type == topodatapb.TabletType_BACKUP || tablet.Type == topodatapb.TabletType_RESTORE ||
+		s.tm.IsBackupRunning() {
 		return false
 	}
 	voters, err := s.getVoters(ctx)
@@ -509,6 +516,10 @@ func (s *groupReplicationSync) promote(ctx context.Context, tabletType topodatap
 			slog.String("tablet_type", tabletType.String()))
 		return
 	}
+	// Before the action lock, which is never held across an RPC to another tablet.
+	if s.deposedPrimary(ctx, nil) {
+		return
+	}
 	if !tm.actionSema.TryAcquire(1) {
 		return
 	}
@@ -561,6 +572,77 @@ func (s *groupReplicationSync) promote(ctx context.Context, tabletType topodatap
 	if err := tm.changeTypeWithGroupRecordLocked(ctx, topodatapb.TabletType_PRIMARY, DBActionSetReadWrite, SemiSyncActionNone, rec); err != nil {
 		log.Error("Group replication sync: failed to promote the tablet to PRIMARY", slog.Any("error", err))
 	}
+}
+
+// deposedPrimary returns whether MySQL, the ONLINE primary with quorum of its view, may be a deposed
+// primary that has not learned of its expulsion yet: another tablet of the shard reports that its
+// MySQL is an active member of the same incarnation, with quorum in its own view, whose view has an
+// ONLINE primary other than this member. A primary that was paused (SIGSTOP) or cut off while the
+// group expelled it and elected another member resumes with its stale view, in which it is still the
+// primary of every voter, until MySQL learns of the expulsion: its tablet must neither become PRIMARY
+// nor serve again on that view, or it writes a newer primary term to the shard record, and the
+// legitimate primary's tablet steps down (endPrimaryTerm). The deposed member's certification fails
+// meanwhile, so it commits nothing; its MySQL stays super_read_only.
+//
+// Every other tablet of the shard is asked, concurrently, each within groupReplicationPeerTimeout,
+// not only the recorded primary: a stale member may have been elected and cut off before its tablet
+// took the primary term, and the shard record then names a tablet that is a REPLICA (the TLA+ model's
+// flag1_fixed_faults). A tablet that does not answer does not depose this member. No view is
+// compared: while a deposed member still claims its view, the legitimate primary's tablet waits too,
+// until the deposed member learns of its expulsion and no longer reports a primary other than the
+// legitimate one; the model checks that the shard then gets its primary (EventuallyServes). rec is
+// the shard record to decide on; nil reads it again.
+func (s *groupReplicationSync) deposedPrimary(ctx context.Context, rec *shardGroupRecord) bool {
+	tm := s.tm
+	status, err := tm.groupReplicationStatus(ctx)
+	if err != nil || !mysql.IsGroupPrimary(status) {
+		return false
+	}
+	own, err := tm.MysqlDaemon.GetServerUUID(ctx)
+	if err != nil {
+		return false
+	}
+	if rec == nil {
+		if rec, err = s.getRecord(ctx, true); err != nil {
+			return false
+		}
+	}
+	self := topoproto.TabletAliasString(tm.tabletAlias)
+	var others []*topodatapb.Tablet
+	for alias, tablet := range rec.tablets {
+		if alias != self {
+			others = append(others, tablet)
+		}
+	}
+	incarnation := policy.GroupIncarnation(status.GetViewId())
+	for alias, peer := range tm.peerFullStatuses(ctx, others) {
+		gs := peer.GetGroupReplicationStatus()
+		if !mysql.IsGroupMemberActive(gs) || policy.GroupIncarnation(gs.GetViewId()) != incarnation || !gs.GetHasQuorum() ||
+			gs.GetPrimaryUuid() == "" || gs.GetPrimaryUuid() == own || !primaryOnlineInView(gs) {
+			continue
+		}
+		if time.Since(s.lastDeposedLog) >= groupReplicationIllegitimateLogInterval {
+			s.lastDeposedLog = time.Now()
+			log.Warn("Group replication sync: MySQL is the primary of its view, but another tablet reports another primary of the same incarnation, with quorum: "+
+				"MySQL may be a deposed primary that has not learned of its expulsion yet, and the tablet neither becomes PRIMARY nor serves",
+				slog.String("view_id", status.GetViewId()),
+				slog.String("other_tablet", alias),
+				slog.String("other_view_id", gs.GetViewId()),
+				slog.String("other_primary", gs.GetPrimaryUuid()))
+		}
+		return true
+	}
+	return false
+}
+
+// primaryOnlineInView returns whether the primary of the member's view is ONLINE in that view.
+func primaryOnlineInView(status *replicationdatapb.GroupReplicationStatus) bool {
+	for _, m := range status.GetMembers() {
+		if m.GetMemberUuid() == status.GetPrimaryUuid() {
+			return m.GetState() == mysql.GroupMemberStateOnline
+		}
+	}
+	return false
 }
 
 // demote changes the tablet type from PRIMARY to REPLICA after MySQL lost the primary role in
@@ -633,13 +715,14 @@ func (s *groupReplicationSync) demoteStalePrimary(ctx context.Context, durabilit
 }
 
 // enforceSemiSync applies the effective semi-sync setting on the primary: the durability policy
-// asks for semi-sync, and no group with at least two ONLINE members supersedes it. Semi-sync is
+// asks for semi-sync, and no group with at least two ONLINE members supersedes it, unless the shard
+// is being converted back to asynchronous replication (leavingGroup). Semi-sync is
 // only enabled while a replica is connected to acknowledge transactions: with Vitess's infinite
 // semi-sync timeout, enabling it without one would block every commit, for example while a
 // member of a group of two restarts.
 func (s *groupReplicationSync) enforceSemiSync(ctx context.Context, status *replicationdatapb.GroupReplicationStatus, durability policy.Durabler, tablet *topodatapb.Tablet) {
 	tm := s.tm
-	superseded := mysql.GroupSupersedesSemiSync(status)
+	superseded := mysql.GroupSupersedesSemiSync(status) && !s.leavingGroup(durability)
 	want := policy.SemiSyncAckers(durability, tablet) > 0 && !superseded
 	enabled := tm.isPrimarySideSemiSyncEnabled(ctx)
 	if want && !enabled && !s.hasSemiSyncReplicas(ctx) {
@@ -665,14 +748,63 @@ func (s *groupReplicationSync) enforceSemiSync(ctx context.Context, status *repl
 		log.Info("Group replication sync: changing primary semi-sync",
 			slog.Bool("enabled", want),
 			slog.Bool("superseded_by_group", superseded),
+			slog.Bool("leaving_group", s.leavingGroup(durability)),
 			slog.Int("online_members", mysql.OnlineGroupMembers(status)))
-		if err := tm.fixSemiSync(ctx, topodatapb.TabletType_PRIMARY, semiSyncAction); err != nil {
+		fix := tm.fixSemiSync
+		if want && s.leavingGroup(durability) {
+			// fixSemiSync disables semi-sync on a member of a group with two ONLINE members.
+			fix = func(ctx context.Context, tabletType topodatapb.TabletType, _ SemiSyncAction) error {
+				return tm.enableSemiSync(ctx, tabletType)
+			}
+		}
+		if err := fix(ctx, topodatapb.TabletType_PRIMARY, semiSyncAction); err != nil {
 			log.Error("Group replication sync: failed to change semi-sync", slog.Any("error", err))
 			return
 		}
 		enabled = want
 	}
 	s.setTwoPCAllowed(twoPCDurable(status, enabled))
+}
+
+// applyMemberWeight sets the member weight of the tablet's MySQL to the weight that the shard's group
+// replication policy gives the tablet, while MySQL is an active member whose weight differs. MySQL
+// applies group_replication_member_weight from a join's configuration only: a member that joined
+// while the shard's policy was not a group replication policy yet, during a conversion, or before
+// its type changed, kept another weight until its next join. The variable is dynamic, and the
+// group's next primary election uses the new weight. The change takes the action lock, without
+// waiting, so that it never runs during an RPC that configures and starts Group Replication.
+func (s *groupReplicationSync) applyMemberWeight(ctx context.Context, status *replicationdatapb.GroupReplicationStatus, durability policy.Durabler, tablet *topodatapb.Tablet) {
+	grd, ok := policy.AsGroupReplication(durability)
+	if !ok || !mysql.IsGroupMemberActive(status) {
+		return
+	}
+	tm := s.tm
+	want := tm.groupMemberWeight(grd, tablet)
+	if int32(want) == status.GetMemberWeight() {
+		return
+	}
+	if !tm.actionSema.TryAcquire(1) {
+		return
+	}
+	defer tm.unlock()
+	log.Info("Group replication sync: setting the member weight of the shard's policy",
+		slog.Int("weight", want),
+		slog.Int("previous_weight", int(status.GetMemberWeight())))
+	if err := tm.MysqlDaemon.SetGroupReplicationMemberWeight(ctx, want); err != nil {
+		log.Warn("Group replication sync: cannot set the member weight", slog.Any("error", err))
+	}
+}
+
+// leavingGroup returns whether the shard's own durability policy, which the loop resolved its cached
+// policy with, is not a group replication policy: MigrateReplicationMode stores it before the shard's
+// group shrinks, when it converts the shard back. The group of such a shard no longer supersedes
+// semi-sync: its primary enables semi-sync as soon as an acker replicates from it, while the group
+// still runs, so that it never acknowledges a commit that neither a group majority nor a semi-sync
+// acker holds when the last secondary leaves. The migration to Group Replication never stores an
+// asynchronous policy as the shard's own: its primary disables semi-sync once the group has two
+// ONLINE members, before the last acker joins.
+func (s *groupReplicationSync) leavingGroup(durability policy.Durabler) bool {
+	return s.durabilityShardPolicy != "" && !policy.IsGroupReplication(durability)
 }
 
 // groupReplicationVoterMajorityLost is the reason for which a PRIMARY tablet does not serve while
@@ -850,6 +982,9 @@ func (s *groupReplicationSync) serveAgain(ctx context.Context, durability policy
 	// Read before the action lock, so that it is never held across a topology read.
 	if err := tm.checkOwnTabletRecord(ctx); err != nil {
 		log.Warn("Group replication sync: the primary does not serve again", slog.Any("error", err))
+		return
+	}
+	if s.deposedPrimary(ctx, nil) {
 		return
 	}
 	if !tm.actionSema.TryAcquire(1) {

@@ -71,3 +71,44 @@ func TestGroupReplicationOneVoterPerCell(t *testing.T) {
 		}
 	}, waitTimeout, pollInterval)
 }
+
+// TestGroupReplicationSwapsIneligibleVoter checks that a secondary voter whose tablet type changes to
+// RDONLY, which the policy does not allow as a voter, gives its seat to the other REPLICA of its cell
+// right away (SwapVoter, without the grace period, while its MySQL is still ONLINE), that its tablet
+// then leaves the group, and that no write fails meanwhile.
+func TestGroupReplicationSwapsIneligibleVoter(t *testing.T) {
+	opts := defaultClusterOptions()
+	// Two REPLICA tablets in zone2.
+	opts.replicaCells = []string{"zone1", "zone2", "zone2", "zone3"}
+	opts.rdonly = false
+	// A swap that waited for the grace period would not happen within the test's waits.
+	opts.vtorcExtraArgs = []string{"--group-replication-voter-replacement-grace-period", "1h"}
+	tc := setupCluster(t, opts)
+	primary, zone2a, zone2b, zone3 := tc.replicas[0], tc.replicas[1], tc.replicas[2], tc.replicas[3]
+
+	out, err := tc.VtctldClientProcess.ExecuteCommandWithOutput("MigrateReplicationMode",
+		"--durability-policy", policy.DurabilityGroupReplicationCrossCell, keyspaceName)
+	require.NoError(t, err, out)
+	waitForGroup(t, tc, primary, []*cluster.Vttablet{primary, zone2a, zone3})
+
+	w := startWriter(t, tc)
+	require.Eventually(t, func() bool { return w.ok.Load() > 20 }, waitTimeout, pollInterval)
+	out, err = tc.VtctldClientProcess.ExecuteCommandWithOutput("ChangeTabletType", zone2a.Alias, "rdonly")
+	require.NoError(t, err, out)
+
+	// VTOrc gives zone2a's seat to zone2b, which joins the group.
+	waitForGroup(t, tc, primary, []*cluster.Vttablet{primary, zone2b, zone3})
+	// zone2a, no longer a voter, leaves the group.
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		status, err := fullStatus(t, tc, zone2a)
+		require.NoError(c, err)
+		assert.False(c, mysql.IsGroupMemberActive(status.GroupReplicationStatus))
+	}, waitTimeout, pollInterval)
+	before := w.ok.Load()
+	require.Eventually(t, func() bool { return w.ok.Load() > before+20 }, waitTimeout, pollInterval)
+	ok, fail, lastErr := w.stop()
+	assert.Positive(t, ok)
+	// The primary kept a majority of its voters ONLINE throughout.
+	assert.Zero(t, fail, "writes failed while an ineligible voter was replaced, last error: %v", lastErr)
+	requireAckedWrites(t, primary, w.ackedIDs())
+}

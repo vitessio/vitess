@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/event"
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -69,6 +70,12 @@ func findGroupWithQuorum(statuses map[string]*fullStatusResult, legitimate *poli
 			continue
 		}
 		gs := res.groupStatus()
+		if supersededView(statuses, alias, gs) {
+			// A deposed primary that was paused or cut off still shows the view it had, until MySQL
+			// learns of its expulsion: another reachable member is the ONLINE primary, with quorum,
+			// of a newer view of the same incarnation.
+			continue
+		}
 		if !gs.HasQuorum || gs.PrimaryUuid == "" {
 			continue
 		}
@@ -101,6 +108,18 @@ func findGroupWithQuorum(statuses map[string]*fullStatusResult, legitimate *poli
 	return gv, nil
 }
 
+// supersededView returns whether another reachable tablet than alias reports its MySQL as the ONLINE
+// primary, with quorum, of a view of the same incarnation as view and not older than it
+// (policy.SupersedesGroupView).
+func supersededView(statuses map[string]*fullStatusResult, alias string, view *replicationdatapb.GroupReplicationStatus) bool {
+	for other, res := range statuses {
+		if other != alias && res.err == nil && policy.SupersedesGroupView(res.groupStatus(), view) {
+			return true
+		}
+	}
+	return false
+}
+
 // groupPromotionEligibility returns an error when the tablet cannot be the shard's primary
 // after an emergency reparent of a group replication shard: it must be reachable, an ONLINE
 // member of the group in the view of the quorum, a listed voter when voters are listed (a tablet that
@@ -113,6 +132,10 @@ func groupPromotionEligibility(res *fullStatusResult, gv *groupReplicationView, 
 	}
 	if !res.isOnlineMember() || res.groupStatus().GroupName != gv.groupName || policy.GroupIncarnation(res.groupStatus().ViewId) != gv.incarnation || !memberIsOnlineInView(gv.view, res.status.ServerUuid) {
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "tablet %v is not an ONLINE member of the shard's replication group", alias)
+	}
+	if mysql.IsGroupPrimary(res.groupStatus()) && res.status.ServerUuid != gv.primaryUUID {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+			"tablet %v reports its MySQL as the primary of the view %s, which the group has left: it is a deposed primary that has not learned of its expulsion", alias, res.groupStatus().ViewId)
 	}
 	if !res.status.GetGroupReplicationEnabled() {
 		return groupReplicationNotEnabledError(alias)

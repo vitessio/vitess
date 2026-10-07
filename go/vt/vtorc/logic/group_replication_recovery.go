@@ -182,6 +182,31 @@ func promoteGroupPrimary(ctx context.Context, analysisEntry *inst.DetectionAnaly
 		return true, topologyRecovery, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "%s is not a tablet of its shard", aliasString)
 	}
 	legitimate := legitimateGroupOf(shardInfo, statuses)
+	// A deposed primary that was paused or cut off resumes with its stale view, in which it is still
+	// the legitimate primary, until MySQL learns of its expulsion (FLAG 1 of the soak): VTOrc's stored
+	// state then reports it as a group primary that is not the shard primary. Another member that is
+	// the ONLINE primary, with quorum, of a newer view of the same incarnation is the group's primary
+	// instead: it is promoted if it may be, and nothing is otherwise.
+	if newer := supersedingGroupPrimary(statuses, tablet.Alias, status.GetGroupReplicationStatus()); newer != nil {
+		newerAlias := topoproto.TabletAliasString(newer.tablet.Alias)
+		refuse := func(why string) error {
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+				"the view %s of %s is superseded: %s is the ONLINE primary, with quorum, of the newer view %s of the same incarnation, and %s",
+				status.GetGroupReplicationStatus().GetViewId(), aliasString, newerAlias, newer.status.GetGroupReplicationStatus().GetViewId(), why)
+		}
+		switch {
+		case topoproto.TabletAliasEqual(shardInfo.PrimaryAlias, newer.tablet.Alias) && newer.tablet.Type == topodatapb.TabletType_PRIMARY:
+			return true, topologyRecovery, refuse("it is the shard primary already")
+		case !policy.IsVoter(shardInfo.GetGroupReplicationVoters(), newer.tablet.Alias):
+			return true, topologyRecovery, refuse("it is not a voter")
+		case !legitimate.IsLegitimatePrimary(newer.status.GetGroupReplicationStatus()):
+			return true, topologyRecovery, refuse("it is not the primary of the shard's legitimate group")
+		case !newer.status.GetGroupReplicationEnabled():
+			return true, topologyRecovery, refuse("it does not run Group Replication (--enable-group-replication)")
+		}
+		_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("the view of %s is superseded: promoting %s, the primary of the newer view, instead", aliasString, newerAlias))
+		tablet, status, aliasString = newer.tablet, newer.status, newerAlias
+	}
 	if !legitimate.IsLegitimatePrimary(status.GetGroupReplicationStatus()) {
 		gs := status.GetGroupReplicationStatus()
 		return true, topologyRecovery, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
@@ -843,6 +868,21 @@ func joinVotersAfterBootstrap(voters []*topodatapb.TabletAlias, tabletInfos []*t
 // legitimateGroupOf returns the shard's legitimate replication group from its shard record. The
 // voters are identified in the members' views by the server_uuids that the statuses report, or
 // that VTOrc last discovered, and by the MySQL addresses of their tablet records.
+// supersedingGroupPrimary returns the reachable tablet, other than the given one, that reports its
+// MySQL as the ONLINE primary, with quorum, of a view of the same incarnation as view and not older
+// than it (policy.SupersedesGroupView), or nil if none does.
+func supersedingGroupPrimary(statuses []*shardTabletStatus, alias *topodatapb.TabletAlias, view *replicationdatapb.GroupReplicationStatus) *shardTabletStatus {
+	for _, st := range statuses {
+		if st.err != nil || topoproto.TabletAliasEqual(st.tablet.Alias, alias) {
+			continue
+		}
+		if policy.SupersedesGroupView(st.status.GetGroupReplicationStatus(), view) {
+			return st
+		}
+	}
+	return nil
+}
+
 func legitimateGroupOf(shardInfo *topo.ShardInfo, statuses []*shardTabletStatus) *policy.LegitimateGroup {
 	tablets := make(map[string]*topodatapb.Tablet, len(statuses))
 	uuids := make(map[string]string, len(statuses))

@@ -38,6 +38,33 @@ func GroupIncarnation(viewID string) string {
 	return incarnation
 }
 
+// GroupViewNotOlder returns whether the view id a, of the form <incarnation>:<sequence>, is not older
+// than b, of the same incarnation: Group Replication increments the sequence on every view change. An
+// id that cannot be compared counts as not older.
+func GroupViewNotOlder(a, b string) bool {
+	_, seqA, okA := strings.Cut(a, ":")
+	_, seqB, okB := strings.Cut(b, ":")
+	if !okA || !okB {
+		return true
+	}
+	na, errA := strconv.ParseUint(seqA, 10, 64)
+	nb, errB := strconv.ParseUint(seqB, 10, 64)
+	if errA != nil || errB != nil {
+		return true
+	}
+	return na >= nb
+}
+
+// SupersedesGroupView returns whether the member status other, of another member, reports that its
+// MySQL is the ONLINE primary, with quorum, of a view of the same incarnation as view and not older
+// than it: the member whose view is view then holds a view that the group has left, as a deposed
+// primary that was paused or cut off does until MySQL learns of its expulsion.
+func SupersedesGroupView(other, view *replicationdatapb.GroupReplicationStatus) bool {
+	incarnation := GroupIncarnation(view.GetViewId())
+	return mysql.IsGroupPrimary(other) && incarnation != "" && GroupIncarnation(other.GetViewId()) == incarnation &&
+		GroupViewNotOlder(other.GetViewId(), view.GetViewId())
+}
+
 // GroupIncarnationTime returns when the group of the given incarnation was created, as MySQL encodes
 // it in the incarnation: the fixed part of a Group Replication view id is the time, in units of 100
 // nanoseconds since the Unix epoch, at which the group communication engine installed the group's

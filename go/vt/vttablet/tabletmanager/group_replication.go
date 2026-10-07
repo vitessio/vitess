@@ -274,12 +274,7 @@ func (tm *TabletManager) groupReplicationConfigUntil(ctx context.Context, durabi
 
 	weight := defaultGroupMemberWeight
 	if grd, ok := policy.AsGroupReplication(durability); ok {
-		weighted := tablet.CloneVT()
-		if isTransitionalTabletType(weighted.Type) {
-			// A tablet that joins at the end of a restore returns to its base type.
-			weighted.Type = tm.baseTabletType
-		}
-		weight = grd.MemberWeight(weighted)
+		weight = tm.groupMemberWeight(grd, tablet)
 	}
 
 	return mysql.GroupReplicationConfig{
@@ -291,6 +286,16 @@ func (tm *TabletManager) groupReplicationConfigUntil(ctx context.Context, durabi
 		ExitStateAction: groupReplicationExitStateAction,
 		AutorejoinTries: groupReplicationAutorejoinTries,
 	}, nil
+}
+
+// groupMemberWeight returns the member weight that the policy gives the tablet. A tablet of a
+// transitional type, which joins at the end of a restore, has the weight of its base type.
+func (tm *TabletManager) groupMemberWeight(grd policy.GroupReplicationDurabler, tablet *topodatapb.Tablet) int {
+	weighted := tablet.CloneVT()
+	if isTransitionalTabletType(weighted.Type) {
+		weighted.Type = tm.baseTabletType
+	}
+	return grd.MemberWeight(weighted)
 }
 
 // groupReplicationStatus returns the Group Replication state of the tablet's MySQL.

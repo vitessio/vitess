@@ -227,12 +227,14 @@ func TestGroupReplicationSyncPromotesOnlyWithVoterMajority(t *testing.T) {
 }
 
 // TestGroupReplicationSyncPromotesWithoutWaitingForFailedVoter checks that the promotion of the
-// group's new primary does not wait for the failed primary's tablet, which cannot tell its
-// server_uuid, once the voters that answer make a majority (S2: the old primary is frozen).
+// group's new primary does not wait until the failed primary's tablet, which cannot tell its
+// server_uuid, answers, once the voters that answer make a majority (S2: the old primary is frozen).
+// The check for a deposed primary asks every other tablet first, and waits for the frozen one at
+// most groupReplicationPeerTimeout.
 func TestGroupReplicationSyncPromotesWithoutWaitingForFailedVoter(t *testing.T) {
 	withGroupReplication(t)
 	oldPeerTimeout := groupReplicationPeerTimeout
-	groupReplicationPeerTimeout = 10 * time.Second
+	groupReplicationPeerTimeout = time.Second
 	t.Cleanup(func() { groupReplicationPeerTimeout = oldPeerTimeout })
 	ctx := t.Context()
 	tm, fmd, peers, _ := newLegitimacyTestTM(t)
@@ -246,7 +248,7 @@ func TestGroupReplicationSyncPromotesWithoutWaitingForFailedVoter(t *testing.T) 
 	start := time.Now()
 	newGroupReplicationSync(tm).reconcile(ctx)
 	assert.Equal(t, topodatapb.TabletType_PRIMARY, tm.Tablet().Type)
-	assert.Less(t, time.Since(start), 5*time.Second, "the promotion must not wait for the frozen voter")
+	assert.Less(t, time.Since(start), groupReplicationPeerTimeout+4*time.Second, "the promotion waits for the frozen voter at most groupReplicationPeerTimeout")
 }
 
 // TestGroupReplicationSyncTrustsOwnBootstrap checks that a tablet does not take the group it just

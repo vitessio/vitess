@@ -244,6 +244,11 @@ func (mysqld *Mysqld) DisableGroupReplicationSuperReadOnlyAction(ctx context.Con
 	return mysqld.ExecuteSuperQueryList(ctx, []string{mysql.DisableGroupReplicationSuperReadOnlyActionCommand()})
 }
 
+// SetGroupReplicationMemberWeight is part of the MysqlDaemon interface.
+func (mysqld *Mysqld) SetGroupReplicationMemberWeight(ctx context.Context, weight int) error {
+	return mysqld.ExecuteSuperQueryList(ctx, []string{mysql.SetGroupReplicationMemberWeightCommand(weight)})
+}
+
 // checkGroupReplicationPrivileges returns a FAILED_PRECONDITION error unless an account of the
 // replication user has the privileges that the MySQL communication stack needs. Without them,
 // MySQL refuses the connections between members, and a join fails only after its timeout.

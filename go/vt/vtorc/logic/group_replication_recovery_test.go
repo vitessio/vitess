@@ -1460,3 +1460,85 @@ func TestReconcileStaleTopoPrimaryGroupReplicationVoter(t *testing.T) {
 		})
 	}
 }
+
+// TestPromoteGroupPrimaryRefusesSupersededView reproduces the VTOrc path of FLAG 1 of the soak: a
+// deposed primary resumes with its stale view, in which it is the ONLINE primary, with quorum, of the
+// three voters in the recorded incarnation, so VTOrc's stored state reports it as a group primary that
+// is not the shard primary (GroupPrimaryNotInTopo). Its fresh read under the shard lock shows another
+// tablet as the ONLINE primary, with quorum, of a newer view of the same incarnation: VTOrc must not
+// promote the deposed member, and promotes that newer primary instead when it is eligible.
+func TestPromoteGroupPrimaryRefusesSupersededView(t *testing.T) {
+	deposed := recoveryTablet("zone1", 101, topodatapb.TabletType_REPLICA)
+	newer := recoveryTablet("zone2", 200, topodatapb.TabletType_REPLICA)
+	other := recoveryTablet("zone3", 300, topodatapb.TabletType_REPLICA)
+	oldPrimary := recoveryTablet("zone1", 102, topodatapb.TabletType_PRIMARY)
+	withView := func(status *replicationdatapb.FullStatus, viewID string) *replicationdatapb.FullStatus {
+		status.GroupReplicationStatus.ViewId = viewID
+		return status
+	}
+	for _, tt := range []struct {
+		name string
+		// newerIsShardPrimary makes the newer primary the shard primary already.
+		newerIsShardPrimary bool
+		// newerWithoutGroupReplication makes the newer primary's vttablet one that does not run Group
+		// Replication.
+		newerWithoutGroupReplication bool
+		wantPromoted                 bool
+	}{{
+		name:         "the newer primary is not the shard primary yet: it is promoted instead",
+		wantPromoted: true,
+	}, {
+		name:                "the newer primary is the shard primary already: nothing is promoted",
+		newerIsShardPrimary: true,
+	}, {
+		name:                         "the newer primary's vttablet does not run Group Replication: nothing is promoted",
+		newerWithoutGroupReplication: true,
+	}} {
+		t.Run(tt.name, func(t *testing.T) {
+			newer := newer.CloneVT()
+			if tt.newerIsShardPrimary {
+				newer.Type = topodatapb.TabletType_PRIMARY
+			}
+			mockTMC := groupReplicationRecoveryTest(t, deposed, newer, other, oldPrimary)
+			setVoters(t, deposed, newer, other)
+			setIncarnation(t, voterTestIncarnation)
+			if tt.newerIsShardPrimary {
+				_, err := ts.UpdateShardFields(t.Context(), "ks", "0", func(si *topo.ShardInfo) error {
+					si.PrimaryAlias = newer.Alias
+					return nil
+				})
+				require.NoError(t, err)
+			}
+			newerStatus := withView(groupMemberStatus(newer, newer, newer, other), voterTestIncarnation+":6")
+			newerStatus.GroupReplicationEnabled = !tt.newerWithoutGroupReplication
+			mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(deposed)).Return(withView(groupMemberStatus(deposed, deposed, deposed, newer, other), voterTestIncarnation+":5"), nil)
+			mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(newer)).Return(newerStatus, nil)
+			mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(other)).Return(withView(groupMemberStatus(other, newer, newer, other), voterTestIncarnation+":6"), nil)
+			mockTMC.EXPECT().FullStatus(gomock.Any(), sameTablet(oldPrimary)).Return(nil, errors.New("unreachable"))
+			mockTMC.EXPECT().ChangeType(gomock.Any(), sameTablet(deposed), gomock.Any(), gomock.Any()).Times(0)
+			if tt.wantPromoted {
+				mockTMC.EXPECT().ChangeType(gomock.Any(), sameTablet(newer), topodatapb.TabletType_PRIMARY, false).Return(nil)
+				mockTMC.EXPECT().PrimaryPosition(gomock.Any(), sameTablet(newer)).Return("MySQL56/6f1c2c2e-5a8e-4b8e-9d3a-7c1f0b6e2a41:1-10", nil)
+				mockTMC.EXPECT().PopulateReparentJournal(gomock.Any(), sameTablet(newer), gomock.Any(), gomock.Any(), newer.Alias, gomock.Any()).Return(nil)
+			}
+
+			analysisEntry := &inst.DetectionAnalysis{
+				Analysis:              inst.GroupPrimaryNotInTopo,
+				AnalyzedInstanceAlias: deposed.Alias,
+				AnalyzedKeyspace:      "ks",
+				AnalyzedShard:         "0",
+			}
+			attempted, topologyRecovery, err := promoteGroupPrimary(t.Context(), analysisEntry, log.NewPrefixedLogger("test"))
+			require.True(t, attempted)
+			require.NotNil(t, topologyRecovery)
+			if !tt.wantPromoted {
+				require.Error(t, err)
+				assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+				assert.ErrorContains(t, err, "superseded")
+				return
+			}
+			require.NoError(t, err)
+			assert.True(t, topoproto.TabletAliasEqual(newer.Alias, topologyRecovery.SuccessorAlias))
+		})
+	}
+}
