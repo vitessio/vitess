@@ -588,7 +588,7 @@ func (tsv *TabletServer) begin(
 			if err != nil {
 				return err
 			}
-			for _, query := range postBeginQueries {
+			for _, query := range rewriteDoubleSlashComments(tsv.env.Parser(), postBeginQueries) {
 				plan, err := tsv.qe.GetPlan(ctx, logStats, query, true, false)
 				if err != nil {
 					return err
@@ -1263,6 +1263,8 @@ func (tsv *TabletServer) beginWaitForSameRangeTransactions(ctx context.Context, 
 // the query and bind variables or the table name is empty.
 func (tsv *TabletServer) computeTxSerializerKey(ctx context.Context, logStats *tabletenv.LogStats, sql string, bindVariables map[string]*querypb.BindVariable) (string, string) {
 	// Strip trailing comments so we don't pollute the query cache.
+	// Plan the text that execute plans, so that both share a plan cache entry.
+	sql, _ = tsv.env.Parser().RewriteDoubleSlashComments(sql)
 	sql, _ = sqlparser.SplitMarginComments(sql)
 	plan, err := tsv.qe.GetPlan(ctx, logStats, sql, false, false)
 	if err != nil {
@@ -1726,7 +1728,7 @@ func (tsv *TabletServer) ReserveBeginExecute(ctx context.Context, session querys
 				return err
 			}
 
-			for _, query := range postBeginQueries {
+			for _, query := range rewriteDoubleSlashComments(tsv.env.Parser(), postBeginQueries) {
 				plan, err := tsv.qe.GetPlan(ctx, logStats, query, true, false)
 				if err != nil {
 					return err

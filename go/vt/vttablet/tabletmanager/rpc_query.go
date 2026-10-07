@@ -121,6 +121,11 @@ func (tm *TabletManager) executeMultiFetchAsDba(
 		return nil, err
 	}
 
+	// The statements are split and checked with Vitess's tokenizer and then
+	// sent to MySQL as written, so MySQL must skip every comment that Vitess
+	// skips.
+	sql, _ = tm.Env.Parser().RewriteDoubleSlashComments(sql)
+
 	// Parse, validate, and gate before acquiring an mysqld connection so a
 	// rejected batch does not cost us a connection acquire and the SET
 	// sql_log_bin / foreign_key_checks / USE round-trips that follow.
@@ -320,7 +325,10 @@ func (tm *TabletManager) ExecuteFetchAsAllPrivs(ctx context.Context, req *tablet
 	// Replace any provided sidecar database qualifiers with the correct one,
 	// then gate before opening the mysqld connection so a rejected batch
 	// does not cost a connection acquire and a USE round-trip.
-	uq, err := tm.Env.Parser().ReplaceTableQualifiers(string(req.Query), sidecar.DefaultName, sidecar.GetName())
+	// The query is checked with Vitess's tokenizer and then sent to MySQL as
+	// written, so MySQL must skip every comment that Vitess skips.
+	query, _ := tm.Env.Parser().RewriteDoubleSlashComments(string(req.Query))
+	uq, err := tm.Env.Parser().ReplaceTableQualifiers(query, sidecar.DefaultName, sidecar.GetName())
 	if err != nil {
 		return nil, err
 	}
@@ -359,7 +367,10 @@ func (tm *TabletManager) ExecuteFetchAsApp(ctx context.Context, req *tabletmanag
 	// Replace any provided sidecar database qualifiers with the correct one,
 	// then gate before opening the mysqld connection so a rejected batch
 	// does not cost a connection acquire.
-	uq, err := tm.Env.Parser().ReplaceTableQualifiers(string(req.Query), sidecar.DefaultName, sidecar.GetName())
+	// The query is checked with Vitess's tokenizer and then sent to MySQL as
+	// written, so MySQL must skip every comment that Vitess skips.
+	query, _ := tm.Env.Parser().RewriteDoubleSlashComments(string(req.Query))
+	uq, err := tm.Env.Parser().ReplaceTableQualifiers(query, sidecar.DefaultName, sidecar.GetName())
 	if err != nil {
 		return nil, err
 	}

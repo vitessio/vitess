@@ -19,6 +19,7 @@ package tabletserver
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sync"
 	"time"
 
@@ -626,6 +627,27 @@ func (te *TxEngine) stopTransactionWatcher() {
 // validateSettings validates the pre-queries of a reservation, which are
 // executed directly on the reserved connection, see
 // planbuilder.ValidateSettingsSQLMode.
+// rewriteDoubleSlashComments returns queries with each "//" comment rewritten
+// to "#/", for queries that are executed as written, so that MySQL skips the
+// comments that Vitess skips. It copies queries only if one of them changes.
+func rewriteDoubleSlashComments(parser *sqlparser.Parser, queries []string) []string {
+	var rewritten []string
+	for i, query := range queries {
+		query, changed := parser.RewriteDoubleSlashComments(query)
+		if !changed {
+			continue
+		}
+		if rewritten == nil {
+			rewritten = slices.Clone(queries)
+		}
+		rewritten[i] = query
+	}
+	if rewritten == nil {
+		return queries
+	}
+	return rewritten
+}
+
 func (te *TxEngine) validateSettings(preQueries []string) error {
 	parser := te.env.Environment().Parser()
 	cfg := te.env.Config()
@@ -644,6 +666,7 @@ func (te *TxEngine) ReserveBegin(ctx context.Context, options *querypb.ExecuteOp
 	// The pre-queries are executed directly on the reserved connection, without the
 	// settings pool's BuildSettingQuery pass, so the settings validation must run here —
 	// before any connection is acquired or state is changed.
+	preQueries = rewriteDoubleSlashComments(te.env.Environment().Parser(), preQueries)
 	if err := te.validateSettings(preQueries); err != nil {
 		return 0, "", err
 	}
@@ -674,6 +697,7 @@ func (te *TxEngine) Reserve(ctx context.Context, options *querypb.ExecuteOptions
 	span, ctx := trace.NewSpan(ctx, "TxEngine.Reserve")
 	defer span.Finish()
 	// see ReserveBegin: validate before any connection is acquired or tainted
+	preQueries = rewriteDoubleSlashComments(te.env.Environment().Parser(), preQueries)
 	if err := te.validateSettings(preQueries); err != nil {
 		return 0, err
 	}
