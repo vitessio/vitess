@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"fmt"
 	"math"
+	"math/rand/v2"
 	"strings"
 	"testing"
 
@@ -28,6 +29,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/bytes2"
+	"vitess.io/vitess/go/mysql/decimal"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
@@ -916,4 +918,72 @@ func TestForEachValueMalformedEncoding(t *testing.T) {
 		err := malformed.ForEachValue(func(Value) {})
 		assert.ErrorIs(t, err, ErrBadTupleEncoding)
 	})
+}
+
+// referenceNewDecimalValue is NewValue's decimal arm as it was before the
+// literal scan was allowed to decide on its own: parse, then scan.
+func referenceNewDecimalValue(val []byte) (Value, error) {
+	if _, err := decimal.NewFromMySQL(val); err != nil {
+		return NULL, err
+	}
+	return rawLiteral(Decimal, val)
+}
+
+// TestNewValueDecimalMatchesParser checks that NewValue's decimal arm, which
+// skips decimal.NewFromMySQL for an unpadded numeric literal, accepts and
+// rejects exactly what parsing and then scanning the literal does, with the
+// same errors. Inputs run from short to far beyond MySQL's precision, with
+// signs, dots, padding and stray characters.
+func TestNewValueDecimalMatchesParser(t *testing.T) {
+	const alphabet = "0123456789012345678901234567890123456789....+-- \t\neE"
+	rnd := rand.New(rand.NewPCG(1, 2))
+
+	check := func(input string) {
+		t.Helper()
+		got, gotErr := NewValue(Decimal, []byte(input))
+		want, wantErr := referenceNewDecimalValue([]byte(input))
+		if wantErr != nil {
+			require.EqualError(t, gotErr, wantErr.Error(), "input %q", input)
+			return
+		}
+		require.NoError(t, gotErr, "input %q", input)
+		require.Equal(t, want, got, "input %q", input)
+	}
+
+	for _, length := range []int{0, 1, 2, 3, 17, 18, 19, 20, 40, 65, 66, 81, 82, 83, 100, 200} {
+		for range 2000 {
+			b := make([]byte, length)
+			for i := range b {
+				b[i] = alphabet[rnd.IntN(len(alphabet))]
+			}
+			check(string(b))
+
+			// A literal of the same length, so that the accepting arm is
+			// exercised at every size and not only by chance.
+			for i := range b {
+				b[i] = '0' + byte(rnd.IntN(10))
+			}
+			if length > 2 {
+				b[rnd.IntN(length)] = '.'
+			}
+			if length > 0 && rnd.IntN(3) == 0 {
+				b[0] = "+-"[rnd.IntN(2)]
+			}
+			check(string(b))
+		}
+	}
+}
+
+// TestNewValueDecimalDoesNotAllocate checks that validating an unpadded
+// decimal literal does not build a decimal.
+func TestNewValueDecimalDoesNotAllocate(t *testing.T) {
+	for _, input := range []string{"1", "-123.45", "100000.0001", "123456789012345678901234567890.123456789", strings.Repeat("9", 65)} {
+		val := []byte(input)
+		allocs := testing.AllocsPerRun(100, func() {
+			if _, err := NewValue(Decimal, val); err != nil {
+				t.Fatal(err)
+			}
+		})
+		assert.Zero(t, allocs, "input %q", input)
+	}
 }

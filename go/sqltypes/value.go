@@ -111,6 +111,13 @@ func NewValue(typ querypb.Type, val []byte) (v Value, err error) {
 		// literal for; written raw they would parse as identifiers.
 		return rawLiteral(typ, val)
 	case IsDecimal(typ):
+		// decimal.NewFromMySQL accepts every unpadded numeric literal, so the
+		// literal scan alone decides those, without building a decimal that
+		// would be thrown away. Anything else takes the parser for its error,
+		// or for the over-long decimals whose excess it never scans.
+		if isNumericLiteral(val, false) {
+			return MakeTrusted(typ, val), nil
+		}
 		if _, err := decimal.NewFromMySQL(val); err != nil {
 			return NULL, err
 		}
