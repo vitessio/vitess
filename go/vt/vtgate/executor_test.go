@@ -2579,14 +2579,6 @@ func TestExecutorCountsDoubleSlashComments(t *testing.T) {
 	})
 }
 
-// TestExecutorLogsDoubleSlashCommentsWithoutCommentText checks that the
-// warning that VTGate logs holds neither literals nor comment text.
-func TestExecutorLogsDoubleSlashCommentsWithoutCommentText(t *testing.T) {
-	sql := "/* lead@example.com */ select /* body@example.com */ id from music_user_map where id = 1234 // line@example.com\n and name = 'secret' /* tail@example.com */"
-	got := redactedSQL{parser: sqlparser.NewTestParser(), sql: sql}.String()
-	assert.Equal(t, "select id from music_user_map where id = :id /* INT64 */ and `name` = :name /* VARCHAR */", got)
-}
-
 // TestExecutorCountsDoubleSlashCommentsOnceOnRetry checks that a statement
 // that VTGate retries after a denied-tables error is counted once, and that
 // the client gets one warning.

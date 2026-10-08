@@ -1242,27 +1242,11 @@ func (e *Executor) ParseDestinationTarget(targetString string) (string, topodata
 	return econtext.ParseDestinationTarget(targetString, defaultTabletType, e.VSchema())
 }
 
-// redactedSQL formats as the redacted statement, without its comments. A
-// throttled logger formats its arguments only for the messages it emits, so
-// the redaction runs only for those.
-type redactedSQL struct {
-	parser *sqlparser.Parser
-	sql    string
-}
-
-func (r redactedSQL) String() string {
-	piiSafeSQL, err := r.parser.RedactSQLQueryWithoutComments(r.sql)
-	if err != nil {
-		return "<unparsable>"
-	}
-	return piiSafeSQL
-}
-
 // countDoubleSlashComment counts a statement that uses a deprecated //
-// comment and logs it. sql is the statement as the client sent it.
-func (e *Executor) countDoubleSlashComment(sql string) {
+// comment and logs it.
+func (e *Executor) countDoubleSlashComment() {
 	warnings.Add("DoubleSlashComment", 1)
-	doubleSlashCommentsLogger.Warningf("%q uses a // comment, which is deprecated and will be removed in a future release; use --, # or /* */ instead", redactedSQL{parser: e.env.Parser(), sql: sql})
+	doubleSlashCommentsLogger.Warningf("a statement uses a // comment, which is deprecated and will be removed in a future release; use --, # or /* */ instead")
 }
 
 // doubleSlashCommentWarning is the warning that a client gets for a statement
@@ -1293,7 +1277,6 @@ func (e *Executor) fetchOrCreatePlan(
 
 	// Plans can forward the statement text to MySQL as written, so MySQL must
 	// skip every comment that Vitess skips.
-	original := queryString
 	queryString, rewritten := e.env.Parser().RewriteDoubleSlashComments(queryString)
 	// Count each executed statement once: a binary protocol prepare is
 	// counted when the statement is executed, and a retry after buffering
@@ -1301,7 +1284,7 @@ func (e *Executor) fetchOrCreatePlan(
 	// PlanPrepareStmt, as the session keeps the rewritten text.
 	if rewritten && isExecutePath && !logStats.DoubleSlashComment {
 		logStats.DoubleSlashComment = true
-		e.countDoubleSlashComment(original)
+		e.countDoubleSlashComment()
 	}
 	query, comments := sqlparser.SplitMarginComments(queryString)
 	vcursor, _ = e.newVCursor(safeSession, comments, logStats)
@@ -2043,7 +2026,7 @@ func (e *Executor) PlanPrepareStmt(ctx context.Context, safeSession *econtext.Sa
 	// only time that a SQL PREPARE can be counted. Its statement clears the
 	// session warnings before it runs, so the warning stays.
 	if _, rewritten := e.env.Parser().RewriteDoubleSlashComments(query); rewritten {
-		e.countDoubleSlashComment(query)
+		e.countDoubleSlashComment()
 		safeSession.RecordWarning(doubleSlashCommentWarning())
 	}
 	return plan, nil
