@@ -384,9 +384,19 @@ func IsDimensionCombined(name string) bool {
 	return combinedDimensions[name]
 }
 
-// JoinLabels returns the key that multi-label stats use for the given label values.
-func JoinLabels(labels []string) string {
-	return safeJoinLabels(labels, nil)
+// CombinedLabels reports, for each label name, whether its dimension is combined.
+func CombinedLabels(labelNames []string) []bool {
+	combinedLabels := make([]bool, len(labelNames))
+	for i, name := range labelNames {
+		combinedLabels[i] = IsDimensionCombined(name)
+	}
+	return combinedLabels
+}
+
+// JoinLabels returns the key that multi-label stats use for the given label
+// values, with the values of combined labels replaced by StatsAllStr.
+func JoinLabels(labels []string, combinedLabels []bool) string {
+	return safeJoinLabels(labels, combinedLabels)
 }
 
 // safeJoinLabels joins the label values with ".", but first replaces any existing

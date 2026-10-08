@@ -889,7 +889,7 @@ func TestVStreamsMetricsCallerIDLabel(t *testing.T) {
 }
 
 func TestVStreamLagTrackerReportsMaxLagOfLiveStreams(t *testing.T) {
-	tracker := newVStreamLagTracker()
+	tracker := newVStreamLagTracker(nil)
 	shardLabels := []string{"ks", "-80", "PRIMARY"}
 	otherShardLabels := []string{"ks", "80-", "PRIMARY"}
 
@@ -910,7 +910,7 @@ func TestVStreamLagTrackerReportsMaxLagOfLiveStreams(t *testing.T) {
 }
 
 func TestVStreamLagTrackerSkipsStreamsWithoutLag(t *testing.T) {
-	tracker := newVStreamLagTracker()
+	tracker := newVStreamLagTracker(nil)
 	shardLabels := []string{"ks", "-80", "PRIMARY"}
 
 	firstLag, endFirstStream := tracker.register(shardLabels)
@@ -942,8 +942,20 @@ func TestVStreamsLagKeepsLiveStreamsWhenAnotherManagerIsCreatedForTheCell(t *tes
 	assert.Equal(t, int64(7), exportedLag[cell+"."+ks+".-20.PRIMARY"])
 }
 
+func TestVStreamLagTrackerReportsMaxLagAcrossCombinedDimensions(t *testing.T) {
+	tracker := newVStreamLagTracker([]bool{false, true, false})
+	lowLag, endLowLagStream := tracker.register([]string{"ks", "-80", "PRIMARY"})
+	defer endLowLagStream()
+	highLag, endHighLagStream := tracker.register([]string{"ks", "80-", "PRIMARY"})
+	defer endHighLagStream()
+	lowLag.Store(3)
+	highLag.Store(8)
+
+	assert.Equal(t, map[string]int64{"ks.all.PRIMARY": 8}, tracker.maxLagByLabel())
+}
+
 func TestVStreamLagTrackerEscapesDotsInLabels(t *testing.T) {
-	tracker := newVStreamLagTracker()
+	tracker := newVStreamLagTracker(nil)
 	lag, endStream := tracker.register([]string{"my.ks", "-", "REPLICA"})
 	defer endStream()
 	lag.Store(4)

@@ -71,12 +71,17 @@ type vstreamManager struct {
 // VStreamsLag gauge only reports streams that are still open. A label is
 // reported as the max lag across its live streams.
 type vstreamLagTracker struct {
+	combinedLabels []bool
+
 	mu      sync.Mutex
 	streams map[string]map[*atomic.Int64]struct{}
 }
 
-func newVStreamLagTracker() *vstreamLagTracker {
-	return &vstreamLagTracker{streams: make(map[string]map[*atomic.Int64]struct{})}
+func newVStreamLagTracker(combinedLabels []bool) *vstreamLagTracker {
+	return &vstreamLagTracker{
+		combinedLabels: combinedLabels,
+		streams:        make(map[string]map[*atomic.Int64]struct{}),
+	}
 }
 
 var (
@@ -90,12 +95,12 @@ var (
 // tracker or the gauge would only see the newest manager's streams. A vtgate
 // serves one cell, so this is one tracker per process; it is keyed by cell to
 // match the exporter, which scopes the gauge by cell.
-func vstreamLagTrackerForCell(cell string) *vstreamLagTracker {
+func vstreamLagTrackerForCell(cell string, labelNames []string) *vstreamLagTracker {
 	vstreamLagTrackersMu.Lock()
 	defer vstreamLagTrackersMu.Unlock()
 	tracker, ok := vstreamLagTrackersByCell[cell]
 	if !ok {
-		tracker = newVStreamLagTracker()
+		tracker = newVStreamLagTracker(stats.CombinedLabels(labelNames))
 		vstreamLagTrackersByCell[cell] = tracker
 	}
 	return tracker
@@ -108,7 +113,7 @@ const noLagYet = math.MinInt64
 // register adds a live stream and returns the value it should store its lag
 // in, along with a func that must be called when the stream ends.
 func (t *vstreamLagTracker) register(labelValues []string) (*atomic.Int64, func()) {
-	key := stats.JoinLabels(labelValues)
+	key := stats.JoinLabels(labelValues, t.combinedLabels)
 	lag := &atomic.Int64{}
 	lag.Store(noLagYet)
 
@@ -289,7 +294,7 @@ func vstreamCallerPrincipal(ctx context.Context) string {
 func newVStreamManager(resolver *srvtopo.Resolver, serv srvtopo.Server, cell string) *vstreamManager {
 	exporter := servenv.NewExporter(cell, "VStreamManager")
 	labels := vstreamMetricLabelNames(vstreamMetricsIncludeCaller)
-	lagTracker := vstreamLagTrackerForCell(cell)
+	lagTracker := vstreamLagTrackerForCell(cell, labels)
 
 	return &vstreamManager{
 		resolver: resolver,
