@@ -440,6 +440,9 @@ func BuildSettingQuery(settings []string, parser *sqlparser.Parser, rejectSubque
 		if err := validateConstantSetExprsSQLMode(set.Exprs); err != nil {
 			return "", "", err
 		}
+		if err := rejectSettingCharsetExprs(set.Exprs); err != nil {
+			return "", "", err
+		}
 		setExprs = append(setExprs, set.Exprs...)
 		for _, sExpr := range set.Exprs {
 			sysVar := sExpr.Var

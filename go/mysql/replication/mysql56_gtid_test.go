@@ -17,11 +17,15 @@ limitations under the License.
 package replication
 
 import (
+	"fmt"
+	"math"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/race"
 )
 
 func TestParseMysql56GTID(t *testing.T) {
@@ -89,6 +93,69 @@ func TestMysql56GTIDString(t *testing.T) {
 	want := "00010203-0405-0607-0809-0a0b0c0d0e0f:12345"
 	got := strings.ToLower(input.String())
 	assert.Equalf(t, want, got, "%#v.String() = %#v, want %#v", input, got, want)
+}
+
+// TestMysql56GTIDStringMatchesSprintf checks that SID.String() and
+// Mysql56GTID.String() produce the same output as the fmt.Sprintf format they
+// replaced, for edge SIDs and sequences.
+func TestMysql56GTIDStringMatchesSprintf(t *testing.T) {
+	sids := []SID{
+		{},
+		{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
+		{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
+		{0x16, 0xb1, 0x03, 0x9f, 0x22, 0xb6, 0x11, 0xed, 0xb7, 0x65, 0x0a, 0x43, 0xf9, 0x5f, 0x28, 0xa3},
+	}
+	sequences := []int64{0, 1, 9, 10, 12345, math.MaxInt64, -1, math.MinInt64}
+	for _, sid := range sids {
+		want := fmt.Sprintf("%x-%x-%x-%x-%x", sid[:4], sid[4:6], sid[6:8], sid[8:10], sid[10:])
+		assert.Equal(t, want, sid.String())
+		for _, seq := range sequences {
+			gtid := Mysql56GTID{Server: sid, Sequence: seq}
+			assert.Equal(t, fmt.Sprintf("%s:%d", want, seq), gtid.String())
+		}
+	}
+}
+
+// TestSIDAppendToNonEmpty checks that appendTo writes the SID after existing
+// bytes in dst, including when dst has to grow.
+func TestSIDAppendToNonEmpty(t *testing.T) {
+	sid := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
+	want := "prefix:00010203-0405-0607-0809-0a0b0c0d0e0f"
+
+	grown := sid.appendTo([]byte("prefix:"))
+	assert.Equal(t, want, string(grown))
+
+	roomy := make([]byte, 0, 64)
+	roomy = append(roomy, "prefix:"...)
+	assert.Equal(t, want, string(sid.appendTo(roomy)))
+}
+
+var gtidStringSink string
+
+// TestMysql56GTIDStringAllocs checks that Mysql56GTID.String() allocates only
+// the returned string.
+func TestMysql56GTIDStringAllocs(t *testing.T) {
+	if race.Enabled {
+		t.Skip("allocation counts differ under the race detector")
+	}
+	gtid := Mysql56GTID{
+		Server:   SID{0x16, 0xb1, 0x03, 0x9f, 0x22, 0xb6, 0x11, 0xed, 0xb7, 0x65, 0x0a, 0x43, 0xf9, 0x5f, 0x28, 0xa3},
+		Sequence: math.MaxInt64,
+	}
+	allocs := testing.AllocsPerRun(100, func() {
+		gtidStringSink = gtid.String()
+	})
+	assert.EqualValues(t, 1, allocs)
+}
+
+func BenchmarkMysql56GTIDString(b *testing.B) {
+	sid, err := ParseSID("16b1039f-22b6-11ed-b765-0a43f95f28a3")
+	require.NoError(b, err)
+	gtid := Mysql56GTID{Server: sid, Sequence: 123456789}
+	b.ReportAllocs()
+	for b.Loop() {
+		_ = gtid.String()
+	}
 }
 
 func TestMysql56GTIDFlavor(t *testing.T) {

@@ -546,6 +546,19 @@ var validSQL = []struct {
 	input:  "select timestamp'2012-12-31 11:30:45'",
 	output: "select timestamp'2012-12-31 11:30:45' from dual",
 }, {
+	// a quote in a temporal literal is escaped, so it cannot close the literal;
+	// the normalizer rejects these values as invalid temporal values
+	input:                `select date '2020-01-01\' union select user() -- '`,
+	output:               `select date'2020-01-01\' union select user() -- ' from dual`,
+	ignoreNormalizerTest: true,
+}, {
+	input:                "select time '12:34:56'' union select user() -- '",
+	output:               `select time'12:34:56\' union select user() -- ' from dual`,
+	ignoreNormalizerTest: true,
+}, {
+	input:  `set @@optimizer_switch = timestamp '2012-12-31 11:30:45\\'`,
+	output: `set @@optimizer_switch = timestamp'2012-12-31 11:30:45\\'`,
+}, {
 	input:  "select * from information_schema.columns",
 	output: "select * from information_schema.`columns`",
 }, {
@@ -1895,6 +1908,18 @@ var validSQL = []struct {
 	output:     "create table a",
 	partialDDL: true,
 }, {
+	// SERIAL is an alias for BIGINT UNSIGNED NOT NULL AUTO_INCREMENT UNIQUE
+	input:  "create table if not exists __drizzle_migrations (id serial primary key, hash text not null, created_at bigint)",
+	output: "create table if not exists __drizzle_migrations (\n\tid serial primary key,\n\t`hash` text not null,\n\tcreated_at bigint\n)",
+}, {
+	// SERIAL is not a reserved keyword
+	input:  "create table serial (serial serial)",
+	output: "create table `serial` (\n\t`serial` serial\n)",
+}, {
+	input: "alter table t add column s serial",
+}, {
+	input: "alter table t modify column id serial first",
+}, {
 	input:  "create table a (b1 bool not null primary key, b2 boolean not null)",
 	output: "create table a (\n\tb1 bool not null primary key,\n\tb2 boolean not null\n)",
 }, {
@@ -2365,6 +2390,10 @@ var validSQL = []struct {
 	input:  "show create user current_user",
 	output: "show create user current_user",
 }, {
+	// a quote in the user name is escaped, so it cannot end the string
+	input:  "show create user 'a'';insert into t values (1); -- '",
+	output: "show create user 'a\\';insert into t values (1); -- '",
+}, {
 	input: "show create view v",
 }, {
 	input:  "show databases",
@@ -2384,6 +2413,10 @@ var validSQL = []struct {
 }, {
 	input:  "show engine INNODB mutex",
 	output: "show engine innodb mutex",
+}, {
+	// an engine name is written as an identifier, so it cannot end the statement
+	input:  "show engine `innodb; insert into t values (1); -- ` status",
+	output: "show engine `innodb; insert into t values (1); -- ` status",
 }, {
 	input: "show engines",
 }, {
@@ -2437,6 +2470,20 @@ var validSQL = []struct {
 }, {
 	input: "show grants for 'u' using 'r1'@''",
 }, {
+	// a quote in a user name or host is escaped, so it cannot end the string
+	input:  "show grants for 'o''brien'@'h''x' using 'r''1'",
+	output: "show grants for 'o\\'brien'@'h\\'x' using 'r\\'1'",
+}, {
+	input:  "show grants for 'a'';insert into t values (1); -- '",
+	output: "show grants for 'a\\';insert into t values (1); -- '",
+}, {
+	// a host is read as the host it names, however it is quoted
+	input:  "show grants for 'u'@\"h\"",
+	output: "show grants for 'u'@'h'",
+}, {
+	input:  "show grants for 'u'@`h';insert into t values (1); -- `",
+	output: "show grants for 'u'@'h\\';insert into t values (1); -- '",
+}, {
 	input:  "show index from t",
 	output: "show indexes from t",
 }, {
@@ -2481,6 +2528,12 @@ var validSQL = []struct {
 }, {
 	input:  "show profile cpu for query 1 limit 10",
 	output: "show profile cpu for query 1 limit 10",
+}, {
+	input:  "show profile block io, ipc, page faults, source, swaps",
+	output: "show profile block io, ipc, page faults, source, swaps",
+}, {
+	input:  "show profile CPU, Block IO",
+	output: "show profile cpu, block io",
 }, {
 	input:  "show profiles",
 	output: "show profiles",
@@ -6573,6 +6626,24 @@ var invalidSQL = []struct {
 	input  string
 	output string
 }{{
+	// SHOW PROFILE writes its types back unquoted, so only MySQL's own are accepted
+	input:  "show profile `all; insert into t values (1); -- `",
+	output: "unknown profile type at position 50",
+}, {
+	input:  "show profile foo",
+	output: "unknown profile type at position 17",
+}, {
+	input:  "show profile foo bar",
+	output: "unknown profile type at position 21 near 'bar'",
+}, {
+	// MySQL reads a quoted user variable name to its closing quote, and
+	// Vitess reads one only if it holds nothing an identifier cannot.
+	input:  "select @'a//b'",
+	output: "syntax error at position 9",
+}, {
+	input:  "select @\"a b\" from t",
+	output: "syntax error at position 9",
+}, {
 	// MySQL only accepts a text literal or a user defined variable as the
 	// statement text of a PREPARE; a positional parameter is a syntax error.
 	input:  "prepare stmt1 from ?",

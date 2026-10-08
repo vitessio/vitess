@@ -17,6 +17,7 @@ limitations under the License.
 package sqlparser
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -535,6 +536,140 @@ a`,
 	for _, testCase := range testCases {
 		gotSQL := StripLeadingComments(testCase.input)
 		assert.Equal(t, testCase.outSQL, gotSQL)
+	}
+}
+
+func TestRewriteDoubleSlashComments(t *testing.T) {
+	testCases := []struct {
+		input  string
+		output string
+	}{{
+		input:  "select 1 from t",
+		output: "select 1 from t",
+	}, {
+		input:  "select 1 from t // x",
+		output: "select 1 from t #/ x",
+	}, {
+		input:  "select 1 from t //x\n",
+		output: "select 1 from t #/x\n",
+	}, {
+		input:  "select 1 from t //",
+		output: "select 1 from t #/",
+	}, {
+		input:  "// x\nselect 1 from t",
+		output: "#/ x\nselect 1 from t",
+	}, {
+		// MySQL reads this as 10 / 2; Vitess reads it as 10.
+		input:  "select 10 //* x */ 2",
+		output: "select 10 #/* x */ 2",
+	}, {
+		// The ; is inside the comment, so it does not end the statement.
+		input:  "select 1 // ; drop table t\n, 2",
+		output: "select 1 #/ ; drop table t\n, 2",
+	}, {
+		input:  "select 1 // a\r\n, 2 /// b\n, 3",
+		output: "select 1 #/ a\r\n, 2 #// b\n, 3",
+	}, {
+		input:  "select 'http://x', `a//b`, \"//\" from t /* // */ -- //\n",
+		output: "select 'http://x', `a//b`, \"//\" from t /* // */ -- //\n",
+	}, {
+		// Inside a versioned comment that Vitess executes, / is division.
+		input:  "select /*!50000 4 //*x*/ 2 */",
+		output: "select /*!50000 4 //*x*/ 2 */",
+	}, {
+		// A versioned comment that Vitess skips is a comment as a whole.
+		input:  "select 1 /*!99999 // x */",
+		output: "select 1 /*!99999 // x */",
+	}, {
+		// An unterminated string runs to the end of the text.
+		input:  "select 1 // a\n, 'b // c",
+		output: "select 1 #/ a\n, 'b // c",
+	}, {
+		input:  "select 'a // b",
+		output: "select 'a // b",
+	}, {
+		input:  "select @'ab' // x\n",
+		output: "select @'ab' #/ x\n",
+	}, {
+		// Vitess cannot read this quoted user variable name whole, so it is
+		// a lexing error. The tokenizer then reads the quoted name as a
+		// string, as MySQL does, and the comment after it is rewritten.
+		input:  "do @'a//b' := 1 // x\n",
+		output: "do @'a//b' := 1 #/ x\n",
+	}, {
+		input:  "select 1; select @'a b', 1 // ; select 2\n, 3",
+		output: "select 1; select @'a b', 1 #/ ; select 2\n, 3",
+	}}
+	parser := NewTestParser()
+	for _, tcase := range testCases {
+		t.Run(tcase.input, func(t *testing.T) {
+			out, rewritten := parser.RewriteDoubleSlashComments(tcase.input)
+			assert.Equal(t, tcase.output, out)
+			assert.Equal(t, tcase.output != tcase.input, rewritten)
+		})
+	}
+}
+
+// TestRewriteDoubleSlashCommentsKeepsStatement checks that the rewrite does
+// not change what Vitess parses.
+func TestRewriteDoubleSlashCommentsKeepsStatement(t *testing.T) {
+	parser := NewTestParser()
+	inputs := []string{
+		"select 1e//+ 2\n from t",
+		"select 1 from t // x",
+		"select 10 //* x */ 2 from t // y\n, 3",
+		"select 1 // ; drop table t\n, 2",
+		"// x\nselect 1 from t",
+		"select 1 from t // a\r\nwhere a = 1 /// b\n",
+	}
+	for _, tcase := range validSQL {
+		inputs = append(inputs, tcase.input)
+	}
+	for _, input := range inputs {
+		want, err := parser.Parse(input)
+		if err != nil {
+			continue
+		}
+		rewritten, _ := parser.RewriteDoubleSlashComments(input)
+		got, err := parser.Parse(rewritten)
+		require.NoError(t, err, rewritten)
+		assert.Equal(t, String(want), String(got), input)
+	}
+}
+
+// TestRewriteDoubleSlashCommentsLeavesNoComment checks that, after the rewrite,
+// the tokenizer reads no "//" comment and splits the text into the same
+// statements, also in text that does not lex or parse.
+func TestRewriteDoubleSlashCommentsLeavesNoComment(t *testing.T) {
+	parser := NewTestParser()
+	inputs := []string{
+		"SELECT @'a b', 10 //*x*/ 2",
+		"select 1; select @'a b', 1 // ; select 2\n, 3",
+		"select @'a//b' // x\n; select 1 // y",
+		"select :1x // a\n; select 2 // b",
+	}
+	for _, tcase := range validSQL {
+		inputs = append(inputs, tcase.input)
+	}
+	for _, tcase := range invalidSQL {
+		inputs = append(inputs, tcase.input)
+	}
+	for _, input := range inputs {
+		rewritten, _ := parser.RewriteDoubleSlashComments(input)
+		tokenizer := parser.NewStringTokenizer(rewritten)
+		for {
+			typ, val := tokenizer.Scan()
+			if typ == 0 {
+				break
+			}
+			if typ == COMMENT {
+				assert.False(t, strings.HasPrefix(val, "//"), "%q left %q", input, val)
+			}
+		}
+		want, wantErr := parser.SplitStatementToPieces(input)
+		got, gotErr := parser.SplitStatementToPieces(rewritten)
+		assert.Equal(t, wantErr, gotErr, input)
+		assert.Len(t, got, len(want), input)
 	}
 }
 

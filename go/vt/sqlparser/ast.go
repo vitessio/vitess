@@ -2050,6 +2050,8 @@ type (
 
 	// ShowProfile represents SHOW PROFILE [type, ...] [FOR QUERY n] [LIMIT row_count [OFFSET offset]].
 	ShowProfile struct {
+		// Types holds lowercase names from MySQL's fixed list of profile types (see
+		// isShowProfileType), which are written back unquoted.
 		Types    []string
 		ForQuery *Literal
 		Limit    *Limit

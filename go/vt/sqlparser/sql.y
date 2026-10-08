@@ -375,7 +375,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %token <str> UNRESOLVED TRANSACTIONS
 
 // Type Tokens
-%token <str> BIT TINYINT SMALLINT MEDIUMINT INT INTEGER BIGINT INTNUM
+%token <str> BIT TINYINT SMALLINT MEDIUMINT INT INTEGER BIGINT INTNUM SERIAL
 %token <str> REAL DOUBLE FLOAT_TYPE FLOAT4_TYPE FLOAT8_TYPE DECIMAL_TYPE NUMERIC
 %token <str> TIME TIMESTAMP DATETIME YEAR
 %token <str> CHAR VARCHAR BOOL CHARACTER VARBINARY NCHAR
@@ -2425,6 +2425,12 @@ column_type:
 | char_type
 | time_type
 | spatial_type
+| SERIAL
+  {
+    // SERIAL is MySQL's alias for BIGINT UNSIGNED NOT NULL AUTO_INCREMENT UNIQUE.
+    // It takes no length and no UNSIGNED or ZEROFILL.
+    $$ = &ColumnType{Type: string($1)}
+  }
 
 numeric_type:
   int_type length_opt
@@ -4940,11 +4946,19 @@ show_profile_type:
   }
 | ci_identifier
   {
-    $$ = $1.String()
+    $$ = $1.Lowered()
+    if !isShowProfileType($$) {
+      yylex.Error("unknown profile type")
+      return 1
+    }
   }
 | ci_identifier ci_identifier
   {
-    $$ = $1.String() + " " + $2.String()
+    $$ = $1.Lowered() + " " + $2.Lowered()
+    if !isShowProfileType($$) {
+      yylex.Error("unknown profile type")
+      return 1
+    }
   }
 
 for_query_opt:
@@ -9481,6 +9495,7 @@ non_reserved_keyword:
 | SECURITY
 | SEQUENCE
 | SESSION
+| SERIAL
 | SERIALIZABLE
 | SHARE
 | SHARED
