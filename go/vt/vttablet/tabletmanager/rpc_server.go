@@ -42,6 +42,9 @@ func (tm *TabletManager) lock(ctx context.Context) error {
 
 // unlock is the symmetrical action to lock.
 func (tm *TabletManager) unlock() {
+	// Later FullStatus calls must not join a collection from before this action
+	// completed, including when an error left the tablet partially changed.
+	tm.fullStatusGroup.Forget("FullStatus")
 	tm.actionSema.Release(1)
 }
 

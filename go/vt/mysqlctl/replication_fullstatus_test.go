@@ -19,6 +19,7 @@ package mysqlctl
 import (
 	"context"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -181,6 +182,131 @@ func TestCollectFullStatusDataStopsAfterCancellation(t *testing.T) {
 	assert.Nil(t, result)
 	assert.Zero(t, db.GetQueryCalledNum("SHOW BINARY LOG STATUS"))
 	assert.Zero(t, db.GetQueryCalledNum("SELECT * FROM performance_schema.replication_connection_configuration"))
+}
+
+func TestCollectFullStatusDataCancelsBlockedQuery(t *testing.T) {
+	tests := []struct {
+		name  string
+		query string
+		retry bool
+	}{
+		{name: "connection validation", query: "SELECT 1"},
+		{name: "variables"},
+		{name: "replication status", query: "SHOW REPLICA STATUS"},
+		{name: "primary status", query: "SHOW BINARY LOG STATUS"},
+		{name: "semi-sync variables", query: fullStatusSemiSyncQuery(t, fullStatusGlobalVariablesQuery, fullStatusSemiSyncVariables)},
+		{name: "semi-sync status", query: fullStatusSemiSyncQuery(t, fullStatusGlobalStatusQuery, fullStatusSemiSyncStatuses)},
+		{name: "replication configuration", query: "SELECT * FROM performance_schema.replication_connection_configuration"},
+		{name: "replication status after reconnect", query: "SHOW REPLICA STATUS", retry: true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			db, mysqld := newCollectFullStatusDataTestMysqld(t)
+			require.NoError(t, mysqld.dbaPool.SetCapacity(t.Context(), 1))
+			conn, err := mysqld.GetDbaConnection(t.Context())
+			require.NoError(t, err)
+			t.Cleanup(conn.Close)
+			query := tc.query
+			if query == "" {
+				query = conn.FullStatusVariablesQuery()
+			}
+			qr, err := conn.ExecuteFetch(query, 100, true)
+			require.NoError(t, err)
+			conn.Close()
+			db.AddQuery(query, qr)
+
+			ctx, cancel := context.WithCancel(t.Context())
+			t.Cleanup(cancel)
+			release := make(chan struct{})
+			unblock := sync.OnceFunc(func() { close(release) })
+			t.Cleanup(unblock)
+			var calls atomic.Int32
+			blockedCall := int32(1)
+			if tc.retry {
+				blockedCall = 2
+			}
+			db.SetBeforeFunc(query, func() {
+				call := calls.Add(1)
+				if tc.retry && call == 1 {
+					db.CloseAllConnections()
+					return
+				}
+				if call == blockedCall {
+					cancel()
+					<-release
+				}
+			})
+
+			var status *replicationdatapb.FullStatus
+			var collectionErr error
+			finished := make(chan struct{})
+			go func() {
+				status, collectionErr = mysqld.CollectFullStatusData(ctx)
+				close(finished)
+			}()
+			if !assert.Eventually(t, func() bool {
+				select {
+				case <-finished:
+					return true
+				default:
+					return false
+				}
+			}, 30*time.Second, time.Millisecond, "collection must return before MySQL answers") {
+				unblock()
+				<-finished
+				return
+			}
+			require.ErrorIs(t, collectionErr, context.Canceled)
+			assert.Nil(t, status)
+			assert.Equal(t, blockedCall, calls.Load(), "cancellation must not retry")
+
+			// The cancelled connection must release the sole pool slot even while
+			// the old server-side query is still blocked.
+			nextCtx, nextCancel := context.WithTimeout(t.Context(), 30*time.Second)
+			t.Cleanup(nextCancel)
+			status, err = mysqld.CollectFullStatusData(nextCtx)
+			require.NoError(t, err)
+			require.NotNil(t, status)
+			assert.Equal(t, uint32(42), status.ServerId)
+		})
+	}
+}
+
+func TestCollectFullStatusReplicaSemiSyncIndependentOfSourcePlugin(t *testing.T) {
+	tests := []struct {
+		name    string
+		primary string
+		replica string
+	}{
+		{name: "replica only", replica: "replica"},
+		{name: "slave only", replica: "slave"},
+		{name: "source and slave", primary: "source", replica: "slave"},
+		{name: "master and replica", primary: "master", replica: "replica"},
+	}
+	for _, tc := range tests {
+		for _, active := range []string{"OFF", "ON"} {
+			t.Run(tc.name+"/"+active, func(t *testing.T) {
+				db, mysqld := newCollectFullStatusDataTestMysqld(t)
+				variables := []string{"rpl_semi_sync_" + tc.replica + "_enabled|ON"}
+				statuses := []string{"Rpl_semi_sync_" + tc.replica + "_status|" + active}
+				if tc.primary != "" {
+					variables = append(variables, "rpl_semi_sync_"+tc.primary+"_enabled|ON")
+					statuses = append(statuses, "Rpl_semi_sync_"+tc.primary+"_status|ON")
+				}
+				fields := sqltypes.MakeTestFields("variable_name|variable_value", "varchar|varchar")
+				db.AddQueryPattern("SELECT variable_name, variable_value FROM performance_schema.global_variables WHERE variable_name IN .*", sqltypes.MakeTestResult(fields, variables...))
+				db.AddQueryPattern("SELECT variable_name, variable_value FROM performance_schema.global_status WHERE variable_name IN .*", sqltypes.MakeTestResult(fields, statuses...))
+
+				status, err := mysqld.CollectFullStatusData(t.Context())
+				require.NoError(t, err)
+				require.NotNil(t, status)
+				assert.True(t, status.SemiSyncReplicaEnabled)
+				assert.Equal(t, active == "ON", status.SemiSyncReplicaStatus)
+				assert.Equal(t, tc.primary != "", status.SemiSyncPrimaryEnabled)
+				assert.Equal(t, tc.primary != "", status.SemiSyncPrimaryStatus)
+			})
+		}
+	}
 }
 
 func TestCollectFullStatusDataRetriesLostConnectionOnce(t *testing.T) {
@@ -425,7 +551,7 @@ func TestCollectFullStatusDataOmitsGTIDPurgedForFilePos(t *testing.T) {
 	assert.Equal(t, uint32(42), status.ServerId)
 }
 
-func TestFetchFullStatusVariablesHonorsCanceledContext(t *testing.T) {
+func TestRunFullStatusQueryHonorsCanceledContext(t *testing.T) {
 	db := fakesqldb.New(t)
 	t.Cleanup(db.Close)
 
@@ -445,7 +571,10 @@ func TestFetchFullStatusVariablesHonorsCanceledContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 
-	_, err = testMysqld.fetchFullStatusVariables(ctx, conn)
+	err = runFullStatusQuery(ctx, conn, "variables", func() error {
+		_, err := conn.Conn.ExecuteFetch(query, 1, true)
+		return err
+	})
 
 	require.ErrorIs(t, err, context.Canceled)
 	assert.Zero(t, db.GetQueryCalledNum(query))
