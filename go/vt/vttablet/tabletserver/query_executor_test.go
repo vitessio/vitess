@@ -2347,6 +2347,18 @@ func TestSettingsRejectUnsafeConnectionCharsets(t *testing.T) {
 	safeSetting := "set character_set_client = 'utf8mb4'"
 	assertSettingRefused(t, safeSetting)
 	assert.Zero(t, db.GetQueryCalledNum(safeSetting), "a refused setting must not reach the backend")
+
+	// a user-defined variable named like a connection character set variable
+	// changes no connection setting, so a reserved connection may assign it
+	userVariableSetting := "set @charset = 'latin1'"
+	db.AddQuery(userVariableSetting, &sqltypes.Result{})
+	connID, _, err := tsv.te.ReserveBegin(ctx, &querypb.ExecuteOptions{}, []string{userVariableSetting})
+	require.NoError(t, err)
+	require.NoError(t, tsv.te.Release(ctx, connID))
+	connID, err = tsv.te.Reserve(ctx, &querypb.ExecuteOptions{}, 0, []string{userVariableSetting})
+	require.NoError(t, err)
+	require.NoError(t, tsv.te.Release(ctx, connID))
+	assert.Equal(t, 2, db.GetQueryCalledNum(userVariableSetting), "the pre-query must reach the backend on both reservation paths")
 }
 
 // A setting is applied with no table ACL check, so under strict table ACL one
