@@ -195,6 +195,58 @@ func StripLeadingComments(sql string) string {
 	return sql
 }
 
+// RewriteDoubleSlashComments replaces the "//" that starts each line comment
+// in sql with "#/", and reports whether it replaced any. Vitess reads "//" as
+// a comment to the end of the line, but MySQL has no such comment: it reads
+// the first "/" as division and goes on to read the rest of the line. MySQL
+// ends a "#" comment where Vitess ends a "//" comment, at the next '\n', so
+// after the rewrite MySQL skips exactly the text that Vitess skipped. Unlike
+// the "-" of "-- ", a "#" never joins the token before it (as in "1e-"), and
+// the rewrite keeps every offset in sql unchanged.
+//
+// Statement text that Vitess forwards to MySQL as written must go through
+// this rewrite first. Text that Vitess generates from a parsed statement
+// carries no comment to rewrite.
+func (p *Parser) RewriteDoubleSlashComments(sql string) (string, bool) {
+	if !strings.Contains(sql, "//") {
+		return sql, false
+	}
+	tokenizer := p.NewStringTokenizer(sql)
+	var buf strings.Builder
+	copied := 0
+	for {
+		pos := tokenizer.Pos
+		typ, val := tokenizer.Scan()
+		switch typ {
+		case LEX_ERROR:
+			// Some callers forward text that does not parse, and split it
+			// with a tokenizer that reads on past a lexing error. Read on
+			// too, so that MySQL skips every comment that tokenizer skips.
+			if tokenizer.Pos > pos {
+				continue
+			}
+			fallthrough
+		case 0:
+			if copied == 0 {
+				return sql, false
+			}
+			buf.WriteString(sql[copied:])
+			return buf.String(), true
+		case COMMENT:
+			if !strings.HasPrefix(val, "//") {
+				continue
+			}
+			start := tokenizer.Pos - len(val)
+			if copied == 0 {
+				buf.Grow(len(sql))
+			}
+			buf.WriteString(sql[copied:start])
+			buf.WriteByte('#')
+			copied = start + 1
+		}
+	}
+}
+
 func hasCommentPrefix(sql string) bool {
 	return len(sql) > 1 && ((sql[0] == '/' && sql[1] == '*') || (sql[0] == '-' && sql[1] == '-'))
 }

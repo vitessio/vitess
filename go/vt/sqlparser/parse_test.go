@@ -6589,6 +6589,14 @@ var invalidSQL = []struct {
 	input  string
 	output string
 }{{
+	// MySQL reads a quoted user variable name to its closing quote, and
+	// Vitess reads one only if it holds nothing an identifier cannot.
+	input:  "select @'a//b'",
+	output: "syntax error at position 9",
+}, {
+	input:  "select @\"a b\" from t",
+	output: "syntax error at position 9",
+}, {
 	// SHOW PROFILE writes its types back unquoted, so only MySQL's own are accepted
 	input:  "show profile `all; insert into t values (1); -- `",
 	output: "unknown profile type at position 50",

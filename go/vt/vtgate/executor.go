@@ -1192,6 +1192,9 @@ func (e *Executor) fetchOrCreatePlan(
 		return nil, nil, nil, vterrors.VT13001("vschema not initialized")
 	}
 
+	// Plans can forward the statement text to MySQL as written, so MySQL must
+	// skip every comment that Vitess skips.
+	queryString, _ = e.env.Parser().RewriteDoubleSlashComments(queryString)
 	query, comments := sqlparser.SplitMarginComments(queryString)
 	vcursor, _ = e.newVCursor(safeSession, comments, logStats)
 
