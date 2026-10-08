@@ -292,29 +292,16 @@ func (c *Conn) parseRow(data []byte, fields []*querypb.Field, reader func([]byte
 	return result, nil
 }
 
-// parseRowCopy parses an individual row out of an ephemeral packet, copying the
-// values so the row survives `recycleReadPacket`. Rather than one allocation per
-// column it copies the whole row into a single exactly-sized buffer and hands each
-// column a sub-slice of it, which takes a row of C columns from 1+C allocations
-// down to 2.
-//
-// It walks the packet twice: once to total the value lengths, then once to copy. The
-// alternative is to parse into `Value`s that alias the packet and rewrite them in a
-// second pass, which measured ~4% slower at 20 columns and leaves a window where the
-// row points into a buffer the caller is about to recycle. Nothing here ever aliases
-// `data` past the copy.
-//
-// The lenenc decode is open-coded rather than reached through `parseRow`'s reader
-// argument: that indirect call cannot be inlined _(`readLenEncStringAsBytes` costs 106
-// against a budget of 80)_, and the overwhelmingly common case is a value under 251
-// bytes, which is a single length byte. Worth ~22% here, at the cost of a NULL branch
-// that now exists in two places — `TestParseRowCopyMatchesPerValueCopy` is what keeps
-// the two honest.
+// parseRowCopy copies all value bytes out of an ephemeral packet so the row
+// survives `recycleReadPacket`. Copying each value separately (as Vitess v24
+// and earlier did) would allocate once per column. It instead totals their lengths
+// and copies them into one exactly-sized backing buffer, keeping parsing to two
+// allocations regardless of column count.
 // Returns a SQLError.
 func (c *Conn) parseRowCopy(data []byte, fields []*querypb.Field) ([]sqltypes.Value, error) {
 	colNumber := len(fields)
 
-	// First pass: total the value lengths, and bounds-check as we go.
+	// First pass: validate the row and total its value lengths.
 	total := 0
 	pos := 0
 	for range colNumber {
@@ -327,7 +314,7 @@ func (c *Conn) parseRowCopy(data []byte, fields []*querypb.Field) ([]sqltypes.Va
 			pos++
 			continue
 		case b < NullValue:
-			// Single-byte length, the common case.
+			// Most lengths fit in one byte.
 			n = int(b)
 			pos++
 		default:
@@ -344,9 +331,7 @@ func (c *Conn) parseRowCopy(data []byte, fields []*querypb.Field) ([]sqltypes.Va
 		pos += n
 	}
 
-	// Second pass: copy into the one buffer. This repeats the walk above over the same
-	// bytes in the same order, so every index is already known to be in range and the
-	// checks are not repeated. Keep the two loops in step if either changes.
+	// Second pass: copy into the shared buffer. The first pass made every index safe.
 	row := make([]sqltypes.Value, colNumber)
 	buf := make([]byte, total)
 	off := 0
@@ -355,8 +340,7 @@ func (c *Conn) parseRowCopy(data []byte, fields []*querypb.Field) ([]sqltypes.Va
 		var n int
 		switch b := data[pos]; {
 		case b == NullValue:
-			// Leave the zero Value: a NULL carries no bytes and must stay distinct
-			// from a zero-length value.
+			// Preserve NULL; it differs from an empty value.
 			pos++
 			continue
 		case b < NullValue:
@@ -367,11 +351,7 @@ func (c *Conn) parseRowCopy(data []byte, fields []*querypb.Field) ([]sqltypes.Va
 			n, pos = int(size), next
 		}
 		copy(buf[off:off+n], data[pos:pos+n])
-		// The third index is load-bearing: `sqltypes.Value.CachedSize` charges
-		// `cap(val)`, so without it every value would be billed the whole row
-		// buffer and `StreamConsolidator` would stop catching up on the first
-		// result it saw. Capping at the length keeps the accounting identical to
-		// one allocation per value.
+		// Cap each slice so `CachedSize` does not charge the full row buffer.
 		row[i] = sqltypes.MakeTrusted(fields[i].Type, buf[off:off+n:off+n])
 		off += n
 		pos += n
