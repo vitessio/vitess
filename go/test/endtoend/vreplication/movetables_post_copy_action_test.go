@@ -21,7 +21,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
@@ -169,8 +168,8 @@ func TestMoveTablesStopCancelDuringPostCopyAction(t *testing.T) {
 			released = true
 			for _, conn := range conns {
 				_, err := conn.ExecuteFetch("rollback", 1, false)
-				assert.NoError(t, err)
 				conn.Close()
+				require.NoError(t, err)
 			}
 		}
 		t.Cleanup(func() { release(t) })

@@ -520,7 +520,7 @@ func TestExecStopWhilePostCopyActionRunning(t *testing.T) {
 		return n
 	}
 	alterRunning := func() bool {
-		return superQueryCount(fmt.Sprintf("select count(*) from information_schema.processlist where info = %s", encodeString(alter))) == 1
+		return superQueryCount("select count(*) from information_schema.processlist where info = "+encodeString(alter)) == 1
 	}
 	alterBlocked := func() bool {
 		return superQueryCount(fmt.Sprintf("select count(*) from information_schema.processlist where info = %s and state = 'Waiting for table metadata lock'", encodeString(alter))) == 1
