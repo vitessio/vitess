@@ -33,6 +33,7 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/mysql/sqlmode"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vtenv"
@@ -427,7 +428,44 @@ func TestConnectorConnectNeutralizesSQLMode(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(conn.Close)
 
-	require.Equal(t, 1, db.GetQueryCalledNum(sqlmode.NeutralizeSessionQuery))
+	// A connection that asked for no character set restores the server's
+	// default, which the fake server announces as utf8mb4.
+	require.Equal(t, 1, db.GetQueryCalledNum(sqlmode.SessionSetupQuery("utf8mb4", "utf8mb4_0900_ai_ci")))
+
+	// a connection that negotiated a character set restores it in the same statement
+	params := db.ConnParams()
+	params.Charset = collations.CollationUtf8mb4ID
+	charsetConnector := New(params)
+	conn, err = charsetConnector.Connect(t.Context())
+	require.NoError(t, err)
+	t.Cleanup(conn.Close)
+	require.Equal(t, 2, db.GetQueryCalledNum(sqlmode.SessionSetupQuery("utf8mb4", "utf8mb4_0900_ai_ci")))
+
+	// MySQL 5.7 and MariaDB do not have utf8mb4_0900_ai_ci, so the server refuses
+	// the collation, and the character set is restored alone.
+	db.AddRejectedQuery(sqlmode.SessionSetupQuery("utf8mb4", "utf8mb4_0900_ai_ci"),
+		sqlerror.NewSQLError(sqlerror.ERUnknownCollation, sqlerror.SSUnknownSQLState, "Unknown collation: 'utf8mb4_0900_ai_ci'"))
+	conn, err = charsetConnector.Connect(t.Context())
+	require.NoError(t, err)
+	t.Cleanup(conn.Close)
+	require.Equal(t, 3, db.GetQueryCalledNum(sqlmode.SessionSetupQuery("utf8mb4", "utf8mb4_0900_ai_ci")))
+	require.Equal(t, 1, db.GetQueryCalledNum(sqlmode.SessionSetupQuery("utf8mb4", "")))
+
+	// A safe collation that Vitess does not implement has no name to restore, so
+	// its character set is restored alone: here tis620_thai_ci.
+	params.Charset = 18 // tis620_thai_ci
+	tis620Connector := New(params)
+	conn, err = tis620Connector.Connect(t.Context())
+	require.NoError(t, err)
+	t.Cleanup(conn.Close)
+	require.Equal(t, 1, db.GetQueryCalledNum(sqlmode.SessionSetupQuery("tis620", "")))
+
+	// A character set that Vitess cannot parse safely is refused rather than set
+	// up, here cp932, whose second byte can be a backslash.
+	params.Charset = 95 // cp932_japanese_ci
+	unsafeConnector := New(params)
+	_, err = unsafeConnector.Connect(t.Context())
+	require.ErrorContains(t, err, "unsupported connection character set (collation 95)")
 }
 
 // stallingHandler completes the handshake but never answers a query until released,
