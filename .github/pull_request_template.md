@@ -12,6 +12,23 @@
 <!-- A few sentences describing the overall goals of the pull request's commits. -->
 <!-- If this is a bug fix and you think the fix should be backported, please write so. -->
 
+## Motivation
+
+<!--
+  Required unless you are a Vitess maintainer.
+  Maintainer review time is limited, and PRs that leave this section empty or generic may be closed without review.
+  See "Pull requests and maintainer review" in CONTRIBUTING.md.
+-->
+
+**How do you use Vitess?** (pick one)
+
+-   [ ] In production
+-   [ ] In staging or development
+-   [ ] Evaluating it
+-   [ ] I don't use Vitess
+
+**Did you run this change against a real Vitess deployment?** <!-- Describe where and what you observed. For a bug fix, include how you reproduced the problem. Not required for documentation, CI, or test-only changes. -->
+
 ## Related Issue(s)
 
 <!-- List related issues and pull requests. If this PR fixes an issue, please add it using Fixes #????  -->

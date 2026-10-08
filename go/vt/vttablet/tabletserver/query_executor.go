@@ -942,8 +942,10 @@ func (qre *QueryExecutor) checkPermissions() error {
 	// a table the planner did derive by name, and a dry run records it. The
 	// planner flags such statements in the one switch that must account for
 	// every statement type (BuildPermissions), so this needs no list of its
-	// own. The exempt ACL applied above stays as the escape hatch for
-	// operators who need these statements.
+	// own. Two kinds of caller can still run them: one in the exempt ACL
+	// applied above, and one holding every role in a table group that covers
+	// every table ("%"), except for CALL and LOAD DATA, which stay exempt-only
+	// (see checkUndeterminedTableAccess).
 	if qre.plan.TablesUndetermined {
 		return qre.checkUndeterminedTableAccess(callerID)
 	}
@@ -977,20 +979,32 @@ func (qre *QueryExecutor) checkAccess(authorized *tableacl.ACLResult, tableName 
 
 // checkUndeterminedTableAccess enforces table ACL for a statement whose table
 // set could not be determined at planning time (see checkPermissions). It
-// mirrors checkAccess's dry-run and stats handling, but denies unconditionally
-// under strict table ACL: the tables the planner did derive have already been
-// checked, no grant can cover the ones it could not, and the caller has
-// already been shown to be non-exempt.
+// mirrors checkAccess's dry-run and stats handling. The tables the planner did
+// derive have already been checked, and the caller has already been shown to
+// be non-exempt. The ones it could not derive are covered only by a table
+// group that covers every table ("%"), and then only for a caller who holds
+// every role in it, since the statement may read, write or alter any of them;
+// the roles are granted separately, so being an ADMIN alone does not let a
+// caller read. CALL and LOAD DATA are not covered even then, as they can act
+// beyond any table (see TabletPlan.buildAuthorized). Any other caller is
+// denied under strict table ACL.
 func (qre *QueryExecutor) checkUndeterminedTableAccess(callerID *querypb.VTGateCallerID) error {
+	authorized := qre.plan.AuthorizedUndetermined
 	var aclState acl.ACLState
 	defer func() {
 		// There is no table to name; label the denial so operators can tell
 		// it apart from a per-table one in the TableACL* counters. The label
 		// carries hyphens so that no unquoted table name can share the series.
+		// Its table group stays empty, as it shipped, so that an alert on the
+		// series still matches when a group covers every table.
 		statsKey := qre.generateACLStatsKey("undetermined-table-set", &tableacl.ACLResult{}, callerID)
 		qre.recordACLStats(statsKey, aclState)
 	}()
 
+	if authorized.IsMember(callerID) {
+		aclState = acl.ACLAllow
+		return nil
+	}
 	if qre.tsv.qe.enableTableACLDryRun {
 		aclState = acl.ACLPseudoDenied
 		return nil
@@ -1216,6 +1230,9 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 	t.SequenceInfo.Lock()
 	defer t.SequenceInfo.Unlock()
 	if t.SequenceInfo.NextVal == 0 || t.SequenceInfo.NextVal+inc > t.SequenceInfo.LastVal {
+		// Stage the new cache range and write it to SequenceInfo after the COMMIT succeeds.
+		// A failed COMMIT can leave the old next_id in the sequence table.
+		nextVal, lastVal := t.SequenceInfo.NextVal, t.SequenceInfo.LastVal
 		_, err := qre.execAsTransaction(func(conn *StatefulConnection) (*sqltypes.Result, error) {
 			query := fmt.Sprintf("select next_id, cache from %s where id = 0 for update", sqlparser.String(tableName))
 			qr, err := qre.execStatefulConn(conn, query, false)
@@ -1229,16 +1246,15 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 			if err != nil {
 				return nil, vterrors.Wrapf(err, "error loading sequence %s", tableName)
 			}
-			// If LastVal does not match next ID, then either:
-			// VTTablet just started, and we're initializing the cache, or
-			// Someone reset the id underneath us.
-			if t.SequenceInfo.LastVal != nextID {
-				if nextID < t.SequenceInfo.LastVal {
-					log.Warn(fmt.Sprintf("Sequence next ID value %v is below the currently cached max %v, updating it to max", nextID, t.SequenceInfo.LastVal))
-					nextID = t.SequenceInfo.LastVal
+			// Start the staged range at next_id when next_id differs from the cached last value.
+			// The two differ when the cache is empty, when a write outside this cache changed next_id,
+			// or when an earlier refill's COMMIT applied but returned an error.
+			if lastVal != nextID {
+				if nextID < lastVal {
+					log.Warn(fmt.Sprintf("Sequence next ID value %v is below the currently cached max %v, updating it to max", nextID, lastVal))
+					nextID = lastVal
 				}
-				t.SequenceInfo.NextVal = nextID
-				t.SequenceInfo.LastVal = nextID
+				nextVal = nextID
 			}
 			cache, err := qr.Rows[0][1].ToCastInt64()
 			if err != nil {
@@ -1248,7 +1264,7 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid cache value for sequence %s: %d", tableName, cache)
 			}
 			newLast := nextID + cache
-			for newLast < t.SequenceInfo.NextVal+inc {
+			for newLast < nextVal+inc {
 				newLast += cache
 			}
 			query = fmt.Sprintf("update %s set next_id = %d where id = 0", sqlparser.String(tableName), newLast)
@@ -1256,12 +1272,15 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 			if err != nil {
 				return nil, err
 			}
-			t.SequenceInfo.LastVal = newLast
+			lastVal = newLast
 			return nil, nil
 		})
 		if err != nil {
 			return nil, err
 		}
+
+		t.SequenceInfo.NextVal = nextVal
+		t.SequenceInfo.LastVal = lastVal
 	}
 	ret := t.SequenceInfo.NextVal
 	t.SequenceInfo.NextVal += inc
@@ -1516,6 +1535,15 @@ func (qre *QueryExecutor) execRollbackToSavepoint(conn *StatefulConnection, sql 
 	return qr, nil
 }
 
+// escapeAnnotationPrincipal returns the caller principal in a form that can be
+// embedded in the annotation comment that prefixes queries sent to MySQL. The
+// principal can be chosen by the client, and "*/" is the only sequence that
+// ends the comment, so it is escaped as "*\/", which MySQL reads as ordinary
+// comment text.
+func escapeAnnotationPrincipal(principal string) string {
+	return strings.ReplaceAll(principal, "*/", `*\/`)
+}
+
 func (qre *QueryExecutor) generateFinalSQL(parsedQuery *sqlparser.ParsedQuery, bindVars map[string]*querypb.BindVariable) (string, string, error) {
 	query, err := parsedQuery.GenerateQuery(bindVars, nil)
 	if err != nil {
@@ -1526,6 +1554,7 @@ func (qre *QueryExecutor) generateFinalSQL(parsedQuery *sqlparser.ParsedQuery, b
 		if username == "" {
 			username = callerid.GetUsername(callerid.ImmediateCallerIDFromContext(qre.ctx))
 		}
+		username = escapeAnnotationPrincipal(username)
 		var buf strings.Builder
 		tabletTypeStr := qre.tsv.sm.target.TabletType.String()
 		buf.Grow(8 + len(username) + len(tabletTypeStr))

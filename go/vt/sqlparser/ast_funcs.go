@@ -220,6 +220,9 @@ func (ct *ColumnType) SQLType() querypb.Type {
 
 func SQLTypeToQueryType(typeName string, unsigned bool) querypb.Type {
 	switch keywordVals[strings.ToLower(typeName)] {
+	case SERIAL:
+		// SERIAL is an alias for BIGINT UNSIGNED NOT NULL AUTO_INCREMENT UNIQUE.
+		return sqltypes.Uint64
 	case TINYINT:
 		if unsigned {
 			return sqltypes.Uint8
@@ -2329,11 +2332,14 @@ func (ty ShowCommandType) ToString() string {
 // formatUserOrRoleHost extracts the host from an AT_ID token value.
 // AT_ID values may be quoted (e.g., 'localhost') or unquoted (e.g., localhost).
 func formatUserOrRoleHost(atID string) string {
-	host := atID
-	if len(host) > 0 && host[0] == '\'' && host[len(host)-1] == '\'' {
-		host = host[1 : len(host)-1]
+	// The tokenizer keeps a quoted host's quotes, and a doubled quote inside it
+	// stands for the quote itself (see Tokenizer.quotedNameIsIdentifier). Read it
+	// as the host it names, which UserOrRole.formatTo encodes again.
+	if len(atID) >= 2 && (atID[0] == '\'' || atID[0] == '"') && atID[len(atID)-1] == atID[0] {
+		quote := atID[:1]
+		return strings.ReplaceAll(atID[1:len(atID)-1], quote+quote, quote)
 	}
-	return host
+	return atID
 }
 
 func (node *UserOrRole) formatTo(buf *TrackedBuffer) {
@@ -2341,14 +2347,29 @@ func (node *UserOrRole) formatTo(buf *TrackedBuffer) {
 		buf.WriteString("current_user")
 		return
 	}
-	buf.WriteString("'")
-	buf.WriteString(*node.Name)
-	buf.WriteString("'")
+	buf.WriteString(encodeSQLString(*node.Name))
 	if node.Host != nil {
-		buf.WriteString("@'")
-		buf.WriteString(*node.Host)
-		buf.WriteString("'")
+		buf.WriteByte('@')
+		buf.WriteString(encodeSQLString(*node.Host))
 	}
+}
+
+// showProfileTypes are the types SHOW PROFILE accepts, in lowercase. ALL and MEMORY
+// have productions of their own.
+var showProfileTypes = map[string]bool{
+	"block io":         true,
+	"context switches": true,
+	"cpu":              true,
+	"ipc":              true,
+	"page faults":      true,
+	"source":           true,
+	"swaps":            true,
+}
+
+// isShowProfileType reports whether name, in lowercase, is a SHOW PROFILE type.
+// Only those are accepted, since they are written back unquoted.
+func isShowProfileType(name string) bool {
+	return showProfileTypes[name]
 }
 
 // ToString returns the DropKeyType as a string
