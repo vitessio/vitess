@@ -4651,6 +4651,10 @@ show_statement:
  */
 | SHOW ci_identifier ddl_skip_to_end
   {
+    if !isShowOtherCommand($2.String()) {
+      yylex.Error("unknown SHOW command")
+      return 1
+    }
     $$ = &Show{&ShowOther{Command: string($2.String())}}
   }
 | SHOW CREATE USER ddl_skip_to_end
@@ -4659,6 +4663,10 @@ show_statement:
    }
 | SHOW BINARY ci_identifier ddl_skip_to_end /* SHOW BINARY ... */
   {
+    if !isShowOtherCommand($3.String()) {
+      yylex.Error("unknown SHOW command")
+      return 1
+    }
     $$ = &Show{&ShowOther{Command: string($2) + " " + $3.String()}}
   }
 | SHOW BINARY LOGS ddl_skip_to_end /* SHOW BINARY LOGS */

@@ -4320,6 +4320,17 @@ func TestInvalid(t *testing.T) {
 	}, {
 		input: "select _binary foo",
 		err:   "syntax error at position 19 near 'foo'",
+	}, {
+		// ShowOther writes its command back unquoted, so a back-quoted one that
+		// holds more than a plain word would print as more than one statement
+		input: "show `privileges; drop table t`",
+		err:   "unknown SHOW command",
+	}, {
+		input: "show `x;drop table t` hosts",
+		err:   "unknown SHOW command",
+	}, {
+		input: "show binary `logs; drop table t`",
+		err:   "unknown SHOW command",
 	},
 	}
 

@@ -2315,6 +2315,23 @@ func (ty ShowCommandType) ToString() string {
 	}
 }
 
+// isShowOtherCommand reports whether name, a word of a SHOW statement that
+// ShowOther keeps as its command, is a plain word. ShowOther writes its command
+// back unquoted, so a back-quoted identifier holding anything else, such as a ';'
+// and more SQL, would print as more than one statement. Every SHOW command MySQL
+// accepts is a plain word, and MySQL rejects a back-quoted one.
+func isShowOtherCommand(name string) bool {
+	if name == "" {
+		return false
+	}
+	for _, c := range name {
+		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '_') {
+			return false
+		}
+	}
+	return true
+}
+
 // ToString returns the DropKeyType as a string
 func (key DropKeyType) ToString() string {
 	switch key {
