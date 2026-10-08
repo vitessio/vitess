@@ -44,6 +44,22 @@ func (info *UnicaseInfo) unicodeSort(codepoint rune) rune {
 	return codepoint
 }
 
+// changeCase returns the upper or lower case of codepoint, or codepoint
+// itself when the table has no entry for it.
+func (info *UnicaseInfo) changeCase(codepoint rune, upcase bool) rune {
+	if codepoint < 0 || codepoint > info.MaxChar {
+		return codepoint
+	}
+	if page := info.Page[int(codepoint)>>8]; page != nil {
+		unicaseChar := (*page)[int(codepoint)&0xFF]
+		if upcase {
+			return unicaseChar.ToUpper
+		}
+		return unicaseChar.ToLower
+	}
+	return codepoint
+}
+
 var plane00 = []UnicaseChar{
 	{0x0000, 0x0000, 0x0000},
 	{0x0001, 0x0001, 0x0001},

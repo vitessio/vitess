@@ -871,6 +871,26 @@ func TestCompilerSingle(t *testing.T) {
 			expression: `GREATEST(JSON_OBJECT(), JSON_ARRAY())`,
 			result:     `VARCHAR("{}")`,
 		},
+		{
+			// UPPER over a JSON value case-maps the document's text, which uses utf8mb4_bin.
+			expression: `UPPER(column0)`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`{"a": "b"}`))},
+			result:     `VARCHAR("{\"A\": \"B\"}")`,
+			collation:  collations.CollationUtf8mb4BinID,
+			typeWanted: evalengine.NewTypeEx(sqltypes.VarChar, collations.CollationUtf8mb4BinID, true, 0, 0, nil),
+		},
+		{
+			// LOWER over a JSON value returns text, so the comparison is not a JSON comparison.
+			expression: `LOWER(column0) = '{"a": "b"}'`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`{"a": "b"}`))},
+			result:     `INT64(1)`,
+		},
+		{
+			// The utf8mb4_bin collation of the JSON text makes the comparison case-sensitive.
+			expression: `LOWER(column0) = '{"A": "B"}'`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`{"a": "b"}`))},
+			result:     `INT64(0)`,
+		},
 	}
 
 	tz, _ := time.LoadLocation("Europe/Madrid")

@@ -190,6 +190,38 @@ func (c *Collation_unicode_bin) Collate(left, right []byte, isPrefix bool) int {
 	return collationBinary(left, right, isPrefix)
 }
 
+func (c *Collation_unicode_bin) ToLower(dst, src []byte) []byte {
+	return c.changeCase(dst, src, false)
+}
+
+func (c *Collation_unicode_bin) ToUpper(dst, src []byte) []byte {
+	return c.changeCase(dst, src, true)
+}
+
+// changeCase maps every codepoint in src through MySQL's default unicase
+// table, which MySQL uses to change the case of text in its _bin Unicode
+// collations, and appends the result to dst. Malformed input and codepoints
+// whose mapping cannot be encoded in the charset are copied unchanged.
+func (c *Collation_unicode_bin) changeCase(dst, src []byte, upcase bool) []byte {
+	var buf [4]byte
+	for len(src) > 0 {
+		cp, width, ok := c.charset.DecodeRune(src)
+		if width == 0 {
+			break
+		}
+		if ok {
+			if n := c.charset.EncodeRune(buf[:], unicaseInfo_default.changeCase(cp, upcase)); n > 0 {
+				dst = append(dst, buf[:n]...)
+				src = src[width:]
+				continue
+			}
+		}
+		dst = append(dst, src[:width]...)
+		src = src[width:]
+	}
+	return dst
+}
+
 func (c *Collation_unicode_bin) WeightString(dst, src []byte, numCodepoints int) []byte {
 	if c.charset.SupportsSupplementaryChars() {
 		return c.weightStringUnicode(dst, src, numCodepoints)

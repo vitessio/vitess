@@ -593,6 +593,7 @@ func (call *builtinChangeCase) eval(env *ExpressionEnv) (eval, error) {
 		return nil, err
 	}
 
+	var b *evalBytes
 	switch e := arg.(type) {
 	case nil:
 		return nil, nil
@@ -601,22 +602,30 @@ func (call *builtinChangeCase) eval(env *ExpressionEnv) (eval, error) {
 		return evalToVarchar(e, call.collate, false)
 
 	case *evalBytes:
-		coll := colldata.Lookup(e.col.Collation)
-		csa, ok := coll.(colldata.CaseAwareCollation)
-		if !ok {
-			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "not implemented")
-		}
-		var newcase []byte
-		if call.upcase {
-			newcase = csa.ToUpper(nil, e.bytes)
-		} else {
-			newcase = csa.ToLower(nil, e.bytes)
-		}
-		return newEvalText(newcase, e.col), nil
+		b = e
+
+	case *evalJSON:
+		b = newEvalText(e.ToRawBytes(), collationJSON)
 
 	default:
-		return e, nil
+		b, err = evalToVarchar(e, call.collate, true)
+		if err != nil {
+			return nil, err
+		}
 	}
+
+	coll := colldata.Lookup(b.col.Collation)
+	csa, ok := coll.(colldata.CaseAwareCollation)
+	if !ok {
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "not implemented")
+	}
+	var newcase []byte
+	if call.upcase {
+		newcase = csa.ToUpper(nil, b.bytes)
+	} else {
+		newcase = csa.ToLower(nil, b.bytes)
+	}
+	return newEvalText(newcase, b.col), nil
 }
 
 func (call *builtinChangeCase) compile(c *compiler) (ctype, error) {
@@ -627,16 +636,21 @@ func (call *builtinChangeCase) compile(c *compiler) (ctype, error) {
 
 	skip := c.compileNullCheck1(str)
 
+	col := str.Col
 	switch {
 	case str.isTextual():
+	case str.Type == sqltypes.TypeJSON:
+		c.asm.Convert_xc(1, sqltypes.VarChar, collationJSON.Collation, nil)
+		col = collationJSON
 	default:
 		c.asm.Convert_xc(1, sqltypes.VarChar, c.collation, nil)
+		col = typedCoercionCollation(sqltypes.VarChar, c.collation)
 	}
 
 	c.asm.Fn_LUCASE(call.upcase)
 	c.asm.jumpDestination(skip)
 
-	return str, nil
+	return ctype{Type: sqltypes.VarChar, Col: col, Flag: nullableFlags(str.Flag)}, nil
 }
 
 func (call *builtinCharLength) eval(env *ExpressionEnv) (eval, error) {
