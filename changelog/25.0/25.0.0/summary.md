@@ -7,6 +7,7 @@
 - **[Major Changes](#major-changes)**
     - **[Security](#security)**
         - [Legacy vtctld HTTP API removed](#vtctld-http-api-removed)
+        - [VTAdmin refuses cross-site requests that change cluster state](#vtadmin-cross-site-state-changes)
     - **[New Support](#new-support)**
         - [VTOrc failover of an unreachable primary `vttablet` via replica quorum](#vtorc-quorum-unreachable-primary)
     - **[Breaking Changes](#breaking-changes)**
@@ -91,6 +92,21 @@ The removed endpoints are `cells`, `keyspaces`, `keyspace`, `shards`, `srv_keysp
 **Impact**: requests to `/api/` on vtctld's HTTP port return `404 Not Found`. Passing one of the four flags logs a deprecation warning and has no effect. For anyone who builds on the Go packages, `vtctld.InitVtctld`, `vtctld.ActionRepository`, `vtctld.ActionResult`, and `vtctld.TabletWithURL` are gone.
 
 See [#21169](https://github.com/vitessio/vitess/issues/21169) for the removal and [#21170](https://github.com/vitessio/vitess/issues/21170) for the removal of the flags in v26.
+
+#### <a id="vtadmin-cross-site-state-changes"/>VTAdmin refuses cross-site requests that change cluster state</a>
+
+Several VTAdmin API routes that change cluster state accepted any HTTP method, and `vtadmin-web` sent some of them as `GET`. In a deployment that authenticates VTAdmin users with a session cookie, a page on another site could therefore change cluster state with an operator's session. See [GHSA-3fr2-mqr5-r5x5](https://github.com/vitessio/vitess/security/advisories/GHSA-3fr2-mqr5-r5x5).
+
+VTAdmin closes this in two ways:
+
+- The `PingTablet`, `RunHealthCheck`, `ConcludeTransaction`, `StartWorkflow`, `StopWorkflow`, `WorkflowSwitchTraffic`, `WorkflowDelete`, and `MoveTablesComplete` routes accept only `POST`, and `vtadmin-web` sends all of them as `POST`.
+- `vtadmin` refuses a state-changing request (any method other than `GET`, `HEAD`, or `OPTIONS`) that a browser sends on behalf of another origin. It accepts the request when its `Origin` is listed in `--http-origin` or when the browser reports it as same-origin in `Sec-Fetch-Site`. From a browser that sends no fetch metadata, it accepts the request when its `Origin` is the origin the request was sent to. Clients other than browsers send neither header and are not affected.
+
+**Migration**: upgrade `vtadmin` and `vtadmin-web` together, since an older `vtadmin-web` sends the ping, health check, conclude transaction, and workflow start and stop actions as `GET`. If `vtadmin-web` is served from a different origin than `vtadmin`, list that origin by name in `--http-origin`. A `*` entry still lets any page read responses, but no longer lets it change cluster state. When `vtadmin` runs behind a proxy that terminates TLS, also list the public origin in `--http-origin`, so that browsers that send no fetch metadata are accepted.
+
+**Impact**: a request to one of the eight routes with a method other than `POST` returns `404 Not Found`, as for VTAdmin's other method-restricted routes. A state-changing request that a browser sends from an origin `vtadmin` does not accept returns `403 Forbidden`.
+
+See [#21397](https://github.com/vitessio/vitess/pull/21397) for details.
 
 ### <a id="new-support"/>New Support</a>
 
