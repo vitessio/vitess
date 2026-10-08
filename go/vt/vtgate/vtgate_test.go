@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -939,6 +940,65 @@ func TestRebuildTopoGraphs(t *testing.T) {
 			tt.checkFunc(t, ctx, ts, factory)
 		})
 	}
+}
+
+// TestRebuildTopoGraphsKeyspaceDeletedDuringRebuild checks that a keyspace
+// deleted between the existence check and the rebuild is skipped, and that
+// its files in the cell are left in place.
+func TestRebuildTopoGraphsKeyspaceDeletedDuringRebuild(t *testing.T) {
+	ctx := t.Context()
+	cell := "cell1"
+	ts, factory := memorytopo.NewServerAndFactory(ctx, cell)
+	require.NoError(t, ts.CreateKeyspace(ctx, "ks1", &topodatapb.Keyspace{}))
+	require.NoError(t, ts.UpdateShardReplicationFields(ctx, cell, "ks1", "0", func(sr *topodatapb.ShardReplication) error {
+		sr.Nodes = append(sr.Nodes, &topodatapb.ShardReplication_Node{TabletAlias: &topodatapb.TabletAlias{Cell: cell, Uid: 100}})
+		return nil
+	}))
+
+	// Delete the keyspace right after the first read of its record.
+	hooked := &deleteKeyspaceAfterGetFactory{Factory: factory, deleteKeyspace: func() {
+		require.NoError(t, ts.DeleteKeyspace(ctx, "ks1"))
+	}}
+	rebuildTS, err := topo.NewWithFactory(hooked, "", "")
+	require.NoError(t, err)
+	t.Cleanup(rebuildTS.Close)
+
+	err = rebuildTopoGraphs(ctx, rebuildTS, cell, []string{"ks1"})
+	require.NoError(t, err)
+	sr, err := ts.GetShardReplication(ctx, cell, "ks1", "0")
+	require.NoError(t, err)
+	require.Len(t, sr.Nodes, 1)
+	_, err = ts.GetSrvKeyspace(ctx, cell, "ks1")
+	require.True(t, topo.IsErrType(err, topo.NoNode))
+}
+
+// deleteKeyspaceAfterGetFactory creates memorytopo connections that call
+// deleteKeyspace once, after the first Get of the ks1 keyspace record.
+type deleteKeyspaceAfterGetFactory struct {
+	*memorytopo.Factory
+	deleteKeyspace func()
+	once           sync.Once
+}
+
+func (f *deleteKeyspaceAfterGetFactory) Create(cell, serverAddr, root string) (topo.Conn, error) {
+	conn, err := f.Factory.Create(cell, serverAddr, root)
+	if err != nil {
+		return nil, err
+	}
+	return &deleteKeyspaceAfterGetConn{Conn: conn, factory: f}, nil
+}
+
+type deleteKeyspaceAfterGetConn struct {
+	topo.Conn
+	factory *deleteKeyspaceAfterGetFactory
+}
+
+func (c *deleteKeyspaceAfterGetConn) Get(ctx context.Context, filePath string) ([]byte, topo.Version, error) {
+	contents, version, err := c.Conn.Get(ctx, filePath)
+	if filePath == "keyspaces/ks1/Keyspace" {
+		c.factory.once.Do(c.factory.deleteKeyspace)
+	}
+	return contents, version, err
 }
 
 func TestBinlogDumpGTID(t *testing.T) {

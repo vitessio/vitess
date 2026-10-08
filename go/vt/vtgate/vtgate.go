@@ -473,6 +473,18 @@ func Init(
 	return vtgateInst
 }
 
+// rebuildExistingKeyspace rebuilds the SrvKeyspace of a keyspace in a cell.
+// Unlike topotools.RebuildKeyspace, it never deletes the files of a keyspace
+// that doesn't exist: it returns the NoNode error instead.
+func rebuildExistingKeyspace(ctx context.Context, topoServer *topo.Server, keyspace, cell string) (err error) {
+	ctx, unlock, err := topoServer.LockKeyspace(ctx, keyspace, "RebuildKeyspace")
+	if err != nil {
+		return err
+	}
+	defer unlock(&err)
+	return topotools.RebuildKeyspaceLocked(ctx, logutil.NewConsoleLogger(), topoServer, keyspace, []string{cell}, false)
+}
+
 func rebuildTopoGraphs(ctx context.Context, topoServer *topo.Server, cell string, keyspaces []string) error {
 	existingKeyspaces := make([]string, 0, len(keyspaces))
 	for _, ks := range keyspaces {
@@ -496,7 +508,14 @@ func rebuildTopoGraphs(ctx context.Context, topoServer *topo.Server, cell string
 				return vterrors.Wrap(err, "vtgate Init: failed to read Keyspace")
 			}
 			log.Info(fmt.Sprintf("Rebuilding Serving Keyspace %v", ks))
-			if err := topotools.RebuildKeyspace(ctx, logutil.NewConsoleLogger(), topoServer, ks, []string{cell}, false); err != nil {
+			err = rebuildExistingKeyspace(ctx, topoServer, ks, cell)
+			switch {
+			case err == nil:
+			case topo.IsErrType(err, topo.NoNode):
+				// The keyspace was deleted after the check above.
+				log.Warn(fmt.Sprintf("Keyspace %v was deleted from the global topo while rebuilding it, skipping it", ks))
+				continue
+			default:
 				return vterrors.Wrap(err, "vtgate Init: failed to RebuildKeyspace")
 			}
 		default:
