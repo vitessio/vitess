@@ -216,9 +216,9 @@ Both compatibility behaviors will be removed in v26, along with the `SelectStrea
 
 Vitess accepts `//` line comments, which are not part of MySQL's syntax. For MySQL compatibility, support for them is deprecated. It will be disabled by default in v26 and removed in v27.
 
-VTGate counts each executed statement that uses a `//` comment under the `DoubleSlashComment` type of the `VtGateWarnings` metric, and logs a throttled warning with the redacted statement.
+VTGate counts each executed statement that uses a `//` comment under the `DoubleSlashComment` type of the `VtGateWarnings` metric, and logs a throttled warning with the redacted statement, without its comments. The client gets a MySQL warning (`ER_WARN_DEPRECATED_SYNTAX`, 1287) for the statement, which `SHOW WARNINGS` and many drivers show.
 
-**Impact**: Replace `//` comments in queries with `-- ` or `/* */` comments. Use the `VtGateWarnings` metric and the VTGate log to find the remaining uses.
+**Impact**: Replace `//` comments in queries with `-- ` or `/* */` comments. Use the `VtGateWarnings` metric, the VTGate log, and the warnings that clients receive to find the remaining uses.
 
 ## <a id="minor-changes"/>Minor Changes</a>
 

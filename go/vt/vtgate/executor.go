@@ -1242,20 +1242,37 @@ func (e *Executor) ParseDestinationTarget(targetString string) (string, topodata
 	return econtext.ParseDestinationTarget(targetString, defaultTabletType, e.VSchema())
 }
 
-// redactedSQL formats as the redacted statement. A throttled logger formats
-// its arguments only for the messages it emits, so the redaction runs only
-// for those.
+// redactedSQL formats as the redacted statement, without its comments. A
+// throttled logger formats its arguments only for the messages it emits, so
+// the redaction runs only for those.
 type redactedSQL struct {
 	parser *sqlparser.Parser
 	sql    string
 }
 
 func (r redactedSQL) String() string {
-	piiSafeSQL, err := r.parser.RedactSQLQuery(r.sql)
+	piiSafeSQL, err := r.parser.RedactSQLQueryWithoutComments(r.sql)
 	if err != nil {
 		return "<unparsable>"
 	}
 	return piiSafeSQL
+}
+
+// countDoubleSlashComment counts a statement that uses a deprecated //
+// comment and logs it. sql is the statement as the client sent it.
+func (e *Executor) countDoubleSlashComment(sql string) {
+	warnings.Add("DoubleSlashComment", 1)
+	doubleSlashCommentsLogger.Warningf("%q uses a // comment, which is deprecated and will be removed in a future release; use -- or /* */ instead", redactedSQL{parser: e.env.Parser(), sql: sql})
+}
+
+// doubleSlashCommentWarning is the warning that a client gets for a statement
+// that uses a // comment. It has the shape of MySQL's warning for deprecated
+// syntax.
+func doubleSlashCommentWarning() *querypb.QueryWarning {
+	return &querypb.QueryWarning{
+		Code:    uint32(sqlerror.ERWarnDeprecatedSyntax),
+		Message: "'// comment' is deprecated and will be removed in a future release. Please use '-- ' or '/* */' instead",
+	}
 }
 
 func (e *Executor) fetchOrCreatePlan(
@@ -1278,12 +1295,13 @@ func (e *Executor) fetchOrCreatePlan(
 	// skip every comment that Vitess skips.
 	original := queryString
 	queryString, rewritten := e.env.Parser().RewriteDoubleSlashComments(queryString)
-	// Count each executed statement once: a PREPARE is counted when it is
-	// executed, and a retry after buffering shares the statement's logStats.
+	// Count each executed statement once: a binary protocol prepare is
+	// counted when the statement is executed, and a retry after buffering
+	// shares the statement's logStats. A SQL PREPARE is counted by
+	// PlanPrepareStmt, as the session keeps the rewritten text.
 	if rewritten && isExecutePath && !logStats.DoubleSlashComment {
 		logStats.DoubleSlashComment = true
-		warnings.Add("DoubleSlashComment", 1)
-		doubleSlashCommentsLogger.Warningf("%q uses a // comment, which is deprecated and will be removed in a future release; use -- or /* */ instead", redactedSQL{parser: e.env.Parser(), sql: original})
+		e.countDoubleSlashComment(original)
 	}
 	query, comments := sqlparser.SplitMarginComments(queryString)
 	vcursor, _ = e.newVCursor(safeSession, comments, logStats)
@@ -2020,6 +2038,13 @@ func (e *Executor) PlanPrepareStmt(ctx context.Context, safeSession *econtext.Sa
 	plan, _, _, err := e.fetchOrCreatePlan(ctx, safeSession, query, nil, false, true, lStats, false)
 	if err != nil {
 		return nil, err
+	}
+	// The session keeps the rewritten text of the statement, so this is the
+	// only time that a SQL PREPARE can be counted. Its statement clears the
+	// session warnings before it runs, so the warning stays.
+	if _, rewritten := e.env.Parser().RewriteDoubleSlashComments(query); rewritten {
+		e.countDoubleSlashComment(query)
+		safeSession.RecordWarning(doubleSlashCommentWarning())
 	}
 	return plan, nil
 }

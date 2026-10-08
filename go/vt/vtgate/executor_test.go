@@ -2485,28 +2485,111 @@ func TestExecutorRewritesDoubleSlashComments(t *testing.T) {
 	assert.Equal(t, "repair table t1 #/*x*/ , t2", queries[0].Sql)
 }
 
+// doubleSlashWarnings returns the warnings in the session that report a
+// deprecated // comment.
+func doubleSlashWarnings(session *vtgatepb.Session) []*querypb.QueryWarning {
+	var found []*querypb.QueryWarning
+	for _, w := range session.Warnings {
+		if w.Code == uint32(sqlerror.ERWarnDeprecatedSyntax) {
+			found = append(found, w)
+		}
+	}
+	return found
+}
+
+// TestExecutorCountsDoubleSlashComments checks that each executed statement
+// that uses a // comment is counted and warned about once, and that preparing
+// a statement is not.
 func TestExecutorCountsDoubleSlashComments(t *testing.T) {
 	executor, _, _, _, _ := createExecutorEnv(t)
-	session := &vtgatepb.Session{TargetString: KsTestUnsharded}
-
+	ctx := t.Context()
 	before := warnings.Counts()["DoubleSlashComment"]
-	_, err := executorExec(t.Context(), executor, session, "select id from music_user_map where id = 1 // x", nil)
-	require.NoError(t, err)
-	assert.Equal(t, before+1, warnings.Counts()["DoubleSlashComment"])
 
-	_, err = executorExec(t.Context(), executor, session, "select id from music_user_map where id = 1 -- x", nil)
-	require.NoError(t, err)
-	assert.Equal(t, before+1, warnings.Counts()["DoubleSlashComment"])
+	t.Run("execute", func(t *testing.T) {
+		session := &vtgatepb.Session{TargetString: KsTestUnsharded}
+		_, err := executorExec(ctx, executor, session, "select id from music_user_map where id = 1 // x", nil)
+		require.NoError(t, err)
+		assert.Equal(t, before+1, warnings.Counts()["DoubleSlashComment"])
+		require.Len(t, doubleSlashWarnings(session), 1)
+		assert.Equal(t, "'// comment' is deprecated and will be removed in a future release. Please use '-- ' or '/* */' instead", doubleSlashWarnings(session)[0].Message)
 
-	// A prepared statement is counted when it is executed, not when it is
-	// prepared.
-	_, _, err = executorPrepare(t.Context(), executor, session, "select id from music_user_map where id = ? // x")
-	require.NoError(t, err)
-	assert.Equal(t, before+1, warnings.Counts()["DoubleSlashComment"])
+		// The next statement clears the warning.
+		_, err = executorExec(ctx, executor, session, "select id from music_user_map where id = 1 -- x", nil)
+		require.NoError(t, err)
+		assert.Equal(t, before+1, warnings.Counts()["DoubleSlashComment"])
+		assert.Empty(t, doubleSlashWarnings(session))
+	})
+
+	t.Run("show warnings", func(t *testing.T) {
+		session := &vtgatepb.Session{TargetString: KsTestUnsharded}
+		_, err := executorExec(ctx, executor, session, "select id from music_user_map where id = 1 // x", nil)
+		require.NoError(t, err)
+		qr, err := executorExec(ctx, executor, session, "show warnings", nil)
+		require.NoError(t, err)
+		require.Len(t, qr.Rows, 1)
+		assert.Contains(t, qr.Rows[0][2].ToString(), "'// comment' is deprecated")
+
+		// A SHOW that has the comment neither counts nor adds a warning.
+		session = &vtgatepb.Session{TargetString: KsTestUnsharded}
+		before := warnings.Counts()["DoubleSlashComment"]
+		_, err = executorExec(ctx, executor, session, "show warnings // x", nil)
+		require.NoError(t, err)
+		assert.Empty(t, doubleSlashWarnings(session))
+		assert.Equal(t, before+1, warnings.Counts()["DoubleSlashComment"])
+	})
+
+	t.Run("binary protocol prepare", func(t *testing.T) {
+		session := &vtgatepb.Session{TargetString: KsTestUnsharded}
+		before := warnings.Counts()["DoubleSlashComment"]
+		sql := "select id from music_user_map where id = :v1 // x"
+		bv := map[string]*querypb.BindVariable{"v1": sqltypes.Int64BindVariable(1)}
+
+		_, _, err := executorPrepare(ctx, executor, session, sql)
+		require.NoError(t, err)
+		assert.Equal(t, before, warnings.Counts()["DoubleSlashComment"])
+		assert.Empty(t, doubleSlashWarnings(session))
+
+		_, err = executor.Execute(ctx, nil, "TestExecute", econtext.NewSafeSession(session), sql, bv, true)
+		require.NoError(t, err)
+		assert.Equal(t, before+1, warnings.Counts()["DoubleSlashComment"])
+		assert.Len(t, doubleSlashWarnings(session), 1)
+
+		_, err = executor.Execute(ctx, nil, "TestExecute", econtext.NewSafeSession(session), sql, bv, true)
+		require.NoError(t, err)
+		assert.Equal(t, before+2, warnings.Counts()["DoubleSlashComment"])
+	})
+
+	t.Run("SQL prepare", func(t *testing.T) {
+		session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded})
+		before := warnings.Counts()["DoubleSlashComment"]
+
+		// The session keeps the rewritten text, so PREPARE is where the
+		// comment is counted and warned about.
+		_, err := executorExecSession(ctx, executor, session, "prepare p from 'select id from music_user_map where id = ? // x'", nil)
+		require.NoError(t, err)
+		assert.Equal(t, before+1, warnings.Counts()["DoubleSlashComment"])
+		assert.Len(t, doubleSlashWarnings(session.Session), 1)
+
+		_, err = executorExecSession(ctx, executor, session, "set @id = 1", nil)
+		require.NoError(t, err)
+		_, err = executorExecSession(ctx, executor, session, "execute p using @id", nil)
+		require.NoError(t, err)
+		assert.Equal(t, before+1, warnings.Counts()["DoubleSlashComment"])
+		assert.Empty(t, doubleSlashWarnings(session.Session))
+	})
+}
+
+// TestExecutorLogsDoubleSlashCommentsWithoutCommentText checks that the
+// warning that VTGate logs holds neither literals nor comment text.
+func TestExecutorLogsDoubleSlashCommentsWithoutCommentText(t *testing.T) {
+	sql := "/* lead@example.com */ select /* body@example.com */ id from music_user_map where id = 1234 // line@example.com\n and name = 'secret' /* tail@example.com */"
+	got := redactedSQL{parser: sqlparser.NewTestParser(), sql: sql}.String()
+	assert.Equal(t, "select id from music_user_map where id = :id /* INT64 */ and `name` = :name /* VARCHAR */", got)
 }
 
 // TestExecutorCountsDoubleSlashCommentsOnceOnRetry checks that a statement
-// that VTGate retries after a denied-tables error is counted once.
+// that VTGate retries after a denied-tables error is counted once, and that
+// the client gets one warning.
 func TestExecutorCountsDoubleSlashCommentsOnceOnRetry(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		executor, sbc1, _, _, ctx := createExecutorEnv(t)
@@ -2521,6 +2604,7 @@ func TestExecutorCountsDoubleSlashCommentsOnceOnRetry(t *testing.T) {
 		_, err := executorExecSession(ctx, executor, session, "select * from user // x", nil)
 		require.NoError(t, err)
 		assert.Equal(t, before+1, warnings.Counts()["DoubleSlashComment"])
+		assert.Len(t, doubleSlashWarnings(session.Session), 1)
 	})
 }
 

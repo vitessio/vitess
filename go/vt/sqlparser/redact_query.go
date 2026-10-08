@@ -18,8 +18,19 @@ package sqlparser
 
 import querypb "vitess.io/vitess/go/vt/proto/query"
 
-// RedactSQLQuery returns a sql string with the params stripped out for display
+// RedactSQLQuery returns a sql string with the params stripped out for display.
+// Comments are kept as written.
 func (p *Parser) RedactSQLQuery(sql string) (string, error) {
+	return p.redactSQLQuery(sql, false)
+}
+
+// RedactSQLQueryWithoutComments is like RedactSQLQuery, but it also drops the
+// comments, whose text can hold anything.
+func (p *Parser) RedactSQLQueryWithoutComments(sql string) (string, error) {
+	return p.redactSQLQuery(sql, true)
+}
+
+func (p *Parser) redactSQLQuery(sql string, dropComments bool) (string, error) {
 	bv := map[string]*querypb.BindVariable{}
 	sqlStripped, comments := SplitMarginComments(sql)
 
@@ -31,6 +42,16 @@ func (p *Parser) RedactSQLQuery(sql string) (string, error) {
 	out, err := Normalize(stmt, NewReservedVars("redacted", reservedVars), bv, true, "ks", 0, "", map[string]string{}, nil, nil)
 	if err != nil {
 		return "", err
+	}
+
+	if dropComments {
+		_ = Walk(func(node SQLNode) (bool, error) {
+			if commented, ok := node.(Commented); ok {
+				commented.SetComments(nil)
+			}
+			return true, nil
+		}, out.AST)
+		return String(out.AST), nil
 	}
 
 	return comments.Leading + String(out.AST) + comments.Trailing, nil
