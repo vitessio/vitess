@@ -987,3 +987,42 @@ func TestNewValueDecimalDoesNotAllocate(t *testing.T) {
 		assert.Zero(t, allocs, "input %q", input)
 	}
 }
+
+// TestIsNumericLiteral checks the exported numeric literal scan that the
+// vstreamer's lastpk validation relies on: a single unpadded numeric token,
+// with the exponent admitted only on request, and none of the words Go's
+// parsers accept.
+func TestIsNumericLiteral(t *testing.T) {
+	for _, tc := range []struct {
+		in       string
+		plain    bool
+		exponent bool
+	}{
+		{"0", true, true},
+		{"-12", true, true},
+		{"+1.5", true, true},
+		{"1.", true, true},
+		{".5", true, true},
+		{"1e5", false, true},
+		{"1E-5", false, true},
+		{".5e+3", false, true},
+		{"1e", false, false},
+		{"e5", false, false},
+		{".", false, false},
+		{"", false, false},
+		{"-", false, false},
+		{" 1", false, false},
+		{"1 ", false, false},
+		{"1\t", false, false},
+		{"1.2.3", false, false},
+		{"--1", false, false},
+		{"NaN", false, false},
+		{"Inf", false, false},
+		{"Infinity", false, false},
+		{"0x1", false, false},
+		{"1;", false, false},
+	} {
+		assert.Equal(t, tc.plain || tc.exponent, IsNumericLiteral([]byte(tc.in), true), "%q with exponent", tc.in)
+		assert.Equal(t, tc.plain, IsNumericLiteral([]byte(tc.in), false), "%q without exponent", tc.in)
+	}
+}

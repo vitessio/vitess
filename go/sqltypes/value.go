@@ -115,7 +115,7 @@ func NewValue(typ querypb.Type, val []byte) (v Value, err error) {
 		// literal scan alone decides those, without building a decimal that
 		// would be thrown away. Anything else takes the parser for its error,
 		// or for the over-long decimals whose excess it never scans.
-		if isNumericLiteral(val, false) {
+		if IsNumericLiteral(val, false) {
 			return MakeTrusted(typ, val), nil
 		}
 		if _, err := decimal.NewFromMySQL(val); err != nil {
@@ -874,9 +874,9 @@ func isRawSQLLiteral(typ querypb.Type, val []byte) bool {
 	case IsUnsigned(typ):
 		return isDigits(trimSpaceTab(val))
 	case IsFloat(typ):
-		return isNumericLiteral(trimSpaceTab(val), true)
+		return IsNumericLiteral(trimSpaceTab(val), true)
 	case IsDecimal(typ):
-		return isNumericLiteral(trimSpaceTab(val), false)
+		return IsNumericLiteral(trimSpaceTab(val), false)
 	case typ == HexNum:
 		return len(val) > 2 && val[0] == '0' && val[1] == 'x' && isHexDigits(val[2:])
 	case typ == HexVal:
@@ -891,13 +891,13 @@ func isRawSQLLiteral(typ querypb.Type, val []byte) bool {
 	return false
 }
 
-// isNumericLiteral reports whether val is exactly
+// IsNumericLiteral reports whether val is exactly
 // [+-]?([0-9]+(\.[0-9]*)?|\.[0-9]+)([eE][+-]?[0-9]+)?, with the exponent
 // admitted only when allowExponent is set, and so is a single numeric token
 // that can be written into a statement without quoting. It rejects what Go's
 // parsers accept but MySQL has no literal for: NaN, Inf, Infinity and
 // surrounding whitespace.
-func isNumericLiteral(val []byte, allowExponent bool) bool {
+func IsNumericLiteral(val []byte, allowExponent bool) bool {
 	i := 0
 	if i < len(val) && (val[i] == '+' || val[i] == '-') {
 		i++
