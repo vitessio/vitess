@@ -2354,10 +2354,10 @@ func TestSettingsRejectUnsafeConnectionCharsets(t *testing.T) {
 	db.AddQuery(userVariableSetting, &sqltypes.Result{})
 	connID, _, err := tsv.te.ReserveBegin(ctx, &querypb.ExecuteOptions{}, []string{userVariableSetting})
 	require.NoError(t, err)
-	require.NoError(t, tsv.te.Release(ctx, connID))
+	require.NoError(t, tsv.te.Release(connID))
 	connID, err = tsv.te.Reserve(ctx, &querypb.ExecuteOptions{}, 0, []string{userVariableSetting})
 	require.NoError(t, err)
-	require.NoError(t, tsv.te.Release(ctx, connID))
+	require.NoError(t, tsv.te.Release(connID))
 	assert.Equal(t, 2, db.GetQueryCalledNum(userVariableSetting), "the pre-query must reach the backend on both reservation paths")
 }
 
