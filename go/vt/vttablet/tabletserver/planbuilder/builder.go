@@ -190,6 +190,9 @@ func showTableRewrite(show *sqlparser.ShowBasic, dbName string) {
 }
 
 func analyzeSet(set *sqlparser.Set) (*Plan, error) {
+	if err := validateSetExprsCharset(set.Exprs); err != nil {
+		return nil, err
+	}
 	verify, err := validateSetStatementSQLMode(set)
 	if err != nil {
 		return nil, err

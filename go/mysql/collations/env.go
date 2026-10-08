@@ -262,6 +262,8 @@ func (env *Environment) DefaultConnectionCharset() ID {
 // handshake.
 // - empty, in which case the default connection charset for this MySQL version
 // is returned.
+//
+// Only the character sets in connectionCharsets are accepted.
 func (env *Environment) ParseConnectionCharset(csname string) (ID, error) {
 	if csname == "" {
 		return env.DefaultConnectionCharset(), nil
@@ -275,10 +277,103 @@ func (env *Environment) ParseConnectionCharset(csname string) (ID, error) {
 		collid = coll
 	}
 	if collid == 0 || collid > 255 {
-		return 0, fmt.Errorf("unsupported connection charset: %q", csname)
+		return 0, fmt.Errorf("unsupported connection character set: %q", csname)
+	}
+	if _, ok := env.ConnectionCharset(collid); !ok {
+		return 0, fmt.Errorf("unsupported connection character set: %q: its multibyte characters can contain a backslash or back quote byte, which Vitess cannot parse or escape safely; use utf8mb4 instead", csname)
 	}
 	return collid, nil
 }
+
+// connectionCharsets are the character sets that can be used for a connection.
+//
+// Vitess parses and escapes SQL text byte by byte, so a byte that is a quote, a
+// backslash or a back quote must never be part of a multibyte character, and
+// MySQL must read each such byte as that character. That holds for the
+// character sets below. Some of them reuse other ASCII bytes: euckr accepts the
+// letters as the second byte of a character, and swe7 maps 0x5C and 0x60 to
+// letters of its own, but MySQL still reads those two bytes as a backslash and a
+// back quote in SQL text. It does not hold for sjis, cp932, gbk, big5 and
+// gb18030, where the second byte of a character can be a backslash or a back
+// quote, nor for ucs2, utf16, utf16le and utf32, which MySQL does not accept
+// as a client character set anyway.
+var connectionCharsets = map[string]bool{
+	"utf8mb4": true,
+	"utf8mb3": true,
+	"utf8":    true,
+	"ujis":    true,
+	"eucjpms": true,
+	"euckr":   true,
+	"gb2312":  true,
+
+	"armscii8": true,
+	"ascii":    true,
+	"binary":   true,
+	"cp1250":   true,
+	"cp1251":   true,
+	"cp1256":   true,
+	"cp1257":   true,
+	"cp850":    true,
+	"cp852":    true,
+	"cp866":    true,
+	"dec8":     true,
+	"geostd8":  true,
+	"greek":    true,
+	"hebrew":   true,
+	"hp8":      true,
+	"keybcs2":  true,
+	"koi8r":    true,
+	"koi8u":    true,
+	"latin1":   true,
+	"latin2":   true,
+	"latin5":   true,
+	"latin7":   true,
+	"macce":    true,
+	"macroman": true,
+	"swe7":     true,
+	"tis620":   true,
+}
+
+// ConnectionCharset returns the name of the character set of the collation a
+// client asked for in its connection handshake, and whether that character set
+// can be used for a connection. The collation does not have to be one that
+// Vitess implements, nor one that exists in this environment's MySQL version: a
+// collation ID names the same character set in every version. Unknown means
+// that the client did not ask for one, and is accepted. The name is empty for an
+// ID that MySQL does not define.
+func (env *Environment) ConnectionCharset(id ID) (charset string, ok bool) {
+	if id == Unknown {
+		return "", true
+	}
+	aliases := globalVersionInfo[id].alias
+	if len(aliases) == 0 {
+		return "", false
+	}
+	charset = aliases[0].charset
+	return charset, connectionCharsets[charset]
+}
+
+// IsConnectionCharsetName reports whether name, a character set or a collation
+// name as a SET statement gives it, belongs to one of the character sets that
+// can be used for a connection. Like ConnectionCharset, it knows every name
+// MySQL defines, in any version, whether or not Vitess implements it.
+func IsConnectionCharsetName(name string) bool {
+	charset, ok := charsetsByName()[strings.ToLower(name)]
+	return ok && connectionCharsets[charset]
+}
+
+// charsetsByName maps every character set and collation name MySQL defines to
+// its character set.
+var charsetsByName = sync.OnceValue(func() map[string]string {
+	byName := make(map[string]string)
+	for _, vi := range globalVersionInfo {
+		for _, alias := range vi.alias {
+			byName[alias.name] = alias.charset
+			byName[alias.charset] = alias.charset
+		}
+	}
+	return byName
+})
 
 func (env *Environment) AllCollationIDs() []ID {
 	all := make([]ID, 0, len(env.byID))
