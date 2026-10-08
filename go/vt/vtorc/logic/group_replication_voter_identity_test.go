@@ -19,8 +19,6 @@ package logic
 import (
 	"context"
 	"errors"
-	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -31,9 +29,9 @@ import (
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/reparenttestutil"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
@@ -192,70 +190,6 @@ func TestRestoreDeletedGroupVoters(t *testing.T) {
 	require.NoError(t, err)
 }
 
-// beforeShardWriteFactory is a memorytopo factory whose global cell runs a hook, once it is armed and
-// only once, right before a write of a shard record: between the read and the versioned write of
-// topo.Server.UpdateShardFields. It records the errors of the writes that follow.
-type beforeShardWriteFactory struct {
-	*memorytopo.Factory
-	mu         sync.Mutex
-	hook       func()
-	writeErrs  []error
-	shardWrite bool
-}
-
-// Create is part of the topo.Factory interface.
-func (f *beforeShardWriteFactory) Create(cell, serverAddr, root string) (topo.Conn, error) {
-	conn, err := f.Factory.Create(cell, serverAddr, root)
-	if err != nil || cell != topo.GlobalCell {
-		return conn, err
-	}
-	return &beforeShardWriteConn{Conn: conn, f: f}, nil
-}
-
-// arm makes the next write of a shard record run hook first.
-func (f *beforeShardWriteFactory) arm(hook func()) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.hook = hook
-}
-
-// errs returns the errors of the writes of shard records since the hook was armed.
-func (f *beforeShardWriteFactory) errs() []error {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return f.writeErrs
-}
-
-type beforeShardWriteConn struct {
-	topo.Conn
-	f *beforeShardWriteFactory
-}
-
-// Update is part of the topo.Conn interface.
-func (c *beforeShardWriteConn) Update(ctx context.Context, filePath string, contents []byte, version topo.Version) (topo.Version, error) {
-	if !strings.HasSuffix(filePath, "/"+topo.ShardFile) {
-		return c.Conn.Update(ctx, filePath, contents, version)
-	}
-	c.f.mu.Lock()
-	hook := c.f.hook
-	c.f.hook = nil
-	armed := hook != nil || c.f.shardWrite
-	if hook != nil {
-		c.f.shardWrite = true
-	}
-	c.f.mu.Unlock()
-	if hook != nil {
-		hook()
-	}
-	v, err := c.Conn.Update(ctx, filePath, contents, version)
-	if armed {
-		c.f.mu.Lock()
-		c.f.writeErrs = append(c.f.writeErrs, err)
-		c.f.mu.Unlock()
-	}
-	return v, err
-}
-
 // TestUpdateGroupReplicationVotersWithConcurrentIdentityWrite checks that a voter's vttablet, which
 // publishes its identity in the shard record without the shard lock, never makes VTOrc's change of the
 // voters fail or lose either write, wherever its write lands: between VTOrc's read of the shard, on
@@ -291,7 +225,7 @@ func TestUpdateGroupReplicationVotersWithConcurrentIdentityWrite(t *testing.T) {
 			setVoters(t, primary, voter2, voter3)
 			setIncarnation(t, voterTestIncarnation)
 			// VTOrc writes through the factory that runs the hook; the vttablet writes directly.
-			factory := &beforeShardWriteFactory{Factory: recoveryTopoFactory}
+			factory := reparenttestutil.NewShardWriteHook(recoveryTopoFactory)
 			vtorcTS, err := topo.NewWithFactory(factory, "", "")
 			require.NoError(t, err)
 			t.Cleanup(vtorcTS.Close)
@@ -316,7 +250,7 @@ func TestUpdateGroupReplicationVotersWithConcurrentIdentityWrite(t *testing.T) {
 				func(context.Context, *topodatapb.Tablet) (*replicationdatapb.FullStatus, error) {
 					// VTOrc has read the shard record, and decides on this read.
 					if tt.insideCAS {
-						factory.arm(publish)
+						factory.Arm(publish)
 					} else {
 						publish()
 					}
@@ -334,7 +268,7 @@ func TestUpdateGroupReplicationVotersWithConcurrentIdentityWrite(t *testing.T) {
 			if tt.insideCAS {
 				// The identity write did land inside the compare-and-swap: its versioned write failed, and
 				// its retry succeeded.
-				writeErrs := factory.errs()
+				writeErrs := factory.WriteErrors()
 				require.Len(t, writeErrs, 2)
 				assert.True(t, topo.IsErrType(writeErrs[0], topo.BadVersion), "first write: %v", writeErrs[0])
 				assert.NoError(t, writeErrs[1])
