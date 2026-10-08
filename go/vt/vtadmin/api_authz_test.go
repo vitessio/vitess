@@ -2747,6 +2747,91 @@ func TestReloadSchemas(t *testing.T) {
 	})
 }
 
+func TestReloadSchemaShard(t *testing.T) {
+	t.Parallel()
+
+	opts := vtadmin.Options{
+		RBAC: &rbac.Config{
+			Rules: []*struct {
+				Resource string
+				Actions  []string
+				Subjects []string
+				Clusters []string
+			}{
+				{
+					Resource: "Schema",
+					Actions:  []string{"reload"},
+					Subjects: []string{"user:allowed-all"},
+					Clusters: []string{"*"},
+				},
+				{
+					Resource: "Schema",
+					Actions:  []string{"reload"},
+					Subjects: []string{"user:allowed-other"},
+					Clusters: []string{"other"},
+				},
+			},
+		},
+	}
+	err := opts.RBAC.Reify()
+	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
+
+	api := vtadmin.NewAPI(vtenv.NewTestEnv(), testClusters(t), opts)
+	t.Cleanup(func() {
+		if err := api.Close(); err != nil {
+			t.Logf("api did not close cleanly: %s", err.Error())
+		}
+	})
+
+	t.Run("unauthorized actor", func(t *testing.T) {
+		t.Parallel()
+
+		actor := &rbac.Actor{Name: "unauthorized"}
+		ctx := context.Background()
+		ctx = rbac.NewContext(ctx, actor)
+
+		resp, err := api.ReloadSchemaShard(ctx, &vtadminpb.ReloadSchemaShardRequest{
+			ClusterId: "test",
+			Keyspace:  "test",
+			Shard:     "-",
+		})
+		assert.ErrorContains(t, err, "unauthorized", "actor %+v should not be permitted to ReloadSchemaShard", actor)
+		assert.Nil(t, resp, "actor %+v should not be permitted to ReloadSchemaShard", actor)
+	})
+
+	t.Run("actor authorized only for another cluster", func(t *testing.T) {
+		t.Parallel()
+
+		actor := &rbac.Actor{Name: "allowed-other"}
+		ctx := context.Background()
+		ctx = rbac.NewContext(ctx, actor)
+
+		resp, err := api.ReloadSchemaShard(ctx, &vtadminpb.ReloadSchemaShardRequest{
+			ClusterId: "test",
+			Keyspace:  "test",
+			Shard:     "-",
+		})
+		assert.ErrorContains(t, err, "unauthorized", "actor %+v should not be permitted to ReloadSchemaShard", actor)
+		assert.Nil(t, resp, "actor %+v should not be permitted to ReloadSchemaShard", actor)
+	})
+
+	t.Run("authorized actor", func(t *testing.T) {
+		t.Parallel()
+
+		actor := &rbac.Actor{Name: "allowed-all"}
+		ctx := context.Background()
+		ctx = rbac.NewContext(ctx, actor)
+
+		resp, err := api.ReloadSchemaShard(ctx, &vtadminpb.ReloadSchemaShardRequest{
+			ClusterId: "test",
+			Keyspace:  "test",
+			Shard:     "-",
+		})
+		require.NoError(t, err)
+		assert.NotEmpty(t, resp.Events, "actor %+v should be permitted to ReloadSchemaShard", actor)
+	})
+}
+
 func TestRetrySchemaMigration(t *testing.T) {
 	t.Parallel()
 
@@ -3691,6 +3776,15 @@ func testClusters(t testing.TB) []*cluster.Cluster {
 					"test": {
 						Response: &vtctldatapb.ReloadSchemaKeyspaceResponse{
 							Events: []*logutilpb.Event{{}, {}, {}}},
+					},
+				},
+				ReloadSchemaShardResults: map[string]struct {
+					Response *vtctldatapb.ReloadSchemaShardResponse
+					Error    error
+				}{
+					"test/-": {
+						Response: &vtctldatapb.ReloadSchemaShardResponse{
+							Events: []*logutilpb.Event{{}}},
 					},
 				},
 				ReparentTabletResults: map[string]struct {

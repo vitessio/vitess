@@ -2291,15 +2291,25 @@ func (api *API) RemoveKeyspaceCell(ctx context.Context, req *vtadminpb.RemoveKey
 
 // ReloadSchemaShard is part of the vtadminpb.VTAdminServer interface.
 func (api *API) ReloadSchemaShard(ctx context.Context, req *vtadminpb.ReloadSchemaShardRequest) (*vtadminpb.ReloadSchemaShardResponse, error) {
-	span, ctx := trace.NewSpan(ctx, "API.ReloadSchemas")
+	span, ctx := trace.NewSpan(ctx, "API.ReloadSchemaShard")
 	defer span.Finish()
+
+	span.Annotate("cluster_id", req.ClusterId)
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("shard", req.Shard)
 
 	c, err := api.getClusterForRequest(req.ClusterId)
 	if err != nil {
 		return nil, err
 	}
 
+	if !api.authz.IsAuthorized(ctx, c.ID, rbac.SchemaResource, rbac.ReloadAction) {
+		return nil, fmt.Errorf("%w: cannot reload schema for %s/%s in %s", errors.ErrUnauthorized, req.Keyspace, req.Shard, req.ClusterId)
+	}
+
 	res, err := c.Vtctld.ReloadSchemaShard(ctx, &vtctldatapb.ReloadSchemaShardRequest{
+		Keyspace:       req.Keyspace,
+		Shard:          req.Shard,
 		WaitPosition:   req.WaitPosition,
 		IncludePrimary: req.IncludePrimary,
 		Concurrency:    req.Concurrency,
