@@ -276,6 +276,11 @@ func TestCanonicalOutput(t *testing.T) {
 			"select 1 from t1 into outfile 'test/t1.txt'",
 			"SELECT 1 FROM `t1` INTO OUTFILE 'test/t1.txt'",
 		},
+		{
+			// temporal literal values are escaped like string literals, after an upper-case keyword
+			`select date '2020-01-01\' or 1 -- ', time '12:34:56'' or 1 -- ', timestamp '2012-12-31 11:30:45\\'`,
+			`SELECT DATE'2020-01-01\' or 1 -- ', TIME'12:34:56\' or 1 -- ', TIMESTAMP'2012-12-31 11:30:45\\' FROM dual`,
+		},
 	}
 
 	parser := NewTestParser()
