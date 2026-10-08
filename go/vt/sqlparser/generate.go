@@ -19,7 +19,7 @@ package sqlparser
 // Generate all the AST helpers using the tooling in `go/tools`
 
 //go:generate go tool -modfile=../../../tools/goyacc/go.mod goyacc -o sql.go sql.y
-//go:generate go run ../../tools/reservedgen -in sql.y -out non_reserved_keywords.go
+//go:generate go run ../../tools/reservedgen -in sql.y -mysql testdata/mysql_keywords.txt -out non_reserved_keywords.go
 //go:generate go tool -modfile=../../../tools/goimports/go.mod goimports -local vitess.io/vitess -w sql.go
 //go:generate go tool -modfile=../../../tools/gofumpt/go.mod gofumpt -w sql.go
 //go:generate go run ../../tools/asthelpergen/main  --in . --iface vitess.io/vitess/go/vt/sqlparser.SQLNode --clone_exclude "*ColName" --equals_custom "*ColName"

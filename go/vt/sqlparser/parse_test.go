@@ -5832,7 +5832,7 @@ func TestCreateTable(t *testing.T) {
 			input: `create table non_reserved_keyword (id int(11)) ENGINE = MEDIUMTEXT`,
 			output: `create table non_reserved_keyword (
 	id int(11)
-) ENGINE MEDIUMTEXT`,
+) ENGINE ` + "`MEDIUMTEXT`",
 		},
 		{
 			input: `create table t1 (id int(11)) ENGINE = FOOBAR`,

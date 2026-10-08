@@ -2621,7 +2621,17 @@ func isBareName(name string) bool {
 	// is the only such keyword that is also a real charset or collation name.
 	// encodeObjectName quotes it for the positions that lack that alternative.
 	tok, isKeyword := keywordLookupTable.LookupString(name)
-	if !isKeyword || tok == BINARY {
+	if isKeyword && tok == BINARY {
+		return true
+	}
+	// Non-reserved to this grammar is not non-reserved to MySQL, which still
+	// has to accept what we write: it rejects `int`, `char` and the like bare,
+	// although the grammar here reads them as identifiers. A word MySQL reserves
+	// that this tokenizer does not know as a keyword is quoted just the same.
+	if _, reserved := mysqlReservedWords[strings.ToLower(name)]; reserved {
+		return false
+	}
+	if !isKeyword {
 		return true
 	}
 	_, nonReserved := nonReservedKeywords[tok]

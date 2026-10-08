@@ -17,7 +17,10 @@ limitations under the License.
 package sqlparser
 
 import (
+	"bufio"
 	"fmt"
+	"os"
+	"path"
 	"strings"
 	"testing"
 
@@ -492,6 +495,14 @@ func TestEncodeSQLName(t *testing.T) {
 		{in: "select", out: "`select`"},
 		{in: "SELECT", out: "`SELECT`"},
 		{in: "next", out: "`next`"},
+		// MySQL reserves words this grammar reads as plain identifiers, and
+		// rejects them bare. `array` is a keyword there too, but not a reserved
+		// one, so it needs no quoting.
+		{in: "int", out: "`int`"},
+		{in: "INT", out: "`INT`"},
+		{in: "char", out: "`char`"},
+		{in: "year_month", out: "`year_month`"},
+		{in: "array", out: "array"},
 		// So must a keyword that is neither reserved nor non-reserved, and a
 		// charset introducer: neither lexes as something a name position takes.
 		{in: "cast", out: "`cast`"},
@@ -513,6 +524,36 @@ func TestEncodeSQLName(t *testing.T) {
 			assert.Equal(t, tc.out, encodeSQLName(tc.in))
 		})
 	}
+}
+
+// TestMySQLReservedNamesAreQuoted pins that no word MySQL reserves is written
+// bare, whether or not this grammar reads it as a keyword. The grammar accepts
+// hundreds of them as identifiers (`int`, `char`, `grant`, ...), but the MySQL
+// the statement is sent to does not, so a bare one fails there however well it
+// parses here. `binary` is the exception: the charset and collation rules accept
+// it in its own right, as MySQL's do.
+func TestMySQLReservedNamesAreQuoted(t *testing.T) {
+	file, err := os.Open(path.Join("testdata", "mysql_keywords.txt"))
+	require.NoError(t, err)
+	defer file.Close()
+
+	reserved := 0
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		word, flag, ok := strings.Cut(scanner.Text(), "\t")
+		if !ok || flag != "1" {
+			continue
+		}
+		reserved++
+		want := "`" + word + "`"
+		if strings.EqualFold(word, "binary") {
+			want = word
+		}
+		assert.Equal(t, want, encodeSQLName(word))
+	}
+	require.NoError(t, scanner.Err())
+	// A canary, so that this cannot pass by reading nothing.
+	require.Greater(t, reserved, 200)
 }
 
 // TestPositionEncoders pins the encoders for positions that accept less than

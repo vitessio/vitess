@@ -26,22 +26,55 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestGeneratedFileIsUpToDate guards the generated set against drifting from
-// sql.y. Moving a keyword into or out of non_reserved_keyword changes whether the
-// formatter writes that name bare, so the two must not diverge silently: run
-// `make sqlparser` if this fails.
+// TestGeneratedFileIsUpToDate guards the generated sets against drifting from
+// their sources. Moving a keyword into or out of non_reserved_keyword, or
+// refreshing the MySQL keyword list, changes whether the formatter writes that
+// name bare, so the two must not diverge silently: run `make sqlparser` if this
+// fails.
 func TestGeneratedFileIsUpToDate(t *testing.T) {
 	grammar, err := os.ReadFile("../../vt/sqlparser/sql.y")
+	require.NoError(t, err)
+	keywords, err := os.ReadFile("../../vt/sqlparser/testdata/mysql_keywords.txt")
 	require.NoError(t, err)
 	committed, err := os.ReadFile("../../vt/sqlparser/non_reserved_keywords.go")
 	require.NoError(t, err)
 
 	tokens, err := NonReservedKeywords(string(grammar))
 	require.NoError(t, err)
-	fresh, err := generate(tokens)
+	reserved, err := MySQLReservedWords(string(keywords))
+	require.NoError(t, err)
+	fresh, err := generate(tokens, reserved)
 	require.NoError(t, err)
 
 	assert.Equal(t, string(fresh), string(committed))
+}
+
+func TestMySQLReservedWords(t *testing.T) {
+	// pad stands in for the several hundred rows of a real dump, so the canary
+	// does not trip on the cases below.
+	var pad strings.Builder
+	for i := range minMySQLReservedWords {
+		fmt.Fprintf(&pad, "PAD%03d\t1\n", i)
+	}
+
+	t.Run("reads reserved words and skips the rest", func(t *testing.T) {
+		got, err := MySQLReservedWords("// generated\nWORD\tRESERVED\nZED\t1\nACTION\t0\nAlpha\t1\nZED\t1\n\n" + pad.String())
+		require.NoError(t, err)
+		require.Len(t, got, minMySQLReservedWords+2)
+		assert.Equal(t, "alpha", got[0])
+		assert.Equal(t, "zed", got[len(got)-1])
+		assert.NotContains(t, got, "action")
+	})
+	t.Run("rejects a short list", func(t *testing.T) {
+		_, err := MySQLReservedWords("WORD\tRESERVED\nA\t1\n")
+		assert.ErrorContains(t, err, "only found 1 MySQL reserved words")
+	})
+	t.Run("rejects a line it does not understand", func(t *testing.T) {
+		_, err := MySQLReservedWords(pad.String() + "A B\n")
+		require.ErrorContains(t, err, "unexpected line")
+		_, err = MySQLReservedWords(pad.String() + "A\tmaybe\n")
+		assert.ErrorContains(t, err, "unexpected line")
+	})
 }
 
 // TestNonReservedKeywordsSkipsBlankAndCommentLines covers a rule with a blank
