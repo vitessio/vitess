@@ -1295,6 +1295,14 @@ func (ct *ColumnType) FormatFast(buf *TrackedBuffer) {
 			buf.WriteByte(' ')
 			buf.WriteString(keywordStrings[AUTO_INCREMENT])
 		}
+		if ct.Options.SerialDefaultValue {
+			buf.WriteByte(' ')
+			buf.WriteString(keywordStrings[SERIAL])
+			buf.WriteByte(' ')
+			buf.WriteString(keywordStrings[DEFAULT])
+			buf.WriteByte(' ')
+			buf.WriteString(keywordStrings[VALUE])
+		}
 		if ct.Options.Comment != nil {
 			buf.WriteByte(' ')
 			buf.WriteString(keywordStrings[COMMENT_KEYWORD])
