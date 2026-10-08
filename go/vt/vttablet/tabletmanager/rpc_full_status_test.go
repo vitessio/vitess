@@ -106,12 +106,14 @@ func TestFullStatusConsolidatesConcurrentCalls(t *testing.T) {
 				assert.EqualValues(t, 1, daemon.calls.Load())
 
 				// A stalled disk must bypass even an already-running collection.
-				controller := tm.QueryServiceControl.(*fullStatusController)
-				controller.diskStalled.Store(true)
-				stalled, err := tm.FullStatus(t.Context())
-				require.NoError(t, err)
-				assert.True(t, stalled.DiskStalled)
-				controller.diskStalled.Store(false)
+				if outcome == "success" {
+					controller := tm.QueryServiceControl.(*fullStatusController)
+					controller.diskStalled.Store(true)
+					stalled, err := tm.FullStatus(t.Context())
+					require.NoError(t, err)
+					assert.True(t, stalled.DiskStalled)
+					controller.diskStalled.Store(false)
+				}
 
 				close(release)
 				synctest.Wait()

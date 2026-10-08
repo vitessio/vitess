@@ -164,7 +164,8 @@ func (tm *TabletManager) ReplicationStatus(ctx context.Context) (*replicationdat
 	return protoStatus, nil
 }
 
-// FullStatus returns the full status of MySQL including the replication information, semi-sync information, GTID information among others.
+// FullStatus returns the full status of MySQL including the replication information, semi-sync information, GTID information among others
+//
 // Concurrent calls share an in-flight collection. Releasing the tablet action lock
 // invalidates it so later calls cannot join a pre-action collection.
 func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.FullStatus, error) {
@@ -192,7 +193,19 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 		// Bound the shared work even if all callers have left.
 		ctx, cancel := context.WithTimeout(tm.BatchCtx, topo.RemoteOperationTimeout)
 		defer cancel()
-		return tm.collectFullStatus(ctx)
+
+		status, err := tm.MysqlDaemon.CollectFullStatusData(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if status == nil {
+			return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "FullStatus collector returned no data")
+		}
+
+		status.SemiSyncBlocked = tm.SemiSyncMonitor.AllWritesBlocked()
+		status.TabletType = tm.Tablet().Type
+		status.ShardPeerHealth = tm.shardPeerHealthSnapshot()
+		return status, nil
 	})
 	select {
 	case <-ctx.Done():
@@ -204,21 +217,6 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 		// Each RPC owns its response; callers must not mutate a shared proto.
 		return result.Val.(*replicationdatapb.FullStatus).CloneVT(), nil
 	}
-}
-
-func (tm *TabletManager) collectFullStatus(ctx context.Context) (*replicationdatapb.FullStatus, error) {
-	status, err := tm.MysqlDaemon.CollectFullStatusData(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if status == nil {
-		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "FullStatus collector returned no data")
-	}
-
-	status.SemiSyncBlocked = tm.SemiSyncMonitor.AllWritesBlocked()
-	status.TabletType = tm.Tablet().Type
-	status.ShardPeerHealth = tm.shardPeerHealthSnapshot()
-	return status, nil
 }
 
 // shardPeerHealthSnapshot returns the latest shard-peer liveness signals, or nil when

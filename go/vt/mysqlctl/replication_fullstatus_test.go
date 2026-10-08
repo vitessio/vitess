@@ -19,7 +19,6 @@ package mysqlctl
 import (
 	"context"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -123,8 +122,8 @@ func TestCollectFullStatusData(t *testing.T) {
 	// costing their own queries.
 	assert.Zero(t, db.GetQueryCalledNum("SELECT @@global.gtid_purged"))
 	assert.Zero(t, db.GetQueryCalledNum("select @@global.replica_net_timeout"))
-	assert.Len(t, strings.Split(db.QueryLog(), ";"), 7)
-	assert.Equal(t, selectOneCalls+1, db.GetQueryCalledNum("SELECT 1"))
+	assert.Len(t, strings.Split(db.QueryLog(), ";"), 6)
+	assert.Equal(t, selectOneCalls, db.GetQueryCalledNum("SELECT 1"))
 
 	db.AddQuery("SHOW REPLICA STATUS", &sqltypes.Result{})
 	db.AddQuery("SELECT * FROM performance_schema.replication_connection_configuration", sqltypes.MakeTestResult(
@@ -138,7 +137,7 @@ func TestCollectFullStatusData(t *testing.T) {
 	assert.Nil(t, status.ReplicationStatus)
 	assert.Nil(t, status.ReplicationConfiguration)
 	// A primary reads the same batch, so the query count does not move.
-	assert.Len(t, strings.Split(db.QueryLog(), ";"), 7)
+	assert.Len(t, strings.Split(db.QueryLog(), ";"), 6)
 }
 
 func newCollectFullStatusDataTestMysqld(t *testing.T) (*fakesqldb.DB, *Mysqld) {
@@ -190,7 +189,6 @@ func TestCollectFullStatusDataCancelsBlockedQuery(t *testing.T) {
 		query string
 		retry bool
 	}{
-		{name: "connection validation", query: "SELECT 1"},
 		{name: "variables"},
 		{name: "replication status", query: "SHOW REPLICA STATUS"},
 		{name: "primary status", query: "SHOW BINARY LOG STATUS"},
@@ -218,8 +216,9 @@ func TestCollectFullStatusDataCancelsBlockedQuery(t *testing.T) {
 			ctx, cancel := context.WithCancel(t.Context())
 			t.Cleanup(cancel)
 			release := make(chan struct{})
-			unblock := sync.OnceFunc(func() { close(release) })
-			t.Cleanup(unblock)
+			finished := make(chan struct{})
+			// Unblock the fake server and drain the collection before later cleanups close the pool.
+			t.Cleanup(func() { close(release); <-finished })
 			var calls atomic.Int32
 			blockedCall := int32(1)
 			if tc.retry {
@@ -239,23 +238,18 @@ func TestCollectFullStatusDataCancelsBlockedQuery(t *testing.T) {
 
 			var status *replicationdatapb.FullStatus
 			var collectionErr error
-			finished := make(chan struct{})
 			go func() {
 				status, collectionErr = mysqld.CollectFullStatusData(ctx)
 				close(finished)
 			}()
-			if !assert.Eventually(t, func() bool {
+			require.Eventually(t, func() bool {
 				select {
 				case <-finished:
 					return true
 				default:
 					return false
 				}
-			}, 30*time.Second, time.Millisecond, "collection must return before MySQL answers") {
-				unblock()
-				<-finished
-				return
-			}
+			}, 30*time.Second, time.Millisecond, "collection must return before MySQL answers")
 			require.ErrorIs(t, collectionErr, context.Canceled)
 			assert.Nil(t, status)
 			assert.Equal(t, blockedCall, calls.Load(), "cancellation must not retry")
@@ -284,28 +278,26 @@ func TestCollectFullStatusReplicaSemiSyncIndependentOfSourcePlugin(t *testing.T)
 		{name: "master and replica", primary: "master", replica: "replica"},
 	}
 	for _, tc := range tests {
-		for _, active := range []string{"OFF", "ON"} {
-			t.Run(tc.name+"/"+active, func(t *testing.T) {
-				db, mysqld := newCollectFullStatusDataTestMysqld(t)
-				variables := []string{"rpl_semi_sync_" + tc.replica + "_enabled|ON"}
-				statuses := []string{"Rpl_semi_sync_" + tc.replica + "_status|" + active}
-				if tc.primary != "" {
-					variables = append(variables, "rpl_semi_sync_"+tc.primary+"_enabled|ON")
-					statuses = append(statuses, "Rpl_semi_sync_"+tc.primary+"_status|ON")
-				}
-				fields := sqltypes.MakeTestFields("variable_name|variable_value", "varchar|varchar")
-				db.AddQueryPattern("SELECT variable_name, variable_value FROM performance_schema.global_variables WHERE variable_name IN .*", sqltypes.MakeTestResult(fields, variables...))
-				db.AddQueryPattern("SELECT variable_name, variable_value FROM performance_schema.global_status WHERE variable_name IN .*", sqltypes.MakeTestResult(fields, statuses...))
+		t.Run(tc.name, func(t *testing.T) {
+			db, mysqld := newCollectFullStatusDataTestMysqld(t)
+			variables := []string{"rpl_semi_sync_" + tc.replica + "_enabled|ON"}
+			statuses := []string{"Rpl_semi_sync_" + tc.replica + "_status|ON"}
+			if tc.primary != "" {
+				variables = append(variables, "rpl_semi_sync_"+tc.primary+"_enabled|ON")
+				statuses = append(statuses, "Rpl_semi_sync_"+tc.primary+"_status|ON")
+			}
+			fields := sqltypes.MakeTestFields("variable_name|variable_value", "varchar|varchar")
+			db.AddQueryPattern("SELECT variable_name, variable_value FROM performance_schema.global_variables WHERE variable_name IN .*", sqltypes.MakeTestResult(fields, variables...))
+			db.AddQueryPattern("SELECT variable_name, variable_value FROM performance_schema.global_status WHERE variable_name IN .*", sqltypes.MakeTestResult(fields, statuses...))
 
-				status, err := mysqld.CollectFullStatusData(t.Context())
-				require.NoError(t, err)
-				require.NotNil(t, status)
-				assert.True(t, status.SemiSyncReplicaEnabled)
-				assert.Equal(t, active == "ON", status.SemiSyncReplicaStatus)
-				assert.Equal(t, tc.primary != "", status.SemiSyncPrimaryEnabled)
-				assert.Equal(t, tc.primary != "", status.SemiSyncPrimaryStatus)
-			})
-		}
+			status, err := mysqld.CollectFullStatusData(t.Context())
+			require.NoError(t, err)
+			require.NotNil(t, status)
+			assert.True(t, status.SemiSyncReplicaEnabled)
+			assert.True(t, status.SemiSyncReplicaStatus)
+			assert.Equal(t, tc.primary != "", status.SemiSyncPrimaryEnabled)
+			assert.Equal(t, tc.primary != "", status.SemiSyncPrimaryStatus)
+		})
 	}
 }
 

@@ -71,14 +71,6 @@ func (mysqld *Mysqld) CollectFullStatusData(ctx context.Context) (*replicationda
 	}
 	defer conn.Recycle()
 
-	// Connection validation needs the same cancellation handling as the data reads.
-	if err := runFullStatusQuery(ctx, conn, "connection validation", func() error {
-		_, err := conn.Conn.ExecuteFetch("SELECT 1", 1, false)
-		return err
-	}); err != nil {
-		return nil, err
-	}
-
 	if conn.Conn.IsMariaDB() {
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "FullStatus is not supported on MariaDB")
 	}
@@ -162,7 +154,8 @@ func (mysqld *Mysqld) CollectFullStatusData(ctx context.Context) (*replicationda
 }
 
 // runFullStatusQuery runs a FullStatus query and retries once after reconnecting
-// when MySQL drops the connection.
+// when MySQL drops the connection. Cancelling ctx closes the socket so a blocked
+// read cannot outlive the collection.
 func runFullStatusQuery(ctx context.Context, conn *dbconnpool.PooledDBConnection, queryName string, query func() error) error {
 	if err := ctx.Err(); err != nil {
 		return err
