@@ -2378,6 +2378,10 @@ var validSQL = []struct {
 	input:  "show create user current_user",
 	output: "show create user current_user",
 }, {
+	// a quote in the user name is escaped, so it cannot end the string
+	input:  "show create user 'a'';insert into t values (1); -- '",
+	output: "show create user 'a\\';insert into t values (1); -- '",
+}, {
 	input: "show create view v",
 }, {
 	input:  "show databases",
@@ -2397,6 +2401,10 @@ var validSQL = []struct {
 }, {
 	input:  "show engine INNODB mutex",
 	output: "show engine innodb mutex",
+}, {
+	// an engine name is written as an identifier, so it cannot end the statement
+	input:  "show engine `innodb; insert into t values (1); -- ` status",
+	output: "show engine `innodb; insert into t values (1); -- ` status",
 }, {
 	input: "show engines",
 }, {
@@ -2450,6 +2458,20 @@ var validSQL = []struct {
 }, {
 	input: "show grants for 'u' using 'r1'@''",
 }, {
+	// a quote in a user name or host is escaped, so it cannot end the string
+	input:  "show grants for 'o''brien'@'h''x' using 'r''1'",
+	output: "show grants for 'o\\'brien'@'h\\'x' using 'r\\'1'",
+}, {
+	input:  "show grants for 'a'';insert into t values (1); -- '",
+	output: "show grants for 'a\\';insert into t values (1); -- '",
+}, {
+	// a host is read as the host it names, however it is quoted
+	input:  "show grants for 'u'@\"h\"",
+	output: "show grants for 'u'@'h'",
+}, {
+	input:  "show grants for 'u'@`h';insert into t values (1); -- `",
+	output: "show grants for 'u'@'h\\';insert into t values (1); -- '",
+}, {
 	input:  "show index from t",
 	output: "show indexes from t",
 }, {
@@ -2494,6 +2516,12 @@ var validSQL = []struct {
 }, {
 	input:  "show profile cpu for query 1 limit 10",
 	output: "show profile cpu for query 1 limit 10",
+}, {
+	input:  "show profile block io, ipc, page faults, source, swaps",
+	output: "show profile block io, ipc, page faults, source, swaps",
+}, {
+	input:  "show profile CPU, Block IO",
+	output: "show profile cpu, block io",
 }, {
 	input:  "show profiles",
 	output: "show profiles",
@@ -6561,6 +6589,16 @@ var invalidSQL = []struct {
 	input  string
 	output string
 }{{
+	// SHOW PROFILE writes its types back unquoted, so only MySQL's own are accepted
+	input:  "show profile `all; insert into t values (1); -- `",
+	output: "unknown profile type at position 50",
+}, {
+	input:  "show profile foo",
+	output: "unknown profile type at position 17",
+}, {
+	input:  "show profile foo bar",
+	output: "unknown profile type at position 21 near 'bar'",
+}, {
 	input:  "select : from t",
 	output: "syntax error at position 9 near ':'",
 }, {
