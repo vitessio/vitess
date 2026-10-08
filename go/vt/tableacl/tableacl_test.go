@@ -33,6 +33,10 @@ import (
 	tableaclpb "vitess.io/vitess/go/vt/proto/tableacl"
 )
 
+// allTablesACLSink keeps the result of AuthorizedForAllTables on the heap
+// while its allocations are counted.
+var allTablesACLSink *ACLResult
+
 type fakeACLFactory struct{}
 
 func (factory *fakeACLFactory) New(entries []string) (acl.ACL, error) {
@@ -221,6 +225,15 @@ func TestTableACLAuthorize(t *testing.T) {
 	require.True(t, allTablesACL.IsMember(&querypb.VTGateCallerID{Username: "u3"}), "user u3 should hold every role on every table")
 	require.False(t, allTablesACL.IsMember(&querypb.VTGateCallerID{Username: "u1"}), "user u1 should not hold every role on every table")
 	require.False(t, allTablesACL.IsMember(&querypb.VTGateCallerID{Username: "u2"}), "user u2 should not hold every role on every table")
+
+	// Every cached plan whose tables cannot be determined holds this result,
+	// and the plan cache counts the result but not the ACL in it, as with the
+	// ACL of each role. So the ACL must be built once with the configuration
+	// and shared, leaving the result as the only allocation per call.
+	allocs := testing.AllocsPerRun(100, func() {
+		allTablesACLSink = tacl.AuthorizedForAllTables()
+	})
+	require.Equal(t, float64(1), allocs, "AuthorizedForAllTables should allocate only its ACLResult")
 
 	// The rule must not rely on ValidateProto rejecting entries that overlap
 	// "%": if a stricter group ever governed some tables alongside it, holding
