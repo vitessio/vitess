@@ -2310,6 +2310,45 @@ func TestReserveSettingsRejectUnsupportedSQLModes(t *testing.T) {
 	require.NoError(t, tsv.te.Release(connID))
 }
 
+// A connection starts out in a character set Vitess can parse safely, and a
+// session must not be able to switch it to one it cannot: not through a SET
+// statement sent to the query service, and not through connection settings,
+// which a VTGate gRPC client controls through its session's system variables.
+// Connection settings refuse any character set change, on the settings-pool
+// path and on either reservation path, since undoing one restores the server's
+// global character set.
+func TestSettingsRejectUnsafeConnectionCharsets(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	t.Cleanup(db.Close)
+	ctx := t.Context()
+	tsv := newTestTabletServer(ctx, enableStrictTableACL, db)
+	t.Cleanup(tsv.StopService)
+
+	assertSettingRefused := func(t *testing.T, setting string) {
+		const settingsErr = "the connection character set cannot be changed through connection settings"
+		_, _, err := tsv.te.ReserveBegin(ctx, &querypb.ExecuteOptions{}, []string{setting})
+		require.ErrorContains(t, err, settingsErr)
+		_, err = tsv.te.Reserve(ctx, &querypb.ExecuteOptions{}, 0, []string{setting})
+		require.ErrorContains(t, err, settingsErr)
+		_, err = tsv.qe.GetConnSetting(ctx, []string{setting})
+		require.ErrorContains(t, err, settingsErr)
+	}
+
+	for _, setting := range []string{"set character_set_client = 'gbk'", "set names 'sjis'", "set collation_connection = 'cp932_japanese_ci'"} {
+		t.Run(setting, func(t *testing.T) {
+			assertSettingRefused(t, setting)
+			_, err := tsv.Execute(ctx, tsv.sm.Target(), setting, nil, 0, 0, nil)
+			require.ErrorContains(t, err, "unsupported connection character set")
+			assert.Zero(t, db.GetQueryCalledNum(setting), "a rejected setting must not reach the backend")
+		})
+	}
+
+	// even a safe character set is refused as a connection setting
+	safeSetting := "set character_set_client = 'utf8mb4'"
+	assertSettingRefused(t, safeSetting)
+	assert.Zero(t, db.GetQueryCalledNum(safeSetting), "a refused setting must not reach the backend")
+}
+
 // A setting is applied with no table ACL check, so under strict table ACL one
 // that would read a table through a subquery is rejected before it reaches the
 // backend, on the settings-pool path and on both reservation paths alike.
