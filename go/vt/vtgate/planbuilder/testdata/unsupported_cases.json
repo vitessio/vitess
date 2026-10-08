@@ -260,6 +260,26 @@
     "plan": "VT12001: unsupported: Assignment expression"
   },
   {
+    "comment": "get_lock in a DO statement",
+    "query": "do get_lock('foo', 10)",
+    "plan": "VT12001: unsupported: get_lock in a DO statement, use SELECT instead"
+  },
+  {
+    "comment": "get_lock nested in a DO expression",
+    "query": "do 1, (select get_lock('foo', 10) from dual)",
+    "plan": "VT12001: unsupported: get_lock in a DO statement, use SELECT instead"
+  },
+  {
+    "comment": "release_lock in a DO statement",
+    "query": "do release_lock('foo')",
+    "plan": "VT12001: unsupported: release_lock in a DO statement, use SELECT instead"
+  },
+  {
+    "comment": "release_all_locks in a DO statement",
+    "query": "do release_all_locks()",
+    "plan": "VT12001: unsupported: release_all_locks in a DO statement, use SELECT instead"
+  },
+  {
     "comment": "explain - routed table with join on different keyspace table",
     "query": "explain select 1, second_user.foo.id, foo.col from second_user.foo join user.user join main.unsharded",
     "plan": "VT03031: EXPLAIN is only supported for single keyspace"

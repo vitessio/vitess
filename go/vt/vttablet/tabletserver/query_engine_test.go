@@ -1069,6 +1069,17 @@ func TestPlanPoolUnsafe(t *testing.T) {
 			"select id from t where get_lock('foo', 10) = 1",
 			"SelectLockFunc not allowed without reserved connection",
 		}, {
+			// DO keeps its expressions, so get_lock in it classifies like
+			// in a select list instead of acquiring a lock on a pooled
+			// connection.
+			"get_lock in a DO statement is unsafe with server-side connection pooling",
+			"do get_lock('foo', 10)",
+			"OtherAdmin not allowed without reserved connection",
+		}, {
+			"release_lock in a DO statement is a safe no-op on a pooled connection",
+			"do release_lock('foo')",
+			"",
+		}, {
 			// vtgate only reserves a connection for get_lock; a session that
 			// never acquired a lock sends release_lock as a plain execute, and
 			// a pooled connection can hold no user-level lock, so releasing
