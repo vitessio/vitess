@@ -17,6 +17,8 @@ limitations under the License.
 package planbuilder
 
 import (
+	"strconv"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -66,8 +68,20 @@ func validateSetExprsCharset(exprs sqlparser.SetExprs) error {
 		}
 		switch value := expr.Expr.(type) {
 		case *sqlparser.Literal:
-			if value.Type == sqlparser.StrVal && collations.IsConnectionCharsetName(value.Val) {
-				continue
+			switch value.Type {
+			case sqlparser.StrVal:
+				if collations.IsConnectionCharsetName(value.Val) {
+					continue
+				}
+			case sqlparser.IntVal:
+				// MySQL also accepts a collation ID, and refuses 0 and an ID it
+				// does not define, as VTGate does.
+				id, err := strconv.ParseUint(value.Val, 10, 16)
+				if err == nil && id != 0 {
+					if _, ok := collations.MySQL8().ConnectionCharset(collations.ID(id)); ok {
+						continue
+					}
+				}
 			}
 		case *sqlparser.ColName:
 			if value.Qualifier.IsEmpty() && collations.IsConnectionCharsetName(value.Name.String()) {
@@ -88,9 +102,13 @@ func validateSetExprsCharset(exprs sqlparser.SetExprs) error {
 // with DEFAULT, which takes the server's global value, and that need not be a
 // character set Vitess can parse safely. VTGate never sends these variables as
 // settings: it handles SET NAMES and SET CHARACTER SET itself and never applies
-// the character set variables.
+// the character set variables. A user-defined variable that only shares one of
+// their names changes no connection setting and is left alone.
 func rejectSettingCharsetExprs(exprs sqlparser.SetExprs) error {
 	for _, expr := range exprs {
+		if expr.Var.Scope == sqlparser.VariableScope {
+			continue
+		}
 		if connectionCharsetVariables[expr.Var.Name.Lowered()] {
 			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "the connection character set cannot be changed through connection settings: %s", expr.Var.Name.String())
 		}
