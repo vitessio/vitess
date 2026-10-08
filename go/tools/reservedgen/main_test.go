@@ -88,10 +88,10 @@ func TestNonReservedKeywordsSkipsBlankAndCommentLines(t *testing.T) {
 	for i := range n {
 		tok := fmt.Sprintf("TOK%03d", i)
 		want = append(want, tok)
-		switch {
-		case i == 0:
+		switch i {
+		case 0:
 			rule.WriteString("  " + tok + "\n")
-		case i == 1:
+		case 1:
 			rule.WriteString("| " + tok + " %prec FUNCTION_CALL_NON_KEYWORD\n")
 		default:
 			rule.WriteString("| " + tok + "\n")
