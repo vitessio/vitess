@@ -1014,8 +1014,8 @@
                       "Sharded": false
                     },
                     "FieldQuery": "select 1 as `found` from information_schema.`tables` where 1 != 1",
-                    "Query": "select 1 as `found` from information_schema.`tables` where `table_name` = :table_name1 /* VARCHAR */ and `table_name` = :table_name1 /* VARCHAR */ limit :__upper_limit",
-                    "SysTableTableName": "[table_name1:'Music']"
+                    "Query": "select 1 as `found` from information_schema.`tables` where `table_name` = :table_name1 /* VARCHAR */ and `table_name` = 'Music' limit :__upper_limit",
+                    "SysTableTableName": "[table_name1:'music']"
                   },
                   {
                     "OperatorType": "Route",
@@ -1025,8 +1025,8 @@
                       "Sharded": false
                     },
                     "FieldQuery": "select 1 as `found` from information_schema.views where 1 != 1",
-                    "Query": "select 1 as `found` from information_schema.views where `table_name` = :table_name2 /* VARCHAR */ and `table_name` = :table_name2 /* VARCHAR */ limit :__upper_limit",
-                    "SysTableTableName": "[table_name2:'user']"
+                    "Query": "select 1 as `found` from information_schema.views where `table_name` = :table_name2 /* VARCHAR */ and `table_name` = 'user' limit :__upper_limit",
+                    "SysTableTableName": "[table_name2:'music']"
                   }
                 ]
               }
@@ -1041,8 +1041,8 @@
               "Sharded": false
             },
             "FieldQuery": "select 1 as `found` from information_schema.`tables` where 1 != 1",
-            "Query": "select 1 as `found` from information_schema.`tables` where `table_name` = :table_name /* VARCHAR */ and `table_name` = :table_name /* VARCHAR */ and :__sq_has_values",
-            "SysTableTableName": "[table_name:'Music']"
+            "Query": "select 1 as `found` from information_schema.`tables` where `table_name` = :table_name /* VARCHAR */ and `table_name` = 'Music' and :__sq_has_values",
+            "SysTableTableName": "[table_name:'music']"
           }
         ]
       }
@@ -1157,7 +1157,7 @@
     }
   },
   {
-    "comment": "table_schema OR predicate\n# It is unsupported because we do not route queries to multiple keyspaces right now",
+    "comment": "table_schema OR predicate # rewritten to IN and resolved at execution",
     "query": "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'ks' OR TABLE_SCHEMA = 'main'",
     "plan": {
       "Type": "Passthrough",
@@ -1171,7 +1171,8 @@
           "Sharded": false
         },
         "FieldQuery": "select TABLE_CATALOG, TABLE_SCHEMA, `TABLE_NAME`, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
-        "Query": "select TABLE_CATALOG, TABLE_SCHEMA, `TABLE_NAME`, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = 'ks' or TABLE_SCHEMA = 'main'"
+        "Query": "select TABLE_CATALOG, TABLE_SCHEMA, `TABLE_NAME`, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = :__vtschemaname /* VARCHAR */",
+        "SysTableTableSchema": "[('ks', 'main')]"
       }
     }
   },
@@ -1287,6 +1288,303 @@
         "FieldQuery": "select c.`column_name`, c.data_type, c.`table_name`, c.table_schema, c.is_nullable from (select `table_name` from information_schema.`tables` where 1 != 1) as `tables`, information_schema.`columns` as c where 1 != 1",
         "Query": "select c.`column_name`, c.data_type, c.`table_name`, c.table_schema, c.is_nullable from (select `table_name` from information_schema.`tables` where table_schema = :__vtschemaname /* VARCHAR */ limit 1000) as `tables`, information_schema.`columns` as c where `tables`.`table_name` = c.`table_name` order by c.`table_name` asc",
         "SysTableTableSchema": "['ks']"
+      }
+    }
+  },
+  {
+    "comment": "single-element IN on table_schema routes like equality",
+    "query": "select table_name from information_schema.tables where table_schema in ('user')",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select table_name from information_schema.tables where table_schema in ('user')",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "DBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select `table_name` from information_schema.`tables` where 1 != 1",
+        "Query": "select `table_name` from information_schema.`tables` where table_schema = :__vtschemaname /* VARCHAR */",
+        "SysTableTableSchema": "['user']"
+      }
+    }
+  },
+  {
+    "comment": "single-element IN on table_name routes like equality",
+    "query": "select column_name from information_schema.statistics where table_schema = 'user' and table_name in ('user_extra')",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select column_name from information_schema.statistics where table_schema = 'user' and table_name in ('user_extra')",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "DBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select `column_name` from information_schema.statistics where 1 != 1",
+        "Query": "select `column_name` from information_schema.statistics where table_schema = :__vtschemaname /* VARCHAR */ and `table_name` = :table_name /* VARCHAR */",
+        "SysTableTableName": "[table_name:'user_extra']",
+        "SysTableTableSchema": "['user']"
+      }
+    }
+  },
+  {
+    "comment": "single-element IN containing database() is left alone, like = database()",
+    "query": "select table_name from information_schema.tables where table_schema in (database())",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select table_name from information_schema.tables where table_schema in (database())",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "DBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select `table_name` from information_schema.`tables` where 1 != 1",
+        "Query": "select `table_name` from information_schema.`tables` where table_schema in (database())"
+      }
+    }
+  },
+  {
+    "comment": "multi-element IN containing database() is left alone for the tablet to evaluate, like = database()",
+    "query": "select table_name from information_schema.tables where table_schema in (database(), 'vt_main')",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select table_name from information_schema.tables where table_schema in (database(), 'vt_main')",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "DBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select `table_name` from information_schema.`tables` where 1 != 1",
+        "Query": "select `table_name` from information_schema.`tables` where table_schema in (database(), 'vt_main')"
+      }
+    }
+  },
+  {
+    "comment": "a second, different table_name value stays a plain filter instead of overwriting the routing source",
+    "query": "select table_name from information_schema.tables where table_name = 't1' and table_name = 't2'",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select table_name from information_schema.tables where table_name = 't1' and table_name = 't2'",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "DBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select `table_name` from information_schema.`tables` where 1 != 1",
+        "Query": "select `table_name` from information_schema.`tables` where `table_name` = :table_name /* VARCHAR */ and `table_name` = 't2'",
+        "SysTableTableName": "[table_name:'t1']"
+      }
+    }
+  },
+  {
+    "comment": "a second, different table_name value from a single-element IN stays a plain filter",
+    "query": "select table_name from information_schema.tables where table_name = 't1' and table_name in ('t2')",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select table_name from information_schema.tables where table_name = 't1' and table_name in ('t2')",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "DBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select `table_name` from information_schema.`tables` where 1 != 1",
+        "Query": "select `table_name` from information_schema.`tables` where `table_name` = :table_name /* VARCHAR */ and `table_name` = 't2'",
+        "SysTableTableName": "[table_name:'t1']"
+      }
+    }
+  },
+  {
+    "comment": "single-element IN on a non-routing column is left alone",
+    "query": "select * from information_schema.tables where engine in ('InnoDB')",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select * from information_schema.tables where engine in ('InnoDB')",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "DBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select TABLE_CATALOG, TABLE_SCHEMA, `TABLE_NAME`, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from information_schema.`tables` where 1 != 1",
+        "Query": "select TABLE_CATALOG, TABLE_SCHEMA, `TABLE_NAME`, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from information_schema.`tables` where `engine` in ('InnoDB')"
+      }
+    }
+  },
+  {
+    "comment": "list bindvar IN on table_schema is resolved at execution",
+    "query": "select table_name from information_schema.tables where table_schema in ::schemas",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select table_name from information_schema.tables where table_schema in ::schemas",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "DBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select `table_name` from information_schema.`tables` where 1 != 1",
+        "Query": "select `table_name` from information_schema.`tables` where table_schema = :__vtschemaname /* VARCHAR */",
+        "SysTableTableSchema": "[::schemas]"
+      }
+    }
+  },
+  {
+    "comment": "list bindvar IN on table_name is re-pointed at a dedicated variable",
+    "query": "select column_name from information_schema.statistics where table_schema = 'user' and table_name in ::tables",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select column_name from information_schema.statistics where table_schema = 'user' and table_name in ::tables",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "DBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select `column_name` from information_schema.statistics where 1 != 1",
+        "Query": "select `column_name` from information_schema.statistics where table_schema = :__vtschemaname /* VARCHAR */ and `table_name` in ::__tables",
+        "SysTableTableSchema": "['user']",
+        "SysTableTableName": "[__tables:::tables]"
+      }
+    }
+  },
+  {
+    "comment": "a list bindvar shared between predicates: only the table_name predicate is re-pointed",
+    "query": "select column_name from information_schema.statistics where table_schema = 'user' and table_name in ::names and index_name in ::names",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select column_name from information_schema.statistics where table_schema = 'user' and table_name in ::names and index_name in ::names",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "DBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select `column_name` from information_schema.statistics where 1 != 1",
+        "Query": "select `column_name` from information_schema.statistics where table_schema = :__vtschemaname /* VARCHAR */ and `table_name` in ::__names and index_name in ::names",
+        "SysTableTableName": "[__names:::names]",
+        "SysTableTableSchema": "['user']"
+      }
+    }
+  },
+  {
+    "comment": "multi-element literal IN on table_schema is resolved at execution",
+    "query": "select table_name from information_schema.tables where table_schema in ('a', 'b')",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select table_name from information_schema.tables where table_schema in ('a', 'b')",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "DBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select `table_name` from information_schema.`tables` where 1 != 1",
+        "Query": "select `table_name` from information_schema.`tables` where table_schema = :__vtschemaname /* VARCHAR */",
+        "SysTableTableSchema": "[('a', 'b')]"
+      }
+    }
+  },
+  {
+    "comment": "prepared-statement IN on table_schema is resolved at execution",
+    "query": "select table_name from information_schema.tables where table_schema in (:v1, :v2)",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select table_name from information_schema.tables where table_schema in (:v1, :v2)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "DBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select `table_name` from information_schema.`tables` where 1 != 1",
+        "Query": "select `table_name` from information_schema.`tables` where table_schema = :__vtschemaname /* VARCHAR */",
+        "SysTableTableSchema": "[(:v1, :v2)]"
+      }
+    }
+  },
+  {
+    "comment": "single-element IN with an untranslatable element is left alone",
+    "query": "select * from information_schema.tables where table_schema in (table_name)",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select * from information_schema.tables where table_schema in (table_name)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "DBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select TABLE_CATALOG, TABLE_SCHEMA, `TABLE_NAME`, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from information_schema.`tables` where 1 != 1",
+        "Query": "select TABLE_CATALOG, TABLE_SCHEMA, `TABLE_NAME`, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from information_schema.`tables` where table_schema in (`table_name`)"
+      }
+    }
+  },
+  {
+    "comment": "NOT IN on table_schema is left alone",
+    "query": "select table_name from information_schema.tables where table_schema not in ('user')",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select table_name from information_schema.tables where table_schema not in ('user')",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "DBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select `table_name` from information_schema.`tables` where 1 != 1",
+        "Query": "select `table_name` from information_schema.`tables` where table_schema not in ('user')"
+      }
+    }
+  },
+  {
+    "comment": "single-element list bindvar on a non-routing column is left alone",
+    "query": "select * from information_schema.tables where engine in ::x",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select * from information_schema.tables where engine in ::x",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "DBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select TABLE_CATALOG, TABLE_SCHEMA, `TABLE_NAME`, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from information_schema.`tables` where 1 != 1",
+        "Query": "select TABLE_CATALOG, TABLE_SCHEMA, `TABLE_NAME`, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from information_schema.`tables` where `engine` in ::x"
       }
     }
   }

@@ -449,7 +449,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %token <str> GTID_SUBSET GTID_SUBTRACT WAIT_FOR_EXECUTED_GTID_SET WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS
 
 // Explain tokens
-%token <str> FORMAT TREE VITESS TRADITIONAL VTEXPLAIN VEXPLAIN PLAN MYSQLPLAN
+%token <str> FORMAT VITESS VTEXPLAIN VEXPLAIN PLAN MYSQLPLAN
 
 // Lock type tokens
 %token <str> LOCAL LOW_PRIORITY
@@ -1154,20 +1154,29 @@ query_expression:
   }
 | with_clause query_expression_parens limit_clause
   {
-    $2.SetWith($1)
+    // A parenthesized query expression is its own scope. When it carries its
+    // own with clause, MySQL keeps that one and ignores the outer clause.
+    if $2.GetWith() == nil {
+      $2.SetWith($1)
+    }
     $2.SetLimit($3)
     $$ = $2
   }
 | with_clause query_expression_parens order_by_clause limit_opt
   {
-    $2.SetWith($1)
+    if $2.GetWith() == nil {
+      $2.SetWith($1)
+    }
     $2.SetOrderBy($3)
     $2.SetLimit($4)
     $$ = $2
   }
 | with_clause query_expression_parens
   {
-    $2.SetWith($1)
+    if $2.GetWith() == nil {
+      $2.SetWith($1)
+    }
+    $$ = $2
   }
 | SELECT comment_opt cache_opt NEXT num_val for_from table_name
   {
@@ -5194,17 +5203,28 @@ explain_format_opt:
   {
     $$ = EmptyType
   }
-| FORMAT '=' JSON
+| FORMAT '=' sql_id
   {
-    $$ = JSONType
+    // The format names are matched by text rather than as keywords. MySQL accepts
+    // them as ordinary identifiers everywhere else, and rejects an unknown name
+    // rather than the syntax; keeping them out of the keyword table means the
+    // formatter does not backtick columns or values spelled tree or traditional.
+    typ, ok := ExplainTypeFromName($3.String())
+    if !ok {
+      yylex.Error("Unknown EXPLAIN format name: '" + $3.String() + "'")
+      return 1
+    }
+    $$ = typ
   }
-| FORMAT '=' TREE
+| FORMAT '=' STRING
   {
-    $$ = TreeType
-  }
-| FORMAT '=' TRADITIONAL
-  {
-    $$ = TraditionalType
+    // MySQL also accepts the format name as a quoted string
+    typ, ok := ExplainTypeFromName($3)
+    if !ok {
+      yylex.Error("Unknown EXPLAIN format name: '" + $3 + "'")
+      return 1
+    }
+    $$ = typ
   }
 | ANALYZE
   {
@@ -9570,10 +9590,8 @@ non_reserved_keyword:
 | TINYINT
 | TINYTEXT
 | TRACE
-| TRADITIONAL
 | TRANSACTION
 | TRANSACTIONS
-| TREE
 | TRIGGER
 | TRIGGERS
 | TRIM %prec FUNCTION_CALL_NON_KEYWORD

@@ -266,18 +266,31 @@ func (vc *VCursorImpl) GetSafeSession() *SafeSession {
 	return vc.SafeSession
 }
 
+// PrepareSetVarComment returns the SET_VAR query hint content for the session's system
+// variables. The variables are listed sorted by name, so that the same session renders
+// the same hint on every request: the hint is part of the plan cache key and of the
+// query text sent to the tablets.
 func (vc *VCursorImpl) PrepareSetVarComment() string {
-	var res []string
+	var keys []string
+	values := make(map[string]string)
 	vc.Session().GetSystemVariables(func(k, v string) {
 		if sysvars.SupportsSetVar(k) {
-			if k == "sql_mode" && v == "''" {
-				// SET_VAR(sql_mode, '') is not accepted by MySQL, giving a warning:
-				// | Warning | 1064 | Optimizer hint syntax error near ''') */
-				v = "' '"
-			}
-			res = append(res, fmt.Sprintf("SET_VAR(%s = %s)", k, v))
+			keys = append(keys, k)
+			values[k] = v
 		}
 	})
+	sort.Strings(keys)
+
+	res := make([]string, 0, len(keys))
+	for _, k := range keys {
+		v := values[k]
+		if k == "sql_mode" && v == "''" {
+			// SET_VAR(sql_mode, '') is not accepted by MySQL, giving a warning:
+			// | Warning | 1064 | Optimizer hint syntax error near ''') */
+			v = "' '"
+		}
+		res = append(res, fmt.Sprintf("SET_VAR(%s = %s)", k, v))
+	}
 
 	return strings.Join(res, " ")
 }
@@ -1124,19 +1137,22 @@ func (vc *VCursorImpl) CheckForReservedConnection(setVarComment string, stmt sql
 	if setVarComment == "" {
 		return
 	}
-	// A VEXPLAIN wraps an inner statement that carries the SET_VAR hint; decide
-	// against that inner statement so, for example, VEXPLAIN of a SELECT is treated
-	// like the SELECT and does not spuriously pin the session to a reserved
-	// connection.
-	if vexplain, ok := stmt.(*sqlparser.VExplainStmt); ok {
-		stmt = vexplain.Statement
+	// An EXPLAIN or VEXPLAIN wraps an inner statement that carries the SET_VAR hint;
+	// decide against that inner statement so, for example, EXPLAIN of a SELECT is
+	// treated like the SELECT and does not spuriously pin the session to a reserved
+	// connection, while EXPLAIN of a statement that cannot take the hint still does.
+	switch explain := stmt.(type) {
+	case *sqlparser.ExplainStmt:
+		stmt = explain.Statement
+	case *sqlparser.VExplainStmt:
+		stmt = explain.Statement
 	}
 	switch stmt.(type) {
 	// If the statement supports optimizer hints or a transaction statement or a SET statement
-	// no reserved connection is needed
+	// or a USE statement (which VTGate handles itself), no reserved connection is needed
 	case *sqlparser.Begin, *sqlparser.Commit, *sqlparser.Rollback, *sqlparser.Savepoint,
 		*sqlparser.SRollback, *sqlparser.Release, *sqlparser.Set, *sqlparser.Show,
-		sqlparser.SupportOptimizerHint:
+		*sqlparser.Use, sqlparser.SupportOptimizerHint:
 	default:
 		vc.NeedsReservedConn()
 	}
@@ -1145,6 +1161,11 @@ func (vc *VCursorImpl) CheckForReservedConnection(setVarComment string, stmt sql
 // NeedsReservedConn implements the SessionActions interface
 func (vc *VCursorImpl) NeedsReservedConn() {
 	vc.SafeSession.SetReservedConn(true)
+}
+
+// ResetReservedConn implements the SessionActions interface
+func (vc *VCursorImpl) ResetReservedConn() {
+	vc.SafeSession.SetReservedConn(false)
 }
 
 func (vc *VCursorImpl) InReservedConn() bool {
@@ -1392,7 +1413,7 @@ func (vc *VCursorImpl) SetSessionTrackGTIDs(enable bool) {
 
 // HasCreatedTempTable implements the SessionActions interface
 func (vc *VCursorImpl) HasCreatedTempTable() {
-	vc.SafeSession.GetOrCreateOptions().HasCreatedTempTables = true
+	vc.SafeSession.SetHasCreatedTempTables()
 }
 
 // GetWarnings implements the SessionActions interface

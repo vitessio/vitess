@@ -17,7 +17,6 @@ limitations under the License.
 package materialize
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -34,7 +33,8 @@ import (
 var (
 	createOptions = struct {
 		SourceKeyspace string
-		TableSettings  tableSettings
+		TableSettings  jsonFlag
+		tableSettings  []*vtctldatapb.TableMaterializeSettings
 	}{}
 
 	// create makes a MaterializeCreate gRPC call to a vtctld.
@@ -77,7 +77,7 @@ should be copied as-is from the source keyspace. Here's an example value for tab
 			if err := common.ParseAndValidateCreateOptions(cmd); err != nil {
 				return err
 			}
-			return nil
+			return parseTableSettings(cmd)
 		},
 		RunE: commandCreate,
 	}
@@ -104,22 +104,13 @@ func commandCreate(cmd *cobra.Command, args []string) error {
 		MaterializationIntent:     vtctldatapb.MaterializationIntent_CUSTOM,
 		TargetKeyspace:            common.BaseOptions.TargetKeyspace,
 		SourceKeyspace:            createOptions.SourceKeyspace,
-		TableSettings:             createOptions.TableSettings.val,
+		TableSettings:             createOptions.tableSettings,
 		StopAfterCopy:             common.CreateOptions.StopAfterCopy,
 		Cell:                      strings.Join(common.CreateOptions.Cells, ","),
 		TabletTypes:               topoproto.MakeStringTypeCSV(common.CreateOptions.TabletTypes),
 		TabletSelectionPreference: tsp,
 		ReferenceTables:           common.CreateOptions.ReferenceTables,
 		WorkflowOptions:           workflowOptions,
-	}
-
-	createOptions.TableSettings.parser, err = sqlparser.New(sqlparser.Options{
-		MySQLServerVersion: common.CreateOptions.MySQLServerVersion,
-		TruncateUILen:      common.CreateOptions.TruncateUILen,
-		TruncateErrLen:     common.CreateOptions.TruncateErrLen,
-	})
-	if err != nil {
-		return err
 	}
 
 	req := &vtctldatapb.MaterializeCreateRequest{
@@ -149,24 +140,38 @@ func commandCreate(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// tableSettings is a wrapper around a slice of TableMaterializeSettings
-// proto messages that implements the pflag.Value interface.
-type tableSettings struct {
-	val    []*vtctldatapb.TableMaterializeSettings
-	parser *sqlparser.Parser
-}
-
-func (ts *tableSettings) String() string {
-	tsj, _ := json.Marshal(ts.val)
-	return string(tsj)
-}
-
-func (ts *tableSettings) Set(v string) error {
-	var err error
-	ts.val, err = common.ParseTableMaterializeSettings(v, ts.parser)
+// parseTableSettings validates the --table-settings flag with a parser
+// configured from the other flags. Flags are applied in the order given on
+// the command line, so this runs once every flag has been applied.
+func parseTableSettings(cmd *cobra.Command) error {
+	if !cmd.Flags().Changed("table-settings") {
+		return nil
+	}
+	parser, err := sqlparser.New(sqlparser.Options{
+		MySQLServerVersion: common.CreateOptions.MySQLServerVersion,
+		TruncateUILen:      common.CreateOptions.TruncateUILen,
+		TruncateErrLen:     common.CreateOptions.TruncateErrLen,
+	})
+	if err != nil {
+		return err
+	}
+	createOptions.tableSettings, err = common.ParseTableMaterializeSettings(string(createOptions.TableSettings), parser)
 	return err
 }
 
-func (ts *tableSettings) Type() string {
+// jsonFlag is a pflag.Value that holds a flag's JSON text as given and shows
+// the flag's type as JSON in the command's help.
+type jsonFlag string
+
+func (j *jsonFlag) String() string {
+	return string(*j)
+}
+
+func (j *jsonFlag) Set(v string) error {
+	*j = jsonFlag(v)
+	return nil
+}
+
+func (j *jsonFlag) Type() string {
 	return "JSON"
 }

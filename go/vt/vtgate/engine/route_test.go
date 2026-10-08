@@ -22,6 +22,8 @@ import (
 	"strconv"
 	"testing"
 
+	"google.golang.org/protobuf/proto"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -196,6 +198,251 @@ func TestInformationSchemaWithTableAndSchemaWithRoutedTables(t *testing.T) {
 			vc.ExpectLog(t, tc.expectedLog)
 		})
 	}
+}
+
+func TestSystemTableSchemaLists(t *testing.T) {
+	tuple := func(name string) evalengine.Expr {
+		return evalengine.NewBindVarTuple(name, collations.SystemCollation.Collation)
+	}
+	literal := func(v string) evalengine.Expr {
+		return evalengine.NewLiteralString([]byte(v), collations.SystemCollation)
+	}
+	replace := sqltypes.Int64BindVariable(1)
+	tests := []struct {
+		name        string
+		schemas     []evalengine.Expr
+		bindVars    map[string]*querypb.BindVariable
+		expectedLog []string
+		wantErr     string
+	}{{
+		name:    "single value routes like equality",
+		schemas: []evalengine.Expr{tuple("schemas")},
+		bindVars: map[string]*querypb.BindVariable{
+			"schemas": sqltypes.TestBindVariable([]any{"myKeyspace"}),
+		},
+		expectedLog: []string{
+			"ResolveDestinations myKeyspace [] Destinations:DestinationAnyShard()",
+			fmt.Sprintf("ExecuteMultiShard myKeyspace.1: dummy_select {__replacevtschemaname: %v schemas: %v} false false",
+				replace, sqltypes.TestBindVariable([]any{"myKeyspace"})),
+		},
+	}, {
+		name:    "duplicate values route like equality",
+		schemas: []evalengine.Expr{tuple("schemas")},
+		bindVars: map[string]*querypb.BindVariable{
+			"schemas": sqltypes.TestBindVariable([]any{"myKeyspace", "myKeyspace"}),
+		},
+		expectedLog: []string{
+			"ResolveDestinations myKeyspace [] Destinations:DestinationAnyShard()",
+			fmt.Sprintf("ExecuteMultiShard myKeyspace.1: dummy_select {__replacevtschemaname: %v schemas: %v} false false",
+				replace, sqltypes.TestBindVariable([]any{"myKeyspace", "myKeyspace"})),
+		},
+	}, {
+		name:    "NULL elements are ignored",
+		schemas: []evalengine.Expr{tuple("schemas")},
+		bindVars: map[string]*querypb.BindVariable{
+			"schemas": sqltypes.TestBindVariable([]any{"myKeyspace", nil}),
+		},
+		expectedLog: []string{
+			"ResolveDestinations myKeyspace [] Destinations:DestinationAnyShard()",
+			fmt.Sprintf("ExecuteMultiShard myKeyspace.1: dummy_select {__replacevtschemaname: %v schemas: %v} false false",
+				replace, sqltypes.TestBindVariable([]any{"myKeyspace", nil})),
+		},
+	}, {
+		name:    "all NULL matches nothing",
+		schemas: []evalengine.Expr{tuple("schemas")},
+		bindVars: map[string]*querypb.BindVariable{
+			"schemas": sqltypes.TestBindVariable([]any{nil, nil}),
+		},
+		expectedLog: []string{
+			"ResolveDestinations ks [] Destinations:DestinationAnyShard()",
+			fmt.Sprintf("ExecuteMultiShard ks.1: dummy_select {__vtschemaname: type:VARCHAR schemas: %v} false false",
+				sqltypes.TestBindVariable([]any{nil, nil})),
+		},
+	}, {
+		name:    "distinct values error",
+		schemas: []evalengine.Expr{tuple("schemas")},
+		bindVars: map[string]*querypb.BindVariable{
+			"schemas": sqltypes.TestBindVariable([]any{"ks1", "ks2"}),
+		},
+		wantErr: "VT12001",
+	}, {
+		// predicates may be on different schema columns (KEY_COLUMN_USAGE has three)
+		name:    "multi-name list errors even when another predicate names one of them",
+		schemas: []evalengine.Expr{literal("myKeyspace"), tuple("schemas")},
+		bindVars: map[string]*querypb.BindVariable{
+			"schemas": sqltypes.TestBindVariable([]any{"myKeyspace", "other"}),
+		},
+		wantErr: "VT12001",
+	}, {
+		name:    "list naming no schema makes the query match nothing despite a scalar",
+		schemas: []evalengine.Expr{literal("myKeyspace"), tuple("schemas")},
+		bindVars: map[string]*querypb.BindVariable{
+			"schemas": sqltypes.TestBindVariable([]any{nil}),
+		},
+		expectedLog: []string{
+			"ResolveDestinations ks [] Destinations:DestinationAnyShard()",
+			fmt.Sprintf("ExecuteMultiShard ks.1: dummy_select {__vtschemaname: type:VARCHAR schemas: %v} false false",
+				sqltypes.TestBindVariable([]any{nil})),
+		},
+	}, {
+		name:    "scalar and list naming different schemas error",
+		schemas: []evalengine.Expr{literal("myKeyspace"), tuple("schemas")},
+		bindVars: map[string]*querypb.BindVariable{
+			"schemas": sqltypes.TestBindVariable([]any{"ks1"}),
+		},
+		wantErr: "specifying two different database in the query is not supported",
+	}, {
+		name:    "lists agreeing after duplicates and NULLs route",
+		schemas: []evalengine.Expr{tuple("s1"), tuple("s2")},
+		bindVars: map[string]*querypb.BindVariable{
+			"s1": sqltypes.TestBindVariable([]any{"myKeyspace", nil}),
+			"s2": sqltypes.TestBindVariable([]any{"myKeyspace", "myKeyspace"}),
+		},
+		expectedLog: []string{
+			"ResolveDestinations myKeyspace [] Destinations:DestinationAnyShard()",
+			fmt.Sprintf("ExecuteMultiShard myKeyspace.1: dummy_select {__replacevtschemaname: %v s1: %v s2: %v} false false",
+				replace, sqltypes.TestBindVariable([]any{"myKeyspace", nil}), sqltypes.TestBindVariable([]any{"myKeyspace", "myKeyspace"})),
+		},
+	}}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			sel := &Route{
+				RoutingParameters: &RoutingParameters{
+					Opcode: DBA,
+					Keyspace: &vindexes.Keyspace{
+						Name:    "ks",
+						Sharded: false,
+					},
+					SysTableTableSchema: tc.schemas,
+				},
+				Query:      "dummy_select",
+				FieldQuery: "dummy_select_field",
+			}
+			vc := &loggingVCursor{
+				shards:  []string{"1"},
+				results: []*sqltypes.Result{defaultSelectResult},
+			}
+			_, err := sel.TryExecute(t.Context(), vc, tc.bindVars, false)
+			if tc.wantErr != "" {
+				require.ErrorContains(t, err, tc.wantErr)
+				assert.Equal(t, vtrpcpb.Code_UNIMPLEMENTED, vterrors.Code(err))
+				return
+			}
+			require.NoError(t, err)
+			vc.ExpectLog(t, tc.expectedLog)
+		})
+	}
+}
+
+// TestSystemTableRoutedTableRewritesEveryTableName pins that every routed
+// table-name predicate is rewritten to its physical name, not just the first.
+func TestSystemTableRoutedTableRewritesEveryTableName(t *testing.T) {
+	sel := &Route{
+		RoutingParameters: &RoutingParameters{
+			Opcode:              DBA,
+			Keyspace:            &vindexes.Keyspace{Name: "ks"},
+			SysTableTableSchema: []evalengine.Expr{evalengine.NewLiteralString([]byte("schema"), collations.SystemCollation)},
+			SysTableTableName: map[string]evalengine.Expr{
+				"t1": evalengine.NewLiteralString([]byte("a"), collations.SystemCollation),
+				"t2": evalengine.NewLiteralString([]byte("b"), collations.SystemCollation),
+			},
+		},
+		Query:      "dummy_select",
+		FieldQuery: "dummy_select_field",
+	}
+	vc := &loggingVCursor{
+		shards:  []string{"1"},
+		results: []*sqltypes.Result{defaultSelectResult},
+		tableRoutes: tableRoutes{
+			tbl: &vindexes.BaseTable{
+				Name:     sqlparser.NewIdentifierCS("routedTable"),
+				Keyspace: &vindexes.Keyspace{Name: "routedKeyspace"},
+			},
+		},
+	}
+	bindVars := map[string]*querypb.BindVariable{}
+
+	_, err := sel.TryExecute(t.Context(), vc, bindVars, false)
+	require.NoError(t, err)
+	want := sqltypes.StringBindVariable("routedTable")
+	assert.True(t, proto.Equal(want, bindVars["t1"]), "t1 = %v", bindVars["t1"])
+	assert.True(t, proto.Equal(want, bindVars["t2"]), "t2 = %v", bindVars["t2"])
+	assert.Contains(t, vc.log, "ResolveDestinations routedKeyspace [] Destinations:DestinationAnyShard()")
+}
+
+// sysTableNameInRoute builds a DBA route for `table_name IN ::tables`, keyed by
+// the dedicated ::vttables while the expression reads the client's ::tables.
+func sysTableNameInRoute() *Route {
+	return &Route{
+		RoutingParameters: &RoutingParameters{
+			Opcode: DBA,
+			Keyspace: &vindexes.Keyspace{
+				Name:    "ks",
+				Sharded: false,
+			},
+			SysTableTableName: map[string]evalengine.Expr{
+				"vttables": evalengine.NewBindVarTuple("tables", collations.SystemCollation.Collation),
+			},
+		},
+		Query:      "dummy_select",
+		FieldQuery: "dummy_select_field",
+	}
+}
+
+func TestSystemTableTableNameInSingleValueRoutedRewrite(t *testing.T) {
+	sel := sysTableNameInRoute()
+	vc := &loggingVCursor{
+		shards:  []string{"1"},
+		results: []*sqltypes.Result{defaultSelectResult},
+		tableRoutes: tableRoutes{
+			tbl: &vindexes.BaseTable{
+				Name:     sqlparser.NewIdentifierCS("routedTable"),
+				Keyspace: &vindexes.Keyspace{Name: "routedKeyspace"},
+			},
+		},
+	}
+	original := sqltypes.TestBindVariable([]any{"tableName"})
+	bindVars := map[string]*querypb.BindVariable{
+		"tables": original,
+	}
+
+	_, err := sel.TryExecute(t.Context(), vc, bindVars, false)
+	require.NoError(t, err)
+	require.NotNil(t, bindVars["vttables"])
+	assert.Equal(t, querypb.Type_TUPLE, bindVars["vttables"].Type,
+		"the rewritten query says `in ::vttables`, so the dedicated bind variable must be a tuple")
+	assert.True(t, proto.Equal(original, bindVars["tables"]),
+		"the client's list bind variable may be shared with other predicates and must never be rewritten")
+	vc.ExpectLog(t, []string{
+		"FindTable(tableName)",
+		"ResolveDestinations routedKeyspace [] Destinations:DestinationAnyShard()",
+		fmt.Sprintf("ExecuteMultiShard routedKeyspace.1: dummy_select {__vtschemaname: type:VARCHAR tables: %v vttables: %v} false false", original, sqltypes.TestBindVariable([]any{"routedTable"})),
+	})
+}
+
+func TestSystemTableTableNameInMultiValueStaysUnrouted(t *testing.T) {
+	sel := sysTableNameInRoute()
+	vc := &loggingVCursor{
+		shards:  []string{"1"},
+		results: []*sqltypes.Result{defaultSelectResult},
+	}
+	original := sqltypes.TestBindVariable([]any{"t1", "t2"})
+	bindVars := map[string]*querypb.BindVariable{
+		"tables": original,
+	}
+
+	_, err := sel.TryExecute(t.Context(), vc, bindVars, false)
+	require.NoError(t, err)
+	assert.True(t, proto.Equal(original, bindVars["tables"]),
+		"a multi-element table-name list must keep its original bind variable untouched")
+	require.NotNil(t, bindVars["vttables"],
+		"the rewritten query references the dedicated variable, so it must be populated even when the list contributes nothing to routing")
+	assert.Equal(t, original.Values, bindVars["vttables"].Values,
+		"a multi-element list is copied into the dedicated variable unchanged")
+	vc.ExpectLog(t, []string{
+		"ResolveDestinations ks [] Destinations:DestinationAnyShard()",
+		fmt.Sprintf("ExecuteMultiShard ks.1: dummy_select {__vtschemaname: type:VARCHAR tables: %v vttables: %v} false false", original, bindVars["vttables"]),
+	})
 }
 
 func TestSelectScatter(t *testing.T) {

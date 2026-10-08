@@ -24,21 +24,21 @@ import { useCallback, useMemo, useState } from 'react';
 import { Icon, Icons } from '../Icon';
 
 export interface ColumnProps {
-    // Column display name string | JSX.Element
-    display: string | JSX.Element;
+    // Column display name string | React.JSX.Element
+    display: string | React.JSX.Element;
     // Column data accessor
     accessor: string;
 }
 
 interface Props<T> {
-    // When passing a JSX.Element, note that the column element
+    // When passing a React.JSX.Element, note that the column element
     // will be rendered *inside* a <th> tag. (Note: I don't love this
     // abstraction + we'll likely want to revisit this when we add
     // table sorting.)
     columns: Array<ColumnProps>;
     data: T[];
     pageSize?: number;
-    renderRows: (rows: T[]) => JSX.Element[];
+    renderRows: (rows: T[]) => React.JSX.Element[];
     title?: string;
     // Pass a unique `pageKey` for each DataTable, in case multiple
     // DataTables access the same URL. This will be used to

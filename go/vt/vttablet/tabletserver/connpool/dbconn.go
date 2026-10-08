@@ -25,6 +25,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/pools/smartconnpool"
 	"vitess.io/vitess/go/sqltypes"
@@ -178,11 +179,13 @@ func (dbc *Conn) execOnce(ctx context.Context, query string, maxrows int, wantfi
 	// and channel overhead on the happy path.
 	var wg sync.WaitGroup
 	wg.Add(1)
+	fetchDone := make(chan struct{})
 	stop := context.AfterFunc(ctx, func() {
 		defer wg.Done()
-		dbc.terminate(ctx, insideTxn, now)
+		dbc.terminate(ctx, insideTxn, now, fetchDone)
 	})
 	result, err := dbc.conn.ExecuteFetch(query, maxrows, wantfields)
+	close(fetchDone)
 	if !stop() {
 		// The context was cancelled and terminate has started. Wait for
 		// it to finish so that the kill statement completes and the dba
@@ -212,20 +215,60 @@ func (dbc *Conn) getErrorMessageFromContextError(ctx context.Context) string {
 	return errMsg
 }
 
-// terminate kills the query or connection based on the transaction status
-func (dbc *Conn) terminate(ctx context.Context, insideTxn bool, now time.Time) {
+// terminate kills the query or connection based on the transaction status.
+// fetchDone closes when the interrupted fetch call returns; it tells terminate
+// whether the kill actually unblocked the statement.
+func (dbc *Conn) terminate(ctx context.Context, insideTxn bool, now time.Time, fetchDone <-chan struct{}) {
 	errMsg := dbc.getErrorMessageFromContextError(ctx)
 	if insideTxn {
 		// we can't safely kill a query in a transaction, we need to kill the connection
 		_ = dbc.Kill(errMsg, time.Since(now))
-	} else {
-		_ = dbc.KillQuery(errMsg, time.Since(now))
+		return
+	}
+	// Outside a transaction we prefer KILL QUERY so the connection — and any
+	// reserved state on it (temp tables, settings) — survives the timeout.
+	// But KILL QUERY is the only thing that makes the blocked ExecuteFetch
+	// return; if it fails (e.g. the dba pool is exhausted), fall back to
+	// killing the connection, which closes the client socket and unblocks
+	// the call. Preserving the connection is best-effort; unblocking is not.
+	if err := dbc.KillQuery(errMsg, time.Since(now)); err != nil {
+		_ = dbc.Kill(errMsg, time.Since(now))
+		return
+	}
+	// A successful KILL QUERY only sets the mysqld thread's kill flag, which
+	// the statement checks at execution checkpoints; a thread wedged in an
+	// uninterruptible phase (e.g. stalled storage I/O) may never honor it,
+	// and the blocked fetch would then hold the connection in use forever —
+	// invisible to the transaction killer, which skips in-use connections.
+	// Give the statement one kill timeout to actually return, then escalate
+	// to killing the connection: its socket close unblocks unconditionally.
+	timer := time.NewTimer(dbc.killTimeout)
+	defer timer.Stop()
+	select {
+	case <-fetchDone:
+	case <-timer.C:
+		_ = dbc.Kill(errMsg, time.Since(now))
 	}
 }
 
-// ExecOnce executes the specified query, but does not retry on connection errors.
+// ExecOnce executes the specified query, but does not retry on connection
+// errors. Use it whenever the connection itself carries state a silent
+// reconnect would destroy (an open transaction, a reserved connection's temp
+// tables or settings). If ctx expires while the query is executing, the whole
+// connection is killed, because a partially-executed transaction cannot be
+// safely continued. Callers holding a reserved connection outside a
+// transaction should use ExecOnceKeepConnOnTimeout instead.
 func (dbc *Conn) ExecOnce(ctx context.Context, query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
-	return dbc.execOnce(ctx, query, maxrows, wantfields, true /* Once means we are in a txn*/)
+	return dbc.execOnce(ctx, query, maxrows, wantfields, true /* insideTxn */)
+}
+
+// ExecOnceKeepConnOnTimeout is like ExecOnce but, if ctx expires while the
+// query is executing, kills only the query (KILL QUERY) rather than the whole
+// connection — so a reserved connection's state (temp tables, settings)
+// survives the interruption. It must only be used when the connection is not
+// inside a transaction, where killing just the query is safe.
+func (dbc *Conn) ExecOnceKeepConnOnTimeout(ctx context.Context, query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
+	return dbc.execOnce(ctx, query, maxrows, wantfields, false /* insideTxn */)
 }
 
 // FetchNext returns the next result set.
@@ -318,11 +361,13 @@ func (dbc *Conn) streamOnce(
 
 	var wg sync.WaitGroup
 	wg.Add(1)
+	fetchDone := make(chan struct{})
 	stop := context.AfterFunc(ctx, func() {
 		defer wg.Done()
-		dbc.terminate(ctx, insideTxn, now)
+		dbc.terminate(ctx, insideTxn, now, fetchDone)
 	})
 	err := dbc.conn.ExecuteStreamFetch(query, callback, alloc, streamBufferSize)
+	close(fetchDone)
 	if !stop() {
 		wg.Wait()
 		return dbc.Err()
@@ -335,7 +380,13 @@ func (dbc *Conn) streamOnce(
 	return err
 }
 
-// StreamOnce executes the query and streams the results. But, does not retry on connection errors.
+// StreamOnce executes the query and streams the results. But, does not retry
+// on connection errors. Use it whenever the connection itself carries state a
+// silent reconnect would destroy (an open transaction, a reserved
+// connection's temp tables or settings). If ctx expires while the stream is
+// executing, the whole connection is killed, because a partially-executed
+// transaction cannot be safely continued. Callers holding a reserved
+// connection outside a transaction should use StreamOnceKeepConnOnTimeout.
 func (dbc *Conn) StreamOnce(
 	ctx context.Context,
 	query string,
@@ -343,6 +394,33 @@ func (dbc *Conn) StreamOnce(
 	alloc func() *sqltypes.Result,
 	streamBufferSize int,
 	includedFields querypb.ExecuteOptions_IncludedFields,
+) error {
+	return dbc.streamOnceKill(ctx, query, callback, alloc, streamBufferSize, includedFields, true /* insideTxn */)
+}
+
+// StreamOnceKeepConnOnTimeout is like StreamOnce but, if ctx expires while the
+// stream is executing, kills only the query (KILL QUERY) rather than the whole
+// connection, so a reserved connection's state survives. It must only be used
+// when the connection is not inside a transaction.
+func (dbc *Conn) StreamOnceKeepConnOnTimeout(
+	ctx context.Context,
+	query string,
+	callback func(*sqltypes.Result) error,
+	alloc func() *sqltypes.Result,
+	streamBufferSize int,
+	includedFields querypb.ExecuteOptions_IncludedFields,
+) error {
+	return dbc.streamOnceKill(ctx, query, callback, alloc, streamBufferSize, includedFields, false /* insideTxn */)
+}
+
+func (dbc *Conn) streamOnceKill(
+	ctx context.Context,
+	query string,
+	callback func(*sqltypes.Result) error,
+	alloc func() *sqltypes.Result,
+	streamBufferSize int,
+	includedFields querypb.ExecuteOptions_IncludedFields,
+	insideTxn bool,
 ) error {
 	resultSent := false
 	return dbc.streamOnce(
@@ -357,7 +435,7 @@ func (dbc *Conn) StreamOnce(
 		},
 		alloc,
 		streamBufferSize,
-		true, // Once means we are in a txn
+		insideTxn,
 	)
 }
 
@@ -592,6 +670,23 @@ func (dbc *Conn) ConnCheck(ctx context.Context) error {
 		return dbc.Reconnect(ctx)
 	}
 	return nil
+}
+
+// PeerCheck performs a fast, non-blocking check that the MySQL server has
+// not closed its side of the connection (e.g. after wait_timeout). Nothing
+// is sent, so the server's idle timers are unaffected. Unlike ConnCheck it
+// never reconnects: callers that own connection state (temp tables,
+// settings) must observe the death instead of silently swapping the
+// connection out from under it.
+func (dbc *Conn) PeerCheck() error {
+	return dbc.conn.ConnCheck()
+}
+
+// PeerCheckSupported reports whether PeerCheck is a real check on this platform.
+// It is false where the underlying ConnCheck is only a stub (Windows), so a
+// caller cannot rely on PeerCheck's success to mean the peer is alive.
+func (dbc *Conn) PeerCheckSupported() bool {
+	return mysql.ConnCheckSupported
 }
 
 func (dbc *Conn) Reconnect(ctx context.Context) error {

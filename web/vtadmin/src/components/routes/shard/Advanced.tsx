@@ -25,14 +25,14 @@ import { logutil, vtadmin, vtctldata } from '../../../proto/vtadmin';
 import Dialog from '../../dialog/Dialog';
 import EventLogEntry from './EventLogEntry';
 import ValidationResults from '../../ValidationResults';
-interface RouteParams {
+type RouteParams = {
     clusterID: string;
     keyspace: string;
     shard: string;
-}
+};
 
 const Advanced: React.FC = () => {
-    const params = useParams<RouteParams>();
+    const params = useParams<RouteParams>() as RouteParams;
     const navigate = useNavigate();
 
     const shardName = `${params.keyspace}/${params.shard}`;

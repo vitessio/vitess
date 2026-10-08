@@ -347,6 +347,36 @@ func (plan *Plan) mapValues(values []sqltypes.Value) ([]sqltypes.Value, error) {
 	return result, nil
 }
 
+// mapBitmap projects a column presence bitmap, in the source table's column
+// order as found in the binlog event, onto the columns emitted by the plan,
+// mirroring what mapValues does for the values: bit i of the result describes
+// ColExprs[i]. Fixed values are always present. A keyspace_id() column is
+// computed from its vindex columns, so it is only present when all of those
+// are; otherwise mapValues would have hashed a placeholder for an omitted
+// column and the resulting keyspace ID would be meaningless.
+func (plan *Plan) mapBitmap(source *mysql.Bitmap) *binlogdatapb.RowChange_Bitmap {
+	mapped := mysql.NewServerBitmap(len(plan.ColExprs))
+	for i, colExpr := range plan.ColExprs {
+		present := true
+		switch {
+		case colExpr.Vindex != nil:
+			for _, col := range colExpr.VindexColumns {
+				if !source.Bit(col) {
+					present = false
+					break
+				}
+			}
+		case colExpr.ColNum != -1:
+			present = source.Bit(colExpr.ColNum)
+		}
+		mapped.Set(i, present)
+	}
+	return &binlogdatapb.RowChange_Bitmap{
+		Count: int64(mapped.Count()),
+		Cols:  mapped.Bits(),
+	}
+}
+
 func getKeyspaceID(values []sqltypes.Value, vindex vindexes.Vindex, vindexColumns []int, fields []*querypb.Field) (key.DestinationKeyspaceID, error) {
 	vindexValues := make([]sqltypes.Value, 0, len(vindexColumns))
 	for _, col := range vindexColumns {

@@ -58,8 +58,10 @@ var (
 	utf8mb4 = "'utf8mb4'"
 
 	ForeignKeyChecks = "foreign_key_checks"
+	UniqueChecks     = "unique_checks"
 
 	Autocommit                  = SystemVariable{Name: "autocommit", IsBoolean: true, Default: on}
+	SQLMode                     = SystemVariable{Name: "sql_mode", SupportSetVar: true}
 	Charset                     = SystemVariable{Name: "charset", Default: utf8mb4, IdentifierAsString: true}
 	ClientFoundRows             = SystemVariable{Name: "client_found_rows", IsBoolean: true, Default: off}
 	SessionEnableSystemSettings = SystemVariable{Name: "enable_system_settings", IsBoolean: true, Default: on}
@@ -222,7 +224,7 @@ var (
 		{Name: "show_old_temporals", IsBoolean: true},
 		{Name: "sort_buffer_size", SupportSetVar: true},
 		{Name: "sql_big_selects", IsBoolean: true, SupportSetVar: true},
-		{Name: "sql_mode", SupportSetVar: true},
+		SQLMode,
 		{Name: "sql_notes", IsBoolean: true},
 		{Name: "sql_quote_show_create", IsBoolean: true},
 		{Name: "sql_safe_updates", IsBoolean: true, SupportSetVar: true},
@@ -232,7 +234,7 @@ var (
 		{Name: "transaction_isolation", Case: SCUpper},
 		{Name: "transaction_prealloc_size"},
 		{Name: "tx_isolation", Case: SCUpper},
-		{Name: "unique_checks", IsBoolean: true, SupportSetVar: true},
+		{Name: UniqueChecks, IsBoolean: true, SupportSetVar: true},
 		{Name: "updatable_views_with_limit", IsBoolean: true, SupportSetVar: true},
 	}
 	CheckAndIgnore = []SystemVariable{
@@ -299,18 +301,21 @@ func SupportsSetVar(name string) bool {
 	return sys.SupportSetVar
 }
 
-// GetInterestingVariables is used to return all the variables that may be listed in a SHOW VARIABLES command.
-func GetInterestingVariables() []string {
-	var res []string
+// GetInterestingVariables returns the variables whose values VTGate substitutes in the
+// output of a SHOW VARIABLES command: the server identity VTGate advertises and, for the
+// session scope, the variables whose session values may not have reached the MySQL
+// connection. A SHOW GLOBAL VARIABLES reports the global values, which the session's
+// values must not replace.
+func GetInterestingVariables(global bool) []string {
+	// version, version comment and socket describe the server VTGate presents itself as
+	res := []string{Version.Name, VersionComment.Name, Socket.Name}
+	if global {
+		return res
+	}
 	// Add all the vitess aware variables
 	for _, variable := range VitessAware {
 		res = append(res, variable.Name)
 	}
-	// Also add version and version comment
-	res = append(res, Version.Name)
-	res = append(res, VersionComment.Name)
-	res = append(res, Socket.Name)
-
 	for _, variable := range UseReservedConn {
 		if variable.SupportSetVar {
 			res = append(res, variable.Name)

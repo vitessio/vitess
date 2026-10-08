@@ -1010,3 +1010,37 @@ func TestFindColumn(t *testing.T) {
 		})
 	}
 }
+
+// TestPlanMapBitmap confirms that a column presence bitmap in the source table's
+// column order is projected onto the plan's emitted columns: plain columns take
+// the bit of the source column they copy, fixed values are always present, and
+// keyspace_id() is only present when all of its vindex columns are.
+func TestPlanMapBitmap(t *testing.T) {
+	hash, err := vindexes.CreateVindex("hash", "hash", nil)
+	require.NoError(t, err)
+
+	// Source table columns: 0 id, 1 blb, 2 val, 3 txt. The BLOB and TEXT
+	// columns are omitted from the row image, as with binlog_row_image=NOBLOB.
+	source := mysql.NewServerBitmap(4)
+	source.Set(0, true)
+	source.Set(2, true)
+
+	plan := &Plan{
+		ColExprs: []ColExpr{
+			{ColNum: 2}, // val: present, reordered
+			{ColNum: 1}, // blb: omitted
+			{ColNum: 0}, // id: present
+			{ColNum: -1, FixedValue: sqltypes.NewInt64(1)}, // constant: always present
+			{Vindex: hash, VindexColumns: []int{0}},        // keyspace_id() over a present column
+			{Vindex: hash, VindexColumns: []int{1}},        // keyspace_id() over an omitted column
+			{Vindex: hash, VindexColumns: []int{0, 3}},     // keyspace_id() with one omitted column
+		},
+	}
+
+	got := plan.mapBitmap(&source)
+	require.EqualValues(t, len(plan.ColExprs), got.Count)
+	want := []bool{true, false, true, true, true, false, false}
+	for i, w := range want {
+		assert.Equal(t, w, got.Cols[i/8]&(1<<(i%8)) != 0, "bit %d", i)
+	}
+}

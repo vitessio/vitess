@@ -130,6 +130,7 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	fs.IntVar(&currentConfig.TxPool.Size, "queryserver-config-transaction-cap", defaultConfig.TxPool.Size, "query server transaction cap is the maximum number of transactions allowed to happen at any given point of a time for a single vttablet. E.g. by setting transaction cap to 100, there are at most 100 transactions will be processed by a vttablet and the 101th transaction will be blocked (and fail if it cannot get connection within specified timeout)")
 	fs.IntVar(&currentConfig.MessagePostponeParallelism, "queryserver-config-message-postpone-cap", defaultConfig.MessagePostponeParallelism, "query server message postpone cap is the maximum number of messages that can be postponed at any given time. Set this number to substantially lower than transaction cap, so that the transaction pool isn't exhausted by the message subsystem.")
 	fs.DurationVar(&currentConfig.Oltp.TxTimeout, "queryserver-config-transaction-timeout", defaultConfig.Oltp.TxTimeout, "query server transaction timeout, a transaction will be killed if it takes longer than this value")
+	fs.DurationVar(&currentConfig.TempTableIdleTimeout, "queryserver-config-temp-table-idle-timeout", defaultConfig.TempTableIdleTimeout, "idle timeout for reserved connections that hold temporary tables and are not kept alive by vtgate (e.g. gRPC API sessions). -1 (default): mirror this mysqld's @@global.wait_timeout, refreshed on the schema reload interval. 0: disabled, these connections are reclaimed at the transaction timeout as before. > 0: use this value; keep it at or below mysqld's wait_timeout and at or above the transaction timeout.")
 	utils.SetFlagDurationVar(fs, &currentConfig.GracePeriods.Shutdown, "shutdown-grace-period", defaultConfig.GracePeriods.Shutdown, "how long to wait for queries and transactions to complete during graceful shutdown.")
 	fs.IntVar(&currentConfig.Oltp.MaxRows, "queryserver-config-max-result-size", defaultConfig.Oltp.MaxRows, "query server max result size, maximum number of rows allowed to return from vttablet for non-streaming queries.")
 	fs.IntVar(&currentConfig.Oltp.WarnRows, "queryserver-config-warn-result-size", defaultConfig.Oltp.WarnRows, "query server result size warning threshold, warn if number of rows returned from vttablet for non-streaming queries exceeds this")
@@ -188,7 +189,7 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 
 	utils.SetFlagBoolVar(fs, &currentConfig.EnableTransactionLimit, "enable-transaction-limit", defaultConfig.EnableTransactionLimit, "If true, limit on number of transactions open at the same time will be enforced for all users. User trying to open a new transaction after exhausting their limit will receive an error immediately, regardless of whether there are available slots or not.")
 	utils.SetFlagBoolVar(fs, &currentConfig.EnableTransactionLimitDryRun, "enable-transaction-limit-dry-run", defaultConfig.EnableTransactionLimitDryRun, "If true, limit on number of transactions open at the same time will be tracked for all users, but not enforced.")
-	utils.SetFlagFloat64Var(fs, &currentConfig.TransactionLimitPerUser, "transaction-limit-per-user", defaultConfig.TransactionLimitPerUser, "Maximum number of transactions a single user is allowed to use at any time, represented as fraction of -transaction_cap.")
+	utils.SetFlagFloat64Var(fs, &currentConfig.TransactionLimitPerUser, "transaction-limit-per-user", defaultConfig.TransactionLimitPerUser, "Maximum number of transactions a single user is allowed to use at any time, represented as fraction of --queryserver-config-transaction-cap.")
 	utils.SetFlagBoolVar(fs, &currentConfig.TransactionLimitByUsername, "transaction-limit-by-username", defaultConfig.TransactionLimitByUsername, "Include VTGateCallerID.username when considering who the user is for the purpose of transaction limit.")
 	utils.SetFlagBoolVar(fs, &currentConfig.TransactionLimitByPrincipal, "transaction-limit-by-principal", defaultConfig.TransactionLimitByPrincipal, "Include CallerID.principal when considering who the user is for the purpose of transaction limit.")
 	utils.SetFlagBoolVar(fs, &currentConfig.TransactionLimitByComponent, "transaction-limit-by-component", defaultConfig.TransactionLimitByComponent, "Include CallerID.component when considering who the user is for the purpose of transaction limit.")
@@ -365,6 +366,13 @@ type TabletConfig struct {
 	EnableTableACLDryRun bool          `json:"-"`
 	TableACLExemptACL    string        `json:"-"`
 	TwoPCAbandonAge      time.Duration `json:"-"`
+
+	// TempTableIdleTimeout is the idle timeout for reserved connections that
+	// hold temporary tables and are not covered by the vtgate keepalive
+	// contract. -1 means auto (mirror mysqld's @@global.wait_timeout), 0
+	// means disabled (the transaction timeout applies as before), > 0 is an
+	// explicit timeout.
+	TempTableIdleTimeout time.Duration `json:"-"`
 
 	EnableTxThrottler              bool                          `json:"-"`
 	TxThrottlerConfig              *TxThrottlerConfigFlag        `json:"-"`
@@ -602,15 +610,21 @@ func (cfg *OltpConfig) MarshalJSON() ([]byte, error) {
 }
 
 func (cfg *OltpConfig) UnmarshalJSON(data []byte) (err error) {
+	type Proxy OltpConfig
+
 	var tmp struct {
-		OltpConfig
+		Proxy
 		QueryTimeout string `json:"queryTimeoutSeconds,omitempty"`
 		TxTimeout    string `json:"txTimeoutSeconds,omitempty"`
 	}
 
+	tmp.Proxy = Proxy(*cfg)
+
 	if err = json.Unmarshal(data, &tmp); err != nil {
 		return err
 	}
+
+	*cfg = OltpConfig(tmp.Proxy)
 
 	if tmp.QueryTimeout != "" {
 		cfg.QueryTimeout, err = time.ParseDuration(tmp.QueryTimeout)
@@ -1009,7 +1023,7 @@ func (c *TabletConfig) verifyTransactionLimitConfig() error {
 		bySubcomp   = c.TransactionLimitBySubcomponent
 	)
 	if byAny := byUser || byPrincipal || byComp || bySubcomp; !byAny {
-		return errors.New("no user discriminating fields selected for transaction limiter, everyone would share single chunk of transaction pool. Override with at least one of --transaction_limit_by flags set to true")
+		return errors.New("no user discriminating fields selected for transaction limiter, everyone would share single chunk of transaction pool. Override with at least one of the --transaction-limit-by-* flags set to true")
 	}
 	if v := c.TransactionLimitPerUser; v <= 0 || v >= 1 {
 		return fmt.Errorf("--transaction-limit-per-user should be a fraction within range (0, 1) (specified value: %v)", v)
@@ -1144,6 +1158,9 @@ var defaultConfig = TabletConfig{
 	EnablePerWorkloadTableMetrics: false,
 
 	TwoPCAbandonAge: 15 * time.Minute,
+
+	// Auto: mirror this mysqld's @@global.wait_timeout.
+	TempTableIdleTimeout: -1,
 
 	QueryThrottlerConfigRefreshInterval: time.Minute,
 }
