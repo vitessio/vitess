@@ -36,14 +36,16 @@ const maliciousTableName = "t1`;INSERT INTO mydb.loot SELECT * FROM mysql.user;s
 // needs a single quote to break out, not a back quote.
 const maliciousQuotedName = "t1';INSERT INTO mydb.loot SELECT * FROM mysql.user;SHOW TABLES LIKE 't1"
 
-// TestGeneratedDDLIsOneStatement guards against a table name adding statements
-// to the DDL the executor generates.
+// TestGeneratedDDLIsOneStatement guards against a table name changing the DDL
+// the executor generates.
 //
 // The generated text is executed as-is, without a re-parse, and some of it runs
-// on the DBA connection. Those connections negotiate CLIENT_MULTI_STATEMENTS and
-// ExecuteFetch runs the whole batch before reporting an error, so an embedded
-// ';' executes. Every identifier must therefore be escaped before the statement
-// text is produced.
+// on the DBA connection. A name that ends its own quoting turns the rest of the
+// name into statement text, which can name other tables or add clauses. The
+// connections do not negotiate CLIENT_MULTI_STATEMENTS, so a ';' does not run a
+// second statement, but every identifier must still be escaped before the
+// statement text is produced, so that each generated statement parses as the one
+// intended statement.
 func TestGeneratedDDLIsOneStatement(t *testing.T) {
 	parser := sqlparser.NewTestParser()
 
