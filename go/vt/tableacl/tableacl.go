@@ -44,6 +44,10 @@ type aclEntry struct {
 	tableNameOrPrefix string
 	groupName         string
 	acl               map[Role]acl.ACL
+	// allRoles admits a principal only if it holds every role in the group.
+	// It is built once per configuration, so that every plan that holds it
+	// shares it, as plans share the ACL of each role.
+	allRoles acl.ACL
 }
 
 type aclEntries []aclEntry
@@ -157,6 +161,7 @@ func load(config *tableaclpb.Config, newACL func([]string) (acl.ACL, error)) (en
 		if err != nil {
 			return nil, err
 		}
+		allRoles := allRolesACL{readers, writers, admins}
 		for _, tableNameOrPrefix := range group.TableNamesOrPrefixes {
 			entries = append(entries, aclEntry{
 				tableNameOrPrefix: tableNameOrPrefix,
@@ -166,6 +171,7 @@ func load(config *tableaclpb.Config, newACL func([]string) (acl.ACL, error)) (en
 					WRITER: writers,
 					ADMIN:  admins,
 				},
+				allRoles: allRoles,
 			})
 		}
 	}
@@ -292,10 +298,10 @@ func (tacl *tableACL) AuthorizedForAllTables() *ACLResult {
 	// A "%" entry overlaps every other entry, so ValidateProto only accepts it
 	// alone. The rule is checked here as well rather than relied on: alongside
 	// any other group, some tables would be governed by that group instead.
-	if len(tacl.entries) == 1 && tacl.entries[0].tableNameOrPrefix == "%" {
+	if len(tacl.entries) == 1 && tacl.entries[0].tableNameOrPrefix == "%" && tacl.entries[0].allRoles != nil {
 		entry := tacl.entries[0]
 		return &ACLResult{
-			ACL:       allRolesACL{entry.acl[READER], entry.acl[WRITER], entry.acl[ADMIN]},
+			ACL:       entry.allRoles,
 			GroupName: entry.groupName,
 		}
 	}
