@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"net"
 	"net/http"
 	"net/http/pprof"
 	"net/url"
@@ -361,12 +362,100 @@ func (api *API) WithCluster(c *cluster.Cluster, id string) dynamic.API {
 	return dynamicAPI
 }
 
+// rejectCrossSiteRequests refuses a state-changing request that a browser sent on
+// behalf of a page from another site, so that a page cannot use a VTAdmin
+// operator's session cookie to change cluster state. Restricting those routes to
+// POST is not enough on its own: a browser sends a cookie with SameSite=None on a
+// cross-site form POST, and one without a SameSite attribute on a cross-site
+// top-level POST made shortly after it was set. CORS does not help either, since it
+// only keeps the page from reading the response.
+//
+// A request is accepted when it is not state-changing, when its Origin is one of
+// the configured CORS origins, when the browser reports it as same-origin or
+// user-initiated (Sec-Fetch-Site), or, from a browser that sends no fetch metadata,
+// when its Origin is the origin it was sent to. A request without an Origin or
+// fetch metadata does not come from a browser and is accepted.
+//
+// Only an explicitly configured origin is trusted: a "*" CORS origin lets any page
+// read responses, and must not also let any page change cluster state. The origin a
+// request was sent to is taken from the connection, so behind a proxy that
+// terminates TLS, browsers without fetch metadata are only accepted from the
+// public origin when it is configured as a CORS origin.
+func rejectCrossSiteRequests(allowedOrigins []string) mux.MiddlewareFunc {
+	allowed := make(map[string]bool, len(allowedOrigins))
+	for _, origin := range allowedOrigins {
+		if normalized, ok := normalizeOrigin(origin); ok {
+			allowed[normalized] = true
+		}
+	}
+
+	isAllowed := func(r *http.Request) bool {
+		switch r.Method {
+		case http.MethodGet, http.MethodHead, http.MethodOptions:
+			return true
+		}
+		origin := r.Header.Get("Origin")
+		normalizedOrigin, validOrigin := normalizeOrigin(origin)
+		if validOrigin && allowed[normalizedOrigin] {
+			return true
+		}
+		switch r.Header.Get("Sec-Fetch-Site") {
+		case "same-origin", "none":
+			return true
+		case "":
+			if origin == "" {
+				return true
+			}
+			scheme := "http"
+			if r.TLS != nil {
+				scheme = "https"
+			}
+			requestOrigin, ok := normalizeOrigin(scheme + "://" + r.Host)
+			return validOrigin && ok && normalizedOrigin == requestOrigin
+		}
+		return false
+	}
+
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if !isAllowed(r) {
+				http.Error(w, "cross-site request refused", http.StatusForbidden)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// normalizeOrigin returns origin as a lowercase scheme://host:port, with the
+// scheme's default port made explicit, so that two spellings of one origin compare
+// equal. It reports false for anything that is not an http or https origin,
+// including "*" and "null".
+func normalizeOrigin(origin string) (string, bool) {
+	u, err := url.Parse(origin)
+	if err != nil || u.Host == "" || u.User != nil || (u.Path != "" && u.Path != "/") || u.RawQuery != "" || u.Fragment != "" {
+		return "", false
+	}
+	scheme := strings.ToLower(u.Scheme)
+	port := u.Port()
+	switch {
+	case scheme == "http" && port == "":
+		port = "80"
+	case scheme == "https" && port == "":
+		port = "443"
+	case scheme != "http" && scheme != "https":
+		return "", false
+	}
+	return scheme + "://" + net.JoinHostPort(strings.ToLower(u.Hostname()), port), true
+}
+
 // Handler handles all routes under "/api" (see above)
 func (api *API) Handler() http.Handler {
 	router := mux.NewRouter().PathPrefix("/api").Subrouter()
 
 	router.Use(handlers.CORS(
 		handlers.AllowCredentials(), handlers.AllowedOrigins(api.options.HTTPOpts.CORSOrigins), handlers.AllowedMethods([]string{"GET", "HEAD", "POST", "PUT", "DELETE", "OPTIONS"})))
+	router.Use(rejectCrossSiteRequests(api.options.HTTPOpts.CORSOrigins))
 
 	httpAPI := vtadminhttp.NewAPI(api, api.options.HTTPOpts)
 
@@ -393,7 +482,7 @@ func (api *API) Handler() http.Handler {
 	router.HandleFunc("/migration/{cluster_id}/{keyspace}/launch", httpAPI.Adapt(vtadminhttp.LaunchSchemaMigration)).Name("API.LaunchSchemaMigration").Methods("PUT", "OPTIONS")
 	router.HandleFunc("/migration/{cluster_id}/{keyspace}/retry", httpAPI.Adapt(vtadminhttp.RetrySchemaMigration)).Name("API.RetrySchemaMigration").Methods("PUT", "OPTIONS")
 	router.HandleFunc("/migrations/", httpAPI.Adapt(vtadminhttp.GetSchemaMigrations)).Name("API.GetSchemaMigrations")
-	router.HandleFunc("/movetables/{cluster_id}/complete", httpAPI.Adapt(vtadminhttp.MoveTablesComplete)).Name("API.MoveTablesComplete")
+	router.HandleFunc("/movetables/{cluster_id}/complete", httpAPI.Adapt(vtadminhttp.MoveTablesComplete)).Name("API.MoveTablesComplete").Methods("POST", "OPTIONS")
 	router.HandleFunc("/schema/{table}", httpAPI.Adapt(vtadminhttp.FindSchema)).Name("API.FindSchema")
 	router.HandleFunc("/schema/{cluster_id}/{keyspace}/{table}", httpAPI.Adapt(vtadminhttp.GetSchema)).Name("API.GetSchema")
 	router.HandleFunc("/schemas", httpAPI.Adapt(vtadminhttp.GetSchemas)).Name("API.GetSchemas")
@@ -414,8 +503,8 @@ func (api *API) Handler() http.Handler {
 	router.HandleFunc("/tablet/{tablet}", httpAPI.Adapt(vtadminhttp.GetTablet)).Name("API.GetTablet").Methods("GET")
 	router.HandleFunc("/tablet/{tablet}", httpAPI.Adapt(vtadminhttp.DeleteTablet)).Name("API.DeleteTablet").Methods("DELETE", "OPTIONS")
 	router.HandleFunc("/tablet/{tablet}/full_status", httpAPI.Adapt(vtadminhttp.GetFullStatus)).Name("API.GetFullStatus").Methods("GET")
-	router.HandleFunc("/tablet/{tablet}/healthcheck", httpAPI.Adapt(vtadminhttp.RunHealthCheck)).Name("API.RunHealthCheck")
-	router.HandleFunc("/tablet/{tablet}/ping", httpAPI.Adapt(vtadminhttp.PingTablet)).Name("API.PingTablet")
+	router.HandleFunc("/tablet/{tablet}/healthcheck", httpAPI.Adapt(vtadminhttp.RunHealthCheck)).Name("API.RunHealthCheck").Methods("POST", "OPTIONS")
+	router.HandleFunc("/tablet/{tablet}/ping", httpAPI.Adapt(vtadminhttp.PingTablet)).Name("API.PingTablet").Methods("POST", "OPTIONS")
 	router.HandleFunc("/tablet/{tablet}/refresh", httpAPI.Adapt(vtadminhttp.RefreshState)).Name("API.RefreshState").Methods("PUT", "OPTIONS")
 	router.HandleFunc("/tablet/{tablet}/refresh_replication_source", httpAPI.Adapt(vtadminhttp.RefreshTabletReplicationSource)).Name("API.RefreshTabletReplicationSource").Methods("PUT", "OPTIONS")
 	router.HandleFunc("/tablet/{tablet}/reload_schema", httpAPI.Adapt(vtadminhttp.ReloadTabletSchema)).Name("API.ReloadTabletSchema").Methods("PUT", "OPTIONS")
@@ -425,7 +514,7 @@ func (api *API) Handler() http.Handler {
 	router.HandleFunc("/tablet/{tablet}/stop_replication", httpAPI.Adapt(vtadminhttp.StopReplication)).Name("API.StopReplication").Methods("PUT", "OPTIONS")
 	router.HandleFunc("/tablet/{tablet}/externally_promoted", httpAPI.Adapt(vtadminhttp.TabletExternallyPromoted)).Name("API.TabletExternallyPromoted").Methods("POST")
 	router.HandleFunc("/transactions/{cluster_id}/{keyspace}", httpAPI.Adapt(vtadminhttp.GetUnresolvedTransactions)).Name("API.GetUnresolvedTransactions").Methods("GET")
-	router.HandleFunc("/transaction/{cluster_id}/{dtid}/conclude", httpAPI.Adapt(vtadminhttp.ConcludeTransaction)).Name("API.ConcludeTransaction")
+	router.HandleFunc("/transaction/{cluster_id}/{dtid}/conclude", httpAPI.Adapt(vtadminhttp.ConcludeTransaction)).Name("API.ConcludeTransaction").Methods("POST", "OPTIONS")
 	router.HandleFunc("/transaction/{cluster_id}/{dtid}/info", httpAPI.Adapt(vtadminhttp.GetTransactionInfo)).Name("API.GetTransactionInfo")
 	router.HandleFunc("/vschema/{cluster_id}/{keyspace}", httpAPI.Adapt(vtadminhttp.GetVSchema)).Name("API.GetVSchema")
 	router.HandleFunc("/vschemas", httpAPI.Adapt(vtadminhttp.GetVSchemas)).Name("API.GetVSchemas")
@@ -437,10 +526,10 @@ func (api *API) Handler() http.Handler {
 	router.HandleFunc("/workflow/{cluster_id}/{keyspace}/{name}", httpAPI.Adapt(vtadminhttp.GetWorkflow)).Name("API.GetWorkflow")
 	router.HandleFunc("/workflows", httpAPI.Adapt(vtadminhttp.GetWorkflows)).Name("API.GetWorkflows")
 	router.HandleFunc("/workflow/{cluster_id}/{keyspace}/{name}/status", httpAPI.Adapt(vtadminhttp.GetWorkflowStatus)).Name("API.GetWorkflowStatus")
-	router.HandleFunc("/workflow/{cluster_id}/{keyspace}/{name}/start", httpAPI.Adapt(vtadminhttp.StartWorkflow)).Name("API.StartWorkflow")
-	router.HandleFunc("/workflow/{cluster_id}/{keyspace}/{name}/stop", httpAPI.Adapt(vtadminhttp.StopWorkflow)).Name("API.StopWorkflow")
-	router.HandleFunc("/workflow/{cluster_id}/switchtraffic", httpAPI.Adapt(vtadminhttp.WorkflowSwitchTraffic)).Name("API.WorkflowSwitchTraffic")
-	router.HandleFunc("/workflow/{cluster_id}/delete", httpAPI.Adapt(vtadminhttp.WorkflowDelete)).Name("API.WorkflowDelete")
+	router.HandleFunc("/workflow/{cluster_id}/{keyspace}/{name}/start", httpAPI.Adapt(vtadminhttp.StartWorkflow)).Name("API.StartWorkflow").Methods("POST", "OPTIONS")
+	router.HandleFunc("/workflow/{cluster_id}/{keyspace}/{name}/stop", httpAPI.Adapt(vtadminhttp.StopWorkflow)).Name("API.StopWorkflow").Methods("POST", "OPTIONS")
+	router.HandleFunc("/workflow/{cluster_id}/switchtraffic", httpAPI.Adapt(vtadminhttp.WorkflowSwitchTraffic)).Name("API.WorkflowSwitchTraffic").Methods("POST", "OPTIONS")
+	router.HandleFunc("/workflow/{cluster_id}/delete", httpAPI.Adapt(vtadminhttp.WorkflowDelete)).Name("API.WorkflowDelete").Methods("POST", "OPTIONS")
 	router.HandleFunc("/workflow/{cluster_id}/materialize", httpAPI.Adapt(vtadminhttp.MaterializeCreate)).Name("API.MaterializeCreate").Methods("POST")
 	router.HandleFunc("/workflow/{cluster_id}/movetables", httpAPI.Adapt(vtadminhttp.MoveTablesCreate)).Name("API.MoveTablesCreate").Methods("POST")
 	router.HandleFunc("/workflow/{cluster_id}/reshard", httpAPI.Adapt(vtadminhttp.ReshardCreate)).Name("API.ReshardCreate").Methods("POST")
