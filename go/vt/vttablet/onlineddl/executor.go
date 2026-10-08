@@ -658,8 +658,11 @@ func (e *Executor) isAnyConflictingMigrationRunning(onlineDDL *schema.OnlineDDL)
 // the callers here execute the statement text as it stands. A table name reaches
 // us straight from the tenant's DDL, so it has to be escaped before the
 // statement text exists. Otherwise a name holding a back quote closes its own
-// quoting, and a ';' after that runs as another statement: these connections
-// negotiate CLIENT_MULTI_STATEMENTS, and some of them are the DBA connection.
+// quoting, and the rest of the name becomes part of the statement, which can then
+// name other tables or add clauses, and some of these statements run on the DBA
+// connection. The connections do not negotiate CLIENT_MULTI_STATEMENTS, so a ';'
+// does not start another statement, but the one statement is already the wrong
+// one.
 //
 // sqlescape.EscapeID supplies the back quotes and doubles any inside the name,
 // so the templates must not quote %a themselves.
