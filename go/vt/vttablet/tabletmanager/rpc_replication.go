@@ -31,6 +31,7 @@ import (
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/protoutil"
+	"vitess.io/vitess/go/tb"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -164,6 +165,9 @@ func (tm *TabletManager) ReplicationStatus(ctx context.Context) (*replicationdat
 	return protoStatus, nil
 }
 
+// fullStatusGroupKey is the singleflight key shared by FullStatus and unlock.
+const fullStatusGroupKey = "FullStatus"
+
 // FullStatus returns the full status of MySQL including the replication information, semi-sync information, GTID information among others
 //
 // Concurrent calls share an in-flight collection. Releasing the tablet action lock
@@ -185,9 +189,15 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 		}, nil
 	}
 
-	resultChan := tm.fullStatusGroup.DoChan("FullStatus", func() (result any, err error) {
+	resultChan := tm.fullStatusGroup.DoChan(fullStatusGroupKey, func() (result any, err error) {
 		// DoChan runs in a separate goroutine, outside the RPC's panic handler.
-		defer servenv.HandlePanic("FullStatus", &err)
+		// Keep the stack server-side and hand callers a coded error.
+		defer func() {
+			if x := recover(); x != nil {
+				log.Error(fmt.Sprintf("TabletManager.FullStatus on %v panic: %v\n%s", topoproto.TabletAliasString(tm.tabletAlias), x, tb.Stack(4)))
+				err = vterrors.Errorf(vtrpc.Code_INTERNAL, "FullStatus collection panicked: %v", x)
+			}
+		}()
 
 		// One caller timing out must not cancel the collection for the others.
 		// Bound the shared work even if all callers have left.

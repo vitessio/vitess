@@ -125,6 +125,8 @@ func TestFullStatusConsolidatesConcurrentCalls(t *testing.T) {
 						assert.Nil(t, statuses[i])
 					case "panic":
 						require.ErrorContains(t, errs[i], "collector panicked")
+						assert.Equal(t, vtrpc.Code_INTERNAL, vterrors.Code(errs[i]))
+						assert.NotContains(t, errs[i].Error(), ".go:", "stack must stay server-side")
 						assert.Nil(t, statuses[i])
 					default:
 						require.NoError(t, errs[i])

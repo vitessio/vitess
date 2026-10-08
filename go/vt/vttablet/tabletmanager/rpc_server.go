@@ -44,7 +44,7 @@ func (tm *TabletManager) lock(ctx context.Context) error {
 func (tm *TabletManager) unlock() {
 	// Later FullStatus calls must not join a collection from before this action
 	// completed, including when an error left the tablet partially changed.
-	tm.fullStatusGroup.Forget("FullStatus")
+	tm.fullStatusGroup.Forget(fullStatusGroupKey)
 	tm.actionSema.Release(1)
 }
 
