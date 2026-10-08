@@ -21,29 +21,27 @@ GOLANGCI_LINT_MODFILE="$(git rev-parse --show-toplevel)/tools/golangci-lint/go.m
 # from HEAD in everything the other parents brought in, which was already linted
 # on their own branches. Only the files with hunks that match none of the
 # parents (conflict resolutions and the like) hold something the merge itself
-# introduced, so only those are linted. A throwaway commit object of the index
-# lets git compute that combined diff.
+# introduced, so only those are linted. Whenever that selection cannot be
+# computed, fall back to every staged file: linting too much beats skipping lint.
 staged_go_files() {
-  local parents=() parent merge_head_file
+  local merge_head_file tree files
   merge_head_file=$(git rev-parse --git-path MERGE_HEAD)
-  if [ ! -f "$merge_head_file" ]; then
-    git diff --cached --name-only --diff-filter=ACM -- '*.go'
-    return
+  if [ -f "$merge_head_file" ] && tree=$(git write-tree); then
+    # --name-only would list every file that differs from any parent, so read
+    # the combined diff headers, which only exist for files that differ from all
+    # of them. The trees are given result first, then the parents.
+    # shellcheck disable=SC2046
+    if files=$(git diff --no-color --no-ext-diff --cc "$tree" HEAD $(cat "$merge_head_file") -- '*.go'); then
+      echo "$files" \
+        | sed -n 's/^diff --cc //p' \
+        | while read -r file; do
+            [ -f "$file" ] && echo "$file"
+          done
+      return
+    fi
   fi
 
-  parents+=(-p HEAD)
-  while read -r parent; do
-    parents+=(-p "$parent")
-  done < "$merge_head_file"
-
-  # --name-only would list every file that differs from any parent, so read the
-  # combined diff headers, which only exist for files that differ from all.
-  git diff-tree --cc -r -p --no-commit-id \
-    "$(git commit-tree "$(git write-tree)" "${parents[@]}" -m merge)" -- '*.go' \
-    | sed -n 's/^diff --cc //p' \
-    | while read -r file; do
-        [ -f "$file" ] && echo "$file"
-      done
+  git diff --cached --name-only --diff-filter=ACMR -- '*.go'
 }
 
 # Lint only changed packages. Packages in nested Go modules
