@@ -2511,7 +2511,7 @@ func TestExecutorCountsDoubleSlashComments(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, before+1, warnings.Counts()["DoubleSlashComment"])
 		require.Len(t, doubleSlashWarnings(session), 1)
-		assert.Equal(t, "'// comment' is deprecated and will be removed in a future release. Please use '-- ' or '/* */' instead", doubleSlashWarnings(session)[0].Message)
+		assert.Equal(t, "'// comment' is deprecated and will be removed in a future release. Please use '-- ', '#' or '/* */' instead", doubleSlashWarnings(session)[0].Message)
 
 		// The next statement clears the warning.
 		_, err = executorExec(ctx, executor, session, "select id from music_user_map where id = 1 -- x", nil)

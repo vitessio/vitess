@@ -1262,7 +1262,7 @@ func (r redactedSQL) String() string {
 // comment and logs it. sql is the statement as the client sent it.
 func (e *Executor) countDoubleSlashComment(sql string) {
 	warnings.Add("DoubleSlashComment", 1)
-	doubleSlashCommentsLogger.Warningf("%q uses a // comment, which is deprecated and will be removed in a future release; use -- or /* */ instead", redactedSQL{parser: e.env.Parser(), sql: sql})
+	doubleSlashCommentsLogger.Warningf("%q uses a // comment, which is deprecated and will be removed in a future release; use --, # or /* */ instead", redactedSQL{parser: e.env.Parser(), sql: sql})
 }
 
 // doubleSlashCommentWarning is the warning that a client gets for a statement
@@ -1271,7 +1271,7 @@ func (e *Executor) countDoubleSlashComment(sql string) {
 func doubleSlashCommentWarning() *querypb.QueryWarning {
 	return &querypb.QueryWarning{
 		Code:    uint32(sqlerror.ERWarnDeprecatedSyntax),
-		Message: "'// comment' is deprecated and will be removed in a future release. Please use '-- ' or '/* */' instead",
+		Message: "'// comment' is deprecated and will be removed in a future release. Please use '-- ', '#' or '/* */' instead",
 	}
 }
 

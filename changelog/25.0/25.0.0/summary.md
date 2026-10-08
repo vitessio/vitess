@@ -218,7 +218,7 @@ Vitess accepts `//` line comments, which are not part of MySQL's syntax. For MyS
 
 VTGate counts each executed statement that uses a `//` comment under the `DoubleSlashComment` type of the `VtGateWarnings` metric, and logs a throttled warning with the redacted statement, without its comments. The client gets a MySQL warning (`ER_WARN_DEPRECATED_SYNTAX`, 1287) for the statement, which `SHOW WARNINGS` and many drivers show.
 
-**Impact**: Replace `//` comments in queries with `-- ` or `/* */` comments. Use the `VtGateWarnings` metric, the VTGate log, and the warnings that clients receive to find the remaining uses.
+**Impact**: Replace `//` comments in queries with `-- `, `#` or `/* */` comments. Use the `VtGateWarnings` metric, the VTGate log, and the warnings that clients receive to find the remaining uses.
 
 ## <a id="minor-changes"/>Minor Changes</a>
 
