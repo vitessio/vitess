@@ -250,6 +250,46 @@ describe('api/http', () => {
         });
     });
 
+    describe('cluster actions', () => {
+        // These actions change cluster state, so the API only accepts them as POST
+        // requests, which a cross-site navigation cannot send.
+        it.each([
+            ['pingTablet', () => api.pingTablet({ clusterID: 'c0', alias: 'zone1-100' }), '/api/tablet/zone1-100/ping'],
+            [
+                'runHealthCheck',
+                () => api.runHealthCheck({ clusterID: 'c0', alias: 'zone1-100' }),
+                '/api/tablet/zone1-100/healthcheck',
+            ],
+            [
+                'concludeTransaction',
+                () => api.concludeTransaction({ clusterID: 'c0', dtid: 'dtid1' }),
+                '/api/transaction/c0/dtid1/conclude',
+            ],
+            [
+                'startWorkflow',
+                () => api.startWorkflow({ clusterID: 'c0', keyspace: 'ks', name: 'wf' }),
+                '/api/workflow/c0/ks/wf/start',
+            ],
+            [
+                'stopWorkflow',
+                () => api.stopWorkflow({ clusterID: 'c0', keyspace: 'ks', name: 'wf' }),
+                '/api/workflow/c0/ks/wf/stop',
+            ],
+        ])('sends %s as a POST request', async (_, call, endpoint) => {
+            const apiAddr = import.meta.env.VITE_VTADMIN_API_ADDRESS;
+            let method = '';
+            global.server.use(
+                http.all(`${apiAddr}${endpoint}`, ({ request }) => {
+                    method = request.method;
+                    return HttpResponse.json({ ok: true, result: {} });
+                })
+            );
+
+            await call();
+            expect(method).toEqual('POST');
+        });
+    });
+
     describe('vtfetchEntities', () => {
         it('throws an error if result.tablets is not an array', async () => {
             const endpoint = '/api/foos';
