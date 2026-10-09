@@ -80,7 +80,15 @@ func (isr *InfoSchemaRouting) Clone() Routing {
 }
 
 func (isr *InfoSchemaRouting) updateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Routing {
-	isr.seenPredicates = append(isr.seenPredicates, expr)
+	original := expr
+	if cmp, ok := expr.(*sqlparser.ComparisonExpr); ok {
+		// Extraction rewrites the comparison's operands and operator in place.
+		// Keep the original fields for resetRoutingLogic, while retaining the
+		// child expressions and their semantic information.
+		pristine := *cmp
+		original = &pristine
+	}
+	isr.seenPredicates = append(isr.seenPredicates, original)
 	isTableSchema, bvName, out := extractInfoSchemaRoutingPredicate(ctx, expr)
 	if out == nil {
 		return isr
@@ -187,16 +195,7 @@ func extractInfoSchemaRoutingPredicate(ctx *plancontext.PlanningContext, in sqlp
 				return true, sqltypes.BvSchemaName, rhs
 			}
 			// The normalizer shares list bindvars between identical IN tuples, so
-			// the engine writes a dedicated variable. On replay (resetRoutingLogic)
-			// recognize it and recover the client's list (#20972).
-			for original, name := range ctx.ReservedArguments {
-				if name != string(rhs) {
-					continue
-				}
-				if clientList, ok := original.(sqlparser.ListArg); ok {
-					return false, name, clientList
-				}
-			}
+			// the engine writes a dedicated variable.
 			bvName := ctx.GetReservedArgumentFor(rhs)
 			cmp.Right = sqlparser.ListArg(bvName)
 			return false, bvName, rhs
