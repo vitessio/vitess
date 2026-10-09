@@ -80,9 +80,12 @@ func (pt *probeTable) hashCodeForRow(inputRow sqltypes.Row) (vthash.Hash, error)
 			if err != evalengine.UnsupportedCollationHashError || checkCol.WsCol == nil {
 				return vthash.Hash{}, err
 			}
-			checkCol = checkCol.SwitchToWeightString()
-			pt.checkCols[i] = checkCol
-			err = evalengine.NullsafeHashcode128(&hasher, inputRow[checkCol.Col], checkCol.Type.Collation(), checkCol.Type.Type(), pt.sqlmode, checkCol.Type.Values())
+			// Hash this value through its weight string instead. The column is
+			// not switched over for good: with an unknown static type the rows
+			// may mix text and non-text values, and every value has to keep the
+			// same representation for the lifetime of the probe table.
+			wsCol := checkCol.SwitchToWeightString()
+			err = evalengine.NullsafeHashcode128(&hasher, inputRow[wsCol.Col], wsCol.Type.Collation(), wsCol.Type.Type(), pt.sqlmode, wsCol.Type.Values())
 			if err != nil {
 				return vthash.Hash{}, err
 			}

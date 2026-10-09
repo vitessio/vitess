@@ -264,6 +264,32 @@ func TestDistinctUnknownTypeUsesWeightString(t *testing.T) {
 		require.NoError(t, err)
 		utils.MustMatch(t, "[[INT64(9007199254740993)] [INT64(9007199254740992)]]", fmt.Sprintf("%v", qr.Rows))
 	})
+
+	// Text and non-text values interleaved in one unknown-typed column: a text
+	// value makes the hash fall back to the weight string for that row only,
+	// so a number seen before and after the text keeps hashing the same way.
+	t.Run("interleaved text and numbers", func(t *testing.T) {
+		input := &sqltypes.Result{
+			Fields: sqltypes.MakeTestFields("x|weight_string(x)", "varchar|varbinary"),
+			Rows: []sqltypes.Row{
+				{sqltypes.NewInt64(1), sqltypes.NULL},
+				{sqltypes.NewVarChar("x"), sqltypes.NewVarBinary("ws-x")},
+				{sqltypes.NewInt64(1), sqltypes.NULL},
+				{sqltypes.NewVarChar("x"), sqltypes.NewVarBinary("ws-x")},
+				{sqltypes.NewVarChar("y"), sqltypes.NewVarBinary("ws-y")},
+				{sqltypes.NewInt64(2), sqltypes.NULL},
+			},
+		}
+		distinct := &Distinct{
+			Source:    &fakePrimitive{results: []*sqltypes.Result{input}},
+			CheckCols: []CheckCol{{Col: 0, WsCol: &offsetOne, Type: evalengine.NewUnknownType()}},
+			Truncate:  1,
+		}
+
+		qr, err := distinct.TryExecute(t.Context(), &noopVCursor{}, nil, true)
+		require.NoError(t, err)
+		utils.MustMatch(t, `[[INT64(1)] [VARCHAR("x")] [VARCHAR("y")] [INT64(2)]]`, fmt.Sprintf("%v", qr.Rows))
+	})
 }
 
 func TestWeightStringFallBack(t *testing.T) {
