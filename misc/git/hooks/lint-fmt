@@ -23,26 +23,38 @@ GOLANGCI_LINT_MODFILE="$(git rev-parse --show-toplevel)/tools/golangci-lint/go.m
 # parents (conflict resolutions and the like) hold something the merge itself
 # introduced, so only those are linted. Whenever that selection cannot be
 # computed, fall back to every staged file: linting too much beats skipping lint.
+#
+# File names are read NUL-terminated, since git quotes unusual names otherwise.
 staged_go_files() {
   local merge_head_file tree files
   merge_head_file=$(git rev-parse --git-path MERGE_HEAD)
-  if [ -f "$merge_head_file" ] && tree=$(git write-tree); then
-    # --name-only would list every file that differs from any parent, so read
-    # the combined diff headers, which only exist for files that differ from all
-    # of them. The trees are given result first, then the parents.
-    # shellcheck disable=SC2046
-    if files=$(git diff --no-color --no-ext-diff --cc "$tree" HEAD $(cat "$merge_head_file") -- '*.go'); then
-      echo "$files" \
-        | sed -n 's/^diff --cc //p' \
-        | while read -r file; do
-            [ -f "$file" ] && echo "$file"
-          done
-      return
-    fi
+  # shellcheck disable=SC2046
+  if [ -f "$merge_head_file" ] && tree=$(git write-tree) \
+    && files=$(merge_go_files "$tree" HEAD $(cat "$merge_head_file")); then
+    echo "$files"
+    return
   fi
 
-  git diff --cached --name-only --diff-filter=ACMR -- '*.go'
+  git diff --cached --name-only -z --diff-filter=ACMR -- '*.go' | tr '\0' '\n'
 }
+
+# Print the .go files of the merge result (the first tree) that have a hunk
+# matching none of the parents (the other trees). -c --name-only lists the files
+# that differ from every parent, which includes files that merged cleanly with
+# changes from both sides. Only the --cc patch drops those, so keep a file when
+# its --cc patch is not empty. --no-ext-diff and --no-textconv make that patch
+# compare the actual blobs whatever the user's config says.
+merge_go_files() (
+  set -o pipefail
+  git diff --name-only -z -c "$@" -- '*.go' \
+    | while IFS= read -r -d '' file; do
+        [ -f "$file" ] || continue
+        patch=$(git diff --no-color --no-ext-diff --no-textconv --cc "$@" -- ":(literal)$file") || exit 1
+        if [ -n "$patch" ]; then
+          echo "$file"
+        fi
+      done
+)
 
 # Lint only changed packages. Packages in nested Go modules
 # are skipped: golangci-lint can only typecheck belonging
@@ -54,7 +66,7 @@ if [ -z "$staged_files" ]; then
 fi
 
 changed_pkgs=$(echo "$staged_files" \
-  | xargs -n1 dirname \
+  | while IFS= read -r file; do dirname -- "$file"; done \
   | sort -u \
   | while read -r dir; do
       mod_dir=$dir
