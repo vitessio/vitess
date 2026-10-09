@@ -608,6 +608,9 @@ func EmptySemTable() *SemTable {
 // TableSetFor returns the bitmask for this particular table
 func (st *SemTable) TableSetFor(t *sqlparser.AliasedTableExpr) TableSet {
 	for idx, t2 := range st.Tables {
+		if t2 == nil {
+			continue
+		}
 		if t == t2.GetAliasedTableExpr() {
 			return SingleTableSet(idx)
 		}
@@ -832,6 +835,9 @@ func (st *SemTable) SingleKeyspace() (ks *vindexes.Keyspace) {
 	}
 
 	for _, table := range st.Tables {
+		if table == nil {
+			continue
+		}
 		if _, isDT := table.(*DerivedTable); isDT {
 			continue
 		}

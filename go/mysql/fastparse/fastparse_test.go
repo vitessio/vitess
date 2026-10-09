@@ -745,6 +745,13 @@ func TestParseStringToFloat(t *testing.T) {
 		{str: "    10  ", val: 10},
 		{str: "2266951196291479516", val: 2266951196291479516},
 		{str: "abcd123", val: 0},
+		{str: "NaN", val: 0},
+		{str: "nan", val: 0},
+		{str: "inf", val: 0},
+		{str: "+INF", val: 0},
+		{str: "-Infinity", val: 0},
+		{str: "nanx", val: 0},
+		{str: "info", val: 0},
 	}
 
 	for _, tc := range tcs {
@@ -754,3 +761,4 @@ func TestParseStringToFloat(t *testing.T) {
 		})
 	}
 }
+

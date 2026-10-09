@@ -39,7 +39,6 @@ package fastparse
 //   3) Multiply by 2^precision and round to get mantissa.
 
 import (
-	"math"
 	"strconv"
 )
 
@@ -58,59 +57,6 @@ var (
 	float64info = floatInfo{52, 11, -1023}
 )
 
-// commonPrefixLenIgnoreCase returns the length of the common
-// prefix of s and prefix, with the character case of s ignored.
-// The prefix argument must be all lower-case.
-func commonPrefixLenIgnoreCase(s, prefix string) int {
-	n := min(len(prefix), len(s))
-	for i := range n {
-		c := s[i]
-		if 'A' <= c && c <= 'Z' {
-			c += 'a' - 'A'
-		}
-		if c != prefix[i] {
-			return i
-		}
-	}
-	return n
-}
-
-// special returns the floating-point value for the special,
-// possibly signed floating-point representations inf, infinity,
-// and NaN. The result is ok if a prefix of s contains one
-// of these representations and n is the length of that prefix.
-// The character case is ignored.
-func special(s string) (f float64, n int, ok bool) {
-	if len(s) == 0 {
-		return 0, 0, false
-	}
-	sign := 1
-	nsign := 0
-	switch s[0] {
-	case '+', '-':
-		if s[0] == '-' {
-			sign = -1
-		}
-		nsign = 1
-		s = s[1:]
-		fallthrough
-	case 'i', 'I':
-		n := commonPrefixLenIgnoreCase(s, "infinity")
-		// Anything longer than "inf" is ok, but if we
-		// don't have "infinity", only consume "inf".
-		if 3 < n && n < 8 {
-			n = 3
-		}
-		if n == 3 || n == 8 {
-			return math.Inf(sign), nsign + n, true
-		}
-	case 'n', 'N':
-		if commonPrefixLenIgnoreCase(s, "nan") == 3 {
-			return math.NaN(), 3, true
-		}
-	}
-	return 0, 0, false
-}
 
 // readFloat reads a decimal or hexadecimal mantissa and exponent from a float
 // string representation in s; the number may be followed by other characters.
@@ -263,10 +209,6 @@ func atof64exact(mantissa uint64, exp int, neg bool) (f float64, ok bool) {
 }
 
 func Atof64(s string) (f float64, n int, err error) {
-	if val, n, ok := special(s); ok {
-		return val, n, nil
-	}
-
 	mantissa, exp, neg, trunc, n, ok := readFloat(s)
 	if !ok {
 		return 0, n, strconv.ErrSyntax
