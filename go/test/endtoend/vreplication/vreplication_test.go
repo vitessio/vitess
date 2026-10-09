@@ -1006,6 +1006,21 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 			// Reverse Replicate
 			switchReads(t, workflowType, cellNames, ksWorkflow, true)
 			printShardPositions(vc, ksShards)
+
+			// A ReverseTraffic that fails, here because the reverse workflow
+			// cannot catch up, must leave the workflow in place.
+			reverseWorkflow := workflow + "_reverse"
+			err = vc.VtctldClient.ExecuteCommand("Workflow", "--keyspace", defaultSourceKs, "stop", "--workflow", reverseWorkflow)
+			require.NoError(t, err)
+			out, err := vc.VtctldClient.ExecuteCommandWithOutput(workflowType, "--workflow", workflow, "--target-keyspace", defaultTargetKs,
+				"ReverseTraffic", "--tablet-types=primary", "--timeout=10s")
+			require.Error(t, err)
+			require.Contains(t, out, "failed to sync up replication between the source and target")
+			_, err = vc.VtctldClient.ExecuteCommandWithOutput("Workflow", "--keyspace", defaultTargetKs, "show", "--workflow", workflow)
+			require.NoError(t, err, "the failed ReverseTraffic deleted the workflow")
+			// Canceling the switch restarted the reverse workflow.
+			require.NoError(t, waitForWorkflowState(vc, defaultSourceKs+"."+reverseWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String()))
+
 			switchWrites(t, workflowType, ksWorkflow, true)
 
 			output, err := vc.VtctldClient.ExecuteCommandWithOutput("Workflow", "--keyspace", defaultTargetKs, "show", "--workflow", workflow)

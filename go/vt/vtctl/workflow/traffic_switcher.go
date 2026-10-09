@@ -1200,10 +1200,21 @@ func (ts *trafficSwitcher) cancelMigration(ctx context.Context, sm *StreamMigrat
 		ts.Logger().Errorf("Cancel migration failed (%v): could not restart vreplication: %v", ts.WorkflowName(), err)
 	}
 
-	ts.Logger().Infof("cancelMigration (%v): deleting reverse vreplication workflows", ts.WorkflowName())
-	if err := ts.deleteReverseVReplication(cmCtx); err != nil {
-		cancelErrs.RecordError(fmt.Errorf("could not delete reverse vreplication streams: %v", err))
-		ts.Logger().Errorf("Cancel migration failed (%v): could not delete reverse vreplication streams: %v", ts.WorkflowName(), err)
+	if strings.HasSuffix(ts.WorkflowName(), reverseSuffix) {
+		// We are canceling a ReverseTraffic, so the reverse workflow is the
+		// original one: put it back as it was before the switch, frozen,
+		// rather than deleting it.
+		ts.Logger().Infof("cancelMigration (%v): freezing the original workflow %s", ts.WorkflowName(), ts.reverseWorkflow)
+		if err := ts.freezeReverseVReplication(cmCtx); err != nil {
+			cancelErrs.RecordError(fmt.Errorf("could not freeze the original workflow's streams: %v", err))
+			ts.Logger().Errorf("Cancel migration failed (%v): could not freeze the original workflow's streams: %v", ts.WorkflowName(), err)
+		}
+	} else {
+		ts.Logger().Infof("cancelMigration (%v): deleting reverse vreplication workflows", ts.WorkflowName())
+		if err := ts.deleteReverseVReplication(cmCtx); err != nil {
+			cancelErrs.RecordError(fmt.Errorf("could not delete reverse vreplication streams: %v", err))
+			ts.Logger().Errorf("Cancel migration failed (%v): could not delete reverse vreplication streams: %v", ts.WorkflowName(), err)
+		}
 	}
 
 	if cancelErrs.HasErrors() {
@@ -1229,6 +1240,17 @@ func (ts *trafficSwitcher) freezeTargetVReplication(ctx context.Context) error {
 		return err
 	}
 	return nil
+}
+
+// freezeReverseVReplication marks the reverse workflow's streams frozen, which
+// they were before a canceled ReverseTraffic recreated them.
+func (ts *trafficSwitcher) freezeReverseVReplication(ctx context.Context) error {
+	return ts.ForAllSources(func(source *MigrationSource) error {
+		query := fmt.Sprintf("update _vt.vreplication set message = %s where db_name=%s and workflow=%s", encodeString(Frozen),
+			encodeString(source.GetPrimary().DbName()), encodeString(ts.reverseWorkflow))
+		_, err := ts.TabletManagerClient().VReplicationExec(ctx, source.GetPrimary().Tablet, query)
+		return err
+	})
 }
 
 func (ts *trafficSwitcher) dropTargetVReplicationStreams(ctx context.Context) error {

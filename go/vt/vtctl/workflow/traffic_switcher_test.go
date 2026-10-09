@@ -359,37 +359,75 @@ func TestCancelMigration_TABLES(t *testing.T) {
 		},
 	}
 
-	env := newTestEnv(t, ctx, defaultCellName, sourceKeyspace, targetKeyspace)
-	defer env.close()
-	env.tmc.schema = schema
+	testCases := []struct {
+		name string
+		// reverse cancels a ReverseTraffic: a forward switch of the reverse
+		// workflow, whose own reverse workflow is the original one.
+		reverse bool
+		// The queries cancelMigration must run on each tablet, in order.
+		queries map[int][]string
+	}{
+		{
+			name: "SwitchTraffic",
+			queries: map[int][]string{
+				200: {"update _vt.vreplication set state='Running', message='' where db_name='vt_targetks' and workflow='wf1'"},
+				100: {"delete from _vt.vreplication where db_name = 'vt_sourceks' and workflow = 'wf1_reverse'"},
+			},
+		},
+		{
+			// The original workflow must be frozen again, not deleted.
+			name:    "ReverseTraffic",
+			reverse: true,
+			queries: map[int][]string{
+				100: {"update _vt.vreplication set state='Running', message='' where db_name='vt_sourceks' and workflow='wf1_reverse'"},
+				200: {"update _vt.vreplication set message = 'FROZEN' where db_name='vt_targetks' and workflow='wf1'"},
+			},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := ctx
+			env := newTestEnv(t, ctx, defaultCellName, sourceKeyspace, targetKeyspace)
+			defer env.close()
+			env.tmc.schema = schema
 
-	ts, _, err := env.ws.getWorkflowState(ctx, targetKeyspace.KeyspaceName, workflowName)
-	require.NoError(t, err)
+			keyspace, workflow := targetKeyspace.KeyspaceName, workflowName
+			if tc.reverse {
+				env.tmc.reverse.Store(true)
+				keyspace, workflow = sourceKeyspace.KeyspaceName, ReverseWorkflowName(workflowName)
+			}
+			ts, _, err := env.ws.getWorkflowState(ctx, keyspace, workflow)
+			require.NoError(t, err)
 
-	sm, err := BuildStreamMigrator(ctx, ts, false, sqlparser.NewTestParser())
-	require.NoError(t, err)
+			sm, err := BuildStreamMigrator(ctx, ts, false, sqlparser.NewTestParser())
+			require.NoError(t, err)
 
-	env.tmc.expectVRQuery(200, "update _vt.vreplication set state='Running', message='' where db_name='vt_targetks' and workflow='wf1'", &sqltypes.Result{})
-	env.tmc.expectVRQuery(100, "delete from _vt.vreplication where db_name = 'vt_sourceks' and workflow = 'wf1_reverse'", &sqltypes.Result{})
+			for tabletID, queries := range tc.queries {
+				for _, query := range queries {
+					env.tmc.expectVRQuery(tabletID, query, &sqltypes.Result{})
+				}
+			}
 
-	ctx, _, err = env.ts.LockKeyspace(ctx, targetKeyspace.KeyspaceName, "test")
-	require.NoError(t, err)
+			ctx, _, err = env.ts.LockKeyspace(ctx, targetKeyspace.KeyspaceName, "test")
+			require.NoError(t, err)
 
-	ctx, _, err = env.ts.LockKeyspace(ctx, sourceKeyspace.KeyspaceName, "test")
-	require.NoError(t, err)
+			ctx, _, err = env.ts.LockKeyspace(ctx, sourceKeyspace.KeyspaceName, "test")
+			require.NoError(t, err)
 
-	err = topo.CheckKeyspaceLocked(ctx, ts.targetKeyspace)
-	require.NoError(t, err)
+			err = topo.CheckKeyspaceLocked(ctx, ts.targetKeyspace)
+			require.NoError(t, err)
 
-	err = topo.CheckKeyspaceLocked(ctx, ts.sourceKeyspace)
-	require.NoError(t, err)
+			err = topo.CheckKeyspaceLocked(ctx, ts.sourceKeyspace)
+			require.NoError(t, err)
 
-	err = ts.cancelMigration(ctx, sm)
-	require.NoError(t, err)
+			err = ts.cancelMigration(ctx, sm)
+			require.NoError(t, err)
 
-	// Expect the queries to be cleared
-	assert.Empty(t, env.tmc.vrQueries[100])
-	assert.Empty(t, env.tmc.vrQueries[200])
+			// Expect the queries to be cleared
+			assert.Empty(t, env.tmc.vrQueries[100])
+			assert.Empty(t, env.tmc.vrQueries[200])
+		})
+	}
 }
 
 func TestCancelMigration_SHARDS(t *testing.T) {
