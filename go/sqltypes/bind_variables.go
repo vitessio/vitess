@@ -335,7 +335,7 @@ func BuildBindVariable(v any) (*querypb.BindVariable, error) {
 func ValidateBindVariables(bv map[string]*querypb.BindVariable) error {
 	for k, v := range bv {
 		if err := ValidateBindVariable(v); err != nil {
-			return fmt.Errorf("%s: %v", k, err)
+			return fmt.Errorf("%s: %w", k, err)
 		}
 	}
 	return nil
@@ -366,6 +366,70 @@ func ValidateBindVariable(bv *querypb.BindVariable) error {
 	// If NewValue succeeds, the value is valid.
 	_, err := NewValue(bv.Type, bv.Value)
 	return err
+}
+
+// ValidateNestedBindVariables validates bind variables with the leaf rules of
+// ValidateBindVariables (every scalar payload must be a value of its declared
+// type, see NewValue) but allows a tuple member to itself be a tuple, one
+// level deep. The tablet's query service uses it at its boundary: vtgate's
+// engine sends nested tuples (sqltypes.TupleToProto) for foreign key cascades
+// and composite-key DML, which the client boundary's ValidateBindVariables
+// rejects. Nested tuples are decoded and their leaves validated; a malformed
+// tuple encoding is an error, never a panic.
+func ValidateNestedBindVariables(bv map[string]*querypb.BindVariable) error {
+	for k, v := range bv {
+		if err := validateNestedBindVariable(v); err != nil {
+			return fmt.Errorf("%s: %w", k, err)
+		}
+	}
+	return nil
+}
+
+func validateNestedBindVariable(bv *querypb.BindVariable) error {
+	if bv == nil {
+		return errors.New("bind variable is nil")
+	}
+	if bv.Type != querypb.Type_TUPLE {
+		_, err := NewValue(bv.Type, bv.Value)
+		return err
+	}
+	if len(bv.Values) == 0 {
+		return errors.New("empty tuple is not allowed")
+	}
+	for _, val := range bv.Values {
+		if val == nil {
+			return errors.New("tuple member is nil")
+		}
+		if val.Type != querypb.Type_TUPLE {
+			if _, err := NewValue(val.Type, val.Value); err != nil {
+				return err
+			}
+			continue
+		}
+		inner := ProtoToValue(val)
+		var err error
+		var leaves int
+		if ferr := inner.ForEachValue(func(leaf Value) {
+			leaves++
+			if err != nil {
+				return
+			}
+			if leaf.Type() == Tuple {
+				err = errors.New("tuple nesting deeper than one level is not allowed")
+				return
+			}
+			_, err = NewValue(leaf.Type(), leaf.Raw())
+		}); ferr != nil {
+			return ferr
+		}
+		if err != nil {
+			return err
+		}
+		if leaves == 0 {
+			return errors.New("empty tuple is not allowed")
+		}
+	}
+	return nil
 }
 
 // BindVariableToValue converts a bind var into a Value.

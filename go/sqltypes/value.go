@@ -107,17 +107,63 @@ func NewValue(typ querypb.Type, val []byte) (v Value, err error) {
 		if _, err := fastparse.ParseFloat64(hack.String(val)); err != nil {
 			return NULL, err
 		}
-		return MakeTrusted(typ, val), nil
+		// The parser accepts Go's NaN, Inf and Infinity, which MySQL has no
+		// literal for; written raw they would parse as identifiers.
+		return rawLiteral(typ, val)
 	case IsDecimal(typ):
+		// decimal.NewFromMySQL accepts every unpadded numeric literal, so the
+		// literal scan alone decides those, without building a decimal that
+		// would be thrown away. Anything else takes the parser for its error,
+		// or for the over-long decimals whose excess it never scans.
+		if IsNumericLiteral(val, false) {
+			return MakeTrusted(typ, val), nil
+		}
 		if _, err := decimal.NewFromMySQL(val); err != nil {
 			return NULL, err
 		}
-		return MakeTrusted(typ, val), nil
-	case IsQuoted(typ) || typ == Bit || typ == HexNum || typ == HexVal || typ == Null || typ == BitNum:
+		// The parser sizes the value from digit counts and truncates — in the
+		// integral or the fractional part — rather than scanning past MySQL's
+		// precision, so it never sees trailing text.
+		return rawLiteral(typ, val)
+	case typ == HexNum || typ == HexVal || typ == BitNum:
+		return rawLiteral(typ, val)
+	case IsQuoted(typ) || typ == Bit || typ == Null:
 		return MakeTrusted(typ, val), nil
 	}
 	// All other types are unsafe or invalid.
 	return NULL, fmt.Errorf("invalid type specified for MakeValue: %v", typ)
+}
+
+// rawLiteral builds a Value of a type the encoders write into generated SQL
+// verbatim. Only a payload that is a single literal token may be a value of
+// such a type; anything else is SQL text and is rejected. The error names
+// the expected shape so a client can correct its encoding.
+func rawLiteral(typ querypb.Type, val []byte) (Value, error) {
+	if isRawSQLLiteral(typ, val) {
+		return MakeTrusted(typ, val), nil
+	}
+	var expected string
+	switch typ {
+	case HexNum:
+		expected = "0x<hex digits>"
+	case HexVal:
+		expected = "x'<hex digits>' with an even digit count"
+	case BitNum:
+		expected = "0b<binary digits>"
+	default:
+		expected = "a numeric literal"
+	}
+	// Cap the echoed payload: it is caller-controlled and the message is
+	// returned to the client and logged. This bounds the error string only;
+	// whether a tablet's log line also carries the request's bind variables
+	// in full is governed by --sanitize-log-messages and
+	// --sql-max-length-errors, as for every tablet error.
+	shown := val
+	const maxEcho = 64
+	if len(shown) > maxEcho {
+		shown = append(append([]byte{}, shown[:maxEcho]...), "…"...)
+	}
+	return NULL, fmt.Errorf("invalid %s literal: %q, expected %s", typ, shown, expected)
 }
 
 // MakeTrusted makes a new Value based on the type.
@@ -544,6 +590,21 @@ func (v Value) EncodeSQL(b BinWriter) {
 		encodeBytesSQL(v.val, b)
 	case v.Type() == Bit:
 		encodeBytesSQLBits(v.val, b)
+	case v.Type() == Tuple:
+		// ForEachValue's error is dropped: a malformed encoding would come
+		// out as a truncated list. The encoders trust their input; a tuple
+		// payload from the wire is decoded by ValidateNestedBindVariables
+		// before it gets here, and in-tree producers go through TupleToProto.
+		b.Write([]byte{'('})
+		var i int
+		_ = v.ForEachValue(func(bv Value) {
+			if i > 0 {
+				b.Write([]byte{',', ' '})
+			}
+			bv.EncodeSQL(b)
+			i++
+		})
+		b.Write([]byte{')'})
 	default:
 		b.Write(v.val)
 	}
@@ -562,6 +623,7 @@ func (v Value) EncodeSQLStringBuilder(b *strings.Builder) {
 	case v.Type() == Bit:
 		encodeBytesSQLBits(v.val, b)
 	case v.Type() == Tuple:
+		// See the Tuple arm of EncodeSQL for why ForEachValue's error is dropped.
 		b.WriteByte('(')
 		var i int
 		_ = v.ForEachValue(func(bv Value) {
@@ -589,6 +651,18 @@ func (v Value) EncodeSQLBytes2(b *bytes2.Buffer) {
 		encodeBytesSQLBytes2(v.val, b)
 	case v.Type() == Bit:
 		encodeBytesSQLBits(v.val, b)
+	case v.Type() == Tuple:
+		// See the Tuple arm of EncodeSQL for why ForEachValue's error is dropped.
+		b.WriteByte('(')
+		var i int
+		_ = v.ForEachValue(func(bv Value) {
+			if i > 0 {
+				b.WriteString(", ")
+			}
+			bv.EncodeSQLBytes2(b)
+			i++
+		})
+		b.WriteByte(')')
 	default:
 		b.Write(v.val)
 	}
@@ -769,6 +843,152 @@ func (v *Value) decodeBitNum() ([]byte, error) {
 	return i.Bytes(), nil
 }
 
+// isRawSQLLiteral reports whether val is, modulo space/tab padding on numeric
+// types, a single literal token for typ. The encoders write values of these
+// types into generated statements verbatim, so a payload of any other shape is
+// SQL text, not a value. The grammar follows the lexer and MySQL rather than
+// the normalizer's canonicalization: hex digits may be either case, the 0x and
+// 0b prefixes may not, and x'...' needs an even digit count. Numeric payloads
+// may carry leading and trailing spaces and tabs, as fastparse tolerates for
+// integrals and floats. The predicate applies the same tolerance to decimals
+// for uniformity. decimal.NewFromMySQL rejects padding on a decimal it scans,
+// but it does not scan the part of an over-long decimal that exceeds MySQL's
+// precision, so NewValue does reach the predicate with padded decimals such
+// as "<82 digits> ". Accepting them is harmless: the lexer reads spaces and
+// tabs around a number as whitespace, so the value is still one literal token.
+// Expression and RAW carry SQL text by contract and are the caller's
+// responsibility; this reports false for them and for every other type.
+//
+// NewValue consults it only for the float, decimal and hex/bit arms, whose
+// parsers are lax; its integral arms return after fastparse, which admits the
+// same alphabet, so the IsSigned and IsUnsigned cases below are exercised by
+// the tests' fuzz oracle only.
+func isRawSQLLiteral(typ querypb.Type, val []byte) bool {
+	switch {
+	case IsSigned(typ):
+		val = trimSpaceTab(val)
+		if len(val) > 0 && val[0] == '-' {
+			val = val[1:]
+		}
+		return isDigits(val)
+	case IsUnsigned(typ):
+		return isDigits(trimSpaceTab(val))
+	case IsFloat(typ):
+		return IsNumericLiteral(trimSpaceTab(val), true)
+	case IsDecimal(typ):
+		return IsNumericLiteral(trimSpaceTab(val), false)
+	case typ == HexNum:
+		return len(val) > 2 && val[0] == '0' && val[1] == 'x' && isHexDigits(val[2:])
+	case typ == HexVal:
+		if len(val) < 3 || (val[0] != 'x' && val[0] != 'X') || val[1] != '\'' || val[len(val)-1] != '\'' {
+			return false
+		}
+		digits := val[2 : len(val)-1]
+		return len(digits)%2 == 0 && isHexDigits(digits)
+	case typ == BitNum:
+		return len(val) > 2 && val[0] == '0' && val[1] == 'b' && isBitDigits(val[2:])
+	}
+	return false
+}
+
+// IsNumericLiteral reports whether val is exactly
+// [+-]?([0-9]+(\.[0-9]*)?|\.[0-9]+)([eE][+-]?[0-9]+)?, with the exponent
+// admitted only when allowExponent is set, and so is a single numeric token
+// that can be written into a statement without quoting. It rejects what Go's
+// parsers accept but MySQL has no literal for: NaN, Inf, Infinity and
+// surrounding whitespace.
+func IsNumericLiteral(val []byte, allowExponent bool) bool {
+	i := 0
+	if i < len(val) && (val[i] == '+' || val[i] == '-') {
+		i++
+	}
+	mantissa := 0
+	for i < len(val) && isDigit(val[i]) {
+		i++
+		mantissa++
+	}
+	if i < len(val) && val[i] == '.' {
+		i++
+		for i < len(val) && isDigit(val[i]) {
+			i++
+			mantissa++
+		}
+	}
+	if mantissa == 0 {
+		return false
+	}
+	if allowExponent && i < len(val) && (val[i] == 'e' || val[i] == 'E') {
+		i++
+		if i < len(val) && (val[i] == '+' || val[i] == '-') {
+			i++
+		}
+		exponent := 0
+		for i < len(val) && isDigit(val[i]) {
+			i++
+			exponent++
+		}
+		if exponent == 0 {
+			return false
+		}
+	}
+	return i == len(val)
+}
+
+// trimSpaceTab strips the leading and trailing spaces and tabs that
+// fastparse.ParseInt64/ParseUint64/ParseFloat64 skip.
+func trimSpaceTab(val []byte) []byte {
+	for len(val) > 0 && (val[0] == ' ' || val[0] == '\t') {
+		val = val[1:]
+	}
+	for len(val) > 0 && (val[len(val)-1] == ' ' || val[len(val)-1] == '\t') {
+		val = val[:len(val)-1]
+	}
+	return val
+}
+
+func isDigit(b byte) bool { return b >= '0' && b <= '9' }
+
+func isHexDigit(b byte) bool {
+	return isDigit(b) || (b >= 'a' && b <= 'f') || (b >= 'A' && b <= 'F')
+}
+
+// isDigits reports whether val is one or more decimal digits.
+func isDigits(val []byte) bool {
+	if len(val) == 0 {
+		return false
+	}
+	for _, b := range val {
+		if !isDigit(b) {
+			return false
+		}
+	}
+	return true
+}
+
+// isHexDigits reports whether every byte of val is a hex digit (vacuously true
+// for an empty slice; callers that need at least one digit check the length).
+func isHexDigits(val []byte) bool {
+	for _, b := range val {
+		if !isHexDigit(b) {
+			return false
+		}
+	}
+	return true
+}
+
+// isBitDigits reports whether val is one or more binary digits.
+func isBitDigits(val []byte) bool {
+	if len(val) == 0 {
+		return false
+	}
+	for _, b := range val {
+		if b != '0' && b != '1' {
+			return false
+		}
+	}
+	return true
+}
+
 var ErrBadTupleEncoding = errors.New("bad tuple encoding in sqltypes.Value")
 
 func encodeTuple(tuple []Value) []byte {
@@ -807,6 +1027,9 @@ func (v *Value) ForEachValue(each func(bv Value)) error {
 		}
 
 		buf = buf[varlen:]
+		if sz > uint64(len(buf)) {
+			return ErrBadTupleEncoding
+		}
 		each(Value{val: buf[:sz], typ: uint16(ty)})
 
 		buf = buf[sz:]

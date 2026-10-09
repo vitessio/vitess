@@ -22,6 +22,7 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -42,12 +43,18 @@ func (e *ExecStmt) GetFields(ctx context.Context, vcursor VCursor, bindVars map[
 }
 
 func (e *ExecStmt) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	bindVars = e.prepareBindVars(vcursor, bindVars)
+	bindVars, err := e.prepareBindVars(vcursor, bindVars)
+	if err != nil {
+		return nil, err
+	}
 	return vcursor.ExecutePrimitive(ctx, e.Input, bindVars, wantfields)
 }
 
 func (e *ExecStmt) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	bindVars = e.prepareBindVars(vcursor, bindVars)
+	bindVars, err := e.prepareBindVars(vcursor, bindVars)
+	if err != nil {
+		return err
+	}
 	return vcursor.StreamExecutePrimitive(ctx, e.Input, bindVars, wantfields, callback)
 }
 
@@ -71,16 +78,24 @@ func (e *ExecStmt) description() PrimitiveDescription {
 	}
 }
 
-func (e *ExecStmt) prepareBindVars(vcursor VCursor, bindVars map[string]*querypb.BindVariable) map[string]*querypb.BindVariable {
+func (e *ExecStmt) prepareBindVars(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (map[string]*querypb.BindVariable, error) {
 	count := 1
 	for _, p := range e.Params {
 		bvName := "v" + strconv.Itoa(count)
-		bv := vcursor.Session().GetUDV(p.Name.Lowered())
+		name := p.Name.Lowered()
+		bv := vcursor.Session().GetUDV(name)
 		if bv == nil {
 			bv = sqltypes.NullBindVariable
+		}
+		// The session arrives over the wire with the request, so a
+		// user-defined variable is as caller-controlled as a request bind
+		// variable. EXECUTE ... USING @x bypasses the normalizer's rewrite
+		// of @x, so it gets the same check here before it reaches a tablet.
+		if err := sqltypes.ValidateBindVariable(bv); err != nil {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "user-defined variable @%s: %v", name, err)
 		}
 		bindVars[bvName] = bv
 		count++
 	}
-	return bindVars
+	return bindVars, nil
 }
