@@ -276,6 +276,7 @@ const (
 	Vtctld_WorkflowUpdate_FullMethodName              = "/vtctlservice.Vtctld/WorkflowUpdate"
 	Vtctld_GetMirrorRules_FullMethodName              = "/vtctlservice.Vtctld/GetMirrorRules"
 	Vtctld_WorkflowMirrorTraffic_FullMethodName       = "/vtctlservice.Vtctld/WorkflowMirrorTraffic"
+	Vtctld_UpdateQueryThrottlerConfig_FullMethodName  = "/vtctlservice.Vtctld/UpdateQueryThrottlerConfig"
 )
 
 // VtctldClient is the client API for Vtctld service.
@@ -633,6 +634,8 @@ type VtctldClient interface {
 	// GetMirrorRules returns the VSchema routing rules.
 	GetMirrorRules(ctx context.Context, in *vtctldata.GetMirrorRulesRequest, opts ...grpc.CallOption) (*vtctldata.GetMirrorRulesResponse, error)
 	WorkflowMirrorTraffic(ctx context.Context, in *vtctldata.WorkflowMirrorTrafficRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowMirrorTrafficResponse, error)
+	// UpdateQueryThrottlerConfig updated the query throttler config.
+	UpdateQueryThrottlerConfig(ctx context.Context, in *vtctldata.UpdateQueryThrottlerConfigRequest, opts ...grpc.CallOption) (*vtctldata.UpdateQueryThrottlerConfigResponse, error)
 }
 
 type vtctldClient struct {
@@ -1960,6 +1963,16 @@ func (c *vtctldClient) WorkflowMirrorTraffic(ctx context.Context, in *vtctldata.
 	return out, nil
 }
 
+func (c *vtctldClient) UpdateQueryThrottlerConfig(ctx context.Context, in *vtctldata.UpdateQueryThrottlerConfigRequest, opts ...grpc.CallOption) (*vtctldata.UpdateQueryThrottlerConfigResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(vtctldata.UpdateQueryThrottlerConfigResponse)
+	err := c.cc.Invoke(ctx, Vtctld_UpdateQueryThrottlerConfig_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // VtctldServer is the server API for Vtctld service.
 // All implementations must embed UnimplementedVtctldServer
 // for forward compatibility.
@@ -2315,6 +2328,8 @@ type VtctldServer interface {
 	// GetMirrorRules returns the VSchema routing rules.
 	GetMirrorRules(context.Context, *vtctldata.GetMirrorRulesRequest) (*vtctldata.GetMirrorRulesResponse, error)
 	WorkflowMirrorTraffic(context.Context, *vtctldata.WorkflowMirrorTrafficRequest) (*vtctldata.WorkflowMirrorTrafficResponse, error)
+	// UpdateQueryThrottlerConfig updated the query throttler config.
+	UpdateQueryThrottlerConfig(context.Context, *vtctldata.UpdateQueryThrottlerConfigRequest) (*vtctldata.UpdateQueryThrottlerConfigResponse, error)
 	mustEmbedUnimplementedVtctldServer()
 }
 
@@ -2711,6 +2726,9 @@ func (UnimplementedVtctldServer) GetMirrorRules(context.Context, *vtctldata.GetM
 }
 func (UnimplementedVtctldServer) WorkflowMirrorTraffic(context.Context, *vtctldata.WorkflowMirrorTrafficRequest) (*vtctldata.WorkflowMirrorTrafficResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method WorkflowMirrorTraffic not implemented")
+}
+func (UnimplementedVtctldServer) UpdateQueryThrottlerConfig(context.Context, *vtctldata.UpdateQueryThrottlerConfigRequest) (*vtctldata.UpdateQueryThrottlerConfigResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateQueryThrottlerConfig not implemented")
 }
 func (UnimplementedVtctldServer) mustEmbedUnimplementedVtctldServer() {}
 func (UnimplementedVtctldServer) testEmbeddedByValue()                {}
@@ -5034,6 +5052,24 @@ func _Vtctld_WorkflowMirrorTraffic_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Vtctld_UpdateQueryThrottlerConfig_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.UpdateQueryThrottlerConfigRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).UpdateQueryThrottlerConfig(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Vtctld_UpdateQueryThrottlerConfig_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).UpdateQueryThrottlerConfig(ctx, req.(*vtctldata.UpdateQueryThrottlerConfigRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Vtctld_ServiceDesc is the grpc.ServiceDesc for Vtctld service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -5544,6 +5580,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "WorkflowMirrorTraffic",
 			Handler:    _Vtctld_WorkflowMirrorTraffic_Handler,
+		},
+		{
+			MethodName: "UpdateQueryThrottlerConfig",
+			Handler:    _Vtctld_UpdateQueryThrottlerConfig_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

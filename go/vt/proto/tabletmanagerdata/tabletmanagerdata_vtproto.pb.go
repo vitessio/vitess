@@ -2869,6 +2869,7 @@ func (m *CheckThrottlerRequest) CloneVT() *CheckThrottlerRequest {
 	r.Scope = m.Scope
 	r.SkipRequestHeartbeats = m.SkipRequestHeartbeats
 	r.OkIfNotExists = m.OkIfNotExists
+	r.ThrottlerType = m.ThrottlerType
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -2939,6 +2940,7 @@ func (m *GetThrottlerStatusRequest) CloneVT() *GetThrottlerStatusRequest {
 		return (*GetThrottlerStatusRequest)(nil)
 	}
 	r := new(GetThrottlerStatusRequest)
+	r.ThrottlerType = m.ThrottlerType
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -10316,6 +10318,11 @@ func (m *CheckThrottlerRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error)
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.ThrottlerType != 0 {
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.ThrottlerType))
+		i--
+		dAtA[i] = 0x30
+	}
 	if m.OkIfNotExists {
 		i--
 		if m.OkIfNotExists {
@@ -10570,6 +10577,11 @@ func (m *GetThrottlerStatusRequest) MarshalToSizedBufferVT(dAtA []byte) (int, er
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.ThrottlerType != 0 {
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.ThrottlerType))
+		i--
+		dAtA[i] = 0x8
 	}
 	return len(dAtA) - i, nil
 }
@@ -13907,6 +13919,9 @@ func (m *CheckThrottlerRequest) SizeVT() (n int) {
 	if m.OkIfNotExists {
 		n += 2
 	}
+	if m.ThrottlerType != 0 {
+		n += 1 + protohelpers.SizeOfVarint(uint64(m.ThrottlerType))
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -14003,6 +14018,9 @@ func (m *GetThrottlerStatusRequest) SizeVT() (n int) {
 	}
 	var l int
 	_ = l
+	if m.ThrottlerType != 0 {
+		n += 1 + protohelpers.SizeOfVarint(uint64(m.ThrottlerType))
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -30215,6 +30233,25 @@ func (m *CheckThrottlerRequest) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.OkIfNotExists = bool(v != 0)
+		case 6:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ThrottlerType", wireType)
+			}
+			m.ThrottlerType = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.ThrottlerType |= ThrottlerType(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
@@ -30855,6 +30892,25 @@ func (m *GetThrottlerStatusRequest) UnmarshalVT(dAtA []byte) error {
 			return fmt.Errorf("proto: GetThrottlerStatusRequest: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
+		case 1:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ThrottlerType", wireType)
+			}
+			m.ThrottlerType = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.ThrottlerType |= ThrottlerType(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])

@@ -45,6 +45,7 @@ func TestDemuxResourceExhaustedErrors(t *testing.T) {
 		// and therefore shouldn't need to be teased out of another error.
 		{"in-memory row count exceeded allowed limit of 13", ERTooManyUserConnections},
 		{"rpc error: code = ResourceExhausted desc = Transaction throttled", EROutOfResources},
+		{"[QueryThrottler] query throttled: metric=lag value=20.00 breached threshold=10.00 throttle=100%", EROutOfResources},
 	}
 
 	for _, c := range cases {
@@ -182,6 +183,11 @@ func TestNewSQLErrorFromError(t *testing.T) {
 		},
 		{
 			err: vterrors.Errorf(vtrpc.Code_RESOURCE_EXHAUSTED, "vttablet: rpc error: code = ResourceExhausted desc = Transaction throttled"),
+			num: EROutOfResources,
+			ss:  SSUnknownSQLState,
+		},
+		{
+			err: vterrors.Errorf(vtrpc.Code_RESOURCE_EXHAUSTED, "vttablet: rpc error: code = ResourceExhausted desc = [QueryThrottler] query throttled: metric=lag value=20.00 breached threshold=10.00 throttle=100%%"),
 			num: EROutOfResources,
 			ss:  SSUnknownSQLState,
 		},

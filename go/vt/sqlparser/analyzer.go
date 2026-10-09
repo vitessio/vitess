@@ -68,10 +68,14 @@ const (
 
 // ASTToStatementType returns a StatementType from an AST stmt
 func ASTToStatementType(stmt Statement) StatementType {
-	switch stmt.(type) {
+	switch stmt := stmt.(type) {
 	case *Select, *Union:
 		return StmtSelect
 	case *Insert:
+		// REPLACE parses to an *Insert, so the action distinguishes the two.
+		if stmt.Action == ReplaceAct {
+			return StmtReplace
+		}
 		return StmtInsert
 	case *Update:
 		return StmtUpdate
@@ -318,6 +322,24 @@ func (s StatementType) String() string {
 	default:
 		return "UNKNOWN"
 	}
+}
+
+// validStatementTypeNames is the set of names StatementType.String() can return.
+// It is derived from the enum so it cannot drift from String(); StmtKill must
+// remain the last StatementType constant for the range to cover every value.
+var validStatementTypeNames = func() map[string]struct{} {
+	names := make(map[string]struct{})
+	for s := StmtUnknown; s <= StmtKill; s++ {
+		names[s.String()] = struct{}{}
+	}
+	return names
+}()
+
+// IsValidStatementType reports whether name is one StatementType.String() can produce.
+// Use it to check externally-supplied names, such as query-throttler rule keys.
+func IsValidStatementType(name string) bool {
+	_, ok := validStatementTypeNames[name]
+	return ok
 }
 
 // IsDML returns true if the query is an INSERT, UPDATE or DELETE statement.
