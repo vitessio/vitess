@@ -36,8 +36,21 @@ import (
 // BenchmarkExecuteVarBinary-4          100          14610045 ns/op
 // BenchmarkExecuteExpression-4        1000           1047798 ns/op
 
+<<<<<<< HEAD
 var benchQuery = "select a from test_table where v = :vtg1 and v0 = :vtg2 and v1 = :vtg3 and v2 = :vtg4 and v3 = :vtg5 and v4 = :vtg6 and v5 = :vtg7 and v6 = :vtg8 and v7 = :vtg9 and v8 = :vtg10 and v9 = :vtg11"
 var benchVarValue []byte
+||||||| parent of f93240b571 (sqltypes, vtgate, vttablet: reject bind variables that are not single SQL literals (#21386))
+var (
+	benchQuery    = "select a from test_table where v = :vtg1 and v0 = :vtg2 and v1 = :vtg3 and v2 = :vtg4 and v3 = :vtg5 and v4 = :vtg6 and v5 = :vtg7 and v6 = :vtg8 and v7 = :vtg9 and v8 = :vtg10 and v9 = :vtg11"
+	benchVarValue []byte
+)
+=======
+var (
+	benchQuery    = "select a from test_table where v = :vtg1 and v0 = :vtg2 and v1 = :vtg3 and v2 = :vtg4 and v3 = :vtg5 and v4 = :vtg6 and v5 = :vtg7 and v6 = :vtg8 and v7 = :vtg9 and v8 = :vtg10 and v9 = :vtg11"
+	benchVarValue []byte
+	benchHexValue []byte
+)
+>>>>>>> f93240b571 (sqltypes, vtgate, vttablet: reject bind variables that are not single SQL literals (#21386))
 
 func init() {
 	// benchQuerySize is the approximate size of the query.
@@ -51,6 +64,14 @@ func init() {
 		baseval.WriteString("\\'123456789")
 	}
 	benchVarValue = baseval.Bytes()
+
+	// A HEXNUM literal of the same order of size: 0x followed by hex digits.
+	hexval := &bytes.Buffer{}
+	hexval.WriteString("0x")
+	for i := 0; i < benchQuerySize/100; i++ {
+		hexval.WriteString("3132333435")
+	}
+	benchHexValue = hexval.Bytes()
 }
 
 func BenchmarkExecuteVarBinary(b *testing.B) {
@@ -77,9 +98,21 @@ func BenchmarkExecuteVarBinary(b *testing.B) {
 	}
 }
 
+<<<<<<< HEAD
 func BenchmarkExecuteExpression(b *testing.B) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+||||||| parent of f93240b571 (sqltypes, vtgate, vttablet: reject bind variables that are not single SQL literals (#21386))
+func BenchmarkExecuteExpression(b *testing.B) {
+	ctx := b.Context()
+=======
+// BenchmarkExecuteHexNum measures the raw write path: a HEXNUM payload is
+// written into the statement verbatim once the bind variable gate has scanned
+// it. It replaces BenchmarkExecuteExpression, whose EXPRESSION bind variables
+// the gate rejects at the query service boundary, as vtgate always did.
+func BenchmarkExecuteHexNum(b *testing.B) {
+	ctx := b.Context()
+>>>>>>> f93240b571 (sqltypes, vtgate, vttablet: reject bind variables that are not single SQL literals (#21386))
 	db, tsv := setupTabletServerTest(b, ctx, "")
 	defer db.Close()
 	defer tsv.StopService()
@@ -89,10 +122,7 @@ func BenchmarkExecuteExpression(b *testing.B) {
 		"vtg1": sqltypes.Int64BindVariable(1),
 	}
 	for i := 2; i <= 11; i++ {
-		bv[fmt.Sprintf("vtg%d", i)] = &querypb.BindVariable{
-			Type:  querypb.Type_EXPRESSION,
-			Value: benchVarValue,
-		}
+		bv[fmt.Sprintf("vtg%d", i)] = sqltypes.HexNumBindVariable(benchHexValue)
 	}
 
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}

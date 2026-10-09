@@ -19,6 +19,7 @@ package vtgate
 import (
 	"context"
 	"fmt"
+	"math"
 	"os"
 	"runtime"
 	"strconv"
@@ -904,6 +905,140 @@ func TestSelectUserDefinedVariable(t *testing.T) {
 		}},
 	}
 	utils.MustMatch(t, wantResult, result, "Mismatch")
+}
+
+// TestSelectUserDefinedVariableValidation pins that a user-defined variable
+// taken from the session is validated the same way as a request bind variable
+// before it is sent to a tablet. The session travels over the wire with the
+// request, so its variables are as caller-controlled as the request's.
+func TestSelectUserDefinedVariableValidation(t *testing.T) {
+	malformed := sqltypes.HexNumBindVariable([]byte("1; drop table main1 #"))
+	wellFormed := sqltypes.HexNumBindVariable([]byte("0x41"))
+
+	t.Run("malformed referenced variable is rejected before reaching the tablet", func(t *testing.T) {
+		executor, _, _, sbclookup, ctx := createExecutorEnv(t)
+		session := &vtgatepb.Session{
+			TargetString:         "@primary",
+			UserDefinedVariables: map[string]*querypb.BindVariable{"x": malformed},
+		}
+		_, err := executorExec(ctx, executor, session, "select id from main1 where id = @x", nil)
+		require.Error(t, err)
+		assert.Equal(t, vtrpcpb.Code_INVALID_ARGUMENT, vterrors.Code(err))
+		require.ErrorContains(t, err, "@x")
+		require.ErrorContains(t, err, "invalid HEXNUM literal")
+		assert.Empty(t, sbclookup.Queries)
+	})
+
+	t.Run("well-formed referenced variable is sent", func(t *testing.T) {
+		executor, _, _, sbclookup, ctx := createExecutorEnv(t)
+		session := &vtgatepb.Session{
+			TargetString:         "@primary",
+			UserDefinedVariables: map[string]*querypb.BindVariable{"x": wellFormed},
+		}
+		_, err := executorExec(ctx, executor, session, "select id from main1 where id = @x", nil)
+		require.NoError(t, err)
+		require.Len(t, sbclookup.Queries, 1)
+		assert.Equal(t, wellFormed, sbclookup.Queries[0].BindVariables["__vtudvx"])
+	})
+
+	t.Run("malformed referenced variable is rejected on the streaming path", func(t *testing.T) {
+		executor, _, _, sbclookup, ctx := createExecutorEnv(t)
+		session := econtext.NewSafeSession(&vtgatepb.Session{
+			TargetString:         "@primary",
+			UserDefinedVariables: map[string]*querypb.BindVariable{"x": malformed},
+		})
+		err := executor.StreamExecute(ctx, nil, "TestExecuteStream", session, "select id from main1 where id = @x", nil, false, func(*sqltypes.Result) error { return nil })
+		require.Error(t, err)
+		assert.Equal(t, vtrpcpb.Code_INVALID_ARGUMENT, vterrors.Code(err))
+		require.ErrorContains(t, err, "@x")
+		require.ErrorContains(t, err, "invalid HEXNUM literal")
+		assert.Empty(t, sbclookup.Queries)
+	})
+
+	t.Run("malformed variable evaluated by vtgate itself is rejected, not panicked on", func(t *testing.T) {
+		// select @x never reaches a tablet: vtgate's evalengine decodes the
+		// payload, and on the merge base a HEXNUM without its prefix panicked.
+		executor, _, _, _, ctx := createExecutorEnv(t)
+		session := &vtgatepb.Session{
+			TargetString:         "@primary",
+			UserDefinedVariables: map[string]*querypb.BindVariable{"x": malformed},
+		}
+		var err error
+		require.NotPanics(t, func() {
+			_, err = executorExec(ctx, executor, session, "select @x", nil)
+		})
+		require.Error(t, err)
+		assert.Equal(t, vtrpcpb.Code_INVALID_ARGUMENT, vterrors.Code(err))
+		require.ErrorContains(t, err, "@x")
+		require.ErrorContains(t, err, "invalid HEXNUM literal")
+	})
+
+	t.Run("malformed unreferenced variable does not affect the query", func(t *testing.T) {
+		executor, _, _, sbclookup, ctx := createExecutorEnv(t)
+		session := &vtgatepb.Session{
+			TargetString:         "@primary",
+			UserDefinedVariables: map[string]*querypb.BindVariable{"y": malformed},
+		}
+		_, err := executorExec(ctx, executor, session, "select id from main1 where id = 1", nil)
+		require.NoError(t, err)
+		require.Len(t, sbclookup.Queries, 1)
+	})
+
+	t.Run("malformed variable passed to execute ... using is rejected", func(t *testing.T) {
+		executor, _, _, sbclookup, ctx := createExecutorEnv(t)
+		session := econtext.NewSafeSession(&vtgatepb.Session{
+			TargetString:         "@primary",
+			UserDefinedVariables: map[string]*querypb.BindVariable{"x": malformed},
+		})
+		_, err := executorExecSession(ctx, executor, session, "prepare s from 'select id from main1 where id = ?'", nil)
+		require.NoError(t, err)
+		require.Empty(t, sbclookup.Queries)
+		_, err = executorExecSession(ctx, executor, session, "execute s using @x", nil)
+		require.Error(t, err)
+		assert.Equal(t, vtrpcpb.Code_INVALID_ARGUMENT, vterrors.Code(err))
+		require.ErrorContains(t, err, "@x")
+		require.ErrorContains(t, err, "invalid HEXNUM literal")
+		assert.Empty(t, sbclookup.Queries)
+	})
+}
+
+// TestSelectTupleWithNonLiteralMembers pins that a tuple vtgate evaluates
+// itself is returned rather than panicked on when a member is a value the
+// evalengine produces but sqltypes.NewValue has no arm for: a float overflow
+// (+Inf is not a SQL literal), a NULL (a nil eval) and a nested tuple.
+// evalTuple.ToRawBytes used to rebuild each member with NewValue and panic on
+// its error. The members are evalengine output, not caller bytes, and are
+// trusted the way the scalar path trusts them.
+func TestSelectTupleWithNonLiteralMembers(t *testing.T) {
+	testcases := []struct {
+		sql  string
+		want sqltypes.Value
+	}{{
+		sql:  "select (1e308*10, 1)",
+		want: sqltypes.TestTuple(sqltypes.NewFloat64(math.Inf(1)), sqltypes.NewInt64(1)),
+	}, {
+		sql:  "select (null, 1)",
+		want: sqltypes.TestTuple(sqltypes.NULL, sqltypes.NewInt64(1)),
+	}, {
+		sql:  "select ((1, 2), 3)",
+		want: sqltypes.TestTuple(sqltypes.TestTuple(sqltypes.NewInt64(1), sqltypes.NewInt64(2)), sqltypes.NewInt64(3)),
+	}}
+	for _, tc := range testcases {
+		t.Run(tc.sql, func(t *testing.T) {
+			executor, _, _, _, ctx := createExecutorEnv(t)
+			session := &vtgatepb.Session{TargetString: "@primary"}
+
+			var result *sqltypes.Result
+			var err error
+			require.NotPanics(t, func() {
+				result, err = executorExec(ctx, executor, session, tc.sql, nil)
+			})
+			require.NoError(t, err)
+			require.Len(t, result.Rows, 1)
+			require.Len(t, result.Rows[0], 1)
+			assert.Equal(t, tc.want, result.Rows[0][0])
+		})
+	}
 }
 
 func TestFoundRows(t *testing.T) {

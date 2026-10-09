@@ -18,6 +18,7 @@ package sqltypes
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -568,6 +569,51 @@ func TestValidateBindVariable(t *testing.T) {
 			}},
 		},
 		err: "tuple not allowed inside another tuple",
+	}, {
+		in: &querypb.BindVariable{
+			Type:  querypb.Type_HEXVAL,
+			Value: []byte("1+1"),
+		},
+		err: `invalid HEXVAL literal: "1+1", expected x'<hex digits>' with an even digit count`,
+	}, {
+		in: &querypb.BindVariable{
+			Type:  querypb.Type_HEXVAL,
+			Value: []byte("x'41'"),
+		},
+	}, {
+		in: &querypb.BindVariable{
+			Type:  querypb.Type_HEXNUM,
+			Value: []byte("1; do sleep(4) #"),
+		},
+		err: `invalid HEXNUM literal: "1; do sleep(4) #", expected 0x<hex digits>`,
+	}, {
+		in: &querypb.BindVariable{
+			Type:  querypb.Type_HEXNUM,
+			Value: []byte("0xff"),
+		},
+	}, {
+		in: &querypb.BindVariable{
+			Type:  querypb.Type_BITNUM,
+			Value: []byte("1 or 1=1"),
+		},
+		err: `invalid BITNUM literal: "1 or 1=1", expected 0b<binary digits>`,
+	}, {
+		in: &querypb.BindVariable{
+			Type:  querypb.Type_BITNUM,
+			Value: []byte("0b1"),
+		},
+	}, {
+		in: &querypb.BindVariable{
+			Type:  querypb.Type_DECIMAL,
+			Value: []byte(strings.Repeat("1", 80) + "; drop table x #"),
+		},
+		err: `invalid DECIMAL literal:`,
+	}, {
+		in: &querypb.BindVariable{
+			Type:  querypb.Type_FLOAT64,
+			Value: []byte("NaN"),
+		},
+		err: `invalid FLOAT64 literal: "NaN", expected a numeric literal`,
 	}}
 	for _, tcase := range testcases {
 		err := ValidateBindVariable(tcase.in)
@@ -582,6 +628,121 @@ func TestValidateBindVariable(t *testing.T) {
 	err := ValidateBindVariable(nil)
 	want := "bind variable is nil"
 	assert.ErrorContains(t, err, want)
+}
+
+// TestValidateNestedBindVariables pins the validator the tablet uses at its
+// boundary: the same leaf rules as the client boundary, plus one level of
+// tuple nesting, which vtgate's engine sends (TupleToProto) for foreign key
+// cascades and composite-key DML. A malformed nested encoding is an error,
+// never a panic.
+func TestValidateNestedBindVariables(t *testing.T) {
+	nested := func(rows ...Value) *querypb.BindVariable {
+		bv := &querypb.BindVariable{Type: querypb.Type_TUPLE}
+		for _, row := range rows {
+			var members []Value
+			require.NoError(t, row.ForEachValue(func(v Value) { members = append(members, v) }))
+			bv.Values = append(bv.Values, TupleToProto(members))
+		}
+		return bv
+	}
+
+	// A nested tuple whose inner protowire payload declares a member length
+	// past the end of the buffer.
+	corrupted := nested(TestTuple(NewInt64(1)))
+	inner := corrupted.Values[0].Value
+	require.Equal(t, byte(1), inner[len(inner)-2], "expected the member length byte")
+	inner[len(inner)-2] = 0x7f
+
+	testcases := []struct {
+		name  string
+		in    map[string]*querypb.BindVariable
+		err   string
+		errIs error
+	}{{
+		name: "scalar well-formed",
+		in:   map[string]*querypb.BindVariable{"v": {Type: querypb.Type_HEXVAL, Value: []byte("x'41'")}},
+	}, {
+		name: "scalar malformed",
+		in:   map[string]*querypb.BindVariable{"v": {Type: querypb.Type_HEXVAL, Value: []byte("1+1")}},
+		err:  `v: invalid HEXVAL literal: "1+1"`,
+	}, {
+		name: "flat tuple well-formed",
+		in: map[string]*querypb.BindVariable{"vals": {
+			Type:   querypb.Type_TUPLE,
+			Values: []*querypb.Value{ValueToProto(NewInt64(1)), ValueToProto(NewInt64(2))},
+		}},
+	}, {
+		name: "flat tuple malformed member",
+		in: map[string]*querypb.BindVariable{"vals": {
+			Type:   querypb.Type_TUPLE,
+			Values: []*querypb.Value{ValueToProto(NewInt64(1)), {Type: querypb.Type_HEXVAL, Value: []byte("1+1")}},
+		}},
+		err: `vals: invalid HEXVAL literal: "1+1"`,
+	}, {
+		name: "nested tuple as vtgate sends it",
+		in: map[string]*querypb.BindVariable{"dml_vals": nested(
+			TestTuple(NewInt64(1), NewVarChar("a")),
+			TestTuple(NewInt64(2), NewVarChar("b")),
+		)},
+	}, {
+		name: "nested tuple malformed leaf",
+		in: map[string]*querypb.BindVariable{"dml_vals": nested(
+			TestTuple(NewInt64(1), NewVarChar("a")),
+			TestTuple(NewInt64(2), MakeTrusted(HexVal, []byte("1+1"))),
+		)},
+		err: `dml_vals: invalid HEXVAL literal: "1+1"`,
+	}, {
+		name: "nested tuple deeper than one level",
+		in: map[string]*querypb.BindVariable{"dml_vals": nested(
+			TestTuple(TestTuple(NewInt64(1))),
+		)},
+		err: "dml_vals: tuple nesting deeper than one level is not allowed",
+	}, {
+		name: "nested tuple with an empty inner tuple",
+		in:   map[string]*querypb.BindVariable{"v": nested(TestTuple(NewInt64(1)), TestTuple())},
+		err:  "v: empty tuple is not allowed",
+	}, {
+		name:  "nested tuple corrupted encoding",
+		in:    map[string]*querypb.BindVariable{"dml_vals": corrupted},
+		errIs: ErrBadTupleEncoding,
+	}, {
+		name: "empty tuple",
+		in:   map[string]*querypb.BindVariable{"vals": {Type: querypb.Type_TUPLE}},
+		err:  "vals: empty tuple is not allowed",
+	}, {
+		name: "nil tuple member",
+		in:   map[string]*querypb.BindVariable{"vals": {Type: querypb.Type_TUPLE, Values: []*querypb.Value{nil}}},
+		err:  "vals: tuple member is nil",
+	}, {
+		name: "nil bind variable",
+		in:   map[string]*querypb.BindVariable{"v": nil},
+		err:  "v: bind variable is nil",
+	}, {
+		name: "empty map",
+		in:   map[string]*querypb.BindVariable{},
+	}, {
+		name: "nil map",
+	}}
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			var err error
+			require.NotPanics(t, func() { err = ValidateNestedBindVariables(tc.in) })
+			switch {
+			case tc.errIs != nil:
+				require.ErrorIs(t, err, tc.errIs)
+			case tc.err != "":
+				require.ErrorContains(t, err, tc.err)
+			default:
+				require.NoError(t, err)
+			}
+		})
+	}
+
+	// The client-boundary validator keeps rejecting nested tuples; only the
+	// tablet's accepts them.
+	assert.ErrorContains(t, ValidateBindVariables(map[string]*querypb.BindVariable{
+		"dml_vals": nested(TestTuple(NewInt64(1), NewVarChar("a"))),
+	}), "tuple not allowed inside another tuple")
 }
 
 func TestBindVariableToValue(t *testing.T) {
