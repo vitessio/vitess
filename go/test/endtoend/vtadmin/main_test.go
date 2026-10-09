@@ -19,9 +19,12 @@ package vtadmin
 import (
 	_ "embed"
 	"flag"
+	"net/http"
+	"net/url"
 	"os"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -98,5 +101,42 @@ func TestVtadminAPIs(t *testing.T) {
 	t.Run("keyspaces api", func(t *testing.T) {
 		resp := clusterInstance.VtadminProcess.MakeAPICallRetry(t, "api/keyspaces")
 		require.Contains(t, resp, uks)
+	})
+
+	// VExplain is authorized as a read, so a VEXPLAIN that runs the statement it
+	// explains must not change data, even through a stored function that runs with
+	// its definer's privileges.
+	t.Run("vexplain cannot write through a definer function", func(t *testing.T) {
+		tablet := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet().VttabletProcess
+		for _, query := range []string{
+			"insert into u_a (id, a) values (1, 1)",
+			"create table vexplain_audit (id bigint auto_increment primary key)",
+			"create function vexplain_write() returns int deterministic modifies sql data sql security definer begin insert into vexplain_audit () values (); return 1; end",
+		} {
+			_, err := tablet.QueryTablet(query, uks, true)
+			require.NoError(t, err, query)
+		}
+
+		for _, sql := range []string{
+			"vexplain trace select vexplain_write() from u_a where id = 1",
+			"vexplain queries select vexplain_write() from u_a where id = 1",
+			"vexplain all select vexplain_write() from u_a where id = 1",
+		} {
+			params := url.Values{
+				"cluster_id": {clusterInstance.VtadminProcess.ClusterID},
+				"keyspace":   {uks},
+				"sql":        {sql},
+			}
+			status, resp, err := clusterInstance.VtadminProcess.MakeAPICall("api/vexplain?" + params.Encode())
+			require.NoError(t, err)
+			// The function's write must be what fails the request, refused by
+			// the read-only transaction, rather than some unrelated error.
+			assert.Equal(t, http.StatusInternalServerError, status, resp)
+			assert.Contains(t, resp, "Cannot execute statement in a READ ONLY transaction", sql)
+
+			qr, err := tablet.QueryTablet("select count(*) from vexplain_audit", uks, true)
+			require.NoError(t, err)
+			assert.Equal(t, "0", qr.Rows[0][0].ToString(), "the definer function must not have written: %s", sql)
+		}
 	})
 }

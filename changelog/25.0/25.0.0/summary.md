@@ -7,6 +7,7 @@
 - **[Major Changes](#major-changes)**
     - **[Security](#security)**
         - [Legacy vtctld HTTP API removed](#vtctld-http-api-removed)
+        - [VTAdmin VExplain modes that run the statement require the `execute` action](#vtadmin-vexplain-execute-action)
     - **[New Support](#new-support)**
         - [VTOrc failover of an unreachable primary `vttablet` via replica quorum](#vtorc-quorum-unreachable-primary)
     - **[Breaking Changes](#breaking-changes)**
@@ -92,6 +93,14 @@ The removed endpoints are `cells`, `keyspaces`, `keyspace`, `shards`, `srv_keysp
 **Impact**: requests to `/api/` on vtctld's HTTP port return `404 Not Found`. Passing one of the four flags logs a deprecation warning and has no effect. For anyone who builds on the Go packages, `vtctld.InitVtctld`, `vtctld.ActionRepository`, `vtctld.ActionResult`, and `vtctld.TabletWithURL` are gone.
 
 See [#21169](https://github.com/vitessio/vitess/issues/21169) for the removal and [#21170](https://github.com/vitessio/vitess/issues/21170) for the removal of the flags in v26.
+
+#### <a id="vtadmin-vexplain-execute-action"/>VTAdmin VExplain modes that run the statement require the `execute` action</a>
+
+VTAdmin's VExplain API was authorized with the `get` action, but `VEXPLAIN QUERIES`, `ALL` and `TRACE` run the statement they explain, so an actor allowed only to read could change data through it ([GHSA-c2r8-grjp-w8c2](https://github.com/vitessio/vitess/security/advisories/GHSA-c2r8-grjp-w8c2)). Those modes now require the new `execute` action on the `VExplain` resource; `PLAN`, `KEYS` and `MYSQLPLAN`, which do not run the statement, still require only `get`. VTAdmin also runs the modes that run the statement in a read-only transaction that is always rolled back, and accepts only a `SELECT` without `INTO`, sequence next-values or advisory lock functions for them.
+
+**Migration**: grant the `execute` action on `VExplain` to the actors that should run `VEXPLAIN QUERIES`, `ALL` or `TRACE`. Rules that grant all actions (`*`) and `--no-rbac` already include it.
+
+**Impact**: an actor with only `get` on `VExplain` gets an `unauthorized` error from `VEXPLAIN QUERIES`, `ALL` and `TRACE`.
 
 ### <a id="new-support"/>New Support</a>
 
