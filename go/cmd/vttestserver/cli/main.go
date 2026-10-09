@@ -151,12 +151,12 @@ func New() (cmd *cobra.Command) {
 			" random data (--initialize-with-random-data option) will only run during"+
 			" cluster startup if the data directory does not already exist. "+
 			" Changes to VSchema are persisted across cluster restarts using a simple"+
-			" watcher if the --data_dir argument is specified.")
+			" watcher if the --data-dir argument is specified.")
 
 	utils.SetFlagBoolVar(cmd.Flags(), &doSeed, "initialize-with-random-data", false,
 		"If this flag is each table-shard will be initialized"+
-			" with random data. See also the 'rng_seed' and 'min_shard_size'"+
-			" and 'max_shard_size' flags.")
+			" with random data. See also the --rng-seed, --min-table-shard-size"+
+			" and --max-table-shard-size flags.")
 
 	utils.SetFlagIntVar(cmd.Flags(), &seed.RngSeed, "rng-seed", 123,
 		"The random number generator seed to use when initializing"+

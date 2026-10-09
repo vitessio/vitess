@@ -875,7 +875,7 @@ func (tm *TabletManager) createSequenceTable(ctx context.Context, tableName stri
 	return err
 }
 
-// ValidateVReplicationPermissionsOld validates that the --db_filtered_user has
+// ValidateVReplicationPermissionsOld validates that the --db-filtered-user has
 // the minimum permissions required on the sidecardb vreplication table
 // needed in order to manage vreplication metadata.
 // Switching to use a functional test approach in ValidateVReplicationPermissions below
@@ -922,7 +922,7 @@ func (tm *TabletManager) ValidateVReplicationPermissionsOld(ctx context.Context,
 	}, nil
 }
 
-// ValidateVReplicationPermissions validates that the --db_filtered_user has
+// ValidateVReplicationPermissions validates that the --db-filtered-user has
 // the minimum permissions required on the sidecardb vreplication table
 // using a functional testing approach that doesn't require access to mysql.user table.
 func (tm *TabletManager) ValidateVReplicationPermissions(ctx context.Context, req *tabletmanagerdatapb.ValidateVReplicationPermissionsRequest) (*tabletmanagerdatapb.ValidateVReplicationPermissionsResponse, error) {
