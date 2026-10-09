@@ -17244,7 +17244,7 @@ yydefault:
 		var yyLOCAL *TableOption
 //line sql.y:3183
 		{
-			yyLOCAL = &TableOption{Name: (string(yyDollar[2].str())), String: yyDollar[4].str(), CaseSensitive: true}
+			yyLOCAL = &TableOption{Name: string(yyDollar[2].str()), String: yyDollar[4].str(), CaseSensitive: true}
 		}
 		yyVAL.settableOption(yyLOCAL)
 	case 544:
