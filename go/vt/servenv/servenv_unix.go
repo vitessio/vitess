@@ -63,6 +63,8 @@ func Init() {
 	}
 	inited = true
 
+	startClientTLSReload(tlsReloadInterval)
+
 	// Once you run as root, you pretty much destroy the chances of a
 	// non-privileged user starting the program correctly.
 	if uid := os.Getuid(); uid == 0 {
