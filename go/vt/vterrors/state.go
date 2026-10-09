@@ -129,6 +129,8 @@ const (
 
 	UnsupportedSQLMode
 
+	InvalidCharacterString
+
 	// No state should be added below NumOfStates
 	NumOfStates
 )
