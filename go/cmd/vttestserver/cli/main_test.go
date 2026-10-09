@@ -247,7 +247,7 @@ func TestCanGetKeyspaces(t *testing.T) {
 
 	defer func() {
 		if t.Failed() {
-			cluster.PrintFiles(t, clusterInstance.Env.Directory(), "vtcombo.INFO", "error.log")
+			cluster.PrintFiles(t, clusterInstance.Env.Directory(), "error.log")
 		}
 	}()
 

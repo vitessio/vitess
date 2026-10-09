@@ -73,7 +73,6 @@
 - [ ] PR created and reviewed
 
 ## Notes
-- Glog flags (log_dir, log_backtrace_at) come from Go standard library - may not need migration
 - Some tests use `GetFlagVariantForTestsByVersion` - DO NOT modify these
 - Utils functions automatically handle deprecation and hiding - no manual work needed
 - Utils functions work with both pflag.FlagSet and cobra's Flags()/PersistentFlags()

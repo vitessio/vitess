@@ -22,7 +22,6 @@ import (
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cmd/zk/internal/zkfs"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo/zk2topo"
 )
 
@@ -44,11 +43,9 @@ or the file specified in the ZK_CLIENT_CONFIG environment variable.
 The local cell may be overridden with the ZK_CLIENT_LOCAL_CELL environment
 variable.`,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-			if err := log.Init(cmd.Flags()); err != nil {
+			if err := log.Init(); err != nil {
 				return err
 			}
-
-			logutil.PurgeLogs()
 
 			// Connect to the server.
 			fs = &zkfs.FS{
@@ -57,9 +54,6 @@ variable.`,
 
 			return nil
 		},
-		PersistentPostRun: func(cmd *cobra.Command, args []string) {
-			logutil.Flush()
-		},
 	}
 )
 
@@ -67,6 +61,5 @@ func init() {
 	Root.Flags().StringVar(&server, "server", server, "server(s) to connect to")
 
 	log.RegisterFlags(Root.Flags())
-	logutil.RegisterFlags(Root.Flags())
 	acl.RegisterFlags(Root.Flags())
 }

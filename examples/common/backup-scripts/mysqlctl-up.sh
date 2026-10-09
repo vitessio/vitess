@@ -36,7 +36,6 @@ if [ -d $VTDATAROOT/$tablet_dir ]; then
 fi
 
 mysqlctl \
- --log_dir $VTDATAROOT/tmp \
  --tablet-uid $uid \
  --mysql-port $mysql_port \
  $action

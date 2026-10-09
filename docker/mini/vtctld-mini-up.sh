@@ -30,7 +30,6 @@ vtctld \
  -service-map 'grpc-vtctl' \
  -backup-storage-implementation file \
  -file-backup-storage-root $VTDATAROOT/backups \
- -log_dir $VTDATAROOT/tmp \
  -port $vtctld_web_port \
  -grpc-port $grpc_port \
  -pid-file $VTDATAROOT/tmp/vtctld.pid \

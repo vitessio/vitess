@@ -56,7 +56,6 @@ $VTDATAROOT/
       vtgate-stderr.txt
       vttablet-stderr.txt
       mysqlctl-stderr.txt
-      *.INFO, *.WARNING, *.ERROR   # glog files
     backups/                  # backup data
 ```
 
@@ -68,7 +67,7 @@ When a test fails, read logs from the tmp directory inside the cluster's VTDATAR
 $VTDATAROOT/vtroot_<port>/tmp_<port>/
 ```
 
-Look for `*-stderr.txt` files and glog files (`*.INFO`, `*.WARNING`, `*.ERROR`).
+Look for `*-stderr.txt` files.
 
 ### Clear between runs
 
@@ -90,5 +89,4 @@ Each end-to-end test package starts a `cluster.LocalProcessCluster` (topo, vtctl
 2. Rebuild binaries: `make build`
 3. Run the failing test with `-v`
 4. On failure, read logs from `$VTDATAROOT/vtroot_*/tmp_*/`
-5. Check `*-stderr.txt` files first for startup errors
-6. Check glog `*.ERROR` and `*.WARNING` files for runtime errors
+5. Check the `*-stderr.txt` files for startup and runtime errors. Search for the `ERR` and `WRN` levels.

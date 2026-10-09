@@ -109,7 +109,6 @@ func installSignalHandlers(cancel func()) {
 
 func main() {
 	defer exit.RecoverAll()
-	defer logutil.Flush()
 
 	if detachedMode {
 		// this method will call os.Exit and kill this process
