@@ -160,6 +160,15 @@ func TestStringMapWithMultiLabels(t *testing.T) {
 	require.Equal(t, "ccc", c.ValueLabel())
 }
 
+func TestCombinedLabels(t *testing.T) {
+	clearStats()
+	t.Cleanup(clearStats)
+	combineDimensions = "a,c"
+
+	assert.Equal(t, []bool{true, false, true}, CombinedLabels([]string{"a", "b", "c"}))
+	assert.Empty(t, CombinedLabels(nil))
+}
+
 func TestSafeJoinLabels(t *testing.T) {
 	cases := []struct {
 		labels   []string
