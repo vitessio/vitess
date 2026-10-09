@@ -102,7 +102,7 @@ var (
 	VT09027 = errorWithState("VT09027", vtrpcpb.Code_FAILED_PRECONDITION, CTERecursiveForbidsAggregation, "Recursive Common Table Expression '%s' can contain neither aggregation nor window functions in recursive query block", "")
 	VT09028 = errorWithState("VT09028", vtrpcpb.Code_FAILED_PRECONDITION, CTERecursiveForbiddenJoinOrder, "In recursive query block of Recursive Common Table Expression '%s', the recursive table must neither be in the right argument of a LEFT JOIN, nor be forced to be non-first with join order hints", "")
 	VT09029 = errorWithState("VT09029", vtrpcpb.Code_FAILED_PRECONDITION, CTERecursiveRequiresSingleReference, "In recursive query block of Recursive Common Table Expression %s, the recursive table must be referenced only once, and not in any subquery", "")
-	VT09030 = errorWithState("VT09030", vtrpcpb.Code_FAILED_PRECONDITION, CTEMaxRecursionDepth, "Recursive query aborted after 1000 iterations.", "")
+	VT09030 = errorWithState("VT09030", vtrpcpb.Code_FAILED_PRECONDITION, CTEMaxRecursionDepth, "Recursive query aborted after %d iterations. Try increasing @@cte_max_recursion_depth to a larger value.", "")
 	VT09031 = errorWithoutState("VT09031", vtrpcpb.Code_FAILED_PRECONDITION, "Primary demotion is stalled", "")
 	VT09032 = errorWithoutState("VT09032", vtrpcpb.Code_FAILED_PRECONDITION, "previous transaction failed. Issue a ROLLBACK to resolve the failure.", "This error occurs after a VT15001 error was sent to the client. Later queries in the same session will continue to fail until the client sends a ROLLBACK.")
 

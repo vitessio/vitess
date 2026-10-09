@@ -18,10 +18,13 @@ package engine
 
 import (
 	"context"
+	"strconv"
+	"strings"
 	"sync"
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/sysvars"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -38,9 +41,42 @@ type RecurseCTE struct {
 
 var _ Primitive = (*RecurseCTE)(nil)
 
-// maxRecurseDepth caps the number of recursion iterations before we abort.
-// TODO: This should be controlled with the cte_max_recursion_depth system variable.
-const maxRecurseDepth = 1000
+// defaultMaxRecurseDepth is the number of recursion iterations after which we
+// abort when the session has not set cte_max_recursion_depth. It matches the
+// MySQL default for that system variable.
+const defaultMaxRecurseDepth = 1000
+
+// maxRecurseDepth returns the recursion-depth limit for this session: the value
+// of the cte_max_recursion_depth session system variable when it has been set,
+// and the MySQL default otherwise.
+func maxRecurseDepth(vcursor VCursor) uint64 {
+	limit := uint64(defaultMaxRecurseDepth)
+	session := vcursor.Session()
+	if !session.HasSystemVariables() {
+		return limit
+	}
+	session.GetSystemVariables(func(k string, v string) {
+		if k != sysvars.CTEMaxRecursionDepth {
+			return
+		}
+		if parsed, ok := parseRecurseDepth(v); ok {
+			limit = parsed
+		}
+	})
+	return limit
+}
+
+// parseRecurseDepth parses the stored value of cte_max_recursion_depth. The
+// session stores system variable values in their SQL-encoded form, so a value
+// that was assigned as a string literal is still wrapped in quotes here.
+func parseRecurseDepth(v string) (uint64, bool) {
+	v = strings.Trim(strings.TrimSpace(v), "'\"")
+	depth, err := strconv.ParseUint(v, 10, 32)
+	if err != nil {
+		return 0, false
+	}
+	return depth, true
+}
 
 func (r *RecurseCTE) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	res, err := vcursor.ExecutePrimitive(ctx, r.Seed, bindVars, wantfields)
@@ -51,8 +87,15 @@ func (r *RecurseCTE) TryExecute(ctx context.Context, vcursor VCursor, bindVars m
 	// recurseRows contains the rows used in the next recursion
 	recurseRows := res.Rows
 	joinVars := make(map[string]*querypb.BindVariable)
-	loops := 0
+	maxDepth := maxRecurseDepth(vcursor)
+	var iterations uint64
 	for len(recurseRows) > 0 {
+		// Like MySQL, one iteration is one recursion level: the whole frontier
+		// produced by the previous level, however many rows it holds.
+		iterations++
+		if iterations > maxDepth {
+			return nil, vterrors.VT09030(iterations)
+		}
 		// copy over the results from the previous recursion
 		theseRows := recurseRows
 		recurseRows = nil
@@ -63,10 +106,6 @@ func (r *RecurseCTE) TryExecute(ctx context.Context, vcursor VCursor, bindVars m
 			// check if the context is done - we might be in a long running recursion
 			if err := ctx.Err(); err != nil {
 				return nil, err
-			}
-			loops++
-			if loops > maxRecurseDepth {
-				return nil, vterrors.VT09030("")
 			}
 			rresult, err := vcursor.ExecutePrimitive(ctx, r.Term, combineVars(bindVars, joinVars), false)
 			if err != nil {
@@ -110,8 +149,16 @@ func (r *RecurseCTE) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 	// one Term stream is active at a time: recursing inside the Term callback
 	// would nest a live stream per level and exhaust the connection pool.
 	joinVars := make(map[string]*querypb.BindVariable)
-	loops := 0
+	maxDepth := maxRecurseDepth(vcursor)
+	var iterations uint64
 	for len(recurseRows) > 0 {
+		// Like MySQL, one iteration is one recursion level: the whole frontier
+		// produced by the previous level, however many rows it holds. Streamed
+		// rows cannot be unsent, so the guard fires before the level starts.
+		iterations++
+		if iterations > maxDepth {
+			return vterrors.VT09030(iterations)
+		}
 		// copy over the results from the previous recursion
 		theseRows := recurseRows
 		recurseRows = nil
@@ -122,10 +169,6 @@ func (r *RecurseCTE) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 			// check if the context is done - we might be in a long running recursion
 			if err := ctx.Err(); err != nil {
 				return err
-			}
-			loops++
-			if loops > maxRecurseDepth {
-				return vterrors.VT09030("")
 			}
 			err := vcursor.StreamExecutePrimitive(ctx, r.Term, combineVars(bindVars, joinVars), false, func(result *sqltypes.Result) error {
 				mu.Lock()

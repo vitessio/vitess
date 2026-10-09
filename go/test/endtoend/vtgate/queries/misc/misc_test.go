@@ -1043,3 +1043,29 @@ func TestOlapErrorAfterFields(t *testing.T) {
 	// The error ended the result set cleanly, so the connection stays usable.
 	utils.AssertMatches(t, mcmp.VtConn, "select 1", "[[INT64(1)]]")
 }
+
+// TestRecursiveCTEMaxRecursionDepth verifies that the cte_max_recursion_depth
+// session system variable is accepted by VTGate and drives the recursion guard
+// the way it does in MySQL, on both the OLTP and the OLAP workload.
+func TestRecursiveCTEMaxRecursionDepth(t *testing.T) {
+	mcmp, closer := start(t)
+	t.Cleanup(closer)
+
+	unbounded := "with recursive cte as (select 1 as n union all select n + 1 from cte) select * from cte"
+
+	utils.Exec(t, mcmp.VtConn, "set cte_max_recursion_depth = 10")
+	for _, workload := range []string{"oltp", "olap"} {
+		t.Run(workload, func(t *testing.T) {
+			utils.Exec(t, mcmp.VtConn, "set workload = "+workload)
+			_, err := mcmp.VtConn.ExecuteFetch(unbounded, 1000, false)
+			require.ErrorContains(t, err, "Recursive query aborted after 11 iterations")
+		})
+	}
+
+	// Raising the limit above the MySQL default allows a deeper recursion.
+	utils.Exec(t, mcmp.VtConn, "set workload = oltp")
+	utils.Exec(t, mcmp.VtConn, "set cte_max_recursion_depth = 2000")
+	utils.AssertMatches(t, mcmp.VtConn,
+		"with recursive cte as (select 1 as n union all select n + 1 from cte where n < 1500) select count(*) from cte",
+		"[[INT64(1500)]]")
+}

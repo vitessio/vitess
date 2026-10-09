@@ -60,6 +60,10 @@ var (
 // noopVCursor is used to build other vcursors.
 type noopVCursor struct {
 	inTx bool
+
+	// systemVariables are the MySQL session system variables the fake session
+	// reports through HasSystemVariables and GetSystemVariables.
+	systemVariables map[string]string
 }
 
 func (t *noopVCursor) GetExecutionMetrics() *Metrics {
@@ -217,11 +221,13 @@ func (t *noopVCursor) StreamExecutePrimitive(ctx context.Context, primitive Prim
 }
 
 func (t *noopVCursor) HasSystemVariables() bool {
-	panic("implement me")
+	return len(t.systemVariables) > 0
 }
 
-func (t *noopVCursor) GetSystemVariables(func(k string, v string)) {
-	panic("implement me")
+func (t *noopVCursor) GetSystemVariables(f func(k string, v string)) {
+	for k, v := range t.systemVariables {
+		f(k, v)
+	}
 }
 
 func (t *noopVCursor) GetWarnings() []*querypb.QueryWarning {
@@ -558,8 +564,10 @@ func (f *loggingVCursor) HasSystemVariables() bool {
 	return len(f.systemVariables) > 0
 }
 
-func (f *loggingVCursor) GetSystemVariables(func(k string, v string)) {
-	panic("implement me")
+func (f *loggingVCursor) GetSystemVariables(fn func(k string, v string)) {
+	for k, v := range f.systemVariables {
+		fn(k, v)
+	}
 }
 
 func (f *loggingVCursor) SetFoundRows(u uint64) {
