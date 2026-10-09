@@ -6,6 +6,13 @@ updates:
       interval: "weekly"
     cooldown:
       default-days: 14
+    # Dependabot only updates direct requirements unless told otherwise, and Go
+    # marks a module required only for a tool directive as "// indirect". Name
+    # those tool modules here, or Dependabot never bumps them.
+    allow:
+      - dependency-type: "direct"
+      - dependency-name: "google.golang.org/grpc/cmd/protoc-gen-go-grpc"
+        dependency-type: "all"
     groups:
       go:
         patterns:
@@ -32,21 +39,44 @@ updates:
           - "github.com/dave/jennifer"
           - "golang.org/x/tools"
 
+  # Every requirement in a tools/* module is "// indirect", because the module
+  # exists only for its tool directive. Allow the tool module itself and
+  # nothing else: the tool's own dependencies stay at the versions it pins.
   - package-ecosystem: "gomod"
     directories:
       - "/tools/addlicense"
       - "/tools/gofumpt"
-      - "/tools/goimports"
       - "/tools/gotestsum"
       - "/tools/goyacc"
     schedule:
       interval: "weekly"
     cooldown:
       default-days: 14
+    allow:
+      - dependency-name: "github.com/google/addlicense"
+        dependency-type: "all"
+      - dependency-name: "mvdan.cc/gofumpt"
+        dependency-type: "all"
+      - dependency-name: "gotest.tools/gotestsum"
+        dependency-type: "all"
+      - dependency-name: "github.com/vitessio/goyacc"
+        dependency-type: "all"
     groups:
       go-tools:
         patterns:
           - "*"
+
+  # goimports ships in golang.org/x/tools, which the other tool modules also
+  # require; allowing it in the entry above would bump it past their pins.
+  - package-ecosystem: "gomod"
+    directory: "/tools/goimports"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 14
+    allow:
+      - dependency-name: "golang.org/x/tools"
+        dependency-type: "all"
 
   # golangci-lint bumps can change lint findings; keep them in their own PR.
   - package-ecosystem: "gomod"
@@ -55,6 +85,9 @@ updates:
       interval: "weekly"
     cooldown:
       default-days: 14
+    allow:
+      - dependency-name: "github.com/golangci/golangci-lint/v2"
+        dependency-type: "all"
 
   - package-ecosystem: "github-actions"
     # "/" only covers .github/workflows; the composite actions must be listed.
