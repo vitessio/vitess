@@ -98,6 +98,11 @@ func TestInfoSchemaRoutingResetPreservesRoutingValues(t *testing.T) {
 			tables:     map[string]string{"table_name": "'orders'"},
 		},
 		{
+			name:       "table list argument",
+			predicates: []string{"table_name in ::tables"},
+			tables:     map[string]string{"__tables": "::tables"},
+		},
+		{
 			name:       "conflicting table predicates",
 			predicates: []string{"table_name = 'orders'", "table_name = 'customers'"},
 			tables:     map[string]string{"table_name": "'orders'"},
@@ -112,7 +117,7 @@ func TestInfoSchemaRoutingResetPreservesRoutingValues(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := &plancontext.PlanningContext{
-				ReservedVars:      sqlparser.NewReservedVars("vtg", sqlparser.BindVars{"schema": {}, "schemas": {}, "table": {}}),
+				ReservedVars:      sqlparser.NewReservedVars("vtg", sqlparser.BindVars{"schema": {}, "schemas": {}, "table": {}, "tables": {}}),
 				ReservedArguments: map[sqlparser.Expr]string{},
 				SemTable:          semantics.EmptySemTable(),
 				VSchema:           infoSchemaRoutingVSchema{},
@@ -150,32 +155,4 @@ func TestInfoSchemaRoutingResetPreservesRoutingValues(t *testing.T) {
 			}
 		})
 	}
-}
-
-// TestExtractInfoSchemaRoutingPredicateListArgReplay pins that re-extracting an
-// already-rewritten `table_name IN ::list` node is idempotent.
-func TestExtractInfoSchemaRoutingPredicateListArgReplay(t *testing.T) {
-	ctx := &plancontext.PlanningContext{
-		ReservedVars:      sqlparser.NewReservedVars("vtg", sqlparser.BindVars{"tables": {}}),
-		ReservedArguments: map[sqlparser.Expr]string{},
-		SemTable:          semantics.EmptySemTable(),
-		VSchema:           environmentOnlyVSchema{},
-	}
-	cmp := &sqlparser.ComparisonExpr{
-		Operator: sqlparser.InOp,
-		Left:     sqlparser.NewColName("table_name"),
-		Right:    sqlparser.ListArg("tables"),
-	}
-
-	isSchema, bvName, out := extractInfoSchemaRoutingPredicate(ctx, cmp)
-	require.False(t, isSchema)
-	require.Equal(t, sqlparser.ListArg("tables"), out)
-	require.NotEqual(t, "tables", bvName, "the predicate must be re-pointed at a dedicated variable")
-	require.Equal(t, sqlparser.ListArg(bvName), cmp.Right)
-
-	isSchema2, bvName2, out2 := extractInfoSchemaRoutingPredicate(ctx, cmp)
-	require.False(t, isSchema2)
-	assert.Equal(t, bvName, bvName2, "replay must reuse the dedicated variable, not reserve another")
-	assert.Equal(t, sqlparser.ListArg("tables"), out2, "replay must recover the client's original list")
-	assert.Equal(t, sqlparser.ListArg(bvName), cmp.Right, "replay must not mutate the predicate again")
 }
