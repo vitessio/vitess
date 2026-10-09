@@ -168,7 +168,13 @@ func (u *UserDefinedVariable) Execute(ctx context.Context, vcursor VCursor, env 
 	if err != nil {
 		return err
 	}
-	return vcursor.Session().SetUDV(u.Name, value.Value(vcursor.ConnCollation()))
+	v := value.Value(vcursor.ConnCollation())
+	if v.Type() == sqltypes.Tuple {
+		// A row value is not a scalar: MySQL rejects it here with 1241, and
+		// stored it could never be read back as a bind variable.
+		return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.OperandColumns, "Operand should contain %d column(s)", 1)
+	}
+	return vcursor.Session().SetUDV(u.Name, v)
 }
 
 var _ SetOp = (*SysVarIgnore)(nil)
