@@ -16,7 +16,10 @@ limitations under the License.
 
 package sysvars
 
-import "sync"
+import (
+	"strings"
+	"sync"
+)
 
 // This information lives here, because it's needed from the vtgate planbuilder, the vtgate engine,
 // and the AST rewriter, that happens to live in sqlparser.
@@ -301,9 +304,43 @@ func SupportsSetVar(name string) bool {
 	return sys.SupportSetVar
 }
 
+<<<<<<< HEAD
 // GetInterestingVariables is used to return all the variables that may be listed in a SHOW VARIABLES command.
 func GetInterestingVariables() []string {
 	var res []string
+||||||| parent of 147c440977 (vtgate: keep values containing `*/` out of the SET_VAR optimizer hint (#21388))
+// GetInterestingVariables returns the variables whose values VTGate substitutes in the
+// output of a SHOW VARIABLES command: the server identity VTGate advertises and, for the
+// session scope, the variables whose session values may not have reached the MySQL
+// connection. A SHOW GLOBAL VARIABLES reports the global values, which the session's
+// values must not replace.
+func GetInterestingVariables(global bool) []string {
+	// version, version comment and socket describe the server VTGate presents itself as
+	res := []string{Version.Name, VersionComment.Name, Socket.Name}
+	if global {
+		return res
+	}
+=======
+// IsSafeSetVarValue reports whether a system variable value can be carried
+// in a SET_VAR optimizer hint. The hint lives inside a /*+ ... */ comment and
+// nothing inside a block comment can escape the sequence that terminates it,
+// so such a value has to be applied through a reserved connection instead.
+func IsSafeSetVarValue(value string) bool {
+	return !strings.Contains(value, "*/")
+}
+
+// GetInterestingVariables returns the variables whose values VTGate substitutes in the
+// output of a SHOW VARIABLES command: the server identity VTGate advertises and, for the
+// session scope, the variables whose session values may not have reached the MySQL
+// connection. A SHOW GLOBAL VARIABLES reports the global values, which the session's
+// values must not replace.
+func GetInterestingVariables(global bool) []string {
+	// version, version comment and socket describe the server VTGate presents itself as
+	res := []string{Version.Name, VersionComment.Name, Socket.Name}
+	if global {
+		return res
+	}
+>>>>>>> 147c440977 (vtgate: keep values containing `*/` out of the SET_VAR optimizer hint (#21388))
 	// Add all the vitess aware variables
 	for _, variable := range VitessAware {
 		res = append(res, variable.Name)
