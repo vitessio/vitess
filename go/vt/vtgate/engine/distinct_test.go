@@ -183,6 +183,89 @@ func TestDistinctStreamAsync(t *testing.T) {
 [VARCHAR("a") INT64(1) INT64(1) VARCHAR("t")]]`, qr.Rows))
 }
 
+// TestDistinctUnknownTypeUsesWeightString checks that DISTINCT over a column
+// whose type or collation the planner could not determine (an expression
+// inside a derived table) still separates distinct values, by using the
+// weight string the planner added instead of hashing every value alike.
+func TestDistinctUnknownTypeUsesWeightString(t *testing.T) {
+	offsetOne := 1
+	for name, typ := range map[string]evalengine.Type{
+		"unknown type":      evalengine.NewUnknownType(),
+		"unknown collation": evalengine.NewType(sqltypes.VarChar, collations.Unknown),
+	} {
+		t.Run(name, func(t *testing.T) {
+			input := r("x|weight_string(x)",
+				"varchar|varbinary",
+				"zoe|1F211DDD1CAA",
+				"null|null",
+				"p|1E0C")
+			distinct := &Distinct{
+				Source:    &fakePrimitive{results: []*sqltypes.Result{input}},
+				CheckCols: []CheckCol{{Col: 0, WsCol: &offsetOne, Type: typ}},
+				Truncate:  1,
+			}
+
+			qr, err := distinct.TryExecute(t.Context(), &noopVCursor{}, nil, true)
+			require.NoError(t, err)
+
+			got := fmt.Sprintf("%v", qr.Rows)
+			expected := fmt.Sprintf("%v", r("x", "varchar", "zoe", "null", "p").Rows)
+			utils.MustMatch(t, expected, got)
+		})
+	}
+
+	// Equal numbers that arrive with different numeric types (as the branches
+	// of a UNION can produce) must still be seen as one value.
+	t.Run("mixed numeric types", func(t *testing.T) {
+		input := &sqltypes.Result{
+			Fields: sqltypes.MakeTestFields("x|weight_string(x)", "decimal|varbinary"),
+			Rows: []sqltypes.Row{
+				{sqltypes.NewInt64(1), sqltypes.NULL},
+				{sqltypes.NewDecimal("1.0"), sqltypes.NULL},
+				{sqltypes.NewFloat64(1), sqltypes.NULL},
+				{sqltypes.NewUint64(2), sqltypes.NULL},
+				{sqltypes.NewDecimal("2.00"), sqltypes.NULL},
+			},
+		}
+		distinct := &Distinct{
+			Source:    &fakePrimitive{results: []*sqltypes.Result{input}},
+			CheckCols: []CheckCol{{Col: 0, WsCol: &offsetOne, Type: evalengine.NewUnknownType()}},
+			Truncate:  1,
+		}
+
+		qr, err := distinct.TryExecute(t.Context(), &noopVCursor{}, nil, true)
+		require.NoError(t, err)
+		utils.MustMatch(t, "[[INT64(1)] [UINT64(2)]]", fmt.Sprintf("%v", qr.Rows))
+	})
+
+	// Around 2^53 a float64 can no longer tell neighbouring integers apart.
+	// Hashing unknown-typed numbers through DECIMAL keeps the two integers
+	// distinct and still merges the float that is exactly equal to one of
+	// them; the integer 2^53+1 is not merged into the float 2^53 even though
+	// NullsafeCompare would coerce that pair to float64, which is the
+	// documented limit of hashing without a static type.
+	t.Run("large integers near 2^53", func(t *testing.T) {
+		input := &sqltypes.Result{
+			Fields: sqltypes.MakeTestFields("x|weight_string(x)", "decimal|varbinary"),
+			Rows: []sqltypes.Row{
+				{sqltypes.NewInt64(9007199254740993), sqltypes.NULL},
+				{sqltypes.NewInt64(9007199254740992), sqltypes.NULL},
+				{sqltypes.NewFloat64(9007199254740992), sqltypes.NULL},
+				{sqltypes.NewInt64(9007199254740993), sqltypes.NULL},
+			},
+		}
+		distinct := &Distinct{
+			Source:    &fakePrimitive{results: []*sqltypes.Result{input}},
+			CheckCols: []CheckCol{{Col: 0, WsCol: &offsetOne, Type: evalengine.NewUnknownType()}},
+			Truncate:  1,
+		}
+
+		qr, err := distinct.TryExecute(t.Context(), &noopVCursor{}, nil, true)
+		require.NoError(t, err)
+		utils.MustMatch(t, "[[INT64(9007199254740993)] [INT64(9007199254740992)]]", fmt.Sprintf("%v", qr.Rows))
+	})
+}
+
 func TestWeightStringFallBack(t *testing.T) {
 	offsetOne := 1
 	checkCols := []CheckCol{{
