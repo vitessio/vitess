@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"unicode"
+	"unicode/utf8"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sysvars"
@@ -73,8 +73,15 @@ const (
 
 var ErrInvalidPriority = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Invalid priority value specified in query")
 
+// isSQLSpaceRune reports whether r is a space character for SQL. A character
+// outside the ASCII range is never one.
+func isSQLSpaceRune(r rune) bool {
+	return r < utf8.RuneSelf && IsSQLSpace(byte(r))
+}
+
+// isNonSpace reports whether r is not a space character for SQL.
 func isNonSpace(r rune) bool {
-	return !unicode.IsSpace(r)
+	return !isSQLSpaceRune(r)
 }
 
 // leadingCommentEnd returns the first index after all leading comments, or
@@ -113,38 +120,152 @@ func leadingCommentEnd(text string) (end int) {
 	return 0
 }
 
-// trailingCommentStart returns the first index of trailing comments.
-// If there are no trailing comments, returns the length of the input string.
-func trailingCommentStart(text string) (start int) {
-	hasComment := false
-	reducedLen := len(text)
-	for reducedLen > 0 {
-		// Eat up any whitespace. Leading whitespace will be considered part of
-		// the trailing comments.
-		nextReducedLen := strings.LastIndexFunc(text[:reducedLen], isNonSpace) + 1
-		if nextReducedLen == 0 {
-			break
-		}
-		reducedLen = nextReducedLen
-		if reducedLen < 4 || text[reducedLen-2:reducedLen] != "*/" {
-			break
-		}
-
-		// Find the beginning of the comment
-		startCommentPos := strings.LastIndex(text[:reducedLen-2], "/*")
-		if startCommentPos < 0 || text[startCommentPos+2] == '!' {
-			// Badly formatted sql, or a special /*! comment
-			break
-		}
-
-		hasComment = true
-		reducedLen = startCommentPos
+// marginBounds returns the part [start, end) of sql that is not a margin
+// comment. Only spaces and block comments come before start or after end.
+//
+// newlineFirst reports that the query ends with a line comment and a ';' after
+// it. SplitMarginComments trims the ';' and, with it, the newline that ends the
+// line comment, so it must put a newline before the trailing comments. Without
+// it the line comment would run on into them when the callers add them again.
+//
+// Only text that ends with '*/' can have trailing comments, and most queries do
+// not, so any other text is split at its leading comments alone. Those need no
+// tokenizer: with nothing before it, a '/*' always opens a comment and the first
+// '*/' after it closes the comment.
+func (p *Parser) marginBounds(sql string) (start, end int, newlineFirst bool) {
+	end = len(sql)
+	for end > 0 && IsSQLSpace(sql[end-1]) {
+		end--
 	}
-
-	if hasComment {
-		return reducedLen
+	if !strings.HasSuffix(sql[:end], "*/") {
+		return leadingCommentEnd(sql), len(sql), false
 	}
-	return len(text)
+	start, end, newlineFirst, _ = p.tokenizedMarginBounds(sql)
+	return start, end, newlineFirst
+}
+
+// tokenizedMarginBounds is marginBounds for any text. It reads sql with the
+// tokenizer the parser uses. ok is false when the tokenizer rejects sql, and
+// then nothing is split off: the parser reads all of sql and rejects it.
+//
+// A '*/' at the end of the text does not always close a comment. Only the text
+// before it shows whether a comment is open: a '/*' in a string literal does not
+// start one, and a line comment can end with '*/'. The callers make a plan for
+// the query that SplitMarginComments returns, and they authorize only that
+// query. Then they add the comments to the query again. If the split made a
+// comment out of text that is not a comment, that text would go to MySQL with
+// nothing having parsed it. Reading the text with the parser's own tokenizer
+// makes the split agree with the parser on literals, quoted identifiers and
+// comments.
+//
+// Only block comment tokens and the spaces around them are margin. Everything
+// else the tokenizer reads is statement: every other token, a line comment up
+// to its newline, and the bytes of a /*!...*/ comment that Scan steps over
+// without returning a token, which show up between two tokens. MySQL can run
+// what is inside a /*!...*/ comment, even one whose version does not apply to
+// this parser, so it must never land in a margin.
+func (p *Parser) tokenizedMarginBounds(sql string) (start, end int, newlineFirst, ok bool) {
+	tkn := p.NewStringTokenizer(sql)
+	start = -1
+	keep := func(from, to int) {
+		if start < 0 {
+			start = from
+		}
+		end = to
+	}
+	// lastTyp and stmtEnd describe the query without the ';' tokens at its
+	// end, which SplitMarginComments trims.
+	var lastTyp, stmtEnd int
+	for {
+		before := tkn.Pos
+		typ, val := tkn.Scan()
+		if typ == LEX_ERROR {
+			return 0, len(sql), false, false
+		}
+		// Bytes other than spaces between two tokens belong to a /*!...*/
+		// comment that Scan stepped over.
+		from, to := before, tkn.currStart
+		for from < to && IsSQLSpace(sql[from]) {
+			from++
+		}
+		if from < to {
+			for IsSQLSpace(sql[to-1]) {
+				to--
+			}
+			keep(from, to)
+			stmtEnd = end
+		}
+		switch {
+		case typ == 0:
+			if start < 0 {
+				// Only comments and spaces. They all go to Trailing.
+				return 0, 0, false, true
+			}
+			// Without a trailing comment nothing is cut off the end, and the
+			// query reads the same.
+			if strings.Trim(sql[end:], sqlSpaceChars) == "" {
+				return start, end, false, true
+			}
+			// "select 0--/**/" and "select 0--;/**/": cutting off the comment
+			// and trimming the ';' would leave a '--' that the end of the text
+			// turns into a comment, so the callers would plan "select 0" for a
+			// statement MySQL reads as two minus signs.
+			//
+			// The leading comments are at the start of the text, so cutting them
+			// off changes nothing after them.
+			if lastTyp == '-' && strings.HasSuffix(sql[:stmtEnd], "--") {
+				return start, len(sql), false, true
+			}
+			// "select 1 -- x\n;/**/": the trim removes the newline that ends the
+			// line comment.
+			return start, end, lastTyp == COMMENT && stmtEnd < end, true
+		case typ == COMMENT && strings.HasPrefix(val, "/*"):
+			// A block comment: a margin, if nothing but comments follows it.
+		case typ == COMMENT:
+			// A line comment. Its newline stays outside, because the newline
+			// ends the comment when the margin is added again.
+			keep(tkn.currStart, tkn.currStart+len(strings.TrimSuffix(val, "\n")))
+			lastTyp, stmtEnd = typ, end
+		case typ == ';':
+			keep(tkn.currStart, tkn.Pos)
+		default:
+			keep(tkn.currStart, tkn.Pos)
+			lastTyp, stmtEnd = typ, end
+		}
+	}
+}
+
+// sqlSpaceChars holds the characters that MySQL treats as a space between two
+// tokens: space, tab, newline, vertical tab, form feed and carriage return.
+//
+// This string is the only place that spells out the set. IsSQLSpace reads it
+// through sqlSpaceTable, and the trims in SplitMarginComments take it as a
+// cutset, so no second copy can drift from this one. Tokenizer.skipBlank and the
+// '--' rule in Tokenizer.Scan repeat the set because they read a uint16 rather
+// than a byte, and TestMarginCommentRulesMatchTokenizer checks that all of them
+// stay equal.
+//
+// Do not use unicode.IsSpace instead. That function also accepts a no-break space
+// and other characters that MySQL does not accept, and then Vitess would remove a
+// character that MySQL wants to see.
+const sqlSpaceChars = " \t\n\v\f\r"
+
+// sqlSpaceTable answers IsSQLSpace with one index instead of a comparison for
+// each character in the set.
+var sqlSpaceTable = func() (table [256]bool) {
+	for i := range len(sqlSpaceChars) {
+		table[sqlSpaceChars[i]] = true
+	}
+	return table
+}()
+
+// IsSQLSpace reports whether c is one of the characters in sqlSpaceChars, the
+// set MySQL treats as a space between two tokens.
+//
+// This is exported so that other packages which scan SQL a byte at a time can
+// ask this one, rather than keeping a copy of the set that drifts from it.
+func IsSQLSpace(c byte) bool {
+	return sqlSpaceTable[c]
 }
 
 // MarginComments holds the leading and trailing comments that surround a query.
@@ -153,23 +274,61 @@ type MarginComments struct {
 	Trailing string
 }
 
-// SplitMarginComments pulls out any leading or trailing comments from a raw sql query.
-// This function also trims leading (if there's a comment) and trailing whitespace.
+// SplitMarginComments pulls out any leading or trailing comments from a raw sql
+// query, reading /*!...*/ comments at the default MySQL version. It is for
+// callers that only display a query. Callers that plan or authorize the query
+// use Parser.SplitMarginComments with the parser that parses it.
 func SplitMarginComments(sql string) (query string, comments MarginComments) {
-	trailingStart := trailingCommentStart(sql)
-	leadingEnd := leadingCommentEnd(sql[:trailingStart])
-	comments = MarginComments{
-		Leading:  strings.TrimLeftFunc(sql[:leadingEnd], unicode.IsSpace),
-		Trailing: strings.TrimRightFunc(sql[trailingStart:], unicode.IsSpace),
+	return defaultMarginParser.SplitMarginComments(sql)
+}
+
+// defaultMarginParser reads versioned comments for SplitMarginComments at the
+// default MySQL version.
+var defaultMarginParser = func() *Parser {
+	parser, err := New(Options{})
+	if err != nil {
+		panic(err)
 	}
-	return strings.TrimFunc(sql[leadingEnd:trailingStart], func(c rune) bool {
-		return unicode.IsSpace(c) || c == ';'
-	}), comments
+	return parser
+}()
+
+// SplitMarginComments pulls out any leading or trailing comments from a raw sql
+// query, and trims leading (if there's a comment) and trailing whitespace. It
+// reads a /*!...*/ comment at the parser's MySQL version, as the parser does, so
+// callers that plan or authorize the query must split it with the parser that
+// parses it.
+func (p *Parser) SplitMarginComments(sql string) (query string, comments MarginComments) {
+	start, end, newlineFirst := p.marginBounds(sql)
+	comments = MarginComments{
+		Leading:  strings.TrimLeft(sql[:start], sqlSpaceChars),
+		Trailing: strings.TrimRight(sql[end:], sqlSpaceChars),
+	}
+	if newlineFirst {
+		comments.Trailing = "\n" + comments.Trailing
+	}
+	return trimQuery(sql[start:end]), comments
+}
+
+// trimQuery removes the spaces and ';' characters at both ends of query. It
+// does what strings.Trim with that cutset does, but SplitMarginComments runs
+// for every query, and strings.Trim builds its cutset set on every call.
+func trimQuery(query string) string {
+	isCut := func(c byte) bool { return c == ';' || IsSQLSpace(c) }
+	for len(query) > 0 && isCut(query[0]) {
+		query = query[1:]
+	}
+	for len(query) > 0 && isCut(query[len(query)-1]) {
+		query = query[:len(query)-1]
+	}
+	return query
 }
 
 // StripLeadingComments trims the SQL string and removes any leading comments
 func StripLeadingComments(sql string) string {
-	sql = strings.TrimFunc(sql, unicode.IsSpace)
+	// Trim with the SQL space set, not unicode.IsSpace: a no-break space is part
+	// of an identifier to MySQL, so removing one here would change the statement
+	// this reports on.
+	sql = strings.Trim(sql, sqlSpaceChars)
 
 	for hasCommentPrefix(sql) {
 		switch sql[0] {
@@ -193,7 +352,7 @@ func StripLeadingComments(sql string) string {
 			sql = sql[index+1:]
 		}
 
-		sql = strings.TrimFunc(sql, unicode.IsSpace)
+		sql = strings.Trim(sql, sqlSpaceChars)
 	}
 
 	return sql

@@ -306,7 +306,7 @@ func (tkn *Tokenizer) Scan() (int, string) {
 				switch tkn.cur() {
 				case '-':
 					nextChar := tkn.peek(1)
-					if nextChar == ' ' || nextChar == '\n' || nextChar == '\t' || nextChar == '\r' || nextChar == eofChar {
+					if nextChar == ' ' || nextChar == '\t' || nextChar == '\n' || nextChar == '\v' || nextChar == '\f' || nextChar == '\r' || nextChar == eofChar {
 						tkn.skip(1)
 						return tkn.scanCommentType1(2)
 					}
@@ -381,7 +381,7 @@ func (tkn *Tokenizer) skipStatement() int {
 // skipBlank skips the cursor while it finds whitespace
 func (tkn *Tokenizer) skipBlank() {
 	ch := tkn.cur()
-	for ch == ' ' || ch == '\n' || ch == '\r' || ch == '\t' {
+	for ch == ' ' || ch == '\t' || ch == '\n' || ch == '\v' || ch == '\f' || ch == '\r' {
 		tkn.skip(1)
 		ch = tkn.cur()
 	}
@@ -647,7 +647,12 @@ func (tkn *Tokenizer) scanString(delim uint16, typ int) (int, string) {
 			fallthrough
 
 		case '\\':
+			// The next delimiter usually ends the string, so size the buffer
+			// for the text up to it rather than growing it a few bytes at a time.
 			var buffer strings.Builder
+			if rest := strings.IndexByte(tkn.buf[tkn.Pos+1:], byte(delim)); rest >= 0 {
+				buffer.Grow(tkn.Pos + 1 + rest - start)
+			}
 			buffer.WriteString(tkn.buf[start:tkn.Pos])
 			return tkn.scanStringSlow(&buffer, delim, typ)
 
@@ -735,20 +740,12 @@ func (tkn *Tokenizer) scanCommentType1(prefixLen int) (int, string) {
 // prefix has already been scanned
 func (tkn *Tokenizer) scanCommentType2() (int, string) {
 	start := tkn.Pos - 2
-	for {
-		if tkn.cur() == '*' {
-			tkn.skip(1)
-			if tkn.cur() == '/' {
-				tkn.skip(1)
-				break
-			}
-			continue
-		}
-		if tkn.cur() == eofChar {
-			return LEX_ERROR, tkn.buf[start:tkn.Pos]
-		}
-		tkn.skip(1)
+	end := strings.Index(tkn.buf[tkn.Pos:], "*/")
+	if end < 0 {
+		tkn.Pos = len(tkn.buf)
+		return LEX_ERROR, tkn.buf[start:]
 	}
+	tkn.skip(end + 2)
 	return COMMENT, tkn.buf[start:tkn.Pos]
 }
 

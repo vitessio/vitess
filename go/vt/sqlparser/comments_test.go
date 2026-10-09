@@ -136,6 +136,205 @@ func TestSplitComments(t *testing.T) {
 		outSQL:              "/*! select 1 */",
 		outLeadingComments:  "",
 		outTrailingComments: "",
+	}, {
+		// The text of a '--' line comment can end with '*/'. This must not make
+		// the SQL before the line comment into a trailing comment. All of the
+		// text from the client must stay in the query. The parser then reads
+		// the text, and the callers authorize it.
+		input:               "select id from t where id=1 /*x*/ union select authentication_string from mysql.user -- */",
+		outSQL:              "select id from t where id=1 /*x*/ union select authentication_string from mysql.user -- */",
+		outLeadingComments:  "",
+		outTrailingComments: "",
+	}, {
+		// The same rule applies to a '#' line comment.
+		input:               "select id from t where id=1 /*x*/ union select 1 # */",
+		outSQL:              "select id from t where id=1 /*x*/ union select 1 # */",
+		outLeadingComments:  "",
+		outTrailingComments: "",
+	}, {
+		// The same rule applies to additional rows in an INSERT statement.
+		input:               "insert into t(a) values (1) /*x*/ , (2) -- */",
+		outSQL:              "insert into t(a) values (1) /*x*/ , (2) -- */",
+		outLeadingComments:  "",
+		outTrailingComments: "",
+	}, {
+		// A '--' with no space after it does not start a comment. Therefore the
+		// '*/' at the end closes no comment.
+		input:               "select 1 /*a*/ union select 2 --*/",
+		outSQL:              "select 1 /*a*/ union select 2 --*/",
+		outLeadingComments:  "",
+		outTrailingComments: "",
+	}, {
+		// A '/*' in a string literal does not start a comment.
+		input:               "select 'a /*' , 1 -- */",
+		outSQL:              "select 'a /*' , 1 -- */",
+		outLeadingComments:  "",
+		outTrailingComments: "",
+	}, {
+		// A '/*' in a quoted identifier also does not start a comment.
+		input:               "select `a /*` , 1 -- */",
+		outSQL:              "select `a /*` , 1 -- */",
+		outLeadingComments:  "",
+		outTrailingComments: "",
+	}, {
+		// A line comment can end with a newline. A block comment after that
+		// newline is a trailing comment. The newline stays with the trailing
+		// comment, because the newline ends the line comment when we put the
+		// query and the comment together again.
+		input:               "select 1 -- x\n/*b*/",
+		outSQL:              "select 1 -- x",
+		outLeadingComments:  "",
+		outTrailingComments: "\n/*b*/",
+	}, {
+		// A '--' with a block comment directly after it is two minus signs, and
+		// it is not a comment. Therefore MySQL rejects all of this input. If we
+		// remove the block comment, the query is "select 0--". That query makes
+		// a good plan as "select 0". We must not authorize a statement that we
+		// never send.
+		input:               "select 0--/**/",
+		outSQL:              "select 0--/**/",
+		outLeadingComments:  "",
+		outTrailingComments: "",
+	}, {
+		// The same with a ';' after the '--'. The trim removes the ';', so a
+		// split would plan "select 0--" as "select 0". vtgate sends some
+		// statements as written, with the comments added again, and then MySQL
+		// reads "-- /* x" as a line comment and runs the union after it.
+		input:               "select 0--; /* x\nunion select 1 /* */",
+		outSQL:              "select 0--; /* x\nunion select 1 /* */",
+		outLeadingComments:  "",
+		outTrailingComments: "",
+	}, {
+		// A ';' after a line comment. The trim removes the newline that ends
+		// the line comment together with the ';', so the trailing comments get
+		// a newline in front. Without it, the line comment would end inside the
+		// block comment in the text that vtgate sends, and MySQL would run the
+		// union after it.
+		input:               "select 1 -- x\n; /* c\nunion select 2 /* */",
+		outSQL:              "select 1 -- x",
+		outLeadingComments:  "",
+		outTrailingComments: "\n /* c\nunion select 2 /* */",
+	}, {
+		// A ';' after any other token is still trimmed, and the block comment
+		// after it is still a trailing comment.
+		input:               "select 1; /*rule-tag*/",
+		outSQL:              "select 1",
+		outLeadingComments:  "",
+		outTrailingComments: " /*rule-tag*/",
+	}, {
+		// Three backticks after '@' start a name with a backtick in it, not an
+		// empty name, so the block comment after the name is a trailing comment.
+		input:               "select @```a` /*rule-tag*/",
+		outSQL:              "select @```a`",
+		outLeadingComments:  "",
+		outTrailingComments: " /*rule-tag*/",
+	}, {
+		// A /*!...*/ comment can contain SQL that MySQL executes. Therefore it
+		// stays in the query, also when a true trailing comment comes after it.
+		input:               "select 1 /*!80000 union select 2 */ /*b*/",
+		outSQL:              "select 1 /*!80000 union select 2 */",
+		outLeadingComments:  "",
+		outTrailingComments: " /*b*/",
+	}, {
+		// The same shape with no space between the two comments. The '*/' that
+		// closes the versioned comment has to be read as part of the query: if
+		// only its '*' is, the '/' that follows joins the next comment's '/*'
+		// and reads as a '//' line comment, which swallows the trailing comment
+		// and hides it from a query rule.
+		input:               "select 1 /*!80000 union select 2 *//*b*/",
+		outSQL:              "select 1 /*!80000 union select 2 */",
+		outLeadingComments:  "",
+		outTrailingComments: "/*b*/",
+	}, {
+		// A '*' inside a versioned comment that is not its closer is ordinary
+		// SQL, and a '*/' outside one still ends a real comment. This pins that
+		// the rule above stays narrow: this input is "2 * <comment> 3".
+		input:               "select 2*/*c*/3 /*tag*/",
+		outSQL:              "select 2*/*c*/3",
+		outLeadingComments:  "",
+		outTrailingComments: " /*tag*/",
+	}, {
+		// A versioned comment stays in the query whether or not its version
+		// applies: the parser skips this one, but a backend can be newer than the
+		// version the parser reads comments at.
+		input:               "select 1 /*!99999 union select 2 */ /*tag*/",
+		outSQL:              "select 1 /*!99999 union select 2 */",
+		outLeadingComments:  "",
+		outTrailingComments: " /*tag*/",
+	}, {
+		// A '*/' inside a string literal in a /*!...*/ comment does not end that
+		// comment, because MySQL reads the text inside as SQL. MySQL reads this
+		// input as "select '*/', 1". Therefore the block comment at the end is a
+		// trailing comment, and a query rule for it must still see it.
+		input:               "select /*! '*/', */ 1 /*rule-tag*/",
+		outSQL:              "select /*! '*/', */ 1",
+		outLeadingComments:  "",
+		outTrailingComments: " /*rule-tag*/",
+	}, {
+		// The same shape, but with a version the parser does not apply. The
+		// tokenizer skips such a comment to its first '*/' and gives quotes in it
+		// no meaning, so the comment ends inside the literal, and the block at the
+		// end is a trailing comment.
+		input:               "select 1 /*!99999 '*/ + 2 /*rule-tag*/",
+		outSQL:              "select 1 /*!99999 '*/ + 2",
+		outLeadingComments:  "",
+		outTrailingComments: " /*rule-tag*/",
+	}, {
+		// The same, with SQL after the '*/' that ends the skipped comment. The SQL
+		// stays in the query, and only the block comment at the end is trailing.
+		input:               "select 1 /*!99999 '*/ union select 2 /*rule-tag*/",
+		outSQL:              "select 1 /*!99999 '*/ union select 2",
+		outLeadingComments:  "",
+		outTrailingComments: " /*rule-tag*/",
+	}, {
+		// A skipped comment ends at its first '*/', inside the literal here, which
+		// leaves "b' */ /*rule-tag*/" with a literal that never closes. The
+		// tokenizer rejects the input, so nothing is split off it.
+		input:               "select 1 /*!99999 'a*/b' */ /*rule-tag*/",
+		outSQL:              "select 1 /*!99999 'a*/b' */ /*rule-tag*/",
+		outLeadingComments:  "",
+		outTrailingComments: "",
+	}, {
+		// The text of a line comment can end with '--'. Those two characters are
+		// already in the comment, so they cannot open a second comment. The block
+		// comment after the newline is still a trailing comment. A query rule for
+		// that comment reads MarginComments.Trailing, so the comment must go
+		// there.
+		input:               "select 1 -- body--\n/*rule-tag*/",
+		outSQL:              "select 1 -- body--",
+		outLeadingComments:  "",
+		outTrailingComments: "\n/*rule-tag*/",
+	}, {
+		// A form feed is a space for MySQL, so it is a space here too. It does not
+		// end the group of trailing comments, and the trim removes it. If it did
+		// end the group, the block comment would stay out of the trailing
+		// comments and a query rule for it would stop working.
+		input:               "select 1 /*rule-tag*/\f",
+		outSQL:              "select 1",
+		outLeadingComments:  "",
+		outTrailingComments: " /*rule-tag*/",
+	}, {
+		// A vertical tab is also a space for MySQL.
+		input:               "select 1 /*rule-tag*/\v",
+		outSQL:              "select 1",
+		outLeadingComments:  "",
+		outTrailingComments: " /*rule-tag*/",
+	}, {
+		// A space character does not end a group of trailing comments.
+		input:               "select 1 /*a*/\f/*b*/",
+		outSQL:              "select 1",
+		outLeadingComments:  "",
+		outTrailingComments: " /*a*/\f/*b*/",
+	}, {
+		// A no-break space is not a space for MySQL. MySQL reads it as part of an
+		// unquoted identifier and then reports an unknown column. Therefore the
+		// character stays in the query, and the parser rejects the query in the
+		// same way that MySQL does. Vitess must not remove the character and then
+		// run a statement that MySQL refuses.
+		input:               "select 1 /*rule-tag*/\u00a0",
+		outSQL:              "select 1 /*rule-tag*/\u00a0",
+		outLeadingComments:  "",
+		outTrailingComments: "",
 	}}
 	for _, testCase := range testCases {
 		t.Run(testCase.input, func(t *testing.T) {
@@ -146,6 +345,80 @@ func TestSplitComments(t *testing.T) {
 			assert.Equal(t, testCase.outLeadingComments, gotLeadingComments, "LeadingComments mismatch")
 			assert.Equal(t, testCase.outTrailingComments, gotTrailingComments, "TrailingCommints mismatch")
 		})
+	}
+}
+
+// TestMarginCommentRulesMatchTokenizer checks the space rules in this file
+// against the tokenizer for every byte value.
+//
+// SplitMarginComments trims spaces off the query, and then the parser reads only
+// the part that stays in the query. The two must agree about which bytes are
+// spaces. If they do not agree, the split can put SQL where nothing parses it.
+//
+// The tokenizer cannot call IsSQLSpace. It reads each byte as a uint16 value, so
+// that eofChar, which is 0x100, stays different from all 256 byte values. A byte
+// with the value 0 is legal in a query, so the tokenizer needs a value outside
+// the range of a byte to mark the end of the text. This test fails if somebody
+// changes one of the two definitions and not the other.
+func TestMarginCommentRulesMatchTokenizer(t *testing.T) {
+	parser := NewTestParser()
+
+	for b := range 256 {
+		c := byte(b)
+
+		// skipBlank must step over the byte only if IsSQLSpace accepts it.
+		blankTkn := parser.NewStringTokenizer(string(c) + "x")
+		blankTkn.skipBlank()
+		assert.Equal(t, IsSQLSpace(c), blankTkn.Pos == 1,
+			"skipBlank and IsSQLSpace disagree about byte 0x%02x", b)
+
+		// A '--' opens a comment only if a space character comes after it.
+		lineTkn := parser.NewStringTokenizer("--" + string(c))
+		lineTkn.AllowComments = true
+		typ, _ := lineTkn.Scan()
+		assert.Equal(t, IsSQLSpace(c), typ == COMMENT,
+			"the '--' rule and IsSQLSpace disagree about byte 0x%02x", b)
+	}
+}
+
+// TestSQLSpaceCharsMatchMySQL checks that the parser accepts the characters MySQL
+// treats as a space between two tokens, and no others.
+//
+// MySQL accepts six characters as a space. It does not accept a no-break space or
+// the other characters that unicode.IsSpace accepts. A no-break space can be part
+// of an unquoted identifier in MySQL, so MySQL reads it as a name and reports an
+// unknown column.
+//
+// The accepted set comes from IsSQLSpace rather than from a list written here, so
+// this test cannot hold a copy of the set that drifts from the one the code uses.
+//
+// Both directions matter. If the parser rejects a character that MySQL accepts,
+// Vitess refuses a query that works. If the parser accepts a character that
+// MySQL rejects, Vitess runs a query that MySQL refuses.
+func TestSQLSpaceCharsMatchMySQL(t *testing.T) {
+	parser := NewTestParser()
+
+	spaces := 0
+	for b := range 256 {
+		c := byte(b)
+		if !IsSQLSpace(c) {
+			continue
+		}
+		spaces++
+		sql := "select" + string(c) + "1 from" + string(c) + "t"
+		_, err := parser.Parse(sql)
+		// assert, not require: the point is to report every character the parser
+		// disagrees about, not to stop at the first one.
+		//nolint:testifylint // require-error would end the loop early
+		assert.NoError(t, err, "the parser must accept %q as a space", c)
+	}
+	// MySQL accepts exactly six characters as a space. A seventh would mean the
+	// set grew past what MySQL accepts.
+	assert.Equal(t, 6, spaces, "IsSQLSpace must accept exactly six characters")
+
+	for _, c := range []string{"\u0085", "\u00a0", "\u1680", "\u2000", "\u2028", "\u3000"} {
+		_, err := parser.Parse("select" + c + "1 from t")
+		assert.Error(t, err, "the parser must not accept %q as a space", c)
 	}
 }
 
@@ -215,6 +488,16 @@ a`,
 	}, {
 		input:  `-- foo bar`,
 		outSQL: "",
+	}, {
+		// The trim uses the SQL space set, so all six of those characters go.
+		input:  "\v\f select 1 \r\n",
+		outSQL: "select 1",
+	}, {
+		// A no-break space is not one of them. MySQL reads it as part of an
+		// unquoted identifier, so removing it here would report on a statement
+		// that is not the one the client sent.
+		input:  " select 1",
+		outSQL: " select 1",
 	}}
 	for _, testCase := range testCases {
 		gotSQL := StripLeadingComments(testCase.input)
