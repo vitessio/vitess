@@ -47,6 +47,8 @@ jobs:
     - name: Find the base of the pull request's merge commit
       # github.event.pull_request.base.sha is not updated when the base branch
       # moves, so paths-filter would also count the base branch's newer commits.
+      # With token: '', paths-filter diffs against `base` on pull_request
+      # events too (see its README); action.yml's input description is stale.
       id: merge-base
       if: github.event_name == 'pull_request'
       run: echo "sha=$(git rev-parse HEAD^1)" >> "$GITHUB_OUTPUT"
