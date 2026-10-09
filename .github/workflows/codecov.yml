@@ -42,12 +42,40 @@ jobs:
           echo "is_full_run=false" >> "$GITHUB_OUTPUT"
         fi
 
+    - name: Find the base of the pull request's merge commit
+      # github.event.pull_request.base.sha is not updated when the base branch
+      # moves, so paths-filter would also count the base branch's newer commits.
+      # With token: '', paths-filter diffs against `base` on pull_request
+      # events too (see its README); action.yml's input description is stale.
+      id: merge-base
+      if: github.event_name == 'pull_request'
+      run: echo "sha=$(git rev-parse HEAD^1)" >> "$GITHUB_OUTPUT"
+
     - name: Check for changes in files relevant to code coverage
       if: steps.mode.outputs.is_full_run != 'true'
       uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
       id: changes
       with:
         token: ''
+<<<<<<< HEAD
+||||||| parent of 239d13c194 (CI: diff paths-filter against the base of the pull request's merge commit (#21445))
+        # With 'every', a file is relevant only if it matches all patterns: any
+        # path from the brace-list, and not a test file in one of the endtoend
+        # test packages, which the coverage run never tests and which cannot
+        # be imported by unit tests. The endtoend trees are enumerated explicitly
+        # so that testdata fixtures whose paths merely contain an endtoend
+        # directory (e.g. under go/tools/ci-config) still count as relevant.
+        predicate-quantifier: 'every'
+=======
+        base: ${{ steps.merge-base.outputs.sha }}
+        # With 'every', a file is relevant only if it matches all patterns: any
+        # path from the brace-list, and not a test file in one of the endtoend
+        # test packages, which the coverage run never tests and which cannot
+        # be imported by unit tests. The endtoend trees are enumerated explicitly
+        # so that testdata fixtures whose paths merely contain an endtoend
+        # directory (e.g. under go/tools/ci-config) still count as relevant.
+        predicate-quantifier: 'every'
+>>>>>>> 239d13c194 (CI: diff paths-filter against the base of the pull request's merge commit (#21445))
         filters: |
           changed_files:
             - .github/workflows/codecov.yml
