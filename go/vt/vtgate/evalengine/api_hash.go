@@ -36,7 +36,7 @@ type HashCode = uint64
 // for two values that are considered equal by `NullsafeCompare`.
 func NullsafeHashcode(v sqltypes.Value, collation collations.ID, coerceType sqltypes.Type, sqlmode SQLMode, values *EnumSetValues) (HashCode, error) {
 	if coerceType == sqltypes.Unknown {
-		coerceType = v.Type()
+		coerceType = hashTypeForUnknown(v)
 	}
 	e, err := valueToEvalCast(v, coerceType, collation, values, sqlmode)
 	if err != nil {
@@ -74,18 +74,28 @@ const (
 
 var ErrHashCoercionIsNotExact = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot coerce into target type without losing precision")
 
+// hashTypeForUnknown returns the type to hash v by when the caller could not
+// determine a static type (the planner's unknown type, e.g. for an expression
+// inside a derived table). Numbers of any kind go through DECIMAL so that
+// values NullsafeCompare considers equal (1, 1.0, 1e0) still hash alike even
+// when they arrive with different numeric types. Other values keep the type
+// they arrived with; text with an unknown collation then reports
+// UnsupportedCollationHashError, which lets the caller switch to the weight
+// string the planner added for it.
+func hashTypeForUnknown(v sqltypes.Value) sqltypes.Type {
+	if sqltypes.IsNumber(v.Type()) {
+		return sqltypes.Decimal
+	}
+	return v.Type()
+}
+
 // NullsafeHashcode128 returns a 128-bit hashcode that is guaranteed to be the same
 // for two values that are considered equal by `NullsafeCompare`.
 // This can be used to avoid having to do comparison checks after a hash,
 // since we consider the 128 bits of entropy enough to guarantee uniqueness.
 func NullsafeHashcode128(hash *vthash.Hasher, v sqltypes.Value, collation collations.ID, coerceTo sqltypes.Type, sqlmode SQLMode, values *EnumSetValues) error {
-	// A caller that could not determine the static type (the planner's unknown
-	// type, e.g. for an expression inside a derived table) must still hash
-	// equal values alike. Hash the value as the type it arrived with; text with
-	// an unknown collation then reports UnsupportedCollationHashError, which
-	// lets the caller switch to the weight string the planner added for it.
 	if coerceTo == sqltypes.Unknown {
-		coerceTo = v.Type()
+		coerceTo = hashTypeForUnknown(v)
 	}
 	switch {
 	case v.IsNull(), sqltypes.IsNull(coerceTo):
