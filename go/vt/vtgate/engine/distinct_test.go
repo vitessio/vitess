@@ -183,6 +183,38 @@ func TestDistinctStreamAsync(t *testing.T) {
 [VARCHAR("a") INT64(1) INT64(1) VARCHAR("t")]]`, qr.Rows))
 }
 
+// TestDistinctUnknownTypeUsesWeightString checks that DISTINCT over a column
+// whose type or collation the planner could not determine (an expression
+// inside a derived table) still separates distinct values, by using the
+// weight string the planner added instead of hashing every value alike.
+func TestDistinctUnknownTypeUsesWeightString(t *testing.T) {
+	offsetOne := 1
+	for name, typ := range map[string]evalengine.Type{
+		"unknown type":      evalengine.NewUnknownType(),
+		"unknown collation": evalengine.NewType(sqltypes.VarChar, collations.Unknown),
+	} {
+		t.Run(name, func(t *testing.T) {
+			input := r("x|weight_string(x)",
+				"varchar|varbinary",
+				"zoe|1F211DDD1CAA",
+				"null|null",
+				"p|1E0C")
+			distinct := &Distinct{
+				Source:    &fakePrimitive{results: []*sqltypes.Result{input}},
+				CheckCols: []CheckCol{{Col: 0, WsCol: &offsetOne, Type: typ}},
+				Truncate:  1,
+			}
+
+			qr, err := distinct.TryExecute(t.Context(), &noopVCursor{}, nil, true)
+			require.NoError(t, err)
+
+			got := fmt.Sprintf("%v", qr.Rows)
+			expected := fmt.Sprintf("%v", r("x", "varchar", "zoe", "null", "p").Rows)
+			utils.MustMatch(t, expected, got)
+		})
+	}
+}
+
 func TestWeightStringFallBack(t *testing.T) {
 	offsetOne := 1
 	checkCols := []CheckCol{{

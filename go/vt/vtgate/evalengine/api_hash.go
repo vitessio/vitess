@@ -35,6 +35,9 @@ type HashCode = uint64
 // NullsafeHashcode returns an int64 hashcode that is guaranteed to be the same
 // for two values that are considered equal by `NullsafeCompare`.
 func NullsafeHashcode(v sqltypes.Value, collation collations.ID, coerceType sqltypes.Type, sqlmode SQLMode, values *EnumSetValues) (HashCode, error) {
+	if coerceType == sqltypes.Unknown {
+		coerceType = v.Type()
+	}
 	e, err := valueToEvalCast(v, coerceType, collation, values, sqlmode)
 	if err != nil {
 		return 0, err
@@ -76,6 +79,14 @@ var ErrHashCoercionIsNotExact = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "
 // This can be used to avoid having to do comparison checks after a hash,
 // since we consider the 128 bits of entropy enough to guarantee uniqueness.
 func NullsafeHashcode128(hash *vthash.Hasher, v sqltypes.Value, collation collations.ID, coerceTo sqltypes.Type, sqlmode SQLMode, values *EnumSetValues) error {
+	// A caller that could not determine the static type (the planner's unknown
+	// type, e.g. for an expression inside a derived table) must still hash
+	// equal values alike. Hash the value as the type it arrived with; text with
+	// an unknown collation then reports UnsupportedCollationHashError, which
+	// lets the caller switch to the weight string the planner added for it.
+	if coerceTo == sqltypes.Unknown {
+		coerceTo = v.Type()
+	}
 	switch {
 	case v.IsNull(), sqltypes.IsNull(coerceTo):
 		hash.Write16(hashPrefixNil)
