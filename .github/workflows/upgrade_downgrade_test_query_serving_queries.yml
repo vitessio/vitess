@@ -47,11 +47,21 @@ jobs:
         echo $previous_release_ref
         echo "previous_release_ref=${previous_release_ref}" >> $GITHUB_OUTPUT
 
+    - name: Find the base of the pull request's merge commit
+      # github.event.pull_request.base.sha is not updated when the base branch
+      # moves, so paths-filter would also count the base branch's newer commits.
+      # With token: '', paths-filter diffs against `base` on pull_request
+      # events too (see its README); action.yml's input description is stale.
+      id: merge-base
+      if: github.event_name == 'pull_request'
+      run: echo "sha=$(git rev-parse HEAD^1)" >> "$GITHUB_OUTPUT"
+
     - name: Check for changes in relevant files
       uses: dorny/paths-filter@ebc4d7e9ebcb0b1eb21480bb8f43113e996ac77a # v3.0.1
       id: changes
       with:
         token: ''
+        base: ${{ steps.merge-base.outputs.sha }}
         filters: |
           end_to_end:
             - 'test/config.json'
