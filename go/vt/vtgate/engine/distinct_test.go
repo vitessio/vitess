@@ -237,6 +237,33 @@ func TestDistinctUnknownTypeUsesWeightString(t *testing.T) {
 		require.NoError(t, err)
 		utils.MustMatch(t, "[[INT64(1)] [UINT64(2)]]", fmt.Sprintf("%v", qr.Rows))
 	})
+
+	// Around 2^53 a float64 can no longer tell neighbouring integers apart.
+	// Hashing unknown-typed numbers through DECIMAL keeps the two integers
+	// distinct and still merges the float that is exactly equal to one of
+	// them; the integer 2^53+1 is not merged into the float 2^53 even though
+	// NullsafeCompare would coerce that pair to float64, which is the
+	// documented limit of hashing without a static type.
+	t.Run("large integers near 2^53", func(t *testing.T) {
+		input := &sqltypes.Result{
+			Fields: sqltypes.MakeTestFields("x|weight_string(x)", "decimal|varbinary"),
+			Rows: []sqltypes.Row{
+				{sqltypes.NewInt64(9007199254740993), sqltypes.NULL},
+				{sqltypes.NewInt64(9007199254740992), sqltypes.NULL},
+				{sqltypes.NewFloat64(9007199254740992), sqltypes.NULL},
+				{sqltypes.NewInt64(9007199254740993), sqltypes.NULL},
+			},
+		}
+		distinct := &Distinct{
+			Source:    &fakePrimitive{results: []*sqltypes.Result{input}},
+			CheckCols: []CheckCol{{Col: 0, WsCol: &offsetOne, Type: evalengine.NewUnknownType()}},
+			Truncate:  1,
+		}
+
+		qr, err := distinct.TryExecute(t.Context(), &noopVCursor{}, nil, true)
+		require.NoError(t, err)
+		utils.MustMatch(t, "[[INT64(9007199254740993)] [INT64(9007199254740992)]]", fmt.Sprintf("%v", qr.Rows))
+	})
 }
 
 func TestWeightStringFallBack(t *testing.T) {
