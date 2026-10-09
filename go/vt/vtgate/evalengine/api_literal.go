@@ -141,32 +141,45 @@ func parseHexLiteral(val []byte) ([]byte, error) {
 	return raw, nil
 }
 
+// echoLiteral bounds a caller-controlled payload for an error message, the
+// way sqltypes caps its literal errors.
+func echoLiteral(val []byte) []byte {
+	const maxEcho = 64
+	if len(val) <= maxEcho {
+		return val
+	}
+	return append(append([]byte{}, val[:maxEcho]...), "…"...)
+}
+
+// parseHexNumber decodes a 0x-prefixed hex literal. Malformed input is an
+// error, not a panic: a bind variable can reach here without going through the
+// parser. val is never written to: it is the shared bvar.Value, which
+// Concatenate.parallelExec reads from several goroutines at once, and
+// hex.DecodeBytes pads an odd digit count itself.
 func parseHexNumber(val []byte) ([]byte, error) {
-	if val[0] != '0' || val[1] != 'x' {
-		panic("malformed hex literal from parser")
+	if len(val) < 2 || val[0] != '0' || val[1] != 'x' {
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "malformed hex literal: %q (missing 0x prefix)", echoLiteral(val))
 	}
-	if len(val)%2 == 0 {
-		return parseHexLiteral(val[2:])
+	return parseHexLiteral(val[2:])
+}
+
+// parseHexValLiteral decodes an x'...' hex string literal. Malformed input is
+// an error, not a panic, for the same reason as parseHexNumber.
+func parseHexValLiteral(val []byte) ([]byte, error) {
+	if len(val) < 3 || (val[0] != 'x' && val[0] != 'X') || val[1] != '\'' || val[len(val)-1] != '\'' {
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "malformed hex literal: %q (expected x'...')", echoLiteral(val))
 	}
-	// If the hex literal doesn't have an even amount of hex digits, we need
-	// to pad it with a '0' in the left. Instead of allocating a new slice
-	// for padding pad in-place by replacing the 'x' in the original slice with
-	// a '0', and clean it up after parsing.
-	val[1] = '0'
-	defer func() {
-		val[1] = 'x'
-	}()
-	return parseHexLiteral(val[1:])
+	return parseHexLiteral(val[2 : len(val)-1])
 }
 
 func parseBitNum(val []byte) ([]byte, error) {
-	if val[0] != '0' || val[1] != 'b' {
-		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "malformed Bit literal: %q (missing 0b prefix)", val)
+	if len(val) < 2 || val[0] != '0' || val[1] != 'b' {
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "malformed Bit literal: %q (missing 0b prefix)", echoLiteral(val))
 	}
 	var i big.Int
 	_, ok := i.SetString(hack.String(val)[2:], 2)
 	if !ok {
-		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "malformed Bit literal: %q (not base 2)", val)
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "malformed Bit literal: %q (not base 2)", echoLiteral(val))
 	}
 	return i.Bytes(), nil
 }

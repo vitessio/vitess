@@ -345,6 +345,56 @@ func TestComStmtExecute(t *testing.T) {
 	require.Equal(t, uint32(18), stmtID, "Parsed incorrect values")
 }
 
+// TestComStmtExecuteDecimalParameterIsValidated pins that a binary-protocol
+// prepared statement is covered by vtgate's bind variable gate. The client
+// picks each parameter's type, and a MYSQL_TYPE_NEWDECIMAL parameter's bytes
+// are copied verbatim into a DECIMAL bind variable, a type the encoders write
+// into a statement unquoted. Before the gate rejected over-long decimals this
+// payload passed sqltypes.NewValue and reached the tablet as SQL text, so a
+// MySQL-protocol client had the same splice as a gRPC caller.
+func TestComStmtExecuteDecimalParameterIsValidated(t *testing.T) {
+	listener, sConn, cConn := createSocketPair(t)
+	t.Cleanup(func() {
+		listener.Close()
+		sConn.Close()
+		cConn.Close()
+	})
+
+	prepare := &PrepareData{
+		StatementID: 1,
+		PrepareStmt: "select * from test_table where id = :v1",
+		ParamsCount: 1,
+		ParamsType:  make([]int32, 1),
+		BindVars:    map[string]*querypb.BindVariable{},
+	}
+	payload := []byte(strings.Repeat("1", 80) + "; drop table test_table #")
+	data := []byte{
+		ComStmtExecute,
+		1, 0, 0, 0, // statement id
+		0,          // cursor flags
+		1, 0, 0, 0, // iteration count
+		0,       // null bitmap
+		1,       // new params bound
+		0xf6, 0, // MYSQL_TYPE_NEWDECIMAL, no flags
+		byte(len(payload)), // length-encoded string
+	}
+	data = append(data, payload...)
+
+	stmtID, _, err := sConn.parseComStmtExecute(map[uint32]*PrepareData{1: prepare}, data)
+	require.NoError(t, err)
+	require.EqualValues(t, 1, stmtID)
+
+	// The client's bytes, unparsed, under the type the client chose.
+	bv := prepare.BindVars["v1"]
+	require.NotNil(t, bv)
+	assert.Equal(t, querypb.Type_DECIMAL, bv.Type)
+	assert.Equal(t, payload, bv.Value)
+
+	// vtgate.Execute runs this before anything else.
+	err = sqltypes.ValidateBindVariables(prepare.BindVars)
+	require.ErrorContains(t, err, "v1: invalid DECIMAL literal")
+}
+
 func TestComStmtExecuteUpdStmt(t *testing.T) {
 	listener, sConn, cConn := createSocketPair(t)
 	defer func() {

@@ -497,16 +497,30 @@ func TestPlanExecutorSetUDV(t *testing.T) {
 	}, {
 		in:  "set @foo = 2.1, @bar = 'baz'",
 		out: &vtgatepb.Session{UserDefinedVariables: createMap([]string{"foo", "bar"}, []any{sqltypes.DecimalString("2.1"), "baz"}), Autocommit: true},
+	}, {
+		// A parenthesized scalar is not a row value.
+		in:  "set @foo = (2)",
+		out: &vtgatepb.Session{UserDefinedVariables: createMap([]string{"foo"}, []any{2}), Autocommit: true},
+	}, {
+		// MySQL rejects a row value here with 1241. Stored, the tuple could
+		// never be read back: every reference to the variable failed.
+		in:  "set @foo = (1, 2)",
+		err: "Operand should contain 1 column(s)",
+	}, {
+		in:  "set @foo = ((1, 2), 3)",
+		err: "Operand should contain 1 column(s)",
 	}}
 	for _, tcase := range testcases {
 		t.Run(tcase.in, func(t *testing.T) {
 			session := econtext.NewSafeSession(&vtgatepb.Session{Autocommit: true})
 			_, err := executorExecSession(ctx, executor, session, tcase.in, nil)
-			if err != nil {
+			if tcase.err != "" {
 				require.EqualError(t, err, tcase.err)
-			} else {
-				utils.MustMatch(t, tcase.out, session.Session, "session output was not as expected")
+				assert.Empty(t, session.UserDefinedVariables, "a rejected SET must not store the variable")
+				return
 			}
+			require.NoError(t, err)
+			utils.MustMatch(t, tcase.out, session.Session, "session output was not as expected")
 		})
 	}
 }
