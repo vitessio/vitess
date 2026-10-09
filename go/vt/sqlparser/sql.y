@@ -1929,6 +1929,15 @@ column_attribute_list_opt:
     $1.OnUpdate = $4
     $$ = $1
   }
+| column_attribute_list_opt SERIAL DEFAULT VALUE
+  {
+    // SERIAL DEFAULT VALUE implies NOT NULL, which overrides an earlier NULL.
+    if $1.Null != nil && *$1.Null {
+      $1.Null = nil
+    }
+    $1.SerialDefaultValue = true
+    $$ = $1
+  }
 | column_attribute_list_opt AUTO_INCREMENT
   {
     $1.Autoincrement = true

@@ -829,6 +829,10 @@ func TestBuildPermissions(t *testing.T) {
 		input:  "create table if not exists __drizzle_migrations (id serial primary key, hash text not null, created_at bigint)",
 		output: []Permission{{TableName: "__drizzle_migrations", Role: tableacl.ADMIN}},
 	}, {
+		// A SERIAL DEFAULT VALUE column attribute is parsed too.
+		input:  "create table t (id int serial default value)",
+		output: []Permission{{TableName: "t", Role: tableacl.ADMIN}},
+	}, {
 		// A partially parsed DDL other than CREATE TABLE stays as it was.
 		input: "alter table t bogus",
 		output: []Permission{{

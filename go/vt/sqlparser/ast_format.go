@@ -998,6 +998,9 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 		if ct.Options.Autoincrement {
 			buf.astPrintf(ct, " %s", keywordStrings[AUTO_INCREMENT])
 		}
+		if ct.Options.SerialDefaultValue {
+			buf.astPrintf(ct, " %s %s %s", keywordStrings[SERIAL], keywordStrings[DEFAULT], keywordStrings[VALUE])
+		}
 		if ct.Options.Comment != nil {
 			buf.astPrintf(ct, " %s %v", keywordStrings[COMMENT_KEYWORD], ct.Options.Comment)
 		}
