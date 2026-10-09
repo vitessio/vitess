@@ -167,3 +167,43 @@ func isCommentsAndWhitespaceOnly(parser *Parser, text string) bool {
 		}
 	}
 }
+
+// FuzzSplitMarginCommentsSkipsTokenizer checks that SplitMarginComments, which
+// reads only the leading comments of text that does not end with '*/', splits
+// every input the tokenizer accepts exactly where tokenizedMarginBounds does.
+func FuzzSplitMarginCommentsSkipsTokenizer(f *testing.F) {
+	seeds := []string{
+		"/* a */ select 1",
+		"/* a */ select 1 /* b */",
+		"/* a */ /*!80000 select 1 */",
+		"/* a",
+		"/**/#0",
+		"select 1 -- */",
+		"select 1 -- x\n/*b*/",
+		"select 0--/**/",
+		"select 1;",
+		"/* a */ select 1; ",
+		" \v\f/* a */\tselect 1\r\n",
+	}
+	for _, s := range seeds {
+		f.Add(s)
+	}
+	parser := NewTestParser()
+	f.Fuzz(func(t *testing.T, sql string) {
+		start, end, newlineFirst, ok := parser.tokenizedMarginBounds(sql)
+		if !ok {
+			return
+		}
+		want := MarginComments{
+			Leading:  strings.TrimLeft(sql[:start], sqlSpaceChars),
+			Trailing: strings.TrimRight(sql[end:], sqlSpaceChars),
+		}
+		if newlineFirst {
+			want.Trailing = "\n" + want.Trailing
+		}
+		query, comments := parser.SplitMarginComments(sql)
+		require.Equal(t, strings.Trim(sql[start:end], sqlSpaceChars+";"), query,
+			"query differs from the tokenizer's (from %q)", sql)
+		require.Equal(t, want, comments, "margins differ from the tokenizer's (from %q)", sql)
+	})
+}

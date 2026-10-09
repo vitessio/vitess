@@ -351,9 +351,9 @@ func TestSplitComments(t *testing.T) {
 // TestMarginCommentRulesMatchTokenizer checks the space rules in this file
 // against the tokenizer for every byte value.
 //
-// trailingCommentStart splits the query, and then the parser reads only the part
-// that stays in the query. The two must agree about which bytes are spaces. If
-// they do not agree, the split can put SQL where nothing parses it.
+// SplitMarginComments trims spaces off the query, and then the parser reads only
+// the part that stays in the query. The two must agree about which bytes are
+// spaces. If they do not agree, the split can put SQL where nothing parses it.
 //
 // The tokenizer cannot call IsSQLSpace. It reads each byte as a uint16 value, so
 // that eofChar, which is 0x100, stays different from all 256 byte values. A byte
@@ -372,26 +372,12 @@ func TestMarginCommentRulesMatchTokenizer(t *testing.T) {
 		assert.Equal(t, IsSQLSpace(c), blankTkn.Pos == 1,
 			"skipBlank and IsSQLSpace disagree about byte 0x%02x", b)
 
-		// A '--' opens a comment only if a space character comes after it, so
-		// isLineCommentStart must agree with the tokenizer for every byte.
-		lineComment := "--" + string(c)
-		lineTkn := parser.NewStringTokenizer(lineComment)
+		// A '--' opens a comment only if a space character comes after it.
+		lineTkn := parser.NewStringTokenizer("--" + string(c))
 		lineTkn.AllowComments = true
 		typ, _ := lineTkn.Scan()
-		assert.Equal(t, isLineCommentStart(lineComment, 0), typ == COMMENT,
-			"isLineCommentStart and the tokenizer disagree about byte 0x%02x", b)
-
-		// '#' and '//' open a comment whatever follows them, unlike '--'. Cover
-		// them too, so the agreement is checked for every spelling of a line
-		// comment rather than only the one with a condition on it.
-		for _, opener := range []string{"#", "//"} {
-			body := opener + string(c)
-			bodyTkn := parser.NewStringTokenizer(body)
-			bodyTkn.AllowComments = true
-			typ, _ := bodyTkn.Scan()
-			assert.Equal(t, isLineCommentStart(body, 0), typ == COMMENT,
-				"isLineCommentStart and the tokenizer disagree about %q followed by byte 0x%02x", opener, b)
-		}
+		assert.Equal(t, IsSQLSpace(c), typ == COMMENT,
+			"the '--' rule and IsSQLSpace disagree about byte 0x%02x", b)
 	}
 }
 
@@ -434,59 +420,6 @@ func TestSQLSpaceCharsMatchMySQL(t *testing.T) {
 		_, err := parser.Parse("select" + c + "1 from t")
 		assert.Error(t, err, "the parser must not accept %q as a space", c)
 	}
-}
-
-// TestCommentScanHelpers covers the boundaries that trailingCommentStart depends
-// on, including the inputs that have no end.
-func TestCommentScanHelpers(t *testing.T) {
-	t.Run("skipQuoted", func(t *testing.T) {
-		tests := []struct {
-			in               string
-			backslashEscapes bool
-			want             int
-		}{
-			{`'a'`, true, 3},
-			{`''`, true, 2},
-			{`'a''b'`, true, 6},   // two quotes together are one quote
-			{`'a\'b'`, true, 6},   // a backslash escapes the quote
-			{`'a\'`, true, -1},    // the escaped quote does not end the text
-			{`'a\\'`, true, 5},    // an escaped backslash does not escape the quote
-			{`'a`, true, -1},      // no end
-			{`'a\`, true, -1},     // a backslash at the end
-			{`"a\"b"`, true, 6},   // a double quote follows the same rules
-			{"`a`", false, 3},     // an identifier has no backslash escapes
-			{"`a``b`", false, 6},  // two backticks together are one backtick
-			{"`a\\`", false, 4},   // a backslash does not escape the backtick
-			{"`a", false, -1},     // no end
-			{`'a /* b'`, true, 8}, // a comment mark in a literal is only text
-		}
-		for _, tc := range tests {
-			t.Run(tc.in, func(t *testing.T) {
-				assert.Equal(t, tc.want, skipQuoted(tc.in, 0, tc.backslashEscapes))
-			})
-		}
-	})
-
-	t.Run("blockCommentEnd", func(t *testing.T) {
-		tests := []struct {
-			in   string
-			want int
-		}{
-			{`/**/`, 4},
-			{`/* a */`, 7},
-			{`/***/`, 5},   // the extra star is part of the text
-			{`/*/`, -1},    // a '/' alone does not close the comment
-			{`/*`, -1},     // no end
-			{`/*a*`, -1},   // a star at the end does not close the comment
-			{`/*a*/b`, 5},  // the index stops after the '*/'
-			{`/*a*/*/`, 5}, // the first '*/' ends the comment
-		}
-		for _, tc := range tests {
-			t.Run(tc.in, func(t *testing.T) {
-				assert.Equal(t, tc.want, blockCommentEnd(tc.in, 0))
-			})
-		}
-	})
 }
 
 func TestStripLeadingComments(t *testing.T) {
