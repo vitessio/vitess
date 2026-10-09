@@ -76,7 +76,7 @@
         - [Connections whose certificate revocation cannot be checked against a configured CRL are rejected](#vttls-crl-fail-closed)
         - [Optional gRPC TLS: connections are counted by transport](#grpc-optional-tls-connections)
         - [ORCA metrics now report QPS and EPS](#grpc-orca-qps)
-        - [Trailing comment detection and whitespace in the SQL parser](#sqlparser-margin-comment-split)
+        - [Statements are trimmed of MySQL's space characters only](#sqlparser-mysql-space-set)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -858,14 +858,6 @@ With `--grpc-enable-orca-metrics`, gRPC servers now report QPS and EPS in their 
 
 Clients using gRPC's standard `weighted_round_robin` policy with `enableOobLoadReport: true` ignore reports without QPS, so they previously fell back to plain round robin. After upgrading a server that has `--grpc-enable-orca-metrics` set, those clients switch to weighted routing with no configuration change. The policy weighs each server by its QPS, CPU utilization, and error rate.
 
-#### <a id="sqlparser-margin-comment-split"/>Trailing comment detection and whitespace in the SQL parser</a>
+#### <a id="sqlparser-mysql-space-set"/>Statements are trimmed of MySQL's space characters only</a>
 
-VTGate and VTTablet separate a query's leading and trailing comments from the statement before they plan it, and query rules match those comments. The comments are now found by reading the query the way the parser does, so text in a string literal, a quoted identifier, a line comment or a `/*!...*/` versioned comment is never taken for a margin comment.
-
-User-visible consequences:
-
-- **`\v` and `\f` are now a space between two tokens.** MySQL treats them as spaces, and now Vitess does too, so `select 1\vfrom t` and `select 0\f` parse where they were rejected before. This affects all parsing, not only comment detection.
-- **Characters outside MySQL's space set are no longer removed from a statement.** Vitess trimmed statements with `unicode.IsSpace`, which accepts a no-break space among others. Such a character now stays in the statement and the parser rejects it, which is what MySQL does — `select 0` followed by a no-break space is `unknown column '0 '` to MySQL. Vitess previously removed the character and ran a statement MySQL refuses.
-- **Statement-type detection and `vtexplain` trim the same set**, so they report on the statement as MySQL reads it.
-
-Query rules that match `trailingComment` match only comments that end the statement as the parser reads it. A `*/` at the end of a query that does not close a block comment no longer makes the text before it a trailing comment, so such a rule no longer matches it. A `/*!...*/` versioned comment is always part of the statement. Rules keyed on a comment appended after a versioned comment or after a line comment still match.
+VTGate and VTTablet trim whitespace from the start and end of a statement before they parse it. They used to trim every Unicode space character, including the no-break space (U+00A0), which MySQL does not treat as a space. They now trim only the characters MySQL treats as spaces: space, tab, line feed, vertical tab, form feed and carriage return. A statement that starts or ends with any other space character is now rejected with a syntax error, as MySQL rejects it, where Vitess used to remove the character and run the statement. Clients that send such characters must remove them before upgrading.
