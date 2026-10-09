@@ -871,6 +871,23 @@ func TestCompilerSingle(t *testing.T) {
 			expression: `GREATEST(JSON_OBJECT(), JSON_ARRAY())`,
 			result:     `VARCHAR("{}")`,
 		},
+		{
+			// TRIM with a remstr removes every repeated occurrence, not only one.
+			expression: `TRIM(BOTH 'x' FROM 'xxxbarxxx')`,
+			result:     `VARCHAR("bar")`,
+		},
+		{
+			expression: `TRIM('x' FROM 'xxxbarxxx')`,
+			result:     `VARCHAR("bar")`,
+		},
+		{
+			expression: `TRIM(LEADING 'ab' FROM 'ababcab')`,
+			result:     `VARCHAR("cab")`,
+		},
+		{
+			expression: `TRIM(TRAILING '0' FROM '1.500')`,
+			result:     `VARCHAR("1.5")`,
+		},
 	}
 
 	tz, _ := time.LoadLocation("Europe/Madrid")
