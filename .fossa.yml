@@ -9,3 +9,10 @@ targets:
   exclude:
     - type: maven
       path: java
+
+# Exclude the Go modules under tools/. They pin developer tooling (linters,
+# formatters, test runners) that is built and run during development and CI,
+# but is not part of the Vitess code or its distributed binaries.
+paths:
+  exclude:
+    - ./tools
