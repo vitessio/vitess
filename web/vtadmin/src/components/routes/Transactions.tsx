@@ -114,7 +114,11 @@ export const Transactions = () => {
                                     </ShardLink>
                                 );
                             })
-                            .reduce((prev, curr) => [prev, ', ', curr])}
+                            .reduce((prev, curr) => (
+                                <>
+                                    {prev}, {curr}
+                                </>
+                            ))}
                     </DataCell>
                     <DataCell>
                         <div className="font-sans whitespace-nowrap">{formatDateTime(row.time_created)}</div>

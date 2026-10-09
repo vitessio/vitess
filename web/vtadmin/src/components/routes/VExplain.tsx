@@ -50,7 +50,7 @@ export const VExplain = () => {
         { cluster_id: clusterID, keyspace: keyspaceName, sql: fetchVExplainRequestSql() },
         {
             // Never cache, never refetch.
-            cacheTime: 0,
+            gcTime: 0,
             enabled: false,
             refetchOnWindowFocus: false,
             retry: false,
