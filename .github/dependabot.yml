@@ -40,14 +40,11 @@ updates:
           - "golang.org/x/tools"
 
   # Every requirement in a tools/* module is "// indirect", because the module
-  # exists only for its tool directive. Allow the tool module itself and
-  # nothing else: the tool's own dependencies stay at the versions it pins.
+  # exists only for its tool directive. Each tool gets its own entry that
+  # allows the tool module itself and nothing else, so each bump is its own PR
+  # and the tool's own dependencies stay at the versions it pins.
   - package-ecosystem: "gomod"
-    directories:
-      - "/tools/addlicense"
-      - "/tools/gofumpt"
-      - "/tools/gotestsum"
-      - "/tools/goyacc"
+    directory: "/tools/addlicense"
     schedule:
       interval: "weekly"
     cooldown:
@@ -55,19 +52,17 @@ updates:
     allow:
       - dependency-name: "github.com/google/addlicense"
         dependency-type: "all"
+
+  - package-ecosystem: "gomod"
+    directory: "/tools/gofumpt"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 14
+    allow:
       - dependency-name: "mvdan.cc/gofumpt"
         dependency-type: "all"
-      - dependency-name: "gotest.tools/gotestsum"
-        dependency-type: "all"
-      - dependency-name: "github.com/vitessio/goyacc"
-        dependency-type: "all"
-    groups:
-      go-tools:
-        patterns:
-          - "*"
 
-  # goimports ships in golang.org/x/tools, which the other tool modules also
-  # require; allowing it in the entry above would bump it past their pins.
   - package-ecosystem: "gomod"
     directory: "/tools/goimports"
     schedule:
@@ -78,7 +73,6 @@ updates:
       - dependency-name: "golang.org/x/tools"
         dependency-type: "all"
 
-  # golangci-lint bumps can change lint findings; keep them in their own PR.
   - package-ecosystem: "gomod"
     directory: "/tools/golangci-lint"
     schedule:
@@ -87,6 +81,26 @@ updates:
       default-days: 14
     allow:
       - dependency-name: "github.com/golangci/golangci-lint/v2"
+        dependency-type: "all"
+
+  - package-ecosystem: "gomod"
+    directory: "/tools/gotestsum"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 14
+    allow:
+      - dependency-name: "gotest.tools/gotestsum"
+        dependency-type: "all"
+
+  - package-ecosystem: "gomod"
+    directory: "/tools/goyacc"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 14
+    allow:
+      - dependency-name: "github.com/vitessio/goyacc"
         dependency-type: "all"
 
   - package-ecosystem: "github-actions"
