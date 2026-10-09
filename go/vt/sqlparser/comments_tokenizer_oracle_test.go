@@ -26,13 +26,15 @@ import (
 // tokenizerMarginBounds is the reference for SplitMarginComments: it finds the
 // statement in sql with the tokenizer the parser uses. It returns the part
 // [start, end) of sql that is not a margin comment, and ok is false when the
-// tokenizer rejects sql.
+// tokenizer rejects sql. newlineFirst reports that the trailing comments must
+// start with a newline, because trimming the query removes the one that ends
+// its last line comment.
 //
 // Only block comment tokens and the spaces around them are margin. Everything
 // else the tokenizer reads is statement: every other token, a line comment up
 // to its newline, and the bytes of a /*!...*/ comment that Scan steps over
 // without returning a token, which show up between two tokens.
-func tokenizerMarginBounds(parser *Parser, sql string) (start, end int, ok bool) {
+func tokenizerMarginBounds(parser *Parser, sql string) (start, end int, newlineFirst, ok bool) {
 	tkn := parser.NewStringTokenizer(sql)
 	start = -1
 	keep := func(from, to int) {
@@ -41,48 +43,64 @@ func tokenizerMarginBounds(parser *Parser, sql string) (start, end int, ok bool)
 		}
 		end = to
 	}
-	var lastTyp int
+	// lastTyp and stmtEnd describe the query without the ';' tokens at its
+	// end, which SplitMarginComments trims.
+	var lastTyp, stmtEnd int
 	for {
 		before := tkn.Pos
 		typ, val := tkn.Scan()
 		if typ == LEX_ERROR {
-			return 0, len(sql), false
+			return 0, len(sql), false, false
 		}
 		if gap := sql[before:tkn.currStart]; strings.Trim(gap, sqlSpaceChars) != "" {
 			keep(before+len(gap)-len(strings.TrimLeft(gap, sqlSpaceChars)),
 				before+len(strings.TrimRight(gap, sqlSpaceChars)))
+			stmtEnd = end
 		}
 		switch {
 		case typ == 0:
 			if start < 0 {
-				return 0, 0, true
+				return 0, 0, false, true
 			}
-			// "select 0--/**/": cutting off the comment would leave a '--' that
-			// the end of the text turns into a comment. Without a trailing
-			// comment nothing is cut there, and the '--' reads the same.
-			if lastTyp == '-' && strings.HasSuffix(sql[:end], "--") && strings.Trim(sql[end:], sqlSpaceChars) != "" {
-				// The leading comments are at the start of the text, so cutting
-				// them off changes nothing after them.
-				return start, len(sql), true
+			// Without a trailing comment nothing is cut off the end, and the
+			// query reads the same.
+			if strings.Trim(sql[end:], sqlSpaceChars) == "" {
+				return start, end, false, true
 			}
-			return start, end, true
+			// "select 0--/**/" and "select 0--;/**/": cutting off the comment
+			// and trimming the ';' would leave a '--' that the end of the text
+			// turns into a comment.
+			//
+			// The leading comments are at the start of the text, so cutting them
+			// off changes nothing after them.
+			if lastTyp == '-' && strings.HasSuffix(sql[:stmtEnd], "--") {
+				return start, len(sql), false, true
+			}
+			// "select 1 -- x\n;/**/": the trim removes the newline that ends the
+			// line comment.
+			return start, end, lastTyp == COMMENT && stmtEnd < end, true
 		case typ == COMMENT && strings.HasPrefix(val, "/*"):
 		case typ == COMMENT:
 			keep(tkn.currStart, tkn.currStart+len(strings.TrimSuffix(val, "\n")))
-			lastTyp = typ
+			lastTyp, stmtEnd = typ, end
+		case typ == ';':
+			keep(tkn.currStart, tkn.Pos)
 		default:
 			keep(tkn.currStart, tkn.Pos)
-			lastTyp = typ
+			lastTyp, stmtEnd = typ, end
 		}
 	}
 }
 
 // tokenizerSplit is SplitMarginComments computed from tokenizerMarginBounds.
 func tokenizerSplit(parser *Parser, sql string) (query string, comments MarginComments, ok bool) {
-	start, end, ok := tokenizerMarginBounds(parser, sql)
+	start, end, newlineFirst, ok := tokenizerMarginBounds(parser, sql)
 	comments = MarginComments{
 		Leading:  strings.TrimLeft(sql[:start], sqlSpaceChars),
 		Trailing: strings.TrimRight(sql[end:], sqlSpaceChars),
+	}
+	if newlineFirst {
+		comments.Trailing = "\n" + comments.Trailing
 	}
 	return strings.Trim(sql[start:end], sqlSpaceChars+";"), comments, ok
 }
@@ -113,6 +131,9 @@ func FuzzSplitMarginCommentsMatchesTokenizer(f *testing.F) {
 		"0e--\n/**/",
 		"/**/0e--",
 		"/**/--/**/",
+		"select 0--; /* x\nunion select 1 /* */",
+		"select 1 -- x\n; /* c */",
+		"select @```a` /* c */",
 	}
 	for _, s := range seeds {
 		f.Add(s)

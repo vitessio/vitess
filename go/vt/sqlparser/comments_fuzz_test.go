@@ -17,6 +17,7 @@ limitations under the License.
 package sqlparser
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -33,10 +34,14 @@ import (
 //
 //  1. Trailing contains only spaces and complete comments.
 //  2. When we add the margin comments to the query again, the statement stays
-//     the same. Leading+query+Trailing must give the same AST as query alone.
+//     the same. Leading+query+Trailing must read as the same tokens as query
+//     alone.
 //
-// A wrong comment boundary breaks the second rule. The test uses the real parser
-// for this check. It does not use the rules in comments.go.
+// Rule 2 compares tokens, not ASTs. vtgate sends some statements, such as
+// OPTIMIZE TABLE, as written, and the AST of such a statement does not hold its
+// text, so two different texts give the same AST. A wrong comment boundary
+// breaks the second rule. The test uses the real tokenizer for this check. It
+// does not use the rules in comments.go.
 func FuzzSplitMarginComments(f *testing.F) {
 	seeds := []string{
 		"select id from t where id=1 /*x*/ union select authentication_string from mysql.user -- */",
@@ -57,6 +62,9 @@ func FuzzSplitMarginComments(f *testing.F) {
 		"select \"a *\" /*x*/, 1 -- */",
 		"select 1 // x\n/*b*/",
 		"/**/#0",
+		"optimize table t1 --; /* x\n, t2 /* */",
+		"select 1 --; /* x\nunion select 2 /* */",
+		"optimize table t1 -- x\n; /* c\n, t2 /* */",
 	}
 	for _, s := range seeds {
 		f.Add(s)
@@ -75,33 +83,25 @@ func FuzzSplitMarginComments(f *testing.F) {
 		// This rule applies only if the parser accepts the query. Only then do
 		// the callers make a plan and authorize the query.
 		//
-		// The test ignores an input that the parser rejects. Such an input has
-		// no statement to hide.
-		if _, err, panicked := parseNoPanic(parser, sql); err != nil || panicked {
-			return
-		}
+		// It applies whether or not the parser accepts the whole input. The
+		// callers never parse the whole input, only the query, so an input the
+		// parser rejects can still hide text from them.
 		stmt, err, panicked := parseNoPanic(parser, query)
 		if err != nil || panicked {
 			return
 		}
 		// The AST of a CommentOnly statement is the text of the comments.
-		// Therefore a move of the comments always changes the AST. Such a
-		// statement has no SQL to hide, and rule 2 does not apply to it.
+		// Such a statement has no SQL to hide, and rule 2 does not apply to it.
 		if _, ok := stmt.(*CommentOnly); ok {
 			return
 		}
-		recombined, err, panicked := parseNoPanic(parser, comments.Leading+query+comments.Trailing)
-		// Do not excuse this panic. Both the original input and the split query
-		// parsed cleanly above, so the parser can read both of those. A panic on
-		// the text they recombine into is one the split introduced, which is
-		// exactly what this test is for. The known createIdentifierCI panic is
-		// already excluded by the check on the original input.
-		require.False(t, panicked,
-			"re-attaching margin comments panicked the parser: %q (from %q)", query, sql)
-		require.NoError(t, err,
-			"query parsed but recombination did not: %q (from %q)", query, sql)
-		require.Equal(t, String(stmt), String(recombined),
-			"re-attaching margin comments changed the statement (from %q)", sql)
+		want, ok := statementTokens(parser, query)
+		require.True(t, ok, "the tokenizer rejects a query the parser accepts: %q (from %q)", query, sql)
+		recombined := comments.Leading + query + comments.Trailing
+		got, ok := statementTokens(parser, recombined)
+		require.True(t, ok, "re-attaching margin comments made the text unreadable: %q (from %q)", recombined, sql)
+		require.Equal(t, want, got,
+			"re-attaching margin comments changed the statement: %q (from %q)", recombined, sql)
 	})
 }
 
@@ -121,6 +121,24 @@ func parseNoPanic(parser *Parser, sql string) (stmt Statement, err error, panick
 	}()
 	stmt, err = parser.Parse(sql)
 	return stmt, err, false
+}
+
+// statementTokens returns the tokens the tokenizer reads in sql, without its
+// comments. ok is false when the tokenizer rejects sql.
+func statementTokens(parser *Parser, sql string) (tokens []string, ok bool) {
+	tkn := parser.NewStringTokenizer(sql)
+	for {
+		typ, val := tkn.Scan()
+		switch typ {
+		case 0:
+			return tokens, true
+		case LEX_ERROR:
+			return nil, false
+		case COMMENT:
+		default:
+			tokens = append(tokens, fmt.Sprintf("%d:%s", typ, val))
+		}
+	}
 }
 
 // isCommentsAndWhitespaceOnly reports whether text contains only spaces and

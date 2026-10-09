@@ -196,6 +196,39 @@ func TestSplitComments(t *testing.T) {
 		outLeadingComments:  "",
 		outTrailingComments: "",
 	}, {
+		// The same with a ';' after the '--'. The trim removes the ';', so a
+		// split would plan "select 0--" as "select 0". vtgate sends some
+		// statements as written, with the comments added again, and then MySQL
+		// reads "-- /* x" as a line comment and runs the union after it.
+		input:               "select 0--; /* x\nunion select 1 /* */",
+		outSQL:              "select 0--; /* x\nunion select 1 /* */",
+		outLeadingComments:  "",
+		outTrailingComments: "",
+	}, {
+		// A ';' after a line comment. The trim removes the newline that ends
+		// the line comment together with the ';', so the trailing comments get
+		// a newline in front. Without it, the line comment would end inside the
+		// block comment in the text that vtgate sends, and MySQL would run the
+		// union after it.
+		input:               "select 1 -- x\n; /* c\nunion select 2 /* */",
+		outSQL:              "select 1 -- x",
+		outLeadingComments:  "",
+		outTrailingComments: "\n /* c\nunion select 2 /* */",
+	}, {
+		// A ';' after any other token is still trimmed, and the block comment
+		// after it is still a trailing comment.
+		input:               "select 1; /*rule-tag*/",
+		outSQL:              "select 1",
+		outLeadingComments:  "",
+		outTrailingComments: " /*rule-tag*/",
+	}, {
+		// Three backticks after '@' start a name with a backtick in it, not an
+		// empty name, so the block comment after the name is a trailing comment.
+		input:               "select @```a` /*rule-tag*/",
+		outSQL:              "select @```a`",
+		outLeadingComments:  "",
+		outTrailingComments: " /*rule-tag*/",
+	}, {
 		// A /*!...*/ comment can contain SQL that MySQL executes. Therefore it
 		// stays in the query, also when a true trailing comment comes after it.
 		input:               "select 1 /*!80000 union select 2 */ /*b*/",

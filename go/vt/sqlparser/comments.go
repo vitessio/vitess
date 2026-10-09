@@ -123,6 +123,11 @@ func leadingCommentEnd(text string) (end int) {
 // trailingCommentStart returns the first index of trailing comments.
 // If there are no trailing comments, returns the length of the input string.
 //
+// newlineFirst reports that the query ends with a line comment and a ';' after
+// it. SplitMarginComments trims the ';' and, with it, the newline that ends the
+// line comment, so it must put a newline before the trailing comments. Without
+// it the line comment would run on into them when the callers add them again.
+//
 // A '*/' at the end of the text does not always close a comment. Only the text
 // before the '*/' shows if a comment is open. For example, a '/*' in a string
 // literal does not start a comment. Also, a '--' or a '#' line comment can end
@@ -138,13 +143,27 @@ func leadingCommentEnd(text string) (end int) {
 // parser's version. FuzzSplitMarginCommentsMatchesTokenizer checks that the
 // split matches the one the tokenizer gives, so a change to the tokenizer that
 // this scan does not follow fails that test.
-func trailingCommentStart(text, version string) (start int) {
+func trailingCommentStart(text, version string) (start int, newlineFirst bool) {
+	// A group of trailing comments ends with the '*/' of a block comment, and
+	// only spaces come after that. Text that does not end this way has nothing
+	// to split off, and most queries do not, so do not scan them: the scan reads
+	// all of a long INSERT just to find that out at its end.
+	if !strings.HasSuffix(strings.TrimRight(text, sqlSpaceChars), "*/") {
+		return len(text), false
+	}
+
 	// contentEnd is the index that comes after the last byte of the query. Only
 	// block comments and spaces come after contentEnd.
 	contentEnd := 0
+	// statementEnd is contentEnd without the ';' characters at the end of the
+	// query. SplitMarginComments trims those, so the query the callers plan ends
+	// at statementEnd, and the guards at the end of this function must look
+	// there.
+	statementEnd := 0
 	inTrailingComment := false
 	// contentEndsInLineComment records whether the query stops at the end of a
-	// line comment. The guard at the end of this function must know this.
+	// line comment, not counting a ';' after it. The guards at the end of this
+	// function must know this.
 	contentEndsInLineComment := false
 	// inVersionedComment records whether the scan is inside a /*!...*/ comment.
 	// The '*/' that closes one is part of the query, and the case below has to
@@ -172,6 +191,7 @@ func trailingCommentStart(text, version string) (start int) {
 			// still ordinary SQL.
 			pos += 2
 			contentEnd = pos
+			statementEnd = pos
 			inVersionedComment = false
 			inTrailingComment = false
 			contentEndsInLineComment = false
@@ -182,7 +202,7 @@ func trailingCommentStart(text, version string) (start int) {
 			// in the query with the versioned comment around it.
 			end := blockCommentEnd(text, pos)
 			if end < 0 {
-				return len(text)
+				return len(text), false
 			}
 			pos = end
 
@@ -194,10 +214,11 @@ func trailingCommentStart(text, version string) (start int) {
 			end, applies := versionedCommentEnd(text, pos, version)
 			if end < 0 {
 				// The comment has no end. Do not split the text.
-				return len(text)
+				return len(text), false
 			}
 			pos = end
 			contentEnd = pos
+			statementEnd = pos
 			inVersionedComment = applies
 			inTrailingComment = false
 			contentEndsInLineComment = false
@@ -206,7 +227,7 @@ func trailingCommentStart(text, version string) (start int) {
 			end := blockCommentEnd(text, pos)
 			if end < 0 {
 				// The comment has no end. Do not split the text.
-				return len(text)
+				return len(text), false
 			}
 			inTrailingComment = true
 			pos = end
@@ -218,11 +239,12 @@ func trailingCommentStart(text, version string) (start int) {
 			if newline < 0 {
 				// The line comment continues to the end of the text. Therefore
 				// the text does not end with a block comment.
-				return len(text)
+				return len(text), false
 			}
 			// Stop before the newline character. This character ends the line
 			// comment. Therefore it must stay with the comments after a split.
 			contentEnd = pos + newline
+			statementEnd = contentEnd
 			pos += newline + 1
 			inTrailingComment = false
 			contentEndsInLineComment = true
@@ -234,20 +256,22 @@ func trailingCommentStart(text, version string) (start int) {
 			// must not be read as the start of a '--' comment.
 			end := wordEnd(text, pos)
 			if end < 0 {
-				return len(text)
+				return len(text), false
 			}
 			pos = end
 			contentEnd = pos
+			statementEnd = pos
 			inTrailingComment = false
 			contentEndsInLineComment = false
 
 		case text[pos] == '@':
 			end := variableEnd(text, pos)
 			if end < 0 {
-				return len(text)
+				return len(text), false
 			}
 			pos = end
 			contentEnd = pos
+			statementEnd = pos
 			inTrailingComment = false
 			contentEndsInLineComment = false
 
@@ -258,36 +282,49 @@ func trailingCommentStart(text, version string) (start int) {
 			if end < 0 {
 				// The literal has no end. All of the text after it is in the
 				// literal.
-				return len(text)
+				return len(text), false
 			}
 			pos = end
 			contentEnd = pos
+			statementEnd = pos
 			inTrailingComment = false
 			contentEndsInLineComment = false
+
+		case text[pos] == ';':
+			// SplitMarginComments trims a ';' from the end of the query. It is
+			// part of the query here, so that a comment after it is still a
+			// trailing comment, but it does not move statementEnd.
+			pos++
+			contentEnd = pos
+			inTrailingComment = false
 
 		default:
 			pos++
 			contentEnd = pos
+			statementEnd = pos
 			inTrailingComment = false
 			contentEndsInLineComment = false
 		}
 	}
 
 	if !inTrailingComment {
-		return len(text)
+		return len(text), false
 	}
 	// After we remove the comments, the parser must read the text before them in
-	// the same way. A '--' starts a comment only when a space or the end of the
-	// text comes after it. Therefore "select 0--" is "select 0". But
-	// "select 0--/**/" has two minus signs and no number to subtract. If we
-	// split "select 0--/**/", the query "select 0--" makes a good plan. But the
-	// full text is a syntax error after we add the comment again.
+	// the same way, and so must MySQL after the callers add the comments again.
+	// Two endings of the query break this.
 	//
-	// This cannot hide a second statement. Only comments and spaces come after
-	// the '--'. Therefore the full text never has a number for the two minus
-	// signs, and MySQL always rejects it. We keep the text together for a
-	// different reason. We must not authorize one statement and then send a
-	// different statement.
+	// The first is a '--' at the end. A '--' starts a comment only when a space
+	// or the end of the text comes after it. Therefore "select 0--" is
+	// "select 0". But "select 0--/**/" has two minus signs and no number to
+	// subtract. If we split it, the query "select 0--" makes a good plan, but the
+	// text the callers send is a syntax error. With a ';' in between, as in
+	// "select 0--; /* x\nunion select 1 /* */", it is worse: the trim removes
+	// the ';', and the callers that send the query as written send
+	// "select 0-- /* x\nunion select 1 /* */". There the '--' starts a line
+	// comment that ends inside the block comment, and MySQL runs the text after
+	// the newline, which nothing planned. MySQL rejects both inputs, so we do
+	// not split them and let the parser reject them too.
 	//
 	// A line comment can also end with '--', as in "select 1 -- body--". Those
 	// two characters are already inside the comment, and the newline that ends
@@ -295,10 +332,14 @@ func trailingCommentStart(text, version string) (start int) {
 	// the same way with the comments and without them, and this guard must
 	// ignore that case. If it does not, the trailing comment never reaches
 	// MarginComments.Trailing, and a query rule for that comment stops working.
-	if !contentEndsInLineComment && strings.HasSuffix(text[:contentEnd], "--") {
-		return len(text)
+	if !contentEndsInLineComment && strings.HasSuffix(text[:statementEnd], "--") {
+		return len(text), false
 	}
-	return contentEnd
+	// The second is a line comment with a ';' after it, as in
+	// "select 1 -- x\n; /* c\nunion select 2 /* */". MySQL accepts this input.
+	// The trim removes the newline that ends the line comment together with the
+	// ';', so the caller must put one back: see newlineFirst.
+	return contentEnd, contentEndsInLineComment && statementEnd < contentEnd
 }
 
 // versionedCommentEnd reads the /*!...*/ comment that starts at pos the way
@@ -449,8 +490,9 @@ func variableEnd(text string, pos int) int {
 		return -1
 	}
 	if text[pos] == '`' {
-		if pos+1 < len(text) && text[pos+1] == '`' {
-			// An empty quoted name.
+		if pos+1 < len(text) && text[pos+1] == '`' && (pos+2 >= len(text) || text[pos+2] != '`') {
+			// An empty quoted name. Three backticks in a row are not one: the
+			// second and third are an escaped backtick in the name.
 			return -1
 		}
 		return skipQuoted(text, pos, false)
@@ -624,11 +666,14 @@ var defaultMarginParser = func() *Parser {
 // callers that plan or authorize the query must split it with the parser that
 // parses it.
 func (p *Parser) SplitMarginComments(sql string) (query string, comments MarginComments) {
-	trailingStart := trailingCommentStart(sql, p.version)
+	trailingStart, newlineFirst := trailingCommentStart(sql, p.version)
 	leadingEnd := leadingCommentEnd(sql[:trailingStart])
 	comments = MarginComments{
 		Leading:  strings.TrimLeft(sql[:leadingEnd], sqlSpaceChars),
 		Trailing: strings.TrimRight(sql[trailingStart:], sqlSpaceChars),
+	}
+	if newlineFirst {
+		comments.Trailing = "\n" + comments.Trailing
 	}
 	return strings.Trim(sql[leadingEnd:trailingStart], sqlSpaceChars+";"), comments
 }
