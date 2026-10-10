@@ -97,6 +97,25 @@ func (s *Server) Get(ctx context.Context, filePath string) ([]byte, topo.Version
 	return pair.Value, ConsulVersion(pair.ModifyIndex), nil
 }
 
+var _ topo.LinearizableGetter = (*Server)(nil)
+
+// GetLinearizable is part of the topo.LinearizableGetter interface. Consul's
+// default consistency mode lets a leader that has just lost its leadership
+// serve stale data, so this asks for a consistent read.
+func (s *Server) GetLinearizable(ctx context.Context, filePath string) ([]byte, topo.Version, error) {
+	nodePath := path.Join(s.root, filePath)
+
+	pair, _, err := s.kv.Get(nodePath, (&api.QueryOptions{RequireConsistent: true}).WithContext(ctx))
+	if err != nil {
+		return nil, nil, err
+	}
+	if pair == nil {
+		return nil, nil, topo.NewError(topo.NoNode, nodePath)
+	}
+
+	return pair.Value, ConsulVersion(pair.ModifyIndex), nil
+}
+
 // GetVersion is part of topo.Conn interface.
 func (s *Server) GetVersion(ctx context.Context, filePath string, version int64) ([]byte, error) {
 	return nil, topo.NewError(topo.NoImplementation, "GetVersion not supported in consul topo")
