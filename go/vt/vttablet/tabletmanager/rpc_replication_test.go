@@ -31,6 +31,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
@@ -1652,4 +1653,106 @@ func TestShardPeerHealthSnapshot(t *testing.T) {
 	snap := tm.shardPeerHealthSnapshot()
 	require.Len(t, snap, 1)
 	assert.Equal(t, int64(1), snap[0].ConsecutivePingFailures)
+}
+
+// retryingReceiverError is the connection error of a replication receiver that keeps retrying a
+// source it cannot connect to.
+const retryingReceiverError = "Error connecting to source 'vt_repl@mysql-old-primary:3305'. This was attempt 3/86400, with a delay of 10 seconds between attempts. Message: Access denied for user 'vt_repl'@'localhost'. Account is locked."
+
+// TestStopReplicationAndGetStatusStopsRetryingReceiver checks that a replication receiver that
+// keeps retrying its connection is stopped: it is not replicating, but it is running, and it
+// receives from its source (and acknowledges semi-sync transactions) as soon as it connects.
+// ERS counts every tablet whose replication it stopped as unable to acknowledge the old
+// primary's writes.
+func TestStopReplicationAndGetStatusStopsRetryingReceiver(t *testing.T) {
+	testCases := []struct {
+		mode            replicationdatapb.StopReplicationMode
+		expectedQueries []string
+	}{
+		{
+			mode:            replicationdatapb.StopReplicationMode_IOTHREADONLY,
+			expectedQueries: []string{"STOP REPLICA IO_THREAD"},
+		},
+		{
+			mode:            replicationdatapb.StopReplicationMode_IOANDSQLTHREAD,
+			expectedQueries: []string{"STOP REPLICA"},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.mode.String(), func(t *testing.T) {
+			fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
+			fakeMysqlDaemon.Replicating = false
+			fakeMysqlDaemon.IOThreadConnectingError = retryingReceiverError
+			fakeMysqlDaemon.ExpectedExecuteSuperQueryList = tc.expectedQueries
+			tm := newTestReplicationTM(newTestTablet(t, 100, "ks", "0", nil), fakeMysqlDaemon, nil)
+
+			resp, err := tm.StopReplicationAndGetStatus(t.Context(), tc.mode)
+			require.NoError(t, err)
+			require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList(), "the retrying receiver must be stopped")
+			assert.Equal(t, int32(replication.ReplicationStateConnecting), resp.Status.Before.IoState)
+			assert.Equal(t, int32(replication.ReplicationStateStopped), resp.Status.After.IoState)
+		})
+	}
+}
+
+// TestStopReplicationAndGetStatusStopsRunningReceiverWithStoppedApplier checks that
+// StopReplicationAndGetStatus(IOANDSQLTHREAD) stops a running receiver when the applier is already
+// stopped: it stops replication if either thread runs, not only if both do.
+func TestStopReplicationAndGetStatusStopsRunningReceiverWithStoppedApplier(t *testing.T) {
+	fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
+	fakeMysqlDaemon.Replicating = true
+	fakeMysqlDaemon.SQLThreadStopped = true
+	fakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA"}
+	tm := newTestReplicationTM(newTestTablet(t, 100, "ks", "0", nil), fakeMysqlDaemon, nil)
+
+	resp, err := tm.StopReplicationAndGetStatus(t.Context(), replicationdatapb.StopReplicationMode_IOANDSQLTHREAD)
+	require.NoError(t, err)
+	require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList(), "the running receiver must be stopped")
+	assert.Equal(t, int32(replication.ReplicationStateRunning), resp.Status.Before.IoState)
+	assert.Equal(t, int32(replication.ReplicationStateStopped), resp.Status.Before.SqlState)
+	assert.Equal(t, int32(replication.ReplicationStateStopped), resp.Status.After.IoState)
+}
+
+// TestSetReplicationSourceStopsRetryingReceiver checks that repointing a replica whose applier is
+// stopped and whose receiver keeps retrying its old source stops replication before changing the
+// source, which MySQL refuses while the receiver runs (ERROR 3081), and starts replication
+// afterwards, as the receiver was running.
+func TestSetReplicationSourceStopsRetryingReceiver(t *testing.T) {
+	ctx := t.Context()
+	ts := memorytopo.NewServer(ctx, "cell1")
+	t.Cleanup(ts.Close)
+
+	tablet := newTestTablet(t, 100, "ks", "0", nil)
+	fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
+	fakeMysqlDaemon.Replicating = false
+	fakeMysqlDaemon.IOThreadConnectingError = retryingReceiverError
+	fakeMysqlDaemon.CurrentSourceHost = "mysql-old-primary"
+	fakeMysqlDaemon.CurrentSourcePort = 3305
+	fakeMysqlDaemon.SetReplicationSourceInputs = []string{"mysql-new-primary:3306"}
+	fakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		"STOP REPLICA",
+		"FAKE SET SOURCE",
+		"START REPLICA",
+	}
+
+	_, err := ts.GetOrCreateShard(ctx, "ks", "0")
+	require.NoError(t, err)
+	require.NoError(t, ts.CreateTablet(ctx, tablet))
+	parent := &topodatapb.Tablet{
+		Alias:         &topodatapb.TabletAlias{Cell: "cell1", Uid: 200},
+		Keyspace:      "ks",
+		Shard:         "0",
+		Type:          topodatapb.TabletType_PRIMARY,
+		MysqlHostname: "mysql-new-primary",
+		MysqlPort:     3306,
+	}
+	require.NoError(t, ts.CreateTablet(ctx, parent))
+	tm := newTestReplicationTM(tablet, fakeMysqlDaemon, ts)
+	tm.BatchCtx = ctx
+	tm.tmc = newFakeTMClient()
+
+	require.NoError(t, tm.SetReplicationSource(ctx, parent.Alias, 0, "", false, false, 0))
+	require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
+	assert.Equal(t, "mysql-new-primary", fakeMysqlDaemon.CurrentSourceHost)
+	assert.True(t, fakeMysqlDaemon.Replicating)
 }

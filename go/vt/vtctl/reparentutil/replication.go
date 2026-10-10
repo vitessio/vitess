@@ -306,16 +306,16 @@ func FindPositionsOfAllCandidates(
 }
 
 // ReplicaWasRunning returns true if a StopReplicationStatus indicates that the
-// replica had running replication threads before being stopped. It returns an
-// error if the Before state of replication is nil.
+// replica had running replication threads before being stopped, including an IO
+// thread that was retrying its connection. It returns an error if the Before
+// state of replication is nil.
 func ReplicaWasRunning(stopStatus *replicationdatapb.StopReplicationStatus) (bool, error) {
 	if stopStatus == nil || stopStatus.Before == nil {
 		return false, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "could not determine Before state of StopReplicationStatus %v", stopStatus)
 	}
 
 	replStatus := replication.ProtoToReplicationStatus(stopStatus.Before)
-	return (replStatus.IOState == replication.ReplicationStateRunning) ||
-		(replStatus.SQLState == replication.ReplicationStateRunning), nil
+	return replStatus.IORunning() || replStatus.SQLHealthy(), nil
 }
 
 // SetReplicationSource is used to set the replication source on the specified
@@ -381,7 +381,8 @@ func (rs *replicationSnapshot) replicasWithStoppedIO(tabletMap map[string]*topo.
 }
 
 // replicaIOThreadWasRunning returns true if a StopReplicationStatus indicates
-// that ERS stopped a healthy IO thread that should restart during cleanup.
+// that ERS stopped a running IO thread, including one that was retrying its
+// connection, which should restart during cleanup.
 func replicaIOThreadWasRunning(stopStatus *replicationdatapb.StopReplicationStatus) (bool, error) {
 	if stopStatus == nil || stopStatus.Before == nil {
 		return false, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "could not determine Before state of StopReplicationStatus %v", stopStatus)
@@ -389,7 +390,7 @@ func replicaIOThreadWasRunning(stopStatus *replicationdatapb.StopReplicationStat
 
 	replStatus := replication.ProtoToReplicationStatus(stopStatus.Before)
 
-	return replStatus.IOHealthy(), nil
+	return replStatus.IORunning(), nil
 }
 
 // tabletAliasError wraps an error with the tablet alias that produced it.
@@ -501,6 +502,16 @@ func stopReplicationAndBuildStatusMaps(
 				err = vterrors.Wrapf(err, "error when getting replication status for alias %v", alias)
 			}
 		} else {
+			// Older VTTablets leave a receiver that retries its connection running. It still
+			// counts as stopped: refusing it would fail every ERS while the primary is
+			// unreachable (then every replica's receiver retries) until VTTablet is upgraded.
+			if stopReplicationStatus.After != nil {
+				if after := replication.ProtoToReplicationStatus(stopReplicationStatus.After); after.IORunning() {
+					logger.Warningf("the replication receiver of %v still runs after it was stopped, as older VTTablets leave a receiver that retries its connection running; "+
+						"if it reconnects to the old primary, it can acknowledge its writes", alias)
+				}
+			}
+
 			isTakingBackup := false
 
 			// Prefer the most up-to-date information regarding whether the tablet is taking a backup from the After
