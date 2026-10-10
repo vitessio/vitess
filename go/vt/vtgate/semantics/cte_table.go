@@ -46,8 +46,9 @@ func newCTETable(node *sqlparser.AliasedTableExpr, t sqlparser.TableName, cteDef
 		name = node.As.String()
 	}
 
-	authoritative := true
-	for _, expr := range cteDef.Query.GetColumns() {
+	selectExprs := cteDef.Query.GetColumns()
+	authoritative := len(cteDef.Columns) == 0 || len(cteDef.Columns) == len(selectExprs)
+	for _, expr := range selectExprs {
 		_, isStar := expr.(*sqlparser.StarExpr)
 		if isStar {
 			authoritative = false
@@ -94,18 +95,19 @@ func (cte *CTETable) canShortCut() shortCut {
 func (cte *CTETable) getColumns(bool) []ColumnInfo {
 	selExprs := cte.Query.GetColumns()
 	cols := make([]ColumnInfo, 0, len(selExprs))
+	// a declared column list renames the columns only when it pairs with the
+	// select list; an unpairable list leaves the CTE on the select list names
+	useDeclared := len(cte.Columns) == len(selExprs)
 	for i, selExpr := range selExprs {
 		ae, isAe := selExpr.(*sqlparser.AliasedExpr)
 		if !isAe {
 			panic(vterrors.VT12001("should not be called"))
 		}
-		if len(cte.Columns) == 0 {
-			cols = append(cols, ColumnInfo{Name: ae.ColumnName()})
+		if useDeclared {
+			cols = append(cols, ColumnInfo{Name: cte.Columns[i].String()})
 			continue
 		}
-
-		// We have column aliases defined on the CTE
-		cols = append(cols, ColumnInfo{Name: cte.Columns[i].String()})
+		cols = append(cols, ColumnInfo{Name: ae.ColumnName()})
 	}
 	return cols
 }
