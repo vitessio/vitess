@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // starts the copy phase for the first table in the (sorted) list.
@@ -177,18 +178,16 @@ func (uvs *uvstreamer) sendEventsForRows(ctx context.Context, tableName string, 
 }
 
 // converts lastpk from proto to value
-func getLastPKFromQR(qr *querypb.QueryResult) []sqltypes.Value {
+func getLastPKFromQR(qr *querypb.QueryResult) ([]sqltypes.Value, error) {
 	if qr == nil {
-		return nil
+		return nil, nil
 	}
-	var lastPK []sqltypes.Value
-	r := sqltypes.Proto3ToResult(qr)
-	if len(r.Rows) != 1 {
-		log.Error(fmt.Sprintf("unexpected lastpk input: %v", qr))
-		return nil
+	// The lastpk comes from the client, so check its shape before
+	// Proto3ToResult decodes it.
+	if err := validateLastPKShape(qr); err != nil {
+		return nil, err
 	}
-	lastPK = r.Rows[0]
-	return lastPK
+	return sqltypes.Proto3ToResult(qr).Rows[0], nil
 }
 
 // converts lastpk from value to proto
@@ -210,13 +209,16 @@ func (uvs *uvstreamer) copyTable(ctx context.Context, tableName string) error {
 	}()
 
 	var newLastPK *sqltypes.Result
-	lastPK := getLastPKFromQR(uvs.plans[tableName].tablePK.Lastpk)
+	lastPK, err := getLastPKFromQR(uvs.plans[tableName].tablePK.Lastpk)
+	if err != nil {
+		return vterrors.Wrapf(err, "invalid lastpk for table %s", tableName)
+	}
 	filter := uvs.plans[tableName].rule.Filter
 
 	log.Info(fmt.Sprintf("Starting copyTable for %s, Filter: %s, LastPK: %v", tableName, filter, lastPK))
 	uvs.sendTestEvent("Copy Start " + tableName)
 
-	err := uvs.vse.StreamRows(ctx, filter, lastPK, func(rows *binlogdatapb.VStreamRowsResponse) error {
+	err = uvs.vse.StreamRows(ctx, filter, lastPK, func(rows *binlogdatapb.VStreamRowsResponse) error {
 		select {
 		case <-ctx.Done():
 			log.Info("Returning io.EOF in StreamRows")
