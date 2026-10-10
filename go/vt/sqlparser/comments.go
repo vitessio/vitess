@@ -178,7 +178,7 @@ func (p *Parser) tokenizedMarginBounds(sql string) (start, end int, newlineFirst
 	var lastTyp, stmtEnd int
 	for {
 		before := tkn.Pos
-		typ, val := tkn.Scan()
+		typ := tkn.ScanSkip()
 		if typ == LEX_ERROR {
 			return 0, len(sql), false, false
 		}
@@ -219,12 +219,12 @@ func (p *Parser) tokenizedMarginBounds(sql string) (start, end int, newlineFirst
 			// "select 1 -- x\n;/**/": the trim removes the newline that ends the
 			// line comment.
 			return start, end, lastTyp == COMMENT && stmtEnd < end, true
-		case typ == COMMENT && strings.HasPrefix(val, "/*"):
+		case typ == COMMENT && strings.HasPrefix(sql[tkn.currStart:], "/*"):
 			// A block comment: a margin, if nothing but comments follows it.
 		case typ == COMMENT:
 			// A line comment. Its newline stays outside, because the newline
 			// ends the comment when the margin is added again.
-			keep(tkn.currStart, tkn.currStart+len(strings.TrimSuffix(val, "\n")))
+			keep(tkn.currStart, tkn.currStart+len(strings.TrimSuffix(sql[tkn.currStart:tkn.Pos], "\n")))
 			lastTyp, stmtEnd = typ, end
 		case typ == ';':
 			keep(tkn.currStart, tkn.Pos)

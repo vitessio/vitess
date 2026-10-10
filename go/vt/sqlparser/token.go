@@ -51,6 +51,24 @@ type Tokenizer struct {
 	currStart int // start position of current token (set in Scan after skipBlank)
 }
 
+// The token types that scan returns for a token whose value needs more work
+// than taking it from the input: escapes to decode, or the name to give a '?'.
+// The value scan returns with them is the text between the quotes, as
+// written. Scan and ScanSkip return the token's type instead, and Scan does
+// that work.
+const (
+	// singleQuotedEscaped is a STRING in single quotes that holds escapes.
+	singleQuotedEscaped = -1 - iota
+	// doubleQuotedEscaped is a STRING in double quotes that holds escapes.
+	doubleQuotedEscaped
+	// nationalEscaped is an NCHAR_STRING that holds escapes.
+	nationalEscaped
+	// backquotedEscaped is an ID in backticks that holds a doubled backtick.
+	backquotedEscaped
+	// positionalArg is a VALUE_ARG written as '?'.
+	positionalArg
+)
+
 // location tracks the byte-offset span [start, end) of a grammar symbol
 // in the input buffer. Used by the parser's %locations feature.
 type location struct {
@@ -154,9 +172,49 @@ func (tkn *Tokenizer) Error(err string) {
 	tkn.skipStatement()
 }
 
-// Scan scans the tokenizer for the next token and returns
-// the token type and an optional value.
+// ScanSkip scans the next token and returns its type. It skips working out
+// the token's value, which saves decoding the escapes in strings and quoted
+// identifiers; use Scan for the value.
+func (tkn *Tokenizer) ScanSkip() int {
+	typ, _ := tkn.scan()
+	switch typ {
+	case singleQuotedEscaped, doubleQuotedEscaped:
+		return STRING
+	case nationalEscaped:
+		return NCHAR_STRING
+	case backquotedEscaped:
+		return ID
+	case positionalArg:
+		return VALUE_ARG
+	}
+	return typ
+}
+
+// Scan scans the next token and returns its type and an optional value.
 func (tkn *Tokenizer) Scan() (int, string) {
+	typ, val := tkn.scan()
+	switch typ {
+	case singleQuotedEscaped:
+		return STRING, decodeString(val, '\'')
+	case doubleQuotedEscaped:
+		return STRING, decodeString(val, '"')
+	case nationalEscaped:
+		return NCHAR_STRING, decodeString(val, '\'')
+	case backquotedEscaped:
+		return ID, decodeBackquoted(val)
+	case positionalArg:
+		buf := make([]byte, 0, 8)
+		buf = append(buf, ":v"...)
+		buf = strconv.AppendInt(buf, int64(tkn.posVarIndex), 10)
+		return VALUE_ARG, string(buf)
+	}
+	return typ, val
+}
+
+// scan scans the next token for Scan and ScanSkip. For a token whose value
+// needs more work than taking it from the input, it returns one of the token
+// types above.
+func (tkn *Tokenizer) scan() (int, string) {
 	for {
 		tkn.skipBlank()
 		// If inside a versioned comment and we've reached the closing */,
@@ -194,6 +252,9 @@ func (tkn *Tokenizer) Scan() (int, string) {
 			}
 			if tID == LEX_ERROR {
 				return tID, ""
+			}
+			if tID == backquotedEscaped {
+				tBytes = decodeBackquoted(tBytes)
 			}
 			return tokenID, tBytes
 		case isLetter(ch):
@@ -262,11 +323,11 @@ func (tkn *Tokenizer) Scan() (int, string) {
 				}
 				return int(ch), ""
 			case '?':
+				// Count the '?' here, so that it gets the same name
+				// whether or not the tokens before it were read with
+				// ScanSkip.
 				tkn.posVarIndex++
-				buf := make([]byte, 0, 8)
-				buf = append(buf, ":v"...)
-				buf = strconv.AppendInt(buf, int64(tkn.posVarIndex), 10)
-				return VALUE_ARG, string(buf)
+				return positionalArg, ""
 			case '.':
 				return int(ch), ""
 			case '/':
@@ -455,66 +516,45 @@ func (tkn *Tokenizer) scanBitLiteral() (int, string) {
 	return BIT_LITERAL, bit
 }
 
-// scanLiteralIdentifierSlow scans an identifier surrounded by backticks which may
-// contain escape sequences instead of it. This method is only called from
-// scanLiteralIdentifier once the first escape sequence is found in the identifier.
-// The provided `buf` contains the contents of the identifier that have been scanned
-// so far.
-func (tkn *Tokenizer) scanLiteralIdentifierSlow(buf *strings.Builder) (int, string) {
-	backTickSeen := true
-	for {
-		if backTickSeen {
-			if tkn.cur() != '`' {
-				break
-			}
-			backTickSeen = false
-			buf.WriteByte('`')
-			tkn.skip(1)
-			continue
-		}
-		// The previous char was not a backtick.
-		switch tkn.cur() {
-		case '`':
-			backTickSeen = true
-		case eofChar:
-			// Premature EOF.
-			return LEX_ERROR, buf.String()
-		default:
-			buf.WriteByte(byte(tkn.cur()))
-			// keep scanning
-		}
-		tkn.skip(1)
-	}
-	return ID, buf.String()
-}
-
 // scanLiteralIdentifier scans an identifier enclosed by backticks. If the identifier
-// is a simple literal, it'll be returned as a slice of the input buffer. If the identifier
-// contains escape sequences, this function will fall back to scanLiteralIdentifierSlow
+// is a simple literal, it'll be returned as a slice of the input buffer. If it
+// holds a doubled backtick, which stands for one backtick, it is returned as
+// backquotedEscaped, for Scan to decode.
 func (tkn *Tokenizer) scanLiteralIdentifier() (int, string) {
 	start := tkn.Pos
+	doubled := false
 	for {
 		switch tkn.cur() {
 		case '`':
-			if tkn.peek(1) != '`' {
-				if tkn.Pos == start {
-					return LEX_ERROR, ""
-				}
-				tkn.skip(1)
+			if tkn.peek(1) == '`' {
+				doubled = true
+				tkn.skip(2)
+				continue
+			}
+			if tkn.Pos == start {
+				return LEX_ERROR, ""
+			}
+			tkn.skip(1)
+			if !doubled {
 				return ID, tkn.buf[start : tkn.Pos-1]
 			}
-
-			var buf strings.Builder
-			buf.WriteString(tkn.buf[start:tkn.Pos])
-			tkn.skip(1)
-			return tkn.scanLiteralIdentifierSlow(&buf)
+			return backquotedEscaped, tkn.buf[start : tkn.Pos-1]
 		case eofChar:
 			// Premature EOF.
-			return LEX_ERROR, tkn.buf[start:tkn.Pos]
+			if !doubled {
+				return LEX_ERROR, tkn.buf[start:tkn.Pos]
+			}
+			return LEX_ERROR, decodeBackquoted(tkn.buf[start:tkn.Pos])
 		default:
 			tkn.skip(1)
 		}
 	}
+}
+
+// decodeBackquoted decodes the doubled backticks in the text of an identifier
+// quoted with backticks.
+func decodeBackquoted(text string) string {
+	return strings.ReplaceAll(text, "``", "`")
 }
 
 // scanBindVarOrAssignmentExpression scans a bind variable or an assignment expression; assumes a ':' has been scanned right before
@@ -632,93 +672,81 @@ exit:
 
 // scanString scans a string surrounded by the given `delim`, which can be
 // either single or double quotes. Assumes that the given delimiter has just
-// been scanned. If the skin contains any escape sequences, this function
-// will fall back to scanStringSlow
+// been scanned. A string without escapes is returned as a slice of the input
+// buffer. A string with escapes is returned as one of the token types for
+// Scan to decode: singleQuotedEscaped, doubleQuotedEscaped or nationalEscaped.
 func (tkn *Tokenizer) scanString(delim uint16, typ int) (int, string) {
 	start := tkn.Pos
-
+	escaped := false
 	for {
 		switch tkn.cur() {
 		case delim:
 			if tkn.peek(1) != delim {
 				tkn.skip(1)
-				return typ, tkn.buf[start : tkn.Pos-1]
+				if !escaped {
+					return typ, tkn.buf[start : tkn.Pos-1]
+				}
+				return escapedStringType(delim, typ), tkn.buf[start : tkn.Pos-1]
 			}
-			fallthrough
-
+			escaped = true
+			tkn.skip(1)
 		case '\\':
-			// The next delimiter usually ends the string, so size the buffer
-			// for the text up to it rather than growing it a few bytes at a time.
-			var buffer strings.Builder
-			if rest := strings.IndexByte(tkn.buf[tkn.Pos+1:], byte(delim)); rest >= 0 {
-				buffer.Grow(tkn.Pos + 1 + rest - start)
+			escaped = true
+			tkn.skip(1)
+			if tkn.cur() == eofChar {
+				// String terminates mid escape character.
+				return LEX_ERROR, decodeString(tkn.buf[start:tkn.Pos], byte(delim))
 			}
-			buffer.WriteString(tkn.buf[start:tkn.Pos])
-			return tkn.scanStringSlow(&buffer, delim, typ)
-
 		case eofChar:
-			return LEX_ERROR, tkn.buf[start:tkn.Pos]
+			if !escaped {
+				return LEX_ERROR, tkn.buf[start:tkn.Pos]
+			}
+			return LEX_ERROR, decodeString(tkn.buf[start:tkn.Pos], byte(delim))
 		}
-
 		tkn.skip(1)
 	}
 }
 
-// scanString scans a string surrounded by the given `delim` and containing escape
-// sequencse. The given `buffer` contains the contents of the string that have
-// been scanned so far.
-func (tkn *Tokenizer) scanStringSlow(buffer *strings.Builder, delim uint16, typ int) (int, string) {
-	for {
-		ch := tkn.cur()
-		if ch == eofChar {
-			// Unterminated string.
-			return LEX_ERROR, buffer.String()
-		}
-
-		if ch != delim && ch != '\\' {
-			// Scan ahead to the next interesting character.
-			start := tkn.Pos
-			for ; tkn.Pos < len(tkn.buf); tkn.Pos++ {
-				ch = uint16(tkn.buf[tkn.Pos])
-				if ch == delim || ch == '\\' {
-					break
-				}
-			}
-
-			buffer.WriteString(tkn.buf[start:tkn.Pos])
-			if tkn.Pos >= len(tkn.buf) {
-				// Reached the end of the buffer without finding a delim or
-				// escape character.
-				tkn.skip(1)
-				continue
-			}
-		}
-		tkn.skip(1) // Read one past the delim or escape character.
-
-		if ch == '\\' {
-			if tkn.cur() == eofChar {
-				// String terminates mid escape character.
-				return LEX_ERROR, buffer.String()
-			}
-			// Preserve escaping of % and _
-			if tkn.cur() == '%' || tkn.cur() == '_' {
-				buffer.WriteByte('\\')
-				ch = tkn.cur()
-			} else if decodedChar := sqltypes.SQLDecodeMap[byte(tkn.cur())]; decodedChar == sqltypes.DontEscape {
-				ch = tkn.cur()
-			} else {
-				ch = uint16(decodedChar)
-			}
-		} else if ch == delim && tkn.cur() != delim {
-			// Correctly terminated string, which is not a double delim.
-			break
-		}
-
-		buffer.WriteByte(byte(ch))
-		tkn.skip(1)
+// escapedStringType returns the token type that scan returns for a string of
+// type typ in the given quotes that holds escapes.
+func escapedStringType(delim uint16, typ int) int {
+	switch {
+	case typ == NCHAR_STRING:
+		return nationalEscaped
+	case delim == '"':
+		return doubleQuotedEscaped
 	}
+	return singleQuotedEscaped
+}
 
-	return typ, buffer.String()
+// decodeString decodes the backslash escapes and the doubled delimiters in
+// the text of a string literal. A backslash at the end of the text, where an
+// unterminated string stops, is dropped.
+func decodeString(text string, delim byte) string {
+	var buf strings.Builder
+	buf.Grow(len(text))
+	for {
+		i := 0
+		for i < len(text) && text[i] != '\\' && text[i] != delim {
+			i++
+		}
+		buf.WriteString(text[:i])
+		if i+1 >= len(text) {
+			return buf.String()
+		}
+		ch := text[i+1]
+		if text[i] == '\\' {
+			// Preserve escaping of % and _
+			if ch == '%' || ch == '_' {
+				buf.WriteByte('\\')
+			} else if decoded := sqltypes.SQLDecodeMap[ch]; decoded != sqltypes.DontEscape {
+				ch = decoded
+			}
+		}
+		// A delimiter here is always doubled: a single one ends the string.
+		buf.WriteByte(ch)
+		text = text[i+2:]
+	}
 }
 
 // scanCommentType1 scans a SQL line-comment, which is applied until the end
