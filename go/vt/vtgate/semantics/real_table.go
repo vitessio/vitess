@@ -167,11 +167,9 @@ func extractSelectExprsFromCTE(selectExprs []sqlparser.SelectExpr) []ColumnInfo 
 }
 
 func extractColumnsFromCTE(columns sqlparser.Columns, selectExprs []sqlparser.SelectExpr) []ColumnInfo {
-	if len(columns) == 0 {
+	// an unpairable declared list leaves the CTE on the select list names
+	if len(columns) == 0 || len(columns) != len(selectExprs) {
 		return nil
-	}
-	if len(selectExprs) != len(columns) {
-		panic("mismatch of columns")
 	}
 	return slice.Map(columns, func(from sqlparser.IdentifierCI) ColumnInfo {
 		return ColumnInfo{
