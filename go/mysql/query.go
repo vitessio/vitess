@@ -342,6 +342,73 @@ func (c *Conn) parseRow(data []byte, fields []*querypb.Field, reader func([]byte
 	return result, nil
 }
 
+// parseRowCopy copies all value bytes out of an ephemeral packet so the row
+// survives `recycleReadPacket`. Copying each value separately (as Vitess v24
+// and earlier did) would allocate once per column. It instead totals their lengths
+// and copies them into one exactly-sized backing buffer, keeping parsing to two
+// allocations regardless of column count.
+// Returns a SQLError.
+func (c *Conn) parseRowCopy(data []byte, fields []*querypb.Field) ([]sqltypes.Value, error) {
+	colNumber := len(fields)
+
+	// First pass: validate the row and total its value lengths.
+	total := 0
+	pos := 0
+	for range colNumber {
+		if pos >= len(data) {
+			return nil, sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "decoding string failed")
+		}
+		var n int
+		switch b := data[pos]; {
+		case b == NullValue:
+			pos++
+			continue
+		case b < NullValue:
+			// Most lengths fit in one byte.
+			n = int(b)
+			pos++
+		default:
+			size, next, ok := readLenEncInt(data, pos)
+			if !ok || size > uint64(len(data)-next) {
+				return nil, sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "decoding string failed")
+			}
+			n, pos = int(size), next
+		}
+		if pos+n > len(data) {
+			return nil, sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "decoding string failed")
+		}
+		total += n
+		pos += n
+	}
+
+	// Second pass: copy into the shared buffer. The first pass made every index safe.
+	row := make([]sqltypes.Value, colNumber)
+	buf := make([]byte, total)
+	off := 0
+	pos = 0
+	for i := range colNumber {
+		var n int
+		switch b := data[pos]; {
+		case b == NullValue:
+			// Preserve NULL; it differs from an empty value.
+			pos++
+			continue
+		case b < NullValue:
+			n = int(b)
+			pos++
+		default:
+			size, next, _ := readLenEncInt(data, pos)
+			n, pos = int(size), next
+		}
+		copy(buf[off:off+n], data[pos:pos+n])
+		// Cap each slice so `CachedSize` does not charge the full row buffer.
+		row[i] = sqltypes.MakeTrusted(fields[i].Type, buf[off:off+n:off+n])
+		off += n
+		pos += n
+	}
+	return row, nil
+}
+
 // ExecuteFetch executes a query and returns the result.
 // Returns a SQLError. Depending on the transport used, the error
 // returned might be different for the same condition:
@@ -563,7 +630,7 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (*sqltypes.Result, 
 		}
 
 		// Regular row.
-		row, err := c.parseRow(data, result.Fields, readLenEncStringAsBytesCopy, nil)
+		row, err := c.parseRowCopy(data, result.Fields)
 		if err != nil {
 			c.recycleReadPacket()
 			return nil, false, 0, err
