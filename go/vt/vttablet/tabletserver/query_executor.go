@@ -1415,6 +1415,12 @@ func (qre *QueryExecutor) getStreamConn() (*connpool.PooledConn, error) {
 }
 
 // execSet executes a SET statement on a dedicated transaction or reserved connection.
+// The SET changes the connection's MySQL session behind the settings the connection
+// carries, so the connection is discarded rather than recycled when it is released
+// (see MarkSessionDiverged). The mark is set before the statement is sent: a SET that
+// fails may still have changed the session, by an assignment that took effect before
+// a later one failed or by a failure that leaves its outcome unknown.
+//
 // When the statement assigns sql_mode a value that could not be judged at plan time (a
 // non-constant expression), the applied value is read back and validated, so that such an
 // expression cannot put the connection into a mode the Vitess parser cannot honor (see
@@ -1422,14 +1428,20 @@ func (qre *QueryExecutor) getStreamConn() (*connpool.PooledConn, error) {
 // not applied, as it would not be in MySQL; only if the restore itself fails is the
 // connection closed rather than left running under an unsupported mode.
 func (qre *QueryExecutor) execSet(conn *StatefulConnection) (*sqltypes.Result, error) {
+	sql, _, err := qre.generateFinalSQL(qre.plan.FullQuery, qre.bindVars)
+	if err != nil {
+		return nil, err
+	}
 	if !qre.plan.VerifySQLMode {
-		return qre.txFetch(conn, false)
+		conn.MarkSessionDiverged()
+		return qre.execTxQuery(conn, sql, false)
 	}
 	prev, err := qre.readSQLMode(conn)
 	if err != nil {
 		return nil, err
 	}
-	result, err := qre.txFetch(conn, false)
+	conn.MarkSessionDiverged()
+	result, err := qre.execTxQuery(conn, sql, false)
 	if err != nil {
 		return nil, err
 	}
