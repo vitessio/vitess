@@ -22,6 +22,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -65,6 +66,19 @@ func (jm *joinMerger) mergeJoinInputs(ctx *plancontext.PlanningContext, lhs, rhs
 
 	// an unsharded/reference route can be merged with anything going to that keyspace
 	case a == anyShard && sameKeyspace:
+		// Except when the merge owes the rows a reference table keeps on the preserved side
+		// of an outer join: only a single-shard route returns each of them once.
+		if owesReferenceRows(ctx, jm.joinType, lhsRoute, rhsRoute) {
+			if !routingB.OpCode().IsSingleShard() {
+				debugNoRewrite("apply join merge blocked: reference table on the preserved side of a %s", jm.joinType.ToString())
+				return nil
+			}
+			// The opcode can come from a join predicate that the caller restores to its
+			// cross-table shape, so anyone resetting the routing has to check it again.
+			// The merge gets a copy of the routing, so that re-checking it cannot damage
+			// the RHS if we end up not merging after all.
+			return jm.merge(ctx, lhsRoute, rhsRoute, routingB.Clone())
+		}
 		return jm.merge(ctx, lhsRoute, rhsRoute, routingB)
 	case b == anyShard && sameKeyspace:
 		return jm.merge(ctx, lhsRoute, rhsRoute, routingA)
@@ -100,6 +114,38 @@ func (jm *joinMerger) mergeJoinInputs(ctx *plancontext.PlanningContext, lhs, rhs
 		}
 		return nil
 	}
+}
+
+// owesReferenceRows reports whether a merge of these two routes has to produce the rows that an
+// outer join preserves on a reference side exactly once. A reference table has the same rows on
+// every shard, so a multi-shard route returns each unmatched preserved row once per shard.
+// Checking the opcode rather than the routing type leaves unsharded routes out: there is only one
+// shard to read them from.
+func owesReferenceRows(ctx *plancontext.PlanningContext, joinType sqlparser.JoinType, preserved, other *Route) bool {
+	if joinType.IsInner() || preserved.Routing.OpCode() != engine.Reference {
+		return false
+	}
+
+	return !isDirectDMLRowSource(ctx, preserved, other)
+}
+
+// isDirectDMLRowSource reports whether a merge of these routes is the row source of a multi-table
+// DML rather than something that reads it. Nothing reads the preserved rows then: an unmatched one
+// has no row to update or delete on the other side, and a reference table that is itself the
+// target has a physical copy on every shard to write to. A target among these routes is what says
+// the DML writes through this join rather than reading it from further down, where an outer join
+// in a subquery does have its rows read.
+func isDirectDMLRowSource(ctx *plancontext.PlanningContext, routes ...*Route) bool {
+	targets := ctx.SemTable.DMLTargets
+	if targets.IsEmpty() {
+		return false
+	}
+
+	var id semantics.TableSet
+	for _, route := range routes {
+		id = id.Merge(TableID(route))
+	}
+	return id.IsOverlapping(targets)
 }
 
 func mergeAnyShardRoutings(ctx *plancontext.PlanningContext, a, b *AnyShardRouting, joinPredicates []sqlparser.Expr, joinType sqlparser.JoinType) *AnyShardRouting {
@@ -262,16 +308,29 @@ func getKeyspaceName(routing Routing) string {
 }
 
 func (jm *joinMerger) merge(ctx *plancontext.PlanningContext, op1, op2 *Route, r Routing, conditions ...engine.Condition) *Route {
+	// The rows a join further down preserved are not read either when this merge is the DML's row
+	// source, so the target exempts them the same way it exempts the ones this join preserves.
+	preserved, canMerge := referenceRowsInvariant(r, owesReferenceRows(ctx, jm.joinType, op1, op2), op1, op2)
+	if preserved && isDirectDMLRowSource(ctx, op1, op2) {
+		preserved, canMerge = false, true
+	}
+	if !canMerge {
+		debugNoRewrite("apply join merge blocked: %s routing would widen a route that has to stay single-shard", r.OpCode().String())
+		return nil
+	}
+
 	aj := NewApplyJoin(ctx, op1.Source, op2.Source, ctx.SemTable.AndExpressions(jm.predicates...), jm.joinType, false)
 	for _, column := range aj.JoinPredicates.columns {
 		if column.JoinPredicateID != nil {
 			ctx.PredTracker.Set(*column.JoinPredicateID, column.Original)
 		}
 	}
+
 	return &Route{
-		unaryOperator: newUnaryOp(aj),
-		MergedWith:    []*Route{op2},
-		Routing:       r,
-		Conditions:    conditions,
+		unaryOperator:          newUnaryOp(aj),
+		MergedWith:             []*Route{op2},
+		Routing:                r,
+		Conditions:             conditions,
+		PreservesReferenceRows: preserved,
 	}
 }
