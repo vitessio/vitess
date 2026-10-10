@@ -154,6 +154,21 @@ func TestDestinationExactKeyRange(t *testing.T) {
 	}
 }
 
+func TestDestinationExactKeyRangeDoesNotMutateShards(t *testing.T) {
+	shards := initShardArray(t, "-40-80-")
+	allShards := []*topodatapb.ShardReference{shards[2], shards[0], shards[1]}
+	destination := DestinationExactKeyRange{}
+
+	var gotShards []string
+	err := destination.Resolve(allShards, func(shard string) error {
+		gotShards = append(gotShards, shard)
+		return nil
+	})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"-40", "40-80", "80-"}, gotShards)
+	assert.Equal(t, []*topodatapb.ShardReference{shards[2], shards[0], shards[1]}, allShards)
+}
+
 func TestDestinationKeyRange(t *testing.T) {
 	testCases := []struct {
 		keyspace string
