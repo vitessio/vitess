@@ -225,6 +225,16 @@ func alterOptionCapableOfInstantDDL(alterOption sqlparser.AlterOption, createTab
 			return false, nil
 		}
 		for _, column := range opt.Columns {
+			if (column.Type.Options != nil && column.Type.Options.Autoincrement) || strings.EqualFold(column.Type.Type, "serial") {
+				log.Info("ALTER is not eligible for INSTANT DDL because the column is AUTO_INCREMENT",
+					slog.String("alter", sqlparser.CanonicalString(alterOption)))
+				return false, nil
+			}
+			if column.Type.Options != nil && column.Type.Options.KeyOpt != sqlparser.ColKeyNone {
+				log.Info("ALTER is not eligible for INSTANT DDL because the column defines an inline key",
+					slog.String("alter", sqlparser.CanonicalString(alterOption)))
+				return false, nil
+			}
 			if isGenerated, storage := IsGeneratedColumn(column); isGenerated {
 				if storage == sqlparser.StoredStorage {
 					// Adding a generated "STORED" column is unsupported
