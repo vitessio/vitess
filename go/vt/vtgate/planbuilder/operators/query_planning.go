@@ -880,6 +880,12 @@ func pushFilterUnderProjection(ctx *plancontext.PlanningContext, filter *Filter,
 			return filter, NoRewrite
 		}
 	}
+	// Swapping under this projection leaves the WHERE on the UNION itself, which
+	// queryBuilder.addPredicate cannot render.
+	if _, isUnion := projection.Source.(*Union); isUnion {
+		debugNoRewrite("filter push blocked: a WHERE cannot attach to a UNION")
+		return filter, NoRewrite
+	}
 	return Swap(filter, projection, "push filter under projection")
 }
 

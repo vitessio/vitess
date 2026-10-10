@@ -18,6 +18,7 @@ package operators
 
 import (
 	"fmt"
+	"io"
 	"slices"
 	"strings"
 
@@ -26,6 +27,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/predicates"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 type Union struct {
@@ -95,22 +97,133 @@ The first SELECT of the union dictates the column names, and the second is whate
 can be found on the same offset. The names of the RHS are discarded.
 */
 func (u *Union) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
-	offsets := make(map[string]int)
-	sel := u.GetSelectFor(0)
-	for i, selectExpr := range sel.GetColumns() {
-		ae, ok := selectExpr.(*sqlparser.AliasedExpr)
-		if !ok {
-			panic(vterrors.VT12001("pushing predicates on UNION where the first SELECT contains * or NEXT"))
-		}
-		offsets[strings.ToLower(ae.ColumnName())] = i
-	}
-
+	offsets := u.columnOffsets()
 	exprPerSource := u.predicatePerSource(ctx, expr, offsets)
 	for i, src := range u.Sources {
 		u.Sources[i] = src.AddPredicate(ctx, exprPerSource[i])
 	}
 
 	return u
+}
+
+func (u *Union) columnOffsets() map[string]int {
+	offsets := make(map[string]int)
+	for i, selectExpr := range u.GetSelectFor(0).GetColumns() {
+		ae, ok := selectExpr.(*sqlparser.AliasedExpr)
+		if !ok {
+			panic(vterrors.VT12001("pushing predicates on UNION where the first SELECT contains * or NEXT"))
+		}
+		offsets[strings.ToLower(ae.ColumnName())] = i
+	}
+	return offsets
+}
+
+// canPushPredicate reports whether a predicate can be pushed into the sources of the UNION.
+// Pushing duplicates every expression it substitutes in, once per source, so `col <> col` over
+// `select uuid()` must not be pushed - it would become `uuid() <> uuid()`, which is true rather
+// than false.
+//
+// This inspects the projections behind the columns the predicate references rather than the
+// rewritten predicate, because building that one is not free: predicatePerSource registers a join
+// predicate per source in ctx.PredTracker, and CopyOnRewrite over a *predicates.JoinPredicate
+// calls JoinPredicate.Clone, which overwrites the tracked expression.
+func (u *Union) canPushPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) bool {
+	offsets := u.columnOffsets()
+	resolved := map[derivedColumn]bool{}
+
+	safe := true
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+		col, ok := node.(*sqlparser.ColName)
+		if !ok {
+			return true, nil
+		}
+		idx, ok := offsets[col.Name.Lowered()]
+		// !ok is a column the UNION does not project, which a column list on the derived
+		// table produces: `sub(c)` renames them and the offsets no longer resolve.
+		if !ok || !u.canSubstituteAt(ctx, resolved, idx) {
+			safe = false
+			return false, io.EOF
+		}
+		return true, nil
+	}, expr)
+	return safe
+}
+
+// canSubstituteAt reports whether every leaf branch projects something at idx that substitution can
+// duplicate. A leaf the guard cannot inspect counts as unsafe.
+func (u *Union) canSubstituteAt(ctx *plancontext.PlanningContext, resolved map[derivedColumn]bool, idx int) bool {
+	for i := range u.Sources {
+		for _, stmt := range u.allSelectsFor(i) {
+			// GetAllSelects also yields *ValuesStatement, which has no projection to inspect.
+			sel, ok := stmt.(*sqlparser.Select)
+			if !ok {
+				return false
+			}
+			cols := sel.GetColumns()
+			// A branch narrower than the first one, which an unexpanded * can produce.
+			if idx >= len(cols) {
+				return false
+			}
+			ae, ok := cols[idx].(*sqlparser.AliasedExpr)
+			if !ok || unsafeToDuplicate(ctx, resolved, ae.Expr) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// derivedColumn is what unsafeToDuplicate resolves, and so what it caches against.
+type derivedColumn struct {
+	tbl  *semantics.DerivedTable
+	name string
+}
+
+// unsafeToDuplicate reports whether substituting a branch projection would duplicate a volatile
+// expression. A branch can select from a derived table of its own, and it is that branch's
+// Horizon.AddPredicate that substitutes the expression in afterwards, so a column reference has to
+// be followed through the derived table before the question can be answered.
+//
+// resolved caches the answer per derived table column: `c + c` reaches the same column twice at
+// every level, so without it the walk costs 2^depth.
+func unsafeToDuplicate(ctx *plancontext.PlanningContext, resolved map[derivedColumn]bool, expr sqlparser.Expr) bool {
+	if sqlparser.ContainsVolatile(expr) {
+		return true
+	}
+
+	unsafe := false
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+		col, ok := node.(*sqlparser.ColName)
+		if !ok {
+			return true, nil
+		}
+		if columnIsUnsafe(ctx, resolved, col) {
+			unsafe = true
+			return false, io.EOF
+		}
+		return true, nil
+	}, expr)
+	return unsafe
+}
+
+func columnIsUnsafe(ctx *plancontext.PlanningContext, resolved map[derivedColumn]bool, col *sqlparser.ColName) bool {
+	tbl, err := ctx.SemTable.TableInfoForExpr(col)
+	if err != nil {
+		// A column an unexpanded * hides, so it comes from a real table and cannot be volatile.
+		return false
+	}
+	dt, ok := tbl.(*semantics.DerivedTable)
+	if !ok {
+		return false
+	}
+
+	key := derivedColumn{tbl: dt, name: col.Name.Lowered()}
+	if unsafe, ok := resolved[key]; ok {
+		return unsafe
+	}
+	unsafe := unsafeToDuplicate(ctx, resolved, semantics.RewriteDerivedTableExpression(col, dt))
+	resolved[key] = unsafe
+	return unsafe
 }
 
 func (u *Union) predicatePerSource(ctx *plancontext.PlanningContext, expr sqlparser.Expr, offsets map[string]int) []sqlparser.Expr {
@@ -150,6 +263,23 @@ func (u *Union) predicatePerSource(ctx *plancontext.PlanningContext, expr sqlpar
 	}
 
 	return exprPerSource
+}
+
+// allSelectsFor returns every leaf statement behind a source, where GetSelectFor returns only the
+// first. `a union all b union all c` parses left-associatively, so source 0 of the outer UNION is
+// itself a union over a and b, and looking at the first SELECT alone would not see b.
+func (u *Union) allSelectsFor(source int) []sqlparser.TableStatement {
+	src := u.Sources[source]
+	for {
+		switch op := src.(type) {
+		case *Horizon:
+			return sqlparser.GetAllSelects(op.Query)
+		case *Route:
+			src = op.Source
+		default:
+			panic(vterrors.VT13001("expected all sources of the UNION to be horizons"))
+		}
+	}
 }
 
 func (u *Union) GetSelectFor(source int) *sqlparser.Select {
