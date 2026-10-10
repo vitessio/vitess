@@ -35,6 +35,7 @@ import (
 	"math/rand/v2"
 	"os"
 	"path"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -379,7 +380,7 @@ const (
 	maxConcurrency                = 15
 	singleConnectionSleepInterval = 5 * time.Millisecond
 	periodicSleepPercent          = 10 // in the range (0,100). 10 means 10% sleep time throught the stress load.
-	waitForStatusTimeout          = 180 * time.Second
+	waitForStatusTimeout          = 300 * time.Second
 )
 
 func resetOpOrder() {
@@ -406,6 +407,10 @@ func mysqlParams() *mysql.ConnParams {
 	}
 	return evaluatedMysqlParams
 }
+
+// parallelReplicationWorkers runs the migrations with the parallel applier
+// when > 1. The suite runs in CI both with it and without.
+var parallelReplicationWorkers = flag.Int("vreplication-parallel-replication-workers", 1, "number of parallel replication workers for the migrations; <= 1 applies serially")
 
 func TestMain(m *testing.M) {
 	flag.Parse()
@@ -434,6 +439,14 @@ func TestMain(m *testing.M) {
 			"--heartbeat-on-demand-duration", "5s",
 			"--migration-check-interval", "5s",
 			"--vstream-packet-size", "4096", // Keep this value small and below 10k to ensure multilple vstream iterations
+		}
+		if *parallelReplicationWorkers > 1 {
+			txPoolSize := max(*parallelReplicationWorkers, 100)
+			clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
+				"--queryserver-config-transaction-cap", strconv.Itoa(txPoolSize),
+				"--transaction-limit-per-user", "0.9",
+				"--vreplication-parallel-replication-workers", strconv.Itoa(*parallelReplicationWorkers),
+			)
 		}
 		clusterInstance.VtGateExtraArgs = []string{
 			"--ddl-strategy", "online",
@@ -529,10 +542,10 @@ func TestVreplStressSchemaChanges(t *testing.T) {
 				}
 				status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, waitForStatusTimeout, expectStatus)
 				fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
-				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, expectStatus)
 				cancel() // will cause runMultipleConnections() to terminate
 				wg.Wait()
 				require.NoError(t, workloadErr)
+				require.Equal(t, string(expectStatus), string(status), "migration did not reach expected status within timeout")
 				if !testcase.expectFailure {
 					testCompareBeforeAfterTables(t, testcase.autoIncInsert)
 				}

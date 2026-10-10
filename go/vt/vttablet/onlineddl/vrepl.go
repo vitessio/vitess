@@ -52,6 +52,7 @@ type VReplStream struct {
 	id                   int32
 	workflow             string
 	source               string
+	options              string
 	pos                  string
 	timeUpdated          int64
 	timeHeartbeat        int64
