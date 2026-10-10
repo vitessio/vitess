@@ -145,6 +145,13 @@ type flavor interface {
 	// as the new replication source (without changing any GTID position).
 	setReplicationSourceCommand(params *ConnParams, host string, port int32, heartbeatInterval float64, connectRetry int) string
 
+	// setReplicationSourceReceiverCommand returns the command that changes only the receiver
+	// (I/O thread) options of an already configured, auto-positioned replication channel to
+	// use the provided host/port, keeping every other setting. MySQL keeps the relay log when
+	// it is run with the receiver stopped and the applier running. Flavors that cannot do
+	// this return UnsupportedCommand or an empty string.
+	setReplicationSourceReceiverCommand(params *ConnParams, host string, port int32, heartbeatInterval float64, connectRetry int) string
+
 	// resetBinaryLogsCommand returns the command to reset the binary logs.
 	resetBinaryLogsCommand() string
 
@@ -428,6 +435,23 @@ func (c *Conn) SetReplicationPositionCommands(pos replication.Position) []string
 // It should not start or stop replication.
 func (c *Conn) SetReplicationSourceCommand(params *ConnParams, host string, port int32, heartbeatInterval float64, connectRetry int) string {
 	return c.flavor.setReplicationSourceCommand(params, host, port, heartbeatInterval, connectRetry)
+}
+
+// SetReplicationSourceReceiverCommand returns the command that changes only the receiver
+// options (address, credentials, TLS, heartbeat) of an already configured, auto-positioned
+// replication channel. Unlike SetReplicationSourceCommand it can be run while the applier is
+// running, which makes MySQL keep the relay log. It must be called with the receiver
+// stopped. It returns UnsupportedCommand or an empty string for flavors that cannot do this;
+// see SupportsReplicationSourceReceiverChange.
+func (c *Conn) SetReplicationSourceReceiverCommand(params *ConnParams, host string, port int32, heartbeatInterval float64, connectRetry int) string {
+	return c.flavor.setReplicationSourceReceiverCommand(params, host, port, heartbeatInterval, connectRetry)
+}
+
+// SupportsReplicationSourceReceiverChange reports whether the flavor provides
+// SetReplicationSourceReceiverCommand.
+func (c *Conn) SupportsReplicationSourceReceiverChange() bool {
+	cmd := c.flavor.setReplicationSourceReceiverCommand(&ConnParams{}, "", 0, 0, 0)
+	return cmd != "" && cmd != UnsupportedCommand
 }
 
 // resultToMap is a helper function used by ShowReplicationStatus.

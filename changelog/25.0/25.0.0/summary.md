@@ -56,6 +56,7 @@
         - [Query timeout for state-changing statements on the streaming path](#vttablet-stream-query-timeout)
         - [Query rules now apply to queries on the streaming path](#vttablet-rules-apply-to-streaming)
         - [New `--demote-primary-lock-wait-timeout` flag](#vttablet-demote-primary-lock-wait-timeout)
+        - [New `--replication-preserve-relay-logs` flag](#vttablet-replication-preserve-relay-logs)
         - [Schema engine table-count limit is now configurable](#vttablet-schema-max-table-count)
         - [Replicas are placed in a crash-safe state before shutdown](#vttablet-replica-crash-safe-shutdown)
         - [Skip MySQL version check when restoring from a mysql-shell backup](#vttablet-mysql-shell-restore-skip-version-check)
@@ -588,6 +589,14 @@ A new VTTablet flag, `--demote-primary-lock-wait-timeout` (default `0`, disabled
 When disabled (the default), demotion behavior is unchanged and the wait is unbounded.
 
 See [#20285](https://github.com/vitessio/vitess/pull/20285) for details.
+
+#### <a id="vttablet-replication-preserve-relay-logs"/>New `--replication-preserve-relay-logs` flag</a>
+
+VTTablet now keeps a MySQL 8.0.26+ replica's relay log when it repoints replication that uses GTID auto-positioning (reparents, VTOrc's replica repairs, tablet startup), so received but unapplied transactions, which a semi-sync primary may already have reported as committed, are no longer discarded. A replica whose relay log holds another server's transactions that the shard primary lacks now fails to start, as it does for errant GTIDs in its executed set. MariaDB and file-position replication still discard the relay log when repointed.
+
+Changing a replica's replication source no longer stops its applier, so it no longer waits for a busy or blocked applier. `EmergencyReparentShard` can therefore repoint such a replica to the new primary at once and count it as a semi-sync acker. Restarting replication without changing the source still stops the applier.
+
+The new VTTablet flag `--replication-preserve-relay-logs` (default `true`) restores the previous behavior when set to `false`.
 
 #### <a id="vttablet-schema-max-table-count"/>Schema engine table-count limit is now configurable</a>
 

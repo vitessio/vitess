@@ -215,6 +215,12 @@ func (mysqlFlavorLegacy) catchupToGTIDCommands(params *ConnParams, replPos repli
 	return cmds
 }
 
+// setReplicationSourceReceiverCommand is part of the Flavor interface. The legacy flavor keeps
+// reconfiguring replication with the full CHANGE MASTER TO command.
+func (mysqlFlavorLegacy) setReplicationSourceReceiverCommand(params *ConnParams, host string, port int32, heartbeatInterval float64, connectRetry int) string {
+	return UnsupportedCommand
+}
+
 func (mysqlFlavorLegacy) setReplicationSourceCommand(params *ConnParams, host string, port int32, heartbeatInterval float64, connectRetry int) string {
 	args := []string{
 		fmt.Sprintf("MASTER_HOST = '%s'", host),

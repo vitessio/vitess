@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/reparent/utils"
 	endtoendutils "vitess.io/vitess/go/test/endtoend/utils"
@@ -317,19 +318,13 @@ func TestERSExcludesErrantGTIDCandidateAndRewaits(t *testing.T) {
 	require.Equal(t, strconv.Itoa(tablets[0].MySQLPort), replicaStatusField(t, tablets[2], "Source_Port"))
 }
 
-// TestERSWaitsForAckerRepointBeforePromotion checks that when the winner's sole semi-sync
-// acker cannot complete its repoint promptly — its applier is stuck mid-event-group on a
-// non-transactional table, which STOP REPLICA cannot roll back, so the STOP inside
-// SetReplicationSource waits — ERS fails cleanly before making the candidate read-write,
-// and succeeds once the applier is unblocked.
-func TestERSWaitsForAckerRepointBeforePromotion(t *testing.T) {
-	endtoendutils.SkipIfBinaryIsBelowVersion(t, 25, "vtctld")
-
-	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
-	defer utils.TeardownCluster(clusterInstance)
+// blockAckerApplier makes tablets[1] the only semi-sync acker of tablets[2] (tablets[3]
+// becomes an rdonly), kills the primary tablets[0], and leaves tablets[1] with every
+// transaction received but its applier stuck mid-event-group on a non-transactional table,
+// which STOP REPLICA cannot roll back. It returns the connection holding the lock that blocks
+// the applier.
+func blockAckerApplier(t *testing.T, clusterInstance *cluster.LocalProcessCluster) *mysql.Conn {
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
-
-	utils.ConfirmReplication(t, tablets[0], tablets[1:])
 
 	// The cross-cell replica becomes an rdonly so it cannot ack: tablets[1] is then
 	// tablets[2]'s only semi-sync acker.
@@ -346,7 +341,7 @@ func TestERSWaitsForAckerRepointBeforePromotion(t *testing.T) {
 	// Hold a read lock on the table on tablets[1] so its applier wedges on the write.
 	lockConn, err := utils.GetMySQLConn(t.Context(), tablets[1])
 	require.NoError(t, err)
-	defer lockConn.Close()
+	t.Cleanup(lockConn.Close)
 	_, err = lockConn.ExecuteFetch("lock tables vt_nontx read", 1000, true)
 	require.NoError(t, err)
 
@@ -356,6 +351,33 @@ func TestERSWaitsForAckerRepointBeforePromotion(t *testing.T) {
 	waitForReceivedPosition(t, tablets[1], primaryPosition)
 
 	utils.StopTablet(t, tablets[0], true)
+	return lockConn
+}
+
+// TestERSWaitsForAckerRepointBeforePromotion checks that when the winner's sole semi-sync
+// acker cannot complete its repoint promptly — its applier is stuck mid-event-group on a
+// non-transactional table, which STOP REPLICA cannot roll back, so the STOP inside
+// SetReplicationSource waits — ERS fails cleanly before making the candidate read-write,
+// and succeeds once the applier is unblocked. The acker runs with
+// --replication-preserve-relay-logs=false, as the default repoint does not stop the applier
+// (see TestERSRepointsAckerWithBlockedApplier).
+func TestERSWaitsForAckerRepointBeforePromotion(t *testing.T) {
+	endtoendutils.SkipIfBinaryIsBelowVersion(t, 25, "vtctld")
+
+	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
+	defer utils.TeardownCluster(clusterInstance)
+	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
+
+	utils.ConfirmReplication(t, tablets[0], tablets[1:])
+
+	// Restart the acker's vttablet with the repoint that stops the applier.
+	if version, err := cluster.GetMajorVersion("vttablet"); err == nil && version >= 25 {
+		require.NoError(t, tablets[1].VttabletProcess.TearDownWithTimeout(30*time.Second))
+		tablets[1].VttabletProcess.ExtraArgs = append(tablets[1].VttabletProcess.ExtraArgs, "--replication-preserve-relay-logs=false")
+		require.NoError(t, tablets[1].VttabletProcess.Setup())
+	}
+
+	lockConn := blockAckerApplier(t, clusterInstance)
 
 	// tablets[2] wins the election, but its sole acker tablets[1] cannot finish
 	// SetReplicationSource while its applier is pinned: ERS must fail before the
@@ -368,12 +390,55 @@ func TestERSWaitsForAckerRepointBeforePromotion(t *testing.T) {
 	res := utils.RunSQL(t.Context(), t, `select @@global.read_only, @@global.super_read_only`, tablets[2])
 	require.Equal(t, `[[INT64(1) INT64(1)]]`, fmt.Sprintf("%v", res.Rows))
 
-	// Unblock the applier and the same ERS succeeds.
+	// Unblock the applier, stop the acker's replication and start its applier again, and the
+	// same ERS succeeds. The failed attempt's STOP REPLICA was killed at its deadline, and
+	// stops the applier once its event group completes, but the acker's receiver keeps retrying
+	// the dead primary (Replica_IO_Running: Connecting, with a connection error). The repoint
+	// with --replication-preserve-relay-logs=false treats such a receiver as stopped, so it
+	// runs CHANGE REPLICATION SOURCE without STOP REPLICA, which MySQL refuses (ERROR 3081)
+	// while the receiver runs. The applier must run for ERS to wait on the relay log.
 	_, err = lockConn.ExecuteFetch("unlock tables", 1000, true)
 	require.NoError(t, err)
+	utils.RunSQLs(t.Context(), t, []string{`STOP REPLICA`, `START REPLICA SQL_THREAD`}, tablets[1])
 	out, err = utils.Ers(clusterInstance, nil, "120s", "30s")
 	require.NoError(t, err, out)
 
 	newPrimary := utils.GetNewPrimary(t, clusterInstance)
 	utils.ConfirmReplication(t, newPrimary, nil)
+}
+
+// TestERSRepointsAckerWithBlockedApplier checks that a semi-sync acker whose applier is
+// stuck on a lock can still be repointed, as the repoint stops only its receiver, so ERS
+// promotes the winner at once and the acker acknowledges its writes while still behind on
+// apply.
+func TestERSRepointsAckerWithBlockedApplier(t *testing.T) {
+	endtoendutils.SkipIfBinaryIsBelowVersion(t, 25, "vttablet")
+	// Older vtctlds wait on every candidate's relay log, including the blocked acker's.
+	endtoendutils.SkipIfBinaryIsBelowVersion(t, 25, "vtctld")
+
+	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
+	t.Cleanup(func() { utils.TeardownCluster(clusterInstance) })
+	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
+
+	utils.ConfirmReplication(t, tablets[0], tablets[1:])
+	lockConn := blockAckerApplier(t, clusterInstance)
+
+	out, err := utils.Ers(clusterInstance, nil, "120s", "30s")
+	require.NoError(t, err, out)
+	newPrimary := utils.GetNewPrimary(t, clusterInstance)
+	require.Equal(t, tablets[2].Alias, newPrimary.Alias)
+
+	// The write commits only once tablets[1], the only acker, acknowledges it, although its
+	// applier is still blocked.
+	waitForReplicationSource(t, tablets[1], newPrimary)
+	insertedVal := utils.ConfirmReplication(t, newPrimary, nil)
+	assert.Equal(t, "Yes", replicaStatusField(t, tablets[1], "Replica_SQL_Running"))
+	res := utils.RunSQL(t.Context(), t, "select id from vt_nontx", tablets[1])
+	assert.Empty(t, res.Rows, "the acker's applier must still be blocked")
+
+	// Once unblocked, the acker applies everything.
+	_, err = lockConn.ExecuteFetch("unlock tables", 1000, true)
+	require.NoError(t, err)
+	require.NoError(t, utils.CheckInsertedValues(t.Context(), t, tablets[1], insertedVal))
+	utils.CheckReplicationStatus(t.Context(), t, tablets[1], true, true)
 }
