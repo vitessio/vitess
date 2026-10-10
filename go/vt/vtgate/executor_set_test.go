@@ -690,6 +690,15 @@ func TestSetVar(t *testing.T) {
 		{sql: "explain format=json update user set col = 2", sent: "explain format = json update /*+ SET_VAR(sql_mode = 'only_full_group_by') */ `user` set col = 2"},
 		// A VALUES statement cannot take the hint, so neither can its EXPLAIN.
 		{sql: "explain values row(1)", rc: true},
+		// PREPARE and DEALLOCATE are handled by VTGate. EXECUTE is decided on the
+		// stored statement, which carries the hint.
+		{sql: "prepare p from 'select 1 from user'"},
+		{sql: "execute p", sent: "select /*+ SET_VAR(sql_mode = 'only_full_group_by') */ 1 from `user`"},
+		{sql: "deallocate prepare p"},
+		// A stored statement that cannot take the hint reserves a connection when it
+		// runs, not when it is prepared.
+		{sql: "prepare q from 'create table foo(bar bigint)'"},
+		{sql: "execute q", rc: true},
 	}
 
 	for _, tc := range tcases {

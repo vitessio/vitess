@@ -127,6 +127,12 @@ func (e *Executor) newExecute(
 			return err
 		}
 
+		// The session then sends its settings with every later statement,
+		// instead of carrying them as SET_VAR hints.
+		if plan.NeedsSettingsOnConn {
+			vcursor.NeedsReservedConn()
+		}
+
 		// Start an implicit transaction if necessary. This is done after plan
 		// creation so we can check whether the plan actually accesses real table
 		// data, matching MySQL's behavior where only data-accessing statements
