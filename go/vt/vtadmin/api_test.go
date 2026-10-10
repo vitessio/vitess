@@ -5753,6 +5753,27 @@ func TestServeHTTP(t *testing.T) {
 		})
 	}
 }
+func TestWithCluster(t *testing.T) {
+	t.Run("rejected candidate is closed", func(t *testing.T) {
+		// regression for #20866
+		cluster1 := vtadmintestutil.BuildCluster(t, vtadmintestutil.TestClusterConfig{Cluster: &vtadminpb.Cluster{Id: "id", Name: "cluster"}})
+		cluster2 := vtadmintestutil.BuildCluster(t, vtadmintestutil.TestClusterConfig{Cluster: &vtadminpb.Cluster{Id: "id", Name: "cluster"}})
+
+		api := NewAPI(vtenv.NewTestEnv(), nil, Options{EnableDynamicClusters: true})
+		api.WithCluster(cluster1, "id")
+		api.WithCluster(cluster2, "id")
+
+		resp, err := api.GetClusters(t.Context(), &vtadminpb.GetClustersRequest{})
+		require.NoError(t, err)
+		require.Len(t, resp.Clusters, 1)
+		assert.Equal(t, "cluster", resp.Clusters[0].Name)
+
+		assert.EqualError(t, cluster2.DB.PingContext(t.Context()), "sql: database is closed")
+
+		api.WithCluster(cluster1, "id")
+		assert.NoError(t, cluster1.DB.PingContext(t.Context()))
+	})
+}
 
 func init() {
 	// For tests that don't actually care about mocking the tmclient (i.e. they
