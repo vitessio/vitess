@@ -1004,6 +1004,108 @@ func TestRewritesWithSetVarComment(in *testing.T) {
 	}
 }
 
+// TestRewritesWithClientSetVar checks how the session's SET_VAR hints are merged
+// into a query block's first optimizer hint comment that the client wrote. The
+// session's hints leave out the variables that the same comment sets, so the
+// client's value applies without a duplicate, and they go ahead of the client's
+// hints, so a malformed client hint cannot drop them. Other query blocks still get
+// the session's full hint: a session copy in a nested block can still override a
+// client's hint in an enclosing block, which needs the planner and is tracked on
+// #21014.
+func TestRewritesWithClientSetVar(t *testing.T) {
+	const session = "SET_VAR(sql_mode = 'STRICT_TRANS_TABLES') SET_VAR(sql_safe_updates = 0)"
+	fkOff := false
+	tests := []struct {
+		name, in, expected, setVarComment string
+		fkChecks                          *bool
+	}{{
+		name:          "client sets a session variable",
+		in:            "select /*+ SET_VAR(sql_mode = 'ANSI_QUOTES') */ 1 from t",
+		expected:      "select /*+ SET_VAR(sql_safe_updates = 0) SET_VAR(sql_mode = 'ANSI_QUOTES') */ 1 from t",
+		setVarComment: session,
+	}, {
+		name:          "client sets every session variable",
+		in:            "select /*+ SET_VAR(sql_mode = 'ANSI_QUOTES') SET_VAR(sql_safe_updates = 1) */ 1 from t",
+		expected:      "select /*+ SET_VAR(sql_mode = 'ANSI_QUOTES') SET_VAR(sql_safe_updates = 1) */ 1 from t",
+		setVarComment: session,
+	}, {
+		name:          "malformed client hint",
+		in:            "select /*+ BOGUS_HINT(x) */ 1 from t",
+		expected:      "select /*+ SET_VAR(sql_mode = 'STRICT_TRANS_TABLES') SET_VAR(sql_safe_updates = 0) BOGUS_HINT(x) */ 1 from t",
+		setVarComment: session,
+	}, {
+		// MySQL reads only the first optimizer hint comment of a query block,
+		// so the client's sql_mode in the later comment does not count.
+		name:          "client hint in a later hint comment does not count",
+		in:            "select /*+ SET_VAR(sql_safe_updates = 1) */ /*+ SET_VAR(sql_mode = 'ANSI_QUOTES') */ 1 from t",
+		expected:      "select /*+ SET_VAR(sql_mode = 'STRICT_TRANS_TABLES') SET_VAR(sql_safe_updates = 1) */ /*+ SET_VAR(sql_mode = 'ANSI_QUOTES') */ 1 from t",
+		setVarComment: session,
+	}, {
+		name:          "client variable name in another case",
+		in:            "select /*+ SET_VAR(SQL_MODE = 'ANSI_QUOTES') */ 1 from t",
+		expected:      "select /*+ SET_VAR(sql_safe_updates = 0) SET_VAR(SQL_MODE = 'ANSI_QUOTES') */ 1 from t",
+		setVarComment: session,
+	}, {
+		name:          "session variable name in another case",
+		in:            "select /*+ SET_VAR(sql_mode = 'ANSI_QUOTES') */ 1 from t",
+		expected:      "select /*+ SET_VAR(sql_safe_updates = 0) SET_VAR(sql_mode = 'ANSI_QUOTES') */ 1 from t",
+		setVarComment: "SET_VAR(Sql_Mode = 'STRICT_TRANS_TABLES') SET_VAR(sql_safe_updates = 0)",
+	}, {
+		name:          "values with spaces, commas and parentheses",
+		in:            "select /*+ SET_VAR(optimizer_switch = 'mrr=off, (x)') */ 1 from t",
+		expected:      "select /*+ SET_VAR(sql_mode = 'A, B (c)') SET_VAR(sql_safe_updates = 0) SET_VAR(optimizer_switch = 'mrr=off, (x)') */ 1 from t",
+		setVarComment: "SET_VAR(sql_mode = 'A, B (c)') SET_VAR(optimizer_switch = 'index_merge=off, mrr=on (y)') SET_VAR(sql_safe_updates = 0)",
+	}, {
+		// The nested block still gets the session's sql_mode, which MySQL
+		// prefers over the client's in the enclosing block. That needs the
+		// planner and is tracked on #21014.
+		name:          "other query blocks keep the session's full hint",
+		in:            "select /*+ SET_VAR(sql_mode = 'ANSI_QUOTES') */ 1 from t where exists (select 1 from s)",
+		expected:      "select /*+ SET_VAR(sql_safe_updates = 0) SET_VAR(sql_mode = 'ANSI_QUOTES') */ 1 from t where exists (select /*+ SET_VAR(sql_mode = 'STRICT_TRANS_TABLES') SET_VAR(sql_safe_updates = 0) */ 1 from s)",
+		setVarComment: session,
+	}, {
+		name:          "client hint in a nested block",
+		in:            "select 1 from t where exists (select /*+ SET_VAR(sql_mode = 'ANSI_QUOTES') */ 1 from s)",
+		expected:      "select /*+ SET_VAR(sql_mode = 'STRICT_TRANS_TABLES') SET_VAR(sql_safe_updates = 0) */ 1 from t where exists (select /*+ SET_VAR(sql_safe_updates = 0) SET_VAR(sql_mode = 'ANSI_QUOTES') */ 1 from s)",
+		setVarComment: session,
+	}, {
+		name:          "client hint on the first union arm",
+		in:            "select /*+ SET_VAR(sql_mode = 'ANSI_QUOTES') */ 1 from t union select 1 from s",
+		expected:      "select /*+ SET_VAR(sql_safe_updates = 0) SET_VAR(sql_mode = 'ANSI_QUOTES') */ 1 from t union select /*+ SET_VAR(sql_mode = 'STRICT_TRANS_TABLES') SET_VAR(sql_safe_updates = 0) */ 1 from s",
+		setVarComment: session,
+	}, {
+		// The union node shares its first arm's comments. Once the session's
+		// foreign_key_checks is rewritten, the hint is not added a second time.
+		name:          "union with foreign_key_checks",
+		in:            "select 1 from t union select 1 from s",
+		expected:      "select /*+ SET_VAR(foreign_key_checks=Off) SET_VAR(sql_mode = 'STRICT_TRANS_TABLES') */ 1 from t union select /*+ SET_VAR(foreign_key_checks=Off) SET_VAR(sql_mode = 'STRICT_TRANS_TABLES') */ 1 from s",
+		setVarComment: "SET_VAR(foreign_key_checks = 0) SET_VAR(sql_mode = 'STRICT_TRANS_TABLES')",
+		fkChecks:      &fkOff,
+	}}
+
+	parser := NewTestParser()
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			stmt, err := parser.Parse(tc.in)
+			require.NoError(t, err)
+			result, err := Normalize(
+				stmt,
+				NewReservedVars("v", nil),
+				map[string]*querypb.BindVariable{},
+				false,
+				"ks",
+				0,
+				tc.setVarComment,
+				map[string]string{},
+				tc.fkChecks,
+				&fakeViews{},
+			)
+			require.NoError(t, err)
+			assert.Equal(t, tc.expected, String(result.AST))
+		})
+	}
+}
+
 func TestRewritesSysVar(in *testing.T) {
 	tests := []testCaseSysVar{{
 		in:       "select @x = @@sql_mode",

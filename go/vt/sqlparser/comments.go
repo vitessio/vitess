@@ -390,6 +390,56 @@ func (c *ParsedComments) GetMySQLSetVarNames() []string {
 	return nil
 }
 
+// setVarNames returns the lowercase names of the variables that the given
+// optimizer hint comment sets with SET_VAR hints.
+func setVarNames(comment string) map[string]struct{} {
+	names := Comments{comment}.Parsed().GetMySQLSetVarNames()
+	if len(names) == 0 {
+		return nil
+	}
+	set := make(map[string]struct{}, len(names))
+	for _, name := range names {
+		set[strings.ToLower(name)] = struct{}{}
+	}
+	return set
+}
+
+// removeSetVarHints returns hints, a sequence of optimizer hints such as
+// "SET_VAR(a = 1) SET_VAR(b = 'x')", without the SET_VAR hints of the
+// variables in names. The keys of names must be lowercase. Hints that
+// cannot be read are left as they are.
+func removeSetVarHints(hints string, names map[string]struct{}) string {
+	if len(names) == 0 {
+		return hints
+	}
+	var kept []string
+	removed := false
+	pos := 0
+	for pos < len(hints) {
+		finalPos, ohNameStart, ohNameEnd, ohContentStart, ohContentEnd := getOptimizerHint(pos, hints)
+		if ohContentEnd == -1 || ohContentEnd >= len(hints) {
+			if strings.TrimSpace(hints[ohNameStart:]) != "" {
+				// Something we could not read follows; keep the hints unchanged.
+				return hints
+			}
+			break
+		}
+		pos = finalPos + 1
+		if strings.EqualFold(hints[ohNameStart:ohNameEnd], OptimizerHintSetVar) {
+			setVarName, _, isValid := strings.Cut(hints[ohContentStart:ohContentEnd], "=")
+			if _, found := names[strings.ToLower(strings.TrimSpace(setVarName))]; isValid && found {
+				removed = true
+				continue
+			}
+		}
+		kept = append(kept, hints[ohNameStart:finalPos+1])
+	}
+	if !removed {
+		return hints
+	}
+	return strings.Join(kept, " ")
+}
+
 // SetMySQLSetVarValue updates or sets the value of the given variable as part of a /*+ SET_VAR() */ MySQL optimizer hint.
 func (c *ParsedComments) SetMySQLSetVarValue(key string, value string) (newComments Comments) {
 	if c == nil {
