@@ -579,3 +579,23 @@ func GetBackupCandidates(tablets []*topo.TabletInfo, stats []*replicationdatapb.
 	}
 	return res
 }
+
+// ValidateShardManaged refuses a shard holding a tablet Vitess cannot revoke writes from, since a
+// reparent there would report a guarantee it never established. Anything but MANAGED fails closed,
+// so a record written before the field existed reads as managed and a mode a newer peer knows does
+// not.
+func ValidateShardManaged(tabletMap map[string]*topo.TabletInfo) error {
+	var unmanaged []string
+	for alias, tabletInfo := range tabletMap {
+		if tabletInfo.GetMysqlMode() != topodatapb.TabletMySQLMode_MANAGED {
+			unmanaged = append(unmanaged, alias)
+		}
+	}
+	if len(unmanaged) == 0 {
+		return nil
+	}
+	slices.Sort(unmanaged)
+	return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION,
+		"shard has unmanaged tablets %v that Vitess cannot revoke writes from, so it cannot be reparented safely; "+
+			"unmanaged tablets belong in a keyspace of their own", unmanaged)
+}

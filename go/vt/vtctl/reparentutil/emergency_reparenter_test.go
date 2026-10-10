@@ -142,6 +142,42 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 		wantNewPrimary         *topodatapb.TabletAlias
 	}{
 		{
+			// The tmc has no responses configured, so if the guard did not fire first the run
+			// would fail on a stop-replication RPC instead, with a different error.
+			name:       "refuses a shard containing an unmanaged tablet",
+			durability: policy.DurabilityNone,
+			tmc:        &testutil.TabletManagerClient{},
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+					Shard: &topodatapb.Shard{
+						PrimaryAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+					},
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias:     &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+					Keyspace:  "testkeyspace",
+					Shard:     "-",
+					Type:      topodatapb.TabletType_PRIMARY,
+					MysqlMode: topodatapb.TabletMySQLMode_UNMANAGED,
+				},
+				{
+					Alias:     &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+					Keyspace:  "testkeyspace",
+					Shard:     "-",
+					MysqlMode: topodatapb.TabletMySQLMode_MANAGED,
+				},
+			},
+			cells:            []string{"zone1"},
+			keyspace:         "testkeyspace",
+			shard:            "-",
+			shouldErr:        true,
+			errShouldContain: "shard has unmanaged tablets [zone1-0000000100]",
+		},
+		{
 			name:       "success with matching expected primary",
 			durability: policy.DurabilityNone,
 			emergencyReparentOps: EmergencyReparentOptions{
