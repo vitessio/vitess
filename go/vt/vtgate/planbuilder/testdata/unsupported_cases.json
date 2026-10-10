@@ -260,6 +260,11 @@
     "plan": "VT12001: unsupported: Assignment expression"
   },
   {
+    "comment": "select into user-defined variables",
+    "query": "select id from user limit 1 into @x",
+    "plan": "VT12001: unsupported: INTO user-defined variables"
+  },
+  {
     "comment": "explain - routed table with join on different keyspace table",
     "query": "explain select 1, second_user.foo.id, foo.col from second_user.foo join user.user join main.unsharded",
     "plan": "VT03031: EXPLAIN is only supported for single keyspace"
