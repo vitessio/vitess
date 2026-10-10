@@ -31,6 +31,7 @@ import (
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/protoutil"
+	"vitess.io/vitess/go/tb"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -164,9 +165,18 @@ func (tm *TabletManager) ReplicationStatus(ctx context.Context) (*replicationdat
 	return protoStatus, nil
 }
 
+// fullStatusGroupKey is the singleflight key shared by FullStatus and unlock.
+const fullStatusGroupKey = "FullStatus"
+
 // FullStatus returns the full status of MySQL including the replication information, semi-sync information, GTID information among others
+//
+// Concurrent calls share an in-flight collection. Releasing the tablet action lock
+// invalidates it so later calls cannot join a pre-action collection.
 func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.FullStatus, error) {
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 
@@ -179,19 +189,44 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 		}, nil
 	}
 
-	// Collect mysql state using CollectFullStatusData.
-	status, err := tm.MysqlDaemon.CollectFullStatusData(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if status == nil {
-		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "FullStatus collector returned no data")
-	}
+	resultChan := tm.fullStatusGroup.DoChan(fullStatusGroupKey, func() (result any, err error) {
+		// DoChan runs in a separate goroutine, outside the RPC's panic handler.
+		// Keep the stack server-side and hand callers a coded error.
+		defer func() {
+			if x := recover(); x != nil {
+				log.Error(fmt.Sprintf("TabletManager.FullStatus on %v panic: %v\n%s", topoproto.TabletAliasString(tm.tabletAlias), x, tb.Stack(4)))
+				err = vterrors.Errorf(vtrpc.Code_INTERNAL, "FullStatus collection panicked: %v", x)
+			}
+		}()
 
-	status.SemiSyncBlocked = tm.SemiSyncMonitor.AllWritesBlocked()
-	status.TabletType = tm.Tablet().Type
-	status.ShardPeerHealth = tm.shardPeerHealthSnapshot()
-	return status, nil
+		// One caller timing out must not cancel the collection for the others.
+		// Bound the shared work even if all callers have left.
+		ctx, cancel := context.WithTimeout(tm.BatchCtx, topo.RemoteOperationTimeout)
+		defer cancel()
+
+		status, err := tm.MysqlDaemon.CollectFullStatusData(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if status == nil {
+			return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "FullStatus collector returned no data")
+		}
+
+		status.SemiSyncBlocked = tm.SemiSyncMonitor.AllWritesBlocked()
+		status.TabletType = tm.Tablet().Type
+		status.ShardPeerHealth = tm.shardPeerHealthSnapshot()
+		return status, nil
+	})
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case result := <-resultChan:
+		if result.Err != nil {
+			return nil, result.Err
+		}
+		// Each RPC owns its response; callers must not mutate a shared proto.
+		return result.Val.(*replicationdatapb.FullStatus).CloneVT(), nil
+	}
 }
 
 // shardPeerHealthSnapshot returns the latest shard-peer liveness signals, or nil when
