@@ -127,6 +127,15 @@ func TestIsUnrecoverableError(t *testing.T) {
 			expected: true,
 		},
 		{
+			name: "wrapped vterrors.Code_FAILED_PRECONDITION (vstreamer wrapError)",
+			err: vterrors.Wrapf(
+				vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "missing a needed value"),
+				"stream (at source tablet) error @ (including the GTID we failed to process) %s",
+				"MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5",
+			),
+			expected: true,
+		},
+		{
 			name:     "vterrors.Code_FAILED_PRECONDITION, WrongTablet",
 			err:      vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s: %v, want: %v or %v", vterrors.WrongTablet, "PRIMARY", "REPLICA", nil),
 			expected: false,
