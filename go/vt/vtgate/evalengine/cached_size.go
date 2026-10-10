@@ -40,6 +40,29 @@ func (cached *ArithmeticExpr) CachedSize(alloc bool) int64 {
 	return size
 }
 
+func (cached *BetweenExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(64)
+	}
+	// field Left vitess.io/vitess/go/vt/vtgate/evalengine.IR
+	if cc, ok := cached.Left.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field From vitess.io/vitess/go/vt/vtgate/evalengine.IR
+	if cc, ok := cached.From.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field To vitess.io/vitess/go/vt/vtgate/evalengine.IR
+	if cc, ok := cached.To.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
+
 func (cached *BinaryExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
