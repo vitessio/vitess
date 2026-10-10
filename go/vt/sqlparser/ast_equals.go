@@ -4113,7 +4113,7 @@ func (cmp *Comparator) RefOfOtherAdmin(a, b *OtherAdmin) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return true
+	return cmp.SliceOfExpr(a.Exprs, b.Exprs)
 }
 
 // RefOfOverClause does deep equals between the two objects.
