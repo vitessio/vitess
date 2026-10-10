@@ -706,6 +706,22 @@ func (mysqld *Mysqld) restoreReplicaAfterFailedShutdown(ctx context.Context, sta
 	}
 }
 
+// StartSQLThread starts a replica's SQL thread(s) only. It does nothing for flavors without a
+// command for it.
+func (mysqld *Mysqld) StartSQLThread(ctx context.Context) error {
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
+	if err != nil {
+		return err
+	}
+	defer conn.Recycle()
+
+	start := conn.Conn.StartSQLThreadCommand()
+	if !replicationThreadCommandAvailable(start) {
+		return nil
+	}
+	return mysqld.executeSuperQueryListConn(ctx, conn, []string{start})
+}
+
 // StopSQLThread stops a replica's SQL thread(s) only.
 func (mysqld *Mysqld) StopSQLThread(ctx context.Context) error {
 	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)

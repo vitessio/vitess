@@ -31,6 +31,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
@@ -1652,4 +1653,162 @@ func TestShardPeerHealthSnapshot(t *testing.T) {
 	snap := tm.shardPeerHealthSnapshot()
 	require.Len(t, snap, 1)
 	assert.Equal(t, int64(1), snap[0].ConsecutivePingFailures)
+}
+
+// stoppedApplierMysqld exposes independent replication-thread states so the test
+// can verify that starting the applier never starts the receiver.
+type stoppedApplierMysqld struct {
+	*mysqlctl.FakeMysqlDaemon
+	ioState         replication.ReplicationState
+	sqlState        replication.ReplicationState
+	lastSQLError    string
+	receivedFile    replication.Position
+	startCalls      int
+	startedApplier  bool
+	startedReceiver bool
+}
+
+func (m *stoppedApplierMysqld) ReplicationStatus(ctx context.Context) (replication.ReplicationStatus, error) {
+	rs, err := m.FakeMysqlDaemon.ReplicationStatus(ctx)
+	rs.IOState = m.ioState
+	rs.SQLState = m.sqlState
+	rs.LastSQLError = m.lastSQLError
+	rs.RelayLogSourceBinlogEquivalentPosition = m.receivedFile
+	return rs, err
+}
+
+func (m *stoppedApplierMysqld) StopIOThread(ctx context.Context) error {
+	if err := m.FakeMysqlDaemon.StopIOThread(ctx); err != nil {
+		return err
+	}
+	m.ioState = replication.ReplicationStateStopped
+	return nil
+}
+
+func (m *stoppedApplierMysqld) StartSQLThread(ctx context.Context) error {
+	m.startCalls++
+	if err := m.FakeMysqlDaemon.StartSQLThread(ctx); err != nil {
+		return err
+	}
+	m.startedApplier = true
+	m.sqlState = replication.ReplicationStateRunning
+	return nil
+}
+
+func (m *stoppedApplierMysqld) StartReplication(context.Context, map[string]string) error {
+	m.startedReceiver = true
+	return errors.New("unexpected full replication start")
+}
+
+// TestStopReplicationAndGetStatusStartsStoppedApplier checks that ERS's IO-only
+// stop starts an error-free applier with unapplied relay logs, including after a
+// restart with both threads stopped. The receiver remains revoked; the original
+// thread states remain in Before, while After reports the running applier.
+func TestStopReplicationAndGetStatusStartsStoppedApplier(t *testing.T) {
+	executed, err := replication.DecodePosition("MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-826")
+	require.NoError(t, err)
+	received, err := replication.DecodePosition("MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-1326")
+	require.NoError(t, err)
+	fileExecuted, err := replication.DecodePosition("FilePos/mysql-bin.000001:100")
+	require.NoError(t, err)
+	fileReceived, err := replication.DecodePosition("FilePos/mysql-bin.000001:200")
+	require.NoError(t, err)
+
+	tests := []struct {
+		name          string
+		relayLog      replication.Position
+		ioState       replication.ReplicationState
+		sqlRunning    bool
+		lastSQLError  string
+		backupRunning bool
+		fileExecuted  replication.Position
+		fileReceived  replication.Position
+		queryError    string
+		wantErr       string
+		wantStarted   bool
+	}{
+		{name: "unapplied relay log", relayLog: received, wantStarted: true},
+		{name: "running receiver stopped first", relayLog: received, ioState: replication.ReplicationStateRunning, wantStarted: true},
+		{name: "applier stopped by an error", relayLog: received, lastSQLError: "Duplicate entry '1' for key 't.PRIMARY'"},
+		{name: "backup running", relayLog: received, backupRunning: true},
+		{name: "applier already running", relayLog: received, sqlRunning: true},
+		{name: "relay log applied", relayLog: executed},
+		{name: "no received position"},
+		{name: "unapplied file position", fileExecuted: fileExecuted, fileReceived: fileReceived, wantStarted: true},
+		{name: "file position applied", fileExecuted: fileReceived, fileReceived: fileReceived},
+		{name: "applier start fails", relayLog: received, queryError: "START REPLICA SQL_THREAD"},
+		{name: "receiver stop fails", relayLog: received, ioState: replication.ReplicationStateRunning, queryError: "STOP REPLICA IO_THREAD", wantErr: "stop io thread failed"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fmd := newTestMysqlDaemon(t, 1)
+			t.Cleanup(fmd.DB().Close)
+			fmd.Version = "Ver 8.4.6"
+			fmd.CurrentPrimaryPosition = executed
+			fmd.CurrentRelayLogPosition = tt.relayLog
+			fmd.CurrentSourceFilePosition = tt.fileExecuted
+			if tt.queryError != "" {
+				fmd.ExecuteSuperQueryErrorMap = map[string]error{tt.queryError: errors.New("injected thread command failure")}
+			}
+			if tt.ioState == replication.ReplicationStateRunning && tt.queryError != "STOP REPLICA IO_THREAD" {
+				fmd.ExpectedExecuteSuperQueryList = append(fmd.ExpectedExecuteSuperQueryList, "STOP REPLICA IO_THREAD")
+			}
+			if tt.wantStarted {
+				fmd.ExpectedExecuteSuperQueryList = append(fmd.ExpectedExecuteSuperQueryList, "START REPLICA SQL_THREAD")
+			}
+			ioState := tt.ioState
+			if ioState == replication.ReplicationStateUnknown {
+				ioState = replication.ReplicationStateStopped
+			}
+			mysqld := &stoppedApplierMysqld{
+				FakeMysqlDaemon: fmd,
+				ioState:         ioState,
+				sqlState:        replication.ReplicationStateStopped,
+				lastSQLError:    tt.lastSQLError,
+				receivedFile:    tt.fileReceived,
+			}
+			if tt.sqlRunning {
+				mysqld.sqlState = replication.ReplicationStateRunning
+			}
+			tm := newTestReplicationTM(newTestTablet(t, 100, "ks", "0", nil), mysqld, nil)
+			tm._isBackupRunning = tt.backupRunning
+
+			resp, err := tm.StopReplicationAndGetStatus(t.Context(), replicationdatapb.StopReplicationMode_IOTHREADONLY)
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				assert.False(t, mysqld.startedApplier)
+				assert.False(t, mysqld.startedReceiver)
+				require.NotNil(t, resp.Status)
+				assert.Nil(t, resp.Status.After)
+				return
+			}
+			require.NoError(t, err)
+			require.NoError(t, fmd.CheckSuperQueryList())
+			wantStartCalls := 0
+			if tt.wantStarted || tt.queryError == "START REPLICA SQL_THREAD" {
+				wantStartCalls = 1
+			}
+			assert.Equal(t, wantStartCalls, mysqld.startCalls)
+			assert.Equal(t, tt.wantStarted, mysqld.startedApplier)
+			assert.False(t, mysqld.startedReceiver, "the receiver was started")
+			require.NotNil(t, resp.Status)
+			require.NotNil(t, resp.Status.Before)
+			require.NotNil(t, resp.Status.After)
+			beforeSQL := replication.ReplicationStateStopped
+			if tt.sqlRunning {
+				beforeSQL = replication.ReplicationStateRunning
+			}
+			assert.Equal(t, int32(ioState), resp.Status.Before.IoState)
+			assert.Equal(t, int32(beforeSQL), resp.Status.Before.SqlState)
+			assert.Equal(t, int32(replication.ReplicationStateStopped), resp.Status.After.IoState)
+			wantSQL := beforeSQL
+			if tt.wantStarted {
+				wantSQL = replication.ReplicationStateRunning
+			}
+			assert.Equal(t, int32(wantSQL), resp.Status.After.SqlState)
+			assert.Equal(t, replication.EncodePosition(tt.relayLog), resp.Status.After.RelayLogPosition)
+			assert.Equal(t, replication.EncodePosition(executed), resp.Status.After.Position)
+			assert.Equal(t, tt.backupRunning, resp.Status.After.BackupRunning)
+		})
+	}
 }
