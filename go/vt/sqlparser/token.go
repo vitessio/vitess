@@ -52,9 +52,10 @@ type Tokenizer struct {
 }
 
 // The token types that scan returns for a token whose value needs more work
-// than taking it from the input: escapes to decode or a '?' to number. The
-// value scan returns with them is the text between the quotes, as written.
-// Scan does that work and returns the token's type instead.
+// than taking it from the input: escapes to decode, or the name to give a '?'.
+// The value scan returns with them is the text between the quotes, as
+// written. Scan and ScanSkip return the token's type instead, and Scan does
+// that work.
 const (
 	// singleQuotedEscaped is a STRING in single quotes that holds escapes.
 	singleQuotedEscaped = -1 - iota
@@ -171,31 +172,11 @@ func (tkn *Tokenizer) Error(err string) {
 	tkn.skipStatement()
 }
 
-// Scan scans the tokenizer for the next token and returns
-// the token type and an optional value.
-func (tkn *Tokenizer) Scan() (int, string) {
-	typ, val := tkn.scan()
-	switch typ {
-	case singleQuotedEscaped:
-		return STRING, decodeString(val, '\'')
-	case doubleQuotedEscaped:
-		return STRING, decodeString(val, '"')
-	case nationalEscaped:
-		return NCHAR_STRING, decodeString(val, '\'')
-	case backquotedEscaped:
-		return ID, decodeBackquoted(val)
-	case positionalArg:
-		tkn.posVarIndex++
-		buf := make([]byte, 0, 8)
-		buf = append(buf, ":v"...)
-		buf = strconv.AppendInt(buf, int64(tkn.posVarIndex), 10)
-		return VALUE_ARG, string(buf)
-	}
-	return typ, val
-}
-
-// scannedType returns the token type of a token that scan returned as typ.
-func scannedType(typ int) int {
+// ScanSkip scans the next token and returns its type. It skips working out
+// the token's value, which saves decoding the escapes in strings and quoted
+// identifiers; use Scan for the value.
+func (tkn *Tokenizer) ScanSkip() int {
+	typ, _ := tkn.scan()
 	switch typ {
 	case singleQuotedEscaped, doubleQuotedEscaped:
 		return STRING
@@ -209,10 +190,30 @@ func scannedType(typ int) int {
 	return typ
 }
 
-// scan is Scan without the work that only the value of a token needs. For a
-// token whose value needs decoding or numbering, it returns one of the token
-// types above, and Scan does that work. Callers that need only where the
-// tokens are and what they are call scan and skip it.
+// Scan scans the next token and returns its type and an optional value.
+func (tkn *Tokenizer) Scan() (int, string) {
+	typ, val := tkn.scan()
+	switch typ {
+	case singleQuotedEscaped:
+		return STRING, decodeString(val, '\'')
+	case doubleQuotedEscaped:
+		return STRING, decodeString(val, '"')
+	case nationalEscaped:
+		return NCHAR_STRING, decodeString(val, '\'')
+	case backquotedEscaped:
+		return ID, decodeBackquoted(val)
+	case positionalArg:
+		buf := make([]byte, 0, 8)
+		buf = append(buf, ":v"...)
+		buf = strconv.AppendInt(buf, int64(tkn.posVarIndex), 10)
+		return VALUE_ARG, string(buf)
+	}
+	return typ, val
+}
+
+// scan scans the next token for Scan and ScanSkip. For a token whose value
+// needs more work than taking it from the input, it returns one of the token
+// types above.
 func (tkn *Tokenizer) scan() (int, string) {
 	for {
 		tkn.skipBlank()
@@ -322,6 +323,10 @@ func (tkn *Tokenizer) scan() (int, string) {
 				}
 				return int(ch), ""
 			case '?':
+				// Count the '?' here, so that it gets the same name
+				// whether or not the tokens before it were read with
+				// ScanSkip.
+				tkn.posVarIndex++
 				return positionalArg, ""
 			case '.':
 				return int(ch), ""

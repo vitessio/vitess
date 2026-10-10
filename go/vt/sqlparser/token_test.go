@@ -246,6 +246,18 @@ func TestVersion(t *testing.T) {
 	}
 }
 
+// TestScanSkipCountsPositionalArgs checks that ScanSkip counts a '?' it reads
+// without its value, so that a later '?' read with Scan gets the same name.
+func TestScanSkipCountsPositionalArgs(t *testing.T) {
+	tkn := NewTestParser().NewStringTokenizer("select ?, ?")
+	require.Equal(t, SELECT, tkn.ScanSkip())
+	require.Equal(t, VALUE_ARG, tkn.ScanSkip())
+	require.Equal(t, int(','), tkn.ScanSkip())
+	typ, val := tkn.Scan()
+	require.Equal(t, VALUE_ARG, typ)
+	require.Equal(t, ":v2", val)
+}
+
 func TestIntegerAndID(t *testing.T) {
 	testcases := []struct {
 		in  string

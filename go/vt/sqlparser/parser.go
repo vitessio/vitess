@@ -228,7 +228,7 @@ func (p *Parser) SplitStatement(blob string) (string, string, error) {
 	tokenizer := p.NewStringTokenizer(blob)
 	tkn := 0
 	for {
-		tkn, _ = tokenizer.scan()
+		tkn = tokenizer.ScanSkip()
 		if tkn == 0 || tkn == ';' || tkn == eofChar {
 			break
 		}
@@ -299,7 +299,7 @@ func (p *Parser) SplitStatementToPieces(blob string) (pieces []string, err error
 
 loop:
 	for {
-		tkn, _ = tokenizer.scan()
+		tkn = tokenizer.ScanSkip()
 		switch tkn {
 		case ';':
 			// Potential end of the statement.
@@ -333,7 +333,7 @@ loop:
 			// for our valid prefix match (assuming our longest valid sequence is 10 tokens),
 			// accumulate the token.
 			if len(startTokens) < 10 {
-				startTokens = append(startTokens, scannedType(tkn))
+				startTokens = append(startTokens, tkn)
 			}
 			emptyStatement = false
 		}
