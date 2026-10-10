@@ -229,11 +229,17 @@ func validateSQLModePlan(inner planFunc) planFunc {
 }
 
 // validateConnectionCharsetPlan wraps the planFunc of a connection character set
-// variable with a plan-time check of a constant value: a character set or collation
-// that Vitess cannot parse and escape safely is refused (see
-// collations.IsConnectionCharsetName), as VTTablet refuses it, rather than answered
-// with OK. NULL, which only turns result conversion off, and non-constant values,
-// whose character set cannot be judged here, are left to the wrapped planFunc.
+// variable with a plan-time check of its value, so that VTGate refuses, rather
+// than answers with OK, the values that VTTablet refuses (see
+// validateSetExprsCharset): only a constant naming a character set or collation
+// that Vitess can parse and escape safely (see collations.IsConnectionCharsetName),
+// or MySQL's ID of such a collation, is accepted, plus NULL for
+// character_set_results, which only turns result conversion off.
+// DEFAULT and other non-constant values resolve to a character set that cannot
+// be judged here, and are refused. A user variable is the exception: mysqldump
+// output ends by restoring the character set it saved in one, as in
+// SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT, and refusing that would
+// fail every dump replayed through VTGate.
 func validateConnectionCharsetPlan(inner planFunc) planFunc {
 	return func(expr *sqlparser.SetExpr, vschema plancontext.VSchema, ec *expressionConverter) (engine.SetOp, error) {
 		var safe bool
@@ -249,16 +255,16 @@ func validateConnectionCharsetPlan(inner planFunc) planFunc {
 				if err == nil && id != 0 {
 					_, safe = vschema.Environment().CollationEnv().ConnectionCharset(collations.ID(id))
 				}
-			default:
-				return inner(expr, vschema, ec)
 			}
 		case *sqlparser.ColName:
-			if !value.Qualifier.IsEmpty() {
-				return inner(expr, vschema, ec)
-			}
-			safe = collations.IsConnectionCharsetName(value.Name.String())
-		default:
-			return inner(expr, vschema, ec)
+			safe = value.Qualifier.IsEmpty() && collations.IsConnectionCharsetName(value.Name.String())
+		case *sqlparser.NullVal:
+			safe = expr.Var.Name.Lowered() == "character_set_results"
+		case *sqlparser.Argument:
+			// the normalizer has replaced a user variable with this bind variable.
+			// A client can also name a bind variable this way, but VTGate ignores
+			// the assignment, so no character set is applied either way.
+			safe = strings.HasPrefix(value.Name, sqlparser.UserDefinedVariableName)
 		}
 		if !safe {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported connection character set %s for %s: use utf8mb4", sqlparser.String(expr.Expr), expr.Var.Name.Lowered())
