@@ -252,6 +252,9 @@ type (
 
 		// AnyAdvisoryLockTaken returns true of any advisory lock is taken
 		AnyAdvisoryLockTaken() bool
+		// AdvisoryLockSessionTarget returns the target of the reserved connection
+		// holding advisory locks, or nil when the session has no lock connection.
+		AdvisoryLockSessionTarget() *querypb.Target
 		// AddAdvisoryLock adds advisory lock to the session
 		AddAdvisoryLock(name string)
 		// RemoveAdvisoryLock removes advisory lock from the session

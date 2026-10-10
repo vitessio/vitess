@@ -830,6 +830,17 @@ func (session *SafeSession) SetLockSession(lockSession *vtgatepb.Session_ShardSe
 	session.LastLockHeartbeat = time.Now().Unix()
 }
 
+// AdvisoryLockSessionTarget returns a copy of the target for the connection
+// holding this session's advisory locks.
+func (session *SafeSession) AdvisoryLockSessionTarget() *querypb.Target {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	if session.LockSession == nil {
+		return nil
+	}
+	return proto.Clone(session.LockSession.Target).(*querypb.Target)
+}
+
 // UpdateLockHeartbeat updates the LastLockHeartbeat time
 func (session *SafeSession) UpdateLockHeartbeat() {
 	session.mu.Lock()

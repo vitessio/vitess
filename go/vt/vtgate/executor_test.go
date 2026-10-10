@@ -2174,6 +2174,68 @@ func TestServingKeyspaces(t *testing.T) {
 	require.Equal(t, `[[INT64(1)]]`, fmt.Sprintf("%v", result.Rows))
 }
 
+// TestLockPlansStayOnSameKeyspaceAfterServingBlip tests that GET_LOCK and
+// RELEASE_LOCK stay on the alphabetically first VSchema keyspace when they are
+// planned under different serving sets.
+//
+// Lock plans cache that keyspace. The plan-cache key does not include the
+// serving set, and a serving change does not clear plans. GET_LOCK and
+// RELEASE_LOCK are separate statements, so a serving-dependent choice would
+// pin them to different keyspaces and release held locks.
+func TestLockPlansStayOnSameKeyspaceAfterServingBlip(t *testing.T) {
+	buffer.SetBufferingModeInTestingEnv(true)
+	defer func() {
+		buffer.SetBufferingModeInTestingEnv(false)
+	}()
+
+	executor, sbc1, _, sbclookup, _ := createExecutorEnv(t)
+
+	gw, ok := executor.resolver.resolver.GetGateway().(*TabletGateway)
+	require.True(t, ok)
+	hc := gw.hc.(*discovery.FakeHealthCheck)
+
+	setServing := func(keyspace string, serving bool) {
+		for _, tablet := range hc.GetAllTablets() {
+			if tablet.Keyspace == keyspace {
+				hc.SetServing(tablet, serving)
+			}
+		}
+		// Broadcast twice so the keyspace event watcher has consumed every
+		// healthcheck from the first broadcast before the test reads serving state.
+		hc.BroadcastAll()
+		hc.BroadcastAll()
+	}
+
+	hc.BroadcastAll()
+	hc.BroadcastAll()
+	require.ElementsMatch(t, []string{KsTestSharded, KsTestUnsharded}, gw.GetServingKeyspaces())
+
+	session := econtext.NewSafeSession(nil)
+	_, err := exec(executor, session, "select get_lock('lock name', 10) from dual")
+	require.NoError(t, err)
+	require.NotNil(t, session.LockSession)
+	require.Equal(t, KsTestSharded, session.LockSession.Target.Keyspace)
+	require.NotEmpty(t, sbc1.Queries)
+	require.Empty(t, sbclookup.Queries)
+
+	setServing(KsTestSharded, false)
+	require.ElementsMatch(t, []string{KsTestUnsharded}, gw.GetServingKeyspaces())
+
+	sbc1.Queries = nil
+	releasePlan, _ := getPlanCached(t, t.Context(), executor, econtext.NewSafeSession(nil), "select release_lock('lock name') from dual", sqlparser.MarginComments{}, nil, false)
+	lock, ok := releasePlan.Instructions.(*engine.Lock)
+	require.True(t, ok)
+	require.Equal(t, KsTestSharded, lock.Keyspace.Name)
+	require.Empty(t, sbc1.Queries)
+	require.Empty(t, sbclookup.Queries)
+
+	_, err = exec(executor, session, "select release_lock('lock name') from dual")
+	require.NoError(t, err)
+	require.Nil(t, session.LockSession)
+	require.Empty(t, sbclookup.Queries)
+	require.NotEmpty(t, sbc1.Queries)
+}
+
 func TestExecutorOther(t *testing.T) {
 	executor, sbc1, sbc2, sbclookup, ctx := createExecutorEnv(t)
 
