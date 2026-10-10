@@ -49,7 +49,31 @@ type Tokenizer struct {
 	buf       string
 	parser    *Parser
 	currStart int // start position of current token (set in Scan after skipBlank)
+
+	// pending is the work scan left for Scan to give the value of the token
+	// it returned: the escapes to decode in buf[pendingStart:pendingEnd], or
+	// the number of a '?'. Callers that need only the token types and where
+	// the tokens are call scan and skip that work.
+	pending      pendingValue
+	pendingDelim byte
+	pendingStart int
+	pendingEnd   int
 }
+
+// pendingValue is the work Scan has to do to give the value of a token.
+type pendingValue uint8
+
+const (
+	// valueReady: scan returned the value.
+	valueReady pendingValue = iota
+	// valueString: a string with backslash escapes or a doubled delimiter.
+	valueString
+	// valueQuotedIdentifier: an identifier quoted with backticks that holds a
+	// doubled backtick.
+	valueQuotedIdentifier
+	// valuePositionalArg: a '?', which Scan numbers in order.
+	valuePositionalArg
+)
 
 // location tracks the byte-offset span [start, end) of a grammar symbol
 // in the input buffer. Used by the parser's %locations feature.
@@ -157,6 +181,39 @@ func (tkn *Tokenizer) Error(err string) {
 // Scan scans the tokenizer for the next token and returns
 // the token type and an optional value.
 func (tkn *Tokenizer) Scan() (int, string) {
+	typ, val := tkn.scan()
+	if tkn.pending != valueReady {
+		val = tkn.pendingValue()
+	}
+	return typ, val
+}
+
+// pendingValue does the work scan left for the value of the token it
+// returned last.
+func (tkn *Tokenizer) pendingValue() string {
+	pending := tkn.pending
+	tkn.pending = valueReady
+	switch pending {
+	case valueString:
+		return decodeString(tkn.buf[tkn.pendingStart:tkn.pendingEnd], tkn.pendingDelim)
+	case valueQuotedIdentifier:
+		return strings.ReplaceAll(tkn.buf[tkn.pendingStart:tkn.pendingEnd], "``", "`")
+	case valuePositionalArg:
+		tkn.posVarIndex++
+		buf := make([]byte, 0, 8)
+		buf = append(buf, ":v"...)
+		buf = strconv.AppendInt(buf, int64(tkn.posVarIndex), 10)
+		return string(buf)
+	}
+	return ""
+}
+
+// scan is Scan without the work that only the value of a token needs:
+// decoding the escapes in a string or a quoted identifier, and numbering a
+// '?'. It leaves that work in tkn.pending, and it returns "" as the value of
+// such a token.
+func (tkn *Tokenizer) scan() (int, string) {
+	tkn.pending = valueReady
 	for {
 		tkn.skipBlank()
 		// If inside a versioned comment and we've reached the closing */,
@@ -193,6 +250,7 @@ func (tkn *Tokenizer) Scan() (int, string) {
 				tID, tBytes = tkn.scanIdentifier(true)
 			}
 			if tID == LEX_ERROR {
+				tkn.pending = valueReady
 				return tID, ""
 			}
 			return tokenID, tBytes
@@ -262,11 +320,8 @@ func (tkn *Tokenizer) Scan() (int, string) {
 				}
 				return int(ch), ""
 			case '?':
-				tkn.posVarIndex++
-				buf := make([]byte, 0, 8)
-				buf = append(buf, ":v"...)
-				buf = strconv.AppendInt(buf, int64(tkn.posVarIndex), 10)
-				return VALUE_ARG, string(buf)
+				tkn.pending = valuePositionalArg
+				return VALUE_ARG, ""
 			case '.':
 				return int(ch), ""
 			case '/':
@@ -455,66 +510,49 @@ func (tkn *Tokenizer) scanBitLiteral() (int, string) {
 	return BIT_LITERAL, bit
 }
 
-// scanLiteralIdentifierSlow scans an identifier surrounded by backticks which may
-// contain escape sequences instead of it. This method is only called from
-// scanLiteralIdentifier once the first escape sequence is found in the identifier.
-// The provided `buf` contains the contents of the identifier that have been scanned
-// so far.
-func (tkn *Tokenizer) scanLiteralIdentifierSlow(buf *strings.Builder) (int, string) {
-	backTickSeen := true
-	for {
-		if backTickSeen {
-			if tkn.cur() != '`' {
-				break
-			}
-			backTickSeen = false
-			buf.WriteByte('`')
-			tkn.skip(1)
-			continue
-		}
-		// The previous char was not a backtick.
-		switch tkn.cur() {
-		case '`':
-			backTickSeen = true
-		case eofChar:
-			// Premature EOF.
-			return LEX_ERROR, buf.String()
-		default:
-			buf.WriteByte(byte(tkn.cur()))
-			// keep scanning
-		}
-		tkn.skip(1)
-	}
-	return ID, buf.String()
-}
-
 // scanLiteralIdentifier scans an identifier enclosed by backticks. If the identifier
-// is a simple literal, it'll be returned as a slice of the input buffer. If the identifier
-// contains escape sequences, this function will fall back to scanLiteralIdentifierSlow
+// is a simple literal, it'll be returned as a slice of the input buffer. If it
+// holds a doubled backtick, which stands for one backtick, the value is left
+// for Scan to decode.
 func (tkn *Tokenizer) scanLiteralIdentifier() (int, string) {
 	start := tkn.Pos
+	doubled := false
 	for {
 		switch tkn.cur() {
 		case '`':
-			if tkn.peek(1) != '`' {
-				if tkn.Pos == start {
-					return LEX_ERROR, ""
-				}
-				tkn.skip(1)
+			if tkn.peek(1) == '`' {
+				doubled = true
+				tkn.skip(2)
+				continue
+			}
+			if tkn.Pos == start {
+				return LEX_ERROR, ""
+			}
+			tkn.skip(1)
+			if !doubled {
 				return ID, tkn.buf[start : tkn.Pos-1]
 			}
-
-			var buf strings.Builder
-			buf.WriteString(tkn.buf[start:tkn.Pos])
-			tkn.skip(1)
-			return tkn.scanLiteralIdentifierSlow(&buf)
+			tkn.setPending(valueQuotedIdentifier, 0, start, tkn.Pos-1)
+			return ID, ""
 		case eofChar:
 			// Premature EOF.
-			return LEX_ERROR, tkn.buf[start:tkn.Pos]
+			if !doubled {
+				return LEX_ERROR, tkn.buf[start:tkn.Pos]
+			}
+			tkn.setPending(valueQuotedIdentifier, 0, start, tkn.Pos)
+			return LEX_ERROR, ""
 		default:
 			tkn.skip(1)
 		}
 	}
+}
+
+// setPending records the work Scan has to do for the value of a token.
+func (tkn *Tokenizer) setPending(pending pendingValue, delim byte, start, end int) {
+	tkn.pending = pending
+	tkn.pendingDelim = delim
+	tkn.pendingStart = start
+	tkn.pendingEnd = end
 }
 
 // scanBindVarOrAssignmentExpression scans a bind variable or an assignment expression; assumes a ':' has been scanned right before
@@ -632,93 +670,71 @@ exit:
 
 // scanString scans a string surrounded by the given `delim`, which can be
 // either single or double quotes. Assumes that the given delimiter has just
-// been scanned. If the skin contains any escape sequences, this function
-// will fall back to scanStringSlow
+// been scanned. A string without escapes is returned as a slice of the input
+// buffer. The value of a string with escapes is left for Scan to decode.
 func (tkn *Tokenizer) scanString(delim uint16, typ int) (int, string) {
 	start := tkn.Pos
-
+	escaped := false
 	for {
 		switch tkn.cur() {
 		case delim:
 			if tkn.peek(1) != delim {
 				tkn.skip(1)
-				return typ, tkn.buf[start : tkn.Pos-1]
+				if !escaped {
+					return typ, tkn.buf[start : tkn.Pos-1]
+				}
+				tkn.setPending(valueString, byte(delim), start, tkn.Pos-1)
+				return typ, ""
 			}
-			fallthrough
-
+			escaped = true
+			tkn.skip(1)
 		case '\\':
-			// The next delimiter usually ends the string, so size the buffer
-			// for the text up to it rather than growing it a few bytes at a time.
-			var buffer strings.Builder
-			if rest := strings.IndexByte(tkn.buf[tkn.Pos+1:], byte(delim)); rest >= 0 {
-				buffer.Grow(tkn.Pos + 1 + rest - start)
+			escaped = true
+			tkn.skip(1)
+			if tkn.cur() == eofChar {
+				// String terminates mid escape character.
+				tkn.setPending(valueString, byte(delim), start, tkn.Pos)
+				return LEX_ERROR, ""
 			}
-			buffer.WriteString(tkn.buf[start:tkn.Pos])
-			return tkn.scanStringSlow(&buffer, delim, typ)
-
 		case eofChar:
-			return LEX_ERROR, tkn.buf[start:tkn.Pos]
+			if !escaped {
+				return LEX_ERROR, tkn.buf[start:tkn.Pos]
+			}
+			tkn.setPending(valueString, byte(delim), start, tkn.Pos)
+			return LEX_ERROR, ""
 		}
-
 		tkn.skip(1)
 	}
 }
 
-// scanString scans a string surrounded by the given `delim` and containing escape
-// sequencse. The given `buffer` contains the contents of the string that have
-// been scanned so far.
-func (tkn *Tokenizer) scanStringSlow(buffer *strings.Builder, delim uint16, typ int) (int, string) {
+// decodeString decodes the backslash escapes and the doubled delimiters in
+// the text of a string literal. A backslash at the end of the text, where an
+// unterminated string stops, is dropped.
+func decodeString(text string, delim byte) string {
+	var buf strings.Builder
+	buf.Grow(len(text))
 	for {
-		ch := tkn.cur()
-		if ch == eofChar {
-			// Unterminated string.
-			return LEX_ERROR, buffer.String()
+		i := 0
+		for i < len(text) && text[i] != '\\' && text[i] != delim {
+			i++
 		}
-
-		if ch != delim && ch != '\\' {
-			// Scan ahead to the next interesting character.
-			start := tkn.Pos
-			for ; tkn.Pos < len(tkn.buf); tkn.Pos++ {
-				ch = uint16(tkn.buf[tkn.Pos])
-				if ch == delim || ch == '\\' {
-					break
-				}
-			}
-
-			buffer.WriteString(tkn.buf[start:tkn.Pos])
-			if tkn.Pos >= len(tkn.buf) {
-				// Reached the end of the buffer without finding a delim or
-				// escape character.
-				tkn.skip(1)
-				continue
-			}
+		buf.WriteString(text[:i])
+		if i+1 >= len(text) {
+			return buf.String()
 		}
-		tkn.skip(1) // Read one past the delim or escape character.
-
-		if ch == '\\' {
-			if tkn.cur() == eofChar {
-				// String terminates mid escape character.
-				return LEX_ERROR, buffer.String()
-			}
+		ch := text[i+1]
+		if text[i] == '\\' {
 			// Preserve escaping of % and _
-			if tkn.cur() == '%' || tkn.cur() == '_' {
-				buffer.WriteByte('\\')
-				ch = tkn.cur()
-			} else if decodedChar := sqltypes.SQLDecodeMap[byte(tkn.cur())]; decodedChar == sqltypes.DontEscape {
-				ch = tkn.cur()
-			} else {
-				ch = uint16(decodedChar)
+			if ch == '%' || ch == '_' {
+				buf.WriteByte('\\')
+			} else if decoded := sqltypes.SQLDecodeMap[ch]; decoded != sqltypes.DontEscape {
+				ch = decoded
 			}
-		} else if ch == delim && tkn.cur() != delim {
-			// Correctly terminated string, which is not a double delim.
-			break
 		}
-
-		buffer.WriteByte(byte(ch))
-		tkn.skip(1)
+		// A delimiter here is always doubled: a single one ends the string.
+		buf.WriteByte(ch)
+		text = text[i+2:]
 	}
-
-	return typ, buffer.String()
 }
 
 // scanCommentType1 scans a SQL line-comment, which is applied until the end

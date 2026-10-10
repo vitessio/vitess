@@ -228,7 +228,7 @@ func (p *Parser) SplitStatement(blob string) (string, string, error) {
 	tokenizer := p.NewStringTokenizer(blob)
 	tkn := 0
 	for {
-		tkn, _ = tokenizer.Scan()
+		tkn, _ = tokenizer.scan()
 		if tkn == 0 || tkn == ';' || tkn == eofChar {
 			break
 		}
@@ -299,7 +299,7 @@ func (p *Parser) SplitStatementToPieces(blob string) (pieces []string, err error
 
 loop:
 	for {
-		tkn, _ = tokenizer.Scan()
+		tkn, _ = tokenizer.scan()
 		switch tkn {
 		case ';':
 			// Potential end of the statement.

@@ -178,7 +178,7 @@ func (p *Parser) tokenizedMarginBounds(sql string) (start, end int, newlineFirst
 	var lastTyp, stmtEnd int
 	for {
 		before := tkn.Pos
-		typ, val := tkn.Scan()
+		typ, val := tkn.scan()
 		if typ == LEX_ERROR {
 			return 0, len(sql), false, false
 		}

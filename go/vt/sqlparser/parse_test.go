@@ -6784,6 +6784,12 @@ var invalidSQL = []struct {
 	input:  "select 'aa\\",
 	output: "syntax error at position 12 near 'aa'",
 }, {
+	input:  "select 'a\\'bc",
+	output: "syntax error at position 14 near 'a'bc'",
+}, {
+	input:  "select 'a''bc",
+	output: "syntax error at position 14 near 'a'bc'",
+}, {
 	input:  "select /* aa",
 	output: "syntax error at position 13 near '/* aa'",
 }, {
@@ -7052,6 +7058,55 @@ func BenchmarkParse3(b *testing.B) {
 	b.Run("escaped", func(b *testing.B) {
 		largeQueryBenchmark(b, true)
 	})
+}
+
+// splitBenchmarkQueries are queries tagged with a trailing comment, the way
+// sqlcommenter and marginalia tag them, so that splitting them off reads the
+// whole query.
+func splitBenchmarkQueries() []struct{ name, sql string } {
+	const tag = " /*application='app',controller='users',action='show',traceparent='00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01'*/"
+
+	var insert strings.Builder
+	insert.WriteString("insert into t (id, doc) values ")
+	for i := 0; insert.Len() < 20000; i++ {
+		if i > 0 {
+			insert.WriteString(", ")
+		}
+		insert.WriteString(`(1, '{"a": "x\\"y", "b": [1, 2, 3], "c": "hello world"}')`)
+	}
+
+	return []struct{ name, sql string }{
+		{"point_select", "select id, name, email from users where id = 12345" + tag},
+		{"escapes", "select 'it''s', 'a\\nb', 'c\\'d', `we``ird` from t where x = 'e\\\\f'" + tag},
+		{"insert_20kb", insert.String() + tag},
+	}
+}
+
+func BenchmarkSplitMarginComments(b *testing.B) {
+	parser := NewTestParser()
+	for _, q := range splitBenchmarkQueries() {
+		b.Run(q.name, func(b *testing.B) {
+			b.ReportAllocs()
+			for b.Loop() {
+				parser.SplitMarginComments(q.sql)
+			}
+		})
+	}
+}
+
+func BenchmarkSplitStatementToPieces(b *testing.B) {
+	parser := NewTestParser()
+	for _, q := range splitBenchmarkQueries() {
+		blob := q.sql + "; " + q.sql + "; select 1"
+		b.Run(q.name, func(b *testing.B) {
+			b.ReportAllocs()
+			for b.Loop() {
+				if _, err := parser.SplitStatementToPieces(blob); err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
 }
 
 func TestValidUnionCases(t *testing.T) {
