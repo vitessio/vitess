@@ -36,10 +36,16 @@ func TestVectors(t *testing.T) {
 		useSSE4, useAVX2, useNEON, useVMX = sse4, avx2, neon, vmx
 	}(useSSE4, useAVX2, useNEON, useVMX)
 
+	newValue := func(key [Size]byte) *Digest {
+		h := New256Value(key)
+		return &h
+	}
+
 	if useAVX2 {
 		t.Run("AVX2 version", func(t *testing.T) {
 			testVectors(New128, testVectors128, t)
 			testVectors(New, testVectors256, t)
+			testVectors(newValue, testVectors256, t)
 			useAVX2 = false
 		})
 	}
@@ -47,6 +53,7 @@ func TestVectors(t *testing.T) {
 		t.Run("SSE4 version", func(t *testing.T) {
 			testVectors(New128, testVectors128, t)
 			testVectors(New, testVectors256, t)
+			testVectors(newValue, testVectors256, t)
 			useSSE4 = false
 		})
 	}
@@ -54,6 +61,7 @@ func TestVectors(t *testing.T) {
 		t.Run("NEON version", func(t *testing.T) {
 			testVectors(New128, testVectors128, t)
 			testVectors(New, testVectors256, t)
+			testVectors(newValue, testVectors256, t)
 			useNEON = false
 		})
 	}
@@ -61,13 +69,54 @@ func TestVectors(t *testing.T) {
 		t.Run("VMX version", func(t *testing.T) {
 			testVectors(New128, testVectors128, t)
 			testVectors(New, testVectors256, t)
+			testVectors(newValue, testVectors256, t)
 			useVMX = false
 		})
 	}
 	t.Run("Generic version", func(t *testing.T) {
 		testVectors(New128, testVectors128, t)
 		testVectors(New, testVectors256, t)
+		testVectors(newValue, testVectors256, t)
 	})
+}
+
+func TestNew256Value(t *testing.T) {
+	var key [Size]byte
+	for i := range key {
+		key[i] = byte(i)
+	}
+	var input [97]byte
+	for i := range input {
+		input[i] = byte(i)
+	}
+
+	for _, tc := range []struct {
+		name string
+		key  [Size]byte
+	}{
+		{name: "zero"},
+		{name: "nonzero", key: key},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := New256Value(tc.key)
+			pointer := New(tc.key)
+			assert.Equal(t, *pointer, h)
+
+			start := 0
+			for _, end := range []int{0, 1, 31, 33, 64, len(input)} {
+				n, err := h.Write(input[start:end])
+				require.NoError(t, err)
+				require.Equal(t, end-start, n)
+				_, err = pointer.Write(input[start:end])
+				require.NoError(t, err)
+
+				want := Sum(input[:end], tc.key[:])
+				assert.Equal(t, want[:], h.Sum(nil), "length %d", end)
+				assert.Equal(t, pointer.Sum(nil), h.Sum(nil), "length %d", end)
+				start = end
+			}
+		})
+	}
 }
 
 func testVectors(NewFunc func([32]byte) *Digest, vectors []string, t *testing.T) {
