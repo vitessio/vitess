@@ -48,6 +48,10 @@ import (
 // backupEngineImplementation is the implementation to use for BackupEngine
 var backupEngineImplementation = builtinBackupEngineName
 
+// backupLogToStorage controls whether backup logs are written to a separate
+// file and uploaded to the backup storage directory.
+var backupLogToStorage bool
+
 type BackupResult int
 
 const (
@@ -225,6 +229,12 @@ func isIncrementalBackup(params BackupParams) bool {
 
 func registerBackupEngineFlags(fs *pflag.FlagSet) {
 	utils.SetFlagStringVar(fs, &backupEngineImplementation, "backup-engine-implementation", backupEngineImplementation, "Specifies which implementation to use for creating new backups (builtin or xtrabackup). Restores will always be done with whichever engine created a given backup.")
+	utils.SetFlagBoolVar(fs, &backupLogToStorage, "backup-log-to-storage", backupLogToStorage, "When set, backup operations write engine-specific logs to a separate file and upload it to the backup storage directory alongside the backup data.")
+}
+
+// BackupLogToStorage returns whether backup logs should be written to storage.
+func BackupLogToStorage() bool {
+	return backupLogToStorage
 }
 
 // GetBackupEngine returns the BackupEngine implementation that should be used
