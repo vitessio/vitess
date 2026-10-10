@@ -2600,7 +2600,7 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 }
 
 // Apply attempts to apply given ALTER TABLE diff onto the table defined by this entity.
-// This entity is unmodified. If successful, a new CREATE TABLE entity is returned.
+// This entity and the given diff are unmodified. If successful, a new CREATE TABLE entity is returned.
 func (c *CreateTableEntity) Apply(diff EntityDiff) (Entity, error) {
 	dup := c.Clone().(*CreateTableEntity)
 	for diff != nil {
@@ -2609,7 +2609,11 @@ func (c *CreateTableEntity) Apply(diff EntityDiff) (Entity, error) {
 			return nil, ErrEntityTypeMismatch
 		}
 		if !diff.IsEmpty() {
-			if err := dup.apply(alterDiff); err != nil {
+			// apply() sorts the alter options and edits column, index and partition
+			// nodes in place. Work on a clone of the statement so that the diff is
+			// left unchanged and none of its nodes end up in the resulting table.
+			cloned := &AlterTableEntityDiff{alterTable: sqlparser.Clone(alterDiff.alterTable)}
+			if err := dup.apply(cloned); err != nil {
 				return nil, err
 			}
 		}
