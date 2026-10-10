@@ -149,6 +149,11 @@ func (ast *astCompiler) cardExpr(expr IR) error {
 		return ast.cardBinary(expr.Left, expr.Right)
 	case *ComparisonExpr:
 		return ast.cardComparison(expr.Left, expr.Right)
+	case *BetweenExpr:
+		if err := ast.cardComparison(expr.Left, expr.From); err != nil {
+			return err
+		}
+		return ast.cardComparison(expr.Left, expr.To)
 	case *InExpr:
 		if err := ast.cardExpr(expr.Left); err != nil {
 			return err

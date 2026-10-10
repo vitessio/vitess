@@ -576,6 +576,10 @@ func (call *builtinUUID) constant() bool {
 	return false
 }
 
+func (call *builtinUUID) constForExecution() bool {
+	return false
+}
+
 func (call *builtinUUIDToBin) eval(env *ExpressionEnv) (eval, error) {
 	arg, err := call.arg1(env)
 	if arg == nil || err != nil {
