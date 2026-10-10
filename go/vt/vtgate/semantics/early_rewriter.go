@@ -1075,6 +1075,11 @@ func (r *earlyRewriter) expandTableColumns(
 		org:             org,
 		expandedColumns: map[sqlparser.TableName][]*sqlparser.ColName{},
 	}
+	if !starExpr.TableName.IsEmpty() {
+		// USING coalescing applies to an unqualified * only: a qualified star
+		// returns every column of its table, join columns included
+		state.joinUsing = nil
+	}
 
 	for _, tbl := range tables {
 		if !starExpr.TableName.IsEmpty() && !tbl.matches(starExpr.TableName) {
