@@ -49,30 +49,23 @@ type Tokenizer struct {
 	buf       string
 	parser    *Parser
 	currStart int // start position of current token (set in Scan after skipBlank)
-
-	// pending is the work scan left for Scan to give the value of the token
-	// it returned: the escapes to decode in buf[pendingStart:pendingEnd], or
-	// the number of a '?'. Callers that need only the token types and where
-	// the tokens are call scan and skip that work.
-	pending      pendingValue
-	pendingDelim byte
-	pendingStart int
-	pendingEnd   int
 }
 
-// pendingValue is the work Scan has to do to give the value of a token.
-type pendingValue uint8
-
+// The token types that scan returns for a token whose value needs more work
+// than taking it from the input: escapes to decode or a '?' to number. The
+// value scan returns with them is the text between the quotes, as written.
+// Scan does that work and returns the token's type instead.
 const (
-	// valueReady: scan returned the value.
-	valueReady pendingValue = iota
-	// valueString: a string with backslash escapes or a doubled delimiter.
-	valueString
-	// valueQuotedIdentifier: an identifier quoted with backticks that holds a
-	// doubled backtick.
-	valueQuotedIdentifier
-	// valuePositionalArg: a '?', which Scan numbers in order.
-	valuePositionalArg
+	// singleQuotedEscaped is a STRING in single quotes that holds escapes.
+	singleQuotedEscaped = -1 - iota
+	// doubleQuotedEscaped is a STRING in double quotes that holds escapes.
+	doubleQuotedEscaped
+	// nationalEscaped is an NCHAR_STRING that holds escapes.
+	nationalEscaped
+	// backquotedEscaped is an ID in backticks that holds a doubled backtick.
+	backquotedEscaped
+	// positionalArg is a VALUE_ARG written as '?'.
+	positionalArg
 )
 
 // location tracks the byte-offset span [start, end) of a grammar symbol
@@ -182,38 +175,45 @@ func (tkn *Tokenizer) Error(err string) {
 // the token type and an optional value.
 func (tkn *Tokenizer) Scan() (int, string) {
 	typ, val := tkn.scan()
-	if tkn.pending != valueReady {
-		val = tkn.pendingValue()
-	}
-	return typ, val
-}
-
-// pendingValue does the work scan left for the value of the token it
-// returned last.
-func (tkn *Tokenizer) pendingValue() string {
-	pending := tkn.pending
-	tkn.pending = valueReady
-	switch pending {
-	case valueString:
-		return decodeString(tkn.buf[tkn.pendingStart:tkn.pendingEnd], tkn.pendingDelim)
-	case valueQuotedIdentifier:
-		return strings.ReplaceAll(tkn.buf[tkn.pendingStart:tkn.pendingEnd], "``", "`")
-	case valuePositionalArg:
+	switch typ {
+	case singleQuotedEscaped:
+		return STRING, decodeString(val, '\'')
+	case doubleQuotedEscaped:
+		return STRING, decodeString(val, '"')
+	case nationalEscaped:
+		return NCHAR_STRING, decodeString(val, '\'')
+	case backquotedEscaped:
+		return ID, decodeBackquoted(val)
+	case positionalArg:
 		tkn.posVarIndex++
 		buf := make([]byte, 0, 8)
 		buf = append(buf, ":v"...)
 		buf = strconv.AppendInt(buf, int64(tkn.posVarIndex), 10)
-		return string(buf)
+		return VALUE_ARG, string(buf)
 	}
-	return ""
+	return typ, val
 }
 
-// scan is Scan without the work that only the value of a token needs:
-// decoding the escapes in a string or a quoted identifier, and numbering a
-// '?'. It leaves that work in tkn.pending, and it returns "" as the value of
-// such a token.
+// scannedType returns the token type of a token that scan returned as typ.
+func scannedType(typ int) int {
+	switch typ {
+	case singleQuotedEscaped, doubleQuotedEscaped:
+		return STRING
+	case nationalEscaped:
+		return NCHAR_STRING
+	case backquotedEscaped:
+		return ID
+	case positionalArg:
+		return VALUE_ARG
+	}
+	return typ
+}
+
+// scan is Scan without the work that only the value of a token needs. For a
+// token whose value needs decoding or numbering, it returns one of the token
+// types above, and Scan does that work. Callers that need only where the
+// tokens are and what they are call scan and skip it.
 func (tkn *Tokenizer) scan() (int, string) {
-	tkn.pending = valueReady
 	for {
 		tkn.skipBlank()
 		// If inside a versioned comment and we've reached the closing */,
@@ -250,8 +250,10 @@ func (tkn *Tokenizer) scan() (int, string) {
 				tID, tBytes = tkn.scanIdentifier(true)
 			}
 			if tID == LEX_ERROR {
-				tkn.pending = valueReady
 				return tID, ""
+			}
+			if tID == backquotedEscaped {
+				tBytes = decodeBackquoted(tBytes)
 			}
 			return tokenID, tBytes
 		case isLetter(ch):
@@ -320,8 +322,7 @@ func (tkn *Tokenizer) scan() (int, string) {
 				}
 				return int(ch), ""
 			case '?':
-				tkn.pending = valuePositionalArg
-				return VALUE_ARG, ""
+				return positionalArg, ""
 			case '.':
 				return int(ch), ""
 			case '/':
@@ -512,8 +513,8 @@ func (tkn *Tokenizer) scanBitLiteral() (int, string) {
 
 // scanLiteralIdentifier scans an identifier enclosed by backticks. If the identifier
 // is a simple literal, it'll be returned as a slice of the input buffer. If it
-// holds a doubled backtick, which stands for one backtick, the value is left
-// for Scan to decode.
+// holds a doubled backtick, which stands for one backtick, it is returned as
+// backquotedEscaped, for Scan to decode.
 func (tkn *Tokenizer) scanLiteralIdentifier() (int, string) {
 	start := tkn.Pos
 	doubled := false
@@ -532,27 +533,23 @@ func (tkn *Tokenizer) scanLiteralIdentifier() (int, string) {
 			if !doubled {
 				return ID, tkn.buf[start : tkn.Pos-1]
 			}
-			tkn.setPending(valueQuotedIdentifier, 0, start, tkn.Pos-1)
-			return ID, ""
+			return backquotedEscaped, tkn.buf[start : tkn.Pos-1]
 		case eofChar:
 			// Premature EOF.
 			if !doubled {
 				return LEX_ERROR, tkn.buf[start:tkn.Pos]
 			}
-			tkn.setPending(valueQuotedIdentifier, 0, start, tkn.Pos)
-			return LEX_ERROR, ""
+			return LEX_ERROR, decodeBackquoted(tkn.buf[start:tkn.Pos])
 		default:
 			tkn.skip(1)
 		}
 	}
 }
 
-// setPending records the work Scan has to do for the value of a token.
-func (tkn *Tokenizer) setPending(pending pendingValue, delim byte, start, end int) {
-	tkn.pending = pending
-	tkn.pendingDelim = delim
-	tkn.pendingStart = start
-	tkn.pendingEnd = end
+// decodeBackquoted decodes the doubled backticks in the text of an identifier
+// quoted with backticks.
+func decodeBackquoted(text string) string {
+	return strings.ReplaceAll(text, "``", "`")
 }
 
 // scanBindVarOrAssignmentExpression scans a bind variable or an assignment expression; assumes a ':' has been scanned right before
@@ -671,7 +668,8 @@ exit:
 // scanString scans a string surrounded by the given `delim`, which can be
 // either single or double quotes. Assumes that the given delimiter has just
 // been scanned. A string without escapes is returned as a slice of the input
-// buffer. The value of a string with escapes is left for Scan to decode.
+// buffer. A string with escapes is returned as one of the token types for
+// Scan to decode: singleQuotedEscaped, doubleQuotedEscaped or nationalEscaped.
 func (tkn *Tokenizer) scanString(delim uint16, typ int) (int, string) {
 	start := tkn.Pos
 	escaped := false
@@ -683,8 +681,7 @@ func (tkn *Tokenizer) scanString(delim uint16, typ int) (int, string) {
 				if !escaped {
 					return typ, tkn.buf[start : tkn.Pos-1]
 				}
-				tkn.setPending(valueString, byte(delim), start, tkn.Pos-1)
-				return typ, ""
+				return escapedStringType(delim, typ), tkn.buf[start : tkn.Pos-1]
 			}
 			escaped = true
 			tkn.skip(1)
@@ -693,18 +690,28 @@ func (tkn *Tokenizer) scanString(delim uint16, typ int) (int, string) {
 			tkn.skip(1)
 			if tkn.cur() == eofChar {
 				// String terminates mid escape character.
-				tkn.setPending(valueString, byte(delim), start, tkn.Pos)
-				return LEX_ERROR, ""
+				return LEX_ERROR, decodeString(tkn.buf[start:tkn.Pos], byte(delim))
 			}
 		case eofChar:
 			if !escaped {
 				return LEX_ERROR, tkn.buf[start:tkn.Pos]
 			}
-			tkn.setPending(valueString, byte(delim), start, tkn.Pos)
-			return LEX_ERROR, ""
+			return LEX_ERROR, decodeString(tkn.buf[start:tkn.Pos], byte(delim))
 		}
 		tkn.skip(1)
 	}
+}
+
+// escapedStringType returns the token type that scan returns for a string of
+// type typ in the given quotes that holds escapes.
+func escapedStringType(delim uint16, typ int) int {
+	switch {
+	case typ == NCHAR_STRING:
+		return nationalEscaped
+	case delim == '"':
+		return doubleQuotedEscaped
+	}
+	return singleQuotedEscaped
 }
 
 // decodeString decodes the backslash escapes and the doubled delimiters in

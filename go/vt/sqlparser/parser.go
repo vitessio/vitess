@@ -333,7 +333,7 @@ loop:
 			// for our valid prefix match (assuming our longest valid sequence is 10 tokens),
 			// accumulate the token.
 			if len(startTokens) < 10 {
-				startTokens = append(startTokens, tkn)
+				startTokens = append(startTokens, scannedType(tkn))
 			}
 			emptyStatement = false
 		}

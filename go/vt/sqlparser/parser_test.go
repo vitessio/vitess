@@ -166,6 +166,14 @@ func TestSplitStatementToPieces(t *testing.T) {
 			// Create procedure with definer id at_id.
 			input:     "create DEFINER=`root`@`localhost` procedure p1 (in country CHAR(3))  begin declare abc DECIMAL(14,2); DECLARE def DECIMAL(14,2); end",
 			lenWanted: 1,
+		}, {
+			// Create procedure with definer string that holds escapes.
+			input:     "create DEFINER='ro''ot'@localhost procedure p1 (in country CHAR(3))  begin declare abc DECIMAL(14,2); DECLARE def DECIMAL(14,2); end",
+			lenWanted: 1,
+		}, {
+			// Create procedure with definer id that holds a doubled backtick.
+			input:     "create DEFINER=`ro``ot` procedure p1 (in country CHAR(3))  begin declare abc DECIMAL(14,2); DECLARE def DECIMAL(14,2); end",
+			lenWanted: 1,
 		},
 	}
 
