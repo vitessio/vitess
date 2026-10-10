@@ -573,6 +573,13 @@ func (fmd *FakeMysqlDaemon) StopIOThread(ctx context.Context) error {
 	})
 }
 
+// StartIOThread is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) StartIOThread(ctx context.Context) error {
+	return fmd.ExecuteSuperQueryList(ctx, []string{
+		"START REPLICA IO_THREAD",
+	})
+}
+
 // SetReplicationPosition is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) SetReplicationPosition(ctx context.Context, pos replication.Position) error {
 	if !reflect.DeepEqual(fmd.SetReplicationPositionPos, pos) {

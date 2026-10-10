@@ -299,6 +299,11 @@ type TabletManagerClient struct {
 	PopulateReparentJournalDelays map[string]time.Duration
 	// keyed by tablet alias
 	PopulateReparentJournalResults map[string]error
+	// keyed by tablet alias.
+	PrepareEmergencyReparentResults map[string]struct {
+		Response *tabletmanagerdatapb.PrepareEmergencyReparentResponse
+		Error    error
+	}
 	// keyed by tablet alias
 	ReadReparentJournalInfoResults map[string]int32
 	// keyed by tablet alias; takes precedence over ReadReparentJournalInfoResults
@@ -321,6 +326,11 @@ type TabletManagerClient struct {
 	PromoteReplicaResults map[string]struct {
 		Result string
 		Error  error
+	}
+	// keyed by tablet alias.
+	PromoteReplicaAndJournalResults map[string]struct {
+		Response *tabletmanagerdatapb.PromoteReplicaAndJournalResponse
+		Error    error
 	}
 	// keyed by tablet alias.
 	RefreshStateResults map[string]error
@@ -1019,6 +1029,19 @@ func (fake *TabletManagerClient) ReadReparentJournalInfo(ctx context.Context, ta
 	return 0, assert.AnError
 }
 
+func (fake *TabletManagerClient) PrepareEmergencyReparent(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.PrepareEmergencyReparentRequest) (*tabletmanagerdatapb.PrepareEmergencyReparentResponse, error) {
+	if fake.PrepareEmergencyReparentResults == nil {
+		return nil, assert.AnError
+	}
+
+	key := topoproto.TabletAliasString(tablet.Alias)
+	if result, ok := fake.PrepareEmergencyReparentResults[key]; ok {
+		return result.Response, result.Error
+	}
+
+	return nil, assert.AnError
+}
+
 // PromoteReplica is part of the tmclient.TabletManagerClient interface.
 func (fake *TabletManagerClient) PromoteReplica(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) (string, error) {
 	if fake.PromoteReplicaResults == nil {
@@ -1053,6 +1076,19 @@ func (fake *TabletManagerClient) PromoteReplica(ctx context.Context, tablet *top
 	}
 
 	return "", assert.AnError
+}
+
+func (fake *TabletManagerClient) PromoteReplicaAndJournal(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.PromoteReplicaAndJournalRequest) (*tabletmanagerdatapb.PromoteReplicaAndJournalResponse, error) {
+	if fake.PromoteReplicaAndJournalResults == nil {
+		return nil, assert.AnError
+	}
+
+	key := topoproto.TabletAliasString(tablet.Alias)
+	if result, ok := fake.PromoteReplicaAndJournalResults[key]; ok {
+		return result.Response, result.Error
+	}
+
+	return nil, assert.AnError
 }
 
 // RefreshState is part of the tmclient.TabletManagerClient interface.
