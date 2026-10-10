@@ -1936,6 +1936,68 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 	}
 }
 
+func TestStopReplicationAndBuildStatusMapsWarnsForDeprecatedReplication(t *testing.T) {
+	alias := &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}
+	aliasString := topoproto.TabletAliasString(alias)
+	tmc := &stopReplicationAndBuildStatusMapsTestTMClient{
+		stopReplicationAndGetStatusResults: map[string]*struct {
+			StopStatus *replicationdatapb.StopReplicationStatus
+			Err        error
+		}{
+			aliasString: {
+				StopStatus: &replicationdatapb.StopReplicationStatus{
+					Before: &replicationdatapb.Status{
+						Position: "MariaDB/0-1-5",
+					},
+					After: &replicationdatapb.Status{Position: "MariaDB/0-1-5"},
+				},
+			},
+		},
+	}
+	tabletMap := map[string]*topo.TabletInfo{
+		aliasString: {
+			Tablet: &topodatapb.Tablet{
+				Alias: alias,
+				Type:  topodatapb.TabletType_REPLICA,
+			},
+		},
+	}
+	durability, err := policy.GetDurabilityPolicy(policy.DurabilityNone)
+	require.NoError(t, err)
+	logger := logutil.NewMemoryLogger()
+
+	_, err = stopReplicationAndBuildStatusMaps(t.Context(), tmc, &events.Reparent{}, tabletMap, nil, 30*time.Second, sets.New[string](), nil, durability, true, logger)
+	require.NoError(t, err)
+	assert.Contains(t, logger.String(), "MariaDB support for serving shards is deprecated")
+
+	tmc.stopReplicationAndGetStatusResults[aliasString].StopStatus = &replicationdatapb.StopReplicationStatus{
+		Before: &replicationdatapb.Status{
+			Position:      "FilePos/mysql-bin.000001:5",
+			ServerVersion: "Ver 8.0.35",
+		},
+		After: &replicationdatapb.Status{Position: "FilePos/mysql-bin.000001:5"},
+	}
+	logger = logutil.NewMemoryLogger()
+	_, err = stopReplicationAndBuildStatusMaps(t.Context(), tmc, &events.Reparent{}, tabletMap, nil, 30*time.Second, sets.New[string](), nil, durability, true, logger)
+	require.NoError(t, err)
+	assert.Contains(t, logger.String(), "File-position replication for serving shards is deprecated")
+
+	const mysqlGTID = "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5"
+	tmc.stopReplicationAndGetStatusResults[aliasString].StopStatus = &replicationdatapb.StopReplicationStatus{
+		Before: &replicationdatapb.Status{
+			Position:         mysqlGTID,
+			RelayLogPosition: mysqlGTID,
+			FilePosition:     "FilePos/mysql-bin.000001:5",
+			ServerVersion:    "Ver 8.0.35",
+		},
+		After: &replicationdatapb.Status{Position: mysqlGTID},
+	}
+	logger = logutil.NewMemoryLogger()
+	_, err = stopReplicationAndBuildStatusMaps(t.Context(), tmc, &events.Reparent{}, tabletMap, nil, 30*time.Second, sets.New[string](), nil, durability, true, logger)
+	require.NoError(t, err)
+	assert.NotContains(t, logger.String(), "will become unsupported in v26.0.0")
+}
+
 func TestReplicaWasRunning(t *testing.T) {
 	t.Parallel()
 
