@@ -118,3 +118,22 @@ func SendError(w http.ResponseWriter, err error) {
 	w.WriteHeader(http.StatusForbidden)
 	fmt.Fprintf(w, "Access denied: %v\n", err)
 }
+
+// SetPolicyForTest sets the active security policy for testing and returns a cleanup function to restore the previous state.
+func SetPolicyForTest(name string) func() {
+	once.Do(savePolicy)
+	prevPolicy := currentPolicy
+	prevSecurityPolicy := securityPolicy
+	securityPolicy = name
+	if name == "" {
+		currentPolicy = nil
+	} else if policy, ok := policies[name]; ok {
+		currentPolicy = policy
+	} else {
+		currentPolicy = denyAllPolicy{}
+	}
+	return func() {
+		currentPolicy = prevPolicy
+		securityPolicy = prevSecurityPolicy
+	}
+}
