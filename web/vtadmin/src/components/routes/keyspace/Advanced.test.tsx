@@ -71,7 +71,7 @@ describe('Advanced keyspace actions', () => {
             const response: Promise<Response> = new Promise((resolve) =>
                 resolve(new Response('{"ok": "true", "result": {}}', { status: 200 }))
             );
-            vi.spyOn(global, 'fetch').mockReturnValue(response);
+            vi.spyOn(globalThis, 'fetch').mockReturnValue(response);
 
             render(
                 <QueryClientProvider client={queryClient}>
@@ -85,8 +85,8 @@ describe('Advanced keyspace actions', () => {
                 expect(screen.queryByText('Loading...')).toBeNull();
             });
 
-            expect(global.fetch).toHaveBeenCalledTimes(1);
-            expect(global.fetch).toHaveBeenCalledWith(`/api/keyspace/some-cluster/some-keyspace`, {
+            expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+            expect(globalThis.fetch).toHaveBeenCalledWith(`/api/keyspace/some-cluster/some-keyspace`, {
                 credentials: undefined,
             });
 
@@ -99,10 +99,10 @@ describe('Advanced keyspace actions', () => {
             const user = userEvent.setup();
             await user.click(button);
             await waitFor(() => {
-                expect(global.fetch).toHaveBeenCalledTimes(1);
+                expect(globalThis.fetch).toHaveBeenCalledTimes(1);
             });
 
-            expect(global.fetch).toHaveBeenCalledWith(
+            expect(globalThis.fetch).toHaveBeenCalledWith(
                 `/api/schemas/reload?cluster=some-cluster&keyspace=some-keyspace`,
                 {
                     credentials: undefined,
