@@ -97,12 +97,13 @@ func (vtbackup *VtbackupProcess) Setup() (err error) {
 		return
 	}
 
-	vtbackup.exit = make(chan error)
+	// The goroutine keeps the channel and the process it was started for: a restart replaces both
+	// fields, and the goroutine of the earlier process must not close the new channel.
+	exit, proc := make(chan error), vtbackup.proc
+	vtbackup.exit = exit
 	go func() {
-		if vtbackup.proc != nil {
-			vtbackup.exit <- vtbackup.proc.Wait()
-			close(vtbackup.exit)
-		}
+		exit <- proc.Wait()
+		close(exit)
 	}()
 
 	return nil

@@ -238,12 +238,13 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 	if err != nil {
 		return
 	}
-	vtgate.exit = make(chan error)
+	// The goroutine keeps the channel and the process it was started for: a restart replaces both
+	// fields, and the goroutine of the earlier process must not close the new channel.
+	exit, proc := make(chan error), vtgate.proc
+	vtgate.exit = exit
 	go func() {
-		if vtgate.proc != nil {
-			vtgate.exit <- vtgate.proc.Wait()
-			close(vtgate.exit)
-		}
+		exit <- proc.Wait()
+		close(exit)
 	}()
 
 	timeout := time.Now().Add(60 * time.Second)
