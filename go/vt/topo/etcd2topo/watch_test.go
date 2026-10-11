@@ -19,11 +19,17 @@ package etcd2topo
 import (
 	"context"
 	"fmt"
+	"io"
+	"net"
 	"path"
+	"strconv"
+	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	clientv3 "go.etcd.io/etcd/client/v3"
@@ -156,5 +162,177 @@ func TestWatchTopoVersion(t *testing.T) {
 			gotVersion := int64(wd.Version.(EtcdVersion))
 			require.Equal(t, expectedVersion, gotVersion, "expected version %d, got %d", expectedVersion, gotVersion)
 		}
+	}
+}
+
+// TestWatchAfterCompaction tests that a watch survives resuming from a
+// compacted revision. When the client reconnects after the revision it was
+// watching from has been compacted, the watch reads the node again and keeps
+// going instead of failing.
+func TestWatchAfterCompaction(t *testing.T) {
+	etcdServerAddr, _ := startEtcd(t, testfiles.GoVtTopoEtcd2topoPort, testfiles.GoVtTopoEtcd2topoPeerPort)
+	proxy := newPausableProxy(t, strings.TrimPrefix(etcdServerAddr, "http://"))
+
+	// The watch goes through the proxy, while the test changes etcd directly.
+	admin, err := clientv3.New(clientv3.Config{
+		Endpoints:   []string{etcdServerAddr},
+		DialTimeout: 5 * time.Second,
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() { admin.Close() })
+
+	tests := []struct {
+		name   string
+		change func(ctx context.Context, nodePath string) error
+		check  func(t *testing.T, wd *topo.WatchData)
+	}{
+		{
+			name: "updated while disconnected",
+			change: func(ctx context.Context, nodePath string) error {
+				_, err := admin.Put(ctx, nodePath, "v2")
+				return err
+			},
+			check: func(t *testing.T, wd *topo.WatchData) {
+				require.NoError(t, wd.Err)
+				assert.Equal(t, "v2", string(wd.Contents))
+			},
+		},
+		{
+			name: "deleted while disconnected",
+			change: func(ctx context.Context, nodePath string) error {
+				_, err := admin.Delete(ctx, nodePath)
+				return err
+			},
+			check: func(t *testing.T, wd *topo.WatchData) {
+				assert.True(t, topo.IsErrType(wd.Err, topo.NoNode), "expected NoNode, got %v", wd.Err)
+			},
+		},
+	}
+	for i, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := t.Context()
+			client, err := clientv3.New(clientv3.Config{
+				Endpoints:   []string{proxy.addr()},
+				DialTimeout: 5 * time.Second,
+			})
+			require.NoError(t, err)
+			server := &Server{
+				cli:     client,
+				root:    "/vitess/test",
+				running: make(chan struct{}),
+			}
+			t.Cleanup(server.Close)
+
+			name := "key" + strconv.Itoa(i)
+			nodePath := path.Join(server.root, name)
+			_, err = admin.Put(ctx, nodePath, "v1")
+			require.NoError(t, err)
+
+			current, changes, err := server.Watch(ctx, name)
+			require.NoError(t, err)
+			require.Equal(t, "v1", string(current.Contents))
+
+			// Disconnect the watch, then change the node and compact away
+			// the revision the watch resumes from.
+			proxy.setPaused(true)
+			require.NoError(t, tt.change(ctx, nodePath))
+			var resp *clientv3.PutResponse
+			for j := range 5 {
+				resp, err = admin.Put(ctx, path.Join(server.root, "other"), strconv.Itoa(j))
+				require.NoError(t, err)
+			}
+			_, err = admin.Compact(ctx, resp.Header.Revision)
+			require.NoError(t, err)
+			proxy.setPaused(false)
+
+			var wd *topo.WatchData
+			assert.Eventually(t, func() bool {
+				select {
+				case wd = <-changes:
+					return true
+				default:
+					return false
+				}
+			}, 30*time.Second, 10*time.Millisecond)
+			require.NotNil(t, wd)
+			tt.check(t, wd)
+		})
+	}
+}
+
+// pausableProxy forwards TCP connections to target. While paused, it closes
+// all open connections and refuses new ones.
+type pausableProxy struct {
+	target   string
+	listener net.Listener
+
+	mu     sync.Mutex
+	paused bool
+	conns  map[net.Conn]struct{}
+}
+
+func newPausableProxy(t *testing.T, target string) *pausableProxy {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	p := &pausableProxy{
+		target:   target,
+		listener: listener,
+		conns:    make(map[net.Conn]struct{}),
+	}
+	go p.serve()
+	t.Cleanup(func() {
+		listener.Close()
+		p.setPaused(true)
+	})
+	return p
+}
+
+func (p *pausableProxy) addr() string {
+	return p.listener.Addr().String()
+}
+
+func (p *pausableProxy) serve() {
+	for {
+		conn, err := p.listener.Accept()
+		if err != nil {
+			return
+		}
+		upstream, err := net.Dial("tcp", p.target)
+		if err != nil {
+			conn.Close()
+			continue
+		}
+
+		p.mu.Lock()
+		if p.paused {
+			p.mu.Unlock()
+			conn.Close()
+			upstream.Close()
+			continue
+		}
+		p.conns[conn] = struct{}{}
+		p.conns[upstream] = struct{}{}
+		p.mu.Unlock()
+
+		pipe := func(dst, src net.Conn) {
+			_, _ = io.Copy(dst, src)
+			dst.Close()
+			src.Close()
+		}
+		go pipe(conn, upstream)
+		go pipe(upstream, conn)
+	}
+}
+
+func (p *pausableProxy) setPaused(paused bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	p.paused = paused
+	if paused {
+		for conn := range p.conns {
+			conn.Close()
+		}
+		clear(p.conns)
 	}
 }

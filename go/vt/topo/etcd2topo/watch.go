@@ -84,6 +84,7 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 		defer outerCancel()
 
 		rev := initial.Header.Revision
+		modRev := initial.Kvs[0].ModRevision
 		var watchRetries int
 		for {
 			select {
@@ -125,6 +126,43 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 
 				watchRetries = 0
 
+				if wresp.CompactRevision != 0 {
+					// The revision we were watching from has been compacted.
+					// This happens when the watch resumes after a reconnect
+					// and the node has not changed since before the
+					// compaction. Read the node again and watch from there,
+					// rather than failing the watch.
+					getCtx, getCancel := context.WithTimeout(outerCtx, topo.RemoteOperationTimeout)
+					current, err := s.cli.Get(getCtx, nodePath)
+					getCancel()
+					if err != nil {
+						notifications <- &topo.WatchData{
+							Err: convertError(err, nodePath),
+						}
+						return
+					}
+					if len(current.Kvs) != 1 {
+						// Node is gone, send a final notice.
+						notifications <- &topo.WatchData{
+							Err: topo.NewError(topo.NoNode, nodePath),
+						}
+						return
+					}
+					if kv := current.Kvs[0]; kv.ModRevision != modRev {
+						modRev = kv.ModRevision
+						notifications <- &topo.WatchData{
+							Contents: kv.Value,
+							Version:  EtcdVersion(kv.ModRevision),
+						}
+					}
+
+					rev = current.Header.Revision
+					watchCancel()
+					watchCtx, watchCancel = context.WithCancel(outerCtx)
+					watcher = s.cli.Watch(watchCtx, nodePath, clientv3.WithRev(rev+1))
+					continue
+				}
+
 				if wresp.Canceled {
 					// Final notification.
 					notifications <- &topo.WatchData{
@@ -138,6 +176,7 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 				for _, ev := range wresp.Events {
 					switch ev.Type {
 					case mvccpb.PUT:
+						modRev = ev.Kv.ModRevision
 						notifications <- &topo.WatchData{
 							Contents: ev.Kv.Value,
 							Version:  EtcdVersion(ev.Kv.ModRevision),
