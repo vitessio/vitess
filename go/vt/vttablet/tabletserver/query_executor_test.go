@@ -2902,11 +2902,11 @@ func TestReserveSettingsRejectUnsupportedSQLModes(t *testing.T) {
 	// that cannot be judged upfront are rejected: non-constant sql_mode expressions,
 	// strings that do not parse, and statements that are not SET statements
 	_, _, err = tsv.te.ReserveBegin(ctx, &querypb.ExecuteOptions{}, []string{"set sql_mode = concat('AN', 'SI')"})
-	require.EqualError(t, err, "non-constant sql_mode value in connection settings: set sql_mode = concat('AN', 'SI')")
+	require.EqualError(t, err, "non-constant sql_mode value in connection settings")
 	_, _, err = tsv.te.ReserveBegin(ctx, &querypb.ExecuteOptions{}, []string{"this is not SQL"})
-	require.ErrorContains(t, err, "failed to parse connection setting: this is not SQL")
+	require.ErrorContains(t, err, "failed to parse connection setting at position 1")
 	_, _, err = tsv.te.ReserveBegin(ctx, &querypb.ExecuteOptions{}, []string{"select 1 from dual"})
-	require.EqualError(t, err, "connection setting is not a SET statement: select 1 from dual")
+	require.EqualError(t, err, "connection setting at position 1 is not a SET statement")
 
 	validSetting := "set sql_mode = 'STRICT_TRANS_TABLES'"
 	db.AddQuery(validSetting, &sqltypes.Result{})
@@ -2975,7 +2975,7 @@ func TestSettingsRejectUnsafeConnectionCharsets(t *testing.T) {
 // ACL dry run accepts it too, as it lets through any request the ACL would deny.
 func TestSettingsWithSubqueryUnderStrictTableACL(t *testing.T) {
 	subquerySetting := "set @@sql_select_limit = (select count(*) from test_table)"
-	settingErr := "connection setting must not contain a subquery: " + subquerySetting
+	settingErr := "connection setting must not contain a subquery"
 
 	t.Run("strict table ACL rejects", func(t *testing.T) {
 		db := setUpQueryExecutorTest(t)
