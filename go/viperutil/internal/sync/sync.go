@@ -40,7 +40,11 @@ import (
 // settings from. The "live" config only updates after blocking all values from
 // reading in order to swap in the most recently-loaded config from the "disk".
 type Viper struct {
-	m    sync.Mutex // prevents races between loadFromDisk and AllSettings
+	// m guards live: Set, WriteConfig, AllSettings and loadFromDisk take it for writing, and the
+	// getters returned by AdaptGetter for reading. Every key's value lives in live, so the per-key
+	// locks alone do not keep a read of one key from racing with a write of another. A path that
+	// takes both locks takes the key's lock first.
+	m    sync.RWMutex
 	disk *viper.Viper
 	live *viper.Viper
 	keys map[string]*sync.RWMutex
@@ -338,6 +342,9 @@ func AdaptGetter[T any](key string, getter func(v *viper.Viper) func(key string)
 	return func(key string) T {
 		m.RLock()
 		defer m.RUnlock()
+
+		v.m.RLock()
+		defer v.m.RUnlock()
 
 		return getter(v.live)(key)
 	}
