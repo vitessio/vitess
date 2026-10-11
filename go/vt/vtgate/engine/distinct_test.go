@@ -290,6 +290,32 @@ func TestDistinctUnknownTypeUsesWeightString(t *testing.T) {
 		require.NoError(t, err)
 		utils.MustMatch(t, `[[INT64(1)] [VARCHAR("x")] [VARCHAR("y")] [INT64(2)]]`, fmt.Sprintf("%v", qr.Rows))
 	})
+
+	// A temporal and a number that compare equal as scalars stay two values:
+	// MySQL gives a column mixing them (e.g. the branches of a UNION) a VARCHAR
+	// type, so DISTINCT keeps both `2000-01-01` and `20000101`.
+	t.Run("temporal and numeric values stay apart", func(t *testing.T) {
+		input := &sqltypes.Result{
+			Fields: sqltypes.MakeTestFields("x|weight_string(x)", "varchar|varbinary"),
+			Rows: []sqltypes.Row{
+				{sqltypes.NewDate("2000-01-01"), sqltypes.NULL},
+				{sqltypes.NewInt64(20000101), sqltypes.NULL},
+				{sqltypes.NewDate("2000-01-01"), sqltypes.NULL},
+				{sqltypes.NewTime("11:22:33"), sqltypes.NULL},
+				{sqltypes.NewInt64(112233), sqltypes.NULL},
+				{sqltypes.NewInt64(20000101), sqltypes.NULL},
+			},
+		}
+		distinct := &Distinct{
+			Source:    &fakePrimitive{results: []*sqltypes.Result{input}},
+			CheckCols: []CheckCol{{Col: 0, WsCol: &offsetOne, Type: evalengine.NewUnknownType()}},
+			Truncate:  1,
+		}
+
+		qr, err := distinct.TryExecute(t.Context(), &noopVCursor{}, nil, true)
+		require.NoError(t, err)
+		utils.MustMatch(t, `[[DATE("2000-01-01")] [INT64(20000101)] [TIME("11:22:33")] [INT64(112233)]]`, fmt.Sprintf("%v", qr.Rows))
+	})
 }
 
 func TestWeightStringFallBack(t *testing.T) {
