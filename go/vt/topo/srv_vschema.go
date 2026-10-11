@@ -40,7 +40,10 @@ type WatchSrvVSchemaData struct {
 // It has the same contract as Conn.Watch, but it also unpacks the
 // contents into a SrvVSchema object.
 func (ts *Server) WatchSrvVSchema(ctx context.Context, cell string) (*WatchSrvVSchemaData, <-chan *WatchSrvVSchemaData, error) {
-	conn, err := ts.ConnForCell(ctx, cell)
+	// ctx lives as long as the watch, so bound the cell lookup separately.
+	connCtx, connCancel := context.WithTimeout(ctx, RemoteOperationTimeout)
+	conn, err := ts.ConnForCell(connCtx, cell)
+	connCancel()
 	if err != nil {
 		return nil, nil, err
 	}

@@ -36,7 +36,7 @@ func (k cellName) String() string {
 	return string(k)
 }
 
-func NewSrvVSchemaWatcher(ctx context.Context, topoServer *topo.Server, counts *stats.CountersWithSingleLabel, cacheRefresh, cacheTTL time.Duration) *SrvVSchemaWatcher {
+func NewSrvVSchemaWatcher(ctx context.Context, topoServer *topo.Server, counts *stats.CountersWithSingleLabel, cacheRefresh time.Duration) *SrvVSchemaWatcher {
 	watch := func(entry *watchEntry) {
 		key := entry.key.(cellName)
 		requestCtx, requestCancel := context.WithCancel(ctx)
@@ -61,13 +61,7 @@ func NewSrvVSchemaWatcher(ctx context.Context, topoServer *topo.Server, counts *
 		}
 	}
 
-	rw := &resilientWatcher{
-		watcher:              watch,
-		counts:               counts,
-		cacheRefreshInterval: cacheRefresh,
-		cacheTTL:             cacheTTL,
-		entries:              make(map[string]*watchEntry),
-	}
+	rw := newResilientWatcher(ctx, "SrvVSchema", watch, counts, cacheRefresh)
 
 	return &SrvVSchemaWatcher{rw}
 }

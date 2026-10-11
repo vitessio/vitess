@@ -1,10 +1,5 @@
 VTGate is a stateless proxy responsible for accepting requests from applications and routing them to the appropriate tablet server(s) for query execution. It speaks both the MySQL Protocol and a gRPC protocol.
 
-### Key Options
-
-* `--srv-topo-cache-ttl`: There may be instances where you will need to increase the cached TTL from the default of 1 second to a higher number:
-	* You may want to increase this option if you see that your topo leader goes down and keeps your queries waiting for a few seconds.
-
 Usage:
   vtgate [flags]
 
@@ -195,7 +190,7 @@ Flags:
       --sql-max-length-errors int                                        truncate queries in error logs to the given length (default unlimited)
       --sql-max-length-ui int                                            truncate queries in debug UIs to the given length (default 512) (default 512)
       --srv-topo-cache-refresh duration                                  how frequently to refresh the topology for cached entries (default 1s)
-      --srv-topo-cache-ttl duration                                      how long to use cached entries for topology (default 1s)
+      --srv-topo-cache-ttl duration                                      how long to use cached entries for topology queries that are not watched, such as the list of keyspaces (default 1s)
       --srv-topo-timeout duration                                        topo server timeout (default 5s)
       --stats-backend string                                             The name of the registered push-based monitoring/stats backend to use
       --stats-combine-dimensions string                                  List of dimensions to be combined into a single "all" value in exported stats vars

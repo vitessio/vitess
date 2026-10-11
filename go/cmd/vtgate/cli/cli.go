@@ -52,12 +52,7 @@ var (
 	Main = &cobra.Command{
 		Use:   "vtgate",
 		Short: "VTGate is a stateless proxy responsible for accepting requests from applications and routing them to the appropriate tablet server(s) for query execution. It speaks both the MySQL Protocol and a gRPC protocol.",
-		Long: `VTGate is a stateless proxy responsible for accepting requests from applications and routing them to the appropriate tablet server(s) for query execution. It speaks both the MySQL Protocol and a gRPC protocol.
-
-### Key Options
-` +
-			"\n* `--srv-topo-cache-ttl`: There may be instances where you will need to increase the cached TTL from the default of 1 second to a higher number:\n" +
-			`	* You may want to increase this option if you see that your topo leader goes down and keeps your queries waiting for a few seconds.`,
+		Long:  `VTGate is a stateless proxy responsible for accepting requests from applications and routing them to the appropriate tablet server(s) for query execution. It speaks both the MySQL Protocol and a gRPC protocol.`,
 		Example: `vtgate \
 	--topo-implementation etcd2 \
 	--topo-global-server-address localhost:2379 \

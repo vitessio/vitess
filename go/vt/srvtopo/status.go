@@ -67,7 +67,7 @@ const TopoTemplate = `
     <th>Cell</th>
     <th>Keyspace</th>
     <th>SrvKeyspace</th>
-    <th>TTL</th>
+    <th>Stale</th>
     <th>Error</th>
   </tr>
   {{range $i, $sk := .SrvKeyspaces}}
@@ -75,7 +75,7 @@ const TopoTemplate = `
     <td>{{$sk.Cell}}</td>
     <td>{{$sk.Keyspace}}</td>
     <td>{{$sk.StatusAsHTML}}</td>
-    <td>{{github_com_vitessio_vitess_srvtopo_ttl_time $sk.ExpirationTime}}</td>
+    <td>{{if not $sk.StaleSince.IsZero}}{{github_com_vitessio_vitess_srvtopo_time_since $sk.StaleSince}}{{end}}</td>
     <td>{{if $sk.LastError}}({{github_com_vitessio_vitess_srvtopo_time_since $sk.LastErrorTime}} Ago) {{$sk.LastError}}{{end}}</td>
   </tr>
   {{end}}
@@ -115,12 +115,14 @@ func (skncsl SrvKeyspaceNamesCacheStatusList) Swap(i, j int) {
 
 // SrvKeyspaceCacheStatus is the current value for a SrvKeyspace object
 type SrvKeyspaceCacheStatus struct {
-	Cell           string
-	Keyspace       string
-	Value          *topodatapb.SrvKeyspace
-	ExpirationTime time.Time
-	LastErrorTime  time.Time
-	LastError      error
+	Cell     string
+	Keyspace string
+	Value    *topodatapb.SrvKeyspace
+	// StaleSince is when the watch for this SrvKeyspace stopped running while
+	// Value was cached. It is zero while the watch is running.
+	StaleSince    time.Time
+	LastErrorTime time.Time
+	LastError     error
 }
 
 var (

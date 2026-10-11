@@ -17,6 +17,7 @@ limitations under the License.
 package srvtopo
 
 import (
+	"context"
 	"errors"
 	"sync/atomic"
 	"testing"
@@ -24,11 +25,13 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
 
@@ -132,8 +135,9 @@ func TestWatcherOutageBehavior(t *testing.T) {
 	assert.NotNil(t, vschema)
 }
 
-// TestVSchemaWatcherCacheExpiryBehavior tests cache behavior during different error types.
-func TestVSchemaWatcherCacheExpiryBehavior(t *testing.T) {
+// TestVSchemaWatcherKeepsCachedValueOnError tests that the cached value is kept
+// for every error other than NoNode, even after the TTL has elapsed.
+func TestVSchemaWatcherKeepsCachedValueOnError(t *testing.T) {
 	originalCacheTTL := srvTopoCacheTTL
 	originalCacheRefresh := srvTopoCacheRefresh
 	srvTopoCacheTTL = 100 * time.Millisecond
@@ -162,28 +166,28 @@ func TestVSchemaWatcherCacheExpiryBehavior(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, vschema)
 
-	// Wait for cache TTL to expire
-	time.Sleep(srvTopoCacheTTL + 10*time.Millisecond)
+	for _, forceErr := range []error{
+		errors.New("HTTP 500 internal server error"),
+		topo.NewError(topo.Timeout, "topo timeout error"),
+	} {
+		factory.SetError(forceErr)
+		// Let the TTL expire and the watch fail to be re-established a few
+		// times.
+		time.Sleep(3 * srvTopoCacheTTL)
 
-	// Set a non-topo error (like 500 HTTP error)
-	nonTopoErr := errors.New("HTTP 500 internal server error")
-	factory.SetError(nonTopoErr)
+		vschema, err = rs.GetSrvVSchema(ctx, "test_cell")
+		require.NoError(t, err, "should serve cached value for %v", forceErr)
+		assert.True(t, proto.Equal(initialVSchema, vschema), "should return cached VSchema for %v", forceErr)
+	}
+	factory.SetError(nil)
 
-	// Get VSchema after TTL expiry with non-topo error
-	// Should still serve cached value (not the error)
-	vschema, err = rs.GetSrvVSchema(ctx, "test_cell")
-	require.NoError(t, err, "Should serve cached value for non-topo errors even after TTL")
-	assert.NotNil(t, vschema, "Should return cached VSchema")
-
-	// Now test with a topo error
-	factory.SetError(topo.NewError(topo.Timeout, "topo timeout error"))
-	time.Sleep(srvTopoCacheTTL + 10*time.Millisecond) // Let TTL expire again
-
-	// With topo error after TTL expiry, cache should be cleared
-	vschema, err = rs.GetSrvVSchema(ctx, "test_cell")
-	require.Error(t, err, "Should return error for topo errors after TTL expiry")
-	assert.True(t, topo.IsErrType(err, topo.Timeout), "Should return the topo error")
-	assert.Nil(t, vschema, "Should not return vschema when error occurs")
+	// When the node is deleted, the cached value is cleared.
+	err = ts.DeleteSrvVSchema(ctx, "test_cell")
+	require.NoError(t, err)
+	assert.Eventually(t, func() bool {
+		_, err := rs.GetSrvVSchema(ctx, "test_cell")
+		return topo.IsErrType(err, topo.NoNode)
+	}, 30*time.Second, 10*time.Millisecond)
 }
 
 // TestWatcherShouldOnlyNotifyOnActualChanges tests that watchers are called when VSchema content changes.
@@ -236,4 +240,114 @@ func TestWatcherShouldOnlyNotifyOnActualChanges(t *testing.T) {
 	assert.Eventually(t, func() bool {
 		return callCount.Load() > callsAfterSameUpdate
 	}, 1*time.Second, 10*time.Millisecond)
+}
+
+// setCacheFlags overrides the srvtopo cache flags for the duration of the test.
+func setCacheFlags(t *testing.T, ttl, refresh time.Duration) {
+	originalCacheTTL := srvTopoCacheTTL
+	originalCacheRefresh := srvTopoCacheRefresh
+	srvTopoCacheTTL = ttl
+	srvTopoCacheRefresh = refresh
+	t.Cleanup(func() {
+		srvTopoCacheTTL = originalCacheTTL
+		srvTopoCacheRefresh = originalCacheRefresh
+	})
+}
+
+// TestGetSrvKeyspaceDoesNotWaitForWatchRestart tests that, once a watch has
+// failed, GetSrvKeyspace serves the cached value instead of waiting for the
+// watch to be re-established while the topo server does not answer.
+func TestGetSrvKeyspaceDoesNotWaitForWatchRestart(t *testing.T) {
+	setCacheFlags(t, 10*time.Millisecond, 10*time.Millisecond)
+
+	ctx := t.Context()
+	ts, factory := memorytopo.NewServerAndFactory(ctx, "test_cell")
+	counts := stats.NewCountersWithSingleLabel("", "Watch restart test", "type")
+	rs := NewResilientServer(ctx, ts, counts)
+
+	want := &topodatapb.SrvKeyspace{
+		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{{ServedType: topodatapb.TabletType_PRIMARY}},
+	}
+	err := ts.UpdateSrvKeyspace(ctx, "test_cell", "test_ks", want)
+	require.NoError(t, err)
+	got, err := rs.GetSrvKeyspace(ctx, "test_cell", "test_ks")
+	require.NoError(t, err)
+	require.True(t, proto.Equal(want, got))
+
+	entry := rs.SrvKeyspaceWatcher.rw.getEntry(&srvKeyspaceKey{"test_cell", "test_ks"})
+	entryState := func() (watchState, time.Time) {
+		entry.mutex.Lock()
+		defer entry.mutex.Unlock()
+		return entry.watchState, entry.lastErrorTime
+	}
+
+	// Break the watch, wait until it is due to be re-established, then make
+	// the topo server hang.
+	factory.SetError(errors.New("watch broken"))
+	assert.Eventually(t, func() bool {
+		state, lastErrorTime := entryState()
+		return state == watchStateIdle && time.Since(lastErrorTime) > srvTopoCacheRefresh
+	}, 30*time.Second, time.Millisecond)
+	factory.SetError(nil)
+	factory.Lock()
+	t.Cleanup(factory.Unlock)
+
+	// Start re-establishing the watch. It blocks on the hung topo server.
+	entry.mutex.Lock()
+	entry.ensureWatchingLocked(ctx)
+	entry.mutex.Unlock()
+	state, _ := entryState()
+	require.Equal(t, watchStateStarting, state)
+
+	// Let the TTL elapse; the cached value must still be served right away.
+	time.Sleep(2 * srvTopoCacheTTL)
+	queryCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	got, err = rs.GetSrvKeyspace(queryCtx, "test_cell", "test_ks")
+	require.NoError(t, err)
+	assert.True(t, proto.Equal(want, got))
+	state, _ = entryState()
+	assert.Equal(t, watchStateStarting, state)
+}
+
+// TestSrvTopoWatchStaleSeconds tests that SrvTopoWatchStaleSeconds reports how
+// long a cached value has been served without a running watch.
+func TestSrvTopoWatchStaleSeconds(t *testing.T) {
+	setCacheFlags(t, 10*time.Millisecond, 10*time.Millisecond)
+
+	ctx := t.Context()
+	ts, factory := memorytopo.NewServerAndFactory(ctx, "stale_cell")
+	counts := stats.NewCountersWithSingleLabel("", "Stale seconds test", "type")
+	rs := NewResilientServer(ctx, ts, counts)
+
+	err := ts.UpdateSrvKeyspace(ctx, "stale_cell", "stale_ks", &topodatapb.SrvKeyspace{})
+	require.NoError(t, err)
+	_, err = rs.GetSrvKeyspace(ctx, "stale_cell", "stale_ks")
+	require.NoError(t, err)
+
+	const label = "SrvKeyspace.stale_cell.stale_ks"
+	staleSeconds := func() (int64, bool) {
+		// Querying the value also re-establishes the watch once the topo
+		// server is back.
+		_, err := rs.GetSrvKeyspace(ctx, "stale_cell", "stale_ks")
+		require.NoError(t, err)
+		v, ok := allWatchers.staleSeconds()[label]
+		return v, ok
+	}
+
+	v, ok := staleSeconds()
+	require.True(t, ok)
+	assert.Zero(t, v)
+
+	factory.SetError(errors.New("topo unavailable"))
+	assert.Eventually(t, func() bool {
+		v, _ := staleSeconds()
+		return v >= 1
+	}, 30*time.Second, 10*time.Millisecond)
+
+	factory.SetError(nil)
+	assert.Eventually(t, func() bool {
+		v, ok := staleSeconds()
+		return ok && v == 0
+	}, 30*time.Second, 10*time.Millisecond)
 }

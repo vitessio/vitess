@@ -42,6 +42,7 @@
         - [Stricter PROXY protocol v1 header validation](#vtgate-proxy-protocol-v1-strictness)
         - [MySQL-faithful validation and rejection of unsupported `sql_mode` values](#vtgate-sql-mode-rejection)
         - [New `VEXPLAIN MYSQLPLAN` statement](#vtgate-vexplain-mysqlplan)
+        - [Watched topology data is served from cache while a watch is re-established](#vtgate-srvtopo-serve-stale)
     - **[Reparent](#minor-changes-reparent)**
         - [`EmergencyReparentShard` no longer waits on replicas that cannot win the election](#ers-lagging-relay-log-wait)
         - [`EmergencyReparentShard` can explicitly recover from split brain](#ers-allow-split-brain-promotion)
@@ -471,7 +472,18 @@ Because each per-shard `EXPLAIN` runs on a separate connection, a `VEXPLAIN MYSQ
 
 Like a plain `EXPLAIN`, the per-shard `EXPLAIN FORMAT=JSON` queries `VEXPLAIN MYSQLPLAN` issues are not subject to table ACL checks on the explained tables, so `VEXPLAIN MYSQLPLAN` can return per-shard plan metadata (index names, row estimates, filtered percentages) for tables the caller could not otherwise read. For the same reason — the tablet plans an `EXPLAIN` without the explained table's identity — query denylist rules that are conditioned on a table name are not enforced against these per-shard `EXPLAIN` queries either; denylist rules conditioned on the query pattern still apply if their pattern matches the `explain format = json ...` query text. Unlike a plain `EXPLAIN`, which reaches a single arbitrary shard, `VEXPLAIN MYSQLPLAN` extends this to every resolved shard of every keyspace in the plan. Deployments that rely on table ACLs or table-scoped query denylist rules to restrict read access should restrict access to `VEXPLAIN MYSQLPLAN` accordingly.
 
-### <a id="minor-changes-reparent"/>Reparent</a>
+#### <a id="vtgate-srvtopo-serve-stale"/>Watched topology data is served from cache while a watch is re-established</a>
+
+VTGate and VTTablet watch the `SrvKeyspace` and `SrvVSchema` records in the topology server. When such a watch failed, for example because it resumed after a reconnect from a revision the topo server had already compacted, queries only kept using the cached record for `--srv-topo-cache-ttl` (1s by default). After that, every query for the keyspace waited until the watch was re-established, or failed if re-establishing it returned an error. While the topo server was slow or unreachable, this stalled or failed all queries, even though the cluster was otherwise healthy.
+
+The cached record is now served until the watch is re-established, and is only dropped when the topo server reports that the record no longer exists. As a result:
+
+- `--srv-topo-cache-ttl` no longer applies to `SrvKeyspace` and `SrvVSchema`. It still applies to topology data that is not watched, such as the list of keyspaces. Deployments that raised it to work around query stalls during topo outages no longer need to.
+- The new `SrvTopoWatchStaleSeconds` gauge, labeled by `Type`, `Cell` and `Keyspace`, reports how many seconds a cached record has been served without a running watch. It is 0 while the watch is running.
+- The "SrvKeyspace Cache" table on the `/debug/status` page shows how long each record has been stale instead of a TTL.
+- With the `etcd2` topo implementation, a watch that resumes from a compacted revision now reads the record again and continues, instead of failing.
+- Setting up a `SrvKeyspace` or `SrvVSchema` watch now gives up after `--remote-operation-timeout` if the global topo server does not answer, so a failed watch is retried rather than hanging.
+
 
 #### <a id="ers-lagging-relay-log-wait"/>`EmergencyReparentShard` no longer waits on replicas that cannot win the election</a>
 

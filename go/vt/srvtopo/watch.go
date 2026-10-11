@@ -19,6 +19,7 @@ package srvtopo
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -50,21 +51,115 @@ type watchEntry struct {
 	value     any
 	lastError error
 
-	lastValueTime time.Time
 	lastErrorTime time.Time
+
+	// staleSince is when the watch stopped running while a value was
+	// cached. It is zero while the watch is running or no value is cached.
+	staleSince time.Time
 
 	listeners []func(any, error) bool
 }
 
+// SrvTopoWatchStaleSeconds reports, for every watched entry that holds a
+// value, how many seconds that value has been served without a running watch.
+// It is 0 while the watch is running.
+var _ = stats.NewGaugesFuncWithMultiLabels(
+	"SrvTopoWatchStaleSeconds",
+	"Seconds a watched srvtopo value has been served without a running topo watch",
+	[]string{"Type", "Cell", "Keyspace"},
+	allWatchers.staleSeconds,
+)
+
+// allWatchers tracks every live resilientWatcher in the process for
+// SrvTopoWatchStaleSeconds.
+var allWatchers = &watcherRegistry{watchers: make(map[*resilientWatcher]struct{})}
+
+type watcherRegistry struct {
+	mu       sync.Mutex
+	watchers map[*resilientWatcher]struct{}
+}
+
+func (r *watcherRegistry) add(ctx context.Context, w *resilientWatcher) {
+	r.mu.Lock()
+	r.watchers[w] = struct{}{}
+	r.mu.Unlock()
+
+	context.AfterFunc(ctx, func() {
+		r.mu.Lock()
+		delete(r.watchers, w)
+		r.mu.Unlock()
+	})
+}
+
+func (r *watcherRegistry) staleSeconds() map[string]int64 {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	result := make(map[string]int64)
+	for w := range r.watchers {
+		w.staleSeconds(result)
+	}
+	return result
+}
+
 type resilientWatcher struct {
 	watcher func(entry *watchEntry)
+	// kind is the Type label of SrvTopoWatchStaleSeconds for this watcher's
+	// entries.
+	kind string
 
 	counts               *stats.CountersWithSingleLabel
 	cacheRefreshInterval time.Duration
-	cacheTTL             time.Duration
 
 	mutex   sync.Mutex
 	entries map[string]*watchEntry
+}
+
+func newResilientWatcher(ctx context.Context, kind string, watcher func(entry *watchEntry), counts *stats.CountersWithSingleLabel, cacheRefresh time.Duration) *resilientWatcher {
+	rw := &resilientWatcher{
+		watcher:              watcher,
+		kind:                 kind,
+		counts:               counts,
+		cacheRefreshInterval: cacheRefresh,
+		entries:              make(map[string]*watchEntry),
+	}
+	allWatchers.add(ctx, rw)
+	return rw
+}
+
+// staleSeconds adds the staleness of every entry that holds a value to result,
+// keyed by the SrvTopoWatchStaleSeconds labels. If several watchers in the process
+// watch the same key, the largest staleness wins.
+func (w *resilientWatcher) staleSeconds(result map[string]int64) {
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
+
+	for _, entry := range w.entries {
+		entry.mutex.Lock()
+		hasValue := entry.value != nil
+		var stale int64
+		if entry.watchState != watchStateRunning && !entry.staleSince.IsZero() {
+			stale = int64(time.Since(entry.staleSince).Seconds())
+		}
+		entry.mutex.Unlock()
+
+		if !hasValue {
+			continue
+		}
+
+		var cell, keyspace string
+		switch key := entry.key.(type) {
+		case *srvKeyspaceKey:
+			cell, keyspace = key.cell, key.keyspace
+		case cellName:
+			cell = string(key)
+		}
+		// Label values are joined with ".", so they must not contain one.
+		labels := strings.Join([]string{w.kind, strings.ReplaceAll(cell, ".", "_"), strings.ReplaceAll(keyspace, ".", "_")}, ".")
+		if stale >= result[labels] {
+			result[labels] = stale
+		}
+	}
 }
 
 func (w *resilientWatcher) getEntry(wkey fmt.Stringer) *watchEntry {
@@ -128,8 +223,11 @@ func (entry *watchEntry) currentValueLocked(ctx context.Context) (any, error) {
 
 	entry.ensureWatchingLocked(ctx)
 
-	cacheValid := entry.value != nil && time.Since(entry.lastValueTime) < entry.rw.cacheTTL
-	if cacheValid {
+	// While the watch is not running, serve the last known value rather than
+	// waiting for the watch to be re-established. The topo server may be slow
+	// or unreachable, and until it reports that the node is gone the cached
+	// value is the best information available.
+	if entry.value != nil {
 		entry.rw.counts.Add(cachedCategory, 1)
 		return entry.value, nil
 	}
@@ -184,7 +282,7 @@ func (entry *watchEntry) onValueLocked(value any) {
 		entry.watchStartingChan = nil
 	}
 	entry.value = value
-	entry.lastValueTime = time.Now()
+	entry.staleSince = time.Time{}
 
 	entry.lastError = nil
 	entry.lastErrorTime = time.Time{}
@@ -195,32 +293,25 @@ func (entry *watchEntry) onErrorLocked(ctx context.Context, err error, init bool
 
 	entry.lastErrorTime = time.Now()
 
-	// if the node disappears, delete the cached value
+	// if the node disappears, delete the cached value. Any other error leaves
+	// the cached value in place, to be served until the watch is
+	// re-established.
 	if topo.IsErrType(err, topo.NoNode) {
 		entry.value = nil
 	}
 
+	if entry.value == nil {
+		entry.staleSince = time.Time{}
+	} else if entry.staleSince.IsZero() {
+		entry.staleSince = entry.lastErrorTime
+	}
+
 	if init {
 		entry.lastError = err
-
-		// This watcher will able to continue to return the last value till it is not able to connect to the topo server even if the cache TTL is reached.
-		// TTL cache is only checked if the error is a known error i.e topo.Error.
-		_, isTopoErr := err.(topo.Error)
-		if entry.value != nil && isTopoErr && time.Since(entry.lastValueTime) > entry.rw.cacheTTL {
-			log.Error(fmt.Sprintf("WatchSrvKeyspace clearing cached entry for %v", entry.key))
-			entry.value = nil
-		}
-	} else {
-		if !topo.IsErrType(err, topo.Interrupted) {
-			// No need to log if we're explicitly interrupted.
-			entry.lastError = fmt.Errorf("ResilientWatch stream failed for %v: %w", entry.key, err)
-			log.Error(fmt.Sprintf("%v", entry.lastError))
-		}
-
-		// Even though we didn't get a new value, update the lastValueTime
-		// here since the watch was successfully running before and we want
-		// the value to be cached for the full TTL from here onwards.
-		entry.lastValueTime = time.Now()
+	} else if !topo.IsErrType(err, topo.Interrupted) {
+		// No need to log if we're explicitly interrupted.
+		entry.lastError = fmt.Errorf("ResilientWatch stream failed for %v: %w", entry.key, err)
+		log.Error(fmt.Sprintf("%v", entry.lastError))
 	}
 
 	if entry.watchStartingChan != nil {

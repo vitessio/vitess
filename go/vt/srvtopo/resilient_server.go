@@ -40,9 +40,11 @@ var (
 	// srv-topo-cache-ttl elapses.
 	//
 	// For entries we watch (like the SrvKeyspace for a given cell), if
-	// setting the watch fails, we will use the last known value until
-	// srv-topo-cache-ttl elapses and we only try to re-establish the watch
-	// once every srv-topo-cache-refresh interval.
+	// the watch fails, we keep serving the last known value until the watch
+	// is re-established or the topo server reports that the entry was
+	// deleted, and we only try to re-establish the watch once every
+	// srv-topo-cache-refresh interval. srv-topo-cache-ttl does not apply to
+	// watched entries.
 	srvTopoTimeout      = 5 * time.Second
 	srvTopoCacheTTL     = 1 * time.Second
 	srvTopoCacheRefresh = 1 * time.Second
@@ -50,7 +52,7 @@ var (
 
 func registerFlags(fs *pflag.FlagSet) {
 	utils.SetFlagDurationVar(fs, &srvTopoTimeout, "srv-topo-timeout", srvTopoTimeout, "topo server timeout")
-	utils.SetFlagDurationVar(fs, &srvTopoCacheTTL, "srv-topo-cache-ttl", srvTopoCacheTTL, "how long to use cached entries for topology")
+	utils.SetFlagDurationVar(fs, &srvTopoCacheTTL, "srv-topo-cache-ttl", srvTopoCacheTTL, "how long to use cached entries for topology queries that are not watched, such as the list of keyspaces")
 	utils.SetFlagDurationVar(fs, &srvTopoCacheRefresh, "srv-topo-cache-refresh", srvTopoCacheRefresh, "how frequently to refresh the topology for cached entries")
 }
 
@@ -88,8 +90,8 @@ func NewResilientServer(ctx context.Context, base *topo.Server, counts *stats.Co
 
 	return &ResilientServer{
 		topoServer:            base,
-		SrvKeyspaceWatcher:    NewSrvKeyspaceWatcher(ctx, base, counts, srvTopoCacheRefresh, srvTopoCacheTTL),
-		SrvVSchemaWatcher:     NewSrvVSchemaWatcher(ctx, base, counts, srvTopoCacheRefresh, srvTopoCacheTTL),
+		SrvKeyspaceWatcher:    NewSrvKeyspaceWatcher(ctx, base, counts, srvTopoCacheRefresh),
+		SrvVSchemaWatcher:     NewSrvVSchemaWatcher(ctx, base, counts, srvTopoCacheRefresh),
 		SrvKeyspaceNamesQuery: NewSrvKeyspaceNamesQuery(base, counts, srvTopoCacheRefresh, srvTopoCacheTTL),
 	}
 }
