@@ -170,8 +170,8 @@ func parseValue(s string, c *cache, depth int) (*Value, string, error) {
 			return nil, tail, fmt.Errorf("cannot parse string: %s", err)
 		}
 		v := c.getValue()
-		v.t = typeRawString
-		v.s = ss
+		v.t = TypeString
+		v.s = unescapeStringBestEffort(ss)
 		return v, tail, nil
 	}
 	if s[0] == 't' {
@@ -201,7 +201,7 @@ func parseValue(s string, c *cache, depth int) (*Value, string, error) {
 	v := c.getValue()
 	v.t = TypeNumber
 	v.s = s[:flen]
-	v.n = numberTypeRaw
+	v.n = parseNumberType(v.s)
 	if mayExceedFloat64(v.s, exponent) && !mysqlNumberFits(v.s) {
 		return nil, s, fmt.Errorf("number too big to be stored in double: %q", startEndString(v.s))
 	}
@@ -649,8 +649,8 @@ func unescapeStringBestEffort(s string) string {
 	}
 
 	// Slow path - unescape string.
-	b := hack.StringBytes(s) // It is safe to do, since s points to a byte slice in Parser.b.
-	b = b[:n]
+	b := make([]byte, n, len(s))
+	copy(b, s[:n])
 	s = s[n+1:]
 	for len(s) > 0 {
 		ch := s[0]
@@ -1239,8 +1239,7 @@ func (v *Value) Type() Type {
 		return TypeNull
 	}
 	if v.t == typeRawString {
-		v.s = unescapeStringBestEffort(v.s)
-		v.t = TypeString
+		return TypeString
 	}
 	return v.t
 }
@@ -1313,12 +1312,15 @@ func (v *Value) NumberType() NumberType {
 		return NumberTypeUnknown
 	}
 	if v.n == numberTypeRaw {
-		v.n = parseNumberType(v.s)
+		return parseNumberType(v.s)
 	}
 	return v.n
 }
 
 func parseNumberType(ns string) NumberType {
+	if strings.IndexByte(ns, '.') >= 0 || strings.IndexByte(ns, 'e') >= 0 || strings.IndexByte(ns, 'E') >= 0 {
+		return NumberTypeFloat
+	}
 	_, err := fastparse.ParseInt64(ns, 10)
 	if err == nil {
 		return NumberTypeSigned
