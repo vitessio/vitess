@@ -364,9 +364,11 @@ func TestCancelMigration_TABLES(t *testing.T) {
 		// reverse cancels a ReverseTraffic: a forward switch of the reverse
 		// workflow, whose own reverse workflow is the original one.
 		reverse bool
-		// originalGone means the switch had already deleted the original
-		// workflow's rows, to recreate them, when it failed.
-		originalGone bool
+		// sourceShards are the source keyspace's shards; the default is "0".
+		sourceShards []string
+		// originalStreams are the original workflow's streams that the
+		// target tablet still has; nil leaves them all in place.
+		originalStreams []*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream
 		// The queries cancelMigration must run on each tablet, in order.
 		queries map[int][]string
 	}{
@@ -388,9 +390,9 @@ func TestCancelMigration_TABLES(t *testing.T) {
 		},
 		{
 			// The original workflow's rows must be recreated, then frozen.
-			name:         "ReverseTraffic after the original workflow's rows were deleted",
-			reverse:      true,
-			originalGone: true,
+			name:            "ReverseTraffic after the original workflow's rows were deleted",
+			reverse:         true,
+			originalStreams: []*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream{},
 			queries: map[int][]string{
 				100: {"update _vt.vreplication set state='Running', message='' where db_name='vt_sourceks' and workflow='wf1_reverse'"},
 				200: {
@@ -400,11 +402,34 @@ func TestCancelMigration_TABLES(t *testing.T) {
 				},
 			},
 		},
+		{
+			// Two source shards merged into one target shard give the original
+			// workflow one row per source shard on it. If the switch had
+			// recreated only one of them, all of them must be recreated.
+			name:            "ReverseTraffic after only some of the original workflow's rows were recreated",
+			reverse:         true,
+			sourceShards:    []string{"-80", "80-"},
+			originalStreams: []*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream{{Id: 1}},
+			queries: map[int][]string{
+				100: {"update _vt.vreplication set state='Running', message='' where db_name='vt_sourceks' and workflow='wf1_reverse'"},
+				110: {"update _vt.vreplication set state='Running', message='' where db_name='vt_sourceks' and workflow='wf1_reverse'"},
+				200: {
+					"delete from _vt.vreplication where db_name = 'vt_targetks' and workflow = 'wf1'",
+					"/insert into _vt.vreplication.*'wf1'.*",
+					"/insert into _vt.vreplication.*'wf1'.*",
+					"update _vt.vreplication set message = 'FROZEN' where db_name='vt_targetks' and workflow='wf1'",
+				},
+			},
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := ctx
-			env := newTestEnv(t, ctx, defaultCellName, sourceKeyspace, targetKeyspace)
+			sourceKeyspace := *sourceKeyspace
+			if tc.sourceShards != nil {
+				sourceKeyspace.ShardNames = tc.sourceShards
+			}
+			env := newTestEnv(t, ctx, defaultCellName, &sourceKeyspace, targetKeyspace)
 			defer env.close()
 			env.tmc.schema = schema
 
@@ -419,10 +444,10 @@ func TestCancelMigration_TABLES(t *testing.T) {
 			sm, err := BuildStreamMigrator(ctx, ts, false, sqlparser.NewTestParser())
 			require.NoError(t, err)
 
-			if tc.originalGone {
+			if tc.originalStreams != nil {
 				env.tmc.expectReadVReplicationWorkflowRequest(200, &readVReplicationWorkflowRequestResponse{
 					req: &tabletmanagerdatapb.ReadVReplicationWorkflowRequest{Workflow: workflowName},
-					res: &tabletmanagerdatapb.ReadVReplicationWorkflowResponse{},
+					res: &tabletmanagerdatapb.ReadVReplicationWorkflowResponse{Streams: tc.originalStreams},
 				})
 			}
 			for tabletID, queries := range tc.queries {
@@ -447,8 +472,9 @@ func TestCancelMigration_TABLES(t *testing.T) {
 			require.NoError(t, err)
 
 			// Expect the queries to be cleared
-			assert.Empty(t, env.tmc.vrQueries[100])
-			assert.Empty(t, env.tmc.vrQueries[200])
+			for tabletID := range tc.queries {
+				assert.Empty(t, env.tmc.vrQueries[tabletID])
+			}
 		})
 	}
 }

@@ -1243,10 +1243,18 @@ func (ts *trafficSwitcher) freezeTargetVReplication(ctx context.Context) error {
 }
 
 // restoreReverseVReplication puts the reverse workflow back as it was before a
-// canceled ReverseTraffic: frozen. If the switch had already deleted its
-// streams on some shard, to recreate them, they are recreated first; as
-// frozen streams are never run, their positions do not matter.
+// canceled ReverseTraffic: frozen. If the switch had already deleted any of its
+// streams, to recreate them, they are all recreated first; as frozen streams
+// are never run, their positions do not matter.
 func (ts *trafficSwitcher) restoreReverseVReplication(ctx context.Context) error {
+	// createReverseVReplication creates one stream on a source shard for each
+	// target stream that copies from it.
+	wantStreams := make(map[string]int)
+	for _, target := range ts.Targets() {
+		for _, bls := range target.Sources {
+			wantStreams[bls.Shard]++
+		}
+	}
 	var mu sync.Mutex
 	missing := false
 	if err := ts.ForAllSources(func(source *MigrationSource) error {
@@ -1255,7 +1263,7 @@ func (ts *trafficSwitcher) restoreReverseVReplication(ctx context.Context) error
 		if err != nil {
 			return err
 		}
-		if res == nil || len(res.Streams) == 0 {
+		if len(res.GetStreams()) != wantStreams[source.GetShard().ShardName()] {
 			mu.Lock()
 			missing = true
 			mu.Unlock()
