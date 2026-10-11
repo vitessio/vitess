@@ -19,6 +19,7 @@ package json
 
 import (
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -809,4 +810,24 @@ func TestMarshalToBlob(t *testing.T) {
 		obj.Add("k", NewBlob("foo"))
 		require.Equal(t, `{"k": `+encoded+`}`, string(NewObject(obj).MarshalTo(nil)))
 	})
+}
+
+func TestIssueSharedValueRace(t *testing.T) {
+	var p Parser
+	doc, err := p.Parse(`{"s": "a\nb", "n": 1.5}`)
+	require.NoError(t, err)
+	obj, ok := doc.Object()
+	require.True(t, ok)
+	str, num := obj.Get("s"), obj.Get("n")
+
+	var wg sync.WaitGroup
+	for range 2 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_ = str.Type()
+			_ = num.NumberType()
+		}()
+	}
+	wg.Wait()
 }
