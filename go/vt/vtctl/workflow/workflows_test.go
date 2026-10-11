@@ -66,7 +66,7 @@ func TestGetStreamState(t *testing.T) {
 			},
 			rstream: &tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream{
 				TimeUpdated: &vttime.Time{
-					Seconds: int64(time.Now().Second()) - 11,
+					Seconds: time.Now().Unix() - 11,
 				},
 			},
 			want: "Lagging",
