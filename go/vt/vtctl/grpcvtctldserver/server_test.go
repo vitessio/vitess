@@ -15047,6 +15047,34 @@ func TestValidateSchemaKeyspace(t *testing.T) {
 		},
 	}
 
+	// With IncludeVschema, the tables that are missing from the vschema must be
+	// reported for the shard they were found on as well as for the keyspace.
+	t.Run("include vschema: table not in vschema", func(t *testing.T) {
+		require.NoError(t, ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+			Name:     "ks1",
+			Keyspace: &vschemapb.Keyspace{},
+		}))
+		t.Cleanup(func() {
+			require.NoError(t, ts.DeleteVSchema(ctx, "ks1"))
+		})
+		setupSchema(&topodatapb.TabletAlias{Cell: "zone1", Uid: 100}, schema1)
+		setupSchema(&topodatapb.TabletAlias{Cell: "zone1", Uid: 101}, schema1)
+
+		resp, err := vtctld.ValidateSchemaKeyspace(ctx, &vtctldatapb.ValidateSchemaKeyspaceRequest{
+			Keyspace:       "ks1",
+			IncludeVschema: true,
+		})
+		require.NoError(t, err)
+
+		expected := "ks1/- has tables that are not in the vschema: [not_in_vschema]"
+		utils.MustMatch(t, &vtctldatapb.ValidateSchemaKeyspaceResponse{
+			Results: []string{expected},
+			ResultsByShard: map[string]*vtctldatapb.ValidateShardResponse{
+				"-": {Results: []string{expected}},
+			},
+		}, resp)
+	})
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tt.setup()
