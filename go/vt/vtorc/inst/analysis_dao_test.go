@@ -1054,6 +1054,8 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 			codeWanted:     NoProblem,
 		},
 	}
+	tests = append(tests, staleReplicaStateCases()...)
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			resetPrimaryHealthState()
@@ -1079,7 +1081,10 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 			}
 			require.NoError(t, err)
 			if tt.codeWanted == NoProblem {
-				require.Empty(t, got)
+				// An analysis that only carries structure warnings has no problem.
+				for _, analysis := range got {
+					require.Equal(t, NoProblem, analysis.Analysis)
+				}
 				return
 			}
 			require.Len(t, got, 1)
@@ -1088,6 +1093,118 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 			require.Equal(t, tt.shardWanted, got[0].AnalyzedShard)
 		})
 	}
+}
+
+// staleReplicaStateCases returns, for each problem that VTOrc fixes by
+// repairing a replica's MySQL state, a case in which the problem is detected
+// and the same case with the replica's last check invalid, in which it is not:
+// VTOrc can no longer read the replica's MySQL, so the state it last read is
+// stale, and repairing the replica can only fail.
+func staleReplicaStateCases() []struct {
+	name           string
+	info           []*test.InfoForRecoveryAnalysis
+	codeWanted     AnalysisCode
+	shardWanted    string
+	keyspaceWanted string
+	preFunc        func()
+	wantErr        string
+} {
+	type replicaState func(replica *test.InfoForRecoveryAnalysis)
+	problems := []struct {
+		code       AnalysisCode
+		durability string
+		state      replicaState
+	}{
+		{ReplicaIsWritable, policy.DurabilityNone, func(r *test.InfoForRecoveryAnalysis) { r.ReadOnly = 0 }},
+		{ReplicationStopped, policy.DurabilityNone, func(r *test.InfoForRecoveryAnalysis) { r.ReplicationStopped = 1 }},
+		{NotConnectedToPrimary, policy.DurabilityNone, func(r *test.InfoForRecoveryAnalysis) { r.IsPrimary = 1 }},
+		{ReplicaMisconfigured, policy.DurabilityNone, func(r *test.InfoForRecoveryAnalysis) {
+			r.HeartbeatInterval = 1
+			r.ReplicaNetTimeout = 8
+		}},
+		{ConnectedToWrongPrimary, policy.DurabilityNone, func(r *test.InfoForRecoveryAnalysis) {
+			r.PrimaryTabletInfo = &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 102}}
+		}},
+		{ReplicaSemiSyncMustBeSet, policy.DurabilitySemiSync, func(r *test.InfoForRecoveryAnalysis) { r.SemiSyncReplicaEnabled = 0 }},
+		{ReplicaSemiSyncMustNotBeSet, policy.DurabilityNone, func(r *test.InfoForRecoveryAnalysis) { r.SemiSyncReplicaEnabled = 1 }},
+	}
+	var cases []struct {
+		name           string
+		info           []*test.InfoForRecoveryAnalysis
+		codeWanted     AnalysisCode
+		shardWanted    string
+		keyspaceWanted string
+		preFunc        func()
+		wantErr        string
+	}
+	for _, problem := range problems {
+		for _, lastCheckValid := range []int{1, 0} {
+			primary := &test.InfoForRecoveryAnalysis{
+				TabletInfo: &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+					Hostname:      "localhost",
+					Keyspace:      "ks",
+					Shard:         "0",
+					Type:          topodatapb.TabletType_PRIMARY,
+					MysqlHostname: "localhost",
+					MysqlPort:     6708,
+				},
+				DurabilityPolicy:              problem.durability,
+				LastCheckValid:                1,
+				CountReplicas:                 1,
+				CountValidReplicas:            1,
+				CountValidReplicatingReplicas: 1,
+				CountValidOracleGTIDReplicas:  1,
+				IsPrimary:                     1,
+				SemiSyncPrimaryEnabled:        1,
+				CurrentTabletType:             int(topodatapb.TabletType_PRIMARY),
+			}
+			if problem.durability == policy.DurabilityNone {
+				primary.SemiSyncPrimaryEnabled = 0
+			}
+			replica := &test.InfoForRecoveryAnalysis{
+				TabletInfo: &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+					Hostname:      "localhost",
+					Keyspace:      "ks",
+					Shard:         "0",
+					Type:          topodatapb.TabletType_REPLICA,
+					MysqlHostname: "localhost",
+					MysqlPort:     6709,
+				},
+				DurabilityPolicy: problem.durability,
+				PrimaryTabletInfo: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+				},
+				LastCheckValid: lastCheckValid,
+				ReadOnly:       1,
+			}
+			if problem.durability == policy.DurabilitySemiSync {
+				replica.SemiSyncReplicaEnabled = 1
+			}
+			problem.state(replica)
+			name, codeWanted := string(problem.code)+" with a valid last check", problem.code
+			if lastCheckValid == 0 {
+				name, codeWanted = string(problem.code)+" with a stale last check", NoProblem
+			}
+			cases = append(cases, struct {
+				name           string
+				info           []*test.InfoForRecoveryAnalysis
+				codeWanted     AnalysisCode
+				shardWanted    string
+				keyspaceWanted string
+				preFunc        func()
+				wantErr        string
+			}{
+				name:           name,
+				info:           []*test.InfoForRecoveryAnalysis{primary, replica},
+				codeWanted:     codeWanted,
+				shardWanted:    "0",
+				keyspaceWanted: "ks",
+			})
+		}
+	}
+	return cases
 }
 
 // TestStalePrimary tests that an old primary that remains writable and is of tablet type PRIMARY
