@@ -1204,10 +1204,10 @@ func (ts *trafficSwitcher) cancelMigration(ctx context.Context, sm *StreamMigrat
 		// We are canceling a ReverseTraffic, so the reverse workflow is the
 		// original one: put it back as it was before the switch, frozen,
 		// rather than deleting it.
-		ts.Logger().Infof("cancelMigration (%v): freezing the original workflow %s", ts.WorkflowName(), ts.reverseWorkflow)
-		if err := ts.freezeReverseVReplication(cmCtx); err != nil {
-			cancelErrs.RecordError(fmt.Errorf("could not freeze the original workflow's streams: %v", err))
-			ts.Logger().Errorf("Cancel migration failed (%v): could not freeze the original workflow's streams: %v", ts.WorkflowName(), err)
+		ts.Logger().Infof("cancelMigration (%v): restoring the original workflow %s", ts.WorkflowName(), ts.reverseWorkflow)
+		if err := ts.restoreReverseVReplication(cmCtx); err != nil {
+			cancelErrs.RecordError(fmt.Errorf("could not restore the original workflow's streams: %v", err))
+			ts.Logger().Errorf("Cancel migration failed (%v): could not restore the original workflow's streams: %v", ts.WorkflowName(), err)
 		}
 	} else {
 		ts.Logger().Infof("cancelMigration (%v): deleting reverse vreplication workflows", ts.WorkflowName())
@@ -1242,8 +1242,37 @@ func (ts *trafficSwitcher) freezeTargetVReplication(ctx context.Context) error {
 	return nil
 }
 
-// freezeReverseVReplication marks the reverse workflow's streams frozen, which
-// they were before a canceled ReverseTraffic recreated them.
+// restoreReverseVReplication puts the reverse workflow back as it was before a
+// canceled ReverseTraffic: frozen. If the switch had already deleted its
+// streams on some shard, to recreate them, they are recreated first; as
+// frozen streams are never run, their positions do not matter.
+func (ts *trafficSwitcher) restoreReverseVReplication(ctx context.Context) error {
+	var mu sync.Mutex
+	missing := false
+	if err := ts.ForAllSources(func(source *MigrationSource) error {
+		res, err := ts.TabletManagerClient().ReadVReplicationWorkflow(ctx, source.GetPrimary().Tablet,
+			&tabletmanagerdatapb.ReadVReplicationWorkflowRequest{Workflow: ts.reverseWorkflow})
+		if err != nil {
+			return err
+		}
+		if res == nil || len(res.Streams) == 0 {
+			mu.Lock()
+			missing = true
+			mu.Unlock()
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+	if missing {
+		if err := ts.createReverseVReplication(ctx); err != nil {
+			return err
+		}
+	}
+	return ts.freezeReverseVReplication(ctx)
+}
+
+// freezeReverseVReplication marks the reverse workflow's streams frozen.
 func (ts *trafficSwitcher) freezeReverseVReplication(ctx context.Context) error {
 	return ts.ForAllSources(func(source *MigrationSource) error {
 		query := fmt.Sprintf("update _vt.vreplication set message = %s where db_name=%s and workflow=%s", encodeString(Frozen),

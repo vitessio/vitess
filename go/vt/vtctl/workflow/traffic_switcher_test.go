@@ -364,6 +364,9 @@ func TestCancelMigration_TABLES(t *testing.T) {
 		// reverse cancels a ReverseTraffic: a forward switch of the reverse
 		// workflow, whose own reverse workflow is the original one.
 		reverse bool
+		// originalGone means the switch had already deleted the original
+		// workflow's rows, to recreate them, when it failed.
+		originalGone bool
 		// The queries cancelMigration must run on each tablet, in order.
 		queries map[int][]string
 	}{
@@ -381,6 +384,20 @@ func TestCancelMigration_TABLES(t *testing.T) {
 			queries: map[int][]string{
 				100: {"update _vt.vreplication set state='Running', message='' where db_name='vt_sourceks' and workflow='wf1_reverse'"},
 				200: {"update _vt.vreplication set message = 'FROZEN' where db_name='vt_targetks' and workflow='wf1'"},
+			},
+		},
+		{
+			// The original workflow's rows must be recreated, then frozen.
+			name:         "ReverseTraffic after the original workflow's rows were deleted",
+			reverse:      true,
+			originalGone: true,
+			queries: map[int][]string{
+				100: {"update _vt.vreplication set state='Running', message='' where db_name='vt_sourceks' and workflow='wf1_reverse'"},
+				200: {
+					"delete from _vt.vreplication where db_name = 'vt_targetks' and workflow = 'wf1'",
+					"/insert into _vt.vreplication.*'wf1'.*",
+					"update _vt.vreplication set message = 'FROZEN' where db_name='vt_targetks' and workflow='wf1'",
+				},
 			},
 		},
 	}
@@ -402,6 +419,12 @@ func TestCancelMigration_TABLES(t *testing.T) {
 			sm, err := BuildStreamMigrator(ctx, ts, false, sqlparser.NewTestParser())
 			require.NoError(t, err)
 
+			if tc.originalGone {
+				env.tmc.expectReadVReplicationWorkflowRequest(200, &readVReplicationWorkflowRequestResponse{
+					req: &tabletmanagerdatapb.ReadVReplicationWorkflowRequest{Workflow: workflowName},
+					res: &tabletmanagerdatapb.ReadVReplicationWorkflowResponse{},
+				})
+			}
 			for tabletID, queries := range tc.queries {
 				for _, query := range queries {
 					env.tmc.expectVRQuery(tabletID, query, &sqltypes.Result{})
