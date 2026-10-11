@@ -122,8 +122,9 @@ func TestFKWorkflow(t *testing.T) {
 	// Give some time for the workflow to encounter errors and potentially retry
 	time.Sleep(2 * vttablet.GetDefaultVReplicationConfig().RetryDelay)
 
-	// Verify workflow is still running and hasn't terminated due to errors
-	require.NoError(t, waitForWorkflowState(vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String()))
+	// Verify workflow is still running and hasn't terminated due to errors. As
+	// it cannot make progress while the source is down, it shows as Lagging.
+	require.NoError(t, waitForWorkflowState(vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Lagging.String()))
 
 	// Restart the source database to allow workflow to continue
 	err = sourceTab.DbServer.StartProvideInit(false)
