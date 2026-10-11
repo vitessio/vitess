@@ -19,6 +19,8 @@ package srvtopo
 import (
 	"context"
 	"fmt"
+	"maps"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -131,10 +133,7 @@ func newResilientWatcher(ctx context.Context, kind string, watcher func(entry *w
 // keyed by the SrvTopoWatchStaleSeconds labels. If several watchers in the process
 // watch the same key, the largest staleness wins.
 func (w *resilientWatcher) staleSeconds(result map[string]int64) {
-	w.mutex.Lock()
-	defer w.mutex.Unlock()
-
-	for _, entry := range w.entries {
+	for _, entry := range w.allEntries() {
 		entry.mutex.Lock()
 		hasValue := entry.value != nil
 		var stale int64
@@ -160,6 +159,16 @@ func (w *resilientWatcher) staleSeconds(result map[string]int64) {
 			result[labels] = stale
 		}
 	}
+}
+
+// allEntries returns a snapshot of all entries. Callers lock each entry on its
+// own, so that an entry busy notifying its listeners does not block getEntry
+// for every other key.
+func (w *resilientWatcher) allEntries() []*watchEntry {
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
+
+	return slices.Collect(maps.Values(w.entries))
 }
 
 func (w *resilientWatcher) getEntry(wkey fmt.Stringer) *watchEntry {

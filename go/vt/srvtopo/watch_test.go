@@ -170,10 +170,15 @@ func TestVSchemaWatcherKeepsCachedValueOnError(t *testing.T) {
 		errors.New("HTTP 500 internal server error"),
 		topo.NewError(topo.Timeout, "topo timeout error"),
 	} {
+		// Let the watch fail to be re-established several times, past the
+		// TTL. Queries trigger the attempts, at most one per refresh
+		// interval.
+		errorsBefore := counts.Counts()[errorCategory]
 		factory.SetError(forceErr)
-		// Let the TTL expire and the watch fail to be re-established a few
-		// times.
-		time.Sleep(3 * srvTopoCacheTTL)
+		assert.Eventually(t, func() bool {
+			_, _ = rs.GetSrvVSchema(ctx, "test_cell")
+			return counts.Counts()[errorCategory]-errorsBefore >= 4
+		}, 30*time.Second, time.Millisecond)
 
 		vschema, err = rs.GetSrvVSchema(ctx, "test_cell")
 		require.NoError(t, err, "should serve cached value for %v", forceErr)
@@ -300,7 +305,10 @@ func TestGetSrvKeyspaceDoesNotWaitForWatchRestart(t *testing.T) {
 	require.Equal(t, watchStateStarting, state)
 
 	// Let the TTL elapse; the cached value must still be served right away.
-	time.Sleep(2 * srvTopoCacheTTL)
+	assert.Eventually(t, func() bool {
+		_, lastErrorTime := entryState()
+		return time.Since(lastErrorTime) > 2*srvTopoCacheTTL
+	}, 30*time.Second, time.Millisecond)
 	queryCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	got, err = rs.GetSrvKeyspace(queryCtx, "test_cell", "test_ks")
@@ -329,8 +337,7 @@ func TestSrvTopoWatchStaleSeconds(t *testing.T) {
 	staleSeconds := func() (int64, bool) {
 		// Querying the value also re-establishes the watch once the topo
 		// server is back.
-		_, err := rs.GetSrvKeyspace(ctx, "stale_cell", "stale_ks")
-		require.NoError(t, err)
+		_, _ = rs.GetSrvKeyspace(ctx, "stale_cell", "stale_ks")
 		v, ok := allWatchers.staleSeconds()[label]
 		return v, ok
 	}

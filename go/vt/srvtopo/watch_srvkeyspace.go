@@ -83,10 +83,7 @@ func (w *SrvKeyspaceWatcher) WatchSrvKeyspace(ctx context.Context, cell, keyspac
 }
 
 func (w *SrvKeyspaceWatcher) srvKeyspaceCacheStatus() (result []*SrvKeyspaceCacheStatus) {
-	w.rw.mutex.Lock()
-	defer w.rw.mutex.Unlock()
-
-	for _, entry := range w.rw.entries {
+	for _, entry := range w.rw.allEntries() {
 		entry.mutex.Lock()
 		var staleSince time.Time
 		if entry.watchState != watchStateRunning {

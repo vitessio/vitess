@@ -127,11 +127,10 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 				watchRetries = 0
 
 				if wresp.CompactRevision != 0 {
-					// The revision we were watching from has been compacted.
-					// This happens when the watch resumes after a reconnect
-					// and the node has not changed since before the
-					// compaction. Read the node again and watch from there,
-					// rather than failing the watch.
+					// The revision we were watching from has been compacted,
+					// typically because the watch resumed after a reconnect
+					// from the revision it last saw. Read the node again and
+					// watch from there, rather than failing the watch.
 					getCtx, getCancel := context.WithTimeout(outerCtx, topo.RemoteOperationTimeout)
 					current, err := s.cli.Get(getCtx, nodePath)
 					getCancel()

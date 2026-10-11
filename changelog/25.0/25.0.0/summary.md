@@ -484,6 +484,7 @@ The cached record is now served until the watch is re-established, and is only d
 - With the `etcd2` topo implementation, a watch that resumes from a compacted revision now reads the record again and continues, instead of failing.
 - Setting up a `SrvKeyspace` or `SrvVSchema` watch now gives up after `--remote-operation-timeout` if the global topo server does not answer, so a failed watch is retried rather than hanging.
 
+### <a id="minor-changes-reparent"/>Reparent</a>
 
 #### <a id="ers-lagging-relay-log-wait"/>`EmergencyReparentShard` no longer waits on replicas that cannot win the election</a>
 

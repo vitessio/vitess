@@ -181,21 +181,26 @@ func TestWatchAfterCompaction(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { admin.Close() })
 
+	put := func(value string) func(ctx context.Context, nodePath string) error {
+		return func(ctx context.Context, nodePath string) error {
+			_, err := admin.Put(ctx, nodePath, value)
+			return err
+		}
+	}
 	tests := []struct {
-		name   string
+		name string
+		// change is applied while the watch is disconnected, if set.
 		change func(ctx context.Context, nodePath string) error
-		check  func(t *testing.T, wd *topo.WatchData)
+		// deleted means the watch is expected to end with NoNode. Otherwise
+		// it is expected to deliver "v2" and then keep delivering changes.
+		deleted bool
 	}{
 		{
-			name: "updated while disconnected",
-			change: func(ctx context.Context, nodePath string) error {
-				_, err := admin.Put(ctx, nodePath, "v2")
-				return err
-			},
-			check: func(t *testing.T, wd *topo.WatchData) {
-				require.NoError(t, wd.Err)
-				assert.Equal(t, "v2", string(wd.Contents))
-			},
+			name: "unchanged while disconnected",
+		},
+		{
+			name:   "updated while disconnected",
+			change: put("v2"),
 		},
 		{
 			name: "deleted while disconnected",
@@ -203,9 +208,7 @@ func TestWatchAfterCompaction(t *testing.T) {
 				_, err := admin.Delete(ctx, nodePath)
 				return err
 			},
-			check: func(t *testing.T, wd *topo.WatchData) {
-				assert.True(t, topo.IsErrType(wd.Err, topo.NoNode), "expected NoNode, got %v", wd.Err)
-			},
+			deleted: true,
 		},
 	}
 	for i, tt := range tests {
@@ -232,10 +235,26 @@ func TestWatchAfterCompaction(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, "v1", string(current.Contents))
 
-			// Disconnect the watch, then change the node and compact away
-			// the revision the watch resumes from.
+			nextChange := func() *topo.WatchData {
+				var wd *topo.WatchData
+				assert.Eventually(t, func() bool {
+					select {
+					case wd = <-changes:
+						return true
+					default:
+						return false
+					}
+				}, 30*time.Second, 10*time.Millisecond)
+				require.NotNil(t, wd)
+				return wd
+			}
+
+			// Disconnect the watch, then compact away the revision it resumes
+			// from.
 			proxy.setPaused(true)
-			require.NoError(t, tt.change(ctx, nodePath))
+			if tt.change != nil {
+				require.NoError(t, tt.change(ctx, nodePath))
+			}
 			var resp *clientv3.PutResponse
 			for j := range 5 {
 				resp, err = admin.Put(ctx, path.Join(server.root, "other"), strconv.Itoa(j))
@@ -245,17 +264,28 @@ func TestWatchAfterCompaction(t *testing.T) {
 			require.NoError(t, err)
 			proxy.setPaused(false)
 
-			var wd *topo.WatchData
-			assert.Eventually(t, func() bool {
-				select {
-				case wd = <-changes:
-					return true
-				default:
-					return false
-				}
-			}, 30*time.Second, 10*time.Millisecond)
-			require.NotNil(t, wd)
-			tt.check(t, wd)
+			if tt.deleted {
+				wd := nextChange()
+				assert.True(t, topo.IsErrType(wd.Err, topo.NoNode), "expected NoNode, got %v", wd.Err)
+				return
+			}
+
+			if tt.change == nil {
+				// Wait for the client to reconnect, so that the watch resumes
+				// before the node changes.
+				_, err = client.Get(ctx, nodePath)
+				require.NoError(t, err)
+				require.NoError(t, put("v2")(ctx, nodePath))
+			}
+			wd := nextChange()
+			require.NoError(t, wd.Err)
+			assert.Equal(t, "v2", string(wd.Contents))
+
+			// The watch keeps delivering changes.
+			require.NoError(t, put("v3")(ctx, nodePath))
+			wd = nextChange()
+			require.NoError(t, wd.Err)
+			assert.Equal(t, "v3", string(wd.Contents))
 		})
 	}
 }

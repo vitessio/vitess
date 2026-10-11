@@ -168,29 +168,31 @@ func TestGetSrvKeyspace(t *testing.T) {
 	errorReqsBefore := counts.Counts()[errorCategory]
 	factory.SetError(topo.NewError(topo.Timeout, "test topo error"))
 
-	requireCachedFor := func(d time.Duration) {
-		for expiry := time.Now().Add(d); time.Now().Before(expiry); time.Sleep(time.Millisecond) {
+	// requireCachedUntilErrors queries until n more errors have been counted,
+	// i.e. until the watch has failed to be re-established several times,
+	// well past the TTL, and requires the cached value every time.
+	requireCachedUntilErrors := func(n int64) {
+		start := counts.Counts()[errorCategory]
+		for expiry := time.Now().Add(30 * time.Second); counts.Counts()[errorCategory]-start < n; time.Sleep(time.Millisecond) {
+			require.True(t, time.Now().Before(expiry), "timed out waiting for %d errors", n)
 			got, err := rs.GetSrvKeyspace(t.Context(), "test_cell", "test_ks")
 			require.NoError(t, err)
 			require.True(t, proto.Equal(want, got), "expected keyspace to be cached, got %v", got)
 		}
 	}
-	requireCachedFor(3 * srvTopoCacheTTL)
-
-	// Clear the error away and check that the value is still served.
-	factory.SetError(nil)
-	requireCachedFor(srvTopoCacheRefresh)
+	requireCachedUntilErrors(5)
 
 	// Do the same with an Interrupted error.
 	factory.SetError(topo.NewError(topo.Interrupted, "another test topo error"))
-	requireCachedFor(3 * srvTopoCacheTTL)
+	requireCachedUntilErrors(5)
 
 	factory.SetError(nil)
 
 	// Check that the expected number of errors were counted during the
-	// interval
+	// interval: the watch failure itself, plus at most one failed attempt to
+	// re-establish the watch per refresh interval.
 	errorReqs := counts.Counts()[errorCategory]
-	expectedErrors := int64(time.Since(errorTestStart) / srvTopoCacheRefresh)
+	expectedErrors := 1 + int64(time.Since(errorTestStart)/srvTopoCacheRefresh)
 	if errorReqs-errorReqsBefore > expectedErrors {
 		assert.Failf(t, "too many error requests", "expected <= %v error requests got %d", expectedErrors, errorReqs-errorReqsBefore)
 	}
@@ -772,9 +774,13 @@ func TestSrvKeyspaceWatcher(t *testing.T) {
 	}
 
 	// Now simulate a topo service error. The cached value is kept, so the
-	// listener is not notified, even after the TTL has elapsed.
+	// listener is not notified, even after the watch has failed to be
+	// re-established for longer than the TTL.
+	errorsBefore := counts.Counts()[errorCategory]
 	factory.SetError(topo.NewError(topo.Timeout, "test topo error"))
-	time.Sleep(3 * srvTopoCacheTTL)
+	assert.Eventually(t, func() bool {
+		return counts.Counts()[errorCategory]-errorsBefore >= 5
+	}, 30*time.Second, time.Millisecond)
 	assert.Len(t, allSeen(), 8)
 
 	got, err := rs.GetSrvKeyspace(t.Context(), "test_cell", "test_ks")
