@@ -85,9 +85,14 @@ var ErrHashCoercionIsNotExact = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "
 // are kept as two values, which errs on the side of not losing data. Only a
 // static type can settle that case, as it does for every known-typed column.
 // Non-finite floats (NaN, ±Inf) have no DECIMAL form and keep hashing as
-// floats. Other values keep the type they arrived with; text with an unknown
-// collation then reports UnsupportedCollationHashError, which lets the caller
-// switch to the weight string the planner added for it.
+// floats. DATE and TIME values go through DATETIME, the type MySQL gives a
+// column that mixes temporal types, converting a TIME with the current date:
+// DATE '0000-00-00' and TIME '00:00:00' stay apart, while today's DATE and
+// TIME '00:00:00' hash alike. The conversion is one-to-one, so a column of
+// only DATE or only TIME values keeps every distinct value. Other values keep
+// the type they arrived with; text with an unknown collation then reports
+// UnsupportedCollationHashError, which lets the caller switch to the weight
+// string the planner added for it.
 func hashTypeForUnknown(v sqltypes.Value) sqltypes.Type {
 	if sqltypes.IsFloat(v.Type()) {
 		if f, err := v.ToFloat64(); err == nil && (math.IsNaN(f) || math.IsInf(f, 0)) {
@@ -96,6 +101,10 @@ func hashTypeForUnknown(v sqltypes.Value) sqltypes.Type {
 	}
 	if sqltypes.IsNumber(v.Type()) {
 		return sqltypes.Decimal
+	}
+	switch v.Type() {
+	case sqltypes.Date, sqltypes.Time:
+		return sqltypes.Datetime
 	}
 	return v.Type()
 }

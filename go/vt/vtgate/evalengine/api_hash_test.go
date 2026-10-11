@@ -206,6 +206,39 @@ func TestHashCodesUnknownNonFiniteFloats(t *testing.T) {
 	}
 }
 
+// TestHashCodesUnknownTemporal checks that DATE and TIME values of unknown
+// static type hash the way MySQL compares them in a column that mixes
+// temporal types: as DATETIME, with a TIME placed on the current date.
+func TestHashCodesUnknownTemporal(t *testing.T) {
+	now := time.Now()
+	today, tomorrow := now.Format(time.DateOnly), now.AddDate(0, 0, 1).Format(time.DateOnly)
+	cases := []struct {
+		a, b  sqltypes.Value
+		equal bool
+	}{
+		{sqltypes.NewDate("0000-00-00"), sqltypes.NewTime("00:00:00"), false},
+		{sqltypes.NewDate(today), sqltypes.NewTime("00:00:00"), true},
+		{sqltypes.NewDatetime(today + " 00:00:00"), sqltypes.NewTime("00:00:00"), true},
+		{sqltypes.NewDate(tomorrow), sqltypes.NewTime("24:00:00"), true},
+		{sqltypes.NewTime("-01:00:00"), sqltypes.NewTime("23:00:00"), false},
+		{sqltypes.NewDate("2000-01-01"), sqltypes.NewDatetime("2000-01-01 00:00:01"), false},
+	}
+	for _, tc := range cases {
+		t.Run(fmt.Sprintf("%v %s %v", tc.a, equality(tc.equal).Operator(), tc.b), func(t *testing.T) {
+			h1, err := NullsafeHashcode(tc.a, collations.CollationUtf8mb4ID, sqltypes.Unknown, 0, nil)
+			require.NoError(t, err)
+			h2, err := NullsafeHashcode(tc.b, collations.CollationUtf8mb4ID, sqltypes.Unknown, 0, nil)
+			require.NoError(t, err)
+			assert.Equal(t, tc.equal, h1 == h2)
+
+			hasher1, hasher2 := vthash.New(), vthash.New()
+			require.NoError(t, NullsafeHashcode128(&hasher1, tc.a, collations.CollationUtf8mb4ID, sqltypes.Unknown, 0, nil))
+			require.NoError(t, NullsafeHashcode128(&hasher2, tc.b, collations.CollationUtf8mb4ID, sqltypes.Unknown, 0, nil))
+			assert.Equal(t, tc.equal, hasher1.Sum128() == hasher2.Sum128())
+		})
+	}
+}
+
 func TestHashCodesRandom128(t *testing.T) {
 	tested := 0
 	equal := 0

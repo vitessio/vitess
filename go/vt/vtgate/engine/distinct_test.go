@@ -342,6 +342,29 @@ func TestDistinctUnknownTypeUsesWeightString(t *testing.T) {
 		require.NoError(t, err)
 		utils.MustMatch(t, `[[FLOAT64(+Inf)] [FLOAT64(NaN)] [FLOAT64(-Inf)] [INT64(1)]]`, fmt.Sprintf("%v", qr.Rows))
 	})
+
+	// DATE '0000-00-00' and TIME '00:00:00' are different DATETIME values in
+	// MySQL (the TIME is placed on the current date), so both rows are kept.
+	t.Run("zero date and midnight time", func(t *testing.T) {
+		input := &sqltypes.Result{
+			Fields: sqltypes.MakeTestFields("x|weight_string(x)", "varchar|varbinary"),
+			Rows: []sqltypes.Row{
+				{sqltypes.NewDate("0000-00-00"), sqltypes.NULL},
+				{sqltypes.NewTime("00:00:00"), sqltypes.NULL},
+				{sqltypes.NewDate("0000-00-00"), sqltypes.NULL},
+				{sqltypes.NewTime("00:00:00"), sqltypes.NULL},
+			},
+		}
+		distinct := &Distinct{
+			Source:    &fakePrimitive{results: []*sqltypes.Result{input}},
+			CheckCols: []CheckCol{{Col: 0, WsCol: &offsetOne, Type: evalengine.NewUnknownType()}},
+			Truncate:  1,
+		}
+
+		qr, err := distinct.TryExecute(t.Context(), &noopVCursor{}, nil, true)
+		require.NoError(t, err)
+		utils.MustMatch(t, `[[DATE("0000-00-00")] [TIME("00:00:00")]]`, fmt.Sprintf("%v", qr.Rows))
+	})
 }
 
 func TestWeightStringFallBack(t *testing.T) {
