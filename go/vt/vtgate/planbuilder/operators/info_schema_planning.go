@@ -76,19 +76,31 @@ func (isr *InfoSchemaRouting) Clone() Routing {
 		SysTableTableSchema: slices.Clone(isr.SysTableTableSchema),
 		SysTableTableName:   maps.Clone(isr.SysTableTableName),
 		Table:               isr.Table,
+		seenPredicates:      cloneInfoSchemaPredicates(isr.seenPredicates),
 	}
 }
 
-func (isr *InfoSchemaRouting) updateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Routing {
-	original := expr
+func cloneInfoSchemaPredicate(expr sqlparser.Expr) sqlparser.Expr {
 	if cmp, ok := expr.(*sqlparser.ComparisonExpr); ok {
 		// Extraction rewrites the comparison's operands and operator in place.
 		// Keep the original fields for resetRoutingLogic, while retaining the
 		// child expressions and their semantic information.
 		pristine := *cmp
-		original = &pristine
+		return &pristine
 	}
-	isr.seenPredicates = append(isr.seenPredicates, original)
+	return expr
+}
+
+func cloneInfoSchemaPredicates(predicates []sqlparser.Expr) []sqlparser.Expr {
+	cloned := slices.Clone(predicates)
+	for i, expr := range cloned {
+		cloned[i] = cloneInfoSchemaPredicate(expr)
+	}
+	return cloned
+}
+
+func (isr *InfoSchemaRouting) updateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Routing {
+	isr.seenPredicates = append(isr.seenPredicates, cloneInfoSchemaPredicate(expr))
 	isTableSchema, bvName, out := extractInfoSchemaRoutingPredicate(ctx, expr)
 	if out == nil {
 		return isr
@@ -260,13 +272,18 @@ func tryMergeInfoSchemaRoutings(ctx *plancontext.PlanningContext, routingA, rout
 	isrB := routingB.(*InfoSchemaRouting)
 	emptyA := len(isrA.SysTableTableName) == 0 && len(isrA.SysTableTableSchema) == 0
 	emptyB := len(isrB.SysTableTableName) == 0 && len(isrB.SysTableTableSchema) == 0
+	merge := func(routing *InfoSchemaRouting) *Route {
+		// Reset must replay both inputs without rewriting their saved expressions.
+		routing.seenPredicates = cloneInfoSchemaPredicates(slices.Concat(isrA.seenPredicates, isrB.seenPredicates))
+		return m.merge(ctx, lhsRoute, rhsRoute, routing)
+	}
 
 	switch {
 	// if either side has no predicates to help us route, we can merge them
 	case emptyA:
-		return m.merge(ctx, lhsRoute, rhsRoute, isrB)
+		return merge(isrB)
 	case emptyB:
-		return m.merge(ctx, lhsRoute, rhsRoute, isrA)
+		return merge(isrA)
 
 	// if we have no schema predicates on either side, we can merge if the table info is the same
 	case len(isrA.SysTableTableSchema) == 0 && len(isrB.SysTableTableSchema) == 0:
@@ -277,12 +294,12 @@ func tryMergeInfoSchemaRoutings(ctx *plancontext.PlanningContext, routingA, rout
 			}
 			isrA.SysTableTableName[k] = expr
 		}
-		return m.merge(ctx, lhsRoute, rhsRoute, isrA)
+		return merge(isrA)
 
 	// if both sides have the same schema predicate, we can safely merge them
 	case equalExprs(isrA.SysTableTableSchema, isrB.SysTableTableSchema):
 		maps.Copy(isrA.SysTableTableName, isrB.SysTableTableName)
-		return m.merge(ctx, lhsRoute, rhsRoute, isrA)
+		return merge(isrA)
 
 	// give up
 	default:
