@@ -75,13 +75,19 @@ func yyParsePooled(yylex yyLexer) int {
 // is partially parsed but still contains a syntax error, the
 // error is ignored and the DDL is returned anyway.
 func (p *Parser) Parse2(sql string) (Statement, BindVars, error) {
+	return p.parse2(sql, true)
+}
+
+func (p *Parser) parse2(sql string, logPartialDDL bool) (Statement, BindVars, error) {
 	tokenizer := p.NewStringTokenizer(sql)
 	if yyParsePooled(tokenizer) != 0 || tokenizer.LastError != nil {
 		if tokenizer.partialDDL != nil {
 			if typ, val := tokenizer.Scan(); typ != 0 {
 				return nil, nil, fmt.Errorf("extra characters encountered after end of DDL: '%s'", val)
 			}
-			log.Warn(fmt.Sprintf("ignoring error parsing DDL '%s': %v", sql, tokenizer.LastError))
+			if logPartialDDL {
+				log.Warn(fmt.Sprintf("ignoring error parsing DDL '%s': %v", sql, tokenizer.LastError))
+			}
 			switch x := tokenizer.partialDDL.(type) {
 			case DBDDLStatement:
 				x.SetFullyParsed(false)
@@ -199,6 +205,14 @@ func (p *Parser) ParseExpr(sql string) (Expr, error) {
 // Parse behaves like Parse2 but does not return a set of bind variables
 func (p *Parser) Parse(sql string) (Statement, error) {
 	stmt, _, err := p.Parse2(sql)
+	return stmt, err
+}
+
+// ParseWithoutLogging behaves like Parse but does not log warnings for partially
+// parsed DDL. Use it when parsing sensitive input whose diagnostics are handled by
+// the caller, such as connection settings.
+func (p *Parser) ParseWithoutLogging(sql string) (Statement, error) {
+	stmt, _, err := p.parse2(sql, false)
 	return stmt, err
 }
 

@@ -3636,6 +3636,7 @@ func TestSanitizeLogMessagesConnectionSettingErrors(t *testing.T) {
 	}{
 		{"subquery", "set @@sql_select_limit = (select count(*) from t where secret = '" + secret + "')", vtrpcpb.Code_INVALID_ARGUMENT, vtrpcpb.Code_INVALID_ARGUMENT},
 		{"parse error", "set @@sql_select_limit = 1 '" + secret + "'", vtrpcpb.Code_INVALID_ARGUMENT, vtrpcpb.Code_INVALID_ARGUMENT},
+		{"partial DDL", "create table a ignore me " + secret, vtrpcpb.Code_INTERNAL, vtrpcpb.Code_INVALID_ARGUMENT},
 		{"not SET", "select '" + secret + "'", vtrpcpb.Code_INTERNAL, vtrpcpb.Code_INVALID_ARGUMENT},
 		{"non-constant sql_mode", "set sql_mode = concat('" + secret + "', '')", vtrpcpb.Code_UNIMPLEMENTED, vtrpcpb.Code_UNIMPLEMENTED},
 		{"invalid sql_mode", "set sql_mode = '" + secret + "'", vtrpcpb.Code_INVALID_ARGUMENT, vtrpcpb.Code_INVALID_ARGUMENT},
@@ -3665,7 +3666,7 @@ func TestSanitizeLogMessagesConnectionSettingErrors(t *testing.T) {
 				require.Error(t, err)
 				assert.Equal(t, wantCode, vterrors.Code(err))
 				assert.NotContains(t, err.Error(), secret)
-				if tc.name == "parse error" || tc.name == "not SET" {
+				if tc.name == "parse error" || tc.name == "not SET" || tc.name == "partial DDL" {
 					assert.Contains(t, err.Error(), "position 2")
 				}
 				if tc.name == "invalid sql_mode" {
@@ -3675,6 +3676,10 @@ func TestSanitizeLogMessagesConnectionSettingErrors(t *testing.T) {
 				require.Error(t, converted)
 				assert.Equal(t, wantCode, vterrors.Code(converted))
 				logs := tl.getLogs()
+				for _, logged := range logs {
+					assert.NotContains(t, logged, secret)
+					assert.NotContains(t, logged, tc.setting)
+				}
 				require.Len(t, logs, 1)
 				logged := logs[0]
 				assert.Contains(t, logged, err.Error())
@@ -3683,4 +3688,22 @@ func TestSanitizeLogMessagesConnectionSettingErrors(t *testing.T) {
 			})
 		}
 	}
+}
+
+// A table ACL dry run looks for subqueries before validating settings. Parsing a
+// rejected partial DDL there must not log its text either.
+func TestSanitizeLogMessagesSettingSubqueryLookup(t *testing.T) {
+	tl := newTestLogger()
+	t.Cleanup(tl.Close)
+	const secret = "dry_run_setting_secret_21253"
+	setting := "create table a ignore me " + secret
+	reject, found := settingsRejectSubqueries([]string{setting}, vtenv.NewTestEnv().Parser(), true, true)
+	assert.False(t, reject)
+	assert.Empty(t, found)
+	logs := tl.getLogs()
+	for _, logged := range logs {
+		assert.NotContains(t, logged, secret)
+		assert.NotContains(t, logged, setting)
+	}
+	assert.Empty(t, logs)
 }

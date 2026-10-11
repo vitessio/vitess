@@ -56,7 +56,7 @@ import (
 // connection's character set are rejected too (see rejectSettingCharsetExprs).
 func ValidateSettingsSQLMode(settings []string, parser *sqlparser.Parser, rejectSubqueries bool) error {
 	for i, setting := range settings {
-		stmt, err := parser.Parse(setting)
+		stmt, err := parser.ParseWithoutLogging(setting)
 		if err != nil {
 			// Parser errors can include the token near the failure, so do not wrap them.
 			return vterrors.NewErrorf(vterrors.Code(err), vterrors.ErrState(err), "failed to parse connection setting at position %d", i+1)
@@ -101,7 +101,7 @@ func rejectSettingSubqueries(set *sqlparser.Set) error {
 // parse as a SET statement is skipped: the settings validation reports it.
 func SettingWithSubquery(settings []string, parser *sqlparser.Parser) string {
 	for _, setting := range settings {
-		stmt, err := parser.Parse(setting)
+		stmt, err := parser.ParseWithoutLogging(setting)
 		if err != nil {
 			continue
 		}
