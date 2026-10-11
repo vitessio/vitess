@@ -31,6 +31,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/prototext"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/ptr"
@@ -46,6 +47,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtenv"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
@@ -56,6 +58,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 var (
@@ -3761,6 +3764,80 @@ func TestValidateShardsHaveVReplicationPermissions(t *testing.T) {
 			assert.ErrorContains(t, err, tc.expectedErrContains)
 		})
 	}
+}
+
+// TestConfigOverridesValidatedBeforeWorkflowChanges checks that the workflow
+// create and update entry points reject an invalid VReplication config
+// override before they deploy any schema or touch any stream. The tablets
+// only parse the overrides after the workflow rows are written, which left a
+// failed create behind as a workflow that could not be cancelled.
+func TestConfigOverridesValidatedBeforeWorkflowChanges(t *testing.T) {
+	ctx := t.Context()
+	ms := &vtctldatapb.MaterializeSettings{
+		Workflow:       "wf",
+		SourceKeyspace: "sourceks",
+		TargetKeyspace: "targetks",
+		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
+			TargetTable:      "t1",
+			SourceExpression: "select * from t1",
+		}},
+	}
+	env := newTestMaterializerEnv(t, ctx, ms, []string{"-"}, []string{"-80", "80-"})
+	defer env.close()
+
+	for _, tc := range []struct {
+		name      string
+		overrides map[string]string
+		errMsg    string
+	}{
+		{"invalid value", map[string]string{"vreplication-copy-phase-duration": "notaduration"}, "invalid value for vreplication-copy-phase-duration: notaduration"},
+		{"unknown flag", map[string]string{"nosuchflag": "1"}, "unknown vreplication config flag: nosuchflag"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			check := func(t *testing.T, err error) {
+				require.ErrorContains(t, err, tc.errMsg)
+				assert.Equal(t, vtrpcpb.Code_INVALID_ARGUMENT, vterrors.Code(err))
+			}
+			options := &vtctldatapb.WorkflowOptions{Config: tc.overrides}
+
+			_, err := env.ws.MoveTablesCreate(ctx, &vtctldatapb.MoveTablesCreateRequest{
+				Workflow:        ms.Workflow,
+				SourceKeyspace:  ms.SourceKeyspace,
+				TargetKeyspace:  ms.TargetKeyspace,
+				IncludeTables:   []string{"t1"},
+				WorkflowOptions: options,
+			})
+			check(t, err)
+
+			_, err = env.ws.ReshardCreate(ctx, &vtctldatapb.ReshardCreateRequest{
+				Workflow:        ms.Workflow,
+				Keyspace:        ms.TargetKeyspace,
+				SourceShards:    []string{"-80", "80-"},
+				TargetShards:    []string{"-"},
+				WorkflowOptions: options,
+			})
+			check(t, err)
+
+			materializeSettings := proto.Clone(ms).(*vtctldatapb.MaterializeSettings)
+			materializeSettings.WorkflowOptions = options
+			check(t, env.ws.Materialize(ctx, materializeSettings))
+
+			_, err = env.ws.WorkflowUpdate(ctx, &vtctldatapb.WorkflowUpdateRequest{
+				Keyspace: ms.TargetKeyspace,
+				TabletRequest: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
+					Workflow:        ms.Workflow,
+					ConfigOverrides: tc.overrides,
+				},
+			})
+			check(t, err)
+		})
+	}
+
+	// A valid value and an empty value (which removes an override) pass.
+	require.NoError(t, validateConfigOverrides(map[string]string{
+		"vreplication-copy-phase-duration": "1h",
+		"vreplication-retry-delay":         "",
+	}))
 }
 
 func TestWorkflowUpdate(t *testing.T) {
