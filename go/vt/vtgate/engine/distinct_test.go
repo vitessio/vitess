@@ -18,6 +18,7 @@ package engine
 
 import (
 	"fmt"
+	"math"
 	"testing"
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -315,6 +316,31 @@ func TestDistinctUnknownTypeUsesWeightString(t *testing.T) {
 		qr, err := distinct.TryExecute(t.Context(), &noopVCursor{}, nil, true)
 		require.NoError(t, err)
 		utils.MustMatch(t, `[[DATE("2000-01-01")] [INT64(20000101)] [TIME("11:22:33")] [INT64(112233)]]`, fmt.Sprintf("%v", qr.Rows))
+	})
+
+	// Non-finite floats have no DECIMAL form; hashing them must not panic and
+	// equal values must still be merged.
+	t.Run("non-finite floats", func(t *testing.T) {
+		input := &sqltypes.Result{
+			Fields: sqltypes.MakeTestFields("x|weight_string(x)", "float64|varbinary"),
+			Rows: []sqltypes.Row{
+				{sqltypes.NewFloat64(math.Inf(1)), sqltypes.NULL},
+				{sqltypes.NewFloat64(math.NaN()), sqltypes.NULL},
+				{sqltypes.NewFloat64(math.Inf(-1)), sqltypes.NULL},
+				{sqltypes.NewFloat64(math.Inf(1)), sqltypes.NULL},
+				{sqltypes.NewInt64(1), sqltypes.NULL},
+				{sqltypes.NewFloat64(math.Inf(-1)), sqltypes.NULL},
+			},
+		}
+		distinct := &Distinct{
+			Source:    &fakePrimitive{results: []*sqltypes.Result{input}},
+			CheckCols: []CheckCol{{Col: 0, WsCol: &offsetOne, Type: evalengine.NewUnknownType()}},
+			Truncate:  1,
+		}
+
+		qr, err := distinct.TryExecute(t.Context(), &noopVCursor{}, nil, true)
+		require.NoError(t, err)
+		utils.MustMatch(t, `[[FLOAT64(+Inf)] [FLOAT64(NaN)] [FLOAT64(-Inf)] [INT64(1)]]`, fmt.Sprintf("%v", qr.Rows))
 	})
 }
 

@@ -84,10 +84,16 @@ var ErrHashCoercionIsNotExact = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "
 // 2^53 that NullsafeCompare coerces to the same float64: they hash apart and
 // are kept as two values, which errs on the side of not losing data. Only a
 // static type can settle that case, as it does for every known-typed column.
-// Other values keep the type they arrived with; text with an unknown
+// Non-finite floats (NaN, ±Inf) have no DECIMAL form and keep hashing as
+// floats. Other values keep the type they arrived with; text with an unknown
 // collation then reports UnsupportedCollationHashError, which lets the caller
 // switch to the weight string the planner added for it.
 func hashTypeForUnknown(v sqltypes.Value) sqltypes.Type {
+	if sqltypes.IsFloat(v.Type()) {
+		if f, err := v.ToFloat64(); err == nil && (math.IsNaN(f) || math.IsInf(f, 0)) {
+			return sqltypes.Float64
+		}
+	}
 	if sqltypes.IsNumber(v.Type()) {
 		return sqltypes.Decimal
 	}

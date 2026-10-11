@@ -18,6 +18,7 @@ package evalengine
 
 import (
 	"fmt"
+	"math"
 	"testing"
 	"time"
 
@@ -179,6 +180,32 @@ func TestHashCodes128(t *testing.T) {
 
 // The following test tries to produce lots of different values and compares them both using hash code and compare,
 // to make sure that these two methods agree on what values are equal
+// TestHashCodesUnknownNonFiniteFloats checks that NaN and infinite floats of
+// unknown static type hash without error through both hash functions, and
+// that their FLOAT32 and FLOAT64 forms hash alike. Unknown-typed numbers go
+// through DECIMAL, which has no form for these values.
+func TestHashCodesUnknownNonFiniteFloats(t *testing.T) {
+	cases := []struct{ f32, f64 sqltypes.Value }{
+		{sqltypes.NewFloat32(float32(math.NaN())), sqltypes.NewFloat64(math.NaN())},
+		{sqltypes.NewFloat32(float32(math.Inf(1))), sqltypes.NewFloat64(math.Inf(1))},
+		{sqltypes.NewFloat32(float32(math.Inf(-1))), sqltypes.NewFloat64(math.Inf(-1))},
+	}
+	for _, tc := range cases {
+		t.Run(tc.f64.String(), func(t *testing.T) {
+			h1, err := NullsafeHashcode(tc.f32, collations.CollationUtf8mb4ID, sqltypes.Unknown, 0, nil)
+			require.NoError(t, err)
+			h2, err := NullsafeHashcode(tc.f64, collations.CollationUtf8mb4ID, sqltypes.Unknown, 0, nil)
+			require.NoError(t, err)
+			assert.Equal(t, h1, h2)
+
+			hasher1, hasher2 := vthash.New(), vthash.New()
+			require.NoError(t, NullsafeHashcode128(&hasher1, tc.f32, collations.CollationUtf8mb4ID, sqltypes.Unknown, 0, nil))
+			require.NoError(t, NullsafeHashcode128(&hasher2, tc.f64, collations.CollationUtf8mb4ID, sqltypes.Unknown, 0, nil))
+			assert.Equal(t, hasher1.Sum128(), hasher2.Sum128())
+		})
+	}
+}
+
 func TestHashCodesRandom128(t *testing.T) {
 	tested := 0
 	equal := 0
