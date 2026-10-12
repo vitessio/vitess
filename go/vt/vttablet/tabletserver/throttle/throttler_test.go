@@ -18,6 +18,7 @@ package throttle
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"maps"
 	"math"
@@ -195,6 +196,12 @@ func (ts *FakeTopoServer) GetTablet(ctx context.Context, alias *topodatapb.Table
 		},
 	}
 	return tablet, nil
+}
+
+func (ts *FakeTopoServer) GetShard(ctx context.Context, keyspace, shard string) (*topo.ShardInfo, error) {
+	return topo.NewShardInfo(keyspace, shard, &topodatapb.Shard{
+		PrimaryAlias: &topodatapb.TabletAlias{Cell: "fakezone0", Uid: 100},
+	}, nil), nil
 }
 
 func (ts *FakeTopoServer) FindAllTabletAliasesInShard(ctx context.Context, keyspace, shard string) ([]*topodatapb.TabletAlias, error) {
@@ -2289,4 +2296,118 @@ func TestReplica(t *testing.T) {
 			})
 		}()
 	})
+}
+
+// stimulateTopoServer serves a single shard record and a set of tablet records, and counts reads.
+type stimulateTopoServer struct {
+	FakeTopoServer
+	primaryAlias *topodatapb.TabletAlias
+	tabletTypes  map[uint32]topodatapb.TabletType
+	shardErr     error
+
+	shardReads  int
+	tabletReads []*topodatapb.TabletAlias
+	listReads   int
+}
+
+func (ts *stimulateTopoServer) GetShard(ctx context.Context, keyspace, shard string) (*topo.ShardInfo, error) {
+	ts.shardReads++
+	if ts.shardErr != nil {
+		return nil, ts.shardErr
+	}
+	return topo.NewShardInfo(keyspace, shard, &topodatapb.Shard{PrimaryAlias: ts.primaryAlias}, nil), nil
+}
+
+func (ts *stimulateTopoServer) GetTablet(ctx context.Context, alias *topodatapb.TabletAlias) (*topo.TabletInfo, error) {
+	ts.tabletReads = append(ts.tabletReads, alias)
+	return &topo.TabletInfo{Tablet: &topodatapb.Tablet{Alias: alias, Type: ts.tabletTypes[alias.Uid]}}, nil
+}
+
+func (ts *stimulateTopoServer) FindAllTabletAliasesInShard(ctx context.Context, keyspace, shard string) ([]*topodatapb.TabletAlias, error) {
+	ts.listReads++
+	return ts.FakeTopoServer.FindAllTabletAliasesInShard(ctx, keyspace, shard)
+}
+
+// stimulateTMClient records which tablets were sent a CheckThrottler request.
+type stimulateTMClient struct {
+	tmclient.TabletManagerClient
+	checked []*topodatapb.Tablet
+}
+
+func (c *stimulateTMClient) CheckThrottler(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.CheckThrottlerRequest) (*tabletmanagerdatapb.CheckThrottlerResponse, error) {
+	c.checked = append(c.checked, tablet)
+	return &tabletmanagerdatapb.CheckThrottlerResponse{}, nil
+}
+
+func TestStimulatePrimaryThrottler(t *testing.T) {
+	primary := &topodatapb.TabletAlias{Cell: "fakezone1", Uid: 101}
+	errShard := errors.New("topo unavailable")
+
+	tcases := []struct {
+		name         string
+		primaryAlias *topodatapb.TabletAlias
+		tabletTypes  map[uint32]topodatapb.TabletType
+		shardErr     error
+		expectErr    error
+		expectReads  int
+		expectTarget *topodatapb.TabletAlias
+	}{
+		{
+			name:         "stimulates the primary named by the shard record",
+			primaryAlias: primary,
+			tabletTypes:  map[uint32]topodatapb.TabletType{101: topodatapb.TabletType_PRIMARY},
+			expectReads:  1,
+			expectTarget: primary,
+		},
+		{
+			name:        "no primary in the shard record",
+			expectReads: 0,
+		},
+		{
+			name:         "shard record ahead of the tablet record",
+			primaryAlias: primary,
+			tabletTypes:  map[uint32]topodatapb.TabletType{101: topodatapb.TabletType_REPLICA},
+			expectReads:  1,
+		},
+		{
+			name:      "shard read fails",
+			shardErr:  errShard,
+			expectErr: errShard,
+		},
+	}
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			ts := &stimulateTopoServer{
+				primaryAlias: tcase.primaryAlias,
+				tabletTypes:  tcase.tabletTypes,
+				shardErr:     tcase.shardErr,
+			}
+			tmClient := &stimulateTMClient{}
+			throttler := &Throttler{
+				keyspace:      "ks",
+				shard:         "-80",
+				ts:            ts,
+				dormantPeriod: time.Minute,
+			}
+
+			err := throttler.stimulatePrimaryThrottler(context.Background(), tmClient)
+			if tcase.expectErr != nil {
+				require.ErrorIs(t, err, tcase.expectErr)
+			} else {
+				require.NoError(t, err)
+			}
+
+			// One shard read and at most one tablet read; never a walk of the whole shard.
+			assert.Equal(t, 1, ts.shardReads)
+			assert.Zero(t, ts.listReads)
+			assert.Len(t, ts.tabletReads, tcase.expectReads)
+			if tcase.expectTarget == nil {
+				assert.Empty(t, tmClient.checked)
+				return
+			}
+			require.Len(t, tmClient.checked, 1)
+			assert.Equal(t, tcase.expectTarget.Cell, tmClient.checked[0].Alias.Cell)
+			assert.Equal(t, tcase.expectTarget.Uid, tmClient.checked[0].Alias.Uid)
+		})
+	}
 }
