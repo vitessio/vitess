@@ -2304,6 +2304,7 @@ type stimulateTopoServer struct {
 	primaryAlias *topodatapb.TabletAlias
 	tabletTypes  map[uint32]topodatapb.TabletType
 	shardErr     error
+	tabletErr    error
 
 	shardReads  int
 	tabletReads []*topodatapb.TabletAlias
@@ -2320,6 +2321,9 @@ func (ts *stimulateTopoServer) GetShard(ctx context.Context, keyspace, shard str
 
 func (ts *stimulateTopoServer) GetTablet(ctx context.Context, alias *topodatapb.TabletAlias) (*topo.TabletInfo, error) {
 	ts.tabletReads = append(ts.tabletReads, alias)
+	if ts.tabletErr != nil {
+		return nil, ts.tabletErr
+	}
 	return &topo.TabletInfo{Tablet: &topodatapb.Tablet{Alias: alias, Type: ts.tabletTypes[alias.Uid]}}, nil
 }
 
@@ -2331,23 +2335,34 @@ func (ts *stimulateTopoServer) FindAllTabletAliasesInShard(ctx context.Context, 
 // stimulateTMClient records which tablets were sent a CheckThrottler request.
 type stimulateTMClient struct {
 	tmclient.TabletManagerClient
-	checked []*topodatapb.Tablet
+	checked  []*topodatapb.Tablet
+	checkErr error
 }
 
 func (c *stimulateTMClient) CheckThrottler(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.CheckThrottlerRequest) (*tabletmanagerdatapb.CheckThrottlerResponse, error) {
 	c.checked = append(c.checked, tablet)
+	if c.checkErr != nil {
+		return nil, c.checkErr
+	}
 	return &tabletmanagerdatapb.CheckThrottlerResponse{}, nil
 }
 
+// TestStimulatePrimaryThrottler verifies that a replica finds the primary to stimulate from the shard record
+// with one shard read and at most one tablet read, never walking the shard, and that it skips the round when
+// there is no primary or the tablet record does not say PRIMARY, and returns topo and RPC errors.
 func TestStimulatePrimaryThrottler(t *testing.T) {
 	primary := &topodatapb.TabletAlias{Cell: "fakezone1", Uid: 101}
 	errShard := errors.New("topo unavailable")
+	errTablet := errors.New("tablet record unavailable")
+	errCheck := errors.New("primary unreachable")
 
 	tcases := []struct {
 		name         string
 		primaryAlias *topodatapb.TabletAlias
 		tabletTypes  map[uint32]topodatapb.TabletType
 		shardErr     error
+		tabletErr    error
+		checkErr     error
 		expectErr    error
 		expectReads  int
 		expectTarget *topodatapb.TabletAlias
@@ -2374,6 +2389,22 @@ func TestStimulatePrimaryThrottler(t *testing.T) {
 			shardErr:  errShard,
 			expectErr: errShard,
 		},
+		{
+			name:         "primary tablet read fails",
+			primaryAlias: primary,
+			tabletErr:    errTablet,
+			expectErr:    errTablet,
+			expectReads:  1,
+		},
+		{
+			name:         "check on the primary fails",
+			primaryAlias: primary,
+			tabletTypes:  map[uint32]topodatapb.TabletType{101: topodatapb.TabletType_PRIMARY},
+			checkErr:     errCheck,
+			expectErr:    errCheck,
+			expectReads:  1,
+			expectTarget: primary,
+		},
 	}
 	for _, tcase := range tcases {
 		t.Run(tcase.name, func(t *testing.T) {
@@ -2381,8 +2412,9 @@ func TestStimulatePrimaryThrottler(t *testing.T) {
 				primaryAlias: tcase.primaryAlias,
 				tabletTypes:  tcase.tabletTypes,
 				shardErr:     tcase.shardErr,
+				tabletErr:    tcase.tabletErr,
 			}
-			tmClient := &stimulateTMClient{}
+			tmClient := &stimulateTMClient{checkErr: tcase.checkErr}
 			throttler := &Throttler{
 				keyspace:      "ks",
 				shard:         "-80",
