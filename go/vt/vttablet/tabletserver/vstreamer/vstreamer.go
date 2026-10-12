@@ -1374,6 +1374,7 @@ func (vs *vstreamer) getValues(plan *streamerPlan, data []byte,
 				slog.String("table", plan.Table.Name),
 				slog.String("column", plan.Table.Fields[colNum].Name),
 				slog.Int("col_num", colNum),
+				// querypb.Type has no JSON marshaler, so slog.Any would log types as numbers.
 				slog.String("fields", fmt.Sprint(plan.Table.Fields)),
 				slog.Any("values", values),
 				slog.Any("error", err))
