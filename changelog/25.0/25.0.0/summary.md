@@ -76,6 +76,7 @@
         - [Connections whose certificate revocation cannot be checked against a configured CRL are rejected](#vttls-crl-fail-closed)
         - [Optional gRPC TLS: connections are counted by transport](#grpc-optional-tls-connections)
         - [ORCA metrics now report QPS and EPS](#grpc-orca-qps)
+        - [Statements are trimmed of MySQL's space characters only](#sqlparser-mysql-space-set)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -856,3 +857,7 @@ See [#21161](https://github.com/vitessio/vitess/issues/21161) for details.
 With `--grpc-enable-orca-metrics`, gRPC servers now report QPS and EPS in their ORCA load reports, alongside CPU and memory utilization. QPS is the rate of gRPC messages sent plus failed calls: one per unary response or stream message, and one per call that fails, so long-lived streams such as `VStream` keep counting while they send. EPS is the rate of calls whose gRPC handler returns an error; query errors that VTGate returns inside a successful response, as `Execute` does, are not counted. Health checks and ORCA reports are not counted.
 
 Clients using gRPC's standard `weighted_round_robin` policy with `enableOobLoadReport: true` ignore reports without QPS, so they previously fell back to plain round robin. After upgrading a server that has `--grpc-enable-orca-metrics` set, those clients switch to weighted routing with no configuration change. The policy weighs each server by its QPS, CPU utilization, and error rate.
+
+#### <a id="sqlparser-mysql-space-set"/>Statements are trimmed of MySQL's space characters only</a>
+
+VTGate and VTTablet trim whitespace from the start and end of a statement before they parse it. They used to trim every Unicode space character, including the no-break space (U+00A0), which MySQL does not treat as a space. They now trim only the characters MySQL treats as spaces: space, tab, line feed, vertical tab, form feed and carriage return. A statement that starts or ends with any other space character is now rejected with a syntax error, as MySQL rejects it, where Vitess used to remove the character and run the statement. Clients that send such characters must remove them before upgrading.

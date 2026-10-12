@@ -608,7 +608,7 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) (err error) {
 		}
 	} else {
 		sql = qre.query
-		sqlWithoutComments, _ = sqlparser.SplitMarginComments(qre.query)
+		sqlWithoutComments, _ = qre.tsv.env.Parser().SplitMarginComments(qre.query)
 	}
 
 	var replaceKeyspace string
