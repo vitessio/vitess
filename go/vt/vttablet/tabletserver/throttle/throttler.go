@@ -45,6 +45,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math"
 	"math/rand/v2"
 	"strings"
@@ -692,7 +693,7 @@ func (throttler *Throttler) stimulatePrimaryThrottler(ctx context.Context, tmCli
 	req := &tabletmanagerdatapb.CheckThrottlerRequest{AppName: throttlerapp.ThrottlerStimulatorName.String()}
 	_, err = tmClient.CheckThrottler(ctx, tablet.Tablet, req)
 	if err != nil {
-		log.Error(fmt.Sprintf("stimulatePrimaryThrottler: %+v", err))
+		log.Error("stimulatePrimaryThrottler failed", slog.Any("error", err))
 	}
 	return err
 }
