@@ -276,7 +276,7 @@ describe('api/http', () => {
         ])('sends %s as a POST request', async (_, call, endpoint) => {
             const apiAddr = import.meta.env.VITE_VTADMIN_API_ADDRESS;
             let method = '';
-            global.server.use(
+            server.use(
                 http.all(`${apiAddr}${endpoint}`, ({ request }) => {
                     method = request.method;
                     return HttpResponse.json({ ok: true, result: {} });
