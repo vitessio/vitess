@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/patrickmn/go-cache"
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -2289,4 +2290,40 @@ func TestReplica(t *testing.T) {
 			})
 		}()
 	})
+}
+
+// TestInventoryRefreshIntervalFlag verifies that --throttler-inventory-refresh-interval, parsed through the
+// real flag set, reaches the throttler that NewThrottler builds, and that a value below the 10s minimum
+// (including zero and negative values) is raised to it instead of being passed to the refresh ticker.
+func TestInventoryRefreshIntervalFlag(t *testing.T) {
+	defer func(tabletTypes string, interval time.Duration) {
+		throttleTabletTypes = tabletTypes
+		throttlerInventoryRefreshInterval = interval
+	}(throttleTabletTypes, throttlerInventoryRefreshInterval)
+
+	tcases := []struct {
+		name   string
+		args   []string
+		expect time.Duration
+	}{
+		{name: "default", expect: inventoryRefreshInterval},
+		{name: "set", args: []string{"--throttler-inventory-refresh-interval=1m"}, expect: time.Minute},
+		{name: "the minimum is accepted", args: []string{"--throttler-inventory-refresh-interval=10s"}, expect: inventoryRefreshInterval},
+		{name: "below the minimum is raised", args: []string{"--throttler-inventory-refresh-interval=1ms"}, expect: inventoryRefreshInterval},
+		{name: "zero is raised", args: []string{"--throttler-inventory-refresh-interval=0"}, expect: inventoryRefreshInterval},
+		{name: "negative is raised", args: []string{"--throttler-inventory-refresh-interval=-5s"}, expect: inventoryRefreshInterval},
+	}
+	for i, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			throttlerInventoryRefreshInterval = inventoryRefreshInterval
+			fs := pflag.NewFlagSet("vttablet", pflag.ContinueOnError)
+			registerThrottlerFlags(fs)
+			require.NoError(t, fs.Parse(tcase.args))
+
+			env := tabletenv.NewEnv(vtenv.NewTestEnv(), tabletenv.NewDefaultConfig(), "TestInventoryRefreshIntervalFlag")
+			throttler := NewThrottler(env, nil, nil, &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}, nil,
+				func() topodatapb.TabletType { return topodatapb.TabletType_PRIMARY }, fmt.Sprintf("TestInventoryRefreshPool%d", i))
+			assert.Equal(t, tcase.expect, throttler.inventoryRefreshInterval)
+		})
+	}
 }
