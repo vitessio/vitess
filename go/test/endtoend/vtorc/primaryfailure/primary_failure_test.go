@@ -520,10 +520,11 @@ func TestDeadPrimaryMysqldWithLiveVttablet(t *testing.T) {
 	// The shard is healthy again. Count VTOrc's attempts to fix a replica over
 	// the next 20 seconds: there is nothing left that it can fix.
 	fixReplicaAttempts := func() int {
-		recoveries, ok := vtOrcProcess.GetVars()["RecoveriesCount"].(map[string]any)
-		if !ok {
-			return 0
-		}
+		vars := vtOrcProcess.GetVars()
+		require.NotNil(t, vars, "could not read VTOrc's /debug/vars")
+		recoveries, ok := vars["RecoveriesCount"].(map[string]any)
+		require.True(t, ok, "RecoveriesCount is missing from VTOrc's /debug/vars")
+		// An absent FixReplica label means VTOrc has not attempted that recovery.
 		return utils.GetIntFromValue(recoveries[fmt.Sprintf("%s.%s.%s", logic.FixReplicaRecoveryName, keyspace.Name, shard0.Name)])
 	}
 	time.Sleep(5 * time.Second)
@@ -531,6 +532,10 @@ func TestDeadPrimaryMysqldWithLiveVttablet(t *testing.T) {
 	time.Sleep(20 * time.Second)
 	after := fixReplicaAttempts()
 	assert.LessOrEqual(t, after-before, 1, "VTOrc kept trying to fix a replica in a healthy shard: %d attempts in 20s", after-before)
+
+	// VTOrc still detects the old primary's stale problem, and skips repairing
+	// it because it can no longer reach the old primary's MySQL.
+	utils.WaitForSkippedRecoveryCount(t, vtOrcProcess, logic.FixReplicaRecoveryName, keyspace.Name, shard0.Name, logic.RecoverySkipReplicaUnreachable, 1)
 }
 
 // Failover should not be cross data centers, according to the configuration file
