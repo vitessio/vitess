@@ -1897,6 +1897,8 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 			if tc.wantErr {
 				require.Error(t, err)
 				if tc.wantCanceled {
+					require.ErrorContains(t, err, "failed to gather replication positions")
+					require.NotContains(t, err.Error(), "cancel migration failed")
 					// Writes are back on the source, and every expected
 					// query, including the cancel's, was run.
 					for _, keyspace := range []*testKeyspace{tc.sourceKeyspace, tc.targetKeyspace} {
