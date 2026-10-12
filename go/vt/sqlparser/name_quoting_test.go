@@ -19,13 +19,17 @@ package sqlparser
 import (
 	"bufio"
 	"fmt"
+	"maps"
 	"os"
 	"path"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/mysql/collations"
 )
 
 // TestQuotedNamesDoNotSmuggleSQL covers names that the grammar accepts as a
@@ -192,9 +196,9 @@ func TestQuotedNamesDoNotSmuggleSQL(t *testing.T) {
 	}
 }
 
-// TestBareNamesAreNotQuoted pins that ordinary charset, collation, engine,
-// tablespace and index names keep their unquoted spelling, so the fix above
-// does not churn generated DDL or break name lookups.
+// TestBareNamesAreNotQuoted pins that real charset, collation, engine,
+// tablespace, index type and parser names keep their unquoted spelling, so the
+// fix above does not churn generated DDL or break name lookups.
 func TestBareNamesAreNotQuoted(t *testing.T) {
 	testcases := []struct {
 		input  string
@@ -210,7 +214,8 @@ func TestBareNamesAreNotQuoted(t *testing.T) {
 		{input: "alter table t convert to character set utf8mb4 collate utf8mb4_bin"},
 		{input: "create table t (\n\tid int\n) charset utf8mb4,\n  collate utf8mb4_bin"},
 		{input: "create table t (\n\tid int\n) engine InnoDB"},
-		{input: "create table t (\n\tid int\n) tablespace ts storage disk"},
+		{input: "create table t (\n\tid int\n) tablespace innodb_system storage disk"},
+		{input: "create table t (\n\tid int\n) engine MyISAM"},
 		{input: "create table t (\n\ta varchar(10) character set utf8mb4 collate utf8mb4_bin\n)"},
 		{input: "create database d character set utf8mb4"},
 		{input: "create table t (\n\ta int,\n\tkey i (a) using btree\n)"},
@@ -408,15 +413,16 @@ func TestEmptyNameIsRejected(t *testing.T) {
 // name reads back; this pins that it does so back-quoted, rather than in some
 // other spelling that happens to parse.
 //
-// Which keywords can stay bare depends on the production being written into:
+// A keyword stays bare only if it is a real name -- `memory`, `ascii`, `binary`
+// -- and the production being written into can read it back:
 //
-//   - charset and collation take sql_id, and BINARY in its own right, so a
-//     non-reserved keyword and `binary` both come back bare -- except before the
-//     BINARY modifier, which the BINARY alternative does not take;
+//   - charset and collation take sql_id, and BINARY in its own right, so both
+//     come back bare -- except `binary` before the BINARY modifier, which the
+//     BINARY alternative does not take;
 //   - ENGINE, TABLESPACE and index USING take sql_id or table_alias, which admit
 //     a non-reserved keyword but have no BINARY alternative;
 //   - WITH PARSER takes ci_identifier, which is an ID and nothing else, so every
-//     keyword stays quoted there, non-reserved ones included.
+//     keyword stays quoted there, real names included.
 func TestKeywordNamesAreQuoted(t *testing.T) {
 	testcases := []struct {
 		input  string
@@ -482,29 +488,37 @@ func TestEncodeSQLName(t *testing.T) {
 		{in: "utf8mb4", out: "utf8mb4"},
 		{in: "utf8mb4_0900_ai_ci", out: "utf8mb4_0900_ai_ci"},
 		{in: "InnoDB", out: "InnoDB"},
+		{in: "INNODB", out: "INNODB"},
 		{in: "latin1", out: "latin1"},
-		{in: "_x", out: "_x"},
+		{in: "innodb_system", out: "innodb_system"},
+		{in: "btree", out: "btree"},
+		{in: "ngram", out: "ngram"},
 		// `binary` is reserved, but the charset and collation rules accept it in
 		// its own right, as MySQL's do, so it stays bare.
 		{in: "binary", out: "binary"},
 		{in: "BINARY", out: "BINARY"},
-		// Non-reserved keywords are accepted where an identifier is, so also bare.
+		// Real names that are non-reserved keywords are accepted where an
+		// identifier is, so also bare.
 		{in: "memory", out: "memory"},
 		{in: "ascii", out: "ascii"},
-		// Any other reserved word must be quoted or it will not lex back.
+		{in: "hash", out: "hash"},
+		// A name that is not a real one is quoted, however plain it looks: a
+		// tablespace a user named, an engine Vitess does not know.
+		{in: "ts", out: "`ts`"},
+		{in: "my_engine", out: "`my_engine`"},
+		{in: "_x", out: "`_x`"},
+		{in: "utf9", out: "`utf9`"},
+		// That covers every keyword that is not a real name, whatever this
+		// grammar or any MySQL version makes of it.
 		{in: "select", out: "`select`"},
 		{in: "SELECT", out: "`SELECT`"},
 		{in: "next", out: "`next`"},
-		// MySQL reserves words this grammar reads as plain identifiers, and
-		// rejects them bare. `array` is a keyword there too, but not a reserved
-		// one, so it needs no quoting.
 		{in: "int", out: "`int`"},
 		{in: "INT", out: "`INT`"},
 		{in: "char", out: "`char`"},
 		{in: "year_month", out: "`year_month`"},
-		{in: "array", out: "array"},
-		// So must a keyword that is neither reserved nor non-reserved, and a
-		// charset introducer: neither lexes as something a name position takes.
+		{in: "array", out: "`array`"},
+		{in: "master_bind", out: "`master_bind`"},
 		{in: "cast", out: "`cast`"},
 		{in: "release", out: "`release`"},
 		{in: "_utf8mb4", out: "`_utf8mb4`"},
@@ -527,11 +541,12 @@ func TestEncodeSQLName(t *testing.T) {
 }
 
 // TestMySQLReservedNamesAreQuoted pins that no word MySQL reserves is written
-// bare, whether or not this grammar reads it as a keyword. The grammar accepts
-// hundreds of them as identifiers (`int`, `char`, `grant`, ...), but the MySQL
-// the statement is sent to does not, so a bare one fails there however well it
-// parses here. `binary` is the exception: the charset and collation rules accept
-// it in its own right, as MySQL's do.
+// bare, which holds as long as no real charset, collation, engine, index type or
+// parser name is one. The grammar accepts hundreds of them as identifiers
+// (`int`, `char`, `grant`, ...), but the MySQL the statement is sent to does
+// not, so a bare one fails there however well it parses here. `binary` is the
+// exception: the charset and collation rules accept it in its own right, as
+// MySQL's do.
 func TestMySQLReservedNamesAreQuoted(t *testing.T) {
 	file, err := os.Open(path.Join("testdata", "mysql_keywords.txt"))
 	require.NoError(t, err)
@@ -567,7 +582,9 @@ func TestPositionEncoders(t *testing.T) {
 	}{
 		{in: "utf8mb4", object: "utf8mb4", identifier: "utf8mb4", binaryMod: "utf8mb4"},
 		{in: "ngram", object: "ngram", identifier: "ngram", binaryMod: "ngram"},
-		// A non-reserved keyword is bare except where only an ID is taken.
+		{in: "ts", object: "`ts`", identifier: "`ts`", binaryMod: "`ts`"},
+		// A real name that is a non-reserved keyword is bare except where only
+		// an ID is taken.
 		{in: "memory", object: "memory", identifier: "`memory`", binaryMod: "memory"},
 		{in: "ascii", object: "ascii", identifier: "`ascii`", binaryMod: "ascii"},
 		// `binary` is bare only where the BINARY alternative takes it.
@@ -631,11 +648,47 @@ func TestQuotedNameIsSemanticallyEqual(t *testing.T) {
 // tablespace, index type or parser name, and checks that the regenerated
 // statement reads back as the same statement.
 //
-// Whether a name may be written bare depends on which token it lexes as, not
-// merely on whether sql.y reserves it: these positions take an ID or a
-// non-reserved keyword, so a keyword in neither list (`cast`, `release`) and an
-// introducer have to be quoted just as a reserved word does.
+// Only the few keywords that are also real names -- `binary`, `memory`, `ascii`
+// and the like -- are written bare, and only where the position reads them back
+// as a name; every other keyword is back-quoted, whichever list sql.y puts it in.
 func TestEveryKeywordNameRoundTrips(t *testing.T) {
+	var names []string
+	introducers := 0
+	for _, kw := range keywords {
+		names = append(names, kw.name, strings.ToUpper(kw.name))
+		if strings.HasPrefix(kw.name, "_") {
+			introducers++
+		}
+	}
+	// A canary, so that this cannot pass by iterating over nothing.
+	require.Greater(t, len(keywords), 500)
+	require.Greater(t, introducers, 40, "charset introducers are expected in the keyword table")
+
+	testNamesRoundTrip(t, names)
+}
+
+// TestEveryKnownNameRoundTrips does the same for every name isBareName lets
+// through bare -- every charset and collation name of every version, and every
+// one of bareObjectNames -- so that a name added to either still reads back as
+// itself in every position it can be written into.
+func TestEveryKnownNameRoundTrips(t *testing.T) {
+	known := collations.KnownNames()
+	// A canary, so that this cannot pass by iterating over nothing.
+	require.Greater(t, len(known), 300)
+	known = append(known, slices.Collect(maps.Keys(bareObjectNames))...)
+
+	var names []string
+	for _, name := range known {
+		require.True(t, isBareName(name), name)
+		names = append(names, name, strings.ToUpper(name))
+	}
+	testNamesRoundTrip(t, names)
+}
+
+// testNamesRoundTrip writes each of names into every position that takes a
+// charset, collation, engine, tablespace, index type or parser name, and checks
+// that the regenerated statement reads back as the same statement.
+func testNamesRoundTrip(t *testing.T, names []string) {
 	positions := []struct {
 		name string
 		sql  string
@@ -692,18 +745,6 @@ func TestEveryKeywordNameRoundTrips(t *testing.T) {
 		{"convert character set binary", "select a from t where convert(a, char(10) character set %s binary) = b", encodeSQLString},
 		{"column character set binary", "create table t (a varchar(10) character set %s binary)", encodeSQLString},
 	}
-
-	var names []string
-	introducers := 0
-	for _, kw := range keywords {
-		names = append(names, kw.name, strings.ToUpper(kw.name))
-		if strings.HasPrefix(kw.name, "_") {
-			introducers++
-		}
-	}
-	// A canary, so that this cannot pass by iterating over nothing.
-	require.Greater(t, len(keywords), 500)
-	require.Greater(t, introducers, 40, "charset introducers are expected in the keyword table")
 
 	parser := NewTestParser()
 	for _, pos := range positions {

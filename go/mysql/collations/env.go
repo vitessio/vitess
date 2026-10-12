@@ -18,6 +18,7 @@ package collations
 
 import (
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 	"sync"
@@ -125,6 +126,33 @@ func NewEnvironment(serverVersion string) *Environment {
 	}
 	return fetchCacheEnvironment(version)
 }
+
+// IsKnownName reports whether name is the name of a charset or collation in any
+// MySQL or MariaDB version this package has data for, whether or not Vitess
+// supports it. Names are compared case-insensitively, as MySQL compares them.
+func IsKnownName(name string) bool {
+	_, ok := knownNames()[strings.ToLower(name)]
+	return ok
+}
+
+// KnownNames returns, sorted, every name IsKnownName reports as known.
+func KnownNames() []string {
+	return slices.Sorted(maps.Keys(knownNames()))
+}
+
+var knownNames = sync.OnceValue(func() map[string]struct{} {
+	names := make(map[string]struct{})
+	for _, vi := range globalVersionInfo {
+		for _, alias := range vi.alias {
+			names[alias.name] = struct{}{}
+			names[alias.charset] = struct{}{}
+		}
+	}
+	for alias := range charsetAliases() {
+		names[alias] = struct{}{}
+	}
+	return names
+})
 
 func makeEnv(version collver) *Environment {
 	env := &Environment{

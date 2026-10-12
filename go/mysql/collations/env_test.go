@@ -71,3 +71,27 @@ func TestParseConnectionCharset(t *testing.T) {
 		require.False(t, IsConnectionCharsetName(name), "name %q", name)
 	}
 }
+
+// TestIsKnownName checks that charset and collation names from every version are
+// known, in any case, including ones Vitess does not support, and that nothing
+// else is.
+func TestIsKnownName(t *testing.T) {
+	for _, name := range []string{
+		"utf8mb4", "UTF8MB4", "utf8mb4_0900_ai_ci", "utf8", "utf8mb3", "utf8_general_ci",
+		"binary", "BINARY", "ascii", "latin1_swedish_ci",
+		// MariaDB only.
+		"utf8mb3_croatian_mysql561_ci", "ucs2_croatian_mysql561_ci",
+	} {
+		require.True(t, IsKnownName(name), name)
+	}
+	for _, name := range []string{"", "utf9", "utf8mb4 ", "`utf8mb4`", "innodb", "select"} {
+		require.False(t, IsKnownName(name), name)
+	}
+
+	names := KnownNames()
+	require.Greater(t, len(names), 300)
+	for _, name := range names {
+		require.True(t, IsKnownName(name), name)
+		require.Regexp(t, "^[a-z][a-z0-9_]*$", name)
+	}
+}

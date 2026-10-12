@@ -25,6 +25,7 @@ import (
 	"strconv"
 	"strings"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/mysql/decimal"
 	"vitess.io/vitess/go/sqltypes"
@@ -2591,51 +2592,61 @@ func encodeDatabaseOptionValue(option DatabaseOption) string {
 	return encodeSQLName(option.Value)
 }
 
-// isBareName reports whether name, written unquoted into a charset, collation,
-// engine, tablespace or index type position, reads back as that same name, in
-// which case it needs no quoting on the way out.
+// isBareName reports whether name may be written unquoted into a charset,
+// collation, engine, tablespace or index type position.
+//
+// Only a name from a closed catalogue stays bare: a charset or collation name of
+// any MySQL or MariaDB version, or one of bareObjectNames. Those are the names
+// generated DDL would otherwise churn on, and each is a plain word that both
+// this grammar and MySQL read back as that same name; TestEveryKnownNameRoundTrips
+// holds them to it. Everything else is back-quoted -- a tablespace a user named,
+// an engine Vitess does not know -- so whether a name is safe bare never depends
+// on which words this grammar or some MySQL version treats as keywords.
+//
+// `binary` is the one reserved word in the catalogue. The charset and collation
+// rules take it in their own right, as MySQL's do, and encodeObjectName quotes it
+// for the positions that do not.
 func isBareName(name string) bool {
-	if name == "" {
-		return false
-	}
-	for i := 0; i < len(name); i++ {
-		switch c := name[i]; {
-		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c == '_':
-		case c >= '0' && c <= '9':
-			if i == 0 {
-				return false
-			}
-		default:
-			return false
-		}
-	}
-	// The name scans as a single word, but a word the tokenizer knows as a
-	// keyword comes back as that keyword's token rather than as an ID. Every
-	// position these names are written into takes sql_id or table_id -- an ID
-	// or a non-reserved keyword -- so any other keyword has to be quoted or the
-	// regenerated statement will not parse: a reserved word, a keyword that is
-	// in neither list (`cast`, `release`), or a charset introducer (`_utf8mb4`).
-	//
-	// BINARY is the exception: the charset and collation rules accept it in its
-	// own right, exactly as MySQL's charset_name and collation_name do, and it
-	// is the only such keyword that is also a real charset or collation name.
-	// encodeObjectName quotes it for the positions that lack that alternative.
-	tok, isKeyword := keywordLookupTable.LookupString(name)
-	if isKeyword && tok == BINARY {
+	lower := strings.ToLower(name)
+	if _, ok := bareObjectNames[lower]; ok {
 		return true
 	}
-	// Non-reserved to this grammar is not non-reserved to MySQL, which still
-	// has to accept what we write: it rejects `int`, `char` and the like bare,
-	// although the grammar here reads them as identifiers. A word MySQL reserves
-	// that this tokenizer does not know as a keyword is quoted just the same.
-	if _, reserved := mysqlReservedWords[strings.ToLower(name)]; reserved {
-		return false
-	}
-	if !isKeyword {
-		return true
-	}
-	_, nonReserved := nonReservedKeywords[tok]
-	return nonReserved
+	return collations.IsKnownName(lower)
+}
+
+// bareObjectNames holds the storage engine, index type, full-text parser and
+// InnoDB tablespace names that isBareName lets through, lower-cased.
+var bareObjectNames = map[string]struct{}{
+	// MySQL's storage engines and their aliases, and Percona Server's and
+	// MariaDB's.
+	"innodb":             {},
+	"myisam":             {},
+	"memory":             {},
+	"heap":               {},
+	"csv":                {},
+	"archive":            {},
+	"blackhole":          {},
+	"mrg_myisam":         {},
+	"merge":              {},
+	"federated":          {},
+	"example":            {},
+	"ndb":                {},
+	"ndbcluster":         {},
+	"ndbinfo":            {},
+	"performance_schema": {},
+	"rocksdb":            {},
+	"tokudb":             {},
+	"aria":               {},
+	// Index types.
+	"btree": {},
+	"hash":  {},
+	"rtree": {},
+	// The full-text parser plugins MySQL ships.
+	"ngram": {},
+	"mecab": {},
+	// InnoDB's own tablespaces.
+	"innodb_system":         {},
+	"innodb_file_per_table": {},
 }
 
 // ToString prints the list of table expressions as a string
