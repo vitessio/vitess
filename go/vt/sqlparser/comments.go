@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
