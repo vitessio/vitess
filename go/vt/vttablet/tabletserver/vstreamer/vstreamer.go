@@ -1374,7 +1374,7 @@ func (vs *vstreamer) getValues(plan *streamerPlan, data []byte,
 				slog.String("table", plan.Table.Name),
 				slog.String("column", plan.Table.Fields[colNum].Name),
 				slog.Int("col_num", colNum),
-				slog.Any("fields", plan.Table.Fields),
+				slog.String("fields", fmt.Sprint(plan.Table.Fields)),
 				slog.Any("values", values),
 				slog.Any("error", err))
 			return nil, nil, false, vterrors.Wrapf(err, "failed to extract row's value for column %s from binlog event",
