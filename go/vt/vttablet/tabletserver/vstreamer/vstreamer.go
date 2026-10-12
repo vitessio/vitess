@@ -1554,7 +1554,7 @@ func wrapError(err error, stopPos replication.Position, vse *Engine) error {
 		vse.errorCounts.Add("StreamEnded", 1)
 		log.Error("stream (at source tablet) error, position includes the GTID we failed to process",
 			slog.String("position", stopPos.String()),
-			slog.String("code", vterrors.Code(err).String()),
+			slog.String("error_code", vterrors.Code(err).String()),
 			slog.Any("error", err))
 		// Wrap rather than reformat so that the error's code survives: the
 		// vplayer only treats FAILED_PRECONDITION stream errors as terminal.
