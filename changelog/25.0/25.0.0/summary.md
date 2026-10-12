@@ -77,6 +77,7 @@
         - [Optional gRPC TLS: connections are counted by transport](#grpc-optional-tls-connections)
         - [ORCA metrics now report QPS and EPS](#grpc-orca-qps)
         - [Statements are trimmed of MySQL's space characters only](#sqlparser-mysql-space-set)
+        - [Charset and collation names are quoted when regenerated](#sqlparser-charset-name-quoting)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -861,3 +862,15 @@ Clients using gRPC's standard `weighted_round_robin` policy with `enableOobLoadR
 #### <a id="sqlparser-mysql-space-set"/>Statements are trimmed of MySQL's space characters only</a>
 
 VTGate and VTTablet trim whitespace from the start and end of a statement before they parse it. They used to trim every Unicode space character, including the no-break space (U+00A0), which MySQL does not treat as a space. They now trim only the characters MySQL treats as spaces: space, tab, line feed, vertical tab, form feed and carriage return. A statement that starts or ends with any other space character is now rejected with a syntax error, as MySQL rejects it, where Vitess used to remove the character and run the statement. Clients that send such characters must remove them before upgrading.
+
+#### <a id="sqlparser-charset-name-quoting"/>Charset and collation names are quoted when regenerated</a>
+
+A charset, collation, engine, tablespace or full-text parser name is now decoded when parsed, and written back as a single token when Vitess regenerates the statement: bare when it is a known charset, collation, engine, index type or parser name, back-quoted otherwise.
+
+User-visible consequences:
+
+- **A quoted name is normalized.** `COLLATE 'utf8_bin'` regenerates as `COLLATE utf8_bin` — the quoted and unquoted spellings mean the same name, and the decoded form is what is stored. Anything comparing the printed form of these statements byte for byte sees the new spelling.
+- **Only known names stay bare.** A charset or collation name of any MySQL or MariaDB version, a known storage engine such as `InnoDB` or `memory`, the `BTREE`, `HASH` and `RTREE` index types, the `ngram` and `mecab` parsers, and the `innodb_system` and `innodb_file_per_table` tablespaces are written back as they were spelled. Any other name is back-quoted: `TABLESPACE ts` regenerates as ``TABLESPACE `ts` ``, and so does an engine Vitess does not know or a keyword used as a name. `WITH PARSER` accepts only a plain identifier, so a known name that is a keyword is quoted there: ``WITH PARSER `memory` `` keeps its quoting where `ENGINE memory` does not. `binary` is still bare where the grammar has a `BINARY` alternative, except directly before the `BINARY` attribute: `CHARACTER SET 'binary' BINARY` regenerates as ``CHARACTER SET `binary` BINARY``.
+- **`COLLATE binary` in an expression is quoted.** `expr COLLATE binary` regenerates as ``expr COLLATE `binary` ``, because MySQL's expression `COLLATE` only accepts `binary` quoted. Column, table and database `COLLATE binary` and `CHARACTER SET binary` stay bare.
+- **An empty charset, collation, engine or partition tablespace name is rejected.** `CHARACTER SET ''` and `COLLATE ''` on a column, a table, `ALTER TABLE ... CONVERT TO`, `CAST`/`CONVERT`, `CONVERT ... USING`, `CHAR ... USING`, `SELECT ... INTO OUTFILE` and an expression, `ENGINE ''` on a table or a partition, and a partition's `TABLESPACE ''` no longer parse. An empty name in these positions is indistinguishable from the clause being absent, so it would previously have been dropped or mangled and a statement MySQL rejects could have become a valid, different one. Non-DDL statements get the error directly; DDL falls back to a partial parse, so the client's own text is forwarded and MySQL rejects it. `SET NAMES ... COLLATE ''` and `SET CHARACTER SET ... COLLATE ''`, which used to parse and discard the collation, are now parse errors too; MySQL rejects both. `CREATE`/`ALTER DATABASE ... CHARACTER SET ''` and `COLLATE ''` are unchanged: they still parse and are written back as `''`.
+- **`ENCRYPTION` requires a quoted value.** `CREATE`/`ALTER DATABASE ... ENCRYPTION N` no longer fully parses, matching MySQL, which only accepts `'Y'` or `'N'` as a quoted string. Such a statement now falls back to a partial parse rather than being regenerated into a spelling MySQL would refuse.
