@@ -34,6 +34,7 @@ import (
 
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/grpctmclient"
@@ -2379,7 +2380,7 @@ func TestStimulatePrimaryThrottler(t *testing.T) {
 			expectReads: 0,
 		},
 		{
-			name:         "shard record ahead of the tablet record",
+			name:         "shard record names a tablet that is no longer primary",
 			primaryAlias: primary,
 			tabletTypes:  map[uint32]topodatapb.TabletType{101: topodatapb.TabletType_REPLICA},
 			expectReads:  1,
@@ -2422,7 +2423,7 @@ func TestStimulatePrimaryThrottler(t *testing.T) {
 				dormantPeriod: time.Minute,
 			}
 
-			err := throttler.stimulatePrimaryThrottler(context.Background(), tmClient)
+			err := throttler.stimulatePrimaryThrottler(t.Context(), tmClient)
 			if tcase.expectErr != nil {
 				require.ErrorIs(t, err, tcase.expectErr)
 			} else {
@@ -2438,8 +2439,7 @@ func TestStimulatePrimaryThrottler(t *testing.T) {
 				return
 			}
 			require.Len(t, tmClient.checked, 1)
-			assert.Equal(t, tcase.expectTarget.Cell, tmClient.checked[0].Alias.Cell)
-			assert.Equal(t, tcase.expectTarget.Uid, tmClient.checked[0].Alias.Uid)
+			assert.Equal(t, topoproto.TabletAliasString(tcase.expectTarget), topoproto.TabletAliasString(tmClient.checked[0].Alias))
 		})
 	}
 }
