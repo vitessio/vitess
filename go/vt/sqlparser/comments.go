@@ -295,6 +295,11 @@ var defaultMarginParser = func() *Parser {
 // callers that plan or authorize the query must split it with the parser that
 // parses it.
 func (p *Parser) SplitMarginComments(sql string) (query string, comments MarginComments) {
+	// Earlier releases removed every Unicode space, such as a no-break space,
+	// from both ends of a statement, and this release keeps doing so. The rest of
+	// the split and every caller only see the trimmed text, so nothing reads the
+	// removed characters.
+	sql = strings.TrimFunc(sql, unicode.IsSpace)
 	start, end, newlineFirst := p.marginBounds(sql)
 	comments = MarginComments{
 		Leading:  strings.TrimLeft(sql[:start], sqlSpaceChars),
@@ -322,10 +327,7 @@ func trimQuery(query string) string {
 
 // StripLeadingComments trims the SQL string and removes any leading comments
 func StripLeadingComments(sql string) string {
-	// Trim with the SQL space set, not unicode.IsSpace: a no-break space is part
-	// of an identifier to MySQL, so removing one here would change the statement
-	// this reports on.
-	sql = strings.Trim(sql, sqlSpaceChars)
+	sql = strings.TrimFunc(sql, unicode.IsSpace)
 
 	for hasCommentPrefix(sql) {
 		switch sql[0] {
@@ -349,7 +351,7 @@ func StripLeadingComments(sql string) string {
 			sql = sql[index+1:]
 		}
 
-		sql = strings.Trim(sql, sqlSpaceChars)
+		sql = strings.TrimFunc(sql, unicode.IsSpace)
 	}
 
 	return sql

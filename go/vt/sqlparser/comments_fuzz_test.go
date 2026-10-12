@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"unicode"
 
 	"github.com/stretchr/testify/require"
 )
@@ -171,6 +172,8 @@ func isCommentsAndWhitespaceOnly(parser *Parser, text string) bool {
 // FuzzSplitMarginCommentsSkipsTokenizer checks that SplitMarginComments, which
 // reads only the leading comments of text that does not end with '*/', splits
 // every input the tokenizer accepts exactly where tokenizedMarginBounds does.
+// SplitMarginComments first removes the Unicode spaces at both ends of the
+// input, so tokenizedMarginBounds reads the input without them too.
 func FuzzSplitMarginCommentsSkipsTokenizer(f *testing.F) {
 	seeds := []string{
 		"/* a */ select 1",
@@ -189,7 +192,8 @@ func FuzzSplitMarginCommentsSkipsTokenizer(f *testing.F) {
 		f.Add(s)
 	}
 	parser := NewTestParser()
-	f.Fuzz(func(t *testing.T, sql string) {
+	f.Fuzz(func(t *testing.T, input string) {
+		sql := strings.TrimFunc(input, unicode.IsSpace)
 		start, end, newlineFirst, ok := parser.tokenizedMarginBounds(sql)
 		if !ok {
 			return
@@ -201,9 +205,9 @@ func FuzzSplitMarginCommentsSkipsTokenizer(f *testing.F) {
 		if newlineFirst {
 			want.Trailing = "\n" + want.Trailing
 		}
-		query, comments := parser.SplitMarginComments(sql)
+		query, comments := parser.SplitMarginComments(input)
 		require.Equal(t, strings.Trim(sql[start:end], sqlSpaceChars+";"), query,
-			"query differs from the tokenizer's (from %q)", sql)
-		require.Equal(t, want, comments, "margins differ from the tokenizer's (from %q)", sql)
+			"query differs from the tokenizer's (from %q)", input)
+		require.Equal(t, want, comments, "margins differ from the tokenizer's (from %q)", input)
 	})
 }

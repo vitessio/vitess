@@ -327,13 +327,22 @@ func TestSplitComments(t *testing.T) {
 		outLeadingComments:  "",
 		outTrailingComments: " /*a*/\f/*b*/",
 	}, {
-		// A no-break space is not a space for MySQL. MySQL reads it as part of an
-		// unquoted identifier and then reports an unknown column. Therefore the
-		// character stays in the query, and the parser rejects the query in the
-		// same way that MySQL does. Vitess must not remove the character and then
-		// run a statement that MySQL refuses.
-		input:               "select 1 /*rule-tag*/\u00a0",
-		outSQL:              "select 1 /*rule-tag*/\u00a0",
+		// Unicode spaces, such as a no-break space, are removed from both ends
+		// of the statement, as earlier releases did.
+		input:               "\u00a0select 1 /*rule-tag*/\u00a0",
+		outSQL:              "select 1",
+		outLeadingComments:  "",
+		outTrailingComments: " /*rule-tag*/",
+	}, {
+		input:               "\u00a0/* a */ select 1\u2028",
+		outSQL:              "select 1",
+		outLeadingComments:  "/* a */ ",
+		outTrailingComments: "",
+	}, {
+		// Inside the statement, a no-break space is not a space. The tokenizer
+		// rejects it, so nothing is split off, and the parser rejects the query.
+		input:               "select 1\u00a0/*rule-tag*/",
+		outSQL:              "select 1\u00a0/*rule-tag*/",
 		outLeadingComments:  "",
 		outTrailingComments: "",
 	}}
@@ -494,11 +503,9 @@ a`,
 		input:  "\v\f select 1 \r\n",
 		outSQL: "select 1",
 	}, {
-		// A no-break space is not one of them. MySQL reads it as part of an
-		// unquoted identifier, so removing it here would report on a statement
-		// that is not the one the client sent.
-		input:  " select 1",
-		outSQL: " select 1",
+		// Unicode spaces, such as a no-break space, are removed as well.
+		input:  "\u00a0select 1\u00a0",
+		outSQL: "select 1",
 	}}
 	for _, testCase := range testCases {
 		gotSQL := StripLeadingComments(testCase.input)
