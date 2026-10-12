@@ -421,7 +421,7 @@ func BuildSettingQuery(settings []string, parser *sqlparser.Parser, rejectSubque
 	var resetSetExprs sqlparser.SetExprs
 	defaultValue := &sqlparser.Default{}
 	for i, setting := range settings {
-		stmt, err := parser.ParseWithoutLogging(setting)
+		stmt, err := parser.Parse(setting)
 		if err != nil {
 			// Parser errors can include the token near the failure, so do not wrap them.
 			return "", "", vterrors.NewErrorf(vterrors.Code(err), vterrors.ErrState(err), "[BUG]: failed to parse system setting at position %d", i+1)
