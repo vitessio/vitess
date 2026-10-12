@@ -84,6 +84,10 @@ const (
 	// could not be validated against the topology at startup (topology unreachable). Recovery
 	// is held until a subsequent refresh cycle completes validation.
 	RecoverySkipCellNoRecoveryUnvalidated
+	// RecoverySkipReplicaUnreachable is used when a replica's problem was detected from the
+	// MySQL state VTOrc last read, but VTOrc's last check of the replica failed: the state is
+	// stale, and a repair, which needs the same tablet, could only fail.
+	RecoverySkipReplicaUnreachable
 )
 
 // String represents a RecoverySkip as a string.
@@ -103,6 +107,8 @@ func (rsc RecoverySkipCode) String() string {
 		return "CellNoRecovery"
 	case RecoverySkipCellNoRecoveryUnvalidated:
 		return "CellNoRecoveryUnvalidated"
+	case RecoverySkipReplicaUnreachable:
+		return "ReplicaUnreachable"
 	default:
 		return "None"
 	}
@@ -740,6 +746,9 @@ func getCheckAndRecoverFunctionCode(analysisEntry *inst.DetectionAnalysis) (reco
 	// replica
 	case inst.NotConnectedToPrimary, inst.ConnectedToWrongPrimary, inst.ReplicationStopped, inst.ReplicaIsWritable,
 		inst.ReplicaSemiSyncMustBeSet, inst.ReplicaSemiSyncMustNotBeSet, inst.ReplicaMisconfigured:
+		if !analysisEntry.LastCheckValid {
+			recoverySkipCode = RecoverySkipReplicaUnreachable
+		}
 		recoveryFunc = fixReplicaFunc
 	// primary, non actionable
 	case inst.DeadPrimaryAndReplicas:

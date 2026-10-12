@@ -112,12 +112,6 @@ func (dap *DetectionAnalysisProblem) HasMatch(a *DetectionAnalysis, ca *clusterA
 }
 
 // detectionAnalysisProblems contains all possible problems to match during detection analysis.
-//
-// The problems that VTOrc fixes by repairing a replica's MySQL state (fixReplica)
-// match only while the replica's last check is valid. When VTOrc can no longer
-// read a replica's MySQL, for example because its mysqld is down, the state it
-// last read is stale, and repairing the replica can only fail, again on every
-// recovery cycle.
 var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 	// InvalidPrimary and InvalidReplica
 	{
@@ -257,7 +251,7 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 			Priority:    detectionAnalysisPriorityMedium,
 		},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
-			return topo.IsReplicaType(a.TabletType) && a.LastCheckValid && !a.IsReadOnly
+			return topo.IsReplicaType(a.TabletType) && !a.IsReadOnly
 		},
 	},
 
@@ -295,7 +289,7 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 		},
 		BeforeAnalyses: []AnalysisCode{PrimarySemiSyncMustBeSet},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
-			return topo.IsReplicaType(a.TabletType) && a.LastCheckValid && !a.IsPrimary && policy.IsReplicaSemiSync(ca.durability, primary, tablet) && !a.SemiSyncReplicaEnabled
+			return topo.IsReplicaType(a.TabletType) && !a.IsPrimary && policy.IsReplicaSemiSync(ca.durability, primary, tablet) && !a.SemiSyncReplicaEnabled
 		},
 	},
 	{
@@ -306,7 +300,7 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 		},
 		AfterAnalyses: []AnalysisCode{PrimarySemiSyncMustNotBeSet},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
-			return topo.IsReplicaType(a.TabletType) && a.LastCheckValid && !a.IsPrimary && !policy.IsReplicaSemiSync(ca.durability, primary, tablet) && a.SemiSyncReplicaEnabled
+			return topo.IsReplicaType(a.TabletType) && !a.IsPrimary && !policy.IsReplicaSemiSync(ca.durability, primary, tablet) && a.SemiSyncReplicaEnabled
 		},
 	},
 	{
@@ -385,7 +379,7 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 		},
 		BeforeAnalyses: []AnalysisCode{PrimarySemiSyncBlocked},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
-			return topo.IsReplicaType(a.TabletType) && a.LastCheckValid && !a.IsPrimary && a.ReplicationStopped
+			return topo.IsReplicaType(a.TabletType) && !a.IsPrimary && a.ReplicationStopped
 		},
 	},
 	{
@@ -395,7 +389,7 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 			Priority:    detectionAnalysisPriorityMedium,
 		},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
-			return topo.IsReplicaType(a.TabletType) && a.LastCheckValid && a.IsPrimary
+			return topo.IsReplicaType(a.TabletType) && a.IsPrimary
 		},
 	},
 	{
@@ -405,7 +399,7 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 			Priority:    detectionAnalysisPriorityMedium,
 		},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
-			return topo.IsReplicaType(a.TabletType) && a.LastCheckValid && !a.IsPrimary && math.Round(a.HeartbeatInterval*2) != float64(a.ReplicaNetTimeout)
+			return topo.IsReplicaType(a.TabletType) && !a.IsPrimary && math.Round(a.HeartbeatInterval*2) != float64(a.ReplicaNetTimeout)
 		},
 	},
 	{
@@ -415,7 +409,7 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 			Priority:    detectionAnalysisPriorityMedium,
 		},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
-			return topo.IsReplicaType(a.TabletType) && a.LastCheckValid && !a.IsPrimary && ca.primaryAlias != nil && !topoproto.TabletAliasEqual(a.AnalyzedInstancePrimaryAlias, ca.primaryAlias)
+			return topo.IsReplicaType(a.TabletType) && !a.IsPrimary && ca.primaryAlias != nil && !topoproto.TabletAliasEqual(a.AnalyzedInstancePrimaryAlias, ca.primaryAlias)
 		},
 	},
 	// Unreachable primary checks

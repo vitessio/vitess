@@ -391,6 +391,7 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 				Analysis:         inst.ReplicationStopped,
 				AnalyzedKeyspace: keyspace,
 				AnalyzedShard:    shard,
+				LastCheckValid:   true,
 			},
 			wantRecoveryFunction: fixReplicaFunc,
 		}, {
@@ -482,6 +483,31 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 			require.Equal(t, tt.wantRecoveryFunction, gotFunc)
 			require.Equal(t, tt.wantRecoverySkipCode.String(), recoverySkipCode.String())
 		})
+	}
+
+	// A replica problem is repaired only while VTOrc's last check of the replica is
+	// valid. Otherwise the problem was detected from stale MySQL state, and the
+	// repair, which needs the same tablet, could only fail.
+	for _, analysis := range []inst.AnalysisCode{
+		inst.NotConnectedToPrimary, inst.ConnectedToWrongPrimary, inst.ReplicationStopped, inst.ReplicaIsWritable,
+		inst.ReplicaSemiSyncMustBeSet, inst.ReplicaSemiSyncMustNotBeSet, inst.ReplicaMisconfigured,
+	} {
+		for _, lastCheckValid := range []bool{true, false} {
+			t.Run(fmt.Sprintf("%s with a valid last check: %t", analysis, lastCheckValid), func(t *testing.T) {
+				gotFunc, recoverySkipCode := getCheckAndRecoverFunctionCode(&inst.DetectionAnalysis{
+					Analysis:         analysis,
+					AnalyzedKeyspace: keyspace,
+					AnalyzedShard:    shard,
+					LastCheckValid:   lastCheckValid,
+				})
+				require.Equal(t, fixReplicaFunc, gotFunc)
+				wantSkipCode := RecoverySkipNone
+				if !lastCheckValid {
+					wantSkipCode = RecoverySkipReplicaUnreachable
+				}
+				require.Equal(t, wantSkipCode.String(), recoverySkipCode.String())
+			})
+		}
 	}
 }
 
@@ -693,6 +719,7 @@ func TestRecheckPrimaryHealth(t *testing.T) {
 				Analysis:              analysis,
 				AnalyzedKeyspace:      "ks",
 				AnalyzedShard:         "0",
+				LastCheckValid:        true,
 			}, []string{"ks", "0", ""}, func(*topodatapb.TabletAlias, bool) {
 				// the implementation for DiscoverInstance is not required because we are mocking the db response.
 			})
@@ -1742,6 +1769,7 @@ func TestCellsNoRecoveryGateSkip(t *testing.T) {
 				AnalyzedCell:          "zone1",
 				AnalyzedKeyspace:      "ks",
 				AnalyzedShard:         "0",
+				LastCheckValid:        true,
 			},
 			cellsToSet: []string{"zone1"},
 			wantSkip:   true,
