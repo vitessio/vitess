@@ -119,7 +119,7 @@ func init() {
 
 func registerThrottlerFlags(fs *pflag.FlagSet) {
 	utils.SetFlagStringVar(fs, &throttleTabletTypes, "throttle-tablet-types", throttleTabletTypes, "Comma separated VTTablet types to be considered by the throttler. default: 'replica'. example: 'replica,rdonly'. 'replica' always implicitly included")
-	utils.SetFlagDurationVar(fs, &throttlerInventoryRefreshInterval, "throttler-inventory-refresh-interval", throttlerInventoryRefreshInterval, "How often the primary's throttler re-reads its shard's tablet records from the topo to find the tablets to probe. Each refresh reads the shard record, the replication graph in every cell, and every tablet record in the shard, so a longer interval reduces topo load. Tablets that join or leave the shard, or change type, are noticed up to this much later. A tablet that becomes primary refreshes immediately. Values below 10s are raised to 10s.")
+	utils.SetFlagDurationVar(fs, &throttlerInventoryRefreshInterval, "throttler-inventory-refresh-interval", throttlerInventoryRefreshInterval, "How often the primary's throttler re-reads its shard's tablet records from the topo to find the tablets to probe. Each refresh reads the shard record, the replication graph in every cell, and every tablet record in the shard, so a longer interval reduces topo load. Tablets that join or leave the shard, or change type, are noticed up to this much later. A tablet that becomes primary, or stops being primary, refreshes immediately. Values below 10s are raised to 10s.")
 }
 
 // inventoryRefreshIntervalFromFlag returns --throttler-inventory-refresh-interval, raised to the default
@@ -411,6 +411,24 @@ func (throttler *Throttler) WatchSrvKeyspaceCallback(srvks *topodatapb.SrvKeyspa
 	return true
 }
 
+// updateInventoryMetricThresholds sets the inventory threshold of every registered metric from its default,
+// or from throttler.MetricsThreshold for the metric used as default, then converges the metric thresholds.
+// It runs on every inventory refresh, and whenever a throttler config is applied, so that a new threshold
+// or custom query takes effect immediately rather than on the next refresh.
+func (throttler *Throttler) updateInventoryMetricThresholds() {
+	metricNameUsedAsDefault := throttler.metricNameUsedAsDefault()
+	metricsThreshold := throttler.GetMetricsThreshold()
+	for metricName, selfMetric := range base.RegisteredSelfMetrics {
+		threshold := selfMetric.DefaultThreshold()
+		if (metricName == metricNameUsedAsDefault || metricName == base.DefaultMetricName) && metricsThreshold != 0 {
+			// backwards compatibility to v20:
+			threshold = metricsThreshold
+		}
+		throttler.metricThresholds.Set(inventoryPrefix+metricName.String(), threshold, cache.DefaultExpiration)
+	}
+	throttler.convergeMetricThresholds()
+}
+
 // convergeMetricThresholds looks at metric thresholds as defined by:
 //   - inventory (also includes changes to throttler.MetricsThreshold). This always includes all known metrics
 //     ie lag, threads_running, etc...
@@ -496,7 +514,8 @@ func (throttler *Throttler) applyThrottlerConfig(ctx context.Context, throttlerC
 				throttler.metricThresholds.Delete(throttlerConfigPrefix + metricName.String())
 			}
 		}
-		throttler.convergeMetricThresholds()
+		// Threshold and CustomQuery above determine the inventory thresholds, so recalculate them now.
+		throttler.updateInventoryMetricThresholds()
 	}
 	if throttlerConfig.Enabled {
 		go throttler.Enable()
@@ -796,19 +815,16 @@ func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 					shouldBeLeader := throttler.IsOpen() && throttler.tabletTypeFunc() == topodatapb.TabletType_PRIMARY
 
 					isLeader := throttler.isLeader.Swap(shouldBeLeader)
-					transitionedIntoLeader := false
 					if shouldBeLeader && !isLeader {
 						log.Info("Throttler: transition into leadership")
-						transitionedIntoLeader = true
-					}
-					if !shouldBeLeader && isLeader {
-						log.Info("Throttler: transition out of leadership")
-					}
-
-					if transitionedIntoLeader {
 						// transitioned into leadership, let's speed up the next 'refresh' and 'collect' ticks
 						go inventoryRefreshTicker.TickNow()
 						throttler.requestHeartbeats()
+					}
+					if !shouldBeLeader && isLeader {
+						log.Info("Throttler: transition out of leadership")
+						// transitioned out of leadership, refresh now so that we stop probing the shard's tablets
+						go inventoryRefreshTicker.TickNow()
 					}
 				}()
 			case <-activeCollectTicker.C:
@@ -1078,17 +1094,7 @@ func (throttler *Throttler) refreshInventory(ctx context.Context) error {
 		}
 	}
 
-	metricNameUsedAsDefault := throttler.metricNameUsedAsDefault()
-	metricsThreshold := throttler.GetMetricsThreshold()
-	for metricName, selfMetric := range base.RegisteredSelfMetrics {
-		threshold := selfMetric.DefaultThreshold()
-		if (metricName == metricNameUsedAsDefault || metricName == base.DefaultMetricName) && metricsThreshold != 0 {
-			// backwards compatibility to v20:
-			threshold = metricsThreshold
-		}
-		throttler.metricThresholds.Set(inventoryPrefix+metricName.String(), threshold, cache.DefaultExpiration)
-	}
-	throttler.convergeMetricThresholds()
+	throttler.updateInventoryMetricThresholds()
 
 	clusterSettingsCopy := throttler.configSettings.MySQLStore
 	// config may dynamically change, but internal structure (config.Settings().MySQLStore.Clusters in our case)

@@ -707,7 +707,7 @@ See [#21139](https://github.com/vitessio/vitess/pull/21139) for details.
 
 A new VTTablet flag, `--throttler-inventory-refresh-interval` (default `10s`, the previous hardcoded value), sets how often the primary's tablet throttler re-reads its shard's tablet records from the topo server to decide which tablets to probe. While the throttler is enabled, every primary does this, whether or not anything is being throttled. Each refresh lists the cells, reads the shard record, reads the replication graph in every cell, and reads every tablet record in the shard. In large keyspaces this adds up to steady load on the topo server.
 
-A longer interval reduces that load. The trade-off is that a tablet joining or leaving the shard, or changing type (for example, a replica that is drained for a backup), is noticed up to one interval later. A tablet that becomes primary refreshes its inventory immediately. The minimum is `10s`: lower values, including zero and negative ones, are raised to it, because refreshes run concurrently and a shorter interval would overlap them.
+A longer interval reduces that load. The trade-off is that a tablet joining or leaving the shard, or changing type (for example, a replica that is drained for a backup), is noticed up to one interval later. A tablet that becomes primary, or stops being primary, refreshes its inventory immediately. Throttler config changes from `UpdateThrottlerConfig`, such as a new threshold or custom query, take effect immediately and do not wait for a refresh. The minimum is `10s`: lower values, including zero and negative ones, are raised to it, because refreshes run concurrently and a shorter interval would overlap them.
 
 **Impact**: None unless the flag is set.
 
