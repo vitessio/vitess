@@ -1374,9 +1374,10 @@ func (vs *vstreamer) getValues(plan *streamerPlan, data []byte,
 				slog.String("table", plan.Table.Name),
 				slog.String("column", plan.Table.Fields[colNum].Name),
 				slog.Int("col_num", colNum),
-				// querypb.Type has no JSON marshaler, so slog.Any would log types as numbers.
+				// Formatted as strings so types render by name; slog.Any would log
+				// querypb.Type as a number and drop the type from each value.
 				slog.String("fields", fmt.Sprint(plan.Table.Fields)),
-				slog.Any("values", values),
+				slog.String("values", fmt.Sprint(values)),
 				slog.Any("error", err))
 			return nil, nil, false, vterrors.Wrapf(err, "failed to extract row's value for column %s from binlog event",
 				plan.Table.Fields[colNum].Name)
