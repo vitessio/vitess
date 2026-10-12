@@ -45,9 +45,10 @@ type Tokenizer struct {
 	multi              bool
 	inVersionedComment bool // true when scanning inside a MySQL versioned comment (/*!...*/)
 
-	Pos    int
-	buf    string
-	parser *Parser
+	Pos       int
+	buf       string
+	parser    *Parser
+	currStart int // start position of current token (set in Scan after skipBlank)
 }
 
 // NewStringTokenizer creates a new Tokenizer for the
@@ -129,6 +130,7 @@ func (tkn *Tokenizer) Scan() (int, string) {
 			tkn.inVersionedComment = false
 			tkn.skipBlank()
 		}
+		tkn.currStart = tkn.Pos
 		switch ch := tkn.cur(); {
 		case ch == '@':
 			tokenID := AT_ID

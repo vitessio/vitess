@@ -1194,32 +1194,8 @@ func (e *Executor) fetchOrCreatePlan(
 
 	// Plans can forward the statement text to MySQL as written, so MySQL must
 	// skip every comment that Vitess skips.
-<<<<<<< HEAD
 	queryString, _ = e.env.Parser().RewriteDoubleSlashComments(queryString)
-	query, comments := sqlparser.SplitMarginComments(queryString)
-||||||| parent of 995a04ae8f (sqlparser: find margin comments with the parser's tokenizer (#21387))
-	queryString, rewritten := e.env.Parser().RewriteDoubleSlashComments(queryString)
-	// Count each executed statement once: a binary protocol prepare is
-	// counted when the statement is executed, and a retry after buffering
-	// shares the statement's logStats. A SQL PREPARE is counted by
-	// PlanPrepareStmt, as the session keeps the rewritten text.
-	if rewritten && isExecutePath && !logStats.DoubleSlashComment {
-		logStats.DoubleSlashComment = true
-		e.countDoubleSlashComment()
-	}
-	query, comments := sqlparser.SplitMarginComments(queryString)
-=======
-	queryString, rewritten := e.env.Parser().RewriteDoubleSlashComments(queryString)
-	// Count each executed statement once: a binary protocol prepare is
-	// counted when the statement is executed, and a retry after buffering
-	// shares the statement's logStats. A SQL PREPARE is counted by
-	// PlanPrepareStmt, as the session keeps the rewritten text.
-	if rewritten && isExecutePath && !logStats.DoubleSlashComment {
-		logStats.DoubleSlashComment = true
-		e.countDoubleSlashComment()
-	}
 	query, comments := e.env.Parser().SplitMarginComments(queryString)
->>>>>>> 995a04ae8f (sqlparser: find margin comments with the parser's tokenizer (#21387))
 	vcursor, _ = e.newVCursor(safeSession, comments, logStats)
 
 	var setVarComment string

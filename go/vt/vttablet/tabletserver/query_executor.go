@@ -366,49 +366,9 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 		}
 	}
 
-<<<<<<< HEAD
 	sql, sqlWithoutComments, err := qre.generateFinalSQL(qre.plan.FullQuery, qre.bindVars)
 	if err != nil {
 		return err
-||||||| parent of 995a04ae8f (sqlparser: find margin comments with the parser's tokenizer (#21387))
-	// Produce the SQL to send to MySQL. Templated plans (SELECT, SHOW, ...)
-	// carry a ParsedQuery that generateFinalSQL resolves with the bind
-	// variables. Plans without one (FLUSH, OPTIMIZE, ... — statements that
-	// can't carry bind variables and that Execute also sends verbatim via
-	// execOther) fall back to the client's original text. The comment-less
-	// form is the stream consolidator's dedup key, so identical queries
-	// consolidate regardless of their margin comments.
-	var sql string
-	var sqlWithoutComments string
-	if qre.plan.FullQuery != nil {
-		var err error
-		sql, sqlWithoutComments, err = qre.generateFinalSQL(qre.plan.FullQuery, qre.bindVars)
-		if err != nil {
-			return err
-		}
-	} else {
-		sql = qre.query
-		sqlWithoutComments, _ = sqlparser.SplitMarginComments(qre.query)
-=======
-	// Produce the SQL to send to MySQL. Templated plans (SELECT, SHOW, ...)
-	// carry a ParsedQuery that generateFinalSQL resolves with the bind
-	// variables. Plans without one (FLUSH, OPTIMIZE, ... — statements that
-	// can't carry bind variables and that Execute also sends verbatim via
-	// execOther) fall back to the client's original text. The comment-less
-	// form is the stream consolidator's dedup key, so identical queries
-	// consolidate regardless of their margin comments.
-	var sql string
-	var sqlWithoutComments string
-	if qre.plan.FullQuery != nil {
-		var err error
-		sql, sqlWithoutComments, err = qre.generateFinalSQL(qre.plan.FullQuery, qre.bindVars)
-		if err != nil {
-			return err
-		}
-	} else {
-		sql = qre.query
-		sqlWithoutComments, _ = qre.tsv.env.Parser().SplitMarginComments(qre.query)
->>>>>>> 995a04ae8f (sqlparser: find margin comments with the parser's tokenizer (#21387))
 	}
 
 	var replaceKeyspace string
