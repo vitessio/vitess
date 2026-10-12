@@ -1292,7 +1292,7 @@ func (e *Executor) fetchOrCreatePlan(
 		logStats.DoubleSlashComment = true
 		e.countDoubleSlashComment()
 	}
-	query, comments := sqlparser.SplitMarginComments(queryString)
+	query, comments := e.env.Parser().SplitMarginComments(queryString)
 	vcursor, _ = e.newVCursor(safeSession, comments, logStats)
 
 	var setVarComment string
