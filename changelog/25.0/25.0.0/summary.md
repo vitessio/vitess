@@ -62,6 +62,7 @@
         - [ApplySchema session variables](#vttablet-applyschema-session-variables)
         - [Table ACL: statements whose tables cannot be determined are denied under strict table ACL](#vttablet-table-acl-undetermined-table-set)
         - [Table ACL: reads embedded in non-SELECT statements are now checked](#vttablet-table-acl-embedded-reads)
+        - [New `--throttler-inventory-refresh-interval` flag](#vttablet-throttler-inventory-refresh-interval)
     - **[VTCtld](#minor-changes-vtctld)**
         - [MySQL version-aware reparent candidate election](#vtctld-version-aware-reparent)
     - **[Backup/Restore](#minor-changes-backup)**
@@ -704,6 +705,13 @@ Connection settings — the SET statements vtgate attaches to a session's querie
 
 See [#21139](https://github.com/vitessio/vitess/pull/21139) for details.
 
+#### <a id="vttablet-throttler-inventory-refresh-interval"/>New `--throttler-inventory-refresh-interval` flag</a>
+
+A new VTTablet flag, `--throttler-inventory-refresh-interval` (default `10s`, the previous hardcoded value), sets how often the primary's tablet throttler re-reads its shard's tablet records from the topo server to decide which tablets to probe. While the throttler is enabled, every primary does this, whether or not anything is being throttled. Each refresh lists the cells, reads the shard record, reads the replication graph in every cell, and reads every tablet record in the shard. In large keyspaces this adds up to steady load on the topo server.
+
+A longer interval reduces that load. The trade-off is that a tablet joining or leaving the shard, or changing type (for example, a replica that is drained for a backup), is noticed up to one interval later. A tablet that becomes primary, or stops being primary, refreshes its inventory immediately. Throttler config changes from `UpdateThrottlerConfig`, such as a new threshold or custom query, take effect immediately and do not wait for a refresh. The minimum is `10s`: lower values, including zero and negative ones, are raised to it, because refreshes run concurrently and a shorter interval would overlap them.
+
+**Impact**: The refresh interval is unchanged unless the flag is set. Independently of the flag, a threshold or custom query applied with `UpdateThrottlerConfig` now takes effect immediately, where it previously waited up to `10s` for the next refresh, and a primary that is demoted stops probing its shard's tablets immediately.
 
 ### <a id="minor-changes-vtctld"/>VTCtld</a>
 

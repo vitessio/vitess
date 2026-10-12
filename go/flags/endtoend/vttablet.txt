@@ -387,6 +387,7 @@ Flags:
       --tablet-path string                                               tablet alias
       --tablet-protocol string                                           Protocol to use to make queryservice RPCs to vttablets. (default "grpc")
       --throttle-tablet-types string                                     Comma separated VTTablet types to be considered by the throttler. default: 'replica'. example: 'replica,rdonly'. 'replica' always implicitly included (default "replica")
+      --throttler-inventory-refresh-interval duration                    How often the primary's throttler re-reads its shard's tablet records from the topo to find the tablets to probe. Each refresh reads the shard record, the replication graph in every cell, and every tablet record in the shard, so a longer interval reduces topo load. Tablets that join or leave the shard, or change type, are noticed up to this much later. A tablet that becomes primary, or stops being primary, refreshes immediately. Values below 10s are raised to 10s. (default 10s)
       --topo-consul-lock-delay duration                                  LockDelay for consul session. (default 15s)
       --topo-consul-lock-session-checks string                           List of checks for consul session. (default "serfHealth")
       --topo-consul-lock-session-ttl string                              TTL for consul session.

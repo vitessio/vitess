@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/patrickmn/go-cache"
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -418,9 +419,11 @@ func TestApplyThrottlerConfig(t *testing.T) {
 	})
 	t.Run("metric thresholds", func(t *testing.T) {
 		{
+			// lag is not in MetricThresholds, so it takes Threshold, even though the config disabled
+			// the throttler and no inventory refresh runs after it.
 			val, ok := throttler.metricThresholds.Get("lag")
 			require.True(t, ok)
-			assert.Equal(t, float64(0.75), val)
+			assert.Equal(t, float64(14), val)
 		}
 		{
 			val, ok := throttler.metricThresholds.Get("threads_running")
@@ -2288,5 +2291,150 @@ func TestReplica(t *testing.T) {
 				assert.Contains(t, checkResult.Summary(), testAppName.String()+" is denied access due to")
 			})
 		}()
+	})
+}
+
+// TestInventoryRefreshIntervalFlag verifies that --throttler-inventory-refresh-interval, parsed through the
+// real flag set, reaches the throttler that NewThrottler builds, and that a value below the 10s minimum
+// (including zero and negative values) is raised to it instead of being passed to the refresh ticker.
+func TestInventoryRefreshIntervalFlag(t *testing.T) {
+	tabletTypes, interval := throttleTabletTypes, throttlerInventoryRefreshInterval
+	t.Cleanup(func() {
+		throttleTabletTypes = tabletTypes
+		throttlerInventoryRefreshInterval = interval
+	})
+
+	tcases := []struct {
+		name   string
+		args   []string
+		expect time.Duration
+	}{
+		{name: "default", expect: inventoryRefreshInterval},
+		{name: "set", args: []string{"--throttler-inventory-refresh-interval=1m"}, expect: time.Minute},
+		{name: "the minimum is accepted", args: []string{"--throttler-inventory-refresh-interval=10s"}, expect: inventoryRefreshInterval},
+		{name: "below the minimum is raised", args: []string{"--throttler-inventory-refresh-interval=1ms"}, expect: inventoryRefreshInterval},
+		{name: "zero is raised", args: []string{"--throttler-inventory-refresh-interval=0"}, expect: inventoryRefreshInterval},
+		{name: "negative is raised", args: []string{"--throttler-inventory-refresh-interval=-5s"}, expect: inventoryRefreshInterval},
+	}
+	for i, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			throttlerInventoryRefreshInterval = inventoryRefreshInterval
+			fs := pflag.NewFlagSet("vttablet", pflag.ContinueOnError)
+			registerThrottlerFlags(fs)
+			require.NoError(t, fs.Parse(tcase.args))
+
+			env := tabletenv.NewEnv(vtenv.NewTestEnv(), tabletenv.NewDefaultConfig(), "TestInventoryRefreshIntervalFlag")
+			throttler := NewThrottler(env, nil, nil, &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}, nil,
+				func() topodatapb.TabletType { return topodatapb.TabletType_PRIMARY }, fmt.Sprintf("TestInventoryRefreshPool%d", i))
+			assert.Equal(t, tcase.expect, throttler.inventoryRefreshInterval)
+		})
+	}
+}
+
+// TestApplyThrottlerConfigThresholdsWithoutRefresh verifies that a threshold and a custom query applied through
+// the throttler config take effect immediately, rather than on the next inventory refresh, which in this test
+// does not come for an hour.
+func TestApplyThrottlerConfigThresholdsWithoutRefresh(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	throttler := newTestThrottler()
+	throttler.inventoryRefreshInterval = time.Hour
+
+	lagDefaultThreshold := base.RegisteredSelfMetrics[base.LagMetricName].DefaultThreshold()
+	thresholdOf := func(metricName base.MetricName) any {
+		val, _ := throttler.metricThresholds.Get(metricName.String())
+		return val
+	}
+	runThrottler(t, ctx, throttler, 30*time.Second, func(t *testing.T, ctx context.Context) {
+		defer cancel() // early termination
+		// The refresh at startup has calculated the thresholds from MetricsThreshold.
+		require.Equal(t, 0.75, thresholdOf(base.LagMetricName))
+
+		throttler.applyThrottlerConfig(ctx, &topodatapb.ThrottlerConfig{Threshold: 5})
+		assert.Equal(t, 5.0, thresholdOf(base.LagMetricName))
+
+		throttler.applyThrottlerConfig(ctx, &topodatapb.ThrottlerConfig{Threshold: 20, CustomQuery: "select 17"})
+		assert.Equal(t, 20.0, thresholdOf(base.CustomMetricName))
+		assert.Equal(t, lagDefaultThreshold, thresholdOf(base.LagMetricName))
+	})
+}
+
+// TestInventoryRefreshOnDemotion verifies that a primary that stops being primary refreshes its inventory
+// immediately, and stops probing the shard's tablets, rather than on the next inventory refresh, which in
+// this test does not come for an hour.
+func TestInventoryRefreshOnDemotion(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	throttler := newTestThrottler()
+	throttler.inventoryRefreshInterval = time.Hour
+	var tabletType atomic.Int32
+	tabletType.Store(int32(topodatapb.TabletType_PRIMARY))
+	throttler.tabletTypeFunc = func() topodatapb.TabletType { return topodatapb.TabletType(tabletType.Load()) }
+
+	probesCount := func() int {
+		var count int
+		<-runSerialFunction(t, ctx, throttler, func(context.Context) {
+			count = len(throttler.inventory.ClustersProbes)
+		})
+		return count
+	}
+	runThrottler(t, ctx, throttler, 30*time.Second, func(t *testing.T, ctx context.Context) {
+		defer cancel()                     // early termination
+		require.Equal(t, 3, probesCount()) // self, plus the fake shard's tablets
+
+		tabletType.Store(int32(topodatapb.TabletType_REPLICA))
+		assert.Eventually(t, func() bool { return probesCount() == 1 }, 5*time.Second, 10*time.Millisecond) // self only
+	})
+}
+
+// TestInventoryRefreshRejectsStaleLeadership verifies that probes from a refresh that started in an earlier
+// leadership generation are discarded: a refresh that was in flight while the primary was demoted does not restore the
+// shard's probes, and one that was in flight while it was promoted does not clear them.
+func TestInventoryRefreshRejectsStaleLeadership(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	throttler := newTestThrottler()
+	throttler.inventoryRefreshInterval = time.Hour
+	var tabletType atomic.Int32
+	tabletType.Store(int32(topodatapb.TabletType_PRIMARY))
+	throttler.tabletTypeFunc = func() topodatapb.TabletType { return topodatapb.TabletType(tabletType.Load()) }
+
+	probesCount := func() int {
+		var count int
+		<-runSerialFunction(t, ctx, throttler, func(context.Context) {
+			count = len(throttler.inventory.ClustersProbes)
+		})
+		return count
+	}
+	sendProbes := func(clusterProbes *base.ClusterProbes) {
+		select {
+		case throttler.clusterProbesChan <- clusterProbes:
+		case <-ctx.Done():
+			require.FailNow(t, ctx.Err().Error(), "sending cluster probes")
+		}
+	}
+	runThrottler(t, ctx, throttler, 30*time.Second, func(t *testing.T, ctx context.Context) {
+		defer cancel()                     // early termination
+		require.Equal(t, 3, probesCount()) // self, plus the fake shard's tablets
+		var leaderProbes, replicaProbes base.Probes
+		var leaderGeneration, replicaGeneration int64
+		<-runSerialFunction(t, ctx, throttler, func(context.Context) {
+			leaderProbes = throttler.inventory.ClustersProbes
+			leaderGeneration = throttler.leadershipGeneration.Load()
+		})
+
+		tabletType.Store(int32(topodatapb.TabletType_REPLICA))
+		require.Eventually(t, func() bool { return probesCount() == 1 }, 5*time.Second, 10*time.Millisecond)
+		<-runSerialFunction(t, ctx, throttler, func(context.Context) {
+			replicaProbes = throttler.inventory.ClustersProbes
+			replicaGeneration = throttler.leadershipGeneration.Load()
+		})
+		sendProbes(&base.ClusterProbes{TabletProbes: leaderProbes, LeadershipGeneration: leaderGeneration})
+		assert.Equal(t, 1, probesCount(), "a refresh from before the demotion restored the shard's probes")
+
+		tabletType.Store(int32(topodatapb.TabletType_PRIMARY))
+		require.Eventually(t, func() bool { return probesCount() == 3 }, 5*time.Second, 10*time.Millisecond)
+		sendProbes(&base.ClusterProbes{TabletProbes: replicaProbes, LeadershipGeneration: replicaGeneration})
+		assert.Equal(t, 3, probesCount(), "a refresh from before the promotion cleared the shard's probes")
 	})
 }

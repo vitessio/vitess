@@ -61,6 +61,9 @@ type ClusterProbes struct {
 	IgnoreHostsCount     int
 	IgnoreHostsThreshold float64
 	TabletProbes         Probes
+	// LeadershipGeneration is the throttler's leadership generation when the refresh that produced these
+	// probes started.
+	LeadershipGeneration int64
 }
 
 // NewProbes creates Probes
