@@ -917,7 +917,7 @@ func (node *PartitionDefinitionOptions) FormatFast(buf *TrackedBuffer) {
 	}
 	if node.TableSpace != "" {
 		buf.WriteString(" tablespace ")
-		buf.WriteString(node.TableSpace)
+		buf.WriteString(encodeObjectName(node.TableSpace))
 	}
 	if node.SubPartitionDefinitions != nil {
 		buf.WriteString(" (")
@@ -971,7 +971,7 @@ func (node *SubPartitionDefinitionOptions) FormatFast(buf *TrackedBuffer) {
 	}
 	if node.TableSpace != "" {
 		buf.WriteString(" tablespace ")
-		buf.WriteString(node.TableSpace)
+		buf.WriteString(encodeObjectName(node.TableSpace))
 	}
 }
 
@@ -993,7 +993,7 @@ func (node *PartitionEngine) FormatFast(buf *TrackedBuffer) {
 		buf.WriteString("storage ")
 	}
 	buf.WriteString("engine ")
-	buf.WriteString(node.Name)
+	buf.WriteString(encodeObjectName(node.Name))
 }
 
 // FormatFast formats the node.
@@ -1116,7 +1116,8 @@ func (ts *TableSpec) FormatFast(buf *TrackedBuffer) {
 		if opt.String != "" {
 			if opt.CaseSensitive {
 				buf.WriteByte(' ')
-				buf.WriteString(opt.String)
+				buf.WriteString(encodeTableOptionValue(opt.Name, opt.String))
+				buf.WriteString(opt.Storage)
 			} else {
 				buf.WriteByte(' ')
 				buf.WriteString(opt.String)
@@ -1183,7 +1184,7 @@ func (ct *ColumnType) FormatFast(buf *TrackedBuffer) {
 		buf.WriteByte(' ')
 		buf.WriteString(keywordStrings[SET])
 		buf.WriteByte(' ')
-		buf.WriteString(ct.Charset.Name)
+		buf.WriteString(encodeColumnCharsetName(ct.Charset))
 	}
 	if ct.Charset.Binary {
 		buf.WriteByte(' ')
@@ -1194,7 +1195,7 @@ func (ct *ColumnType) FormatFast(buf *TrackedBuffer) {
 			buf.WriteByte(' ')
 			buf.WriteString(keywordStrings[COLLATE])
 			buf.WriteByte(' ')
-			buf.WriteString(ct.Options.Collate)
+			buf.WriteString(encodeSQLName(ct.Options.Collate))
 		}
 		if ct.Options.Null != nil && ct.Options.As == nil {
 			if *ct.Options.Null {
@@ -1369,7 +1370,7 @@ func (idx *IndexDefinition) FormatFast(buf *TrackedBuffer) {
 		}
 		if opt.String != "" {
 			buf.WriteByte(' ')
-			buf.WriteString(opt.String)
+			buf.WriteString(encodeIndexOptionValue(opt.Name, opt.String))
 		} else if opt.Value != nil {
 			buf.WriteByte(' ')
 			opt.Value.FormatFast(buf)
@@ -2399,7 +2400,7 @@ func (node *CurTimeFuncExpr) FormatFast(buf *TrackedBuffer) {
 func (node *CollateExpr) FormatFast(buf *TrackedBuffer) {
 	buf.printExpr(node, node.Expr, true)
 	buf.WriteString(" collate ")
-	buf.WriteString(node.Collation)
+	buf.WriteString(encodeObjectName(node.Collation))
 }
 
 // FormatFast formats the node.
@@ -2761,7 +2762,7 @@ func (node *CharExpr) FormatFast(buf *TrackedBuffer) {
 	buf.formatExprs(node.Exprs)
 	if node.Charset != "" {
 		buf.WriteString(" using ")
-		buf.WriteString(node.Charset)
+		buf.WriteString(encodeSQLName(node.Charset))
 	}
 	buf.WriteByte(')')
 }
@@ -2827,7 +2828,7 @@ func (node *ConvertUsingExpr) FormatFast(buf *TrackedBuffer) {
 	buf.WriteString("convert(")
 	buf.printExpr(node, node.Expr, true)
 	buf.WriteString(" using ")
-	buf.WriteString(node.Type)
+	buf.WriteString(encodeSQLName(node.Type))
 	buf.WriteByte(')')
 }
 
@@ -2845,7 +2846,7 @@ func (node *ConvertType) FormatFast(buf *TrackedBuffer) {
 	}
 	if node.Charset.Name != "" {
 		buf.WriteString(" character set ")
-		buf.WriteString(node.Charset.Name)
+		buf.WriteString(encodeColumnCharsetName(node.Charset))
 	}
 	if node.Charset.Binary {
 		buf.WriteByte(' ')
@@ -3243,7 +3244,7 @@ func (node *SelectInto) FormatFast(buf *TrackedBuffer) {
 	buf.WriteString(node.FileName)
 	if node.Charset.Name != "" {
 		buf.WriteString(" character set ")
-		buf.WriteString(node.Charset.Name)
+		buf.WriteString(encodeSQLName(node.Charset.Name))
 	}
 	buf.WriteString(node.FormatOption)
 	buf.WriteString(node.ExportOption)
@@ -3267,7 +3268,7 @@ func (node *CreateDatabase) FormatFast(buf *TrackedBuffer) {
 			}
 			buf.WriteString(createOption.Type.ToString())
 			buf.WriteByte(' ')
-			buf.WriteString(createOption.Value)
+			buf.WriteString(encodeDatabaseOptionValue(createOption))
 		}
 	}
 }
@@ -3291,7 +3292,7 @@ func (node *AlterDatabase) FormatFast(buf *TrackedBuffer) {
 			}
 			buf.WriteString(createOption.Type.ToString())
 			buf.WriteByte(' ')
-			buf.WriteString(createOption.Value)
+			buf.WriteString(encodeDatabaseOptionValue(createOption))
 		}
 	}
 }
@@ -3618,10 +3619,10 @@ func (node *RenameColumn) FormatFast(buf *TrackedBuffer) {
 // FormatFast formats the node
 func (node *AlterCharset) FormatFast(buf *TrackedBuffer) {
 	buf.WriteString("convert to character set ")
-	buf.WriteString(node.CharacterSet)
+	buf.WriteString(encodeSQLName(node.CharacterSet))
 	if node.Collate != "" {
 		buf.WriteString(" collate ")
-		buf.WriteString(node.Collate)
+		buf.WriteString(encodeSQLName(node.Collate))
 	}
 }
 
@@ -3715,7 +3716,8 @@ func (node TableOptions) FormatFast(buf *TrackedBuffer) {
 		case option.String != "":
 			if option.CaseSensitive {
 				buf.WriteByte(' ')
-				buf.WriteString(option.String)
+				buf.WriteString(encodeTableOptionValue(option.Name, option.String))
+				buf.WriteString(option.Storage)
 			} else {
 				buf.WriteByte(' ')
 				buf.WriteString(option.String)
