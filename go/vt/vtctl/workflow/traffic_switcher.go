@@ -911,73 +911,28 @@ func (ts *trafficSwitcher) ForAllUIDs(f func(target *MigrationTarget, uid int32)
 }
 
 func (ts *trafficSwitcher) createReverseVReplication(ctx context.Context) error {
+	// Build all of the reverse streams before deleting the existing ones, so
+	// that failing to build them leaves those in place.
+	reverseBlses := make(map[*MigrationTarget]map[int32]*binlogdatapb.BinlogSource)
+	for _, target := range ts.Targets() {
+		reverseBlses[target] = make(map[int32]*binlogdatapb.BinlogSource)
+		for uid := range target.Sources {
+			reverseBls, err := ts.buildReverseBinlogSource(ctx, target, uid)
+			if err != nil {
+				return err
+			}
+			reverseBlses[target][uid] = reverseBls
+		}
+	}
 	if err := ts.deleteReverseVReplication(ctx); err != nil {
 		return err
 	}
 	err := ts.ForAllUIDs(func(target *MigrationTarget, uid int32) error {
-		bls := target.Sources[uid]
-		source := ts.Sources()[bls.Shard]
-		reverseBls := &binlogdatapb.BinlogSource{
-			Keyspace:       ts.TargetKeyspaceName(),
-			Shard:          target.GetShard().ShardName(),
-			TabletType:     bls.TabletType,
-			Filter:         &binlogdatapb.Filter{},
-			OnDdl:          bls.OnDdl,
-			SourceTimeZone: bls.TargetTimeZone,
-			TargetTimeZone: bls.SourceTimeZone,
-		}
-		var err error
-		for _, rule := range bls.Filter.Rules {
-			if rule.Filter == "exclude" {
-				reverseBls.Filter.Rules = append(reverseBls.Filter.Rules, rule)
-				continue
-			}
-			var filter string
-			if strings.HasPrefix(rule.Match, "/") {
-				if ts.SourceKeyspaceSchema().Keyspace.Sharded {
-					filter = key.KeyRangeString(source.GetShard().KeyRange)
-				}
-			} else {
-				var inKeyrange string
-				if ts.SourceKeyspaceSchema().Keyspace.Sharded {
-					vtable, ok := ts.SourceKeyspaceSchema().Tables[rule.Match]
-					if !ok {
-						return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "table %s not found in vschema", rule.Match)
-					}
-					// We currently assume the primary vindex is the best way to filter rows
-					// for the table, which may not always be true.
-					// TODO: handle more of these edge cases explicitly, e.g. sequence tables.
-					switch vtable.Type {
-					case vindexes.TypeReference:
-						// For reference tables there are no vindexes and thus no filter to apply.
-					default:
-						// For non-reference tables we return an error if there's no primary
-						// vindex as it's not clear what to do.
-						if len(vtable.ColumnVindexes) > 0 && len(vtable.ColumnVindexes[0].Columns) > 0 {
-							inKeyrange = fmt.Sprintf(" where in_keyrange(%s, '%s.%s', %s)", sqlparser.String(vtable.ColumnVindexes[0].Columns[0]),
-								ts.SourceKeyspaceName(), vtable.ColumnVindexes[0].Name, encodeString(key.KeyRangeString(source.GetShard().KeyRange)))
-						} else {
-							return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "no primary vindex found for the %s table in the %s keyspace",
-								vtable.Name.String(), ts.SourceKeyspaceName())
-						}
-					}
-				}
-				filter = fmt.Sprintf("select * from %s%s", sqlescape.EscapeID(rule.Match), inKeyrange)
-				if ts.IsMultiTenantMigration() {
-					filter, err = ts.addTenantFilter(ctx, filter)
-					if err != nil {
-						return err
-					}
-				}
-			}
-			reverseBls.Filter.Rules = append(reverseBls.Filter.Rules, &binlogdatapb.Rule{
-				Match:  rule.Match,
-				Filter: filter,
-			})
-		}
+		source := ts.Sources()[target.Sources[uid].Shard]
+		reverseBls := reverseBlses[target][uid]
 		ts.Logger().Infof("Creating reverse workflow vreplication stream on tablet %s: workflow %s, startPos %s",
 			source.GetPrimary().GetAlias(), ts.ReverseWorkflowName(), target.Position)
-		_, err = ts.VReplicationExec(ctx, source.GetPrimary().GetAlias(),
+		_, err := ts.VReplicationExec(ctx, source.GetPrimary().GetAlias(),
 			binlogplayer.CreateVReplicationState(ts.ReverseWorkflowName(), reverseBls, target.Position,
 				binlogdatapb.VReplicationWorkflowState_Stopped, source.GetPrimary().DbName(), ts.workflowType, ts.workflowSubType))
 		if err != nil {
@@ -999,6 +954,72 @@ func (ts *trafficSwitcher) createReverseVReplication(ctx context.Context) error 
 		return nil
 	})
 	return err
+}
+
+// buildReverseBinlogSource builds the binlog source of the reverse stream for
+// the target stream uid.
+func (ts *trafficSwitcher) buildReverseBinlogSource(ctx context.Context, target *MigrationTarget, uid int32) (*binlogdatapb.BinlogSource, error) {
+	bls := target.Sources[uid]
+	source := ts.Sources()[bls.Shard]
+	reverseBls := &binlogdatapb.BinlogSource{
+		Keyspace:       ts.TargetKeyspaceName(),
+		Shard:          target.GetShard().ShardName(),
+		TabletType:     bls.TabletType,
+		Filter:         &binlogdatapb.Filter{},
+		OnDdl:          bls.OnDdl,
+		SourceTimeZone: bls.TargetTimeZone,
+		TargetTimeZone: bls.SourceTimeZone,
+	}
+	var err error
+	for _, rule := range bls.Filter.Rules {
+		if rule.Filter == "exclude" {
+			reverseBls.Filter.Rules = append(reverseBls.Filter.Rules, rule)
+			continue
+		}
+		var filter string
+		if strings.HasPrefix(rule.Match, "/") {
+			if ts.SourceKeyspaceSchema().Keyspace.Sharded {
+				filter = key.KeyRangeString(source.GetShard().KeyRange)
+			}
+		} else {
+			var inKeyrange string
+			if ts.SourceKeyspaceSchema().Keyspace.Sharded {
+				vtable, ok := ts.SourceKeyspaceSchema().Tables[rule.Match]
+				if !ok {
+					return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "table %s not found in vschema", rule.Match)
+				}
+				// We currently assume the primary vindex is the best way to filter rows
+				// for the table, which may not always be true.
+				// TODO: handle more of these edge cases explicitly, e.g. sequence tables.
+				switch vtable.Type {
+				case vindexes.TypeReference:
+					// For reference tables there are no vindexes and thus no filter to apply.
+				default:
+					// For non-reference tables we return an error if there's no primary
+					// vindex as it's not clear what to do.
+					if len(vtable.ColumnVindexes) > 0 && len(vtable.ColumnVindexes[0].Columns) > 0 {
+						inKeyrange = fmt.Sprintf(" where in_keyrange(%s, '%s.%s', %s)", sqlparser.String(vtable.ColumnVindexes[0].Columns[0]),
+							ts.SourceKeyspaceName(), vtable.ColumnVindexes[0].Name, encodeString(key.KeyRangeString(source.GetShard().KeyRange)))
+					} else {
+						return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "no primary vindex found for the %s table in the %s keyspace",
+							vtable.Name.String(), ts.SourceKeyspaceName())
+					}
+				}
+			}
+			filter = fmt.Sprintf("select * from %s%s", sqlescape.EscapeID(rule.Match), inKeyrange)
+			if ts.IsMultiTenantMigration() {
+				filter, err = ts.addTenantFilter(ctx, filter)
+				if err != nil {
+					return nil, err
+				}
+			}
+		}
+		reverseBls.Filter.Rules = append(reverseBls.Filter.Rules, &binlogdatapb.Rule{
+			Match:  rule.Match,
+			Filter: filter,
+		})
+	}
+	return reverseBls, nil
 }
 
 func (ts *trafficSwitcher) addTenantFilter(ctx context.Context, filter string) (string, error) {

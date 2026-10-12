@@ -479,6 +479,45 @@ func TestCancelMigration_TABLES(t *testing.T) {
 	}
 }
 
+// TestCreateReverseVReplicationBuildError confirms that when the reverse
+// streams cannot be built, the existing ones are not deleted first.
+func TestCreateReverseVReplicationBuildError(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
+	defer cancel()
+
+	sourceKeyspace := &testKeyspace{
+		KeyspaceName: "sourceks",
+		ShardNames:   []string{"0"},
+	}
+	targetKeyspace := &testKeyspace{
+		KeyspaceName: "targetks",
+		ShardNames:   []string{"0"},
+	}
+	env := newTestEnv(t, ctx, defaultCellName, sourceKeyspace, targetKeyspace)
+	defer env.close()
+	env.tmc.schema = map[string]*tabletmanagerdatapb.SchemaDefinition{
+		"t1": {
+			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+				{Name: "t1", Schema: "CREATE TABLE t1 (id BIGINT, PRIMARY KEY (id))"},
+			},
+		},
+	}
+	// The reverse filter for t1 needs its vindex in the sharded source
+	// keyspace's vschema, which does not have it.
+	require.NoError(t, env.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+		Name:     sourceKeyspace.KeyspaceName,
+		Keyspace: &vschema.Keyspace{Sharded: true},
+	}))
+
+	ts, _, err := env.ws.getWorkflowState(ctx, targetKeyspace.KeyspaceName, "wf1")
+	require.NoError(t, err)
+
+	// No queries are expected, so deleting the reverse streams would fail
+	// with a different error.
+	err = ts.createReverseVReplication(ctx)
+	require.ErrorContains(t, err, "table t1 not found in vschema")
+}
+
 func TestCancelMigration_SHARDS(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
