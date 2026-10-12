@@ -36,7 +36,7 @@ var _ ThrottlingStrategyHandler = (*NoOpStrategy)(nil)
 type NoOpStrategy struct{}
 
 // Evaluate always returns a decision to not throttle since this is a no-op strategy.
-func (s *NoOpStrategy) Evaluate(ctx context.Context, targetTabletType topodatapb.TabletType, fullQuery *sqlparser.ParsedQuery, transactionID int64, attrs QueryAttributes) ThrottleDecision {
+func (s *NoOpStrategy) Evaluate(ctx context.Context, targetTabletType topodatapb.TabletType, fullQuery *sqlparser.ParsedQuery, statementType sqlparser.StatementType, transactionID int64, attrs QueryAttributes) ThrottleDecision {
 	return ThrottleDecision{
 		Throttle: false,
 		Message:  "NoOpStrategy: no throttling applied",
@@ -51,6 +51,11 @@ func (s *NoOpStrategy) Start() {
 // Stop is a no-op for the NoOpStrategy since it has no resources to clean up.
 func (s *NoOpStrategy) Stop() {
 	// No-op: NoOpStrategy has no resources to clean up
+}
+
+// UpdateConfig is a no-op for the NoOpStrategy since it has no nested config to apply.
+func (s *NoOpStrategy) UpdateConfig(_ *querythrottlerpb.Config) {
+	// No-op: NoOpStrategy ignores config updates by design.
 }
 
 // GetStrategyName returns the name of the strategy.

@@ -92,8 +92,8 @@ type Controller interface {
 	TopoServer() *topo.Server
 
 	// CheckThrottler
-	CheckThrottler(ctx context.Context, appName string, flags *throttle.CheckFlags) *throttle.CheckResult
-	GetThrottlerStatus(ctx context.Context) *throttle.ThrottlerStatus
+	CheckThrottler(ctx context.Context, appName string, flags *throttle.CheckFlags, throttlerType tabletmanagerdata.ThrottlerType) *throttle.CheckResult
+	GetThrottlerStatus(ctx context.Context, throttlerType tabletmanagerdata.ThrottlerType) *throttle.ThrottlerStatus
 
 	// RedoPreparedTransactions recreates the transactions with stored prepared transaction log.
 	RedoPreparedTransactions()
