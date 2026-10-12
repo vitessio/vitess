@@ -1391,7 +1391,7 @@ func (vs *vstreamer) getValues(plan *streamerPlan, data []byte,
 		}
 		value, l, err := mysqlbinlog.CellValue(data, pos, plan.TableMap.Types[colNum], plan.TableMap.Metadata[colNum], plan.Table.Fields[colNum], partialJSON)
 		if err != nil {
-			log.Error("extractRowAndFilter: failed to extract column value",
+			log.Error("failed to extract column value from binlog event",
 				slog.String("table", plan.Table.Name),
 				slog.String("column", plan.Table.Fields[colNum].Name),
 				slog.Int("col_num", colNum),
@@ -1552,8 +1552,9 @@ func wrapError(err error, stopPos replication.Position, vse *Engine) error {
 	if err != nil {
 		vse.vstreamersEndedWithErrors.Add(1)
 		vse.errorCounts.Add("StreamEnded", 1)
-		log.Error("stream (at source tablet) error",
+		log.Error("stream (at source tablet) error, position includes the GTID we failed to process",
 			slog.String("position", stopPos.String()),
+			slog.String("code", vterrors.Code(err).String()),
 			slog.Any("error", err))
 		// Wrap rather than reformat so that the error's code survives: the
 		// vplayer only treats FAILED_PRECONDITION stream errors as terminal.
