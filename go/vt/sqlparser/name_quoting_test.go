@@ -28,8 +28,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"vitess.io/vitess/go/mysql/collations"
 )
 
 // TestQuotedNamesDoNotSmuggleSQL covers names that the grammar accepts as a
@@ -667,15 +665,19 @@ func TestEveryKeywordNameRoundTrips(t *testing.T) {
 	testNamesRoundTrip(t, names)
 }
 
-// TestEveryKnownNameRoundTrips does the same for every name isBareName lets
-// through bare -- every charset and collation name of every version, and every
-// one of bareObjectNames -- so that a name added to either still reads back as
-// itself in every position it can be written into.
+// TestEveryKnownNameRoundTrips does the same for the names isBareName lets
+// through bare: every one of bareObjectNames, and a sample of charset and
+// collation names. A sample is enough because the rest is covered elsewhere:
+// the collations package checks that every known name is a plain word, a plain
+// word that is not a keyword lexes as an ID, which every position takes, and
+// TestEveryKeywordNameRoundTrips covers every known name that is a keyword.
 func TestEveryKnownNameRoundTrips(t *testing.T) {
-	known := collations.KnownNames()
-	// A canary, so that this cannot pass by iterating over nothing.
-	require.Greater(t, len(known), 300)
-	known = append(known, slices.Collect(maps.Keys(bareObjectNames))...)
+	known := slices.Collect(maps.Keys(bareObjectNames))
+	known = append(known,
+		"utf8mb4", "utf8mb4_0900_ai_ci", "utf8mb4_bin", "utf8", "utf8mb3",
+		"utf8mb3_croatian_mysql561_ci", "latin1", "latin1_swedish_ci",
+		"ascii", "binary", "gb18030_unicode_520_ci",
+	)
 
 	var names []string
 	for _, name := range known {

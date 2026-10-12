@@ -92,7 +92,7 @@ type IndexOption struct {
 	Value *Literal
 	// String is the name of an index type or fulltext parser, as in USING BTREE
 	// or WITH PARSER ngram. It is client supplied, so it must be written out
-	// with encodeSQLName.
+	// with encodeIndexOptionValue, which quotes it the way its option reads back.
 	String string
 }
 
@@ -109,7 +109,8 @@ type TableOption struct {
 	Tables TableNames
 	// CaseSensitive marks String as a client-supplied name -- a charset,
 	// collation, engine or tablespace -- rather than one of a fixed set of
-	// keywords, so it must be written out with encodeSQLName.
+	// keywords, so it must be written out with encodeTableOptionValue, which
+	// quotes it the way its option reads back.
 	CaseSensitive bool
 	// Storage is TABLESPACE's optional trailing STORAGE clause. It is kept apart
 	// from String so that String stays a single name that can be quoted.
@@ -2599,7 +2600,7 @@ func encodeDatabaseOptionValue(option DatabaseOption) string {
 // any MySQL or MariaDB version, or one of bareObjectNames. Those are the names
 // generated DDL would otherwise churn on, and each is a plain word that both
 // this grammar and MySQL read back as that same name; TestEveryKnownNameRoundTrips
-// holds them to it. Everything else is back-quoted -- a tablespace a user named,
+// explains how the tests hold them to it. Everything else is back-quoted -- a tablespace a user named,
 // an engine Vitess does not know -- so whether a name is safe bare never depends
 // on which words this grammar or some MySQL version treats as keywords.
 //

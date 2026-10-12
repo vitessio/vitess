@@ -18,7 +18,6 @@ package collations
 
 import (
 	"fmt"
-	"maps"
 	"slices"
 	"strings"
 	"sync"
@@ -133,11 +132,6 @@ func NewEnvironment(serverVersion string) *Environment {
 func IsKnownName(name string) bool {
 	_, ok := knownNames()[strings.ToLower(name)]
 	return ok
-}
-
-// KnownNames returns, sorted, every name IsKnownName reports as known.
-func KnownNames() []string {
-	return slices.Sorted(maps.Keys(knownNames()))
 }
 
 var knownNames = sync.OnceValue(func() map[string]struct{} {

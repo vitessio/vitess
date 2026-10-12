@@ -88,9 +88,11 @@ func TestIsKnownName(t *testing.T) {
 		require.False(t, IsKnownName(name), name)
 	}
 
-	names := KnownNames()
+	// sqlparser writes a known name unquoted, which is only safe for a plain
+	// word: one that lexes as a single identifier or keyword.
+	names := knownNames()
 	require.Greater(t, len(names), 300)
-	for _, name := range names {
+	for name := range names {
 		require.True(t, IsKnownName(name), name)
 		require.Regexp(t, "^[a-z][a-z0-9_]*$", name)
 	}
