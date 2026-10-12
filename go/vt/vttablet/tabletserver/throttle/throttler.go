@@ -155,6 +155,9 @@ type Throttler struct {
 	isEnabled atomic.Bool
 	isLeader  atomic.Bool
 	isOpen    atomic.Bool
+	// leadershipGeneration is incremented on every transition into or out of leadership, so that an
+	// inventory refresh that started before a transition can be recognized and discarded.
+	leadershipGeneration atomic.Int64
 
 	leaderCheckInterval           time.Duration
 	activeCollectInterval         time.Duration
@@ -674,7 +677,10 @@ func (throttler *Throttler) Close() {
 		return
 	}
 	throttler.Disable()
-	throttler.isLeader.Store(false)
+	if throttler.isLeader.Swap(false) {
+		// Like the leader check, so that a refresh from before Close is not applied after the next Open.
+		throttler.leadershipGeneration.Add(1)
+	}
 
 	// The below " != nil " checks are relevant to unit tests, where perhaps not all
 	// fields are supplied.
@@ -815,6 +821,9 @@ func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 					shouldBeLeader := throttler.IsOpen() && throttler.tabletTypeFunc() == topodatapb.TabletType_PRIMARY
 
 					isLeader := throttler.isLeader.Swap(shouldBeLeader)
+					if shouldBeLeader != isLeader {
+						throttler.leadershipGeneration.Add(1)
+					}
 					if shouldBeLeader && !isLeader {
 						log.Info("Throttler: transition into leadership")
 						// transitioned into leadership, let's speed up the next 'refresh' and 'collect' ticks
@@ -877,6 +886,12 @@ func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 				}
 			case probes := <-throttler.clusterProbesChan:
 				// incoming structural update, sparse, as result of refreshInventory()
+				if probes.LeadershipGeneration != throttler.leadershipGeneration.Load() {
+					// Leadership changed while this refresh was in flight. The refresh that the transition
+					// triggered has the probes for the current leadership, so do not let these override them.
+					log.Info(fmt.Sprintf("Throttler: discarding inventory refreshed in leadership generation %d", probes.LeadershipGeneration))
+					continue
+				}
 				throttler.updateClusterProbes(probes)
 			case <-metricsAggregateTicker.C:
 				if throttler.IsOpen() {
@@ -1096,17 +1111,22 @@ func (throttler *Throttler) refreshInventory(ctx context.Context) error {
 
 	throttler.updateInventoryMetricThresholds()
 
+	// Leadership is read once, here, and its generation recorded in the probes, so that the probes can be
+	// rejected if leadership changes before they are applied.
+	leadershipGeneration := throttler.leadershipGeneration.Load()
+	isLeader := throttler.isLeader.Load()
 	clusterSettingsCopy := throttler.configSettings.MySQLStore
 	// config may dynamically change, but internal structure (config.Settings().MySQLStore.Clusters in our case)
 	// is immutable and can only be _replaced_. Hence, it's safe to read in a goroutine:
 	collect := func() error {
 		clusterProbes := &base.ClusterProbes{
-			IgnoreHostsCount: clusterSettingsCopy.IgnoreHostsCount,
-			TabletProbes:     base.NewProbes(),
+			IgnoreHostsCount:     clusterSettingsCopy.IgnoreHostsCount,
+			TabletProbes:         base.NewProbes(),
+			LeadershipGeneration: leadershipGeneration,
 		}
 		// self tablet
 		addProbe(throttler.tabletAliasString(), nil, base.SelfScope, &clusterSettingsCopy, clusterProbes.TabletProbes)
-		if !throttler.isLeader.Load() {
+		if !isLeader {
 			// This tablet may have used to be the primary, but it isn't now. It may have a recollection
 			// of previous clusters it used to probe. It may have recollection of specific probes for such clusters.
 			// This now ensures any existing cluster probes are overridden with an empty list of probes.

@@ -2386,3 +2386,55 @@ func TestInventoryRefreshOnDemotion(t *testing.T) {
 		assert.Eventually(t, func() bool { return probesCount() == 1 }, 5*time.Second, 10*time.Millisecond) // self only
 	})
 }
+
+// TestInventoryRefreshRejectsStaleLeadership verifies that probes from a refresh that started in an earlier
+// leadership generation are discarded: a refresh that was in flight while the primary was demoted does not restore the
+// shard's probes, and one that was in flight while it was promoted does not clear them.
+func TestInventoryRefreshRejectsStaleLeadership(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	throttler := newTestThrottler()
+	throttler.inventoryRefreshInterval = time.Hour
+	var tabletType atomic.Int32
+	tabletType.Store(int32(topodatapb.TabletType_PRIMARY))
+	throttler.tabletTypeFunc = func() topodatapb.TabletType { return topodatapb.TabletType(tabletType.Load()) }
+
+	probesCount := func() int {
+		var count int
+		<-runSerialFunction(t, ctx, throttler, func(context.Context) {
+			count = len(throttler.inventory.ClustersProbes)
+		})
+		return count
+	}
+	sendProbes := func(clusterProbes *base.ClusterProbes) {
+		select {
+		case throttler.clusterProbesChan <- clusterProbes:
+		case <-ctx.Done():
+			require.FailNow(t, ctx.Err().Error(), "sending cluster probes")
+		}
+	}
+	runThrottler(t, ctx, throttler, 30*time.Second, func(t *testing.T, ctx context.Context) {
+		defer cancel()                     // early termination
+		require.Equal(t, 3, probesCount()) // self, plus the fake shard's tablets
+		var leaderProbes, replicaProbes base.Probes
+		var leaderGeneration, replicaGeneration int64
+		<-runSerialFunction(t, ctx, throttler, func(context.Context) {
+			leaderProbes = throttler.inventory.ClustersProbes
+			leaderGeneration = throttler.leadershipGeneration.Load()
+		})
+
+		tabletType.Store(int32(topodatapb.TabletType_REPLICA))
+		require.Eventually(t, func() bool { return probesCount() == 1 }, 5*time.Second, 10*time.Millisecond)
+		<-runSerialFunction(t, ctx, throttler, func(context.Context) {
+			replicaProbes = throttler.inventory.ClustersProbes
+			replicaGeneration = throttler.leadershipGeneration.Load()
+		})
+		sendProbes(&base.ClusterProbes{TabletProbes: leaderProbes, LeadershipGeneration: leaderGeneration})
+		assert.Equal(t, 1, probesCount(), "a refresh from before the demotion restored the shard's probes")
+
+		tabletType.Store(int32(topodatapb.TabletType_PRIMARY))
+		require.Eventually(t, func() bool { return probesCount() == 3 }, 5*time.Second, 10*time.Millisecond)
+		sendProbes(&base.ClusterProbes{TabletProbes: replicaProbes, LeadershipGeneration: replicaGeneration})
+		assert.Equal(t, 3, probesCount(), "a refresh from before the promotion cleared the shard's probes")
+	})
+}

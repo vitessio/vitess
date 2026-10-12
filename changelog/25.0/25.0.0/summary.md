@@ -709,7 +709,7 @@ A new VTTablet flag, `--throttler-inventory-refresh-interval` (default `10s`, th
 
 A longer interval reduces that load. The trade-off is that a tablet joining or leaving the shard, or changing type (for example, a replica that is drained for a backup), is noticed up to one interval later. A tablet that becomes primary, or stops being primary, refreshes its inventory immediately. Throttler config changes from `UpdateThrottlerConfig`, such as a new threshold or custom query, take effect immediately and do not wait for a refresh. The minimum is `10s`: lower values, including zero and negative ones, are raised to it, because refreshes run concurrently and a shorter interval would overlap them.
 
-**Impact**: None unless the flag is set.
+**Impact**: The refresh interval is unchanged unless the flag is set. Independently of the flag, a threshold or custom query applied with `UpdateThrottlerConfig` now takes effect immediately, where it previously waited up to `10s` for the next refresh, and a primary that is demoted stops probing its shard's tablets immediately.
 
 ### <a id="minor-changes-vtctld"/>VTCtld</a>
 
