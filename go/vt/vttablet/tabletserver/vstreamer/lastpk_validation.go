@@ -84,63 +84,15 @@ func validateLastPKValue(v sqltypes.Value, field *querypb.Field) (sqltypes.Value
 		return sqltypes.Value{}, err
 	}
 	// writeLastPKValue writes a number verbatim, so its bytes have to be a
-	// literal on their own. Parsing alone is not enough, as NewValue keeps the
-	// bytes it was given: decimal.NewFromMySQL stops scanning once the integral
-	// part exceeds MySQL's precision, and fastparse accepts Go's NaN and Inf
-	// words, so a payload can parse and still carry a tail.
-	if sqltypes.IsNumber(value.Type()) && !isPlainNumericLiteral(value.Raw()) {
+	// literal on their own. NewValue keeps the bytes it was given and, for an
+	// integral or a float, tolerates the space and tab padding that fastparse
+	// skips, which a lastpk value has no reason to carry. The check is stricter
+	// than NewValue's own, so it stays here.
+	if sqltypes.IsNumber(value.Type()) && !sqltypes.IsNumericLiteral(value.Raw(), true) {
 		return sqltypes.Value{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
 			"%q is not a numeric literal", value.Raw())
 	}
 	return value, nil
-}
-
-// isPlainNumericLiteral reports whether val is exactly
-// [+-]?([0-9]+(\.[0-9]*)?|\.[0-9]+)([eE][+-]?[0-9]+)? and so is safe to write
-// into a statement without quoting. It rejects the shapes Go's parsers accept
-// but MySQL has no literal for, such as NaN, Inf and surrounding whitespace.
-func isPlainNumericLiteral(val []byte) bool {
-	i := 0
-	if i < len(val) && (val[i] == '+' || val[i] == '-') {
-		i++
-	}
-
-	mantissa := 0
-	for i < len(val) && isDigit(val[i]) {
-		i++
-		mantissa++
-	}
-	if i < len(val) && val[i] == '.' {
-		i++
-		for i < len(val) && isDigit(val[i]) {
-			i++
-			mantissa++
-		}
-	}
-	if mantissa == 0 {
-		return false
-	}
-
-	if i < len(val) && (val[i] == 'e' || val[i] == 'E') {
-		i++
-		if i < len(val) && (val[i] == '+' || val[i] == '-') {
-			i++
-		}
-		exponent := 0
-		for i < len(val) && isDigit(val[i]) {
-			i++
-			exponent++
-		}
-		if exponent == 0 {
-			return false
-		}
-	}
-
-	return i == len(val)
-}
-
-func isDigit(c byte) bool {
-	return c >= '0' && c <= '9'
 }
 
 // writeLastPKValue writes a value returned by validateLastPK into a statement

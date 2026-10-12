@@ -3201,7 +3201,7 @@ table_option:
   }
 | default_optional charset_or_character_set equal_opt charset
   {
-    $$ = &TableOption{Name:(string($2)), String:$4, CaseSensitive: true}
+    $$ = &TableOption{Name:string($2), String:$4, CaseSensitive: true}
   }
 | default_optional COLLATE equal_opt charset
   {
