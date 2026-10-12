@@ -1016,8 +1016,15 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 				"ReverseTraffic", "--tablet-types=primary", "--timeout=10s")
 			require.Error(t, err)
 			require.Contains(t, out, "failed to sync up replication between the source and target")
-			_, err = vc.VtctldClient.ExecuteCommandWithOutput("Workflow", "--keyspace", defaultTargetKs, "show", "--workflow", workflow)
-			require.NoError(t, err, "the failed ReverseTraffic deleted the workflow")
+			out, err = vc.VtctldClient.ExecuteCommandWithOutput("Workflow", "--keyspace", defaultTargetKs, "show", "--workflow", workflow)
+			require.NoError(t, err)
+			require.False(t, isEmptyWorkflowShowOutput(out), "the failed ReverseTraffic deleted the workflow")
+			// The workflow is frozen, as it was before the ReverseTraffic.
+			messages := gjson.Get(out, "workflows.0.shard_streams.@values.#.streams.#.message|@flatten").Array()
+			require.NotEmpty(t, messages)
+			for _, message := range messages {
+				require.Equal(t, "FROZEN", message.String())
+			}
 			// Canceling the switch restarted the reverse workflow.
 			require.NoError(t, waitForWorkflowState(vc, defaultSourceKs+"."+reverseWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String()))
 
