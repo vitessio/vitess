@@ -1182,7 +1182,7 @@ func (e *Executor) fetchOrCreatePlan(
 	// Plans can forward the statement text to MySQL as written, so MySQL must
 	// skip every comment that Vitess skips.
 	queryString, _ = e.env.Parser().RewriteDoubleSlashComments(queryString)
-	query, comments := sqlparser.SplitMarginComments(queryString)
+	query, comments := e.env.Parser().SplitMarginComments(queryString)
 	vcursor, _ = e.newVCursor(safeSession, comments, logStats)
 
 	var setVarComment string

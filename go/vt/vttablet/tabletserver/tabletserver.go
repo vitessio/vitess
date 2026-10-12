@@ -934,7 +934,7 @@ func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sq
 			if bindVariables == nil {
 				bindVariables = make(map[string]*querypb.BindVariable)
 			}
-			query, comments := sqlparser.SplitMarginComments(sql)
+			query, comments := tsv.env.Parser().SplitMarginComments(sql)
 
 			plan, err := tsv.qe.GetPlan(ctx, logStats, query, skipQueryPlanCache(options), options.GetInDmlExecution() && tsv.config.PassthroughDML)
 			if err != nil {
@@ -1035,7 +1035,7 @@ func (tsv *TabletServer) streamExecute(ctx context.Context, target *querypb.Targ
 			if bindVariables == nil {
 				bindVariables = make(map[string]*querypb.BindVariable)
 			}
-			query, comments := sqlparser.SplitMarginComments(sql)
+			query, comments := tsv.env.Parser().SplitMarginComments(sql)
 			plan, err := tsv.qe.GetStreamPlan(ctx, logStats, query, skipQueryPlanCache(options))
 			if err != nil {
 				return err
@@ -1167,7 +1167,7 @@ func (tsv *TabletServer) computeTxSerializerKey(ctx context.Context, logStats *t
 	// Strip trailing comments so we don't pollute the query cache.
 	// Plan the text that execute plans, so that both share a plan cache entry.
 	sql, _ = tsv.env.Parser().RewriteDoubleSlashComments(sql)
-	sql, _ = sqlparser.SplitMarginComments(sql)
+	sql, _ = tsv.env.Parser().SplitMarginComments(sql)
 	plan, err := tsv.qe.GetPlan(ctx, logStats, sql, false, false)
 	if err != nil {
 		logComputeRowSerializerKey.Errorf("failed to get plan for query: %v err: %v", sql, err)
