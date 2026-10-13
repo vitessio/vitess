@@ -72,6 +72,19 @@ func TestGetStreamState(t *testing.T) {
 			want: "Lagging",
 		},
 		{
+			name: "running state",
+			stream: &vtctldatapb.Workflow_Stream{
+				State: "Running",
+			},
+			rstream: &tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream{
+				State: binlogdata.VReplicationWorkflowState_Running,
+				TimeUpdated: &vttime.Time{
+					Seconds: time.Now().Unix(),
+				},
+			},
+			want: "Running",
+		},
+		{
 			name: "non-running and error free",
 			stream: &vtctldatapb.Workflow_Stream{
 				State: "Stopped",
