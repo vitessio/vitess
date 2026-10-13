@@ -425,10 +425,8 @@ func TestVDiffCreate(t *testing.T) {
 	defer env.close()
 
 	tests := []struct {
-		name string
-		req  *vtctldatapb.VDiffCreateRequest
-		// lagging makes the streams' last update more than 10 seconds old.
-		lagging bool
+		name    string
+		req     *vtctldatapb.VDiffCreateRequest
 		wantErr string
 	}{
 		{
@@ -444,19 +442,9 @@ func TestVDiffCreate(t *testing.T) {
 				Workflow:       workflowName,
 			},
 		},
-		{
-			// Lagging streams are still running.
-			name: "lagging streams",
-			req: &vtctldatapb.VDiffCreateRequest{
-				TargetKeyspace: targetKeyspace.KeyspaceName,
-				Workflow:       workflowName,
-			},
-			lagging: true,
-		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			env.tmc.lagging.Store(tt.lagging)
 			if tt.wantErr == "" {
 				env.tmc.expectVRQueryResultOnKeyspaceTablets(targetKeyspace.KeyspaceName, &queryResult{
 					query:  "select vrepl_id, table_name, lastpk from _vt.copy_state where vrepl_id in (1) and id in (select max(id) from _vt.copy_state where vrepl_id in (1) group by vrepl_id, table_name)",

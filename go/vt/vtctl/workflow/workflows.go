@@ -641,8 +641,6 @@ func getStreamState(stream *vtctldatapb.Workflow_Stream, rstream *tabletmanagerd
 		return binlogdatapb.VReplicationWorkflowState_Error.String()
 	case stream.State == binlogdatapb.VReplicationWorkflowState_Running.String() && len(stream.CopyStates) > 0:
 		return binlogdatapb.VReplicationWorkflowState_Copying.String()
-	case stream.State == binlogdatapb.VReplicationWorkflowState_Running.String() && time.Now().Unix()-rstream.TimeUpdated.Seconds > 10:
-		return binlogdatapb.VReplicationWorkflowState_Lagging.String()
 	}
 	return rstream.State.String()
 }

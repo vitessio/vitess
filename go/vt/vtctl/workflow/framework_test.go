@@ -290,7 +290,6 @@ type testTMClient struct {
 	env     *testEnv    // For access to the env config from tmc methods.
 	reverse atomic.Bool // Are we reversing traffic?
 	frozen  atomic.Bool // Are the workflows frozen?
-	lagging atomic.Bool // Are the streams lagging?
 
 	// Can be used to return an error if an unexpected request is made or
 	// an expected request is NOT made.
@@ -732,10 +731,6 @@ func (tmc *testTMClient) ReadVReplicationWorkflows(ctx context.Context, tablet *
 		if tmc.reverse.Load() {
 			ks = tmc.env.targetKeyspace
 		}
-		timeUpdated := time.Now()
-		if tmc.lagging.Load() {
-			timeUpdated = timeUpdated.Add(-30 * time.Second)
-		}
 		return &tabletmanagerdatapb.ReadVReplicationWorkflowsResponse{
 			Workflows: []*tabletmanagerdatapb.ReadVReplicationWorkflowResponse{
 				{
@@ -757,8 +752,8 @@ func (tmc *testTMClient) ReadVReplicationWorkflows(ctx context.Context, tablet *
 								},
 							},
 							Pos:           position,
-							TimeUpdated:   protoutil.TimeToProto(timeUpdated),
-							TimeHeartbeat: protoutil.TimeToProto(timeUpdated),
+							TimeUpdated:   protoutil.TimeToProto(time.Now()),
+							TimeHeartbeat: protoutil.TimeToProto(time.Now()),
 						},
 					},
 				},
