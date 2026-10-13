@@ -27,7 +27,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"google.golang.org/protobuf/encoding/protowire"
 
@@ -911,31 +910,19 @@ func encodeBytesSQLStringBuilder(val []byte, buf *strings.Builder) {
 // BufEncodeStringSQL encodes the string into a strings.Builder
 func BufEncodeStringSQL(buf *strings.Builder, val string) {
 	buf.WriteByte('\'')
-	for idx := 0; idx < len(val); {
-		ch, size := utf8.DecodeRuneInString(val[idx:])
-		if ch == utf8.RuneError && size == 1 {
-			buf.WriteByte(val[idx])
-			idx++
-			continue
-		}
-		if ch > 255 {
-			buf.WriteRune(ch)
-			idx += size
-			continue
-		}
+	for idx := 0; idx < len(val); idx++ {
+		ch := val[idx]
 		// If \% or \_ is present, we want to keep them as is, and don't want to escape \ again
 		if ch == '\\' && idx+1 < len(val) && (val[idx+1] == '%' || val[idx+1] == '_') {
-			buf.WriteRune(ch)
-			idx += size
+			buf.WriteByte(ch)
 			continue
 		}
 		if encodedChar := SQLEncodeMap[ch]; encodedChar == DontEscape {
-			buf.WriteRune(ch)
+			buf.WriteByte(ch)
 		} else {
 			buf.WriteByte('\\')
 			buf.WriteByte(encodedChar)
 		}
-		idx += size
 	}
 	buf.WriteByte('\'')
 }
