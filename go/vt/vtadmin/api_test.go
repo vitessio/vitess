@@ -47,6 +47,7 @@ import (
 	"vitess.io/vitess/go/vt/vtadmin/cluster"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery/fakediscovery"
 	vtadminerrors "vitess.io/vitess/go/vt/vtadmin/errors"
+	"vitess.io/vitess/go/vt/vtadmin/rbac"
 	vtadmintestutil "vitess.io/vitess/go/vt/vtadmin/testutil"
 	"vitess.io/vitess/go/vt/vtadmin/vtctldclient/fakevtctldclient"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver"
@@ -5139,6 +5140,8 @@ func TestVExplain(t *testing.T) {
 		tabletSchemas map[string]*tabletmanagerdatapb.SchemaDefinition
 		tablets       []*vtadminpb.Tablet
 		req           *vtadminpb.VExplainRequest
+		// actions, when set, are the only actions the actor may take on VExplain.
+		actions       []string
 		expectedError error
 	}{
 		{
@@ -5162,6 +5165,52 @@ func TestVExplain(t *testing.T) {
 			req: &vtadminpb.VExplainRequest{
 				ClusterId: "c0",
 				Keyspace:  "commerce",
+			},
+			expectedError: vtadminerrors.ErrInvalidRequest,
+		},
+		{
+			name: "returns an error if a VEXPLAIN that runs its statement is not authorized to execute",
+			req: &vtadminpb.VExplainRequest{
+				ClusterId: "c0",
+				Keyspace:  "commerce",
+				Sql:       "vexplain all select * from customers",
+			},
+			actions:       []string{"get"},
+			expectedError: vtadminerrors.ErrUnauthorized,
+		},
+		{
+			name: "returns an error if a VEXPLAIN that runs its statement is given DML",
+			req: &vtadminpb.VExplainRequest{
+				ClusterId: "c0",
+				Keyspace:  "commerce",
+				Sql:       "vexplain /*vt+ EXECUTE_DML_QUERIES */ queries insert into customers (id) values (1)",
+			},
+			expectedError: vtadminerrors.ErrInvalidRequest,
+		},
+		{
+			name: "returns an error if the explained SELECT writes its result with INTO",
+			req: &vtadminpb.VExplainRequest{
+				ClusterId: "c0",
+				Keyspace:  "commerce",
+				Sql:       "vexplain queries select * from customers into outfile '/tmp/customers'",
+			},
+			expectedError: vtadminerrors.ErrInvalidRequest,
+		},
+		{
+			name: "returns an error if the explained SELECT consumes sequence values",
+			req: &vtadminpb.VExplainRequest{
+				ClusterId: "c0",
+				Keyspace:  "commerce",
+				Sql:       "vexplain trace select next 1 values from seq",
+			},
+			expectedError: vtadminerrors.ErrInvalidRequest,
+		},
+		{
+			name: "returns an error if the explained SELECT takes an advisory lock",
+			req: &vtadminpb.VExplainRequest{
+				ClusterId: "c0",
+				Keyspace:  "commerce",
+				Sql:       "vexplain all select get_lock('l', 1)",
 			},
 			expectedError: vtadminerrors.ErrInvalidRequest,
 		},
@@ -5237,6 +5286,81 @@ func TestVExplain(t *testing.T) {
 				Keyspace:  "commerce",
 				Sql:       "vexplain all select * from customers",
 			},
+			actions: []string{"get", "execute"},
+		},
+		{
+			name: "runs VExplain PLAN, which only plans the statement, of a statement with side effects with only the get action",
+			keyspaces: []*vtctldatapb.Keyspace{
+				{
+					Name:     "commerce",
+					Keyspace: &topodatapb.Keyspace{},
+				},
+			},
+			shards: []*vtctldatapb.Shard{
+				{
+					Name:     "-",
+					Keyspace: "commerce",
+				},
+			},
+			srvVSchema: &vschemapb.SrvVSchema{
+				Keyspaces: map[string]*vschemapb.Keyspace{
+					"commerce": {
+						Sharded: false,
+						Tables: map[string]*vschemapb.Table{
+							"customers": {},
+						},
+					},
+				},
+				RoutingRules: &vschemapb.RoutingRules{
+					Rules: []*vschemapb.RoutingRule{},
+				},
+			},
+			tabletSchemas: map[string]*tabletmanagerdatapb.SchemaDefinition{
+				"c0_cell1-0000000100": {
+					DatabaseSchema: "CREATE DATABASE commerce",
+					TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+						{
+							Name:       "t1",
+							Schema:     `CREATE TABLE customers (id int(11) not null,PRIMARY KEY (id));`,
+							Type:       "BASE",
+							Columns:    []string{"id"},
+							DataLength: 100,
+							RowCount:   50,
+							Fields: []*querypb.Field{
+								{
+									Name: "id",
+									Type: querypb.Type_INT32,
+								},
+							},
+						},
+					},
+				},
+			},
+			tablets: []*vtadminpb.Tablet{
+				{
+					Cluster: &vtadminpb.Cluster{
+						Id:   "c0",
+						Name: "cluster0",
+					},
+					State: vtadminpb.Tablet_SERVING,
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Uid:  100,
+							Cell: "c0_cell1",
+						},
+						Hostname: "tablet-cell1-a",
+						Keyspace: "commerce",
+						Shard:    "-",
+						Type:     topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+			req: &vtadminpb.VExplainRequest{
+				ClusterId: "c0",
+				Keyspace:  "commerce",
+				Sql:       "vexplain plan select get_lock('l', 1) from customers",
+			},
+			actions: []string{"get"},
 		},
 	}
 
@@ -5292,7 +5416,25 @@ func TestVExplain(t *testing.T) {
 					}),
 				}
 
-				api := NewAPI(vtenv.NewTestEnv(), clusters, Options{})
+				opts := Options{}
+				if tt.actions != nil {
+					opts.RBAC = &rbac.Config{
+						Rules: []*struct {
+							Resource string
+							Actions  []string
+							Subjects []string
+							Clusters []string
+						}{{
+							Resource: string(rbac.VExplainResource),
+							Actions:  tt.actions,
+							Subjects: []string{"user:allowed"},
+							Clusters: []string{"*"},
+						}},
+					}
+					require.NoError(t, opts.RBAC.Reify())
+					ctx = rbac.NewContext(ctx, &rbac.Actor{Name: "allowed"})
+				}
+				api := NewAPI(vtenv.NewTestEnv(), clusters, opts)
 				resp, err := api.VExplain(ctx, tt.req)
 
 				if tt.expectedError != nil {
