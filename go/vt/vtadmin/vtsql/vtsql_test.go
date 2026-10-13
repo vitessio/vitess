@@ -18,12 +18,8 @@ package vtsql
 
 import (
 	"context"
-<<<<<<< HEAD
-||||||| parent of 1fefc24c1e (VTAdmin: require an execute permission for VExplain modes that run the statement (#21396))
-=======
 	"database/sql"
 	"strings"
->>>>>>> 1fefc24c1e (VTAdmin: require an execute permission for VExplain modes that run the statement (#21396))
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -108,8 +104,8 @@ func TestVExplainRunsExecutingTypesReadOnly(t *testing.T) {
 			"1: rollback",
 		},
 	}, {
-		query: "vexplain mysqlplan select * from customers",
-		want:  []string{"1: vexplain mysqlplan select * from customers"},
+		query: "vexplain plan select * from customers",
+		want:  []string{"1: vexplain plan select * from customers"},
 	}} {
 		t.Run(tc.query, func(t *testing.T) {
 			log := &fakevtsql.StatementLog{}

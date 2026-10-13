@@ -130,14 +130,8 @@ func (c *conn) QueryContext(ctx context.Context, query string, args []driver.Nam
 			pos:    0,
 			closed: false,
 		}, nil
-<<<<<<< HEAD
-	case "vexplain all select * from customers":
-||||||| parent of 1fefc24c1e (VTAdmin: require an execute permission for VExplain modes that run the statement (#21396))
-	case "vexplain all select * from customers", "vexplain mysqlplan select * from customers":
-=======
-	case "vexplain all select * from customers", "vexplain mysqlplan select * from customers",
+	case "vexplain all select * from customers", "vexplain plan select * from customers",
 		"vexplain plan select get_lock('l', 1) from customers":
->>>>>>> 1fefc24c1e (VTAdmin: require an execute permission for VExplain modes that run the statement (#21396))
 		columns := []string{"VExplain"}
 		vals := make([][]any, 0, 1)
 		vals = append(vals, []any{"{'Table' : 'customer, 'TestPlan' : 'TestPlan'}"})
