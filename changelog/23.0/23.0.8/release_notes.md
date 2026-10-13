@@ -56,10 +56,20 @@ User-visible consequences:
 
 See [#21435](https://github.com/vitessio/vitess/pull/21435) for details.
 
+### VTAdmin VExplain modes that run the statement require the `execute` action
+
+VTAdmin's VExplain API was authorized with the `get` action, but `VEXPLAIN QUERIES`, `ALL` and `TRACE` run the statement they explain, so an actor allowed only to read could change data through it ([GHSA-c2r8-grjp-w8c2](https://github.com/vitessio/vitess/security/advisories/GHSA-c2r8-grjp-w8c2)). Those modes now require the new `execute` action on the `VExplain` resource; `PLAN` and `KEYS`, which only plan the statement, still require only `get`. For those modes VTAdmin also accepts only a `SELECT` without `INTO`, sequence next-values or advisory lock functions, and runs them in a read-only transaction that is always rolled back. The VExplain page in the web UI now defaults to `PLAN`.
+
+**Migration**: grant the `execute` action on `VExplain` to the actors that should run `VEXPLAIN QUERIES`, `ALL` or `TRACE`. Rules that grant all actions (`*`) and `--no-rbac` already include it.
+
+**Impact**: an actor with only `get` on `VExplain` gets an `unauthorized` error from `VEXPLAIN QUERIES`, `ALL` and `TRACE`.
+
+See [#21396](https://github.com/vitessio/vitess/pull/21396) for details.
+
 ------------
 The entire changelog for this release can be found [here](https://github.com/vitessio/vitess/blob/main/changelog/23.0/23.0.8/changelog.md).
 
-The release includes 28 merged Pull Requests.
+The release includes 29 merged Pull Requests.
 
 Thanks to all our contributors: @app/vitess-bot, @arthurschreiber, @lmorduch, @mattlord
 
