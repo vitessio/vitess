@@ -42,6 +42,10 @@ See [#21349](https://github.com/vitessio/vitess/pull/21349) for details.
 
 Vitess parses and escapes SQL text byte by byte, and in these character sets the second byte of a character can be a backslash or a back quote, so text in them was misparsed or corrupted on its way through Vitess. Use `utf8mb4` as the connection character set instead. Tables and columns can still be declared with any of these character sets; MySQL converts between them and the connection character set.
 
+This fixes [GHSA-c28j-qmfx-4gxp](https://github.com/vitessio/vitess/security/advisories/GHSA-c28j-qmfx-4gxp).
+
+See [#21392](https://github.com/vitessio/vitess/pull/21392) and [#21465](https://github.com/vitessio/vitess/pull/21465) for details.
+
 ### Charset and collation names are quoted when regenerated
 
 A charset, collation, engine, tablespace or full-text parser name is now decoded when parsed, and written back as a single token when Vitess regenerates the statement: bare when it is a known charset, collation, engine, index type or parser name, back-quoted otherwise.
@@ -54,6 +58,8 @@ User-visible consequences:
 - **An empty charset, collation, engine or partition tablespace name is rejected.** `CHARACTER SET ''` and `COLLATE ''` on a column, a table, `ALTER TABLE ... CONVERT TO`, `CAST`/`CONVERT`, `CONVERT ... USING`, `CHAR ... USING`, `SELECT ... INTO OUTFILE` and an expression, `ENGINE ''` on a table or a partition, and a partition's `TABLESPACE ''` no longer parse. An empty name in these positions is indistinguishable from the clause being absent, so it would previously have been dropped or mangled and a statement MySQL rejects could have become a valid, different one. Non-DDL statements get the error directly; DDL falls back to a partial parse, so the client's own text is forwarded and MySQL rejects it. `SET NAMES ... COLLATE ''` and `SET CHARACTER SET ... COLLATE ''`, which used to parse and discard the collation, are now parse errors too; MySQL rejects both. `CREATE`/`ALTER DATABASE ... CHARACTER SET ''` and `COLLATE ''` are unchanged: they still parse and are written back as `''`.
 - **`ENCRYPTION` requires a quoted value.** `CREATE`/`ALTER DATABASE ... ENCRYPTION N` no longer fully parses, matching MySQL, which only accepts `'Y'` or `'N'` as a quoted string. Such a statement now falls back to a partial parse rather than being regenerated into a spelling MySQL would refuse.
 
+This fixes [GHSA-j8pc-mcwq-qrg6](https://github.com/vitessio/vitess/security/advisories/GHSA-j8pc-mcwq-qrg6).
+
 See [#21435](https://github.com/vitessio/vitess/pull/21435) for details.
 
 ### VTAdmin VExplain modes that run the statement require the `execute` action
@@ -65,6 +71,20 @@ VTAdmin's VExplain API was authorized with the `get` action, but `VEXPLAIN QUERI
 **Impact**: an actor with only `get` on `VExplain` gets an `unauthorized` error from `VEXPLAIN QUERIES`, `ALL` and `TRACE`.
 
 See [#21396](https://github.com/vitessio/vitess/pull/21396) for details.
+
+### Security fixes
+
+- Fixes [GHSA-73pp-99vw-h5g8](https://github.com/vitessio/vitess/security/advisories/GHSA-73pp-99vw-h5g8): SQL injection through VStream LastPK values. See [#21377](https://github.com/vitessio/vitess/pull/21377).
+- Fixes [GHSA-92cc-q2h6-m2vr](https://github.com/vitessio/vitess/security/advisories/GHSA-92cc-q2h6-m2vr): SQL injection through `convert_tz()` arguments in a VStream filter. See [#21377](https://github.com/vitessio/vitess/pull/21377).
+- Fixes [GHSA-8w3p-4xg5-rm9w](https://github.com/vitessio/vitess/security/advisories/GHSA-8w3p-4xg5-rm9w): SQL injection through table names in Online DDL statements. See [#21381](https://github.com/vitessio/vitess/pull/21381).
+- Fixes [GHSA-x56j-8c72-5xgg](https://github.com/vitessio/vitess/security/advisories/GHSA-x56j-8c72-5xgg): SQL injection through the caller ID in query annotations (`--queryserver-config-annotate-queries`). See [#21369](https://github.com/vitessio/vitess/pull/21369).
+- Fixes [GHSA-m282-7w35-g77m](https://github.com/vitessio/vitess/security/advisories/GHSA-m282-7w35-g77m): SQL injection through a global `SET` variable name. See [#21390](https://github.com/vitessio/vitess/pull/21390).
+- Fixes [GHSA-9248-hccp-qf8f](https://github.com/vitessio/vitess/security/advisories/GHSA-9248-hccp-qf8f): SQL injection through `DATE`, `TIME` and `TIMESTAMP` literals. See [#21389](https://github.com/vitessio/vitess/pull/21389).
+- Fixes [GHSA-9rx3-8pwm-c228](https://github.com/vitessio/vitess/security/advisories/GHSA-9rx3-8pwm-c228): SQL injection through a session variable value carried in a `SET_VAR` hint. See [#21388](https://github.com/vitessio/vitess/pull/21388).
+- Fixes [GHSA-pfg5-ppc7-ff45](https://github.com/vitessio/vitess/security/advisories/GHSA-pfg5-ppc7-ff45): SQL hidden from parsing and table ACL checks in a trailing comment. See [#21387](https://github.com/vitessio/vitess/pull/21387).
+- Fixes [GHSA-xf67-9r78-xv82](https://github.com/vitessio/vitess/security/advisories/GHSA-xf67-9r78-xv82): SQL injection through malformed numeric bind variables. See [#21386](https://github.com/vitessio/vitess/pull/21386).
+- Fixes [GHSA-3fr2-mqr5-r5x5](https://github.com/vitessio/vitess/security/advisories/GHSA-3fr2-mqr5-r5x5): VTAdmin API routes that change cluster state accepted cross-site `GET` requests. See [#21397](https://github.com/vitessio/vitess/pull/21397).
+- Fixes [GHSA-78h7-x6qm-xpr8](https://github.com/vitessio/vitess/security/advisories/GHSA-78h7-x6qm-xpr8): VTAdmin's `ReloadSchemaShard` did not check RBAC. See [#21394](https://github.com/vitessio/vitess/pull/21394).
 
 ------------
 The entire changelog for this release can be found [here](https://github.com/vitessio/vitess/blob/main/changelog/24.0/24.0.5/changelog.md).
