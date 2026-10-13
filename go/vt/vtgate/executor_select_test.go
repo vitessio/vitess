@@ -388,41 +388,6 @@ func TestSetSystemVariables(t *testing.T) {
 	utils.MustMatch(t, wantQueries, lookup.Queries)
 }
 
-<<<<<<< HEAD
-||||||| parent of 147c440977 (vtgate: keep values containing `*/` out of the SET_VAR optimizer hint (#21388))
-// A statement may carry several optimizer hint comments; MySQL honors the first and
-// reads the rest as ordinary comments. The session's SET_VAR hint joins the first one
-// and the statement goes through instead of failing.
-func TestSetVarWithSeveralOptimizerHintComments(t *testing.T) {
-	executor, _, _, lookup, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
-	session := econtext.NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: KsTestUnsharded, SystemVariables: map[string]string{"sql_mode": "'only_full_group_by'"}})
-
-	_, err := executor.Execute(t.Context(), nil, "TestSelect", session, "select /*+ MAX_EXECUTION_TIME(100) */ /*+ NO_BKA(t) */ id from main1", map[string]*querypb.BindVariable{}, false)
-	require.NoError(t, err)
-	require.False(t, session.InReservedConn())
-	wantQueries := []*querypb.BoundQuery{
-		{Sql: "select /*+ MAX_EXECUTION_TIME(100) SET_VAR(sql_mode = 'only_full_group_by') */ /*+ NO_BKA(t) */ id from main1", BindVariables: map[string]*querypb.BindVariable{}},
-	}
-	utils.MustMatch(t, wantQueries, lookup.Queries)
-}
-
-=======
-// A statement may carry several optimizer hint comments; MySQL honors the first and
-// reads the rest as ordinary comments. The session's SET_VAR hint joins the first one
-// and the statement goes through instead of failing.
-func TestSetVarWithSeveralOptimizerHintComments(t *testing.T) {
-	executor, _, _, lookup, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
-	session := econtext.NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: KsTestUnsharded, SystemVariables: map[string]string{"sql_mode": "'only_full_group_by'"}})
-
-	_, err := executor.Execute(t.Context(), nil, "TestSelect", session, "select /*+ MAX_EXECUTION_TIME(100) */ /*+ NO_BKA(t) */ id from main1", map[string]*querypb.BindVariable{}, false)
-	require.NoError(t, err)
-	require.False(t, session.InReservedConn())
-	wantQueries := []*querypb.BoundQuery{
-		{Sql: "select /*+ MAX_EXECUTION_TIME(100) SET_VAR(sql_mode = 'only_full_group_by') */ /*+ NO_BKA(t) */ id from main1", BindVariables: map[string]*querypb.BindVariable{}},
-	}
-	utils.MustMatch(t, wantQueries, lookup.Queries)
-}
-
 func TestSetSystemVariablesCommentTerminatorFallsBackToReservedConn(t *testing.T) {
 	executor, _, _, lookup, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 	session := econtext.NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: KsTestUnsharded, SystemVariables: map[string]string{}})
@@ -451,7 +416,6 @@ func TestSetSystemVariablesCommentTerminatorFallsBackToReservedConn(t *testing.T
 	utils.MustMatch(t, wantQueries, lookup.Queries)
 }
 
->>>>>>> 147c440977 (vtgate: keep values containing `*/` out of the SET_VAR optimizer hint (#21388))
 func TestSetSystemVariablesWithSetVarInvalidSQLMode(t *testing.T) {
 	executor, sbc1, _, _, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 
