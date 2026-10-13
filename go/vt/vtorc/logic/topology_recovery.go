@@ -958,7 +958,12 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.DetectionAnalysis) (err 
 	analyzedInstanceAliasString := topoproto.TabletAliasString(analysisEntry.AnalyzedInstanceAlias)
 	if recoverySkipCode != RecoverySkipNone {
 		skipReason := recoverySkipCode.String()
-		logger.Warn(fmt.Sprintf("Skipping recovery for problem: %+v, recovery: %+v, reason: %+v, aborting recovery", analysisEntry.Analysis, skipReason, recoveryName))
+		// A skip can repeat on every recovery cycle for as long as its cause
+		// lasts, such as a replica that stays unreachable, so log it at most once
+		// a minute for each tablet, problem and reason.
+		if util.ClearToLog("executeCheckAndRecoverFunction: skip", fmt.Sprintf("%s:%s:%s", analyzedInstanceAliasString, analysisEntry.Analysis, skipReason)) {
+			logger.Warn(fmt.Sprintf("Skipping recovery for problem: %+v, recovery: %+v, reason: %+v, aborting recovery", analysisEntry.Analysis, recoveryName, skipReason))
+		}
 		recoveriesSkippedCounter.Add(append(recoveryLabels, skipReason), 1)
 
 		// Unhandled problem type
