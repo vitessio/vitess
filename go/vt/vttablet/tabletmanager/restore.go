@@ -380,8 +380,9 @@ func (tm *TabletManager) disableReplication(ctx context.Context) error {
 // startReplication connects restored data to the primary. Restore has already
 // set the GTID position to pos, so this only stops and clears the copied
 // replication configuration before initializing replication.
-func (tm *TabletManager) startReplication(ctx context.Context, pos replication.Position, tabletType topodatapb.TabletType) error {
-	// Do these even if the context expires.
+func (tm *TabletManager) startReplication(ctx context.Context, logger logutil.Logger, pos replication.Position, tabletType topodatapb.TabletType) error {
+	// Stopping and clearing replication cannot revive a receiver, so they do not
+	// need the shard lock. Do them even if the context expires.
 	if err := tm.MysqlDaemon.StopReplication(context.Background(), nil); err != nil {
 		return vterrors.Wrap(err, "failed to stop replication")
 	}
@@ -389,7 +390,7 @@ func (tm *TabletManager) startReplication(ctx context.Context, pos replication.P
 		return vterrors.Wrap(err, "failed to reset replication")
 	}
 
-	primaryPosStr, err := tm.initializeReplication(ctx, tabletType)
+	primaryPosStr, err := tm.initializeReplicationUnlessShardLocked(ctx, logger, tabletType)
 	// If we ran into an error while initializing replication, then there is no point in waiting for catch-up.
 	// Also, if there is no primary tablet in the shard, we don't need to proceed further.
 	if err != nil || primaryPosStr == "" {
@@ -547,7 +548,7 @@ func (rt *restoreStateManager) finish(ctx context.Context, replCmd replicationCo
 			return vterrors.Wrap(err, "failed to disable replication")
 		}
 	case replicationActionInitialize:
-		if _, err := rt.tm.initializeReplication(ctx, rt.prevTabletType); err != nil {
+		if _, err := rt.tm.initializeReplicationUnlessShardLocked(ctx, rt.logger, rt.prevTabletType); err != nil {
 			return vterrors.Wrap(err, "failed to initialize replication")
 		}
 	case replicationActionStart:
@@ -555,7 +556,7 @@ func (rt *restoreStateManager) finish(ctx context.Context, replCmd replicationCo
 			return vterrors.New(vtrpcpb.Code_INTERNAL, "cannot start replication with nil position")
 		}
 		rt.logger.Infof("Restore: starting replication at position %v", *replCmd.position)
-		if err := rt.tm.startReplication(ctx, *replCmd.position, rt.prevTabletType); err != nil {
+		if err := rt.tm.startReplication(ctx, rt.logger, *replCmd.position, rt.prevTabletType); err != nil {
 			return vterrors.Wrapf(err, "failed to start replication with position %q", replCmd.position.String())
 		}
 	}

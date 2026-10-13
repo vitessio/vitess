@@ -27,6 +27,7 @@ import (
 
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -265,4 +266,110 @@ func TestInitializationPrimaryStatusHasShortDeadline(t *testing.T) {
 	unlock(&err)
 	require.NoError(t, err)
 	assert.Zero(t, md.ExpectedExecuteSuperQueryCurrent)
+}
+
+func TestRestoreFinalizationShardLockFailures(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		// tryLockErr is returned by TryLock. Without it, memorytopo's TryLock
+		// blocks on the held lock, like a lock taken between check and acquire.
+		tryLockErr error
+		ctxTimeout time.Duration
+		deferred   bool
+	}{
+		{name: "lock held", tryLockErr: topo.NewError(topo.NodeExists, "shard"), deferred: true},
+		{name: "acquisition timeout", deferred: true},
+		{name: "backend error", tryLockErr: errors.New("topology authorization denied")},
+		{name: "parent context expires", ctxTimeout: 100 * time.Millisecond},
+	} {
+		for actionName, action := range map[string]replicationAction{"start": replicationActionStart, "initialize": replicationActionInitialize} {
+			t.Run(tc.name+"/"+actionName, func(t *testing.T) {
+				tm, md, ts, factory := newReplicationInitializationTM(t)
+				holdInitializationShardLock(t, ts)
+				if tc.tryLockErr != nil {
+					factory.AddOperationError(memorytopo.TryLock, ".*", tc.tryLockErr)
+				}
+				require.NoError(t, tm.tmState.ChangeTabletType(t.Context(), topodatapb.TabletType_RESTORE, DBActionNone))
+				md.ExpectedExecuteSuperQueryList = nil
+				replCmd := replicationCommand{action: action}
+				if action == replicationActionStart {
+					// Restore already set the GTID position, so finalization must not reset it.
+					md.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA", "FAKE RESET REPLICA ALL"}
+					pos := md.GetPrimaryPositionLocked()
+					replCmd.position = &pos
+				}
+				ctx := t.Context()
+				if tc.ctxTimeout != 0 {
+					var cancel context.CancelFunc
+					ctx, cancel = context.WithTimeout(ctx, tc.ctxTimeout)
+					t.Cleanup(cancel)
+				}
+
+				logger := logutil.NewMemoryLogger()
+				rsm := tm.newRestoreStateManager(logger, false)
+				rsm.state = restoreStarted
+				rsm.nextTabletType = topodatapb.TabletType_REPLICA
+				// Restore holds the tablet action lock, which the shard lock holder
+				// may need, so it must not wait long for the shard lock.
+				start := time.Now()
+				err := rsm.finish(ctx, replCmd)
+				assert.Less(t, time.Since(start), replicationInitializationLockAcquireTimeout+5*time.Second)
+
+				require.NoError(t, md.CheckSuperQueryList())
+				assert.False(t, md.Replicating)
+				assert.False(t, md.SemiSyncReplicaEnabled)
+				assert.Empty(t, md.CurrentSourceHost)
+				if tc.deferred {
+					require.NoError(t, err)
+					// The tablet becomes a replica type so that VTOrc repairs its replication.
+					assert.Equal(t, topodatapb.TabletType_REPLICA, tm.Tablet().Type)
+					assert.Contains(t, logger.String(), "leaving replication unchanged for VTOrc to repair")
+					return
+				}
+				require.ErrorContains(t, err, "cannot initialize replication for ks/0")
+				assert.Equal(t, topodatapb.TabletType_RESTORE, tm.Tablet().Type)
+				assert.NotContains(t, logger.String(), "leaving replication unchanged")
+			})
+		}
+	}
+}
+
+func TestStartDoesNotWaitForHeldShardLock(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		tryLockErr error
+	}{
+		{name: "lock held", tryLockErr: topo.NewError(topo.NodeExists, "shard")},
+		{name: "acquisition timeout"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ts, factory := memorytopo.NewServerAndFactory(t.Context(), "cell1")
+			t.Cleanup(ts.Close)
+			_, err := ts.GetOrCreateShard(t.Context(), "ks", "0")
+			require.NoError(t, err)
+			primary := newTestTablet(t, 2, "ks", "0", nil)
+			primary.Type = topodatapb.TabletType_PRIMARY
+			primary.MysqlHostname, primary.MysqlPort = "old-primary", 3306
+			require.NoError(t, ts.CreateTablet(t.Context(), primary))
+			_, err = ts.UpdateShardFields(t.Context(), "ks", "0", func(si *topo.ShardInfo) error { si.PrimaryAlias = primary.Alias; return nil })
+			require.NoError(t, err)
+			holdInitializationShardLock(t, ts)
+			if tc.tryLockErr != nil {
+				factory.AddOperationError(memorytopo.TryLock, ".*", tc.tryLockErr)
+			}
+
+			// The shard lock holder may need RPCs to this tablet, which it does
+			// not serve until Start returns.
+			start := time.Now()
+			tm := newTestTM(t, ts, 1, "ks", "0", nil)
+			t.Cleanup(tm.Stop)
+			assert.Less(t, time.Since(start), replicationInitializationLockAcquireTimeout+5*time.Second)
+
+			md := tm.MysqlDaemon.(*mysqlctl.FakeMysqlDaemon)
+			assert.False(t, md.Replicating)
+			assert.False(t, md.SemiSyncReplicaEnabled)
+			assert.Empty(t, md.CurrentSourceHost)
+			assert.Equal(t, topodatapb.TabletType_REPLICA, tm.Tablet().Type)
+		})
+	}
 }
