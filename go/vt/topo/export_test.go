@@ -22,3 +22,8 @@ import "time"
 func (ts *Server) SetCellInfoCacheTTL(ttl time.Duration) {
 	ts.cellInfoCacheTTL = ttl
 }
+
+// ExpireCellInfo makes the next ts.ConnForCell for cell re-read its CellInfo.
+func (ts *Server) ExpireCellInfo(cell string) {
+	ts.expireCellInfo(cell)
+}
