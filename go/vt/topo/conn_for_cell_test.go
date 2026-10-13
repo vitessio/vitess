@@ -203,48 +203,69 @@ func TestDeleteCellInfoFailureKeepsCache(t *testing.T) {
 // TestConnForCellOlderReadDoesNotReplaceNewer verifies that when a ConnForCell read is still in flight after
 // the cell was re-pointed by another process and then expired in this one, so that a later call reads the
 // new CellInfo in a read of its own, the call that read the old CellInfo does not replace the connection the
-// later call built from the new one.
+// later call built from the new one. That holds even if this process expires the cell once more before the
+// older read completes, since expiry leaves the order of reads in place.
 func TestConnForCellOlderReadDoesNotReplaceNewer(t *testing.T) {
-	ctx := t.Context()
-	_, memFactory := memorytopo.NewServerAndFactory(ctx, "zone1")
-	factory := newPausingFactory(memFactory)
-	ts, err := topo.NewWithFactory(factory, "", "")
-	require.NoError(t, err)
-	defer ts.Close()
-	other, err := topo.NewWithFactory(memFactory, "", "")
-	require.NoError(t, err)
-	defer other.Close()
+	for _, updateAgain := range []bool{false, true} {
+		name := "re-pointed once"
+		if updateAgain {
+			name = "updated again before the older read completes"
+		}
+		t.Run(name, func(t *testing.T) {
+			ctx := t.Context()
+			_, memFactory := memorytopo.NewServerAndFactory(ctx, "zone1")
+			factory := newPausingFactory(memFactory)
+			ts, err := topo.NewWithFactory(factory, "", "")
+			require.NoError(t, err)
+			defer ts.Close()
+			other, err := topo.NewWithFactory(memFactory, "", "")
+			require.NoError(t, err)
+			defer other.Close()
 
-	_, err = ts.ConnForCell(ctx, "zone1")
-	require.NoError(t, err)
-	ts.SetCellInfoCacheTTL(time.Hour)
+			_, err = ts.ConnForCell(ctx, "zone1")
+			require.NoError(t, err)
+			ts.SetCellInfoCacheTTL(time.Hour)
 
-	// The first call reads the old CellInfo and pauses.
-	ts.ExpireCellInfo("zone1")
-	close(factory.armed)
-	older := make(chan topo.Conn)
-	go func() {
-		got, err := ts.ConnForCell(ctx, "zone1")
-		assert.NoError(t, err)
-		older <- got
-	}()
-	<-factory.paused
+			// The first call reads the old CellInfo and pauses.
+			ts.ExpireCellInfo("zone1")
+			close(factory.armed)
+			older := make(chan topo.Conn)
+			go func() {
+				got, err := ts.ConnForCell(ctx, "zone1")
+				assert.NoError(t, err)
+				older <- got
+			}()
+			<-factory.paused
 
-	// Another process re-points the cell. Once this process expires the cell again, a second call starts a
-	// read of its own and builds a connection from the new CellInfo.
-	require.NoError(t, other.UpdateCellInfoFields(ctx, "zone1", func(ci *topodatapb.CellInfo) error {
-		ci.Root = "/zone1-moved"
-		return nil
-	}))
-	ts.ExpireCellInfo("zone1")
-	newer, err := ts.ConnForCell(ctx, "zone1")
-	require.NoError(t, err)
+			// Another process re-points the cell. Once this process expires the cell again, a second call
+			// starts a read of its own and builds a connection from the new CellInfo.
+			require.NoError(t, other.UpdateCellInfoFields(ctx, "zone1", func(ci *topodatapb.CellInfo) error {
+				ci.Root = "/zone1-moved"
+				return nil
+			}))
+			ts.ExpireCellInfo("zone1")
+			newer, err := ts.ConnForCell(ctx, "zone1")
+			require.NoError(t, err)
 
-	close(factory.release)
-	assert.Same(t, newer, <-older, "the older read replaced the connection built from the newer one")
-	got, err := ts.ConnForCell(ctx, "zone1")
-	require.NoError(t, err)
-	assert.Same(t, newer, got, "the cached connection does not point at the cell's current root")
+			if updateAgain {
+				// This process changes the cell once more, which expires the entry the newer read made.
+				require.NoError(t, ts.UpdateCellInfoFields(ctx, "zone1", func(ci *topodatapb.CellInfo) error {
+					ci.Root = "/zone1-moved-again"
+					return nil
+				}))
+			}
+
+			close(factory.release)
+			assert.Same(t, newer, <-older, "the older read replaced the connection built from the newer one")
+			got, err := ts.ConnForCell(ctx, "zone1")
+			require.NoError(t, err)
+			if updateAgain {
+				assert.NotSame(t, newer, got, "the expired entry was reused instead of being read again")
+			} else {
+				assert.Same(t, newer, got, "the cached connection does not point at the cell's current root")
+			}
+		})
+	}
 }
 
 // TestDeleteCellInfoRereadsCellInfo verifies that DeleteCellInfo reads the cell's CellInfo before it checks
@@ -383,12 +404,16 @@ func TestConnForCellChangeStartsNewRead(t *testing.T) {
 		assert.NoError(t, err)
 		newer <- got
 	}()
-	select {
-	case got := <-newer:
-		assert.NotSame(t, conn, got, "the call after the change returned the connection to the old root")
-	case <-time.After(30 * time.Second):
-		require.FailNow(t, "the call after the change waited on the read that began before it")
-	}
+	var got topo.Conn
+	require.Eventually(t, func() bool {
+		select {
+		case got = <-newer:
+			return true
+		default:
+			return false
+		}
+	}, 30*time.Second, 10*time.Millisecond, "the call after the change waited on the read that began before it")
+	assert.NotSame(t, conn, got, "the call after the change returned the connection to the old root")
 }
 
 // TestConnForCellReadEndsWithCaller verifies that the CellInfo read a ConnForCell does has ended by the time
@@ -453,7 +478,14 @@ func TestConnForCellReadPanics(t *testing.T) {
 
 	close(factory.release)
 	assert.Equal(t, "read failed", <-panicked)
-	err = <-waiterErr
+	require.Eventually(t, func() bool {
+		select {
+		case err = <-waiterErr:
+			return true
+		default:
+			return false
+		}
+	}, 30*time.Second, 10*time.Millisecond, "the waiting call was still blocked after the read panicked")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "reading CellInfo panicked")
 }
@@ -488,7 +520,15 @@ func TestConnForCellWaiterStopsOnOwnCtx(t *testing.T) {
 	// The waiter shares the read in flight rather than reading, then stops when its ctx is canceled.
 	assert.Never(t, func() bool { return gets() > readsBefore }, 100*time.Millisecond, 10*time.Millisecond)
 	cancel()
-	require.ErrorIs(t, <-waiterErr, context.Canceled)
+	require.Eventually(t, func() bool {
+		select {
+		case err = <-waiterErr:
+			return true
+		default:
+			return false
+		}
+	}, 30*time.Second, 10*time.Millisecond, "the waiting call did not stop when its ctx was canceled")
+	require.ErrorIs(t, err, context.Canceled)
 
 	close(factory.release)
 	require.NoError(t, <-readerErr)

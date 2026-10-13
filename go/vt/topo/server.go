@@ -187,9 +187,11 @@ var errCellInfoReadPanicked = vterrors.New(vtrpcpb.Code_INTERNAL, "reading CellI
 type cellConn struct {
 	cellInfo *topodata.CellInfo
 	conn     Conn
-	// cellInfoReadAt is when the read of cellInfo that conn was last checked against started. Zero means
-	// expired.
-	cellInfoReadAt time.Time
+	// cellInfoReadStart is when the read of cellInfo that conn was last checked against started. It orders
+	// reads, so expiry leaves it in place.
+	cellInfoReadStart time.Time
+	// expired makes the next ConnForCell read the cell's CellInfo again, regardless of cellInfoReadStart.
+	expired bool
 }
 
 // defaultCellInfoCacheTTL is how long ConnForCell reuses a cell's cached connection without reading the cell's
@@ -333,7 +335,7 @@ func (ts *Server) ConnForCell(ctx context.Context, cell string) (Conn, error) {
 	for {
 		// Reuse the cached connection while the CellInfo it was checked against is recent.
 		ts.mu.Lock()
-		if cc, ok := ts.cellConns[cell]; ok && time.Since(cc.cellInfoReadAt) < ts.cellInfoCacheTTL {
+		if cc, ok := ts.cellConns[cell]; ok && !cc.expired && time.Since(cc.cellInfoReadStart) < ts.cellInfoCacheTTL {
 			ts.mu.Unlock()
 			return cc.conn, nil
 		}
@@ -405,22 +407,19 @@ func (ts *Server) updateCellConnLocked(key cellInfoReadKey, ci *topodata.CellInf
 	cc, ok := ts.cellConns[cell]
 	// A read that started after ours has already updated the entry. What we read may be older than what it
 	// read, so keep its result rather than replacing a newer connection with an older one.
-	if ok && cc.cellInfoReadAt.After(readStart) {
+	if ok && cc.cellInfoReadStart.After(readStart) {
 		return cc.conn, nil
 	}
 	// If the cell's CellInfo was expired while we read it, what we read may predate the change, so leave the
 	// entry expired for the next call to read again.
-	readAt := readStart
-	if ts.cellInfoGenerations[cell] != key.generation {
-		readAt = time.Time{}
-	}
+	expired := ts.cellInfoGenerations[cell] != key.generation
 	if ok {
 		// Client exists in cache.
 		// Let's verify that it is the same cell as we are looking for.
 		// The cell name can be re-used with a different ServerAddress and/or Root
 		// in which case we should get a new connection and update the cache
 		if ci.ServerAddress == cc.cellInfo.ServerAddress && ci.Root == cc.cellInfo.Root {
-			cc.cellInfoReadAt = readAt
+			cc.cellInfoReadStart, cc.expired = readStart, expired
 			ts.cellConns[cell] = cc
 			return cc.conn, nil
 		}
@@ -442,7 +441,7 @@ func (ts *Server) updateCellConnLocked(key cellInfoReadKey, ci *topodata.CellInf
 		if globalCellConn, ok := ts.globalCell.(*StatsConn); ok && globalCellConn.IsReadOnly() {
 			statsConn.SetReadOnly(true)
 		}
-		ts.cellConns[cell] = cellConn{cellInfo: ci, conn: statsConn, cellInfoReadAt: readAt}
+		ts.cellConns[cell] = cellConn{cellInfo: ci, conn: statsConn, cellInfoReadStart: readStart, expired: expired}
 		return statsConn, nil
 	case IsErrType(err, NoNode):
 		err = vterrors.Wrap(err, fmt.Sprintf("failed to create topo connection to %v, %v", ci.ServerAddress, ci.Root))
@@ -503,7 +502,7 @@ func (ts *Server) expireCellInfo(cell string) {
 	defer ts.mu.Unlock()
 	ts.cellInfoGenerations[cell]++
 	if cc, ok := ts.cellConns[cell]; ok {
-		cc.cellInfoReadAt = time.Time{}
+		cc.expired = true
 		ts.cellConns[cell] = cc
 	}
 }
