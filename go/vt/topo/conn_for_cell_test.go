@@ -87,6 +87,20 @@ type pausingFactory struct {
 	paused  chan struct{}
 	release chan struct{}
 	used    atomic.Bool
+	// returned is closed when the paused read returns.
+	returned chan struct{}
+	// panics makes the paused read panic once released.
+	panics bool
+}
+
+func newPausingFactory(memFactory *memorytopo.Factory) *pausingFactory {
+	return &pausingFactory{
+		Factory:  memFactory,
+		armed:    make(chan struct{}),
+		paused:   make(chan struct{}),
+		release:  make(chan struct{}),
+		returned: make(chan struct{}),
+	}
 }
 
 func (f *pausingFactory) Create(cell, serverAddr, root string) (topo.Conn, error) {
@@ -108,9 +122,13 @@ func (c *pausingConn) Get(ctx context.Context, filePath string) ([]byte, topo.Ve
 		select {
 		case <-c.factory.armed:
 			if c.factory.used.CompareAndSwap(false, true) {
+				defer close(c.factory.returned)
 				close(c.factory.paused)
 				select {
 				case <-c.factory.release:
+					if c.factory.panics {
+						panic("read failed")
+					}
 				case <-ctx.Done():
 					return nil, nil, ctx.Err()
 				}
@@ -127,7 +145,7 @@ func (c *pausingConn) Get(ctx context.Context, filePath string) ([]byte, topo.Ve
 func TestConnForCellExpiryDuringRead(t *testing.T) {
 	ctx := t.Context()
 	_, memFactory := memorytopo.NewServerAndFactory(ctx, "zone1")
-	factory := &pausingFactory{Factory: memFactory, armed: make(chan struct{}), paused: make(chan struct{}), release: make(chan struct{})}
+	factory := newPausingFactory(memFactory)
 	ts, err := topo.NewWithFactory(factory, "", "")
 	require.NoError(t, err)
 	defer ts.Close()
@@ -186,7 +204,7 @@ func TestDeleteCellInfoFailureKeepsCache(t *testing.T) {
 func TestConnForCellOlderReadDoesNotReplaceNewer(t *testing.T) {
 	ctx := t.Context()
 	_, memFactory := memorytopo.NewServerAndFactory(ctx, "zone1")
-	factory := &pausingFactory{Factory: memFactory, armed: make(chan struct{}), paused: make(chan struct{}), release: make(chan struct{})}
+	factory := newPausingFactory(memFactory)
 	ts, err := topo.NewWithFactory(factory, "", "")
 	require.NoError(t, err)
 	defer ts.Close()
@@ -274,12 +292,12 @@ func TestConnForCellAfterRecreate(t *testing.T) {
 }
 
 // TestConnForCellSharesCellInfoRead verifies that ConnForCell calls arriving while a cell's CellInfo is
-// being refreshed share that one read rather than each reading it, and that canceling the call that started
-// the read makes only that call return, while the others still get the result.
+// being refreshed share that one read rather than each reading it, and that canceling the call doing the read
+// fails only that call: the others make one read between them and still get the connection.
 func TestConnForCellSharesCellInfoRead(t *testing.T) {
 	ctx := t.Context()
 	_, memFactory := memorytopo.NewServerAndFactory(ctx, "zone1")
-	factory := &pausingFactory{Factory: memFactory, armed: make(chan struct{}), paused: make(chan struct{}), release: make(chan struct{})}
+	factory := newPausingFactory(memFactory)
 	ts, err := topo.NewWithFactory(factory, "", "")
 	require.NoError(t, err)
 	defer ts.Close()
@@ -320,7 +338,7 @@ func TestConnForCellSharesCellInfoRead(t *testing.T) {
 	for range callers {
 		assert.Same(t, conn, <-results)
 	}
-	assert.Equal(t, readsBefore, gets())
+	assert.Equal(t, readsBefore+1, gets(), "the waiting calls did not share one read after the reader was canceled")
 }
 
 // TestConnForCellChangeStartsNewRead verifies that after this process changes a cell's CellInfo, ConnForCell
@@ -328,7 +346,7 @@ func TestConnForCellSharesCellInfoRead(t *testing.T) {
 func TestConnForCellChangeStartsNewRead(t *testing.T) {
 	ctx := t.Context()
 	_, memFactory := memorytopo.NewServerAndFactory(ctx, "zone1")
-	factory := &pausingFactory{Factory: memFactory, armed: make(chan struct{}), paused: make(chan struct{}), release: make(chan struct{})}
+	factory := newPausingFactory(memFactory)
 	ts, err := topo.NewWithFactory(factory, "", "")
 	require.NoError(t, err)
 	defer ts.Close()
@@ -368,4 +386,107 @@ func TestConnForCellChangeStartsNewRead(t *testing.T) {
 	case <-time.After(30 * time.Second):
 		require.FailNow(t, "the call after the change waited on the read that began before it")
 	}
+}
+
+// TestConnForCellReadEndsWithCaller verifies that the CellInfo read a ConnForCell does has ended by the time
+// that ConnForCell returns, even when it returns because its ctx was canceled, so that no read is left running
+// against a Server that its owner may close next.
+func TestConnForCellReadEndsWithCaller(t *testing.T) {
+	ctx := t.Context()
+	_, memFactory := memorytopo.NewServerAndFactory(ctx, "zone1")
+	factory := newPausingFactory(memFactory)
+	ts, err := topo.NewWithFactory(factory, "", "")
+	require.NoError(t, err)
+	defer ts.Close()
+
+	ts.ExpireCellInfo("zone1")
+	close(factory.armed)
+	callCtx, cancel := context.WithCancel(ctx)
+	done := make(chan error)
+	go func() {
+		_, err := ts.ConnForCell(callCtx, "zone1")
+		done <- err
+	}()
+	<-factory.paused
+	cancel()
+	require.ErrorIs(t, <-done, context.Canceled)
+	select {
+	case <-factory.returned:
+	default:
+		assert.Fail(t, "the CellInfo read was still running after ConnForCell returned")
+	}
+	close(factory.release)
+}
+
+// TestConnForCellReadPanics verifies that when the CellInfo read panics, the panic reaches the call that did
+// the read, and the calls waiting on that read get an error instead of waiting forever.
+func TestConnForCellReadPanics(t *testing.T) {
+	ctx := t.Context()
+	_, memFactory := memorytopo.NewServerAndFactory(ctx, "zone1")
+	factory := newPausingFactory(memFactory)
+	factory.panics = true
+	ts, err := topo.NewWithFactory(factory, "", "")
+	require.NoError(t, err)
+	defer ts.Close()
+	gets := func() int64 { return memFactory.GetCallStats().Counts()["Get"] }
+
+	ts.ExpireCellInfo("zone1")
+	close(factory.armed)
+	panicked := make(chan any)
+	go func() {
+		defer func() { panicked <- recover() }()
+		_, _ = ts.ConnForCell(ctx, "zone1")
+	}()
+	<-factory.paused
+	readsBefore := gets()
+
+	waiterErr := make(chan error)
+	go func() {
+		_, err := ts.ConnForCell(ctx, "zone1")
+		waiterErr <- err
+	}()
+	assert.Never(t, func() bool { return gets() > readsBefore }, 200*time.Millisecond, 10*time.Millisecond,
+		"the waiting call read CellInfo instead of sharing the read in flight")
+
+	close(factory.release)
+	assert.Equal(t, "read failed", <-panicked)
+	err = <-waiterErr
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "reading CellInfo panicked")
+}
+
+// TestConnForCellWaiterStopsOnOwnCtx verifies that a ConnForCell waiting on another call's CellInfo read
+// returns as soon as its own ctx is done, without waiting for the read.
+func TestConnForCellWaiterStopsOnOwnCtx(t *testing.T) {
+	ctx := t.Context()
+	_, memFactory := memorytopo.NewServerAndFactory(ctx, "zone1")
+	factory := newPausingFactory(memFactory)
+	ts, err := topo.NewWithFactory(factory, "", "")
+	require.NoError(t, err)
+	defer ts.Close()
+
+	ts.ExpireCellInfo("zone1")
+	close(factory.armed)
+	readerErr := make(chan error)
+	go func() {
+		_, err := ts.ConnForCell(ctx, "zone1")
+		readerErr <- err
+	}()
+	<-factory.paused
+
+	gets := func() int64 { return memFactory.GetCallStats().Counts()["Get"] }
+	readsBefore := gets()
+	waiterCtx, cancel := context.WithCancel(ctx)
+	waiterErr := make(chan error)
+	go func() {
+		_, err := ts.ConnForCell(waiterCtx, "zone1")
+		waiterErr <- err
+	}()
+	// The waiter shares the read in flight rather than reading, then stops when its ctx is canceled.
+	assert.Never(t, func() bool { return gets() > readsBefore }, 100*time.Millisecond, 10*time.Millisecond)
+	cancel()
+	require.ErrorIs(t, <-waiterErr, context.Canceled)
+
+	close(factory.release)
+	require.NoError(t, <-readerErr)
 }
