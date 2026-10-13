@@ -79,8 +79,8 @@ func TestConnForCellCachesCellInfo(t *testing.T) {
 	})
 }
 
-// pausingFactory wraps a memorytopo factory. Once armed, the next global read of a CellInfo returns what it
-// read and then waits for release before returning.
+// pausingFactory wraps a memorytopo factory. Once armed, the next global read of a CellInfo reads it and then
+// waits for release, or for its ctx to be done like a real topo read, before returning.
 type pausingFactory struct {
 	*memorytopo.Factory
 	armed   chan struct{}
@@ -109,7 +109,11 @@ func (c *pausingConn) Get(ctx context.Context, filePath string) ([]byte, topo.Ve
 		case <-c.factory.armed:
 			if c.factory.used.CompareAndSwap(false, true) {
 				close(c.factory.paused)
-				<-c.factory.release
+				select {
+				case <-c.factory.release:
+				case <-ctx.Done():
+					return nil, nil, ctx.Err()
+				}
 			}
 		default:
 		}
@@ -175,9 +179,10 @@ func TestDeleteCellInfoFailureKeepsCache(t *testing.T) {
 	assert.Same(t, conn, got)
 }
 
-// TestConnForCellOlderReadDoesNotReplaceNewer verifies that when two ConnForCell calls refresh a cell at
-// once and another process re-points the cell in between, the call that read the old CellInfo does not
-// replace the connection that the later call built from the new one.
+// TestConnForCellOlderReadDoesNotReplaceNewer verifies that when a ConnForCell read is still in flight after
+// the cell was re-pointed by another process and then expired in this one, so that a later call reads the
+// new CellInfo in a read of its own, the call that read the old CellInfo does not replace the connection the
+// later call built from the new one.
 func TestConnForCellOlderReadDoesNotReplaceNewer(t *testing.T) {
 	ctx := t.Context()
 	_, memFactory := memorytopo.NewServerAndFactory(ctx, "zone1")
@@ -191,10 +196,10 @@ func TestConnForCellOlderReadDoesNotReplaceNewer(t *testing.T) {
 
 	_, err = ts.ConnForCell(ctx, "zone1")
 	require.NoError(t, err)
-	// Every call refreshes, so both calls below read CellInfo.
-	ts.SetCellInfoCacheTTL(0)
+	ts.SetCellInfoCacheTTL(time.Hour)
 
 	// The first call reads the old CellInfo and pauses.
+	ts.ExpireCellInfo("zone1")
 	close(factory.armed)
 	older := make(chan topo.Conn)
 	go func() {
@@ -204,11 +209,13 @@ func TestConnForCellOlderReadDoesNotReplaceNewer(t *testing.T) {
 	}()
 	<-factory.paused
 
-	// Another process re-points the cell, and a second call builds a connection from the new CellInfo.
+	// Another process re-points the cell. Once this process expires the cell again, a second call starts a
+	// read of its own and builds a connection from the new CellInfo.
 	require.NoError(t, other.UpdateCellInfoFields(ctx, "zone1", func(ci *topodatapb.CellInfo) error {
 		ci.Root = "/zone1-moved"
 		return nil
 	}))
+	ts.ExpireCellInfo("zone1")
 	newer, err := ts.ConnForCell(ctx, "zone1")
 	require.NoError(t, err)
 
@@ -264,4 +271,101 @@ func TestConnForCellAfterRecreate(t *testing.T) {
 	got, err = ts.ConnForCell(ctx, "zone1")
 	require.NoError(t, err)
 	assert.NotSame(t, conn, got, "the connection cached for the deleted cell was reused")
+}
+
+// TestConnForCellSharesCellInfoRead verifies that ConnForCell calls arriving while a cell's CellInfo is
+// being refreshed share that one read rather than each reading it, and that canceling the call that started
+// the read makes only that call return, while the others still get the result.
+func TestConnForCellSharesCellInfoRead(t *testing.T) {
+	ctx := t.Context()
+	_, memFactory := memorytopo.NewServerAndFactory(ctx, "zone1")
+	factory := &pausingFactory{Factory: memFactory, armed: make(chan struct{}), paused: make(chan struct{}), release: make(chan struct{})}
+	ts, err := topo.NewWithFactory(factory, "", "")
+	require.NoError(t, err)
+	defer ts.Close()
+	ts.SetCellInfoCacheTTL(time.Hour)
+	gets := func() int64 { return memFactory.GetCallStats().Counts()["Get"] }
+
+	conn, err := ts.ConnForCell(ctx, "zone1")
+	require.NoError(t, err)
+
+	// The first call starts the read, which pauses; then cancel that call.
+	ts.ExpireCellInfo("zone1")
+	close(factory.armed)
+	firstCtx, cancelFirst := context.WithCancel(ctx)
+	firstErr := make(chan error)
+	go func() {
+		_, err := ts.ConnForCell(firstCtx, "zone1")
+		firstErr <- err
+	}()
+	<-factory.paused
+	readsBefore := gets()
+
+	const callers = 4
+	results := make(chan topo.Conn, callers)
+	for range callers {
+		go func() {
+			got, err := ts.ConnForCell(ctx, "zone1")
+			assert.NoError(t, err)
+			results <- got
+		}()
+	}
+	assert.Never(t, func() bool { return gets() > readsBefore }, 200*time.Millisecond, 10*time.Millisecond,
+		"a call read CellInfo instead of sharing the read in flight")
+
+	cancelFirst()
+	require.ErrorIs(t, <-firstErr, context.Canceled)
+
+	close(factory.release)
+	for range callers {
+		assert.Same(t, conn, <-results)
+	}
+	assert.Equal(t, readsBefore, gets())
+}
+
+// TestConnForCellChangeStartsNewRead verifies that after this process changes a cell's CellInfo, ConnForCell
+// starts a read of its own rather than joining a read that began before the change.
+func TestConnForCellChangeStartsNewRead(t *testing.T) {
+	ctx := t.Context()
+	_, memFactory := memorytopo.NewServerAndFactory(ctx, "zone1")
+	factory := &pausingFactory{Factory: memFactory, armed: make(chan struct{}), paused: make(chan struct{}), release: make(chan struct{})}
+	ts, err := topo.NewWithFactory(factory, "", "")
+	require.NoError(t, err)
+	defer ts.Close()
+	ts.SetCellInfoCacheTTL(time.Hour)
+
+	conn, err := ts.ConnForCell(ctx, "zone1")
+	require.NoError(t, err)
+
+	// A read that began before the change is still in flight.
+	ts.ExpireCellInfo("zone1")
+	close(factory.armed)
+	older := make(chan topo.Conn)
+	go func() {
+		got, err := ts.ConnForCell(ctx, "zone1")
+		assert.NoError(t, err)
+		older <- got
+	}()
+	<-factory.paused
+	defer func() {
+		close(factory.release)
+		<-older
+	}()
+
+	require.NoError(t, ts.UpdateCellInfoFields(ctx, "zone1", func(ci *topodatapb.CellInfo) error {
+		ci.Root = "/zone1-moved"
+		return nil
+	}))
+	newer := make(chan topo.Conn)
+	go func() {
+		got, err := ts.ConnForCell(ctx, "zone1")
+		assert.NoError(t, err)
+		newer <- got
+	}()
+	select {
+	case got := <-newer:
+		assert.NotSame(t, conn, got, "the call after the change returned the connection to the old root")
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "the call after the change waited on the read that began before it")
+	}
 }

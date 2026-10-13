@@ -53,6 +53,7 @@ import (
 
 	"github.com/spf13/pflag"
 	"golang.org/x/sync/semaphore"
+	"golang.org/x/sync/singleflight"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/topodata"
@@ -157,6 +158,14 @@ type Server struct {
 	cellInfoGenerations map[string]uint64
 	// cellInfoCacheTTL is defaultCellInfoCacheTTL; tests change it.
 	cellInfoCacheTTL time.Duration
+	// cellInfoReads lets concurrent ConnForCell calls for the same cell and generation share one CellInfo read.
+	cellInfoReads singleflight.Group
+}
+
+// cellInfoRead is the result of one read of a cell's CellInfo.
+type cellInfoRead struct {
+	cellInfo  *topodata.CellInfo
+	startedAt time.Time
 }
 
 type cellConn struct {
@@ -312,14 +321,13 @@ func (ts *Server) ConnForCell(ctx context.Context, cell string) (Conn, error) {
 	}
 	generation := ts.cellInfoGenerations[cell]
 	ts.mu.Unlock()
-	readStart := time.Now()
 
-	// Fetch cell cluster addresses from the global cluster. This is a strong read: the result is trusted
-	// for cellInfoCacheTTL, so it must not come from a GlobalReadOnlyCell that lags behind.
-	ci, err := ts.GetCellInfo(ctx, cell, true /*strongRead*/)
+	// Fetch cell cluster addresses from the global cluster.
+	read, err := ts.readCellInfo(ctx, cell, generation)
 	if err != nil {
 		return nil, err
 	}
+	ci, readStart := read.cellInfo, read.startedAt
 
 	// Return a cached client if present.
 	ts.mu.Lock()
@@ -413,6 +421,34 @@ func (ts *Server) Close() {
 		cc.conn.Close()
 	}
 	ts.cellConns = make(map[string]cellConn)
+}
+
+// readCellInfo reads cell's CellInfo from the global topo. It is a strong read: the result is trusted for
+// cellInfoCacheTTL, so it must not come from a GlobalReadOnlyCell that lags behind.
+//
+// When an entry expires, every ConnForCell for the cell arrives here at once, so concurrent calls share one
+// read. The read is keyed by generation too, so a call made after this process changed the cell starts a
+// new read rather than joining one that began before the change. The read is not canceled with the ctx of
+// the call that started it, so that ctx being canceled does not fail the others; each call stops waiting
+// when its own ctx is done.
+func (ts *Server) readCellInfo(ctx context.Context, cell string, generation uint64) (cellInfoRead, error) {
+	key := fmt.Sprintf("%s/%d", cell, generation)
+	results := ts.cellInfoReads.DoChan(key, func() (any, error) {
+		readCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), RemoteOperationTimeout)
+		defer cancel()
+		startedAt := time.Now()
+		ci, err := ts.GetCellInfo(readCtx, cell, true /*strongRead*/)
+		return cellInfoRead{cellInfo: ci, startedAt: startedAt}, err
+	})
+	select {
+	case <-ctx.Done():
+		return cellInfoRead{}, ctx.Err()
+	case result := <-results:
+		if result.Err != nil {
+			return cellInfoRead{}, result.Err
+		}
+		return result.Val.(cellInfoRead), nil
+	}
 }
 
 // expireCellInfo makes the next ConnForCell for cell read its CellInfo from the global topo again.
