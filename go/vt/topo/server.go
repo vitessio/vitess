@@ -538,6 +538,8 @@ func (ts *Server) SetReadOnly(readOnly bool) error {
 	}
 	globalCellConn.SetReadOnly(readOnly)
 
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
 	for _, cc := range ts.cellConns {
 		localCellConn, ok := cc.conn.(*StatsConn)
 		if !ok {
@@ -559,6 +561,8 @@ func (ts *Server) IsReadOnly() (bool, error) {
 		return false, nil
 	}
 
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
 	for _, cc := range ts.cellConns {
 		localCellConn, ok := cc.conn.(*StatsConn)
 		if !ok {

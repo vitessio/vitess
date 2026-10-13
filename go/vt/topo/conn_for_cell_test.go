@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -489,4 +490,51 @@ func TestConnForCellWaiterStopsOnOwnCtx(t *testing.T) {
 
 	close(factory.release)
 	require.NoError(t, <-readerErr)
+}
+
+// TestConnForCellConcurrentWithReadOnly verifies that refreshing cell connections in ConnForCell is safe
+// alongside SetReadOnly and IsReadOnly, which srvtopo's read-only server calls on every GetTopoServer, and
+// alongside operations on a connection that check its read-only state. Run with -race.
+func TestConnForCellConcurrentWithReadOnly(t *testing.T) {
+	ctx := t.Context()
+	ts := memorytopo.NewServer(ctx, "zone1")
+	defer ts.Close()
+	_, err := ts.ConnForCell(ctx, "zone1")
+	require.NoError(t, err)
+	// Every call refreshes the cell's cached connection.
+	ts.SetCellInfoCacheTTL(0)
+
+	const iterations = 500
+	var wg sync.WaitGroup
+	var connErr, readOnlyErr error
+	wg.Go(func() {
+		for range iterations {
+			conn, err := ts.ConnForCell(ctx, "zone1")
+			if err != nil {
+				connErr = err
+				return
+			}
+			// Checks the connection's read-only state; the outcome depends on timing.
+			_, _ = conn.Create(ctx, "read_only_probe", nil)
+		}
+	})
+	wg.Go(func() {
+		for range iterations {
+			if err := ts.SetReadOnly(true); err != nil {
+				readOnlyErr = err
+				return
+			}
+			if _, err := ts.IsReadOnly(); err != nil {
+				readOnlyErr = err
+				return
+			}
+		}
+	})
+	wg.Wait()
+	require.NoError(t, connErr)
+	require.NoError(t, readOnlyErr)
+
+	readOnly, err := ts.IsReadOnly()
+	require.NoError(t, err)
+	assert.True(t, readOnly)
 }
