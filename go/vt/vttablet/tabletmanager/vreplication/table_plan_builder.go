@@ -381,6 +381,7 @@ func (tpb *tablePlanBuilder) generate() *TablePlan {
 		TablePlanBuilder:        tpb,
 		PartialInserts:          make(map[string]*sqlparser.ParsedQuery, 0),
 		PartialUpdates:          make(map[string]*sqlparser.ParsedQuery, 0),
+		PartialBitmaps:          make(map[string]*mappedDataColumns),
 		CollationEnv:            tpb.collationEnv,
 		WorkflowConfig:          tpb.workflowConfig,
 	}
