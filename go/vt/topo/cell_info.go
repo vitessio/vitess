@@ -141,7 +141,11 @@ func (ts *Server) UpdateCellInfoFields(ctx context.Context, cell string, update 
 		if err != nil {
 			return err
 		}
-		if _, err = ts.globalCell.Update(ctx, filePath, contents, version); !IsErrType(err, BadVersion) {
+		_, err = ts.globalCell.Update(ctx, filePath, contents, version)
+		if err == nil {
+			ts.expireCellInfo(cell)
+		}
+		if !IsErrType(err, BadVersion) {
 			// This includes the 'err=nil' case.
 			return err
 		}
@@ -185,7 +189,11 @@ func (ts *Server) DeleteCellInfo(ctx context.Context, cell string, force bool) e
 	}
 
 	filePath := pathForCellInfo(cell)
-	return ts.globalCell.Delete(ctx, filePath, nil)
+	if err := ts.globalCell.Delete(ctx, filePath, nil); err != nil {
+		return err
+	}
+	ts.expireCellInfo(cell)
+	return nil
 }
 
 // GetKnownCells returns the list of known cells.

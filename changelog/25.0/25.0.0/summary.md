@@ -78,6 +78,7 @@
         - [ORCA metrics now report QPS and EPS](#grpc-orca-qps)
         - [Statements are trimmed of MySQL's space characters only](#sqlparser-mysql-space-set)
         - [Charset and collation names are quoted when regenerated](#sqlparser-charset-name-quoting)
+        - [Cell connections reuse `CellInfo` for up to 30 seconds](#topo-cell-info-cache)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -874,3 +875,9 @@ User-visible consequences:
 - **`COLLATE binary` in an expression is quoted.** `expr COLLATE binary` regenerates as ``expr COLLATE `binary` ``, because MySQL's expression `COLLATE` only accepts `binary` quoted. Column, table and database `COLLATE binary` and `CHARACTER SET binary` stay bare.
 - **An empty charset, collation, engine or partition tablespace name is rejected.** `CHARACTER SET ''` and `COLLATE ''` on a column, a table, `ALTER TABLE ... CONVERT TO`, `CAST`/`CONVERT`, `CONVERT ... USING`, `CHAR ... USING`, `SELECT ... INTO OUTFILE` and an expression, `ENGINE ''` on a table or a partition, and a partition's `TABLESPACE ''` no longer parse. An empty name in these positions is indistinguishable from the clause being absent, so it would previously have been dropped or mangled and a statement MySQL rejects could have become a valid, different one. Non-DDL statements get the error directly; DDL falls back to a partial parse, so the client's own text is forwarded and MySQL rejects it. `SET NAMES ... COLLATE ''` and `SET CHARACTER SET ... COLLATE ''`, which used to parse and discard the collation, are now parse errors too; MySQL rejects both. `CREATE`/`ALTER DATABASE ... CHARACTER SET ''` and `COLLATE ''` are unchanged: they still parse and are written back as `''`.
 - **`ENCRYPTION` requires a quoted value.** `CREATE`/`ALTER DATABASE ... ENCRYPTION N` no longer fully parses, matching MySQL, which only accepts `'Y'` or `'N'` as a quoted string. Such a statement now falls back to a partial parse rather than being regenerated into a spelling MySQL would refuse.
+
+#### <a id="topo-cell-info-cache"/>Cell connections reuse `CellInfo` for up to 30 seconds</a>
+
+Every read or write against a cell's local topo first gets the cell's connection, and that used to read the cell's `CellInfo` from the global topo on every call, even though the connection was already cached, only to detect a cell being pointed at a different topo server. The `CellInfo` is now re-read at most every 30 seconds per cell, which removes most global topo reads from per-cell paths such as the tablet throttler's inventory refresh and `FindAllTabletAliasesInShard`.
+
+**Impact**: a cell whose `ServerAddress` or `Root` is changed with `vtctldclient UpdateCellInfo` is picked up by other processes up to 30 seconds later. The process that makes the change, and one that deletes a cell, sees it immediately.
