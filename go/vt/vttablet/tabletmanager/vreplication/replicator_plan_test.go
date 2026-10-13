@@ -2306,3 +2306,37 @@ func BenchmarkAppendFromRowLargeJSON(b *testing.B) {
 		}
 	}
 }
+
+// TestClearEmptyPartialJSONDoesNotTouchPaddingBits pins the Count bound in
+// clearEmptyPartialJSONDataColumns: bits at index >= Count are padding in the
+// packed Cols byte and must not be cleared when an empty partial JSON value
+// sits at a field index past Count.
+func TestClearEmptyPartialJSONDoesNotTouchPaddingBits(t *testing.T) {
+	tp := &TablePlan{
+		Fields: []*querypb.Field{
+			{Name: "id", Type: querypb.Type_INT64},
+			{Name: "j", Type: querypb.Type_JSON},
+		},
+	}
+	// Count=1: only bit 0 is in range. Bit 1 is padding, left set so a
+	// len(Cols)*8 bound would clear it when unsetting the JSON field at i=1.
+	after := &binlogdatapb.RowChange_Bitmap{Count: 1, Cols: []byte{0x03}}
+	legacy := &binlogdatapb.RowChange_Bitmap{Count: 1, Cols: []byte{0x03}}
+	rowChange := &binlogdatapb.RowChange{
+		AfterDataColumns: after,
+		DataColumns:      legacy,
+		JsonPartialValues: &binlogdatapb.RowChange_Bitmap{
+			Count: 1,
+			Cols:  []byte{0x01},
+		},
+	}
+	afterVals := []sqltypes.Value{
+		sqltypes.NewInt64(1),
+		sqltypes.MakeTrusted(querypb.Type_JSON, []byte{}),
+	}
+
+	tp.clearEmptyPartialJSONDataColumns(rowChange, afterVals)
+
+	assert.Equal(t, []byte{0x03}, after.Cols, "AfterDataColumns padding bit must stay set")
+	assert.Equal(t, []byte{0x03}, legacy.Cols, "DataColumns padding bit must stay set")
+}

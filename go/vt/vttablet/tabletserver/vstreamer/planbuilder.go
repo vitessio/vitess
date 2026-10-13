@@ -377,6 +377,43 @@ func (plan *Plan) mapBitmap(source *mysql.Bitmap) *binlogdatapb.RowChange_Bitmap
 	}
 }
 
+// unreconstructibleAfterColumn returns the name of the first emitted column
+// whose value cannot be produced from a partial after image alone: a column
+// that binlog_row_image=NOBLOB omitted, a keyspace_id() with an omitted vindex
+// input, or a JSON column that binlog_row_value_options=PARTIAL_JSON sent as a
+// diff that can only be applied on top of the previous value. It returns ""
+// when every emitted value is complete. Columns the plan does not emit are
+// irrelevant, whatever the image says about them.
+func (plan *Plan) unreconstructibleAfterColumn(dataColumns *mysql.Bitmap, jsonPartialValues *mysql.Bitmap) string {
+	// jsonPartialValues has one bit per JSON column of the source table, in
+	// table order.
+	jsonOrdinal := make(map[int]int)
+	for i, field := range plan.Table.Fields {
+		if field.Type == querypb.Type_JSON {
+			jsonOrdinal[i] = len(jsonOrdinal)
+		}
+	}
+	for _, colExpr := range plan.ColExprs {
+		switch {
+		case colExpr.Vindex != nil:
+			for _, col := range colExpr.VindexColumns {
+				if !dataColumns.Bit(col) {
+					return colExpr.Field.Name
+				}
+			}
+		case colExpr.ColNum != -1:
+			if !dataColumns.Bit(colExpr.ColNum) {
+				return colExpr.Field.Name
+			}
+			if ordinal, isJSON := jsonOrdinal[colExpr.ColNum]; isJSON &&
+				jsonPartialValues.Count() > 0 && jsonPartialValues.Bit(ordinal) {
+				return colExpr.Field.Name
+			}
+		}
+	}
+	return ""
+}
+
 func getKeyspaceID(values []sqltypes.Value, vindex vindexes.Vindex, vindexColumns []int, fields []*querypb.Field) (key.DestinationKeyspaceID, error) {
 	vindexValues := make([]sqltypes.Value, 0, len(vindexColumns))
 	for _, col := range vindexColumns {

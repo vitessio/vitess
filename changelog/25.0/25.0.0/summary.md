@@ -8,6 +8,7 @@
     - **[Security](#security)**
         - [Legacy vtctld HTTP API removed](#vtctld-http-api-removed)
         - [VTAdmin refuses cross-site requests that change cluster state](#vtadmin-cross-site-state-changes)
+        - [VTAdmin VExplain modes that can run the statement require the `execute` action](#vtadmin-vexplain-execute-action)
     - **[New Support](#new-support)**
         - [VTOrc failover of an unreachable primary `vttablet` via replica quorum](#vtorc-quorum-unreachable-primary)
     - **[Breaking Changes](#breaking-changes)**
@@ -21,6 +22,7 @@
     - **[Deprecations](#deprecations)**
         - [CLI Flags](#deprecated-cli-flags)
         - [Legacy streaming-path plan types in query rules](#deprecated-selectstream-rule-plan)
+        - [`//` comments](#deprecated-double-slash-comments)
 - **[Minor Changes](#minor-changes)**
     - **[VReplication](#minor-changes-vreplication)**
         - [Default data protection for `_reverse` workflow cancel/complete](#vreplication-reverse-workflow-data-protection)
@@ -76,6 +78,8 @@
         - [Connections whose certificate revocation cannot be checked against a configured CRL are rejected](#vttls-crl-fail-closed)
         - [Optional gRPC TLS: connections are counted by transport](#grpc-optional-tls-connections)
         - [ORCA metrics now report QPS and EPS](#grpc-orca-qps)
+        - [Statements are trimmed of MySQL's space characters only](#sqlparser-mysql-space-set)
+        - [Charset and collation names are quoted when regenerated](#sqlparser-charset-name-quoting)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -107,6 +111,14 @@ VTAdmin closes this in two ways:
 **Impact**: a request to one of the eight routes with a method other than `POST` returns `404 Not Found`, as for VTAdmin's other method-restricted routes. A state-changing request that a browser sends from an origin `vtadmin` does not accept returns `403 Forbidden`.
 
 See [#21397](https://github.com/vitessio/vitess/pull/21397) for details.
+
+#### <a id="vtadmin-vexplain-execute-action"/>VTAdmin VExplain modes that can run the statement require the `execute` action</a>
+
+VTAdmin's VExplain API was authorized with the `get` action, but `VEXPLAIN QUERIES`, `ALL` and `TRACE` run the statement they explain, and MySQL's `EXPLAIN`, which `VEXPLAIN MYSQLPLAN` runs, calls the statement's functions in some query shapes, so an actor allowed only to read could change data through it ([GHSA-c2r8-grjp-w8c2](https://github.com/vitessio/vitess/security/advisories/GHSA-c2r8-grjp-w8c2)). Those modes now require the new `execute` action on the `VExplain` resource; `PLAN` and `KEYS`, which only plan the statement, still require only `get`. For those modes VTAdmin also accepts only a `SELECT` without `INTO`, sequence next-values or advisory lock functions, and runs `QUERIES`, `ALL` and `TRACE` in a read-only transaction that is always rolled back.
+
+**Migration**: grant the `execute` action on `VExplain` to the actors that should run `VEXPLAIN QUERIES`, `ALL`, `TRACE` or `MYSQLPLAN`. Rules that grant all actions (`*`) and `--no-rbac` already include it.
+
+**Impact**: an actor with only `get` on `VExplain` gets an `unauthorized` error from `VEXPLAIN QUERIES`, `ALL`, `TRACE` and `MYSQLPLAN`.
 
 ### <a id="new-support"/>New Support</a>
 
@@ -233,6 +245,14 @@ For backward compatibility, rules keep matching queries on the streaming path by
 Both compatibility behaviors will be removed in v26, along with the `SelectStream` plan name.
 
 **Impact**: Update query rules that use `SelectStream` to the concrete plan names listed above, and re-key `OtherRead` rules meant to gate streamed `ANALYZE` on the `Select` plan or a `Query` pattern. Note that rules keyed on concrete plan names match on both execution paths, not only streamed queries.
+
+#### <a id="deprecated-double-slash-comments"/>`//` comments</a>
+
+Vitess accepts `//` line comments, which are not part of MySQL's syntax. For MySQL compatibility, support for them is deprecated. It will be disabled by default in v26 and removed in v27.
+
+VTGate counts each executed statement that uses a `//` comment under the `DoubleSlashComment` type of the `VtGateWarnings` metric, and logs a throttled warning. The client gets a MySQL warning (`ER_WARN_DEPRECATED_SYNTAX`, 1287) for the statement, which `SHOW WARNINGS` and many drivers show.
+
+**Impact**: Replace `//` comments in queries with `-- `, `#` or `/* */` comments. Use the `VtGateWarnings` metric, the VTGate log, and the warnings that clients receive to find the remaining uses.
 
 ## <a id="minor-changes"/>Minor Changes</a>
 
@@ -863,3 +883,19 @@ See [#21161](https://github.com/vitessio/vitess/issues/21161) for details.
 With `--grpc-enable-orca-metrics`, gRPC servers now report QPS and EPS in their ORCA load reports, alongside CPU and memory utilization. QPS is the rate of gRPC messages sent plus failed calls: one per unary response or stream message, and one per call that fails, so long-lived streams such as `VStream` keep counting while they send. EPS is the rate of calls whose gRPC handler returns an error; query errors that VTGate returns inside a successful response, as `Execute` does, are not counted. Health checks and ORCA reports are not counted.
 
 Clients using gRPC's standard `weighted_round_robin` policy with `enableOobLoadReport: true` ignore reports without QPS, so they previously fell back to plain round robin. After upgrading a server that has `--grpc-enable-orca-metrics` set, those clients switch to weighted routing with no configuration change. The policy weighs each server by its QPS, CPU utilization, and error rate.
+
+#### <a id="sqlparser-mysql-space-set"/>Statements are trimmed of MySQL's space characters only</a>
+
+VTGate and VTTablet trim whitespace from the start and end of a statement before they parse it. They used to trim every Unicode space character, including the no-break space (U+00A0), which MySQL does not treat as a space. They now trim only the characters MySQL treats as spaces: space, tab, line feed, vertical tab, form feed and carriage return. A statement that starts or ends with any other space character is now rejected with a syntax error, as MySQL rejects it, where Vitess used to remove the character and run the statement. Clients that send such characters must remove them before upgrading.
+
+#### <a id="sqlparser-charset-name-quoting"/>Charset and collation names are quoted when regenerated</a>
+
+A charset, collation, engine, tablespace or full-text parser name is now decoded when parsed, and written back as a single token when Vitess regenerates the statement: bare when it is a known charset, collation, engine, index type or parser name, back-quoted otherwise.
+
+User-visible consequences:
+
+- **A quoted name is normalized.** `COLLATE 'utf8_bin'` regenerates as `COLLATE utf8_bin` — the quoted and unquoted spellings mean the same name, and the decoded form is what is stored. Anything comparing the printed form of these statements byte for byte sees the new spelling.
+- **Only known names stay bare.** A charset or collation name of any MySQL or MariaDB version, a known storage engine such as `InnoDB` or `memory`, the `BTREE`, `HASH` and `RTREE` index types, the `ngram` and `mecab` parsers, and the `innodb_system` and `innodb_file_per_table` tablespaces are written back as they were spelled. Any other name is back-quoted: `TABLESPACE ts` regenerates as ``TABLESPACE `ts` ``, and so does an engine Vitess does not know or a keyword used as a name. `WITH PARSER` accepts only a plain identifier, so a known name that is a keyword is quoted there: ``WITH PARSER `memory` `` keeps its quoting where `ENGINE memory` does not. `binary` is still bare where the grammar has a `BINARY` alternative, except directly before the `BINARY` attribute: `CHARACTER SET 'binary' BINARY` regenerates as ``CHARACTER SET `binary` BINARY``.
+- **`COLLATE binary` in an expression is quoted.** `expr COLLATE binary` regenerates as ``expr COLLATE `binary` ``, because MySQL's expression `COLLATE` only accepts `binary` quoted. Column, table and database `COLLATE binary` and `CHARACTER SET binary` stay bare.
+- **An empty charset, collation, engine or partition tablespace name is rejected.** `CHARACTER SET ''` and `COLLATE ''` on a column, a table, `ALTER TABLE ... CONVERT TO`, `CAST`/`CONVERT`, `CONVERT ... USING`, `CHAR ... USING`, `SELECT ... INTO OUTFILE` and an expression, `ENGINE ''` on a table or a partition, and a partition's `TABLESPACE ''` no longer parse. An empty name in these positions is indistinguishable from the clause being absent, so it would previously have been dropped or mangled and a statement MySQL rejects could have become a valid, different one. Non-DDL statements get the error directly; DDL falls back to a partial parse, so the client's own text is forwarded and MySQL rejects it. `SET NAMES ... COLLATE ''` and `SET CHARACTER SET ... COLLATE ''`, which used to parse and discard the collation, are now parse errors too; MySQL rejects both. `CREATE`/`ALTER DATABASE ... CHARACTER SET ''` and `COLLATE ''` are unchanged: they still parse and are written back as `''`.
+- **`ENCRYPTION` requires a quoted value.** `CREATE`/`ALTER DATABASE ... ENCRYPTION N` no longer fully parses, matching MySQL, which only accepts `'Y'` or `'N'` as a quoted string. Such a statement now falls back to a partial parse rather than being regenerated into a spelling MySQL would refuse.
