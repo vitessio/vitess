@@ -880,4 +880,4 @@ User-visible consequences:
 
 Every read or write against a cell's local topo first gets the cell's connection, and that used to read the cell's `CellInfo` from the global topo on every call, even though the connection was already cached, only to detect a cell being pointed at a different topo server. The `CellInfo` is now re-read at most every 30 seconds per cell, which removes most global topo reads from per-cell paths such as the tablet throttler's inventory refresh and `FindAllTabletAliasesInShard`.
 
-**Impact**: a cell whose `ServerAddress` or `Root` is changed with `vtctldclient UpdateCellInfo` is picked up by other processes up to 30 seconds later. The process that makes the change, and one that deletes a cell, sees it immediately.
+**Impact**: after a cell is re-pointed with `vtctldclient UpdateCellInfo`, other processes, including watches that start in that time, may use the old topo server for up to 30 seconds, so keep it running that long. Open watches are unaffected.

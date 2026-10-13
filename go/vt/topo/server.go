@@ -197,8 +197,8 @@ type cellConn struct {
 // defaultCellInfoCacheTTL is how long ConnForCell reuses a cell's cached connection without reading the cell's
 // CellInfo from the global topo again. CellInfo only changes when a cell is added, removed, or pointed at a
 // different topo server, so re-reading it on every call costs a global read per cell-local operation for a
-// change that is almost never there. A cell that is re-pointed by another process is noticed up to this
-// long later; this process notices its own UpdateCellInfoFields and DeleteCellInfo immediately.
+// change that is almost never there. A cell re-pointed by another process is noticed up to this long later, by
+// new ConnForCell calls only; this process notices its own changes immediately.
 const defaultCellInfoCacheTTL = 30 * time.Second
 
 type cellsToAliasesMap struct {
