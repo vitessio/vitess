@@ -20,7 +20,8 @@
  * [release-24.0] vtgate/buffer: do not lose the timeout thread's queue-not-empty wakeup (#21402) [#21440](https://github.com/vitessio/vitess/pull/21440)
  * [release-24.0] vtgate/buffer: create each shard buffer only once (#21403) [#21441](https://github.com/vitessio/vitess/pull/21441)
  * [release-24.0] sqlparser: rewrite `//` comments to `#/` before statement text reaches MySQL (#21410) [#21451](https://github.com/vitessio/vitess/pull/21451)
- * [release-24.0] sqltypes, vtgate, vttablet: reject bind variables that are not single SQL literals (#21386) [#21518](https://github.com/vitessio/vitess/pull/21518) 
+ * [release-24.0] sqltypes, vtgate, vttablet: reject bind variables that are not single SQL literals (#21386) [#21518](https://github.com/vitessio/vitess/pull/21518)
+ * [release-24.0] vtgate: keep values containing */ out of the SET_VAR optimizer hint (#21388) [#21401](https://github.com/vitessio/vitess/pull/21401)
 #### VTTablet
  * [release-24.0] VTTablet: let callers with every role on every table run statements whose tables cannot be determined (#21349) [#21414](https://github.com/vitessio/vitess/pull/21414)
  * [release-24.0] VTTablet: accept user variables and safe collation IDs in connection character set checks (#21465) [#21470](https://github.com/vitessio/vitess/pull/21470)
