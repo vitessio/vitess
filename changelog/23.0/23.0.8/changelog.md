@@ -17,6 +17,7 @@
  * [release-23.0] VReplication: validate bulk-delete Before images against the field count (#20976) [#21454](https://github.com/vitessio/vitess/pull/21454) 
 #### VTGate
  * [release-23.0] vtgate: reject global SET names that cannot be system variables (#21390) [#21398](https://github.com/vitessio/vitess/pull/21398)
+ * [release-23.0] vtgate: keep values containing `*/` out of the SET_VAR optimizer hint (#21388) [#21400](https://github.com/vitessio/vitess/pull/21400)
  * [release-23.0] vtgate/buffer: do not lose the timeout thread's queue-not-empty wakeup (#21402) [#21439](https://github.com/vitessio/vitess/pull/21439)
  * [release-23.0] sqlparser: rewrite `//` comments to `#/` before statement text reaches MySQL (#21410) [#21450](https://github.com/vitessio/vitess/pull/21450)
  * [release-23.0] sqltypes, vtgate, vttablet: reject bind variables that are not single SQL literals (#21386) [#21517](https://github.com/vitessio/vitess/pull/21517) 
