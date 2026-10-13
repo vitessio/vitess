@@ -65,7 +65,7 @@ var (
 		output: "create table t (\n\tid int primary key,\n\tdt datetime default (now() + 1)\n)",
 	}, {
 		input:  "create table x (e enum('red','yellow') null collate 'utf8_bin')",
-		output: "create table x (\n\te enum('red', 'yellow') collate 'utf8_bin' null\n)",
+		output: "create table x (\n\te enum('red', 'yellow') collate utf8_bin null\n)",
 	}, {
 		input:  "create table 3t2 (c1 bigint not null, c2 text, primary key(c1))",
 		output: "create table `3t2` (\n\tc1 bigint not null,\n\tc2 text,\n\tprimary key (c1)\n)",
@@ -591,7 +591,7 @@ var (
 		partialDDL: true,
 	}, {
 		input:  "alter database charset charset = 'utf16'",
-		output: "alter database `charset` character set 'utf16'",
+		output: "alter database `charset` character set utf16",
 	}, {
 		input:  "create table t(id int unique)",
 		output: "create table t (\n\tid int unique\n)",
@@ -1617,7 +1617,7 @@ var (
 		output: "alter table a modify column foo varchar(255) as (concat(bar, ' ', baz)) virtual",
 	}, {
 		input:  "alter table a character set utf32 collate = 'utf'",
-		output: "alter table a charset utf32 collate utf",
+		output: "alter table a charset utf32 collate `utf`",
 	}, {
 		input: "alter table a convert to character set utf32",
 	}, {
@@ -1788,14 +1788,16 @@ var (
 	}, {
 		input: "alter database d character set geostd8",
 	}, {
-		input: "alter database d default collate 'utf8_bin'",
+		input:  "alter database d default collate 'utf8_bin'",
+		output: "alter database d default collate utf8_bin",
 	}, {
-		input: "alter database default collate 'utf8_bin'",
+		input:  "alter database default collate 'utf8_bin'",
+		output: "alter database default collate utf8_bin",
 	}, {
 		input: "alter database d upgrade data directory name",
 	}, {
 		input:  "alter database d collate = 'utf8_bin'",
-		output: "alter database d collate 'utf8_bin'",
+		output: "alter database d collate utf8_bin",
 	}, {
 		input:  "alter schema d default character set = geostd8",
 		output: "alter database d default character set geostd8",
@@ -1804,10 +1806,10 @@ var (
 		output: "alter database d character set geostd8",
 	}, {
 		input:  "alter schema d default collate = 'utf8_bin'",
-		output: "alter database d default collate 'utf8_bin'",
+		output: "alter database d default collate utf8_bin",
 	}, {
 		input:  "alter schema d collate = 'utf8_bin' character set = geostd8 character set = geostd8",
-		output: "alter database d collate 'utf8_bin' character set geostd8 character set geostd8",
+		output: "alter database d collate utf8_bin character set geostd8 character set geostd8",
 	}, {
 		input:  `DROP INDEX Indexes ON mydb.mytable`,
 		output: "alter table mydb.mytable drop key `Indexes`",
@@ -2091,16 +2093,16 @@ var (
 		output: "alter table b add unique key a (col1)",
 	}, {
 		input:  "create unique index a using foo on b (col1 desc)",
-		output: "alter table b add unique key a (col1 desc) using foo",
+		output: "alter table b add unique key a (col1 desc) using `foo`",
 	}, {
 		input:  "create fulltext index a on b (col1) with parser a",
-		output: "alter table b add fulltext key a (col1) with parser a",
+		output: "alter table b add fulltext key a (col1) with parser `a`",
 	}, {
 		input:  "create spatial index a on b (col1)",
 		output: "alter table b add spatial key a (col1)",
 	}, {
 		input:  "create fulltext index a on b (col1) key_block_size=12 with parser a comment 'string' algorithm inplace lock none",
-		output: "alter table b add fulltext key a (col1) key_block_size 12 with parser a comment 'string', algorithm = inplace, lock none",
+		output: "alter table b add fulltext key a (col1) key_block_size 12 with parser `a` comment 'string', algorithm = inplace, lock none",
 	}, {
 		input:  "create index a on b ((col1 + col2), (col1*col2))",
 		output: "alter table b add key a ((col1 + col2), (col1 * col2))",
@@ -2953,7 +2955,8 @@ var (
 		input:  "create schema if not exists test_db",
 		output: "create database if not exists test_db",
 	}, {
-		input: "create database test_db default collate 'utf8mb4_general_ci' collate utf8mb4_general_ci",
+		input:  "create database test_db default collate 'utf8mb4_general_ci' collate utf8mb4_general_ci",
+		output: "create database test_db default collate utf8mb4_general_ci collate utf8mb4_general_ci",
 	}, {
 		input: "create database test_db character set geostd8",
 	}, {
@@ -4829,7 +4832,8 @@ func TestSelectInto(t *testing.T) {
 		input:  "select * from (select * from t union select * from t2) as t3 where t3.name in (select col from t4) into outfile s3 'out_file_name'",
 		output: "select * from (select * from t union select * from t2) as t3 where t3.`name` in (select col from t4) into outfile s3 'out_file_name'",
 	}, {
-		input: `select * from TestPerson into outfile s3 's3://test-bucket/export_import/export/users.csv' character set 'utf8' overwrite on`,
+		input:  `select * from TestPerson into outfile s3 's3://test-bucket/export_import/export/users.csv' character set 'utf8' overwrite on`,
+		output: `select * from TestPerson into outfile s3 's3://test-bucket/export_import/export/users.csv' character set utf8 overwrite on`,
 	}, {
 		input: `select * from t1 into outfile '/tmp/foo.csv' fields escaped by '\\' terminated by '\n'`,
 	}, {
@@ -5187,6 +5191,19 @@ func TestCreateTable(t *testing.T) {
 	key by_status (status_nonkeyword) using PDQ,
 	key by_full_name (full_name) using OTHER
 )`,
+			output: `create table t (
+	id int auto_increment,
+	username varchar,
+	email varchar,
+	full_name varchar,
+	status_nonkeyword varchar,
+	primary key (id) using BTREE,
+	unique key by_username (username) using HASH,
+	unique key by_username2 (username) using ` + "`OTHER`" + `,
+	unique key by_username3 (username) using ` + "`XYZ`" + `,
+	key by_status (status_nonkeyword) using ` + "`PDQ`" + `,
+	key by_full_name (full_name) using ` + "`OTHER`" + `
+)`,
 		},
 		// test other index options
 		{
@@ -5386,6 +5403,39 @@ func TestCreateTable(t *testing.T) {
   tablespace tablespace_name storage disk,
   union (a, b, c),
   tablespace tablespace_name`,
+			output: `create table t (
+	id int auto_increment
+) engine InnoDB,
+  auto_increment 123,
+  autoextend_size 16,
+  avg_row_length 1,
+  charset utf8mb4,
+  charset latin1,
+  checksum 0,
+  collate binary,
+  collate ascii_bin,
+  comment 'this is a comment',
+  compression 'zlib',
+  connection 'connect_string',
+  data directory 'absolute path to directory',
+  delay_key_write 1,
+  encryption 'n',
+  engine_attribute '{}',
+  index directory 'absolute path to directory',
+  insert_method no,
+  key_block_size 1024,
+  max_rows 100,
+  min_rows 10,
+  pack_keys 0,
+  password 'sekret',
+  row_format default,
+  secondary_engine_attribute '{}',
+  stats_auto_recalc default,
+  stats_persistent 0,
+  stats_sample_pages 1,
+  tablespace ` + "`tablespace_name`" + ` storage disk,
+  union (a, b, c),
+  tablespace ` + "`tablespace_name`",
 		},
 		// boolean columns
 		{
@@ -5604,12 +5654,12 @@ func TestCreateTable(t *testing.T) {
 			input: `create table non_reserved_keyword (id int(11)) ENGINE = MEDIUMTEXT`,
 			output: `create table non_reserved_keyword (
 	id int(11)
-) ENGINE MEDIUMTEXT`,
+) ENGINE ` + "`MEDIUMTEXT`",
 		}, {
 			input: `create table t1 (id int(11)) ENGINE = FOOBAR`,
 			output: `create table t1 (
 	id int(11)
-) ENGINE FOOBAR`,
+) ENGINE ` + "`FOOBAR`",
 		},
 		// partitions
 		{
@@ -5888,7 +5938,7 @@ partition by list (val)
 	val INT
 )
 partition by list (val)
-(partition mypart values in (1, 3, 5) storage engine FOOBAR,
+(partition mypart values in (1, 3, 5) storage engine ` + "`FOOBAR`" + `,
  partition MyPart values in (2, 4, 6))`,
 		},
 		{
@@ -5901,7 +5951,7 @@ partition by list (val)
 	val INT
 )
 partition by list (val)
-(partition mypart values in (1, 3, 5) engine FOOBAR,
+(partition mypart values in (1, 3, 5) engine ` + "`FOOBAR`" + `,
  partition MyPart values in (2, 4, 6))`,
 		},
 		{
@@ -5914,7 +5964,7 @@ partition by list (val)
 	val INT
 )
 partition by list (val)
-(partition mypart values in (1, 3, 5) storage engine FOOBAR,
+(partition mypart values in (1, 3, 5) storage engine ` + "`FOOBAR`" + `,
  partition MyPart values in (2, 4, 6))`,
 		},
 		{
@@ -5927,7 +5977,7 @@ partition by list (val)
 	val INT
 )
 partition by list (val)
-(partition mypart values in (1, 3, 5) storage engine FOOBAR comment 'test',
+(partition mypart values in (1, 3, 5) storage engine ` + "`FOOBAR`" + ` comment 'test',
  partition MyPart values in (2, 4, 6) comment 'test2')`,
 		},
 		{
@@ -5940,7 +5990,7 @@ partition by list (val)
 	val INT
 )
 partition by list (val)
-(partition mypart values in (1, 3, 5) storage engine FOOBAR data directory 'test',
+(partition mypart values in (1, 3, 5) storage engine ` + "`FOOBAR`" + ` data directory 'test',
  partition MyPart values in (2, 4, 6) data directory 'test2')`,
 		},
 		{
@@ -5975,7 +6025,7 @@ partition by list (id)
 	val INT
 )
 partition by list (val)
-(partition mypart values in (1, 3, 5) storage engine FOOBAR comment 'before' data directory 'test',
+(partition mypart values in (1, 3, 5) storage engine ` + "`FOOBAR`" + ` comment 'before' data directory 'test',
  partition MyPart values in (2, 4, 6) data directory 'test2')`,
 		},
 		{
@@ -6144,7 +6194,7 @@ partition by range (YEAR(purchased)) subpartition by hash (TO_DAYS(purchased))
 )
 partition by range (YEAR(purchased)) subpartition by hash (TO_DAYS(purchased))
 (partition p0 values less than (1990) (subpartition s0 storage engine innodb data directory '/data', subpartition s1 comment 'this is s1' index directory '/index'),
- partition p1 values less than (2000) (subpartition s2 max_rows 4, subpartition s31 min_rows 5 tablespace t2),
+ partition p1 values less than (2000) (subpartition s2 max_rows 4, subpartition s31 min_rows 5 tablespace ` + "`t2`" + `),
  partition p2 values less than maxvalue (subpartition s4, subpartition s5))`,
 		},
 		{
