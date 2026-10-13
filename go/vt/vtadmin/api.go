@@ -2673,7 +2673,9 @@ func (api *API) VExplain(ctx context.Context, req *vtadminpb.VExplainRequest) (*
 	// read-only transaction does not prevent: a statement other than a SELECT,
 	// whose execution can take sequence values before it fails (an INSERT into a
 	// table with an auto_increment sequence), and the side effects of
-	// hasSideEffectsBeyondTables.
+	// hasSideEffectsBeyondTables. The other types run nothing: VTGate plans the
+	// statement, and MYSQLPLAN has MySQL EXPLAIN it, which neither runs its
+	// functions nor writes its INTO target. So they explain any statement.
 	switch vexplainStmt.Type {
 	case sqlparser.QueriesVExplainType, sqlparser.AllVExplainType, sqlparser.TraceVExplainType:
 		if !api.authz.IsAuthorized(ctx, c.ID, rbac.VExplainResource, rbac.ExecuteAction) {
@@ -2682,9 +2684,9 @@ func (api *API) VExplain(ctx context.Context, req *vtadminpb.VExplainRequest) (*
 		if _, ok := vexplainStmt.Statement.(sqlparser.SelectStatement); !ok {
 			return nil, fmt.Errorf("%w: VEXPLAIN %s only runs SELECT statements; use VEXPLAIN PLAN for other statements", errors.ErrInvalidRequest, vexplainStmt.Type.ToString())
 		}
-	}
-	if hasSideEffectsBeyondTables(vexplainStmt.Statement) {
-		return nil, fmt.Errorf("%w: VExplain does not run statements with INTO, sequence next-values or advisory lock functions", errors.ErrInvalidRequest)
+		if hasSideEffectsBeyondTables(vexplainStmt.Statement) {
+			return nil, fmt.Errorf("%w: VEXPLAIN %s does not run statements with INTO, sequence next-values or advisory lock functions; use VEXPLAIN PLAN for them", errors.ErrInvalidRequest, vexplainStmt.Type.ToString())
+		}
 	}
 
 	// Canonicalize the SQL using the AST, to prevent use of raw user input.

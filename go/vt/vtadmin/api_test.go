@@ -5355,6 +5355,154 @@ func TestVExplain(t *testing.T) {
 			},
 			actions: []string{"get"},
 		},
+		{
+			name: "runs VExplain PLAN of a statement with side effects, which it does not run, with only the get action",
+			keyspaces: []*vtctldatapb.Keyspace{
+				{
+					Name:     "commerce",
+					Keyspace: &topodatapb.Keyspace{},
+				},
+			},
+			shards: []*vtctldatapb.Shard{
+				{
+					Name:     "-",
+					Keyspace: "commerce",
+				},
+			},
+			srvVSchema: &vschemapb.SrvVSchema{
+				Keyspaces: map[string]*vschemapb.Keyspace{
+					"commerce": {
+						Sharded: false,
+						Tables: map[string]*vschemapb.Table{
+							"customers": {},
+						},
+					},
+				},
+				RoutingRules: &vschemapb.RoutingRules{
+					Rules: []*vschemapb.RoutingRule{},
+				},
+			},
+			tabletSchemas: map[string]*tabletmanagerdatapb.SchemaDefinition{
+				"c0_cell1-0000000100": {
+					DatabaseSchema: "CREATE DATABASE commerce",
+					TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+						{
+							Name:       "t1",
+							Schema:     `CREATE TABLE customers (id int(11) not null,PRIMARY KEY (id));`,
+							Type:       "BASE",
+							Columns:    []string{"id"},
+							DataLength: 100,
+							RowCount:   50,
+							Fields: []*querypb.Field{
+								{
+									Name: "id",
+									Type: querypb.Type_INT32,
+								},
+							},
+						},
+					},
+				},
+			},
+			tablets: []*vtadminpb.Tablet{
+				{
+					Cluster: &vtadminpb.Cluster{
+						Id:   "c0",
+						Name: "cluster0",
+					},
+					State: vtadminpb.Tablet_SERVING,
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Uid:  100,
+							Cell: "c0_cell1",
+						},
+						Hostname: "tablet-cell1-a",
+						Keyspace: "commerce",
+						Shard:    "-",
+						Type:     topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+			req: &vtadminpb.VExplainRequest{
+				ClusterId: "c0",
+				Keyspace:  "commerce",
+				Sql:       "vexplain plan select get_lock('l', 1) from customers",
+			},
+			actions: []string{"get"},
+		},
+		{
+			name: "runs VExplain MYSQLPLAN of a statement with side effects, which it does not run, with only the get action",
+			keyspaces: []*vtctldatapb.Keyspace{
+				{
+					Name:     "commerce",
+					Keyspace: &topodatapb.Keyspace{},
+				},
+			},
+			shards: []*vtctldatapb.Shard{
+				{
+					Name:     "-",
+					Keyspace: "commerce",
+				},
+			},
+			srvVSchema: &vschemapb.SrvVSchema{
+				Keyspaces: map[string]*vschemapb.Keyspace{
+					"commerce": {
+						Sharded: false,
+						Tables: map[string]*vschemapb.Table{
+							"customers": {},
+						},
+					},
+				},
+				RoutingRules: &vschemapb.RoutingRules{
+					Rules: []*vschemapb.RoutingRule{},
+				},
+			},
+			tabletSchemas: map[string]*tabletmanagerdatapb.SchemaDefinition{
+				"c0_cell1-0000000100": {
+					DatabaseSchema: "CREATE DATABASE commerce",
+					TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+						{
+							Name:       "t1",
+							Schema:     `CREATE TABLE customers (id int(11) not null,PRIMARY KEY (id));`,
+							Type:       "BASE",
+							Columns:    []string{"id"},
+							DataLength: 100,
+							RowCount:   50,
+							Fields: []*querypb.Field{
+								{
+									Name: "id",
+									Type: querypb.Type_INT32,
+								},
+							},
+						},
+					},
+				},
+			},
+			tablets: []*vtadminpb.Tablet{
+				{
+					Cluster: &vtadminpb.Cluster{
+						Id:   "c0",
+						Name: "cluster0",
+					},
+					State: vtadminpb.Tablet_SERVING,
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Uid:  100,
+							Cell: "c0_cell1",
+						},
+						Hostname: "tablet-cell1-a",
+						Keyspace: "commerce",
+						Shard:    "-",
+						Type:     topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+			req: &vtadminpb.VExplainRequest{
+				ClusterId: "c0",
+				Keyspace:  "commerce",
+				Sql:       "vexplain mysqlplan select get_lock('l', 1) from customers",
+			},
+			actions: []string{"get"},
+		},
 	}
 
 	for _, tt := range tests {
