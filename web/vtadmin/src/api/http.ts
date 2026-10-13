@@ -295,7 +295,7 @@ export interface PingTabletParams {
 }
 
 export const pingTablet = async ({ clusterID, alias }: PingTabletParams) => {
-    const { result } = await vtfetch(`/api/tablet/${alias}/ping?cluster=${clusterID}`);
+    const { result } = await vtfetch(`/api/tablet/${alias}/ping?cluster=${clusterID}`, { method: 'post' });
     const err = pb.PingTabletResponse.verify(result);
     if (err) throw Error(err);
 
@@ -321,7 +321,7 @@ export interface RunHealthCheckParams {
 }
 
 export const runHealthCheck = async ({ clusterID, alias }: RunHealthCheckParams) => {
-    const { result } = await vtfetch(`/api/tablet/${alias}/healthcheck?cluster=${clusterID}`);
+    const { result } = await vtfetch(`/api/tablet/${alias}/healthcheck?cluster=${clusterID}`, { method: 'post' });
     const err = pb.RunHealthCheckResponse.verify(result);
     if (err) throw Error(err);
 
@@ -459,7 +459,7 @@ export interface ConcludeTransactionParams {
 }
 
 export const concludeTransaction = async ({ clusterID, dtid }: ConcludeTransactionParams) => {
-    const { result } = await vtfetch(`/api/transaction/${clusterID}/${dtid}/conclude`);
+    const { result } = await vtfetch(`/api/transaction/${clusterID}/${dtid}/conclude`, { method: 'post' });
     const err = vtctldata.ConcludeTransactionResponse.verify(result);
     if (err) throw Error(err);
 
@@ -557,7 +557,7 @@ export interface WorkflowActionParams {
 }
 
 export const startWorkflow = async ({ clusterID, keyspace, name }: WorkflowActionParams) => {
-    const { result } = await vtfetch(`/api/workflow/${clusterID}/${keyspace}/${name}/start`);
+    const { result } = await vtfetch(`/api/workflow/${clusterID}/${keyspace}/${name}/start`, { method: 'post' });
     const err = vtctldata.WorkflowUpdateResponse.verify(result);
     if (err) throw Error(err);
 
@@ -565,7 +565,7 @@ export const startWorkflow = async ({ clusterID, keyspace, name }: WorkflowActio
 };
 
 export const stopWorkflow = async ({ clusterID, keyspace, name }: WorkflowActionParams) => {
-    const { result } = await vtfetch(`/api/workflow/${clusterID}/${keyspace}/${name}/stop`);
+    const { result } = await vtfetch(`/api/workflow/${clusterID}/${keyspace}/${name}/stop`, { method: 'post' });
     const err = vtctldata.WorkflowUpdateResponse.verify(result);
     if (err) throw Error(err);
 

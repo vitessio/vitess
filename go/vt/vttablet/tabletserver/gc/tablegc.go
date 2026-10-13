@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/mysql/sqlerror"
 
+	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
@@ -73,10 +74,14 @@ func registerGCFlags(fs *pflag.FlagSet) {
 }
 
 var (
+	// The table name is escaped by the caller with sqlescape.EscapeID before it is
+	// written into %a, which sqlparser.BuildParsedQuery does verbatim. The name
+	// passed schema.AnalyzeGCTableName, but that is no guarantee: its [0-f] ranges
+	// also accept punctuation such as ';' and the back quote.
 	sqlPurgeTable   = `delete from %a limit 50`
 	sqlShowVtTables = `show full tables like '\_vt\_%'`
-	sqlDropTable    = "drop table if exists `%a`"
-	sqlDropView     = "drop view if exists `%a`"
+	sqlDropTable    = "drop table if exists %a"
+	sqlDropView     = "drop view if exists %a"
 )
 
 type gcTable struct {
@@ -558,7 +563,7 @@ func (collector *TableGC) purge(ctx context.Context) (tableName string, err erro
 		// OK, we're clear to go!
 
 		// Issue a DELETE
-		parsed := sqlparser.BuildParsedQuery(sqlPurgeTable, tableName)
+		parsed := sqlparser.BuildParsedQuery(sqlPurgeTable, sqlescape.EscapeID(tableName))
 		res, err := conn.ExecuteFetch(parsed.Query, 1, true)
 		if err != nil {
 			return tableName, err
@@ -583,7 +588,7 @@ func (collector *TableGC) dropTable(ctx context.Context, tableName string, isBas
 	if !isBaseTable {
 		sqlDrop = sqlDropView
 	}
-	parsed := sqlparser.BuildParsedQuery(sqlDrop, tableName)
+	parsed := sqlparser.BuildParsedQuery(sqlDrop, sqlescape.EscapeID(tableName))
 
 	log.Infof("TableGC: dropping table: %s", tableName)
 	_, err = conn.Conn.ExecuteFetch(parsed.Query, 1, false)

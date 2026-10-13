@@ -28,6 +28,11 @@ import (
 	"os"
 	"testing"
 
+	"google.golang.org/grpc"
+
+	vtadminhttp "vitess.io/vitess/go/vt/vtadmin/http"
+
+	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
@@ -5332,6 +5337,144 @@ type ServeHTTPResponse struct {
 
 type ServeHTTPResult struct {
 	Clusters []*vtadminpb.Cluster `json:"clusters"`
+}
+
+// TestHandlerRestrictsMutatingRoutesToPOST checks that the routes that change
+// cluster state match only POST, and the CORS preflight, so that a cross-site
+// GET, such as a top-level navigation carrying a session cookie, cannot reach
+// them.
+func TestHandlerRestrictsMutatingRoutesToPOST(t *testing.T) {
+	api := NewAPI(vtenv.NewTestEnv(), nil, Options{})
+	router, ok := api.Handler().(*mux.Router)
+	require.True(t, ok)
+
+	for name, path := range map[string]string{
+		"API.PingTablet":            "/api/tablet/zone1-0000000100/ping",
+		"API.RunHealthCheck":        "/api/tablet/zone1-0000000100/healthcheck",
+		"API.ConcludeTransaction":   "/api/transaction/c0/dtid1/conclude",
+		"API.StartWorkflow":         "/api/workflow/c0/ks/wf/start",
+		"API.StopWorkflow":          "/api/workflow/c0/ks/wf/stop",
+		"API.WorkflowSwitchTraffic": "/api/workflow/c0/switchtraffic",
+		"API.WorkflowDelete":        "/api/workflow/c0/delete",
+		"API.MoveTablesComplete":    "/api/movetables/c0/complete",
+	} {
+		t.Run(name, func(t *testing.T) {
+			for _, method := range []string{http.MethodPost, http.MethodOptions} {
+				var match mux.RouteMatch
+				require.True(t, router.Match(httptest.NewRequest(method, path, nil), &match), method)
+				require.Equal(t, name, match.Route.GetName(), method)
+			}
+			for _, method := range []string{http.MethodGet, http.MethodHead, http.MethodPut, http.MethodDelete} {
+				var match mux.RouteMatch
+				require.False(t, router.Match(httptest.NewRequest(method, path, nil), &match), method)
+			}
+		})
+	}
+}
+
+// countingVtctldClient counts the WorkflowUpdate calls that reach the vtctld.
+type countingVtctldClient struct {
+	*fakevtctldclient.VtctldClient
+	workflowUpdates int
+}
+
+func (c *countingVtctldClient) WorkflowUpdate(ctx context.Context, req *vtctldatapb.WorkflowUpdateRequest, opts ...grpc.CallOption) (*vtctldatapb.WorkflowUpdateResponse, error) {
+	c.workflowUpdates++
+	return &vtctldatapb.WorkflowUpdateResponse{}, nil
+}
+
+// TestHandlerRejectsCrossSiteRequests checks that a state-changing request a
+// browser sends on behalf of a page from another site is refused before it reaches
+// the vtctld, whatever the SameSite attribute of the session cookie it carries,
+// while same-origin requests, requests from a configured CORS origin and requests
+// from non-browser clients still go through.
+func TestHandlerRejectsCrossSiteRequests(t *testing.T) {
+	const webOrigin = "https://vtadmin-web.example.com"
+	for _, tc := range []struct {
+		name string
+		// corsOrigins defaults to webOrigin.
+		corsOrigins []string
+		// url defaults to a plain http request to vtadmin.example.com.
+		url     string
+		headers map[string]string
+		allowed bool
+	}{{
+		name:    "a cross-site form post",
+		headers: map[string]string{"Origin": "https://attacker.example", "Sec-Fetch-Site": "cross-site"},
+	}, {
+		name:        "a cross-site form post when CORS allows every origin",
+		corsOrigins: []string{"*"},
+		headers:     map[string]string{"Origin": "https://attacker.example", "Sec-Fetch-Site": "cross-site"},
+	}, {
+		name:    "a same-site post from another origin",
+		headers: map[string]string{"Origin": "https://other.example.com", "Sec-Fetch-Site": "same-site"},
+	}, {
+		name:    "a post from another origin without fetch metadata",
+		headers: map[string]string{"Origin": "https://attacker.example"},
+	}, {
+		name:    "a post from the same host over another scheme without fetch metadata",
+		url:     "https://vtadmin.example.com/api/workflow/c0/ks/wf/stop",
+		headers: map[string]string{"Origin": "http://vtadmin.example.com"},
+	}, {
+		name:    "a post from a configured CORS origin",
+		headers: map[string]string{"Origin": webOrigin, "Sec-Fetch-Site": "cross-site"},
+		allowed: true,
+	}, {
+		name:        "a post from a configured CORS origin spelled differently",
+		corsOrigins: []string{"https://VTAdmin-Web.example.com:443"},
+		headers:     map[string]string{"Origin": webOrigin, "Sec-Fetch-Site": "cross-site"},
+		allowed:     true,
+	}, {
+		name:    "a same-origin post",
+		headers: map[string]string{"Origin": "http://vtadmin.example.com", "Sec-Fetch-Site": "same-origin"},
+		allowed: true,
+	}, {
+		name:    "a same-origin post without fetch metadata",
+		headers: map[string]string{"Origin": "http://vtadmin.example.com"},
+		allowed: true,
+	}, {
+		name:    "an https same-origin post naming the default port without fetch metadata",
+		url:     "https://vtadmin.example.com/api/workflow/c0/ks/wf/stop",
+		headers: map[string]string{"Origin": "https://vtadmin.example.com:443"},
+		allowed: true,
+	}, {
+		name:    "a post from a non-browser client",
+		allowed: true,
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			corsOrigins := tc.corsOrigins
+			if corsOrigins == nil {
+				corsOrigins = []string{webOrigin}
+			}
+			target := tc.url
+			if target == "" {
+				target = "http://vtadmin.example.com/api/workflow/c0/ks/wf/stop"
+			}
+
+			vtctld := &countingVtctldClient{VtctldClient: &fakevtctldclient.VtctldClient{}}
+			c := vtadmintestutil.BuildCluster(t, vtadmintestutil.TestClusterConfig{
+				Cluster:      &vtadminpb.Cluster{Id: "c0", Name: "cluster0"},
+				VtctldClient: vtctld,
+			})
+			api := NewAPI(vtenv.NewTestEnv(), []*cluster.Cluster{c}, Options{
+				HTTPOpts: vtadminhttp.Options{CORSOrigins: corsOrigins},
+			})
+
+			req := httptest.NewRequest(http.MethodPost, target, nil)
+			for name, value := range tc.headers {
+				req.Header.Set(name, value)
+			}
+			w := httptest.NewRecorder()
+			api.Handler().ServeHTTP(w, req)
+
+			if tc.allowed {
+				assert.Equal(t, 1, vtctld.workflowUpdates, "the request must reach the vtctld")
+				return
+			}
+			assert.Equal(t, http.StatusForbidden, w.Code)
+			assert.Zero(t, vtctld.workflowUpdates, "a refused request must not reach the vtctld")
+		})
+	}
 }
 
 func TestServeHTTP(t *testing.T) {

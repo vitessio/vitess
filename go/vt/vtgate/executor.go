@@ -648,6 +648,12 @@ func (e *Executor) addNeededBindVars(vcursor *econtext.VCursorImpl, bindVarNeeds
 		if val == nil {
 			val = sqltypes.NullBindVariable
 		}
+		// The session arrives over the wire with the request, so a
+		// user-defined variable is as caller-controlled as a request bind
+		// variable and gets the same check before it reaches a tablet.
+		if err := sqltypes.ValidateBindVariable(val); err != nil {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "user-defined variable @%s: %v", udv, err)
+		}
 		bindVars[sqlparser.UserDefinedVariableName+udv] = val
 	}
 
@@ -1179,7 +1185,10 @@ func (e *Executor) fetchOrCreatePlan(
 		return nil, nil, nil, vterrors.VT13001("vschema not initialized")
 	}
 
-	query, comments := sqlparser.SplitMarginComments(queryString)
+	// Plans can forward the statement text to MySQL as written, so MySQL must
+	// skip every comment that Vitess skips.
+	queryString, _ = e.env.Parser().RewriteDoubleSlashComments(queryString)
+	query, comments := e.env.Parser().SplitMarginComments(queryString)
 	vcursor, _ = e.newVCursor(safeSession, comments, logStats)
 
 	var setVarComment string
