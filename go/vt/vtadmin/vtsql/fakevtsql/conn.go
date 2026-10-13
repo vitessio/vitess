@@ -131,7 +131,7 @@ func (c *conn) QueryContext(ctx context.Context, query string, args []driver.Nam
 			closed: false,
 		}, nil
 	case "vexplain all select * from customers", "vexplain mysqlplan select * from customers",
-		"vexplain plan select get_lock('l', 1) from customers", "vexplain mysqlplan select get_lock('l', 1) from customers":
+		"vexplain plan select get_lock('l', 1) from customers":
 		columns := []string{"VExplain"}
 		vals := make([][]any, 0, 1)
 		vals = append(vals, []any{"{'Table' : 'customer, 'TestPlan' : 'TestPlan'}"})
