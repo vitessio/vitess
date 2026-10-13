@@ -653,6 +653,12 @@ func (e *Executor) addNeededBindVars(vcursor *econtext.VCursorImpl, bindVarNeeds
 		if val == nil {
 			val = sqltypes.NullBindVariable
 		}
+		// The session arrives over the wire with the request, so a
+		// user-defined variable is as caller-controlled as a request bind
+		// variable and gets the same check before it reaches a tablet.
+		if err := sqltypes.ValidateBindVariable(val); err != nil {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "user-defined variable @%s: %v", udv, err)
+		}
 		bindVars[sqlparser.UserDefinedVariableName+udv] = val
 	}
 
