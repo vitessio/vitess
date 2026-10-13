@@ -377,19 +377,16 @@ func (tm *TabletManager) disableReplication(ctx context.Context) error {
 	return nil
 }
 
+// startReplication connects restored data to the primary. Restore has already
+// set the GTID position to pos, so this only stops and clears the copied
+// replication configuration before initializing replication.
 func (tm *TabletManager) startReplication(ctx context.Context, pos replication.Position, tabletType topodatapb.TabletType) error {
-	// The first three steps of stopping replication, and setting the replication position,
-	// we want to do even if the context expires, so we use a background context for these tasks.
+	// Do these even if the context expires.
 	if err := tm.MysqlDaemon.StopReplication(context.Background(), nil); err != nil {
 		return vterrors.Wrap(err, "failed to stop replication")
 	}
 	if err := tm.MysqlDaemon.ResetReplicationParameters(context.Background()); err != nil {
 		return vterrors.Wrap(err, "failed to reset replication")
-	}
-
-	// Set the position at which to resume from the primary.
-	if err := tm.MysqlDaemon.SetReplicationPosition(context.Background(), pos); err != nil {
-		return vterrors.Wrap(err, "failed to set replication position")
 	}
 
 	primaryPosStr, err := tm.initializeReplication(ctx, tabletType)
