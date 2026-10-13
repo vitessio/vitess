@@ -27,7 +27,7 @@
         - [`vdiff show --no-samples` strips the per-table row-sample report](#vreplication-vdiff-no-samples)
         - [Preserve Materialize target data on cancel by default](#vreplication-materialize-cancel-data-protection)
         - [Online DDL migrations are no longer failed by recoverable vreplication errors](#onlineddl-vrepl-auto-resume)
-        - [VStream: `before_data_columns` bitmap for partial before images](#vstream-before-data-columns)
+        - [VStream: `before_data_columns` and `after_data_columns` bitmaps for partial row images](#vstream-before-data-columns)
     - **[VTGate](#minor-changes-vtgate)**
         - [Ingress bytes in query LogStats](#vtgate-logstats-ingress-bytes)
         - [New controls for cross-keyspace reads](#vtgate-cross-keyspace-reads)
@@ -272,13 +272,17 @@ As part of this change, vreplication terminal errors are now classified in their
 
 See [#20926](https://github.com/vitessio/vitess/issues/20926) for details.
 
-#### <a id="vstream-before-data-columns"/>VStream: `before_data_columns` bitmap for partial before images</a>
+#### <a id="vstream-before-data-columns"/>VStream: `before_data_columns` and `after_data_columns` bitmaps for partial row images</a>
 
 When MySQL runs with `binlog_row_image=NOBLOB`, it omits BLOB/TEXT columns that are not part of the primary key from the before image of UPDATE and DELETE row events, whether or not they changed. The vstreamer already signaled this for the after image via `RowChange.data_columns`, but the before image carried no such information, so VStream consumers could not tell an omitted column apart from a `NULL`.
 
-`RowChange` now has an additional `before_data_columns` bitmap, set only when the before image is partial (and `--vreplication-experimental-flags` allows NOBLOB row images, which is the default). A bit is set for every column that is present in the before image, in the order of the columns emitted by the stream's filter (after projection). Note that the existing `data_columns` bitmap for the after image remains in the source table's column order for compatibility with existing consumers; aligning the two is tracked in [#21075](https://github.com/vitessio/vitess/issues/21075). The field is additive: VReplication ignores it and consumers that do not know about it are unaffected.
+`RowChange` now has an additional `before_data_columns` bitmap, set only when the before image is partial (and `--vreplication-experimental-flags` allows NOBLOB row images, which is the default). A bit is set for every column that is present in the before image, in the order of the columns emitted by the stream's filter (after projection).
 
-See [#21065](https://github.com/vitessio/vitess/issues/21065) for details.
+The existing `data_columns` bitmap for the after image, sent for partial row images under `binlog_row_image=NOBLOB` or `binlog_row_value_options=PARTIAL_JSON`, uses the source table's column order as found in the binlog event. That order matches the emitted values only when the filter neither reorders nor drops columns, as with `select *`. Consumers of a projecting filter therefore could not map its bits onto the values they receive. `RowChange` now also has an `after_data_columns` bitmap, set whenever `data_columns` is. Its bits follow the order of the columns emitted by the stream, like `before_data_columns` and the row values. VStream consumers should read `after_data_columns` when it is present. `data_columns` keeps its layout for compatibility and is considered legacy.
+
+Both fields are additive, and consumers that do not know about them are unaffected. VReplication uses `after_data_columns` when the source sends it and falls back to `data_columns` when the source runs an older version.
+
+See [#21065](https://github.com/vitessio/vitess/issues/21065) and [#21075](https://github.com/vitessio/vitess/issues/21075) for details.
 
 ### <a id="minor-changes-vtgate"/>VTGate</a>
 
