@@ -223,6 +223,7 @@ stringData:
         - "create"
         - "put"
         - "ping"
+        - "execute"
       subjects: ["*"]
       clusters: ["*"]
     - resource: "Shard"

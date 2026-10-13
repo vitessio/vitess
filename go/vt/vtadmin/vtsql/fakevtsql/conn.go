@@ -44,12 +44,36 @@ var (
 type conn struct {
 	tablets   []*vtadminpb.Tablet
 	shouldErr bool
+	log       *StatementLog
+	id        int
+
+	onStatement func(statement string)
 }
 
 var (
 	_ driver.Conn           = (*conn)(nil)
+	_ driver.ExecerContext  = (*conn)(nil)
 	_ driver.QueryerContext = (*conn)(nil)
 )
+
+// ExecContext accepts the transaction statements that vtsql runs.
+func (c *conn) ExecContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
+	// Like a real driver, run nothing for a request that is already done.
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if c.log != nil {
+		c.log.record(c.id, query)
+	}
+	if c.onStatement != nil {
+		c.onStatement(query)
+	}
+	switch strings.ToLower(query) {
+	case "start transaction read only", "rollback":
+		return driver.ResultNoRows, nil
+	}
+	return nil, fmt.Errorf("%w: %q %v", ErrUnrecognizedQuery, query, args)
+}
 
 func (c *conn) Begin() (driver.Tx, error) {
 	return nil, nil
@@ -64,6 +88,16 @@ func (c *conn) Prepare(query string) (driver.Stmt, error) {
 }
 
 func (c *conn) QueryContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
+	// Like a real driver, run nothing for a request that is already done.
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if c.log != nil {
+		c.log.record(c.id, query)
+	}
+	if c.onStatement != nil {
+		c.onStatement(query)
+	}
 	if c.shouldErr {
 		return nil, assert.AnError
 	}
@@ -96,7 +130,8 @@ func (c *conn) QueryContext(ctx context.Context, query string, args []driver.Nam
 			pos:    0,
 			closed: false,
 		}, nil
-	case "vexplain all select * from customers":
+	case "vexplain all select * from customers", "vexplain plan select * from customers",
+		"vexplain plan select get_lock('l', 1) from customers":
 		columns := []string{"VExplain"}
 		vals := [][]any{}
 		vals = append(vals, []any{"{'Table' : 'customer, 'TestPlan' : 'TestPlan'}"})
