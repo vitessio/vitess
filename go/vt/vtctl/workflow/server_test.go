@@ -31,6 +31,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/prototext"
 
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/ptr"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
@@ -2030,6 +2031,109 @@ func TestMoveTablesSwitchWritesCompletesAfterCancelOnFreeze(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, stateAfter.WritesSwitched, "expected writes to remain switched after the original context was canceled")
 	require.True(t, tsAfter.frozen, "expected the target workflow to be frozen even though the original context was canceled")
+}
+
+// TestCanSwitchStreamNotReplicating confirms that we refuse to switch traffic when a
+// stream is not replicating or has not finished copying, even though its reported lag
+// is low. A stream that never ran reports its lag as the time since it was created.
+func TestCanSwitchStreamNotReplicating(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+
+	const (
+		workflowName       = "wf1"
+		tableName          = "t1"
+		sourceKeyspaceName = "sourceks"
+		targetKeyspaceName = "targetks"
+		vrID               = 1
+	)
+
+	testcases := []struct {
+		name      string
+		state     binlogdatapb.VReplicationWorkflowState
+		copyState bool
+		want      string
+	}{
+		{
+			name:  "stopped",
+			state: binlogdatapb.VReplicationWorkflowState_Stopped,
+			want:  cannotSwitchStopped,
+		},
+		{
+			name:      "stopped with copy state left",
+			state:     binlogdatapb.VReplicationWorkflowState_Stopped,
+			copyState: true,
+			want:      cannotSwitchStopped,
+		},
+		{
+			name:      "copy state left",
+			state:     binlogdatapb.VReplicationWorkflowState_Init,
+			copyState: true,
+			want:      cannotSwitchCopyIncomplete,
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			env := newTestEnv(t, ctx, defaultCellName, &testKeyspace{
+				KeyspaceName: sourceKeyspaceName,
+				ShardNames:   []string{"0"},
+			}, &testKeyspace{
+				KeyspaceName: targetKeyspaceName,
+				ShardNames:   []string{"0"},
+			})
+			defer env.close()
+			env.tmc.schema = map[string]*tabletmanagerdatapb.SchemaDefinition{
+				tableName: {
+					TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
+						Name:   tableName,
+						Schema: fmt.Sprintf("CREATE TABLE %s (id BIGINT, name VARCHAR(64), PRIMARY KEY (id))", tableName),
+					}},
+				},
+			}
+
+			ts, _, err := env.ws.getWorkflowState(ctx, targetKeyspaceName, workflowName)
+			require.NoError(t, err)
+
+			copyStateResult := &querypb.QueryResult{}
+			if tc.copyState {
+				copyStateResult = sqltypes.ResultToProto3(sqltypes.MakeTestResult(
+					sqltypes.MakeTestFields("vrepl_id|table_name|lastpk", "int64|varchar|varbinary"),
+					fmt.Sprintf("%d|%s|", vrID, tableName),
+				))
+			}
+			env.tmc.expectVRQueryResultOnKeyspaceTablets(targetKeyspaceName, &queryResult{
+				query: fmt.Sprintf("select vrepl_id, table_name, lastpk from _vt.copy_state where vrepl_id in (%d) and id in (select max(id) from _vt.copy_state where vrepl_id in (%d) group by vrepl_id, table_name)",
+					vrID, vrID),
+				result: copyStateResult,
+			})
+			now := protoutil.TimeToProto(time.Now())
+			env.tmc.AddVReplicationWorkflowsResponse(env.tmc.GetWorkflowKey(targetKeyspaceName, "0"), &tabletmanagerdatapb.ReadVReplicationWorkflowsResponse{
+				Workflows: []*tabletmanagerdatapb.ReadVReplicationWorkflowResponse{{
+					Workflow:     workflowName,
+					WorkflowType: binlogdatapb.VReplicationWorkflowType_MoveTables,
+					Streams: []*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream{{
+						Id:    vrID,
+						State: tc.state,
+						Bls: &binlogdatapb.BinlogSource{
+							Keyspace: sourceKeyspaceName,
+							Shard:    "0",
+							Filter: &binlogdatapb.Filter{
+								Rules: []*binlogdatapb.Rule{{Match: tableName}},
+							},
+						},
+						Pos:           position,
+						TimeUpdated:   now,
+						TimeHeartbeat: now,
+					}},
+				}},
+			})
+
+			reason, err := env.ws.canSwitch(ctx, ts, 30, nil)
+			require.NoError(t, err)
+			require.Equal(t, tc.want, reason)
+		})
+	}
 }
 
 func TestWorkflowSwitchTrafficFailsForInvalidMoveTablesSourceKeyspace(t *testing.T) {
