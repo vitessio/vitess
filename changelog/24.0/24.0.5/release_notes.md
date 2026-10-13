@@ -59,7 +59,7 @@ See [#21435](https://github.com/vitessio/vitess/pull/21435) for details.
 ------------
 The entire changelog for this release can be found [here](https://github.com/vitessio/vitess/blob/main/changelog/24.0/24.0.5/changelog.md).
 
-The release includes 28 merged Pull Requests.
+The release includes 30 merged Pull Requests.
 
 Thanks to all our contributors: @app/vitess-bot, @arthurschreiber, @lmorduch, @mattlord
 
