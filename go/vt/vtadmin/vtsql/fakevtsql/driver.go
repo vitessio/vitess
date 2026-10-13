@@ -46,6 +46,9 @@ type Connector struct {
 	ShouldErr bool
 	// Log, when set, records the statements run on the Connector's connections.
 	Log *StatementLog
+	// OnStatement, when set, is called with each statement before it runs, for
+	// example so that a test can cancel a request partway through.
+	OnStatement func(statement string)
 }
 
 // StatementLog records the statements run on a Connector's connections, each
@@ -81,7 +84,7 @@ var _ driver.Connector = (*Connector)(nil)
 
 // Connect is part of the driver.Connector interface.
 func (c *Connector) Connect(ctx context.Context) (driver.Conn, error) {
-	conn := &conn{tablets: c.Tablets, shouldErr: c.ShouldErr, log: c.Log}
+	conn := &conn{tablets: c.Tablets, shouldErr: c.ShouldErr, log: c.Log, onStatement: c.OnStatement}
 	if c.Log != nil {
 		conn.id = c.Log.newConn()
 	}

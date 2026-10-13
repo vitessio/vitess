@@ -46,6 +46,8 @@ type conn struct {
 	shouldErr bool
 	log       *StatementLog
 	id        int
+
+	onStatement func(statement string)
 }
 
 var (
@@ -56,8 +58,15 @@ var (
 
 // ExecContext accepts the transaction statements that vtsql runs.
 func (c *conn) ExecContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
+	// Like a real driver, run nothing for a request that is already done.
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if c.log != nil {
 		c.log.record(c.id, query)
+	}
+	if c.onStatement != nil {
+		c.onStatement(query)
 	}
 	switch strings.ToLower(query) {
 	case "start transaction read only", "rollback":
@@ -79,8 +88,15 @@ func (c *conn) Prepare(query string) (driver.Stmt, error) {
 }
 
 func (c *conn) QueryContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
+	// Like a real driver, run nothing for a request that is already done.
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if c.log != nil {
 		c.log.record(c.id, query)
+	}
+	if c.onStatement != nil {
+		c.onStatement(query)
 	}
 	if c.shouldErr {
 		return nil, assert.AnError

@@ -183,6 +183,10 @@ func (vtgate *VTGateProxy) ShowTablets(ctx context.Context) (*sql.Rows, error) {
 	return vtgate.conn.QueryContext(vtgate.getQueryContext(ctx), "SHOW vitess_tablets") //nolint:sqlclosecheck
 }
 
+// vexplainRollbackTimeout bounds the rollback of the read-only transaction
+// that a VExplain which runs its statement uses.
+const vexplainRollbackTimeout = 10 * time.Second
+
 // VExplain is part of the DB interface.
 func (vtgate *VTGateProxy) VExplain(ctx context.Context, query string, vexplainStmt *sqlparser.VExplainStmt) (*vtadminpb.VExplainResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "VTGateProxy.VExplain")
@@ -208,7 +212,13 @@ func (vtgate *VTGateProxy) VExplain(ctx context.Context, query string, vexplainS
 			return nil, err
 		}
 		defer func() {
-			if _, err := conn.ExecContext(ctx, "rollback"); err != nil {
+			// Roll back even when the request has been canceled or has run past
+			// its deadline. vitessdriver keeps the session on the client, so if
+			// the rollback is not sent, VTGate cannot roll back the shard
+			// transactions until they time out.
+			rollbackCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), vexplainRollbackTimeout)
+			defer cancel()
+			if _, err := conn.ExecContext(rollbackCtx, "rollback"); err != nil {
 				// Never return a connection that may still be in the transaction
 				// to the pool.
 				_ = conn.Raw(func(any) error { return driver.ErrBadConn })

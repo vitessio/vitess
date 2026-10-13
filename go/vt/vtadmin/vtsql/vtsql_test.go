@@ -17,7 +17,9 @@ limitations under the License.
 package vtsql
 
 import (
+	"context"
 	"database/sql"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -118,4 +120,31 @@ func TestVExplainRunsExecutingTypesReadOnly(t *testing.T) {
 			require.Equal(t, tc.want, log.Statements())
 		})
 	}
+
+	// The transaction is rolled back even when the request is canceled while
+	// the statement runs. Otherwise the connection is dropped without a
+	// rollback, and vitessdriver keeps the session on the client, so VTGate
+	// cannot roll back the shard transactions until they time out.
+	t.Run("canceled request", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+		log := &fakevtsql.StatementLog{}
+		db := sql.OpenDB(&fakevtsql.Connector{Log: log, OnStatement: func(statement string) {
+			if strings.HasPrefix(statement, "vexplain") {
+				cancel()
+			}
+		}})
+		t.Cleanup(func() { db.Close() })
+		proxy := &VTGateProxy{conn: db, cluster: &vtadminpb.Cluster{Id: "c0", Name: "cluster0"}}
+
+		query := "vexplain all select * from customers"
+		stmt, err := parser.Parse(query)
+		require.NoError(t, err)
+		_, _ = proxy.VExplain(ctx, query, stmt.(*sqlparser.VExplainStmt))
+		require.Equal(t, []string{
+			"1: start transaction read only",
+			"1: vexplain all select * from customers",
+			"1: rollback",
+		}, log.Statements())
+	})
 }
