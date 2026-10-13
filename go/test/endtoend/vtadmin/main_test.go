@@ -103,9 +103,11 @@ func TestVtadminAPIs(t *testing.T) {
 		require.Contains(t, resp, uks)
 	})
 
-	// VExplain is authorized as a read, so a VEXPLAIN that runs the statement it
-	// explains must not change data, even through a stored function that runs with
-	// its definer's privileges.
+	// A VEXPLAIN that runs the statement it explains needs the execute action,
+	// which this cluster's RBAC config grants. VTAdmin runs such a VEXPLAIN in a
+	// read-only transaction, so even an actor allowed to execute cannot change
+	// data through it, including through a stored function that runs with its
+	// definer's privileges.
 	t.Run("vexplain cannot write through a definer function", func(t *testing.T) {
 		tablet := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet().VttabletProcess
 		for _, query := range []string{
