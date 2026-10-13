@@ -45,7 +45,8 @@
  * [release-24.0] sqlparser: escape the user, host and engine names that SHOW statements print (#21464) [#21467](https://github.com/vitessio/vitess/pull/21467) 
 #### VTAdmin
  * [release-24.0] VTAdmin: only accept POST for API routes that change cluster state (#21397) [#21482](https://github.com/vitessio/vitess/pull/21482)
- * [release-24.0] VTAdmin: check RBAC in ReloadSchemaShard and forward its keyspace and shard (#21394) [#21483](https://github.com/vitessio/vitess/pull/21483) 
+ * [release-24.0] VTAdmin: check RBAC in ReloadSchemaShard and forward its keyspace and shard (#21394) [#21483](https://github.com/vitessio/vitess/pull/21483)
+ * [release-24.0] VTAdmin: require an execute permission for VExplain modes that run the statement (#21396) [#21561](https://github.com/vitessio/vitess/pull/21561)
 #### VTTablet
  * [release-24.0] tabletserver: escape */ in the principal of query annotations (#21369) [#21416](https://github.com/vitessio/vitess/pull/21416)
  * [release-24.0] VStreamer: Validate provided LastPK value (#21377) [#21427](https://github.com/vitessio/vitess/pull/21427)
