@@ -352,10 +352,9 @@ You will need administrator privileges on the vitess repository to be able to ma
     export GPG_AGENT_INFO
     ```
 
-3. Export following to avoid any version conflicts
+3. Export the following Maven options. The `--add-opens` options avoid version conflicts, and the `-Daether` options keep Maven 3.10 from adding files to the bundle that the Central Portal rejects (see [Java Packages](java-packages.md#maven-310)). They work with Maven 3.9 too.
     ```bash
-    export MAVEN_OPTS="--add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED --add-opens=java.base/java.text=ALL-UNNAMED 
-    --add-opens=java.desktop/java.awt.font=ALL-UNNAMED"
+    export MAVEN_OPTS="--add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED --add-opens=java.base/java.text=ALL-UNNAMED --add-opens=java.desktop/java.awt.font=ALL-UNNAMED -Daether.priority.EnhancedLocalRepositoryManagerFactory=NaN -Daether.priority.VersionsMetadataGeneratorFactory=NaN -Daether.syncContext.named.factory=rwlock-local"
     ```
 
 4. Deploy (upload) the Java code to Maven Central through the [Central Portal](https://central.sonatype.com/):
