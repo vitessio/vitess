@@ -97,8 +97,13 @@ func (ts *Server) CreateCellInfo(ctx context.Context, cell string, ci *topodatap
 
 	// Save it.
 	filePath := pathForCellInfo(cell)
-	_, err = ts.globalCell.Create(ctx, filePath, contents)
-	return err
+	if _, err = ts.globalCell.Create(ctx, filePath, contents); err != nil {
+		return err
+	}
+	// A cell name can be reused after a delete, so a connection cached for an earlier cell of this name
+	// must not be reused.
+	ts.expireCellInfo(cell)
+	return nil
 }
 
 // UpdateCellInfoFields is a high level helper method to read a CellInfo

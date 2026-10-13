@@ -236,3 +236,32 @@ func TestDeleteCellInfoRereadsCellInfo(t *testing.T) {
 	require.NoError(t, ts.DeleteCellInfo(ctx, "zone1", false /*force*/))
 	assert.Equal(t, before+1, gets(), "the safety check did not re-read CellInfo")
 }
+
+// TestConnForCellAfterRecreate verifies that after another process deletes a cell and this process creates
+// a cell of the same name at a different root, ConnForCell does not reuse the connection it cached for the
+// old cell.
+func TestConnForCellAfterRecreate(t *testing.T) {
+	ctx := t.Context()
+	ts, factory := memorytopo.NewServerAndFactory(ctx, "zone1")
+	defer ts.Close()
+	other, err := topo.NewWithFactory(factory, "", "")
+	require.NoError(t, err)
+	defer other.Close()
+	ts.SetCellInfoCacheTTL(time.Hour)
+
+	conn, err := ts.ConnForCell(ctx, "zone1")
+	require.NoError(t, err)
+
+	// Creating a cell that already exists fails and leaves the cached connection in place.
+	require.True(t, topo.IsErrType(ts.CreateCellInfo(ctx, "zone1", &topodatapb.CellInfo{}), topo.NodeExists))
+	got, err := ts.ConnForCell(ctx, "zone1")
+	require.NoError(t, err)
+	require.Same(t, conn, got)
+
+	require.NoError(t, other.DeleteCellInfo(ctx, "zone1", true /*force*/))
+	require.NoError(t, ts.CreateCellInfo(ctx, "zone1", &topodatapb.CellInfo{Root: "/zone1-recreated"}))
+
+	got, err = ts.ConnForCell(ctx, "zone1")
+	require.NoError(t, err)
+	assert.NotSame(t, conn, got, "the connection cached for the deleted cell was reused")
+}
