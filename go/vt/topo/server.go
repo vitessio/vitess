@@ -437,9 +437,13 @@ func (ts *Server) updateCellConnLocked(key cellInfoReadKey, ci *topodata.CellInf
 	switch {
 	case err == nil:
 		cellReadSem := semaphore.NewWeighted(DefaultReadConcurrency)
-		conn = NewStatsConn(cell, conn, cellReadSem)
-		ts.cellConns[cell] = cellConn{cellInfo: ci, conn: conn, cellInfoReadAt: readAt}
-		return conn, nil
+		statsConn := NewStatsConn(cell, conn, cellReadSem)
+		// A Server that SetReadOnly made read-only stays read-only for the cells it connects to afterwards.
+		if globalCellConn, ok := ts.globalCell.(*StatsConn); ok && globalCellConn.IsReadOnly() {
+			statsConn.SetReadOnly(true)
+		}
+		ts.cellConns[cell] = cellConn{cellInfo: ci, conn: statsConn, cellInfoReadAt: readAt}
+		return statsConn, nil
 	case IsErrType(err, NoNode):
 		err = vterrors.Wrap(err, fmt.Sprintf("failed to create topo connection to %v, %v", ci.ServerAddress, ci.Root))
 		return nil, NewError(NoNode, err.Error())

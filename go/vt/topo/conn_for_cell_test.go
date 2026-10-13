@@ -30,8 +30,10 @@ import (
 
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // TestConnForCellCachesCellInfo verifies that ConnForCell reuses a cell's connection without reading the
@@ -537,4 +539,43 @@ func TestConnForCellConcurrentWithReadOnly(t *testing.T) {
 	readOnly, err := ts.IsReadOnly()
 	require.NoError(t, err)
 	assert.True(t, readOnly)
+}
+
+// TestConnForCellNewConnKeepsReadOnly verifies that once the Server is read-only, a connection ConnForCell
+// creates afterwards is read-only too, both for a cell re-pointed by another process and for a cell this
+// Server connects to for the first time.
+func TestConnForCellNewConnKeepsReadOnly(t *testing.T) {
+	ctx := t.Context()
+	ts, factory := memorytopo.NewServerAndFactory(ctx, "zone1", "zone2")
+	defer ts.Close()
+	other, err := topo.NewWithFactory(factory, "", "")
+	require.NoError(t, err)
+	defer other.Close()
+	ts.SetCellInfoCacheTTL(0)
+
+	conn, err := ts.ConnForCell(ctx, "zone1")
+	require.NoError(t, err)
+	require.NoError(t, ts.SetReadOnly(true))
+
+	assertReadOnly := func(t *testing.T, conn topo.Conn) {
+		_, err := conn.Create(ctx, "read_only_probe", nil)
+		assert.Equal(t, vtrpcpb.Code_READ_ONLY, vterrors.Code(err), "a write through the connection was not rejected: %v", err)
+	}
+
+	t.Run("re-pointed cell", func(t *testing.T) {
+		require.NoError(t, other.UpdateCellInfoFields(ctx, "zone1", func(ci *topodatapb.CellInfo) error {
+			ci.Root = "/zone1-moved"
+			return nil
+		}))
+		got, err := ts.ConnForCell(ctx, "zone1")
+		require.NoError(t, err)
+		require.NotSame(t, conn, got)
+		assertReadOnly(t, got)
+	})
+
+	t.Run("first connection to a cell", func(t *testing.T) {
+		got, err := ts.ConnForCell(ctx, "zone2")
+		require.NoError(t, err)
+		assertReadOnly(t, got)
+	})
 }
