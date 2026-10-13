@@ -3677,6 +3677,10 @@ func (s *Server) getWorkflowStatus(ctx context.Context, keyspace string, workflo
 				return workflowStatus, fmt.Errorf("invalid state for stream %s of workflow %s.%s", stream.State, keyspace, workflow)
 			}
 			currentStatus := binlogdatapb.VReplicationWorkflowState(state)
+			// A lagging stream is a running one that has not been updated recently.
+			if currentStatus == binlogdatapb.VReplicationWorkflowState_Lagging {
+				currentStatus = binlogdatapb.VReplicationWorkflowState_Running
+			}
 			if workflowStatus != binlogdatapb.VReplicationWorkflowState_Unknown && currentStatus != workflowStatus {
 				return binlogdatapb.VReplicationWorkflowState_Unknown, nil
 			}
