@@ -162,7 +162,8 @@ type Server struct {
 type cellConn struct {
 	cellInfo *topodata.CellInfo
 	conn     Conn
-	// cellInfoReadAt is when cellInfo was last read from the global topo and found to match conn.
+	// cellInfoReadAt is when the read of cellInfo that conn was last checked against started. Zero means
+	// expired.
 	cellInfoReadAt time.Time
 }
 
@@ -311,6 +312,7 @@ func (ts *Server) ConnForCell(ctx context.Context, cell string) (Conn, error) {
 	}
 	generation := ts.cellInfoGenerations[cell]
 	ts.mu.Unlock()
+	readStart := time.Now()
 
 	// Fetch cell cluster addresses from the global cluster. This is a strong read: the result is trusted
 	// for cellInfoCacheTTL, so it must not come from a GlobalReadOnlyCell that lags behind.
@@ -322,13 +324,18 @@ func (ts *Server) ConnForCell(ctx context.Context, cell string) (Conn, error) {
 	// Return a cached client if present.
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
+	cc, ok := ts.cellConns[cell]
+	// A concurrent read that started after ours has already updated the entry. What we read may be older
+	// than what it read, so keep its result rather than replacing a newer connection with an older one.
+	if ok && cc.cellInfoReadAt.After(readStart) {
+		return cc.conn, nil
+	}
 	// If the cell's CellInfo was expired while we read it, what we read may predate the change, so leave
 	// the entry expired for the next call to read again.
-	readAt := time.Now()
+	readAt := readStart
 	if ts.cellInfoGenerations[cell] != generation {
 		readAt = time.Time{}
 	}
-	cc, ok := ts.cellConns[cell]
 	if ok {
 		// Client exists in cache.
 		// Let's verify that it is the same cell as we are looking for.

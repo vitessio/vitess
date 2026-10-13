@@ -159,6 +159,9 @@ func (ts *Server) DeleteCellInfo(ctx context.Context, cell string, force bool) e
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
+	// Check the cell's current topo server for serving keyspaces, not one a cached connection still points
+	// at after the cell was re-pointed by another process.
+	ts.expireCellInfo(cell)
 	srvKeyspaces, err := ts.GetSrvKeyspaceNames(ctx, cell)
 	switch {
 	case err == nil:

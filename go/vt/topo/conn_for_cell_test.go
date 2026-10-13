@@ -174,3 +174,65 @@ func TestDeleteCellInfoFailureKeepsCache(t *testing.T) {
 	require.NoError(t, err)
 	assert.Same(t, conn, got)
 }
+
+// TestConnForCellOlderReadDoesNotReplaceNewer verifies that when two ConnForCell calls refresh a cell at
+// once and another process re-points the cell in between, the call that read the old CellInfo does not
+// replace the connection that the later call built from the new one.
+func TestConnForCellOlderReadDoesNotReplaceNewer(t *testing.T) {
+	ctx := t.Context()
+	_, memFactory := memorytopo.NewServerAndFactory(ctx, "zone1")
+	factory := &pausingFactory{Factory: memFactory, armed: make(chan struct{}), paused: make(chan struct{}), release: make(chan struct{})}
+	ts, err := topo.NewWithFactory(factory, "", "")
+	require.NoError(t, err)
+	defer ts.Close()
+	other, err := topo.NewWithFactory(memFactory, "", "")
+	require.NoError(t, err)
+	defer other.Close()
+
+	_, err = ts.ConnForCell(ctx, "zone1")
+	require.NoError(t, err)
+	// Every call refreshes, so both calls below read CellInfo.
+	ts.SetCellInfoCacheTTL(0)
+
+	// The first call reads the old CellInfo and pauses.
+	close(factory.armed)
+	older := make(chan topo.Conn)
+	go func() {
+		got, err := ts.ConnForCell(ctx, "zone1")
+		assert.NoError(t, err)
+		older <- got
+	}()
+	<-factory.paused
+
+	// Another process re-points the cell, and a second call builds a connection from the new CellInfo.
+	require.NoError(t, other.UpdateCellInfoFields(ctx, "zone1", func(ci *topodatapb.CellInfo) error {
+		ci.Root = "/zone1-moved"
+		return nil
+	}))
+	newer, err := ts.ConnForCell(ctx, "zone1")
+	require.NoError(t, err)
+
+	close(factory.release)
+	assert.Same(t, newer, <-older, "the older read replaced the connection built from the newer one")
+	got, err := ts.ConnForCell(ctx, "zone1")
+	require.NoError(t, err)
+	assert.Same(t, newer, got, "the cached connection does not point at the cell's current root")
+}
+
+// TestDeleteCellInfoRereadsCellInfo verifies that DeleteCellInfo reads the cell's CellInfo before it checks
+// the cell for serving keyspaces, rather than checking through a cached connection that another process's
+// re-point may have left pointing at the old topo server.
+func TestDeleteCellInfoRereadsCellInfo(t *testing.T) {
+	ctx := t.Context()
+	ts, factory := memorytopo.NewServerAndFactory(ctx, "zone1")
+	defer ts.Close()
+	gets := func() int64 { return factory.GetCallStats().Counts()["Get"] }
+
+	_, err := ts.ConnForCell(ctx, "zone1")
+	require.NoError(t, err)
+	ts.SetCellInfoCacheTTL(time.Hour)
+
+	before := gets()
+	require.NoError(t, ts.DeleteCellInfo(ctx, "zone1", false /*force*/))
+	assert.Equal(t, before+1, gets(), "the safety check did not re-read CellInfo")
+}
