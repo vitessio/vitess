@@ -1141,9 +1141,28 @@ func (tm *TabletManager) hookExtraEnv() map[string]string {
 	}
 }
 
+const replicationInitializationPrimaryStatusTimeout = 2 * time.Second
+
+func (tm *TabletManager) lockReplicationInitialization(ctx context.Context) (context.Context, func(*error), error) {
+	tablet := tm.Tablet()
+	lockedCtx, unlock, err := tm.TopoServer.LockShard(ctx, tablet.Keyspace, tablet.Shard, "initialize replication")
+	if err != nil {
+		switch {
+		case ctx.Err() != nil:
+			err = ctx.Err()
+		case topo.IsErrType(err, topo.NodeExists):
+			err = vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "another operation holds the shard lock: %v", err)
+		case topo.IsErrType(err, topo.Timeout):
+			err = vterrors.Errorf(vtrpc.Code_DEADLINE_EXCEEDED, "timed out acquiring the shard lock: %v", err)
+		}
+		return nil, nil, vterrors.Wrapf(err, "cannot initialize replication for %s/%s; replication has not been changed", tablet.Keyspace, tablet.Shard)
+	}
+	return lockedCtx, unlock, nil
+}
+
 // initializeReplication is used to initialize the replication when the tablet starts.
 // It returns the current primary tablet for use externally
-func (tm *TabletManager) initializeReplication(ctx context.Context, tabletType topodatapb.TabletType) (string, error) {
+func (tm *TabletManager) initializeReplication(ctx context.Context, tabletType topodatapb.TabletType) (_ string, err error) {
 	// If active reparents are disabled, we do not touch replication.
 	// There is nothing to do
 	if mysqlctl.DisableActiveReparents {
@@ -1156,8 +1175,30 @@ func (tm *TabletManager) initializeReplication(ctx context.Context, tabletType t
 		return "", nil
 	}
 
-	// Read the shard to find the current primary, and its location.
+	// Avoid contending with shard operations when no receiver will be started.
 	tablet := tm.Tablet()
+	si, err := tm.TopoServer.GetShard(ctx, tablet.Keyspace, tablet.Shard)
+	if err != nil {
+		return "", vterrors.Wrap(err, "cannot read shard")
+	}
+	if si.PrimaryAlias == nil || topoproto.TabletAliasEqual(si.PrimaryAlias, tablet.Alias) {
+		return "", nil
+	}
+	ctx, unlock, err := tm.lockReplicationInitialization(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer unlock(&err)
+	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+	defer cancel()
+	return tm.initializeReplicationLocked(ctx, tabletType)
+}
+
+// initializeReplicationLocked runs with the shard lock held from source selection
+// through receiver startup, so it cannot undo a reparent's receiver revocation.
+func (tm *TabletManager) initializeReplicationLocked(ctx context.Context, tabletType topodatapb.TabletType) (string, error) {
+	tablet := tm.Tablet()
+	// Read the shard to find the current primary, and its location.
 	si, err := tm.TopoServer.GetShard(ctx, tablet.Keyspace, tablet.Shard)
 	if err != nil {
 		return "", vterrors.Wrap(err, "cannot read shard")
@@ -1198,10 +1239,6 @@ func (tm *TabletManager) initializeReplication(ctx context.Context, tabletType t
 		return "", err
 	}
 
-	if err := tm.fixSemiSync(ctx, tabletType, semiSyncAction); err != nil {
-		return "", err
-	}
-
 	// Set primary and start replication.
 	if currentPrimary.MysqlHostname == "" {
 		log.Warn("primary tablet in the shard record does not have mysql hostname specified, possibly because that tablet has been shut down.")
@@ -1218,7 +1255,10 @@ func (tm *TabletManager) initializeReplication(ctx context.Context, tabletType t
 		return "", err
 	}
 
-	primaryStatus, err := tm.tmc.PrimaryStatus(ctx, currentPrimary.Tablet)
+	// Bound the probe so a dead primary does not keep the shard lock held.
+	statusCtx, statusCancel := context.WithTimeout(ctx, replicationInitializationPrimaryStatusTimeout)
+	primaryStatus, err := tm.tmc.PrimaryStatus(statusCtx, currentPrimary.Tablet)
+	statusCancel()
 	if err != nil {
 		return "", err
 	}
@@ -1238,6 +1278,15 @@ func (tm *TabletManager) initializeReplication(ctx context.Context, tabletType t
 		return "", vterrors.New(vtrpc.Code_FAILED_PRECONDITION, fmt.Sprintf("Errant GTID detected - %s; Primary GTID - %s, Replica GTID - %s", errantGtid, primaryPosition, replicaPos.String()))
 	}
 
+	// This check is not a fencing token: the lock lease can still expire after it.
+	if err := topo.CheckShardLocked(ctx, tablet.Keyspace, tablet.Shard); err != nil {
+		return "", err
+	}
+	// Change semi-sync only after validating the source, but before the
+	// receiver connects to it.
+	if err := tm.fixSemiSync(ctx, tabletType, semiSyncAction); err != nil {
+		return "", err
+	}
 	if err := tm.setReplicationSourceRecoverable(ctx, currentPrimary.MysqlHostname, currentPrimary.MysqlPort, 0, true, true); err != nil {
 		return "", vterrors.Wrap(err, "failed to configure replication source")
 	}
