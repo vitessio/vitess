@@ -1077,17 +1077,11 @@ func (tsv *TabletServer) streamExecute(ctx context.Context, target *querypb.Targ
 }
 
 // BeginExecute combines Begin and Execute.
-<<<<<<< HEAD
 func (tsv *TabletServer) BeginExecute(ctx context.Context, target *querypb.Target, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (queryservice.TransactionState, *sqltypes.Result, error) {
-||||||| parent of f93240b571 (sqltypes, vtgate, vttablet: reject bind variables that are not single SQL literals (#21386))
-func (tsv *TabletServer) BeginExecute(ctx context.Context, session queryservice.Session, target *querypb.Target, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (queryservice.TransactionState, *sqltypes.Result, error) {
-=======
-func (tsv *TabletServer) BeginExecute(ctx context.Context, session queryservice.Session, target *querypb.Target, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (queryservice.TransactionState, *sqltypes.Result, error) {
 	// Reject before begin; see validateBindVariables.
 	if err := tsv.validateBindVariables(ctx, sql, bindVariables, nil); err != nil {
 		return queryservice.TransactionState{}, nil, err
 	}
->>>>>>> f93240b571 (sqltypes, vtgate, vttablet: reject bind variables that are not single SQL literals (#21386))
 
 	// Disable hot row protection in case of reserve connection.
 	if tsv.enableHotRowProtection && reservedID == 0 {
@@ -1120,37 +1114,11 @@ func (tsv *TabletServer) BeginStreamExecute(
 	options *querypb.ExecuteOptions,
 	callback func(*sqltypes.Result) error,
 ) (queryservice.TransactionState, error) {
-<<<<<<< HEAD
-||||||| parent of f93240b571 (sqltypes, vtgate, vttablet: reject bind variables that are not single SQL literals (#21386))
-	// Disable hot row protection in case of reserve connection.
-	if tsv.enableHotRowProtection && reservedID == 0 {
-		txDone, err := tsv.beginWaitForSameRangeTransactions(ctx, target, options, sql, bindVariables)
-		if err != nil {
-			return queryservice.TransactionState{}, err
-		}
-		if txDone != nil {
-			defer txDone()
-		}
-	}
-
-=======
 	// Reject before begin; see validateBindVariables.
 	if err := tsv.validateBindVariables(ctx, sql, bindVariables, nil); err != nil {
 		return queryservice.TransactionState{}, err
 	}
 
-	// Disable hot row protection in case of reserve connection.
-	if tsv.enableHotRowProtection && reservedID == 0 {
-		txDone, err := tsv.beginWaitForSameRangeTransactions(ctx, target, options, sql, bindVariables)
-		if err != nil {
-			return queryservice.TransactionState{}, err
-		}
-		if txDone != nil {
-			defer txDone()
-		}
-	}
-
->>>>>>> f93240b571 (sqltypes, vtgate, vttablet: reject bind variables that are not single SQL literals (#21386))
 	state, err := tsv.begin(ctx, target, postBeginQueries, reservedID, nil, options)
 	if err != nil {
 		return state, err
@@ -1381,18 +1349,12 @@ func (tsv *TabletServer) VStreamResults(ctx context.Context, target *querypb.Tar
 }
 
 // ReserveBeginExecute implements the QueryService interface
-<<<<<<< HEAD
 func (tsv *TabletServer) ReserveBeginExecute(ctx context.Context, target *querypb.Target, settings []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (state queryservice.ReservedTransactionState, result *sqltypes.Result, err error) {
-||||||| parent of f93240b571 (sqltypes, vtgate, vttablet: reject bind variables that are not single SQL literals (#21386))
-func (tsv *TabletServer) ReserveBeginExecute(ctx context.Context, session queryservice.Session, target *querypb.Target, settings []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (state queryservice.ReservedTransactionState, result *sqltypes.Result, err error) {
-=======
-func (tsv *TabletServer) ReserveBeginExecute(ctx context.Context, session queryservice.Session, target *querypb.Target, settings []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (state queryservice.ReservedTransactionState, result *sqltypes.Result, err error) {
 	// Reject before reserving and beginning; see validateBindVariables.
 	if err = tsv.validateBindVariables(ctx, sql, bindVariables, nil); err != nil {
 		return state, nil, err
 	}
 
->>>>>>> f93240b571 (sqltypes, vtgate, vttablet: reject bind variables that are not single SQL literals (#21386))
 	state, result, err = tsv.beginExecuteWithSettings(ctx, target, settings, postBeginQueries, sql, bindVariables, options)
 	// If there is an error and the error message is about allowing query in reserved connection only,
 	// then we do not return an error from here and continue to use the reserved connection path.

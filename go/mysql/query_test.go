@@ -19,6 +19,7 @@ package mysql
 import (
 	"fmt"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 
