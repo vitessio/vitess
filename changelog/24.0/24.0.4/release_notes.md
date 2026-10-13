@@ -1,4 +1,5 @@
 # Release of Vitess v24.0.4
+# Release of Vitess v24.0.4
 
 ## Summary
 
