@@ -103,6 +103,7 @@ const (
 	cannotSwitchHighLag             = "replication lag %ds is higher than allowed lag %ds"
 	cannotSwitchFailedTabletRefresh = "could not refresh all of the tablets involved in the operation:\n%s"
 	cannotSwitchFrozen              = "workflow is frozen"
+	cannotSwitchStopped             = "workflow is stopped"
 
 	// Number of LOCK TABLES cycles to perform on the sources during SwitchWrites.
 	lockTablesCycles = 2
@@ -2892,6 +2893,9 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 		}
 	}
 
+	// The read-only tablet types whose reads this call switched, which we need to
+	// switch back if we then fail to switch writes.
+	var readsSwitched []topodatapb.TabletType
 	if switchReplica || switchRdonly {
 		// If we're going to switch writes immediately after then we don't need to
 		// rebuild the SrvVSchema here as we will do it after switching writes.
@@ -2899,6 +2903,9 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 			return nil, err
 		}
 		s.Logger().Infof("Switch Reads done for workflow %s.%s", req.Keyspace, req.Workflow)
+		if !req.DryRun {
+			readsSwitched = readsSwitchedFromState(startState, req.TabletTypes)
+		}
 	}
 	if rdDryRunResults != nil {
 		dryRunResults = append(dryRunResults, *rdDryRunResults...)
@@ -2906,6 +2913,11 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 
 	if switchPrimary {
 		if _, wrDryRunResults, err = s.switchWrites(ctx, req, ts, startState, timeout, false); err != nil {
+			if len(readsSwitched) > 0 && direction == DirectionForward {
+				if rerr := s.revertReadsSwitch(ctx, req, ts, startState, readsSwitched); rerr != nil {
+					err = vterrors.Errorf(vtrpcpb.Code_CANCELED, "%v\n\nfailed to switch reads back after failing to switch writes, manual cleanup work may be necessary: %v", err, rerr)
+				}
+			}
 			return nil, err
 		}
 		s.Logger().Infof("Switch Writes done for workflow %s.%s", req.Keyspace, req.Workflow)
@@ -3024,6 +3036,71 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 				"requesting reversal of read traffic for RDONLYs but RDONLY reads have not been switched"))
 		}
 	}
+
+	return s.switchReadsForTabletTypes(ctx, req, ts, state, roTabletTypes, rebuildSrvVSchema, direction)
+}
+
+// readsSwitchedFromState returns the read-only tablet types, out of those requested, whose
+// reads were not switched in any cell in the given state, and which a forward switch of
+// reads therefore moved over in full. Tablet types that were already switched in some
+// cells are left out, as moving them back would undo an earlier switch.
+func readsSwitchedFromState(state *State, tabletTypes []topodatapb.TabletType) []topodatapb.TabletType {
+	var switched []topodatapb.TabletType
+	for _, tabletType := range tabletTypes {
+		var cellsSwitched, cellsNotSwitched []string
+		switch tabletType {
+		case topodatapb.TabletType_REPLICA:
+			cellsSwitched, cellsNotSwitched = state.ReplicaCellsSwitched, state.ReplicaCellsNotSwitched
+		case topodatapb.TabletType_RDONLY:
+			cellsSwitched, cellsNotSwitched = state.RdonlyCellsSwitched, state.RdonlyCellsNotSwitched
+		default:
+			continue
+		}
+		// The state of a reverse workflow is reported from the perspective of the
+		// original workflow, so switching its reads forward moves them back to the
+		// not switched state.
+		alreadySwitched := len(cellsSwitched) > 0
+		if state.IsReverse {
+			alreadySwitched = len(cellsNotSwitched) > 0
+		}
+		if !alreadySwitched {
+			switched = append(switched, tabletType)
+		}
+	}
+	return switched
+}
+
+// revertReadsSwitch switches the reads for the given read-only tablet types back after
+// we switched them and then failed to switch writes in the same SwitchTraffic call, so
+// that we do not leave reads on a target that is not in sync with the source.
+func (s *Server) revertReadsSwitch(ctx context.Context, req *vtctldatapb.WorkflowSwitchTrafficRequest, ts *trafficSwitcher, state *State,
+	roTabletTypes []topodatapb.TabletType,
+) error {
+	if ts.MigrationType() == binlogdatapb.MigrationType_TABLES && (ts.IsMultiTenantMigration() || ts.isPartialMigration) {
+		// Reads for these migrations are switched along with writes, or cannot be
+		// switched back on their own.
+		return nil
+	}
+	ts.Logger().Infof("Switching reads back for workflow %s.%s, tablet types: %s, after failing to switch writes",
+		ts.targetKeyspace, ts.workflow, topoproto.MakeStringTypeCSV(roTabletTypes))
+	// The original context may have been canceled or timed out, which may be
+	// why we failed to switch writes, so we use a new one, as is done when
+	// canceling the migration.
+	revertCtx, revertCancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Minute)
+	defer revertCancel()
+	_, err := s.switchReadsForTabletTypes(revertCtx, req, ts, state, roTabletTypes, true /* rebuildSrvVSchema */, DirectionBackward)
+	return err
+}
+
+// switchReadsForTabletTypes switches read traffic for the given read-only tablet types
+// in the given direction, without validating the request against the workflow state.
+func (s *Server) switchReadsForTabletTypes(ctx context.Context, req *vtctldatapb.WorkflowSwitchTrafficRequest, ts *trafficSwitcher, state *State,
+	roTabletTypes []topodatapb.TabletType, rebuildSrvVSchema bool, direction TrafficSwitchDirection,
+) (*[]string, error) {
+	roTypesToSwitchStr := topoproto.MakeStringTypeCSV(roTabletTypes)
+	switchReplica := slices.Contains(roTabletTypes, topodatapb.TabletType_REPLICA)
+	switchRdonly := slices.Contains(roTabletTypes, topodatapb.TabletType_RDONLY)
+	cellsStr := strings.Join(req.Cells, ",")
 
 	// If there are no rdonly tablets in the cells ask to switch rdonly tablets as well so that routing rules
 	// are updated for rdonly as well. Otherwise vitess will not know that the workflow has completed and will
@@ -3480,6 +3557,14 @@ func (s *Server) canSwitch(ctx context.Context, ts *trafficSwitcher, maxAllowedR
 				return cannotSwitchCopyIncomplete, nil
 			case binlogdatapb.VReplicationWorkflowState_Error.String():
 				return cannotSwitchError, nil
+			case binlogdatapb.VReplicationWorkflowState_Stopped.String():
+				// A stopped stream is not replicating, so the target may be missing
+				// data no matter what the lag says. A stream that never ran reports
+				// its lag as the time since it was created.
+				return cannotSwitchStopped, nil
+			}
+			if len(st.CopyStates) > 0 {
+				return cannotSwitchCopyIncomplete, nil
 			}
 		}
 	}

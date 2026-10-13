@@ -31,6 +31,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/prototext"
 
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/ptr"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
@@ -2030,6 +2031,208 @@ func TestMoveTablesSwitchWritesCompletesAfterCancelOnFreeze(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, stateAfter.WritesSwitched, "expected writes to remain switched after the original context was canceled")
 	require.True(t, tsAfter.frozen, "expected the target workflow to be frozen even though the original context was canceled")
+}
+
+// TestCanSwitchStreamNotReplicating confirms that we refuse to switch traffic when a
+// stream is not replicating or has not finished copying, even though its reported lag
+// is low. A stream that never ran reports its lag as the time since it was created.
+func TestCanSwitchStreamNotReplicating(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+
+	const (
+		workflowName       = "wf1"
+		tableName          = "t1"
+		sourceKeyspaceName = "sourceks"
+		targetKeyspaceName = "targetks"
+		vrID               = 1
+	)
+
+	testcases := []struct {
+		name      string
+		state     binlogdatapb.VReplicationWorkflowState
+		copyState bool
+		want      string
+	}{
+		{
+			name:  "stopped",
+			state: binlogdatapb.VReplicationWorkflowState_Stopped,
+			want:  cannotSwitchStopped,
+		},
+		{
+			name:      "stopped with copy state left",
+			state:     binlogdatapb.VReplicationWorkflowState_Stopped,
+			copyState: true,
+			want:      cannotSwitchStopped,
+		},
+		{
+			name:      "copy state left",
+			state:     binlogdatapb.VReplicationWorkflowState_Init,
+			copyState: true,
+			want:      cannotSwitchCopyIncomplete,
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			env := newTestEnv(t, ctx, defaultCellName, &testKeyspace{
+				KeyspaceName: sourceKeyspaceName,
+				ShardNames:   []string{"0"},
+			}, &testKeyspace{
+				KeyspaceName: targetKeyspaceName,
+				ShardNames:   []string{"0"},
+			})
+			defer env.close()
+			env.tmc.schema = map[string]*tabletmanagerdatapb.SchemaDefinition{
+				tableName: {
+					TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
+						Name:   tableName,
+						Schema: fmt.Sprintf("CREATE TABLE %s (id BIGINT, name VARCHAR(64), PRIMARY KEY (id))", tableName),
+					}},
+				},
+			}
+
+			ts, _, err := env.ws.getWorkflowState(ctx, targetKeyspaceName, workflowName)
+			require.NoError(t, err)
+
+			copyStateResult := &querypb.QueryResult{}
+			if tc.copyState {
+				copyStateResult = sqltypes.ResultToProto3(sqltypes.MakeTestResult(
+					sqltypes.MakeTestFields("vrepl_id|table_name|lastpk", "int64|varchar|varbinary"),
+					fmt.Sprintf("%d|%s|", vrID, tableName),
+				))
+			}
+			env.tmc.expectVRQueryResultOnKeyspaceTablets(targetKeyspaceName, &queryResult{
+				query: fmt.Sprintf("select vrepl_id, table_name, lastpk from _vt.copy_state where vrepl_id in (%d) and id in (select max(id) from _vt.copy_state where vrepl_id in (%d) group by vrepl_id, table_name)",
+					vrID, vrID),
+				result: copyStateResult,
+			})
+			now := protoutil.TimeToProto(time.Now())
+			env.tmc.AddVReplicationWorkflowsResponse(env.tmc.GetWorkflowKey(targetKeyspaceName, "0"), &tabletmanagerdatapb.ReadVReplicationWorkflowsResponse{
+				Workflows: []*tabletmanagerdatapb.ReadVReplicationWorkflowResponse{{
+					Workflow:     workflowName,
+					WorkflowType: binlogdatapb.VReplicationWorkflowType_MoveTables,
+					Streams: []*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream{{
+						Id:    vrID,
+						State: tc.state,
+						Bls: &binlogdatapb.BinlogSource{
+							Keyspace: sourceKeyspaceName,
+							Shard:    "0",
+							Filter: &binlogdatapb.Filter{
+								Rules: []*binlogdatapb.Rule{{Match: tableName}},
+							},
+						},
+						Pos:           position,
+						TimeUpdated:   now,
+						TimeHeartbeat: now,
+					}},
+				}},
+			})
+
+			reason, err := env.ws.canSwitch(ctx, ts, 30, nil)
+			require.NoError(t, err)
+			require.Equal(t, tc.want, reason)
+		})
+	}
+}
+
+// TestMoveTablesSwitchTrafficRevertsReadsOnWriteSwitchFailure confirms that when
+// SwitchTraffic switches reads and then fails to switch writes, it switches back the
+// reads that it switched, and only those.
+func TestMoveTablesSwitchTrafficRevertsReadsOnWriteSwitchFailure(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+
+	const (
+		workflowName       = "wf1"
+		tableName          = "t1"
+		sourceKeyspaceName = "sourceks"
+		targetKeyspaceName = "targetks"
+		vrID               = 1
+	)
+
+	testcases := []struct {
+		name string
+		// The keyspace that reads are routed to before SwitchTraffic.
+		readsStartIn string
+	}{
+		{
+			name:         "reads not switched before",
+			readsStartIn: sourceKeyspaceName,
+		},
+		{
+			name:         "reads already switched before",
+			readsStartIn: targetKeyspaceName,
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			env := newTestEnv(t, ctx, defaultCellName, &testKeyspace{
+				KeyspaceName: sourceKeyspaceName,
+				ShardNames:   []string{"0"},
+			}, &testKeyspace{
+				KeyspaceName: targetKeyspaceName,
+				ShardNames:   []string{"0"},
+			})
+			defer env.close()
+			env.tmc.schema = map[string]*tabletmanagerdatapb.SchemaDefinition{
+				tableName: {
+					TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
+						Name:   tableName,
+						Schema: fmt.Sprintf("CREATE TABLE %s (id BIGINT, name VARCHAR(64), PRIMARY KEY (id))", tableName),
+					}},
+				},
+			}
+			env.updateTableRoutingRules(t, ctx, roTabletTypes, []string{tableName},
+				sourceKeyspaceName, targetKeyspaceName, tc.readsStartIn)
+
+			copyTableQR := &queryResult{
+				query: fmt.Sprintf("select vrepl_id, table_name, lastpk from _vt.copy_state where vrepl_id in (%d) and id in (select max(id) from _vt.copy_state where vrepl_id in (%d) group by vrepl_id, table_name)",
+					vrID, vrID),
+				result: &querypb.QueryResult{},
+			}
+			journalQR := &queryResult{
+				query:  "/select val from _vt.resharding_journal.*",
+				result: &querypb.QueryResult{},
+			}
+			// Fail the journal check in switchWrites, after reads have been switched.
+			journalErrQR := &queryResult{
+				query: "/select val from _vt.resharding_journal.*",
+				err:   errors.New("journal read error"),
+			}
+			env.tmc.expectVRQueryResultOnKeyspaceTablets(targetKeyspaceName, copyTableQR)
+			env.tmc.expectVRQueryResultOnKeyspaceTablets(sourceKeyspaceName, journalQR)    // switchReads
+			env.tmc.expectVRQueryResultOnKeyspaceTablets(sourceKeyspaceName, journalErrQR) // switchWrites
+			env.tmc.expectVRQueryResultOnKeyspaceTablets(sourceKeyspaceName, journalQR)    // switching reads back
+
+			_, err := env.ws.WorkflowSwitchTraffic(ctx, &vtctldatapb.WorkflowSwitchTrafficRequest{
+				Keyspace:    targetKeyspaceName,
+				Workflow:    workflowName,
+				Direction:   int32(DirectionForward),
+				TabletTypes: allTabletTypes,
+			})
+			require.ErrorContains(t, err, "journal read error")
+			require.NotContains(t, err.Error(), "failed to switch reads back")
+
+			// Reads should be routed where they were before SwitchTraffic, in both the
+			// routing rules and the SrvVSchema that vtgate uses.
+			want := []string{tc.readsStartIn + "." + tableName}
+			rules, err := topotools.GetRoutingRules(ctx, env.ts)
+			require.NoError(t, err)
+			srvVSchema, err := env.ts.GetSrvVSchema(ctx, defaultCellName)
+			require.NoError(t, err)
+			srvRules := topotools.GetRoutingRulesMap(srvVSchema.RoutingRules)
+			for _, tabletType := range roTabletTypes {
+				tt := strings.ToLower(tabletType.String())
+				for _, from := range []string{tableName, sourceKeyspaceName + "." + tableName, targetKeyspaceName + "." + tableName} {
+					from = from + "@" + tt
+					require.Equal(t, want, rules[from], "routing rule for %s", from)
+					require.Equal(t, want, srvRules[from], "SrvVSchema routing rule for %s", from)
+				}
+			}
+		})
+	}
 }
 
 func TestWorkflowSwitchTrafficFailsForInvalidMoveTablesSourceKeyspace(t *testing.T) {
