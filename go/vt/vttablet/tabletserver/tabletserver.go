@@ -1124,37 +1124,11 @@ func (tsv *TabletServer) BeginStreamExecute(
 	options *querypb.ExecuteOptions,
 	callback func(*sqltypes.Result) error,
 ) (queryservice.TransactionState, error) {
-<<<<<<< HEAD
-||||||| parent of f93240b571 (sqltypes, vtgate, vttablet: reject bind variables that are not single SQL literals (#21386))
-	// Disable hot row protection in case of reserve connection.
-	if tsv.enableHotRowProtection && reservedID == 0 {
-		txDone, err := tsv.beginWaitForSameRangeTransactions(ctx, target, options, sql, bindVariables)
-		if err != nil {
-			return queryservice.TransactionState{}, err
-		}
-		if txDone != nil {
-			defer txDone()
-		}
-	}
-
-=======
 	// Reject before begin; see validateBindVariables.
 	if err := tsv.validateBindVariables(ctx, sql, bindVariables, nil); err != nil {
 		return queryservice.TransactionState{}, err
 	}
 
-	// Disable hot row protection in case of reserve connection.
-	if tsv.enableHotRowProtection && reservedID == 0 {
-		txDone, err := tsv.beginWaitForSameRangeTransactions(ctx, target, options, sql, bindVariables)
-		if err != nil {
-			return queryservice.TransactionState{}, err
-		}
-		if txDone != nil {
-			defer txDone()
-		}
-	}
-
->>>>>>> f93240b571 (sqltypes, vtgate, vttablet: reject bind variables that are not single SQL literals (#21386))
 	state, err := tsv.begin(ctx, target, postBeginQueries, reservedID, nil, options)
 	if err != nil {
 		return state, err
