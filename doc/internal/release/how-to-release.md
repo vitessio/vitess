@@ -358,7 +358,7 @@ You will need administrator privileges on the vitess repository to be able to ma
     --add-opens=java.desktop/java.awt.font=ALL-UNNAMED"
     ```
 
-4. Deploy (upload) the Java code to the oss.sonatype.org repository:
+4. Deploy (upload) the Java code to Maven Central through the [Central Portal](https://central.sonatype.com/):
 
    > **Warning:** After the deployment, the Java packages will be automatically released. Once released, you cannot delete them. The only option is to upload a newer version (e.g. increment the patch level).</p>
 
