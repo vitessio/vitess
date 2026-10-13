@@ -151,6 +151,9 @@ type FakeMysqlDaemon struct {
 	// will return an error.
 	SetReplicationPositionPos replication.Position
 
+	// GTIDPurged is returned by GetGTIDPurged.
+	GTIDPurged replication.Position
+
 	// StartReplicationUntilAfterPos is matched against the input.
 	StartReplicationUntilAfterPos replication.Position
 
@@ -410,7 +413,7 @@ func (fmd *FakeMysqlDaemon) CollectFullStatusData(context.Context) (*replication
 
 // GetGTIDPurged is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) GetGTIDPurged(ctx context.Context) (replication.Position, error) {
-	return replication.Position{}, nil
+	return fmd.GTIDPurged, nil
 }
 
 // ResetReplication is part of the MysqlDaemon interface.
