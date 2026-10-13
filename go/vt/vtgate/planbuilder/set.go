@@ -21,6 +21,8 @@ import (
 	"strconv"
 	"strings"
 
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/sqlmode"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/sysvars"
@@ -29,6 +31,8 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
+
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 type (
@@ -154,6 +158,12 @@ func buildSetOpCheckAndIgnore(s setting) planFunc {
 }
 
 func planSysVarCheckIgnore(expr *sqlparser.SetExpr, schema plancontext.VSchema, boolean bool) (engine.SetOp, error) {
+	// The check query prints the name as is. Global variables are not planned from the
+	// sysvars table, so for them nothing else has checked it.
+	name := expr.Var.Name.Lowered()
+	if !isSysVarName(name) {
+		return nil, vterrors.VT05006(sqlparser.String(expr))
+	}
 	keyspace, dest, err := resolveDestination(schema)
 	if err != nil {
 		return nil, err
@@ -164,11 +174,74 @@ func planSysVarCheckIgnore(expr *sqlparser.SetExpr, schema plancontext.VSchema, 
 	}
 
 	return &engine.SysVarCheckAndIgnore{
-		Name:              expr.Var.Name.Lowered(),
+		Name:              name,
 		Keyspace:          keyspace,
 		TargetDestination: dest,
 		Expr:              value,
 	}, nil
+}
+
+// validateSQLModePlan wraps sql_mode's planFunc with plan-time validation of constant
+// values: literals and constant expressions (e.g. CONCAT over literals) are evaluated and
+// validated the way MySQL validates a SET sql_mode, and modes the Vitess parser cannot
+// support are rejected (see sqlmode.Validate). Non-constant expressions are validated at
+// execution time, once their value is known.
+func validateSQLModePlan(inner planFunc) planFunc {
+	return func(expr *sqlparser.SetExpr, vschema plancontext.VSchema, ec *expressionConverter) (engine.SetOp, error) {
+		evalExpr, err := evalengine.Translate(expr.Expr, &evalengine.Config{
+			Collation:   vschema.ConnCollation(),
+			Environment: vschema.Environment(),
+		})
+		if err == nil {
+			if lit, ok := evalExpr.(*evalengine.Literal); ok {
+				if res, err := evalengine.EmptyExpressionEnv(vschema.Environment()).Evaluate(lit); err == nil {
+					if _, err := sqlmode.Validate(res.Value(vschema.ConnCollation())); err != nil {
+						return nil, err
+					}
+				}
+			}
+		}
+		return inner(expr, vschema, ec)
+	}
+}
+
+// validateConnectionCharsetPlan wraps the planFunc of a connection character set
+// variable with a plan-time check of a constant value: a character set or collation
+// that Vitess cannot parse and escape safely is refused (see
+// collations.IsConnectionCharsetName), as VTTablet refuses it, rather than answered
+// with OK. NULL, which only turns result conversion off, and non-constant values,
+// whose character set cannot be judged here, are left to the wrapped planFunc.
+func validateConnectionCharsetPlan(inner planFunc) planFunc {
+	return func(expr *sqlparser.SetExpr, vschema plancontext.VSchema, ec *expressionConverter) (engine.SetOp, error) {
+		var safe bool
+		switch value := expr.Expr.(type) {
+		case *sqlparser.Literal:
+			switch value.Type {
+			case sqlparser.StrVal:
+				safe = collations.IsConnectionCharsetName(value.Val)
+			case sqlparser.IntVal:
+				// MySQL also accepts a collation ID, and refuses 0 and an ID it
+				// does not define.
+				id, err := strconv.ParseUint(value.Val, 10, 16)
+				if err == nil && id != 0 {
+					_, safe = vschema.Environment().CollationEnv().ConnectionCharset(collations.ID(id))
+				}
+			default:
+				return inner(expr, vschema, ec)
+			}
+		case *sqlparser.ColName:
+			if !value.Qualifier.IsEmpty() {
+				return inner(expr, vschema, ec)
+			}
+			safe = collations.IsConnectionCharsetName(value.Name.String())
+		default:
+			return inner(expr, vschema, ec)
+		}
+		if !safe {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported connection character set %s for %s: use utf8mb4", sqlparser.String(expr.Expr), expr.Var.Name.Lowered())
+		}
+		return inner(expr, vschema, ec)
+	}
 }
 
 func buildSetOpReservedConn(s setting) planFunc {
@@ -245,6 +318,32 @@ func resolveDestination(vschema plancontext.VSchema) (*vindexes.Keyspace, key.Sh
 		dest = key.DestinationAnyShard{}
 	}
 	return keyspace, dest, nil
+}
+
+// isSysVarName reports whether name can be the name of a MySQL system variable: one
+// identifier, or two joined by a dot, as in the component variable validate_password.length
+// or the key cache variable hot$cache.key_buffer_size. Each identifier is letters, digits,
+// underscores and dollar signs. A back-tick quoted name can hold any other character, which
+// MySQL rejects as an unknown system variable. The caller passes the lowercased name.
+func isSysVarName(name string) bool {
+	prefix, suffix, dotted := strings.Cut(name, ".")
+	if dotted && !isSysVarIdent(suffix) {
+		return false
+	}
+	return isSysVarIdent(prefix)
+}
+
+func isSysVarIdent(ident string) bool {
+	if ident == "" {
+		return false
+	}
+	for i := 0; i < len(ident); i++ {
+		c := ident[i]
+		if !(c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '_' || c == '$') {
+			return false
+		}
+	}
+	return true
 }
 
 func extractValue(expr *sqlparser.SetExpr, boolean bool) (string, error) {

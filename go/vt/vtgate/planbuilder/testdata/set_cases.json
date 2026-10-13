@@ -651,5 +651,88 @@
         ]
       }
     }
+  },
+  {
+    "comment": "global variable name that cannot be a system variable is rejected",
+    "query": "set @@`global.version = 1 union select sleep(5) -- ` = 1",
+    "plan": "VT05006: unknown system variable '@@global.`version = 1 union select sleep(5) -- ` = 1'"
+  },
+  {
+    "comment": "global variable name that cannot be a system variable is rejected with set global",
+    "query": "set global `version = 1 union select sleep(5) -- ` = 1",
+    "plan": "VT05006: unknown system variable '@@global.`version = 1 union select sleep(5) -- ` = 1'"
+  },
+  {
+    "comment": "global component variable name is planned as check and ignore",
+    "query": "set @@global.validate_password.length = 8",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SET",
+      "Original": "set @@global.validate_password.length = 8",
+      "Instructions": {
+        "OperatorType": "Set",
+        "Ops": [
+          {
+            "Type": "SysVarCheckAndIgnore",
+            "Name": "validate_password.length",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "TargetDestination": {},
+            "Expr": "8"
+          }
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "SingleRow"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "comment": "global variable name with an empty part before the dot is rejected",
+    "query": "set global `.foo` = 1",
+    "plan": "VT05006: unknown system variable '@@global.`.foo` = 1'"
+  },
+  {
+    "comment": "global variable name with an empty part after the dot is rejected",
+    "query": "set global `foo.` = 1",
+    "plan": "VT05006: unknown system variable '@@global.`foo.` = 1'"
+  },
+  {
+    "comment": "global variable name with two dots is rejected",
+    "query": "set @@global.a.b.c = 1",
+    "plan": "VT05006: unknown system variable '@@global.`a.b.c` = 1'"
+  },
+  {
+    "comment": "global key cache variable name with a dollar sign is planned as check and ignore",
+    "query": "set @@global.hot$cache.key_buffer_size = 1048576",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SET",
+      "Original": "set @@global.hot$cache.key_buffer_size = 1048576",
+      "Instructions": {
+        "OperatorType": "Set",
+        "Ops": [
+          {
+            "Type": "SysVarCheckAndIgnore",
+            "Name": "hot$cache.key_buffer_size",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "TargetDestination": {},
+            "Expr": "1048576"
+          }
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "SingleRow"
+          }
+        ]
+      }
+    }
   }
 ]

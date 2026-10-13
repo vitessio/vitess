@@ -2529,6 +2529,19 @@ func TestExecutorOtherAdmin(t *testing.T) {
 	}
 }
 
+// TestExecutorRewritesDoubleSlashComments checks that a statement that vtgate
+// forwards as written reaches the tablet with each "//" comment rewritten to
+// "#/", so that MySQL skips the text that Vitess skipped.
+func TestExecutorRewritesDoubleSlashComments(t *testing.T) {
+	executor, _, _, sbclookup, _ := createExecutorEnv(t)
+
+	_, err := executorExec(t.Context(), executor, &vtgatepb.Session{TargetString: KsTestUnsharded}, "repair table t1 //*x*/ , t2\n", nil)
+	require.NoError(t, err)
+	queries := sbclookup.GetQueries()
+	require.Len(t, queries, 1)
+	assert.Equal(t, "repair table t1 #/*x*/ , t2", queries[0].Sql)
+}
+
 func TestExecutorSavepointInTx(t *testing.T) {
 	executor, sbc1, sbc2, _, _ := createExecutorEnv(t)
 
