@@ -38,6 +38,8 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/reparenttestutil"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
+
+	"golang.org/x/sync/semaphore"
 )
 
 func newReplicationInitializationTM(t *testing.T) (*TabletManager, *mysqlctl.FakeMysqlDaemon, *topo.Server, *memorytopo.Factory) {
@@ -61,6 +63,7 @@ func newReplicationInitializationTMWithServer(t *testing.T, ts *topo.Server) (*T
 	md.FetchSuperQueryMap["SHOW DATABASES"] = sqltypes.MakeTestResult(sqltypes.MakeTestFields("Database", "varchar"), "vt_ks")
 	tm := &TabletManager{
 		BatchCtx: ctx, TopoServer: ts, MysqlDaemon: md, tmc: newFakeTMClient(), tabletAlias: tablet.Alias,
+		actionSema: semaphore.NewWeighted(1),
 	}
 	tm.tmState = newTMState(tm, tablet)
 	t.Cleanup(tm.tmState.cancel)
@@ -287,6 +290,8 @@ func TestRestoreFinalizationShardLockFailures(t *testing.T) {
 			t.Run(tc.name+"/"+actionName, func(t *testing.T) {
 				tm, md, ts, factory := newReplicationInitializationTM(t)
 				holdInitializationShardLock(t, ts)
+				// Stop the background retry before the lock is released.
+				t.Cleanup(tm.tmState.cancel)
 				if tc.tryLockErr != nil {
 					factory.AddOperationError(memorytopo.TryLock, ".*", tc.tryLockErr)
 				}
@@ -322,14 +327,14 @@ func TestRestoreFinalizationShardLockFailures(t *testing.T) {
 				assert.Empty(t, md.CurrentSourceHost)
 				if tc.deferred {
 					require.NoError(t, err)
-					// The tablet becomes a replica type so that VTOrc repairs its replication.
+					// The tablet becomes a replica type, and initialization is retried in the background.
 					assert.Equal(t, topodatapb.TabletType_REPLICA, tm.Tablet().Type)
-					assert.Contains(t, logger.String(), "leaving replication unchanged for VTOrc to repair")
+					assert.Contains(t, logger.String(), "deferring replication initialization")
 					return
 				}
 				require.ErrorContains(t, err, "cannot initialize replication for ks/0")
 				assert.Equal(t, topodatapb.TabletType_RESTORE, tm.Tablet().Type)
-				assert.NotContains(t, logger.String(), "leaving replication unchanged")
+				assert.NotContains(t, logger.String(), "deferring replication initialization")
 			})
 		}
 	}
@@ -373,4 +378,34 @@ func TestStartDoesNotWaitForHeldShardLock(t *testing.T) {
 			assert.Equal(t, topodatapb.TabletType_REPLICA, tm.Tablet().Type)
 		})
 	}
+}
+
+func TestDeferredReplicationInitializationRetriesAfterLockRelease(t *testing.T) {
+	tm, md, ts, _ := newReplicationInitializationTM(t)
+	release := holdInitializationShardLock(t, ts)
+	started := make(chan struct{}, 2)
+	// Runs for source configuration and START REPLICA.
+	md.ExecuteSuperQueryListCallback = func() { started <- struct{}{} }
+
+	logger := logutil.NewMemoryLogger()
+	_, err := tm.initializeReplicationUnlessShardLocked(t.Context(), logger, topodatapb.TabletType_REPLICA)
+	require.NoError(t, err)
+	assert.Contains(t, logger.String(), "deferring replication initialization")
+	assert.Empty(t, started, "deferral must not change replication")
+
+	release()
+	for range 2 {
+		select {
+		case <-started:
+		case <-time.After(30 * time.Second):
+			require.FailNow(t, "deferred replication initialization was not retried")
+		}
+	}
+	// The retry releases the shard lock after it has changed replication.
+	_, unlock, err := ts.LockShard(t.Context(), "ks", "0", "after retry")
+	require.NoError(t, err)
+	unlock(&err)
+	require.NoError(t, err)
+	assert.Equal(t, "old-primary", md.CurrentSourceHost)
+	require.NoError(t, md.CheckSuperQueryList())
 }

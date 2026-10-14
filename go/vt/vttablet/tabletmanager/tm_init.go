@@ -1182,16 +1182,69 @@ func (tm *TabletManager) lockReplicationInitialization(ctx context.Context) (con
 	return lockedCtx, unlock, nil
 }
 
+const (
+	// replicationInitializationRetryInterval is the wait between retries of a
+	// deferred replication initialization while the shard lock is unavailable.
+	replicationInitializationRetryInterval = time.Second
+	// replicationInitializationMaxRetryInterval bounds the backoff after other
+	// initialization errors, each of which can hold the shard lock for seconds.
+	replicationInitializationMaxRetryInterval = time.Minute
+)
+
 // initializeReplicationUnlessShardLocked initializes replication unless the
-// shard lock is held. If the lock is held, replication is left unchanged and
-// VTOrc repairs it under the lock.
+// shard lock is unavailable. In that case replication is left unchanged and
+// initialization is retried in the background.
 func (tm *TabletManager) initializeReplicationUnlessShardLocked(ctx context.Context, logger logutil.Logger, tabletType topodatapb.TabletType) (string, error) {
 	primaryPos, err := tm.initializeReplication(ctx, tabletType)
 	if _, ok := errors.AsType[*shardLockUnavailableError](err); ok {
-		logger.Warningf("leaving replication unchanged for VTOrc to repair: %v", err)
+		logger.Warningf("deferring replication initialization, retrying in the background: %v", err)
+		go tm.retryReplicationInitialization(tm.tmState.ctx)
 		return "", nil
 	}
 	return primaryPos, err
+}
+
+// retryReplicationInitialization retries replication initialization until it
+// succeeds or ctx is done.
+func (tm *TabletManager) retryReplicationInitialization(ctx context.Context) {
+	interval := replicationInitializationRetryInterval
+	var lastErr string
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(interval):
+		}
+		err := tm.retryReplicationInitializationOnce(ctx)
+		if err == nil {
+			log.Info("Initialized deferred replication")
+			return
+		}
+		if _, ok := errors.AsType[*shardLockUnavailableError](err); ok {
+			interval = replicationInitializationRetryInterval
+		} else {
+			interval = min(2*interval, replicationInitializationMaxRetryInterval)
+		}
+		if err.Error() != lastErr {
+			lastErr = err.Error()
+			log.Warn(fmt.Sprintf("Retrying deferred replication initialization: %v", err))
+		}
+	}
+}
+
+func (tm *TabletManager) retryReplicationInitializationOnce(ctx context.Context) error {
+	// RPCs can change replication once the tablet serves them.
+	if err := tm.lock(ctx); err != nil {
+		return err
+	}
+	defer tm.unlock()
+	tabletType := tm.Tablet().Type
+	if tabletType == topodatapb.TabletType_RESTORE {
+		// A restore initializes replication when it finishes.
+		return nil
+	}
+	_, err := tm.initializeReplication(ctx, tabletType)
+	return err
 }
 
 // initializeReplication is used to initialize the replication when the tablet starts.
