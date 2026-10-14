@@ -564,7 +564,7 @@ func TestVtBackupWithChunking(t *testing.T) {
 // direct connection with a single attempt: the QueryTablet helper retries
 // failing statements for ~10s each, but here the failure is the assertion.
 func assertMysqldIsSuperReadOnly(t *testing.T, tablet *cluster.Vttablet) {
-	conn, err := tablet.VttabletProcess.TabletConn(keyspaceName, false)
+	conn, err := tablet.VttabletProcess.TabletConnWithContext(t.Context(), keyspaceName, false)
 	require.NoError(t, err)
 	defer conn.Close()
 	_, err = conn.ExecuteFetch("create database testdb_fail", 1000, true)
