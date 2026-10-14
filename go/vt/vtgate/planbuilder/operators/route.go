@@ -116,6 +116,11 @@ type (
 
 // UpdateRoutingLogic first checks if we are dealing with a predicate that
 func UpdateRoutingLogic(ctx *plancontext.PlanningContext, in sqlparser.Expr, r Routing) Routing {
+	if nr, ok := r.(*NoneRouting); ok {
+		// a none routing stays none no matter what further predicates say.
+		return nr
+	}
+
 	ks := r.Keyspace()
 	if ks == nil {
 		var err error
