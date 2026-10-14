@@ -28,6 +28,9 @@ runs:
     - name: Build bootstrap image
       uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
       with:
+        # Build from the checked-out code. Without a context, the action
+        # makes BuildKit fetch the repository from GitHub again.
+        context: .
         file: docker/bootstrap/Dockerfile
         target: ${{ inputs.bootstrap-flavor }}
         tags: vitess/bootstrap:${{ inputs.bootstrap-version }}-${{ inputs.bootstrap-flavor }}
