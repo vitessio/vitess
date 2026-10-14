@@ -107,12 +107,12 @@ func TestInitializeReplicationDoesNotReviveReceiverDuringReparent(t *testing.T) 
 	tm, md, ts, _ := newReplicationInitializationTM(t)
 	release := holdInitializationShardLock(t, ts)
 
-	ctx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
-	t.Cleanup(cancel)
-	_, err := tm.initializeReplication(ctx, topodatapb.TabletType_REPLICA)
+	// memorytopo's TryLock waits for a held lock, so acquisition times out.
+	_, err := tm.initializeReplication(t.Context(), topodatapb.TabletType_REPLICA)
 	require.ErrorContains(t, err, "cannot initialize replication for ks/0")
+	_, unavailable := errors.AsType[*shardLockUnavailableError](err)
+	assert.True(t, unavailable)
 	assert.Equal(t, vtrpcpb.Code_DEADLINE_EXCEEDED, vterrors.Code(err))
-	require.ErrorIs(t, ctx.Err(), context.DeadlineExceeded)
 	assert.False(t, md.Replicating)
 	assert.False(t, md.SemiSyncReplicaEnabled)
 	assert.Empty(t, md.CurrentSourceHost)
@@ -219,7 +219,7 @@ func TestInitializeReplicationEmptyPrimaryHostnamePreservesSemiSync(t *testing.T
 
 func TestReplicationInitializationMapsBackendContentionError(t *testing.T) {
 	tm, md, _, factory := newReplicationInitializationTM(t)
-	factory.AddOperationError(memorytopo.Lock, ".*", topo.NewError(topo.NodeExists, "shard"))
+	factory.AddOperationError(memorytopo.TryLock, ".*", topo.NewError(topo.NodeExists, "shard"))
 	_, err := tm.initializeReplication(t.Context(), topodatapb.TabletType_REPLICA)
 	require.Error(t, err)
 	assert.Equal(t, vtrpcpb.Code_UNAVAILABLE, vterrors.Code(err))
@@ -229,10 +229,11 @@ func TestReplicationInitializationMapsBackendContentionError(t *testing.T) {
 func TestInitializeReplicationRereadsPrimaryAfterAcquiringLock(t *testing.T) {
 	tm, md, ts, factory := newReplicationInitializationTM(t)
 	release := holdInitializationShardLock(t, ts)
-	before := factory.GetCallStats().Counts()["Lock"]
+	before := factory.GetCallStats().Counts()["TryLock"]
 	done := make(chan error, 1)
 	go func() { _, err := tm.initializeReplication(t.Context(), topodatapb.TabletType_REPLICA); done <- err }()
-	require.Eventually(t, func() bool { return factory.GetCallStats().Counts()["Lock"] > before }, 30*time.Second, time.Millisecond)
+	// Publish the new primary and release the lock while TryLock waits for it.
+	require.Eventually(t, func() bool { return factory.GetCallStats().Counts()["TryLock"] > before }, 30*time.Second, time.Millisecond)
 	primary := newTestTablet(t, 3, "ks", "0", nil)
 	primary.Type = topodatapb.TabletType_PRIMARY
 	primary.MysqlHostname, primary.MysqlPort = "new-primary", 3306

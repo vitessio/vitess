@@ -1151,9 +1151,20 @@ type shardLockUnavailableError struct{ cause error }
 func (e *shardLockUnavailableError) Error() string { return e.cause.Error() }
 func (e *shardLockUnavailableError) Cause() error  { return e.cause }
 
-func (tm *TabletManager) lockReplicationInitialization(ctx context.Context, opts ...topo.LockOption) (context.Context, func(*error), error) {
+// replicationInitializationLockAcquireTimeout bounds the shard lock acquisition
+// of replication initialization. It does not bound the topology backend's
+// cleanup after a timed-out acquisition.
+const replicationInitializationLockAcquireTimeout = time.Second
+
+// lockReplicationInitialization does not wait for a held shard lock. The lock
+// holder may need RPCs to this tablet, which a starting tablet does not serve
+// yet and a restoring tablet blocks with its action lock.
+func (tm *TabletManager) lockReplicationInitialization(ctx context.Context) (context.Context, func(*error), error) {
 	tablet := tm.Tablet()
-	lockedCtx, unlock, err := tm.TopoServer.LockShard(ctx, tablet.Keyspace, tablet.Shard, "initialize replication", opts...)
+	// NonBlocking still waits if another operation takes the lock between the
+	// check and the acquisition, or if the backend's TryLock blocks.
+	lockedCtx, unlock, err := tm.TopoServer.LockShard(ctx, tablet.Keyspace, tablet.Shard, "initialize replication",
+		topo.WithType(topo.NonBlocking), topo.WithAcquireTimeout(replicationInitializationLockAcquireTimeout))
 	if err != nil {
 		msg := fmt.Sprintf("cannot initialize replication for %s/%s; replication has not been changed", tablet.Keyspace, tablet.Shard)
 		switch {
@@ -1171,21 +1182,11 @@ func (tm *TabletManager) lockReplicationInitialization(ctx context.Context, opts
 	return lockedCtx, unlock, nil
 }
 
-// replicationInitializationLockAcquireTimeout bounds the shard lock acquisition
-// of initializeReplicationUnlessShardLocked. It does not bound the topology
-// backend's cleanup after a timed-out acquisition.
-const replicationInitializationLockAcquireTimeout = time.Second
-
-// initializeReplicationUnlessShardLocked initializes replication without waiting
-// for a held shard lock. The lock holder may need RPCs to this tablet, which a
-// starting tablet does not serve yet and a restoring tablet blocks with its
-// action lock. If the lock is held, replication is left unchanged and VTOrc
-// repairs it under the lock.
+// initializeReplicationUnlessShardLocked initializes replication unless the
+// shard lock is held. If the lock is held, replication is left unchanged and
+// VTOrc repairs it under the lock.
 func (tm *TabletManager) initializeReplicationUnlessShardLocked(ctx context.Context, logger logutil.Logger, tabletType topodatapb.TabletType) (string, error) {
-	// NonBlocking still waits if another operation takes the lock between the
-	// check and the acquisition, or if the backend's TryLock blocks.
-	primaryPos, err := tm.initializeReplication(ctx, tabletType,
-		topo.WithType(topo.NonBlocking), topo.WithAcquireTimeout(replicationInitializationLockAcquireTimeout))
+	primaryPos, err := tm.initializeReplication(ctx, tabletType)
 	if _, ok := errors.AsType[*shardLockUnavailableError](err); ok {
 		logger.Warningf("leaving replication unchanged for VTOrc to repair: %v", err)
 		return "", nil
@@ -1195,7 +1196,7 @@ func (tm *TabletManager) initializeReplicationUnlessShardLocked(ctx context.Cont
 
 // initializeReplication is used to initialize the replication when the tablet starts.
 // It returns the current primary tablet for use externally
-func (tm *TabletManager) initializeReplication(ctx context.Context, tabletType topodatapb.TabletType, opts ...topo.LockOption) (_ string, err error) {
+func (tm *TabletManager) initializeReplication(ctx context.Context, tabletType topodatapb.TabletType) (_ string, err error) {
 	// If active reparents are disabled, we do not touch replication.
 	// There is nothing to do
 	if mysqlctl.DisableActiveReparents {
@@ -1217,7 +1218,7 @@ func (tm *TabletManager) initializeReplication(ctx context.Context, tabletType t
 	if si.PrimaryAlias == nil || topoproto.TabletAliasEqual(si.PrimaryAlias, tablet.Alias) {
 		return "", nil
 	}
-	ctx, unlock, err := tm.lockReplicationInitialization(ctx, opts...)
+	ctx, unlock, err := tm.lockReplicationInitialization(ctx)
 	if err != nil {
 		return "", err
 	}
