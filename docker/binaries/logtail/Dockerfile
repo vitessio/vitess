@@ -16,7 +16,7 @@ ARG DEBIAN_VER=stable-slim
 
 FROM debian:${DEBIAN_VER}
 
-ENV TAIL_FILEPATH /dev/null
+ENV TAIL_FILEPATH=/dev/null
 
 COPY tail.sh /vt/tail.sh
 
