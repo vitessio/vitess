@@ -134,6 +134,12 @@ updates:
       interval: "weekly"
     cooldown:
       default-days: 30
+    ignore:
+      # typescript-eslint can't support TypeScript 7 until TypeScript 7 provides a compiler API:
+      # https://github.com/typescript-eslint/typescript-eslint/issues/10940
+      - dependency-name: "typescript"
+        versions:
+          - ">= 7"
     groups:
       vtadmin-npm:
         patterns:
