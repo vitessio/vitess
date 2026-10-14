@@ -168,7 +168,7 @@ func TestTabletBackupOnly(t *testing.T) {
 	initTablets(t, true, true)
 	firstBackupTest(t, true)
 
-	tearDown(t, false)
+	tearDown(t, true)
 }
 
 func firstBackupTest(t *testing.T, removeBackup bool) {
@@ -560,7 +560,7 @@ func TestVtBackupWithChunking(t *testing.T) {
 }
 
 // assertMysqldIsSuperReadOnly verifies that writes against the tablet's
-// mysqld fail because vtbackup left it in super-read-only mode. It uses a
+// mysqld fail because it runs in super-read-only mode. It uses a
 // direct connection with a single attempt: the QueryTablet helper retries
 // failing statements for ~10s each, but here the failure is the assertion.
 func assertMysqldIsSuperReadOnly(t *testing.T, tablet *cluster.Vttablet) {
