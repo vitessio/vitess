@@ -88,7 +88,9 @@ func (s *Server) newUniqueEphemeralKV(ctx context.Context, cli *clientv3.Client,
 // waitOnLastRev waits on all revisions of the files in the provided
 // directory that have revisions smaller than the provided revision.
 // It returns true only if there is no more other older files.
-func (s *Server) waitOnLastRev(ctx context.Context, cli *clientv3.Client, nodePath string, revision int64) (bool, error) {
+// If wait is false, it returns a topo.NodeExists error instead of
+// waiting when an older file exists.
+func (s *Server) waitOnLastRev(ctx context.Context, cli *clientv3.Client, nodePath string, revision int64, wait bool) (bool, error) {
 	// Get the keys that are blocking us, if any.
 	opts := append(clientv3.WithLastRev(), clientv3.WithMaxModRev(revision-1))
 	lastKey, err := cli.Get(ctx, nodePath+"/", opts...)
@@ -98,6 +100,9 @@ func (s *Server) waitOnLastRev(ctx context.Context, cli *clientv3.Client, nodePa
 	if len(lastKey.Kvs) == 0 {
 		// No older key, we're done waiting.
 		return true, nil
+	}
+	if !wait {
+		return false, topo.NewError(topo.NodeExists, "lock already exists at path "+nodePath)
 	}
 
 	// Wait for release on blocking key. Cancel the watch when we
@@ -134,10 +139,12 @@ type etcdLockDescriptor struct {
 }
 
 // TryLock is part of the topo.Conn interface.
+// Like etcd's concurrency.Mutex.TryLock, it creates its lock file and
+// gives up if an older one exists, so two callers cannot both see the
+// lock as free and then block on each other.
 func (s *Server) TryLock(ctx context.Context, dirPath, contents string) (topo.LockDescriptor, error) {
-	// We list all the entries under dirPath
-	entries, err := s.ListDir(ctx, dirPath, true)
-	if err != nil {
+	// We list the directory first to make sure it exists.
+	if _, err := s.ListDir(ctx, dirPath, false /*full*/); err != nil {
 		// We need to return the right error codes, like
 		// topo.ErrNoNode and topo.ErrInterrupted, and the
 		// easiest way to do this is to return convertError(err).
@@ -146,16 +153,7 @@ func (s *Server) TryLock(ctx context.Context, dirPath, contents string) (topo.Lo
 		return nil, convertError(err, dirPath)
 	}
 
-	// If there is a folder '/locks' with some entries in it then we can assume that someone else already has a lock.
-	// Throw error in this case
-	for _, e := range entries {
-		if e.Name == locksPath && e.Type == topo.TypeDirectory && e.Ephemeral {
-			return nil, topo.NewError(topo.NodeExists, "lock already exists at path "+dirPath)
-		}
-	}
-
-	// everything is good let's acquire the lock.
-	return s.lock(ctx, dirPath, contents, leaseTTL)
+	return s.lock(ctx, dirPath, contents, leaseTTL, false /*wait*/)
 }
 
 // Lock is part of the topo.Conn interface.
@@ -170,7 +168,7 @@ func (s *Server) Lock(ctx context.Context, dirPath, contents string) (topo.LockD
 		return nil, convertError(err, dirPath)
 	}
 
-	return s.lock(ctx, dirPath, contents, leaseTTL)
+	return s.lock(ctx, dirPath, contents, leaseTTL, true /*wait*/)
 }
 
 // LockWithTTL is part of the topo.Conn interface.
@@ -185,16 +183,18 @@ func (s *Server) LockWithTTL(ctx context.Context, dirPath, contents string, ttl 
 		return nil, convertError(err, dirPath)
 	}
 
-	return s.lock(ctx, dirPath, contents, int(ttl.Seconds()))
+	return s.lock(ctx, dirPath, contents, int(ttl.Seconds()), true /*wait*/)
 }
 
 // LockName is part of the topo.Conn interface.
 func (s *Server) LockName(ctx context.Context, dirPath, contents string) (topo.LockDescriptor, error) {
-	return s.lock(ctx, dirPath, contents, int(topo.NamedLockTTL.Seconds()))
+	return s.lock(ctx, dirPath, contents, int(topo.NamedLockTTL.Seconds()), true /*wait*/)
 }
 
-// lock is used by both Lock() and primary election.
-func (s *Server) lock(ctx context.Context, nodePath, contents string, ttl int) (topo.LockDescriptor, error) {
+// lock is used by Lock(), LockWithTTL(), LockName(), TryLock() and primary election.
+// If wait is false, it returns a topo.NodeExists error instead of
+// waiting for older lock files to go away.
+func (s *Server) lock(ctx context.Context, nodePath, contents string, ttl int, wait bool) (topo.LockDescriptor, error) {
 	nodePath = path.Join(s.root, nodePath, locksPath)
 
 	// Get a lease, set its KeepAlive.
@@ -221,7 +221,7 @@ func (s *Server) lock(ctx context.Context, nodePath, contents string, ttl int) (
 
 	// Wait until all older nodes in the locks directory are gone.
 	for {
-		done, err := s.waitOnLastRev(ctx, s.cli, nodePath, revision)
+		done, err := s.waitOnLastRev(ctx, s.cli, nodePath, revision, wait)
 		if err != nil {
 			// We had an error waiting on the last node.
 			// Revoke our lease, this will delete the file.

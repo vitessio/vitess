@@ -18,7 +18,9 @@ package test
 
 import (
 	"context"
+	"fmt"
 	"path"
+	"sync"
 	"testing"
 	"time"
 
@@ -47,6 +49,48 @@ func checkTryLock(t *testing.T, ctx context.Context, ts *topo.Server) {
 
 	t.Log("===      checkTryLockUnblocks")
 	checkTryLockUnblocks(ctx, t, conn)
+
+	t.Log("===      checkTryLockConcurrent")
+	checkTryLockConcurrent(ctx, t, conn)
+}
+
+// checkTryLockConcurrent checks that concurrent TryLock calls on a free lock
+// all return without waiting: one gets the lock, the others return NodeExists
+// and leave nothing behind that blocks the next TryLock.
+func checkTryLockConcurrent(ctx context.Context, t *testing.T, conn topo.Conn) {
+	keyspacePath := path.Join(topo.KeyspacesPath, "test_keyspace")
+	tryCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	const contenders = 20
+	start := make(chan struct{})
+	locks := make([]topo.LockDescriptor, contenders)
+	errs := make([]error, contenders)
+	var wg sync.WaitGroup
+	for i := range contenders {
+		wg.Go(func() {
+			<-start
+			locks[i], errs[i] = conn.TryLock(tryCtx, keyspacePath, fmt.Sprintf("contender-%d", i))
+		})
+	}
+	close(start)
+	wg.Wait()
+
+	var held topo.LockDescriptor
+	for i, err := range errs {
+		if err == nil {
+			require.Nil(t, held, "more than one TryLock got the lock")
+			held = locks[i]
+			continue
+		}
+		require.True(t, topo.IsErrType(err, topo.NodeExists), "TryLock should return NodeExists, got: %v", err)
+	}
+	require.NotNil(t, held, "no TryLock got the lock")
+	require.NoError(t, held.Unlock(ctx))
+
+	lockDescriptor, err := conn.TryLock(tryCtx, keyspacePath, "after")
+	require.NoError(t, err)
+	require.NoError(t, lockDescriptor.Unlock(ctx))
 }
 
 // checkTryLockTimeout test the fail-fast nature of TryLock
