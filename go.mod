@@ -62,7 +62,7 @@ require (
 	github.com/planetscale/vtprotobuf v0.6.1-0.20250313105119-ba97887b0a25
 	github.com/prometheus/client_golang v1.24.1
 	github.com/prometheus/common v0.72.0
-	github.com/shirou/gopsutil/v4 v4.26.8
+	github.com/shirou/gopsutil/v4 v4.26.9
 	github.com/sjmudd/stopwatch v0.1.1
 	github.com/soheilhy/cmux v0.1.5
 	github.com/spf13/afero v1.15.0
