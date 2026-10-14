@@ -1007,8 +1007,11 @@ func vtctlBackup(t *testing.T, tabletType string) {
 	require.NoError(t, err)
 	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 2)
 	// replica2 was restored from the backup, so this pins that a decompressor
-	// actually processed the backup data during the restore.
-	verifyRestoreRanThroughDecompressor(t, replica2.VttabletProcess.GetVars())
+	// actually processed the backup data during the restore. Only the builtin
+	// engine instruments bytes-processed counts.
+	if currentSetupType == BuiltinBackup {
+		verifyRestoreRanThroughDecompressor(t, replica2.VttabletProcess.GetVars())
+	}
 
 	verifyAfterRemovingBackupNoBackupShouldBePresent(t, backups)
 	err = replica2.VttabletProcess.TearDown()
