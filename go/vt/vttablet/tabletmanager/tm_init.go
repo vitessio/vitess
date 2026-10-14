@@ -1240,14 +1240,22 @@ func (tm *TabletManager) retryReplicationInitializationOnce(ctx context.Context)
 		return err
 	}
 	defer tm.unlock()
-	tabletType := tm.Tablet().Type
-	if tabletType != topodatapb.TabletType_RESTORE {
-		if _, err := tm.initializeReplication(ctx, tabletType); err != nil {
+	switch tabletType := tm.Tablet().Type; tabletType {
+	case topodatapb.TabletType_PRIMARY, topodatapb.TabletType_RESTORE:
+		// A primary does not replicate. A restore initializes replication when
+		// it finishes, and defers it again if needed.
+	default:
+		primaryPos, err := tm.initializeReplication(ctx, tabletType)
+		if err != nil {
 			return err
 		}
+		// initializeReplication succeeds without configuring a source when the
+		// shard has no usable primary.
+		if primaryPos == "" {
+			return vterrors.New(vtrpc.Code_UNAVAILABLE, "no primary to replicate from yet")
+		}
 	}
-	// A restore initializes replication when it finishes, and defers it again
-	// if needed. Clear under the action lock so a later deferral stays pending.
+	// Clear under the action lock so a later deferral stays pending.
 	tm.tmState.SetReplicationPending(ctx, false)
 	return nil
 }

@@ -435,3 +435,61 @@ func TestPendingReplicationOnlyWithholdsNonPrimaryService(t *testing.T) {
 	assert.Equal(t, "replication is not initialized", tm.tmState.canServe(topodatapb.TabletType_RDONLY))
 	assert.Empty(t, tm.tmState.canServe(topodatapb.TabletType_PRIMARY))
 }
+
+func newPendingReplicationTM(t *testing.T) (*TabletManager, *mysqlctl.FakeMysqlDaemon, *topo.Server, *tabletservermock.Controller) {
+	t.Helper()
+	tm, md, ts, _ := newReplicationInitializationTM(t)
+	qsc := tabletservermock.NewController()
+	require.NoError(t, qsc.InitDBConfig(&querypb.Target{Keyspace: "ks", Shard: "0"}, nil, md))
+	tm.QueryServiceControl = qsc
+	tm.tmState.Open()
+	tm.tmState.SetReplicationPending(t.Context(), true)
+	require.False(t, qsc.IsServing())
+	return tm, md, ts, qsc
+}
+
+func TestDeferredReplicationInitializationWaitsForUsablePrimary(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		update func(t *testing.T, tm *TabletManager, ts *topo.Server)
+	}{{
+		name: "no primary",
+		update: func(t *testing.T, tm *TabletManager, ts *topo.Server) {
+			_, err := ts.UpdateShardFields(t.Context(), "ks", "0", func(si *topo.ShardInfo) error { si.PrimaryAlias = nil; return nil })
+			require.NoError(t, err)
+		},
+	}, {
+		name: "shard names this tablet",
+		update: func(t *testing.T, tm *TabletManager, ts *topo.Server) {
+			_, err := ts.UpdateShardFields(t.Context(), "ks", "0", func(si *topo.ShardInfo) error { si.PrimaryAlias = tm.Tablet().Alias; return nil })
+			require.NoError(t, err)
+		},
+	}, {
+		name: "primary has no MySQL hostname",
+		update: func(t *testing.T, tm *TabletManager, ts *topo.Server) {
+			_, err := ts.UpdateTabletFields(t.Context(), &topodatapb.TabletAlias{Cell: "cell1", Uid: 2}, func(tablet *topodatapb.Tablet) error { tablet.MysqlHostname = ""; return nil })
+			require.NoError(t, err)
+		},
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			tm, md, ts, qsc := newPendingReplicationTM(t)
+			tc.update(t, tm, ts)
+			md.ExpectedExecuteSuperQueryList = nil
+
+			require.Error(t, tm.retryReplicationInitializationOnce(t.Context()))
+			assert.False(t, md.Replicating)
+			assert.False(t, qsc.IsServing(), "a replica must not serve until replication is configured")
+			require.NoError(t, md.CheckSuperQueryList())
+		})
+	}
+}
+
+func TestDeferredReplicationInitializationCompletesOnPromotion(t *testing.T) {
+	tm, md, _, qsc := newPendingReplicationTM(t)
+	md.ExpectedExecuteSuperQueryList = nil
+	require.NoError(t, tm.tmState.ChangeTabletType(t.Context(), topodatapb.TabletType_PRIMARY, DBActionNone))
+
+	require.NoError(t, tm.retryReplicationInitializationOnce(t.Context()))
+	assert.True(t, qsc.IsServing())
+	require.NoError(t, md.CheckSuperQueryList())
+}
