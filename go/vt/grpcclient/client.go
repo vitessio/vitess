@@ -80,7 +80,7 @@ func RegisterFlags(fs *pflag.FlagSet) {
 	utils.SetFlagIntVar(fs, &initialWindowSize, "grpc-initial-window-size", initialWindowSize, "gRPC initial window size")
 	utils.SetFlagStringVar(fs, &compression, "grpc-compression", compression, "Which protocol to use for compressing gRPC. Default: nothing. Supported: snappy")
 
-	utils.SetFlagStringVar(fs, &credsFile, "grpc-auth-static-client-creds", credsFile, "When using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server.")
+	utils.SetFlagStringVar(fs, &credsFile, "grpc-auth-static-client-creds", credsFile, "When using --grpc-auth-mode=static in the server, this file provides the credentials to use to authenticate with server.")
 }
 
 func RegisterDialConcurrencyFlags(fs *pflag.FlagSet) {

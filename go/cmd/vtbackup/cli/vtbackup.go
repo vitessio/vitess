@@ -212,7 +212,7 @@ func init() {
 
 	utils.SetFlagDurationVar(Main.Flags(), &minBackupInterval, "min-backup-interval", minBackupInterval, "Only take a new backup if it's been at least this long since the most recent backup.")
 	utils.SetFlagDurationVar(Main.Flags(), &minRetentionTime, "min-retention-time", minRetentionTime, "Keep each old backup for at least this long before removing it. Set to 0 to disable pruning of old backups.")
-	utils.SetFlagIntVar(Main.Flags(), &minRetentionCount, "min-retention-count", minRetentionCount, "Always keep at least this many of the most recent backups in this backup storage location, even if some are older than the min_retention_time. This must be at least 1 since a backup must always exist to allow new backups to be made")
+	utils.SetFlagIntVar(Main.Flags(), &minRetentionCount, "min-retention-count", minRetentionCount, "Always keep at least this many of the most recent backups in this backup storage location, even if some are older than --min-retention-time. This must be at least 1 since a backup must always exist to allow new backups to be made")
 	utils.SetFlagBoolVar(Main.Flags(), &initialBackup, "initial-backup", initialBackup, "Instead of restoring from backup, initialize an empty database with the provided init-db-sql-file and upload a backup of that for the shard, if the shard has no backups yet. This can be used to seed a brand new shard with an initial, empty backup. If any backups already exist for the shard, this will be considered a successful no-op. This can only be done before the shard exists in topology (i.e. before any tablets are deployed).")
 	utils.SetFlagBoolVar(Main.Flags(), &allowFirstBackup, "allow-first-backup", allowFirstBackup, "Allow this job to take the first backup of an existing shard.")
 	utils.SetFlagBoolVar(Main.Flags(), &restartBeforeBackup, "restart-before-backup", restartBeforeBackup, "Perform a mysqld clean/full restart after applying binlogs, but before taking the backup. Only makes sense to work around xtrabackup bugs.")
@@ -548,7 +548,7 @@ func restoreForBackup(ctx context.Context, mysqlTermHandler *mySQLTermHandler, t
 	case mysqlctl.ErrNoBackup:
 		// There is no backup found, but we may be taking the initial backup of a shard.
 		if !allowFirstBackup {
-			return replication.Position{}, vterrors.New(vtrpc.Code_FAILED_PRECONDITION, "no backup found; not starting up empty since --initial_backup flag was not enabled")
+			return replication.Position{}, vterrors.New(vtrpc.Code_FAILED_PRECONDITION, "no backup found; not starting up empty since --allow-first-backup flag was not enabled")
 		}
 
 		deprecatedDurationByPhase.Set("RestoreLastBackup", int64(time.Since(restoreAt).Seconds()))
@@ -973,14 +973,14 @@ func shouldBackup(ctx context.Context, topoServer *topo.Server, backupStorage ba
 
 	// We need at least one backup so we can restore first, unless the user explicitly says we don't
 	if len(backups) == 0 && !allowFirstBackup {
-		return false, errors.New("no existing backups to restore from; backup is not possible since --initial_backup flag was not enabled")
+		return false, errors.New("no existing backups to restore from; backup is not possible since --allow-first-backup flag was not enabled")
 	}
 	if lastBackup == nil {
 		if allowFirstBackup {
 			// There's no complete backup, but we were told to take one from scratch anyway.
 			return true, nil
 		}
-		return false, errors.New("no complete backups to restore from; backup is not possible since --initial_backup flag was not enabled")
+		return false, errors.New("no complete backups to restore from; backup is not possible since --allow-first-backup flag was not enabled")
 	}
 
 	// Has it been long enough since the last complete backup to need a new one?

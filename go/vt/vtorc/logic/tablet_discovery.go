@@ -51,7 +51,7 @@ var (
 	shutdownWaitTime = 30 * time.Second
 	// shardsToWatch is a map storing the shards for a given keyspace that need to be watched.
 	// We store the key range for all the shards that we want to watch.
-	// This is populated by parsing `--clusters_to_watch` flag.
+	// This is populated by parsing `--clusters-to-watch` flag.
 	shardsToWatch map[string][]*topodatapb.KeyRange
 
 	// ErrNoPrimaryTablet is a fixed error message.
@@ -122,7 +122,85 @@ func RegisterFlags(fs *pflag.FlagSet) {
 	utils.SetFlagDurationVar(fs, &shutdownWaitTime, "shutdown-wait-time", shutdownWaitTime, "Maximum time to wait for VTOrc to release all the locks that it is holding before shutting down on SIGTERM")
 }
 
+<<<<<<< HEAD
 // initializeShardsToWatch parses the --clusters_to_watch flag-value
+||||||| parent of a240ed6c4b (Refer to flags by their dashed names in help and error text (#21339))
+// validateCellsNoRecovery ensures every cell passed to --cells-no-recovery
+// exists in the topology. Recovery skipping relies on an exact match against
+// the analyzed tablet's cell, so an unknown cell name would silently disable
+// the intended protection. If the topology is unreachable at startup, validation
+// is skipped with a warning so VTOrc can still start; the risk is that a
+// misconfigured cell name becomes a silent no-op until VTOrc is restarted with
+// a reachable topology. When the topology is reachable, an unknown cell is fatal.
+func validateCellsNoRecovery(ctx context.Context) error {
+	if len(cellsNoRecovery) == 0 {
+		cellsNoRecoveryValidated.Store(true)
+		return nil
+	}
+	// Trim whitespace so that "--cells-no-recovery=cell1, cell2" works the
+	// same as "--cells-no-recovery=cell1,cell2". pflag's StringSliceVar
+	// splits on commas but does not strip surrounding whitespace.
+	for i, cell := range cellsNoRecovery {
+		cellsNoRecovery[i] = strings.TrimSpace(cell)
+	}
+	knownCells, err := ts.GetKnownCells(ctx)
+	if err != nil {
+		log.Warn(fmt.Sprintf("failed to get known cells while validating --cells-no-recovery, skipping validation: %v", err))
+		return nil
+	}
+	knownCellSet := make(map[string]struct{}, len(knownCells))
+	for _, cell := range knownCells {
+		knownCellSet[cell] = struct{}{}
+	}
+	for _, cell := range cellsNoRecovery {
+		if _, ok := knownCellSet[cell]; !ok {
+			return fmt.Errorf("--cells-no-recovery contains cell %q which does not exist in the topology (known cells: %v)", cell, knownCells)
+		}
+	}
+	cellsNoRecoveryValidated.Store(true)
+	return nil
+}
+
+// initializeShardsToWatch parses the --clusters_to_watch flag-value
+=======
+// validateCellsNoRecovery ensures every cell passed to --cells-no-recovery
+// exists in the topology. Recovery skipping relies on an exact match against
+// the analyzed tablet's cell, so an unknown cell name would silently disable
+// the intended protection. If the topology is unreachable at startup, validation
+// is skipped with a warning so VTOrc can still start; the risk is that a
+// misconfigured cell name becomes a silent no-op until VTOrc is restarted with
+// a reachable topology. When the topology is reachable, an unknown cell is fatal.
+func validateCellsNoRecovery(ctx context.Context) error {
+	if len(cellsNoRecovery) == 0 {
+		cellsNoRecoveryValidated.Store(true)
+		return nil
+	}
+	// Trim whitespace so that "--cells-no-recovery=cell1, cell2" works the
+	// same as "--cells-no-recovery=cell1,cell2". pflag's StringSliceVar
+	// splits on commas but does not strip surrounding whitespace.
+	for i, cell := range cellsNoRecovery {
+		cellsNoRecovery[i] = strings.TrimSpace(cell)
+	}
+	knownCells, err := ts.GetKnownCells(ctx)
+	if err != nil {
+		log.Warn(fmt.Sprintf("failed to get known cells while validating --cells-no-recovery, skipping validation: %v", err))
+		return nil
+	}
+	knownCellSet := make(map[string]struct{}, len(knownCells))
+	for _, cell := range knownCells {
+		knownCellSet[cell] = struct{}{}
+	}
+	for _, cell := range cellsNoRecovery {
+		if _, ok := knownCellSet[cell]; !ok {
+			return fmt.Errorf("--cells-no-recovery contains cell %q which does not exist in the topology (known cells: %v)", cell, knownCells)
+		}
+	}
+	cellsNoRecoveryValidated.Store(true)
+	return nil
+}
+
+// initializeShardsToWatch parses the --clusters-to-watch flag-value
+>>>>>>> a240ed6c4b (Refer to flags by their dashed names in help and error text (#21339))
 // into a map of keyspace/shards.
 func initializeShardsToWatch() error {
 	shardsToWatch = make(map[string][]*topodatapb.KeyRange)
@@ -193,7 +271,7 @@ func OpenTabletDiscovery() <-chan time.Time {
 	if _, err := db.ExecVTOrc("DELETE FROM vitess_tablet"); err != nil {
 		log.Error(err.Error())
 	}
-	// Parse --clusters_to_watch into a filter.
+	// Parse --clusters-to-watch into a filter.
 	err := initializeShardsToWatch()
 	if err != nil {
 		log.Error(fmt.Sprintf("Error parsing --clusters-to-watch: %v", err))
