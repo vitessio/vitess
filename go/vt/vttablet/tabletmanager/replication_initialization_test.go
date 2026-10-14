@@ -156,9 +156,7 @@ func TestInitializeReplicationHoldsShardLockThroughReceiverStart(t *testing.T) {
 	md.ExecuteSuperQueryListCallback = func() {
 		checks++
 		// This runs for both source configuration and the final START REPLICA.
-		ctx, cancel := context.WithTimeout(t.Context(), time.Millisecond)
-		defer cancel()
-		_, unlock, err := ts.LockShard(ctx, "ks", "0", "concurrent reparent")
+		_, unlock, err := ts.LockShard(t.Context(), "ks", "0", "concurrent reparent", topo.WithAcquireTimeout(100*time.Millisecond))
 		if unlock != nil {
 			var unlockErr error
 			unlock(&unlockErr)
@@ -262,11 +260,14 @@ func TestInitializationPrimaryStatusHasShortDeadline(t *testing.T) {
 	go func() { _, err := tm.initializeReplication(t.Context(), topodatapb.TabletType_REPLICA); done <- err }()
 	require.Eventually(t, func() bool { return len(done) == 1 }, 30*time.Second, time.Millisecond)
 	require.ErrorIs(t, <-done, context.DeadlineExceeded)
-	assert.Less(t, time.Since(start), 5*time.Second)
+	end := time.Now()
+	// The probe must not wait for RemoteOperationTimeout.
+	assert.Less(t, end.Sub(start), topo.RemoteOperationTimeout)
 	rpcCtx := <-client.entered
 	deadline, ok := rpcCtx.Deadline()
 	require.True(t, ok)
-	assert.WithinDuration(t, start.Add(replicationInitializationPrimaryStatusTimeout), deadline, 500*time.Millisecond)
+	assert.False(t, deadline.Before(start.Add(replicationInitializationPrimaryStatusTimeout)))
+	assert.False(t, deadline.After(end.Add(replicationInitializationPrimaryStatusTimeout)))
 	_, unlock, err := ts.LockShard(t.Context(), "ks", "0", "failover after short probe")
 	require.NoError(t, err)
 	unlock(&err)
@@ -280,13 +281,14 @@ func TestRestoreFinalizationShardLockFailures(t *testing.T) {
 		// tryLockErr is returned by TryLock. Without it, memorytopo's TryLock
 		// blocks on the held lock, like a lock taken between check and acquire.
 		tryLockErr error
-		ctxTimeout time.Duration
-		deferred   bool
+		// cancelWhileLocking cancels the restore's context while TryLock waits.
+		cancelWhileLocking bool
+		deferred           bool
 	}{
 		{name: "lock held", tryLockErr: topo.NewError(topo.NodeExists, "shard"), deferred: true},
 		{name: "acquisition timeout", deferred: true},
 		{name: "backend error", tryLockErr: errors.New("topology authorization denied")},
-		{name: "parent context expires", ctxTimeout: 100 * time.Millisecond},
+		{name: "parent context canceled", cancelWhileLocking: true},
 	} {
 		for actionName, action := range map[string]replicationAction{"start": replicationActionStart, "initialize": replicationActionInitialize} {
 			t.Run(tc.name+"/"+actionName, func(t *testing.T) {
@@ -307,10 +309,15 @@ func TestRestoreFinalizationShardLockFailures(t *testing.T) {
 					replCmd.position = &pos
 				}
 				ctx := t.Context()
-				if tc.ctxTimeout != 0 {
+				if tc.cancelWhileLocking {
 					var cancel context.CancelFunc
-					ctx, cancel = context.WithTimeout(ctx, tc.ctxTimeout)
+					ctx, cancel = context.WithCancel(ctx)
 					t.Cleanup(cancel)
+					before := factory.GetCallStats().Counts()["TryLock"]
+					go func() {
+						assert.Eventually(t, func() bool { return factory.GetCallStats().Counts()["TryLock"] > before }, 30*time.Second, time.Millisecond)
+						cancel()
+					}()
 				}
 
 				logger := logutil.NewMemoryLogger()
