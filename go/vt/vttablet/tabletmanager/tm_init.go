@@ -237,6 +237,14 @@ type TabletManager struct {
 	mysqlVersion mysqlVersionCache
 }
 
+// shardLockUnavailableError reports that replication initialization left
+// replication unchanged because another operation held the shard lock, or
+// because acquiring it timed out. Other lock failures are not wrapped in it.
+type shardLockUnavailableError struct{ cause error }
+
+func (e *shardLockUnavailableError) Error() string { return e.cause.Error() }
+func (e *shardLockUnavailableError) Cause() error  { return e.cause }
+
 // BuildTabletFromInput builds a tablet record from input parameters.
 func BuildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32, db *dbconfigs.DBConfigs, collationEnv *collations.Environment) (*topodatapb.Tablet, error) {
 	hostname := tabletHostname
@@ -1142,14 +1150,6 @@ func (tm *TabletManager) hookExtraEnv() map[string]string {
 }
 
 const replicationInitializationPrimaryStatusTimeout = 2 * time.Second
-
-// shardLockUnavailableError reports that replication initialization left
-// replication unchanged because another operation held the shard lock, or
-// because acquiring it timed out. Other lock failures are not wrapped in it.
-type shardLockUnavailableError struct{ cause error }
-
-func (e *shardLockUnavailableError) Error() string { return e.cause.Error() }
-func (e *shardLockUnavailableError) Cause() error  { return e.cause }
 
 // replicationInitializationLockAcquireTimeout bounds the shard lock acquisition
 // of replication initialization. It does not bound the topology backend's

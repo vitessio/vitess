@@ -44,6 +44,23 @@ import (
 	"golang.org/x/sync/semaphore"
 )
 
+// The client lets tests hold initialization after acquisition, without sleeps.
+type initializationPrimaryClient struct {
+	tmclient.TabletManagerClient
+	entered chan context.Context
+	release chan struct{}
+}
+
+func (c *initializationPrimaryClient) PrimaryStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
+	c.entered <- ctx
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-c.release:
+		return c.TabletManagerClient.PrimaryStatus(ctx, tablet)
+	}
+}
+
 func newReplicationInitializationTM(t *testing.T) (*TabletManager, *mysqlctl.FakeMysqlDaemon, *topo.Server, *memorytopo.Factory) {
 	t.Helper()
 	ctx := t.Context()
@@ -167,23 +184,6 @@ func TestInitializeReplicationValidationFailurePreservesSemiSync(t *testing.T) {
 	require.ErrorContains(t, err, "cannot read executed position")
 	assert.False(t, md.SemiSyncReplicaEnabled)
 	assert.Zero(t, md.ExpectedExecuteSuperQueryCurrent)
-}
-
-// The client lets tests hold initialization after acquisition, without sleeps.
-type initializationPrimaryClient struct {
-	tmclient.TabletManagerClient
-	entered chan context.Context
-	release chan struct{}
-}
-
-func (c *initializationPrimaryClient) PrimaryStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
-	c.entered <- ctx
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	case <-c.release:
-		return c.TabletManagerClient.PrimaryStatus(ctx, tablet)
-	}
 }
 
 func TestInitializeReplicationReadOnlyCasesDoNotLockShard(t *testing.T) {
