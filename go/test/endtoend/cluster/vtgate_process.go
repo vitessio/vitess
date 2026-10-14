@@ -238,12 +238,14 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 	if err != nil {
 		return
 	}
-	vtgate.exit = make(chan error)
+	// The waiter captures this process and channel: TearDown returns once it
+	// receives the exit result, and a restart then replaces both fields, so
+	// the waiter must not read them again when it closes the channel.
+	proc, exit := vtgate.proc, make(chan error)
+	vtgate.exit = exit
 	go func() {
-		if vtgate.proc != nil {
-			vtgate.exit <- vtgate.proc.Wait()
-			close(vtgate.exit)
-		}
+		exit <- proc.Wait()
+		close(exit)
 	}()
 
 	timeout := time.Now().Add(60 * time.Second)

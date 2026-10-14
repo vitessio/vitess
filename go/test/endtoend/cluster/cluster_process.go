@@ -85,6 +85,13 @@ var (
 	}
 )
 
+// IsCoverage reports whether this is a coverage run (-is-coverage). Binaries
+// then write their coverage profiles on a graceful exit, so teardown must not
+// kill them.
+func IsCoverage() bool {
+	return *isCoverage
+}
+
 // LocalProcessCluster Testcases need to use this to iniate a cluster
 type LocalProcessCluster struct {
 	Keyspaces          []Keyspace

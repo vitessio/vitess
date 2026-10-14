@@ -789,7 +789,13 @@ func (vc *VitessCluster) teardown() {
 	}
 
 	for _, keyspace := range keyspaces {
-		_ = vc.killKeyspaceProcesses(keyspace)
+		if cluster.IsCoverage() {
+			// Coverage runs need a graceful exit so that the instrumented
+			// binaries write their coverage profiles.
+			_ = vc.TearDownKeyspace(keyspace)
+		} else {
+			_ = vc.killKeyspaceProcesses(keyspace)
+		}
 	}
 	if err := vc.Vtctld.TearDown(); err != nil {
 		log.Info("Error stopping Vtctld:  " + err.Error())

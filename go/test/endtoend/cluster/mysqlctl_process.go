@@ -213,16 +213,20 @@ func (mysqlctl *MysqlctlProcess) Kill() error {
 	// else it will immediately restart the mysqld process when we kill it.
 	// mysqld_safe runs with --defaults-file=<tablet dir>/my.cnf, so matching
 	// the full tablet directory keeps another cluster's tablet with the same
-	// UID from matching. The bracketed first characters keep the pattern from
-	// matching the command line of this pipeline's own sh process.
+	// UID from matching. The process list is filtered here rather than in a
+	// shell pipeline, so the path needs no quoting.
 	tabletDir := path.Dir(pidFile) + "/"
-	mspidb, err := exec.Command("sh", "-c",
-		fmt.Sprintf("ps auxww | grep -E '[m]ysqld_safe|[m]ariadbd-safe' | grep -F -- '%s' | awk '{print $2}'", tabletDir)).Output()
+	psOut, err := exec.Command("ps", "-eo", "pid=,args=").Output()
 	if err != nil {
 		return err
 	}
-	for field := range strings.FieldsSeq(string(mspidb)) {
-		mysqldSafePID, err := strconv.Atoi(field)
+	for line := range strings.Lines(string(psOut)) {
+		pidField, args, _ := strings.Cut(strings.TrimSpace(line), " ")
+		if !strings.Contains(args, tabletDir) ||
+			(!strings.Contains(args, "mysqld_safe") && !strings.Contains(args, "mariadbd-safe")) {
+			continue
+		}
+		mysqldSafePID, err := strconv.Atoi(pidField)
 		if err != nil {
 			return err
 		}
