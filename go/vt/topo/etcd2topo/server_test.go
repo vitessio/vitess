@@ -439,6 +439,46 @@ func TestEtcd2TopoServerClosed(t *testing.T) {
 	require.True(t, topo.IsErrType(err, topo.Interrupted), "Error should be topo.Interrupted, got: %v", err)
 }
 
+// keysOnlyWithoutLeaseKV mimics etcd 3.7+ servers, which omit the lease
+// from keys-only range responses.
+type keysOnlyWithoutLeaseKV struct {
+	clientv3.KV
+}
+
+func (kv keysOnlyWithoutLeaseKV) Get(ctx context.Context, key string, opts ...clientv3.OpOption) (*clientv3.GetResponse, error) {
+	resp, err := kv.KV.Get(ctx, key, opts...)
+	if err == nil && clientv3.OpGet(key, opts...).IsKeysOnly() {
+		for _, item := range resp.Kvs {
+			item.Lease = 0
+		}
+	}
+	return resp, err
+}
+
+// TestEtcd2TopoTryLockWithoutKeysOnlyLeases checks that TryLock detects a
+// held lock when keys-only reads return no lease, as on etcd 3.7+ servers.
+func TestEtcd2TopoTryLockWithoutKeysOnlyLeases(t *testing.T) {
+	clientAddr, _ := startEtcd(t, testfiles.GoVtTopoEtcd2topoPort, testfiles.GoVtTopoEtcd2topoPeerPort)
+
+	s, err := NewServer(clientAddr, "/test-trylock-keys-only")
+	require.NoError(t, err)
+	t.Cleanup(s.Close)
+	s.cli.KV = keysOnlyWithoutLeaseKV{s.cli.KV}
+
+	ctx := t.Context()
+	_, err = s.Create(ctx, "ks/Keyspace", []byte{})
+	require.NoError(t, err)
+
+	lock, err := s.Lock(ctx, "ks", "holder")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = lock.Unlock(context.Background()) })
+
+	tryCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	_, err = s.TryLock(tryCtx, "ks", "contender")
+	require.True(t, topo.IsErrType(err, topo.NodeExists), "TryLock should return NodeExists, got: %v", err)
+}
+
 // testKeyspaceLock tests etcd-specific heartbeat (TTL).
 // Note TTL granularity is in seconds, even though the API uses time.Duration.
 // So we have to wait a long time in these tests.
