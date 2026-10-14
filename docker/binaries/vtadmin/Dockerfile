@@ -34,7 +34,7 @@ FROM nginxinc/nginx-unprivileged:1.22 AS nginx
 ENV VTADMIN_WEB_PORT=14201
 
 # Set up Vitess environment (just enough to run pre-built Go binaries)
-ENV VTROOT /vt
+ENV VTROOT=/vt
 
 # Copy binaries
 COPY --from=lite /vt/bin/vtadmin /vt/bin/
