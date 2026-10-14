@@ -831,15 +831,6 @@ const (
 	// After a traffic switch, this many new successful queries prove that any
 	// buffering has drained and traffic is flowing again.
 	loadTestPostSwitchQueryCount = 100
-	// vtgate does not buffer a failover that starts within
-	// --buffer-min-time-between-failovers (1s in this cluster's config, see
-	// extraVTGateArgs) of the previous one on the same shard, and such a
-	// failover would fail queries. The cooldown is tracked per shard, and
-	// consecutive switches buffer on different shards (the forward switch on
-	// the source shard, the reverse switch on the target shards), so a shard's
-	// next failover already comes a whole switch later. This gap is a margin
-	// on top of that, not a requirement.
-	loadTestMinTimeBetweenSwitches = 2 * time.Second
 )
 
 type loadGenerator struct {
@@ -888,8 +879,14 @@ func (lg *loadGenerator) stop() {
 
 // waitForTrafficToResume waits until the load generator executes new
 // successful queries, proving that any buffering triggered by a preceding
-// traffic switch has drained and traffic is flowing again, and then holds a
-// short gap before the next switch (see loadTestMinTimeBetweenSwitches).
+// traffic switch has drained and traffic is flowing again.
+//
+// The next switch needs no extra gap. vtgate does not buffer a failover that
+// starts within --buffer-min-time-between-failovers (1s in this cluster's
+// config, see extraVTGateArgs) of the previous one, but it tracks that per
+// shard, and consecutive switches buffer on different shards: the forward
+// switch on the source shard, the reverse switch on the target shards. A
+// shard's next failover therefore comes a whole switch later.
 func (lg *loadGenerator) waitForTrafficToResume() {
 	t := lg.t
 	start := lg.successfulQueries.Load()
@@ -903,7 +900,6 @@ func (lg *loadGenerator) waitForTrafficToResume() {
 			time.Sleep(100 * time.Millisecond)
 		}
 	}
-	time.Sleep(loadTestMinTimeBetweenSwitches)
 }
 
 func (lg *loadGenerator) start() {
