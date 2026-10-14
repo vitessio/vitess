@@ -293,7 +293,13 @@
           <plugin>
             <groupId>org.sonatype.central</groupId>
             <artifactId>central-publishing-maven-plugin</artifactId>
+<<<<<<< HEAD
             <version>0.6.0</version>
+||||||| parent of 1b15e4d829 (java: fix Maven Central publishing with Maven 3.10 (#21570))
+            <version>0.11.0</version>
+=======
+            <version>0.12.0</version>
+>>>>>>> 1b15e4d829 (java: fix Maven Central publishing with Maven 3.10 (#21570))
             <extensions>true</extensions>
             <configuration>
               <publishingServerId>central</publishingServerId>
