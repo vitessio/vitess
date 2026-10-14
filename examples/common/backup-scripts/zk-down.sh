@@ -21,6 +21,5 @@ source "$(dirname "${BASH_SOURCE[0]:-$0}")/../env.sh"
 # Stop ZooKeeper servers.
 echo "Stopping zk servers..."
 for zkid in $zkids; do
-  zkctl --zk.myid $zkid --zk.cfg $zkcfg --log_dir $VTDATAROOT/tmp shutdown
+  zkctl --zk.myid $zkid --zk.cfg $zkcfg shutdown
 done
-

@@ -31,7 +31,6 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/utils"
@@ -63,7 +62,6 @@ var (
 			"{{</ warning>}}\n\n" +
 			"To enable communication with a `vttablet`, the server must be configured to receive gRPC messages on a unix domain socket.",
 		Example: `mysqlctld \
-	--log_dir=${VTDATAROOT}/logs \
 	--tablet-uid=100 \
 	--mysql-port=17100 \
 	--socket-file=/path/to/socket-file`,
@@ -105,8 +103,6 @@ func init() {
 }
 
 func run(cmd *cobra.Command, args []string) error {
-	defer logutil.Flush()
-
 	// We'll register this OnTerm handler before mysqld starts, so we get notified
 	// if mysqld dies on its own without us (or our RPC client) telling it to.
 	mysqldTerminated := make(chan struct{})

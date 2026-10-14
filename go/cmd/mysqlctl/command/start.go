@@ -32,7 +32,7 @@ var Start = &cobra.Command{
 	Use:     "start",
 	Short:   "Starts mysqld on an already 'init'-ed directory.",
 	Long:    "Resume an existing `mysqld` instance that was previously bootstrapped with `init` or `init_config`",
-	Example: `mysqlctl --tablet-uid 101 --alsologtostderr start`,
+	Example: `mysqlctl --tablet-uid 101 start`,
 	Args:    cobra.NoArgs,
 	RunE:    commandStart,
 }

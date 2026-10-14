@@ -24,7 +24,6 @@ import (
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/vt/grpccommon"
-	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
@@ -79,7 +78,6 @@ func init() {
 }
 
 func run(cmd *cobra.Command, args []string) error {
-	defer logutil.Flush()
 	servenv.Init()
 
 	fromTS, err := topo.OpenServer(fromImplementation, fromServerAddress, fromRoot)

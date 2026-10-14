@@ -28,7 +28,6 @@ echo "Starting vtgate..."
 # shellcheck disable=SC2086
 vtgate \
   $TOPOLOGY_FLAGS \
-  --log_dir $VTDATAROOT/tmp \
   --log-queries-to-file $VTDATAROOT/tmp/vtgate_querylog.txt \
   --port $web_port \
   --grpc-port $grpc_port \

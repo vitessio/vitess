@@ -58,7 +58,6 @@ func mysqlconn(t *testing.T) *mysql.Conn {
 }
 
 func TestMain(m *testing.M) {
-	_flag.TrickGlog()
 	_flag.ParseFlagsForTest()
 	pflag.Parse()
 

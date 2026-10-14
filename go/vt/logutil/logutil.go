@@ -14,8 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// package logutil provides some utilities for logging using glog and
-// redirects the stdlib logging to glog.
+// Package logutil provides logging utilities and redirects standard library logging.
 
 package logutil
 

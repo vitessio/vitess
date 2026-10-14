@@ -62,7 +62,6 @@ public class GrpcClientStaticAuthTest extends RpcClientTest {
 
     vtgateclienttest = new ProcessBuilder(Arrays.asList(
         vtRoot + "/bin/vtgateclienttest",
-        "--logtostderr",
         "--grpc-port", Integer.toString(port),
         "--service-map", "grpc-vtgateservice",
         "--grpc-auth-mode", "static",

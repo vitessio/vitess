@@ -62,7 +62,6 @@ var (
 	--topo-implementation etcd2 \
 	--topo-global-server-address localhost:2379 \
 	--topo-global-root /vitess/global \
-	--log_dir $VTDATAROOT/tmp \
 	--port 15001 \
 	--grpc-port 15991 \
 	--mysql-server-port 15306 \

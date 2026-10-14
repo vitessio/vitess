@@ -271,8 +271,6 @@ func run(cc *cobra.Command, args []string) error {
 		cmd.DetachFromTerminalAndExit()
 	}
 
-	defer logutil.Flush()
-
 	if minRetentionCount < 1 {
 		log.Error("min_retention_count must be at least 1 to allow restores to succeed")
 		exit.Return(1)

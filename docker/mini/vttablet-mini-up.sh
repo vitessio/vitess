@@ -41,7 +41,6 @@ echo "  - Tablet listens on http://$hostname:$port"
 # shellcheck disable=SC2086
 vttablet \
  $TOPOLOGY_FLAGS \
- -log_dir $VTDATAROOT/tmp \
  -log-queries-to-file $VTDATAROOT/tmp/$tablet_logfile \
  -tablet-path $alias \
  -tablet-hostname "$hostname" \

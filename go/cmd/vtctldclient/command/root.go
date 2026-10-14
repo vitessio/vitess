@@ -30,7 +30,6 @@ import (
 
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/utils"
@@ -106,7 +105,7 @@ connect directly to the topo server(s).`, useInternalVtctld),
 		// We use PersistentPreRun to set up the tracer, grpc client, and
 		// command context for every command.
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) (err error) {
-			if err := log.Init(cmd.Flags()); err != nil {
+			if err := log.Init(); err != nil {
 				return err
 			}
 
@@ -119,7 +118,6 @@ connect directly to the topo server(s).`, useInternalVtctld),
 				return fmt.Errorf("failed to initialize vtenv: %w", err)
 			}
 
-			logutil.PurgeLogs()
 			traceCloser = trace.StartTracing("vtctldclient")
 			client, err = getClientForCommand(cmd)
 			ctx := cmd.Context()

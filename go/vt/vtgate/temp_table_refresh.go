@@ -300,7 +300,7 @@ func (r *tempTableActivityRefresher) refresh(ctx context.Context, t tempTableRef
 		_, err = qs.Execute(ctx, nil, t.target, tempTableActivityRefreshQuery, nil, 0 /* transactionID */, t.reservedID, nil /* options */)
 	}
 	if err != nil {
-		log.V(2).Info("temp-table activity refresh failed",
+		log.Debug("temp-table activity refresh failed",
 			slog.Int64("reserved_id", t.reservedID),
 			slog.Any("error", err))
 	}

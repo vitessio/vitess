@@ -19,7 +19,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -423,17 +422,9 @@ func getTablet(ctx context.Context, ts *topo.Server, cells []string, keyspace st
 	return tabletId
 }
 
-func trickGlog() {
-	var args []string
-	os.Args, args = os.Args[:1], os.Args[1:]
-	defer func() { os.Args = append(os.Args, args...) }()
-	flag.Parse()
-}
-
 var testResumability bool
 
 func parseCommandLine() *RowLogConfig {
-	trickGlog()
 	sourceKeyspace := pflag.StringP("source", "s", "", "")
 	targetKeyspace := pflag.StringP("target", "t", "", "")
 	ids := pflag.StringSlice("ids", nil, "")

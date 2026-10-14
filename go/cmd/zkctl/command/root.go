@@ -19,7 +19,6 @@ package command
 import (
 	"github.com/spf13/cobra"
 
-	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/zkctl"
 )
@@ -44,9 +43,6 @@ var (
 			zkd = zkctl.NewZkd(zkConfig)
 
 			return nil
-		},
-		PersistentPostRun: func(cmd *cobra.Command, args []string) {
-			logutil.Flush()
 		},
 	}
 )

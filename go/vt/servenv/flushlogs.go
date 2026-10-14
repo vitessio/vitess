@@ -1,5 +1,5 @@
 /*
-Copyright 2019 The Vitess Authors.
+Copyright 2026 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -20,14 +20,17 @@ import (
 	"fmt"
 	"net/http"
 
-	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/log"
 )
 
+// init registers the deprecated /debug/flushlogs endpoint. v24 did not show a deprecation warning for it, so it
+// stays as a no-op until v26.
 func init() {
-	OnInit(func() {
-		HTTPHandleFunc("/debug/flushlogs", func(w http.ResponseWriter, r *http.Request) {
-			logutil.Flush()
-			fmt.Fprint(w, "flushed")
-		})
-	})
+	HTTPHandleFunc("/debug/flushlogs", flushLogs)
+}
+
+// flushLogs responds with success and logs a deprecation warning. The logger writes each record immediately.
+func flushLogs(w http.ResponseWriter, _ *http.Request) {
+	log.Warn("/debug/flushlogs is deprecated, it has no effect and will be removed in v26")
+	fmt.Fprint(w, "flushed")
 }

@@ -641,15 +641,8 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 					if err = dbcmd.Wait(); err != nil {
 						// Get logs to help understand why it failed...
 						vtdataroot := os.Getenv("VTDATAROOT")
-						mysqlctlLog := path.Join(vtdataroot, "/tmp/mysqlctl.INFO")
-						logBytes, ferr := os.ReadFile(mysqlctlLog)
-						if ferr == nil {
-							log.Error("mysqlctl log contents:\n" + string(logBytes))
-						} else {
-							log.Error(fmt.Sprintf("Failed to read the mysqlctl log file %q: %v", mysqlctlLog, ferr))
-						}
 						mysqldLog := path.Join(vtdataroot, fmt.Sprintf("/vt_%010d/error.log", tablets[ind].Vttablet.TabletUID))
-						logBytes, ferr = os.ReadFile(mysqldLog)
+						logBytes, ferr := os.ReadFile(mysqldLog)
 						if ferr == nil {
 							log.Error("mysqld error log contents:\n" + string(logBytes))
 						} else {

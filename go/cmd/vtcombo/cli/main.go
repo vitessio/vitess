@@ -177,10 +177,6 @@ func run(cmd *cobra.Command, args []string) (err error) {
 
 	cmd.Flags().Set("cells-to-watch", strings.Join(tpb.Cells, ","))
 
-	if f := cmd.Flags().Lookup("log_dir"); f != nil && !f.Changed {
-		cmd.Flags().Set("log_dir", "$VTDATAROOT/tmp")
-	}
-
 	env, err = vtenv.New(vtenv.Options{
 		MySQLServerVersion: servenv.MySQLServerVersion(),
 		TruncateUILen:      servenv.TruncateUILen,

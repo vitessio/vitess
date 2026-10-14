@@ -33,7 +33,6 @@ var Init = &cobra.Command{
 	Long: "Bootstraps a new `mysqld` instance, initializes its data directory, and starts the instance.\n" +
 		"The MySQL version and flavor will be auto-detected, with a minimal configuration file applied.",
 	Example: `mysqlctl \
-	--alsologtostderr \
 	--tablet-uid 101 \
 	--mysql-port 12345 \
 	init`,

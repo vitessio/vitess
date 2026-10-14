@@ -23,7 +23,6 @@ import (
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/stats"
-	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vtenv"
@@ -136,8 +135,6 @@ func getFileParam(flag, flagFile, name string, required bool) (string, error) {
 }
 
 func run(cmd *cobra.Command, args []string) error {
-	defer logutil.Flush()
-
 	servenv.Init()
 	return parseAndRun(cmd.Context())
 }

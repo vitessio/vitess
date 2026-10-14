@@ -25,7 +25,6 @@ import (
 	vtcmd "vitess.io/vitess/go/cmd"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/dbconfigs"
-	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/utils"
 )
@@ -53,9 +52,6 @@ var (
 			}
 
 			return nil
-		},
-		PersistentPostRun: func(cmd *cobra.Command, args []string) {
-			logutil.Flush()
 		},
 		Version: servenv.AppVersion.String(),
 	}
