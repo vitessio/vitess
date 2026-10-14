@@ -1258,6 +1258,12 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 		query:  fmt.Sprintf("update _vt.vreplication set message = 'FROZEN' where db_name='vt_%s' and workflow='%s'", sourceKeyspaceName, ReverseWorkflowName(workflowName)),
 		result: &querypb.QueryResult{},
 	}
+	// Canceling a forward switch restarts the workflow and deletes the
+	// reverse one.
+	restartWFQR := &queryResult{
+		query:  fmt.Sprintf("update _vt.vreplication set state='Running', message='' where db_name='vt_%s' and workflow='%s'", targetKeyspaceName, workflowName),
+		result: &querypb.QueryResult{},
+	}
 
 	hasDeniedTableEntry := func(si *topo.ShardInfo) bool {
 		if si == nil || len(si.TabletControls) == 0 {
@@ -1275,8 +1281,13 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 		req                            *vtctldatapb.WorkflowSwitchTrafficRequest
 		multiTenant                    bool
 		preFunc                        func(env *testEnv)
-		want                           *vtctldatapb.WorkflowSwitchTrafficResponse
-		wantErr                        bool
+		// expectQueries, when set, replaces the default expected queries.
+		expectQueries func(env *testEnv, source, target *testKeyspace)
+		want          *vtctldatapb.WorkflowSwitchTrafficResponse
+		wantErr       bool
+		// wantCanceled means that the failed switch must have been canceled,
+		// leaving writes on the source.
+		wantCanceled bool
 	}{
 		{
 			name: "basic forward",
@@ -1435,6 +1446,39 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 				CurrentState: "All Reads Switched. Writes Switched",
 			},
 		},
+		{
+			name: "forward with an error reading the source positions",
+			sourceKeyspace: &testKeyspace{
+				KeyspaceName: sourceKeyspaceName,
+				ShardNames:   []string{"0"},
+			},
+			targetKeyspace: &testKeyspace{
+				KeyspaceName: targetKeyspaceName,
+				ShardNames:   []string{"-80", "80-"},
+			},
+			req: &vtctldatapb.WorkflowSwitchTrafficRequest{
+				Keyspace:    targetKeyspaceName,
+				Workflow:    workflowName,
+				Direction:   int32(DirectionForward),
+				TabletTypes: allTabletTypes,
+			},
+			preFunc: func(env *testEnv) {
+				env.tmc.setPrimaryPositionError(env.tablets[sourceKeyspaceName][startingSourceTabletUID], errors.New("position read failed"))
+			},
+			expectQueries: func(env *testEnv, source, target *testKeyspace) {
+				env.tmc.expectVRQueryResultOnKeyspaceTablets(target.KeyspaceName, copyTableQR)
+				for i := 0; i < len(target.ShardNames); i++ { // Per stream
+					env.tmc.expectVRQueryResultOnKeyspaceTablets(source.KeyspaceName, journalQR)
+				}
+				for i := 0; i < len(target.ShardNames); i++ { // Per stream
+					env.tmc.expectVRQueryResultOnKeyspaceTablets(source.KeyspaceName, lockTableQR)
+				}
+				env.tmc.expectVRQueryResultOnKeyspaceTablets(target.KeyspaceName, restartWFQR)
+				env.tmc.expectVRQueryResultOnKeyspaceTablets(source.KeyspaceName, deleteReverseWFQR)
+			},
+			wantErr:      true,
+			wantCanceled: true,
+		},
 	}
 
 	for _, tc := range testcases {
@@ -1446,7 +1490,9 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 			defer env.close()
 			env.tmc.schema = schema
 
-			if tc.req.Direction == int32(DirectionForward) {
+			if tc.expectQueries != nil {
+				tc.expectQueries(env, tc.sourceKeyspace, tc.targetKeyspace)
+			} else if tc.req.Direction == int32(DirectionForward) {
 				env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.targetKeyspace.KeyspaceName, copyTableQR)
 				env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.targetKeyspace.KeyspaceName, cutoverQR)
 				for i := 0; i < len(tc.targetKeyspace.ShardNames); i++ { // Per stream
@@ -1531,6 +1577,22 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 			got, err := env.ws.WorkflowSwitchTraffic(ctx, tc.req)
 			if tc.wantErr {
 				require.Error(t, err)
+				if tc.wantCanceled {
+					require.ErrorContains(t, err, "failed to gather replication positions")
+					require.NotContains(t, err.Error(), "cancel migration failed")
+					// Writes are back on the source, and every expected
+					// query, including the cancel's, was run.
+					for _, keyspace := range []*testKeyspace{tc.sourceKeyspace, tc.targetKeyspace} {
+						for _, shardName := range keyspace.ShardNames {
+							si, err := env.ts.GetShard(ctx, keyspace.KeyspaceName, shardName)
+							require.NoError(t, err)
+							require.Equal(t, keyspace == tc.targetKeyspace, hasDeniedTableEntry(si), "denied tables in %s/%s", keyspace.KeyspaceName, shardName)
+						}
+					}
+					for tabletID, queries := range env.tmc.vrQueries {
+						require.Empty(t, queries, "queries not run on tablet %d", tabletID)
+					}
+				}
 				return
 			}
 			require.NoError(t, err)

@@ -3301,6 +3301,9 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 		// intra-keyspace materializations that write on the source), and we know for certain
 		// that any in progress writes are done.
 		if err := ts.gatherSourcePositions(ctx); err != nil {
+			if cerr := sw.cancelMigration(ctx, sm); cerr != nil {
+				err = vterrors.Errorf(vtrpcpb.Code_CANCELED, "%v\n\n%v", err, cerr)
+			}
 			return handleError("failed to gather replication positions on migration sources", err)
 		}
 
