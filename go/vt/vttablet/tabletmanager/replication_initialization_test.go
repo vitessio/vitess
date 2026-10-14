@@ -430,22 +430,22 @@ func TestDeferredReplicationInitializationRetriesAfterLockRelease(t *testing.T) 
 
 func TestPendingReplicationOnlyWithholdsNonPrimaryService(t *testing.T) {
 	tm, _, _, _ := newReplicationInitializationTM(t)
-	tm.tmState.replicationPending = true
+	tm.tmState.pendingReplicationInit = 1
 	assert.Equal(t, "replication is not initialized", tm.tmState.canServe(topodatapb.TabletType_REPLICA))
 	assert.Equal(t, "replication is not initialized", tm.tmState.canServe(topodatapb.TabletType_RDONLY))
 	assert.Empty(t, tm.tmState.canServe(topodatapb.TabletType_PRIMARY))
 }
 
-func newPendingReplicationTM(t *testing.T) (*TabletManager, *mysqlctl.FakeMysqlDaemon, *topo.Server, *tabletservermock.Controller) {
+func newPendingReplicationTM(t *testing.T) (*TabletManager, *mysqlctl.FakeMysqlDaemon, *topo.Server, *tabletservermock.Controller, uint64) {
 	t.Helper()
 	tm, md, ts, _ := newReplicationInitializationTM(t)
 	qsc := tabletservermock.NewController()
 	require.NoError(t, qsc.InitDBConfig(&querypb.Target{Keyspace: "ks", Shard: "0"}, nil, md))
 	tm.QueryServiceControl = qsc
 	tm.tmState.Open()
-	tm.tmState.SetReplicationPending(t.Context(), true)
+	id := tm.tmState.deferReplicationInit(t.Context())
 	require.False(t, qsc.IsServing())
-	return tm, md, ts, qsc
+	return tm, md, ts, qsc, id
 }
 
 func TestDeferredReplicationInitializationWaitsForUsablePrimary(t *testing.T) {
@@ -472,11 +472,11 @@ func TestDeferredReplicationInitializationWaitsForUsablePrimary(t *testing.T) {
 		},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
-			tm, md, ts, qsc := newPendingReplicationTM(t)
+			tm, md, ts, qsc, id := newPendingReplicationTM(t)
 			tc.update(t, tm, ts)
 			md.ExpectedExecuteSuperQueryList = nil
 
-			require.Error(t, tm.retryReplicationInitializationOnce(t.Context()))
+			require.Error(t, tm.retryReplicationInitializationOnce(t.Context(), id))
 			assert.False(t, md.Replicating)
 			assert.False(t, qsc.IsServing(), "a replica must not serve until replication is configured")
 			require.NoError(t, md.CheckSuperQueryList())
@@ -485,11 +485,66 @@ func TestDeferredReplicationInitializationWaitsForUsablePrimary(t *testing.T) {
 }
 
 func TestDeferredReplicationInitializationCompletesOnPromotion(t *testing.T) {
-	tm, md, _, qsc := newPendingReplicationTM(t)
+	tm, md, _, qsc, id := newPendingReplicationTM(t)
 	md.ExpectedExecuteSuperQueryList = nil
 	require.NoError(t, tm.tmState.ChangeTabletType(t.Context(), topodatapb.TabletType_PRIMARY, DBActionNone))
 
-	require.NoError(t, tm.retryReplicationInitializationOnce(t.Context()))
+	require.NoError(t, tm.retryReplicationInitializationOnce(t.Context(), id))
 	assert.True(t, qsc.IsServing())
 	require.NoError(t, md.CheckSuperQueryList())
+}
+
+func TestSupersededReplicationInitializationDoesNotChangeReplication(t *testing.T) {
+	t.Run("later deferral", func(t *testing.T) {
+		tm, md, _, qsc, first := newPendingReplicationTM(t)
+		md.ExpectedExecuteSuperQueryList = nil
+		tm.tmState.deferReplicationInit(t.Context())
+
+		require.NoError(t, tm.retryReplicationInitializationOnce(t.Context(), first))
+		assert.False(t, md.Replicating)
+		assert.False(t, qsc.IsServing(), "the later deferral is still pending")
+		require.NoError(t, md.CheckSuperQueryList())
+	})
+	t.Run("completed", func(t *testing.T) {
+		tm, md, _, qsc, id := newPendingReplicationTM(t)
+		require.NoError(t, tm.retryReplicationInitializationOnce(t.Context(), id))
+		require.NoError(t, md.CheckSuperQueryList())
+		require.True(t, qsc.IsServing())
+
+		md.ExpectedExecuteSuperQueryList = nil
+		md.ExpectedExecuteSuperQueryCurrent = 0
+		require.NoError(t, tm.retryReplicationInitializationOnce(t.Context(), id))
+		require.NoError(t, md.CheckSuperQueryList())
+	})
+	t.Run("point-in-time restore disables replication", func(t *testing.T) {
+		tm, md, _, _, id := newPendingReplicationTM(t)
+		require.NoError(t, tm.tmState.ChangeTabletType(t.Context(), topodatapb.TabletType_RESTORE, DBActionNone))
+		require.Error(t, tm.retryReplicationInitializationOnce(t.Context(), id), "a retry must wait while the restore runs")
+
+		md.SetReplicationSourceInputs = []string{"//:0"}
+		// disableReplication points replication at an impossible source.
+		md.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA", "FAKE RESET REPLICA ALL", "FAKE SET SOURCE", "START REPLICA"}
+		rsm := tm.newRestoreStateManager(logutil.NewMemoryLogger(), false)
+		rsm.state = restoreStarted
+		rsm.nextTabletType = topodatapb.TabletType_DRAINED
+		require.NoError(t, rsm.finish(t.Context(), replicationCommand{action: replicationActionDisable}))
+
+		require.NoError(t, tm.retryReplicationInitializationOnce(t.Context(), id))
+		assert.Equal(t, "//", md.CurrentSourceHost)
+		require.NoError(t, md.CheckSuperQueryList())
+	})
+	t.Run("aborted restore", func(t *testing.T) {
+		tm, md, _, qsc, id := newPendingReplicationTM(t)
+		require.NoError(t, tm.tmState.ChangeTabletType(t.Context(), topodatapb.TabletType_RESTORE, DBActionNone))
+		rsm := tm.newRestoreStateManager(logutil.NewMemoryLogger(), false)
+		rsm.state = restoreStarted
+		rsm.prevTabletType = topodatapb.TabletType_REPLICA
+		require.NoError(t, rsm.abort())
+
+		// The data did not change, so the earlier initialization still applies.
+		require.NoError(t, tm.retryReplicationInitializationOnce(t.Context(), id))
+		assert.Equal(t, "old-primary", md.CurrentSourceHost)
+		assert.True(t, qsc.IsServing())
+		require.NoError(t, md.CheckSuperQueryList())
+	})
 }

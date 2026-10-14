@@ -540,6 +540,10 @@ func (rt *restoreStateManager) finish(ctx context.Context, replCmd replicationCo
 		return vterrors.New(vtrpcpb.Code_INTERNAL, "restore cannot be finished in current state")
 	}
 
+	// The restored data replaces what an earlier deferred replication
+	// initialization was for, and replCmd decides replication for it.
+	rt.tm.tmState.cancelReplicationInit(ctx)
+
 	// Perform replication command.
 	switch replCmd.action {
 	case replicationActionDisable:

@@ -1199,16 +1199,16 @@ func (tm *TabletManager) initializeReplicationUnlessShardLocked(ctx context.Cont
 	primaryPos, err := tm.initializeReplication(ctx, tabletType)
 	if _, ok := errors.AsType[*shardLockUnavailableError](err); ok {
 		logger.Warningf("deferring replication initialization, retrying in the background: %v", err)
-		tm.tmState.SetReplicationPending(ctx, true)
-		go tm.retryReplicationInitialization(tm.tmState.ctx)
+		id := tm.tmState.deferReplicationInit(ctx)
+		go tm.retryReplicationInitialization(tm.tmState.ctx, id)
 		return "", nil
 	}
 	return primaryPos, err
 }
 
-// retryReplicationInitialization retries replication initialization until it
-// succeeds or ctx is done.
-func (tm *TabletManager) retryReplicationInitialization(ctx context.Context) {
+// retryReplicationInitialization retries the deferred replication
+// initialization id until it ends or ctx is done.
+func (tm *TabletManager) retryReplicationInitialization(ctx context.Context, id uint64) {
 	interval := replicationInitializationRetryInterval
 	var lastErr string
 	for {
@@ -1217,7 +1217,7 @@ func (tm *TabletManager) retryReplicationInitialization(ctx context.Context) {
 			return
 		case <-time.After(interval):
 		}
-		err := tm.retryReplicationInitializationOnce(ctx)
+		err := tm.retryReplicationInitializationOnce(ctx, id)
 		if err == nil {
 			log.Info("Initialized deferred replication")
 			return
@@ -1234,16 +1234,23 @@ func (tm *TabletManager) retryReplicationInitialization(ctx context.Context) {
 	}
 }
 
-func (tm *TabletManager) retryReplicationInitializationOnce(ctx context.Context) error {
+func (tm *TabletManager) retryReplicationInitializationOnce(ctx context.Context, id uint64) error {
 	// RPCs can change replication once the tablet serves them.
 	if err := tm.lock(ctx); err != nil {
 		return err
 	}
 	defer tm.unlock()
+	if !tm.tmState.isPendingReplicationInit(id) {
+		// It completed, or a later deferral or a restore superseded it.
+		return nil
+	}
 	switch tabletType := tm.Tablet().Type; tabletType {
-	case topodatapb.TabletType_PRIMARY, topodatapb.TabletType_RESTORE:
-		// A primary does not replicate. A restore initializes replication when
-		// it finishes, and defers it again if needed.
+	case topodatapb.TabletType_PRIMARY:
+		// A primary does not replicate.
+	case topodatapb.TabletType_RESTORE:
+		// A restore that finishes supersedes this initialization. One that
+		// aborts leaves the data, and this initialization, unchanged.
+		return vterrors.New(vtrpc.Code_UNAVAILABLE, "waiting for the restore to finish")
 	default:
 		primaryPos, err := tm.initializeReplication(ctx, tabletType)
 		if err != nil {
@@ -1255,8 +1262,7 @@ func (tm *TabletManager) retryReplicationInitializationOnce(ctx context.Context)
 			return vterrors.New(vtrpc.Code_UNAVAILABLE, "no primary to replicate from yet")
 		}
 	}
-	// Clear under the action lock so a later deferral stays pending.
-	tm.tmState.SetReplicationPending(ctx, false)
+	tm.tmState.endReplicationInit(ctx, id)
 	return nil
 }
 

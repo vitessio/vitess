@@ -82,9 +82,10 @@ type tmState struct {
 	deniedTables    map[topodatapb.TabletType][]string
 	tablet          *topodatapb.Tablet
 	isPublishing    bool
-	// replicationPending is set while a deferred replication initialization
-	// has not completed.
-	replicationPending bool
+	// pendingReplicationInit identifies the deferred replication
+	// initialization that has not completed, or is zero if there is none.
+	pendingReplicationInit uint64
+	lastReplicationInit    uint64
 
 	// displayState contains the current snapshot of the internal state
 	// and has its own mutex.
@@ -288,16 +289,46 @@ func (ts *tmState) ChangeTabletTags(ctx context.Context, tabletTags map[string]s
 	setTabletTagsStats(ts.tablet)
 }
 
-// SetReplicationPending withholds query service from non-primary tablet types
-// while a deferred replication initialization has not completed.
-func (ts *tmState) SetReplicationPending(ctx context.Context, pending bool) {
+// deferReplicationInit records a new deferred replication initialization and
+// returns its ID. It supersedes any earlier one. Non-primary tablet types do
+// not serve queries until it ends.
+func (ts *tmState) deferReplicationInit(ctx context.Context) uint64 {
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
-	if ts.replicationPending == pending {
-		return
+	ts.lastReplicationInit++
+	ts.setPendingReplicationInitLocked(ctx, ts.lastReplicationInit)
+	return ts.lastReplicationInit
+}
+
+// isPendingReplicationInit reports whether id is the pending deferred
+// replication initialization.
+func (ts *tmState) isPendingReplicationInit(id uint64) bool {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	return ts.pendingReplicationInit == id
+}
+
+// endReplicationInit ends the deferred replication initialization id if it is
+// still pending.
+func (ts *tmState) endReplicationInit(ctx context.Context, id uint64) {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	if ts.pendingReplicationInit == id {
+		ts.setPendingReplicationInitLocked(ctx, 0)
 	}
-	ts.replicationPending = pending
-	if ts.isOpen {
+}
+
+// cancelReplicationInit ends any pending deferred replication initialization.
+func (ts *tmState) cancelReplicationInit(ctx context.Context) {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	ts.setPendingReplicationInitLocked(ctx, 0)
+}
+
+func (ts *tmState) setPendingReplicationInitLocked(ctx context.Context, id uint64) {
+	wasPending := ts.pendingReplicationInit != 0
+	ts.pendingReplicationInit = id
+	if ts.isOpen && wasPending != (id != 0) {
 		if err := ts.updateLocked(ctx); err != nil {
 			log.Error(fmt.Sprintf("Cannot update query service after replication initialization state change: %v", err))
 		}
@@ -405,7 +436,7 @@ func (ts *tmState) canServe(tabletType topodatapb.TabletType) string {
 	if !topo.IsRunningQueryService(tabletType) {
 		return fmt.Sprintf("not a serving tablet type(%v)", tabletType)
 	}
-	if ts.replicationPending && tabletType != topodatapb.TabletType_PRIMARY {
+	if ts.pendingReplicationInit != 0 && tabletType != topodatapb.TabletType_PRIMARY {
 		return "replication is not initialized"
 	}
 	if ts.tabletControls[tabletType] {
