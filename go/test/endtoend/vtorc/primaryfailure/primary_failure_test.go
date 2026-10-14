@@ -401,7 +401,17 @@ func TestDeadPrimaryMysqldWithLiveVttablet(t *testing.T) {
 	require.NotNil(t, curPrimary, "should have elected a primary")
 	vtOrcProcess := clusterInfo.ClusterInstance.VTOrcProcesses[0]
 	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.ElectNewPrimaryRecoveryName, keyspace.Name, shard0.Name, 1)
-	replica, rdonly := utils.FindReplicaAndRdonly(t, shard0, curPrimary)
+	var replica, rdonly *cluster.Vttablet
+	for _, tablet := range shard0.Vttablets {
+		if tablet.Alias != curPrimary.Alias && tablet.Type == "replica" {
+			replica = tablet
+		}
+		if tablet.Type == "rdonly" {
+			rdonly = tablet
+		}
+	}
+	require.NotNil(t, replica, "could not find replica tablet")
+	require.NotNil(t, rdonly, "could not find rdonly tablet")
 	utils.CheckReplication(t, clusterInfo, curPrimary, []*cluster.Vttablet{rdonly, replica}, 10*time.Second)
 
 	// Stop only mysqld; the vttablet keeps running.
