@@ -1192,12 +1192,14 @@ const (
 )
 
 // initializeReplicationUnlessShardLocked initializes replication unless the
-// shard lock is unavailable. In that case replication is left unchanged and
-// initialization is retried in the background.
+// shard lock is unavailable. In that case replication is left unchanged, and
+// initialization is retried in the background while non-primary types do not
+// serve queries.
 func (tm *TabletManager) initializeReplicationUnlessShardLocked(ctx context.Context, logger logutil.Logger, tabletType topodatapb.TabletType) (string, error) {
 	primaryPos, err := tm.initializeReplication(ctx, tabletType)
 	if _, ok := errors.AsType[*shardLockUnavailableError](err); ok {
 		logger.Warningf("deferring replication initialization, retrying in the background: %v", err)
+		tm.tmState.SetReplicationPending(ctx, true)
 		go tm.retryReplicationInitialization(tm.tmState.ctx)
 		return "", nil
 	}
@@ -1239,12 +1241,15 @@ func (tm *TabletManager) retryReplicationInitializationOnce(ctx context.Context)
 	}
 	defer tm.unlock()
 	tabletType := tm.Tablet().Type
-	if tabletType == topodatapb.TabletType_RESTORE {
-		// A restore initializes replication when it finishes.
-		return nil
+	if tabletType != topodatapb.TabletType_RESTORE {
+		if _, err := tm.initializeReplication(ctx, tabletType); err != nil {
+			return err
+		}
 	}
-	_, err := tm.initializeReplication(ctx, tabletType)
-	return err
+	// A restore initializes replication when it finishes, and defers it again
+	// if needed. Clear under the action lock so a later deferral stays pending.
+	tm.tmState.SetReplicationPending(ctx, false)
+	return nil
 }
 
 // initializeReplication is used to initialize the replication when the tablet starts.

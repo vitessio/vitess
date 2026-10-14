@@ -82,6 +82,9 @@ type tmState struct {
 	deniedTables    map[topodatapb.TabletType][]string
 	tablet          *topodatapb.Tablet
 	isPublishing    bool
+	// replicationPending is set while a deferred replication initialization
+	// has not completed.
+	replicationPending bool
 
 	// displayState contains the current snapshot of the internal state
 	// and has its own mutex.
@@ -285,6 +288,22 @@ func (ts *tmState) ChangeTabletTags(ctx context.Context, tabletTags map[string]s
 	setTabletTagsStats(ts.tablet)
 }
 
+// SetReplicationPending withholds query service from non-primary tablet types
+// while a deferred replication initialization has not completed.
+func (ts *tmState) SetReplicationPending(ctx context.Context, pending bool) {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	if ts.replicationPending == pending {
+		return
+	}
+	ts.replicationPending = pending
+	if ts.isOpen {
+		if err := ts.updateLocked(ctx); err != nil {
+			log.Error(fmt.Sprintf("Cannot update query service after replication initialization state change: %v", err))
+		}
+	}
+}
+
 func (ts *tmState) SetMysqlPort(mport int32) {
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
@@ -385,6 +404,9 @@ func (ts *tmState) updateLocked(ctx context.Context) error {
 func (ts *tmState) canServe(tabletType topodatapb.TabletType) string {
 	if !topo.IsRunningQueryService(tabletType) {
 		return fmt.Sprintf("not a serving tablet type(%v)", tabletType)
+	}
+	if ts.replicationPending && tabletType != topodatapb.TabletType_PRIMARY {
+		return "replication is not initialized"
 	}
 	if ts.tabletControls[tabletType] {
 		return "TabletControl.DisableQueryService set"

@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -37,6 +38,7 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/reparenttestutil"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	"golang.org/x/sync/semaphore"
@@ -372,6 +374,7 @@ func TestStartDoesNotWaitForHeldShardLock(t *testing.T) {
 			assert.Less(t, time.Since(start), replicationInitializationLockAcquireTimeout+5*time.Second)
 
 			md := tm.MysqlDaemon.(*mysqlctl.FakeMysqlDaemon)
+			assert.False(t, tm.QueryServiceControl.(*tabletservermock.Controller).IsServing())
 			assert.False(t, md.Replicating)
 			assert.False(t, md.SemiSyncReplicaEnabled)
 			assert.Empty(t, md.CurrentSourceHost)
@@ -382,6 +385,11 @@ func TestStartDoesNotWaitForHeldShardLock(t *testing.T) {
 
 func TestDeferredReplicationInitializationRetriesAfterLockRelease(t *testing.T) {
 	tm, md, ts, _ := newReplicationInitializationTM(t)
+	qsc := tabletservermock.NewController()
+	require.NoError(t, qsc.InitDBConfig(&querypb.Target{Keyspace: "ks", Shard: "0"}, nil, md))
+	tm.QueryServiceControl = qsc
+	tm.tmState.Open()
+	require.True(t, qsc.IsServing())
 	release := holdInitializationShardLock(t, ts)
 	started := make(chan struct{}, 2)
 	// Runs for source configuration and START REPLICA.
@@ -392,6 +400,7 @@ func TestDeferredReplicationInitializationRetriesAfterLockRelease(t *testing.T) 
 	require.NoError(t, err)
 	assert.Contains(t, logger.String(), "deferring replication initialization")
 	assert.Empty(t, started, "deferral must not change replication")
+	assert.False(t, qsc.IsServing(), "a replica must not serve before replication is initialized")
 
 	release()
 	for range 2 {
@@ -408,4 +417,13 @@ func TestDeferredReplicationInitializationRetriesAfterLockRelease(t *testing.T) 
 	require.NoError(t, err)
 	assert.Equal(t, "old-primary", md.CurrentSourceHost)
 	require.NoError(t, md.CheckSuperQueryList())
+	assert.True(t, qsc.IsServing())
+}
+
+func TestPendingReplicationOnlyWithholdsNonPrimaryService(t *testing.T) {
+	tm, _, _, _ := newReplicationInitializationTM(t)
+	tm.tmState.replicationPending = true
+	assert.Equal(t, "replication is not initialized", tm.tmState.canServe(topodatapb.TabletType_REPLICA))
+	assert.Equal(t, "replication is not initialized", tm.tmState.canServe(topodatapb.TabletType_RDONLY))
+	assert.Empty(t, tm.tmState.canServe(topodatapb.TabletType_PRIMARY))
 }
