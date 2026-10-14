@@ -20,6 +20,16 @@
 # TESTS_TOTAL is set by gotestsum and counts skipped tests too, so a shard
 # whose tests all t.Skip does not trip this.
 if [[ "${TESTS_TOTAL:-0}" -eq 0 ]]; then
-	echo "ERROR: gotestsum ran 0 tests for $PACKAGES: flag ordering or -run filtering may have broken package selection"
+	echo "ERROR: gotestsum ran 0 tests for $PACKAGES: flag ordering or -run filtering may have broken package selection, or TestMain failed and its rerun had no tests to select"
+	# The console format drops the output of a failed attempt once a rerun
+	# passes, so print it from the JSON log gotestsum wrote.
+	if [[ -r "${GOTESTSUM_JSONFILE:-}" ]]; then
+		echo "Output of every attempt, from $GOTESTSUM_JSONFILE:"
+		if command -v jq >/dev/null; then
+			jq -rj 'select(.Action == "output") | .Output' "$GOTESTSUM_JSONFILE"
+		else
+			grep '"Action":"output"' "$GOTESTSUM_JSONFILE"
+		fi
+	fi
 	exit 1
 fi
