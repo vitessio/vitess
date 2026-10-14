@@ -354,6 +354,8 @@ func (ts *Server) updateCellConnLocked(cell string, generation uint64, ci *topod
 		if cc.conn != nil {
 			cc.conn.Close()
 		}
+		// Drop it from the cache too, so that if connecting below fails, no call can get the closed connection.
+		delete(ts.cellConns, cell)
 	}
 
 	// Connect to the cell topo server, while holding the lock.

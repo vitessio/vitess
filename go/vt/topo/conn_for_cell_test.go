@@ -92,6 +92,8 @@ type pausingFactory struct {
 	used    atomic.Bool
 	// returned is closed when the paused read returns.
 	returned chan struct{}
+	// failRoot makes connecting to a cell at this root fail.
+	failRoot string
 }
 
 func newPausingFactory(memFactory *memorytopo.Factory) *pausingFactory {
@@ -105,6 +107,9 @@ func newPausingFactory(memFactory *memorytopo.Factory) *pausingFactory {
 }
 
 func (f *pausingFactory) Create(cell, serverAddr, root string) (topo.Conn, error) {
+	if f.failRoot != "" && root == f.failRoot {
+		return nil, errors.New("topo server unreachable")
+	}
 	conn, err := f.Factory.Create(cell, serverAddr, root)
 	if err != nil || cell != topo.GlobalCell {
 		return conn, err
@@ -424,4 +429,47 @@ func TestConnForCellNewConnKeepsReadOnly(t *testing.T) {
 		require.NoError(t, err)
 		assertReadOnly(t, got)
 	})
+}
+
+// TestConnForCellFailedReplacementDropsClosedConn verifies that when a ConnForCell finds the cell re-pointed,
+// closes the old connection, and then fails to connect to the new topo server, the closed connection is not
+// left cached for a read of the old CellInfo that was still in flight to return and mark fresh.
+func TestConnForCellFailedReplacementDropsClosedConn(t *testing.T) {
+	ctx := t.Context()
+	_, memFactory := memorytopo.NewServerAndFactory(ctx, "zone1")
+	factory := newPausingFactory(memFactory)
+	factory.failRoot = "/zone1-unreachable"
+	ts, err := topo.NewWithFactory(factory, "", "")
+	require.NoError(t, err)
+	defer ts.Close()
+	other, err := topo.NewWithFactory(memFactory, "", "")
+	require.NoError(t, err)
+	defer other.Close()
+	ts.SetCellInfoCacheTTL(time.Hour)
+
+	conn, err := ts.ConnForCell(ctx, "zone1")
+	require.NoError(t, err)
+
+	// A read of the old CellInfo pauses.
+	ts.ExpireCellInfo("zone1")
+	close(factory.armed)
+	older := make(chan topo.Conn)
+	go func() {
+		got, err := ts.ConnForCell(ctx, "zone1")
+		assert.NoError(t, err)
+		older <- got
+	}()
+	<-factory.paused
+
+	// The cell is re-pointed to a topo server that can't be reached, so the next call closes the old
+	// connection and fails to replace it.
+	require.NoError(t, other.UpdateCellInfoFields(ctx, "zone1", func(ci *topodatapb.CellInfo) error {
+		ci.Root = "/zone1-unreachable"
+		return nil
+	}))
+	_, err = ts.ConnForCell(ctx, "zone1")
+	require.Error(t, err)
+
+	close(factory.release)
+	assert.NotSame(t, conn, <-older, "the older read returned the connection the failed replacement closed")
 }
