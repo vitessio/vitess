@@ -59,8 +59,6 @@ import (
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vterrors"
-
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 const (
@@ -159,33 +157,7 @@ type Server struct {
 	cellInfoGenerations map[string]uint64
 	// cellInfoCacheTTL is defaultCellInfoCacheTTL; tests change it.
 	cellInfoCacheTTL time.Duration
-	// cellInfoReads holds the CellInfo read in flight for each cell and generation, so that concurrent
-	// ConnForCell calls share it.
-	cellInfoReads map[cellInfoReadKey]*cellInfoRead
 }
-
-type cellInfoReadKey struct {
-	cell       string
-	generation uint64
-}
-
-// cellInfoRead is a CellInfo read in flight. The call that started it does the read in its own goroutine,
-// with its own ctx, and closes done once it has updated the cache.
-type cellInfoRead struct {
-	done chan struct{}
-	// startedAt is when the read started. Calls only share a read that started within the TTL, since an older
-	// one may have read the CellInfo before a re-point.
-	startedAt time.Time
-	// Set before done is closed.
-	conn Conn
-	err  error
-	// readerCanceled is whether err is the reading call's ctx being done, which does not apply to the calls
-	// waiting on it.
-	readerCanceled bool
-}
-
-// errCellInfoReadPanicked is what the calls waiting on a CellInfo read get when the read panicked.
-var errCellInfoReadPanicked = vterrors.New(vtrpcpb.Code_INTERNAL, "reading CellInfo panicked")
 
 type cellConn struct {
 	cellInfo *topodata.CellInfo
@@ -290,7 +262,6 @@ func NewWithFactory(factory Factory, serverAddress, root string) (*Server, error
 		cellConns:           make(map[string]cellConn),
 		cellInfoGenerations: make(map[string]uint64),
 		cellInfoCacheTTL:    defaultCellInfoCacheTTL,
-		cellInfoReads:       make(map[cellInfoReadKey]*cellInfoRead),
 	}, nil
 }
 
@@ -335,86 +306,31 @@ func (ts *Server) ConnForCell(ctx context.Context, cell string) (Conn, error) {
 		return ts.globalCell, nil
 	}
 
-	for {
-		// Reuse the cached connection while the CellInfo it was checked against is recent.
-		ts.mu.Lock()
-		if cc, ok := ts.cellConns[cell]; ok && !cc.expired && time.Since(cc.cellInfoReadStart) < ts.cellInfoCacheTTL {
-			ts.mu.Unlock()
-			return cc.conn, nil
-		}
-		// When an entry expires, every call for the cell arrives here at once, so concurrent calls share one
-		// read. The key includes the generation, so a call made after this process changed the cell starts a
-		// read of its own rather than sharing one that began before the change.
-		key := cellInfoReadKey{cell: cell, generation: ts.cellInfoGenerations[cell]}
-		if read, ok := ts.cellInfoReads[key]; ok && time.Since(read.startedAt) < ts.cellInfoCacheTTL {
-			ts.mu.Unlock()
-			select {
-			case <-read.done:
-			case <-ctx.Done():
-				return nil, ctx.Err()
-			}
-			if read.readerCanceled {
-				// The reading call gave up, not the read; try again, possibly as the reader.
-				continue
-			}
-			return read.conn, read.err
-		}
-		// No recent read to share: start one, which replaces any older read as the one to share.
-		read := &cellInfoRead{done: make(chan struct{}), startedAt: time.Now()}
-		ts.cellInfoReads[key] = read
+	// Reuse the cached connection while the CellInfo it was checked against is recent.
+	ts.mu.Lock()
+	if cc, ok := ts.cellConns[cell]; ok && !cc.expired && time.Since(cc.cellInfoReadStart) < ts.cellInfoCacheTTL {
 		ts.mu.Unlock()
-		return ts.refreshCellConn(ctx, key, read)
+		return cc.conn, nil
 	}
-}
-
-// refreshCellConn reads the cell's CellInfo for read, updates the cell's cached connection, and completes
-// read. It runs in the goroutine of the call that started read, so the read never outlives its caller.
-func (ts *Server) refreshCellConn(ctx context.Context, key cellInfoReadKey, read *cellInfoRead) (conn Conn, err error) {
-	completed := false
-	defer func() {
-		if !completed {
-			// The read panicked before the cache was updated. Don't leave the waiting calls blocked.
-			ts.mu.Lock()
-			defer ts.mu.Unlock()
-			ts.endCellInfoReadLocked(key, read)
-			read.err = errCellInfoReadPanicked
-			close(read.done)
-		}
-	}()
+	generation := ts.cellInfoGenerations[cell]
+	ts.mu.Unlock()
 
 	// Fetch cell cluster addresses from the global cluster. This is a strong read: the result is trusted for
 	// cellInfoCacheTTL, so it must not come from a GlobalReadOnlyCell that lags behind.
-	ci, err := ts.GetCellInfo(ctx, key.cell, true /*strongRead*/)
-
-	ts.mu.Lock()
-	defer ts.mu.Unlock()
-	// Complete the read under the same lock that updates the cache, so that a call arriving now either waits
-	// on the read or finds the updated entry, and never starts a second read in between.
-	defer func() {
-		ts.endCellInfoReadLocked(key, read)
-		read.conn, read.err = conn, err
-		read.readerCanceled = err != nil && ctx.Err() != nil
-		completed = true
-		close(read.done)
-	}()
+	readStart := time.Now()
+	ci, err := ts.GetCellInfo(ctx, cell, true /*strongRead*/)
 	if err != nil {
 		return nil, err
 	}
-	return ts.updateCellConnLocked(key, ci, read.startedAt)
+
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	return ts.updateCellConnLocked(cell, generation, ci, readStart)
 }
 
-// endCellInfoReadLocked stops calls from sharing read, unless a newer read has already replaced it. ts.mu must
-// be held.
-func (ts *Server) endCellInfoReadLocked(key cellInfoReadKey, read *cellInfoRead) {
-	if ts.cellInfoReads[key] == read {
-		delete(ts.cellInfoReads, key)
-	}
-}
-
-// updateCellConnLocked updates the cell's cached connection from a CellInfo whose read started at readStart.
-// ts.mu must be held.
-func (ts *Server) updateCellConnLocked(key cellInfoReadKey, ci *topodata.CellInfo, readStart time.Time) (Conn, error) {
-	cell := key.cell
+// updateCellConnLocked updates the cell's cached connection from a CellInfo whose read started at readStart, in
+// the cell's given expiry generation. ts.mu must be held.
+func (ts *Server) updateCellConnLocked(cell string, generation uint64, ci *topodata.CellInfo, readStart time.Time) (Conn, error) {
 	cc, ok := ts.cellConns[cell]
 	// A read that started after ours has already updated the entry. What we read may be older than what it
 	// read, so keep its result rather than replacing a newer connection with an older one.
@@ -423,7 +339,7 @@ func (ts *Server) updateCellConnLocked(key cellInfoReadKey, ci *topodata.CellInf
 	}
 	// If the cell's CellInfo was expired while we read it, what we read may predate the change, so leave the
 	// entry expired for the next call to read again.
-	expired := ts.cellInfoGenerations[cell] != key.generation
+	expired := ts.cellInfoGenerations[cell] != generation
 	if ok {
 		// Client exists in cache.
 		// Let's verify that it is the same cell as we are looking for.
