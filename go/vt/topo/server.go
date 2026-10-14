@@ -173,6 +173,9 @@ type cellInfoReadKey struct {
 // with its own ctx, and closes done once it has updated the cache.
 type cellInfoRead struct {
 	done chan struct{}
+	// startedAt is when the read started. Calls only share a read that started within the TTL, since an older
+	// one may have read the CellInfo before a re-point.
+	startedAt time.Time
 	// Set before done is closed.
 	conn Conn
 	err  error
@@ -343,7 +346,7 @@ func (ts *Server) ConnForCell(ctx context.Context, cell string) (Conn, error) {
 		// read. The key includes the generation, so a call made after this process changed the cell starts a
 		// read of its own rather than sharing one that began before the change.
 		key := cellInfoReadKey{cell: cell, generation: ts.cellInfoGenerations[cell]}
-		if read, ok := ts.cellInfoReads[key]; ok {
+		if read, ok := ts.cellInfoReads[key]; ok && time.Since(read.startedAt) < ts.cellInfoCacheTTL {
 			ts.mu.Unlock()
 			select {
 			case <-read.done:
@@ -356,7 +359,8 @@ func (ts *Server) ConnForCell(ctx context.Context, cell string) (Conn, error) {
 			}
 			return read.conn, read.err
 		}
-		read := &cellInfoRead{done: make(chan struct{})}
+		// No recent read to share: start one, which replaces any older read as the one to share.
+		read := &cellInfoRead{done: make(chan struct{}), startedAt: time.Now()}
 		ts.cellInfoReads[key] = read
 		ts.mu.Unlock()
 		return ts.refreshCellConn(ctx, key, read)
@@ -372,7 +376,7 @@ func (ts *Server) refreshCellConn(ctx context.Context, key cellInfoReadKey, read
 			// The read panicked before the cache was updated. Don't leave the waiting calls blocked.
 			ts.mu.Lock()
 			defer ts.mu.Unlock()
-			delete(ts.cellInfoReads, key)
+			ts.endCellInfoReadLocked(key, read)
 			read.err = errCellInfoReadPanicked
 			close(read.done)
 		}
@@ -380,7 +384,6 @@ func (ts *Server) refreshCellConn(ctx context.Context, key cellInfoReadKey, read
 
 	// Fetch cell cluster addresses from the global cluster. This is a strong read: the result is trusted for
 	// cellInfoCacheTTL, so it must not come from a GlobalReadOnlyCell that lags behind.
-	readStart := time.Now()
 	ci, err := ts.GetCellInfo(ctx, key.cell, true /*strongRead*/)
 
 	ts.mu.Lock()
@@ -388,7 +391,7 @@ func (ts *Server) refreshCellConn(ctx context.Context, key cellInfoReadKey, read
 	// Complete the read under the same lock that updates the cache, so that a call arriving now either waits
 	// on the read or finds the updated entry, and never starts a second read in between.
 	defer func() {
-		delete(ts.cellInfoReads, key)
+		ts.endCellInfoReadLocked(key, read)
 		read.conn, read.err = conn, err
 		read.readerCanceled = err != nil && ctx.Err() != nil
 		completed = true
@@ -397,7 +400,15 @@ func (ts *Server) refreshCellConn(ctx context.Context, key cellInfoReadKey, read
 	if err != nil {
 		return nil, err
 	}
-	return ts.updateCellConnLocked(key, ci, readStart)
+	return ts.updateCellConnLocked(key, ci, read.startedAt)
+}
+
+// endCellInfoReadLocked stops calls from sharing read, unless a newer read has already replaced it. ts.mu must
+// be held.
+func (ts *Server) endCellInfoReadLocked(key cellInfoReadKey, read *cellInfoRead) {
+	if ts.cellInfoReads[key] == read {
+		delete(ts.cellInfoReads, key)
+	}
 }
 
 // updateCellConnLocked updates the cell's cached connection from a CellInfo whose read started at readStart.

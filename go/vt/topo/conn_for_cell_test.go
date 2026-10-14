@@ -363,6 +363,61 @@ func TestConnForCellSharesCellInfoRead(t *testing.T) {
 		assert.Same(t, conn, <-results)
 	}
 	assert.Equal(t, readsBefore+1, gets(), "the waiting calls did not share one read after the reader was canceled")
+
+	t.Run("a call after the TTL does not join an older read", func(t *testing.T) {
+		ctx := t.Context()
+		_, memFactory := memorytopo.NewServerAndFactory(ctx, "zone1")
+		factory := newPausingFactory(memFactory)
+		ts, err := topo.NewWithFactory(factory, "", "")
+		require.NoError(t, err)
+		defer ts.Close()
+		other, err := topo.NewWithFactory(memFactory, "", "")
+		require.NoError(t, err)
+		defer other.Close()
+		ts.SetCellInfoCacheTTL(time.Hour)
+
+		conn, err := ts.ConnForCell(ctx, "zone1")
+		require.NoError(t, err)
+
+		// A read of the old CellInfo pauses.
+		ts.ExpireCellInfo("zone1")
+		close(factory.armed)
+		older := make(chan topo.Conn)
+		go func() {
+			got, err := ts.ConnForCell(ctx, "zone1")
+			assert.NoError(t, err)
+			older <- got
+		}()
+		<-factory.paused
+		defer func() {
+			close(factory.release)
+			<-older
+		}()
+
+		// Another process re-points the cell, and the paused read becomes older than the TTL.
+		require.NoError(t, other.UpdateCellInfoFields(ctx, "zone1", func(ci *topodatapb.CellInfo) error {
+			ci.Root = "/zone1-moved"
+			return nil
+		}))
+		ts.SetCellInfoCacheTTL(time.Nanosecond)
+
+		newer := make(chan topo.Conn)
+		go func() {
+			got, err := ts.ConnForCell(ctx, "zone1")
+			assert.NoError(t, err)
+			newer <- got
+		}()
+		var got topo.Conn
+		require.Eventually(t, func() bool {
+			select {
+			case got = <-newer:
+				return true
+			default:
+				return false
+			}
+		}, 30*time.Second, 10*time.Millisecond, "the call after the TTL waited on the read that began before it")
+		assert.NotSame(t, conn, got, "the call after the TTL got the connection to the old root")
+	})
 }
 
 // TestConnForCellChangeStartsNewRead verifies that after this process changes a cell's CellInfo, ConnForCell

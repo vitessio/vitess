@@ -20,6 +20,8 @@ import "time"
 
 // SetCellInfoCacheTTL sets how long ts.ConnForCell reuses a cell's connection without re-reading CellInfo.
 func (ts *Server) SetCellInfoCacheTTL(ttl time.Duration) {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
 	ts.cellInfoCacheTTL = ttl
 }
 
