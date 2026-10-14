@@ -913,16 +913,22 @@ func (ts *trafficSwitcher) ForAllUIDs(f func(target *MigrationTarget, uid int32)
 func (ts *trafficSwitcher) createReverseVReplication(ctx context.Context) error {
 	// Build all of the reverse streams before deleting the existing ones, so
 	// that failing to build them leaves those in place.
+	var mu sync.Mutex
 	reverseBlses := make(map[*MigrationTarget]map[int32]*binlogdatapb.BinlogSource)
-	for _, target := range ts.Targets() {
-		reverseBlses[target] = make(map[int32]*binlogdatapb.BinlogSource)
-		for uid := range target.Sources {
-			reverseBls, err := ts.buildReverseBinlogSource(ctx, target, uid)
-			if err != nil {
-				return err
-			}
-			reverseBlses[target][uid] = reverseBls
+	if err := ts.ForAllUIDs(func(target *MigrationTarget, uid int32) error {
+		reverseBls, err := ts.buildReverseBinlogSource(ctx, target, uid)
+		if err != nil {
+			return err
 		}
+		mu.Lock()
+		defer mu.Unlock()
+		if reverseBlses[target] == nil {
+			reverseBlses[target] = make(map[int32]*binlogdatapb.BinlogSource)
+		}
+		reverseBlses[target][uid] = reverseBls
+		return nil
+	}); err != nil {
+		return err
 	}
 	if err := ts.deleteReverseVReplication(ctx); err != nil {
 		return err
