@@ -25,7 +25,7 @@ jobs:
 
     steps:
     - name: Harden the runner (Audit all outbound calls)
-      uses: step-security/harden-runner@f808768d1510423e83855289c910610ca9b43176 # v2.17.0
+      uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
       with:
         egress-policy: audit
 
@@ -37,7 +37,7 @@ jobs:
         fi
 
     - name: Check out code
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         # The merge commit and its first parent, for the path filter.
         fetch-depth: 2
@@ -53,7 +53,7 @@ jobs:
       run: echo "sha=$(git rev-parse HEAD^1)" >> "$GITHUB_OUTPUT"
 
     - name: Check for changes in relevant files
-      uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
+      uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
       id: changes
       with:
         token: ''
@@ -80,14 +80,14 @@ jobs:
     - name: Set up Go
       if: steps.changes.outputs.end_to_end == 'true'
       # zizmor: ignore[cache-poisoning] this workflow publishes no artifacts
-      uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
       with:
         go-version-file: go.mod
         cache: ${{ (github.base_ref == 'main' || (github.base_ref == '' && github.ref_name == 'main')) && 'true' || 'false' }}
 
     - name: Set up python
       if: steps.changes.outputs.end_to_end == 'true'
-      uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+      uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
 
     - name: Tune the OS
       if: steps.changes.outputs.end_to_end == 'true'
@@ -168,7 +168,7 @@ jobs:
 
     - name: Test Summary
       if: steps.changes.outputs.end_to_end == 'true' && !cancelled()
-      uses: test-summary/action@31493c76ec9e7aa675f1585d3ed6f1da69269a86 # v2.4
+      uses: test-summary/action@37b508cfee6d4d080eedd00b5bb240a6a784a6a5 # v2.6
       with:
         paths: "report*.xml"
         show: "fail"
