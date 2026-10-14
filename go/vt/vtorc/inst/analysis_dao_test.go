@@ -860,7 +860,60 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 			keyspaceWanted: "ks",
 			shardWanted:    "0",
 			codeWanted:     DeadPrimary,
+<<<<<<< HEAD
 		}, {
+||||||| parent of 5b4886b7fc (VTOrc: don't repair a replica whose MySQL state VTOrc can no longer read (#21534))
+		},
+		{
+=======
+		},
+		{
+			// A replica whose replication was stopped when VTOrc last read it, and
+			// that VTOrc can no longer reach, still counts as not replicating.
+			name: "DeadPrimary when VTOrc is starting up and a stopped replica is now unreachable",
+			info: []*test.InfoForRecoveryAnalysis{{
+				TabletInfo: &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+					Hostname:      "localhost",
+					Keyspace:      "ks",
+					Shard:         "0",
+					Type:          topodatapb.TabletType_PRIMARY,
+					MysqlHostname: "localhost",
+					MysqlPort:     6708,
+				},
+				DurabilityPolicy: policy.DurabilityNone,
+				IsInvalid:        1,
+			}, {
+				TabletInfo: &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+					Hostname:      "localhost",
+					Keyspace:      "ks",
+					Shard:         "0",
+					Type:          topodatapb.TabletType_REPLICA,
+					MysqlHostname: "localhost",
+					MysqlPort:     6709,
+				},
+				LastCheckValid:     1,
+				ReplicationStopped: 1,
+			}, {
+				TabletInfo: &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 103},
+					Hostname:      "localhost",
+					Keyspace:      "ks",
+					Shard:         "0",
+					Type:          topodatapb.TabletType_REPLICA,
+					MysqlHostname: "localhost",
+					MysqlPort:     6710,
+				},
+				LastCheckValid:     0,
+				ReplicationStopped: 1,
+			}},
+			keyspaceWanted: "ks",
+			shardWanted:    "0",
+			codeWanted:     DeadPrimary,
+		},
+		{
+>>>>>>> 5b4886b7fc (VTOrc: don't repair a replica whose MySQL state VTOrc can no longer read (#21534))
 			name: "Invalid Primary",
 			info: []*test.InfoForRecoveryAnalysis{{
 				TabletInfo: &topodatapb.Tablet{

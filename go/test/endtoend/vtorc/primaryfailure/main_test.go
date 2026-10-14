@@ -31,7 +31,13 @@ func TestMain(m *testing.M) {
 	var cellInfos []*utils.CellInfo
 	cellInfos = append(cellInfos, &utils.CellInfo{
 		CellName:    utils.Cell1,
+<<<<<<< HEAD
 		NumReplicas: 13,
+||||||| parent of 5b4886b7fc (VTOrc: don't repair a replica whose MySQL state VTOrc can no longer read (#21534))
+		NumReplicas: 15,
+=======
+		NumReplicas: 16,
+>>>>>>> 5b4886b7fc (VTOrc: don't repair a replica whose MySQL state VTOrc can no longer read (#21534))
 		NumRdonly:   3,
 		UIDBase:     100,
 	})

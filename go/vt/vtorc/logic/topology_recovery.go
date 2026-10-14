@@ -74,6 +74,24 @@ const (
 	RecoverySkipERSDisabled
 	RecoverySkipStaleAnalysis
 	RecoverySkipPrimaryRecovery
+<<<<<<< HEAD
+||||||| parent of 5b4886b7fc (VTOrc: don't repair a replica whose MySQL state VTOrc can no longer read (#21534))
+	RecoverySkipCellNoRecovery
+	// RecoverySkipCellNoRecoveryUnvalidated is used when --cells-no-recovery was set but
+	// could not be validated against the topology at startup (topology unreachable). Recovery
+	// is held until a subsequent refresh cycle completes validation.
+	RecoverySkipCellNoRecoveryUnvalidated
+=======
+	RecoverySkipCellNoRecovery
+	// RecoverySkipCellNoRecoveryUnvalidated is used when --cells-no-recovery was set but
+	// could not be validated against the topology at startup (topology unreachable). Recovery
+	// is held until a subsequent refresh cycle completes validation.
+	RecoverySkipCellNoRecoveryUnvalidated
+	// RecoverySkipReplicaUnreachable is used when a replica's problem was detected from the
+	// MySQL state VTOrc last read, but VTOrc's last check of the replica failed: the state is
+	// stale, and a repair, which needs the same tablet, could only fail.
+	RecoverySkipReplicaUnreachable
+>>>>>>> 5b4886b7fc (VTOrc: don't repair a replica whose MySQL state VTOrc can no longer read (#21534))
 )
 
 // String represents a RecoverySkip as a string.
@@ -89,6 +107,20 @@ func (rsc RecoverySkipCode) String() string {
 		return "StaleAnalysis"
 	case RecoverySkipPrimaryRecovery:
 		return "PrimaryRecovery"
+<<<<<<< HEAD
+||||||| parent of 5b4886b7fc (VTOrc: don't repair a replica whose MySQL state VTOrc can no longer read (#21534))
+	case RecoverySkipCellNoRecovery:
+		return "CellNoRecovery"
+	case RecoverySkipCellNoRecoveryUnvalidated:
+		return "CellNoRecoveryUnvalidated"
+=======
+	case RecoverySkipCellNoRecovery:
+		return "CellNoRecovery"
+	case RecoverySkipCellNoRecoveryUnvalidated:
+		return "CellNoRecoveryUnvalidated"
+	case RecoverySkipReplicaUnreachable:
+		return "ReplicaUnreachable"
+>>>>>>> 5b4886b7fc (VTOrc: don't repair a replica whose MySQL state VTOrc can no longer read (#21534))
 	default:
 		return "None"
 	}
@@ -610,6 +642,9 @@ func getCheckAndRecoverFunctionCode(analysisEntry *inst.DetectionAnalysis) (reco
 	// replica
 	case inst.NotConnectedToPrimary, inst.ConnectedToWrongPrimary, inst.ReplicationStopped, inst.ReplicaIsWritable,
 		inst.ReplicaSemiSyncMustBeSet, inst.ReplicaSemiSyncMustNotBeSet, inst.ReplicaMisconfigured:
+		if !analysisEntry.LastCheckValid {
+			recoverySkipCode = RecoverySkipReplicaUnreachable
+		}
 		recoveryFunc = fixReplicaFunc
 	// primary, non actionable
 	case inst.DeadPrimaryAndReplicas:
@@ -795,7 +830,18 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.DetectionAnalysis) (err 
 
 	if recoverySkipCode != RecoverySkipNone {
 		skipReason := recoverySkipCode.String()
+<<<<<<< HEAD
 		logger.Warningf("Skipping recovery for problem: %+v, recovery: %+v, reason: %+v, aborting recovery", analysisEntry.Analysis, skipReason, recoveryName)
+||||||| parent of 5b4886b7fc (VTOrc: don't repair a replica whose MySQL state VTOrc can no longer read (#21534))
+		logger.Warn(fmt.Sprintf("Skipping recovery for problem: %+v, recovery: %+v, reason: %+v, aborting recovery", analysisEntry.Analysis, skipReason, recoveryName))
+=======
+		// A skip can repeat on every recovery cycle for as long as its cause
+		// lasts, such as a replica that stays unreachable, so log it at most once
+		// a minute for each tablet, problem and reason.
+		if util.ClearToLog("executeCheckAndRecoverFunction: skip", fmt.Sprintf("%s:%s:%s", analyzedInstanceAliasString, analysisEntry.Analysis, skipReason)) {
+			logger.Warn(fmt.Sprintf("Skipping recovery for problem: %+v, recovery: %+v, reason: %+v, aborting recovery", analysisEntry.Analysis, recoveryName, skipReason))
+		}
+>>>>>>> 5b4886b7fc (VTOrc: don't repair a replica whose MySQL state VTOrc can no longer read (#21534))
 		recoveriesSkippedCounter.Add(append(recoveryLabels, skipReason), 1)
 		// Unhandled problem type
 		if analysisEntry.Analysis != inst.NoProblem {
@@ -918,6 +964,59 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.DetectionAnalysis) (err 
 			recoveriesSkippedCounter.Add(append(recoveryLabels, RecoverySkipStaleAnalysis.String()), 1)
 			return nil
 		}
+<<<<<<< HEAD
+||||||| parent of 5b4886b7fc (VTOrc: don't repair a replica whose MySQL state VTOrc can no longer read (#21534))
+		// Re-evaluate the cells-no-recovery gate against the post-refresh analysis. For PrimaryTabletDeleted,
+		// AnalyzedCell comes from vitess_shard.primary_alias.Cell and can shift between the pre-lock snapshot
+		// and the refreshed snapshot (refreshAllInformation runs RefreshAllKeyspacesAndShards and refreshAllTablets
+		// concurrently, so the shard record and tablet records may not form a consistent snapshot). Without this
+		// re-check, checkIfAlreadyFixed matches on AnalyzedInstanceAlias (the surviving replica, stable) and
+		// proceeds to ERS even if the refreshed AnalyzedCell is now a denied cell.
+		// ClusterHasNoPrimary is excluded because it has its own shard-level cell gate above (getShardTabletsByCell)
+		// and its AnalyzedCell is typically empty.
+		// refreshedEntry is always non-nil here: the alreadyFixed==true early-return above means we only
+		// reach this point when checkIfAlreadyFixed found a matching entry and returned it. The nil check
+		// is kept as a defensive guard against future refactors that might add a (false, nil, nil) path.
+		if refreshedEntry != nil && len(cellsNoRecovery) > 0 && refreshedEntry.Analysis != inst.ClusterHasNoPrimary {
+			refreshedCell := refreshedEntry.AnalyzedCell
+			if refreshedCell == "" || slices.Contains(cellsNoRecovery, refreshedCell) {
+				logger.Info(fmt.Sprintf("CheckAndRecover: Tablet: %+v: NOT Recovering host (refreshed AnalyzedCell %q is denied or unknown; --cells-no-recovery fail-closed after lock)", analyzedInstanceAliasString, refreshedCell))
+				recoveriesSkippedCounter.Add(append(recoveryLabels, RecoverySkipCellNoRecovery.String()), 1)
+				return nil
+			}
+		}
+=======
+		// The replica may have become unreachable since the problem was detected:
+		// skip the repair for that reason, as the check before the lock would.
+		if refreshedEntry != nil {
+			if _, skip := getCheckAndRecoverFunctionCode(refreshedEntry); skip == RecoverySkipReplicaUnreachable {
+				if util.ClearToLog("executeCheckAndRecoverFunction: skip", fmt.Sprintf("%s:%s:%s", analyzedInstanceAliasString, analysisEntry.Analysis, skip)) {
+					logger.Warn(fmt.Sprintf("Skipping recovery for problem: %+v, recovery: %+v, reason: %+v, aborting recovery", analysisEntry.Analysis, recoveryName, skip))
+				}
+				recoveriesSkippedCounter.Add(append(recoveryLabels, skip.String()), 1)
+				return nil
+			}
+		}
+		// Re-evaluate the cells-no-recovery gate against the post-refresh analysis. For PrimaryTabletDeleted,
+		// AnalyzedCell comes from vitess_shard.primary_alias.Cell and can shift between the pre-lock snapshot
+		// and the refreshed snapshot (refreshAllInformation runs RefreshAllKeyspacesAndShards and refreshAllTablets
+		// concurrently, so the shard record and tablet records may not form a consistent snapshot). Without this
+		// re-check, checkIfAlreadyFixed matches on AnalyzedInstanceAlias (the surviving replica, stable) and
+		// proceeds to ERS even if the refreshed AnalyzedCell is now a denied cell.
+		// ClusterHasNoPrimary is excluded because it has its own shard-level cell gate above (getShardTabletsByCell)
+		// and its AnalyzedCell is typically empty.
+		// refreshedEntry is always non-nil here: the alreadyFixed==true early-return above means we only
+		// reach this point when checkIfAlreadyFixed found a matching entry and returned it. The nil check
+		// is kept as a defensive guard against future refactors that might add a (false, nil, nil) path.
+		if refreshedEntry != nil && len(cellsNoRecovery) > 0 && refreshedEntry.Analysis != inst.ClusterHasNoPrimary {
+			refreshedCell := refreshedEntry.AnalyzedCell
+			if refreshedCell == "" || slices.Contains(cellsNoRecovery, refreshedCell) {
+				logger.Info(fmt.Sprintf("CheckAndRecover: Tablet: %+v: NOT Recovering host (refreshed AnalyzedCell %q is denied or unknown; --cells-no-recovery fail-closed after lock)", analyzedInstanceAliasString, refreshedCell))
+				recoveriesSkippedCounter.Add(append(recoveryLabels, RecoverySkipCellNoRecovery.String()), 1)
+				return nil
+			}
+		}
+>>>>>>> 5b4886b7fc (VTOrc: don't repair a replica whose MySQL state VTOrc can no longer read (#21534))
 	}
 
 	// Actually attempt recovery:
@@ -1010,13 +1109,33 @@ func checkIfAlreadyFixed(analysisEntry *inst.DetectionAnalysis) (bool, error) {
 
 	for _, entry := range analysisEntries {
 		// If there is a analysis which has the same recovery required, then we should proceed with the recovery
+<<<<<<< HEAD
 		if entry.AnalyzedInstanceAlias == analysisEntry.AnalyzedInstanceAlias && analysisEntriesHaveSameRecovery(analysisEntry, entry) {
 			return false, nil
+||||||| parent of 5b4886b7fc (VTOrc: don't repair a replica whose MySQL state VTOrc can no longer read (#21534))
+		tabletAliasesEqual := topoproto.TabletAliasEqual(entry.AnalyzedInstanceAlias, analysisEntry.AnalyzedInstanceAlias)
+		if tabletAliasesEqual && analysisEntriesHaveSameRecovery(analysisEntry, entry) {
+			return false, entry, nil
+=======
+		tabletAliasesEqual := topoproto.TabletAliasEqual(entry.AnalyzedInstanceAlias, analysisEntry.AnalyzedInstanceAlias)
+		if tabletAliasesEqual && (analysisEntriesHaveSameRecovery(analysisEntry, entry) || replicaBecameUnreachable(analysisEntry, entry)) {
+			return false, entry, nil
+>>>>>>> 5b4886b7fc (VTOrc: don't repair a replica whose MySQL state VTOrc can no longer read (#21534))
 		}
 	}
 
 	// We didn't find a replication analysis matching the original failure, which means that some other agent probably fixed it.
 	return true, nil
+}
+
+// replicaBecameUnreachable reports whether newAnalysis is prevAnalysis's
+// problem, needing the same recovery, except that VTOrc can no longer read the
+// replica, so the recovery is now skipped as ReplicaUnreachable. The problem
+// is still there, not fixed: the caller skips the recovery for that reason.
+func replicaBecameUnreachable(prevAnalysis, newAnalysis *inst.DetectionAnalysis) bool {
+	prevRecoveryFunctionCode, _ := getCheckAndRecoverFunctionCode(prevAnalysis)
+	newRecoveryFunctionCode, newSkipRecovery := getCheckAndRecoverFunctionCode(newAnalysis)
+	return prevRecoveryFunctionCode == newRecoveryFunctionCode && newSkipRecovery == RecoverySkipReplicaUnreachable
 }
 
 // recoverShardAnalyses executes recoveries for a shard's analyses. Analyses
