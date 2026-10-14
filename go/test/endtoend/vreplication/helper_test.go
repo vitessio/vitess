@@ -888,18 +888,10 @@ func (lg *loadGenerator) stop() {
 // switch on the source shard, the reverse switch on the target shards. A
 // shard's next failover therefore comes a whole switch later.
 func (lg *loadGenerator) waitForTrafficToResume() {
-	t := lg.t
 	start := lg.successfulQueries.Load()
-	timer := time.NewTimer(defaultTimeout)
-	defer timer.Stop()
-	for lg.successfulQueries.Load()-start < loadTestPostSwitchQueryCount {
-		select {
-		case <-timer.C:
-			require.FailNowf(t, "load generator did not resume", "no %d successful queries within %s after a traffic switch", loadTestPostSwitchQueryCount, defaultTimeout)
-		default:
-			time.Sleep(100 * time.Millisecond)
-		}
-	}
+	require.Eventually(lg.t, func() bool {
+		return lg.successfulQueries.Load()-start >= loadTestPostSwitchQueryCount
+	}, defaultTimeout, 100*time.Millisecond, "load generator did not run %d successful queries after a traffic switch", loadTestPostSwitchQueryCount)
 }
 
 func (lg *loadGenerator) start() {
