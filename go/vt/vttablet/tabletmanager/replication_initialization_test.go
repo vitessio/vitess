@@ -424,7 +424,8 @@ func TestDeferredReplicationInitializationRetriesAfterLockRelease(t *testing.T) 
 	require.NoError(t, err)
 	assert.Equal(t, "old-primary", md.CurrentSourceHost)
 	require.NoError(t, md.CheckSuperQueryList())
-	assert.True(t, qsc.IsServing())
+	// The retry opens query service after it releases the shard lock.
+	assert.Eventually(t, qsc.IsServing, 30*time.Second, 10*time.Millisecond)
 }
 
 func TestPendingReplicationOnlyWithholdsNonPrimaryService(t *testing.T) {
