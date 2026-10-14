@@ -71,7 +71,8 @@ jobs:
         ./tools/make-release-packages.sh
 
     - name: Upload Files
-      uses: csexton/release-asset-action@3567794e918fa3068116688122a76cdeb57b5f09 # v3
-      with:
-        github-token: ${{ secrets.GITHUB_TOKEN }}
-        pattern: "releases/*.{tar.gz,rpm,deb}"
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        TAG: ${{ github.event.release.tag_name }}
+      run: |
+        gh release upload "$TAG" releases/*.{tar.gz,rpm,deb} --repo "$GITHUB_REPOSITORY"
