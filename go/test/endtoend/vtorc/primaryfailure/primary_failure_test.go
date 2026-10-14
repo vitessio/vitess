@@ -386,6 +386,55 @@ func TestDeadPrimaryRecoversImmediately(t *testing.T) {
 	assert.Less(t, d.Seconds(), 9.5)
 }
 
+// TestDeadPrimaryMysqldWithLiveVttablet stops only the primary's mysqld, so its
+// vttablet keeps running, and checks that once VTOrc has elected a new primary
+// it stops acting on the old one. VTOrc can no longer read the old primary's
+// MySQL state, so the state it last read, writable, is stale.
+func TestDeadPrimaryMysqldWithLiveVttablet(t *testing.T) {
+	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
+	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, []string{"--remote-operation-timeout=10s", "--wait-replicas-timeout=5s"}, cluster.VTOrcConfiguration{
+		PreventCrossCellFailover: true,
+	}, cluster.DefaultVtorcsByCell, policy.DurabilityNone)
+	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
+	shard0 := &keyspace.Shards[0]
+	curPrimary := utils.ShardPrimaryTablet(t, clusterInfo, keyspace, shard0)
+	require.NotNil(t, curPrimary, "should have elected a primary")
+	vtOrcProcess := clusterInfo.ClusterInstance.VTOrcProcesses[0]
+	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.ElectNewPrimaryRecoveryName, keyspace.Name, shard0.Name, 1)
+	replica, rdonly := utils.FindReplicaAndRdonly(t, shard0, curPrimary)
+	utils.CheckReplication(t, clusterInfo, curPrimary, []*cluster.Vttablet{rdonly, replica}, 10*time.Second)
+
+	// Stop only mysqld; the vttablet keeps running.
+	require.NoError(t, curPrimary.MysqlctlProcess.Stop())
+	defer func() {
+		curPrimary.VttabletProcess.Kill()
+		utils.PermanentlyRemoveVttablet(clusterInfo, curPrimary)
+	}()
+
+	utils.CheckPrimaryTablet(t, clusterInfo, replica, true)
+	utils.VerifyWritesSucceed(t, clusterInfo, replica, []*cluster.Vttablet{rdonly}, 10*time.Second)
+	utils.WaitForSuccessfulRecoveryCount(t, vtOrcProcess, logic.RecoverDeadPrimaryRecoveryName, keyspace.Name, shard0.Name, 1)
+
+	// The shard is healthy again. Count VTOrc's attempts to fix a replica over
+	// 20 seconds: there is nothing left that it can fix.
+	fixReplicaAttempts := func() int {
+		vars := vtOrcProcess.GetVars()
+		require.NotNil(t, vars, "could not read VTOrc's /debug/vars")
+		recoveries, ok := vars["RecoveriesCount"].(map[string]any)
+		require.True(t, ok, "RecoveriesCount is missing from VTOrc's /debug/vars")
+		// An absent FixReplica label means VTOrc has not attempted that recovery.
+		return utils.GetIntFromValue(recoveries[fmt.Sprintf("%s.%s.%s", logic.FixReplicaRecoveryName, keyspace.Name, shard0.Name)])
+	}
+	// Start the window once VTOrc is known to detect the old primary's stale
+	// problem and to skip repairing it, because it can no longer reach the old
+	// primary's MySQL.
+	utils.WaitForSkippedRecoveryCount(t, vtOrcProcess, logic.FixReplicaRecoveryName, keyspace.Name, shard0.Name, logic.RecoverySkipReplicaUnreachable, 1)
+	before := fixReplicaAttempts()
+	time.Sleep(20 * time.Second)
+	after := fixReplicaAttempts()
+	assert.LessOrEqual(t, after-before, 1, "VTOrc kept trying to fix a replica in a healthy shard: %d attempts in 20s", after-before)
+}
+
 // Failover should not be cross data centers, according to the configuration file
 // covers part of the test case master-failover-lost-replicas from orchestrator
 func TestCrossDataCenterFailure(t *testing.T) {
