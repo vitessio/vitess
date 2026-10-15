@@ -19,6 +19,9 @@ package topo_test
 import (
 	"context"
 	"errors"
+	"fmt"
+	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -38,11 +41,12 @@ import (
 
 // TestConnForCellCachesCellInfo verifies that ConnForCell reuses a cell's connection without reading the
 // cell's CellInfo from the global topo while the CellInfo is within its cache TTL, re-reads it once the TTL
-// has passed, and picks up this process's own UpdateCellInfoFields immediately.
+// has passed and counts the TTL from that read, and picks up this process's own UpdateCellInfoFields
+// immediately.
 func TestConnForCellCachesCellInfo(t *testing.T) {
 	ctx := t.Context()
 	ts, factory := memorytopo.NewServerAndFactory(ctx, "zone1")
-	defer ts.Close()
+	t.Cleanup(ts.Close)
 	gets := func() int64 { return factory.GetCallStats().Counts()["Get"] }
 
 	conn, err := ts.ConnForCell(ctx, "zone1")
@@ -68,6 +72,22 @@ func TestConnForCellCachesCellInfo(t *testing.T) {
 			assert.Same(t, conn, got)
 		}
 		assert.Equal(t, before+3, gets(), "CellInfo was not re-read on every call")
+	})
+
+	t.Run("the TTL counts from the latest read", func(t *testing.T) {
+		ts.SetCellInfoCacheTTL(time.Second)
+		t.Cleanup(func() { ts.SetCellInfoCacheTTL(time.Hour) })
+		// Wait for the TTL to pass and the CellInfo to be read again.
+		assert.Eventually(t, func() bool {
+			before := gets()
+			_, err := ts.ConnForCell(ctx, "zone1")
+			return err == nil && gets() > before
+		}, 30*time.Second, 10*time.Millisecond)
+		before := gets()
+		got, err := ts.ConnForCell(ctx, "zone1")
+		require.NoError(t, err)
+		assert.Same(t, conn, got)
+		assert.Equal(t, before, gets(), "CellInfo was read again within the TTL of the latest read")
 	})
 
 	t.Run("re-pointed in this process", func(t *testing.T) {
@@ -151,7 +171,7 @@ func TestConnForCellExpiryDuringRead(t *testing.T) {
 	factory := newPausingFactory(memFactory)
 	ts, err := topo.NewWithFactory(factory, "", "")
 	require.NoError(t, err)
-	defer ts.Close()
+	t.Cleanup(ts.Close)
 	ts.SetCellInfoCacheTTL(time.Hour)
 
 	conn, err := ts.ConnForCell(ctx, "zone1")
@@ -185,7 +205,7 @@ func TestConnForCellExpiryDuringRead(t *testing.T) {
 func TestDeleteCellInfoFailureKeepsCache(t *testing.T) {
 	ctx := t.Context()
 	ts, factory := memorytopo.NewServerAndFactory(ctx, "zone1")
-	defer ts.Close()
+	t.Cleanup(ts.Close)
 
 	conn, err := ts.ConnForCell(ctx, "zone1")
 	require.NoError(t, err)
@@ -200,71 +220,111 @@ func TestDeleteCellInfoFailureKeepsCache(t *testing.T) {
 	assert.Same(t, conn, got)
 }
 
-// TestConnForCellOlderReadDoesNotReplaceNewer verifies that when a ConnForCell read is still in flight after
-// the cell was re-pointed by another process and then expired in this one, so that a later call reads the
-// new CellInfo in a read of its own, the call that read the old CellInfo does not replace the connection the
-// later call built from the new one. That holds even if this process expires the cell once more before the
-// older read completes, since expiry leaves the order of reads in place.
+// TestConnForCellOlderReadDoesNotReplaceNewer verifies that when a ConnForCell read of the old CellInfo is
+// still in flight after another call has read the cell's CellInfo again and applied it, the older read never
+// replaces what the newer one applied: it returns the newer read's connection, or, if connecting to what the
+// newer read found failed, reads again rather than connect to a topo server that may have been superseded.
+// That holds whether or not this process expired the cell in between, which expiry leaves the order of reads
+// in place for.
 func TestConnForCellOlderReadDoesNotReplaceNewer(t *testing.T) {
-	for _, updateAgain := range []bool{false, true} {
-		name := "re-pointed once"
-		if updateAgain {
-			name = "updated again before the older read completes"
-		}
-		t.Run(name, func(t *testing.T) {
-			ctx := t.Context()
-			_, memFactory := memorytopo.NewServerAndFactory(ctx, "zone1")
-			factory := newPausingFactory(memFactory)
-			ts, err := topo.NewWithFactory(factory, "", "")
-			require.NoError(t, err)
-			defer ts.Close()
-			other, err := topo.NewWithFactory(memFactory, "", "")
-			require.NoError(t, err)
-			defer other.Close()
+	const unreachableRoot = "/zone1-unreachable"
+	tcases := []struct {
+		name string
+		// newRoot is where another process re-points the cell before the newer read; empty leaves it.
+		newRoot string
+		// updateAgain has this process change the cell again before the older read completes.
+		updateAgain bool
+	}{
+		{name: "not re-pointed"},
+		{name: "re-pointed", newRoot: "/zone1-moved"},
+		{name: "re-pointed, then changed again here", newRoot: "/zone1-moved", updateAgain: true},
+		{name: "re-pointed to an unreachable topo server", newRoot: unreachableRoot},
+	}
+	for _, tcase := range tcases {
+		for _, expireBetween := range []bool{false, true} {
+			name := tcase.name
+			if expireBetween {
+				name += ", expired here in between"
+			}
+			t.Run(name, func(t *testing.T) {
+				ctx := t.Context()
+				_, memFactory := memorytopo.NewServerAndFactory(ctx, "zone1")
+				factory := newPausingFactory(memFactory)
+				factory.failRoot = unreachableRoot
+				ts, err := topo.NewWithFactory(factory, "", "")
+				require.NoError(t, err)
+				t.Cleanup(ts.Close)
+				other, err := topo.NewWithFactory(memFactory, "", "")
+				require.NoError(t, err)
+				t.Cleanup(other.Close)
+				ts.SetCellInfoCacheTTL(time.Hour)
 
-			_, err = ts.ConnForCell(ctx, "zone1")
-			require.NoError(t, err)
-			ts.SetCellInfoCacheTTL(time.Hour)
+				conn, err := ts.ConnForCell(ctx, "zone1")
+				require.NoError(t, err)
 
-			// The first call reads the old CellInfo and pauses.
-			ts.ExpireCellInfo("zone1")
-			close(factory.armed)
-			older := make(chan topo.Conn)
-			go func() {
+				// The older read gets the old CellInfo and pauses.
+				ts.ExpireCellInfo("zone1")
+				close(factory.armed)
+				type result struct {
+					conn topo.Conn
+					err  error
+				}
+				older := make(chan result)
+				go func() {
+					got, err := ts.ConnForCell(ctx, "zone1")
+					older <- result{got, err}
+				}()
+				<-factory.paused
+
+				// The newer read gets the current CellInfo and is applied.
+				if tcase.newRoot != "" {
+					require.NoError(t, other.UpdateCellInfoFields(ctx, "zone1", func(ci *topodatapb.CellInfo) error {
+						ci.Root = tcase.newRoot
+						return nil
+					}))
+				}
+				if expireBetween {
+					ts.ExpireCellInfo("zone1")
+				}
+				unreachable := tcase.newRoot == unreachableRoot
+				newer, err := ts.ConnForCell(ctx, "zone1")
+				if unreachable {
+					require.Error(t, err)
+				} else {
+					require.NoError(t, err)
+				}
+				if tcase.newRoot == "" {
+					assert.Same(t, conn, newer)
+				}
+				if tcase.updateAgain {
+					require.NoError(t, ts.UpdateCellInfoFields(ctx, "zone1", func(ci *topodatapb.CellInfo) error {
+						ci.Root = "/zone1-moved-again"
+						return nil
+					}))
+				}
+
+				close(factory.release)
+				res := <-older
+				if unreachable {
+					require.Error(t, res.err, "the older read connected to the topo server the cell was re-pointed from")
+				} else {
+					require.NoError(t, res.err)
+					assert.Same(t, newer, res.conn, "the older read replaced the connection built from the newer one")
+				}
+
 				got, err := ts.ConnForCell(ctx, "zone1")
-				assert.NoError(t, err)
-				older <- got
-			}()
-			<-factory.paused
-
-			// Another process re-points the cell. Once this process expires the cell again, a second call
-			// starts a read of its own and builds a connection from the new CellInfo.
-			require.NoError(t, other.UpdateCellInfoFields(ctx, "zone1", func(ci *topodatapb.CellInfo) error {
-				ci.Root = "/zone1-moved"
-				return nil
-			}))
-			ts.ExpireCellInfo("zone1")
-			newer, err := ts.ConnForCell(ctx, "zone1")
-			require.NoError(t, err)
-
-			if updateAgain {
-				// This process changes the cell once more, which expires the entry the newer read made.
-				require.NoError(t, ts.UpdateCellInfoFields(ctx, "zone1", func(ci *topodatapb.CellInfo) error {
-					ci.Root = "/zone1-moved-again"
-					return nil
-				}))
-			}
-
-			close(factory.release)
-			assert.Same(t, newer, <-older, "the older read replaced the connection built from the newer one")
-			got, err := ts.ConnForCell(ctx, "zone1")
-			require.NoError(t, err)
-			if updateAgain {
-				assert.NotSame(t, newer, got, "the expired entry was reused instead of being read again")
-			} else {
-				assert.Same(t, newer, got, "the cached connection does not point at the cell's current root")
-			}
-		})
+				switch {
+				case unreachable:
+					require.Error(t, err, "a call after the failed connection reused a connection to the old topo server")
+				case tcase.updateAgain:
+					require.NoError(t, err)
+					assert.NotSame(t, newer, got, "the expired entry was reused instead of being read again")
+				default:
+					require.NoError(t, err)
+					assert.Same(t, newer, got, "the cached connection does not point at the cell's current topo server")
+				}
+			})
+		}
 	}
 }
 
@@ -274,7 +334,7 @@ func TestConnForCellOlderReadDoesNotReplaceNewer(t *testing.T) {
 func TestDeleteCellInfoRereadsCellInfo(t *testing.T) {
 	ctx := t.Context()
 	ts, factory := memorytopo.NewServerAndFactory(ctx, "zone1")
-	defer ts.Close()
+	t.Cleanup(ts.Close)
 	gets := func() int64 { return factory.GetCallStats().Counts()["Get"] }
 
 	_, err := ts.ConnForCell(ctx, "zone1")
@@ -292,10 +352,10 @@ func TestDeleteCellInfoRereadsCellInfo(t *testing.T) {
 func TestConnForCellAfterRecreate(t *testing.T) {
 	ctx := t.Context()
 	ts, factory := memorytopo.NewServerAndFactory(ctx, "zone1")
-	defer ts.Close()
+	t.Cleanup(ts.Close)
 	other, err := topo.NewWithFactory(factory, "", "")
 	require.NoError(t, err)
-	defer other.Close()
+	t.Cleanup(other.Close)
 	ts.SetCellInfoCacheTTL(time.Hour)
 
 	conn, err := ts.ConnForCell(ctx, "zone1")
@@ -324,7 +384,7 @@ func TestConnForCellReadEndsWithCaller(t *testing.T) {
 	factory := newPausingFactory(memFactory)
 	ts, err := topo.NewWithFactory(factory, "", "")
 	require.NoError(t, err)
-	defer ts.Close()
+	t.Cleanup(ts.Close)
 
 	ts.ExpireCellInfo("zone1")
 	close(factory.armed)
@@ -351,7 +411,7 @@ func TestConnForCellReadEndsWithCaller(t *testing.T) {
 func TestConnForCellConcurrentWithReadOnly(t *testing.T) {
 	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "zone1")
-	defer ts.Close()
+	t.Cleanup(ts.Close)
 	_, err := ts.ConnForCell(ctx, "zone1")
 	require.NoError(t, err)
 	// Every call refreshes the cell's cached connection.
@@ -398,10 +458,10 @@ func TestConnForCellConcurrentWithReadOnly(t *testing.T) {
 func TestConnForCellNewConnKeepsReadOnly(t *testing.T) {
 	ctx := t.Context()
 	ts, factory := memorytopo.NewServerAndFactory(ctx, "zone1", "zone2")
-	defer ts.Close()
+	t.Cleanup(ts.Close)
 	other, err := topo.NewWithFactory(factory, "", "")
 	require.NoError(t, err)
-	defer other.Close()
+	t.Cleanup(other.Close)
 	ts.SetCellInfoCacheTTL(0)
 
 	conn, err := ts.ConnForCell(ctx, "zone1")
@@ -431,45 +491,125 @@ func TestConnForCellNewConnKeepsReadOnly(t *testing.T) {
 	})
 }
 
-// TestConnForCellFailedReplacementDropsClosedConn verifies that when a ConnForCell finds the cell re-pointed,
-// closes the old connection, and then fails to connect to the new topo server, the closed connection is not
-// left cached for a read of the old CellInfo that was still in flight to return and mark fresh.
-func TestConnForCellFailedReplacementDropsClosedConn(t *testing.T) {
+// trackingFactory wraps a memorytopo factory so that each cell connection reports, through rootProbePath, the
+// root it was made for and when it was closed, and so that connecting to a root under /down fails.
+type trackingFactory struct {
+	*memorytopo.Factory
+	closes atomic.Int64
+}
+
+const rootProbePath = "__root_probe__"
+
+func (f *trackingFactory) Create(cell, serverAddr, root string) (topo.Conn, error) {
+	if cell != topo.GlobalCell && strings.HasPrefix(root, "/down") {
+		return nil, errors.New("topo server unreachable")
+	}
+	conn, err := f.Factory.Create(cell, serverAddr, root)
+	if err != nil || cell == topo.GlobalCell {
+		return conn, err
+	}
+	return &trackingConn{Conn: conn, factory: f, root: root}, nil
+}
+
+type trackingConn struct {
+	topo.Conn
+	factory *trackingFactory
+	root    string
+	// closedAt is the factory's close count when this connection was closed, or zero while it is open.
+	closedAt atomic.Int64
+}
+
+func (c *trackingConn) Close() {
+	c.closedAt.CompareAndSwap(0, c.factory.closes.Add(1))
+	c.Conn.Close()
+}
+
+func (c *trackingConn) Get(ctx context.Context, filePath string) ([]byte, topo.Version, error) {
+	if filePath == rootProbePath {
+		return fmt.Appendf(nil, "%d %s", c.closedAt.Load(), c.root), nil, nil
+	}
+	return c.Conn.Get(ctx, filePath)
+}
+
+// probeConn returns the root a cell connection from ConnForCell was made for, and when it was closed.
+func probeConn(ctx context.Context, conn topo.Conn) (root string, closedAt int64, err error) {
+	contents, _, err := conn.Get(ctx, rootProbePath)
+	if err != nil {
+		return "", 0, err
+	}
+	closed, root, _ := strings.Cut(string(contents), " ")
+	closedAt, err = strconv.ParseInt(closed, 10, 64)
+	return root, closedAt, err
+}
+
+// TestConnForCellConcurrentRepoints runs ConnForCell from several goroutines while another process keeps
+// re-pointing the cell, sometimes to a topo server that can't be reached, and this process keeps expiring it.
+// It verifies that ConnForCell never returns a connection that was closed before the call started, and that
+// once the cell settles on a reachable topo server, ConnForCell connects to it.
+func TestConnForCellConcurrentRepoints(t *testing.T) {
 	ctx := t.Context()
 	_, memFactory := memorytopo.NewServerAndFactory(ctx, "zone1")
-	factory := newPausingFactory(memFactory)
-	factory.failRoot = "/zone1-unreachable"
+	factory := &trackingFactory{Factory: memFactory}
 	ts, err := topo.NewWithFactory(factory, "", "")
 	require.NoError(t, err)
-	defer ts.Close()
+	t.Cleanup(ts.Close)
 	other, err := topo.NewWithFactory(memFactory, "", "")
 	require.NoError(t, err)
-	defer other.Close()
-	ts.SetCellInfoCacheTTL(time.Hour)
+	t.Cleanup(other.Close)
+	ts.SetCellInfoCacheTTL(20 * time.Millisecond)
+	repoint := func(root string) {
+		require.NoError(t, other.UpdateCellInfoFields(ctx, "zone1", func(ci *topodatapb.CellInfo) error {
+			ci.Root = root
+			return nil
+		}))
+	}
 
-	conn, err := ts.ConnForCell(ctx, "zone1")
-	require.NoError(t, err)
+	var stop atomic.Bool
+	var calls, closedReturns atomic.Int64
+	var wg sync.WaitGroup
+	for range 8 {
+		wg.Go(func() {
+			for !stop.Load() {
+				before := factory.closes.Load()
+				conn, err := ts.ConnForCell(ctx, "zone1")
+				calls.Add(1)
+				if err != nil {
+					continue
+				}
+				// A connection closed during this call may have been closed by another goroutine after this
+				// call got it; one closed before this call started was returned closed.
+				if _, closedAt, err := probeConn(ctx, conn); err != nil || closedAt != 0 && closedAt <= before {
+					closedReturns.Add(1)
+				}
+			}
+		})
+	}
+	for i := range 200 {
+		root := fmt.Sprintf("/up%d", i)
+		if i%3 == 0 {
+			root = fmt.Sprintf("/down%d", i)
+		}
+		repoint(root)
+		if i%5 == 0 {
+			ts.ExpireCellInfo("zone1")
+		}
+		// Let the callers run against each state.
+		target := calls.Load() + 20
+		for calls.Load() < target {
+			runtime.Gosched()
+		}
+	}
+	stop.Store(true)
+	wg.Wait()
+	assert.Zero(t, closedReturns.Load(), "ConnForCell returned a connection that was already closed")
 
-	// A read of the old CellInfo pauses.
-	ts.ExpireCellInfo("zone1")
-	close(factory.armed)
-	older := make(chan topo.Conn)
-	go func() {
-		got, err := ts.ConnForCell(ctx, "zone1")
-		assert.NoError(t, err)
-		older <- got
-	}()
-	<-factory.paused
-
-	// The cell is re-pointed to a topo server that can't be reached, so the next call closes the old
-	// connection and fails to replace it.
-	require.NoError(t, other.UpdateCellInfoFields(ctx, "zone1", func(ci *topodatapb.CellInfo) error {
-		ci.Root = "/zone1-unreachable"
-		return nil
-	}))
-	_, err = ts.ConnForCell(ctx, "zone1")
-	require.Error(t, err)
-
-	close(factory.release)
-	assert.NotSame(t, conn, <-older, "the older read returned the connection the failed replacement closed")
+	repoint("/final")
+	assert.Eventually(t, func() bool {
+		conn, err := ts.ConnForCell(ctx, "zone1")
+		if err != nil {
+			return false
+		}
+		root, _, err := probeConn(ctx, conn)
+		return err == nil && root == "/final"
+	}, 30*time.Second, 5*time.Millisecond, "ConnForCell did not settle on the cell's current topo server")
 }

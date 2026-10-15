@@ -157,13 +157,17 @@ type Server struct {
 	cellInfoGenerations map[string]uint64
 	// cellInfoCacheTTL is defaultCellInfoCacheTTL; tests change it.
 	cellInfoCacheTTL time.Duration
+	// cellInfoLatestReads is, for each cell, when the latest CellInfo read that ConnForCell applied started. It
+	// orders reads independently of cellConns, whose entries expire and are dropped, so that a read older than
+	// one already applied is never applied after it.
+	cellInfoLatestReads map[string]time.Time
 }
 
 type cellConn struct {
 	cellInfo *topodata.CellInfo
 	conn     Conn
-	// cellInfoReadStart is when the read of cellInfo that conn was last checked against started. It orders
-	// reads, so expiry leaves it in place.
+	// cellInfoReadStart is when the read of cellInfo that conn was last checked against started, which the TTL
+	// counts from.
 	cellInfoReadStart time.Time
 	// expired makes the next ConnForCell read the cell's CellInfo again, regardless of cellInfoReadStart.
 	expired bool
@@ -262,6 +266,7 @@ func NewWithFactory(factory Factory, serverAddress, root string) (*Server, error
 		cellConns:           make(map[string]cellConn),
 		cellInfoGenerations: make(map[string]uint64),
 		cellInfoCacheTTL:    defaultCellInfoCacheTTL,
+		cellInfoLatestReads: make(map[string]time.Time),
 	}, nil
 }
 
@@ -306,37 +311,49 @@ func (ts *Server) ConnForCell(ctx context.Context, cell string) (Conn, error) {
 		return ts.globalCell, nil
 	}
 
-	// Reuse the cached connection while the CellInfo it was checked against is recent.
-	ts.mu.Lock()
-	if cc, ok := ts.cellConns[cell]; ok && !cc.expired && time.Since(cc.cellInfoReadStart) < ts.cellInfoCacheTTL {
+	for {
+		// Reuse the cached connection while the CellInfo it was checked against is recent.
+		ts.mu.Lock()
+		if cc, ok := ts.cellConns[cell]; ok && !cc.expired && time.Since(cc.cellInfoReadStart) < ts.cellInfoCacheTTL {
+			ts.mu.Unlock()
+			return cc.conn, nil
+		}
+		generation := ts.cellInfoGenerations[cell]
 		ts.mu.Unlock()
-		return cc.conn, nil
-	}
-	generation := ts.cellInfoGenerations[cell]
-	ts.mu.Unlock()
 
-	// Fetch cell cluster addresses from the global cluster. This is a strong read: the result is trusted for
-	// cellInfoCacheTTL, so it must not come from a GlobalReadOnlyCell that lags behind.
-	readStart := time.Now()
-	ci, err := ts.GetCellInfo(ctx, cell, true /*strongRead*/)
-	if err != nil {
-		return nil, err
-	}
+		// Fetch cell cluster addresses from the global cluster. This is a strong read: the result is trusted for
+		// cellInfoCacheTTL, so it must not come from a GlobalReadOnlyCell that lags behind.
+		readStart := time.Now()
+		ci, err := ts.GetCellInfo(ctx, cell, true /*strongRead*/)
+		if err != nil {
+			return nil, err
+		}
 
-	ts.mu.Lock()
-	defer ts.mu.Unlock()
-	return ts.updateCellConnLocked(cell, generation, ci, readStart)
+		ts.mu.Lock()
+		conn, superseded, err := ts.updateCellConnLocked(cell, generation, ci, readStart)
+		ts.mu.Unlock()
+		if !superseded {
+			return conn, err
+		}
+		// A newer read was applied and left no connection, because connecting to what it read failed. What we
+		// read may be older, so read again rather than connect to it.
+	}
 }
 
 // updateCellConnLocked updates the cell's cached connection from a CellInfo whose read started at readStart, in
-// the cell's given expiry generation. ts.mu must be held.
-func (ts *Server) updateCellConnLocked(cell string, generation uint64, ci *topodata.CellInfo, readStart time.Time) (Conn, error) {
+// the cell's given expiry generation. It reports the read as superseded, and changes nothing, when a read that
+// started later has already been applied and left no connection to return. ts.mu must be held.
+func (ts *Server) updateCellConnLocked(cell string, generation uint64, ci *topodata.CellInfo, readStart time.Time) (conn Conn, superseded bool, err error) {
 	cc, ok := ts.cellConns[cell]
-	// A read that started after ours has already updated the entry. What we read may be older than what it
-	// read, so keep its result rather than replacing a newer connection with an older one.
-	if ok && cc.cellInfoReadStart.After(readStart) {
-		return cc.conn, nil
+	// A read that started after ours has already been applied. What we read may be older than what it read, so
+	// never apply ours after it: return its connection, or have the caller read again if it left none.
+	if ts.cellInfoLatestReads[cell].After(readStart) {
+		if ok {
+			return cc.conn, false, nil
+		}
+		return nil, true, nil
 	}
+	ts.cellInfoLatestReads[cell] = readStart
 	// If the cell's CellInfo was expired while we read it, what we read may predate the change, so leave the
 	// entry expired for the next call to read again.
 	expired := ts.cellInfoGenerations[cell] != generation
@@ -348,7 +365,7 @@ func (ts *Server) updateCellConnLocked(cell string, generation uint64, ci *topod
 		if ci.ServerAddress == cc.cellInfo.ServerAddress && ci.Root == cc.cellInfo.Root {
 			cc.cellInfoReadStart, cc.expired = readStart, expired
 			ts.cellConns[cell] = cc
-			return cc.conn, nil
+			return cc.conn, false, nil
 		}
 		// Close the cached connection, we don't need it anymore
 		if cc.conn != nil {
@@ -361,7 +378,7 @@ func (ts *Server) updateCellConnLocked(cell string, generation uint64, ci *topod
 	// Connect to the cell topo server, while holding the lock.
 	// This ensures only one connection is established at any given time.
 	// Create the connection and cache it
-	conn, err := ts.factory.Create(cell, ci.ServerAddress, ci.Root)
+	conn, err = ts.factory.Create(cell, ci.ServerAddress, ci.Root)
 	switch {
 	case err == nil:
 		cellReadSem := semaphore.NewWeighted(DefaultReadConcurrency)
@@ -371,12 +388,12 @@ func (ts *Server) updateCellConnLocked(cell string, generation uint64, ci *topod
 			statsConn.SetReadOnly(true)
 		}
 		ts.cellConns[cell] = cellConn{cellInfo: ci, conn: statsConn, cellInfoReadStart: readStart, expired: expired}
-		return statsConn, nil
+		return statsConn, false, nil
 	case IsErrType(err, NoNode):
 		err = vterrors.Wrap(err, fmt.Sprintf("failed to create topo connection to %v, %v", ci.ServerAddress, ci.Root))
-		return nil, NewError(NoNode, err.Error())
+		return nil, false, NewError(NoNode, err.Error())
 	default:
-		return nil, vterrors.Wrap(err, fmt.Sprintf("failed to create topo connection to %v, %v", ci.ServerAddress, ci.Root))
+		return nil, false, vterrors.Wrap(err, fmt.Sprintf("failed to create topo connection to %v, %v", ci.ServerAddress, ci.Root))
 	}
 }
 
