@@ -1238,6 +1238,11 @@ func (tm *TabletManager) retryReplicationInitialization(ctx context.Context, id 
 }
 
 func (tm *TabletManager) retryReplicationInitializationOnce(ctx context.Context, id uint64) (err error) {
+	// Check without locks first, so that a retry with nothing to do does not
+	// take the shard lock, which a restore or a reparent may be about to try.
+	if done, err := tm.settleDeferredReplicationInit(ctx, id); done || err != nil {
+		return err
+	}
 	// Take the shard lock first, as reparents do, so that its acquisition and
 	// the topology backend's cleanup after a failed one never hold the action
 	// lock that RPCs to this tablet need.
@@ -1252,33 +1257,23 @@ func (tm *TabletManager) retryReplicationInitializationOnce(ctx context.Context,
 		return vterrors.New(vtrpc.Code_UNAVAILABLE, "another action is running on this tablet")
 	}
 	defer tm.unlock()
-	if !tm.tmState.isPendingReplicationInit(id) {
-		// It completed, or a later deferral or a restore superseded it.
-		return nil
+	if done, err := tm.settleDeferredReplicationInit(ctx, id); done || err != nil {
+		return err
 	}
-	switch tabletType := tm.Tablet().Type; tabletType {
-	case topodatapb.TabletType_PRIMARY:
-		// A primary does not replicate.
-	case topodatapb.TabletType_RESTORE:
-		// A restore that finishes supersedes this initialization. One that
-		// aborts leaves the data, and this initialization, unchanged.
-		return vterrors.New(vtrpc.Code_UNAVAILABLE, "waiting for the restore to finish")
-	default:
-		primary, err := tm.replicatingShardPrimary(ctx)
-		if err != nil {
+	primary, err := tm.replicatingShardPrimary(ctx)
+	if err != nil {
+		return err
+	}
+	if primary != nil {
+		// A reparent, VTOrc or mysqld itself already replicates from the
+		// primary. Keep startup's errant GTID check, but not its restart.
+		if _, err := tm.checkNoErrantGTIDs(ctx, primary); err != nil {
 			return err
 		}
-		if primary != nil {
-			// A reparent, VTOrc or mysqld itself already replicates from the
-			// primary. Keep startup's errant GTID check, but not its restart.
-			if _, err := tm.checkNoErrantGTIDs(ctx, primary); err != nil {
-				return err
-			}
-			break
-		}
+	} else {
 		ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 		defer cancel()
-		primaryPos, err := tm.initializeReplicationLocked(ctx, tabletType)
+		primaryPos, err := tm.initializeReplicationLocked(ctx, tm.Tablet().Type)
 		if err != nil {
 			return err
 		}
@@ -1290,6 +1285,29 @@ func (tm *TabletManager) retryReplicationInitializationOnce(ctx context.Context,
 	}
 	tm.tmState.endReplicationInit(ctx, id)
 	return nil
+}
+
+// settleDeferredReplicationInit reports whether the deferred replication
+// initialization id has ended without needing a replication change: it is no
+// longer pending, or the tablet has become a primary, which ends it. While a
+// restore runs, it returns an error. Ending it is safe without the action
+// lock, because only this ID is ended.
+func (tm *TabletManager) settleDeferredReplicationInit(ctx context.Context, id uint64) (bool, error) {
+	if !tm.tmState.isPendingReplicationInit(id) {
+		// It completed, or a later deferral or a restore superseded it.
+		return true, nil
+	}
+	switch tm.Tablet().Type {
+	case topodatapb.TabletType_PRIMARY:
+		// A primary does not replicate.
+		tm.tmState.endReplicationInit(ctx, id)
+		return true, nil
+	case topodatapb.TabletType_RESTORE:
+		// A restore that finishes supersedes this initialization. One that
+		// aborts leaves the data, and this initialization, unchanged.
+		return false, vterrors.New(vtrpc.Code_UNAVAILABLE, "waiting for the restore to finish")
+	}
+	return false, nil
 }
 
 // replicatingShardPrimary returns the shard's current primary if both

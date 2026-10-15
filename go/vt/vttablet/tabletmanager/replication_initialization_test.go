@@ -691,3 +691,39 @@ func TestConcurrentlyDeferredReplicasInitializeReplication(t *testing.T) {
 		require.NoError(t, r.md.CheckSuperQueryList())
 	}
 }
+
+func TestDeferredReplicationRetrySkipsShardLockWithNothingToDo(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		tabletType topodatapb.TabletType
+		supersede  bool
+		wantErr    string
+		pending    bool
+	}{
+		{name: "promoted", tabletType: topodatapb.TabletType_PRIMARY},
+		{name: "superseded", tabletType: topodatapb.TabletType_REPLICA, supersede: true, pending: true},
+		{name: "restore running", tabletType: topodatapb.TabletType_RESTORE, wantErr: "waiting for the restore to finish", pending: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tm, md, ts, factory := newReplicationInitializationTM(t)
+			id := tm.tmState.deferReplicationInit(t.Context(), nil)
+			if tc.supersede {
+				tm.tmState.deferReplicationInit(t.Context(), nil)
+			}
+			require.NoError(t, tm.tmState.ChangeTabletType(t.Context(), tc.tabletType, DBActionNone))
+			md.ExpectedExecuteSuperQueryList = nil
+			holdInitializationShardLock(t, ts)
+			before := factory.GetCallStats().Counts()["TryLock"]
+
+			err := tm.retryReplicationInitializationOnce(t.Context(), id)
+			if tc.wantErr != "" {
+				require.ErrorContains(t, err, tc.wantErr)
+			} else {
+				require.NoError(t, err)
+			}
+			assert.Equal(t, before, factory.GetCallStats().Counts()["TryLock"], "the retry must not take the shard lock")
+			assert.Equal(t, tc.pending, tm.tmState.pendingReplicationInit != 0)
+			require.NoError(t, md.CheckSuperQueryList())
+		})
+	}
+}
