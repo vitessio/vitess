@@ -79,6 +79,13 @@ var (
 	PerfTest = flag.Bool("perf-test", false, "include end-to-end performance tests")
 )
 
+// IsCoverage reports whether this is a coverage run (-is-coverage). Binaries
+// then write their coverage profiles on a graceful exit, so teardown must not
+// kill them.
+func IsCoverage() bool {
+	return *isCoverage
+}
+
 // LocalProcessCluster Testcases need to use this to iniate a cluster
 type LocalProcessCluster struct {
 	Keyspaces          []Keyspace
@@ -1069,14 +1076,33 @@ func (cluster *LocalProcessCluster) Teardown() {
 		log.Errorf("Error in vtadmin teardown: %v", err)
 	}
 
+	// On CI the data directory is discarded after the test run, so nothing
+	// needs to be flushed to disk and a graceful mysqld shutdown buys us
+	// nothing. Killing mysqld skips the shutdown ack wait that can stall a
+	// semi-sync primary for many seconds per cluster. Coverage runs still
+	// shut down gracefully so that the mysqlctl shutdown path stays exercised.
+	killMySQL := os.Getenv("CI") == "true" && !*isCoverage
+
 	var mysqlctlProcessList []*exec.Cmd
 	var mysqlctlTabletUIDs []int
 	for _, keyspace := range cluster.Keyspaces {
 		for _, shard := range keyspace.Shards {
 			for _, tablet := range shard.Vttablets {
 				if tablet.MysqlctlProcess.TabletUID > 0 {
+<<<<<<< HEAD
 					if proc, err := tablet.MysqlctlProcess.StopProcess(); err != nil {
 						log.Errorf("Error in mysqlctl teardown: %v", err)
+||||||| parent of 82b354973f (test: kill processes instead of shutting them down in e2e teardown (#21598))
+					if proc, err := tablet.MysqlctlProcess.StopProcess(); err != nil {
+						log.Error(fmt.Sprintf("Error in mysqlctl teardown: %v", err))
+=======
+					if killMySQL {
+						if err := tablet.MysqlctlProcess.Kill(); err != nil {
+							log.Error(fmt.Sprintf("Error in mysqlctl teardown: %v", err))
+						}
+					} else if proc, err := tablet.MysqlctlProcess.StopProcess(); err != nil {
+						log.Error(fmt.Sprintf("Error in mysqlctl teardown: %v", err))
+>>>>>>> 82b354973f (test: kill processes instead of shutting them down in e2e teardown (#21598))
 					} else {
 						mysqlctlProcessList = append(mysqlctlProcessList, proc)
 						mysqlctlTabletUIDs = append(mysqlctlTabletUIDs, tablet.MysqlctlProcess.TabletUID)
