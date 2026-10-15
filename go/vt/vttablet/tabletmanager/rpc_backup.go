@@ -95,6 +95,7 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 		MysqlShutdownTimeout: shutdownTimeout(l, req.MysqlShutdownTimeout),
 		BackupEngine:         backupEngine,
 		InitSQL:              req.InitSql.CloneVT(),
+		IncludeBinlogs:       req.IncludeBinlogs,
 	}
 
 	// Perform any requested pre backup initialization queries.
