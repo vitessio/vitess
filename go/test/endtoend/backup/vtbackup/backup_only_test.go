@@ -118,8 +118,6 @@ func TestTabletInitialBackup(t *testing.T) {
 }
 
 func prepareCluster(t *testing.T) {
-	waitForReplicationToCatchup([]cluster.Vttablet{*replica1, *replica2})
-
 	dataPointReader := vtBackup(t, true, false, false)
 	verifyBackupCount(t, shardKsName, 1)
 	verifyBackupStats(t, dataPointReader, true /* initialBackup */)
@@ -127,10 +125,8 @@ func prepareCluster(t *testing.T) {
 	// Initialize the tablets
 	initTablets(t, false, false)
 
-	err := primary.VttabletProcess.CreateDB("testDB")
-	require.ErrorContains(t, err, "The MySQL server is running with the --super-read-only option so it cannot execute this statement")
-	err = replica1.VttabletProcess.CreateDB("testDB")
-	require.ErrorContains(t, err, "The MySQL server is running with the --super-read-only option so it cannot execute this statement")
+	assertMysqldIsSuperReadOnly(t, primary)
+	assertMysqldIsSuperReadOnly(t, replica1)
 
 	// Restore the Tablet
 	restore(t, primary, "replica", "NOT_SERVING")
@@ -141,8 +137,18 @@ func prepareCluster(t *testing.T) {
 	waitForRestoreComplete(t, primary.VttabletProcess, 180*time.Second)
 	// Vitess expects that the user has set the database into ReadWrite mode before calling
 	// TabletExternallyReparented
+<<<<<<< HEAD
 	err = localCluster.VtctldClientProcess.ExecuteCommand(
 		"SetWritable", primary.Alias, "true")
+||||||| parent of 522e711943 (test: remove dead waits from the backup and vtgate query e2e tests (#21600))
+	err = localCluster.VtctldClientProcess.ExecuteCommand(
+		"SetWritable", primary.Alias, "true",
+	)
+=======
+	err := localCluster.VtctldClientProcess.ExecuteCommand(
+		"SetWritable", primary.Alias, "true",
+	)
+>>>>>>> 522e711943 (test: remove dead waits from the backup and vtgate query e2e tests (#21600))
 	require.NoError(t, err)
 	err = localCluster.VtctldClientProcess.ExecuteCommand(
 		"TabletExternallyReparented", primary.Alias)
@@ -168,7 +174,7 @@ func TestTabletBackupOnly(t *testing.T) {
 	initTablets(t, true, true)
 	firstBackupTest(t, true)
 
-	tearDown(t, false)
+	tearDown(t, true)
 }
 
 func firstBackupTest(t *testing.T, removeBackup bool) {
@@ -222,9 +228,8 @@ func firstBackupTest(t *testing.T, removeBackup bool) {
 	err = localCluster.InitTablet(replica2, keyspaceName, shardName)
 	require.NoError(t, err)
 	restore(t, replica2, "replica", "SERVING")
-	// Replica2 takes time to serve. Sleeping for 5 sec.
-	time.Sleep(5 * time.Second)
-	// check the new replica has the data
+	// check the new replica has the data; VerifyRowsInTablet polls for up to
+	// 60s, which covers replica2's remaining catch-up time after the restore.
 	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 2)
 
 	if removeBackup {
@@ -490,6 +495,132 @@ func verifyDisableEnableRedoLogs(ctx context.Context, t *testing.T, mysqlSocket 
 	}
 }
 
+<<<<<<< HEAD
+||||||| parent of 522e711943 (test: remove dead waits from the backup and vtgate query e2e tests (#21600))
+// TestVtBackupWithChunking verifies that the vtbackup binary accepts chunking
+// flags and produces a chunked backup. It then restores the chunked backup on
+// replica2 and verifies the data is intact.
+func TestVtBackupWithChunking(t *testing.T) {
+	// Chunked backups are a v25 feature; older vttablets can't restore them.
+	utils.SkipIfBinaryIsBelowVersion(t, 25, "vttablet")
+	prepareCluster(t)
+
+	_, err := primary.VttabletProcess.QueryTablet(vtInsertTest, keyspaceName, true)
+	require.NoError(t, err)
+	_, err = primary.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test1')", keyspaceName, true)
+	require.NoError(t, err)
+
+	cluster.VerifyRowsInTablet(t, replica1, keyspaceName, 1)
+
+	_, err = startVtBackup(
+		t, false, true, false,
+		"--builtinbackup-file-chunk-threshold", "4194304",
+		"--builtinbackup-file-chunk-size", "4194304",
+	)
+	require.NoError(t, err)
+
+	backups, err := listBackups(shardKsName)
+	require.NoError(t, err)
+	require.NotEmpty(t, backups)
+
+	backupLocation := path.Join(localCluster.VtbackupProcess.FileBackupStorageRoot, keyspaceName, shardName, backups[len(backups)-1])
+	manifestData, err := os.ReadFile(path.Join(backupLocation, "MANIFEST"))
+	require.NoError(t, err)
+
+	var manifest struct {
+		FileEntries []mysqlctl.FileEntry
+	}
+	require.NoError(t, json.Unmarshal(manifestData, &manifest))
+
+	chunkedFiles := 0
+	for _, fe := range manifest.FileEntries {
+		if len(fe.Chunks) > 0 {
+			chunkedFiles++
+			t.Logf("File %s: %d chunks", fe.Name, len(fe.Chunks))
+		}
+	}
+	assert.Positive(t, chunkedFiles, "expected at least one file with chunks in MANIFEST")
+
+	err = localCluster.InitTablet(replica2, keyspaceName, shardName)
+	require.NoError(t, err)
+	restore(t, replica2, "replica", "SERVING")
+	waitForRestoreComplete(t, replica2.VttabletProcess, 180*time.Second)
+	waitForReplicationToCatchup([]cluster.Vttablet{*replica2})
+	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 1)
+
+	removeBackups(t)
+	tearDown(t, true)
+}
+
+=======
+// TestVtBackupWithChunking verifies that the vtbackup binary accepts chunking
+// flags and produces a chunked backup. It then restores the chunked backup on
+// replica2 and verifies the data is intact.
+func TestVtBackupWithChunking(t *testing.T) {
+	// Chunked backups are a v25 feature; older vttablets can't restore them.
+	utils.SkipIfBinaryIsBelowVersion(t, 25, "vttablet")
+	prepareCluster(t)
+
+	_, err := primary.VttabletProcess.QueryTablet(vtInsertTest, keyspaceName, true)
+	require.NoError(t, err)
+	_, err = primary.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test1')", keyspaceName, true)
+	require.NoError(t, err)
+
+	cluster.VerifyRowsInTablet(t, replica1, keyspaceName, 1)
+
+	_, err = startVtBackup(
+		t, false, true, false,
+		"--builtinbackup-file-chunk-threshold", "4194304",
+		"--builtinbackup-file-chunk-size", "4194304",
+	)
+	require.NoError(t, err)
+
+	backups, err := listBackups(shardKsName)
+	require.NoError(t, err)
+	require.NotEmpty(t, backups)
+
+	backupLocation := path.Join(localCluster.VtbackupProcess.FileBackupStorageRoot, keyspaceName, shardName, backups[len(backups)-1])
+	manifestData, err := os.ReadFile(path.Join(backupLocation, "MANIFEST"))
+	require.NoError(t, err)
+
+	var manifest struct {
+		FileEntries []mysqlctl.FileEntry
+	}
+	require.NoError(t, json.Unmarshal(manifestData, &manifest))
+
+	chunkedFiles := 0
+	for _, fe := range manifest.FileEntries {
+		if len(fe.Chunks) > 0 {
+			chunkedFiles++
+			t.Logf("File %s: %d chunks", fe.Name, len(fe.Chunks))
+		}
+	}
+	assert.Positive(t, chunkedFiles, "expected at least one file with chunks in MANIFEST")
+
+	err = localCluster.InitTablet(replica2, keyspaceName, shardName)
+	require.NoError(t, err)
+	restore(t, replica2, "replica", "SERVING")
+	waitForRestoreComplete(t, replica2.VttabletProcess, 180*time.Second)
+	waitForReplicationToCatchup([]cluster.Vttablet{*replica2})
+	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 1)
+
+	removeBackups(t)
+	tearDown(t, true)
+}
+
+// assertMysqldIsSuperReadOnly verifies that writes against the tablet's
+// mysqld fail because it runs in super-read-only mode. It uses a
+// direct connection with a single attempt: the QueryTablet helper retries
+// failing statements for ~10s each, but here the failure is the assertion.
+func assertMysqldIsSuperReadOnly(t *testing.T, tablet *cluster.Vttablet) {
+	conn, err := tablet.VttabletProcess.TabletConnWithContext(t.Context(), keyspaceName, false)
+	require.NoError(t, err)
+	defer conn.Close()
+	_, err = conn.ExecuteFetch("create database testdb_fail", 1000, true)
+	require.ErrorContains(t, err, "The MySQL server is running with the --super-read-only option so it cannot execute this statement")
+}
+
+>>>>>>> 522e711943 (test: remove dead waits from the backup and vtgate query e2e tests (#21600))
 // This helper function wait for all replicas to catch-up the replication.
 // It does this by querying the status detail url of each replica and find the lag.
 func waitForReplicationToCatchup(tablets []cluster.Vttablet) bool {
