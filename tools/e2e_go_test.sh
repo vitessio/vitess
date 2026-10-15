@@ -23,6 +23,11 @@ if [[ -n "$JUNIT_OUTPUT" ]]; then
 	GOTESTSUM_ARGS+=("--junitfile" "$JUNIT_OUTPUT")
 fi
 
+# Compile the tests with the same CGO_ENABLED=0 and -trimpath that "make build"
+# uses for the binaries. Both are part of Go's build cache key, so the tests
+# then reuse the packages "make build" already compiled instead of compiling
+# the whole dependency graph a second time.
+#
 # The test packages must come before "$@" on the go test command line: "$@"
 # can contain test-binary flags such as --topo-flavor or -keep-data, which
 # go test only forwards to the test binary when they appear after the package
@@ -33,4 +38,4 @@ fi
 # this command; go test applies the -run flag (the last occurrence wins) and
 # hands the trailing package string to the test binary, which ignores it.
 # shellcheck disable=SC2086
-go tool -modfile=tools/gotestsum/go.mod gotestsum "${GOTESTSUM_ARGS[@]}" --raw-command -- go test -json -v -count=1 $PACKAGES "$@"
+CGO_ENABLED=0 go tool -modfile=tools/gotestsum/go.mod gotestsum "${GOTESTSUM_ARGS[@]}" --raw-command -- go test -trimpath -json -v -count=1 $PACKAGES "$@"
