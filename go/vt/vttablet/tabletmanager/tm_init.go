@@ -1235,10 +1235,19 @@ func (tm *TabletManager) retryReplicationInitialization(ctx context.Context, id 
 	}
 }
 
-func (tm *TabletManager) retryReplicationInitializationOnce(ctx context.Context, id uint64) error {
-	// RPCs can change replication once the tablet serves them.
-	if err := tm.lock(ctx); err != nil {
+func (tm *TabletManager) retryReplicationInitializationOnce(ctx context.Context, id uint64) (err error) {
+	// Take the shard lock first, as reparents do, so that its acquisition and
+	// the topology backend's cleanup after a failed one never hold the action
+	// lock that RPCs to this tablet need.
+	ctx, unlock, err := tm.lockReplicationInitialization(ctx)
+	if err != nil {
 		return err
+	}
+	defer unlock(&err)
+	// RPCs can change replication once the tablet serves them. Do not wait for
+	// one while holding the shard lock.
+	if !tm.actionSema.TryAcquire(1) {
+		return vterrors.New(vtrpc.Code_UNAVAILABLE, "another action is running on this tablet")
 	}
 	defer tm.unlock()
 	if !tm.tmState.isPendingReplicationInit(id) {
@@ -1261,12 +1270,14 @@ func (tm *TabletManager) retryReplicationInitializationOnce(ctx context.Context,
 			// A reparent or VTOrc has already configured replication.
 			break
 		}
-		primaryPos, err := tm.initializeReplication(ctx, tabletType)
+		ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+		defer cancel()
+		primaryPos, err := tm.initializeReplicationLocked(ctx, tabletType)
 		if err != nil {
 			return err
 		}
-		// initializeReplication succeeds without configuring a source when the
-		// shard has no usable primary.
+		// initializeReplicationLocked succeeds without configuring a source
+		// when the shard has no usable primary.
 		if primaryPos == "" {
 			return vterrors.New(vtrpc.Code_UNAVAILABLE, "no primary to replicate from yet")
 		}

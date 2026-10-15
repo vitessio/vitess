@@ -576,3 +576,42 @@ func TestDeferredReplicationInitializationKeepsExistingReplication(t *testing.T)
 	assert.True(t, qsc.IsServing())
 	require.NoError(t, md.CheckSuperQueryList(), "replication that is already correct must not be restarted")
 }
+
+func TestDeferredReplicationRetryLocksShardBeforeActionLock(t *testing.T) {
+	t.Run("does not hold the action lock while acquiring the shard lock", func(t *testing.T) {
+		tm, md, ts, factory := newReplicationInitializationTM(t)
+		id := tm.tmState.deferReplicationInit(t.Context())
+		md.ExpectedExecuteSuperQueryList = nil
+		holdInitializationShardLock(t, ts)
+		before := factory.GetCallStats().Counts()["TryLock"]
+		done := make(chan error, 1)
+		go func() { done <- tm.retryReplicationInitializationOnce(t.Context(), id) }()
+		require.Eventually(t, func() bool { return factory.GetCallStats().Counts()["TryLock"] > before }, 30*time.Second, time.Millisecond)
+
+		// memorytopo's TryLock waits for the held lock; an RPC must not wait for it.
+		require.True(t, tm.actionSema.TryAcquire(1), "the retry must not hold the action lock while it acquires the shard lock")
+		tm.unlock()
+		err := <-done
+		_, unavailable := errors.AsType[*shardLockUnavailableError](err)
+		assert.True(t, unavailable, "%v", err)
+		require.NoError(t, md.CheckSuperQueryList())
+	})
+	t.Run("does not wait for a busy tablet", func(t *testing.T) {
+		tm, md, ts, qsc, id := newPendingReplicationTM(t)
+		md.ExpectedExecuteSuperQueryList = nil
+		require.NoError(t, tm.lock(t.Context()))
+		t.Cleanup(tm.unlock)
+
+		// The deadline makes a retry that waits for the action lock fail instead of hang.
+		ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+		t.Cleanup(cancel)
+		require.ErrorContains(t, tm.retryReplicationInitializationOnce(ctx, id), "another action is running on this tablet")
+		assert.False(t, qsc.IsServing())
+		require.NoError(t, md.CheckSuperQueryList())
+		// The retry released the shard lock.
+		_, unlock, err := ts.LockShard(t.Context(), "ks", "0", "after busy retry", topo.WithAcquireTimeout(30*time.Second))
+		require.NoError(t, err)
+		unlock(&err)
+		require.NoError(t, err)
+	})
+}
