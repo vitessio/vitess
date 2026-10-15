@@ -842,18 +842,49 @@ func TestReparentSourceEndsDeferredReplicationInitialization(t *testing.T) {
 	assert.True(t, qsc.IsServing())
 }
 
-func TestSourceOnlyRPCKeepsStoppedReplicaOutOfRotation(t *testing.T) {
-	tm, md, _, qsc, id := newPendingReplicationTM(t)
+func TestSourceOnlyRPCStartsDeferredReplication(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		startErr error
+	}{{name: "replication starts"}, {name: "starting replication fails", startErr: errors.New("cannot start replication")}} {
+		t.Run(tc.name, func(t *testing.T) {
+			tm, md, _, qsc, id := newPendingReplicationTM(t)
+			md.StartReplicationError = tc.startErr
+			md.ExpectedExecuteSuperQueryList = []string{"FAKE SET SOURCE", "START REPLICA"}
+			if tc.startErr != nil {
+				md.ExpectedExecuteSuperQueryList = []string{"FAKE SET SOURCE"}
+			}
+			tm._waitForGrantsComplete = make(chan struct{})
+			close(tm._waitForGrantsComplete)
+
+			// PRS, and ERS for a replica it found stopped, do not force replication
+			// to start, but replication that was never initialized must start.
+			err := tm.SetReplicationSource(t.Context(), &topodatapb.TabletAlias{Cell: "cell1", Uid: 2}, 0, "", false, true, 0)
+			require.NoError(t, md.CheckSuperQueryList())
+			if tc.startErr != nil {
+				require.ErrorContains(t, err, "cannot start replication")
+				require.ErrorContains(t, tm.retryReplicationInitializationOnce(t.Context(), id), "waiting for replication from old-primary:3306")
+				assert.False(t, qsc.IsServing(), "a replica whose replication is stopped must not serve")
+				return
+			}
+			require.NoError(t, err)
+			md.IOThreadRunning = true
+			require.NoError(t, tm.retryReplicationInitializationOnce(t.Context(), id))
+			assert.True(t, qsc.IsServing())
+		})
+	}
+}
+
+func TestSourceOnlyRPCLeavesStoppedReplicationStoppedWithoutDeferral(t *testing.T) {
+	tm, md, _, _, _ := newPendingReplicationTM(t)
+	tm.tmState.cancelReplicationInit(t.Context())
 	md.ExpectedExecuteSuperQueryList = []string{"FAKE SET SOURCE"}
 	tm._waitForGrantsComplete = make(chan struct{})
 	close(tm._waitForGrantsComplete)
 
-	// The RPC configures the source without starting replication.
 	require.NoError(t, tm.SetReplicationSource(t.Context(), &topodatapb.TabletAlias{Cell: "cell1", Uid: 2}, 0, "", false, true, 0))
 	require.NoError(t, md.CheckSuperQueryList())
-
-	require.ErrorContains(t, tm.retryReplicationInitializationOnce(t.Context(), id), "waiting for replication from old-primary:3306")
-	assert.False(t, qsc.IsServing(), "a replica whose replication is stopped must not serve")
+	assert.False(t, md.Replicating)
 }
 
 func TestReparentSourceSurvivesFailedReplicationStart(t *testing.T) {

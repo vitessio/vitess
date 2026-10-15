@@ -973,6 +973,12 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 	if forceStartReplication {
 		shouldbeReplicating = true
 	}
+	// Replication that vttablet has not initialized yet was not stopped on
+	// purpose, so start it. Otherwise nothing would, and the deferred
+	// initialization would keep the replica out of rotation.
+	if tm.tmState.hasPendingReplicationInit() {
+		shouldbeReplicating = true
+	}
 
 	// If using semi-sync, we need to enable it before connecting to primary.
 	// If we are currently PRIMARY, assume we are about to become REPLICA.

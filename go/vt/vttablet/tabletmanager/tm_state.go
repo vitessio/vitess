@@ -320,6 +320,14 @@ func (ts *tmState) setReplicationInitError(ctx context.Context, id uint64, err e
 	}
 }
 
+// hasPendingReplicationInit reports whether a deferred replication
+// initialization is pending.
+func (ts *tmState) hasPendingReplicationInit() bool {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	return ts.pendingReplicationInit != 0
+}
+
 // isPendingReplicationInit reports whether id is the pending deferred
 // replication initialization.
 func (ts *tmState) isPendingReplicationInit(id uint64) bool {
