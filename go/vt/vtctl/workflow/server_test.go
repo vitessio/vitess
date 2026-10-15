@@ -35,6 +35,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/textutil"
+	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/topo"
@@ -1993,6 +1994,52 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestCanSwitchRefreshTimeoutIsPerShard confirms that the tablet refresh done before
+// switching traffic does not fail when refreshing all of the shards takes longer than
+// shardTabletRefreshTimeout, as long as each shard refreshes within it.
+func TestCanSwitchRefreshTimeoutIsPerShard(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 2*shardTabletRefreshTimeout)
+	defer cancel()
+
+	workflowName := "wf1"
+	tableName := "t1"
+	targetShards, err := key.GenerateShardRanges(16, 0)
+	require.NoError(t, err)
+	sourceKeyspace := &testKeyspace{
+		KeyspaceName: "sourceks",
+		ShardNames:   []string{"0"},
+	}
+	targetKeyspace := &testKeyspace{
+		KeyspaceName: "targetks",
+		ShardNames:   targetShards,
+	}
+
+	env := newTestEnv(t, ctx, defaultCellName, sourceKeyspace, targetKeyspace)
+	defer env.close()
+	env.tmc.schema = map[string]*tabletmanagerdatapb.SchemaDefinition{
+		tableName: {
+			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+				{
+					Name:   tableName,
+					Schema: fmt.Sprintf("CREATE TABLE %s (id BIGINT, name VARCHAR(64), PRIMARY KEY (id))", tableName),
+				},
+			},
+		},
+	}
+	env.tmc.expectVRQueryResultOnKeyspaceTablets(targetKeyspace.KeyspaceName, &queryResult{
+		query:  "/select vrepl_id, table_name, lastpk from _vt.copy_state.*",
+		result: &querypb.QueryResult{},
+	})
+	// Refreshing the target shards one at a time takes 1.6 times the timeout.
+	env.tmc.refreshStateDelay = shardTabletRefreshTimeout / 10
+
+	ts, err := env.ws.buildTrafficSwitcher(ctx, targetKeyspace.KeyspaceName, workflowName)
+	require.NoError(t, err)
+	reason, err := env.ws.canSwitch(ctx, ts, 30, nil)
+	require.NoError(t, err)
+	require.Empty(t, reason)
 }
 
 func TestMoveTablesSwitchWritesCompletesAfterCancelOnFreeze(t *testing.T) {

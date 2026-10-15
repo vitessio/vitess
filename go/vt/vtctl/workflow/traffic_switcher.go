@@ -75,6 +75,11 @@ const (
 	// operation too.
 	shardTabletRefreshTimeout = time.Duration(30 * time.Second)
 
+	// How many shards to refresh the tablets of concurrently when checking if we can
+	// switch traffic. Each shard refresh in turn calls RefreshState on all of the shard's
+	// tablets in parallel.
+	shardTabletRefreshConcurrency = 32
+
 	// Use pt-osc's naming convention, this format also ensures vstreamer ignores such tables.
 	renameTableTemplate = "_%.59s_old" // limit table name to 64 characters
 

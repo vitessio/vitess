@@ -3488,33 +3488,35 @@ func (s *Server) canSwitch(ctx context.Context, ts *trafficSwitcher, maxAllowedR
 	}
 
 	// Ensure that the tablets on both sides are in good shape as we make this same call in the
-	// process and an error will cause us to backout.
+	// process and an error will cause us to backout. Each shard gets its own timeout, so the
+	// timeout does not have to cover all of the shards.
 	refreshErrors := strings.Builder{}
 	var m sync.Mutex
-	var wg sync.WaitGroup
-	rtbsCtx, cancel := context.WithTimeout(ctx, shardTabletRefreshTimeout)
-	defer cancel()
+	var eg errgroup.Group
+	eg.SetLimit(shardTabletRefreshConcurrency)
 	refreshTablets := func(shards []*topo.ShardInfo, stype string) {
-		defer wg.Done()
 		for _, si := range shards {
-			if partial, partialDetails, err := topotools.RefreshTabletsByShard(rtbsCtx, s.ts, s.tmc, si, nil, ts.Logger()); err != nil || partial {
-				msg := fmt.Sprintf("failed to successfully refresh all tablets in the %s/%s %s shard (%v):\n  %v\n",
-					si.Keyspace(), si.ShardName(), stype, err, partialDetails)
-				if partial && ts.force {
-					log.Warn(msg)
-				} else {
-					m.Lock()
-					refreshErrors.WriteString(msg)
-					m.Unlock()
+			eg.Go(func() error {
+				rtbsCtx, cancel := context.WithTimeout(ctx, shardTabletRefreshTimeout)
+				defer cancel()
+				if partial, partialDetails, err := topotools.RefreshTabletsByShard(rtbsCtx, s.ts, s.tmc, si, nil, ts.Logger()); err != nil || partial {
+					msg := fmt.Sprintf("failed to successfully refresh all tablets in the %s/%s %s shard (%v):\n  %v\n",
+						si.Keyspace(), si.ShardName(), stype, err, partialDetails)
+					if partial && ts.force {
+						log.Warn(msg)
+					} else {
+						m.Lock()
+						refreshErrors.WriteString(msg)
+						m.Unlock()
+					}
 				}
-			}
+				return nil
+			})
 		}
 	}
-	wg.Add(1)
-	go refreshTablets(ts.SourceShards(), "source")
-	wg.Add(1)
-	go refreshTablets(ts.TargetShards(), "target")
-	wg.Wait()
+	refreshTablets(ts.SourceShards(), "source")
+	refreshTablets(ts.TargetShards(), "target")
+	_ = eg.Wait() // The errors are collected in refreshErrors.
 	if refreshErrors.Len() > 0 {
 		return fmt.Sprintf(cannotSwitchFailedTabletRefresh, refreshErrors.String()), nil
 	}
