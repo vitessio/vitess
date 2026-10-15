@@ -39,6 +39,41 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
+// TestConnForCellWithoutCache verifies that with the default CellInfo cache TTL of 0, ConnForCell reads the
+// cell's CellInfo on every call, as it did before the cache, and that calls for a cell don't wait for each
+// other's reads.
+func TestConnForCellWithoutCache(t *testing.T) {
+	ctx := t.Context()
+	_, memFactory := memorytopo.NewServerAndFactory(ctx, "zone1")
+	factory := newPausingFactory(memFactory)
+	ts, err := topo.NewWithFactory(factory, "", "")
+	require.NoError(t, err)
+	t.Cleanup(ts.Close)
+	gets := func() int64 { return memFactory.GetCallStats().Counts()["Get"] }
+
+	conn, err := ts.ConnForCell(ctx, "zone1")
+	require.NoError(t, err)
+	before := gets()
+	for range 3 {
+		got, err := ts.ConnForCell(ctx, "zone1")
+		require.NoError(t, err)
+		assert.Same(t, conn, got)
+	}
+	require.Equal(t, before+3, gets(), "CellInfo was not read on every call")
+
+	close(factory.armed)
+	first := goConnForCell(ctx, ts, "zone1")
+	<-factory.paused
+	second := goConnForCell(ctx, ts, "zone1")
+	require.Eventually(t, func() bool { return len(second) > 0 }, 30*time.Second, 10*time.Millisecond,
+		"a call waited for another call's read of the cell's CellInfo")
+	res := <-second
+	require.NoError(t, res.err)
+	assert.Same(t, conn, res.conn)
+	close(factory.release)
+	require.NoError(t, (<-first).err)
+}
+
 // TestConnForCellCachesCellInfo verifies that ConnForCell reuses a cell's connection without reading the
 // cell's CellInfo from the global topo while the CellInfo is within its cache TTL, re-reads it once the TTL
 // has passed and counts the TTL from that read, and picks up this process's own UpdateCellInfoFields
@@ -48,6 +83,7 @@ func TestConnForCellCachesCellInfo(t *testing.T) {
 	ts, factory := memorytopo.NewServerAndFactory(ctx, "zone1")
 	t.Cleanup(ts.Close)
 	gets := func() int64 { return factory.GetCallStats().Counts()["Get"] }
+	ts.SetCellInfoCacheTTL(time.Hour)
 
 	conn, err := ts.ConnForCell(ctx, "zone1")
 	require.NoError(t, err)
@@ -63,7 +99,7 @@ func TestConnForCellCachesCellInfo(t *testing.T) {
 	})
 
 	t.Run("after the TTL", func(t *testing.T) {
-		ts.SetCellInfoCacheTTL(0)
+		ts.SetCellInfoCacheTTL(time.Nanosecond)
 		t.Cleanup(func() { ts.SetCellInfoCacheTTL(time.Hour) })
 		before := gets()
 		for range 3 {
@@ -216,6 +252,7 @@ func TestDeleteCellInfoFailureKeepsCache(t *testing.T) {
 	ctx := t.Context()
 	ts, factory := memorytopo.NewServerAndFactory(ctx, "zone1")
 	t.Cleanup(ts.Close)
+	ts.SetCellInfoCacheTTL(time.Hour)
 
 	conn, err := ts.ConnForCell(ctx, "zone1")
 	require.NoError(t, err)
@@ -303,6 +340,7 @@ func TestConnForCellWaitEndsWithCaller(t *testing.T) {
 	ts, err := topo.NewWithFactory(factory, "", "")
 	require.NoError(t, err)
 	t.Cleanup(ts.Close)
+	ts.SetCellInfoCacheTTL(time.Hour)
 
 	close(factory.armed)
 	first := goConnForCell(ctx, ts, "zone1")
@@ -319,6 +357,36 @@ func TestConnForCellWaitEndsWithCaller(t *testing.T) {
 
 	close(factory.release)
 	require.NoError(t, (<-first).err)
+}
+
+// TestConnForCellRefreshReadTimesOut verifies that a ConnForCell refreshing a cell bounds its CellInfo read by
+// RemoteOperationTimeout even when its ctx has no deadline, so that a read that hangs doesn't keep the other
+// calls for the cell waiting after the global topo recovers.
+func TestConnForCellRefreshReadTimesOut(t *testing.T) {
+	ctx := t.Context()
+	_, memFactory := memorytopo.NewServerAndFactory(ctx, "zone1")
+	factory := newPausingFactory(memFactory)
+	ts, err := topo.NewWithFactory(factory, "", "")
+	require.NoError(t, err)
+	t.Cleanup(ts.Close)
+	ts.SetCellInfoCacheTTL(time.Hour)
+	timeout := topo.RemoteOperationTimeout
+	topo.RemoteOperationTimeout = 100 * time.Millisecond
+	t.Cleanup(func() { topo.RemoteOperationTimeout = timeout })
+
+	// The first call's read hangs; ctx has no deadline.
+	_, hasDeadline := ctx.Deadline()
+	require.False(t, hasDeadline)
+	close(factory.armed)
+	t.Cleanup(func() { close(factory.release) })
+	first := goConnForCell(ctx, ts, "zone1")
+	<-factory.paused
+	second := goConnForCell(ctx, ts, "zone1")
+
+	require.Eventually(t, func() bool { return len(second) > 0 }, 30*time.Second, 10*time.Millisecond,
+		"a call for the cell kept waiting behind a read that hung")
+	require.NoError(t, (<-second).err)
+	require.ErrorIs(t, (<-first).err, context.DeadlineExceeded)
 }
 
 // TestConnForCellPointedBackAfterFailedReplacement verifies that when a cell is re-pointed at a topo server
@@ -410,49 +478,53 @@ func TestConnForCellAfterRecreate(t *testing.T) {
 
 // TestConnForCellConcurrentWithReadOnly verifies that refreshing cell connections in ConnForCell is safe
 // alongside SetReadOnly and IsReadOnly, which srvtopo's read-only server calls on every GetTopoServer, and
-// alongside operations on a connection that check its read-only state. Run with -race.
+// alongside operations on a connection that check its read-only state, both without the cache and with a cache
+// that every call refreshes. Run with -race.
 func TestConnForCellConcurrentWithReadOnly(t *testing.T) {
-	ctx := t.Context()
-	ts := memorytopo.NewServer(ctx, "zone1")
-	t.Cleanup(ts.Close)
-	_, err := ts.ConnForCell(ctx, "zone1")
-	require.NoError(t, err)
-	// Every call refreshes the cell's cached connection.
-	ts.SetCellInfoCacheTTL(0)
+	for name, ttl := range map[string]time.Duration{"without the cache": 0, "with the cache": time.Nanosecond} {
+		t.Run(name, func(t *testing.T) {
+			ctx := t.Context()
+			ts := memorytopo.NewServer(ctx, "zone1")
+			t.Cleanup(ts.Close)
+			_, err := ts.ConnForCell(ctx, "zone1")
+			require.NoError(t, err)
+			ts.SetCellInfoCacheTTL(ttl)
 
-	const iterations = 500
-	var wg sync.WaitGroup
-	var connErr, readOnlyErr error
-	wg.Go(func() {
-		for range iterations {
-			conn, err := ts.ConnForCell(ctx, "zone1")
-			if err != nil {
-				connErr = err
-				return
-			}
-			// Checks the connection's read-only state; the outcome depends on timing.
-			_, _ = conn.Create(ctx, "read_only_probe", nil)
-		}
-	})
-	wg.Go(func() {
-		for range iterations {
-			if err := ts.SetReadOnly(true); err != nil {
-				readOnlyErr = err
-				return
-			}
-			if _, err := ts.IsReadOnly(); err != nil {
-				readOnlyErr = err
-				return
-			}
-		}
-	})
-	wg.Wait()
-	require.NoError(t, connErr)
-	require.NoError(t, readOnlyErr)
+			const iterations = 500
+			var wg sync.WaitGroup
+			var connErr, readOnlyErr error
+			wg.Go(func() {
+				for range iterations {
+					conn, err := ts.ConnForCell(ctx, "zone1")
+					if err != nil {
+						connErr = err
+						return
+					}
+					// Checks the connection's read-only state; the outcome depends on timing.
+					_, _ = conn.Create(ctx, "read_only_probe", nil)
+				}
+			})
+			wg.Go(func() {
+				for range iterations {
+					if err := ts.SetReadOnly(true); err != nil {
+						readOnlyErr = err
+						return
+					}
+					if _, err := ts.IsReadOnly(); err != nil {
+						readOnlyErr = err
+						return
+					}
+				}
+			})
+			wg.Wait()
+			require.NoError(t, connErr)
+			require.NoError(t, readOnlyErr)
 
-	readOnly, err := ts.IsReadOnly()
-	require.NoError(t, err)
-	assert.True(t, readOnly)
+			readOnly, err := ts.IsReadOnly()
+			require.NoError(t, err)
+			assert.True(t, readOnly)
+		})
+	}
 }
 
 // TestConnForCellNewConnKeepsReadOnly verifies that once the Server is read-only, a connection ConnForCell
