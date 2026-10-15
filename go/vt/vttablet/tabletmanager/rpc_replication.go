@@ -546,7 +546,7 @@ func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.Tab
 
 	// From here on this source replaces any that a deferred initialization
 	// would choose, even if starting replication fails.
-	tm.tmState.replicationSourceChosen()
+	tm.tmState.replicationSourceChosen(ti.MysqlHostname, ti.MysqlPort)
 	if err := tm.MysqlDaemon.SetReplicationPosition(ctx, pos); err != nil {
 		return err
 	}
@@ -1032,7 +1032,7 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 	}
 	// From here on this source replaces any that a deferred initialization
 	// would choose, even if starting replication fails.
-	tm.tmState.replicationSourceChosen()
+	tm.tmState.replicationSourceChosen(host, port)
 	if status.SourceHost != host || status.SourcePort != port || heartbeatInterval != 0 {
 		// This handles both changing the address and starting replication.
 		if err := tm.setReplicationSourceRecoverable(ctx, host, port, heartbeatInterval, wasReplicating, shouldbeReplicating); err != nil {

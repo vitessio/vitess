@@ -27,6 +27,7 @@ import (
 	"github.com/spf13/pflag"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/key"
@@ -89,10 +90,10 @@ type tmState struct {
 	// replicationInitError is the latest error of the pending deferred
 	// replication initialization.
 	replicationInitError string
-	// replicationInitSourceChosen is set when an RPC has chosen the
-	// replication source since the pending deferral, which then must not
-	// choose one itself.
-	replicationInitSourceChosen bool
+	// replicationInitSource is the "host:port" of the replication source that
+	// an RPC chose since the pending deferral, which then must not choose one
+	// itself. It is empty if no RPC has chosen one.
+	replicationInitSource string
 
 	// displayState contains the current snapshot of the internal state
 	// and has its own mutex.
@@ -334,7 +335,7 @@ func (ts *tmState) endReplicationInit(id uint64) {
 	if ts.pendingReplicationInit == id {
 		ts.pendingReplicationInit = 0
 		ts.replicationInitError = ""
-		ts.replicationInitSourceChosen = false
+		ts.replicationInitSource = ""
 	}
 }
 
@@ -350,24 +351,28 @@ func (ts *tmState) refreshServing(ctx context.Context) {
 	}
 }
 
-// replicationSourceChosen records that an RPC is installing a replication
-// source of its choice, so that the pending deferred initialization no longer
+// replicationSourceChosen records that an RPC is installing the replication
+// source host:port, so that the pending deferred initialization no longer
 // chooses one. It does not end the deferral: replicas still do not serve until
-// replication runs.
-func (ts *tmState) replicationSourceChosen() {
+// replication runs from that source.
+func (ts *tmState) replicationSourceChosen(host string, port int32) {
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
 	if ts.pendingReplicationInit != 0 {
-		ts.replicationInitSourceChosen = true
+		ts.replicationInitSource = netutil.JoinHostPort(host, port)
 	}
 }
 
-// isReplicationSourceChosen reports whether an RPC has chosen the replication
-// source since the deferred replication initialization id.
-func (ts *tmState) isReplicationSourceChosen(id uint64) bool {
+// chosenReplicationSource returns the "host:port" of the replication source
+// that an RPC chose since the deferred replication initialization id, or an
+// empty string if no RPC has chosen one.
+func (ts *tmState) chosenReplicationSource(id uint64) string {
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
-	return ts.pendingReplicationInit == id && ts.replicationInitSourceChosen
+	if ts.pendingReplicationInit != id {
+		return ""
+	}
+	return ts.replicationInitSource
 }
 
 // cancelReplicationInit ends any pending deferred replication initialization.
@@ -382,7 +387,7 @@ func (ts *tmState) cancelReplicationInit(ctx context.Context) {
 func (ts *tmState) setPendingReplicationInitLocked(ctx context.Context, id uint64, err error) {
 	reason := ts.canServe(ts.tablet.Type)
 	if id != ts.pendingReplicationInit {
-		ts.replicationInitSourceChosen = false
+		ts.replicationInitSource = ""
 	}
 	ts.pendingReplicationInit = id
 	ts.replicationInitError = ""

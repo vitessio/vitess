@@ -1277,16 +1277,16 @@ func (tm *TabletManager) attemptDeferredReplicationInit(ctx context.Context, id 
 	// Bound everything done while holding both locks.
 	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer cancel()
-	if tm.tmState.isReplicationSourceChosen(id) {
-		// An RPC chose the source but did not finish starting replication.
-		// Keep its source, which may be newer than the shard record, and wait
-		// until replication runs from it.
+	if source := tm.tmState.chosenReplicationSource(id); source != "" {
+		// An RPC chose the source but did not finish installing it or starting
+		// replication. Keep its choice, which may be newer than the shard
+		// record, and wait until replication runs from that source.
 		status, err := tm.MysqlDaemon.ReplicationStatus(ctx)
-		if err != nil {
+		if err != nil && !errors.Is(err, mysql.ErrNotReplica) {
 			return err
 		}
-		if !status.Running() {
-			return vterrors.New(vtrpc.Code_UNAVAILABLE, "waiting for replication from the source that a reparent or VTOrc chose")
+		if !status.Running() || netutil.JoinHostPort(status.SourceHost, status.SourcePort) != source {
+			return vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "waiting for replication from %s, which a reparent or VTOrc chose", source)
 		}
 		tm.tmState.endReplicationInit(id)
 		return nil

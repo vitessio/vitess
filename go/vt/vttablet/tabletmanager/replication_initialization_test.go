@@ -904,3 +904,53 @@ func TestDeferredReplicationRetryEnablesServingAfterReleasingLocks(t *testing.T)
 	require.NoError(t, md.CheckSuperQueryList())
 	assert.True(t, qsc.IsServing())
 }
+
+func TestFailedReparentSourceKeepsReplicaOutOfRotation(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		setup func(md *mysqlctl.FakeMysqlDaemon)
+		rpc   func(ctx context.Context, tm *TabletManager, primary *topodatapb.TabletAlias) error
+	}{{
+		name:  "SetReplicationSource cannot install the source",
+		setup: func(md *mysqlctl.FakeMysqlDaemon) { md.SetReplicationSourceError = errors.New("cannot change source") },
+		rpc: func(ctx context.Context, tm *TabletManager, primary *topodatapb.TabletAlias) error {
+			return tm.SetReplicationSource(ctx, primary, 0, "", true, true, 0)
+		},
+	}, {
+		name:  "InitReplica cannot set the position",
+		setup: func(md *mysqlctl.FakeMysqlDaemon) {},
+		rpc: func(ctx context.Context, tm *TabletManager, primary *topodatapb.TabletAlias) error {
+			// A position other than the fake's expected one fails to apply.
+			return tm.InitReplica(ctx, primary, gtidFlavor+"/"+serverUUID+":1-100", 0, true)
+		},
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			tm, md, ts, qsc, id := newPendingReplicationTM(t)
+			newPrimary := newTestTablet(t, 3, "ks", "0", nil)
+			newPrimary.Type = topodatapb.TabletType_PRIMARY
+			newPrimary.MysqlHostname, newPrimary.MysqlPort = "new-primary", 3306
+			require.NoError(t, ts.CreateTablet(t.Context(), newPrimary))
+			// The new primary is published, but the replica still replicates
+			// from the old one, which the failed RPC did not replace.
+			_, err := ts.UpdateShardFields(t.Context(), "ks", "0", func(si *topo.ShardInfo) error { si.PrimaryAlias = newPrimary.Alias; return nil })
+			require.NoError(t, err)
+			md.Replicating, md.IOThreadRunning, md.SemiSyncReplicaEnabled = true, true, true
+			md.CurrentSourceHost, md.CurrentSourcePort = "old-primary", 3306
+			md.SetReplicationSourceInputs = []string{"new-primary:3306"}
+			md.ExpectedExecuteSuperQueryList = nil
+			tc.setup(md)
+			tm._waitForGrantsComplete = make(chan struct{})
+			close(tm._waitForGrantsComplete)
+
+			require.Error(t, tc.rpc(t.Context(), tm, newPrimary.Alias))
+			assert.Equal(t, "old-primary", md.CurrentSourceHost)
+
+			// Replication runs, but not from the source the RPC chose.
+			md.ExpectedExecuteSuperQueryList = nil
+			md.ExpectedExecuteSuperQueryCurrent = 0
+			require.ErrorContains(t, tm.retryReplicationInitializationOnce(t.Context(), id), "waiting for replication from new-primary:3306")
+			require.NoError(t, md.CheckSuperQueryList())
+			assert.False(t, qsc.IsServing(), "a replica must not serve from a source other than the one the RPC chose")
+		})
+	}
+}
