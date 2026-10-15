@@ -516,8 +516,9 @@ message BackupShardRequest {
   // Restores use them automatically.
   bool include_binlogs = 9;
   // TabletTypes is an ordered preference of the tablet types to take the backup from.
-  // Defaults to REPLICA, RDONLY and SPARE by lowest replication lag.
-  // PRIMARY may be listed, but only together with AllowPrimary.
+  // When empty, the tablet with the lowest replication lag among REPLICA, RDONLY and
+  // SPARE is used. PRIMARY cannot be listed: AllowPrimary falls back to the primary
+  // when no listed type can take the backup.
   repeated topodata.TabletType tablet_types = 10;
 }
 
