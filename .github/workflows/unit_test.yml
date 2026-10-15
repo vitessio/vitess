@@ -95,11 +95,13 @@ jobs:
             evalengine: "1"
             flavor: mysql-8.0
 
-          # mysql84 tests
+          # mysql84 tests. The first leg runs against the newest supported etcd
+          # server; every other leg uses the build.env default.
           - platform: mysql84
             evalengine: "0"
             flavor: mysql-8.4
             java: true
+            etcd: v3.7.2
 
           - platform: mysql84
             evalengine: "1"
@@ -135,6 +137,9 @@ jobs:
     # step below skipped. The 'Skip CI' label also gets the small runner, since
     # the legs then only fail at that step.
     runs-on: ${{ needs.changes.outputs.unit_tests == 'true' && !contains(github.event.pull_request.labels.*.name, 'Skip CI') && (github.repository == 'vitessio/vitess' && (matrix.arch == 'arm64' && 'oracle-vm-16cpu-64gb-arm64' || 'oracle-vm-16cpu-64gb-x86-64') || (matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04')) || 'ubuntu-24.04' }}
+
+    env:
+      ETCD_VERSION: ${{ matrix.etcd }}
 
     steps:
       - name: Harden the runner (Audit all outbound calls)
