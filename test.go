@@ -194,7 +194,7 @@ func (t *Test) run(dir, dataDir string) ([]byte, error) {
 		testArgs := strings.Join(testCmd, " ")
 
 		if *dockerImage != "" {
-			args = []string{"--image", *dockerImage, t.flavor, testArgs}
+			args = []string{"--image", *dockerImage, t.flavor, t.bootstrapVersion, testArgs}
 		} else {
 			// If there is no cache, we have to call 'make build' before each test.
 			args = []string{t.flavor, t.bootstrapVersion, "make build && " + testArgs}

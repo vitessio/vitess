@@ -87,6 +87,12 @@ if [[ -z "$flavor" ]]; then
 fi
 
 if [[ -z "$cmd" ]]; then
+	# Without a terminal, a shell would exit right away and report success
+	# without running anything.
+	if ! tty -s; then
+		echo "A command must be specified as third argument when not running in a terminal."
+		exit 1
+	fi
 	cmd=bash
 fi
 
