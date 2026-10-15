@@ -1344,7 +1344,13 @@ func (mysqld *Mysqld) SemiSyncExtensionLoaded(ctx context.Context) (mysql.SemiSy
 	}
 	defer conn.Recycle()
 
-	return conn.Conn.SemiSyncExtensionLoaded()
+	semiSyncType := mysql.SemiSyncTypeUnknown
+	err := mysqld.executeWithContext(ctx, conn, "SHOW VARIABLES LIKE 'rpl_semi_sync_%_enabled'", func() error {
+		var err error
+		semiSyncType, err = conn.Conn.SemiSyncExtensionLoaded()
+		return err
+	})
+	return semiSyncType, err
 }
 
 func (mysqld *Mysqld) IsSemiSyncBlocked(ctx context.Context) (bool, error) {
