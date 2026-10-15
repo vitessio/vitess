@@ -1200,7 +1200,7 @@ func (tm *TabletManager) initializeReplicationUnlessShardLocked(ctx context.Cont
 	primaryPos, err := tm.initializeReplication(ctx, tabletType)
 	if _, ok := errors.AsType[*shardLockUnavailableError](err); ok {
 		logger.Warningf("deferring replication initialization, retrying in the background: %v", err)
-		id := tm.tmState.deferReplicationInit(ctx)
+		id := tm.tmState.deferReplicationInit(ctx, err)
 		go tm.retryReplicationInitialization(tm.tmState.ctx, id)
 		return "", nil
 	}
@@ -1223,6 +1223,7 @@ func (tm *TabletManager) retryReplicationInitialization(ctx context.Context, id 
 			log.Info("Initialized deferred replication")
 			return
 		}
+		tm.tmState.setReplicationInitError(ctx, id, err)
 		if _, ok := errors.AsType[*shardLockUnavailableError](err); ok {
 			interval = replicationInitializationRetryInterval
 		} else {

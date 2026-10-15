@@ -443,7 +443,7 @@ func newPendingReplicationTM(t *testing.T) (*TabletManager, *mysqlctl.FakeMysqlD
 	require.NoError(t, qsc.InitDBConfig(&querypb.Target{Keyspace: "ks", Shard: "0"}, nil, md))
 	tm.QueryServiceControl = qsc
 	tm.tmState.Open()
-	id := tm.tmState.deferReplicationInit(t.Context())
+	id := tm.tmState.deferReplicationInit(t.Context(), nil)
 	require.False(t, qsc.IsServing())
 	return tm, md, ts, qsc, id
 }
@@ -498,7 +498,7 @@ func TestSupersededReplicationInitializationDoesNotChangeReplication(t *testing.
 	t.Run("later deferral", func(t *testing.T) {
 		tm, md, _, qsc, first := newPendingReplicationTM(t)
 		md.ExpectedExecuteSuperQueryList = nil
-		tm.tmState.deferReplicationInit(t.Context())
+		tm.tmState.deferReplicationInit(t.Context(), nil)
 
 		require.NoError(t, tm.retryReplicationInitializationOnce(t.Context(), first))
 		assert.False(t, md.Replicating)
@@ -580,7 +580,7 @@ func TestDeferredReplicationInitializationKeepsExistingReplication(t *testing.T)
 func TestDeferredReplicationRetryLocksShardBeforeActionLock(t *testing.T) {
 	t.Run("does not hold the action lock while acquiring the shard lock", func(t *testing.T) {
 		tm, md, ts, factory := newReplicationInitializationTM(t)
-		id := tm.tmState.deferReplicationInit(t.Context())
+		id := tm.tmState.deferReplicationInit(t.Context(), nil)
 		md.ExpectedExecuteSuperQueryList = nil
 		holdInitializationShardLock(t, ts)
 		before := factory.GetCallStats().Counts()["TryLock"]
@@ -614,4 +614,21 @@ func TestDeferredReplicationRetryLocksShardBeforeActionLock(t *testing.T) {
 		unlock(&err)
 		require.NoError(t, err)
 	})
+}
+
+func TestPendingReplicationReasonShowsLatestError(t *testing.T) {
+	tm, md, ts, factory := newReplicationInitializationTM(t)
+	holdInitializationShardLock(t, ts)
+	t.Cleanup(tm.tmState.cancel)
+	factory.AddOperationError(memorytopo.TryLock, ".*", topo.NewError(topo.NodeExists, "shard"))
+	md.ExpectedExecuteSuperQueryList = nil
+	_, err := tm.initializeReplicationUnlessShardLocked(t.Context(), logutil.NewMemoryLogger(), topodatapb.TabletType_REPLICA)
+	require.NoError(t, err)
+	assert.Contains(t, tm.tmState.canServe(topodatapb.TabletType_REPLICA), "replication is not initialized: cannot initialize replication for ks/0; replication has not been changed: another operation holds the shard lock")
+
+	id := tm.tmState.pendingReplicationInit
+	tm.tmState.setReplicationInitError(t.Context(), id, errors.New("Errant GTID detected"))
+	assert.Equal(t, "replication is not initialized: Errant GTID detected", tm.tmState.canServe(topodatapb.TabletType_REPLICA))
+	tm.tmState.setReplicationInitError(t.Context(), id+1, errors.New("superseded"))
+	assert.Equal(t, "replication is not initialized: Errant GTID detected", tm.tmState.canServe(topodatapb.TabletType_REPLICA))
 }
