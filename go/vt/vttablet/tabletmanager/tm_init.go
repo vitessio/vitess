@@ -1273,6 +1273,9 @@ func (tm *TabletManager) retryReplicationInitializationOnce(ctx context.Context,
 		if _, err := tm.checkNoErrantGTIDs(ctx, primary); err != nil {
 			return err
 		}
+		if err := tm.fixRunningReplicaSemiSync(ctx, primary, tm.Tablet().Type); err != nil {
+			return err
+		}
 	} else {
 		primaryPos, err := tm.initializeReplicationLocked(ctx, tm.Tablet().Type)
 		if err != nil {
@@ -1329,6 +1332,56 @@ func (tm *TabletManager) replicatingShardPrimary(ctx context.Context) (*topodata
 		return nil, nil
 	}
 	return primary.Tablet, nil
+}
+
+// replicaSemiSyncAction returns the semi-sync action that the keyspace's
+// durability policy requires for this tablet as a tabletType replica of
+// primary.
+func (tm *TabletManager) replicaSemiSyncAction(ctx context.Context, primary *topodatapb.Tablet, tabletType topodatapb.TabletType) (SemiSyncAction, error) {
+	tablet := tm.Tablet()
+	durabilityName, err := tm.TopoServer.GetKeyspaceDurability(ctx, tablet.Keyspace)
+	if err != nil {
+		return SemiSyncActionNone, vterrors.Wrapf(err, "cannot read keyspace durability policy %v", tablet.Keyspace)
+	}
+	log.Info(fmt.Sprintf("Getting a new durability policy for %v", durabilityName))
+	durability, err := policy.GetDurabilityPolicy(durabilityName)
+	if err != nil {
+		return SemiSyncActionNone, vterrors.Wrapf(err, "cannot get durability policy %v", durabilityName)
+	}
+	// The policy depends on the type this tablet replicates as.
+	tablet.Type = tabletType
+	return tm.convertBoolToSemiSyncAction(ctx, policy.IsReplicaSemiSync(durability, primary, tablet))
+}
+
+// fixRunningReplicaSemiSync applies the durability policy's semi-sync setting
+// to a receiver that is already running from primary. A receiver acknowledges
+// according to the setting it started with, so it is restarted, without
+// changing its source, only if it does not acknowledge as the policy requires.
+func (tm *TabletManager) fixRunningReplicaSemiSync(ctx context.Context, primary *topodatapb.Tablet, tabletType topodatapb.TabletType) error {
+	semiSyncAction, err := tm.replicaSemiSyncAction(ctx, primary, tabletType)
+	if err != nil || semiSyncAction == SemiSyncActionNone {
+		return err
+	}
+	acking, err := tm.MysqlDaemon.SemiSyncReplicationStatus(ctx)
+	if err != nil {
+		return err
+	}
+	tablet := tm.Tablet()
+	// This check is not a fencing token: the lock lease can still expire after it.
+	if err := topo.CheckShardLocked(ctx, tablet.Keyspace, tablet.Shard); err != nil {
+		return err
+	}
+	if err := tm.fixSemiSync(ctx, tabletType, semiSyncAction); err != nil {
+		return err
+	}
+	if acking == (semiSyncAction == SemiSyncActionSet) {
+		return nil
+	}
+	log.Info(fmt.Sprintf("Restarting replication so that the replica semi-sync setting takes effect: acknowledging %v", !acking))
+	if err := tm.MysqlDaemon.StopReplication(ctx, tm.hookExtraEnv()); err != nil {
+		return err
+	}
+	return tm.startReplicationRecoverable(ctx)
 }
 
 // checkNoErrantGTIDs returns the status of primary after checking that this
@@ -1425,21 +1478,8 @@ func (tm *TabletManager) initializeReplicationLocked(ctx context.Context, tablet
 		return "", vterrors.Wrapf(err, "cannot read primary tablet %v", si.PrimaryAlias)
 	}
 
-	durabilityName, err := tm.TopoServer.GetKeyspaceDurability(ctx, tablet.Keyspace)
-	if err != nil {
-		return "", vterrors.Wrapf(err, "cannot read keyspace durability policy %v", tablet.Keyspace)
-	}
-	log.Info(fmt.Sprintf("Getting a new durability policy for %v", durabilityName))
-	durability, err := policy.GetDurabilityPolicy(durabilityName)
-	if err != nil {
-		return "", vterrors.Wrapf(err, "cannot get durability policy %v", durabilityName)
-	}
 	// If using semi-sync, we need to enable it before connecting to primary.
-	// We should set the correct type, since it is used in replica semi-sync
-
-	tablet.Type = tabletType
-
-	semiSyncAction, err := tm.convertBoolToSemiSyncAction(ctx, policy.IsReplicaSemiSync(durability, currentPrimary.Tablet, tablet))
+	semiSyncAction, err := tm.replicaSemiSyncAction(ctx, currentPrimary.Tablet, tabletType)
 	if err != nil {
 		return "", err
 	}

@@ -596,9 +596,13 @@ func TestDeferredReplicationInitializationKeepsExistingReplication(t *testing.T)
 		name       string
 		replicaPos string
 		errant     bool
+		// notAcking is set when the receiver does not acknowledge, although
+		// the semi_sync durability policy requires it.
+		notAcking bool
 	}{
 		{name: "no errant GTID", replicaPos: gtidPosition},
 		{name: "errant GTID", replicaPos: gtidPosition + ",8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1", errant: true},
+		{name: "receiver not acknowledging", replicaPos: gtidPosition, notAcking: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			tm, md, _, qsc, id := newPendingReplicationTM(t)
@@ -609,16 +613,22 @@ func TestDeferredReplicationInitializationKeepsExistingReplication(t *testing.T)
 			pos, err := replication.ParsePosition(gtidFlavor, tc.replicaPos)
 			require.NoError(t, err)
 			md.SetPrimaryPositionLocked(pos)
+			md.SemiSyncReplicaEnabled = !tc.notAcking
 			md.ExpectedExecuteSuperQueryList = nil
+			if tc.notAcking {
+				// Restart the receiver so it acknowledges, without changing its source.
+				md.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA", "START REPLICA"}
+			}
 
 			err = tm.retryReplicationInitializationOnce(t.Context(), id)
-			require.NoError(t, md.CheckSuperQueryList(), "replication that is already running must not be restarted")
+			require.NoError(t, md.CheckSuperQueryList(), "replication that is already running must keep its source, and restart only to acknowledge")
 			if tc.errant {
 				require.ErrorContains(t, err, "Errant GTID detected")
 				assert.False(t, qsc.IsServing(), "a replica with an errant GTID must not serve")
 				return
 			}
 			require.NoError(t, err)
+			assert.True(t, md.SemiSyncReplicaEnabled)
 			assert.True(t, qsc.IsServing())
 		})
 	}
@@ -757,6 +767,7 @@ func TestDeferredReplicationRetryBoundsReadsUnderLocks(t *testing.T) {
 	// the executed position while holding both locks.
 	md.Replicating, md.IOThreadRunning = true, true
 	md.CurrentSourceHost, md.CurrentSourcePort = "old-primary", 3306
+	md.SemiSyncReplicaEnabled = true
 	md.ExpectedExecuteSuperQueryList = nil
 	daemon := &deadlineRecordingDaemon{FakeMysqlDaemon: md}
 	tm.MysqlDaemon = daemon
