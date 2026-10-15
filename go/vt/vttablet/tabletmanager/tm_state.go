@@ -326,12 +326,27 @@ func (ts *tmState) isPendingReplicationInit(id uint64) bool {
 }
 
 // endReplicationInit ends the deferred replication initialization id if it is
-// still pending.
-func (ts *tmState) endReplicationInit(ctx context.Context, id uint64) {
+// still pending. It does not update query service: the caller does that with
+// refreshServing once it no longer holds the locks of the initialization.
+func (ts *tmState) endReplicationInit(id uint64) {
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
 	if ts.pendingReplicationInit == id {
-		ts.setPendingReplicationInitLocked(ctx, 0, nil)
+		ts.pendingReplicationInit = 0
+		ts.replicationInitError = ""
+		ts.replicationInitSourceChosen = false
+	}
+}
+
+// refreshServing brings query service in line with the current state.
+func (ts *tmState) refreshServing(ctx context.Context) {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	if !ts.isOpen {
+		return
+	}
+	if err := ts.updateLocked(ctx); err != nil {
+		log.Error(fmt.Sprintf("Cannot update query service: %v", err))
 	}
 }
 

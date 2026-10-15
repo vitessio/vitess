@@ -66,6 +66,22 @@ func (d *deadlineRecordingDaemon) PrimaryPosition(ctx context.Context) (replicat
 	return d.FakeMysqlDaemon.PrimaryPosition(ctx)
 }
 
+// blockingServingController blocks the transition that enables query service
+// until released.
+type blockingServingController struct {
+	*tabletservermock.Controller
+	enabling chan struct{}
+	release  chan struct{}
+}
+
+func (c *blockingServingController) SetServingType(tabletType topodatapb.TabletType, ptsTime time.Time, serving bool, reason string) error {
+	if serving {
+		c.enabling <- struct{}{}
+		<-c.release
+	}
+	return c.Controller.SetServingType(tabletType, ptsTime, serving, reason)
+}
+
 // The client lets tests hold initialization after acquisition, without sleeps.
 type initializationPrimaryClient struct {
 	tmclient.TabletManagerClient
@@ -861,4 +877,30 @@ func TestReparentSourceSurvivesFailedReplicationStart(t *testing.T) {
 			assert.True(t, qsc.IsServing())
 		})
 	}
+}
+
+func TestDeferredReplicationRetryEnablesServingAfterReleasingLocks(t *testing.T) {
+	tm, md, ts, qsc, id := newPendingReplicationTM(t)
+	ctrl := &blockingServingController{Controller: qsc, enabling: make(chan struct{}, 1), release: make(chan struct{})}
+	tm.QueryServiceControl = ctrl
+	done := make(chan error, 1)
+	go func() { done <- tm.retryReplicationInitializationOnce(t.Context(), id) }()
+	select {
+	case <-ctrl.enabling:
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "the retry did not enable query service")
+	}
+
+	// Enabling query service can stall on MySQL; it must not hold either lock.
+	require.True(t, tm.actionSema.TryAcquire(1), "the retry must release the action lock before enabling query service")
+	tm.unlock()
+	_, unlock, err := ts.LockShard(t.Context(), "ks", "0", "reparent", topo.WithAcquireTimeout(30*time.Second))
+	require.NoError(t, err, "the retry must release the shard lock before enabling query service")
+	unlock(&err)
+	require.NoError(t, err)
+
+	close(ctrl.release)
+	require.NoError(t, <-done)
+	require.NoError(t, md.CheckSuperQueryList())
+	assert.True(t, qsc.IsServing())
 }

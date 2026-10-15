@@ -1237,7 +1237,21 @@ func (tm *TabletManager) retryReplicationInitialization(ctx context.Context, id 
 	}
 }
 
-func (tm *TabletManager) retryReplicationInitializationOnce(ctx context.Context, id uint64) (err error) {
+func (tm *TabletManager) retryReplicationInitializationOnce(ctx context.Context, id uint64) error {
+	err := tm.attemptDeferredReplicationInit(ctx, id)
+	if err == nil {
+		// Enable query service only after the attempt has released its locks.
+		// Enabling it opens MySQL connections that the attempt's deadline does
+		// not bound, and a stalled one must not keep the shard lock held.
+		tm.tmState.refreshServing(ctx)
+	}
+	return err
+}
+
+// attemptDeferredReplicationInit tries once to complete the deferred
+// replication initialization id. On success, the deferral has ended, but query
+// service is not updated yet.
+func (tm *TabletManager) attemptDeferredReplicationInit(ctx context.Context, id uint64) (err error) {
 	// Check without locks first, so that a retry with nothing to do does not
 	// take the shard lock, which a restore or a reparent may be about to try.
 	if done, err := tm.settleDeferredReplicationInit(ctx, id); done || err != nil {
@@ -1274,7 +1288,7 @@ func (tm *TabletManager) retryReplicationInitializationOnce(ctx context.Context,
 		if !status.Running() {
 			return vterrors.New(vtrpc.Code_UNAVAILABLE, "waiting for replication from the source that a reparent or VTOrc chose")
 		}
-		tm.tmState.endReplicationInit(ctx, id)
+		tm.tmState.endReplicationInit(id)
 		return nil
 	}
 	primary, err := tm.replicatingShardPrimary(ctx)
@@ -1301,7 +1315,7 @@ func (tm *TabletManager) retryReplicationInitializationOnce(ctx context.Context,
 			return vterrors.New(vtrpc.Code_UNAVAILABLE, "no primary to replicate from yet")
 		}
 	}
-	tm.tmState.endReplicationInit(ctx, id)
+	tm.tmState.endReplicationInit(id)
 	return nil
 }
 
@@ -1318,7 +1332,7 @@ func (tm *TabletManager) settleDeferredReplicationInit(ctx context.Context, id u
 	switch tm.Tablet().Type {
 	case topodatapb.TabletType_PRIMARY:
 		// A primary does not replicate.
-		tm.tmState.endReplicationInit(ctx, id)
+		tm.tmState.endReplicationInit(id)
 		return true, nil
 	case topodatapb.TabletType_RESTORE:
 		// A restore that finishes supersedes this initialization. One that
