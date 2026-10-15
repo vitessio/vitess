@@ -89,6 +89,10 @@ type tmState struct {
 	// replicationInitError is the latest error of the pending deferred
 	// replication initialization.
 	replicationInitError string
+	// replicationInitSourceChosen is set when an RPC has chosen the
+	// replication source since the pending deferral, which then must not
+	// choose one itself.
+	replicationInitSourceChosen bool
 
 	// displayState contains the current snapshot of the internal state
 	// and has its own mutex.
@@ -331,6 +335,26 @@ func (ts *tmState) endReplicationInit(ctx context.Context, id uint64) {
 	}
 }
 
+// replicationSourceChosen records that an RPC is installing a replication
+// source of its choice, so that the pending deferred initialization no longer
+// chooses one. It does not end the deferral: replicas still do not serve until
+// replication runs.
+func (ts *tmState) replicationSourceChosen() {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	if ts.pendingReplicationInit != 0 {
+		ts.replicationInitSourceChosen = true
+	}
+}
+
+// isReplicationSourceChosen reports whether an RPC has chosen the replication
+// source since the deferred replication initialization id.
+func (ts *tmState) isReplicationSourceChosen(id uint64) bool {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	return ts.pendingReplicationInit == id && ts.replicationInitSourceChosen
+}
+
 // cancelReplicationInit ends any pending deferred replication initialization.
 func (ts *tmState) cancelReplicationInit(ctx context.Context) {
 	ts.mu.Lock()
@@ -342,6 +366,9 @@ func (ts *tmState) cancelReplicationInit(ctx context.Context) {
 
 func (ts *tmState) setPendingReplicationInitLocked(ctx context.Context, id uint64, err error) {
 	reason := ts.canServe(ts.tablet.Type)
+	if id != ts.pendingReplicationInit {
+		ts.replicationInitSourceChosen = false
+	}
 	ts.pendingReplicationInit = id
 	ts.replicationInitError = ""
 	if id != 0 && err != nil {

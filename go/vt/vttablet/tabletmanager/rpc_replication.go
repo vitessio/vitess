@@ -544,6 +544,9 @@ func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.Tab
 		return err
 	}
 
+	// From here on this source replaces any that a deferred initialization
+	// would choose, even if starting replication fails.
+	tm.tmState.replicationSourceChosen()
 	if err := tm.MysqlDaemon.SetReplicationPosition(ctx, pos); err != nil {
 		return err
 	}
@@ -1027,6 +1030,9 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 			return vterrors.New(vtrpc.Code_FAILED_PRECONDITION, fmt.Sprintf("Errant GTID detected - %s; Primary GTID - %s, Replica GTID - %s", errantGtid, primaryPosition, replicaPosition.String()))
 		}
 	}
+	// From here on this source replaces any that a deferred initialization
+	// would choose, even if starting replication fails.
+	tm.tmState.replicationSourceChosen()
 	if status.SourceHost != host || status.SourcePort != port || heartbeatInterval != 0 {
 		// This handles both changing the address and starting replication.
 		if err := tm.setReplicationSourceRecoverable(ctx, host, port, heartbeatInterval, wasReplicating, shouldbeReplicating); err != nil {

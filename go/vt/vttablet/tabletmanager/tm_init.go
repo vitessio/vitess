@@ -1263,6 +1263,20 @@ func (tm *TabletManager) retryReplicationInitializationOnce(ctx context.Context,
 	// Bound everything done while holding both locks.
 	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer cancel()
+	if tm.tmState.isReplicationSourceChosen(id) {
+		// An RPC chose the source but did not finish starting replication.
+		// Keep its source, which may be newer than the shard record, and wait
+		// until replication runs from it.
+		status, err := tm.MysqlDaemon.ReplicationStatus(ctx)
+		if err != nil {
+			return err
+		}
+		if !status.Running() {
+			return vterrors.New(vtrpc.Code_UNAVAILABLE, "waiting for replication from the source that a reparent or VTOrc chose")
+		}
+		tm.tmState.endReplicationInit(ctx, id)
+		return nil
+	}
 	primary, err := tm.replicatingShardPrimary(ctx)
 	if err != nil {
 		return err

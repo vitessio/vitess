@@ -807,3 +807,58 @@ func TestReparentSourceEndsDeferredReplicationInitialization(t *testing.T) {
 	require.NoError(t, md.CheckSuperQueryList())
 	assert.Equal(t, "new-primary", md.CurrentSourceHost)
 }
+
+func TestReparentSourceSurvivesFailedReplicationStart(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		queries []string
+		rpc     func(ctx context.Context, tm *TabletManager, primary *topodatapb.TabletAlias) error
+	}{{
+		name:    "SetReplicationSource",
+		queries: []string{"FAKE SET SOURCE"},
+		rpc: func(ctx context.Context, tm *TabletManager, primary *topodatapb.TabletAlias) error {
+			return tm.SetReplicationSource(ctx, primary, 0, "", true, true, 0)
+		},
+	}, {
+		name:    "InitReplica",
+		queries: []string{"FAKE RESET BINARY LOGS AND GTIDS", "FAKE SET GLOBAL gtid_purged", "FAKE SET SOURCE"},
+		rpc: func(ctx context.Context, tm *TabletManager, primary *topodatapb.TabletAlias) error {
+			return tm.InitReplica(ctx, primary, gtidFlavor+"/"+gtidPosition, 0, true)
+		},
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			tm, md, ts, qsc, id := newPendingReplicationTM(t)
+			// The shard record still names the old primary.
+			newPrimary := newTestTablet(t, 3, "ks", "0", nil)
+			newPrimary.Type = topodatapb.TabletType_PRIMARY
+			newPrimary.MysqlHostname, newPrimary.MysqlPort = "new-primary", 3306
+			require.NoError(t, ts.CreateTablet(t.Context(), newPrimary))
+			md.SetReplicationSourceInputs = []string{"new-primary:3306"}
+			md.ExpectedExecuteSuperQueryList = tc.queries
+			md.StartReplicationError = errors.New("cannot start replication")
+			tm._waitForGrantsComplete = make(chan struct{})
+			close(tm._waitForGrantsComplete)
+
+			// The RPC installs its source, but replication does not start.
+			require.ErrorContains(t, tc.rpc(t.Context(), tm, newPrimary.Alias), "cannot start replication")
+			require.NoError(t, md.CheckSuperQueryList())
+			assert.False(t, qsc.IsServing(), "replication is not running")
+
+			// The retry keeps the source the RPC chose, and keeps the replica
+			// out of rotation until replication runs.
+			md.ExpectedExecuteSuperQueryList = nil
+			md.ExpectedExecuteSuperQueryCurrent = 0
+			require.ErrorContains(t, tm.retryReplicationInitializationOnce(t.Context(), id), "waiting for replication")
+			require.NoError(t, md.CheckSuperQueryList())
+			assert.Equal(t, "new-primary", md.CurrentSourceHost)
+			assert.False(t, qsc.IsServing())
+
+			// Once replication runs, for example after VTOrc restarts it, the
+			// deferral ends.
+			md.Replicating, md.IOThreadRunning = true, true
+			require.NoError(t, tm.retryReplicationInitializationOnce(t.Context(), id))
+			assert.Equal(t, "new-primary", md.CurrentSourceHost)
+			assert.True(t, qsc.IsServing())
+		})
+	}
+}
