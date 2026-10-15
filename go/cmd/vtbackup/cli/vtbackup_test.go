@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo"
@@ -135,4 +136,36 @@ func (m *catchupReplicationMysqlDaemon) StopReplication(ctx context.Context, hoo
 
 func testCatchupPosition(pos uint64) replication.Position {
 	return replication.Position{GTIDSet: replication.FilePosGTID{File: "source-bin.000001", Pos: pos}}
+}
+
+func TestResetReplication(t *testing.T) {
+	pos, err := replication.DecodePosition("MySQL56/16b1039f-22b6-11ed-b765-0a43f95f28a3:1-10")
+	require.NoError(t, err)
+
+	tests := []struct {
+		name        string
+		pos         replication.Position
+		keepBinlogs bool
+		queries     []string
+	}{
+		{"keep restored binlogs", pos, true, []string{"STOP REPLICA", "FAKE RESET REPLICA ALL"}},
+		{"set position", pos, false, []string{"STOP REPLICA", "FAKE RESET REPLICA ALL", "FAKE RESET BINARY LOGS AND GTIDS", "FAKE SET GLOBAL gtid_purged"}},
+		{"zero position", replication.Position{}, false, []string{"STOP REPLICA", "FAKE RESET REPLICA ALL", "FAKE RESET ALL REPLICATION"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fake := mysqlctl.NewFakeMysqlDaemon(fakesqldb.New(t))
+			t.Cleanup(fake.Close)
+			fake.SetReplicationPositionPos = tt.pos
+			fake.ExpectedExecuteSuperQueryList = tt.queries
+			require.NoError(t, resetReplication(t.Context(), tt.pos, tt.keepBinlogs, fake))
+			assert.Equal(t, len(tt.queries), fake.ExpectedExecuteSuperQueryCurrent)
+		})
+	}
+}
+
+func TestValidateBinlogFlags(t *testing.T) {
+	require.NoError(t, validateBinlogFlags(mysqlctl.BackupParams{IncludeBinlogs: true, BackupEngine: "builtin"}, false))
+	require.ErrorContains(t, validateBinlogFlags(mysqlctl.BackupParams{IncludeBinlogs: true, BackupEngine: "builtin"}, true), "--restore-with-clone")
+	require.NoError(t, validateBinlogFlags(mysqlctl.BackupParams{}, true))
 }

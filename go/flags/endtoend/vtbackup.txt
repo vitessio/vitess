@@ -153,6 +153,7 @@ Flags:
       --grpc-max-message-size int                                   Maximum allowed RPC message size. Larger messages will be rejected by gRPC with the error 'exceeding the max size'. (default 16777216)
       --grpc-prometheus                                             Enable gRPC monitoring with Prometheus.
   -h, --help                                                        help for vtbackup
+      --include-binlogs                                             Include the source's binary logs in a full builtin backup. Restores use them automatically.
       --incremental-from-pos string                                 Position, or name of backup from which to create an incremental backup. Default: empty. If given, then this backup becomes an incremental backup from given position or given backup. If value is 'auto', this backup will be taken from the last successful backup position.
       --init-backup-sql-fail-on-error                               Whether or not to fail the backup if the init SQL queries (--init-backup-sql-queries) fail, which includes if they fail to complete before the specified timeout (--init-backup-sql-timeout)
       --init-backup-sql-queries strings                             Queries to execute after catch-up replication, before initializing the backup
