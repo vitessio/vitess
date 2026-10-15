@@ -102,6 +102,25 @@ jobs:
         if: steps.changes.outputs.end_to_end == 'true'
         uses: $/.github/actions/setup-go
 
+      # Build the source tree once into an image on top of the bootstrap image,
+      # so the tests don't each run "make build" in a fresh container. The
+      # default builder uses the Docker daemon, which has the bootstrap image
+      # loaded and keeps the result without exporting it. The image starts from
+      # the Go module and build caches that setup-go restored.
+      - name: Build the test image
+        if: steps.changes.outputs.end_to_end == 'true'
+        timeout-minutes: 20
+        run: |
+          # The build cache directory only exists when setup-go restored one.
+          mkdir -p "$(go env GOCACHE)"
+          docker buildx build --builder default \
+            --file docker/test/Dockerfile \
+            --build-arg bootstrap_image="vitess/bootstrap:${BOOTSTRAP_VERSION}-${BOOTSTRAP_FLAVOR}" \
+            --build-context gomodcache="$(go env GOMODCACHE)" \
+            --build-context gocache="$(go env GOCACHE)" \
+            --tag vitess-test \
+            .
+
       - name: Tune the OS
         if: steps.changes.outputs.end_to_end == 'true'
         timeout-minutes: 5
@@ -111,4 +130,4 @@ jobs:
         if: steps.changes.outputs.end_to_end == 'true'
         timeout-minutes: 30
         run: |
-          go run test.go -docker=true -pull=false -flavor=${{ env.BOOTSTRAP_FLAVOR }} -bootstrap-version=${{ env.BOOTSTRAP_VERSION }} --follow -shard ${{ matrix.shard }}
+          go run test.go -docker=true -docker-image=vitess-test -pull=false -flavor=${{ env.BOOTSTRAP_FLAVOR }} -bootstrap-version=${{ env.BOOTSTRAP_VERSION }} --follow -shard ${{ matrix.shard }}
