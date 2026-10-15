@@ -67,6 +67,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
@@ -1263,12 +1264,16 @@ func (tm *TabletManager) retryReplicationInitializationOnce(ctx context.Context,
 		// aborts leaves the data, and this initialization, unchanged.
 		return vterrors.New(vtrpc.Code_UNAVAILABLE, "waiting for the restore to finish")
 	default:
-		replicating, err := tm.replicatingFromShardPrimary(ctx)
+		primary, err := tm.replicatingShardPrimary(ctx)
 		if err != nil {
 			return err
 		}
-		if replicating {
-			// A reparent or VTOrc has already configured replication.
+		if primary != nil {
+			// A reparent, VTOrc or mysqld itself already replicates from the
+			// primary. Keep startup's errant GTID check, but not its restart.
+			if _, err := tm.checkNoErrantGTIDs(ctx, primary); err != nil {
+				return err
+			}
 			break
 		}
 		ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
@@ -1287,21 +1292,58 @@ func (tm *TabletManager) retryReplicationInitializationOnce(ctx context.Context,
 	return nil
 }
 
-// replicatingFromShardPrimary reports whether both replication threads are
-// running from the shard's current primary.
-func (tm *TabletManager) replicatingFromShardPrimary(ctx context.Context) (bool, error) {
+// replicatingShardPrimary returns the shard's current primary if both
+// replication threads are running from it, and nil otherwise.
+func (tm *TabletManager) replicatingShardPrimary(ctx context.Context) (*topodatapb.Tablet, error) {
 	status, err := tm.MysqlDaemon.ReplicationStatus(ctx)
 	if errors.Is(err, mysql.ErrNotReplica) {
-		return false, nil
+		return nil, nil
 	}
 	if err != nil || !status.Running() {
-		return false, err
+		return nil, err
 	}
 	primary, err := topotools.GetShardPrimaryForTablet(ctx, tm.TopoServer, tm.Tablet())
 	if err != nil {
-		return false, err
+		return nil, err
 	}
-	return status.SourceHost == primary.MysqlHostname && status.SourcePort == primary.MysqlPort, nil
+	if status.SourceHost != primary.MysqlHostname || status.SourcePort != primary.MysqlPort {
+		return nil, nil
+	}
+	return primary.Tablet, nil
+}
+
+// checkNoErrantGTIDs returns the status of primary after checking that this
+// tablet has executed no transaction that primary lacks. A tablet with such an
+// errant GTID must not enter the replication graph.
+func (tm *TabletManager) checkNoErrantGTIDs(ctx context.Context, primary *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
+	replicaPos, err := tm.MysqlDaemon.PrimaryPosition(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Bound the probe so a dead primary does not keep the shard lock held.
+	statusCtx, statusCancel := context.WithTimeout(ctx, replicationInitializationPrimaryStatusTimeout)
+	primaryStatus, err := tm.tmc.PrimaryStatus(statusCtx, primary)
+	statusCancel()
+	if err != nil {
+		return nil, err
+	}
+	primaryPosition, err := replication.DecodePosition(primaryStatus.Position)
+	if err != nil {
+		return nil, err
+	}
+	primarySid, err := replication.ParseSID(primaryStatus.ServerUuid)
+	if err != nil {
+		return nil, err
+	}
+	errantGtid, err := replication.ErrantGTIDsOnReplica(replicaPos, primaryPosition, primarySid)
+	if err != nil {
+		return nil, err
+	}
+	if errantGtid != "" {
+		return nil, vterrors.New(vtrpc.Code_FAILED_PRECONDITION, fmt.Sprintf("Errant GTID detected - %s; Primary GTID - %s, Replica GTID - %s", errantGtid, primaryPosition, replicaPos.String()))
+	}
+	return primaryStatus, nil
 }
 
 // initializeReplication is used to initialize the replication when the tablet starts.
@@ -1389,37 +1431,9 @@ func (tm *TabletManager) initializeReplicationLocked(ctx context.Context, tablet
 		return "", nil
 	}
 
-	// Find our own executed GTID set and,
-	// the executed GTID set of the tablet that we are reparenting to.
-	// We will then compare our own position against it to verify that we don't
-	// have an errant GTID. If we find any GTID that we have, but the primary doesn't,
-	// we will not enter the replication graph and instead fail replication.
-	replicaPos, err := tm.MysqlDaemon.PrimaryPosition(ctx)
+	primaryStatus, err := tm.checkNoErrantGTIDs(ctx, currentPrimary.Tablet)
 	if err != nil {
 		return "", err
-	}
-
-	// Bound the probe so a dead primary does not keep the shard lock held.
-	statusCtx, statusCancel := context.WithTimeout(ctx, replicationInitializationPrimaryStatusTimeout)
-	primaryStatus, err := tm.tmc.PrimaryStatus(statusCtx, currentPrimary.Tablet)
-	statusCancel()
-	if err != nil {
-		return "", err
-	}
-	primaryPosition, err := replication.DecodePosition(primaryStatus.Position)
-	if err != nil {
-		return "", err
-	}
-	primarySid, err := replication.ParseSID(primaryStatus.ServerUuid)
-	if err != nil {
-		return "", err
-	}
-	errantGtid, err := replication.ErrantGTIDsOnReplica(replicaPos, primaryPosition, primarySid)
-	if err != nil {
-		return "", err
-	}
-	if errantGtid != "" {
-		return "", vterrors.New(vtrpc.Code_FAILED_PRECONDITION, fmt.Sprintf("Errant GTID detected - %s; Primary GTID - %s, Replica GTID - %s", errantGtid, primaryPosition, replicaPos.String()))
 	}
 
 	// This check is not a fencing token: the lock lease can still expire after it.

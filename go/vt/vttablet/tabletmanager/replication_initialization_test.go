@@ -570,15 +570,36 @@ func TestSupersededReplicationInitializationDoesNotChangeReplication(t *testing.
 }
 
 func TestDeferredReplicationInitializationKeepsExistingReplication(t *testing.T) {
-	tm, md, _, qsc, id := newPendingReplicationTM(t)
-	// A reparent has already pointed replication at the current primary.
-	md.Replicating, md.IOThreadRunning = true, true
-	md.CurrentSourceHost, md.CurrentSourcePort = "old-primary", 3306
-	md.ExpectedExecuteSuperQueryList = nil
+	for _, tc := range []struct {
+		name       string
+		replicaPos string
+		errant     bool
+	}{
+		{name: "no errant GTID", replicaPos: gtidPosition},
+		{name: "errant GTID", replicaPos: gtidPosition + ",8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1", errant: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tm, md, _, qsc, id := newPendingReplicationTM(t)
+			// Replication already runs from the current primary, as after a
+			// reparent or a vttablet restart that left mysqld replicating.
+			md.Replicating, md.IOThreadRunning = true, true
+			md.CurrentSourceHost, md.CurrentSourcePort = "old-primary", 3306
+			pos, err := replication.ParsePosition(gtidFlavor, tc.replicaPos)
+			require.NoError(t, err)
+			md.SetPrimaryPositionLocked(pos)
+			md.ExpectedExecuteSuperQueryList = nil
 
-	require.NoError(t, tm.retryReplicationInitializationOnce(t.Context(), id))
-	assert.True(t, qsc.IsServing())
-	require.NoError(t, md.CheckSuperQueryList(), "replication that is already correct must not be restarted")
+			err = tm.retryReplicationInitializationOnce(t.Context(), id)
+			require.NoError(t, md.CheckSuperQueryList(), "replication that is already running must not be restarted")
+			if tc.errant {
+				require.ErrorContains(t, err, "Errant GTID detected")
+				assert.False(t, qsc.IsServing(), "a replica with an errant GTID must not serve")
+				return
+			}
+			require.NoError(t, err)
+			assert.True(t, qsc.IsServing())
+		})
+	}
 }
 
 func TestDeferredReplicationRetryLocksShardBeforeActionLock(t *testing.T) {
