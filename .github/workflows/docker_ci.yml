@@ -98,6 +98,20 @@ jobs:
           bootstrap-flavor: ${{ env.BOOTSTRAP_FLAVOR }}
           cache-export: ${{ matrix.shard == 'java' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release-')) }}
 
+      # Build the source tree once into an image on top of the bootstrap image,
+      # so the tests don't each run "make build" in a fresh container. The
+      # default builder uses the Docker daemon, which has the bootstrap image
+      # loaded and keeps the result without exporting it.
+      - name: Build the test image
+        if: steps.changes.outputs.end_to_end == 'true'
+        timeout-minutes: 20
+        run: |
+          docker buildx build --builder default \
+            --file docker/test/Dockerfile \
+            --build-arg bootstrap_image="vitess/bootstrap:${BOOTSTRAP_VERSION}-${BOOTSTRAP_FLAVOR}" \
+            --tag vitess-test \
+            .
+
       - name: Set up Go
         if: steps.changes.outputs.end_to_end == 'true'
         uses: $/.github/actions/setup-go
@@ -111,4 +125,4 @@ jobs:
         if: steps.changes.outputs.end_to_end == 'true'
         timeout-minutes: 30
         run: |
-          go run test.go -docker=true -pull=false -flavor=${{ env.BOOTSTRAP_FLAVOR }} -bootstrap-version=${{ env.BOOTSTRAP_VERSION }} --follow -shard ${{ matrix.shard }}
+          go run test.go -docker=true -docker-image=vitess-test -pull=false -flavor=${{ env.BOOTSTRAP_FLAVOR }} -bootstrap-version=${{ env.BOOTSTRAP_VERSION }} --follow -shard ${{ matrix.shard }}

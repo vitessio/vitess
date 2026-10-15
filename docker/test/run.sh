@@ -22,11 +22,10 @@
 
 # If you still think that you want to use this script, read on.
 #
-# The script has two modes it can run in:
-# - run_test:     Run the test cmd in the given Docker image ("flavor").
-# - create_cache: Create a new Docker image after copying the source and
-#                 running "make build". Such an image can be reused in
-#                 future test invocations via --use_docker_cache <image>.
+# By default, the script copies the source tree into the bootstrap image of the
+# given flavor and runs the command there. With --image <image>, it runs the
+# command in <image> instead, which already contains the source tree and its
+# build (see docker/test/Dockerfile).
 #
 # Examples:
 #  a) Start an interactive shell within the Docker image.
@@ -35,11 +34,8 @@
 #  b) Build the code and run a test.
 #  $ docker/test/run.sh mysql80 "make build && ./test/keyrange_test.py -v"
 #
-#  c) Cache the output of the command e.g. cache "make build" as we do for CI.
-#  $ docker/test/run.sh --create_docker_cache vitess/bootstrap:rm_mysql80_test_cache_do_NOT_push mysql80 "make build"
-#
-#  d) Run the test using a cache image.
-#  $ docker/test/run.sh --use_docker_cache vitess/bootstrap:rm_mysql80_test_cache_do_NOT_push mysql80 "./test/keyrange_test.py -v"
+#  c) Run a test in an image that already contains the build.
+#  $ docker/test/run.sh --image vitess-test mysql80 "./test/keyrange_test.py -v"
 
 # Functions.
 # Helper to append additional commands via "&&".
@@ -53,35 +49,18 @@ function append_cmd() {
 	echo "$cmd"
 }
 
-# Variables.
-# Default to "run_test" mode unless the --create_docker_cache flag is found.
-mode="run_test"
-
 # Main.
 # Parse non-positional flags.
 while true; do
 	case "$1" in
-	--create_docker_cache)
+	--image)
 		case "$2" in
 		"")
-			echo "ERROR: --create_docker_cache requires the name of the image as second parameter"
+			echo "ERROR: --image requires the name of the image as second parameter"
 			exit 1
 			;;
 		*)
-			mode="create_cache"
-			cache_image=$2
-			shift 2
-			;;
-		esac
-		;;
-	--use_docker_cache)
-		case "$2" in
-		"")
-			echo "ERROR: --use_docker_cache requires the name of the image as second parameter"
-			exit 1
-			;;
-		*)
-			existing_cache_image=$2
+			prebuilt_image=$2
 			shift 2
 			;;
 		esac
@@ -117,8 +96,8 @@ if [[ ! -f bootstrap.sh ]]; then
 fi
 
 image=vitess/bootstrap:$version-$flavor
-if [[ -n "$existing_cache_image" ]]; then
-	image=$existing_cache_image
+if [[ -n "$prebuilt_image" ]]; then
+	image=$prebuilt_image
 fi
 
 # Fix permissions before copying files, to avoid AUFS bug other must have read/access permissions
@@ -166,14 +145,11 @@ else
 fi
 
 # Run tests
-case "$mode" in
-"run_test") echo "Running tests in $image image..." ;;
-"create_cache") echo "Creating cache image $cache_image ..." ;;
-esac
+echo "Running tests in $image image..."
 
 bashcmd=""
 
-if [[ -z "$existing_cache_image" ]]; then
+if [[ -z "$prebuilt_image" ]]; then
 	# Construct "cp" command to copy the source code.
 	bashcmd=$(append_cmd "$bashcmd" "cp -R /tmp/src/!(vtdataroot|dist|bin|lib|vthook) . && cp -R /tmp/src/.git .")
 fi
@@ -220,15 +196,6 @@ if [[ -n "$hostdir" ]]; then
 	docker run --name="rm_$testid" -v "$hostdir":/vt/vtdataroot "$image" bash -c 'rm -rf /vt/vtdataroot/*'
 	docker rm -f "rm_$testid" &>/dev/null
 	rm -rf "$hostdir"
-fi
-
-# If requested, create the cache image.
-if [[ "$mode" == "create_cache" && $exitcode == 0 ]]; then
-	msg="DO NOT PUSH: This is a temporary layer meant to persist e.g. the result of 'make build'. Never push this layer back to our official Docker Hub repository."
-	if ! docker commit -m "$msg" "$testid" "$cache_image"; then
-		exitcode=$?
-		echo "ERROR: Failed to create Docker cache. Used command: docker commit -m '$msg' $testid $image"
-	fi
 fi
 
 # Delete the container

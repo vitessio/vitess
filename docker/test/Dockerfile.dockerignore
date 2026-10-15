@@ -1,0 +1,11 @@
+# Used instead of the repository's .dockerignore when building
+# docker/test/Dockerfile. It leaves out what docker/test/run.sh does not copy
+# into a test container, plus local build and test output.
+/_test
+/bin/
+/dist/
+/lib/
+/vtdataroot/
+/vthook/
+/web/vtadmin/build
+/web/vtadmin/node_modules
