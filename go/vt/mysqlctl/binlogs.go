@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strings"
 
+	"vitess.io/vitess/go/mysql/replication"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -116,4 +117,70 @@ func binlogFilesForFullBackup(cnf *Mycnf) ([]FileEntry, error) {
 		fes = append(fes, FileEntry{Base: backupBinlogStripped, Name: "binlog." + seq, ModTime: fi.ModTime().UTC()})
 	}
 	return fes, nil
+}
+
+// restoredBinlogVarsQuery reads where mysqld looks for binlogs after a restore.
+const restoredBinlogVarsQuery = "SELECT @@global.log_bin_basename, @@global.log_bin_index"
+
+// finishBinlogRestore gives the restored binlogs their source mtimes, so that
+// binlog_expire_logs_seconds still counts from when they were written, and writes
+// the index that mysqld reads them from. It runs before mysqld starts.
+func finishBinlogRestore(cnf *Mycnf, fes []FileEntry) error {
+	_, indexPath, err := binlogLocation(cnf)
+	if err != nil {
+		return err
+	}
+	var index strings.Builder
+	for i := range fes {
+		if fes[i].ModTime.IsZero() {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "binlog entry %q has no modification time", fes[i].Name)
+		}
+		p, err := fes[i].fullPath(cnf)
+		if err != nil {
+			return err
+		}
+		if err := os.Chtimes(p, fes[i].ModTime, fes[i].ModTime); err != nil {
+			return vterrors.Wrapf(err, "cannot set modification time of %s", p)
+		}
+		index.WriteString(p + "\n")
+	}
+	tmp := indexPath + ".tmp"
+	if err := os.WriteFile(tmp, []byte(index.String()), 0o640); err != nil {
+		return vterrors.Wrapf(err, "cannot write binlog index %s", tmp)
+	}
+	return vterrors.Wrapf(os.Rename(tmp, indexPath), "cannot install binlog index %s", indexPath)
+}
+
+// verifyRestoredBinlogs checks, without changing anything, that mysqld reads the
+// binlogs the restore installed and that they put gtid_executed at the backup
+// position. A mismatch fails the restore: repairing it with RESET would delete them.
+func verifyRestoredBinlogs(ctx context.Context, mysqld MysqlDaemon, cnf *Mycnf, pos replication.Position) error {
+	basename, indexPath, err := binlogLocation(cnf)
+	if err != nil {
+		return err
+	}
+	qr, err := mysqld.FetchSuperQuery(ctx, restoredBinlogVarsQuery)
+	if err != nil {
+		return vterrors.Wrap(err, "cannot read binlog location after restore")
+	}
+	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 2 {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected result for %q: %v", restoredBinlogVarsQuery, qr.Rows)
+	}
+	if got := qr.Rows[0][0].ToString(); got != basename {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "restored binlogs are under %s but mysqld's log_bin_basename is %s", basename, got)
+	}
+	// mysqld uses log-bin-index as given but reports a custom extension as ".index",
+	// so only the path without its extension is comparable.
+	got := qr.Rows[0][1].ToString()
+	if strings.TrimSuffix(got, filepath.Ext(got)) != strings.TrimSuffix(indexPath, filepath.Ext(indexPath)) {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "restored binlog index is %s but mysqld's log_bin_index is %s", indexPath, got)
+	}
+	executed, err := mysqld.PrimaryPosition(ctx)
+	if err != nil {
+		return vterrors.Wrap(err, "cannot read gtid_executed after restore")
+	}
+	if !executed.Equal(pos) {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "gtid_executed after restoring binlogs is %v, expected the backup position %v", executed, pos)
+	}
+	return nil
 }

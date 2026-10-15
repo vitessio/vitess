@@ -832,6 +832,10 @@ func TestBackupRestoreWithManyChunks(t *testing.T) {
 	restoredData, err := os.ReadFile(filePath)
 	require.NoError(t, err)
 	assert.Equal(t, originalChecksum, crc32.ChecksumIEEE(restoredData))
+
+	// A backup without binlogs restores none and writes no binlog index.
+	assert.False(t, bm.IncludesBinlogs)
+	assert.NoFileExists(t, path.Join(backupRoot, "binlog.index"))
 }
 
 // TestBackupRestoreWithBinlogs backs up a source with binlogs and checks that
@@ -923,6 +927,49 @@ func TestBackupRestoreWithBinlogs(t *testing.T) {
 	for _, fe := range bm.FileEntries {
 		assert.NotEqual(t, backupBinlogStripped, fe.Base, "data entries must not include binlogs: %v", fe)
 	}
+
+	// Restore into a target with another binlog basename.
+	dstDir := path.Join(backupRoot, "dst")
+	require.NoError(t, os.MkdirAll(dstDir, 0o755))
+	dstBase := path.Join(dstDir, "dst-bin")
+	restored, err := be.ExecuteRestore(ctx, RestoreParams{
+		Cnf: &Mycnf{
+			InnodbDataHomeDir:     path.Join(backupRoot, "innodb"),
+			InnodbLogGroupHomeDir: path.Join(backupRoot, "log"),
+			DataDir:               dataDir,
+			BinLogPath:            dstBase,
+			RelayLogPath:          path.Join(backupRoot, "relaylog"),
+			RelayLogIndexPath:     path.Join(backupRoot, "relaylogindex"),
+			RelayLogInfoPath:      path.Join(backupRoot, "relayloginfo"),
+		},
+		Logger:               logutil.NewMemoryLogger(),
+		Mysqld:               newBackupTestMysqld(t),
+		Concurrency:          4,
+		HookExtraEnv:         map[string]string{},
+		DbName:               "test",
+		Keyspace:             "test",
+		Shard:                "-",
+		StartTime:            time.Now(),
+		Stats:                backupstats.NoStats(),
+		MysqlShutdownTimeout: time.Minute,
+	}, filebackupstorage.NewBackupHandle(nil, "", "", true))
+	require.NoError(t, err)
+	assert.True(t, restored.IncludesBinlogs)
+
+	var dstIndex strings.Builder
+	for _, seq := range []string{"000001", "000002"} {
+		p := dstBase + "." + seq
+		got, err := os.ReadFile(p)
+		require.NoError(t, err)
+		assert.Equal(t, "binlog "+seq, string(got))
+		st, err := os.Stat(p)
+		require.NoError(t, err)
+		assert.True(t, mtimes[seq].Equal(st.ModTime()), "mtime of %s: %v", p, st.ModTime())
+		dstIndex.WriteString(p + "\n")
+	}
+	gotIndex, err := os.ReadFile(dstBase + ".index")
+	require.NoError(t, err)
+	assert.Equal(t, dstIndex.String(), string(gotIndex))
 }
 
 func TestCreateChunkedDestinationsRejectsBadStorageName(t *testing.T) {

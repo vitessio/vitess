@@ -11,7 +11,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -137,4 +139,88 @@ func TestValidateIncludeBinlogs(t *testing.T) {
 	err = ValidateIncludeBinlogs(BackupParams{IncludeBinlogs: true, BackupEngine: builtinBackupEngineName, IncrementalFromPos: "auto"})
 	assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
 	require.NoError(t, ValidateIncludeBinlogs(BackupParams{IncludeBinlogs: true, BackupEngine: builtinBackupEngineName}))
+}
+
+func TestFinishBinlogRestoreRejectsMissingModTime(t *testing.T) {
+	dir := t.TempDir()
+	cnf := &Mycnf{DataDir: dir, BinLogPath: filepath.Join(dir, "dst-bin")}
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "dst-bin.000001"), []byte("x"), 0o644))
+	err := finishBinlogRestore(cnf, []FileEntry{{Base: backupBinlogStripped, Name: "binlog.000001"}})
+	assert.Equal(t, vtrpcpb.Code_INVALID_ARGUMENT, vterrors.Code(err))
+}
+
+func TestVerifyRestoredBinlogs(t *testing.T) {
+	cnf := &Mycnf{DataDir: "/vt/data", BinLogPath: "/vt/bin-logs/dst-bin"}
+	customIndexCnf := &Mycnf{DataDir: "/vt/data", BinLogPath: "/vt/bin-logs/dst-bin", BinLogIndexPath: "custom.idx"}
+	pos, err := replication.DecodePosition("MySQL56/16b1039f-22b6-11ed-b765-0a43f95f28a3:1-10")
+	require.NoError(t, err)
+	other, err := replication.DecodePosition("MySQL56/16b1039f-22b6-11ed-b765-0a43f95f28a3:1-9")
+	require.NoError(t, err)
+
+	tests := []struct {
+		name     string
+		cnf      *Mycnf
+		basename string
+		index    string
+		executed replication.Position
+		wantErr  string
+	}{
+		{name: "match", cnf: cnf, basename: "/vt/bin-logs/dst-bin", index: "/vt/bin-logs/dst-bin.index", executed: pos},
+		{name: "custom index extension is reported as .index", cnf: customIndexCnf, basename: "/vt/bin-logs/dst-bin", index: "/vt/data/custom.index", executed: pos},
+		{name: "basename differs", cnf: cnf, basename: "/vt/data/binlog", index: "/vt/bin-logs/dst-bin.index", executed: pos, wantErr: "log_bin_basename"},
+		{name: "index differs", cnf: cnf, basename: "/vt/bin-logs/dst-bin", index: "/vt/data/binlog.index", executed: pos, wantErr: "log_bin_index"},
+		{name: "gtid_executed differs", cnf: cnf, basename: "/vt/bin-logs/dst-bin", index: "/vt/bin-logs/dst-bin.index", executed: other, wantErr: "gtid_executed"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fakedb := fakesqldb.New(t)
+			t.Cleanup(fakedb.Close)
+			mysqld := NewFakeMysqlDaemon(fakedb)
+			t.Cleanup(mysqld.Close)
+			mysqld.CurrentPrimaryPosition = tt.executed
+			mysqld.FetchSuperQueryMap = map[string]*sqltypes.Result{
+				restoredBinlogVarsQuery: sqltypes.MakeTestResult(
+					sqltypes.MakeTestFields("log_bin_basename|log_bin_index", "varchar|varchar"),
+					tt.basename+"|"+tt.index),
+			}
+			// No ExpectedExecuteSuperQueryList: any RESET or SET GLOBAL gtid_purged fails the test.
+			err := verifyRestoredBinlogs(t.Context(), mysqld, tt.cnf, pos)
+			if tt.wantErr == "" {
+				require.NoError(t, err)
+				return
+			}
+			require.ErrorContains(t, err, tt.wantErr)
+			assert.Equal(t, vtrpcpb.Code_INTERNAL, vterrors.Code(err))
+		})
+	}
+}
+
+func TestEnsureRestoredGTIDPurgedMatchesManifestKeepsBinlogs(t *testing.T) {
+	cnf := &Mycnf{DataDir: "/vt/data", BinLogPath: "/vt/bin-logs/dst-bin"}
+	pos, err := replication.DecodePosition("MySQL56/16b1039f-22b6-11ed-b765-0a43f95f28a3:1-10")
+	require.NoError(t, err)
+	other, err := replication.DecodePosition("MySQL56/16b1039f-22b6-11ed-b765-0a43f95f28a3:1-9")
+	require.NoError(t, err)
+
+	fakedb := fakesqldb.New(t)
+	t.Cleanup(fakedb.Close)
+	mysqld := NewFakeMysqlDaemon(fakedb)
+	t.Cleanup(mysqld.Close)
+	mysqld.CurrentPrimaryPosition = pos
+	// The fake's gtid_purged is empty, which differs from pos; a call to
+	// SetReplicationPosition would fail because it expects a different position.
+	mysqld.SetReplicationPositionPos = other
+	mysqld.FetchSuperQueryMap = map[string]*sqltypes.Result{
+		restoredBinlogVarsQuery: sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("log_bin_basename|log_bin_index", "varchar|varchar"),
+			"/vt/bin-logs/dst-bin|/vt/bin-logs/dst-bin.index"),
+	}
+	params := &RestoreParams{Cnf: cnf, Mysqld: mysqld, Logger: logutil.NewMemoryLogger()}
+	manifest := &BackupManifest{Position: pos, IncludesBinlogs: true}
+
+	require.NoError(t, ensureRestoredGTIDPurgedMatchesManifest(t.Context(), manifest, params))
+
+	// Without binlogs in the backup, the same state is repaired through SetReplicationPosition.
+	manifest.IncludesBinlogs = false
+	require.Error(t, ensureRestoredGTIDPurgedMatchesManifest(t.Context(), manifest, params))
 }

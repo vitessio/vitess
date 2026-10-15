@@ -30,6 +30,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -1403,6 +1404,11 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreP
 		}
 	}
 	fes := bm.FileEntries
+	if len(bm.BinlogFileEntries) > 0 {
+		// Binlog entries were stored after the data files, so their storage names
+		// continue FileEntries' indices; restore them in the same pass.
+		fes = append(slices.Clip(bm.FileEntries), bm.BinlogFileEntries...)
+	}
 
 	// For chunked files, we pre-create the files at the right size, each chunk then only writes to the right offset.
 	// This is done to prevent them from being truncated when retries happen.
@@ -1442,6 +1448,11 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreP
 		}
 		err = be.restoreFileEntries(ctx, newFEs, bh, bm, params, createdDir)
 		if err != nil {
+			return "", err
+		}
+	}
+	if len(bm.BinlogFileEntries) > 0 {
+		if err := finishBinlogRestore(params.Cnf, fes[len(bm.FileEntries):]); err != nil {
 			return "", err
 		}
 	}
