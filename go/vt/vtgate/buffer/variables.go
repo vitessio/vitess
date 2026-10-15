@@ -113,8 +113,10 @@ const (
 	stopMaxFailoverDurationExceeded stopReason = "MaxDurationExceeded"
 	stopShutdown                    stopReason = "Shutdown"
 	stopMoveTablesSwitchingTraffic  stopReason = "MoveTablesSwitchedTraffic"
+	stopMoveTablesSwitchCancelled   stopReason = "MoveTablesSwitchCancelled"
 
 	stopMoveTablesSwitchingTrafficMessage = "MoveTables has switched writes"
+	stopMoveTablesSwitchCancelledMessage  = "the MoveTables switch was cancelled and the tables are no longer denied"
 	stopFailoverEndDetectedMessage        = "a primary promotion has been detected"
 	stopShardMissingMessage               = "the keyspace has been resharded"
 )
