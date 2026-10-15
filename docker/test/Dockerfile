@@ -24,8 +24,17 @@
 
 ARG bootstrap_image=vitess/bootstrap:ci-mysql84
 
+# Go module and build caches to start from. These stages are empty; pass
+# directories with --build-context gomodcache=<dir> and gocache=<dir> to use
+# them instead, e.g. "go env GOMODCACHE" and "go env GOCACHE" of the same Go
+# version.
+FROM scratch AS gomodcache
+FROM scratch AS gocache
+
 FROM ${bootstrap_image}
 
+COPY --from=gomodcache --chown=vitess:vitess . /go/pkg/mod/
+COPY --from=gocache --chown=vitess:vitess . /home/vitess/.cache/go-build/
 COPY --chown=vitess:vitess . /vt/src/vitess.io/vitess
 
 # Without a cache mount, the Go module and build caches stay in the image. A
