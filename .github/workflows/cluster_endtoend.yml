@@ -175,6 +175,11 @@ jobs:
       - name: Set up Go
         if: needs.generate-matrix.outputs.end_to_end == 'true'
         uses: $/.github/actions/setup-go
+        with:
+          # Every job here runs "make build" with the same flags, so whichever
+          # finishes first on a push to main saves a build cache all of them,
+          # and the Docker test image, can reuse.
+          save-build-cache: "true"
 
       - name: Set up python
         if: needs.generate-matrix.outputs.end_to_end == 'true'

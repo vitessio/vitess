@@ -4,6 +4,9 @@ inputs:
   cache:
     description: "Whether to restore and save the Go module and build caches"
     default: "true"
+  save-build-cache:
+    description: "Whether this job saves the Go build cache on pushes to main and the release branches. Only set it in jobs whose build the other jobs can reuse; every other job restores the cache instead."
+    default: "false"
 runs:
   using: "composite"
   steps:
@@ -23,12 +26,24 @@ runs:
     # else restores. Caches saved from any other run are scoped to a ref that
     # pull requests do not restore from, while still counting against the
     # repository quota and evicting the shared entries.
+    #
+    # Any such job can save the module cache, since the download step below
+    # makes every saved module cache complete. The build cache only holds what
+    # the saving job compiled, so only jobs that set save-build-cache save it,
+    # and all other jobs, including those on these pushes, restore it.
     - name: Determine cache mode
       id: cache-mode
       shell: bash
       env:
         SAVE: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release-')) }}
-      run: echo "save=${SAVE}" >> "${GITHUB_OUTPUT}"
+        SAVE_BUILD_CACHE: ${{ inputs.save-build-cache }}
+      run: |
+        echo "save=${SAVE}" >> "${GITHUB_OUTPUT}"
+        if [ "${SAVE}" = "true" ] && [ "${SAVE_BUILD_CACHE}" = "true" ]; then
+          echo "save-build=true" >> "${GITHUB_OUTPUT}"
+        else
+          echo "save-build=false" >> "${GITHUB_OUTPUT}"
+        fi
 
     - name: Restore Go module cache
       if: inputs.cache == 'true' && steps.cache-mode.outputs.save == 'false'
@@ -40,13 +55,13 @@ runs:
           go-mod-
 
     - name: Restore Go build cache
-      if: inputs.cache == 'true' && steps.cache-mode.outputs.save == 'false'
+      if: inputs.cache == 'true' && steps.cache-mode.outputs.save-build == 'false'
       uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ~/.cache/go-build
-        key: go-build-${{ runner.os }}-${{ runner.arch }}-go${{ steps.setup-go.outputs.go-version }}-${{ hashFiles('go.sum', 'tools/**/go.sum') }}
+        key: go-build-v2-${{ runner.os }}-${{ runner.arch }}-go${{ steps.setup-go.outputs.go-version }}-${{ hashFiles('go.sum', 'tools/**/go.sum') }}
         restore-keys: |
-          go-build-${{ runner.os }}-${{ runner.arch }}-go${{ steps.setup-go.outputs.go-version }}-
+          go-build-v2-${{ runner.os }}-${{ runner.arch }}-go${{ steps.setup-go.outputs.go-version }}-
 
     # Pushes to main and the release branches save the entries every other run
     # restores from. The saves deliberately start from an empty cache instead
@@ -61,12 +76,15 @@ runs:
         path: ~/go/pkg/mod
         key: go-mod-${{ hashFiles('go.sum', 'tools/**/go.sum') }}
 
+    # The v2 in the key drops the x64 entries saved before save-build-cache
+    # existed: whichever job finished first saved them, often one that
+    # compiled next to nothing, and an existing key is never saved again.
     - name: Cache Go build cache
-      if: inputs.cache == 'true' && steps.cache-mode.outputs.save == 'true'
+      if: inputs.cache == 'true' && steps.cache-mode.outputs.save-build == 'true'
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ~/.cache/go-build
-        key: go-build-${{ runner.os }}-${{ runner.arch }}-go${{ steps.setup-go.outputs.go-version }}-${{ hashFiles('go.sum', 'tools/**/go.sum') }}
+        key: go-build-v2-${{ runner.os }}-${{ runner.arch }}-go${{ steps.setup-go.outputs.go-version }}-${{ hashFiles('go.sum', 'tools/**/go.sum') }}
 
     # Download the root module and every tool module, so a saved module cache
     # always contains the full dependency set its key covers, no matter which
