@@ -533,6 +533,22 @@ func TestSupersededReplicationInitializationDoesNotChangeReplication(t *testing.
 		assert.Equal(t, "//", md.CurrentSourceHost)
 		require.NoError(t, md.CheckSuperQueryList())
 	})
+	t.Run("dry-run restore", func(t *testing.T) {
+		tm, md, _, qsc, id := newPendingReplicationTM(t)
+		require.NoError(t, tm.tmState.ChangeTabletType(t.Context(), topodatapb.TabletType_RESTORE, DBActionNone))
+		rsm := tm.newRestoreStateManager(logutil.NewMemoryLogger(), false)
+		rsm.dryRun = true
+		rsm.state = restoreStarted
+		rsm.nextTabletType = topodatapb.TabletType_REPLICA
+		require.NoError(t, rsm.finish(t.Context(), replicationCommand{action: replicationActionNone}))
+		assert.False(t, qsc.IsServing(), "a dry run does not initialize replication")
+
+		// The data did not change, so the earlier initialization still applies.
+		require.NoError(t, tm.retryReplicationInitializationOnce(t.Context(), id))
+		assert.Equal(t, "old-primary", md.CurrentSourceHost)
+		assert.True(t, qsc.IsServing())
+		require.NoError(t, md.CheckSuperQueryList())
+	})
 	t.Run("aborted restore", func(t *testing.T) {
 		tm, md, _, qsc, id := newPendingReplicationTM(t)
 		require.NoError(t, tm.tmState.ChangeTabletType(t.Context(), topodatapb.TabletType_RESTORE, DBActionNone))

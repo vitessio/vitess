@@ -198,6 +198,7 @@ func (tm *TabletManager) restoreBackupLocked(ctx context.Context, logger logutil
 	}
 
 	rsm := tm.newRestoreStateManager(logger, deleteBeforeRestore)
+	rsm.dryRun = params.DryRun
 
 	if ok, err := rsm.start(ctx); !ok || err != nil {
 		if err != nil {
@@ -506,8 +507,10 @@ const (
 // RESTORE, and setting up replication.
 type restoreStateManager struct {
 	deleteBeforeRestore bool
-	logger              logutil.Logger
-	tm                  *TabletManager
+	// dryRun is set when the restore does not change any data.
+	dryRun bool
+	logger logutil.Logger
+	tm     *TabletManager
 
 	state restoreState
 
@@ -541,8 +544,11 @@ func (rt *restoreStateManager) finish(ctx context.Context, replCmd replicationCo
 	}
 
 	// The restored data replaces what an earlier deferred replication
-	// initialization was for, and replCmd decides replication for it.
-	rt.tm.tmState.cancelReplicationInit(ctx)
+	// initialization was for, and replCmd decides replication for it. A dry
+	// run leaves the data, and the deferred initialization, unchanged.
+	if !rt.dryRun {
+		rt.tm.tmState.cancelReplicationInit(ctx)
+	}
 
 	// Perform replication command.
 	switch replCmd.action {
