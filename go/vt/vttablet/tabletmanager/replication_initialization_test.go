@@ -986,3 +986,40 @@ func TestFailedReparentSourceKeepsReplicaOutOfRotation(t *testing.T) {
 		})
 	}
 }
+
+func TestChosenReplicationSourceCompletion(t *testing.T) {
+	setup := func(t *testing.T) (*TabletManager, *mysqlctl.FakeMysqlDaemon, *tabletservermock.Controller, uint64) {
+		tm, md, ts, qsc, id := newPendingReplicationTM(t)
+		newPrimary := newTestTablet(t, 3, "ks", "0", nil)
+		newPrimary.Type = topodatapb.TabletType_PRIMARY
+		newPrimary.MysqlHostname, newPrimary.MysqlPort = "new-primary", 3306
+		require.NoError(t, ts.CreateTablet(t.Context(), newPrimary))
+		// An RPC chose the new primary, and replication runs from it.
+		tm.tmState.replicationSourceChosen(newPrimary.Alias, "new-primary", 3306)
+		md.Replicating, md.IOThreadRunning = true, true
+		md.CurrentSourceHost, md.CurrentSourcePort = "new-primary", 3306
+		md.ExpectedExecuteSuperQueryList = nil
+		return tm, md, qsc, id
+	}
+	t.Run("waits for a running action", func(t *testing.T) {
+		tm, _, qsc, id := setup(t)
+		// An RPC that may still change replication holds the action lock.
+		require.NoError(t, tm.lock(t.Context()))
+		require.ErrorContains(t, tm.retryReplicationInitializationOnce(t.Context(), id), "another action is running")
+		assert.False(t, qsc.IsServing())
+		tm.unlock()
+
+		require.NoError(t, tm.retryReplicationInitializationOnce(t.Context(), id))
+		assert.True(t, qsc.IsServing())
+	})
+	t.Run("checks errant GTIDs", func(t *testing.T) {
+		tm, md, qsc, id := setup(t)
+		pos, err := replication.ParsePosition(gtidFlavor, gtidPosition+",8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1")
+		require.NoError(t, err)
+		md.SetPrimaryPositionLocked(pos)
+
+		require.ErrorContains(t, tm.retryReplicationInitializationOnce(t.Context(), id), "Errant GTID detected")
+		assert.False(t, qsc.IsServing(), "a replica with an errant GTID must not serve")
+		require.NoError(t, md.CheckSuperQueryList())
+	})
+}

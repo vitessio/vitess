@@ -1265,6 +1265,11 @@ func (tm *TabletManager) attemptDeferredReplicationInit(ctx context.Context, id 
 	if done, err := tm.settleDeferredReplicationInit(ctx, id); done || err != nil {
 		return err
 	}
+	if _, source := tm.tmState.chosenReplicationSource(id); source != "" {
+		// An RPC chose the source. Completing the deferral changes no
+		// replication, so it does not need the shard lock.
+		return tm.completeChosenReplicationSource(ctx, id)
+	}
 	// Take the shard lock first, as reparents do, so that its acquisition and
 	// the topology backend's cleanup after a failed one never hold the action
 	// lock that RPCs to this tablet need.
@@ -1281,6 +1286,11 @@ func (tm *TabletManager) attemptDeferredReplicationInit(ctx context.Context, id 
 	defer tm.unlock()
 	if done, err := tm.settleDeferredReplicationInit(ctx, id); done || err != nil {
 		return err
+	}
+	if _, source := tm.tmState.chosenReplicationSource(id); source != "" {
+		// An RPC chose a source after the check above. Never replace it; the
+		// next attempt completes the deferral.
+		return &replicationInitWaitError{fmt.Sprintf("waiting for replication from %s, which a reparent or VTOrc chose", source)}
 	}
 	// Bound everything done while holding both locks.
 	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
@@ -1315,11 +1325,10 @@ func (tm *TabletManager) attemptDeferredReplicationInit(ctx context.Context, id 
 
 // settleDeferredReplicationInit reports whether the deferred replication
 // initialization id has ended without needing a replication change: it is no
-// longer pending; the tablet has become a primary, which ends it; or an RPC
-// chose the replication source, in which case it ends once replication runs
-// from that source. While it waits for a restore or for that source, it
-// returns a *replicationInitWaitError. It changes no replication, so it needs
-// no lock, and ending the deferral is safe because only this ID is ended.
+// longer pending, or the tablet has become a primary, which ends it. While a
+// restore runs, it returns a *replicationInitWaitError. It changes no
+// replication, so it needs no lock, and ending the deferral is safe because
+// only this ID is ended.
 func (tm *TabletManager) settleDeferredReplicationInit(ctx context.Context, id uint64) (bool, error) {
 	if !tm.tmState.isPendingReplicationInit(id) {
 		// It completed, or a later deferral or a restore superseded it.
@@ -1335,23 +1344,42 @@ func (tm *TabletManager) settleDeferredReplicationInit(ctx context.Context, id u
 		// aborts leaves the data, and this initialization, unchanged.
 		return false, &replicationInitWaitError{"waiting for the restore to finish"}
 	}
-	source := tm.tmState.chosenReplicationSource(id)
-	if source == "" {
-		return false, nil
+	return false, nil
+}
+
+// completeChosenReplicationSource ends the deferred replication initialization
+// id once replication runs from the source an RPC chose for it, and that
+// source passes the errant GTID check that initialization runs.
+func (tm *TabletManager) completeChosenReplicationSource(ctx context.Context, id uint64) error {
+	// Hold the action lock, so that no RPC changes replication between these
+	// checks and ending the deferral. Do not wait for it.
+	if !tm.actionSema.TryAcquire(1) {
+		return &replicationInitWaitError{"another action is running on this tablet"}
 	}
-	// An RPC chose the source, which may be newer than the shard record. Keep
-	// its choice, and wait until replication runs from that source.
+	defer tm.unlock()
+	alias, source := tm.tmState.chosenReplicationSource(id)
+	if source == "" {
+		// It ended, or a later deferral superseded it.
+		return nil
+	}
 	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer cancel()
 	status, err := tm.MysqlDaemon.ReplicationStatus(ctx)
 	if err != nil && !errors.Is(err, mysql.ErrNotReplica) {
-		return false, err
+		return err
 	}
 	if !status.Running() || netutil.JoinHostPort(status.SourceHost, status.SourcePort) != source {
-		return false, &replicationInitWaitError{fmt.Sprintf("waiting for replication from %s, which a reparent or VTOrc chose", source)}
+		return &replicationInitWaitError{fmt.Sprintf("waiting for replication from %s, which a reparent or VTOrc chose", source)}
+	}
+	primary, err := tm.TopoServer.GetTablet(ctx, alias)
+	if err != nil {
+		return err
+	}
+	if _, err := tm.checkNoErrantGTIDs(ctx, primary.Tablet); err != nil {
+		return err
 	}
 	tm.tmState.endReplicationInit(id)
-	return true, nil
+	return nil
 }
 
 // replicatingShardPrimary returns the shard's current primary if both

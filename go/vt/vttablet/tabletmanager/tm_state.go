@@ -92,8 +92,10 @@ type tmState struct {
 	replicationInitError string
 	// replicationInitSource is the "host:port" of the replication source that
 	// an RPC chose since the pending deferral, which then must not choose one
-	// itself. It is empty if no RPC has chosen one.
-	replicationInitSource string
+	// itself, and replicationInitSourceAlias is that source's tablet. The
+	// address is empty if no RPC has chosen a source.
+	replicationInitSource      string
+	replicationInitSourceAlias *topodatapb.TabletAlias
 
 	// displayState contains the current snapshot of the internal state
 	// and has its own mutex.
@@ -335,7 +337,7 @@ func (ts *tmState) endReplicationInit(id uint64) {
 	if ts.pendingReplicationInit == id {
 		ts.pendingReplicationInit = 0
 		ts.replicationInitError = ""
-		ts.replicationInitSource = ""
+		ts.replicationInitSource, ts.replicationInitSourceAlias = "", nil
 	}
 }
 
@@ -351,28 +353,29 @@ func (ts *tmState) refreshServing(ctx context.Context) {
 	}
 }
 
-// replicationSourceChosen records that an RPC is installing the replication
-// source host:port, so that the pending deferred initialization no longer
-// chooses one. It does not end the deferral: replicas still do not serve until
-// replication runs from that source.
-func (ts *tmState) replicationSourceChosen(host string, port int32) {
+// replicationSourceChosen records that an RPC is installing source, at
+// host:port, as the replication source, so that the pending deferred
+// initialization no longer chooses one. It does not end the deferral: replicas
+// still do not serve until replication runs from that source and is validated.
+func (ts *tmState) replicationSourceChosen(source *topodatapb.TabletAlias, host string, port int32) {
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
 	if ts.pendingReplicationInit != 0 {
 		ts.replicationInitSource = netutil.JoinHostPort(host, port)
+		ts.replicationInitSourceAlias = source
 	}
 }
 
-// chosenReplicationSource returns the "host:port" of the replication source
-// that an RPC chose since the deferred replication initialization id, or an
-// empty string if no RPC has chosen one.
-func (ts *tmState) chosenReplicationSource(id uint64) string {
+// chosenReplicationSource returns the tablet and the "host:port" of the
+// replication source that an RPC chose since the deferred replication
+// initialization id. The address is empty if no RPC has chosen one.
+func (ts *tmState) chosenReplicationSource(id uint64) (*topodatapb.TabletAlias, string) {
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
 	if ts.pendingReplicationInit != id {
-		return ""
+		return nil, ""
 	}
-	return ts.replicationInitSource
+	return ts.replicationInitSourceAlias, ts.replicationInitSource
 }
 
 // cancelReplicationInit ends any pending deferred replication initialization.
@@ -387,7 +390,7 @@ func (ts *tmState) cancelReplicationInit(ctx context.Context) {
 func (ts *tmState) setPendingReplicationInitLocked(ctx context.Context, id uint64, err error) {
 	reason := ts.canServe(ts.tablet.Type)
 	if id != ts.pendingReplicationInit {
-		ts.replicationInitSource = ""
+		ts.replicationInitSource, ts.replicationInitSourceAlias = "", nil
 	}
 	ts.pendingReplicationInit = id
 	ts.replicationInitError = ""
