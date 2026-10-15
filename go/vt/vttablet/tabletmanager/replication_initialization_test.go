@@ -780,3 +780,30 @@ func TestDeferredReplicationRetryBoundsReadsUnderLocks(t *testing.T) {
 		assert.False(t, deadline.After(latest))
 	}
 }
+
+func TestReparentSourceEndsDeferredReplicationInitialization(t *testing.T) {
+	tm, md, ts, qsc, id := newPendingReplicationTM(t)
+	// A reparent promoted tablet 3, but the shard record still names the old
+	// primary, because the new primary has not published itself yet.
+	newPrimary := newTestTablet(t, 3, "ks", "0", nil)
+	newPrimary.Type = topodatapb.TabletType_PRIMARY
+	newPrimary.MysqlHostname, newPrimary.MysqlPort = "new-primary", 3306
+	require.NoError(t, ts.CreateTablet(t.Context(), newPrimary))
+	md.SetReplicationSourceInputs = []string{"new-primary:3306"}
+	md.ExpectedExecuteSuperQueryList = []string{"FAKE SET SOURCE", "START REPLICA"}
+	// RPCs wait for the DBA grants, which this fixture does not apply.
+	tm._waitForGrantsComplete = make(chan struct{})
+	close(tm._waitForGrantsComplete)
+
+	require.NoError(t, tm.SetReplicationSource(t.Context(), newPrimary.Alias, 0, "", true, true, 0))
+	require.NoError(t, md.CheckSuperQueryList())
+	assert.Equal(t, "new-primary", md.CurrentSourceHost)
+	assert.True(t, qsc.IsServing(), "the reparent configured replication")
+
+	// The deferral's retry must not point replication back at the stale primary.
+	md.ExpectedExecuteSuperQueryList = nil
+	md.ExpectedExecuteSuperQueryCurrent = 0
+	require.NoError(t, tm.retryReplicationInitializationOnce(t.Context(), id))
+	require.NoError(t, md.CheckSuperQueryList())
+	assert.Equal(t, "new-primary", md.CurrentSourceHost)
+}

@@ -335,7 +335,9 @@ func (ts *tmState) endReplicationInit(ctx context.Context, id uint64) {
 func (ts *tmState) cancelReplicationInit(ctx context.Context) {
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
-	ts.setPendingReplicationInitLocked(ctx, 0, nil)
+	if ts.pendingReplicationInit != 0 {
+		ts.setPendingReplicationInitLocked(ctx, 0, nil)
+	}
 }
 
 func (ts *tmState) setPendingReplicationInitLocked(ctx context.Context, id uint64, err error) {
