@@ -47,6 +47,10 @@ type HookResult struct {
 	Stderr     string
 }
 
+// hookWaitDelay bounds how long a hook's output is waited for after the hook
+// exits or is killed.
+var hookWaitDelay = time.Second
+
 // The hook will return a value between 0 and 255. 0 if it succeeds.
 // So we have these additional values here for more information.
 const (
@@ -144,14 +148,21 @@ func (hook *Hook) ExecuteContext(ctx context.Context) (result *HookResult) {
 		return result
 	}
 
-	// Run it.
+	// Run it. A child the hook started can keep its output open after the
+	// hook exits or is killed, so stop waiting for the output after
+	// hookWaitDelay.
 	var stdout, stderr strings.Builder
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
+	cmd.WaitDelay = hookWaitDelay
 
 	start := time.Now()
 	err = cmd.Run()
 	duration := time.Since(start)
+	if errors.Is(err, exec.ErrWaitDelay) && ctx.Err() == nil {
+		// The hook itself succeeded; only a child kept its output open.
+		err = nil
+	}
 
 	result.Stdout = stdout.String()
 	result.Stderr = stderr.String()
@@ -165,8 +176,8 @@ func (hook *Hook) ExecuteContext(ctx context.Context) (result *HookResult) {
 		return result
 	}
 
-	if ctx.Err() != nil && errors.Is(ctx.Err(), context.DeadlineExceeded) {
-		// When (exec.Cmd).Run hits a context cancelled, the process is killed via SIGTERM.
+	if ctx.Err() != nil {
+		// When (exec.Cmd).Run hits a context that expired or was canceled, the process is killed via SIGTERM.
 		// This means:
 		// 	1. cmd.ProcessState.Exited() is false.
 		//	2. cmd.ProcessState.ExitCode() is -1.
