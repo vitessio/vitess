@@ -66,15 +66,17 @@ func newReplicationInitializationTM(t *testing.T) (*TabletManager, *mysqlctl.Fak
 	ctx := t.Context()
 	ts, factory := memorytopo.NewServerAndFactory(ctx, "cell1")
 	t.Cleanup(ts.Close)
-	tm, md := newReplicationInitializationTMWithServer(t, ts)
+	tm, md := newReplicationInitializationTMWithServer(t, ts, 1)
 	return tm, md, ts, factory
 }
 
-func newReplicationInitializationTMWithServer(t *testing.T, ts *topo.Server) (*TabletManager, *mysqlctl.FakeMysqlDaemon) {
+// newReplicationInitializationTMWithServer adds replica uid to shard ks/0,
+// whose primary is tablet 2. The first call creates the shard and its primary.
+func newReplicationInitializationTMWithServer(t *testing.T, ts *topo.Server, uid int) (*TabletManager, *mysqlctl.FakeMysqlDaemon) {
 	t.Helper()
 	ctx := t.Context()
-	tablet := newTestTablet(t, 1, "ks", "0", nil)
-	md := newTestMysqlDaemon(t, 3307)
+	tablet := newTestTablet(t, uid, "ks", "0", nil)
+	md := newTestMysqlDaemon(t, int32(3306+uid))
 	md.ServerUUID = serverUUID
 	if md.FetchSuperQueryMap == nil {
 		md.FetchSuperQueryMap = map[string]*sqltypes.Result{}
@@ -87,18 +89,20 @@ func newReplicationInitializationTMWithServer(t *testing.T, ts *topo.Server) (*T
 	tm.tmState = newTMState(tm, tablet)
 	t.Cleanup(tm.tmState.cancel)
 	require.NoError(t, ts.CreateTablet(ctx, tablet))
-	_, err := ts.GetOrCreateShard(ctx, "ks", "0")
-	require.NoError(t, err)
-	reparenttestutil.SetKeyspaceDurability(ctx, t, ts, "ks", policy.DurabilitySemiSync)
 	primary := newTestTablet(t, 2, "ks", "0", nil)
-	primary.Type = topodatapb.TabletType_PRIMARY
-	primary.MysqlHostname, primary.MysqlPort = "old-primary", 3306
-	require.NoError(t, ts.CreateTablet(ctx, primary))
-	_, err = ts.UpdateShardFields(ctx, "ks", "0", func(si *topo.ShardInfo) error {
-		si.PrimaryAlias = primary.Alias
-		return nil
-	})
-	require.NoError(t, err)
+	if _, err := ts.GetTablet(ctx, primary.Alias); topo.IsErrType(err, topo.NoNode) {
+		_, err := ts.GetOrCreateShard(ctx, "ks", "0")
+		require.NoError(t, err)
+		reparenttestutil.SetKeyspaceDurability(ctx, t, ts, "ks", policy.DurabilitySemiSync)
+		primary.Type = topodatapb.TabletType_PRIMARY
+		primary.MysqlHostname, primary.MysqlPort = "old-primary", 3306
+		require.NoError(t, ts.CreateTablet(ctx, primary))
+		_, err = ts.UpdateShardFields(ctx, "ks", "0", func(si *topo.ShardInfo) error {
+			si.PrimaryAlias = primary.Alias
+			return nil
+		})
+		require.NoError(t, err)
+	}
 	pos, err := replication.ParsePosition(gtidFlavor, gtidPosition)
 	require.NoError(t, err)
 	md.SetPrimaryPositionLocked(pos)
@@ -631,4 +635,38 @@ func TestPendingReplicationReasonShowsLatestError(t *testing.T) {
 	assert.Equal(t, "replication is not initialized: Errant GTID detected", tm.tmState.canServe(topodatapb.TabletType_REPLICA))
 	tm.tmState.setReplicationInitError(t.Context(), id+1, errors.New("superseded"))
 	assert.Equal(t, "replication is not initialized: Errant GTID detected", tm.tmState.canServe(topodatapb.TabletType_REPLICA))
+}
+
+func TestConcurrentlyDeferredReplicasInitializeReplication(t *testing.T) {
+	ts, _ := memorytopo.NewServerAndFactory(t.Context(), "cell1")
+	t.Cleanup(ts.Close)
+	type replica struct {
+		tm  *TabletManager
+		md  *mysqlctl.FakeMysqlDaemon
+		qsc *tabletservermock.Controller
+	}
+	var replicas []replica
+	for _, uid := range []int{1, 3} {
+		tm, md := newReplicationInitializationTMWithServer(t, ts, uid)
+		qsc := tabletservermock.NewController()
+		require.NoError(t, qsc.InitDBConfig(&querypb.Target{Keyspace: "ks", Shard: "0"}, nil, md))
+		tm.QueryServiceControl = qsc
+		tm.tmState.Open()
+		replicas = append(replicas, replica{tm, md, qsc})
+	}
+
+	release := holdInitializationShardLock(t, ts)
+	for _, r := range replicas {
+		_, err := r.tm.initializeReplicationUnlessShardLocked(t.Context(), logutil.NewMemoryLogger(), topodatapb.TabletType_REPLICA)
+		require.NoError(t, err)
+		require.False(t, r.qsc.IsServing())
+	}
+	release()
+
+	// Both retries contend for the shard lock, and each eventually takes it.
+	for _, r := range replicas {
+		assert.Eventually(t, r.qsc.IsServing, 30*time.Second, 10*time.Millisecond)
+		assert.Equal(t, "old-primary", r.md.CurrentSourceHost)
+		require.NoError(t, r.md.CheckSuperQueryList())
+	}
 }
