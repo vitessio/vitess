@@ -568,6 +568,18 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 	shardNames := strings.Split(names, ",")
 	log.Info(fmt.Sprintf("Addshards got %d shards with %+v", len(shardNames), shardNames))
 	isSharded := len(shardNames) > 1
+	// Create a new keyspace's shards and serving graph before starting any
+	// tablet. Otherwise the first vttablet registers itself while it is still
+	// building the SrvKeyspace in the background, and a vtgate that finds the
+	// tablet first caches the missing SrvKeyspace for --srv-topo-cache-refresh.
+	newKeyspace := len(keyspace.Shards) == 0
+	if newKeyspace {
+		for _, shardName := range shardNames {
+			err := vc.VtctldClient.ExecuteCommand("CreateShard", keyspace.Name+"/"+shardName)
+			require.NoErrorf(t, err, "CreateShard command failed with %+v\n", err)
+		}
+		require.NoError(t, vc.VtctldClient.ExecuteCommand("RebuildKeyspaceGraph", keyspace.Name))
+	}
 	primaryTabletUID := 0
 	for ind, shardName := range shardNames {
 		tabletID := tabletIDBase + ind*100
@@ -577,8 +589,10 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 			log.Info(fmt.Sprintf("Shard %s already exists, not adding", shardName))
 		} else {
 			log.Info("Adding Shard " + shardName)
-			err := vc.VtctldClient.ExecuteCommand("CreateShard", keyspace.Name+"/"+shardName)
-			require.NoErrorf(t, err, "CreateShard command failed with %+v\n", err)
+			if !newKeyspace {
+				err := vc.VtctldClient.ExecuteCommand("CreateShard", keyspace.Name+"/"+shardName)
+				require.NoErrorf(t, err, "CreateShard command failed with %+v\n", err)
+			}
 			keyspace.Shards[shardName] = shard
 		}
 		for i, cell := range cells {
