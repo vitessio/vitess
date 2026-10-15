@@ -18,6 +18,7 @@ package etcd2topo
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path"
 	"time"
@@ -85,11 +86,15 @@ func (s *Server) newUniqueEphemeralKV(ctx context.Context, cli *clientv3.Client,
 	return newKey, txnresp.Header.Revision, nil
 }
 
+// errLockHeld is returned by waitOnLastRev when wait is false and an
+// older file exists.
+var errLockHeld = errors.New("waitOnLastRev: lock is held by another file")
+
 // waitOnLastRev waits on all revisions of the files in the provided
 // directory that have revisions smaller than the provided revision.
 // It returns true only if there is no more other older files.
-// If wait is false, it returns a topo.NodeExists error instead of
-// waiting when an older file exists.
+// If wait is false, it returns errLockHeld instead of waiting when an
+// older file exists.
 func (s *Server) waitOnLastRev(ctx context.Context, cli *clientv3.Client, nodePath string, revision int64, wait bool) (bool, error) {
 	// Get the keys that are blocking us, if any.
 	opts := append(clientv3.WithLastRev(), clientv3.WithMaxModRev(revision-1))
@@ -102,7 +107,7 @@ func (s *Server) waitOnLastRev(ctx context.Context, cli *clientv3.Client, nodePa
 		return true, nil
 	}
 	if !wait {
-		return false, topo.NewError(topo.NodeExists, "lock already exists at path "+nodePath)
+		return false, errLockHeld
 	}
 
 	// Wait for release on blocking key. Cancel the watch when we
@@ -194,8 +199,8 @@ func (s *Server) LockName(ctx context.Context, dirPath, contents string) (topo.L
 // lock is used by Lock(), LockWithTTL(), LockName(), TryLock() and primary election.
 // If wait is false, it returns a topo.NodeExists error instead of
 // waiting for older lock files to go away.
-func (s *Server) lock(ctx context.Context, nodePath, contents string, ttl int, wait bool) (topo.LockDescriptor, error) {
-	nodePath = path.Join(s.root, nodePath, locksPath)
+func (s *Server) lock(ctx context.Context, dirPath, contents string, ttl int, wait bool) (topo.LockDescriptor, error) {
+	nodePath := path.Join(s.root, dirPath, locksPath)
 
 	// Get a lease, set its KeepAlive.
 	lease, err := s.cli.Grant(ctx, int64(ttl))
@@ -230,6 +235,9 @@ func (s *Server) lock(ctx context.Context, nodePath, contents string, ttl int, w
 				log.Warn(fmt.Sprintf("Revoke(%d) failed, may have left %v behind: %v", lease.ID, key, rerr))
 			}
 			revokeCancel()
+			if err == errLockHeld {
+				return nil, topo.NewError(topo.NodeExists, "lock already exists at path "+dirPath)
+			}
 			return nil, err
 		}
 		if done {
