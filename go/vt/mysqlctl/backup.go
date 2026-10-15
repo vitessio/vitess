@@ -131,6 +131,9 @@ func Backup(ctx context.Context, params BackupParams) error {
 	if params.Stats == nil {
 		params.Stats = backupstats.NoStats()
 	}
+	if err := ValidateIncludeBinlogs(params); err != nil {
+		return err
+	}
 
 	startTs := time.Now()
 	backupDir := GetBackupDir(params.Keyspace, params.Shard)

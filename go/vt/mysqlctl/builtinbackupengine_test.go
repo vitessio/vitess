@@ -30,6 +30,7 @@ import (
 	"math"
 	"os"
 	"path"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -41,6 +42,7 @@ import (
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/os2"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstats"
 	"vitess.io/vitess/go/vt/mysqlctl/filebackupstorage"
@@ -680,6 +682,44 @@ func TestBackupFilesDoesNotCallEndBackup(t *testing.T) {
 	assert.Positive(t, bh.WaitCalls, "backupFiles must call Wait() to flush pending async operations")
 }
 
+// newBackupTestTopo sets up the topo that ExecuteBackup needs for the MANIFEST
+// metadata, and shortens the mysqld shutdown timeout for the test.
+func newBackupTestTopo(t *testing.T) (ts *topo.Server, keyspace, shard string) {
+	ctx := t.Context()
+	keyspace, shard = "mykeyspace", "-"
+	ts = memorytopo.NewServer(ctx, "cell1")
+	t.Cleanup(ts.Close)
+
+	require.NoError(t, ts.CreateKeyspace(ctx, keyspace, &topodata.Keyspace{}))
+	require.NoError(t, ts.CreateShard(ctx, keyspace, shard))
+	tablet := topo.NewTablet(100, "cell1", "mykeyspace-00-80-0100")
+	tablet.Keyspace = keyspace
+	tablet.Shard = shard
+	require.NoError(t, ts.CreateTablet(ctx, tablet))
+	_, err := ts.UpdateShardFields(ctx, keyspace, shard, func(si *topo.ShardInfo) error {
+		si.PrimaryAlias = &topodata.TabletAlias{Uid: 100, Cell: "cell1"}
+		now := time.Now()
+		si.PrimaryTermStartTime = &vttime.Time{Seconds: now.Unix(), Nanoseconds: int32(now.Nanosecond())}
+		return nil
+	})
+	require.NoError(t, err)
+
+	oldDeadline := BuiltinBackupMysqldTimeout
+	BuiltinBackupMysqldTimeout = time.Second
+	t.Cleanup(func() { BuiltinBackupMysqldTimeout = oldDeadline })
+	return ts, keyspace, shard
+}
+
+// newBackupTestMysqld returns a fake mysqld that expects a replica to be stopped and started.
+func newBackupTestMysqld(t *testing.T) *FakeMysqlDaemon {
+	fakedb := fakesqldb.New(t)
+	t.Cleanup(fakedb.Close)
+	mysqld := NewFakeMysqlDaemon(fakedb)
+	t.Cleanup(mysqld.Close)
+	mysqld.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA", "START REPLICA"}
+	return mysqld
+}
+
 // TestBackupRestoreWithManyChunks exercises backup and restore with a high
 // chunk count (256 chunks) by overriding minBackupFileChunkSize below the
 // production floor. This validates that chunking works correctly under heavy
@@ -727,38 +767,13 @@ func TestBackupRestoreWithManyChunks(t *testing.T) {
 	require.NoError(t, err)
 	originalChecksum := crc32.ChecksumIEEE(originalData)
 
-	// Set up topo — required by ExecuteBackup for MANIFEST metadata.
-	keyspace, shard := "mykeyspace", "-"
-	ts := memorytopo.NewServer(ctx, "cell1")
-	t.Cleanup(ts.Close)
-
-	require.NoError(t, ts.CreateKeyspace(ctx, keyspace, &topodata.Keyspace{}))
-	require.NoError(t, ts.CreateShard(ctx, keyspace, shard))
-	tablet := topo.NewTablet(100, "cell1", "mykeyspace-00-80-0100")
-	tablet.Keyspace = keyspace
-	tablet.Shard = shard
-	require.NoError(t, ts.CreateTablet(ctx, tablet))
-	_, err = ts.UpdateShardFields(ctx, keyspace, shard, func(si *topo.ShardInfo) error {
-		si.PrimaryAlias = &topodata.TabletAlias{Uid: 100, Cell: "cell1"}
-		now := time.Now()
-		si.PrimaryTermStartTime = &vttime.Time{Seconds: now.Unix(), Nanoseconds: int32(now.Nanosecond())}
-		return nil
-	})
-	require.NoError(t, err)
-
-	oldDeadline := BuiltinBackupMysqldTimeout
-	BuiltinBackupMysqldTimeout = time.Second
-	t.Cleanup(func() { BuiltinBackupMysqldTimeout = oldDeadline })
+	ts, keyspace, shard := newBackupTestTopo(t)
 
 	// Backup: should split the 16MiB file into 256 chunks of 64KiB each.
 	be := &BuiltinBackupEngine{}
 	bh := filebackupstorage.NewBackupHandle(nil, "", "", false)
 
-	fakedb := fakesqldb.New(t)
-	t.Cleanup(fakedb.Close)
-	mysqld := NewFakeMysqlDaemon(fakedb)
-	t.Cleanup(mysqld.Close)
-	mysqld.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA", "START REPLICA"}
+	mysqld := newBackupTestMysqld(t)
 
 	backupResult, err := be.ExecuteBackup(ctx, BackupParams{
 		Logger: logutil.NewMemoryLogger(),
@@ -782,11 +797,7 @@ func TestBackupRestoreWithManyChunks(t *testing.T) {
 
 	// Restore: read back all 256 chunks and reassemble into the original file.
 	restoreBh := filebackupstorage.NewBackupHandle(nil, "", "", true)
-	fakedb2 := fakesqldb.New(t)
-	t.Cleanup(fakedb2.Close)
-	mysqld2 := NewFakeMysqlDaemon(fakedb2)
-	t.Cleanup(mysqld2.Close)
-	mysqld2.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA", "START REPLICA"}
+	mysqld2 := newBackupTestMysqld(t)
 
 	bm, err := be.ExecuteRestore(ctx, RestoreParams{
 		Cnf: &Mycnf{
@@ -821,6 +832,97 @@ func TestBackupRestoreWithManyChunks(t *testing.T) {
 	restoredData, err := os.ReadFile(filePath)
 	require.NoError(t, err)
 	assert.Equal(t, originalChecksum, crc32.ChecksumIEEE(restoredData))
+}
+
+// TestBackupRestoreWithBinlogs backs up a source with binlogs and checks that
+// the binlogs land in the manifest's BinlogFileEntries, apart from the data files.
+func TestBackupRestoreWithBinlogs(t *testing.T) {
+	ctx := t.Context()
+	backupRoot := t.TempDir()
+	filebackupstorage.FileBackupStorageRoot = backupRoot
+	require.NoError(t, os.MkdirAll(path.Join(backupRoot, "innodb"), 0o755))
+	require.NoError(t, os.MkdirAll(path.Join(backupRoot, "log"), 0o755))
+	dataDir := path.Join(backupRoot, "datadir")
+	require.NoError(t, os.MkdirAll(path.Join(dataDir, "test1"), 0o755))
+	require.NoError(t, os.WriteFile(path.Join(dataDir, "test1", "0.ibd"), []byte("data"), 0o644))
+
+	// The source's binlogs, with distinct content and mtimes.
+	srcDir := path.Join(backupRoot, "src")
+	require.NoError(t, os.MkdirAll(srcDir, 0o755))
+	srcBase := path.Join(srcDir, "src-bin")
+	mtimes := map[string]time.Time{
+		"000001": time.Unix(1700000000, 0).UTC(),
+		"000002": time.Unix(1700000100, 0).UTC(),
+	}
+	var index strings.Builder
+	for _, seq := range []string{"000001", "000002"} {
+		p := srcBase + "." + seq
+		require.NoError(t, os.WriteFile(p, []byte("binlog "+seq), 0o644))
+		require.NoError(t, os.Chtimes(p, mtimes[seq], mtimes[seq]))
+		index.WriteString(p + "\n")
+	}
+	require.NoError(t, os.WriteFile(srcBase+".index", []byte(index.String()), 0o644))
+
+	ts, keyspace, shard := newBackupTestTopo(t)
+	mysqld := newBackupTestMysqld(t)
+	binlogVars := func(row string) map[string]*sqltypes.Result {
+		return map[string]*sqltypes.Result{
+			binlogBackupVarsQuery: sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields("log_bin|binlog_encryption|log_replica_updates", "int64|int64|int64"),
+				row),
+		}
+	}
+	params := BackupParams{
+		Logger: logutil.NewMemoryLogger(),
+		Mysqld: mysqld,
+		Cnf: &Mycnf{
+			InnodbDataHomeDir:     path.Join(backupRoot, "innodb"),
+			InnodbLogGroupHomeDir: path.Join(backupRoot, "log"),
+			DataDir:               dataDir,
+			BinLogPath:            srcBase,
+		},
+		Stats:                backupstats.NoStats(),
+		Concurrency:          4,
+		HookExtraEnv:         map[string]string{},
+		TopoServer:           ts,
+		Keyspace:             keyspace,
+		Shard:                shard,
+		MysqlShutdownTimeout: time.Minute,
+		IncludeBinlogs:       true,
+	}
+
+	be := &BuiltinBackupEngine{}
+	bh := filebackupstorage.NewBackupHandle(nil, "", "", false)
+
+	// A source with the binlog off is refused before anything is backed up.
+	mysqld.FetchSuperQueryMap = binlogVars("0|0|1")
+	backupResult, err := be.ExecuteBackup(ctx, params, bh)
+	require.Error(t, err)
+	assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+	assert.Equal(t, BackupUnusable, backupResult)
+
+	mysqld.FetchSuperQueryMap = binlogVars("1|0|1")
+	backupResult, err = be.ExecuteBackup(ctx, params, bh)
+	require.NoError(t, err)
+	require.Equal(t, BackupUsable, backupResult)
+
+	// The file handle has no dir or name, so the MANIFEST is directly under the root.
+	data, err := os.ReadFile(path.Join(backupRoot, backupManifestFileName))
+	require.NoError(t, err)
+	var bm builtinBackupManifest
+	require.NoError(t, json.Unmarshal(data, &bm))
+	assert.True(t, bm.IncludesBinlogs)
+	require.Len(t, bm.BinlogFileEntries, 2)
+	for i, seq := range []string{"000001", "000002"} {
+		fe := bm.BinlogFileEntries[i]
+		assert.Equal(t, backupBinlogStripped, fe.Base)
+		assert.Equal(t, "binlog."+seq, fe.Name)
+		assert.True(t, mtimes[seq].Equal(fe.ModTime), "mtime of %s: %v", fe.Name, fe.ModTime)
+	}
+	require.NotEmpty(t, bm.FileEntries)
+	for _, fe := range bm.FileEntries {
+		assert.NotEqual(t, backupBinlogStripped, fe.Base, "data entries must not include binlogs: %v", fe)
+	}
 }
 
 func TestCreateChunkedDestinationsRejectsBadStorageName(t *testing.T) {

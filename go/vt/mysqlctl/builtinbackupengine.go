@@ -549,6 +549,12 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 		return BackupUnusable, vterrors.Wrap(err, "can't get replica status")
 	}
 
+	if params.IncludeBinlogs {
+		if err := checkBinlogsBackupable(ctx, params.Mysqld, sourceIsPrimary); err != nil {
+			return BackupUnusable, err
+		}
+	}
+
 	// get the read-only flag
 	readOnly, err := params.Mysqld.IsReadOnly(ctx)
 	if err != nil {
@@ -732,6 +738,12 @@ func (be *BuiltinBackupEngine) backupFiles(
 		fes, _, err = binlogFilesToBackup(params.Cnf, binlogFiles)
 	} else {
 		fes, _, err = findFilesToBackup(params.Cnf)
+		if err == nil && params.IncludeBinlogs {
+			// Appended last, so their indices (storage names) follow the data files'.
+			var binlogs []FileEntry
+			binlogs, err = binlogFilesForFullBackup(params.Cnf)
+			fes = append(fes, binlogs...)
+		}
 	}
 	if err != nil {
 		return vterrors.Wrap(err, "can't find files to backup")
@@ -1215,6 +1227,13 @@ func (be *BuiltinBackupEngine) backupManifest(
 			hostname = ""
 		}
 
+		// Binlog entries were appended after the data files; keep them out of
+		// FileEntries so that older versions can still restore the data.
+		n := len(fes)
+		for n > 0 && fes[n-1].Base == backupBinlogStripped {
+			n--
+		}
+
 		// JSON-encode and write the MANIFEST
 		bm := &builtinBackupManifest{
 			// Common base fields
@@ -1235,9 +1254,11 @@ func (be *BuiltinBackupEngine) backupManifest(
 			MySQLVersion:       mysqlVersion,
 			UpgradeSafe:        params.UpgradeSafe,
 			IncrementalDetails: incrDetails,
+			IncludesBinlogs:    n < len(fes),
 
 			// Builtin-specific fields
-			FileEntries:          fes,
+			FileEntries:          fes[:n],
+			BinlogFileEntries:    fes[n:],
 			SkipCompress:         !backupStorageCompress,
 			CompressionEngine:    CompressionEngineName,
 			ExternalDecompressor: ManifestExternalDecompressorCmd,

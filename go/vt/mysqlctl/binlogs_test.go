@@ -1,10 +1,20 @@
 package mysqlctl
 
 import (
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/vterrors"
+
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 func TestBinlogLocation(t *testing.T) {
@@ -49,4 +59,82 @@ func TestBinlogLocation(t *testing.T) {
 			assert.Equal(t, tt.wantIndexPath, indexPath)
 		})
 	}
+}
+
+func TestBinlogFilesForFullBackup(t *testing.T) {
+	dir := t.TempDir()
+	cnf := &Mycnf{DataDir: dir, BinLogPath: filepath.Join(dir, "src-bin")}
+	mtime := time.Unix(1700000000, 0).UTC()
+	for _, seq := range []string{"000001", "000002"} {
+		p := filepath.Join(dir, "src-bin."+seq)
+		require.NoError(t, os.WriteFile(p, []byte("x"), 0o644))
+		require.NoError(t, os.Chtimes(p, mtime, mtime))
+	}
+	index := filepath.Join(dir, "src-bin.000001") + "\n./src-bin.000002\n"
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "src-bin.index"), []byte(index), 0o644))
+
+	fes, err := binlogFilesForFullBackup(cnf)
+	require.NoError(t, err)
+	assert.Equal(t, []FileEntry{
+		{Base: backupBinlogStripped, Name: "binlog.000001", ModTime: mtime},
+		{Base: backupBinlogStripped, Name: "binlog.000002", ModTime: mtime},
+	}, fes)
+
+	t.Run("missing file", func(t *testing.T) {
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "src-bin.index"), []byte("./src-bin.000003\n"), 0o644))
+		_, err := binlogFilesForFullBackup(cnf)
+		require.ErrorContains(t, err, "src-bin.000003")
+	})
+	t.Run("file outside the basename", func(t *testing.T) {
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "other-bin.000001"), []byte("x"), 0o644))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "src-bin.index"), []byte("./other-bin.000001\n"), 0o644))
+		_, err := binlogFilesForFullBackup(cnf)
+		require.ErrorContains(t, err, "other-bin.000001")
+	})
+}
+
+func TestCheckBinlogsBackupable(t *testing.T) {
+	tests := []struct {
+		name            string
+		row             []string // log_bin, binlog_encryption, log_replica_updates
+		sourceIsPrimary bool
+		wantErr         string
+	}{
+		{name: "replica with replica updates", row: []string{"1", "0", "1"}},
+		{name: "primary without replica updates", row: []string{"1", "0", "0"}, sourceIsPrimary: true},
+		{name: "binlog off", row: []string{"0", "0", "1"}, wantErr: "log_bin"},
+		{name: "encrypted", row: []string{"1", "1", "1"}, wantErr: "binlog_encryption"},
+		{name: "replica without replica updates", row: []string{"1", "0", "0"}, wantErr: "log_replica_updates"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fakedb := fakesqldb.New(t)
+			t.Cleanup(fakedb.Close)
+			mysqld := NewFakeMysqlDaemon(fakedb)
+			t.Cleanup(mysqld.Close)
+			mysqld.FetchSuperQueryMap = map[string]*sqltypes.Result{
+				binlogBackupVarsQuery: sqltypes.MakeTestResult(
+					sqltypes.MakeTestFields("log_bin|binlog_encryption|log_replica_updates", "int64|int64|int64"),
+					strings.Join(tt.row, "|")),
+			}
+			err := checkBinlogsBackupable(t.Context(), mysqld, tt.sourceIsPrimary)
+			if tt.wantErr == "" {
+				require.NoError(t, err)
+				return
+			}
+			require.ErrorContains(t, err, tt.wantErr)
+			assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+		})
+	}
+}
+
+func TestValidateIncludeBinlogs(t *testing.T) {
+	require.NoError(t, ValidateIncludeBinlogs(BackupParams{BackupEngine: builtinBackupEngineName}))
+	require.NoError(t, ValidateIncludeBinlogs(BackupParams{BackupEngine: "xtrabackup"}), "no-op without IncludeBinlogs")
+
+	err := ValidateIncludeBinlogs(BackupParams{IncludeBinlogs: true, BackupEngine: "xtrabackup"})
+	assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+	err = ValidateIncludeBinlogs(BackupParams{IncludeBinlogs: true, BackupEngine: builtinBackupEngineName, IncrementalFromPos: "auto"})
+	assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+	require.NoError(t, ValidateIncludeBinlogs(BackupParams{IncludeBinlogs: true, BackupEngine: builtinBackupEngineName}))
 }

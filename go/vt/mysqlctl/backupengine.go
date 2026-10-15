@@ -96,6 +96,8 @@ type BackupParams struct {
 	BackupEngine string
 	// Any SQL that you would like to run before initializing the backup.
 	InitSQL *tabletmanagerdatapb.BackupRequest_InitSQL
+	// IncludeBinlogs includes the source's binlogs in a full builtin backup.
+	IncludeBinlogs bool
 }
 
 func (b *BackupParams) Copy() BackupParams {
@@ -116,6 +118,7 @@ func (b *BackupParams) Copy() BackupParams {
 		UpgradeSafe:          b.UpgradeSafe,
 		MysqlShutdownTimeout: b.MysqlShutdownTimeout,
 		InitSQL:              b.InitSQL,
+		IncludeBinlogs:       b.IncludeBinlogs,
 	}
 }
 
