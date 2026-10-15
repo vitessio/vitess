@@ -810,18 +810,50 @@ func TestReparentSourceEndsDeferredReplicationInitialization(t *testing.T) {
 	// RPCs wait for the DBA grants, which this fixture does not apply.
 	tm._waitForGrantsComplete = make(chan struct{})
 	close(tm._waitForGrantsComplete)
+	// The RPC must not enable query service itself: that can stall on MySQL
+	// while the RPC holds the action lock.
+	ctrl := &blockingServingController{Controller: qsc, enabling: make(chan struct{}, 1), release: make(chan struct{})}
+	tm.QueryServiceControl = ctrl
 
-	require.NoError(t, tm.SetReplicationSource(t.Context(), newPrimary.Alias, 0, "", true, true, 0))
+	done := make(chan error, 1)
+	go func() { done <- tm.SetReplicationSource(t.Context(), newPrimary.Alias, 0, "", true, true, 0) }()
+	select {
+	case err := <-done:
+		require.NoError(t, err)
+	case <-ctrl.enabling:
+		close(ctrl.release)
+		require.FailNow(t, "SetReplicationSource enabled query service")
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "SetReplicationSource did not return")
+	}
 	require.NoError(t, md.CheckSuperQueryList())
 	assert.Equal(t, "new-primary", md.CurrentSourceHost)
-	assert.True(t, qsc.IsServing(), "the reparent configured replication")
+	assert.False(t, qsc.IsServing())
 
-	// The deferral's retry must not point replication back at the stale primary.
+	// The retry keeps the source the reparent chose, ends the deferral, and
+	// enables query service.
+	close(ctrl.release)
+	md.Replicating, md.IOThreadRunning = true, true
 	md.ExpectedExecuteSuperQueryList = nil
 	md.ExpectedExecuteSuperQueryCurrent = 0
 	require.NoError(t, tm.retryReplicationInitializationOnce(t.Context(), id))
 	require.NoError(t, md.CheckSuperQueryList())
 	assert.Equal(t, "new-primary", md.CurrentSourceHost)
+	assert.True(t, qsc.IsServing())
+}
+
+func TestSourceOnlyRPCKeepsStoppedReplicaOutOfRotation(t *testing.T) {
+	tm, md, _, qsc, id := newPendingReplicationTM(t)
+	md.ExpectedExecuteSuperQueryList = []string{"FAKE SET SOURCE"}
+	tm._waitForGrantsComplete = make(chan struct{})
+	close(tm._waitForGrantsComplete)
+
+	// The RPC configures the source without starting replication.
+	require.NoError(t, tm.SetReplicationSource(t.Context(), &topodatapb.TabletAlias{Cell: "cell1", Uid: 2}, 0, "", false, true, 0))
+	require.NoError(t, md.CheckSuperQueryList())
+
+	require.ErrorContains(t, tm.retryReplicationInitializationOnce(t.Context(), id), "waiting for replication from old-primary:3306")
+	assert.False(t, qsc.IsServing(), "a replica whose replication is stopped must not serve")
 }
 
 func TestReparentSourceSurvivesFailedReplicationStart(t *testing.T) {

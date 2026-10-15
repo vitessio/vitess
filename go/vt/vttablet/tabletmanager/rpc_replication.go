@@ -554,10 +554,6 @@ func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.Tab
 	if err := tm.setReplicationSourceRecoverable(ctx, ti.MysqlHostname, ti.MysqlPort, 0, false, true); err != nil {
 		return err
 	}
-	// The caller chose this source, so a deferred initialization must not
-	// replace it.
-	tm.tmState.cancelReplicationInit(ctx)
-
 	// wait until we get the replicated row, or our context times out
 	return tm.MysqlDaemon.WaitForReparentJournal(ctx, timeCreatedNS)
 }
@@ -1050,11 +1046,6 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 			return err
 		}
 	}
-	// The caller chose this source, for example a reparent that has not yet
-	// published the new primary in the shard record, so a deferred
-	// initialization must not replace it.
-	tm.tmState.cancelReplicationInit(ctx)
-
 	// If needed, wait until we replicate to the specified point, or our context
 	// times out. Callers can specify the point to wait for as either a
 	// GTID-based replication position or a Vitess reparent journal entry,

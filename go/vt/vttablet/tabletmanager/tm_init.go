@@ -247,6 +247,12 @@ type shardLockUnavailableError struct{ cause error }
 func (e *shardLockUnavailableError) Error() string { return e.cause.Error() }
 func (e *shardLockUnavailableError) Cause() error  { return e.cause }
 
+// replicationInitWaitError reports that a deferred replication initialization
+// is waiting for another operation, which its retry checks without locks.
+type replicationInitWaitError struct{ reason string }
+
+func (e *replicationInitWaitError) Error() string { return e.reason }
+
 // BuildTabletFromInput builds a tablet record from input parameters.
 func BuildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32, db *dbconfigs.DBConfigs, collationEnv *collations.Environment) (*topodatapb.Tablet, error) {
 	hostname := tabletHostname
@@ -1225,7 +1231,9 @@ func (tm *TabletManager) retryReplicationInitialization(ctx context.Context, id 
 			return
 		}
 		tm.tmState.setReplicationInitError(ctx, id, err)
-		if _, ok := errors.AsType[*shardLockUnavailableError](err); ok {
+		_, lockUnavailable := errors.AsType[*shardLockUnavailableError](err)
+		_, waiting := errors.AsType[*replicationInitWaitError](err)
+		if lockUnavailable || waiting {
 			interval = replicationInitializationRetryInterval
 		} else {
 			interval = min(2*interval, replicationInitializationMaxRetryInterval)
@@ -1277,20 +1285,6 @@ func (tm *TabletManager) attemptDeferredReplicationInit(ctx context.Context, id 
 	// Bound everything done while holding both locks.
 	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer cancel()
-	if source := tm.tmState.chosenReplicationSource(id); source != "" {
-		// An RPC chose the source but did not finish installing it or starting
-		// replication. Keep its choice, which may be newer than the shard
-		// record, and wait until replication runs from that source.
-		status, err := tm.MysqlDaemon.ReplicationStatus(ctx)
-		if err != nil && !errors.Is(err, mysql.ErrNotReplica) {
-			return err
-		}
-		if !status.Running() || netutil.JoinHostPort(status.SourceHost, status.SourcePort) != source {
-			return vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "waiting for replication from %s, which a reparent or VTOrc chose", source)
-		}
-		tm.tmState.endReplicationInit(id)
-		return nil
-	}
 	primary, err := tm.replicatingShardPrimary(ctx)
 	if err != nil {
 		return err
@@ -1321,9 +1315,11 @@ func (tm *TabletManager) attemptDeferredReplicationInit(ctx context.Context, id 
 
 // settleDeferredReplicationInit reports whether the deferred replication
 // initialization id has ended without needing a replication change: it is no
-// longer pending, or the tablet has become a primary, which ends it. While a
-// restore runs, it returns an error. Ending it is safe without the action
-// lock, because only this ID is ended.
+// longer pending; the tablet has become a primary, which ends it; or an RPC
+// chose the replication source, in which case it ends once replication runs
+// from that source. While it waits for a restore or for that source, it
+// returns a *replicationInitWaitError. It changes no replication, so it needs
+// no lock, and ending the deferral is safe because only this ID is ended.
 func (tm *TabletManager) settleDeferredReplicationInit(ctx context.Context, id uint64) (bool, error) {
 	if !tm.tmState.isPendingReplicationInit(id) {
 		// It completed, or a later deferral or a restore superseded it.
@@ -1337,9 +1333,25 @@ func (tm *TabletManager) settleDeferredReplicationInit(ctx context.Context, id u
 	case topodatapb.TabletType_RESTORE:
 		// A restore that finishes supersedes this initialization. One that
 		// aborts leaves the data, and this initialization, unchanged.
-		return false, vterrors.New(vtrpc.Code_UNAVAILABLE, "waiting for the restore to finish")
+		return false, &replicationInitWaitError{"waiting for the restore to finish"}
 	}
-	return false, nil
+	source := tm.tmState.chosenReplicationSource(id)
+	if source == "" {
+		return false, nil
+	}
+	// An RPC chose the source, which may be newer than the shard record. Keep
+	// its choice, and wait until replication runs from that source.
+	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+	defer cancel()
+	status, err := tm.MysqlDaemon.ReplicationStatus(ctx)
+	if err != nil && !errors.Is(err, mysql.ErrNotReplica) {
+		return false, err
+	}
+	if !status.Running() || netutil.JoinHostPort(status.SourceHost, status.SourcePort) != source {
+		return false, &replicationInitWaitError{fmt.Sprintf("waiting for replication from %s, which a reparent or VTOrc chose", source)}
+	}
+	tm.tmState.endReplicationInit(id)
+	return true, nil
 }
 
 // replicatingShardPrimary returns the shard's current primary if both
