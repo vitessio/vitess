@@ -52,7 +52,10 @@ const (
 	backupInnodbDataHomeDir     = "InnoDBData"
 	backupInnodbLogGroupHomeDir = "InnoDBLog"
 	backupBinlogDir             = "BinLog"
-	backupData                  = "Data"
+	// backupBinlogStripped marks binlogs stored as binlog.<seq> in BinlogFileEntries,
+	// restored under the target's binlog basename.
+	backupBinlogStripped = "BinLogStripped"
+	backupData           = "Data"
 
 	// backupManifestFileName is the MANIFEST file name within a backup.
 	backupManifestFileName = "MANIFEST"

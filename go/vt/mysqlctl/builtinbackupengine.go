@@ -155,6 +155,12 @@ type builtinBackupManifest struct {
 	// FileEntries contains all the files in the backup
 	FileEntries []FileEntry
 
+	// BinlogFileEntries contains the source's binlogs, when the backup includes them.
+	// They are kept out of FileEntries so that older versions, which fail on an
+	// unknown Base, restore the data and ignore them. Their storage names continue
+	// FileEntries' indices.
+	BinlogFileEntries []FileEntry `json:",omitempty"`
+
 	// SkipCompress is true if the backup files were NOT run through gzip.
 	// The field is expressed as a negative because it will come through as
 	// false for backups that were created before the field existed, and those
@@ -199,6 +205,10 @@ type FileEntry struct {
 	// Chunks, when non-empty, indicates this file was split into chunks for
 	// parallel backup/restore. Each chunk is independently compressed and hashed.
 	Chunks []FileChunk `json:",omitempty"`
+
+	// ModTime is the source file's modification time. It is only set for binlogs,
+	// which mysqld expires by mtime (binlog_expire_logs_seconds).
+	ModTime time.Time `json:",omitzero"`
 
 	// RetryCount specifies how many times we retried restoring/backing up this FileEntry.
 	// If we fail to restore/backup this FileEntry, we will retry up to maxRetriesPerFile times.
@@ -263,6 +273,9 @@ func registerBuiltinBackupEngineFlags(fs *pflag.FlagSet) {
 	fs.Uint64Var(&backupFileChunkSize, "builtinbackup-file-chunk-size", backupFileChunkSize, "Size of each chunk (in bytes) when splitting large files for parallel backup/restore.")
 }
 
+// errInvalidBinlogEntry is returned for a stripped binlog whose name is not binlog.<seq>.
+var errInvalidBinlogEntry = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid binlog entry name")
+
 // fullPath returns the full path of the entry, based on its type.
 // It validates that the resolved path does not escape the base directory
 // via path traversal (e.g. "../../" sequences in fe.Name).
@@ -278,6 +291,16 @@ func (fe *FileEntry) fullPath(cnf *Mycnf) (string, error) {
 		root = cnf.DataDir
 	case backupBinlogDir:
 		root = filepath.Dir(cnf.BinLogPath)
+	case backupBinlogStripped:
+		seq, ok := strings.CutPrefix(fe.Name, "binlog.")
+		if !ok || !binlogSeqRE.MatchString(seq) {
+			return "", errInvalidBinlogEntry
+		}
+		basename, _, err := binlogLocation(cnf)
+		if err != nil {
+			return "", err
+		}
+		return path.Join(fe.ParentPath, basename+"."+seq), nil
 	default:
 		return "", vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "unknown base: %v", fe.Base)
 	}

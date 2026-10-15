@@ -22,6 +22,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"hash/crc32"
@@ -162,6 +163,26 @@ func TestFileEntryFullPath(t *testing.T) {
 			entry:    FileEntry{Base: backupData, Name: "mydb/../mydb/table1.ibd"},
 			wantPath: "/vt/data/mydb/table1.ibd",
 		},
+		{
+			name:     "stripped binlog resolves to the target basename",
+			entry:    FileEntry{Base: backupBinlogStripped, Name: "binlog.000123"},
+			wantPath: "/vt/binlogs/mysql-bin.000123",
+		},
+		{
+			name:      "stripped binlog with traversal is rejected",
+			entry:     FileEntry{Base: backupBinlogStripped, Name: "binlog.000123/../../x"},
+			wantError: errInvalidBinlogEntry,
+		},
+		{
+			name:      "stripped binlog with short sequence is rejected",
+			entry:     FileEntry{Base: backupBinlogStripped, Name: "binlog.12"},
+			wantError: errInvalidBinlogEntry,
+		},
+		{
+			name:      "stripped binlog with another prefix is rejected",
+			entry:     FileEntry{Base: backupBinlogStripped, Name: "foo.000001"},
+			wantError: errInvalidBinlogEntry,
+		},
 	}
 
 	// Test unknown base separately since it returns a different error type.
@@ -183,6 +204,35 @@ func TestFileEntryFullPath(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestManifestWithBinlogsDecodesInOlderShape proves that an N-1 restore, which
+// knows nothing of BinlogFileEntries, decodes the manifest and sees only data files.
+func TestManifestWithBinlogsDecodesInOlderShape(t *testing.T) {
+	base := BackupManifest{BackupMethod: builtinBackupEngineName, IncludesBinlogs: true}
+	bm := builtinBackupManifest{
+		BackupManifest:    base,
+		FileEntries:       []FileEntry{{Base: backupData, Name: "ks/t.ibd"}},
+		BinlogFileEntries: []FileEntry{{Base: backupBinlogStripped, Name: "binlog.000001", ModTime: time.Unix(1700000000, 0).UTC()}},
+	}
+	data, err := json.Marshal(bm)
+	require.NoError(t, err)
+
+	var roundTrip builtinBackupManifest
+	require.NoError(t, json.Unmarshal(data, &roundTrip))
+	assert.Equal(t, bm.BinlogFileEntries, roundTrip.BinlogFileEntries)
+	assert.True(t, roundTrip.IncludesBinlogs)
+
+	// The shape of builtinBackupManifest before this change.
+	var older struct {
+		BackupManifest
+		FileEntries []struct {
+			Base, Name, Hash, ParentPath string
+		}
+	}
+	require.NoError(t, json.Unmarshal(data, &older))
+	require.Len(t, older.FileEntries, 1)
+	assert.Equal(t, backupData, older.FileEntries[0].Base)
 }
 
 func TestParseBackupStorageName(t *testing.T) {

@@ -361,6 +361,10 @@ type BackupManifest struct {
 	// UpgradeSafe indicates whether the backup is safe to use for an upgrade to a newer MySQL version
 	UpgradeSafe bool
 
+	// IncludesBinlogs is true when the backup contains the source's binlogs, which
+	// a restore installs and keeps instead of resetting gtid_purged.
+	IncludesBinlogs bool `json:",omitempty"`
+
 	// IncrementalDetails is nil for non-incremental backups
 	IncrementalDetails *IncrementalBackupDetails
 }
