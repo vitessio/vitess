@@ -564,3 +564,15 @@ func TestSupersededReplicationInitializationDoesNotChangeReplication(t *testing.
 		require.NoError(t, md.CheckSuperQueryList())
 	})
 }
+
+func TestDeferredReplicationInitializationKeepsExistingReplication(t *testing.T) {
+	tm, md, _, qsc, id := newPendingReplicationTM(t)
+	// A reparent has already pointed replication at the current primary.
+	md.Replicating, md.IOThreadRunning = true, true
+	md.CurrentSourceHost, md.CurrentSourcePort = "old-primary", 3306
+	md.ExpectedExecuteSuperQueryList = nil
+
+	require.NoError(t, tm.retryReplicationInitializationOnce(t.Context(), id))
+	assert.True(t, qsc.IsServing())
+	require.NoError(t, md.CheckSuperQueryList(), "replication that is already correct must not be restarted")
+}

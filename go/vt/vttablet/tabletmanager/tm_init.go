@@ -51,6 +51,7 @@ import (
 
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/flagutil"
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
@@ -1252,6 +1253,14 @@ func (tm *TabletManager) retryReplicationInitializationOnce(ctx context.Context,
 		// aborts leaves the data, and this initialization, unchanged.
 		return vterrors.New(vtrpc.Code_UNAVAILABLE, "waiting for the restore to finish")
 	default:
+		replicating, err := tm.replicatingFromShardPrimary(ctx)
+		if err != nil {
+			return err
+		}
+		if replicating {
+			// A reparent or VTOrc has already configured replication.
+			break
+		}
 		primaryPos, err := tm.initializeReplication(ctx, tabletType)
 		if err != nil {
 			return err
@@ -1264,6 +1273,23 @@ func (tm *TabletManager) retryReplicationInitializationOnce(ctx context.Context,
 	}
 	tm.tmState.endReplicationInit(ctx, id)
 	return nil
+}
+
+// replicatingFromShardPrimary reports whether both replication threads are
+// running from the shard's current primary.
+func (tm *TabletManager) replicatingFromShardPrimary(ctx context.Context) (bool, error) {
+	status, err := tm.MysqlDaemon.ReplicationStatus(ctx)
+	if errors.Is(err, mysql.ErrNotReplica) {
+		return false, nil
+	}
+	if err != nil || !status.Running() {
+		return false, err
+	}
+	primary, err := topotools.GetShardPrimaryForTablet(ctx, tm.TopoServer, tm.Tablet())
+	if err != nil {
+		return false, err
+	}
+	return status.SourceHost == primary.MysqlHostname && status.SourcePort == primary.MysqlPort, nil
 }
 
 // initializeReplication is used to initialize the replication when the tablet starts.
