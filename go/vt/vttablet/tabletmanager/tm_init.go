@@ -1265,7 +1265,7 @@ func (tm *TabletManager) attemptDeferredReplicationInit(ctx context.Context, id 
 	if done, err := tm.settleDeferredReplicationInit(ctx, id); done || err != nil {
 		return err
 	}
-	if _, source := tm.tmState.chosenReplicationSource(id); source != "" {
+	if tm.tmState.chosenReplicationSource(id) != nil {
 		// An RPC chose the source. Completing the deferral changes no
 		// replication, so it does not need the shard lock.
 		return tm.completeChosenReplicationSource(ctx, id)
@@ -1287,10 +1287,10 @@ func (tm *TabletManager) attemptDeferredReplicationInit(ctx context.Context, id 
 	if done, err := tm.settleDeferredReplicationInit(ctx, id); done || err != nil {
 		return err
 	}
-	if _, source := tm.tmState.chosenReplicationSource(id); source != "" {
+	if source := tm.tmState.chosenReplicationSource(id); source != nil {
 		// An RPC chose a source after the check above. Never replace it; the
 		// next attempt completes the deferral.
-		return &replicationInitWaitError{fmt.Sprintf("waiting for replication from %s, which a reparent or VTOrc chose", source)}
+		return &replicationInitWaitError{fmt.Sprintf("waiting for replication from %s, which a reparent or VTOrc chose", topoproto.TabletAliasString(source))}
 	}
 	// Bound everything done while holding both locks.
 	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
@@ -1357,23 +1357,23 @@ func (tm *TabletManager) completeChosenReplicationSource(ctx context.Context, id
 		return &replicationInitWaitError{"another action is running on this tablet"}
 	}
 	defer tm.unlock()
-	alias, source := tm.tmState.chosenReplicationSource(id)
-	if source == "" {
+	alias := tm.tmState.chosenReplicationSource(id)
+	if alias == nil {
 		// It ended, or a later deferral superseded it.
 		return nil
 	}
 	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer cancel()
+	primary, err := tm.TopoServer.GetTablet(ctx, alias)
+	if err != nil {
+		return err
+	}
 	status, err := tm.MysqlDaemon.ReplicationStatus(ctx)
 	if err != nil && !errors.Is(err, mysql.ErrNotReplica) {
 		return err
 	}
-	if !status.Running() || netutil.JoinHostPort(status.SourceHost, status.SourcePort) != source {
-		return &replicationInitWaitError{fmt.Sprintf("waiting for replication from %s, which a reparent or VTOrc chose", source)}
-	}
-	primary, err := tm.TopoServer.GetTablet(ctx, alias)
-	if err != nil {
-		return err
+	if !status.Running() || status.SourceHost != primary.MysqlHostname || status.SourcePort != primary.MysqlPort {
+		return &replicationInitWaitError{fmt.Sprintf("waiting for replication from %s (%s), which a reparent or VTOrc chose", topoproto.TabletAliasString(alias), netutil.JoinHostPort(primary.MysqlHostname, primary.MysqlPort))}
 	}
 	if _, err := tm.checkNoErrantGTIDs(ctx, primary.Tablet); err != nil {
 		return err

@@ -509,6 +509,9 @@ func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.Tab
 		return err
 	}
 	defer tm.unlock()
+	// From here on this source replaces any that a deferred initialization
+	// would choose, even if a later step fails.
+	tm.tmState.replicationSourceChosen(parent)
 
 	semiSyncAction, err := tm.convertBoolToSemiSyncAction(ctx, semiSync)
 	if err != nil {
@@ -544,9 +547,6 @@ func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.Tab
 		return err
 	}
 
-	// From here on this source replaces any that a deferred initialization
-	// would choose, even if starting replication fails.
-	tm.tmState.replicationSourceChosen(ti.Alias, ti.MysqlHostname, ti.MysqlPort)
 	if err := tm.MysqlDaemon.SetReplicationPosition(ctx, pos); err != nil {
 		return err
 	}
@@ -929,6 +929,11 @@ func (tm *TabletManager) setReplicationSourceSemiSyncNoAction(ctx context.Contex
 }
 
 func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool, semiSync SemiSyncAction, heartbeatInterval float64) (err error) {
+	// From here on this source replaces any that a deferred initialization
+	// would choose, even if a later step fails.
+	if parentAlias != nil {
+		tm.tmState.replicationSourceChosen(parentAlias)
+	}
 	// Change our type to REPLICA if we used to be PRIMARY.
 	// Being sent SetReplicationSource means another PRIMARY has been successfully promoted,
 	// so we convert to REPLICA first, since we want to do it even if other
@@ -1032,9 +1037,6 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 			return vterrors.New(vtrpc.Code_FAILED_PRECONDITION, fmt.Sprintf("Errant GTID detected - %s; Primary GTID - %s, Replica GTID - %s", errantGtid, primaryPosition, replicaPosition.String()))
 		}
 	}
-	// From here on this source replaces any that a deferred initialization
-	// would choose, even if starting replication fails.
-	tm.tmState.replicationSourceChosen(parentAlias, host, port)
 	if status.SourceHost != host || status.SourcePort != port || heartbeatInterval != 0 {
 		// This handles both changing the address and starting replication.
 		if err := tm.setReplicationSourceRecoverable(ctx, host, port, heartbeatInterval, wasReplicating, shouldbeReplicating); err != nil {

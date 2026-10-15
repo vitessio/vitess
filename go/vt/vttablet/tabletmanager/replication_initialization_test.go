@@ -24,6 +24,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
@@ -80,6 +81,19 @@ func (c *blockingServingController) SetServingType(tabletType topodatapb.TabletT
 		<-c.release
 	}
 	return c.Controller.SetServingType(tabletType, ptsTime, serving, reason)
+}
+
+// failingPrimaryStatusClient fails PrimaryStatus for one tablet.
+type failingPrimaryStatusClient struct {
+	tmclient.TabletManagerClient
+	failing *topodatapb.TabletAlias
+}
+
+func (c *failingPrimaryStatusClient) PrimaryStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
+	if proto.Equal(tablet.Alias, c.failing) {
+		return nil, errors.New("primary status unavailable")
+	}
+	return c.TabletManagerClient.PrimaryStatus(ctx, tablet)
 }
 
 // The client lets tests hold initialization after acquisition, without sleeps.
@@ -863,7 +877,7 @@ func TestSourceOnlyRPCStartsDeferredReplication(t *testing.T) {
 			require.NoError(t, md.CheckSuperQueryList())
 			if tc.startErr != nil {
 				require.ErrorContains(t, err, "cannot start replication")
-				require.ErrorContains(t, tm.retryReplicationInitializationOnce(t.Context(), id), "waiting for replication from old-primary:3306")
+				require.ErrorContains(t, tm.retryReplicationInitializationOnce(t.Context(), id), "(old-primary:3306), which a reparent or VTOrc chose")
 				assert.False(t, qsc.IsServing(), "a replica whose replication is stopped must not serve")
 				return
 			}
@@ -1011,7 +1025,7 @@ func TestFailedReparentSourceKeepsReplicaOutOfRotation(t *testing.T) {
 			// Replication runs, but not from the source the RPC chose.
 			md.ExpectedExecuteSuperQueryList = nil
 			md.ExpectedExecuteSuperQueryCurrent = 0
-			require.ErrorContains(t, tm.retryReplicationInitializationOnce(t.Context(), id), "waiting for replication from new-primary:3306")
+			require.ErrorContains(t, tm.retryReplicationInitializationOnce(t.Context(), id), "(new-primary:3306), which a reparent or VTOrc chose")
 			require.NoError(t, md.CheckSuperQueryList())
 			assert.False(t, qsc.IsServing(), "a replica must not serve from a source other than the one the RPC chose")
 		})
@@ -1026,7 +1040,7 @@ func TestChosenReplicationSourceCompletion(t *testing.T) {
 		newPrimary.MysqlHostname, newPrimary.MysqlPort = "new-primary", 3306
 		require.NoError(t, ts.CreateTablet(t.Context(), newPrimary))
 		// An RPC chose the new primary, and replication runs from it.
-		tm.tmState.replicationSourceChosen(newPrimary.Alias, "new-primary", 3306)
+		tm.tmState.replicationSourceChosen(newPrimary.Alias)
 		md.Replicating, md.IOThreadRunning = true, true
 		md.CurrentSourceHost, md.CurrentSourcePort = "new-primary", 3306
 		md.ExpectedExecuteSuperQueryList = nil
@@ -1053,4 +1067,25 @@ func TestChosenReplicationSourceCompletion(t *testing.T) {
 		assert.False(t, qsc.IsServing(), "a replica with an errant GTID must not serve")
 		require.NoError(t, md.CheckSuperQueryList())
 	})
+}
+
+func TestReparentSourceSurvivesFailedValidation(t *testing.T) {
+	tm, md, ts, qsc, id := newPendingReplicationTM(t)
+	// The shard record still names the old primary.
+	newPrimary := newTestTablet(t, 3, "ks", "0", nil)
+	newPrimary.Type = topodatapb.TabletType_PRIMARY
+	newPrimary.MysqlHostname, newPrimary.MysqlPort = "new-primary", 3306
+	require.NoError(t, ts.CreateTablet(t.Context(), newPrimary))
+	tm.tmc = &failingPrimaryStatusClient{TabletManagerClient: tm.tmc, failing: newPrimary.Alias}
+	md.ExpectedExecuteSuperQueryList = nil
+	tm._waitForGrantsComplete = make(chan struct{})
+	close(tm._waitForGrantsComplete)
+
+	// The RPC fails before it changes the source.
+	require.ErrorContains(t, tm.SetReplicationSource(t.Context(), newPrimary.Alias, 0, "", true, true, 0), "primary status unavailable")
+
+	// The retry must not fall back to the stale shard record.
+	require.ErrorContains(t, tm.retryReplicationInitializationOnce(t.Context(), id), "(new-primary:3306), which a reparent or VTOrc chose")
+	require.NoError(t, md.CheckSuperQueryList())
+	assert.False(t, qsc.IsServing())
 }
