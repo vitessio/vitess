@@ -1046,26 +1046,57 @@ func TestOlapErrorAfterFields(t *testing.T) {
 
 // TestRecursiveCTEMaxRecursionDepth verifies that the cte_max_recursion_depth
 // session system variable is accepted by VTGate and drives the recursion guard
-// the way it does in MySQL, on both the OLTP and the OLAP workload.
+// the way it does in MySQL, on both the OLTP and the OLAP workload. The
+// recursive query blocks join the sharded t1, so VTGate runs the recursion
+// itself (RecurseCTE) rather than pushing the whole CTE down to MySQL.
 func TestRecursiveCTEMaxRecursionDepth(t *testing.T) {
 	mcmp, closer := start(t)
 	t.Cleanup(closer)
 
-	unbounded := "with recursive cte as (select 1 as n union all select n + 1 from cte) select * from cte"
+	// t1 holds the chain 1, 2, ..., 1500: each recursion level joins the next id.
+	values := make([]string, 0, 1500)
+	for i := 1; i <= 1500; i++ {
+		values = append(values, fmt.Sprintf("(%d, %d)", i, i))
+	}
+	mcmp.Exec("insert into t1(id1, id2) values " + strings.Join(values, ", "))
 
-	utils.Exec(t, mcmp.VtConn, "set cte_max_recursion_depth = 10")
+	chain := func(levels int) string {
+		return fmt.Sprintf("with recursive cte as (select id1 from t1 where id1 = 1 union all "+
+			"select t1.id1 from cte join t1 on t1.id1 = cte.id1 + 1 where t1.id1 <= %d) select count(*) from cte", levels)
+	}
+	// The recursive query block is planned as a route that returns no rows.
+	emptyTerm := "with recursive cte as (select id1 from t1 where id1 = 1 union all select id1 + 1 from cte where false) select * from cte"
+
+	for _, query := range []string{chain(10), emptyTerm} {
+		require.Contains(t, mcmp.VExplain(query), `"OperatorType": "RecurseCTE"`, query)
+	}
+
 	for _, workload := range []string{"oltp", "olap"} {
-		t.Run(workload, func(t *testing.T) {
-			utils.Exec(t, mcmp.VtConn, "set workload = "+workload)
-			_, err := mcmp.VtConn.ExecuteFetch(unbounded, 1000, false)
-			require.ErrorContains(t, err, "Recursive query aborted after 11 iterations")
+		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
+			utils.Exec(mcmp.AsT(), mcmp.VtConn, "set workload = "+workload)
+
+			mcmp.Exec("set cte_max_recursion_depth = 9")
+			mcmp.AssertContainsError(chain(10), "Recursive query aborted after 10 iterations")
+			mcmp.Exec("set cte_max_recursion_depth = 10")
+			mcmp.AssertMatches(chain(10), "[[INT64(10)]]")
+
+			// MySQL clamps a value above the maximum to 4294967295, so a recursion
+			// deeper than the default of 1000 still completes.
+			mcmp.Exec("set cte_max_recursion_depth = 4294967296")
+			mcmp.AssertMatches(chain(1500), "[[INT64(1500)]]")
+
+			// A limit of 0 rejects any executed recursive query block, but MySQL
+			// does not execute one that cannot return rows.
+			mcmp.Exec("set cte_max_recursion_depth = 0")
+			mcmp.AssertMatches(emptyTerm, "[[INT64(1)]]")
+			mcmp.AssertContainsError(chain(10), "Recursive query aborted after 1 iterations")
 		})
 	}
 
-	// Raising the limit above the MySQL default allows a deeper recursion.
+	// A CTE that does not reference a sharded table is pushed down to MySQL, which
+	// enforces the session's limit itself.
 	utils.Exec(t, mcmp.VtConn, "set workload = oltp")
-	utils.Exec(t, mcmp.VtConn, "set cte_max_recursion_depth = 2000")
-	utils.AssertMatches(t, mcmp.VtConn,
-		"with recursive cte as (select 1 as n union all select n + 1 from cte where n < 1500) select count(*) from cte",
-		"[[INT64(1500)]]")
+	mcmp.Exec("set cte_max_recursion_depth = 10")
+	mcmp.AssertContainsError("with recursive cte as (select 1 as n union all select n + 1 from cte) select * from cte",
+		"Recursive query aborted after 11 iterations")
 }

@@ -18,6 +18,7 @@ package engine
 
 import (
 	"context"
+	"math"
 	"strconv"
 	"strings"
 	"sync"
@@ -66,22 +67,42 @@ func maxRecurseDepth(vcursor VCursor) uint64 {
 	return limit
 }
 
+// maxRecurseDepthLimit is the largest value MySQL accepts for
+// cte_max_recursion_depth. Larger values are clamped to it.
+const maxRecurseDepthLimit = math.MaxUint32
+
 // parseRecurseDepth parses the stored value of cte_max_recursion_depth. The
-// session stores system variable values in their SQL-encoded form, so a value
-// that was assigned as a string literal is still wrapped in quotes here.
+// session stores system variable values as they were assigned, in their
+// SQL-encoded form, so a string literal is still wrapped in quotes here and an
+// out-of-range number has not been clamped yet. Like MySQL, values above
+// 4294967295 become 4294967295 and negative values become 0.
 func parseRecurseDepth(v string) (uint64, bool) {
 	v = strings.Trim(strings.TrimSpace(v), "'\"")
-	depth, err := strconv.ParseUint(v, 10, 32)
-	if err != nil {
-		return 0, false
+	if depth, err := strconv.ParseUint(v, 10, 64); err == nil {
+		return min(depth, maxRecurseDepthLimit), true
 	}
-	return depth, true
+	if depth, err := strconv.ParseInt(v, 10, 64); err == nil && depth < 0 {
+		return 0, true
+	}
+	return 0, false
+}
+
+// termReturnsNoRows reports whether the recursive term was planned as a route
+// that never returns rows, like a recursive query block with WHERE false.
+// MySQL does not execute such a block, so it never counts an iteration.
+func termReturnsNoRows(term Primitive) bool {
+	route, ok := term.(*Route)
+	return ok && route.RoutingParameters != nil && route.Opcode == None
 }
 
 func (r *RecurseCTE) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	res, err := vcursor.ExecutePrimitive(ctx, r.Seed, bindVars, wantfields)
 	if err != nil {
 		return nil, err
+	}
+
+	if termReturnsNoRows(r.Term) {
+		return res, nil
 	}
 
 	// recurseRows contains the rows used in the next recursion
@@ -143,6 +164,9 @@ func (r *RecurseCTE) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 	})
 	if err != nil {
 		return err
+	}
+	if termReturnsNoRows(r.Term) {
+		return nil
 	}
 
 	// Expand each recursion level iteratively, mirroring the buffered path. Only

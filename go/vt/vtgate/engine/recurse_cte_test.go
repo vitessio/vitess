@@ -340,3 +340,68 @@ func TestRecurseCTERecursionLimitCountsLevels(t *testing.T) {
 	require.ErrorContains(t, err, fmt.Sprintf("Recursive query aborted after %d iterations", levels+1))
 	require.Len(t, streamed, width+levels*width)
 }
+
+// TestRecurseCTERecursionLimitClampsLikeMySQL verifies that a stored
+// cte_max_recursion_depth outside [0, 4294967295] is clamped the way MySQL
+// clamps it on assignment, instead of falling back to the default.
+func TestRecurseCTERecursionLimitClampsLikeMySQL(t *testing.T) {
+	testCases := []struct {
+		value string
+		want  uint64
+	}{
+		{value: "0", want: 0},
+		{value: "4294967295", want: 4294967295},
+		{value: "4294967296", want: 4294967295},
+		{value: "18446744073709551615", want: 4294967295},
+		{value: "'4294967296'", want: 4294967295},
+		{value: "-1", want: 0},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.value, func(t *testing.T) {
+			vc := &noopVCursor{systemVariables: map[string]string{sysvars.CTEMaxRecursionDepth: tc.value}}
+			require.Equal(t, tc.want, maxRecurseDepth(vc))
+		})
+	}
+}
+
+// TestRecurseCTEZeroLimitWithEmptyTerm verifies that a limit of 0 still
+// returns the seed rows when the recursive term is planned as a route that
+// returns no rows (such as WHERE false), because MySQL never executes such a
+// term. A term that has to run still counts an iteration, even when it finds
+// no rows, so it fails with a limit of 0 as in MySQL.
+func TestRecurseCTEZeroLimitWithEmptyTerm(t *testing.T) {
+	fields := sqltypes.MakeTestFields("col1", "int64")
+	newSeed := func() *fakePrimitive {
+		return &fakePrimitive{results: []*sqltypes.Result{sqltypes.MakeTestResult(fields, "1", "2")}}
+	}
+	vc := &noopVCursor{systemVariables: map[string]string{sysvars.CTEMaxRecursionDepth: "0"}}
+	bv := map[string]*querypb.BindVariable{}
+
+	newCTE := func() *RecurseCTE {
+		return &RecurseCTE{
+			Seed: newSeed(),
+			Term: NewRoute(None, nil, "select :col1 + 1 from dual where 0", "select :col1 + 1 from dual where 1 != 1"),
+			Vars: map[string]int{"col1": 0},
+		}
+	}
+	res, err := newCTE().TryExecute(t.Context(), vc, bv, true)
+	require.NoError(t, err)
+	require.Len(t, res.Rows, 2)
+
+	res, err = wrapStreamExecute(newCTE(), vc, bv, true)
+	require.NoError(t, err)
+	require.Len(t, res.Rows, 2)
+
+	executedTerm := func() *RecurseCTE {
+		return &RecurseCTE{
+			Seed: newSeed(),
+			Term: &fakePrimitive{results: []*sqltypes.Result{sqltypes.MakeTestResult(fields), sqltypes.MakeTestResult(fields)}},
+			Vars: map[string]int{"col1": 0},
+		}
+	}
+	_, err = executedTerm().TryExecute(t.Context(), vc, bv, true)
+	require.ErrorContains(t, err, "Recursive query aborted after 1 iterations")
+
+	_, err = wrapStreamExecute(executedTerm(), vc, bv, true)
+	require.ErrorContains(t, err, "Recursive query aborted after 1 iterations")
+}
