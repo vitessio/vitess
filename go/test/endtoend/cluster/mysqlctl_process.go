@@ -197,6 +197,14 @@ func (mysqlctl *MysqlctlProcess) Stop() (err error) {
 		}
 		break
 	}
+	return mysqlctl.Kill()
+}
+
+// Kill kills the mysqld and any associated mysqld_safe processes without a
+// graceful shutdown. This is safe when the data directory is discarded right
+// after: nothing needs to be flushed, and it skips the semi-sync ack wait
+// that can stall a graceful shutdown of a primary for many seconds.
+func (mysqlctl *MysqlctlProcess) Kill() error {
 	pidFile := path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/mysql.pid", mysqlctl.TabletUID))
 	pidBytes, err := os.ReadFile(pidFile)
 	if err != nil {
@@ -210,16 +218,26 @@ func (mysqlctl *MysqlctlProcess) Stop() (err error) {
 	}
 	// We first need to try and kill any associated mysqld_safe process or
 	// else it will immediately restart the mysqld process when we kill it.
-	mspidb, err := exec.Command("sh", "-c",
-		fmt.Sprintf("ps auxww | grep -E 'mysqld_safe|mariadbd-safe' | grep vt_%010d | awk '{print $2}'", mysqlctl.TabletUID)).Output()
+	// mysqld_safe runs with --defaults-file=<tablet dir>/my.cnf, so matching
+	// the full tablet directory keeps another cluster's tablet with the same
+	// UID from matching. The process list is filtered here rather than in a
+	// shell pipeline, so the path needs no quoting.
+	tabletDir := path.Dir(pidFile) + "/"
+	psOut, err := exec.Command("ps", "-eo", "pid=,args=").Output()
 	if err != nil {
 		return err
 	}
-	mysqldSafePID, err := strconv.Atoi(strings.TrimSpace(string(mspidb)))
-	// If we found a valid associated mysqld_safe process then let's kill
-	// it first.
-	if err == nil && mysqldSafePID > 0 {
-		if err = syscallutil.Kill(mysqldSafePID, syscall.SIGKILL); err != nil {
+	for line := range strings.Lines(string(psOut)) {
+		pidField, args, _ := strings.Cut(strings.TrimSpace(line), " ")
+		if !strings.Contains(args, tabletDir) ||
+			(!strings.Contains(args, "mysqld_safe") && !strings.Contains(args, "mariadbd-safe")) {
+			continue
+		}
+		mysqldSafePID, err := strconv.Atoi(pidField)
+		if err != nil {
+			return err
+		}
+		if err := syscallutil.Kill(mysqldSafePID, syscall.SIGKILL); err != nil {
 			return err
 		}
 	}
