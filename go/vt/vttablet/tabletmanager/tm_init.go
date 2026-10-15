@@ -1305,6 +1305,15 @@ func (tm *TabletManager) attemptDeferredReplicationInit(ctx context.Context, id 
 		if _, err := tm.checkNoErrantGTIDs(ctx, primary); err != nil {
 			return err
 		}
+		fenced, err := tm.fenceFormerPrimary(ctx)
+		if err != nil {
+			return err
+		}
+		if fenced {
+			if _, err := tm.checkNoErrantGTIDs(ctx, primary); err != nil {
+				return err
+			}
+		}
 		if err := tm.fixRunningReplicaSemiSync(ctx, primary, tm.Tablet().Type); err != nil {
 			return err
 		}
@@ -1486,6 +1495,49 @@ func (tm *TabletManager) checkNoErrantGTIDs(ctx context.Context, primary *topoda
 	return primaryStatus, nil
 }
 
+// fenceRevertTimeout bounds fenceFormerPrimary's revert after a failure, which
+// runs after the caller's deadline when that deadline caused the failure.
+const fenceRevertTimeout = 2 * time.Second
+
+// fenceFormerPrimary fences writes on a mysqld with source-side semi-sync
+// enabled, as a former primary has. Its commits waiting for acknowledgements
+// reach gtid_executed only once released, so when it returns true the caller
+// must repeat its errant GTID check.
+func (tm *TabletManager) fenceFormerPrimary(ctx context.Context) (_ bool, err error) {
+	source, replica := tm.MysqlDaemon.SemiSyncEnabled(ctx)
+	if !source {
+		return false, nil
+	}
+	defer func() {
+		if err == nil {
+			return
+		}
+		// Re-enable source-side semi-sync, so that the next attempt fences
+		// again instead of validating while released commits may still be
+		// finishing.
+		revertCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), fenceRevertTimeout)
+		defer cancel()
+		if revertErr := tm.MysqlDaemon.SetSemiSyncEnabled(revertCtx, true, replica); revertErr != nil {
+			log.Warn(fmt.Sprintf("Failed to re-enable source-side semi-sync after a failed fence: %v", revertErr))
+		}
+	}()
+	// Release the waiting commits first: enabling super_read_only waits for
+	// commits in progress, and they would never finish.
+	log.Info("Disabling source-side semi-sync and enabling super_read_only before replicating")
+	if err := tm.MysqlDaemon.SetSemiSyncEnabled(ctx, false, replica); err != nil {
+		return false, err
+	}
+	// Enabling super_read_only waits for the released commits to finish and
+	// rejects new ones.
+	if _, err := tm.MysqlDaemon.SetSuperReadOnly(ctx, true); err != nil {
+		if sqlErr, ok := errors.AsType[*sqlerror.SQLError](err); !ok || sqlErr.Number() != sqlerror.ERUnknownSystemVariable {
+			return false, err
+		}
+		log.Warn("server does not know about super_read_only, continuing anyway...")
+	}
+	return true, nil
+}
+
 // initializeReplication is used to initialize the replication when the tablet starts.
 // It returns the current primary tablet for use externally
 func (tm *TabletManager) initializeReplication(ctx context.Context, tabletType topodatapb.TabletType) (_ string, err error) {
@@ -1566,6 +1618,15 @@ func (tm *TabletManager) initializeReplicationLocked(ctx context.Context, tablet
 	// This check is not a fencing token: the lock lease can still expire after it.
 	if err := topo.CheckShardLocked(ctx, tablet.Keyspace, tablet.Shard); err != nil {
 		return "", err
+	}
+	fenced, err := tm.fenceFormerPrimary(ctx)
+	if err != nil {
+		return "", err
+	}
+	if fenced {
+		if primaryStatus, err = tm.checkNoErrantGTIDs(ctx, currentPrimary.Tablet); err != nil {
+			return "", err
+		}
 	}
 	// Change semi-sync only after validating the source, but before the
 	// receiver connects to it.

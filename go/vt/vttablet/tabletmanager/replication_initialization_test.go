@@ -1089,3 +1089,151 @@ func TestReparentSourceSurvivesFailedValidation(t *testing.T) {
 	require.NoError(t, md.CheckSuperQueryList())
 	assert.False(t, qsc.IsServing())
 }
+
+// blockedCommitDaemon is a former primary with a commit waiting for semi-sync
+// acknowledgements. Disabling source-side semi-sync releases the commit, which
+// reaches gtid_executed only when it finishes. Enabling super_read_only waits
+// for it to finish, and until ctx is done while it still waits for
+// acknowledgements or while stuck is set.
+type blockedCommitDaemon struct {
+	*mysqlctl.FakeMysqlDaemon
+	committed replication.Position
+	released  bool
+	stuck     bool
+	// disableErr is returned, after disabling source-side semi-sync, once.
+	disableErr error
+}
+
+func (d *blockedCommitDaemon) SetSemiSyncEnabled(ctx context.Context, primary, replica bool) error {
+	disabling := d.SemiSyncPrimaryEnabled && !primary
+	d.released = d.released || disabling
+	if err := d.FakeMysqlDaemon.SetSemiSyncEnabled(ctx, primary, replica); err != nil {
+		return err
+	}
+	if err := d.disableErr; disabling && err != nil {
+		d.disableErr = nil
+		return err
+	}
+	return nil
+}
+
+func (d *blockedCommitDaemon) SetSuperReadOnly(ctx context.Context, on bool, opts ...mysqlctl.SetSuperReadOnlyOption) (mysqlctl.ResetSuperReadOnlyFunc, error) {
+	if on && !d.SuperReadOnly.Load() {
+		if !d.released || d.stuck {
+			<-ctx.Done()
+			return nil, ctx.Err()
+		}
+		d.SetPrimaryPositionLocked(d.committed)
+	}
+	return d.FakeMysqlDaemon.SetSuperReadOnly(ctx, on, opts...)
+}
+
+// formerPrimaryInitializations are the paths that initialize replication on a
+// former primary: startup, and a retry that configures the source or finds it
+// already running.
+var formerPrimaryInitializations = []struct {
+	name    string
+	running bool
+	retry   bool
+}{
+	{name: "startup"},
+	{name: "retry configures source", retry: true},
+	{name: "retry already running", running: true, retry: true},
+}
+
+func newFormerPrimaryTM(t *testing.T, running bool, commitGTID string) (*TabletManager, *blockedCommitDaemon, *tabletservermock.Controller, uint64) {
+	t.Helper()
+	tm, md, _, qsc, id := newPendingReplicationTM(t)
+	md.SemiSyncPrimaryEnabled = true
+	if running {
+		md.Replicating, md.IOThreadRunning, md.SemiSyncReplicaEnabled = true, true, true
+		md.CurrentSourceHost, md.CurrentSourcePort = "old-primary", 3306
+		md.ExpectedExecuteSuperQueryList = nil
+	}
+	committed, err := replication.ParsePosition(gtidFlavor, gtidPosition+commitGTID)
+	require.NoError(t, err)
+	d := &blockedCommitDaemon{FakeMysqlDaemon: md, committed: committed}
+	tm.MysqlDaemon = d
+	return tm, d, qsc, id
+}
+
+func initializeFormerPrimary(ctx context.Context, tm *TabletManager, retry bool, id uint64) error {
+	if retry {
+		return tm.retryReplicationInitializationOnce(ctx, id)
+	}
+	_, err := tm.initializeReplication(ctx, topodatapb.TabletType_REPLICA)
+	return err
+}
+
+func TestFormerPrimaryIsFencedBeforeReplicating(t *testing.T) {
+	for _, path := range formerPrimaryInitializations {
+		for _, tc := range []struct {
+			name       string
+			commitGTID string
+		}{
+			{name: "released commit is errant", commitGTID: ",8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1"},
+			{name: "nothing to release"},
+		} {
+			t.Run(path.name+"/"+tc.name, func(t *testing.T) {
+				tm, md, qsc, id := newFormerPrimaryTM(t, path.running, tc.commitGTID)
+				if tc.commitGTID != "" {
+					md.ExpectedExecuteSuperQueryList = nil
+				}
+
+				err := initializeFormerPrimary(t.Context(), tm, path.retry, id)
+				assert.True(t, md.SuperReadOnly.Load(), "a former primary must not accept writes once it replicates")
+				assert.False(t, md.SemiSyncPrimaryEnabled)
+				require.NoError(t, md.CheckSuperQueryList())
+				if tc.commitGTID != "" {
+					require.ErrorContains(t, err, "Errant GTID detected", "a commit released after the first check must be validated")
+					assert.False(t, qsc.IsServing())
+					return
+				}
+				require.NoError(t, err)
+				assert.True(t, md.Replicating)
+				assert.Equal(t, path.retry, qsc.IsServing())
+			})
+		}
+	}
+}
+
+func TestFailedFenceIsRepeatedByTheNextAttempt(t *testing.T) {
+	for _, path := range formerPrimaryInitializations {
+		for _, tc := range []struct {
+			name  string
+			setup func(*blockedCommitDaemon)
+			err   string
+		}{
+			{name: "super_read_only times out", setup: func(d *blockedCommitDaemon) { d.stuck = true }, err: "deadline exceeded"},
+			{name: "disabling semi-sync fails", setup: func(d *blockedCommitDaemon) { d.disableErr = errors.New("connection lost") }, err: "connection lost"},
+		} {
+			t.Run(path.name+"/"+tc.name, func(t *testing.T) {
+				tm, md, qsc, id := newFormerPrimaryTM(t, path.running, ",8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1")
+				md.ExpectedExecuteSuperQueryList = nil
+				tc.setup(md)
+
+				ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+				defer cancel()
+				require.ErrorContains(t, initializeFormerPrimary(ctx, tm, path.retry, id), tc.err)
+				assert.True(t, md.SemiSyncPrimaryEnabled, "the next attempt must find the former primary unfenced")
+				assert.False(t, qsc.IsServing())
+
+				// Released commits may still be finishing. The next attempt
+				// must fence again rather than validate at once.
+				md.stuck = false
+				require.ErrorContains(t, initializeFormerPrimary(t.Context(), tm, path.retry, id), "Errant GTID detected")
+				assert.True(t, md.SuperReadOnly.Load())
+				assert.False(t, qsc.IsServing())
+				require.NoError(t, md.CheckSuperQueryList())
+			})
+		}
+	}
+}
+
+func TestReplicaWithoutSourceSemiSyncIsNotFenced(t *testing.T) {
+	tm, md, _, _ := newReplicationInitializationTM(t)
+	_, err := tm.initializeReplication(t.Context(), topodatapb.TabletType_REPLICA)
+	require.NoError(t, err)
+	assert.False(t, md.SuperReadOnly.Load(), "a replica without source-side semi-sync keeps its read-only setting")
+	require.NoError(t, md.CheckSuperQueryList())
+}
