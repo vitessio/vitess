@@ -102,35 +102,29 @@ func TestConnForCellCachesCellInfo(t *testing.T) {
 	})
 }
 
-// pausingFactory wraps a memorytopo factory. Once armed, the next global read of a CellInfo reads it and then
-// waits for release, or for its ctx to be done like a real topo read, before returning.
+// pausingFactory wraps a trackingFactory. Once armed, the next global read of a CellInfo waits for release, or
+// for its ctx to be done like a real topo read, after it reads the CellInfo, or before if beforeRead is set.
 type pausingFactory struct {
-	*memorytopo.Factory
+	*trackingFactory
 	armed   chan struct{}
 	paused  chan struct{}
 	release chan struct{}
 	used    atomic.Bool
-	// returned is closed when the paused read returns.
-	returned chan struct{}
-	// failRoot makes connecting to a cell at this root fail.
-	failRoot string
+	// beforeRead pauses the read before it reads the CellInfo rather than after.
+	beforeRead bool
 }
 
 func newPausingFactory(memFactory *memorytopo.Factory) *pausingFactory {
 	return &pausingFactory{
-		Factory:  memFactory,
-		armed:    make(chan struct{}),
-		paused:   make(chan struct{}),
-		release:  make(chan struct{}),
-		returned: make(chan struct{}),
+		trackingFactory: &trackingFactory{Factory: memFactory},
+		armed:           make(chan struct{}),
+		paused:          make(chan struct{}),
+		release:         make(chan struct{}),
 	}
 }
 
 func (f *pausingFactory) Create(cell, serverAddr, root string) (topo.Conn, error) {
-	if f.failRoot != "" && root == f.failRoot {
-		return nil, errors.New("topo server unreachable")
-	}
-	conn, err := f.Factory.Create(cell, serverAddr, root)
+	conn, err := f.trackingFactory.Create(cell, serverAddr, root)
 	if err != nil || cell != topo.GlobalCell {
 		return conn, err
 	}
@@ -143,23 +137,39 @@ type pausingConn struct {
 }
 
 func (c *pausingConn) Get(ctx context.Context, filePath string) ([]byte, topo.Version, error) {
-	contents, version, err := c.Conn.Get(ctx, filePath)
-	if strings.HasPrefix(filePath, topo.CellsPath+"/") {
-		select {
-		case <-c.factory.armed:
-			if c.factory.used.CompareAndSwap(false, true) {
-				defer close(c.factory.returned)
-				close(c.factory.paused)
-				select {
-				case <-c.factory.release:
-				case <-ctx.Done():
-					return nil, nil, ctx.Err()
-				}
-			}
-		default:
+	if !strings.HasPrefix(filePath, topo.CellsPath+"/") {
+		return c.Conn.Get(ctx, filePath)
+	}
+	if c.factory.beforeRead {
+		if err := c.pause(ctx); err != nil {
+			return nil, nil, err
 		}
+		return c.Conn.Get(ctx, filePath)
+	}
+	contents, version, err := c.Conn.Get(ctx, filePath)
+	if pauseErr := c.pause(ctx); pauseErr != nil {
+		return nil, nil, pauseErr
 	}
 	return contents, version, err
+}
+
+// pause waits for release if the factory is armed and this is the first read since.
+func (c *pausingConn) pause(ctx context.Context) error {
+	select {
+	case <-c.factory.armed:
+	default:
+		return nil
+	}
+	if !c.factory.used.CompareAndSwap(false, true) {
+		return nil
+	}
+	close(c.factory.paused)
+	select {
+	case <-c.factory.release:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 // TestConnForCellExpiryDuringRead verifies that when this process changes a cell's CellInfo while a
@@ -220,112 +230,135 @@ func TestDeleteCellInfoFailureKeepsCache(t *testing.T) {
 	assert.Same(t, conn, got)
 }
 
-// TestConnForCellOlderReadDoesNotReplaceNewer verifies that when a ConnForCell read of the old CellInfo is
-// still in flight after another call has read the cell's CellInfo again and applied it, the older read never
-// replaces what the newer one applied: it returns the newer read's connection, or, if connecting to what the
-// newer read found failed, reads again rather than connect to a topo server that may have been superseded.
-// That holds whether or not this process expired the cell in between, which expiry leaves the order of reads
-// in place for.
-func TestConnForCellOlderReadDoesNotReplaceNewer(t *testing.T) {
-	const unreachableRoot = "/zone1-unreachable"
-	tcases := []struct {
-		name string
-		// newRoot is where another process re-points the cell before the newer read; empty leaves it.
-		newRoot string
-		// updateAgain has this process change the cell again before the older read completes.
-		updateAgain bool
-	}{
-		{name: "not re-pointed"},
-		{name: "re-pointed", newRoot: "/zone1-moved"},
-		{name: "re-pointed, then changed again here", newRoot: "/zone1-moved", updateAgain: true},
-		{name: "re-pointed to an unreachable topo server", newRoot: unreachableRoot},
+// connResult is what a ConnForCell run in a goroutine returned.
+type connResult struct {
+	conn topo.Conn
+	err  error
+}
+
+func goConnForCell(ctx context.Context, ts *topo.Server, cell string) chan connResult {
+	done := make(chan connResult, 1)
+	go func() {
+		conn, err := ts.ConnForCell(ctx, cell)
+		done <- connResult{conn, err}
+	}()
+	return done
+}
+
+// TestConnForCellRefreshesOneAtATime verifies that while a ConnForCell is refreshing a cell, another that finds
+// the cell's entry stale waits for it rather than reading the cell's CellInfo too, and then uses what it
+// applied, without reading it again. If the two reads overlapped, the one that started first could get the newer CellInfo, for example
+// when it is delayed before it reaches the topo server and the cell is re-pointed meanwhile.
+func TestConnForCellRefreshesOneAtATime(t *testing.T) {
+	ctx := t.Context()
+	_, memFactory := memorytopo.NewServerAndFactory(ctx, "zone1")
+	factory := newPausingFactory(memFactory)
+	factory.beforeRead = true
+	ts, err := topo.NewWithFactory(factory, "", "")
+	require.NoError(t, err)
+	t.Cleanup(ts.Close)
+	other, err := topo.NewWithFactory(memFactory, "", "")
+	require.NoError(t, err)
+	t.Cleanup(other.Close)
+	ts.SetCellInfoCacheTTL(time.Hour)
+
+	_, err = ts.ConnForCell(ctx, "zone1")
+	require.NoError(t, err)
+
+	// The first call pauses before it reads CellInfo.
+	ts.ExpireCellInfo("zone1")
+	close(factory.armed)
+	first := goConnForCell(ctx, ts, "zone1")
+	<-factory.paused
+
+	second := goConnForCell(ctx, ts, "zone1")
+	assert.Never(t, func() bool { return len(second) > 0 }, 500*time.Millisecond, 10*time.Millisecond,
+		"a second call refreshed the cell while the first was refreshing it")
+
+	// The cell is re-pointed before the first call reads CellInfo.
+	require.NoError(t, other.UpdateCellInfoFields(ctx, "zone1", func(ci *topodatapb.CellInfo) error {
+		ci.Root = "/zone1-moved"
+		return nil
+	}))
+	gets := func() int64 { return memFactory.GetCallStats().Counts()["Get"] }
+	before := gets()
+	close(factory.release)
+	res := <-first
+	require.NoError(t, res.err)
+	root, _, err := probeConn(ctx, res.conn)
+	require.NoError(t, err)
+	assert.Equal(t, "/zone1-moved", root, "the first call did not apply the CellInfo it read")
+	res2 := <-second
+	require.NoError(t, res2.err)
+	assert.Same(t, res.conn, res2.conn, "the second call did not use what the first applied")
+	assert.Equal(t, before+1, gets(), "the second call read CellInfo again after the first had refreshed the cell")
+}
+
+// TestConnForCellWaitEndsWithCaller verifies that a ConnForCell waiting for another call's refresh of the cell
+// returns when its own ctx is done, rather than waiting as long as that refresh takes.
+func TestConnForCellWaitEndsWithCaller(t *testing.T) {
+	ctx := t.Context()
+	_, memFactory := memorytopo.NewServerAndFactory(ctx, "zone1")
+	factory := newPausingFactory(memFactory)
+	ts, err := topo.NewWithFactory(factory, "", "")
+	require.NoError(t, err)
+	t.Cleanup(ts.Close)
+
+	close(factory.armed)
+	first := goConnForCell(ctx, ts, "zone1")
+	<-factory.paused
+
+	callCtx, cancel := context.WithCancel(ctx)
+	second := goConnForCell(callCtx, ts, "zone1")
+	assert.Never(t, func() bool { return len(second) > 0 }, 200*time.Millisecond, 10*time.Millisecond,
+		"a second call did not wait for the first call's refresh")
+	cancel()
+	require.Eventually(t, func() bool { return len(second) > 0 }, 30*time.Second, 10*time.Millisecond,
+		"a call kept waiting for another call's refresh after its ctx was canceled")
+	require.ErrorIs(t, (<-second).err, context.Canceled)
+
+	close(factory.release)
+	require.NoError(t, (<-first).err)
+}
+
+// TestConnForCellPointedBackAfterFailedReplacement verifies that when a cell is re-pointed at a topo server
+// that can't be reached and then pointed back, ConnForCell connects again rather than returning the
+// connection it closed when it found the cell re-pointed.
+func TestConnForCellPointedBackAfterFailedReplacement(t *testing.T) {
+	ctx := t.Context()
+	_, memFactory := memorytopo.NewServerAndFactory(ctx, "zone1")
+	ts, err := topo.NewWithFactory(&trackingFactory{Factory: memFactory}, "", "")
+	require.NoError(t, err)
+	t.Cleanup(ts.Close)
+	other, err := topo.NewWithFactory(memFactory, "", "")
+	require.NoError(t, err)
+	t.Cleanup(other.Close)
+	ts.SetCellInfoCacheTTL(time.Hour)
+	repoint := func(root string) {
+		require.NoError(t, other.UpdateCellInfoFields(ctx, "zone1", func(ci *topodatapb.CellInfo) error {
+			ci.Root = root
+			return nil
+		}))
+		// Stand in for the TTL passing.
+		ts.ExpireCellInfo("zone1")
 	}
-	for _, tcase := range tcases {
-		for _, expireBetween := range []bool{false, true} {
-			name := tcase.name
-			if expireBetween {
-				name += ", expired here in between"
-			}
-			t.Run(name, func(t *testing.T) {
-				ctx := t.Context()
-				_, memFactory := memorytopo.NewServerAndFactory(ctx, "zone1")
-				factory := newPausingFactory(memFactory)
-				factory.failRoot = unreachableRoot
-				ts, err := topo.NewWithFactory(factory, "", "")
-				require.NoError(t, err)
-				t.Cleanup(ts.Close)
-				other, err := topo.NewWithFactory(memFactory, "", "")
-				require.NoError(t, err)
-				t.Cleanup(other.Close)
-				ts.SetCellInfoCacheTTL(time.Hour)
 
-				conn, err := ts.ConnForCell(ctx, "zone1")
-				require.NoError(t, err)
+	conn, err := ts.ConnForCell(ctx, "zone1")
+	require.NoError(t, err)
+	oldRoot, _, err := probeConn(ctx, conn)
+	require.NoError(t, err)
 
-				// The older read gets the old CellInfo and pauses.
-				ts.ExpireCellInfo("zone1")
-				close(factory.armed)
-				type result struct {
-					conn topo.Conn
-					err  error
-				}
-				older := make(chan result)
-				go func() {
-					got, err := ts.ConnForCell(ctx, "zone1")
-					older <- result{got, err}
-				}()
-				<-factory.paused
+	repoint("/down")
+	_, err = ts.ConnForCell(ctx, "zone1")
+	require.Error(t, err)
 
-				// The newer read gets the current CellInfo and is applied.
-				if tcase.newRoot != "" {
-					require.NoError(t, other.UpdateCellInfoFields(ctx, "zone1", func(ci *topodatapb.CellInfo) error {
-						ci.Root = tcase.newRoot
-						return nil
-					}))
-				}
-				if expireBetween {
-					ts.ExpireCellInfo("zone1")
-				}
-				unreachable := tcase.newRoot == unreachableRoot
-				newer, err := ts.ConnForCell(ctx, "zone1")
-				if unreachable {
-					require.Error(t, err)
-				} else {
-					require.NoError(t, err)
-				}
-				if tcase.newRoot == "" {
-					assert.Same(t, conn, newer)
-				}
-				if tcase.updateAgain {
-					require.NoError(t, ts.UpdateCellInfoFields(ctx, "zone1", func(ci *topodatapb.CellInfo) error {
-						ci.Root = "/zone1-moved-again"
-						return nil
-					}))
-				}
-
-				close(factory.release)
-				res := <-older
-				if unreachable {
-					require.Error(t, res.err, "the older read connected to the topo server the cell was re-pointed from")
-				} else {
-					require.NoError(t, res.err)
-					assert.Same(t, newer, res.conn, "the older read replaced the connection built from the newer one")
-				}
-
-				got, err := ts.ConnForCell(ctx, "zone1")
-				switch {
-				case unreachable:
-					require.Error(t, err, "a call after the failed connection reused a connection to the old topo server")
-				case tcase.updateAgain:
-					require.NoError(t, err)
-					assert.NotSame(t, newer, got, "the expired entry was reused instead of being read again")
-				default:
-					require.NoError(t, err)
-					assert.Same(t, newer, got, "the cached connection does not point at the cell's current topo server")
-				}
-			})
-		}
-	}
+	repoint(oldRoot)
+	got, err := ts.ConnForCell(ctx, "zone1")
+	require.NoError(t, err)
+	root, closedAt, err := probeConn(ctx, got)
+	require.NoError(t, err)
+	assert.Equal(t, oldRoot, root)
+	assert.Zero(t, closedAt, "ConnForCell returned the connection it closed")
 }
 
 // TestDeleteCellInfoRereadsCellInfo verifies that DeleteCellInfo reads the cell's CellInfo before it checks
@@ -373,36 +406,6 @@ func TestConnForCellAfterRecreate(t *testing.T) {
 	got, err = ts.ConnForCell(ctx, "zone1")
 	require.NoError(t, err)
 	assert.NotSame(t, conn, got, "the connection cached for the deleted cell was reused")
-}
-
-// TestConnForCellReadEndsWithCaller verifies that the CellInfo read a ConnForCell does has ended by the time
-// that ConnForCell returns, even when it returns because its ctx was canceled, so that no read is left running
-// against a Server that its owner may close next.
-func TestConnForCellReadEndsWithCaller(t *testing.T) {
-	ctx := t.Context()
-	_, memFactory := memorytopo.NewServerAndFactory(ctx, "zone1")
-	factory := newPausingFactory(memFactory)
-	ts, err := topo.NewWithFactory(factory, "", "")
-	require.NoError(t, err)
-	t.Cleanup(ts.Close)
-
-	ts.ExpireCellInfo("zone1")
-	close(factory.armed)
-	callCtx, cancel := context.WithCancel(ctx)
-	done := make(chan error)
-	go func() {
-		_, err := ts.ConnForCell(callCtx, "zone1")
-		done <- err
-	}()
-	<-factory.paused
-	cancel()
-	require.ErrorIs(t, <-done, context.Canceled)
-	select {
-	case <-factory.returned:
-	default:
-		assert.Fail(t, "the CellInfo read was still running after ConnForCell returned")
-	}
-	close(factory.release)
 }
 
 // TestConnForCellConcurrentWithReadOnly verifies that refreshing cell connections in ConnForCell is safe
