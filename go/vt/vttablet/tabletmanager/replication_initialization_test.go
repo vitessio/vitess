@@ -644,11 +644,12 @@ func TestDeferredReplicationRetryLocksShardBeforeActionLock(t *testing.T) {
 func TestPendingReplicationReasonShowsLatestError(t *testing.T) {
 	tm, md, ts, factory := newReplicationInitializationTM(t)
 	holdInitializationShardLock(t, ts)
-	t.Cleanup(tm.tmState.cancel)
 	factory.AddOperationError(memorytopo.TryLock, ".*", topo.NewError(topo.NodeExists, "shard"))
 	md.ExpectedExecuteSuperQueryList = nil
 	_, err := tm.initializeReplicationUnlessShardLocked(t.Context(), logutil.NewMemoryLogger(), topodatapb.TabletType_REPLICA)
 	require.NoError(t, err)
+	// Stop the background retry, so that only this test changes the reason.
+	tm.tmState.cancel()
 	assert.Contains(t, tm.tmState.canServe(topodatapb.TabletType_REPLICA), "replication is not initialized: cannot initialize replication for ks/0; replication has not been changed: another operation holds the shard lock")
 
 	id := tm.tmState.pendingReplicationInit
