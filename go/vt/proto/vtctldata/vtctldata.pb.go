@@ -2559,8 +2559,9 @@ type BackupShardRequest struct {
 	// to control the related behavior.
 	InitSql *tabletmanagerdata.BackupRequest_InitSQL `protobuf:"bytes,8,opt,name=init_sql,json=initSql,proto3" json:"init_sql,omitempty"`
 	// TabletTypes is an ordered preference of the tablet types to take the backup from.
-	// Defaults to REPLICA, RDONLY and SPARE by lowest replication lag.
-	// PRIMARY may be listed, but only together with AllowPrimary.
+	// When empty, the tablet with the lowest replication lag among REPLICA, RDONLY and
+	// SPARE is used. PRIMARY cannot be listed: AllowPrimary falls back to the primary
+	// when no listed type can take the backup.
 	TabletTypes   []topodata.TabletType `protobuf:"varint,9,rep,packed,name=tablet_types,json=tabletTypes,proto3,enum=topodata.TabletType" json:"tablet_types,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

@@ -580,20 +580,12 @@ func GetBackupCandidates(tablets []*topo.TabletInfo, stats []*replicationdatapb.
 	return res
 }
 
-// backupTabletTypes are the tablet types chosen for a backup when none are requested.
+// backupTabletTypes are the tablet types that can be chosen to back up a shard.
+// The primary is not one of them: it is only used through AllowPrimary.
 var backupTabletTypes = []topodatapb.TabletType{
 	topodatapb.TabletType_REPLICA,
 	topodatapb.TabletType_RDONLY,
 	topodatapb.TabletType_SPARE,
-}
-
-// requestableBackupTabletTypes are the tablet types that may be requested for a backup.
-// PRIMARY is one of them, but callers must also require AllowPrimary before choosing it.
-var requestableBackupTabletTypes = []topodatapb.TabletType{
-	topodatapb.TabletType_REPLICA,
-	topodatapb.TabletType_RDONLY,
-	topodatapb.TabletType_SPARE,
-	topodatapb.TabletType_PRIMARY,
 }
 
 // UnsupportedBackupTabletTypes returns the given tablet types that cannot back up a shard.
@@ -601,7 +593,7 @@ func UnsupportedBackupTabletTypes(tabletTypes []topodatapb.TabletType) []topodat
 	var unsupported []topodatapb.TabletType
 
 	for _, tabletType := range tabletTypes {
-		if !slices.Contains(requestableBackupTabletTypes, tabletType) {
+		if !slices.Contains(backupTabletTypes, tabletType) {
 			unsupported = append(unsupported, tabletType)
 		}
 	}
@@ -610,13 +602,16 @@ func UnsupportedBackupTabletTypes(tabletTypes []topodatapb.TabletType) []topodat
 }
 
 // ChooseBackupTablet returns the tablet that should take a backup of the shard, or nil if none can.
-// tabletTypes is an ordered preference, empty meaning any of backupTabletTypes.
+// tabletTypes is an ordered preference, empty meaning any of backupTabletTypes. A type outside backupTabletTypes never matches.
 func ChooseBackupTablet(tablets []*topo.TabletInfo, stats []*replicationdatapb.Status, tabletTypes []topodatapb.TabletType) *topo.TabletInfo {
 	if len(tabletTypes) == 0 {
 		return lowestLagTablet(tablets, stats, backupTabletTypes)
 	}
 
 	for _, tabletType := range tabletTypes {
+		if !slices.Contains(backupTabletTypes, tabletType) {
+			continue
+		}
 		if tablet := lowestLagTablet(tablets, stats, []topodatapb.TabletType{tabletType}); tablet != nil {
 			return tablet
 		}

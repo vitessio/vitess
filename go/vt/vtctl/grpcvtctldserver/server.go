@@ -479,15 +479,15 @@ func (s *VtctldServer) BackupShard(req *vtctldatapb.BackupShardRequest, stream v
 	span.Annotate("mysql_shutdown_timeout", req.MysqlShutdownTimeout)
 	span.Annotate("tablet_types", topoproto.MakeStringTypeCSV(req.TabletTypes))
 
-	if unsupported := reparentutil.UnsupportedBackupTabletTypes(req.TabletTypes); len(unsupported) > 0 {
-		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "tablet type %s cannot take a backup of a shard",
-			topoproto.MakeStringTypeCSV(unsupported))
+	if slices.Contains(req.TabletTypes, topodatapb.TabletType_PRIMARY) {
+		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+			"type PRIMARY cannot be listed in tablet types. to fall back to the primary when no listed type can take the backup, rerun the backup command with --allow-primary")
 		return err
 	}
 
-	if !req.AllowPrimary && slices.Contains(req.TabletTypes, topodatapb.TabletType_PRIMARY) {
-		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
-			"type PRIMARY cannot take backup. if you really need to do this, rerun the backup command with --allow-primary")
+	if unsupported := reparentutil.UnsupportedBackupTabletTypes(req.TabletTypes); len(unsupported) > 0 {
+		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "tablet type %s cannot take a backup of a shard",
+			topoproto.MakeStringTypeCSV(unsupported))
 		return err
 	}
 
@@ -503,7 +503,7 @@ func (s *VtctldServer) BackupShard(req *vtctldatapb.BackupShardRequest, stream v
 		backupTablet = tablet.Tablet
 	}
 
-	if backupTablet == nil && len(req.TabletTypes) == 0 && req.AllowPrimary {
+	if backupTablet == nil && req.AllowPrimary {
 		for _, tablet := range tablets {
 			if tablet.Type != topodatapb.TabletType_PRIMARY {
 				continue
@@ -515,6 +515,11 @@ func (s *VtctldServer) BackupShard(req *vtctldatapb.BackupShardRequest, stream v
 	}
 
 	if backupTablet == nil {
+		// A tablet that could not report its status may be the one that was asked for.
+		if err != nil {
+			err = vterrors.Wrap(err, "no tablet available for backup")
+			return err
+		}
 		err = vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no tablet available for backup")
 		return err
 	}

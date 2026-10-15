@@ -3034,11 +3034,11 @@ func TestChooseBackupTablet(t *testing.T) {
 			expected:    replica2Tablet,
 		},
 		{
-			name:        "the primary is chosen when it is listed and nothing earlier matches",
+			name:        "a listed primary never matches",
 			tablets:     []*topo.TabletInfo{primaryTablet, replicaTablet},
 			stats:       []*replicationdatapb.Status{{ReplicationLagSeconds: 0}, {ReplicationLagSeconds: 5}},
 			tabletTypes: []topodatapb.TabletType{topodatapb.TabletType_RDONLY, topodatapb.TabletType_PRIMARY},
-			expected:    primaryTablet,
+			expected:    nil,
 		},
 		{
 			name:        "an earlier type still wins over a listed primary",
@@ -3097,9 +3097,9 @@ func TestUnsupportedBackupTabletTypes(t *testing.T) {
 			expected:    nil,
 		},
 		{
-			name:        "primary may be requested",
+			name:        "primary is reported",
 			tabletTypes: []topodatapb.TabletType{topodatapb.TabletType_RDONLY, topodatapb.TabletType_PRIMARY},
-			expected:    nil,
+			expected:    []topodatapb.TabletType{topodatapb.TabletType_PRIMARY},
 		},
 		{
 			name:        "a type that cannot back up is reported",
