@@ -1260,6 +1260,9 @@ func (tm *TabletManager) retryReplicationInitializationOnce(ctx context.Context,
 	if done, err := tm.settleDeferredReplicationInit(ctx, id); done || err != nil {
 		return err
 	}
+	// Bound everything done while holding both locks.
+	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+	defer cancel()
 	primary, err := tm.replicatingShardPrimary(ctx)
 	if err != nil {
 		return err
@@ -1271,8 +1274,6 @@ func (tm *TabletManager) retryReplicationInitializationOnce(ctx context.Context,
 			return err
 		}
 	} else {
-		ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
-		defer cancel()
 		primaryPos, err := tm.initializeReplicationLocked(ctx, tm.Tablet().Type)
 		if err != nil {
 			return err

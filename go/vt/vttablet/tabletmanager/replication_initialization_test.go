@@ -44,6 +44,28 @@ import (
 	"golang.org/x/sync/semaphore"
 )
 
+// deadlineRecordingDaemon records the deadlines of the contexts passed to its
+// replication reads.
+type deadlineRecordingDaemon struct {
+	*mysqlctl.FakeMysqlDaemon
+	deadlines []time.Time
+}
+
+func (d *deadlineRecordingDaemon) record(ctx context.Context) {
+	deadline, _ := ctx.Deadline()
+	d.deadlines = append(d.deadlines, deadline)
+}
+
+func (d *deadlineRecordingDaemon) ReplicationStatus(ctx context.Context) (replication.ReplicationStatus, error) {
+	d.record(ctx)
+	return d.FakeMysqlDaemon.ReplicationStatus(ctx)
+}
+
+func (d *deadlineRecordingDaemon) PrimaryPosition(ctx context.Context) (replication.Position, error) {
+	d.record(ctx)
+	return d.FakeMysqlDaemon.PrimaryPosition(ctx)
+}
+
 // The client lets tests hold initialization after acquisition, without sleeps.
 type initializationPrimaryClient struct {
 	tmclient.TabletManagerClient
@@ -726,5 +748,24 @@ func TestDeferredReplicationRetrySkipsShardLockWithNothingToDo(t *testing.T) {
 			assert.Equal(t, tc.pending, tm.tmState.pendingReplicationInit != 0)
 			require.NoError(t, md.CheckSuperQueryList())
 		})
+	}
+}
+
+func TestDeferredReplicationRetryBoundsReadsUnderLocks(t *testing.T) {
+	tm, md, _, _, id := newPendingReplicationTM(t)
+	// Take the "already replicating" path, which reads replication status and
+	// the executed position while holding both locks.
+	md.Replicating, md.IOThreadRunning = true, true
+	md.CurrentSourceHost, md.CurrentSourcePort = "old-primary", 3306
+	md.ExpectedExecuteSuperQueryList = nil
+	daemon := &deadlineRecordingDaemon{FakeMysqlDaemon: md}
+	tm.MysqlDaemon = daemon
+
+	require.NoError(t, tm.retryReplicationInitializationOnce(t.Context(), id))
+	require.Len(t, daemon.deadlines, 2)
+	latest := time.Now().Add(topo.RemoteOperationTimeout)
+	for _, deadline := range daemon.deadlines {
+		require.False(t, deadline.IsZero(), "reads under the locks must have a deadline")
+		assert.False(t, deadline.After(latest))
 	}
 }
