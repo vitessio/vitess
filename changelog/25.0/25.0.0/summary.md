@@ -884,18 +884,21 @@ See [#20677](https://github.com/vitessio/vitess/issues/20677) and [#20678](https
 
 #### <a id="backup-shard-tablet-types"/>`BackupShard` can choose the tablet type to back up from</a>
 
-`BackupShard` picks whichever of the shard's `REPLICA`, `RDONLY` and `SPARE` tablets has the lowest replication lag, ignoring the type. A new `--tablet-types` flag, and the matching `tablet_types` field on `BackupShardRequest`, turn that into an ordered preference: the first listed type with a usable tablet wins, and the lowest lag decides within a type.
+`BackupShard` picks whichever of the shard's `REPLICA`, `RDONLY` and `SPARE` tablets has the lowest replication lag, ignoring the type. A new `--tablet-types` flag, and the matching `tablet_types` field on `BackupShardRequest`, turn that into an ordered preference: the first listed type with a usable tablet wins, and the lowest lag decides within a type. When the flag is unset, the tablet with the lowest lag among `REPLICA`, `RDONLY` and `SPARE` is used, as before.
 
 Passing `--tablet-types=rdonly,replica` prioritises backups from an `RDONLY` tablet and falls back to a `REPLICA` if no `RDONLY` tablet can serve one, which keeps backup load off the tablets serving replica reads.
+
+`primary` cannot be listed. `--allow-primary` keeps its meaning: when no tablet of the listed types can take the backup, it is taken on the primary.
 
 | flags | result |
 |---|---|
 | `--tablet-types=rdonly,replica` | an `RDONLY` tablet, falling back to a `REPLICA` when none can serve the backup |
 | `--tablet-types=rdonly` | an `RDONLY` tablet only, with no fallback |
-| `--tablet-types=rdonly,primary --allow-primary` | the primary only when no `RDONLY` tablet can serve the backup |
-| `--tablet-types=rdonly,primary` | rejected: listing `primary` requires `--allow-primary` |
-| `--tablet-types=rdonly --allow-primary` | an `RDONLY` tablet only, since `--allow-primary` does not add an unlisted primary |
+| `--tablet-types=rdonly --allow-primary` | an `RDONLY` tablet, falling back to the primary when none can serve the backup |
+| `--tablet-types=rdonly,primary` | rejected: `primary` cannot be listed, use `--allow-primary` |
 | unset | unchanged, including the existing fallback to the primary under `--allow-primary` |
+
+`--tablet-types` needs a v25 `vtctld`. An older `vtctld` ignores the field and uses the lowest-lag tablet of any of those types, so `--tablet-types=rdonly` against it can back up from a `REPLICA`. Upgrade `vtctld` before relying on the flag.
 
 ### <a id="minor-changes-vtadmin"/>VTAdmin</a>
 

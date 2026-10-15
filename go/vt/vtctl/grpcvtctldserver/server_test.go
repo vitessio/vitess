@@ -1167,7 +1167,7 @@ func TestBackupShard(t *testing.T) {
 			},
 		},
 		{
-			name: "allow primary does not add an unlisted primary",
+			name: "allow primary falls back to the primary after the listed types",
 			ts:   memorytopo.NewServer(ctx, "zone1"),
 			tmc: &testutil.TabletManagerClient{
 				Backups: map[string]struct {
@@ -1213,12 +1213,15 @@ func TestBackupShard(t *testing.T) {
 				TabletTypes:  []topodatapb.TabletType{topodatapb.TabletType_RDONLY},
 			},
 			assertion: func(t *testing.T, responses []*vtctldatapb.BackupResponse, err error) {
-				require.NotErrorIs(t, err, io.EOF, "expected backupclient stream to close with non-EOF")
-				assert.Empty(t, responses, "expected no backupclient messages")
+				require.ErrorIs(t, err, io.EOF, "expected Recv loop to end with io.EOF")
+				require.NotEmpty(t, responses)
+				for _, resp := range responses {
+					assert.Equal(t, 200, int(resp.TabletAlias.Uid), "expected the primary, as no rdonly tablet exists")
+				}
 			},
 		},
 		{
-			name: "a listed primary is chosen when nothing earlier matches",
+			name: "a listed primary is rejected even with allow primary",
 			ts:   memorytopo.NewServer(ctx, "zone1"),
 			tmc: &testutil.TabletManagerClient{
 				Backups: map[string]struct {
@@ -1263,11 +1266,9 @@ func TestBackupShard(t *testing.T) {
 				TabletTypes:  []topodatapb.TabletType{topodatapb.TabletType_RDONLY, topodatapb.TabletType_PRIMARY},
 			},
 			assertion: func(t *testing.T, responses []*vtctldatapb.BackupResponse, err error) {
-				require.ErrorIs(t, err, io.EOF, "expected Recv loop to end with io.EOF")
-				require.NotEmpty(t, responses)
-				for _, resp := range responses {
-					assert.Equal(t, 200, int(resp.TabletAlias.Uid), "expected the listed primary")
-				}
+				require.ErrorContains(t, err, "type PRIMARY cannot be listed in tablet types")
+				assert.Equal(t, vtrpc.Code_INVALID_ARGUMENT, vterrors.Code(err))
+				assert.Empty(t, responses, "expected no backupclient messages")
 			},
 		},
 		{
@@ -1288,8 +1289,140 @@ func TestBackupShard(t *testing.T) {
 				TabletTypes: []topodatapb.TabletType{topodatapb.TabletType_RDONLY, topodatapb.TabletType_PRIMARY},
 			},
 			assertion: func(t *testing.T, responses []*vtctldatapb.BackupResponse, err error) {
-				require.NotErrorIs(t, err, io.EOF, "expected backupclient stream to close with non-EOF")
-				require.ErrorContains(t, err, "--allow-primary")
+				require.ErrorContains(t, err, "type PRIMARY cannot be listed in tablet types")
+				assert.Equal(t, vtrpc.Code_INVALID_ARGUMENT, vterrors.Code(err))
+				assert.Empty(t, responses, "expected no backupclient messages")
+			},
+		},
+		{
+			name: "a tablet type that cannot back up a shard",
+			ts:   memorytopo.NewServer(ctx, "zone1"),
+			tmc:  &testutil.TabletManagerClient{},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+					Keyspace: "ks",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_DRAINED,
+				},
+			},
+			req: &vtctldatapb.BackupShardRequest{
+				Keyspace:    "ks",
+				Shard:       "-",
+				TabletTypes: []topodatapb.TabletType{topodatapb.TabletType_DRAINED},
+			},
+			assertion: func(t *testing.T, responses []*vtctldatapb.BackupResponse, err error) {
+				require.ErrorContains(t, err, "tablet type drained cannot take a backup of a shard")
+				assert.Equal(t, vtrpc.Code_INVALID_ARGUMENT, vterrors.Code(err))
+				assert.Empty(t, responses, "expected no backupclient messages")
+			},
+		},
+		{
+			name: "no listed type can take the backup",
+			ts:   memorytopo.NewServer(ctx, "zone1"),
+			tmc: &testutil.TabletManagerClient{
+				Backups: map[string]struct {
+					Events        []*logutilpb.Event
+					EventInterval time.Duration
+					EventJitter   time.Duration
+					ErrorAfter    time.Duration
+				}{
+					"zone1-0000000101": {Events: []*logutilpb.Event{{}}},
+					"zone1-0000000200": {Events: []*logutilpb.Event{{}}},
+				},
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000200": {Position: "some-position"},
+				},
+				ReplicationStatusResults: map[string]struct {
+					Position *replicationdatapb.Status
+					Error    error
+				}{
+					"zone1-0000000101": {Position: &replicationdatapb.Status{ReplicationLagSeconds: 5}},
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+					Keyspace: "ks",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_REPLICA,
+				},
+				{
+					Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 200},
+					Keyspace: "ks",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_PRIMARY,
+				},
+			},
+			req: &vtctldatapb.BackupShardRequest{
+				Keyspace:    "ks",
+				Shard:       "-",
+				TabletTypes: []topodatapb.TabletType{topodatapb.TabletType_RDONLY},
+			},
+			assertion: func(t *testing.T, responses []*vtctldatapb.BackupResponse, err error) {
+				require.ErrorContains(t, err, "no tablet available for backup")
+				assert.Equal(t, vtrpc.Code_FAILED_PRECONDITION, vterrors.Code(err))
+				assert.Empty(t, responses, "expected no backupclient messages")
+			},
+		},
+		{
+			name: "the listed tablet could not report its status",
+			ts:   memorytopo.NewServer(ctx, "zone1"),
+			tmc: &testutil.TabletManagerClient{
+				Backups: map[string]struct {
+					Events        []*logutilpb.Event
+					EventInterval time.Duration
+					EventJitter   time.Duration
+					ErrorAfter    time.Duration
+				}{
+					"zone1-0000000101": {Events: []*logutilpb.Event{{}}},
+					"zone1-0000000102": {Events: []*logutilpb.Event{{}}},
+				},
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000200": {Position: "some-position"},
+				},
+				ReplicationStatusResults: map[string]struct {
+					Position *replicationdatapb.Status
+					Error    error
+				}{
+					"zone1-0000000101": {Position: &replicationdatapb.Status{ReplicationLagSeconds: 5}},
+					"zone1-0000000102": {Error: assert.AnError},
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+					Keyspace: "ks",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_REPLICA,
+				},
+				{
+					Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 102},
+					Keyspace: "ks",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_RDONLY,
+				},
+				{
+					Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 200},
+					Keyspace: "ks",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_PRIMARY,
+				},
+			},
+			req: &vtctldatapb.BackupShardRequest{
+				Keyspace:    "ks",
+				Shard:       "-",
+				TabletTypes: []topodatapb.TabletType{topodatapb.TabletType_RDONLY},
+			},
+			assertion: func(t *testing.T, responses []*vtctldatapb.BackupResponse, err error) {
+				require.ErrorContains(t, err, "no tablet available for backup")
+				require.ErrorContains(t, err, assert.AnError.Error(), "expected the status error as the reason")
 				assert.Empty(t, responses, "expected no backupclient messages")
 			},
 		},
