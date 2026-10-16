@@ -56,8 +56,13 @@ writes flowing while it runs.
 | `BufferEndsOnlyAfterSwitch` | diagnostic | buffering is never ended by a keyspace event before the routing rules switch |
 | `NoFailureAfterSwitch` | diagnostic | a write that arrives after vtgate already routes to the target never fails |
 
-`FixedPlanCache`, `DrainOnDeny` and `KewFix` switch on candidate fixes for the
-problems the model finds. They are described under Results.
+Further constants:
+
+| Constant | Meaning |
+| --- | --- |
+| `StartupEvent` | the model starts with a "keyspace consistent" event still queued, like the one the keyspace event watcher sends when it first sees a primary |
+| `Diagnostics` | record the history variables the diagnostic properties read |
+| `FixedPlanCache`, `DrainOnDeny`, `KewFix`, `EventGenerations` | candidate fixes for the problems the model finds, described under Results |
 
 ## State space reductions
 
@@ -100,31 +105,33 @@ python3 trace.py out/Safety_Buffer.trace.json   # compact view of a counterexamp
 
 ## Results
 
-Checked with TLC 2026.10. "2 writes" and "3 writes" are the size of `Reqs`.
-A row marked *pending* was still running when this was written.
+Checked with TLC 2026.10 on the reduced model. "1 write", "2 writes" and
+"3 writes" are the size of `Reqs`. The counterexample traces below are
+abridged excerpts; step numbers depend on the exploration order.
 
 ### Current code
 
 | Config | Buffering | What is checked | Result |
 | --- | --- | --- | --- |
-| `Safety_NoBuffer` (3 writes, cancel, unrelated rebuild) | off | all safety properties | *pending* |
-| `Safety_Buffer` (3 writes, cancel) | on | all safety properties | *pending* |
-| `Liveness_NoBuffer` (1 write, cancel, unrelated rebuild) | off | safety, `RequestsTerminate`, `SwitchTerminates` | *pending* |
-| `Liveness_Buffer` (1 write, cancel, unrelated rebuild) | on | safety, `RequestsTerminate`, `SwitchTerminates` | *pending* |
+| `Safety_NoBuffer` (3 writes, cancel, unrelated rebuild) | off | all safety properties | holds (9.2M states) |
+| `Safety_Buffer` (3 writes, cancel) | on | all safety properties | holds (12.3M states) |
+| `Liveness_NoBuffer` (1 write, cancel, unrelated rebuild) | off | safety, `RequestsTerminate`, `SwitchTerminates` | holds |
+| `Liveness_Buffer` (1 write, cancel, unrelated rebuild) | on | safety, `RequestsTerminate`, `SwitchTerminates` | holds |
 | `SlowWrites_NoBuffer` / `SlowWrites_Buffer` | off / on | safety without the `LOCK TABLES` timing assumption | **violated**: `NoLostWrites` (finding 1) |
 | `Force_Buffer` | on | safety with `--force` and a failed refresh | **violated**: `NoLostWrites` (as `--force` warns) |
 | `Avail_NoBuffer` / `Avail_Buffer` | off / on | `WritesSucceedIfSwitchSucceeds` | **violated** (finding 2) |
 | `Diag_FailAfterSwitch_Buffer` | on | `NoFailureAfterSwitch` | **violated** (finding 2) |
 | `Diag_EarlyRelease` | on | `BufferEndsOnlyAfterSwitch` | **violated** (finding 3) |
 | `Cancel_NoTimeouts_NoBuffer` / `_Buffer` | off / on | `RequestsTerminate` with a patient client and a cancelled switch | **violated** (finding 4) |
+| `Diag_StaleEvent` | on | `BufferEndsOnlyAfterSwitch` with the finding 3 fix and a queued event | **violated** (finding 5) |
 
 When the `LOCK TABLES` timing assumption holds and `--force` is not used, the
-current code keeps every write it acknowledges, both with and without
-buffering. It never applies a write twice, never takes client writes on both
-sides, and a cancelled switch leaves every write on the source. Results for
-the larger configurations are pending (see the table). The problems found
-are a lost-write window that depends on timing (1) and availability problems
-(2–4) in vtgate.
+current code keeps every write it acknowledges, with and without buffering:
+it never loses or duplicates a write, never takes client writes on both
+sides, and a cancelled switch leaves every write on the source (checked with
+3 writes). Every request returns and every switch ends (checked with 1 write).
+The problems found are a lost-write window that
+depends on timing (1) and availability problems in vtgate (2–5).
 
 ### Findings
 
@@ -157,18 +164,19 @@ previous rules have finished. With it, all safety properties hold even with
 `SlowWrites = TRUE` (`Fix_SlowWrites_*`), and the `LOCK TABLES` cycles are no
 longer needed for correctness. A smaller mitigation is to check the rule
 again after the pool connection is acquired. That narrows the window but does
-not remove it.
+not remove it. This fix is not implemented.
 
 **2. The plan cache can keep a source-routed plan after the switch.**
 (`Avail_*`, `Diag_FailAfterSwitch_Buffer`)
 
-`fetchOrCreatePlan` captures the VSchema in `newVCursor`, then reads the cache
-epoch in `plans.GetOrLoad`. If `SaveVSchema` runs between the two, a plan
-built for the old routing is cached under the new epoch. Every later write of
-that shape goes to the source and is denied. It then waits for a newer VSchema
-that never comes, and fails after three tries. Only the deferred `ClearPlans`
-of that failure clears the plan. This affects writes that arrive *after*
-vtgate already routes to the target, with or without buffering:
+`fetchOrCreatePlan` captured the VSchema in `newVCursor`, then read the cache
+epoch in `plans.GetOrLoad`. If `SaveVSchema` ran between the two, a plan
+built for the old routing was cached under the new epoch. Every later write of
+that shape went to the source and was denied. It then waited for a newer
+VSchema that never came, and failed after three tries. Only the deferred
+`ClearPlans` of that failure cleared the plan. This affected writes that
+arrive *after* vtgate already routes to the target, with or without
+buffering:
 
 ```
 15 ChangeRouting          routeHist=<<src,tgt>>
@@ -182,20 +190,20 @@ vtgate already routes to the target, with or without buffering:
 ```
 
 `FixedPlanCache` models reading the VSchema and the epoch as one snapshot.
-With it, `NoFailureAfterSwitch` holds (2.5M states), and with a patient client
+With it, `NoFailureAfterSwitch` holds, and with a patient client
 `WritesSucceedIfSwitchSucceeds` holds with and without buffering.
 
-**3. A periodic health check ends MoveTables buffering early.**
+**3. A periodic health check ended MoveTables buffering early.**
 (`Diag_EarlyRelease`)
 
-Buffering starts on the first `disallowed due to rule` error and calls
-`MarkShardNotServing`. That marks the source shard not serving, although its
+Buffering started on the first `disallowed due to rule` error and called
+`MarkShardNotServing`. That marked the source shard not serving, although its
 primary is serving. During `switchWrites` nothing rebuilds the SrvVSchema
-until `changeRouting`, so the KeyspaceEventWatcher's MoveTables state is
+until `changeRouting`, so the KeyspaceEventWatcher's MoveTables state was
 still `None`. The next health stream message from the source primary (every
-`--health-check-interval`, 20s by default) flips the shard back to serving.
-`ensureConsistentLocked` then broadcasts, and the buffer stops with
-`FailoverEndDetected` while writes are still denied:
+`--health-check-interval`, 20s by default) flipped the shard back to serving.
+`ensureConsistentLocked` then broadcast an event, and the buffer stopped with
+`FailoverEndDetected` while writes were still denied:
 
 ```
 11 GwBuffer               bufState=buffering  kewServing=False   <- MarkShardNotServing
@@ -203,42 +211,91 @@ still `None`. The next health stream message from the source primary (every
 13 BufferHandleEvent      bufState=draining  releasedEarly=True  <- before the routing switch
 ```
 
-Writes are not lost: a released write is denied again and falls back to
-`newExecute`'s `waitForNewerVSchema`. But buffering ends early. Then
-`--buffer-min-time-between-failovers` (1m) keeps the buffer from starting
-again for the rest of the switch, and the buffer metrics report the wrong
-reason. `KewFix` models a fix: for a MoveTables deny error, re-evaluate the
+Writes were not lost: a released write is denied again and falls back to
+`newExecute`'s `waitForNewerVSchema`. But buffering ended early, then
+`--buffer-min-time-between-failovers` (1m) kept the buffer from starting
+again for the rest of the switch, and the buffer metrics reported the wrong
+reason. `KewFix` models the fix: for a MoveTables deny error, re-evaluate the
 MoveTables state from topo instead of marking the primary not serving. With
-it, `BufferEndsOnlyAfterSwitch` holds (`Fix_EarlyRelease`, 1.45M states).
+it, `BufferEndsOnlyAfterSwitch` holds (`Fix_EarlyRelease`).
 
-**4. After a cancelled switch, denied writes wait out the VSchema timeout.**
-(`Cancel_NoTimeouts_*`)
+**4. After a cancelled switch, denied writes waited out the VSchema
+timeout.** (`Cancel_NoTimeouts_*`)
 
-`cancelMigration` restores the deny rules but does not rebuild the
-SrvVSchema. A write that was denied during the attempt waits in
-`waitForNewerVSchema` for a VSchema that never comes. It waits the full
-timeout, 30s without buffering or 10s with it, although the source is already
-writable again. `KewFix` also makes `Cancel` rebuild the SrvVSchema.
+`cancelMigration` restored the deny rules but did not rebuild the
+SrvVSchema. A write that was denied during the attempt waited in
+`waitForNewerVSchema` for a VSchema that never came. It waited the full
+timeout, 30s without buffering or 10s with it, although the source was
+already writable again. `KewFix` also makes `Cancel` rebuild the SrvVSchema.
 
-### With all three fixes
+**5. A queued keyspace event could end a buffering that had just started.**
+(`Diag_StaleEvent`)
+
+The shard buffer ended its buffering on any keyspace event. An event that
+was still queued when buffering started, such as the one the watcher sends
+when it first sees a primary, ended the new buffering although it said
+nothing about it. This affects reparent buffering as well. The model only
+shows it with `StartupEvent`, because it otherwise starts with no event
+queued:
+
+```
+10 GwBuffer               bufState=buffering  kewMT=switching   <- buffering starts, KewFix applied
+11 BufferHandleEvent      bufState=draining  releasedEarly=True <- the queued startup event ends it
+```
+
+`EventGenerations` models the fix: starting a buffering advances a
+generation, every event carries the generation it was sent at, and the buffer
+ignores events older than its buffering. With it, `BufferEndsOnlyAfterSwitch`
+holds (`Fix_StaleEvent`).
+
+### With the fixes
 
 | Config | Buffering | What is checked | Result |
 | --- | --- | --- | --- |
-| `Fix_SlowWrites_NoBuffer` | off | safety with `SlowWrites`, cancel, unrelated rebuild | holds (2.8M states) |
-| `Fix_SlowWrites_Buffer` | on | safety with `SlowWrites` and cancel | *pending* |
-| `Fix_EarlyRelease` | on | `BufferEndsOnlyAfterSwitch` | holds (1.45M states) |
+| `Fix_SlowWrites_NoBuffer` | off | safety with `SlowWrites`, cancel, unrelated rebuild | holds |
+| `Fix_SlowWrites_Buffer` | on | safety with `SlowWrites` and cancel | holds |
 | `Avail_NoBuffer_FixedCache` / `Avail_Buffer_FixedCache` | off / on | `WritesSucceedIfSwitchSucceeds` | holds |
-| `Diag_FailAfterSwitch_Buffer_FixedCache` | on | `NoFailureAfterSwitch` | holds (2.5M states) |
-| `Fix_All_Liveness_NoBuffer` / `_Buffer` | off / on | safety and liveness, all fixes | *pending* |
-| `Fix_All_NoTimeouts_NoBuffer` / `_Buffer` | off / on | `RequestsTerminate` and `WritesSucceedIfSwitchSucceeds`, patient client, cancel | *pending* |
+| `Diag_FailAfterSwitch_Buffer_FixedCache` | on | `NoFailureAfterSwitch` | holds |
+| `Fix_EarlyRelease` | on | `BufferEndsOnlyAfterSwitch` | holds |
+| `Fix_StaleEvent` | on | `BufferEndsOnlyAfterSwitch` with a queued event | holds |
+| `Fix_All_Liveness_NoBuffer` / `_Buffer` | off / on | safety, `RequestsTerminate`, `SwitchTerminates`; all fixes, queued event | holds |
+| `Fix_All_NoTimeouts_NoBuffer` / `_Buffer` | off / on | safety, `RequestsTerminate`, `WritesSucceedIfSwitchSucceeds`; patient client, cancel, all fixes, queued event | holds |
+
+All eight refinement configurations pass on this model.
+
+### Fixes in the code
+
+| Model | Code |
+| --- | --- |
+| `FixedPlanCache` | `fetchOrCreatePlan` reads the VSchema and the plan cache epoch together (`vschemaForPlanning`) |
+| `KewFix` | a MoveTables deny error calls `KeyspaceEventWatcher.MarkMoveTablesDenied` instead of `MarkShardNotServing`; `cancelMigration` rebuilds the SrvVSchema |
+| `EventGenerations` | `KeyspaceEvent.Generation`; the shard buffer ignores events older than its buffering |
+| `DrainOnDeny` | not implemented |
+
+Two more changes in the code are not modeled. The executor delivers each
+SrvVSchema to the keyspace event watcher only after it installed the VSchema
+built from it (`SrvVSchemaInstalled`), so that writes released at the end of a
+switch are planned with the new routing rules right away, and
+`waitForNewerVSchema` returns without waiting when the executor already has a
+newer VSchema. In the model the watcher and the executor see SrvVSchema
+versions independently, which covers every ordering, including the one the
+code now enforces.
+
+`KewFix` abstracts `MarkMoveTablesDenied` in two ways. The model re-evaluates
+the MoveTables state when buffering starts; the code marks the switch as in
+progress and re-evaluates it in the background, which only adds an interval
+in which nothing can end the buffering. And the code also re-checks
+consistency on every SrvVSchema update without a MoveTables state, which can
+only end a buffering once the denied tables are lifted, after a cancelled
+switch.
 
 ### Buffering on versus off
 
-The model makes one point clear: for non-transactional statements, the
-`newExecute` retry loop already holds writes during a switch. A write denied
-by the source waits for a newer VSchema and is planned again. With buffering
-off, that wait is `vschemaWaitTimeout` (30s) per retry. With buffering on, it
-is `--buffer-max-failover-duration / 2` (10s by default), plus the time the
-write spent in the shard buffer. Turning buffering on therefore shortens the
+For non-transactional statements, the `newExecute` retry loop already holds
+writes during a switch. A write denied by the source waits for a newer
+VSchema and is planned again. With buffering off, that wait is
+`vschemaWaitTimeout` (30s) per retry. With buffering on, it is
+`--buffer-max-failover-duration / 2` (10s by default), plus the time the write
+spent in the shard buffer. Turning buffering on therefore shortens the
 `newExecute` wait. Statements inside a transaction are never retried or
 buffered: they fail and the client must retry the transaction.
