@@ -73,7 +73,7 @@ runs:
             ;;
           esac
         done
-        echo "tools=${tools[*]}" >> "${GITHUB_OUTPUT}"
+        echo "go-tools=${tools[*]}" >> "${GITHUB_OUTPUT}"
 
     # One module cache entry per go.sum, keyed by its hash, so that a tool's
     # dependency update only replaces that tool's entry. The entries restore
@@ -187,7 +187,7 @@ runs:
     - name: Download Go modules
       shell: bash
       env:
-        TOOLS: ${{ steps.entries.outputs.tools }}
+        TOOLS: ${{ steps.entries.outputs.go-tools }}
       run: |
         download() {
           go mod download || return 1
