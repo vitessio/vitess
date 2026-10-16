@@ -22,6 +22,7 @@ import (
 	"io"
 	"os"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -39,6 +40,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 )
@@ -216,49 +218,7 @@ func TestVStreamWithTablesToSkipCopyFlag(t *testing.T) {
 	// Since we don't expect merchant table to be part of copy phase, we can
 	// subtract 10 from the total rows found in the 3 tables.
 	wantTotalRows := insertedRows1 + insertedRows2 + insertedRows3 - 10
-<<<<<<< HEAD
-	assert.Equal(t, wantTotalRows, numRowEvents)
-||||||| parent of 6863137eb7 (test: remove dead waits from the vstream e2e tests (#21619))
-	assert.Equal(t, wantTotalRows, numRowEvents)
-
-	// Confirm that the copy phase queries used by the VStream did NOT include the MAX_EXECUTION_TIME
-	// query hint. Adding the hint forces unnecessary copy resume cycles for VStream clients that may
-	// not support resume well, or at all (see issue #20039).
-	logFiles := path.Join(vc.ClusterConfig.tmpDir, "*-vttablet-stderr.txt")
-	totalCmd := fmt.Sprintf("grep -h 'Streaming rows for query:' %s | wc -l", logFiles)
-	totalOut, err := exec.Command("bash", "-c", totalCmd).Output()
-	require.NoError(t, err)
-	totalCount, err := strconv.Atoi(strings.TrimSpace(string(totalOut)))
-	require.NoError(t, err)
-	require.Positive(t, totalCount, "expected at least one rowstreamer 'Streaming rows for query:' log line during copy phase")
-
-	withHintCmd := fmt.Sprintf("grep -h 'Streaming rows for query:' %s | grep -c MAX_EXECUTION_TIME || true", logFiles)
-	withHintOut, err := exec.Command("bash", "-c", withHintCmd).Output()
-	require.NoError(t, err)
-	withHintCount, err := strconv.Atoi(strings.TrimSpace(string(withHintOut)))
-	require.NoError(t, err)
-	require.Zero(t, withHintCount, "expected no VStream copy/sync queries to include MAX_EXECUTION_TIME hint")
-=======
 	assert.Equal(t, wantTotalRows, numRowEvents.Load())
-
-	// Confirm that the copy phase queries used by the VStream did NOT include the MAX_EXECUTION_TIME
-	// query hint. Adding the hint forces unnecessary copy resume cycles for VStream clients that may
-	// not support resume well, or at all (see issue #20039).
-	logFiles := path.Join(vc.ClusterConfig.tmpDir, "*-vttablet-stderr.txt")
-	totalCmd := fmt.Sprintf("grep -h 'Streaming rows for query:' %s | wc -l", logFiles)
-	totalOut, err := exec.Command("bash", "-c", totalCmd).Output()
-	require.NoError(t, err)
-	totalCount, err := strconv.Atoi(strings.TrimSpace(string(totalOut)))
-	require.NoError(t, err)
-	require.Positive(t, totalCount, "expected at least one rowstreamer 'Streaming rows for query:' log line during copy phase")
-
-	withHintCmd := fmt.Sprintf("grep -h 'Streaming rows for query:' %s | grep -c MAX_EXECUTION_TIME || true", logFiles)
-	withHintOut, err := exec.Command("bash", "-c", withHintCmd).Output()
-	require.NoError(t, err)
-	withHintCount, err := strconv.Atoi(strings.TrimSpace(string(withHintOut)))
-	require.NoError(t, err)
-	require.Zero(t, withHintCount, "expected no VStream copy/sync queries to include MAX_EXECUTION_TIME hint")
->>>>>>> 6863137eb7 (test: remove dead waits from the vstream e2e tests (#21619))
 }
 
 // TestVStreamLaggingDDLRowEvents confirms that when the schema historian is enabled via the --track-schema-versions flag, we don't
@@ -608,8 +568,7 @@ func isSentinelRow(ev *binlogdatapb.RowEvent) bool {
 // waitForSentinelRow inserts the sentinel customer row into keyspace and waits
 // until the stream reports it in seen.
 func waitForSentinelRow(t *testing.T, vtgateConn *mysql.Conn, keyspace string, seen *atomic.Bool) {
-	_, err := execVtgateQuery(vtgateConn, keyspace, fmt.Sprintf("insert into customer (cid, name) values (%d, 'sentinel')", sentinelCID))
-	require.NoError(t, err)
+	execVtgateQuery(t, vtgateConn, keyspace, fmt.Sprintf("insert into customer (cid, name) values (%d, 'sentinel')", sentinelCID))
 	require.Eventually(t, seen.Load, 30*time.Second, 10*time.Millisecond, "the vstream did not deliver the sentinel row")
 }
 
@@ -755,35 +714,8 @@ func testVStreamStopOnReshardFlag(t *testing.T, stopOnReshard bool, baseTabletID
 		}
 	}()
 
-<<<<<<< HEAD
-	ticker := time.NewTicker(1 * time.Second)
-	tickCount := 0
-	for {
-		<-ticker.C
-		tickCount++
-		switch tickCount {
-		case 1:
-			reshard(t, "sharded", "customer", "vstreamStopOnReshard", "-80,80-",
-				"-40,40-", baseTabletID+400, nil, nil, nil, nil, defaultCellName, 1)
-		case 60:
-			done = true
-||||||| parent of 6863137eb7 (test: remove dead waits from the vstream e2e tests (#21619))
-	ticker := time.NewTicker(1 * time.Second)
-	tickCount := 0
-	for {
-		<-ticker.C
-		tickCount++
-		switch tickCount {
-		case 1:
-			reshard(t, "sharded", "customer", "vstreamStopOnReshard", "-80,80-",
-				"-40,40-", baseTabletID+400, nil, nil, nil, nil, defaultCellName, 1,
-				reshardOptions{skipSwitchWritesErrorHandling: true})
-		case 60:
-			done = true
-=======
 	reshard(t, "sharded", "customer", "vstreamStopOnReshard", "-80,80-",
-		"-40,40-", baseTabletID+400, nil, nil, nil, nil, defaultCellName, 1,
-		reshardOptions{skipSwitchWritesErrorHandling: true})
+		"-40,40-", baseTabletID+400, nil, nil, nil, nil, defaultCellName, 1)
 
 	// With StopOnReshard the stream ends cleanly on the reshard journal.
 	// Without it, the stream must keep going: vtgate starts streaming the new
@@ -794,7 +726,6 @@ func testVStreamStopOnReshardFlag(t *testing.T, stopOnReshard bool, baseTabletID
 		if stopOnReshard {
 			assert.True(c, streamEnded.Load(), "the vstream did not end with io.EOF after the reshard")
 			return
->>>>>>> 6863137eb7 (test: remove dead waits from the vstream e2e tests (#21619))
 		}
 		assert.False(c, done.Load(), "the vstream ended")
 		mu.Lock()
@@ -878,22 +809,10 @@ func testVStreamCopyMultiKeyspaceReshard(t *testing.T, baseTabletID int) numEven
 	var ne numEvents
 	streamedNames := make(map[string]bool) // names of the streamed rows of the sharded customer table
 	go func() {
-<<<<<<< HEAD
-		var reader vtgateconn.VStreamReader
-		reader, err = vstreamConn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, flags)
-		require.NoError(t, err)
-||||||| parent of 6863137eb7 (test: remove dead waits from the vstream e2e tests (#21619))
-		var reader vtgateconn.VStreamReader
-		reader, err = vstreamConn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, flags)
-		if !assert.NoError(t, err) {
-			return
-		}
-=======
 		reader, err := vstreamConn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, flags)
 		if !assert.NoError(t, err) {
 			return
 		}
->>>>>>> 6863137eb7 (test: remove dead waits from the vstream e2e tests (#21619))
 		for {
 			evs, err := reader.Recv()
 
@@ -963,8 +882,7 @@ func testVStreamCopyMultiKeyspaceReshard(t *testing.T, baseTabletID int) numEven
 	stopInserting()
 
 	// Wait until every inserted row has been streamed.
-	nameResult, err := execVtgateQuery(vtgateConn, "sharded", "select name from customer")
-	require.NoError(t, err)
+	nameResult := execVtgateQuery(t, vtgateConn, "sharded", "select name from customer")
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
 		mu.Lock()
 		defer mu.Unlock()
@@ -1192,8 +1110,7 @@ func TestMultiVStreamsKeyspaceReshard(t *testing.T) {
 			if insertedNames == nil && newShardRowEvents > 0 && journalEvents > 0 {
 				close(stopInserts)
 				<-insertsDone
-				qr, err := execVtgateQuery(vtgateConn, ks, "select name from customer")
-				require.NoError(t, err)
+				qr := execVtgateQuery(t, vtgateConn, ks, "select name from customer")
 				insertedNames = make([]string, 0, len(qr.Rows))
 				for _, row := range qr.Rows {
 					insertedNames = append(insertedNames, row[0].ToString())
@@ -1471,24 +1388,10 @@ const (
 	numExpectedHeartbeats = 10
 )
 
-<<<<<<< HEAD
-func doVStream(t *testing.T, vc *VitessCluster, flags *vtgatepb.VStreamFlags) (numRowEvents map[string]int, numFieldEvents map[string]int) {
-	// Stream for a while to ensure heartbeats are sent.
-	ctx, cancel := context.WithTimeout(context.Background(), vstreamHeartbeatsTestContextTimeout)
-	defer cancel()
-
-||||||| parent of 6863137eb7 (test: remove dead waits from the vstream e2e tests (#21619))
-func doVStream(t *testing.T, vc *VitessCluster, flags *vtgatepb.VStreamFlags) (numRowEvents map[string]int, numFieldEvents map[string]int) {
-	// Stream for a while to ensure heartbeats are sent.
-	ctx, cancel := context.WithTimeout(t.Context(), vstreamHeartbeatsTestContextTimeout)
-	defer cancel()
-
-=======
 // doVStream streams the customer and, if flags ask for them, heartbeat events
 // until ctx ends. It calls onHeartbeat, if set, with the number of heartbeats
 // received so far. It returns an error only if the stream could not start.
 func doVStream(t *testing.T, ctx context.Context, vc *VitessCluster, flags *vtgatepb.VStreamFlags, onHeartbeat func(int)) (numRowEvents map[string]int, numFieldEvents map[string]int, err error) {
->>>>>>> 6863137eb7 (test: remove dead waits from the vstream e2e tests (#21619))
 	numRowEvents = make(map[string]int)
 	numFieldEvents = make(map[string]int)
 	vstreamConn, err := vtgateconn.Dial(ctx, fmt.Sprintf("%s:%d", vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateGrpcPort))
@@ -1526,15 +1429,9 @@ func doVStream(t *testing.T, ctx context.Context, vc *VitessCluster, flags *vtga
 				case binlogdatapb.VEventType_ROW:
 					rowEvent := ev.RowEvent
 					arr := strings.Split(rowEvent.TableName, ".")
-<<<<<<< HEAD
-					require.Equal(t, len(arr), 2)
-||||||| parent of 6863137eb7 (test: remove dead waits from the vstream e2e tests (#21619))
-					require.Len(t, arr, 2)
-=======
 					if !assert.Len(t, arr, 2) {
 						continue
 					}
->>>>>>> 6863137eb7 (test: remove dead waits from the vstream e2e tests (#21619))
 					tableName := arr[1]
 					assert.Equal(t, defaultSourceKs, rowEvent.Keyspace)
 					assert.Equal(t, "0", rowEvent.Shard)
@@ -1546,15 +1443,9 @@ func doVStream(t *testing.T, ctx context.Context, vc *VitessCluster, flags *vtga
 				case binlogdatapb.VEventType_FIELD:
 					fieldEvent := ev.FieldEvent
 					arr := strings.Split(fieldEvent.TableName, ".")
-<<<<<<< HEAD
-					require.Equal(t, len(arr), 2)
-||||||| parent of 6863137eb7 (test: remove dead waits from the vstream e2e tests (#21619))
-					require.Len(t, arr, 2)
-=======
 					if !assert.Len(t, arr, 2) {
 						continue
 					}
->>>>>>> 6863137eb7 (test: remove dead waits from the vstream e2e tests (#21619))
 					tableName := arr[1]
 					assert.Equal(t, defaultSourceKs, fieldEvent.Keyspace)
 					assert.Equal(t, "0", fieldEvent.Shard)
@@ -1711,33 +1602,15 @@ func TestVStreamPushdownFilters(t *testing.T) {
 	createdPauls := startingPauls
 	createdNonPauls := 0
 	go func() {
-<<<<<<< HEAD
-||||||| parent of 6863137eb7 (test: remove dead waits from the vstream e2e tests (#21619))
-		var closeOnce sync.Once
-		closeDone := func() { closeOnce.Do(func() { close(done) }) }
-		defer closeDone()
-=======
 		defer close(insertsDone)
->>>>>>> 6863137eb7 (test: remove dead waits from the vstream e2e tests (#21619))
 		id := 1
 		for {
 			select {
 			case <-streamCtx.Done():
-<<<<<<< HEAD
-				// Give the VStream a little catch-up time before telling it to stop
-				// via the done channel.
-				time.Sleep(10 * time.Second)
-				close(done)
-||||||| parent of 6863137eb7 (test: remove dead waits from the vstream e2e tests (#21619))
-				// Give the VStream a little catch-up time before telling it to stop
-				// via the done channel.
-				time.Sleep(10 * time.Second)
-=======
 				_, err := vtgateConn.ExecuteFetch(fmt.Sprintf("insert into `%s`.customer (cid, name) values (%d, 'paÜl')", ks, sentinelCID), 1, false)
 				if assert.NoError(t, err) {
 					createdPauls++
 				}
->>>>>>> 6863137eb7 (test: remove dead waits from the vstream e2e tests (#21619))
 				return
 			default:
 				if id%10 == 0 {
