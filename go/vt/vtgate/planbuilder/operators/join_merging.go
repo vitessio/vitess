@@ -65,7 +65,20 @@ func (jm *joinMerger) mergeJoinInputs(ctx *plancontext.PlanningContext, lhs, rhs
 
 	// an unsharded/reference route can be merged with anything going to that keyspace
 	case a == anyShard && sameKeyspace:
-		return jm.merge(ctx, lhsRoute, rhsRoute, routingB)
+		newRouting := rhsRoute.Routing.Clone()
+
+		rhsID := TableID(rhsRoute)
+		for _, predicate := range jm.predicates {
+			if ctx.SemTable.DirectDeps(predicate).IsSolvedBy(rhsID) {
+				newRouting = UpdateRoutingLogic(ctx, predicate, newRouting)
+			}
+		}
+
+		if !jm.joinType.IsInner() && !newRouting.OpCode().IsSingleShard() {
+			debugNoRewrite("apply join merge blocked: anyShard routing with non-inner join type %s and multi-shard routing %s", jm.joinType.ToString(), newRouting.OpCode().String())
+			return nil
+		}
+		return jm.merge(ctx, lhsRoute, rhsRoute, newRouting)
 	case b == anyShard && sameKeyspace:
 		return jm.merge(ctx, lhsRoute, rhsRoute, routingA)
 
