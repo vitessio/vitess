@@ -1585,7 +1585,8 @@ const fenceRevertTimeout = 2 * time.Second
 // fenceFormerPrimary fences writes on a mysqld with source-side semi-sync
 // enabled, as a former primary has. Its commits waiting for acknowledgements
 // reach gtid_executed only once released, so when it returns true the caller
-// must repeat its errant GTID check.
+// must repeat its errant GTID check. The applier's commits can wait too, so
+// a caller that stops replication must fence first.
 func (tm *TabletManager) fenceFormerPrimary(ctx context.Context) (_ bool, err error) {
 	source, replica, err := tm.MysqlDaemon.ReadSemiSyncEnabled(ctx)
 	if err != nil || !source {
@@ -1718,14 +1719,16 @@ func (tm *TabletManager) initializeReplicationLocked(ctx context.Context, tablet
 	if err := topo.CheckShardLocked(ctx, tablet.Keyspace, tablet.Shard); err != nil {
 		return "", err
 	}
-	// Check again once nothing else can commit: STOP REPLICA waits for the
-	// applier's transaction in progress, and the fence for a former
-	// primary's commits.
-	if err := tm.MysqlDaemon.StopReplication(ctx, tm.hookExtraEnv()); err != nil {
-		return "", vterrors.Wrap(err, "failed to stop replication")
-	}
+	// Check again once nothing else can commit: the fence waits for a
+	// former primary's commits, and STOP REPLICA for the applier's
+	// transaction in progress. Fence first, because with source-side
+	// semi-sync on, the applier's commit can itself wait for
+	// acknowledgements until the fence disables it.
 	if _, err := tm.fenceFormerPrimary(ctx); err != nil {
 		return "", err
+	}
+	if err := tm.MysqlDaemon.StopReplication(ctx, tm.hookExtraEnv()); err != nil {
+		return "", vterrors.Wrap(err, "failed to stop replication")
 	}
 	if primaryStatus, err = tm.checkNoErrantGTIDs(ctx, currentPrimary.Tablet); err != nil {
 		return "", err

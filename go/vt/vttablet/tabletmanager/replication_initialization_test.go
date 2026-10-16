@@ -1242,8 +1242,8 @@ func newFormerPrimaryTM(t *testing.T, running bool, commitGTID string) (*TabletM
 	return tm, d, qsc, id
 }
 
-// configuringStops returns the replication commands of n attempts that fail
-// after stopping replication before their final check. Attempts that find
+// configuringStops returns the replication commands of n attempts that fence
+// and stop replication, and then fail their final check. Attempts that find
 // replication running run no command.
 func configuringStops(running bool, n int) []string {
 	if running {
@@ -1305,7 +1305,8 @@ func TestFailedFenceIsRepeatedByTheNextAttempt(t *testing.T) {
 		} {
 			t.Run(path.name+"/"+tc.name, func(t *testing.T) {
 				tm, md, qsc, id := newFormerPrimaryTM(t, path.running, ",8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1")
-				md.ExpectedExecuteSuperQueryList = configuringStops(path.running, 2)
+				// Only the second attempt, whose fence succeeds, stops replication.
+				md.ExpectedExecuteSuperQueryList = configuringStops(path.running, 1)
 				tc.setup(md)
 
 				ctx, cancel := context.WithTimeout(t.Context(), time.Second)
@@ -2146,4 +2147,69 @@ func TestUndoDemotePrimaryKeepsDeferredReplicaOutOfRotation(t *testing.T) {
 	require.NoError(t, tm.UndoDemotePrimary(t.Context(), false))
 	assert.True(t, tm.tmState.replicationInitPending())
 	assert.False(t, qsc.IsServing())
+}
+
+// semiSyncBlockedApplier models an applier whose commit waits for semi-sync
+// acknowledgements while source-side semi-sync is on. STOP REPLICA waits for
+// that commit, as MySQL does.
+type semiSyncBlockedApplier struct {
+	*mysqlctl.FakeMysqlDaemon
+	stoppedWhileBlocked bool
+}
+
+func (d *semiSyncBlockedApplier) StopReplication(ctx context.Context, hookExtraEnv map[string]string) error {
+	if d.SemiSyncPrimaryEnabled {
+		d.stoppedWhileBlocked = true
+		<-ctx.Done()
+		return ctx.Err()
+	}
+	return d.FakeMysqlDaemon.StopReplication(ctx, hookExtraEnv)
+}
+
+// TestFenceReleasesTheApplierBeforeStopping covers a replica with source-side
+// semi-sync on, as a stale UndoDemotePrimary leaves it, whose applier waits
+// for acknowledgements. Each path must disable source-side semi-sync before
+// it waits for the applier to stop.
+func TestFenceReleasesTheApplierBeforeStopping(t *testing.T) {
+	for _, path := range []string{"startup", "retry", "retry on a chosen source", "retry already running"} {
+		t.Run(path, func(t *testing.T) {
+			tm, md, _, qsc, id := newPendingReplicationTM(t)
+			tm._waitForGrantsComplete = make(chan struct{})
+			close(tm._waitForGrantsComplete)
+			md.Replicating, md.IOThreadRunning, md.SemiSyncReplicaEnabled = true, true, true
+			md.CurrentSourceHost, md.CurrentSourcePort = "stale-primary", 3306
+			md.ExpectedExecuteSuperQueryList = nil
+			require.NoError(t, tm.UndoDemotePrimary(t.Context(), true))
+			require.True(t, md.SemiSyncPrimaryEnabled)
+			daemon := &semiSyncBlockedApplier{FakeMysqlDaemon: md}
+			tm.MysqlDaemon = daemon
+			md.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA", "FAKE SET SOURCE", "START REPLICA"}
+			switch path {
+			case "startup":
+				tm.tmState.cancelReplicationInit(t.Context())
+			case "retry on a chosen source":
+				tm.tmState.requestReplicationSource(&topodatapb.TabletAlias{Cell: "cell1", Uid: 2})
+			case "retry already running":
+				md.CurrentSourceHost = "old-primary"
+				md.ExpectedExecuteSuperQueryList = nil
+			}
+			ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+			defer cancel()
+			var err error
+			if path == "startup" {
+				_, err = tm.initializeReplication(ctx, topodatapb.TabletType_REPLICA)
+			} else {
+				err = tm.retryReplicationInitializationOnce(ctx, id)
+			}
+			require.NoError(t, err)
+			assert.False(t, daemon.stoppedWhileBlocked, "replication was stopped while its applier waited for acknowledgements")
+			assert.False(t, md.SemiSyncPrimaryEnabled)
+			assert.True(t, md.SuperReadOnly.Load())
+			assert.True(t, md.Replicating)
+			if path != "startup" {
+				assert.True(t, qsc.IsServing())
+			}
+			require.NoError(t, md.CheckSuperQueryList())
+		})
+	}
 }
