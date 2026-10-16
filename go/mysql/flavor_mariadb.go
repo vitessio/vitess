@@ -201,6 +201,12 @@ func (mariadbFlavor) setReplicationPositionCommands(pos replication.Position) []
 	}
 }
 
+// setReplicationSourceReceiverCommand is part of the Flavor interface. MariaDB's relay log
+// semantics differ from MySQL's, so it keeps reconfiguring replication with the full command.
+func (mariadbFlavor) setReplicationSourceReceiverCommand(params *ConnParams, host string, port int32, heartbeatInterval float64, connectRetry int) string {
+	return UnsupportedCommand
+}
+
 func (mariadbFlavor) setReplicationSourceCommand(params *ConnParams, host string, port int32, heartbeatInterval float64, connectRetry int) string {
 	args := []string{
 		fmt.Sprintf("MASTER_HOST = '%s'", host),

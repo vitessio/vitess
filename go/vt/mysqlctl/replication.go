@@ -717,6 +717,17 @@ func (mysqld *Mysqld) StopSQLThread(ctx context.Context) error {
 	return mysqld.executeSuperQueryListConn(ctx, conn, []string{conn.Conn.StopSQLThreadCommand()})
 }
 
+// StartSQLThread starts a replica's SQL (applier) thread(s) only.
+func (mysqld *Mysqld) StartSQLThread(ctx context.Context) error {
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
+	if err != nil {
+		return err
+	}
+	defer conn.Recycle()
+
+	return mysqld.executeSuperQueryListConn(ctx, conn, []string{conn.Conn.StartSQLThreadCommand()})
+}
+
 // RestartReplication stops, resets and starts replication.
 func (mysqld *Mysqld) RestartReplication(ctx context.Context, hookExtraEnv map[string]string) error {
 	h := hook.NewSimpleHook("preflight_stop_slave")
@@ -1086,6 +1097,49 @@ func (mysqld *Mysqld) SetReplicationSource(ctx context.Context, host string, por
 		cmds = append(cmds, conn.Conn.StartReplicationCommand())
 	}
 	return mysqld.executeSuperQueryListConn(ctx, conn, cmds)
+}
+
+// ErrReplicationSourceReceiverChangeUnsupported is returned by SetReplicationSourceReceiver when
+// the server's flavor can only reconfigure replication with the full CHANGE REPLICATION SOURCE
+// command.
+var ErrReplicationSourceReceiverChangeUnsupported = vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "the MySQL flavor does not support changing only the replication receiver options")
+
+// SupportsReplicationSourceReceiverChange reports whether SetReplicationSourceReceiver is
+// available for this server's flavor.
+func (mysqld *Mysqld) SupportsReplicationSourceReceiverChange(ctx context.Context) (bool, error) {
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
+	if err != nil {
+		return false, err
+	}
+	defer conn.Recycle()
+
+	return conn.Conn.SupportsReplicationSourceReceiverChange(), nil
+}
+
+// SetReplicationSourceReceiver points the receiver (I/O thread) of the already configured,
+// auto-positioned replication channel at the provided host / port, and changes nothing else.
+// It must be called with the receiver stopped, and it neither stops nor starts any
+// replication thread. MySQL keeps the relay log only while the applier is running: with both
+// threads stopped, any CHANGE REPLICATION SOURCE discards it.
+//
+// It returns ErrReplicationSourceReceiverChangeUnsupported, without executing anything, for
+// flavors that cannot do this.
+func (mysqld *Mysqld) SetReplicationSourceReceiver(ctx context.Context, host string, port int32, heartbeatInterval float64) error {
+	params, err := mysqld.dbcfgs.ReplConnector().MysqlParams()
+	if err != nil {
+		return err
+	}
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
+	if err != nil {
+		return err
+	}
+	defer conn.Recycle()
+
+	cmd := conn.Conn.SetReplicationSourceReceiverCommand(params, host, port, heartbeatInterval, int(replicationConnectRetry.Seconds()))
+	if !replicationThreadCommandAvailable(cmd) {
+		return ErrReplicationSourceReceiverChangeUnsupported
+	}
+	return mysqld.executeSuperQueryListConn(ctx, conn, []string{cmd})
 }
 
 // ResetReplication resets all replication for this host.

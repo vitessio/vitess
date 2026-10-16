@@ -250,6 +250,11 @@ func (flv *filePosFlavor) setReplicationSourceCommand(params *ConnParams, host s
 	return UnsupportedCommand
 }
 
+// setReplicationSourceReceiverCommand is part of the Flavor interface.
+func (flv *filePosFlavor) setReplicationSourceReceiverCommand(params *ConnParams, host string, port int32, heartbeatInterval float64, connectRetry int) string {
+	return UnsupportedCommand
+}
+
 // resetBinaryLogsCommand is part of the Flavor interface.
 func (flv *filePosFlavor) resetBinaryLogsCommand() string {
 	return UnsupportedCommand

@@ -999,6 +999,7 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 		return vterrors.New(vtrpc.Code_FAILED_PRECONDITION, "Shard primary has empty mysql hostname")
 	}
 	// Errant GTID detection.
+	var source replicationSource
 	{
 		// Find the executed GTID set of the tablet that we are reparenting to.
 		// We will then compare our own position against it to verify that we don't
@@ -1023,10 +1024,11 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 		if errantGtid != "" {
 			return vterrors.New(vtrpc.Code_FAILED_PRECONDITION, fmt.Sprintf("Errant GTID detected - %s; Primary GTID - %s, Replica GTID - %s", errantGtid, primaryPosition, replicaPosition.String()))
 		}
+		source = replicationSource{position: primaryPosition, uuid: primarySid}
 	}
 	if status.SourceHost != host || status.SourcePort != port || heartbeatInterval != 0 {
 		// This handles both changing the address and starting replication.
-		if err := tm.setReplicationSourceRecoverable(ctx, host, port, heartbeatInterval, wasReplicating, shouldbeReplicating); err != nil {
+		if err := tm.repointReplication(ctx, host, port, heartbeatInterval, source, wasReplicating, shouldbeReplicating); err != nil {
 			return err
 		}
 	} else if shouldbeReplicating {

@@ -61,6 +61,7 @@ type MysqlDaemon interface {
 	StartReplicationUntilAfter(ctx context.Context, pos replication.Position) error
 	StopReplication(ctx context.Context, hookExtraEnv map[string]string) error
 	StopIOThread(ctx context.Context) error
+	StartSQLThread(ctx context.Context) error
 	ReplicationStatus(ctx context.Context) (replication.ReplicationStatus, error)
 	PrimaryStatus(ctx context.Context) (replication.PrimaryStatus, error)
 	CollectFullStatusData(ctx context.Context) (*replicationdatapb.FullStatus, error)
@@ -86,6 +87,11 @@ type MysqlDaemon interface {
 	SetSuperReadOnly(ctx context.Context, on bool, opts ...SetSuperReadOnlyOption) (ResetSuperReadOnlyFunc, error)
 	SetReplicationPosition(ctx context.Context, pos replication.Position) error
 	SetReplicationSource(ctx context.Context, host string, port int32, heartbeatInterval float64, stopReplicationBefore bool, startReplicationAfter bool) error
+	// SupportsReplicationSourceReceiverChange reports whether SetReplicationSourceReceiver is available.
+	SupportsReplicationSourceReceiverChange(ctx context.Context) (bool, error)
+	// SetReplicationSourceReceiver changes only the receiver options of an already configured,
+	// auto-positioned replication channel, which keeps the relay log while the applier runs.
+	SetReplicationSourceReceiver(ctx context.Context, host string, port int32, heartbeatInterval float64) error
 	WaitForReparentJournal(ctx context.Context, timeCreatedNS int64) error
 
 	WaitSourcePos(context.Context, replication.Position) error

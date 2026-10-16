@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"reflect"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -90,6 +91,10 @@ type FakeMysqlDaemon struct {
 	// IOThreadRunning is always true except in one testcase where
 	// we want to test error handling during SetReplicationSource.
 	IOThreadRunning bool
+
+	// AutoPosition is returned by ReplicationStatus, and reports whether
+	// replication is configured with GTID auto-positioning.
+	AutoPosition bool
 
 	// CurrentPrimaryPosition is returned by PrimaryPosition
 	// and ReplicationStatus.
@@ -164,6 +169,22 @@ type FakeMysqlDaemon struct {
 
 	// SetReplicationSourceFunc overrides SetReplicationSource when it is set.
 	SetReplicationSourceFunc func(ctx context.Context, host string, port int32, heartbeatInterval float64, stopReplicationBefore bool, startReplicationAfter bool) error
+
+	// ReplicationSourceReceiverChangeUnsupported makes
+	// SupportsReplicationSourceReceiverChange report false and
+	// SetReplicationSourceReceiver fail, like a flavor without the
+	// receiver-only command.
+	ReplicationSourceReceiverChangeUnsupported bool
+
+	// SetReplicationSourceReceiverError is used by SetReplicationSourceReceiver.
+	SetReplicationSourceReceiverError error
+
+	// StartSQLThreadError is returned by StartSQLThread, after it records the statement.
+	StartSQLThreadError error
+
+	// SQLThreadStopsOnStart makes StartSQLThread leave the applier stopped, like an applier
+	// that stops again right away on an error.
+	SQLThreadStopsOnStart bool
 
 	// StopReplicationError error is used by StopReplication.
 	StopReplicationError error
@@ -381,10 +402,11 @@ func (fmd *FakeMysqlDaemon) ReplicationStatus(ctx context.Context) (replication.
 		ReplicationLagSeconds:                  fmd.ReplicationLagSeconds,
 		// Implemented as AND to avoid changing all tests that were
 		// previously using Replicating = false.
-		IOState:    replication.ReplicationStatusToState(strconv.FormatBool(fmd.Replicating && fmd.IOThreadRunning)),
-		SQLState:   replication.ReplicationStatusToState(strconv.FormatBool(fmd.Replicating)),
-		SourceHost: fmd.CurrentSourceHost,
-		SourcePort: fmd.CurrentSourcePort,
+		IOState:      replication.ReplicationStatusToState(strconv.FormatBool(fmd.Replicating && fmd.IOThreadRunning)),
+		SQLState:     replication.ReplicationStatusToState(strconv.FormatBool(fmd.Replicating)),
+		SourceHost:   fmd.CurrentSourceHost,
+		SourcePort:   fmd.CurrentSourcePort,
+		AutoPosition: fmd.AutoPosition,
 	}, nil
 }
 
@@ -573,6 +595,20 @@ func (fmd *FakeMysqlDaemon) StopIOThread(ctx context.Context) error {
 	})
 }
 
+// StartSQLThread is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) StartSQLThread(ctx context.Context) error {
+	replicating := fmd.Replicating
+	if err := fmd.ExecuteSuperQueryList(ctx, []string{
+		"START REPLICA SQL_THREAD",
+	}); err != nil {
+		return err
+	}
+	if fmd.StartSQLThreadError != nil || fmd.SQLThreadStopsOnStart {
+		fmd.Replicating = replicating
+	}
+	return fmd.StartSQLThreadError
+}
+
 // SetReplicationPosition is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) SetReplicationPosition(ctx context.Context, pos replication.Position) error {
 	if !reflect.DeepEqual(fmd.SetReplicationPositionPos, pos) {
@@ -611,9 +647,55 @@ func (fmd *FakeMysqlDaemon) SetReplicationSource(ctx context.Context, host strin
 	if startReplicationAfter {
 		cmds = append(cmds, "START REPLICA")
 	}
+	// Like MySQL, the change discards the relay log when both replication threads are stopped
+	// (CurrentRelayLogPosition falls back to CurrentPrimaryPosition). Tests that do not set a
+	// relay log position keep none.
+	fmd.mu.Lock()
+	discardsRelayLog := (stopReplicationBefore || !fmd.Replicating) && !fmd.CurrentRelayLogPosition.IsZero()
+	fmd.mu.Unlock()
 	fmd.CurrentSourceHost = host
 	fmd.CurrentSourcePort = port
-	return fmd.ExecuteSuperQueryList(ctx, cmds)
+	if err := fmd.ExecuteSuperQueryList(ctx, cmds); err != nil {
+		return err
+	}
+	if discardsRelayLog {
+		fmd.mu.Lock()
+		fmd.CurrentRelayLogPosition = fmd.CurrentPrimaryPosition
+		fmd.mu.Unlock()
+	}
+	return nil
+}
+
+// SupportsReplicationSourceReceiverChange is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) SupportsReplicationSourceReceiverChange(ctx context.Context) (bool, error) {
+	return !fmd.ReplicationSourceReceiverChangeUnsupported, nil
+}
+
+// SetReplicationSourceReceiver is part of the MysqlDaemon interface. Like MySQL, it discards
+// the relay log (CurrentRelayLogPosition falls back to CurrentPrimaryPosition) when the applier
+// is not running.
+func (fmd *FakeMysqlDaemon) SetReplicationSourceReceiver(ctx context.Context, host string, port int32, heartbeatInterval float64) error {
+	if fmd.ReplicationSourceReceiverChangeUnsupported {
+		return ErrReplicationSourceReceiverChangeUnsupported
+	}
+	input := fmt.Sprintf("%v:%v", host, port)
+	if !slices.Contains(fmd.SetReplicationSourceInputs, input) {
+		return fmt.Errorf("wrong input for SetReplicationSourceReceiver: expected a value in %v got %v", fmd.SetReplicationSourceInputs, input)
+	}
+	if fmd.SetReplicationSourceReceiverError != nil {
+		return fmd.SetReplicationSourceReceiverError
+	}
+	if err := fmd.ExecuteSuperQueryList(ctx, []string{"FAKE SET SOURCE RECEIVER"}); err != nil {
+		return err
+	}
+	fmd.mu.Lock()
+	defer fmd.mu.Unlock()
+	fmd.CurrentSourceHost = host
+	fmd.CurrentSourcePort = port
+	if !fmd.Replicating {
+		fmd.CurrentRelayLogPosition = fmd.CurrentPrimaryPosition
+	}
+	return nil
 }
 
 // WaitForReparentJournal is part of the MysqlDaemon interface.
@@ -709,6 +791,10 @@ func (fmd *FakeMysqlDaemon) ExecuteSuperQueryList(ctx context.Context, queryList
 			fmd.Replicating = true
 		case "STOP REPLICA":
 			fmd.Replicating = false
+		case "START REPLICA SQL_THREAD":
+			// Replicating reflects the applier; the receiver is
+			// Replicating && IOThreadRunning.
+			fmd.Replicating = true
 		}
 	}
 	return nil

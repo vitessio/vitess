@@ -364,6 +364,21 @@ func (mysqld *vtcomboMysqld) SetReplicationSource(ctx context.Context, host stri
 	return nil
 }
 
+// SupportsReplicationSourceReceiverChange implements the MysqlDaemon interface
+func (mysqld *vtcomboMysqld) SupportsReplicationSourceReceiverChange(ctx context.Context) (bool, error) {
+	return false, nil
+}
+
+// SetReplicationSourceReceiver implements the MysqlDaemon interface
+func (mysqld *vtcomboMysqld) SetReplicationSourceReceiver(ctx context.Context, host string, port int32, heartbeatInterval float64) error {
+	return nil
+}
+
+// StartSQLThread implements the MysqlDaemon interface
+func (mysqld *vtcomboMysqld) StartSQLThread(ctx context.Context) error {
+	return nil
+}
+
 // StartReplication implements the MysqlDaemon interface
 func (mysqld *vtcomboMysqld) StartReplication(ctx context.Context, hookExtraEnv map[string]string) error {
 	return nil
