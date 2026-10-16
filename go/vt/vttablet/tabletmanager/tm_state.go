@@ -98,6 +98,12 @@ type tmState struct {
 	// tickets, in the order the requests arrive.
 	replicationInitSourceTicket uint64
 	replicationSourceTickets    uint64
+	// replicationInitStopped is set while replication is stopped because a
+	// request stopped it since the pending deferral, which then changes no
+	// replication until a request starts it. replicationInitRunTicket is the
+	// ticket of the latest request that stopped or started replication.
+	replicationInitStopped   bool
+	replicationInitRunTicket uint64
 
 	// displayState contains the current snapshot of the internal state
 	// and has its own mutex.
@@ -322,14 +328,6 @@ func (ts *tmState) setReplicationInitError(ctx context.Context, id uint64, err e
 	}
 }
 
-// hasPendingReplicationInit reports whether a deferred replication
-// initialization is pending.
-func (ts *tmState) hasPendingReplicationInit() bool {
-	ts.mu.Lock()
-	defer ts.mu.Unlock()
-	return ts.pendingReplicationInit != 0
-}
-
 // isPendingReplicationInit reports whether id is the pending deferred
 // replication initialization.
 func (ts *tmState) isPendingReplicationInit(id uint64) bool {
@@ -352,6 +350,7 @@ func (ts *tmState) endReplicationInit(id, ticket uint64) bool {
 	ts.pendingReplicationInit = 0
 	ts.replicationInitError = ""
 	ts.replicationInitSource, ts.replicationInitSourceTicket = nil, 0
+	ts.replicationInitStopped, ts.replicationInitRunTicket = false, 0
 	return true
 }
 
@@ -380,11 +379,40 @@ func (ts *tmState) requestReplicationSource(source *topodatapb.TabletAlias) uint
 	return ts.replicationSourceTickets
 }
 
-// newReplicationSourceTicket returns a ticket for an operation that will choose
-// a replication source it does not know yet. The operation calls it when it
-// starts, so that requests arriving while it runs are newer.
-func (ts *tmState) newReplicationSourceTicket() uint64 {
+// newReplicationTicket returns a ticket for an operation that will choose a
+// replication source it does not know yet, or stop or start replication. The
+// operation calls it when it starts, so that requests arriving while it runs
+// are newer.
+func (ts *tmState) newReplicationTicket() uint64 {
 	return ts.requestReplicationSource(nil)
+}
+
+// replicationRunRequested records that the request with ticket stopped
+// replication, or started it if running is set, unless a later request was
+// recorded. While a request has stopped replication, the pending deferral
+// changes no replication and does not end.
+func (ts *tmState) replicationRunRequested(ticket uint64, running bool) {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	if ts.pendingReplicationInit != 0 && ticket > ts.replicationInitRunTicket {
+		ts.replicationInitStopped, ts.replicationInitRunTicket = !running, ticket
+	}
+}
+
+// replicationStoppedOnRequest reports whether a request has stopped
+// replication since the pending deferral.
+func (ts *tmState) replicationStoppedOnRequest() bool {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	return ts.pendingReplicationInit != 0 && ts.replicationInitStopped
+}
+
+// replicationNeedsStart reports whether replication must be started because
+// vttablet has not initialized it and no request has stopped it.
+func (ts *tmState) replicationNeedsStart() bool {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	return ts.pendingReplicationInit != 0 && !ts.replicationInitStopped
 }
 
 // replicationSourceChosen records that the request with ticket is about to make
@@ -429,6 +457,7 @@ func (ts *tmState) setPendingReplicationInitLocked(ctx context.Context, id uint6
 	reason := ts.canServe(ts.tablet.Type)
 	if id != ts.pendingReplicationInit {
 		ts.replicationInitSource, ts.replicationInitSourceTicket = nil, 0
+		ts.replicationInitStopped, ts.replicationInitRunTicket = false, 0
 	}
 	ts.pendingReplicationInit = id
 	ts.replicationInitError = ""

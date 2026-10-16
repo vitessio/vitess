@@ -1652,3 +1652,125 @@ func TestInternalRepointDoesNotReplaceNewerSource(t *testing.T) {
 		})
 	}
 }
+
+// newReplicatingPendingTM returns a deferred replica whose replication runs
+// from the shard primary and acknowledges, with grants applied.
+func newReplicatingPendingTM(t *testing.T) (*TabletManager, *mysqlctl.FakeMysqlDaemon, *tabletservermock.Controller, uint64) {
+	t.Helper()
+	tm, md, _, qsc, id := newPendingReplicationTM(t)
+	tm._waitForGrantsComplete = make(chan struct{})
+	close(tm._waitForGrantsComplete)
+	md.Replicating, md.IOThreadRunning, md.SemiSyncReplicaEnabled = true, true, true
+	md.CurrentSourceHost, md.CurrentSourcePort = "old-primary", 3306
+	return tm, md, qsc, id
+}
+
+// stopReplicationOnRequest stops replication with the named request.
+func stopReplicationOnRequest(t *testing.T, tm *TabletManager, md *mysqlctl.FakeMysqlDaemon, name string) {
+	t.Helper()
+	pos, err := replication.ParsePosition(gtidFlavor, gtidPosition)
+	require.NoError(t, err)
+	switch name {
+	case "StopReplication":
+		md.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA"}
+		require.NoError(t, tm.StopReplication(t.Context()))
+	case "StopReplicationMinimum":
+		md.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA"}
+		md.WaitPrimaryPositions = []replication.Position{pos}
+		_, err := tm.StopReplicationMinimum(t.Context(), gtidFlavor+"/"+gtidPosition, 30*time.Second)
+		require.NoError(t, err)
+	case "StartReplicationUntilAfter":
+		md.ExpectedExecuteSuperQueryList = []string{"START REPLICA UNTIL AFTER"}
+		md.StartReplicationUntilAfterPos = pos
+		require.NoError(t, tm.StartReplicationUntilAfter(t.Context(), gtidFlavor+"/"+gtidPosition, 30*time.Second))
+	case "ResetReplication":
+		md.ExpectedExecuteSuperQueryList = []string{"FAKE RESET ALL REPLICATION"}
+		require.NoError(t, tm.ResetReplication(t.Context()))
+	}
+	require.NoError(t, md.CheckSuperQueryList())
+	// The fake does not stop replication for the last two.
+	md.Replicating = false
+	md.ExpectedExecuteSuperQueryList, md.ExpectedExecuteSuperQueryCurrent = nil, 0
+}
+
+func TestDeferredInitializationKeepsReplicationStoppedOnRequest(t *testing.T) {
+	for _, stop := range []string{"StopReplication", "StopReplicationMinimum", "StartReplicationUntilAfter", "ResetReplication"} {
+		t.Run(stop, func(t *testing.T) {
+			tm, md, qsc, id := newReplicatingPendingTM(t)
+			stopReplicationOnRequest(t, tm, md, stop)
+
+			require.ErrorContains(t, tm.retryReplicationInitializationOnce(t.Context(), id), "replication was stopped on request")
+			require.NoError(t, md.CheckSuperQueryList(), "the retry must not undo the stop")
+			assert.False(t, md.Replicating)
+			assert.False(t, qsc.IsServing(), "replication was never validated")
+
+			// Starting replication on request resumes initialization.
+			md.ExpectedExecuteSuperQueryList = []string{"START REPLICA"}
+			require.NoError(t, tm.StartReplication(t.Context(), true))
+			require.NoError(t, tm.retryReplicationInitializationOnce(t.Context(), id))
+			require.NoError(t, md.CheckSuperQueryList())
+			assert.True(t, qsc.IsServing())
+		})
+	}
+}
+
+func TestRequestThatStartsReplicationResumesInitialization(t *testing.T) {
+	oldPrimary := &topodatapb.TabletAlias{Cell: "cell1", Uid: 2}
+	for _, tc := range []struct {
+		name    string
+		queries []string
+		start   func(context.Context, *TabletManager) error
+	}{
+		{name: "StartReplication", queries: []string{"START REPLICA"}, start: func(ctx context.Context, tm *TabletManager) error {
+			return tm.StartReplication(ctx, true)
+		}},
+		{name: "RestartReplication", queries: []string{"STOP REPLICA", "START REPLICA"}, start: func(ctx context.Context, tm *TabletManager) error {
+			return tm.RestartReplication(ctx, true)
+		}},
+		{name: "SetReplicationSource forcing a start", queries: []string{"STOP REPLICA", "START REPLICA"}, start: func(ctx context.Context, tm *TabletManager) error {
+			return tm.SetReplicationSource(ctx, oldPrimary, 0, "", true, true, 0)
+		}},
+		{name: "InitReplica", queries: []string{"FAKE RESET BINARY LOGS AND GTIDS", "FAKE SET GLOBAL gtid_purged", "FAKE SET SOURCE", "START REPLICA"}, start: func(ctx context.Context, tm *TabletManager) error {
+			return tm.InitReplica(ctx, oldPrimary, gtidFlavor+"/"+gtidPosition, 0, true)
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tm, md, qsc, id := newReplicatingPendingTM(t)
+			stopReplicationOnRequest(t, tm, md, "StopReplication")
+
+			md.ExpectedExecuteSuperQueryList = tc.queries
+			require.NoError(t, tc.start(t.Context(), tm))
+			require.NoError(t, md.CheckSuperQueryList())
+			md.ExpectedExecuteSuperQueryList, md.ExpectedExecuteSuperQueryCurrent = nil, 0
+			require.NoError(t, tm.retryReplicationInitializationOnce(t.Context(), id))
+			assert.True(t, qsc.IsServing())
+		})
+	}
+}
+
+func TestSourceOnlyRPCKeepsReplicationStoppedOnRequest(t *testing.T) {
+	tm, md, qsc, id := newReplicatingPendingTM(t)
+	stopReplicationOnRequest(t, tm, md, "StopReplication")
+
+	// A reparent repoints the replica without forcing a start, as PRS does.
+	require.NoError(t, tm.SetReplicationSource(t.Context(), &topodatapb.TabletAlias{Cell: "cell1", Uid: 2}, 0, "", false, true, 0))
+	require.NoError(t, md.CheckSuperQueryList())
+	assert.False(t, md.Replicating, "a request stopped replication, so it must stay stopped")
+	require.ErrorContains(t, tm.retryReplicationInitializationOnce(t.Context(), id), "replication was stopped on request")
+	assert.False(t, qsc.IsServing())
+}
+
+func TestReplicationRunRequestsKeepTheLatest(t *testing.T) {
+	tm, _, _, _, id := newPendingReplicationTM(t)
+	older, newer := tm.tmState.newReplicationTicket(), tm.tmState.newReplicationTicket()
+	tm.tmState.replicationRunRequested(newer, false)
+	tm.tmState.replicationRunRequested(older, true)
+	assert.True(t, tm.tmState.replicationStoppedOnRequest(), "an older start must not undo a newer stop")
+	tm.tmState.replicationRunRequested(tm.tmState.newReplicationTicket(), true)
+	assert.False(t, tm.tmState.replicationStoppedOnRequest())
+
+	tm.tmState.replicationRunRequested(tm.tmState.newReplicationTicket(), false)
+	tm.tmState.deferReplicationInit(t.Context(), nil)
+	assert.False(t, tm.tmState.replicationStoppedOnRequest(), "a new deferral starts without requests")
+	assert.True(t, tm.tmState.isPendingReplicationInit(id+1))
+}

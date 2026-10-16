@@ -1339,7 +1339,8 @@ func (tm *TabletManager) endCheckedReplicationInit(id, ticket uint64) error {
 // settleDeferredReplicationInit reports whether the deferred replication
 // initialization id has ended without needing a replication change: it is no
 // longer pending, or the tablet has become a primary, which ends it. While a
-// restore runs, it returns a *replicationInitWaitError. It changes no
+// restore runs, or while replication is stopped on request, it returns a
+// *replicationInitWaitError. It changes no
 // replication, so it needs no lock, and ending the deferral is safe because
 // only this ID is ended.
 func (tm *TabletManager) settleDeferredReplicationInit(ctx context.Context, id uint64) (bool, error) {
@@ -1359,6 +1360,11 @@ func (tm *TabletManager) settleDeferredReplicationInit(ctx context.Context, id u
 		// A restore that finishes supersedes this initialization. One that
 		// aborts leaves the data, and this initialization, unchanged.
 		return false, &replicationInitWaitError{"waiting for the restore to finish"}
+	}
+	if tm.tmState.replicationStoppedOnRequest() {
+		// Do not undo the stop. Initialization resumes once a request starts
+		// replication or chooses a source and starts it.
+		return false, &replicationInitWaitError{"replication was stopped on request; waiting for a request to start it"}
 	}
 	return false, nil
 }

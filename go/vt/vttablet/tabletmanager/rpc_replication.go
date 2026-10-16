@@ -247,6 +247,7 @@ func (tm *TabletManager) WaitForPosition(ctx context.Context, pos string) error 
 // replication or not (using hook if not).
 func (tm *TabletManager) StopReplication(ctx context.Context) error {
 	log.Info("StopReplication")
+	ticket := tm.tmState.newReplicationTicket()
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
 		return err
 	}
@@ -255,7 +256,11 @@ func (tm *TabletManager) StopReplication(ctx context.Context) error {
 	}
 	defer tm.unlock()
 
-	return tm.stopReplicationLocked(ctx)
+	if err := tm.stopReplicationLocked(ctx); err != nil {
+		return err
+	}
+	tm.tmState.replicationRunRequested(ticket, false)
+	return nil
 }
 
 func (tm *TabletManager) stopReplicationLocked(ctx context.Context) error {
@@ -271,6 +276,7 @@ func (tm *TabletManager) stopIOThreadLocked(ctx context.Context) error {
 // replication or not (using hook if not).
 func (tm *TabletManager) StopReplicationMinimum(ctx context.Context, position string, waitTime time.Duration) (string, error) {
 	log.Info(fmt.Sprintf("StopReplicationMinimum: position: %v waitTime: %v", position, waitTime))
+	ticket := tm.tmState.newReplicationTicket()
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
 		return "", err
 	}
@@ -291,6 +297,7 @@ func (tm *TabletManager) StopReplicationMinimum(ctx context.Context, position st
 	if err := tm.stopReplicationLocked(ctx); err != nil {
 		return "", err
 	}
+	tm.tmState.replicationRunRequested(ticket, false)
 	pos, err = tm.MysqlDaemon.PrimaryPosition(ctx)
 	if err != nil {
 		return "", err
@@ -302,6 +309,7 @@ func (tm *TabletManager) StopReplicationMinimum(ctx context.Context, position st
 // replication or not (using hook if not).
 func (tm *TabletManager) StartReplication(ctx context.Context, semiSync bool) error {
 	log.Info("StartReplication")
+	ticket := tm.tmState.newReplicationTicket()
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
 		return err
 	}
@@ -318,12 +326,17 @@ func (tm *TabletManager) StartReplication(ctx context.Context, semiSync bool) er
 	if err := tm.fixSemiSync(ctx, tm.Tablet().Type, semiSyncAction); err != nil {
 		return err
 	}
-	return tm.startReplicationRecoverable(ctx)
+	if err := tm.startReplicationRecoverable(ctx); err != nil {
+		return err
+	}
+	tm.tmState.replicationRunRequested(ticket, true)
+	return nil
 }
 
 // RestartReplication will stop replication and then start it again
 func (tm *TabletManager) RestartReplication(ctx context.Context, semiSync bool) error {
 	log.Info("RestartReplication")
+	ticket := tm.tmState.newReplicationTicket()
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
 		return err
 	}
@@ -358,13 +371,18 @@ func (tm *TabletManager) RestartReplication(ctx context.Context, semiSync bool) 
 	}
 
 	// Start replication
-	return tm.startReplicationRecoverable(postStopCtx)
+	if err := tm.startReplicationRecoverable(postStopCtx); err != nil {
+		return err
+	}
+	tm.tmState.replicationRunRequested(ticket, true)
+	return nil
 }
 
 // StartReplicationUntilAfter will start the replication and let it catch up
 // until and including the transactions in `position`
 func (tm *TabletManager) StartReplicationUntilAfter(ctx context.Context, position string, waitTime time.Duration) error {
 	log.Info(fmt.Sprintf("StartReplicationUntilAfter: position: %v waitTime: %v", position, waitTime))
+	ticket := tm.tmState.newReplicationTicket()
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
 		return err
 	}
@@ -381,7 +399,12 @@ func (tm *TabletManager) StartReplicationUntilAfter(ctx context.Context, positio
 		return err
 	}
 
-	return tm.MysqlDaemon.StartReplicationUntilAfter(waitCtx, pos)
+	if err := tm.MysqlDaemon.StartReplicationUntilAfter(waitCtx, pos); err != nil {
+		return err
+	}
+	// Replication stops at the position.
+	tm.tmState.replicationRunRequested(ticket, false)
+	return nil
 }
 
 // GetReplicas returns the address of all the replicas
@@ -396,6 +419,7 @@ func (tm *TabletManager) GetReplicas(ctx context.Context) ([]string, error) {
 // All binary and relay logs are flushed. All replication positions are reset.
 func (tm *TabletManager) ResetReplication(ctx context.Context) error {
 	log.Info("ResetReplication")
+	ticket := tm.tmState.newReplicationTicket()
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
 		return err
 	}
@@ -404,7 +428,11 @@ func (tm *TabletManager) ResetReplication(ctx context.Context) error {
 	}
 	defer tm.unlock()
 
-	return tm.MysqlDaemon.ResetReplication(ctx)
+	if err := tm.MysqlDaemon.ResetReplication(ctx); err != nil {
+		return err
+	}
+	tm.tmState.replicationRunRequested(ticket, false)
+	return nil
 }
 
 // InitPrimary enables writes and returns the replication position.
@@ -555,6 +583,7 @@ func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.Tab
 	if err := tm.setReplicationSourceRecoverable(ctx, ti.MysqlHostname, ti.MysqlPort, 0, false, true); err != nil {
 		return err
 	}
+	tm.tmState.replicationRunRequested(ticket, true)
 	// wait until we get the replicated row, or our context times out
 	return tm.MysqlDaemon.WaitForReparentJournal(ctx, timeCreatedNS)
 }
@@ -920,7 +949,7 @@ func (tm *TabletManager) SetReplicationSource(ctx context.Context, parentAlias *
 
 	// setReplicationSourceLocked also fixes the semi-sync. In case the tablet type is primary it assumes that it will become a replica if SetReplicationSource
 	// is called, so we always call fixSemiSync with a non-primary tablet type. This will always set the source side replication to false.
-	return tm.setReplicationSourceLocked(ctx, parentAlias, timeCreatedNS, waitPosition, forceStartReplication, semiSyncAction, heartbeatInterval)
+	return tm.setReplicationSourceLocked(ctx, parentAlias, ticket, timeCreatedNS, waitPosition, forceStartReplication, semiSyncAction, heartbeatInterval)
 }
 
 // setReplicationSourceSemiSyncNoAction is SetReplicationSource for a caller
@@ -933,10 +962,12 @@ func (tm *TabletManager) setReplicationSourceSemiSyncNoAction(ctx context.Contex
 	defer tm.unlock()
 	tm.tmState.replicationSourceChosen(parentAlias, ticket)
 
-	return tm.setReplicationSourceLocked(ctx, parentAlias, timeCreatedNS, waitPosition, forceStartReplication, SemiSyncActionNone, 0)
+	return tm.setReplicationSourceLocked(ctx, parentAlias, ticket, timeCreatedNS, waitPosition, forceStartReplication, SemiSyncActionNone, 0)
 }
 
-func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool, semiSync SemiSyncAction, heartbeatInterval float64) (err error) {
+// setReplicationSourceLocked makes parentAlias, which the caller requested
+// with ticket, the replication source.
+func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentAlias *topodatapb.TabletAlias, ticket uint64, timeCreatedNS int64, waitPosition string, forceStartReplication bool, semiSync SemiSyncAction, heartbeatInterval float64) (err error) {
 	// Change our type to REPLICA if we used to be PRIMARY.
 	// Being sent SetReplicationSource means another PRIMARY has been successfully promoted,
 	// so we convert to REPLICA first, since we want to do it even if other
@@ -982,9 +1013,10 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 		shouldbeReplicating = true
 	}
 	// Replication that vttablet has not initialized yet was not stopped on
-	// purpose, so start it. Otherwise nothing would, and the deferred
-	// initialization would keep the replica out of rotation.
-	if tm.tmState.hasPendingReplicationInit() {
+	// purpose unless a request stopped it, so start it. Otherwise nothing
+	// would, and the deferred initialization would keep the replica out of
+	// rotation.
+	if tm.tmState.replicationNeedsStart() {
 		shouldbeReplicating = true
 	}
 
@@ -1056,6 +1088,9 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 		if err := tm.startReplicationRecoverable(ctx); err != nil {
 			return err
 		}
+	}
+	if shouldbeReplicating {
+		tm.tmState.replicationRunRequested(ticket, true)
 	}
 	// If needed, wait until we replicate to the specified point, or our context
 	// times out. Callers can specify the point to wait for as either a
