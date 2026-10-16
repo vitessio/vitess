@@ -714,6 +714,10 @@ func (mysqld *Mysqld) WaitForDBAGrants(ctx context.Context, waitTime time.Durati
 func (mysqld *Mysqld) wait(ctx context.Context, cnf *Mycnf, params *mysql.ConnParams) error {
 	log.Info(fmt.Sprintf("Waiting for mysqld socket file (%v) to be ready...", cnf.SocketFile))
 
+	// mysqld usually becomes ready within a few seconds, so poll quickly at
+	// first, then back off to once a second for a slow start such as crash
+	// recovery.
+	delay := 100 * time.Millisecond
 	for {
 		select {
 		case <-ctx.Done():
@@ -733,7 +737,8 @@ func (mysqld *Mysqld) wait(ctx context.Context, cnf *Mycnf, params *mysql.ConnPa
 		} else if !os.IsNotExist(statErr) {
 			return fmt.Errorf("can't stat mysqld socket file: %v", statErr)
 		}
-		time.Sleep(1000 * time.Millisecond)
+		time.Sleep(delay)
+		delay = min(2*delay, time.Second)
 	}
 }
 
