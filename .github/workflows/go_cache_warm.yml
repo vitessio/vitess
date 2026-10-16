@@ -1,0 +1,134 @@
+name: Warm Go caches
+
+# The only writer of the Go module and build caches that every other job
+# restores through the setup-go action. Each push to main saves fresh build
+# cache entries for that commit, built from an empty cache, so they contain
+# exactly what the jobs compile and nothing stale. Pull requests restore the
+# newest entries by key prefix.
+on:
+  push:
+    branches:
+      - "main"
+  workflow_dispatch:
+
+# Only the newest commit's caches matter.
+concurrency:
+  group: format('{0}-{1}', ${{ github.ref }}, 'Warm Go caches')
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  warm:
+    name: "Warm Go build cache (${{ matrix.entry }}, ${{ matrix.arch }})"
+    if: github.repository == 'vitessio/vitess'
+    permissions:
+      contents: read
+      # To delete the entries this run supersedes.
+      actions: write
+    strategy:
+      fail-fast: false
+      matrix:
+        # Each entry is built on the runner type of the jobs that restore it:
+        # packages compiled without -trimpath have their source and module
+        # cache directories in their cache keys, and those differ between
+        # runner types. Only "build" uses -trimpath.
+        include:
+          - entry: build
+            arch: x64
+            runner: oracle-vm-16cpu-64gb-x86-64
+            save-modules: true
+          - entry: build
+            arch: arm64
+            runner: oracle-vm-16cpu-64gb-arm64
+          - entry: unit
+            arch: x64
+            runner: oracle-vm-16cpu-64gb-x86-64
+          - entry: unit
+            arch: arm64
+            runner: oracle-vm-16cpu-64gb-arm64
+          - entry: race
+            arch: x64
+            runner: oracle-vm-16cpu-64gb-x86-64
+          # The static checks run on GitHub-hosted runners.
+          - entry: tools
+            arch: x64
+            runner: ubuntu-24.04
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+
+      - name: Check out code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: "false"
+
+      # Restores the module cache and downloads every module, but no build
+      # cache: each entry starts empty.
+      - name: Set up Go
+        uses: $/.github/actions/setup-go
+        with:
+          build-cache: none
+
+      - name: Look up the module cache
+        if: matrix.save-modules
+        id: modules
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/go/pkg/mod
+          key: go-mod-${{ hashFiles('go.sum', 'tools/**/go.sum') }}
+          lookup-only: true
+
+      # The download step of setup-go made the module cache complete for this
+      # key. A key is never saved twice, so only a go.sum change saves one.
+      - name: Save the module cache
+        if: matrix.save-modules && steps.modules.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/go/pkg/mod
+          key: go-mod-${{ hashFiles('go.sum', 'tools/**/go.sum') }}
+
+      - name: Warm the build cache
+        run: tools/warm_go_build_cache.sh "${{ matrix.entry }}"
+
+      # setup-go restores "<prefix><sha>" by the prefix, which picks the
+      # newest entry.
+      - name: Determine the cache key
+        id: key
+        env:
+          ENTRY: ${{ matrix.entry }}
+          RUNNER_OS_NAME: ${{ runner.os }}
+          RUNNER_ARCH_NAME: ${{ runner.arch }}
+          SHA: ${{ github.sha }}
+        run: |
+          prefix="go-build-v3-${RUNNER_OS_NAME}-${RUNNER_ARCH_NAME}-$(go env GOVERSION)-${ENTRY}-"
+          echo "prefix=${prefix}" >> "${GITHUB_OUTPUT}"
+          echo "key=${prefix}${SHA}" >> "${GITHUB_OUTPUT}"
+
+      - name: Save the build cache
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/go-build
+          key: ${{ steps.key.outputs.key }}
+
+      # Keep only the entry just saved for this branch, so that per-commit
+      # entries do not push other caches out of the repository quota.
+      - name: Delete superseded build cache entries
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          REF: ${{ github.ref }}
+          PREFIX: ${{ steps.key.outputs.prefix }}
+          KEY: ${{ steps.key.outputs.key }}
+        run: |
+          gh cache list --repo "${REPO}" --ref "${REF}" --key "${PREFIX}" --limit 100 --json id,key \
+            --jq ".[] | select(.key != \"${KEY}\") | .id" |
+            while read -r id; do
+              gh cache delete --repo "${REPO}" "${id}"
+            done

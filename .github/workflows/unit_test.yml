@@ -164,9 +164,8 @@ jobs:
         if: needs.changes.outputs.unit_tests == 'true'
         uses: $/.github/actions/setup-go
         with:
-          # The arm64 jobs are the only arm64 jobs that build Vitess, so they
-          # save the arm64 build cache. On x64, the end-to-end jobs save it.
-          save-build-cache: ${{ matrix.arch == 'arm64' }}
+          # "make unit_test" and "make unit_test_race" run "make build" first.
+          build-cache: ${{ matrix.race && 'build race' || 'build unit' }}
 
       - name: Set up python
         if: needs.changes.outputs.unit_tests == 'true'

@@ -1,12 +1,17 @@
 name: "Set up Go"
-description: "Set up Go with shared module and build caching"
+description: "Set up Go and restore the shared module and build caches"
 inputs:
   cache:
-    description: "Whether to restore and save the Go module and build caches"
+    description: "Whether to restore the Go module and build caches"
     default: "true"
-  save-build-cache:
-    description: "Whether this job saves the Go build cache on pushes to main and the release branches. Only set it in jobs whose build the other jobs can reuse; every other job restores the cache instead."
-    default: "false"
+  build-cache:
+    description: >-
+      Space-separated build cache entries to restore, each filled by the
+      go_cache_warm workflow (see tools/warm_go_build_cache.sh): "build" for
+      make build and the end-to-end tests, "unit" for the unit tests, "race"
+      for the race tests, "tools" for the go tool binaries and go/tools, or
+      "none".
+    default: "build"
 runs:
   using: "composite"
   steps:
@@ -22,31 +27,25 @@ runs:
         # out of the repository cache quota.
         cache: false
 
-    # Only pushes to main and the release branches save caches; everything
-    # else restores. Caches saved from any other run are scoped to a ref that
-    # pull requests do not restore from, while still counting against the
-    # repository quota and evicting the shared entries.
-    #
-    # Any such job can save the module cache, since the download step below
-    # makes every saved module cache complete. The build cache only holds what
-    # the saving job compiled, so only jobs that set save-build-cache save it,
-    # and all other jobs, including those on these pushes, restore it.
-    - name: Determine cache mode
-      id: cache-mode
+    # Jobs only restore caches. The go_cache_warm workflow is the only writer:
+    # on every push to main it saves the module cache and fresh build cache
+    # entries for that commit, keyed so that the prefixes below restore the
+    # newest one.
+    - name: Determine build cache entries
+      id: entries
+      if: inputs.cache == 'true'
       shell: bash
       env:
-        SAVE: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release-')) }}
-        SAVE_BUILD_CACHE: ${{ inputs.save-build-cache }}
+        ENTRIES: ${{ inputs.build-cache }}
       run: |
-        echo "save=${SAVE}" >> "${GITHUB_OUTPUT}"
-        if [ "${SAVE}" = "true" ] && [ "${SAVE_BUILD_CACHE}" = "true" ]; then
-          echo "save-build=true" >> "${GITHUB_OUTPUT}"
-        else
-          echo "save-build=false" >> "${GITHUB_OUTPUT}"
-        fi
+        for entry in build unit race tools; do
+          case " ${ENTRIES} " in
+          *" ${entry} "*) echo "${entry}=true" >> "${GITHUB_OUTPUT}" ;;
+          esac
+        done
 
     - name: Restore Go module cache
-      if: inputs.cache == 'true' && steps.cache-mode.outputs.save == 'false'
+      if: inputs.cache == 'true'
       uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ~/go/pkg/mod
@@ -54,43 +53,50 @@ runs:
         restore-keys: |
           go-mod-
 
-    - name: Restore Go build cache
-      if: inputs.cache == 'true' && steps.cache-mode.outputs.save-build == 'false'
+    # Each entry holds what one group of jobs compiles, with that group's
+    # flags, so restoring several of them into one cache directory never
+    # overlaps.
+    - name: Restore Go build cache (build)
+      if: steps.entries.outputs.build == 'true'
       uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ~/.cache/go-build
-        key: go-build-v2-${{ runner.os }}-${{ runner.arch }}-go${{ steps.setup-go.outputs.go-version }}-${{ hashFiles('go.sum', 'tools/**/go.sum') }}
+        key: go-build-v3-${{ runner.os }}-${{ runner.arch }}-go${{ steps.setup-go.outputs.go-version }}-build-${{ github.sha }}
         restore-keys: |
-          go-build-v2-${{ runner.os }}-${{ runner.arch }}-go${{ steps.setup-go.outputs.go-version }}-
+          go-build-v3-${{ runner.os }}-${{ runner.arch }}-go${{ steps.setup-go.outputs.go-version }}-build-
 
-    # Pushes to main and the release branches save the entries every other run
-    # restores from. The saves deliberately start from an empty cache instead
-    # of a restored one, so a go.sum change produces a minimal entry without
-    # stale module versions or dead build cache contents. actions/cache saves
-    # in its post step, after the job has populated the caches, and only when
-    # the job succeeds and the key does not exist yet.
-    - name: Cache Go modules
-      if: inputs.cache == 'true' && steps.cache-mode.outputs.save == 'true'
-      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-      with:
-        path: ~/go/pkg/mod
-        key: go-mod-${{ hashFiles('go.sum', 'tools/**/go.sum') }}
-
-    # The v2 in the key drops the x64 entries saved before save-build-cache
-    # existed: whichever job finished first saved them, often one that
-    # compiled next to nothing, and an existing key is never saved again.
-    - name: Cache Go build cache
-      if: inputs.cache == 'true' && steps.cache-mode.outputs.save-build == 'true'
-      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+    - name: Restore Go build cache (unit)
+      if: steps.entries.outputs.unit == 'true'
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ~/.cache/go-build
-        key: go-build-v2-${{ runner.os }}-${{ runner.arch }}-go${{ steps.setup-go.outputs.go-version }}-${{ hashFiles('go.sum', 'tools/**/go.sum') }}
+        key: go-build-v3-${{ runner.os }}-${{ runner.arch }}-go${{ steps.setup-go.outputs.go-version }}-unit-${{ github.sha }}
+        restore-keys: |
+          go-build-v3-${{ runner.os }}-${{ runner.arch }}-go${{ steps.setup-go.outputs.go-version }}-unit-
 
-    # Download the root module and every tool module, so a saved module cache
-    # always contains the full dependency set its key covers, no matter which
-    # job saves it first; the tool modules are otherwise only fetched on first
-    # use. On a cache hit this is a fast no-op. Retried because
-    # proxy.golang.org occasionally drops connections mid-download.
+    - name: Restore Go build cache (race)
+      if: steps.entries.outputs.race == 'true'
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.cache/go-build
+        key: go-build-v3-${{ runner.os }}-${{ runner.arch }}-go${{ steps.setup-go.outputs.go-version }}-race-${{ github.sha }}
+        restore-keys: |
+          go-build-v3-${{ runner.os }}-${{ runner.arch }}-go${{ steps.setup-go.outputs.go-version }}-race-
+
+    - name: Restore Go build cache (tools)
+      if: steps.entries.outputs.tools == 'true'
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.cache/go-build
+        key: go-build-v3-${{ runner.os }}-${{ runner.arch }}-go${{ steps.setup-go.outputs.go-version }}-tools-${{ github.sha }}
+        restore-keys: |
+          go-build-v3-${{ runner.os }}-${{ runner.arch }}-go${{ steps.setup-go.outputs.go-version }}-tools-
+
+    # Download the root module and every tool module; the tool modules are
+    # otherwise only fetched on first use. On a cache hit this is a fast
+    # no-op, and it also makes the module cache the warm workflow saves
+    # complete. Retried because proxy.golang.org occasionally drops
+    # connections mid-download.
     - name: Download Go modules
       shell: bash
       run: |
