@@ -1,0 +1,78 @@
+name: Sync to vitess-security
+on:
+  push:
+    branches:
+      - main
+      - 'release-*.0'
+
+  # Safety net in case a push event was missed or a previous sync failed.
+  schedule:
+    - cron: '17 * * * *'
+
+  workflow_dispatch: {}
+
+permissions: read-all
+
+# Pushes are serialized and never cancelled: each run syncs every branch, so a
+# queued run always supersedes the one it waited for.
+concurrency:
+  group: sync-to-vitess-security
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Sync main and release branches
+    # Forks must not run this job: they have neither the deploy key nor any business pushing to vitess-security.
+    if: github.repository == 'vitessio/vitess'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+
+      - name: Check out code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The destination may be empty or behind by many commits, so we need the full history of every branch.
+          fetch-depth: 0
+          persist-credentials: 'false'
+
+      - name: Generate GitHub App token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        id: app-token
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          # Scope the token to the destination only.
+          repositories: vitess-security
+          permission-contents: write
+          # GitHub rejects a push from an app that touches .github/workflows without this.
+          permission-workflows: write
+
+      - name: Push branches
+        env:
+          APP_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -euo pipefail
+
+          refspecs=("refs/remotes/origin/main:refs/heads/main")
+          while read -r ref; do
+            branch="${ref#refs/remotes/origin/}"
+            if [[ "${branch}" =~ ^release-[0-9]+\.0$ ]]; then
+              refspecs+=("${ref}:refs/heads/${branch}")
+            fi
+          done < <(git for-each-ref --format='%(refname)' 'refs/remotes/origin/release-*')
+
+          echo "Pushing: ${refspecs[*]}"
+
+          auth="$(printf 'x-access-token:%s' "${APP_TOKEN}" | base64 -w0)"
+          echo "::add-mask::${auth}"
+
+          # Deliberately no force: if vitess-security has commits that are not in vitess (an in-flight security fix),
+          # the push of that branch is rejected and this job fails instead of discarding them.
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth}" \
+            push https://github.com/vitessio/vitess-security.git "${refspecs[@]}"
