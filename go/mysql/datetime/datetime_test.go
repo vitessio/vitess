@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/decimal"
 	"vitess.io/vitess/go/vt/vthash"
@@ -258,6 +259,31 @@ func TestRoundForJSON(t *testing.T) {
 		res := time.RoundForJSON()
 		assert.Equal(t, tc.want, res)
 	}
+}
+
+// TestCompareNegativeZero pins that a zero time carries no sign, and that the
+// fingerprint agrees with the comparison: consumers that hash a TIME to decide
+// equality would otherwise keep -00:00:00 and 00:00:00 apart.
+func TestCompareNegativeZero(t *testing.T) {
+	negativeZero := Time{hour: negMask}
+	zero := Time{}
+
+	require.True(t, negativeZero.Neg())
+	require.Equal(t, 0, negativeZero.Compare(zero))
+	require.Equal(t, 0, zero.Compare(negativeZero))
+
+	hash := func(tm Time) vthash.Hash {
+		h := vthash.New()
+		tm.Hash(&h)
+		return h.Sum128()
+	}
+	require.Equal(t, hash(zero), hash(negativeZero))
+
+	// A sign still separates times that have a magnitude to be negative about.
+	negativeSecond := Time{hour: negMask, second: 1}
+	positiveSecond := Time{second: 1}
+	require.Equal(t, -1, negativeSecond.Compare(positiveSecond))
+	require.NotEqual(t, hash(positiveSecond), hash(negativeSecond))
 }
 
 func TestCompare(t *testing.T) {

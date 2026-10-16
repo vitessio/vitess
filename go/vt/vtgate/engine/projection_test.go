@@ -75,6 +75,41 @@ func TestMultiply(t *testing.T) {
 	assert.Equal(t, "[[UINT64(6)] [UINT64(0)] [UINT64(2)]]", fmt.Sprintf("%v", qr.Rows))
 }
 
+// TestProjectionFoldedJSONLiteral processes several rows through a Projection
+// whose expression contains a constant-folded JSON literal; JSON_REMOVE
+// mutates in place, so every row must see the pristine literal.
+func TestProjectionFoldedJSONLiteral(t *testing.T) {
+	fields := evalengine.FieldResolver([]*querypb.Field{
+		{Name: "p", Type: sqltypes.VarChar, Charset: collations.CollationUtf8mb4ID},
+	})
+	astExpr, err := sqlparser.NewTestParser().ParseExpr(`json_remove(json_array(1, 2, 3), p)`)
+	require.NoError(t, err)
+	evalExpr, err := evalengine.Translate(astExpr, &evalengine.Config{
+		ResolveColumn: fields.Column,
+		ResolveType:   fields.Type,
+		Environment:   vtenv.NewTestEnv(),
+		Collation:     collations.MySQL8().DefaultConnectionCharset(),
+	})
+	require.NoError(t, err)
+	fp := &fakePrimitive{
+		results: []*sqltypes.Result{sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("p", "varchar"),
+			"$[0]",
+			"$[1]",
+			"$[2]",
+		)},
+	}
+	proj := &Projection{
+		Cols:       []string{"j"},
+		Exprs:      []evalengine.Expr{evalExpr},
+		Input:      fp,
+		noTxNeeded: noTxNeeded{},
+	}
+	qr, err := proj.TryExecute(t.Context(), &noopVCursor{}, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	assert.Equal(t, `[[JSON("[2, 3]")] [JSON("[1, 3]")] [JSON("[1, 2]")]]`, fmt.Sprintf("%v", qr.Rows))
+}
+
 func TestProjectionStreaming(t *testing.T) {
 	expr := &sqlparser.BinaryExpr{
 		Operator: sqlparser.MultOp,

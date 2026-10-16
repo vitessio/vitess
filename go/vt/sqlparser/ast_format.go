@@ -1544,10 +1544,12 @@ func (node *ComparisonExpr) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *BetweenExpr) Format(buf *TrackedBuffer) {
+	// BETWEEN is ternary and non-associative: no operand position may drop
+	// the parentheses of an equal-precedence child.
 	if node.IsBetween {
-		buf.astPrintf(node, "%v between %l and %r", node.Left, node.From, node.To)
+		buf.astPrintf(node, "%r between %r and %r", node.Left, node.From, node.To)
 	} else {
-		buf.astPrintf(node, "%v not between %l and %r", node.Left, node.From, node.To)
+		buf.astPrintf(node, "%r not between %r and %r", node.Left, node.From, node.To)
 	}
 }
 
