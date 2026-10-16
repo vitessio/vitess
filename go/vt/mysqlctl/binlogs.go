@@ -201,12 +201,14 @@ func verifyRestoredBinlogs(ctx context.Context, mysqld MysqlDaemon, cnf *Mycnf, 
 	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 2 {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected result for %q: %v", restoredBinlogVarsQuery, qr.Rows)
 	}
-	if got := qr.Rows[0][0].ToString(); got != basename {
+	// mysqld reports a log-bin in a relative subdirectory as a relative path, which
+	// it resolves under the datadir.
+	if got := absUnderDataDir(cnf, qr.Rows[0][0].ToString()); got != basename {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "restored binlogs are under %s but mysqld's log_bin_basename is %s", basename, got)
 	}
 	// mysqld uses log-bin-index as given but reports a custom extension as ".index",
 	// so only the path without its extension is comparable.
-	got := qr.Rows[0][1].ToString()
+	got := absUnderDataDir(cnf, qr.Rows[0][1].ToString())
 	if strings.TrimSuffix(got, filepath.Ext(got)) != strings.TrimSuffix(indexPath, filepath.Ext(indexPath)) {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "restored binlog index is %s but mysqld's log_bin_index is %s", indexPath, got)
 	}

@@ -168,9 +168,10 @@ func TestVerifyRestoredBinlogs(t *testing.T) {
 	dir := t.TempDir()
 	cnf := &Mycnf{DataDir: filepath.Join(dir, "data"), BinLogPath: filepath.Join(dir, "bin-logs/dst-bin")}
 	customIndexCnf := &Mycnf{DataDir: filepath.Join(dir, "data"), BinLogPath: filepath.Join(dir, "bin-logs/dst-bin"), BinLogIndexPath: "custom.idx"}
+	relativeCnf := &Mycnf{DataDir: filepath.Join(dir, "data"), BinLogPath: "sub/dst-bin"}
 	// The binlogs are listed from the index the restore wrote, so the check isn't
 	// limited by the row cap on SHOW BINARY LOGS, which the fake doesn't answer.
-	for _, index := range []string{"bin-logs/dst-bin.index", "data/custom.idx"} {
+	for _, index := range []string{"bin-logs/dst-bin.index", "data/custom.idx", "data/sub/dst-bin.index"} {
 		p := filepath.Join(dir, index)
 		require.NoError(t, os.MkdirAll(filepath.Dir(p), 0o755))
 		binlogs := filepath.Join(dir, "bin-logs/dst-bin.000001") + "\n" + filepath.Join(dir, "bin-logs/dst-bin.000002") + "\n"
@@ -184,10 +185,12 @@ func TestVerifyRestoredBinlogs(t *testing.T) {
 	tests := []struct {
 		name string
 		cnf  *Mycnf
-		// basename and index are mysqld's reported paths, relative to dir.
-		basename string
-		index    string
-		executed replication.Position
+		// basename and index are mysqld's reported paths, relative to dir unless
+		// reportedAsIs.
+		basename     string
+		index        string
+		reportedAsIs bool
+		executed     replication.Position
 		// unreadable is a binlog that SHOW BINLOG EVENTS fails on, as with a missing key.
 		unreadable string
 		wantErr    string
@@ -195,6 +198,8 @@ func TestVerifyRestoredBinlogs(t *testing.T) {
 	}{
 		{name: "match", cnf: cnf, basename: "bin-logs/dst-bin", index: "bin-logs/dst-bin.index", executed: pos},
 		{name: "custom index extension is reported as .index", cnf: customIndexCnf, basename: "bin-logs/dst-bin", index: "data/custom.index", executed: pos},
+		// mysqld reports a log-bin in a relative subdirectory as given.
+		{name: "relative subdirectory is reported relative", cnf: relativeCnf, basename: "sub/dst-bin", index: "sub/dst-bin.index", reportedAsIs: true, executed: pos},
 		{name: "basename differs", cnf: cnf, basename: "data/binlog", index: "bin-logs/dst-bin.index", executed: pos, wantErr: "log_bin_basename"},
 		{name: "index differs", cnf: cnf, basename: "bin-logs/dst-bin", index: "data/binlog.index", executed: pos, wantErr: "log_bin_index"},
 		{name: "gtid_executed differs", cnf: cnf, basename: "bin-logs/dst-bin", index: "bin-logs/dst-bin.index", executed: other, wantErr: "gtid_executed"},
@@ -207,10 +212,14 @@ func TestVerifyRestoredBinlogs(t *testing.T) {
 			mysqld := NewFakeMysqlDaemon(fakedb)
 			t.Cleanup(mysqld.Close)
 			mysqld.CurrentPrimaryPosition = tt.executed
+			basename, index := filepath.Join(dir, tt.basename), filepath.Join(dir, tt.index)
+			if tt.reportedAsIs {
+				basename, index = tt.basename, tt.index
+			}
 			mysqld.FetchSuperQueryMap = map[string]*sqltypes.Result{
 				restoredBinlogVarsQuery: sqltypes.MakeTestResult(
 					sqltypes.MakeTestFields("log_bin_basename|log_bin_index", "varchar|varchar"),
-					filepath.Join(dir, tt.basename)+"|"+filepath.Join(dir, tt.index)),
+					basename+"|"+index),
 			}
 			for _, name := range []string{"dst-bin.000001", "dst-bin.000002"} {
 				if name != tt.unreadable {
