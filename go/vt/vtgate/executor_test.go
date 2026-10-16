@@ -1750,6 +1750,38 @@ func TestGetPlanCacheUnnormalized(t *testing.T) {
 	})
 }
 
+// TestGetPlanCacheIgnoresPlanForReplacedVSchema checks that a plan built from
+// a VSchema that was replaced while the plan was being built is not served
+// for the new VSchema. During a MoveTables SwitchTraffic, such a plan would
+// keep routing writes to the source keyspace after the switch.
+func TestGetPlanCacheIgnoresPlanForReplacedVSchema(t *testing.T) {
+	executor, _, _, _, ctx := createExecutorEnv(t)
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "@primary"})
+	query := "select id from user where id = 1"
+
+	// Planning starts against the current VSchema.
+	vcursor, epoch := executor.newVCursor(session, makeComments(""), nil)
+
+	// The routing rules move user to the unsharded keyspace before the plan is
+	// cached.
+	srvVSchema := executor.vm.GetCurrentSrvVschema().CloneVT()
+	srvVSchema.RoutingRules = &vschemapb.RoutingRules{Rules: []*vschemapb.RoutingRule{{
+		FromTable: "user",
+		ToTables:  []string{KsTestUnsharded + ".user"},
+	}}}
+	executor.vm.VSchemaUpdate(srvVSchema, nil)
+
+	stalePlan, _, _, err := executor.getCachedOrBuildPlan(ctx, vcursor, epoch, query, map[string]*querypb.BindVariable{}, "", false, engine.PlanKey{}, false)
+	require.NoError(t, err)
+	require.Equal(t, []string{KsTestSharded + ".user"}, stalePlan.TablesUsed)
+
+	// Wait for the cache to settle, as getPlanCached does.
+	time.Sleep(100 * time.Millisecond)
+
+	plan, _ := getPlanCached(t, ctx, executor, session, query, makeComments(""), map[string]*querypb.BindVariable{}, false)
+	assert.Equal(t, []string{KsTestUnsharded + ".user"}, plan.TablesUsed)
+}
+
 func TestGetPlanCacheNormalized(t *testing.T) {
 	t.Run("Cache", func(t *testing.T) {
 		r, _, _, _, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
