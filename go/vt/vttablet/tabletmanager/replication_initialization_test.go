@@ -19,6 +19,7 @@ package tabletmanager
 import (
 	"context"
 	"errors"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -215,7 +216,8 @@ func TestInitializeReplicationHoldsShardLockThroughReceiverStart(t *testing.T) {
 	checks := 0
 	md.ExecuteSuperQueryListCallback = func() {
 		checks++
-		// This runs for both source configuration and the final START REPLICA.
+		// This runs for the stop before the final check, source
+		// configuration and the final START REPLICA.
 		_, unlock, err := ts.LockShard(t.Context(), "ks", "0", "concurrent reparent", topo.WithAcquireTimeout(100*time.Millisecond))
 		if unlock != nil {
 			var unlockErr error
@@ -226,7 +228,7 @@ func TestInitializeReplicationHoldsShardLockThroughReceiverStart(t *testing.T) {
 	}
 	_, err := tm.initializeReplication(t.Context(), topodatapb.TabletType_REPLICA)
 	require.NoError(t, err)
-	assert.Equal(t, 2, checks)
+	assert.Equal(t, 3, checks)
 	require.NoError(t, md.CheckSuperQueryList())
 	// Initialization releases its lock after the receiver has started.
 	_, unlock, err := ts.LockShard(t.Context(), "ks", "0", "after initialization")
@@ -1240,6 +1242,16 @@ func newFormerPrimaryTM(t *testing.T, running bool, commitGTID string) (*TabletM
 	return tm, d, qsc, id
 }
 
+// configuringStops returns the replication commands of n attempts that fail
+// after stopping replication before their final check. Attempts that find
+// replication running run no command.
+func configuringStops(running bool, n int) []string {
+	if running {
+		return nil
+	}
+	return slices.Repeat([]string{"STOP REPLICA"}, n)
+}
+
 func initializeFormerPrimary(ctx context.Context, tm *TabletManager, retry bool, id uint64) error {
 	if retry {
 		return tm.retryReplicationInitializationOnce(ctx, id)
@@ -1260,7 +1272,7 @@ func TestFormerPrimaryIsFencedBeforeReplicating(t *testing.T) {
 			t.Run(path.name+"/"+tc.name, func(t *testing.T) {
 				tm, md, qsc, id := newFormerPrimaryTM(t, path.running, tc.commitGTID)
 				if tc.commitGTID != "" {
-					md.ExpectedExecuteSuperQueryList = nil
+					md.ExpectedExecuteSuperQueryList = configuringStops(path.running, 1)
 				}
 
 				err := initializeFormerPrimary(t.Context(), tm, path.retry, id)
@@ -1293,7 +1305,7 @@ func TestFailedFenceIsRepeatedByTheNextAttempt(t *testing.T) {
 		} {
 			t.Run(path.name+"/"+tc.name, func(t *testing.T) {
 				tm, md, qsc, id := newFormerPrimaryTM(t, path.running, ",8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1")
-				md.ExpectedExecuteSuperQueryList = nil
+				md.ExpectedExecuteSuperQueryList = configuringStops(path.running, 2)
 				tc.setup(md)
 
 				ctx, cancel := context.WithTimeout(t.Context(), time.Second)
@@ -2058,4 +2070,70 @@ func TestInitializationConfiguresOnlyTheChosenSource(t *testing.T) {
 	require.ErrorIs(t, err, errShardPrimaryNotChosen)
 	require.NoError(t, md.CheckSuperQueryList())
 	assert.False(t, md.Replicating)
+}
+
+// applierCommitDaemon commits a transaction from the old source's relay log
+// when replication stops, as STOP REPLICA waits for the applier's
+// transaction in progress.
+type applierCommitDaemon struct {
+	*mysqlctl.FakeMysqlDaemon
+	committed replication.Position
+}
+
+func (d *applierCommitDaemon) StopReplication(ctx context.Context, hookExtraEnv map[string]string) error {
+	if err := d.FakeMysqlDaemon.StopReplication(ctx, hookExtraEnv); err != nil {
+		return err
+	}
+	d.SetPrimaryPositionLocked(d.committed)
+	return nil
+}
+
+func (d *applierCommitDaemon) SetReplicationSource(ctx context.Context, host string, port int32, heartbeatInterval float64, stopReplicationBefore bool, startReplicationAfter bool) error {
+	if stopReplicationBefore {
+		if err := d.StopReplication(ctx, nil); err != nil {
+			return err
+		}
+	}
+	return d.FakeMysqlDaemon.SetReplicationSource(ctx, host, port, heartbeatInterval, false, startReplicationAfter)
+}
+
+// TestFinalCheckCoversTheOldApplier covers a replica that runs from a source
+// other than the primary it is about to replicate from, with an errant
+// transaction in its relay log that commits when replication stops. Every
+// path that configures the source must check after that.
+func TestFinalCheckCoversTheOldApplier(t *testing.T) {
+	for _, path := range []string{"startup", "retry", "retry on a chosen source"} {
+		t.Run(path, func(t *testing.T) {
+			tm, md, ts, qsc, id, newPrimary := newSourceChoiceTM(t)
+			errant, err := replication.ParsePosition(gtidFlavor, gtidPosition+",8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1")
+			require.NoError(t, err)
+			md.CurrentRelayLogPosition = errant
+			md.Replicating, md.IOThreadRunning = true, true
+			md.CurrentSourceHost, md.CurrentSourcePort = "stale-primary", 3306
+			md.ExpectedExecuteSuperQueryList = nil
+			tm.MysqlDaemon = &applierCommitDaemon{FakeMysqlDaemon: md, committed: errant}
+			switch path {
+			case "startup":
+				tm.tmState.cancelReplicationInit(t.Context())
+			case "retry on a chosen source":
+				_, err := ts.UpdateShardFields(t.Context(), "ks", "0", func(si *topo.ShardInfo) error { si.PrimaryAlias = newPrimary.Alias; return nil })
+				require.NoError(t, err)
+				// The RPC rejects the errant transaction in the relay log.
+				require.ErrorContains(t, tm.SetReplicationSource(t.Context(), newPrimary.Alias, 0, "", true, true, 0), "Errant GTID detected")
+			}
+
+			md.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA"}
+			if path == "startup" {
+				_, err = tm.initializeReplication(t.Context(), topodatapb.TabletType_REPLICA)
+			} else {
+				err = tm.retryReplicationInitializationOnce(t.Context(), id)
+			}
+			require.ErrorContains(t, err, "Errant GTID detected")
+			require.NoError(t, md.CheckSuperQueryList())
+			assert.Equal(t, "stale-primary", md.CurrentSourceHost)
+			if path != "startup" {
+				assert.False(t, qsc.IsServing())
+			}
+		})
+	}
 }

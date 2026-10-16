@@ -1718,21 +1718,24 @@ func (tm *TabletManager) initializeReplicationLocked(ctx context.Context, tablet
 	if err := topo.CheckShardLocked(ctx, tablet.Keyspace, tablet.Shard); err != nil {
 		return "", err
 	}
-	fenced, err := tm.fenceFormerPrimary(ctx)
-	if err != nil {
+	// Check again once nothing else can commit: STOP REPLICA waits for the
+	// applier's transaction in progress, and the fence for a former
+	// primary's commits.
+	if err := tm.MysqlDaemon.StopReplication(ctx, tm.hookExtraEnv()); err != nil {
+		return "", vterrors.Wrap(err, "failed to stop replication")
+	}
+	if _, err := tm.fenceFormerPrimary(ctx); err != nil {
 		return "", err
 	}
-	if fenced {
-		if primaryStatus, err = tm.checkNoErrantGTIDs(ctx, currentPrimary.Tablet); err != nil {
-			return "", err
-		}
+	if primaryStatus, err = tm.checkNoErrantGTIDs(ctx, currentPrimary.Tablet); err != nil {
+		return "", err
 	}
 	// Change semi-sync only after validating the source, but before the
 	// receiver connects to it.
 	if err := tm.fixSemiSync(ctx, tabletType, semiSyncAction); err != nil {
 		return "", err
 	}
-	if err := tm.setReplicationSourceRecoverable(ctx, currentPrimary.MysqlHostname, currentPrimary.MysqlPort, 0, true, true); err != nil {
+	if err := tm.setReplicationSourceRecoverable(ctx, currentPrimary.MysqlHostname, currentPrimary.MysqlPort, 0, false, true); err != nil {
 		return "", vterrors.Wrap(err, "failed to configure replication source")
 	}
 
