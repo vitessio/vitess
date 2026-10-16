@@ -1824,22 +1824,26 @@ func TestChosenSourceCompletionKeepsStopRequestedWhileItWaited(t *testing.T) {
 	}
 }
 
-// finishRestoreUnderShardLock finishes a restore with the action lock and the
+// finishRestoreUnderShardLock runs a restore with the action lock and the
 // shard lock held, as during a reparent, so finalization defers replication
-// initialization. It returns the ID of that deferral.
+// initialization. It calls during while the restore runs, and returns the ID
+// of the deferral.
 func finishRestoreUnderShardLock(t *testing.T, tm *TabletManager, md *mysqlctl.FakeMysqlDaemon, ts *topo.Server, during func()) uint64 {
 	t.Helper()
-	require.NoError(t, tm.tmState.ChangeTabletType(t.Context(), topodatapb.TabletType_RESTORE, DBActionNone))
+	tm.Cnf = &mysqlctl.Mycnf{}
 	require.NoError(t, tm.lock(t.Context()))
+	rsm := tm.newRestoreStateManager(logutil.NewMemoryLogger(), true)
+	started, err := rsm.start(t.Context())
+	require.NoError(t, err)
+	require.True(t, started)
+	rsm.nextTabletType = topodatapb.TabletType_REPLICA
 	releaseShard := holdInitializationShardLock(t, ts)
 	during()
 	// Keep the background retry from running; the test drives it.
 	tm.tmState.cancel()
 	md.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA", "FAKE RESET REPLICA ALL"}
+	md.ExpectedExecuteSuperQueryCurrent = 0
 	pos := md.GetPrimaryPositionLocked()
-	rsm := tm.newRestoreStateManager(logutil.NewMemoryLogger(), false)
-	rsm.state = restoreStarted
-	rsm.prevTabletType, rsm.nextTabletType = topodatapb.TabletType_REPLICA, topodatapb.TabletType_REPLICA
 	require.NoError(t, rsm.finish(t.Context(), replicationCommand{action: replicationActionStart, position: &pos}))
 	require.NoError(t, md.CheckSuperQueryList())
 	tm.unlock()
@@ -1884,14 +1888,19 @@ func TestRestoreKeepsSourceChosenDuringRestore(t *testing.T) {
 }
 
 func TestRestoreDiscardsSourceChosenBeforeRestore(t *testing.T) {
-	tm, md, ts, _, _, newPrimary := newSourceChoiceTM(t)
-	tm.tmState.cancelReplicationInit(t.Context())
 	// A source chosen during an earlier restore is for the data that this
-	// restore replaces.
-	require.NoError(t, tm.tmState.ChangeTabletType(t.Context(), topodatapb.TabletType_RESTORE, DBActionNone))
-	tm.tmState.requestReplicationSource(newPrimary.Alias)
-	require.NoError(t, tm.tmState.ChangeTabletType(t.Context(), topodatapb.TabletType_REPLICA, DBActionNone))
-	id := finishRestoreUnderShardLock(t, tm, md, ts, func() {})
-	chosen, _ := tm.tmState.chosenReplicationSource(id)
-	assert.Nil(t, chosen)
+	// restore replaces, also if that restore failed and left the tablet
+	// RESTORE.
+	for _, leftType := range []topodatapb.TabletType{topodatapb.TabletType_REPLICA, topodatapb.TabletType_RESTORE} {
+		t.Run(leftType.String(), func(t *testing.T) {
+			tm, md, ts, _, _, newPrimary := newSourceChoiceTM(t)
+			tm.tmState.cancelReplicationInit(t.Context())
+			require.NoError(t, tm.tmState.ChangeTabletType(t.Context(), topodatapb.TabletType_RESTORE, DBActionNone))
+			tm.tmState.requestReplicationSource(newPrimary.Alias)
+			require.NoError(t, tm.tmState.ChangeTabletType(t.Context(), leftType, DBActionNone))
+			id := finishRestoreUnderShardLock(t, tm, md, ts, func() {})
+			chosen, _ := tm.tmState.chosenReplicationSource(id)
+			assert.Nil(t, chosen)
+		})
+	}
 }

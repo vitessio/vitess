@@ -104,10 +104,10 @@ type tmState struct {
 	// ticket of the latest request that stopped or started replication.
 	replicationInitStopped   bool
 	replicationInitRunTicket uint64
-	// restoreSource is the newest source that a request chose since the
-	// tablet last became RESTORE, and restoreSourceTicket its ticket. A
-	// deferral that the restore creates starts with it, because the request
-	// may have failed waiting for the restore's action lock.
+	// restoreSource is the newest source that a request chose during the
+	// current restore, and restoreSourceTicket its ticket. A deferral that the
+	// restore creates starts with it, because the request may have failed
+	// waiting for the restore's action lock.
 	restoreSource       *topodatapb.TabletAlias
 	restoreSourceTicket uint64
 
@@ -237,10 +237,6 @@ func (ts *tmState) ChangeTabletType(ctx context.Context, tabletType topodatapb.T
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
 	log.Info(fmt.Sprintf("Changing Tablet Type: %v for %s", tabletType, ts.tablet.Alias.String()))
-	if tabletType == topodatapb.TabletType_RESTORE && ts.tablet.Type != topodatapb.TabletType_RESTORE {
-		// The restore replaces the data that earlier choices were made for.
-		ts.restoreSource = nil
-	}
 
 	var primaryTermStartTime *vttime.Time
 	if tabletType == topodatapb.TabletType_PRIMARY {
@@ -315,6 +311,14 @@ func (ts *tmState) ChangeTabletTags(ctx context.Context, tabletTags map[string]s
 	ts.publishStateLocked(ctx)
 	ts.publishForDisplay()
 	setTabletTagsStats(ts.tablet)
+}
+
+// beginRestore drops the source choices of earlier restores, whose data the
+// restore that is starting replaces.
+func (ts *tmState) beginRestore() {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	ts.restoreSource = nil
 }
 
 // deferReplicationInit records a new deferred replication initialization,

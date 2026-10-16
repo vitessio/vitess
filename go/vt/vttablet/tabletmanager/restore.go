@@ -635,7 +635,9 @@ func (rt *restoreStateManager) start(ctx context.Context) (bool, error) {
 	}
 	rt.nextTabletType = nextTabletType
 
-	// Transition to RESTORE state.
+	// Transition to RESTORE state. The tablet can already be RESTORE if an
+	// earlier restore failed to finish.
+	rt.tm.tmState.beginRestore()
 	if err := rt.tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_RESTORE, DBActionNone); err != nil {
 		return false, err
 	}
