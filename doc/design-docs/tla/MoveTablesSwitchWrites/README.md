@@ -196,7 +196,7 @@ writable again. `KewFix` also makes `Cancel` rebuild the SrvVSchema.
 | Config | Buffering | What is checked | Result |
 | --- | --- | --- | --- |
 | `Fix_SlowWrites_NoBuffer` | off | safety with `SlowWrites`, cancel, unrelated rebuild | holds (2.8M states) |
-| `Fix_SlowWrites_Buffer` | on | same | *pending* |
+| `Fix_SlowWrites_Buffer` | on | safety with `SlowWrites` and cancel | *pending* |
 | `Fix_EarlyRelease` | on | `BufferEndsOnlyAfterSwitch` | holds (1.45M states) |
 | `Avail_NoBuffer_FixedCache` / `Avail_Buffer_FixedCache` | off / on | `WritesSucceedIfSwitchSucceeds` | holds |
 | `Diag_FailAfterSwitch_Buffer_FixedCache` | on | `NoFailureAfterSwitch` | holds (2.5M states) |
