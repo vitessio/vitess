@@ -1587,6 +1587,7 @@ func (d *blockingDemotionDaemon) SetSuperReadOnly(ctx context.Context, on bool, 
 // the shard primary as the replication source after waiting: an offline
 // backup when it finishes, and the shard sync of a demoted primary after the
 // demotion. A source that an RPC chose while they waited must stay recorded.
+// The backup leaves a pending deferral to the retry, so it does not repoint.
 func TestInternalRepointDoesNotReplaceNewerSource(t *testing.T) {
 	for _, tc := range []struct {
 		name string
@@ -1594,6 +1595,8 @@ func TestInternalRepointDoesNotReplaceNewerSource(t *testing.T) {
 		// that releases it, and the operation's result.
 		start func(t *testing.T, tm *TabletManager, md *mysqlctl.FakeMysqlDaemon) (chan struct{}, <-chan error)
 		err   string
+		// queries are the replication commands that the operation runs.
+		queries []string
 	}{
 		{name: "offline backup", err: "backup failed", start: func(t *testing.T, tm *TabletManager, md *mysqlctl.FakeMysqlDaemon) (chan struct{}, <-chan error) {
 			tm.Cnf = &mysqlctl.Mycnf{}
@@ -1614,7 +1617,7 @@ func TestInternalRepointDoesNotReplaceNewerSource(t *testing.T) {
 			<-storage.entered
 			return storage.release, finished
 		}},
-		{name: "shard sync demotion", start: func(t *testing.T, tm *TabletManager, md *mysqlctl.FakeMysqlDaemon) (chan struct{}, <-chan error) {
+		{name: "shard sync demotion", queries: []string{"FAKE SET SOURCE", "START REPLICA"}, start: func(t *testing.T, tm *TabletManager, md *mysqlctl.FakeMysqlDaemon) (chan struct{}, <-chan error) {
 			require.NoError(t, tm.tmState.ChangeTabletType(t.Context(), topodatapb.TabletType_PRIMARY, DBActionNone))
 			d := &blockingDemotionDaemon{FakeMysqlDaemon: md, entered: make(chan struct{}), release: make(chan struct{})}
 			tm.MysqlDaemon = d
@@ -1626,9 +1629,7 @@ func TestInternalRepointDoesNotReplaceNewerSource(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			tm, md, _, qsc, id, newPrimary := newSourceChoiceTM(t)
-			// Both operations repoint the replica at the old primary that the
-			// shard record names.
-			md.ExpectedExecuteSuperQueryList = []string{"FAKE SET SOURCE", "START REPLICA"}
+			md.ExpectedExecuteSuperQueryList = tc.queries
 			release, finished := tc.start(t, tm, md)
 
 			// While the operation waits, an RPC chooses the new primary and
@@ -1902,5 +1903,80 @@ func TestRestoreDiscardsSourceChosenBeforeRestore(t *testing.T) {
 			chosen, _ := tm.tmState.chosenReplicationSource(id)
 			assert.Nil(t, chosen)
 		})
+	}
+}
+
+// TestOfflineBackupLeavesDeferredReplicationToTheRetry checks that the cleanup
+// of an offline backup, which does not hold the shard lock, neither starts a
+// receiver that a reparent stopped nor chooses the source from the shard record
+// while replication initialization is deferred. Without a deferral, it keeps
+// a stopped receiver stopped, as before.
+func TestOfflineBackupLeavesDeferredReplicationToTheRetry(t *testing.T) {
+	for _, pending := range []bool{false, true} {
+		for _, outcome := range []string{"success", "engine failure", "builtin failure"} {
+			name := "no deferral/" + outcome
+			if pending {
+				name = "deferral/" + outcome
+			}
+			t.Run(name, func(t *testing.T) {
+				tm, md, ts, qsc, id, _ := newSourceChoiceTM(t)
+				if !pending {
+					tm.tmState.cancelReplicationInit(t.Context())
+				}
+				tm.Cnf = &mysqlctl.Mycnf{DataDir: t.TempDir() + "/missing", InnodbDataHomeDir: t.TempDir() + "/missing"}
+				md.Running, md.Replicating, md.IOThreadRunning = true, false, true
+				md.CurrentSourceHost, md.CurrentSourcePort = "old-primary", 3306
+				md.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA", "START REPLICA"}
+				if outcome == "builtin failure" {
+					md.ExpectedExecuteSuperQueryList = append([]string{"STOP REPLICA"}, md.ExpectedExecuteSuperQueryList...)
+				}
+				// A reparent has stopped this receiver and still holds the
+				// shard lock.
+				holdInitializationShardLock(t, ts)
+				const storageName = "offline-backup-test-storage"
+				storage := &mysqlctl.FakeBackupStorage{}
+				storage.WithParamsReturn = storage
+				storage.StartBackupReturn.BackupHandle = &mysqlctl.FakeBackupHandle{NameV: "offline"}
+				previousStorage := backupstorage.BackupStorageImplementation
+				backupstorage.BackupStorageImplementation = storageName
+				backupstorage.BackupStorageMap[storageName] = storage
+				t.Cleanup(func() {
+					backupstorage.BackupStorageImplementation = previousStorage
+					delete(backupstorage.BackupStorageMap, storageName)
+				})
+
+				engineName := "builtin"
+				var engine *mysqlctl.FakeBackupEngine
+				if outcome != "builtin failure" {
+					engineName = "offline-backup-test-engine"
+					engine = &mysqlctl.FakeBackupEngine{ShouldDrainForBackupReturn: true}
+					engine.ExecuteBackupReturn.Res = mysqlctl.BackupUsable
+					if outcome == "engine failure" {
+						engine.ExecuteBackupReturn.Res = mysqlctl.BackupUnusable
+						engine.ExecuteBackupReturn.Err = errors.New("engine failure")
+					}
+					mysqlctl.BackupRestoreEngineMap[engineName] = engine
+					t.Cleanup(func() { delete(mysqlctl.BackupRestoreEngineMap, engineName) })
+				}
+				err := tm.Backup(t.Context(), logutil.NewMemoryLogger(), &tabletmanagerdatapb.BackupRequest{BackupEngine: &engineName})
+				switch outcome {
+				case "success":
+					require.NoError(t, err)
+				case "engine failure":
+					require.ErrorContains(t, err, "engine failure")
+				case "builtin failure":
+					require.ErrorContains(t, err, "can't find files to backup")
+				}
+				if engine != nil {
+					require.Len(t, engine.ExecuteBackupCalls, 1)
+				}
+				assert.False(t, md.Replicating, "backup cleanup started a receiver that a reparent stopped")
+				if pending {
+					chosen, _ := tm.tmState.chosenReplicationSource(id)
+					assert.Nil(t, chosen, "backup cleanup chose the source from the shard record")
+					assert.False(t, qsc.IsServing())
+				}
+			})
+		}
 	}
 }

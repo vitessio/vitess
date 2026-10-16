@@ -941,6 +941,13 @@ func (tm *TabletManager) SetReplicationSource(ctx context.Context, parentAlias *
 	}
 	defer tm.unlock()
 	tm.tmState.replicationSourceChosen(parentAlias, ticket)
+	// Replication that vttablet has not initialized yet was not stopped on
+	// purpose unless a request stopped it, so start it. Otherwise nothing
+	// would, and the deferred initialization would keep the replica out of
+	// rotation.
+	if tm.tmState.replicationNeedsStart() {
+		forceStartReplication = true
+	}
 
 	semiSyncAction, err := tm.convertBoolToSemiSyncAction(ctx, semiSync)
 	if err != nil {
@@ -1010,13 +1017,6 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 		shouldbeReplicating = true
 	}
 	if forceStartReplication {
-		shouldbeReplicating = true
-	}
-	// Replication that vttablet has not initialized yet was not stopped on
-	// purpose unless a request stopped it, so start it. Otherwise nothing
-	// would, and the deferred initialization would keep the replica out of
-	// rotation.
-	if tm.tmState.replicationNeedsStart() {
 		shouldbeReplicating = true
 	}
 

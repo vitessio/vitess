@@ -395,10 +395,9 @@ func (ts *tmState) requestReplicationSource(source *topodatapb.TabletAlias) uint
 	return ts.replicationSourceTickets
 }
 
-// newReplicationTicket returns a ticket for an operation that will choose a
-// replication source it does not know yet, or stop or start replication. The
-// operation calls it when it starts, so that requests arriving while it runs
-// are newer.
+// newReplicationTicket returns a ticket for a request that stops or starts
+// replication. The request calls it when it arrives, so that requests arriving
+// later are newer.
 func (ts *tmState) newReplicationTicket() uint64 {
 	return ts.requestReplicationSource(nil)
 }
@@ -421,6 +420,14 @@ func (ts *tmState) replicationStoppedOnRequest() bool {
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
 	return ts.pendingReplicationInit != 0 && ts.replicationInitStopped
+}
+
+// replicationInitPending reports whether a deferred replication
+// initialization is pending.
+func (ts *tmState) replicationInitPending() bool {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	return ts.pendingReplicationInit != 0
 }
 
 // replicationNeedsStart reports whether replication must be started because
