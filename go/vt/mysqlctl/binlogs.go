@@ -151,9 +151,6 @@ func binlogFilesForFullBackup(cnf *Mycnf) ([]FileEntry, error) {
 // restoredBinlogVarsQuery reads where mysqld looks for binlogs after a restore.
 const restoredBinlogVarsQuery = "SELECT @@global.log_bin_basename, @@global.log_bin_index"
 
-// showBinaryLogsQuery lists the binlogs mysqld knows about.
-const showBinaryLogsQuery = "SHOW BINARY LOGS"
-
 // finishBinlogRestore gives the restored binlogs their source mtimes, so that
 // binlog_expire_logs_seconds still counts from when they were written, and writes
 // the index that mysqld reads them from. It runs before mysqld starts.
@@ -214,13 +211,19 @@ func verifyRestoredBinlogs(ctx context.Context, mysqld MysqlDaemon, cnf *Mycnf, 
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "restored binlog index is %s but mysqld's log_bin_index is %s", indexPath, got)
 	}
 	// An encrypted binlog is readable only with the binlog master key that encrypted
-	// it, so a target whose keyring lacks the source's key can't serve it.
-	qr, err = mysqld.FetchSuperQuery(ctx, showBinaryLogsQuery)
+	// it, so a target whose keyring lacks the source's key can't serve it. The list
+	// comes from the index rather than SHOW BINARY LOGS, whose result FetchSuperQuery
+	// caps at 10000 rows.
+	data, err := os.ReadFile(indexPath)
 	if err != nil {
-		return vterrors.Wrap(err, "cannot list binlogs after restore")
+		return vterrors.Wrapf(err, "cannot read binlog index %s after restore", indexPath)
 	}
-	for _, row := range qr.Rows {
-		name := row[0].ToString()
+	for line := range strings.Lines(string(data)) {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		name := filepath.Base(line)
 		if _, err := mysqld.FetchSuperQuery(ctx, "SHOW BINLOG EVENTS IN "+sqltypes.EncodeStringSQL(name)+" LIMIT 1"); err != nil {
 			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot read restored binlog %s; if it is encrypted, this server's keyring needs the source's binlog master key: %v", name, err)
 		}

@@ -165,16 +165,26 @@ func TestFinishBinlogRestoreRejectsMissingModTime(t *testing.T) {
 }
 
 func TestVerifyRestoredBinlogs(t *testing.T) {
-	cnf := &Mycnf{DataDir: "/vt/data", BinLogPath: "/vt/bin-logs/dst-bin"}
-	customIndexCnf := &Mycnf{DataDir: "/vt/data", BinLogPath: "/vt/bin-logs/dst-bin", BinLogIndexPath: "custom.idx"}
+	dir := t.TempDir()
+	cnf := &Mycnf{DataDir: filepath.Join(dir, "data"), BinLogPath: filepath.Join(dir, "bin-logs/dst-bin")}
+	customIndexCnf := &Mycnf{DataDir: filepath.Join(dir, "data"), BinLogPath: filepath.Join(dir, "bin-logs/dst-bin"), BinLogIndexPath: "custom.idx"}
+	// The binlogs are listed from the index the restore wrote, so the check isn't
+	// limited by the row cap on SHOW BINARY LOGS, which the fake doesn't answer.
+	for _, index := range []string{"bin-logs/dst-bin.index", "data/custom.idx"} {
+		p := filepath.Join(dir, index)
+		require.NoError(t, os.MkdirAll(filepath.Dir(p), 0o755))
+		binlogs := filepath.Join(dir, "bin-logs/dst-bin.000001") + "\n" + filepath.Join(dir, "bin-logs/dst-bin.000002") + "\n"
+		require.NoError(t, os.WriteFile(p, []byte(binlogs), 0o644))
+	}
 	pos, err := replication.DecodePosition("MySQL56/16b1039f-22b6-11ed-b765-0a43f95f28a3:1-10")
 	require.NoError(t, err)
 	other, err := replication.DecodePosition("MySQL56/16b1039f-22b6-11ed-b765-0a43f95f28a3:1-9")
 	require.NoError(t, err)
 
 	tests := []struct {
-		name     string
-		cnf      *Mycnf
+		name string
+		cnf  *Mycnf
+		// basename and index are mysqld's reported paths, relative to dir.
 		basename string
 		index    string
 		executed replication.Position
@@ -183,12 +193,12 @@ func TestVerifyRestoredBinlogs(t *testing.T) {
 		wantErr    string
 		wantCode   vtrpcpb.Code
 	}{
-		{name: "match", cnf: cnf, basename: "/vt/bin-logs/dst-bin", index: "/vt/bin-logs/dst-bin.index", executed: pos},
-		{name: "custom index extension is reported as .index", cnf: customIndexCnf, basename: "/vt/bin-logs/dst-bin", index: "/vt/data/custom.index", executed: pos},
-		{name: "basename differs", cnf: cnf, basename: "/vt/data/binlog", index: "/vt/bin-logs/dst-bin.index", executed: pos, wantErr: "log_bin_basename"},
-		{name: "index differs", cnf: cnf, basename: "/vt/bin-logs/dst-bin", index: "/vt/data/binlog.index", executed: pos, wantErr: "log_bin_index"},
-		{name: "gtid_executed differs", cnf: cnf, basename: "/vt/bin-logs/dst-bin", index: "/vt/bin-logs/dst-bin.index", executed: other, wantErr: "gtid_executed"},
-		{name: "binlog unreadable", cnf: cnf, basename: "/vt/bin-logs/dst-bin", index: "/vt/bin-logs/dst-bin.index", executed: pos, unreadable: "dst-bin.000002", wantErr: "cannot read restored binlog dst-bin.000002", wantCode: vtrpcpb.Code_FAILED_PRECONDITION},
+		{name: "match", cnf: cnf, basename: "bin-logs/dst-bin", index: "bin-logs/dst-bin.index", executed: pos},
+		{name: "custom index extension is reported as .index", cnf: customIndexCnf, basename: "bin-logs/dst-bin", index: "data/custom.index", executed: pos},
+		{name: "basename differs", cnf: cnf, basename: "data/binlog", index: "bin-logs/dst-bin.index", executed: pos, wantErr: "log_bin_basename"},
+		{name: "index differs", cnf: cnf, basename: "bin-logs/dst-bin", index: "data/binlog.index", executed: pos, wantErr: "log_bin_index"},
+		{name: "gtid_executed differs", cnf: cnf, basename: "bin-logs/dst-bin", index: "bin-logs/dst-bin.index", executed: other, wantErr: "gtid_executed"},
+		{name: "binlog unreadable", cnf: cnf, basename: "bin-logs/dst-bin", index: "bin-logs/dst-bin.index", executed: pos, unreadable: "dst-bin.000002", wantErr: "cannot read restored binlog dst-bin.000002", wantCode: vtrpcpb.Code_FAILED_PRECONDITION},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -200,10 +210,7 @@ func TestVerifyRestoredBinlogs(t *testing.T) {
 			mysqld.FetchSuperQueryMap = map[string]*sqltypes.Result{
 				restoredBinlogVarsQuery: sqltypes.MakeTestResult(
 					sqltypes.MakeTestFields("log_bin_basename|log_bin_index", "varchar|varchar"),
-					tt.basename+"|"+tt.index),
-				showBinaryLogsQuery: sqltypes.MakeTestResult(
-					sqltypes.MakeTestFields("Log_name", "varchar"),
-					"dst-bin.000001", "dst-bin.000002"),
+					filepath.Join(dir, tt.basename)+"|"+filepath.Join(dir, tt.index)),
 			}
 			for _, name := range []string{"dst-bin.000001", "dst-bin.000002"} {
 				if name != tt.unreadable {
@@ -227,7 +234,9 @@ func TestVerifyRestoredBinlogs(t *testing.T) {
 }
 
 func TestEnsureRestoredGTIDPurgedMatchesManifestKeepsBinlogs(t *testing.T) {
-	cnf := &Mycnf{DataDir: "/vt/data", BinLogPath: "/vt/bin-logs/dst-bin"}
+	dir := t.TempDir()
+	cnf := &Mycnf{DataDir: filepath.Join(dir, "data"), BinLogPath: filepath.Join(dir, "dst-bin")}
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "dst-bin.index"), nil, 0o644))
 	pos, err := replication.DecodePosition("MySQL56/16b1039f-22b6-11ed-b765-0a43f95f28a3:1-10")
 	require.NoError(t, err)
 	other, err := replication.DecodePosition("MySQL56/16b1039f-22b6-11ed-b765-0a43f95f28a3:1-9")
@@ -244,8 +253,7 @@ func TestEnsureRestoredGTIDPurgedMatchesManifestKeepsBinlogs(t *testing.T) {
 	mysqld.FetchSuperQueryMap = map[string]*sqltypes.Result{
 		restoredBinlogVarsQuery: sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields("log_bin_basename|log_bin_index", "varchar|varchar"),
-			"/vt/bin-logs/dst-bin|/vt/bin-logs/dst-bin.index"),
-		showBinaryLogsQuery: sqltypes.MakeTestResult(sqltypes.MakeTestFields("Log_name", "varchar")),
+			filepath.Join(dir, "dst-bin")+"|"+filepath.Join(dir, "dst-bin.index")),
 	}
 	params := &RestoreParams{Cnf: cnf, Mysqld: mysqld, Logger: logutil.NewMemoryLogger()}
 	manifest := &BackupManifest{Position: pos, IncludesBinlogs: true}
