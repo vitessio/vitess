@@ -101,8 +101,16 @@ func TestPRSWithDrainedLaggingTablet(t *testing.T) {
 	res := utils.RunSQL(t.Context(), t, `select msg from vt_insert_test`, tablets[1])
 	assert.Len(t, res.Rows, 1)
 
-	// Perform a graceful reparent operation
-	utils.Prs(t, clusterInstance, tablets[2])
+	// Perform a graceful reparent operation. The drained tablet can't reach
+	// the reparent journal within the wait-replicas-timeout because of its
+	// replication delay, so PRS may report it as failed, but no other tablet.
+	out, err := utils.PrsWithTimeout(t, clusterInstance, tablets[2], false, "", "5s")
+	if err != nil {
+		assert.Contains(t, out, fmt.Sprintf("tablet %s failed to SetReplicationSource", tablets[1].Alias))
+		for _, tablet := range []*cluster.Vttablet{tablets[0], tablets[3]} {
+			assert.NotContains(t, out, fmt.Sprintf("tablet %s failed", tablet.Alias))
+		}
+	}
 	utils.ValidateTopology(t, clusterInstance, false)
 	utils.CheckPrimaryTablet(t, clusterInstance, tablets[2])
 }
