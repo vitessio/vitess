@@ -48,8 +48,11 @@ type VSchemaManager struct {
 	serv              srvtopo.Server
 	cell              string
 	subscriber        func(vschema *vindexes.VSchema, stats *VSchemaStats)
-	schema            SchemaInfo
-	parser            *sqlparser.Parser
+	// srvVSchemaInstalled, if set, is called with each SrvVSchema update after
+	// subscriber has installed the VSchema built from it.
+	srvVSchemaInstalled func(*vschemapb.SrvVSchema)
+	schema              SchemaInfo
+	parser              *sqlparser.Parser
 }
 
 // SchemaInfo is an interface to schema tracker.
@@ -150,6 +153,9 @@ func (vm *VSchemaManager) VSchemaUpdate(v *vschemapb.SrvVSchema, err error) bool
 
 	if vm.subscriber != nil {
 		vm.subscriber(vschema, vSchemaStats(err, vschema))
+	}
+	if vm.srvVSchemaInstalled != nil && v != nil {
+		vm.srvVSchemaInstalled(v)
 	}
 	return true
 }

@@ -1262,6 +1262,109 @@ func TestRulesReferenceKeyspace(t *testing.T) {
 	}
 }
 
+// TestSrvVSchemaInstalledOrdersMoveTablesSwitch verifies that once vtgate's
+// executor delivers SrvVSchema updates through SrvVSchemaInstalled, a
+// MoveTables traffic switch is reported only for a SrvVSchema the executor has
+// installed. If the watcher's own SrvVSchema watch reported it first, the
+// buffered writes would be released before the executor could route them to
+// the target keyspace.
+func TestSrvVSchemaInstalledOrdersMoveTablesSwitch(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+
+	ts := memorytopo.NewServer(ctx, "zone1")
+	defer ts.Close()
+
+	const keyspace = "source"
+	shards := []string{"-80", "80-"}
+	require.NoError(t, ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{}))
+	for _, shard := range shards {
+		require.NoError(t, ts.CreateShard(ctx, keyspace, shard))
+		// SwitchTraffic has denied the tables on the source.
+		_, err := ts.UpdateShardFields(ctx, keyspace, shard, func(si *topo.ShardInfo) error {
+			si.TabletControls = []*topodatapb.Shard_TabletControl{{
+				TabletType:   topodatapb.TabletType_PRIMARY,
+				DeniedTables: []string{"t1"},
+			}}
+			return nil
+		})
+		require.NoError(t, err)
+	}
+
+	kew := NewKeyspaceEventWatcher(ctx, &realTopoBackedServer{ts: ts}, NewFakeHealthCheck(nil), "zone1")
+	events := kew.Subscribe()
+	defer kew.Unsubscribe(events)
+
+	kss := &keyspaceState{
+		kew:        kew,
+		keyspace:   keyspace,
+		consistent: true,
+		lastKeyspace: &topodatapb.SrvKeyspace{
+			Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{{
+				ServedType: topodatapb.TabletType_PRIMARY,
+				ShardReferences: []*topodatapb.ShardReference{
+					{Name: "-80"},
+					{Name: "80-"},
+				},
+			}},
+		},
+		shards: make(map[string]*shardState),
+	}
+	for _, shard := range shards {
+		kss.shards[shard] = &shardState{
+			target:  &querypb.Target{Keyspace: keyspace, Shard: shard, TabletType: topodatapb.TabletType_PRIMARY},
+			serving: true,
+		}
+	}
+	kew.mu.Lock()
+	kew.keyspaces[keyspace] = kss
+	kew.mu.Unlock()
+
+	routingRules := func(to string) *vschemapb.SrvVSchema {
+		return &vschemapb.SrvVSchema{RoutingRules: &vschemapb.RoutingRules{Rules: []*vschemapb.RoutingRule{
+			{FromTable: "t1", ToTables: []string{to + ".t1"}},
+			{FromTable: "source.t1", ToTables: []string{to + ".t1"}},
+			{FromTable: "target.t1", ToTables: []string{to + ".t1"}},
+		}}}
+	}
+	moveTablesState := func() MoveTablesStatus {
+		kss.mu.Lock()
+		defer kss.mu.Unlock()
+		if kss.moveTablesState == nil {
+			return MoveTablesUnknown
+		}
+		return kss.moveTablesState.State
+	}
+
+	// The executor installed a VSchema whose routing rules still point at the
+	// source.
+	kew.SrvVSchemaInstalled(routingRules(keyspace))
+	require.Eventually(t, func() bool {
+		return moveTablesState() == MoveTablesSwitching
+	}, 30*time.Second, 10*time.Millisecond)
+
+	// The watcher's own SrvVSchema watch delivers the switched routing rules
+	// before the executor has installed them. It must neither report the
+	// switch nor stay registered.
+	assert.False(t, kss.onSrvVSchema(routingRules("target"), nil))
+	assert.Equal(t, MoveTablesSwitching, moveTablesState())
+	select {
+	case ev := <-events:
+		require.NotEqual(t, keyspace, ev.Keyspace, "the switch was reported before the executor installed the VSchema")
+	default:
+	}
+
+	// Once the executor has installed them, the switch is reported.
+	kew.SrvVSchemaInstalled(routingRules("target"))
+	require.Eventually(t, func() bool {
+		select {
+		case ev := <-events:
+			return ev.Keyspace == keyspace && ev.MoveTablesState.State == MoveTablesSwitched
+		default:
+			return false
+		}
+	}, 30*time.Second, 10*time.Millisecond)
+}
+
 type fakeTopoServer struct{}
 
 // GetTopoServer returns the full topo.Server instance.
@@ -1424,6 +1527,7 @@ func TestOnSrvVSchemaUnregistersAfterDelete(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			kss := &keyspaceState{
+				kew:      &KeyspaceEventWatcher{},
 				keyspace: "ks1",
 				shards:   make(map[string]*shardState),
 			}

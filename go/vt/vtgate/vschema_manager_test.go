@@ -17,6 +17,7 @@ limitations under the License.
 package vtgate
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -501,6 +502,45 @@ func TestRebuildVSchema(t *testing.T) {
 }
 
 // TestVSchemaUDFsUpdate tests that the UDFs are updated in the VSchema.
+// TestVSchemaUpdateNotifiesSrvVSchemaInstalled verifies that srvVSchemaInstalled
+// sees each SrvVSchema only after the subscriber has installed the VSchema
+// built from it. The keyspace event watcher relies on this to release writes
+// buffered during a MoveTables traffic switch only once the executor routes
+// them with the switched routing rules.
+func TestVSchemaUpdateNotifiesSrvVSchemaInstalled(t *testing.T) {
+	var installed *vindexes.VSchema
+	var notified []*vschemapb.SrvVSchema
+	vm := &VSchemaManager{
+		subscriber: func(vschema *vindexes.VSchema, _ *VSchemaStats) {
+			installed = vschema
+		},
+		srvVSchemaInstalled: func(srvVSchema *vschemapb.SrvVSchema) {
+			require.NotNil(t, installed, "notified before the VSchema was installed")
+			_, routed := installed.RoutingRules["t1"]
+			assert.Equal(t, srvVSchema.GetRoutingRules() != nil, routed, "notified before the VSchema built from this SrvVSchema was installed")
+			notified = append(notified, srvVSchema)
+		},
+	}
+
+	srvVSchema := &vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{"source": {}, "target": {}},
+	}
+	vm.VSchemaUpdate(srvVSchema, nil)
+
+	switched := srvVSchema.CloneVT()
+	switched.RoutingRules = &vschemapb.RoutingRules{Rules: []*vschemapb.RoutingRule{
+		{FromTable: "t1", ToTables: []string{"target.t1"}},
+	}}
+	vm.VSchemaUpdate(switched, nil)
+
+	// A watch error carries no SrvVSchema, so there is nothing to deliver.
+	vm.VSchemaUpdate(nil, errors.New("watch failed"))
+
+	require.Len(t, notified, 2)
+	assert.Same(t, srvVSchema, notified[0])
+	assert.Same(t, switched, notified[1])
+}
+
 func TestVSchemaUDFsUpdate(t *testing.T) {
 	ks := &vindexes.Keyspace{Name: "ks", Sharded: true}
 

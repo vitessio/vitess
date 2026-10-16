@@ -77,6 +77,17 @@ type KeyspaceEventWatcher struct {
 
 	subsMu sync.Mutex
 	subs   map[chan *KeyspaceEvent]struct{}
+
+	// srvVSchemaMu guards installedSrvVSchema.
+	srvVSchemaMu sync.Mutex
+	// installedSrvVSchema is the latest SrvVSchema delivered by
+	// SrvVSchemaInstalled, or nil before the first delivery. Once it is set,
+	// the watcher only evaluates SrvVSchema values that its owner installed
+	// and no longer watches SrvVSchema itself.
+	installedSrvVSchema *vschemapb.SrvVSchema
+	// srvVSchemaInstalled wakes the goroutine that applies installedSrvVSchema
+	// to every keyspace.
+	srvVSchemaInstalled chan struct{}
 }
 
 // KeyspaceEvent is yielded to all watchers when an availability event for a keyspace has been resolved
@@ -111,6 +122,8 @@ func NewKeyspaceEventWatcher(ctx context.Context, topoServer srvtopo.Server, hc 
 		keyspaces:        make(map[string]*keyspaceState),
 		missingKeyspaces: make(map[string]time.Time),
 		subs:             make(map[chan *KeyspaceEvent]struct{}),
+
+		srvVSchemaInstalled: make(chan struct{}, 1),
 	}
 	kew.run(ctx)
 	log.Info(fmt.Sprintf("started watching keyspace events in %q", localCell))
@@ -244,9 +257,72 @@ func (kew *KeyspaceEventWatcher) broadcast(ev *KeyspaceEvent) {
 	}
 }
 
+// SrvVSchemaInstalled delivers a SrvVSchema that the caller has finished acting
+// on. vtgate's executor calls it once it routes queries with the VSchema built
+// from vs, so that a MoveTables traffic switch is reported, and the writes
+// buffered during it are released, only when those writes are planned with
+// the switched routing rules. Without it, the watcher's own SrvVSchema watch
+// can report the switch before the executor has the new routing rules, and a
+// released write is planned against the source keyspace again.
+//
+// Before the first call the watcher watches SrvVSchema itself; from the first
+// call on it ignores its own watch. SrvVSchemaInstalled does not block: the
+// latest value is applied to every keyspace by a separate goroutine, in order.
+func (kew *KeyspaceEventWatcher) SrvVSchemaInstalled(vs *vschemapb.SrvVSchema) {
+	if vs == nil {
+		// As in onSrvVSchema: keep the state derived from the previous value.
+		return
+	}
+	kew.srvVSchemaMu.Lock()
+	kew.installedSrvVSchema = vs
+	kew.srvVSchemaMu.Unlock()
+	select {
+	case kew.srvVSchemaInstalled <- struct{}{}:
+	default:
+		// A wakeup is already pending; it will apply the latest value.
+	}
+}
+
+// getInstalledSrvVSchema returns the latest SrvVSchema delivered by
+// SrvVSchemaInstalled, or nil if there was none.
+func (kew *KeyspaceEventWatcher) getInstalledSrvVSchema() *vschemapb.SrvVSchema {
+	kew.srvVSchemaMu.Lock()
+	defer kew.srvVSchemaMu.Unlock()
+	return kew.installedSrvVSchema
+}
+
+// applyInstalledSrvVSchema applies the latest installed SrvVSchema to every
+// keyspace the watcher tracks.
+func (kew *KeyspaceEventWatcher) applyInstalledSrvVSchema() {
+	vs := kew.getInstalledSrvVSchema()
+	if vs == nil {
+		return
+	}
+	kew.mu.Lock()
+	keyspaces := make([]*keyspaceState, 0, len(kew.keyspaces))
+	for _, kss := range kew.keyspaces {
+		keyspaces = append(keyspaces, kss)
+	}
+	kew.mu.Unlock()
+	for _, kss := range keyspaces {
+		kss.applySrvVSchema(vs)
+	}
+}
+
 func (kew *KeyspaceEventWatcher) run(ctx context.Context) {
 	hcChan := kew.hc.Subscribe(kewHcSubscriberName)
 	bufferCtx, bufferCancel := context.WithCancel(ctx)
+
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-kew.srvVSchemaInstalled:
+				kew.applyInstalledSrvVSchema()
+			}
+		}
+	}()
 
 	go func() {
 		defer bufferCancel()
@@ -813,6 +889,17 @@ func (kss *keyspaceState) isServing() bool {
 // In addition, the traffic switcher updates SrvVSchema when the DeniedTables attributes in a Shard
 // record is modified.
 func (kss *keyspaceState) onSrvVSchema(vs *vschemapb.SrvVSchema, err error) bool {
+	if kss.kew.getInstalledSrvVSchema() != nil {
+		// The watcher's owner delivers SrvVSchema updates through
+		// SrvVSchemaInstalled now, so this watch is no longer needed.
+		return false
+	}
+	return kss.applySrvVSchema(vs)
+}
+
+// applySrvVSchema updates the MoveTables state of the keyspace from vs. It
+// returns false once the keyspace was deleted.
+func (kss *keyspaceState) applySrvVSchema(vs *vschemapb.SrvVSchema) bool {
 	kss.mu.Lock()
 	defer kss.mu.Unlock()
 	// If onSrvKeyspace has already marked this keyspace deleted (NoNode in
@@ -864,6 +951,12 @@ func newKeyspaceState(ctx context.Context, kew *KeyspaceEventWatcher, cell, keys
 		// Skip the SrvVSchema listener: onSrvVSchema always returns true,
 		// and the listener would never be reaped — pinning the orphan
 		// keyspaceState in the SrvVSchema watcher's listeners slice.
+		return kss
+	}
+	if vs := kew.getInstalledSrvVSchema(); vs != nil {
+		// The owner delivers SrvVSchema updates (see SrvVSchemaInstalled):
+		// start from the latest one instead of watching SrvVSchema.
+		kss.applySrvVSchema(vs)
 		return kss
 	}
 	kew.ts.WatchSrvVSchema(ctx, cell, kss.onSrvVSchema)

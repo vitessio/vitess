@@ -228,6 +228,12 @@ func NewExecutor(
 		schema:     e.schemaTracker,
 		parser:     env.Parser(),
 	}
+	if gw := resolver.scatterConn.gateway; gw != nil && gw.kev != nil {
+		// The keyspace event watcher ends MoveTables buffering. Let it see each
+		// SrvVSchema only once the executor routes with it, so that buffered
+		// writes are planned with the switched routing rules when released.
+		e.vm.srvVSchemaInstalled = gw.kev.SrvVSchemaInstalled
+	}
 	serv.WatchSrvVSchema(ctx, cell, e.vm.VSchemaUpdate)
 
 	executorOnce.Do(func() {
