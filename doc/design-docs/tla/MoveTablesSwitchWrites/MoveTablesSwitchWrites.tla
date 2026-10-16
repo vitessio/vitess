@@ -35,10 +35,30 @@ CONSTANTS
     MaxExtraRebuilds, \* unrelated RebuildSrvVSchema calls that may happen meanwhile
     FixedPlanCache,   \* proposed fix: epoch read atomically with the VSchema
     DrainOnDeny,      \* proposed fix: applying the deny rule waits for writes admitted before it
-    KewFix            \* proposed fix: a MoveTables deny error does not mark the primary
+    KewFix,           \* proposed fix: a MoveTables deny error does not mark the primary
                       \* not serving; cancelMigration rebuilds SrvVSchema
+    Diagnostics       \* record the history variables used only by the diagnostic properties
 
 MaxTries == 3   \* MaxBufferingRetries in plan_execute.go
+
+(***************************************************************************)
+(* State space reductions that do not change behavior:                    *)
+(*                                                                         *)
+(*  - A per-request field is reset to its initial value as soon as no     *)
+(*    action or property reads it again before it is next written, so     *)
+(*    states that differ only in such stale values are not told apart.   *)
+(*  - withRetry's choice of the next step after a buffer check ("give up  *)
+(*    if the only primary was marked invalid, otherwise send") reads only *)
+(*    the request's own state, so it is folded into the step before it.   *)
+(*  - The history variables used only by diagnostic properties are not  *)
+(*    written unless Diagnostics is TRUE.                                 *)
+(*  - Requests are interchangeable, so safety-only configurations declare *)
+(*    SYMMETRY Perms.                                                     *)
+(*                                                                         *)
+(* RefinementCheck.tla checks with TLC that every behavior of the model   *)
+(* without these reductions is a behavior of this one.                    *)
+(***************************************************************************)
+Perms == Permutations(Reqs)
 
 VARIABLES
     \* ---- switchWrites (vtctld) ----
@@ -73,6 +93,7 @@ vsVars  == <<vtVer, epoch, cache>>
 kewVars == <<kewVer, kewCons, kewMT, kewServing, kewEvent>>
 bufVars == <<bufState, bufQ, drainQ, lastEndRecent>>
 reqVars == <<rs, try, lastVer, capVer, dest, bufOnce, invalid, gwErr>>
+PerAttempt == <<dest, bufOnce, invalid, gwErr>>   \* written when a plan is loaded
 histVars == <<releasedEarly, deniedAtTgt, failedAfterSwitch, startedAfter>>
 vars == <<wfVars, topoVars, dbVars, vsVars, kewVars, bufVars, reqVars, histVars>>
 
@@ -314,6 +335,21 @@ HealthCheck ==
 (***************************************************************************)
 (* vtgate: shard buffer for the source shard                               *)
 (***************************************************************************)
+\* withRetry, after the buffer check: pick a healthy tablet. The only primary
+\* was marked invalid after a retryable (FAILED_PRECONDITION) error -> give up
+\* with the last error ("gwDone"; the attempt's fields are dead from here on),
+\* otherwise send the query. once is the value of bufOnce after the check.
+GwCheck(r, once) ==
+    IF invalid[r]
+    THEN /\ rs' = [rs EXCEPT ![r] = "gwDone"]
+         /\ dest' = [dest EXCEPT ![r] = "src"]
+         /\ bufOnce' = [bufOnce EXCEPT ![r] = FALSE]
+         /\ invalid' = [invalid EXCEPT ![r] = FALSE]
+         /\ gwErr' = [gwErr EXCEPT ![r] = FALSE]
+    ELSE /\ rs' = [rs EXCEPT ![r] = "send"]
+         /\ bufOnce' = [bufOnce EXCEPT ![r] = once]
+         /\ UNCHANGED <<dest, invalid, gwErr>>
+
 NotYetSwitched == pc \notin {"freeze", "done", "cancelled"}
 
 \* recordKeyspaceEvent: any event stops buffering (stopBufferingLocked).
@@ -323,7 +359,7 @@ BufferHandleEvent ==
     /\ IF bufState = "buffering"
        THEN /\ bufState' = "draining" /\ drainQ' = bufQ /\ bufQ' = {}
             /\ lastEndRecent' = TRUE
-            /\ releasedEarly' = (releasedEarly \/ (NotYetSwitched /\ bufQ # {}))
+            /\ releasedEarly' = (releasedEarly \/ (Diagnostics /\ NotYetSwitched /\ bufQ # {}))
        ELSE UNCHANGED <<bufState, bufQ, drainQ, lastEndRecent, releasedEarly>>
     /\ UNCHANGED <<kewVer, kewCons, kewMT, kewServing, wfVars, topoVars, dbVars, vsVars, reqVars,
                    deniedAtTgt, failedAfterSwitch, startedAfter>>
@@ -331,9 +367,8 @@ BufferHandleEvent ==
 BufferDrainOne ==
     /\ \E r \in drainQ :
         /\ drainQ' = drainQ \ {r}
-        /\ rs' = [rs EXCEPT ![r] = "gwCheck"]
-        /\ bufOnce' = [bufOnce EXCEPT ![r] = TRUE]
-    /\ UNCHANGED <<bufState, bufQ, lastEndRecent, try, lastVer, capVer, dest, invalid, gwErr,
+        /\ GwCheck(r, TRUE)
+    /\ UNCHANGED <<bufState, bufQ, lastEndRecent, try, lastVer, capVer,
                    wfVars, topoVars, dbVars, vsVars, kewVars, histVars>>
 
 BufferDrainDone ==
@@ -346,9 +381,8 @@ BufferWindowTimeout ==
     /\ Timeouts
     /\ \E r \in bufQ :
         /\ bufQ' = bufQ \ {r}
-        /\ rs' = [rs EXCEPT ![r] = "gwCheck"]
-        /\ bufOnce' = [bufOnce EXCEPT ![r] = TRUE]
-    /\ UNCHANGED <<bufState, drainQ, lastEndRecent, try, lastVer, capVer, dest, invalid, gwErr,
+        /\ GwCheck(r, TRUE)
+    /\ UNCHANGED <<bufState, drainQ, lastEndRecent, try, lastVer, capVer,
                    wfVars, topoVars, dbVars, vsVars, kewVars, histVars>>
 
 \* --buffer-max-failover-duration expires.
@@ -375,14 +409,14 @@ Start(r) ==
     /\ rs' = [rs EXCEPT ![r] = "capture"]
     /\ lastVer' = [lastVer EXCEPT ![r] = vtVer]    \* lastVSchemaCreated
     /\ try' = [try EXCEPT ![r] = 0]
-    /\ startedAfter' = [startedAfter EXCEPT ![r] = (routeHist[vtVer] = "tgt")]
+    /\ startedAfter' = [startedAfter EXCEPT ![r] = Diagnostics /\ routeHist[vtVer] = "tgt"]
     /\ UNCHANGED <<capVer, dest, bufOnce, invalid, gwErr>>
     /\ UNCHANGED <<wfVars, topoVars, dbVars, vsVars, kewVars, bufVars, releasedEarly, deniedAtTgt, failedAfterSwitch>>
 
 \* fetchOrCreatePlan, part 1: newVCursor captures e.VSchema().
 Capture(r) ==
     /\ rs[r] = "capture"
-    /\ capVer' = [capVer EXCEPT ![r] = vtVer]
+    /\ capVer' = [capVer EXCEPT ![r] = IF FixedPlanCache THEN 0 ELSE vtVer]
     /\ IF FixedPlanCache
        THEN \* plan lookup/build happens against an atomic (vschema, epoch) snapshot
             LET route == IF cache.ep = epoch THEN cache.route ELSE routeHist[vtVer]
@@ -406,7 +440,8 @@ Load(r) ==
     /\ bufOnce' = [bufOnce EXCEPT ![r] = FALSE]
     /\ invalid' = [invalid EXCEPT ![r] = FALSE]
     /\ gwErr' = [gwErr EXCEPT ![r] = FALSE]
-    /\ UNCHANGED <<try, lastVer, capVer, wfVars, topoVars, dbVars, vtVer, epoch, kewVars, bufVars, histVars>>
+    /\ capVer' = [capVer EXCEPT ![r] = 0]
+    /\ UNCHANGED <<try, lastVer, wfVars, topoVars, dbVars, vtVer, epoch, kewVars, bufVars, histVars>>
 
 \* withRetry, top of loop: buffer.WaitForFailoverEnd(ctx, ks, shard, kev, err).
 \* Only the source shard's buffer can be involved: the target is never denied
@@ -417,14 +452,14 @@ GwBuffer(r) ==
        THEN CASE bufState = "buffering" ->
                     /\ bufQ' = bufQ \cup {r}
                     /\ rs' = [rs EXCEPT ![r] = "buffered"]
-                    /\ UNCHANGED <<bufState, kewCons, kewServing, kewMT, kewEvent>>
+                    /\ UNCHANGED <<bufState, kewCons, kewServing, kewMT, kewEvent, PerAttempt>>
               [] bufState = "idle" /\ gwErr[r] /\ ~lastEndRecent /\ ~KewFix ->
                     \* startBufferingLocked -> kev.MarkShardNotServing
                     /\ kewCons' = FALSE /\ kewServing' = FALSE
                     /\ bufState' = "buffering"
                     /\ bufQ' = bufQ \cup {r}
                     /\ rs' = [rs EXCEPT ![r] = "buffered"]
-                    /\ UNCHANGED <<kewMT, kewEvent>>
+                    /\ UNCHANGED <<kewMT, kewEvent, PerAttempt>>
               [] bufState = "idle" /\ gwErr[r] /\ ~lastEndRecent /\ KewFix ->
                     \* Proposed: the primary is serving, MoveTables denied the
                     \* write. Re-evaluate the MoveTables state from topo instead
@@ -433,25 +468,18 @@ GwBuffer(r) ==
                         e  == Ensure(FALSE, mt, kewServing)
                     IN /\ kewCons' = e.cons /\ kewMT' = e.mt
                        /\ kewEvent' = (kewEvent \/ e.ev)
-                       /\ UNCHANGED kewServing
+                       /\ UNCHANGED <<kewServing, PerAttempt>>
                        /\ bufState' = "buffering"
                        /\ bufQ' = bufQ \cup {r}
                        /\ rs' = [rs EXCEPT ![r] = "buffered"]
               [] OTHER ->
-                    /\ rs' = [rs EXCEPT ![r] = "gwCheck"]
+                    /\ GwCheck(r, bufOnce[r])
                     /\ UNCHANGED <<bufState, bufQ, kewCons, kewServing, kewMT, kewEvent>>
-       ELSE /\ rs' = [rs EXCEPT ![r] = "gwCheck"]
+       ELSE /\ GwCheck(r, bufOnce[r])
             /\ UNCHANGED <<bufState, bufQ, kewCons, kewServing, kewMT, kewEvent>>
-    /\ UNCHANGED <<drainQ, lastEndRecent, kewVer,
-                   try, lastVer, capVer, dest, bufOnce, invalid, gwErr,
+    /\ UNCHANGED <<drainQ, lastEndRecent, kewVer, try, lastVer, capVer,
                    wfVars, topoVars, dbVars, vsVars, histVars>>
 
-\* withRetry: pick a healthy tablet; the only primary was marked invalid after
-\* a retryable (FAILED_PRECONDITION) error -> give up with the last error.
-GwCheck(r) ==
-    /\ rs[r] = "gwCheck"
-    /\ rs' = [rs EXCEPT ![r] = IF invalid[r] THEN "gwDone" ELSE "send"]
-    /\ UNCHANGED <<try, lastVer, capVer, dest, bufOnce, invalid, gwErr>> /\ UC_req(r)
 
 \* vttablet checkPermissions: the deny rule is evaluated before a pooled
 \* connection is taken (and so before the MDL is acquired).
@@ -463,9 +491,13 @@ Send(r) ==
                /\ invalid' = [invalid EXCEPT ![r] = TRUE]
                /\ rs' = [rs EXCEPT ![r] = "gwBuf"]
                /\ deniedAtTgt' = (deniedAtTgt \/ dest[r] = "tgt")
+               /\ UNCHANGED bufOnce
           ELSE /\ rs' = [rs EXCEPT ![r] = "passed"]
-               /\ UNCHANGED <<gwErr, invalid, deniedAtTgt>>
-    /\ UNCHANGED <<try, lastVer, capVer, dest, bufOnce, releasedEarly, failedAfterSwitch, startedAfter,
+               /\ bufOnce' = [bufOnce EXCEPT ![r] = FALSE]
+               /\ invalid' = [invalid EXCEPT ![r] = FALSE]
+               /\ gwErr' = [gwErr EXCEPT ![r] = FALSE]
+               /\ UNCHANGED deniedAtTgt
+    /\ UNCHANGED <<try, lastVer, capVer, dest, releasedEarly, failedAfterSwitch, startedAfter,
                    wfVars, topoVars, dbVars, vsVars, kewVars, bufVars>>
 
 \* txPool.Begin (may wait up to the pool timeout), then MySQL takes the MDL.
@@ -483,9 +515,14 @@ Commit(r) ==
             /\ tgtClient' = tgtClient \cup {r}
             /\ UNCHANGED srcLog
     /\ rs' = [rs EXCEPT ![r] = "acked"]
-    /\ UNCHANGED <<try, lastVer, capVer, dest, bufOnce, invalid, gwErr,
+    /\ try' = [try EXCEPT ![r] = 0]
+    /\ lastVer' = [lastVer EXCEPT ![r] = 0]
+    /\ dest' = [dest EXCEPT ![r] = "src"]
+    /\ startedAfter' = [startedAfter EXCEPT ![r] = FALSE]
+    /\ UNCHANGED <<capVer, bufOnce, invalid, gwErr,
                    srcTabDeny, tgtTabDeny, replPos, streamOn,
-                   wfVars, topoVars, vsVars, kewVars, bufVars, histVars>>
+                   wfVars, topoVars, vsVars, kewVars, bufVars,
+                   releasedEarly, deniedAtTgt, failedAfterSwitch>>
 
 \* newExecute: the root cause contains "enforce denied tables" -> retry,
 \* unless this was the last try: fail, and the deferred ClearPlans runs.
@@ -498,9 +535,11 @@ GwDone(r) ==
        ELSE /\ rs' = [rs EXCEPT ![r] = "failed"]
             /\ epoch' = epoch + 1
             /\ failedAfterSwitch' = (failedAfterSwitch \/ startedAfter[r])
-            /\ UNCHANGED try
-    /\ UNCHANGED <<lastVer, capVer, dest, bufOnce, invalid, gwErr, vtVer, cache,
-                   releasedEarly, deniedAtTgt, startedAfter, wfVars, topoVars, dbVars, kewVars, bufVars>>
+            /\ try' = [try EXCEPT ![r] = 0]
+    /\ lastVer' = IF rs'[r] = "failed" THEN [lastVer EXCEPT ![r] = 0] ELSE lastVer
+    /\ startedAfter' = IF rs'[r] = "failed" THEN [startedAfter EXCEPT ![r] = FALSE] ELSE startedAfter
+    /\ UNCHANGED <<capVer, dest, bufOnce, invalid, gwErr, vtVer, cache,
+                   releasedEarly, deniedAtTgt, wfVars, topoVars, dbVars, kewVars, bufVars>>
 
 \* waitForNewerVSchema(ctx, e, lastVSchemaCreated, timeout)
 VSchemaWaitNewer(r) ==
@@ -528,7 +567,7 @@ TimeoutActs ==
     \/ BufferWindowTimeout \/ BufferMaxDuration \/ \E r \in Reqs : VSchemaWaitTimeout(r)
 
 ReqStep(r) ==
-    \/ Capture(r) \/ Load(r) \/ GwBuffer(r) \/ GwCheck(r) \/ Send(r)
+    \/ Capture(r) \/ Load(r) \/ GwBuffer(r) \/ Send(r)
     \/ AcquireMDL(r) \/ Commit(r) \/ GwDone(r) \/ VSchemaWaitNewer(r)
 
 Next ==

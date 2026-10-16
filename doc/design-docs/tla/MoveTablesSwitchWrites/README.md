@@ -59,6 +59,31 @@ writes flowing while it runs.
 `FixedPlanCache`, `DrainOnDeny` and `KewFix` switch on candidate fixes for the
 problems the model finds. They are described under Results.
 
+## State space reductions
+
+Four reductions make the larger configurations tractable without changing what
+the model can do:
+
+- A per-request field is reset to its initial value as soon as nothing reads
+  it again before it is next written.
+- withRetry's choice of the next step after a buffer check reads only the
+  request's own state, so it is folded into the step before it.
+- The history variables used only by `BufferEndsOnlyAfterSwitch` and
+  `NoFailureAfterSwitch` are written only when `Diagnostics = TRUE`.
+- Requests are interchangeable, so the invariant-only configurations declare
+  `SYMMETRY Perms`. TLC does not support symmetry for liveness checking, so
+  configurations that check temporal properties do not use it.
+
+`refinement/RefinementCheck.tla` checks the first three mechanically. It maps
+every state of the unreduced model to a state of the reduced one and has TLC
+check that every behavior of the unreduced model, fairness included, is a
+behavior of the reduced model. Every property that holds for the reduced model
+and does not read a reset field therefore holds for the unreduced one.
+`refinement/check.sh <name>` takes the unreduced model from git history and
+runs the check for `refinement/<name>.cfg`. The configurations cover the
+current code with and without buffering, slow writes with `--force`, and all
+three fixes. A deliberately broken reduction is reported as a violation.
+
 ## Running
 
 Requires Java 11 or newer and `tla2tools.jar` (put it next to `run.sh` or set `$TLA2TOOLS`)
