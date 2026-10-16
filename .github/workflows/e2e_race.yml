@@ -80,7 +80,7 @@ jobs:
       if: steps.changes.outputs.end_to_end == 'true'
       uses: $/.github/actions/setup-go
       with:
-        build-cache: build race
+        build-cache: build,race
 
     - name: Tune the OS
       if: steps.changes.outputs.end_to_end == 'true'

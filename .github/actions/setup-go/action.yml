@@ -6,11 +6,12 @@ inputs:
     default: "true"
   build-cache:
     description: >-
-      Space-separated build cache entries to restore, each filled by the
-      go_cache_warm workflow (see tools/warm_go_build_cache.sh): "build" for
-      make build and the end-to-end tests, "unit" for the unit tests, "race"
-      for the race tests, "tools" for the go tool binaries and go/tools, or
-      "none".
+      Comma-separated build cache entries to restore, for example
+      "build,unit". Each is filled by the go_cache_warm workflow (see
+      tools/warm_go_build_cache.sh): "build" for make build and the
+      end-to-end tests, "unit" for the unit tests, "race" for the race tests,
+      "tools" for the go tool binaries and go/tools. "none" restores no build
+      cache.
     default: "build"
 runs:
   using: "composite"
@@ -38,9 +39,15 @@ runs:
       env:
         ENTRIES: ${{ inputs.build-cache }}
       run: |
-        for entry in build unit race tools; do
-          case " ${ENTRIES} " in
-          *" ${entry} "*) echo "${entry}=true" >> "${GITHUB_OUTPUT}" ;;
+        IFS=',' read -r -a entries <<< "${ENTRIES}"
+        for entry in "${entries[@]}"; do
+          case "${entry}" in
+          build | unit | race | tools) echo "${entry}=true" >> "${GITHUB_OUTPUT}" ;;
+          none) ;;
+          *)
+            echo "::error::Unknown build-cache entry '${entry}' in '${ENTRIES}': expected a comma-separated list of build, unit, race and tools, or none"
+            exit 1
+            ;;
           esac
         done
 

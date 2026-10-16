@@ -165,7 +165,7 @@ jobs:
         uses: $/.github/actions/setup-go
         with:
           # "make unit_test" and "make unit_test_race" run "make build" first.
-          build-cache: ${{ matrix.race && 'build race' || 'build unit' }}
+          build-cache: ${{ matrix.race && 'build,race' || 'build,unit' }}
 
       - name: Set up python
         if: needs.changes.outputs.unit_tests == 'true'
