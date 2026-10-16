@@ -1381,6 +1381,11 @@ func (tm *TabletManager) completeChosenReplicationSource(ctx context.Context, id
 		return false, &replicationInitWaitError{"another action is running on this tablet"}
 	}
 	defer tm.unlock()
+	// Requests that stop replication record it under the action lock, so check
+	// again now that this holds it.
+	if done, err := tm.settleDeferredReplicationInit(ctx, id); done || err != nil {
+		return done, err
+	}
 	alias, ticket := tm.tmState.chosenReplicationSource(id)
 	if alias == nil {
 		// It ended, or a later deferral superseded it.

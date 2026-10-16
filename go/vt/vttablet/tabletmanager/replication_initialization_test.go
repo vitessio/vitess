@@ -1774,3 +1774,52 @@ func TestReplicationRunRequestsKeepTheLatest(t *testing.T) {
 	assert.False(t, tm.tmState.replicationStoppedOnRequest(), "a new deferral starts without requests")
 	assert.True(t, tm.tmState.isPendingReplicationInit(id+1))
 }
+
+// boundedReplayDaemon models START REPLICA UNTIL, which returns while
+// replication still runs toward its position.
+type boundedReplayDaemon struct{ *mysqlctl.FakeMysqlDaemon }
+
+func (d *boundedReplayDaemon) StartReplicationUntilAfter(ctx context.Context, pos replication.Position) error {
+	if err := d.FakeMysqlDaemon.StartReplicationUntilAfter(ctx, pos); err != nil {
+		return err
+	}
+	d.Replicating = true
+	return nil
+}
+
+func TestChosenSourceCompletionKeepsStopRequestedWhileItWaited(t *testing.T) {
+	for _, tc := range []string{"older start finishes after the stop", "bounded replay still running"} {
+		t.Run(tc, func(t *testing.T) {
+			tm, md, qsc, id := newReplicatingPendingTM(t)
+			tm.tmState.requestReplicationSource(&topodatapb.TabletAlias{Cell: "cell1", Uid: 2})
+			olderStart := tm.tmState.newReplicationTicket()
+			// The attempt's lock-free check passes before the stop.
+			done, err := tm.settleDeferredReplicationInit(t.Context(), id)
+			require.NoError(t, err)
+			require.False(t, done)
+
+			stopReplicationOnRequest(t, tm, md, "StopReplication")
+			if tc == "bounded replay still running" {
+				pos, err := replication.ParsePosition(gtidFlavor, gtidPosition)
+				require.NoError(t, err)
+				md.StartReplicationUntilAfterPos = pos
+				md.ExpectedExecuteSuperQueryList = []string{"START REPLICA UNTIL AFTER"}
+				tm.MysqlDaemon = &boundedReplayDaemon{md}
+				require.NoError(t, tm.StartReplicationUntilAfter(t.Context(), gtidFlavor+"/"+gtidPosition, 30*time.Second))
+			} else {
+				md.ExpectedExecuteSuperQueryList = []string{"START REPLICA"}
+				require.NoError(t, md.StartReplication(t.Context(), nil))
+				tm.tmState.replicationRunRequested(olderStart, true)
+			}
+			require.NoError(t, md.CheckSuperQueryList())
+			require.True(t, md.Replicating)
+
+			// The attempt continues with the completion on the chosen source.
+			_, err = tm.completeChosenReplicationSource(t.Context(), id)
+			require.ErrorContains(t, err, "replication was stopped on request")
+			tm.tmState.refreshServing(t.Context())
+			assert.True(t, tm.tmState.replicationStoppedOnRequest())
+			assert.False(t, qsc.IsServing(), "a stop request must keep the deferred replica out of rotation")
+		})
+	}
+}
