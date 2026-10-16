@@ -891,8 +891,9 @@ func (kss *keyspaceState) isServing() bool {
 func (kss *keyspaceState) onSrvVSchema(vs *vschemapb.SrvVSchema, err error) bool {
 	if kss.kew.getInstalledSrvVSchema() != nil {
 		// The watcher's owner delivers SrvVSchema updates through
-		// SrvVSchemaInstalled now, so this watch is no longer needed.
-		return false
+		// SrvVSchemaInstalled now: ignore this watch. Keep it registered, as
+		// before, until the keyspace is deleted.
+		return !kss.isDeleted()
 	}
 	return kss.applySrvVSchema(vs)
 }

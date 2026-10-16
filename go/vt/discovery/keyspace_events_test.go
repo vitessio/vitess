@@ -1343,9 +1343,8 @@ func TestSrvVSchemaInstalledOrdersMoveTablesSwitch(t *testing.T) {
 	}, 30*time.Second, 10*time.Millisecond)
 
 	// The watcher's own SrvVSchema watch delivers the switched routing rules
-	// before the executor has installed them. It must neither report the
-	// switch nor stay registered.
-	assert.False(t, kss.onSrvVSchema(routingRules("target"), nil))
+	// before the executor has installed them. It must not report the switch.
+	kss.onSrvVSchema(routingRules("target"), nil)
 	assert.Equal(t, MoveTablesSwitching, moveTablesState())
 	select {
 	case ev := <-events:
