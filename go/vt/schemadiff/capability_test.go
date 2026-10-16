@@ -174,6 +174,36 @@ func TestAlterTableCapableOfInstantDDL(t *testing.T) {
 			expectCapableOfInstantDDL: false,
 		},
 		{
+			name:                      "add column fails with AUTO_INCREMENT",
+			create:                    "create table t(id int, i1 int not null, primary key(id))",
+			alter:                     "alter table t add column s int auto_increment",
+			expectCapableOfInstantDDL: false,
+		},
+		{
+			name:                      "add column fails with inline unique key",
+			create:                    "create table t(id int, i1 int not null, primary key(id))",
+			alter:                     "alter table t add column s int unique",
+			expectCapableOfInstantDDL: false,
+		},
+		{
+			name:                      "add column fails with inline unique key with key keyword",
+			create:                    "create table t(id int, i1 int not null, primary key(id))",
+			alter:                     "alter table t add column s int unique key",
+			expectCapableOfInstantDDL: false,
+		},
+		{
+			name:                      "add column fails with inline key",
+			create:                    "create table t(id int, i1 int not null, primary key(id))",
+			alter:                     "alter table t add column s int key",
+			expectCapableOfInstantDDL: false,
+		},
+		{
+			name:                      "add column fails with inline primary key",
+			create:                    "create table t(id int, i1 int not null)",
+			alter:                     "alter table t add column s int primary key",
+			expectCapableOfInstantDDL: false,
+		},
+		{
 			name:                      "drop virtual column",
 			create:                    "create table t(id int, i1 int not null, i2 int generated always as (i1 + 1) virtual, primary key(id))",
 			alter:                     "alter table t drop column i2",
