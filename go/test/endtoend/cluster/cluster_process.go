@@ -37,6 +37,8 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/sync/errgroup"
+
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -406,11 +408,27 @@ func (cluster *LocalProcessCluster) startKeyspace(keyspace Keyspace, shardNames 
 	}
 	// Create the keyspace if it doesn't already exist.
 	_ = cluster.VtctldClientProcess.CreateKeyspace(keyspace.Name, keyspace.SidecarDBName, keyspace.DurabilityPolicy)
-	for _, shardName := range shardNames {
-		shard, err := cluster.AddShard(keyspace.Name, shardName, totalTabletsRequired, rdonly, customizers)
+	// Start the mysqlds of every shard before waiting for any of them, then
+	// bring up the shards at the same time: mysqlctl init takes seconds, and
+	// the shards don't depend on each other.
+	shards := make([]*Shard, len(shardNames))
+	mysqlctlProcessLists := make([][]*exec.Cmd, len(shardNames))
+	for i, shardName := range shardNames {
+		shards[i], mysqlctlProcessLists[i], err = cluster.startShardMySQL(keyspace.Name, shardName, totalTabletsRequired, rdonly, customizers)
 		if err != nil {
 			return err
 		}
+	}
+	var g errgroup.Group
+	for i, shard := range shards {
+		g.Go(func() error {
+			return cluster.finishShard(keyspace.Name, shard, mysqlctlProcessLists[i])
+		})
+	}
+	if err = g.Wait(); err != nil {
+		return err
+	}
+	for _, shard := range shards {
 		keyspace.Shards = append(keyspace.Shards, *shard)
 	}
 	// if the keyspace is present then append the shard info
@@ -453,6 +471,20 @@ func (cluster *LocalProcessCluster) startKeyspace(keyspace Keyspace, shardNames 
 }
 
 func (cluster *LocalProcessCluster) AddShard(keyspaceName string, shardName string, totalTabletsRequired int, rdonly bool, customizers []any) (*Shard, error) {
+	shard, mysqlctlProcessList, err := cluster.startShardMySQL(keyspaceName, shardName, totalTabletsRequired, rdonly, customizers)
+	if err != nil {
+		return nil, err
+	}
+	if err := cluster.finishShard(keyspaceName, shard, mysqlctlProcessList); err != nil {
+		return nil, err
+	}
+	return shard, nil
+}
+
+// startShardMySQL reserves the ports of a new shard's tablets and starts
+// their mysqlctl processes without waiting for them. finishShard waits for
+// them and starts the vttablets.
+func (cluster *LocalProcessCluster) startShardMySQL(keyspaceName string, shardName string, totalTabletsRequired int, rdonly bool, customizers []any) (*Shard, []*exec.Cmd, error) {
 	shard := &Shard{
 		Name: shardName,
 	}
@@ -479,7 +511,7 @@ func (cluster *LocalProcessCluster) AddShard(keyspaceName string, shardName stri
 		log.Info(fmt.Sprintf("Starting mysqlctl for table uid %d, mysql port %d", tablet.TabletUID, tablet.MySQLPort))
 		mysqlctlProcess, err := MysqlCtlProcessInstanceOptionalInit(tablet.TabletUID, tablet.MySQLPort, cluster.TmpDirectory, !cluster.ReusingVTDATAROOT)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		switch tablet.Type {
 		case "primary":
@@ -492,7 +524,7 @@ func (cluster *LocalProcessCluster) AddShard(keyspaceName string, shardName stri
 		proc, err := tablet.MysqlctlProcess.StartProcess()
 		if err != nil {
 			log.Error(fmt.Sprintf("error starting mysqlctl process: %v, %v", tablet.MysqlctldProcess, err))
-			return nil, err
+			return nil, nil, err
 		}
 		mysqlctlProcessList = append(mysqlctlProcessList, proc)
 
@@ -527,16 +559,24 @@ func (cluster *LocalProcessCluster) AddShard(keyspaceName string, shardName stri
 			if f, ok := customizer.(func(*VttabletProcess)); ok {
 				f(tablet.VttabletProcess)
 			} else {
-				return nil, fmt.Errorf("type mismatch on customizer: %T", customizer)
+				return nil, nil, fmt.Errorf("type mismatch on customizer: %T", customizer)
 			}
 		}
 	}
+
+	return shard, mysqlctlProcessList, nil
+}
+
+// finishShard waits for the mysqlctl processes that startShardMySQL started,
+// then starts the shard's vttablets and makes the first tablet the primary.
+func (cluster *LocalProcessCluster) finishShard(keyspaceName string, shard *Shard, mysqlctlProcessList []*exec.Cmd) error {
+	shardName := shard.Name
 
 	// wait till all mysqlctl is instantiated
 	for _, proc := range mysqlctlProcessList {
 		if err := proc.Wait(); err != nil {
 			log.Error(fmt.Sprintf("unable to start mysql process %v: %v", proc, err))
-			return nil, err
+			return err
 		}
 	}
 	for _, tablet := range shard.Vttablets {
@@ -544,16 +584,16 @@ func (cluster *LocalProcessCluster) AddShard(keyspaceName string, shardName stri
 
 		if err := tablet.VttabletProcess.Setup(); err != nil {
 			log.Error(fmt.Sprintf("error starting vttablet for tablet uid %d, grpc port %d: %v", tablet.TabletUID, tablet.GrpcPort, err))
-			return nil, err
+			return err
 		}
 	}
 
 	// Make first tablet as primary
 	if err := cluster.VtctldClientProcess.InitializeShard(keyspaceName, shardName, cluster.Cell, shard.Vttablets[0].TabletUID); err != nil {
 		log.Error(fmt.Sprintf("error running InitializeShard on keyspace %v, shard %v: %v", keyspaceName, shardName, err))
-		return nil, err
+		return err
 	}
-	return shard, nil
+	return nil
 }
 
 // StartUnshardedKeyspaceLegacy starts unshared keyspace with shard name as "0"
