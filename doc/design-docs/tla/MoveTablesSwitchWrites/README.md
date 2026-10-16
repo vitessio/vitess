@@ -164,7 +164,23 @@ previous rules have finished. With it, all safety properties hold even with
 `SlowWrites = TRUE` (`Fix_SlowWrites_*`), and the `LOCK TABLES` cycles are no
 longer needed for correctness. A smaller mitigation is to check the rule
 again after the pool connection is acquired. That narrows the window but does
-not remove it. This fix is not implemented.
+not remove it.
+
+The code implements `DrainOnDeny` in vttablet. Each write (DML, `LOAD DATA`,
+`nextval`) registers with the query engine before `checkPermissions` and
+unregisters when it finishes. After `applyDenyList` loads the deny rule, it
+calls `WaitForAdmittedWrites`, which waits for the registered writes to the
+denied tables, for up to 30s. If they don't finish in time, `RefreshState`
+fails and the switch is canceled, as for any other refresh failure. A write
+whose plan was cached before the rule was loaded, but that registers after
+the wait looked, sees the plan cache epoch that loading the rule advanced, and
+checks the current rules instead of the ones cached with its plan. The
+`LOCK TABLES` cycles stay: older tablets don't wait.
+
+The drain only covers writes the deny rule stops. A deny rule matches a
+statement by the tables it names, so it never stops a write to a moved table
+made by a stored function, procedure, trigger or event, before or after the
+switch. The model has no such writes.
 
 **2. The plan cache can keep a source-routed plan after the switch.**
 (`Avail_*`, `Diag_FailAfterSwitch_Buffer`)
@@ -270,7 +286,7 @@ All eight refinement configurations pass on this model.
 | `FixedPlanCache` | `fetchOrCreatePlan` reads the VSchema and the plan cache epoch together (`vschemaForPlanning`) |
 | `KewFix` | a MoveTables deny error calls `KeyspaceEventWatcher.MarkMoveTablesDenied` instead of `MarkShardNotServing`; `cancelMigration` rebuilds the SrvVSchema |
 | `EventGenerations` | `KeyspaceEvent.Generation`; the shard buffer ignores events older than its buffering |
-| `DrainOnDeny` | not implemented |
+| `DrainOnDeny` | `applyDenyList` calls `WaitForAdmittedWrites` after loading the deny rule; writes register before `checkPermissions` and check the current rules if their plan is older than the last rule load |
 
 Two more changes in the code are not modeled. The executor delivers each
 SrvVSchema to the keyspace event watcher only after it installed the VSchema
