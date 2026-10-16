@@ -1039,6 +1039,9 @@ func backupShardWithBinlogs(t *testing.T) {
 		t.Skip("--include-binlogs is only supported by the builtin backup engine")
 	}
 	verifyInitialReplication(t)
+	// BackupShard picks the backup source itself, and replica2 is still running when
+	// this test runs on its own. Leave replica1 as the only candidate.
+	require.NoError(t, replica2.VttabletProcess.TearDown())
 
 	// Spread the rows over several binlogs of the backup source. FLUSH BINARY LOGS
 	// is not replicated, so it runs on replica1 rather than on the primary.
