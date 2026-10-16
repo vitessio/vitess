@@ -160,30 +160,34 @@ func TestERSSucceedsWithLaggingSQLThreadReplica(t *testing.T) {
 }
 
 // TestERSFiltersReplicaBehindOnRelayLogReceipt checks that a replica that is behind on
-// received relay logs — and additionally has an unapplied relay log backlog it can never
-// drain — is excluded from the relay log wait entirely and cannot fail the reparent.
+// received relay logs and cannot apply its backlog within the ERS wait budget is excluded
+// from the relay log wait and cannot fail the reparent.
 func TestERSFiltersReplicaBehindOnRelayLogReceipt(t *testing.T) {
 	endtoendutils.SkipIfBinaryIsBelowVersion(t, 25, "vtctld")
 
 	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
-	defer utils.TeardownCluster(clusterInstance)
+	t.Cleanup(func() { utils.TeardownCluster(clusterInstance) })
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
 	utils.ConfirmReplication(t, tablets[0], tablets[1:])
 
-	// First stop applying on tablets[1] while still receiving...
-	utils.RunSQL(t.Context(), t, `STOP REPLICA SQL_THREAD`, tablets[1])
+	// Delay applies for an hour so the backlog remains during ERS, even when ERS
+	// starts the SQL thread. The delay also survives the repoint.
+	utils.RunSQLs(t.Context(), t, []string{
+		`STOP REPLICA SQL_THREAD`,
+		`CHANGE REPLICATION SOURCE TO SOURCE_DELAY = 3600`,
+	}, tablets[1])
 
-	// ...so this write lands in tablets[1]'s relay log without being applied...
+	// This write lands in tablets[1]'s relay log without being applied.
 	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[2], tablets[3]})
 
-	// ...and wait until tablets[1] has actually received it: semi-sync only needs one
+	// Wait until tablets[1] has actually received it: semi-sync only needs one
 	// acker, so the write confirming on tablets[2] and tablets[3] says nothing about
-	// tablets[1]'s relay log...
+	// tablets[1]'s relay log.
 	primaryPosition := strings.ReplaceAll(utils.RunSQL(t.Context(), t, `select @@global.gtid_executed`, tablets[0]).Rows[0][0].ToString(), "\n", "")
 	waitForReceivedPosition(t, tablets[1], primaryPosition)
 
-	// ...then stop receiving too. tablets[1] is now fully stopped with a
+	// Stop receiving too. tablets[1] is now fully stopped with a
 	// received-but-unapplied backlog.
 	utils.RunSQL(t.Context(), t, `STOP REPLICA IO_THREAD`, tablets[1])
 
@@ -202,15 +206,18 @@ func TestERSFiltersReplicaBehindOnRelayLogReceipt(t *testing.T) {
 	err = utils.CheckInsertedValues(t.Context(), t, newPrimary, insertedVal)
 	require.NoError(t, err)
 
-	// tablets[1] was fully stopped when the reparent began, so it is repointed to the new
-	// primary but not started. The repoint of non-winning replicas completes
-	// asynchronously after ERS returns, so wait for it to land; otherwise START REPLICA
-	// races the in-flight CHANGE REPLICATION SOURCE.
+	// Wait for the asynchronous repoint before checking the backlog and clearing
+	// the apply delay. Older VTTablets leave this replica's threads stopped.
 	waitForReplicationSource(t, tablets[1], newPrimary)
-	utils.CheckReplicationStatus(t.Context(), t, tablets[1], false, false)
+	res := utils.RunSQL(t.Context(), t, `select msg from vt_insert_test`, tablets[1])
+	assert.Len(t, res.Rows, 1, "the excluded replica must still have an unapplied backlog")
 
-	// Once started, it catches up on everything through the new primary.
-	utils.RunSQL(t.Context(), t, `START REPLICA`, tablets[1])
+	// Once the delay is cleared, it catches up through the new primary.
+	utils.RunSQLs(t.Context(), t, []string{
+		`STOP REPLICA`,
+		`CHANGE REPLICATION SOURCE TO SOURCE_DELAY = 0`,
+		`START REPLICA`,
+	}, tablets[1])
 	err = utils.CheckInsertedValues(t.Context(), t, tablets[1], insertedVal)
 	require.NoError(t, err)
 	utils.ConfirmReplication(t, newPrimary, []*cluster.Vttablet{tablets[1]})
@@ -223,19 +230,30 @@ func TestERSFailsWhenNoCandidateAppliesRelayLogs(t *testing.T) {
 	endtoendutils.SkipIfBinaryIsBelowVersion(t, 25, "vtctld")
 
 	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
-	defer utils.TeardownCluster(clusterInstance)
+	t.Cleanup(func() { utils.TeardownCluster(clusterInstance) })
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
 	utils.ConfirmReplication(t, tablets[0], tablets[1:])
 
-	// Stop the SQL thread on every replica: they all keep receiving (and sending
-	// semi-sync ACKs) but none of them applies.
+	// Delay applies for an hour on every replica, beyond the ERS wait budget.
+	// ERS can restart a stopped SQL thread, but it does not clear this delay.
+	// Receivers keep fetching and sending semi-sync ACKs.
 	for _, tablet := range tablets[1:] {
-		utils.RunSQL(t.Context(), t, `STOP REPLICA SQL_THREAD`, tablet)
+		utils.RunSQLs(t.Context(), t, []string{
+			`STOP REPLICA SQL_THREAD`,
+			`CHANGE REPLICATION SOURCE TO SOURCE_DELAY = 3600`,
+			`START REPLICA SQL_THREAD`,
+		}, tablet)
 	}
 
 	// This write is received by every replica but applied by none.
 	insertedVal := utils.ConfirmReplication(t, tablets[0], nil)
+	primaryPosition := strings.ReplaceAll(utils.RunSQL(t.Context(), t, `select @@global.gtid_executed`, tablets[0]).Rows[0][0].ToString(), "\n", "")
+	for _, tablet := range tablets[1:] {
+		waitForReceivedPosition(t, tablet, primaryPosition)
+		res := utils.RunSQL(t.Context(), t, `select msg from vt_insert_test`, tablet)
+		require.Len(t, res.Rows, 1, "every candidate must have received but not applied the write")
+	}
 
 	// Kill the primary's vttablet (mysqld keeps running, so the replicas' IO threads stay
 	// connected).
@@ -246,8 +264,18 @@ func TestERSFailsWhenNoCandidateAppliesRelayLogs(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, out, "all candidates failed to apply relay logs")
 
-	// The failed reparent restarts replication on the replicas it stopped, so their SQL
-	// threads drain the received backlog. Wait for that, then the reparent succeeds.
+	// Cleanup after the failed ERS restarts replication but preserves the delay.
+	// Check that the write is still unapplied, then clear the delay.
+	for _, tablet := range tablets[1:] {
+		res := utils.RunSQL(t.Context(), t, `select msg from vt_insert_test`, tablet)
+		assert.Len(t, res.Rows, 1, "the write must remain unapplied after the failed ERS")
+		utils.RunSQLs(t.Context(), t, []string{
+			`STOP REPLICA`,
+			`CHANGE REPLICATION SOURCE TO SOURCE_DELAY = 0`,
+			`START REPLICA`,
+		}, tablet)
+	}
+	// Wait for the backlog to drain, then the reparent succeeds.
 	err = utils.CheckInsertedValues(t.Context(), t, tablets[1], insertedVal)
 	require.NoError(t, err)
 
@@ -270,7 +298,7 @@ func TestERSExcludesErrantGTIDCandidateAndRewaits(t *testing.T) {
 	endtoendutils.SkipIfBinaryIsBelowVersion(t, 25, "vtctld")
 
 	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
-	defer utils.TeardownCluster(clusterInstance)
+	t.Cleanup(func() { utils.TeardownCluster(clusterInstance) })
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
 	utils.ConfirmReplication(t, tablets[0], tablets[1:])
@@ -284,8 +312,13 @@ func TestERSExcludesErrantGTIDCandidateAndRewaits(t *testing.T) {
 		`SET GLOBAL super_read_only = 1`,
 	}, tablets[2])
 
-	// Stop the SQL thread on tablets[1]: it keeps receiving but stops applying.
-	utils.RunSQL(t.Context(), t, `STOP REPLICA SQL_THREAD`, tablets[1])
+	// Delay applies for an hour on tablets[1] so it stays behind during the
+	// election, even if ERS restarts its SQL thread.
+	utils.RunSQLs(t.Context(), t, []string{
+		`STOP REPLICA SQL_THREAD`,
+		`CHANGE REPLICATION SOURCE TO SOURCE_DELAY = 3600`,
+		`START REPLICA SQL_THREAD`,
+	}, tablets[1])
 
 	// This write is received by every replica but applied only on tablets[2] and tablets[3].
 	insertedVal := utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[2], tablets[3]})
@@ -308,7 +341,15 @@ func TestERSExcludesErrantGTIDCandidateAndRewaits(t *testing.T) {
 	err = utils.CheckInsertedValues(t.Context(), t, newPrimary, insertedVal)
 	require.NoError(t, err)
 
-	// The lagged replica was repointed with a forced start and catches up.
+	// The lagged replica is repointed, but its apply delay persists until cleared.
+	waitForReplicationSource(t, tablets[1], newPrimary)
+	res := utils.RunSQL(t.Context(), t, `select msg from vt_insert_test`, tablets[1])
+	assert.Len(t, res.Rows, 1, "the losing replica must still be behind on apply")
+	utils.RunSQLs(t.Context(), t, []string{
+		`STOP REPLICA`,
+		`CHANGE REPLICATION SOURCE TO SOURCE_DELAY = 0`,
+		`START REPLICA`,
+	}, tablets[1])
 	err = utils.CheckInsertedValues(t.Context(), t, tablets[1], insertedVal)
 	require.NoError(t, err)
 

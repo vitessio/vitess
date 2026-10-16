@@ -3852,3 +3852,50 @@ func TestSetSuperReadOnlyLockWaitTimeout(t *testing.T) {
 		assert.Equal(t, 0, db.GetQueryCalledNum("SET SESSION lock_wait_timeout = @@global.lock_wait_timeout"), "must not restore a lock_wait_timeout that was never set")
 	})
 }
+
+// TestStartSQLThread verifies that the daemon starts only the applier, propagates
+// a rejected START command, and leaves flavors without SQL-thread commands alone.
+func TestStartSQLThread(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		flavor     string
+		queryError error
+	}{
+		{name: "applier only"},
+		{name: "command failure", queryError: errors.New("injected SQL thread failure")},
+		{name: "group replication", flavor: mysql.GRFlavorID},
+		{name: "unmanaged file position", flavor: replication.FilePosFlavorID},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db := fakesqldb.New(t)
+			t.Cleanup(db.Close)
+			cp := *db.ConnParams()
+			cp.Flavor = tc.flavor
+			dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
+			dbc.Flavor = tc.flavor
+			db.AddQuery("SELECT 1", &sqltypes.Result{})
+			if tc.flavor == "" {
+				if tc.queryError != nil {
+					db.AddRejectedQuery("START REPLICA SQL_THREAD", tc.queryError)
+				} else {
+					db.AddQuery("START REPLICA SQL_THREAD", &sqltypes.Result{})
+				}
+			}
+			mysqld := NewMysqld(dbc)
+			t.Cleanup(mysqld.Close)
+			err := mysqld.StartSQLThread(t.Context())
+			if tc.queryError != nil {
+				require.ErrorContains(t, err, tc.queryError.Error())
+			} else {
+				require.NoError(t, err)
+			}
+			wantStarts := 1
+			if tc.flavor != "" {
+				wantStarts = 0
+			}
+			assert.Equal(t, wantStarts, db.GetQueryCalledNum("START REPLICA SQL_THREAD"))
+			assert.Zero(t, db.GetQueryCalledNum("START REPLICA"))
+			assert.Zero(t, db.GetQueryCalledNum("START REPLICA IO_THREAD"))
+		})
+	}
+}

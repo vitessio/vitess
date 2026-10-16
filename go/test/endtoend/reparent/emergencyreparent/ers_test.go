@@ -428,7 +428,7 @@ func TestSemiSyncSetupCorrectly(t *testing.T) {
 // leaves the cluster untouched.
 func TestERSPromoteRdonly(t *testing.T) {
 	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
-	defer utils.TeardownCluster(clusterInstance)
+	t.Cleanup(func() { utils.TeardownCluster(clusterInstance) })
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
 	// make tablets[1] a rdonly tablet.
@@ -446,8 +446,15 @@ func TestERSPromoteRdonly(t *testing.T) {
 		ctx := t.Context()
 		strChan := make(chan string)
 		go func() {
-			// We expect this to fail since we have ignored all replica tablets and only the rdonly is left, which is not capable of sending semi-sync ACKs
-			out, err := utils.ErsIgnoreTablet(clusterInstance, tablets[2], "240s", "90s", []*cluster.Vttablet{tablets[0], tablets[3]}, false)
+			// The requested primary's only peer is RDONLY, which cannot send
+			// semi-sync ACKs. Wait for both reachable tablets so the test reaches
+			// the election check instead of canceling the peer's status RPC.
+			out, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput(
+				"--action-timeout", "240s", "EmergencyReparentShard", utils.KeyspaceShard,
+				"--new-primary", tablets[2].Alias, "--wait-replicas-timeout", "90s",
+				"--ignore-replicas", fmt.Sprintf("%s,%s", tablets[0].Alias, tablets[3].Alias),
+				"--wait-for-all-tablets",
+			)
 			assert.Error(t, err)
 			select {
 			case strChan <- out:
