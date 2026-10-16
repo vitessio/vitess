@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -31,6 +32,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
@@ -39,12 +41,17 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/semisyncmonitor"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
 	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
 
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	vttimepb "vitess.io/vitess/go/vt/proto/vttime"
 )
 
 func newTestReplicationTM(tablet *topodatapb.Tablet, mysqlDaemon mysqlctl.MysqlDaemon, ts *topo.Server) *TabletManager {
@@ -61,6 +68,32 @@ func newTestReplicationTM(tablet *topodatapb.Tablet, mysqlDaemon mysqlctl.MysqlD
 			displayState: displayState{
 				tablet: tablet,
 			},
+		},
+	}
+}
+
+func newPromoteReplicaAndJournalTestTM(t *testing.T, mysqlDaemon mysqlctl.MysqlDaemon) *TabletManager {
+	t.Helper()
+
+	ts := memorytopo.NewServer(t.Context(), "cell1")
+	_, err := ts.GetOrCreateShard(t.Context(), "ks", "0")
+	require.NoError(t, err)
+
+	tablet := newTestTablet(t, 100, "ks", "0", nil)
+	require.NoError(t, ts.CreateTablet(t.Context(), tablet))
+
+	tm := newTestReplicationTM(tablet, mysqlDaemon, ts)
+	tm.BatchCtx = t.Context()
+	tm.QueryServiceControl = tabletservermock.NewController()
+	tm.tmState = newTMState(tm, tablet)
+	t.Cleanup(tm.tmState.Close)
+	return tm
+}
+
+func setReparentJournalLength(fakeMysqlDaemon *mysqlctl.FakeMysqlDaemon, length int32) {
+	fakeMysqlDaemon.FetchSuperQueryMap = map[string]*sqltypes.Result{
+		mysqlctl.ReadReparentJournalInfoQuery(): {
+			Rows: [][]sqltypes.Value{{sqltypes.NewInt32(length)}},
 		},
 	}
 }
@@ -108,7 +141,214 @@ type (
 		err    error
 		calls  int
 	}
+
+	blockingWaitSourcePosMysqlDaemon struct {
+		*mysqlctl.FakeMysqlDaemon
+		entered chan struct{}
+		release chan struct{}
+	}
+
+	blockingPromoteMysqlDaemon struct {
+		*mysqlctl.FakeMysqlDaemon
+		entered  chan struct{}
+		release  chan struct{}
+		position replication.Position
+		ctxErr   chan error
+	}
+
+	prepareCancellationMysqlDaemon struct {
+		*mysqlctl.FakeMysqlDaemon
+		stopEntered        chan struct{}
+		waitEntered        chan struct{}
+		journalEntered     chan struct{}
+		ioThreadRunning    atomic.Bool
+		startIOThreadCalls atomic.Int32
+		startIOThreadError error
+	}
+
+	prepareConcurrentStopMysqlDaemon struct {
+		*mysqlctl.FakeMysqlDaemon
+		waitEntered        chan struct{}
+		ioThreadRunning    atomic.Bool
+		sqlThreadRunning   atomic.Bool
+		startIOThreadCalls atomic.Int32
+		stopCalls          atomic.Int32
+	}
+
+	deadlineRecordingMysqlDaemon struct {
+		*mysqlctl.FakeMysqlDaemon
+		stopDeadline    chan time.Time
+		waitDeadline    chan time.Time
+		promoteDeadline chan time.Time
+		fetchDeadline   chan time.Time
+		executeDeadline chan time.Time
+	}
+
+	deadlineSignalContext struct {
+		context.Context
+		once    sync.Once
+		entered chan struct{}
+	}
+
+	prepareResult struct {
+		response *tabletmanagerdatapb.PrepareEmergencyReparentResponse
+		err      error
+	}
+
+	promoteResult struct {
+		response *tabletmanagerdatapb.PromoteReplicaAndJournalResponse
+		err      error
+	}
 )
+
+func (ctx *deadlineSignalContext) Deadline() (time.Time, bool) {
+	ctx.once.Do(func() { close(ctx.entered) })
+	return ctx.Context.Deadline()
+}
+
+func recordDeadline(ctx context.Context) time.Time {
+	deadline, _ := ctx.Deadline()
+	return deadline
+}
+
+func receive[T any](t *testing.T, ch <-chan T) T {
+	t.Helper()
+	select {
+	case v := <-ch:
+		return v
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "timed out waiting on channel")
+		return *new(T)
+	}
+}
+
+func (d *deadlineRecordingMysqlDaemon) StopIOThread(ctx context.Context) error {
+	d.stopDeadline <- recordDeadline(ctx)
+	return d.FakeMysqlDaemon.StopIOThread(ctx)
+}
+
+func (d *deadlineRecordingMysqlDaemon) WaitSourcePos(ctx context.Context, position replication.Position) error {
+	d.waitDeadline <- recordDeadline(ctx)
+	return d.FakeMysqlDaemon.WaitSourcePos(ctx, position)
+}
+
+func (d *deadlineRecordingMysqlDaemon) Promote(ctx context.Context, hookExtraEnv map[string]string) (replication.Position, error) {
+	d.promoteDeadline <- recordDeadline(ctx)
+	return d.FakeMysqlDaemon.Promote(ctx, hookExtraEnv)
+}
+
+func (d *deadlineRecordingMysqlDaemon) FetchSuperQuery(ctx context.Context, query string) (*sqltypes.Result, error) {
+	d.fetchDeadline <- recordDeadline(ctx)
+	return d.FakeMysqlDaemon.FetchSuperQuery(ctx, query)
+}
+
+func (d *deadlineRecordingMysqlDaemon) ExecuteSuperQueryList(ctx context.Context, queries []string) error {
+	d.executeDeadline <- recordDeadline(ctx)
+	return d.FakeMysqlDaemon.ExecuteSuperQueryList(ctx, queries)
+}
+
+func (d *blockingWaitSourcePosMysqlDaemon) WaitSourcePos(ctx context.Context, _ replication.Position) error {
+	close(d.entered)
+	select {
+	case <-d.release:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (d *blockingPromoteMysqlDaemon) Promote(ctx context.Context, _ map[string]string) (replication.Position, error) {
+	close(d.entered)
+	<-d.release
+	d.ctxErr <- ctx.Err()
+	return d.position, nil
+}
+
+func (d *prepareCancellationMysqlDaemon) ReplicationStatus(ctx context.Context) (replication.ReplicationStatus, error) {
+	status, err := d.FakeMysqlDaemon.ReplicationStatus(ctx)
+	if d.ioThreadRunning.Load() {
+		status.IOState = replication.ReplicationStateRunning
+	} else {
+		status.IOState = replication.ReplicationStateStopped
+	}
+	return status, err
+}
+
+func (d *prepareCancellationMysqlDaemon) StopIOThread(ctx context.Context) error {
+	d.ioThreadRunning.Store(false)
+	if d.stopEntered != nil {
+		close(d.stopEntered)
+		<-ctx.Done()
+		return ctx.Err()
+	}
+	return nil
+}
+
+func (d *prepareCancellationMysqlDaemon) StartIOThread(context.Context) error {
+	d.startIOThreadCalls.Add(1)
+	if d.startIOThreadError != nil {
+		return d.startIOThreadError
+	}
+	d.ioThreadRunning.Store(true)
+	return nil
+}
+
+func (d *prepareCancellationMysqlDaemon) WaitSourcePos(ctx context.Context, position replication.Position) error {
+	if d.waitEntered == nil {
+		return d.FakeMysqlDaemon.WaitSourcePos(ctx, position)
+	}
+	close(d.waitEntered)
+	<-ctx.Done()
+	return ctx.Err()
+}
+
+func (d *prepareCancellationMysqlDaemon) FetchSuperQuery(ctx context.Context, query string) (*sqltypes.Result, error) {
+	if d.journalEntered == nil {
+		return d.FakeMysqlDaemon.FetchSuperQuery(ctx, query)
+	}
+	close(d.journalEntered)
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+func (d *prepareConcurrentStopMysqlDaemon) ReplicationStatus(ctx context.Context) (replication.ReplicationStatus, error) {
+	status, err := d.FakeMysqlDaemon.ReplicationStatus(ctx)
+	if d.ioThreadRunning.Load() {
+		status.IOState = replication.ReplicationStateRunning
+	} else {
+		status.IOState = replication.ReplicationStateStopped
+	}
+	if d.sqlThreadRunning.Load() {
+		status.SQLState = replication.ReplicationStateRunning
+	} else {
+		status.SQLState = replication.ReplicationStateStopped
+	}
+	return status, err
+}
+
+func (d *prepareConcurrentStopMysqlDaemon) StopIOThread(context.Context) error {
+	d.ioThreadRunning.Store(false)
+	return nil
+}
+
+func (d *prepareConcurrentStopMysqlDaemon) WaitSourcePos(ctx context.Context, _ replication.Position) error {
+	close(d.waitEntered)
+	<-ctx.Done()
+	return ctx.Err()
+}
+
+func (d *prepareConcurrentStopMysqlDaemon) StopReplication(context.Context, map[string]string) error {
+	d.stopCalls.Add(1)
+	d.ioThreadRunning.Store(false)
+	d.sqlThreadRunning.Store(false)
+	return nil
+}
+
+func (d *prepareConcurrentStopMysqlDaemon) StartIOThread(context.Context) error {
+	d.startIOThreadCalls.Add(1)
+	d.ioThreadRunning.Store(true)
+	return nil
+}
 
 func (d *demotePrimaryStallQS) SetDemotePrimaryStalled(val bool) {
 	d.primaryStalled.Store(val)
@@ -1631,6 +1871,814 @@ func TestGetMySQLVersionStringBounded(t *testing.T) {
 		// proving the lookup did not run unbounded.
 		require.Less(t, elapsed, 10*time.Second, "deadline-less lookup must still be capped")
 	})
+}
+
+func TestPrepareEmergencyReparent(t *testing.T) {
+	executedPosition := replication.MustParsePosition(replication.Mysql56FlavorID, "24bc7856-9c9d-11ee-bb9d-0242ac120002:1-5")
+	relayLogPosition := replication.MustParsePosition(replication.Mysql56FlavorID, "24bc7856-9c9d-11ee-bb9d-0242ac120002:1-10")
+
+	t.Run("success", func(t *testing.T) {
+		fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
+		fakeMysqlDaemon.Replicating = true
+		fakeMysqlDaemon.IOThreadRunning = true
+		fakeMysqlDaemon.CurrentPrimaryPosition = executedPosition
+		fakeMysqlDaemon.CurrentRelayLogPosition = relayLogPosition
+		fakeMysqlDaemon.WaitPrimaryPositions = []replication.Position{relayLogPosition}
+		fakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA IO_THREAD"}
+		setReparentJournalLength(fakeMysqlDaemon, 7)
+
+		tm := newTestReplicationTM(newTestTablet(t, 100, "ks", "0", nil), fakeMysqlDaemon, nil)
+		response, err := tm.PrepareEmergencyReparent(t.Context(), &tabletmanagerdatapb.PrepareEmergencyReparentRequest{
+			WaitForPositionTimeout: protoutil.DurationToProto(30 * time.Second),
+		})
+
+		require.NoError(t, err)
+		require.NotNil(t, response.Status)
+		require.NotNil(t, response.Status.After)
+		assert.Equal(t, replication.EncodePosition(relayLogPosition), response.RelayLogPosition)
+		assert.EqualValues(t, 7, response.ReparentJournalLength)
+		assert.Nil(t, response.StopReplicationError)
+		assert.Nil(t, response.WaitForPositionError)
+		assert.Nil(t, response.ReadReparentJournalError)
+		require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
+	})
+
+	t.Run("phase deadlines", func(t *testing.T) {
+		fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
+		fakeMysqlDaemon.Replicating = true
+		fakeMysqlDaemon.IOThreadRunning = true
+		fakeMysqlDaemon.CurrentRelayLogPosition = relayLogPosition
+		fakeMysqlDaemon.WaitPrimaryPositions = []replication.Position{relayLogPosition}
+		fakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA IO_THREAD"}
+		setReparentJournalLength(fakeMysqlDaemon, 1)
+		daemon := &deadlineRecordingMysqlDaemon{
+			FakeMysqlDaemon: fakeMysqlDaemon,
+			stopDeadline:    make(chan time.Time, 1),
+			waitDeadline:    make(chan time.Time, 1),
+			fetchDeadline:   make(chan time.Time, 1),
+		}
+		tm := newTestReplicationTM(newTestTablet(t, 100, "ks", "0", nil), daemon, nil)
+		started := time.Now()
+
+		_, err := tm.PrepareEmergencyReparent(t.Context(), &tabletmanagerdatapb.PrepareEmergencyReparentRequest{
+			WaitForPositionTimeout: protoutil.DurationToProto(45 * time.Second),
+		})
+
+		require.NoError(t, err)
+		assert.WithinDuration(t, started.Add(topo.RemoteOperationTimeout), receive(t, daemon.stopDeadline), 2*time.Second)
+		assert.WithinDuration(t, started.Add(45*time.Second), receive(t, daemon.waitDeadline), 2*time.Second)
+		assert.WithinDuration(t, started.Add(topo.RemoteOperationTimeout), receive(t, daemon.fetchDeadline), 2*time.Second)
+		require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
+	})
+
+	t.Run("action lock wait does not consume stop deadline", func(t *testing.T) {
+		originalRemoteOperationTimeout := topo.RemoteOperationTimeout
+		topo.RemoteOperationTimeout = 5 * time.Second
+		t.Cleanup(func() { topo.RemoteOperationTimeout = originalRemoteOperationTimeout })
+
+		fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
+		fakeMysqlDaemon.Replicating = true
+		fakeMysqlDaemon.IOThreadRunning = true
+		fakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA IO_THREAD"}
+		setReparentJournalLength(fakeMysqlDaemon, 1)
+		daemon := &deadlineRecordingMysqlDaemon{
+			FakeMysqlDaemon: fakeMysqlDaemon,
+			stopDeadline:    make(chan time.Time, 1),
+			fetchDeadline:   make(chan time.Time, 1),
+		}
+		tm := newTestReplicationTM(newTestTablet(t, 100, "ks", "0", nil), daemon, nil)
+		require.NoError(t, tm.actionSema.Acquire(t.Context(), 1))
+		lockHeld := true
+		t.Cleanup(func() {
+			if lockHeld {
+				tm.actionSema.Release(1)
+			}
+		})
+		ctx := &deadlineSignalContext{
+			Context: t.Context(),
+			entered: make(chan struct{}),
+		}
+		resultCh := make(chan error, 1)
+		go func() {
+			_, err := tm.PrepareEmergencyReparent(ctx, &tabletmanagerdatapb.PrepareEmergencyReparentRequest{})
+			resultCh <- err
+		}()
+
+		receive(t, ctx.entered)
+		time.Sleep(2 * time.Second)
+		lockReleased := time.Now()
+		tm.actionSema.Release(1)
+		lockHeld = false
+
+		deadline := receive(t, daemon.stopDeadline)
+		assert.Greater(t, deadline.Sub(lockReleased), 4*time.Second)
+
+		require.NoError(t, receive(t, resultCh))
+		require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
+	})
+
+	t.Run("source file position fallback", func(t *testing.T) {
+		filePosition := replication.MustParsePosition(replication.FilePosFlavorID, "mysql-bin.000123:456")
+		fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
+		fakeMysqlDaemon.Replicating = true
+		fakeMysqlDaemon.IOThreadRunning = false
+		fakeMysqlDaemon.CurrentPrimaryPosition = executedPosition
+		fakeMysqlDaemon.CurrentSourceFilePosition = filePosition
+		fakeMysqlDaemon.WaitPrimaryPositions = []replication.Position{filePosition}
+		setReparentJournalLength(fakeMysqlDaemon, 1)
+
+		tm := newTestReplicationTM(newTestTablet(t, 100, "ks", "0", nil), fakeMysqlDaemon, nil)
+		response, err := tm.PrepareEmergencyReparent(t.Context(), &tabletmanagerdatapb.PrepareEmergencyReparentRequest{})
+
+		require.NoError(t, err)
+		assert.Equal(t, replication.EncodePosition(filePosition), response.RelayLogPosition)
+		assert.Nil(t, response.WaitForPositionError)
+	})
+
+	t.Run("invalid timeout", func(t *testing.T) {
+		fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
+		tm := newTestReplicationTM(newTestTablet(t, 100, "ks", "0", nil), fakeMysqlDaemon, nil)
+
+		response, err := tm.PrepareEmergencyReparent(t.Context(), &tabletmanagerdatapb.PrepareEmergencyReparentRequest{
+			WaitForPositionTimeout: protoutil.DurationToProto(-time.Second),
+		})
+
+		assert.Nil(t, response)
+		require.ErrorContains(t, err, "wait_for_position_timeout")
+		require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
+	})
+
+	t.Run("nil request", func(t *testing.T) {
+		fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
+		tm := newTestReplicationTM(newTestTablet(t, 100, "ks", "0", nil), fakeMysqlDaemon, nil)
+
+		response, err := tm.PrepareEmergencyReparent(t.Context(), nil)
+
+		assert.Nil(t, response)
+		require.ErrorContains(t, err, "request is required")
+		require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
+	})
+
+	t.Run("stop failure", func(t *testing.T) {
+		fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
+		fakeMysqlDaemon.Replicating = true
+		fakeMysqlDaemon.IOThreadRunning = true
+		fakeMysqlDaemon.CurrentPrimaryPosition = executedPosition
+		fakeMysqlDaemon.CurrentRelayLogPosition = relayLogPosition
+		fakeMysqlDaemon.ExecuteSuperQueryErrorMap = map[string]error{
+			"STOP REPLICA IO_THREAD": errors.New("injected stop failure"),
+		}
+		fakeMysqlDaemon.TimeoutHook = func() error { return errors.New("wait should not run") }
+		var journalReads atomic.Int64
+		fakeMysqlDaemon.FetchSuperQueryCallback = func(string) (*sqltypes.Result, error) {
+			journalReads.Add(1)
+			return nil, errors.New("journal should not run")
+		}
+
+		tm := newTestReplicationTM(newTestTablet(t, 100, "ks", "0", nil), fakeMysqlDaemon, nil)
+		response, err := tm.PrepareEmergencyReparent(t.Context(), &tabletmanagerdatapb.PrepareEmergencyReparentRequest{})
+
+		require.NoError(t, err)
+		require.NotNil(t, response.Status)
+		require.ErrorContains(t, vterrors.FromVTRPC(response.StopReplicationError), "injected stop failure")
+		assert.Nil(t, response.WaitForPositionError)
+		assert.Nil(t, response.ReadReparentJournalError)
+		assert.Zero(t, journalReads.Load())
+	})
+
+	t.Run("relay log wait failure still reads journal", func(t *testing.T) {
+		fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
+		fakeMysqlDaemon.Replicating = true
+		fakeMysqlDaemon.IOThreadRunning = false
+		fakeMysqlDaemon.CurrentPrimaryPosition = executedPosition
+		fakeMysqlDaemon.CurrentRelayLogPosition = relayLogPosition
+		fakeMysqlDaemon.TimeoutHook = func() error { return errors.New("injected wait failure") }
+		setReparentJournalLength(fakeMysqlDaemon, 11)
+
+		tm := newTestReplicationTM(newTestTablet(t, 100, "ks", "0", nil), fakeMysqlDaemon, nil)
+		response, err := tm.PrepareEmergencyReparent(t.Context(), &tabletmanagerdatapb.PrepareEmergencyReparentRequest{})
+
+		require.NoError(t, err)
+		assert.Empty(t, response.RelayLogPosition)
+		require.ErrorContains(t, vterrors.FromVTRPC(response.WaitForPositionError), "injected wait failure")
+		assert.EqualValues(t, 11, response.ReparentJournalLength)
+		assert.Nil(t, response.ReadReparentJournalError)
+	})
+
+	t.Run("journal read failure preserves earlier results", func(t *testing.T) {
+		fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
+		fakeMysqlDaemon.Replicating = true
+		fakeMysqlDaemon.IOThreadRunning = false
+		fakeMysqlDaemon.CurrentPrimaryPosition = executedPosition
+		fakeMysqlDaemon.CurrentRelayLogPosition = relayLogPosition
+		fakeMysqlDaemon.WaitPrimaryPositions = []replication.Position{relayLogPosition}
+		fakeMysqlDaemon.FetchSuperQueryCallback = func(string) (*sqltypes.Result, error) {
+			return nil, errors.New("injected journal read failure")
+		}
+
+		tm := newTestReplicationTM(newTestTablet(t, 100, "ks", "0", nil), fakeMysqlDaemon, nil)
+		response, err := tm.PrepareEmergencyReparent(t.Context(), &tabletmanagerdatapb.PrepareEmergencyReparentRequest{})
+
+		require.NoError(t, err)
+		assert.Equal(t, replication.EncodePosition(relayLogPosition), response.RelayLogPosition)
+		assert.Nil(t, response.WaitForPositionError)
+		require.ErrorContains(t, vterrors.FromVTRPC(response.ReadReparentJournalError), "injected journal read failure")
+	})
+}
+
+func TestPrepareEmergencyReparentCancellationRestoresIOThread(t *testing.T) {
+	relayLogPosition := replication.MustParsePosition(replication.Mysql56FlavorID, "24bc7856-9c9d-11ee-bb9d-0242ac120002:1-10")
+
+	newDaemon := func() *prepareCancellationMysqlDaemon {
+		fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
+		fakeMysqlDaemon.Replicating = true
+		return &prepareCancellationMysqlDaemon{FakeMysqlDaemon: fakeMysqlDaemon}
+	}
+
+	tests := []struct {
+		name             string
+		initialIORunning bool
+		configure        func(*prepareCancellationMysqlDaemon) <-chan struct{}
+		beforeCancel     func(*testing.T, *TabletManager)
+		wantRunning      bool
+		wantStartCall    int32
+	}{
+		{
+			name:             "relay log wait",
+			initialIORunning: true,
+			configure: func(daemon *prepareCancellationMysqlDaemon) <-chan struct{} {
+				daemon.CurrentRelayLogPosition = relayLogPosition
+				daemon.waitEntered = make(chan struct{})
+				return daemon.waitEntered
+			},
+			wantRunning:   true,
+			wantStartCall: 1,
+		},
+		{
+			name:             "journal read",
+			initialIORunning: true,
+			configure: func(daemon *prepareCancellationMysqlDaemon) <-chan struct{} {
+				daemon.journalEntered = make(chan struct{})
+				return daemon.journalEntered
+			},
+			wantRunning:   true,
+			wantStartCall: 1,
+		},
+		{
+			name:             "unrelated action",
+			initialIORunning: true,
+			configure: func(daemon *prepareCancellationMysqlDaemon) <-chan struct{} {
+				daemon.CurrentRelayLogPosition = relayLogPosition
+				daemon.waitEntered = make(chan struct{})
+				return daemon.waitEntered
+			},
+			beforeCancel: func(t *testing.T, tm *TabletManager) {
+				tm.Sleep(t.Context(), 0)
+			},
+			wantRunning:   true,
+			wantStartCall: 1,
+		},
+		{
+			name:             "failed replication action",
+			initialIORunning: true,
+			configure: func(daemon *prepareCancellationMysqlDaemon) <-chan struct{} {
+				daemon.CurrentRelayLogPosition = relayLogPosition
+				daemon.waitEntered = make(chan struct{})
+				return daemon.waitEntered
+			},
+			beforeCancel: func(t *testing.T, tm *TabletManager) {
+				_, err := tm.StopReplicationMinimum(t.Context(), "not-a-position", 30*time.Second)
+				require.ErrorContains(t, err, "parse error")
+			},
+		},
+		{
+			name:             "tablet was promoted",
+			initialIORunning: true,
+			configure: func(daemon *prepareCancellationMysqlDaemon) <-chan struct{} {
+				daemon.CurrentRelayLogPosition = relayLogPosition
+				daemon.waitEntered = make(chan struct{})
+				return daemon.waitEntered
+			},
+			beforeCancel: func(t *testing.T, tm *TabletManager) {
+				tm.tmState.displayState.mu.Lock()
+				tm.tmState.displayState.tablet.Type = topodatapb.TabletType_PRIMARY
+				tm.tmState.displayState.mu.Unlock()
+			},
+		},
+		{
+			name: "initially stopped I/O thread",
+			configure: func(daemon *prepareCancellationMysqlDaemon) <-chan struct{} {
+				daemon.CurrentRelayLogPosition = relayLogPosition
+				daemon.waitEntered = make(chan struct{})
+				return daemon.waitEntered
+			},
+		},
+		{
+			name:             "stop phase",
+			initialIORunning: true,
+			configure: func(daemon *prepareCancellationMysqlDaemon) <-chan struct{} {
+				daemon.stopEntered = make(chan struct{})
+				return daemon.stopEntered
+			},
+			wantRunning:   true,
+			wantStartCall: 1,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			daemon := newDaemon()
+			daemon.ioThreadRunning.Store(tc.initialIORunning)
+			entered := tc.configure(daemon)
+			tm := newTestReplicationTM(newTestTablet(t, 100, "ks", "0", nil), daemon, nil)
+			ctx, cancel := context.WithCancel(t.Context())
+			t.Cleanup(cancel)
+			resultCh := make(chan prepareResult, 1)
+			go func() {
+				response, err := tm.PrepareEmergencyReparent(ctx, &tabletmanagerdatapb.PrepareEmergencyReparentRequest{
+					WaitForPositionTimeout: protoutil.DurationToProto(30 * time.Second),
+				})
+				resultCh <- prepareResult{response: response, err: err}
+			}()
+
+			receive(t, entered)
+			if tc.beforeCancel != nil {
+				tc.beforeCancel(t, tm)
+			}
+			cancel()
+
+			result := receive(t, resultCh)
+			assert.Nil(t, result.response)
+			require.ErrorIs(t, result.err, context.Canceled)
+			assert.Equal(t, tc.wantRunning, daemon.ioThreadRunning.Load())
+			assert.Equal(t, tc.wantStartCall, daemon.startIOThreadCalls.Load())
+		})
+	}
+
+	t.Run("restart failure", func(t *testing.T) {
+		daemon := newDaemon()
+		daemon.ioThreadRunning.Store(true)
+		daemon.CurrentRelayLogPosition = relayLogPosition
+		daemon.waitEntered = make(chan struct{})
+		daemon.startIOThreadError = errors.New("injected restart failure")
+		tm := newTestReplicationTM(newTestTablet(t, 100, "ks", "0", nil), daemon, nil)
+		ctx, cancel := context.WithCancel(t.Context())
+		t.Cleanup(cancel)
+		resultCh := make(chan prepareResult, 1)
+		go func() {
+			response, err := tm.PrepareEmergencyReparent(ctx, &tabletmanagerdatapb.PrepareEmergencyReparentRequest{
+				WaitForPositionTimeout: protoutil.DurationToProto(30 * time.Second),
+			})
+			resultCh <- prepareResult{response: response, err: err}
+		}()
+
+		receive(t, daemon.waitEntered)
+		cancel()
+
+		result := receive(t, resultCh)
+		assert.Nil(t, result.response)
+		require.ErrorContains(t, result.err, "injected restart failure")
+		assert.Equal(t, vtrpcpb.Code_CANCELED, vterrors.Code(result.err))
+		assert.False(t, daemon.ioThreadRunning.Load())
+		assert.EqualValues(t, 1, daemon.startIOThreadCalls.Load())
+	})
+
+	t.Run("restart lock timeout", func(t *testing.T) {
+		daemon := newDaemon()
+		daemon.ioThreadRunning.Store(true)
+		daemon.CurrentRelayLogPosition = relayLogPosition
+		daemon.waitEntered = make(chan struct{})
+		tm := newTestReplicationTM(newTestTablet(t, 100, "ks", "0", nil), daemon, nil)
+		ctx, cancel := context.WithCancel(t.Context())
+		t.Cleanup(cancel)
+		resultCh := make(chan prepareResult, 1)
+		go func() {
+			response, err := tm.PrepareEmergencyReparent(ctx, &tabletmanagerdatapb.PrepareEmergencyReparentRequest{
+				WaitForPositionTimeout: protoutil.DurationToProto(30 * time.Second),
+			})
+			resultCh <- prepareResult{response: response, err: err}
+		}()
+
+		receive(t, daemon.waitEntered)
+		require.True(t, tm.actionSema.TryAcquire(1))
+		t.Cleanup(func() { tm.actionSema.Release(1) })
+		originalRemoteOperationTimeout := topo.RemoteOperationTimeout
+		topo.RemoteOperationTimeout = 0
+		t.Cleanup(func() { topo.RemoteOperationTimeout = originalRemoteOperationTimeout })
+		cancel()
+
+		result := receive(t, resultCh)
+		assert.Nil(t, result.response)
+		require.ErrorContains(t, result.err, "failed to reacquire the action lock")
+		assert.Equal(t, vtrpcpb.Code_CANCELED, vterrors.Code(result.err))
+		assert.False(t, daemon.ioThreadRunning.Load())
+		assert.Zero(t, daemon.startIOThreadCalls.Load())
+	})
+}
+
+func TestPrepareEmergencyReparentCancellationDoesNotReverseNewerStopReplication(t *testing.T) {
+	relayLogPosition := replication.MustParsePosition(replication.Mysql56FlavorID, "24bc7856-9c9d-11ee-bb9d-0242ac120002:1-10")
+	fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
+	fakeMysqlDaemon.Replicating = true
+	fakeMysqlDaemon.CurrentRelayLogPosition = relayLogPosition
+	daemon := &prepareConcurrentStopMysqlDaemon{
+		FakeMysqlDaemon: fakeMysqlDaemon,
+		waitEntered:     make(chan struct{}),
+	}
+	daemon.ioThreadRunning.Store(true)
+	daemon.sqlThreadRunning.Store(true)
+
+	tm := newTestReplicationTM(newTestTablet(t, 100, "ks", "0", nil), daemon, nil)
+	ctx, cancel := context.WithCancel(t.Context())
+	t.Cleanup(cancel)
+	resultCh := make(chan prepareResult, 1)
+	go func() {
+		response, err := tm.PrepareEmergencyReparent(ctx, &tabletmanagerdatapb.PrepareEmergencyReparentRequest{
+			WaitForPositionTimeout: protoutil.DurationToProto(30 * time.Second),
+		})
+		resultCh <- prepareResult{response: response, err: err}
+	}()
+
+	receive(t, daemon.waitEntered)
+	require.True(t, tm.actionSema.TryAcquire(1))
+	tm.actionSema.Release(1)
+
+	stopResultCh := make(chan error, 1)
+	go func() {
+		stopResultCh <- tm.StopReplication(t.Context())
+	}()
+	require.NoError(t, receive(t, stopResultCh))
+	cancel()
+
+	result := receive(t, resultCh)
+	assert.Nil(t, result.response)
+	require.ErrorIs(t, result.err, context.Canceled)
+
+	assert.EqualValues(t, 0, daemon.startIOThreadCalls.Load())
+	assert.EqualValues(t, 1, daemon.stopCalls.Load())
+	assert.False(t, daemon.ioThreadRunning.Load())
+	assert.False(t, daemon.sqlThreadRunning.Load())
+}
+
+func TestReparentPhaseTimeout(t *testing.T) {
+	for name, timeout := range map[string]*vttimepb.Duration{
+		"unset": nil,
+		"zero":  protoutil.DurationToProto(0),
+	} {
+		t.Run(name, func(t *testing.T) {
+			got, err := reparentPhaseTimeout(timeout)
+			require.NoError(t, err)
+			assert.Equal(t, topo.RemoteOperationTimeout, got)
+		})
+	}
+}
+
+func TestReparentPhaseError(t *testing.T) {
+	t.Run("Vitess error", func(t *testing.T) {
+		err := vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "tablet unavailable")
+		rpcErr := reparentPhaseError(err)
+		assert.Equal(t, vtrpcpb.Code_UNAVAILABLE, rpcErr.Code)
+		assert.Equal(t, "tablet unavailable", rpcErr.Message)
+	})
+
+	t.Run("MySQL error", func(t *testing.T) {
+		err := sqlerror.NewSQLError(sqlerror.ERNotReplica, sqlerror.SSUnknownSQLState, "not a replica")
+		rpcErr := reparentPhaseError(err)
+		assert.Equal(t, err.VtRpcErrorCode(), rpcErr.Code)
+		assert.Contains(t, rpcErr.Message, fmt.Sprintf("errno %d", sqlerror.ERNotReplica))
+	})
+
+	t.Run("wrapped MySQL error", func(t *testing.T) {
+		err := sqlerror.NewSQLError(sqlerror.ERAccessDeniedError, sqlerror.SSAccessDeniedError, "access denied")
+		rpcErr := reparentPhaseError(fmt.Errorf("execute query: %w", err))
+		assert.Equal(t, vtrpcpb.Code_PERMISSION_DENIED, rpcErr.Code)
+		assert.Contains(t, rpcErr.Message, fmt.Sprintf("errno %d", sqlerror.ERAccessDeniedError))
+	})
+}
+
+func TestPromoteReplicaAndJournal(t *testing.T) {
+	promotionPosition := replication.MustParsePosition(replication.Mysql56FlavorID, "24bc7856-9c9d-11ee-bb9d-0242ac120002:1-10")
+	created := time.Unix(1700000000, 123).UTC()
+
+	newRequest := func() *tabletmanagerdatapb.PromoteReplicaAndJournalRequest {
+		return &tabletmanagerdatapb.PromoteReplicaAndJournalRequest{
+			SemiSync:    true,
+			TimeCreated: protoutil.TimeToProto(created),
+			ActionName:  "EmergencyReparentShard",
+		}
+	}
+
+	t.Run("success", func(t *testing.T) {
+		fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
+		fakeMysqlDaemon.PromoteResult = promotionPosition
+		tm := newPromoteReplicaAndJournalTestTM(t, fakeMysqlDaemon)
+		fakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+			mysqlctl.PopulateReparentJournal(created.UnixNano(), "EmergencyReparentShard", topoproto.TabletAliasString(tm.tabletAlias), promotionPosition),
+		}
+
+		response, err := tm.PromoteReplicaAndJournal(t.Context(), newRequest())
+
+		require.NoError(t, err)
+		assert.Equal(t, replication.EncodePosition(promotionPosition), response.Position)
+		assert.Nil(t, response.PromoteReplicaError)
+		assert.Nil(t, response.PopulateReparentJournalError)
+		assert.True(t, fakeMysqlDaemon.SemiSyncPrimaryEnabled)
+		assert.Equal(t, topodatapb.TabletType_PRIMARY, tm.Tablet().Type)
+		require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
+	})
+
+	t.Run("phase deadlines", func(t *testing.T) {
+		fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
+		fakeMysqlDaemon.PromoteResult = promotionPosition
+		daemon := &deadlineRecordingMysqlDaemon{
+			FakeMysqlDaemon: fakeMysqlDaemon,
+			promoteDeadline: make(chan time.Time, 1),
+			executeDeadline: make(chan time.Time, 1),
+		}
+		tm := newPromoteReplicaAndJournalTestTM(t, daemon)
+		fakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+			mysqlctl.PopulateReparentJournal(created.UnixNano(), "EmergencyReparentShard", topoproto.TabletAliasString(tm.tabletAlias), promotionPosition),
+		}
+		request := newRequest()
+		journalTimeout := topo.RemoteOperationTimeout / 2
+		request.PopulateReparentJournalTimeout = protoutil.DurationToProto(journalTimeout)
+		started := time.Now()
+
+		_, err := tm.PromoteReplicaAndJournal(t.Context(), request)
+
+		require.NoError(t, err)
+		assert.WithinDuration(t, started.Add(topo.RemoteOperationTimeout), receive(t, daemon.promoteDeadline), 2*time.Second)
+		assert.WithinDuration(t, started.Add(journalTimeout), receive(t, daemon.executeDeadline), 2*time.Second)
+	})
+
+	t.Run("action lock wait does not consume promotion deadline", func(t *testing.T) {
+		originalRemoteOperationTimeout := topo.RemoteOperationTimeout
+		topo.RemoteOperationTimeout = 5 * time.Second
+		t.Cleanup(func() { topo.RemoteOperationTimeout = originalRemoteOperationTimeout })
+
+		fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
+		fakeMysqlDaemon.PromoteResult = promotionPosition
+		daemon := &deadlineRecordingMysqlDaemon{
+			FakeMysqlDaemon: fakeMysqlDaemon,
+			promoteDeadline: make(chan time.Time, 1),
+			executeDeadline: make(chan time.Time, 1),
+		}
+		tm := newPromoteReplicaAndJournalTestTM(t, daemon)
+		fakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+			mysqlctl.PopulateReparentJournal(created.UnixNano(), "EmergencyReparentShard", topoproto.TabletAliasString(tm.tabletAlias), promotionPosition),
+		}
+		require.NoError(t, tm.actionSema.Acquire(t.Context(), 1))
+		lockHeld := true
+		t.Cleanup(func() {
+			if lockHeld {
+				tm.actionSema.Release(1)
+			}
+		})
+		ctx := &deadlineSignalContext{
+			Context: t.Context(),
+			entered: make(chan struct{}),
+		}
+		resultCh := make(chan promoteResult, 1)
+		request := newRequest()
+		go func() {
+			response, err := tm.PromoteReplicaAndJournal(ctx, request)
+			resultCh <- promoteResult{response: response, err: err}
+		}()
+
+		receive(t, ctx.entered)
+		time.Sleep(2 * time.Second)
+		lockReleased := time.Now()
+		tm.actionSema.Release(1)
+		lockHeld = false
+
+		deadline := receive(t, daemon.promoteDeadline)
+		assert.True(t, deadline.After(lockReleased.Add(4*time.Second)))
+
+		result := receive(t, resultCh)
+		require.NoError(t, result.err)
+		assert.Equal(t, replication.EncodePosition(promotionPosition), result.response.Position)
+	})
+
+	t.Run("promotion failure prevents journal write", func(t *testing.T) {
+		fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
+		fakeMysqlDaemon.PromoteError = errors.New("injected promotion failure")
+		tm := newPromoteReplicaAndJournalTestTM(t, fakeMysqlDaemon)
+
+		response, err := tm.PromoteReplicaAndJournal(t.Context(), newRequest())
+
+		require.NoError(t, err)
+		require.ErrorContains(t, vterrors.FromVTRPC(response.PromoteReplicaError), "injected promotion failure")
+		assert.Nil(t, response.PopulateReparentJournalError)
+		assert.Empty(t, response.Position)
+		assert.Equal(t, topodatapb.TabletType_REPLICA, tm.Tablet().Type)
+	})
+
+	t.Run("post-promotion failure preserves promotion position", func(t *testing.T) {
+		fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
+		fakeMysqlDaemon.PromoteResult = promotionPosition
+		tm := newPromoteReplicaAndJournalTestTM(t, fakeMysqlDaemon)
+		queryService := tm.QueryServiceControl.(*tabletservermock.Controller)
+		require.NoError(t, queryService.InitDBConfig(&querypb.Target{
+			Keyspace:   "ks",
+			Shard:      "0",
+			TabletType: topodatapb.TabletType_REPLICA,
+		}, &dbconfigs.DBConfigs{}, fakeMysqlDaemon))
+		tm.tmState.Open()
+		queryService.SetServingTypeError = errors.New("injected query service activation failure")
+
+		response, err := tm.PromoteReplicaAndJournal(t.Context(), newRequest())
+
+		require.NoError(t, err)
+		assert.Equal(t, replication.EncodePosition(promotionPosition), response.Position)
+		require.ErrorContains(t, vterrors.FromVTRPC(response.PromoteReplicaError), "injected query service activation failure")
+		assert.Nil(t, response.PopulateReparentJournalError)
+		assert.Equal(t, topodatapb.TabletType_PRIMARY, tm.Tablet().Type)
+	})
+
+	t.Run("journal failure preserves promotion position", func(t *testing.T) {
+		fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
+		fakeMysqlDaemon.PromoteResult = promotionPosition
+		tm := newPromoteReplicaAndJournalTestTM(t, fakeMysqlDaemon)
+		journalQuery := mysqlctl.PopulateReparentJournal(created.UnixNano(), "EmergencyReparentShard", topoproto.TabletAliasString(tm.tabletAlias), promotionPosition)
+		fakeMysqlDaemon.ExecuteSuperQueryErrorMap = map[string]error{
+			journalQuery: errors.New("injected journal failure"),
+		}
+
+		response, err := tm.PromoteReplicaAndJournal(t.Context(), newRequest())
+
+		require.NoError(t, err)
+		assert.Equal(t, replication.EncodePosition(promotionPosition), response.Position)
+		assert.Nil(t, response.PromoteReplicaError)
+		require.ErrorContains(t, vterrors.FromVTRPC(response.PopulateReparentJournalError), "injected journal failure")
+		assert.Equal(t, topodatapb.TabletType_PRIMARY, tm.Tablet().Type)
+	})
+}
+
+func TestPromoteReplicaAndJournalCancellation(t *testing.T) {
+	promotionPosition := replication.MustParsePosition(replication.Mysql56FlavorID, "24bc7856-9c9d-11ee-bb9d-0242ac120002:1-10")
+	created := time.Unix(1700000000, 123).UTC()
+
+	t.Run("before promotion", func(t *testing.T) {
+		fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
+		tm := newTestReplicationTM(newTestTablet(t, 100, "ks", "0", nil), fakeMysqlDaemon, nil)
+		ctx, cancel := context.WithCancel(t.Context())
+		cancel()
+
+		response, err := tm.PromoteReplicaAndJournal(ctx, &tabletmanagerdatapb.PromoteReplicaAndJournalRequest{
+			TimeCreated: protoutil.TimeToProto(created),
+			ActionName:  "EmergencyReparentShard",
+		})
+
+		assert.Nil(t, response)
+		require.ErrorIs(t, err, context.Canceled)
+		assert.Equal(t, topodatapb.TabletType_REPLICA, tm.Tablet().Type)
+	})
+
+	t.Run("while waiting for action lock", func(t *testing.T) {
+		fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
+		fakeMysqlDaemon.PromoteResult = promotionPosition
+		tm := newPromoteReplicaAndJournalTestTM(t, fakeMysqlDaemon)
+		require.NoError(t, tm.actionSema.Acquire(t.Context(), 1))
+		t.Cleanup(func() { tm.actionSema.Release(1) })
+		baseCtx, cancel := context.WithCancel(t.Context())
+		t.Cleanup(cancel)
+		ctx := &deadlineSignalContext{
+			Context: baseCtx,
+			entered: make(chan struct{}),
+		}
+		resultCh := make(chan promoteResult, 1)
+		go func() {
+			response, err := tm.PromoteReplicaAndJournal(ctx, &tabletmanagerdatapb.PromoteReplicaAndJournalRequest{
+				TimeCreated: protoutil.TimeToProto(created),
+				ActionName:  "EmergencyReparentShard",
+			})
+			resultCh <- promoteResult{response: response, err: err}
+		}()
+
+		receive(t, ctx.entered)
+		cancel()
+
+		result := receive(t, resultCh)
+		assert.Nil(t, result.response)
+		require.ErrorIs(t, result.err, context.Canceled)
+		assert.Equal(t, topodatapb.TabletType_REPLICA, tm.Tablet().Type)
+		require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
+	})
+
+	t.Run("after promotion starts", func(t *testing.T) {
+		fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
+		daemon := &blockingPromoteMysqlDaemon{
+			FakeMysqlDaemon: fakeMysqlDaemon,
+			entered:         make(chan struct{}),
+			release:         make(chan struct{}),
+			position:        promotionPosition,
+			ctxErr:          make(chan error, 1),
+		}
+		t.Cleanup(func() {
+			select {
+			case <-daemon.release:
+			default:
+				close(daemon.release)
+			}
+		})
+
+		tm := newPromoteReplicaAndJournalTestTM(t, daemon)
+		fakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+			mysqlctl.PopulateReparentJournal(created.UnixNano(), "EmergencyReparentShard", topoproto.TabletAliasString(tm.tabletAlias), promotionPosition),
+		}
+		ctx, cancel := context.WithCancel(t.Context())
+		resultCh := make(chan promoteResult, 1)
+		go func() {
+			response, err := tm.PromoteReplicaAndJournal(ctx, &tabletmanagerdatapb.PromoteReplicaAndJournalRequest{
+				TimeCreated: protoutil.TimeToProto(created),
+				ActionName:  "EmergencyReparentShard",
+			})
+			resultCh <- promoteResult{response: response, err: err}
+		}()
+
+		receive(t, daemon.entered)
+		cancel()
+		close(daemon.release)
+
+		result := receive(t, resultCh)
+		require.NoError(t, result.err)
+		assert.Equal(t, replication.EncodePosition(promotionPosition), result.response.Position)
+		assert.NoError(t, <-daemon.ctxErr)
+		require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
+	})
+}
+
+func TestPromoteReplicaAndJournalRejectsInvalidRequest(t *testing.T) {
+	created := time.Unix(1700000000, 123).UTC()
+	tests := []struct {
+		name      string
+		request   *tabletmanagerdatapb.PromoteReplicaAndJournalRequest
+		expectErr string
+	}{
+		{
+			name:      "nil request",
+			expectErr: "request is required",
+		},
+		{
+			name:      "missing timestamp",
+			request:   &tabletmanagerdatapb.PromoteReplicaAndJournalRequest{ActionName: "EmergencyReparentShard"},
+			expectErr: "time_created",
+		},
+		{
+			name:      "invalid timestamp",
+			request:   &tabletmanagerdatapb.PromoteReplicaAndJournalRequest{TimeCreated: &vttimepb.Time{Seconds: 1, Nanoseconds: int32(time.Second)}, ActionName: "EmergencyReparentShard"},
+			expectErr: "time_created is out of range",
+		},
+		{
+			name:      "negative timestamp",
+			request:   &tabletmanagerdatapb.PromoteReplicaAndJournalRequest{TimeCreated: &vttimepb.Time{Seconds: -1}, ActionName: "EmergencyReparentShard"},
+			expectErr: "time_created must be positive",
+		},
+		{
+			name:      "zero timestamp",
+			request:   &tabletmanagerdatapb.PromoteReplicaAndJournalRequest{TimeCreated: &vttimepb.Time{}, ActionName: "EmergencyReparentShard"},
+			expectErr: "time_created must be positive",
+		},
+		{
+			name:      "oversized action",
+			request:   &tabletmanagerdatapb.PromoteReplicaAndJournalRequest{TimeCreated: protoutil.TimeToProto(created), ActionName: strings.Repeat("a", 256)},
+			expectErr: "action_name must not exceed 255 bytes",
+		},
+		{
+			name: "negative journal timeout",
+			request: &tabletmanagerdatapb.PromoteReplicaAndJournalRequest{
+				TimeCreated:                    protoutil.TimeToProto(created),
+				ActionName:                     "EmergencyReparentShard",
+				PopulateReparentJournalTimeout: protoutil.DurationToProto(-time.Second),
+			},
+			expectErr: "populate_reparent_journal_timeout",
+		},
+		{
+			name: "journal timeout exceeds remote operation timeout",
+			request: &tabletmanagerdatapb.PromoteReplicaAndJournalRequest{
+				TimeCreated:                    protoutil.TimeToProto(created),
+				ActionName:                     "EmergencyReparentShard",
+				PopulateReparentJournalTimeout: protoutil.DurationToProto(topo.RemoteOperationTimeout + time.Second),
+			},
+			expectErr: "must not exceed the remote operation timeout",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
+			fakeMysqlDaemon.PromoteError = errors.New("promotion should not run")
+			tm := newTestReplicationTM(newTestTablet(t, 100, "ks", "0", nil), fakeMysqlDaemon, nil)
+			tm.QueryServiceControl = tabletservermock.NewController()
+
+			response, err := tm.PromoteReplicaAndJournal(t.Context(), tc.request)
+
+			assert.Nil(t, response)
+			require.ErrorContains(t, err, tc.expectErr)
+			assert.Equal(t, topodatapb.TabletType_REPLICA, tm.Tablet().Type)
+			require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
+		})
+	}
 }
 
 func TestShardPeerHealthSnapshot(t *testing.T) {

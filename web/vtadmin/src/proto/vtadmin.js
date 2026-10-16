@@ -97245,6 +97245,707 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         return StopReplicationAndGetStatusResponse;
     })();
 
+    tabletmanagerdata.PrepareEmergencyReparentRequest = (function() {
+
+        /**
+         * Properties of a PrepareEmergencyReparentRequest.
+         * @typedef {Object} tabletmanagerdata.PrepareEmergencyReparentRequest.$Properties
+         * @property {vttime.Duration.$Properties|null} [wait_for_position_timeout] PrepareEmergencyReparentRequest wait_for_position_timeout
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+
+        /**
+         * Properties of a PrepareEmergencyReparentRequest.
+         * @memberof tabletmanagerdata
+         * @interface IPrepareEmergencyReparentRequest
+         * @augments tabletmanagerdata.PrepareEmergencyReparentRequest.$Properties
+         * @deprecated Use tabletmanagerdata.PrepareEmergencyReparentRequest.$Properties instead.
+         */
+
+        /**
+         * Shape of a PrepareEmergencyReparentRequest.
+         * @typedef {tabletmanagerdata.PrepareEmergencyReparentRequest.$Properties} tabletmanagerdata.PrepareEmergencyReparentRequest.$Shape
+         */
+
+        /**
+         * Constructs a new PrepareEmergencyReparentRequest.
+         * @memberof tabletmanagerdata
+         * @classdesc Represents a PrepareEmergencyReparentRequest.
+         * @constructor
+         * @param {tabletmanagerdata.PrepareEmergencyReparentRequest.$Properties=} [properties] Properties to set
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+        const PrepareEmergencyReparentRequest = function (properties) {
+            if (properties)
+                for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                        this[keys[i]] = properties[keys[i]];
+        };
+
+        /**
+         * PrepareEmergencyReparentRequest wait_for_position_timeout.
+         * @member {vttime.Duration.$Properties|null|undefined} wait_for_position_timeout
+         * @memberof tabletmanagerdata.PrepareEmergencyReparentRequest
+         * @instance
+         */
+        PrepareEmergencyReparentRequest.prototype.wait_for_position_timeout = null;
+
+        /**
+         * Creates a new PrepareEmergencyReparentRequest instance using the specified properties.
+         * @function create
+         * @memberof tabletmanagerdata.PrepareEmergencyReparentRequest
+         * @static
+         * @param {tabletmanagerdata.PrepareEmergencyReparentRequest.$Properties=} [properties] Properties to set
+         * @returns {tabletmanagerdata.PrepareEmergencyReparentRequest} PrepareEmergencyReparentRequest instance
+         * @type {{
+         *   (properties: tabletmanagerdata.PrepareEmergencyReparentRequest.$Shape): tabletmanagerdata.PrepareEmergencyReparentRequest & tabletmanagerdata.PrepareEmergencyReparentRequest.$Shape;
+         *   (properties?: tabletmanagerdata.PrepareEmergencyReparentRequest.$Properties): tabletmanagerdata.PrepareEmergencyReparentRequest;
+         * }}
+         */
+        PrepareEmergencyReparentRequest.create = function(properties) {
+            return new PrepareEmergencyReparentRequest(properties);
+        };
+
+        /**
+         * Encodes the specified PrepareEmergencyReparentRequest message. Does not implicitly {@link tabletmanagerdata.PrepareEmergencyReparentRequest.verify|verify} messages.
+         * @function encode
+         * @memberof tabletmanagerdata.PrepareEmergencyReparentRequest
+         * @static
+         * @param {tabletmanagerdata.PrepareEmergencyReparentRequest.$Properties} message PrepareEmergencyReparentRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        PrepareEmergencyReparentRequest.encode = function (message, writer, _depth) {
+            if (!writer)
+                writer = $Writer.create();
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            if (message.wait_for_position_timeout != null && $Object.hasOwnProperty.call(message, "wait_for_position_timeout"))
+                $root.vttime.Duration.encode(message.wait_for_position_timeout, writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
+            if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
+                for (let i = 0; i < message.$unknowns.length; ++i)
+                    writer.raw(message.$unknowns[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified PrepareEmergencyReparentRequest message, length delimited. Does not implicitly {@link tabletmanagerdata.PrepareEmergencyReparentRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof tabletmanagerdata.PrepareEmergencyReparentRequest
+         * @static
+         * @param {tabletmanagerdata.PrepareEmergencyReparentRequest.$Properties} message PrepareEmergencyReparentRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        PrepareEmergencyReparentRequest.encodeDelimited = function(message, writer) {
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
+        };
+
+        /**
+         * Decodes a PrepareEmergencyReparentRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof tabletmanagerdata.PrepareEmergencyReparentRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {tabletmanagerdata.PrepareEmergencyReparentRequest & tabletmanagerdata.PrepareEmergencyReparentRequest.$Shape} PrepareEmergencyReparentRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        PrepareEmergencyReparentRequest.decode = function (reader, length, _end, _depth, _target) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $Reader.recursionLimit)
+                throw $Error("max depth exceeded");
+            let end, message, value;
+            if (length === $undefined)
+                end = reader.len;
+            else {
+                end = reader.pos + length;
+                if (end > reader.len)
+                    throw $RangeError("index out of range");
+                length = reader.len;
+                reader.len = end;
+            }
+            message = _target || new $root.tabletmanagerdata.PrepareEmergencyReparentRequest();
+            while (reader.pos < end) {
+                let start = reader.pos;
+                let tag = reader.tag();
+                if (tag === _end) {
+                    _end = $undefined;
+                    break;
+                }
+                let wireType = tag & 7;
+                switch (tag >>>= 3) {
+                case 1: {
+                        if (wireType !== 2)
+                            break;
+                        message.wait_for_position_timeout = $root.vttime.Duration.decode(reader, reader.uint32(), $undefined, _depth + 1, message.wait_for_position_timeout);
+                        continue;
+                    }
+                }
+                reader.skipType(wireType, _depth, tag);
+                if (!reader.discardUnknown) {
+                    $util.makeProp(message, "$unknowns", false);
+                    (message.$unknowns || (message.$unknowns = [])).push(reader.raw(start, reader.pos));
+                }
+            }
+            if (length !== $undefined) {
+                if (reader.pos !== end)
+                    throw $RangeError("index out of range");
+                reader.len = length;
+            }
+            if (_end !== $undefined)
+                throw $Error("missing end group");
+            return message;
+        };
+
+        /**
+         * Decodes a PrepareEmergencyReparentRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof tabletmanagerdata.PrepareEmergencyReparentRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {tabletmanagerdata.PrepareEmergencyReparentRequest & tabletmanagerdata.PrepareEmergencyReparentRequest.$Shape} PrepareEmergencyReparentRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        PrepareEmergencyReparentRequest.decodeDelimited = function(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a PrepareEmergencyReparentRequest message.
+         * @function verify
+         * @memberof tabletmanagerdata.PrepareEmergencyReparentRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        PrepareEmergencyReparentRequest.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.wait_for_position_timeout != null && $Object.hasOwnProperty.call(message, "wait_for_position_timeout")) {
+                let error = $root.vttime.Duration.verify(message.wait_for_position_timeout, _depth + 1);
+                if (error)
+                    return "wait_for_position_timeout." + error;
+            }
+            return null;
+        };
+
+        /**
+         * Creates a PrepareEmergencyReparentRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof tabletmanagerdata.PrepareEmergencyReparentRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {tabletmanagerdata.PrepareEmergencyReparentRequest} PrepareEmergencyReparentRequest
+         */
+        PrepareEmergencyReparentRequest.fromObject = function (object, _depth) {
+            if (object instanceof $root.tabletmanagerdata.PrepareEmergencyReparentRequest)
+                return object;
+            if (!$util.isObject(object))
+                throw $TypeError(".tabletmanagerdata.PrepareEmergencyReparentRequest: object expected");
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let message = new $root.tabletmanagerdata.PrepareEmergencyReparentRequest();
+            if (object.wait_for_position_timeout != null) {
+                if (!$util.isObject(object.wait_for_position_timeout))
+                    throw $TypeError(".tabletmanagerdata.PrepareEmergencyReparentRequest.wait_for_position_timeout: object expected");
+                message.wait_for_position_timeout = $root.vttime.Duration.fromObject(object.wait_for_position_timeout, _depth + 1);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a PrepareEmergencyReparentRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof tabletmanagerdata.PrepareEmergencyReparentRequest
+         * @static
+         * @param {tabletmanagerdata.PrepareEmergencyReparentRequest} message PrepareEmergencyReparentRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        PrepareEmergencyReparentRequest.toObject = function (message, options, _depth) {
+            if (!options)
+                options = {};
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let object = {};
+            if (options.defaults)
+                object.wait_for_position_timeout = null;
+            if (message.wait_for_position_timeout != null && $Object.hasOwnProperty.call(message, "wait_for_position_timeout"))
+                object.wait_for_position_timeout = $root.vttime.Duration.toObject(message.wait_for_position_timeout, options, _depth + 1);
+            return object;
+        };
+
+        /**
+         * Converts this PrepareEmergencyReparentRequest to JSON.
+         * @function toJSON
+         * @memberof tabletmanagerdata.PrepareEmergencyReparentRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        PrepareEmergencyReparentRequest.prototype.toJSON = function() {
+            return PrepareEmergencyReparentRequest.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        /**
+         * Gets the type url for PrepareEmergencyReparentRequest
+         * @function getTypeUrl
+         * @memberof tabletmanagerdata.PrepareEmergencyReparentRequest
+         * @static
+         * @param {string} [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns {string} The type url
+         */
+        PrepareEmergencyReparentRequest.getTypeUrl = function(prefix) {
+            if (prefix === $undefined)
+                prefix = "type.googleapis.com";
+            return prefix + "/tabletmanagerdata.PrepareEmergencyReparentRequest";
+        };
+
+        return PrepareEmergencyReparentRequest;
+    })();
+
+    tabletmanagerdata.PrepareEmergencyReparentResponse = (function() {
+
+        /**
+         * Properties of a PrepareEmergencyReparentResponse.
+         * @typedef {Object} tabletmanagerdata.PrepareEmergencyReparentResponse.$Properties
+         * @property {replicationdata.StopReplicationStatus.$Properties|null} [status] PrepareEmergencyReparentResponse status
+         * @property {string|null} [relay_log_position] PrepareEmergencyReparentResponse relay_log_position
+         * @property {number|null} [reparent_journal_length] PrepareEmergencyReparentResponse reparent_journal_length
+         * @property {vtrpc.RPCError.$Properties|null} [stop_replication_error] PrepareEmergencyReparentResponse stop_replication_error
+         * @property {vtrpc.RPCError.$Properties|null} [wait_for_position_error] PrepareEmergencyReparentResponse wait_for_position_error
+         * @property {vtrpc.RPCError.$Properties|null} [read_reparent_journal_error] PrepareEmergencyReparentResponse read_reparent_journal_error
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+
+        /**
+         * Properties of a PrepareEmergencyReparentResponse.
+         * @memberof tabletmanagerdata
+         * @interface IPrepareEmergencyReparentResponse
+         * @augments tabletmanagerdata.PrepareEmergencyReparentResponse.$Properties
+         * @deprecated Use tabletmanagerdata.PrepareEmergencyReparentResponse.$Properties instead.
+         */
+
+        /**
+         * Shape of a PrepareEmergencyReparentResponse.
+         * @typedef {tabletmanagerdata.PrepareEmergencyReparentResponse.$Properties} tabletmanagerdata.PrepareEmergencyReparentResponse.$Shape
+         */
+
+        /**
+         * Constructs a new PrepareEmergencyReparentResponse.
+         * @memberof tabletmanagerdata
+         * @classdesc Represents a PrepareEmergencyReparentResponse.
+         * @constructor
+         * @param {tabletmanagerdata.PrepareEmergencyReparentResponse.$Properties=} [properties] Properties to set
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+        const PrepareEmergencyReparentResponse = function (properties) {
+            if (properties)
+                for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                        this[keys[i]] = properties[keys[i]];
+        };
+
+        /**
+         * PrepareEmergencyReparentResponse status.
+         * @member {replicationdata.StopReplicationStatus.$Properties|null|undefined} status
+         * @memberof tabletmanagerdata.PrepareEmergencyReparentResponse
+         * @instance
+         */
+        PrepareEmergencyReparentResponse.prototype.status = null;
+
+        /**
+         * PrepareEmergencyReparentResponse relay_log_position.
+         * @member {string} relay_log_position
+         * @memberof tabletmanagerdata.PrepareEmergencyReparentResponse
+         * @instance
+         */
+        PrepareEmergencyReparentResponse.prototype.relay_log_position = "";
+
+        /**
+         * PrepareEmergencyReparentResponse reparent_journal_length.
+         * @member {number} reparent_journal_length
+         * @memberof tabletmanagerdata.PrepareEmergencyReparentResponse
+         * @instance
+         */
+        PrepareEmergencyReparentResponse.prototype.reparent_journal_length = 0;
+
+        /**
+         * PrepareEmergencyReparentResponse stop_replication_error.
+         * @member {vtrpc.RPCError.$Properties|null|undefined} stop_replication_error
+         * @memberof tabletmanagerdata.PrepareEmergencyReparentResponse
+         * @instance
+         */
+        PrepareEmergencyReparentResponse.prototype.stop_replication_error = null;
+
+        /**
+         * PrepareEmergencyReparentResponse wait_for_position_error.
+         * @member {vtrpc.RPCError.$Properties|null|undefined} wait_for_position_error
+         * @memberof tabletmanagerdata.PrepareEmergencyReparentResponse
+         * @instance
+         */
+        PrepareEmergencyReparentResponse.prototype.wait_for_position_error = null;
+
+        /**
+         * PrepareEmergencyReparentResponse read_reparent_journal_error.
+         * @member {vtrpc.RPCError.$Properties|null|undefined} read_reparent_journal_error
+         * @memberof tabletmanagerdata.PrepareEmergencyReparentResponse
+         * @instance
+         */
+        PrepareEmergencyReparentResponse.prototype.read_reparent_journal_error = null;
+
+        /**
+         * Creates a new PrepareEmergencyReparentResponse instance using the specified properties.
+         * @function create
+         * @memberof tabletmanagerdata.PrepareEmergencyReparentResponse
+         * @static
+         * @param {tabletmanagerdata.PrepareEmergencyReparentResponse.$Properties=} [properties] Properties to set
+         * @returns {tabletmanagerdata.PrepareEmergencyReparentResponse} PrepareEmergencyReparentResponse instance
+         * @type {{
+         *   (properties: tabletmanagerdata.PrepareEmergencyReparentResponse.$Shape): tabletmanagerdata.PrepareEmergencyReparentResponse & tabletmanagerdata.PrepareEmergencyReparentResponse.$Shape;
+         *   (properties?: tabletmanagerdata.PrepareEmergencyReparentResponse.$Properties): tabletmanagerdata.PrepareEmergencyReparentResponse;
+         * }}
+         */
+        PrepareEmergencyReparentResponse.create = function(properties) {
+            return new PrepareEmergencyReparentResponse(properties);
+        };
+
+        /**
+         * Encodes the specified PrepareEmergencyReparentResponse message. Does not implicitly {@link tabletmanagerdata.PrepareEmergencyReparentResponse.verify|verify} messages.
+         * @function encode
+         * @memberof tabletmanagerdata.PrepareEmergencyReparentResponse
+         * @static
+         * @param {tabletmanagerdata.PrepareEmergencyReparentResponse.$Properties} message PrepareEmergencyReparentResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        PrepareEmergencyReparentResponse.encode = function (message, writer, _depth) {
+            if (!writer)
+                writer = $Writer.create();
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            if (message.status != null && $Object.hasOwnProperty.call(message, "status"))
+                $root.replicationdata.StopReplicationStatus.encode(message.status, writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
+            if (message.relay_log_position != null && $Object.hasOwnProperty.call(message, "relay_log_position") && message.relay_log_position !== "")
+                writer.uint32(/* id 2, wireType 2 =*/18).string(message.relay_log_position);
+            if (message.reparent_journal_length != null && $Object.hasOwnProperty.call(message, "reparent_journal_length") && message.reparent_journal_length !== 0)
+                writer.uint32(/* id 3, wireType 0 =*/24).int32(message.reparent_journal_length);
+            if (message.stop_replication_error != null && $Object.hasOwnProperty.call(message, "stop_replication_error"))
+                $root.vtrpc.RPCError.encode(message.stop_replication_error, writer.uint32(/* id 4, wireType 2 =*/34).fork(), _depth + 1).ldelim();
+            if (message.wait_for_position_error != null && $Object.hasOwnProperty.call(message, "wait_for_position_error"))
+                $root.vtrpc.RPCError.encode(message.wait_for_position_error, writer.uint32(/* id 5, wireType 2 =*/42).fork(), _depth + 1).ldelim();
+            if (message.read_reparent_journal_error != null && $Object.hasOwnProperty.call(message, "read_reparent_journal_error"))
+                $root.vtrpc.RPCError.encode(message.read_reparent_journal_error, writer.uint32(/* id 6, wireType 2 =*/50).fork(), _depth + 1).ldelim();
+            if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
+                for (let i = 0; i < message.$unknowns.length; ++i)
+                    writer.raw(message.$unknowns[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified PrepareEmergencyReparentResponse message, length delimited. Does not implicitly {@link tabletmanagerdata.PrepareEmergencyReparentResponse.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof tabletmanagerdata.PrepareEmergencyReparentResponse
+         * @static
+         * @param {tabletmanagerdata.PrepareEmergencyReparentResponse.$Properties} message PrepareEmergencyReparentResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        PrepareEmergencyReparentResponse.encodeDelimited = function(message, writer) {
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
+        };
+
+        /**
+         * Decodes a PrepareEmergencyReparentResponse message from the specified reader or buffer.
+         * @function decode
+         * @memberof tabletmanagerdata.PrepareEmergencyReparentResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {tabletmanagerdata.PrepareEmergencyReparentResponse & tabletmanagerdata.PrepareEmergencyReparentResponse.$Shape} PrepareEmergencyReparentResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        PrepareEmergencyReparentResponse.decode = function (reader, length, _end, _depth, _target) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $Reader.recursionLimit)
+                throw $Error("max depth exceeded");
+            let end, message, value;
+            if (length === $undefined)
+                end = reader.len;
+            else {
+                end = reader.pos + length;
+                if (end > reader.len)
+                    throw $RangeError("index out of range");
+                length = reader.len;
+                reader.len = end;
+            }
+            message = _target || new $root.tabletmanagerdata.PrepareEmergencyReparentResponse();
+            while (reader.pos < end) {
+                let start = reader.pos;
+                let tag = reader.tag();
+                if (tag === _end) {
+                    _end = $undefined;
+                    break;
+                }
+                let wireType = tag & 7;
+                switch (tag >>>= 3) {
+                case 1: {
+                        if (wireType !== 2)
+                            break;
+                        message.status = $root.replicationdata.StopReplicationStatus.decode(reader, reader.uint32(), $undefined, _depth + 1, message.status);
+                        continue;
+                    }
+                case 2: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.relay_log_position = value;
+                        else
+                            delete message.relay_log_position;
+                        continue;
+                    }
+                case 3: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.int32())
+                            message.reparent_journal_length = value;
+                        else
+                            delete message.reparent_journal_length;
+                        continue;
+                    }
+                case 4: {
+                        if (wireType !== 2)
+                            break;
+                        message.stop_replication_error = $root.vtrpc.RPCError.decode(reader, reader.uint32(), $undefined, _depth + 1, message.stop_replication_error);
+                        continue;
+                    }
+                case 5: {
+                        if (wireType !== 2)
+                            break;
+                        message.wait_for_position_error = $root.vtrpc.RPCError.decode(reader, reader.uint32(), $undefined, _depth + 1, message.wait_for_position_error);
+                        continue;
+                    }
+                case 6: {
+                        if (wireType !== 2)
+                            break;
+                        message.read_reparent_journal_error = $root.vtrpc.RPCError.decode(reader, reader.uint32(), $undefined, _depth + 1, message.read_reparent_journal_error);
+                        continue;
+                    }
+                }
+                reader.skipType(wireType, _depth, tag);
+                if (!reader.discardUnknown) {
+                    $util.makeProp(message, "$unknowns", false);
+                    (message.$unknowns || (message.$unknowns = [])).push(reader.raw(start, reader.pos));
+                }
+            }
+            if (length !== $undefined) {
+                if (reader.pos !== end)
+                    throw $RangeError("index out of range");
+                reader.len = length;
+            }
+            if (_end !== $undefined)
+                throw $Error("missing end group");
+            return message;
+        };
+
+        /**
+         * Decodes a PrepareEmergencyReparentResponse message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof tabletmanagerdata.PrepareEmergencyReparentResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {tabletmanagerdata.PrepareEmergencyReparentResponse & tabletmanagerdata.PrepareEmergencyReparentResponse.$Shape} PrepareEmergencyReparentResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        PrepareEmergencyReparentResponse.decodeDelimited = function(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a PrepareEmergencyReparentResponse message.
+         * @function verify
+         * @memberof tabletmanagerdata.PrepareEmergencyReparentResponse
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        PrepareEmergencyReparentResponse.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.status != null && $Object.hasOwnProperty.call(message, "status")) {
+                let error = $root.replicationdata.StopReplicationStatus.verify(message.status, _depth + 1);
+                if (error)
+                    return "status." + error;
+            }
+            if (message.relay_log_position != null && $Object.hasOwnProperty.call(message, "relay_log_position"))
+                if (!$util.isString(message.relay_log_position))
+                    return "relay_log_position: string expected";
+            if (message.reparent_journal_length != null && $Object.hasOwnProperty.call(message, "reparent_journal_length"))
+                if (!$util.isInteger(message.reparent_journal_length))
+                    return "reparent_journal_length: integer expected";
+            if (message.stop_replication_error != null && $Object.hasOwnProperty.call(message, "stop_replication_error")) {
+                let error = $root.vtrpc.RPCError.verify(message.stop_replication_error, _depth + 1);
+                if (error)
+                    return "stop_replication_error." + error;
+            }
+            if (message.wait_for_position_error != null && $Object.hasOwnProperty.call(message, "wait_for_position_error")) {
+                let error = $root.vtrpc.RPCError.verify(message.wait_for_position_error, _depth + 1);
+                if (error)
+                    return "wait_for_position_error." + error;
+            }
+            if (message.read_reparent_journal_error != null && $Object.hasOwnProperty.call(message, "read_reparent_journal_error")) {
+                let error = $root.vtrpc.RPCError.verify(message.read_reparent_journal_error, _depth + 1);
+                if (error)
+                    return "read_reparent_journal_error." + error;
+            }
+            return null;
+        };
+
+        /**
+         * Creates a PrepareEmergencyReparentResponse message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof tabletmanagerdata.PrepareEmergencyReparentResponse
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {tabletmanagerdata.PrepareEmergencyReparentResponse} PrepareEmergencyReparentResponse
+         */
+        PrepareEmergencyReparentResponse.fromObject = function (object, _depth) {
+            if (object instanceof $root.tabletmanagerdata.PrepareEmergencyReparentResponse)
+                return object;
+            if (!$util.isObject(object))
+                throw $TypeError(".tabletmanagerdata.PrepareEmergencyReparentResponse: object expected");
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let message = new $root.tabletmanagerdata.PrepareEmergencyReparentResponse();
+            if (object.status != null) {
+                if (!$util.isObject(object.status))
+                    throw $TypeError(".tabletmanagerdata.PrepareEmergencyReparentResponse.status: object expected");
+                message.status = $root.replicationdata.StopReplicationStatus.fromObject(object.status, _depth + 1);
+            }
+            if (object.relay_log_position != null)
+                if (typeof object.relay_log_position !== "string" || object.relay_log_position.length)
+                    message.relay_log_position = $String(object.relay_log_position);
+            if (object.reparent_journal_length != null)
+                if ($Number(object.reparent_journal_length) !== 0)
+                    message.reparent_journal_length = object.reparent_journal_length | 0;
+            if (object.stop_replication_error != null) {
+                if (!$util.isObject(object.stop_replication_error))
+                    throw $TypeError(".tabletmanagerdata.PrepareEmergencyReparentResponse.stop_replication_error: object expected");
+                message.stop_replication_error = $root.vtrpc.RPCError.fromObject(object.stop_replication_error, _depth + 1);
+            }
+            if (object.wait_for_position_error != null) {
+                if (!$util.isObject(object.wait_for_position_error))
+                    throw $TypeError(".tabletmanagerdata.PrepareEmergencyReparentResponse.wait_for_position_error: object expected");
+                message.wait_for_position_error = $root.vtrpc.RPCError.fromObject(object.wait_for_position_error, _depth + 1);
+            }
+            if (object.read_reparent_journal_error != null) {
+                if (!$util.isObject(object.read_reparent_journal_error))
+                    throw $TypeError(".tabletmanagerdata.PrepareEmergencyReparentResponse.read_reparent_journal_error: object expected");
+                message.read_reparent_journal_error = $root.vtrpc.RPCError.fromObject(object.read_reparent_journal_error, _depth + 1);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a PrepareEmergencyReparentResponse message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof tabletmanagerdata.PrepareEmergencyReparentResponse
+         * @static
+         * @param {tabletmanagerdata.PrepareEmergencyReparentResponse} message PrepareEmergencyReparentResponse
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        PrepareEmergencyReparentResponse.toObject = function (message, options, _depth) {
+            if (!options)
+                options = {};
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let object = {};
+            if (options.defaults) {
+                object.status = null;
+                object.relay_log_position = "";
+                object.reparent_journal_length = 0;
+                object.stop_replication_error = null;
+                object.wait_for_position_error = null;
+                object.read_reparent_journal_error = null;
+            }
+            if (message.status != null && $Object.hasOwnProperty.call(message, "status"))
+                object.status = $root.replicationdata.StopReplicationStatus.toObject(message.status, options, _depth + 1);
+            if (message.relay_log_position != null && $Object.hasOwnProperty.call(message, "relay_log_position"))
+                object.relay_log_position = message.relay_log_position;
+            if (message.reparent_journal_length != null && $Object.hasOwnProperty.call(message, "reparent_journal_length"))
+                object.reparent_journal_length = message.reparent_journal_length;
+            if (message.stop_replication_error != null && $Object.hasOwnProperty.call(message, "stop_replication_error"))
+                object.stop_replication_error = $root.vtrpc.RPCError.toObject(message.stop_replication_error, options, _depth + 1);
+            if (message.wait_for_position_error != null && $Object.hasOwnProperty.call(message, "wait_for_position_error"))
+                object.wait_for_position_error = $root.vtrpc.RPCError.toObject(message.wait_for_position_error, options, _depth + 1);
+            if (message.read_reparent_journal_error != null && $Object.hasOwnProperty.call(message, "read_reparent_journal_error"))
+                object.read_reparent_journal_error = $root.vtrpc.RPCError.toObject(message.read_reparent_journal_error, options, _depth + 1);
+            return object;
+        };
+
+        /**
+         * Converts this PrepareEmergencyReparentResponse to JSON.
+         * @function toJSON
+         * @memberof tabletmanagerdata.PrepareEmergencyReparentResponse
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        PrepareEmergencyReparentResponse.prototype.toJSON = function() {
+            return PrepareEmergencyReparentResponse.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        /**
+         * Gets the type url for PrepareEmergencyReparentResponse
+         * @function getTypeUrl
+         * @memberof tabletmanagerdata.PrepareEmergencyReparentResponse
+         * @static
+         * @param {string} [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns {string} The type url
+         */
+        PrepareEmergencyReparentResponse.getTypeUrl = function(prefix) {
+            if (prefix === $undefined)
+                prefix = "type.googleapis.com";
+            return prefix + "/tabletmanagerdata.PrepareEmergencyReparentResponse";
+        };
+
+        return PrepareEmergencyReparentResponse;
+    })();
+
     tabletmanagerdata.PromoteReplicaRequest = (function() {
 
         /**
@@ -97793,6 +98494,707 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         };
 
         return PromoteReplicaResponse;
+    })();
+
+    tabletmanagerdata.PromoteReplicaAndJournalRequest = (function() {
+
+        /**
+         * Properties of a PromoteReplicaAndJournalRequest.
+         * @typedef {Object} tabletmanagerdata.PromoteReplicaAndJournalRequest.$Properties
+         * @property {boolean|null} [semi_sync] PromoteReplicaAndJournalRequest semi_sync
+         * @property {vttime.Time.$Properties|null} [time_created] PromoteReplicaAndJournalRequest time_created
+         * @property {string|null} [action_name] PromoteReplicaAndJournalRequest action_name
+         * @property {vttime.Duration.$Properties|null} [populate_reparent_journal_timeout] PromoteReplicaAndJournalRequest populate_reparent_journal_timeout
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+
+        /**
+         * Properties of a PromoteReplicaAndJournalRequest.
+         * @memberof tabletmanagerdata
+         * @interface IPromoteReplicaAndJournalRequest
+         * @augments tabletmanagerdata.PromoteReplicaAndJournalRequest.$Properties
+         * @deprecated Use tabletmanagerdata.PromoteReplicaAndJournalRequest.$Properties instead.
+         */
+
+        /**
+         * Shape of a PromoteReplicaAndJournalRequest.
+         * @typedef {tabletmanagerdata.PromoteReplicaAndJournalRequest.$Properties} tabletmanagerdata.PromoteReplicaAndJournalRequest.$Shape
+         */
+
+        /**
+         * Constructs a new PromoteReplicaAndJournalRequest.
+         * @memberof tabletmanagerdata
+         * @classdesc Represents a PromoteReplicaAndJournalRequest.
+         * @constructor
+         * @param {tabletmanagerdata.PromoteReplicaAndJournalRequest.$Properties=} [properties] Properties to set
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+        const PromoteReplicaAndJournalRequest = function (properties) {
+            if (properties)
+                for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                        this[keys[i]] = properties[keys[i]];
+        };
+
+        /**
+         * PromoteReplicaAndJournalRequest semi_sync.
+         * @member {boolean} semi_sync
+         * @memberof tabletmanagerdata.PromoteReplicaAndJournalRequest
+         * @instance
+         */
+        PromoteReplicaAndJournalRequest.prototype.semi_sync = false;
+
+        /**
+         * PromoteReplicaAndJournalRequest time_created.
+         * @member {vttime.Time.$Properties|null|undefined} time_created
+         * @memberof tabletmanagerdata.PromoteReplicaAndJournalRequest
+         * @instance
+         */
+        PromoteReplicaAndJournalRequest.prototype.time_created = null;
+
+        /**
+         * PromoteReplicaAndJournalRequest action_name.
+         * @member {string} action_name
+         * @memberof tabletmanagerdata.PromoteReplicaAndJournalRequest
+         * @instance
+         */
+        PromoteReplicaAndJournalRequest.prototype.action_name = "";
+
+        /**
+         * PromoteReplicaAndJournalRequest populate_reparent_journal_timeout.
+         * @member {vttime.Duration.$Properties|null|undefined} populate_reparent_journal_timeout
+         * @memberof tabletmanagerdata.PromoteReplicaAndJournalRequest
+         * @instance
+         */
+        PromoteReplicaAndJournalRequest.prototype.populate_reparent_journal_timeout = null;
+
+        /**
+         * Creates a new PromoteReplicaAndJournalRequest instance using the specified properties.
+         * @function create
+         * @memberof tabletmanagerdata.PromoteReplicaAndJournalRequest
+         * @static
+         * @param {tabletmanagerdata.PromoteReplicaAndJournalRequest.$Properties=} [properties] Properties to set
+         * @returns {tabletmanagerdata.PromoteReplicaAndJournalRequest} PromoteReplicaAndJournalRequest instance
+         * @type {{
+         *   (properties: tabletmanagerdata.PromoteReplicaAndJournalRequest.$Shape): tabletmanagerdata.PromoteReplicaAndJournalRequest & tabletmanagerdata.PromoteReplicaAndJournalRequest.$Shape;
+         *   (properties?: tabletmanagerdata.PromoteReplicaAndJournalRequest.$Properties): tabletmanagerdata.PromoteReplicaAndJournalRequest;
+         * }}
+         */
+        PromoteReplicaAndJournalRequest.create = function(properties) {
+            return new PromoteReplicaAndJournalRequest(properties);
+        };
+
+        /**
+         * Encodes the specified PromoteReplicaAndJournalRequest message. Does not implicitly {@link tabletmanagerdata.PromoteReplicaAndJournalRequest.verify|verify} messages.
+         * @function encode
+         * @memberof tabletmanagerdata.PromoteReplicaAndJournalRequest
+         * @static
+         * @param {tabletmanagerdata.PromoteReplicaAndJournalRequest.$Properties} message PromoteReplicaAndJournalRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        PromoteReplicaAndJournalRequest.encode = function (message, writer, _depth) {
+            if (!writer)
+                writer = $Writer.create();
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            if (message.semi_sync != null && $Object.hasOwnProperty.call(message, "semi_sync") && message.semi_sync !== false)
+                writer.uint32(/* id 1, wireType 0 =*/8).bool(message.semi_sync);
+            if (message.time_created != null && $Object.hasOwnProperty.call(message, "time_created"))
+                $root.vttime.Time.encode(message.time_created, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
+            if (message.action_name != null && $Object.hasOwnProperty.call(message, "action_name") && message.action_name !== "")
+                writer.uint32(/* id 3, wireType 2 =*/26).string(message.action_name);
+            if (message.populate_reparent_journal_timeout != null && $Object.hasOwnProperty.call(message, "populate_reparent_journal_timeout"))
+                $root.vttime.Duration.encode(message.populate_reparent_journal_timeout, writer.uint32(/* id 4, wireType 2 =*/34).fork(), _depth + 1).ldelim();
+            if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
+                for (let i = 0; i < message.$unknowns.length; ++i)
+                    writer.raw(message.$unknowns[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified PromoteReplicaAndJournalRequest message, length delimited. Does not implicitly {@link tabletmanagerdata.PromoteReplicaAndJournalRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof tabletmanagerdata.PromoteReplicaAndJournalRequest
+         * @static
+         * @param {tabletmanagerdata.PromoteReplicaAndJournalRequest.$Properties} message PromoteReplicaAndJournalRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        PromoteReplicaAndJournalRequest.encodeDelimited = function(message, writer) {
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
+        };
+
+        /**
+         * Decodes a PromoteReplicaAndJournalRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof tabletmanagerdata.PromoteReplicaAndJournalRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {tabletmanagerdata.PromoteReplicaAndJournalRequest & tabletmanagerdata.PromoteReplicaAndJournalRequest.$Shape} PromoteReplicaAndJournalRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        PromoteReplicaAndJournalRequest.decode = function (reader, length, _end, _depth, _target) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $Reader.recursionLimit)
+                throw $Error("max depth exceeded");
+            let end, message, value;
+            if (length === $undefined)
+                end = reader.len;
+            else {
+                end = reader.pos + length;
+                if (end > reader.len)
+                    throw $RangeError("index out of range");
+                length = reader.len;
+                reader.len = end;
+            }
+            message = _target || new $root.tabletmanagerdata.PromoteReplicaAndJournalRequest();
+            while (reader.pos < end) {
+                let start = reader.pos;
+                let tag = reader.tag();
+                if (tag === _end) {
+                    _end = $undefined;
+                    break;
+                }
+                let wireType = tag & 7;
+                switch (tag >>>= 3) {
+                case 1: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.bool())
+                            message.semi_sync = value;
+                        else
+                            delete message.semi_sync;
+                        continue;
+                    }
+                case 2: {
+                        if (wireType !== 2)
+                            break;
+                        message.time_created = $root.vttime.Time.decode(reader, reader.uint32(), $undefined, _depth + 1, message.time_created);
+                        continue;
+                    }
+                case 3: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.action_name = value;
+                        else
+                            delete message.action_name;
+                        continue;
+                    }
+                case 4: {
+                        if (wireType !== 2)
+                            break;
+                        message.populate_reparent_journal_timeout = $root.vttime.Duration.decode(reader, reader.uint32(), $undefined, _depth + 1, message.populate_reparent_journal_timeout);
+                        continue;
+                    }
+                }
+                reader.skipType(wireType, _depth, tag);
+                if (!reader.discardUnknown) {
+                    $util.makeProp(message, "$unknowns", false);
+                    (message.$unknowns || (message.$unknowns = [])).push(reader.raw(start, reader.pos));
+                }
+            }
+            if (length !== $undefined) {
+                if (reader.pos !== end)
+                    throw $RangeError("index out of range");
+                reader.len = length;
+            }
+            if (_end !== $undefined)
+                throw $Error("missing end group");
+            return message;
+        };
+
+        /**
+         * Decodes a PromoteReplicaAndJournalRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof tabletmanagerdata.PromoteReplicaAndJournalRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {tabletmanagerdata.PromoteReplicaAndJournalRequest & tabletmanagerdata.PromoteReplicaAndJournalRequest.$Shape} PromoteReplicaAndJournalRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        PromoteReplicaAndJournalRequest.decodeDelimited = function(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a PromoteReplicaAndJournalRequest message.
+         * @function verify
+         * @memberof tabletmanagerdata.PromoteReplicaAndJournalRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        PromoteReplicaAndJournalRequest.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.semi_sync != null && $Object.hasOwnProperty.call(message, "semi_sync"))
+                if (typeof message.semi_sync !== "boolean")
+                    return "semi_sync: boolean expected";
+            if (message.time_created != null && $Object.hasOwnProperty.call(message, "time_created")) {
+                let error = $root.vttime.Time.verify(message.time_created, _depth + 1);
+                if (error)
+                    return "time_created." + error;
+            }
+            if (message.action_name != null && $Object.hasOwnProperty.call(message, "action_name"))
+                if (!$util.isString(message.action_name))
+                    return "action_name: string expected";
+            if (message.populate_reparent_journal_timeout != null && $Object.hasOwnProperty.call(message, "populate_reparent_journal_timeout")) {
+                let error = $root.vttime.Duration.verify(message.populate_reparent_journal_timeout, _depth + 1);
+                if (error)
+                    return "populate_reparent_journal_timeout." + error;
+            }
+            return null;
+        };
+
+        /**
+         * Creates a PromoteReplicaAndJournalRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof tabletmanagerdata.PromoteReplicaAndJournalRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {tabletmanagerdata.PromoteReplicaAndJournalRequest} PromoteReplicaAndJournalRequest
+         */
+        PromoteReplicaAndJournalRequest.fromObject = function (object, _depth) {
+            if (object instanceof $root.tabletmanagerdata.PromoteReplicaAndJournalRequest)
+                return object;
+            if (!$util.isObject(object))
+                throw $TypeError(".tabletmanagerdata.PromoteReplicaAndJournalRequest: object expected");
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let message = new $root.tabletmanagerdata.PromoteReplicaAndJournalRequest();
+            if (object.semi_sync != null)
+                if (object.semi_sync)
+                    message.semi_sync = $Boolean(object.semi_sync);
+            if (object.time_created != null) {
+                if (!$util.isObject(object.time_created))
+                    throw $TypeError(".tabletmanagerdata.PromoteReplicaAndJournalRequest.time_created: object expected");
+                message.time_created = $root.vttime.Time.fromObject(object.time_created, _depth + 1);
+            }
+            if (object.action_name != null)
+                if (typeof object.action_name !== "string" || object.action_name.length)
+                    message.action_name = $String(object.action_name);
+            if (object.populate_reparent_journal_timeout != null) {
+                if (!$util.isObject(object.populate_reparent_journal_timeout))
+                    throw $TypeError(".tabletmanagerdata.PromoteReplicaAndJournalRequest.populate_reparent_journal_timeout: object expected");
+                message.populate_reparent_journal_timeout = $root.vttime.Duration.fromObject(object.populate_reparent_journal_timeout, _depth + 1);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a PromoteReplicaAndJournalRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof tabletmanagerdata.PromoteReplicaAndJournalRequest
+         * @static
+         * @param {tabletmanagerdata.PromoteReplicaAndJournalRequest} message PromoteReplicaAndJournalRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        PromoteReplicaAndJournalRequest.toObject = function (message, options, _depth) {
+            if (!options)
+                options = {};
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let object = {};
+            if (options.defaults) {
+                object.semi_sync = false;
+                object.time_created = null;
+                object.action_name = "";
+                object.populate_reparent_journal_timeout = null;
+            }
+            if (message.semi_sync != null && $Object.hasOwnProperty.call(message, "semi_sync"))
+                object.semi_sync = message.semi_sync;
+            if (message.time_created != null && $Object.hasOwnProperty.call(message, "time_created"))
+                object.time_created = $root.vttime.Time.toObject(message.time_created, options, _depth + 1);
+            if (message.action_name != null && $Object.hasOwnProperty.call(message, "action_name"))
+                object.action_name = message.action_name;
+            if (message.populate_reparent_journal_timeout != null && $Object.hasOwnProperty.call(message, "populate_reparent_journal_timeout"))
+                object.populate_reparent_journal_timeout = $root.vttime.Duration.toObject(message.populate_reparent_journal_timeout, options, _depth + 1);
+            return object;
+        };
+
+        /**
+         * Converts this PromoteReplicaAndJournalRequest to JSON.
+         * @function toJSON
+         * @memberof tabletmanagerdata.PromoteReplicaAndJournalRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        PromoteReplicaAndJournalRequest.prototype.toJSON = function() {
+            return PromoteReplicaAndJournalRequest.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        /**
+         * Gets the type url for PromoteReplicaAndJournalRequest
+         * @function getTypeUrl
+         * @memberof tabletmanagerdata.PromoteReplicaAndJournalRequest
+         * @static
+         * @param {string} [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns {string} The type url
+         */
+        PromoteReplicaAndJournalRequest.getTypeUrl = function(prefix) {
+            if (prefix === $undefined)
+                prefix = "type.googleapis.com";
+            return prefix + "/tabletmanagerdata.PromoteReplicaAndJournalRequest";
+        };
+
+        return PromoteReplicaAndJournalRequest;
+    })();
+
+    tabletmanagerdata.PromoteReplicaAndJournalResponse = (function() {
+
+        /**
+         * Properties of a PromoteReplicaAndJournalResponse.
+         * @typedef {Object} tabletmanagerdata.PromoteReplicaAndJournalResponse.$Properties
+         * @property {string|null} [position] PromoteReplicaAndJournalResponse position
+         * @property {vtrpc.RPCError.$Properties|null} [promote_replica_error] PromoteReplicaAndJournalResponse promote_replica_error
+         * @property {vtrpc.RPCError.$Properties|null} [populate_reparent_journal_error] PromoteReplicaAndJournalResponse populate_reparent_journal_error
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+
+        /**
+         * Properties of a PromoteReplicaAndJournalResponse.
+         * @memberof tabletmanagerdata
+         * @interface IPromoteReplicaAndJournalResponse
+         * @augments tabletmanagerdata.PromoteReplicaAndJournalResponse.$Properties
+         * @deprecated Use tabletmanagerdata.PromoteReplicaAndJournalResponse.$Properties instead.
+         */
+
+        /**
+         * Shape of a PromoteReplicaAndJournalResponse.
+         * @typedef {tabletmanagerdata.PromoteReplicaAndJournalResponse.$Properties} tabletmanagerdata.PromoteReplicaAndJournalResponse.$Shape
+         */
+
+        /**
+         * Constructs a new PromoteReplicaAndJournalResponse.
+         * @memberof tabletmanagerdata
+         * @classdesc Represents a PromoteReplicaAndJournalResponse.
+         * @constructor
+         * @param {tabletmanagerdata.PromoteReplicaAndJournalResponse.$Properties=} [properties] Properties to set
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+        const PromoteReplicaAndJournalResponse = function (properties) {
+            if (properties)
+                for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                        this[keys[i]] = properties[keys[i]];
+        };
+
+        /**
+         * PromoteReplicaAndJournalResponse position.
+         * @member {string} position
+         * @memberof tabletmanagerdata.PromoteReplicaAndJournalResponse
+         * @instance
+         */
+        PromoteReplicaAndJournalResponse.prototype.position = "";
+
+        /**
+         * PromoteReplicaAndJournalResponse promote_replica_error.
+         * @member {vtrpc.RPCError.$Properties|null|undefined} promote_replica_error
+         * @memberof tabletmanagerdata.PromoteReplicaAndJournalResponse
+         * @instance
+         */
+        PromoteReplicaAndJournalResponse.prototype.promote_replica_error = null;
+
+        /**
+         * PromoteReplicaAndJournalResponse populate_reparent_journal_error.
+         * @member {vtrpc.RPCError.$Properties|null|undefined} populate_reparent_journal_error
+         * @memberof tabletmanagerdata.PromoteReplicaAndJournalResponse
+         * @instance
+         */
+        PromoteReplicaAndJournalResponse.prototype.populate_reparent_journal_error = null;
+
+        /**
+         * Creates a new PromoteReplicaAndJournalResponse instance using the specified properties.
+         * @function create
+         * @memberof tabletmanagerdata.PromoteReplicaAndJournalResponse
+         * @static
+         * @param {tabletmanagerdata.PromoteReplicaAndJournalResponse.$Properties=} [properties] Properties to set
+         * @returns {tabletmanagerdata.PromoteReplicaAndJournalResponse} PromoteReplicaAndJournalResponse instance
+         * @type {{
+         *   (properties: tabletmanagerdata.PromoteReplicaAndJournalResponse.$Shape): tabletmanagerdata.PromoteReplicaAndJournalResponse & tabletmanagerdata.PromoteReplicaAndJournalResponse.$Shape;
+         *   (properties?: tabletmanagerdata.PromoteReplicaAndJournalResponse.$Properties): tabletmanagerdata.PromoteReplicaAndJournalResponse;
+         * }}
+         */
+        PromoteReplicaAndJournalResponse.create = function(properties) {
+            return new PromoteReplicaAndJournalResponse(properties);
+        };
+
+        /**
+         * Encodes the specified PromoteReplicaAndJournalResponse message. Does not implicitly {@link tabletmanagerdata.PromoteReplicaAndJournalResponse.verify|verify} messages.
+         * @function encode
+         * @memberof tabletmanagerdata.PromoteReplicaAndJournalResponse
+         * @static
+         * @param {tabletmanagerdata.PromoteReplicaAndJournalResponse.$Properties} message PromoteReplicaAndJournalResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        PromoteReplicaAndJournalResponse.encode = function (message, writer, _depth) {
+            if (!writer)
+                writer = $Writer.create();
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            if (message.position != null && $Object.hasOwnProperty.call(message, "position") && message.position !== "")
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.position);
+            if (message.promote_replica_error != null && $Object.hasOwnProperty.call(message, "promote_replica_error"))
+                $root.vtrpc.RPCError.encode(message.promote_replica_error, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
+            if (message.populate_reparent_journal_error != null && $Object.hasOwnProperty.call(message, "populate_reparent_journal_error"))
+                $root.vtrpc.RPCError.encode(message.populate_reparent_journal_error, writer.uint32(/* id 3, wireType 2 =*/26).fork(), _depth + 1).ldelim();
+            if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
+                for (let i = 0; i < message.$unknowns.length; ++i)
+                    writer.raw(message.$unknowns[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified PromoteReplicaAndJournalResponse message, length delimited. Does not implicitly {@link tabletmanagerdata.PromoteReplicaAndJournalResponse.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof tabletmanagerdata.PromoteReplicaAndJournalResponse
+         * @static
+         * @param {tabletmanagerdata.PromoteReplicaAndJournalResponse.$Properties} message PromoteReplicaAndJournalResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        PromoteReplicaAndJournalResponse.encodeDelimited = function(message, writer) {
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
+        };
+
+        /**
+         * Decodes a PromoteReplicaAndJournalResponse message from the specified reader or buffer.
+         * @function decode
+         * @memberof tabletmanagerdata.PromoteReplicaAndJournalResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {tabletmanagerdata.PromoteReplicaAndJournalResponse & tabletmanagerdata.PromoteReplicaAndJournalResponse.$Shape} PromoteReplicaAndJournalResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        PromoteReplicaAndJournalResponse.decode = function (reader, length, _end, _depth, _target) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $Reader.recursionLimit)
+                throw $Error("max depth exceeded");
+            let end, message, value;
+            if (length === $undefined)
+                end = reader.len;
+            else {
+                end = reader.pos + length;
+                if (end > reader.len)
+                    throw $RangeError("index out of range");
+                length = reader.len;
+                reader.len = end;
+            }
+            message = _target || new $root.tabletmanagerdata.PromoteReplicaAndJournalResponse();
+            while (reader.pos < end) {
+                let start = reader.pos;
+                let tag = reader.tag();
+                if (tag === _end) {
+                    _end = $undefined;
+                    break;
+                }
+                let wireType = tag & 7;
+                switch (tag >>>= 3) {
+                case 1: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.position = value;
+                        else
+                            delete message.position;
+                        continue;
+                    }
+                case 2: {
+                        if (wireType !== 2)
+                            break;
+                        message.promote_replica_error = $root.vtrpc.RPCError.decode(reader, reader.uint32(), $undefined, _depth + 1, message.promote_replica_error);
+                        continue;
+                    }
+                case 3: {
+                        if (wireType !== 2)
+                            break;
+                        message.populate_reparent_journal_error = $root.vtrpc.RPCError.decode(reader, reader.uint32(), $undefined, _depth + 1, message.populate_reparent_journal_error);
+                        continue;
+                    }
+                }
+                reader.skipType(wireType, _depth, tag);
+                if (!reader.discardUnknown) {
+                    $util.makeProp(message, "$unknowns", false);
+                    (message.$unknowns || (message.$unknowns = [])).push(reader.raw(start, reader.pos));
+                }
+            }
+            if (length !== $undefined) {
+                if (reader.pos !== end)
+                    throw $RangeError("index out of range");
+                reader.len = length;
+            }
+            if (_end !== $undefined)
+                throw $Error("missing end group");
+            return message;
+        };
+
+        /**
+         * Decodes a PromoteReplicaAndJournalResponse message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof tabletmanagerdata.PromoteReplicaAndJournalResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {tabletmanagerdata.PromoteReplicaAndJournalResponse & tabletmanagerdata.PromoteReplicaAndJournalResponse.$Shape} PromoteReplicaAndJournalResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        PromoteReplicaAndJournalResponse.decodeDelimited = function(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a PromoteReplicaAndJournalResponse message.
+         * @function verify
+         * @memberof tabletmanagerdata.PromoteReplicaAndJournalResponse
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        PromoteReplicaAndJournalResponse.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.position != null && $Object.hasOwnProperty.call(message, "position"))
+                if (!$util.isString(message.position))
+                    return "position: string expected";
+            if (message.promote_replica_error != null && $Object.hasOwnProperty.call(message, "promote_replica_error")) {
+                let error = $root.vtrpc.RPCError.verify(message.promote_replica_error, _depth + 1);
+                if (error)
+                    return "promote_replica_error." + error;
+            }
+            if (message.populate_reparent_journal_error != null && $Object.hasOwnProperty.call(message, "populate_reparent_journal_error")) {
+                let error = $root.vtrpc.RPCError.verify(message.populate_reparent_journal_error, _depth + 1);
+                if (error)
+                    return "populate_reparent_journal_error." + error;
+            }
+            return null;
+        };
+
+        /**
+         * Creates a PromoteReplicaAndJournalResponse message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof tabletmanagerdata.PromoteReplicaAndJournalResponse
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {tabletmanagerdata.PromoteReplicaAndJournalResponse} PromoteReplicaAndJournalResponse
+         */
+        PromoteReplicaAndJournalResponse.fromObject = function (object, _depth) {
+            if (object instanceof $root.tabletmanagerdata.PromoteReplicaAndJournalResponse)
+                return object;
+            if (!$util.isObject(object))
+                throw $TypeError(".tabletmanagerdata.PromoteReplicaAndJournalResponse: object expected");
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let message = new $root.tabletmanagerdata.PromoteReplicaAndJournalResponse();
+            if (object.position != null)
+                if (typeof object.position !== "string" || object.position.length)
+                    message.position = $String(object.position);
+            if (object.promote_replica_error != null) {
+                if (!$util.isObject(object.promote_replica_error))
+                    throw $TypeError(".tabletmanagerdata.PromoteReplicaAndJournalResponse.promote_replica_error: object expected");
+                message.promote_replica_error = $root.vtrpc.RPCError.fromObject(object.promote_replica_error, _depth + 1);
+            }
+            if (object.populate_reparent_journal_error != null) {
+                if (!$util.isObject(object.populate_reparent_journal_error))
+                    throw $TypeError(".tabletmanagerdata.PromoteReplicaAndJournalResponse.populate_reparent_journal_error: object expected");
+                message.populate_reparent_journal_error = $root.vtrpc.RPCError.fromObject(object.populate_reparent_journal_error, _depth + 1);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a PromoteReplicaAndJournalResponse message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof tabletmanagerdata.PromoteReplicaAndJournalResponse
+         * @static
+         * @param {tabletmanagerdata.PromoteReplicaAndJournalResponse} message PromoteReplicaAndJournalResponse
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        PromoteReplicaAndJournalResponse.toObject = function (message, options, _depth) {
+            if (!options)
+                options = {};
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let object = {};
+            if (options.defaults) {
+                object.position = "";
+                object.promote_replica_error = null;
+                object.populate_reparent_journal_error = null;
+            }
+            if (message.position != null && $Object.hasOwnProperty.call(message, "position"))
+                object.position = message.position;
+            if (message.promote_replica_error != null && $Object.hasOwnProperty.call(message, "promote_replica_error"))
+                object.promote_replica_error = $root.vtrpc.RPCError.toObject(message.promote_replica_error, options, _depth + 1);
+            if (message.populate_reparent_journal_error != null && $Object.hasOwnProperty.call(message, "populate_reparent_journal_error"))
+                object.populate_reparent_journal_error = $root.vtrpc.RPCError.toObject(message.populate_reparent_journal_error, options, _depth + 1);
+            return object;
+        };
+
+        /**
+         * Converts this PromoteReplicaAndJournalResponse to JSON.
+         * @function toJSON
+         * @memberof tabletmanagerdata.PromoteReplicaAndJournalResponse
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        PromoteReplicaAndJournalResponse.prototype.toJSON = function() {
+            return PromoteReplicaAndJournalResponse.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        /**
+         * Gets the type url for PromoteReplicaAndJournalResponse
+         * @function getTypeUrl
+         * @memberof tabletmanagerdata.PromoteReplicaAndJournalResponse
+         * @static
+         * @param {string} [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns {string} The type url
+         */
+        PromoteReplicaAndJournalResponse.getTypeUrl = function(prefix) {
+            if (prefix === $undefined)
+                prefix = "type.googleapis.com";
+            return prefix + "/tabletmanagerdata.PromoteReplicaAndJournalResponse";
+        };
+
+        return PromoteReplicaAndJournalResponse;
     })();
 
     tabletmanagerdata.BackupRequest = (function() {
