@@ -17,9 +17,10 @@ limitations under the License.
 package predicates
 
 import (
-	"vitess.io/vitess/go/vt/vterrors"
+	"maps"
 
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 type (
@@ -29,15 +30,27 @@ type (
 	Tracker struct {
 		lastID      ID
 		expressions map[ID]sqlparser.Expr
+
+		// children tracks per-source copies of a predicate, such as the copies
+		// created when a predicate is pushed into every source of a UNION.
+		// When the original predicate is restored or skipped, the copies must
+		// be skipped as well - they cannot be restored to column form inside
+		// their source, and after a merge no one produces their arguments.
+		children map[ID][]ID
 	}
 
 	// ID is a unique key that references the current expression a join predicate represents.
 	ID int
+
+	// Snapshot holds the previous expressions of a predicate and its copies,
+	// captured by ResetToOriginal so an abandoned rewrite can be rolled back.
+	Snapshot map[ID]sqlparser.Expr
 )
 
 func NewTracker() *Tracker {
 	return &Tracker{
 		expressions: make(map[ID]sqlparser.Expr),
+		children:    make(map[ID][]ID),
 	}
 }
 
@@ -48,6 +61,24 @@ func (t *Tracker) NewJoinPredicate(org sqlparser.Expr) *JoinPredicate {
 		ID:      nextID,
 		tracker: t,
 	}
+}
+
+// NewChildJoinPredicate creates a new JoinPredicate that is tracked as a copy of the
+// given parent predicate, so that Skip/restore operations on the parent cascade to it.
+func (t *Tracker) NewChildJoinPredicate(parent *JoinPredicate, org sqlparser.Expr) *JoinPredicate {
+	jp := t.NewJoinPredicate(org)
+	t.children[parent.ID] = append(t.children[parent.ID], jp.ID)
+	return jp
+}
+
+// DescendantIDs returns the IDs of all transitive copies of the given predicate.
+func (t *Tracker) DescendantIDs(id ID) []ID {
+	ids := make([]ID, 0, len(t.children[id]))
+	for _, child := range t.children[id] {
+		ids = append(ids, child)
+		ids = append(ids, t.DescendantIDs(child)...)
+	}
+	return ids
 }
 
 func (t *Tracker) nextID() ID {
@@ -70,4 +101,32 @@ func (t *Tracker) Get(id ID) (sqlparser.Expr, error) {
 
 func (t *Tracker) Skip(id ID) {
 	t.expressions[id] = nil
+}
+
+// SkipWithDescendants skips the given predicate and all its transitive copies.
+func (t *Tracker) SkipWithDescendants(id ID) {
+	t.Skip(id)
+	for _, child := range t.children[id] {
+		t.SkipWithDescendants(child)
+	}
+}
+
+// ResetToOriginal returns the predicate to its pre-push expression and skips
+// all of its transitive copies: they cannot be restored to column form inside
+// their source, and once the parent is restored nothing produces their
+// arguments. It returns a Snapshot of the previous state so callers that may
+// abandon the rewrite can undo it with Rollback.
+func (t *Tracker) ResetToOriginal(id ID, expr sqlparser.Expr) Snapshot {
+	snapshot := Snapshot{id: t.expressions[id]}
+	t.expressions[id] = expr
+	for _, child := range t.DescendantIDs(id) {
+		snapshot[child] = t.expressions[child]
+		t.Skip(child)
+	}
+	return snapshot
+}
+
+// Rollback puts back the expressions captured in a Snapshot.
+func (t *Tracker) Rollback(s Snapshot) {
+	maps.Copy(t.expressions, s)
 }
