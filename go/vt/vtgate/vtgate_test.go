@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -832,6 +833,76 @@ func TestRebuildTopoGraphs(t *testing.T) {
 			},
 		},
 		{
+			name:      "Deleted keyspace with leftover files in the cell is skipped",
+			keyspaces: []string{"ks1"},
+			setupFunc: func(ctx context.Context, ts *topo.Server, factory *memorytopo.Factory) error {
+				// Leave a ShardReplication record behind in the cell, without a
+				// keyspace record in the global topo.
+				return ts.UpdateShardReplicationFields(ctx, cell, "ks1", "0", func(sr *topodatapb.ShardReplication) error {
+					sr.Nodes = append(sr.Nodes, &topodatapb.ShardReplication_Node{TabletAlias: &topodatapb.TabletAlias{Cell: cell, Uid: 100}})
+					return nil
+				})
+			},
+			checkFunc: func(t *testing.T, ctx context.Context, ts *topo.Server, factory *memorytopo.Factory) {
+				// The leftover files are left in place, and no srving keyspace is built.
+				sr, err := ts.GetShardReplication(ctx, cell, "ks1", "0")
+				require.NoError(t, err)
+				require.Len(t, sr.Nodes, 1)
+				_, err = ts.GetSrvKeyspace(ctx, cell, "ks1")
+				require.True(t, topo.IsErrType(err, topo.NoNode))
+				_, err = ts.GetKeyspace(ctx, "ks1")
+				require.True(t, topo.IsErrType(err, topo.NoNode))
+				srvVSchema, err := ts.GetSrvVSchema(ctx, cell)
+				require.NoError(t, err)
+				require.Empty(t, srvVSchema.Keyspaces)
+			},
+		},
+		{
+			name:      "Keyspace to watch that does not exist is skipped",
+			keyspaces: []string{"ks1", "ks2"},
+			setupFunc: func(ctx context.Context, ts *topo.Server, factory *memorytopo.Factory) error {
+				// Only ks1 exists, and both its srving keyspace and srving vschema are built.
+				_, err := ts.GetOrCreateShard(ctx, "ks1", "-")
+				if err != nil {
+					return err
+				}
+				err = ts.UpdateSrvKeyspace(ctx, cell, "ks1", &topodatapb.SrvKeyspace{})
+				if err != nil {
+					return err
+				}
+				return ts.UpdateSrvVSchema(ctx, cell, &vschemapb.SrvVSchema{
+					Keyspaces: map[string]*vschemapb.Keyspace{
+						"ks1": {
+							// We mark the keyspace as sharded to know if the srving vschema is rebuilt.
+							// If it is rebuilt, the keyspace will be marked as unsharded.
+							Sharded: true,
+						},
+					},
+				})
+			},
+			checkFunc: func(t *testing.T, ctx context.Context, ts *topo.Server, factory *memorytopo.Factory) {
+				// ks2 gets no srving keyspace, and its absence from the srving
+				// vschema doesn't cause a rebuild.
+				_, err := ts.GetSrvKeyspace(ctx, cell, "ks2")
+				require.True(t, topo.IsErrType(err, topo.NoNode))
+				_, err = ts.GetKeyspace(ctx, "ks2")
+				require.True(t, topo.IsErrType(err, topo.NoNode))
+				srvVSchema, err := ts.GetSrvVSchema(ctx, cell)
+				require.NoError(t, err)
+				require.Len(t, srvVSchema.Keyspaces, 1)
+				require.True(t, srvVSchema.Keyspaces["ks1"].Sharded)
+			},
+		},
+		{
+			name:      "Error in reading keyspace",
+			keyspaces: []string{"ks1"},
+			setupFunc: func(ctx context.Context, ts *topo.Server, factory *memorytopo.Factory) error {
+				factory.AddOperationError(memorytopo.Get, "keyspaces/ks1/Keyspace$", errors.New("simulated topo error"))
+				return nil
+			},
+			wantErr: "vtgate Init: failed to read Keyspace: simulated topo error",
+		},
+		{
 			name:      "Error in reading srving vschema",
 			keyspaces: []string{},
 			setupFunc: func(ctx context.Context, ts *topo.Server, factory *memorytopo.Factory) error {
@@ -869,6 +940,65 @@ func TestRebuildTopoGraphs(t *testing.T) {
 			tt.checkFunc(t, ctx, ts, factory)
 		})
 	}
+}
+
+// TestRebuildTopoGraphsKeyspaceDeletedDuringRebuild checks that a keyspace
+// deleted between the existence check and the rebuild is skipped, and that
+// its files in the cell are left in place.
+func TestRebuildTopoGraphsKeyspaceDeletedDuringRebuild(t *testing.T) {
+	ctx := t.Context()
+	cell := "cell1"
+	ts, factory := memorytopo.NewServerAndFactory(ctx, cell)
+	require.NoError(t, ts.CreateKeyspace(ctx, "ks1", &topodatapb.Keyspace{}))
+	require.NoError(t, ts.UpdateShardReplicationFields(ctx, cell, "ks1", "0", func(sr *topodatapb.ShardReplication) error {
+		sr.Nodes = append(sr.Nodes, &topodatapb.ShardReplication_Node{TabletAlias: &topodatapb.TabletAlias{Cell: cell, Uid: 100}})
+		return nil
+	}))
+
+	// Delete the keyspace right after the first read of its record.
+	hooked := &deleteKeyspaceAfterGetFactory{Factory: factory, deleteKeyspace: func() {
+		require.NoError(t, ts.DeleteKeyspace(ctx, "ks1"))
+	}}
+	rebuildTS, err := topo.NewWithFactory(hooked, "", "")
+	require.NoError(t, err)
+	t.Cleanup(rebuildTS.Close)
+
+	err = rebuildTopoGraphs(ctx, rebuildTS, cell, []string{"ks1"})
+	require.NoError(t, err)
+	sr, err := ts.GetShardReplication(ctx, cell, "ks1", "0")
+	require.NoError(t, err)
+	require.Len(t, sr.Nodes, 1)
+	_, err = ts.GetSrvKeyspace(ctx, cell, "ks1")
+	require.True(t, topo.IsErrType(err, topo.NoNode))
+}
+
+// deleteKeyspaceAfterGetFactory creates memorytopo connections that call
+// deleteKeyspace once, after the first Get of the ks1 keyspace record.
+type deleteKeyspaceAfterGetFactory struct {
+	*memorytopo.Factory
+	deleteKeyspace func()
+	once           sync.Once
+}
+
+func (f *deleteKeyspaceAfterGetFactory) Create(cell, serverAddr, root string) (topo.Conn, error) {
+	conn, err := f.Factory.Create(cell, serverAddr, root)
+	if err != nil {
+		return nil, err
+	}
+	return &deleteKeyspaceAfterGetConn{Conn: conn, factory: f}, nil
+}
+
+type deleteKeyspaceAfterGetConn struct {
+	topo.Conn
+	factory *deleteKeyspaceAfterGetFactory
+}
+
+func (c *deleteKeyspaceAfterGetConn) Get(ctx context.Context, filePath string) ([]byte, topo.Version, error) {
+	contents, version, err := c.Conn.Get(ctx, filePath)
+	if filePath == "keyspaces/ks1/Keyspace" {
+		c.factory.once.Do(c.factory.deleteKeyspace)
+	}
+	return contents, version, err
 }
 
 func TestBinlogDumpGTID(t *testing.T) {
