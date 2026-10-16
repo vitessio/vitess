@@ -51,6 +51,11 @@ type (
 		ParamsCount  uint16                  // ParamsCount is the total number of bind parameters (?) in the query.
 		Optimized    atomic.Bool             // Prepared queries need to be optimized before the first execution
 
+		// NeedsSettingsOnConn is set when the statement cannot carry the session's
+		// settings as a SET_VAR hint, so it must run on a connection with the
+		// settings applied. Preparing the statement runs nothing and ignores it.
+		NeedsSettingsOnConn bool
+
 		ExecCount    uint64 // ExecCount is how many times this plan has been executed.
 		ExecTime     uint64 // ExecTime is the total accumulated execution time in nanoseconds.
 		ShardQueries uint64 // ShardQueries is the total count of shard-level queries performed.
