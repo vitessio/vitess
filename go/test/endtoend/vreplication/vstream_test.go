@@ -20,6 +20,8 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -37,6 +39,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 )
@@ -155,16 +158,8 @@ func TestVStreamWithTablesToSkipCopyFlag(t *testing.T) {
 	stopInserting := atomic.Bool{}
 	stopInserting.Store(false)
 	var insertMu sync.Mutex
-<<<<<<< HEAD
-	go func() {
-||||||| parent of 6863137eb7 (test: remove dead waits from the vstream e2e tests (#21619))
-	go func() {
-		insertCount := 0
-=======
 	var inserts sync.WaitGroup
 	inserts.Go(func() {
-		insertCount := 0
->>>>>>> 6863137eb7 (test: remove dead waits from the vstream e2e tests (#21619))
 		for {
 			if stopInserting.Load() {
 				return
@@ -212,317 +207,7 @@ func TestVStreamWithTablesToSkipCopyFlag(t *testing.T) {
 	// Since we don't expect merchant table to be part of copy phase, we can
 	// subtract 10 from the total rows found in the 3 tables.
 	wantTotalRows := insertedRows1 + insertedRows2 + insertedRows3 - 10
-<<<<<<< HEAD
-	assert.Equal(t, wantTotalRows, numRowEvents)
-||||||| parent of 6863137eb7 (test: remove dead waits from the vstream e2e tests (#21619))
-	assert.Equal(t, wantTotalRows, numRowEvents)
-
-	// Confirm that the copy phase queries used by the VStream did NOT include the MAX_EXECUTION_TIME
-	// query hint. Adding the hint forces unnecessary copy resume cycles for VStream clients that may
-	// not support resume well, or at all (see issue #20039).
-	logFiles := path.Join(vc.ClusterConfig.tmpDir, "*-vttablet-stderr.txt")
-	totalCmd := fmt.Sprintf("grep -h 'Streaming rows for query:' %s | wc -l", logFiles)
-	totalOut, err := exec.Command("bash", "-c", totalCmd).Output()
-	require.NoError(t, err)
-	totalCount, err := strconv.Atoi(strings.TrimSpace(string(totalOut)))
-	require.NoError(t, err)
-	require.Positive(t, totalCount, "expected at least one rowstreamer 'Streaming rows for query:' log line during copy phase")
-
-	withHintCmd := fmt.Sprintf("grep -h 'Streaming rows for query:' %s | grep -c MAX_EXECUTION_TIME || true", logFiles)
-	withHintOut, err := exec.Command("bash", "-c", withHintCmd).Output()
-	require.NoError(t, err)
-	withHintCount, err := strconv.Atoi(strings.TrimSpace(string(withHintOut)))
-	require.NoError(t, err)
-	require.Zero(t, withHintCount, "expected no VStream copy/sync queries to include MAX_EXECUTION_TIME hint")
-}
-
-// TestVStreamLaggingDDLRowEvents confirms that when the schema historian is enabled via the --track-schema-versions flag, we don't
-// fail to handle older ROW events in the VStream that were created prior to a DDL which modified the table structure and thus
-// impacted the binlog event field number to table column mapping. This includes recovering the value mappings for an ENUM or SET
-// column that was added and then dropped — also when the column has a binary collation and thus reports as BINARY rather than
-// ENUM/SET in field metadata — which requires the historian to have recorded the column's type definition (issue #20175).
-func TestVStreamLaggingDDLRowEvents(t *testing.T) {
-	oldArgs := slices.Clone(extraVTTabletArgs)
-	extraVTTabletArgs = append(extraVTTabletArgs,
-		"--track-schema-versions",
-	)
-	defer func() {
-		extraVTTabletArgs = oldArgs
-	}()
-
-	vc = NewVitessCluster(t, nil)
-	defer vc.TearDown()
-
-	oldDefaultReplicas := defaultReplicas
-	oldDefaultRdonly := defaultRdonly
-	defaultReplicas = 0
-	defaultRdonly = 0
-	defer func() {
-		defaultReplicas = oldDefaultReplicas
-		defaultRdonly = oldDefaultRdonly
-	}()
-
-	defaultCell := vc.Cells[vc.CellNames[0]]
-	vc.AddKeyspace(t, []*Cell{defaultCell}, defaultSourceKs, "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100, nil)
-	verifyClusterHealth(t, vc)
-
-	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Minute)
-	defer cancel()
-	vstreamConn, err := vtgateconn.Dial(ctx, fmt.Sprintf("%s:%d", vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateGrpcPort))
-	require.NoError(t, err)
-	defer vstreamConn.Close()
-
-	filter := &binlogdatapb.Filter{
-		Rules: []*binlogdatapb.Rule{{
-			Match:  "loadtest",
-			Filter: "select * from loadtest",
-		}},
-		FieldEventMode: binlogdatapb.Filter_ERR_ON_MISMATCH,
-	}
-	startVGTID := &binlogdatapb.VGtid{
-		ShardGtids: []*binlogdatapb.ShardGtid{{
-			Keyspace: defaultSourceKs,
-			Shard:    "0",
-			Gtid:     "",
-		}},
-	}
-
-	reader, err := vstreamConn.VStream(ctx, topodatapb.TabletType_PRIMARY, startVGTID, filter, nil)
-	require.NoError(t, err)
-	var resumeVGTID *binlogdatapb.VGtid
-	for resumeVGTID == nil {
-		evs, err := reader.Recv()
-		require.NoError(t, err)
-		for _, ev := range evs {
-			if ev.Type == binlogdatapb.VEventType_VGTID {
-				resumeVGTID = ev.Vgtid
-				break
-			}
-		}
-	}
-
-	vtgateConn := vc.GetVTGateConn(t)
-	defer vtgateConn.Close()
-	_, err = vtgateConn.ExecuteFetch("use `"+defaultSourceKs+"`", 1000, false)
-	require.NoError(t, err)
-	_, err = vtgateConn.ExecuteFetch("alter table loadtest add column age int default 1 after id, "+
-		"add column plan enum('free','standard','enterprise') not null default 'free' after age, "+
-		"add column roles set('admin','user') not null default 'user' after plan, "+
-		// A binary collation makes the column report as BINARY rather than ENUM in
-		// field metadata, exercising the historian's name-based type enrichment.
-		"add column tier enum('gold','silver') collate utf8mb4_bin not null default 'gold' after roles", 1000, false)
-	require.NoError(t, err)
-	_, err = vtgateConn.ExecuteFetch("insert into loadtest (id, name, plan, roles, tier) values "+
-		"(2001, 'cust1', 'standard', 'admin,user', 'silver'), (2002, 'cust2', 'enterprise', 'user', 'gold'), (2003, 'cust3', 'free', 'admin', 'silver')", 1000, false)
-	require.NoError(t, err)
-	_, err = vtgateConn.ExecuteFetch("alter table loadtest drop column age, drop column plan, drop column roles, drop column tier", 1000, false)
-	require.NoError(t, err)
-
-	streamCtx, streamCancel := context.WithTimeout(t.Context(), 5*time.Minute)
-	defer streamCancel()
-	rowEvents := 0
-	var loadtestFields []*querypb.Field
-	var decodedValues []string
-	// We use eventually here as it's still possible that the schema tracker's stream encounters an error and
-	// pauses for a few seconds before restarting.
-	require.EventuallyWithT(t, func(c *assert.CollectT) {
-		reader, err = vstreamConn.VStream(streamCtx, topodatapb.TabletType_PRIMARY, resumeVGTID, filter, nil)
-		assert.NoError(c, err)
-	}, 30*time.Second, 500*time.Millisecond)
-	deadline := time.Now().Add(1 * time.Minute)
-	for rowEvents < 3 {
-		if time.Now().After(deadline) {
-			require.FailNowf(t, "timed out waiting for row events", "row events seen: %d", rowEvents)
-		}
-		evs, err := reader.Recv()
-		require.NoError(t, err)
-		for _, ev := range evs {
-			switch ev.Type {
-			case binlogdatapb.VEventType_FIELD:
-				if strings.HasSuffix(ev.FieldEvent.TableName, ".loadtest") {
-					loadtestFields = ev.FieldEvent.Fields
-				}
-			case binlogdatapb.VEventType_ROW:
-				if strings.HasSuffix(ev.RowEvent.TableName, ".loadtest") {
-					rowEvents += len(ev.RowEvent.RowChanges)
-					for _, rowChange := range ev.RowEvent.RowChanges {
-						if rowChange.After == nil {
-							continue
-						}
-						// MakeRowTrusted indexes fields by position without bounds checks, so
-						// confirm the FIELD event arrived first and matches the row's shape.
-						require.NotNilf(t, loadtestFields, "received a ROW event for the loadtest table before its FIELD event")
-						require.Lenf(t, rowChange.After.Lengths, len(loadtestFields),
-							"loadtest ROW event value count does not match the preceding FIELD event's field count")
-						for _, val := range sqltypes.MakeRowTrusted(loadtestFields, rowChange.After) {
-							decodedValues = append(decodedValues, val.ToString())
-						}
-					}
-				}
-			}
-		}
-	}
-	// The resumed stream replays the inserts that reference the since-dropped ENUM (plan, tier)
-	// and SET (roles) columns. With --track-schema-versions the historian supplies their
-	// type definitions, so the values must decode to the exact strings inserted (issue #20175).
-	for _, want := range []string{"free", "standard", "enterprise", "admin,user", "user", "admin", "gold", "silver"} {
-		assert.Containsf(t, decodedValues, want, "expected decoded ENUM/SET value %q in resumed loadtest rows; got %v", want, decodedValues)
-	}
-=======
 	assert.Equal(t, wantTotalRows, numRowEvents.Load())
-
-	// Confirm that the copy phase queries used by the VStream did NOT include the MAX_EXECUTION_TIME
-	// query hint. Adding the hint forces unnecessary copy resume cycles for VStream clients that may
-	// not support resume well, or at all (see issue #20039).
-	logFiles := path.Join(vc.ClusterConfig.tmpDir, "*-vttablet-stderr.txt")
-	totalCmd := fmt.Sprintf("grep -h 'Streaming rows for query:' %s | wc -l", logFiles)
-	totalOut, err := exec.Command("bash", "-c", totalCmd).Output()
-	require.NoError(t, err)
-	totalCount, err := strconv.Atoi(strings.TrimSpace(string(totalOut)))
-	require.NoError(t, err)
-	require.Positive(t, totalCount, "expected at least one rowstreamer 'Streaming rows for query:' log line during copy phase")
-
-	withHintCmd := fmt.Sprintf("grep -h 'Streaming rows for query:' %s | grep -c MAX_EXECUTION_TIME || true", logFiles)
-	withHintOut, err := exec.Command("bash", "-c", withHintCmd).Output()
-	require.NoError(t, err)
-	withHintCount, err := strconv.Atoi(strings.TrimSpace(string(withHintOut)))
-	require.NoError(t, err)
-	require.Zero(t, withHintCount, "expected no VStream copy/sync queries to include MAX_EXECUTION_TIME hint")
-}
-
-// TestVStreamLaggingDDLRowEvents confirms that when the schema historian is enabled via the --track-schema-versions flag, we don't
-// fail to handle older ROW events in the VStream that were created prior to a DDL which modified the table structure and thus
-// impacted the binlog event field number to table column mapping. This includes recovering the value mappings for an ENUM or SET
-// column that was added and then dropped — also when the column has a binary collation and thus reports as BINARY rather than
-// ENUM/SET in field metadata — which requires the historian to have recorded the column's type definition (issue #20175).
-func TestVStreamLaggingDDLRowEvents(t *testing.T) {
-	oldArgs := slices.Clone(extraVTTabletArgs)
-	extraVTTabletArgs = append(extraVTTabletArgs,
-		"--track-schema-versions",
-	)
-	defer func() {
-		extraVTTabletArgs = oldArgs
-	}()
-
-	vc = NewVitessCluster(t, nil)
-	defer vc.TearDown()
-
-	oldDefaultReplicas := defaultReplicas
-	oldDefaultRdonly := defaultRdonly
-	defaultReplicas = 0
-	defaultRdonly = 0
-	defer func() {
-		defaultReplicas = oldDefaultReplicas
-		defaultRdonly = oldDefaultRdonly
-	}()
-
-	defaultCell := vc.Cells[vc.CellNames[0]]
-	vc.AddKeyspace(t, []*Cell{defaultCell}, defaultSourceKs, "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100, nil)
-	verifyClusterHealth(t, vc)
-
-	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Minute)
-	defer cancel()
-	vstreamConn, err := vtgateconn.Dial(ctx, fmt.Sprintf("%s:%d", vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateGrpcPort))
-	require.NoError(t, err)
-	defer vstreamConn.Close()
-
-	filter := &binlogdatapb.Filter{
-		Rules: []*binlogdatapb.Rule{{
-			Match:  "loadtest",
-			Filter: "select * from loadtest",
-		}},
-		FieldEventMode: binlogdatapb.Filter_ERR_ON_MISMATCH,
-	}
-	startVGTID := &binlogdatapb.VGtid{
-		ShardGtids: []*binlogdatapb.ShardGtid{{
-			Keyspace: defaultSourceKs,
-			Shard:    "0",
-			Gtid:     "",
-		}},
-	}
-
-	reader, err := vstreamConn.VStream(ctx, topodatapb.TabletType_PRIMARY, startVGTID, filter, nil)
-	require.NoError(t, err)
-	var resumeVGTID *binlogdatapb.VGtid
-	for resumeVGTID == nil {
-		evs, err := reader.Recv()
-		require.NoError(t, err)
-		for _, ev := range evs {
-			if ev.Type == binlogdatapb.VEventType_VGTID {
-				resumeVGTID = ev.Vgtid
-				break
-			}
-		}
-	}
-
-	vtgateConn := vc.GetVTGateConn(t)
-	defer vtgateConn.Close()
-	_, err = vtgateConn.ExecuteFetch("use `"+defaultSourceKs+"`", 1000, false)
-	require.NoError(t, err)
-	_, err = vtgateConn.ExecuteFetch("alter table loadtest add column age int default 1 after id, "+
-		"add column plan enum('free','standard','enterprise') not null default 'free' after age, "+
-		"add column roles set('admin','user') not null default 'user' after plan, "+
-		// A binary collation makes the column report as BINARY rather than ENUM in
-		// field metadata, exercising the historian's name-based type enrichment.
-		"add column tier enum('gold','silver') collate utf8mb4_bin not null default 'gold' after roles", 1000, false)
-	require.NoError(t, err)
-	_, err = vtgateConn.ExecuteFetch("insert into loadtest (id, name, plan, roles, tier) values "+
-		"(2001, 'cust1', 'standard', 'admin,user', 'silver'), (2002, 'cust2', 'enterprise', 'user', 'gold'), (2003, 'cust3', 'free', 'admin', 'silver')", 1000, false)
-	require.NoError(t, err)
-	_, err = vtgateConn.ExecuteFetch("alter table loadtest drop column age, drop column plan, drop column roles, drop column tier", 1000, false)
-	require.NoError(t, err)
-
-	streamCtx, streamCancel := context.WithTimeout(t.Context(), 5*time.Minute)
-	defer streamCancel()
-	rowEvents := 0
-	var loadtestFields []*querypb.Field
-	var decodedValues []string
-	// We use eventually here as it's still possible that the schema tracker's stream encounters an error and
-	// pauses for a few seconds before restarting.
-	require.EventuallyWithT(t, func(c *assert.CollectT) {
-		reader, err = vstreamConn.VStream(streamCtx, topodatapb.TabletType_PRIMARY, resumeVGTID, filter, nil)
-		assert.NoError(c, err)
-	}, 30*time.Second, 500*time.Millisecond)
-	deadline := time.Now().Add(1 * time.Minute)
-	for rowEvents < 3 {
-		if time.Now().After(deadline) {
-			require.FailNowf(t, "timed out waiting for row events", "row events seen: %d", rowEvents)
-		}
-		evs, err := reader.Recv()
-		require.NoError(t, err)
-		for _, ev := range evs {
-			switch ev.Type {
-			case binlogdatapb.VEventType_FIELD:
-				if strings.HasSuffix(ev.FieldEvent.TableName, ".loadtest") {
-					loadtestFields = ev.FieldEvent.Fields
-				}
-			case binlogdatapb.VEventType_ROW:
-				if strings.HasSuffix(ev.RowEvent.TableName, ".loadtest") {
-					rowEvents += len(ev.RowEvent.RowChanges)
-					for _, rowChange := range ev.RowEvent.RowChanges {
-						if rowChange.After == nil {
-							continue
-						}
-						// MakeRowTrusted indexes fields by position without bounds checks, so
-						// confirm the FIELD event arrived first and matches the row's shape.
-						require.NotNilf(t, loadtestFields, "received a ROW event for the loadtest table before its FIELD event")
-						require.Lenf(t, rowChange.After.Lengths, len(loadtestFields),
-							"loadtest ROW event value count does not match the preceding FIELD event's field count")
-						for _, val := range sqltypes.MakeRowTrusted(loadtestFields, rowChange.After) {
-							decodedValues = append(decodedValues, val.ToString())
-						}
-					}
-				}
-			}
-		}
-	}
-	// The resumed stream replays the inserts that reference the since-dropped ENUM (plan, tier)
-	// and SET (roles) columns. With --track-schema-versions the historian supplies their
-	// type definitions, so the values must decode to the exact strings inserted (issue #20175).
-	for _, want := range []string{"free", "standard", "enterprise", "admin,user", "user", "admin", "gold", "silver"} {
-		assert.Containsf(t, decodedValues, want, "expected decoded ENUM/SET value %q in resumed loadtest rows; got %v", want, decodedValues)
-	}
->>>>>>> 6863137eb7 (test: remove dead waits from the vstream e2e tests (#21619))
 }
 
 // Validates that we have a working VStream API
@@ -578,16 +263,8 @@ func testVStreamWithFailover(t *testing.T, failover bool) {
 	defer vtgateConn.Close()
 
 	// first goroutine that keeps inserting rows into table being streamed until some time elapses after second PRS
-<<<<<<< HEAD
-	go func() {
-||||||| parent of 6863137eb7 (test: remove dead waits from the vstream e2e tests (#21619))
-	go func() {
-		insertCount := 0
-=======
 	var inserts sync.WaitGroup
 	inserts.Go(func() {
-		insertCount := 0
->>>>>>> 6863137eb7 (test: remove dead waits from the vstream e2e tests (#21619))
 		for {
 			if stopInserting.Load() {
 				return
@@ -769,8 +446,7 @@ func isSentinelRow(ev *binlogdatapb.RowEvent) bool {
 // waitForSentinelRow inserts the sentinel customer row into keyspace and waits
 // until the stream reports it in seen.
 func waitForSentinelRow(t *testing.T, vtgateConn *mysql.Conn, keyspace string, seen *atomic.Bool) {
-	_, err := execVtgateQuery(vtgateConn, keyspace, fmt.Sprintf("insert into customer (cid, name) values (%d, 'sentinel')", sentinelCID))
-	require.NoError(t, err)
+	execVtgateQuery(t, vtgateConn, keyspace, fmt.Sprintf("insert into customer (cid, name) values (%d, 'sentinel')", sentinelCID))
 	require.Eventually(t, seen.Load, 30*time.Second, 10*time.Millisecond, "the vstream did not deliver the sentinel row")
 }
 
@@ -822,24 +498,8 @@ func testVStreamStopOnReshardFlag(t *testing.T, stopOnReshard bool, baseTabletID
 			Filter: "select * from customer",
 		}},
 	}
-<<<<<<< HEAD
 	flags := &vtgatepb.VStreamFlags{HeartbeatInterval: 3600, StopOnReshard: stopOnReshard}
-	done := false
-||||||| parent of 6863137eb7 (test: remove dead waits from the vstream e2e tests (#21619))
-	flags := &vtgatepb.VStreamFlags{
-		HeartbeatInterval:    3600,
-		StopOnReshard:        stopOnReshard,
-		TransactionChunkSize: 1024, // 1KB - test chunking for all transactions
-	}
-	done := false
-=======
-	flags := &vtgatepb.VStreamFlags{
-		HeartbeatInterval:    3600,
-		StopOnReshard:        stopOnReshard,
-		TransactionChunkSize: 1024, // 1KB - test chunking for all transactions
-	}
 	var done, streamEnded, stopInserts atomic.Bool
->>>>>>> 6863137eb7 (test: remove dead waits from the vstream e2e tests (#21619))
 
 	// first goroutine that keeps inserting rows into table being streamed until the test has seen the reshard
 	// * if StopOnReshard is false we should keep getting events on the new shards
@@ -900,17 +560,9 @@ func testVStreamStopOnReshardFlag(t *testing.T, stopOnReshard bool, baseTabletID
 				}
 				mu.Unlock()
 			case io.EOF:
-<<<<<<< HEAD
 				log.Infof("Stream Ended")
-				done = true
-||||||| parent of 6863137eb7 (test: remove dead waits from the vstream e2e tests (#21619))
-				log.Info("Stream Ended")
-				done = true
-=======
-				log.Info("Stream Ended")
 				streamEnded.Store(true)
 				done.Store(true)
->>>>>>> 6863137eb7 (test: remove dead waits from the vstream e2e tests (#21619))
 			default:
 				log.Infof("%s:: remote error: %v", time.Now(), err)
 				numErrors++
@@ -934,35 +586,8 @@ func testVStreamStopOnReshardFlag(t *testing.T, stopOnReshard bool, baseTabletID
 		}
 	}()
 
-<<<<<<< HEAD
-	ticker := time.NewTicker(1 * time.Second)
-	tickCount := 0
-	for {
-		<-ticker.C
-		tickCount++
-		switch tickCount {
-		case 1:
-			reshard(t, "sharded", "customer", "vstreamStopOnReshard", "-80,80-",
-				"-40,40-", baseTabletID+400, nil, nil, nil, nil, defaultCellName, 1)
-		case 60:
-			done = true
-||||||| parent of 6863137eb7 (test: remove dead waits from the vstream e2e tests (#21619))
-	ticker := time.NewTicker(1 * time.Second)
-	tickCount := 0
-	for {
-		<-ticker.C
-		tickCount++
-		switch tickCount {
-		case 1:
-			reshard(t, "sharded", "customer", "vstreamStopOnReshard", "-80,80-",
-				"-40,40-", baseTabletID+400, nil, nil, nil, nil, defaultCellName, 1,
-				reshardOptions{skipSwitchWritesErrorHandling: true})
-		case 60:
-			done = true
-=======
 	reshard(t, "sharded", "customer", "vstreamStopOnReshard", "-80,80-",
-		"-40,40-", baseTabletID+400, nil, nil, nil, nil, defaultCellName, 1,
-		reshardOptions{skipSwitchWritesErrorHandling: true})
+		"-40,40-", baseTabletID+400, nil, nil, nil, nil, defaultCellName, 1)
 
 	// With StopOnReshard the stream ends cleanly on the reshard journal.
 	// Without it, the stream must keep going: vtgate starts streaming the new
@@ -973,7 +598,6 @@ func testVStreamStopOnReshardFlag(t *testing.T, stopOnReshard bool, baseTabletID
 		if stopOnReshard {
 			assert.True(c, streamEnded.Load(), "the vstream did not end with io.EOF after the reshard")
 			return
->>>>>>> 6863137eb7 (test: remove dead waits from the vstream e2e tests (#21619))
 		}
 		assert.False(c, done.Load(), "the vstream ended")
 		mu.Lock()
@@ -1030,20 +654,8 @@ func testVStreamCopyMultiKeyspaceReshard(t *testing.T, baseTabletID int) numEven
 			Match: "/customer.*/",
 		}},
 	}
-<<<<<<< HEAD
 	flags := &vtgatepb.VStreamFlags{}
-	done := false
-||||||| parent of 6863137eb7 (test: remove dead waits from the vstream e2e tests (#21619))
-	flags := &vtgatepb.VStreamFlags{
-		TransactionChunkSize: 1024, // 1KB - test chunking for all transactions
-	}
-	done := false
-=======
-	flags := &vtgatepb.VStreamFlags{
-		TransactionChunkSize: 1024, // 1KB - test chunking for all transactions
-	}
 	var done, stopInserts, reshardDone atomic.Bool
->>>>>>> 6863137eb7 (test: remove dead waits from the vstream e2e tests (#21619))
 
 	// First goroutine that keeps inserting rows into the table being streamed until the new shards have streamed rows
 	// We should keep getting events on the new shards
@@ -1065,22 +677,10 @@ func testVStreamCopyMultiKeyspaceReshard(t *testing.T, baseTabletID int) numEven
 	var ne numEvents
 	streamedNames := make(map[string]bool) // names of the streamed rows of the sharded customer table
 	go func() {
-<<<<<<< HEAD
-		var reader vtgateconn.VStreamReader
-		reader, err = vstreamConn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, flags)
-		require.NoError(t, err)
-||||||| parent of 6863137eb7 (test: remove dead waits from the vstream e2e tests (#21619))
-		var reader vtgateconn.VStreamReader
-		reader, err = vstreamConn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, flags)
-		if !assert.NoError(t, err) {
-			return
-		}
-=======
 		reader, err := vstreamConn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, flags)
 		if !assert.NoError(t, err) {
 			return
 		}
->>>>>>> 6863137eb7 (test: remove dead waits from the vstream e2e tests (#21619))
 		for {
 			evs, err := reader.Recv()
 
@@ -1121,27 +721,11 @@ func testVStreamCopyMultiKeyspaceReshard(t *testing.T, baseTabletID int) numEven
 				}
 				mu.Unlock()
 			case io.EOF:
-<<<<<<< HEAD
 				log.Infof("Stream Ended")
-				done = true
-||||||| parent of 6863137eb7 (test: remove dead waits from the vstream e2e tests (#21619))
-				log.Info("Stream Ended")
-				done = true
-=======
-				log.Info("Stream Ended")
 				done.Store(true)
->>>>>>> 6863137eb7 (test: remove dead waits from the vstream e2e tests (#21619))
 			default:
-<<<<<<< HEAD
 				log.Errorf("Returned err %v", err)
-				done = true
-||||||| parent of 6863137eb7 (test: remove dead waits from the vstream e2e tests (#21619))
-				log.Error(fmt.Sprintf("Returned err %v", err))
-				done = true
-=======
-				log.Error(fmt.Sprintf("Returned err %v", err))
 				done.Store(true)
->>>>>>> 6863137eb7 (test: remove dead waits from the vstream e2e tests (#21619))
 			}
 			if done.Load() {
 				return
@@ -1166,35 +750,20 @@ func testVStreamCopyMultiKeyspaceReshard(t *testing.T, baseTabletID int) numEven
 	stopInserting()
 
 	// Wait until every inserted row has been streamed.
-	nameResult, err := execVtgateQuery(vtgateConn, "sharded", "select name from customer")
-	require.NoError(t, err)
+	nameResult := execVtgateQuery(t, vtgateConn, "sharded", "select name from customer")
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
 		mu.Lock()
 		defer mu.Unlock()
 		for _, row := range nameResult.Rows {
 			assert.Truef(c, streamedNames[row[0].ToString()], "row %s was not streamed", row[0].ToString())
 		}
-<<<<<<< HEAD
-		if done {
-			break
-		}
-	}
-	log.Infof("ne=%v", ne)
-||||||| parent of 6863137eb7 (test: remove dead waits from the vstream e2e tests (#21619))
-		if done {
-			break
-		}
-	}
-	log.Info(fmt.Sprintf("ne=%v", ne))
-=======
 	}, 30*time.Second, 10*time.Millisecond)
 	done.Store(true)
 
 	mu.Lock()
 	result := ne
 	mu.Unlock()
-	log.Info(fmt.Sprintf("ne=%v", result))
->>>>>>> 6863137eb7 (test: remove dead waits from the vstream e2e tests (#21619))
+	log.Infof("ne=%v", result)
 
 	// The number of row events streamed by the VStream API should match the number of rows inserted.
 	// This is important for sharded tables, where we need to ensure that no row events are missed during the resharding process.
@@ -1284,14 +853,7 @@ func TestMultiVStreamsKeyspaceReshard(t *testing.T) {
 	vgtid := &binlogdatapb.VGtid{
 		ShardGtids: []*binlogdatapb.ShardGtid{{
 			Keyspace: "/.*", // Match all keyspaces just to be more realistic.
-<<<<<<< HEAD
 		}}}
-||||||| parent of 6863137eb7 (test: remove dead waits from the vstream e2e tests (#21619))
-		}},
-	}
-=======
-		}},
-	}
 	// The names of the customer rows seen in either stream.
 	streamedNames := make(map[string]bool)
 	recordNames := func(ev *binlogdatapb.RowEvent) {
@@ -1301,7 +863,6 @@ func TestMultiVStreamsKeyspaceReshard(t *testing.T) {
 			}
 		}
 	}
->>>>>>> 6863137eb7 (test: remove dead waits from the vstream e2e tests (#21619))
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -1415,8 +976,7 @@ func TestMultiVStreamsKeyspaceReshard(t *testing.T) {
 			if insertedNames == nil && newShardRowEvents > 0 && journalEvents > 0 {
 				close(stopInserts)
 				<-insertsDone
-				qr, err := execVtgateQuery(vtgateConn, ks, "select name from customer")
-				require.NoError(t, err)
+				qr := execVtgateQuery(t, vtgateConn, ks, "select name from customer")
 				insertedNames = make([]string, 0, len(qr.Rows))
 				for _, row := range qr.Rows {
 					insertedNames = append(insertedNames, row[0].ToString())
@@ -1692,24 +1252,10 @@ const (
 	numExpectedHeartbeats = 10
 )
 
-<<<<<<< HEAD
-func doVStream(t *testing.T, vc *VitessCluster, flags *vtgatepb.VStreamFlags) (numRowEvents map[string]int, numFieldEvents map[string]int) {
-	// Stream for a while to ensure heartbeats are sent.
-	ctx, cancel := context.WithTimeout(context.Background(), vstreamHeartbeatsTestContextTimeout)
-	defer cancel()
-
-||||||| parent of 6863137eb7 (test: remove dead waits from the vstream e2e tests (#21619))
-func doVStream(t *testing.T, vc *VitessCluster, flags *vtgatepb.VStreamFlags) (numRowEvents map[string]int, numFieldEvents map[string]int) {
-	// Stream for a while to ensure heartbeats are sent.
-	ctx, cancel := context.WithTimeout(t.Context(), vstreamHeartbeatsTestContextTimeout)
-	defer cancel()
-
-=======
 // doVStream streams the customer and, if flags ask for them, heartbeat events
 // until ctx ends. It calls onHeartbeat, if set, with the number of heartbeats
 // received so far. It returns an error only if the stream could not start.
 func doVStream(t *testing.T, ctx context.Context, vc *VitessCluster, flags *vtgatepb.VStreamFlags, onHeartbeat func(int)) (numRowEvents map[string]int, numFieldEvents map[string]int, err error) {
->>>>>>> 6863137eb7 (test: remove dead waits from the vstream e2e tests (#21619))
 	numRowEvents = make(map[string]int)
 	numFieldEvents = make(map[string]int)
 	vstreamConn, err := vtgateconn.Dial(ctx, fmt.Sprintf("%s:%d", vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateGrpcPort))
@@ -1746,15 +1292,9 @@ func doVStream(t *testing.T, ctx context.Context, vc *VitessCluster, flags *vtga
 				case binlogdatapb.VEventType_ROW:
 					rowEvent := ev.RowEvent
 					arr := strings.Split(rowEvent.TableName, ".")
-<<<<<<< HEAD
-					require.Equal(t, len(arr), 2)
-||||||| parent of 6863137eb7 (test: remove dead waits from the vstream e2e tests (#21619))
-					require.Len(t, arr, 2)
-=======
 					if !assert.Len(t, arr, 2) {
 						continue
 					}
->>>>>>> 6863137eb7 (test: remove dead waits from the vstream e2e tests (#21619))
 					tableName := arr[1]
 					assert.Equal(t, defaultSourceKs, rowEvent.Keyspace)
 					assert.Equal(t, "0", rowEvent.Shard)
@@ -1766,15 +1306,9 @@ func doVStream(t *testing.T, ctx context.Context, vc *VitessCluster, flags *vtga
 				case binlogdatapb.VEventType_FIELD:
 					fieldEvent := ev.FieldEvent
 					arr := strings.Split(fieldEvent.TableName, ".")
-<<<<<<< HEAD
-					require.Equal(t, len(arr), 2)
-||||||| parent of 6863137eb7 (test: remove dead waits from the vstream e2e tests (#21619))
-					require.Len(t, arr, 2)
-=======
 					if !assert.Len(t, arr, 2) {
 						continue
 					}
->>>>>>> 6863137eb7 (test: remove dead waits from the vstream e2e tests (#21619))
 					tableName := arr[1]
 					assert.Equal(t, defaultSourceKs, fieldEvent.Keyspace)
 					assert.Equal(t, "0", fieldEvent.Shard)
@@ -1786,13 +1320,7 @@ func doVStream(t *testing.T, ctx context.Context, vc *VitessCluster, flags *vtga
 			log.Infof("Stream Ended")
 			done = true
 		default:
-<<<<<<< HEAD
-			log.Errorf("remote error: %v", err)
-||||||| parent of 6863137eb7 (test: remove dead waits from the vstream e2e tests (#21619))
-			log.Error(fmt.Sprintf("remote error: %v", err))
-=======
-			log.Info(fmt.Sprintf("stream ended: %v", err))
->>>>>>> 6863137eb7 (test: remove dead waits from the vstream e2e tests (#21619))
+			log.Infof("stream ended: %v", err)
 			done = true
 		}
 	}
@@ -1866,17 +1394,6 @@ func TestVStreamHeartbeats(t *testing.T) {
 					cancel()
 				}
 			}
-<<<<<<< HEAD
-			require.GreaterOrEqual(t, gotNumRowEvents["heartbeat"], tc.expectedHeartbeats, "incorrect number of heartbeat events received")
-			log.Infof("Total number of heartbeat events received: %v", gotNumRowEvents["heartbeat"])
-			delete(gotNumRowEvents, "heartbeat")
-			require.Equal(t, expectedNumRowEvents, gotNumRowEvents)
-||||||| parent of 6863137eb7 (test: remove dead waits from the vstream e2e tests (#21619))
-			require.GreaterOrEqual(t, gotNumRowEvents["heartbeat"], tc.expectedHeartbeats, "incorrect number of heartbeat events received")
-			log.Info(fmt.Sprintf("Total number of heartbeat events received: %v", gotNumRowEvents["heartbeat"]))
-			delete(gotNumRowEvents, "heartbeat")
-			require.Equal(t, expectedNumRowEvents, gotNumRowEvents)
-=======
 		}
 		streams.Go(func() {
 			gotNumRowEvents[i], gotNumFieldEvents[i], streamErrs[i] = doVStream(t, ctx, vc, tc.flags, onHeartbeat)
@@ -1895,10 +1412,9 @@ func TestVStreamHeartbeats(t *testing.T) {
 			} else {
 				require.GreaterOrEqual(t, gotNumRowEvents[i]["heartbeat"], tc.expectedHeartbeats, "incorrect number of heartbeat events received")
 			}
-			log.Info(fmt.Sprintf("Total number of heartbeat events received: %v", gotNumRowEvents[i]["heartbeat"]))
+			log.Infof("Total number of heartbeat events received: %v", gotNumRowEvents[i]["heartbeat"])
 			delete(gotNumRowEvents[i], "heartbeat")
 			require.Equal(t, expectedNumRowEvents, gotNumRowEvents[i])
->>>>>>> 6863137eb7 (test: remove dead waits from the vstream e2e tests (#21619))
 		})
 	}
 }
@@ -1948,33 +1464,15 @@ func TestVStreamPushdownFilters(t *testing.T) {
 	createdPauls := startingPauls
 	createdNonPauls := 0
 	go func() {
-<<<<<<< HEAD
-||||||| parent of 6863137eb7 (test: remove dead waits from the vstream e2e tests (#21619))
-		var closeOnce sync.Once
-		closeDone := func() { closeOnce.Do(func() { close(done) }) }
-		defer closeDone()
-=======
 		defer close(insertsDone)
->>>>>>> 6863137eb7 (test: remove dead waits from the vstream e2e tests (#21619))
 		id := 1
 		for {
 			select {
 			case <-streamCtx.Done():
-<<<<<<< HEAD
-				// Give the VStream a little catch-up time before telling it to stop
-				// via the done channel.
-				time.Sleep(10 * time.Second)
-				close(done)
-||||||| parent of 6863137eb7 (test: remove dead waits from the vstream e2e tests (#21619))
-				// Give the VStream a little catch-up time before telling it to stop
-				// via the done channel.
-				time.Sleep(10 * time.Second)
-=======
 				_, err := vtgateConn.ExecuteFetch(fmt.Sprintf("insert into `%s`.customer (cid, name) values (%d, 'paÜl')", ks, sentinelCID), 1, false)
 				if assert.NoError(t, err) {
 					createdPauls++
 				}
->>>>>>> 6863137eb7 (test: remove dead waits from the vstream e2e tests (#21619))
 				return
 			default:
 				if id%10 == 0 {
@@ -2027,30 +1525,12 @@ func TestVStreamPushdownFilters(t *testing.T) {
 // it receives the sentinel row, and returns number of copy phase and running
 // phase row events.
 func runVStreamAndGetNumOfRowEvents(t *testing.T, ctx context.Context, vstreamConn *vtgateconn.VTGateConn,
-<<<<<<< HEAD
-	vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter, done chan struct{}) (copyPhaseRowEvents int, runningPhaseRowEvents int) {
-||||||| parent of 6863137eb7 (test: remove dead waits from the vstream e2e tests (#21619))
-	vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter, done chan struct{},
-) (copyPhaseRowEvents int, runningPhaseRowEvents int) {
-=======
-	vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter,
-) (copyPhaseRowEvents int, runningPhaseRowEvents int) {
->>>>>>> 6863137eb7 (test: remove dead waits from the vstream e2e tests (#21619))
+	vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter) (copyPhaseRowEvents int, runningPhaseRowEvents int) {
 	copyPhase := true
 	func() {
-<<<<<<< HEAD
-		reader, err := vstreamConn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, &vtgatepb.VStreamFlags{})
-||||||| parent of 6863137eb7 (test: remove dead waits from the vstream e2e tests (#21619))
-		reader, err := vstreamConn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, &vtgatepb.VStreamFlags{
-			TransactionChunkSize: 1024, // 1KB - test chunking for all transactions
-		})
-=======
 		ctx, cancel := context.WithTimeout(ctx, time.Minute)
 		defer cancel()
-		reader, err := vstreamConn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, &vtgatepb.VStreamFlags{
-			TransactionChunkSize: 1024, // 1KB - test chunking for all transactions
-		})
->>>>>>> 6863137eb7 (test: remove dead waits from the vstream e2e tests (#21619))
+		reader, err := vstreamConn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, &vtgatepb.VStreamFlags{})
 		require.NoError(t, err)
 		for {
 			evs, err := reader.Recv()
