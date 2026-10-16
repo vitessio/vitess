@@ -1139,6 +1139,23 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 		s.Logger().Infof("Successfully opened external topo: %+v", externalTopo)
 	}
 
+	// When creating the workflow, locking the workflow and its target keyspace is sufficient.
+	// We take the locks before creating anything, so that failing to take them leaves
+	// nothing behind.
+	lockName := fmt.Sprintf("%s/%s", targetKeyspace, req.Workflow)
+	ctx, workflowUnlock, lockErr := s.ts.LockName(ctx, lockName, "MoveTablesCreate")
+	if lockErr != nil {
+		s.Logger().Errorf("Locking the workflow %s failed: %v", lockName, lockErr)
+		return nil, vterrors.Wrapf(lockErr, "failed to lock the %s workflow", lockName)
+	}
+	defer workflowUnlock(&err)
+	ctx, targetUnlock, lockErr := s.ts.LockKeyspace(ctx, targetKeyspace, "MoveTablesCreate")
+	if lockErr != nil {
+		s.Logger().Errorf("Locking target keyspace %s failed: %v", targetKeyspace, lockErr)
+		return nil, lockErr
+	}
+	defer targetUnlock(&err)
+
 	var origVSchema *topo.KeyspaceVSchemaInfo // If we need to rollback a failed create
 	vschema, err := s.ts.GetVSchema(ctx, targetKeyspace)
 	if err != nil {
@@ -1274,22 +1291,6 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 	if err != nil {
 		return nil, err
 	}
-	sw := &switcher{s: s, ts: ts}
-
-	// When creating the workflow, locking the workflow and its target keyspace is sufficient.
-	lockName := fmt.Sprintf("%s/%s", ts.TargetKeyspaceName(), ts.WorkflowName())
-	ctx, workflowUnlock, lockErr := s.ts.LockName(ctx, lockName, "MoveTablesCreate")
-	if lockErr != nil {
-		ts.Logger().Errorf("Locking the workflow %s failed: %v", lockName, lockErr)
-		return nil, vterrors.Wrapf(lockErr, "failed to lock the %s workflow", lockName)
-	}
-	defer workflowUnlock(&err)
-	ctx, targetUnlock, lockErr := sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "MoveTablesCreate")
-	if lockErr != nil {
-		ts.Logger().Errorf("Locking target keyspace %s failed: %v", ts.TargetKeyspaceName(), lockErr)
-		return nil, lockErr
-	}
-	defer targetUnlock(&err)
 
 	// If we get an error after this point, where the vreplication streams/records
 	// have been created, then we clean up the workflow's artifacts.
