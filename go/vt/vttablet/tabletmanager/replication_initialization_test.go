@@ -881,8 +881,15 @@ func TestSourceOnlyRPCStartsDeferredReplication(t *testing.T) {
 			require.NoError(t, md.CheckSuperQueryList())
 			if tc.startErr != nil {
 				require.ErrorContains(t, err, "cannot start replication")
-				require.ErrorContains(t, tm.retryReplicationInitializationOnce(t.Context(), id), "(old-primary:3306), which a reparent or VTOrc chose")
 				assert.False(t, qsc.IsServing(), "a replica whose replication is stopped must not serve")
+				// The shard record names the chosen source, so the retry
+				// configures it once starting works.
+				md.StartReplicationError = nil
+				md.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA", "FAKE SET SOURCE", "START REPLICA"}
+				md.ExpectedExecuteSuperQueryCurrent = 0
+				require.NoError(t, tm.retryReplicationInitializationOnce(t.Context(), id))
+				require.NoError(t, md.CheckSuperQueryList())
+				assert.True(t, qsc.IsServing())
 				return
 			}
 			require.NoError(t, err)
@@ -986,7 +993,10 @@ func TestDeferredReplicationRetryEnablesServingAfterReleasingLocks(t *testing.T)
 	assert.True(t, qsc.IsServing())
 }
 
-func TestFailedReparentSourceKeepsReplicaOutOfRotation(t *testing.T) {
+// TestRetryConfiguresSourceAFailedReparentChose checks that a replica whose
+// RPC failed to install its source does not serve, and that the retry
+// configures that source once the shard record names it.
+func TestRetryConfiguresSourceAFailedReparentChose(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
 		setup func(md *mysqlctl.FakeMysqlDaemon)
@@ -1026,12 +1036,17 @@ func TestFailedReparentSourceKeepsReplicaOutOfRotation(t *testing.T) {
 			require.Error(t, tc.rpc(t.Context(), tm, newPrimary.Alias))
 			assert.Equal(t, "old-primary", md.CurrentSourceHost)
 
-			// Replication runs, but not from the source the RPC chose.
-			md.ExpectedExecuteSuperQueryList = nil
-			md.ExpectedExecuteSuperQueryCurrent = 0
-			require.ErrorContains(t, tm.retryReplicationInitializationOnce(t.Context(), id), "(new-primary:3306), which a reparent or VTOrc chose")
-			require.NoError(t, md.CheckSuperQueryList())
 			assert.False(t, qsc.IsServing(), "a replica must not serve from a source other than the one the RPC chose")
+
+			// Replication runs, but not from the source the RPC chose. The
+			// shard record names that source, so the retry configures it.
+			md.SetReplicationSourceError = nil
+			md.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA", "FAKE SET SOURCE", "START REPLICA"}
+			md.ExpectedExecuteSuperQueryCurrent = 0
+			require.NoError(t, tm.retryReplicationInitializationOnce(t.Context(), id))
+			require.NoError(t, md.CheckSuperQueryList())
+			assert.Equal(t, "new-primary", md.CurrentSourceHost)
+			assert.True(t, qsc.IsServing())
 		})
 	}
 }
@@ -1981,6 +1996,30 @@ func TestOfflineBackupLeavesDeferredReplicationToTheRetry(t *testing.T) {
 	}
 }
 
+func TestRetryConfiguresShardPrimaryChosenDuringRestore(t *testing.T) {
+	for _, rpc := range sourceChoosingRPCs {
+		t.Run(rpc.name, func(t *testing.T) {
+			tm, md, ts, qsc, _, _ := newSourceChoiceTM(t)
+			tm.tmState.cancelReplicationInit(t.Context())
+			shardPrimary := &topodatapb.TabletAlias{Cell: "cell1", Uid: 2}
+			id := finishRestoreUnderShardLock(t, tm, md, ts, func() {
+				// A reparent's RPC to the shard primary times out waiting for
+				// the restore's action lock, and so never configures it.
+				ctx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
+				defer cancel()
+				require.ErrorIs(t, rpc.call(ctx, tm, shardPrimary), context.DeadlineExceeded)
+			})
+			md.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA", "FAKE SET SOURCE", "START REPLICA"}
+			md.ExpectedExecuteSuperQueryCurrent = 0
+			require.NoError(t, tm.retryReplicationInitializationOnce(t.Context(), id))
+			require.NoError(t, md.CheckSuperQueryList())
+			assert.Equal(t, "old-primary", md.CurrentSourceHost)
+			assert.True(t, md.Replicating)
+			assert.True(t, qsc.IsServing())
+		})
+	}
+}
+
 func TestDeferredRetryWaitsForActions(t *testing.T) {
 	t.Run("offline backup", func(t *testing.T) {
 		tm, md, _, _, id := newPendingReplicationTM(t)
@@ -2003,4 +2042,20 @@ func TestDeferredRetryWaitsForActions(t *testing.T) {
 		assert.True(t, waiting, "%v", err)
 		assert.ErrorContains(t, err, "another action is running")
 	})
+}
+
+// TestInitializationConfiguresOnlyTheChosenSource covers a shard record that
+// stops naming the chosen source after the retry checked it without the shard
+// lock.
+func TestInitializationConfiguresOnlyTheChosenSource(t *testing.T) {
+	tm, md, _, _, _, newPrimary := newSourceChoiceTM(t)
+	md.ExpectedExecuteSuperQueryList = nil
+	ctx, unlock, err := tm.lockReplicationInitialization(t.Context())
+	require.NoError(t, err)
+	defer unlock(&err)
+	// The shard record names the old primary.
+	_, err = tm.initializeReplicationLocked(ctx, topodatapb.TabletType_REPLICA, newPrimary.Alias)
+	require.ErrorIs(t, err, errShardPrimaryNotChosen)
+	require.NoError(t, md.CheckSuperQueryList())
+	assert.False(t, md.Replicating)
 }

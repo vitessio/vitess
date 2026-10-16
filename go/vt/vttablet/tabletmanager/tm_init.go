@@ -1294,10 +1294,16 @@ func (tm *TabletManager) attemptDeferredReplicationInit(ctx context.Context, id 
 	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer cancel()
 	var primary *topodatapb.Tablet
+	var waitErr error
 	alias, ticket := tm.tmState.chosenReplicationSource(id)
 	if alias != nil {
-		// Never replace a source that an RPC chose.
-		if primary, err = tm.replicatingChosenSource(ctx, alias); err != nil {
+		// Never replace a source that an RPC chose. If replication does not
+		// run from it, initialize it below, but only if the shard record
+		// names it.
+		primary, err = tm.replicatingChosenSource(ctx, alias)
+		if _, waiting := errors.AsType[*replicationInitWaitError](err); waiting {
+			waitErr = err
+		} else if err != nil {
 			return err
 		}
 	} else if primary, err = tm.replicatingShardPrimary(ctx); err != nil {
@@ -1313,7 +1319,10 @@ func (tm *TabletManager) attemptDeferredReplicationInit(ctx context.Context, id 
 			return err
 		}
 	} else {
-		primaryPos, err := tm.initializeReplicationLocked(ctx, tm.Tablet().Type)
+		primaryPos, err := tm.initializeReplicationLocked(ctx, tm.Tablet().Type, alias)
+		if errors.Is(err, errShardPrimaryNotChosen) {
+			return waitErr
+		}
 		if err != nil {
 			return err
 		}
@@ -1397,6 +1406,10 @@ func (tm *TabletManager) completeChosenReplicationSource(ctx context.Context, id
 	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer cancel()
 	primary, err := tm.replicatingChosenSource(ctx, alias)
+	if _, waiting := errors.AsType[*replicationInitWaitError](err); waiting && tm.shardPrimaryIs(ctx, alias) {
+		// Initialization can configure the chosen source under the shard lock.
+		return false, nil
+	}
 	if err != nil {
 		return false, err
 	}
@@ -1639,17 +1652,33 @@ func (tm *TabletManager) initializeReplication(ctx context.Context, tabletType t
 	defer unlock(&err)
 	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer cancel()
-	return tm.initializeReplicationLocked(ctx, tabletType)
+	return tm.initializeReplicationLocked(ctx, tabletType, nil)
+}
+
+// errShardPrimaryNotChosen reports that the shard record does not name the
+// source that initialization was asked to configure.
+var errShardPrimaryNotChosen = vterrors.New(vtrpc.Code_UNAVAILABLE, "the shard record does not name the chosen replication source")
+
+// shardPrimaryIs reports whether the shard record names alias as the primary.
+func (tm *TabletManager) shardPrimaryIs(ctx context.Context, alias *topodatapb.TabletAlias) bool {
+	tablet := tm.Tablet()
+	si, err := tm.TopoServer.GetShard(ctx, tablet.Keyspace, tablet.Shard)
+	return err == nil && topoproto.TabletAliasEqual(si.PrimaryAlias, alias)
 }
 
 // initializeReplicationLocked runs with the shard lock held from source selection
 // through receiver startup, so it cannot undo a reparent's receiver revocation.
-func (tm *TabletManager) initializeReplicationLocked(ctx context.Context, tabletType topodatapb.TabletType) (string, error) {
+// If source is set, it returns errShardPrimaryNotChosen unless the shard record
+// names source, before it changes anything.
+func (tm *TabletManager) initializeReplicationLocked(ctx context.Context, tabletType topodatapb.TabletType, source *topodatapb.TabletAlias) (string, error) {
 	tablet := tm.Tablet()
 	// Read the shard to find the current primary, and its location.
 	si, err := tm.TopoServer.GetShard(ctx, tablet.Keyspace, tablet.Shard)
 	if err != nil {
 		return "", vterrors.Wrap(err, "cannot read shard")
+	}
+	if source != nil && !topoproto.TabletAliasEqual(si.PrimaryAlias, source) {
+		return "", errShardPrimaryNotChosen
 	}
 	if si.PrimaryAlias == nil {
 		// There's no primary. This is fine, since there might be no primary currently
