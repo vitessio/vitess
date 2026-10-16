@@ -89,6 +89,9 @@ func RefreshKeyspaceAndShard(keyspaceName string, shardName string) error {
 // shouldWatchShard returns true if a shard is within the shardsToWatch
 // ranges for it's keyspace.
 func shouldWatchShard(shard *topo.ShardInfo) bool {
+	if ringSize > 1 && !isInRingSegment(shard.Keyspace(), shard.ShardName(), ringIndex, ringSize, ringWatchersPerShard) {
+		return false
+	}
 	if len(shardsToWatch) == 0 {
 		return true
 	}
@@ -138,9 +141,12 @@ func refreshKeyspaceHelper(ctx context.Context, keyspaceName string) error {
 func refreshAllShards(ctx context.Context, keyspaceName string) error {
 	// get all shards for keyspace name.
 	shardInfos, err := ts.FindAllShardsInKeyspace(ctx, keyspaceName, &topo.FindAllShardsInKeyspaceOptions{
-		// Fetch shard records concurrently to speed up discovery. A typical
-		// Vitess cluster will have 1-3 vtorc instances deployed, so there is
-		// little risk of a thundering herd.
+		// Fetch shard records concurrently to speed up discovery. Note that
+		// ring partitioning (--vtorc-ring-size) filters shards only after this
+		// call, so every instance still fetches every shard record here on each
+		// refresh; a larger ring multiplies these topo reads rather than
+		// dividing them. Operators running many instances should size the ring
+		// against their topology server accordingly.
 		Concurrency: 8,
 	})
 	if err != nil {
