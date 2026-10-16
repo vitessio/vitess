@@ -366,11 +366,11 @@ dependency_check:
 
 # Checks for formatting and linting errors.
 lint:
-	go tool -modfile=tools/golangci-lint/go.mod golangci-lint run ./go/...
+	go run -trimpath -modfile=tools/golangci-lint/go.mod github.com/golangci/golangci-lint/v2/cmd/golangci-lint run ./go/...
 
 # Applies autofixes for formatting and linting errors if supported.
 lint-fix:
-	go tool -modfile=tools/golangci-lint/go.mod golangci-lint run --fix ./go/...
+	go run -trimpath -modfile=tools/golangci-lint/go.mod github.com/golangci/golangci-lint/v2/cmd/golangci-lint run --fix ./go/...
 
 vtadmin_web_install:
 	cd web/vtadmin && npm install
@@ -383,7 +383,7 @@ vtadmin_web_proto_types: vtadmin_web_install
 
 vtadmin_authz_testgen:
 	go generate ./go/vt/vtadmin/
-	go tool -modfile=tools/gofumpt/go.mod gofumpt -w ./go/vt/vtadmin/
+	go run -trimpath -modfile=tools/gofumpt/go.mod mvdan.cc/gofumpt -w ./go/vt/vtadmin/
 
 generate-flag-testdata:
 	./tools/generate_flag_testdata.sh

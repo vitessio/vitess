@@ -19,6 +19,10 @@ jobs:
   build:
     name: Static Code Checks Etc
     runs-on: ubuntu-24.04
+    env:
+      # Build everything the way the go_cache_warm workflow warms it, so the
+      # checks reuse its tools build cache entry.
+      GOFLAGS: -trimpath
 
     steps:
       - name: Harden the runner (Audit all outbound calls)

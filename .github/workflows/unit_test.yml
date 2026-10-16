@@ -250,5 +250,5 @@ jobs:
         run: |
           echo '## Slowest Tests' >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
-          go tool -modfile=tools/gotestsum/go.mod gotestsum tool slowest --num 20 --jsonfile report.json | tee -a "$GITHUB_STEP_SUMMARY"
+          go run -trimpath -modfile=tools/gotestsum/go.mod gotest.tools/gotestsum tool slowest --num 20 --jsonfile report.json | tee -a "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"

@@ -1,14 +1,16 @@
 name: Warm Go caches
 
 # The only writer of the Go module and build caches that every other job
-# restores through the setup-go action. Each push to main saves a module cache
-# entry for every go.sum without one, and fresh build cache entries for that
-# commit. Both are built from an empty cache, so they contain exactly what the
-# jobs need and nothing stale. Pull requests restore the newest entries.
+# restores through the setup-go action. Each push to main or a release branch
+# saves a module cache entry for every go.sum without one, and fresh build
+# cache entries for that commit. Both are built from an empty cache, so they
+# contain exactly what the jobs need and nothing stale. Pull requests restore
+# the newest entries of their base branch.
 on:
   push:
     branches:
       - "main"
+      - "release-[0-9]+.[0-9]"
   workflow_dispatch:
 
 # Only the newest commit's caches matter.
@@ -134,11 +136,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # build, unit and race compile with -trimpath, so their entries fit
-        # any runner of the same architecture. tools does not: "go tool"
-        # takes no -trimpath, so the checkout and module cache paths are part
-        # of its cache keys, and it is built on the GitHub-hosted runner type
-        # the static checks run on.
+        # Every entry compiles with -trimpath, so it fits any runner of the
+        # same architecture. tools is built on the GitHub-hosted runner type
+        # the static checks run on, which also has their C toolchain.
         include:
           - entry: build
             arch: x64

@@ -21,9 +21,10 @@
 #
 # Each entry must use exactly the flags its jobs use: the flags are part of
 # every package's cache key, and so is the source directory of every package
-# compiled without -trimpath. All entries but "tools" use -trimpath, so they
-# fit any runner of their architecture. "go tool" does not take -trimpath, so
-# "tools" only fits runners with the same checkout and module cache paths.
+# compiled without -trimpath. Every entry uses -trimpath, so it fits any runner
+# of its architecture, whatever its checkout and module cache paths. This is
+# also why the jobs run the tools under tools/ with "go run -trimpath" rather
+# than "go tool", which takes no -trimpath.
 #
 # "unit" is built on top of "build", whose flags it shares; the workflow saves
 # only what it adds.
@@ -31,12 +32,22 @@
 # Test packages are warmed with "go test -exec /bin/true": that compiles, vets
 # and links every test binary the way the jobs do, without running any of
 # them. The end-to-end packages would otherwise start clusters in TestMain.
-# -count=1 keeps those runs out of the test result cache.
+# -count=1 keeps those runs out of the test result cache. Tools are warmed the
+# same way with "go run -exec /bin/true", which compiles and links them into
+# the cache without running them.
 
 set -euo pipefail
 
 warm_tests() {
 	go test "$@" -count=1 -run '^$' -exec /bin/true >/dev/null
+}
+
+# Warms the tools/<name> tool, the way the jobs run it.
+warm_tool() {
+	local modfile="tools/$1/go.mod"
+	local pkg
+	pkg="$(sed -n 's/^tool //p' "${modfile}")"
+	go run -exec /bin/true -trimpath -modfile="${modfile}" "${pkg}"
 }
 
 # The packages tools/unit_test_runner.sh tests.
@@ -58,7 +69,7 @@ build)
 	export CGO_ENABLED=0
 	go list -trimpath -export -deps ./go/... >/dev/null
 	warm_tests -trimpath ./go/.../endtoend/...
-	go tool -n -modfile=tools/gotestsum/go.mod gotestsum >/dev/null
+	warm_tool gotestsum
 	;;
 unit)
 	# "make unit_test": the unit tests and the demo it installs, with the
@@ -73,15 +84,14 @@ race)
 	# cgo, so gotestsum runs with it too.
 	# shellcheck disable=SC2046
 	warm_tests -race -trimpath $(unit_packages) $(e2e_race_packages)
-	go tool -n -modfile=tools/gotestsum/go.mod gotestsum >/dev/null
+	warm_tool gotestsum
 	;;
 tools)
-	# The static checks: the generators and checks they "go run" from
-	# go/tools, and the tool binaries they run with "go tool".
-	go list -export -deps ./go/tools/... >/dev/null
+	# The static checks, which set GOFLAGS=-trimpath: the generators and
+	# checks they "go run" from go/tools, and the tools under tools/.
+	go list -trimpath -export -deps ./go/tools/... >/dev/null
 	for modfile in tools/*/go.mod; do
-		tool="$(basename "$(dirname "${modfile}")")"
-		go tool -n -modfile="${modfile}" "${tool}" >/dev/null
+		warm_tool "$(basename "$(dirname "${modfile}")")"
 	done
 	;;
 *)
