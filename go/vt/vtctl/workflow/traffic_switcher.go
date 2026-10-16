@@ -1181,6 +1181,16 @@ func (ts *trafficSwitcher) cancelMigration(ctx context.Context, sm *StreamMigrat
 	if err != nil {
 		cancelErrs.RecordError(fmt.Errorf("could not revert denied tables / shard access: %v", err))
 		ts.Logger().Errorf("Cancel migration failed (%v): could not revert denied tables / shard access: %v", ts.WorkflowName(), err)
+	} else if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
+		// vtgates learn that the source no longer denies the tables from a
+		// SrvVSchema update: it ends the buffering of writes the denied tables
+		// rejected, and the writes waiting for a newer VSchema retry at once
+		// instead of when their wait times out.
+		ts.Logger().Infof("cancelMigration (%v): rebuilding SrvVSchema", ts.WorkflowName())
+		if err := ts.TopoServer().RebuildSrvVSchema(cmCtx, nil); err != nil {
+			cancelErrs.RecordError(fmt.Errorf("could not rebuild SrvVSchema: %v", err))
+			ts.Logger().Errorf("Cancel migration failed (%v): could not rebuild SrvVSchema: %v", ts.WorkflowName(), err)
+		}
 	}
 
 	if err := sm.CancelStreamMigrations(cmCtx); err != nil {

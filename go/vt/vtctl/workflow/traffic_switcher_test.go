@@ -384,12 +384,21 @@ func TestCancelMigration_TABLES(t *testing.T) {
 	err = topo.CheckKeyspaceLocked(ctx, ts.sourceKeyspace)
 	require.NoError(t, err)
 
+	// Replace the SrvVSchema so that a rebuild can be detected.
+	require.NoError(t, env.ts.UpdateSrvVSchema(ctx, defaultCellName, &vschema.SrvVSchema{}))
+
 	err = ts.cancelMigration(ctx, sm)
 	require.NoError(t, err)
 
 	// Expect the queries to be cleared
 	assert.Empty(t, env.tmc.vrQueries[100])
 	assert.Empty(t, env.tmc.vrQueries[200])
+
+	// The SrvVSchema is rebuilt, so that vtgates learn that the source no
+	// longer denies the tables.
+	srvVSchema, err := env.ts.GetSrvVSchema(ctx, defaultCellName)
+	require.NoError(t, err)
+	assert.Contains(t, srvVSchema.GetKeyspaces(), sourceKeyspace.KeyspaceName)
 }
 
 func TestCancelMigration_SHARDS(t *testing.T) {
