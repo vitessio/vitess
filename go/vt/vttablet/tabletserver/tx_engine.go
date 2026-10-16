@@ -97,6 +97,9 @@ type TxEngine struct {
 	preparedPool *TxPreparedPool
 	twoPC        *TwoPC
 	dxNotify     func()
+
+	// activeCommits tracks COMMIT statements that are executing in MySQL.
+	activeCommits *QueryList
 }
 
 // TwoPC can be disallowed for various reasons. These are the reasons we keep track off
@@ -114,7 +117,9 @@ func NewTxEngine(env tabletenv.Env, dxNotifier func()) *TxEngine {
 		env:                 env,
 		shutdownGracePeriod: config.GracePeriods.Shutdown,
 		reservedConnStats:   env.Exporter().NewTimings("ReservedConnections", "Reserved connections stats", "operation"),
+		activeCommits:       NewQueryList("active-commits", env.Environment().Parser()),
 	}
+
 	limiter := txlimiter.New(env)
 	te.txPool = NewTxPool(env, limiter)
 	// We initially allow twoPC (handles vttablet restarts).
@@ -148,6 +153,17 @@ func NewTxEngine(env tabletenv.Env, dxNotifier func()) *TxEngine {
 	te.dxNotify = dxNotifier
 	te.state = NotServing
 	return te
+}
+
+// SetClusterAction sets the cluster action on activeCommits. With
+// ClusterActionNoQueries, new COMMITs are rejected.
+func (te *TxEngine) SetClusterAction(ca ClusterActionState) {
+	te.activeCommits.SetClusterAction(ca)
+}
+
+// TerminateActiveCommits terminates active COMMIT statements.
+func (te *TxEngine) TerminateActiveCommits() {
+	te.activeCommits.TerminateAll()
 }
 
 // AcceptReadWrite will start accepting all transactions.
@@ -299,14 +315,68 @@ func (te *TxEngine) Begin(ctx context.Context, reservedID int64, setting *smartc
 func (te *TxEngine) Commit(ctx context.Context, transactionID int64) (int64, string, error) {
 	span, ctx := trace.NewSpan(ctx, "TxEngine.Commit")
 	defer span.Finish()
+
 	var query string
-	var err error
 	connID, err := te.txFinish(ctx, transactionID, tx.TxCommit, func(conn *StatefulConnection) error {
-		query, err = te.txPool.Commit(ctx, conn)
+		var err error
+		query, err = te.commit(ctx, conn)
 		return err
 	})
 
 	return connID, query, err
+}
+
+// commit commits the transaction on conn and tracks the COMMIT in
+// activeCommits, which lets the shutdown grace period kill it. If
+// activeCommits rejects new COMMITs, commit kills the transaction and
+// releases conn. An autocommit transaction sends no COMMIT and is not tracked.
+// A killed COMMIT that MySQL already wrote to the binlog still commits in
+// MySQL, because KILL does not roll it back. Its error says the outcome is
+// unknown.
+func (te *TxEngine) commit(ctx context.Context, conn *StatefulConnection) (string, error) {
+	// Skip the gate for an autocommit transaction. MySQL already committed
+	// each statement, and a rejection would report failure for applied writes.
+	if conn.IsInTransaction() && conn.TxProperties().Autocommit {
+		return te.txPool.Commit(ctx, conn)
+	}
+
+	qd, err := te.addActiveCommit(ctx, conn)
+	if err != nil {
+		return "", err
+	}
+	defer te.activeCommits.Remove(qd)
+
+	query, err := te.txPool.Commit(ctx, conn)
+	if err != nil && qd.terminated.Load() {
+		return query, vterrors.Wrapf(err, "COMMIT was killed and its outcome is unknown")
+	}
+
+	return query, err
+}
+
+// addActiveCommit adds the COMMIT on conn to activeCommits and returns its
+// QueryDetail, which the caller must remove from activeCommits. If
+// activeCommits rejects new COMMITs, it kills the transaction, releases conn,
+// and returns the error. After an error, the caller may only release conn
+// again, with Release or TxPool.RollbackAndRelease. Both do nothing on a
+// released connection.
+func (te *TxEngine) addActiveCommit(ctx context.Context, conn *StatefulConnection) (*QueryDetail, error) {
+	qd := NewQueryDetail(ctx, conn)
+	if err := te.activeCommits.Add(qd); err != nil {
+		// Kill the transaction. The shutdown grace period has ended.
+		conn.Close()
+
+		// Conclude the transaction before the connection is released.
+		if conn.IsInTransaction() {
+			te.txPool.txComplete(conn, tx.TxKill)
+		}
+
+		conn.Release(tx.TxKill)
+
+		return nil, err
+	}
+
+	return qd, nil
 }
 
 // Rollback rolls back the specified transaction.

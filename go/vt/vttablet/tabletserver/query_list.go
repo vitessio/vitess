@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/safehtml"
@@ -39,6 +40,9 @@ type QueryDetail struct {
 	conn   killable
 	connID int64
 	start  time.Time
+
+	// terminated reports whether Terminate or TerminateAll killed the query.
+	terminated atomic.Bool
 }
 
 type killable interface {
@@ -144,6 +148,7 @@ func (ql *QueryList) Terminate(connID int64) bool {
 		return false
 	}
 	for _, qd := range qds {
+		qd.terminated.Store(true)
 		err := qd.conn.Kill("QueryList.Terminate()", time.Since(qd.start))
 		if err != nil {
 			log.Warn(fmt.Sprintf("Error terminating query on connection id: %d, error: %v", qd.conn.ID(), err))
@@ -158,6 +163,7 @@ func (ql *QueryList) TerminateAll() {
 	defer ql.mu.Unlock()
 	for _, qds := range ql.queryDetails {
 		for _, qd := range qds {
+			qd.terminated.Store(true)
 			err := qd.conn.Kill("QueryList.TerminateAll()", time.Since(qd.start))
 			if err != nil {
 				log.Warn(fmt.Sprintf("Error terminating query on connection id: %d, error: %v", qd.conn.ID(), err))
