@@ -25,6 +25,7 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sysvars"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -95,6 +96,18 @@ func termReturnsNoRows(term Primitive) bool {
 	return ok && route.RoutingParameters != nil && route.Opcode == None
 }
 
+// exceedsMaxMemoryRows returns an error when the rows that the recursion keeps
+// in memory are over the max-memory-rows limit. Counting levels instead of Term
+// calls means a recursion whose frontier grows with every level is not stopped
+// by the depth limit until it has kept far more rows than any single Term
+// result, so the rows it keeps are checked on their own.
+func exceedsMaxMemoryRows(vcursor VCursor, numRows int) error {
+	if vcursor.ExceedsMaxMemoryRows(numRows) {
+		return vterrors.NewErrorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.NetPacketTooLarge, "in-memory row count exceeded allowed limit of %d", vcursor.MaxMemoryRows())
+	}
+	return nil
+}
+
 func (r *RecurseCTE) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	res, err := vcursor.ExecutePrimitive(ctx, r.Seed, bindVars, wantfields)
 	if err != nil {
@@ -134,6 +147,9 @@ func (r *RecurseCTE) TryExecute(ctx context.Context, vcursor VCursor, bindVars m
 			}
 			recurseRows = append(recurseRows, rresult.Rows...)
 			res.Rows = append(res.Rows, rresult.Rows...)
+			if err := exceedsMaxMemoryRows(vcursor, len(res.Rows)); err != nil {
+				return nil, err
+			}
 		}
 	}
 	return res, nil
@@ -160,6 +176,9 @@ func (r *RecurseCTE) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 		mu.Lock()
 		defer mu.Unlock()
 		recurseRows = append(recurseRows, result.Rows...)
+		if err := exceedsMaxMemoryRows(vcursor, len(recurseRows)); err != nil {
+			return err
+		}
 		return callback(result)
 	})
 	if err != nil {
@@ -198,6 +217,9 @@ func (r *RecurseCTE) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 				mu.Lock()
 				defer mu.Unlock()
 				recurseRows = append(recurseRows, result.Rows...)
+				if err := exceedsMaxMemoryRows(vcursor, len(recurseRows)); err != nil {
+					return err
+				}
 				return callback(result)
 			})
 			if err != nil {

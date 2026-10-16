@@ -135,6 +135,12 @@ func TestRecurseDualQuery(t *testing.T) {
 // ("Recursive query aborted after 1001 iterations."); the streaming path must
 // enforce the same guard rather than recursing unbounded.
 func TestRecurseCTERecursionLimit(t *testing.T) {
+	// The buffered path keeps more rows than the test max-memory-rows limit
+	// before the depth guard fires, and this test is about the depth guard.
+	saveIgnore := testIgnoreMaxMemoryRows
+	t.Cleanup(func() { testIgnoreMaxMemoryRows = saveIgnore })
+	testIgnoreMaxMemoryRows = true
+
 	fields := sqltypes.MakeTestFields("col1", "int64")
 
 	// The Term keeps returning a single row well past the 1000-iteration guard,
@@ -404,4 +410,64 @@ func TestRecurseCTEZeroLimitWithEmptyTerm(t *testing.T) {
 
 	_, err = wrapStreamExecute(executedTerm(), vc, bv, true)
 	require.ErrorContains(t, err, "Recursive query aborted after 1 iterations")
+}
+
+// TestRecurseCTEMaxMemoryRows verifies that a recursion whose rows grow with
+// every level is stopped by the max-memory-rows limit, on both paths, even
+// though each Term call returns only a few rows and the recursion stays far
+// below the depth limit.
+func TestRecurseCTEMaxMemoryRows(t *testing.T) {
+	saveMax, saveIgnore := testMaxMemoryRows, testIgnoreMaxMemoryRows
+	t.Cleanup(func() {
+		testMaxMemoryRows, testIgnoreMaxMemoryRows = saveMax, saveIgnore
+	})
+	testMaxMemoryRows = 10
+
+	fields := sqltypes.MakeTestFields("col1", "int64")
+	// Every Term call returns two rows for four levels, so the frontier doubles
+	// each level: 1 + 2 + 4 + 8 + 16 = 31 rows from 31 Term calls.
+	const levels, totalRows = 4, 31
+	newCTE := func() *RecurseCTE {
+		var results []*sqltypes.Result
+		calls := 1
+		for range levels {
+			for range calls {
+				results = append(results, sqltypes.MakeTestResult(fields, "1", "2"))
+			}
+			calls *= 2
+		}
+		for range calls {
+			results = append(results, sqltypes.MakeTestResult(fields))
+		}
+		return &RecurseCTE{
+			Seed: &fakePrimitive{results: []*sqltypes.Result{sqltypes.MakeTestResult(fields, "1")}},
+			Term: &fakePrimitive{results: results, noLog: true},
+			Vars: map[string]int{"col1": 0},
+		}
+	}
+	bv := map[string]*querypb.BindVariable{}
+	const wantErr = "in-memory row count exceeded allowed limit of 10"
+
+	testIgnoreMaxMemoryRows = false
+	_, err := newCTE().TryExecute(t.Context(), &noopVCursor{}, bv, true)
+	require.ErrorContains(t, err, wantErr)
+
+	// The streaming path forwards rows instead of keeping them, but it keeps
+	// each level's frontier to drive the next one.
+	var streamed []sqltypes.Row
+	err = newCTE().TryStreamExecute(t.Context(), &noopVCursor{}, bv, true, func(r *sqltypes.Result) error {
+		streamed = append(streamed, r.Rows...)
+		return nil
+	})
+	require.ErrorContains(t, err, wantErr)
+	require.Less(t, len(streamed), totalRows)
+
+	testIgnoreMaxMemoryRows = true
+	res, err := newCTE().TryExecute(t.Context(), &noopVCursor{}, bv, true)
+	require.NoError(t, err)
+	require.Len(t, res.Rows, totalRows)
+
+	res, err = wrapStreamExecute(newCTE(), &noopVCursor{}, bv, true)
+	require.NoError(t, err)
+	require.Len(t, res.Rows, totalRows)
 }
