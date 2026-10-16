@@ -25,6 +25,7 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/sysvars"
 )
 
 func TestRecurseDualQuery(t *testing.T) {
@@ -130,10 +131,16 @@ func TestRecurseDualQuery(t *testing.T) {
 
 // TestRecurseCTERecursionLimit verifies that the recursion-depth guard is
 // enforced on both the buffered and streaming execution paths. The buffered
-// path aborts after 1000 iterations with VT09030 ("Recursive query aborted
-// after 1000 iterations."); the streaming path must enforce the same guard
-// rather than recursing unbounded.
+// path aborts once the 1000-iteration default is exceeded with VT09030
+// ("Recursive query aborted after 1001 iterations."); the streaming path must
+// enforce the same guard rather than recursing unbounded.
 func TestRecurseCTERecursionLimit(t *testing.T) {
+	// The buffered path keeps more rows than the test max-memory-rows limit
+	// before the depth guard fires, and this test is about the depth guard.
+	saveIgnore := testIgnoreMaxMemoryRows
+	t.Cleanup(func() { testIgnoreMaxMemoryRows = saveIgnore })
+	testIgnoreMaxMemoryRows = true
+
 	fields := sqltypes.MakeTestFields("col1", "int64")
 
 	// The Term keeps returning a single row well past the 1000-iteration guard,
@@ -203,4 +210,264 @@ func TestRecurseCTEStreamConcurrentDelivery(t *testing.T) {
 	res, err := wrapStreamExecute(cte, &noopVCursor{}, bv, true)
 	require.NoError(t, err)
 	require.Len(t, res.Rows, seedChunks)
+}
+
+// TestRecurseCTEConfigurableRecursionLimit verifies that the recursion guard
+// honors the session's cte_max_recursion_depth system variable on both the
+// buffered and streaming paths, and that the error reports the iteration
+// count that exceeded the limit, as MySQL does.
+func TestRecurseCTEConfigurableRecursionLimit(t *testing.T) {
+	fields := sqltypes.MakeTestFields("col1", "int64")
+
+	// The Term returns one row per iteration for this many iterations and then
+	// stops, so a limit above it lets the recursion complete.
+	const iterations = 20
+	newTerm := func() *fakePrimitive {
+		results := make([]*sqltypes.Result, 0, iterations+1)
+		for i := range iterations {
+			results = append(results, sqltypes.MakeTestResult(fields, strconv.Itoa(i+2)))
+		}
+		results = append(results, sqltypes.MakeTestResult(fields))
+		return &fakePrimitive{results: results, noLog: true}
+	}
+	newCTE := func() (*fakePrimitive, *RecurseCTE) {
+		seed := &fakePrimitive{results: []*sqltypes.Result{sqltypes.MakeTestResult(fields, "1")}}
+		return seed, &RecurseCTE{Seed: seed, Term: newTerm(), Vars: map[string]int{"col1": 0}}
+	}
+	bv := map[string]*querypb.BindVariable{}
+
+	testCases := []struct {
+		name  string
+		value string
+		limit int
+	}{
+		{name: "integer value", value: "5", limit: 5},
+		{name: "quoted value", value: "'7'", limit: 7},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			vc := &noopVCursor{systemVariables: map[string]string{sysvars.CTEMaxRecursionDepth: tc.value}}
+			wantErr := fmt.Sprintf("Recursive query aborted after %d iterations", tc.limit+1)
+
+			_, cte := newCTE()
+			_, err := cte.TryExecute(t.Context(), vc, bv, true)
+			require.ErrorContains(t, err, wantErr)
+
+			// The streaming path delivers the seed row plus one row per allowed
+			// iteration before the guard fires.
+			_, cte = newCTE()
+			var streamed []sqltypes.Row
+			err = cte.TryStreamExecute(t.Context(), vc, bv, true, func(r *sqltypes.Result) error {
+				streamed = append(streamed, r.Rows...)
+				return nil
+			})
+			require.ErrorContains(t, err, wantErr)
+			require.Len(t, streamed, tc.limit+1)
+		})
+	}
+
+	t.Run("limit above the recursion depth completes", func(t *testing.T) {
+		vc := &noopVCursor{systemVariables: map[string]string{sysvars.CTEMaxRecursionDepth: "25"}}
+
+		_, cte := newCTE()
+		res, err := cte.TryExecute(t.Context(), vc, bv, true)
+		require.NoError(t, err)
+		require.Len(t, res.Rows, iterations+1)
+
+		_, cte = newCTE()
+		res, err = wrapStreamExecute(cte, vc, bv, true)
+		require.NoError(t, err)
+		require.Len(t, res.Rows, iterations+1)
+	})
+
+	t.Run("unrelated or invalid values keep the default", func(t *testing.T) {
+		require.Equal(t, uint64(defaultMaxRecurseDepth), maxRecurseDepth(&noopVCursor{}))
+		require.Equal(t, uint64(defaultMaxRecurseDepth), maxRecurseDepth(&noopVCursor{
+			systemVariables: map[string]string{"default_week_format": "1"},
+		}))
+		require.Equal(t, uint64(defaultMaxRecurseDepth), maxRecurseDepth(&noopVCursor{
+			systemVariables: map[string]string{sysvars.CTEMaxRecursionDepth: "'not-a-number'"},
+		}))
+	})
+}
+
+// TestRecurseCTERecursionLimitCountsLevels verifies that the guard counts
+// recursion levels, as MySQL does, not rows: a level whose frontier holds
+// several rows consumes a single iteration.
+func TestRecurseCTERecursionLimitCountsLevels(t *testing.T) {
+	fields := sqltypes.MakeTestFields("col1", "int64")
+
+	// Seed yields 3 rows; the Term yields one row per input row, so every
+	// level has 3 rows, and the recursion stops after 4 levels.
+	const levels, width = 4, 3
+	newTerm := func() *fakePrimitive {
+		results := make([]*sqltypes.Result, 0, levels*width+width)
+		for i := range levels * width {
+			results = append(results, sqltypes.MakeTestResult(fields, strconv.Itoa(i+10)))
+		}
+		for range width {
+			results = append(results, sqltypes.MakeTestResult(fields))
+		}
+		return &fakePrimitive{results: results, noLog: true}
+	}
+	newCTE := func() *RecurseCTE {
+		return &RecurseCTE{
+			Seed: &fakePrimitive{results: []*sqltypes.Result{sqltypes.MakeTestResult(fields, "1", "2", "3")}},
+			Term: newTerm(),
+			Vars: map[string]int{"col1": 0},
+		}
+	}
+	bv := map[string]*querypb.BindVariable{}
+
+	// The recursion needs levels+1 iterations: the last one processes the
+	// final frontier and finds no rows, and MySQL counts it too. A limit of
+	// levels+1 lets the whole recursion run even though it executes
+	// (levels+1)*width Term queries.
+	vc := &noopVCursor{systemVariables: map[string]string{sysvars.CTEMaxRecursionDepth: strconv.Itoa(levels + 1)}}
+	res, err := newCTE().TryExecute(t.Context(), vc, bv, true)
+	require.NoError(t, err)
+	require.Len(t, res.Rows, width+levels*width)
+
+	res, err = wrapStreamExecute(newCTE(), vc, bv, true)
+	require.NoError(t, err)
+	require.Len(t, res.Rows, width+levels*width)
+
+	// A limit of levels aborts when the last iteration starts, reporting
+	// levels+1 as MySQL does; every row before it was delivered.
+	vc = &noopVCursor{systemVariables: map[string]string{sysvars.CTEMaxRecursionDepth: strconv.Itoa(levels)}}
+	_, err = newCTE().TryExecute(t.Context(), vc, bv, true)
+	require.ErrorContains(t, err, fmt.Sprintf("Recursive query aborted after %d iterations", levels+1))
+
+	var streamed []sqltypes.Row
+	err = newCTE().TryStreamExecute(t.Context(), vc, bv, true, func(r *sqltypes.Result) error {
+		streamed = append(streamed, r.Rows...)
+		return nil
+	})
+	require.ErrorContains(t, err, fmt.Sprintf("Recursive query aborted after %d iterations", levels+1))
+	require.Len(t, streamed, width+levels*width)
+}
+
+// TestRecurseCTERecursionLimitClampsLikeMySQL verifies that a stored
+// cte_max_recursion_depth outside [0, 4294967295] is clamped the way MySQL
+// clamps it on assignment, instead of falling back to the default.
+func TestRecurseCTERecursionLimitClampsLikeMySQL(t *testing.T) {
+	testCases := []struct {
+		value string
+		want  uint64
+	}{
+		{value: "0", want: 0},
+		{value: "4294967295", want: 4294967295},
+		{value: "4294967296", want: 4294967295},
+		{value: "18446744073709551615", want: 4294967295},
+		{value: "'4294967296'", want: 4294967295},
+		{value: "-1", want: 0},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.value, func(t *testing.T) {
+			vc := &noopVCursor{systemVariables: map[string]string{sysvars.CTEMaxRecursionDepth: tc.value}}
+			require.Equal(t, tc.want, maxRecurseDepth(vc))
+		})
+	}
+}
+
+// TestRecurseCTEZeroLimitWithEmptyTerm verifies that a limit of 0 still
+// returns the seed rows when the recursive term is planned as a route that
+// returns no rows (such as WHERE false), because MySQL never executes such a
+// term. A term that has to run still counts an iteration, even when it finds
+// no rows, so it fails with a limit of 0 as in MySQL.
+func TestRecurseCTEZeroLimitWithEmptyTerm(t *testing.T) {
+	fields := sqltypes.MakeTestFields("col1", "int64")
+	newSeed := func() *fakePrimitive {
+		return &fakePrimitive{results: []*sqltypes.Result{sqltypes.MakeTestResult(fields, "1", "2")}}
+	}
+	vc := &noopVCursor{systemVariables: map[string]string{sysvars.CTEMaxRecursionDepth: "0"}}
+	bv := map[string]*querypb.BindVariable{}
+
+	newCTE := func() *RecurseCTE {
+		return &RecurseCTE{
+			Seed: newSeed(),
+			Term: NewRoute(None, nil, "select :col1 + 1 from dual where 0", "select :col1 + 1 from dual where 1 != 1"),
+			Vars: map[string]int{"col1": 0},
+		}
+	}
+	res, err := newCTE().TryExecute(t.Context(), vc, bv, true)
+	require.NoError(t, err)
+	require.Len(t, res.Rows, 2)
+
+	res, err = wrapStreamExecute(newCTE(), vc, bv, true)
+	require.NoError(t, err)
+	require.Len(t, res.Rows, 2)
+
+	executedTerm := func() *RecurseCTE {
+		return &RecurseCTE{
+			Seed: newSeed(),
+			Term: &fakePrimitive{results: []*sqltypes.Result{sqltypes.MakeTestResult(fields), sqltypes.MakeTestResult(fields)}},
+			Vars: map[string]int{"col1": 0},
+		}
+	}
+	_, err = executedTerm().TryExecute(t.Context(), vc, bv, true)
+	require.ErrorContains(t, err, "Recursive query aborted after 1 iterations")
+
+	_, err = wrapStreamExecute(executedTerm(), vc, bv, true)
+	require.ErrorContains(t, err, "Recursive query aborted after 1 iterations")
+}
+
+// TestRecurseCTEMaxMemoryRows verifies that a recursion whose rows grow with
+// every level is stopped by the max-memory-rows limit, on both paths, even
+// though each Term call returns only a few rows and the recursion stays far
+// below the depth limit.
+func TestRecurseCTEMaxMemoryRows(t *testing.T) {
+	saveMax, saveIgnore := testMaxMemoryRows, testIgnoreMaxMemoryRows
+	t.Cleanup(func() {
+		testMaxMemoryRows, testIgnoreMaxMemoryRows = saveMax, saveIgnore
+	})
+	testMaxMemoryRows = 10
+
+	fields := sqltypes.MakeTestFields("col1", "int64")
+	// Every Term call returns two rows for four levels, so the frontier doubles
+	// each level: 1 + 2 + 4 + 8 + 16 = 31 rows from 31 Term calls.
+	const levels, totalRows = 4, 31
+	newCTE := func() *RecurseCTE {
+		var results []*sqltypes.Result
+		calls := 1
+		for range levels {
+			for range calls {
+				results = append(results, sqltypes.MakeTestResult(fields, "1", "2"))
+			}
+			calls *= 2
+		}
+		for range calls {
+			results = append(results, sqltypes.MakeTestResult(fields))
+		}
+		return &RecurseCTE{
+			Seed: &fakePrimitive{results: []*sqltypes.Result{sqltypes.MakeTestResult(fields, "1")}},
+			Term: &fakePrimitive{results: results, noLog: true},
+			Vars: map[string]int{"col1": 0},
+		}
+	}
+	bv := map[string]*querypb.BindVariable{}
+	const wantErr = "in-memory row count exceeded allowed limit of 10"
+
+	testIgnoreMaxMemoryRows = false
+	_, err := newCTE().TryExecute(t.Context(), &noopVCursor{}, bv, true)
+	require.ErrorContains(t, err, wantErr)
+
+	// The streaming path forwards rows instead of keeping them, but it keeps
+	// each level's frontier to drive the next one.
+	var streamed []sqltypes.Row
+	err = newCTE().TryStreamExecute(t.Context(), &noopVCursor{}, bv, true, func(r *sqltypes.Result) error {
+		streamed = append(streamed, r.Rows...)
+		return nil
+	})
+	require.ErrorContains(t, err, wantErr)
+	require.Less(t, len(streamed), totalRows)
+
+	testIgnoreMaxMemoryRows = true
+	res, err := newCTE().TryExecute(t.Context(), &noopVCursor{}, bv, true)
+	require.NoError(t, err)
+	require.Len(t, res.Rows, totalRows)
+
+	res, err = wrapStreamExecute(newCTE(), &noopVCursor{}, bv, true)
+	require.NoError(t, err)
+	require.Len(t, res.Rows, totalRows)
 }
