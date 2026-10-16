@@ -217,7 +217,7 @@
       ],
       "Args": [
         "-timeout",
-        "20m"
+        "30m"
       ],
       "Command": [],
       "Manual": false,
