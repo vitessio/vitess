@@ -17,6 +17,8 @@ limitations under the License.
 package topo_test
 
 import (
+	"context"
+	"path"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -167,4 +169,119 @@ func TestDeleteOrphanedKeyspaceFiles(t *testing.T) {
 			tt.verify(t, ts, mtf)
 		})
 	}
+}
+
+// TestDeleteOrphanedKeyspaceFilesKeepsLiveFiles checks that the cleanup
+// deletes no file when it cannot confirm that the files are orphaned.
+func TestDeleteOrphanedKeyspaceFilesKeepsLiveFiles(t *testing.T) {
+	cell := "zone-1"
+	keyspace := "ks"
+	srvKeyspacePath := path.Join(topo.KeyspacesPath, keyspace, topo.SrvKeyspaceFile)
+	createKeyspace := func(t *testing.T, ts *topo.Server) {
+		require.NoError(t, ts.CreateKeyspace(t.Context(), keyspace, &topodatapb.Keyspace{}))
+	}
+	tests := []struct {
+		name                string
+		noLinearizableReads bool
+		setup               func(t *testing.T, ts *topo.Server)
+		// afterGet runs after the cleanup reads the version of the SrvKeyspace.
+		afterGet func(t *testing.T, ts *topo.Server)
+		wantErr  string
+	}{
+		{
+			name:    "Keyspace exists",
+			setup:   createKeyspace,
+			wantErr: "keyspace ks exists; not deleting its files in cell zone-1",
+		},
+		{
+			name:     "Keyspace created after the file versions were read",
+			afterGet: createKeyspace,
+			wantErr:  "keyspace ks exists; not deleting its files in cell zone-1",
+		},
+		{
+			name: "File written after its version was read",
+			afterGet: func(t *testing.T, ts *topo.Server) {
+				require.NoError(t, ts.UpdateSrvKeyspace(t.Context(), cell, keyspace, &topodatapb.SrvKeyspace{}))
+			},
+			wantErr: "keyspaces/ks/SrvKeyspace in cell zone-1 changed while deleting the files of keyspace ks; the keyspace may have been created again",
+		},
+		{
+			name:                "Global topo without linearizable reads",
+			noLinearizableReads: true,
+			wantErr:             "cannot confirm that keyspace ks does not exist; not deleting its files in cell zone-1: the topo implementation of cell global does not support linearizable reads",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := t.Context()
+			ts, mtf := memorytopo.NewServerAndFactory(ctx, cell)
+			require.NoError(t, ts.UpdateSrvKeyspace(ctx, cell, keyspace, &topodatapb.SrvKeyspace{}))
+			if tt.setup != nil {
+				tt.setup(t, ts)
+			}
+
+			// The cleanup runs on its own server, whose connections run the
+			// hook, while the hook writes through ts.
+			factory := &hookFactory{Factory: mtf, noLinearizableReads: tt.noLinearizableReads}
+			if tt.afterGet != nil {
+				factory.afterGet = func(getCell, filePath string) {
+					if getCell == cell && filePath == srvKeyspacePath {
+						tt.afterGet(t, ts)
+					}
+				}
+			}
+			cleanupTS, err := topo.NewWithFactory(factory, "", "")
+			require.NoError(t, err)
+			t.Cleanup(cleanupTS.Close)
+
+			err = cleanupTS.DeleteOrphanedKeyspaceFiles(ctx, cell, keyspace)
+			require.EqualError(t, err, tt.wantErr)
+			_, err = ts.GetSrvKeyspace(ctx, cell, keyspace)
+			require.NoError(t, err)
+		})
+	}
+}
+
+// hookFactory creates memorytopo connections that call afterGet after each
+// Get. Unless noLinearizableReads is set, they also support linearizable
+// reads.
+type hookFactory struct {
+	*memorytopo.Factory
+	noLinearizableReads bool
+	afterGet            func(cell, filePath string)
+}
+
+func (f *hookFactory) Create(cell, serverAddr, root string) (topo.Conn, error) {
+	conn, err := f.Factory.Create(cell, serverAddr, root)
+	if err != nil {
+		return nil, err
+	}
+	hc := &hookConn{Conn: conn, afterGet: func(filePath string) {
+		if f.afterGet != nil {
+			f.afterGet(cell, filePath)
+		}
+	}}
+	if f.noLinearizableReads {
+		return hc, nil
+	}
+	return linearizableHookConn{hc}, nil
+}
+
+type hookConn struct {
+	topo.Conn
+	afterGet func(filePath string)
+}
+
+func (c *hookConn) Get(ctx context.Context, filePath string) ([]byte, topo.Version, error) {
+	contents, version, err := c.Conn.Get(ctx, filePath)
+	c.afterGet(filePath)
+	return contents, version, err
+}
+
+type linearizableHookConn struct {
+	*hookConn
+}
+
+func (c linearizableHookConn) GetLinearizable(ctx context.Context, filePath string) ([]byte, topo.Version, error) {
+	return c.Conn.(topo.LinearizableGetter).GetLinearizable(ctx, filePath)
 }

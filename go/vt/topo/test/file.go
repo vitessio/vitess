@@ -22,6 +22,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/vt/topo"
 )
 
@@ -198,6 +200,29 @@ func checkFileInCell(t *testing.T, conn topo.Conn, hasCells bool) {
 	// ListDir root: nothing.
 	expected = expected[:len(expected)-1]
 	checkListDir(ctx, t, conn, "/", expected)
+}
+
+// checkGetLinearizable tests that the implementation supports linearizable
+// reads, and that they return the same as Get.
+func checkGetLinearizable(t *testing.T, ctx context.Context, ts *topo.Server) {
+	for _, cell := range []string{topo.GlobalCell, LocalCellName} {
+		conn, err := ts.ConnForCell(ctx, cell)
+		require.NoError(t, err)
+		getter, ok := conn.(topo.LinearizableGetter)
+		require.True(t, ok, "the conn of cell %v doesn't implement topo.LinearizableGetter", cell)
+
+		_, _, err = getter.GetLinearizable(ctx, "myfile")
+		require.True(t, topo.IsErrType(err, topo.NoNode), "GetLinearizable of a missing file returned %v in cell %v", err, cell)
+
+		version, err := conn.Create(ctx, "myfile", []byte("a"))
+		require.NoError(t, err)
+		contents, gotVersion, err := getter.GetLinearizable(ctx, "myfile")
+		require.NoError(t, err)
+		require.Equal(t, "a", string(contents))
+		require.Equal(t, version.String(), gotVersion.String())
+
+		require.NoError(t, conn.Delete(ctx, "myfile", nil))
+	}
 }
 
 // checkList tests the file part of the Conn API.

@@ -127,6 +127,20 @@ func (c *ZkConn) Get(ctx context.Context, path string) (data []byte, stat *zk.St
 	return
 }
 
+// SyncGet syncs the server this connection reads from with the leader, then
+// gets the node. Both calls use the same connection, so the Get reflects every
+// write that completed before the Sync.
+func (c *ZkConn) SyncGet(ctx context.Context, path string) (data []byte, stat *zk.Stat, err error) {
+	err = c.withRetry(ctx, func(conn *zk.Conn) error {
+		if _, err = conn.Sync(path); err != nil {
+			return err
+		}
+		data, stat, err = conn.Get(path)
+		return err
+	})
+	return
+}
+
 // GetW is part of the Conn interface.
 func (c *ZkConn) GetW(ctx context.Context, path string) (data []byte, stat *zk.Stat, watch <-chan zk.Event, err error) {
 	err = c.withRetry(ctx, func(conn *zk.Conn) error {

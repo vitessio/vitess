@@ -392,13 +392,28 @@ func (ts *Server) DeleteKeyspace(ctx context.Context, keyspace string) error {
 	return nil
 }
 
-// DeleteOrphanedKeyspaceFiles clears the residual files for a given keyspace in a cell.
+// DeleteOrphanedKeyspaceFiles deletes the files that a keyspace which no
+// longer exists in the global topo left behind in a cell.
+//
+// It doesn't lock the keyspace, because creating a keyspace takes no lock.
+// Instead it reads the version of every file, then confirms with a
+// linearizable read that the keyspace still doesn't exist, and deletes each
+// file only if it still has that version. Every writer of these files creates
+// the keyspace record first. So if the keyspace is created again during the
+// cleanup, a file it wrote before its version was read means the check sees
+// the keyspace, and a file it wrote afterwards fails the versioned delete.
+// Either way, no file of the new keyspace is deleted.
 func (ts *Server) DeleteOrphanedKeyspaceFiles(ctx context.Context, cell string, keyspace string) error {
 	conn, err := ts.ConnForCell(ctx, cell)
 	if err != nil {
 		return err
 	}
 
+	type versionedFile struct {
+		path    string
+		version Version
+	}
+	var files []versionedFile
 	dirsToClear := []string{path.Join(KeyspacesPath, keyspace)}
 	for len(dirsToClear) > 0 {
 		dir := dirsToClear[len(dirsToClear)-1]
@@ -418,10 +433,40 @@ func (ts *Server) DeleteOrphanedKeyspaceFiles(ctx context.Context, cell string, 
 				dirsToClear = append(dirsToClear, childPath)
 				continue
 			}
-			err = conn.Delete(ctx, childPath, nil)
+			_, version, err := conn.Get(ctx, childPath)
 			if err != nil {
+				if IsErrType(err, NoNode) {
+					continue
+				}
 				return err
 			}
+			files = append(files, versionedFile{path: childPath, version: version})
+		}
+	}
+	if len(files) == 0 {
+		return nil
+	}
+
+	err = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "the global topo does not support linearizable reads")
+	if getter, ok := ts.globalCell.(LinearizableGetter); ok {
+		_, _, err = getter.GetLinearizable(ctx, path.Join(KeyspacesPath, keyspace, KeyspaceFile))
+	}
+	switch {
+	case err == nil:
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "keyspace %v exists; not deleting its files in cell %v", keyspace, cell)
+	case IsErrType(err, NoNode):
+	default:
+		return vterrors.Wrapf(err, "cannot confirm that keyspace %v does not exist; not deleting its files in cell %v", keyspace, cell)
+	}
+
+	for _, file := range files {
+		err := conn.Delete(ctx, file.path, file.version)
+		switch {
+		case err == nil, IsErrType(err, NoNode):
+		case IsErrType(err, BadVersion):
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%v in cell %v changed while deleting the files of keyspace %v; the keyspace may have been created again", file.path, cell, keyspace)
+		default:
+			return err
 		}
 	}
 	return nil
