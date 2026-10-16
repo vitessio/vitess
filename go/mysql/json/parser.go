@@ -170,8 +170,8 @@ func parseValue(s string, c *cache, depth int) (*Value, string, error) {
 			return nil, tail, fmt.Errorf("cannot parse string: %s", err)
 		}
 		v := c.getValue()
-		v.t = typeRawString
-		v.s = ss
+		v.t = TypeString
+		v.s = unescapeStringBestEffort(ss)
 		return v, tail, nil
 	}
 	if s[0] == 't' {
@@ -201,7 +201,7 @@ func parseValue(s string, c *cache, depth int) (*Value, string, error) {
 	v := c.getValue()
 	v.t = TypeNumber
 	v.s = s[:flen]
-	v.n = numberTypeRaw
+	v.n = parseNumberType(v.s)
 	if mayExceedFloat64(v.s, exponent) && !mysqlNumberFits(v.s) {
 		return nil, s, fmt.Errorf("number too big to be stored in double: %q", startEndString(v.s))
 	}
@@ -1057,11 +1057,6 @@ func (v *Value) marshalFloat(dst []byte) []byte {
 // MarshalTo appends marshaled v to dst and returns the result.
 func (v *Value) MarshalTo(dst []byte) []byte {
 	switch v.t {
-	case typeRawString:
-		dst = append(dst, '"')
-		dst = append(dst, v.s...)
-		dst = append(dst, '"')
-		return dst
 	case TypeObject:
 		return v.o.MarshalTo(dst)
 	case TypeArray:
@@ -1183,8 +1178,6 @@ const (
 
 	// TypeBlob is JSON blob.
 	TypeBlob
-
-	typeRawString
 )
 
 type NumberType int32
@@ -1195,7 +1188,6 @@ const (
 	NumberTypeUnsigned
 	NumberTypeDecimal
 	NumberTypeFloat
-	numberTypeRaw
 )
 
 // String returns string representation of t.
@@ -1225,9 +1217,6 @@ func (t Type) String() string {
 		return "opaque"
 	case TypeNull:
 		return "null"
-
-	// typeRawString is skipped intentionally,
-	// since it shouldn't be visible to user.
 	default:
 		panic(fmt.Errorf("BUG: unknown Value type: %d", t))
 	}
@@ -1237,10 +1226,6 @@ func (t Type) String() string {
 func (v *Value) Type() Type {
 	if v == nil {
 		return TypeNull
-	}
-	if v.t == typeRawString {
-		v.s = unescapeStringBestEffort(v.s)
-		v.t = TypeString
 	}
 	return v.t
 }
@@ -1312,13 +1297,13 @@ func (v *Value) NumberType() NumberType {
 	if v.t != TypeNumber {
 		return NumberTypeUnknown
 	}
-	if v.n == numberTypeRaw {
-		v.n = parseNumberType(v.s)
-	}
 	return v.n
 }
 
 func parseNumberType(ns string) NumberType {
+	if strings.IndexByte(ns, '.') >= 0 || strings.IndexByte(ns, 'e') >= 0 || strings.IndexByte(ns, 'E') >= 0 {
+		return NumberTypeFloat
+	}
 	_, err := fastparse.ParseInt64(ns, 10)
 	if err == nil {
 		return NumberTypeSigned
