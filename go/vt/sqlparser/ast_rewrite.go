@@ -9522,12 +9522,29 @@ func (a *application) rewriteRefOfOtherAdmin(parent SQLNode, node *OtherAdmin, r
 			return true
 		}
 	}
-	if a.post != nil {
-		if a.pre == nil {
-			a.cur.replacer = replacer
-			a.cur.parent = parent
-			a.cur.node = node
+	for x, el := range node.Exprs {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(RefOfOtherAdminExprsOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
 		}
+		if !a.rewriteExpr(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(*OtherAdmin).Exprs[idx] = newNode.(Expr)
+			}
+		}(x)) {
+			return false
+		}
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
 		if !a.post(&a.cur) {
 			return false
 		}

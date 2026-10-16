@@ -3574,6 +3574,26 @@ func (cached *OrderByOption) CachedSize(alloc bool) int64 {
 	return size
 }
 
+func (cached *OtherAdmin) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	// field Exprs []vitess.io/vitess/go/vt/sqlparser.Expr
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Exprs)) * int64(16))
+		for _, elem := range cached.Exprs {
+			if cc, ok := elem.(cachedObject); ok {
+				size += cc.CachedSize(true)
+			}
+		}
+	}
+	return size
+}
+
 func (cached *OverClause) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

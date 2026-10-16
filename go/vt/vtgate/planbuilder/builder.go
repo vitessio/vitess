@@ -211,6 +211,9 @@ func createInstructionFor(ctx context.Context, query string, stmt sqlparser.Stat
 	case *sqlparser.VExplainStmt:
 		return buildVExplainPlan(ctx, stmt, reservedVars, vschema, cfg)
 	case *sqlparser.OtherAdmin:
+		if err := checkDoLockFuncs(stmt); err != nil {
+			return nil, err
+		}
 		return buildOtherReadAndAdmin(query, vschema)
 	case *sqlparser.Analyze:
 		return buildRoutePlan(stmt, reservedVars, vschema, buildAnalyzePlan)

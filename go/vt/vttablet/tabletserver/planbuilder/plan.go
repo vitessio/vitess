@@ -215,8 +215,9 @@ type Plan struct {
 	// keep-on-timeout safety. Set for DML containing a mutating lock
 	// function: the statement's row changes roll back atomically under KILL
 	// QUERY, but the lock grant or release does not, and can race the kill —
-	// leaving lock state the session never recorded. SELECT carries the same
-	// fact as the SelectLockFunc plan type instead.
+	// leaving lock state the session never recorded. DO containing a mutating
+	// lock function sets it too. SELECT carries the same fact as the
+	// SelectLockFunc plan type instead.
 	KillsConnOnTimeout bool
 
 	// VerifySQLMode is set on a PlanSet that assigns sql_mode a value that could not be
@@ -340,12 +341,12 @@ func BuildStreaming(env *vtenv.Environment, statement sqlparser.Statement, table
 	if err != nil {
 		return nil, err
 	}
-	// A lock function reached through DML mutates or acquires connection-
-	// scoped lock state exactly as it does in a SELECT predicate; the plan
-	// type stays DML (dispatch is unchanged) but the timeout and reservation
-	// consequences carry over. See lockFuncs.
+	// A lock function reached through DML or DO mutates or acquires
+	// connection-scoped lock state exactly as it does in a SELECT predicate;
+	// the plan type stays as it is (dispatch is unchanged) but the timeout and
+	// reservation consequences carry over. See lockFuncs.
 	switch statement.(type) {
-	case *sqlparser.Insert, *sqlparser.Update, *sqlparser.Delete:
+	case *sqlparser.Insert, *sqlparser.Update, *sqlparser.Delete, *sqlparser.OtherAdmin:
 		mutating, acquiring := lockFuncs(statement)
 		plan.KillsConnOnTimeout = mutating
 		if acquiring {
