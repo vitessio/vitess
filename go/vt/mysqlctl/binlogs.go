@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/os2"
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -145,6 +146,11 @@ func finishBinlogRestore(cnf *Mycnf, fes []FileEntry) error {
 			return vterrors.Wrapf(err, "cannot set modification time of %s", p)
 		}
 		index.WriteString(p + "\n")
+	}
+	// A log-bin-index outside the restored directories may live in a directory the
+	// restore removed with the datadir.
+	if err := os2.MkdirAll(filepath.Dir(indexPath)); err != nil {
+		return vterrors.Wrapf(err, "cannot create the directory of binlog index %s", indexPath)
 	}
 	tmp := indexPath + ".tmp"
 	if err := os.WriteFile(tmp, []byte(index.String()), 0o640); err != nil {

@@ -928,7 +928,8 @@ func TestBackupRestoreWithBinlogs(t *testing.T) {
 		assert.NotEqual(t, backupBinlogStripped, fe.Base, "data entries must not include binlogs: %v", fe)
 	}
 
-	// Restore into a target with another binlog basename.
+	// Restore into a target with another binlog basename, and an index in a
+	// directory of its own that doesn't exist yet.
 	dstDir := path.Join(backupRoot, "dst")
 	require.NoError(t, os.MkdirAll(dstDir, 0o755))
 	dstBase := path.Join(dstDir, "dst-bin")
@@ -938,6 +939,7 @@ func TestBackupRestoreWithBinlogs(t *testing.T) {
 			InnodbLogGroupHomeDir: path.Join(backupRoot, "log"),
 			DataDir:               dataDir,
 			BinLogPath:            dstBase,
+			BinLogIndexPath:       "indexes/dst-bin.index",
 			RelayLogPath:          path.Join(backupRoot, "relaylog"),
 			RelayLogIndexPath:     path.Join(backupRoot, "relaylogindex"),
 			RelayLogInfoPath:      path.Join(backupRoot, "relayloginfo"),
@@ -967,7 +969,7 @@ func TestBackupRestoreWithBinlogs(t *testing.T) {
 		assert.True(t, mtimes[seq].Equal(st.ModTime()), "mtime of %s: %v", p, st.ModTime())
 		dstIndex.WriteString(p + "\n")
 	}
-	gotIndex, err := os.ReadFile(dstBase + ".index")
+	gotIndex, err := os.ReadFile(path.Join(dataDir, "indexes", "dst-bin.index"))
 	require.NoError(t, err)
 	assert.Equal(t, dstIndex.String(), string(gotIndex))
 }
