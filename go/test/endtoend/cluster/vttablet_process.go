@@ -38,6 +38,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/errgroup"
 
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/mysql"
@@ -176,6 +177,17 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 		}
 	}
 	return nil
+}
+
+// SetupVttablets runs Setup for all the given vttablets at once and waits
+// until every one of them is up. Calling Setup one tablet after another
+// waits for each vttablet's startup in turn.
+func SetupVttablets(vttablets ...*VttabletProcess) error {
+	var g errgroup.Group
+	for _, vttablet := range vttablets {
+		g.Go(vttablet.Setup)
+	}
+	return g.Wait()
 }
 
 // GetStatus returns /debug/status endpoint result

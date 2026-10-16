@@ -227,12 +227,13 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 }
 
 func setupShard(ctx context.Context, t *testing.T, clusterInstance *cluster.LocalProcessCluster, shardName string, tablets []*cluster.Vttablet) {
+	vttablets := make([]*cluster.VttabletProcess, 0, len(tablets))
 	for _, tablet := range tablets {
 		tablet.VttabletProcess.SupportsBackup = false
-		// Start the tablet
-		err := tablet.VttabletProcess.Setup()
-		require.NoError(t, err)
+		vttablets = append(vttablets, tablet.VttabletProcess)
 	}
+	// Start the tablets
+	require.NoError(t, cluster.SetupVttablets(vttablets...))
 
 	for _, tablet := range tablets {
 		err := tablet.VttabletProcess.WaitForTabletStatuses([]string{"SERVING", "NOT_SERVING"})

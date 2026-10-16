@@ -539,13 +539,14 @@ func (cluster *LocalProcessCluster) AddShard(keyspaceName string, shardName stri
 			return nil, err
 		}
 	}
+	vttablets := make([]*VttabletProcess, 0, len(shard.Vttablets))
 	for _, tablet := range shard.Vttablets {
 		log.Info(fmt.Sprintf("Starting vttablet for tablet uid %d, grpc port %d", tablet.TabletUID, tablet.GrpcPort))
-
-		if err := tablet.VttabletProcess.Setup(); err != nil {
-			log.Error(fmt.Sprintf("error starting vttablet for tablet uid %d, grpc port %d: %v", tablet.TabletUID, tablet.GrpcPort, err))
-			return nil, err
-		}
+		vttablets = append(vttablets, tablet.VttabletProcess)
+	}
+	if err := SetupVttablets(vttablets...); err != nil {
+		log.Error(fmt.Sprintf("error starting the vttablets of shard %v: %v", shardName, err))
+		return nil, err
 	}
 
 	// Make first tablet as primary
@@ -654,6 +655,7 @@ func (cluster *LocalProcessCluster) StartKeyspaceLegacy(keyspace Keyspace, shard
 				return err
 			}
 		}
+		vttablets := make([]*VttabletProcess, 0, len(shard.Vttablets))
 		for _, tablet := range shard.Vttablets {
 			if !cluster.ReusingVTDATAROOT {
 				if _, err = tablet.VttabletProcess.QueryTablet("create database vt_"+keyspace.Name, keyspace.Name, false); err != nil {
@@ -663,11 +665,11 @@ func (cluster *LocalProcessCluster) StartKeyspaceLegacy(keyspace Keyspace, shard
 			}
 
 			log.Info(fmt.Sprintf("Starting vttablet for tablet uid %d, grpc port %d", tablet.TabletUID, tablet.GrpcPort))
-
-			if err = tablet.VttabletProcess.Setup(); err != nil {
-				log.Error(fmt.Sprintf("error starting vttablet for tablet uid %d, grpc port %d: %v", tablet.TabletUID, tablet.GrpcPort, err))
-				return
-			}
+			vttablets = append(vttablets, tablet.VttabletProcess)
+		}
+		if err = SetupVttablets(vttablets...); err != nil {
+			log.Error(fmt.Sprintf("error starting the vttablets of shard %v: %v", shardName, err))
+			return
 		}
 
 		// Make first tablet as primary
