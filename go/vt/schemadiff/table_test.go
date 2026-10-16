@@ -3161,6 +3161,103 @@ func TestValidate(t *testing.T) {
 	}
 }
 
+// TestApplyDoesNotModifyDiff checks that Apply leaves the diff's ALTER TABLE
+// statement unchanged. apply rewrites column, index, and partition nodes from
+// that statement in place, and sorts its options.
+func TestApplyDoesNotModifyDiff(t *testing.T) {
+	tt := []struct {
+		name       string
+		from       string
+		alter      string
+		subsequent string
+	}{
+		{
+			name:  "modify column primary key",
+			from:  "create table t (id int)",
+			alter: "alter table t modify column id int primary key",
+		},
+		{
+			name:  "add serial column",
+			from:  "create table t (id int primary key)",
+			alter: "alter table t add column s serial",
+		},
+		{
+			name:  "add unnamed key",
+			from:  "create table t (id int primary key, i int)",
+			alter: "alter table t add key (i)",
+		},
+		{
+			name:  "add partition",
+			from:  "create table t (id int primary key) partition by range (id) (partition p1 values less than (10))",
+			alter: "alter table t add partition (partition p2 values less than (20) engine = innodb)",
+		},
+		{
+			name:  "alter option order",
+			from:  "create table t (id int primary key, i int)",
+			alter: "alter table t add column i2 int, drop column i",
+		},
+		{
+			name:       "subsequent diff",
+			from:       "create table t (id int)",
+			alter:      "alter table t add column s serial",
+			subsequent: "alter table t modify column id int primary key",
+		},
+	}
+	env := NewTestEnv()
+	for _, ts := range tt {
+		t.Run(ts.name, func(t *testing.T) {
+			stmt, err := env.Parser().ParseStrictDDL(ts.from)
+			require.NoError(t, err)
+			fromCreateTable, ok := stmt.(*sqlparser.CreateTable)
+			require.True(t, ok)
+			from, err := NewCreateTableEntity(env, fromCreateTable)
+			require.NoError(t, err)
+
+			parseAlter := func(sql string) *AlterTableEntityDiff {
+				t.Helper()
+				stmt, err := env.Parser().ParseStrictDDL(sql)
+				require.NoError(t, err)
+				alterTable, ok := stmt.(*sqlparser.AlterTable)
+				require.True(t, ok)
+				return &AlterTableEntityDiff{from: from, alterTable: alterTable}
+			}
+			diff := parseAlter(ts.alter)
+			if ts.subsequent != "" {
+				diff.SetSubsequentDiff(parseAlter(ts.subsequent))
+			}
+
+			type recorded struct {
+				diff      *AlterTableEntityDiff
+				statement string
+				canonical string
+				clone     *sqlparser.AlterTable
+			}
+			var recordedDiffs []recorded
+			for d := diff; d != nil; d = d.subsequentDiff {
+				recordedDiffs = append(recordedDiffs, recorded{
+					diff:      d,
+					statement: d.StatementString(),
+					canonical: d.CanonicalStatementString(),
+					clone:     sqlparser.Clone(d.AlterTable()),
+				})
+			}
+
+			applied, err := from.Apply(diff)
+			require.NoError(t, err)
+			require.NotNil(t, applied)
+
+			for _, rec := range recordedDiffs {
+				// CanonicalStatementString memoizes. Clear it so a mutated AST
+				// cannot keep reporting the pre-Apply text.
+				rec.diff.canonicalStatementString = ""
+				assert.Equal(t, rec.statement, rec.diff.StatementString())
+				assert.Equal(t, rec.canonical, rec.diff.CanonicalStatementString())
+				assert.Truef(t, sqlparser.Equals.RefOfAlterTable(rec.clone, rec.diff.AlterTable()), "diff %s mutated to %s", rec.statement, rec.diff.StatementString())
+			}
+		})
+	}
+}
+
 func TestNormalize(t *testing.T) {
 	tt := []struct {
 		name    string
