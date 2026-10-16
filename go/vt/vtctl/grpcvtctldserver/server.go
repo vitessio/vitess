@@ -684,7 +684,7 @@ func (s *VtctldServer) ChangeTabletType(ctx context.Context, req *vtctldatapb.Ch
 		return nil, err
 	}
 
-	durabilityName, err := s.ts.GetKeyspaceDurability(ctx, tablet.Keyspace)
+	durabilityName, err := s.ts.GetShardInfoDurability(ctx, shard)
 	if err != nil {
 		return nil, err
 	}
@@ -1315,6 +1315,7 @@ func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldat
 	span.Annotate("new_primary_alias", topoproto.TabletAliasString(req.NewPrimary))
 	span.Annotate("allow_split_brain_promotion", req.AllowSplitBrainPromotion)
 	span.Annotate("required_position", req.RequiredPosition)
+	span.Annotate("group_replication_force_new_group", req.GroupReplicationForceNewGroup)
 
 	requiredPosition, err := replication.DecodePositionDefaultFlavor(req.RequiredPosition, replication.Mysql56FlavorID)
 	if err != nil {
@@ -1348,14 +1349,15 @@ func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldat
 		req.Keyspace,
 		req.Shard,
 		reparentutil.EmergencyReparentOptions{
-			NewPrimaryAlias:           req.NewPrimary,
-			IgnoreReplicas:            sets.New(ignoreReplicaAliases...),
-			WaitReplicasTimeout:       waitReplicasTimeout,
-			WaitAllTablets:            req.WaitForAllTablets,
-			AllowSplitBrainPromotion:  req.AllowSplitBrainPromotion,
-			PreventCrossCellPromotion: req.PreventCrossCellPromotion,
-			ExpectedPrimaryAlias:      req.ExpectedPrimary,
-			RequiredPosition:          requiredPosition,
+			NewPrimaryAlias:               req.NewPrimary,
+			IgnoreReplicas:                sets.New(ignoreReplicaAliases...),
+			WaitReplicasTimeout:           waitReplicasTimeout,
+			WaitAllTablets:                req.WaitForAllTablets,
+			AllowSplitBrainPromotion:      req.AllowSplitBrainPromotion,
+			PreventCrossCellPromotion:     req.PreventCrossCellPromotion,
+			ExpectedPrimaryAlias:          req.ExpectedPrimary,
+			RequiredPosition:              requiredPosition,
+			GroupReplicationForceNewGroup: req.GroupReplicationForceNewGroup,
 		},
 	)
 
@@ -2855,7 +2857,9 @@ func (s *VtctldServer) InitShardPrimaryLocked(
 	}
 	ev.ShardInfo = *shardInfo
 
-	durabilityName, err := s.ts.GetKeyspaceDurability(ctx, req.Keyspace)
+	// The shard's own policy, from the record read under the shard lock, applies over the
+	// keyspace's (see topo.ShardDurabilityPolicy).
+	durabilityName, err := s.ts.GetShardInfoDurability(ctx, shardInfo)
 	if err != nil {
 		return err
 	}
@@ -2907,6 +2911,14 @@ func (s *VtctldServer) InitShardPrimaryLocked(
 		logger.Warningf("primary-elect tablet %v is not the only primary in the shard, proceeding anyway as -force was used", topoproto.TabletAliasString(req.PrimaryElectTabletAlias))
 	}
 
+	// Under a group replication policy, InitPrimary bootstraps the shard's group: only on vttablets
+	// that run Group Replication.
+	if grd, ok := policy.AsGroupReplication(durability); ok {
+		if err := reparentutil.CheckGroupReplicationCapabilities(ctx, tmc, grd, durabilityName, primaryElectTabletInfo.Tablet, tabletMap); err != nil {
+			return err
+		}
+	}
+
 	// First phase: reset replication on all tablets. If anyone fails,
 	// we stop. It is probably because it is unreachable, and may leave
 	// an unstable database process in the mix, with a database daemon
@@ -2947,6 +2959,13 @@ func (s *VtctldServer) InitShardPrimaryLocked(
 	rp, err := tmc.InitPrimary(ctx, primaryElectTabletInfo.Tablet, policy.SemiSyncAckers(durability, primaryElectTabletInfo.Tablet) > 0)
 	if err != nil {
 		return err
+	}
+	// Under a group replication policy, InitPrimary bootstrapped the shard's group: record it as
+	// the shard's legitimate group while the shard lock is held.
+	if policy.IsGroupReplication(durability) {
+		if _, err := reparentutil.RecordGroupReplicationIncarnation(ctx, s.ts, tmc, req.Keyspace, req.Shard, primaryElectTabletInfo.Tablet, shardInfo.GroupReplicationIncarnation); err != nil {
+			return err
+		}
 	}
 
 	// Check we stil have the topology lock.
@@ -3184,6 +3203,56 @@ func (s *VtctldServer) MigrateCreate(ctx context.Context, req *vtctldatapb.Migra
 	span.Annotate("on_ddl", req.OnDdl)
 
 	resp, err = s.ws.MigrateCreate(ctx, req)
+	return resp, err
+}
+
+// MigrateReplicationMode is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) MigrateReplicationMode(ctx context.Context, req *vtctldatapb.MigrateReplicationModeRequest) (resp *vtctldatapb.MigrateReplicationModeResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.MigrateReplicationMode")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("shard", req.Shard)
+	span.Annotate("durability_policy", req.DurabilityPolicy)
+	span.Annotate("dry_run", req.DryRun)
+
+	if req.Keyspace == "" {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "keyspace is required")
+	}
+	if req.DurabilityPolicy == "" {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "durability policy is required")
+	}
+	waitTimeout, _, err := protoutil.DurationFromProto(req.WaitTimeout)
+	if err != nil {
+		return nil, err
+	}
+
+	m := sync.Mutex{}
+	logstream := []*logutilpb.Event{}
+	logger := logutil.NewCallbackLogger(func(e *logutilpb.Event) {
+		m.Lock()
+		defer m.Unlock()
+
+		logstream = append(logstream, e)
+	})
+
+	opts := reparentutil.MigrateReplicationModeOptions{
+		DurabilityPolicy: req.DurabilityPolicy,
+		DryRun:           req.DryRun,
+		WaitTimeout:      waitTimeout,
+	}
+	if req.Shard != "" {
+		opts.Shards = []string{req.Shard}
+	}
+	resp, err = reparentutil.NewReplicationModeMigrator(s.ts, s.tmc, logger).Migrate(ctx, req.Keyspace, opts)
+
+	m.Lock()
+	defer m.Unlock()
+	resp.Events = make([]*logutilpb.Event, len(logstream))
+	copy(resp.Events, logstream)
+
 	return resp, err
 }
 
@@ -3715,7 +3784,7 @@ func (s *VtctldServer) ReparentTablet(ctx context.Context, req *vtctldatapb.Repa
 		return nil, err
 	}
 
-	durabilityName, err := s.ts.GetKeyspaceDurability(ctx, tablet.Keyspace)
+	durabilityName, err := s.ts.GetShardInfoDurability(ctx, shard)
 	if err != nil {
 		return nil, err
 	}
@@ -3897,28 +3966,7 @@ func (s *VtctldServer) SetKeyspaceDurabilityPolicy(ctx context.Context, req *vtc
 	span.Annotate("keyspace", req.Keyspace)
 	span.Annotate("durability_policy", req.DurabilityPolicy)
 
-	ctx, unlock, lockErr := s.ts.LockKeyspace(ctx, req.Keyspace, "SetKeyspaceDurabilityPolicy")
-	if lockErr != nil {
-		err = lockErr
-		return nil, err
-	}
-
-	defer unlock(&err)
-
-	ki, err := s.ts.GetKeyspace(ctx, req.Keyspace)
-	if err != nil {
-		return nil, err
-	}
-
-	policyValid := policy.CheckDurabilityPolicyExists(req.DurabilityPolicy)
-	if !policyValid {
-		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "durability policy <%v> is not a valid policy. Please register it as a policy first", req.DurabilityPolicy)
-		return nil, err
-	}
-
-	ki.DurabilityPolicy = req.DurabilityPolicy
-
-	err = s.ts.UpdateKeyspace(ctx, ki)
+	ki, err := reparentutil.SetKeyspaceDurabilityPolicy(ctx, s.ts, req.Keyspace, req.DurabilityPolicy)
 	if err != nil {
 		return nil, err
 	}
@@ -4490,7 +4538,7 @@ func (s *VtctldServer) StartReplication(ctx context.Context, req *vtctldatapb.St
 		return nil, err
 	}
 
-	durabilityName, err := s.ts.GetKeyspaceDurability(ctx, tablet.Keyspace)
+	durabilityName, err := s.ts.GetShardInfoDurability(ctx, shard)
 	if err != nil {
 		return nil, err
 	}
@@ -4595,7 +4643,7 @@ func (s *VtctldServer) TabletExternallyReparented(ctx context.Context, req *vtct
 
 	event.DispatchUpdate(ev, "starting external reparent")
 
-	durabilityName, err := s.ts.GetKeyspaceDurability(ctx, tablet.Keyspace)
+	durabilityName, err := s.ts.GetShardInfoDurability(ctx, shard)
 	if err != nil {
 		return nil, err
 	}
