@@ -347,21 +347,23 @@ func readMigration(t *testing.T, uuid string) sqltypes.RowNamedValues {
 }
 
 func waitForMigration(t *testing.T, uuid string, timeout time.Duration) sqltypes.RowNamedValues {
-	var status string
-	sleepDuration := time.Second
-	for timeout > 0 {
-		row := readMigration(t, uuid)
-		status = row["migration_status"].ToString()
-		switch status {
-		case string(schema.OnlineDDLStatusComplete), string(schema.OnlineDDLStatusFailed), string(schema.OnlineDDLStatusCancelled):
-			// migration is complete, either successful or not
-			return row
+	terminalStatuses := []string{string(schema.OnlineDDLStatusComplete), string(schema.OnlineDDLStatusFailed), string(schema.OnlineDDLStatusCancelled)}
+	var row sqltypes.RowNamedValues
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, uuid)
+		if !assert.NoError(c, err) || !assert.NotNil(c, rs) {
+			return
 		}
-		time.Sleep(sleepDuration)
-		timeout = timeout - sleepDuration
-	}
-	require.NoError(t, fmt.Errorf("timeout in waitForMigration(%s). status is: %s", uuid, status))
-	return nil
+		migration := rs.Named().Row()
+		if !assert.NotNil(c, migration) {
+			return
+		}
+		// The migration is complete, either successful or not.
+		if assert.Contains(c, terminalStatuses, migration["migration_status"].ToString(), "migration %s is not complete", uuid) {
+			row = migration
+		}
+	}, timeout, 100*time.Millisecond)
+	return row
 }
 
 func getTablet() *cluster.Vttablet {
