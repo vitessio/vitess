@@ -372,6 +372,18 @@
       "Tags": [],
       "Needs": []
     },
+    "tls_reload": {
+      "File": "unused.go",
+      "Packages": [
+        "vitess.io/vitess/go/test/endtoend/tls/reload"
+      ],
+      "Args": [],
+      "Command": [],
+      "Manual": false,
+      "Shard": "12",
+      "Tags": [],
+      "Needs": []
+    },
     "unmanaged_ssl_check": {
       "File": "unused.go",
       "Packages": [
