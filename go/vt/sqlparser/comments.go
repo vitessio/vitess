@@ -299,6 +299,22 @@ var defaultMarginParser = func() *Parser {
 // parses it.
 func (p *Parser) SplitMarginComments(sql string) (query string, comments MarginComments) {
 	start, end, newlineFirst := p.marginBounds(sql)
+	if strings.Trim(sql[end:], sqlSpaceChars) == "" {
+		// A statement terminator at the end of the text is not part of the
+		// query: trimQuery removes it in every case. The split reads it as
+		// query text, though, so it holds the comments before it in the query,
+		// where the callers rebuild the query from the AST and lose them.
+		// Remove the terminator and split again.
+		//
+		// The retry moves nothing else. When the second split finds no
+		// trailing comment, the text stays as it is, so a ';' that belongs to a
+		// line comment stays in the query with the comment that holds it.
+		if trimmed := strings.TrimRight(sql, sqlSpaceChars+";"); len(trimmed) < len(sql) {
+			if s, e, nl := p.marginBounds(trimmed); strings.Trim(trimmed[e:], sqlSpaceChars) != "" {
+				sql, start, end, newlineFirst = trimmed, s, e, nl
+			}
+		}
+	}
 	comments = MarginComments{
 		Leading:  strings.TrimLeft(sql[:start], sqlSpaceChars),
 		Trailing: strings.TrimRight(sql[end:], sqlSpaceChars),
