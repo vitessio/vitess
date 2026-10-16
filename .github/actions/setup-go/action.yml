@@ -13,6 +13,13 @@ inputs:
       "tools" for the go tool binaries and go/tools. "none" restores no build
       cache.
     default: "build"
+  go-tools:
+    description: >-
+      Comma-separated tool modules under tools/ whose module caches to restore
+      and download next to the root module's, for example
+      "gotestsum,gofumpt". "none" restores and downloads only the root
+      module's. Tools not listed still download on first use.
+    default: "gotestsum"
 runs:
   using: "composite"
   steps:
@@ -29,42 +36,116 @@ runs:
         cache: false
 
     # Jobs only restore caches. The go_cache_warm workflow is the only writer:
-    # on every push to main it saves the module cache and fresh build cache
-    # entries for that commit, keyed so that the prefixes below restore the
-    # newest one.
-    - name: Determine build cache entries
+    # on every push to main it saves a module cache entry for each go.sum that
+    # changed, and fresh build cache entries for that commit, keyed so that
+    # the keys and prefixes below restore the newest one.
+    - name: Determine cache entries
       id: entries
-      if: inputs.cache == 'true'
       shell: bash
       env:
-        ENTRIES: ${{ inputs.build-cache }}
+        BUILD_ENTRIES: ${{ inputs.build-cache }}
+        GO_TOOLS: ${{ inputs.go-tools }}
       run: |
-        IFS=',' read -r -a entries <<< "${ENTRIES}"
+        IFS=',' read -r -a entries <<< "${BUILD_ENTRIES}"
         for entry in "${entries[@]}"; do
           case "${entry}" in
           build | unit | race | tools) echo "${entry}=true" >> "${GITHUB_OUTPUT}" ;;
           none) ;;
           *)
-            echo "::error::Unknown build-cache entry '${entry}' in '${ENTRIES}': expected a comma-separated list of build, unit, race and tools, or none"
+            echo "::error::Unknown build-cache entry '${entry}' in '${BUILD_ENTRIES}': expected a comma-separated list of build, unit, race and tools, or none"
             exit 1
             ;;
           esac
         done
 
-    - name: Restore Go module cache
+        tools=()
+        IFS=',' read -r -a entries <<< "${GO_TOOLS}"
+        for entry in "${entries[@]}"; do
+          case "${entry}" in
+          addlicense | gofumpt | goimports | golangci-lint | gotestsum | goyacc)
+            echo "tool-${entry}=true" >> "${GITHUB_OUTPUT}"
+            tools+=("${entry}")
+            ;;
+          none) ;;
+          *)
+            echo "::error::Unknown go-tools entry '${entry}' in '${GO_TOOLS}': expected a comma-separated list of addlicense, gofumpt, goimports, golangci-lint, gotestsum and goyacc, or none"
+            exit 1
+            ;;
+          esac
+        done
+        echo "tools=${tools[*]}" >> "${GITHUB_OUTPUT}"
+
+    # One module cache entry per go.sum, keyed by its hash, so that a tool's
+    # dependency update only replaces that tool's entry. The entries restore
+    # into the same module cache; modules they share are identical.
+    - name: Restore Go module cache (root)
       if: inputs.cache == 'true'
       uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ~/go/pkg/mod
-        key: go-mod-${{ hashFiles('go.sum', 'tools/**/go.sum') }}
+        key: go-mod-root-${{ hashFiles('go.sum') }}
         restore-keys: |
-          go-mod-
+          go-mod-root-
+
+    - name: Restore Go module cache (addlicense)
+      if: inputs.cache == 'true' && steps.entries.outputs.tool-addlicense == 'true'
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/go/pkg/mod
+        key: go-mod-addlicense-${{ hashFiles('tools/addlicense/go.sum') }}
+        restore-keys: |
+          go-mod-addlicense-
+
+    - name: Restore Go module cache (gofumpt)
+      if: inputs.cache == 'true' && steps.entries.outputs.tool-gofumpt == 'true'
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/go/pkg/mod
+        key: go-mod-gofumpt-${{ hashFiles('tools/gofumpt/go.sum') }}
+        restore-keys: |
+          go-mod-gofumpt-
+
+    - name: Restore Go module cache (goimports)
+      if: inputs.cache == 'true' && steps.entries.outputs.tool-goimports == 'true'
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/go/pkg/mod
+        key: go-mod-goimports-${{ hashFiles('tools/goimports/go.sum') }}
+        restore-keys: |
+          go-mod-goimports-
+
+    - name: Restore Go module cache (golangci-lint)
+      if: inputs.cache == 'true' && steps.entries.outputs.tool-golangci-lint == 'true'
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/go/pkg/mod
+        key: go-mod-golangci-lint-${{ hashFiles('tools/golangci-lint/go.sum') }}
+        restore-keys: |
+          go-mod-golangci-lint-
+
+    - name: Restore Go module cache (gotestsum)
+      if: inputs.cache == 'true' && steps.entries.outputs.tool-gotestsum == 'true'
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/go/pkg/mod
+        key: go-mod-gotestsum-${{ hashFiles('tools/gotestsum/go.sum') }}
+        restore-keys: |
+          go-mod-gotestsum-
+
+    - name: Restore Go module cache (goyacc)
+      if: inputs.cache == 'true' && steps.entries.outputs.tool-goyacc == 'true'
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/go/pkg/mod
+        key: go-mod-goyacc-${{ hashFiles('tools/goyacc/go.sum') }}
+        restore-keys: |
+          go-mod-goyacc-
 
     # Each entry holds what one group of jobs compiles, with that group's
     # flags, so restoring several of them into one cache directory never
     # overlaps.
     - name: Restore Go build cache (build)
-      if: steps.entries.outputs.build == 'true'
+      if: inputs.cache == 'true' && steps.entries.outputs.build == 'true'
       uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ~/.cache/go-build
@@ -73,7 +154,7 @@ runs:
           go-build-v3-${{ runner.os }}-${{ runner.arch }}-go${{ steps.setup-go.outputs.go-version }}-build-
 
     - name: Restore Go build cache (unit)
-      if: steps.entries.outputs.unit == 'true'
+      if: inputs.cache == 'true' && steps.entries.outputs.unit == 'true'
       uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ~/.cache/go-build
@@ -82,7 +163,7 @@ runs:
           go-build-v3-${{ runner.os }}-${{ runner.arch }}-go${{ steps.setup-go.outputs.go-version }}-unit-
 
     - name: Restore Go build cache (race)
-      if: steps.entries.outputs.race == 'true'
+      if: inputs.cache == 'true' && steps.entries.outputs.race == 'true'
       uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ~/.cache/go-build
@@ -91,7 +172,7 @@ runs:
           go-build-v3-${{ runner.os }}-${{ runner.arch }}-go${{ steps.setup-go.outputs.go-version }}-race-
 
     - name: Restore Go build cache (tools)
-      if: steps.entries.outputs.tools == 'true'
+      if: inputs.cache == 'true' && steps.entries.outputs.tools == 'true'
       uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ~/.cache/go-build
@@ -99,22 +180,23 @@ runs:
         restore-keys: |
           go-build-v3-${{ runner.os }}-${{ runner.arch }}-go${{ steps.setup-go.outputs.go-version }}-tools-
 
-    # Download the root module and every tool module; the tool modules are
-    # otherwise only fetched on first use. On a cache hit this is a fast
-    # no-op, and it also makes the module cache the warm workflow saves
-    # complete. Retried because proxy.golang.org occasionally drops
-    # connections mid-download.
+    # Download the root module's modules and the listed tools', so that a
+    # cache miss is retried here rather than failing on first use. On a cache
+    # hit this is a fast no-op. Retried because proxy.golang.org occasionally
+    # drops connections mid-download.
     - name: Download Go modules
       shell: bash
+      env:
+        TOOLS: ${{ steps.entries.outputs.tools }}
       run: |
         download() {
           go mod download || return 1
-          local modfile
-          for modfile in tools/*/go.mod; do
+          local tool
+          for tool in ${TOOLS}; do
             # Older release trees, which the upgrade/downgrade workflows also
-            # set up, have no tool modules; the unmatched glob stays literal.
-            [ -f "${modfile}" ] || continue
-            go mod download -modfile="${modfile}" || return 1
+            # set up, have no tool modules.
+            [ -f "tools/${tool}/go.mod" ] || continue
+            go mod download -modfile="tools/${tool}/go.mod" || return 1
           done
         }
 

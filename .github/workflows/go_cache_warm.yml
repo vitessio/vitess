@@ -1,10 +1,10 @@
 name: Warm Go caches
 
 # The only writer of the Go module and build caches that every other job
-# restores through the setup-go action. Each push to main saves fresh build
-# cache entries for that commit, built from an empty cache, so they contain
-# exactly what the jobs compile and nothing stale. Pull requests restore the
-# newest entries by key prefix.
+# restores through the setup-go action. Each push to main saves a module cache
+# entry for every go.sum without one, and fresh build cache entries for that
+# commit. Both are built from an empty cache, so they contain exactly what the
+# jobs need and nothing stale. Pull requests restore the newest entries.
 on:
   push:
     branches:
@@ -24,9 +24,107 @@ permissions:
   contents: read
 
 jobs:
+  # One entry per go.sum, keyed by its hash: a tool's dependency update only
+  # replaces that tool's entry. Module caches do not depend on the platform.
+  modules:
+    name: "Warm Go module cache (${{ matrix.set }})"
+    if: github.repository == 'vitessio/vitess'
+    permissions:
+      contents: read
+      # To delete the entries this run supersedes.
+      actions: write
+    strategy:
+      fail-fast: false
+      matrix:
+        set: [root, addlicense, gofumpt, goimports, golangci-lint, gotestsum, goyacc]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+
+      - name: Check out code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: "false"
+
+      - name: Determine the cache key
+        id: key
+        env:
+          SET: ${{ matrix.set }}
+          SUM: ${{ matrix.set == 'root' && hashFiles('go.sum') || hashFiles(format('tools/{0}/go.sum', matrix.set)) }}
+        run: |
+          echo "prefix=go-mod-${SET}-" >> "${GITHUB_OUTPUT}"
+          echo "key=go-mod-${SET}-${SUM}" >> "${GITHUB_OUTPUT}"
+
+      # A key is never saved twice, so only a go.sum change saves an entry.
+      - name: Look up the module cache
+        id: lookup
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ steps.key.outputs.key }}
+          lookup-only: true
+
+      - name: Set up Go
+        if: steps.lookup.outputs.cache-hit != 'true'
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      # Starts from an empty module cache, so the entry holds exactly this
+      # go.sum's modules. Retried because proxy.golang.org occasionally drops
+      # connections mid-download.
+      - name: Download the modules
+        if: steps.lookup.outputs.cache-hit != 'true'
+        env:
+          SET: ${{ matrix.set }}
+        run: |
+          go clean -modcache
+          args=()
+          if [ "${SET}" != "root" ]; then
+            args=(-modfile="tools/${SET}/go.mod")
+          fi
+          for attempt in 1 2 3; do
+            if go mod download "${args[@]}"; then
+              break
+            fi
+            if [ "${attempt}" = 3 ]; then
+              echo "go mod download failed after ${attempt} attempts"
+              exit 1
+            fi
+            echo "go mod download failed (attempt ${attempt}); retrying"
+            go clean -modcache
+            sleep 10
+          done
+          du -sh "$(go env GOMODCACHE)"
+
+      - name: Save the module cache
+        if: steps.lookup.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ steps.key.outputs.key }}
+
+      - name: Delete superseded module cache entries
+        if: steps.lookup.outputs.cache-hit != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          REF: ${{ github.ref }}
+          PREFIX: ${{ steps.key.outputs.prefix }}
+          KEY: ${{ steps.key.outputs.key }}
+        run: tools/delete_superseded_cache_entries.sh "${PREFIX}" "${KEY}"
+
   warm:
     name: "Warm Go build cache (${{ matrix.entry }}, ${{ matrix.arch }})"
     if: github.repository == 'vitessio/vitess'
+    # Restores the module cache entries the modules job just saved.
+    needs: modules
     permissions:
       contents: read
       # To delete the entries this run supersedes.
@@ -43,26 +141,31 @@ jobs:
           - entry: build
             arch: x64
             runner: oracle-vm-16cpu-64gb-x86-64
-            save-modules: true
+            go-tools: gotestsum
           - entry: build
             arch: arm64
             runner: oracle-vm-16cpu-64gb-arm64
+            go-tools: gotestsum
           # unit shares the flags of build, which the unit jobs also restore,
           # so it only saves what it adds on top of build.
           - entry: unit
             base: build
             arch: x64
             runner: oracle-vm-16cpu-64gb-x86-64
+            go-tools: gotestsum
           - entry: unit
             base: build
             arch: arm64
             runner: oracle-vm-16cpu-64gb-arm64
+            go-tools: gotestsum
           - entry: race
             arch: x64
             runner: oracle-vm-16cpu-64gb-x86-64
+            go-tools: gotestsum
           - entry: tools
             arch: x64
             runner: ubuntu-24.04
+            go-tools: addlicense,gofumpt,goimports,golangci-lint,gotestsum,goyacc
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
 
@@ -77,30 +180,13 @@ jobs:
         with:
           persist-credentials: "false"
 
-      # Restores the module cache and downloads every module, but no build
-      # cache: each entry starts empty.
+      # Restores the module caches, but no build cache: each entry starts
+      # empty.
       - name: Set up Go
         uses: $/.github/actions/setup-go
         with:
           build-cache: none
-
-      - name: Look up the module cache
-        if: matrix.save-modules
-        id: modules
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/go/pkg/mod
-          key: go-mod-${{ hashFiles('go.sum', 'tools/**/go.sum') }}
-          lookup-only: true
-
-      # The download step of setup-go made the module cache complete for this
-      # key. A key is never saved twice, so only a go.sum change saves one.
-      - name: Save the module cache
-        if: matrix.save-modules && steps.modules.outputs.cache-hit != 'true'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/go/pkg/mod
-          key: go-mod-${{ hashFiles('go.sum', 'tools/**/go.sum') }}
+          go-tools: ${{ matrix.go-tools }}
 
       - name: Warm the base entry
         if: matrix.base
@@ -145,9 +231,7 @@ jobs:
           key: ${{ steps.key.outputs.key }}
 
       # Keep only the entry just saved for this branch, so that per-commit
-      # entries do not push other caches out of the repository quota. The
-      # save step only warns when its upload fails, so first make sure the new
-      # entry exists: without it, the older entries are all jobs have.
+      # entries do not push other caches out of the repository quota.
       - name: Delete superseded build cache entries
         env:
           GH_TOKEN: ${{ github.token }}
@@ -155,15 +239,4 @@ jobs:
           REF: ${{ github.ref }}
           PREFIX: ${{ steps.key.outputs.prefix }}
           KEY: ${{ steps.key.outputs.key }}
-        run: |
-          entries="$(gh cache list --repo "${REPO}" --ref "${REF}" --key "${PREFIX}" --limit 100 \
-            --json id,key --jq '.[] | [.id, .key] | @tsv')"
-          if ! cut -f2 <<< "${entries}" | grep -q -F -x -- "${KEY}"; then
-            echo "::error::${KEY} was not saved; keeping the older entries."
-            exit 1
-          fi
-          while IFS=$'\t' read -r id key; do
-            if [ "${key}" != "${KEY}" ]; then
-              gh cache delete --repo "${REPO}" "${id}"
-            fi
-          done <<< "${entries}"
+        run: tools/delete_superseded_cache_entries.sh "${PREFIX}" "${KEY}"

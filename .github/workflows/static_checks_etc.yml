@@ -149,6 +149,7 @@ jobs:
         uses: $/.github/actions/setup-go
         with:
           build-cache: tools
+          go-tools: addlicense,gofumpt,goimports,golangci-lint,goyacc
 
       - name: Tune the OS
         if: steps.changes.outputs.go_files == 'true'
