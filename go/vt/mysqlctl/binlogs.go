@@ -66,9 +66,10 @@ func ValidateIncludeBinlogs(params BackupParams) error {
 }
 
 // checkBinlogsBackupable refuses to back up binlogs that would not contain every
-// transaction in the data (no binlog, or a replica without log_replica_updates), or
-// that another server could not read (binlog encryption is keyed to this server).
-func checkBinlogsBackupable(ctx context.Context, mysqld MysqlDaemon, sourceIsPrimary bool) error {
+// transaction in the data (no binlog, or no log_replica_updates, since a server that
+// was a replica then did not log what it replicated), or that another server could
+// not read (binlog encryption is keyed to this server).
+func checkBinlogsBackupable(ctx context.Context, mysqld MysqlDaemon) error {
 	qr, err := mysqld.FetchSuperQuery(ctx, binlogBackupVarsQuery)
 	if err != nil {
 		return vterrors.Wrap(err, "cannot read binlog settings")
@@ -82,8 +83,8 @@ func checkBinlogsBackupable(ctx context.Context, mysqld MysqlDaemon, sourceIsPri
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot include binlogs: log_bin is off")
 	case row[1].ToString() != "0":
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot include binlogs: binlog_encryption is on, so another server cannot read them")
-	case !sourceIsPrimary && row[2].ToString() != "1":
-		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot include binlogs: log_replica_updates is off, so this replica's binlogs lack replicated transactions")
+	case row[2].ToString() != "1":
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot include binlogs: log_replica_updates is off, so this server's binlogs may lack replicated transactions")
 	}
 	return nil
 }

@@ -140,7 +140,7 @@ Limitations and requirements:
 
 - Full backups only.
 - `vtbackup --restore-with-clone` together with `--include-binlogs` is refused in this release, because CLONE does not copy binary logs.
-- The backup source must have `log_bin` enabled, `log_replica_updates` enabled when backing up a replica, and `binlog_encryption` off. Otherwise the backup fails with `FAILED_PRECONDITION`.
+- The backup source must have `log_bin` enabled, `log_replica_updates` enabled, and `binlog_encryption` off. Otherwise the backup fails with `FAILED_PRECONDITION`.
 
 Things to be aware of:
 

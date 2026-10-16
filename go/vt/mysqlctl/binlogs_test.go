@@ -97,16 +97,14 @@ func TestBinlogFilesForFullBackup(t *testing.T) {
 
 func TestCheckBinlogsBackupable(t *testing.T) {
 	tests := []struct {
-		name            string
-		row             []string // log_bin, binlog_encryption, log_replica_updates
-		sourceIsPrimary bool
-		wantErr         string
+		name    string
+		row     []string // log_bin, binlog_encryption, log_replica_updates
+		wantErr string
 	}{
-		{name: "replica with replica updates", row: []string{"1", "0", "1"}},
-		{name: "primary without replica updates", row: []string{"1", "0", "0"}, sourceIsPrimary: true},
+		{name: "with replica updates", row: []string{"1", "0", "1"}},
 		{name: "binlog off", row: []string{"0", "0", "1"}, wantErr: "log_bin"},
 		{name: "encrypted", row: []string{"1", "1", "1"}, wantErr: "binlog_encryption"},
-		{name: "replica without replica updates", row: []string{"1", "0", "0"}, wantErr: "log_replica_updates"},
+		{name: "without replica updates", row: []string{"1", "0", "0"}, wantErr: "log_replica_updates is off"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -119,7 +117,7 @@ func TestCheckBinlogsBackupable(t *testing.T) {
 					sqltypes.MakeTestFields("log_bin|binlog_encryption|log_replica_updates", "int64|int64|int64"),
 					strings.Join(tt.row, "|")),
 			}
-			err := checkBinlogsBackupable(t.Context(), mysqld, tt.sourceIsPrimary)
+			err := checkBinlogsBackupable(t.Context(), mysqld)
 			if tt.wantErr == "" {
 				require.NoError(t, err)
 				return
