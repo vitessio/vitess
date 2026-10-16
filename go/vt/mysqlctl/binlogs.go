@@ -44,8 +44,10 @@ func absUnderDataDir(cnf *Mycnf, p string) string {
 	return filepath.Join(cnf.DataDir, p)
 }
 
-// binlogBackupVarsQuery reads the settings that decide whether the source's binlogs can be backed up.
-const binlogBackupVarsQuery = "SELECT @@global.log_bin, @@global.log_replica_updates"
+// binlogBackupVarsQuery reads the settings that decide whether the source's binlogs
+// can be backed up. MySQL 5.7 and MariaDB name the replica setting log_slave_updates,
+// and MySQL 8.0.26 and later also accept it as an alias.
+const binlogBackupVarsQuery = "SHOW GLOBAL VARIABLES WHERE Variable_name IN ('log_bin', 'log_replica_updates', 'log_slave_updates')"
 
 // ValidateIncludeBinlogs fails fast when IncludeBinlogs is combined with a backup that
 // cannot carry the binlogs: only a full builtin backup stops mysqld cleanly, so its
@@ -75,14 +77,25 @@ func checkBinlogsBackupable(ctx context.Context, mysqld MysqlDaemon) error {
 	if err != nil {
 		return vterrors.Wrap(err, "cannot read binlog settings")
 	}
-	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 2 {
+	vars := make(map[string]string, len(qr.Rows))
+	for _, row := range qr.Rows {
+		if len(row) != 2 {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected result for %q: %v", binlogBackupVarsQuery, qr.Rows)
+		}
+		vars[row[0].ToString()] = row[1].ToString()
+	}
+	logBin, ok := vars["log_bin"]
+	if !ok {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected result for %q: %v", binlogBackupVarsQuery, qr.Rows)
 	}
-	row := qr.Rows[0]
+	replicaUpdates, ok := vars["log_replica_updates"]
+	if !ok {
+		replicaUpdates, ok = vars["log_slave_updates"]
+	}
 	switch {
-	case row[0].ToString() != "1":
+	case logBin != "ON":
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot include binlogs: log_bin is off")
-	case row[1].ToString() != "1":
+	case !ok || replicaUpdates != "ON":
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot include binlogs: log_replica_updates is off, so this server's binlogs may lack replicated transactions")
 	}
 	return nil

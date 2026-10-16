@@ -3,7 +3,6 @@ package mysqlctl
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -98,12 +97,15 @@ func TestBinlogFilesForFullBackup(t *testing.T) {
 func TestCheckBinlogsBackupable(t *testing.T) {
 	tests := []struct {
 		name    string
-		row     []string // log_bin, log_replica_updates
+		rows    []string // Variable_name|Value, as SHOW GLOBAL VARIABLES returns them
 		wantErr string
 	}{
-		{name: "with replica updates", row: []string{"1", "1"}},
-		{name: "binlog off", row: []string{"0", "1"}, wantErr: "log_bin"},
-		{name: "without replica updates", row: []string{"1", "0"}, wantErr: "log_replica_updates is off"},
+		{name: "with replica updates", rows: []string{"log_bin|ON", "log_replica_updates|ON", "log_slave_updates|ON"}},
+		{name: "binlog off", rows: []string{"log_bin|OFF", "log_replica_updates|ON", "log_slave_updates|ON"}, wantErr: "log_bin"},
+		{name: "without replica updates", rows: []string{"log_bin|ON", "log_replica_updates|OFF", "log_slave_updates|OFF"}, wantErr: "log_replica_updates is off"},
+		// MySQL 5.7 has only log_slave_updates.
+		{name: "MySQL 5.7 with replica updates", rows: []string{"log_bin|ON", "log_slave_updates|ON"}},
+		{name: "MySQL 5.7 without replica updates", rows: []string{"log_bin|ON", "log_slave_updates|OFF"}, wantErr: "log_replica_updates is off"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -113,8 +115,8 @@ func TestCheckBinlogsBackupable(t *testing.T) {
 			t.Cleanup(mysqld.Close)
 			mysqld.FetchSuperQueryMap = map[string]*sqltypes.Result{
 				binlogBackupVarsQuery: sqltypes.MakeTestResult(
-					sqltypes.MakeTestFields("log_bin|log_replica_updates", "int64|int64"),
-					strings.Join(tt.row, "|")),
+					sqltypes.MakeTestFields("Variable_name|Value", "varchar|varchar"),
+					tt.rows...),
 			}
 			err := checkBinlogsBackupable(t.Context(), mysqld)
 			if tt.wantErr == "" {
