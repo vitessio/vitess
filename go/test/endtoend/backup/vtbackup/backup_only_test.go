@@ -677,6 +677,9 @@ func verifyBackupStats(t *testing.T, dataPointReader *opentsdb.DataPointReader, 
 // binlog_expire_logs_seconds are purged when mysqld starts and drop out of the next
 // backup.
 func TestVtBackupWithBinlogs(t *testing.T) {
+	// --include-binlogs is a v25 feature of both vtbackup and BackupShard's vttablet.
+	utils.SkipIfBinaryIsBelowVersion(t, 25, "vttablet")
+	utils.SkipIfBinaryIsBelowVersion(t, 25, "vtbackup")
 	prepareCluster(t)
 
 	_, err := primary.VttabletProcess.QueryTablet(vtInsertTest, keyspaceName, true)
