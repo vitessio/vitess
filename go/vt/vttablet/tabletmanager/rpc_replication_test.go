@@ -994,6 +994,7 @@ func TestSetReplicationSourceRecovery(t *testing.T) {
 		fakeMysqlDaemon.SetReplicationSourceInputs = []string{"mysql-primary:3306"}
 		fakeMysqlDaemon.StartReplicationError = recoverableReplicationInitError()
 		fakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+			"STOP REPLICA",
 			"FAKE RESET BINARY LOGS AND GTIDS",
 			"FAKE SET GLOBAL gtid_purged",
 			"FAKE SET SOURCE",
@@ -1202,6 +1203,60 @@ func TestSetReplicationSourceRecovery(t *testing.T) {
 		require.Equal(t, "mysql-new-primary", fakeMysqlDaemon.CurrentSourceHost)
 		require.EqualValues(t, 3306, fakeMysqlDaemon.CurrentSourcePort)
 		require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
+	})
+}
+
+// TestInitReplicaStopsReplicationFirst verifies InitReplica stops replication
+// that shard sync may have restarted after ResetReplication, before it touches
+// the GTID position or the replication source.
+func TestInitReplicaStopsReplicationFirst(t *testing.T) {
+	setup := func(t *testing.T) (*TabletManager, *mysqlctl.FakeMysqlDaemon, *topodatapb.TabletAlias) {
+		ts := memorytopo.NewServer(t.Context(), "cell1")
+		parent := &topodatapb.Tablet{
+			Alias:         &topodatapb.TabletAlias{Cell: "cell1", Uid: 200},
+			Keyspace:      "ks",
+			Shard:         "0",
+			Type:          topodatapb.TabletType_PRIMARY,
+			MysqlHostname: "mysql-primary",
+			MysqlPort:     3306,
+		}
+		require.NoError(t, ts.CreateTablet(t.Context(), parent))
+
+		// Shard sync has already repointed the tablet and restarted replication.
+		fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
+		fakeMysqlDaemon.Replicating = true
+		fakeMysqlDaemon.CurrentSourceHost = "mysql-old-primary"
+		fakeMysqlDaemon.CurrentSourcePort = 3305
+		fakeMysqlDaemon.SetReplicationSourceInputs = []string{"mysql-primary:3306"}
+
+		return newTestReplicationTM(newTestTablet(t, 100, "ks", "0", nil), fakeMysqlDaemon, ts), fakeMysqlDaemon, parent.Alias
+	}
+
+	t.Run("replication running", func(t *testing.T) {
+		tm, fakeMysqlDaemon, parent := setup(t)
+		fakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+			"STOP REPLICA",
+			"FAKE RESET BINARY LOGS AND GTIDS",
+			"FAKE SET GLOBAL gtid_purged",
+			"FAKE SET SOURCE",
+			"START REPLICA",
+		}
+
+		require.NoError(t, tm.InitReplica(t.Context(), parent, "", 0, false))
+		require.Equal(t, "mysql-primary", fakeMysqlDaemon.CurrentSourceHost)
+		require.EqualValues(t, 3306, fakeMysqlDaemon.CurrentSourcePort)
+		require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
+	})
+
+	t.Run("stop replication fails", func(t *testing.T) {
+		tm, fakeMysqlDaemon, parent := setup(t)
+		stopErr := errors.New("stop replication failed")
+		fakeMysqlDaemon.StopReplicationError = stopErr
+
+		err := tm.InitReplica(t.Context(), parent, "", 0, false)
+		require.ErrorIs(t, err, stopErr)
+		require.Zero(t, fakeMysqlDaemon.ExpectedExecuteSuperQueryCurrent)
+		require.Equal(t, "mysql-old-primary", fakeMysqlDaemon.CurrentSourceHost)
 	})
 }
 

@@ -544,6 +544,12 @@ func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.Tab
 		return err
 	}
 
+	// Don't rely on a preceding ResetReplication having left replication
+	// stopped: shard sync may have repointed and restarted it in between.
+	if err := tm.stopReplicationLocked(ctx); err != nil {
+		return err
+	}
+
 	if err := tm.MysqlDaemon.SetReplicationPosition(ctx, pos); err != nil {
 		return err
 	}
