@@ -1555,6 +1555,21 @@ func TestExecutorDeniedErrorNoBuffer(t *testing.T) {
 	})
 }
 
+// TestWaitForNewerVSchemaAlreadyNewer verifies that waitForNewerVSchema does
+// not wait when the executor already has a newer VSchema. Writes buffered
+// during a MoveTables traffic switch are released once the executor installed
+// the switched VSchema, and must be planned again without further delay.
+func TestWaitForNewerVSchemaAlreadyNewer(t *testing.T) {
+	executor, _, _, _, ctx := createExecutorEnv(t)
+	require.NotNil(t, executor.VSchema())
+	lastVSchemaCreated := executor.VSchema().GetCreated().Add(-time.Second)
+
+	// A zero timeout leaves no time to wait: only a VSchema that is already
+	// newer can be reported.
+	assert.True(t, waitForNewerVSchema(ctx, executor, lastVSchemaCreated, 0))
+	assert.False(t, waitForNewerVSchema(ctx, executor, executor.VSchema().GetCreated(), 0))
+}
+
 // TestVTGateExecuteMultiTimeoutUsesParentContextPerStatement verifies that
 // each statement in an ExecuteMulti request receives a timeout derived from the
 // original request context.

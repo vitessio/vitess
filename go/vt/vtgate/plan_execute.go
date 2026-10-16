@@ -42,7 +42,16 @@ type (
 
 var vschemaWaitTimeout = 30 * time.Second
 
+// waitForNewerVSchema waits up to timeout for the executor to have a VSchema
+// created after lastVSchemaCreated, and reports whether it does. It returns
+// without waiting if the executor already has one: the keyspace event
+// watcher releases the writes buffered during a MoveTables traffic switch
+// only after the executor installed the switched VSchema, so these writes
+// can be planned again right away.
 func waitForNewerVSchema(ctx context.Context, e *Executor, lastVSchemaCreated time.Time, timeout time.Duration) bool {
+	if vs := e.VSchema(); vs != nil && vs.GetCreated().After(lastVSchemaCreated) {
+		return true
+	}
 	pollingInterval := 10 * time.Millisecond
 	waitCtx, cancel := context.WithTimeout(ctx, timeout)
 	ticker := time.NewTicker(pollingInterval)
