@@ -717,7 +717,7 @@ func testVStreamStopOnReshardFlag(t *testing.T, stopOnReshard bool, baseTabletID
 		StopOnReshard:        stopOnReshard,
 		TransactionChunkSize: 1024, // 1KB - test chunking for all transactions
 	}
-	var done, stopInserts atomic.Bool
+	var done, streamEnded, stopInserts atomic.Bool
 
 	// first goroutine that keeps inserting rows into table being streamed until the test has seen the reshard
 	// * if StopOnReshard is false we should keep getting events on the new shards
@@ -729,6 +729,12 @@ func testVStreamStopOnReshardFlag(t *testing.T, stopOnReshard bool, baseTabletID
 			insertRow("sharded", "customer", id)
 		}
 	})
+	stopInserting := func() {
+		stopInserts.Store(true)
+		inserts.Wait()
+	}
+	// Stop inserting before the deferred teardown, also when the test fails.
+	defer stopInserting()
 	// stream events from the VStream API
 	var mu sync.Mutex // protects ne
 	var ne numEvents
@@ -777,6 +783,7 @@ func testVStreamStopOnReshardFlag(t *testing.T, stopOnReshard bool, baseTabletID
 				mu.Unlock()
 			case io.EOF:
 				log.Info("Stream Ended")
+				streamEnded.Store(true)
 				done.Store(true)
 			default:
 				log.Info(fmt.Sprintf("%s:: remote error: %v", time.Now(), err))
@@ -805,23 +812,23 @@ func testVStreamStopOnReshardFlag(t *testing.T, stopOnReshard bool, baseTabletID
 		"-40,40-", baseTabletID+400, nil, nil, nil, nil, defaultCellName, 1,
 		reshardOptions{skipSwitchWritesErrorHandling: true})
 
-	// With StopOnReshard the stream ends on the reshard journal. Without it,
-	// vtgate starts streaming the new shards only after every old shard has
-	// reached the journal, and it sends a journal to the client before that.
-	// Once rows from both new shards have arrived, a journal sent by mistake
-	// would already have arrived too.
+	// With StopOnReshard the stream ends cleanly on the reshard journal.
+	// Without it, the stream must keep going: vtgate starts streaming the new
+	// shards only after every old shard has reached the journal, and it sends
+	// a journal to the client before that. Once rows from both new shards
+	// have arrived, a journal sent by mistake would already have arrived too.
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
-		if done.Load() {
+		if stopOnReshard {
+			assert.True(c, streamEnded.Load(), "the vstream did not end with io.EOF after the reshard")
 			return
 		}
-		assert.False(c, stopOnReshard, "the vstream did not end after the reshard")
+		assert.False(c, done.Load(), "the vstream ended")
 		mu.Lock()
 		defer mu.Unlock()
 		assert.Positive(c, ne.numDash40Events, "no row events from shard -40")
 		assert.Positive(c, ne.num40DashEvents, "no row events from shard 40-")
 	}, time.Minute, 100*time.Millisecond)
-	stopInserts.Store(true)
-	inserts.Wait()
+	stopInserting()
 	done.Store(true)
 
 	mu.Lock()
@@ -886,6 +893,12 @@ func testVStreamCopyMultiKeyspaceReshard(t *testing.T, baseTabletID int) numEven
 			insertRow("sharded", "customer", id)
 		}
 	})
+	stopInserting := func() {
+		stopInserts.Store(true)
+		inserts.Wait()
+	}
+	// Stop inserting before the deferred teardown, also when the test fails.
+	defer stopInserting()
 	// stream events from the VStream API
 	var mu sync.Mutex // protects ne and streamedNames
 	var ne numEvents
@@ -961,8 +974,7 @@ func testVStreamCopyMultiKeyspaceReshard(t *testing.T, baseTabletID int) numEven
 		assert.Positive(c, ne.num40DashEvents, "no row events from shard 40-")
 		assert.Positive(c, ne.numShard0AfterReshardEvents, "no row events from the unsharded keyspace after the reshard")
 	}, time.Minute, 100*time.Millisecond)
-	stopInserts.Store(true)
-	inserts.Wait()
+	stopInserting()
 
 	// Wait until every inserted row has been streamed.
 	nameResult, err := execVtgateQuery(vtgateConn, "sharded", "select name from customer")
