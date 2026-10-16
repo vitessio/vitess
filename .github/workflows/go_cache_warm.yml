@@ -79,10 +79,16 @@ jobs:
       # Starts from an empty module cache, so the entry holds exactly this
       # go.sum's modules. Retried because proxy.golang.org occasionally drops
       # connections mid-download.
+      #
+      # -modcacherw leaves the files writable. Jobs restore several entries
+      # into one module cache, and entries share modules: without it, tar
+      # cannot replace the read-only copy another entry already extracted,
+      # and the whole restore fails.
       - name: Download the modules
         if: steps.lookup.outputs.cache-hit != 'true'
         env:
           SET: ${{ matrix.set }}
+          GOFLAGS: -modcacherw
         run: |
           go clean -modcache
           args=()
