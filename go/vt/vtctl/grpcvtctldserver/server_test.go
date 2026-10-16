@@ -1423,6 +1423,7 @@ func TestBackupShard(t *testing.T) {
 			assertion: func(t *testing.T, responses []*vtctldatapb.BackupResponse, err error) {
 				require.ErrorContains(t, err, "no tablet available for backup")
 				require.ErrorContains(t, err, assert.AnError.Error(), "expected the status error as the reason")
+				assert.Equal(t, vtrpc.Code_FAILED_PRECONDITION, vterrors.Code(err))
 				assert.Empty(t, responses, "expected no backupclient messages")
 			},
 		},
