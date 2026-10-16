@@ -96,6 +96,7 @@ Flags:
       --tablet-manager-grpc-server-name string                      the server name to use to validate server certificate
       --tablet-manager-protocol string                              Protocol to use to make tabletmanager RPCs to vttablets. (default "grpc")
       --tolerable-replication-lag duration                          Amount of replication lag that is considered acceptable for a tablet to be eligible for promotion when Vitess makes the choice of a new primary in PRS
+      --topo-cell-info-cache-ttl duration                           How long to reuse a cell's CellInfo before reading it from the global topo again; 0 reads it on every call. While a cell's cached CellInfo is stale, a re-point or deletion of the cell by another process is not noticed, and writes to the cell can go to its old topo server.
       --topo-consul-lock-delay duration                             LockDelay for consul session. (default 15s)
       --topo-consul-lock-session-checks string                      List of checks for consul session. (default "serfHealth")
       --topo-consul-lock-session-ttl string                         TTL for consul session.

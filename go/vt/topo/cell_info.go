@@ -97,8 +97,13 @@ func (ts *Server) CreateCellInfo(ctx context.Context, cell string, ci *topodatap
 
 	// Save it.
 	filePath := pathForCellInfo(cell)
-	_, err = ts.globalCell.Create(ctx, filePath, contents)
-	return err
+	if _, err = ts.globalCell.Create(ctx, filePath, contents); err != nil {
+		return err
+	}
+	// A cell name can be reused after a delete, so a connection cached for an earlier cell of this name
+	// must not be reused.
+	ts.expireCellInfo(cell)
+	return nil
 }
 
 // UpdateCellInfoFields is a high level helper method to read a CellInfo
@@ -141,7 +146,11 @@ func (ts *Server) UpdateCellInfoFields(ctx context.Context, cell string, update 
 		if err != nil {
 			return err
 		}
-		if _, err = ts.globalCell.Update(ctx, filePath, contents, version); !IsErrType(err, BadVersion) {
+		_, err = ts.globalCell.Update(ctx, filePath, contents, version)
+		if err == nil {
+			ts.expireCellInfo(cell)
+		}
+		if !IsErrType(err, BadVersion) {
 			// This includes the 'err=nil' case.
 			return err
 		}
@@ -155,6 +164,9 @@ func (ts *Server) DeleteCellInfo(ctx context.Context, cell string, force bool) e
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
+	// Check the cell's current topo server for serving keyspaces, not one a cached connection still points
+	// at after the cell was re-pointed by another process.
+	ts.expireCellInfo(cell)
 	srvKeyspaces, err := ts.GetSrvKeyspaceNames(ctx, cell)
 	switch {
 	case err == nil:
@@ -185,7 +197,11 @@ func (ts *Server) DeleteCellInfo(ctx context.Context, cell string, force bool) e
 	}
 
 	filePath := pathForCellInfo(cell)
-	return ts.globalCell.Delete(ctx, filePath, nil)
+	if err := ts.globalCell.Delete(ctx, filePath, nil); err != nil {
+		return err
+	}
+	ts.expireCellInfo(cell)
+	return nil
 }
 
 // GetKnownCells returns the list of known cells.

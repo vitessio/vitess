@@ -86,7 +86,8 @@ func (s *Server) Update(ctx context.Context, filePath string, contents []byte, v
 func (s *Server) Get(ctx context.Context, filePath string) ([]byte, topo.Version, error) {
 	nodePath := path.Join(s.root, filePath)
 
-	pair, _, err := s.kv.Get(nodePath, nil)
+	options := &api.QueryOptions{}
+	pair, _, err := s.kv.Get(nodePath, options.WithContext(ctx))
 	if err != nil {
 		return nil, nil, err
 	}
