@@ -120,6 +120,11 @@ type shardBuffer struct {
 	lastReparent time.Time
 	// currentPrimary is tracked to determine when to update "lastReparent".
 	currentPrimary *topodatapb.TabletAlias
+	// moveTablesToken is set while buffering for a MoveTables switch. It is
+	// the token the keyspace event watcher returned when buffering started;
+	// moveTablesKEW is that watcher.
+	moveTablesToken uint64
+	moveTablesKEW   *discovery.KeyspaceEventWatcher
 	// timeoutThread will be set while a failover is in progress and the object is
 	// in the BUFFERING state.
 	timeoutThread *timeoutThread
@@ -292,14 +297,30 @@ func (sb *shardBuffer) shouldBufferLocked(failoverDetected bool) bool {
 }
 
 func (sb *shardBuffer) startBufferingLocked(ctx context.Context, kev *discovery.KeyspaceEventWatcher, err error) bool {
-	if kev != nil {
-		if !kev.MarkShardNotServing(ctx, sb.keyspace, sb.shard, isErrorDueToReparenting(err)) {
-			// We failed to mark the shard as not serving. Do not buffer the request.
-			// This can happen if the keyspace has been deleted or if the keyspace even watcher
-			// hasn't yet seen the shard. Keyspace event watcher might not stop buffering for this
-			// request at all until it times out. It's better to not buffer this request.
+	switch {
+	case kev == nil:
+	case isErrorDueToMoveTables(err):
+		// The primary is still serving; MoveTables is switching the routing of
+		// some of its tables. Marking the shard not serving would let the next
+		// serving health update from this primary (periodic, or sent after a
+		// schema reload) end buffering before the switch, and would make the
+		// watcher wait for another health update after it. Instead, the
+		// watcher ends this buffering when the writes are switched or the
+		// switch is cancelled.
+		token, ok := kev.MarkShardMoveTablesBuffering(ctx, sb.keyspace, sb.shard)
+		if !ok {
+			// The keyspace event would not include the shard, so it would not
+			// end buffering for it. Do not buffer the request.
 			return false
 		}
+		sb.moveTablesToken = token
+		sb.moveTablesKEW = kev
+	case !kev.MarkShardNotServing(ctx, sb.keyspace, sb.shard, isErrorDueToReparenting(err)):
+		// We failed to mark the shard as not serving. Do not buffer the request.
+		// This can happen if the keyspace has been deleted or if the keyspace even watcher
+		// hasn't yet seen the shard. Keyspace event watcher might not stop buffering for this
+		// request at all until it times out. It's better to not buffer this request.
+		return false
 	}
 	// Reset monitoring data from previous failover.
 	lastRequestsInFlightMax.Set(sb.statsKey, 0)
@@ -514,9 +535,11 @@ func (sb *shardBuffer) remove(toRemove *entry) {
 	// Entry was already removed. Keep the queue as it is.
 }
 
-func (sb *shardBuffer) recordKeyspaceEvent(alias *topodatapb.TabletAlias, stillServing bool, keyspaceEvent *discovery.KeyspaceEvent) {
+func (sb *shardBuffer) recordKeyspaceEvent(shardEvent discovery.ShardEvent, keyspaceEvent *discovery.KeyspaceEvent) {
 	sb.mu.Lock()
 	defer sb.mu.Unlock()
+
+	alias, stillServing := shardEvent.Tablet, shardEvent.Serving
 
 	log.V(2).Info(fmt.Sprintf("disruption in shard %s/%s resolved (serving: %v), movetable state %#v", sb.keyspace, sb.shard, stillServing, keyspaceEvent.MoveTablesState))
 
@@ -531,6 +554,25 @@ func (sb *shardBuffer) recordKeyspaceEvent(alias *topodatapb.TabletAlias, stillS
 
 	// heuristically determine the reason why vtgate is currently buffering
 	moveTablesSwitched := keyspaceEvent.MoveTablesState.State == discovery.MoveTablesSwitched
+
+	if shardEvent.MoveTablesBufferToken != 0 {
+		// The event only ends one buffering for a MoveTables switch.
+		if shardEvent.MoveTablesBufferToken != sb.moveTablesToken {
+			return
+		}
+		if moveTablesSwitched {
+			sb.stopBufferingLocked(stopMoveTablesSwitchingTraffic, stopMoveTablesSwitchingTrafficMessage)
+		} else {
+			sb.stopBufferingLocked(stopMoveTablesSwitchCancelled, stopMoveTablesSwitchCancelledMessage)
+		}
+		return
+	}
+	if sb.moveTablesToken != 0 && !moveTablesSwitched {
+		// Buffering for a MoveTables switch ends when the writes are switched,
+		// or with an event for its token (see above), not when an unrelated
+		// availability event in the keyspace is resolved.
+		return
+	}
 
 	switch {
 	case moveTablesSwitched:
@@ -560,6 +602,13 @@ func (sb *shardBuffer) stopBufferingLocked(reason stopReason, details string) {
 	}
 
 	// Stop buffering.
+	if sb.moveTablesToken != 0 {
+		// Let the watcher forget this buffering, whatever ended it. Not
+		// synchronously: the watcher may be blocked on delivering an event to
+		// the listener that holds sb.mu.
+		go sb.moveTablesKEW.ClearShardMoveTablesBuffering(sb.keyspace, sb.shard, sb.moveTablesToken)
+		sb.moveTablesToken, sb.moveTablesKEW = 0, nil
+	}
 	sb.lastEnd = sb.timeNow()
 	d := sb.lastEnd.Sub(sb.lastStart)
 

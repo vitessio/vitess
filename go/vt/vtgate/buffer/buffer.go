@@ -108,6 +108,15 @@ func isErrorDueToReparenting(err error) bool {
 	return true
 }
 
+// isErrorDueToMoveTables returns whether the failure is the denied tables
+// error that the source primary of a MoveTables returns while its writes are
+// switched. That primary keeps serving: only the routing of the denied tables
+// changes.
+func isErrorDueToMoveTables(err error) bool {
+	return vterrors.Code(err) == vtrpcpb.Code_FAILED_PRECONDITION &&
+		strings.Contains(err.Error(), ClusterEventMoveTables)
+}
+
 // for debugging purposes
 func getReason(err error) string {
 	for _, ce := range ClusterEvents {
@@ -211,7 +220,7 @@ func (b *Buffer) HandleKeyspaceEvent(ksevent *discovery.KeyspaceEvent) {
 	for _, shard := range ksevent.Shards {
 		sb := b.getOrCreateBuffer(shard.Target.Keyspace, shard.Target.Shard)
 		if sb != nil {
-			sb.recordKeyspaceEvent(shard.Tablet, shard.Serving, ksevent)
+			sb.recordKeyspaceEvent(shard, ksevent)
 		}
 	}
 }
