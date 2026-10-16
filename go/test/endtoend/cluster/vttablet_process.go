@@ -150,12 +150,13 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 
 	vttablet.DbName = "vt_" + vttablet.Keyspace
 
-	vttablet.exit = make(chan error)
+	// The goroutine keeps the channel and the process it was started for: a restart replaces both
+	// fields, and the goroutine of the earlier process must not close the new channel.
+	exit, proc := make(chan error), vttablet.proc
+	vttablet.exit = exit
 	go func() {
-		if vttablet.proc != nil {
-			vttablet.exit <- vttablet.proc.Wait()
-			close(vttablet.exit)
-		}
+		exit <- proc.Wait()
+		close(exit)
 	}()
 
 	if vttablet.ServingStatus != "" {
