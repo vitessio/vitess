@@ -78,12 +78,13 @@ var (
 	mysqlSslServerCA                  string
 	mysqlTLSMinVersion                string
 
-	mysqlKeepAlivePeriod          time.Duration
-	mysqlConnReadTimeout          time.Duration
-	mysqlConnWriteTimeout         time.Duration
-	mysqlQueryTimeout             time.Duration
-	mysqlSlowConnectWarnThreshold time.Duration
-	mysqlConnBufferPooling        bool
+	mysqlKeepAlivePeriod            time.Duration
+	mysqlConnReadTimeout            time.Duration
+	mysqlConnWriteTimeout           time.Duration
+	mysqlQueryTimeout               time.Duration
+	mysqlSlowConnectWarnThreshold   time.Duration
+	mysqlProxyProtocolHeaderTimeout = time.Second
+	mysqlConnBufferPooling          bool
 
 	mysqlDefaultWorkloadName = "OLTP"
 	mysqlDefaultWorkload     int32
@@ -101,6 +102,7 @@ func registerPluginFlags(fs *pflag.FlagSet) {
 	utils.SetFlagStringVar(fs, &mysqlAuthServerImpl, "mysql-auth-server-impl", mysqlAuthServerImpl, "Which auth server implementation to use. Options: none, ldap, clientcert, static, vault.")
 	utils.SetFlagBoolVar(fs, &mysqlAllowClearTextWithoutTLS, "mysql-allow-clear-text-without-tls", mysqlAllowClearTextWithoutTLS, "If set, the server will allow the use of a clear text password over non-SSL connections.")
 	utils.SetFlagBoolVar(fs, &mysqlProxyProtocol, "proxy-protocol", mysqlProxyProtocol, "Enable HAProxy PROXY protocol on MySQL listener socket")
+	utils.SetFlagDurationVar(fs, &mysqlProxyProtocolHeaderTimeout, "proxy-protocol-header-timeout", mysqlProxyProtocolHeaderTimeout, "How long a --proxy-protocol listener waits for a PROXY header before treating the connection as headerless. Keep this above the delay a real header can see from normal network jitter (e.g. a TCP retransmit, or a slower proxy-to-vtgate hop): once it elapses, a still-in-flight header is read as the start of the MySQL handshake instead, corrupting the connection.")
 	utils.SetFlagBoolVar(fs, &mysqlServerRequireSecureTransport, "mysql-server-require-secure-transport", mysqlServerRequireSecureTransport, "Reject insecure connections but only if mysql-server-ssl-cert and mysql-server-ssl-key are provided")
 	utils.SetFlagStringVar(fs, &mysqlSslCert, "mysql-server-ssl-cert", mysqlSslCert, "Path to the ssl cert for mysql server plugin SSL")
 	utils.SetFlagStringVar(fs, &mysqlSslKey, "mysql-server-ssl-key", mysqlSslKey, "Path to ssl key for mysql server plugin SSL")
@@ -1921,6 +1923,7 @@ func initMySQLProtocol(vtgate *VTGate) *mysqlServer {
 			mysqlConnReadTimeout,
 			mysqlConnWriteTimeout,
 			mysqlProxyProtocol,
+			mysqlProxyProtocolHeaderTimeout,
 			mysqlConnBufferPooling,
 			mysqlKeepAlivePeriod,
 			mysqlServerFlushDelay,
@@ -1970,6 +1973,7 @@ func newMysqlUnixSocket(address string, authServer mysql.AuthServer, handler mys
 		mysqlConnReadTimeout,
 		mysqlConnWriteTimeout,
 		false,
+		0,
 		mysqlConnBufferPooling,
 		mysqlKeepAlivePeriod,
 		mysqlServerFlushDelay,
@@ -2004,6 +2008,7 @@ func newMysqlUnixSocket(address string, authServer mysql.AuthServer, handler mys
 			mysqlConnReadTimeout,
 			mysqlConnWriteTimeout,
 			false,
+			0,
 			mysqlConnBufferPooling,
 			mysqlKeepAlivePeriod,
 			mysqlServerFlushDelay,
