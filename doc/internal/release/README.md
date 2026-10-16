@@ -5,6 +5,7 @@ This page describes the steps for cutting a new [open source release](https://gi
 ### Summary
 
 - [How to Release](./how-to-release.md)
+- [Patch Release Automation](./patch-release-automation.md)
 - [Versioning](./versioning.md)
 - [Release Branches](./release-branches.md)
 - [Release Tags](./release-tags.md)
