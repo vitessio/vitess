@@ -25,6 +25,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"runtime/debug"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -476,6 +477,19 @@ func (s *VtctldServer) BackupShard(req *vtctldatapb.BackupShardRequest, stream v
 	span.Annotate("incremental_from_pos", req.IncrementalFromPos)
 	span.Annotate("upgrade_safe", req.UpgradeSafe)
 	span.Annotate("mysql_shutdown_timeout", req.MysqlShutdownTimeout)
+	span.Annotate("tablet_types", topoproto.MakeStringTypeCSV(req.TabletTypes))
+
+	if slices.Contains(req.TabletTypes, topodatapb.TabletType_PRIMARY) {
+		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+			"type PRIMARY cannot be listed in tablet types. to fall back to the primary when no listed type can take the backup, rerun the backup command with --allow-primary")
+		return err
+	}
+
+	if unsupported := reparentutil.UnsupportedBackupTabletTypes(req.TabletTypes); len(unsupported) > 0 {
+		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "tablet type %s cannot take a backup of a shard",
+			topoproto.MakeStringTypeCSV(unsupported))
+		return err
+	}
 
 	tablets, stats, err := reparentutil.ShardReplicationStatuses(ctx, s.ts, s.tmc, req.Keyspace, req.Shard)
 	// Instead of return on err directly, only return err when no tablets for backup at all
@@ -483,27 +497,10 @@ func (s *VtctldServer) BackupShard(req *vtctldatapb.BackupShardRequest, stream v
 		return err
 	}
 
-	var (
-		backupTablet    *topodatapb.Tablet
-		backupTabletLag uint32
-	)
+	var backupTablet *topodatapb.Tablet
 
-	for i, tablet := range tablets {
-		switch tablet.Type {
-		case topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY, topodatapb.TabletType_SPARE:
-		default:
-			continue
-		}
-
-		// ignore a tablet whose replication lag status is missing or unknown
-		if stats[i] == nil || stats[i].ReplicationLagUnknown {
-			continue
-		}
-
-		if lag := stats[i].ReplicationLagSeconds; backupTablet == nil || lag < backupTabletLag {
-			backupTablet = tablet.Tablet
-			backupTabletLag = lag
-		}
+	if tablet := reparentutil.ChooseBackupTablet(tablets, stats, req.TabletTypes); tablet != nil {
+		backupTablet = tablet.Tablet
 	}
 
 	if backupTablet == nil && req.AllowPrimary {
@@ -518,6 +515,11 @@ func (s *VtctldServer) BackupShard(req *vtctldatapb.BackupShardRequest, stream v
 	}
 
 	if backupTablet == nil {
+		// Give the status errors as the reason, since a tablet that could not report may be one that was asked for.
+		if err != nil {
+			err = vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no tablet available for backup: %v", err)
+			return err
+		}
 		err = vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no tablet available for backup")
 		return err
 	}
