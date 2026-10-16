@@ -515,9 +515,9 @@ func (s *VtctldServer) BackupShard(req *vtctldatapb.BackupShardRequest, stream v
 	}
 
 	if backupTablet == nil {
-		// A tablet that could not report its status may be the one that was asked for.
+		// Give the status errors as the reason, since a tablet that could not report may be one that was asked for.
 		if err != nil {
-			err = vterrors.Wrap(err, "no tablet available for backup")
+			err = vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no tablet available for backup: %v", err)
 			return err
 		}
 		err = vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no tablet available for backup")
