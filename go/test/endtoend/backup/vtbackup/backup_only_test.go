@@ -682,19 +682,31 @@ func verifyBackupStats(t *testing.T, dataPointReader *opentsdb.DataPointReader, 
 // them up again with the new ones, whether vtbackup or BackupShard took that backup.
 // The restore keeps each binlog's original mtime, so binlogs past
 // binlog_expire_logs_seconds are purged when mysqld starts and drop out of the next
-// backup.
+// backup. A vttablet older than v25 restores only the data of such a backup.
 func TestVtBackupWithBinlogs(t *testing.T) {
 	// --include-binlogs is a v25 feature of both vtbackup and BackupShard's vttablet.
-	utils.SkipIfBinaryIsBelowVersion(t, 25, "vttablet")
 	utils.SkipIfBinaryIsBelowVersion(t, 25, "vtbackup")
+	vttabletVersion, err := cluster.GetMajorVersion("vttablet")
+	require.NoError(t, err)
 	prepareCluster(t)
 
-	_, err := primary.VttabletProcess.QueryTablet(vtInsertTest, keyspaceName, true)
+	_, err = primary.VttabletProcess.QueryTablet(vtInsertTest, keyspaceName, true)
 	require.NoError(t, err)
 	insertRow := func(msg string, rows int) {
 		_, err := primary.VttabletProcess.QueryTablet(fmt.Sprintf("insert into vt_insert_test (msg) values ('%s')", msg), keyspaceName, true)
 		require.NoError(t, err)
 		cluster.VerifyRowsInTablet(t, replica1, keyspaceName, rows)
+	}
+	// restoreReplica2 brings up replica2 from the latest backup, which must hold the
+	// given number of rows, and checks that it replicates from the backup's position.
+	restoreReplica2 := func(rows int) {
+		err := localCluster.InitTablet(replica2, keyspaceName, shardName)
+		require.NoError(t, err)
+		restore(t, replica2, "replica", "SERVING")
+		waitForRestoreComplete(t, replica2.VttabletProcess, 180*time.Second)
+		cluster.VerifyRowsInTablet(t, replica2, keyspaceName, rows)
+		insertRow("after-restore", rows+1)
+		cluster.VerifyRowsInTablet(t, replica2, keyspaceName, rows+1)
 	}
 	insertRow("binlogs1", 1)
 
@@ -702,6 +714,13 @@ func TestVtBackupWithBinlogs(t *testing.T) {
 	require.NoError(t, err)
 	backupA := lastBackupBinlogs(t)
 	require.NotEmpty(t, backupA)
+
+	if vttabletVersion < 25 {
+		restoreReplica2(1)
+		removeBackups(t)
+		tearDown(t, true)
+		return
+	}
 
 	insertRow("binlogs2", 2)
 	_, err = startVtBackup(t, false, false, false, "--include-binlogs")
@@ -746,12 +765,7 @@ func TestVtBackupWithBinlogs(t *testing.T) {
 	assert.Greater(t, backupD[len(backupD)-1].Name, backupC[len(backupC)-1].Name)
 
 	// A vttablet restores the vtbackup backup and its binlogs.
-	err = localCluster.InitTablet(replica2, keyspaceName, shardName)
-	require.NoError(t, err)
-	restore(t, replica2, "replica", "SERVING")
-	waitForRestoreComplete(t, replica2.VttabletProcess, 180*time.Second)
-	waitForReplicationToCatchup([]cluster.Vttablet{*replica2})
-	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 4)
+	restoreReplica2(4)
 
 	removeBackups(t)
 	tearDown(t, true)
