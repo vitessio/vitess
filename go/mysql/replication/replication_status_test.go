@@ -53,6 +53,32 @@ func TestStatusSQLThreadNotRunning(t *testing.T) {
 	assert.Equalf(t, want, got, "%#v.Running() = %v, want %v", input, got, want)
 }
 
+// TestIORunning checks that IORunning, unlike IOHealthy, reports an IO thread that retries its
+// connection after an error as running.
+func TestIORunning(t *testing.T) {
+	testCases := []struct {
+		name        string
+		state       ReplicationState
+		lastIOError string
+		running     bool
+		healthy     bool
+	}{
+		{name: "running", state: ReplicationStateRunning, running: true, healthy: true},
+		{name: "connecting", state: ReplicationStateConnecting, running: true, healthy: true},
+		{name: "retrying after a connection error", state: ReplicationStateConnecting, lastIOError: "error connecting to source", running: true, healthy: false},
+		{name: "stopped", state: ReplicationStateStopped, running: false, healthy: false},
+		{name: "stopped after an error", state: ReplicationStateStopped, lastIOError: "error reading from source", running: false, healthy: false},
+		{name: "unknown", state: ReplicationStateUnknown, running: false, healthy: false},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			status := &ReplicationStatus{IOState: tc.state, LastIOError: tc.lastIOError}
+			assert.Equal(t, tc.running, status.IORunning())
+			assert.Equal(t, tc.healthy, status.IOHealthy())
+		})
+	}
+}
+
 func TestFindErrantGTIDs(t *testing.T) {
 	sid1 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
 	sid2 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16}

@@ -291,8 +291,7 @@ func (mysqld *Mysqld) prepareReplicaForShutdown(ctx context.Context, inherited *
 				"unexpected result reading the durability settings before shutdown: %+v", qr)
 		}
 		state = &replicaShutdownState{
-			startReceiver: status.IOState == replication.ReplicationStateRunning ||
-				status.IOState == replication.ReplicationStateConnecting,
+			startReceiver:       status.IORunning(),
 			startApplier:        status.SQLState == replication.ReplicationStateRunning,
 			flushLogAtTrxCommit: qr.Rows[0][0].ToString(),
 			syncBinlog:          qr.Rows[0][1].ToString(),
@@ -621,8 +620,7 @@ func (mysqld *Mysqld) restoreReplicaAfterFailedShutdown(ctx context.Context, sta
 		// landing afterwards would leave replication stopped -- so wait for any
 		// interrupted stop to settle (observed as its thread reporting stopped),
 		// start whatever should be running, and verify the result.
-		receiverRunning := status.IOState == replication.ReplicationStateRunning ||
-			status.IOState == replication.ReplicationStateConnecting
+		receiverRunning := status.IORunning()
 		applierRunning := status.SQLState == replication.ReplicationStateRunning
 		// A thread observed stopped means any pending stop for it has settled,
 		// and a receiver observed stopped needs no further cycling: restarting
