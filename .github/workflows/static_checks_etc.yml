@@ -21,7 +21,9 @@ jobs:
     runs-on: ubuntu-24.04
     env:
       # Build everything the way the go_cache_warm workflow warms it, so the
-      # checks reuse its tools build cache entry.
+      # checks reuse its build, unit and tools build cache entries. Nothing
+      # under go/ uses cgo.
+      CGO_ENABLED: "0"
       GOFLAGS: -trimpath
 
     steps:
@@ -152,7 +154,7 @@ jobs:
         if: (steps.changes.outputs.go_files == 'true' || steps.changes.outputs.parser_changes == 'true' || steps.changes.outputs.proto_changes == 'true')
         uses: $/.github/actions/setup-go
         with:
-          build-cache: tools
+          build-cache: build,unit,tools
           go-tools: addlicense,gofumpt,goimports,golangci-lint,goyacc
 
       - name: Tune the OS
@@ -218,8 +220,10 @@ jobs:
             .github/workflows/*.yml
 
       # Runs the golangci-lint build pinned in tools/golangci-lint, the same
-      # one "make lint" runs, which the tools build cache entry holds. The
-      # problem matcher of actions/setup-go turns the issues it reports into
+      # one "make lint" runs, which the tools build cache entry holds. With
+      # the analysis cache that setup-go restores, it only analyzes the
+      # packages that changed and those that depend on them. The problem
+      # matcher of actions/setup-go turns the issues it reports into
       # annotations.
       - name: Run golangci-lint
         if: steps.changes.outputs.go_files == 'true'

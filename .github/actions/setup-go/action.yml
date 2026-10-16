@@ -10,8 +10,8 @@ inputs:
       "build,unit". Each is filled by the go_cache_warm workflow (see
       tools/warm_go_build_cache.sh): "build" for make build and the
       end-to-end tests, "unit" for the unit tests, "race" for the race tests,
-      "tools" for the tools under tools/ and go/tools. "none" restores no build
-      cache.
+      "tools" for the static checks, which also restores the golangci-lint
+      analysis cache. "none" restores no build cache.
     default: "build"
   go-tools:
     description: >-
@@ -179,6 +179,15 @@ runs:
         key: go-build-v3-${{ runner.os }}-${{ runner.arch }}-go${{ steps.setup-go.outputs.go-version }}-tools-${{ github.sha }}
         restore-keys: |
           go-build-v3-${{ runner.os }}-${{ runner.arch }}-go${{ steps.setup-go.outputs.go-version }}-tools-
+
+    - name: Restore golangci-lint cache
+      if: inputs.cache == 'true' && steps.entries.outputs.tools == 'true'
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.cache/golangci-lint
+        key: golangci-lint-v1-${{ runner.os }}-${{ runner.arch }}-go${{ steps.setup-go.outputs.go-version }}-${{ github.sha }}
+        restore-keys: |
+          golangci-lint-v1-${{ runner.os }}-${{ runner.arch }}-go${{ steps.setup-go.outputs.go-version }}-
 
     # Download the root module's modules and the listed tools', so that a
     # cache miss is retried here rather than failing on first use. On a cache

@@ -26,8 +26,8 @@
 # also why the jobs run the tools under tools/ with "go run -trimpath" rather
 # than "go tool", which takes no -trimpath.
 #
-# "unit" is built on top of "build", whose flags it shares; the workflow saves
-# only what it adds.
+# "unit" is built on top of "build", and "tools" on top of both: they share
+# its flags, and the workflow saves only what each adds.
 #
 # Test packages are warmed with "go test -exec /bin/true": that compiles, vets
 # and links every test binary the way the jobs do, without running any of
@@ -35,6 +35,11 @@
 # -count=1 keeps those runs out of the test result cache. Tools are warmed the
 # same way with "go run -exec /bin/true", which compiles and links them into
 # the cache without running them.
+#
+# "tools" also runs golangci-lint over the whole tree, which fills its
+# analysis cache (~/.cache/golangci-lint) for the workflow to save, and the
+# Go build cache with the packages and test packages it loads that "build" and
+# "unit" do not already hold.
 
 set -euo pipefail
 
@@ -87,12 +92,18 @@ race)
 	warm_tool gotestsum
 	;;
 tools)
-	# The static checks, which set GOFLAGS=-trimpath: the generators and
-	# checks they "go run" from go/tools, and the tools under tools/.
+	# The static checks, which set CGO_ENABLED=0 and GOFLAGS=-trimpath: the
+	# generators and checks they "go run" from go/tools, the tools under
+	# tools/, and their golangci-lint run. Its findings are the static checks'
+	# business, so they do not fail this.
+	export CGO_ENABLED=0
 	go list -trimpath -export -deps ./go/tools/... >/dev/null
 	for modfile in tools/*/go.mod; do
 		warm_tool "$(basename "$(dirname "${modfile}")")"
 	done
+	GOFLAGS=-trimpath go run -trimpath -modfile=tools/golangci-lint/go.mod \
+		github.com/golangci/golangci-lint/v2/cmd/golangci-lint \
+		run --issues-exit-code=0 --timeout 10m ./go/... >/dev/null
 	;;
 *)
 	echo "usage: $0 <build|unit|race|tools>" >&2

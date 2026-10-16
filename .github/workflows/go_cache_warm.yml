@@ -3,9 +3,9 @@ name: Warm Go caches
 # The only writer of the Go module and build caches that every other job
 # restores through the setup-go action. Each push to main or a release branch
 # saves a module cache entry for every go.sum without one, and fresh build
-# cache entries for that commit. Both are built from an empty cache, so they
-# contain exactly what the jobs need and nothing stale. Pull requests restore
-# the newest entries of their base branch.
+# cache entries and a golangci-lint analysis cache entry for that commit. All
+# are built from an empty cache, so they contain exactly what the jobs need and
+# nothing stale. Pull requests restore the newest entries of their base branch.
 on:
   push:
     branches:
@@ -140,8 +140,7 @@ jobs:
       fail-fast: false
       matrix:
         # Every entry compiles with -trimpath, so it fits any runner of the
-        # same architecture. tools is built on the GitHub-hosted runner type
-        # the static checks run on, which also has their C toolchain.
+        # same architecture.
         include:
           - entry: build
             arch: x64
@@ -167,9 +166,12 @@ jobs:
             arch: x64
             runner: oracle-vm-16cpu-64gb-x86-64
             go-tools: gotestsum
+          # Likewise tools, on top of build and unit: the static checks
+          # restore all three.
           - entry: tools
+            base: build,unit
             arch: x64
-            runner: ubuntu-24.04
+            runner: oracle-vm-16cpu-64gb-x86-64
             go-tools: addlicense,gofumpt,goimports,golangci-lint,gotestsum,goyacc
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
@@ -193,12 +195,15 @@ jobs:
           build-cache: none
           go-tools: ${{ matrix.go-tools }}
 
-      - name: Warm the base entry
+      - name: Warm the base entries
         if: matrix.base
         env:
           BASE: ${{ matrix.base }}
         run: |
-          tools/warm_go_build_cache.sh "${BASE}"
+          IFS=',' read -r -a bases <<< "${BASE}"
+          for base in "${bases[@]}"; do
+            tools/warm_go_build_cache.sh "${base}"
+          done
           gocache="$(go env GOCACHE)"
           find "${gocache}" -type f > "${RUNNER_TEMP}/base-files"
 
@@ -207,8 +212,9 @@ jobs:
           ENTRY: ${{ matrix.entry }}
         run: tools/warm_go_build_cache.sh "${ENTRY}"
 
-      # Jobs restore the base entry next to this one, so leave its files out.
-      - name: Remove the base entry's files
+      # Jobs restore the base entries next to this one, so leave their files
+      # out.
+      - name: Remove the base entries' files
         if: matrix.base
         run: |
           while read -r file; do
@@ -228,6 +234,9 @@ jobs:
           prefix="go-build-v3-${RUNNER_OS_NAME}-${RUNNER_ARCH_NAME}-$(go env GOVERSION)-${ENTRY}-"
           echo "prefix=${prefix}" >> "${GITHUB_OUTPUT}"
           echo "key=${prefix}${SHA}" >> "${GITHUB_OUTPUT}"
+          lint_prefix="golangci-lint-v1-${RUNNER_OS_NAME}-${RUNNER_ARCH_NAME}-$(go env GOVERSION)-"
+          echo "lint-prefix=${lint_prefix}" >> "${GITHUB_OUTPUT}"
+          echo "lint-key=${lint_prefix}${SHA}" >> "${GITHUB_OUTPUT}"
 
       - name: Save the build cache
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -244,4 +253,23 @@ jobs:
           REF: ${{ github.ref }}
           PREFIX: ${{ steps.key.outputs.prefix }}
           KEY: ${{ steps.key.outputs.key }}
+        run: tools/delete_superseded_cache_entries.sh "${PREFIX}" "${KEY}"
+
+      # The analysis cache the golangci-lint run of the tools entry filled.
+      # The static checks restore it with the tools entry.
+      - name: Save the golangci-lint cache
+        if: matrix.entry == 'tools'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/golangci-lint
+          key: ${{ steps.key.outputs.lint-key }}
+
+      - name: Delete superseded golangci-lint cache entries
+        if: matrix.entry == 'tools'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          REF: ${{ github.ref }}
+          PREFIX: ${{ steps.key.outputs.lint-prefix }}
+          KEY: ${{ steps.key.outputs.lint-key }}
         run: tools/delete_superseded_cache_entries.sh "${PREFIX}" "${KEY}"
