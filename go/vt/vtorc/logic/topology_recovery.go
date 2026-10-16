@@ -88,6 +88,19 @@ const (
 	// MySQL state VTOrc last read, but VTOrc's last check of the replica failed: the state is
 	// stale, and a repair, which needs the same tablet, could only fail.
 	RecoverySkipReplicaUnreachable
+	// RecoverySkipGroupReplicationGracePeriod is used while VTOrc waits for a shard's replication
+	// group to elect a new primary on its own, before it falls back to a reparent.
+	RecoverySkipGroupReplicationGracePeriod
+	// RecoverySkipGroupPrimaryAlive is used when VTOrc cannot reach the primary tablet, but the
+	// members of its replication group still see its MySQL as their primary.
+	RecoverySkipGroupPrimaryAlive
+	// RecoverySkipGroupPrimaryMoveBackoff is used while VTOrc waits before it tries again to move
+	// the primary of a replication group away from a member whose cell's topology server does not
+	// answer, after it could not.
+	RecoverySkipGroupPrimaryMoveBackoff
+	// RecoverySkipGroupJoinInFlight is used while a join that VTOrc started on a voter of a
+	// replication group still runs in the background.
+	RecoverySkipGroupJoinInFlight
 )
 
 // String represents a RecoverySkip as a string.
@@ -109,6 +122,14 @@ func (rsc RecoverySkipCode) String() string {
 		return "CellNoRecoveryUnvalidated"
 	case RecoverySkipReplicaUnreachable:
 		return "ReplicaUnreachable"
+	case RecoverySkipGroupReplicationGracePeriod:
+		return "GroupReplicationGracePeriod"
+	case RecoverySkipGroupPrimaryAlive:
+		return "GroupPrimaryAlive"
+	case RecoverySkipGroupPrimaryMoveBackoff:
+		return "GroupPrimaryMoveBackoff"
+	case RecoverySkipGroupJoinInFlight:
+		return "GroupJoinInFlight"
 	default:
 		return "None"
 	}
@@ -178,6 +199,21 @@ const (
 	// reconcileStaleTopoPrimaryFunc is the recovery function for when a tablet has a stale type of
 	// PRIMARY in the topology and should be updated and demoted.
 	reconcileStaleTopoPrimaryFunc
+
+	// promoteGroupPrimaryFunc makes the tablet of a replication group's primary the shard primary.
+	promoteGroupPrimaryFunc
+	// startGroupReplicationFunc makes a voting member join its shard's replication group.
+	startGroupReplicationFunc
+	// bootstrapGroupReplicationFunc bootstraps a shard's replication group.
+	bootstrapGroupReplicationFunc
+	// updateGroupReplicationVotersFunc updates the voters of a shard's replication group.
+	updateGroupReplicationVotersFunc
+	// moveGroupPrimaryToVoterFunc moves the primary of a shard's replication group, which is not a
+	// voter, to a voter.
+	moveGroupPrimaryToVoterFunc
+	// adoptGroupReplicationBootstrapFunc records the incarnation of a group whose bootstrap's
+	// reply was lost.
+	adoptGroupReplicationBootstrapFunc
 )
 
 // TopologyRecovery represents an entry in the topology_recovery table
@@ -549,10 +585,10 @@ func restartDirectReplicas(ctx context.Context, analysisEntry *inst.DetectionAna
 		}
 	}()
 
-	// Get durability policy for the keyspace to determine semi-sync settings
-	durabilityPolicy, err := inst.GetDurabilityPolicy(analysisEntry.AnalyzedKeyspace)
+	// Get the shard's durability policy to determine semi-sync settings
+	durabilityPolicy, err := inst.GetShardDurabilityPolicy(analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
 	if err != nil {
-		logger.Error(fmt.Sprintf("Error getting durability policy for keyspace %v: %v", analysisEntry.AnalyzedKeyspace, err))
+		logger.Error(fmt.Sprintf("Error getting durability policy for shard %v/%v: %v", analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard, err))
 		return false, topologyRecovery, err
 	}
 
@@ -718,17 +754,55 @@ func getCheckAndRecoverFunctionCode(analysisEntry *inst.DetectionAnalysis) (reco
 		if !isERSEnabled(analysisEntry) {
 			log.Info(fmt.Sprintf("VTOrc not configured to run EmergencyReparentShard, skipping recovering %v", analysisCode))
 			recoverySkipCode = RecoverySkipERSDisabled
+		} else {
+			recoverySkipCode = groupReplicationFailoverSkipCode(analysisEntry, time.Now())
+		}
+		recoveryFunc = recoverDeadPrimaryFunc
+	case inst.DeadPrimaryWithoutReplicas:
+		// The members of a replication group do not replicate from the primary through the
+		// default channel, so a shard whose tablets are all group members has no replicas in
+		// that sense. Such a shard is recovered like DeadPrimary once its group had the chance to
+		// elect a new primary. Without active members there is nothing to fail over to.
+		if analysisEntry.ShardGroupActiveMembers == 0 {
+			recoverySkipCode = RecoverySkipNoRecoveryAction
+			break
+		}
+		if !isERSEnabled(analysisEntry) {
+			log.Info(fmt.Sprintf("VTOrc not configured to run EmergencyReparentShard, skipping recovering %v", analysisCode))
+			recoverySkipCode = RecoverySkipERSDisabled
+		} else {
+			recoverySkipCode = groupReplicationFailoverSkipCode(analysisEntry, time.Now())
 		}
 		recoveryFunc = recoverDeadPrimaryFunc
 	case inst.IncapacitatedPrimary:
+		recoverySkipCode = groupReplicationFailoverSkipCode(analysisEntry, time.Now())
 		recoveryFunc = recoverIncapacitatedPrimaryFunc
 	case inst.PrimaryTabletDeleted:
 		// If ERS is disabled globally, on the keyspace or the shard, skip recovery.
 		if !isERSEnabled(analysisEntry) {
 			log.Info(fmt.Sprintf("VTOrc not configured to run EmergencyReparentShard, skipping recovering %v", analysisCode))
 			recoverySkipCode = RecoverySkipERSDisabled
+		} else {
+			recoverySkipCode = groupReplicationFailoverSkipCode(analysisEntry, time.Now())
 		}
 		recoveryFunc = recoverPrimaryTabletDeletedFunc
+	case inst.GroupPrimaryNotInTopo:
+		recoverySkipCode = groupPrimaryMoveSkipCode(analysisEntry, time.Now())
+		recoveryFunc = promoteGroupPrimaryFunc
+	case inst.GroupMemberNotOnline:
+		if groupJoinsInFlight.running(topoproto.TabletAliasString(analysisEntry.AnalyzedInstanceAlias)) {
+			// The join that VTOrc started on the tablet still runs, without the shard lock.
+			recoverySkipCode = RecoverySkipGroupJoinInFlight
+		}
+		recoveryFunc = startGroupReplicationFunc
+	case inst.GroupNotBootstrapped:
+		recoveryFunc = bootstrapGroupReplicationFunc
+	case inst.GroupBootstrapNotRecorded:
+		recoveryFunc = adoptGroupReplicationBootstrapFunc
+	case inst.GroupVotersOutOfDate:
+		recoveryFunc = updateGroupReplicationVotersFunc
+	case inst.GroupPrimaryNotVoter:
+		recoveryFunc = moveGroupPrimaryToVoterFunc
 	case inst.ErrantGTIDDetected:
 		if !config.ConvertTabletWithErrantGTIDs() {
 			log.Info(fmt.Sprintf("VTOrc not configured to do anything on detecting errant GTIDs, skipping recovering %v", analysisCode))
@@ -738,6 +812,7 @@ func getCheckAndRecoverFunctionCode(analysisEntry *inst.DetectionAnalysis) (reco
 	case inst.PrimaryHasPrimary:
 		recoveryFunc = recoverPrimaryHasPrimaryFunc
 	case inst.ClusterHasNoPrimary:
+		recoverySkipCode = groupReplicationFailoverSkipCode(analysisEntry, time.Now())
 		recoveryFunc = electNewPrimaryFunc
 	case inst.PrimaryIsReadOnly, inst.PrimarySemiSyncMustBeSet, inst.PrimarySemiSyncMustNotBeSet, inst.PrimaryCurrentTypeMismatch:
 		recoveryFunc = fixPrimaryFunc
@@ -803,6 +878,9 @@ func hasActionableRecovery(recoveryFunctionCode recoveryFunction) bool {
 		return true
 	case reconcileStaleTopoPrimaryFunc:
 		return true
+	case promoteGroupPrimaryFunc, startGroupReplicationFunc, bootstrapGroupReplicationFunc, updateGroupReplicationVotersFunc,
+		adoptGroupReplicationBootstrapFunc, moveGroupPrimaryToVoterFunc:
+		return true
 	default:
 		return false
 	}
@@ -839,6 +917,18 @@ func getCheckAndRecoverFunction(recoveryFunctionCode recoveryFunction) (
 		return recoverErrantGTIDDetected
 	case reconcileStaleTopoPrimaryFunc:
 		return reconcileStaleTopoPrimary
+	case promoteGroupPrimaryFunc:
+		return promoteGroupPrimary
+	case startGroupReplicationFunc:
+		return startGroupReplicationOnMember
+	case bootstrapGroupReplicationFunc:
+		return bootstrapGroupReplication
+	case updateGroupReplicationVotersFunc:
+		return updateGroupReplicationVoters
+	case moveGroupPrimaryToVoterFunc:
+		return moveGroupPrimaryToVoter
+	case adoptGroupReplicationBootstrapFunc:
+		return adoptGroupReplicationBootstrap
 	default:
 		return nil
 	}
@@ -874,6 +964,18 @@ func getRecoverFunctionName(recoveryFunctionCode recoveryFunction) string {
 		return RecoverErrantGTIDDetectedName
 	case reconcileStaleTopoPrimaryFunc:
 		return ReconcileStaleTopoPrimaryRecoveryName
+	case promoteGroupPrimaryFunc:
+		return PromoteGroupPrimaryRecoveryName
+	case startGroupReplicationFunc:
+		return StartGroupReplicationRecoveryName
+	case bootstrapGroupReplicationFunc:
+		return BootstrapGroupReplicationRecoveryName
+	case updateGroupReplicationVotersFunc:
+		return UpdateGroupReplicationVotersRecoveryName
+	case moveGroupPrimaryToVoterFunc:
+		return MoveGroupPrimaryToVoterRecoveryName
+	case adoptGroupReplicationBootstrapFunc:
+		return AdoptGroupReplicationBootstrapRecoveryName
 	default:
 		return ""
 	}
@@ -909,10 +1011,50 @@ func shardWideRecoveryIgnoredTablets(recoveryFunctionCode recoveryFunction, anal
 	return tabletsToIgnore
 }
 
+// recoveryRunsWithoutShardPrimary returns whether a recovery that is not shard-wide can run while the
+// shard has no primary tablet. The other recoveries fix a tablet relative to the shard primary.
+func recoveryRunsWithoutShardPrimary(recoveryFunctionCode recoveryFunction) bool {
+	switch recoveryFunctionCode {
+	case promoteGroupPrimaryFunc:
+		// The group primary's tablet is about to become the shard's only primary. The old
+		// primary's tablet may already have demoted itself.
+		return true
+	case updateGroupReplicationVotersFunc:
+		// The voters of a group that is not bootstrapped yet are selected before the shard has a
+		// primary.
+		return true
+	case moveGroupPrimaryToVoterFunc:
+		// The group primary that is not a voter does not serve, and its tablet may not be PRIMARY.
+		return true
+	case startGroupReplicationFunc:
+		// A group that was just bootstrapped, or that lost the majority of its voters, only gets
+		// a primary tablet once enough voters have joined it: its primary is not followed before
+		// a majority of the voters is ONLINE in its view.
+		return true
+	case adoptGroupReplicationBootstrapFunc:
+		// A group whose incarnation is not recorded is followed by no tablet.
+		return true
+	default:
+		return false
+	}
+}
+
+// isGroupReplicationTabletRecovery returns whether the given recovery is a group replication
+// recovery of a single tablet. These recoveries read the shard's tablets cell by cell, each cell with
+// its own deadline, and work with the cells that answer.
+func isGroupReplicationTabletRecovery(recoveryFunctionCode recoveryFunction) bool {
+	switch recoveryFunctionCode {
+	case promoteGroupPrimaryFunc, startGroupReplicationFunc, updateGroupReplicationVotersFunc, adoptGroupReplicationBootstrapFunc, moveGroupPrimaryToVoterFunc:
+		return true
+	default:
+		return false
+	}
+}
+
 // isShardWideRecovery returns whether the given recovery is a recovery that affects all tablets in a shard
 func isShardWideRecovery(recoveryFunctionCode recoveryFunction) bool {
 	switch recoveryFunctionCode {
-	case recoverDeadPrimaryFunc, recoverIncapacitatedPrimaryFunc, electNewPrimaryFunc, recoverPrimaryTabletDeletedFunc:
+	case recoverDeadPrimaryFunc, recoverIncapacitatedPrimaryFunc, electNewPrimaryFunc, recoverPrimaryTabletDeletedFunc, bootstrapGroupReplicationFunc:
 		return true
 	default:
 		return false
@@ -1134,19 +1276,27 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.DetectionAnalysis) (err 
 			// So, we only need to refresh the tablet info records (to know if the primary tablet has changed),
 			// and the replication data of the new primary and this tablet.
 			logger.Info("Refreshing shard tablet info")
-			refreshTabletInfoOfShard(ctx, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
+			if isGroupReplicationTabletRecovery(checkAndRecoverFunctionCode) {
+				// A group replication recovery can do with the tablet records of the cells
+				// that answer: it must not wait for a cell whose topology server is cut off.
+				refreshReachableTabletInfoOfShard(ctx, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
+			} else {
+				refreshTabletInfoOfShard(ctx, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
+			}
 			logger.Info("Discovering analysis instance")
 			DiscoverInstance(analysisEntry.AnalyzedInstanceAlias, true)
 			logger.Info("Getting shard primary")
 			primaryTablet, err := shardPrimary(analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
-			if err != nil {
+			switch {
+			case errors.Is(err, ErrNoPrimaryTablet) && recoveryRunsWithoutShardPrimary(checkAndRecoverFunctionCode):
+				logger.Info("Shard has no primary tablet")
+			case err != nil:
 				logger.Error(fmt.Sprintf("executeCheckAndRecoverFunction: Tablet: %+v: error while finding the shard primary: %v",
 					analyzedInstanceAliasString, err))
 				return err
-			}
-			// We can skip the refresh if we know the tablet we are looking at is the primary tablet.
-			// This would be the case for PrimaryHasPrimary recovery. We don't need to refresh the same tablet twice.
-			if !topoproto.TabletAliasEqual(analysisEntry.AnalyzedInstanceAlias, primaryTablet.Alias) {
+			case !topoproto.TabletAliasEqual(analysisEntry.AnalyzedInstanceAlias, primaryTablet.Alias):
+				// We can skip the refresh if we know the tablet we are looking at is the primary tablet.
+				// This would be the case for PrimaryHasPrimary recovery. We don't need to refresh the same tablet twice.
 				logger.Info("Discovering primary instance")
 				DiscoverInstance(primaryTablet.Alias, true)
 			}
@@ -1504,7 +1654,7 @@ func fixPrimary(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logg
 		return false, topologyRecovery, err
 	}
 
-	durabilityPolicy, err := inst.GetDurabilityPolicy(analyzedTablet.Keyspace)
+	durabilityPolicy, err := inst.GetShardDurabilityPolicy(analyzedTablet.Keyspace, analyzedTablet.Shard)
 	if err != nil {
 		logger.Info(fmt.Sprintf("Could not read the durability policy for %v/%v", analyzedTablet.Keyspace, analyzedTablet.Shard))
 		return false, topologyRecovery, err
@@ -1550,16 +1700,33 @@ func fixReplica(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logg
 		return false, topologyRecovery, err
 	}
 
-	durabilityPolicy, err := inst.GetDurabilityPolicy(analyzedTablet.Keyspace)
+	durabilityPolicy, err := inst.GetShardDurabilityPolicy(analyzedTablet.Keyspace, analyzedTablet.Shard)
 	if err != nil {
 		logger.Info(fmt.Sprintf("Could not read the durability policy for %v/%v", analyzedTablet.Keyspace, analyzedTablet.Shard))
 		return false, topologyRecovery, err
+	}
+
+	// A voter of a shard's replication group replicates through the group, also while it is out of
+	// it or joining it: configuring its default channel would run asynchronous replication next to
+	// its membership, which the replication lag poller then reads (the G13 chaos run). It is only made
+	// read-only if it is writable; its tablet or GroupMemberNotOnline makes it join the group. The
+	// analyses do not match a voter (inst.replicatesThroughGroup); this is the recovery's own check.
+	groupVoter := policy.IsGroupReplication(durabilityPolicy) && isGroupReplicationVoter(ctx, durabilityPolicy, analyzedTablet)
+	if groupVoter && analysisEntry.Analysis != inst.ReplicaIsWritable {
+		message := fmt.Sprintf("%v is a voter of the shard's replication group: not configuring asynchronous replication on it (%v)", analysisEntry.AnalyzedInstanceAlias, analysisEntry.Analysis)
+		logger.Info(message)
+		_ = AuditTopologyRecovery(topologyRecovery, message)
+		return false, topologyRecovery, nil
 	}
 
 	err = setReadOnly(ctx, analyzedTablet)
 	if err != nil {
 		logger.Info(fmt.Sprintf("Could not set the tablet %v to readonly - %v", analysisEntry.AnalyzedInstanceAlias, err))
 		return true, topologyRecovery, err
+	}
+	if groupVoter {
+		_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("%v is a voter of the shard's replication group: made it read-only, not configuring asynchronous replication on it", analysisEntry.AnalyzedInstanceAlias))
+		return true, topologyRecovery, nil
 	}
 
 	err = setReplicationSource(ctx, analyzedTablet, primaryTablet, policy.IsReplicaSemiSync(durabilityPolicy, primaryTablet, analyzedTablet), fixReplicaHeartbeatInterval(analysisEntry))
@@ -1660,9 +1827,17 @@ func reconcileStaleTopoPrimary(ctx context.Context, analysisEntry *inst.Detectio
 			return
 		}
 
-		durabilityPolicy, err := inst.GetDurabilityPolicy(analyzedTablet.Keyspace)
+		durabilityPolicy, err := inst.GetShardDurabilityPolicy(analyzedTablet.Keyspace, analyzedTablet.Shard)
 		if err != nil {
 			logger.Error("failed to read durability policy", slog.String("tablet", aliasString), slog.Any("error", err))
+			return
+		}
+
+		// A voter of a shard's replication group rejoins the group, which its tablet or
+		// GroupMemberNotOnline does. Configuring the default channel on it would start
+		// asynchronous replication next to its group membership; only the tablet type is fixed.
+		if isGroupReplicationVoter(ctx, durabilityPolicy, analyzedTablet) {
+			logger.Info("stale primary is a voter of the shard's replication group, not configuring asynchronous replication", slog.String("tablet", aliasString))
 			return
 		}
 
@@ -1743,7 +1918,7 @@ func recoverErrantGTIDDetected(ctx context.Context, analysisEntry *inst.Detectio
 		return false, topologyRecovery, err
 	}
 
-	durabilityPolicy, err := inst.GetDurabilityPolicy(analyzedTablet.Keyspace)
+	durabilityPolicy, err := inst.GetShardDurabilityPolicy(analyzedTablet.Keyspace, analyzedTablet.Shard)
 	if err != nil {
 		logger.Info(fmt.Sprintf("Could not read the durability policy for %v/%v", analyzedTablet.Keyspace, analyzedTablet.Shard))
 		return false, topologyRecovery, err

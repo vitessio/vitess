@@ -39,9 +39,11 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/utils"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
 	"vitess.io/vitess/go/vt/vtorc/inst"
+	"vitess.io/vitess/go/vt/vtorc/process"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 )
 
@@ -359,6 +361,32 @@ func refreshTabletInfoOfShard(ctx context.Context, keyspace, shard string) {
 	}, false, nil)
 }
 
+// refreshReachableTabletInfoOfShard is refreshTabletInfoOfShard for the group replication
+// recoveries of a single tablet. It reads each cell with its own deadline
+// (groupReplicationCellTimeout), refreshes the tablet records of the cells that answer, and leaves
+// those of the other cells as they are. A cell whose topology server is cut off otherwise holds the
+// recovery for the whole remote operation timeout, after which nothing is refreshed: in the G9b
+// chaos scenario the group elected a member of such a cell, and VTOrc must move the group primary
+// out of it without waiting for that cell.
+func refreshReachableTabletInfoOfShard(ctx context.Context, keyspace, shard string) {
+	log.Info(fmt.Sprintf("refresh of the tablet records of shard %v/%v from the cells that answer", keyspace, shard))
+	tablets, failedCells, err := getReachableShardTablets(ctx, keyspace, shard)
+	if err != nil {
+		log.Error(fmt.Sprintf("Error fetching tablets for keyspace/shard %v/%v: %v", keyspace, shard, err))
+		return
+	}
+	// Only the tablets of the cells that answered may be forgotten.
+	query := "SELECT alias FROM vitess_tablet WHERE keyspace = ? AND shard = ?"
+	args := sqlutils.Args(keyspace, shard)
+	if len(failedCells) > 0 {
+		query += " AND cell NOT IN (" + strings.TrimSuffix(strings.Repeat("?, ", len(failedCells)), ", ") + ")"
+		for _, cell := range failedCells {
+			args = append(args, cell)
+		}
+	}
+	refreshTablets(tablets, query, args, func(*topodatapb.TabletAlias) {}, false, nil)
+}
+
 func refreshTabletsInKeyspaceShard(ctx context.Context, keyspace, shard string, loader func(*topodatapb.TabletAlias), forceRefresh bool, tabletsToIgnore []*topodatapb.TabletAlias) {
 	tablets, err := getShardTabletsByCell(ctx, keyspace, shard, nil)
 	if err != nil {
@@ -410,7 +438,21 @@ func refreshTablets(tablets []*topo.TabletInfo, query string, args []any, loader
 	}
 	wg.Wait()
 
-	// Forget tablets that were removed.
+	// A tablet that has a record again is no deleted voter any more.
+	if deleted, err := inst.ReadDeletedGroupVoters(); err == nil {
+		for alias := range deleted {
+			if !latestInstances[alias] {
+				continue
+			}
+			if tabletAlias, err := topoproto.ParseTabletAlias(alias); err == nil {
+				if err := inst.UnmarkDeletedGroupVoter(tabletAlias); err != nil {
+					log.Error(err.Error())
+				}
+			}
+		}
+	}
+
+	// Forget tablets that were removed, except the listed voters of a replication group.
 	toForget := make([]*topodatapb.TabletAlias, 0)
 	err := db.QueryVTOrc(query, args, func(row sqlutils.RowMap) error {
 		tabletAliasString := row.GetString("alias")
@@ -425,9 +467,83 @@ func refreshTablets(tablets []*topo.TabletInfo, query string, args []any, loader
 		log.Error(err.Error())
 	}
 	for _, tabletAlias := range toForget {
+		if keepDeletedGroupVoter(tabletAlias) {
+			continue
+		}
 		if err := inst.ForgetInstance(tabletAlias); err != nil {
 			log.Error(err.Error())
 		}
+		if err := inst.UnmarkDeletedGroupVoter(tabletAlias); err != nil {
+			log.Error(err.Error())
+		}
+	}
+}
+
+// keepDeletedGroupVoter returns whether VTOrc keeps what it knows about a tablet whose tablet record is
+// gone, and marks it (inst.MarkDeletedGroupVoter): a listed voter of its shard's replication group.
+// VTOrc then keeps discovering it at the address it last knew, and the voter changes use its
+// server_uuid, its address and when VTOrc last reached it: a deleted voter that VTOrc forgot could not
+// be told from one that is down, and its removal could lose what it acknowledged. While the shard
+// record cannot be read, the tablet is kept, unmarked.
+func keepDeletedGroupVoter(alias *topodatapb.TabletAlias) bool {
+	tablet, err := inst.ReadTablet(alias)
+	if err != nil || tablet == nil {
+		return false
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
+	defer cancel()
+	si, err := ts.GetShard(ctx, tablet.Keyspace, tablet.Shard)
+	if err != nil {
+		log.Warn(fmt.Sprintf("Not forgetting %s, whose tablet record is gone, until the record of its shard can be read: %v", topoproto.TabletAliasString(alias), err))
+		return true
+	}
+	if !policy.IsVoter(si.GetGroupReplicationVoters(), alias) {
+		return false
+	}
+	if err := inst.MarkDeletedGroupVoter(alias); err != nil {
+		log.Error(err.Error())
+	}
+	return true
+}
+
+// restoreDeletedGroupVoters gives VTOrc back the listed voters of the shard's replication group whose
+// tablet record is gone and that it does not keep (keepDeletedGroupVoter), as after VTOrc restarted.
+// Each voter published its identity in the shard record (Shard.group_replication_voter_identities):
+// VTOrc stores the tablet record held there, marks it as a deleted voter (inst.MarkDeletedGroupVoter),
+// and discovers it at that address. The voter planner then removes it once it is down for the grace
+// period, measured from VTOrc's restart, and identifies it in the group's views by the server_uuid it
+// published until VTOrc reaches its MySQL. A voter whose tablet record exists, or cannot be read, is
+// left to the tablet discovery, as is every voter until VTOrc's first discovery cycle completed: the
+// tablet records are read concurrently with the shard records.
+func restoreDeletedGroupVoters(ctx context.Context, si *topo.ShardInfo) {
+	if !process.FirstDiscoveryCycleComplete.Load() {
+		return
+	}
+	for _, identity := range policy.GroupVoterIdentities(si.Shard) {
+		tablet := identity.GetTablet()
+		if !shouldWatchTablet(tablet) {
+			continue
+		}
+		if _, err := inst.ReadTablet(tablet.Alias); err == nil {
+			continue
+		} else if !errors.Is(err, inst.ErrTabletAliasNil) {
+			log.Error(err.Error())
+			continue
+		}
+		getCtx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+		_, err := ts.GetTablet(getCtx, tablet.Alias)
+		cancel()
+		if !topo.IsErrType(err, topo.NoNode) {
+			continue
+		}
+		if err := inst.SaveTablet(tablet); err != nil {
+			log.Error(err.Error())
+			continue
+		}
+		if err := inst.MarkDeletedGroupVoter(tablet.Alias); err != nil {
+			log.Error(err.Error())
+		}
+		log.Info(fmt.Sprintf("Restored voter %s of %s/%s, whose tablet record is gone, from the identity it published in the shard record", topoproto.TabletAliasString(tablet.Alias), si.Keyspace(), si.ShardName()))
 	}
 }
 
