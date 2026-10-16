@@ -443,6 +443,19 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 	if err != nil {
 		return err
 	}
+	// From here on Start spawns background goroutines (keyspace rebuild, shard
+	// sync, shard health monitor) that use the topo server. None of them may
+	// outlive a failed Start: the caller is free to close the topo server as
+	// soon as Start has returned.
+	startSucceeded := false
+	defer func() {
+		if startSucceeded {
+			return
+		}
+		tm.stopShardHealthMonitor()
+		tm.stopShardSync()
+		tm.stopRebuildKeyspace()
+	}()
 	if err := tm.checkPrimaryShip(ctx, si); err != nil {
 		return err
 	}
@@ -535,12 +548,6 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 		}
 		tm.shardHealthMonitor.Start(tm.BatchCtx)
 	}
-	startSucceeded := false
-	defer func() {
-		if !startSucceeded {
-			tm.stopShardHealthMonitor()
-		}
-	}()
 
 	restoring, err := tm.handleRestore(tm.BatchCtx, config)
 	if err != nil {
