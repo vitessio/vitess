@@ -141,7 +141,9 @@ jobs:
           key: ${{ steps.key.outputs.key }}
 
       # Keep only the entry just saved for this branch, so that per-commit
-      # entries do not push other caches out of the repository quota.
+      # entries do not push other caches out of the repository quota. The
+      # save step only warns when its upload fails, so first make sure the new
+      # entry exists: without it, the older entries are all jobs have.
       - name: Delete superseded build cache entries
         env:
           GH_TOKEN: ${{ github.token }}
@@ -150,8 +152,14 @@ jobs:
           PREFIX: ${{ steps.key.outputs.prefix }}
           KEY: ${{ steps.key.outputs.key }}
         run: |
-          gh cache list --repo "${REPO}" --ref "${REF}" --key "${PREFIX}" --limit 100 --json id,key \
-            --jq ".[] | select(.key != \"${KEY}\") | .id" |
-            while read -r id; do
+          entries="$(gh cache list --repo "${REPO}" --ref "${REF}" --key "${PREFIX}" --limit 100 \
+            --json id,key --jq '.[] | [.id, .key] | @tsv')"
+          if ! cut -f2 <<< "${entries}" | grep -q -F -x -- "${KEY}"; then
+            echo "::error::${KEY} was not saved; keeping the older entries."
+            exit 1
+          fi
+          while IFS=$'\t' read -r id key; do
+            if [ "${key}" != "${KEY}" ]; then
               gh cache delete --repo "${REPO}" "${id}"
-            done
+            fi
+          done <<< "${entries}"
