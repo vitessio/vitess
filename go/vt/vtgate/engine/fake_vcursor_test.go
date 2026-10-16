@@ -118,6 +118,10 @@ func (t *noopVCursor) AnyAdvisoryLockTaken() bool {
 	panic("implement me")
 }
 
+func (t *noopVCursor) AdvisoryLockSessionTarget() *querypb.Target {
+	return nil
+}
+
 func (t *noopVCursor) AddAdvisoryLock(name string) {
 	// TODO implement me
 	panic("implement me")
