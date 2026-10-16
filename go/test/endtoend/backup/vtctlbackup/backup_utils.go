@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math/rand/v2"
 	"os"
 	"os/exec"
@@ -45,12 +46,16 @@ import (
 	"vitess.io/vitess/go/test/endtoend/utils"
 	"vitess.io/vitess/go/textutil"
 	vtenv "vitess.io/vitess/go/vt/env"
+	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 )
 
 // constants for test variants
@@ -1043,6 +1048,9 @@ func backupShardWithBinlogs(t *testing.T) {
 	// this test runs on its own. Leave replica1 as the only candidate.
 	require.NoError(t, replica2.VttabletProcess.TearDown())
 
+	// The rows inserted from here on are binlogged before the backup's position.
+	streamFrom := replication.Position{GTIDSet: getGTIDSet(t, primary, "gtid_executed")}
+
 	// Spread the rows over several binlogs of the backup source. FLUSH BINARY LOGS
 	// is not replicated, so it runs on replica1 rather than on the primary.
 	msgs := []string{"test1"}
@@ -1074,6 +1082,7 @@ func backupShardWithBinlogs(t *testing.T) {
 	assert.ElementsMatch(t, ReadRowsFromPrimary(t), ReadRowsFromTablet(t, replica2))
 
 	verifyBinlogStream(t, replica2, msgs)
+	verifyVStream(t, replica2, streamFrom, msgs[1:])
 
 	verifyAfterRemovingBackupNoBackupShouldBePresent(t, backups)
 	err = replica2.VttabletProcess.TearDown()
@@ -1626,6 +1635,39 @@ func verifyBinlogStream(t *testing.T, tablet *cluster.Vttablet, msgs []string) {
 	for _, msg := range msgs {
 		assert.Containsf(t, string(out), "'"+msg+"'", "row %q missing from the binlog stream", msg)
 	}
+}
+
+// verifyVStream streams vt_insert_test from the tablet itself, starting at pos,
+// until the row events include every one of msgs.
+func verifyVStream(t *testing.T, tablet *cluster.Vttablet, pos replication.Position, msgs []string) {
+	tabletInfo, err := localCluster.VtctldClientProcess.GetTablet(tablet.Alias)
+	require.NoError(t, err)
+	ctx, cancel := context.WithTimeout(t.Context(), timeout)
+	defer cancel()
+	conn, err := tabletconn.GetDialer()(ctx, tabletInfo, grpcclient.FailFast(false))
+	require.NoError(t, err)
+	defer conn.Close(ctx)
+
+	missing := slices.Clone(msgs)
+	err = conn.VStream(ctx, &binlogdatapb.VStreamRequest{
+		Target:   &querypb.Target{Keyspace: keyspaceName, Shard: shardName, TabletType: tabletInfo.Type},
+		Position: replication.EncodePosition(pos),
+		Filter:   &binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{{Match: "vt_insert_test", Filter: "select * from vt_insert_test"}}},
+	}, func(events []*binlogdatapb.VEvent) error {
+		for _, event := range events {
+			for _, change := range event.GetRowEvent().GetRowChanges() {
+				missing = slices.DeleteFunc(missing, func(msg string) bool {
+					return strings.Contains(string(change.GetAfter().GetValues()), msg)
+				})
+			}
+		}
+		if len(missing) == 0 {
+			return io.EOF
+		}
+		return nil
+	})
+	require.NoErrorf(t, err, "rows missing from the VStream: %v", missing)
+	assert.Empty(t, missing)
 }
 
 func TestReplicaFullBackup(t *testing.T, replicaIndex int) (manifest *mysqlctl.BackupManifest) {
