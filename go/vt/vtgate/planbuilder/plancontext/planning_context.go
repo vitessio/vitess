@@ -139,7 +139,10 @@ func (ctx *PlanningContext) TypeForExpr(e sqlparser.Expr) (evalengine.Type, bool
 	if !found {
 		typ := ctx.calculateTypeFor(e)
 		if typ.Valid() {
-			ctx.SemTable.ExprTypes[e] = typ
+			if semantics.ValidAsMapKey(e) {
+				// Unhashable expressions can still be typed, just not cached.
+				ctx.SemTable.ExprTypes[e] = typ
+			}
 			return typ, true
 		}
 		return evalengine.NewUnknownType(), false
