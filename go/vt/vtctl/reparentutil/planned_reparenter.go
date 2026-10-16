@@ -19,6 +19,7 @@ package reparentutil
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strconv"
 	"sync"
 	"time"
@@ -28,6 +29,7 @@ import (
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/logutil"
@@ -74,6 +76,11 @@ type PlannedReparentOptions struct {
 
 	lockAction string
 	durability policy.Durabler
+	// durabilityName is the name of durability, for the errors that name the policy.
+	durabilityName string
+	// grSwap is the change of the voters that promotes a primary-elect that is not a voter of the
+	// shard's replication group (see planGroupReplicationSwap).
+	grSwap *groupSwapPlan
 }
 
 // NewPlannedReparenter returns a new PlannedReparenter object, ready to perform
@@ -185,7 +192,19 @@ func (pr *PlannedReparenter) preflightChecks(
 	}
 
 	event.DispatchUpdate(ev, "electing a primary candidate")
-	opts.NewPrimaryAlias, err = ElectNewPrimary(ctx, pr.tmc, &ev.ShardInfo, tabletMap, innodbBufferPoolData, opts, pr.logger)
+	// Under a group replication policy only a voter can be promoted, so the election only
+	// considers the voters when the shard record lists them. A requested primary is not
+	// filtered here: the group replication check below explains why it is refused.
+	electionTablets := tabletMap
+	if voters := ev.ShardInfo.GroupReplicationVoters; opts.NewPrimaryAlias == nil && policy.IsGroupReplication(opts.durability) && len(voters) > 0 {
+		electionTablets = make(map[string]*topo.TabletInfo, len(voters))
+		for alias, info := range tabletMap {
+			if policy.IsVoter(voters, info.Alias) {
+				electionTablets[alias] = info
+			}
+		}
+	}
+	opts.NewPrimaryAlias, err = ElectNewPrimary(ctx, pr.tmc, &ev.ShardInfo, electionTablets, innodbBufferPoolData, opts, pr.logger)
 	if err != nil {
 		return true, err
 	}
@@ -213,6 +232,32 @@ func (pr *PlannedReparenter) preflightChecks(
 	}
 	if !canEstablishForTablet(opts.durability, newPrimaryTabletInfo.Tablet, tabletsReachable) {
 		return true, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "primary-elect tablet %v won't be able to make forward progress on promotion", primaryElectAliasStr)
+	}
+
+	// Under a group replication policy, PromoteReplica switches the group's primary, which
+	// only works for an ONLINE member of the current primary's group. The FullStatus RPCs
+	// this needs are only made for group replication keyspaces.
+	if policy.IsGroupReplication(opts.durability) {
+		var currentPrimaryTablet *topodatapb.Tablet
+		if currentPrimary := FindCurrentPrimary(tabletMap, pr.logger); currentPrimary != nil {
+			currentPrimaryTablet = currentPrimary.Tablet
+		}
+		shardInitialized := ev.ShardInfo.PrimaryTermStartTime != nil
+		tablets := make([]*topodatapb.Tablet, 0, len(tabletMap))
+		for _, info := range tabletMap {
+			tablets = append(tablets, info.Tablet)
+		}
+		voters := ev.ShardInfo.GroupReplicationVoters
+		grd, isGroup := policy.AsGroupReplication(opts.durability)
+		if isGroup && len(voters) > 0 && !policy.IsVoter(voters, newPrimaryTabletInfo.Alias) {
+			// The primary-elect takes the seat of the voter of its cell, or a new seat, first.
+			opts.grSwap, err = planGroupReplicationSwap(ctx, pr, ev.ShardInfo.Shard, grd, tablets, currentPrimaryTablet, newPrimaryTabletInfo.Tablet)
+			if err != nil {
+				return true, err
+			}
+		} else if err := checkGroupReplicationPrimaryElect(ctx, pr.tmc, shardInitialized, ev.ShardInfo.GroupReplicationIncarnation, voters, tablets, currentPrimaryTablet, newPrimaryTabletInfo.Tablet); err != nil {
+			return true, err
+		}
 	}
 	ev.NewPrimary = newPrimaryTabletInfo.CloneVT()
 	return false, nil
@@ -281,17 +326,36 @@ func (pr *PlannedReparenter) performGracefulPromotion(
 		return vterrors.Wrapf(err, "failed to DemotePrimary on current primary %v: %v", currentPrimary.AliasString(), err)
 	}
 
+	// A primary-elect that is not a voter takes the seat of the demoted primary, the voter of its cell, and
+	// joins the group, while writes pause; on a failure, the old voters are written back.
+	var swapErr error
+	if swap := opts.grSwap; swap != nil && swap.afterDemote {
+		event.DispatchUpdate(ev, "swapping the primary-elect in as a voter for the demoted primary")
+		reverted, err := pr.swapAfterDemote(ctx, ev, keyspace, shard, swap, currentPrimary.Tablet, primaryStatus.Position, opts)
+		if err != nil && !reverted {
+			// The old primary is no longer a voter: the demotion is not undone (it would not serve).
+			return vterrors.Wrapf(err, "failed to swap primary-elect tablet %v in as a voter; the demoted primary %v is no longer a voter, and VTOrc moves the group primary to a voter",
+				primaryElectAliasStr, currentPrimary.AliasString())
+		}
+		swapErr = err
+	}
+
 	// Wait for the primary-elect to catch up to the position we demoted the
 	// current primary at. If it fails to catch up within WaitReplicasTimeout,
 	// we will try to roll back to the original primary before aborting.
 	waitCtx, waitCancel := context.WithTimeout(ctx, opts.WaitReplicasTimeout)
 	defer waitCancel()
 
-	waitErr := pr.tmc.WaitForPosition(waitCtx, primaryElect, primaryStatus.Position)
+	waitErr := swapErr
+	if waitErr == nil {
+		waitErr = pr.tmc.WaitForPosition(waitCtx, primaryElect, primaryStatus.Position)
+	}
 
 	// Do some wrapping of errors to get the right codes and callstacks.
 	var finalWaitErr error
 	switch {
+	case swapErr != nil:
+		finalWaitErr = vterrors.Wrapf(swapErr, "failed to swap primary-elect tablet %v in as a voter", primaryElectAliasStr)
 	case waitErr != nil:
 		finalWaitErr = vterrors.Wrapf(waitErr, "primary-elect tablet %v failed to catch up with replication %v", primaryElectAliasStr, primaryStatus.Position)
 	case ctx.Err() == context.DeadlineExceeded:
@@ -328,6 +392,17 @@ func (pr *PlannedReparenter) performInitialPromotion(
 ) (string, error) {
 	primaryElectAliasStr := topoproto.TabletAliasString(primaryElect.Alias)
 
+	// Under a group replication policy, InitPrimary bootstraps a group: only on a shard that has
+	// none yet, and only on vttablets that run Group Replication.
+	if grd, ok := policy.AsGroupReplication(opts.durability); ok {
+		if err := pr.checkShardHasNoGroup(ctx, keyspace, shard, tabletMap); err != nil {
+			return "", err
+		}
+		if err := CheckGroupReplicationCapabilities(ctx, pr.tmc, grd, opts.durabilityName, primaryElect, tabletMap); err != nil {
+			return "", err
+		}
+	}
+
 	// Unlike the other PRS paths, initial promotion calls InitPrimary directly and
 	// never catches the primary-elect up to another tablet's position — there is no
 	// current primary to catch up to. The election may have preferred this candidate
@@ -343,6 +418,22 @@ func (pr *PlannedReparenter) performInitialPromotion(
 
 	if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
 		return "", vterrors.Wrap(err, lostTopologyLockMsg)
+	}
+
+	// Under a group replication policy, InitPrimary bootstraps the shard's group. Its voters
+	// are selected and stored first, with the primary-elect among them, so that the right
+	// tablets join the group once it exists. The incarnation the shard record lists before the
+	// bootstrap is what the new group's incarnation replaces (a compare-and-swap).
+	previousIncarnation := ""
+	if grd, ok := policy.AsGroupReplication(opts.durability); ok {
+		if err := pr.selectInitialVoters(ctx, keyspace, shard, grd, primaryElect, tabletMap); err != nil {
+			return "", err
+		}
+		si, err := pr.ts.GetShard(ctx, keyspace, shard)
+		if err != nil {
+			return "", vterrors.Wrapf(err, "cannot read the shard record of %s/%s", keyspace, shard)
+		}
+		previousIncarnation = si.GroupReplicationIncarnation
 	}
 
 	promoteCtx, promoteCancel := context.WithTimeout(ctx, opts.WaitReplicasTimeout)
@@ -361,6 +452,16 @@ func (pr *PlannedReparenter) performInitialPromotion(
 		return "", vterrors.Wrapf(err, "primary-elect tablet %v failed to be promoted to primary; please try again", primaryElectAliasStr)
 	}
 
+	// InitPrimary bootstrapped the shard's group: record its incarnation as the shard's
+	// legitimate group, while the shard lock is still held.
+	if policy.IsGroupReplication(opts.durability) {
+		incarnation, err := RecordGroupReplicationIncarnation(ctx, pr.ts, pr.tmc, keyspace, shard, primaryElect, previousIncarnation)
+		if err != nil {
+			return "", vterrors.Wrapf(err, "primary-elect tablet %v bootstrapped the replication group, but its incarnation could not be recorded; please re-run", primaryElectAliasStr)
+		}
+		pr.logger.Infof("recorded the replication group incarnation %s of shard %s/%s", incarnation, keyspace, shard)
+	}
+
 	if ctx.Err() == context.DeadlineExceeded {
 		// InitPrimary succeeded, but we ran out of time. PRS needs to be
 		// re-run to complete fully.
@@ -368,6 +469,112 @@ func (pr *PlannedReparenter) performInitialPromotion(
 	}
 
 	return rp, nil
+}
+
+// checkShardHasNoGroup returns a FAILED_PRECONDITION error when the shard, which has neither a
+// primary tablet nor a primary term, already has a replication group, or may be getting one: the
+// initial promotion's InitPrimary would bootstrap a second group next to it, and record its
+// incarnation over the first one's. That is the case on a new shard whose group VTOrc bootstraps on
+// its own (GroupVotersOutOfDate, GroupNotBootstrapped): until a majority of its voters joined the
+// group, no tablet is PRIMARY, and a PlannedReparentShard that takes the shard lock in between
+// would take the initial promotion path. The shard has a group, or is getting one, when:
+//   - a bootstrap intent is live (LiveGroupReplicationBootstrapIntent): a component bootstrapped
+//     the group, or is bootstrapping it, and its incarnation is not recorded yet;
+//   - an incarnation is recorded: the group was bootstrapped;
+//   - a tablet's MySQL is an active member of the shard's group (policy.GroupName), for example of
+//     a bootstrap whose intent expired, or of a previous initial promotion that failed after
+//     InitPrimary bootstrapped it;
+//   - a START GROUP_REPLICATION runs on a tablet's MySQL: MySQL finishes a START whose client left,
+//     such as VTOrc's bootstrap RPC that timed out, and it may outlast the bootstrap intent.
+//
+// A tablet whose MySQL is an active member of another group does not tell that the shard has a
+// group, but the initial promotion still refuses, with its own error: InitPrimary cannot bootstrap
+// the shard's group on such a tablet, nor make it join, and waiting for VTOrc would not help.
+//
+// It reads the shard record and the status of every tablet under the shard lock, after
+// verifyAllTabletsReachable. A tablet whose status cannot be read fails the check.
+func (pr *PlannedReparenter) checkShardHasNoGroup(ctx context.Context, keyspace, shard string, tabletMap map[string]*topo.TabletInfo) error {
+	const advice = "PlannedReparentShard cannot initialize it with a new group: wait until the group's primary tablet is PRIMARY (VTOrc promotes it), then run PlannedReparentShard again to choose the primary"
+	si, err := pr.ts.GetShard(ctx, keyspace, shard)
+	if err != nil {
+		return vterrors.Wrapf(err, "cannot read the shard record of %s/%s", keyspace, shard)
+	}
+	if intent := LiveGroupReplicationBootstrapIntent(si.Shard, time.Now()); intent != nil {
+		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION,
+			"shard %s/%s has a live bootstrap intent for its replication group, on tablet %v since %v: the group is being bootstrapped; %s",
+			keyspace, shard, topoproto.TabletAliasString(intent.GetTarget()), protoutil.TimeFromProto(intent.GetTime()).UTC().Format(time.RFC3339), advice)
+	}
+	if incarnation := si.GetGroupReplicationIncarnation(); incarnation != "" {
+		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION,
+			"shard %s/%s already has a replication group: the shard record lists its incarnation %s; %s", keyspace, shard, incarnation, advice)
+	}
+	tablets := make([]*topodatapb.Tablet, 0, len(tabletMap))
+	for _, info := range tabletMap {
+		tablets = append(tablets, info.Tablet)
+	}
+	statuses := fetchFullStatuses(ctx, pr.tmc, tablets, topo.RemoteOperationTimeout)
+	aliases := make([]string, 0, len(statuses))
+	for alias := range statuses {
+		aliases = append(aliases, alias)
+	}
+	slices.Sort(aliases)
+	groupName := policy.GroupName(keyspace, shard)
+	for _, alias := range aliases {
+		res := statuses[alias]
+		if res.err != nil {
+			return vterrors.Wrapf(res.err, "cannot verify that no tablet of shard %s/%s is a member of a replication group", keyspace, shard)
+		}
+		if res.groupStatus().GetStartInProgress() {
+			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION,
+				"a START GROUP_REPLICATION runs on tablet %v of shard %s/%s: it may create the shard's group; %s", alias, keyspace, shard, advice)
+		}
+		if res.isActiveMember() {
+			gs := res.groupStatus()
+			if name := gs.GetGroupName(); name != "" && name != groupName {
+				return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION,
+					"tablet %v of shard %s/%s is %s in replication group %s (view %s), which is not the shard's group %s: InitPrimary would leave it there, and could not bootstrap the shard's group on it; stop Group Replication on its MySQL, then run PlannedReparentShard again",
+					alias, keyspace, shard, gs.GetMemberState(), name, gs.GetViewId(), groupName)
+			}
+			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION,
+				"tablet %v of shard %s/%s is already %s in replication group %s (view %s): the shard has a group; %s",
+				alias, keyspace, shard, gs.GetMemberState(), gs.GetGroupName(), gs.GetViewId(), advice)
+		}
+	}
+	return nil
+}
+
+// selectInitialVoters selects the voters of a group replication shard that never had a
+// primary and stores them in the shard record, under the shard lock. The primary-elect keeps
+// its seat; recorded voters are kept where possible. No tablet is an active member yet. The shard
+// has tablets that may be voters in at least policy.MinGroupReplicationCells cells
+// (CheckGroupReplicationCapabilities), so the list has a voter in each of them.
+func (pr *PlannedReparenter) selectInitialVoters(
+	ctx context.Context,
+	keyspace string,
+	shard string,
+	durability policy.GroupReplicationDurabler,
+	primaryElect *topodatapb.Tablet,
+	tabletMap map[string]*topo.TabletInfo,
+) error {
+	primaryElectAliasStr := topoproto.TabletAliasString(primaryElect.Alias)
+	if !durability.IsGroupMember(primaryElect) {
+		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "primary-elect tablet %v cannot be a voting member of the replication group according to the durability policy", primaryElectAliasStr)
+	}
+	si, err := pr.ts.GetShard(ctx, keyspace, shard)
+	if err != nil {
+		return vterrors.Wrapf(err, "failed to read shard %s/%s", keyspace, shard)
+	}
+	recordedVoters := si.GroupReplicationVoters
+	candidates := make([]policy.VoterCandidate, 0, len(tabletMap))
+	for _, info := range tabletMap {
+		candidates = append(candidates, policy.VoterCandidate{Tablet: info.Tablet})
+	}
+	voters := policy.SelectVoters(durability, recordedVoters, primaryElect.Alias, candidates)
+	if !policy.IsVoter(voters, primaryElect.Alias) {
+		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "primary-elect tablet %v is not among the selected voters %s", primaryElectAliasStr, votersString(voters))
+	}
+	pr.logger.Infof("storing the group replication voters %s of shard %s/%s", votersString(voters), keyspace, shard)
+	return writeGroupReplicationVoters(ctx, pr.ts, keyspace, shard, voters)
 }
 
 // checkPrimaryElectContainsAllPositions verifies that the primary-elect's
@@ -754,16 +961,19 @@ func (pr *PlannedReparenter) reparentShardLocked(
 		)
 	}
 
-	keyspaceDurability, err := pr.ts.GetKeyspaceDurability(ctx, keyspace)
+	// The shard's own policy, from the record read under the shard lock, applies over the
+	// keyspace's (see topo.ShardDurabilityPolicy).
+	shardDurability, err := pr.ts.GetShardInfoDurability(ctx, shardInfo)
 	if err != nil {
 		return err
 	}
 
-	pr.logger.Infof("Getting a new durability policy for %v", keyspaceDurability)
-	opts.durability, err = policy.GetDurabilityPolicy(keyspaceDurability)
+	pr.logger.Infof("Getting a new durability policy for %v", shardDurability)
+	opts.durability, err = policy.GetDurabilityPolicy(shardDurability)
 	if err != nil {
 		return err
 	}
+	opts.durabilityName = shardDurability
 
 	ev.ShardInfo = *shardInfo
 
@@ -799,6 +1009,17 @@ func (pr *PlannedReparenter) reparentShardLocked(
 	}
 
 	currentPrimary := FindCurrentPrimary(tabletMap, pr.logger)
+	if swap := opts.grSwap; swap != nil && !swap.afterDemote {
+		// The primary-elect takes the seat of a voter other than the current primary, or a new seat, and
+		// joins the group, while the primary keeps serving; then the reparent goes on as for a voter.
+		if err := pr.swapInElect(ctx, ev, keyspace, shard, swap, opts); err != nil {
+			return err
+		}
+		if err := checkGroupReplicationPrimaryElect(ctx, pr.tmc, true, ev.ShardInfo.GroupReplicationIncarnation, ev.ShardInfo.GroupReplicationVoters,
+			swap.tablets, currentPrimary.Tablet, ev.NewPrimary); err != nil {
+			return vterrors.Wrapf(err, "swapped primary-elect %v in as a voter, but cannot promote it", topoproto.TabletAliasString(ev.NewPrimary.Alias))
+		}
+	}
 	reparentJournalPos := ""
 	// promoteReplicaRequired is a boolean that is used to store whether we need to call
 	// `PromoteReplica` when we reparent the tablets. This is required to be done when we are doing

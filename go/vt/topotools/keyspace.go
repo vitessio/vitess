@@ -164,5 +164,9 @@ func KeyspaceEquality(left, right *topodatapb.Keyspace) bool {
 		return false
 	}
 
+	if left.MigrationSourceDurabilityPolicy != right.MigrationSourceDurabilityPolicy {
+		return false
+	}
+
 	return proto.Equal(left.VtorcState, right.VtorcState)
 }

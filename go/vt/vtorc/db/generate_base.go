@@ -32,6 +32,7 @@ var TableNames = []string{
 	"primary_health",
 	"vitess_keyspace",
 	"vitess_shard",
+	"vitess_deleted_group_voter",
 }
 
 // vtorcBackend is a list of SQL statements required to build the vtorc backend
@@ -106,6 +107,18 @@ CREATE TABLE database_instance (
 	semi_sync_primary_clients int NOT NULL DEFAULT 0,
 	semi_sync_blocked tinyint NOT NULL DEFAULT 0,
 	is_disk_stalled TINYint NOT NULL DEFAULT 0,
+	gr_plugin_active TINYint NOT NULL DEFAULT 0,
+	gr_group_name varchar(64) NOT NULL DEFAULT '',
+	gr_member_state varchar(32) NOT NULL DEFAULT '',
+	gr_member_role varchar(32) NOT NULL DEFAULT '',
+	gr_primary_uuid varchar(64) NOT NULL DEFAULT '',
+	gr_has_quorum TINYint NOT NULL DEFAULT 0,
+	gr_online_members int NOT NULL DEFAULT 0,
+	gr_view_members int NOT NULL DEFAULT 0,
+	gr_active_member_uuids text NOT NULL DEFAULT '',
+	gr_online_member_uuids text NOT NULL DEFAULT '',
+	gr_view_id varchar(128) NOT NULL DEFAULT '',
+	gr_start_in_progress TINYint NOT NULL DEFAULT 0,
 	PRIMARY KEY (alias)
 )`,
 	`
@@ -294,6 +307,7 @@ CREATE TABLE vitess_keyspace (
 	keyspace_type smallint(5) NOT NULL,
 	durability_policy varchar(512) NOT NULL,
 	disable_emergency_reparent tinyint NOT NULL,
+	migration_source_durability_policy varchar(512) NOT NULL DEFAULT '',
 	PRIMARY KEY (keyspace)
 )`,
 	`
@@ -306,7 +320,20 @@ CREATE TABLE vitess_shard (
 	primary_alias varchar(512) NOT NULL,
 	primary_timestamp varchar(512) NOT NULL,
 	disable_emergency_reparent tinyint NOT NULL,
+	group_replication_voters text NOT NULL DEFAULT '',
+	group_replication_voter_uuids text NOT NULL DEFAULT '',
+	group_replication_incarnation varchar(128) NOT NULL DEFAULT '',
+	group_replication_bootstrap_target varchar(512) NOT NULL DEFAULT '',
+	durability_policy varchar(512) NOT NULL DEFAULT '',
 	PRIMARY KEY (keyspace, shard)
+)`,
+	`
+DROP TABLE IF EXISTS vitess_deleted_group_voter
+`,
+	`
+CREATE TABLE vitess_deleted_group_voter (
+	alias varchar(256) NOT NULL,
+	PRIMARY KEY (alias)
 )`,
 	`
 CREATE INDEX source_host_port_idx_database_instance_database_instance on database_instance (source_host, source_port)

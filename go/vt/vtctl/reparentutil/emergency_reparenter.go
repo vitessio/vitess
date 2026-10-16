@@ -77,6 +77,12 @@ type EmergencyReparentOptions struct {
 	// checked after replication is stopped and a reachable primary is demoted.
 	RequiredPosition replication.Position
 
+	// GroupReplicationForceNewGroup applies to a shard whose durability policy uses MySQL Group
+	// Replication, once its group lost its majority: the voters that do not answer are dropped, and
+	// a new group is bootstrapped from the others (see forceNewGroupReplicationGroup). It is refused
+	// on any other shard.
+	GroupReplicationForceNewGroup bool
+
 	// Private options managed internally. We use value passing to avoid leaking
 	// these details back out.
 	lockAction string
@@ -265,13 +271,16 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		)
 	}
 
-	keyspaceDurability, err := erp.ts.GetKeyspaceDurability(ctx, keyspace)
+	// The shard's own policy, from the record read under the shard lock, applies over the
+	// keyspace's: a shard converted to Group Replication while its keyspace is still being
+	// migrated takes the Group Replication path.
+	shardDurability, err := erp.ts.GetShardInfoDurability(ctx, shardInfo)
 	if err != nil {
 		return err
 	}
 
-	erp.logger.Infof("Getting a new durability policy for %v", keyspaceDurability)
-	opts.durability, err = policy.GetDurabilityPolicy(keyspaceDurability)
+	erp.logger.Infof("Getting a new durability policy for %v", shardDurability)
+	opts.durability, err = policy.GetDurabilityPolicy(shardDurability)
 	if err != nil {
 		return err
 	}
@@ -285,6 +294,16 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 			return err
 		}
 		prevPrimary = prevPrimaryInfo.Tablet
+	}
+
+	// A group replication shard elects its primary through the group, not through
+	// replication positions. It has its own path; see reparentShardLockedGroupReplication.
+	if policy.IsGroupReplication(opts.durability) {
+		return erp.reparentShardLockedGroupReplication(ctx, ev, keyspace, shard, prevPrimary, opts)
+	}
+	if opts.GroupReplicationForceNewGroup {
+		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT,
+			"--group-replication-force-new-group applies only to a shard whose durability policy uses group replication, not %s", shardDurability)
 	}
 
 	// read all the tablets and their information

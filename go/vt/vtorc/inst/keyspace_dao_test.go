@@ -141,7 +141,7 @@ func TestSaveAndReadKeyspace(t *testing.T) {
 			if tt.keyspace.KeyspaceType == topodatapb.KeyspaceType_SNAPSHOT {
 				return
 			}
-			durabilityPolicy, err := GetDurabilityPolicy(tt.keyspaceName)
+			durabilityPolicy, err := GetShardRecordDurabilityPolicy(tt.keyspaceName, nil)
 			if tt.errInDurabilityPolicy != "" {
 				require.EqualError(t, err, tt.errInDurabilityPolicy)
 				return

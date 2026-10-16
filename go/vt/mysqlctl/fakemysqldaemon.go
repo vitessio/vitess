@@ -31,6 +31,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/dbconnpool"
@@ -138,6 +139,12 @@ type FakeMysqlDaemon struct {
 	// SetSuperReadOnlyError is used by SetSuperReadOnly.
 	SetSuperReadOnlyError error
 
+	// OfflineMode is the current value of offline_mode.
+	OfflineMode atomic.Bool
+
+	// SetOfflineModeError is returned by SetOfflineMode, if set.
+	SetOfflineModeError error
+
 	// SetSuperReadOnlyLockWaitTimeout records the lockWaitTimeout passed to the
 	// most recent SetSuperReadOnly call.
 	SetSuperReadOnlyLockWaitTimeout time.Duration
@@ -225,6 +232,109 @@ type FakeMysqlDaemon struct {
 	SemiSyncPrimaryEnabled bool
 	// SemiSyncReplicaEnabled represents the state of rpl_semi_sync_replica_enabled.
 	SemiSyncReplicaEnabled bool
+
+	// FullStatusData is returned by CollectFullStatusData.
+	FullStatusData *replicationdatapb.FullStatus
+
+	// GroupReplication is returned by GroupReplicationStatus. StartGroupReplication,
+	// StopGroupReplication and SetGroupReplicationPrimary update it.
+	GroupReplication *replicationdatapb.GroupReplicationStatus
+
+	// GroupReplicationApplier is returned by GroupReplicationApplierStatus; nil reports a server
+	// without the Group Replication plugin. GroupReplicationApplierError is returned instead, if
+	// set.
+	GroupReplicationApplier      *mysql.GroupReplicationApplierStatus
+	GroupReplicationApplierError error
+
+	// GroupReplicationConfig is the last configuration passed to ConfigureGroupReplication.
+	GroupReplicationConfig mysql.GroupReplicationConfig
+
+	// SetGroupReplicationMemberWeightCalls counts the calls of SetGroupReplicationMemberWeight.
+	SetGroupReplicationMemberWeightCalls int
+
+	// GroupReplicationBootstrapped is set when StartGroupReplication bootstrapped a group.
+	GroupReplicationBootstrapped bool
+
+	// SuperReadOnlyActionDisabled is whether the member action mysql_disable_super_read_only_if_primary
+	// is disabled in the member's configuration (its group's while it is in one). MySQL enables it by
+	// default. Like Mysqld, ConfigureGroupReplication disables it; DisableGroupReplicationSuperReadOnlyAction
+	// disables it on a writable member. Every primary election that elects this member ends with
+	// super_read_only set, and cleared again only if the action is enabled.
+	SuperReadOnlyActionDisabled bool
+	// SuperReadOnlyActionLocalDisables and SuperReadOnlyActionOnlineDisables count the disables of the
+	// action by ConfigureGroupReplication and by DisableGroupReplicationSuperReadOnlyAction.
+	SuperReadOnlyActionLocalDisables  int
+	SuperReadOnlyActionOnlineDisables int
+	// SuperReadOnlyActionEnabledAtStart records, for each StartGroupReplication, whether the action
+	// was enabled in the member's configuration when the START began.
+	SuperReadOnlyActionEnabledAtStart []bool
+	// HoldGroupPrimaryElection keeps a primary election that elects this member running
+	// (GroupReplication.PrimaryElectionInProgress) until EndGroupPrimaryElection, as under
+	// BEFORE_ON_PRIMARY_FAILOVER while the new primary applies its backlog; otherwise the election ends
+	// at once.
+	HoldGroupPrimaryElection bool
+	// memberActionsVersion is the version of the member actions configuration.
+	memberActionsVersion int64
+
+	// GroupReplicationError is returned by the group replication methods, if set.
+	GroupReplicationError error
+
+	// StartGroupReplicationError is returned by StartGroupReplication, if set.
+	StartGroupReplicationError error
+
+	// StartGroupReplicationHook, if set, is called at the start of StartGroupReplication, before
+	// the fake changes anything, for example to block a START GROUP_REPLICATION while it runs.
+	StartGroupReplicationHook func(bootstrap bool)
+
+	// StartGroupReplicationFunc, if set, replaces what StartGroupReplication does after its hook
+	// and its checks of the errors above: the test sets the status the start ends with, for
+	// example a group of its own, and its error.
+	StartGroupReplicationFunc func(bootstrap bool) error
+
+	// ApplyGroupReplicationRelayLogCalls counts the calls to ApplyGroupReplicationRelayLog, which
+	// adds GroupReplication.ReceivedTransactionSet to CurrentPrimaryPosition, like MySQL's applier
+	// applying the relay log of a member out of its group, unless ApplyGroupReplicationRelayLogError
+	// is set, which it returns instead.
+	ApplyGroupReplicationRelayLogCalls int
+	ApplyGroupReplicationRelayLogError error
+	// ApplyGroupReplicationRelayLogBlocks makes ApplyGroupReplicationRelayLog wait until its context
+	// ends and return its error, like an applier that cannot apply the relay log.
+	ApplyGroupReplicationRelayLogBlocks bool
+
+	// StopGroupReplicationHook, if set, is called at the start of StopGroupReplication, before the
+	// fake changes anything, for example to observe the state MySQL leaves its group in.
+	StopGroupReplicationHook func()
+
+	// GroupReplicationFenceStatusHook, if set, is called after each read of
+	// GroupReplicationFenceStatus, before it returns, for example to change MySQL's group between the
+	// read and what the reader does with it.
+	GroupReplicationFenceStatusHook func()
+
+	// SetSuperReadOnlyHook, if set, is called at the start of SetSuperReadOnly, before the fake
+	// changes anything, with the value being set.
+	SetSuperReadOnlyHook func(on bool)
+
+	// groupReplicationFenceStatusReads counts the calls to GroupReplicationFenceStatus.
+	groupReplicationFenceStatusReads int
+	// startRunning is set while StartGroupReplicationFunc runs, and closed when it returns.
+	// GroupReplicationFenceStatus does not return the view id until then: MySQL holds it back for
+	// about a second while a START forms or joins a group, and the fake holds it back for the whole
+	// START, which is the worst case for its readers.
+	startRunning chan struct{}
+
+	// groupReplicationStatusHook is called after each read of the group replication status.
+	groupReplicationStatusHook func()
+
+	// ConfigureGroupReplicationErrors are returned by the next calls of
+	// ConfigureGroupReplication, one per call.
+	ConfigureGroupReplicationErrors []error
+
+	// GroupReplicationStartCalls, GroupReplicationStopCalls and SetGroupReplicationPrimaryCalls
+	// count the calls to the respective methods. Use GroupReplicationCalls to read them while
+	// the daemon is in use.
+	GroupReplicationStartCalls      int
+	GroupReplicationStopCalls       int
+	SetGroupReplicationPrimaryCalls int
 
 	// GlobalReadLock is used to test if a lock has been acquired already or not
 	GlobalReadLock bool
@@ -405,7 +515,7 @@ func (fmd *FakeMysqlDaemon) PrimaryStatus(ctx context.Context) (replication.Prim
 
 // CollectFullStatusData is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) CollectFullStatusData(context.Context) (*replicationdatapb.FullStatus, error) {
-	return nil, nil
+	return fmd.FullStatusData.CloneVT(), nil
 }
 
 // GetGTIDPurged is part of the MysqlDaemon interface.
@@ -479,6 +589,8 @@ func (fmd *FakeMysqlDaemon) SetPrimaryPositionLocked(pos replication.Position) {
 
 // IsReadOnly is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) IsReadOnly(ctx context.Context) (bool, error) {
+	fmd.mu.Lock()
+	defer fmd.mu.Unlock()
 	return fmd.ReadOnly, nil
 }
 
@@ -489,6 +601,8 @@ func (fmd *FakeMysqlDaemon) IsSuperReadOnly(ctx context.Context) (bool, error) {
 
 // SetReadOnly is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) SetReadOnly(ctx context.Context, on bool) error {
+	fmd.mu.Lock()
+	defer fmd.mu.Unlock()
 	fmd.ReadOnly = on
 	return nil
 }
@@ -499,6 +613,11 @@ func (fmd *FakeMysqlDaemon) SetSuperReadOnly(ctx context.Context, on bool, opts 
 	for _, opt := range opts {
 		opt(&options)
 	}
+	if fmd.SetSuperReadOnlyHook != nil {
+		fmd.SetSuperReadOnlyHook(on)
+	}
+	fmd.mu.Lock()
+	defer fmd.mu.Unlock()
 	fmd.SetSuperReadOnlyLockWaitTimeout = options.lockWaitTimeout
 	if fmd.SetSuperReadOnlyError != nil {
 		return nil, fmd.SetSuperReadOnlyError
@@ -515,6 +634,8 @@ func (fmd *FakeMysqlDaemon) SetSuperReadOnly(ctx context.Context, on bool, opts 
 		return nil, nil
 	}
 	return func() error {
+		fmd.mu.Lock()
+		defer fmd.mu.Unlock()
 		fmd.SuperReadOnly.Store(prev)
 		fmd.ReadOnly = prevReadOnly
 		return nil
@@ -905,4 +1026,458 @@ func (fmd *FakeMysqlDaemon) ReleaseGlobalReadLock(ctx context.Context) error {
 	}
 
 	return errors.New("no read locks acquired yet")
+}
+
+// GroupReplicationStatus is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) GroupReplicationStatus(ctx context.Context) (*replicationdatapb.GroupReplicationStatus, error) {
+	fmd.mu.Lock()
+	hook := fmd.groupReplicationStatusHook
+	status, err := fmd.groupReplicationStatusLocked()
+	fmd.mu.Unlock()
+	if hook != nil {
+		hook()
+	}
+	return status, err
+}
+
+func (fmd *FakeMysqlDaemon) groupReplicationStatusLocked() (*replicationdatapb.GroupReplicationStatus, error) {
+	if fmd.GroupReplicationError != nil {
+		return nil, fmd.GroupReplicationError
+	}
+	if fmd.GroupReplication == nil {
+		return &replicationdatapb.GroupReplicationStatus{}, nil
+	}
+	status := fmd.GroupReplication.CloneVT()
+	// Like MySQL's processlist, the status shows a START GROUP_REPLICATION for as long as it runs.
+	status.StartInProgress = status.StartInProgress || fmd.startRunning != nil
+	return status, nil
+}
+
+// errGroupReplicationCommandRunning is how MySQL refuses a START or STOP GROUP_REPLICATION while a
+// START runs (errno 3663).
+func errGroupReplicationCommandRunning(command string) error {
+	return sqlerror.NewSQLErrorf(3663, "HY000", "The %s command encountered a failure. %s.", command, mysql.GroupReplicationCommandRunningMessage)
+}
+
+// SetGroupReplicationStatusHook sets a function that GroupReplicationStatus calls after each read
+// of the status, for tests that need to know when a reader has read it; nil removes it.
+func (fmd *FakeMysqlDaemon) SetGroupReplicationStatusHook(hook func()) {
+	fmd.mu.Lock()
+	defer fmd.mu.Unlock()
+	fmd.groupReplicationStatusHook = hook
+}
+
+// GroupReplicationApplierStatus is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) GroupReplicationApplierStatus(ctx context.Context) (*mysql.GroupReplicationApplierStatus, error) {
+	fmd.mu.Lock()
+	defer fmd.mu.Unlock()
+	if fmd.GroupReplicationApplierError != nil {
+		return nil, fmd.GroupReplicationApplierError
+	}
+	if fmd.GroupReplicationApplier == nil {
+		return &mysql.GroupReplicationApplierStatus{MemberState: mysql.GroupMemberStateOffline}, nil
+	}
+	status := *fmd.GroupReplicationApplier
+	return &status, nil
+}
+
+// GroupReplicationFenceStatus is part of the MysqlDaemon interface. It returns the status that
+// GroupReplicationStatus returns, and super_read_only. It does not return the view id while a START
+// GROUP_REPLICATION runs (StartGroupReplicationFunc): it waits for it to return, or for ctx to end,
+// which is the worst case of MySQL's (see startRunning). Without withView, it returns no view id.
+func (fmd *FakeMysqlDaemon) GroupReplicationFenceStatus(ctx context.Context, withView bool) (*mysql.GroupReplicationFenceStatus, error) {
+	fmd.mu.Lock()
+	if running := fmd.startRunning; withView && running != nil {
+		fmd.mu.Unlock()
+		select {
+		case <-running:
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+		fmd.mu.Lock()
+	}
+	fmd.groupReplicationFenceStatusReads++
+	status, err := fmd.groupReplicationStatusLocked()
+	var fs *mysql.GroupReplicationFenceStatus
+	if err == nil {
+		if !withView {
+			status.ViewId = ""
+		}
+		fs = &mysql.GroupReplicationFenceStatus{Status: status, ViewKnown: withView, ServerUUID: fmd.serverUUIDLocked(), SuperReadOnly: fmd.SuperReadOnly.Load()}
+	}
+	hook := fmd.GroupReplicationFenceStatusHook
+	fmd.mu.Unlock()
+	if hook != nil {
+		hook()
+	}
+	return fs, err
+}
+
+// GroupReplicationFenceStatusReads returns how many times GroupReplicationFenceStatus was called.
+func (fmd *FakeMysqlDaemon) GroupReplicationFenceStatusReads() int {
+	fmd.mu.Lock()
+	defer fmd.mu.Unlock()
+	return fmd.groupReplicationFenceStatusReads
+}
+
+// ConfigureGroupReplication is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) ConfigureGroupReplication(ctx context.Context, cfg mysql.GroupReplicationConfig) error {
+	fmd.mu.Lock()
+	defer fmd.mu.Unlock()
+	if fmd.GroupReplicationError != nil {
+		return fmd.GroupReplicationError
+	}
+	if fmd.startRunning != nil {
+		// Like MySQL, the configuration cannot change while a START runs.
+		return sqlerror.NewSQLError(3724, "HY000", "This option cannot be set while START or STOP GROUP_REPLICATION is ongoing.")
+	}
+	if len(fmd.ConfigureGroupReplicationErrors) > 0 {
+		err := fmd.ConfigureGroupReplicationErrors[0]
+		fmd.ConfigureGroupReplicationErrors = fmd.ConfigureGroupReplicationErrors[1:]
+		return err
+	}
+	fmd.GroupReplicationConfig = cfg
+	if !fmd.SuperReadOnlyActionDisabled {
+		// Like Mysqld, before every START: a group that the member forms on its own uses its own
+		// configuration.
+		fmd.SuperReadOnlyActionDisabled = true
+		fmd.SuperReadOnlyActionLocalDisables++
+		fmd.memberActionsVersion++
+	}
+	if fmd.GroupReplication == nil {
+		fmd.GroupReplication = &replicationdatapb.GroupReplicationStatus{MemberState: mysql.GroupMemberStateOffline}
+	}
+	fmd.GroupReplication.PluginActive = true
+	fmd.GroupReplication.GroupName = cfg.GroupName
+	fmd.GroupReplication.SinglePrimaryMode = true
+	fmd.GroupReplication.MemberWeight = int32(cfg.MemberWeight)
+	return nil
+}
+
+// StartGroupReplication is part of the MysqlDaemon interface. The member becomes ONLINE; with
+// bootstrap it is the only member and the writable primary, otherwise it joins the members
+// already in GroupReplication.Members as a read-only secondary.
+func (fmd *FakeMysqlDaemon) StartGroupReplication(ctx context.Context, bootstrap bool) error {
+	if fmd.StartGroupReplicationHook != nil {
+		fmd.StartGroupReplicationHook(bootstrap)
+	}
+	fmd.mu.Lock()
+	defer fmd.mu.Unlock()
+	fmd.GroupReplicationStartCalls++
+	if fmd.GroupReplicationError != nil {
+		return fmd.GroupReplicationError
+	}
+	if fmd.StartGroupReplicationError != nil {
+		return fmd.StartGroupReplicationError
+	}
+	if fmd.GroupReplication == nil || !fmd.GroupReplication.PluginActive {
+		return errors.New("group replication plugin is not loaded")
+	}
+	if fmd.startRunning != nil {
+		return errGroupReplicationCommandRunning("START GROUP_REPLICATION")
+	}
+	if mysql.IsGroupMemberActive(fmd.GroupReplication) {
+		return errors.New("group replication is already running")
+	}
+	fmd.SuperReadOnlyActionEnabledAtStart = append(fmd.SuperReadOnlyActionEnabledAtStart, !fmd.SuperReadOnlyActionDisabled)
+	if start := fmd.StartGroupReplicationFunc; start != nil {
+		running := make(chan struct{})
+		fmd.startRunning = running
+		fmd.mu.Unlock()
+		defer func() {
+			fmd.mu.Lock()
+			fmd.startRunning = nil
+			close(running)
+		}()
+		return start(bootstrap)
+	}
+	uuid := fmd.serverUUIDLocked()
+	fmd.GroupReplication.MemberState = mysql.GroupMemberStateOnline
+	fmd.GroupReplication.HasQuorum = true
+	if bootstrap {
+		fmd.GroupReplicationBootstrapped = true
+		// Every bootstrap creates a new incarnation of the group.
+		fmd.GroupReplication.ViewId = fmt.Sprintf("%d:1", 1790000000+fakeGroupIncarnations.Add(1))
+		fmd.GroupReplication.MemberRole = mysql.GroupMemberRolePrimary
+		fmd.GroupReplication.PrimaryUuid = uuid
+		fmd.GroupReplication.Members = nil
+		// MySQL elects the bootstrapping member: writable at the end of the election only if the
+		// member action mysql_disable_super_read_only_if_primary is enabled.
+		fmd.electGroupPrimaryLocked()
+	} else {
+		fmd.GroupReplication.MemberRole = mysql.GroupMemberRoleSecondary
+		fmd.SuperReadOnly.Store(true)
+		fmd.ReadOnly = true
+	}
+	fmd.setOwnGroupMemberLocked(fmd.GroupReplication.MemberState, fmd.GroupReplication.MemberRole)
+	return nil
+}
+
+// ApplyGroupReplicationRelayLog is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) ApplyGroupReplicationRelayLog(ctx context.Context, until replication.GTIDSet) error {
+	fmd.mu.Lock()
+	fmd.ApplyGroupReplicationRelayLogCalls++
+	if fmd.ApplyGroupReplicationRelayLogBlocks {
+		fmd.mu.Unlock()
+		<-ctx.Done()
+		return ctx.Err()
+	}
+	defer fmd.mu.Unlock()
+	if fmd.ApplyGroupReplicationRelayLogError != nil {
+		return fmd.ApplyGroupReplicationRelayLogError
+	}
+	if fmd.GroupReplication != nil && mysql.IsGroupMemberActive(fmd.GroupReplication) {
+		return errors.New("the applier of the group_replication_applier channel runs with group replication")
+	}
+	if received := fmd.GroupReplication.GetReceivedTransactionSet(); received != "" {
+		set, err := replication.ParseMysql56GTIDSet(received)
+		if err != nil {
+			return err
+		}
+		executed := fmd.CurrentPrimaryPosition.GTIDSet
+		if executed == nil {
+			executed = replication.Mysql56GTIDSet{}
+		}
+		fmd.CurrentPrimaryPosition = replication.Position{GTIDSet: executed.Union(set)}
+	}
+	if fmd.CurrentPrimaryPosition.GTIDSet == nil || !fmd.CurrentPrimaryPosition.GTIDSet.Contains(until) {
+		return fmt.Errorf("the applier did not apply %v", until)
+	}
+	return nil
+}
+
+// electGroupPrimaryLocked models the primary election that makes this member the primary of its
+// group: the election runs (GroupReplication.PrimaryElectionInProgress) until it ends, at once unless
+// HoldGroupPrimaryElection is set.
+func (fmd *FakeMysqlDaemon) electGroupPrimaryLocked() {
+	fmd.GroupReplication.PrimaryElectionInProgress = true
+	if !fmd.HoldGroupPrimaryElection {
+		fmd.endGroupPrimaryElectionLocked()
+	}
+}
+
+// endGroupPrimaryElectionLocked ends a primary election of this member like Group Replication does:
+// it sets super_read_only, which undoes an earlier clear, and runs the member action
+// mysql_disable_super_read_only_if_primary if it is enabled (sro-eval case B, MySQL 8.4.11).
+func (fmd *FakeMysqlDaemon) endGroupPrimaryElectionLocked() {
+	if fmd.GroupReplication == nil || !fmd.GroupReplication.PrimaryElectionInProgress {
+		return
+	}
+	fmd.GroupReplication.PrimaryElectionInProgress = false
+	fmd.SuperReadOnly.Store(true)
+	fmd.ReadOnly = true
+	if !fmd.SuperReadOnlyActionDisabled {
+		fmd.SuperReadOnly.Store(false)
+		fmd.ReadOnly = false
+	}
+}
+
+// ElectGroupPrimary replaces the group replication status with status, in which this member is the
+// group's new primary, and runs the election that made it the primary (see HoldGroupPrimaryElection).
+func (fmd *FakeMysqlDaemon) ElectGroupPrimary(status *replicationdatapb.GroupReplicationStatus) {
+	fmd.mu.Lock()
+	defer fmd.mu.Unlock()
+	fmd.GroupReplication = status
+	fmd.electGroupPrimaryLocked()
+}
+
+// EndGroupPrimaryElection ends a primary election that HoldGroupPrimaryElection kept running.
+func (fmd *FakeMysqlDaemon) EndGroupPrimaryElection() {
+	fmd.mu.Lock()
+	defer fmd.mu.Unlock()
+	fmd.endGroupPrimaryElectionLocked()
+}
+
+// SetStartGroupReplicationFunc sets StartGroupReplicationFunc, safely while the daemon is in use.
+func (fmd *FakeMysqlDaemon) SetStartGroupReplicationFunc(start func(bootstrap bool) error) {
+	fmd.mu.Lock()
+	defer fmd.mu.Unlock()
+	fmd.StartGroupReplicationFunc = start
+}
+
+// GroupPrimaryElectionInProgress returns whether a primary election of this member runs, without
+// calling the status hooks.
+func (fmd *FakeMysqlDaemon) GroupPrimaryElectionInProgress() bool {
+	fmd.mu.Lock()
+	defer fmd.mu.Unlock()
+	return fmd.GroupReplication.GetPrimaryElectionInProgress()
+}
+
+// GroupReplicationMemberActions is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) GroupReplicationMemberActions(ctx context.Context) (*mysql.GroupReplicationMemberActions, error) {
+	fmd.mu.Lock()
+	defer fmd.mu.Unlock()
+	if fmd.GroupReplicationError != nil {
+		return nil, fmd.GroupReplicationError
+	}
+	return &mysql.GroupReplicationMemberActions{SuperReadOnlyActionEnabled: !fmd.SuperReadOnlyActionDisabled, ConfigurationVersion: fmd.memberActionsVersion + 1}, nil
+}
+
+// SetGroupReplicationMemberWeight is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) SetGroupReplicationMemberWeight(ctx context.Context, weight int) error {
+	fmd.mu.Lock()
+	defer fmd.mu.Unlock()
+	if fmd.GroupReplicationError != nil {
+		return fmd.GroupReplicationError
+	}
+	if fmd.GroupReplication == nil {
+		fmd.GroupReplication = &replicationdatapb.GroupReplicationStatus{MemberState: mysql.GroupMemberStateOffline}
+	}
+	fmd.GroupReplication.MemberWeight = int32(weight)
+	fmd.SetGroupReplicationMemberWeightCalls++
+	return nil
+}
+
+// DisableGroupReplicationSuperReadOnlyAction is part of the MysqlDaemon interface. Like MySQL, it
+// requires super_read_only OFF (errno 1123).
+func (fmd *FakeMysqlDaemon) DisableGroupReplicationSuperReadOnlyAction(ctx context.Context) error {
+	fmd.mu.Lock()
+	defer fmd.mu.Unlock()
+	if fmd.GroupReplicationError != nil {
+		return fmd.GroupReplicationError
+	}
+	if fmd.SuperReadOnly.Load() {
+		return sqlerror.NewSQLError(1123, "HY000", "Can't initialize function 'group_replication_disable_member_action'; Server must have super_read_only=0.")
+	}
+	fmd.SuperReadOnlyActionDisabled = true
+	fmd.SuperReadOnlyActionOnlineDisables++
+	fmd.memberActionsVersion++
+	return nil
+}
+
+// fakeGroupIncarnations numbers the group incarnations that fake daemons bootstrap.
+var fakeGroupIncarnations atomic.Int64
+
+// StopGroupReplication is part of the MysqlDaemon interface. Like MySQL, it leaves the member
+// super_read_only, and the member only sees itself afterwards.
+func (fmd *FakeMysqlDaemon) StopGroupReplication(ctx context.Context) error {
+	if fmd.StopGroupReplicationHook != nil {
+		fmd.StopGroupReplicationHook()
+	}
+	fmd.mu.Lock()
+	defer fmd.mu.Unlock()
+	fmd.GroupReplicationStopCalls++
+	if fmd.GroupReplicationError != nil {
+		return fmd.GroupReplicationError
+	}
+	if fmd.startRunning != nil {
+		// Like MySQL, a STOP is refused until the START in progress ends.
+		return errGroupReplicationCommandRunning("STOP GROUP_REPLICATION")
+	}
+	if fmd.GroupReplication != nil {
+		fmd.GroupReplication.MemberState = mysql.GroupMemberStateOffline
+		fmd.GroupReplication.MemberRole = ""
+		fmd.GroupReplication.PrimaryUuid = ""
+		fmd.GroupReplication.HasQuorum = false
+		fmd.GroupReplication.PrimaryElectionInProgress = false
+		fmd.GroupReplication.Members = nil
+		fmd.setOwnGroupMemberLocked(mysql.GroupMemberStateOffline, "")
+	}
+	fmd.SuperReadOnly.Store(true)
+	fmd.ReadOnly = true
+	return nil
+}
+
+// IsOfflineMode is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) IsOfflineMode(ctx context.Context) (bool, error) {
+	return fmd.OfflineMode.Load(), nil
+}
+
+// SetOfflineMode is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) SetOfflineMode(ctx context.Context, on bool) error {
+	if fmd.SetOfflineModeError != nil {
+		return fmd.SetOfflineModeError
+	}
+	fmd.OfflineMode.Store(on)
+	return nil
+}
+
+// SetGroupReplicationPrimary is part of the MysqlDaemon interface. Like MySQL, it fails if the
+// member is already the primary.
+func (fmd *FakeMysqlDaemon) SetGroupReplicationPrimary(ctx context.Context, memberUUID string) error {
+	fmd.mu.Lock()
+	defer fmd.mu.Unlock()
+	fmd.SetGroupReplicationPrimaryCalls++
+	if fmd.GroupReplicationError != nil {
+		return fmd.GroupReplicationError
+	}
+	if fmd.GroupReplication == nil || fmd.GroupReplication.MemberState != mysql.GroupMemberStateOnline {
+		return errors.New("member is not ONLINE in a group")
+	}
+	if fmd.GroupReplication.PrimaryUuid == memberUUID {
+		return errors.New("the requested member is already the current group primary")
+	}
+	fmd.GroupReplication.PrimaryUuid = memberUUID
+	role := mysql.GroupMemberRoleSecondary
+	self := memberUUID == fmd.serverUUIDLocked()
+	if self {
+		role = mysql.GroupMemberRolePrimary
+	} else {
+		fmd.GroupReplication.PrimaryElectionInProgress = false
+		fmd.SuperReadOnly.Store(true)
+		fmd.ReadOnly = true
+	}
+	fmd.GroupReplication.MemberRole = role
+	for _, m := range fmd.GroupReplication.Members {
+		switch m.MemberUuid {
+		case memberUUID:
+			m.Role = mysql.GroupMemberRolePrimary
+		default:
+			m.Role = mysql.GroupMemberRoleSecondary
+		}
+	}
+	if self {
+		// group_replication_set_as_primary returns once the election ended on the new primary.
+		fmd.electGroupPrimaryLocked()
+	}
+	return nil
+}
+
+// SetGroupReplicationApplierStatus sets the status that GroupReplicationApplierStatus returns,
+// safely while the daemon is in use.
+func (fmd *FakeMysqlDaemon) SetGroupReplicationApplierStatus(status *mysql.GroupReplicationApplierStatus) {
+	fmd.mu.Lock()
+	defer fmd.mu.Unlock()
+	fmd.GroupReplicationApplier = status
+}
+
+// SetGroupReplicationStatus replaces the group replication status, for tests that need a
+// particular view of the group. It is safe to call while the daemon is in use.
+func (fmd *FakeMysqlDaemon) SetGroupReplicationStatus(status *replicationdatapb.GroupReplicationStatus) {
+	fmd.mu.Lock()
+	defer fmd.mu.Unlock()
+	fmd.GroupReplication = status
+}
+
+// GroupReplicationCalls returns how many times StartGroupReplication, StopGroupReplication and
+// SetGroupReplicationPrimary were called. It is safe to call while the daemon is in use.
+func (fmd *FakeMysqlDaemon) GroupReplicationCalls() (start, stop, setPrimary int) {
+	fmd.mu.Lock()
+	defer fmd.mu.Unlock()
+	return fmd.GroupReplicationStartCalls, fmd.GroupReplicationStopCalls, fmd.SetGroupReplicationPrimaryCalls
+}
+
+func (fmd *FakeMysqlDaemon) serverUUIDLocked() string {
+	if fmd.ServerUUID != "" {
+		return fmd.ServerUUID
+	}
+	return "00000000-0000-0000-0000-000000000000"
+}
+
+// setOwnGroupMemberLocked updates this member's own row in the membership list, adding it if
+// needed.
+func (fmd *FakeMysqlDaemon) setOwnGroupMemberLocked(state, role string) {
+	uuid := fmd.serverUUIDLocked()
+	for _, m := range fmd.GroupReplication.Members {
+		if m.MemberUuid == uuid {
+			m.State = state
+			m.Role = role
+			return
+		}
+	}
+	fmd.GroupReplication.Members = append(fmd.GroupReplication.Members, &replicationdatapb.GroupReplicationMember{
+		MemberUuid: uuid,
+		State:      state,
+		Role:       role,
+	})
 }

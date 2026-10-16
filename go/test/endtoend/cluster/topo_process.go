@@ -122,10 +122,13 @@ func (topo *TopoProcess) SetupEtcd() (err error) {
 		return
 	}
 
-	topo.exit = make(chan error)
+	// The goroutine keeps the channel and the process it was started for: a restart replaces both
+	// fields, and the goroutine of the earlier process must not close the new channel.
+	exit, proc := make(chan error), topo.proc
+	topo.exit = exit
 	go func() {
-		topo.exit <- topo.proc.Wait()
-		close(topo.exit)
+		exit <- proc.Wait()
+		close(exit)
 	}()
 
 	timeout := time.Now().Add(60 * time.Second)
@@ -279,10 +282,13 @@ func (topo *TopoProcess) SetupConsul(cluster *LocalProcessCluster) (err error) {
 		return
 	}
 
-	topo.exit = make(chan error)
+	// The goroutine keeps the channel and the process it was started for: a restart replaces both
+	// fields, and the goroutine of the earlier process must not close the new channel.
+	exit, proc := make(chan error), topo.proc
+	topo.exit = exit
 	go func() {
-		topo.exit <- topo.proc.Wait()
-		close(topo.exit)
+		exit <- proc.Wait()
+		close(exit)
 	}()
 
 	timeout := time.Now().Add(60 * time.Second)

@@ -54,7 +54,7 @@ import (
 
 const (
 	trxHistoryLenQuery        = `select count as history_len from information_schema.INNODB_METRICS where name = 'trx_rseg_history_len'`
-	replicaLagQuery           = `show replica status`
+	replicaLagQuery           = `show replica status for channel ''`
 	legacyLagQuery            = `show slave status`
 	hostQuery                 = `select @@hostname as hostname, @@port as port`
 	fullyThrottledMetricLabel = "FullyThrottledTimeout"

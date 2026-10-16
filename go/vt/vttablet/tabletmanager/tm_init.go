@@ -38,12 +38,14 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log/slog"
 	"maps"
 	"math/rand/v2"
 	"os"
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/spf13/pflag"
@@ -51,6 +53,7 @@ import (
 
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/flagutil"
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
@@ -225,6 +228,36 @@ type TabletManager struct {
 	// in progress
 	_rebuildKeyspaceCancel context.CancelFunc
 
+	// _groupReplicationSyncCancel stops the group replication sync loop, and
+	// _groupReplicationSyncDone is closed once it has stopped. Both are nil unless the loop runs.
+	_groupReplicationSyncCancel context.CancelFunc
+	_groupReplicationSyncDone   chan struct{}
+
+	// groupReplicationRejoinSuspended is set by an explicit StopGroupReplication or
+	// StopReplication, and keeps the group replication sync loop from making the tablet rejoin
+	// its group until an explicit StartGroupReplication or StartReplication.
+	groupReplicationRejoinSuspended atomic.Bool
+
+	// groupReplicationPeers remembers what the tablet learned about the MySQL of the other
+	// tablets of its shard, to identify the shard's voters in its group's view, and the
+	// incarnation of the last group this tablet bootstrapped.
+	groupReplicationPeers groupReplicationPeers
+	// groupReplicationTopo remembers what the tablet last read from the topology about its
+	// shard's durability policy, voters and tablets, for the group replication
+	// RPCs that must not wait for a topology server that does not answer.
+	groupReplicationTopo groupReplicationTopoCache
+	// groupReplicationFence is what the fence check knows about the joins and bootstraps of the
+	// tablet's MySQL, and about the fence it set (see groupReplicationFence).
+	groupReplicationFence groupReplicationFence
+	// groupReplicationRedoPending is set when the tablet became PRIMARY without serving, and so
+	// without making MySQL writable and redoing its prepared transactions: the decision that lets it
+	// serve does both (liftGroupReplicationFenceLocked).
+	groupReplicationRedoPending atomic.Bool
+	// groupReplicationDemoted is set by DemotePrimary on a PRIMARY tablet, and cleared by
+	// UndoDemotePrimary and by any change of the tablet type: the sync loop does not make such a
+	// tablet serve again, nor its MySQL writable, which only the caller of DemotePrimary decides.
+	groupReplicationDemoted atomic.Bool
+
 	// _lockTablesConnection is used to get and release the table read locks to pause replication
 	_lockTablesConnection *dbconnpool.DBConnection
 	_lockTablesTimer      *time.Timer
@@ -381,7 +414,7 @@ func validateFlags() error {
 			"--demote-primary-lock-wait-timeout cannot be negative, got %v", demotePrimaryLockWaitTimeout)
 	}
 
-	return nil
+	return validateGroupReplicationFlags()
 }
 
 // Start starts the TabletManager.
@@ -396,7 +429,9 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 	log.Info("TabletManager Start")
 	tm.DBConfigs.DBName = topoproto.TabletDbName(tablet)
 	tm.tabletAlias = tablet.Alias
-	tm.tmc = tmclient.NewTabletManagerClient()
+	if tm.tmc == nil {
+		tm.tmc = tmclient.NewTabletManagerClient()
+	}
 
 	// Check if there's an existing tablet record in topology and use it if flag is enabled
 	if initTabletTypeLookup {
@@ -549,6 +584,7 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 	if restoring {
 		// If restore was triggered, it will take care
 		// of updating the tablet state and initializing replication.
+		tm.startGroupReplicationSync()
 		startSucceeded = true
 		return nil
 	}
@@ -566,6 +602,7 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 		return err
 	}
 	tm.tmState.Open()
+	tm.startGroupReplicationSync()
 
 	startSucceeded = true
 	return nil
@@ -576,6 +613,7 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 // stale identifiers from hanging around in topology.
 func (tm *TabletManager) Close() {
 	tm.stopShardHealthMonitor()
+	tm.stopGroupReplicationSync()
 
 	// Stop the shard sync loop and wait for it to exit. We do this in Close()
 	// rather than registering it as an OnTerm hook so the shard sync loop keeps
@@ -612,6 +650,7 @@ func (tm *TabletManager) Close() {
 // when you want to clean up a tm immediately.
 func (tm *TabletManager) Stop() {
 	tm.stopShardHealthMonitor()
+	tm.stopGroupReplicationSync()
 
 	// Stop the shard sync loop and wait for it to exit. This needs to be done
 	// here in addition to in Close() because tests do not call Close().
@@ -806,6 +845,19 @@ func (tm *TabletManager) rebuildKeyspace(ctx context.Context, done chan<- struct
 }
 
 func (tm *TabletManager) checkPrimaryShip(ctx context.Context, si *topo.ShardInfo) error {
+	if groupReplicationEnabled() {
+		durability, err := tm.shardDurability(ctx)
+		if err != nil {
+			return err
+		}
+		if policy.IsGroupReplication(durability) {
+			// The group, not the topology, decides which MySQL is writable: a PRIMARY record
+			// may be stale. The tablet starts as a REPLICA, and the group replication sync loop
+			// promotes it if its MySQL is the primary of its group.
+			log.Info("Keyspace uses group replication, starting as " + tm.Tablet().Type.String() + " regardless of the shard record")
+			return nil
+		}
+	}
 	if si.PrimaryAlias != nil && topoproto.TabletAliasEqual(si.PrimaryAlias, tm.tabletAlias) {
 		// We're marked as primary in the shard record, which could mean the primary
 		// tablet process was just restarted. However, we need to check if a new
@@ -922,7 +974,11 @@ func (tm *TabletManager) findMysqlPort(retryInterval time.Duration) {
 
 // redoPreparedTransactionsAndSetReadWrite redoes prepared transactions in read-only mode.
 // We turn off super read only mode, and then redo the transactions. Finally, we turn off read-only mode to allow for further traffic.
+// It refuses to make an active group replication member that is not the group primary writable.
 func (tm *TabletManager) redoPreparedTransactionsAndSetReadWrite(ctx context.Context) error {
+	if err := tm.checkGroupAllowsReadWrite(ctx); err != nil {
+		return err
+	}
 	_, err := tm.MysqlDaemon.SetSuperReadOnly(ctx, false)
 	if err != nil {
 		// Ignore the error if the sever doesn't support super read only variable.
@@ -1156,6 +1212,32 @@ func (tm *TabletManager) initializeReplication(ctx context.Context, tabletType t
 		return "", nil
 	}
 
+	if groupReplicationEnabled() {
+		// A voting member of a group joins the group instead of replicating from the primary.
+		voter, err := tm.isGroupReplicationVoter(ctx)
+		if err != nil {
+			return "", err
+		}
+		if voter {
+			tm.initializeGroupReplication(ctx)
+			return "", nil
+		}
+		// A tablet that is not a voter replicates asynchronously from the primary, unless its
+		// MySQL is still an active member of a group: configuring the default channel would
+		// break it, and removing a member from its group is VTOrc's decision.
+		status, err := tm.groupReplicationStatus(ctx)
+		if err != nil {
+			return "", err
+		}
+		if mysql.IsGroupMemberActive(status) {
+			log.Warn("MySQL is an active group replication member, but the tablet is not a voter of its shard's group: leaving its replication as it is",
+				slog.String("group", status.GroupName),
+				slog.String("state", status.MemberState),
+				slog.String("role", status.MemberRole))
+			return "", nil
+		}
+	}
+
 	// Read the shard to find the current primary, and its location.
 	tablet := tm.Tablet()
 	si, err := tm.TopoServer.GetShard(ctx, tablet.Keyspace, tablet.Shard)
@@ -1179,9 +1261,9 @@ func (tm *TabletManager) initializeReplication(ctx context.Context, tabletType t
 		return "", vterrors.Wrapf(err, "cannot read primary tablet %v", si.PrimaryAlias)
 	}
 
-	durabilityName, err := tm.TopoServer.GetKeyspaceDurability(ctx, tablet.Keyspace)
+	durabilityName, err := tm.TopoServer.GetShardInfoDurability(ctx, si)
 	if err != nil {
-		return "", vterrors.Wrapf(err, "cannot read keyspace durability policy %v", tablet.Keyspace)
+		return "", vterrors.Wrapf(err, "cannot read the durability policy of shard %v/%v", tablet.Keyspace, tablet.Shard)
 	}
 	log.Info(fmt.Sprintf("Getting a new durability policy for %v", durabilityName))
 	durability, err := policy.GetDurabilityPolicy(durabilityName)
@@ -1241,6 +1323,31 @@ func (tm *TabletManager) initializeReplication(ctx context.Context, tabletType t
 	if err := tm.setReplicationSourceRecoverable(ctx, currentPrimary.MysqlHostname, currentPrimary.MysqlPort, 0, true, true); err != nil {
 		return "", vterrors.Wrap(err, "failed to configure replication source")
 	}
+	// A former group member keeps the offline_mode that Group Replication's OFFLINE_MODE exit
+	// state action set: it is now an asynchronous replica of the shard primary.
+	if groupReplicationEnabled() {
+		if err := tm.liftOfflineMode(ctx, "MySQL replicates from the shard primary"); err != nil {
+			return "", err
+		}
+	}
 
 	return primaryStatus.Position, nil
+}
+
+// initializeGroupReplication makes the tablet's MySQL join its shard's group when the tablet
+// starts. It never bootstraps a group: two tablets that start at the same time could each create
+// one. It only starts a join when another tablet of the shard reports an active member of the
+// shard's group. If it does not join, for example because no other member is reachable yet, the
+// group replication sync loop retries it.
+func (tm *TabletManager) initializeGroupReplication(ctx context.Context) {
+	status, err := tm.groupReplicationStatus(ctx)
+	if err == nil && !mysql.IsGroupMemberActive(status) {
+		if err := tm.checkLegitimateGroupToJoin(ctx); err != nil {
+			log.Warn(fmt.Sprintf("Not joining the group replication group during initialization, the group replication sync loop will retry: %v", err))
+			return
+		}
+	}
+	if _, err := tm.startGroupReplicationLocked(ctx, false /* bootstrap */, nil); err != nil {
+		log.Warn(fmt.Sprintf("Cannot join the group replication group during initialization, the group replication sync loop will retry: %v", err))
+	}
 }

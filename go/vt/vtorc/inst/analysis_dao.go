@@ -26,6 +26,7 @@ import (
 	"github.com/patrickmn/go-cache"
 	"google.golang.org/protobuf/encoding/prototext"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 	"vitess.io/vitess/go/vt/log"
@@ -83,6 +84,21 @@ type clusterAnalysis struct {
 
 	// durability is the shard's current durability policy.
 	durability policy.Durabler
+
+	// groupReplication is the shard's MySQL Group Replication state, aggregated over its tablets.
+	groupReplication *groupReplicationShardState
+}
+
+// analysisRow is a tablet row of the detection analysis query that is waiting to be analyzed.
+// Rows are analyzed after the query has returned all of them, because some problems depend on
+// the state of the whole shard.
+type analysisRow struct {
+	a                        *DetectionAnalysis
+	ca                       *clusterAnalysis
+	tablet                   *topodatapb.Tablet
+	primaryTablet            *topodatapb.Tablet
+	isInvalid                bool
+	isStaleBinlogCoordinates bool
 }
 
 // GetDetectionAnalysis will check for detected problems (dead primary; unreachable primary; etc)
@@ -106,10 +122,16 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		vitess_keyspace.keyspace AS keyspace,
 		vitess_keyspace.keyspace_type AS keyspace_type,
 		vitess_keyspace.durability_policy AS durability_policy,
+		vitess_keyspace.migration_source_durability_policy AS keyspace_migration_source_durability_policy,
 		vitess_keyspace.disable_emergency_reparent AS keyspace_disable_emergency_reparent,
 		vitess_shard.primary_timestamp AS shard_primary_term_timestamp,
 		vitess_shard.primary_alias AS shard_primary_alias,
 		vitess_shard.disable_emergency_reparent AS shard_disable_emergency_reparent,
+		vitess_shard.group_replication_voters AS shard_group_replication_voters,
+		vitess_shard.group_replication_voter_uuids AS shard_group_replication_voter_uuids,
+		vitess_shard.group_replication_incarnation AS shard_group_replication_incarnation,
+		vitess_shard.group_replication_bootstrap_target AS shard_group_replication_bootstrap_target,
+		vitess_shard.durability_policy AS shard_durability_policy,
 		primary_instance.read_only AS read_only,
 		MIN(primary_instance.gtid_errant) AS gtid_errant,
 		MIN(primary_instance.alias) IS NULL AS is_invalid,
@@ -281,7 +303,19 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 			DISTINCT case when replica_instance.log_bin
 			AND replica_instance.log_replica_updates then replica_instance.major_version else NULL end
 		) AS count_distinct_logging_major_versions,
-		primary_instance.is_disk_stalled != 0 AS is_disk_stalled
+		primary_instance.is_disk_stalled != 0 AS is_disk_stalled,
+		MIN(primary_instance.server_uuid) AS analyzed_server_uuid,
+		MIN(primary_instance.gr_plugin_active) AS gr_plugin_active,
+		MIN(primary_instance.gr_member_state) AS gr_member_state,
+		MIN(primary_instance.gr_member_role) AS gr_member_role,
+		MIN(primary_instance.gr_primary_uuid) AS gr_primary_uuid,
+		MIN(primary_instance.gr_has_quorum) AS gr_has_quorum,
+		MIN(primary_instance.gr_online_members) AS gr_online_members,
+		MIN(primary_instance.gr_active_member_uuids) AS gr_active_member_uuids,
+		MIN(primary_instance.gr_online_member_uuids) AS gr_online_member_uuids,
+		MIN(primary_instance.gr_view_id) AS gr_view_id,
+		MIN(primary_instance.gr_start_in_progress) AS gr_start_in_progress,
+		MAX(vitess_deleted_group_voter.alias IS NOT NULL) AS is_deleted_group_voter
 	FROM
 		vitess_tablet
 		JOIN vitess_keyspace ON (
@@ -306,6 +340,9 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		)
 		LEFT JOIN database_instance_stale_binlog_coordinates ON (
 			vitess_tablet.alias = database_instance_stale_binlog_coordinates.alias
+		)
+		LEFT JOIN vitess_deleted_group_voter ON (
+			vitess_tablet.alias = vitess_deleted_group_voter.alias
 		)
 		SHARD_OBSERVER_JOIN
 	WHERE
@@ -347,6 +384,11 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 	query = strings.Replace(query, "SHARD_OBSERVER_JOIN", shardObserverJoin, 1)
 
 	clusters := make(map[string]*clusterAnalysis)
+	grRows := make(map[string][]*groupReplicationRow)
+	grVoters := make(map[string][]*topodatapb.TabletAlias)
+	grIncarnations := make(map[string]string)
+	grVoterUUIDs := make(map[string]map[string]string)
+	var rows []*analysisRow
 	err := db.Db.QueryVTOrc(query, args, func(m sqlutils.RowMap) error {
 		a := &DetectionAnalysis{
 			Analysis: NoProblem,
@@ -359,6 +401,39 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 			return nil
 		}
 
+		// Every tablet of the shard counts towards the shard's Group Replication state, including
+		// the tablets that are not analyzed below: a tablet taking a backup can still be a member.
+		grKeyspaceShard := getKeyspaceShardName(m.GetString("keyspace"), m.GetString("shard"))
+		grRows[grKeyspaceShard] = append(grRows[grKeyspaceShard], &groupReplicationRow{
+			tablet:            tablet,
+			valid:             m.GetBool("is_last_check_valid") && !m.GetBool("is_invalid"),
+			serverUUID:        m.GetString("analyzed_server_uuid"),
+			active:            isGroupMemberActive(m.GetBool("gr_plugin_active"), m.GetString("gr_member_state")),
+			online:            m.GetBool("gr_plugin_active") && m.GetString("gr_member_state") == mysql.GroupMemberStateOnline,
+			groupPrimary:      isGroupPrimary(m.GetBool("gr_plugin_active"), m.GetString("gr_member_state"), m.GetString("gr_member_role"), m.GetBool("gr_has_quorum")),
+			hasQuorum:         m.GetBool("gr_has_quorum"),
+			primaryUUID:       m.GetString("gr_primary_uuid"),
+			activeMemberUUIDs: splitGroupMemberUUIDs(m.GetString("gr_active_member_uuids")),
+			startInProgress:   m.GetBool("gr_start_in_progress"),
+			deleted:           m.GetBool("is_deleted_group_voter"),
+			status: groupRowStatus(m.GetBool("gr_plugin_active"), m.GetString("gr_member_state"), m.GetString("gr_member_role"),
+				m.GetBool("gr_has_quorum"), m.GetString("gr_primary_uuid"), m.GetString("gr_view_id"), splitGroupMemberUUIDs(m.GetString("gr_online_member_uuids"))),
+		})
+		grIncarnations[grKeyspaceShard] = m.GetString("shard_group_replication_incarnation")
+		grVoterUUIDs[grKeyspaceShard] = parseGroupVoterUUIDs(m.GetString("shard_group_replication_voter_uuids"))
+		if _, ok := grVoters[grKeyspaceShard]; !ok {
+			voters, err := parseGroupReplicationVoters(m.GetString("shard_group_replication_voters"))
+			if err != nil {
+				log.Warn(fmt.Sprintf("failed to parse the group replication voters of %s: %v", grKeyspaceShard, err))
+			}
+			grVoters[grKeyspaceShard] = voters
+		}
+
+		// A voter whose tablet record was deleted only counts towards its shard's Group Replication
+		// state: VTOrc repairs nothing on it.
+		if m.GetBool("is_deleted_group_voter") {
+			return nil
+		}
 		// We don't want to run any fixes on any non-replica type tablet.
 		if tablet.Type != topodatapb.TabletType_PRIMARY && !topo.IsReplicaType(tablet.Type) {
 			return nil
@@ -447,6 +522,26 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		a.IsReadOnly = m.GetUint("read_only") == 1
 		a.IsDiskStalled = m.GetBool("is_disk_stalled")
 
+		a.AnalyzedServerUUID = m.GetString("analyzed_server_uuid")
+		a.GroupReplicationPluginActive = m.GetBool("gr_plugin_active")
+		a.GroupMemberState = m.GetString("gr_member_state")
+		a.GroupMemberRole = m.GetString("gr_member_role")
+		a.GroupHasQuorum = m.GetBool("gr_has_quorum")
+		a.GroupOnlineMembers = m.GetUint("gr_online_members")
+		a.IsGroupMemberActive = isGroupMemberActive(a.GroupReplicationPluginActive, a.GroupMemberState)
+		a.IsGroupPrimary = isGroupPrimary(a.GroupReplicationPluginActive, a.GroupMemberState, a.GroupMemberRole, a.GroupHasQuorum)
+		a.GroupViewIncarnation = policy.GroupIncarnation(m.GetString("gr_view_id"))
+		a.GroupStartInProgress = m.GetBool("gr_start_in_progress")
+		a.ShardGroupIncarnation = m.GetString("shard_group_replication_incarnation")
+		a.IsGroupBootstrapIntentTarget = m.GetString("shard_group_replication_bootstrap_target") == topoproto.TabletAliasString(tablet.Alias)
+		if a.IsGroupMemberActive {
+			// An active group member replicates through the group's own channels and has no
+			// default replication channel. It is neither stopped nor, unless it is the group's
+			// primary, a replication source.
+			a.ReplicationStopped = false
+			a.IsPrimary = a.IsGroupPrimary
+		}
+
 		if !a.LastCheckValid {
 			analysisMessage := fmt.Sprintf(
 				"analysis: Alias: %+v, Keyspace: %+v, Shard: %+v, IsPrimary: %+v, PrimaryHealthUnhealthy: %+v, LastCheckValid: %+v, LastCheckPartialSuccess: %+v, CountReplicas: %+v, CountValidReplicas: %+v, CountValidReplicatingReplicas: %+v, CountLaggingReplicas: %+v, CountDelayedReplicas: %+v",
@@ -471,7 +566,13 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 					log.Warn(fmt.Sprintf("failed to parse shard primary alias %q: %v", shardPrimaryAliasStr, err))
 				}
 			}
-			durabilityPolicy := m.GetString("durability_policy")
+			// The shard's own policy applies over the keyspace's: a shard that MigrateReplicationMode
+			// converted while the keyspace is still being migrated is analyzed as converted, and a
+			// shard that it did not convert yet by the keyspace's migration source.
+			durabilityPolicy := topo.ShardDurabilityPolicy(&topodatapb.Keyspace{
+				DurabilityPolicy:                m.GetString("durability_policy"),
+				MigrationSourceDurabilityPolicy: m.GetString("keyspace_migration_source_durability_policy"),
+			}, &topodatapb.Shard{DurabilityPolicy: m.GetString("shard_durability_policy")})
 			if durabilityPolicy == "" {
 				log.Error(fmt.Sprintf("ignoring keyspace %v because no durability_policy is set. Please set it using SetKeyspaceDurabilityPolicy", a.AnalyzedKeyspace))
 				return nil
@@ -494,7 +595,27 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 			// We failed to load the durability policy, so we shouldn't run any analysis
 			return nil
 		}
-		isInvalid := m.GetBool("is_invalid")
+		rows = append(rows, &analysisRow{
+			a:                        a,
+			ca:                       ca,
+			tablet:                   tablet,
+			primaryTablet:            primaryTablet,
+			isInvalid:                m.GetBool("is_invalid"),
+			isStaleBinlogCoordinates: isStaleBinlogCoordinates,
+		})
+		return nil
+	})
+
+	now := time.Now()
+	for keyspaceShard, shardRows := range grRows {
+		if ca := clusters[keyspaceShard]; ca != nil && ca.durability != nil {
+			ca.groupReplication = computeGroupReplicationShardState(ca.durability, grIncarnations[keyspaceShard], grVoters[keyspaceShard], grVoterUUIDs[keyspaceShard], shardRows, now)
+		}
+	}
+	analyzeRow := func(row *analysisRow) {
+		a, ca, tablet, primaryTablet := row.a, row.ca, row.tablet, row.primaryTablet
+		isInvalid, isStaleBinlogCoordinates := row.isInvalid, row.isStaleBinlogCoordinates
+		applyGroupReplicationShardState(a, ca.groupReplication)
 		var matchedProblems []*DetectionAnalysisProblem
 		for _, problem := range detectionAnalysisProblems {
 			// When isInvalid is true, instance data is unreliable (never been reached).
@@ -510,7 +631,7 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		if ca.hasShardWideAction && len(matchedProblems) == 0 {
 			// Shard-wide action already detected and no problems matched
 			// for this tablet — suppress it.
-			return nil
+			return
 		}
 		if len(matchedProblems) > 0 {
 			sortDetectionAnalysisMatchedProblems(matchedProblems)
@@ -542,7 +663,7 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 							slog.String("active_shard_wide", string(ca.shardWideAnalysisCode)),
 						)
 					}
-					return nil
+					return
 				}
 				ca.hasShardWideAction = true
 				ca.shardWideAnalysisCode = chosenProblem.Meta.Analysis
@@ -608,7 +729,7 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 								slog.String("shard_wide", string(ca.shardWideAnalysisCode)),
 							)
 						}
-						return nil
+						return
 					}
 				}
 			}
@@ -661,8 +782,10 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 				_ = auditInstanceAnalysisInChangelog(a.AnalyzedInstanceAlias, a.Analysis)
 			}()
 		}
-		return nil
-	})
+	}
+	for _, row := range rows {
+		analyzeRow(row)
+	}
 
 	result = postProcessAnalyses(result, clusters)
 

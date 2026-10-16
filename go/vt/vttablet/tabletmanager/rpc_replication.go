@@ -38,6 +38,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/utils"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
 
@@ -191,6 +192,20 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 	status.SemiSyncBlocked = tm.SemiSyncMonitor.AllWritesBlocked()
 	status.TabletType = tm.Tablet().Type
 	status.ShardPeerHealth = tm.shardPeerHealthSnapshot()
+	status.GroupReplicationEnabled = groupReplicationEnabled()
+	if tm.groupReplicationFence.starts.Load() > 0 {
+		// A join or a bootstrap of the tablet's own is in progress, which MySQL's processlist may not
+		// show yet (the START has not been sent) or anymore (it returned, and the tablet finishes the
+		// transition). VTOrc must not bootstrap another member meanwhile.
+		if status.GroupReplicationStatus == nil {
+			status.GroupReplicationStatus = &replicationdatapb.GroupReplicationStatus{}
+		}
+		status.GroupReplicationStatus.StartInProgress = true
+	}
+	// Every decision of the tablet that depends on the durability policy resolves the shard's own
+	// policy over its keyspace's (shardDurability). MigrateReplicationMode requires it on the voters.
+	status.ShardDurabilityPolicySupported = true
+	status.GroupReplicationDemoted = tm.groupReplicationDemoted.Load()
 	return status, nil
 }
 
@@ -255,6 +270,19 @@ func (tm *TabletManager) StopReplication(ctx context.Context) error {
 	}
 	defer tm.unlock()
 
+	// On an active group replication member, replication is its membership in the group.
+	status, err := tm.groupReplicationStatus(ctx)
+	if err != nil {
+		return err
+	}
+	if groupReplicationEnabled() {
+		tm.groupReplicationRejoinSuspended.Store(true)
+	}
+	if mysql.IsGroupMemberActive(status) {
+		_, err := tm.stopGroupReplicationLocked(ctx)
+		return err
+	}
+
 	return tm.stopReplicationLocked(ctx)
 }
 
@@ -309,6 +337,27 @@ func (tm *TabletManager) StartReplication(ctx context.Context, semiSync bool) er
 		return err
 	}
 	defer tm.unlock()
+
+	// On an active group replication member, or a tablet that the shard record lists as a
+	// voter of its group, replication is its membership in the group. Any other tablet
+	// replicates asynchronously.
+	if groupReplicationEnabled() {
+		tm.groupReplicationRejoinSuspended.Store(false)
+	}
+	status, err := tm.groupReplicationStatus(ctx)
+	if err != nil {
+		return err
+	}
+	groupMember := mysql.IsGroupMemberActive(status)
+	if !groupMember {
+		if groupMember, err = tm.isGroupReplicationVoter(ctx); err != nil {
+			return err
+		}
+	}
+	if groupMember {
+		_, err := tm.startGroupReplicationLocked(ctx, false /* bootstrap */, nil)
+		return err
+	}
 
 	semiSyncAction, err := tm.convertBoolToSemiSyncAction(ctx, semiSync)
 	if err != nil {
@@ -418,6 +467,26 @@ func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string
 	}
 	defer tm.unlock()
 
+	// In a keyspace that uses group replication, the primary is the member that bootstraps the
+	// shard's group. The caller holds the shard lock. A vttablet that does not run Group
+	// Replication refuses: it would make MySQL writable without a group.
+	if groupReplicationEnabled() {
+		durability, err := tm.shardDurability(ctx)
+		if err != nil {
+			return "", err
+		}
+		if policy.IsGroupReplication(durability) {
+			if err := tm.bootstrapGroupForInitPrimaryLocked(ctx); err != nil {
+				return "", vterrors.Wrapf(err, "failed to bootstrap the group")
+			}
+		}
+	} else if err := tm.refuseGroupReplicationPolicyWithoutFlag(ctx); err != nil {
+		return "", err
+	}
+	if err := tm.checkGroupAllowsReadWrite(ctx); err != nil {
+		return "", err
+	}
+
 	semiSyncAction, err := tm.convertBoolToSemiSyncAction(ctx, semiSync)
 	if err != nil {
 		return "", err
@@ -462,6 +531,26 @@ func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string
 	}
 
 	return replication.EncodePosition(pos), nil
+}
+
+// refuseGroupReplicationPolicyWithoutFlag returns a FAILED_PRECONDITION error if the shard's policy,
+// on a vttablet that does not run Group Replication, is a group replication policy: InitPrimary would
+// make MySQL writable without a group. The read runs under the action lock: it is bounded by
+// groupReplicationTopoReadTimeout, and a policy that cannot be read is logged, and the initialization
+// goes on as it did before the read.
+func (tm *TabletManager) refuseGroupReplicationPolicyWithoutFlag(ctx context.Context) error {
+	readCtx, cancel := context.WithTimeout(ctx, groupReplicationTopoReadTimeout)
+	defer cancel()
+	durability, err := tm.shardDurability(readCtx)
+	if err != nil {
+		log.Warn("InitPrimary: cannot read the shard's durability policy, initializing without Group Replication", slog.Any("error", err))
+		return nil
+	}
+	if policy.IsGroupReplication(durability) {
+		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION,
+			"the shard uses a group replication durability policy, but this vttablet does not run Group Replication; start it with --enable-group-replication")
+	}
+	return nil
 }
 
 // PopulateReparentJournal adds an entry into the reparent_journal table.
@@ -609,11 +698,14 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 
 	finishCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	// Read the timeout before starting the goroutine, which may only run after DemotePrimary
+	// returned.
+	stallTimeout := 10 * topo.RemoteOperationTimeout
 	go func() {
 		select {
 		case <-finishCtx.Done():
 		// Finished running DemotePrimary. Nothing to do.
-		case <-time.After(10 * topo.RemoteOperationTimeout):
+		case <-time.After(stallTimeout):
 			// We waited for over 10 times of remote operation timeout, but DemotePrimary is still not done.
 			// Collect more information and signal demote primary is indefinitely stalled.
 			log.Error("DemotePrimary seems to be stalled. Collecting more information.")
@@ -640,6 +732,26 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 		return nil, err
 	}
 
+	// Under a group replication policy, the revert of a partial failure makes MySQL writable and the
+	// tablet serve only on a decision on the serving invariant (revertDemotionWithGroupDecisionLocked);
+	// stoppedServing and setReadOnly say what it has to revert. Otherwise the reverts below run as
+	// they always did. It runs last, after the semi-sync reverts. useGroupRevert decides once, when
+	// the first revert runs: the deferred functions run one after the other.
+	groupRevertDecided, groupRevert := false, false
+	useGroupRevert := func() bool {
+		if !groupRevertDecided {
+			groupRevertDecided = true
+			groupRevert = tm.demotionRevertNeedsGroupDecision(ctx)
+		}
+		return groupRevert
+	}
+	stoppedServing, setReadOnly := false, false
+	defer func() {
+		if finalErr != nil && revertPartialFailure && useGroupRevert() {
+			tm.revertDemotionWithGroupDecisionLocked(ctx, tablet, setReadOnly && !wasReadOnly, stoppedServing && wasServing)
+		}
+	}()
+
 	log.Info(
 		"captured initial state",
 		slog.String("tablet", topoproto.TabletAliasString(tablet.Alias)),
@@ -665,20 +777,34 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 		if err := tm.QueryServiceControl.SetServingType(tablet.Type, protoutil.TimeFromProto(tablet.PrimaryTermStartTime).UTC(), false, "demotion in progress"); err != nil {
 			return nil, vterrors.Wrap(err, "SetServingType(serving=false) failed")
 		}
+		stoppedServing = true
 		defer func() {
-			if finalErr != nil && revertPartialFailure && wasServing {
+			if finalErr != nil && revertPartialFailure && wasServing && !useGroupRevert() {
 				log.Info("reverting query service to serving")
-				if err := tm.QueryServiceControl.SetServingType(tablet.Type, protoutil.TimeFromProto(tablet.PrimaryTermStartTime).UTC(), true, ""); err != nil {
+				// A PRIMARY that must not serve for its replication group stays not serving.
+				if err := tm.tmState.SetServingUnlessGroupReplicationNotServing(tablet.Type, protoutil.TimeFromProto(tablet.PrimaryTermStartTime).UTC()); err != nil {
 					log.Warn(fmt.Sprintf("SetServingType(serving=true) failed during revert: %v", err))
 				}
 			}
 		}()
 	}
 
-	log.Info("checking semi-sync status")
-	isSemiSyncBlocked, err := tm.MysqlDaemon.IsSemiSyncBlocked(ctx)
+	// A group replication member does not use semi-sync: the group makes transactions durable,
+	// and it moves super_read_only itself when it switches primaries.
+	groupStatus, err := tm.groupReplicationStatus(ctx)
 	if err != nil {
 		return nil, err
+	}
+	groupMember := mysql.IsGroupMemberActive(groupStatus)
+	isSemiSyncBlocked := false
+	if groupMember {
+		log.Info("MySQL is an active group replication member, skipping the semi-sync steps")
+	} else {
+		log.Info("checking semi-sync status")
+		isSemiSyncBlocked, err = tm.MysqlDaemon.IsSemiSyncBlocked(ctx)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	log.Info(
@@ -721,7 +847,7 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 				}
 			}()
 		}
-	} else {
+	} else if !groupMember {
 		// If `force` is false, we're demoting this primary as part of a `PlannedReparentShard` operation,
 		// but we might be blocked on semi-sync ACKs.
 		//
@@ -759,9 +885,10 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 	} else {
 		log.Info("enabled super_read_only")
 	}
+	setReadOnly = true
 
 	defer func() {
-		if finalErr != nil && revertPartialFailure && !wasReadOnly {
+		if finalErr != nil && revertPartialFailure && !wasReadOnly && !useGroupRevert() {
 			// We need to redo the prepared transactions in read only mode using the dba user to ensure we don't lose them.
 			// setting read_only OFF will also set super_read_only OFF if it was set
 			log.Info("reverting read-only by redoing prepared transactions")
@@ -773,7 +900,7 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 
 	log.Info("checking primary-side semi-sync state")
 	// If we haven't disabled the primary side semi-sync so far, do it now.
-	if tm.isPrimarySideSemiSyncEnabled(ctx) {
+	if !groupMember && tm.isPrimarySideSemiSyncEnabled(ctx) {
 		// If using semi-sync, we need to disable primary-side.
 		log.Info("disabling primary-side semi-sync")
 		if err := tm.fixSemiSync(ctx, topodatapb.TabletType_REPLICA, SemiSyncActionSet); err != nil {
@@ -800,8 +927,115 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 	protoStatus.ServerVersion = tm.getMySQLVersionStringBounded(ctx)
 
 	log.Info("demoted primary", slog.String("position", protoStatus.Position))
+	if wasPrimary {
+		// Only the caller decides whether this primary serves again (UndoDemotePrimary): the group
+		// replication sync loop does not make it serve, nor its MySQL writable, meanwhile.
+		tm.groupReplicationDemoted.Store(true)
+	}
 
 	return protoStatus, nil
+}
+
+// demotionRevertNeedsGroupDecision returns whether the revert of a failed DemotePrimary goes through
+// the decision on the serving invariant (revertDemotionWithGroupDecisionLocked): on a tablet that
+// supports Group Replication, under a group replication durability policy, or when the policy cannot
+// be read. A tablet that does not support Group Replication, or whose shard uses another policy,
+// reverts as a semi-sync shard does.
+func (tm *TabletManager) demotionRevertNeedsGroupDecision(ctx context.Context) bool {
+	return tm.shardMayRunGroup(ctx)
+}
+
+// shardMayRunGroup returns whether the tablet's MySQL may be a member of its shard's replication
+// group: the tablet supports Group Replication, and its shard uses a group replication durability
+// policy, or the policy cannot be read. The read does not inherit the caller's cancellation (the
+// caller may have given up, as a demotion's caller does), only a short bound of its own.
+func (tm *TabletManager) shardMayRunGroup(ctx context.Context) bool {
+	if !groupReplicationEnabled() {
+		return false
+	}
+	readCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), groupReplicationTopoReadTimeout)
+	defer cancel()
+	durability, err := tm.durabilityForGroupChange(readCtx, time.Now().Add(groupReplicationTopoReadTimeout))
+	if err != nil {
+		log.Warn("Group replication: cannot read the durability policy, assuming that the shard runs a group", slog.Any("error", err))
+		return true
+	}
+	return policy.IsGroupReplication(durability)
+}
+
+// revertDemotionWithGroupDecisionLocked reverts a DemotePrimary that failed after it stopped the
+// query service or made MySQL super_read_only, on a tablet that supports Group Replication. It runs
+// under the action lock, after the semi-sync reverts. Like UndoDemotePrimary and every promotion
+// (changeTypeLocked), it makes MySQL writable and the tablet serve only on a decision on the serving
+// invariant: it waits for the end of a primary election, takes the fence snapshot, decides on
+// MySQL's status read under the lock (applyGroupReplicationServingDecisionLocked), and makes MySQL
+// writable, redoing the prepared transactions, only if the tablet may serve and no fence was decided
+// since the snapshot, which it then settles. A tablet that may not serve stays as the demotion left
+// it: PRIMARY, not serving, with MySQL read-only and the reason recorded; the sync loop makes it serve
+// again (serveAgain) once the decision allows it, and redoes the prepared transactions then. The
+// reparent that called DemotePrimary fails either way.
+//
+// makeWritable is set when the demotion made a writable MySQL super_read_only, serve when it stopped
+// the query service of a serving tablet.
+func (tm *TabletManager) revertDemotionWithGroupDecisionLocked(ctx context.Context, tablet *topodatapb.Tablet, makeWritable, serve bool) {
+	if !makeWritable && !serve {
+		return
+	}
+	log.Info("reverting the failed demotion through the group replication serving decision",
+		slog.Bool("make_writable", makeWritable), slog.Bool("serve", serve))
+	termStart := protoutil.TimeFromProto(tablet.PrimaryTermStartTime).UTC()
+	tm.waitForGroupElectionEnd(ctx)
+	fence := &tm.groupReplicationFence
+	fences := fence.snapshot()
+	reason, status, err := tm.applyGroupReplicationServingDecisionLocked(ctx, nil)
+	if err != nil {
+		reason = groupReplicationDemotionRevertUndecided
+		log.Warn("Group replication: cannot decide whether the tablet serves after the failed demotion, it stays read-only and does not serve", slog.Any("error", err))
+		if err := tm.tmState.SetGroupReplicationNotServing(ctx, reason); err != nil {
+			log.Warn(fmt.Sprintf("SetGroupReplicationNotServing failed during revert: %v", err))
+		}
+	}
+	if reason == "" && fence.decidedSince(fences) {
+		reason = fence.lastReason()
+		log.Warn("Group replication: MySQL was fenced while the tablet decided to serve after the failed demotion", slog.String("reason", reason))
+		if err := tm.tmState.SetGroupReplicationNotServing(ctx, reason); err != nil {
+			log.Warn(fmt.Sprintf("SetGroupReplicationNotServing failed during revert: %v", err))
+		}
+	}
+	if reason != "" {
+		// The tablet stays PRIMARY: it does not serve, and MySQL stays read-only. The decision that
+		// lets it serve again makes MySQL writable, and redoes the prepared transactions.
+		if makeWritable {
+			tm.groupReplicationRedoPending.Store(true)
+		}
+		log.Warn("Group replication: the failed demotion is not reverted, the tablet does not serve", slog.String("reason", reason),
+			slog.String("member_state", status.GetMemberState()), slog.String("view_id", status.GetViewId()))
+		return
+	}
+	if makeWritable {
+		log.Info("reverting read-only by redoing prepared transactions")
+		if err := tm.redoPreparedTransactionsAndSetReadWrite(ctx); err != nil {
+			log.Warn(fmt.Sprintf("RedoPreparedTransactionsAndSetReadWrite failed during revert: %v", err))
+			tm.groupReplicationRedoPending.Store(true)
+			if err := tm.tmState.SetGroupReplicationNotServing(ctx, groupReplicationDemotionRevertFailed); err != nil {
+				log.Warn(fmt.Sprintf("SetGroupReplicationNotServing failed during revert: %v", err))
+			}
+			return
+		}
+		tm.groupReplicationRedoPending.Store(false)
+	}
+	// MySQL takes writes from now on, unless a fence was decided meanwhile: MySQL is then fenced
+	// again, and the tablet does not serve.
+	if !tm.settleGroupReplicationFenceLocked(ctx, fences) {
+		return
+	}
+	if serve {
+		log.Info("reverting query service to serving")
+		// A reason set since the decision stands.
+		if err := tm.tmState.SetServingUnlessGroupReplicationNotServing(tablet.Type, termStart); err != nil {
+			log.Warn(fmt.Sprintf("SetServingType(serving=true) failed during revert: %v", err))
+		}
+	}
 }
 
 // UndoDemotePrimary reverts a previous call to DemotePrimary
@@ -817,6 +1051,47 @@ func (tm *TabletManager) UndoDemotePrimary(ctx context.Context, semiSync bool) e
 	}
 	defer tm.unlock()
 
+	// A group replication member can only serve as the primary while it is the group primary.
+	// Check before anything changes. A not-serving reason set after the status is read is decided
+	// on a newer state, and stands (see below).
+	// The fence check may fence MySQL meanwhile, without the action lock: a fence decided since the
+	// snapshot below stands (see groupReplicationFence). Group Replication sets super_read_only when
+	// the election that elected MySQL ends: the decision waits for that first.
+	if groupReplicationEnabled() {
+		tm.waitForGroupElectionEnd(ctx)
+	}
+	_, servingGen := tm.tmState.GroupReplicationNotServingState()
+	fences := tm.groupReplicationFence.snapshot()
+	groupStatus, err := tm.groupReplicationStatus(ctx)
+	if err != nil {
+		return err
+	}
+	if mysql.IsGroupMemberActive(groupStatus) && !mysql.IsGroupPrimary(groupStatus) {
+		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot undo the demotion: MySQL is no longer the primary of group %s (member %s %s)", groupStatus.GroupName, groupStatus.MemberState, groupStatus.MemberRole)
+	}
+	// Under a group replication policy that lists voters, only the primary of the shard's
+	// recorded group, with a majority of the voters ONLINE in its view, serves: VTOrc's
+	// PrimaryIsReadOnly recovery undid the demotion of a PRIMARY tablet whose MySQL was in the
+	// ERROR state after its group lost its majority, which cleared super_read_only on a MySQL
+	// outside of any group (S7d chaos scenario). The decision is made on MySQL's status read now,
+	// under the action lock, and any not-serving reason set before is only cleared at the end.
+	if reason, err := tm.groupReplicationServingDecision(ctx, nil, groupStatus); err != nil {
+		return err
+	} else if reason != "" {
+		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot undo the demotion: %s (member %s %s, view %s)",
+			reason, groupStatus.GetMemberState(), groupStatus.GetMemberRole(), groupStatus.GetViewId())
+	}
+	if groupReplicationEnabled() {
+		if err := tm.checkOwnTabletRecord(ctx); err != nil {
+			return vterrors.Wrapf(err, "cannot undo the demotion")
+		}
+	}
+	if mysql.IsGroupPrimary(groupStatus) {
+		if err := tm.liftOfflineMode(ctx, "MySQL is the primary of its group and serves again"); err != nil {
+			return err
+		}
+	}
+
 	semiSyncAction, err := tm.convertBoolToSemiSyncAction(ctx, semiSync)
 	if err != nil {
 		return err
@@ -824,7 +1099,8 @@ func (tm *TabletManager) UndoDemotePrimary(ctx context.Context, semiSync bool) e
 
 	// If semi-sync is enabled, we need to set two pc to be allowed.
 	// Otherwise, we block all Prepared calls because atomic transactions require semi-sync for correctness..
-	tm.QueryServiceControl.SetTwoPCAllowed(tabletserver.TwoPCAllowed_SemiSync, semiSyncAction == SemiSyncActionSet)
+	// A group with at least two ONLINE members makes prepared transactions durable as well.
+	tm.QueryServiceControl.SetTwoPCAllowed(tabletserver.TwoPCAllowed_SemiSync, twoPCDurable(groupStatus, semiSyncAction == SemiSyncActionSet))
 
 	// If using semi-sync, we need to enable source-side.
 	if err := tm.fixSemiSync(ctx, topodatapb.TabletType_PRIMARY, semiSyncAction); err != nil {
@@ -841,22 +1117,51 @@ func (tm *TabletManager) UndoDemotePrimary(ctx context.Context, semiSync bool) e
 			return err
 		}
 		if ti.Type == topodatapb.TabletType_PRIMARY {
-			return tm.tmState.updateTypeAndPublish(ctx, topodatapb.TabletType_PRIMARY, ti.PrimaryTermStartTime, DBActionSetReadWrite)
+			if tm.groupReplicationFence.decidedSince(fences) {
+				return errFencedDuringUndoDemotePrimary
+			}
+			tm.tmState.ClearGroupReplicationNotServingBeforeChange(servingGen)
+			err := tm.tmState.updateTypeAndPublish(ctx, topodatapb.TabletType_PRIMARY, ti.PrimaryTermStartTime, DBActionSetReadWrite, 0)
+			if !tm.settleGroupReplicationFenceLocked(ctx, fences) {
+				return errFencedDuringUndoDemotePrimary
+			}
+			if err == nil {
+				tm.groupReplicationDemoted.Store(false)
+				tm.groupReplicationRedoPending.Store(false)
+			}
+			return err
 		}
 	}
 
+	if tm.groupReplicationFence.decidedSince(fences) {
+		return errFencedDuringUndoDemotePrimary
+	}
 	// We need to redo the prepared transactions in read only mode using the dba user to ensure we don't lose them.
 	if err = tm.redoPreparedTransactionsAndSetReadWrite(ctx); err != nil {
 		return err
 	}
+	tm.groupReplicationRedoPending.Store(false)
+	// The decision above holds, and lifts a fence that the fence check set, unless the check fenced
+	// MySQL again meanwhile: MySQL is then fenced again, and the tablet does not serve.
+	if !tm.settleGroupReplicationFenceLocked(ctx, fences) {
+		return errFencedDuringUndoDemotePrimary
+	}
+	tm.groupReplicationDemoted.Store(false)
 
-	// Update serving graph
+	// Update serving graph. A not-serving reason set since the decision above stands.
 	log.Info("UndoDemotePrimary re-enabling query service")
-	if err := tm.QueryServiceControl.SetServingType(tablet.Type, protoutil.TimeFromProto(tablet.PrimaryTermStartTime).UTC(), true, ""); err != nil {
+	tm.tmState.ClearGroupReplicationNotServingBeforeChange(servingGen)
+	if err := tm.tmState.SetServingUnlessGroupReplicationNotServing(tablet.Type, protoutil.TimeFromProto(tablet.PrimaryTermStartTime).UTC()); err != nil {
 		return vterrors.Wrap(err, "SetServingType(serving=true) failed")
 	}
 	return nil
 }
+
+// errFencedDuringUndoDemotePrimary is returned by UndoDemotePrimary when the tablet's fence check
+// fenced MySQL while UndoDemotePrimary decided that the tablet may serve: the fence may be decided
+// on a newer status of MySQL, and stands.
+var errFencedDuringUndoDemotePrimary = vterrors.New(vtrpc.Code_FAILED_PRECONDITION,
+	"cannot undo the demotion: MySQL was fenced with super_read_only meanwhile, its replication group does not let it serve")
 
 // ReplicaWasPromoted promotes a replica to primary, no questions asked.
 func (tm *TabletManager) ReplicaWasPromoted(ctx context.Context) error {
@@ -885,6 +1190,16 @@ func (tm *TabletManager) ResetReplicationParameters(ctx context.Context) error {
 	err := tm.MysqlDaemon.StopReplication(ctx, tm.hookExtraEnv())
 	if err != nil {
 		return err
+	}
+
+	// MySQL refuses RESET REPLICA ALL on an active group replication member, because it would
+	// also reset the channels of the group. Only reset the default channel there.
+	groupStatus, err := tm.groupReplicationStatus(ctx)
+	if err != nil {
+		return err
+	}
+	if mysql.IsGroupMemberActive(groupStatus) {
+		return tm.MysqlDaemon.ExecuteSuperQueryList(ctx, []string{mysql.ResetDefaultReplicationChannelCommand()})
 	}
 
 	err = tm.MysqlDaemon.ResetReplicationParameters(ctx)
@@ -933,11 +1248,49 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 	// steps fail below.
 	// Note it is important to check for PRIMARY here so that we don't
 	// unintentionally change the type of RDONLY tablets
+	//
+	// A group replication member is checked first: while its MySQL is the primary of a group
+	// with quorum, another primary cannot have been promoted, so the request is stale (for
+	// example from a VTOrc or reparent acting on an old view). Changing the type would take
+	// the shard's only writable primary out of service until the group replication sync loop
+	// promotes it again.
+	//
+	// A reparent that records a reparent journal entry (timeCreatedNS) is the exception: a
+	// PlannedReparentShard repoints the other tablets while the primary-elect's PromoteReplica
+	// switches the group's primary, so the old primary's member can still be the group primary
+	// for a moment. Wait until the group moved the primary away from it.
+	groupStatus, err := tm.groupReplicationStatus(ctx)
+	if err != nil {
+		return err
+	}
+	if mysql.IsGroupPrimary(groupStatus) {
+		if timeCreatedNS == 0 {
+			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION,
+				"cannot replicate from %v: MySQL is the primary of replication group %s", topoproto.TabletAliasString(parentAlias), groupStatus.GroupName)
+		}
+		if groupStatus, err = tm.waitUntilNotGroupPrimary(ctx); err != nil {
+			return vterrors.Wrapf(err, "cannot replicate from %v", topoproto.TabletAliasString(parentAlias))
+		}
+	}
 	tablet := tm.Tablet()
 	if tablet.Type == topodatapb.TabletType_PRIMARY {
 		if err := tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_REPLICA, DBActionNone); err != nil {
 			return err
 		}
+	}
+
+	// An active group replication member replicates through its group, never through the
+	// default channel.
+	if mysql.IsGroupMemberActive(groupStatus) {
+		return tm.setGroupMemberReplicationSourceLocked(ctx, groupStatus, parentAlias, timeCreatedNS, waitPosition, semiSync)
+	}
+	// Nor through the default channel while it is joining its group: a START GROUP_REPLICATION still
+	// runs, and completes the join on its own, also after the client that started it gave up. The
+	// default channel configured meanwhile would run asynchronous replication next to the membership,
+	// which the replication lag poller then reads (the G13 chaos run).
+	if groupStatus.GetStartInProgress() {
+		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot replicate from %v: a START GROUP_REPLICATION runs, MySQL is joining replication group %s",
+			topoproto.TabletAliasString(parentAlias), groupStatus.GetGroupName())
 	}
 
 	// See if we were replicating at all, and should be replicating.
@@ -1038,6 +1391,14 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 			return err
 		}
 		if err := tm.startReplicationRecoverable(ctx); err != nil {
+			return err
+		}
+	}
+	// A former group member that left its group involuntarily keeps the offline_mode that the
+	// OFFLINE_MODE exit state action set. It now replicates from the shard primary, like any
+	// asynchronous replica, and its tablet cannot serve until the flag is cleared.
+	if groupReplicationEnabled() {
+		if err := tm.liftOfflineMode(ctx, "MySQL replicates from the shard primary"); err != nil {
 			return err
 		}
 	}
@@ -1201,6 +1562,16 @@ func (tm *TabletManager) PromoteReplica(ctx context.Context, semiSync bool) (str
 		return "", err
 	}
 
+	// An active group replication member is promoted by the group, not by clearing its
+	// replication configuration.
+	groupStatus, err := tm.groupReplicationStatus(ctx)
+	if err != nil {
+		return "", err
+	}
+	if mysql.IsGroupMemberActive(groupStatus) {
+		return tm.promoteGroupMemberLocked(ctx, groupStatus, semiSyncAction)
+	}
+
 	// If semi-sync is enabled, we need to set two pc to be allowed.
 	// Otherwise, we block all Prepared calls because atomic transactions require semi-sync for correctness..
 	tm.QueryServiceControl.SetTwoPCAllowed(tabletserver.TwoPCAllowed_SemiSync, semiSyncAction == SemiSyncActionSet)
@@ -1235,18 +1606,19 @@ func (tm *TabletManager) fixSemiSync(ctx context.Context, tabletType topodatapb.
 	case SemiSyncActionNone:
 		return nil
 	case SemiSyncActionSet:
-		if tm.SemiSyncMonitor != nil {
-			// We want to enable the semi-sync monitor only if the tablet is going to start
-			// expecting semi-sync ACKs.
-			if tabletType == topodatapb.TabletType_PRIMARY {
-				tm.SemiSyncMonitor.Open()
-			} else {
-				tm.SemiSyncMonitor.Close()
-			}
+		// An active group with at least two ONLINE members supersedes semi-sync. Semi-sync is
+		// then disabled rather than enabled: with an infinite timeout, it would block every
+		// commit as soon as the last replica acknowledging transactions has joined the group.
+		groupStatus, err := tm.groupReplicationStatus(ctx)
+		if err != nil {
+			return err
 		}
-		// Always enable replica-side since it doesn't hurt to keep it on for a primary.
-		// The primary-side needs to be off for a replica, or else it will get stuck.
-		return tm.MysqlDaemon.SetSemiSyncEnabled(ctx, tabletType == topodatapb.TabletType_PRIMARY, true)
+		if mysql.GroupSupersedesSemiSync(groupStatus) {
+			log.Info("MySQL is a member of a group with at least two ONLINE members, disabling semi-sync instead of enabling it",
+				slog.String("group", groupStatus.GroupName))
+			return tm.fixSemiSync(ctx, tabletType, SemiSyncActionUnset)
+		}
+		return tm.enableSemiSync(ctx, tabletType)
 	case SemiSyncActionUnset:
 		// The nil check is required for vtcombo, which doesn't run the semi-sync monitor
 		// but does try to turn off semi-sync.
@@ -1257,6 +1629,23 @@ func (tm *TabletManager) fixSemiSync(ctx context.Context, tabletType topodatapb.
 	default:
 		return vterrors.Errorf(vtrpc.Code_INTERNAL, "Unknown SemiSyncAction - %v", semiSync)
 	}
+}
+
+// enableSemiSync enables semi-sync for a tablet of the given type, whatever group MySQL is in: the
+// replica side always, and the primary side on a PRIMARY.
+func (tm *TabletManager) enableSemiSync(ctx context.Context, tabletType topodatapb.TabletType) error {
+	if tm.SemiSyncMonitor != nil {
+		// We want to enable the semi-sync monitor only if the tablet is going to start
+		// expecting semi-sync ACKs.
+		if tabletType == topodatapb.TabletType_PRIMARY {
+			tm.SemiSyncMonitor.Open()
+		} else {
+			tm.SemiSyncMonitor.Close()
+		}
+	}
+	// Always enable replica-side since it doesn't hurt to keep it on for a primary.
+	// The primary-side needs to be off for a replica, or else it will get stuck.
+	return tm.MysqlDaemon.SetSemiSyncEnabled(ctx, tabletType == topodatapb.TabletType_PRIMARY, true)
 }
 
 func (tm *TabletManager) isPrimarySideSemiSyncEnabled(ctx context.Context) bool {

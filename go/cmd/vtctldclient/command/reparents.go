@@ -103,6 +103,8 @@ var emergencyReparentShardOptions = struct {
 	// RequiredPosition is the GTID set that the new primary must have. At least
 	// one candidate must have received it.
 	RequiredPosition string
+
+	GroupReplicationForceNewGroup bool
 }{}
 
 func validateEmergencyReparentShardOptions(_ *cobra.Command, _ []string) error {
@@ -150,16 +152,17 @@ func commandEmergencyReparentShard(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
 	resp, err := client.EmergencyReparentShard(commandCtx, &vtctldatapb.EmergencyReparentShardRequest{
-		Keyspace:                  keyspace,
-		Shard:                     shard,
-		NewPrimary:                newPrimaryAlias,
-		AllowSplitBrainPromotion:  emergencyReparentShardOptions.AllowSplitBrainPromotion,
-		RequiredPosition:          emergencyReparentShardOptions.RequiredPosition,
-		ExpectedPrimary:           expectedPrimaryAlias,
-		IgnoreReplicas:            ignoreReplicaAliases,
-		WaitReplicasTimeout:       protoutil.DurationToProto(emergencyReparentShardOptions.WaitReplicasTimeout),
-		PreventCrossCellPromotion: emergencyReparentShardOptions.PreventCrossCellPromotion,
-		WaitForAllTablets:         emergencyReparentShardOptions.WaitForAllTablets,
+		Keyspace:                      keyspace,
+		Shard:                         shard,
+		NewPrimary:                    newPrimaryAlias,
+		AllowSplitBrainPromotion:      emergencyReparentShardOptions.AllowSplitBrainPromotion,
+		RequiredPosition:              emergencyReparentShardOptions.RequiredPosition,
+		ExpectedPrimary:               expectedPrimaryAlias,
+		IgnoreReplicas:                ignoreReplicaAliases,
+		WaitReplicasTimeout:           protoutil.DurationToProto(emergencyReparentShardOptions.WaitReplicasTimeout),
+		PreventCrossCellPromotion:     emergencyReparentShardOptions.PreventCrossCellPromotion,
+		WaitForAllTablets:             emergencyReparentShardOptions.WaitForAllTablets,
+		GroupReplicationForceNewGroup: emergencyReparentShardOptions.GroupReplicationForceNewGroup,
 	})
 	if err != nil {
 		return err
@@ -328,6 +331,7 @@ func init() {
 	EmergencyReparentShard.Flags().BoolVar(&emergencyReparentShardOptions.WaitForAllTablets, "wait-for-all-tablets", false, "Should ERS wait for all the tablets to respond. Useful when all the tablets are reachable.")
 	EmergencyReparentShard.Flags().StringSliceVarP(&emergencyReparentShardOptions.IgnoreReplicaAliasStrList, "ignore-replicas", "i", nil, "Comma-separated, repeated list of replica tablet aliases to ignore during the emergency reparent.")
 	EmergencyReparentShard.Flags().StringVar(&emergencyReparentShardOptions.RequiredPosition, "required-position", "", "Minimum MySQL GTID set, for example <uuid>:1-100, that the new primary must have. Fails if no candidate has received it, either applied or still in the relay log. MySQL GTID shards only. On any other shard, ERS demotes a reachable primary and then fails. An older vtctld ignores this flag.")
+	EmergencyReparentShard.Flags().BoolVar(&emergencyReparentShardOptions.GroupReplicationForceNewGroup, "group-replication-force-new-group", false, "Group replication shards only, once the group has lost its majority and its members have left it: drops the voters that do not answer from the shard record, and bootstraps a new group from the voters that answer. Transactions that only the dropped voters held are lost. Make sure the dropped voters are down first: one that still runs, cut off from the vtctld and the topology server, keeps serving. An older vtctld ignores this flag, and its EmergencyReparentShard fails while the group has no quorum.")
 	Root.AddCommand(EmergencyReparentShard)
 
 	InitShardPrimary.Flags().DurationVar(&initShardPrimaryOptions.WaitReplicasTimeout, "wait-replicas-timeout", 30*time.Second, "Time to wait for replicas to catch up in reparenting.")

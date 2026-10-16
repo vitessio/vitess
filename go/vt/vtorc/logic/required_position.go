@@ -71,7 +71,7 @@ func requiredPositionForRecovery(tablet *topodatapb.Tablet, logger logutil.Logge
 		return replication.Position{}, nil
 	}
 
-	durability, err := inst.GetDurabilityPolicy(tablet.Keyspace)
+	durability, err := inst.GetShardDurabilityPolicy(tablet.Keyspace, tablet.Shard)
 	if err != nil {
 		logger.Errorf("required position: cannot read the durability policy, aborting ERS: %v", err)
 		return replication.Position{}, vterrors.Wrapf(err, "cannot read the durability policy of keyspace %s", tablet.Keyspace)
