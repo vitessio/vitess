@@ -80,9 +80,13 @@ check that every behavior of the unreduced model, fairness included, is a
 behavior of the reduced model. Every property that holds for the reduced model
 and does not read a reset field therefore holds for the unreduced one.
 `refinement/check.sh <name>` takes the unreduced model from git history and
-runs the check for `refinement/<name>.cfg`. The configurations cover the
-current code with and without buffering, slow writes with `--force`, and all
-three fixes. A deliberately broken reduction is reported as a violation.
+runs the check for `refinement/<name>.cfg`. `OptSafety` (every step maps to a
+step or a stutter) is checked with 2 writes for the current code with and
+without buffering, slow writes with `--force`, and all three fixes. `OptSpec`
+(the same plus fairness) costs more and is checked with 1 write for the
+current code with and without buffering and for all three fixes, and with
+2 writes when timeouts are disabled. A deliberately broken reduction is
+reported as a violation.
 
 ## Running
 

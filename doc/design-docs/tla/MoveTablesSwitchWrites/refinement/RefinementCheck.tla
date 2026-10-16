@@ -28,5 +28,10 @@ Opt == INSTANCE MoveTablesSwitchWrites WITH
     gwErr        <- [r \in Reqs |-> AttemptLive(r) /\ gwErr[r]],
     startedAfter <- [r \in Reqs |-> ~Finished(r) /\ startedAfter[r]]
 
+\* Every step of the unreduced model is a step of the reduced one (or leaves
+\* the mapped state unchanged).
+OptSafety == Opt!Init /\ [][Opt!Next]_(Opt!vars)
+
+\* The same, plus the reduced model's fairness conditions.
 OptSpec == Opt!Spec
 ===============================================================================
