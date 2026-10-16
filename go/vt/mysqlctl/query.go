@@ -47,8 +47,23 @@ func getPoolReconnect(ctx context.Context, pool *dbconnpool.ConnectionPool) (*db
 	if err != nil {
 		return conn, err
 	}
-	// Run a test query to see if this connection is still good.
-	if _, err := conn.Conn.ExecuteFetch("SELECT 1", 1, false); err != nil {
+	// Run a test query to see if this connection is still good. A server that
+	// does not answer it would hold the caller indefinitely, so close the
+	// connection when ctx ends first.
+	checked := make(chan error, 1)
+	go func() {
+		_, err := conn.Conn.ExecuteFetch("SELECT 1", 1, false)
+		checked <- err
+	}()
+	select {
+	case err = <-checked:
+	case <-ctx.Done():
+		conn.Close()
+		<-checked
+		conn.Recycle()
+		return nil, ctx.Err()
+	}
+	if err != nil {
 		// If we get a connection error, try to reconnect.
 		if sqlErr, ok := err.(*sqlerror.SQLError); ok && (sqlErr.Number() == sqlerror.CRServerGone || sqlErr.Number() == sqlerror.CRServerLost) {
 			if err := conn.Conn.Reconnect(ctx); err != nil {

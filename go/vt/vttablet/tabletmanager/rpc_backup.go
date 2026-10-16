@@ -118,6 +118,9 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 			return err
 		}
 		defer tm.unlock()
+		// The source chosen after the backup must not replace one that a
+		// request made while the backup ran.
+		sourceTicket := tm.tmState.newReplicationTicket()
 
 		tablet, err := tm.TopoServer.GetTablet(ctx, tm.tabletAlias)
 		if err != nil {
@@ -174,7 +177,8 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 				l.Errorf("Failed to convert bool to semisync action, error: %v", err)
 				return
 			}
-			if err := tm.setReplicationSourceLocked(bgCtx, shardPrimary.Alias, 0, "", false, semiSyncAction, 0); err != nil {
+			tm.tmState.replicationSourceChosen(shardPrimary.Alias, sourceTicket)
+			if err := tm.setReplicationSourceLocked(bgCtx, shardPrimary.Alias, sourceTicket, 0, "", false, semiSyncAction, 0); err != nil {
 				l.Errorf("Failed to set replication source, error: %v", err)
 			}
 		}()
