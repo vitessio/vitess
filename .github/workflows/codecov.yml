@@ -139,9 +139,9 @@ jobs:
     - name: Set up Go
       uses: $/.github/actions/setup-go
       with:
-        # The coverage build instruments Vitess's packages, so only their
-        # dependencies come from the unit tests' entry.
-        build-cache: build unit
+        # The coverage build uses its own flags; only its "make build" step
+        # reuses the build entry.
+        build-cache: build
 
     - name: Set up python
       uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0

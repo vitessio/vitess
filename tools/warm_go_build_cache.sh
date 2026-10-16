@@ -21,7 +21,12 @@
 #
 # Each entry must use exactly the flags its jobs use: the flags are part of
 # every package's cache key, and so is the source directory of every package
-# compiled without -trimpath.
+# compiled without -trimpath. All entries but "tools" use -trimpath, so they
+# fit any runner of their architecture. "go tool" does not take -trimpath, so
+# "tools" only fits runners with the same checkout and module cache paths.
+#
+# "unit" is built on top of "build", whose flags it shares; the workflow saves
+# only what it adds.
 #
 # Test packages are warmed with "go test -exec /bin/true": that compiles, vets
 # and links every test binary the way the jobs do, without running any of
@@ -56,16 +61,18 @@ build)
 	go tool -n -modfile=tools/gotestsum/go.mod gotestsum >/dev/null
 	;;
 unit)
-	# "make unit_test": the unit tests, the demo it installs, and gotestsum.
+	# "make unit_test": the unit tests and the demo it installs, with the
+	# flags of "build". gotestsum is already in "build".
+	export CGO_ENABLED=0
 	# shellcheck disable=SC2046
-	warm_tests $(unit_packages)
-	go list -export -deps ./examples/demo/demo.go >/dev/null
-	go tool -n -modfile=tools/gotestsum/go.mod gotestsum >/dev/null
+	warm_tests -trimpath $(unit_packages)
+	go list -trimpath -export -deps ./examples/demo/demo.go >/dev/null
 	;;
 race)
-	# "make unit_test_race" and "make e2e_test_race".
+	# "make unit_test_race" and "make e2e_test_race". The race detector needs
+	# cgo, so gotestsum runs with it too.
 	# shellcheck disable=SC2046
-	warm_tests -race $(unit_packages) $(e2e_race_packages)
+	warm_tests -race -trimpath $(unit_packages) $(e2e_race_packages)
 	go tool -n -modfile=tools/gotestsum/go.mod gotestsum >/dev/null
 	;;
 tools)

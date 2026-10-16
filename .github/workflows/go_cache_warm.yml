@@ -30,10 +30,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Each entry is built on the runner type of the jobs that restore it:
-        # packages compiled without -trimpath have their source and module
-        # cache directories in their cache keys, and those differ between
-        # runner types. Only "build" uses -trimpath.
+        # build, unit and race compile with -trimpath, so their entries fit
+        # any runner of the same architecture. tools does not: "go tool"
+        # takes no -trimpath, so the checkout and module cache paths are part
+        # of its cache keys, and it is built on the GitHub-hosted runner type
+        # the static checks run on.
         include:
           - entry: build
             arch: x64
@@ -42,16 +43,19 @@ jobs:
           - entry: build
             arch: arm64
             runner: oracle-vm-16cpu-64gb-arm64
+          # unit shares the flags of build, which the unit jobs also restore,
+          # so it only saves what it adds on top of build.
           - entry: unit
+            base: build
             arch: x64
             runner: oracle-vm-16cpu-64gb-x86-64
           - entry: unit
+            base: build
             arch: arm64
             runner: oracle-vm-16cpu-64gb-arm64
           - entry: race
             arch: x64
             runner: oracle-vm-16cpu-64gb-x86-64
-          # The static checks run on GitHub-hosted runners.
           - entry: tools
             arch: x64
             runner: ubuntu-24.04
@@ -94,8 +98,27 @@ jobs:
           path: ~/go/pkg/mod
           key: go-mod-${{ hashFiles('go.sum', 'tools/**/go.sum') }}
 
+      - name: Warm the base entry
+        if: matrix.base
+        env:
+          BASE: ${{ matrix.base }}
+        run: |
+          tools/warm_go_build_cache.sh "${BASE}"
+          gocache="$(go env GOCACHE)"
+          find "${gocache}" -type f > "${RUNNER_TEMP}/base-files"
+
       - name: Warm the build cache
-        run: tools/warm_go_build_cache.sh "${{ matrix.entry }}"
+        env:
+          ENTRY: ${{ matrix.entry }}
+        run: tools/warm_go_build_cache.sh "${ENTRY}"
+
+      # Jobs restore the base entry next to this one, so leave its files out.
+      - name: Remove the base entry's files
+        if: matrix.base
+        run: |
+          while read -r file; do
+            rm -f -- "${file}"
+          done < "${RUNNER_TEMP}/base-files"
 
       # setup-go restores "<prefix><sha>" by the prefix, which picks the
       # newest entry.
