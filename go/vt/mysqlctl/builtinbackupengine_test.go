@@ -874,6 +874,9 @@ func TestBackupRestoreWithBinlogs(t *testing.T) {
 			binlogBackupVarsQuery: sqltypes.MakeTestResult(
 				sqltypes.MakeTestFields("Variable_name|Value", "varchar|varchar"),
 				"log_bin|"+logBin, "log_replica_updates|ON"),
+			binlogLocationQuery: sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields("log_bin_basename|log_bin_index", "varchar|varchar"),
+				srcBase+"|"+srcBase+".index"),
 		}
 	}
 	params := BackupParams{

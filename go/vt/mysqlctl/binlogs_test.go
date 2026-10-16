@@ -112,9 +112,12 @@ func TestBinlogFilesForFullBackup(t *testing.T) {
 
 func TestCheckBinlogsBackupable(t *testing.T) {
 	tests := []struct {
-		name    string
-		rows    []string // Variable_name|Value, as SHOW GLOBAL VARIABLES returns them
-		wantErr string
+		name string
+		rows []string // Variable_name|Value, as SHOW GLOBAL VARIABLES returns them
+		// binLogPath overrides the cnf's log-bin, which matches what mysqld reports.
+		binLogPath string
+		noLogBin   bool
+		wantErr    string
 	}{
 		{name: "with replica updates", rows: []string{"log_bin|ON", "log_replica_updates|ON", "log_slave_updates|ON"}},
 		{name: "binlog off", rows: []string{"log_bin|OFF", "log_replica_updates|ON", "log_slave_updates|ON"}, wantErr: "log_bin"},
@@ -122,6 +125,10 @@ func TestCheckBinlogsBackupable(t *testing.T) {
 		// MySQL 5.7 has only log_slave_updates.
 		{name: "MySQL 5.7 with replica updates", rows: []string{"log_bin|ON", "log_slave_updates|ON"}},
 		{name: "MySQL 5.7 without replica updates", rows: []string{"log_bin|ON", "log_slave_updates|OFF"}, wantErr: "log_replica_updates is off"},
+		// The binlogs are found through cnf once mysqld stops, so cnf must describe
+		// them before it does.
+		{name: "log-bin unset", rows: []string{"log_bin|ON", "log_replica_updates|ON"}, noLogBin: true, wantErr: "log-bin is not set"},
+		{name: "log-bin differs from mysqld's", rows: []string{"log_bin|ON", "log_replica_updates|ON"}, binLogPath: "/vt/bin-logs/other-bin", wantErr: "log_bin_basename"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -133,8 +140,18 @@ func TestCheckBinlogsBackupable(t *testing.T) {
 				binlogBackupVarsQuery: sqltypes.MakeTestResult(
 					sqltypes.MakeTestFields("Variable_name|Value", "varchar|varchar"),
 					tt.rows...),
+				binlogLocationQuery: sqltypes.MakeTestResult(
+					sqltypes.MakeTestFields("log_bin_basename|log_bin_index", "varchar|varchar"),
+					"/vt/bin-logs/src-bin|/vt/bin-logs/src-bin.index"),
 			}
-			err := checkBinlogsBackupable(t.Context(), mysqld)
+			cnf := &Mycnf{DataDir: "/vt/data", BinLogPath: "/vt/bin-logs/src-bin"}
+			if tt.binLogPath != "" {
+				cnf.BinLogPath = tt.binLogPath
+			}
+			if tt.noLogBin {
+				cnf.BinLogPath = ""
+			}
+			err := checkBinlogsBackupable(t.Context(), mysqld, cnf)
 			if tt.wantErr == "" {
 				require.NoError(t, err)
 				return
@@ -217,7 +234,7 @@ func TestVerifyRestoredBinlogs(t *testing.T) {
 				basename, index = tt.basename, tt.index
 			}
 			mysqld.FetchSuperQueryMap = map[string]*sqltypes.Result{
-				restoredBinlogVarsQuery: sqltypes.MakeTestResult(
+				binlogLocationQuery: sqltypes.MakeTestResult(
 					sqltypes.MakeTestFields("log_bin_basename|log_bin_index", "varchar|varchar"),
 					basename+"|"+index),
 			}
@@ -260,7 +277,7 @@ func TestEnsureRestoredGTIDPurgedMatchesManifestKeepsBinlogs(t *testing.T) {
 	// SetReplicationPosition would fail because it expects a different position.
 	mysqld.SetReplicationPositionPos = other
 	mysqld.FetchSuperQueryMap = map[string]*sqltypes.Result{
-		restoredBinlogVarsQuery: sqltypes.MakeTestResult(
+		binlogLocationQuery: sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields("log_bin_basename|log_bin_index", "varchar|varchar"),
 			filepath.Join(dir, "dst-bin")+"|"+filepath.Join(dir, "dst-bin.index")),
 	}

@@ -141,6 +141,7 @@ Limitations and requirements:
 - Full backups only.
 - `vtbackup --restore-with-clone` together with `--include-binlogs` is refused in this release, because CLONE does not copy binary logs.
 - The backup source must have `log_bin` and `log_replica_updates` enabled. Otherwise the backup fails with `FAILED_PRECONDITION`.
+- The tablet's `log-bin` (and `log-bin-index`, if set) must say where `mysqld` keeps its binary logs, as the `my.cnf` that Vitess generates does. A source whose `mysqld` uses its default basename because `log-bin` isn't set, or another basename, is refused with `FAILED_PRECONDITION` before `mysqld` is stopped.
 
 Things to be aware of:
 

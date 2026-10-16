@@ -87,8 +87,9 @@ func ValidateIncludeBinlogs(params BackupParams) error {
 
 // checkBinlogsBackupable refuses to back up binlogs that would not contain every
 // transaction in the data: no binlog, or no log_replica_updates, since a server that
-// was a replica then did not log what it replicated.
-func checkBinlogsBackupable(ctx context.Context, mysqld MysqlDaemon) error {
+// was a replica then did not log what it replicated. It also refuses when cnf doesn't
+// say where mysqld keeps them, which can only be read from cnf once mysqld stops.
+func checkBinlogsBackupable(ctx context.Context, mysqld MysqlDaemon, cnf *Mycnf) error {
 	qr, err := mysqld.FetchSuperQuery(ctx, binlogBackupVarsQuery)
 	if err != nil {
 		return vterrors.Wrap(err, "cannot read binlog settings")
@@ -113,6 +114,9 @@ func checkBinlogsBackupable(ctx context.Context, mysqld MysqlDaemon) error {
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot include binlogs: log_bin is off")
 	case !ok || replicaUpdates != "ON":
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot include binlogs: log_replica_updates is off, so this server's binlogs may lack replicated transactions")
+	}
+	if _, err := checkBinlogLocation(ctx, mysqld, cnf, vtrpcpb.Code_FAILED_PRECONDITION); err != nil {
+		return vterrors.Wrap(err, "cannot include binlogs")
 	}
 	return nil
 }
@@ -148,8 +152,36 @@ func binlogFilesForFullBackup(cnf *Mycnf) ([]FileEntry, error) {
 	return fes, nil
 }
 
-// restoredBinlogVarsQuery reads where mysqld looks for binlogs after a restore.
-const restoredBinlogVarsQuery = "SELECT @@global.log_bin_basename, @@global.log_bin_index"
+// binlogLocationQuery reads where mysqld looks for binlogs.
+const binlogLocationQuery = "SELECT @@global.log_bin_basename, @@global.log_bin_index"
+
+// checkBinlogLocation checks that mysqld uses the binlog basename and index that cnf
+// describes, failing with code if it doesn't, and returns the index.
+func checkBinlogLocation(ctx context.Context, mysqld MysqlDaemon, cnf *Mycnf, code vtrpcpb.Code) (string, error) {
+	basename, indexPath, err := binlogLocation(cnf)
+	if err != nil {
+		return "", err
+	}
+	qr, err := mysqld.FetchSuperQuery(ctx, binlogLocationQuery)
+	if err != nil {
+		return "", vterrors.Wrap(err, "cannot read binlog location")
+	}
+	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 2 {
+		return "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected result for %q: %v", binlogLocationQuery, qr.Rows)
+	}
+	// mysqld reports a log-bin in a relative subdirectory as a relative path, which
+	// it resolves under the datadir.
+	if got := absUnderDataDir(cnf, qr.Rows[0][0].ToString()); got != basename {
+		return "", vterrors.Errorf(code, "binlogs are under %s but mysqld's log_bin_basename is %s", basename, got)
+	}
+	// mysqld uses log-bin-index as given but reports a custom extension as ".index",
+	// so only the path without its extension is comparable.
+	got := absUnderDataDir(cnf, qr.Rows[0][1].ToString())
+	if strings.TrimSuffix(got, filepath.Ext(got)) != strings.TrimSuffix(indexPath, filepath.Ext(indexPath)) {
+		return "", vterrors.Errorf(code, "binlog index is %s but mysqld's log_bin_index is %s", indexPath, got)
+	}
+	return indexPath, nil
+}
 
 // finishBinlogRestore gives the restored binlogs their source mtimes, so that
 // binlog_expire_logs_seconds still counts from when they were written, and writes
@@ -190,27 +222,9 @@ func finishBinlogRestore(cnf *Mycnf, fes []FileEntry) error {
 // gtid_executed at the backup position. A mismatch fails the restore: repairing it
 // with RESET would delete them.
 func verifyRestoredBinlogs(ctx context.Context, mysqld MysqlDaemon, cnf *Mycnf, pos replication.Position) error {
-	basename, indexPath, err := binlogLocation(cnf)
+	indexPath, err := checkBinlogLocation(ctx, mysqld, cnf, vtrpcpb.Code_INTERNAL)
 	if err != nil {
-		return err
-	}
-	qr, err := mysqld.FetchSuperQuery(ctx, restoredBinlogVarsQuery)
-	if err != nil {
-		return vterrors.Wrap(err, "cannot read binlog location after restore")
-	}
-	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 2 {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected result for %q: %v", restoredBinlogVarsQuery, qr.Rows)
-	}
-	// mysqld reports a log-bin in a relative subdirectory as a relative path, which
-	// it resolves under the datadir.
-	if got := absUnderDataDir(cnf, qr.Rows[0][0].ToString()); got != basename {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "restored binlogs are under %s but mysqld's log_bin_basename is %s", basename, got)
-	}
-	// mysqld uses log-bin-index as given but reports a custom extension as ".index",
-	// so only the path without its extension is comparable.
-	got := absUnderDataDir(cnf, qr.Rows[0][1].ToString())
-	if strings.TrimSuffix(got, filepath.Ext(got)) != strings.TrimSuffix(indexPath, filepath.Ext(indexPath)) {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "restored binlog index is %s but mysqld's log_bin_index is %s", indexPath, got)
+		return vterrors.Wrap(err, "cannot check the restored binlogs")
 	}
 	// An encrypted binlog is readable only with the binlog master key that encrypted
 	// it, so a target whose keyring lacks the source's key can't serve it. The list

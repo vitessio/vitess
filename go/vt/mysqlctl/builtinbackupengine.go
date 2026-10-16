@@ -551,7 +551,7 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 	}
 
 	if params.IncludeBinlogs {
-		if err := checkBinlogsBackupable(ctx, params.Mysqld); err != nil {
+		if err := checkBinlogsBackupable(ctx, params.Mysqld, params.Cnf); err != nil {
 			return BackupUnusable, err
 		}
 	}
