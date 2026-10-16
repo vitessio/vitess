@@ -120,6 +120,10 @@ type shardBuffer struct {
 	lastReparent time.Time
 	// currentPrimary is tracked to determine when to update "lastReparent".
 	currentPrimary *topodatapb.TabletAlias
+	// generation is the keyspace event watcher's generation for the current
+	// or last buffering. Keyspace events with a lower generation were sent
+	// before that buffering started and do not end it.
+	generation uint64
 	// timeoutThread will be set while a failover is in progress and the object is
 	// in the BUFFERING state.
 	timeoutThread *timeoutThread
@@ -292,14 +296,15 @@ func (sb *shardBuffer) shouldBufferLocked(failoverDetected bool) bool {
 }
 
 func (sb *shardBuffer) startBufferingLocked(ctx context.Context, kev *discovery.KeyspaceEventWatcher, err error) bool {
+	var generation uint64
 	if kev != nil {
 		var marked bool
 		if isMoveTablesDeniedError(err) {
 			// The primary is serving: a MoveTables traffic switch denied the
 			// table on it. Keep buffering until the switch completes.
-			marked = kev.MarkMoveTablesDenied(ctx, sb.keyspace, sb.shard)
+			generation, marked = kev.MarkMoveTablesDenied(ctx, sb.keyspace, sb.shard)
 		} else {
-			marked = kev.MarkShardNotServing(ctx, sb.keyspace, sb.shard, isErrorDueToReparenting(err))
+			generation, marked = kev.MarkShardNotServing(ctx, sb.keyspace, sb.shard, isErrorDueToReparenting(err))
 		}
 		if !marked {
 			// We failed to mark the shard as not serving. Do not buffer the request.
@@ -315,6 +320,7 @@ func (sb *shardBuffer) startBufferingLocked(ctx context.Context, kev *discovery.
 	failoverDurationSumMs.Reset(sb.statsKey)
 
 	sb.lastStart = sb.timeNow()
+	sb.generation = generation
 	sb.logErrorIfStateNotLocked(stateIdle)
 	sb.state.Store(int32(stateBuffering))
 	sb.queue = make([]*entry, 0)
@@ -533,6 +539,13 @@ func (sb *shardBuffer) recordKeyspaceEvent(alias *topodatapb.TabletAlias, stillS
 			sb.lastReparent = sb.timeNow()
 		}
 		sb.currentPrimary = alias
+	}
+	if keyspaceEvent.Generation < sb.generation {
+		// The event was sent before the current buffering started, e.g. it was
+		// still queued, so it does not report the end of this disruption.
+		log.V(2).Info(fmt.Sprintf("ignoring keyspace event for shard %s/%s from generation %d, buffering started at generation %d",
+			sb.keyspace, sb.shard, keyspaceEvent.Generation, sb.generation))
+		return
 	}
 	var reason stopReason
 	var msg string

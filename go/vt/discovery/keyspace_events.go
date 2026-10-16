@@ -103,6 +103,12 @@ type KeyspaceEvent struct {
 
 	// MoveTablesState records the current state of an ongoing MoveTables workflow
 	MoveTablesState MoveTablesState
+
+	// Generation is the keyspace's generation when the event was sent (see
+	// MarkShardNotServing). The event says nothing about an availability
+	// incident that was marked with a higher generation, since that incident
+	// started after the event was sent.
+	Generation uint64
 }
 
 type ShardEvent struct {
@@ -148,6 +154,10 @@ type keyspaceState struct {
 	// lastSrvVSchema is the latest SrvVSchema the MoveTables state was
 	// evaluated against, or nil if there was none.
 	lastSrvVSchema *vschemapb.SrvVSchema
+	// generation is advanced every time an availability incident is marked
+	// by MarkShardNotServing or MarkMoveTablesDenied, and sent with every
+	// event.
+	generation uint64
 }
 
 // isConsistent returns whether the keyspace is currently consistent or not.
@@ -415,6 +425,7 @@ func (kss *keyspaceState) ensureConsistentLocked() {
 		Keyspace:        kss.keyspace,
 		Shards:          make([]ShardEvent, 0, len(kss.shards)),
 		MoveTablesState: moveTablesState,
+		Generation:      kss.generation,
 	}
 
 	// we haven't found any inconsistencies between the HealthCheck stream and the topology
@@ -1171,13 +1182,14 @@ func (kew *KeyspaceEventWatcher) WaitForConsistentKeyspaces(ctx context.Context,
 // state is re-evaluated from the latest SrvVSchema and the shard records in
 // the background, so the caller does not wait for topo reads.
 //
-// It returns false if the keyspace or the shard is unknown, in which case the
-// caller must not buffer.
-func (kew *KeyspaceEventWatcher) MarkMoveTablesDenied(ctx context.Context, keyspace string, shard string) bool {
+// It returns the generation of the incident (see MarkShardNotServing), and
+// false if the keyspace or the shard is unknown, in which case the caller
+// must not buffer.
+func (kew *KeyspaceEventWatcher) MarkMoveTablesDenied(ctx context.Context, keyspace string, shard string) (uint64, bool) {
 	kss := kew.getKeyspaceStatus(ctx, keyspace)
 	if kss == nil {
 		// Only happens if the keyspace was deleted.
-		return false
+		return 0, false
 	}
 	kss.mu.Lock()
 	defer kss.mu.Unlock()
@@ -1185,18 +1197,19 @@ func (kew *KeyspaceEventWatcher) MarkMoveTablesDenied(ctx context.Context, keysp
 	if sstate == nil {
 		// This only happens if the shard is deleted, or if
 		// the keyspace event watcher hasn't seen the shard at all.
-		return false
+		return 0, false
 	}
+	kss.generation++
 	kss.consistent = false
 	if kss.lastSrvVSchema == nil {
 		// Without a SrvVSchema the MoveTables state cannot be evaluated: fall
 		// back to marking the shard not serving.
 		sstate.serving = false
-		return true
+		return kss.generation, true
 	}
 	kss.moveTablesState = &MoveTablesState{Typ: MoveTablesRegular, State: MoveTablesSwitching}
 	go kss.reevaluateMoveTables()
-	return true
+	return kss.generation, true
 }
 
 // MarkShardNotServing marks the given shard not serving.
@@ -1204,12 +1217,17 @@ func (kew *KeyspaceEventWatcher) MarkMoveTablesDenied(ctx context.Context, keysp
 // coordinate between the sharding logic and the keyspace event watcher.
 // We take in a boolean as well to tell us whether this error is because
 // a reparent is ongoing. If it is, we also mark the shard to wait for a reparent.
-// The return argument is whether the shard was found and marked not serving successfully or not.
-func (kew *KeyspaceEventWatcher) MarkShardNotServing(ctx context.Context, keyspace string, shard string, isReparentErr bool) bool {
+//
+// Marking an incident advances the keyspace's generation, which is returned
+// and sent with every later KeyspaceEvent: an event with a lower generation
+// was sent before the incident was marked and cannot be its resolution. The
+// boolean return argument is whether the shard was found and marked not
+// serving successfully or not.
+func (kew *KeyspaceEventWatcher) MarkShardNotServing(ctx context.Context, keyspace string, shard string, isReparentErr bool) (uint64, bool) {
 	kss := kew.getKeyspaceStatus(ctx, keyspace)
 	if kss == nil {
 		// Only happens if the keyspace was deleted.
-		return false
+		return 0, false
 	}
 	kss.mu.Lock()
 	defer kss.mu.Unlock()
@@ -1217,8 +1235,9 @@ func (kew *KeyspaceEventWatcher) MarkShardNotServing(ctx context.Context, keyspa
 	if sstate == nil {
 		// This only happens if the shard is deleted, or if
 		// the keyspace event watcher hasn't seen the shard at all.
-		return false
+		return 0, false
 	}
+	kss.generation++
 	// Mark the keyspace inconsistent and the shard not serving.
 	kss.consistent = false
 	sstate.serving = false
@@ -1229,5 +1248,5 @@ func (kew *KeyspaceEventWatcher) MarkShardNotServing(ctx context.Context, keyspa
 		// a serving healthcheck from a primary that is being demoted.
 		sstate.waitForReparent = true
 	}
-	return true
+	return kss.generation, true
 }

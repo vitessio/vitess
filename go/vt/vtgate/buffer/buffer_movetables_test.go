@@ -35,26 +35,26 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-const moveTablesCell = "zone1"
+const singleShardCell = "zone1"
 
-// moveTablesSrvTopo serves a single keyspace with a single shard from a
+// singleShardSrvTopo serves a single keyspace with a single shard from a
 // memorytopo server. Its SrvVSchema watch delivers srvVSchema once; later
 // updates are delivered through KeyspaceEventWatcher.SrvVSchemaInstalled, as
 // vtgate's executor does.
-type moveTablesSrvTopo struct {
+type singleShardSrvTopo struct {
 	ts         *topo.Server
 	srvVSchema *vschemapb.SrvVSchema
 }
 
-func (s *moveTablesSrvTopo) GetTopoServer() (*topo.Server, error) {
+func (s *singleShardSrvTopo) GetTopoServer() (*topo.Server, error) {
 	return s.ts, nil
 }
 
-func (s *moveTablesSrvTopo) GetSrvKeyspaceNames(ctx context.Context, cell string, staleOK bool) ([]string, error) {
+func (s *singleShardSrvTopo) GetSrvKeyspaceNames(ctx context.Context, cell string, staleOK bool) ([]string, error) {
 	return []string{keyspace}, nil
 }
 
-func (s *moveTablesSrvTopo) GetSrvKeyspace(ctx context.Context, cell, ks string) (*topodatapb.SrvKeyspace, error) {
+func (s *singleShardSrvTopo) GetSrvKeyspace(ctx context.Context, cell, ks string) (*topodatapb.SrvKeyspace, error) {
 	return &topodatapb.SrvKeyspace{
 		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{{
 			ServedType:      topodatapb.TabletType_PRIMARY,
@@ -63,11 +63,11 @@ func (s *moveTablesSrvTopo) GetSrvKeyspace(ctx context.Context, cell, ks string)
 	}, nil
 }
 
-func (s *moveTablesSrvTopo) WatchSrvKeyspace(ctx context.Context, cell, ks string, callback func(*topodatapb.SrvKeyspace, error) bool) {
+func (s *singleShardSrvTopo) WatchSrvKeyspace(ctx context.Context, cell, ks string, callback func(*topodatapb.SrvKeyspace, error) bool) {
 	callback(s.GetSrvKeyspace(ctx, cell, ks))
 }
 
-func (s *moveTablesSrvTopo) WatchSrvVSchema(ctx context.Context, cell string, callback func(*vschemapb.SrvVSchema, error) bool) {
+func (s *singleShardSrvTopo) WatchSrvVSchema(ctx context.Context, cell string, callback func(*vschemapb.SrvVSchema, error) bool) {
 	callback(s.srvVSchema, nil)
 }
 
@@ -79,7 +79,7 @@ func (s *moveTablesSrvTopo) WatchSrvVSchema(ctx context.Context, cell string, ca
 func TestMoveTablesBufferingEndsWhenWritesSwitch(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
 
-	ts := memorytopo.NewServer(ctx, moveTablesCell)
+	ts := memorytopo.NewServer(ctx, singleShardCell)
 	t.Cleanup(ts.Close)
 	require.NoError(t, ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{}))
 	require.NoError(t, ts.CreateShard(ctx, keyspace, shard))
@@ -95,8 +95,8 @@ func TestMoveTablesBufferingEndsWhenWritesSwitch(t *testing.T) {
 	// The MoveTables workflow routes writes to the source, and vtgate has
 	// seen its routing rules.
 	healthChecks := make(chan *discovery.TabletHealth, 10)
-	srvTopo := &moveTablesSrvTopo{ts: ts, srvVSchema: routingRules(keyspace)}
-	kew := discovery.NewKeyspaceEventWatcher(ctx, srvTopo, discovery.NewFakeHealthCheck(healthChecks), moveTablesCell)
+	srvTopo := &singleShardSrvTopo{ts: ts, srvVSchema: routingRules(keyspace)}
+	kew := discovery.NewKeyspaceEventWatcher(ctx, srvTopo, discovery.NewFakeHealthCheck(healthChecks), singleShardCell)
 
 	cfg := NewDefaultConfig()
 	cfg.Enabled = true
@@ -121,7 +121,7 @@ func TestMoveTablesBufferingEndsWhenWritesSwitch(t *testing.T) {
 
 	primaryHealth := &discovery.TabletHealth{
 		Tablet: &topodatapb.Tablet{
-			Alias:    &topodatapb.TabletAlias{Cell: moveTablesCell, Uid: 100},
+			Alias:    &topodatapb.TabletAlias{Cell: singleShardCell, Uid: 100},
 			Keyspace: keyspace,
 			Shard:    shard,
 			Type:     topodatapb.TabletType_PRIMARY,
@@ -131,13 +131,8 @@ func TestMoveTablesBufferingEndsWhenWritesSwitch(t *testing.T) {
 		PrimaryTermStartTime: 1,
 	}
 	healthChecks <- primaryHealth
-	// Wait for the buffer to process the event that reports the keyspace as
-	// consistent, so that it cannot end the buffering started below.
-	sb := b.getOrCreateBuffer(keyspace, shard)
 	require.Eventually(t, func() bool {
-		sb.mu.RLock()
-		defer sb.mu.RUnlock()
-		return sb.currentPrimary != nil
+		return len(kew.GetServingKeyspaces()) == 1
 	}, 30*time.Second, 10*time.Millisecond)
 
 	// SwitchTraffic denies the table on the source. Nothing rebuilds the
