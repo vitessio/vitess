@@ -2137,3 +2137,13 @@ func TestFinalCheckCoversTheOldApplier(t *testing.T) {
 		})
 	}
 }
+
+func TestUndoDemotePrimaryKeepsDeferredReplicaOutOfRotation(t *testing.T) {
+	tm, md, _, qsc, _ := newPendingReplicationTM(t)
+	tm._waitForGrantsComplete = make(chan struct{})
+	close(tm._waitForGrantsComplete)
+	md.ExpectedExecuteSuperQueryList = nil
+	require.NoError(t, tm.UndoDemotePrimary(t.Context(), false))
+	assert.True(t, tm.tmState.replicationInitPending())
+	assert.False(t, qsc.IsServing())
+}
