@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/logutil"
@@ -1088,6 +1089,69 @@ func TestReparentSourceSurvivesFailedValidation(t *testing.T) {
 	require.ErrorContains(t, tm.retryReplicationInitializationOnce(t.Context(), id), "(new-primary:3306), which a reparent or VTOrc chose")
 	require.NoError(t, md.CheckSuperQueryList())
 	assert.False(t, qsc.IsServing())
+}
+
+type failingSemiSyncProbeDaemon struct {
+	*mysqlctl.FakeMysqlDaemon
+}
+
+func (d *failingSemiSyncProbeDaemon) SemiSyncExtensionLoaded(context.Context) (mysql.SemiSyncType, error) {
+	return mysql.SemiSyncTypeUnknown, errors.New("semi-sync plugin probe failed")
+}
+
+func TestReparentSourceSurvivesEarlyRPCFailure(t *testing.T) {
+	for _, rpc := range []struct {
+		name string
+		call func(context.Context, *TabletManager, *topodatapb.TabletAlias) error
+	}{
+		{name: "SetReplicationSource", call: func(ctx context.Context, tm *TabletManager, alias *topodatapb.TabletAlias) error {
+			return tm.SetReplicationSource(ctx, alias, 0, "", true, true, 0)
+		}},
+		{name: "InitReplica", call: func(ctx context.Context, tm *TabletManager, alias *topodatapb.TabletAlias) error {
+			return tm.InitReplica(ctx, alias, gtidFlavor+"/"+gtidPosition, 0, true)
+		}},
+	} {
+		for _, failure := range []struct {
+			name string
+			err  string
+			// fail makes the RPC fail early, and returns the context to call it
+			// with and a function that undoes the failure.
+			fail func(t *testing.T, tm *TabletManager, md *mysqlctl.FakeMysqlDaemon) (context.Context, func())
+		}{
+			{name: "semi-sync plugin probe", err: "semi-sync plugin probe failed", fail: func(t *testing.T, tm *TabletManager, md *mysqlctl.FakeMysqlDaemon) (context.Context, func()) {
+				tm.MysqlDaemon = &failingSemiSyncProbeDaemon{FakeMysqlDaemon: md}
+				return t.Context(), func() { tm.MysqlDaemon = md }
+			}},
+			{name: "busy action lock", err: "deadline exceeded", fail: func(t *testing.T, tm *TabletManager, md *mysqlctl.FakeMysqlDaemon) (context.Context, func()) {
+				require.NoError(t, tm.lock(t.Context()))
+				ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
+				t.Cleanup(cancel)
+				return ctx, tm.unlock
+			}},
+		} {
+			t.Run(rpc.name+"/"+failure.name, func(t *testing.T) {
+				tm, md, ts, qsc, id := newPendingReplicationTM(t)
+				newPrimary := newTestTablet(t, 3, "ks", "0", nil)
+				newPrimary.Type = topodatapb.TabletType_PRIMARY
+				newPrimary.MysqlHostname, newPrimary.MysqlPort = "new-primary", 3306
+				require.NoError(t, ts.CreateTablet(t.Context(), newPrimary))
+				md.ExpectedExecuteSuperQueryList = nil
+				tm._waitForGrantsComplete = make(chan struct{})
+				close(tm._waitForGrantsComplete)
+
+				ctx, undo := failure.fail(t, tm, md)
+				require.ErrorContains(t, rpc.call(ctx, tm, newPrimary.Alias), failure.err)
+				undo()
+
+				// The shard record still names the old primary. The retry must
+				// keep the RPC's target.
+				require.ErrorContains(t, tm.retryReplicationInitializationOnce(t.Context(), id), "(new-primary:3306), which a reparent or VTOrc chose")
+				require.NoError(t, md.CheckSuperQueryList())
+				assert.Empty(t, md.CurrentSourceHost)
+				assert.False(t, qsc.IsServing())
+			})
+		}
+	}
 }
 
 // blockedCommitDaemon is a former primary with a commit waiting for semi-sync
