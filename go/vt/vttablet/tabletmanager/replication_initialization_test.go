@@ -1270,6 +1270,7 @@ func TestFailedFenceIsRepeatedByTheNextAttempt(t *testing.T) {
 		}{
 			{name: "super_read_only times out", setup: func(d *blockedCommitDaemon) { d.stuck = true }, err: "deadline exceeded"},
 			{name: "disabling semi-sync fails", setup: func(d *blockedCommitDaemon) { d.disableErr = errors.New("connection lost") }, err: "connection lost"},
+			{name: "reading semi-sync fails", setup: func(d *blockedCommitDaemon) { d.ReadSemiSyncEnabledError = errors.New("variables unreadable") }, err: "variables unreadable"},
 		} {
 			t.Run(path.name+"/"+tc.name, func(t *testing.T) {
 				tm, md, qsc, id := newFormerPrimaryTM(t, path.running, ",8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1")
@@ -1284,7 +1285,7 @@ func TestFailedFenceIsRepeatedByTheNextAttempt(t *testing.T) {
 
 				// Released commits may still be finishing. The next attempt
 				// must fence again rather than validate at once.
-				md.stuck = false
+				md.stuck, md.ReadSemiSyncEnabledError = false, nil
 				require.ErrorContains(t, initializeFormerPrimary(t.Context(), tm, path.retry, id), "Errant GTID detected")
 				assert.True(t, md.SuperReadOnly.Load())
 				assert.False(t, qsc.IsServing())

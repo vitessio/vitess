@@ -1504,9 +1504,9 @@ const fenceRevertTimeout = 2 * time.Second
 // reach gtid_executed only once released, so when it returns true the caller
 // must repeat its errant GTID check.
 func (tm *TabletManager) fenceFormerPrimary(ctx context.Context) (_ bool, err error) {
-	source, replica := tm.MysqlDaemon.SemiSyncEnabled(ctx)
-	if !source {
-		return false, nil
+	source, replica, err := tm.MysqlDaemon.ReadSemiSyncEnabled(ctx)
+	if err != nil || !source {
+		return false, err
 	}
 	defer func() {
 		if err == nil {
