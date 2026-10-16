@@ -1715,6 +1715,9 @@ func stopReplicationOnRequest(t *testing.T, tm *TabletManager, md *mysqlctl.Fake
 	case "ResetReplication":
 		md.ExpectedExecuteSuperQueryList = []string{"FAKE RESET ALL REPLICATION"}
 		require.NoError(t, tm.ResetReplication(t.Context()))
+	case "ResetReplicationParameters":
+		md.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA", "FAKE RESET REPLICA ALL"}
+		require.NoError(t, tm.ResetReplicationParameters(t.Context()))
 	}
 	require.NoError(t, md.CheckSuperQueryList())
 	// The fake does not stop replication for the last two.
@@ -1723,7 +1726,7 @@ func stopReplicationOnRequest(t *testing.T, tm *TabletManager, md *mysqlctl.Fake
 }
 
 func TestDeferredInitializationKeepsReplicationStoppedOnRequest(t *testing.T) {
-	for _, stop := range []string{"StopReplication", "StopReplicationMinimum", "StartReplicationUntilAfter", "ResetReplication"} {
+	for _, stop := range []string{"StopReplication", "StopReplicationMinimum", "StartReplicationUntilAfter", "ResetReplication", "ResetReplicationParameters"} {
 		t.Run(stop, func(t *testing.T) {
 			tm, md, qsc, id := newReplicatingPendingTM(t)
 			stopReplicationOnRequest(t, tm, md, stop)

@@ -911,6 +911,7 @@ func (tm *TabletManager) ReplicaWasPromoted(ctx context.Context) error {
 // ResetReplicationParameters resets the replica replication parameters
 func (tm *TabletManager) ResetReplicationParameters(ctx context.Context) error {
 	log.Info("ResetReplicationParameters")
+	ticket := tm.tmState.newReplicationTicket()
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
 		return err
 	}
@@ -928,6 +929,7 @@ func (tm *TabletManager) ResetReplicationParameters(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	tm.tmState.replicationRunRequested(ticket, false)
 	return nil
 }
 
