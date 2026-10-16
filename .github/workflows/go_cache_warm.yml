@@ -9,6 +9,10 @@ on:
   push:
     branches:
       - "main"
+  # TEMPORARY: lets #21614 save PR-scoped entries to measure; remove before merging.
+  pull_request:
+    branches:
+      - "main"
   workflow_dispatch:
 
 # Only the newest commit's caches matter.
