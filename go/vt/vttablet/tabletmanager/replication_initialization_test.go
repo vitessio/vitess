@@ -1980,3 +1980,27 @@ func TestOfflineBackupLeavesDeferredReplicationToTheRetry(t *testing.T) {
 		}
 	}
 }
+
+func TestDeferredRetryWaitsForActions(t *testing.T) {
+	t.Run("offline backup", func(t *testing.T) {
+		tm, md, _, _, id := newPendingReplicationTM(t)
+		md.ExpectedExecuteSuperQueryList = nil
+		require.NoError(t, tm.lock(t.Context()))
+		defer tm.unlock()
+		require.NoError(t, tm.changeTypeLocked(t.Context(), topodatapb.TabletType_BACKUP, DBActionNone, SemiSyncActionNone))
+		err := tm.retryReplicationInitializationOnce(t.Context(), id)
+		_, waiting := errors.AsType[*replicationInitWaitError](err)
+		assert.True(t, waiting, "%v", err)
+		assert.ErrorContains(t, err, "waiting for the backup to finish")
+	})
+	t.Run("another action", func(t *testing.T) {
+		tm, md, _, _, id := newPendingReplicationTM(t)
+		md.ExpectedExecuteSuperQueryList = nil
+		require.NoError(t, tm.lock(t.Context()))
+		defer tm.unlock()
+		err := tm.retryReplicationInitializationOnce(t.Context(), id)
+		_, waiting := errors.AsType[*replicationInitWaitError](err)
+		assert.True(t, waiting, "%v", err)
+		assert.ErrorContains(t, err, "another action is running")
+	})
+}

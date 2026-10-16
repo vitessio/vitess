@@ -1284,7 +1284,7 @@ func (tm *TabletManager) attemptDeferredReplicationInit(ctx context.Context, id 
 	// RPCs can change replication once the tablet serves them. Do not wait for
 	// one while holding the shard lock.
 	if !tm.actionSema.TryAcquire(1) {
-		return vterrors.New(vtrpc.Code_UNAVAILABLE, "another action is running on this tablet")
+		return &replicationInitWaitError{"another action is running on this tablet"}
 	}
 	defer tm.unlock()
 	if done, err := tm.settleDeferredReplicationInit(ctx, id); done || err != nil {
@@ -1339,10 +1339,10 @@ func (tm *TabletManager) endCheckedReplicationInit(id, ticket uint64) error {
 // settleDeferredReplicationInit reports whether the deferred replication
 // initialization id has ended without needing a replication change: it is no
 // longer pending, or the tablet has become a primary, which ends it. While a
-// restore runs, or while replication is stopped on request, it returns a
-// *replicationInitWaitError. It changes no
-// replication, so it needs no lock, and ending the deferral is safe because
-// only this ID is ended.
+// restore or an offline backup runs, or while replication is stopped on
+// request, it returns a *replicationInitWaitError. It changes no replication,
+// so it needs no lock, and ending the deferral is safe because only this ID is
+// ended.
 func (tm *TabletManager) settleDeferredReplicationInit(ctx context.Context, id uint64) (bool, error) {
 	// Read the ticket before the type: an RPC that chooses a source also
 	// demotes a primary, and the deferral must not then end without checking
@@ -1360,6 +1360,9 @@ func (tm *TabletManager) settleDeferredReplicationInit(ctx context.Context, id u
 		// A restore that finishes supersedes this initialization. One that
 		// aborts leaves the data, and this initialization, unchanged.
 		return false, &replicationInitWaitError{"waiting for the restore to finish"}
+	case topodatapb.TabletType_BACKUP:
+		// An offline backup holds the action lock until it finishes.
+		return false, &replicationInitWaitError{"waiting for the backup to finish"}
 	}
 	if tm.tmState.replicationStoppedOnRequest() {
 		// Do not undo the stop. Initialization resumes once a request starts
