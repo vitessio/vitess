@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
@@ -69,7 +70,7 @@ func TestBinlogFilesForFullBackup(t *testing.T) {
 	mtime := time.Unix(1700000000, 0).UTC()
 	for _, seq := range []string{"000001", "000002"} {
 		p := filepath.Join(dir, "src-bin."+seq)
-		require.NoError(t, os.WriteFile(p, []byte("x"), 0o644))
+		require.NoError(t, os.WriteFile(p, mysql.BinglogMagicNumber, 0o644))
 		require.NoError(t, os.Chtimes(p, mtime, mtime))
 	}
 	index := filepath.Join(dir, "src-bin.000001") + "\n./src-bin.000002\n"
@@ -86,6 +87,14 @@ func TestBinlogFilesForFullBackup(t *testing.T) {
 		require.NoError(t, os.WriteFile(filepath.Join(dir, "src-bin.index"), []byte("./src-bin.000003\n"), 0o644))
 		_, err := binlogFilesForFullBackup(cnf)
 		require.ErrorContains(t, err, "src-bin.000003")
+	})
+	t.Run("encrypted file", func(t *testing.T) {
+		// binlog_encryption=OFF leaves files written while it was ON encrypted.
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "src-bin.000002"), append(encryptedBinlogMagic, 0x01), 0o644))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "src-bin.index"), []byte(index), 0o644))
+		_, err := binlogFilesForFullBackup(cnf)
+		require.ErrorContains(t, err, "src-bin.000002 is encrypted")
+		assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
 	})
 	t.Run("file outside the basename", func(t *testing.T) {
 		require.NoError(t, os.WriteFile(filepath.Join(dir, "other-bin.000001"), []byte("x"), 0o644))

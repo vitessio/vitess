@@ -1,7 +1,9 @@
 package mysqlctl
 
 import (
+	"bytes"
 	"context"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -11,6 +13,10 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
+
+// encryptedBinlogMagic starts a binlog written with binlog_encryption on. Turning
+// binlog_encryption off later does not decrypt such files.
+var encryptedBinlogMagic = []byte{0xfd, 'b', 'i', 'n'}
 
 // binlogSeqRE matches a binlog file's sequence suffix, as mysqld writes it.
 var binlogSeqRE = regexp.MustCompile("^[0-9]{6,}$")
@@ -115,9 +121,29 @@ func binlogFilesForFullBackup(cnf *Mycnf) ([]FileEntry, error) {
 		if err != nil {
 			return nil, vterrors.Wrapf(err, "cannot stat binlog %s", p)
 		}
+		encrypted, err := isEncryptedBinlog(p)
+		if err != nil {
+			return nil, err
+		}
+		if encrypted {
+			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot include binlogs: %s is encrypted (written while binlog_encryption was on), so another server cannot read it; purge it with PURGE BINARY LOGS or wait for it to expire", p)
+		}
 		fes = append(fes, FileEntry{Base: backupBinlogStripped, Name: "binlog." + seq, ModTime: fi.ModTime().UTC()})
 	}
 	return fes, nil
+}
+
+func isEncryptedBinlog(p string) (bool, error) {
+	f, err := os.Open(p)
+	if err != nil {
+		return false, vterrors.Wrapf(err, "cannot open binlog %s", p)
+	}
+	defer f.Close()
+	magic := make([]byte, len(encryptedBinlogMagic))
+	if _, err := io.ReadFull(f, magic); err != nil {
+		return false, vterrors.Wrapf(err, "cannot read the header of binlog %s", p)
+	}
+	return bytes.Equal(magic, encryptedBinlogMagic), nil
 }
 
 // restoredBinlogVarsQuery reads where mysqld looks for binlogs after a restore.
