@@ -1040,9 +1040,10 @@ func TestChosenReplicationSourceCompletion(t *testing.T) {
 		newPrimary.Type = topodatapb.TabletType_PRIMARY
 		newPrimary.MysqlHostname, newPrimary.MysqlPort = "new-primary", 3306
 		require.NoError(t, ts.CreateTablet(t.Context(), newPrimary))
-		// An RPC chose the new primary, and replication runs from it.
+		// An RPC chose the new primary, and replication runs from it,
+		// acknowledging as the semi_sync durability policy requires.
 		tm.tmState.replicationSourceChosen(newPrimary.Alias)
-		md.Replicating, md.IOThreadRunning = true, true
+		md.Replicating, md.IOThreadRunning, md.SemiSyncReplicaEnabled = true, true, true
 		md.CurrentSourceHost, md.CurrentSourcePort = "new-primary", 3306
 		md.ExpectedExecuteSuperQueryList = nil
 		return tm, md, qsc, id
@@ -1301,4 +1302,65 @@ func TestReplicaWithoutSourceSemiSyncIsNotFenced(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, md.SuperReadOnly.Load(), "a replica without source-side semi-sync keeps its read-only setting")
 	require.NoError(t, md.CheckSuperQueryList())
+}
+
+// failRPCBeforeSemiSync makes SetReplicationSource to the shard primary fail
+// at its first replication status read, after it has recorded its source but
+// before it changes semi-sync. The retry then completes on that source with
+// replication as the RPC found it.
+func failRPCBeforeSemiSync(t *testing.T, tm *TabletManager, md *mysqlctl.FakeMysqlDaemon) {
+	t.Helper()
+	tm._waitForGrantsComplete = make(chan struct{})
+	close(tm._waitForGrantsComplete)
+	md.ReplicationStatusError = errors.New("status read failed")
+	require.ErrorContains(t, tm.SetReplicationSource(t.Context(), &topodatapb.TabletAlias{Cell: "cell1", Uid: 2}, 0, "", true, true, 0), "status read failed")
+	md.ReplicationStatusError = nil
+}
+
+func TestChosenSourceCompletionChecksWhatInitializationChecks(t *testing.T) {
+	t.Run("former primary is fenced", func(t *testing.T) {
+		tm, md, qsc, id := newFormerPrimaryTM(t, true, ",8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1")
+		failRPCBeforeSemiSync(t, tm, md.FakeMysqlDaemon)
+
+		require.ErrorContains(t, tm.retryReplicationInitializationOnce(t.Context(), id), "Errant GTID detected")
+		assert.True(t, md.SuperReadOnly.Load())
+		assert.False(t, md.SemiSyncPrimaryEnabled)
+		assert.False(t, qsc.IsServing())
+		require.NoError(t, md.CheckSuperQueryList())
+	})
+	t.Run("receiver is restarted to acknowledge under the shard lock", func(t *testing.T) {
+		tm, md, ts, qsc, id := newPendingReplicationTM(t)
+		md.Replicating, md.IOThreadRunning = true, true
+		md.CurrentSourceHost, md.CurrentSourcePort = "old-primary", 3306
+		md.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA", "START REPLICA"}
+		md.ExecuteSuperQueryListCallback = func() {
+			_, unlock, err := ts.LockShard(t.Context(), "ks", "0", "concurrent reparent", topo.WithAcquireTimeout(100*time.Millisecond))
+			if unlock != nil {
+				var unlockErr error
+				unlock(&unlockErr)
+			}
+			assert.True(t, topo.IsErrType(err, topo.Timeout), "the receiver must restart under the shard lock: %v", err)
+		}
+		failRPCBeforeSemiSync(t, tm, md)
+
+		require.NoError(t, tm.retryReplicationInitializationOnce(t.Context(), id))
+		require.NoError(t, md.CheckSuperQueryList())
+		assert.True(t, md.SemiSyncReplicaEnabled)
+		assert.Equal(t, "old-primary", md.CurrentSourceHost)
+		assert.True(t, qsc.IsServing())
+	})
+	t.Run("receiver is not restarted without the shard lock", func(t *testing.T) {
+		tm, md, ts, qsc, id := newPendingReplicationTM(t)
+		md.Replicating, md.IOThreadRunning = true, true
+		md.CurrentSourceHost, md.CurrentSourcePort = "old-primary", 3306
+		md.ExpectedExecuteSuperQueryList = nil
+		failRPCBeforeSemiSync(t, tm, md)
+		holdInitializationShardLock(t, ts)
+
+		err := tm.retryReplicationInitializationOnce(t.Context(), id)
+		_, unavailable := errors.AsType[*shardLockUnavailableError](err)
+		assert.True(t, unavailable, "%v", err)
+		require.NoError(t, md.CheckSuperQueryList())
+		assert.False(t, qsc.IsServing(), "a replica that does not acknowledge as required must not serve")
+	})
 }
