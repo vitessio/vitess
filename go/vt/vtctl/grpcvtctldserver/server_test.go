@@ -26,6 +26,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -15411,4 +15412,114 @@ func TestValidateShard(t *testing.T) {
 func TestMain(m *testing.M) {
 	_flag.ParseFlagsForTest()
 	os.Exit(m.Run())
+}
+
+// resetReplicationErrorTMC counts ResetReplication calls so a test can assert the phase never ran.
+type resetReplicationErrorTMC struct {
+	*testutil.TabletManagerClient
+	resetCalls atomic.Int32
+}
+
+func (tmc *resetReplicationErrorTMC) ResetReplication(context.Context, *topodatapb.Tablet) error {
+	tmc.resetCalls.Add(1)
+	return assert.AnError
+}
+
+// InitShardPrimary's first phase fans ResetReplication out to every tablet concurrently, which
+// deletes binary and relay logs and resets GTID state. Letting only the unmanaged tablet's call
+// fail would leave the managed ones already reset, so the refusal has to come first. ERS and PRS
+// cover the same guard in their own tables; this is the InitShardPrimary half.
+func TestInitShardPrimaryRejectsUnmanagedTablet(t *testing.T) {
+	ctx := t.Context()
+	ts := memorytopo.NewServer(ctx, "zone1")
+	t.Cleanup(ts.Close)
+
+	primary := &topodatapb.Tablet{
+		Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+		Keyspace: "testkeyspace",
+		Shard:    "-",
+		Type:     topodatapb.TabletType_PRIMARY,
+	}
+	unmanaged := &topodatapb.Tablet{
+		Alias:     &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+		Keyspace:  primary.Keyspace,
+		Shard:     primary.Shard,
+		Type:      topodatapb.TabletType_REPLICA,
+		MysqlMode: topodatapb.TabletMySQLMode_UNMANAGED,
+	}
+	testutil.AddShards(ctx, t, ts, &vtctldatapb.Shard{
+		Keyspace: primary.Keyspace,
+		Name:     primary.Shard,
+		Shard:    &topodatapb.Shard{PrimaryAlias: primary.Alias},
+	})
+	testutil.AddTablets(ctx, t, ts, nil, primary, unmanaged)
+
+	tmc := &resetReplicationErrorTMC{TabletManagerClient: &testutil.TabletManagerClient{}}
+	server := NewTestVtctldServer(ts, tmc)
+	_, err := server.InitShardPrimary(ctx, &vtctldatapb.InitShardPrimaryRequest{
+		Keyspace:                primary.Keyspace,
+		Shard:                   primary.Shard,
+		PrimaryElectTabletAlias: primary.Alias,
+	})
+
+	require.Error(t, err)
+	assert.Equal(t, vtrpc.Code_FAILED_PRECONDITION, vterrors.Code(err))
+	require.ErrorContains(t, err, "shard has unmanaged tablets [zone1-0000000101]")
+	assert.Zero(t, tmc.resetCalls.Load(), "the refusal must come before the ResetReplication phase")
+}
+
+// FindAllTabletAliasesInShardByCell seeds the shard's recorded primary into the tablet map before
+// it reads any ShardReplication, which is the property that made the per-shard non-managed index
+// removable: the two-writer layout from #20840, an unmanaged tablet serving as the shard primary,
+// is in the map whatever ShardReplication says. Every other unmanaged test leaves its tablet in
+// ShardReplication, so this is the only thing pinning it.
+func TestInitShardPrimaryRejectsUnmanagedRecordedPrimary(t *testing.T) {
+	ctx := t.Context()
+	ts := memorytopo.NewServer(ctx, "zone1")
+	t.Cleanup(ts.Close)
+
+	unmanaged := &topodatapb.Tablet{
+		Alias:     &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+		Keyspace:  "testkeyspace",
+		Shard:     "-",
+		Type:      topodatapb.TabletType_PRIMARY,
+		MysqlMode: topodatapb.TabletMySQLMode_UNMANAGED,
+	}
+	elect := &topodatapb.Tablet{
+		Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+		Keyspace: unmanaged.Keyspace,
+		Shard:    unmanaged.Shard,
+		Type:     topodatapb.TabletType_REPLICA,
+	}
+	testutil.AddShards(ctx, t, ts, &vtctldatapb.Shard{
+		Keyspace: unmanaged.Keyspace,
+		Name:     unmanaged.Shard,
+		Shard:    &topodatapb.Shard{PrimaryAlias: unmanaged.Alias},
+	})
+	testutil.AddTablets(ctx, t, ts, nil, unmanaged, elect)
+	require.NoError(t, topo.DeleteTabletReplicationData(ctx, ts, unmanaged))
+
+	// Pin the premise rather than assume it: with its replication record gone, the Shard
+	// record's PrimaryAlias is the only thing that can put this tablet in the map.
+	sri, err := ts.GetShardReplication(ctx, "zone1", unmanaged.Keyspace, unmanaged.Shard)
+	if !topo.IsErrType(err, topo.NoNode) {
+		require.NoError(t, err)
+		for _, node := range sri.Nodes {
+			assert.NotEqual(t, unmanaged.Alias.Uid, node.TabletAlias.Uid,
+				"the unmanaged tablet must be absent from ShardReplication")
+		}
+	}
+
+	tmc := &resetReplicationErrorTMC{TabletManagerClient: &testutil.TabletManagerClient{}}
+	server := NewTestVtctldServer(ts, tmc)
+	_, err = server.InitShardPrimary(ctx, &vtctldatapb.InitShardPrimaryRequest{
+		Keyspace:                unmanaged.Keyspace,
+		Shard:                   unmanaged.Shard,
+		PrimaryElectTabletAlias: elect.Alias,
+	})
+
+	require.Error(t, err)
+	assert.Equal(t, vtrpc.Code_FAILED_PRECONDITION, vterrors.Code(err))
+	require.ErrorContains(t, err, "shard has unmanaged tablets [zone1-0000000100]")
+	assert.Zero(t, tmc.resetCalls.Load(), "the refusal must come before the ResetReplication phase")
 }
