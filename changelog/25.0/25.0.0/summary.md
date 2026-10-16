@@ -140,13 +140,14 @@ Limitations and requirements:
 
 - Full backups only.
 - `vtbackup --restore-with-clone` together with `--include-binlogs` is refused in this release, because CLONE does not copy binary logs.
-- The backup source must have `log_bin` enabled, `log_replica_updates` enabled, and `binlog_encryption` off, with no binary logs left from when it was on (turning `binlog_encryption` off does not decrypt existing files). Otherwise the backup fails with `FAILED_PRECONDITION`.
+- The backup source must have `log_bin` and `log_replica_updates` enabled. Otherwise the backup fails with `FAILED_PRECONDITION`.
 
 Things to be aware of:
 
 - Backups grow by the size of the source's retained binary logs.
 - Binlog expiry (`binlog_expire_logs_seconds`) on the restored server follows the original file times, so old binary logs may be purged soon after the restored `mysqld` starts.
 - Older Vitess versions restoring such a backup restore only the data and ignore the binary logs.
+- Encrypted binary logs (`binlog_encryption`) are backed up as they are, so only a server whose keyring holds the source's binary log master key, such as one sharing the source's keyring, can restore them. A restore fails when it cannot read a restored binary log (and `mysqld` does not start when the newest one is unreadable), and a failed restore restores nothing. `ALTER INSTANCE ROTATE BINLOG MASTER KEY` removes the previous key from the keyring, so a backup whose binary logs were encrypted before a rotation can no longer be restored.
 
 **Upgrade order**: upgrade both `vtctld` and the tablets before using `--include-binlogs` with `vtctldclient Backup` or `BackupShard`. An older `vtctld` or `vttablet` silently ignores the field and takes a backup without binary logs.
 

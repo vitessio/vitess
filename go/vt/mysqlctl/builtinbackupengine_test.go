@@ -872,7 +872,7 @@ func TestBackupRestoreWithBinlogs(t *testing.T) {
 	binlogVars := func(row string) map[string]*sqltypes.Result {
 		return map[string]*sqltypes.Result{
 			binlogBackupVarsQuery: sqltypes.MakeTestResult(
-				sqltypes.MakeTestFields("log_bin|binlog_encryption|log_replica_updates", "int64|int64|int64"),
+				sqltypes.MakeTestFields("log_bin|log_replica_updates", "int64|int64"),
 				row),
 		}
 	}
@@ -899,13 +899,13 @@ func TestBackupRestoreWithBinlogs(t *testing.T) {
 	bh := filebackupstorage.NewBackupHandle(nil, "", "", false)
 
 	// A source with the binlog off is refused before anything is backed up.
-	mysqld.FetchSuperQueryMap = binlogVars("0|0|1")
+	mysqld.FetchSuperQueryMap = binlogVars("0|1")
 	backupResult, err := be.ExecuteBackup(ctx, params, bh)
 	require.Error(t, err)
 	assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
 	assert.Equal(t, BackupUnusable, backupResult)
 
-	mysqld.FetchSuperQueryMap = binlogVars("1|0|1")
+	mysqld.FetchSuperQueryMap = binlogVars("1|1")
 	backupResult, err = be.ExecuteBackup(ctx, params, bh)
 	require.NoError(t, err)
 	require.Equal(t, BackupUsable, backupResult)

@@ -10,7 +10,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
@@ -70,7 +69,7 @@ func TestBinlogFilesForFullBackup(t *testing.T) {
 	mtime := time.Unix(1700000000, 0).UTC()
 	for _, seq := range []string{"000001", "000002"} {
 		p := filepath.Join(dir, "src-bin."+seq)
-		require.NoError(t, os.WriteFile(p, mysql.BinglogMagicNumber, 0o644))
+		require.NoError(t, os.WriteFile(p, []byte("x"), 0o644))
 		require.NoError(t, os.Chtimes(p, mtime, mtime))
 	}
 	index := filepath.Join(dir, "src-bin.000001") + "\n./src-bin.000002\n"
@@ -88,14 +87,6 @@ func TestBinlogFilesForFullBackup(t *testing.T) {
 		_, err := binlogFilesForFullBackup(cnf)
 		require.ErrorContains(t, err, "src-bin.000003")
 	})
-	t.Run("encrypted file", func(t *testing.T) {
-		// binlog_encryption=OFF leaves files written while it was ON encrypted.
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "src-bin.000002"), append(encryptedBinlogMagic, 0x01), 0o644))
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "src-bin.index"), []byte(index), 0o644))
-		_, err := binlogFilesForFullBackup(cnf)
-		require.ErrorContains(t, err, "src-bin.000002 is encrypted")
-		assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
-	})
 	t.Run("file outside the basename", func(t *testing.T) {
 		require.NoError(t, os.WriteFile(filepath.Join(dir, "other-bin.000001"), []byte("x"), 0o644))
 		require.NoError(t, os.WriteFile(filepath.Join(dir, "src-bin.index"), []byte("./other-bin.000001\n"), 0o644))
@@ -107,13 +98,12 @@ func TestBinlogFilesForFullBackup(t *testing.T) {
 func TestCheckBinlogsBackupable(t *testing.T) {
 	tests := []struct {
 		name    string
-		row     []string // log_bin, binlog_encryption, log_replica_updates
+		row     []string // log_bin, log_replica_updates
 		wantErr string
 	}{
-		{name: "with replica updates", row: []string{"1", "0", "1"}},
-		{name: "binlog off", row: []string{"0", "0", "1"}, wantErr: "log_bin"},
-		{name: "encrypted", row: []string{"1", "1", "1"}, wantErr: "binlog_encryption"},
-		{name: "without replica updates", row: []string{"1", "0", "0"}, wantErr: "log_replica_updates is off"},
+		{name: "with replica updates", row: []string{"1", "1"}},
+		{name: "binlog off", row: []string{"0", "1"}, wantErr: "log_bin"},
+		{name: "without replica updates", row: []string{"1", "0"}, wantErr: "log_replica_updates is off"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -123,7 +113,7 @@ func TestCheckBinlogsBackupable(t *testing.T) {
 			t.Cleanup(mysqld.Close)
 			mysqld.FetchSuperQueryMap = map[string]*sqltypes.Result{
 				binlogBackupVarsQuery: sqltypes.MakeTestResult(
-					sqltypes.MakeTestFields("log_bin|binlog_encryption|log_replica_updates", "int64|int64|int64"),
+					sqltypes.MakeTestFields("log_bin|log_replica_updates", "int64|int64"),
 					strings.Join(tt.row, "|")),
 			}
 			err := checkBinlogsBackupable(t.Context(), mysqld)
@@ -170,13 +160,17 @@ func TestVerifyRestoredBinlogs(t *testing.T) {
 		basename string
 		index    string
 		executed replication.Position
-		wantErr  string
+		// unreadable is a binlog that SHOW BINLOG EVENTS fails on, as with a missing key.
+		unreadable string
+		wantErr    string
+		wantCode   vtrpcpb.Code
 	}{
 		{name: "match", cnf: cnf, basename: "/vt/bin-logs/dst-bin", index: "/vt/bin-logs/dst-bin.index", executed: pos},
 		{name: "custom index extension is reported as .index", cnf: customIndexCnf, basename: "/vt/bin-logs/dst-bin", index: "/vt/data/custom.index", executed: pos},
 		{name: "basename differs", cnf: cnf, basename: "/vt/data/binlog", index: "/vt/bin-logs/dst-bin.index", executed: pos, wantErr: "log_bin_basename"},
 		{name: "index differs", cnf: cnf, basename: "/vt/bin-logs/dst-bin", index: "/vt/data/binlog.index", executed: pos, wantErr: "log_bin_index"},
 		{name: "gtid_executed differs", cnf: cnf, basename: "/vt/bin-logs/dst-bin", index: "/vt/bin-logs/dst-bin.index", executed: other, wantErr: "gtid_executed"},
+		{name: "binlog unreadable", cnf: cnf, basename: "/vt/bin-logs/dst-bin", index: "/vt/bin-logs/dst-bin.index", executed: pos, unreadable: "dst-bin.000002", wantErr: "cannot read restored binlog dst-bin.000002", wantCode: vtrpcpb.Code_FAILED_PRECONDITION},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -189,6 +183,14 @@ func TestVerifyRestoredBinlogs(t *testing.T) {
 				restoredBinlogVarsQuery: sqltypes.MakeTestResult(
 					sqltypes.MakeTestFields("log_bin_basename|log_bin_index", "varchar|varchar"),
 					tt.basename+"|"+tt.index),
+				showBinaryLogsQuery: sqltypes.MakeTestResult(
+					sqltypes.MakeTestFields("Log_name", "varchar"),
+					"dst-bin.000001", "dst-bin.000002"),
+			}
+			for _, name := range []string{"dst-bin.000001", "dst-bin.000002"} {
+				if name != tt.unreadable {
+					mysqld.FetchSuperQueryMap["SHOW BINLOG EVENTS IN '"+name+"' LIMIT 1"] = &sqltypes.Result{}
+				}
 			}
 			// No ExpectedExecuteSuperQueryList: any RESET or SET GLOBAL gtid_purged fails the test.
 			err := verifyRestoredBinlogs(t.Context(), mysqld, tt.cnf, pos)
@@ -197,7 +199,11 @@ func TestVerifyRestoredBinlogs(t *testing.T) {
 				return
 			}
 			require.ErrorContains(t, err, tt.wantErr)
-			assert.Equal(t, vtrpcpb.Code_INTERNAL, vterrors.Code(err))
+			wantCode := vtrpcpb.Code_INTERNAL
+			if tt.wantCode != vtrpcpb.Code_OK {
+				wantCode = tt.wantCode
+			}
+			assert.Equal(t, wantCode, vterrors.Code(err))
 		})
 	}
 }
@@ -221,6 +227,7 @@ func TestEnsureRestoredGTIDPurgedMatchesManifestKeepsBinlogs(t *testing.T) {
 		restoredBinlogVarsQuery: sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields("log_bin_basename|log_bin_index", "varchar|varchar"),
 			"/vt/bin-logs/dst-bin|/vt/bin-logs/dst-bin.index"),
+		showBinaryLogsQuery: sqltypes.MakeTestResult(sqltypes.MakeTestFields("Log_name", "varchar")),
 	}
 	params := &RestoreParams{Cnf: cnf, Mysqld: mysqld, Logger: logutil.NewMemoryLogger()}
 	manifest := &BackupManifest{Position: pos, IncludesBinlogs: true}

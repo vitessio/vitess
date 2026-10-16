@@ -1,22 +1,17 @@
 package mysqlctl
 
 import (
-	"bytes"
 	"context"
-	"io"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
-
-// encryptedBinlogMagic starts a binlog written with binlog_encryption on. Turning
-// binlog_encryption off later does not decrypt such files.
-var encryptedBinlogMagic = []byte{0xfd, 'b', 'i', 'n'}
 
 // binlogSeqRE matches a binlog file's sequence suffix, as mysqld writes it.
 var binlogSeqRE = regexp.MustCompile("^[0-9]{6,}$")
@@ -49,7 +44,7 @@ func absUnderDataDir(cnf *Mycnf, p string) string {
 }
 
 // binlogBackupVarsQuery reads the settings that decide whether the source's binlogs can be backed up.
-const binlogBackupVarsQuery = "SELECT @@global.log_bin, @@global.binlog_encryption, @@global.log_replica_updates"
+const binlogBackupVarsQuery = "SELECT @@global.log_bin, @@global.log_replica_updates"
 
 // ValidateIncludeBinlogs fails fast when IncludeBinlogs is combined with a backup that
 // cannot carry the binlogs: only a full builtin backup stops mysqld cleanly, so its
@@ -72,24 +67,21 @@ func ValidateIncludeBinlogs(params BackupParams) error {
 }
 
 // checkBinlogsBackupable refuses to back up binlogs that would not contain every
-// transaction in the data (no binlog, or no log_replica_updates, since a server that
-// was a replica then did not log what it replicated), or that another server could
-// not read (binlog encryption is keyed to this server).
+// transaction in the data: no binlog, or no log_replica_updates, since a server that
+// was a replica then did not log what it replicated.
 func checkBinlogsBackupable(ctx context.Context, mysqld MysqlDaemon) error {
 	qr, err := mysqld.FetchSuperQuery(ctx, binlogBackupVarsQuery)
 	if err != nil {
 		return vterrors.Wrap(err, "cannot read binlog settings")
 	}
-	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 3 {
+	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 2 {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected result for %q: %v", binlogBackupVarsQuery, qr.Rows)
 	}
 	row := qr.Rows[0]
 	switch {
 	case row[0].ToString() != "1":
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot include binlogs: log_bin is off")
-	case row[1].ToString() != "0":
-		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot include binlogs: binlog_encryption is on, so another server cannot read them")
-	case row[2].ToString() != "1":
+	case row[1].ToString() != "1":
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot include binlogs: log_replica_updates is off, so this server's binlogs may lack replicated transactions")
 	}
 	return nil
@@ -121,33 +113,16 @@ func binlogFilesForFullBackup(cnf *Mycnf) ([]FileEntry, error) {
 		if err != nil {
 			return nil, vterrors.Wrapf(err, "cannot stat binlog %s", p)
 		}
-		encrypted, err := isEncryptedBinlog(p)
-		if err != nil {
-			return nil, err
-		}
-		if encrypted {
-			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot include binlogs: %s is encrypted (written while binlog_encryption was on), so another server cannot read it; purge it with PURGE BINARY LOGS or wait for it to expire", p)
-		}
 		fes = append(fes, FileEntry{Base: backupBinlogStripped, Name: "binlog." + seq, ModTime: fi.ModTime().UTC()})
 	}
 	return fes, nil
 }
 
-func isEncryptedBinlog(p string) (bool, error) {
-	f, err := os.Open(p)
-	if err != nil {
-		return false, vterrors.Wrapf(err, "cannot open binlog %s", p)
-	}
-	defer f.Close()
-	magic := make([]byte, len(encryptedBinlogMagic))
-	if _, err := io.ReadFull(f, magic); err != nil {
-		return false, vterrors.Wrapf(err, "cannot read the header of binlog %s", p)
-	}
-	return bytes.Equal(magic, encryptedBinlogMagic), nil
-}
-
 // restoredBinlogVarsQuery reads where mysqld looks for binlogs after a restore.
 const restoredBinlogVarsQuery = "SELECT @@global.log_bin_basename, @@global.log_bin_index"
+
+// showBinaryLogsQuery lists the binlogs mysqld knows about.
+const showBinaryLogsQuery = "SHOW BINARY LOGS"
 
 // finishBinlogRestore gives the restored binlogs their source mtimes, so that
 // binlog_expire_logs_seconds still counts from when they were written, and writes
@@ -179,8 +154,9 @@ func finishBinlogRestore(cnf *Mycnf, fes []FileEntry) error {
 }
 
 // verifyRestoredBinlogs checks, without changing anything, that mysqld reads the
-// binlogs the restore installed and that they put gtid_executed at the backup
-// position. A mismatch fails the restore: repairing it with RESET would delete them.
+// binlogs the restore installed, that it can read each one, and that they put
+// gtid_executed at the backup position. A mismatch fails the restore: repairing it
+// with RESET would delete them.
 func verifyRestoredBinlogs(ctx context.Context, mysqld MysqlDaemon, cnf *Mycnf, pos replication.Position) error {
 	basename, indexPath, err := binlogLocation(cnf)
 	if err != nil {
@@ -201,6 +177,18 @@ func verifyRestoredBinlogs(ctx context.Context, mysqld MysqlDaemon, cnf *Mycnf, 
 	got := qr.Rows[0][1].ToString()
 	if strings.TrimSuffix(got, filepath.Ext(got)) != strings.TrimSuffix(indexPath, filepath.Ext(indexPath)) {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "restored binlog index is %s but mysqld's log_bin_index is %s", indexPath, got)
+	}
+	// An encrypted binlog is readable only with the binlog master key that encrypted
+	// it, so a target whose keyring lacks the source's key can't serve it.
+	qr, err = mysqld.FetchSuperQuery(ctx, showBinaryLogsQuery)
+	if err != nil {
+		return vterrors.Wrap(err, "cannot list binlogs after restore")
+	}
+	for _, row := range qr.Rows {
+		name := row[0].ToString()
+		if _, err := mysqld.FetchSuperQuery(ctx, "SHOW BINLOG EVENTS IN "+sqltypes.EncodeStringSQL(name)+" LIMIT 1"); err != nil {
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot read restored binlog %s; if it is encrypted, this server's keyring needs the source's binlog master key: %v", name, err)
+		}
 	}
 	executed, err := mysqld.PrimaryPosition(ctx)
 	if err != nil {
