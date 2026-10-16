@@ -74,6 +74,14 @@ func isMergeable(ctx *plancontext.PlanningContext, query sqlparser.TableStatemen
 }
 
 func settleSubqueries(ctx *plancontext.PlanningContext, op Operator) Operator {
+	onlyExistsSubqueries := true
+	_ = Visit(op, func(op Operator) error {
+		if subquery, ok := op.(*SubQuery); ok && subquery.FilterType != opcode.PulloutExists {
+			onlyExistsSubqueries = false
+		}
+		return nil
+	})
+
 	visit := func(op Operator, lhsTables semantics.TableSet, isRoot bool) (Operator, *ApplyResult) {
 		switch op := op.(type) {
 		case *SubQueryContainer:
@@ -86,6 +94,9 @@ func settleSubqueries(ctx *plancontext.PlanningContext, op Operator) Operator {
 		case *Projection:
 			ap, err := op.GetAliasedProjections()
 			if err != nil {
+				if _, isStar := op.Columns.(StarProjections); isStar && onlyExistsSubqueries {
+					return op, NoRewrite
+				}
 				panic(err)
 			}
 
@@ -650,12 +661,13 @@ func (s *subqueryRouteMerger) merge(ctx *plancontext.PlanningContext, inner, out
 	if !s.subq.TopLevel {
 		// if the subquery we are merging isn't a top level predicate, we can't use it for routing
 		return &Route{
-			unaryOperator: newUnaryOp(outer.Source),
-			MergedWith:    mergedWith(inner, outer),
-			Routing:       outer.Routing,
-			Ordering:      outer.Ordering,
-			ResultColumns: outer.ResultColumns,
-			Conditions:    allCond,
+			unaryOperator:             newUnaryOp(outer.Source),
+			MergedWith:                mergedWith(inner, outer),
+			ContainsSpecialUnionInput: routeContainsSpecialUnionInput(outer),
+			Routing:                   outer.Routing,
+			Ordering:                  outer.Ordering,
+			ResultColumns:             outer.ResultColumns,
+			Conditions:                allCond,
 		}
 	}
 	_, isSharded := r.(*ShardedRouting)
@@ -669,12 +681,13 @@ func (s *subqueryRouteMerger) merge(ctx *plancontext.PlanningContext, inner, out
 		src = s.rewriteASTExpression(ctx, inner)
 	}
 	return &Route{
-		unaryOperator: newUnaryOp(src),
-		MergedWith:    mergedWith(inner, outer),
-		Routing:       r,
-		Ordering:      s.outer.Ordering,
-		ResultColumns: s.outer.ResultColumns,
-		Conditions:    allCond,
+		unaryOperator:             newUnaryOp(src),
+		MergedWith:                mergedWith(inner, outer),
+		ContainsSpecialUnionInput: routeContainsSpecialUnionInput(outer),
+		Routing:                   r,
+		Ordering:                  s.outer.Ordering,
+		ResultColumns:             s.outer.ResultColumns,
+		Conditions:                allCond,
 	}
 }
 
