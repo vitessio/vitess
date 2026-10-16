@@ -92,6 +92,16 @@ func IsCoverage() bool {
 	return *isCoverage
 }
 
+// KillDiscardedMySQL reports whether a mysqld whose data is never read again
+// is killed instead of shut down gracefully. On CI the data directory is
+// discarded after the test run, so nothing needs to be flushed to disk and a
+// graceful shutdown buys nothing: killing skips the shutdown ack wait that
+// can stall a semi-sync primary for many seconds. Coverage runs still shut
+// down gracefully so that the mysqlctl shutdown path stays exercised.
+func KillDiscardedMySQL() bool {
+	return os.Getenv("CI") == "true" && !*isCoverage
+}
+
 // LocalProcessCluster Testcases need to use this to iniate a cluster
 type LocalProcessCluster struct {
 	Keyspaces          []Keyspace
@@ -1070,12 +1080,7 @@ func (cluster *LocalProcessCluster) Teardown() {
 		log.Error(fmt.Sprintf("Error in vtadmin teardown: %v", err))
 	}
 
-	// On CI the data directory is discarded after the test run, so nothing
-	// needs to be flushed to disk and a graceful mysqld shutdown buys us
-	// nothing. Killing mysqld skips the shutdown ack wait that can stall a
-	// semi-sync primary for many seconds per cluster. Coverage runs still
-	// shut down gracefully so that the mysqlctl shutdown path stays exercised.
-	killMySQL := os.Getenv("CI") == "true" && !*isCoverage
+	killMySQL := KillDiscardedMySQL()
 
 	var mysqlctlProcessList []*exec.Cmd
 	var mysqlctlTabletUIDs []int
