@@ -40,6 +40,26 @@ type execError struct {
 func (e *execError) Error() string { return e.msg }
 func (e *execError) Unwrap() error { return e.cause }
 
+// recycle returns conn to its pool. For a closed connection, the pool opens a
+// replacement before Recycle returns, with no deadline, so this waits for it
+// only until ctx ends: a timed-out query closes its connection, and a server
+// that does not answer must not keep the caller waiting on the replacement.
+func recycle(ctx context.Context, conn *dbconnpool.PooledDBConnection) {
+	if !conn.Conn.IsClosed() {
+		conn.Recycle()
+		return
+	}
+	recycled := make(chan struct{})
+	go func() {
+		conn.Recycle()
+		close(recycled)
+	}()
+	select {
+	case <-recycled:
+	case <-ctx.Done():
+	}
+}
+
 // getPoolReconnect gets a connection from a pool, tests it, and reconnects if
 // the connection is lost.
 func getPoolReconnect(ctx context.Context, pool *dbconnpool.ConnectionPool) (*dbconnpool.PooledDBConnection, error) {
@@ -60,19 +80,19 @@ func getPoolReconnect(ctx context.Context, pool *dbconnpool.ConnectionPool) (*db
 	case <-ctx.Done():
 		conn.Close()
 		<-checked
-		conn.Recycle()
+		recycle(ctx, conn)
 		return nil, ctx.Err()
 	}
 	if err != nil {
 		// If we get a connection error, try to reconnect.
 		if sqlErr, ok := err.(*sqlerror.SQLError); ok && (sqlErr.Number() == sqlerror.CRServerGone || sqlErr.Number() == sqlerror.CRServerLost) {
 			if err := conn.Conn.Reconnect(ctx); err != nil {
-				conn.Recycle()
+				recycle(ctx, conn)
 				return nil, err
 			}
 			return conn, nil
 		}
-		conn.Recycle()
+		recycle(ctx, conn)
 		return nil, err
 	}
 	return conn, nil
@@ -89,7 +109,7 @@ func (mysqld *Mysqld) ExecuteSuperQueryList(ctx context.Context, queryList []str
 	if err != nil {
 		return err
 	}
-	defer conn.Recycle()
+	defer recycle(ctx, conn)
 
 	return mysqld.executeSuperQueryListConn(ctx, conn, queryList)
 }
@@ -120,7 +140,7 @@ func (mysqld *Mysqld) ExecuteSuperQueryListMulti(ctx context.Context, queryList 
 		return err
 	}
 	// A closed connection is discarded upon Recycle rather than reused.
-	defer conn.Recycle()
+	defer recycle(ctx, conn)
 	defer conn.Close()
 
 	// The exchange is a blocking write and read of its own, so it is bounded the
@@ -149,7 +169,7 @@ func (mysqld *Mysqld) ExecuteSuperQueryListTainted(ctx context.Context, queryLis
 		return err
 	}
 	// A closed connection is discarded upon Recycle rather than reused.
-	defer conn.Recycle()
+	defer recycle(ctx, conn)
 	defer conn.Close()
 
 	return mysqld.executeSuperQueryListConn(ctx, conn, queryList)
@@ -190,7 +210,7 @@ func (mysqld *Mysqld) FetchSuperQuery(ctx context.Context, query string) (*sqlty
 	if connErr != nil {
 		return nil, connErr
 	}
-	defer conn.Recycle()
+	defer recycle(ctx, conn)
 	qr, err := mysqld.executeFetchContext(ctx, conn, query, 10000, true)
 	if err != nil {
 		return nil, err
@@ -440,7 +460,7 @@ func (mysqld *Mysqld) AcquireGlobalReadLock(ctx context.Context) error {
 
 	err = mysqld.executeSuperQueryListConn(ctx, conn, []string{"FLUSH TABLES WITH READ LOCK"})
 	if err != nil {
-		conn.Recycle()
+		recycle(ctx, conn)
 		return err
 	}
 
