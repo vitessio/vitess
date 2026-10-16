@@ -16,6 +16,6 @@ git show "$REF_COMMIT:./../MoveTablesSwitchWrites.tla" \
   > "$work/MoveTablesSwitchWritesRef.tla"
 cp ../MoveTablesSwitchWrites.tla RefinementCheck.tla "$1.cfg" "$work/"
 cd "$work"
-java -XX:+UseParallelGC -cp "$jar" tlc2.TLC -workers auto -deadlock -cleanup \
+java -XX:+UseParallelGC -cp "$jar" tlc2.TLC -workers auto -deadlock -cleanup -noGenerateSpecTE \
   -config "$1.cfg" RefinementCheck.tla 2>&1 | tee check.log \
   | grep --line-buffered -E "violated|No error|distinct states found, 0|Finished in"
