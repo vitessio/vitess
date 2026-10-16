@@ -2817,6 +2817,25 @@
         ""
       ],
       "Needs": []
+    },
+    "vreplication_movetables_post_copy_action": {
+      "File": "unused.go",
+      "Packages": [
+        "vitess.io/vitess/go/test/endtoend/vreplication"
+      ],
+      "Args": [
+        "-run",
+        "TestMoveTablesStopCancelDuringPostCopyAction"
+      ],
+      "Command": [],
+      "Manual": false,
+      "Shard": "vreplication_cellalias",
+      "Tags": [],
+      "Needs": [
+        "larger-runner",
+        "limit-resources",
+        "binlog-compression"
+      ]
     }
   }
 }
