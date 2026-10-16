@@ -237,9 +237,31 @@ func (sm *stateManager) SetServingType(tabletType topodatapb.TabletType, ptsTime
 
 	log.Info(fmt.Sprintf("Starting transition to %v %v, primary term start timestamp: %v", tabletType, state, ptsTimestamp))
 	if sm.mustTransition(tabletType, ptsTimestamp, state, reason) {
+		if tabletType == topodatapb.TabletType_PRIMARY && state == StateServing {
+			sm.announceNotServingBeforeResuming()
+		}
 		return sm.execTransition(tabletType, state)
 	}
 	return nil
+}
+
+// announceNotServingBeforeResuming broadcasts once more that a PRIMARY which does not serve does
+// not serve, right before it serves again. The caller holds the transition semaphore.
+//
+// vtgate ends the buffering of a shard when its primary serves again, but a buffering that started
+// after vtgate saw the primary stop serving (a request found no serving primary) waits for a
+// primary with a newer term: vtgate then cannot tell the primary that resumes from the old primary
+// of a reparent that still reports serving. Only a not-serving health check seen after the start of
+// the buffering lets the same primary end it with the same term. Without this announcement, a
+// primary that pauses and resumes with its term, as Group Replication's migration steps and
+// UndoDemotePrimary do, makes vtgate buffer until --buffer-max-failover-duration.
+func (sm *stateManager) announceNotServingBeforeResuming() {
+	sm.mu.Lock()
+	resuming := sm.target.TabletType == topodatapb.TabletType_PRIMARY && sm.state == StateNotServing
+	sm.mu.Unlock()
+	if resuming {
+		sm.Broadcast()
+	}
 }
 
 // mustTransition returns true if the requested state does not match the current

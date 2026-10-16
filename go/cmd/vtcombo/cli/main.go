@@ -56,6 +56,7 @@ import (
 	// Imported for the flags its init registers for vtcombo.
 	_ "vitess.io/vitess/go/vt/vtctld"
 
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vttestpb "vitess.io/vitess/go/vt/proto/vttest"
 )
@@ -392,4 +393,10 @@ func (mysqld *vtcomboMysqld) SetSemiSyncEnabled(ctx context.Context, source, rep
 // SemiSyncExtensionLoaded implements the MysqlDaemon interface
 func (mysqld *vtcomboMysqld) SemiSyncExtensionLoaded(ctx context.Context) (mysql.SemiSyncType, error) {
 	return mysql.SemiSyncTypeSource, nil
+}
+
+// GroupReplicationStatus implements the MysqlDaemon interface. The shared MySQL instance is never
+// a member of a replication group.
+func (mysqld *vtcomboMysqld) GroupReplicationStatus(ctx context.Context) (*replicationdatapb.GroupReplicationStatus, error) {
+	return &replicationdatapb.GroupReplicationStatus{}, nil
 }
