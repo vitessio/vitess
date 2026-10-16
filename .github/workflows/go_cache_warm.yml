@@ -13,10 +13,13 @@ on:
       - "release-[0-9]+.[0-9]"
   workflow_dispatch:
 
-# Only the newest commit's caches matter.
+# Runs of one branch go one at a time, so that a run never deletes the entries
+# of a newer one. A new push replaces a run that is still waiting, but never
+# cancels one in progress: runs can wait long for the Oracle VMs, and during a
+# burst of pushes cancelling would keep the slower entries from being saved.
 concurrency:
   group: format('{0}-{1}', ${{ github.ref }}, 'Warm Go caches')
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 permissions:
   contents: read

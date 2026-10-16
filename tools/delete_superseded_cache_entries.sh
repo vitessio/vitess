@@ -15,7 +15,8 @@
 # limitations under the License.
 
 # Deletes the GitHub Actions cache entries of the current ref whose key starts
-# with PREFIX, except KEY, the entry the go_cache_warm workflow just saved.
+# with PREFIX and that were saved before KEY, the entry the go_cache_warm
+# workflow just saved. Entries saved after KEY belong to a newer run and stay.
 # Usage:
 #
 #   REPO=<owner/repo> REF=<git ref> GH_TOKEN=<token> \
@@ -30,14 +31,19 @@ set -euo pipefail
 prefix="$1"
 key="$2"
 
+# createdAt looks like 2026-10-15T00:56:56.855357Z; fromdateiso8601 takes no
+# fractional seconds, so they are added separately.
 entries="$(gh cache list --repo "${REPO}" --ref "${REF}" --key "${prefix}" --limit 100 \
-	--json id,key --jq '.[] | [.id, .key] | @tsv')"
-if ! cut -f2 <<<"${entries}" | grep -q -F -x -- "${key}"; then
+	--json id,key,createdAt --jq '.[] | [.id, .key,
+		(.createdAt | capture("^(?<s>[^.Z]+)(?<f>\\.[0-9]+)?Z$")
+			| ((.s + "Z") | fromdateiso8601) + (("0" + (.f // "")) | tonumber))] | @tsv')"
+created="$(awk -F'\t' -v key="${key}" '$2 == key { print $3 }' <<<"${entries}")"
+if [ -z "${created}" ]; then
 	echo "::error::${key} was not saved; keeping the older entries."
 	exit 1
 fi
-while IFS=$'\t' read -r id entry; do
-	if [ "${entry}" != "${key}" ]; then
+while IFS=$'\t' read -r id _ entry_created; do
+	if awk -v a="${entry_created}" -v b="${created}" 'BEGIN { exit !(a < b) }'; then
 		gh cache delete --repo "${REPO}" "${id}"
 	fi
 done <<<"${entries}"
