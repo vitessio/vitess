@@ -93,6 +93,11 @@ type tmState struct {
 	// replication source since the pending deferral, which then must not
 	// choose one itself. It is nil if no RPC has chosen one.
 	replicationInitSource *topodatapb.TabletAlias
+	// replicationInitSourceTicket is the ticket of the request that chose
+	// replicationInitSource, or zero. replicationSourceTickets issues the
+	// tickets, in the order the requests arrive.
+	replicationInitSourceTicket uint64
+	replicationSourceTickets    uint64
 
 	// displayState contains the current snapshot of the internal state
 	// and has its own mutex.
@@ -333,17 +338,21 @@ func (ts *tmState) isPendingReplicationInit(id uint64) bool {
 	return ts.pendingReplicationInit == id
 }
 
-// endReplicationInit ends the deferred replication initialization id if it is
-// still pending. It does not update query service: the caller does that with
-// refreshServing once it no longer holds the locks of the initialization.
-func (ts *tmState) endReplicationInit(id uint64) {
+// endReplicationInit ends the deferred replication initialization id, and
+// reports whether it did, if it is still pending and no source was chosen for
+// it since chosenReplicationSource returned ticket. It does not update query
+// service: the caller does that with refreshServing once it no longer holds
+// the locks of the initialization.
+func (ts *tmState) endReplicationInit(id, ticket uint64) bool {
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
-	if ts.pendingReplicationInit == id {
-		ts.pendingReplicationInit = 0
-		ts.replicationInitError = ""
-		ts.replicationInitSource = nil
+	if ts.pendingReplicationInit != id || ts.replicationInitSourceTicket != ticket {
+		return false
 	}
+	ts.pendingReplicationInit = 0
+	ts.replicationInitError = ""
+	ts.replicationInitSource, ts.replicationInitSourceTicket = nil, 0
+	return true
 }
 
 // refreshServing brings query service in line with the current state.
@@ -358,28 +367,46 @@ func (ts *tmState) refreshServing(ctx context.Context) {
 	}
 }
 
-// replicationSourceChosen records that an RPC is about to make source the
-// replication source, so that the pending deferred initialization no longer
-// chooses one. It does not end the deferral: replicas still do not serve until
-// replication runs from that source and is validated.
-func (ts *tmState) replicationSourceChosen(source *topodatapb.TabletAlias) {
+// requestReplicationSource returns a ticket for a request to make source the
+// replication source, and records the request as replicationSourceChosen does.
+// A request calls it before anything that can fail, and calls
+// replicationSourceChosen with the ticket again once it holds the action lock,
+// for a deferral created while it waited.
+func (ts *tmState) requestReplicationSource(source *topodatapb.TabletAlias) uint64 {
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
-	if ts.pendingReplicationInit != 0 {
-		ts.replicationInitSource = source
+	ts.replicationSourceTickets++
+	ts.chooseReplicationSourceLocked(source, ts.replicationSourceTickets)
+	return ts.replicationSourceTickets
+}
+
+// replicationSourceChosen records that the request with ticket is about to make
+// source the replication source, so that the pending deferred initialization
+// no longer chooses one, unless a later request was recorded. It does not end
+// the deferral: replicas still do not serve until replication runs from that
+// source and is validated.
+func (ts *tmState) replicationSourceChosen(source *topodatapb.TabletAlias, ticket uint64) {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	ts.chooseReplicationSourceLocked(source, ticket)
+}
+
+func (ts *tmState) chooseReplicationSourceLocked(source *topodatapb.TabletAlias, ticket uint64) {
+	if source != nil && ts.pendingReplicationInit != 0 && ticket > ts.replicationInitSourceTicket {
+		ts.replicationInitSource, ts.replicationInitSourceTicket = source, ticket
 	}
 }
 
 // chosenReplicationSource returns the tablet that an RPC chose as the
 // replication source since the deferred replication initialization id, or
-// nil if no RPC has chosen one.
-func (ts *tmState) chosenReplicationSource(id uint64) *topodatapb.TabletAlias {
+// nil if no RPC has chosen one, and the ticket that endReplicationInit needs.
+func (ts *tmState) chosenReplicationSource(id uint64) (*topodatapb.TabletAlias, uint64) {
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
 	if ts.pendingReplicationInit != id {
-		return nil
+		return nil, 0
 	}
-	return ts.replicationInitSource
+	return ts.replicationInitSource, ts.replicationInitSourceTicket
 }
 
 // cancelReplicationInit ends any pending deferred replication initialization.
@@ -394,7 +421,7 @@ func (ts *tmState) cancelReplicationInit(ctx context.Context) {
 func (ts *tmState) setPendingReplicationInitLocked(ctx context.Context, id uint64, err error) {
 	reason := ts.canServe(ts.tablet.Type)
 	if id != ts.pendingReplicationInit {
-		ts.replicationInitSource = nil
+		ts.replicationInitSource, ts.replicationInitSourceTicket = nil, 0
 	}
 	ts.pendingReplicationInit = id
 	ts.replicationInitError = ""

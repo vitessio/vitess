@@ -504,7 +504,7 @@ func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.Tab
 	log.Info(fmt.Sprintf("InitReplica: parent: %v  position: %v  timeCreatedNS: %d  semisync: %t", parent, position, timeCreatedNS, semiSync))
 	// From here on this source replaces any that a deferred initialization
 	// would choose, even if a later step fails.
-	tm.tmState.replicationSourceChosen(parent)
+	ticket := tm.tmState.requestReplicationSource(parent)
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
 		return err
 	}
@@ -512,6 +512,7 @@ func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.Tab
 		return err
 	}
 	defer tm.unlock()
+	tm.tmState.replicationSourceChosen(parent, ticket)
 
 	semiSyncAction, err := tm.convertBoolToSemiSyncAction(ctx, semiSync)
 	if err != nil {
@@ -902,9 +903,7 @@ func (tm *TabletManager) SetReplicationSource(ctx context.Context, parentAlias *
 	log.Info(fmt.Sprintf("SetReplicationSource: parent: %v  position: %s force: %v semiSync: %v timeCreatedNS: %d", parentAlias, waitPosition, forceStartReplication, semiSync, timeCreatedNS))
 	// From here on this source replaces any that a deferred initialization
 	// would choose, even if a later step fails.
-	if parentAlias != nil {
-		tm.tmState.replicationSourceChosen(parentAlias)
-	}
+	ticket := tm.tmState.requestReplicationSource(parentAlias)
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
 		return err
 	}
@@ -912,6 +911,7 @@ func (tm *TabletManager) SetReplicationSource(ctx context.Context, parentAlias *
 		return err
 	}
 	defer tm.unlock()
+	tm.tmState.replicationSourceChosen(parentAlias, ticket)
 
 	semiSyncAction, err := tm.convertBoolToSemiSyncAction(ctx, semiSync)
 	if err != nil {
@@ -925,20 +925,17 @@ func (tm *TabletManager) SetReplicationSource(ctx context.Context, parentAlias *
 
 func (tm *TabletManager) setReplicationSourceSemiSyncNoAction(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool) error {
 	log.Info(fmt.Sprintf("SetReplicationSource: parent: %v  position: %v force: %v", parentAlias, waitPosition, forceStartReplication))
+	ticket := tm.tmState.requestReplicationSource(parentAlias)
 	if err := tm.lock(ctx); err != nil {
 		return err
 	}
 	defer tm.unlock()
+	tm.tmState.replicationSourceChosen(parentAlias, ticket)
 
 	return tm.setReplicationSourceLocked(ctx, parentAlias, timeCreatedNS, waitPosition, forceStartReplication, SemiSyncActionNone, 0)
 }
 
 func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool, semiSync SemiSyncAction, heartbeatInterval float64) (err error) {
-	// From here on this source replaces any that a deferred initialization
-	// would choose, even if a later step fails.
-	if parentAlias != nil {
-		tm.tmState.replicationSourceChosen(parentAlias)
-	}
 	// Change our type to REPLICA if we used to be PRIMARY.
 	// Being sent SetReplicationSource means another PRIMARY has been successfully promoted,
 	// so we convert to REPLICA first, since we want to do it even if other

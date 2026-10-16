@@ -1265,7 +1265,7 @@ func (tm *TabletManager) attemptDeferredReplicationInit(ctx context.Context, id 
 	if done, err := tm.settleDeferredReplicationInit(ctx, id); done || err != nil {
 		return err
 	}
-	if tm.tmState.chosenReplicationSource(id) != nil {
+	if alias, _ := tm.tmState.chosenReplicationSource(id); alias != nil {
 		// An RPC chose the source. Unless the replica's semi-sync must be
 		// repaired, completing the deferral changes no replication, so it does
 		// not need the shard lock.
@@ -1294,7 +1294,8 @@ func (tm *TabletManager) attemptDeferredReplicationInit(ctx context.Context, id 
 	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer cancel()
 	var primary *topodatapb.Tablet
-	if alias := tm.tmState.chosenReplicationSource(id); alias != nil {
+	alias, ticket := tm.tmState.chosenReplicationSource(id)
+	if alias != nil {
 		// Never replace a source that an RPC chose.
 		if primary, err = tm.replicatingChosenSource(ctx, alias); err != nil {
 			return err
@@ -1322,7 +1323,16 @@ func (tm *TabletManager) attemptDeferredReplicationInit(ctx context.Context, id 
 			return vterrors.New(vtrpc.Code_UNAVAILABLE, "no primary to replicate from yet")
 		}
 	}
-	tm.tmState.endReplicationInit(id)
+	return tm.endCheckedReplicationInit(id, ticket)
+}
+
+// endCheckedReplicationInit ends the deferred replication initialization id
+// unless an RPC chose a source since the caller read ticket, which then still
+// has to be checked.
+func (tm *TabletManager) endCheckedReplicationInit(id, ticket uint64) error {
+	if !tm.tmState.endReplicationInit(id, ticket) && tm.tmState.isPendingReplicationInit(id) {
+		return &replicationInitWaitError{"a reparent or VTOrc chose another replication source while it was checked"}
+	}
 	return nil
 }
 
@@ -1333,6 +1343,10 @@ func (tm *TabletManager) attemptDeferredReplicationInit(ctx context.Context, id 
 // replication, so it needs no lock, and ending the deferral is safe because
 // only this ID is ended.
 func (tm *TabletManager) settleDeferredReplicationInit(ctx context.Context, id uint64) (bool, error) {
+	// Read the ticket before the type: an RPC that chooses a source also
+	// demotes a primary, and the deferral must not then end without checking
+	// that source.
+	_, ticket := tm.tmState.chosenReplicationSource(id)
 	if !tm.tmState.isPendingReplicationInit(id) {
 		// It completed, or a later deferral or a restore superseded it.
 		return true, nil
@@ -1340,8 +1354,7 @@ func (tm *TabletManager) settleDeferredReplicationInit(ctx context.Context, id u
 	switch tm.Tablet().Type {
 	case topodatapb.TabletType_PRIMARY:
 		// A primary does not replicate.
-		tm.tmState.endReplicationInit(id)
-		return true, nil
+		return true, tm.endCheckedReplicationInit(id, ticket)
 	case topodatapb.TabletType_RESTORE:
 		// A restore that finishes supersedes this initialization. One that
 		// aborts leaves the data, and this initialization, unchanged.
@@ -1362,7 +1375,7 @@ func (tm *TabletManager) completeChosenReplicationSource(ctx context.Context, id
 		return false, &replicationInitWaitError{"another action is running on this tablet"}
 	}
 	defer tm.unlock()
-	alias := tm.tmState.chosenReplicationSource(id)
+	alias, ticket := tm.tmState.chosenReplicationSource(id)
 	if alias == nil {
 		// It ended, or a later deferral superseded it.
 		return true, nil
@@ -1379,8 +1392,7 @@ func (tm *TabletManager) completeChosenReplicationSource(ctx context.Context, id
 	if ok, err := tm.replicaSemiSyncSatisfied(ctx, primary, tm.Tablet().Type); !ok || err != nil {
 		return false, err
 	}
-	tm.tmState.endReplicationInit(id)
-	return true, nil
+	return true, tm.endCheckedReplicationInit(id, ticket)
 }
 
 // replicatingChosenSource returns the tablet that alias names if both

@@ -19,6 +19,7 @@ package tabletmanager
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -1042,7 +1043,7 @@ func TestChosenReplicationSourceCompletion(t *testing.T) {
 		require.NoError(t, ts.CreateTablet(t.Context(), newPrimary))
 		// An RPC chose the new primary, and replication runs from it,
 		// acknowledging as the semi_sync durability policy requires.
-		tm.tmState.replicationSourceChosen(newPrimary.Alias)
+		tm.tmState.requestReplicationSource(newPrimary.Alias)
 		md.Replicating, md.IOThreadRunning, md.SemiSyncReplicaEnabled = true, true, true
 		md.CurrentSourceHost, md.CurrentSourcePort = "new-primary", 3306
 		md.ExpectedExecuteSuperQueryList = nil
@@ -1363,4 +1364,183 @@ func TestChosenSourceCompletionChecksWhatInitializationChecks(t *testing.T) {
 		require.NoError(t, md.CheckSuperQueryList())
 		assert.False(t, qsc.IsServing(), "a replica that does not acknowledge as required must not serve")
 	})
+}
+
+// sourceChoosingRPCs are the RPCs that choose a replication source for a
+// pending deferral.
+var sourceChoosingRPCs = []struct {
+	name string
+	call func(context.Context, *TabletManager, *topodatapb.TabletAlias) error
+}{
+	{name: "SetReplicationSource", call: func(ctx context.Context, tm *TabletManager, alias *topodatapb.TabletAlias) error {
+		return tm.SetReplicationSource(ctx, alias, 0, "", true, true, 0)
+	}},
+	{name: "InitReplica", call: func(ctx context.Context, tm *TabletManager, alias *topodatapb.TabletAlias) error {
+		return tm.InitReplica(ctx, alias, gtidFlavor+"/"+gtidPosition, 0, true)
+	}},
+}
+
+func newSourceChoiceTM(t *testing.T) (*TabletManager, *mysqlctl.FakeMysqlDaemon, *topo.Server, *tabletservermock.Controller, uint64, *topodatapb.Tablet) {
+	t.Helper()
+	tm, md, ts, qsc, id := newPendingReplicationTM(t)
+	newPrimary := newTestTablet(t, 3, "ks", "0", nil)
+	newPrimary.Type = topodatapb.TabletType_PRIMARY
+	newPrimary.MysqlHostname, newPrimary.MysqlPort = "new-primary", 3306
+	require.NoError(t, ts.CreateTablet(t.Context(), newPrimary))
+	tm._waitForGrantsComplete = make(chan struct{})
+	close(tm._waitForGrantsComplete)
+	return tm, md, ts, qsc, id, newPrimary
+}
+
+func TestNewerSourceSupersedesInFlightCompletion(t *testing.T) {
+	for _, path := range []string{"configures source", "already running", "chosen source"} {
+		for _, rpc := range sourceChoosingRPCs {
+			t.Run(path+"/"+rpc.name, func(t *testing.T) {
+				tm, md, ts, qsc, id, newPrimary := newSourceChoiceTM(t)
+				md.ExpectedExecuteSuperQueryList = nil
+				switch path {
+				case "configures source":
+					md.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA", "FAKE SET SOURCE", "START REPLICA"}
+				case "already running", "chosen source":
+					md.Replicating, md.IOThreadRunning, md.SemiSyncReplicaEnabled = true, true, true
+					md.CurrentSourceHost, md.CurrentSourcePort = "old-primary", 3306
+				}
+				if path == "chosen source" {
+					tm.tmState.requestReplicationSource(&topodatapb.TabletAlias{Cell: "cell1", Uid: 2})
+					// A reparent holds the shard lock; this completion needs only
+					// the action lock.
+					holdInitializationShardLock(t, ts)
+				}
+				client := &initializationPrimaryClient{TabletManagerClient: tm.tmc, entered: make(chan context.Context, 1), release: make(chan struct{})}
+				tm.tmc = client
+				finished := make(chan error, 1)
+				go func() { finished <- tm.retryReplicationInitializationOnce(t.Context(), id) }()
+				// The attempt validates the old primary and holds the action lock.
+				<-client.entered
+
+				// A reparent's RPC chooses the new primary, then times out
+				// waiting for the action lock.
+				ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
+				defer cancel()
+				require.ErrorContains(t, rpc.call(ctx, tm, newPrimary.Alias), "deadline exceeded")
+				close(client.release)
+
+				require.ErrorContains(t, <-finished, "chose another replication source")
+				chosen, _ := tm.tmState.chosenReplicationSource(id)
+				assert.True(t, proto.Equal(newPrimary.Alias, chosen), "the newer source must stay recorded")
+				assert.False(t, qsc.IsServing(), "the replica must not serve from a source it was told to leave")
+			})
+		}
+	}
+}
+
+// blockingSemiSyncProbeDaemon blocks the first semi-sync plugin probe until
+// release is closed.
+type blockingSemiSyncProbeDaemon struct {
+	*mysqlctl.FakeMysqlDaemon
+	entered, release chan struct{}
+	once             sync.Once
+}
+
+func (d *blockingSemiSyncProbeDaemon) SemiSyncExtensionLoaded(ctx context.Context) (mysql.SemiSyncType, error) {
+	d.once.Do(func() {
+		close(d.entered)
+		<-d.release
+	})
+	return d.FakeMysqlDaemon.SemiSyncExtensionLoaded(ctx)
+}
+
+func TestOlderRPCDoesNotReplaceNewerSource(t *testing.T) {
+	tm, md, _, qsc, id, newPrimary := newSourceChoiceTM(t)
+	md.ExpectedExecuteSuperQueryList = []string{"FAKE SET SOURCE", "START REPLICA"}
+	d := &blockingSemiSyncProbeDaemon{FakeMysqlDaemon: md, entered: make(chan struct{}), release: make(chan struct{})}
+	tm.MysqlDaemon = d
+	// An older SetReplicationSource to the old primary holds the action lock.
+	older := make(chan error, 1)
+	go func() {
+		older <- tm.SetReplicationSource(t.Context(), &topodatapb.TabletAlias{Cell: "cell1", Uid: 2}, 0, "", true, true, 0)
+	}()
+	<-d.entered
+	// A newer one, to the new primary, times out waiting for it.
+	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
+	defer cancel()
+	require.ErrorContains(t, tm.SetReplicationSource(ctx, newPrimary.Alias, 0, "", true, true, 0), "deadline exceeded")
+	close(d.release)
+	require.NoError(t, <-older)
+
+	chosen, _ := tm.tmState.chosenReplicationSource(id)
+	assert.True(t, proto.Equal(newPrimary.Alias, chosen), "the older RPC replaced the newer source")
+	require.ErrorContains(t, tm.retryReplicationInitializationOnce(t.Context(), id), "(new-primary:3306), which a reparent or VTOrc chose")
+	assert.False(t, qsc.IsServing())
+}
+
+// grantsObservingContext reports when an RPC starts waiting for grants.
+type grantsObservingContext struct {
+	context.Context
+	waiting chan struct{}
+	once    sync.Once
+}
+
+func (c *grantsObservingContext) Done() <-chan struct{} {
+	c.once.Do(func() { close(c.waiting) })
+	return c.Context.Done()
+}
+
+func TestRPCCoversDeferralCreatedWhileItWaits(t *testing.T) {
+	for _, rpc := range sourceChoosingRPCs {
+		t.Run(rpc.name, func(t *testing.T) {
+			tm, md, _, qsc, _, newPrimary := newSourceChoiceTM(t)
+			tm.tmState.cancelReplicationInit(t.Context())
+			md.SetReplicationSourceInputs = []string{"new-primary:3306"}
+			md.ExpectedExecuteSuperQueryList = []string{"FAKE SET SOURCE", "START REPLICA"}
+			if rpc.name == "InitReplica" {
+				md.ExpectedExecuteSuperQueryList = append([]string{"FAKE RESET BINARY LOGS AND GTIDS", "FAKE SET GLOBAL gtid_purged"}, md.ExpectedExecuteSuperQueryList...)
+			}
+			tm._waitForGrantsComplete = make(chan struct{})
+			ctx := &grantsObservingContext{Context: t.Context(), waiting: make(chan struct{})}
+			finished := make(chan error, 1)
+			go func() { finished <- rpc.call(ctx, tm, newPrimary.Alias) }()
+			<-ctx.waiting
+			// A restore defers initialization while the RPC waits for grants.
+			id := tm.tmState.deferReplicationInit(t.Context(), nil)
+			close(tm._waitForGrantsComplete)
+			require.NoError(t, <-finished)
+			require.NoError(t, md.CheckSuperQueryList())
+
+			// The shard record still names the old primary. The retry must
+			// keep the RPC's source.
+			md.ExpectedExecuteSuperQueryList, md.ExpectedExecuteSuperQueryCurrent = nil, 0
+			require.NoError(t, tm.retryReplicationInitializationOnce(t.Context(), id))
+			require.NoError(t, md.CheckSuperQueryList())
+			assert.Equal(t, "new-primary", md.CurrentSourceHost)
+			assert.True(t, qsc.IsServing())
+		})
+	}
+}
+
+func TestQueuedOlderRPCDoesNotReplaceNewerSource(t *testing.T) {
+	tm, md, _, qsc, id, newPrimary := newSourceChoiceTM(t)
+	md.ExpectedExecuteSuperQueryList = []string{"FAKE SET SOURCE", "START REPLICA"}
+	oldPrimary := &topodatapb.TabletAlias{Cell: "cell1", Uid: 2}
+	// Another action holds the action lock. An older SetReplicationSource to
+	// the old primary waits for it.
+	require.NoError(t, tm.lock(t.Context()))
+	older := make(chan error, 1)
+	go func() { older <- tm.SetReplicationSource(t.Context(), oldPrimary, 0, "", true, true, 0) }()
+	assert.Eventually(t, func() bool {
+		chosen, _ := tm.tmState.chosenReplicationSource(id)
+		return proto.Equal(oldPrimary, chosen)
+	}, 30*time.Second, time.Millisecond)
+	// A newer one, to the new primary, times out waiting too.
+	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
+	defer cancel()
+	require.ErrorContains(t, tm.SetReplicationSource(ctx, newPrimary.Alias, 0, "", true, true, 0), "deadline exceeded")
+	// The older one then takes the lock.
+	tm.unlock()
+	require.NoError(t, <-older)
+
+	chosen, _ := tm.tmState.chosenReplicationSource(id)
+	assert.True(t, proto.Equal(newPrimary.Alias, chosen), "the older RPC replaced the newer source once it held the lock")
+	require.ErrorContains(t, tm.retryReplicationInitializationOnce(t.Context(), id), "(new-primary:3306), which a reparent or VTOrc chose")
+	assert.False(t, qsc.IsServing())
 }
