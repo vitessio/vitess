@@ -293,7 +293,15 @@ func (sb *shardBuffer) shouldBufferLocked(failoverDetected bool) bool {
 
 func (sb *shardBuffer) startBufferingLocked(ctx context.Context, kev *discovery.KeyspaceEventWatcher, err error) bool {
 	if kev != nil {
-		if !kev.MarkShardNotServing(ctx, sb.keyspace, sb.shard, isErrorDueToReparenting(err)) {
+		var marked bool
+		if isMoveTablesDeniedError(err) {
+			// The primary is serving: a MoveTables traffic switch denied the
+			// table on it. Keep buffering until the switch completes.
+			marked = kev.MarkMoveTablesDenied(ctx, sb.keyspace, sb.shard)
+		} else {
+			marked = kev.MarkShardNotServing(ctx, sb.keyspace, sb.shard, isErrorDueToReparenting(err))
+		}
+		if !marked {
 			// We failed to mark the shard as not serving. Do not buffer the request.
 			// This can happen if the keyspace has been deleted or if the keyspace even watcher
 			// hasn't yet seen the shard. Keyspace event watcher might not stop buffering for this

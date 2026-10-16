@@ -118,6 +118,12 @@ func getReason(err error) string {
 	return ""
 }
 
+// isMoveTablesDeniedError returns true if err is the error a primary returns
+// for a table that a MoveTables traffic switch denied on it.
+func isMoveTablesDeniedError(err error) bool {
+	return vterrors.Code(err) == vtrpcpb.Code_FAILED_PRECONDITION && strings.Contains(err.Error(), ClusterEventMoveTables)
+}
+
 // isFailoverError looks at the error returned by the sql query execution to check if there is a cluster event
 // (caused by resharding or reparenting) or a denied tables error seen during switch writes in MoveTables
 func isFailoverError(err error) (string, bool) {

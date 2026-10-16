@@ -145,6 +145,9 @@ type keyspaceState struct {
 	shards       map[string]*shardState
 
 	moveTablesState *MoveTablesState
+	// lastSrvVSchema is the latest SrvVSchema the MoveTables state was
+	// evaluated against, or nil if there was none.
+	lastSrvVSchema *vschemapb.SrvVSchema
 }
 
 // isConsistent returns whether the keyspace is currently consistent or not.
@@ -916,6 +919,7 @@ func (kss *keyspaceState) applySrvVSchema(vs *vschemapb.SrvVSchema) bool {
 	if vs == nil {
 		return true
 	}
+	kss.lastSrvVSchema = vs
 	// Use a local for the new state — getMoveTablesStatus returns (nil, err)
 	// on failure, and assigning directly into kss.moveTablesState would
 	// silently clobber the previously-tracked state on a transient topo blip.
@@ -930,9 +934,32 @@ func (kss *keyspaceState) applySrvVSchema(vs *vschemapb.SrvVSchema) bool {
 		// switched, and if so, it will send an event to the buffering subscribers to indicate that
 		// buffering can be stopped.
 		kss.consistent = false
-		kss.ensureConsistentLocked()
 	}
+	// This also ends an event for which MarkMoveTablesDenied made the keyspace
+	// inconsistent once the MoveTables state is gone, e.g. because the traffic
+	// switch was cancelled and the source no longer denies the tables.
+	kss.ensureConsistentLocked()
 	return true
+}
+
+// reevaluateMoveTables recomputes the MoveTables state of the keyspace from
+// the latest SrvVSchema and the shard records, and ends the availability
+// event if it reports the traffic switch as complete or no MoveTables at all.
+func (kss *keyspaceState) reevaluateMoveTables() {
+	kss.mu.Lock()
+	defer kss.mu.Unlock()
+	if kss.deleted || kss.lastSrvVSchema == nil {
+		return
+	}
+	newState, err := kss.getMoveTablesStatus(kss.lastSrvVSchema)
+	if err != nil {
+		// Keep treating the switch as in progress: buffering ends with the
+		// next SrvVSchema update or when it times out.
+		log.Error(fmt.Sprintf("reevaluateMoveTables: keyspace %s failed to get move tables status: %v", kss.keyspace, err))
+		return
+	}
+	kss.moveTablesState = newState
+	kss.ensureConsistentLocked()
 }
 
 // newKeyspaceState allocates the internal state required to keep track of availability incidents
@@ -1133,6 +1160,43 @@ func (kew *KeyspaceEventWatcher) WaitForConsistentKeyspaces(ctx context.Context,
 		case <-time.After(waitConsistentKeyspacesCheck):
 		}
 	}
+}
+
+// MarkMoveTablesDenied records that the primary of the given shard denied a
+// query because a MoveTables traffic switch denied its tables. The primary is
+// serving, so unlike MarkShardNotServing this does not mark the shard not
+// serving, which would let the primary's next health check end the buffering
+// while writes are still denied. Instead the keyspace stays inconsistent
+// while its MoveTables state reports the traffic switch as in progress. The
+// state is re-evaluated from the latest SrvVSchema and the shard records in
+// the background, so the caller does not wait for topo reads.
+//
+// It returns false if the keyspace or the shard is unknown, in which case the
+// caller must not buffer.
+func (kew *KeyspaceEventWatcher) MarkMoveTablesDenied(ctx context.Context, keyspace string, shard string) bool {
+	kss := kew.getKeyspaceStatus(ctx, keyspace)
+	if kss == nil {
+		// Only happens if the keyspace was deleted.
+		return false
+	}
+	kss.mu.Lock()
+	defer kss.mu.Unlock()
+	sstate := kss.shards[shard]
+	if sstate == nil {
+		// This only happens if the shard is deleted, or if
+		// the keyspace event watcher hasn't seen the shard at all.
+		return false
+	}
+	kss.consistent = false
+	if kss.lastSrvVSchema == nil {
+		// Without a SrvVSchema the MoveTables state cannot be evaluated: fall
+		// back to marking the shard not serving.
+		sstate.serving = false
+		return true
+	}
+	kss.moveTablesState = &MoveTablesState{Typ: MoveTablesRegular, State: MoveTablesSwitching}
+	go kss.reevaluateMoveTables()
+	return true
 }
 
 // MarkShardNotServing marks the given shard not serving.
