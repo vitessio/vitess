@@ -1823,3 +1823,75 @@ func TestChosenSourceCompletionKeepsStopRequestedWhileItWaited(t *testing.T) {
 		})
 	}
 }
+
+// finishRestoreUnderShardLock finishes a restore with the action lock and the
+// shard lock held, as during a reparent, so finalization defers replication
+// initialization. It returns the ID of that deferral.
+func finishRestoreUnderShardLock(t *testing.T, tm *TabletManager, md *mysqlctl.FakeMysqlDaemon, ts *topo.Server, during func()) uint64 {
+	t.Helper()
+	require.NoError(t, tm.tmState.ChangeTabletType(t.Context(), topodatapb.TabletType_RESTORE, DBActionNone))
+	require.NoError(t, tm.lock(t.Context()))
+	releaseShard := holdInitializationShardLock(t, ts)
+	during()
+	// Keep the background retry from running; the test drives it.
+	tm.tmState.cancel()
+	md.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA", "FAKE RESET REPLICA ALL"}
+	pos := md.GetPrimaryPositionLocked()
+	rsm := tm.newRestoreStateManager(logutil.NewMemoryLogger(), false)
+	rsm.state = restoreStarted
+	rsm.prevTabletType, rsm.nextTabletType = topodatapb.TabletType_REPLICA, topodatapb.TabletType_REPLICA
+	require.NoError(t, rsm.finish(t.Context(), replicationCommand{action: replicationActionStart, position: &pos}))
+	require.NoError(t, md.CheckSuperQueryList())
+	tm.unlock()
+	releaseShard()
+	id := tm.tmState.pendingReplicationInit
+	require.NotZero(t, id)
+	return id
+}
+
+func TestRestoreKeepsSourceChosenDuringRestore(t *testing.T) {
+	for _, pending := range []bool{false, true} {
+		for _, rpc := range sourceChoosingRPCs {
+			name := "no earlier deferral/" + rpc.name
+			if pending {
+				name = "earlier deferral/" + rpc.name
+			}
+			t.Run(name, func(t *testing.T) {
+				tm, md, ts, qsc, _, newPrimary := newSourceChoiceTM(t)
+				if !pending {
+					tm.tmState.cancelReplicationInit(t.Context())
+				}
+				id := finishRestoreUnderShardLock(t, tm, md, ts, func() {
+					// A reparent chooses a new primary, and its RPC times
+					// out waiting for the restore's action lock.
+					ctx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
+					defer cancel()
+					require.ErrorIs(t, rpc.call(ctx, tm, newPrimary.Alias), context.DeadlineExceeded)
+				})
+				chosen, _ := tm.tmState.chosenReplicationSource(id)
+				assert.True(t, proto.Equal(newPrimary.Alias, chosen), "restore discarded the reparent's source")
+
+				// The shard record still names the old primary.
+				md.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA", "FAKE SET SOURCE", "START REPLICA"}
+				md.ExpectedExecuteSuperQueryCurrent = 0
+				err := tm.retryReplicationInitializationOnce(t.Context(), id)
+				assert.NotEqual(t, "old-primary", md.CurrentSourceHost, "retry=%v", err)
+				assert.False(t, md.Replicating)
+				assert.False(t, qsc.IsServing())
+			})
+		}
+	}
+}
+
+func TestRestoreDiscardsSourceChosenBeforeRestore(t *testing.T) {
+	tm, md, ts, _, _, newPrimary := newSourceChoiceTM(t)
+	tm.tmState.cancelReplicationInit(t.Context())
+	// A source chosen during an earlier restore is for the data that this
+	// restore replaces.
+	require.NoError(t, tm.tmState.ChangeTabletType(t.Context(), topodatapb.TabletType_RESTORE, DBActionNone))
+	tm.tmState.requestReplicationSource(newPrimary.Alias)
+	require.NoError(t, tm.tmState.ChangeTabletType(t.Context(), topodatapb.TabletType_REPLICA, DBActionNone))
+	id := finishRestoreUnderShardLock(t, tm, md, ts, func() {})
+	chosen, _ := tm.tmState.chosenReplicationSource(id)
+	assert.Nil(t, chosen)
+}

@@ -104,6 +104,12 @@ type tmState struct {
 	// ticket of the latest request that stopped or started replication.
 	replicationInitStopped   bool
 	replicationInitRunTicket uint64
+	// restoreSource is the newest source that a request chose since the
+	// tablet last became RESTORE, and restoreSourceTicket its ticket. A
+	// deferral that the restore creates starts with it, because the request
+	// may have failed waiting for the restore's action lock.
+	restoreSource       *topodatapb.TabletAlias
+	restoreSourceTicket uint64
 
 	// displayState contains the current snapshot of the internal state
 	// and has its own mutex.
@@ -231,6 +237,10 @@ func (ts *tmState) ChangeTabletType(ctx context.Context, tabletType topodatapb.T
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
 	log.Info(fmt.Sprintf("Changing Tablet Type: %v for %s", tabletType, ts.tablet.Alias.String()))
+	if tabletType == topodatapb.TabletType_RESTORE && ts.tablet.Type != topodatapb.TabletType_RESTORE {
+		// The restore replaces the data that earlier choices were made for.
+		ts.restoreSource = nil
+	}
 
 	var primaryTermStartTime *vttime.Time
 	if tabletType == topodatapb.TabletType_PRIMARY {
@@ -308,13 +318,15 @@ func (ts *tmState) ChangeTabletTags(ctx context.Context, tabletTags map[string]s
 }
 
 // deferReplicationInit records a new deferred replication initialization,
-// deferred because of cause, and returns its ID. It supersedes any earlier one.
+// deferred because of cause, and returns its ID. It supersedes any earlier one,
+// and keeps the source that a request chose during the current restore.
 // Non-primary tablet types do not serve queries until it ends.
 func (ts *tmState) deferReplicationInit(ctx context.Context, cause error) uint64 {
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
 	ts.lastReplicationInit++
 	ts.setPendingReplicationInitLocked(ctx, ts.lastReplicationInit, cause)
+	ts.chooseReplicationSourceLocked(ts.restoreSource, ts.restoreSourceTicket)
 	return ts.lastReplicationInit
 }
 
@@ -427,6 +439,9 @@ func (ts *tmState) replicationSourceChosen(source *topodatapb.TabletAlias, ticke
 }
 
 func (ts *tmState) chooseReplicationSourceLocked(source *topodatapb.TabletAlias, ticket uint64) {
+	if source != nil && ts.tablet.GetType() == topodatapb.TabletType_RESTORE && ticket > ts.restoreSourceTicket {
+		ts.restoreSource, ts.restoreSourceTicket = source, ticket
+	}
 	if source != nil && ts.pendingReplicationInit != 0 && ticket > ts.replicationInitSourceTicket {
 		ts.replicationInitSource, ts.replicationInitSourceTicket = source, ticket
 	}
