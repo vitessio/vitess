@@ -669,3 +669,103 @@ func verifyBackupStats(t *testing.T, dataPointReader *opentsdb.DataPointReader, 
 	// Verify phase sequences.
 	require.Equal(t, expectActivePhases, activePhases)
 }
+
+// TestVtBackupWithBinlogs checks that vtbackup --include-binlogs carries the
+// binlog history forward: each run restores the previous backup's binlogs and backs
+// them up again with the new ones, whether vtbackup or BackupShard took that backup.
+// The restore keeps each binlog's original mtime, so binlogs past
+// binlog_expire_logs_seconds are purged when mysqld starts and drop out of the next
+// backup.
+func TestVtBackupWithBinlogs(t *testing.T) {
+	prepareCluster(t)
+
+	_, err := primary.VttabletProcess.QueryTablet(vtInsertTest, keyspaceName, true)
+	require.NoError(t, err)
+	insertRow := func(msg string, rows int) {
+		_, err := primary.VttabletProcess.QueryTablet(fmt.Sprintf("insert into vt_insert_test (msg) values ('%s')", msg), keyspaceName, true)
+		require.NoError(t, err)
+		cluster.VerifyRowsInTablet(t, replica1, keyspaceName, rows)
+	}
+	insertRow("binlogs1", 1)
+
+	_, err = startVtBackup(t, false, false, false, "--include-binlogs")
+	require.NoError(t, err)
+	backupA := lastBackupBinlogs(t)
+	require.NotEmpty(t, backupA)
+
+	insertRow("binlogs2", 2)
+	_, err = startVtBackup(t, false, false, false, "--include-binlogs")
+	require.NoError(t, err)
+	backupB := lastBackupBinlogs(t)
+	assert.Subset(t, binlogNames(backupB), binlogNames(backupA))
+	assert.Greater(t, backupB[len(backupB)-1].Name, backupA[len(backupA)-1].Name)
+
+	// Back-date replica1's oldest binlog past the default binlog_expire_logs_seconds,
+	// so it is backed up with that mtime. The backup flushes the binlogs before it
+	// shuts mysqld down, so replica1 must not expire it first; its mysqld restart
+	// after the backup restores the default.
+	insertRow("binlogs3", 3)
+	err = replica1.VttabletProcess.QueryTabletMultiple([]string{
+		"set global binlog_expire_logs_seconds = 31536000",
+		"flush binary logs",
+	}, keyspaceName, true)
+	require.NoError(t, err)
+	rs, err := replica1.VttabletProcess.QueryTablet("show binary logs", keyspaceName, true)
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, len(rs.Rows), 2)
+	oldestBinlog := rs.Rows[0][0].ToString()
+	rs, err = replica1.VttabletProcess.QueryTablet("select @@global.log_bin_basename", keyspaceName, true)
+	require.NoError(t, err)
+	oldMtime := time.Now().Add(-30 * 24 * time.Hour)
+	require.NoError(t, os.Chtimes(path.Join(path.Dir(rs.Rows[0][0].ToString()), oldestBinlog), oldMtime, oldMtime))
+
+	err = localCluster.VtctldClientProcess.ExecuteCommand("BackupShard", "--include-binlogs", shardKsName)
+	require.NoError(t, err)
+	backupC := lastBackupBinlogs(t)
+	require.GreaterOrEqual(t, len(backupC), 2)
+	expired := backupC[0]
+	assert.Equal(t, "binlog."+strings.TrimPrefix(path.Ext(oldestBinlog), "."), expired.Name)
+	assert.WithinDuration(t, oldMtime, expired.ModTime, time.Second)
+
+	insertRow("binlogs4", 4)
+	_, err = startVtBackup(t, false, false, false, "--include-binlogs")
+	require.NoError(t, err)
+	backupD := lastBackupBinlogs(t)
+	assert.NotContains(t, binlogNames(backupD), expired.Name)
+	assert.Subset(t, binlogNames(backupD), binlogNames(backupC[1:]))
+	assert.Greater(t, backupD[len(backupD)-1].Name, backupC[len(backupC)-1].Name)
+
+	// A vttablet restores the vtbackup backup and its binlogs.
+	err = localCluster.InitTablet(replica2, keyspaceName, shardName)
+	require.NoError(t, err)
+	restore(t, replica2, "replica", "SERVING")
+	waitForRestoreComplete(t, replica2.VttabletProcess, 180*time.Second)
+	waitForReplicationToCatchup([]cluster.Vttablet{*replica2})
+	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 4)
+
+	removeBackups(t)
+	tearDown(t, true)
+}
+
+// lastBackupBinlogs returns the binlog entries in the latest backup's MANIFEST.
+func lastBackupBinlogs(t *testing.T) []mysqlctl.FileEntry {
+	backups, err := listBackups(shardKsName)
+	require.NoError(t, err)
+	require.NotEmpty(t, backups)
+	data, err := os.ReadFile(path.Join(localCluster.VtbackupProcess.FileBackupStorageRoot, keyspaceName, shardName, backups[len(backups)-1], "MANIFEST"))
+	require.NoError(t, err)
+	var manifest struct {
+		IncludesBinlogs   bool
+		BinlogFileEntries []mysqlctl.FileEntry
+	}
+	require.NoError(t, json.Unmarshal(data, &manifest))
+	require.True(t, manifest.IncludesBinlogs)
+	return manifest.BinlogFileEntries
+}
+
+func binlogNames(entries []mysqlctl.FileEntry) (names []string) {
+	for _, fe := range entries {
+		names = append(names, fe.Name)
+	}
+	return names
+}
