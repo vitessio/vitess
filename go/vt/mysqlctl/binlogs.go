@@ -73,14 +73,14 @@ func ValidateIncludeBinlogs(params BackupParams) error {
 		return nil
 	}
 	if isIncrementalBackup(params) {
-		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "including binlogs is only supported for full backups, not incremental ones")
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "including binlogs is only supported for full backups, not incremental ones")
 	}
 	be, err := GetBackupEngine(params.BackupEngine)
 	if err != nil {
 		return vterrors.Wrap(err, "failed to find backup engine")
 	}
 	if be.Name() != builtinBackupEngineName {
-		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "including binlogs is only supported with the %s backup engine, not %s", builtinBackupEngineName, be.Name())
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "including binlogs is only supported with the %s backup engine, not %s", builtinBackupEngineName, be.Name())
 	}
 	return nil
 }

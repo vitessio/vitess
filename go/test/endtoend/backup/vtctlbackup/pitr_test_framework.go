@@ -805,7 +805,7 @@ func ExecTestIncrementalBackupWithBinlogs(t *testing.T, tcase *PITRTestCase) {
 		t.Run("incremental backup refuses binlogs", func(t *testing.T) {
 			output, err := localCluster.VtctldClientProcess.ExecuteCommandWithOutput("BackupShard", "--include-binlogs", "--incremental-from-pos", mysqlctl.AutoIncrementalFromPos, shardKsName)
 			require.Error(t, err)
-			assert.Contains(t, output, "FailedPrecondition")
+			assert.Contains(t, output, "InvalidArgument")
 			assert.Contains(t, output, "including binlogs is only supported for full backups")
 		})
 

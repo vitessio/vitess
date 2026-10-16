@@ -29,8 +29,10 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 func TestCatchUpReplicationForBackupClearsLastErrWhenReplicationBecomesHealthy(t *testing.T) {
@@ -166,6 +168,8 @@ func TestResetReplication(t *testing.T) {
 
 func TestValidateBinlogFlags(t *testing.T) {
 	require.NoError(t, validateBinlogFlags(mysqlctl.BackupParams{IncludeBinlogs: true, BackupEngine: "builtin"}, false))
-	require.ErrorContains(t, validateBinlogFlags(mysqlctl.BackupParams{IncludeBinlogs: true, BackupEngine: "builtin"}, true), "--restore-with-clone")
+	err := validateBinlogFlags(mysqlctl.BackupParams{IncludeBinlogs: true, BackupEngine: "builtin"}, true)
+	require.ErrorContains(t, err, "--restore-with-clone")
+	assert.Equal(t, vtrpc.Code_INVALID_ARGUMENT, vterrors.Code(err))
 	require.NoError(t, validateBinlogFlags(mysqlctl.BackupParams{}, true))
 }

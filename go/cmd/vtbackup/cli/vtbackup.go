@@ -509,7 +509,7 @@ func validateBinlogFlags(params mysqlctl.BackupParams, restoreWithClone bool) er
 		return nil
 	}
 	if restoreWithClone {
-		return vterrors.New(vtrpc.Code_FAILED_PRECONDITION, "--include-binlogs cannot be used with --restore-with-clone: CLONE does not copy binary logs")
+		return vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "--include-binlogs cannot be used with --restore-with-clone: CLONE does not copy binary logs")
 	}
 	return mysqlctl.ValidateIncludeBinlogs(params)
 }

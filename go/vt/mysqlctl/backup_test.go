@@ -89,7 +89,7 @@ func TestBackupRejectsIncludeBinlogsWithOtherEngine(t *testing.T) {
 
 	err := Backup(env.ctx, env.backupParams)
 	require.Error(t, err)
-	assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+	assert.Equal(t, vtrpcpb.Code_INVALID_ARGUMENT, vterrors.Code(err))
 	assert.Empty(t, env.backupEngine.ExecuteBackupCalls)
 }
 

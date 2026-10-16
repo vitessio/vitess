@@ -175,9 +175,9 @@ func TestValidateIncludeBinlogs(t *testing.T) {
 	require.NoError(t, ValidateIncludeBinlogs(BackupParams{BackupEngine: "xtrabackup"}), "no-op without IncludeBinlogs")
 
 	err := ValidateIncludeBinlogs(BackupParams{IncludeBinlogs: true, BackupEngine: "xtrabackup"})
-	assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+	assert.Equal(t, vtrpcpb.Code_INVALID_ARGUMENT, vterrors.Code(err))
 	err = ValidateIncludeBinlogs(BackupParams{IncludeBinlogs: true, BackupEngine: builtinBackupEngineName, IncrementalFromPos: "auto"})
-	assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+	assert.Equal(t, vtrpcpb.Code_INVALID_ARGUMENT, vterrors.Code(err))
 	require.NoError(t, ValidateIncludeBinlogs(BackupParams{IncludeBinlogs: true, BackupEngine: builtinBackupEngineName}))
 }
 
