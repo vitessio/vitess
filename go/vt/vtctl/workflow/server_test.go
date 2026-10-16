@@ -1996,10 +1996,10 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 	}
 }
 
-// TestCanSwitchRefreshTimeoutIsPerShard confirms that the tablet refresh done before
-// switching traffic does not fail when refreshing all of the shards takes longer than
-// shardTabletRefreshTimeout, as long as each shard refreshes within it.
-func TestCanSwitchRefreshTimeoutIsPerShard(t *testing.T) {
+// TestCanSwitchRefreshesShardsConcurrently confirms that the tablet refresh done before
+// switching traffic refreshes the shards concurrently, so it does not fail when refreshing
+// the shards one at a time would take longer than shardTabletRefreshTimeout.
+func TestCanSwitchRefreshesShardsConcurrently(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 2*shardTabletRefreshTimeout)
 	defer cancel()
 

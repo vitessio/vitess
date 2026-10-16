@@ -107,11 +107,6 @@ const (
 	// timeout of 60s can cause us to lose our keyspace lock before completing the
 	// operation too.
 	shardTabletRefreshTimeout = time.Duration(30 * time.Second)
-
-	// How many shards to refresh the tablets of concurrently when checking if we can
-	// switch traffic. Each shard refresh in turn calls RefreshState on all of the shard's
-	// tablets in parallel.
-	shardTabletRefreshConcurrency = 32
 )
 
 // trafficSwitcher contains the metadata for switching read and write traffic
