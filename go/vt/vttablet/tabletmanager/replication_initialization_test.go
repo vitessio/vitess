@@ -32,8 +32,10 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/topo"
@@ -1543,4 +1545,110 @@ func TestQueuedOlderRPCDoesNotReplaceNewerSource(t *testing.T) {
 	assert.True(t, proto.Equal(newPrimary.Alias, chosen), "the older RPC replaced the newer source once it held the lock")
 	require.ErrorContains(t, tm.retryReplicationInitializationOnce(t.Context(), id), "(new-primary:3306), which a reparent or VTOrc chose")
 	assert.False(t, qsc.IsServing())
+}
+
+// blockingBackupStorage fails a backup once release is closed.
+type blockingBackupStorage struct {
+	backupstorage.BackupStorage
+	entered, release chan struct{}
+}
+
+func (s *blockingBackupStorage) WithParams(backupstorage.Params) backupstorage.BackupStorage {
+	return s
+}
+
+func (s *blockingBackupStorage) Close() error { return nil }
+
+func (s *blockingBackupStorage) StartBackup(context.Context, string, string) (backupstorage.BackupHandle, error) {
+	close(s.entered)
+	<-s.release
+	return nil, errors.New("backup failed")
+}
+
+// blockingDemotionDaemon is a deposed primary with commits blocked on
+// semi-sync. Its demotion waits for release when it enables super_read_only.
+type blockingDemotionDaemon struct {
+	*mysqlctl.FakeMysqlDaemon
+	entered, release chan struct{}
+	once             sync.Once
+}
+
+func (d *blockingDemotionDaemon) IsSemiSyncBlocked(context.Context) (bool, error) { return true, nil }
+
+func (d *blockingDemotionDaemon) SetSuperReadOnly(ctx context.Context, on bool, opts ...mysqlctl.SetSuperReadOnlyOption) (mysqlctl.ResetSuperReadOnlyFunc, error) {
+	d.once.Do(func() {
+		close(d.entered)
+		<-d.release
+	})
+	return d.FakeMysqlDaemon.SetSuperReadOnly(ctx, on, opts...)
+}
+
+// TestInternalRepointDoesNotReplaceNewerSource covers operations that choose
+// the shard primary as the replication source after waiting: an offline
+// backup when it finishes, and the shard sync of a demoted primary after the
+// demotion. A source that an RPC chose while they waited must stay recorded.
+func TestInternalRepointDoesNotReplaceNewerSource(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		// start starts the operation, and returns when it waits, a channel
+		// that releases it, and the operation's result.
+		start func(t *testing.T, tm *TabletManager, md *mysqlctl.FakeMysqlDaemon) (chan struct{}, <-chan error)
+		err   string
+	}{
+		{name: "offline backup", err: "backup failed", start: func(t *testing.T, tm *TabletManager, md *mysqlctl.FakeMysqlDaemon) (chan struct{}, <-chan error) {
+			tm.Cnf = &mysqlctl.Mycnf{}
+			storage := &blockingBackupStorage{entered: make(chan struct{}), release: make(chan struct{})}
+			const name = "blocking-backup-storage"
+			oldImplementation := backupstorage.BackupStorageImplementation
+			backupstorage.BackupStorageImplementation = name
+			backupstorage.BackupStorageMap[name] = storage
+			t.Cleanup(func() {
+				backupstorage.BackupStorageImplementation = oldImplementation
+				delete(backupstorage.BackupStorageMap, name)
+			})
+			engine := "builtin"
+			finished := make(chan error, 1)
+			go func() {
+				finished <- tm.Backup(t.Context(), logutil.NewMemoryLogger(), &tabletmanagerdatapb.BackupRequest{BackupEngine: &engine})
+			}()
+			<-storage.entered
+			return storage.release, finished
+		}},
+		{name: "shard sync demotion", start: func(t *testing.T, tm *TabletManager, md *mysqlctl.FakeMysqlDaemon) (chan struct{}, <-chan error) {
+			require.NoError(t, tm.tmState.ChangeTabletType(t.Context(), topodatapb.TabletType_PRIMARY, DBActionNone))
+			d := &blockingDemotionDaemon{FakeMysqlDaemon: md, entered: make(chan struct{}), release: make(chan struct{})}
+			tm.MysqlDaemon = d
+			finished := make(chan error, 1)
+			go func() { finished <- tm.endPrimaryTerm(t.Context(), &topodatapb.TabletAlias{Cell: "cell1", Uid: 2}) }()
+			<-d.entered
+			return d.release, finished
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tm, md, _, qsc, id, newPrimary := newSourceChoiceTM(t)
+			// Both operations repoint the replica at the old primary that the
+			// shard record names.
+			md.ExpectedExecuteSuperQueryList = []string{"FAKE SET SOURCE", "START REPLICA"}
+			release, finished := tc.start(t, tm, md)
+
+			// While the operation waits, an RPC chooses the new primary and
+			// times out waiting for the action lock.
+			ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
+			defer cancel()
+			require.ErrorContains(t, tm.SetReplicationSource(ctx, newPrimary.Alias, 0, "", true, true, 0), "deadline exceeded")
+			close(release)
+			if err := <-finished; tc.err != "" {
+				require.ErrorContains(t, err, tc.err)
+			} else {
+				require.NoError(t, err)
+			}
+			require.NoError(t, md.CheckSuperQueryList())
+
+			chosen, _ := tm.tmState.chosenReplicationSource(id)
+			assert.True(t, proto.Equal(newPrimary.Alias, chosen), "the operation replaced the newer source")
+			md.ExpectedExecuteSuperQueryList, md.ExpectedExecuteSuperQueryCurrent = nil, 0
+			require.ErrorContains(t, tm.retryReplicationInitializationOnce(t.Context(), id), "(new-primary:3306), which a reparent or VTOrc chose")
+			assert.False(t, qsc.IsServing())
+		})
+	}
 }

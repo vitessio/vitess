@@ -380,6 +380,13 @@ func (ts *tmState) requestReplicationSource(source *topodatapb.TabletAlias) uint
 	return ts.replicationSourceTickets
 }
 
+// newReplicationSourceTicket returns a ticket for an operation that will choose
+// a replication source it does not know yet. The operation calls it when it
+// starts, so that requests arriving while it runs are newer.
+func (ts *tmState) newReplicationSourceTicket() uint64 {
+	return ts.requestReplicationSource(nil)
+}
+
 // replicationSourceChosen records that the request with ticket is about to make
 // source the replication source, so that the pending deferred initialization
 // no longer chooses one, unless a later request was recorded. It does not end

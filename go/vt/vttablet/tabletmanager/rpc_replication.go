@@ -923,9 +923,10 @@ func (tm *TabletManager) SetReplicationSource(ctx context.Context, parentAlias *
 	return tm.setReplicationSourceLocked(ctx, parentAlias, timeCreatedNS, waitPosition, forceStartReplication, semiSyncAction, heartbeatInterval)
 }
 
-func (tm *TabletManager) setReplicationSourceSemiSyncNoAction(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool) error {
+// setReplicationSourceSemiSyncNoAction is SetReplicationSource for a caller
+// that requested parentAlias with ticket.
+func (tm *TabletManager) setReplicationSourceSemiSyncNoAction(ctx context.Context, parentAlias *topodatapb.TabletAlias, ticket uint64, timeCreatedNS int64, waitPosition string, forceStartReplication bool) error {
 	log.Info(fmt.Sprintf("SetReplicationSource: parent: %v  position: %v force: %v", parentAlias, waitPosition, forceStartReplication))
-	ticket := tm.tmState.requestReplicationSource(parentAlias)
 	if err := tm.lock(ctx); err != nil {
 		return err
 	}
