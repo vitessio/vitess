@@ -71,14 +71,8 @@ func (ts *Server) LockShard(ctx context.Context, keyspace, shard, action string,
 // - an unlock method
 // - an error if anything failed.
 //
-// `TryLockShard` is different from `LockShard`. If there is already a lock on given shard,
-// then unlike `LockShard` instead of waiting and blocking the client it returns with
-// `Lock already exists` error. With current implementation it may not be able to fail-fast
-// for some scenarios. For example there is a possibility that a thread checks for lock for
-// a given shard but by the time it acquires the lock, some other thread has already acquired it,
-// in this case the client will block until the other caller releases the lock or the
-// client call times out (just like standard `LockShard' implementation). In short the lock checking
-// and acquiring is not under the same mutex in current implementation of `TryLockShard`.
+// `TryLockShard` is different from `LockShard`. If the shard is already locked, or another
+// caller is acquiring the lock, it returns a NodeExists error instead of waiting.
 //
 // We are currently using `TryLockShard` during tablet discovery in Vtorc recovery
 func (ts *Server) TryLockShard(ctx context.Context, keyspace, shard, action string) (context.Context, func(*error), error) {

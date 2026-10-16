@@ -17,11 +17,13 @@ limitations under the License.
 package consultopo
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"path"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -452,4 +454,65 @@ func TestConsulWatcherStormPrevention(t *testing.T) {
 	assert.NotNil(t, vschema, "GetSrvVSchema() should continue returning cached value")
 
 	t.Log("Consul storm prevention test completed - watchers remained quiet during outage")
+}
+
+// TestConsulTopoTryLockAcrossServers checks that concurrent TryLock calls from
+// separate servers on a free lock all return without waiting: one gets the
+// lock and the others return NodeExists.
+func TestConsulTopoTryLockAcrossServers(t *testing.T) {
+	cmd, configFilename, serverAddr := startConsul(t, "")
+	t.Cleanup(func() {
+		if err := cmd.Process.Kill(); err != nil {
+			log.Error(fmt.Sprintf("cmd process kill has an error: %v", err))
+		}
+		if err := cmd.Wait(); err != nil {
+			log.Error(fmt.Sprintf("cmd wait has an error: %v", err))
+		}
+		os.Remove(configFilename)
+	})
+
+	const contenders = 10
+	root := "test-trylock-across-servers"
+	servers := make([]*Server, contenders)
+	for i := range servers {
+		s, err := NewServer("", serverAddr, root)
+		require.NoError(t, err)
+		t.Cleanup(s.Close)
+		servers[i] = s
+	}
+
+	ctx := t.Context()
+	_, err := servers[0].Create(ctx, "ks/Keyspace", []byte{})
+	require.NoError(t, err)
+
+	tryCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	start := make(chan struct{})
+	locks := make([]topo.LockDescriptor, contenders)
+	errs := make([]error, contenders)
+	var wg sync.WaitGroup
+	for i, s := range servers {
+		wg.Go(func() {
+			<-start
+			locks[i], errs[i] = s.TryLock(tryCtx, "ks", fmt.Sprintf("contender-%d", i))
+		})
+	}
+	close(start)
+	wg.Wait()
+
+	var held topo.LockDescriptor
+	for i, err := range errs {
+		if err == nil {
+			require.Nil(t, held, "more than one TryLock got the lock")
+			held = locks[i]
+			continue
+		}
+		require.True(t, topo.IsErrType(err, topo.NodeExists), "TryLock should return NodeExists, got: %v", err)
+	}
+	require.NotNil(t, held, "no TryLock got the lock")
+	require.NoError(t, held.Unlock(ctx))
+
+	lockDescriptor, err := servers[0].TryLock(tryCtx, "ks", "after")
+	require.NoError(t, err)
+	require.NoError(t, lockDescriptor.Unlock(ctx))
 }
