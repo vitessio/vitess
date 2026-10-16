@@ -148,7 +148,7 @@ Things to be aware of:
 - Binlog expiry (`binlog_expire_logs_seconds`) on the restored server follows the original file times, so old binary logs may be purged soon after the restored `mysqld` starts.
 - Older Vitess versions restoring such a backup restore only the data and ignore the binary logs.
 
-**Upgrade order**: upgrade tablets before using `--include-binlogs` through `vtctld` (`vtctldclient Backup` or `BackupShard`). An older `vttablet` silently ignores the field and takes a backup without binary logs.
+**Upgrade order**: upgrade both `vtctld` and the tablets before using `--include-binlogs` with `vtctldclient Backup` or `BackupShard`. An older `vtctld` or `vttablet` silently ignores the field and takes a backup without binary logs.
 
 See [#17667](https://github.com/vitessio/vitess/issues/17667).
 
