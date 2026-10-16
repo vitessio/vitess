@@ -41,7 +41,17 @@ func (l *Literal) IsExpr() {}
 
 // eval implements the expression interface
 func (l *Literal) eval(_ *ExpressionEnv) (eval, error) {
-	return l.inner, nil
+	return cloneJSONLiteral(l.inner), nil
+}
+
+// cloneJSONLiteral returns e with a JSON document deep-cloned: JSON functions
+// mutate documents in place, and a Literal is shared by every evaluation of a
+// translated expression.
+func cloneJSONLiteral(e eval) eval {
+	if j, ok := e.(*evalJSON); ok {
+		return j.Clone()
+	}
+	return e
 }
 
 // typeof implements the Expr interface
