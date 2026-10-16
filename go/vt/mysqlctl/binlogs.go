@@ -88,7 +88,8 @@ func ValidateIncludeBinlogs(params BackupParams) error {
 // checkBinlogsBackupable refuses to back up binlogs that would not contain every
 // transaction in the data: no binlog, or no log_replica_updates, since a server that
 // was a replica then did not log what it replicated. It also refuses when cnf doesn't
-// say where mysqld keeps them, which can only be read from cnf once mysqld stops.
+// say where mysqld keeps them, or their index can't be listed, since the backup finds
+// them through cnf once mysqld stops.
 func checkBinlogsBackupable(ctx context.Context, mysqld MysqlDaemon, cnf *Mycnf) error {
 	qr, err := mysqld.FetchSuperQuery(ctx, binlogBackupVarsQuery)
 	if err != nil {
@@ -117,6 +118,11 @@ func checkBinlogsBackupable(ctx context.Context, mysqld MysqlDaemon, cnf *Mycnf)
 	}
 	if _, err := checkBinlogLocation(ctx, mysqld, cnf, vtrpcpb.Code_FAILED_PRECONDITION); err != nil {
 		return vterrors.Wrap(err, "cannot include binlogs")
+	}
+	// The backup lists the binlogs again once mysqld has stopped; listing them now
+	// finds an unreadable or foreign index while the server is still up.
+	if _, err := binlogFilesForFullBackup(cnf); err != nil {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot include binlogs: %v", err)
 	}
 	return nil
 }

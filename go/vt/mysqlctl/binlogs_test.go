@@ -117,6 +117,7 @@ func TestCheckBinlogsBackupable(t *testing.T) {
 		// binLogPath overrides the cnf's log-bin, which matches what mysqld reports.
 		binLogPath string
 		noLogBin   bool
+		noIndex    bool
 		wantErr    string
 	}{
 		{name: "with replica updates", rows: []string{"log_bin|ON", "log_replica_updates|ON", "log_slave_updates|ON"}},
@@ -128,7 +129,8 @@ func TestCheckBinlogsBackupable(t *testing.T) {
 		// The binlogs are found through cnf once mysqld stops, so cnf must describe
 		// them before it does.
 		{name: "log-bin unset", rows: []string{"log_bin|ON", "log_replica_updates|ON"}, noLogBin: true, wantErr: "log-bin is not set"},
-		{name: "log-bin differs from mysqld's", rows: []string{"log_bin|ON", "log_replica_updates|ON"}, binLogPath: "/vt/bin-logs/other-bin", wantErr: "log_bin_basename"},
+		{name: "log-bin differs from mysqld's", rows: []string{"log_bin|ON", "log_replica_updates|ON"}, binLogPath: "other-bin", wantErr: "log_bin_basename"},
+		{name: "index unreadable", rows: []string{"log_bin|ON", "log_replica_updates|ON"}, noIndex: true, wantErr: "cannot read binlog index"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -136,17 +138,23 @@ func TestCheckBinlogsBackupable(t *testing.T) {
 			t.Cleanup(fakedb.Close)
 			mysqld := NewFakeMysqlDaemon(fakedb)
 			t.Cleanup(mysqld.Close)
+			dir := t.TempDir()
+			src := filepath.Join(dir, "src-bin")
+			require.NoError(t, os.WriteFile(src+".000001", []byte("x"), 0o644))
+			if !tt.noIndex {
+				require.NoError(t, os.WriteFile(src+".index", []byte(src+".000001\n"), 0o644))
+			}
 			mysqld.FetchSuperQueryMap = map[string]*sqltypes.Result{
 				binlogBackupVarsQuery: sqltypes.MakeTestResult(
 					sqltypes.MakeTestFields("Variable_name|Value", "varchar|varchar"),
 					tt.rows...),
 				binlogLocationQuery: sqltypes.MakeTestResult(
 					sqltypes.MakeTestFields("log_bin_basename|log_bin_index", "varchar|varchar"),
-					"/vt/bin-logs/src-bin|/vt/bin-logs/src-bin.index"),
+					src+"|"+src+".index"),
 			}
-			cnf := &Mycnf{DataDir: "/vt/data", BinLogPath: "/vt/bin-logs/src-bin"}
+			cnf := &Mycnf{DataDir: filepath.Join(dir, "data"), BinLogPath: src}
 			if tt.binLogPath != "" {
-				cnf.BinLogPath = tt.binLogPath
+				cnf.BinLogPath = filepath.Join(dir, tt.binLogPath)
 			}
 			if tt.noLogBin {
 				cnf.BinLogPath = ""
