@@ -1,0 +1,8 @@
+{
+    "tables": {
+        "bench_orders": {},
+        "bench_events": {},
+        "bench_accounts": {},
+        "bench_logs": {}
+    }
+}

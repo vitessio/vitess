@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 	"time"
 
@@ -37,14 +38,17 @@ const beginStmtLen = int64(len("begin;"))
 // It allows us to retry a failed transactions on lock errors.
 type vdbClient struct {
 	binlogplayer.DBClient
-	stats            *binlogplayer.Stats
-	InTransaction    bool
-	startTime        time.Time
-	queries          []string
-	queriesPos       int64
-	batchSize        int64
-	maxBatchSize     int64
-	relayLogMaxItems int
+	stats                            *binlogplayer.Stats
+	vreplicationID                   int32
+	InTransaction                    bool
+	foreignKeyChecksEnabled          bool
+	foreignKeyChecksStateInitialized bool
+	startTime                        time.Time
+	queries                          []string
+	queriesPos                       int64
+	batchSize                        int64
+	maxBatchSize                     int64
+	relayLogMaxItems                 int
 }
 
 func newVDBClient(dbclient binlogplayer.DBClient, stats *binlogplayer.Stats, relayLogMaxItems int) *vdbClient {
@@ -53,6 +57,15 @@ func newVDBClient(dbclient binlogplayer.DBClient, stats *binlogplayer.Stats, rel
 		stats:            stats,
 		relayLogMaxItems: relayLogMaxItems,
 	}
+}
+
+// newVDBClientWithID creates a vdbClient with a pre-set vreplicationID.
+// Used by parallel apply workers so each worker's connection is associated
+// with the correct vreplication stream for relay log batching.
+func newVDBClientWithID(dbclient binlogplayer.DBClient, stats *binlogplayer.Stats, relayLogMaxItems int, vreplicationID int32) *vdbClient {
+	client := newVDBClient(dbclient, stats, relayLogMaxItems)
+	client.vreplicationID = vreplicationID
+	return client
 }
 
 func (vc *vdbClient) Begin() error {
@@ -78,6 +91,31 @@ func (vc *vdbClient) Begin() error {
 	return nil
 }
 
+// BeginImmediate starts a real transaction on the server even when batch mode
+// is enabled. This is needed for commit paths that must execute a couple of
+// statements immediately on one connection and still commit them atomically.
+func (vc *vdbClient) BeginImmediate() error {
+	if vc.InTransaction {
+		return nil
+	}
+	if err := vc.DBClient.Begin(); err != nil {
+		return err
+	}
+	// The "begin" entry is for Retry's replay loop, which calls vc.Begin()
+	// when it sees "begin" in the buffer. BEGIN has already gone down the
+	// wire above, so advance queriesPos past it: any later
+	// ExecuteTrxQueryBatch / CommitTrxQueryBatch must not include this
+	// "begin" in its multi-statement, because a nested BEGIN would
+	// implicit-commit the current transaction and break atomicity with
+	// the immediate writes the caller is about to do.
+	vc.queries = []string{"begin"}
+	vc.queriesPos = 1
+	vc.batchSize = 0
+	vc.InTransaction = true
+	vc.startTime = time.Now()
+	return nil
+}
+
 func (vc *vdbClient) Commit() error {
 	if err := vc.DBClient.Commit(); err != nil {
 		return err
@@ -96,7 +134,7 @@ func (vc *vdbClient) Commit() error {
 func (vc *vdbClient) CommitTrxQueryBatch() error {
 	vc.queries = append(vc.queries, "commit")
 	queries := strings.Join(vc.queries[vc.queriesPos:], ";")
-	for _, err := vc.ExecuteFetchMulti(queries, -1); err != nil; {
+	if _, err := vc.ExecuteFetchMulti(queries, -1); err != nil {
 		return err
 	}
 	vc.InTransaction = false
@@ -128,7 +166,8 @@ func (vc *vdbClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Result, 
 	} else {
 		vc.queries = append(vc.queries, query)
 	}
-	return vc.DBClient.ExecuteFetch(query, maxrows)
+	qr, err := vc.DBClient.ExecuteFetch(query, maxrows)
+	return qr, err
 }
 
 // AddQueryToTrxBatch adds the query to the current transaction's query
@@ -157,7 +196,8 @@ func (vc *vdbClient) AddQueryToTrxBatch(query string) error {
 func (vc *vdbClient) ExecuteTrxQueryBatch() ([]*sqltypes.Result, error) {
 	defer vc.stats.Timings.Record(binlogplayer.BlplMultiQuery, time.Now())
 
-	qrs, err := vc.ExecuteFetchMulti(strings.Join(vc.queries[vc.queriesPos:], ";"), -1)
+	queries := strings.Join(vc.queries[vc.queriesPos:], ";")
+	qrs, err := vc.ExecuteFetchMulti(queries, -1)
 	if err != nil {
 		return nil, err
 	}
@@ -166,6 +206,19 @@ func (vc *vdbClient) ExecuteTrxQueryBatch() ([]*sqltypes.Result, error) {
 	vc.batchSize = 0
 
 	return qrs, nil
+}
+
+// markTrxBatchedQueriesFlushed advances the batch position past every
+// query currently buffered. ExecuteFetch appends each query it runs to
+// the trx batch buffer (so Retry can replay them), but in batch-commit
+// mode that buffer is also what CommitTrxQueryBatch sends as a single
+// multi-statement, which double-executes any query that was already
+// run on the wire via ExecuteFetch. Callers that have already executed
+// queries through ExecuteFetch mid-batch use this to keep them out of
+// the upcoming CommitTrxQueryBatch replay.
+func (vc *vdbClient) markTrxBatchedQueriesFlushed() {
+	vc.queriesPos = int64(len(vc.queries))
+	vc.batchSize = 0
 }
 
 // Execute is ExecuteFetch without the maxrows.
@@ -195,6 +248,46 @@ func (vc *vdbClient) ExecuteWithRetry(ctx context.Context, query string) (*sqlty
 		return qr, err
 	}
 	return qr, nil
+}
+
+// replayTrx applies the last transaction again after it was rolled back: it
+// begins a new transaction and executes the statements recorded since the
+// last BEGIN, in one batch when batching, leaving the transaction open. The
+// parallel applier uses it to apply a transaction again after rolling it
+// back to resolve a commit-order deadlock.
+func (vc *vdbClient) replayTrx() error {
+	begin := -1
+	for i, query := range slices.Backward(vc.queries) {
+		if query == "begin" {
+			begin = i
+			break
+		}
+	}
+	if begin < 0 {
+		return vterrors.Errorf(vtrpc.Code_INTERNAL, "no transaction to replay")
+	}
+	statements := append([]string(nil), vc.queries[begin+1:]...)
+	vc.queries = nil
+	vc.queriesPos = 0
+	vc.batchSize = 0
+	if err := vc.Begin(); err != nil {
+		return err
+	}
+	if vc.maxBatchSize > 0 {
+		for _, statement := range statements {
+			if err := vc.AddQueryToTrxBatch(statement); err != nil {
+				return err
+			}
+		}
+		_, err := vc.ExecuteTrxQueryBatch()
+		return err
+	}
+	for _, statement := range statements {
+		if _, err := vc.ExecuteFetch(statement, vc.relayLogMaxItems); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (vc *vdbClient) Retry() (*sqltypes.Result, error) {

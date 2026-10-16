@@ -523,6 +523,7 @@ const (
 			id,
 			workflow,
 			source,
+			options,
 			pos,
 			time_updated,
 			transaction_timestamp,

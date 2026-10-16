@@ -82,6 +82,15 @@ innodb, to confirm that vtgate's fkmanaged mode is working properly.
 */
 
 func TestFKExt(t *testing.T) {
+	testFKExt(t)
+}
+
+// TestFKExtParallelApply runs TestFKExt with the parallel applier.
+func TestFKExtParallelApply(t *testing.T) {
+	testFKExt(t, parallelReplicationWorkers)
+}
+
+func testFKExt(t *testing.T, extraArgs ...string) {
 	setSidecarDBName("_vt")
 
 	// Ensure that there are multiple copy phase cycles per table.
@@ -89,6 +98,7 @@ func TestFKExt(t *testing.T) {
 		"--vstream-packet-size=256",
 		"--queryserver-config-schema-change-signal",
 		parallelInsertWorkers)
+	extraVTTabletArgs = append(extraVTTabletArgs, extraArgs...)
 	extraVTGateArgs = append(extraVTGateArgs, "--schema-change-signal"+"=true", "--planner-version", "Gen4")
 	defer func() { extraVTTabletArgs = nil }()
 	initFKExtConfig(t)
