@@ -37,6 +37,10 @@ CONSTANTS
     DrainOnDeny,      \* proposed fix: applying the deny rule waits for writes admitted before it
     KewFix,           \* proposed fix: a MoveTables deny error does not mark the primary
                       \* not serving; cancelMigration rebuilds SrvVSchema
+    StartupEvent,     \* a "keyspace consistent" event, e.g. the one the watcher sends when it
+                      \* first sees the primary, may still be queued when the switch starts
+    EventGenerations, \* proposed fix: events carry a generation and the buffer ignores
+                      \* events older than the buffering it would end
     Diagnostics       \* record the history variables used only by the diagnostic properties
 
 MaxTries == 3   \* MaxBufferingRetries in plan_execute.go
@@ -79,6 +83,9 @@ VARIABLES
     vtVer, epoch, cache,
     \* ---- vtgate: KeyspaceEventWatcher for the source keyspace ----
     kewVer, kewCons, kewMT, kewServing, kewEvent,
+    kewGen,        \* generation, advanced by MarkShardNotServing / MarkMoveTablesDenied
+    evGen,         \* generation of the queued event (only meaningful while kewEvent)
+    bufGen,        \* generation the current buffering started with
     \* ---- vtgate: shard buffer for the source shard ----
     bufState, bufQ, drainQ, lastEndRecent,
     \* ---- per request ----
@@ -90,7 +97,7 @@ wfVars  == <<pc, sw, srcPos>>
 topoVars == <<srcTopoDeny, tgtTopoDeny, routeHist, extra>>
 dbVars  == <<srcTabDeny, tgtTabDeny, srcLog, tgtData, tgtClient, replPos, streamOn>>
 vsVars  == <<vtVer, epoch, cache>>
-kewVars == <<kewVer, kewCons, kewMT, kewServing, kewEvent>>
+kewVars == <<kewVer, kewCons, kewMT, kewServing, kewEvent, kewGen, evGen, bufGen>>
 bufVars == <<bufState, bufQ, drainQ, lastEndRecent>>
 reqVars == <<rs, try, lastVer, capVer, dest, bufOnce, invalid, gwErr>>
 PerAttempt == <<dest, bufOnce, invalid, gwErr>>   \* written when a plan is loaded
@@ -116,7 +123,9 @@ Init ==
     /\ srcLog = <<>> /\ tgtData = {} /\ tgtClient = {}
     /\ replPos = 0 /\ streamOn = TRUE
     /\ vtVer = 1 /\ epoch = 1 /\ cache = [ep |-> 0, route |-> "src"]
-    /\ kewVer = 1 /\ kewCons = TRUE /\ kewMT = "none" /\ kewServing = TRUE /\ kewEvent = FALSE
+    /\ kewVer = 1 /\ kewCons = TRUE /\ kewMT = "none" /\ kewServing = TRUE
+    /\ kewEvent = StartupEvent
+    /\ kewGen = 0 /\ evGen = 0 /\ bufGen = 0
     /\ bufState = "idle" /\ bufQ = {} /\ drainQ = {} /\ lastEndRecent = FALSE
     /\ rs = [r \in Reqs |-> "idle"]
     /\ try = [r \in Reqs |-> 0]
@@ -319,7 +328,8 @@ KewSeesVSchema ==
        IN /\ kewVer' = TopoVer
           /\ kewCons' = e.cons /\ kewMT' = e.mt
           /\ kewEvent' = (kewEvent \/ e.ev)
-    /\ UNCHANGED <<kewServing, wfVars, topoVars, dbVars, vsVars, bufVars, reqVars, histVars>>
+          /\ evGen' = IF e.ev THEN kewGen ELSE evGen
+    /\ UNCHANGED <<kewServing, kewGen, bufGen, wfVars, topoVars, dbVars, vsVars, bufVars, reqVars, histVars>>
 
 \* Periodic (and on-change) health stream update from the source primary,
 \* which keeps reporting serving=true throughout: the deny rule does not
@@ -330,7 +340,8 @@ HealthCheck ==
        IN /\ kewServing' = TRUE
           /\ kewCons' = e.cons /\ kewMT' = e.mt
           /\ kewEvent' = (kewEvent \/ e.ev)
-    /\ UNCHANGED <<kewVer, wfVars, topoVars, dbVars, vsVars, bufVars, reqVars, histVars>>
+          /\ evGen' = IF e.ev THEN kewGen ELSE evGen
+    /\ UNCHANGED <<kewVer, kewGen, bufGen, wfVars, topoVars, dbVars, vsVars, bufVars, reqVars, histVars>>
 
 (***************************************************************************)
 (* vtgate: shard buffer for the source shard                               *)
@@ -352,17 +363,20 @@ GwCheck(r, once) ==
 
 NotYetSwitched == pc \notin {"freeze", "done", "cancelled"}
 
-\* recordKeyspaceEvent: any event stops buffering (stopBufferingLocked).
+\* recordKeyspaceEvent: any event stops buffering (stopBufferingLocked). With
+\* EventGenerations, an event from before the buffering started is ignored.
+\* Queued events are coalesced into one that carries the newest generation:
+\* the buffer acts on the newest one anyway, and stopping is idempotent.
 BufferHandleEvent ==
     /\ kewEvent
     /\ kewEvent' = FALSE
-    /\ IF bufState = "buffering"
+    /\ IF bufState = "buffering" /\ (~EventGenerations \/ evGen >= bufGen)
        THEN /\ bufState' = "draining" /\ drainQ' = bufQ /\ bufQ' = {}
             /\ lastEndRecent' = TRUE
             /\ releasedEarly' = (releasedEarly \/ (Diagnostics /\ NotYetSwitched /\ bufQ # {}))
        ELSE UNCHANGED <<bufState, bufQ, drainQ, lastEndRecent, releasedEarly>>
-    /\ UNCHANGED <<kewVer, kewCons, kewMT, kewServing, wfVars, topoVars, dbVars, vsVars, reqVars,
-                   deniedAtTgt, failedAfterSwitch, startedAfter>>
+    /\ UNCHANGED <<kewVer, kewCons, kewMT, kewServing, kewGen, evGen, bufGen,
+                   wfVars, topoVars, dbVars, vsVars, reqVars, deniedAtTgt, failedAfterSwitch, startedAfter>>
 
 BufferDrainOne ==
     /\ \E r \in drainQ :
@@ -443,6 +457,10 @@ Load(r) ==
     /\ capVer' = [capVer EXCEPT ![r] = 0]
     /\ UNCHANGED <<try, lastVer, wfVars, topoVars, dbVars, vtVer, epoch, kewVars, bufVars, histVars>>
 
+\* The generation a new buffering starts with. Without EventGenerations it stays
+\* 0, so the model is unchanged.
+NextGen == IF EventGenerations THEN kewGen + 1 ELSE kewGen
+
 \* withRetry, top of loop: buffer.WaitForFailoverEnd(ctx, ks, shard, kev, err).
 \* Only the source shard's buffer can be involved: the target is never denied
 \* while routed to (checked by NeverDeniedAtTarget).
@@ -452,14 +470,15 @@ GwBuffer(r) ==
        THEN CASE bufState = "buffering" ->
                     /\ bufQ' = bufQ \cup {r}
                     /\ rs' = [rs EXCEPT ![r] = "buffered"]
-                    /\ UNCHANGED <<bufState, kewCons, kewServing, kewMT, kewEvent, PerAttempt>>
+                    /\ UNCHANGED <<bufState, kewCons, kewServing, kewMT, kewEvent, kewGen, evGen, bufGen, PerAttempt>>
               [] bufState = "idle" /\ gwErr[r] /\ ~lastEndRecent /\ ~KewFix ->
                     \* startBufferingLocked -> kev.MarkShardNotServing
                     /\ kewCons' = FALSE /\ kewServing' = FALSE
+                    /\ kewGen' = NextGen /\ bufGen' = NextGen
                     /\ bufState' = "buffering"
                     /\ bufQ' = bufQ \cup {r}
                     /\ rs' = [rs EXCEPT ![r] = "buffered"]
-                    /\ UNCHANGED <<kewMT, kewEvent, PerAttempt>>
+                    /\ UNCHANGED <<kewMT, kewEvent, evGen, PerAttempt>>
               [] bufState = "idle" /\ gwErr[r] /\ ~lastEndRecent /\ KewFix ->
                     \* Proposed: the primary is serving, MoveTables denied the
                     \* write. Re-evaluate the MoveTables state from topo instead
@@ -468,15 +487,17 @@ GwBuffer(r) ==
                         e  == Ensure(FALSE, mt, kewServing)
                     IN /\ kewCons' = e.cons /\ kewMT' = e.mt
                        /\ kewEvent' = (kewEvent \/ e.ev)
+                       /\ kewGen' = NextGen /\ bufGen' = NextGen
+                       /\ evGen' = IF e.ev THEN NextGen ELSE evGen
                        /\ UNCHANGED <<kewServing, PerAttempt>>
                        /\ bufState' = "buffering"
                        /\ bufQ' = bufQ \cup {r}
                        /\ rs' = [rs EXCEPT ![r] = "buffered"]
               [] OTHER ->
                     /\ GwCheck(r, bufOnce[r])
-                    /\ UNCHANGED <<bufState, bufQ, kewCons, kewServing, kewMT, kewEvent>>
+                    /\ UNCHANGED <<bufState, bufQ, kewCons, kewServing, kewMT, kewEvent, kewGen, evGen, bufGen>>
        ELSE /\ GwCheck(r, bufOnce[r])
-            /\ UNCHANGED <<bufState, bufQ, kewCons, kewServing, kewMT, kewEvent>>
+            /\ UNCHANGED <<bufState, bufQ, kewCons, kewServing, kewMT, kewEvent, kewGen, evGen, bufGen>>
     /\ UNCHANGED <<drainQ, lastEndRecent, kewVer, try, lastVer, capVer,
                    wfVars, topoVars, dbVars, vsVars, histVars>>
 

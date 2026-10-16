@@ -18,6 +18,12 @@ DestLive(r)    == MRs[r] \in {"gwBuf", "buffered", "send", "passed", "mdl"}
 
 Opt == INSTANCE MoveTablesSwitchWrites WITH
     Diagnostics  <- TRUE,
+    \* Not part of the unreduced model; with both FALSE the generations stay 0.
+    StartupEvent <- FALSE,
+    EventGenerations <- FALSE,
+    kewGen       <- 0,
+    evGen        <- 0,
+    bufGen       <- 0,
     rs           <- MRs,
     try          <- [r \in Reqs |-> IF Finished(r) THEN 0 ELSE try[r]],
     lastVer      <- [r \in Reqs |-> IF Finished(r) THEN 0 ELSE lastVer[r]],
