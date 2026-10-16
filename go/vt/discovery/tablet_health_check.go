@@ -317,6 +317,14 @@ func (thc *tabletHealthCheck) checkConn(hc *HealthCheckImpl) {
 		// streamCancel to make sure the watcher goroutine terminates.
 		streamCancel()
 
+		// The tablet was removed or replaced, or the healthcheck was closed.
+		// The stream ended because we canceled it, which is not a healthcheck
+		// error. A health check timeout cancels only streamCtx, so it is still
+		// counted below, even if the teardown raced with it.
+		if thc.ctx.Err() != nil && !timedout.Load() {
+			return
+		}
+
 		if err != nil {
 			hcErrorCounters.Add([]string{thc.Target.Keyspace, thc.Target.Shard, topoproto.TabletTypeLString(thc.Target.TabletType)}, 1)
 			// This means that another tablet has taken over the host:port that we were connected to.
