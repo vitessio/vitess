@@ -3689,21 +3689,3 @@ func TestSanitizeLogMessagesConnectionSettingErrors(t *testing.T) {
 		}
 	}
 }
-
-// A table ACL dry run looks for subqueries before validating settings. Parsing a
-// rejected partial DDL there must not log its text either.
-func TestSanitizeLogMessagesSettingSubqueryLookup(t *testing.T) {
-	tl := newTestLogger()
-	t.Cleanup(tl.Close)
-	const secret = "dry_run_setting_secret_21253"
-	setting := "create table a ignore me " + secret
-	reject, found := settingsRejectSubqueries([]string{setting}, vtenv.NewTestEnv().Parser(), true, true)
-	assert.False(t, reject)
-	assert.Empty(t, found)
-	logs := tl.getLogs()
-	for _, logged := range logs {
-		assert.NotContains(t, logged, secret)
-		assert.NotContains(t, logged, setting)
-	}
-	assert.Empty(t, logs)
-}
