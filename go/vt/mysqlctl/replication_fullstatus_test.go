@@ -280,7 +280,7 @@ type stallingSessionSetupHandler struct {
 }
 
 func (h *stallingSessionSetupHandler) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
-	if h.stall.Load() && strings.EqualFold(query, sqlmode.NeutralizeSessionQuery) {
+	if h.stall.Load() && sqlmode.IsSessionSetupQuery(query) {
 		h.once.Do(func() { close(h.stalled) })
 		<-h.release
 	}
