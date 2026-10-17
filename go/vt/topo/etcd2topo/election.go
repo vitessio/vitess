@@ -97,6 +97,8 @@ func (mp *etcdLeaderParticipation) WaitForLeadership() (context.Context, error) 
 		// It can be that we were interrupted.
 		return nil, err
 	}
+	// Stop can miss a lock acquired while it runs: end the lease's KeepAlive with lockCtx.
+	context.AfterFunc(lockCtx, ld.(*etcdLockDescriptor).stopKeepAlive)
 
 	// We got the lock. Return the lockContext. If Stop() is called,
 	// it will cancel the lockCtx, and cancel the returned context.
