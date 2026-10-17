@@ -1220,6 +1220,18 @@ func (e *Executor) VSchema() *vindexes.VSchema {
 	return e.vschema
 }
 
+// vschemaForPlanning returns the current VSchema and the plan cache epoch
+// that belongs to it. SaveVSchema replaces the VSchema and advances the epoch
+// while holding e.mu, so reading both under e.mu guarantees that a plan built
+// from the returned VSchema is cached under an epoch that the next VSchema
+// invalidates. Reading the epoch later, after the VSchema was captured, could
+// cache a plan built for a replaced VSchema under the epoch of its successor.
+func (e *Executor) vschemaForPlanning() (*vindexes.VSchema, uint32) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.vschema, e.epoch.Load()
+}
+
 // SaveVSchema updates the vschema and stats
 func (e *Executor) SaveVSchema(vschema *vindexes.VSchema, stats *VSchemaStats) {
 	e.mu.Lock()
@@ -1293,7 +1305,7 @@ func (e *Executor) fetchOrCreatePlan(
 		e.countDoubleSlashComment()
 	}
 	query, comments := e.env.Parser().SplitMarginComments(queryString)
-	vcursor, _ = e.newVCursor(safeSession, comments, logStats)
+	vcursor, epoch := e.newVCursor(safeSession, comments, logStats)
 
 	var setVarComment string
 	if e.vConfig.SetVarEnabled {
@@ -1303,14 +1315,14 @@ func (e *Executor) fetchOrCreatePlan(
 	var planKey engine.PlanKey
 	if preparedPlan {
 		planKey = buildPlanKey(ctx, vcursor, query, setVarComment)
-		plan, logStats.CachedPlan = e.plans.Get(planKey.Hash(), e.epoch.Load())
+		plan, logStats.CachedPlan = e.plans.Get(planKey.Hash(), epoch)
 	}
 
 	if plan == nil {
-		plan, logStats.CachedPlan, stmt, err = e.getCachedOrBuildPlan(ctx, vcursor, query, bindVars, setVarComment, parameterize, planKey, false)
+		plan, logStats.CachedPlan, stmt, err = e.getCachedOrBuildPlan(ctx, vcursor, epoch, query, bindVars, setVarComment, parameterize, planKey, false)
 		if err != nil && preparedPlan && isExecutePath {
 			// The baseline plan failed to build, try to build an optimized plan
-			plan, err = e.tryOptimizedPlan(ctx, vcursor, bindVars, query, setVarComment, parameterize, planKey, plan, err)
+			plan, err = e.tryOptimizedPlan(ctx, vcursor, epoch, bindVars, query, setVarComment, parameterize, planKey, plan, err)
 		}
 	}
 	if err != nil {
@@ -1319,12 +1331,12 @@ func (e *Executor) fetchOrCreatePlan(
 
 	if shouldOptimizePlan(preparedPlan, isExecutePath, plan) {
 		vcursor.SetBindVars(bindVars)
-		optimizedPlan, _, _, err := e.getCachedOrBuildPlan(ctx, vcursor, query, bindVars, setVarComment, parameterize, planKey, true)
+		optimizedPlan, _, _, err := e.getCachedOrBuildPlan(ctx, vcursor, epoch, query, bindVars, setVarComment, parameterize, planKey, true)
 		if err == nil {
 			if sp, ok := optimizedPlan.Instructions.(*engine.PlanSwitcher); ok {
 				sp.Baseline = plan.Instructions
 				optimizedPlan.Optimized.Store(true)
-				e.plans.Set(planKey.Hash(), optimizedPlan, 0, e.epoch.Load())
+				e.plans.Set(planKey.Hash(), optimizedPlan, 0, epoch)
 				plan = optimizedPlan
 			}
 		}
@@ -1339,13 +1351,18 @@ func (e *Executor) fetchOrCreatePlan(
 	return plan, vcursor, stmt, nil
 }
 
-func (e *Executor) newVCursor(safeSession *econtext.SafeSession, comments sqlparser.MarginComments, logStats *logstats.LogStats) (*econtext.VCursorImpl, error) {
-	return econtext.NewVCursorImpl(safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver, e.serv, nullResultsObserver{}, e.vConfig, e.metrics)
+// newVCursor returns a VCursor for planning a statement, together with the
+// plan cache epoch to use for any plan built with it (see vschemaForPlanning).
+func (e *Executor) newVCursor(safeSession *econtext.SafeSession, comments sqlparser.MarginComments, logStats *logstats.LogStats) (*econtext.VCursorImpl, uint32) {
+	vschema, epoch := e.vschemaForPlanning()
+	vcursor, _ := econtext.NewVCursorImpl(safeSession, comments, e, logStats, e.vm, vschema, e.resolver.resolver, e.serv, nullResultsObserver{}, e.vConfig, e.metrics)
+	return vcursor, epoch
 }
 
 func (e *Executor) tryOptimizedPlan(
 	ctx context.Context,
 	vcursor *econtext.VCursorImpl,
+	epoch uint32,
 	bindVars map[string]*querypb.BindVariable,
 	baseQuery string,
 	setVarComment string,
@@ -1355,12 +1372,12 @@ func (e *Executor) tryOptimizedPlan(
 	prevErr error,
 ) (*engine.Plan, error) {
 	vcursor.SetBindVars(bindVars)
-	sPlan, _, _, err := e.getCachedOrBuildPlan(ctx, vcursor, baseQuery, bindVars, setVarComment, parameterize, planKey, true)
+	sPlan, _, _, err := e.getCachedOrBuildPlan(ctx, vcursor, epoch, baseQuery, bindVars, setVarComment, parameterize, planKey, true)
 	if err == nil {
 		if sp, ok := sPlan.Instructions.(*engine.PlanSwitcher); ok {
 			sp.BaselineErr = prevErr
 			sPlan.Optimized.Store(true)
-			e.plans.Set(planKey.Hash(), sPlan, 0, e.epoch.Load())
+			e.plans.Set(planKey.Hash(), sPlan, 0, epoch)
 			return sPlan, nil
 		}
 	}
@@ -1390,9 +1407,13 @@ func (e *Executor) applyQueryHints(vcursor *econtext.VCursorImpl, plan *engine.P
 	vcursor.SetExecQueryTimeout(qh.Timeout)
 }
 
+// getCachedOrBuildPlan returns the cached plan for the statement or builds one
+// with vcursor. epoch must be the plan cache epoch returned together with
+// vcursor by newVCursor.
 func (e *Executor) getCachedOrBuildPlan(
 	ctx context.Context,
 	vcursor *econtext.VCursorImpl,
+	epoch uint32,
 	query string,
 	bindVars map[string]*querypb.BindVariable,
 	setVarComment string,
@@ -1475,7 +1496,7 @@ func (e *Executor) getCachedOrBuildPlan(
 			// build Plan key
 			planKey = buildPlanKey(ctx, vcursor, query, setVarComment)
 		}
-		plan, cached, err = e.plans.GetOrLoad(planKey.Hash(), e.epoch.Load(), func() (*engine.Plan, error) {
+		plan, cached, err = e.plans.GetOrLoad(planKey.Hash(), epoch, func() (*engine.Plan, error) {
 			return e.buildStatement(ctx, vcursor, query, stmt, reservedVars, bindVarNeeds, qh, paramsCount)
 		})
 		return plan, cached, stmt, err
