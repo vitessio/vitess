@@ -207,7 +207,7 @@ func (b *parserLogBuffer) Write(p []byte) (int, error) {
 func (b *parserLogBuffer) contents() string {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	return b.Buffer.String()
+	return b.String()
 }
 
 func TestPartialDDLDoesNotLogSensitiveInput(t *testing.T) {
