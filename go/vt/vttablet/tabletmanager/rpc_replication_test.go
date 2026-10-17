@@ -283,6 +283,7 @@ func TestFullStatusUsesCollectedData(t *testing.T) {
 	}
 	tablet := newTestTablet(t, 100, "ks", "0", nil)
 	tm := newTestReplicationTM(tablet, mysqlDaemon, nil)
+	tm.BatchCtx = t.Context()
 	tm.QueryServiceControl = tabletservermock.NewController()
 	tm.SemiSyncMonitor = semisyncmonitor.CreateTestSemiSyncMonitor(fakeMysqlDaemon.DB(), exporter)
 
@@ -318,6 +319,7 @@ func TestFullStatusRejectsMissingCollectedData(t *testing.T) {
 	}
 	tablet := newTestTablet(t, 100, "ks", "0", nil)
 	tm := newTestReplicationTM(tablet, mysqlDaemon, nil)
+	tm.BatchCtx = t.Context()
 	tm.QueryServiceControl = tabletservermock.NewController()
 
 	status, err := tm.FullStatus(t.Context())
@@ -336,6 +338,7 @@ func TestFullStatusReturnsCollectorError(t *testing.T) {
 	}
 	tablet := newTestTablet(t, 100, "ks", "0", nil)
 	tm := newTestReplicationTM(tablet, mysqlDaemon, nil)
+	tm.BatchCtx = t.Context()
 	tm.QueryServiceControl = tabletservermock.NewController()
 
 	status, err := tm.FullStatus(t.Context())
@@ -403,6 +406,7 @@ func TestFullStatusCollectsEveryField(t *testing.T) {
 
 	tablet := newTestTablet(t, 100, "ks", "0", nil)
 	tm := newTestReplicationTM(tablet, mysqld, nil)
+	tm.BatchCtx = t.Context()
 	tm.QueryServiceControl = tabletservermock.NewController()
 	tm.SemiSyncMonitor = semisyncmonitor.CreateTestSemiSyncMonitor(db, exporter)
 

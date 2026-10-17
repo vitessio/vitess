@@ -65,7 +65,7 @@ var (
 // not supported, because the mandatory variables include server_uuid, gtid_mode,
 // and super_read_only, none of which MariaDB has.
 func (mysqld *Mysqld) CollectFullStatusData(ctx context.Context) (*replicationdatapb.FullStatus, error) {
-	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
+	conn, err := mysqld.dbaPool.Get(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -78,7 +78,7 @@ func (mysqld *Mysqld) CollectFullStatusData(ctx context.Context) (*replicationda
 	var variables *mysql.FullStatusVariables
 	err = runFullStatusQuery(ctx, conn, "variables", func() error {
 		var queryErr error
-		variables, queryErr = mysqld.fetchFullStatusVariables(ctx, conn)
+		variables, queryErr = mysqld.fetchFullStatusVariables(conn)
 		return queryErr
 	})
 	if err != nil {
@@ -154,13 +154,32 @@ func (mysqld *Mysqld) CollectFullStatusData(ctx context.Context) (*replicationda
 }
 
 // runFullStatusQuery runs a FullStatus query and retries once after reconnecting
-// when MySQL drops the connection.
+// when MySQL drops the connection. Cancelling ctx closes the socket so a blocked
+// read cannot outlive the collection.
 func runFullStatusQuery(ctx context.Context, conn *dbconnpool.PooledDBConnection, queryName string, query func() error) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 
-	err := query()
+	queryOnce := func() error {
+		// Close this attempt's socket on cancellation. Waiting for MySQL to process
+		// a KILL can leave the shared collection blocked past its deadline.
+		mysqlConn := conn.Conn.Conn
+		closed := make(chan struct{})
+		stop := context.AfterFunc(ctx, func() {
+			mysqlConn.Close()
+			close(closed)
+		})
+		defer func() {
+			// Finish closing before reconnecting or returning the connection to its pool.
+			if !stop() {
+				<-closed
+			}
+		}()
+		return query()
+	}
+
+	err := queryOnce()
 	if ctxErr := ctx.Err(); ctxErr != nil {
 		return ctxErr
 	}
@@ -185,7 +204,7 @@ func runFullStatusQuery(ctx context.Context, conn *dbconnpool.PooledDBConnection
 		return err
 	}
 
-	err = query()
+	err = queryOnce()
 	if ctxErr := ctx.Err(); ctxErr != nil {
 		return ctxErr
 	}
@@ -193,8 +212,8 @@ func runFullStatusQuery(ctx context.Context, conn *dbconnpool.PooledDBConnection
 }
 
 // fetchFullStatusVariables reads and parses the mandatory FullStatus variables.
-func (mysqld *Mysqld) fetchFullStatusVariables(ctx context.Context, conn *dbconnpool.PooledDBConnection) (*mysql.FullStatusVariables, error) {
-	qr, err := mysqld.executeFetchContext(ctx, conn, conn.Conn.FullStatusVariablesQuery(), 1, true)
+func (mysqld *Mysqld) fetchFullStatusVariables(conn *dbconnpool.PooledDBConnection) (*mysql.FullStatusVariables, error) {
+	qr, err := conn.Conn.ExecuteFetch(conn.Conn.FullStatusVariablesQuery(), 1, true)
 	if err != nil {
 		return nil, err
 	}
@@ -211,7 +230,7 @@ func (mysqld *Mysqld) collectFullStatusSemiSync(ctx context.Context, conn *dbcon
 	var variables map[string]string
 	err := runFullStatusQuery(ctx, conn, "semi-sync variables", func() error {
 		var queryErr error
-		variables, queryErr = mysqld.fetchFullStatusValues(ctx, conn, fullStatusGlobalVariablesQuery, fullStatusSemiSyncVariables)
+		variables, queryErr = mysqld.fetchFullStatusValues(conn, fullStatusGlobalVariablesQuery, fullStatusSemiSyncVariables)
 		return queryErr
 	})
 	if err != nil {
@@ -227,7 +246,7 @@ func (mysqld *Mysqld) collectFullStatusSemiSync(ctx context.Context, conn *dbcon
 	var statuses map[string]string
 	err = runFullStatusQuery(ctx, conn, "semi-sync status", func() error {
 		var queryErr error
-		statuses, queryErr = mysqld.fetchFullStatusValues(ctx, conn, fullStatusGlobalStatusQuery, fullStatusSemiSyncStatuses)
+		statuses, queryErr = mysqld.fetchFullStatusValues(conn, fullStatusGlobalStatusQuery, fullStatusSemiSyncStatuses)
 		return queryErr
 	})
 	if err != nil {
@@ -241,7 +260,7 @@ func (mysqld *Mysqld) collectFullStatusSemiSync(ctx context.Context, conn *dbcon
 
 // fetchFullStatusValues reads the requested variables or status values from
 // performance_schema.
-func (mysqld *Mysqld) fetchFullStatusValues(ctx context.Context, conn *dbconnpool.PooledDBConnection, queryTemplate string, names []string) (map[string]string, error) {
+func (mysqld *Mysqld) fetchFullStatusValues(conn *dbconnpool.PooledDBConnection, queryTemplate string, names []string) (map[string]string, error) {
 	bv, err := sqltypes.BuildBindVariable(names)
 	if err != nil {
 		return nil, err
@@ -250,7 +269,7 @@ func (mysqld *Mysqld) fetchFullStatusValues(ctx context.Context, conn *dbconnpoo
 	if err != nil {
 		return nil, err
 	}
-	qr, err := mysqld.executeFetchContext(ctx, conn, query, len(names), false)
+	qr, err := conn.Conn.ExecuteFetch(query, len(names), false)
 	if err != nil {
 		return nil, err
 	}
@@ -267,6 +286,11 @@ func (mysqld *Mysqld) fetchFullStatusValues(ctx context.Context, conn *dbconnpoo
 // parseSemiSyncVariables fills the semi-sync settings using either source/replica
 // or the legacy master/slave names.
 func parseSemiSyncVariables(status *replicationdatapb.FullStatus, values map[string]string) error {
+	if enabled, ok := values["rpl_semi_sync_replica_enabled"]; ok {
+		status.SemiSyncReplicaEnabled = enabled == "ON"
+	} else {
+		status.SemiSyncReplicaEnabled = values["rpl_semi_sync_slave_enabled"] == "ON"
+	}
 	if _, ok := values["rpl_semi_sync_source_enabled"]; ok {
 		timeout, err := parseOptionalUint(values, "rpl_semi_sync_source_timeout", 64)
 		if err != nil {
@@ -277,7 +301,6 @@ func parseSemiSyncVariables(status *replicationdatapb.FullStatus, values map[str
 			return err
 		}
 		status.SemiSyncPrimaryEnabled = values["rpl_semi_sync_source_enabled"] == "ON"
-		status.SemiSyncReplicaEnabled = values["rpl_semi_sync_replica_enabled"] == "ON"
 		status.SemiSyncPrimaryTimeout = timeout
 		status.SemiSyncWaitForReplicaCount = uint32(waitForReplicaCount)
 		return nil
@@ -292,7 +315,6 @@ func parseSemiSyncVariables(status *replicationdatapb.FullStatus, values map[str
 			return err
 		}
 		status.SemiSyncPrimaryEnabled = values["rpl_semi_sync_master_enabled"] == "ON"
-		status.SemiSyncReplicaEnabled = values["rpl_semi_sync_slave_enabled"] == "ON"
 		status.SemiSyncPrimaryTimeout = timeout
 		status.SemiSyncWaitForReplicaCount = uint32(waitForReplicaCount)
 	}
@@ -302,13 +324,17 @@ func parseSemiSyncVariables(status *replicationdatapb.FullStatus, values map[str
 // parseSemiSyncStatuses fills the semi-sync status using either source/replica
 // or the legacy master/slave names.
 func parseSemiSyncStatuses(status *replicationdatapb.FullStatus, values map[string]string) error {
+	if active, ok := values["Rpl_semi_sync_replica_status"]; ok {
+		status.SemiSyncReplicaStatus = active == "ON"
+	} else {
+		status.SemiSyncReplicaStatus = values["Rpl_semi_sync_slave_status"] == "ON"
+	}
 	if _, ok := values["Rpl_semi_sync_source_status"]; ok {
 		clients, err := parseOptionalUint(values, "Rpl_semi_sync_source_clients", 32)
 		if err != nil {
 			return err
 		}
 		status.SemiSyncPrimaryStatus = values["Rpl_semi_sync_source_status"] == "ON"
-		status.SemiSyncReplicaStatus = values["Rpl_semi_sync_replica_status"] == "ON"
 		status.SemiSyncPrimaryClients = uint32(clients)
 		return nil
 	}
@@ -318,7 +344,6 @@ func parseSemiSyncStatuses(status *replicationdatapb.FullStatus, values map[stri
 			return err
 		}
 		status.SemiSyncPrimaryStatus = values["Rpl_semi_sync_master_status"] == "ON"
-		status.SemiSyncReplicaStatus = values["Rpl_semi_sync_slave_status"] == "ON"
 		status.SemiSyncPrimaryClients = uint32(clients)
 	}
 	return nil
