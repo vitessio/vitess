@@ -41,6 +41,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -146,6 +147,10 @@ type Mysqld struct {
 	lockConn *dbconnpool.PooledDBConnection
 
 	capabilities capabilitySet
+
+	// fullStatusReplacement is closed once the pool has replaced the last closed
+	// FullStatus connection, see CollectFullStatusData.
+	fullStatusReplacement atomic.Pointer[chan struct{}]
 
 	// shutdownGateOnce/shutdownGateCh serialize crash-safe shutdown attempts:
 	// preparation, the shutdown itself, and the restore handoff. Callers do

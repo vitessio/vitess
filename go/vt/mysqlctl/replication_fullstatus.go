@@ -65,18 +65,33 @@ var (
 // not supported, because the mandatory variables include server_uuid, gtid_mode,
 // and super_read_only, none of which MariaDB has.
 func (mysqld *Mysqld) CollectFullStatusData(ctx context.Context) (*replicationdatapb.FullStatus, error) {
+	// Wait for a pending replacement instead of borrowing another connection that
+	// can stall the same way, so stalled replacements tie up at most one pool slot.
+	if replaced := mysqld.fullStatusReplacement.Load(); replaced != nil {
+		select {
+		case <-*replaced:
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+
 	conn, err := mysqld.dbaPool.Get(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer func() {
-		// Recycling a closed connection dials its replacement on the pool's context,
-		// which has no deadline, so don't hold the shared collection open for it.
-		if conn.Conn.IsClosed() {
-			go conn.Recycle()
+		if !conn.Conn.IsClosed() {
+			conn.Recycle()
 			return
 		}
-		conn.Recycle()
+		// Recycling a closed connection dials its replacement with no deadline by
+		// default, so don't make the caller wait for it.
+		replaced := make(chan struct{})
+		mysqld.fullStatusReplacement.Store(&replaced)
+		go func() {
+			defer close(replaced)
+			conn.Recycle()
+		}()
 	}()
 
 	if conn.Conn.IsMariaDB() {

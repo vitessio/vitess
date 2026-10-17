@@ -287,13 +287,14 @@ func (h *stallingSessionSetupHandler) HandleQuery(c *mysql.Conn, query string, c
 	return h.QueryHandler.HandleQuery(c, query, callback)
 }
 
-// TestCollectFullStatusDataDoesNotWaitForReplacementConnection covers a cancelled
-// collection returning its closed connection to the pool. The pool opens the
-// replacement on its own context with no deadline, so a stalled replacement must
-// not hold the shared collection past its deadline.
-func TestCollectFullStatusDataDoesNotWaitForReplacementConnection(t *testing.T) {
+// TestCollectFullStatusDataStalledReplacementConnection covers a cancelled
+// collection returning its closed connection to the pool, whose replacement then
+// stalls in MySQL. The pool dials the replacement with no deadline by default, so
+// the collection must not wait for it, and later collections must wait for it
+// rather than borrow another connection that can stall the same way.
+func TestCollectFullStatusDataStalledReplacementConnection(t *testing.T) {
 	db, mysqld := newCollectFullStatusDataTestMysqld(t)
-	require.NoError(t, mysqld.dbaPool.SetCapacity(t.Context(), 1))
+	require.NoError(t, mysqld.dbaPool.SetCapacity(t.Context(), 2))
 	handler := &stallingSessionSetupHandler{
 		QueryHandler: db.Handler,
 		stalled:      make(chan struct{}),
@@ -303,17 +304,30 @@ func TestCollectFullStatusDataDoesNotWaitForReplacementConnection(t *testing.T) 
 	releaseSetup := sync.OnceFunc(func() { close(handler.release) })
 	t.Cleanup(releaseSetup)
 
+	// Leave an idle connection in each slot, so a later collection could borrow one.
+	var conns [2]*dbconnpool.PooledDBConnection
+	for i := range conns {
+		conn, err := mysqld.dbaPool.Get(t.Context())
+		require.NoError(t, err)
+		conns[i] = conn
+	}
+	for _, conn := range conns {
+		conn.Recycle()
+	}
+
+	// MySQL stops answering SHOW REPLICA STATUS, and the first one cancels its collection.
 	ctx, cancel := context.WithCancel(t.Context())
 	t.Cleanup(cancel)
-	releaseQuery := make(chan struct{})
-	t.Cleanup(func() { close(releaseQuery) })
+	queryReleased := make(chan struct{})
+	releaseQuery := sync.OnceFunc(func() { close(queryReleased) })
+	t.Cleanup(releaseQuery)
 	var calls atomic.Int32
 	db.SetBeforeFunc("SHOW REPLICA STATUS", func() {
 		if calls.Add(1) == 1 {
 			handler.stall.Store(true)
 			cancel()
-			<-releaseQuery
 		}
+		<-queryReleased
 	})
 
 	var collectionErr error
@@ -342,8 +356,24 @@ func TestCollectFullStatusDataDoesNotWaitForReplacementConnection(t *testing.T) 
 	}, 30*time.Second, time.Millisecond, "collection must not wait for the replacement connection")
 	require.ErrorIs(t, collectionErr, context.Canceled)
 
-	// The replacement still holds the pool's only slot, so the next collection
-	// gets it once MySQL finishes the setup.
+	// While the replacement is stalled, the next collection waits for it until its
+	// own deadline instead of borrowing the other idle connection.
+	waitCtx, waitCancel := context.WithTimeout(t.Context(), time.Second)
+	t.Cleanup(waitCancel)
+	_, err := mysqld.CollectFullStatusData(waitCtx)
+	require.ErrorIs(t, err, context.DeadlineExceeded)
+	assert.EqualValues(t, 1, calls.Load(), "the waiting collection must not query MySQL")
+
+	// The other idle connection stays free for the rest of the DBA pool.
+	otherCtx, otherCancel := context.WithTimeout(t.Context(), 30*time.Second)
+	t.Cleanup(otherCancel)
+	other, err := mysqld.dbaPool.Get(otherCtx)
+	require.NoError(t, err)
+	other.Recycle()
+
+	// Once MySQL answers again, the replacement goes back to the pool and the next
+	// collection proceeds.
+	releaseQuery()
 	releaseSetup()
 	nextCtx, nextCancel := context.WithTimeout(t.Context(), 30*time.Second)
 	t.Cleanup(nextCancel)
