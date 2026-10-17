@@ -558,6 +558,10 @@ func routeToEngineRoute(ctx *plancontext.PlanningContext, op *operators.Route, h
 		RoutingParameters:   rp,
 		TruncateColumnCount: op.ResultColumns,
 		FetchLastInsertID:   ctx.SemTable.ShouldFetchLastInsertID(),
+		// The reference rows an outer join preserves have to come back even when the routing
+		// resolves to no destination, so the route runs on an arbitrary shard instead of
+		// returning an empty result. The predicate that routed nowhere matches nothing there.
+		NoRoutesSpecialHandling: op.PreservesReferenceRows,
 	}
 	if hints != nil {
 		e.ScatterErrorsAsWarnings = hints.scatterErrorsAsWarnings

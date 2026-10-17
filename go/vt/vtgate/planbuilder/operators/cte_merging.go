@@ -17,6 +17,10 @@ limitations under the License.
 package operators
 
 import (
+	"io"
+	"slices"
+
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
@@ -78,6 +82,15 @@ func tryMergeCTESharded(ctx *plancontext.PlanningContext, seed, term *Route, in 
 }
 
 func mergeCTE(ctx *plancontext.PlanningContext, seed, term *Route, r Routing, in *RecurseCTE, conditions []engine.Condition) *Route {
+	preserved, canMerge := referenceRowsInvariant(r, false, seed, term)
+	if preserved && routedByTheRecursion(r, in) {
+		canMerge = false
+	}
+	if !canMerge {
+		debugNoRewrite("CTE merge blocked: %s routing cannot honour a route that has to stay single-shard", r.OpCode().String())
+		return nil
+	}
+
 	in.Def.Merged = true
 	hz := in.Horizon
 	hz.Source = term.Source
@@ -97,9 +110,47 @@ func mergeCTE(ctx *plancontext.PlanningContext, seed, term *Route, r Routing, in
 		Distinct:       in.Distinct,
 	}
 	return &Route{
-		Routing:       r,
-		unaryOperator: newUnaryOp(cte),
-		MergedWith:    []*Route{term},
-		Conditions:    conditions,
+		Routing:                r,
+		unaryOperator:          newUnaryOp(cte),
+		MergedWith:             []*Route{term},
+		Conditions:             conditions,
+		PreservesReferenceRows: preserved,
 	}
+}
+
+// routedByTheRecursion reports whether this routing was selected by a predicate carrying one of the
+// recursion's bind variables. mergeCTE restores those predicates to their cross-table shape and
+// nothing recomputes the routing afterwards, so a route that is single-shard because of one is not
+// single-shard at all once it is merged. Rows that a multi-shard route would duplicate do not get
+// to rely on that. Any other predicate - a literal in the term, the seed's own routing - does not
+// come and go that way and is taken at face value.
+func routedByTheRecursion(r Routing, in *RecurseCTE) bool {
+	sharded, ok := r.(*ShardedRouting)
+	if !ok || sharded.Selected == nil {
+		return false
+	}
+
+	fromRecursion := func(name string) bool {
+		return slices.ContainsFunc(in.Predicates, func(recursed *plancontext.RecurseExpression) bool {
+			return slices.ContainsFunc(recursed.LeftExprs, func(bve plancontext.BindVarExpr) bool {
+				return bve.Name == name
+			})
+		})
+	}
+
+	for _, predicate := range sharded.Selected.Predicates {
+		found := false
+		_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+			if arg, ok := node.(*sqlparser.Argument); ok && fromRecursion(arg.Name) {
+				found = true
+				return false, io.EOF
+			}
+			return true, nil
+		}, predicate)
+		if found {
+			return true
+		}
+	}
+
+	return false
 }
