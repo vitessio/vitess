@@ -289,7 +289,12 @@ func transformSubQuery(ctx *plancontext.PlanningContext, op *operators.SubQuery)
 			case opcode.PulloutValue:
 				sq.RowResults = ctx.RowSubqueryArgs[op.ArgName]
 			case opcode.PulloutIn, opcode.PulloutNotIn:
-				sq.RowColumns = rowColumns
+				// Only a comparison guarded by HasValues is safe to bind as a list of rows: without the guard, an
+				// empty result would be compared with the placeholder row. In select expressions and UPDATE ... SET
+				// there is no guard, so leave those as they were, which MySQL rejects for a row.
+				if op.HasValuesName != "" {
+					sq.RowColumns = rowColumns
+				}
 			}
 		}
 		return sq, nil
