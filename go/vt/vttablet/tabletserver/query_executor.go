@@ -70,6 +70,9 @@ type QueryExecutor struct {
 	// The target type we requested might be different from tsv's tablet type, if we had a change to the tablet type recently.
 	targetTabletType topodatapb.TabletType
 	setting          *smartconnpool.Setting
+	// writeRules are the query rules that apply to a write, set by
+	// admitWrite. checkPermissions uses them instead of plan.Rules.
+	writeRules *rules.Rules
 }
 
 const (
@@ -162,6 +165,7 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		qre.tsv.Stats().ResultHistogram.Add(int64(len(reply.Rows)))
 	}(time.Now())
 
+	defer qre.admitWrite()()
 	if err = qre.checkPermissions(); err != nil {
 		return nil, err
 	}
@@ -495,6 +499,7 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) (err error) {
 		return callback(result)
 	}
 
+	defer qre.admitWrite()()
 	if err := qre.checkPermissions(); err != nil {
 		return err
 	}
@@ -808,6 +813,7 @@ func (qre *QueryExecutor) streamDML(callback StreamCallback) (err error) {
 		qre.tsv.Stats().ResultHistogram.Add(int64(len(reply.Rows)))
 	}(time.Now())
 
+	defer qre.admitWrite()()
 	if err = qre.checkPermissions(); err != nil {
 		return err
 	}
@@ -864,6 +870,33 @@ func (qre *QueryExecutor) MessageStream(callback StreamCallback) error {
 	return nil
 }
 
+// writesTables reports whether statements with the plan type write to the
+// tables they name. A deny rule matches a statement by the tables it names, so
+// it cannot stop writes made through a stored function or procedure; those
+// statements are not tracked.
+func writesTables(planID p.PlanType) bool {
+	switch planID {
+	case p.PlanInsert, p.PlanInsertMessage, p.PlanUpdate, p.PlanUpdateLimit,
+		p.PlanDelete, p.PlanDeleteLimit, p.PlanLoad, p.PlanNextval:
+		return true
+	}
+	return false
+}
+
+// admitWrite registers a write with the query engine until the returned
+// function is called, so that loading a rule that denies its tables waits for
+// it (see QueryEngine.WaitForAdmittedWrites). It must be called before
+// checkPermissions, which then checks the rules that applied when the write
+// was admitted.
+func (qre *QueryExecutor) admitWrite() (finish func()) {
+	if !writesTables(qre.plan.PlanID) || tabletenv.IsLocalContext(qre.ctx) {
+		return func() {}
+	}
+	var w *admittedWrite
+	w, qre.writeRules = qre.tsv.qe.admitWrite(qre.plan)
+	return w.finish
+}
+
 // checkPermissions returns an error if the query does not pass all checks
 // (denied query, table ACL).
 func (qre *QueryExecutor) checkPermissions() error {
@@ -881,7 +914,11 @@ func (qre *QueryExecutor) checkPermissions() error {
 		username = ci.Username()
 	}
 
-	action, ruleCancelCtx, timeout, desc := qre.plan.Rules.GetAction(remoteAddr, username, qre.bindVars, qre.marginComments)
+	queryRules := qre.plan.Rules
+	if qre.writeRules != nil {
+		queryRules = qre.writeRules
+	}
+	action, ruleCancelCtx, timeout, desc := queryRules.GetAction(remoteAddr, username, qre.bindVars, qre.marginComments)
 
 	bufferingTimeoutCtx, cancel := context.WithTimeout(qre.ctx, timeout) // aborts buffering at given timeout
 	defer cancel()

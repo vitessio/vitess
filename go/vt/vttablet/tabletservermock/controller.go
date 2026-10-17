@@ -79,6 +79,9 @@ type Controller struct {
 	// TS is the return value for TopoServer.
 	TS *topo.Server
 
+	// WaitForAdmittedWritesError is the return value for WaitForAdmittedWrites.
+	WaitForAdmittedWritesError error
+
 	// mu protects the next fields in this structure. They are
 	// accessed by both the methods in this interface, and the
 	// background health check.
@@ -92,6 +95,9 @@ type Controller struct {
 
 	// queryRulesMap has the latest query rules.
 	queryRulesMap map[string]*rules.Rules
+
+	// admittedWritesWaits has the tables of each WaitForAdmittedWrites call.
+	admittedWritesWaits [][]string
 
 	MethodCalled map[string]bool
 }
@@ -193,6 +199,21 @@ func (tqsc *Controller) SetQueryRules(ruleSource string, qrs *rules.Rules) error
 	defer tqsc.mu.Unlock()
 	tqsc.queryRulesMap[ruleSource] = qrs
 	return nil
+}
+
+// WaitForAdmittedWrites is part of the tabletserver.Controller interface
+func (tqsc *Controller) WaitForAdmittedWrites(ctx context.Context, tables []string) error {
+	tqsc.mu.Lock()
+	defer tqsc.mu.Unlock()
+	tqsc.admittedWritesWaits = append(tqsc.admittedWritesWaits, tables)
+	return tqsc.WaitForAdmittedWritesError
+}
+
+// AdmittedWritesWaits returns the tables of each WaitForAdmittedWrites call.
+func (tqsc *Controller) AdmittedWritesWaits() [][]string {
+	tqsc.mu.Lock()
+	defer tqsc.mu.Unlock()
+	return tqsc.admittedWritesWaits
 }
 
 // QueryService is part of the tabletserver.Controller interface

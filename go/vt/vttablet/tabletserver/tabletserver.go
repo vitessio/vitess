@@ -395,6 +395,14 @@ func (tsv *TabletServer) SetQueryRules(ruleSource string, qrs *rules.Rules) erro
 	return nil
 }
 
+// WaitForAdmittedWrites waits until every write to one of tables that was
+// admitted before it was called has finished, or until ctx is done. Called
+// after SetQueryRules loads rules that deny tables, it waits for the writes to
+// them that were admitted under the previous rules.
+func (tsv *TabletServer) WaitForAdmittedWrites(ctx context.Context, tables []string) error {
+	return tsv.qe.WaitForAdmittedWrites(ctx, tables)
+}
+
 func (tsv *TabletServer) initACL(tableACLConfigFile string) error {
 	// tabletacl.Init loads ACL from file if *tableACLConfig is not empty
 	return tableacl.Init(
