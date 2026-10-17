@@ -19,6 +19,7 @@ package mysqlctl
 import (
 	"context"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -26,8 +27,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/mysql/sqlmode"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/dbconnpool"
@@ -264,6 +267,90 @@ func TestCollectFullStatusDataCancelsBlockedQuery(t *testing.T) {
 			assert.Equal(t, uint32(42), status.ServerId)
 		})
 	}
+}
+
+// stallingSessionSetupHandler withholds the session setup of new connections once
+// stall is set, like a mysqld that accepts sockets but never finishes setting them up.
+type stallingSessionSetupHandler struct {
+	fakesqldb.QueryHandler
+	stall   atomic.Bool
+	once    sync.Once
+	stalled chan struct{}
+	release chan struct{}
+}
+
+func (h *stallingSessionSetupHandler) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
+	if h.stall.Load() && strings.EqualFold(query, sqlmode.NeutralizeSessionQuery) {
+		h.once.Do(func() { close(h.stalled) })
+		<-h.release
+	}
+	return h.QueryHandler.HandleQuery(c, query, callback)
+}
+
+// TestCollectFullStatusDataDoesNotWaitForReplacementConnection covers a cancelled
+// collection returning its closed connection to the pool. The pool opens the
+// replacement on its own context with no deadline, so a stalled replacement must
+// not hold the shared collection past its deadline.
+func TestCollectFullStatusDataDoesNotWaitForReplacementConnection(t *testing.T) {
+	db, mysqld := newCollectFullStatusDataTestMysqld(t)
+	require.NoError(t, mysqld.dbaPool.SetCapacity(t.Context(), 1))
+	handler := &stallingSessionSetupHandler{
+		QueryHandler: db.Handler,
+		stalled:      make(chan struct{}),
+		release:      make(chan struct{}),
+	}
+	db.Handler = handler
+	releaseSetup := sync.OnceFunc(func() { close(handler.release) })
+	t.Cleanup(releaseSetup)
+
+	ctx, cancel := context.WithCancel(t.Context())
+	t.Cleanup(cancel)
+	releaseQuery := make(chan struct{})
+	t.Cleanup(func() { close(releaseQuery) })
+	var calls atomic.Int32
+	db.SetBeforeFunc("SHOW REPLICA STATUS", func() {
+		if calls.Add(1) == 1 {
+			handler.stall.Store(true)
+			cancel()
+			<-releaseQuery
+		}
+	})
+
+	var collectionErr error
+	finished := make(chan struct{})
+	go func() {
+		_, collectionErr = mysqld.CollectFullStatusData(ctx)
+		close(finished)
+	}()
+	t.Cleanup(func() { releaseSetup(); <-finished })
+
+	require.Eventually(t, func() bool {
+		select {
+		case <-handler.stalled:
+			return true
+		default:
+			return false
+		}
+	}, 30*time.Second, time.Millisecond, "the cancelled connection must be replaced")
+	require.Eventually(t, func() bool {
+		select {
+		case <-finished:
+			return true
+		default:
+			return false
+		}
+	}, 30*time.Second, time.Millisecond, "collection must not wait for the replacement connection")
+	require.ErrorIs(t, collectionErr, context.Canceled)
+
+	// The replacement still holds the pool's only slot, so the next collection
+	// gets it once MySQL finishes the setup.
+	releaseSetup()
+	nextCtx, nextCancel := context.WithTimeout(t.Context(), 30*time.Second)
+	t.Cleanup(nextCancel)
+	status, err := mysqld.CollectFullStatusData(nextCtx)
+	require.NoError(t, err)
+	require.NotNil(t, status)
+	assert.Equal(t, uint32(42), status.ServerId)
 }
 
 func TestCollectFullStatusReplicaSemiSyncIndependentOfSourcePlugin(t *testing.T) {

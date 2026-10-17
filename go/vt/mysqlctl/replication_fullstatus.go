@@ -69,7 +69,15 @@ func (mysqld *Mysqld) CollectFullStatusData(ctx context.Context) (*replicationda
 	if err != nil {
 		return nil, err
 	}
-	defer conn.Recycle()
+	defer func() {
+		// Recycling a closed connection dials its replacement on the pool's context,
+		// which has no deadline, so don't hold the shared collection open for it.
+		if conn.Conn.IsClosed() {
+			go conn.Recycle()
+			return
+		}
+		conn.Recycle()
+	}()
 
 	if conn.Conn.IsMariaDB() {
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "FullStatus is not supported on MariaDB")
