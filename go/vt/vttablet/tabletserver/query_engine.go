@@ -68,6 +68,15 @@ type TabletPlan struct {
 	// cannot be determined. It is nil when the tables are determined.
 	AuthorizedUndetermined *tableacl.ACLResult
 
+	// epoch is the plan cache epoch the plan was built at. Loading query
+	// rules advances the epoch, so Rules may be out of date when it differs
+	// from the current one.
+	epoch uint32
+	// ruleIDs are the plan types Rules was filtered by.
+	ruleIDs []planbuilder.PlanType
+	// tableNames caches TableNames.
+	tableNames []string
+
 	QueryCount   uint64
 	Time         uint64
 	MysqlTime    uint64
@@ -187,6 +196,9 @@ type QueryEngine struct {
 	plans            *PlanCache
 	settings         *SettingsCache
 	queryRuleSources *rules.Map
+
+	// admittedWrites tracks the writes that are executing.
+	admittedWrites admittedWrites
 
 	// Pools
 	conns       *connpool.Pool
@@ -415,8 +427,9 @@ func (qe *QueryEngine) getPlan(curSchema *currentSchema, sql string, noRowsLimit
 	if err != nil {
 		return nil, err
 	}
-	plan := &TabletPlan{Plan: splan, Original: sql}
-	plan.Rules = qe.queryRuleSources.FilterByPlan(sql, []planbuilder.PlanType{plan.PlanID}, plan.TableNames()...)
+	plan := &TabletPlan{Plan: splan, Original: sql, epoch: curSchema.epoch, tableNames: splan.TableNames()}
+	plan.ruleIDs = []planbuilder.PlanType{plan.PlanID}
+	plan.Rules = qe.queryRuleSources.FilterByPlan(sql, plan.ruleIDs, plan.tableNames...)
 	plan.buildAuthorized()
 	if sqlparser.CachePlan(statement) {
 		return plan, nil
@@ -460,7 +473,7 @@ func (qe *QueryEngine) getStreamPlan(curSchema *currentSchema, sql string) (*Tab
 		return nil, err
 	}
 
-	plan := &TabletPlan{Plan: splan, Original: sql}
+	plan := &TabletPlan{Plan: splan, Original: sql, epoch: curSchema.epoch, tableNames: splan.TableNames()}
 	// Rules keyed on a statement's pre-v25 streaming plan type keep matching
 	// it here on the streaming path: the deprecated SelectStream name for
 	// SELECT, UNION, EXPLAIN, and SHOW, and OtherRead for ANALYZE (which
@@ -471,7 +484,8 @@ func (qe *QueryEngine) getStreamPlan(curSchema *currentSchema, sql string) (*Tab
 	if hasLegacyID {
 		ruleIDs = append(ruleIDs, legacyID)
 	}
-	plan.Rules = qe.queryRuleSources.FilterByPlan(sql, ruleIDs, plan.TableNames()...)
+	plan.ruleIDs = ruleIDs
+	plan.Rules = qe.queryRuleSources.FilterByPlan(sql, ruleIDs, plan.tableNames...)
 	// The OtherRead plan name is not deprecated, so an ANALYZE rule match
 	// through it cannot be flagged when the rules file is loaded; warn when the
 	// legacy plan type is the sole reason a rule applied. (SelectStream rules
@@ -636,6 +650,39 @@ func (qe *QueryEngine) ClearQueryPlanCache() {
 		tables: current.tables,
 		epoch:  qe.epoch,
 	})
+}
+
+// admitWrite registers a write to the plan's tables until finish is called on the
+// result, and returns the query rules that apply to it. A write must be
+// admitted before its permissions are checked against these rules: either
+// WaitForAdmittedWrites waits for it, or the write checks the rules that were
+// loaded before WaitForAdmittedWrites was called.
+func (qe *QueryEngine) admitWrite(plan *TabletPlan) (*admittedWrite, *rules.Rules) {
+	tables := plan.tableNames
+	if tables == nil {
+		tables = plan.TableNames()
+	}
+	w := qe.admittedWrites.admit(tables)
+	// Loading rules advances the epoch before WaitForAdmittedWrites is
+	// called. A write that WaitForAdmittedWrites misses was registered after
+	// it looked, so it sees the new epoch here.
+	if plan.epoch == qe.schema.Load().epoch {
+		return w, plan.Rules
+	}
+	ruleIDs := plan.ruleIDs
+	if ruleIDs == nil {
+		ruleIDs = []planbuilder.PlanType{plan.PlanID}
+	}
+	return w, qe.queryRuleSources.FilterByPlan(plan.Original, ruleIDs, tables...)
+}
+
+// WaitForAdmittedWrites waits until every write to one of tables that was
+// admitted before it was called has finished, or until ctx is done. Called
+// after query rules that deny tables are loaded, it waits for the writes to
+// them that were admitted under the previous rules: writes admitted after it
+// was called are checked against the new rules.
+func (qe *QueryEngine) WaitForAdmittedWrites(ctx context.Context, tables []string) error {
+	return qe.admittedWrites.wait(ctx, tables)
 }
 
 func (qe *QueryEngine) ForEachPlan(each func(plan *TabletPlan) bool) {

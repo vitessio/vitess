@@ -48,6 +48,10 @@ import (
 
 var publishRetryInterval = 30 * time.Second
 
+// denyListWriteDrainTimeout bounds how long loading the denied tables rule
+// waits for the writes to those tables admitted before it was loaded.
+const denyListWriteDrainTimeout = 30 * time.Second
+
 func registerStateFlags(fs *pflag.FlagSet) {
 	utils.SetFlagDurationVar(fs, &publishRetryInterval, "publish-retry-interval", publishRetryInterval, "how long vttablet waits to retry publishing the tablet record")
 }
@@ -398,8 +402,9 @@ func (ts *tmState) canServe(tabletType topodatapb.TabletType) string {
 func (ts *tmState) applyDenyList(ctx context.Context) (err error) {
 	denyListRules := rules.New()
 	deniedTables := ts.deniedTables[ts.tablet.Type]
+	var tables []string
 	if len(deniedTables) > 0 {
-		tables, err := mysqlctl.ResolveTables(ctx, ts.tm.MysqlDaemon, topoproto.TabletDbName(ts.tablet), deniedTables)
+		tables, err = mysqlctl.ResolveTables(ctx, ts.tm.MysqlDaemon, topoproto.TabletDbName(ts.tablet), deniedTables)
 		if err != nil {
 			return err
 		}
@@ -431,8 +436,18 @@ func (ts *tmState) applyDenyList(ctx context.Context) (err error) {
 	loadRuleErr := ts.tm.QueryServiceControl.SetQueryRules(denyListQueryList, denyListRules)
 	if loadRuleErr != nil {
 		log.Warn(fmt.Sprintf("Fail to load query rule set %s: %s", denyListQueryList, loadRuleErr))
+		return nil
 	}
-	return nil
+	if len(tables) == 0 {
+		return nil
+	}
+	// Writes to the denied tables that were admitted before the rule was
+	// loaded may not have reached MySQL yet. Callers such as MoveTables
+	// SwitchTraffic rely on no such write being left once the tablet's state
+	// is refreshed: they record the source position after the refresh.
+	waitCtx, cancel := context.WithTimeout(ctx, denyListWriteDrainTimeout)
+	defer cancel()
+	return ts.tm.QueryServiceControl.WaitForAdmittedWrites(waitCtx, tables)
 }
 
 func (ts *tmState) publishStateLocked(ctx context.Context) {
