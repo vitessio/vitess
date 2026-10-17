@@ -131,6 +131,8 @@ func (s *Server) waitOnLastRev(ctx context.Context, cli *clientv3.Client, nodePa
 type etcdLockDescriptor struct {
 	s       *Server
 	leaseID clientv3.LeaseID
+	// stopKeepAlive ends the lease's KeepAlive.
+	stopKeepAlive context.CancelFunc
 }
 
 // TryLock is part of the topo.Conn interface.
@@ -202,8 +204,12 @@ func (s *Server) lock(ctx context.Context, nodePath, contents string, ttl int) (
 	if err != nil {
 		return nil, convertError(err, nodePath)
 	}
-	leaseKA, err := s.cli.KeepAlive(ctx, lease.ID)
+	// The KeepAlive must outlive ctx, which callers often bound to the acquisition: it runs
+	// until Unlock, or until acquisition fails.
+	kaCtx, stopKeepAlive := context.WithCancel(context.WithoutCancel(ctx))
+	leaseKA, err := s.cli.KeepAlive(kaCtx, lease.ID)
 	if err != nil {
+		stopKeepAlive()
 		return nil, convertError(err, nodePath)
 	}
 	go func() {
@@ -216,6 +222,7 @@ func (s *Server) lock(ctx context.Context, nodePath, contents string, ttl int) (
 	// Create an ephemeral node in the locks directory.
 	key, revision, err := s.newUniqueEphemeralKV(ctx, s.cli, lease.ID, nodePath, contents)
 	if err != nil {
+		stopKeepAlive()
 		return nil, err
 	}
 
@@ -230,13 +237,15 @@ func (s *Server) lock(ctx context.Context, nodePath, contents string, ttl int) (
 				log.Warn(fmt.Sprintf("Revoke(%d) failed, may have left %v behind: %v", lease.ID, key, rerr))
 			}
 			revokeCancel()
+			stopKeepAlive()
 			return nil, err
 		}
 		if done {
 			// No more older nodes, we're it!
 			return &etcdLockDescriptor{
-				s:       s,
-				leaseID: lease.ID,
+				s:             s,
+				leaseID:       lease.ID,
+				stopKeepAlive: stopKeepAlive,
 			}, nil
 		}
 	}
@@ -254,6 +263,7 @@ func (ld *etcdLockDescriptor) Check(ctx context.Context) error {
 
 // Unlock is part of the topo.LockDescriptor interface.
 func (ld *etcdLockDescriptor) Unlock(ctx context.Context) error {
+	defer ld.stopKeepAlive()
 	_, err := ld.s.cli.Revoke(ctx, ld.leaseID)
 	if err != nil {
 		return convertError(err, "lease")

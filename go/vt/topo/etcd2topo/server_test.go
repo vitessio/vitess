@@ -28,6 +28,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/testfiles"
@@ -468,4 +469,20 @@ func testKeyspaceLock(t *testing.T, ts *topo.Server) {
 	if err := lockDescriptor.Unlock(ctx); err != nil {
 		require.NoError(t, err)
 	}
+
+	// Short TTL through topo.Server, which ends the acquisition context once the lock is
+	// acquired: the lease must still be kept alive until the unlock.
+	_, unlock, err := ts.LockKeyspace(ctx, "test_keyspace", "short ttl, acquisition context ended")
+	require.NoError(t, err)
+	assert.Never(t, func() bool {
+		ld, err := conn.TryLock(ctx, keyspacePath, "probe")
+		if err != nil {
+			return false
+		}
+		_ = ld.Unlock(ctx)
+		return true
+	}, 5*time.Second, 250*time.Millisecond, "the lock expired while still held")
+	var unlockErr error
+	unlock(&unlockErr)
+	require.NoError(t, unlockErr)
 }
