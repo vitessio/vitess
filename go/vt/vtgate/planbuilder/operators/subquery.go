@@ -272,9 +272,12 @@ func (sq *SubQuery) settleFilter(ctx *plancontext.PlanningContext, outer Operato
 		}
 
 		var arg sqlparser.Expr
-		if sq.FilterType.NeedsListArg() {
+		switch {
+		case sq.FilterType.NeedsListArg():
 			arg = sqlparser.NewListArg(sq.ArgName)
-		} else {
+		case sq.FilterType == opcode.PulloutValue && sq.RowColumns() > 1:
+			arg = sq.rowArguments(ctx)
+		default:
 			arg = sqlparser.NewArgument(sq.ArgName)
 		}
 		cursor.Replace(arg)
@@ -309,6 +312,47 @@ func (sq *SubQuery) settleFilter(ctx *plancontext.PlanningContext, outer Operato
 		sq.SubqueryValueName = sq.ArgName
 	}
 	return newFilter(outer, predicates...)
+}
+
+// RowColumns returns how many columns each row of the subquery has. It returns 1 when that is not known, which
+// is the case for a subquery selecting `*`.
+func (sq *SubQuery) RowColumns() int {
+	columns := sq.originalSubquery.Select.GetColumns()
+	for _, column := range columns {
+		if _, isStar := column.(*sqlparser.StarExpr); isStar {
+			return 1
+		}
+	}
+	return max(len(columns), 1)
+}
+
+// rowArguments returns the row of arguments that stands in for a value subquery whose row has more than one
+// column, as in `(a, b) < (select x, y ...)`. A single argument can't hold a row, so each column gets its own.
+// The arguments are reserved the first time they're needed, and reused after that.
+func (sq *SubQuery) rowArguments(ctx *plancontext.PlanningContext) sqlparser.ValTuple {
+	names, ok := ctx.RowSubqueryArgs[sq.ArgName]
+	if !ok {
+		names = make([]string, sq.RowColumns())
+		for i := range names {
+			names[i] = ctx.ReservedVars.ReserveVariable(fmt.Sprintf("%s_%d", sq.ArgName, i))
+		}
+		ctx.RowSubqueryArgs[sq.ArgName] = names
+	}
+
+	columns := sq.originalSubquery.Select.GetColumns()
+	row := make(sqlparser.ValTuple, len(names))
+	for i, name := range names {
+		row[i] = sqlparser.NewArgument(name)
+		if ae, isAe := columns[i].(*sqlparser.AliasedExpr); isAe {
+			if argType, found := ctx.TypeForExpr(ae.Expr); found {
+				arg := sqlparser.NewTypedArgument(name, argType.Type())
+				arg.Scale = argType.Scale()
+				arg.Size = argType.Size()
+				row[i] = arg
+			}
+		}
+	}
+	return row
 }
 
 func dontEnterSubqueries(node, _ sqlparser.SQLNode) bool {

@@ -56,6 +56,15 @@ func TestSubqueriesHasValues(t *testing.T) {
 	mcmp.Exec("insert into t1(id1, id2) values (0,1),(1,2),(2,3),(3,4),(4,5),(5,6)")
 	mcmp.AssertMatches(`SELECT id2 FROM t1 WHERE id1 IN (SELECT id1 FROM t1 WHERE id1 > 10)`, `[]`)
 	mcmp.AssertMatches(`SELECT id2 FROM t1 WHERE id1 NOT IN (SELECT id1 FROM t1 WHERE id1 > 10) ORDER BY id2`, `[[INT64(1)] [INT64(2)] [INT64(3)] [INT64(4)] [INT64(5)] [INT64(6)]]`)
+
+	// Row IN and NOT IN subqueries that can't be merged bind each row as a tuple, also when they return no rows.
+	if utils.BinaryIsAtLeastAtVersion(25, "vtgate") {
+		mcmp.Exec("insert into t2(id3, id4) values (1, 2), (3, 4), (7, 8)")
+		mcmp.AssertMatches(`SELECT id2 FROM t1 WHERE (id1, id2) IN (SELECT id3, id4 FROM t2) ORDER BY id2`, `[[INT64(2)] [INT64(4)]]`)
+		mcmp.AssertMatches(`SELECT id2 FROM t1 WHERE (id1, id2) NOT IN (SELECT id3, id4 FROM t2) ORDER BY id2`, `[[INT64(1)] [INT64(3)] [INT64(5)] [INT64(6)]]`)
+		mcmp.AssertMatches(`SELECT id2 FROM t1 WHERE (id1, id2) IN (SELECT id3, id4 FROM t2 WHERE id3 > 10)`, `[]`)
+		mcmp.AssertMatches(`SELECT id2 FROM t1 WHERE (id1, id2) NOT IN (SELECT id3, id4 FROM t2 WHERE id3 > 10) ORDER BY id2`, `[[INT64(1)] [INT64(2)] [INT64(3)] [INT64(4)] [INT64(5)] [INT64(6)]]`)
+	}
 }
 
 func TestNotINQueries(t *testing.T) {
@@ -93,6 +102,16 @@ func TestQueryAndSubQWithLimit(t *testing.T) {
 	mcmp.Exec("insert into t1(id1, id2) values(0,0),(1,1),(2,2),(3, 3), (4, 4), (5, 5), (6, 6), (7, 7), (8, 8),(9,9)")
 	result := mcmp.Exec(`select id1, id2 from t1 where id1 >= ( select id1 from t1 order by id1 asc limit 1) limit 100`)
 	assert.Len(t, result.Rows, 10)
+
+	// A row comparison with a value subquery that can't be merged binds each column of the row. When the
+	// subquery returns no rows, the row compares as a row of NULLs.
+	if utils.BinaryIsAtLeastAtVersion(25, "vtgate") {
+		mcmp.Exec("insert into t2(id3, id4) values (3, 3), (5, 6)")
+		mcmp.AssertMatches(`select id1 from t1 where (id1, id2) < (select id3, id4 from t2 order by id3 limit 1) order by id1`, `[[INT64(0)] [INT64(1)] [INT64(2)]]`)
+		mcmp.AssertMatches(`select id1 from t1 where (id1, id2) = (select id3, id4 from t2 where id3 = 3)`, `[[INT64(3)]]`)
+		mcmp.AssertMatches(`select id1 from t1 where (id1, id2) <=> (select id3, id4 from t2 where id3 > 10)`, `[]`)
+		mcmp.AssertMatches(`select id1, (id1, id2) >= (select id3, id4 from t2 where id3 = 5) from t1 where id1 in (4, 5, 6) order by id1`, `[[INT64(4) INT64(0)] [INT64(5) INT64(0)] [INT64(6) INT64(1)]]`)
+	}
 }
 
 func TestSubQueryOnTopOfSubQuery(t *testing.T) {
