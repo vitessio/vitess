@@ -300,6 +300,27 @@ func mergeShardedRouting(r1 *ShardedRouting, r2 *ShardedRouting) *ShardedRouting
 	return tr
 }
 
+// passesOnReferenceRows reports whether the reference rows an input preserved can still reach the
+// output of this join without a row of a sharded table next to them. Only those can come back once
+// per shard. An input made of reference tables alone returns the same rows on every shard, and a
+// row of a sharded table lives on one, so a join that pairs every preserved row with such a row,
+// as an inner join does and as the null-extended side of an outer join does, returns each pairing
+// once wherever it runs. An input that reads a sharded table returns different rows on each shard,
+// so the shard a pairing lands on decides what it returns, and the invariant has to stay.
+func (jm *joinMerger) passesOnReferenceRows(input, other *Route, isLHS bool) bool {
+	if !input.PreservesReferenceRows {
+		return false
+	}
+	if isLHS && !jm.joinType.IsInner() {
+		return true
+	}
+	if _, referenceOnly := input.Routing.(*AnyShardRouting); !referenceOnly {
+		return true
+	}
+	_, sharded := other.Routing.(*ShardedRouting)
+	return !sharded || other.PreservesReferenceRows
+}
+
 func getKeyspaceName(routing Routing) string {
 	if ks := routing.Keyspace(); ks != nil {
 		return ks.Name
@@ -310,7 +331,8 @@ func getKeyspaceName(routing Routing) string {
 func (jm *joinMerger) merge(ctx *plancontext.PlanningContext, op1, op2 *Route, r Routing, conditions ...engine.Condition) *Route {
 	// The rows a join further down preserved are not read either when this merge is the DML's row
 	// source, so the target exempts them the same way it exempts the ones this join preserves.
-	preserved, canMerge := referenceRowsInvariant(r, owesReferenceRows(ctx, jm.joinType, op1, op2), op1, op2)
+	owed := owesReferenceRows(ctx, jm.joinType, op1, op2) || jm.passesOnReferenceRows(op1, op2, true) || jm.passesOnReferenceRows(op2, op1, false)
+	preserved, canMerge := referenceRowsInvariant(r, owed)
 	if preserved && isDirectDMLRowSource(ctx, op1, op2) {
 		preserved, canMerge = false, true
 	}

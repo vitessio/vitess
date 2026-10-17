@@ -100,11 +100,12 @@ func TestRefusedCTEMergeLeavesAWorkingPlan(t *testing.T) {
 }
 
 // Refusing the merge after the routing has been reset must not leave the inputs behind changed:
-// the reset rewrites a ShardedRouting in place, and the merge can be sharing that object with the
-// route the plan falls back to.
+// the reset rewrites a ShardedRouting in place, and the plan falls back to the route it came from.
+// The preserved rows have to stay on the preserved side of the outer join with `user`, or the
+// merge is a safe one and nothing is refused.
 func TestRefusedJoinMergeLeavesTheProbeSingleShard(t *testing.T) {
 	primitive := planReferenceOuterJoin(t,
-		"select r1.col from ref_with_source as r1 left join ref as r2 on r1.col = r2.col join `user` as u on u.id = r1.col")
+		"select r1.col from ref_with_source as r1 left join ref as r2 on r1.col = r2.col left join `user` as u on u.id = r1.col")
 
 	join, ok := primitive.(*engine.Join)
 	require.True(t, ok, "the reference outer join cannot be merged into the shards, got %T", primitive)
@@ -260,4 +261,25 @@ func TestSubqueryRoutingTheMergedRouteKeepsItsPreservedRows(t *testing.T) {
 	require.Equal(t, engine.EqualUnique, route.Opcode)
 	require.True(t, route.NoRoutesSpecialHandling,
 		"the outer rows are selected by the preserved rows, so they go missing with them")
+}
+
+// Pairing the preserved rows with the rows of a sharded table pins each pairing to the shard that
+// row lives on, so the route can read every shard again. Whatever the outer join kept now only
+// comes back next to a `user` row, once.
+func TestPreservedRowsJoinedToAShardedTableAreMergedIntoTheScatter(t *testing.T) {
+	primitive := planReferenceOuterJoin(t,
+		"select u.id, r1.col, r2.col from `user` u join (ref_with_source r1 left join ref r2 on r1.col = r2.col) on u.col = r1.col")
+
+	route, ok := primitive.(*engine.Route)
+	require.True(t, ok, "the reference join is expected to be merged into the scatter, got %T", primitive)
+	require.Equal(t, engine.Scatter, route.Opcode)
+}
+
+func TestPreservedRowsOnTheNullExtendedSideAreMergedIntoTheScatter(t *testing.T) {
+	primitive := planReferenceOuterJoin(t,
+		"select u.id, r1.col, r2.col from `user` u left join (ref_with_source r1 left join ref r2 on r1.col = r2.col) on u.col = r1.col")
+
+	route, ok := primitive.(*engine.Route)
+	require.True(t, ok, "the reference join is expected to be merged into the scatter, got %T", primitive)
+	require.Equal(t, engine.Scatter, route.Opcode)
 }
