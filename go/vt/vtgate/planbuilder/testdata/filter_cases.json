@@ -5166,7 +5166,7 @@
               "Sharded": true
             },
             "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user` where id = 1 and (col, `name`) < (:__sq1_0 /* INT16 */, :__sq1_1)",
+            "Query": "select id from `user` where id = 1 and (col, `name`) < (:__sq1_0, :__sq1_1)",
             "Values": [
               "1"
             ],
@@ -5289,7 +5289,89 @@
           {
             "InputName": "Outer",
             "OperatorType": "Filter",
-            "Predicate": "(`user`.col, count(*)) <=> (:__sq1_0 /* INT16 */, :__sq1_1)",
+            "Predicate": "(`user`.col, count(*)) <=> (:__sq1_0, :__sq1_1)",
+            "Inputs": [
+              {
+                "OperatorType": "Aggregate",
+                "Variant": "Ordered",
+                "Aggregates": "sum_count_star(1) AS count(*)",
+                "GroupBy": "0",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select col, count(*) from `user` where 1 != 1 group by col",
+                    "OrderBy": "0 ASC",
+                    "Query": "select col, count(*) from `user` group by col order by col asc"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "row arguments of a UNION subquery are untyped, since its first arm doesn't give the types of the row it returns",
+    "query": "select col, count(*) from user group by col having (col, count(*)) <=> (select null, null from user where id = 99 union all select col, id from user where id = 5)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select col, count(*) from user group by col having (col, count(*)) <=> (select null, null from user where id = 99 union all select col, id from user where id = 5)",
+      "Instructions": {
+        "OperatorType": "UncorrelatedSubquery",
+        "Variant": "PulloutValue",
+        "PulloutVars": [
+          "__sq1_0",
+          "__sq1_1"
+        ],
+        "Inputs": [
+          {
+            "InputName": "SubQuery",
+            "OperatorType": "Concatenate",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select null, null from `user` where 1 != 1",
+                "Query": "select null, null from `user` where id = 99",
+                "Values": [
+                  "99"
+                ],
+                "Vindex": "user_index"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select col, id from `user` where 1 != 1",
+                "Query": "select col, id from `user` where id = 5",
+                "Values": [
+                  "5"
+                ],
+                "Vindex": "user_index"
+              }
+            ]
+          },
+          {
+            "InputName": "Outer",
+            "OperatorType": "Filter",
+            "Predicate": "(`user`.col, count(*)) <=> (:__sq1_0, :__sq1_1)",
             "Inputs": [
               {
                 "OperatorType": "Aggregate",

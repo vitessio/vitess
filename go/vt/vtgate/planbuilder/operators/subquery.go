@@ -328,7 +328,8 @@ func (sq *SubQuery) RowColumns() int {
 
 // rowArguments returns the row of arguments that stands in for a value subquery whose row has more than one
 // column, as in `(a, b) < (select x, y ...)`. A single argument can't hold a row, so each column gets its own.
-// The arguments are reserved the first time they're needed, and reused after that.
+// The arguments are reserved the first time they're needed, and reused after that. They are left untyped: the
+// select expressions of a UNION's first arm don't give the types of the row it returns.
 func (sq *SubQuery) rowArguments(ctx *plancontext.PlanningContext) sqlparser.ValTuple {
 	names, ok := ctx.RowSubqueryArgs[sq.ArgName]
 	if !ok {
@@ -339,18 +340,9 @@ func (sq *SubQuery) rowArguments(ctx *plancontext.PlanningContext) sqlparser.Val
 		ctx.RowSubqueryArgs[sq.ArgName] = names
 	}
 
-	columns := sq.originalSubquery.Select.GetColumns()
 	row := make(sqlparser.ValTuple, len(names))
 	for i, name := range names {
 		row[i] = sqlparser.NewArgument(name)
-		if ae, isAe := columns[i].(*sqlparser.AliasedExpr); isAe {
-			if argType, found := ctx.TypeForExpr(ae.Expr); found {
-				arg := sqlparser.NewTypedArgument(name, argType.Type())
-				arg.Scale = argType.Scale()
-				arg.Size = argType.Size()
-				row[i] = arg
-			}
-		}
 	}
 	return row
 }

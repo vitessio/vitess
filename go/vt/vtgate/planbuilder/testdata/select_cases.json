@@ -7724,8 +7724,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select id, (col, `name`) = (:__sq1_0 /* INT16 */, :__sq1_1) as `(col, name) = (select col, name from user where id = 5)` from `user` where 1 != 1",
-            "Query": "select id, (col, `name`) = (:__sq1_0 /* INT16 */, :__sq1_1) as `(col, name) = (select col, name from user where id = 5)` from `user` where id = 1",
+            "FieldQuery": "select id, (col, `name`) = (:__sq1_0, :__sq1_1) as `(col, name) = (select col, name from user where id = 5)` from `user` where 1 != 1",
+            "Query": "select id, (col, `name`) = (:__sq1_0, :__sq1_1) as `(col, name) = (select col, name from user where id = 5)` from `user` where id = 1",
             "Values": [
               "1"
             ],
