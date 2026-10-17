@@ -277,13 +277,22 @@ func transformSubQuery(ctx *plancontext.PlanningContext, op *operators.SubQuery)
 	}
 	if len(cols) == 0 {
 		// no correlation, so uncorrelated it is
-		return &engine.UncorrelatedSubquery{
+		sq := &engine.UncorrelatedSubquery{
 			Opcode:         op.FilterType,
 			SubqueryResult: op.SubqueryValueName,
 			HasValues:      op.HasValuesName,
 			Subquery:       inner,
 			Outer:          outer,
-		}, nil
+		}
+		if rowColumns := op.RowColumns(); rowColumns > 1 {
+			switch op.FilterType {
+			case opcode.PulloutValue:
+				sq.RowResults = ctx.RowSubqueryArgs[op.ArgName]
+			case opcode.PulloutIn, opcode.PulloutNotIn:
+				sq.RowColumns = rowColumns
+			}
+		}
+		return sq, nil
 	}
 
 	return &engine.SemiJoin{

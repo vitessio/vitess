@@ -49,6 +49,10 @@ type PlanningContext struct {
 	// keyed by their arg name.
 	MergedSubqueries map[string]*sqlparser.Subquery
 
+	// RowSubqueryArgs holds, keyed by a subquery's arg name, the arguments that stand in for each column of a
+	// value subquery whose row has more than one column, once the subquery has been pulled out.
+	RowSubqueryArgs map[string][]string
+
 	// CurrentPhase keeps track of how far we've gone in the planning process
 	// The type should be operators.Phase, but depending on that would lead to circular dependencies
 	CurrentPhase int
@@ -107,6 +111,7 @@ func CreatePlanningContext(stmt sqlparser.Statement,
 		PlannerVersion:    version,
 		ReservedArguments: map[sqlparser.Expr]string{},
 		MergedSubqueries:  map[string]*sqlparser.Subquery{},
+		RowSubqueryArgs:   map[string][]string{},
 		Statement:         stmt,
 		PredTracker:       predicates.NewTracker(),
 	}, nil
@@ -382,6 +387,7 @@ func (ctx *PlanningContext) UseMirror() *PlanningContext {
 		ReservedArguments: map[sqlparser.Expr]string{},
 		VerifyAllFKs:      ctx.VerifyAllFKs,
 		MergedSubqueries:  ctx.MergedSubqueries,
+		RowSubqueryArgs:   ctx.RowSubqueryArgs,
 		CurrentPhase:      ctx.CurrentPhase,
 		Statement:         ctx.Statement,
 		OuterTables:       ctx.OuterTables,
