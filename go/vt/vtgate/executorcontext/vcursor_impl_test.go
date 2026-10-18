@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 
@@ -687,6 +688,37 @@ func TestPrepareSetVarComment(t *testing.T) {
 			got := vc.PrepareSetVarComment()
 			require.Equal(t, tc.want, got)
 			require.Equal(t, tc.wantReservedConn, session.InReservedConn())
+		})
+	}
+}
+
+// TestWrapCallbackLastInsertIDConcurrent hammers the wrapped stream callback
+// from many goroutines, the way a parallel streamed union drives each source
+// through its own stream against one session. With a direct field write this
+// fails under -race; through the locked setter it passes.
+func TestWrapCallbackLastInsertIDConcurrent(t *testing.T) {
+	for _, withStats := range []bool{false, true} {
+		t.Run(fmt.Sprintf("interOpStats=%t", withStats), func(t *testing.T) {
+			vc := &VCursorImpl{SafeSession: NewSafeSession(&vtgatepb.Session{})}
+			if withStats {
+				vc.interOpStats = make(map[engine.Primitive]engine.RowsReceived)
+			}
+			cb := vc.wrapCallback(func(*sqltypes.Result) error { return nil }, nil)
+
+			const goroutines = 32
+			var wg sync.WaitGroup
+			wg.Add(goroutines)
+			for i := range goroutines {
+				go func(id uint64) {
+					defer wg.Done()
+					_ = cb(&sqltypes.Result{InsertID: id, InsertIDChanged: true})
+				}(uint64(i + 1))
+			}
+			wg.Wait()
+
+			// any writer may win; the guarantee under test is no data race,
+			// not which id lands last
+			require.NotZero(t, vc.SafeSession.GetLastInsertId())
 		})
 	}
 }
