@@ -810,3 +810,68 @@ func TestMarshalToBlob(t *testing.T) {
 		require.Equal(t, `{"k": `+encoded+`}`, string(NewObject(obj).MarshalTo(nil)))
 	})
 }
+
+// TestObjectMemberOrderMatchesMySQL verifies that object members are ordered
+// the way MySQL orders them: by key length first, then lexicographically by
+// bytes. See https://github.com/vitessio/vitess/issues/21210.
+func TestObjectMemberOrderMatchesMySQL(t *testing.T) {
+	t.Run("comparator", func(t *testing.T) {
+		tests := []struct {
+			a, b string
+			want int
+		}{
+			{"b", "aa", -1}, // shorter key sorts first, regardless of bytes
+			{"aa", "b", 1},
+			{"", "a", -1},
+			{"a", "b", -1}, // same length: byte order decides
+			{"b", "a", 1},
+			{"B", "a", -1},   // 0x42 < 0x61
+			{"Ab", "ab", -1}, // 0x41 < 0x61
+			{"aa", "aa", 0},
+		}
+		for _, tt := range tests {
+			require.Equal(t, tt.want, compareJSONKeys(tt.a, tt.b),
+				"compareJSONKeys(%q, %q)", tt.a, tt.b)
+		}
+	})
+
+	t.Run("parse", func(t *testing.T) {
+		// SELECT CAST('{"aa": 1, "b": 2}' AS JSON) on MySQL 8.4
+		// returns {"b": 2, "aa": 1}.
+		v := MustParse(`{"aa": 1, "b": 2}`)
+		require.Equal(t, `{"b": 2, "aa": 1}`, v.String())
+	})
+
+	t.Run("new object", func(t *testing.T) {
+		// SELECT JSON_OBJECT('aa', 1, 'b', 2) on MySQL 8.4
+		// returns {"b": 2, "aa": 1}.
+		var obj Object
+		obj.Add("aa", MustParse(`1`))
+		obj.Add("b", MustParse(`2`))
+		require.Equal(t, `{"b": 2, "aa": 1}`, NewObject(obj).String())
+	})
+
+	t.Run("length then bytes", func(t *testing.T) {
+		// SELECT JSON_OBJECT('a', 1, 'B', 2, 'ab', 3, 'Ab', 4, 'b', 5)
+		// on MySQL 8.4 returns {"B": 2, "a": 1, "b": 5, "Ab": 4, "ab": 3}.
+		v := MustParse(`{"a": 1, "B": 2, "ab": 3, "Ab": 4, "b": 5}`)
+		require.Equal(t, `{"B": 2, "a": 1, "b": 5, "Ab": 4, "ab": 3}`, v.String())
+	})
+
+	t.Run("lookup stays consistent with the new order", func(t *testing.T) {
+		v := MustParse(`{"aa": 1, "b": 2}`)
+		obj, ok := v.Object()
+		require.True(t, ok, "cannot obtain object")
+
+		require.Equal(t, "1", string(obj.Get("aa").MarshalTo(nil)))
+		require.Equal(t, "2", string(obj.Get("b").MarshalTo(nil)))
+		require.Nil(t, obj.Get("missing"))
+
+		// "c" sorts after "b" (same length, later byte) and before "aa" (shorter).
+		obj.Set("c", MustParse(`3`), Set)
+		require.Equal(t, `{"b": 2, "c": 3, "aa": 1}`, obj.String())
+
+		obj.Del("b")
+		require.Equal(t, `{"c": 3, "aa": 1}`, obj.String())
+	})
+}
