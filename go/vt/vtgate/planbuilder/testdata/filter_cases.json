@@ -5400,5 +5400,79 @@
         "user.user"
       ]
     }
+  },
+  {
+    "comment": "a row comparison and a scalar comparison with subqueries that can't be merged, in separate AND-ed predicates, each get their own arguments",
+    "query": "select id from user where (col, name) < (select user_id, col from music where user_id = 3) and col > (select user_id from music where user_id = 8)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select id from user where (col, name) < (select user_id, col from music where user_id = 3) and col > (select user_id from music where user_id = 8)",
+      "Instructions": {
+        "OperatorType": "UncorrelatedSubquery",
+        "Variant": "PulloutValue",
+        "PulloutVars": [
+          "__sq2"
+        ],
+        "Inputs": [
+          {
+            "InputName": "SubQuery",
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select user_id from music where 1 != 1",
+            "Query": "select user_id from music where user_id = 8",
+            "Values": [
+              "8"
+            ],
+            "Vindex": "user_index"
+          },
+          {
+            "InputName": "Outer",
+            "OperatorType": "UncorrelatedSubquery",
+            "Variant": "PulloutValue",
+            "PulloutVars": [
+              "__sq1_0",
+              "__sq1_1"
+            ],
+            "Inputs": [
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select user_id, col from music where 1 != 1",
+                "Query": "select user_id, col from music where user_id = 3",
+                "Values": [
+                  "3"
+                ],
+                "Vindex": "user_index"
+              },
+              {
+                "InputName": "Outer",
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select id from `user` where 1 != 1",
+                "Query": "select id from `user` where (col, `name`) < (:__sq1_0, :__sq1_1) and col > :__sq2"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user"
+      ]
+    }
   }
 ]

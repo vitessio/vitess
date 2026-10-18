@@ -230,6 +230,8 @@ func (sq *SubQuery) settle(ctx *plancontext.PlanningContext, outer Operator) Ope
 var (
 	correlatedSubqueryErr = vterrors.VT12001("correlated subquery is only supported for EXISTS")
 	subqueryNotAtTopErr   = vterrors.VT12001("unmergable subquery can not be inside complex expression")
+
+	rowSubqueryAmongOthersErr = vterrors.VT12001("row comparison with an unmergable subquery in a predicate with other subqueries")
 )
 
 func (sq *SubQuery) addLimit() {
@@ -244,6 +246,12 @@ func (sq *SubQuery) settleFilter(ctx *plancontext.PlanningContext, outer Operato
 		}
 		sq.addLimit()
 		return outer
+	}
+	// Every subquery in the predicate is replaced with this subquery's argument below, which is only right when it
+	// is the only one (#21638). Refuse a row comparison in such a predicate, instead of comparing a row with the
+	// result of another subquery.
+	if hasRowSubqueryAmongOthers(sq.Original) {
+		panic(rowSubqueryAmongOthersErr)
 	}
 
 	hasValuesArg := func() string {
@@ -317,13 +325,36 @@ func (sq *SubQuery) settleFilter(ctx *plancontext.PlanningContext, outer Operato
 // RowColumns returns how many columns each row of the subquery has. It returns 1 when that is not known, which
 // is the case for a subquery selecting `*`.
 func (sq *SubQuery) RowColumns() int {
-	columns := sq.originalSubquery.Select.GetColumns()
+	return subqueryRowColumns(sq.originalSubquery)
+}
+
+func subqueryRowColumns(subq *sqlparser.Subquery) int {
+	columns := subq.Select.GetColumns()
 	for _, column := range columns {
 		if _, isStar := column.(*sqlparser.StarExpr); isStar {
 			return 1
 		}
 	}
 	return max(len(columns), 1)
+}
+
+// hasRowSubqueryAmongOthers reports whether expr contains more than one subquery, not counting those nested in
+// another, and one of them, other than an EXISTS, returns rows of more than one column.
+func hasRowSubqueryAmongOthers(expr sqlparser.Expr) bool {
+	count, hasRow := 0, false
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+		switch node := node.(type) {
+		case *sqlparser.ExistsExpr:
+			count++
+			return false, nil
+		case *sqlparser.Subquery:
+			count++
+			hasRow = hasRow || subqueryRowColumns(node) > 1
+			return false, nil
+		}
+		return true, nil
+	}, expr)
+	return count > 1 && hasRow
 }
 
 // rowArguments returns the row of arguments that stands in for a value subquery whose row has more than one
