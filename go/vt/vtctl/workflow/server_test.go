@@ -2094,6 +2094,206 @@ func TestMoveTablesSwitchWritesCompletesAfterCancelOnFreeze(t *testing.T) {
 	require.True(t, tsAfter.frozen, "expected the target workflow to be frozen even though the original context was canceled")
 }
 
+// TestMoveTablesSwitchTrafficRevertsReadsOnWriteSwitchFailure confirms that when
+// SwitchTraffic switches reads and then fails to switch writes, it switches back the
+// reads that it switched, and only those, unless switching writes passed the point
+// of no return.
+func TestMoveTablesSwitchTrafficRevertsReadsOnWriteSwitchFailure(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+
+	const (
+		workflowName       = "wf1"
+		tableName          = "t1"
+		sourceKeyspaceName = "sourceks"
+		targetKeyspaceName = "targetks"
+		vrID               = 1
+	)
+
+	testcases := []struct {
+		name string
+		// The keyspace that reads are routed to before SwitchTraffic.
+		readsStartIn string
+		// Whether the journals exist when switching writes fails, meaning that it
+		// passed the point of no return.
+		journalsExist bool
+		// The keyspace that reads should be routed to after SwitchTraffic fails.
+		readsEndIn string
+	}{
+		{
+			name:         "reads not switched before",
+			readsStartIn: sourceKeyspaceName,
+			readsEndIn:   sourceKeyspaceName,
+		},
+		{
+			name:         "reads already switched before",
+			readsStartIn: targetKeyspaceName,
+			readsEndIn:   targetKeyspaceName,
+		},
+		{
+			name:          "switching writes passed the point of no return",
+			readsStartIn:  sourceKeyspaceName,
+			journalsExist: true,
+			readsEndIn:    targetKeyspaceName,
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			env := newTestEnv(t, ctx, defaultCellName, &testKeyspace{
+				KeyspaceName: sourceKeyspaceName,
+				ShardNames:   []string{"0"},
+			}, &testKeyspace{
+				KeyspaceName: targetKeyspaceName,
+				ShardNames:   []string{"0"},
+			})
+			defer env.close()
+			env.tmc.schema = map[string]*tabletmanagerdatapb.SchemaDefinition{
+				tableName: {
+					TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
+						Name:   tableName,
+						Schema: fmt.Sprintf("CREATE TABLE %s (id BIGINT, name VARCHAR(64), PRIMARY KEY (id))", tableName),
+					}},
+				},
+			}
+			env.updateTableRoutingRules(t, ctx, roTabletTypes, []string{tableName},
+				sourceKeyspaceName, targetKeyspaceName, tc.readsStartIn)
+
+			copyTableQR := &queryResult{
+				query: fmt.Sprintf("select vrepl_id, table_name, lastpk from _vt.copy_state where vrepl_id in (%d) and id in (select max(id) from _vt.copy_state where vrepl_id in (%d) group by vrepl_id, table_name)",
+					vrID, vrID),
+				result: &querypb.QueryResult{},
+			}
+			journalQR := &queryResult{
+				query:  "/select val from _vt.resharding_journal.*",
+				result: &querypb.QueryResult{},
+			}
+			// Fail the journal check in switchWrites, after reads have been switched.
+			journalErrQR := &queryResult{
+				query: "/select val from _vt.resharding_journal.*",
+				err:   errors.New("journal read error"),
+			}
+			env.tmc.expectVRQueryResultOnKeyspaceTablets(targetKeyspaceName, copyTableQR)
+			env.tmc.expectVRQueryResultOnKeyspaceTablets(sourceKeyspaceName, journalQR)    // switchReads
+			env.tmc.expectVRQueryResultOnKeyspaceTablets(sourceKeyspaceName, journalErrQR) // switchWrites
+			if tc.journalsExist {
+				env.tmc.expectVRQueryResultOnKeyspaceTablets(sourceKeyspaceName, &queryResult{ // point of no return check
+					query:  "/select val from _vt.resharding_journal.*",
+					result: sqltypes.ResultToProto3(sqltypes.MakeTestResult(sqltypes.MakeTestFields("val", "varbinary"), "")),
+				})
+			} else {
+				env.tmc.expectVRQueryResultOnKeyspaceTablets(sourceKeyspaceName, journalQR) // point of no return check
+				env.tmc.expectVRQueryResultOnKeyspaceTablets(sourceKeyspaceName, journalQR) // switching reads back
+			}
+
+			_, err := env.ws.WorkflowSwitchTraffic(ctx, &vtctldatapb.WorkflowSwitchTrafficRequest{
+				Keyspace:    targetKeyspaceName,
+				Workflow:    workflowName,
+				Direction:   int32(DirectionForward),
+				TabletTypes: allTabletTypes,
+			})
+			require.ErrorContains(t, err, "journal read error")
+			require.NotContains(t, err.Error(), "failed to switch reads back")
+
+			// Check where reads are routed, in both the routing rules and the SrvVSchema
+			// that vtgate uses. Past the point of no return we leave the reads as they
+			// are, for SwitchTraffic to complete when run again, so we only check the
+			// routing rules.
+			want := []string{tc.readsEndIn + "." + tableName}
+			rules, err := topotools.GetRoutingRules(ctx, env.ts)
+			require.NoError(t, err)
+			srvVSchema, err := env.ts.GetSrvVSchema(ctx, defaultCellName)
+			require.NoError(t, err)
+			srvRules := topotools.GetRoutingRulesMap(srvVSchema.RoutingRules)
+			for _, tabletType := range roTabletTypes {
+				tt := strings.ToLower(tabletType.String())
+				for _, from := range []string{tableName, sourceKeyspaceName + "." + tableName, targetKeyspaceName + "." + tableName} {
+					from = from + "@" + tt
+					require.Equal(t, want, rules[from], "routing rule for %s", from)
+					if !tc.journalsExist {
+						require.Equal(t, want, srvRules[from], "SrvVSchema routing rule for %s", from)
+					}
+				}
+			}
+		})
+	}
+}
+
+// TestReadsSwitchedFromState confirms which read-only tablet types a forward switch of
+// reads moves over in full, and so can switch back, and which were already partially
+// switched before it.
+func TestReadsSwitchedFromState(t *testing.T) {
+	cells := []string{"zone1", "zone2"}
+	replica, rdonly := topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY
+
+	testcases := []struct {
+		name                  string
+		state                 *State
+		tabletTypes           []topodatapb.TabletType
+		wantSwitched          []topodatapb.TabletType
+		wantPartiallySwitched []topodatapb.TabletType
+	}{
+		{
+			name: "not switched",
+			state: &State{
+				ReplicaCellsNotSwitched: cells,
+				RdonlyCellsNotSwitched:  cells,
+			},
+			tabletTypes:  allTabletTypes,
+			wantSwitched: []topodatapb.TabletType{replica, rdonly},
+		},
+		{
+			name: "already switched",
+			state: &State{
+				ReplicaCellsSwitched: cells,
+				RdonlyCellsSwitched:  cells,
+			},
+			tabletTypes: allTabletTypes,
+		},
+		{
+			name: "partially switched",
+			state: &State{
+				ReplicaCellsSwitched:    cells[:1],
+				ReplicaCellsNotSwitched: cells[1:],
+				RdonlyCellsNotSwitched:  cells,
+			},
+			tabletTypes:           allTabletTypes,
+			wantSwitched:          []topodatapb.TabletType{rdonly},
+			wantPartiallySwitched: []topodatapb.TabletType{replica},
+		},
+		{
+			name: "only requested tablet types",
+			state: &State{
+				ReplicaCellsNotSwitched: cells,
+				RdonlyCellsNotSwitched:  cells,
+			},
+			tabletTypes:  []topodatapb.TabletType{replica, topodatapb.TabletType_PRIMARY},
+			wantSwitched: []topodatapb.TabletType{replica},
+		},
+		{
+			// The state of a reverse workflow is reported from the perspective of the
+			// original workflow, so its reads are not yet switched when they are
+			// reported as switched.
+			name: "reverse workflow",
+			state: &State{
+				IsReverse:              true,
+				ReplicaCellsSwitched:   cells,
+				RdonlyCellsNotSwitched: cells,
+			},
+			tabletTypes:  allTabletTypes,
+			wantSwitched: []topodatapb.TabletType{replica},
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			switched, partiallySwitched := readsSwitchedFromState(tc.state, tc.tabletTypes)
+			require.Equal(t, tc.wantSwitched, switched)
+			require.Equal(t, tc.wantPartiallySwitched, partiallySwitched)
+		})
+	}
+}
+
 func TestWorkflowSwitchTrafficFailsForInvalidMoveTablesSourceKeyspace(t *testing.T) {
 	ctx := t.Context()
 
