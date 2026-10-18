@@ -2375,9 +2375,13 @@ type BackupRequest struct {
 	MysqlShutdownTimeout *vttime.Duration `protobuf:"bytes,7,opt,name=mysql_shutdown_timeout,json=mysqlShutdownTimeout,proto3" json:"mysql_shutdown_timeout,omitempty"`
 	// Optional queries to run on the mysqld instance prior to the backup and fields
 	// to control the related behavior.
-	InitSql       *tabletmanagerdata.BackupRequest_InitSQL `protobuf:"bytes,8,opt,name=init_sql,json=initSql,proto3" json:"init_sql,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	InitSql *tabletmanagerdata.BackupRequest_InitSQL `protobuf:"bytes,8,opt,name=init_sql,json=initSql,proto3" json:"init_sql,omitempty"`
+	// IncludeOutcome asks for a terminal message carrying the backup's status,
+	// name and MANIFEST at the end of the stream. See
+	// tabletmanagerdata.BackupRequest.include_outcome.
+	IncludeOutcome bool `protobuf:"varint,9,opt,name=include_outcome,json=includeOutcome,proto3" json:"include_outcome,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *BackupRequest) Reset() {
@@ -2466,6 +2470,13 @@ func (x *BackupRequest) GetInitSql() *tabletmanagerdata.BackupRequest_InitSQL {
 	return nil
 }
 
+func (x *BackupRequest) GetIncludeOutcome() bool {
+	if x != nil {
+		return x.IncludeOutcome
+	}
+	return false
+}
+
 type BackupResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// TabletAlias is the alias being used for the backup.
@@ -2473,20 +2484,12 @@ type BackupResponse struct {
 	Keyspace    string                `protobuf:"bytes,2,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
 	Shard       string                `protobuf:"bytes,3,opt,name=shard,proto3" json:"shard,omitempty"`
 	Event       *logutil.Event        `protobuf:"bytes,4,opt,name=event,proto3" json:"event,omitempty"`
-	// Manifest is the raw JSON of the backup's MANIFEST file. It is only
-	// populated on the terminal message when Status is USABLE. Empty on all
-	// other messages, including empty incremental backups.
-	Manifest string `protobuf:"bytes,5,opt,name=manifest,proto3" json:"manifest,omitempty"`
-	// Status classifies the terminal outcome of the backup. It is only
-	// meaningful on the terminal message; intermediate log-event messages
-	// leave it at STATUS_UNSPECIFIED. Older servers that do not populate this
-	// field will always leave it at STATUS_UNSPECIFIED and callers must treat
-	// that as "unknown / unchanged behaviour".
-	Status tabletmanagerdata.BackupResponse_Status `protobuf:"varint,6,opt,name=status,proto3,enum=tabletmanagerdata.BackupResponse_Status" json:"status,omitempty"`
-	// BackupName identifies the backup that was created, and is also its
-	// directory in backup storage. It is only populated on the terminal message
-	// when Status is USABLE.
-	BackupName    string `protobuf:"bytes,7,opt,name=backup_name,json=backupName,proto3" json:"backup_name,omitempty"`
+	// Manifest, Status and BackupName are only set on the terminal message,
+	// which is sent only when the request set include_outcome. See the
+	// tabletmanagerdata.BackupResponse fields of the same names.
+	Manifest      string                                  `protobuf:"bytes,5,opt,name=manifest,proto3" json:"manifest,omitempty"`
+	Status        tabletmanagerdata.BackupResponse_Status `protobuf:"varint,6,opt,name=status,proto3,enum=tabletmanagerdata.BackupResponse_Status" json:"status,omitempty"`
+	BackupName    string                                  `protobuf:"bytes,7,opt,name=backup_name,json=backupName,proto3" json:"backup_name,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2592,9 +2595,13 @@ type BackupShardRequest struct {
 	MysqlShutdownTimeout *vttime.Duration `protobuf:"bytes,7,opt,name=mysql_shutdown_timeout,json=mysqlShutdownTimeout,proto3" json:"mysql_shutdown_timeout,omitempty"`
 	// Optional queries to run on the mysqld instance prior to the backup and fields
 	// to control the related behavior.
-	InitSql       *tabletmanagerdata.BackupRequest_InitSQL `protobuf:"bytes,8,opt,name=init_sql,json=initSql,proto3" json:"init_sql,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	InitSql *tabletmanagerdata.BackupRequest_InitSQL `protobuf:"bytes,8,opt,name=init_sql,json=initSql,proto3" json:"init_sql,omitempty"`
+	// IncludeOutcome asks for a terminal message carrying the backup's status,
+	// name and MANIFEST at the end of the stream. See
+	// tabletmanagerdata.BackupRequest.include_outcome.
+	IncludeOutcome bool `protobuf:"varint,9,opt,name=include_outcome,json=includeOutcome,proto3" json:"include_outcome,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *BackupShardRequest) Reset() {
@@ -2681,6 +2688,13 @@ func (x *BackupShardRequest) GetInitSql() *tabletmanagerdata.BackupRequest_InitS
 		return x.InitSql
 	}
 	return nil
+}
+
+func (x *BackupShardRequest) GetIncludeOutcome() bool {
+	if x != nil {
+		return x.IncludeOutcome
+	}
+	return false
 }
 
 type CancelSchemaMigrationRequest struct {
@@ -17756,7 +17770,7 @@ const file_vtctldata_proto_rawDesc = "" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12?\n" +
 	"\x05value\x18\x02 \x01(\v2).vtctldata.ApplyVSchemaResponse.ParamListR\x05value:\x028\x01\x1a#\n" +
 	"\tParamList\x12\x16\n" +
-	"\x06params\x18\x01 \x03(\tR\x06params\"\xae\x03\n" +
+	"\x06params\x18\x01 \x03(\tR\x06params\"\xd7\x03\n" +
 	"\rBackupRequest\x128\n" +
 	"\ftablet_alias\x18\x01 \x01(\v2\x15.topodata.TabletAliasR\vtabletAlias\x12#\n" +
 	"\rallow_primary\x18\x02 \x01(\bR\fallowPrimary\x12 \n" +
@@ -17765,7 +17779,8 @@ const file_vtctldata_proto_rawDesc = "" +
 	"\fupgrade_safe\x18\x05 \x01(\bR\vupgradeSafe\x12(\n" +
 	"\rbackup_engine\x18\x06 \x01(\tH\x00R\fbackupEngine\x88\x01\x01\x12F\n" +
 	"\x16mysql_shutdown_timeout\x18\a \x01(\v2\x10.vttime.DurationR\x14mysqlShutdownTimeout\x12C\n" +
-	"\binit_sql\x18\b \x01(\v2(.tabletmanagerdata.BackupRequest.InitSQLR\ainitSqlB\x10\n" +
+	"\binit_sql\x18\b \x01(\v2(.tabletmanagerdata.BackupRequest.InitSQLR\ainitSql\x12'\n" +
+	"\x0finclude_outcome\x18\t \x01(\bR\x0eincludeOutcomeB\x10\n" +
 	"\x0e_backup_engine\"\xa1\x02\n" +
 	"\x0eBackupResponse\x128\n" +
 	"\ftablet_alias\x18\x01 \x01(\v2\x15.topodata.TabletAliasR\vtabletAlias\x12\x1a\n" +
@@ -17775,7 +17790,7 @@ const file_vtctldata_proto_rawDesc = "" +
 	"\bmanifest\x18\x05 \x01(\tR\bmanifest\x12@\n" +
 	"\x06status\x18\x06 \x01(\x0e2(.tabletmanagerdata.BackupResponse.StatusR\x06status\x12\x1f\n" +
 	"\vbackup_name\x18\a \x01(\tR\n" +
-	"backupName\"\xef\x02\n" +
+	"backupName\"\x98\x03\n" +
 	"\x12BackupShardRequest\x12\x1a\n" +
 	"\bkeyspace\x18\x01 \x01(\tR\bkeyspace\x12\x14\n" +
 	"\x05shard\x18\x02 \x01(\tR\x05shard\x12#\n" +
@@ -17784,7 +17799,8 @@ const file_vtctldata_proto_rawDesc = "" +
 	"\fupgrade_safe\x18\x05 \x01(\bR\vupgradeSafe\x120\n" +
 	"\x14incremental_from_pos\x18\x06 \x01(\tR\x12incrementalFromPos\x12F\n" +
 	"\x16mysql_shutdown_timeout\x18\a \x01(\v2\x10.vttime.DurationR\x14mysqlShutdownTimeout\x12C\n" +
-	"\binit_sql\x18\b \x01(\v2(.tabletmanagerdata.BackupRequest.InitSQLR\ainitSql\"|\n" +
+	"\binit_sql\x18\b \x01(\v2(.tabletmanagerdata.BackupRequest.InitSQLR\ainitSql\x12'\n" +
+	"\x0finclude_outcome\x18\t \x01(\bR\x0eincludeOutcome\"|\n" +
 	"\x1cCancelSchemaMigrationRequest\x12\x1a\n" +
 	"\bkeyspace\x18\x01 \x01(\tR\bkeyspace\x12\x12\n" +
 	"\x04uuid\x18\x02 \x01(\tR\x04uuid\x12,\n" +

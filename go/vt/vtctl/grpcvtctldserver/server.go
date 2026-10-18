@@ -530,6 +530,7 @@ func (s *VtctldServer) BackupShard(req *vtctldatapb.BackupShardRequest, stream v
 		UpgradeSafe:          req.UpgradeSafe,
 		MysqlShutdownTimeout: req.MysqlShutdownTimeout,
 		InitSql:              req.InitSql,
+		IncludeOutcome:       req.IncludeOutcome,
 	}
 	err = s.backupTablet(ctx, backupTablet, r, stream)
 	return err
@@ -547,6 +548,7 @@ func (s *VtctldServer) backupTablet(ctx context.Context, tablet *topodatapb.Tabl
 		UpgradeSafe:          req.UpgradeSafe,
 		MysqlShutdownTimeout: req.MysqlShutdownTimeout,
 		InitSql:              req.InitSql,
+		IncludeOutcome:       req.IncludeOutcome,
 	}
 	logStream, err := s.tmc.Backup(ctx, tablet, r)
 	if err != nil {
@@ -561,8 +563,8 @@ func (s *VtctldServer) backupTablet(ctx context.Context, tablet *topodatapb.Tabl
 			if tmResp.Event != nil {
 				logutil.LogEvent(logger, tmResp.Event)
 			}
-			// Forward log events as well as the terminal message carrying the
-			// backup's MANIFEST and outcome status.
+			// Forward log events as well as the terminal message, which the tablet
+			// only sends if the request set IncludeOutcome.
 			resp := &vtctldatapb.BackupResponse{
 				TabletAlias: tablet.Alias,
 				Keyspace:    tablet.Keyspace,

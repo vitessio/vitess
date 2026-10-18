@@ -20,13 +20,10 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"vitess.io/vitess/go/vt/mysqlctl"
 
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -68,9 +65,8 @@ func TestConsumeBackupStream_JSONUsable(t *testing.T) {
 	}}
 
 	var out, errOut bytes.Buffer
-	status, err := consumeBackupStream(stream, true /* outputJSON */, &out, &errOut)
+	err := consumeBackupStream(stream, true /* outputJSON */, &out, &errOut)
 	require.NoError(t, err)
-	assert.Equal(t, tabletmanagerdatapb.BackupResponse_USABLE, status)
 
 	// Log events go to errOut in JSON mode, keeping stdout clean.
 	assert.Contains(t, errOut.String(), "backing up")
@@ -97,9 +93,8 @@ func TestConsumeBackupStream_JSONEmpty(t *testing.T) {
 	}}
 
 	var out, errOut bytes.Buffer
-	status, err := consumeBackupStream(stream, true /* outputJSON */, &out, &errOut)
+	err := consumeBackupStream(stream, true /* outputJSON */, &out, &errOut)
 	require.NoError(t, err)
-	assert.Equal(t, tabletmanagerdatapb.BackupResponse_EMPTY, status)
 
 	var got struct {
 		Status   string          `json:"status"`
@@ -110,16 +105,15 @@ func TestConsumeBackupStream_JSONEmpty(t *testing.T) {
 	assert.Equal(t, "null", string(got.Manifest))
 }
 
-// TestConsumeBackupStream_JSONOlderServerNoStatus verifies that a peer predating
-// these fields sends log events only, leaving Status at
-// STATUS_UNSPECIFIED. That must surface as "UNKNOWN", not EMPTY.
+// TestConsumeBackupStream_JSONOlderServerNoStatus verifies that a stream with no
+// terminal message, as from a vtctld or tablet that predates include_outcome,
+// surfaces as "UNKNOWN", not EMPTY.
 func TestConsumeBackupStream_JSONOlderServerNoStatus(t *testing.T) {
 	stream := &fakeBackupStream{resps: []*vtctldatapb.BackupResponse{eventResp(), eventResp()}}
 
 	var out, errOut bytes.Buffer
-	status, err := consumeBackupStream(stream, true /* outputJSON */, &out, &errOut)
+	err := consumeBackupStream(stream, true /* outputJSON */, &out, &errOut)
 	require.NoError(t, err)
-	assert.Equal(t, tabletmanagerdatapb.BackupResponse_STATUS_UNSPECIFIED, status)
 
 	var got struct {
 		Status     string          `json:"status"`
@@ -132,15 +126,6 @@ func TestConsumeBackupStream_JSONOlderServerNoStatus(t *testing.T) {
 	assert.Equal(t, "null", string(got.Manifest))
 }
 
-// TestHandleBackupStream_OlderServerIsNotEmpty verifies an unknown outcome does
-// not make Backup --json exit 2 during a mixed-version deployment.
-func TestHandleBackupStream_OlderServerIsNotEmpty(t *testing.T) {
-	stream := &fakeBackupStream{resps: []*vtctldatapb.BackupResponse{eventResp(), eventResp()}}
-
-	require.NoError(t, handleBackupStream(stream, true /* outputJSON */))
-	require.False(t, EmptyBackup(), "STATUS_UNSPECIFIED must not be reported as an empty backup")
-}
-
 // TestConsumeBackupStream_JSONManifestNotJSON verifies an invalid MANIFEST is
 // reported as null without turning an already-stored backup into a failure.
 func TestConsumeBackupStream_JSONManifestNotJSON(t *testing.T) {
@@ -150,9 +135,8 @@ func TestConsumeBackupStream_JSONManifestNotJSON(t *testing.T) {
 	}}
 
 	var out, errOut bytes.Buffer
-	status, err := consumeBackupStream(stream, true /* outputJSON */, &out, &errOut)
+	err := consumeBackupStream(stream, true /* outputJSON */, &out, &errOut)
 	require.NoError(t, err, "an unparseable manifest must not fail the command")
-	assert.Equal(t, tabletmanagerdatapb.BackupResponse_USABLE, status)
 
 	var got struct {
 		Status     string          `json:"status"`
@@ -176,9 +160,8 @@ func TestConsumeBackupStream_TextUsable(t *testing.T) {
 	}}
 
 	var out, errOut bytes.Buffer
-	status, err := consumeBackupStream(stream, false /* outputJSON */, &out, &errOut)
+	err := consumeBackupStream(stream, false /* outputJSON */, &out, &errOut)
 	require.NoError(t, err)
-	assert.Equal(t, tabletmanagerdatapb.BackupResponse_USABLE, status)
 
 	// In text mode, progress goes to stdout but the MANIFEST is NOT printed --
 	// it is surfaced only via --json, so text output matches prior releases.
@@ -187,62 +170,12 @@ func TestConsumeBackupStream_TextUsable(t *testing.T) {
 	assert.Empty(t, errOut.String())
 }
 
-// TestConsumeBackupStream_TextEmpty verifies text mode reports the existing
-// empty-backup log event exactly once and does not print a terminal summary.
-func TestConsumeBackupStream_TextEmpty(t *testing.T) {
-	emptyEvent := &vtctldatapb.BackupResponse{
-		TabletAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
-		Keyspace:    "ks",
-		Shard:       "-",
-		Event:       &logutilpb.Event{Value: mysqlctl.EmptyBackupMessage},
-	}
-	stream := &fakeBackupStream{resps: []*vtctldatapb.BackupResponse{
-		emptyEvent,
-		{Status: tabletmanagerdatapb.BackupResponse_EMPTY},
-	}}
-
-	var out, errOut bytes.Buffer
-	status, err := consumeBackupStream(stream, false /* outputJSON */, &out, &errOut)
-	require.NoError(t, err)
-	assert.Equal(t, tabletmanagerdatapb.BackupResponse_EMPTY, status)
-
-	// The empty message appears exactly once (from the log event), not duplicated
-	// by a terminal summary line.
-	assert.Equal(t, 1, strings.Count(out.String(), mysqlctl.EmptyBackupMessage))
-	assert.Empty(t, errOut.String())
-}
-
-// TestHandleBackupStream_EmptyReporting verifies an empty backup is reported
-// out of band only in JSON mode so Cobra still runs PersistentPostRunE.
-func TestHandleBackupStream_EmptyReporting(t *testing.T) {
-	emptyStream := func() *fakeBackupStream {
-		return &fakeBackupStream{resps: []*vtctldatapb.BackupResponse{
-			{Status: tabletmanagerdatapb.BackupResponse_EMPTY},
-		}}
-	}
-
-	err := handleBackupStream(emptyStream(), true /* outputJSON */)
-	require.NoError(t, err, "an empty backup is a success, not an error")
-	require.True(t, EmptyBackup(), "--json empty backup must be reported via EmptyBackup")
-
-	err = handleBackupStream(emptyStream(), false /* outputJSON */)
-	require.NoError(t, err, "without --json an empty backup stays a plain success")
-	require.False(t, EmptyBackup(), "without --json an empty backup must not set the flag")
-
-	// A subsequent usable backup must clear the flag rather than inherit it.
-	usableStream := &fakeBackupStream{resps: []*vtctldatapb.BackupResponse{
-		{Status: tabletmanagerdatapb.BackupResponse_USABLE, Manifest: "{}"},
-	}}
-	require.NoError(t, handleBackupStream(usableStream, true /* outputJSON */))
-	require.False(t, EmptyBackup(), "a usable backup must reset the flag")
-}
-
 // TestConsumeBackupStream_Error verifies a terminal stream error is returned to
 // the command caller.
 func TestConsumeBackupStream_Error(t *testing.T) {
 	stream := &erroringBackupStream{}
 	var out, errOut bytes.Buffer
-	_, err := consumeBackupStream(stream, false, &out, &errOut)
+	err := consumeBackupStream(stream, false, &out, &errOut)
 	require.Error(t, err)
 }
 

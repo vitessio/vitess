@@ -785,16 +785,12 @@ func TestBackup(t *testing.T) {
 					Cell: "zone1",
 					Uid:  100,
 				},
+				IncludeOutcome: true,
 			},
 			assertion: func(t *testing.T, responses []*vtctldatapb.BackupResponse, err error) {
 				require.ErrorIs(t, err, io.EOF, "expected Recv loop to end with io.EOF")
 				require.Len(t, responses, 3, "expected 2 log events + 1 terminal message")
 				term := responses[len(responses)-1]
-				// The terminal message must carry a non-nil Event: older peers
-				// dereference Event unconditionally, so a nil one would panic
-				// them during a mixed-version rolling upgrade or downgrade.
-				require.NotNil(t, term.Event, "terminal message must carry a completion log event")
-				assert.Contains(t, term.Event.Value, "backup completed")
 				assert.Equal(t, `{"BackupName":"test-backup"}`, term.Manifest)
 				assert.Equal(t, tabletmanagerdatapb.BackupResponse_USABLE, term.Status)
 			},
@@ -1036,7 +1032,7 @@ func TestBackupTabletSendFailure(t *testing.T) {
 	s := NewTestVtctldServer(memorytopo.NewServer(ctx, "zone1"), tmc)
 	stream := &failingBackupSendStream{}
 
-	err := s.backupTablet(ctx, tablet, &vtctldatapb.BackupRequest{}, stream)
+	err := s.backupTablet(ctx, tablet, &vtctldatapb.BackupRequest{IncludeOutcome: true}, stream)
 	require.NoError(t, err, "a failed Send should be logged, not returned")
 	assert.Equal(t, 2, stream.sent, "expected 1 log event + 1 terminal message")
 
@@ -1092,7 +1088,7 @@ func TestBackupTabletManifestTooLarge(t *testing.T) {
 	s := NewTestVtctldServer(memorytopo.NewServer(ctx, "zone1"), tmc)
 	stream := &recordingBackupSendStream{}
 
-	require.NoError(t, s.backupTablet(ctx, tablet, &vtctldatapb.BackupRequest{}, stream))
+	require.NoError(t, s.backupTablet(ctx, tablet, &vtctldatapb.BackupRequest{IncludeOutcome: true}, stream))
 	require.Len(t, stream.resps, 2, "expected 1 log event + 1 terminal message")
 	term := stream.resps[1]
 	assert.Equal(t, tabletmanagerdatapb.BackupResponse_USABLE, term.Status)
@@ -1200,6 +1196,79 @@ func TestBackupShard(t *testing.T) {
 				for _, resp := range responses {
 					assert.Equal(t, 101, int(resp.TabletAlias.Uid))
 				}
+			},
+		},
+		{
+			name: "forwards the outcome when requested",
+			ts:   memorytopo.NewServer(ctx, "zone1"),
+			tmc: &testutil.TabletManagerClient{
+				Backups: map[string]struct {
+					Events        []*logutilpb.Event
+					EventInterval time.Duration
+					EventJitter   time.Duration
+					ErrorAfter    time.Duration
+					Manifest      string
+					Status        tabletmanagerdatapb.BackupResponse_Status
+				}{
+					"zone1-0000000101": {
+						Events:   []*logutilpb.Event{{}, {}},
+						Manifest: `{"BackupName":"test-backup"}`,
+						Status:   tabletmanagerdatapb.BackupResponse_USABLE,
+					},
+				},
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000200": {
+						Position: "some-position",
+					},
+				},
+				ReplicationStatusResults: map[string]struct {
+					Position *replicationdatapb.Status
+					Error    error
+				}{
+					"zone1-0000000101": {
+						Position: &replicationdatapb.Status{
+							ReplicationLagSeconds: 1,
+						},
+					},
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000101": nil,
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+					Keyspace: "ks",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_REPLICA,
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  200,
+					},
+					Keyspace: "ks",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_PRIMARY,
+				},
+			},
+			req: &vtctldatapb.BackupShardRequest{
+				Keyspace:       "ks",
+				Shard:          "-",
+				IncludeOutcome: true,
+			},
+			assertion: func(t *testing.T, responses []*vtctldatapb.BackupResponse, err error) {
+				require.ErrorIs(t, err, io.EOF, "expected Recv loop to end with io.EOF")
+				require.Len(t, responses, 3, "expected 2 log events + 1 terminal message")
+				term := responses[len(responses)-1]
+				assert.Equal(t, `{"BackupName":"test-backup"}`, term.Manifest)
+				assert.Equal(t, tabletmanagerdatapb.BackupResponse_USABLE, term.Status)
 			},
 		},
 		{

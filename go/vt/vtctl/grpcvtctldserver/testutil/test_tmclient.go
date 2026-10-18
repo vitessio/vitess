@@ -29,7 +29,6 @@ import (
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 
-	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/timer"
 	hk "vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/log"
@@ -193,8 +192,9 @@ type TabletManagerClient struct {
 		EventInterval time.Duration
 		EventJitter   time.Duration
 		ErrorAfter    time.Duration
-		// Manifest and Status, if set, are sent as the terminal Backup stream
-		// message after all Events, mirroring a real tablet.
+		// Manifest and Status are sent as the terminal Backup stream message
+		// after all Events when the request sets IncludeOutcome, mirroring a
+		// real tablet.
 		Manifest string
 		Status   tabletmanagerdatapb.BackupResponse_Status
 	}
@@ -501,17 +501,8 @@ func (fake *TabletManagerClient) Backup(ctx context.Context, tablet *topodatapb.
 			<-ticker.C
 		}
 
-		// Send the terminal message carrying the manifest and outcome status, as
-		// a real tablet does at the end of a successful backup. Like a real
-		// tablet, it also carries a completion log event: older peers dereference
-		// Event unconditionally, so grpctmserver never sends a nil one.
-		if testdata.Manifest != "" || testdata.Status != tabletmanagerdatapb.BackupResponse_STATUS_UNSPECIFIED {
+		if req.IncludeOutcome {
 			stream.ch <- &tabletmanagerdatapb.BackupResponse{
-				Event: &logutilpb.Event{
-					Time:  protoutil.TimeToProto(time.Now()),
-					Level: logutilpb.Level_INFO,
-					Value: fmt.Sprintf("backup completed: %s", testdata.Status),
-				},
 				Manifest: testdata.Manifest,
 				Status:   testdata.Status,
 			}

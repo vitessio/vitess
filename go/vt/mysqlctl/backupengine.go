@@ -98,10 +98,8 @@ type BackupParams struct {
 	InitSQL *tabletmanagerdatapb.BackupRequest_InitSQL
 	// ManifestOut, when non-nil, is set by the backup engine to the raw JSON of the
 	// MANIFEST it wrote, so callers can surface it without reading it back from
-	// backup storage. The engine has these bytes in hand as it writes them, whereas
-	// re-reading costs a ListBackups plus a GET (the write handle returned by
-	// StartBackup cannot be read from). Engines that leave it unset simply fall back
-	// to that storage read, so this is optional for out-of-tree engines.
+	// backup storage. It is optional: for an engine that leaves it unset, the
+	// backup outcome simply has no manifest.
 	ManifestOut *string
 }
 
@@ -112,7 +110,8 @@ type BackupOutcome struct {
 	// later restore. Empty when no backup was stored.
 	Name string
 	// Manifest is the raw JSON of the backup's MANIFEST, exactly as written to
-	// storage. Empty when no backup was stored, or if it could not be obtained.
+	// storage. Empty when no backup was stored, or if the engine did not report
+	// it through BackupParams.ManifestOut.
 	Manifest string
 	// Result classifies the outcome of the backup.
 	Result BackupResult

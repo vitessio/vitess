@@ -29,7 +29,6 @@ import (
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/vtctl/localvtctldclient"
 
-	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
@@ -269,33 +268,26 @@ func TestBackupCommand_BuildsCorrectRequest(t *testing.T) {
 	}
 }
 
-// fakeBackupServer streams canned responses from Backup and BackupShard, then
-// returns err.
+// fakeBackupServer records whether Backup and BackupShard requests asked for the
+// outcome, then returns err.
 type fakeBackupServer struct {
 	vtctlservicepb.UnimplementedVtctldServer
-	resps []*vtctldatapb.BackupResponse
-	err   error
+	includeOutcome bool
+	err            error
 }
 
-func (s *fakeBackupServer) Backup(_ *vtctldatapb.BackupRequest, stream vtctlservicepb.Vtctld_BackupServer) error {
-	return s.send(stream)
-}
-
-func (s *fakeBackupServer) BackupShard(_ *vtctldatapb.BackupShardRequest, stream vtctlservicepb.Vtctld_BackupShardServer) error {
-	return s.send(stream)
-}
-
-func (s *fakeBackupServer) send(stream vtctlservicepb.Vtctld_BackupServer) error {
-	for _, resp := range s.resps {
-		if err := stream.Send(resp); err != nil {
-			return err
-		}
-	}
+func (s *fakeBackupServer) Backup(req *vtctldatapb.BackupRequest, _ vtctlservicepb.Vtctld_BackupServer) error {
+	s.includeOutcome = req.IncludeOutcome
 	return s.err
 }
 
-// TestBackupCommands_JSONOutputWiring runs Backup and BackupShard end to end
-// against a local server to check each command passes its own --json flag.
+func (s *fakeBackupServer) BackupShard(req *vtctldatapb.BackupShardRequest, _ vtctlservicepb.Vtctld_BackupShardServer) error {
+	s.includeOutcome = req.IncludeOutcome
+	return s.err
+}
+
+// TestBackupCommands_JSONOutputWiring runs Backup and BackupShard against a local
+// server to check each command asks for the outcome only with its own --json.
 func TestBackupCommands_JSONOutputWiring(t *testing.T) {
 	originalProtocol := VtctldClientProtocol
 	VtctldClientProtocol = "local"
@@ -307,26 +299,29 @@ func TestBackupCommands_JSONOutputWiring(t *testing.T) {
 	})
 
 	testCases := []struct {
-		name      string
-		args      []string
-		streamErr error
-		wantEmpty bool
-		wantErr   string
+		name               string
+		args               []string
+		streamErr          error
+		wantIncludeOutcome bool
+		wantErr            string
 	}{
 		{
-			name:      "Backup --json empty",
-			args:      []string{"Backup", "--json", "zone1-100"},
-			wantEmpty: true,
+			name:               "Backup --json",
+			args:               []string{"Backup", "--json", "zone1-100"},
+			wantIncludeOutcome: true,
 		},
 		{
-			name:      "BackupShard --json empty",
-			args:      []string{"BackupShard", "--json", "ks/0"},
-			wantEmpty: true,
+			name: "Backup without --json",
+			args: []string{"Backup", "zone1-100"},
 		},
 		{
-			name:      "BackupShard empty without --json",
-			args:      []string{"BackupShard", "ks/0"},
-			wantEmpty: false,
+			name:               "BackupShard --json",
+			args:               []string{"BackupShard", "--json", "ks/0"},
+			wantIncludeOutcome: true,
+		},
+		{
+			name: "BackupShard without --json",
+			args: []string{"BackupShard", "ks/0"},
 		},
 		{
 			name:      "Backup stream error",
@@ -355,10 +350,8 @@ func TestBackupCommands_JSONOutputWiring(t *testing.T) {
 				cmd.Flags().Lookup("json").Changed = false
 			}
 
-			localvtctldclient.SetServer(&fakeBackupServer{
-				resps: []*vtctldatapb.BackupResponse{{Status: tabletmanagerdatapb.BackupResponse_EMPTY}},
-				err:   tc.streamErr,
-			})
+			server := &fakeBackupServer{err: tc.streamErr}
+			localvtctldclient.SetServer(server)
 			Root.SetArgs(tc.args)
 
 			err := Root.Execute()
@@ -367,7 +360,7 @@ func TestBackupCommands_JSONOutputWiring(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
-			assert.Equal(t, tc.wantEmpty, EmptyBackup())
+			assert.Equal(t, tc.wantIncludeOutcome, server.includeOutcome)
 		})
 	}
 }

@@ -109,12 +109,20 @@ func startServer(t *testing.T, tm tabletmanager.RPCTM, opts ...grpc.ServerOption
 
 func TestBackupTerminalMessage(t *testing.T) {
 	tcs := []struct {
-		name       string
-		outcome    mysqlctl.BackupOutcome
-		backupErr  error
-		wantStatus tabletmanagerdatapb.BackupResponse_Status
-		wantErr    string
+		name           string
+		outcome        mysqlctl.BackupOutcome
+		backupErr      error
+		excludeOutcome bool
+		wantStatus     tabletmanagerdatapb.BackupResponse_Status
+		wantErr        string
 	}{
+		{
+			// Without the flag the stream is log events only, as before the
+			// outcome existed.
+			name:           "outcome not requested",
+			outcome:        mysqlctl.BackupOutcome{Name: "b1", Manifest: `{"BackupName":"b1"}`, Result: mysqlctl.BackupUsable},
+			excludeOutcome: true,
+		},
 		{
 			name:       "usable",
 			outcome:    mysqlctl.BackupOutcome{Name: "b1", Manifest: `{"BackupName":"b1"}`, Result: mysqlctl.BackupUsable},
@@ -140,7 +148,7 @@ func TestBackupTerminalMessage(t *testing.T) {
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
 			tablet := startServer(t, &backupOutcomeTM{RPCTM: tmrpctest.NewFakeRPCTM(t), outcome: tc.outcome, err: tc.backupErr})
-			stream, err := grpctmclient.NewClient().Backup(t.Context(), tablet, &tabletmanagerdatapb.BackupRequest{})
+			stream, err := grpctmclient.NewClient().Backup(t.Context(), tablet, &tabletmanagerdatapb.BackupRequest{IncludeOutcome: !tc.excludeOutcome})
 			require.NoError(t, err)
 
 			progress, err := stream.Recv()
@@ -148,6 +156,10 @@ func TestBackupTerminalMessage(t *testing.T) {
 			assert.Equal(t, "backup progress", progress.Event.Value)
 
 			term, err := stream.Recv()
+			if tc.excludeOutcome {
+				require.ErrorIs(t, err, io.EOF)
+				return
+			}
 			if tc.wantErr != "" {
 				// A failed backup must not send a terminal message.
 				require.ErrorContains(t, err, tc.wantErr)
@@ -158,7 +170,6 @@ func TestBackupTerminalMessage(t *testing.T) {
 			assert.Equal(t, tc.wantStatus, term.Status)
 			assert.Equal(t, tc.outcome.Name, term.BackupName)
 			assert.Equal(t, tc.outcome.Manifest, term.Manifest)
-			assert.NotNil(t, term.Event)
 
 			_, err = stream.Recv()
 			assert.ErrorIs(t, err, io.EOF)
@@ -186,7 +197,7 @@ func TestBackupTerminalMessageTooLarge(t *testing.T) {
 		RPCTM:   tmrpctest.NewFakeRPCTM(t),
 		outcome: mysqlctl.BackupOutcome{Name: "b1", Manifest: strings.Repeat("x", 4096), Result: mysqlctl.BackupUsable},
 	}, grpc.MaxSendMsgSize(grpccommon.MaxMessageSize()))
-	stream, err := grpctmclient.NewClient().Backup(t.Context(), tablet, &tabletmanagerdatapb.BackupRequest{})
+	stream, err := grpctmclient.NewClient().Backup(t.Context(), tablet, &tabletmanagerdatapb.BackupRequest{IncludeOutcome: true})
 	require.NoError(t, err)
 
 	_, err = stream.Recv()
@@ -199,7 +210,6 @@ func TestBackupTerminalMessageTooLarge(t *testing.T) {
 	assert.Equal(t, tabletmanagerdatapb.BackupResponse_USABLE, term.Status)
 	assert.Equal(t, "b1", term.BackupName)
 	assert.Empty(t, term.Manifest)
-	assert.NotNil(t, term.Event)
 
 	_, err = stream.Recv()
 	require.ErrorIs(t, err, io.EOF)

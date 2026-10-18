@@ -20,7 +20,6 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"math/rand/v2"
 	"os"
@@ -1514,17 +1513,11 @@ func parseBackupJSONOutput(t *testing.T, output string) *backupJSONOutput {
 
 // testReplicaEmptyIncrementalBackupJSON verifies the machine readable contract of an
 // empty incremental backup: with --json, vtctldclient reports status "EMPTY" with a null
-// manifest and exits with code 2 (command.EmptyBackupExitCode) so callers can skip follow
-// up work by checking $?. Without --json the same backup exits 0, which the caller
-// asserts. Re-running an incremental backup that found no new data is itself a no-op, so
-// this adds no backup to the shard.
+// manifest, and exits 0 like any successful backup. Re-running an incremental backup
+// that found no new data is itself a no-op, so this adds no backup to the shard.
 func testReplicaEmptyIncrementalBackupJSON(t *testing.T, replica *cluster.Vttablet, incrementalFromPos string) {
 	output, err := localCluster.VtctldClientProcess.ExecuteCommandWithOutput("Backup", "--json", "--incremental-from-pos", incrementalFromPos, replica.Alias)
-	// An empty backup is a success that exits non-zero, so ExecuteCommandWithOutput
-	// returns the *exec.ExitError from CombinedOutput rather than nil.
-	exitErr, ok := errors.AsType[*exec.ExitError](err)
-	require.Truef(t, ok, "expected *exec.ExitError, got %v; output: %v", err, output)
-	require.Equalf(t, 2, exitErr.ExitCode(), "output: %v", output)
+	require.NoErrorf(t, err, "output: %v", output)
 
 	result := parseBackupJSONOutput(t, output)
 	require.Equalf(t, "EMPTY", result.Status, "output: %v", output)
@@ -1569,7 +1562,7 @@ func waitForNumBackups(t *testing.T, expectNumBackups int) []string {
 }
 
 // testReplicaIncrementalBackup verifies both stored and empty incremental
-// backup outcomes, including the opt-in JSON exit-code contract.
+// backup outcomes, including the opt-in JSON output.
 func testReplicaIncrementalBackup(t *testing.T, replica *cluster.Vttablet, incrementalFromPos string, expectEmpty bool, expectError string) (manifest *mysqlctl.BackupManifest, backupName string) {
 	numBackups := len(waitForNumBackups(t, -1))
 
@@ -1583,9 +1576,8 @@ func testReplicaIncrementalBackup(t *testing.T, replica *cluster.Vttablet, incre
 
 	if expectEmpty {
 		require.Contains(t, output, mysqlctl.EmptyBackupMessage)
-		// The invocation above had no --json and exited 0, asserted by the NoErrorf
-		// check. Re-run the same no-op backup with --json to cover the other half of
-		// the contract: a machine readable "EMPTY" status and a distinct exit code.
+		// Re-run the same no-op backup with --json to check it reports a machine
+		// readable "EMPTY" status.
 		testReplicaEmptyIncrementalBackupJSON(t, replica, incrementalFromPos)
 		return nil, ""
 	}

@@ -156,11 +156,10 @@ func (CheckThrottlerResponseCode) EnumDescriptor() ([]byte, []int) {
 	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{1}
 }
 
-// Status classifies the outcome of the backup. It is only meaningful on
-// the final (terminal) message of the stream; intermediate log-event
-// messages leave it set to STATUS_UNSPECIFIED. Older servers that do not
-// populate this field will always leave it at STATUS_UNSPECIFIED and
-// callers must treat that as "unknown / unchanged behaviour".
+// Status classifies the outcome of the backup. It is only set on the
+// terminal message, which is sent only when the request set
+// include_outcome; log-event messages leave it at STATUS_UNSPECIFIED.
+// Older tablets never send it, and callers treat that as unknown.
 type BackupResponse_Status int32
 
 const (
@@ -5364,8 +5363,12 @@ type BackupRequest struct {
 	// before taking the backup. If not set, the default value is used.
 	MysqlShutdownTimeout *vttime.Duration       `protobuf:"bytes,6,opt,name=mysql_shutdown_timeout,json=mysqlShutdownTimeout,proto3" json:"mysql_shutdown_timeout,omitempty"`
 	InitSql              *BackupRequest_InitSQL `protobuf:"bytes,7,opt,name=init_sql,json=initSql,proto3" json:"init_sql,omitempty"`
-	unknownFields        protoimpl.UnknownFields
-	sizeCache            protoimpl.SizeCache
+	// IncludeOutcome asks the tablet to end the stream with a terminal message
+	// carrying the backup's status, name and MANIFEST. Tablets that predate it
+	// ignore it.
+	IncludeOutcome bool `protobuf:"varint,8,opt,name=include_outcome,json=includeOutcome,proto3" json:"include_outcome,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *BackupRequest) Reset() {
@@ -5447,15 +5450,23 @@ func (x *BackupRequest) GetInitSql() *BackupRequest_InitSQL {
 	return nil
 }
 
+func (x *BackupRequest) GetIncludeOutcome() bool {
+	if x != nil {
+		return x.IncludeOutcome
+	}
+	return false
+}
+
 type BackupResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Event *logutil.Event         `protobuf:"bytes,1,opt,name=event,proto3" json:"event,omitempty"`
-	// Manifest is the raw JSON of the backup's MANIFEST file. It is only
-	// populated on the terminal message when Status is USABLE. Empty on all
-	// other messages, including empty incremental backups.
+	// Manifest is the raw JSON of the backup's MANIFEST file, as reported by the
+	// backup engine. It is only populated on the terminal message when Status
+	// is USABLE, and is empty if the engine did not report it or it would push
+	// the message over the gRPC message size limit.
 	Manifest string `protobuf:"bytes,2,opt,name=manifest,proto3" json:"manifest,omitempty"`
 	// Status classifies the terminal outcome of the backup. See the Status
-	// enum for details. Empty (STATUS_UNSPECIFIED) on log-event messages.
+	// enum for details.
 	Status BackupResponse_Status `protobuf:"varint,3,opt,name=status,proto3,enum=tabletmanagerdata.BackupResponse_Status" json:"status,omitempty"`
 	// BackupName identifies the backup that was created, and is also its
 	// directory in backup storage. It is only populated on the terminal message
@@ -8973,7 +8984,7 @@ const file_tabletmanagerdata_proto_rawDesc = "" +
 	"\x15PromoteReplicaRequest\x12\x1a\n" +
 	"\bsemiSync\x18\x01 \x01(\bR\bsemiSync\"4\n" +
 	"\x16PromoteReplicaResponse\x12\x1a\n" +
-	"\bposition\x18\x01 \x01(\tR\bposition\"\xa3\x04\n" +
+	"\bposition\x18\x01 \x01(\tR\bposition\"\xcc\x04\n" +
 	"\rBackupRequest\x12 \n" +
 	"\vconcurrency\x18\x01 \x01(\x05R\vconcurrency\x12#\n" +
 	"\rallow_primary\x18\x02 \x01(\bR\fallowPrimary\x120\n" +
@@ -8981,7 +8992,8 @@ const file_tabletmanagerdata_proto_rawDesc = "" +
 	"\fupgrade_safe\x18\x04 \x01(\bR\vupgradeSafe\x12(\n" +
 	"\rbackup_engine\x18\x05 \x01(\tH\x00R\fbackupEngine\x88\x01\x01\x12F\n" +
 	"\x16mysql_shutdown_timeout\x18\x06 \x01(\v2\x10.vttime.DurationR\x14mysqlShutdownTimeout\x12C\n" +
-	"\binit_sql\x18\a \x01(\v2(.tabletmanagerdata.BackupRequest.InitSQLR\ainitSql\x1a\xac\x01\n" +
+	"\binit_sql\x18\a \x01(\v2(.tabletmanagerdata.BackupRequest.InitSQLR\ainitSql\x12'\n" +
+	"\x0finclude_outcome\x18\b \x01(\bR\x0eincludeOutcome\x1a\xac\x01\n" +
 	"\aInitSQL\x12\x18\n" +
 	"\aqueries\x18\x01 \x03(\tR\aqueries\x127\n" +
 	"\ftablet_types\x18\x02 \x03(\x0e2\x14.topodata.TabletTypeR\vtabletTypes\x12*\n" +

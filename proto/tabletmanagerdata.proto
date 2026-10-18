@@ -599,14 +599,17 @@ message BackupRequest {
   // before taking the backup. If not set, the default value is used.
   vttime.Duration mysql_shutdown_timeout = 6;
   InitSQL init_sql = 7;
+  // IncludeOutcome asks the tablet to end the stream with a terminal message
+  // carrying the backup's status, name and MANIFEST. Tablets that predate it
+  // ignore it.
+  bool include_outcome = 8;
 }
 
 message BackupResponse {
-  // Status classifies the outcome of the backup. It is only meaningful on
-  // the final (terminal) message of the stream; intermediate log-event
-  // messages leave it set to STATUS_UNSPECIFIED. Older servers that do not
-  // populate this field will always leave it at STATUS_UNSPECIFIED and
-  // callers must treat that as "unknown / unchanged behaviour".
+  // Status classifies the outcome of the backup. It is only set on the
+  // terminal message, which is sent only when the request set
+  // include_outcome; log-event messages leave it at STATUS_UNSPECIFIED.
+  // Older tablets never send it, and callers treat that as unknown.
   enum Status {
     STATUS_UNSPECIFIED = 0;
     // USABLE indicates the backup was created and stored successfully and
@@ -620,13 +623,14 @@ message BackupResponse {
 
   logutil.Event event = 1;
 
-  // Manifest is the raw JSON of the backup's MANIFEST file. It is only
-  // populated on the terminal message when Status is USABLE. Empty on all
-  // other messages, including empty incremental backups.
+  // Manifest is the raw JSON of the backup's MANIFEST file, as reported by the
+  // backup engine. It is only populated on the terminal message when Status
+  // is USABLE, and is empty if the engine did not report it or it would push
+  // the message over the gRPC message size limit.
   string manifest = 2;
 
   // Status classifies the terminal outcome of the backup. See the Status
-  // enum for details. Empty (STATUS_UNSPECIFIED) on log-event messages.
+  // enum for details.
   Status status = 3;
 
   // BackupName identifies the backup that was created, and is also its

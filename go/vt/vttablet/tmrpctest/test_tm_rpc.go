@@ -1513,12 +1513,6 @@ func compareLoggedBackupStuff(t *testing.T, name string, stream tmclient.BackupS
 	compare(t, "Backup manifest", term.Manifest, testBackupManifest)
 	compare(t, "Backup status", term.Status, tabletmanagerdatapb.BackupResponse_USABLE)
 	compare(t, "Backup name", term.BackupName, testBackupName)
-	// The terminal message must carry a non-nil Event: older vtctld/vtctldclient
-	// peers dereference Event unconditionally, so a nil Event would panic them
-	// during a mixed-version rolling upgrade or downgrade.
-	if term.Event == nil {
-		t.Errorf("terminal Backup message for %v has a nil Event; older peers would panic on it", name)
-	}
 	_, err = stream.Recv()
 	if err == nil {
 		t.Fatalf("log channel wasn't closed for %v", name)
@@ -1532,7 +1526,7 @@ func compareLoggedBackupStuff(t *testing.T, name string, stream tmclient.BackupS
 // tmRPCTestBackup verifies progress events and the terminal backup outcome are
 // delivered in order through a TabletManagerClient implementation.
 func tmRPCTestBackup(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	req := &tabletmanagerdatapb.BackupRequest{Concurrency: testBackupConcurrency, AllowPrimary: testBackupAllowPrimary}
+	req := &tabletmanagerdatapb.BackupRequest{Concurrency: testBackupConcurrency, AllowPrimary: testBackupAllowPrimary, IncludeOutcome: true}
 	stream, err := client.Backup(ctx, tablet, req)
 	if err != nil {
 		t.Fatalf("Backup failed: %v", err)

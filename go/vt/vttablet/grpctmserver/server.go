@@ -698,27 +698,14 @@ func (s *server) Backup(request *tabletmanagerdatapb.BackupRequest, stream table
 	})
 
 	outcome, err := s.tm.Backup(ctx, logger, request)
-	if err != nil {
+	if err != nil || !request.IncludeOutcome {
 		return err
 	}
-	// Send a terminal message carrying the backup's MANIFEST and outcome so the
-	// caller can identify the backup (by name) and detect an empty incremental
-	// backup without scraping log lines.
-	//
-	// The terminal message also carries a real (non-nil) completion Event. Older
-	// vtctld/vtctldclient peers predate the manifest/status fields and dereference
-	// Event unconditionally (logutil.LogEvent switches on event.Level), so a nil
-	// Event would panic them during a mixed-version rolling upgrade or downgrade.
-	// A populated Event keeps the terminal message safe for those peers, which log
-	// it as an ordinary line and ignore the unknown manifest/status fields.
+	// The caller asked for the outcome, so end the stream with a terminal message
+	// carrying it. Only callers that know these fields can set IncludeOutcome, so
+	// this message has no Event, unlike every message before it.
 	status := backupResultToStatus(outcome.Result)
-	// Build the completion event through logutil so it carries the same
-	// Time/Level/File/Line shape as every other event on this stream; a
-	// hand-built event would render with an empty "file:line]" prefix.
-	completion := logutil.NewMemoryLogger()
-	completion.Infof("backup completed: %s", status)
 	resp := &tabletmanagerdatapb.BackupResponse{
-		Event:      completion.Events[0],
 		Manifest:   outcome.Manifest,
 		Status:     status,
 		BackupName: outcome.Name,

@@ -476,6 +476,11 @@ message BackupRequest {
   // Optional queries to run on the mysqld instance prior to the backup and fields
   // to control the related behavior.
   tabletmanagerdata.BackupRequest.InitSQL init_sql = 8;
+
+  // IncludeOutcome asks for a terminal message carrying the backup's status,
+  // name and MANIFEST at the end of the stream. See
+  // tabletmanagerdata.BackupRequest.include_outcome.
+  bool include_outcome = 9;
 }
 
 message BackupResponse {
@@ -485,21 +490,11 @@ message BackupResponse {
   string shard = 3;
   logutil.Event event = 4;
 
-  // Manifest is the raw JSON of the backup's MANIFEST file. It is only
-  // populated on the terminal message when Status is USABLE. Empty on all
-  // other messages, including empty incremental backups.
+  // Manifest, Status and BackupName are only set on the terminal message,
+  // which is sent only when the request set include_outcome. See the
+  // tabletmanagerdata.BackupResponse fields of the same names.
   string manifest = 5;
-
-  // Status classifies the terminal outcome of the backup. It is only
-  // meaningful on the terminal message; intermediate log-event messages
-  // leave it at STATUS_UNSPECIFIED. Older servers that do not populate this
-  // field will always leave it at STATUS_UNSPECIFIED and callers must treat
-  // that as "unknown / unchanged behaviour".
   tabletmanagerdata.BackupResponse.Status status = 6;
-
-  // BackupName identifies the backup that was created, and is also its
-  // directory in backup storage. It is only populated on the terminal message
-  // when Status is USABLE.
   string backup_name = 7;
 }
 
@@ -526,6 +521,11 @@ message BackupShardRequest {
   // Optional queries to run on the mysqld instance prior to the backup and fields
   // to control the related behavior.
   tabletmanagerdata.BackupRequest.InitSQL init_sql = 8;
+
+  // IncludeOutcome asks for a terminal message carrying the backup's status,
+  // name and MANIFEST at the end of the stream. See
+  // tabletmanagerdata.BackupRequest.include_outcome.
+  bool include_outcome = 9;
 }
 
 message CancelSchemaMigrationRequest {

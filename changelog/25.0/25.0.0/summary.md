@@ -179,11 +179,11 @@ See [#20021](https://github.com/vitessio/vitess/issues/20021) for details.
 
 #### <a id="tmclient-backup-stream"/>`TabletManagerClient.Backup` now returns a manifest/status stream</a>
 
-The `tmclient.TabletManagerClient.Backup` method now returns a `tmclient.BackupStream` instead of a `logutil.EventStream`. Each message on the stream is either a log-event message (as before) or a terminal message carrying the backup's raw MANIFEST JSON, its `backup_name`, and an outcome `Status` (`USABLE` or `EMPTY`). Correspondingly, the internal `RPCTM.Backup` method and `mysqlctl.Backup` now return `(mysqlctl.BackupOutcome, error)` instead of just `error`; `BackupOutcome` carries the backup's `Name`, `Manifest` and `Result`.
+The `tmclient.TabletManagerClient.Backup` method now returns a `tmclient.BackupStream` instead of a `logutil.EventStream`. The stream carries log events as before; a request that sets the new `include_outcome` field also ends with a terminal message carrying the backup's raw MANIFEST JSON, its `backup_name`, and an outcome `Status` (`USABLE` or `EMPTY`). Correspondingly, the internal `RPCTM.Backup` method and `mysqlctl.Backup` now return `(mysqlctl.BackupOutcome, error)` instead of just `error`; `BackupOutcome` carries the backup's `Name`, `Manifest` and `Result`.
 
-The wire protocol is backward and forward compatible: the new `BackupResponse.manifest`, `BackupResponse.status`, and `BackupResponse.backup_name` proto fields are additive, and an older server that never sets them leaves `status` at `STATUS_UNSPECIFIED`, which callers treat as "unknown / unchanged behaviour".
+The wire protocol is backward and forward compatible: the new request and response fields are additive, and a request that does not set `include_outcome` gets the same stream as before.
 
-The `BackupEngine` interface is **not** changed. Engines can optionally report the MANIFEST they write by setting the new `BackupParams.ManifestOut` pointer, which lets `mysqlctl.Backup` skip reading the manifest back from storage (a `ListBackups` plus a `GET`, since the write handle returned by `StartBackup` cannot be read from). All in-tree engines do this; engines that do not simply fall back to the storage read, so out-of-tree engines keep working unchanged.
+The `BackupEngine` interface is **not** changed. Engines can optionally report the MANIFEST they write by setting the new `BackupParams.ManifestOut` pointer, and all in-tree engines do. For an engine that does not, the outcome has no manifest; it is not read back from storage.
 
 **Impact**: This is a source-level Go API change; the wire protocol is unchanged. Any out-of-tree implementation or caller of `tmclient.TabletManagerClient` or `tabletmanager.RPCTM`, or any caller of `mysqlctl.Backup`, must update the signature. Callers that only consumed log events can call `Recv()` on the new stream and read `resp.Event` exactly as before.
 
@@ -739,13 +739,14 @@ See [#20778](https://github.com/vitessio/vitess/pull/20778) for details.
 
 #### <a id="backup-manifest-output"/>Backup commands surface the MANIFEST and empty-incremental status</a>
 
-The `vtctldclient Backup` and `BackupShard` commands can now report a backup's outcome and MANIFEST directly, instead of requiring callers to scrape it from the log stream:
+The `vtctldclient Backup` and `BackupShard` commands can now report a backup's outcome and MANIFEST directly, instead of requiring callers to scrape it from the log stream. With the new `--json`/`-j` flag:
 
-- With the new `--json`/`-j` flag, a JSON object with the backup's outcome status (`USABLE`, `EMPTY`, or `UNKNOWN`), the backup's name, and its MANIFEST is written to stdout, while log events go to stderr, so the output can be parsed by tooling. `backup_name` is a typed field, so callers that only need to identify the backup do not have to parse the manifest -- which also covers engines that do not record a name inside their MANIFEST.
-- Without `--json`, no MANIFEST is printed; progress streams as log events as before, followed by a final `backup completed` line.
-- An incremental backup that finds no new data to back up (an "empty" backup) completes successfully. In `--json` mode it reports status `EMPTY` and exits with **code 2** so scripts can skip follow-up work by checking `$?`. Without `--json`, an empty backup behaves as before and exits `0`, so existing automation is unaffected.
+- Log events go to stderr and, once the backup completes, a JSON object with its outcome status (`USABLE`, `EMPTY`, or `UNKNOWN`), its name, and its MANIFEST is written to stdout. `backup_name` is a typed field, so callers that only need to identify the backup do not have to parse the manifest -- which also covers engines that do not record a name inside their MANIFEST.
+- An incremental backup that finds no new data to back up reports status `EMPTY`. It is still a successful backup and exits `0`.
 
-This is carried by three additive fields on the `BackupResponse` proto messages (`manifest`, `status`, and `backup_name`); see the [related breaking change](#tmclient-backup-stream) for the Go API impact. The change is safe for mixed-version (rolling upgrade and downgrade) clusters in both directions: a newer `vtctldclient`/`vtctld` talking to an older peer that does not populate these fields reports status `UNKNOWN` and preserves the previous behaviour, and the terminal stream message a newer `vttablet` sends carries an ordinary completion log event so an older `vtctld` handles it normally instead of choking on it.
+Without `--json`, nothing changes: the request, the output and the exit codes are as before.
+
+`--json` sets the new `include_outcome` field on the request, which vtctld passes on to the tablet. Only then does the tablet end the stream with a terminal message carrying three additive `BackupResponse` fields (`manifest`, `status`, and `backup_name`); if that message would exceed `--grpc-max-message-size`, it is sent without the MANIFEST. See the [related breaking change](#tmclient-backup-stream) for the Go API impact. Mixed-version clusters are unaffected: an older vtctld or tablet ignores `include_outcome`, so `--json` reports status `UNKNOWN`, and an older vtctld never receives the terminal message because it cannot ask for it.
 
 See [#21243](https://github.com/vitessio/vitess/pull/21243) for details.
 

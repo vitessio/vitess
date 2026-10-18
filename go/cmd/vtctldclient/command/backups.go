@@ -37,37 +37,16 @@ import (
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
-// EmptyBackupExitCode is returned by the Backup/BackupShard commands in --json
-// mode when an incremental backup completes with no new data to back up. It lets
-// tooling skip follow-up operations by checking $?. Without --json the commands
-// keep exiting 0 for an empty backup, preserving pre-existing behaviour.
-const EmptyBackupExitCode = 2
-
-var emptyBackup bool
-
-// EmptyBackup reports whether the Backup/BackupShard command that just ran
-// completed with no new data to back up in --json mode. Callers map it to
-// EmptyBackupExitCode once Root.Execute has returned.
-//
-// It is reported out-of-band rather than as an error from RunE because cobra
-// returns from (*Command).execute as soon as RunE errors, before walking the
-// PersistentPostRunE chain -- a sentinel error would silently skip the root
-// command's cleanup (context cancel, client close, onTerm hooks, trace flush).
-func EmptyBackup() bool { return emptyBackup }
-
 // backupOutputHelp documents the backup output modes. It is shared by the
 // Backup and BackupShard long descriptions, which behave identically here.
-const backupOutputHelp = `With --json, a JSON object with the backup's outcome status ("USABLE", "EMPTY", or
-"UNKNOWN"), its name, and its MANIFEST is printed to stdout, while log events are written
-to stderr. Without --json the MANIFEST is not printed; progress is streamed as log events,
-ending with a "backup completed" line.
-
-An incremental backup that finds no new data to back up completes successfully. In --json
-mode it reports status "EMPTY" and exits with code 2 so callers can skip follow-up work by
-checking $?; without --json an empty backup behaves as before and exits 0.`
+const backupOutputHelp = `With --json, log events are written to stderr and, once the backup completes, a JSON
+object with its outcome status ("USABLE", "EMPTY", or "UNKNOWN"), its name, and its
+MANIFEST is printed to stdout. An incremental backup that finds no new data to back up
+reports "EMPTY"; it is still a success. The status is "UNKNOWN" if the vtctld or tablet
+predates this output. Without --json, log events are written to stdout.`
 
 // backupJSONFlagHelp is the --json flag usage, shared by Backup and BackupShard.
-const backupJSONFlagHelp = "Output, on completion, the backup's MANIFEST, name and outcome status as JSON on stdout (log events go to stderr). An empty incremental backup exits with code 2."
+const backupJSONFlagHelp = "Output, on completion, the backup's outcome status, name and MANIFEST as JSON on stdout (log events go to stderr)."
 
 var (
 	// Backup makes a Backup gRPC call to a vtctld.
@@ -170,6 +149,7 @@ func commandBackup(cmd *cobra.Command, args []string) error {
 			Timeout:     protoutil.DurationToProto(backupOptions.InitSQLTimeout),
 			FailOnError: backupOptions.InitSQLFailOnError,
 		},
+		IncludeOutcome: backupOptions.OutputJSON,
 	}
 
 	if backupOptions.BackupEngine != "" {
@@ -181,7 +161,7 @@ func commandBackup(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	return handleBackupStream(stream, backupOptions.OutputJSON)
+	return consumeBackupStream(stream, backupOptions.OutputJSON, os.Stdout, os.Stderr)
 }
 
 var backupShardOptions = struct {
@@ -218,12 +198,13 @@ func commandBackupShard(cmd *cobra.Command, args []string) error {
 			Timeout:     protoutil.DurationToProto(backupOptions.InitSQLTimeout),
 			FailOnError: backupOptions.InitSQLFailOnError,
 		},
+		IncludeOutcome: backupShardOptions.OutputJSON,
 	})
 	if err != nil {
 		return err
 	}
 
-	return handleBackupStream(stream, backupShardOptions.OutputJSON)
+	return consumeBackupStream(stream, backupShardOptions.OutputJSON, os.Stdout, os.Stderr)
 }
 
 // backupResponseStream is the common Recv interface of the Backup and
@@ -240,30 +221,16 @@ type backupJSONOutput struct {
 	// BackupName is typed separately from the manifest because some engines do
 	// not record a name in their MANIFEST at all. Empty for an empty backup.
 	BackupName string `json:"backup_name"`
-	// Manifest is null for an empty backup, or when talking to an older server
-	// that does not return it.
+	// Manifest is null for an empty backup, for an engine that does not report
+	// it, or when talking to an older server that does not return it.
 	Manifest json.RawMessage `json:"manifest"`
-}
-
-// handleBackupStream drains a Backup/BackupShard stream, printing progress and,
-// on completion, the backup's MANIFEST and outcome. An empty incremental backup
-// is a success reported via EmptyBackup, not an error -- see EmptyBackup for why.
-func handleBackupStream(stream backupResponseStream, outputJSON bool) error {
-	status, err := consumeBackupStream(stream, outputJSON, os.Stdout, os.Stderr)
-	if err != nil {
-		return err
-	}
-	// Assigned unconditionally so a later run in the same process cannot observe
-	// a stale value.
-	emptyBackup = outputJSON && status == tabletmanagerdatapb.BackupResponse_EMPTY
-	return nil
 }
 
 // consumeBackupStream reads all messages from a backup stream. Log events are
 // written to errOut in JSON mode (keeping out clean for the final JSON object)
-// and to out otherwise. On completion it prints the manifest/status and returns
-// the terminal status. It never calls exit, so it is safe to unit test.
-func consumeBackupStream(stream backupResponseStream, outputJSON bool, out, errOut io.Writer) (tabletmanagerdatapb.BackupResponse_Status, error) {
+// and to out otherwise. On completion, in JSON mode, it prints the outcome
+// carried by the terminal message.
+func consumeBackupStream(stream backupResponseStream, outputJSON bool, out, errOut io.Writer) error {
 	var (
 		manifest   string
 		backupName string
@@ -292,12 +259,9 @@ func consumeBackupStream(stream backupResponseStream, outputJSON bool, out, errO
 				status = resp.Status
 			}
 		case io.EOF:
-			if perr := printBackupResult(out, errOut, outputJSON, manifest, backupName, status); perr != nil {
-				return status, perr
-			}
-			return status, nil
+			return printBackupResult(out, errOut, outputJSON, manifest, backupName, status)
 		default:
-			return status, err
+			return err
 		}
 	}
 }
