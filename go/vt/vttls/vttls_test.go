@@ -172,8 +172,16 @@ func TestReadServerConfigRereadsFiles(t *testing.T) {
 	res = handshake(t, before, clientConfig(newCerts, newCerts.ClientCert, newCerts.ClientKey))
 	require.Error(t, res.clientErr, "the config loaded before the files changed must still serve the old certificate")
 
-	res = handshake(t, after, clientConfig(oldCerts, oldCerts.ClientCert, oldCerts.ClientKey))
-	require.Error(t, res.serverErr, "a client of the old CA must not be accepted once the CA file changed")
+	// The client trusts the new server CA, so that it is the server
+	// that rejects the handshake, and presents its certificate even
+	// though the server asks for one from another CA, so that it is
+	// the server's CA that rejects it.
+	stale := clientConfig(newCerts, oldCerts.ClientCert, oldCerts.ClientKey)
+	staleCertificate := stale.Certificates[0]
+	stale.Certificates = nil
+	stale.GetClientCertificate = func(*tls.CertificateRequestInfo) (*tls.Certificate, error) { return &staleCertificate, nil }
+	res = handshake(t, after, stale)
+	require.ErrorContains(t, res.serverErr, "certificate signed by unknown authority", "a client of the old CA must not be accepted once the CA file changed")
 
 	res = handshake(t, after, clientConfig(newCerts, newCerts.RevokedClientCert, newCerts.RevokedClientKey))
 	require.ErrorContains(t, res.serverErr, "Certificate revoked: CommonName="+newCerts.RevokedClientName)
