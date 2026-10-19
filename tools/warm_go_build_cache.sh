@@ -39,7 +39,9 @@
 # "tools" also runs golangci-lint over the whole tree, which fills its
 # analysis cache (~/.cache/golangci-lint) for the workflow to save, and the
 # Go build cache with the packages and test packages it loads that "build" and
-# "unit" do not already hold.
+# "unit" do not already hold. The analysis cache keys the files of other
+# modules by their absolute path, so it only fits runners whose module cache
+# is at the same path.
 
 set -euo pipefail
 
