@@ -548,6 +548,22 @@ func TestTabletThrottlerStrategy_UpdateConfig_NoOpWhenUnchanged(t *testing.T) {
 	require.Same(t, before, strategy.config.Load(), "UpdateConfig must not swap when the new config is unchanged")
 }
 
+// The strategy must own its config: mutating the proto passed to the constructor or to
+// UpdateConfig afterwards must not change the rules Evaluate reads.
+func TestTabletThrottlerStrategy_ConfigIsCopiedFromCaller(t *testing.T) {
+	ftcw := NewFakeThrottleClientWrapper(&throttle.CheckResult{}, true)
+
+	initialCfg := makeTabletStrategyConfig("PRIMARY", "SELECT", "lag", makeThresholds(10, 50))
+	strategy := NewTabletThrottlerStrategy(ftcw, initialCfg, createTestTabletConfig())
+	delete(initialCfg.TabletRules, "PRIMARY")
+	require.Contains(t, strategy.config.Load().TabletRules, "PRIMARY", "mutating the constructor's config must not change live rules")
+
+	newCfg := makeTabletStrategyConfig("PRIMARY", "INSERT", "lag", makeThresholds(20, 75))
+	strategy.UpdateConfig(createTestQueryThrottlerConfig(newCfg))
+	delete(newCfg.TabletRules, "PRIMARY")
+	require.Contains(t, strategy.config.Load().TabletRules["PRIMARY"].StatementRules, "INSERT", "mutating UpdateConfig's config must not change live rules")
+}
+
 // slowThrottleClientWrapper simulates a slow/timeout-prone client
 type slowThrottleClientWrapper struct {
 	mu              sync.RWMutex

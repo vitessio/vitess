@@ -154,7 +154,8 @@ func NewTabletThrottlerStrategy(throttleClient ThrottlerClientWrapper, cfg *quer
 	if cfg == nil {
 		cfg = &querythrottlerpb.TabletStrategyConfig{}
 	}
-	strategy.config.Store(cfg)
+	// Store a private copy so a later change to the caller's proto cannot alter live rules.
+	strategy.config.Store(cfg.CloneVT())
 
 	return strategy
 }
@@ -211,7 +212,8 @@ func (s *TabletThrottlerStrategy) UpdateConfig(cfg *querythrottlerpb.Config) {
 	if proto.Equal(s.config.Load(), newTabletCfg) {
 		return
 	}
-	s.config.Store(newTabletCfg)
+	// Store a private copy so a later change to the caller's proto cannot alter live rules.
+	s.config.Store(newTabletCfg.CloneVT())
 }
 
 // runCacheUpdater runs in a background goroutine to periodically refresh cached throttle results.
