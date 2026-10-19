@@ -47,11 +47,11 @@ var (
 	cachedKeyPairs, cachedCombinedKeyPairs sync.Map
 	// watchedCRLs maps the CRL files ClientConfig used, with the CA
 	// file it used them with, to the SHA-256 digest of their contents
-	// when last seen valid under that CA, or to the zero digest when
-	// never seen valid under it.
+	// when last seen valid under that CA.
 	watchedCRLs sync.Map
-	// lastValidCRLs maps the CRL files ClientConfig used to their
-	// *crlFallback, and staleCRLWarnings holds each file whose CRLs it
+	// lastValidCRLs maps the CRL files ClientConfig used, with the CA
+	// file it used them with, to their *crlFallback, and
+	// staleCRLWarnings holds each of those whose last valid CRLs it
 	// held against peers for, with the error it warned about then: the
 	// warning repeats when the failure changes, or when the file breaks
 	// again after having worked.
@@ -106,9 +106,12 @@ func watchCRL(w crlWatch, digest [sha256.Size]byte) {
 	}
 }
 
-// crlFallback holds the CRLs last loaded from a CRL file, by
-// ClientConfig or ReloadCachedFiles, which ClientConfig falls back to
-// when the file cannot be read or used. The reads of the file are
+// crlFallback holds the CRLs last loaded from a CRL file under a CA
+// file, by ClientConfig or ReloadCachedFiles, which ClientConfig falls
+// back to when the file cannot be read or used under that CA. They are
+// kept for each CA, since a CRL file that one CA validates may hold a
+// CRL that another cannot, and the CRLs of one must not take the place
+// of those that another can use. The reads of the file are
 // numbered in the order they are made, and CRLs replace only those
 // from an earlier read, so that a read validated slowly, or published
 // by a reload after a later read, does not leave older CRLs in place
@@ -121,8 +124,8 @@ type crlFallback struct {
 	crls            []*x509.RevocationList
 }
 
-func crlFallbackOf(crl string) *crlFallback {
-	fallback, _ := lastValidCRLs.LoadOrStore(crl, &crlFallback{})
+func crlFallbackOf(w crlWatch) *crlFallback {
+	fallback, _ := lastValidCRLs.LoadOrStore(w, &crlFallback{})
 	return fallback.(*crlFallback)
 }
 
@@ -419,7 +422,7 @@ func (c cachedFiles) read() map[entryID]entryResult {
 		}
 	}
 	for w, seen := range c.crls {
-		fallback := crlFallbackOf(w.crl)
+		fallback := crlFallbackOf(w)
 		body, read, err := fallback.read(w.crl)
 		if err != nil {
 			results[crlEntry(w)] = entryResult{err: vterrors.Wrapf(err, "failed to read crl file: %s", w.crl)}
@@ -533,7 +536,7 @@ func digestFiles(paths []string) map[string]fileState {
 // instance while it is being replaced, the CRLs last loaded from it
 // are held against the peer instead, as a server whose reload fails
 // keeps its previous CRLs, rather than every new connection failing.
-// Only the first load of a file must succeed.
+// Only the first load of a file under each CA must succeed.
 func clientCRLChecker(crl, ca string) (*crlChecker, error) {
 	var issuers []*x509.Certificate
 	if ca != "" {
@@ -544,7 +547,8 @@ func clientCRLChecker(crl, ca string) (*crlChecker, error) {
 	}
 	// The CRL is read once, so that the digest the file is watched
 	// from is the digest of the CRLs checked against.
-	fallback := crlFallbackOf(crl)
+	w := crlWatch{crl: crl, ca: ca}
+	fallback := crlFallbackOf(w)
 	body, read, err := fallback.read(crl)
 	if err == nil {
 		if crlReadTestHook != nil {
@@ -555,8 +559,8 @@ func clientCRLChecker(crl, ca string) (*crlChecker, error) {
 			var checker *crlChecker
 			if checker, err = newCRLCheckerFrom(crls, issuers); err == nil {
 				fallback.store(crls, read)
-				watchCRL(crlWatch{crl: crl, ca: ca}, sha256.Sum256(body))
-				staleCRLWarnings.Delete(crl)
+				watchCRL(w, sha256.Sum256(body))
+				staleCRLWarnings.Delete(w)
 				return checker, nil
 			}
 		}
@@ -569,14 +573,9 @@ func clientCRLChecker(crl, ca string) (*crlChecker, error) {
 	if lastErr != nil {
 		return nil, err
 	}
-	// The file is watched under this CA all the same, from no digest
-	// since it was never seen valid under it, so that ReloadCachedFiles
-	// holds back the files of this configuration while the CRL cannot
-	// be used under its CA, and counts the CRL as changed once it can.
-	watchCRL(crlWatch{crl: crl, ca: ca}, [sha256.Size]byte{})
-	if warned, warnedFor := staleCRLWarnings.Load(crl); !warnedFor || warned.(string) != err.Error() {
-		staleCRLWarnings.Store(crl, err.Error())
-		log.Warn(fmt.Sprintf("Cannot use the CRL file %s, so the CRLs last loaded from it stay in use: %v", crl, err))
+	if warned, warnedFor := staleCRLWarnings.Load(w); !warnedFor || warned.(string) != err.Error() {
+		staleCRLWarnings.Store(w, err.Error())
+		log.Warn(fmt.Sprintf("Cannot use the CRL file %s under the CA file %s, so the CRLs last loaded from it stay in use: %v", crl, ca, err))
 	}
 	return checker, nil
 }

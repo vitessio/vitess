@@ -222,6 +222,54 @@ func TestClientConfigFallsBackToTheLatestCRLRead(t *testing.T) {
 	requireRejected()
 }
 
+// TestClientConfigFallsBackUnderItsOwnCA checks that the CRLs that
+// a configuration falls back to are its own: two configurations share
+// a CRL file with different CA files, and a replacement holds a CRL
+// that the second CA validates and one under the first CA's name that
+// another key signed. The second configuration loading it, or a
+// reload publishing it for that configuration, must not leave the
+// first without the CRLs it loaded before, which still revoke the
+// server.
+func TestClientConfigFallsBackUnderItsOwnCA(t *testing.T) {
+	certs := tlstest.CreateClientServerCertPairs(t.TempDir())
+	crl := path.Join(t.TempDir(), "crl.pem")
+	b, err := os.ReadFile(certs.CombinedCRL)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(crl, b, 0o600))
+
+	revokedServer, err := ReadServerConfig(certs.RevokedServerCert, certs.RevokedServerKey, "", "", "", tls.VersionTLS12)
+	require.NoError(t, err)
+	requireRejected := func(msg string) {
+		t.Helper()
+		config, err := ClientConfig(VerifyIdentity, "", "", certs.ServerCA, crl, certs.RevokedServerName, tls.VersionTLS12)
+		require.NoError(t, err, msg)
+		res := handshake(t, revokedServer, config)
+		require.ErrorContains(t, res.clientErr, "Certificate revoked: CommonName="+certs.RevokedServerName, msg)
+	}
+	other := func() {
+		t.Helper()
+		_, err := ClientConfig(VerifyIdentity, "", "", certs.ClientCA, crl, "", tls.VersionTLS12)
+		require.NoError(t, err)
+	}
+	requireRejected("the first configuration must load the CRL")
+	other()
+
+	serverCA := loadOneCert(t, certs.ServerCA)
+	imposter, imposterKey := selfSignedCA(t, 1, "", serverCA.RawSubject)
+	clientCRL, err := os.ReadFile(certs.ClientCRL)
+	require.NoError(t, err)
+	replacement := append(pem.EncodeToMemory(&pem.Block{Type: "X509 CRL", Bytes: crlWithoutExtensions(t, imposter, imposterKey)}), clientCRL...)
+	require.NoError(t, os.WriteFile(crl, replacement, 0o600))
+
+	other()
+	requireRejected("the second configuration loading the replacement must not take the first's CRLs")
+
+	_, err = ReloadCachedFiles()
+	require.ErrorContains(t, err, "cannot use the CRL file "+crl+" under the CA file "+certs.ServerCA)
+	require.NotContains(t, err.Error(), "under the CA file "+certs.ClientCA)
+	requireRejected("a reload publishing the replacement for the second configuration must not take the first's CRLs")
+}
+
 // clientFiles are the files of a TLS client, installed in turn from
 // unrelated sets of certificates, as a rotation replaces them.
 type clientFiles struct {
@@ -399,9 +447,7 @@ func TestReloadCachedFilesPublishesAtOnce(t *testing.T) {
 // that fails to load holds back the reload of the files it is used
 // with, so that its configuration keeps all of its files from before
 // the reload rather than taking some from after it, while another
-// configuration, sharing no file with it, reloads. A configuration
-// that first loaded a CRL while it could not be used under its CA is
-// held back by it as well.
+// configuration, sharing no file with it, reloads.
 func TestReloadCachedFilesKeepsConfigurationsWhole(t *testing.T) {
 	var olds, news []tlstest.ClientServerKeyPairs
 	for range 3 {
@@ -432,39 +478,14 @@ func TestReloadCachedFilesKeepsConfigurationsWhole(t *testing.T) {
 	other, otherKey := selfSignedCA(t, 1, "", newCA.RawSubject)
 	require.NoError(t, os.WriteFile(badCRL.crl, pem.EncodeToMemory(&pem.Block{Type: "X509 CRL", Bytes: crlWithoutExtensions(t, other, otherKey)}), 0o600))
 
-	// Another configuration uses the same CRL with a CA file of its
-	// own, and first loads while the CRL is not valid under that CA,
-	// falling back to the CRLs last loaded from the file. Its CA file
-	// then gains another CA, under which the CRL is not valid either.
-	sharedCRL := newClientFiles(t)
-	sharedCRL.copy(sharedCRL.ca, news[2].ServerCA)
-	sharedCRLConfig := func() *tls.Config {
-		t.Helper()
-		config, err := ClientConfig(VerifyIdentity, "", "", sharedCRL.ca, badCRL.crl, "", tls.VersionTLS12)
-		require.NoError(t, err)
-		return config
-	}
-	sharedCRLConfig()
-	newCAPEM, err := os.ReadFile(news[2].ServerCA)
-	require.NoError(t, err)
-	otherCAPEM, err := os.ReadFile(news[1].ServerCA)
-	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(sharedCRL.ca, append(newCAPEM, otherCAPEM...), 0o600))
-
 	changed, err := ReloadCachedFiles()
 	require.True(t, changed)
 	require.ErrorContains(t, err, halfRotated.key)
-	require.ErrorContains(t, err, "cannot use the CRL file "+badCRL.crl+" under the CA file "+badCRL.ca)
-	require.ErrorContains(t, err, "cannot use the CRL file "+badCRL.crl+" under the CA file "+sharedCRL.ca)
+	require.ErrorContains(t, err, "cannot use the CRL file "+badCRL.crl)
 	requireNoErrorFor(t, err, path.Dir(rotated.cert))
 
 	halfRotated.requireServes(olds[0], olds[0])
 	rotated.requireServes(news[1], news[1])
-	// Checked before badCRL loads the CRL again under its old CA, which
-	// does not apply the CRL and so keeps it as the one to fall back to.
-	want, err := readx509CertPool(news[2].ServerCA)
-	require.NoError(t, err)
-	require.True(t, want.Equal(sharedCRLConfig().RootCAs), "the configuration sharing the CRL must keep its CA from before the reload")
 	badCRL.requireServes(olds[2], olds[2])
 }
 
