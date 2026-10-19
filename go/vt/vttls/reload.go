@@ -197,8 +197,11 @@ func (f *crlFallback) learnedIssuers() []*x509.Certificate {
 // brings it, so that a replacement whose signature does not verify
 // would take the place of the CRLs to fall back to, and fail every
 // handshake through that issuer even once the file is gone. The
-// checker it returns records the issuers that chains bring from then
-// on.
+// bindings this makes are kept in the checker, within its bound, so
+// that its handshakes through those issuers do not check the CRLs'
+// signatures again; ClientConfig builds a checker for every MySQL
+// connection. The checker it returns records the issuers that chains
+// bring from then on.
 func clientCRLCheckerFrom(crls []*x509.RevocationList, issuers []*x509.Certificate, fallback *crlFallback) (*crlChecker, error) {
 	checker, err := newCRLCheckerFrom(crls, issuers)
 	if err != nil {
@@ -208,8 +211,14 @@ func clientCRLCheckerFrom(crls []*x509.RevocationList, issuers []*x509.Certifica
 		if _, configured := checker.configured[string(issuer.Raw)]; configured {
 			continue
 		}
-		if _, err := checker.bindCRLs(issuer); err != nil {
+		issuerCRLs, err := checker.bindCRLs(issuer)
+		if err != nil {
 			return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "the CRLs cannot be applied under the CA certificate %s that a verified chain of a peer brought: %v", issuer.Subject.CommonName, err)
+		}
+		if checker.reserveBinding() {
+			if _, loaded := checker.bound.LoadOrStore(string(issuer.Raw), crlBinding{crls: issuerCRLs}); loaded {
+				checker.boundIssuers.Add(-1)
+			}
 		}
 	}
 	checker.onIssuer = fallback.learnIssuer
