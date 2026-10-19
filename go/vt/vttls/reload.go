@@ -45,9 +45,10 @@ var (
 	// tlsCertificates and combinedTLSCertificates to the files their
 	// certificates were loaded from.
 	cachedKeyPairs, cachedCombinedKeyPairs sync.Map
-	// watchedCRLs maps the CRL files ClientConfig used, with the CA
-	// file it used them with, to the SHA-256 digest of their contents
-	// when last seen valid under that CA.
+	// watchedCRLs holds the CRL files ClientConfig used, with the CA
+	// file it used them with, as crlWatch keys. The digest of the
+	// contents the configs were built from is kept in their
+	// crlFallback.
 	watchedCRLs sync.Map
 	// lastValidCRLs maps the CRL files ClientConfig used, with the CA
 	// file it used them with, to their *crlFallback, and
@@ -84,8 +85,10 @@ func markCachedFilesInUse() {
 }
 
 // CachedFilesGeneration returns a number that changes whenever
-// ReloadCachedFiles finds that a file changed. A config built by
-// ClientConfig before it changed may hold what the files held before.
+// ReloadCachedFiles finds that a file changed, and whenever ClientConfig
+// builds a config from a CRL that differs from the one the configs
+// before it were built from. A config built by ClientConfig before it
+// changed may hold what the files held before.
 func CachedFilesGeneration() uint64 {
 	return cachedFilesGeneration.Load()
 }
@@ -96,12 +99,12 @@ type crlWatch struct {
 	crl, ca string
 }
 
-// watchCRL has ReloadCachedFiles watch the CRL file of w for changes,
-// starting from digest, the digest of the contents ClientConfig
-// loaded from it. ClientConfig reads the CRL on every call, so the
+// watchCRL has ReloadCachedFiles watch the CRL file of w for changes
+// from what the configs ClientConfig built were built from, see
+// crlFallback.observe. ClientConfig reads the CRL on every call, so the
 // file is only watched, for CachedFilesGeneration, not cached.
-func watchCRL(w crlWatch, digest [sha256.Size]byte) {
-	if _, loaded := watchedCRLs.LoadOrStore(w, digest); !loaded {
+func watchCRL(w crlWatch) {
+	if _, loaded := watchedCRLs.LoadOrStore(w, struct{}{}); !loaded {
 		markCachedFilesInUse()
 	}
 }
@@ -134,6 +137,12 @@ type crlFallback struct {
 	// that the verified chains of peers brought and that the CRLs bound
 	// to, at most maxBoundIssuers of them, see clientCRLCheckerFrom.
 	issuers map[string]*x509.Certificate
+	// digest is the SHA-256 digest of the file's contents that the
+	// configs built since CachedFilesGeneration last changed were built
+	// from, as of the read numbered digestRead, zero for none, see
+	// observe.
+	digest     [sha256.Size]byte
+	digestRead uint64
 }
 
 func crlFallbackOf(w crlWatch) *crlFallback {
@@ -167,6 +176,37 @@ func (f *crlFallback) load() ([]*x509.RevocationList, bool) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.crls, f.crlsRead > 0
+}
+
+// observe records that a config is built from the file's contents
+// whose digest is digest, as of the read numbered read, and reports
+// whether those differ from the contents that the configs built before
+// it were built from, in which case CachedFilesGeneration has to change
+// so that those are built again: when a config is built while the file
+// briefly holds other contents, and the contents before are back by
+// the next reload, that reload finds no change from the digest first
+// recorded, yet the config holds the other contents. The digest of a
+// later read than the one recorded replaces it. The first recorded
+// digest invalidates nothing.
+func (f *crlFallback) observe(digest [sha256.Size]byte, read uint64) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.digestRead == 0 {
+		f.digest, f.digestRead = digest, read
+		return false
+	}
+	if read > f.digestRead {
+		changed := digest != f.digest
+		f.digest, f.digestRead = digest, read
+		return changed
+	}
+	return digest != f.digest
+}
+
+func (f *crlFallback) observed() [sha256.Size]byte {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.digest
 }
 
 // newerThan returns the CRLs kept, when they come from a read made
@@ -370,8 +410,8 @@ func snapshotCachedFiles() cachedFiles {
 		entries.caCertificates[ca.(string)] = certificates.([]*x509.Certificate)
 		return true
 	})
-	watchedCRLs.Range(func(w, digest any) bool {
-		entries.crls[w.(crlWatch)] = digest.([sha256.Size]byte)
+	watchedCRLs.Range(func(w, _ any) bool {
+		entries.crls[w.(crlWatch)] = crlFallbackOf(w.(crlWatch)).observed()
 		return true
 	})
 	fileSets.Range(func(_, set any) bool {
@@ -545,10 +585,10 @@ func (c cachedFiles) read() map[entryID]entryResult {
 		// config built while the file is briefly unreadable would
 		// otherwise keep, with nothing left to reload once it is back.
 		if digest != seen {
-			results[crlEntry(w)] = entryResult{updates: []cacheUpdate{
-				{cache: &watchedCRLs, key: w, value: digest},
-				{apply: func() { fallback.store(crls, read) }},
-			}}
+			results[crlEntry(w)] = entryResult{updates: []cacheUpdate{{apply: func() {
+				fallback.store(crls, read)
+				fallback.observe(digest, read)
+			}}}}
 		}
 	}
 	return results
@@ -680,7 +720,10 @@ func clientCRLChecker(r clientCRLRead) (*crlChecker, error) {
 			var checker *crlChecker
 			if checker, err = clientCRLCheckerFrom(crls, issuers, r.fallback); err == nil {
 				r.fallback.store(crls, r.read)
-				watchCRL(r.w, sha256.Sum256(r.body))
+				if r.fallback.observe(sha256.Sum256(r.body), r.read) {
+					cachedFilesGeneration.Add(1)
+				}
+				watchCRL(r.w)
 				staleCRLWarnings.Delete(r.w)
 				return checker, nil
 			}

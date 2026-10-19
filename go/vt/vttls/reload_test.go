@@ -121,6 +121,43 @@ func TestReloadCachedFiles(t *testing.T) {
 	require.NoError(t, res.serverErr)
 }
 
+// TestReloadCachedFilesInvalidatesConfigsBuiltFromAnotherCRL checks
+// that a config built while the CRL file briefly held B, between two
+// times it held A, is invalidated once A is back and reloaded: a gRPC
+// client's credentials are built again only when CachedFilesGeneration
+// moves past the one they were built at, and would otherwise keep B,
+// and the servers that A revokes and B does not, for good.
+func TestReloadCachedFilesInvalidatesConfigsBuiltFromAnotherCRL(t *testing.T) {
+	certs := tlstest.CreateClientServerCertPairs(t.TempDir())
+	keyPair, err := tls.LoadX509KeyPair(certs.ServerCA, strings.TrimSuffix(certs.ServerCA, "-cert.pem")+"-key.pem")
+	require.NoError(t, err)
+	crlA, err := os.ReadFile(certs.ServerCRL)
+	require.NoError(t, err)
+	// B, from the same CA, revokes nothing.
+	crlB := pem.EncodeToMemory(&pem.Block{Type: "X509 CRL", Bytes: crlWithoutExtensions(t, loadOneCert(t, certs.ServerCA), keyPair.PrivateKey.(*ecdsa.PrivateKey))})
+	crl := path.Join(t.TempDir(), "crl.pem")
+	client := func() {
+		t.Helper()
+		_, err := ClientConfig(VerifyIdentity, "", "", certs.ServerCA, crl, certs.RevokedServerName, tls.VersionTLS12)
+		require.NoError(t, err)
+	}
+	require.NoError(t, os.WriteFile(crl, crlA, 0o600))
+	client()
+
+	// Credentials built now, as reloadingCreds does, record the
+	// generation before they build.
+	require.NoError(t, os.WriteFile(crl, crlB, 0o600))
+	builtAt := CachedFilesGeneration()
+	client()
+	rebuiltAt := CachedFilesGeneration()
+
+	require.NoError(t, os.WriteFile(crl, crlA, 0o600))
+	_, err = ReloadCachedFiles()
+	requireNoErrorFor(t, err, path.Dir(crl))
+	require.NotEqual(t, builtAt, CachedFilesGeneration(), "credentials built from B must be built again once A is reloaded")
+	require.NotEqual(t, rebuiltAt, CachedFilesGeneration(), "credentials built from B again after B was seen must be built again once A is reloaded")
+}
+
 // TestClientConfigKeepsLastValidCRL checks, through real handshakes,
 // that once ClientConfig loaded a CRL file, a replacement it cannot
 // use neither fails the configs it builds nor lets a server that the
