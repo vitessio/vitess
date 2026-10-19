@@ -2897,18 +2897,20 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 	// switched in some cells, which we cannot fully switch back.
 	var readsSwitched, readsPartiallySwitched []topodatapb.TabletType
 	if switchReplica || switchRdonly {
+		// Determine the tablet types to switch reads for, which can include rdonly
+		// reads switched along with replica reads, before changing any routing, so
+		// that the same ones are switched and, if needed, switched back.
+		var readTabletTypes []topodatapb.TabletType
+		if readTabletTypes, err = s.readTabletTypesToSwitch(ctx, req.Cells, req.TabletTypes); err != nil {
+			return nil, err
+		}
 		// If we're going to switch writes immediately after then we don't need to
 		// rebuild the SrvVSchema here as we will do it after switching writes.
-		if rdDryRunResults, err = s.switchReads(ctx, req, ts, startState, !switchPrimary /* rebuildSrvVSchema */, direction); err != nil {
+		if rdDryRunResults, err = s.switchReads(ctx, req, ts, startState, readTabletTypes, !switchPrimary /* rebuildSrvVSchema */, direction); err != nil {
 			return nil, err
 		}
 		s.Logger().Infof("Switch Reads done for workflow %s.%s", req.Keyspace, req.Workflow)
 		if !req.DryRun && switchPrimary {
-			// Include any rdonly reads that were switched along with replica reads.
-			readTabletTypes, err := s.readTabletTypesToSwitch(ctx, req.Cells, req.TabletTypes)
-			if err != nil {
-				return nil, err
-			}
 			readsSwitched, readsPartiallySwitched = readsSwitchedFromState(startState, readTabletTypes)
 		}
 	}
@@ -2980,8 +2982,12 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 	return resp, nil
 }
 
-// switchReads is a generic way of switching read traffic for a workflow.
-func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitchTrafficRequest, ts *trafficSwitcher, state *State, rebuildSrvVSchema bool, direction TrafficSwitchDirection) (*[]string, error) {
+// switchReads is a generic way of switching read traffic for a workflow. The request is
+// validated against the requested tablet types, and the reads are switched for
+// readTabletTypes, which readTabletTypesToSwitch returns for them.
+func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitchTrafficRequest, ts *trafficSwitcher, state *State,
+	readTabletTypes []topodatapb.TabletType, rebuildSrvVSchema bool, direction TrafficSwitchDirection,
+) (*[]string, error) {
 	var roTabletTypes []topodatapb.TabletType
 	// When we are switching all traffic we also get the primary tablet type, which we need to
 	// filter out for switching reads.
@@ -3048,10 +3054,9 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 		}
 	}
 
-	roTabletTypes, err := s.readTabletTypesToSwitch(ctx, req.Cells, roTabletTypes)
-	if err != nil {
-		return nil, err
-	}
+	roTabletTypes = slices.DeleteFunc(slices.Clone(readTabletTypes), func(tabletType topodatapb.TabletType) bool {
+		return tabletType == topodatapb.TabletType_PRIMARY
+	})
 	return s.switchReadsForTabletTypes(ctx, req, ts, state, roTabletTypes, rebuildSrvVSchema, direction, false /* revert */)
 }
 
@@ -3283,7 +3288,15 @@ func (s *Server) switchReadsForTabletTypes(ctx context.Context, req *vtctldatapb
 		case ts.isPartialMigration:
 			ts.Logger().Infof("Partial migration, skipping switchTableReads as traffic is all or nothing per shard and overridden for reads AND writes in the ShardRoutingRule created when switching writes.")
 		default:
-			err := sw.switchTableReads(ctx, req.Cells, roTabletTypes, rebuildSrvVSchema, direction)
+			cells := req.Cells
+			if revert {
+				// The routing rules are global, and switching writes may have published
+				// the switched read rules in every cell, for example when removing primary
+				// mirror rules. We only switch back tablet types that were not switched in
+				// any cell before, so we can rebuild the SrvVSchema in every cell.
+				cells = nil
+			}
+			err := sw.switchTableReads(ctx, cells, roTabletTypes, rebuildSrvVSchema, direction)
 			if err != nil {
 				return defaultErrorHandler(ts.Logger(), "failed to switch read traffic for the tables", err)
 			}

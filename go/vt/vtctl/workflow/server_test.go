@@ -2230,10 +2230,11 @@ func TestMoveTablesSwitchTrafficRevertsReadsOnWriteSwitchFailure(t *testing.T) {
 	}
 }
 
-// TestMoveTablesSwitchTrafficRevertWithReadMirroring confirms that when reads were
-// mirrored and SwitchTraffic switches them in some cells and then fails to switch
-// writes, switching them back does not leave the other cells reading from the target.
-func TestMoveTablesSwitchTrafficRevertWithReadMirroring(t *testing.T) {
+// TestMoveTablesSwitchTrafficRevertWithMirroring confirms that when traffic was
+// mirrored and SwitchTraffic switches reads in some cells and then fails to switch
+// writes, switching the reads back does not leave the other cells reading from the
+// target. Removing mirror rules rebuilds the SrvVSchema in every cell.
+func TestMoveTablesSwitchTrafficRevertWithMirroring(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	t.Cleanup(cancel)
 
@@ -2246,75 +2247,98 @@ func TestMoveTablesSwitchTrafficRevertWithReadMirroring(t *testing.T) {
 		vrID               = 1
 	)
 
-	env := newTestEnv(t, ctx, defaultCellName, &testKeyspace{
-		KeyspaceName: sourceKeyspaceName,
-		ShardNames:   []string{"0"},
-	}, &testKeyspace{
-		KeyspaceName: targetKeyspaceName,
-		ShardNames:   []string{"0"},
-	}, otherCellName)
-	t.Cleanup(env.close)
-	env.tmc.schema = map[string]*tabletmanagerdatapb.SchemaDefinition{
-		tableName: {
-			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
-				Name:   tableName,
-				Schema: fmt.Sprintf("CREATE TABLE %s (id BIGINT, name VARCHAR(64), PRIMARY KEY (id))", tableName),
-			}},
+	testcases := []struct {
+		name string
+		// The tablet types whose traffic is mirrored to the target.
+		mirroredTabletTypes []topodatapb.TabletType
+	}{
+		{
+			name:                "reads mirrored",
+			mirroredTabletTypes: roTabletTypes,
+		},
+		{
+			// Switching writes removes the primary mirror rules before it fails.
+			name:                "reads and writes mirrored",
+			mirroredTabletTypes: allTabletTypes,
 		},
 	}
-	env.updateTableRoutingRules(t, ctx, roTabletTypes, []string{tableName},
-		sourceKeyspaceName, targetKeyspaceName, sourceKeyspaceName)
-	mirrorRules := make(map[string]map[string]float32)
-	for _, tabletType := range roTabletTypes {
-		from := fmt.Sprintf("%s.%s@%s", sourceKeyspaceName, tableName, strings.ToLower(tabletType.String()))
-		mirrorRules[from] = map[string]float32{targetKeyspaceName + "." + tableName: 10}
-	}
-	require.NoError(t, topotools.SaveMirrorRules(ctx, env.ts, mirrorRules))
-	require.NoError(t, env.ts.RebuildSrvVSchema(ctx, nil))
 
-	journalQR := &queryResult{
-		query:  "/select val from _vt.resharding_journal.*",
-		result: &querypb.QueryResult{},
-	}
-	env.tmc.expectVRQueryResultOnKeyspaceTablets(targetKeyspaceName, &queryResult{
-		query: fmt.Sprintf("select vrepl_id, table_name, lastpk from _vt.copy_state where vrepl_id in (%d) and id in (select max(id) from _vt.copy_state where vrepl_id in (%d) group by vrepl_id, table_name)",
-			vrID, vrID),
-		result: &querypb.QueryResult{},
-	})
-	env.tmc.expectVRQueryResultOnKeyspaceTablets(sourceKeyspaceName, journalQR)    // switchReads
-	env.tmc.expectVRQueryResultOnKeyspaceTablets(sourceKeyspaceName, &queryResult{ // switchWrites
-		query: "/select val from _vt.resharding_journal.*",
-		err:   errors.New("journal read error"),
-	})
-	env.tmc.expectVRQueryResultOnKeyspaceTablets(sourceKeyspaceName, journalQR) // switching reads back
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			env := newTestEnv(t, ctx, defaultCellName, &testKeyspace{
+				KeyspaceName: sourceKeyspaceName,
+				ShardNames:   []string{"0"},
+			}, &testKeyspace{
+				KeyspaceName: targetKeyspaceName,
+				ShardNames:   []string{"0"},
+			}, otherCellName)
+			t.Cleanup(env.close)
+			env.tmc.schema = map[string]*tabletmanagerdatapb.SchemaDefinition{
+				tableName: {
+					TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
+						Name:   tableName,
+						Schema: fmt.Sprintf("CREATE TABLE %s (id BIGINT, name VARCHAR(64), PRIMARY KEY (id))", tableName),
+					}},
+				},
+			}
+			env.updateTableRoutingRules(t, ctx, roTabletTypes, []string{tableName},
+				sourceKeyspaceName, targetKeyspaceName, sourceKeyspaceName)
+			mirrorRules := make(map[string]map[string]float32)
+			for _, tabletType := range tc.mirroredTabletTypes {
+				from := sourceKeyspaceName + "." + tableName
+				if tabletType != topodatapb.TabletType_PRIMARY {
+					from += "@" + strings.ToLower(tabletType.String())
+				}
+				mirrorRules[from] = map[string]float32{targetKeyspaceName + "." + tableName: 10}
+			}
+			require.NoError(t, topotools.SaveMirrorRules(ctx, env.ts, mirrorRules))
+			require.NoError(t, env.ts.RebuildSrvVSchema(ctx, nil))
 
-	_, err := env.ws.WorkflowSwitchTraffic(ctx, &vtctldatapb.WorkflowSwitchTrafficRequest{
-		Keyspace:    targetKeyspaceName,
-		Workflow:    workflowName,
-		Cells:       []string{defaultCellName},
-		Direction:   int32(DirectionForward),
-		TabletTypes: allTabletTypes,
-	})
-	require.ErrorContains(t, err, "journal read error")
-	require.ErrorContains(t, err, "switched reads back for tablet types replica,rdonly")
+			journalQR := &queryResult{
+				query:  "/select val from _vt.resharding_journal.*",
+				result: &querypb.QueryResult{},
+			}
+			env.tmc.expectVRQueryResultOnKeyspaceTablets(targetKeyspaceName, &queryResult{
+				query: fmt.Sprintf("select vrepl_id, table_name, lastpk from _vt.copy_state where vrepl_id in (%d) and id in (select max(id) from _vt.copy_state where vrepl_id in (%d) group by vrepl_id, table_name)",
+					vrID, vrID),
+				result: &querypb.QueryResult{},
+			})
+			env.tmc.expectVRQueryResultOnKeyspaceTablets(sourceKeyspaceName, journalQR)    // switchReads
+			env.tmc.expectVRQueryResultOnKeyspaceTablets(sourceKeyspaceName, &queryResult{ // switchWrites
+				query: "/select val from _vt.resharding_journal.*",
+				err:   errors.New("journal read error"),
+			})
+			env.tmc.expectVRQueryResultOnKeyspaceTablets(sourceKeyspaceName, journalQR) // switching reads back
 
-	// Reads should be routed to the source, in the routing rules and in every cell
-	// that vtgate serves from.
-	want := []string{sourceKeyspaceName + "." + tableName}
-	rules, err := topotools.GetRoutingRules(ctx, env.ts)
-	require.NoError(t, err)
-	for _, tabletType := range roTabletTypes {
-		from := tableName + "@" + strings.ToLower(tabletType.String())
-		require.Equal(t, want, rules[from], "routing rule for %s", from)
-	}
-	for _, cell := range []string{defaultCellName, otherCellName} {
-		srvVSchema, err := env.ts.GetSrvVSchema(ctx, cell)
-		require.NoError(t, err)
-		srvRules := topotools.GetRoutingRulesMap(srvVSchema.RoutingRules)
-		for _, tabletType := range roTabletTypes {
-			from := tableName + "@" + strings.ToLower(tabletType.String())
-			require.Equal(t, want, srvRules[from], "SrvVSchema routing rule for %s in cell %s", from, cell)
-		}
+			_, err := env.ws.WorkflowSwitchTraffic(ctx, &vtctldatapb.WorkflowSwitchTrafficRequest{
+				Keyspace:    targetKeyspaceName,
+				Workflow:    workflowName,
+				Cells:       []string{defaultCellName},
+				Direction:   int32(DirectionForward),
+				TabletTypes: allTabletTypes,
+			})
+			require.ErrorContains(t, err, "journal read error")
+			require.ErrorContains(t, err, "switched reads back for tablet types replica,rdonly")
+
+			// Reads should be routed to the source, in the routing rules and in every
+			// cell that vtgate serves from.
+			want := []string{sourceKeyspaceName + "." + tableName}
+			rules, err := topotools.GetRoutingRules(ctx, env.ts)
+			require.NoError(t, err)
+			for _, tabletType := range roTabletTypes {
+				from := tableName + "@" + strings.ToLower(tabletType.String())
+				require.Equal(t, want, rules[from], "routing rule for %s", from)
+			}
+			for _, cell := range []string{defaultCellName, otherCellName} {
+				srvVSchema, err := env.ts.GetSrvVSchema(ctx, cell)
+				require.NoError(t, err)
+				srvRules := topotools.GetRoutingRulesMap(srvVSchema.RoutingRules)
+				for _, tabletType := range roTabletTypes {
+					from := tableName + "@" + strings.ToLower(tabletType.String())
+					require.Equal(t, want, srvRules[from], "SrvVSchema routing rule for %s in cell %s", from, cell)
+				}
+			}
+		})
 	}
 }
 
