@@ -141,6 +141,28 @@ func TestPulloutSubqueryValueBadRows(t *testing.T) {
 
 	_, err := ps.TryExecute(t.Context(), &noopVCursor{}, make(map[string]*querypb.BindVariable), false)
 	require.EqualError(t, err, "subquery returned more than one row")
+
+	// A row that is narrower than the comparison it is bound for is a planner bug, for a value comparison and for
+	// IN alike.
+	narrowResult := sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"col1",
+			"int64",
+		),
+		"1",
+	)
+	ps.Subquery = &fakePrimitive{results: []*sqltypes.Result{narrowResult}}
+	ps.RowResults = []string{"sq_0", "sq_1"}
+	_, err = ps.TryExecute(t.Context(), &noopVCursor{}, make(map[string]*querypb.BindVariable), false)
+	require.EqualError(t, err, "VT13001: [BUG] subquery returned 1 columns for a row of 2")
+
+	ps.Subquery = &fakePrimitive{results: []*sqltypes.Result{narrowResult}}
+	ps.Opcode = PulloutIn
+	ps.HasValues = "has_values"
+	ps.RowResults = nil
+	ps.RowColumns = 2
+	_, err = ps.TryExecute(t.Context(), &noopVCursor{}, make(map[string]*querypb.BindVariable), false)
+	require.EqualError(t, err, "VT13001: [BUG] subquery returned 1 columns for a row of 2")
 }
 
 func TestPulloutSubqueryInNotinGood(t *testing.T) {
