@@ -108,6 +108,11 @@ var onceByKeys = sync.Map{}
 // ReloadCachedFiles; the CRL is read on every call, see
 // clientCRLChecker.
 func ClientConfig(mode SslMode, cert, key, ca, crl, name string, minTLSVersion uint16) (*tls.Config, error) {
+	var crlRead clientCRLRead
+	if crl != "" {
+		crlRead = readClientCRL(crl, ca)
+	}
+
 	publishMu.RLock()
 	defer publishMu.RUnlock()
 
@@ -143,7 +148,7 @@ func ClientConfig(mode SslMode, cert, key, ca, crl, name string, minTLSVersion u
 	var checker *crlChecker
 	if crl != "" {
 		var err error
-		checker, err = clientCRLChecker(crl, ca)
+		checker, err = clientCRLChecker(crlRead)
 		if err != nil {
 			return nil, err
 		}

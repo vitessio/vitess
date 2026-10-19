@@ -163,7 +163,8 @@ const maxReloadAttempts = 5
 // them, so that a test can change the files in between. publishTestHook,
 // when set, runs after ReloadCachedFiles updated the first cache entry
 // of a reload and before the others. crlReadTestHook, when set, runs
-// after ClientConfig read a CRL file and before it validates it. All
+// after ClientConfig read a CRL file and before it takes publishMu to
+// validate it. All
 // are nil outside tests.
 var reloadTestHook, publishTestHook, crlReadTestHook func()
 
@@ -531,41 +532,62 @@ func digestFiles(paths []string) map[string]fileState {
 	return states
 }
 
+// clientCRLRead is a read of a CRL file that ClientConfig makes before
+// it takes publishMu, so that a read stalled on a slow or unresponsive
+// file system holds back neither the publish of a reload nor the
+// configs built after it. A read that a reload then overtakes is only
+// older: its CRLs replace no later ones, and when they cannot be used
+// under the CA that the reload published, clientCRLChecker falls back.
+type clientCRLRead struct {
+	w        crlWatch
+	fallback *crlFallback
+	body     []byte
+	// read is the number of the read, see crlFallback.
+	read uint64
+	err  error
+}
+
+func readClientCRL(crl, ca string) clientCRLRead {
+	w := crlWatch{crl: crl, ca: ca}
+	fallback := crlFallbackOf(w)
+	body, read, err := fallback.read(crl)
+	if err == nil && crlReadTestHook != nil {
+		crlReadTestHook()
+	}
+	return clientCRLRead{w: w, fallback: fallback, body: body, read: read, err: err}
+}
+
 // clientCRLChecker is newCRLChecker for ClientConfig, which reads the
-// CRL file on every call. When the file cannot be read or used, for
-// instance while it is being replaced, the CRLs last loaded from it
-// are held against the peer instead, as a server whose reload fails
-// keeps its previous CRLs, rather than every new connection failing.
-// Only the first load of a file under each CA must succeed.
-func clientCRLChecker(crl, ca string) (*crlChecker, error) {
+// CRL file on every call, see readClientCRL. When the file cannot be
+// read or used, for instance while it is being replaced, the CRLs last
+// loaded from it are held against the peer instead, as a server whose
+// reload fails keeps its previous CRLs, rather than every new
+// connection failing. Only the first load of a file under each CA must
+// succeed.
+func clientCRLChecker(r clientCRLRead) (*crlChecker, error) {
 	var issuers []*x509.Certificate
-	if ca != "" {
+	if r.w.ca != "" {
 		var err error
-		if issuers, err = loadx509Certificates(ca); err != nil {
+		if issuers, err = loadx509Certificates(r.w.ca); err != nil {
 			return nil, err
 		}
 	}
 	// The CRL is read once, so that the digest the file is watched
 	// from is the digest of the CRLs checked against.
-	w := crlWatch{crl: crl, ca: ca}
-	fallback := crlFallbackOf(w)
-	body, read, err := fallback.read(crl)
+	err := r.err
 	if err == nil {
-		if crlReadTestHook != nil {
-			crlReadTestHook()
-		}
 		var crls []*x509.RevocationList
-		if crls, err = parseCRLSet(crl, body); err == nil {
+		if crls, err = parseCRLSet(r.w.crl, r.body); err == nil {
 			var checker *crlChecker
 			if checker, err = newCRLCheckerFrom(crls, issuers); err == nil {
-				fallback.store(crls, read)
-				watchCRL(w, sha256.Sum256(body))
-				staleCRLWarnings.Delete(w)
+				r.fallback.store(crls, r.read)
+				watchCRL(r.w, sha256.Sum256(r.body))
+				staleCRLWarnings.Delete(r.w)
 				return checker, nil
 			}
 		}
 	}
-	last, ok := fallback.load()
+	last, ok := r.fallback.load()
 	if !ok {
 		return nil, err
 	}
@@ -573,9 +595,9 @@ func clientCRLChecker(crl, ca string) (*crlChecker, error) {
 	if lastErr != nil {
 		return nil, err
 	}
-	if warned, warnedFor := staleCRLWarnings.Load(w); !warnedFor || warned.(string) != err.Error() {
-		staleCRLWarnings.Store(w, err.Error())
-		log.Warn(fmt.Sprintf("Cannot use the CRL file %s under the CA file %s, so the CRLs last loaded from it stay in use: %v", crl, ca, err))
+	if warned, warnedFor := staleCRLWarnings.Load(r.w); !warnedFor || warned.(string) != err.Error() {
+		staleCRLWarnings.Store(r.w, err.Error())
+		log.Warn(fmt.Sprintf("Cannot use the CRL file %s under the CA file %s, so the CRLs last loaded from it stay in use: %v", r.w.crl, r.w.ca, err))
 	}
 	return checker, nil
 }
