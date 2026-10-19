@@ -730,8 +730,9 @@ func TestVtBackupWithBinlogs(t *testing.T) {
 	assert.Greater(t, backupB[len(backupB)-1].Name, backupA[len(backupA)-1].Name)
 
 	// Back-date replica1's oldest binlog past the default binlog_expire_logs_seconds,
-	// so it is backed up with that mtime. The backup flushes the binlogs before it
-	// shuts mysqld down, so replica1 must not expire it first; its mysqld restart
+	// so it is backed up with that mtime. Shutting down a replica's mysqld for the
+	// backup first rotates its binlogs (prepareReplicaForShutdown), which would
+	// expire the binlog, so replica1 keeps it for a year until its mysqld restart
 	// after the backup restores the default.
 	insertRow("binlogs3", 3)
 	err = replica1.VttabletProcess.QueryTabletMultiple([]string{
