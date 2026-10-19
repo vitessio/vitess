@@ -17,6 +17,7 @@ limitations under the License.
 package command
 
 import (
+	"math"
 	"os"
 	"path/filepath"
 	"testing"
@@ -577,4 +578,104 @@ func TestQueryThrottlerConfigFromFile(t *testing.T) {
 			},
 		},
 	}, config)
+}
+
+// TestValidateQueryThrottlerConfigContent_RejectsUnenforceableRules covers configs that would be
+// accepted as enabled while containing a rule that can never throttle a query.
+func TestValidateQueryThrottlerConfigContent_RejectsUnenforceableRules(t *testing.T) {
+	// config builds an enabled TABLET_THROTTLER config with a single PRIMARY rule set.
+	config := func(stmtRules map[string]*querythrottler.MetricRuleSet) *querythrottler.Config {
+		return &querythrottler.Config{
+			Enabled:  true,
+			Strategy: querythrottler.ThrottlingStrategy_TABLET_THROTTLER,
+			TabletStrategyConfig: &querythrottler.TabletStrategyConfig{
+				TabletRules: map[string]*querythrottler.StatementRuleSet{
+					"PRIMARY": {StatementRules: stmtRules},
+				},
+			},
+		}
+	}
+	// rule builds a single-metric rule set for stmtType.
+	rule := func(stmtType string, thresholds ...*querythrottler.ThrottleThreshold) map[string]*querythrottler.MetricRuleSet {
+		return map[string]*querythrottler.MetricRuleSet{
+			stmtType: {MetricRules: map[string]*querythrottler.MetricRule{
+				"lag": {Thresholds: thresholds},
+			}},
+		}
+	}
+
+	tests := []struct {
+		name    string
+		config  *querythrottler.Config
+		wantErr string
+	}{
+		{
+			name:    "empty statement_rules",
+			config:  config(nil),
+			wantErr: "statement_rules cannot be empty (tablet_type=PRIMARY)",
+		},
+		{
+			name:    "empty metric_rules",
+			config:  config(map[string]*querythrottler.MetricRuleSet{"SELECT": {}}),
+			wantErr: "metric_rules cannot be empty (tablet_type=PRIMARY, statement=SELECT)",
+		},
+		{
+			name: "nil metric rule",
+			config: config(map[string]*querythrottler.MetricRuleSet{
+				"SELECT": {MetricRules: map[string]*querythrottler.MetricRule{"lag": nil}},
+			}),
+			wantErr: "thresholds cannot be empty (tablet_type=PRIMARY, statement=SELECT, metric=lag)",
+		},
+		{
+			name:    "empty thresholds",
+			config:  config(rule("SELECT")),
+			wantErr: "thresholds cannot be empty (tablet_type=PRIMARY, statement=SELECT, metric=lag)",
+		},
+		{
+			name:    "NaN above",
+			config:  config(rule("SELECT", &querythrottler.ThrottleThreshold{Above: math.NaN(), Throttle: 100})),
+			wantErr: "threshold[0] 'above' must be a finite number, got NaN",
+		},
+		{
+			name:    "positive infinity above",
+			config:  config(rule("SELECT", &querythrottler.ThrottleThreshold{Above: math.Inf(1), Throttle: 100})),
+			wantErr: "threshold[0] 'above' must be a finite number, got +Inf",
+		},
+		{
+			name:    "negative infinity above",
+			config:  config(rule("SELECT", &querythrottler.ThrottleThreshold{Above: math.Inf(-1), Throttle: 100})),
+			wantErr: "threshold[0] 'above' must be a finite number, got -Inf",
+		},
+		{
+			name:    "DDL statement type",
+			config:  config(rule("DDL", &querythrottler.ThrottleThreshold{Above: 5, Throttle: 100})),
+			wantErr: `statement type "DDL" is not supported by the query throttler`,
+		},
+		{
+			name:    "MIGRATION statement type",
+			config:  config(rule("MIGRATION", &querythrottler.ThrottleThreshold{Above: 5, Throttle: 100})),
+			wantErr: `statement type "MIGRATION" is not supported by the query throttler`,
+		},
+	}
+	for _, stmtType := range []string{"SELECT", "INSERT", "REPLACE", "UPDATE", "DELETE"} {
+		tests = append(tests, struct {
+			name    string
+			config  *querythrottler.Config
+			wantErr string
+		}{
+			name:   stmtType + " statement type is supported",
+			config: config(rule(stmtType, &querythrottler.ThrottleThreshold{Above: 5, Throttle: 100})),
+		})
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateQueryThrottlerConfigContent(tt.config)
+			if tt.wantErr == "" {
+				require.NoError(t, err)
+				return
+			}
+			require.ErrorContains(t, err, tt.wantErr)
+		})
+	}
 }

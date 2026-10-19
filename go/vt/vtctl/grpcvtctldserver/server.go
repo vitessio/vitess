@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"path/filepath"
 	"runtime/debug"
@@ -5956,6 +5957,15 @@ func validateQueryThrottlerConfig(cfg *querythrottler.Config) error {
 	}
 }
 
+// queryThrottlerStatementTypes are the statement types the query throttler governs.
+var queryThrottlerStatementTypes = map[string]struct{}{
+	sqlparser.StmtSelect.String():  {},
+	sqlparser.StmtInsert.String():  {},
+	sqlparser.StmtReplace.String(): {},
+	sqlparser.StmtUpdate.String():  {},
+	sqlparser.StmtDelete.String():  {},
+}
+
 func validateTabletThrottlerStrategyConfig(cfg *querythrottler.Config) error {
 	tsc := cfg.GetTabletStrategyConfig()
 	if tsc == nil {
@@ -5975,10 +5985,23 @@ func validateTabletThrottlerStrategyConfig(cfg *querythrottler.Config) error {
 		if v, ok := topodatapb.TabletType_value[tabletType]; !ok || topodatapb.TabletType(v).String() != tabletType {
 			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unknown tablet type %q", tabletType)
 		}
+		if len(stmtRuleSet.GetStatementRules()) == 0 {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "statement_rules cannot be empty (tablet_type=%s)", tabletType)
+		}
 		for stmtType, metricRuleSet := range stmtRuleSet.GetStatementRules() {
 			// Reject statement types the runtime can never emit (StatementType.String()).
 			if !sqlparser.IsValidStatementType(stmtType) {
 				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unknown statement type %q (tablet_type=%s)", stmtType, tabletType)
+			}
+			// The query throttler only governs data-plane queries. Other statement types,
+			// such as MIGRATION and partially-parsed DDL, reach it without a query and are
+			// always allowed, so a rule for them would silently never apply.
+			if _, ok := queryThrottlerStatementTypes[stmtType]; !ok {
+				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+					"statement type %q is not supported by the query throttler, must be one of SELECT, INSERT, REPLACE, UPDATE, DELETE (tablet_type=%s)", stmtType, tabletType)
+			}
+			if len(metricRuleSet.GetMetricRules()) == 0 {
+				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "metric_rules cannot be empty (tablet_type=%s, statement=%s)", tabletType, stmtType)
 			}
 			for metricName, rule := range metricRuleSet.GetMetricRules() {
 				_, mName, err := base.DisaggregateMetricName(metricName)
@@ -6001,7 +6024,18 @@ func validateTabletThrottlerStrategyConfig(cfg *querythrottler.Config) error {
 						"metric %q is configured under multiple scopes; only one scope of a metric may be configured across the query throttler config", bare)
 				}
 				seenBareMetrics[bare] = metricName
+				if len(rule.GetThresholds()) == 0 {
+					return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+						"thresholds cannot be empty (tablet_type=%s, statement=%s, metric=%s)", tabletType, stmtType, metricName)
+				}
 				for i, t := range rule.GetThresholds() {
+					// NaN compares false against everything and infinities leave no reachable
+					// boundary, so either would make the threshold silently unusable.
+					if math.IsNaN(t.GetAbove()) || math.IsInf(t.GetAbove(), 0) {
+						return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+							"threshold[%d] 'above' must be a finite number, got %v (tablet_type=%s, statement=%s, metric=%s)",
+							i, t.GetAbove(), tabletType, stmtType, metricName)
+					}
 					if t.GetAbove() < 0 {
 						return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
 							"threshold[%d] 'above' must be >= 0, got %v (tablet_type=%s, statement=%s, metric=%s)",

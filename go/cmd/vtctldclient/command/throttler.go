@@ -19,6 +19,7 @@ package command
 import (
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"time"
 
@@ -192,6 +193,15 @@ func validateUpdateQueryThrottlerConfig(cmd *cobra.Command, args []string) error
 	return nil
 }
 
+// queryThrottlerStatementTypes mirrors grpcvtctldserver.queryThrottlerStatementTypes.
+var queryThrottlerStatementTypes = map[string]struct{}{
+	sqlparser.StmtSelect.String():  {},
+	sqlparser.StmtInsert.String():  {},
+	sqlparser.StmtReplace.String(): {},
+	sqlparser.StmtUpdate.String():  {},
+	sqlparser.StmtDelete.String():  {},
+}
+
 // validateQueryThrottlerConfigContent performs client-side validation of the
 // config content for fast feedback before the gRPC round-trip.
 func validateQueryThrottlerConfigContent(cfg *querythrottler.Config) error {
@@ -219,9 +229,18 @@ func validateQueryThrottlerConfigContent(cfg *querythrottler.Config) error {
 		if v, ok := topodatapb.TabletType_value[tabletType]; !ok || topodatapb.TabletType(v).String() != tabletType {
 			return fmt.Errorf("unknown tablet type %q", tabletType)
 		}
+		if len(stmtRuleSet.GetStatementRules()) == 0 {
+			return fmt.Errorf("statement_rules cannot be empty (tablet_type=%s)", tabletType)
+		}
 		for stmtType, metricRuleSet := range stmtRuleSet.GetStatementRules() {
 			if !sqlparser.IsValidStatementType(stmtType) {
 				return fmt.Errorf("unknown statement type %q (tablet_type=%s)", stmtType, tabletType)
+			}
+			if _, ok := queryThrottlerStatementTypes[stmtType]; !ok {
+				return fmt.Errorf("statement type %q is not supported by the query throttler, must be one of SELECT, INSERT, REPLACE, UPDATE, DELETE (tablet_type=%s)", stmtType, tabletType)
+			}
+			if len(metricRuleSet.GetMetricRules()) == 0 {
+				return fmt.Errorf("metric_rules cannot be empty (tablet_type=%s, statement=%s)", tabletType, stmtType)
 			}
 			for metricName, rule := range metricRuleSet.GetMetricRules() {
 				_, mName, err := base.DisaggregateMetricName(metricName)
@@ -236,7 +255,14 @@ func validateQueryThrottlerConfigContent(cfg *querythrottler.Config) error {
 					return fmt.Errorf("metric %q is configured under multiple scopes; only one scope of a metric may be configured across the query throttler config", bare)
 				}
 				seenBareMetrics[bare] = metricName
+				if len(rule.GetThresholds()) == 0 {
+					return fmt.Errorf("thresholds cannot be empty (tablet_type=%s, statement=%s, metric=%s)", tabletType, stmtType, metricName)
+				}
 				for i, t := range rule.GetThresholds() {
+					if math.IsNaN(t.GetAbove()) || math.IsInf(t.GetAbove(), 0) {
+						return fmt.Errorf("threshold[%d] 'above' must be a finite number, got %v (tablet_type=%s, statement=%s, metric=%s)",
+							i, t.GetAbove(), tabletType, stmtType, metricName)
+					}
 					if t.GetAbove() < 0 {
 						return fmt.Errorf("threshold[%d] 'above' must be >= 0, got %v (tablet_type=%s, statement=%s, metric=%s)",
 							i, t.GetAbove(), tabletType, stmtType, metricName)
