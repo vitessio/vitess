@@ -17,10 +17,10 @@ package querythrottler
 
 import (
 	"context"
-	"strings"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
@@ -41,43 +41,20 @@ const (
 // pushQueryThrottlerConfig pushes a QueryThrottlerConfig to the keyspace via gRPC.
 func pushQueryThrottlerConfig(t *testing.T, config *querythrottlerpb.Config) {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), waitTimeout)
-	defer cancel()
-
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
-
 	req := &vtctldatapb.UpdateQueryThrottlerConfigRequest{
 		Keyspace:             keyspaceName,
 		QueryThrottlerConfig: config,
 	}
-
-	var lastErr error
-	for {
-		_, err := vtctldClient.UpdateQueryThrottlerConfig(ctx, req)
-		if err == nil {
-			return
-		}
-		lastErr = err
-		t.Logf("pushQueryThrottlerConfig: err=%v", err)
-		select {
-		case <-ctx.Done():
-			require.Failf(t, "timeout", "timed out pushing query throttler config; last err=%v", lastErr)
-		case <-ticker.C:
-		}
-	}
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		_, err := vtctldClient.UpdateQueryThrottlerConfig(t.Context(), req)
+		assert.NoError(c, err, "pushing query throttler config")
+	}, waitTimeout, time.Second)
 }
 
 // waitForQueryThrottlerStatus polls GetThrottlerStatus via gRPC until
 // the throttler reports the expected enabled state.
 func waitForQueryThrottlerStatus(t *testing.T, tablet *cluster.Vttablet, wantEnabled bool) {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), waitTimeout)
-	defer cancel()
-
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
-
 	tabletAlias, err := topoproto.ParseTabletAlias(tablet.Alias)
 	require.NoError(t, err)
 
@@ -85,37 +62,18 @@ func waitForQueryThrottlerStatus(t *testing.T, tablet *cluster.Vttablet, wantEna
 		TabletAlias:   tabletAlias,
 		ThrottlerType: tabletmanagerdatapb.ThrottlerType_DEDICATED_QUERY_THROTTLER,
 	}
-
-	var lastResp *vtctldatapb.GetThrottlerStatusResponse
-	for {
-		resp, rpcErr := vtctldClient.GetThrottlerStatus(ctx, req)
-		lastResp = resp
-		if rpcErr == nil && resp.GetStatus() != nil {
-			isEnabled := resp.GetStatus().GetIsEnabled()
-			if wantEnabled == isEnabled {
-				return
-			}
-		}
-		select {
-		case <-ctx.Done():
-			require.Failf(t, "timeout", "waiting for query throttler enabled=%v on tablet %s; last resp: %v",
-				wantEnabled, tablet.Alias, lastResp)
-			return
-		case <-ticker.C:
-		}
-	}
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		resp, err := vtctldClient.GetThrottlerStatus(t.Context(), req)
+		require.NoError(c, err)
+		require.NotNil(c, resp.GetStatus())
+		assert.Equal(c, wantEnabled, resp.GetStatus().GetIsEnabled(), "query throttler enabled state on tablet %s", tablet.Alias)
+	}, waitTimeout, time.Second)
 }
 
 // waitForQueryThrottlerCheck polls CheckThrottler via gRPC until
 // the "lag" metric's response_code matches wantResponseCode.
 func waitForQueryThrottlerCheck(t *testing.T, tablet *cluster.Vttablet, wantResponseCode tabletmanagerdatapb.CheckThrottlerResponseCode) {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), waitTimeout)
-	defer cancel()
-
-	ticker := time.NewTicker(2 * time.Second)
-	defer ticker.Stop()
-
 	tabletAlias, err := topoproto.ParseTabletAlias(tablet.Alias)
 	require.NoError(t, err)
 
@@ -123,26 +81,13 @@ func waitForQueryThrottlerCheck(t *testing.T, tablet *cluster.Vttablet, wantResp
 		TabletAlias:   tabletAlias,
 		ThrottlerType: tabletmanagerdatapb.ThrottlerType_DEDICATED_QUERY_THROTTLER,
 	}
-
-	var lastResp *vtctldatapb.CheckThrottlerResponse
-	for {
-		resp, rpcErr := vtctldClient.CheckThrottler(ctx, req)
-		lastResp = resp
-		if rpcErr == nil && resp.GetCheck() != nil {
-			lagMetric, ok := resp.GetCheck().GetMetrics()["lag"]
-			if ok && lagMetric.GetResponseCode() == wantResponseCode {
-				t.Logf("waitForQueryThrottlerCheck: lag response_code=%s", wantResponseCode)
-				return
-			}
-		}
-		select {
-		case <-ctx.Done():
-			require.Failf(t, "timeout", "waiting for lag response_code=%s on tablet %s; last resp: %v",
-				wantResponseCode, tablet.Alias, lastResp)
-			return
-		case <-ticker.C:
-		}
-	}
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		resp, err := vtctldClient.CheckThrottler(t.Context(), req)
+		require.NoError(c, err)
+		lagMetric, ok := resp.GetCheck().GetMetrics()["lag"]
+		require.True(c, ok, "lag metric missing from check on tablet %s: %v", tablet.Alias, resp)
+		assert.Equal(c, wantResponseCode, lagMetric.GetResponseCode(), "lag response_code on tablet %s", tablet.Alias)
+	}, waitTimeout, 2*time.Second)
 }
 
 // vtgateExec executes a query via vtgate MySQL connection.
@@ -230,90 +175,40 @@ func disabledConfig() *querythrottlerpb.Config {
 // waitForThrottledQuery polls vtgate until the given query returns an error containing expectError.
 func waitForThrottledQuery(t *testing.T, query string, expectError string) {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), waitTimeout)
-	defer cancel()
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		conn, err := mysql.Connect(t.Context(), &vtParams)
+		require.NoError(c, err)
+		defer conn.Close()
 
-	ticker := time.NewTicker(2 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		conn, err := mysql.Connect(ctx, &vtParams)
-		if err != nil {
-			select {
-			case <-ctx.Done():
-				require.NoError(t, err, "timed out waiting for throttled query, last error was connection failure")
-			case <-ticker.C:
-				continue
-			}
-		}
 		_, err = conn.ExecuteFetch(query, 1000, true)
-		conn.Close()
-		if err != nil && strings.Contains(err.Error(), expectError) {
-			t.Logf("[SUCCESS] waitForThrottledQuery: query returned error: %v", err)
-			return
-		}
-		select {
-		case <-ctx.Done():
-			if err != nil {
-				require.Failf(t, "timeout", "query error does not contain %q; got: %v", expectError, err)
-			} else {
-				require.Failf(t, "timeout", "query %q still succeeding, expected error containing %q", query, expectError)
-			}
-			return
-		case <-ticker.C:
-		}
-	}
+		require.Error(c, err, "query %q still succeeding, expected error containing %q", query, expectError)
+		assert.Contains(c, err.Error(), expectError)
+	}, waitTimeout, 2*time.Second)
 }
 
 // waitForUnthrottledQuery polls vtgate until the given query succeeds without error.
 func waitForUnthrottledQuery(t *testing.T, query string) {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), waitTimeout)
-	defer cancel()
-
-	ticker := time.NewTicker(2 * time.Second)
-	defer ticker.Stop()
-
 	attempt := 0
-	var lastErr error
-	for {
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
 		attempt++
-		conn, err := mysql.Connect(ctx, &vtParams)
-		if err != nil {
-			t.Logf("waitForUnthrottledQuery attempt %d: connect error: %v", attempt, err)
-			lastErr = err
-			select {
-			case <-ctx.Done():
-				require.NoError(t, lastErr, "timed out waiting for query to succeed")
-			case <-ticker.C:
-				continue
-			}
-		}
+		conn, err := mysql.Connect(t.Context(), &vtParams)
+		require.NoError(c, err)
+		defer conn.Close()
+
 		_, err = conn.ExecuteFetch(query, 1000, true)
-		conn.Close()
-		if err == nil {
-			t.Logf("waitForUnthrottledQuery attempt %d: query succeeded", attempt)
-			return
-		}
-		t.Logf("waitForUnthrottledQuery attempt %d: query error: %v", attempt, err)
-		if attempt%5 == 0 {
-			tabletAlias, parseErr := topoproto.ParseTabletAlias(primaryTablet.Alias)
-			if parseErr == nil {
-				checkResp, checkErr := vtctldClient.CheckThrottler(ctx, &vtctldatapb.CheckThrottlerRequest{
+		if err != nil && attempt%5 == 0 {
+			// Log what the throttler reports, to help diagnose a query that stays throttled.
+			if tabletAlias, parseErr := topoproto.ParseTabletAlias(primaryTablet.Alias); parseErr == nil {
+				checkResp, checkErr := vtctldClient.CheckThrottler(t.Context(), &vtctldatapb.CheckThrottlerRequest{
 					TabletAlias:   tabletAlias,
 					ThrottlerType: tabletmanagerdatapb.ThrottlerType_DEDICATED_QUERY_THROTTLER,
 				})
 				t.Logf("waitForUnthrottledQuery attempt %d: CheckThrottler resp (err=%v): %v", attempt, checkErr, checkResp)
 			}
 		}
-		lastErr = err
-		select {
-		case <-ctx.Done():
-			require.NoError(t, lastErr, "timed out waiting for query %q to stop being throttled", query)
-			return
-		case <-ticker.C:
-		}
-	}
+		assert.NoError(c, err, "query %q is still throttled", query)
+	}, waitTimeout, 2*time.Second)
 }
 
 // TestDisabledByDefault validates that with no QueryThrottlerConfig pushed,
@@ -362,9 +257,8 @@ func TestEnableAndThrottleWithLag(t *testing.T) {
 		vtgateExec(t, "select id from t1 limit 1", "")
 	})
 
-	t.Run("stop replication and wait for lag to exceed threshold", func(t *testing.T) {
+	t.Run("stop replication to induce lag", func(t *testing.T) {
 		stopReplication(t)
-		time.Sleep(6 * time.Second)
 	})
 
 	t.Run("wait for underlying throttler to detect lag breach", func(t *testing.T) {
@@ -408,9 +302,8 @@ func TestDisableAfterEnable(t *testing.T) {
 		waitForQueryThrottlerStatus(t, primaryTablet, true)
 	})
 
-	t.Run("stop replication and wait for lag to build", func(t *testing.T) {
+	t.Run("stop replication to induce lag", func(t *testing.T) {
 		stopReplication(t)
-		time.Sleep(6 * time.Second)
 	})
 
 	t.Run("verify queries are throttled", func(t *testing.T) {
@@ -454,9 +347,8 @@ func TestDryRunMode(t *testing.T) {
 		waitForQueryThrottlerStatus(t, primaryTablet, true)
 	})
 
-	t.Run("stop replication and wait for lag to build", func(t *testing.T) {
+	t.Run("stop replication to induce lag", func(t *testing.T) {
 		stopReplication(t)
-		time.Sleep(6 * time.Second)
 	})
 
 	t.Run("wait for underlying throttler to detect lag breach", func(t *testing.T) {
@@ -501,9 +393,8 @@ func TestThrottleByStatementType(t *testing.T) {
 		waitForQueryThrottlerStatus(t, primaryTablet, true)
 	})
 
-	t.Run("stop replication and wait for lag to build", func(t *testing.T) {
+	t.Run("stop replication to induce lag", func(t *testing.T) {
 		stopReplication(t)
-		time.Sleep(6 * time.Second)
 	})
 
 	t.Run("wait for underlying throttler to detect lag breach", func(t *testing.T) {
@@ -520,7 +411,6 @@ func TestThrottleByStatementType(t *testing.T) {
 
 	t.Run("cleanup inserted row and start replication", func(t *testing.T) {
 		startReplication(t)
-		time.Sleep(2 * time.Second)
 		vtgateExec(t, "delete from t1 where id = 2000", "")
 	})
 }
@@ -545,9 +435,8 @@ func TestConfigUpdateWithoutRestart(t *testing.T) {
 		waitForQueryThrottlerStatus(t, primaryTablet, true)
 	})
 
-	t.Run("stop replication and wait for lag to build", func(t *testing.T) {
+	t.Run("stop replication to induce lag", func(t *testing.T) {
 		stopReplication(t)
-		time.Sleep(6 * time.Second)
 	})
 
 	t.Run("wait for underlying throttler to detect lag breach", func(t *testing.T) {
@@ -595,9 +484,8 @@ func TestPriorityZeroNeverThrottled(t *testing.T) {
 		waitForQueryThrottlerStatus(t, primaryTablet, true)
 	})
 
-	t.Run("stop replication and wait for lag to build", func(t *testing.T) {
+	t.Run("stop replication to induce lag", func(t *testing.T) {
 		stopReplication(t)
-		time.Sleep(6 * time.Second)
 	})
 
 	t.Run("wait for underlying throttler to detect lag breach", func(t *testing.T) {
@@ -637,9 +525,8 @@ func TestNoRulesForTabletType(t *testing.T) {
 		waitForQueryThrottlerStatus(t, primaryTablet, true)
 	})
 
-	t.Run("stop replication and wait for lag to build", func(t *testing.T) {
+	t.Run("stop replication to induce lag", func(t *testing.T) {
 		stopReplication(t)
-		time.Sleep(6 * time.Second)
 	})
 
 	t.Run("wait for underlying throttler to detect lag breach", func(t *testing.T) {
@@ -677,9 +564,8 @@ func TestResetConfigClearsThrottling(t *testing.T) {
 		waitForQueryThrottlerStatus(t, primaryTablet, true)
 	})
 
-	t.Run("stop replication and wait for lag to build", func(t *testing.T) {
+	t.Run("stop replication to induce lag", func(t *testing.T) {
 		stopReplication(t)
-		time.Sleep(6 * time.Second)
 	})
 
 	t.Run("wait for underlying throttler to detect lag breach", func(t *testing.T) {
