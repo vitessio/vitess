@@ -283,6 +283,8 @@ type testTMClient struct {
 	primaryPositionErrors              map[uint32]error
 	vdiffRequests                      map[uint32]*vdiffRequestResponse
 	refreshStateErrors                 map[uint32]error
+	// How long each RefreshState call takes. Set it before use.
+	refreshStateDelay time.Duration
 
 	// Stack of ReadVReplicationWorkflowsResponse to return, in order, for each shard
 	readVReplicationWorkflowsResponses       map[string][]*tabletmanagerdatapb.ReadVReplicationWorkflowsResponse
@@ -858,6 +860,13 @@ func (tmc *testTMClient) SetRefreshStateError(tablet *topodatapb.Tablet, err err
 }
 
 func (tmc *testTMClient) RefreshState(ctx context.Context, tablet *topodatapb.Tablet) error {
+	if tmc.refreshStateDelay > 0 {
+		select {
+		case <-time.After(tmc.refreshStateDelay):
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
 	tmc.mu.Lock()
 	defer tmc.mu.Unlock()
 
