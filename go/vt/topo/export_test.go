@@ -29,3 +29,11 @@ func (ts *Server) SetCellInfoCacheTTL(ttl time.Duration) {
 func (ts *Server) ExpireCellInfo(cell string) {
 	ts.expireCellInfo(cell)
 }
+
+// CellReadConn returns the connection that conn, as returned by ConnForCell, sends reads to.
+func CellReadConn(conn Conn) Conn {
+	if c, ok := conn.(*cachedCellConn); ok {
+		return c.readConn()
+	}
+	return conn
+}

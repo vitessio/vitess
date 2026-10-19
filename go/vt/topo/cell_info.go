@@ -69,6 +69,11 @@ func (ts *Server) GetCellInfo(ctx context.Context, cell string, strongRead bool)
 	if !strongRead {
 		conn = ts.globalReadOnlyCell
 	}
+	return getCellInfo(ctx, conn, cell)
+}
+
+// getCellInfo reads a CellInfo through conn.
+func getCellInfo(ctx context.Context, conn Conn, cell string) (*topodatapb.CellInfo, error) {
 	// Read the file.
 	filePath := pathForCellInfo(cell)
 	contents, _, err := conn.Get(ctx, filePath)

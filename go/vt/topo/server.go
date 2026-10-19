@@ -160,6 +160,9 @@ type Server struct {
 	// cellInfoRefreshes lets one ConnForCell at a time read each cell's CellInfo and update its cached
 	// connection, so that each read starts after the last one was applied and sees a CellInfo at least as new.
 	cellInfoRefreshes map[string]*semaphore.Weighted
+	// closed is set by Close. Writes through a cached cell connection then fail with Interrupted, as they would
+	// on the closed connection, instead of reading CellInfo from the closed global connection.
+	closed bool
 }
 
 type cellConn struct {
@@ -318,12 +321,25 @@ func (ts *Server) ConnForCell(ctx context.Context, cell string) (Conn, error) {
 		// GlobalReadOnlyCell for this, since the result is only used for this call.
 		generation := ts.cellInfoGenerations[cell]
 		ts.mu.Unlock()
-		return ts.readCellConn(ctx, cell, generation, false /*strongRead*/)
+		return ts.readCellConn(ctx, ts.globalReadOnlyCell, cell, generation)
 	}
-	if conn, ok := ts.freshCellConnLocked(cell); ok {
-		ts.mu.Unlock()
-		return conn, nil
+	conn, ok := ts.freshCellConnLocked(cell)
+	ts.mu.Unlock()
+	if !ok {
+		var err error
+		if conn, err = ts.refreshCellConn(ctx, cell, false /*force*/); err != nil {
+			return nil, err
+		}
 	}
+	// Reads go to the cached connection, but writes go to the cell's current one.
+	return &cachedCellConn{ts: ts, cell: cell, conn: conn}, nil
+}
+
+// refreshCellConn reads the cell's CellInfo and updates the cell's cached connection from it, returning the
+// connection. Unless force, it returns the cached connection without reading if another call refreshed it while
+// this one waited.
+func (ts *Server) refreshCellConn(ctx context.Context, cell string, force bool) (Conn, error) {
+	ts.mu.Lock()
 	refresh, ok := ts.cellInfoRefreshes[cell]
 	if !ok {
 		refresh = semaphore.NewWeighted(1)
@@ -337,26 +353,36 @@ func (ts *Server) ConnForCell(ctx context.Context, cell string) (Conn, error) {
 	}
 	defer refresh.Release(1)
 	ts.mu.Lock()
-	// Another call may have refreshed the cell while we waited.
-	if conn, ok := ts.freshCellConnLocked(cell); ok {
+	if !force {
+		// Another call may have refreshed the cell while we waited.
+		if conn, ok := ts.freshCellConnLocked(cell); ok {
+			ts.mu.Unlock()
+			return conn, nil
+		}
+	}
+	if ts.closed {
 		ts.mu.Unlock()
-		return conn, nil
+		return nil, NewError(Interrupted, cell)
 	}
 	generation := ts.cellInfoGenerations[cell]
+	global := ts.globalCell
 	ts.mu.Unlock()
 
 	// Other calls for the cell wait for this read, so bound it even if ctx has no deadline. It is a strong read:
 	// the result is trusted for cellInfoCacheTTL, so it must not come from a GlobalReadOnlyCell that lags behind.
 	readCtx, cancel := context.WithTimeout(ctx, RemoteOperationTimeout)
 	defer cancel()
-	return ts.readCellConn(readCtx, cell, generation, true /*strongRead*/)
+	return ts.readCellConn(readCtx, global, cell, generation)
 }
 
-// readCellConn reads the cell's CellInfo from the global cluster and updates the cell's cached connection from
-// it, in the cell's given expiry generation.
-func (ts *Server) readCellConn(ctx context.Context, cell string, generation uint64, strongRead bool) (Conn, error) {
+// readCellConn reads the cell's CellInfo through global, a connection to the global cluster, and updates the
+// cell's cached connection from it, in the cell's given expiry generation.
+func (ts *Server) readCellConn(ctx context.Context, global Conn, cell string, generation uint64) (Conn, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	readStart := time.Now()
-	ci, err := ts.GetCellInfo(ctx, cell, strongRead)
+	ci, err := getCellInfo(ctx, global, cell)
 	if err != nil {
 		return nil, err
 	}
@@ -453,6 +479,9 @@ func GetAliasByCell(ctx context.Context, ts *Server, cell string) string {
 // Close will close all connections to underlying topo Server.
 // It will nil all member variables, so any further access will panic.
 func (ts *Server) Close() {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	ts.closed = true
 	if ts.globalCell != nil {
 		ts.globalCell.Close()
 	}
@@ -461,8 +490,6 @@ func (ts *Server) Close() {
 	}
 	ts.globalCell = nil
 	ts.globalReadOnlyCell = nil
-	ts.mu.Lock()
-	defer ts.mu.Unlock()
 	for _, cc := range ts.cellConns {
 		cc.conn.Close()
 	}

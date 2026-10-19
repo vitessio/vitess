@@ -57,7 +57,7 @@ func TestConnForCellWithoutCache(t *testing.T) {
 	for range 3 {
 		got, err := ts.ConnForCell(ctx, "zone1")
 		require.NoError(t, err)
-		assert.Same(t, conn, got)
+		assert.Same(t, topo.CellReadConn(conn), topo.CellReadConn(got))
 	}
 	require.Equal(t, before+3, gets(), "CellInfo was not read on every call")
 
@@ -69,7 +69,7 @@ func TestConnForCellWithoutCache(t *testing.T) {
 		"a call waited for another call's read of the cell's CellInfo")
 	res := <-second
 	require.NoError(t, res.err)
-	assert.Same(t, conn, res.conn)
+	assert.Same(t, topo.CellReadConn(conn), topo.CellReadConn(res.conn))
 	close(factory.release)
 	require.NoError(t, (<-first).err)
 }
@@ -93,7 +93,7 @@ func TestConnForCellCachesCellInfo(t *testing.T) {
 		for range 3 {
 			got, err := ts.ConnForCell(ctx, "zone1")
 			require.NoError(t, err)
-			assert.Same(t, conn, got)
+			assert.Same(t, topo.CellReadConn(conn), topo.CellReadConn(got))
 		}
 		assert.Equal(t, before, gets(), "CellInfo was read from the global topo")
 	})
@@ -105,7 +105,7 @@ func TestConnForCellCachesCellInfo(t *testing.T) {
 		for range 3 {
 			got, err := ts.ConnForCell(ctx, "zone1")
 			require.NoError(t, err)
-			assert.Same(t, conn, got)
+			assert.Same(t, topo.CellReadConn(conn), topo.CellReadConn(got))
 		}
 		assert.Equal(t, before+3, gets(), "CellInfo was not re-read on every call")
 	})
@@ -122,7 +122,7 @@ func TestConnForCellCachesCellInfo(t *testing.T) {
 		before := gets()
 		got, err := ts.ConnForCell(ctx, "zone1")
 		require.NoError(t, err)
-		assert.Same(t, conn, got)
+		assert.Same(t, topo.CellReadConn(conn), topo.CellReadConn(got))
 		assert.Equal(t, before, gets(), "CellInfo was read again within the TTL of the latest read")
 	})
 
@@ -134,7 +134,7 @@ func TestConnForCellCachesCellInfo(t *testing.T) {
 		}))
 		got, err := ts.ConnForCell(ctx, "zone1")
 		require.NoError(t, err)
-		assert.NotSame(t, conn, got, "the connection to the old root was reused")
+		assert.NotSame(t, topo.CellReadConn(conn), topo.CellReadConn(got), "the connection to the old root was reused")
 	})
 }
 
@@ -239,11 +239,11 @@ func TestConnForCellExpiryDuringRead(t *testing.T) {
 		return nil
 	}))
 	close(factory.release)
-	assert.Same(t, conn, <-done, "the paused read returned the CellInfo it read")
+	assert.Same(t, topo.CellReadConn(conn), topo.CellReadConn(<-done), "the paused read returned the CellInfo it read")
 
 	got, err := ts.ConnForCell(ctx, "zone1")
 	require.NoError(t, err)
-	assert.NotSame(t, conn, got, "the connection to the old root was reused after the read raced the change")
+	assert.NotSame(t, topo.CellReadConn(conn), topo.CellReadConn(got), "the connection to the old root was reused after the read raced the change")
 }
 
 // TestDeleteCellInfoFailureKeepsCache verifies that a DeleteCellInfo that fails to delete the CellInfo
@@ -264,7 +264,7 @@ func TestDeleteCellInfoFailureKeepsCache(t *testing.T) {
 
 	got, err := ts.ConnForCell(ctx, "zone1")
 	require.NoError(t, err)
-	assert.Same(t, conn, got)
+	assert.Same(t, topo.CellReadConn(conn), topo.CellReadConn(got))
 }
 
 // connResult is what a ConnForCell run in a goroutine returned.
@@ -327,7 +327,7 @@ func TestConnForCellRefreshesOneAtATime(t *testing.T) {
 	assert.Equal(t, "/zone1-moved", root, "the first call did not apply the CellInfo it read")
 	res2 := <-second
 	require.NoError(t, res2.err)
-	assert.Same(t, res.conn, res2.conn, "the second call did not use what the first applied")
+	assert.Same(t, topo.CellReadConn(res.conn), topo.CellReadConn(res2.conn), "the second call did not use what the first applied")
 	assert.Equal(t, before+1, gets(), "the second call read CellInfo again after the first had refreshed the cell")
 }
 
@@ -466,14 +466,14 @@ func TestConnForCellAfterRecreate(t *testing.T) {
 	require.True(t, topo.IsErrType(ts.CreateCellInfo(ctx, "zone1", &topodatapb.CellInfo{}), topo.NodeExists))
 	got, err := ts.ConnForCell(ctx, "zone1")
 	require.NoError(t, err)
-	require.Same(t, conn, got)
+	require.Same(t, topo.CellReadConn(conn), topo.CellReadConn(got))
 
 	require.NoError(t, other.DeleteCellInfo(ctx, "zone1", true /*force*/))
 	require.NoError(t, ts.CreateCellInfo(ctx, "zone1", &topodatapb.CellInfo{Root: "/zone1-recreated"}))
 
 	got, err = ts.ConnForCell(ctx, "zone1")
 	require.NoError(t, err)
-	assert.NotSame(t, conn, got, "the connection cached for the deleted cell was reused")
+	assert.NotSame(t, topo.CellReadConn(conn), topo.CellReadConn(got), "the connection cached for the deleted cell was reused")
 }
 
 // TestConnForCellConcurrentWithReadOnly verifies that refreshing cell connections in ConnForCell is safe
@@ -567,10 +567,33 @@ func TestConnForCellNewConnKeepsReadOnly(t *testing.T) {
 }
 
 // trackingFactory wraps a memorytopo factory so that each cell connection reports, through rootProbePath, the
-// root it was made for and when it was closed, and so that connecting to a root under /down fails.
+// root it was made for and when it was closed, records the root each write and lock went to, and so that
+// connecting to a root under /down fails.
 type trackingFactory struct {
 	*memorytopo.Factory
 	closes atomic.Int64
+	// acceptAnyVersion makes cell connections ignore the version of an Update or Delete, as ZooKeeper does when
+	// the version comes from another topo server whose record has been written as many times.
+	acceptAnyVersion bool
+
+	mu sync.Mutex
+	// writes has "<op> <root> <path>" for each write and lock to a cell connection, in order.
+	writes []string
+}
+
+func (f *trackingFactory) recordWrite(op, root, filePath string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.writes = append(f.writes, op+" "+root+" "+filePath)
+}
+
+// takeWrites returns the writes recorded since the last call.
+func (f *trackingFactory) takeWrites() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	writes := f.writes
+	f.writes = nil
+	return writes
 }
 
 const rootProbePath = "__root_probe__"
@@ -597,6 +620,57 @@ type trackingConn struct {
 func (c *trackingConn) Close() {
 	c.closedAt.CompareAndSwap(0, c.factory.closes.Add(1))
 	c.Conn.Close()
+}
+
+func (c *trackingConn) Create(ctx context.Context, filePath string, contents []byte) (topo.Version, error) {
+	c.factory.recordWrite("Create", c.root, filePath)
+	return c.Conn.Create(ctx, filePath, contents)
+}
+
+func (c *trackingConn) Update(ctx context.Context, filePath string, contents []byte, version topo.Version) (topo.Version, error) {
+	c.factory.recordWrite("Update", c.root, filePath)
+	if c.factory.acceptAnyVersion {
+		version = nil
+	}
+	return c.Conn.Update(ctx, filePath, contents, version)
+}
+
+func (c *trackingConn) Delete(ctx context.Context, filePath string, version topo.Version) error {
+	c.factory.recordWrite("Delete", c.root, filePath)
+	if c.factory.acceptAnyVersion {
+		version = nil
+	}
+	return c.Conn.Delete(ctx, filePath, version)
+}
+
+func (c *trackingConn) Lock(ctx context.Context, dirPath, contents string) (topo.LockDescriptor, error) {
+	c.factory.recordWrite("Lock", c.root, dirPath)
+	return c.Conn.Lock(ctx, dirPath, contents)
+}
+
+func (c *trackingConn) LockWithTTL(ctx context.Context, dirPath, contents string, ttl time.Duration) (topo.LockDescriptor, error) {
+	c.factory.recordWrite("LockWithTTL", c.root, dirPath)
+	return c.Conn.LockWithTTL(ctx, dirPath, contents, ttl)
+}
+
+func (c *trackingConn) LockName(ctx context.Context, dirPath, contents string) (topo.LockDescriptor, error) {
+	c.factory.recordWrite("LockName", c.root, dirPath)
+	return c.Conn.LockName(ctx, dirPath, contents)
+}
+
+func (c *trackingConn) TryLock(ctx context.Context, dirPath, contents string) (topo.LockDescriptor, error) {
+	c.factory.recordWrite("TryLock", c.root, dirPath)
+	return c.Conn.TryLock(ctx, dirPath, contents)
+}
+
+func (c *trackingConn) NewLeaderParticipation(name, id string) (topo.LeaderParticipation, error) {
+	c.factory.recordWrite("NewLeaderParticipation", c.root, name)
+	return c.Conn.NewLeaderParticipation(name, id)
+}
+
+func (c *trackingConn) GetVersion(ctx context.Context, filePath string, version int64) ([]byte, error) {
+	c.factory.recordWrite("GetVersion", c.root, filePath)
+	return c.Conn.GetVersion(ctx, filePath, version)
 }
 
 func (c *trackingConn) Get(ctx context.Context, filePath string) ([]byte, topo.Version, error) {
@@ -687,4 +761,340 @@ func TestConnForCellConcurrentRepoints(t *testing.T) {
 		root, _, err := probeConn(ctx, conn)
 		return err == nil && root == "/final"
 	}, 30*time.Second, 5*time.Millisecond, "ConnForCell did not settle on the cell's current topo server")
+}
+
+// newRepointableServer returns a Server for zone1 with the CellInfo cache enabled, another Server for the same
+// topo that stands in for another process, and the factory that tracks their cell connections.
+func newRepointableServer(t *testing.T) (ts, other *topo.Server, factory *trackingFactory) {
+	_, memFactory := memorytopo.NewServerAndFactory(t.Context(), "zone1")
+	factory = &trackingFactory{Factory: memFactory}
+	ts, err := topo.NewWithFactory(factory, "", "")
+	require.NoError(t, err)
+	t.Cleanup(ts.Close)
+	other, err = topo.NewWithFactory(memFactory, "", "")
+	require.NoError(t, err)
+	t.Cleanup(other.Close)
+	ts.SetCellInfoCacheTTL(time.Hour)
+	return ts, other, factory
+}
+
+func repointCell(t *testing.T, other *topo.Server, root string) {
+	require.NoError(t, other.UpdateCellInfoFields(t.Context(), "zone1", func(ci *topodatapb.CellInfo) error {
+		ci.Root = root
+		return nil
+	}))
+}
+
+// TestConnForCellWritesGoToCurrentServer verifies that while a cell's cached CellInfo is still within its TTL,
+// writes and locks through the cached connection go to the topo server the cell is currently pointed at, after
+// another process re-points it, while reads still go to the cached connection.
+func TestConnForCellWritesGoToCurrentServer(t *testing.T) {
+	ctx := t.Context()
+	ts, other, factory := newRepointableServer(t)
+	conn, err := ts.ConnForCell(ctx, "zone1")
+	require.NoError(t, err)
+	oldRoot, _, err := probeConn(ctx, conn)
+	require.NoError(t, err)
+
+	repointCell(t, other, "/moved")
+	// Reads still go to the cached connection.
+	readConn, err := ts.ConnForCell(ctx, "zone1")
+	require.NoError(t, err)
+	root, _, err := probeConn(ctx, readConn)
+	require.NoError(t, err)
+	assert.Equal(t, oldRoot, root)
+
+	_, err = conn.Create(ctx, "dir/file", []byte("a"))
+	require.NoError(t, err)
+	_, err = readConn.Update(ctx, "dir/file", []byte("b"), nil)
+	require.NoError(t, err)
+	lock, err := conn.Lock(ctx, "dir", "x")
+	require.NoError(t, err)
+	require.NoError(t, lock.Unlock(ctx))
+	require.NoError(t, conn.Delete(ctx, "dir/file", nil))
+	assert.Equal(t, []string{"Create /moved dir/file", "Update /moved dir/file", "Lock /moved dir", "Delete /moved dir/file"},
+		factory.takeWrites())
+
+	// The other locks and leader participation, each through a connection got before the next re-point.
+	_, err = conn.Create(ctx, "dir/keep", nil)
+	require.NoError(t, err)
+	factory.takeWrites()
+	for i, lockOrElect := range []func(conn topo.Conn) (string, error){
+		func(conn topo.Conn) (string, error) {
+			lock, err := conn.LockWithTTL(ctx, "dir", "x", time.Minute)
+			if err != nil {
+				return "", err
+			}
+			return "LockWithTTL", lock.Unlock(ctx)
+		},
+		func(conn topo.Conn) (string, error) {
+			lock, err := conn.LockName(ctx, "dir", "x")
+			if err != nil {
+				return "", err
+			}
+			return "LockName", lock.Unlock(ctx)
+		},
+		func(conn topo.Conn) (string, error) {
+			lock, err := conn.TryLock(ctx, "dir", "x")
+			if err != nil {
+				return "", err
+			}
+			return "TryLock", lock.Unlock(ctx)
+		},
+		func(conn topo.Conn) (string, error) {
+			mp, err := conn.NewLeaderParticipation("leader", "id")
+			if err != nil {
+				return "", err
+			}
+			if _, err := mp.WaitForLeadership(); err != nil {
+				return "", err
+			}
+			mp.Stop()
+			return "NewLeaderParticipation", nil
+		},
+	} {
+		conn, err := ts.ConnForCell(ctx, "zone1")
+		require.NoError(t, err)
+		root := fmt.Sprintf("/moved%d", i)
+		repointCell(t, other, root)
+		op, err := lockOrElect(conn)
+		require.NoError(t, err)
+		writes := factory.takeWrites()
+		require.NotEmpty(t, writes, op)
+		assert.Equal(t, op+" "+root, strings.Join(strings.Fields(writes[0])[:2], " "), "%s went to %v", op, writes)
+	}
+}
+
+// TestConnForCellReadsUseCachedConn verifies that reads that return no version, and Close, go to the cell's
+// cached connection, as when ConnForCell returns it without the cache.
+func TestConnForCellReadsUseCachedConn(t *testing.T) {
+	ctx := t.Context()
+	ts, other, factory := newRepointableServer(t)
+	conn, err := ts.ConnForCell(ctx, "zone1")
+	require.NoError(t, err)
+	oldRoot, _, err := probeConn(ctx, conn)
+	require.NoError(t, err)
+	repointCell(t, other, "/moved")
+
+	_, _ = conn.GetVersion(ctx, "file", 1)
+	assert.Equal(t, []string{"GetVersion " + oldRoot + " file"}, factory.takeWrites())
+	conn.Close()
+	_, closedAt, err := probeConn(ctx, conn)
+	require.NoError(t, err)
+	assert.NotZero(t, closedAt, "Close did not close the cached connection")
+}
+
+// TestConnForCellWriteWithStaleVersion verifies that a versioned write whose version was read from the topo
+// server a cell has since been re-pointed from fails with BadVersion, even when another call has already moved
+// the cell to its current connection and even if that server would accept the version, as ZooKeeper does when
+// the record has been written as many times there. UpdateTabletFields then reads the tablet again and writes it
+// to the current topo server.
+func TestConnForCellWriteWithStaleVersion(t *testing.T) {
+	ctx := t.Context()
+	ts, other, factory := newRepointableServer(t)
+	factory.acceptAnyVersion = true
+	alias := &topodatapb.TabletAlias{Cell: "zone1", Uid: 1}
+	require.NoError(t, ts.CreateTablet(ctx, &topodatapb.Tablet{Alias: alias, Keyspace: "ks", Shard: "0"}))
+	ti, err := ts.GetTablet(ctx, alias)
+	require.NoError(t, err)
+	// The version UpdateTablet returns is tagged too.
+	require.NoError(t, ts.UpdateTablet(ctx, ti))
+
+	repointCell(t, other, "/moved")
+	// Another call moves the cell to its current connection.
+	conn, err := ts.ConnForCell(ctx, "zone1")
+	require.NoError(t, err)
+	_, err = conn.Create(ctx, "unrelated", nil)
+	require.NoError(t, err)
+	factory.takeWrites()
+
+	ti.Type = topodatapb.TabletType_PRIMARY
+	err = ts.UpdateTablet(ctx, ti)
+	require.True(t, topo.IsErrType(err, topo.BadVersion), "UpdateTablet with a version from the old topo server: %v", err)
+	assert.Empty(t, factory.takeWrites(), "the write with the old version reached a topo server")
+
+	_, err = ts.UpdateTabletFields(ctx, alias, func(tablet *topodatapb.Tablet) error {
+		tablet.Type = topodatapb.TabletType_PRIMARY
+		return nil
+	})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"Update /moved tablets/zone1-0000000001/Tablet"}, factory.takeWrites())
+}
+
+// TestConnForCellRetryThroughSameConn verifies that a read-modify-write that retries through the connection it
+// got from one ConnForCell call, as UpdateShardReplicationFields does, reads from the current topo server after
+// its write fails with BadVersion, instead of failing the same way every time.
+func TestConnForCellRetryThroughSameConn(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+	ts, other, factory := newRepointableServer(t)
+	factory.acceptAnyVersion = true
+	require.NoError(t, ts.UpdateShardReplicationFields(ctx, "zone1", "ks", "0", func(sr *topodatapb.ShardReplication) error {
+		sr.Nodes = append(sr.Nodes, &topodatapb.ShardReplication_Node{TabletAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 1}})
+		return nil
+	}))
+
+	repointCell(t, other, "/moved")
+	factory.takeWrites()
+	require.NoError(t, ts.UpdateShardReplicationFields(ctx, "zone1", "ks", "0", func(sr *topodatapb.ShardReplication) error {
+		sr.Nodes = append(sr.Nodes, &topodatapb.ShardReplication_Node{TabletAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 2}})
+		return nil
+	}))
+	assert.Equal(t, []string{"Update /moved keyspaces/ks/shards/0/ShardReplication"}, factory.takeWrites())
+}
+
+// TestConnForCellListAndWatchVersions verifies that versions from List and Watch, including the changes a watch
+// sends, can be written with while the cell is unchanged, and fail with BadVersion once it has been re-pointed.
+func TestConnForCellListAndWatchVersions(t *testing.T) {
+	ctx := t.Context()
+	ts, other, _ := newRepointableServer(t)
+	conn, err := ts.ConnForCell(ctx, "zone1")
+	require.NoError(t, err)
+	_, err = conn.Create(ctx, "dir/file", []byte("a"))
+	require.NoError(t, err)
+
+	kvs, err := conn.List(ctx, "dir/")
+	require.NoError(t, err)
+	require.Len(t, kvs, 1)
+	watchCtx, cancelWatch := context.WithCancel(ctx)
+	current, changes, err := conn.Watch(watchCtx, "dir/file")
+	require.NoError(t, err)
+	_, err = conn.Update(ctx, "dir/file", []byte("b"), current.Version)
+	require.NoError(t, err)
+	var change *topo.WatchData
+	require.Eventually(t, func() bool {
+		select {
+		case change = <-changes:
+		default:
+		}
+		return change != nil
+	}, 30*time.Second, 10*time.Millisecond)
+	require.NoError(t, change.Err)
+	listVersion := kvs[0].Version
+
+	repointCell(t, other, "/moved")
+	_, err = conn.Update(ctx, "dir/file", []byte("c"), change.Version)
+	assert.True(t, topo.IsErrType(err, topo.BadVersion), "Update with a version from a watch on the old topo server: %v", err)
+	err = conn.Delete(ctx, "dir/file", listVersion)
+	assert.True(t, topo.IsErrType(err, topo.BadVersion), "Delete with a version from List on the old topo server: %v", err)
+
+	cancelWatch()
+	var last *topo.WatchData
+	for wd := range changes {
+		last = wd
+	}
+	require.NotNil(t, last)
+	assert.True(t, topo.IsErrType(last.Err, topo.Interrupted), "the watch did not end with ErrInterrupted: %v", last.Err)
+}
+
+// TestConnForCellWriteToDeletedCell verifies that after another process deletes a cell, reads through its
+// cached connection keep working within the TTL, but writes fail with NoNode as they do without the cache.
+func TestConnForCellWriteToDeletedCell(t *testing.T) {
+	ctx := t.Context()
+	ts, other, _ := newRepointableServer(t)
+	conn, err := ts.ConnForCell(ctx, "zone1")
+	require.NoError(t, err)
+	_, err = conn.Create(ctx, "file", []byte("a"))
+	require.NoError(t, err)
+
+	require.NoError(t, other.DeleteCellInfo(ctx, "zone1", true /*force*/))
+	_, _, err = conn.Get(ctx, "file")
+	require.NoError(t, err)
+	_, err = conn.Update(ctx, "file", []byte("b"), nil)
+	assert.True(t, topo.IsErrType(err, topo.NoNode), "a write to a deleted cell: %v", err)
+}
+
+// TestConnForCellWriteReadsCellInfoOnce verifies that while a cell is unchanged, each write through its cached
+// connection reads the cell's CellInfo once and goes to the same connection.
+func TestConnForCellWriteReadsCellInfoOnce(t *testing.T) {
+	ctx := t.Context()
+	_, memFactory := memorytopo.NewServerAndFactory(ctx, "zone1")
+	ts, err := topo.NewWithFactory(memFactory, "", "")
+	require.NoError(t, err)
+	t.Cleanup(ts.Close)
+	ts.SetCellInfoCacheTTL(time.Hour)
+	gets := func() int64 { return memFactory.GetCallStats().Counts()["Get"] }
+
+	conn, err := ts.ConnForCell(ctx, "zone1")
+	require.NoError(t, err)
+	readConn := topo.CellReadConn(conn)
+	before := gets()
+	_, err = conn.Create(ctx, "file", []byte("a"))
+	require.NoError(t, err)
+	assert.Equal(t, before+1, gets(), "a write did not read CellInfo exactly once")
+	assert.Same(t, readConn, topo.CellReadConn(conn), "a write moved an unchanged cell to another connection")
+}
+
+// TestConnForCellVersionsAreTagged verifies that a version from each way of reading a cell, and from a write,
+// fails a versioned write with BadVersion once the cell has been re-pointed, without reaching a topo server,
+// even if that server would accept any version.
+func TestConnForCellVersionsAreTagged(t *testing.T) {
+	ctx := t.Context()
+	ts, other, factory := newRepointableServer(t)
+	factory.acceptAnyVersion = true
+	conn, err := ts.ConnForCell(ctx, "zone1")
+	require.NoError(t, err)
+
+	versions := map[string]topo.Version{}
+	versions["Create"], err = conn.Create(ctx, "dir/file", []byte("a"))
+	require.NoError(t, err)
+	kvs, err := conn.List(ctx, "dir/")
+	require.NoError(t, err)
+	require.Len(t, kvs, 1)
+	versions["List"] = kvs[0].Version
+	watchCtx, cancelWatch := context.WithCancel(ctx)
+	current, changes, err := conn.Watch(watchCtx, "dir/file")
+	require.NoError(t, err)
+	versions["Watch current"] = current.Version
+	recursive, recursiveChanges, err := conn.WatchRecursive(watchCtx, "dir")
+	require.NoError(t, err)
+	require.Len(t, recursive, 1)
+	versions["WatchRecursive current"] = recursive[0].Version
+	versions["Update"], err = conn.Update(ctx, "dir/file", []byte("b"), nil)
+	require.NoError(t, err)
+	_, versions["Get"], err = conn.Get(ctx, "dir/file")
+	require.NoError(t, err)
+	var change *topo.WatchData
+	var recursiveChange *topo.WatchDataRecursive
+	require.Eventually(t, func() bool {
+		select {
+		case change = <-changes:
+		case recursiveChange = <-recursiveChanges:
+		default:
+		}
+		return change != nil && recursiveChange != nil
+	}, 30*time.Second, 10*time.Millisecond)
+	versions["Watch change"] = change.Version
+	versions["WatchRecursive change"] = recursiveChange.Version
+
+	repointCell(t, other, "/moved")
+	factory.takeWrites()
+	for name, version := range versions {
+		require.NotNil(t, version, name)
+		_, err := conn.Update(ctx, "dir/file", []byte("c"), version)
+		assert.True(t, topo.IsErrType(err, topo.BadVersion), "Update with a version from %s on the old topo server: %v", name, err)
+	}
+	assert.Empty(t, factory.takeWrites(), "a write with a version from the old topo server reached a topo server")
+
+	cancelWatch()
+	for range changes {
+	}
+	for range recursiveChanges {
+	}
+}
+
+// TestConnForCellWriteAfterClose verifies that once the Server is closed, writes through a cell connection it
+// returned with the cache enabled fail with Interrupted, as they would on the closed connection, rather than
+// read CellInfo through the closed global connection.
+func TestConnForCellWriteAfterClose(t *testing.T) {
+	ctx := t.Context()
+	ts := memorytopo.NewServer(ctx, "zone1")
+	ts.SetCellInfoCacheTTL(time.Hour)
+	conn, err := ts.ConnForCell(ctx, "zone1")
+	require.NoError(t, err)
+	ts.Close()
+
+	_, err = conn.Create(ctx, "file", nil)
+	assert.True(t, topo.IsErrType(err, topo.Interrupted), "Create after Close: %v", err)
+	assert.True(t, topo.IsErrType(conn.Delete(ctx, "file", nil), topo.Interrupted), "Delete after Close")
 }
