@@ -19,6 +19,7 @@ package vttls
 import (
 	"crypto/ecdsa"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/pem"
 	"fmt"
 	"os"
@@ -456,6 +457,30 @@ func TestClientConfigChecksCRLsAgainstIssuersOfVerifiedChains(t *testing.T) {
 
 	require.NoError(t, os.Remove(crl))
 	requireFallback("once the file is gone, the client must fall back to the CRLs it loaded before")
+}
+
+// TestClientCRLCheckerKeepsTheLearnedBindings checks that the bindings
+// that checking a client's CRLs against the issuers verified chains
+// brought before made are kept in the checker, so that its first
+// handshake through one of those issuers reads them rather than
+// checking the CRLs' signatures again.
+func TestClientCRLCheckerKeepsTheLearnedBindings(t *testing.T) {
+	root := t.TempDir()
+	certs := tlstest.CreateClientServerCertPairs(root)
+	rootCert := loadOneCert(t, path.Join(root, "ca-cert.pem"))
+	intermediate := loadOneCert(t, certs.ServerCA)
+	crls, err := loadCRLSet(certs.ServerCRL)
+	require.NoError(t, err)
+	var fallback crlFallback
+	fallback.learnIssuer(intermediate)
+
+	checker, err := clientCRLCheckerFrom(crls, []*x509.Certificate{rootCert}, &fallback)
+	require.NoError(t, err)
+	binding, cached := checker.bound.Load(string(intermediate.Raw))
+	require.True(t, cached, "the binding made for the learned issuer was not kept")
+	require.NoError(t, binding.(crlBinding).err)
+	require.Len(t, binding.(crlBinding).crls, 1)
+	require.Equal(t, int64(1), checker.boundIssuers.Load())
 }
 
 // TestCRLFallbackBoundsTheLearnedIssuers checks that the issuers a
