@@ -23,10 +23,12 @@ import (
 	"os"
 	"path"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/tlstest"
@@ -268,6 +270,71 @@ func TestClientConfigFallsBackUnderItsOwnCA(t *testing.T) {
 	require.ErrorContains(t, err, "cannot use the CRL file "+crl+" under the CA file "+certs.ServerCA)
 	require.NotContains(t, err.Error(), "under the CA file "+certs.ClientCA)
 	requireRejected("a reload publishing the replacement for the second configuration must not take the first's CRLs")
+}
+
+// TestClientConfigReadsCRLOutsideThePublishLock checks that a
+// ClientConfig call reading its CRL file, which may stall on a slow or
+// unresponsive file system, does not keep ReloadCachedFiles from
+// publishing, nor the ClientConfig calls queued behind that publish
+// from building their configs.
+func TestClientConfigReadsCRLOutsideThePublishLock(t *testing.T) {
+	certs := tlstest.CreateClientServerCertPairs(t.TempDir())
+	oldCerts := tlstest.CreateClientServerCertPairs(t.TempDir())
+	newCerts := tlstest.CreateClientServerCertPairs(t.TempDir())
+	files := newClientFiles(t)
+	files.installKeyPair(oldCerts)
+	files.installTrust(oldCerts)
+	files.requireServes(oldCerts, oldCerts)
+	// Another configuration's CA changes, so that the reload has
+	// something to publish.
+	files.copy(files.ca, newCerts.ServerCA)
+
+	read, release := make(chan struct{}), make(chan struct{})
+	var calls atomic.Int32
+	crlReadTestHook = func() {
+		if calls.Add(1) == 1 {
+			close(read)
+			<-release
+		}
+	}
+	t.Cleanup(func() { crlReadTestHook = nil })
+	var releaseOnce sync.Once
+	releaseRead := func() { releaseOnce.Do(func() { close(release) }) }
+	t.Cleanup(releaseRead)
+
+	built := make(chan error, 1)
+	go func() {
+		_, err := ClientConfig(VerifyIdentity, "", "", certs.ServerCA, certs.ServerCRL, certs.ServerName, tls.VersionTLS12)
+		built <- err
+	}()
+	select {
+	case <-read:
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "the call did not read the CRL file in time")
+	}
+
+	reloaded := make(chan error, 1)
+	go func() {
+		_, err := ReloadCachedFiles()
+		reloaded <- err
+	}()
+	var reloadErr error
+	published := assert.Eventually(t, func() bool {
+		select {
+		case reloadErr = <-reloaded:
+			return true
+		default:
+			return false
+		}
+	}, 30*time.Second, 10*time.Millisecond, "a reload must publish while a ClientConfig call reads its CRL file")
+	releaseRead()
+	require.NoError(t, <-built)
+	if !published {
+		<-reloaded
+		t.FailNow()
+	}
+	requireNoErrorFor(t, reloadErr, path.Dir(files.cert))
+	files.requireServes(oldCerts, newCerts)
 }
 
 // clientFiles are the files of a TLS client, installed in turn from
