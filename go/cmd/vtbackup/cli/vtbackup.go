@@ -467,13 +467,7 @@ func takeBackup(ctx, backgroundCtx context.Context, topoServer *topo.Server, bac
 	case mysqlctl.ErrNoBackup:
 		// There is no backup found, but we may be taking the initial backup of a shard
 		if !allowFirstBackup {
-<<<<<<< HEAD
-			return fmt.Errorf("no backup found; not starting up empty since --initial_backup flag was not enabled")
-||||||| parent of a240ed6c4b (Refer to flags by their dashed names in help and error text (#21339))
-			return replication.Position{}, vterrors.New(vtrpc.Code_FAILED_PRECONDITION, "no backup found; not starting up empty since --initial_backup flag was not enabled")
-=======
-			return replication.Position{}, vterrors.New(vtrpc.Code_FAILED_PRECONDITION, "no backup found; not starting up empty since --allow-first-backup flag was not enabled")
->>>>>>> a240ed6c4b (Refer to flags by their dashed names in help and error text (#21339))
+			return fmt.Errorf("no backup found; not starting up empty since --allow-first-backup flag was not enabled")
 		}
 		restorePos = replication.Position{}
 	default:
@@ -860,26 +854,14 @@ func shouldBackup(ctx context.Context, topoServer *topo.Server, backupStorage ba
 
 	// We need at least one backup so we can restore first, unless the user explicitly says we don't
 	if len(backups) == 0 && !allowFirstBackup {
-<<<<<<< HEAD
-		return false, fmt.Errorf("no existing backups to restore from; backup is not possible since --initial_backup flag was not enabled")
-||||||| parent of a240ed6c4b (Refer to flags by their dashed names in help and error text (#21339))
-		return false, errors.New("no existing backups to restore from; backup is not possible since --initial_backup flag was not enabled")
-=======
-		return false, errors.New("no existing backups to restore from; backup is not possible since --allow-first-backup flag was not enabled")
->>>>>>> a240ed6c4b (Refer to flags by their dashed names in help and error text (#21339))
+		return false, fmt.Errorf("no existing backups to restore from; backup is not possible since --allow-first-backup flag was not enabled")
 	}
 	if lastBackup == nil {
 		if allowFirstBackup {
 			// There's no complete backup, but we were told to take one from scratch anyway.
 			return true, nil
 		}
-<<<<<<< HEAD
-		return false, fmt.Errorf("no complete backups to restore from; backup is not possible since --initial_backup flag was not enabled")
-||||||| parent of a240ed6c4b (Refer to flags by their dashed names in help and error text (#21339))
-		return false, errors.New("no complete backups to restore from; backup is not possible since --initial_backup flag was not enabled")
-=======
-		return false, errors.New("no complete backups to restore from; backup is not possible since --allow-first-backup flag was not enabled")
->>>>>>> a240ed6c4b (Refer to flags by their dashed names in help and error text (#21339))
+		return false, fmt.Errorf("no complete backups to restore from; backup is not possible since --allow-first-backup flag was not enabled")
 	}
 
 	// Has it been long enough since the last complete backup to need a new one?
