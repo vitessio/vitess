@@ -337,6 +337,76 @@ func TestClientConfigReadsCRLOutsideThePublishLock(t *testing.T) {
 	files.requireServes(oldCerts, newCerts)
 }
 
+// TestCRLFallbackIsNotHeldBySlowReads checks that a read of a CRL file
+// stalled on the file system does not hold back a ClientConfig call
+// that already read the file from storing the CRLs it read: that call
+// stores them under publishMu, which ReloadCachedFiles, and the calls
+// queued behind it, then wait for.
+func TestCRLFallbackIsNotHeldBySlowReads(t *testing.T) {
+	certs := tlstest.CreateClientServerCertPairs(t.TempDir())
+	client := func() error {
+		_, err := ClientConfig(VerifyIdentity, "", "", certs.ServerCA, certs.ServerCRL, certs.ServerName, tls.VersionTLS12)
+		return err
+	}
+
+	// The first call has read the file, and is held before it takes
+	// publishMu. The second is held in its read of the file.
+	firstRead, releaseFirst := make(chan struct{}), make(chan struct{})
+	secondReading, releaseSecond := make(chan struct{}), make(chan struct{})
+	var reads, fileReads atomic.Int32
+	crlReadTestHook = func() {
+		if reads.Add(1) == 1 {
+			close(firstRead)
+			<-releaseFirst
+		}
+	}
+	crlFileReadTestHook = func() {
+		if fileReads.Add(1) == 2 {
+			close(secondReading)
+			<-releaseSecond
+		}
+	}
+	t.Cleanup(func() { crlReadTestHook, crlFileReadTestHook = nil, nil })
+	var releaseFirstOnce, releaseSecondOnce sync.Once
+	releaseFirstOnly := func() { releaseFirstOnce.Do(func() { close(releaseFirst) }) }
+	releaseAll := func() {
+		releaseFirstOnly()
+		releaseSecondOnce.Do(func() { close(releaseSecond) })
+	}
+	t.Cleanup(releaseAll)
+	waitFor := func(c chan struct{}, what string) {
+		t.Helper()
+		select {
+		case <-c:
+		case <-time.After(30 * time.Second):
+			require.FailNow(t, what)
+		}
+	}
+
+	first, second := make(chan error, 1), make(chan error, 1)
+	go func() { first <- client() }()
+	waitFor(firstRead, "the first call did not read the CRL file in time")
+	go func() { second <- client() }()
+	waitFor(secondReading, "the second call did not start reading the CRL file in time")
+
+	releaseFirstOnly()
+	var firstErr error
+	stored := assert.Eventually(t, func() bool {
+		select {
+		case firstErr = <-first:
+			return true
+		default:
+			return false
+		}
+	}, 30*time.Second, 10*time.Millisecond, "a call that read the CRL file must not wait for another call's read to store it")
+	releaseAll()
+	if !stored {
+		firstErr = <-first
+	}
+	require.NoError(t, firstErr)
+	require.NoError(t, <-second)
+}
+
 // clientFiles are the files of a TLS client, installed in turn from
 // unrelated sets of certificates, as a rotation replaces them.
 type clientFiles struct {

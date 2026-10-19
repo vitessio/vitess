@@ -117,11 +117,19 @@ func watchCRL(w crlWatch, digest [sha256.Size]byte) {
 // by a reload after a later read, does not leave older CRLs in place
 // of newer ones.
 type crlFallback struct {
+	// readMu serializes the reads of the file, so that their numbers
+	// follow the order they are made in, and guards reads, which counts
+	// them. mu guards the rest, and is never held while the file is
+	// read, so that a read stalled on the file system holds back
+	// neither store nor load, which are called under publishMu.
+	readMu sync.Mutex
+	reads  uint64
+
 	mu sync.Mutex
-	// reads counts the reads of the file, and crlsRead is the number
-	// of the read that crls came from, zero for none.
-	reads, crlsRead uint64
-	crls            []*x509.RevocationList
+	// crlsRead is the number of the read that crls came from, zero for
+	// none.
+	crlsRead uint64
+	crls     []*x509.RevocationList
 }
 
 func crlFallbackOf(w crlWatch) *crlFallback {
@@ -131,9 +139,12 @@ func crlFallbackOf(w crlWatch) *crlFallback {
 
 // read returns what the file holds, and the number of this read.
 func (f *crlFallback) read(crl string) ([]byte, uint64, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
+	f.readMu.Lock()
+	defer f.readMu.Unlock()
 	f.reads++
+	if crlFileReadTestHook != nil {
+		crlFileReadTestHook()
+	}
 	body, err := os.ReadFile(crl)
 	return body, f.reads, err
 }
@@ -167,6 +178,10 @@ const maxReloadAttempts = 5
 // validate it. All
 // are nil outside tests.
 var reloadTestHook, publishTestHook, crlReadTestHook func()
+
+// crlFileReadTestHook, when set, runs in every read of a CRL file that
+// a crlFallback numbers, before the file is read. Nil outside tests.
+var crlFileReadTestHook func()
 
 // ReloadCachedFiles reads again the certificate, key, CA and CRL files
 // that ClientConfig and ServerConfig loaded, so that the configs they
