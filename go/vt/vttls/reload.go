@@ -169,6 +169,14 @@ func (f *crlFallback) load() ([]*x509.RevocationList, bool) {
 	return f.crls, f.crlsRead > 0
 }
 
+// newerThan returns the CRLs kept, when they come from a read made
+// after the read numbered read.
+func (f *crlFallback) newerThan(read uint64) ([]*x509.RevocationList, bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.crls, f.crlsRead > read
+}
+
 // learnIssuer records issuer, which a verified chain brought, unless
 // maxBoundIssuers are recorded already.
 func (f *crlFallback) learnIssuer(issuer *x509.Certificate) {
@@ -616,9 +624,9 @@ func digestFiles(paths []string) map[string]fileState {
 // clientCRLRead is a read of a CRL file that ClientConfig makes before
 // it takes publishMu, so that a read stalled on a slow or unresponsive
 // file system holds back neither the publish of a reload nor the
-// configs built after it. A read that a reload then overtakes is only
-// older: its CRLs replace no later ones, and when they cannot be used
-// under the CA that the reload published, clientCRLChecker falls back.
+// configs built after it. A read that a later one overtook, such as
+// the read of a reload that published since, is not built from, see
+// clientCRLChecker.
 type clientCRLRead struct {
 	w        crlWatch
 	fallback *crlFallback
@@ -652,6 +660,16 @@ func clientCRLChecker(r clientCRLRead) (*crlChecker, error) {
 		if issuers, err = loadx509Certificates(r.w.ca); err != nil {
 			return nil, err
 		}
+	}
+	// A read overtaken by a later one, whose CRLs are kept, is not
+	// built from: a reload may have published a new CA along with
+	// those CRLs, and the CRLs of the older read, from the old CA, would
+	// then apply to no certificate of the new CA, letting through the
+	// ones that the newer CRLs revoke. The newer CRLs were validated
+	// under the CA the config is built with, or published along with
+	// it.
+	if newer, overtaken := r.fallback.newerThan(r.read); overtaken {
+		return clientCRLCheckerFrom(newer, issuers, r.fallback)
 	}
 	// The CRL is read once, so that the digest the file is watched
 	// from is the digest of the CRLs checked against.
