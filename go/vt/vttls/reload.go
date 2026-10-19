@@ -47,7 +47,8 @@ var (
 	cachedKeyPairs, cachedCombinedKeyPairs sync.Map
 	// watchedCRLs maps the CRL files ClientConfig used, with the CA
 	// file it used them with, to the SHA-256 digest of their contents
-	// when last seen valid under that CA.
+	// when last seen valid under that CA, or to the zero digest when
+	// never seen valid under it.
 	watchedCRLs sync.Map
 	// lastValidCRLs maps the CRL files ClientConfig used to the CRLs
 	// last loaded from them, by ClientConfig or ReloadCachedFiles,
@@ -511,6 +512,11 @@ func clientCRLChecker(crl, ca string) (*crlChecker, error) {
 	if lastErr != nil {
 		return nil, err
 	}
+	// The file is watched under this CA all the same, from no digest
+	// since it was never seen valid under it, so that ReloadCachedFiles
+	// holds back the files of this configuration while the CRL cannot
+	// be used under its CA, and counts the CRL as changed once it can.
+	watchCRL(crlWatch{crl: crl, ca: ca}, [sha256.Size]byte{})
 	if warned, warnedFor := staleCRLWarnings.Load(crl); !warnedFor || warned.(string) != err.Error() {
 		staleCRLWarnings.Store(crl, err.Error())
 		log.Warn(fmt.Sprintf("Cannot use the CRL file %s, so the CRLs last loaded from it stay in use: %v", crl, err))
