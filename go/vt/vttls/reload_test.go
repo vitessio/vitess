@@ -623,10 +623,12 @@ func TestReloadCachedFilesValidatesCRLsUnderTheirCA(t *testing.T) {
 	require.Equal(t, generation, CachedFilesGeneration(), "a CRL that its CA does not validate must not count as reloaded")
 }
 
-// TestReloadCachedFilesPublishesAtOnce checks that a config built
-// while ReloadCachedFiles updates the caches does not combine the new
-// key pair with the old CA: it is built from the files before the
-// reload or after it.
+// TestReloadCachedFilesPublishesAtOnce checks that no config is built
+// while ReloadCachedFiles updates the caches, so that none combines the
+// new key pair with the old CA: ClientConfig and ServerConfig build
+// under the read side of publishMu, which the update holds exclusively
+// throughout. A config built after the reload takes all of the new
+// files.
 func TestReloadCachedFilesPublishesAtOnce(t *testing.T) {
 	oldCerts := tlstest.CreateClientServerCertPairs(t.TempDir())
 	newCerts := tlstest.CreateClientServerCertPairs(t.TempDir())
@@ -637,36 +639,21 @@ func TestReloadCachedFilesPublishesAtOnce(t *testing.T) {
 	files.installKeyPair(newCerts)
 	files.installTrust(newCerts)
 
-	type built struct {
-		config *tls.Config
-		err    error
-	}
-	results := make(chan built, 1)
-	var duringPublish *built
+	var hooked, buildable bool
 	publishTestHook = func() {
-		go func() {
-			config, err := ClientConfig(VerifyIdentity, files.cert, files.key, files.ca, files.crl, "", tls.VersionTLS12)
-			results <- built{config, err}
-		}()
-		// A config built halfway through the update would be ready
-		// long before this.
-		select {
-		case b := <-results:
-			duringPublish = &b
-		case <-time.After(200 * time.Millisecond):
+		hooked = true
+		if publishMu.TryRLock() {
+			publishMu.RUnlock()
+			buildable = true
 		}
 	}
 	t.Cleanup(func() { publishTestHook = nil })
 
 	_, err := ReloadCachedFiles()
 	requireNoErrorFor(t, err, path.Dir(files.cert))
-	require.Nil(t, duringPublish, "no config must be built while the caches are being updated")
-	b := <-results
-	require.NoError(t, b.err)
-	require.Equal(t, loadOneCert(t, newCerts.ClientCert).Raw, b.config.Certificates[0].Certificate[0])
-	want, err := readx509CertPool(newCerts.ServerCA)
-	require.NoError(t, err)
-	require.True(t, want.Equal(b.config.RootCAs))
+	require.True(t, hooked, "the reload must update the caches for this test to be meaningful")
+	require.False(t, buildable, "a config could be built while the caches were being updated")
+	files.requireServes(newCerts, newCerts)
 }
 
 // TestReloadCachedFilesKeepsConfigurationsWhole checks that a file
