@@ -92,13 +92,11 @@ func (mp *etcdLeaderParticipation) WaitForLeadership() (context.Context, error) 
 
 	// Try to get the primaryship, by getting a lock.
 	var err error
-	ld, err = mp.s.lock(lockCtx, electionPath, mp.id, leaseTTL)
+	ld, err = mp.s.lock(lockCtx, electionPath, mp.id, leaseTTL, false)
 	if err != nil {
 		// It can be that we were interrupted.
 		return nil, err
 	}
-	// Stop can miss a lock acquired while it runs: end the lease's KeepAlive with lockCtx.
-	context.AfterFunc(lockCtx, ld.(*etcdLockDescriptor).stopKeepAlive)
 
 	// We got the lock. Return the lockContext. If Stop() is called,
 	// it will cancel the lockCtx, and cancel the returned context.

@@ -157,7 +157,7 @@ func (s *Server) TryLock(ctx context.Context, dirPath, contents string) (topo.Lo
 	}
 
 	// everything is good let's acquire the lock.
-	return s.lock(ctx, dirPath, contents, leaseTTL)
+	return s.lock(ctx, dirPath, contents, leaseTTL, true)
 }
 
 // Lock is part of the topo.Conn interface.
@@ -172,7 +172,7 @@ func (s *Server) Lock(ctx context.Context, dirPath, contents string) (topo.LockD
 		return nil, convertError(err, dirPath)
 	}
 
-	return s.lock(ctx, dirPath, contents, leaseTTL)
+	return s.lock(ctx, dirPath, contents, leaseTTL, true)
 }
 
 // LockWithTTL is part of the topo.Conn interface.
@@ -187,16 +187,18 @@ func (s *Server) LockWithTTL(ctx context.Context, dirPath, contents string, ttl 
 		return nil, convertError(err, dirPath)
 	}
 
-	return s.lock(ctx, dirPath, contents, int(ttl.Seconds()))
+	return s.lock(ctx, dirPath, contents, int(ttl.Seconds()), false)
 }
 
 // LockName is part of the topo.Conn interface.
 func (s *Server) LockName(ctx context.Context, dirPath, contents string) (topo.LockDescriptor, error) {
-	return s.lock(ctx, dirPath, contents, int(topo.NamedLockTTL.Seconds()))
+	return s.lock(ctx, dirPath, contents, int(topo.NamedLockTTL.Seconds()), false)
 }
 
-// lock is used by both Lock() and primary election.
-func (s *Server) lock(ctx context.Context, nodePath, contents string, ttl int) (topo.LockDescriptor, error) {
+// lock is used by both Lock() and primary election. With untilUnlock, the
+// lease's KeepAlive runs until Unlock. Otherwise it runs only as long as ctx, so
+// that a lock with an explicit TTL expires ttl after its last check.
+func (s *Server) lock(ctx context.Context, nodePath, contents string, ttl int, untilUnlock bool) (topo.LockDescriptor, error) {
 	nodePath = path.Join(s.root, nodePath, locksPath)
 
 	// Get a lease, set its KeepAlive.
@@ -204,9 +206,13 @@ func (s *Server) lock(ctx context.Context, nodePath, contents string, ttl int) (
 	if err != nil {
 		return nil, convertError(err, nodePath)
 	}
-	// The KeepAlive must outlive ctx, which callers often bound to the acquisition: it runs
-	// until Unlock, or until acquisition fails.
-	kaCtx, stopKeepAlive := context.WithCancel(context.WithoutCancel(ctx))
+	// topo.Server bounds ctx to the acquisition, so a KeepAlive that runs until
+	// Unlock must outlive it.
+	kaParent := ctx
+	if untilUnlock {
+		kaParent = context.WithoutCancel(ctx)
+	}
+	kaCtx, stopKeepAlive := context.WithCancel(kaParent)
 	leaseKA, err := s.cli.KeepAlive(kaCtx, lease.ID)
 	if err != nil {
 		stopKeepAlive()

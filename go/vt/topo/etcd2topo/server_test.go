@@ -485,4 +485,17 @@ func testKeyspaceLock(t *testing.T, ts *topo.Server) {
 	var unlockErr error
 	unlock(&unlockErr)
 	require.NoError(t, unlockErr)
+
+	// An explicit TTL still releases the lock after it, without an unlock.
+	_, unlock, err = ts.LockKeyspace(ctx, "test_keyspace", "explicit ttl", topo.WithTTL(time.Second))
+	require.NoError(t, err)
+	assert.Eventually(t, func() bool {
+		ld, err := conn.TryLock(ctx, keyspacePath, "probe")
+		if err != nil {
+			return false
+		}
+		_ = ld.Unlock(ctx)
+		return true
+	}, 30*time.Second, 250*time.Millisecond, "the lock with an explicit TTL did not expire")
+	unlock(&unlockErr)
 }
