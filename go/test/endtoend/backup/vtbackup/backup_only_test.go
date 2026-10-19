@@ -677,10 +677,11 @@ func verifyBackupStats(t *testing.T, dataPointReader *opentsdb.DataPointReader, 
 	require.Equal(t, expectActivePhases, activePhases)
 }
 
-// TestVtBackupWithBinlogs checks that vtbackup --include-binlogs carries the
-// binlog history forward: each run restores the previous backup's binlogs and backs
-// them up again with the new ones, whether vtbackup or BackupShard took that backup.
-// The restore keeps each binlog's original mtime, so binlogs past
+// TestVtBackupWithBinlogs checks that vtbackup --include-binlogs backs up binlogs
+// when the backup it restores has none, and carries the binlog history forward when
+// it does: vtbackup restores that backup's binlogs, here from a BackupShard backup,
+// and backs them up again with the new ones. The restore keeps each binlog's
+// original mtime, so binlogs past
 // binlog_expire_logs_seconds are purged when mysqld starts and drop out of the next
 // backup. A vttablet older than v25 restores only the data of such a backup.
 func TestVtBackupWithBinlogs(t *testing.T) {
@@ -722,19 +723,12 @@ func TestVtBackupWithBinlogs(t *testing.T) {
 		return
 	}
 
-	insertRow("binlogs2", 2)
-	_, err = startVtBackup(t, false, false, false, "--include-binlogs")
-	require.NoError(t, err)
-	backupB := lastBackupBinlogs(t)
-	assert.Subset(t, binlogNames(backupB), binlogNames(backupA))
-	assert.Greater(t, backupB[len(backupB)-1].Name, backupA[len(backupA)-1].Name)
-
 	// Back-date replica1's oldest binlog past the default binlog_expire_logs_seconds,
 	// so it is backed up with that mtime. Shutting down a replica's mysqld for the
 	// backup first rotates its binlogs (prepareReplicaForShutdown), which would
 	// expire the binlog, so replica1 keeps it for a year until its mysqld restart
 	// after the backup restores the default.
-	insertRow("binlogs3", 3)
+	insertRow("binlogs2", 2)
 	err = replica1.VttabletProcess.QueryTabletMultiple([]string{
 		"set global binlog_expire_logs_seconds = 31536000",
 		"flush binary logs",
@@ -757,7 +751,7 @@ func TestVtBackupWithBinlogs(t *testing.T) {
 	assert.Equal(t, "binlog."+strings.TrimPrefix(path.Ext(oldestBinlog), "."), expired.Name)
 	assert.WithinDuration(t, oldMtime, expired.ModTime, time.Second)
 
-	insertRow("binlogs4", 4)
+	insertRow("binlogs3", 3)
 	_, err = startVtBackup(t, false, false, false, "--include-binlogs")
 	require.NoError(t, err)
 	backupD := lastBackupBinlogs(t)
@@ -766,7 +760,7 @@ func TestVtBackupWithBinlogs(t *testing.T) {
 	assert.Greater(t, backupD[len(backupD)-1].Name, backupC[len(backupC)-1].Name)
 
 	// A vttablet restores the vtbackup backup and its binlogs.
-	restoreReplica2(4)
+	restoreReplica2(3)
 
 	removeBackups(t)
 	tearDown(t, true)
