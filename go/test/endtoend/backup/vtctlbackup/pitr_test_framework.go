@@ -803,10 +803,15 @@ func ExecTestIncrementalBackupWithBinlogs(t *testing.T, tcase *PITRTestCase) {
 			require.NotEmpty(t, fullManifest.BinlogFileEntries)
 		})
 		t.Run("incremental backup refuses binlogs", func(t *testing.T) {
-			output, err := localCluster.VtctldClientProcess.ExecuteCommandWithOutput("BackupShard", "--include-binlogs", "--incremental-from-pos", mysqlctl.AutoIncrementalFromPos, shardKsName)
+			// The refusal comes before the init SQL queries, which would otherwise run first.
+			output, err := localCluster.VtctldClientProcess.ExecuteCommandWithOutput("BackupShard", "--include-binlogs", "--incremental-from-pos", mysqlctl.AutoIncrementalFromPos,
+				"--init-backup-sql-queries", "SET GLOBAL innodb_old_blocks_time = 1234", "--init-backup-tablet-types", "REPLICA", "--init-backup-sql-timeout", "30s", shardKsName)
 			require.Error(t, err)
 			assert.Contains(t, output, "InvalidArgument")
 			assert.Contains(t, output, "including binlogs is only supported for full backups")
+			for _, replica := range []*cluster.Vttablet{replica1, replica2} {
+				assert.NotEqual(t, "1234", queryTabletValue(t, replica, "select @@global.innodb_old_blocks_time"), "init SQL ran on %s", replica.Alias)
+			}
 		})
 
 		incrementalBackup := func(t *testing.T, msg string) {

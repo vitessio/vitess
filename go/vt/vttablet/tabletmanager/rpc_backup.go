@@ -97,6 +97,10 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 		InitSQL:              req.InitSql.CloneVT(),
 		IncludeBinlogs:       req.IncludeBinlogs,
 	}
+	// Refuse an invalid IncludeBinlogs request before the init SQL queries run.
+	if err := mysqlctl.ValidateIncludeBinlogs(backupParams); err != nil {
+		return err
+	}
 
 	// Perform any requested pre backup initialization queries.
 	if err := mysqlctl.ExecuteBackupInitSQL(ctx, &backupParams); err != nil {
