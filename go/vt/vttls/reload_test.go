@@ -20,6 +20,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/tls"
 	"encoding/pem"
+	"fmt"
 	"os"
 	"path"
 	"strings"
@@ -405,6 +406,69 @@ func TestCRLFallbackIsNotHeldBySlowReads(t *testing.T) {
 	}
 	require.NoError(t, firstErr)
 	require.NoError(t, <-second)
+}
+
+// TestClientConfigChecksCRLsAgainstIssuersOfVerifiedChains checks,
+// with a CA file that holds the root alone, that a replacement CRL from
+// the intermediate the server presents, which the CA file cannot
+// validate, is checked against that intermediate once a verified chain
+// brought it: a CRL whose signature does not verify is then reported by
+// ReloadCachedFiles, and the client falls back to the CRLs it loaded
+// before, which still accept the server and revoke the revoked one,
+// rather than failing every handshake through the intermediate.
+func TestClientConfigChecksCRLsAgainstIssuersOfVerifiedChains(t *testing.T) {
+	root := t.TempDir()
+	certs := tlstest.CreateClientServerCertPairs(root)
+	rootCA := path.Join(root, "ca-cert.pem")
+	crl := path.Join(t.TempDir(), "crl.pem")
+	b, err := os.ReadFile(certs.ServerCRL)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(crl, b, 0o600))
+
+	validServer, err := ReadServerConfig(certs.ServerCert, certs.ServerKey, "", "", certs.ServerCA, tls.VersionTLS12)
+	require.NoError(t, err)
+	revokedServer, err := ReadServerConfig(certs.RevokedServerCert, certs.RevokedServerKey, "", "", certs.ServerCA, tls.VersionTLS12)
+	require.NoError(t, err)
+	handshakeWith := func(server *tls.Config, name string) handshakeResult {
+		t.Helper()
+		config, err := ClientConfig(VerifyIdentity, "", "", rootCA, crl, name, tls.VersionTLS12)
+		require.NoError(t, err)
+		return handshake(t, server, config)
+	}
+	requireFallback := func(msg string) {
+		t.Helper()
+		res := handshakeWith(validServer, certs.ServerName)
+		require.NoError(t, res.clientErr, msg)
+		require.NoError(t, res.serverErr, msg)
+		res = handshakeWith(revokedServer, certs.RevokedServerName)
+		require.ErrorContains(t, res.clientErr, "Certificate revoked: CommonName="+certs.RevokedServerName, msg)
+	}
+	// The handshake brings the intermediate in a verified chain.
+	requireFallback("the client must load the CRL")
+
+	intermediate := loadOneCert(t, certs.ServerCA)
+	imposter, imposterKey := selfSignedCA(t, 1, "", intermediate.RawSubject)
+	require.NoError(t, os.WriteFile(crl, pem.EncodeToMemory(&pem.Block{Type: "X509 CRL", Bytes: crlWithoutExtensions(t, imposter, imposterKey)}), 0o600))
+
+	_, err = ReloadCachedFiles()
+	require.ErrorContains(t, err, "cannot use the CRL file "+crl)
+	requireFallback("a CRL that the intermediate does not validate must leave the client on the CRLs it loaded before")
+
+	require.NoError(t, os.Remove(crl))
+	requireFallback("once the file is gone, the client must fall back to the CRLs it loaded before")
+}
+
+// TestCRLFallbackBoundsTheLearnedIssuers checks that the issuers a
+// client's CRL fallback records from verified chains are bounded in
+// number: a peer that holds the key of a permitted intermediate can
+// present a CA certificate minted under it on every connection.
+func TestCRLFallbackBoundsTheLearnedIssuers(t *testing.T) {
+	var fallback crlFallback
+	for i := range maxBoundIssuers + 5 {
+		issuer, _ := selfSignedCA(t, int64(1<<40+i), fmt.Sprintf("Minted CA %d", i), nil)
+		fallback.learnIssuer(issuer)
+	}
+	require.Equal(t, maxBoundIssuers, len(fallback.learnedIssuers()))
 }
 
 // clientFiles are the files of a TLS client, installed in turn from

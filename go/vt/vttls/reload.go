@@ -130,6 +130,10 @@ type crlFallback struct {
 	// none.
 	crlsRead uint64
 	crls     []*x509.RevocationList
+	// issuers holds, by DER encoding, the issuers beyond the CA file
+	// that the verified chains of peers brought and that the CRLs bound
+	// to, at most maxBoundIssuers of them, see clientCRLCheckerFrom.
+	issuers map[string]*x509.Certificate
 }
 
 func crlFallbackOf(w crlWatch) *crlFallback {
@@ -163,6 +167,53 @@ func (f *crlFallback) load() ([]*x509.RevocationList, bool) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.crls, f.crlsRead > 0
+}
+
+// learnIssuer records issuer, which a verified chain brought, unless
+// maxBoundIssuers are recorded already.
+func (f *crlFallback) learnIssuer(issuer *x509.Certificate) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if _, known := f.issuers[string(issuer.Raw)]; known || len(f.issuers) >= maxBoundIssuers {
+		return
+	}
+	if f.issuers == nil {
+		f.issuers = make(map[string]*x509.Certificate)
+	}
+	f.issuers[string(issuer.Raw)] = issuer
+}
+
+func (f *crlFallback) learnedIssuers() []*x509.Certificate {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return slices.Collect(maps.Values(f.issuers))
+}
+
+// clientCRLCheckerFrom is newCRLCheckerFrom for the CRLs of a client's
+// CRL file, which are also checked against the issuers beyond the CA
+// file that verified chains brought before, see crlFallback. The CRLs
+// of such an issuer, an intermediate under a CA file that holds the
+// root alone for one, are otherwise only checked when a chain next
+// brings it, so that a replacement whose signature does not verify
+// would take the place of the CRLs to fall back to, and fail every
+// handshake through that issuer even once the file is gone. The
+// checker it returns records the issuers that chains bring from then
+// on.
+func clientCRLCheckerFrom(crls []*x509.RevocationList, issuers []*x509.Certificate, fallback *crlFallback) (*crlChecker, error) {
+	checker, err := newCRLCheckerFrom(crls, issuers)
+	if err != nil {
+		return nil, err
+	}
+	for _, issuer := range fallback.learnedIssuers() {
+		if _, configured := checker.configured[string(issuer.Raw)]; configured {
+			continue
+		}
+		if _, err := checker.bindCRLs(issuer); err != nil {
+			return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "the CRLs cannot be applied under the CA certificate %s that a verified chain of a peer brought: %v", issuer.Subject.CommonName, err)
+		}
+	}
+	checker.onIssuer = fallback.learnIssuer
+	return checker, nil
 }
 
 // maxReloadAttempts bounds how many times ReloadCachedFiles reads the
@@ -460,7 +511,7 @@ func (c cachedFiles) read() map[entryID]entryResult {
 		// CRLs last loaded from the file.
 		crls, err := parseCRLSet(w.crl, body)
 		if err == nil {
-			_, err = newCRLCheckerFrom(crls, issuers)
+			_, err = clientCRLCheckerFrom(crls, issuers, fallback)
 		}
 		if err != nil {
 			results[crlEntry(w)] = entryResult{err: vterrors.Wrapf(err, "cannot use the CRL file %s under the CA file %s; the CRLs last loaded from it stay in use", w.crl, w.ca)}
@@ -594,7 +645,7 @@ func clientCRLChecker(r clientCRLRead) (*crlChecker, error) {
 		var crls []*x509.RevocationList
 		if crls, err = parseCRLSet(r.w.crl, r.body); err == nil {
 			var checker *crlChecker
-			if checker, err = newCRLCheckerFrom(crls, issuers); err == nil {
+			if checker, err = clientCRLCheckerFrom(crls, issuers, r.fallback); err == nil {
 				r.fallback.store(crls, r.read)
 				watchCRL(r.w, sha256.Sum256(r.body))
 				staleCRLWarnings.Delete(r.w)
@@ -606,7 +657,7 @@ func clientCRLChecker(r clientCRLRead) (*crlChecker, error) {
 	if !ok {
 		return nil, err
 	}
-	checker, lastErr := newCRLCheckerFrom(last, issuers)
+	checker, lastErr := clientCRLCheckerFrom(last, issuers, r.fallback)
 	if lastErr != nil {
 		return nil, err
 	}
