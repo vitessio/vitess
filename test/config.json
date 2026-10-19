@@ -204,7 +204,7 @@
       ],
       "Command": [],
       "Manual": false,
-      "Shard": "21",
+      "Shard": "vtgate_readafterwrite",
       "Tags": [],
       "Needs": [
         "microceph"
