@@ -231,10 +231,15 @@ func TestTLSReload(t *testing.T) {
 		require.NoError(t, reloadErr)
 
 		// Clients of the old CA are no longer accepted on new
-		// connections.
-		_, err = grpcServedCert(t, oldCerts)
+		// connections. The client trusts the new server CA, so that it
+		// is vtgate that rejects the handshake, for the old client
+		// certificate: a vtgate still trusting the old client CA would
+		// accept it.
+		staleClient := newCerts
+		staleClient.ClientCert, staleClient.ClientKey = oldCerts.ClientCert, oldCerts.ClientKey
+		_, err = grpcServedCert(t, staleClient)
 		require.Error(t, err)
-		_, err = connectMySQL(t, oldCerts)
+		_, err = connectMySQL(t, staleClient)
 		require.Error(t, err)
 
 		// The connection established before the reload keeps working.
