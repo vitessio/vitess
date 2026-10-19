@@ -3384,46 +3384,16 @@ func (s *Server) canSwitch(ctx context.Context, ts *trafficSwitcher, maxAllowedR
 	var m sync.Mutex
 	rtbsCtx, cancel := context.WithTimeout(ctx, shardTabletRefreshTimeout)
 	defer cancel()
-<<<<<<< HEAD
-	refreshTablets := func(shards []*topo.ShardInfo, stype string) {
-		defer wg.Done()
-		for _, si := range shards {
-			if partial, partialDetails, err := topotools.RefreshTabletsByShard(rtbsCtx, s.ts, s.tmc, si, nil, ts.Logger()); err != nil || partial {
-				msg := fmt.Sprintf("failed to successfully refresh all tablets in the %s/%s %s shard (%v):\n  %v\n",
-					si.Keyspace(), si.ShardName(), stype, err, partialDetails)
-				if partial && ts.force {
-					log.Warning(msg)
-				} else {
-					m.Lock()
-					refreshErrors.WriteString(msg)
-					m.Unlock()
-				}
-||||||| parent of 482d4d76f7 (VReplication: refresh shards concurrently before switching traffic (#21607))
-	refreshTablets := func(shards []*topo.ShardInfo, stype string) {
-		defer wg.Done()
-		for _, si := range shards {
-			if partial, partialDetails, err := topotools.RefreshTabletsByShard(rtbsCtx, s.ts, s.tmc, si, nil, ts.Logger()); err != nil || partial {
-				msg := fmt.Sprintf("failed to successfully refresh all tablets in the %s/%s %s shard (%v):\n  %v\n",
-					si.Keyspace(), si.ShardName(), stype, err, partialDetails)
-				if partial && ts.force {
-					log.Warn(msg)
-				} else {
-					m.Lock()
-					refreshErrors.WriteString(msg)
-					m.Unlock()
-				}
-=======
 	refreshTablets := func(si *topo.ShardInfo, stype string) {
 		if partial, partialDetails, err := topotools.RefreshTabletsByShard(rtbsCtx, s.ts, s.tmc, si, nil, ts.Logger()); err != nil || partial {
 			msg := fmt.Sprintf("failed to successfully refresh all tablets in the %s/%s %s shard (%v):\n  %v\n",
 				si.Keyspace(), si.ShardName(), stype, err, partialDetails)
 			if partial && ts.force {
-				log.Warn(msg)
+				log.Warning(msg)
 			} else {
 				m.Lock()
 				refreshErrors.WriteString(msg)
 				m.Unlock()
->>>>>>> 482d4d76f7 (VReplication: refresh shards concurrently before switching traffic (#21607))
 			}
 		}
 	}
