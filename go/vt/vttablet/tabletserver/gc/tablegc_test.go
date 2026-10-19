@@ -18,16 +18,80 @@ package gc
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
 	"vitess.io/vitess/go/mysql/capabilities"
+	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/vtenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// newFakeDBTableGC builds a TableGC wired to a fake MySQL, sufficient for exercising purge/dropTable.
+func newFakeDBTableGC(t *testing.T, db *fakesqldb.DB) *TableGC {
+	cfg := tabletenv.NewDefaultConfig()
+	cfg.DB = dbconfigs.NewTestDBConfigs(*db.ConnParams(), *db.ConnParams(), "fakesqldb")
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TableGCTest")
+
+	collector := &TableGC{
+		env:             env,
+		throttlerClient: throttle.NewBackgroundClient(nil, throttlerapp.TableGCName, base.UndefinedScope),
+		purgingTables:   map[string]bool{},
+	}
+	var err error
+	collector.lifecycleStates, err = schema.ParseGCLifecycle("hold,purge,evac,drop")
+	require.NoError(t, err)
+	return collector
+}
+
+// injectingGCTableName is accepted by schema.AnalyzeGCTableName but holds back
+// quotes and a ';' that would end the identifier if it were not escaped.
+const injectingGCTableName = "_vt_drp_6ace8bcef73211ea`;DROP`TABLE`X`;_20200915120410_"
+
+// TestGCEscapesTableNames verifies that dropTable and purge write the table name
+// into their statements as one escaped identifier. A name can pass
+// schema.AnalyzeGCTableName and still hold a back quote, since its [0-f] ranges
+// accept punctuation.
+func TestGCEscapesTableNames(t *testing.T) {
+	isGCTable, _, _, _, err := schema.AnalyzeGCTableName(injectingGCTableName)
+	require.NoError(t, err)
+	require.True(t, isGCTable)
+
+	t.Run("drop", func(t *testing.T) {
+		db := fakesqldb.New(t)
+		defer db.Close()
+		db.SetNeverFail(true)
+
+		collector := newFakeDBTableGC(t, db)
+		require.NoError(t, collector.dropTable(t.Context(), injectingGCTableName, true))
+		// The query log is lowercased.
+		assert.Contains(t, db.QueryLog(), strings.ToLower("drop table if exists `_vt_drp_6ace8bcef73211ea``;DROP``TABLE``X``;_20200915120410_`"))
+	})
+
+	t.Run("purge", func(t *testing.T) {
+		db := fakesqldb.New(t)
+		defer db.Close()
+		db.SetNeverFail(true)
+
+		collector := newFakeDBTableGC(t, db)
+		injectingPurgeTableName := strings.Replace(injectingGCTableName, "_vt_drp_", "_vt_prg_", 1)
+		require.True(t, collector.addPurgingTable(injectingPurgeTableName))
+		_, err := collector.purge(t.Context())
+		require.NoError(t, err)
+		// The query log is lowercased.
+		assert.Contains(t, db.QueryLog(), strings.ToLower("delete from `_vt_prg_6ace8bcef73211ea``;DROP``TABLE``X``;_20200915120410_` limit 50"))
+	})
+}
 
 func TestNextTableToPurge(t *testing.T) {
 	tt := []struct {

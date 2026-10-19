@@ -1295,6 +1295,89 @@ func (tc *requireCallerIDTMClient) ExecuteQuery(ctx context.Context, tablet *top
 	return tc.TabletManagerClient.ExecuteQuery(ctx, tablet, req)
 }
 
+// TestBackupShardStatsAlignment checks each tablet is read with its own status.
+// It repeats because ShardReplicationStatuses builds its slice from a map.
+func TestBackupShardStatsAlignment(t *testing.T) {
+	t.Parallel()
+
+	const runs = 20
+
+	for range runs {
+		ctx := t.Context()
+		ts := memorytopo.NewServer(ctx, "zone1")
+		tmc := &testutil.TabletManagerClient{
+			Backups: map[string]struct {
+				Events        []*logutilpb.Event
+				EventInterval time.Duration
+				EventJitter   time.Duration
+				ErrorAfter    time.Duration
+			}{
+				"zone1-0000000101": {Events: []*logutilpb.Event{{}, {}, {}}},
+			},
+			PrimaryPositionResults: map[string]struct {
+				Position string
+				Error    error
+			}{
+				"zone1-0000000200": {Position: "some-position"},
+			},
+			ReplicationStatusResults: map[string]struct {
+				Position *replicationdatapb.Status
+				Error    error
+			}{
+				// This tablet makes ShardReplicationStatuses return an error with a nil status.
+				"zone1-0000000100": {Error: assert.AnError},
+				"zone1-0000000101": {Position: &replicationdatapb.Status{ReplicationLagSeconds: 1}},
+			},
+		}
+		tablets := []*topodatapb.Tablet{
+			{
+				Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+				Keyspace: "ks",
+				Shard:    "-",
+				Type:     topodatapb.TabletType_REPLICA,
+			},
+			{
+				Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+				Keyspace: "ks",
+				Shard:    "-",
+				Type:     topodatapb.TabletType_REPLICA,
+			},
+			{
+				Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 200},
+				Keyspace: "ks",
+				Shard:    "-",
+				Type:     topodatapb.TabletType_PRIMARY,
+			},
+		}
+
+		testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{AlsoSetShardPrimary: true}, tablets...)
+		vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+			return NewVtctldServer(vtenv.NewTestEnv(), ts)
+		})
+
+		client := localvtctldclient.New(vtctld)
+		stream, err := client.BackupShard(ctx, &vtctldatapb.BackupShardRequest{Keyspace: "ks", Shard: "-"})
+		require.NoError(t, err)
+
+		var responses []*vtctldatapb.BackupResponse
+		for {
+			resp, recvErr := stream.Recv()
+			if recvErr != nil {
+				err = recvErr
+				break
+			}
+			responses = append(responses, resp)
+		}
+
+		// The healthy replica must be backed up, whatever order the tablets came back in.
+		require.ErrorIs(t, err, io.EOF, "expected Recv loop to end with io.EOF")
+		require.Len(t, responses, 3, "expected 3 messages from backupclient stream")
+		for _, resp := range responses {
+			require.Equal(t, 101, int(resp.TabletAlias.Uid))
+		}
+	}
+}
+
 func TestCancelSchemaMigration(t *testing.T) {
 	t.Parallel()
 

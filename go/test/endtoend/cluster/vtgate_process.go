@@ -246,12 +246,14 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 	if err != nil {
 		return
 	}
-	vtgate.exit = make(chan error)
+	// The waiter captures this process and channel: TearDown returns once it
+	// receives the exit result, and a restart then replaces both fields, so
+	// the waiter must not read them again when it closes the channel.
+	proc, exit := vtgate.proc, make(chan error)
+	vtgate.exit = exit
 	go func() {
-		if vtgate.proc != nil {
-			vtgate.exit <- vtgate.proc.Wait()
-			close(vtgate.exit)
-		}
+		exit <- proc.Wait()
+		close(exit)
 	}()
 
 	timeout := time.Now().Add(60 * time.Second)
@@ -360,16 +362,20 @@ func (vtgate *VtgateProcess) TearDown() error {
 
 	// We are not checking vtgate's exit code because it sometimes
 	// returns exit code 2, even though vtgate terminates cleanly.
+	// Since the exit result is ignored, a long wait for a graceful exit
+	// buys nothing: force-kill after a short grace period. The forced kill
+	// is not an error either, so that callers like RestartVtgate go on to
+	// start the new vtgate.
 	select {
 	case <-vtgate.exit:
 		vtgate.proc = nil
 		return nil
 
-	case <-time.After(30 * time.Second):
+	case <-time.After(5 * time.Second):
 		vtgate.proc.Process.Kill()
-		err := <-vtgate.exit
+		<-vtgate.exit
 		vtgate.proc = nil
-		return err
+		return nil
 	}
 }
 

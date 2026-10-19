@@ -82,6 +82,12 @@ func (tm *TabletManager) executeMultiFetchAsDba(
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
 		return nil, err
 	}
+
+	// The statements are split and checked with Vitess's tokenizer and then
+	// sent to MySQL as written, so MySQL must skip every comment that Vitess
+	// skips.
+	sql, _ = tm.Env.Parser().RewriteDoubleSlashComments(sql)
+
 	// Get a connection.
 	conn, err := tm.MysqlDaemon.GetDbaConnection(ctx)
 	if err != nil {
@@ -248,7 +254,10 @@ func (tm *TabletManager) ExecuteFetchAsAllPrivs(ctx context.Context, req *tablet
 	}
 
 	// Replace any provided sidecar database qualifiers with the correct one.
-	uq, err := tm.Env.Parser().ReplaceTableQualifiers(string(req.Query), sidecar.DefaultName, sidecar.GetName())
+	// The query is checked with Vitess's tokenizer and then sent to MySQL as
+	// written, so MySQL must skip every comment that Vitess skips.
+	query, _ := tm.Env.Parser().RewriteDoubleSlashComments(string(req.Query))
+	uq, err := tm.Env.Parser().ReplaceTableQualifiers(query, sidecar.DefaultName, sidecar.GetName())
 	if err != nil {
 		return nil, err
 	}
@@ -275,7 +284,10 @@ func (tm *TabletManager) ExecuteFetchAsApp(ctx context.Context, req *tabletmanag
 	}
 	defer conn.Recycle()
 	// Replace any provided sidecar database qualifiers with the correct one.
-	uq, err := tm.Env.Parser().ReplaceTableQualifiers(string(req.Query), sidecar.DefaultName, sidecar.GetName())
+	// The query is checked with Vitess's tokenizer and then sent to MySQL as
+	// written, so MySQL must skip every comment that Vitess skips.
+	query, _ := tm.Env.Parser().RewriteDoubleSlashComments(string(req.Query))
+	uq, err := tm.Env.Parser().ReplaceTableQualifiers(query, sidecar.DefaultName, sidecar.GetName())
 	if err != nil {
 		return nil, err
 	}

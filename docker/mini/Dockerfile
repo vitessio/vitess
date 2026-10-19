@@ -38,9 +38,9 @@ RUN echo "hostname=127.0.0.1" >> /vt/dist/scripts/env.sh
 RUN cat /vt/dist/scripts/env.sh | egrep "^alias" >> /etc/bash.bashrc
 
 # Set up Vitess environment (just enough to run pre-built Go binaries)
-ENV VTROOT /vt/src/vitess.io/vitess
-ENV VTDATAROOT /vt/vtdataroot
-ENV PATH $VTROOT/bin:$PATH
+ENV VTROOT=/vt/src/vitess.io/vitess
+ENV VTDATAROOT=/vt/vtdataroot
+ENV PATH=$VTROOT/bin:$PATH
 ENV PATH="/vt/bin:${PATH}"
 ENV PATH="/var/opt/etcd:${PATH}"
 ENV TOPO="etcd"

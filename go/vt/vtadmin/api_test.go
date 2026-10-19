@@ -28,6 +28,11 @@ import (
 	"os"
 	"testing"
 
+	"google.golang.org/grpc"
+
+	vtadminhttp "vitess.io/vitess/go/vt/vtadmin/http"
+
+	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
@@ -42,6 +47,7 @@ import (
 	"vitess.io/vitess/go/vt/vtadmin/cluster"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery/fakediscovery"
 	vtadminerrors "vitess.io/vitess/go/vt/vtadmin/errors"
+	"vitess.io/vitess/go/vt/vtadmin/rbac"
 	vtadmintestutil "vitess.io/vitess/go/vt/vtadmin/testutil"
 	"vitess.io/vitess/go/vt/vtadmin/vtctldclient/fakevtctldclient"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver"
@@ -5134,6 +5140,8 @@ func TestVExplain(t *testing.T) {
 		tabletSchemas map[string]*tabletmanagerdatapb.SchemaDefinition
 		tablets       []*vtadminpb.Tablet
 		req           *vtadminpb.VExplainRequest
+		// actions, when set, are the only actions the actor may take on VExplain.
+		actions       []string
 		expectedError error
 	}{
 		{
@@ -5157,6 +5165,52 @@ func TestVExplain(t *testing.T) {
 			req: &vtadminpb.VExplainRequest{
 				ClusterId: "c0",
 				Keyspace:  "commerce",
+			},
+			expectedError: vtadminerrors.ErrInvalidRequest,
+		},
+		{
+			name: "returns an error if a VEXPLAIN that runs its statement is not authorized to execute",
+			req: &vtadminpb.VExplainRequest{
+				ClusterId: "c0",
+				Keyspace:  "commerce",
+				Sql:       "vexplain all select * from customers",
+			},
+			actions:       []string{"get"},
+			expectedError: vtadminerrors.ErrUnauthorized,
+		},
+		{
+			name: "returns an error if a VEXPLAIN that runs its statement is given DML",
+			req: &vtadminpb.VExplainRequest{
+				ClusterId: "c0",
+				Keyspace:  "commerce",
+				Sql:       "vexplain /*vt+ EXECUTE_DML_QUERIES */ queries insert into customers (id) values (1)",
+			},
+			expectedError: vtadminerrors.ErrInvalidRequest,
+		},
+		{
+			name: "returns an error if the explained SELECT writes its result with INTO",
+			req: &vtadminpb.VExplainRequest{
+				ClusterId: "c0",
+				Keyspace:  "commerce",
+				Sql:       "vexplain queries select * from customers into outfile '/tmp/customers'",
+			},
+			expectedError: vtadminerrors.ErrInvalidRequest,
+		},
+		{
+			name: "returns an error if the explained SELECT consumes sequence values",
+			req: &vtadminpb.VExplainRequest{
+				ClusterId: "c0",
+				Keyspace:  "commerce",
+				Sql:       "vexplain trace select next 1 values from seq",
+			},
+			expectedError: vtadminerrors.ErrInvalidRequest,
+		},
+		{
+			name: "returns an error if the explained SELECT takes an advisory lock",
+			req: &vtadminpb.VExplainRequest{
+				ClusterId: "c0",
+				Keyspace:  "commerce",
+				Sql:       "vexplain all select get_lock('l', 1)",
 			},
 			expectedError: vtadminerrors.ErrInvalidRequest,
 		},
@@ -5232,6 +5286,81 @@ func TestVExplain(t *testing.T) {
 				Keyspace:  "commerce",
 				Sql:       "vexplain all select * from customers",
 			},
+			actions: []string{"get", "execute"},
+		},
+		{
+			name: "runs VExplain PLAN, which only plans the statement, of a statement with side effects with only the get action",
+			keyspaces: []*vtctldatapb.Keyspace{
+				{
+					Name:     "commerce",
+					Keyspace: &topodatapb.Keyspace{},
+				},
+			},
+			shards: []*vtctldatapb.Shard{
+				{
+					Name:     "-",
+					Keyspace: "commerce",
+				},
+			},
+			srvVSchema: &vschemapb.SrvVSchema{
+				Keyspaces: map[string]*vschemapb.Keyspace{
+					"commerce": {
+						Sharded: false,
+						Tables: map[string]*vschemapb.Table{
+							"customers": {},
+						},
+					},
+				},
+				RoutingRules: &vschemapb.RoutingRules{
+					Rules: []*vschemapb.RoutingRule{},
+				},
+			},
+			tabletSchemas: map[string]*tabletmanagerdatapb.SchemaDefinition{
+				"c0_cell1-0000000100": {
+					DatabaseSchema: "CREATE DATABASE commerce",
+					TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+						{
+							Name:       "t1",
+							Schema:     `CREATE TABLE customers (id int(11) not null,PRIMARY KEY (id));`,
+							Type:       "BASE",
+							Columns:    []string{"id"},
+							DataLength: 100,
+							RowCount:   50,
+							Fields: []*querypb.Field{
+								{
+									Name: "id",
+									Type: querypb.Type_INT32,
+								},
+							},
+						},
+					},
+				},
+			},
+			tablets: []*vtadminpb.Tablet{
+				{
+					Cluster: &vtadminpb.Cluster{
+						Id:   "c0",
+						Name: "cluster0",
+					},
+					State: vtadminpb.Tablet_SERVING,
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Uid:  100,
+							Cell: "c0_cell1",
+						},
+						Hostname: "tablet-cell1-a",
+						Keyspace: "commerce",
+						Shard:    "-",
+						Type:     topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+			req: &vtadminpb.VExplainRequest{
+				ClusterId: "c0",
+				Keyspace:  "commerce",
+				Sql:       "vexplain plan select get_lock('l', 1) from customers",
+			},
+			actions: []string{"get"},
 		},
 	}
 
@@ -5287,7 +5416,25 @@ func TestVExplain(t *testing.T) {
 					}),
 				}
 
-				api := NewAPI(vtenv.NewTestEnv(), clusters, Options{})
+				opts := Options{}
+				if tt.actions != nil {
+					opts.RBAC = &rbac.Config{
+						Rules: []*struct {
+							Resource string
+							Actions  []string
+							Subjects []string
+							Clusters []string
+						}{{
+							Resource: string(rbac.VExplainResource),
+							Actions:  tt.actions,
+							Subjects: []string{"user:allowed"},
+							Clusters: []string{"*"},
+						}},
+					}
+					require.NoError(t, opts.RBAC.Reify())
+					ctx = rbac.NewContext(ctx, &rbac.Actor{Name: "allowed"})
+				}
+				api := NewAPI(vtenv.NewTestEnv(), clusters, opts)
 				resp, err := api.VExplain(ctx, tt.req)
 
 				if tt.expectedError != nil {
@@ -5320,6 +5467,144 @@ type ServeHTTPResponse struct {
 
 type ServeHTTPResult struct {
 	Clusters []*vtadminpb.Cluster `json:"clusters"`
+}
+
+// TestHandlerRestrictsMutatingRoutesToPOST checks that the routes that change
+// cluster state match only POST, and the CORS preflight, so that a cross-site
+// GET, such as a top-level navigation carrying a session cookie, cannot reach
+// them.
+func TestHandlerRestrictsMutatingRoutesToPOST(t *testing.T) {
+	api := NewAPI(vtenv.NewTestEnv(), nil, Options{})
+	router, ok := api.Handler().(*mux.Router)
+	require.True(t, ok)
+
+	for name, path := range map[string]string{
+		"API.PingTablet":            "/api/tablet/zone1-0000000100/ping",
+		"API.RunHealthCheck":        "/api/tablet/zone1-0000000100/healthcheck",
+		"API.ConcludeTransaction":   "/api/transaction/c0/dtid1/conclude",
+		"API.StartWorkflow":         "/api/workflow/c0/ks/wf/start",
+		"API.StopWorkflow":          "/api/workflow/c0/ks/wf/stop",
+		"API.WorkflowSwitchTraffic": "/api/workflow/c0/switchtraffic",
+		"API.WorkflowDelete":        "/api/workflow/c0/delete",
+		"API.MoveTablesComplete":    "/api/movetables/c0/complete",
+	} {
+		t.Run(name, func(t *testing.T) {
+			for _, method := range []string{http.MethodPost, http.MethodOptions} {
+				var match mux.RouteMatch
+				require.True(t, router.Match(httptest.NewRequest(method, path, nil), &match), method)
+				require.Equal(t, name, match.Route.GetName(), method)
+			}
+			for _, method := range []string{http.MethodGet, http.MethodHead, http.MethodPut, http.MethodDelete} {
+				var match mux.RouteMatch
+				require.False(t, router.Match(httptest.NewRequest(method, path, nil), &match), method)
+			}
+		})
+	}
+}
+
+// countingVtctldClient counts the WorkflowUpdate calls that reach the vtctld.
+type countingVtctldClient struct {
+	*fakevtctldclient.VtctldClient
+	workflowUpdates int
+}
+
+func (c *countingVtctldClient) WorkflowUpdate(ctx context.Context, req *vtctldatapb.WorkflowUpdateRequest, opts ...grpc.CallOption) (*vtctldatapb.WorkflowUpdateResponse, error) {
+	c.workflowUpdates++
+	return &vtctldatapb.WorkflowUpdateResponse{}, nil
+}
+
+// TestHandlerRejectsCrossSiteRequests checks that a state-changing request a
+// browser sends on behalf of a page from another site is refused before it reaches
+// the vtctld, whatever the SameSite attribute of the session cookie it carries,
+// while same-origin requests, requests from a configured CORS origin and requests
+// from non-browser clients still go through.
+func TestHandlerRejectsCrossSiteRequests(t *testing.T) {
+	const webOrigin = "https://vtadmin-web.example.com"
+	for _, tc := range []struct {
+		name string
+		// corsOrigins defaults to webOrigin.
+		corsOrigins []string
+		// url defaults to a plain http request to vtadmin.example.com.
+		url     string
+		headers map[string]string
+		allowed bool
+	}{{
+		name:    "a cross-site form post",
+		headers: map[string]string{"Origin": "https://attacker.example", "Sec-Fetch-Site": "cross-site"},
+	}, {
+		name:        "a cross-site form post when CORS allows every origin",
+		corsOrigins: []string{"*"},
+		headers:     map[string]string{"Origin": "https://attacker.example", "Sec-Fetch-Site": "cross-site"},
+	}, {
+		name:    "a same-site post from another origin",
+		headers: map[string]string{"Origin": "https://other.example.com", "Sec-Fetch-Site": "same-site"},
+	}, {
+		name:    "a post from another origin without fetch metadata",
+		headers: map[string]string{"Origin": "https://attacker.example"},
+	}, {
+		name:    "a post from the same host over another scheme without fetch metadata",
+		url:     "https://vtadmin.example.com/api/workflow/c0/ks/wf/stop",
+		headers: map[string]string{"Origin": "http://vtadmin.example.com"},
+	}, {
+		name:    "a post from a configured CORS origin",
+		headers: map[string]string{"Origin": webOrigin, "Sec-Fetch-Site": "cross-site"},
+		allowed: true,
+	}, {
+		name:        "a post from a configured CORS origin spelled differently",
+		corsOrigins: []string{"https://VTAdmin-Web.example.com:443"},
+		headers:     map[string]string{"Origin": webOrigin, "Sec-Fetch-Site": "cross-site"},
+		allowed:     true,
+	}, {
+		name:    "a same-origin post",
+		headers: map[string]string{"Origin": "http://vtadmin.example.com", "Sec-Fetch-Site": "same-origin"},
+		allowed: true,
+	}, {
+		name:    "a same-origin post without fetch metadata",
+		headers: map[string]string{"Origin": "http://vtadmin.example.com"},
+		allowed: true,
+	}, {
+		name:    "an https same-origin post naming the default port without fetch metadata",
+		url:     "https://vtadmin.example.com/api/workflow/c0/ks/wf/stop",
+		headers: map[string]string{"Origin": "https://vtadmin.example.com:443"},
+		allowed: true,
+	}, {
+		name:    "a post from a non-browser client",
+		allowed: true,
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			corsOrigins := tc.corsOrigins
+			if corsOrigins == nil {
+				corsOrigins = []string{webOrigin}
+			}
+			target := tc.url
+			if target == "" {
+				target = "http://vtadmin.example.com/api/workflow/c0/ks/wf/stop"
+			}
+
+			vtctld := &countingVtctldClient{VtctldClient: &fakevtctldclient.VtctldClient{}}
+			c := vtadmintestutil.BuildCluster(t, vtadmintestutil.TestClusterConfig{
+				Cluster:      &vtadminpb.Cluster{Id: "c0", Name: "cluster0"},
+				VtctldClient: vtctld,
+			})
+			api := NewAPI(vtenv.NewTestEnv(), []*cluster.Cluster{c}, Options{
+				HTTPOpts: vtadminhttp.Options{CORSOrigins: corsOrigins},
+			})
+
+			req := httptest.NewRequest(http.MethodPost, target, nil)
+			for name, value := range tc.headers {
+				req.Header.Set(name, value)
+			}
+			w := httptest.NewRecorder()
+			api.Handler().ServeHTTP(w, req)
+
+			if tc.allowed {
+				assert.Equal(t, 1, vtctld.workflowUpdates, "the request must reach the vtctld")
+				return
+			}
+			assert.Equal(t, http.StatusForbidden, w.Code)
+			assert.Zero(t, vtctld.workflowUpdates, "a refused request must not reach the vtctld")
+		})
+	}
 }
 
 func TestServeHTTP(t *testing.T) {

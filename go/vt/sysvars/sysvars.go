@@ -16,7 +16,10 @@ limitations under the License.
 
 package sysvars
 
-import "sync"
+import (
+	"strings"
+	"sync"
+)
 
 // This information lives here, because it's needed from the vtgate planbuilder, the vtgate engine,
 // and the AST rewriter, that happens to live in sqlparser.
@@ -61,6 +64,7 @@ var (
 	UniqueChecks     = "unique_checks"
 
 	Autocommit                  = SystemVariable{Name: "autocommit", IsBoolean: true, Default: on}
+	SQLMode                     = SystemVariable{Name: "sql_mode", SupportSetVar: true}
 	Charset                     = SystemVariable{Name: "charset", Default: utf8mb4, IdentifierAsString: true}
 	ClientFoundRows             = SystemVariable{Name: "client_found_rows", IsBoolean: true, Default: off}
 	SessionEnableSystemSettings = SystemVariable{Name: "enable_system_settings", IsBoolean: true, Default: on}
@@ -223,7 +227,7 @@ var (
 		{Name: "show_old_temporals", IsBoolean: true},
 		{Name: "sort_buffer_size", SupportSetVar: true},
 		{Name: "sql_big_selects", IsBoolean: true, SupportSetVar: true},
-		{Name: "sql_mode", SupportSetVar: true},
+		SQLMode,
 		{Name: "sql_notes", IsBoolean: true},
 		{Name: "sql_quote_show_create", IsBoolean: true},
 		{Name: "sql_safe_updates", IsBoolean: true, SupportSetVar: true},
@@ -298,6 +302,14 @@ func SupportsSetVar(name string) bool {
 	}
 
 	return sys.SupportSetVar
+}
+
+// IsSafeSetVarValue reports whether a system variable value can be carried
+// in a SET_VAR optimizer hint. The hint lives inside a /*+ ... */ comment and
+// nothing inside a block comment can escape the sequence that terminates it,
+// so such a value has to be applied through a reserved connection instead.
+func IsSafeSetVarValue(value string) bool {
+	return !strings.Contains(value, "*/")
 }
 
 // GetInterestingVariables is used to return all the variables that may be listed in a SHOW VARIABLES command.

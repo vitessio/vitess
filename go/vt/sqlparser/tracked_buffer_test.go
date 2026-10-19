@@ -110,7 +110,7 @@ func TestCanonicalOutput(t *testing.T) {
 		},
 		{
 			"create table a (id int not null primary key) engine InnoDB, charset utf8mb4, collate utf8mb4_0900_ai_ci partition by range (`id`) (partition `p10` values less than(10) engine InnoDB tablespace foo)",
-			"CREATE TABLE `a` (\n\t`id` int NOT NULL PRIMARY KEY\n) ENGINE InnoDB,\n  CHARSET utf8mb4,\n  COLLATE utf8mb4_0900_ai_ci\nPARTITION BY RANGE (`id`)\n(PARTITION `p10` VALUES LESS THAN (10) ENGINE InnoDB TABLESPACE foo)",
+			"CREATE TABLE `a` (\n\t`id` int NOT NULL PRIMARY KEY\n) ENGINE InnoDB,\n  CHARSET utf8mb4,\n  COLLATE utf8mb4_0900_ai_ci\nPARTITION BY RANGE (`id`)\n(PARTITION `p10` VALUES LESS THAN (10) ENGINE InnoDB TABLESPACE `foo`)",
 		},
 		{
 			"create table a (id int not null primary key) engine InnoDB, charset utf8mb4, collate utf8mb4_0900_ai_ci partition by range (`id`) (partition `p10` values less than maxvalue)",
@@ -275,6 +275,11 @@ func TestCanonicalOutput(t *testing.T) {
 		{
 			"select 1 from t1 into outfile 'test/t1.txt'",
 			"SELECT 1 FROM `t1` INTO OUTFILE 'test/t1.txt'",
+		},
+		{
+			// temporal literal values are escaped like string literals, after an upper-case keyword
+			`select date '2020-01-01\' or 1 -- ', time '12:34:56'' or 1 -- ', timestamp '2012-12-31 11:30:45\\'`,
+			`SELECT DATE'2020-01-01\' or 1 -- ', TIME'12:34:56\' or 1 -- ', TIMESTAMP'2012-12-31 11:30:45\\' FROM dual`,
 		},
 	}
 

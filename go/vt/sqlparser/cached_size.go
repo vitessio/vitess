@@ -5057,7 +5057,7 @@ func (cached *TableOption) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(80)
+		size += int64(96)
 	}
 	// field Name string
 	size += hack.RuntimeAllocSize(int64(len(cached.Name)))
@@ -5072,6 +5072,8 @@ func (cached *TableOption) CachedSize(alloc bool) int64 {
 			size += elem.CachedSize(false)
 		}
 	}
+	// field Storage string
+	size += hack.RuntimeAllocSize(int64(len(cached.Storage)))
 	return size
 }
 
