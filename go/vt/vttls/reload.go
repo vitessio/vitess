@@ -262,6 +262,12 @@ var crlFileReadTestHook func()
 // others: with the new CA but its old key pair, or with a new CA its
 // CRL is not valid under. Configurations that share no file reload
 // independently.
+//
+// A read of a CRL file that hangs, as on an unresponsive NFS mount,
+// holds up the reload, and the reloads after it, until it returns:
+// reloads are serialized, and a CRL file's reads are too, see
+// crlFallback. It does not hold up the configs that ClientConfig builds
+// from other files, nor the servers' reloads.
 func ReloadCachedFiles() (changed bool, err error) {
 	reloadMu.Lock()
 	defer reloadMu.Unlock()
