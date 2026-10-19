@@ -1710,8 +1710,7 @@ func (tm *TabletManager) initializeReplicationLocked(ctx context.Context, tablet
 		return "", nil
 	}
 
-	primaryStatus, err := tm.checkNoErrantGTIDs(ctx, currentPrimary.Tablet)
-	if err != nil {
+	if _, err := tm.checkNoErrantGTIDs(ctx, currentPrimary.Tablet); err != nil {
 		return "", err
 	}
 
@@ -1730,7 +1729,8 @@ func (tm *TabletManager) initializeReplicationLocked(ctx context.Context, tablet
 	if err := tm.MysqlDaemon.StopReplication(ctx, tm.hookExtraEnv()); err != nil {
 		return "", vterrors.Wrap(err, "failed to stop replication")
 	}
-	if primaryStatus, err = tm.checkNoErrantGTIDs(ctx, currentPrimary.Tablet); err != nil {
+	primaryStatus, err := tm.checkNoErrantGTIDs(ctx, currentPrimary.Tablet)
+	if err != nil {
 		return "", err
 	}
 	// Change semi-sync only after validating the source, but before the
