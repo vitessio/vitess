@@ -18,12 +18,14 @@ package mysqlctl
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/os2"
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -247,6 +249,11 @@ func verifyRestoredBinlogs(ctx context.Context, mysqld MysqlDaemon, cnf *Mycnf, 
 		}
 		name := filepath.Base(line)
 		if _, err := mysqld.FetchSuperQuery(ctx, "SHOW BINLOG EVENTS IN "+sqltypes.EncodeStringSQL(name)+" LIMIT 1"); err != nil {
+			// Only an error from mysqld itself says that it can't read the binlog. Keep
+			// the code of any other, such as a lost connection.
+			if sqlErr, ok := errors.AsType[*sqlerror.SQLError](err); !ok || sqlerror.IsConnErr(sqlErr) {
+				return vterrors.Wrapf(err, "cannot read restored binlog %s", name)
+			}
 			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot read restored binlog %s; if it is encrypted, this server's keyring needs the source's binlog master key: %v", name, err)
 		}
 	}

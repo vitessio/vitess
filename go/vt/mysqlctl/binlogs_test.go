@@ -17,6 +17,7 @@ limitations under the License.
 package mysqlctl
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -27,6 +28,7 @@ import (
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -216,8 +218,10 @@ func TestVerifyRestoredBinlogs(t *testing.T) {
 		index        string
 		reportedAsIs bool
 		executed     replication.Position
-		// unreadable is a binlog that SHOW BINLOG EVENTS fails on, as with a missing key.
+		// unreadable is a binlog that SHOW BINLOG EVENTS fails on with readErr, or
+		// with mysqld's error for a missing binlog key when readErr is nil.
 		unreadable string
+		readErr    error
 		wantErr    string
 		wantCode   vtrpcpb.Code
 	}{
@@ -229,6 +233,9 @@ func TestVerifyRestoredBinlogs(t *testing.T) {
 		{name: "index differs", cnf: cnf, basename: "bin-logs/dst-bin", index: "data/binlog.index", executed: pos, wantErr: "log_bin_index"},
 		{name: "gtid_executed differs", cnf: cnf, basename: "bin-logs/dst-bin", index: "bin-logs/dst-bin.index", executed: other, wantErr: "gtid_executed"},
 		{name: "binlog unreadable", cnf: cnf, basename: "bin-logs/dst-bin", index: "bin-logs/dst-bin.index", executed: pos, unreadable: "dst-bin.000002", wantErr: "cannot read restored binlog dst-bin.000002", wantCode: vtrpcpb.Code_FAILED_PRECONDITION},
+		// Errors that don't come from mysqld reading the binlog keep their code.
+		{name: "connection lost reading a binlog", cnf: cnf, basename: "bin-logs/dst-bin", index: "bin-logs/dst-bin.index", executed: pos, unreadable: "dst-bin.000002", readErr: sqlerror.NewSQLError(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "Lost connection to MySQL server during query"), wantErr: "cannot read restored binlog dst-bin.000002", wantCode: vtrpcpb.Code_UNKNOWN},
+		{name: "pool unavailable reading a binlog", cnf: cnf, basename: "bin-logs/dst-bin", index: "bin-logs/dst-bin.index", executed: pos, unreadable: "dst-bin.000002", readErr: vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "pool closed"), wantErr: "cannot read restored binlog dst-bin.000002", wantCode: vtrpcpb.Code_UNAVAILABLE},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -250,6 +257,19 @@ func TestVerifyRestoredBinlogs(t *testing.T) {
 				if name != tt.unreadable {
 					mysqld.FetchSuperQueryMap["SHOW BINLOG EVENTS IN '"+name+"' LIMIT 1"] = &sqltypes.Result{}
 				}
+			}
+			mysqld.FetchSuperQueryCallback = func(query string) (*sqltypes.Result, error) {
+				if qr, ok := mysqld.FetchSuperQueryMap[query]; ok {
+					return qr, nil
+				}
+				if query != "SHOW BINLOG EVENTS IN '"+tt.unreadable+"' LIMIT 1" {
+					return nil, fmt.Errorf("unexpected query: %v", query)
+				}
+				if tt.readErr != nil {
+					return nil, tt.readErr
+				}
+				// What MySQL 8.0 and 8.4 return for a binlog encrypted with a key the keyring lacks.
+				return nil, sqlerror.NewSQLError(3784, "HY000", "Failed to fetch key from keyring, please check if keyring is loaded.")
 			}
 			// No ExpectedExecuteSuperQueryList: any RESET or SET GLOBAL gtid_purged fails the test.
 			err := verifyRestoredBinlogs(t.Context(), mysqld, tt.cnf, pos)
