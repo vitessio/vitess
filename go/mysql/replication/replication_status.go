@@ -91,6 +91,15 @@ func (s *ReplicationStatus) IOHealthy() bool {
 		(s.IOState == ReplicationStateConnecting && s.LastIOError == "")
 }
 
+// IORunning returns true if the IO thread runs: it is running, or it is connecting, including
+// when it retries after a failed connection attempt. Unlike IOHealthy, which reports whether
+// the replica is actually replicating, it tells whether the thread has to be stopped (MySQL
+// refuses to change the replication source while it runs, and a connecting thread receives
+// from the source as soon as it connects) or was running before it was stopped.
+func (s *ReplicationStatus) IORunning() bool {
+	return s.IOState == ReplicationStateRunning || s.IOState == ReplicationStateConnecting
+}
+
 // SQLHealthy returns true if the SQLState is running.
 // For consistency and to support altering this calculation in the future.
 func (s *ReplicationStatus) SQLHealthy() bool {
