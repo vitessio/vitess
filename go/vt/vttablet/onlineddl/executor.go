@@ -1403,9 +1403,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 				return vterrors.Wrapf(err, "failed killing table lock holders and accessors")
 			}
 		}
-	}
 
-	if !isVreplicationTestSuite {
 		e.updateMigrationStage(ctx, onlineDDL.UUID, "reading post-lock pos")
 		if postWritesPos, err = e.primaryPosition(ctx); err != nil {
 			return vterrors.Wrapf(err, "failed reading pos after locking")

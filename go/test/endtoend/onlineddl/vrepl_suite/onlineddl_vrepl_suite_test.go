@@ -337,15 +337,6 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 	return uuid
 }
 
-func readMigration(t *testing.T, uuid string) sqltypes.RowNamedValues {
-	rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, uuid)
-	require.NoError(t, err)
-	require.NotNil(t, rs)
-	row := rs.Named().Row()
-	require.NotNil(t, row)
-	return row
-}
-
 func waitForMigration(t *testing.T, uuid string, timeout time.Duration) sqltypes.RowNamedValues {
 	terminalStatuses := []string{string(schema.OnlineDDLStatusComplete), string(schema.OnlineDDLStatusFailed), string(schema.OnlineDDLStatusCancelled)}
 	var row sqltypes.RowNamedValues
