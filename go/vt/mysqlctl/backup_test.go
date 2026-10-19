@@ -123,12 +123,10 @@ func TestBackupEmitsStats(t *testing.T) {
 	require.Empty(t, env.stats.ScopeV)
 }
 
-// TestBackupReturnsManifestAndResult covers the values Backup returns to its
-// callers: the raw MANIFEST read back from storage for a usable backup, the
-// BackupEmpty classification for a no-op incremental, and the fact that a
-// failure to read the manifest back is non-fatal. Without these, a regression
-// that makes the manifest always empty -- i.e. silently no-ops the feature --
-// would still pass the rest of this suite.
+// TestBackupReturnsManifestAndResult covers the engine-supplied MANIFEST and
+// backup name for usable backups, no manifest or storage lookup when the engine
+// does not report one, and no metadata for empty backups. It also verifies that
+// finalization failures return an error without a backup name or manifest.
 func TestBackupReturnsManifestAndResult(t *testing.T) {
 	const manifestJSON = `{"BackupName":"test-backup","BackupMethod":"fake"}`
 
