@@ -21,6 +21,8 @@ import (
 	"strconv"
 	"strings"
 
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/sqlmode"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/sysvars"
@@ -29,6 +31,8 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
+
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 type (
@@ -175,6 +179,69 @@ func planSysVarCheckIgnore(expr *sqlparser.SetExpr, schema plancontext.VSchema, 
 		TargetDestination: dest,
 		Expr:              value,
 	}, nil
+}
+
+// validateSQLModePlan wraps sql_mode's planFunc with plan-time validation of constant
+// values: literals and constant expressions (e.g. CONCAT over literals) are evaluated and
+// validated the way MySQL validates a SET sql_mode, and modes the Vitess parser cannot
+// support are rejected (see sqlmode.Validate). Non-constant expressions are validated at
+// execution time, once their value is known.
+func validateSQLModePlan(inner planFunc) planFunc {
+	return func(expr *sqlparser.SetExpr, vschema plancontext.VSchema, ec *expressionConverter) (engine.SetOp, error) {
+		evalExpr, err := evalengine.Translate(expr.Expr, &evalengine.Config{
+			Collation:   vschema.ConnCollation(),
+			Environment: vschema.Environment(),
+		})
+		if err == nil {
+			if lit, ok := evalExpr.(*evalengine.Literal); ok {
+				if res, err := evalengine.EmptyExpressionEnv(vschema.Environment()).Evaluate(lit); err == nil {
+					if _, err := sqlmode.Validate(res.Value(vschema.ConnCollation())); err != nil {
+						return nil, err
+					}
+				}
+			}
+		}
+		return inner(expr, vschema, ec)
+	}
+}
+
+// validateConnectionCharsetPlan wraps the planFunc of a connection character set
+// variable with a plan-time check of a constant value: a character set or collation
+// that Vitess cannot parse and escape safely is refused (see
+// collations.IsConnectionCharsetName), as VTTablet refuses it, rather than answered
+// with OK. NULL, which only turns result conversion off, and non-constant values,
+// whose character set cannot be judged here, are left to the wrapped planFunc.
+func validateConnectionCharsetPlan(inner planFunc) planFunc {
+	return func(expr *sqlparser.SetExpr, vschema plancontext.VSchema, ec *expressionConverter) (engine.SetOp, error) {
+		var safe bool
+		switch value := expr.Expr.(type) {
+		case *sqlparser.Literal:
+			switch value.Type {
+			case sqlparser.StrVal:
+				safe = collations.IsConnectionCharsetName(value.Val)
+			case sqlparser.IntVal:
+				// MySQL also accepts a collation ID, and refuses 0 and an ID it
+				// does not define.
+				id, err := strconv.ParseUint(value.Val, 10, 16)
+				if err == nil && id != 0 {
+					_, safe = vschema.Environment().CollationEnv().ConnectionCharset(collations.ID(id))
+				}
+			default:
+				return inner(expr, vschema, ec)
+			}
+		case *sqlparser.ColName:
+			if !value.Qualifier.IsEmpty() {
+				return inner(expr, vschema, ec)
+			}
+			safe = collations.IsConnectionCharsetName(value.Name.String())
+		default:
+			return inner(expr, vschema, ec)
+		}
+		if !safe {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported connection character set %s for %s: use utf8mb4", sqlparser.String(expr.Expr), expr.Var.Name.Lowered())
+		}
+		return inner(expr, vschema, ec)
+	}
 }
 
 func buildSetOpReservedConn(s setting) planFunc {

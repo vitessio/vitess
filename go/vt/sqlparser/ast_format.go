@@ -699,7 +699,7 @@ func (node *PartitionDefinitionOptions) Format(buf *TrackedBuffer) {
 		buf.astPrintf(node, " min_rows %d", *node.MinRows)
 	}
 	if node.TableSpace != "" {
-		buf.astPrintf(node, " tablespace %#s", node.TableSpace)
+		buf.astPrintf(node, " tablespace %#s", encodeObjectName(node.TableSpace))
 	}
 	if node.SubPartitionDefinitions != nil {
 		buf.astPrintf(node, " (%v)", node.SubPartitionDefinitions)
@@ -742,7 +742,7 @@ func (node *SubPartitionDefinitionOptions) Format(buf *TrackedBuffer) {
 		buf.astPrintf(node, " min_rows %d", *node.MinRows)
 	}
 	if node.TableSpace != "" {
-		buf.astPrintf(node, " tablespace %#s", node.TableSpace)
+		buf.astPrintf(node, " tablespace %#s", encodeObjectName(node.TableSpace))
 	}
 }
 
@@ -762,7 +762,7 @@ func (node *PartitionEngine) Format(buf *TrackedBuffer) {
 		buf.astPrintf(node, "%s", "storage ")
 	}
 	buf.astPrintf(node, "%s", "engine ")
-	buf.astPrintf(node, "%#s", node.Name)
+	buf.astPrintf(node, "%#s", encodeObjectName(node.Name))
 }
 
 // Format formats the node.
@@ -864,7 +864,7 @@ func (ts *TableSpec) Format(buf *TrackedBuffer) {
 		buf.astPrintf(ts, " %s", opt.Name)
 		if opt.String != "" {
 			if opt.CaseSensitive {
-				buf.astPrintf(ts, " %#s", opt.String)
+				buf.astPrintf(ts, " %#s%s", encodeTableOptionValue(opt.Name, opt.String), opt.Storage)
 			} else {
 				buf.astPrintf(ts, " %s", opt.String)
 			}
@@ -913,14 +913,14 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 		buf.astPrintf(ct, " %#s", keywordStrings[ZEROFILL])
 	}
 	if ct.Charset.Name != "" {
-		buf.astPrintf(ct, " %s %s %#s", keywordStrings[CHARACTER], keywordStrings[SET], ct.Charset.Name)
+		buf.astPrintf(ct, " %s %s %#s", keywordStrings[CHARACTER], keywordStrings[SET], encodeColumnCharsetName(ct.Charset))
 	}
 	if ct.Charset.Binary {
 		buf.astPrintf(ct, " %#s", keywordStrings[BINARY])
 	}
 	if ct.Options != nil {
 		if ct.Options.Collate != "" {
-			buf.astPrintf(ct, " %s %#s", keywordStrings[COLLATE], ct.Options.Collate)
+			buf.astPrintf(ct, " %s %#s", keywordStrings[COLLATE], encodeSQLName(ct.Options.Collate))
 		}
 		if ct.Options.Null != nil && ct.Options.As == nil {
 			if *ct.Options.Null {
@@ -1032,7 +1032,7 @@ func (idx *IndexDefinition) Format(buf *TrackedBuffer) {
 			buf.astPrintf(idx, " %s", opt.Name)
 		}
 		if opt.String != "" {
-			buf.astPrintf(idx, " %#s", opt.String)
+			buf.astPrintf(idx, " %#s", encodeIndexOptionValue(opt.Name, opt.String))
 		} else if opt.Value != nil {
 			buf.astPrintf(idx, " %v", opt.Value)
 		}
@@ -1539,11 +1539,17 @@ func (node *Literal) Format(buf *TrackedBuffer) {
 	case HexVal:
 		buf.astPrintf(node, "X'%#s'", node.Val)
 	case DateVal:
-		buf.astPrintf(node, "date'%#s'", node.Val)
+		// The value is the decoded string literal the tokenizer read, so it must be
+		// encoded like a string literal: printing it verbatim would let a quote in
+		// it close the literal.
+		buf.literal("date")
+		sqltypes.MakeTrusted(sqltypes.VarChar, node.Bytes()).EncodeSQL(buf)
 	case TimeVal:
-		buf.astPrintf(node, "time'%#s'", node.Val)
+		buf.literal("time")
+		sqltypes.MakeTrusted(sqltypes.VarChar, node.Bytes()).EncodeSQL(buf)
 	case TimestampVal:
-		buf.astPrintf(node, "timestamp'%#s'", node.Val)
+		buf.literal("timestamp")
+		sqltypes.MakeTrusted(sqltypes.VarChar, node.Bytes()).EncodeSQL(buf)
 	default:
 		panic("unexpected")
 	}
@@ -1828,7 +1834,7 @@ func (node *CurTimeFuncExpr) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *CollateExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%v collate %#s", node.Expr, node.Collation)
+	buf.astPrintf(node, "%v collate %#s", node.Expr, encodeObjectName(node.Collation))
 }
 
 // Format formats the node.
@@ -2071,7 +2077,7 @@ func (node *LocateExpr) Format(buf *TrackedBuffer) {
 func (node *CharExpr) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "char(%n", node.Exprs)
 	if node.Charset != "" {
-		buf.astPrintf(node, " using %#s", node.Charset)
+		buf.astPrintf(node, " using %#s", encodeSQLName(node.Charset))
 	}
 	buf.astPrintf(node, ")")
 }
@@ -2120,7 +2126,7 @@ func (node *ConvertExpr) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *ConvertUsingExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "convert(%v using %#s)", node.Expr, node.Type)
+	buf.astPrintf(node, "convert(%v using %#s)", node.Expr, encodeSQLName(node.Type))
 }
 
 // Format formats the node.
@@ -2134,7 +2140,7 @@ func (node *ConvertType) Format(buf *TrackedBuffer) {
 		buf.astPrintf(node, ")")
 	}
 	if node.Charset.Name != "" {
-		buf.astPrintf(node, " character set %#s", node.Charset.Name)
+		buf.astPrintf(node, " character set %#s", encodeColumnCharsetName(node.Charset))
 	}
 	if node.Charset.Binary {
 		buf.astPrintf(node, " %#s", keywordStrings[BINARY])
@@ -2370,7 +2376,7 @@ func (node *SelectInto) Format(buf *TrackedBuffer) {
 	}
 	buf.astPrintf(node, "%s%#s", node.Type.ToString(), node.FileName)
 	if node.Charset.Name != "" {
-		buf.astPrintf(node, " character set %#s", node.Charset.Name)
+		buf.astPrintf(node, " character set %#s", encodeSQLName(node.Charset.Name))
 	}
 	buf.astPrintf(node, "%#s%#s%#s%#s", node.FormatOption, node.ExportOption, node.Manifest, node.Overwrite)
 }
@@ -2389,7 +2395,7 @@ func (node *CreateDatabase) Format(buf *TrackedBuffer) {
 			}
 			buf.literal(createOption.Type.ToString())
 			buf.WriteByte(' ')
-			buf.literal(createOption.Value)
+			buf.WriteString(encodeDatabaseOptionValue(createOption))
 		}
 	}
 }
@@ -2410,7 +2416,7 @@ func (node *AlterDatabase) Format(buf *TrackedBuffer) {
 			}
 			buf.literal(createOption.Type.ToString())
 			buf.WriteByte(' ')
-			buf.literal(createOption.Value)
+			buf.WriteString(encodeDatabaseOptionValue(createOption))
 		}
 	}
 }
@@ -2658,9 +2664,9 @@ func (node *RenameColumn) Format(buf *TrackedBuffer) {
 
 // Format formats the node
 func (node *AlterCharset) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "convert to character set %#s", node.CharacterSet)
+	buf.astPrintf(node, "convert to character set %#s", encodeSQLName(node.CharacterSet))
 	if node.Collate != "" {
-		buf.astPrintf(node, " collate %#s", node.Collate)
+		buf.astPrintf(node, " collate %#s", encodeSQLName(node.Collate))
 	}
 }
 
@@ -2745,7 +2751,7 @@ func (node TableOptions) Format(buf *TrackedBuffer) {
 		switch {
 		case option.String != "":
 			if option.CaseSensitive {
-				buf.astPrintf(node, " %#s", option.String)
+				buf.astPrintf(node, " %#s%s", encodeTableOptionValue(option.Name, option.String), option.Storage)
 			} else {
 				buf.astPrintf(node, " %s", option.String)
 			}
