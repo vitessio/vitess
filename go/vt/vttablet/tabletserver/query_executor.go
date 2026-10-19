@@ -822,31 +822,13 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 			if err != nil {
 				return nil, vterrors.Wrapf(err, "error loading sequence %s", tableName)
 			}
-<<<<<<< HEAD
-			// If LastVal does not match next ID, then either:
-			// VTTablet just started, and we're initializing the cache, or
-			// Someone reset the id underneath us.
-			if t.SequenceInfo.LastVal != nextID {
-				if nextID < t.SequenceInfo.LastVal {
-					log.Warningf("Sequence next ID value %v is below the currently cached max %v, updating it to max", nextID, t.SequenceInfo.LastVal)
-					nextID = t.SequenceInfo.LastVal
-||||||| parent of 66004ef65d (tabletserver: update the sequence cache only after the refill commits (#21375))
-			// If LastVal does not match next ID, then either:
-			// VTTablet just started, and we're initializing the cache, or
-			// Someone reset the id underneath us.
-			if t.SequenceInfo.LastVal != nextID {
-				if nextID < t.SequenceInfo.LastVal {
-					log.Warn(fmt.Sprintf("Sequence next ID value %v is below the currently cached max %v, updating it to max", nextID, t.SequenceInfo.LastVal))
-					nextID = t.SequenceInfo.LastVal
-=======
 			// Start the staged range at next_id when next_id differs from the cached last value.
 			// The two differ when the cache is empty, when a write outside this cache changed next_id,
 			// or when an earlier refill's COMMIT applied but returned an error.
 			if lastVal != nextID {
 				if nextID < lastVal {
-					log.Warn(fmt.Sprintf("Sequence next ID value %v is below the currently cached max %v, updating it to max", nextID, lastVal))
+					log.Warningf("Sequence next ID value %v is below the currently cached max %v, updating it to max", nextID, lastVal)
 					nextID = lastVal
->>>>>>> 66004ef65d (tabletserver: update the sequence cache only after the refill commits (#21375))
 				}
 				nextVal = nextID
 			}
