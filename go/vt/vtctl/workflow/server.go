@@ -3328,6 +3328,9 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 		// intra-keyspace materializations that write on the source), and we know for certain
 		// that any in progress writes are done.
 		if err := ts.gatherSourcePositions(ctx); err != nil {
+			if cerr := sw.cancelMigration(ctx, sm); cerr != nil {
+				err = vterrors.Errorf(vtrpcpb.Code_CANCELED, "%v\n\n%v", err, cerr)
+			}
 			return handleError("failed to gather replication positions on migration sources", err)
 		}
 
@@ -3541,7 +3544,7 @@ func (s *Server) CopySchemaShard(ctx context.Context, sourceTabletAlias *topodat
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no primary in shard record %v/%v. Consider running 'vtctl InitShardPrimary' in case of a new shard or reparenting the shard to fix the topology data", destKeyspace, destShard)
 	}
 
-	diffs, err := schematools.CompareSchemas(ctx, s.ts, s.tmc, sourceTabletAlias, destShardInfo.PrimaryAlias, tables, excludeTables, includeViews)
+	diffs, err := schematools.CompareSchemas(ctx, s.env, s.ts, s.tmc, sourceTabletAlias, destShardInfo.PrimaryAlias, tables, excludeTables, includeViews)
 	if err != nil {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "CopySchemaShard failed because schemas could not be compared initially: %v", err)
 	}
@@ -3584,7 +3587,7 @@ func (s *Server) CopySchemaShard(ctx context.Context, sourceTabletAlias *topodat
 	// In that case, MySQL would have skipped our CREATE DATABASE IF NOT EXISTS
 	// statement.
 	if !skipVerify {
-		diffs, err = schematools.CompareSchemas(ctx, s.ts, s.tmc, sourceTabletAlias, destShardInfo.PrimaryAlias, tables, excludeTables, includeViews)
+		diffs, err = schematools.CompareSchemas(ctx, s.env, s.ts, s.tmc, sourceTabletAlias, destShardInfo.PrimaryAlias, tables, excludeTables, includeViews)
 		if err != nil {
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "CopySchemaShard failed because schemas could not be compared finally: %v", err)
 		}

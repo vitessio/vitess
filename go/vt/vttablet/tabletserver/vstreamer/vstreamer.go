@@ -95,7 +95,9 @@ type vstreamer struct {
 	stopPos        string
 	commitParent   int64
 	sequenceNumber int64
-	eventGTID      replication.GTID
+	// eventGTID is the formatted GTID of the current transaction, or empty
+	// outside one. It is set by setEventGTID and stamped on each VEvent.
+	eventGTID string
 
 	phase   string
 	vse     *Engine
@@ -181,6 +183,14 @@ func (vs *vstreamer) SetVSchema(vschema *localVSchema) {
 			vs.vevents <- vschema
 		default:
 		}
+	}
+}
+
+// setEventGTID formats gtid into eventGTID, or clears it if gtid is nil.
+func (vs *vstreamer) setEventGTID(gtid replication.GTID) {
+	vs.eventGTID = ""
+	if gtid != nil {
+		vs.eventGTID = gtid.String()
 	}
 }
 
@@ -532,7 +542,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 		if err != nil {
 			return nil, fmt.Errorf("can't parse FORMAT_DESCRIPTION_EVENT: %v, event data: %#v", err, ev)
 		}
-		vs.eventGTID = nil
+		vs.setEventGTID(nil)
 		return nil, nil
 	}
 
@@ -565,7 +575,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 	var vevents []*binlogdatapb.VEvent
 	switch {
 	case ev.IsRotate(), ev.IsStop():
-		vs.eventGTID = nil
+		vs.setEventGTID(nil)
 	case ev.IsPreviousGTIDs():
 		if !shouldSend(binlogdatapb.VEventType_PREVIOUS_GTIDS) {
 			return nil, nil
@@ -573,7 +583,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 		vevents = append(vevents, &binlogdatapb.VEvent{
 			Type: binlogdatapb.VEventType_PREVIOUS_GTIDS,
 		})
-		vs.eventGTID = nil
+		vs.setEventGTID(nil)
 	case ev.IsGTID():
 		gtid, hasBegin, commitParent, sequenceNumber, err := ev.GTID(vs.format)
 		if err != nil {
@@ -589,7 +599,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 		vs.pos = replication.AppendGTID(vs.pos, gtid)
 		vs.commitParent = commitParent
 		vs.sequenceNumber = sequenceNumber
-		vs.eventGTID = gtid
+		vs.setEventGTID(gtid)
 	case ev.IsXID():
 		if shouldSend(binlogdatapb.VEventType_GTID) {
 			vevents = append(vevents, &binlogdatapb.VEvent{
@@ -885,18 +895,12 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 		}
 		vs.vse.vstreamerCompressedTransactionsDecoded.Add(1)
 	}
-	vsEventGTIDString := ""
-	if vs.eventGTID != nil {
-		vsEventGTIDString = vs.eventGTID.String()
-	}
 	for _, vevent := range vevents {
 		vevent.Timestamp = int64(ev.Timestamp())
 		vevent.CurrentTime = timeNowUnixNano
 		vevent.SequenceNumber = vs.sequenceNumber
 		vevent.CommitParent = vs.commitParent
-		if vs.eventGTID != nil {
-			vevent.EventGtid = vsEventGTIDString
-		}
+		vevent.EventGtid = vs.eventGTID
 	}
 	return vevents, nil
 }
@@ -1238,6 +1242,23 @@ func (vs *vstreamer) processRowEvent(vevents []*binlogdatapb.VEvent, plan *strea
 			// both before and after images are filtered out
 			continue
 		}
+		if hasVindex && !beforeOK && afterOK && len(beforeRawValues) > 0 {
+			// An UPDATE whose row moves into the target key range is sent with
+			// only its after image, which the consumer has to apply as an
+			// INSERT. If that image does not carry every emitted value, because
+			// binlog_row_image=NOBLOB omitted an unchanged BLOB/TEXT column or
+			// binlog_row_value_options=PARTIAL_JSON sent a JSON diff that needs
+			// the previous value, the row cannot be reproduced: unlike a real
+			// INSERT, where an omitted column simply took its default, there is
+			// no existing target row to take the missing values from. Fail
+			// closed here, where we still know this was an UPDATE, rather than
+			// let the target insert defaults or NULLs.
+			if col := plan.unreconstructibleAfterColumn(&rows.DataColumns, &row.JSONPartialValues); col != "" {
+				return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+					"table %s: a row moving into the target key range has a partial after image from which column %s cannot be reconstructed (binlog_row_image=NOBLOB omitted it, or binlog_row_value_options=PARTIAL_JSON sent a partial value) and the row cannot be inserted on the target; you will need to use binlog_row_image=FULL without PARTIAL_JSON",
+					plan.Table.Name, col)
+			}
+		}
 
 		// at least one image passes the filter and is not a sharded filter
 		if !hasVindex {
@@ -1273,11 +1294,15 @@ func (vs *vstreamer) processRowEvent(vevents []*binlogdatapb.VEvent, plan *strea
 					// DataColumns is intentionally left in the source table's column
 					// order: existing vplayers (and possibly other consumers) depend
 					// on that layout, and changing it would break replication between
-					// mixed-version tablets. See #21075 for a projected variant.
+					// mixed-version tablets.
 					rowChange.DataColumns = &binlogdatapb.RowChange_Bitmap{
 						Count: int64(rows.DataColumns.Count()),
 						Cols:  rows.DataColumns.Bits(),
 					}
+					// AfterDataColumns describes the columns as emitted, so project
+					// it through the plan the same way the values were. Consumers
+					// that know about it prefer it over DataColumns.
+					rowChange.AfterDataColumns = plan.mapBitmap(&rows.DataColumns)
 				}
 				if row.JSONPartialValues.Count() > 0 {
 					rowChange.JsonPartialValues = &binlogdatapb.RowChange_Bitmap{
@@ -1515,7 +1540,9 @@ func wrapError(err error, stopPos replication.Position, vse *Engine) error {
 	if err != nil {
 		vse.vstreamersEndedWithErrors.Add(1)
 		vse.errorCounts.Add("StreamEnded", 1)
-		err = fmt.Errorf("stream (at source tablet) error @ (including the GTID we failed to process) %v: %v", stopPos, err)
+		// Wrap rather than reformat so that the error's code survives: the
+		// vplayer only treats FAILED_PRECONDITION stream errors as terminal.
+		err = vterrors.Wrapf(err, "stream (at source tablet) error @ (including the GTID we failed to process) %v", stopPos)
 		log.Error(fmt.Sprint(err))
 		return err
 	}

@@ -246,7 +246,7 @@ func TestSourcePKSelectIndices(t *testing.T) {
 			// A computed expression wrapped in CONVERT aliased back to the PK name
 			// is a derived value, not the physical column, so it is treated as not
 			// projected here. Merge-ordering safety is enforced by the caller's
-			// comparisonKeyIsSourcePKPrefix check.
+			// sourceOrderCoversComparisonKey check.
 			name:             "computed convert aliased to PK name is not projected",
 			sourceQuery:      "select convert(concat(c1, 'x') using utf8mb4) as c1, c2 from t order by c1 asc",
 			pkColumns:        []string{"c1"},
@@ -376,11 +376,12 @@ func TestSourcePKSelectIndices(t *testing.T) {
 	}
 }
 
-// TestComparisonKeyIsSourcePKPrefix verifies the merge-safety gate used for
-// subset-projection filters: the columns VDiff merge-sorts on (comparePKs) must
-// be an order-preserving prefix of the physical source PK, since the row streamer
-// always emits source rows ordered by that physical PK.
-func TestComparisonKeyIsSourcePKPrefix(t *testing.T) {
+// TestSourceOrderCoversComparisonKey verifies the merge-safety gate used for
+// subset-projection filters: the row streamer always emits source rows ordered
+// by the physical source PK, so the columns VDiff merge-sorts on (comparePKs)
+// must be an order-preserving prefix of that PK, or, when it is unique, that
+// whole PK followed by more columns.
+func TestSourceOrderCoversComparisonKey(t *testing.T) {
 	testCases := []struct {
 		name        string
 		sourceQuery string
@@ -391,7 +392,12 @@ func TestComparisonKeyIsSourcePKPrefix(t *testing.T) {
 		// colTypes maps source columns to their types; only integer columns are
 		// treated as single-valued (pinnable) under "col = literal".
 		colTypes map[string]querypb.Type
-		wantErr  bool
+		// nonUniqueSourceKey marks sourcePKColumns as the all-columns substitute
+		// key rather than a physical PK or a primary key equivalent.
+		nonUniqueSourceKey bool
+		wantErr            bool
+		// wantExtended is whether the comparison key extends the source key.
+		wantExtended bool
 	}{
 		{
 			// Documented safe case: source PK (cid, typ) compared on cid. cid is a
@@ -419,12 +425,73 @@ func TestComparisonKeyIsSourcePKPrefix(t *testing.T) {
 			sourcePKColumns:     []string{"cid", "typ"},
 		},
 		{
-			// Comparison key has more columns than the physical source PK.
-			name:                "comparison key longer than source pk is rejected",
+			// The comparison key is the unique source PK (cid) followed by typ, as
+			// for a target partitioned by typ. A stream ordered by the unique cid
+			// has no ties on cid, so it is also ordered by (cid, typ).
+			name:                "comparison key extending a unique source pk is allowed",
 			sourceQuery:         "select cid, typ from customer order by cid asc, typ asc",
 			comparePKColIndices: []int{0, 1},
 			sourcePKColumns:     []string{"cid"},
+			wantExtended:        true,
+		},
+		{
+			// A target partitioned on a computed column, e.g. PK (id, ym) with ym
+			// projected as date_format(created_at, '%Y%m'). The unique source PK
+			// (id) already orders the stream with no ties, so the extra column does
+			// not have to be a physical one.
+			name:                "computed column extending a unique source pk is allowed",
+			sourceQuery:         "select id, date_format(created_at, '%Y%m') as ym, v from t order by id asc, ym asc",
+			comparePKColIndices: []int{0, 1},
+			sourcePKColumns:     []string{"id"},
+			wantExtended:        true,
+		},
+		{
+			// A computed column within the source PK's ranks is still rejected: the
+			// stream is not ordered by it.
+			name:                "computed column before the end of the source pk is rejected",
+			sourceQuery:         "select id, date_format(created_at, '%Y%m') as ym, v from t order by id asc, ym asc",
+			comparePKColIndices: []int{0, 1},
+			sourcePKColumns:     []string{"id", "created_at"},
 			wantErr:             true,
+		},
+		{
+			// A computed column extending a non-unique source key is rejected, as
+			// ties on that key leave the order of the extra column undetermined.
+			name:                "computed column extending a non-unique source key is rejected",
+			sourceQuery:         "select id, date_format(created_at, '%Y%m') as ym from t order by id asc, ym asc",
+			comparePKColIndices: []int{0, 1},
+			sourcePKColumns:     []string{"id"},
+			nonUniqueSourceKey:  true,
+			wantErr:             true,
+		},
+		{
+			// The all-columns substitute key need not be unique, so ties on it are
+			// possible and a stream ordered by it is not ordered by a longer key.
+			name:                "comparison key extending a non-unique source key is rejected",
+			sourceQuery:         "select cid, typ from customer order by cid asc, typ asc",
+			comparePKColIndices: []int{0, 1},
+			sourcePKColumns:     []string{"cid"},
+			nonUniqueSourceKey:  true,
+			wantErr:             true,
+		},
+		{
+			// The comparison key (cid, typ) is longer than the source PK (cid, x)
+			// only in part: typ is compared where the source PK has x.
+			name:                "comparison key not starting with the whole source pk is rejected",
+			sourceQuery:         "select cid, typ, x from customer order by cid asc, typ asc",
+			comparePKColIndices: []int{0, 1},
+			sourcePKColumns:     []string{"cid", "x"},
+			wantErr:             true,
+		},
+		{
+			// With tenant_id pinned, the source stream is ordered by the unique id,
+			// so a comparison key of id followed by created_at is ordered as well.
+			name:                "comparison key extending a pinned source pk is allowed",
+			sourceQuery:         "select tenant_id, id, created_at from src where tenant_id = 1 order by id asc, created_at asc",
+			comparePKColIndices: []int{1, 2},
+			sourcePKColumns:     []string{"tenant_id", "id"},
+			colTypes:            map[string]querypb.Type{"tenant_id": querypb.Type_INT64, "id": querypb.Type_INT64},
+			wantExtended:        true,
 		},
 		{
 			// A comparison column that is a computed value (not a physical column)
@@ -550,12 +617,13 @@ func TestComparisonKeyIsSourcePKPrefix(t *testing.T) {
 				comparePKs[i] = compareColInfo{colIndex: idx, isPK: true}
 			}
 
-			err = comparisonKeyIsSourcePKPrefix(sourceSelect, comparePKs, tc.sourcePKColumns, tc.colTypes)
+			extended, err := sourceOrderCoversComparisonKey(sourceSelect, comparePKs, tc.sourcePKColumns, !tc.nonUniqueSourceKey, tc.colTypes)
 			if tc.wantErr {
 				require.Error(t, err)
 				return
 			}
 			require.NoError(t, err)
+			require.Equal(t, tc.wantExtended, extended)
 		})
 	}
 }
@@ -706,9 +774,9 @@ func TestComparisonKeyPrefixRejectionIsNonEphemeral(t *testing.T) {
 
 	// Compare on cid, but the physical source PK is (typ, cid): cid is not a
 	// prefix, so the plan is rejected.
-	rejectErr := comparisonKeyIsSourcePKPrefix(sel,
+	_, rejectErr := sourceOrderCoversComparisonKey(sel,
 		[]compareColInfo{{colIndex: 0, colName: "cid", isPK: true}},
-		[]string{"typ", "cid"}, nil)
+		[]string{"typ", "cid"}, true, nil)
 	require.Error(t, rejectErr)
 	require.False(t, sqlerror.IsEphemeralError(rejectErr), "the rejection error must be non-ephemeral")
 

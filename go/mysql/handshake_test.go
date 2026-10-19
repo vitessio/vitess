@@ -144,6 +144,65 @@ func TestSSLConnection(t *testing.T) {
 	})
 }
 
+// TestSSLRequestMultiStatements checks that the SSLRequest packet, which carries
+// its own copy of the client capability flags, only advertises multi-statement
+// support when the connection parameters ask for it and the server offers it.
+func TestSSLRequestMultiStatements(t *testing.T) {
+	testCases := []struct {
+		name                  string
+		enableMultiStatements bool
+		serverCapabilities    uint32
+		advertised            bool
+	}{{
+		name:                  "disabled",
+		enableMultiStatements: false,
+		serverCapabilities:    CapabilityClientMultiStatements,
+		advertised:            false,
+	}, {
+		name:                  "enabled",
+		enableMultiStatements: true,
+		serverCapabilities:    CapabilityClientMultiStatements,
+		advertised:            true,
+	}, {
+		// Asking for something the server never offered would leave the
+		// connection thinking it can send a batch that the server will reject.
+		name:                  "enabled but not offered by the server",
+		enableMultiStatements: true,
+		serverCapabilities:    0,
+		advertised:            false,
+	}}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			listener, sConn, cConn := createSocketPair(t)
+			t.Cleanup(func() {
+				listener.Close()
+				sConn.Close()
+				cConn.Close()
+			})
+
+			params := &ConnParams{EnableMultiStatements: tc.enableMultiStatements}
+			// This is what clientHandshake records before it writes either of
+			// the two handshake response packets.
+			if params.EnableMultiStatements {
+				cConn.Capabilities |= tc.serverCapabilities & CapabilityClientMultiStatements
+			}
+			require.NoError(t, cConn.writeSSLRequest(CapabilityClientSSL, uint8(collations.CollationUtf8mb4ID), params))
+
+			data, err := sConn.ReadPacket()
+			require.NoError(t, err, "sConn.ReadPacket - SSLRequest failed")
+			flags, _, ok := readUint32(data, 0)
+			require.True(t, ok, "could not read the capability flags of the SSLRequest packet")
+
+			if tc.advertised {
+				require.NotZero(t, flags&CapabilityClientMultiStatements, "MultiStatements must be advertised when requested, flags: %x", flags)
+			} else {
+				require.Zero(t, flags&CapabilityClientMultiStatements, "MultiStatements must not be advertised, flags: %x", flags)
+			}
+		})
+	}
+}
+
 func testSSLConnectionClearText(t *testing.T, ctx context.Context, params *ConnParams) {
 	// Create a client connection, connect.
 	conn, err := Connect(ctx, params)

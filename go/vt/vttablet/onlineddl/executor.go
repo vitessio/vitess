@@ -650,11 +650,73 @@ func (e *Executor) isAnyConflictingMigrationRunning(onlineDDL *schema.OnlineDDL)
 	return (conflictingMigration != nil), conflictingMigration
 }
 
+// buildIdentifierQuery builds a query from a template whose %a placeholders are
+// all identifiers, escaping each one.
+//
+// sqlparser.BuildParsedQuery writes a %a argument verbatim; the escaping in
+// ParsedQuery.GenerateQuery only happens for callers that bind variables, and
+// the callers here execute the statement text as it stands. A table name reaches
+// us straight from the tenant's DDL, so it has to be escaped before the
+// statement text exists. Otherwise a name holding a back quote closes its own
+// quoting, and the rest of the name becomes part of the statement, which can then
+// name other tables or add clauses, and some of these statements run on the DBA
+// connection. The connections do not negotiate CLIENT_MULTI_STATEMENTS, so a ';'
+// does not start another statement, but the one statement is already the wrong
+// one.
+//
+// sqlescape.EscapeID supplies the back quotes and doubles any inside the name,
+// so the templates must not quote %a themselves.
+//
+// The template type is what pairs a template with this builder rather than with
+// buildLiteralQuery or with sqlparser.BuildParsedQuery; see the note on
+// identifierQueryTemplate.
+//
+// What comes back is the statement text, not the *ParsedQuery BuildParsedQuery
+// produced. That ParsedQuery still holds a bind location for every %a, now
+// pointing at text we have already escaped, so binding it would fail with a
+// missing bind variable. No caller wants that, and returning a string leaves
+// nothing to misuse.
+func buildIdentifierQuery(template identifierQueryTemplate, identifiers ...string) string {
+	args := make([]any, len(identifiers))
+	for i, identifier := range identifiers {
+		args[i] = sqlescape.EscapeID(identifier)
+	}
+	return sqlparser.BuildParsedQuery(string(template), args...).Query
+}
+
+// buildLiteralQuery builds a query from a template whose %a placeholders are all
+// string literals, encoding each one. See buildIdentifierQuery for why the
+// encoding cannot be left to GenerateQuery. The encoder supplies the quotes, so
+// the templates must not quote %a themselves.
+func buildLiteralQuery(template literalQueryTemplate, literals ...string) string {
+	args := make([]any, len(literals))
+	for i, literal := range literals {
+		args[i] = sqltypes.EncodeStringSQL(literal)
+	}
+	return sqlparser.BuildParsedQuery(string(template), args...).Query
+}
+
+// likePatternEscaper escapes a table name for use as a LIKE pattern that matches
+// only that name: the escape character itself first, then the '%' and '_'
+// wildcards, all of which a table name may hold.
+var likePatternEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+
+// buildTableExistsQuery builds the SHOW TABLES LIKE query used to test for the
+// existence of a single table, with a pattern that matches only that table.
+func buildTableExistsQuery(tableName string) string {
+	return buildLiteralQuery(sqlShowTablesLike, likePatternEscaper.Replace(tableName))
+}
+
+// buildTableStatusQuery builds the SHOW TABLE STATUS LIKE query for a single
+// table, with a pattern that matches only that table: its caller requires
+// exactly one row.
+func buildTableStatusQuery(tableName string) string {
+	return buildLiteralQuery(sqlShowTableStatus, likePatternEscaper.Replace(tableName))
+}
+
 // tableExists checks if a given table exists.
 func (e *Executor) tableExists(ctx context.Context, tableName string) (bool, error) {
-	tableName = strings.ReplaceAll(tableName, `_`, `\_`)
-	parsed := sqlparser.BuildParsedQuery(sqlShowTablesLike, tableName)
-	rs, err := e.execQuery(ctx, parsed.Query)
+	rs, err := e.execQuery(ctx, buildTableExistsQuery(tableName))
 	if err != nil {
 		return false, err
 	}
@@ -664,8 +726,8 @@ func (e *Executor) tableExists(ctx context.Context, tableName string) (bool, err
 
 // showCreateTable returns the SHOW CREATE statement for a table or a view
 func (e *Executor) showCreateTable(ctx context.Context, tableName string) (string, error) {
-	parsed := sqlparser.BuildParsedQuery(sqlShowCreateTable, tableName)
-	rs, err := e.execQuery(ctx, parsed.Query)
+	showCreateQuery := buildIdentifierQuery(sqlShowCreateTable, tableName)
+	rs, err := e.execQuery(ctx, showCreateQuery)
 	if err != nil {
 		return "", err
 	}
@@ -1054,7 +1116,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 			return vterrors.Wrapf(err, "failed updating artifacts with sentry table name")
 		}
 
-		dropSentryTableQuery := sqlparser.BuildParsedQuery(sqlDropTableIfExists, sentryTableName)
+		dropSentryTableQuery := buildIdentifierQuery(sqlDropTableIfExists, sentryTableName)
 		defer func() {
 			// cut-over attempts may fail. We create a new, unique sentry table for every
 			// cut-over attempt. We could just leave them hanging around, and let gcArtifacts()
@@ -1065,7 +1127,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 			// step is done (whether successful or failed). So, it's a cheap operation to drop the
 			// table right away, which we do, and then also reduce the `artifact` column length by
 			// removing the entry
-			_, err := e.execQuery(ctx, dropSentryTableQuery.Query)
+			_, err := e.execQuery(ctx, dropSentryTableQuery)
 			if err == nil {
 				e.clearSingleArtifact(ctx, onlineDDL.UUID, sentryTableName)
 			}
@@ -1092,8 +1154,8 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 				// Run `ANALYZE TABLE` on the vreplication table so that it has up-to-date statistics at cut-over.
 				// The statement will be replicated, so that in case there's a PRS/ERS shortly after cut-over, the
 				// promoted replica will have good statistics.
-				parsed := sqlparser.BuildParsedQuery(sqlAnalyzeTable, vreplTable)
-				if _, err := preparationsConn.Conn.Exec(ctx, parsed.Query, -1, false); err != nil {
+				analyzeQuery := buildIdentifierQuery(sqlAnalyzeTable, vreplTable)
+				if _, err := preparationsConn.Conn.Exec(ctx, analyzeQuery, -1, false); err != nil {
 					// Best effort only. Do not fail the mgiration if this fails.
 					_ = e.updateMigrationMessage(ctx, "failed ANALYZE shadow table", s.workflow)
 				} else {
@@ -1102,8 +1164,8 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 				// This command will have blocked the table for writes, presumably only for a brief time. But this can cause
 				// vreplication to now lag. Thankfully we're gonna create the sentry table and waitForPos.
 			}
-			parsed := sqlparser.BuildParsedQuery(sqlCreateSentryTable, sentryTableName)
-			if _, err := preparationsConn.Conn.Exec(ctx, parsed.Query, 1, false); err != nil {
+			createSentryQuery := buildIdentifierQuery(sqlCreateSentryTable, sentryTableName)
+			if _, err := preparationsConn.Conn.Exec(ctx, createSentryQuery, 1, false); err != nil {
 				return vterrors.Wrapf(err, "failed creating sentry table")
 			}
 			e.updateMigrationStage(ctx, onlineDDL.UUID, "sentry table created: %s", sentryTableName)
@@ -1202,7 +1264,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 		log.Info("@@rename_table_preserve_foreign_key supported")
 	}
 
-	renameQuery := sqlparser.BuildParsedQuery(sqlSwapTables, onlineDDL.Table, sentryTableName, vreplTable, onlineDDL.Table, sentryTableName, vreplTable)
+	renameQuery := buildIdentifierQuery(sqlSwapTables, onlineDDL.Table, sentryTableName, vreplTable, onlineDDL.Table, sentryTableName, vreplTable)
 	waitForRenameProcess := func() error {
 		// This function waits until it finds the RENAME TABLE... query running in MySQL's PROCESSLIST, or until timeout
 		// The function assumes that one of the renamed tables is locked, thus causing the RENAME to block. If nothing
@@ -1220,7 +1282,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 			}
 			select {
 			case <-renameWaitCtx.Done():
-				return vterrors.Errorf(vtrpcpb.Code_ABORTED, "timeout for rename query: %s", renameQuery.Query)
+				return vterrors.Errorf(vtrpcpb.Code_ABORTED, "timeout for rename query: %s", renameQuery)
 			case err := <-renameCompleteChan:
 				// We expect the RENAME to run and block, not yet complete. The caller of this function
 				// will only unblock the RENAME after the function is complete
@@ -1293,8 +1355,8 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 		// We therefore hard-rename the table into an agreed upon name, and we won't swap it with
 		// the original table. We will actually make the table disappear, creating a void.
 		testSuiteBeforeTableName := onlineDDL.Table + "_before"
-		parsed := sqlparser.BuildParsedQuery(sqlRenameTable, onlineDDL.Table, testSuiteBeforeTableName)
-		if _, err := e.execQuery(ctx, parsed.Query); err != nil {
+		renameBeforeQuery := buildIdentifierQuery(sqlRenameTable, onlineDDL.Table, testSuiteBeforeTableName)
+		if _, err := e.execQuery(ctx, renameBeforeQuery); err != nil {
 			return err
 		}
 		e.updateMigrationStage(ctx, onlineDDL.UUID, "test suite 'before' table renamed")
@@ -1304,8 +1366,8 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 		e.updateMigrationStage(ctx, onlineDDL.UUID, "locking tables")
 		lockCtx, killWhileRenamingCancel := context.WithTimeout(ctx, onlineDDL.CutOverThreshold)
 		defer killWhileRenamingCancel()
-		lockTableQuery := sqlparser.BuildParsedQuery(sqlLockTwoTablesWrite, sentryTableName, onlineDDL.Table)
-		if _, err := lockConn.Conn.Exec(lockCtx, lockTableQuery.Query, 1, false); err != nil {
+		lockTableQuery := buildIdentifierQuery(sqlLockTwoTablesWrite, sentryTableName, onlineDDL.Table)
+		if _, err := lockConn.Conn.Exec(lockCtx, lockTableQuery, 1, false); err != nil {
 			return vterrors.Wrapf(err, "failed locking tables")
 		}
 
@@ -1315,7 +1377,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 		// We run the RENAME in a goroutine, so that we can wait for
 		go func() {
 			defer close(renameCompleteChan)
-			_, err := renameConn.Conn.Exec(ctx, renameQuery.Query, 1, false)
+			_, err := renameConn.Conn.Exec(ctx, renameQuery, 1, false)
 			renameCompleteChan <- err
 			killWhileRenamingCancel() // RENAME is done, no need to kill queries anymore
 		}()
@@ -1380,8 +1442,8 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 		if isVreplicationTestSuite {
 			// this is used in Vitess endtoend testing suite
 			testSuiteAfterTableName := onlineDDL.Table + "_after"
-			parsed := sqlparser.BuildParsedQuery(sqlRenameTable, vreplTable, testSuiteAfterTableName)
-			if _, err := e.execQuery(ctx, parsed.Query); err != nil {
+			renameAfterQuery := buildIdentifierQuery(sqlRenameTable, vreplTable, testSuiteAfterTableName)
+			if _, err := e.execQuery(ctx, renameAfterQuery); err != nil {
 				return err
 			}
 			e.updateMigrationStage(ctx, onlineDDL.UUID, "test suite 'after' table renamed")
@@ -1395,10 +1457,10 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 			e.updateMigrationStage(ctx, onlineDDL.UUID, "dropping sentry table")
 
 			{
-				dropTableQuery := sqlparser.BuildParsedQuery(sqlDropTable, sentryTableName)
+				dropTableQuery := buildIdentifierQuery(sqlDropTable, sentryTableName)
 				lockCtx, cancel := context.WithTimeout(ctx, onlineDDL.CutOverThreshold)
 				defer cancel()
-				if _, err := lockConn.Conn.Exec(lockCtx, dropTableQuery.Query, 1, false); err != nil {
+				if _, err := lockConn.Conn.Exec(lockCtx, dropTableQuery, 1, false); err != nil {
 					return vterrors.Wrapf(err, "failed dropping sentry table")
 				}
 			}
@@ -1676,7 +1738,7 @@ func (e *Executor) postInitVreplicationOriginalMigration(ctx context.Context, on
 		}
 
 		// Apply ALTER TABLE AUTO_INCREMENT=?
-		parsed := sqlparser.BuildParsedQuery(sqlAlterTableAutoIncrement, v.targetTableName(), ":auto_increment")
+		parsed := sqlparser.BuildParsedQuery(sqlAlterTableAutoIncrement, sqlescape.EscapeID(v.targetTableName()), ":auto_increment")
 		bindVars := map[string]*querypb.BindVariable{
 			"auto_increment": sqltypes.Uint64BindVariable(v.analysis.SourceAutoIncrement),
 		}
@@ -2494,7 +2556,7 @@ func (e *Executor) executeRevert(ctx context.Context, onlineDDL *schema.OnlineDD
 				if err := e.updateArtifacts(ctx, onlineDDL.UUID, artifactTable); err != nil {
 					return err
 				}
-				onlineDDL.SQL = sqlparser.BuildParsedQuery(sqlRenameTable, revertMigration.Table, artifactTable).Query
+				onlineDDL.SQL = buildIdentifierQuery(sqlRenameTable, revertMigration.Table, artifactTable)
 				if _, err := e.executeDirectly(ctx, onlineDDL); err != nil {
 					return err
 				}
@@ -2519,7 +2581,7 @@ func (e *Executor) executeRevert(ctx context.Context, onlineDDL *schema.OnlineDD
 				if err := e.updateArtifacts(ctx, onlineDDL.UUID, artifactTable); err != nil {
 					return err
 				}
-				onlineDDL.SQL = sqlparser.BuildParsedQuery(sqlRenameTable, artifactTable, revertMigration.Table).Query
+				onlineDDL.SQL = buildIdentifierQuery(sqlRenameTable, artifactTable, revertMigration.Table)
 				if _, err := e.executeDirectly(ctx, onlineDDL); err != nil {
 					return err
 				}
@@ -2605,8 +2667,8 @@ func (e *Executor) evaluateDeclarativeDiff(ctx context.Context, onlineDDL *schem
 
 		defer func() {
 			// Drop the comparison table
-			parsed := sqlparser.BuildParsedQuery(sqlDropTable, comparisonTableName)
-			_, _ = conn.ExecuteFetch(parsed.Query, 0, false)
+			dropComparisonTableQuery := buildIdentifierQuery(sqlDropTable, comparisonTableName)
+			_, _ = conn.ExecuteFetch(dropComparisonTableQuery, 0, false)
 			// Nothing bad happens for not checking the error code. The table is GC/HOLD. If we
 			// can't drop it now, it still gets collected later by tablegc mechanism
 		}()
@@ -2927,12 +2989,12 @@ func (e *Executor) generateSwapTablesStatement(ctx context.Context, tableName1, 
 	if err != nil {
 		return "", swapTableName, err
 	}
-	parsed := sqlparser.BuildParsedQuery(sqlSwapTables,
+	swapQuery := buildIdentifierQuery(sqlSwapTables,
 		tableName1, swapTableName,
 		tableName2, tableName1,
 		swapTableName, tableName2,
 	)
-	return parsed.Query, swapTableName, nil
+	return swapQuery, swapTableName, nil
 }
 
 func (e *Executor) executeAlterViewOnline(ctx context.Context, onlineDDL *schema.OnlineDDL) (err error) {

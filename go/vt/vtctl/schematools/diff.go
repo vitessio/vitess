@@ -21,7 +21,9 @@ import (
 	"fmt"
 
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
+	"vitess.io/vitess/go/vt/schemadiff"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -34,6 +36,7 @@ import (
 // If fetching the schema for either tablet fails, a non-nil error is returned.
 func CompareSchemas(
 	ctx context.Context,
+	env *vtenv.Environment,
 	ts *topo.Server,
 	tmc tmclient.TabletManagerClient,
 	source *topodatapb.TabletAlias,
@@ -53,5 +56,12 @@ func CompareSchemas(
 		return nil, fmt.Errorf("failed to get schema from tablet %v. err: %v", dest, err)
 	}
 
-	return tmutils.DiffSchemaToArray("source", sourceSchema, "dest", destSchema), nil
+	diffEnv := schemadiff.NewEnv(env, env.CollationEnv().DefaultConnectionCharset())
+	return tmutils.DiffSchemaToArrayWithEnvironment(
+		diffEnv,
+		"source",
+		sourceSchema,
+		"dest",
+		destSchema,
+	), nil
 }

@@ -376,7 +376,10 @@ func (m *Monitor) write() {
 		log.Error(fmt.Sprintf("SemiSync Monitor: failed to get a connection when writing to semisync_heartbeat table: %v", err))
 		return
 	}
-	err = conn.Conn.ExecuteFetchMultiDrain(m.addLockWaitTimeout(m.bindSideCarDBName(semiSyncHeartbeatWrite)))
+	err = m.setLockWaitTimeout(conn)
+	if err == nil {
+		_, err = conn.Conn.ExecuteFetch(m.bindSideCarDBName(semiSyncHeartbeatWrite), 0, false)
+	}
 	conn.Recycle()
 	if err != nil {
 		m.errorCount.Add(1)
@@ -416,7 +419,10 @@ func (m *Monitor) clearAllData() {
 		return
 	}
 	defer conn.Recycle()
-	err = conn.Conn.ExecuteFetchMultiDrain(m.addLockWaitTimeout(m.bindSideCarDBName(semiSyncHeartbeatClear)))
+	err = m.setLockWaitTimeout(conn)
+	if err == nil {
+		_, err = conn.Conn.ExecuteFetch(m.bindSideCarDBName(semiSyncHeartbeatClear), 0, false)
+	}
 	if err != nil {
 		m.errorCount.Add(1)
 		log.Error(fmt.Sprintf("SemiSync Monitor: failed to clear semisync_heartbeat table: %v", err))
@@ -438,9 +444,16 @@ func (m *Monitor) bindSideCarDBName(query string) string {
 	return sqlparser.BuildParsedQuery(query, sidecar.GetIdentifier()).Query
 }
 
-func (m *Monitor) addLockWaitTimeout(query string) string {
-	timeoutQuery := fmt.Sprintf(setLockWaitTimeoutQuery, int(m.actionTimeout.Seconds()))
-	return timeoutQuery + ";" + query
+// setLockWaitTimeout bounds how long the statement that follows it on the same
+// connection waits for table and metadata locks. It is a statement of its own,
+// so that the connections of the monitor never need to send several statements
+// in a single query.
+func (m *Monitor) setLockWaitTimeout(conn *dbconnpool.PooledDBConnection) error {
+	query := fmt.Sprintf(setLockWaitTimeoutQuery, int(m.actionTimeout.Seconds()))
+	if _, err := conn.Conn.ExecuteFetch(query, 0, false); err != nil {
+		return vterrors.Wrapf(err, "failed to set the lock wait timeout")
+	}
+	return nil
 }
 
 func (m *Monitor) getSemiSyncStats(conn *dbconnpool.PooledDBConnection) (semiSyncStats, error) {

@@ -58,6 +58,42 @@ func TestCreateTableDiff(t *testing.T) {
 			to:   "create table t (id int primary key)",
 		},
 		{
+			// SERIAL is an alias for BIGINT UNSIGNED NOT NULL AUTO_INCREMENT UNIQUE, and
+			// MySQL keeps its unique key as a key of the table
+			name: "serial is identical to its expansion",
+			from: "create table t (id serial)",
+			to:   "create table t (id bigint unsigned not null auto_increment, unique key id (id))",
+		},
+		{
+			name: "serial with another key is identical to its expansion",
+			from: "create table t (id serial, b int, key b_idx (b))",
+			to:   "create table t (id bigint unsigned not null auto_increment, b int, unique key id (id), key b_idx (b))",
+		},
+		{
+			// MySQL adds SERIAL's key where the column is defined, so it is named
+			// ahead of the table's own unnamed keys
+			name: "serial with an unnamed key on the same column is identical to its expansion",
+			from: "create table t (id serial, x int, unique key (id, x))",
+			to:   "create table t (id bigint unsigned not null auto_increment, x int, unique key id (id), unique key id_2 (id, x))",
+		},
+		{
+			// named keys keep their names
+			name: "serial with a key named like the column is identical to its expansion",
+			from: "create table t (x int, unique key id (x), id serial)",
+			to:   "create table t (x int, id bigint unsigned not null auto_increment, unique key id (x), unique key id_2 (id))",
+		},
+		{
+			// an explicit NULL after SERIAL wins, as in MySQL
+			name: "nullable serial is identical to its expansion",
+			from: "create table t (id serial null)",
+			to:   "create table t (id bigint unsigned auto_increment, unique key id (id))",
+		},
+		{
+			name: "serial primary key is identical to its expansion",
+			from: "create table t (id serial primary key)",
+			to:   "create table t (id bigint unsigned not null auto_increment, primary key (id), unique key id (id))",
+		},
+		{
 			name: "identical 2",
 			from: "create table t (id int, primary key(id))",
 			to:   "create table t (id int, primary key(id))",
@@ -2769,6 +2805,20 @@ func TestValidate(t *testing.T) {
 			expectErr: &MissingPartitionColumnInUniqueKeyError{Table: "t", Column: "i", UniqueKey: "id_idx"},
 		},
 		{
+			// SERIAL's implicit unique key must cover the partitioning columns too
+			name:      "add serial column to a table partitioned by another column",
+			from:      "create table t (id int primary key, x int) partition by hash(id)",
+			alter:     "alter table t add column s serial",
+			expectErr: &MissingPartitionColumnInUniqueKeyError{Table: "t", Column: "id", UniqueKey: "s"},
+		},
+		{
+			// SERIAL's implicit unique key covers a foreign key added in the same ALTER
+			name:  "serial unique key covers a foreign key in the same alter",
+			from:  "create table t (id int primary key)",
+			alter: "alter table t add column s serial, add constraint f foreign key (s) references parent(id)",
+			to:    "create table t (id int primary key, s bigint unsigned not null auto_increment, unique key s (s), constraint f foreign key (s) references parent(id))",
+		},
+		{
 			name:      "add multiple keys, multi columns, missing column",
 			from:      "create table t (id int primary key, i1 int, i2 int, i4 int)",
 			alter:     "alter table t add key i12_idx(i1, i2), add key i32_idx((IF(i3 IS NULL, i2, i3)), i2), add key i21_idx(i2, i1)",
@@ -3398,6 +3448,30 @@ func TestNormalize(t *testing.T) {
 			name: "normalize primary key and column with no default, with type boolean",
 			from: "create table t (id boolean primary key, b boolean)",
 			to:   "CREATE TABLE `t` (\n\t`id` tinyint(1),\n\t`b` tinyint(1),\n\tPRIMARY KEY (`id`)\n)",
+		},
+		{
+			// SERIAL is an alias for BIGINT UNSIGNED NOT NULL AUTO_INCREMENT UNIQUE, and
+			// MySQL keeps its unique key as a key of the table
+			name: "normalize serial",
+			from: "create table t (id serial)",
+			to:   "CREATE TABLE `t` (\n\t`id` bigint unsigned NOT NULL AUTO_INCREMENT,\n\tUNIQUE KEY `id` (`id`)\n)",
+		},
+		{
+			// an inline UNIQUE is the same key
+			name: "normalize serial unique",
+			from: "create table t (id serial unique)",
+			to:   "CREATE TABLE `t` (\n\t`id` bigint unsigned NOT NULL AUTO_INCREMENT,\n\tUNIQUE KEY `id` (`id`)\n)",
+		},
+		{
+			// an explicit NULL after SERIAL wins, as in MySQL
+			name: "normalize nullable serial",
+			from: "create table t (id serial null)",
+			to:   "CREATE TABLE `t` (\n\t`id` bigint unsigned AUTO_INCREMENT,\n\tUNIQUE KEY `id` (`id`)\n)",
+		},
+		{
+			name: "normalize serial primary key",
+			from: "create table t (id serial primary key)",
+			to:   "CREATE TABLE `t` (\n\t`id` bigint unsigned NOT NULL AUTO_INCREMENT,\n\tPRIMARY KEY (`id`),\n\tUNIQUE KEY `id` (`id`)\n)",
 		},
 		{
 			name: "normalize text types with length information: implicit utf8mb4",

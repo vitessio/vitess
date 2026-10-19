@@ -22,6 +22,7 @@ import (
 	"net"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"gopkg.in/ldap.v2"
@@ -131,7 +132,7 @@ func (asl *AuthServerLdap) validate(username, password string) (mysql.Getter, er
 	if err != nil {
 		return nil, err
 	}
-	return &LdapUserData{asl: asl, groups: groups, username: username, lastUpdated: time.Now(), updating: false}, nil
+	return &LdapUserData{asl: asl, groups: groups, username: username, lastUpdated: time.Now()}, nil
 }
 
 // this needs to be passed an already connected client...should check for this
@@ -167,18 +168,19 @@ type LdapUserData struct {
 	groups      []string
 	username    string
 	lastUpdated time.Time
-	updating    bool
+	updating    atomic.Bool
 	sync.Mutex
 }
 
 func (lud *LdapUserData) update() {
-	lud.Lock()
-	if lud.updating {
-		lud.Unlock()
+	// Only one refresh runs at a time. CompareAndSwap claims the latch and the deferred Store
+	// releases it on every return path, so a refresh that fails on an LDAP connect, bind, or
+	// search error can't leave the latch stuck and freeze this user's cached groups until the
+	// process restarts.
+	if !lud.updating.CompareAndSwap(false, true) {
 		return
 	}
-	lud.updating = true
-	lud.Unlock()
+	defer lud.updating.Store(false)
 	err := lud.asl.Connect("tcp", &lud.asl.ServerConfig)
 	if err != nil {
 		log.Error(fmt.Sprintf("Error updating LDAP user data: %v", err))
@@ -193,7 +195,6 @@ func (lud *LdapUserData) update() {
 	lud.Lock()
 	lud.groups = groups
 	lud.lastUpdated = time.Now()
-	lud.updating = false
 	lud.Unlock()
 }
 

@@ -350,6 +350,7 @@ func TestExecutorSetOp(t *testing.T) {
 		sysVars         map[string]string
 		disallowResConn bool
 		result          *sqltypes.Result
+		err             string
 	}{{
 		in: "set big_tables = 1", // ignore
 	}, {
@@ -408,8 +409,27 @@ func TestExecutorSetOp(t *testing.T) {
 		in:     "set character_set_results='latin1'",
 		result: returnNoResult("character_set_results", "varchar"),
 	}, {
+		// not a character set, which MySQL refuses as well
 		in:     "set character_set_results='abcd'",
 		result: returnNoResult("character_set_results", "varchar"),
+		err:    "unsupported connection character set 'abcd' for character_set_results: use utf8mb4",
+	}, {
+		// a character set Vitess cannot parse safely is refused, not ignored
+		in:     "set character_set_client = 'sjis'",
+		result: returnNoResult("character_set_client", "varchar"),
+		err:    "unsupported connection character set 'sjis' for character_set_client: use utf8mb4",
+	}, {
+		// MySQL also accepts a collation ID: 28 is gbk_chinese_ci
+		in:     "set character_set_client = 28",
+		result: returnNoResult("character_set_client", "varchar"),
+		err:    "unsupported connection character set 28 for character_set_client: use utf8mb4",
+	}, {
+		in:     "set collation_connection = 255",
+		result: returnNoResult("collation_connection", "varchar"),
+	}, {
+		in:     "set collation_connection = gbk_chinese_ci",
+		result: returnNoResult("collation_connection", "varchar"),
+		err:    "unsupported connection character set gbk_chinese_ci for collation_connection: use utf8mb4",
 	}, {
 		in:     "set @@global.client_found_rows = 1",
 		result: returnNoResult("client_found_rows", "int64"),
@@ -437,6 +457,10 @@ func TestExecutorSetOp(t *testing.T) {
 			session.EnableSystemSettings = !tcase.disallowResConn
 			sbclookup.SetResults([]*sqltypes.Result{tcase.result})
 			_, err := executorExecSession(ctx, executor, session, tcase.in, nil)
+			if tcase.err != "" {
+				require.ErrorContains(t, err, tcase.err)
+				return
+			}
 			require.NoError(t, err)
 			utils.MustMatch(t, tcase.warning, session.Warnings, "")
 			utils.MustMatch(t, tcase.sysVars, session.SystemVariables, "")
@@ -573,16 +597,30 @@ func TestPlanExecutorSetUDV(t *testing.T) {
 	}, {
 		in:  "set @foo = 2.1, @bar = 'baz'",
 		out: &vtgatepb.Session{UserDefinedVariables: createMap([]string{"foo", "bar"}, []any{sqltypes.DecimalString("2.1"), "baz"}), Autocommit: true},
+	}, {
+		// A parenthesized scalar is not a row value.
+		in:  "set @foo = (2)",
+		out: &vtgatepb.Session{UserDefinedVariables: createMap([]string{"foo"}, []any{2}), Autocommit: true},
+	}, {
+		// MySQL rejects a row value here with 1241. Stored, the tuple could
+		// never be read back: every reference to the variable failed.
+		in:  "set @foo = (1, 2)",
+		err: "Operand should contain 1 column(s)",
+	}, {
+		in:  "set @foo = ((1, 2), 3)",
+		err: "Operand should contain 1 column(s)",
 	}}
 	for _, tcase := range testcases {
 		t.Run(tcase.in, func(t *testing.T) {
 			session := econtext.NewSafeSession(&vtgatepb.Session{Autocommit: true})
 			_, err := executorExecSession(ctx, executor, session, tcase.in, nil)
-			if err != nil {
+			if tcase.err != "" {
 				require.EqualError(t, err, tcase.err)
-			} else {
-				utils.MustMatch(t, tcase.out, session.Session, "session output was not as expected")
+				assert.Empty(t, session.UserDefinedVariables, "a rejected SET must not store the variable")
+				return
 			}
+			require.NoError(t, err)
+			utils.MustMatch(t, tcase.out, session.Session, "session output was not as expected")
 		})
 	}
 }
@@ -634,6 +672,8 @@ func TestSetVar(t *testing.T) {
 	tcases := []struct {
 		sql string
 		rc  bool
+		// sent, when set, is the query the tablet must receive.
+		sent string
 	}{
 		{sql: "select 1 from user"},
 		{sql: "update user set col = 2"},
@@ -643,16 +683,28 @@ func TestSetVar(t *testing.T) {
 		{sql: "set autocommit = 0"},
 		{sql: "show create table user"}, // reserved connection should not be set.
 		{sql: "create table foo(bar bigint)", rc: true},
+		// USE is handled by VTGate and never reaches a tablet.
+		{sql: "use " + KsTestUnsharded},
+		// EXPLAIN carries the hint on the statement it wraps.
+		{sql: "explain select 1 from user", sent: "explain select /*+ SET_VAR(sql_mode = 'only_full_group_by') */ 1 from `user`"},
+		{sql: "explain format=json update user set col = 2", sent: "explain format = json update /*+ SET_VAR(sql_mode = 'only_full_group_by') */ `user` set col = 2"},
+		// A VALUES statement cannot take the hint, so neither can its EXPLAIN.
+		{sql: "explain values row(1)", rc: true},
 	}
 
 	for _, tc := range tcases {
 		t.Run(tc.sql, func(t *testing.T) {
 			// reset reserved conn need.
 			session.SetReservedConn(false)
+			sbc.Queries = nil
 
 			_, err = executorExecSession(ctx, executor, session, tc.sql, map[string]*querypb.BindVariable{})
 			require.NoError(t, err)
 			assert.Equal(t, tc.rc, session.InReservedConn())
+			if tc.sent != "" {
+				require.Len(t, sbc.Queries, 1)
+				assert.Equal(t, tc.sent, sbc.Queries[0].Sql)
+			}
 		})
 	}
 }

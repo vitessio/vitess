@@ -1100,6 +1100,9 @@ func (td *tableDiffer) getSourcePKCols() error {
 		return nil
 	}
 	sourceTable := sourceSchema.TableDefinitions[0]
+	// A physical PK or a primary key equivalent is unique, while the all-columns
+	// substitute used when a table has neither need not be.
+	sourceKeyUnique := true
 	if len(sourceTable.PrimaryKeyColumns) == 0 {
 		// We use the columns from a PKE if there is one.
 		executeFetch := func(query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
@@ -1123,6 +1126,7 @@ func (td *tableDiffer) getSourcePKCols() error {
 			sourceTable.PrimaryKeyColumns = pkeCols
 		} else {
 			// We use every column together as a substitute PK.
+			sourceKeyUnique = false
 			log.Info(fmt.Sprintf("Using all columns as a substitute primary key for table %s in vdiff %s", sourceTableName, td.wd.ct.uuid))
 			sourceTable.PrimaryKeyColumns = append(sourceTable.PrimaryKeyColumns, sourceTable.Columns...)
 		}
@@ -1132,14 +1136,30 @@ func (td *tableDiffer) getSourcePKCols() error {
 	if err != nil {
 		return vterrors.Wrapf(err, "table %s", sourceTableName)
 	}
-	// Reject any plan whose comparison key is not an order-preserving prefix of the
-	// physical source PK; the source stream is always ordered by that PK.
+	// Reject any plan whose comparison key the source stream, which is always
+	// ordered by the physical source PK, is not also ordered by.
 	sourceColTypes := make(map[string]querypb.Type, len(sourceTable.Fields))
 	for _, f := range sourceTable.Fields {
 		sourceColTypes[strings.ToLower(f.Name)] = f.Type
 	}
-	if err := comparisonKeyIsSourcePKPrefix(sourceSelect, td.tablePlan.comparePKs, sourceTable.PrimaryKeyColumns, sourceColTypes); err != nil {
+	extended, err := sourceOrderCoversComparisonKey(sourceSelect, td.tablePlan.comparePKs, sourceTable.PrimaryKeyColumns, sourceKeyUnique, sourceColTypes)
+	if err != nil {
 		return err
+	}
+	if extended && len(td.wd.ct.sources) > 1 {
+		// The source key is unique only within each source shard, and a target PK
+		// that extends it can hold rows from several shards that share it. A
+		// source checkpoint on that key, which every source shard resumes after,
+		// would then skip the rows of other shards that share it with the last
+		// row diffed, so no resumable checkpoint is possible and any resume
+		// restarts the whole table.
+		log.Info("restarting table instead of resuming; its target primary key extends the source key, which is unique only within each of its source shards",
+			slog.String("table", td.table.Name),
+			slog.String("vdiff", td.wd.ct.uuid))
+		td.tablePlan.sourceCheckpointUnavailable = true
+		td.lastSourcePK = nil
+		td.lastTargetPK = nil
+		return nil
 	}
 	if !allProjected {
 		// The full source PK is not projected, so no resumable source checkpoint is
@@ -1213,16 +1233,24 @@ func legacySourcePkColOrder(targetColumns, sourcePKColumns []string) []int {
 	return order
 }
 
-// comparisonKeyIsSourcePKPrefix returns an error unless the columns the VDiff
-// merge sorter compares on (comparePKs, in comparison order) are an order-
-// preserving prefix of the physical source PK. Each comparePK indexes the SELECT
-// list (shared with the source query), so its underlying source column must equal
-// the source PK column at the same rank. Physical PK columns that the filter's
-// WHERE pins to a single value are constant across the stream and so do not affect
-// its order; they are dropped before the prefix comparison (e.g. a multi-tenant
-// "where tenant_id = 1" filter makes comparing on id valid even though the source
-// PK is (tenant_id, id)).
-func comparisonKeyIsSourcePKPrefix(sourceSelect *sqlparser.Select, comparePKs []compareColInfo, sourcePKColumns []string, sourceColTypes map[string]querypb.Type) error {
+// sourceOrderCoversComparisonKey returns an error unless the source stream, which
+// is ordered by the physical source PK, is also ordered by the columns the VDiff
+// merge sorter compares on (comparePKs, in comparison order). Each comparePK
+// indexes the SELECT list (shared with the source query), so its underlying
+// source column must equal the source PK column at the same rank. Physical PK
+// columns that the filter's WHERE pins to a single value are constant across the
+// stream and so do not affect its order; they are dropped before the comparison
+// (e.g. a multi-tenant "where tenant_id = 1" filter makes comparing on id valid
+// even though the source PK is (tenant_id, id)).
+//
+// The comparison key may be an order-preserving prefix of the source PK. When
+// the source key is unique (a physical PK or a primary key equivalent, not the
+// all-columns substitute), it may also be the whole source key followed by more
+// columns, physical or computed, as for a target partitioned by a column outside
+// the source PK: a stream ordered by a unique key has no ties on it, so it is
+// also ordered by any key that starts with it. extended reports this second
+// case.
+func sourceOrderCoversComparisonKey(sourceSelect *sqlparser.Select, comparePKs []compareColInfo, sourcePKColumns []string, sourceKeyUnique bool, sourceColTypes map[string]querypb.Type) (extended bool, err error) {
 	pinned := equalityPinnedColumns(sourceSelect.Where, sourceColTypes)
 	effectivePK := make([]string, 0, len(sourcePKColumns))
 	for _, col := range sourcePKColumns {
@@ -1245,12 +1273,12 @@ func comparisonKeyIsSourcePKPrefix(sourceSelect *sqlparser.Select, comparePKs []
 	effectiveCompare := make([]string, 0, len(comparePKs))
 	for _, cpk := range comparePKs {
 		if cpk.colIndex < 0 || cpk.colIndex >= len(sourceSelect.SelectExprs.Exprs) {
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL,
+			return false, vterrors.Errorf(vtrpcpb.Code_INTERNAL,
 				"comparison key index %d out of range for vdiff source query: %s", cpk.colIndex, sqlparser.String(sourceSelect))
 		}
 		aliasedExpr, ok := sourceSelect.SelectExprs.Exprs[cpk.colIndex].(*sqlparser.AliasedExpr)
 		if !ok {
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL,
+			return false, vterrors.Errorf(vtrpcpb.Code_INTERNAL,
 				"unexpected non-aliased expression at position %d in vdiff source query: %s", cpk.colIndex, sqlparser.String(sourceSelect))
 		}
 		// A constant projected into the comparison key (e.g. "select 1 as
@@ -1261,8 +1289,17 @@ func comparisonKeyIsSourcePKPrefix(sourceSelect *sqlparser.Select, comparePKs []
 		}
 		colName, ok := underlyingSourceColumn(aliasedExpr.Expr)
 		if !ok {
-			return unsupportedFilter("vdiff does not support this filter: the comparison key includes a non-physical column, so the source stream is not sorted by the compared columns: %s",
-				sqlparser.String(sourceSelect))
+			// Past the whole source key, a computed column (e.g. a target
+			// partitioned on date_format(created_at, '%Y%m')) extends it like
+			// any other: the source key already orders the stream, so the
+			// extra column never decides it. Within the source key's ranks
+			// it would have to match a physical source key column.
+			if len(effectiveCompare) < len(effectivePK) {
+				return false, unsupportedFilter("vdiff does not support this filter: the comparison key includes a non-physical column, so the source stream is not sorted by the compared columns: %s",
+					sqlparser.String(sourceSelect))
+			}
+			effectiveCompare = append(effectiveCompare, sqlparser.String(aliasedExpr.Expr))
+			continue
 		}
 		if _, isPinned := pinned[strings.ToLower(colName)]; isPinned {
 			continue
@@ -1270,17 +1307,21 @@ func comparisonKeyIsSourcePKPrefix(sourceSelect *sqlparser.Select, comparePKs []
 		effectiveCompare = append(effectiveCompare, colName)
 	}
 
-	if len(effectiveCompare) > len(effectivePK) {
-		return unsupportedFilter("vdiff does not support this filter: the comparison key has more columns (%d) than the unconstrained physical source primary key (%d): %s",
+	extended = len(effectiveCompare) > len(effectivePK)
+	// The all-columns substitute key already holds every source column, so a
+	// comparison key only extends it with a computed column or a source column
+	// projected twice.
+	if extended && !sourceKeyUnique {
+		return false, unsupportedFilter("vdiff does not support this filter: the comparison key has more columns (%d) than the unconstrained source key (%d), which is not unique as the source table has no primary key or primary key equivalent: %s",
 			len(effectiveCompare), len(effectivePK), sqlparser.String(sourceSelect))
 	}
-	for i, col := range effectiveCompare {
+	for i, col := range effectiveCompare[:min(len(effectiveCompare), len(effectivePK))] {
 		if !strings.EqualFold(col, effectivePK[i]) {
-			return unsupportedFilter("vdiff does not support this filter: the comparison key is not an order-preserving prefix of the physical source primary key %v, so the source stream is not sorted by the compared columns: %s",
+			return false, unsupportedFilter("vdiff does not support this filter: the comparison key is neither an order-preserving prefix of the physical source primary key %v nor that key followed by more columns, so the source stream is not sorted by the compared columns: %s",
 				sourcePKColumns, sqlparser.String(sourceSelect))
 		}
 	}
-	return nil
+	return extended, nil
 }
 
 // equalityPinnedColumns returns the set of columns the WHERE clause constrains to
@@ -1366,7 +1407,7 @@ func sourceTableNameFromSelect(sourceSelect *sqlparser.Select) (string, error) {
 // PK definition order. allProjected is false (no error) when a PK column is not
 // projected as a physical column, in which case a resumable source checkpoint
 // cannot be built; merge-ordering correctness is enforced by the caller via
-// comparisonKeyIsSourcePKPrefix.
+// sourceOrderCoversComparisonKey.
 func sourcePKSelectIndices(sourceSelect *sqlparser.Select, pkColumns []string) (indices []int, allProjected bool, err error) {
 	indices = make([]int, 0, len(pkColumns))
 	for _, pkc := range pkColumns {
