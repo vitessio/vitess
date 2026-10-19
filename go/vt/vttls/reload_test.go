@@ -556,6 +556,53 @@ func TestClientConfigChecksCRLsAgainstIssuersOfVerifiedChains(t *testing.T) {
 	requireFallback("once the file is gone, the client must fall back to the CRLs it loaded before")
 }
 
+// TestReloadCachedFilesIgnoresIssuersTheNewCANoLongerTrusts checks
+// that an issuer that verified chains brought under the old CA file
+// takes no part in validating the CRLs under a new CA file that no
+// longer trusts it: the CA is rotated to a new root, whose intermediate
+// reuses the old intermediate's name with a new key and issues a valid
+// CRL without an authority key identifier, which the old intermediate's
+// key would reject, holding back the rotation.
+func TestReloadCachedFilesIgnoresIssuersTheNewCANoLongerTrusts(t *testing.T) {
+	oldRoot := t.TempDir()
+	oldCerts := tlstest.CreateClientServerCertPairs(oldRoot)
+	oldIntermediate := loadOneCert(t, oldCerts.ServerCA)
+	newRoot := t.TempDir()
+	tlstest.CreateCA(newRoot)
+	tlstest.CreateIntermediateCA(newRoot, tlstest.CA, "01", "rotated-ca", oldIntermediate.Subject.CommonName)
+	tlstest.CreateSignedCert(newRoot, "rotated-ca", "02", "rotated-server", "rotated.example.com")
+	newIntermediate := loadOneCert(t, path.Join(newRoot, "rotated-ca-cert.pem"))
+	require.Equal(t, oldIntermediate.RawSubject, newIntermediate.RawSubject)
+	newKey, err := tls.LoadX509KeyPair(path.Join(newRoot, "rotated-ca-cert.pem"), path.Join(newRoot, "rotated-ca-key.pem"))
+	require.NoError(t, err)
+
+	files := newClientFiles(t)
+	files.copy(files.ca, path.Join(oldRoot, "ca-cert.pem"))
+	files.copy(files.crl, oldCerts.ServerCRL)
+	client := func(name string) *tls.Config {
+		t.Helper()
+		config, err := ClientConfig(VerifyIdentity, "", "", files.ca, files.crl, name, tls.VersionTLS12)
+		require.NoError(t, err)
+		return config
+	}
+	oldServer, err := ReadServerConfig(oldCerts.ServerCert, oldCerts.ServerKey, "", "", oldCerts.ServerCA, tls.VersionTLS12)
+	require.NoError(t, err)
+	// The handshake brings the old intermediate in a verified chain.
+	res := handshake(t, oldServer, client(oldCerts.ServerName))
+	require.NoError(t, res.clientErr)
+
+	files.copy(files.ca, path.Join(newRoot, "ca-cert.pem"))
+	require.NoError(t, os.WriteFile(files.crl, pem.EncodeToMemory(&pem.Block{Type: "X509 CRL", Bytes: crlWithoutExtensions(t, newIntermediate, newKey.PrivateKey.(*ecdsa.PrivateKey))}), 0o600))
+	_, err = ReloadCachedFiles()
+	requireNoErrorFor(t, err, path.Dir(files.ca))
+
+	newServer, err := ReadServerConfig(path.Join(newRoot, "rotated-server-cert.pem"), path.Join(newRoot, "rotated-server-key.pem"), "", "", path.Join(newRoot, "rotated-ca-cert.pem"), tls.VersionTLS12)
+	require.NoError(t, err)
+	res = handshake(t, newServer, client("rotated.example.com"))
+	require.NoError(t, res.clientErr, "the client must trust the rotated CA")
+	require.NoError(t, res.serverErr)
+}
+
 // TestClientCRLCheckerKeepsTheLearnedBindings checks that the bindings
 // that checking a client's CRLs against the issuers verified chains
 // brought before made are kept in the checker, so that its first

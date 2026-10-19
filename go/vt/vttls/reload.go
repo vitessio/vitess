@@ -137,6 +137,12 @@ type crlFallback struct {
 	// that the verified chains of peers brought and that the CRLs bound
 	// to, at most maxBoundIssuers of them, see clientCRLCheckerFrom.
 	issuers map[string]*x509.Certificate
+	// issuersVersion counts the changes to issuers, and trusted caches
+	// which of them the CA certificates trustedUnder digests, at
+	// issuersVersion trustedVersion, still trust, see trustedIssuers.
+	issuersVersion, trustedVersion uint64
+	trustedUnder                   [sha256.Size]byte
+	trusted                        []*x509.Certificate
 	// digest is the SHA-256 digest of the file's contents that the
 	// configs built since CachedFilesGeneration last changed were built
 	// from, as of the read numbered digestRead, zero for none, see
@@ -229,6 +235,7 @@ func (f *crlFallback) learnIssuer(issuer *x509.Certificate) {
 		f.issuers = make(map[string]*x509.Certificate)
 	}
 	f.issuers[string(issuer.Raw)] = issuer
+	f.issuersVersion++
 }
 
 func (f *crlFallback) learnedIssuers() []*x509.Certificate {
@@ -237,9 +244,68 @@ func (f *crlFallback) learnedIssuers() []*x509.Certificate {
 	return slices.Collect(maps.Values(f.issuers))
 }
 
+// trustedIssuers returns the learned issuers that the CA certificates
+// cas, or the system roots without any, still trust: an issuer that a
+// verified chain brought under an earlier CA file, which a new one no
+// longer trusts, says nothing about the CRLs under the new one. A CA
+// rotated to a new root, whose intermediate reuses the name of the old
+// one with a new key, may issue CRLs without an authority key
+// identifier, which the old intermediate's key would reject. Which
+// issuers are trusted is worked out once for each set of CA
+// certificates and of learned issuers, rather than on every call.
+func (f *crlFallback) trustedIssuers(cas []*x509.Certificate) ([]*x509.Certificate, error) {
+	h := sha256.New()
+	for _, ca := range cas {
+		h.Write(ca.Raw)
+	}
+	var under [sha256.Size]byte
+	copy(under[:], h.Sum(nil))
+
+	f.mu.Lock()
+	if f.trustedVersion == f.issuersVersion && f.trustedUnder == under {
+		trusted := f.trusted
+		f.mu.Unlock()
+		return trusted, nil
+	}
+	version := f.issuersVersion
+	learned := slices.Collect(maps.Values(f.issuers))
+	f.mu.Unlock()
+
+	var roots *x509.CertPool
+	if len(cas) == 0 {
+		var err error
+		if roots, err = x509.SystemCertPool(); err != nil {
+			return nil, vterrors.Wrapf(err, "cannot load the system roots to check the CA certificates that verified chains of peers brought against")
+		}
+	} else {
+		roots = x509.NewCertPool()
+		for _, ca := range cas {
+			roots.AddCert(ca)
+		}
+	}
+	intermediates := x509.NewCertPool()
+	for _, issuer := range learned {
+		intermediates.AddCert(issuer)
+	}
+	var trusted []*x509.Certificate
+	for _, issuer := range learned {
+		if _, err := issuer.Verify(x509.VerifyOptions{Roots: roots, Intermediates: intermediates, KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageAny}}); err == nil {
+			trusted = append(trusted, issuer)
+		}
+	}
+
+	f.mu.Lock()
+	if f.issuersVersion == version {
+		f.trusted, f.trustedUnder, f.trustedVersion = trusted, under, version
+	}
+	f.mu.Unlock()
+	return trusted, nil
+}
+
 // clientCRLCheckerFrom is newCRLCheckerFrom for the CRLs of a client's
 // CRL file, which are also checked against the issuers beyond the CA
-// file that verified chains brought before, see crlFallback. The CRLs
+// file that verified chains brought before and that the CA file still
+// trusts, see crlFallback. The CRLs
 // of such an issuer, an intermediate under a CA file that holds the
 // root alone for one, are otherwise only checked when a chain next
 // brings it, so that a replacement whose signature does not verify
@@ -255,7 +321,11 @@ func clientCRLCheckerFrom(crls []*x509.RevocationList, issuers []*x509.Certifica
 	if err != nil {
 		return nil, err
 	}
-	for _, issuer := range fallback.learnedIssuers() {
+	learned, err := fallback.trustedIssuers(issuers)
+	if err != nil {
+		return nil, err
+	}
+	for _, issuer := range learned {
 		if _, configured := checker.configured[string(issuer.Raw)]; configured {
 			continue
 		}
