@@ -18,10 +18,15 @@ package vttls
 
 import (
 	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/pem"
+	"errors"
 	"fmt"
+	"math/big"
 	"os"
 	"path"
 	"strings"
@@ -637,7 +642,105 @@ func TestCRLFallbackBoundsTheLearnedIssuers(t *testing.T) {
 		issuer, _ := selfSignedCA(t, int64(1<<40+i), fmt.Sprintf("Minted CA %d", i), nil)
 		fallback.learnIssuer(issuer)
 	}
-	require.Equal(t, maxBoundIssuers, len(fallback.learnedIssuers()))
+	require.Len(t, fallback.issuers, maxBoundIssuers)
+}
+
+// mintSubCAs returns n CA certificates that issuer, with the key in
+// keyFile, issued, with serial numbers from serial on.
+func mintSubCAs(t *testing.T, issuer *x509.Certificate, keyFile string, serial int64, n int) []*x509.Certificate {
+	t.Helper()
+	keyPair, err := tls.LoadX509KeyPair(strings.TrimSuffix(keyFile, "-key.pem")+"-cert.pem", keyFile)
+	require.NoError(t, err)
+	subKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+	var minted []*x509.Certificate
+	for i := range n {
+		der, err := x509.CreateCertificate(rand.Reader, &x509.Certificate{
+			SerialNumber:          big.NewInt(serial + int64(i)),
+			Subject:               pkix.Name{CommonName: fmt.Sprintf("Sub CA %d", serial+int64(i))},
+			NotBefore:             time.Now().Add(-time.Hour),
+			NotAfter:              time.Now().Add(time.Hour),
+			IsCA:                  true,
+			BasicConstraintsValid: true,
+			KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
+		}, issuer, &subKey.PublicKey, keyPair.PrivateKey)
+		require.NoError(t, err)
+		cert, err := x509.ParseCertificate(der)
+		require.NoError(t, err)
+		minted = append(minted, cert)
+	}
+	return minted
+}
+
+// TestCRLFallbackVerifiesOnlyNewlyLearnedIssuers checks that learning
+// an issuer has only that issuer verified against the CA certificates,
+// rather than every issuer learned before: a peer that holds the key of
+// a permitted intermediate can bring a CA certificate minted under it
+// on every connection, and each would otherwise have all the others
+// verified again, on the way to maxBoundIssuers of them.
+func TestCRLFallbackVerifiesOnlyNewlyLearnedIssuers(t *testing.T) {
+	root := t.TempDir()
+	certs := tlstest.CreateClientServerCertPairs(root)
+	rootCert := loadOneCert(t, path.Join(root, "ca-cert.pem"))
+	intermediate := loadOneCert(t, certs.ServerCA)
+	minted := mintSubCAs(t, intermediate, strings.TrimSuffix(certs.ServerCA, "-cert.pem")+"-key.pem", 1<<40, 11)
+	var verified atomic.Int32
+	verifyIssuerTestHook = func() { verified.Add(1) }
+	t.Cleanup(func() { verifyIssuerTestHook = nil })
+
+	var fallback crlFallback
+	fallback.learnIssuer(intermediate)
+	for _, issuer := range minted[:10] {
+		fallback.learnIssuer(issuer)
+	}
+	trusted, err := fallback.trustedIssuers([]*x509.Certificate{rootCert})
+	require.NoError(t, err)
+	require.Len(t, trusted, 11)
+	require.Equal(t, int32(11), verified.Load())
+
+	fallback.learnIssuer(minted[10])
+	trusted, err = fallback.trustedIssuers([]*x509.Certificate{rootCert})
+	require.NoError(t, err)
+	require.Len(t, trusted, 12)
+	require.Equal(t, int32(12), verified.Load(), "only the newly learned issuer must be verified")
+}
+
+// TestCRLFallbackTrustsAnIssuerOnceItsIssuerIsLearned checks that an
+// issuer learned before the issuer that connects it to the CA
+// certificates, which it could not be verified without, is trusted
+// once that issuer is learned: when the CA file held the intermediate
+// as chains brought the CA certificates below it, and then holds the
+// root alone, the intermediate is learned last.
+func TestCRLFallbackTrustsAnIssuerOnceItsIssuerIsLearned(t *testing.T) {
+	root := t.TempDir()
+	certs := tlstest.CreateClientServerCertPairs(root)
+	rootCert := loadOneCert(t, path.Join(root, "ca-cert.pem"))
+	intermediate := loadOneCert(t, certs.ServerCA)
+	subCA := mintSubCAs(t, intermediate, strings.TrimSuffix(certs.ServerCA, "-cert.pem")+"-key.pem", 1<<40, 1)[0]
+
+	var fallback crlFallback
+	fallback.learnIssuer(subCA)
+	trusted, err := fallback.trustedIssuers([]*x509.Certificate{rootCert})
+	require.NoError(t, err)
+	require.Empty(t, trusted, "the sub-CA cannot be verified without the intermediate")
+
+	fallback.learnIssuer(intermediate)
+	trusted, err = fallback.trustedIssuers([]*x509.Certificate{rootCert})
+	require.NoError(t, err)
+	require.ElementsMatch(t, []*x509.Certificate{intermediate, subCA}, trusted)
+}
+
+// TestClientConfigNeedsNoSystemRootsWithoutLearnedIssuers checks that a
+// client with a CRL and no CA file, which has learned no issuer from
+// verified chains yet, builds its config without loading the system
+// roots, which only checking learned issuers needs.
+func TestClientConfigNeedsNoSystemRootsWithoutLearnedIssuers(t *testing.T) {
+	certs := tlstest.CreateClientServerCertPairs(t.TempDir())
+	systemRoots = func() (*x509.CertPool, error) { return nil, errors.New("no system roots here") }
+	t.Cleanup(func() { systemRoots = x509.SystemCertPool })
+
+	_, err := ClientConfig(VerifyIdentity, "", "", "", certs.ServerCRL, certs.ServerName, tls.VersionTLS12)
+	require.NoError(t, err)
 }
 
 // clientFiles are the files of a TLS client, installed in turn from
