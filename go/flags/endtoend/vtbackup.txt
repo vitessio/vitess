@@ -135,7 +135,7 @@ Flags:
       --file-backup-storage-root string                             Root directory for the file backup storage.
       --gcs-backup-storage-bucket string                            Google Cloud Storage bucket to use for backups.
       --gcs-backup-storage-root string                              Root prefix for all backup-related object names.
-      --grpc-auth-static-client-creds string                        When using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server.
+      --grpc-auth-static-client-creds string                        When using --grpc-auth-mode=static in the server, this file provides the credentials to use to authenticate with server.
       --grpc-compression string                                     Which protocol to use for compressing gRPC. Default: nothing. Supported: snappy
       --grpc-dial-concurrency-limit int                             Maximum concurrency of grpc dial operations. This should be less than the golang max thread limit of 10000. (default 1024)
       --grpc-enable-tracing                                         Enable gRPC tracing.
@@ -163,7 +163,7 @@ Flags:
       --logtostderr                                                 log to standard error instead of files
       --manifest-external-decompressor string                       command with arguments to store in the backup manifest when compressing a backup with an external compression engine.
       --min-backup-interval duration                                Only take a new backup if it's been at least this long since the most recent backup.
-      --min-retention-count int                                     Always keep at least this many of the most recent backups in this backup storage location, even if some are older than the min_retention_time. This must be at least 1 since a backup must always exist to allow new backups to be made (default 1)
+      --min-retention-count int                                     Always keep at least this many of the most recent backups in this backup storage location, even if some are older than --min-retention-time. This must be at least 1 since a backup must always exist to allow new backups to be made (default 1)
       --min-retention-time duration                                 Keep each old backup for at least this long before removing it. Set to 0 to disable pruning of old backups.
       --mycnf-bin-log-path string                                   mysql binlog path
       --mycnf-data-dir string                                       data directory for mysql

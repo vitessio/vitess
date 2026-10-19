@@ -53,7 +53,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	utils.SetFlagDurationVar(fs, &bufferMinTimeBetweenFailovers, "buffer-min-time-between-failovers", 1*time.Minute, "Minimum time between the end of a failover and the start of the next one (tracked per shard). Faster consecutive failovers will not trigger buffering.")
 
 	utils.SetFlagIntVar(fs, &bufferDrainConcurrency, "buffer-drain-concurrency", 1, "Maximum number of requests retried simultaneously. More concurrency will increase the load on the PRIMARY vttablet when draining the buffer.")
-	utils.SetFlagStringVar(fs, &bufferKeyspaceShards, "buffer-keyspace-shards", "", "If not empty, limit buffering to these entries (comma separated). Entry format: keyspace or keyspace/shard. Requires --enable_buffer=true.")
+	utils.SetFlagStringVar(fs, &bufferKeyspaceShards, "buffer-keyspace-shards", "", "If not empty, limit buffering to these entries (comma separated). Entry format: keyspace or keyspace/shard. Requires --enable-buffer=true.")
 }
 
 func init() {
@@ -80,7 +80,7 @@ func verifyFlags() error {
 	}
 
 	if bufferKeyspaceShards != "" && !bufferEnabled {
-		return fmt.Errorf("--buffer-keyspace-shards=%v also requires that --enable_buffer is set", bufferKeyspaceShards)
+		return fmt.Errorf("--buffer-keyspace-shards=%v also requires that --enable-buffer is set", bufferKeyspaceShards)
 	}
 	if bufferEnabled && bufferEnabledDryRun && bufferKeyspaceShards == "" {
 		return errors.New("both the dry-run mode and actual buffering is enabled. To avoid ambiguity, keyspaces and shards for actual buffering must be explicitly listed in --buffer-keyspace-shards")

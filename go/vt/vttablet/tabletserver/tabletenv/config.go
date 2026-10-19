@@ -184,7 +184,7 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 
 	utils.SetFlagBoolVar(fs, &currentConfig.EnableTransactionLimit, "enable-transaction-limit", defaultConfig.EnableTransactionLimit, "If true, limit on number of transactions open at the same time will be enforced for all users. User trying to open a new transaction after exhausting their limit will receive an error immediately, regardless of whether there are available slots or not.")
 	utils.SetFlagBoolVar(fs, &currentConfig.EnableTransactionLimitDryRun, "enable-transaction-limit-dry-run", defaultConfig.EnableTransactionLimitDryRun, "If true, limit on number of transactions open at the same time will be tracked for all users, but not enforced.")
-	utils.SetFlagFloat64Var(fs, &currentConfig.TransactionLimitPerUser, "transaction-limit-per-user", defaultConfig.TransactionLimitPerUser, "Maximum number of transactions a single user is allowed to use at any time, represented as fraction of -transaction_cap.")
+	utils.SetFlagFloat64Var(fs, &currentConfig.TransactionLimitPerUser, "transaction-limit-per-user", defaultConfig.TransactionLimitPerUser, "Maximum number of transactions a single user is allowed to use at any time, represented as fraction of --queryserver-config-transaction-cap.")
 	utils.SetFlagBoolVar(fs, &currentConfig.TransactionLimitByUsername, "transaction-limit-by-username", defaultConfig.TransactionLimitByUsername, "Include VTGateCallerID.username when considering who the user is for the purpose of transaction limit.")
 	utils.SetFlagBoolVar(fs, &currentConfig.TransactionLimitByPrincipal, "transaction-limit-by-principal", defaultConfig.TransactionLimitByPrincipal, "Include CallerID.principal when considering who the user is for the purpose of transaction limit.")
 	utils.SetFlagBoolVar(fs, &currentConfig.TransactionLimitByComponent, "transaction-limit-by-component", defaultConfig.TransactionLimitByComponent, "Include CallerID.component when considering who the user is for the purpose of transaction limit.")
@@ -1001,7 +1001,7 @@ func (c *TabletConfig) verifyTransactionLimitConfig() error {
 		bySubcomp   = c.TransactionLimitBySubcomponent
 	)
 	if byAny := byUser || byPrincipal || byComp || bySubcomp; !byAny {
-		return errors.New("no user discriminating fields selected for transaction limiter, everyone would share single chunk of transaction pool. Override with at least one of --transaction_limit_by flags set to true")
+		return errors.New("no user discriminating fields selected for transaction limiter, everyone would share single chunk of transaction pool. Override with at least one of the --transaction-limit-by-* flags set to true")
 	}
 	if v := c.TransactionLimitPerUser; v <= 0 || v >= 1 {
 		return fmt.Errorf("--transaction-limit-per-user should be a fraction within range (0, 1) (specified value: %v)", v)
