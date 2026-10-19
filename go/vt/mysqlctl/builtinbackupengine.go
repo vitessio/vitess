@@ -1346,6 +1346,14 @@ func (be *BuiltinBackupEngine) ExecuteRestore(ctx context.Context, params Restor
 	if err != nil {
 		return nil, err
 	}
+	// Copying the binlogs follows BinlogFileEntries, while what the restore does after
+	// mysqld starts follows IncludesBinlogs, and only a full backup includes binlogs.
+	// Refuse a corrupt or hand-edited manifest that disagrees, rather than install
+	// binlogs that the restore then removes, or points mysqld's index at.
+	if bm.IncludesBinlogs != (len(bm.BinlogFileEntries) > 0) || (bm.Incremental && bm.IncludesBinlogs) {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "invalid %s: IncludesBinlogs is %t with %d binlog entries, in an incremental backup: %t",
+			backupManifestFileName, bm.IncludesBinlogs, len(bm.BinlogFileEntries), bm.Incremental)
+	}
 
 	// mark restore as in progress
 	if err := createStateFile(params.Cnf); err != nil {

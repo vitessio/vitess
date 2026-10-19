@@ -936,7 +936,7 @@ func TestBackupRestoreWithBinlogs(t *testing.T) {
 	dstDir := path.Join(backupRoot, "dst")
 	require.NoError(t, os.MkdirAll(dstDir, 0o755))
 	dstBase := path.Join(dstDir, "dst-bin")
-	restored, err := be.ExecuteRestore(ctx, RestoreParams{
+	restoreParams := RestoreParams{
 		Cnf: &Mycnf{
 			InnodbDataHomeDir:     path.Join(backupRoot, "innodb"),
 			InnodbLogGroupHomeDir: path.Join(backupRoot, "log"),
@@ -957,7 +957,29 @@ func TestBackupRestoreWithBinlogs(t *testing.T) {
 		StartTime:            time.Now(),
 		Stats:                backupstats.NoStats(),
 		MysqlShutdownTimeout: time.Minute,
-	}, filebackupstorage.NewBackupHandle(nil, "", "", true))
+	}
+
+	// A manifest whose binlog fields disagree is refused before anything is restored.
+	for name, corrupt := range map[string]func(*builtinBackupManifest){
+		"entries without IncludesBinlogs":  func(m *builtinBackupManifest) { m.IncludesBinlogs = false },
+		"IncludesBinlogs without entries":  func(m *builtinBackupManifest) { m.BinlogFileEntries = nil },
+		"binlogs in an incremental backup": func(m *builtinBackupManifest) { m.Incremental = true },
+	} {
+		t.Run(name, func(t *testing.T) {
+			m := bm
+			corrupt(&m)
+			corruptData, err := json.Marshal(m)
+			require.NoError(t, err)
+			require.NoError(t, os.WriteFile(path.Join(backupRoot, backupManifestFileName), corruptData, 0o644))
+			_, err = be.ExecuteRestore(ctx, restoreParams, filebackupstorage.NewBackupHandle(nil, "", "", true))
+			require.ErrorContains(t, err, "invalid MANIFEST")
+			assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+			assert.NoFileExists(t, dstBase+".000001")
+		})
+	}
+	require.NoError(t, os.WriteFile(path.Join(backupRoot, backupManifestFileName), data, 0o644))
+
+	restored, err := be.ExecuteRestore(ctx, restoreParams, filebackupstorage.NewBackupHandle(nil, "", "", true))
 	require.NoError(t, err)
 	assert.True(t, restored.IncludesBinlogs)
 
