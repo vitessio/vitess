@@ -52,6 +52,7 @@ import (
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 type testcase struct {
@@ -159,6 +160,10 @@ func TestNoBlob(t *testing.T) {
 					Count: 4,
 					Cols:  []byte{0x0b}, // The blob column is also absent from the before image, which is signaled the same way
 				},
+				afterDataColumnsRaw: &binlogdatapb.RowChange_Bitmap{
+					Count: 4,
+					Cols:  []byte{0x0b}, // The projected after image bitmap is the same as DataColumns for a "select *" filter
+				},
 			}}}},
 		}},
 		{"commit", nil},
@@ -182,10 +187,11 @@ func TestNoBlob(t *testing.T) {
 	}}
 	ts.Run()
 
-	// The BeforeDataColumns bitmap describes the columns as emitted by the stream,
-	// so when the filter reorders or drops columns it is projected along with the
-	// values. The existing DataColumns bitmap is intentionally left in the source
-	// table's column order for compatibility with existing consumers.
+	// The BeforeDataColumns and AfterDataColumns bitmaps describe the columns as
+	// emitted by the stream, so when the filter reorders or drops columns they are
+	// projected along with the values. The existing DataColumns bitmap is
+	// intentionally left in the source table's column order for compatibility
+	// with existing consumers.
 	// t5 reorders the columns and keeps the blob; t6 drops the blob altogether.
 	tsp := &TestSpec{
 		t: t,
@@ -224,11 +230,11 @@ func TestNoBlob(t *testing.T) {
 			{name: "id", dataType: "INT32", colType: "int(11)", len: 11, collationID: 63},
 		},
 	}
-	// The after image bitmap is in the source table's (id, blb, val) order for both
-	// tables: only the blob is absent, i.e. 00000101.
+	// The legacy after image bitmap is in the source table's (id, blb, val) order
+	// for both tables: only the blob is absent, i.e. 00000101.
 	afterBitmap := &binlogdatapb.RowChange_Bitmap{Count: 3, Cols: []byte{0x05}}
-	// The before image bitmap is projected. In the emitted (blb, id, val) order only
-	// the blob is absent: 00000110.
+	// The before and projected after image bitmaps follow the emitted columns. In
+	// the emitted (blb, id, val) order only the blob is absent: 00000110.
 	reorderedBitmap := &binlogdatapb.RowChange_Bitmap{Count: 3, Cols: []byte{0x06}}
 	// The omitted blob is not part of the emitted (val, id) columns, so both bits are set.
 	subsetBitmap := &binlogdatapb.RowChange_Bitmap{Count: 2, Cols: []byte{0x03}}
@@ -245,6 +251,7 @@ func TestNoBlob(t *testing.T) {
 				afterRaw:             &querypb.Row{Lengths: []int64{-1, 1, 3}, Values: []byte("1bbb")},
 				dataColumnsRaw:       afterBitmap,
 				beforeDataColumnsRaw: reorderedBitmap,
+				afterDataColumnsRaw:  reorderedBitmap,
 			}}}},
 		}},
 		{"delete from t5 where id = 1", []TestRowEvent{
@@ -266,6 +273,7 @@ func TestNoBlob(t *testing.T) {
 				after:                []string{"bbb", "1"},
 				dataColumnsRaw:       afterBitmap,
 				beforeDataColumnsRaw: subsetBitmap,
+				afterDataColumnsRaw:  subsetBitmap,
 			}}}},
 		}},
 		{"delete from t6 where id = 1", []TestRowEvent{
@@ -277,6 +285,127 @@ func TestNoBlob(t *testing.T) {
 		{"commit", nil},
 	}}
 	tsp.Run()
+
+	// An UPDATE whose row moves into the target key range is delivered with
+	// only its after image, which the consumer applies as an INSERT. Under
+	// NOBLOB that image omits the unchanged blob and, unlike a real INSERT
+	// where an omitted column took its default, the target has no row to keep
+	// the value from. The stream fails closed. When the blob changed too the
+	// image is full and the row is delivered.
+	// 1, 2, 3 and 5 hash into -80; 4 and 6 into 80-.
+	execStatements(t, []string{
+		"create table t7(id1 int, id2 int, blb blob, val varbinary(4), primary key(id1))",
+	})
+	defer execStatements(t, []string{"drop table t7"})
+	keyrangeFilter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "t7",
+			Filter: "select id1, blb, val from t7 where in_keyrange(id1, 'hash', '-80')",
+		}},
+	}
+
+	pos := primaryPosition(t)
+	execStatements(t, []string{
+		"insert into t7 values (4, 1, 'blob1', 'aaa')", // 80-, filtered out
+		"update t7 set id1 = 3 where id1 = 4",          // moves into -80, blob unchanged and omitted
+	})
+	ch := make(chan []*binlogdatapb.VEvent)
+	go func() {
+		for range ch {
+		}
+	}()
+	// Without the check the stream would simply deliver the event and keep
+	// running; bound it so a regression fails instead of hanging.
+	streamCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	err := vstream(streamCtx, t, pos, nil, keyrangeFilter, ch, false)
+	close(ch)
+	require.ErrorContains(t, err, "a row moving into the target key range has a partial after image from which column blb cannot be reconstructed")
+	require.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+
+	// The same move is fine when the filter does not select the omitted blob:
+	// every emitted value is present.
+	projectedFE := &TestFieldEvent{
+		table: "t9",
+		db:    testenv.DBName,
+		cols: []*TestColumn{
+			{name: "id1", dataType: "INT32", colType: "int(11)", len: 11, collationID: 63},
+			{name: "val", dataType: "VARBINARY", colType: "varbinary(4)", len: 4, collationID: 63},
+		},
+	}
+	tsu := &TestSpec{
+		t: t,
+		ddls: []string{
+			"create table t9(id1 int, id2 int, blb blob, val varbinary(4), primary key(id1))",
+		},
+		options: &TestSpecOptions{
+			noblob: true,
+			filter: &binlogdatapb.Filter{
+				Rules: []*binlogdatapb.Rule{{
+					Match:  "t9",
+					Filter: "select id1, val from t9 where in_keyrange(id1, 'hash', '-80')",
+				}},
+			},
+			customFieldEvents: true,
+		},
+	}
+	defer tsu.Close()
+	tsu.Init()
+	tsu.tests = [][]*TestQuery{{
+		{"begin", nil},
+		{"insert into t9 values (6, 1, 'blob1', 'aaa')", noEvents}, // 80-
+		{"update t9 set id1 = 5 where id1 = 6", []TestRowEvent{ // moves into -80, blob omitted but not selected
+			{event: projectedFE.String()},
+			{spec: &TestRowEventSpec{table: "t9", changes: []TestRowChange{{
+				after: []string{"5", "aaa"},
+				// The image is still partial: the legacy bitmap is in source order
+				// (id1, id2, blb, val) with the blob absent, the projected one
+				// covers the emitted (id1, val), both present.
+				dataColumnsRaw:      &binlogdatapb.RowChange_Bitmap{Count: 4, Cols: []byte{0x0b}},
+				afterDataColumnsRaw: &binlogdatapb.RowChange_Bitmap{Count: 2, Cols: []byte{0x03}},
+			}}}},
+		}},
+		{"commit", nil},
+	}}
+	tsu.Run()
+
+	movedFE := &TestFieldEvent{
+		table: "t8",
+		db:    testenv.DBName,
+		cols: []*TestColumn{
+			{name: "id1", dataType: "INT32", colType: "int(11)", len: 11, collationID: 63},
+			{name: "blb", dataType: "BLOB", colType: "blob", len: 65535, collationID: 63},
+			{name: "val", dataType: "VARBINARY", colType: "varbinary(4)", len: 4, collationID: 63},
+		},
+	}
+	tsm := &TestSpec{
+		t: t,
+		ddls: []string{
+			"create table t8(id1 int, id2 int, blb blob, val varbinary(4), primary key(id1))",
+		},
+		options: &TestSpecOptions{
+			noblob: true,
+			filter: &binlogdatapb.Filter{
+				Rules: []*binlogdatapb.Rule{{
+					Match:  "t8",
+					Filter: "select id1, blb, val from t8 where in_keyrange(id1, 'hash', '-80')",
+				}},
+			},
+			customFieldEvents: true,
+		},
+	}
+	defer tsm.Close()
+	tsm.Init()
+	tsm.tests = [][]*TestQuery{{
+		{"begin", nil},
+		{"insert into t8 values (6, 1, 'blob1', 'aaa')", noEvents}, // 80-
+		{"update t8 set id1 = 5, blb = 'blob2' where id1 = 6", []TestRowEvent{ // moves into -80 with a full image
+			{event: movedFE.String()},
+			{spec: &TestRowEventSpec{table: "t8", changes: []TestRowChange{{after: []string{"5", "blob2", "aaa"}}}}},
+		}},
+		{"commit", nil},
+	}}
+	tsm.Run()
 }
 
 // TestSetAndEnum confirms that the events for set and enum columns are correct.
@@ -3142,4 +3271,84 @@ func TestBuildSetStringValue64thMember(t *testing.T) {
 	got, err := buildSetStringValue(env.SchemaEngine.Environment(), plan, 0, value)
 	require.NoError(t, err)
 	assert.Equal(t, "v1,v64", got.ToString())
+}
+
+// TestEventGTIDAcrossBinlogRotation checks that every event of a transaction
+// carries that transaction's own GTID in EventGtid, both for back-to-back
+// transactions in one binlog file and across a binlog rotation, where the
+// vstreamer clears its current GTID.
+func TestEventGTIDAcrossBinlogRotation(t *testing.T) {
+	execStatement(t, "create table event_gtid_rotation(id int, val varbinary(128), primary key(id))")
+	defer execStatement(t, "drop table event_gtid_rotation")
+
+	decode := func(pos string) replication.Position {
+		t.Helper()
+		p, err := replication.DecodePosition(pos)
+		require.NoError(t, err)
+		return p
+	}
+	startPos := primaryPosition(t)
+	positions := []replication.Position{decode(startPos)}
+
+	execStatement(t, "insert into event_gtid_rotation values (1, 'aaa')")
+	positions = append(positions, decode(primaryPosition(t)))
+	execStatement(t, "insert into event_gtid_rotation values (2, 'bbb')")
+	positions = append(positions, decode(primaryPosition(t)))
+	execStatement(t, "flush binary logs")
+	execStatement(t, "insert into event_gtid_rotation values (3, 'ccc')")
+	positions = append(positions, decode(primaryPosition(t)))
+
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "event_gtid_rotation",
+			Filter: "select * from event_gtid_rotation",
+		}},
+	}
+	wg, ch := startStream(ctx, t, filter, startPos, nil)
+	defer wg.Wait()
+	defer cancel()
+
+	var trx [][]*binlogdatapb.VEvent
+	var cur []*binlogdatapb.VEvent
+	for len(trx) < len(positions)-1 {
+		select {
+		case evs, ok := <-ch:
+			require.True(t, ok, "stream ended after %d transactions", len(trx))
+			for _, ev := range evs {
+				if ev.Type == binlogdatapb.VEventType_HEARTBEAT {
+					continue
+				}
+				cur = append(cur, ev)
+				if ev.Type == binlogdatapb.VEventType_COMMIT {
+					trx = append(trx, cur)
+					cur = nil
+				}
+			}
+		case <-ctx.Done():
+			require.FailNow(t, "timed out", "got %d transactions: %v", len(trx), trx)
+		}
+	}
+
+	flavor := positions[0].GTIDSet.Flavor()
+	seen := make(map[string]bool)
+	for i, events := range trx {
+		before, after := positions[i], positions[i+1]
+		gtid := events[0].EventGtid
+		require.NotEmpty(t, gtid, "transaction %d: first event %v has no EventGtid", i, events[0])
+		parsed, err := replication.ParseGTID(flavor, gtid)
+		require.NoError(t, err)
+		require.True(t, after.GTIDSet.ContainsGTID(parsed), "transaction %d: %s is not in %s", i, gtid, after)
+		require.False(t, before.GTIDSet.ContainsGTID(parsed), "transaction %d: %s is already in %s", i, gtid, before)
+
+		sawRow := false
+		for _, ev := range events {
+			require.Equal(t, gtid, ev.EventGtid, "transaction %d: %v event", i, ev.Type)
+			sawRow = sawRow || ev.Type == binlogdatapb.VEventType_ROW
+		}
+		require.True(t, sawRow, "transaction %d has no ROW event: %v", i, events)
+		require.False(t, seen[gtid], "transaction %d reuses %s", i, gtid)
+		seen[gtid] = true
+	}
 }

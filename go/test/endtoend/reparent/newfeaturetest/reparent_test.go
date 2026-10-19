@@ -52,8 +52,8 @@ func TestSingleReplicaERS(t *testing.T) {
 	// Delete and stop two tablets. We only want to have 2 tablets for this test.
 	utils.DeleteTablet(t, clusterInstance, tablets[2])
 	utils.DeleteTablet(t, clusterInstance, tablets[3])
-	utils.StopTablet(t, tablets[2], true)
-	utils.StopTablet(t, tablets[3], true)
+	utils.KillTablet(t, tablets[2])
+	utils.KillTablet(t, tablets[3])
 
 	// Reparent to the other replica
 	output, err := utils.Prs(t, clusterInstance, tablets[1])
@@ -63,7 +63,7 @@ func TestSingleReplicaERS(t *testing.T) {
 	utils.ConfirmReplication(t, tablets[1], []*cluster.Vttablet{tablets[0]})
 
 	// Make the current primary vttablet unavailable.
-	utils.StopTablet(t, tablets[1], true)
+	utils.KillTablet(t, tablets[1])
 
 	// Run an ERS with only one replica reachable. Also, this replica is such that it was a primary before.
 	output, err = utils.Ers(clusterInstance, tablets[0], "", "")

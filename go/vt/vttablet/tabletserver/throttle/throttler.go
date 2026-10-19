@@ -45,6 +45,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math"
 	"math/rand/v2"
 	"strings"
@@ -123,6 +124,7 @@ var ErrThrottlerNotOpen = errors.New("throttler not open")
 // it can be mocked in unit tests
 type throttlerTopoService interface {
 	GetTablet(ctx context.Context, alias *topodatapb.TabletAlias) (*topo.TabletInfo, error)
+	GetShard(ctx context.Context, keyspace, shard string) (*topo.ShardInfo, error)
 	FindAllTabletAliasesInShard(ctx context.Context, keyspace, shard string) ([]*topodatapb.TabletAlias, error)
 	GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, error)
 }
@@ -693,29 +695,33 @@ func (throttler *Throttler) stimulatePrimaryThrottler(ctx context.Context, tmCli
 	ctx, cancel := context.WithTimeout(ctx, throttler.dormantPeriod)
 	defer cancel()
 
-	tabletAliases, err := throttler.ts.FindAllTabletAliasesInShard(ctx, throttler.keyspace, throttler.shard)
+	// The shard record names the primary, so there is no need to list and read every tablet in the
+	// shard: that costs a topo read per cell and per tablet, on every replica that gets checked.
+	si, err := throttler.ts.GetShard(ctx, throttler.keyspace, throttler.shard)
 	if err != nil {
 		return err
 	}
-	for _, tabletAlias := range tabletAliases {
-		tablet, err := throttler.ts.GetTablet(ctx, tabletAlias)
-		if err != nil {
-			return err
-		}
-		if tablet.Type != topodatapb.TabletType_PRIMARY {
-			continue
-		}
-		req := &tabletmanagerdatapb.CheckThrottlerRequest{
-			AppName:       throttlerapp.ThrottlerStimulatorName.String(),
-			ThrottlerType: throttler.throttlerType.ToProto(),
-		}
-		_, err = tmClient.CheckThrottler(ctx, tablet.Tablet, req)
-		if err != nil {
-			log.Error(fmt.Sprintf("stimulatePrimaryThrottler: %+v", err))
-		}
+	if !si.HasPrimary() {
+		return nil
+	}
+	tablet, err := throttler.ts.GetTablet(ctx, si.PrimaryAlias)
+	if err != nil {
 		return err
 	}
-	return nil
+	if tablet.Type != topodatapb.TabletType_PRIMARY {
+		// The shard record and the tablet record disagree, e.g. mid-reparent. We will try again
+		// on the next stimulation.
+		return nil
+	}
+	req := &tabletmanagerdatapb.CheckThrottlerRequest{
+		AppName:       throttlerapp.ThrottlerStimulatorName.String(),
+		ThrottlerType: throttler.throttlerType.ToProto(),
+	}
+	_, err = tmClient.CheckThrottler(ctx, tablet.Tablet, req)
+	if err != nil {
+		log.Error("stimulatePrimaryThrottler failed", slog.Any("error", err))
+	}
+	return err
 }
 
 // throttledAppsSnapshot returns a snapshot (a copy) of current throttled apps

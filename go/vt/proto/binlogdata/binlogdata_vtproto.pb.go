@@ -316,6 +316,7 @@ func (m *RowChange) CloneVT() *RowChange {
 	r.DataColumns = m.DataColumns.CloneVT()
 	r.JsonPartialValues = m.JsonPartialValues.CloneVT()
 	r.BeforeDataColumns = m.BeforeDataColumns.CloneVT()
+	r.AfterDataColumns = m.AfterDataColumns.CloneVT()
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -1734,6 +1735,16 @@ func (m *RowChange) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.AfterDataColumns != nil {
+		size, err := m.AfterDataColumns.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		i--
+		dAtA[i] = 0x32
 	}
 	if m.BeforeDataColumns != nil {
 		size, err := m.BeforeDataColumns.MarshalToSizedBufferVT(dAtA[:i])
@@ -3935,6 +3946,10 @@ func (m *RowChange) SizeVT() (n int) {
 	}
 	if m.BeforeDataColumns != nil {
 		l = m.BeforeDataColumns.SizeVT()
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	if m.AfterDataColumns != nil {
+		l = m.AfterDataColumns.SizeVT()
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	n += len(m.unknownFields)
@@ -7065,6 +7080,42 @@ func (m *RowChange) UnmarshalVT(dAtA []byte) error {
 				m.BeforeDataColumns = &RowChange_Bitmap{}
 			}
 			if err := m.BeforeDataColumns.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 6:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field AfterDataColumns", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.AfterDataColumns == nil {
+				m.AfterDataColumns = &RowChange_Bitmap{}
+			}
+			if err := m.AfterDataColumns.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex

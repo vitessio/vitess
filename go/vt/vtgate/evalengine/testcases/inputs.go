@@ -339,6 +339,7 @@ var inputTrimStrings = []string{
 	"\"a\"",
 	"\"abc\"",
 	"'abca'",
+	"'aabcaa'",
 	"1",
 	"-1",
 	"0123",
