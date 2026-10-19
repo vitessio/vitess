@@ -149,7 +149,7 @@ var (
 						return vtgatepb.TransactionMode_TWOPC
 					default:
 						fmt.Printf("Invalid option: %v\n", txMode)
-						fmt.Println("Usage: -transaction_mode {SINGLE | MULTI | TWOPC}")
+						fmt.Println("Usage: --transaction-mode {SINGLE | MULTI | TWOPC}")
 						os.Exit(1)
 						return -1
 					}
