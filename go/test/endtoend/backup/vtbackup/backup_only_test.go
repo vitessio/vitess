@@ -508,7 +508,9 @@ func verifyDisableEnableRedoLogs(ctx context.Context, mysqlSocket string) error 
 // flags and produces a chunked backup. It then restores the chunked backup on
 // replica2 and verifies the data is intact.
 func TestVtBackupWithChunking(t *testing.T) {
-	// Chunked backups are a v25 feature; older vttablets can't restore them.
+	// Chunked backups are a v25 feature; older vtbackups don't have the
+	// chunking flags, and older vttablets can't restore them.
+	utils.SkipIfBinaryIsBelowVersion(t, 25, "vtbackup")
 	utils.SkipIfBinaryIsBelowVersion(t, 25, "vttablet")
 	prepareCluster(t)
 
