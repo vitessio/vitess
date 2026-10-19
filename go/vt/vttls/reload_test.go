@@ -17,10 +17,13 @@ limitations under the License.
 package vttls
 
 import (
+	"crypto/ecdsa"
 	"crypto/tls"
 	"encoding/pem"
 	"os"
 	"path"
+	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -155,6 +158,68 @@ func TestClientConfigKeepsLastValidCRL(t *testing.T) {
 	require.NoError(t, os.WriteFile(unused, []byte("not a CRL"), 0o600))
 	_, err = ClientConfig(VerifyIdentity, "", "", certs.ServerCA, unused, certs.RevokedServerName, tls.VersionTLS12)
 	require.Error(t, err)
+}
+
+// TestClientConfigFallsBackToTheLatestCRLRead checks, through real
+// handshakes, that a ClientConfig call that read a CRL file before
+// another, and finished validating it after the other stored its
+// CRLs, does not leave the older CRLs as the ones to fall back to:
+// once the file cannot be read, a server that the newer CRLs revoke
+// is still rejected.
+func TestClientConfigFallsBackToTheLatestCRLRead(t *testing.T) {
+	certs := tlstest.CreateClientServerCertPairs(t.TempDir())
+	keyPair, err := tls.LoadX509KeyPair(certs.ServerCA, strings.TrimSuffix(certs.ServerCA, "-cert.pem")+"-key.pem")
+	require.NoError(t, err)
+	crl := path.Join(t.TempDir(), "crl.pem")
+	// A CRL from the server CA that revokes nothing yet.
+	require.NoError(t, os.WriteFile(crl, pem.EncodeToMemory(&pem.Block{Type: "X509 CRL", Bytes: crlWithoutExtensions(t, loadOneCert(t, certs.ServerCA), keyPair.PrivateKey.(*ecdsa.PrivateKey))}), 0o600))
+
+	revokedServer, err := ReadServerConfig(certs.RevokedServerCert, certs.RevokedServerKey, "", "", "", tls.VersionTLS12)
+	require.NoError(t, err)
+	client := func() (*tls.Config, error) {
+		return ClientConfig(VerifyIdentity, "", "", certs.ServerCA, crl, certs.RevokedServerName, tls.VersionTLS12)
+	}
+	requireRejected := func() {
+		t.Helper()
+		config, err := client()
+		require.NoError(t, err)
+		res := handshake(t, revokedServer, config)
+		require.ErrorContains(t, res.clientErr, "Certificate revoked: CommonName="+certs.RevokedServerName)
+	}
+
+	// The first call reads the CRL that revokes nothing, and is held
+	// before it validates it.
+	read, release := make(chan struct{}), make(chan struct{})
+	var calls atomic.Int32
+	crlReadTestHook = func() {
+		if calls.Add(1) == 1 {
+			close(read)
+			<-release
+		}
+	}
+	t.Cleanup(func() { crlReadTestHook = nil })
+	built := make(chan error, 1)
+	go func() {
+		_, err := client()
+		built <- err
+	}()
+	select {
+	case <-read:
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "the first call did not read the CRL file in time")
+	}
+
+	// The second reads the CRL that revokes the server, and stores it.
+	b, err := os.ReadFile(certs.ServerCRL)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(crl, b, 0o600))
+	requireRejected()
+
+	close(release)
+	require.NoError(t, <-built)
+
+	require.NoError(t, os.Remove(crl))
+	requireRejected()
 }
 
 // clientFiles are the files of a TLS client, installed in turn from

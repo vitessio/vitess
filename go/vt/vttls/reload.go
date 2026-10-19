@@ -50,12 +50,11 @@ var (
 	// when last seen valid under that CA, or to the zero digest when
 	// never seen valid under it.
 	watchedCRLs sync.Map
-	// lastValidCRLs maps the CRL files ClientConfig used to the CRLs
-	// last loaded from them, by ClientConfig or ReloadCachedFiles,
-	// and staleCRLWarnings holds each file
-	// whose CRLs it held against peers for, with the error it warned
-	// about then: the warning repeats when the failure changes, or
-	// when the file breaks again after having worked.
+	// lastValidCRLs maps the CRL files ClientConfig used to their
+	// *crlFallback, and staleCRLWarnings holds each file whose CRLs it
+	// held against peers for, with the error it warned about then: the
+	// warning repeats when the failure changes, or when the file breaks
+	// again after having worked.
 	lastValidCRLs, staleCRLWarnings sync.Map
 
 	reloadMu              sync.Mutex
@@ -107,6 +106,51 @@ func watchCRL(w crlWatch, digest [sha256.Size]byte) {
 	}
 }
 
+// crlFallback holds the CRLs last loaded from a CRL file, by
+// ClientConfig or ReloadCachedFiles, which ClientConfig falls back to
+// when the file cannot be read or used. The reads of the file are
+// numbered in the order they are made, and CRLs replace only those
+// from an earlier read, so that a read validated slowly, or published
+// by a reload after a later read, does not leave older CRLs in place
+// of newer ones.
+type crlFallback struct {
+	mu sync.Mutex
+	// reads counts the reads of the file, and crlsRead is the number
+	// of the read that crls came from, zero for none.
+	reads, crlsRead uint64
+	crls            []*x509.RevocationList
+}
+
+func crlFallbackOf(crl string) *crlFallback {
+	fallback, _ := lastValidCRLs.LoadOrStore(crl, &crlFallback{})
+	return fallback.(*crlFallback)
+}
+
+// read returns what the file holds, and the number of this read.
+func (f *crlFallback) read(crl string) ([]byte, uint64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.reads++
+	body, err := os.ReadFile(crl)
+	return body, f.reads, err
+}
+
+// store keeps crls, from the read numbered read, unless the CRLs of a
+// later read are kept already.
+func (f *crlFallback) store(crls []*x509.RevocationList, read uint64) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if read > f.crlsRead {
+		f.crls, f.crlsRead = crls, read
+	}
+}
+
+func (f *crlFallback) load() ([]*x509.RevocationList, bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.crls, f.crlsRead > 0
+}
+
 // maxReloadAttempts bounds how many times ReloadCachedFiles reads the
 // files again looking for a consistent view of them.
 const maxReloadAttempts = 5
@@ -115,8 +159,10 @@ const maxReloadAttempts = 5
 // makes to read the files, after it digested them and before it reads
 // them, so that a test can change the files in between. publishTestHook,
 // when set, runs after ReloadCachedFiles updated the first cache entry
-// of a reload and before the others. Both are nil outside tests.
-var reloadTestHook, publishTestHook func()
+// of a reload and before the others. crlReadTestHook, when set, runs
+// after ClientConfig read a CRL file and before it validates it. All
+// are nil outside tests.
+var reloadTestHook, publishTestHook, crlReadTestHook func()
 
 // ReloadCachedFiles reads again the certificate, key, CA and CRL files
 // that ClientConfig and ServerConfig loaded, so that the configs they
@@ -183,7 +229,11 @@ func publish(updates []cacheUpdate, registered uint64) bool {
 		return false
 	}
 	for i, u := range updates {
-		u.cache.Store(u.key, u.value)
+		if u.apply != nil {
+			u.apply()
+		} else {
+			u.cache.Store(u.key, u.value)
+		}
 		if i == 0 && publishTestHook != nil {
 			publishTestHook()
 		}
@@ -268,6 +318,8 @@ func (c cachedFiles) paths() []string {
 type cacheUpdate struct {
 	cache      *sync.Map
 	key, value any
+	// apply, when set, applies the update instead of storing value.
+	apply func()
 }
 
 // entryID names a cache entry, as the files it is loaded from.
@@ -367,7 +419,8 @@ func (c cachedFiles) read() map[entryID]entryResult {
 		}
 	}
 	for w, seen := range c.crls {
-		body, err := os.ReadFile(w.crl)
+		fallback := crlFallbackOf(w.crl)
+		body, read, err := fallback.read(w.crl)
 		if err != nil {
 			results[crlEntry(w)] = entryResult{err: vterrors.Wrapf(err, "failed to read crl file: %s", w.crl)}
 			continue
@@ -401,7 +454,7 @@ func (c cachedFiles) read() map[entryID]entryResult {
 		if digest != seen {
 			results[crlEntry(w)] = entryResult{updates: []cacheUpdate{
 				{cache: &watchedCRLs, key: w, value: digest},
-				{cache: &lastValidCRLs, key: w.crl, value: crls},
+				{apply: func() { fallback.store(crls, read) }},
 			}}
 		}
 	}
@@ -491,24 +544,28 @@ func clientCRLChecker(crl, ca string) (*crlChecker, error) {
 	}
 	// The CRL is read once, so that the digest the file is watched
 	// from is the digest of the CRLs checked against.
-	body, err := os.ReadFile(crl)
+	fallback := crlFallbackOf(crl)
+	body, read, err := fallback.read(crl)
 	if err == nil {
+		if crlReadTestHook != nil {
+			crlReadTestHook()
+		}
 		var crls []*x509.RevocationList
 		if crls, err = parseCRLSet(crl, body); err == nil {
 			var checker *crlChecker
 			if checker, err = newCRLCheckerFrom(crls, issuers); err == nil {
-				lastValidCRLs.Store(crl, crls)
+				fallback.store(crls, read)
 				watchCRL(crlWatch{crl: crl, ca: ca}, sha256.Sum256(body))
 				staleCRLWarnings.Delete(crl)
 				return checker, nil
 			}
 		}
 	}
-	last, ok := lastValidCRLs.Load(crl)
+	last, ok := fallback.load()
 	if !ok {
 		return nil, err
 	}
-	checker, lastErr := newCRLCheckerFrom(last.([]*x509.RevocationList), issuers)
+	checker, lastErr := newCRLCheckerFrom(last, issuers)
 	if lastErr != nil {
 		return nil, err
 	}
