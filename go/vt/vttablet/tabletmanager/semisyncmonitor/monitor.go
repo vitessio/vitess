@@ -196,6 +196,18 @@ func (m *Monitor) Close() {
 	m.ticks.Stop()
 }
 
+// callbackContext bounds a callback's work by timeout and by the monitor's
+// lifetime, so that Close does not wait for a connect in progress.
+func (m *Monitor) callbackContext(timeout time.Duration) (context.Context, context.CancelFunc) {
+	m.mu.Lock()
+	parent := m.lifetime
+	m.mu.Unlock()
+	if parent == nil {
+		parent = context.Background()
+	}
+	return context.WithTimeout(parent, timeout)
+}
+
 // interruptOnClose closes conn when the monitor closes, which ends the query
 // in flight on it. Call the returned function before recycling conn.
 func (m *Monitor) interruptOnClose(conn *dbconnpool.PooledDBConnection) func() bool {
@@ -234,7 +246,7 @@ func (m *Monitor) checkAndFixSemiSyncBlocked() {
 
 // isSemiSyncBlocked checks if the primary is blocked on semi-sync.
 func (m *Monitor) isSemiSyncBlocked() (bool, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), m.ticks.Interval())
+	ctx, cancel := m.callbackContext(m.ticks.Interval())
 	defer cancel()
 	// Get a connection from the pool
 	conn, err := m.appPool.Get(ctx)
@@ -248,7 +260,11 @@ func (m *Monitor) isSemiSyncBlocked() (bool, error) {
 	if err != nil || stats.waitingSessions == 0 {
 		return false, err
 	}
-	time.Sleep(m.actionDelay)
+	select {
+	case <-time.After(m.actionDelay):
+	case <-ctx.Done():
+		return false, ctx.Err()
+	}
 	followUpStats, err := m.getSemiSyncStats(conn)
 	if err != nil || followUpStats.waitingSessions == 0 || followUpStats.ackedTrxs > stats.ackedTrxs {
 		return false, err
@@ -388,7 +404,7 @@ func (m *Monitor) write() {
 	}
 	defer m.decrementWriteCount()
 	// Get a connection from the pool
-	ctx, cancel := context.WithTimeout(context.Background(), m.actionTimeout)
+	ctx, cancel := m.callbackContext(m.actionTimeout)
 	defer cancel()
 	conn, err := m.appPool.Get(ctx)
 	if err != nil {
@@ -432,7 +448,7 @@ func (m *Monitor) setIsBlocked(val bool) {
 // consumes too much space on the MySQL instance.
 func (m *Monitor) clearAllData() {
 	// Get a connection from the pool
-	ctx, cancel := context.WithTimeout(context.Background(), m.actionTimeout)
+	ctx, cancel := m.callbackContext(m.actionTimeout)
 	defer cancel()
 	conn, err := m.appPool.Get(ctx)
 	if err != nil {
