@@ -837,7 +837,7 @@ func (vc *VitessCluster) killKeyspaceProcesses(ks *Keyspace) error {
 				_ = tablet.Vttablet.Kill()
 				if tablet.DbServer != nil && tablet.DbServer.TabletUID > 0 {
 					if err := tablet.DbServer.Kill(); err != nil {
-						log.Info(fmt.Sprintf("Error killing mysql process associated with vttablet %s: %v", tablet.Name, err))
+						log.Infof("Error killing mysql process associated with vttablet %s: %v", tablet.Name, err)
 					}
 				}
 				return nil
