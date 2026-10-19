@@ -161,7 +161,7 @@ func (s *Server) TryLock(ctx context.Context, dirPath, contents string) (topo.Lo
 		return nil, convertError(err, dirPath)
 	}
 
-	return s.lock(ctx, dirPath, contents, leaseTTL, false /*wait*/)
+	return s.lock(ctx, dirPath, contents, leaseTTL, false /*wait*/, true /*untilUnlock*/)
 }
 
 // Lock is part of the topo.Conn interface.
@@ -176,7 +176,7 @@ func (s *Server) Lock(ctx context.Context, dirPath, contents string) (topo.LockD
 		return nil, convertError(err, dirPath)
 	}
 
-	return s.lock(ctx, dirPath, contents, leaseTTL, true /*wait*/)
+	return s.lock(ctx, dirPath, contents, leaseTTL, true /*wait*/, true /*untilUnlock*/)
 }
 
 // LockWithTTL is part of the topo.Conn interface.
@@ -191,18 +191,20 @@ func (s *Server) LockWithTTL(ctx context.Context, dirPath, contents string, ttl 
 		return nil, convertError(err, dirPath)
 	}
 
-	return s.lock(ctx, dirPath, contents, int(ttl.Seconds()), true /*wait*/)
+	return s.lock(ctx, dirPath, contents, int(ttl.Seconds()), true /*wait*/, false /*untilUnlock*/)
 }
 
 // LockName is part of the topo.Conn interface.
 func (s *Server) LockName(ctx context.Context, dirPath, contents string) (topo.LockDescriptor, error) {
-	return s.lock(ctx, dirPath, contents, int(topo.NamedLockTTL.Seconds()), true /*wait*/)
+	return s.lock(ctx, dirPath, contents, int(topo.NamedLockTTL.Seconds()), true /*wait*/, false /*untilUnlock*/)
 }
 
 // lock is used by Lock(), LockWithTTL(), LockName(), TryLock() and primary election.
 // If wait is false, it returns a topo.NodeExists error instead of
-// waiting for older lock files to go away.
-func (s *Server) lock(ctx context.Context, dirPath, contents string, ttl int, wait bool) (topo.LockDescriptor, error) {
+// waiting for older lock files to go away. With untilUnlock, the
+// lease's KeepAlive runs until Unlock. Otherwise it runs only as long as ctx, so
+// that a lock with an explicit TTL expires ttl after its last check.
+func (s *Server) lock(ctx context.Context, dirPath, contents string, ttl int, wait, untilUnlock bool) (topo.LockDescriptor, error) {
 	nodePath := path.Join(s.root, dirPath, locksPath)
 
 	// Get a lease, set its KeepAlive.
@@ -210,9 +212,13 @@ func (s *Server) lock(ctx context.Context, dirPath, contents string, ttl int, wa
 	if err != nil {
 		return nil, convertError(err, nodePath)
 	}
-	// The KeepAlive must outlive ctx, which callers often bound to the acquisition: it runs
-	// until Unlock, or until acquisition fails.
-	kaCtx, stopKeepAlive := context.WithCancel(context.WithoutCancel(ctx))
+	// topo.Server bounds ctx to the acquisition, so a KeepAlive that runs until
+	// Unlock must outlive it.
+	kaParent := ctx
+	if untilUnlock {
+		kaParent = context.WithoutCancel(ctx)
+	}
+	kaCtx, stopKeepAlive := context.WithCancel(kaParent)
 	leaseKA, err := s.cli.KeepAlive(kaCtx, lease.ID)
 	if err != nil {
 		stopKeepAlive()
