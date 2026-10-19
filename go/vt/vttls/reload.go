@@ -209,6 +209,14 @@ func (f *crlFallback) observe(digest [sha256.Size]byte, read uint64) bool {
 	return digest != f.digest
 }
 
+// changedSince reports whether a read made after the read numbered read
+// recorded contents other than those whose digest is digest.
+func (f *crlFallback) changedSince(read uint64, digest [sha256.Size]byte) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.digestRead > read && f.digest != digest
+}
+
 func (f *crlFallback) observed() [sha256.Size]byte {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -358,8 +366,10 @@ const maxReloadAttempts = 5
 var reloadTestHook, publishTestHook, crlReadTestHook func()
 
 // crlFileReadTestHook, when set, runs in every read of a CRL file that
-// a crlFallback numbers, before the file is read. Nil outside tests.
-var crlFileReadTestHook func()
+// a crlFallback numbers, before the file is read. prePublishTestHook,
+// when set, runs once ReloadCachedFiles read the files consistently,
+// before it publishes them. Both are nil outside tests.
+var crlFileReadTestHook, prePublishTestHook func()
 
 // ReloadCachedFiles reads again the certificate, key, CA and CRL files
 // that ClientConfig and ServerConfig loaded, so that the configs they
@@ -406,10 +416,13 @@ func ReloadCachedFiles() (changed bool, err error) {
 		if reloadTestHook != nil {
 			reloadTestHook()
 		}
-		results := entries.read()
+		results, crlReads := entries.read()
 		if maps.Equal(before, digestFiles(paths)) {
+			if prePublishTestHook != nil {
+				prePublishTestHook()
+			}
 			updates, errs := entries.withhold(results)
-			if publish(updates, registered) {
+			if publish(updates, registered, crlReads) {
 				return len(updates) > 0, vterrors.Aggregate(errs)
 			}
 		}
@@ -421,8 +434,13 @@ func ReloadCachedFiles() (changed bool, err error) {
 
 // publish applies updates to the caches, all at once to ClientConfig
 // and ServerConfig, unless a configuration registered since registered
-// was the count of registrations, in which case it reports false.
-func publish(updates []cacheUpdate, registered uint64) bool {
+// was the count of registrations, or a ClientConfig call recorded CRL
+// contents other than those of crlReads from a later read, in which
+// case it reports false. Such a call validated those contents only
+// under the CA the updates may replace, and they would be what clients
+// fall back to, and what an overtaken read builds from, under the new
+// one; read again, they are validated under it.
+func publish(updates []cacheUpdate, registered uint64, crlReads []reloadCRLRead) bool {
 	if len(updates) == 0 {
 		return true
 	}
@@ -430,6 +448,11 @@ func publish(updates []cacheUpdate, registered uint64) bool {
 	defer publishMu.Unlock()
 	if fileSetsRegistered.Load() != registered {
 		return false
+	}
+	for _, r := range crlReads {
+		if r.fallback.changedSince(r.read, r.digest) {
+			return false
+		}
 	}
 	for i, u := range updates {
 		if u.apply != nil {
@@ -566,6 +589,14 @@ func registerFileSet(set ...entryID) {
 	}
 }
 
+// reloadCRLRead is a read of a CRL file that ReloadCachedFiles made:
+// its number, see crlFallback, and the digest of what it read.
+type reloadCRLRead struct {
+	fallback *crlFallback
+	read     uint64
+	digest   [sha256.Size]byte
+}
+
 // entryResult is what reading the files of a cache entry again gave:
 // the updates of an entry whose files changed, or the error of one that
 // could not be loaded. The entries whose files did not change have no
@@ -576,9 +607,11 @@ type entryResult struct {
 }
 
 // read reads the files of the entries, and returns the result of each
-// entry whose files changed or failed to load, without applying them.
-func (c cachedFiles) read() map[entryID]entryResult {
+// entry whose files changed or failed to load, without applying them,
+// and the reads of the CRL files it made.
+func (c cachedFiles) read() (map[entryID]entryResult, []reloadCRLRead) {
 	results := make(map[entryID]entryResult)
+	var crlReads []reloadCRLRead
 	readKeyPairs := func(cache *sync.Map, entries map[any]keyPairFiles, name func(any) entryID, read func(keyPairFiles) (*[]tls.Certificate, error)) {
 		for id, files := range entries {
 			fresh, err := read(files)
@@ -629,6 +662,7 @@ func (c cachedFiles) read() map[entryID]entryResult {
 			continue
 		}
 		digest := sha256.Sum256(body)
+		crlReads = append(crlReads, reloadCRLRead{fallback: fallback, read: read, digest: digest})
 		issuers, caChanged := readCAs[w.ca]
 		if digest == seen && !caChanged {
 			continue
@@ -661,7 +695,7 @@ func (c cachedFiles) read() map[entryID]entryResult {
 			}}}}
 		}
 	}
-	return results
+	return results, crlReads
 }
 
 // withhold returns the updates of results to publish, and the errors

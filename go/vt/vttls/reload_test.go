@@ -800,6 +800,71 @@ func TestReloadCachedFilesPublishesAtOnce(t *testing.T) {
 	files.requireServes(newCerts, newCerts)
 }
 
+// TestReloadCachedFilesRereadsWhenACRLChangesBeforeItPublishes checks
+// that a reload that read a new CA and CRL, and before it publishes them
+// sees a ClientConfig call keep other CRL contents, read later and
+// validated only under the old CA, reads the files again rather than
+// publish the new CA with those CRLs to fall back to: here they are not
+// valid under the new CA, so the new CA is held back with them, as it
+// would have been had the reload read them.
+func TestReloadCachedFilesRereadsWhenACRLChangesBeforeItPublishes(t *testing.T) {
+	// Two intermediates under one name with different keys, as a
+	// re-keyed CA, each configured as the CA file in turn, with a CRL
+	// without an authority key identifier that only its own key
+	// validates.
+	intermediate := func(name string) (caPEM, crlPEM []byte) {
+		root := t.TempDir()
+		tlstest.CreateCA(root)
+		tlstest.CreateIntermediateCA(root, tlstest.CA, "01", name, "Re-keyed CA")
+		caPEM, err := os.ReadFile(path.Join(root, name+"-cert.pem"))
+		require.NoError(t, err)
+		keyPair, err := tls.LoadX509KeyPair(path.Join(root, name+"-cert.pem"), path.Join(root, name+"-key.pem"))
+		require.NoError(t, err)
+		ca := loadOneCert(t, path.Join(root, name+"-cert.pem"))
+		crlPEM = pem.EncodeToMemory(&pem.Block{Type: "X509 CRL", Bytes: crlWithoutExtensions(t, ca, keyPair.PrivateKey.(*ecdsa.PrivateKey))})
+		return caPEM, crlPEM
+	}
+	oldCA, oldCRL := intermediate("old-ca")
+	newCA, newCRL := intermediate("new-ca")
+
+	files := newClientFiles(t)
+	write := func(dst string, b []byte) {
+		t.Helper()
+		require.NoError(t, os.WriteFile(dst, b, 0o600))
+	}
+	client := func() *tls.Config {
+		t.Helper()
+		config, err := ClientConfig(VerifyIdentity, "", "", files.ca, files.crl, "", tls.VersionTLS12)
+		require.NoError(t, err)
+		return config
+	}
+	write(files.ca, oldCA)
+	write(files.crl, oldCRL)
+	client()
+
+	write(files.ca, newCA)
+	write(files.crl, newCRL)
+	var hooked bool
+	prePublishTestHook = func() {
+		if hooked {
+			return
+		}
+		hooked = true
+		// The old CRL is back, and a call validates it under the old
+		// CA, which the reload has not published over yet.
+		write(files.crl, oldCRL)
+		client()
+	}
+	t.Cleanup(func() { prePublishTestHook = nil })
+
+	_, err := ReloadCachedFiles()
+	require.True(t, hooked)
+	require.ErrorContains(t, err, "cannot use the CRL file "+files.crl+" under the CA file "+files.ca)
+	want := x509.NewCertPool()
+	require.True(t, want.AppendCertsFromPEM(oldCA))
+	require.True(t, want.Equal(client().RootCAs), "the new CA must be held back with the CRL it cannot use")
+}
+
 // TestReloadCachedFilesKeepsConfigurationsWhole checks that a file
 // that fails to load holds back the reload of the files it is used
 // with, so that its configuration keeps all of its files from before
