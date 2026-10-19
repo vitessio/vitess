@@ -234,13 +234,14 @@ func TestTLSReload(t *testing.T) {
 		// connections. The client trusts the new server CA, so that it
 		// is vtgate that rejects the handshake, for the old client
 		// certificate: a vtgate still trusting the old client CA would
-		// accept it.
+		// accept it. The TLS alert shows that vtgate rejected it, rather
+		// than that it could not be reached.
 		staleClient := newCerts
 		staleClient.ClientCert, staleClient.ClientKey = oldCerts.ClientCert, oldCerts.ClientKey
 		_, err = grpcServedCert(t, staleClient)
-		require.Error(t, err)
+		require.ErrorContains(t, err, "remote error: tls:")
 		_, err = connectMySQL(t, staleClient)
-		require.Error(t, err)
+		require.ErrorContains(t, err, "remote error: tls:")
 
 		// The connection established before the reload keeps working.
 		_, err = established.ExecuteFetch("select 1", 1, false)
