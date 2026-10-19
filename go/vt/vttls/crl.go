@@ -75,6 +75,10 @@ type (
 		// maxBoundIssuers of them, counted by boundIssuers.
 		bound        sync.Map
 		boundIssuers atomic.Int64
+		// onIssuer, when set, is told of each issuer that verification
+		// alone vouches for once the CRLs bind to it, see
+		// clientCRLCheckerFrom.
+		onIssuer func(*x509.Certificate)
 		// revokedSerials indexes the serial numbers each CRL
 		// revokes, so that a handshake looks a certificate up
 		// rather than scanning a CRL that may hold many entries.
@@ -629,6 +633,9 @@ func (c *crlChecker) crlsOf(issuer *x509.Certificate) ([]*x509.RevocationList, e
 		return binding.crls, binding.err
 	}
 	crls, err := c.bindCRLs(issuer)
+	if err == nil && c.onIssuer != nil {
+		c.onIssuer(issuer)
+	}
 	if c.reserveBinding() {
 		if _, loaded := c.bound.LoadOrStore(string(issuer.Raw), crlBinding{crls: crls, err: err}); loaded {
 			c.boundIssuers.Add(-1)
