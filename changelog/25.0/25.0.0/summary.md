@@ -218,6 +218,10 @@ The vtctld and vtcombo flags `--cell`, `--proxy-tablets`, `--action-timeout`, an
 
 **Impact**: Remove any usage of these flags from vtctld and vtcombo startup scripts or configuration.
 
+The VTTablet and vtcombo flag `--query-throttler-config-refresh-interval` is now deprecated and is a no-op. The query throttler now applies configuration changes as soon as they are written to the `SrvKeyspace`, through a topology watch, instead of polling on an interval. The flag will be removed entirely in v26.
+
+**Impact**: Remove any usage of the `--query-throttler-config-refresh-interval` flag from VTTablet and vtcombo startup scripts or configuration.
+
 #### <a id="deprecated-selectstream-rule-plan"/>Legacy streaming-path plan types in query rules</a>
 
 The `SelectStream` query plan type no longer exists: statements served over the streaming path now produce the same plan types as buffered execution (`Select`, `Show`, `SelectLockFunc`, ...), so query rules keyed on those concrete plan names now apply to both execution paths.
