@@ -21,11 +21,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math/rand/v2"
 	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"sync"
@@ -43,12 +45,17 @@ import (
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
 	"vitess.io/vitess/go/textutil"
+	vtenv "vitess.io/vitess/go/vt/env"
+	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 )
 
 // constants for test variants
@@ -382,6 +389,10 @@ func TestBackup(t *testing.T, setupType int, streamMode string, stripes int, cDe
 			method: func(t *testing.T) {
 				vtctlBackup(t, "rdonly")
 			},
+		}, //
+		{
+			name:   "TestBackupShardWithBinlogs",
+			method: backupShardWithBinlogs,
 		}, //
 		{
 			name:   "TestPrimaryBackup",
@@ -1024,6 +1035,64 @@ func vtctlBackup(t *testing.T, tabletType string) {
 	require.NoError(t, err)
 }
 
+// backupShardWithBinlogs takes a BackupShard --include-binlogs backup and brings up
+// replica2 from it. replica2 must keep the source's binlogs under its own basename,
+// resume replication from them, and stream from them across the restored files,
+// whose rotate events still name the source's binlogs.
+func backupShardWithBinlogs(t *testing.T) {
+	if currentSetupType != BuiltinBackup {
+		t.Skip("--include-binlogs is only supported by the builtin backup engine")
+	}
+	verifyInitialReplication(t)
+	// BackupShard picks the backup source itself, and replica2 is still running when
+	// this test runs on its own. Leave replica1 as the only candidate.
+	require.NoError(t, replica2.VttabletProcess.TearDown())
+
+	// The rows inserted from here on are binlogged before the backup's position.
+	streamFrom := replication.Position{GTIDSet: getGTIDSet(t, primary, "gtid_executed")}
+
+	// Spread the rows over several binlogs of the backup source. FLUSH BINARY LOGS
+	// is not replicated, so it runs on replica1 rather than on the primary.
+	msgs := []string{"test1"}
+	for i := range 3 {
+		msg := fmt.Sprintf("binlog%d", i)
+		InsertRowOnPrimary(t, msg)
+		msgs = append(msgs, msg)
+		cluster.VerifyRowsInTablet(t, replica1, keyspaceName, len(msgs))
+		FlushBinaryLogsOnReplica(t, 0, 1)
+	}
+
+	err := localCluster.VtctldClientProcess.ExecuteCommand("BackupShard", "--include-binlogs", shardKsName)
+	require.NoError(t, err)
+	backups := localCluster.VerifyBackupCount(t, shardKsName, 1)
+	manifest := readBinlogManifest(t, backups[0])
+	require.True(t, manifest.IncludesBinlogs)
+	require.GreaterOrEqual(t, len(manifest.BinlogFileEntries), 4)
+
+	restoreWaitForBackup(t, "replica", nil, false)
+	err = replica2.VttabletProcess.WaitForTabletStatusesForTimeout([]string{"SERVING"}, timeout)
+	require.NoError(t, err)
+
+	verifyRestoredBinlogs(t, replica2, manifest.BinlogFileEntries)
+	assert.True(t, getGTIDSet(t, replica2, "gtid_executed").Contains(manifest.Position.GTIDSet))
+
+	InsertRowOnPrimary(t, "after-restore")
+	msgs = append(msgs, "after-restore")
+	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, len(msgs))
+	assert.ElementsMatch(t, ReadRowsFromPrimary(t), ReadRowsFromTablet(t, replica2))
+
+	verifyBinlogStream(t, replica2, msgs)
+	verifyVStream(t, replica2, streamFrom, msgs[1:])
+
+	verifyAfterRemovingBackupNoBackupShouldBePresent(t, backups)
+	err = replica2.VttabletProcess.TearDown()
+	require.NoError(t, err)
+	err = localCluster.VtctldClientProcess.ExecuteCommand("DeleteTablets", replica2.Alias)
+	require.NoError(t, err)
+	_, err = primary.VttabletProcess.QueryTablet("DROP TABLE vt_insert_test", keyspaceName, true)
+	require.NoError(t, err)
+}
+
 func chunkedBackup(t *testing.T) {
 	verifyBackupChunking(t, true, 4194304)
 }
@@ -1339,11 +1408,12 @@ func terminateRestore(t *testing.T) {
 	assert.True(t, found, "Restore message not found")
 }
 
-func vtctlBackupReplicaNoDestroyNoWrites(t *testing.T, replicaIndex int) (backups []string) {
+func vtctlBackupReplicaNoDestroyNoWrites(t *testing.T, replicaIndex int, extraArgs ...string) (backups []string) {
 	replica := getReplica(t, replicaIndex)
 	numBackups := len(waitForNumBackups(t, -1))
 
-	err := localCluster.VtctldClientProcess.ExecuteCommand("Backup", replica.Alias)
+	args := append(append([]string{"Backup"}, extraArgs...), replica.Alias)
+	err := localCluster.VtctldClientProcess.ExecuteCommand(args...)
 	require.NoError(t, err)
 
 	backups = waitForNumBackups(t, numBackups+1)
@@ -1472,6 +1542,132 @@ func readManifestFile(t *testing.T, backupLocation string) (manifest *mysqlctl.B
 	require.NoErrorf(t, err, "error while parsing MANIFEST %v", err)
 	require.NotNil(t, manifest)
 	return manifest
+}
+
+// binlogManifest adds the builtin engine's binlog entries to a backup's MANIFEST.
+type binlogManifest struct {
+	mysqlctl.BackupManifest
+	BinlogFileEntries []mysqlctl.FileEntry
+}
+
+func readBinlogManifest(t *testing.T, backupName string) (manifest binlogManifest) {
+	data, err := os.ReadFile(path.Join(localCluster.CurrentVTDATAROOT, "backups", shardKsName, backupName, "MANIFEST"))
+	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(data, &manifest))
+	return manifest
+}
+
+func queryTabletValue(t *testing.T, tablet *cluster.Vttablet, query string) string {
+	rs, err := tablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
+	require.NoError(t, err)
+	require.Len(t, rs.Rows, 1)
+	return rs.Rows[0][0].ToString()
+}
+
+func getGTIDSet(t *testing.T, tablet *cluster.Vttablet, variable string) replication.Mysql56GTIDSet {
+	value := queryTabletValue(t, tablet, "select @@global."+variable)
+	gtids, err := replication.ParseMysql56GTIDSet(strings.ReplaceAll(value, "\n", ""))
+	require.NoError(t, err)
+	return gtids
+}
+
+func showBinaryLogs(t *testing.T, tablet *cluster.Vttablet) (names []string) {
+	rs, err := tablet.VttabletProcess.QueryTablet("show binary logs", keyspaceName, true)
+	require.NoError(t, err)
+	for _, row := range rs.Rows {
+		names = append(names, row[0].ToString())
+	}
+	return names
+}
+
+// verifyRestoredBinlogs checks that the tablet's binlogs start with the backup's
+// binlogs, renamed to the tablet's own basename, followed by at least one new binlog.
+func verifyRestoredBinlogs(t *testing.T, tablet *cluster.Vttablet, entries []mysqlctl.FileEntry) {
+	basename := filepath.Base(queryTabletValue(t, tablet, "select @@global.log_bin_basename"))
+	var want []string
+	for _, fe := range entries {
+		want = append(want, basename+"."+strings.TrimPrefix(fe.Name, "binlog."))
+	}
+	names := showBinaryLogs(t, tablet)
+	require.Greaterf(t, len(names), len(want), "binlogs: %v, restored: %v", names, want)
+	assert.Equal(t, want, names[:len(want)])
+}
+
+var gtidNextRE = regexp.MustCompile(`GTID_NEXT= '([^']+)'`)
+
+// verifyBinlogStream streams the tablet's binlogs with mysqlbinlog over the
+// replication protocol, from the start of its first binlog to the end of its last.
+// The stream plus gtid_purged must cover gtid_executed, so no transaction is
+// missing, and the decoded rows must include msgs.
+func verifyBinlogStream(t *testing.T, tablet *cluster.Vttablet, msgs []string) {
+	purged := getGTIDSet(t, tablet, "gtid_purged")
+	executed := getGTIDSet(t, tablet, "gtid_executed")
+	names := showBinaryLogs(t, tablet)
+	require.NotEmpty(t, names)
+
+	mysqlRoot, err := vtenv.VtMysqlRoot()
+	require.NoError(t, err)
+	args := []string{
+		"--read-from-remote-server", "--to-last-log", "--verbose",
+		"--socket", path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("vt_%010d", tablet.TabletUID), "mysql.sock"),
+		"--user", "vt_dba", "--password=" + dbPassword,
+	}
+	if len(purged) > 0 {
+		args = append(args, "--exclude-gtids", purged.String())
+	}
+	args = append(args, names[0])
+	cmd := exec.CommandContext(t.Context(), path.Join(mysqlRoot, "bin", "mysqlbinlog"), args...)
+	var stderr strings.Builder
+	cmd.Stderr = &stderr
+	out, err := cmd.Output()
+	require.NoErrorf(t, err, "mysqlbinlog: %s", stderr.String())
+
+	streamed := purged
+	for _, match := range gtidNextRE.FindAllStringSubmatch(string(out), -1) {
+		if match[1] == "AUTOMATIC" {
+			continue
+		}
+		gtid, err := replication.ParseMysql56GTIDSet(match[1])
+		require.NoError(t, err)
+		streamed = streamed.Union(gtid).(replication.Mysql56GTIDSet)
+	}
+	assert.Truef(t, streamed.Contains(executed), "streamed %v, gtid_purged %v, gtid_executed %v", streamed, purged, executed)
+	for _, msg := range msgs {
+		assert.Containsf(t, string(out), "'"+msg+"'", "row %q missing from the binlog stream", msg)
+	}
+}
+
+// verifyVStream streams vt_insert_test from the tablet itself, starting at pos,
+// until the row events include every one of msgs.
+func verifyVStream(t *testing.T, tablet *cluster.Vttablet, pos replication.Position, msgs []string) {
+	tabletInfo, err := localCluster.VtctldClientProcess.GetTablet(tablet.Alias)
+	require.NoError(t, err)
+	ctx, cancel := context.WithTimeout(t.Context(), timeout)
+	defer cancel()
+	conn, err := tabletconn.GetDialer()(ctx, tabletInfo, grpcclient.FailFast(false))
+	require.NoError(t, err)
+	defer conn.Close(ctx)
+
+	missing := slices.Clone(msgs)
+	err = conn.VStream(ctx, &binlogdatapb.VStreamRequest{
+		Target:   &querypb.Target{Keyspace: keyspaceName, Shard: shardName, TabletType: tabletInfo.Type},
+		Position: replication.EncodePosition(pos),
+		Filter:   &binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{{Match: "vt_insert_test", Filter: "select * from vt_insert_test"}}},
+	}, func(events []*binlogdatapb.VEvent) error {
+		for _, event := range events {
+			for _, change := range event.GetRowEvent().GetRowChanges() {
+				missing = slices.DeleteFunc(missing, func(msg string) bool {
+					return strings.Contains(string(change.GetAfter().GetValues()), msg)
+				})
+			}
+		}
+		if len(missing) == 0 {
+			return io.EOF
+		}
+		return nil
+	})
+	require.NoErrorf(t, err, "rows missing from the VStream: %v", missing)
+	assert.Empty(t, missing)
 }
 
 func TestReplicaFullBackup(t *testing.T, replicaIndex int) (manifest *mysqlctl.BackupManifest) {

@@ -10,6 +10,7 @@
         - [VTAdmin VExplain modes that can run the statement require the `execute` action](#vtadmin-vexplain-execute-action)
     - **[New Support](#new-support)**
         - [VTOrc failover of an unreachable primary `vttablet` via replica quorum](#vtorc-quorum-unreachable-primary)
+        - [Back up binary logs with full builtin backups](#backup-include-binlogs)
     - **[Breaking Changes](#breaking-changes)**
         - [`--watch-replication-stream` flag removed](#vttablet-watch-replication-stream-removed)
         - [VRLog feature removed](#vttablet-vrlog-removed)
@@ -128,6 +129,31 @@ A graceful `vttablet` shutdown records a shutdown marker in the topology server 
 Note that in this scenario the old primary's MySQL keeps running, and because its `vttablet` is the unreachable component, it cannot be demoted until that `vttablet` comes back and discovers the shard has a new primary. As with any emergency reparent away from an unreachable primary, a semi-sync durability policy (e.g. `semi_sync`) is what prevents the old primary from acknowledging new writes in the meantime; with `none` durability, anything writing directly to the old MySQL (bypassing `vtgate`) could cause a split brain.
 
 See [#19918](https://github.com/vitessio/vitess/issues/19918).
+
+#### <a id="backup-include-binlogs"/>Back up binary logs with full builtin backups</a>
+
+A full backup taken with the `builtin` backup engine can now include the source's binary logs. Pass `--include-binlogs` to `vtbackup`, `vtctldclient Backup` or `vtctldclient BackupShard`. Restores need no flag: when a backup's manifest includes binary logs, a restore puts them in place under the target's own `log-bin` basename, adds them to the binlog index before `mysqld` starts, keeps their original file modification times, and does not reset or purge them. The restored server can therefore serve binlog streams (replicas, VStreams) for transactions from before the backup. Point-in-time recovery from such a backup still works.
+
+`--include-binlogs` is only supported with the `builtin` backup engine. The builtin engine stops `mysqld` cleanly before copying files, so the backed-up binary logs end at exactly the position the data was taken at. `xtrabackup` and `mysqlshell` back up a running server, so binary logs copied alongside the data would contain transactions the backup doesn't. A server restored from such a backup would report those transactions as executed, and replicas or VStreams reading from it would silently miss them. Requests that combine `--include-binlogs` with another engine, or with an incremental backup, fail with `INVALID_ARGUMENT`, as does `vtbackup` with both `--include-binlogs` and `--restore-with-clone`.
+
+Limitations and requirements:
+
+- Full backups only.
+- `vtbackup --restore-with-clone` together with `--include-binlogs` is refused in this release, because CLONE does not copy binary logs.
+- The backup source must have `log_bin` and `log_replica_updates` enabled. Otherwise the backup fails with `FAILED_PRECONDITION`.
+- The tablet's `log-bin` (and `log-bin-index`, if set) must say where `mysqld` keeps its binary logs, as the `my.cnf` that Vitess generates does. A source whose `mysqld` uses its default basename because `log-bin` isn't set, or another basename, is refused with `FAILED_PRECONDITION` before `mysqld` is stopped, as is one whose binary log index can't be read.
+
+Things to be aware of:
+
+- Backups grow by the size of the source's retained binary logs.
+- The binary logs keep every transaction the source logged, including errant GTIDs. Without them, a replica of the restored server that lacks such a transaction stops with error 1236, because the restored `gtid_purged` covers it. With them, the restored server sends the transaction and the replica applies it. VTOrc's errant GTID detection still applies.
+- Binlog expiry (`binlog_expire_logs_seconds`) on the restored server follows the original file times, so old binary logs may be purged soon after the restored `mysqld` starts.
+- Older Vitess versions restoring such a backup restore only the data and ignore the binary logs.
+- Encrypted binary logs (`binlog_encryption`) are backed up as they are, so only a server whose keyring holds the source's binary log master key, such as one sharing the source's keyring, can restore them. A restore fails when it cannot read a restored binary log (and `mysqld` does not start when the newest one is unreadable). The tablet then doesn't start replicating, and restarting it retries the restore. `ALTER INSTANCE ROTATE BINLOG MASTER KEY` removes the previous key from the keyring, so a backup whose binary logs were encrypted before a rotation can no longer be restored.
+
+**Upgrade order**: upgrade both `vtctld` and the tablets before using `--include-binlogs` with `vtctldclient Backup` or `BackupShard`. An older `vtctld` or `vttablet` silently ignores the field and takes a backup without binary logs.
+
+See [#17667](https://github.com/vitessio/vitess/issues/17667).
 
 ### <a id="breaking-changes"/>Breaking Changes</a>
 
