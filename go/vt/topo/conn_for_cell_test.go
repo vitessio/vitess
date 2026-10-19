@@ -572,6 +572,8 @@ func TestConnForCellNewConnKeepsReadOnly(t *testing.T) {
 type trackingFactory struct {
 	*memorytopo.Factory
 	closes atomic.Int64
+	// movedStore, if set, holds the cell records of roots under /moved, apart from those of other roots.
+	movedStore *memorytopo.Factory
 	// acceptAnyVersion makes cell connections ignore the version of an Update or Delete, as ZooKeeper does when
 	// the version comes from another topo server whose record has been written as many times.
 	acceptAnyVersion bool
@@ -602,7 +604,11 @@ func (f *trackingFactory) Create(cell, serverAddr, root string) (topo.Conn, erro
 	if cell != topo.GlobalCell && strings.HasPrefix(root, "/down") {
 		return nil, errors.New("topo server unreachable")
 	}
-	conn, err := f.Factory.Create(cell, serverAddr, root)
+	store := f.Factory
+	if f.movedStore != nil && strings.HasPrefix(root, "/moved") {
+		store = f.movedStore
+	}
+	conn, err := store.Create(cell, serverAddr, root)
 	if err != nil || cell == topo.GlobalCell {
 		return conn, err
 	}
@@ -806,14 +812,20 @@ func TestConnForCellWritesGoToCurrentServer(t *testing.T) {
 
 	_, err = conn.Create(ctx, "dir/file", []byte("a"))
 	require.NoError(t, err)
+	// readConn read from the old topo server, so an unversioned write through it may carry what it read there.
+	writesBefore := len(factory.takeWrites())
+	_, err = readConn.Update(ctx, "dir/file", []byte("b"), nil)
+	assert.True(t, topo.IsErrType(err, topo.BadVersion), "an unversioned write after a read from the old topo server: %v", err)
+	assert.Empty(t, factory.takeWrites(), "the write after a read from the old topo server reached a topo server")
+	// Retrying, it reads from and writes to the current topo server.
 	_, err = readConn.Update(ctx, "dir/file", []byte("b"), nil)
 	require.NoError(t, err)
 	lock, err := conn.Lock(ctx, "dir", "x")
 	require.NoError(t, err)
 	require.NoError(t, lock.Unlock(ctx))
 	require.NoError(t, conn.Delete(ctx, "dir/file", nil))
-	assert.Equal(t, []string{"Create /moved dir/file", "Update /moved dir/file", "Lock /moved dir", "Delete /moved dir/file"},
-		factory.takeWrites())
+	assert.Equal(t, 1, writesBefore)
+	assert.Equal(t, []string{"Update /moved dir/file", "Lock /moved dir", "Delete /moved dir/file"}, factory.takeWrites())
 
 	// The other locks and leader participation, each through a connection got before the next re-point.
 	_, err = conn.Create(ctx, "dir/keep", nil)
@@ -1097,4 +1109,123 @@ func TestConnForCellWriteAfterClose(t *testing.T) {
 	_, err = conn.Create(ctx, "file", nil)
 	assert.True(t, topo.IsErrType(err, topo.Interrupted), "Create after Close: %v", err)
 	assert.True(t, topo.IsErrType(conn.Delete(ctx, "file", nil), topo.Interrupted), "Delete after Close")
+}
+
+// TestSrvKeyspaceUpdatesAfterRepoint verifies that the functions that read a cell's SrvKeyspace, change part
+// of it and write it back, do so on the topo server the cell is currently pointed at, after another process
+// re-points the cell while this one has it cached, rather than copy the old topo server's record over the new
+// one's.
+func TestSrvKeyspaceUpdatesAfterRepoint(t *testing.T) {
+	marked := func(marker string) *topodatapb.SrvKeyspace {
+		return &topodatapb.SrvKeyspace{Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
+			{
+				ServedType: topodatapb.TabletType_REPLICA,
+				ShardReferences: []*topodatapb.ShardReference{
+					{Name: "-80", KeyRange: &topodatapb.KeyRange{End: []byte{0x80}}},
+					{Name: "80-", KeyRange: &topodatapb.KeyRange{Start: []byte{0x80}}},
+				},
+			},
+			{ServedType: topodatapb.TabletType_EXPERIMENTAL, ShardReferences: []*topodatapb.ShardReference{{Name: marker}}},
+		}}
+	}
+	cells := []string{"zone1"}
+	for name, update := range map[string]func(ctx context.Context, ts *topo.Server, shards []*topo.ShardInfo) error{
+		"AddSrvKeyspacePartitions": func(ctx context.Context, ts *topo.Server, shards []*topo.ShardInfo) error {
+			return ts.AddSrvKeyspacePartitions(ctx, "ks", shards, topodatapb.TabletType_RDONLY, cells)
+		},
+		"DeleteSrvKeyspacePartitions": func(ctx context.Context, ts *topo.Server, shards []*topo.ShardInfo) error {
+			return ts.DeleteSrvKeyspacePartitions(ctx, "ks", shards, topodatapb.TabletType_REPLICA, cells)
+		},
+		"UpdateSrvKeyspaceThrottlerConfig": func(ctx context.Context, ts *topo.Server, _ []*topo.ShardInfo) error {
+			_, err := ts.UpdateSrvKeyspaceThrottlerConfig(ctx, "ks", cells, func(*topodatapb.ThrottlerConfig) *topodatapb.ThrottlerConfig {
+				return &topodatapb.ThrottlerConfig{Enabled: true}
+			})
+			return err
+		},
+		"UpdateDisableQueryService": func(ctx context.Context, ts *topo.Server, shards []*topo.ShardInfo) error {
+			return ts.UpdateDisableQueryService(ctx, "ks", shards, topodatapb.TabletType_REPLICA, cells, true)
+		},
+		"MigrateServedType": func(ctx context.Context, ts *topo.Server, shards []*topo.ShardInfo) error {
+			return ts.MigrateServedType(ctx, "ks", shards, nil, topodatapb.TabletType_RDONLY, cells)
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctx := t.Context()
+			_, memFactory := memorytopo.NewServerAndFactory(ctx, "zone1")
+			_, movedStore := memorytopo.NewServerAndFactory(ctx, "zone1")
+			factory := &trackingFactory{Factory: memFactory, movedStore: movedStore}
+			ts, err := topo.NewWithFactory(factory, "", "")
+			require.NoError(t, err)
+			t.Cleanup(ts.Close)
+			other, err := topo.NewWithFactory(memFactory, "", "")
+			require.NoError(t, err)
+			t.Cleanup(other.Close)
+			ts.SetCellInfoCacheTTL(time.Hour)
+			require.NoError(t, ts.CreateKeyspace(ctx, "ks", &topodatapb.Keyspace{}))
+			var shards []*topo.ShardInfo
+			for _, shard := range []string{"-80", "80-"} {
+				require.NoError(t, ts.CreateShard(ctx, "ks", shard))
+				si, err := ts.GetShard(ctx, "ks", shard)
+				require.NoError(t, err)
+				shards = append(shards, si)
+			}
+
+			// The cell's old and new topo servers have different records.
+			require.NoError(t, ts.UpdateSrvKeyspace(ctx, "zone1", "ks", marked("old")))
+			newConn, err := movedStore.Create("zone1", "", "/moved")
+			require.NoError(t, err)
+			t.Cleanup(newConn.Close)
+			data, err := marked("new").MarshalVT()
+			require.NoError(t, err)
+			_, err = newConn.Update(ctx, "keyspaces/ks/SrvKeyspace", data, nil)
+			require.NoError(t, err)
+
+			// This process has the cell cached, at its old topo server, when another process re-points it.
+			sk, err := ts.GetSrvKeyspace(ctx, "zone1", "ks")
+			require.NoError(t, err)
+			require.Equal(t, "old", sk.Partitions[1].ShardReferences[0].Name)
+			repointCell(t, other, "/moved")
+
+			lockCtx, unlock, err := ts.LockKeyspace(ctx, "ks", name)
+			require.NoError(t, err)
+			err = update(lockCtx, ts, shards)
+			unlock(&err)
+			require.NoError(t, err)
+
+			data, _, err = newConn.Get(ctx, "keyspaces/ks/SrvKeyspace")
+			require.NoError(t, err)
+			got := &topodatapb.SrvKeyspace{}
+			require.NoError(t, got.UnmarshalVT(data))
+			var markers []string
+			for _, partition := range got.Partitions {
+				if partition.ServedType == topodatapb.TabletType_EXPERIMENTAL {
+					for _, ref := range partition.ShardReferences {
+						markers = append(markers, ref.Name)
+					}
+				}
+			}
+			assert.Equal(t, []string{"new"}, markers, "the new topo server's SrvKeyspace was replaced with one built from the old one's")
+		})
+	}
+}
+
+// TestConnForCellBlindWriteWithoutReadSinceMove verifies that once a write has moved a cell connection to the
+// cell's current topo server, an unversioned write through it after a later re-point goes to the new topo
+// server, since nothing has been read through it since it moved.
+func TestConnForCellBlindWriteWithoutReadSinceMove(t *testing.T) {
+	ctx := t.Context()
+	ts, other, factory := newRepointableServer(t)
+	conn, err := ts.ConnForCell(ctx, "zone1")
+	require.NoError(t, err)
+	_, _, err = probeConn(ctx, conn)
+	require.NoError(t, err)
+
+	repointCell(t, other, "/moved")
+	_, err = conn.Create(ctx, "file", []byte("a"))
+	require.NoError(t, err)
+	repointCell(t, other, "/moved-again")
+	factory.takeWrites()
+	_, err = conn.Update(ctx, "file", []byte("b"), nil)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"Update /moved-again file"}, factory.takeWrites())
 }

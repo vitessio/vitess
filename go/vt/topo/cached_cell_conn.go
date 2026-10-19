@@ -32,15 +32,20 @@ import (
 // returns with the connection it came from, and fails a versioned Update or Delete with BadVersion when that is
 // not the cell's current connection, rather than send the version to the new topo server. Callers that
 // read-modify-write then read again, from the current connection.
+//
+// An unversioned write can be built from a read as well, so once a read has gone through a cachedCellConn, an
+// unversioned Update or Delete through it that finds the cell re-pointed fails with BadVersion too.
 type cachedCellConn struct {
 	ts   *Server
 	cell string
 
-	// mu protects conn.
+	// mu protects conn and servedRead.
 	mu sync.Mutex
 	// conn is the connection that reads go to. A write moves it to the cell's current connection, so that a
 	// caller retrying a write through the same cachedCellConn reads from where it writes.
 	conn Conn
+	// servedRead is set once a read has gone to conn.
+	servedRead bool
 }
 
 // cellConnVersion is a Version tagged with the cell connection it was read from.
@@ -52,24 +57,37 @@ type cellConnVersion struct {
 func (c *cachedCellConn) readConn() Conn {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.servedRead = true
 	return c.conn
 }
 
 // writeConn reads the cell's CellInfo and returns the cell's current connection, which reads go to from then on.
-func (c *cachedCellConn) writeConn(ctx context.Context) (Conn, error) {
-	conn, err := c.ts.refreshCellConn(ctx, c.cell, true /*force*/)
+// staleRead reports whether a read went through c to a connection the cell has since moved from, so what the
+// write carries may come from the old topo server.
+func (c *cachedCellConn) writeConn(ctx context.Context) (conn Conn, staleRead bool, err error) {
+	conn, err = c.ts.refreshCellConn(ctx, c.cell, true /*force*/)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.conn = conn
-	return conn, nil
+	if conn != c.conn {
+		staleRead = c.servedRead
+		c.conn, c.servedRead = conn, false
+	}
+	return conn, staleRead, nil
 }
 
 // writeVersion returns the version to send to conn for a write at filePath: version as the backend returned
-// it, or a BadVersion error if it was read from another connection.
-func writeVersion(conn Conn, filePath string, version Version) (Version, error) {
+// it, or a BadVersion error if it was read from another connection, or if it is unversioned and the write may
+// carry a stale read.
+func writeVersion(conn Conn, filePath string, version Version, staleRead bool) (Version, error) {
+	if version == nil {
+		if staleRead {
+			return nil, NewError(BadVersion, filePath)
+		}
+		return nil, nil
+	}
 	cv, ok := version.(cellConnVersion)
 	if !ok {
 		return version, nil
@@ -94,7 +112,7 @@ func (c *cachedCellConn) ListDir(ctx context.Context, dirPath string, full bool)
 
 // Create is part of the Conn interface.
 func (c *cachedCellConn) Create(ctx context.Context, filePath string, contents []byte) (Version, error) {
-	conn, err := c.writeConn(ctx)
+	conn, _, err := c.writeConn(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -104,11 +122,11 @@ func (c *cachedCellConn) Create(ctx context.Context, filePath string, contents [
 
 // Update is part of the Conn interface.
 func (c *cachedCellConn) Update(ctx context.Context, filePath string, contents []byte, version Version) (Version, error) {
-	conn, err := c.writeConn(ctx)
+	conn, staleRead, err := c.writeConn(ctx)
 	if err != nil {
 		return nil, err
 	}
-	if version, err = writeVersion(conn, filePath, version); err != nil {
+	if version, err = writeVersion(conn, filePath, version, staleRead); err != nil {
 		return nil, err
 	}
 	version, err = conn.Update(ctx, filePath, contents, version)
@@ -139,11 +157,11 @@ func (c *cachedCellConn) List(ctx context.Context, filePathPrefix string) ([]KVI
 
 // Delete is part of the Conn interface.
 func (c *cachedCellConn) Delete(ctx context.Context, filePath string, version Version) error {
-	conn, err := c.writeConn(ctx)
+	conn, staleRead, err := c.writeConn(ctx)
 	if err != nil {
 		return err
 	}
-	if version, err = writeVersion(conn, filePath, version); err != nil {
+	if version, err = writeVersion(conn, filePath, version, staleRead); err != nil {
 		return err
 	}
 	return conn.Delete(ctx, filePath, version)
@@ -151,7 +169,7 @@ func (c *cachedCellConn) Delete(ctx context.Context, filePath string, version Ve
 
 // Lock is part of the Conn interface.
 func (c *cachedCellConn) Lock(ctx context.Context, dirPath, contents string) (LockDescriptor, error) {
-	conn, err := c.writeConn(ctx)
+	conn, _, err := c.writeConn(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -160,7 +178,7 @@ func (c *cachedCellConn) Lock(ctx context.Context, dirPath, contents string) (Lo
 
 // LockWithTTL is part of the Conn interface.
 func (c *cachedCellConn) LockWithTTL(ctx context.Context, dirPath, contents string, ttl time.Duration) (LockDescriptor, error) {
-	conn, err := c.writeConn(ctx)
+	conn, _, err := c.writeConn(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -169,7 +187,7 @@ func (c *cachedCellConn) LockWithTTL(ctx context.Context, dirPath, contents stri
 
 // LockName is part of the Conn interface.
 func (c *cachedCellConn) LockName(ctx context.Context, dirPath, contents string) (LockDescriptor, error) {
-	conn, err := c.writeConn(ctx)
+	conn, _, err := c.writeConn(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -178,7 +196,7 @@ func (c *cachedCellConn) LockName(ctx context.Context, dirPath, contents string)
 
 // TryLock is part of the Conn interface.
 func (c *cachedCellConn) TryLock(ctx context.Context, dirPath, contents string) (LockDescriptor, error) {
-	conn, err := c.writeConn(ctx)
+	conn, _, err := c.writeConn(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -244,7 +262,7 @@ func (c *cachedCellConn) WatchRecursive(ctx context.Context, path string) ([]*Wa
 // NewLeaderParticipation is part of the Conn interface.
 func (c *cachedCellConn) NewLeaderParticipation(name, id string) (LeaderParticipation, error) {
 	// The refresh read is bounded by RemoteOperationTimeout.
-	conn, err := c.writeConn(context.Background())
+	conn, _, err := c.writeConn(context.Background())
 	if err != nil {
 		return nil, err
 	}
@@ -254,5 +272,8 @@ func (c *cachedCellConn) NewLeaderParticipation(name, id string) (LeaderParticip
 // Close is part of the Conn interface. The cell's connection is the Server's to close, as when ConnForCell
 // returns it without the cache, so this closes the connection that reads go to.
 func (c *cachedCellConn) Close() {
-	c.readConn().Close()
+	c.mu.Lock()
+	conn := c.conn
+	c.mu.Unlock()
+	conn.Close()
 }

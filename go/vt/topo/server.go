@@ -335,6 +335,23 @@ func (ts *Server) ConnForCell(ctx context.Context, cell string) (Conn, error) {
 	return &cachedCellConn{ts: ts, cell: cell, conn: conn}, nil
 }
 
+// connForCellUpdate returns the connection to read a cell's record through and then write it back. With the
+// CellInfo cache enabled, the read goes to the topo server the cell is currently pointed at, and if the cell is
+// re-pointed before the write, the write fails with BadVersion, even if unversioned, rather than replace the
+// new topo server's record with one built from the old one's.
+func (ts *Server) connForCellUpdate(ctx context.Context, cell string) (Conn, error) {
+	conn, err := ts.ConnForCell(ctx, cell)
+	if err != nil {
+		return nil, err
+	}
+	if c, ok := conn.(*cachedCellConn); ok {
+		if _, _, err := c.writeConn(ctx); err != nil {
+			return nil, err
+		}
+	}
+	return conn, nil
+}
+
 // refreshCellConn reads the cell's CellInfo and updates the cell's cached connection from it, returning the
 // connection. Unless force, it returns the cached connection without reading if another call refreshed it while
 // this one waited.
