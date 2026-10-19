@@ -50,7 +50,8 @@ var (
 	// when last seen valid under that CA.
 	watchedCRLs sync.Map
 	// lastValidCRLs maps the CRL files ClientConfig used to the CRLs
-	// last loaded from them, and staleCRLWarnings holds each file
+	// last loaded from them, by ClientConfig or ReloadCachedFiles,
+	// and staleCRLWarnings holds each file
 	// whose CRLs it held against peers for, with the error it warned
 	// about then: the warning repeats when the failure changes, or
 	// when the file breaks again after having worked.
@@ -310,12 +311,12 @@ func registerFileSet(set ...entryID) {
 }
 
 // entryResult is what reading the files of a cache entry again gave:
-// the update of an entry whose files changed, or the error of one that
+// the updates of an entry whose files changed, or the error of one that
 // could not be loaded. The entries whose files did not change have no
 // result.
 type entryResult struct {
-	update *cacheUpdate
-	err    error
+	updates []cacheUpdate
+	err     error
 }
 
 // read reads the files of the entries, and returns the result of each
@@ -330,7 +331,7 @@ func (c cachedFiles) read() map[entryID]entryResult {
 				continue
 			}
 			if cached, ok := cache.Load(id); !ok || !sameCertificates(*cached.(*[]tls.Certificate), *fresh) {
-				results[name(id)] = entryResult{update: &cacheUpdate{cache: cache, key: id, value: fresh}}
+				results[name(id)] = entryResult{updates: []cacheUpdate{{cache: cache, key: id, value: fresh}}}
 			}
 		}
 	}
@@ -347,7 +348,7 @@ func (c cachedFiles) read() map[entryID]entryResult {
 			continue
 		}
 		if !fresh.Equal(cached) {
-			results[caPoolEntry(ca)] = entryResult{update: &cacheUpdate{cache: &certPools, key: ca, value: fresh}}
+			results[caPoolEntry(ca)] = entryResult{updates: []cacheUpdate{{cache: &certPools, key: ca, value: fresh}}}
 		}
 	}
 	// The CA certificates that CRLs are validated under: the ones
@@ -360,7 +361,7 @@ func (c cachedFiles) read() map[entryID]entryResult {
 			continue
 		}
 		if !slices.EqualFunc(fresh, cached, (*x509.Certificate).Equal) {
-			results[caCertificatesEntry(ca)] = entryResult{update: &cacheUpdate{cache: &caCertificates, key: ca, value: fresh}}
+			results[caCertificatesEntry(ca)] = entryResult{updates: []cacheUpdate{{cache: &caCertificates, key: ca, value: fresh}}}
 			readCAs[ca] = fresh
 		}
 	}
@@ -392,8 +393,15 @@ func (c cachedFiles) read() map[entryID]entryResult {
 			results[crlEntry(w)] = entryResult{err: vterrors.Wrapf(err, "cannot use the CRL file %s under the CA file %s; the CRLs last loaded from it stay in use", w.crl, w.ca)}
 			continue
 		}
+		// The CRLs are also what ClientConfig falls back to from then
+		// on, rather than the ones it last loaded itself, which a
+		// config built while the file is briefly unreadable would
+		// otherwise keep, with nothing left to reload once it is back.
 		if digest != seen {
-			results[crlEntry(w)] = entryResult{update: &cacheUpdate{cache: &watchedCRLs, key: w, value: digest}}
+			results[crlEntry(w)] = entryResult{updates: []cacheUpdate{
+				{cache: &watchedCRLs, key: w, value: digest},
+				{cache: &lastValidCRLs, key: w.crl, value: crls},
+			}}
 		}
 	}
 	return results
@@ -435,14 +443,14 @@ func (c cachedFiles) withhold(results map[entryID]entryResult) ([]cacheUpdate, [
 	var updates []cacheUpdate
 	var heldBack []string
 	for id, result := range results {
-		if result.update == nil {
+		if result.updates == nil {
 			continue
 		}
 		if failed[find(id)] {
 			heldBack = append(heldBack, string(id))
 			continue
 		}
-		updates = append(updates, *result.update)
+		updates = append(updates, result.updates...)
 	}
 	if len(heldBack) > 0 {
 		slices.Sort(heldBack)

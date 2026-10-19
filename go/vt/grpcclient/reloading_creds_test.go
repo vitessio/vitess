@@ -23,6 +23,7 @@ import (
 	"net"
 	"os"
 	"path"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -50,9 +51,11 @@ func TestSecureCredentialsReload(t *testing.T) {
 		tlstest.CreateCA(root)
 		tlstest.CreateSignedCert(root, tlstest.CA, "01", "server", "server.example.com")
 		tlstest.CreateSignedCert(root, tlstest.CA, "02", "client", "client.example.com")
+		tlstest.CreateCRL(root, tlstest.CA)
 	}
+	crl := path.Join(live, "ca-crl.pem")
 	install := func(root string) {
-		for _, name := range []string{"client-cert.pem", "client-key.pem", "ca-cert.pem"} {
+		for _, name := range []string{"client-cert.pem", "client-key.pem", "ca-cert.pem", "ca-crl.pem"} {
 			b, err := os.ReadFile(path.Join(root, name))
 			require.NoError(t, err)
 			require.NoError(t, os.WriteFile(path.Join(live, name), b, 0o600))
@@ -73,7 +76,7 @@ func TestSecureCredentialsReload(t *testing.T) {
 	}
 
 	install(oldRoot)
-	creds, err := secureCredentials(path.Join(live, "client-cert.pem"), path.Join(live, "client-key.pem"), path.Join(live, "ca-cert.pem"), "", "server.example.com")
+	creds, err := secureCredentials(path.Join(live, "client-cert.pem"), path.Join(live, "client-key.pem"), path.Join(live, "ca-cert.pem"), crl, "server.example.com")
 	require.NoError(t, err)
 
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
@@ -82,33 +85,66 @@ func TestSecureCredentialsReload(t *testing.T) {
 	require.NoError(t, ln.Close())
 	oldServer := serve(oldRoot, addr)
 
-	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(creds))
-	require.NoError(t, err)
-	t.Cleanup(func() { conn.Close() })
-	check := func() error {
+	dial := func() *grpc.ClientConn {
+		conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(creds))
+		require.NoError(t, err)
+		t.Cleanup(func() { conn.Close() })
+		return conn
+	}
+	check := func(conn *grpc.ClientConn) error {
 		ctx, cancel := context.WithTimeout(t.Context(), time.Second)
 		defer cancel()
 		_, err := healthpb.NewHealthClient(conn).Check(ctx, &healthpb.HealthCheckRequest{})
 		return err
 	}
-	require.NoError(t, check())
+	reload := func() {
+		_, err := vttls.ReloadCachedFiles()
+		if err != nil {
+			require.NotContains(t, err.Error(), live)
+		}
+	}
+	conn := dial()
+	require.NoError(t, check(conn))
 
 	// The rotation replaces the client's files, which are reloaded,
 	// and the server, which drops the connection.
 	install(newRoot)
-	_, err = vttls.ReloadCachedFiles()
-	if err != nil {
-		require.NotContains(t, err.Error(), live)
-	}
+	reload()
 	oldServer.Stop()
-	serve(newRoot, addr)
+	newServer := serve(newRoot, addr)
 
 	var checkErr error
 	assert.Eventually(t, func() bool {
-		checkErr = check()
+		checkErr = check(conn)
 		return checkErr == nil
 	}, 30*time.Second, 50*time.Millisecond, "the connection must reconnect with the reloaded files")
 	require.NoError(t, checkErr)
+
+	// The CRL is then replaced by one that revokes the server, and
+	// reloaded, and the connection reconnects while the file is
+	// briefly gone, as when it is being replaced again.
+	tlstest.RevokeCertAndRegenerateCRL(newRoot, tlstest.CA, "server")
+	install(newRoot)
+	reload()
+	require.NoError(t, os.Remove(crl))
+	newServer.Stop()
+	serve(newRoot, addr)
+	requireRevoked := func(conn *grpc.ClientConn, msg string) {
+		t.Helper()
+		var checkErr error
+		assert.Eventually(t, func() bool {
+			checkErr = check(conn)
+			return checkErr != nil && strings.Contains(checkErr.Error(), "Certificate revoked: CommonName=server.example.com")
+		}, 30*time.Second, 50*time.Millisecond, msg)
+		require.ErrorContains(t, checkErr, "Certificate revoked: CommonName=server.example.com")
+	}
+	requireRevoked(conn, "the reconnect must hold the reloaded CRL against the server, not the one loaded before it")
+
+	// Once the file is back and reloaded, which changes nothing, a new
+	// handshake must still hold that CRL against the server.
+	install(newRoot)
+	reload()
+	requireRevoked(dial(), "a handshake after the file is back must hold the reloaded CRL against the server")
 }
 
 // TestReloadingCredsRetriesFailedBuild checks that credentials that
