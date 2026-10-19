@@ -819,6 +819,40 @@ func TestVStreamsMetrics(t *testing.T) {
 	require.Equal(t, int64(0), errors[expectedLabels2], "Shard 20-40 should have 0 errors")
 }
 
+func TestVStreamsLagIsNotReportedForStreamsThatOnlySawCopyEvents(t *testing.T) {
+	ctx := t.Context()
+	cell := "ah"
+	ks := "TestVStream"
+	_ = createSandbox(ks)
+	hc := discovery.NewFakeHealthCheck(nil)
+	st := getSandboxTopo(ctx, cell, ks, []string{"-20"})
+	vsm := newTestVStreamManager(ctx, hc, st, cell)
+	vsm.vstreamsEventsStreamed.ResetAll()
+	sbc := hc.AddTestTablet(cell, "1.1.1.1", 1001, ks, "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
+	addTabletToSandboxTopo(t, ctx, st, ks, "-20", sbc.Tablet())
+	sbc.AddVStreamEvents([]*binlogdatapb.VEvent{
+		{Type: binlogdatapb.VEventType_BEGIN},
+		{Type: binlogdatapb.VEventType_FIELD, FieldEvent: &binlogdatapb.FieldEvent{TableName: "t1"}},
+		{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{TableName: "t1"}},
+		{Type: binlogdatapb.VEventType_COMMIT},
+	}, nil)
+
+	vstreamCtx, vstreamCancel := context.WithCancel(ctx)
+	t.Cleanup(vstreamCancel)
+	vgtid := &binlogdatapb.VGtid{ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: ks, Shard: "-20", Gtid: "pos"}}}
+	go func() {
+		_ = vsm.VStream(vstreamCtx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{}, func(events []*binlogdatapb.VEvent) error {
+			return nil
+		})
+	}()
+
+	labels := "TestVStream.-20.PRIMARY"
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		assert.Equal(c, int64(4), vsm.vstreamsEventsStreamed.Counts()[labels])
+	}, 30*time.Second, 10*time.Millisecond)
+	assert.NotContains(t, vsm.vstreamsLag.Counts(), labels)
+}
+
 func TestVStreamsMetricsCallerIDLabel(t *testing.T) {
 	// Each case uses its own cell because the exporter reuses metrics by name
 	// per cell, and the two cases register them with different label counts.
@@ -858,11 +892,14 @@ func TestVStreamsMetricsCallerIDLabel(t *testing.T) {
 			hc := discovery.NewFakeHealthCheck(nil)
 			st := getSandboxTopo(ctx, tc.cell, ks, []string{"-20"})
 			vsm := newTestVStreamManager(ctx, hc, st, tc.cell)
+			vsm.vstreamsEventsStreamed.ResetAll()
 			sbc := hc.AddTestTablet(tc.cell, "1.1.1.1", 1001, ks, "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
 			addTabletToSandboxTopo(t, ctx, st, ks, "-20", sbc.Tablet())
 
 			vstreamCtx, vstreamCancel := context.WithCancel(ctx)
 			t.Cleanup(vstreamCancel)
+			eventsPerStream := int64(2)
+			streamsStarted := int64(0)
 			startCallerStream := func(principal string, lagSeconds int64) {
 				sbc.AddVStreamEvents([]*binlogdatapb.VEvent{
 					{Type: binlogdatapb.VEventType_GTID, Gtid: "gtid01"},
@@ -875,12 +912,17 @@ func TestVStreamsMetricsCallerIDLabel(t *testing.T) {
 						return nil
 					})
 				}()
+				streamsStarted++
 				require.EventuallyWithT(t, func(c *assert.CollectT) {
-					assert.Contains(c, slices.Collect(maps.Values(vsm.vstreamsLag.Counts())), lagSeconds)
+					eventsStreamed := int64(0)
+					for _, count := range vsm.vstreamsEventsStreamed.Counts() {
+						eventsStreamed += count
+					}
+					assert.Equal(c, streamsStarted*eventsPerStream, eventsStreamed)
 				}, 30*time.Second, 10*time.Millisecond)
 			}
-			startCallerStream("app1", 5)
 			startCallerStream("app2", 9)
+			startCallerStream("app1", 5)
 
 			assert.Equal(t, tc.expectedLagByLabels, vsm.vstreamsLag.Counts())
 			assert.ElementsMatch(t, slices.Collect(maps.Keys(tc.expectedLagByLabels)), slices.Collect(maps.Keys(vsm.vstreamsCreated.Counts())))

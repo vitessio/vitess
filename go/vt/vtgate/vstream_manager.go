@@ -106,8 +106,9 @@ func vstreamLagTrackerForCell(cell string, labelNames []string) *vstreamLagTrack
 	return tracker
 }
 
-// noLagYet marks a stream that has not received an event, so it is not
-// reported as caught up before its lag is known.
+// noLagYet marks a stream that has not received an event with a timestamp,
+// such as one still copying tables, so it is not reported as caught up before
+// its lag is known.
 const noLagYet = math.MinInt64
 
 // register adds a live stream and returns the value it should store its lag
@@ -1066,7 +1067,9 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 				default:
 					sendevents = append(sendevents, event)
 				}
-				streamLag.Store(event.CurrentTime/1e9 - event.Timestamp)
+				if event.Timestamp != 0 {
+					streamLag.Store(event.CurrentTime/1e9 - event.Timestamp)
+				}
 			}
 			if len(sendevents) != 0 {
 				eventss = append(eventss, sendevents)
