@@ -137,11 +137,13 @@ type crlFallback struct {
 	// that the verified chains of peers brought and that the CRLs bound
 	// to, at most maxBoundIssuers of them, see clientCRLCheckerFrom.
 	issuers map[string]*x509.Certificate
-	// issuersVersion counts the changes to issuers, and trusted caches
-	// which of them the CA certificates trustedUnder digests, at
-	// issuersVersion trustedVersion, still trust, see trustedIssuers.
+	// issuersVersion counts the changes to issuers. verdicts holds, by
+	// DER encoding, whether the CA certificates that trustedUnder
+	// digests trust each of them, and trusted those they trust, as of
+	// issuersVersion trustedVersion, see trustedIssuers.
 	issuersVersion, trustedVersion uint64
 	trustedUnder                   [sha256.Size]byte
+	verdicts                       map[string]bool
 	trusted                        []*x509.Certificate
 	// digest is the SHA-256 digest of the file's contents that the
 	// configs built since CachedFilesGeneration last changed were built
@@ -246,22 +248,32 @@ func (f *crlFallback) learnIssuer(issuer *x509.Certificate) {
 	f.issuersVersion++
 }
 
-func (f *crlFallback) learnedIssuers() []*x509.Certificate {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return slices.Collect(maps.Values(f.issuers))
-}
-
 // trustedIssuers returns the learned issuers that the CA certificates
 // cas, or the system roots without any, still trust: an issuer that a
 // verified chain brought under an earlier CA file, which a new one no
 // longer trusts, says nothing about the CRLs under the new one. A CA
 // rotated to a new root, whose intermediate reuses the name of the old
 // one with a new key, may issue CRLs without an authority key
-// identifier, which the old intermediate's key would reject. Which
-// issuers are trusted is worked out once for each set of CA
-// certificates and of learned issuers, rather than on every call.
+// identifier, which the old intermediate's key would reject.
+//
+// Each issuer's verdict is kept for the CA certificates it was worked
+// out under, so that learning an issuer has only that issuer verified,
+// along with the ones it may connect to the CA certificates, which it
+// issued and which were not trusted without it: a peer that holds the
+// key of a permitted intermediate can bring a CA certificate minted
+// under it on every connection. The verdicts are worked out at the
+// time and kept, so an issuer that expires since stays trusted, which
+// costs nothing, since it verifies no chain any more, and one not yet
+// valid stays untrusted until the CA certificates change.
 func (f *crlFallback) trustedIssuers(cas []*x509.Certificate) ([]*x509.Certificate, error) {
+	// Without learned issuers, as before a chain brought any, there is
+	// nothing to work out, nor system roots to load.
+	f.mu.Lock()
+	none := len(f.issuers) == 0
+	f.mu.Unlock()
+	if none {
+		return nil, nil
+	}
 	h := sha256.New()
 	for _, ca := range cas {
 		h.Write(ca.Raw)
@@ -277,12 +289,16 @@ func (f *crlFallback) trustedIssuers(cas []*x509.Certificate) ([]*x509.Certifica
 	}
 	version := f.issuersVersion
 	learned := slices.Collect(maps.Values(f.issuers))
+	var known map[string]bool
+	if f.trustedUnder == under {
+		known = maps.Clone(f.verdicts)
+	}
 	f.mu.Unlock()
 
 	var roots *x509.CertPool
 	if len(cas) == 0 {
 		var err error
-		if roots, err = x509.SystemCertPool(); err != nil {
+		if roots, err = systemRoots(); err != nil {
 			return nil, vterrors.Wrapf(err, "cannot load the system roots to check the CA certificates that verified chains of peers brought against")
 		}
 	} else {
@@ -295,16 +311,57 @@ func (f *crlFallback) trustedIssuers(cas []*x509.Certificate) ([]*x509.Certifica
 	for _, issuer := range learned {
 		intermediates.AddCert(issuer)
 	}
+	verify := func(issuer *x509.Certificate) bool {
+		if verifyIssuerTestHook != nil {
+			verifyIssuerTestHook()
+		}
+		_, err := issuer.Verify(x509.VerifyOptions{Roots: roots, Intermediates: intermediates, KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageAny}})
+		return err == nil
+	}
+
+	// The issuers without a verdict are verified first. An issuer that
+	// was not trusted is verified again only once an issuer whose
+	// subject is its issuer's name turns out trusted, and so on down.
+	verdicts := make(map[string]bool, len(learned))
+	var untrusted []*x509.Certificate
+	newlyTrusted := make(map[string]bool)
+	for _, issuer := range learned {
+		verdict, ok := known[string(issuer.Raw)]
+		if !ok {
+			verdict = verify(issuer)
+			if verdict {
+				newlyTrusted[string(issuer.RawSubject)] = true
+			}
+		}
+		verdicts[string(issuer.Raw)] = verdict
+		if !verdict {
+			untrusted = append(untrusted, issuer)
+		}
+	}
+	for len(newlyTrusted) > 0 && len(untrusted) > 0 {
+		subjects := newlyTrusted
+		newlyTrusted = make(map[string]bool)
+		var still []*x509.Certificate
+		for _, issuer := range untrusted {
+			if subjects[string(issuer.RawIssuer)] && verify(issuer) {
+				verdicts[string(issuer.Raw)] = true
+				newlyTrusted[string(issuer.RawSubject)] = true
+				continue
+			}
+			still = append(still, issuer)
+		}
+		untrusted = still
+	}
 	var trusted []*x509.Certificate
 	for _, issuer := range learned {
-		if _, err := issuer.Verify(x509.VerifyOptions{Roots: roots, Intermediates: intermediates, KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageAny}}); err == nil {
+		if verdicts[string(issuer.Raw)] {
 			trusted = append(trusted, issuer)
 		}
 	}
 
 	f.mu.Lock()
 	if f.issuersVersion == version {
-		f.trusted, f.trustedUnder, f.trustedVersion = trusted, under, version
+		f.verdicts, f.trusted, f.trustedUnder, f.trustedVersion = verdicts, trusted, under, version
 	}
 	f.mu.Unlock()
 	return trusted, nil
@@ -370,6 +427,16 @@ var reloadTestHook, publishTestHook, crlReadTestHook func()
 // when set, runs once ReloadCachedFiles read the files consistently,
 // before it publishes them. Both are nil outside tests.
 var crlFileReadTestHook, prePublishTestHook func()
+
+// verifyIssuerTestHook, when set, runs on every verification of a
+// learned issuer against the CA certificates, see
+// crlFallback.trustedIssuers. Nil outside tests.
+var verifyIssuerTestHook func()
+
+// systemRoots returns the system roots, which a client without a CA
+// file verifies peers against. A variable so that a test can make it
+// fail.
+var systemRoots = x509.SystemCertPool
 
 // ReloadCachedFiles reads again the certificate, key, CA and CRL files
 // that ClientConfig and ServerConfig loaded, so that the configs they
