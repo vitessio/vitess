@@ -339,6 +339,66 @@ func TestClientConfigReadsCRLOutsideThePublishLock(t *testing.T) {
 	files.requireServes(oldCerts, newCerts)
 }
 
+// TestClientConfigUsesTheCRLsOfAReloadThatOvertookItsRead checks that a
+// ClientConfig call that read its CRL file before a reload published a
+// new CA and CRL, and builds its config after, holds the published CRL
+// against the peer rather than the one it read: the CRL it read names
+// the old CA, which the new CA does not validate, so it would apply to
+// no certificate of the new CA, and let one that the published CRL
+// revokes through.
+func TestClientConfigUsesTheCRLsOfAReloadThatOvertookItsRead(t *testing.T) {
+	oldCerts := tlstest.CreateClientServerCertPairs(t.TempDir())
+	newCerts := tlstest.CreateClientServerCertPairs(t.TempDir())
+	files := newClientFiles(t)
+	files.installTrust(oldCerts)
+	client := func() (*tls.Config, error) {
+		return ClientConfig(VerifyIdentity, "", "", files.ca, files.crl, newCerts.RevokedServerName, tls.VersionTLS12)
+	}
+	_, err := client()
+	require.NoError(t, err)
+
+	// The next call reads the old CRL, and is held before it builds.
+	read, release := make(chan struct{}), make(chan struct{})
+	var calls atomic.Int32
+	crlReadTestHook = func() {
+		if calls.Add(1) == 1 {
+			close(read)
+			<-release
+		}
+	}
+	t.Cleanup(func() { crlReadTestHook = nil })
+	var releaseOnce sync.Once
+	releaseRead := func() { releaseOnce.Do(func() { close(release) }) }
+	t.Cleanup(releaseRead)
+	type built struct {
+		config *tls.Config
+		err    error
+	}
+	results := make(chan built, 1)
+	go func() {
+		config, err := client()
+		results <- built{config, err}
+	}()
+	select {
+	case <-read:
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "the call did not read the CRL file in time")
+	}
+
+	// The CA and the CRL are rotated, and the reload publishes them.
+	files.installTrust(newCerts)
+	_, err = ReloadCachedFiles()
+	requireNoErrorFor(t, err, path.Dir(files.ca))
+
+	releaseRead()
+	b := <-results
+	require.NoError(t, b.err)
+	revokedServer, err := ReadServerConfig(newCerts.RevokedServerCert, newCerts.RevokedServerKey, "", "", "", tls.VersionTLS12)
+	require.NoError(t, err)
+	res := handshake(t, revokedServer, b.config)
+	require.ErrorContains(t, res.clientErr, "Certificate revoked: CommonName="+newCerts.RevokedServerName)
+}
+
 // TestCRLFallbackIsNotHeldBySlowReads checks that a read of a CRL file
 // stalled on the file system does not hold back a ClientConfig call
 // that already read the file from storing the CRLs it read: that call
