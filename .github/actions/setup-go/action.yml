@@ -78,6 +78,19 @@ runs:
     # One module cache entry per go.sum, keyed by its hash, so that a tool's
     # dependency update only replaces that tool's entry. The entries restore
     # into the same module cache; modules they share are identical.
+    #
+    # Go makes the modules it downloads read-only, and tar cannot extract over
+    # them, which fails the restore. The upgrade/downgrade workflows build the
+    # previous release's tree first, which downloads its modules, so make what
+    # is already there writable.
+    - name: Make the Go module cache writable
+      if: inputs.cache == 'true'
+      shell: bash
+      run: |
+        if [ -d ~/go/pkg/mod ]; then
+          chmod -R u+w ~/go/pkg/mod
+        fi
+
     - name: Restore Go module cache (root)
       if: inputs.cache == 'true'
       uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
