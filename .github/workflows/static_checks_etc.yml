@@ -19,6 +19,12 @@ jobs:
   build:
     name: Static Code Checks Etc
     runs-on: ubuntu-24.04
+    env:
+      # Build everything the way the go_cache_warm workflow warms it, so the
+      # checks reuse its build, unit and tools build cache entries. Nothing
+      # under go/ uses cgo.
+      CGO_ENABLED: "0"
+      GOFLAGS: -trimpath
 
     steps:
       - name: Harden the runner (Audit all outbound calls)
@@ -144,6 +150,7 @@ jobs:
 
       - name: Set up Go
         if: (steps.changes.outputs.go_files == 'true' || steps.changes.outputs.parser_changes == 'true' || steps.changes.outputs.proto_changes == 'true')
+<<<<<<< HEAD
         # zizmor: ignore[cache-poisoning] this workflow publishes no artifacts
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
@@ -152,6 +159,14 @@ jobs:
           cache-dependency-path: |
             go.sum
             tools/**/go.sum
+||||||| parent of aa835af9bd (ci: build the Go module and build caches in a dedicated warm workflow (#21614))
+        uses: $/.github/actions/setup-go
+=======
+        uses: $/.github/actions/setup-go
+        with:
+          build-cache: build,unit,tools
+          go-tools: addlicense,gofumpt,goimports,golangci-lint,goyacc
+>>>>>>> aa835af9bd (ci: build the Go module and build caches in a dedicated warm workflow (#21614))
 
       - name: Tune the OS
         if: steps.changes.outputs.go_files == 'true'
@@ -212,8 +227,30 @@ jobs:
             .github/ISSUE_TEMPLATE/*.yml \
             .github/workflows/*.yml
 
+<<<<<<< HEAD
+||||||| parent of aa835af9bd (ci: build the Go module and build caches in a dedicated warm workflow (#21614))
+      - name: Get golangci-lint version
+        if: steps.changes.outputs.go_files == 'true'
+        id: golangci_lint_version
+        run: |
+          version=$(cd tools/golangci-lint && go list -m -f '{{.Version}}' github.com/golangci/golangci-lint/v2)
+          if [ -z "$version" ]; then
+            echo "Could not determine golangci-lint version from tools/golangci-lint/go.mod"
+            exit 1
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+=======
+      # Runs the golangci-lint build pinned in tools/golangci-lint, the same
+      # one "make lint" runs, which the tools build cache entry holds. With
+      # the analysis cache that setup-go restores, it only analyzes the
+      # packages that changed and those that depend on them. The problem
+      # matcher of actions/setup-go turns the issues it reports into
+      # annotations.
+>>>>>>> aa835af9bd (ci: build the Go module and build caches in a dedicated warm workflow (#21614))
       - name: Run golangci-lint
         if: steps.changes.outputs.go_files == 'true'
+<<<<<<< HEAD
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
           args: --timeout 10m
@@ -224,6 +261,39 @@ jobs:
           skip-save-cache: ${{ !(github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release-'))) }}
           working-directory: go
           version: v2.9.0
+||||||| parent of aa835af9bd (ci: build the Go module and build caches in a dedicated warm workflow (#21614))
+        timeout-minutes: 15
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          args: --timeout 10m
+          install-mode: "goinstall"
+          # Same policy as the setup-go action: only pushes to main and the
+          # release branches save the golangci-lint cache, everything else
+          # restores from it.
+          skip-save-cache: ${{ !(github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release-'))) }}
+          working-directory: go
+          version: ${{ steps.golangci_lint_version.outputs.version }}
+
+      - name: Check license headers
+        if: steps.changes.outputs.go_files == 'true'
+        timeout-minutes: 5
+        run: |
+          tools/check_license_headers.sh
+=======
+        timeout-minutes: 15
+        run: |
+          lint() {
+            go run -trimpath -modfile=tools/golangci-lint/go.mod github.com/golangci/golangci-lint/v2/cmd/golangci-lint "$@"
+          }
+          lint config verify
+          lint run --timeout 10m ./go/...
+
+      - name: Check license headers
+        if: steps.changes.outputs.go_files == 'true'
+        timeout-minutes: 5
+        run: |
+          tools/check_license_headers.sh
+>>>>>>> aa835af9bd (ci: build the Go module and build caches in a dedicated warm workflow (#21614))
 
       - name: Run go mod tidy
         if: steps.changes.outputs.go_files == 'true'

@@ -70,11 +70,21 @@ jobs:
 
     - name: Set up Go
       if: steps.changes.outputs.end_to_end == 'true'
+<<<<<<< HEAD
       # zizmor: ignore[cache-poisoning] this workflow publishes no artifacts
       uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
       with:
         go-version-file: go.mod
         cache: ${{ (github.base_ref == 'main' || (github.base_ref == '' && github.ref_name == 'main')) && 'true' || 'false' }}
+||||||| parent of aa835af9bd (ci: build the Go module and build caches in a dedicated warm workflow (#21614))
+      uses: $/.github/actions/setup-go
+=======
+      uses: $/.github/actions/setup-go
+      with:
+        build-cache: build,race
+        # Runs go test directly, without gotestsum.
+        go-tools: none
+>>>>>>> aa835af9bd (ci: build the Go module and build caches in a dedicated warm workflow (#21614))
 
     - name: Tune the OS
       if: steps.changes.outputs.end_to_end == 'true'

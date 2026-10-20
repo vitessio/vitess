@@ -71,6 +71,7 @@ jobs:
     # Needed by `go list` in the next step.
     - name: Set up Go
       if: steps.mode.outputs.is_full_run != 'true' && steps.changes.outputs.changed_files == 'true'
+<<<<<<< HEAD
       # zizmor: ignore[cache-poisoning] this workflow publishes no artifacts
       uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
       with:
@@ -79,6 +80,14 @@ jobs:
         cache-dependency-path: |
           go.sum
           tools/**/go.sum
+||||||| parent of aa835af9bd (ci: build the Go module and build caches in a dedicated warm workflow (#21614))
+      uses: $/.github/actions/setup-go
+=======
+      uses: $/.github/actions/setup-go
+      with:
+        build-cache: none
+        go-tools: none
+>>>>>>> aa835af9bd (ci: build the Go module and build caches in a dedicated warm workflow (#21614))
 
     - name: Detect changed Go packages
       if: steps.mode.outputs.is_full_run != 'true' && steps.changes.outputs.changed_files == 'true'
@@ -134,6 +143,7 @@ jobs:
         persist-credentials: 'false'
 
     - name: Set up Go
+<<<<<<< HEAD
       uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
       with:
         go-version-file: go.mod
@@ -141,6 +151,17 @@ jobs:
         cache-dependency-path: |
           go.sum
           tools/**/go.sum
+||||||| parent of aa835af9bd (ci: build the Go module and build caches in a dedicated warm workflow (#21614))
+      uses: $/.github/actions/setup-go
+=======
+      uses: $/.github/actions/setup-go
+      with:
+        # The coverage build uses its own flags; only its "make build" step
+        # reuses the build entry.
+        build-cache: build
+        # tools/run_codecov.sh runs go test directly, without gotestsum.
+        go-tools: none
+>>>>>>> aa835af9bd (ci: build the Go module and build caches in a dedicated warm workflow (#21614))
 
     - name: Set up python
       uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
