@@ -11,6 +11,7 @@
     - **[New Support](#new-support)**
         - [VTOrc failover of an unreachable primary `vttablet` via replica quorum](#vtorc-quorum-unreachable-primary)
         - [Query throttler `TABLET_THROTTLER` strategy](#vttablet-query-throttler-tablet-throttler)
+        - [Back up binary logs with full builtin backups](#backup-include-binlogs)
     - **[Breaking Changes](#breaking-changes)**
         - [`--watch-replication-stream` flag removed](#vttablet-watch-replication-stream-removed)
         - [VRLog feature removed](#vttablet-vrlog-removed)
@@ -45,6 +46,7 @@
         - [MySQL-faithful validation and rejection of unsupported `sql_mode` values](#vtgate-sql-mode-rejection)
         - [New `VEXPLAIN MYSQLPLAN` statement](#vtgate-vexplain-mysqlplan)
         - [`REPLACE` statements now report the `REPLACE` statement type](#vtgate-replace-statement-type)
+        - [VStream metrics report live streams and can include the caller](#vtgate-vstream-metrics)
     - **[Reparent](#minor-changes-reparent)**
         - [`EmergencyReparentShard` no longer waits on replicas that cannot win the election](#ers-lagging-relay-log-wait)
         - [`EmergencyReparentShard` can explicitly recover from split brain](#ers-allow-split-brain-promotion)
@@ -138,6 +140,31 @@ VTTablet's incoming query throttler has a new `TABLET_THROTTLER` strategy, which
 The configuration is set per keyspace with the new `vtctldclient UpdateQueryThrottlerConfig` command, which validates it and stores it in the `Keyspace` and every cell's `SrvKeyspace`. Tablets watch their `SrvKeyspace` and apply changes immediately. `--tablet-throttler-cache-update-interval` (default `10s`) controls how often a tablet refreshes the throttler check results that its decisions are based on. A disabled configuration runs no strategy.
 
 **Upgrade note**: write and maintain the configuration only with a v25 `vtctld`, including for `RebuildKeyspaceGraph`. A v24 `vtctld` rebuilds each `SrvKeyspace` with only the tablet throttler configuration, so running `RebuildKeyspaceGraph` on it during an upgrade drops `query_throttler_config`. The tablets then fall back to the NoOp strategy, and nothing reports that query throttling stopped. To restore it, re-run `UpdateQueryThrottlerConfig` or rebuild the keyspace graph with a v25 `vtctld`.
+
+#### <a id="backup-include-binlogs"/>Back up binary logs with full builtin backups</a>
+
+A full backup taken with the `builtin` backup engine can now include the source's binary logs. Pass `--include-binlogs` to `vtbackup`, `vtctldclient Backup` or `vtctldclient BackupShard`. Restores need no flag: when a backup's manifest includes binary logs, a restore puts them in place under the target's own `log-bin` basename, adds them to the binlog index before `mysqld` starts, keeps their original file modification times, and does not reset or purge them. The restored server can therefore serve binlog streams (replicas, VStreams) for transactions from before the backup. Point-in-time recovery from such a backup still works.
+
+`--include-binlogs` is only supported with the `builtin` backup engine. The builtin engine stops `mysqld` cleanly before copying files, so the backed-up binary logs end at exactly the position the data was taken at. `xtrabackup` and `mysqlshell` back up a running server, so binary logs copied alongside the data would contain transactions the backup doesn't. A server restored from such a backup would report those transactions as executed, and replicas or VStreams reading from it would silently miss them. Requests that combine `--include-binlogs` with another engine, or with an incremental backup, fail with `INVALID_ARGUMENT`, as does `vtbackup` with both `--include-binlogs` and `--restore-with-clone`.
+
+Limitations and requirements:
+
+- Full backups only.
+- `vtbackup --restore-with-clone` together with `--include-binlogs` is refused in this release, because CLONE does not copy binary logs.
+- The backup source must have `log_bin` and `log_replica_updates` enabled. Otherwise the backup fails with `FAILED_PRECONDITION`.
+- The tablet's `log-bin` (and `log-bin-index`, if set) must say where `mysqld` keeps its binary logs, as the `my.cnf` that Vitess generates does. A source whose `mysqld` uses its default basename because `log-bin` isn't set, or another basename, is refused with `FAILED_PRECONDITION` before `mysqld` is stopped, as is one whose binary log index can't be read.
+
+Things to be aware of:
+
+- Backups grow by the size of the source's retained binary logs.
+- The binary logs keep every transaction the source logged, including errant GTIDs. Without them, a replica of the restored server that lacks such a transaction stops with error 1236, because the restored `gtid_purged` covers it. With them, the restored server sends the transaction and the replica applies it. VTOrc's errant GTID detection still applies.
+- Binlog expiry (`binlog_expire_logs_seconds`) on the restored server follows the original file times, so old binary logs may be purged soon after the restored `mysqld` starts.
+- Older Vitess versions restoring such a backup restore only the data and ignore the binary logs.
+- Encrypted binary logs (`binlog_encryption`) are backed up as they are, so only a server whose keyring holds the source's binary log master key, such as one sharing the source's keyring, can restore them. A restore fails when it cannot read a restored binary log (and `mysqld` does not start when the newest one is unreadable). The tablet then doesn't start replicating, and restarting it retries the restore. `ALTER INSTANCE ROTATE BINLOG MASTER KEY` removes the previous key from the keyring, so a backup whose binary logs were encrypted before a rotation can no longer be restored.
+
+**Upgrade order**: upgrade both `vtctld` and the tablets before using `--include-binlogs` with `vtctldclient Backup` or `BackupShard`. An older `vtctld` or `vttablet` silently ignores the field and takes a backup without binary logs.
+
+See [#17667](https://github.com/vitessio/vitess/issues/17667).
 
 ### <a id="breaking-changes"/>Breaking Changes</a>
 
@@ -507,6 +534,14 @@ This changes three user-visible strings for `REPLACE` statements:
 - `statementType` in query-analysis output
 
 Query planning, routing, transaction behavior, and results are unchanged — only the reported statement type differs. Tooling that parses these fields and matches on the literal `INSERT` will no longer match `REPLACE` statements and should be updated to accept `REPLACE`.
+
+#### <a id="vtgate-vstream-metrics"/>VStream metrics report live streams and can include the caller</a>
+
+`VStreamsLag` now reports, for each keyspace, shard, and tablet type, the highest lag across the VStreams that are currently streaming from that shard. Previously it reported the lag of whichever stream sent an event last, and kept reporting it after every stream for the shard had closed. A shard's series now disappears when its last stream closes, and a newly opened stream is not reported until its first event arrives. Alerts that use `absent()` on `VStreamsLag`, or that fire when lag stays above a threshold, may behave differently.
+
+`VStreamsCount` now also drops streams that end without an error, such as a shard stream ended by a resharding journal event. Previously those streams were counted as active forever.
+
+The new `--vstream-metrics-include-caller` flag adds a `CallerID` label to `VStreamsCreated`, `VStreamsCount`, `VStreamsEventsStreamed`, `VStreamsEndedWithErrors`, `VStreamsLag`, and `VStreamsTransactionsChunked`, so each streaming application can be monitored separately. The label is set to the principal of the effective caller ID in the `VStreamRequest`, or to the MySQL user for SQL `VSTREAM`; streams without one get an empty `CallerID`. The `VStreamRequest` principal is set by the client and is not authenticated by VTGate. Each distinct principal adds a series per keyspace, shard, and tablet type, and the counters keep their series until VTGate restarts, so the number of series grows with the distinct principals seen over the process lifetime, not only those of open streams. For example, if each client instance sets its own principal, the number of series grows with every instance that has connected, so consider the cardinality before enabling the flag. The flag is off by default, and the metrics keep their existing labels when it is off.
 
 ### <a id="minor-changes-reparent"/>Reparent</a>
 
