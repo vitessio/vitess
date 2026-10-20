@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"runtime"
 	"strconv"
 	"strings"
@@ -1198,6 +1199,72 @@ func TestCloseInterruptsStalledQuery(t *testing.T) {
 		require.FailNow(t, "the monitor did not query the semi-sync stats")
 	}
 
+	requireCloseReturns(t, m)
+}
+
+// TestCloseInterruptsConnect checks that Close does not wait for a monitor
+// callback's connect to a server that never sends its greeting.
+func TestCloseInterruptsConnect(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = listener.Close() })
+	accepted := make(chan net.Conn, 1)
+	go func() {
+		if conn, err := listener.Accept(); err == nil {
+			accepted <- conn
+		}
+	}()
+	host, port, err := net.SplitHostPort(listener.Addr().String())
+	require.NoError(t, err)
+	portNum, err := strconv.Atoi(port)
+	require.NoError(t, err)
+	cp := mysql.ConnParams{Host: host, Port: portNum, Uname: "user"}
+	m := NewMonitor(&tabletenv.TabletConfig{
+		DB:              dbconfigs.NewTestDBConfigs(cp, cp, ""),
+		SemiSyncMonitor: tabletenv.SemiSyncMonitorConfig{Interval: time.Hour},
+	}, exporter)
+
+	m.Open()
+	m.ticks.Trigger()
+	select {
+	case conn := <-accepted:
+		t.Cleanup(func() { _ = conn.Close() })
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "the monitor did not connect")
+	}
+
+	requireCloseReturns(t, m)
+}
+
+// TestCloseInterruptsProgressDelay checks that Close does not wait for the
+// delay between the two semi-sync stats reads.
+func TestCloseInterruptsProgressDelay(t *testing.T) {
+	db := fakesqldb.New(t)
+	t.Cleanup(db.Close)
+	params := db.ConnParams()
+	cp := *params
+	m := NewMonitor(&tabletenv.TabletConfig{
+		DB:              dbconfigs.NewTestDBConfigs(cp, cp, ""),
+		SemiSyncMonitor: tabletenv.SemiSyncMonitorConfig{Interval: time.Hour},
+	}, exporter)
+	query := fmt.Sprintf(semiSyncStatsQuery, m.actionTimeout.Milliseconds())
+	db.AddQuery(query, sqltypes.MakeTestResult(sqltypes.MakeTestFields("variable_name|variable_value", "varchar|varchar"), "Rpl_semi_sync_source_wait_sessions|1", "Rpl_semi_sync_source_yes_tx|5"))
+	entered := make(chan struct{})
+	var once sync.Once
+	db.SetBeforeFunc(query, func() { once.Do(func() { close(entered) }) })
+
+	m.Open()
+	m.ticks.Trigger()
+	select {
+	case <-entered:
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "the monitor did not query the semi-sync stats")
+	}
+
+	requireCloseReturns(t, m)
+}
+
+func requireCloseReturns(t *testing.T, m *Monitor) {
 	closed := make(chan struct{})
 	go func() {
 		m.Close()
@@ -1206,7 +1273,7 @@ func TestCloseInterruptsStalledQuery(t *testing.T) {
 	select {
 	case <-closed:
 	case <-time.After(30 * time.Second):
-		require.FailNow(t, "Close waited for the stalled query")
+		require.FailNow(t, "Close waited for the monitor's callback")
 	}
 }
 
