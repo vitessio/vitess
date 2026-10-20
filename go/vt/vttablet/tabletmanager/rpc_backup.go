@@ -101,6 +101,11 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 		MysqlShutdownTimeout: shutdownTimeout(l, req.MysqlShutdownTimeout),
 		BackupEngine:         backupEngine,
 		InitSQL:              req.InitSql.CloneVT(),
+		IncludeBinlogs:       req.IncludeBinlogs,
+	}
+	// Refuse an invalid IncludeBinlogs request before the init SQL queries run.
+	if err := mysqlctl.ValidateIncludeBinlogs(backupParams); err != nil {
+		return mysqlctl.BackupOutcome{Result: mysqlctl.BackupUnusable}, err
 	}
 
 	// Perform any requested pre backup initialization queries.

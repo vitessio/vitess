@@ -96,6 +96,8 @@ type BackupParams struct {
 	BackupEngine string
 	// Any SQL that you would like to run before initializing the backup.
 	InitSQL *tabletmanagerdatapb.BackupRequest_InitSQL
+	// IncludeBinlogs includes the source's binlogs in a full builtin backup.
+	IncludeBinlogs bool
 	// ManifestOut, when non-nil, is set by the backup engine to the raw JSON of the
 	// MANIFEST it wrote, so callers can surface it without reading it back from
 	// backup storage. It is optional: for an engine that leaves it unset, the
@@ -135,6 +137,7 @@ func (b *BackupParams) Copy() BackupParams {
 		UpgradeSafe:          b.UpgradeSafe,
 		MysqlShutdownTimeout: b.MysqlShutdownTimeout,
 		InitSQL:              b.InitSQL,
+		IncludeBinlogs:       b.IncludeBinlogs,
 		ManifestOut:          b.ManifestOut,
 	}
 }
@@ -380,6 +383,10 @@ type BackupManifest struct {
 
 	// UpgradeSafe indicates whether the backup is safe to use for an upgrade to a newer MySQL version
 	UpgradeSafe bool
+
+	// IncludesBinlogs is true when the backup contains the source's binlogs, which
+	// a restore installs and keeps instead of resetting gtid_purged.
+	IncludesBinlogs bool `json:",omitempty"`
 
 	// IncrementalDetails is nil for non-incremental backups
 	IncrementalDetails *IncrementalBackupDetails

@@ -52,7 +52,10 @@ const (
 	backupInnodbDataHomeDir     = "InnoDBData"
 	backupInnodbLogGroupHomeDir = "InnoDBLog"
 	backupBinlogDir             = "BinLog"
-	backupData                  = "Data"
+	// backupBinlogStripped marks binlogs stored as binlog.<seq> in BinlogFileEntries,
+	// restored under the target's binlog basename.
+	backupBinlogStripped = "BinLogStripped"
+	backupData           = "Data"
 
 	// backupManifestFileName is the MANIFEST file name within a backup.
 	backupManifestFileName = "MANIFEST"
@@ -132,6 +135,9 @@ func registerBackupFlags(fs *pflag.FlagSet) {
 func Backup(ctx context.Context, params BackupParams) (BackupOutcome, error) {
 	if params.Stats == nil {
 		params.Stats = backupstats.NoStats()
+	}
+	if err := ValidateIncludeBinlogs(params); err != nil {
+		return BackupOutcome{Result: BackupUnusable}, err
 	}
 
 	startTs := time.Now()
@@ -361,10 +367,15 @@ func ShouldRestore(ctx context.Context, logger logutil.Logger, cnf *Mycnf, mysql
 
 // ensureRestoredGTIDPurgedMatchesManifest sees the following: when you restore a full backup, you want the MySQL server to have
 // @@gtid_purged == <gtid-of-backup>. This then also implies that @@gtid_executed equals same value. This is because we restore without
-// any binary logs.
+// any binary logs, unless the backup includes them: then gtid_executed is only checked.
 func ensureRestoredGTIDPurgedMatchesManifest(ctx context.Context, manifest *BackupManifest, params *RestoreParams) error {
 	if manifest == nil {
 		return nil
+	}
+	if manifest.IncludesBinlogs {
+		// gtid_purged now comes from the first restored binlog, and setting it would
+		// RESET the binlogs away; check gtid_executed instead.
+		return verifyRestoredBinlogs(ctx, params.Mysqld, params.Cnf, manifest.Position)
 	}
 	if manifest.Position.GTIDSet == nil {
 		return nil

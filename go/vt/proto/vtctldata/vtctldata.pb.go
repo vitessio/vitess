@@ -2376,10 +2376,13 @@ type BackupRequest struct {
 	// Optional queries to run on the mysqld instance prior to the backup and fields
 	// to control the related behavior.
 	InitSql *tabletmanagerdata.BackupRequest_InitSQL `protobuf:"bytes,8,opt,name=init_sql,json=initSql,proto3" json:"init_sql,omitempty"`
+	// IncludeBinlogs includes the source's binary logs in a full builtin backup.
+	// Restores use them automatically.
+	IncludeBinlogs bool `protobuf:"varint,9,opt,name=include_binlogs,json=includeBinlogs,proto3" json:"include_binlogs,omitempty"`
 	// IncludeOutcome asks for a terminal message carrying the backup's status,
 	// name and MANIFEST at the end of the stream. See
 	// tabletmanagerdata.BackupRequest.include_outcome.
-	IncludeOutcome bool `protobuf:"varint,9,opt,name=include_outcome,json=includeOutcome,proto3" json:"include_outcome,omitempty"`
+	IncludeOutcome bool `protobuf:"varint,10,opt,name=include_outcome,json=includeOutcome,proto3" json:"include_outcome,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -2468,6 +2471,13 @@ func (x *BackupRequest) GetInitSql() *tabletmanagerdata.BackupRequest_InitSQL {
 		return x.InitSql
 	}
 	return nil
+}
+
+func (x *BackupRequest) GetIncludeBinlogs() bool {
+	if x != nil {
+		return x.IncludeBinlogs
+	}
+	return false
 }
 
 func (x *BackupRequest) GetIncludeOutcome() bool {
@@ -2596,10 +2606,13 @@ type BackupShardRequest struct {
 	// Optional queries to run on the mysqld instance prior to the backup and fields
 	// to control the related behavior.
 	InitSql *tabletmanagerdata.BackupRequest_InitSQL `protobuf:"bytes,8,opt,name=init_sql,json=initSql,proto3" json:"init_sql,omitempty"`
+	// IncludeBinlogs includes the source's binary logs in a full builtin backup.
+	// Restores use them automatically.
+	IncludeBinlogs bool `protobuf:"varint,9,opt,name=include_binlogs,json=includeBinlogs,proto3" json:"include_binlogs,omitempty"`
 	// IncludeOutcome asks for a terminal message carrying the backup's status,
 	// name and MANIFEST at the end of the stream. See
 	// tabletmanagerdata.BackupRequest.include_outcome.
-	IncludeOutcome bool `protobuf:"varint,9,opt,name=include_outcome,json=includeOutcome,proto3" json:"include_outcome,omitempty"`
+	IncludeOutcome bool `protobuf:"varint,10,opt,name=include_outcome,json=includeOutcome,proto3" json:"include_outcome,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -2688,6 +2701,13 @@ func (x *BackupShardRequest) GetInitSql() *tabletmanagerdata.BackupRequest_InitS
 		return x.InitSql
 	}
 	return nil
+}
+
+func (x *BackupShardRequest) GetIncludeBinlogs() bool {
+	if x != nil {
+		return x.IncludeBinlogs
+	}
+	return false
 }
 
 func (x *BackupShardRequest) GetIncludeOutcome() bool {
@@ -17783,7 +17803,7 @@ const file_vtctldata_proto_rawDesc = "" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12?\n" +
 	"\x05value\x18\x02 \x01(\v2).vtctldata.ApplyVSchemaResponse.ParamListR\x05value:\x028\x01\x1a#\n" +
 	"\tParamList\x12\x16\n" +
-	"\x06params\x18\x01 \x03(\tR\x06params\"\xd7\x03\n" +
+	"\x06params\x18\x01 \x03(\tR\x06params\"\x80\x04\n" +
 	"\rBackupRequest\x128\n" +
 	"\ftablet_alias\x18\x01 \x01(\v2\x15.topodata.TabletAliasR\vtabletAlias\x12#\n" +
 	"\rallow_primary\x18\x02 \x01(\bR\fallowPrimary\x12 \n" +
@@ -17793,7 +17813,9 @@ const file_vtctldata_proto_rawDesc = "" +
 	"\rbackup_engine\x18\x06 \x01(\tH\x00R\fbackupEngine\x88\x01\x01\x12F\n" +
 	"\x16mysql_shutdown_timeout\x18\a \x01(\v2\x10.vttime.DurationR\x14mysqlShutdownTimeout\x12C\n" +
 	"\binit_sql\x18\b \x01(\v2(.tabletmanagerdata.BackupRequest.InitSQLR\ainitSql\x12'\n" +
-	"\x0finclude_outcome\x18\t \x01(\bR\x0eincludeOutcomeB\x10\n" +
+	"\x0finclude_binlogs\x18\t \x01(\bR\x0eincludeBinlogs\x12'\n" +
+	"\x0finclude_outcome\x18\n" +
+	" \x01(\bR\x0eincludeOutcomeB\x10\n" +
 	"\x0e_backup_engine\"\xa1\x02\n" +
 	"\x0eBackupResponse\x128\n" +
 	"\ftablet_alias\x18\x01 \x01(\v2\x15.topodata.TabletAliasR\vtabletAlias\x12\x1a\n" +
@@ -17803,7 +17825,7 @@ const file_vtctldata_proto_rawDesc = "" +
 	"\bmanifest\x18\x05 \x01(\tR\bmanifest\x12@\n" +
 	"\x06status\x18\x06 \x01(\x0e2(.tabletmanagerdata.BackupResponse.StatusR\x06status\x12\x1f\n" +
 	"\vbackup_name\x18\a \x01(\tR\n" +
-	"backupName\"\x98\x03\n" +
+	"backupName\"\xc1\x03\n" +
 	"\x12BackupShardRequest\x12\x1a\n" +
 	"\bkeyspace\x18\x01 \x01(\tR\bkeyspace\x12\x14\n" +
 	"\x05shard\x18\x02 \x01(\tR\x05shard\x12#\n" +
@@ -17813,7 +17835,9 @@ const file_vtctldata_proto_rawDesc = "" +
 	"\x14incremental_from_pos\x18\x06 \x01(\tR\x12incrementalFromPos\x12F\n" +
 	"\x16mysql_shutdown_timeout\x18\a \x01(\v2\x10.vttime.DurationR\x14mysqlShutdownTimeout\x12C\n" +
 	"\binit_sql\x18\b \x01(\v2(.tabletmanagerdata.BackupRequest.InitSQLR\ainitSql\x12'\n" +
-	"\x0finclude_outcome\x18\t \x01(\bR\x0eincludeOutcome\"|\n" +
+	"\x0finclude_binlogs\x18\t \x01(\bR\x0eincludeBinlogs\x12'\n" +
+	"\x0finclude_outcome\x18\n" +
+	" \x01(\bR\x0eincludeOutcome\"|\n" +
 	"\x1cCancelSchemaMigrationRequest\x12\x1a\n" +
 	"\bkeyspace\x18\x01 \x01(\tR\bkeyspace\x12\x12\n" +
 	"\x04uuid\x18\x02 \x01(\tR\x04uuid\x12,\n" +

@@ -113,6 +113,7 @@ func TestBackupTerminalMessage(t *testing.T) {
 		outcome        mysqlctl.BackupOutcome
 		backupErr      error
 		excludeOutcome bool
+		includeBinlogs bool
 		wantStatus     tabletmanagerdatapb.BackupResponse_Status
 		wantErr        string
 	}{
@@ -122,6 +123,18 @@ func TestBackupTerminalMessage(t *testing.T) {
 			name:           "outcome not requested",
 			outcome:        mysqlctl.BackupOutcome{Name: "b1", Manifest: `{"BackupName":"b1"}`, Result: mysqlctl.BackupUsable},
 			excludeOutcome: true,
+		},
+		{
+			name:           "binlogs without outcome",
+			outcome:        mysqlctl.BackupOutcome{Name: "b1", Manifest: `{"BackupName":"b1"}`, Result: mysqlctl.BackupUsable},
+			excludeOutcome: true,
+			includeBinlogs: true,
+		},
+		{
+			name:           "binlogs with outcome",
+			outcome:        mysqlctl.BackupOutcome{Name: "b1", Manifest: `{"BackupName":"b1"}`, Result: mysqlctl.BackupUsable},
+			includeBinlogs: true,
+			wantStatus:     tabletmanagerdatapb.BackupResponse_USABLE,
 		},
 		{
 			name:       "usable",
@@ -148,7 +161,10 @@ func TestBackupTerminalMessage(t *testing.T) {
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
 			tablet := startServer(t, &backupOutcomeTM{RPCTM: tmrpctest.NewFakeRPCTM(t), outcome: tc.outcome, err: tc.backupErr})
-			stream, err := grpctmclient.NewClient().Backup(t.Context(), tablet, &tabletmanagerdatapb.BackupRequest{IncludeOutcome: !tc.excludeOutcome})
+			stream, err := grpctmclient.NewClient().Backup(t.Context(), tablet, &tabletmanagerdatapb.BackupRequest{
+				IncludeOutcome: !tc.excludeOutcome,
+				IncludeBinlogs: tc.includeBinlogs,
+			})
 			require.NoError(t, err)
 
 			progress, err := stream.Recv()

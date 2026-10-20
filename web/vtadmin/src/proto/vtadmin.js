@@ -97807,6 +97807,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @property {string|null} [backup_engine] BackupRequest backup_engine
          * @property {vttime.Duration.$Properties|null} [mysql_shutdown_timeout] BackupRequest mysql_shutdown_timeout
          * @property {tabletmanagerdata.BackupRequest.InitSQL.$Properties|null} [init_sql] BackupRequest init_sql
+         * @property {boolean|null} [include_binlogs] BackupRequest include_binlogs
          * @property {boolean|null} [include_outcome] BackupRequest include_outcome
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
@@ -97896,6 +97897,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         BackupRequest.prototype.init_sql = null;
 
         /**
+         * BackupRequest include_binlogs.
+         * @member {boolean} include_binlogs
+         * @memberof tabletmanagerdata.BackupRequest
+         * @instance
+         */
+        BackupRequest.prototype.include_binlogs = false;
+
+        /**
          * BackupRequest include_outcome.
          * @member {boolean} include_outcome
          * @memberof tabletmanagerdata.BackupRequest
@@ -97958,8 +97967,10 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 $root.vttime.Duration.encode(message.mysql_shutdown_timeout, writer.uint32(/* id 6, wireType 2 =*/50).fork(), _depth + 1).ldelim();
             if (message.init_sql != null && $Object.hasOwnProperty.call(message, "init_sql"))
                 $root.tabletmanagerdata.BackupRequest.InitSQL.encode(message.init_sql, writer.uint32(/* id 7, wireType 2 =*/58).fork(), _depth + 1).ldelim();
+            if (message.include_binlogs != null && $Object.hasOwnProperty.call(message, "include_binlogs") && message.include_binlogs !== false)
+                writer.uint32(/* id 8, wireType 0 =*/64).bool(message.include_binlogs);
             if (message.include_outcome != null && $Object.hasOwnProperty.call(message, "include_outcome") && message.include_outcome !== false)
-                writer.uint32(/* id 8, wireType 0 =*/64).bool(message.include_outcome);
+                writer.uint32(/* id 9, wireType 0 =*/72).bool(message.include_outcome);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -98076,6 +98087,15 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                         if (wireType !== 0)
                             break;
                         if (value = reader.bool())
+                            message.include_binlogs = value;
+                        else
+                            delete message.include_binlogs;
+                        continue;
+                    }
+                case 9: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.bool())
                             message.include_outcome = value;
                         else
                             delete message.include_outcome;
@@ -98157,6 +98177,9 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 if (error)
                     return "init_sql." + error;
             }
+            if (message.include_binlogs != null && $Object.hasOwnProperty.call(message, "include_binlogs"))
+                if (typeof message.include_binlogs !== "boolean")
+                    return "include_binlogs: boolean expected";
             if (message.include_outcome != null && $Object.hasOwnProperty.call(message, "include_outcome"))
                 if (typeof message.include_outcome !== "boolean")
                     return "include_outcome: boolean expected";
@@ -98205,6 +98228,9 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                     throw $TypeError(".tabletmanagerdata.BackupRequest.init_sql: object expected");
                 message.init_sql = $root.tabletmanagerdata.BackupRequest.InitSQL.fromObject(object.init_sql, _depth + 1);
             }
+            if (object.include_binlogs != null)
+                if (object.include_binlogs)
+                    message.include_binlogs = $Boolean(object.include_binlogs);
             if (object.include_outcome != null)
                 if (object.include_outcome)
                     message.include_outcome = $Boolean(object.include_outcome);
@@ -98235,6 +98261,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 object.upgrade_safe = false;
                 object.mysql_shutdown_timeout = null;
                 object.init_sql = null;
+                object.include_binlogs = false;
                 object.include_outcome = false;
             }
             if (message.concurrency != null && $Object.hasOwnProperty.call(message, "concurrency"))
@@ -98251,6 +98278,8 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 object.mysql_shutdown_timeout = $root.vttime.Duration.toObject(message.mysql_shutdown_timeout, options, _depth + 1);
             if (message.init_sql != null && $Object.hasOwnProperty.call(message, "init_sql"))
                 object.init_sql = $root.tabletmanagerdata.BackupRequest.InitSQL.toObject(message.init_sql, options, _depth + 1);
+            if (message.include_binlogs != null && $Object.hasOwnProperty.call(message, "include_binlogs"))
+                object.include_binlogs = message.include_binlogs;
             if (message.include_outcome != null && $Object.hasOwnProperty.call(message, "include_outcome"))
                 object.include_outcome = message.include_outcome;
             return object;
@@ -181822,6 +181851,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {string|null} [backup_engine] BackupRequest backup_engine
          * @property {vttime.Duration.$Properties|null} [mysql_shutdown_timeout] BackupRequest mysql_shutdown_timeout
          * @property {tabletmanagerdata.BackupRequest.InitSQL.$Properties|null} [init_sql] BackupRequest init_sql
+         * @property {boolean|null} [include_binlogs] BackupRequest include_binlogs
          * @property {boolean|null} [include_outcome] BackupRequest include_outcome
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
@@ -181919,6 +181949,14 @@ export const vtctldata = $root.vtctldata = (() => {
         BackupRequest.prototype.init_sql = null;
 
         /**
+         * BackupRequest include_binlogs.
+         * @member {boolean} include_binlogs
+         * @memberof vtctldata.BackupRequest
+         * @instance
+         */
+        BackupRequest.prototype.include_binlogs = false;
+
+        /**
          * BackupRequest include_outcome.
          * @member {boolean} include_outcome
          * @memberof vtctldata.BackupRequest
@@ -181983,8 +182021,10 @@ export const vtctldata = $root.vtctldata = (() => {
                 $root.vttime.Duration.encode(message.mysql_shutdown_timeout, writer.uint32(/* id 7, wireType 2 =*/58).fork(), _depth + 1).ldelim();
             if (message.init_sql != null && $Object.hasOwnProperty.call(message, "init_sql"))
                 $root.tabletmanagerdata.BackupRequest.InitSQL.encode(message.init_sql, writer.uint32(/* id 8, wireType 2 =*/66).fork(), _depth + 1).ldelim();
+            if (message.include_binlogs != null && $Object.hasOwnProperty.call(message, "include_binlogs") && message.include_binlogs !== false)
+                writer.uint32(/* id 9, wireType 0 =*/72).bool(message.include_binlogs);
             if (message.include_outcome != null && $Object.hasOwnProperty.call(message, "include_outcome") && message.include_outcome !== false)
-                writer.uint32(/* id 9, wireType 0 =*/72).bool(message.include_outcome);
+                writer.uint32(/* id 10, wireType 0 =*/80).bool(message.include_outcome);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -182107,6 +182147,15 @@ export const vtctldata = $root.vtctldata = (() => {
                         if (wireType !== 0)
                             break;
                         if (value = reader.bool())
+                            message.include_binlogs = value;
+                        else
+                            delete message.include_binlogs;
+                        continue;
+                    }
+                case 10: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.bool())
                             message.include_outcome = value;
                         else
                             delete message.include_outcome;
@@ -182193,6 +182242,9 @@ export const vtctldata = $root.vtctldata = (() => {
                 if (error)
                     return "init_sql." + error;
             }
+            if (message.include_binlogs != null && $Object.hasOwnProperty.call(message, "include_binlogs"))
+                if (typeof message.include_binlogs !== "boolean")
+                    return "include_binlogs: boolean expected";
             if (message.include_outcome != null && $Object.hasOwnProperty.call(message, "include_outcome"))
                 if (typeof message.include_outcome !== "boolean")
                     return "include_outcome: boolean expected";
@@ -182246,6 +182298,9 @@ export const vtctldata = $root.vtctldata = (() => {
                     throw $TypeError(".vtctldata.BackupRequest.init_sql: object expected");
                 message.init_sql = $root.tabletmanagerdata.BackupRequest.InitSQL.fromObject(object.init_sql, _depth + 1);
             }
+            if (object.include_binlogs != null)
+                if (object.include_binlogs)
+                    message.include_binlogs = $Boolean(object.include_binlogs);
             if (object.include_outcome != null)
                 if (object.include_outcome)
                     message.include_outcome = $Boolean(object.include_outcome);
@@ -182277,6 +182332,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 object.upgrade_safe = false;
                 object.mysql_shutdown_timeout = null;
                 object.init_sql = null;
+                object.include_binlogs = false;
                 object.include_outcome = false;
             }
             if (message.tablet_alias != null && $Object.hasOwnProperty.call(message, "tablet_alias"))
@@ -182295,6 +182351,8 @@ export const vtctldata = $root.vtctldata = (() => {
                 object.mysql_shutdown_timeout = $root.vttime.Duration.toObject(message.mysql_shutdown_timeout, options, _depth + 1);
             if (message.init_sql != null && $Object.hasOwnProperty.call(message, "init_sql"))
                 object.init_sql = $root.tabletmanagerdata.BackupRequest.InitSQL.toObject(message.init_sql, options, _depth + 1);
+            if (message.include_binlogs != null && $Object.hasOwnProperty.call(message, "include_binlogs"))
+                object.include_binlogs = message.include_binlogs;
             if (message.include_outcome != null && $Object.hasOwnProperty.call(message, "include_outcome"))
                 object.include_outcome = message.include_outcome;
             return object;
@@ -182808,6 +182866,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {string|null} [incremental_from_pos] BackupShardRequest incremental_from_pos
          * @property {vttime.Duration.$Properties|null} [mysql_shutdown_timeout] BackupShardRequest mysql_shutdown_timeout
          * @property {tabletmanagerdata.BackupRequest.InitSQL.$Properties|null} [init_sql] BackupShardRequest init_sql
+         * @property {boolean|null} [include_binlogs] BackupShardRequest include_binlogs
          * @property {boolean|null} [include_outcome] BackupShardRequest include_outcome
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
@@ -182905,6 +182964,14 @@ export const vtctldata = $root.vtctldata = (() => {
         BackupShardRequest.prototype.init_sql = null;
 
         /**
+         * BackupShardRequest include_binlogs.
+         * @member {boolean} include_binlogs
+         * @memberof vtctldata.BackupShardRequest
+         * @instance
+         */
+        BackupShardRequest.prototype.include_binlogs = false;
+
+        /**
          * BackupShardRequest include_outcome.
          * @member {boolean} include_outcome
          * @memberof vtctldata.BackupShardRequest
@@ -182960,8 +183027,10 @@ export const vtctldata = $root.vtctldata = (() => {
                 $root.vttime.Duration.encode(message.mysql_shutdown_timeout, writer.uint32(/* id 7, wireType 2 =*/58).fork(), _depth + 1).ldelim();
             if (message.init_sql != null && $Object.hasOwnProperty.call(message, "init_sql"))
                 $root.tabletmanagerdata.BackupRequest.InitSQL.encode(message.init_sql, writer.uint32(/* id 8, wireType 2 =*/66).fork(), _depth + 1).ldelim();
+            if (message.include_binlogs != null && $Object.hasOwnProperty.call(message, "include_binlogs") && message.include_binlogs !== false)
+                writer.uint32(/* id 9, wireType 0 =*/72).bool(message.include_binlogs);
             if (message.include_outcome != null && $Object.hasOwnProperty.call(message, "include_outcome") && message.include_outcome !== false)
-                writer.uint32(/* id 9, wireType 0 =*/72).bool(message.include_outcome);
+                writer.uint32(/* id 10, wireType 0 =*/80).bool(message.include_outcome);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -183089,6 +183158,15 @@ export const vtctldata = $root.vtctldata = (() => {
                         if (wireType !== 0)
                             break;
                         if (value = reader.bool())
+                            message.include_binlogs = value;
+                        else
+                            delete message.include_binlogs;
+                        continue;
+                    }
+                case 10: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.bool())
                             message.include_outcome = value;
                         else
                             delete message.include_outcome;
@@ -183170,6 +183248,9 @@ export const vtctldata = $root.vtctldata = (() => {
                 if (error)
                     return "init_sql." + error;
             }
+            if (message.include_binlogs != null && $Object.hasOwnProperty.call(message, "include_binlogs"))
+                if (typeof message.include_binlogs !== "boolean")
+                    return "include_binlogs: boolean expected";
             if (message.include_outcome != null && $Object.hasOwnProperty.call(message, "include_outcome"))
                 if (typeof message.include_outcome !== "boolean")
                     return "include_outcome: boolean expected";
@@ -183222,6 +183303,9 @@ export const vtctldata = $root.vtctldata = (() => {
                     throw $TypeError(".vtctldata.BackupShardRequest.init_sql: object expected");
                 message.init_sql = $root.tabletmanagerdata.BackupRequest.InitSQL.fromObject(object.init_sql, _depth + 1);
             }
+            if (object.include_binlogs != null)
+                if (object.include_binlogs)
+                    message.include_binlogs = $Boolean(object.include_binlogs);
             if (object.include_outcome != null)
                 if (object.include_outcome)
                     message.include_outcome = $Boolean(object.include_outcome);
@@ -183254,6 +183338,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 object.incremental_from_pos = "";
                 object.mysql_shutdown_timeout = null;
                 object.init_sql = null;
+                object.include_binlogs = false;
                 object.include_outcome = false;
             }
             if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
@@ -183272,6 +183357,8 @@ export const vtctldata = $root.vtctldata = (() => {
                 object.mysql_shutdown_timeout = $root.vttime.Duration.toObject(message.mysql_shutdown_timeout, options, _depth + 1);
             if (message.init_sql != null && $Object.hasOwnProperty.call(message, "init_sql"))
                 object.init_sql = $root.tabletmanagerdata.BackupRequest.InitSQL.toObject(message.init_sql, options, _depth + 1);
+            if (message.include_binlogs != null && $Object.hasOwnProperty.call(message, "include_binlogs"))
+                object.include_binlogs = message.include_binlogs;
             if (message.include_outcome != null && $Object.hasOwnProperty.call(message, "include_outcome"))
                 object.include_outcome = message.include_outcome;
             return object;

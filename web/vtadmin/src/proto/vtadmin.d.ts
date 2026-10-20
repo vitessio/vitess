@@ -39110,6 +39110,9 @@ export namespace tabletmanagerdata {
         /** BackupRequest init_sql. */
         init_sql?: (tabletmanagerdata.BackupRequest.InitSQL.$Properties|null);
 
+        /** BackupRequest include_binlogs. */
+        include_binlogs: boolean;
+
         /** BackupRequest include_outcome. */
         include_outcome: boolean;
 
@@ -39217,6 +39220,9 @@ export namespace tabletmanagerdata {
 
             /** BackupRequest init_sql */
             init_sql?: (tabletmanagerdata.BackupRequest.InitSQL.$Properties|null);
+
+            /** BackupRequest include_binlogs */
+            include_binlogs?: (boolean|null);
 
             /** BackupRequest include_outcome */
             include_outcome?: (boolean|null);
@@ -67981,6 +67987,9 @@ export namespace vtctldata {
         /** BackupRequest init_sql. */
         init_sql?: (tabletmanagerdata.BackupRequest.InitSQL.$Properties|null);
 
+        /** BackupRequest include_binlogs. */
+        include_binlogs: boolean;
+
         /** BackupRequest include_outcome. */
         include_outcome: boolean;
 
@@ -68091,6 +68100,9 @@ export namespace vtctldata {
 
             /** BackupRequest init_sql */
             init_sql?: (tabletmanagerdata.BackupRequest.InitSQL.$Properties|null);
+
+            /** BackupRequest include_binlogs */
+            include_binlogs?: (boolean|null);
 
             /** BackupRequest include_outcome */
             include_outcome?: (boolean|null);
@@ -68299,6 +68311,9 @@ export namespace vtctldata {
         /** BackupShardRequest init_sql. */
         init_sql?: (tabletmanagerdata.BackupRequest.InitSQL.$Properties|null);
 
+        /** BackupShardRequest include_binlogs. */
+        include_binlogs: boolean;
+
         /** BackupShardRequest include_outcome. */
         include_outcome: boolean;
 
@@ -68409,6 +68424,9 @@ export namespace vtctldata {
 
             /** BackupShardRequest init_sql */
             init_sql?: (tabletmanagerdata.BackupRequest.InitSQL.$Properties|null);
+
+            /** BackupShardRequest include_binlogs */
+            include_binlogs?: (boolean|null);
 
             /** BackupShardRequest include_outcome */
             include_outcome?: (boolean|null);

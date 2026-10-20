@@ -17,7 +17,9 @@ limitations under the License.
 package cluster
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path"
@@ -85,7 +87,9 @@ func (vtbackup *VtbackupProcess) Setup() (err error) {
 		vtbackup.proc.Args = append(vtbackup.proc.Args, vtbackup.ExtraArgs...)
 	}
 
-	vtbackup.proc.Stderr = os.Stderr
+	// Keep the end of stderr so a failed run's error says why it failed.
+	var stderr bytes.Buffer
+	vtbackup.proc.Stderr = io.MultiWriter(os.Stderr, &stderr)
 	vtbackup.proc.Stdout = os.Stdout
 
 	vtbackup.proc.Env = append(vtbackup.proc.Env, os.Environ()...)
@@ -94,7 +98,9 @@ func (vtbackup *VtbackupProcess) Setup() (err error) {
 
 	err = vtbackup.proc.Run()
 	if err != nil {
-		return
+		tail := stderr.Bytes()
+		tail = tail[max(0, len(tail)-4096):]
+		return fmt.Errorf("%w: %s", err, tail)
 	}
 
 	vtbackup.exit = make(chan error)

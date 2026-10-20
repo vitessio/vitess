@@ -84,6 +84,7 @@ var (
 	allowFirstBackup    bool
 	restartBeforeBackup bool
 	upgradeSafe         bool
+	includeBinlogs      bool
 	initSQLQueries      []string
 	initSQLTabletTypes  []topodatapb.TabletType
 	initSQLTimeout      time.Duration
@@ -218,6 +219,7 @@ func init() {
 	utils.SetFlagBoolVar(Main.Flags(), &allowFirstBackup, "allow-first-backup", allowFirstBackup, "Allow this job to take the first backup of an existing shard.")
 	utils.SetFlagBoolVar(Main.Flags(), &restartBeforeBackup, "restart-before-backup", restartBeforeBackup, "Perform a mysqld clean/full restart after applying binlogs, but before taking the backup. Only makes sense to work around xtrabackup bugs.")
 	Main.Flags().BoolVar(&upgradeSafe, "upgrade-safe", upgradeSafe, "Whether to use innodb_fast_shutdown=0 for the backup so it is safe to use for MySQL upgrades.")
+	Main.Flags().BoolVar(&includeBinlogs, "include-binlogs", includeBinlogs, "Include the source's binary logs in a full builtin backup. Restores use them automatically.")
 	Main.Flags().StringSliceVar(&initSQLQueries, "init-backup-sql-queries", nil, "Queries to execute after catch-up replication, before initializing the backup")
 	Main.Flags().Var((*topoproto.TabletTypeListFlag)(&initSQLTabletTypes), "init-backup-tablet-types", "Tablet types used for the backup where the init SQL queries (--init-backup-sql-queries) will be executed after catch-up replication, before initializing the backup")
 	Main.Flags().DurationVar(&initSQLTimeout, "init-backup-sql-timeout", initSQLTimeout, "At what point should we time out the init SQL query (--init-backup-sql-queries) work and either fail the backup job (--init-backup-sql-fail-on-error) or continue on with the backup")
@@ -423,6 +425,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		TabletType:           topodatapb.TabletType_BACKUP,
 		Stats:                backupstats.BackupStats(),
 		UpgradeSafe:          upgradeSafe,
+		IncludeBinlogs:       includeBinlogs,
 		MysqlShutdownTimeout: mysqlShutdownTimeout,
 		InitSQL: &tabletmanagerdatapb.BackupRequest_InitSQL{
 			Queries:     initSQLQueries,
@@ -431,6 +434,10 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 			FailOnError: initSQLFailOnError,
 		},
 	}
+	if err := validateBinlogFlags(backupParams, restoreWithClone); err != nil {
+		return err
+	}
+
 	// In initial_backup mode, just take a backup of this empty database.
 	if initialBackup {
 		// Take a backup of this empty DB without restoring anything.
@@ -481,12 +488,12 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		restoreCtx = ctx
 	}
 
-	restorePos, err := restoreForBackup(restoreCtx, mysqlTermHandler, topoServer, mysqld, mycnf, dbName, extraEnv)
+	restorePos, keepBinlogs, err := restoreForBackup(restoreCtx, mysqlTermHandler, topoServer, mysqld, mycnf, dbName, extraEnv)
 	if err != nil {
 		return err
 	}
 
-	if err := runBackup(shutdownCtx, topoServer, mysqld, mycnf, restorePos, &backupParams); err != nil {
+	if err := runBackup(shutdownCtx, topoServer, mysqld, mycnf, restorePos, keepBinlogs, &backupParams); err != nil {
 		return err
 	}
 
@@ -494,9 +501,22 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	return nil
 }
 
+// validateBinlogFlags fails before the restore, rather than after catching up, when
+// the binlogs cannot be backed up. CLONE does not copy binlogs, so the history would
+// silently restart.
+func validateBinlogFlags(params mysqlctl.BackupParams, restoreWithClone bool) error {
+	if !params.IncludeBinlogs {
+		return nil
+	}
+	if restoreWithClone {
+		return vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "--include-binlogs cannot be used with --restore-with-clone: CLONE does not copy binary logs")
+	}
+	return mysqlctl.ValidateIncludeBinlogs(params)
+}
+
 // restoreForBackup runs the restore step and returns the position the rest of
-// the backup job should use.
-func restoreForBackup(ctx context.Context, mysqlTermHandler *mySQLTermHandler, topoServer *topo.Server, mysqld mysqlctl.MysqlDaemon, mycnf *mysqlctl.Mycnf, dbName string, extraEnv map[string]string) (replication.Position, error) {
+// the backup job should use, and whether the restore installed the backup's binlogs.
+func restoreForBackup(ctx context.Context, mysqlTermHandler *mySQLTermHandler, topoServer *topo.Server, mysqld mysqlctl.MysqlDaemon, mycnf *mysqlctl.Mycnf, dbName string, extraEnv map[string]string) (replication.Position, bool, error) {
 	if restoreWithClone {
 		var restorePos replication.Position
 
@@ -511,10 +531,10 @@ func restoreForBackup(ctx context.Context, mysqlTermHandler *mySQLTermHandler, t
 			return err
 		})
 		if err != nil {
-			return replication.Position{}, vterrors.Wrap(err, "restore with clone failed")
+			return replication.Position{}, false, vterrors.Wrap(err, "restore with clone failed")
 		}
 
-		return restorePos, nil
+		return restorePos, false, nil
 	}
 
 	phase.Set(phaseNameRestoreLastBackup, int64(1))
@@ -545,23 +565,23 @@ func restoreForBackup(ctx context.Context, mysqlTermHandler *mySQLTermHandler, t
 		// If err is nil, we expect backupManifest to be non-nil.
 		log.Info(fmt.Sprintf("Successfully restored from backup at replication position %v", backupManifest.Position))
 		deprecatedDurationByPhase.Set("RestoreLastBackup", int64(time.Since(restoreAt).Seconds()))
-		return backupManifest.Position, nil
+		return backupManifest.Position, backupManifest.IncludesBinlogs, nil
 	case mysqlctl.ErrNoBackup:
 		// There is no backup found, but we may be taking the initial backup of a shard.
 		if !allowFirstBackup {
-			return replication.Position{}, vterrors.New(vtrpc.Code_FAILED_PRECONDITION, "no backup found; not starting up empty since --allow-first-backup flag was not enabled")
+			return replication.Position{}, false, vterrors.New(vtrpc.Code_FAILED_PRECONDITION, "no backup found; not starting up empty since --allow-first-backup flag was not enabled")
 		}
 
 		deprecatedDurationByPhase.Set("RestoreLastBackup", int64(time.Since(restoreAt).Seconds()))
-		return replication.Position{}, nil
+		return replication.Position{}, false, nil
 	default:
-		return replication.Position{}, vterrors.Wrap(err, "can't restore from backup")
+		return replication.Position{}, false, vterrors.Wrap(err, "can't restore from backup")
 	}
 }
 
 // runBackup starts replication from the restore position, catches up to the
 // current primary position, and takes a new backup.
-func runBackup(ctx context.Context, topoServer *topo.Server, mysqld *mysqlctl.Mysqld, mycnf *mysqlctl.Mycnf, restorePos replication.Position, backupParams *mysqlctl.BackupParams) error {
+func runBackup(ctx context.Context, topoServer *topo.Server, mysqld *mysqlctl.Mysqld, mycnf *mysqlctl.Mycnf, restorePos replication.Position, keepBinlogs bool, backupParams *mysqlctl.BackupParams) error {
 	// As of MySQL 8.0.21, you can disable redo logging using the ALTER INSTANCE
 	// DISABLE INNODB REDO_LOG statement. This functionality is intended for
 	// loading data into a new MySQL instance. Disabling redo logging speeds up
@@ -576,7 +596,7 @@ func runBackup(ctx context.Context, topoServer *topo.Server, mysqld *mysqlctl.My
 	}
 
 	// We have restored a backup. Now start replication.
-	if err := resetReplication(ctx, restorePos, mysqld); err != nil {
+	if err := resetReplication(ctx, restorePos, keepBinlogs, mysqld); err != nil {
 		return fmt.Errorf("error resetting replication: %v", err)
 	}
 	if err := startReplication(ctx, mysqld, topoServer); err != nil {
@@ -774,12 +794,18 @@ func catchUpReplicationForBackup(ctx context.Context, topoServer *topo.Server, m
 	return status, nil
 }
 
-func resetReplication(ctx context.Context, pos replication.Position, mysqld mysqlctl.MysqlDaemon) error {
+func resetReplication(ctx context.Context, pos replication.Position, keepBinlogs bool, mysqld mysqlctl.MysqlDaemon) error {
 	if err := mysqld.StopReplication(ctx, nil); err != nil {
 		return vterrors.Wrap(err, "failed to stop replication")
 	}
 	if err := mysqld.ResetReplicationParameters(ctx); err != nil {
 		return vterrors.Wrap(err, "failed to reset replication")
+	}
+
+	if keepBinlogs {
+		// The restored binlogs already put gtid_executed at pos; setting the position
+		// or resetting replication would delete them.
+		return nil
 	}
 
 	// Check if we have a position to resume from, if not reset to the beginning of time

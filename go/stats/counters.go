@@ -191,10 +191,7 @@ func NewCountersWithMultiLabels(name, help string, labels []string) *CountersWit
 		counts:         make(map[string]*atomic.Int64),
 		help:           help,
 		labels:         labels,
-		combinedLabels: make([]bool, len(labels)),
-	}
-	for i, label := range labels {
-		t.combinedLabels[i] = IsDimensionCombined(label)
+		combinedLabels: CombinedLabels(labels),
 	}
 	if name != "" {
 		publish(name, t)

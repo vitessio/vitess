@@ -268,26 +268,28 @@ func TestBackupCommand_BuildsCorrectRequest(t *testing.T) {
 	}
 }
 
-// fakeBackupServer records whether Backup and BackupShard requests asked for the
-// outcome, then returns err.
+// fakeBackupServer records the Backup and BackupShard request flags, then returns err.
 type fakeBackupServer struct {
 	vtctlservicepb.UnimplementedVtctldServer
 	includeOutcome bool
+	includeBinlogs bool
 	err            error
 }
 
 func (s *fakeBackupServer) Backup(req *vtctldatapb.BackupRequest, _ vtctlservicepb.Vtctld_BackupServer) error {
 	s.includeOutcome = req.IncludeOutcome
+	s.includeBinlogs = req.IncludeBinlogs
 	return s.err
 }
 
 func (s *fakeBackupServer) BackupShard(req *vtctldatapb.BackupShardRequest, _ vtctlservicepb.Vtctld_BackupShardServer) error {
 	s.includeOutcome = req.IncludeOutcome
+	s.includeBinlogs = req.IncludeBinlogs
 	return s.err
 }
 
 // TestBackupCommands_JSONOutputWiring runs Backup and BackupShard against a local
-// server to check each command asks for the outcome only with its own --json.
+// server to check that --json and --include-binlogs set independent request flags.
 func TestBackupCommands_JSONOutputWiring(t *testing.T) {
 	originalProtocol := VtctldClientProtocol
 	VtctldClientProtocol = "local"
@@ -296,6 +298,8 @@ func TestBackupCommands_JSONOutputWiring(t *testing.T) {
 		VtctldClientProtocol = originalProtocol
 		backupOptions.OutputJSON = false
 		backupShardOptions.OutputJSON = false
+		backupOptions.IncludeBinlogs = false
+		backupShardOptions.IncludeBinlogs = false
 	})
 
 	testCases := []struct {
@@ -303,6 +307,7 @@ func TestBackupCommands_JSONOutputWiring(t *testing.T) {
 		args               []string
 		streamErr          error
 		wantIncludeOutcome bool
+		wantIncludeBinlogs bool
 		wantErr            string
 	}{
 		{
@@ -315,6 +320,17 @@ func TestBackupCommands_JSONOutputWiring(t *testing.T) {
 			args: []string{"Backup", "zone1-100"},
 		},
 		{
+			name:               "Backup --include-binlogs",
+			args:               []string{"Backup", "--include-binlogs", "zone1-100"},
+			wantIncludeBinlogs: true,
+		},
+		{
+			name:               "Backup --json --include-binlogs",
+			args:               []string{"Backup", "--json", "--include-binlogs", "zone1-100"},
+			wantIncludeOutcome: true,
+			wantIncludeBinlogs: true,
+		},
+		{
 			name:               "BackupShard --json",
 			args:               []string{"BackupShard", "--json", "ks/0"},
 			wantIncludeOutcome: true,
@@ -322,6 +338,17 @@ func TestBackupCommands_JSONOutputWiring(t *testing.T) {
 		{
 			name: "BackupShard without --json",
 			args: []string{"BackupShard", "ks/0"},
+		},
+		{
+			name:               "BackupShard --include-binlogs",
+			args:               []string{"BackupShard", "--include-binlogs", "ks/0"},
+			wantIncludeBinlogs: true,
+		},
+		{
+			name:               "BackupShard --json --include-binlogs",
+			args:               []string{"BackupShard", "--json", "--include-binlogs", "ks/0"},
+			wantIncludeOutcome: true,
+			wantIncludeBinlogs: true,
 		},
 		{
 			name:      "Backup stream error",
@@ -342,12 +369,15 @@ func TestBackupCommands_JSONOutputWiring(t *testing.T) {
 			// Flag-bound globals persist across Root.Execute calls.
 			backupOptions.OutputJSON = false
 			backupShardOptions.OutputJSON = false
+			backupOptions.IncludeBinlogs = false
+			backupShardOptions.IncludeBinlogs = false
 			backupOptions.InitSQLQueries = nil
 			backupOptions.InitSQLTabletTypes = nil
 			backupOptions.InitSQLTimeout = 0
 			backupOptions.InitSQLFailOnError = false
 			for _, cmd := range []*cobra.Command{Backup, BackupShard} {
 				cmd.Flags().Lookup("json").Changed = false
+				cmd.Flags().Lookup("include-binlogs").Changed = false
 			}
 
 			server := &fakeBackupServer{err: tc.streamErr}
@@ -361,6 +391,7 @@ func TestBackupCommands_JSONOutputWiring(t *testing.T) {
 			}
 			require.NoError(t, err)
 			assert.Equal(t, tc.wantIncludeOutcome, server.includeOutcome)
+			assert.Equal(t, tc.wantIncludeBinlogs, server.includeBinlogs)
 		})
 	}
 }
