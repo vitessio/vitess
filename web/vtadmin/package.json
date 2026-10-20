@@ -13,7 +13,7 @@
   "dependencies": {
     "@bugsnag/js": "^8.10.0",
     "@headlessui/react": "^2.2.10",
-    "@tanstack/react-query": "^5.102.8",
+    "@tanstack/react-query": "^5.103.1",
     "@xyflow/react": "^12.11.6",
     "classnames": "^2.3.2",
     "d3": "^7.9.0",
@@ -29,11 +29,11 @@
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "react-json-tree": "^0.20.0",
-    "react-router-dom": "^7.18.3",
+    "react-router-dom": "^7.18.4",
     "react-tiny-popover": "^8.1.6",
     "react-toastify": "^11.1.0",
     "svgo": "^4.1.0",
-    "web-vitals": "^6.2.1"
+    "web-vitals": "^6.2.2"
   },
   "scripts": {
     "local": "VITE_VTADMIN_API_ADDRESS=\"http://localhost:14200\" VITE_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS=\"true\" PORT=14201 vite",
@@ -68,7 +68,7 @@
     ]
   },
   "devDependencies": {
-    "@eslint-react/eslint-plugin": "^5.19.1",
+    "@eslint-react/eslint-plugin": "^5.20.2",
     "@eslint/js": "^10.0.1",
     "@rollup/plugin-commonjs": "^29.0.3",
     "@tailwindcss/postcss": "^4.3.3",
@@ -79,22 +79,22 @@
     "@types/d3": "^7.4.3",
     "@types/jest": "^30.0.0",
     "@types/lodash-es": "^4.17.4",
-    "@types/node": "^26.5.1",
+    "@types/node": "^26.6.2",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@types/react-router-dom": "^5.3.3",
     "@vitejs/plugin-react": "^6.1.1",
-    "autoprefixer": "^10.6.0",
+    "autoprefixer": "^10.6.1",
     "cross-fetch": "^4.1.0",
-    "eslint": "^10.10.0",
+    "eslint": "^10.11.0",
     "eslint-plugin-jsx-a11y-x": "^0.2.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^17.12.0",
     "i": "^0.3.7",
-    "jsdom": "^30.0.1",
+    "jsdom": "^30.1.0",
     "msw": "^2.15.0",
     "postcss": "^8.5.10",
-    "prettier": "^3.9.6",
+    "prettier": "^3.9.8",
     "protobufjs-cli": "^2.7.0",
     "sass": "^1.104.1",
     "serve": "^14.2.6",
@@ -106,6 +106,6 @@
     "vite": "^8.3.0",
     "vite-plugin-eslint2": "^5.3.0",
     "vite-plugin-svgr": "^5.2.0",
-    "vitest": "^5.0.0"
+    "vitest": "^5.0.1"
   }
 }
