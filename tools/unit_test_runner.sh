@@ -27,10 +27,15 @@ if [[ -z $VT_GO_PARALLEL && -n $VT_GO_PARALLEL_VALUE ]]; then
 	VT_GO_PARALLEL="-p $VT_GO_PARALLEL_VALUE"
 fi
 
-# Enable race detector if RACE=1
+# Compile the tests with -trimpath, and without cgo like "make build", so that
+# their Go build cache entries do not depend on where the checkout and the
+# module cache are: the go_cache_warm workflow builds them on another runner.
+# Enable race detector if RACE=1; it needs cgo.
 RACE_FLAG=""
 if [[ "$RACE" == "1" ]]; then
 	RACE_FLAG="-race"
+else
+	export CGO_ENABLED=0
 fi
 
 # Enable race detector if RACE=1
@@ -75,4 +80,4 @@ if [[ -n "${JSON_OUTPUT:-}" ]]; then
 fi
 
 # shellcheck disable=SC2086
-go tool -modfile=tools/gotestsum/go.mod gotestsum $GOTESTSUM_ARGS --packages="$packages_with_tests" -- $VT_GO_PARALLEL $RACE_FLAG -count=1
+go run -trimpath -modfile=tools/gotestsum/go.mod gotest.tools/gotestsum $GOTESTSUM_ARGS --packages="$packages_with_tests" -- $VT_GO_PARALLEL $RACE_FLAG -trimpath -count=1
