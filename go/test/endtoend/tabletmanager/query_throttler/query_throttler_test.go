@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 
@@ -172,7 +173,9 @@ func disabledConfig() *querythrottlerpb.Config {
 	return &querythrottlerpb.Config{Enabled: false}
 }
 
-// waitForThrottledQuery polls vtgate until the given query returns an error containing expectError.
+// waitForThrottledQuery polls vtgate until the given query returns an error containing
+// expectError. A query throttler rejection must reach the client as ER_OUT_OF_RESOURCES
+// (1041), so the errno is checked as well.
 func waitForThrottledQuery(t *testing.T, query string, expectError string) {
 	t.Helper()
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
@@ -183,6 +186,10 @@ func waitForThrottledQuery(t *testing.T, query string, expectError string) {
 		_, err = conn.ExecuteFetch(query, 1000, true)
 		require.Error(c, err, "query %q still succeeding, expected error containing %q", query, expectError)
 		assert.Contains(c, err.Error(), expectError)
+		var sqlErr *sqlerror.SQLError
+		if assert.ErrorAs(c, err, &sqlErr, "expected a MySQL error") {
+			assert.Equal(c, sqlerror.EROutOfResources, sqlErr.Number(), "unexpected errno for throttled query: %v", err)
+		}
 	}, waitTimeout, 2*time.Second)
 }
 
