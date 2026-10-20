@@ -280,8 +280,11 @@ type testTMClient struct {
 	updateVReplicationWorklowRequests  map[uint32][]*updateVReplicationWorkflowRequestResponse
 	applySchemaRequests                map[uint32][]*applySchemaRequestResponse
 	primaryPositions                   map[uint32]string
+	primaryPositionErrors              map[uint32]error
 	vdiffRequests                      map[uint32]*vdiffRequestResponse
 	refreshStateErrors                 map[uint32]error
+	// How long each RefreshState call takes. Set it before use.
+	refreshStateDelay time.Duration
 
 	// Stack of ReadVReplicationWorkflowsResponse to return, in order, for each shard
 	readVReplicationWorkflowsResponses       map[string][]*tabletmanagerdatapb.ReadVReplicationWorkflowsResponse
@@ -818,9 +821,21 @@ func (tmc *testTMClient) setPrimaryPosition(tablet *topodatapb.Tablet, position 
 	tmc.primaryPositions[tablet.Alias.Uid] = position
 }
 
+func (tmc *testTMClient) setPrimaryPositionError(tablet *topodatapb.Tablet, err error) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
+	if tmc.primaryPositionErrors == nil {
+		tmc.primaryPositionErrors = make(map[uint32]error)
+	}
+	tmc.primaryPositionErrors[tablet.Alias.Uid] = err
+}
+
 func (tmc *testTMClient) PrimaryPosition(ctx context.Context, tablet *topodatapb.Tablet) (string, error) {
 	tmc.mu.Lock()
 	defer tmc.mu.Unlock()
+	if err := tmc.primaryPositionErrors[tablet.Alias.Uid]; err != nil {
+		return "", err
+	}
 	if tmc.primaryPositions != nil && tmc.primaryPositions[tablet.Alias.Uid] != "" {
 		return tmc.primaryPositions[tablet.Alias.Uid], nil
 	}
@@ -846,6 +861,13 @@ func (tmc *testTMClient) SetRefreshStateError(tablet *topodatapb.Tablet, err err
 }
 
 func (tmc *testTMClient) RefreshState(ctx context.Context, tablet *topodatapb.Tablet) error {
+	if tmc.refreshStateDelay > 0 {
+		select {
+		case <-time.After(tmc.refreshStateDelay):
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
 	tmc.mu.Lock()
 	defer tmc.mu.Unlock()
 

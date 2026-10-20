@@ -637,7 +637,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 					err = fmt.Errorf("tablet %s is no longer healthy: %s, restarting vstream",
 						topoproto.TabletAliasString(tablet.Alias), shr.RealtimeStats.HealthError)
 				case shr.RealtimeStats.ReplicationLagSeconds > uint32(discovery.GetLowReplicationLag().Seconds()):
-					err = fmt.Errorf("tablet %s has a replication lag of %d seconds which is beyond the value provided in --discovery_low_replication_lag of %s so the tablet is no longer considered healthy, restarting vstream",
+					err = fmt.Errorf("tablet %s has a replication lag of %d seconds which is beyond the value provided in --discovery-low-replication-lag of %s so the tablet is no longer considered healthy, restarting vstream",
 						topoproto.TabletAliasString(tablet.Alias), shr.RealtimeStats.ReplicationLagSeconds, discovery.GetLowReplicationLag())
 				}
 				if err != nil {

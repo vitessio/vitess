@@ -175,6 +175,12 @@ type (
 		// NeedsReservedConn marks this session as needing a dedicated connection to underlying database
 		NeedsReservedConn()
 
+		// ResetReservedConn clears the mark NeedsReservedConn set. It is for a
+		// caller that marked the session for an operation that then failed
+		// before any connection was reserved; the caller checks ShardSession
+		// for that, as a failed reservation is still recorded there.
+		ResetReservedConn()
+
 		// InReservedConn provides whether this session is using reserved connection
 		InReservedConn() bool
 

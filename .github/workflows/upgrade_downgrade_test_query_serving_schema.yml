@@ -31,7 +31,7 @@ jobs:
       previous_release_ref: ${{ steps.output-previous-release-ref.outputs.previous_release_ref }}
     steps:
     - name: Check out commit's code
-      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         # Full history is needed to list the release branches.
         fetch-depth: 0
@@ -48,7 +48,7 @@ jobs:
         echo "previous_release_ref=${previous_release_ref}" >> $GITHUB_OUTPUT
 
     - name: Check for changes in relevant files
-      uses: dorny/paths-filter@ebc4d7e9ebcb0b1eb21480bb8f43113e996ac77a # v3.0.1
+      uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
       id: changes
       with:
         token: ''
@@ -72,13 +72,16 @@ jobs:
 
   upgrade_downgrade_test:
     needs: changes
-    # Runs when the gate found relevant changes, and also when the gate itself
-    # failed, so that failure is reported instead of silently skipping a
-    # required status check.
-    if: ${{ !cancelled() && (needs.changes.result == 'failure' || (needs.changes.outputs.end_to_end == 'true')) }}
+    # Runs when the gate found relevant changes. Also runs when the gate did not
+    # succeed (it failed, or was cancelled by its timeout) or the PR has the
+    # 'Skip CI' label, so that those fail this job instead of silently skipping
+    # a required status check.
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || contains(github.event.pull_request.labels.*.name, 'Skip CI') || (needs.changes.outputs.end_to_end == 'true')) }}
     timeout-minutes: 60
     name: Run Upgrade Downgrade Test - Query Serving (Schema)
-    runs-on: ${{ github.repository == 'vitessio/vitess' && 'oracle-vm-16cpu-64gb-x86-64' || 'ubuntu-24.04' }}
+    # The large runner is only claimed when the tests will actually run; a
+    # failed or cancelled gate and the 'Skip CI' label only report a failure.
+    runs-on: ${{ needs.changes.result == 'success' && needs.changes.outputs.end_to_end == 'true' && !contains(github.event.pull_request.labels.*.name, 'Skip CI') && github.repository == 'vitessio/vitess' && 'oracle-vm-16cpu-64gb-x86-64' || 'ubuntu-24.04' }}
 
     steps:
     - name: Skip CI
@@ -93,7 +96,7 @@ jobs:
       run: exit 1
 
     - name: Check out commit's code
-      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         persist-credentials: 'false'
 
@@ -101,7 +104,7 @@ jobs:
       uses: $/.github/actions/tune-os
 
     - name: Set up python
-      uses: actions/setup-python@39cd14951b08e74b54015e9e001cdefcf80e669f # v5.1.1
+      uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
 
     - name: Setup MySQL
       uses: $/.github/actions/setup-mysql
@@ -120,7 +123,7 @@ jobs:
 
     # Checkout to the last release of Vitess
     - name: Check out other version's code (${{ needs.changes.outputs.previous_release_ref }})
-      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         ref: ${{ needs.changes.outputs.previous_release_ref }}
         persist-credentials: 'false'
@@ -142,7 +145,7 @@ jobs:
 
     # Checkout to this build's commit
     - name: Check out commit's code
-      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         persist-credentials: 'false'
 

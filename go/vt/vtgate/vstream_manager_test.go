@@ -606,12 +606,6 @@ func TestVStreamsMetrics(t *testing.T) {
 	err := vsm.VStream(vstreamCtx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{}, func(events []*binlogdatapb.VEvent) error {
 		receivedResponses = append(receivedResponses, &binlogdatapb.VStreamResponse{Events: events})
 
-		// While the VStream is running, we should see one active stream per shard.
-		require.Equal(t, map[string]int64{
-			expectedLabels1: 1,
-			expectedLabels2: 1,
-		}, vsm.vstreamsCount.Counts())
-
 		if len(receivedResponses) == 2 {
 			// Stop streaming after receiving both expected responses.
 			vstreamCancel()

@@ -79,6 +79,13 @@ var (
 	PerfTest = flag.Bool("perf-test", false, "include end-to-end performance tests")
 )
 
+// IsCoverage reports whether this is a coverage run (-is-coverage). Binaries
+// then write their coverage profiles on a graceful exit, so teardown must not
+// kill them.
+func IsCoverage() bool {
+	return *isCoverage
+}
+
 // LocalProcessCluster Testcases need to use this to iniate a cluster
 type LocalProcessCluster struct {
 	Keyspaces          []Keyspace
@@ -260,7 +267,7 @@ func (cluster *LocalProcessCluster) StartTopo() (err error) {
 		cluster.TopoProcess.Port, cluster.Hostname, cluster.TmpDirectory)
 	log.Infof("Starting vtctld server on port: %d", cluster.VtctldProcess.Port)
 	cluster.VtctldHTTPPort = cluster.VtctldProcess.Port
-	if err = cluster.VtctldProcess.Setup(cluster.Cell, cluster.VtctldExtraArgs...); err != nil {
+	if err = cluster.VtctldProcess.Setup(cluster.VtctldExtraArgs...); err != nil {
 		log.Error(err.Error())
 		return
 	}
@@ -1069,13 +1076,24 @@ func (cluster *LocalProcessCluster) Teardown() {
 		log.Errorf("Error in vtadmin teardown: %v", err)
 	}
 
+	// On CI the data directory is discarded after the test run, so nothing
+	// needs to be flushed to disk and a graceful mysqld shutdown buys us
+	// nothing. Killing mysqld skips the shutdown ack wait that can stall a
+	// semi-sync primary for many seconds per cluster. Coverage runs still
+	// shut down gracefully so that the mysqlctl shutdown path stays exercised.
+	killMySQL := os.Getenv("CI") == "true" && !*isCoverage
+
 	var mysqlctlProcessList []*exec.Cmd
 	var mysqlctlTabletUIDs []int
 	for _, keyspace := range cluster.Keyspaces {
 		for _, shard := range keyspace.Shards {
 			for _, tablet := range shard.Vttablets {
 				if tablet.MysqlctlProcess.TabletUID > 0 {
-					if proc, err := tablet.MysqlctlProcess.StopProcess(); err != nil {
+					if killMySQL {
+						if err := tablet.MysqlctlProcess.Kill(); err != nil {
+							log.Errorf("Error in mysqlctl teardown: %v", err)
+						}
+					} else if proc, err := tablet.MysqlctlProcess.StopProcess(); err != nil {
 						log.Errorf("Error in mysqlctl teardown: %v", err)
 					} else {
 						mysqlctlProcessList = append(mysqlctlProcessList, proc)

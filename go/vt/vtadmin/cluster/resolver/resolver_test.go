@@ -19,13 +19,18 @@ package resolver
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/url"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
 	grpcresolver "google.golang.org/grpc/resolver"
 
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery/fakediscovery"
@@ -252,6 +257,88 @@ func TestResolveEmptyList(t *testing.T) {
 	cc.assertUpdateWithin(t, time.Millisecond*50, expectedUpdate)
 	cc.close()
 	r.Close()
+}
+
+var _ grpcresolver.AuthorityOverrider = (*builder)(nil)
+
+func TestOverrideAuthority(t *testing.T) {
+	t.Parallel()
+
+	b := &builder{scheme: "test"}
+
+	for _, component := range []string{"vtctld", "vtgate"} {
+		t.Run(component, func(t *testing.T) {
+			t.Parallel()
+
+			u, err := url.Parse(DialAddr(b, component))
+			require.NoError(t, err)
+
+			// Without the override grpc derives the authority from the endpoint, which
+			// DialAddr leaves empty, and an empty :authority is invalid HTTP/2.
+			authority := b.OverrideAuthority(grpcresolver.Target{URL: *u})
+			assert.NotEmpty(t, authority)
+			assert.Equal(t, component, authority)
+		})
+	}
+}
+
+// TestDialAuthority checks the :authority grpc sends when dialing through the resolver.
+// TestOverrideAuthority covers the method on its own; this covers grpc using it.
+func TestDialAuthority(t *testing.T) {
+	t.Parallel()
+
+	for _, component := range []string{"vtctld", "vtgate"} {
+		t.Run(component, func(t *testing.T) {
+			listener, err := net.Listen("tcp", "127.0.0.1:0")
+			require.NoError(t, err)
+
+			t.Cleanup(func() { listener.Close() })
+
+			authorities := make(chan string, 1)
+
+			// No service is registered, so this handler answers any method.
+			server := grpc.NewServer(grpc.UnknownServiceHandler(func(_ any, stream grpc.ServerStream) error {
+				md, _ := metadata.FromIncomingContext(stream.Context())
+				// Joined, not indexed: an empty authority never reaches the metadata.
+				authorities <- strings.Join(md.Get(":authority"), "")
+
+				return nil
+			}))
+
+			go server.Serve(listener)
+			t.Cleanup(server.Stop)
+
+			disco := fakediscovery.New()
+			disco.AddTaggedVtctlds(nil, &vtadminpb.Vtctld{
+				Hostname: listener.Addr().String(),
+			})
+			disco.AddTaggedGates(nil, &vtadminpb.VTGate{
+				Hostname: listener.Addr().String(),
+			})
+
+			opts := testopts
+			opts.Discovery = disco
+			b := opts.NewBuilder("test")
+
+			conn, err := grpc.NewClient(DialAddr(b, component),
+				grpc.WithTransportCredentials(insecure.NewCredentials()),
+				grpc.WithResolvers(b))
+			require.NoError(t, err)
+
+			t.Cleanup(func() { conn.Close() })
+
+			// The handler sends before it returns, so by the time the call completes the
+			// authority is already buffered and no waiting is needed.
+			_ = conn.Invoke(t.Context(), "/vtadmin.Authority/Get", &vtadminpb.Cluster{}, &vtadminpb.Cluster{})
+
+			select {
+			case authority := <-authorities:
+				assert.Equal(t, component, authority)
+			default:
+				assert.Fail(t, "server received no request")
+			}
+		})
+	}
 }
 
 func TestBuild(t *testing.T) {

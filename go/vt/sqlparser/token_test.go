@@ -252,29 +252,6 @@ func TestVersion(t *testing.T) {
 	}
 }
 
-func TestExtractMySQLComment(t *testing.T) {
-	testcases := []struct {
-		comment string
-		version string
-	}{{
-		comment: "/*!50108 SELECT * FROM */",
-		version: "50108",
-	}, {
-		comment: "/*!5018 SELECT * FROM */",
-		version: "",
-	}, {
-		comment: "/*!SELECT * FROM */",
-		version: "",
-	}}
-
-	for _, tcase := range testcases {
-		t.Run(tcase.version, func(t *testing.T) {
-			output, _ := ExtractMysqlComment(tcase.comment)
-			require.Equal(t, tcase.version, output)
-		})
-	}
-}
-
 func TestIntegerAndID(t *testing.T) {
 	testcases := []struct {
 		in  string

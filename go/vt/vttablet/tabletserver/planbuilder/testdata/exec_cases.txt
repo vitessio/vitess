@@ -648,6 +648,10 @@ options:PassthroughDMLs
     {
       "TableName": "a",
       "Role": 2
+    },
+    {
+      "TableName": "b",
+      "Role": 0
     }
   ],
   "FullQuery":"create view a as select * from b"
@@ -905,6 +909,10 @@ options:PassthroughDMLs
     {
       "TableName": "a",
       "Role": 2
+    },
+    {
+      "TableName": "b",
+      "Role": 0
     }
   ],
   "FullQuery":"alter view a as select * from b"

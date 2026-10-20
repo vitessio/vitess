@@ -117,6 +117,8 @@ func getConnectionNoError(t *testing.T, hostname string, port int) *mysql.Conn {
 		Host:  hostname,
 		Port:  port,
 		Uname: "vt_dba",
+		// Tests use these connections to run batches of statements.
+		EnableMultiStatements: true,
 	}
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
@@ -132,6 +134,8 @@ func getConnection(t *testing.T, hostname string, port int) *mysql.Conn {
 		Port:             port,
 		Uname:            "vt_dba",
 		ConnectTimeoutMs: 1000,
+		// Tests use these connections to run batches of statements.
+		EnableMultiStatements: true,
 	}
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)

@@ -20,8 +20,8 @@ FROM vitess/lite:${VT_BASE_VER} AS lite
 FROM debian:${DEBIAN_VER}
 
 # Set up Vitess environment (just enough to run pre-built Go binaries)
-ENV VTROOT /vt
-ENV VTDATAROOT /vtdataroot
+ENV VTROOT=/vt
+ENV VTDATAROOT=/vtdataroot
 
 # Prepare directory structure.
 RUN mkdir -p /vt/bin && mkdir -p /vtdataroot

@@ -1241,8 +1241,26 @@ func fixReplica(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logg
 		return true, topologyRecovery, err
 	}
 
-	err = setReplicationSource(ctx, analyzedTablet, primaryTablet, policy.IsReplicaSemiSync(durabilityPolicy, primaryTablet, analyzedTablet), float64(analysisEntry.ReplicaNetTimeout)/2)
+	err = setReplicationSource(ctx, analyzedTablet, primaryTablet, policy.IsReplicaSemiSync(durabilityPolicy, primaryTablet, analyzedTablet), fixReplicaHeartbeatInterval(analysisEntry))
 	return true, topologyRecovery, err
+}
+
+// fixReplicaHeartbeatInterval returns the heartbeat interval fixReplica passes to SetReplicationSource.
+//
+// A non-zero heartbeat interval makes SetReplicationSource run CHANGE REPLICATION SOURCE TO even when
+// the replica already replicates from the primary. With both replication threads stopped, for example
+// when the applier stopped on an error, MySQL then deletes the relay log, which can hold transactions
+// the primary committed after the replica acknowledged them under semi-sync. Only ReplicaMisconfigured
+// needs that change: MySQL sets the heartbeat to half of replica_net_timeout on every CHANGE
+// REPLICATION SOURCE TO that sets the source host or port without a heartbeat, which the tablet's
+// always do, so it only differs after replica_net_timeout changed since. For every other problem,
+// SetReplicationSource changes the source only when it differs, and otherwise restarts replication
+// without changing it.
+func fixReplicaHeartbeatInterval(analysisEntry *inst.DetectionAnalysis) float64 {
+	if analysisEntry.Analysis != inst.ReplicaMisconfigured {
+		return 0
+	}
+	return float64(analysisEntry.ReplicaNetTimeout) / 2
 }
 
 // demoteStaleTopoPrimary demotes a tablet that has a stale type of PRIMARY in the topology when a newer primary has
@@ -1301,8 +1319,9 @@ func demoteStaleTopoPrimary(ctx context.Context, analysisEntry *inst.DetectionAn
 		return true, topologyRecovery, fmt.Errorf("failed to set tablet type to REPLICA in topology: %w", err)
 	}
 
-	// Set the instance's replication source to the current primary.
-	err = setReplicationSource(ctx, analyzedTablet, primaryTablet, semiSync, float64(analysisEntry.ReplicaNetTimeout)/2)
+	// Set the instance's replication source to the current primary. Like fixReplica, pass no heartbeat
+	// interval, so that a tablet that already replicates from the primary keeps its relay log.
+	err = setReplicationSource(ctx, analyzedTablet, primaryTablet, semiSync, 0)
 	if err != nil {
 		return true, topologyRecovery, fmt.Errorf("failed to repoint replication to primary: %w", err)
 	}

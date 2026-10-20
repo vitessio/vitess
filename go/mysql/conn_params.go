@@ -54,6 +54,14 @@ type ConnParams struct {
 	// using CapabilityClientDeprecateEOF
 	DisableClientDeprecateEOF bool
 
+	// EnableMultiStatements makes the connection negotiate
+	// CapabilityClientMultiStatements at handshake time, which allows a single
+	// query to carry several statements separated by a semicolon. It is off by
+	// default: a connection that does not need to send batches should not be
+	// able to execute them. Connections that only occasionally send batches can
+	// use Conn.SetMultiStatements instead.
+	EnableMultiStatements bool
+
 	// EnableQueryInfo sets whether the results from queries performed by this
 	// connection should include the 'info' field that MySQL usually returns. This 'info'
 	// field usually contains a human-readable text description of the executed query

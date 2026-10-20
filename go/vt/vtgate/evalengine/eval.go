@@ -380,14 +380,25 @@ func valueToEval(value sqltypes.Value, collation collations.TypedCollation, valu
 	switch tt := value.Type(); {
 	case tt == sqltypes.Tuple:
 		t := &evalTuple{}
+		var memberErr error
 		err := value.ForEachValue(func(bv sqltypes.Value) {
-			e, err := valueToEval(bv, collation, values)
-			if err != nil {
+			if memberErr != nil {
+				return
+			}
+			var e eval
+			e, memberErr = valueToEval(bv, collation, values)
+			if memberErr != nil {
 				return
 			}
 			t.t = append(t.t, e)
 		})
-		return t, wrap(err)
+		if err != nil {
+			return nil, wrap(err)
+		}
+		if memberErr != nil {
+			return nil, memberErr
+		}
+		return t, nil
 	case sqltypes.IsSigned(tt):
 		ival, err := value.ToInt64()
 		return newEvalInt64(ival), wrap(err)
@@ -412,8 +423,7 @@ func valueToEval(value sqltypes.Value, collation collations.TypedCollation, valu
 			raw, err := parseHexNumber(value.Raw())
 			return newEvalBytesHex(raw), wrap(err)
 		case sqltypes.HexVal:
-			hex := value.Raw()
-			raw, err := parseHexLiteral(hex[2 : len(hex)-1])
+			raw, err := parseHexValLiteral(value.Raw())
 			return newEvalBytesHex(raw), wrap(err)
 		case sqltypes.BitNum:
 			raw, err := parseBitNum(value.Raw())

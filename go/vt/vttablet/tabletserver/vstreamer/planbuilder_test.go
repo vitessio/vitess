@@ -751,6 +751,61 @@ func TestPlanBuilder(t *testing.T) {
 		inTable: t1,
 		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select id, val from t1 where in_keyrange(id, 1+1, '-80')"},
 		outErr:  `unsupported: 1 + 1`,
+	}, {
+		// VDiff converts a datetime column between time zones in this form, and
+		// the plan keeps a call built from its checked parts.
+		inTable: t1,
+		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select id, convert_tz(val, '+00:00', 'America/New_York') as val from t1"},
+		outPlan: &Plan{
+			ColExprs: []ColExpr{{
+				ColNum: 0,
+				Field: &querypb.Field{
+					Name:    "id",
+					Type:    sqltypes.Int64,
+					Charset: collations.CollationBinaryID,
+					Flags:   uint32(querypb.MySqlFlag_NUM_FLAG),
+				},
+			}, {
+				ColNum: 1,
+				Field: &querypb.Field{
+					Name:    "val",
+					Type:    sqltypes.VarChar,
+					Charset: collations.CollationUtf8mb4ID,
+				},
+			}},
+			columnFuncExprs: map[string]*sqlparser.FuncExpr{
+				"val": sqlparser.NewFuncExpr("convert_tz", sqlparser.NewColName("val"), sqlparser.NewStrLiteral("+00:00"), sqlparser.NewStrLiteral("America/New_York")),
+			},
+			env: vtenv.NewTestEnv(),
+		},
+	}, {
+		// The copy query runs with the privileges of the filtered user, so a
+		// convert_tz in any other form could read data outside the filter.
+		inTable: t1,
+		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select id, convert_tz((select authentication_string from mysql.user limit 1), '+00:00', '+00:00') as val from t1"},
+		outErr:  "unsupported convert_tz: convert_tz((select authentication_string from mysql.`user` limit 1), '+00:00', '+00:00'); only convert_tz(<column>, '<time zone>', '<time zone>') as <column> is supported",
+	}, {
+		inTable: t1,
+		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select id, convert_tz(val, load_file('/etc/passwd'), 'UTC') as val from t1"},
+		outErr:  "unsupported convert_tz: convert_tz(val, load_file('/etc/passwd'), 'UTC'); only convert_tz(<column>, '<time zone>', '<time zone>') as <column> is supported",
+	}, {
+		inTable: t1,
+		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select id, convert_tz(id, '+00:00', 'UTC') as val from t1"},
+		outErr:  "unsupported convert_tz: convert_tz(id, '+00:00', 'UTC'); only convert_tz(<column>, '<time zone>', '<time zone>') as <column> is supported",
+	}, {
+		inTable: t1,
+		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select id, convert_tz(t1.val, '+00:00', 'UTC') as val from t1"},
+		outErr:  "unsupported convert_tz: convert_tz(t1.val, '+00:00', 'UTC'); only convert_tz(<column>, '<time zone>', '<time zone>') as <column> is supported",
+	}, {
+		// A time zone is written into the copy query as a string literal, so it
+		// must not hold anything that needs escaping.
+		inTable: t1,
+		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select id, convert_tz(val, 'UTC'' union select 1 #', 'UTC') as val from t1"},
+		outErr:  `unsupported convert_tz: convert_tz(val, 'UTC\' union select 1 #', 'UTC'); only convert_tz(<column>, '<time zone>', '<time zone>') as <column> is supported`,
+	}, {
+		inTable: t1,
+		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select id, convert_tz(val, '+00:00') as val from t1"},
+		outErr:  "unsupported convert_tz: convert_tz(val, '+00:00'); only convert_tz(<column>, '<time zone>', '<time zone>') as <column> is supported",
 	}}
 	for _, tcase := range testcases {
 		t.Run(tcase.inRule.String(), func(t *testing.T) {

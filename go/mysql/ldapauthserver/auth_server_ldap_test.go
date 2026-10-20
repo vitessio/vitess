@@ -17,6 +17,7 @@ limitations under the License.
 package ldapauthserver
 
 import (
+	"errors"
 	"fmt"
 	"testing"
 
@@ -52,4 +53,53 @@ func TestValidateClearText(t *testing.T) {
 	_, err = asl.validate("invaliduser", "invalidpass")
 	require.Error(t, err, "AuthServerLdap validated invalid credentials.")
 
+}
+
+// flakyLdapClient fails its first Connect and then behaves normally, so a test can drive
+// update() through a failed refresh followed by a successful one.
+type flakyLdapClient struct {
+	connectAttempts int
+}
+
+func (c *flakyLdapClient) Connect(network string, config *ServerConfig) error {
+	c.connectAttempts++
+	if c.connectAttempts == 1 {
+		return errors.New("simulated LDAP connect failure")
+	}
+	return nil
+}
+
+func (c *flakyLdapClient) Close() {}
+
+func (c *flakyLdapClient) Bind(username, password string) error { return nil }
+
+func (c *flakyLdapClient) Search(searchRequest *ldap.SearchRequest) (*ldap.SearchResult, error) {
+	return &ldap.SearchResult{
+		Entries: []*ldap.Entry{
+			{Attributes: []*ldap.EntryAttribute{{Name: "cn", Values: []string{"refreshedgroup"}}}},
+		},
+	}, nil
+}
+
+// TestFailedRefreshDoesNotFreezeFutureUpdates checks that a refresh which fails on an LDAP
+// error still clears the updating latch. Without that, every later update() short-circuits on
+// the updating check and the user's cached groups stay frozen until the process restarts.
+func TestFailedRefreshDoesNotFreezeFutureUpdates(t *testing.T) {
+	client := &flakyLdapClient{}
+	asl := &AuthServerLdap{
+		Client:         client,
+		User:           "testuser",
+		Password:       "testpass",
+		UserDnPattern:  "%s",
+		RefreshSeconds: 1,
+	}
+	lud := &LdapUserData{asl: asl, groups: []string{"stalegroup"}, username: "testuser"}
+
+	// The first refresh fails at Connect, so the cached groups are left untouched.
+	lud.update()
+	require.Equal(t, []string{"stalegroup"}, lud.groups, "a failed refresh should not change cached groups")
+
+	// The failed refresh must not leave updating latched: the next refresh has to run and succeed.
+	lud.update()
+	require.Equal(t, []string{"refreshedgroup"}, lud.groups, "a refresh after an earlier failure must succeed; the updating latch was left set")
 }

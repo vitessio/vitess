@@ -70,7 +70,7 @@ func commandCancel(cmd *cobra.Command, args []string) error {
 	resp, err := GetClient().WorkflowDelete(GetCommandCtx(), req)
 	if err != nil {
 		if grpcerr, ok := status.FromError(err); ok && (grpcerr.Code() == codes.DeadlineExceeded) {
-			return fmt.Errorf("Cancel action timed out. Please try again and the work will pick back up where it left off. Note that you can control the timeout using the --action_timeout flag and the delete batch size with --delete-batch-size.")
+			return fmt.Errorf("Cancel action timed out. Please try again and the work will pick back up where it left off. Note that you can control the timeout using the --action-timeout flag and the delete batch size with --delete-batch-size.")
 		}
 		return err
 	}
