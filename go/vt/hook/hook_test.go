@@ -82,6 +82,45 @@ func TestExecuteOptionalContext(t *testing.T) {
 	require.Error(t, NewHook("sleep", []string{"30"}).ExecuteOptionalContext(ctx))
 	assert.Less(t, time.Since(start), 20*time.Second)
 
+	// A child that keeps the hook's output open does not hold the caller once
+	// the hook is killed. The hook writes the marker after starting the child,
+	// so the context ends only while the child holds the output.
+	marker := path.Join(t.TempDir(), "child_started")
+	backgroundHookPath := path.Join(vtroot, "vthook", "background_child")
+	require.NoError(t, os.WriteFile(backgroundHookPath, []byte("#!/bin/sh\nsleep 30 &\ntouch "+marker+"\nwait\n"), 0o755))
+	t.Cleanup(func() { require.NoError(t, os.Remove(backgroundHookPath)) })
+	ctx, cancel = context.WithCancel(t.Context())
+	defer cancel()
+	returned := make(chan error, 1)
+	go func() { returned <- NewSimpleHook("background_child").ExecuteOptionalContext(ctx) }()
+	require.Eventually(t, func() bool {
+		_, err := os.Stat(marker)
+		return err == nil
+	}, 30*time.Second, 10*time.Millisecond, "the hook did not start its child")
+	cancel()
+	select {
+	case err := <-returned:
+		require.Error(t, err)
+	case <-time.After(20 * time.Second):
+		require.FailNow(t, "the canceled hook waited for its child")
+	}
+
+	// A hook that succeeds while its child keeps the output open succeeds
+	// without an error, and without waiting for the child.
+	exitingHookPath := path.Join(vtroot, "vthook", "exiting_parent")
+	require.NoError(t, os.WriteFile(exitingHookPath, []byte("#!/bin/sh\nsleep 30 &\nexit 0\n"), 0o755))
+	t.Cleanup(func() { require.NoError(t, os.Remove(exitingHookPath)) })
+	start = time.Now()
+	hr := NewSimpleHook("exiting_parent").ExecuteContext(t.Context())
+	assert.Less(t, time.Since(start), 20*time.Second)
+	assert.Equal(t, HOOK_SUCCESS, hr.ExitStatus)
+	assert.Empty(t, hr.Stderr)
+
+	// A canceled hook fails too; it is not treated as missing.
+	ctx, cancel = context.WithCancel(t.Context())
+	time.AfterFunc(10*time.Millisecond, cancel)
+	require.Error(t, NewHook("sleep", []string{"30"}).ExecuteOptionalContext(ctx))
+
 	// A missing hook is still not an error.
 	require.NoError(t, NewSimpleHook("missing_hook").ExecuteOptionalContext(t.Context()))
 }
