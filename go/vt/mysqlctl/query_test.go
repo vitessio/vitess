@@ -196,3 +196,62 @@ func TestExecuteSuperQueryListTaintedDiscardsConnection(t *testing.T) {
 	require.NoError(t, testMysqld.ExecuteSuperQueryList(t.Context(), []string{"select 42"}))
 	require.Equal(t, 2, db.GetQueryCalledNum(sqlmode.SessionSetupQuery("utf8mb4", "utf8mb4_0900_ai_ci")))
 }
+
+// TestReplicationReadsHonorContext checks that replication reads return when
+// their context ends, even if mysqld never answers. Callers make these reads
+// while holding the tablet's action lock, which a hung mysqld must not keep
+// held.
+func TestReplicationReadsHonorContext(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		query string
+		read  func(context.Context, *Mysqld) error
+	}{{
+		name:  "replication status",
+		query: "SHOW REPLICA STATUS",
+		read: func(ctx context.Context, mysqld *Mysqld) error {
+			_, err := mysqld.ReplicationStatus(ctx)
+			return err
+		},
+	}, {
+		name:  "executed position",
+		query: "SELECT @@global.gtid_executed",
+		read: func(ctx context.Context, mysqld *Mysqld) error {
+			_, err := mysqld.PrimaryPosition(ctx)
+			return err
+		},
+	}, {
+		name:  "connection check",
+		query: "SELECT 1",
+		read: func(ctx context.Context, mysqld *Mysqld) error {
+			conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
+			if err == nil {
+				conn.Recycle()
+			}
+			return err
+		},
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			killGraceTimeout = 100 * time.Millisecond
+			t.Cleanup(func() { killGraceTimeout = 5 * time.Second })
+			db := fakesqldb.New(t)
+			t.Cleanup(db.Close)
+			db.AddQueryPattern(".*", &sqltypes.Result{})
+			// The fake server does not answer the query until the test ends.
+			release := make(chan struct{})
+			t.Cleanup(func() { close(release) })
+			db.AddQuery(tc.query, &sqltypes.Result{})
+			db.SetBeforeFunc(tc.query, func() { <-release })
+
+			params := *db.ConnParams()
+			mysqld := NewMysqld(dbconfigs.NewTestDBConfigs(params, params, "fakesqldb"))
+			t.Cleanup(mysqld.Close)
+
+			ctx, cancel := context.WithTimeout(t.Context(), 200*time.Millisecond)
+			defer cancel()
+			start := time.Now()
+			require.ErrorIs(t, tc.read(ctx, mysqld), context.DeadlineExceeded)
+			assert.Less(t, time.Since(start), 30*time.Second)
+		})
+	}
+}
