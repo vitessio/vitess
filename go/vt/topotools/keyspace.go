@@ -131,13 +131,21 @@ func UpdateShardRecords(
 			return err
 		}
 		shards[i] = updatedShard
-		// For 'to' shards, refresh to make them serve. The 'from' shards will
-		// be refreshed after traffic has migrated.
-		if !isFrom {
-			if _, _, err := RefreshTabletsByShard(ctx, ts, tmc, si, cells, logger); err != nil {
-				logger.Warningf("RefreshTabletsByShard(%v/%v, cells=%v) failed with %v; continuing ...", si.Keyspace(), si.ShardName(), cells, err)
-			}
+	}
+	// For 'to' shards, refresh to make them serve. The 'from' shards will
+	// be refreshed after traffic has migrated. The shards are refreshed
+	// concurrently because the caller holds the keyspace lock, and refreshing
+	// many shards one at a time can outlast the lock's lease.
+	if !isFrom {
+		var wg sync.WaitGroup
+		for _, si := range shards {
+			wg.Go(func() {
+				if _, _, err := RefreshTabletsByShard(ctx, ts, tmc, si, cells, logger); err != nil {
+					logger.Warningf("RefreshTabletsByShard(%v/%v, cells=%v) failed with %v; continuing ...", si.Keyspace(), si.ShardName(), cells, err)
+				}
+			})
 		}
+		wg.Wait()
 	}
 	return nil
 }
