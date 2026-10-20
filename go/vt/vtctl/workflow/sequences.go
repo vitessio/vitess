@@ -179,9 +179,6 @@ func (ts *trafficSwitcher) getCurrentSequenceValues(ctx context.Context, sequenc
 }
 
 func (ts *trafficSwitcher) getCurrentSequenceValue(ctx context.Context, seq *sequenceMetadata) (int64, error) {
-	if err := seq.escapeValues(); err != nil {
-		return 0, err
-	}
 	sequenceShard, ierr := ts.TopoServer().GetOnlyShard(ctx, seq.backingTableKeyspace)
 	if ierr != nil || sequenceShard == nil || sequenceShard.PrimaryAlias == nil {
 		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the primary tablet for keyspace %s: %v",
@@ -192,9 +189,24 @@ func (ts *trafficSwitcher) getCurrentSequenceValue(ctx context.Context, seq *seq
 		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the primary tablet for keyspace %s: %v",
 			seq.backingTableKeyspace, ierr)
 	}
+	// The backing table db name defaults to vt_<keyspace> when the sequence
+	// metadata is built. If the tablet serving the sequence uses a db name
+	// override then we must use that instead. This has to happen before the
+	// values are escaped, and the metadata may already have been escaped by
+	// an earlier caller (e.g. getMaxSequenceValues), so we (re-)escape the
+	// backing db name explicitly after applying the override.
 	if sequenceTablet.DbNameOverride != "" {
 		seq.backingTableDBName = sequenceTablet.DbNameOverride
 	}
+	if err := seq.escapeValues(); err != nil {
+		return 0, err
+	}
+	backingDB, err := sqlescape.EnsureEscaped(seq.backingTableDBName)
+	if err != nil {
+		return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid database name %s specified for sequence backing table: %v",
+			seq.backingTableDBName, err)
+	}
+	seq.backingDB = backingDB
 	query := sqlparser.BuildParsedQuery(sqlGetCurrentSequenceVal,
 		seq.backingDB,
 		seq.backingTable,

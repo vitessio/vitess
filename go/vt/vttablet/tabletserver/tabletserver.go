@@ -584,7 +584,7 @@ func (tsv *TabletServer) begin(
 			if err != nil {
 				return err
 			}
-			for _, query := range postBeginQueries {
+			for _, query := range rewriteDoubleSlashComments(tsv.env.Parser(), postBeginQueries) {
 				plan, err := tsv.qe.GetPlan(ctx, logStats, query, true, false)
 				if err != nil {
 					return err
@@ -920,6 +920,9 @@ func (tsv *TabletServer) Execute(ctx context.Context, session queryservice.Sessi
 }
 
 func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, reservedID int64, settings []string, options *querypb.ExecuteOptions) (result *sqltypes.Result, err error) {
+	// Some plans send the statement text to MySQL as written, so MySQL must
+	// skip every comment that Vitess skips.
+	sql, _ = tsv.env.Parser().RewriteDoubleSlashComments(sql)
 	targetType, err := tsv.resolveTargetType(ctx, target)
 	if err != nil {
 		return nil, err
@@ -935,7 +938,7 @@ func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sq
 			if bindVariables == nil {
 				bindVariables = make(map[string]*querypb.BindVariable)
 			}
-			query, comments := sqlparser.SplitMarginComments(sql)
+			query, comments := tsv.env.Parser().SplitMarginComments(sql)
 
 			plan, err := tsv.qe.GetPlan(ctx, logStats, query, skipQueryPlanCache(options), options.GetInDmlExecution() && tsv.config.PassthroughDML)
 			if err != nil {
@@ -1021,6 +1024,9 @@ func (tsv *TabletServer) StreamExecute(ctx context.Context, session queryservice
 }
 
 func (tsv *TabletServer) streamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, reservedID int64, settings []string, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
+	// Some plans send the statement text to MySQL as written, so MySQL must
+	// skip every comment that Vitess skips.
+	sql, _ = tsv.env.Parser().RewriteDoubleSlashComments(sql)
 	allowOnShutdown := false
 	var timeout time.Duration
 	if transactionID != 0 {
@@ -1038,7 +1044,7 @@ func (tsv *TabletServer) streamExecute(ctx context.Context, target *querypb.Targ
 			if bindVariables == nil {
 				bindVariables = make(map[string]*querypb.BindVariable)
 			}
-			query, comments := sqlparser.SplitMarginComments(sql)
+			query, comments := tsv.env.Parser().SplitMarginComments(sql)
 			plan, err := tsv.qe.GetStreamPlan(ctx, logStats, query, skipQueryPlanCache(options))
 			if err != nil {
 				return err
@@ -1081,6 +1087,11 @@ func (tsv *TabletServer) streamExecute(ctx context.Context, target *querypb.Targ
 
 // BeginExecute combines Begin and Execute.
 func (tsv *TabletServer) BeginExecute(ctx context.Context, session queryservice.Session, target *querypb.Target, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (queryservice.TransactionState, *sqltypes.Result, error) {
+	// Reject before begin; see validateBindVariables.
+	if err := tsv.validateBindVariables(ctx, sql, bindVariables, nil); err != nil {
+		return queryservice.TransactionState{}, nil, err
+	}
+
 	// Disable hot row protection in case of reserve connection.
 	if tsv.enableHotRowProtection && reservedID == 0 {
 		txDone, err := tsv.beginWaitForSameRangeTransactions(ctx, target, options, sql, bindVariables)
@@ -1113,6 +1124,11 @@ func (tsv *TabletServer) BeginStreamExecute(
 	options *querypb.ExecuteOptions,
 	callback func(*sqltypes.Result) error,
 ) (queryservice.TransactionState, error) {
+	// Reject before begin; see validateBindVariables.
+	if err := tsv.validateBindVariables(ctx, sql, bindVariables, nil); err != nil {
+		return queryservice.TransactionState{}, err
+	}
+
 	state, err := tsv.begin(ctx, target, postBeginQueries, reservedID, nil, options)
 	if err != nil {
 		return state, err
@@ -1136,6 +1152,8 @@ func (tsv *TabletServer) beginWaitForSameRangeTransactions(ctx context.Context, 
 	// COMMIT, the next one waiting for MySQL in BEGIN+EXECUTE.)
 	var txDone txserializer.DoneFunc
 
+	// The serializer key is built from the bind variables, and the execRequest
+	// below carries none: both callers validate them before getting here.
 	err := tsv.execRequest(
 		// Use (potentially longer) -queryserver-config-query-timeout and not
 		// -queryserver-config-txpool-timeout (defaults to 1s) to limit the waiting.
@@ -1168,7 +1186,9 @@ func (tsv *TabletServer) beginWaitForSameRangeTransactions(ctx context.Context, 
 // the query and bind variables or the table name is empty.
 func (tsv *TabletServer) computeTxSerializerKey(ctx context.Context, logStats *tabletenv.LogStats, sql string, bindVariables map[string]*querypb.BindVariable) (string, string) {
 	// Strip trailing comments so we don't pollute the query cache.
-	sql, _ = sqlparser.SplitMarginComments(sql)
+	// Plan the text that execute plans, so that both share a plan cache entry.
+	sql, _ = tsv.env.Parser().RewriteDoubleSlashComments(sql)
+	sql, _ = tsv.env.Parser().SplitMarginComments(sql)
 	plan, err := tsv.qe.GetPlan(ctx, logStats, sql, false, false)
 	if err != nil {
 		logComputeRowSerializerKey.Errorf("failed to get plan for query: %v err: %v", sql, err)
@@ -1596,6 +1616,11 @@ func (tsv *TabletServer) streamBinlogPackets(ctx context.Context, reader packetR
 
 // ReserveBeginExecute implements the QueryService interface
 func (tsv *TabletServer) ReserveBeginExecute(ctx context.Context, session queryservice.Session, target *querypb.Target, settings []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (state queryservice.ReservedTransactionState, result *sqltypes.Result, err error) {
+	// Reject before reserving and beginning; see validateBindVariables.
+	if err = tsv.validateBindVariables(ctx, sql, bindVariables, nil); err != nil {
+		return state, nil, err
+	}
+
 	state, result, err = tsv.beginExecuteWithSettings(ctx, target, settings, postBeginQueries, sql, bindVariables, options)
 	// If there is an error and the error message is about allowing query in reserved connection only,
 	// then we do not return an error from here and continue to use the reserved connection path.
@@ -1631,7 +1656,7 @@ func (tsv *TabletServer) ReserveBeginExecute(ctx context.Context, session querys
 				return err
 			}
 
-			for _, query := range postBeginQueries {
+			for _, query := range rewriteDoubleSlashComments(tsv.env.Parser(), postBeginQueries) {
 				plan, err := tsv.qe.GetPlan(ctx, logStats, query, true, false)
 				if err != nil {
 					return err
@@ -1679,6 +1704,11 @@ func (tsv *TabletServer) ReserveBeginStreamExecute(
 	options *querypb.ExecuteOptions,
 	callback func(*sqltypes.Result) error,
 ) (state queryservice.ReservedTransactionState, err error) {
+	// Reject before reserving and beginning; see validateBindVariables.
+	if err = tsv.validateBindVariables(ctx, sql, bindVariables, nil); err != nil {
+		return state, err
+	}
+
 	txState, err := tsv.begin(ctx, target, postBeginQueries, 0, settings, options)
 	if err != nil {
 		return txToReserveState(txState), err
@@ -1822,6 +1852,28 @@ func (tsv *TabletServer) GetSchema(ctx context.Context, target *querypb.Target, 
 	return
 }
 
+// validateBindVariables is the tablet's own gate on wire bind variables: only
+// a payload that is a single literal token may be substituted into a
+// statement. vtgate applies the same check to the request's bind variables
+// and to the session's user-defined variables, but a caller can reach this
+// service directly. Nested tuples are accepted here because vtgate's engine
+// sends them; the client boundary in vtgate rejects them. logStats may be nil.
+//
+// It covers the bind variables of the Execute, StreamExecute, Begin* and
+// Reserve* RPCs only: it runs in execRequest, which those requests pass
+// through, and first thing in the four Begin* entry points, so that a rejected
+// request never begins a transaction, reserves a connection, applies settings,
+// or reaches hot row protection, which builds its serializer key from the bind
+// variables. Those requests are validated again by the Execute they go on to
+// call; the check is cheap.
+func (tsv *TabletServer) validateBindVariables(ctx context.Context, sql string, bindVariables map[string]*querypb.BindVariable, logStats *tabletenv.LogStats) error {
+	err := sqltypes.ValidateNestedBindVariables(bindVariables)
+	if err == nil {
+		return nil
+	}
+	return tsv.convertAndLogError(ctx, sql, bindVariables, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err), logStats)
+}
+
 // execRequest performs verifications, sets up the necessary environments
 // and calls the supplied function for executing the request.
 func (tsv *TabletServer) execRequest(
@@ -1850,6 +1902,10 @@ func (tsv *TabletServer) execRequest(
 	logStats.OriginalSQL = sql
 	logStats.BindVariables = sqltypes.CopyBindVariables(bindVariables)
 	defer tsv.handlePanicAndSendLogStats(sql, bindVariables, logStats)
+
+	if err = tsv.validateBindVariables(ctx, sql, bindVariables, logStats); err != nil {
+		return err
+	}
 
 	if err = tsv.sm.StartRequest(ctx, target, allowOnShutdown); err != nil {
 		return err

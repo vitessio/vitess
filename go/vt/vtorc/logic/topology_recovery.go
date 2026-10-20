@@ -78,6 +78,10 @@ const (
 	RecoverySkipERSDisabled
 	RecoverySkipStaleAnalysis
 	RecoverySkipPrimaryRecovery
+	// RecoverySkipReplicaUnreachable is used when a replica's problem was detected from the
+	// MySQL state VTOrc last read, but VTOrc's last check of the replica failed: the state is
+	// stale, and a repair, which needs the same tablet, could only fail.
+	RecoverySkipReplicaUnreachable
 )
 
 // String represents a RecoverySkip as a string.
@@ -93,6 +97,8 @@ func (rsc RecoverySkipCode) String() string {
 		return "StaleAnalysis"
 	case RecoverySkipPrimaryRecovery:
 		return "PrimaryRecovery"
+	case RecoverySkipReplicaUnreachable:
+		return "ReplicaUnreachable"
 	default:
 		return "None"
 	}
@@ -697,6 +703,9 @@ func getCheckAndRecoverFunctionCode(analysisEntry *inst.DetectionAnalysis) (reco
 	// replica
 	case inst.NotConnectedToPrimary, inst.ConnectedToWrongPrimary, inst.ReplicationStopped, inst.ReplicaIsWritable,
 		inst.ReplicaSemiSyncMustBeSet, inst.ReplicaSemiSyncMustNotBeSet, inst.ReplicaMisconfigured:
+		if !analysisEntry.LastCheckValid {
+			recoverySkipCode = RecoverySkipReplicaUnreachable
+		}
 		recoveryFunc = fixReplicaFunc
 	// primary, non actionable
 	case inst.DeadPrimaryAndReplicas:
@@ -889,7 +898,12 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.DetectionAnalysis) (err 
 	analyzedInstanceAliasString := topoproto.TabletAliasString(analysisEntry.AnalyzedInstanceAlias)
 	if recoverySkipCode != RecoverySkipNone {
 		skipReason := recoverySkipCode.String()
-		logger.Warn(fmt.Sprintf("Skipping recovery for problem: %+v, recovery: %+v, reason: %+v, aborting recovery", analysisEntry.Analysis, skipReason, recoveryName))
+		// A skip can repeat on every recovery cycle for as long as its cause
+		// lasts, such as a replica that stays unreachable, so log it at most once
+		// a minute for each tablet, problem and reason.
+		if util.ClearToLog("executeCheckAndRecoverFunction: skip", fmt.Sprintf("%s:%s:%s", analyzedInstanceAliasString, analysisEntry.Analysis, skipReason)) {
+			logger.Warn(fmt.Sprintf("Skipping recovery for problem: %+v, recovery: %+v, reason: %+v, aborting recovery", analysisEntry.Analysis, recoveryName, skipReason))
+		}
 		recoveriesSkippedCounter.Add(append(recoveryLabels, skipReason), 1)
 
 		// Unhandled problem type
@@ -1001,7 +1015,7 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.DetectionAnalysis) (err 
 				DiscoverInstance(primaryTablet.Alias, true)
 			}
 		}
-		alreadyFixed, err := checkIfAlreadyFixed(analysisEntry)
+		alreadyFixed, refreshedEntry, err := checkIfAlreadyFixed(analysisEntry)
 		if err != nil {
 			logger.Error(fmt.Sprintf("executeCheckAndRecoverFunction: Tablet: %+v: error while trying to find if the problem is already fixed: %v",
 				analysisEntry.AnalyzedInstanceAlias, err))
@@ -1011,6 +1025,17 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.DetectionAnalysis) (err 
 			logger.Info(fmt.Sprintf("Analysis: %v on tablet %v - No longer valid, some other agent must have fixed the problem.", analysisEntry.Analysis, analyzedInstanceAliasString))
 			recoveriesSkippedCounter.Add(append(recoveryLabels, RecoverySkipStaleAnalysis.String()), 1)
 			return nil
+		}
+		// The replica may have become unreachable since the problem was detected:
+		// skip the repair for that reason, as the check before the lock would.
+		if refreshedEntry != nil {
+			if _, skip := getCheckAndRecoverFunctionCode(refreshedEntry); skip == RecoverySkipReplicaUnreachable {
+				if util.ClearToLog("executeCheckAndRecoverFunction: skip", fmt.Sprintf("%s:%s:%s", analyzedInstanceAliasString, analysisEntry.Analysis, skip)) {
+					logger.Warn(fmt.Sprintf("Skipping recovery for problem: %+v, recovery: %+v, reason: %+v, aborting recovery", analysisEntry.Analysis, recoveryName, skip))
+				}
+				recoveriesSkippedCounter.Add(append(recoveryLabels, skip.String()), 1)
+				return nil
+			}
 		}
 	}
 
@@ -1072,7 +1097,7 @@ func recheckPrimaryHealth(analysisEntry *inst.DetectionAnalysis, recoveryLabels 
 	discoveryFunc(primaryTabletAlias, true)
 
 	// checking if the original analysis is valid even after the primary refresh.
-	alreadyFixed, err := checkIfAlreadyFixed(analysisEntry)
+	alreadyFixed, _, err := checkIfAlreadyFixed(analysisEntry)
 	if err != nil {
 		log.Info(fmt.Sprintf("recheckPrimaryHealth: Checking if recovery is required returned err: %v", err))
 		return err
@@ -1098,23 +1123,33 @@ func recheckPrimaryHealth(analysisEntry *inst.DetectionAnalysis, recoveryLabels 
 // (via BeforeAnalyses/AfterAnalyses) survive suppression and will still be found
 // here. Non-dependent problems are intentionally suppressed — the shard-wide
 // action takes priority and they will be re-detected on a future poll.
-func checkIfAlreadyFixed(analysisEntry *inst.DetectionAnalysis) (bool, error) {
+func checkIfAlreadyFixed(analysisEntry *inst.DetectionAnalysis) (bool, *inst.DetectionAnalysis, error) {
 	// Run a replication analysis again. We will check if the problem persisted
 	analysisEntries, err := inst.GetDetectionAnalysis(analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard, &inst.DetectionAnalysisHints{})
 	if err != nil {
-		return false, err
+		return false, nil, err
 	}
 
 	for _, entry := range analysisEntries {
 		// If there is a analysis which has the same recovery required, then we should proceed with the recovery
 		tabletAliasesEqual := topoproto.TabletAliasEqual(entry.AnalyzedInstanceAlias, analysisEntry.AnalyzedInstanceAlias)
-		if tabletAliasesEqual && analysisEntriesHaveSameRecovery(analysisEntry, entry) {
-			return false, nil
+		if tabletAliasesEqual && (analysisEntriesHaveSameRecovery(analysisEntry, entry) || replicaBecameUnreachable(analysisEntry, entry)) {
+			return false, entry, nil
 		}
 	}
 
 	// We didn't find a replication analysis matching the original failure, which means that some other agent probably fixed it.
-	return true, nil
+	return true, nil, nil
+}
+
+// replicaBecameUnreachable reports whether newAnalysis is prevAnalysis's
+// problem, needing the same recovery, except that VTOrc can no longer read the
+// replica, so the recovery is now skipped as ReplicaUnreachable. The problem
+// is still there, not fixed: the caller skips the recovery for that reason.
+func replicaBecameUnreachable(prevAnalysis, newAnalysis *inst.DetectionAnalysis) bool {
+	prevRecoveryFunctionCode, _ := getCheckAndRecoverFunctionCode(prevAnalysis)
+	newRecoveryFunctionCode, newSkipRecovery := getCheckAndRecoverFunctionCode(newAnalysis)
+	return prevRecoveryFunctionCode == newRecoveryFunctionCode && newSkipRecovery == RecoverySkipReplicaUnreachable
 }
 
 // recoverShardAnalyses executes recoveries for a shard's analyses. Analyses
@@ -1356,8 +1391,26 @@ func fixReplica(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logg
 		return true, topologyRecovery, err
 	}
 
-	err = setReplicationSource(ctx, analyzedTablet, primaryTablet, policy.IsReplicaSemiSync(durabilityPolicy, primaryTablet, analyzedTablet), float64(analysisEntry.ReplicaNetTimeout)/2)
+	err = setReplicationSource(ctx, analyzedTablet, primaryTablet, policy.IsReplicaSemiSync(durabilityPolicy, primaryTablet, analyzedTablet), fixReplicaHeartbeatInterval(analysisEntry))
 	return true, topologyRecovery, err
+}
+
+// fixReplicaHeartbeatInterval returns the heartbeat interval fixReplica passes to SetReplicationSource.
+//
+// A non-zero heartbeat interval makes SetReplicationSource run CHANGE REPLICATION SOURCE TO even when
+// the replica already replicates from the primary. With both replication threads stopped, for example
+// when the applier stopped on an error, MySQL then deletes the relay log, which can hold transactions
+// the primary committed after the replica acknowledged them under semi-sync. Only ReplicaMisconfigured
+// needs that change: MySQL sets the heartbeat to half of replica_net_timeout on every CHANGE
+// REPLICATION SOURCE TO that sets the source host or port without a heartbeat, which the tablet's
+// always do, so it only differs after replica_net_timeout changed since. For every other problem,
+// SetReplicationSource changes the source only when it differs, and otherwise restarts replication
+// without changing it.
+func fixReplicaHeartbeatInterval(analysisEntry *inst.DetectionAnalysis) float64 {
+	if analysisEntry.Analysis != inst.ReplicaMisconfigured {
+		return 0
+	}
+	return float64(analysisEntry.ReplicaNetTimeout) / 2
 }
 
 // reconcileStaleTopoPrimary updates the type of a tablet in topology to REPLICA when the tablet has a stale type of
@@ -1445,8 +1498,9 @@ func reconcileStaleTopoPrimary(ctx context.Context, analysisEntry *inst.Detectio
 		semiSync := policy.IsReplicaSemiSync(durabilityPolicy, primaryTablet, analyzedTablet)
 
 		// Point the tablet's replication at the current primary. This also changes the tablet's type
-		// to REPLICA and attempts to update the topology.
-		if err := setReplicationSource(ctx, analyzedTablet, primaryTablet, semiSync, float64(analysisEntry.ReplicaNetTimeout)/2); err != nil {
+		// to REPLICA and attempts to update the topology. Like fixReplica, pass no heartbeat interval,
+		// so that a tablet that already replicates from the primary keeps its relay log.
+		if err := setReplicationSource(ctx, analyzedTablet, primaryTablet, semiSync, 0); err != nil {
 			logger.Error("failed to set replication source", slog.String("tablet", aliasString), slog.Any("error", err))
 			return
 		}

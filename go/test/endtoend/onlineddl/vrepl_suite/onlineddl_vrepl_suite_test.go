@@ -338,30 +338,37 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 	return uuid
 }
 
-func readMigration(t *testing.T, uuid string) sqltypes.RowNamedValues {
-	rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
-	require.NotNil(t, rs)
-	row := rs.Named().Row()
-	require.NotNil(t, row)
-	return row
-}
-
 func waitForMigration(t *testing.T, uuid string, timeout time.Duration) sqltypes.RowNamedValues {
-	var status string
-	sleepDuration := time.Second
-	for timeout > 0 {
-		row := readMigration(t, uuid)
-		status = row["migration_status"].ToString()
-		switch status {
-		case string(schema.OnlineDDLStatusComplete), string(schema.OnlineDDLStatusFailed), string(schema.OnlineDDLStatusCancelled):
-			// migration is complete, either successful or not
-			return row
+	terminalStatuses := []string{string(schema.OnlineDDLStatusComplete), string(schema.OnlineDDLStatusFailed), string(schema.OnlineDDLStatusCancelled)}
+	query, err := sqlparser.ParseAndBind("show vitess_migrations like %a", sqltypes.StringBindVariable(uuid))
+	require.NoError(t, err)
+	var row sqltypes.RowNamedValues
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		conn, err := mysql.Connect(t.Context(), &vtParams)
+		if !assert.NoError(c, err) {
+			return
 		}
-		time.Sleep(sleepDuration)
-		timeout = timeout - sleepDuration
-	}
-	require.NoError(t, fmt.Errorf("timeout in waitForMigration(%s). status is: %s", uuid, status))
-	return nil
+		defer conn.Close()
+		rs, err := conn.ExecuteFetch(query, -1, true)
+		if !assert.NoError(c, err) || !assert.NotNil(c, rs) {
+			return
+		}
+		migration := rs.Named().Row()
+		if !assert.NotNil(c, migration) {
+			return
+		}
+		// The migration is complete, either successful or not.
+		status := migration["migration_status"].ToString()
+		if !assert.Contains(c, terminalStatuses, status, "migration %s is not complete", uuid) {
+			return
+		}
+		// A failing migration gets its status before its message, so wait for the message too.
+		if status == string(schema.OnlineDDLStatusFailed) && !assert.NotEmpty(c, migration["message"].ToString(), "migration %s has no failure message yet", uuid) {
+			return
+		}
+		row = migration
+	}, timeout, 100*time.Millisecond)
+	return row
 }
 
 func getTablet() *cluster.Vttablet {

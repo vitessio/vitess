@@ -402,8 +402,7 @@ func (vc *VitessCluster) setupVtctld() {
 	vc.Vtctld = cluster.VtctldProcessInstance(vc.ClusterConfig.vtctldPort, vc.ClusterConfig.vtctldGrpcPort,
 		vc.ClusterConfig.topoPort, vc.ClusterConfig.hostname, vc.ClusterConfig.tmpDir)
 	require.NotNil(vc.t, vc.Vtctld)
-	// use first cell as `-cell`
-	vc.Vtctld.Setup(vc.CellNames[0], extraVtctldArgs...)
+	vc.Vtctld.Setup(extraVtctldArgs...)
 }
 
 func (vc *VitessCluster) setupVtctldClient() {
@@ -797,7 +796,13 @@ func (vc *VitessCluster) teardown() {
 	}
 
 	for _, keyspace := range keyspaces {
-		_ = vc.TearDownKeyspace(keyspace)
+		if cluster.IsCoverage() {
+			// Coverage runs need a graceful exit so that the instrumented
+			// binaries write their coverage profiles.
+			_ = vc.TearDownKeyspace(keyspace)
+		} else {
+			_ = vc.killKeyspaceProcesses(keyspace)
+		}
 	}
 	if err := vc.Vtctld.TearDown(); err != nil {
 		log.Info("Error stopping Vtctld:  " + err.Error())
@@ -818,6 +823,34 @@ func (vc *VitessCluster) teardown() {
 			log.Info("Error stopping VTOrc: " + err.Error())
 		}
 	}
+}
+
+// killKeyspaceProcesses kills the keyspace's vttablet and mysqld processes
+// without a graceful shutdown. This is only safe during the final cluster
+// teardown, where the data directory is deleted right afterwards: nothing
+// needs to be flushed, and killing skips both the semi-sync ack wait that
+// stalls a graceful primary mysqld shutdown and the vttablet termination
+// timeout once its mysqld is gone. Mid-test decommissioning of a keyspace
+// must keep using TearDownKeyspace.
+func (vc *VitessCluster) killKeyspaceProcesses(ks *Keyspace) error {
+	eg := errgroup.Group{}
+	for _, shard := range ks.Shards {
+		for _, tablet := range shard.Tablets {
+			eg.Go(func() error {
+				// The returned error is the process exit status: after a kill
+				// that is always non-nil ("signal: killed"), so it is not
+				// logged here.
+				_ = tablet.Vttablet.Kill()
+				if tablet.DbServer != nil && tablet.DbServer.TabletUID > 0 {
+					if err := tablet.DbServer.Kill(); err != nil {
+						log.Info(fmt.Sprintf("Error killing mysql process associated with vttablet %s: %v", tablet.Name, err))
+					}
+				}
+				return nil
+			})
+		}
+	}
+	return eg.Wait()
 }
 
 func (vc *VitessCluster) TearDownKeyspace(ks *Keyspace) error {
@@ -868,8 +901,7 @@ func (vc *VitessCluster) TearDown() {
 	case <-time.After(1 * time.Minute):
 		log.Info("TearDown() timed out")
 	}
-	// some processes seem to hang around for a bit
-	time.Sleep(5 * time.Second)
+	// Straggling processes are covered by CleanupDataroot's retry loop.
 	vc.CleanupDataroot(vc.t, false)
 }
 

@@ -18,14 +18,12 @@
 
 source "$(dirname "${BASH_SOURCE[0]:-$0}")/../env.sh"
 
-cell=${CELL:-'test'}
 grpc_port=15999
 
 echo "Starting vtctld..."
 # shellcheck disable=SC2086
 vtctld \
  $TOPOLOGY_FLAGS \
- --cell $cell \
  --service_map 'grpc-vtctl,grpc-vtctld' \
  --backup_storage_implementation file \
  --file_backup_storage_root $VTDATAROOT/backups \

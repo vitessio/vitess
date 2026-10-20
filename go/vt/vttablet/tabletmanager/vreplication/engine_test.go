@@ -369,9 +369,10 @@ func TestEngineSelect(t *testing.T) {
 }
 
 func TestWaitForPos(t *testing.T) {
-	savedRetryTime := waitRetryTime
-	defer func() { waitRetryTime = savedRetryTime }()
+	savedRetryTime, savedWaitForPosRetryTime := waitRetryTime, waitForPosRetryTime
+	defer func() { waitRetryTime, waitForPosRetryTime = savedRetryTime, savedWaitForPosRetryTime }()
 	waitRetryTime = 10 * time.Millisecond
+	waitForPosRetryTime = 10 * time.Millisecond
 
 	dbClient := binlogplayer.NewMockDBClient(t)
 	mysqld := &mysqlctl.FakeMysqlDaemon{}
@@ -400,6 +401,35 @@ func TestWaitForPos(t *testing.T) {
 	if duration := time.Since(start); duration < 10*time.Microsecond {
 		t.Errorf("duration: %v, want < 10ms", duration)
 	}
+}
+
+// TestWaitForPosRetriesQuickly checks that WaitForPos notices a position that
+// the stream saves just after the first check within its first, short retry
+// instead of a full waitRetryTime later.
+func TestWaitForPosRetriesQuickly(t *testing.T) {
+	dbClient := binlogplayer.NewMockDBClient(t)
+	mysqld := &mysqlctl.FakeMysqlDaemon{}
+	mysqld.MysqlPort.Store(3306)
+
+	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
+	vre := NewTestEngine(env.TopoServ, env.Cells[0], mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil)
+
+	dbClient.ExpectRequest("select * from _vt.vreplication where db_name='db'", &sqltypes.Result{}, nil)
+	vre.Open(t.Context())
+
+	dbClient.ExpectRequest("select pos, state, message from _vt.vreplication where id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{
+		sqltypes.NewVarBinary("MariaDB/0-1-1083"),
+		sqltypes.NewVarBinary(binlogdatapb.VReplicationWorkflowState_Running.String()),
+		sqltypes.NewVarBinary(""),
+	}}}, nil)
+	dbClient.ExpectRequest("select pos, state, message from _vt.vreplication where id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{
+		sqltypes.NewVarBinary("MariaDB/0-1-1084"),
+		sqltypes.NewVarBinary(binlogdatapb.VReplicationWorkflowState_Running.String()),
+		sqltypes.NewVarBinary(""),
+	}}}, nil)
+	start := time.Now()
+	require.NoError(t, vre.WaitForPos(t.Context(), 1, "MariaDB/0-1-1084"))
+	assert.Less(t, time.Since(start), waitRetryTime/2)
 }
 
 func TestWaitForPosError(t *testing.T) {

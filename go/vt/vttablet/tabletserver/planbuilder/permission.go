@@ -42,8 +42,9 @@ type (
 
 // BuildPermissions builds the list of required permissions for all the
 // tables referenced in a query. tablesUndetermined reports a statement whose
-// tables the parser discards, so that no permission could be derived for it;
-// the executor fails closed on such a statement under strict table ACL.
+// tables the parser discards or leaves opaque, so the permissions returned,
+// if any, do not cover everything it touches; the executor fails closed on
+// such a statement under strict table ACL.
 func BuildPermissions(stmt sqlparser.Statement) (permissions []Permission, tablesUndetermined bool) {
 	// All Statement types myst be covered here.
 	switch node := stmt.(type) {
@@ -74,6 +75,32 @@ func BuildPermissions(stmt sqlparser.Statement) (permissions []Permission, table
 		for _, t := range node.AffectedTables() {
 			permissions = buildTableNamePermissions(t, tableacl.ADMIN, nil, permissions)
 		}
+		// CREATE TABLE ... AS SELECT copies the selected rows when it runs, so
+		// the source tables are read. A CREATE TABLE the parser could only partially parse
+		// keeps just the prefix it understood and is forwarded to MySQL as the
+		// client's raw text, so its body is opaque, and some opaque bodies
+		// copy rows (`(select ...)`, `AS TABLE t`, an EXCEPT source the parser
+		// truncated). Its table set is therefore undetermined and the executor
+		// fails closed on it under strict table ACL; a valid statement in
+		// syntax the grammar lacks is denied along with them.
+		switch ddl := node.(type) {
+		case *sqlparser.CreateTable:
+			switch {
+			case !ddl.IsFullyParsed():
+				tablesUndetermined = true
+			case ddl.Select != nil:
+				permissions = buildSubqueryPermissions(ddl.Select, tableacl.READER, permissions)
+			}
+		case *sqlparser.CreateView:
+			// A view reads nothing when it is defined, but it reads its
+			// source tables as the tablet's MySQL user every time it is
+			// queried, and the ACL then sees only the view's name. So the
+			// source is checked here, as MySQL requires SELECT on it to
+			// define the view.
+			permissions = buildSubqueryPermissions(ddl.Select, tableacl.READER, permissions)
+		case *sqlparser.AlterView:
+			permissions = buildSubqueryPermissions(ddl.Select, tableacl.READER, permissions)
+		}
 	case
 		*sqlparser.AlterMigration,
 		*sqlparser.RevertMigration,
@@ -99,8 +126,30 @@ func BuildPermissions(stmt sqlparser.Statement) (permissions []Permission, table
 		// inside an expression rather than CALLed, so `select f()` is checked
 		// on the tables it names and what f's body touches is not.
 		tablesUndetermined = true
+	case *sqlparser.ValuesStatement:
+		// Reachable through EXPLAIN ANALYZE; it reads only through the
+		// subqueries in its rows.
+		permissions = buildSubqueryPermissions(node, tableacl.READER, permissions)
+	case *sqlparser.ExplainStmt:
+		// An EXPLAIN carries the permissions of the statement it explains,
+		// whatever its format, as MySQL requires the explained statement's
+		// privileges. EXPLAIN ANALYZE executes the statement. A plain EXPLAIN
+		// or DESCRIBE reads too: MySQL reads const tables and evaluates
+		// uncorrelated subqueries while it optimizes, and the plan shows the
+		// outcome ("Impossible WHERE"), which answers a yes/no question about
+		// the data.
+		permissions, tablesUndetermined = BuildPermissions(node.Statement)
+	case *sqlparser.Show:
+		// A SHOW forwards its WHERE clause to MySQL, which evaluates any
+		// subquery in it, so those reads are checked. The SHOW's own subject
+		// stays unchecked.
+		permissions = buildSubqueryPermissions(node, tableacl.READER, permissions)
+	case *sqlparser.Set:
+		// A SET forwards its expressions to MySQL, which evaluates any
+		// subquery in them, so those reads are checked.
+		permissions = buildSubqueryPermissions(node, tableacl.READER, permissions)
 	case *sqlparser.Begin, *sqlparser.Commit, *sqlparser.Rollback,
-		*sqlparser.Savepoint, *sqlparser.Release, *sqlparser.SRollback, *sqlparser.Set, *sqlparser.Show, sqlparser.Explain,
+		*sqlparser.Savepoint, *sqlparser.Release, *sqlparser.SRollback, *sqlparser.ExplainTab,
 		*sqlparser.UnlockTables:
 		// no op
 	default:

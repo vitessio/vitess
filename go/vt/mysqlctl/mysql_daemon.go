@@ -131,6 +131,9 @@ type MysqlDaemon interface {
 
 	// ExecuteSuperQueryList executes a list of queries, no result
 	ExecuteSuperQueryList(ctx context.Context, queryList []string) error
+	// ExecuteSuperQueryListMulti executes a list of queries, each of which may
+	// hold several statements separated by a semicolon, no result
+	ExecuteSuperQueryListMulti(ctx context.Context, queryList []string) error
 
 	// FetchSuperQuery executes one query, returns the result
 	FetchSuperQuery(ctx context.Context, query string) (*sqltypes.Result, error)
