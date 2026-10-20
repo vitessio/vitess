@@ -370,11 +370,14 @@ func (ts *tmState) endReplicationInit(id, ticket uint64) bool {
 	return true
 }
 
-// refreshServing brings query service in line with the current state.
+// refreshServing brings a non-primary's query service in line with the
+// current state. Promotion and demotion manage a primary's query service
+// under the action lock, which the caller does not hold: a demotion disables
+// query service before it makes the tablet read-only.
 func (ts *tmState) refreshServing(ctx context.Context) {
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
-	if !ts.isOpen {
+	if !ts.isOpen || ts.tablet.Type == topodatapb.TabletType_PRIMARY {
 		return
 	}
 	if err := ts.updateLocked(ctx); err != nil {

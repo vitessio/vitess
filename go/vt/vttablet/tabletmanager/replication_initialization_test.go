@@ -1682,6 +1682,55 @@ func TestInternalRepointDoesNotReplaceNewerSource(t *testing.T) {
 	}
 }
 
+// TestDeferredRetryKeepsDemotingPrimaryOutOfService covers a retry that
+// refreshes query service while a forced demotion holds the action lock,
+// after it disabled query service and source-side semi-sync and before
+// super_read_only: either the deferral is still pending when the tablet is
+// promoted, or the retry completed it as a replica and refreshes afterwards.
+func TestDeferredRetryKeepsDemotingPrimaryOutOfService(t *testing.T) {
+	for _, completedAsReplica := range []bool{false, true} {
+		name := "pending at promotion"
+		if completedAsReplica {
+			name = "completed as replica"
+		}
+		t.Run(name, func(t *testing.T) {
+			tm, md, qsc, id := newReplicatingPendingTM(t)
+			md.ExpectedExecuteSuperQueryList = nil
+			if completedAsReplica {
+				require.NoError(t, tm.attemptDeferredReplicationInit(t.Context(), id))
+			}
+			require.NoError(t, tm.tmState.ChangeTabletType(t.Context(), topodatapb.TabletType_PRIMARY, DBActionNone))
+			require.True(t, qsc.IsServing())
+			md.ReadOnly = false
+			md.SemiSyncPrimaryEnabled = true
+			d := &blockingDemotionDaemon{FakeMysqlDaemon: md, entered: make(chan struct{}), release: make(chan struct{})}
+			tm.MysqlDaemon = d
+			var releaseOnce sync.Once
+			release := func() { releaseOnce.Do(func() { close(d.release) }) }
+			t.Cleanup(release)
+			finished := make(chan error, 1)
+			go func() {
+				_, err := tm.DemotePrimary(t.Context(), true)
+				finished <- err
+			}()
+			<-d.entered
+			require.False(t, qsc.IsServing())
+			require.False(t, md.SemiSyncPrimaryEnabled)
+			require.False(t, md.SuperReadOnly.Load())
+
+			if completedAsReplica {
+				tm.tmState.refreshServing(t.Context())
+			} else {
+				require.NoError(t, tm.retryReplicationInitializationOnce(t.Context(), id))
+			}
+			assert.False(t, qsc.IsServing(), "the retry re-enabled query service during demotion")
+
+			release()
+			require.NoError(t, <-finished)
+		})
+	}
+}
+
 // newReplicatingPendingTM returns a deferred replica whose replication runs
 // from the shard primary and acknowledges, with grants applied.
 func newReplicatingPendingTM(t *testing.T) (*TabletManager, *mysqlctl.FakeMysqlDaemon, *tabletservermock.Controller, uint64) {
