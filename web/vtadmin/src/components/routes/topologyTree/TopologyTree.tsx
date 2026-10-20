@@ -48,11 +48,11 @@ export const buildChildNodes = (cell: vtctldata.ITopologyCell | null | undefined
 };
 
 export const TopologyTree = () => {
-    interface RouteParams {
+    type RouteParams = {
         clusterID: string;
-    }
+    };
     useDocumentTitle('Cluster Topolgy');
-    const { clusterID } = useParams<RouteParams>();
+    const { clusterID } = useParams<RouteParams>() as RouteParams;
     const { data } = useTopologyPath({ clusterID, path: '/' });
     const [topologyNode, setTopologyNode] = useState<TopologyNode | undefined>();
 
