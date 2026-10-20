@@ -338,32 +338,18 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 	return uuid
 }
 
-<<<<<<< HEAD
-func readMigration(t *testing.T, uuid string) sqltypes.RowNamedValues {
-	rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
-	require.NotNil(t, rs)
-	row := rs.Named().Row()
-	require.NotNil(t, row)
-	return row
-}
-
-||||||| parent of d241dd4c42 (onlineddl: shorten the test suite's post-cut-over position wait (#21629))
-func readMigration(t *testing.T, uuid string) sqltypes.RowNamedValues {
-	rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, uuid)
-	require.NoError(t, err)
-	require.NotNil(t, rs)
-	row := rs.Named().Row()
-	require.NotNil(t, row)
-	return row
-}
-
-=======
->>>>>>> d241dd4c42 (onlineddl: shorten the test suite's post-cut-over position wait (#21629))
 func waitForMigration(t *testing.T, uuid string, timeout time.Duration) sqltypes.RowNamedValues {
 	terminalStatuses := []string{string(schema.OnlineDDLStatusComplete), string(schema.OnlineDDLStatusFailed), string(schema.OnlineDDLStatusCancelled)}
+	query, err := sqlparser.ParseAndBind("show vitess_migrations like %a", sqltypes.StringBindVariable(uuid))
+	require.NoError(t, err)
 	var row sqltypes.RowNamedValues
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
-		rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, uuid)
+		conn, err := mysql.Connect(t.Context(), &vtParams)
+		if !assert.NoError(c, err) {
+			return
+		}
+		defer conn.Close()
+		rs, err := conn.ExecuteFetch(query, -1, true)
 		if !assert.NoError(c, err) || !assert.NotNil(c, rs) {
 			return
 		}
