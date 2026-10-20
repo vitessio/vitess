@@ -362,9 +362,15 @@ func waitForMigration(t *testing.T, uuid string, timeout time.Duration) sqltypes
 			return
 		}
 		// The migration is complete, either successful or not.
-		if assert.Contains(c, terminalStatuses, migration["migration_status"].ToString(), "migration %s is not complete", uuid) {
-			row = migration
+		status := migration["migration_status"].ToString()
+		if !assert.Contains(c, terminalStatuses, status, "migration %s is not complete", uuid) {
+			return
 		}
+		// A failing migration gets its status before its message, so wait for the message too.
+		if status == string(schema.OnlineDDLStatusFailed) && !assert.NotEmpty(c, migration["message"].ToString(), "migration %s has no failure message yet", uuid) {
+			return
+		}
+		row = migration
 	}, timeout, 100*time.Millisecond)
 	return row
 }
