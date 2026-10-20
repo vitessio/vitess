@@ -177,7 +177,7 @@ sqlparser:
 codegen: sqlparser sizegen
 
 demo:
-	go install ./examples/demo/demo.go
+	CGO_ENABLED=0 go install -trimpath ./examples/demo/demo.go
 
 sizegen:
 	go run ./go/tools/sizegen/sizegen.go \
@@ -363,6 +363,26 @@ minimaltools:
 dependency_check:
 	./tools/dependency_check.sh
 
+<<<<<<< HEAD
+||||||| parent of aa835af9bd (ci: build the Go module and build caches in a dedicated warm workflow (#21614))
+# Checks for formatting and linting errors.
+lint:
+	go tool -modfile=tools/golangci-lint/go.mod golangci-lint run ./go/...
+
+# Applies autofixes for formatting and linting errors if supported.
+lint-fix:
+	go tool -modfile=tools/golangci-lint/go.mod golangci-lint run --fix ./go/...
+
+=======
+# Checks for formatting and linting errors.
+lint:
+	go run -trimpath -modfile=tools/golangci-lint/go.mod github.com/golangci/golangci-lint/v2/cmd/golangci-lint run ./go/...
+
+# Applies autofixes for formatting and linting errors if supported.
+lint-fix:
+	go run -trimpath -modfile=tools/golangci-lint/go.mod github.com/golangci/golangci-lint/v2/cmd/golangci-lint run --fix ./go/...
+
+>>>>>>> aa835af9bd (ci: build the Go module and build caches in a dedicated warm workflow (#21614))
 vtadmin_web_install:
 	cd web/vtadmin && npm install
 
@@ -374,7 +394,13 @@ vtadmin_web_proto_types: vtadmin_web_install
 
 vtadmin_authz_testgen:
 	go generate ./go/vt/vtadmin/
+<<<<<<< HEAD
 	go fmt ./go/vt/vtadmin/
+||||||| parent of aa835af9bd (ci: build the Go module and build caches in a dedicated warm workflow (#21614))
+	go tool -modfile=tools/gofumpt/go.mod gofumpt -w ./go/vt/vtadmin/
+=======
+	go run -trimpath -modfile=tools/gofumpt/go.mod mvdan.cc/gofumpt -w ./go/vt/vtadmin/
+>>>>>>> aa835af9bd (ci: build the Go module and build caches in a dedicated warm workflow (#21614))
 
 generate-flag-testdata:
 	./tools/generate_flag_testdata.sh

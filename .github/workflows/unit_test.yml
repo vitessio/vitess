@@ -139,6 +139,7 @@ jobs:
 
       - name: Set up Go
         if: needs.changes.outputs.unit_tests == 'true'
+<<<<<<< HEAD
         # zizmor: ignore[cache-poisoning] this workflow publishes no artifacts
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
@@ -147,6 +148,14 @@ jobs:
           cache-dependency-path: |
             go.sum
             tools/**/go.sum
+||||||| parent of aa835af9bd (ci: build the Go module and build caches in a dedicated warm workflow (#21614))
+        uses: $/.github/actions/setup-go
+=======
+        uses: $/.github/actions/setup-go
+        with:
+          # "make unit_test" and "make unit_test_race" run "make build" first.
+          build-cache: ${{ matrix.race && 'build,race' || 'build,unit' }}
+>>>>>>> aa835af9bd (ci: build the Go module and build caches in a dedicated warm workflow (#21614))
 
       - name: Set up python
         if: needs.changes.outputs.unit_tests == 'true'
@@ -225,5 +234,5 @@ jobs:
         run: |
           echo '## Slowest Tests' >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
-          go tool -modfile=tools/gotestsum/go.mod gotestsum tool slowest --num 20 --jsonfile report.json | tee -a "$GITHUB_STEP_SUMMARY"
+          go run -trimpath -modfile=tools/gotestsum/go.mod gotest.tools/gotestsum tool slowest --num 20 --jsonfile report.json | tee -a "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
