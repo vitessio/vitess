@@ -541,9 +541,13 @@ func stopReplicationAndBuildStatusMaps(
 		tabletAliasToWaitFor = topoproto.TabletAliasString(tabletToWaitFor)
 	}
 	numGoRoutines := 0
+	primaryQueried := false
 	for alias, tabletInfo := range tabletMap {
 		allTablets = append(allTablets, tabletInfo.Tablet)
 		if !ignoredTablets.Has(alias) {
+			if primaryAlias != nil && topoproto.TabletAliasEqual(primaryAlias, tabletInfo.Alias) {
+				primaryQueried = true
+			}
 			mustWaitFor := tabletAliasToWaitFor == alias
 			// If this is a tablet that we must wait for
 			// we increment numErrorsToWaitFor and pass in this to the
@@ -562,9 +566,11 @@ func stopReplicationAndBuildStatusMaps(
 	}
 	// In general we want to wait for n-1 tablets to respond, since we know the primary tablet is down.
 	requiredSuccesses := numGoRoutines - 1
-	if waitForAllTablets {
+	if waitForAllTablets || !primaryQueried {
 		// In the special case, where we are explicitly told to wait for all the tablets to return,
-		// we set the required success to all the go-routines.
+		// we set the required success to all the go-routines. We also wait for all of them when
+		// the primary isn't among them: the tablet left behind would be a healthy replica, and
+		// it may be the most advanced one.
 		requiredSuccesses = numGoRoutines
 	}
 
