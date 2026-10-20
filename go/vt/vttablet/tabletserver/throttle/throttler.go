@@ -115,7 +115,7 @@ func init() {
 }
 
 func registerThrottlerFlags(fs *pflag.FlagSet) {
-	utils.SetFlagStringVar(fs, &throttleTabletTypes, "throttle-tablet-types", throttleTabletTypes, "Comma separated VTTablet types to be considered by the throttler. default: 'replica'. example: 'replica,rdonly'. 'replica' always implicitly included")
+	utils.SetFlagStringVar(fs, &throttleTabletTypes, "throttle-tablet-types", throttleTabletTypes, "Comma separated VTTablet types to be considered by the throttler. default: 'replica'. example: 'replica,rdonly'. 'replica' always implicitly included. Apps on tablets of other types, except the primary, are not throttled")
 }
 
 var ErrThrottlerNotOpen = errors.New("throttler not open")
@@ -289,6 +289,12 @@ func (throttler *Throttler) initThrottleTabletTypes() {
 	}
 	// always on:
 	throttler.throttleTabletTypesMap[topodatapb.TabletType_REPLICA] = true
+}
+
+// isThrottleTabletType returns true when the throttler applies to a tablet of the given type: always for the
+// primary, and for other types when they are listed in --throttle-tablet-types.
+func (throttler *Throttler) isThrottleTabletType(tabletType topodatapb.TabletType) bool {
+	return tabletType == topodatapb.TabletType_PRIMARY || throttler.throttleTabletTypesMap[tabletType]
 }
 
 // InitDBConfig initializes keyspace and shard
@@ -1447,6 +1453,18 @@ func (throttler *Throttler) AppRequestMetricResult(ctx context.Context, appName 
 func (throttler *Throttler) checkScope(ctx context.Context, appName string, scope base.Scope, metricNames base.MetricNames, flags *CheckFlags) (checkResult *CheckResult) {
 	if !throttler.IsRunning() {
 		return okMetricCheckResult
+	}
+	if !throttlerapp.VitessName.Equals(appName) {
+		if tabletType := throttler.tabletTypeFunc(); !throttler.isThrottleTabletType(tabletType) {
+			// With the same --throttle-tablet-types, the primary neither counts this tablet's metrics nor
+			// renews heartbeats for it, so its own lag may be stale; its apps are not throttled. We return
+			// before marking this throttler as recently checked, so that this tablet does not ask the primary
+			// for heartbeats either. "vitess" checks, which the primary's probes use, still get this tablet's
+			// real metrics.
+			result := NewCheckResult(tabletmanagerdatapb.CheckThrottlerResponseCode_OK, 0, 0, appName, nil)
+			result.Message = fmt.Sprintf("tablet type %v is not in --throttle-tablet-types, so the throttler does not throttle apps on this tablet", tabletType)
+			return result
+		}
 	}
 	if exempted, matchedApp := throttler.IsAppExempted(appName); exempted {
 		// Some apps are exempt from checks. They are always responded with OK. This is because those apps are
