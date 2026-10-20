@@ -16,24 +16,24 @@ limitations under the License.
 
 package topo
 
-import "time"
+import (
+	"context"
+	"time"
+)
 
-// SetCellInfoCacheTTL sets how long ts.ConnForCell reuses a cell's connection without re-reading CellInfo.
+// SetCellInfoCacheTTL sets how long ts's StaleTolerantView reuses a cell's CellInfo.
 func (ts *Server) SetCellInfoCacheTTL(ttl time.Duration) {
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
 	ts.cellInfoCacheTTL = ttl
 }
 
-// ExpireCellInfo makes the next ts.ConnForCell for cell re-read its CellInfo.
+// ExpireCellInfo makes the next StaleTolerantView read for cell re-read its CellInfo.
 func (ts *Server) ExpireCellInfo(cell string) {
 	ts.expireCellInfo(cell)
 }
 
-// CellReadConn returns the connection that conn, as returned by ConnForCell, sends reads to.
-func CellReadConn(conn Conn) Conn {
-	if c, ok := conn.(*cachedCellConn); ok {
-		return c.readConn()
-	}
-	return conn
+// CellReader returns the connection that ts's StaleTolerantView reads cell's records through.
+func (ts *Server) CellReader(ctx context.Context, cell string) (any, error) {
+	return ts.cellReaderFor(ctx, cell)
 }

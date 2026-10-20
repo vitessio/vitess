@@ -105,8 +105,8 @@ func (ts *Server) CreateCellInfo(ctx context.Context, cell string, ci *topodatap
 	if _, err = ts.globalCell.Create(ctx, filePath, contents); err != nil {
 		return err
 	}
-	// A cell name can be reused after a delete, so a connection cached for an earlier cell of this name
-	// must not be reused.
+	// A cell name can be reused after a delete, so a CellInfo cached for an earlier cell of this name must
+	// not be reused.
 	ts.expireCellInfo(cell)
 	return nil
 }
@@ -169,9 +169,6 @@ func (ts *Server) DeleteCellInfo(ctx context.Context, cell string, force bool) e
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
-	// Check the cell's current topo server for serving keyspaces, not one a cached connection still points
-	// at after the cell was re-pointed by another process.
-	ts.expireCellInfo(cell)
 	srvKeyspaces, err := ts.GetSrvKeyspaceNames(ctx, cell)
 	switch {
 	case err == nil:

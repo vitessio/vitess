@@ -244,7 +244,7 @@ func (ts *Server) AddSrvKeyspacePartitions(ctx context.Context, keyspace string,
 		wg.Add(1)
 		go func(cell string) {
 			defer wg.Done()
-			srvKeyspace, conn, err := ts.getSrvKeyspaceForUpdate(ctx, cell, keyspace)
+			srvKeyspace, err := ts.GetSrvKeyspace(ctx, cell, keyspace)
 			switch {
 			case err == nil:
 				partitionFound := false
@@ -293,7 +293,7 @@ func (ts *Server) AddSrvKeyspacePartitions(ctx context.Context, keyspace string,
 					srvKeyspace.Partitions = append(srvKeyspace.GetPartitions(), partition)
 				}
 
-				err = updateSrvKeyspace(ctx, conn, keyspace, srvKeyspace)
+				err = ts.UpdateSrvKeyspace(ctx, cell, keyspace, srvKeyspace)
 				if err != nil {
 					rec.RecordError(err)
 					return
@@ -333,7 +333,7 @@ func (ts *Server) DeleteSrvKeyspacePartitions(ctx context.Context, keyspace stri
 		wg.Add(1)
 		go func(cell string) {
 			defer wg.Done()
-			srvKeyspace, conn, err := ts.getSrvKeyspaceForUpdate(ctx, cell, keyspace)
+			srvKeyspace, err := ts.GetSrvKeyspace(ctx, cell, keyspace)
 			switch {
 			case err == nil:
 				for _, partition := range srvKeyspace.GetPartitions() {
@@ -365,7 +365,7 @@ func (ts *Server) DeleteSrvKeyspacePartitions(ctx context.Context, keyspace stri
 					}
 				}
 
-				err = updateSrvKeyspace(ctx, conn, keyspace, srvKeyspace)
+				err = ts.UpdateSrvKeyspace(ctx, cell, keyspace, srvKeyspace)
 				if err != nil {
 					rec.RecordError(err)
 					return
@@ -405,11 +405,11 @@ func (ts *Server) UpdateSrvKeyspaceThrottlerConfig(ctx context.Context, keyspace
 		wg.Add(1)
 		go func(cell string) {
 			defer wg.Done()
-			srvKeyspace, conn, err := ts.getSrvKeyspaceForUpdate(ctx, cell, keyspace)
+			srvKeyspace, err := ts.GetSrvKeyspace(ctx, cell, keyspace)
 			switch {
 			case err == nil:
 				srvKeyspace.ThrottlerConfig = update(srvKeyspace.ThrottlerConfig)
-				if err := updateSrvKeyspace(ctx, conn, keyspace, srvKeyspace); err != nil {
+				if err := ts.UpdateSrvKeyspace(ctx, cell, keyspace, srvKeyspace); err != nil {
 					rec.RecordError(err)
 					return
 				}
@@ -471,7 +471,7 @@ func (ts *Server) UpdateDisableQueryService(ctx context.Context, keyspace string
 		wg.Add(1)
 		go func(cell string) {
 			defer wg.Done()
-			srvKeyspace, conn, err := ts.getSrvKeyspaceForUpdate(ctx, cell, keyspace)
+			srvKeyspace, err := ts.GetSrvKeyspace(ctx, cell, keyspace)
 			switch {
 			case err == nil:
 				for _, partition := range srvKeyspace.GetPartitions() {
@@ -499,7 +499,7 @@ func (ts *Server) UpdateDisableQueryService(ctx context.Context, keyspace string
 					}
 				}
 
-				err = updateSrvKeyspace(ctx, conn, keyspace, srvKeyspace)
+				err = ts.UpdateSrvKeyspace(ctx, cell, keyspace, srvKeyspace)
 				if err != nil {
 					rec.RecordError(err)
 					return
@@ -539,7 +539,7 @@ func (ts *Server) MigrateServedType(ctx context.Context, keyspace string, shards
 		wg.Add(1)
 		go func(cell, keyspace string) {
 			defer wg.Done()
-			srvKeyspace, conn, err := ts.getSrvKeyspaceForUpdate(ctx, cell, keyspace)
+			srvKeyspace, err := ts.GetSrvKeyspace(ctx, cell, keyspace)
 			switch {
 			case err == nil:
 				for _, partition := range srvKeyspace.GetPartitions() {
@@ -594,7 +594,7 @@ func (ts *Server) MigrateServedType(ctx context.Context, keyspace string, shards
 					return
 				}
 
-				err = updateSrvKeyspace(ctx, conn, keyspace, srvKeyspace)
+				err = ts.UpdateSrvKeyspace(ctx, cell, keyspace, srvKeyspace)
 				if err != nil {
 					rec.RecordError(err)
 					return
@@ -621,11 +621,7 @@ func (ts *Server) UpdateSrvKeyspace(ctx context.Context, cell, keyspace string, 
 	if err != nil {
 		return err
 	}
-	return updateSrvKeyspace(ctx, conn, keyspace, srvKeyspace)
-}
 
-// updateSrvKeyspace saves a new SrvKeyspace through conn. It is a blind write.
-func updateSrvKeyspace(ctx context.Context, conn Conn, keyspace string, srvKeyspace *topodatapb.SrvKeyspace) error {
 	nodePath := srvKeyspaceFileName(keyspace)
 	data, err := srvKeyspace.MarshalVT()
 	if err != nil {
@@ -674,22 +670,7 @@ func (ts *Server) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*t
 	if err != nil {
 		return nil, err
 	}
-	return getSrvKeyspace(ctx, conn, keyspace)
-}
 
-// getSrvKeyspaceForUpdate reads a cell's SrvKeyspace to update it, returning the connection to write it back
-// through.
-func (ts *Server) getSrvKeyspaceForUpdate(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, Conn, error) {
-	conn, err := ts.connForCellUpdate(ctx, cell)
-	if err != nil {
-		return nil, nil, err
-	}
-	srvKeyspace, err := getSrvKeyspace(ctx, conn, keyspace)
-	return srvKeyspace, conn, err
-}
-
-// getSrvKeyspace reads a SrvKeyspace through conn.
-func getSrvKeyspace(ctx context.Context, conn Conn, keyspace string) (*topodatapb.SrvKeyspace, error) {
 	nodePath := srvKeyspaceFileName(keyspace)
 	data, _, err := conn.Get(ctx, nodePath)
 	if err != nil {
