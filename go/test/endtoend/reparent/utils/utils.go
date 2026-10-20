@@ -25,12 +25,8 @@ import (
 	"os"
 	"os/exec"
 	"path"
-<<<<<<< HEAD
 	"reflect"
-||||||| parent of f189a16c83 (test: remove dead waits from the reparent e2e tests (#21623))
-=======
 	"strconv"
->>>>>>> f189a16c83 (test: remove dead waits from the reparent e2e tests (#21623))
 	"strings"
 	"testing"
 	"time"
@@ -44,12 +40,8 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-<<<<<<< HEAD
-	"vitess.io/vitess/go/vt/utils"
-||||||| parent of f189a16c83 (test: remove dead waits from the reparent e2e tests (#21623))
-=======
 	"vitess.io/vitess/go/vt/topo/topoproto"
->>>>>>> f189a16c83 (test: remove dead waits from the reparent e2e tests (#21623))
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 )

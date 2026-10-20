@@ -198,16 +198,8 @@ func TestReparentAvoid(t *testing.T) {
 	// tablets[1] is in the same cell and tablets[3] is in a different cell, so we must land on tablets[1]
 	utils.CheckPrimaryTablet(t, clusterInstance, tablets[1])
 
-<<<<<<< HEAD
 	// If we kill the tablet in the same cell as primary then reparent --avoid_tablet will fail.
-	utils.StopTablet(t, tablets[0], true)
-||||||| parent of f189a16c83 (test: remove dead waits from the reparent e2e tests (#21623))
-	// If we kill the tablet in the same cell as primary then reparent --avoid-tablet will fail.
-	utils.StopTablet(t, tablets[0], true)
-=======
-	// If we kill the tablet in the same cell as primary then reparent --avoid-tablet will fail.
 	utils.KillTablet(t, tablets[0])
->>>>>>> f189a16c83 (test: remove dead waits from the reparent e2e tests (#21623))
 	out, err := utils.PrsAvoid(t, clusterInstance, tablets[1])
 	require.Error(t, err)
 	if vtctldVersion >= 24 {
