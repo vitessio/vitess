@@ -18,8 +18,20 @@ all: grpcvtctldclient localvtctldclient
 
 grpcvtctldclient:
 	go generate ../$@/...
+<<<<<<< HEAD
 	gofmt -w ../$@/client_gen.go
+||||||| parent of aa835af9bd (ci: build the Go module and build caches in a dedicated warm workflow (#21614))
+	go tool -modfile=../../../../tools/gofumpt/go.mod gofumpt -w ../$@/client_gen.go
+=======
+	go run -trimpath -modfile=../../../../tools/gofumpt/go.mod mvdan.cc/gofumpt -w ../$@/client_gen.go
+>>>>>>> aa835af9bd (ci: build the Go module and build caches in a dedicated warm workflow (#21614))
 
 localvtctldclient:
 	go generate ../$@/...
+<<<<<<< HEAD
 	gofmt -w ../$@/client_gen.go
+||||||| parent of aa835af9bd (ci: build the Go module and build caches in a dedicated warm workflow (#21614))
+	go tool -modfile=../../../../tools/gofumpt/go.mod gofumpt -w ../$@/client_gen.go
+=======
+	go run -trimpath -modfile=../../../../tools/gofumpt/go.mod mvdan.cc/gofumpt -w ../$@/client_gen.go
+>>>>>>> aa835af9bd (ci: build the Go module and build caches in a dedicated warm workflow (#21614))

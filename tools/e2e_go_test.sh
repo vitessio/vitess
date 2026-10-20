@@ -38,4 +38,10 @@ fi
 # this command; go test applies the -run flag (the last occurrence wins) and
 # hands the trailing package string to the test binary, which ignores it.
 # shellcheck disable=SC2086
+<<<<<<< HEAD
 CGO_ENABLED=0 go tool -modfile=tools/gotestsum/go.mod gotestsum "${GOTESTSUM_ARGS[@]}" --raw-command -- go test -trimpath -json -v -count=1 $PACKAGES "$@" -args -alsologtostderr
+||||||| parent of aa835af9bd (ci: build the Go module and build caches in a dedicated warm workflow (#21614))
+CGO_ENABLED=0 go tool -modfile=tools/gotestsum/go.mod gotestsum "${GOTESTSUM_ARGS[@]}" --raw-command -- go test -trimpath -json -v -count=1 $PACKAGES "$@"
+=======
+CGO_ENABLED=0 go run -trimpath -modfile=tools/gotestsum/go.mod gotest.tools/gotestsum "${GOTESTSUM_ARGS[@]}" --raw-command -- go test -trimpath -json -v -count=1 $PACKAGES "$@"
+>>>>>>> aa835af9bd (ci: build the Go module and build caches in a dedicated warm workflow (#21614))

@@ -19,7 +19,13 @@ if ! cd go/vt/sqlparser/ ; then
 fi
 
 mv $CUR $TMP
+<<<<<<< HEAD
 output=$(go run ./goyacc -fo $CUR sql.y)
+||||||| parent of aa835af9bd (ci: build the Go module and build caches in a dedicated warm workflow (#21614))
+output=$(go tool -modfile=../../../tools/goyacc/go.mod goyacc -o $CUR sql.y)
+=======
+output=$(go run -trimpath -modfile=../../../tools/goyacc/go.mod github.com/vitessio/goyacc -o $CUR sql.y)
+>>>>>>> aa835af9bd (ci: build the Go module and build caches in a dedicated warm workflow (#21614))
 expectedOutput=$'\nconflicts: 5 shift/reduce'
 
 if [[ "$output" != "$expectedOutput" ]]; then
@@ -28,7 +34,15 @@ if [[ "$output" != "$expectedOutput" ]]; then
     exit 1
 fi
 
+<<<<<<< HEAD
 gofmt -w $CUR
+||||||| parent of aa835af9bd (ci: build the Go module and build caches in a dedicated warm workflow (#21614))
+go tool -modfile=../../../tools/goimports/go.mod goimports -local "vitess.io/vitess" -w $CUR
+go tool -modfile=../../../tools/gofumpt/go.mod gofumpt -w $CUR
+=======
+go run -trimpath -modfile=../../../tools/goimports/go.mod golang.org/x/tools/cmd/goimports -local "vitess.io/vitess" -w $CUR
+go run -trimpath -modfile=../../../tools/gofumpt/go.mod mvdan.cc/gofumpt -w $CUR
+>>>>>>> aa835af9bd (ci: build the Go module and build caches in a dedicated warm workflow (#21614))
 
 if ! diff -q $CUR $TMP > /dev/null ; then
         echo "ERROR: Regenerated parser $TMP does not match current version $(pwd)/sql.go:"
