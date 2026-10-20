@@ -20,8 +20,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
-	"path"
 	"strconv"
 	"strings"
 	"sync"
@@ -989,7 +987,6 @@ func TestReplicationStoppedWithSemiSyncBlocked(t *testing.T) {
 func TestRecoveryDeadlocks(t *testing.T) {
 	t.Run("PrimaryIsReadOnly+PrimarySemiSyncBlocked", func(t *testing.T) {
 		defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
-		disableSemiSyncOnAllTablets(t)
 		utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, nil, cluster.VTOrcConfiguration{
 			PreventCrossCellFailover: true,
 		}, cluster.DefaultVtorcsByCell, policy.DurabilitySemiSync)
@@ -1114,39 +1111,6 @@ func TestSetupWithOrphanedSemiSyncSource(t *testing.T) {
 	case <-done:
 	case <-time.After(3 * time.Minute):
 		require.Fail(t, "cluster setup did not complete, instance cleanup is blocked on an orphaned semi-sync source")
-	}
-}
-
-// disableSemiSyncOnAllTablets clears `rpl_semi_sync_source_enabled` and
-// `rpl_semi_sync_replica_enabled` on every tablet's mysqld in the shared
-// cluster. Required before SetupVttabletsAndVTOrcs when the previous test
-// left a primary with semi-sync source on: vttablet's TearDown does not
-// disable semi-sync, and `cleanAndStartVttablet` issues a DROP DATABASE
-// before restarting vttablet, which hangs forever in the semi-sync wait
-// because no acker is connected.
-//
-// Uses mysql.Connect directly (not utils.RunSQL) so that tablets whose
-// mysqld is not yet running (e.g., first subtest) are silently skipped
-// rather than failing the test.
-func disableSemiSyncOnAllTablets(t *testing.T) {
-	t.Helper()
-	for _, cellInfo := range clusterInfo.CellInfos {
-		all := append([]*cluster.Vttablet{}, cellInfo.ReplicaTablets...)
-		all = append(all, cellInfo.RdonlyTablets...)
-		for _, tablet := range all {
-			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-			params := mysql.ConnParams{
-				Uname:      "vt_dba",
-				UnixSocket: path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/mysql.sock", tablet.TabletUID)),
-			}
-			conn, err := mysql.Connect(ctx, &params)
-			cancel()
-			if err != nil {
-				continue
-			}
-			_, _ = conn.ExecuteFetch("SET GLOBAL rpl_semi_sync_source_enabled = 0, GLOBAL rpl_semi_sync_replica_enabled = 0", 1, false)
-			conn.Close()
-		}
 	}
 }
 
