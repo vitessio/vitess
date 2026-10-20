@@ -80,6 +80,9 @@ runs:
           go mod download || return 1
           local modfile
           for modfile in tools/*/go.mod; do
+            # Older release trees, which the upgrade/downgrade workflows also
+            # set up, have no tool modules; the unmatched glob stays literal.
+            [ -f "${modfile}" ] || continue
             go mod download -modfile="${modfile}" || return 1
           done
         }
