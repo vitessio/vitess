@@ -65,6 +65,7 @@
         - [ApplySchema session variables](#vttablet-applyschema-session-variables)
         - [Table ACL: statements whose tables cannot be determined are denied under strict table ACL](#vttablet-table-acl-undetermined-table-set)
         - [Table ACL: reads embedded in non-SELECT statements are now checked](#vttablet-table-acl-embedded-reads)
+        - [Tablets outside `--throttle-tablet-types` no longer throttle their apps](#vttablet-throttler-excluded-tablet-types)
     - **[VTCtld](#minor-changes-vtctld)**
         - [MySQL version-aware reparent candidate election](#vtctld-version-aware-reparent)
     - **[Backup/Restore](#minor-changes-backup)**
@@ -747,6 +748,16 @@ Connection settings — the SET statements vtgate attaches to a session's querie
 **Compatibility note:** a v24 vtgate still stores a targeted session's `SET` expression as written. Against a vttablet with this change running strict table ACL without dry run, a v24 vtgate session that runs `SET @@var = (<subquery>)` while targeted has that setting rejected on every later query until the client reconnects. Upgrade vtgate before vttablet, or avoid subqueries in targeted `SET` statements during the upgrade. Without strict table ACL nothing changes for such a session.
 
 See [#21139](https://github.com/vitessio/vitess/pull/21139) for details.
+
+#### <a id="vttablet-throttler-excluded-tablet-types"/>Tablets outside `--throttle-tablet-types` no longer throttle their apps</a>
+
+The tablet throttler now applies only to the primary and to tablets whose type is listed in `--throttle-tablet-types` (default `replica`). On a tablet of any other type, RDONLY by default, throttler checks by apps such as `vstreamer`, `rowstreamer` and `resultstreamer` always pass: the tablet's metrics, `--app-metrics` mappings and `--throttle-app` rules no longer apply there, and the tablet no longer asks the primary for heartbeats. Checks by the `vitess` app, which the primary's probes and `vtctldclient CheckThrottler` use by default, still report the tablet's real metrics.
+
+Previously such a tablet throttled the streams it served on its own lag, but with on-demand heartbeats (`--heartbeat-on-demand-duration`) the primary keeps heartbeats flowing only for the tablet types it probes, and an RDONLY tablet could request them at most once a minute. Its heartbeat went stale for most of every minute, so VTGate VStreams, workflows run with `--tablet-types rdonly`, and VDiffs sourced from RDONLY tablets (VDiff picks RDONLY first by default) were throttled on false lag.
+
+**Impact**: If you rely on RDONLY tablets throttling the streams they serve, whether on their own lag with always-on heartbeats, on self metrics mapped with `--app-metrics`, on `--throttle-app` rules, or through a query throttler strategy, add `rdonly` to `--throttle-tablet-types`. The primary then also counts RDONLY tablets in the shard metrics that Online DDL, table GC and VReplication targets check.
+
+See [#20248](https://github.com/vitessio/vitess/issues/20248) for details.
 
 
 ### <a id="minor-changes-vtctld"/>VTCtld</a>
