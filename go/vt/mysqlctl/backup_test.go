@@ -44,9 +44,11 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstats"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 const mysqlShutdownTimeout = 1 * time.Minute
@@ -70,6 +72,25 @@ func TestBackupExecutesBackupWithScopedParams(t *testing.T) {
 	require.Equal(t, backupstats.BackupEngine.String(), executeBackupStats.ScopeV[backupstats.ScopeComponent])
 	require.Contains(t, executeBackupStats.ScopeV, backupstats.ScopeImplementation)
 	require.Equal(t, "Fake", executeBackupStats.ScopeV[backupstats.ScopeImplementation])
+}
+
+// TestBackupParamsCopy tests that Copy carries IncludeBinlogs, which Backup
+// would otherwise silently drop before it reaches the backup engine.
+func TestBackupParamsCopy(t *testing.T) {
+	params := BackupParams{IncludeBinlogs: true}
+	assert.True(t, params.Copy().IncludeBinlogs)
+}
+
+// TestBackupRejectsIncludeBinlogsWithOtherEngine tests that Backup refuses
+// IncludeBinlogs for a non-builtin engine before starting a backup.
+func TestBackupRejectsIncludeBinlogsWithOtherEngine(t *testing.T) {
+	env := createFakeBackupRestoreEnv(t)
+	env.backupParams.IncludeBinlogs = true
+
+	err := Backup(env.ctx, env.backupParams)
+	require.Error(t, err)
+	assert.Equal(t, vtrpcpb.Code_INVALID_ARGUMENT, vterrors.Code(err))
+	assert.Empty(t, env.backupEngine.ExecuteBackupCalls)
 }
 
 // TestBackupNoStats tests that if BackupParams.Stats is nil, then Backup will

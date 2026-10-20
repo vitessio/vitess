@@ -52,7 +52,10 @@ const (
 	backupInnodbDataHomeDir     = "InnoDBData"
 	backupInnodbLogGroupHomeDir = "InnoDBLog"
 	backupBinlogDir             = "BinLog"
-	backupData                  = "Data"
+	// backupBinlogStripped marks binlogs stored as binlog.<seq> in BinlogFileEntries,
+	// restored under the target's binlog basename.
+	backupBinlogStripped = "BinLogStripped"
+	backupData           = "Data"
 
 	// backupManifestFileName is the MANIFEST file name within a backup.
 	backupManifestFileName = "MANIFEST"
@@ -127,6 +130,9 @@ func registerBackupFlags(fs *pflag.FlagSet) {
 func Backup(ctx context.Context, params BackupParams) error {
 	if params.Stats == nil {
 		params.Stats = backupstats.NoStats()
+	}
+	if err := ValidateIncludeBinlogs(params); err != nil {
+		return err
 	}
 
 	startTs := time.Now()
@@ -338,10 +344,19 @@ func ShouldRestore(ctx context.Context, logger logutil.Logger, cnf *Mycnf, mysql
 // ensureRestoredGTIDsMatchManifest makes @@gtid_executed and @@gtid_purged equal
 // the backup's GTID position. Both usually match already, because a full backup
 // is restored without binary logs, but Xtrabackup 2.4 restores @@gtid_purged as
-// of the backup. This runs before the restore state file is removed, so a restore
+// of the backup. If the backup includes binary logs, it only checks them and
+// @@gtid_executed. This runs before the restore state file is removed, so a restore
 // interrupted while resetting GTIDs is started again.
 func ensureRestoredGTIDsMatchManifest(ctx context.Context, manifest *BackupManifest, params *RestoreParams) error {
-	if manifest == nil || manifest.Position.GTIDSet == nil {
+	if manifest == nil {
+		return nil
+	}
+	if manifest.IncludesBinlogs {
+		// gtid_purged now comes from the first restored binlog, and setting it would
+		// RESET the binlogs away; check gtid_executed instead.
+		return verifyRestoredBinlogs(ctx, params.Mysqld, params.Cnf, manifest.Position)
+	}
+	if manifest.Position.GTIDSet == nil {
 		return nil
 	}
 	purged, err := params.Mysqld.GetGTIDPurged(ctx)

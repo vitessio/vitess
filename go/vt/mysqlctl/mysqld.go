@@ -1977,6 +1977,12 @@ func mysqlbinlogEnviron(baseEnv []string) []string {
 	return append(env, "TZ=UTC")
 }
 
+// mysqlApplyArgs returns the arguments for the mysql client that ApplyBinlogFile
+// replays mysqlbinlog's output through. The replay is deliberately binlogged.
+func mysqlApplyArgs(defaultsExtraFile string) []string {
+	return []string{"--defaults-extra-file=" + defaultsExtraFile}
+}
+
 // ApplyBinlogFile extracts a binary log file and applies it to MySQL. It is the equivalent of:
 // $ mysqlbinlog --include-gtids binlog.file | mysql
 func (mysqld *Mysqld) ApplyBinlogFile(ctx context.Context, req *mysqlctlpb.ApplyBinlogFileRequest) error {
@@ -2056,9 +2062,7 @@ func (mysqld *Mysqld) ApplyBinlogFile(ctx context.Context, req *mysqlctlpb.Apply
 			return vterrors.Wrapf(err, "failed to create defaults extra file")
 		}
 		defer os.Remove(cnf)
-		args := []string{
-			"--defaults-extra-file=" + cnf,
-		}
+		args := mysqlApplyArgs(cnf)
 
 		mysqlErrFile, err = os.CreateTemp("", "err-mysql-")
 		if err != nil {

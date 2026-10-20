@@ -227,6 +227,10 @@ type TablePlan struct {
 	PartialInserts map[string]*sqlparser.ParsedQuery
 	// PartialUpdates are same as PartialInserts, but for update statements
 	PartialUpdates map[string]*sqlparser.ParsedQuery
+	// PartialBitmaps caches the projection of each distinct AfterDataColumns
+	// bitmap received from the source onto the target column expressions. The
+	// key is Count plus the serialized Cols bytes.
+	PartialBitmaps map[string]*mappedDataColumns
 
 	CollationEnv   *collations.Environment
 	WorkflowConfig *vttablet.VReplicationConfig
@@ -583,7 +587,7 @@ func (tp *TablePlan) bindFieldVal(field *querypb.Field, val *sqltypes.Value) (*q
 }
 
 func (tp *TablePlan) clearEmptyPartialJSONDataColumns(rowChange *binlogdatapb.RowChange, afterVals []sqltypes.Value) {
-	if rowChange.JsonPartialValues == nil || rowChange.DataColumns == nil {
+	if rowChange.JsonPartialValues == nil || (rowChange.DataColumns == nil && rowChange.AfterDataColumns == nil) {
 		return
 	}
 
@@ -603,8 +607,15 @@ func (tp *TablePlan) clearEmptyPartialJSONDataColumns(rowChange *binlogdatapb.Ro
 			// partial and the diff is empty as a way to exclude it from the AFTER image.
 			// It still has the data bit set, however, even though it's not really
 			// present. So we have to account for this by unsetting the data bit so
-			// that the column's current JSON value is not lost.
-			setBit(rowChange.DataColumns.Cols, i, false)
+			// that the column's current JSON value is not lost. AfterDataColumns is
+			// indexed by tp.Fields like this loop; the legacy DataColumns only is
+			// when the filter does not reorder or drop columns.
+			if rowChange.AfterDataColumns != nil && int64(i) < rowChange.AfterDataColumns.Count {
+				setBit(rowChange.AfterDataColumns.Cols, i, false)
+			}
+			if rowChange.DataColumns != nil && int64(i) < rowChange.DataColumns.Count {
+				setBit(rowChange.DataColumns.Cols, i, false)
+			}
 		}
 		jsonIndex++
 	}
@@ -764,7 +775,7 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 			return nil, err
 		}
 		if tp.isPartial(rowChange) {
-			ins, err := tp.getPartialInsertQuery(rowChange.DataColumns)
+			ins, err := tp.getPartialInsertQuery(rowChange)
 			if err != nil {
 				return nil, err
 			}
@@ -781,7 +792,7 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 	case before && after:
 		if !tp.pkChanged(bindvars) && !tp.HasExtraSourcePkColumns {
 			if limit > 0 {
-				if err := tp.checkUpdateJSONRowSize(rowChange.After, rowChange.Before, rowChange.DataColumns, rowChange.JsonPartialValues, limit); err != nil {
+				if err := tp.checkUpdateJSONRowSize(rowChange.After, rowChange.Before, tp.streamedDataColumns(rowChange), rowChange.JsonPartialValues, limit); err != nil {
 					return nil, err
 				}
 			}
@@ -789,9 +800,15 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 				return nil, err
 			}
 			if tp.isPartial(rowChange) {
-				upd, err := tp.getPartialUpdateQuery(rowChange.DataColumns)
+				upd, err := tp.getPartialUpdateQuery(rowChange)
 				if err != nil {
 					return nil, err
+				}
+				if upd == nil {
+					// The image carries none of the target's writable columns, e.g.
+					// the source row change only touched columns the filter does
+					// not select. Nothing to apply.
+					return nil, nil
 				}
 				tp.Stats.PartialQueryCount.Add([]string{"update"}, 1)
 				return execParsedQuery(upd, bindvars, executor)
@@ -821,6 +838,7 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 		if tp.isPartial(rowChange) {
 			// We need to use a combination of the values in the BEFORE and AFTER image to generate the
 			// new row.
+			dataColumns := tp.streamedDataColumns(rowChange)
 			jsonIndex := 0
 			for i, field := range tp.Fields {
 				if field.Type == querypb.Type_JSON && rowChange.JsonPartialValues != nil {
@@ -873,7 +891,7 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 					jsonIndex++
 					continue
 				}
-				if !isBitSet(rowChange.DataColumns.Cols, i) {
+				if dataColumns != nil && (int64(i) >= dataColumns.Count || !isBitSet(dataColumns.Cols, i)) {
 					return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL,
 						"binary log event missing a needed value for %s.%s due to not using binlog-row-image=FULL; you will need to re-run the workflow with binlog-row-image=FULL",
 						tp.TargetName, field.Name)

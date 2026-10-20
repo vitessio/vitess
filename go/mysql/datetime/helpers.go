@@ -288,9 +288,9 @@ const (
 
 // SizeAndScaleFromString
 func SizeFromString(s string) int32 {
-	idx := strings.LastIndex(s, ".")
-	if idx == -1 {
+	_, frac, ok := strings.CutLast(s, ".")
+	if !ok {
 		return 0
 	}
-	return int32(len(s[idx+1:]))
+	return int32(len(frac))
 }

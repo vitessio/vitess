@@ -1349,6 +1349,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 		}
 	}
 
+	var postWritesPos replication.Position
 	if isVreplicationTestSuite {
 		// The testing suite may inject queries internally from the server via a recurring EVENT.
 		// Those queries are unaffected by query rules (ACLs) because they don't go through Vitess.
@@ -1358,6 +1359,14 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 		renameBeforeQuery := buildIdentifierQuery(sqlRenameTable, onlineDDL.Table, testSuiteBeforeTableName)
 		if _, err := e.execQuery(ctx, renameBeforeQuery); err != nil {
 			return err
+		}
+		// No write to the table can follow the RENAME, so the position right after it covers
+		// all of them. Reading it before the stage writes below makes the position end in the
+		// RENAME itself, which VReplication saves at once, rather than in the stage writes,
+		// which reach the stream as empty transactions that it saves only after its idle
+		// timeout.
+		if postWritesPos, err = e.primaryPosition(ctx); err != nil {
+			return vterrors.Wrapf(err, "failed reading pos after renaming")
 		}
 		e.updateMigrationStage(ctx, onlineDDL.UUID, "test suite 'before' table renamed")
 	} else {
@@ -1394,12 +1403,11 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 				return vterrors.Wrapf(err, "failed killing table lock holders and accessors")
 			}
 		}
-	}
 
-	e.updateMigrationStage(ctx, onlineDDL.UUID, "reading post-lock pos")
-	postWritesPos, err := e.primaryPosition(ctx)
-	if err != nil {
-		return vterrors.Wrapf(err, "failed reading pos after locking")
+		e.updateMigrationStage(ctx, onlineDDL.UUID, "reading post-lock pos")
+		if postWritesPos, err = e.primaryPosition(ctx); err != nil {
+			return vterrors.Wrapf(err, "failed reading pos after locking")
+		}
 	}
 
 	// Right now: new queries are buffered, any existing query will have executed, and worst case scenario is

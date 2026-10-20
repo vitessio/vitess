@@ -39110,6 +39110,9 @@ export namespace tabletmanagerdata {
         /** BackupRequest init_sql. */
         init_sql?: (tabletmanagerdata.BackupRequest.InitSQL.$Properties|null);
 
+        /** BackupRequest include_binlogs. */
+        include_binlogs: boolean;
+
         /**
          * Creates a new BackupRequest instance using the specified properties.
          * @param [properties] Properties to set
@@ -39214,6 +39217,9 @@ export namespace tabletmanagerdata {
 
             /** BackupRequest init_sql */
             init_sql?: (tabletmanagerdata.BackupRequest.InitSQL.$Properties|null);
+
+            /** BackupRequest include_binlogs */
+            include_binlogs?: (boolean|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
@@ -47327,6 +47333,9 @@ export namespace binlogdata {
         /** RowChange before_data_columns. */
         before_data_columns?: (binlogdata.RowChange.Bitmap.$Properties|null);
 
+        /** RowChange after_data_columns. */
+        after_data_columns?: (binlogdata.RowChange.Bitmap.$Properties|null);
+
         /**
          * Creates a new RowChange instance using the specified properties.
          * @param [properties] Properties to set
@@ -47425,6 +47434,9 @@ export namespace binlogdata {
 
             /** RowChange before_data_columns */
             before_data_columns?: (binlogdata.RowChange.Bitmap.$Properties|null);
+
+            /** RowChange after_data_columns */
+            after_data_columns?: (binlogdata.RowChange.Bitmap.$Properties|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
@@ -67938,6 +67950,9 @@ export namespace vtctldata {
         /** BackupRequest init_sql. */
         init_sql?: (tabletmanagerdata.BackupRequest.InitSQL.$Properties|null);
 
+        /** BackupRequest include_binlogs. */
+        include_binlogs: boolean;
+
         /**
          * Creates a new BackupRequest instance using the specified properties.
          * @param [properties] Properties to set
@@ -68045,6 +68060,9 @@ export namespace vtctldata {
 
             /** BackupRequest init_sql */
             init_sql?: (tabletmanagerdata.BackupRequest.InitSQL.$Properties|null);
+
+            /** BackupRequest include_binlogs */
+            include_binlogs?: (boolean|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
@@ -68232,6 +68250,9 @@ export namespace vtctldata {
         /** BackupShardRequest init_sql. */
         init_sql?: (tabletmanagerdata.BackupRequest.InitSQL.$Properties|null);
 
+        /** BackupShardRequest include_binlogs. */
+        include_binlogs: boolean;
+
         /**
          * Creates a new BackupShardRequest instance using the specified properties.
          * @param [properties] Properties to set
@@ -68339,6 +68360,9 @@ export namespace vtctldata {
 
             /** BackupShardRequest init_sql */
             init_sql?: (tabletmanagerdata.BackupRequest.InitSQL.$Properties|null);
+
+            /** BackupShardRequest include_binlogs */
+            include_binlogs?: (boolean|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
