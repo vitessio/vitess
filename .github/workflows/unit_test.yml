@@ -139,14 +139,7 @@ jobs:
 
       - name: Set up Go
         if: needs.changes.outputs.unit_tests == 'true'
-        # zizmor: ignore[cache-poisoning] this workflow publishes no artifacts
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
-          cache: ${{ (github.base_ref == 'main' || (github.base_ref == '' && github.ref_name == 'main')) && 'true' || 'false' }}
-          cache-dependency-path: |
-            go.sum
-            tools/**/go.sum
+        uses: $/.github/actions/setup-go
 
       - name: Set up python
         if: needs.changes.outputs.unit_tests == 'true'
@@ -171,8 +164,6 @@ jobs:
           mkdir -p dist bin
           curl --max-time 10 --retry 3 --retry-max-time 45 -s -L https://github.com/coreos/etcd/releases/download/v3.5.25/etcd-v3.5.25-linux-amd64.tar.gz | tar -zxC dist
           mv dist/etcd-v3.5.25-linux-amd64/{etcd,etcdctl} bin/
-
-          go mod download
 
       - name: Run make tools
         if: needs.changes.outputs.unit_tests == 'true'
