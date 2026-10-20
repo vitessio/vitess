@@ -607,7 +607,8 @@ func TestNoReplicas(t *testing.T) {
 		// A check without an app name is a "vitess" check, like the primary's probes, and gets the tablet's real metrics.
 		resp, err := throttler.CheckThrottler(&clusterInstance.VtctldClientProcess, replicaTablet, "", nil)
 		require.NoError(t, err)
-		assert.NotEmpty(t, resp.Check.Metrics, "%+v", resp)
+		// The RPC adds a "default" metric to a result without metrics, so look for a real one.
+		assert.Contains(t, resp.Check.Metrics, base.LagMetricName.String(), "%+v", resp)
 		assert.NotContains(t, resp.Check.Message, "--throttle-tablet-types", "%+v", resp)
 	})
 	t.Run("VStream from RDONLY tablet is not throttled", func(t *testing.T) {

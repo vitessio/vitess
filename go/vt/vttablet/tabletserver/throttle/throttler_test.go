@@ -2137,14 +2137,8 @@ func TestReplica(t *testing.T) {
 					assert.Equal(t, 2.718, checkResult.Value, "unexpected result: %+v", checkResult) // loadavg exceeds its threshold
 					assert.Len(t, checkResult.Metrics, len(base.KnownMetricNames))
 
-					select {
-					case <-ctx.Done():
-						assert.Fail(t, "context expired before testing completed")
-						return
-					case <-time.After(time.Second):
-						// None of the checks above asked the primary for heartbeats.
-						assert.Empty(t, tmClient.AppNames())
-					}
+					// None of the checks above asked the primary for heartbeats.
+					assert.Never(t, func() bool { return len(tmClient.AppNames()) > 0 }, time.Second, 10*time.Millisecond)
 				})
 				t.Run("validate stimulator", func(t *testing.T) {
 					checkResult := throttler.Check(ctx, throttlerapp.OnlineDDLName.String(), nil, flags)
