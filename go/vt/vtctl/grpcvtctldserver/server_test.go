@@ -15641,18 +15641,10 @@ func TestValidateTabletThrottlerStrategyConfig_RejectsUnenforceableRules(t *test
 			config:  config(rule("SELECT", &querythrottler.ThrottleThreshold{Above: math.Inf(-1), Throttle: 100})),
 			wantErr: "threshold[0] 'above' must be a finite number, got -Inf",
 		},
-		{
-			name:    "DDL statement type",
-			config:  config(rule("DDL", &querythrottler.ThrottleThreshold{Above: 5, Throttle: 100})),
-			wantErr: `statement type "DDL" is not supported by the query throttler`,
-		},
-		{
-			name:    "MIGRATION statement type",
-			config:  config(rule("MIGRATION", &querythrottler.ThrottleThreshold{Above: 5, Throttle: 100})),
-			wantErr: `statement type "MIGRATION" is not supported by the query throttler`,
-		},
 	}
-	for _, stmtType := range []string{"SELECT", "INSERT", "REPLACE", "UPDATE", "DELETE"} {
+	// DDL and MIGRATION plans reach the throttler without a parsed query, and their rules
+	// still apply, so they are valid statement types like the data-plane ones.
+	for _, stmtType := range []string{"SELECT", "INSERT", "REPLACE", "UPDATE", "DELETE", "DDL", "MIGRATION"} {
 		tests = append(tests, struct {
 			name    string
 			config  *querythrottler.Config

@@ -193,15 +193,6 @@ func validateUpdateQueryThrottlerConfig(cmd *cobra.Command, args []string) error
 	return nil
 }
 
-// queryThrottlerStatementTypes mirrors grpcvtctldserver.queryThrottlerStatementTypes.
-var queryThrottlerStatementTypes = map[string]struct{}{
-	sqlparser.StmtSelect.String():  {},
-	sqlparser.StmtInsert.String():  {},
-	sqlparser.StmtReplace.String(): {},
-	sqlparser.StmtUpdate.String():  {},
-	sqlparser.StmtDelete.String():  {},
-}
-
 // validateQueryThrottlerConfigContent performs client-side validation of the
 // config content for fast feedback before the gRPC round-trip.
 func validateQueryThrottlerConfigContent(cfg *querythrottler.Config) error {
@@ -235,9 +226,6 @@ func validateQueryThrottlerConfigContent(cfg *querythrottler.Config) error {
 		for stmtType, metricRuleSet := range stmtRuleSet.GetStatementRules() {
 			if !sqlparser.IsValidStatementType(stmtType) {
 				return fmt.Errorf("unknown statement type %q (tablet_type=%s)", stmtType, tabletType)
-			}
-			if _, ok := queryThrottlerStatementTypes[stmtType]; !ok {
-				return fmt.Errorf("statement type %q is not supported by the query throttler, must be one of SELECT, INSERT, REPLACE, UPDATE, DELETE (tablet_type=%s)", stmtType, tabletType)
 			}
 			if len(metricRuleSet.GetMetricRules()) == 0 {
 				return fmt.Errorf("metric_rules cannot be empty (tablet_type=%s, statement=%s)", tabletType, stmtType)

@@ -5957,15 +5957,6 @@ func validateQueryThrottlerConfig(cfg *querythrottler.Config) error {
 	}
 }
 
-// queryThrottlerStatementTypes are the statement types the query throttler governs.
-var queryThrottlerStatementTypes = map[string]struct{}{
-	sqlparser.StmtSelect.String():  {},
-	sqlparser.StmtInsert.String():  {},
-	sqlparser.StmtReplace.String(): {},
-	sqlparser.StmtUpdate.String():  {},
-	sqlparser.StmtDelete.String():  {},
-}
-
 func validateTabletThrottlerStrategyConfig(cfg *querythrottler.Config) error {
 	tsc := cfg.GetTabletStrategyConfig()
 	if tsc == nil {
@@ -5992,13 +5983,6 @@ func validateTabletThrottlerStrategyConfig(cfg *querythrottler.Config) error {
 			// Reject statement types the runtime can never emit (StatementType.String()).
 			if !sqlparser.IsValidStatementType(stmtType) {
 				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unknown statement type %q (tablet_type=%s)", stmtType, tabletType)
-			}
-			// The query throttler only governs data-plane queries. Other statement types,
-			// such as MIGRATION and partially-parsed DDL, reach it without a query and are
-			// always allowed, so a rule for them would silently never apply.
-			if _, ok := queryThrottlerStatementTypes[stmtType]; !ok {
-				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
-					"statement type %q is not supported by the query throttler, must be one of SELECT, INSERT, REPLACE, UPDATE, DELETE (tablet_type=%s)", stmtType, tabletType)
 			}
 			if len(metricRuleSet.GetMetricRules()) == 0 {
 				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "metric_rules cannot be empty (tablet_type=%s, statement=%s)", tabletType, stmtType)

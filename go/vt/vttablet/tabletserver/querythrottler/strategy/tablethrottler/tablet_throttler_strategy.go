@@ -313,15 +313,6 @@ func (s *TabletThrottlerStrategy) isStale(state *cacheState) bool {
 // with metric thresholds; when a threshold is breached, the query is throttled with the
 // probability that threshold configures. transactionID is unused.
 func (s *TabletThrottlerStrategy) Evaluate(ctx context.Context, targetTabletType topodatapb.TabletType, parsedQuery *sqlparser.ParsedQuery, statementType sqlparser.StatementType, transactionID int64, attrs registry.QueryAttributes) registry.ThrottleDecision {
-	// parsedQuery is plan.FullQuery, which Build() leaves nil for ALTER/REVERT MIGRATION
-	// and partially-parsed DDL. Fail open there.
-	if parsedQuery == nil {
-		return registry.ThrottleDecision{
-			Throttle: false,
-			Message:  "No query to throttle",
-		}
-	}
-
 	startTime := time.Now()
 	tabletTypeStr := targetTabletType.String()
 	// FAST PATH: Check if system is healthy before doing any expensive work
