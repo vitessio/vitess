@@ -19,7 +19,9 @@ package mysqlctl
 import (
 	"bytes"
 	"context"
+	"errors"
 	"log/slog"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -30,6 +32,7 @@ import (
 	"vitess.io/vitess/go/mysql/sqlmode"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
 )
 
@@ -197,10 +200,11 @@ func TestExecuteSuperQueryListTaintedDiscardsConnection(t *testing.T) {
 	require.Equal(t, 2, db.GetQueryCalledNum(sqlmode.SessionSetupQuery("utf8mb4", "utf8mb4_0900_ai_ci")))
 }
 
-// TestReplicationReadsHonorContext checks that replication reads return when
-// their context ends, even if mysqld never answers. Callers make these reads
-// while holding the tablet's action lock, which a hung mysqld must not keep
-// held.
+// TestReplicationReadsHonorContext checks that replication reads and commands
+// return when their context ends, even if mysqld never answers, not even the
+// handshake of the connection that replaces the one closed on timeout. Callers
+// make these calls while holding the tablet's action lock, which a hung mysqld
+// must not keep held.
 func TestReplicationReadsHonorContext(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
@@ -228,6 +232,12 @@ func TestReplicationReadsHonorContext(t *testing.T) {
 			return err
 		},
 	}, {
+		name:  "command",
+		query: "STOP REPLICA",
+		read: func(ctx context.Context, mysqld *Mysqld) error {
+			return mysqld.ExecuteSuperQueryList(ctx, []string{"STOP REPLICA"})
+		},
+	}, {
 		name:  "connection check",
 		query: "SELECT 1",
 		read: func(ctx context.Context, mysqld *Mysqld) error {
@@ -251,14 +261,34 @@ func TestReplicationReadsHonorContext(t *testing.T) {
 			db.SetBeforeFunc(tc.query, func() { <-release })
 
 			params := *db.ConnParams()
-			mysqld := NewMysqld(dbconfigs.NewTestDBConfigs(params, params, "fakesqldb"))
+			dbcfgs := dbconfigs.NewTestDBConfigs(params, params, "fakesqldb")
+			mysqld := NewMysqld(dbcfgs)
 			t.Cleanup(mysqld.Close)
+			// Only the first pool connection completes its handshake.
+			mysqld.dbaPool.Close()
+			mysqld.dbaPool = dbconnpool.NewConnectionPool("DbaConnPool", nil, dbaPoolSize, DbaIdleTimeout, 0, 0)
+			var connects atomic.Int32
+			mysqld.dbaPool.ConnPool.Open(func(ctx context.Context) (*dbconnpool.DBConnection, error) {
+				if connects.Add(1) == 1 {
+					return dbconnpool.NewDBConnection(ctx, dbcfgs.DbaWithDB())
+				}
+				select {
+				case <-release:
+				case <-ctx.Done():
+				}
+				return nil, errors.New("handshake did not complete")
+			}, nil)
 
 			ctx, cancel := context.WithTimeout(t.Context(), 200*time.Millisecond)
 			defer cancel()
-			start := time.Now()
-			require.ErrorIs(t, tc.read(ctx, mysqld), context.DeadlineExceeded)
-			assert.Less(t, time.Since(start), 30*time.Second)
+			returned := make(chan error, 1)
+			go func() { returned <- tc.read(ctx, mysqld) }()
+			select {
+			case err := <-returned:
+				require.ErrorIs(t, err, context.DeadlineExceeded)
+			case <-time.After(30 * time.Second):
+				require.FailNow(t, "the call did not return after its context ended")
+			}
 		})
 	}
 }
