@@ -221,6 +221,13 @@ func TestReplicationReadsHonorContext(t *testing.T) {
 			return err
 		},
 	}, {
+		name:  "semi-sync plugin check",
+		query: "SHOW VARIABLES LIKE 'rpl_semi_sync_%_enabled'",
+		read: func(ctx context.Context, mysqld *Mysqld) error {
+			_, err := mysqld.SemiSyncExtensionLoaded(ctx)
+			return err
+		},
+	}, {
 		name:  "connection check",
 		query: "SELECT 1",
 		read: func(ctx context.Context, mysqld *Mysqld) error {
