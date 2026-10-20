@@ -1166,6 +1166,50 @@ func TestDeadlockOnClose(t *testing.T) {
 	}
 }
 
+// TestCloseInterruptsStalledQuery checks that Close returns while a timer
+// callback's query gets no answer: callers close the monitor while holding the
+// tablet's action lock.
+func TestCloseInterruptsStalledQuery(t *testing.T) {
+	db := fakesqldb.New(t)
+	release := make(chan struct{})
+	t.Cleanup(func() {
+		close(release)
+		db.Close()
+	})
+	params := db.ConnParams()
+	cp := *params
+	m := NewMonitor(&tabletenv.TabletConfig{
+		DB:              dbconfigs.NewTestDBConfigs(cp, cp, ""),
+		SemiSyncMonitor: tabletenv.SemiSyncMonitorConfig{Interval: time.Hour},
+	}, exporter)
+	query := fmt.Sprintf(semiSyncStatsQuery, m.actionTimeout.Milliseconds())
+	db.AddQuery(query, &sqltypes.Result{})
+	entered := make(chan struct{})
+	db.SetBeforeFunc(query, func() {
+		close(entered)
+		<-release
+	})
+
+	m.Open()
+	m.ticks.Trigger()
+	select {
+	case <-entered:
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "the monitor did not query the semi-sync stats")
+	}
+
+	closed := make(chan struct{})
+	go func() {
+		m.Close()
+		close(closed)
+	}()
+	select {
+	case <-closed:
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "Close waited for the stalled query")
+	}
+}
+
 // TestSemiSyncMonitor tests the semi-sync monitor as a black box.
 // It only calls the exported methods to see they work as intended.
 func TestSemiSyncMonitor(t *testing.T) {
