@@ -255,12 +255,10 @@ func (tm *TabletManager) StopReplication(ctx context.Context) error {
 		return err
 	}
 	defer tm.unlock()
-
-	if err := tm.stopReplicationLocked(ctx); err != nil {
-		return err
-	}
+	// Record the stop first: the work can fail after replication stopped.
 	tm.tmState.replicationRunRequested(ticket, false)
-	return nil
+
+	return tm.stopReplicationLocked(ctx)
 }
 
 func (tm *TabletManager) stopReplicationLocked(ctx context.Context) error {
@@ -284,6 +282,8 @@ func (tm *TabletManager) StopReplicationMinimum(ctx context.Context, position st
 		return "", err
 	}
 	defer tm.unlock()
+	// Record the stop first: the work can fail after replication stopped.
+	tm.tmState.replicationRunRequested(ticket, false)
 
 	pos, err := replication.DecodePosition(position)
 	if err != nil {
@@ -297,7 +297,6 @@ func (tm *TabletManager) StopReplicationMinimum(ctx context.Context, position st
 	if err := tm.stopReplicationLocked(ctx); err != nil {
 		return "", err
 	}
-	tm.tmState.replicationRunRequested(ticket, false)
 	pos, err = tm.MysqlDaemon.PrimaryPosition(ctx)
 	if err != nil {
 		return "", err
@@ -390,6 +389,8 @@ func (tm *TabletManager) StartReplicationUntilAfter(ctx context.Context, positio
 		return err
 	}
 	defer tm.unlock()
+	// Record the stop first: the work can fail after replication stopped.
+	tm.tmState.replicationRunRequested(ticket, false)
 
 	waitCtx, cancel := context.WithTimeout(ctx, waitTime)
 	defer cancel()
@@ -399,12 +400,7 @@ func (tm *TabletManager) StartReplicationUntilAfter(ctx context.Context, positio
 		return err
 	}
 
-	if err := tm.MysqlDaemon.StartReplicationUntilAfter(waitCtx, pos); err != nil {
-		return err
-	}
-	// Replication stops at the position.
-	tm.tmState.replicationRunRequested(ticket, false)
-	return nil
+	return tm.MysqlDaemon.StartReplicationUntilAfter(waitCtx, pos)
 }
 
 // GetReplicas returns the address of all the replicas
@@ -427,12 +423,10 @@ func (tm *TabletManager) ResetReplication(ctx context.Context) error {
 		return err
 	}
 	defer tm.unlock()
-
-	if err := tm.MysqlDaemon.ResetReplication(ctx); err != nil {
-		return err
-	}
+	// Record the stop first: the work can fail after replication stopped.
 	tm.tmState.replicationRunRequested(ticket, false)
-	return nil
+
+	return tm.MysqlDaemon.ResetReplication(ctx)
 }
 
 // InitPrimary enables writes and returns the replication position.
@@ -919,6 +913,8 @@ func (tm *TabletManager) ResetReplicationParameters(ctx context.Context) error {
 		return err
 	}
 	defer tm.unlock()
+	// Record the stop first: the work can fail after replication stopped.
+	tm.tmState.replicationRunRequested(ticket, false)
 
 	err := tm.MysqlDaemon.StopReplication(ctx, tm.hookExtraEnv())
 	if err != nil {
@@ -929,7 +925,6 @@ func (tm *TabletManager) ResetReplicationParameters(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	tm.tmState.replicationRunRequested(ticket, false)
 	return nil
 }
 

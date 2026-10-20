@@ -1746,6 +1746,57 @@ func TestDeferredInitializationKeepsReplicationStoppedOnRequest(t *testing.T) {
 	}
 }
 
+// TestFailedStopRequestKeepsReplicationStopped covers stop requests that
+// return an error after replication stopped: a reset that fails after its
+// STOP REPLICA, or a stop or bounded replay whose result the request did not
+// see.
+func TestFailedStopRequestKeepsReplicationStopped(t *testing.T) {
+	pos, err := replication.ParsePosition(gtidFlavor, gtidPosition)
+	require.NoError(t, err)
+	failed := errors.New("failed after stopping replication")
+	for _, tc := range []struct {
+		name    string
+		queries []string
+		failing string
+		stop    func(context.Context, *TabletManager) error
+	}{
+		{name: "StopReplication", failing: "STOP REPLICA", stop: func(ctx context.Context, tm *TabletManager) error {
+			return tm.StopReplication(ctx)
+		}},
+		{name: "StopReplicationMinimum", failing: "STOP REPLICA", stop: func(ctx context.Context, tm *TabletManager) error {
+			_, err := tm.StopReplicationMinimum(ctx, gtidFlavor+"/"+gtidPosition, 30*time.Second)
+			return err
+		}},
+		{name: "StartReplicationUntilAfter", failing: "START REPLICA UNTIL AFTER", stop: func(ctx context.Context, tm *TabletManager) error {
+			return tm.StartReplicationUntilAfter(ctx, gtidFlavor+"/"+gtidPosition, 30*time.Second)
+		}},
+		{name: "ResetReplication", failing: "FAKE RESET ALL REPLICATION", stop: func(ctx context.Context, tm *TabletManager) error {
+			return tm.ResetReplication(ctx)
+		}},
+		{name: "ResetReplicationParameters", queries: []string{"STOP REPLICA"}, failing: "FAKE RESET REPLICA ALL", stop: func(ctx context.Context, tm *TabletManager) error {
+			return tm.ResetReplicationParameters(ctx)
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tm, md, qsc, id := newReplicatingPendingTM(t)
+			md.WaitPrimaryPositions = []replication.Position{pos}
+			md.StartReplicationUntilAfterPos = pos
+			md.ExpectedExecuteSuperQueryList = tc.queries
+			md.ExecuteSuperQueryErrorMap = map[string]error{tc.failing: failed}
+			require.ErrorIs(t, tc.stop(t.Context(), tm), failed)
+			require.NoError(t, md.CheckSuperQueryList())
+			md.Replicating = false
+			md.ExecuteSuperQueryErrorMap = nil
+			md.ExpectedExecuteSuperQueryList, md.ExpectedExecuteSuperQueryCurrent = nil, 0
+
+			require.ErrorContains(t, tm.retryReplicationInitializationOnce(t.Context(), id), "replication was stopped on request")
+			require.NoError(t, md.CheckSuperQueryList(), "the retry must not undo the stop")
+			assert.False(t, md.Replicating)
+			assert.False(t, qsc.IsServing())
+		})
+	}
+}
+
 func TestRequestThatStartsReplicationResumesInitialization(t *testing.T) {
 	oldPrimary := &topodatapb.TabletAlias{Cell: "cell1", Uid: 2}
 	for _, tc := range []struct {
