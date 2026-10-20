@@ -199,7 +199,13 @@ func (hook *Hook) Execute() (result *HookResult) {
 // ExecuteOptional executes an optional hook, logs if it doesn't
 // exist, and returns a printable error.
 func (hook *Hook) ExecuteOptional() error {
-	hr := hook.Execute()
+	return hook.ExecuteOptionalContext(context.Background())
+}
+
+// ExecuteOptionalContext is ExecuteOptional, but the hook is killed when ctx
+// ends.
+func (hook *Hook) ExecuteOptionalContext(ctx context.Context) error {
+	hr := hook.ExecuteContext(ctx)
 	switch hr.ExitStatus {
 	case HOOK_DOES_NOT_EXIST:
 		log.Info(fmt.Sprintf("%v hook doesn't exist", hook.Name))

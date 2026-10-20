@@ -63,6 +63,29 @@ func TestExecuteContext(t *testing.T) {
 	assert.Equal(t, HOOK_SUCCESS, hr.ExitStatus)
 }
 
+func TestExecuteOptionalContext(t *testing.T) {
+	vtroot, err := vtenv.VtRoot()
+	require.NoError(t, err)
+	sleep, err := exec.LookPath("sleep")
+	require.NoError(t, err)
+	sleepHookPath := path.Join(vtroot, "vthook", "sleep")
+	if _, err := os.Lstat(sleepHookPath); err == nil {
+		require.NoError(t, os.Remove(sleepHookPath))
+	}
+	require.NoError(t, os.Symlink(sleep, sleepHookPath))
+	t.Cleanup(func() { require.NoError(t, os.Remove(sleepHookPath)) })
+
+	// A hook that runs past the context's deadline is killed.
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Millisecond)
+	defer cancel()
+	start := time.Now()
+	require.Error(t, NewHook("sleep", []string{"30"}).ExecuteOptionalContext(ctx))
+	assert.Less(t, time.Since(start), 20*time.Second)
+
+	// A missing hook is still not an error.
+	require.NoError(t, NewSimpleHook("missing_hook").ExecuteOptionalContext(t.Context()))
+}
+
 func TestExecuteOptional(t *testing.T) {
 	vtroot, err := vtenv.VtRoot()
 	require.NoError(t, err)
