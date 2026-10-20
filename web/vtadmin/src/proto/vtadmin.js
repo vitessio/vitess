@@ -110868,7 +110868,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 writer.uint32(/* id 3, wireType 0 =*/24).bool(message.skip_request_heartbeats);
             if (message.ok_if_not_exists != null && $Object.hasOwnProperty.call(message, "ok_if_not_exists") && message.ok_if_not_exists !== false)
                 writer.uint32(/* id 4, wireType 0 =*/32).bool(message.ok_if_not_exists);
-            if (message.throttler_type != null && $Object.hasOwnProperty.call(message, "throttler_type"))
+            if (message.throttler_type != null && $Object.hasOwnProperty.call(message, "throttler_type") && message.throttler_type !== 0)
                 writer.uint32(/* id 6, wireType 0 =*/48).int32(message.throttler_type);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -111033,13 +111033,8 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 if (typeof message.ok_if_not_exists !== "boolean")
                     return "ok_if_not_exists: boolean expected";
             if (message.throttler_type != null && $Object.hasOwnProperty.call(message, "throttler_type"))
-                switch (message.throttler_type) {
-                default:
+                if (typeof message.throttler_type !== "number" || (message.throttler_type | 0) !== message.throttler_type)
                     return "throttler_type: enum value expected";
-                case 0:
-                case 1:
-                    break;
-                }
             return null;
         };
 
@@ -111075,12 +111070,6 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                     message.ok_if_not_exists = $Boolean(object.ok_if_not_exists);
             if (object.throttler_type !== 0 && (typeof object.throttler_type !== "string" || $root.tabletmanagerdata.ThrottlerType[object.throttler_type] !== 0))
                 switch (object.throttler_type) {
-                default:
-                    if (typeof object.throttler_type === "number") {
-                        message.throttler_type = object.throttler_type;
-                        break;
-                    }
-                    break;
                 case "DEFAULT_LAG_THROTTLER":
                 case 0:
                     message.throttler_type = 0;
@@ -111089,6 +111078,9 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 case 1:
                     message.throttler_type = 1;
                     break;
+                default:
+                    if (typeof object.throttler_type === "number" && (object.throttler_type | 0) === object.throttler_type)
+                        message.throttler_type = object.throttler_type;
                 }
             return message;
         };
@@ -111188,7 +111180,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
      * @property {number} DEDICATED_QUERY_THROTTLER=1 DEDICATED_QUERY_THROTTLER value
      */
     tabletmanagerdata.ThrottlerType = (function() {
-        const valuesById = {}, values = $Object.create(valuesById);
+        const valuesById = $Object.create(null), values = $Object.create(valuesById);
         values[valuesById[0] = "DEFAULT_LAG_THROTTLER"] = 0;
         values[valuesById[1] = "DEDICATED_QUERY_THROTTLER"] = 1;
         return values;
@@ -112338,7 +112330,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.throttler_type != null && $Object.hasOwnProperty.call(message, "throttler_type"))
+            if (message.throttler_type != null && $Object.hasOwnProperty.call(message, "throttler_type") && message.throttler_type !== 0)
                 writer.uint32(/* id 1, wireType 0 =*/8).int32(message.throttler_type);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -112377,7 +112369,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $Reader.recursionLimit)
                 throw $Error("max depth exceeded");
-            let end, message;
+            let end, message, value;
             if (length === $undefined)
                 end = reader.len;
             else {
@@ -112455,13 +112447,8 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
             if (_depth > $util.recursionLimit)
                 return "max depth exceeded";
             if (message.throttler_type != null && $Object.hasOwnProperty.call(message, "throttler_type"))
-                switch (message.throttler_type) {
-                default:
+                if (typeof message.throttler_type !== "number" || (message.throttler_type | 0) !== message.throttler_type)
                     return "throttler_type: enum value expected";
-                case 0:
-                case 1:
-                    break;
-                }
             return null;
         };
 
@@ -112485,12 +112472,6 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
             let message = new $root.tabletmanagerdata.GetThrottlerStatusRequest();
             if (object.throttler_type !== 0 && (typeof object.throttler_type !== "string" || $root.tabletmanagerdata.ThrottlerType[object.throttler_type] !== 0))
                 switch (object.throttler_type) {
-                default:
-                    if (typeof object.throttler_type === "number") {
-                        message.throttler_type = object.throttler_type;
-                        break;
-                    }
-                    break;
                 case "DEFAULT_LAG_THROTTLER":
                 case 0:
                     message.throttler_type = 0;
@@ -112499,6 +112480,9 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 case 1:
                     message.throttler_type = 1;
                     break;
+                default:
+                    if (typeof object.throttler_type === "number" && (object.throttler_type | 0) === object.throttler_type)
+                        message.throttler_type = object.throttler_type;
                 }
             return message;
         };
@@ -185510,7 +185494,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 writer.uint32(/* id 4, wireType 0 =*/32).bool(message.skip_request_heartbeats);
             if (message.ok_if_not_exists != null && $Object.hasOwnProperty.call(message, "ok_if_not_exists") && message.ok_if_not_exists !== false)
                 writer.uint32(/* id 5, wireType 0 =*/40).bool(message.ok_if_not_exists);
-            if (message.throttler_type != null && $Object.hasOwnProperty.call(message, "throttler_type"))
+            if (message.throttler_type != null && $Object.hasOwnProperty.call(message, "throttler_type") && message.throttler_type !== 0)
                 writer.uint32(/* id 6, wireType 0 =*/48).int32(message.throttler_type);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -185686,13 +185670,8 @@ export const vtctldata = $root.vtctldata = (() => {
                 if (typeof message.ok_if_not_exists !== "boolean")
                     return "ok_if_not_exists: boolean expected";
             if (message.throttler_type != null && $Object.hasOwnProperty.call(message, "throttler_type"))
-                switch (message.throttler_type) {
-                default:
+                if (typeof message.throttler_type !== "number" || (message.throttler_type | 0) !== message.throttler_type)
                     return "throttler_type: enum value expected";
-                case 0:
-                case 1:
-                    break;
-                }
             return null;
         };
 
@@ -185733,12 +185712,6 @@ export const vtctldata = $root.vtctldata = (() => {
                     message.ok_if_not_exists = $Boolean(object.ok_if_not_exists);
             if (object.throttler_type !== 0 && (typeof object.throttler_type !== "string" || $root.tabletmanagerdata.ThrottlerType[object.throttler_type] !== 0))
                 switch (object.throttler_type) {
-                default:
-                    if (typeof object.throttler_type === "number") {
-                        message.throttler_type = object.throttler_type;
-                        break;
-                    }
-                    break;
                 case "DEFAULT_LAG_THROTTLER":
                 case 0:
                     message.throttler_type = 0;
@@ -185747,6 +185720,9 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 1:
                     message.throttler_type = 1;
                     break;
+                default:
+                    if (typeof object.throttler_type === "number" && (object.throttler_type | 0) === object.throttler_type)
+                        message.throttler_type = object.throttler_type;
                 }
             return message;
         };
@@ -211692,7 +211668,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 throw $Error("max depth exceeded");
             if (message.tablet_alias != null && $Object.hasOwnProperty.call(message, "tablet_alias"))
                 $root.topodata.TabletAlias.encode(message.tablet_alias, writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
-            if (message.throttler_type != null && $Object.hasOwnProperty.call(message, "throttler_type"))
+            if (message.throttler_type != null && $Object.hasOwnProperty.call(message, "throttler_type") && message.throttler_type !== 0)
                 writer.uint32(/* id 2, wireType 0 =*/16).int32(message.throttler_type);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
@@ -211820,13 +211796,8 @@ export const vtctldata = $root.vtctldata = (() => {
                     return "tablet_alias." + error;
             }
             if (message.throttler_type != null && $Object.hasOwnProperty.call(message, "throttler_type"))
-                switch (message.throttler_type) {
-                default:
+                if (typeof message.throttler_type !== "number" || (message.throttler_type | 0) !== message.throttler_type)
                     return "throttler_type: enum value expected";
-                case 0:
-                case 1:
-                    break;
-                }
             return null;
         };
 
@@ -211855,12 +211826,6 @@ export const vtctldata = $root.vtctldata = (() => {
             }
             if (object.throttler_type !== 0 && (typeof object.throttler_type !== "string" || $root.tabletmanagerdata.ThrottlerType[object.throttler_type] !== 0))
                 switch (object.throttler_type) {
-                default:
-                    if (typeof object.throttler_type === "number") {
-                        message.throttler_type = object.throttler_type;
-                        break;
-                    }
-                    break;
                 case "DEFAULT_LAG_THROTTLER":
                 case 0:
                     message.throttler_type = 0;
@@ -211869,6 +211834,9 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 1:
                     message.throttler_type = 1;
                     break;
+                default:
+                    if (typeof object.throttler_type === "number" && (object.throttler_type | 0) === object.throttler_type)
+                        message.throttler_type = object.throttler_type;
                 }
             return message;
         };
@@ -265904,7 +265872,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
+            if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace") && message.keyspace !== "")
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
             if (message.query_throttler_config != null && $Object.hasOwnProperty.call(message, "query_throttler_config"))
                 $root.querythrottler.Config.encode(message.query_throttler_config, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
@@ -265924,7 +265892,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         UpdateQueryThrottlerConfigRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -266208,7 +266176,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         UpdateQueryThrottlerConfigResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
