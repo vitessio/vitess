@@ -140,6 +140,11 @@ type Conn interface {
 	// It is similar to `Lock`, but if the lock is already held or another
 	// caller is acquiring it, it returns a NodeExists error instead of
 	// waiting for the lock to be released.
+	//
+	// The etcd2, zk2 and consul implementations fail fast. During a Consul
+	// lock-delay window, consul waits once for the client's lock retry
+	// time (5s) before returning NodeExists. The memorytopo implementation
+	// blocks like `Lock`, and the faketopo one always succeeds.
 	TryLock(ctx context.Context, dirPath, contents string) (LockDescriptor, error)
 
 	//

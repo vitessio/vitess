@@ -73,6 +73,7 @@ func (ts *Server) LockShard(ctx context.Context, keyspace, shard, action string,
 //
 // `TryLockShard` is different from `LockShard`. If the shard is already locked, or another
 // caller is acquiring the lock, it returns a NodeExists error instead of waiting.
+// See `Conn.TryLock` for the backends that wait or always succeed instead.
 //
 // We are currently using `TryLockShard` during tablet discovery in Vtorc recovery
 func (ts *Server) TryLockShard(ctx context.Context, keyspace, shard, action string) (context.Context, func(*error), error) {
