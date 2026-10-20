@@ -10,6 +10,7 @@
         - [VTAdmin VExplain modes that can run the statement require the `execute` action](#vtadmin-vexplain-execute-action)
     - **[New Support](#new-support)**
         - [VTOrc failover of an unreachable primary `vttablet` via replica quorum](#vtorc-quorum-unreachable-primary)
+        - [Query throttler `TABLET_THROTTLER` strategy](#vttablet-query-throttler-tablet-throttler)
     - **[Breaking Changes](#breaking-changes)**
         - [`--watch-replication-stream` flag removed](#vttablet-watch-replication-stream-removed)
         - [VRLog feature removed](#vttablet-vrlog-removed)
@@ -129,6 +130,14 @@ A graceful `vttablet` shutdown records a shutdown marker in the topology server 
 Note that in this scenario the old primary's MySQL keeps running, and because its `vttablet` is the unreachable component, it cannot be demoted until that `vttablet` comes back and discovers the shard has a new primary. As with any emergency reparent away from an unreachable primary, a semi-sync durability policy (e.g. `semi_sync`) is what prevents the old primary from acknowledging new writes in the meantime; with `none` durability, anything writing directly to the old MySQL (bypassing `vtgate`) could cause a split brain.
 
 See [#19918](https://github.com/vitessio/vitess/issues/19918).
+
+#### <a id="vttablet-query-throttler-tablet-throttler"/>Query throttler `TABLET_THROTTLER` strategy</a>
+
+VTTablet's incoming query throttler has a new `TABLET_THROTTLER` strategy, which throttles queries based on the tablet throttler's metrics (for example `lag` or `loadavg`). Rules are keyed by tablet type and statement type, and give each metric a list of thresholds with the percentage of matching queries to reject once the metric goes above that threshold. A throttled query fails with `RESOURCE_EXHAUSTED`, which MySQL clients receive as `ER_OUT_OF_RESOURCES` (1041). `dry_run` evaluates the rules and records metrics without rejecting anything.
+
+The configuration is set per keyspace with the new `vtctldclient UpdateQueryThrottlerConfig` command, which validates it and stores it in the `Keyspace` and every cell's `SrvKeyspace`. Tablets watch their `SrvKeyspace` and apply changes immediately. `--tablet-throttler-cache-update-interval` (default `10s`) controls how often a tablet refreshes the throttler check results that its decisions are based on. A disabled configuration runs no strategy.
+
+**Upgrade note**: write and maintain the configuration only with a v25 `vtctld`, including for `RebuildKeyspaceGraph`. A v24 `vtctld` rebuilds each `SrvKeyspace` with only the tablet throttler configuration, so running `RebuildKeyspaceGraph` on it during an upgrade drops `query_throttler_config`. The tablets then fall back to the NoOp strategy, and nothing reports that query throttling stopped. To restore it, re-run `UpdateQueryThrottlerConfig` or rebuild the keyspace graph with a v25 `vtctld`.
 
 ### <a id="breaking-changes"/>Breaking Changes</a>
 
