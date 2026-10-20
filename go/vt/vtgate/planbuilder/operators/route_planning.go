@@ -19,6 +19,7 @@ package operators
 import (
 	"bytes"
 	"io"
+	"slices"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -324,6 +325,63 @@ func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinPredic
 	}
 
 	return join, Rewrote("logical join to applyJoin ")
+}
+
+// realTableKeyspaces collects the distinct keyspaces of the real tables under
+// op. Virtual tables (recursive CTE references) have no vschema table behind
+// them, dual is only a synthetic reference table that exists on every shard,
+// and information_schema tables only get a synthetic VTable in an arbitrary
+// keyspace (createInfSchemaRoute), so none of them contributes anything.
+// This reflects where the referenced tables actually live rather than where a
+// routing points.
+func realTableKeyspaces(op Operator) []*vindexes.Keyspace {
+	if op == nil {
+		return nil
+	}
+	var result []*vindexes.Keyspace
+	_ = Visit(op, func(this Operator) error {
+		tbl, ok := this.(*Table)
+		if !ok || tbl.VTable == nil {
+			return nil
+		}
+		if tbl.QTable != nil && tbl.QTable.IsInfSchema {
+			return nil
+		}
+		if tbl.VTable.Type == vindexes.TypeReference && tbl.VTable.Name.String() == "dual" {
+			return nil
+		}
+		addOperatorKeyspace(&result, tbl.VTable.Keyspace)
+		return nil
+	})
+	return result
+}
+
+// addOperatorKeyspace appends ks to result unless it is nil or already present.
+// Uses slice-based dedup with pointer equality (Vitess shares keyspace objects by
+// pointer within a planning context) since the number of distinct keyspaces is
+// very small.
+func addOperatorKeyspace(result *[]*vindexes.Keyspace, ks *vindexes.Keyspace) {
+	if ks == nil {
+		return
+	}
+	if slices.Contains(*result, ks) {
+		return
+	}
+	*result = append(*result, ks)
+}
+
+// hasInfoSchemaTables reports whether any table under op reads from
+// information_schema.
+func hasInfoSchemaTables(op Operator) bool {
+	var found bool
+	_ = Visit(op, func(this Operator) error {
+		if tbl, ok := this.(*Table); ok && tbl.QTable != nil && tbl.QTable.IsInfSchema {
+			found = true
+			return io.EOF
+		}
+		return nil
+	})
+	return found
 }
 
 func operatorsToRoutes(a, b Operator) (*Route, *Route) {
