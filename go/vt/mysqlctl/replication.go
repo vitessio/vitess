@@ -1005,7 +1005,13 @@ func (mysqld *Mysqld) ReplicationStatus(ctx context.Context) (replication.Replic
 	}
 	defer conn.Recycle()
 
-	return conn.Conn.ShowReplicationStatus()
+	var status replication.ReplicationStatus
+	err = mysqld.executeWithContext(ctx, conn, "SHOW REPLICA STATUS", func() error {
+		var err error
+		status, err = conn.Conn.ShowReplicationStatus()
+		return err
+	})
+	return status, err
 }
 
 // PrimaryStatus returns the primary replication statuses
@@ -1046,7 +1052,13 @@ func (mysqld *Mysqld) PrimaryPosition(ctx context.Context) (replication.Position
 	}
 	defer conn.Recycle()
 
-	return conn.Conn.PrimaryPosition()
+	var pos replication.Position
+	err = mysqld.executeWithContext(ctx, conn, "SELECT @@global.gtid_executed", func() error {
+		var err error
+		pos, err = conn.Conn.PrimaryPosition()
+		return err
+	})
+	return pos, err
 }
 
 // SetReplicationPosition sets the replication position at which the replica will resume
