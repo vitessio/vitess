@@ -20,13 +20,7 @@ import (
 	"context"
 	"maps"
 	"os"
-<<<<<<< HEAD
-||||||| parent of 479625a5aa (ERS: only go on without the primary when stopping replication (#21658))
-	"strings"
-=======
 	"slices"
-	"strings"
->>>>>>> 479625a5aa (ERS: only go on without the primary when stopping replication (#21658))
 	"testing"
 	"time"
 
