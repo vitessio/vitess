@@ -18,7 +18,9 @@ package reparentutil
 
 import (
 	"context"
+	"maps"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -1934,6 +1936,188 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Test_stopReplicationAndBuildStatusMaps_waitsForAllButThePrimary checks that
+// stopReplicationAndBuildStatusMaps goes on without a tablet that hasn't
+// answered only when that tablet is the shard's primary. Any other tablet that
+// is cancelled may be the most advanced one.
+func Test_stopReplicationAndBuildStatusMaps_waitsForAllButThePrimary(t *testing.T) {
+	type stopResult = struct {
+		StopStatus *replicationdatapb.StopReplicationStatus
+		Err        error
+	}
+	type demoteResult = struct {
+		PrimaryStatus *replicationdatapb.PrimaryStatus
+		Err           error
+	}
+	stopStatus := func(pos string) *stopResult {
+		return &stopResult{
+			StopStatus: &replicationdatapb.StopReplicationStatus{
+				Before: &replicationdatapb.Status{Position: pos, IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+				After:  &replicationdatapb.Status{Position: pos},
+			},
+		}
+	}
+	// notReplica is what a tablet that thinks it's the primary returns, so that
+	// it gets demoted.
+	notReplica := &stopResult{Err: vterrors.ToGRPC(vterrors.Wrap(mysql.ErrNotReplica, "before status failed"))}
+	demoted := func(pos string) *demoteResult {
+		return &demoteResult{PrimaryStatus: &replicationdatapb.PrimaryStatus{Position: pos}}
+	}
+	tabletInfo := func(uid uint32, tabletType topodatapb.TabletType) *topo.TabletInfo {
+		return &topo.TabletInfo{
+			Tablet: &topodatapb.Tablet{
+				Type:  tabletType,
+				Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: uid},
+			},
+		}
+	}
+	replicas := map[string]*topo.TabletInfo{
+		"zone1-0000000101": tabletInfo(101, topodatapb.TabletType_REPLICA),
+		"zone1-0000000102": tabletInfo(102, topodatapb.TabletType_REPLICA),
+		"zone1-0000000103": tabletInfo(103, topodatapb.TabletType_REPLICA),
+	}
+	withTablets := func(tablets map[string]*topo.TabletInfo, extra ...*topo.TabletInfo) map[string]*topo.TabletInfo {
+		tabletMap := maps.Clone(tablets)
+		for _, tablet := range extra {
+			tabletMap[topoproto.TabletAliasString(tablet.Alias)] = tablet
+		}
+		return tabletMap
+	}
+	withResults := func(results map[string]*stopResult, alias string, result *stopResult) map[string]*stopResult {
+		results = maps.Clone(results)
+		results[alias] = result
+		return results
+	}
+	// zone1-0000000103 is the most advanced replica and the last one to answer.
+	slowestReplicaResults := map[string]*stopResult{
+		"zone1-0000000101": stopStatus("MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429100:1-9"),
+		"zone1-0000000102": stopStatus("MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429100:1-9"),
+		"zone1-0000000103": stopStatus("MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429100:1-10"),
+	}
+	slowestReplicaDelays := map[string]time.Duration{
+		"zone1-0000000103": 100 * time.Millisecond,
+	}
+	primaryAlias := &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}
+
+	tests := []struct {
+		name                     string
+		tmc                      *stopReplicationAndBuildStatusMapsTestTMClient
+		tabletMap                map[string]*topo.TabletInfo
+		primaryAlias             *topodatapb.TabletAlias
+		ignoredTablets           sets.Set[string]
+		expectedStatusMap        []string
+		expectedPrimaryStatusMap []string
+	}{
+		{
+			name: "primary ignored",
+			tmc: &stopReplicationAndBuildStatusMapsTestTMClient{
+				stopReplicationAndGetStatusResults: slowestReplicaResults,
+				stopReplicationAndGetStatusDelays:  slowestReplicaDelays,
+			},
+			tabletMap:         withTablets(replicas, tabletInfo(100, topodatapb.TabletType_PRIMARY)),
+			primaryAlias:      primaryAlias,
+			ignoredTablets:    sets.New("zone1-0000000100"),
+			expectedStatusMap: []string{"zone1-0000000101", "zone1-0000000102", "zone1-0000000103"},
+		},
+		{
+			name: "primary not in tablet map",
+			tmc: &stopReplicationAndBuildStatusMapsTestTMClient{
+				stopReplicationAndGetStatusResults: slowestReplicaResults,
+				stopReplicationAndGetStatusDelays:  slowestReplicaDelays,
+			},
+			tabletMap:         replicas,
+			primaryAlias:      primaryAlias,
+			ignoredTablets:    sets.New[string](),
+			expectedStatusMap: []string{"zone1-0000000101", "zone1-0000000102", "zone1-0000000103"},
+		},
+		{
+			name: "no primary in the shard record",
+			tmc: &stopReplicationAndBuildStatusMapsTestTMClient{
+				stopReplicationAndGetStatusResults: slowestReplicaResults,
+				stopReplicationAndGetStatusDelays:  slowestReplicaDelays,
+			},
+			tabletMap:         replicas,
+			ignoredTablets:    sets.New[string](),
+			expectedStatusMap: []string{"zone1-0000000101", "zone1-0000000102", "zone1-0000000103"},
+		},
+		{
+			name: "primary answers before the slowest replica",
+			tmc: &stopReplicationAndBuildStatusMapsTestTMClient{
+				demotePrimaryResults: map[string]*demoteResult{
+					"zone1-0000000100": demoted("MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429100:1-10"),
+				},
+				stopReplicationAndGetStatusResults: withResults(slowestReplicaResults, "zone1-0000000100", notReplica),
+				stopReplicationAndGetStatusDelays:  slowestReplicaDelays,
+			},
+			tabletMap:                withTablets(replicas, tabletInfo(100, topodatapb.TabletType_PRIMARY)),
+			primaryAlias:             primaryAlias,
+			ignoredTablets:           sets.New[string](),
+			expectedStatusMap:        []string{"zone1-0000000101", "zone1-0000000102", "zone1-0000000103"},
+			expectedPrimaryStatusMap: []string{"zone1-0000000100"},
+		},
+		{
+			// The shard record still names zone1-0000000100, which is a replica by
+			// now. zone1-0000000103 is the actual primary and the most advanced
+			// tablet; its demotion must not be cancelled.
+			name: "stale primary in the shard record",
+			tmc: &stopReplicationAndBuildStatusMapsTestTMClient{
+				demotePrimaryResults: map[string]*demoteResult{
+					"zone1-0000000103": demoted("MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429100:1-12"),
+				},
+				demotePrimaryDelays: map[string]time.Duration{
+					"zone1-0000000103": 100 * time.Millisecond,
+				},
+				stopReplicationAndGetStatusResults: map[string]*stopResult{
+					"zone1-0000000100": stopStatus("MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429100:1-9"),
+					"zone1-0000000101": stopStatus("MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429100:1-9"),
+					"zone1-0000000102": stopStatus("MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429100:1-9"),
+					"zone1-0000000103": notReplica,
+				},
+			},
+			tabletMap: withTablets(map[string]*topo.TabletInfo{
+				"zone1-0000000101": replicas["zone1-0000000101"],
+				"zone1-0000000102": replicas["zone1-0000000102"],
+			}, tabletInfo(100, topodatapb.TabletType_REPLICA), tabletInfo(103, topodatapb.TabletType_PRIMARY)),
+			primaryAlias:             primaryAlias,
+			ignoredTablets:           sets.New[string](),
+			expectedStatusMap:        []string{"zone1-0000000100", "zone1-0000000101", "zone1-0000000102"},
+			expectedPrimaryStatusMap: []string{"zone1-0000000103"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			durability, err := policy.GetDurabilityPolicy(policy.DurabilitySemiSync)
+			require.NoError(t, err)
+
+			res, err := stopReplicationAndBuildStatusMaps(t.Context(), tt.tmc, &events.Reparent{}, tt.tabletMap, tt.primaryAlias, time.Minute, tt.ignoredTablets, nil, durability, false, logutil.NewMemoryLogger())
+			require.NoError(t, err)
+			assert.ElementsMatch(t, tt.expectedStatusMap, slices.Collect(maps.Keys(res.statusMap)))
+			assert.ElementsMatch(t, tt.expectedPrimaryStatusMap, slices.Collect(maps.Keys(res.primaryStatusMap)))
+		})
+	}
+
+	t.Run("unreachable primary is not waited for", func(t *testing.T) {
+		tmc := &stopReplicationAndBuildStatusMapsTestTMClient{
+			demotePrimaryResults: map[string]*demoteResult{
+				"zone1-0000000100": demoted("MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429100:1-10"),
+			},
+			demotePrimaryDelays: map[string]time.Duration{
+				"zone1-0000000100": time.Minute,
+			},
+			stopReplicationAndGetStatusResults: withResults(slowestReplicaResults, "zone1-0000000100", notReplica),
+		}
+		durability, err := policy.GetDurabilityPolicy(policy.DurabilitySemiSync)
+		require.NoError(t, err)
+
+		start := time.Now()
+		res, err := stopReplicationAndBuildStatusMaps(t.Context(), tmc, &events.Reparent{}, withTablets(replicas, tabletInfo(100, topodatapb.TabletType_PRIMARY)), primaryAlias, time.Minute, sets.New[string](), nil, durability, false, logutil.NewMemoryLogger())
+		require.NoError(t, err)
+		assert.Less(t, time.Since(start), 30*time.Second)
+		assert.Len(t, res.statusMap, 3)
+		assert.Empty(t, res.primaryStatusMap)
+	})
 }
 
 func TestReplicaWasRunning(t *testing.T) {
