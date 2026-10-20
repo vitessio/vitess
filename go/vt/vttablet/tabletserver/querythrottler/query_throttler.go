@@ -412,7 +412,9 @@ func (qt *QueryThrottler) HandleConfigUpdate(srvks *topodatapb.SrvKeyspace, err 
 		return true
 	}
 
-	needsStrategyChange := currentSnap.cfg.GetStrategy() != newCfg.GetStrategy()
+	// A disabled config runs no strategy, so enabling or disabling is a strategy change
+	// even when the Strategy enum stays the same.
+	needsStrategyChange := effectiveStrategy(currentSnap.cfg) != effectiveStrategy(newCfg)
 	newStrategy := currentSnap.strategy
 	if needsStrategyChange {
 		// Build outside the lock; this can be slow. The factory takes newCfg, so the new
@@ -439,8 +441,8 @@ func (qt *QueryThrottler) HandleConfigUpdate(srvks *topodatapb.SrvKeyspace, err 
 			newStrategy.Start()
 		} else if newStrategy != nil {
 			// Strategy unchanged: push the config into the live strategy before storing the
-			// snapshot, so both land together. Otherwise re-enabling with new rules could
-			// briefly throttle against the strategy's stale nested config.
+			// snapshot, so both land together. Otherwise flipping DryRun along with new rules
+			// could briefly throttle against the strategy's stale nested config.
 			newStrategy.UpdateConfig(newCfg)
 		}
 		qt.snapshot.Store(&stateSnapshot{
@@ -503,9 +505,23 @@ func selectThrottlingStrategy(cfg *querythrottlerpb.Config, client *throttle.Cli
 	return registry.CreateStrategy(cfg, deps)
 }
 
+// effectiveStrategy returns the strategy a config runs: its Strategy when enabled, and
+// UNKNOWN (the NoOp strategy) when disabled.
+func effectiveStrategy(cfg *querythrottlerpb.Config) querythrottlerpb.ThrottlingStrategy {
+	if !cfg.GetEnabled() {
+		return querythrottlerpb.ThrottlingStrategy_UNKNOWN
+	}
+	return cfg.GetStrategy()
+}
+
 // buildNewStrategy builds via the newStrategyFactory hook when set (tests inject a
-// deterministic one), otherwise via the production wiring.
+// deterministic one), otherwise via the production wiring. A disabled config gets the
+// NoOp strategy, so turning the throttler off leaves nothing running in the background;
+// its rules were never validated either, since validation skips disabled configs.
 func (qt *QueryThrottler) buildNewStrategy(cfg *querythrottlerpb.Config) registry.ThrottlingStrategyHandler {
+	if !cfg.GetEnabled() {
+		return &registry.NoOpStrategy{}
+	}
 	if qt.newStrategyFactory != nil {
 		return qt.newStrategyFactory(cfg)
 	}

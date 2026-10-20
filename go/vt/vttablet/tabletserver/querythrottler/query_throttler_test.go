@@ -767,6 +767,47 @@ func TestQueryThrottler_HandleConfigUpdate__NoChange(t *testing.T) {
 	require.Equal(t, oldStrategy, snap.strategy, "strategy should remain unchanged")
 }
 
+// A disabled config must run no strategy, whatever its Strategy enum says. Validation skips
+// disabled configs, and a running TABLET_THROTTLER strategy keeps checking the throttler in
+// the background, so turning the throttler off must leave only the NoOp strategy behind.
+func TestQueryThrottler_HandleConfigUpdate_DisabledConfigRunsNoStrategy(t *testing.T) {
+	qt := &QueryThrottler{
+		ctx:          t.Context(),
+		tabletConfig: &tabletenv.TabletConfig{},
+	}
+	qt.snapshot.Store(&stateSnapshot{
+		cfg:      &querythrottlerpb.Config{},
+		strategy: &registry.NoOpStrategy{},
+	})
+	var built []*mockThrottlingStrategy
+	qt.newStrategyFactory = func(_ *querythrottlerpb.Config) registry.ThrottlingStrategyHandler {
+		m := &mockThrottlingStrategy{}
+		built = append(built, m)
+		return m
+	}
+
+	srvks := func(enabled bool) *topodatapb.SrvKeyspace {
+		return &topodatapb.SrvKeyspace{QueryThrottlerConfig: &querythrottlerpb.Config{
+			Enabled:  enabled,
+			Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER,
+		}}
+	}
+
+	require.True(t, qt.HandleConfigUpdate(srvks(false), nil))
+	require.Empty(t, built, "a disabled config must not build a strategy")
+	require.IsType(t, &registry.NoOpStrategy{}, qt.snapshot.Load().strategy)
+
+	require.True(t, qt.HandleConfigUpdate(srvks(true), nil))
+	require.Len(t, built, 1, "enabling the config must build the strategy")
+	require.True(t, built[0].started, "enabling the config must start the strategy")
+	require.Same(t, built[0], qt.snapshot.Load().strategy)
+
+	require.True(t, qt.HandleConfigUpdate(srvks(false), nil))
+	require.True(t, built[0].stopped, "disabling the config must stop the running strategy")
+	require.IsType(t, &registry.NoOpStrategy{}, qt.snapshot.Load().strategy)
+	require.Len(t, built, 1, "disabling the config must not build another strategy")
+}
+
 // TestQueryThrottler_startSrvKeyspaceWatch_InitialLoad tests that initial configuration is loaded successfully when GetSrvKeyspace succeeds.
 func TestQueryThrottler_startSrvKeyspaceWatch_InitialLoad(t *testing.T) {
 	ctx := t.Context()
@@ -1242,14 +1283,15 @@ func TestQueryThrottler_HandleConfigUpdate_PushesNestedConfigBeforeSnapshotSwap(
 	}
 	qt.snapshot.Store(&stateSnapshot{
 		cfg: &querythrottlerpb.Config{
-			Enabled:  false,
+			Enabled:  true,
+			DryRun:   true,
 			Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER,
 		},
 		strategy: oldStrategy,
 	})
 
-	// Single SrvKeyspace update: flip Enabled false->true AND add nested rules.
-	// Strategy enum is unchanged, so the strategy instance is reused.
+	// Single SrvKeyspace update: flip DryRun true->false AND add nested rules.
+	// The effective strategy is unchanged, so the strategy instance is reused.
 	newCfg := &querythrottlerpb.Config{
 		Enabled:  true,
 		Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER,
@@ -1271,17 +1313,17 @@ func TestQueryThrottler_HandleConfigUpdate_PushesNestedConfigBeforeSnapshotSwap(
 
 	require.True(t, qt.HandleConfigUpdate(srvks, nil))
 
-	// The strategy instance must be reused (Strategy enum unchanged) — guards against
-	// future refactors that accidentally rebuild on Enabled changes.
+	// The strategy instance must be reused (effective strategy unchanged) — guards against
+	// future refactors that accidentally rebuild on DryRun changes.
 	snap := qt.snapshot.Load()
-	require.Same(t, oldStrategy, snap.strategy, "strategy instance must not change when Strategy enum is unchanged")
-	require.True(t, snap.cfg.GetEnabled(), "snapshot must reflect the new Enabled=true")
+	require.Same(t, oldStrategy, snap.strategy, "strategy instance must not change when the effective strategy is unchanged")
+	require.False(t, snap.cfg.GetDryRun(), "snapshot must reflect the new DryRun=false")
 
 	// The core assertion: UpdateConfig ran before HandleConfigUpdate returned.
 	// Without the fix this slice is empty and the strategy keeps its old nested config.
 	require.Len(t, oldStrategy.updateConfigCfgs, 1, "UpdateConfig must be invoked exactly once before the snapshot swap")
 	pushed := oldStrategy.updateConfigCfgs[0]
-	require.True(t, pushed.GetEnabled(), "pushed cfg must reflect new Enabled=true")
+	require.False(t, pushed.GetDryRun(), "pushed cfg must reflect new DryRun=false")
 	require.Contains(t, pushed.GetTabletStrategyConfig().GetTabletRules(), "PRIMARY", "pushed cfg must carry the new nested rules")
 }
 
