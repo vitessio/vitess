@@ -18,10 +18,29 @@ limitations under the License.
 
 package servenv
 
-func getCgroupCpu() (float64, error) {
-	return getCgroupCpuUsage()
+import "errors"
+
+func getCpuUsage() float64 {
+	value, err := getCgroupCpuUsage()
+	if err == nil {
+		return value
+	}
+	// The first cgroup sample is only a baseline; host CPU would measure something else.
+	if errors.Is(err, errNoPreviousCpuSample) {
+		return -1
+	}
+	if value, err := getHostCpuUsage(); err == nil {
+		return value
+	}
+	return -1
 }
 
-func getCgroupMemory() (float64, error) {
-	return getCgroupMemoryUsage()
+func getMemoryUsage() float64 {
+	if value, err := getCgroupMemoryUsage(); err == nil {
+		return value
+	}
+	if value, err := getHostMemoryUsage(); err == nil {
+		return value
+	}
+	return -1
 }

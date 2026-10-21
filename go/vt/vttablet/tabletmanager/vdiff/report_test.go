@@ -66,6 +66,7 @@ func TestGenRowDiff(t *testing.T) {
 			},
 			reportOptions: &tabletmanagerdatapb.VDiffReportOptions{},
 			want: &RowDiff{
+				LosslessValues: true,
 				Row: map[string]string{ // The two PK cols should be first
 					// mysql> select hex("hi4");
 					// +------------+
@@ -131,6 +132,7 @@ func TestGenRowDiff(t *testing.T) {
 				DebugQuery: true,
 			},
 			want: &RowDiff{
+				LosslessValues: true,
 				Row: map[string]string{
 					"c1": "1",
 					"c2": "2",

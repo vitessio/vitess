@@ -82,8 +82,9 @@ var (
 	}{}
 
 	showOptions = struct {
-		Arg     string
-		Verbose bool
+		Arg       string
+		Verbose   bool
+		NoSamples bool
 	}{}
 
 	stopOptions = struct {
@@ -322,6 +323,7 @@ func commandCreate(cmd *cobra.Command, args []string) error {
 					Workflow:       common.BaseOptions.Workflow,
 					TargetKeyspace: common.BaseOptions.TargetKeyspace,
 					Arg:            uuidStr,
+					NoSamples:      true,
 				})
 				if err != nil {
 					return err
@@ -645,6 +647,7 @@ func commandShow(cmd *cobra.Command, args []string) error {
 		Workflow:       common.BaseOptions.Workflow,
 		TargetKeyspace: common.BaseOptions.TargetKeyspace,
 		Arg:            showOptions.Arg,
+		NoSamples:      showOptions.NoSamples,
 	})
 	if err != nil {
 		return err
@@ -709,6 +712,7 @@ func registerCommands(root *cobra.Command) {
 	base.AddCommand(resume)
 
 	show.Flags().BoolVar(&showOptions.Verbose, "verbose", false, "Show verbose output in summaries")
+	show.Flags().BoolVar(&showOptions.NoSamples, "no-samples", false, "Strip the per-table diff report's row-sample arrays (keeping the scalar counters). Useful for large diffs where the samples can exceed gRPC message limits.")
 	base.AddCommand(show)
 
 	stop.Flags().StringSliceVar(&stopOptions.TargetShards, "target-shards", nil, "The target shards to stop the vdiff on; default is all shards.")

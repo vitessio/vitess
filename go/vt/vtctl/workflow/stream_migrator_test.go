@@ -452,18 +452,16 @@ func newStreamMigratorEnv(ctx context.Context, t *testing.T, sourceKeyspace, tar
 		env.targetTabletIds = append(env.targetTabletIds, int(tablet.Alias.Uid))
 	}
 	ts := &testTrafficSwitcher{
-		trafficSwitcher: trafficSwitcher{
-			migrationType:  binlogdatapb.MigrationType_SHARDS,
-			workflow:       "wf1",
-			id:             1,
-			sources:        sources,
-			targets:        targets,
-			sourceKeyspace: sourceKeyspace.KeyspaceName,
-			targetKeyspace: targetKeyspace.KeyspaceName,
-			sourceKSSchema: ksschema,
-			workflowType:   binlogdatapb.VReplicationWorkflowType_Reshard,
-			ws:             tenv.ws,
-		},
+		migrationType:        binlogdatapb.MigrationType_SHARDS,
+		workflow:             "wf1",
+		id:                   1,
+		sources:              sources,
+		targets:              targets,
+		sourceKeyspace:       sourceKeyspace.KeyspaceName,
+		targetKeyspace:       targetKeyspace.KeyspaceName,
+		sourceKSSchema:       ksschema,
+		workflowType:         binlogdatapb.VReplicationWorkflowType_Reshard,
+		ws:                   tenv.ws,
 		sourceKeyspaceSchema: ksschema,
 	}
 	env.ts = ts

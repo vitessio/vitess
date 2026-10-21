@@ -86,9 +86,7 @@ func (e Error) Error() string {
 
 // IsErrType returns true if the error has the specified ErrorCode.
 func IsErrType(err error, code ErrorCode) bool {
-	var e Error
-
-	if errors.As(err, &e) {
+	if e, ok := errors.AsType[Error](err); ok {
 		return e.code == code
 	}
 

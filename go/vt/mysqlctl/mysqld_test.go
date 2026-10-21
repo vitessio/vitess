@@ -20,6 +20,7 @@ import (
 	"context"
 	"net"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 	"testing"
@@ -327,6 +328,51 @@ func TestGetDbaConnection(t *testing.T) {
 	defer conn.Close()
 }
 
+// TestExecuteMysqlScript checks that a script runs as the batch of statements
+// it is, whether or not its connection parameters ask for multi statement
+// support.
+func TestExecuteMysqlScript(t *testing.T) {
+	const script = "create table t1 (id int primary key);create table t2 (id int primary key)"
+	statements := []string{"create table t1 (id int primary key)", "create table t2 (id int primary key)"}
+
+	testCases := []struct {
+		name                  string
+		enableMultiStatements bool
+	}{{
+		name: "connection without multi statement support",
+		// What the dba configuration hands out: the script path has to ask
+		// for the capability itself.
+		enableMultiStatements: false,
+	}, {
+		name: "connection with multi statement support",
+		// What mysqld bootstrap hands out: the capability is already there.
+		enableMultiStatements: true,
+	}}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			db := fakesqldb.New(t)
+			defer db.Close()
+			db.AddQueryPattern(".*", &sqltypes.Result{})
+
+			params := *db.ConnParams()
+			params.EnableMultiStatements = tc.enableMultiStatements
+
+			testMysqld := NewMysqld(dbconfigs.NewTestDBConfigs(params, params, "fakesqldb"))
+			defer testMysqld.Close()
+
+			require.NoError(t, testMysqld.executeMysqlScript(t.Context(), &params, script))
+
+			// Each statement of the script must reach the server on its own. A
+			// script that was sent without the capability is counted under the
+			// joined query.
+			for _, statement := range statements {
+				require.Equal(t, 1, db.GetQueryCalledNum(statement), "statement %q was not executed on its own, query log: %v", statement, db.QueryLog())
+			}
+		})
+	}
+}
+
 func TestGetVersionString(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
@@ -352,30 +398,37 @@ func TestGetVersionString(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestGetVersionComment(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
+// TestExecCmdWithContext verifies that execCmdWithContext is actually bound to its
+// context, so the mysqld --version fallback of GetVersionString can no longer
+// outlive a caller's deadline (e.g. holding the TabletManager action lock).
+func TestExecCmdWithContext(t *testing.T) {
+	if _, err := exec.LookPath("sleep"); err != nil {
+		t.Skip("sleep binary not available")
+	}
 
-	params := db.ConnParams()
-	cp := *params
-	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
+	t.Run("cancelled context returns promptly", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		cancel() // already cancelled
 
-	db.AddQuery("SELECT 1", &sqltypes.Result{})
-	db.AddQuery("select @@global.version_comment", sqltypes.MakeTestResult(sqltypes.MakeTestFields("@@global.version_comment", "varchar"), "test_version1", "test_version2"))
+		start := time.Now()
+		_, _, err := execCmdWithContext(ctx, "sleep", []string{"60"}, nil, "", nil)
+		elapsed := time.Since(start)
 
-	testMysqld := NewMysqld(dbc)
-	defer testMysqld.Close()
+		require.Error(t, err, "a cancelled context must not run the command to completion")
+		require.Less(t, elapsed, 30*time.Second, "the command must be killed rather than sleep for 60s")
+	})
 
-	ctx := t.Context()
-	_, err := testMysqld.GetVersionComment(ctx)
-	require.ErrorContains(t, err, "unexpected result length")
+	t.Run("expired deadline kills a long-running command", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
+		defer cancel()
 
-	ver := "test_version"
-	db.AddQuery("select @@global.version_comment", sqltypes.MakeTestResult(sqltypes.MakeTestFields("@@global.version_comment", "varchar"), ver))
+		start := time.Now()
+		_, _, err := execCmdWithContext(ctx, "sleep", []string{"60"}, nil, "", nil)
+		elapsed := time.Since(start)
 
-	str, err := testMysqld.GetVersionComment(ctx)
-	require.NoError(t, err)
-	assert.Equal(t, ver, str)
+		require.Error(t, err)
+		require.Less(t, elapsed, 30*time.Second, "the command must be killed at the deadline, not run for 60s")
+	})
 }
 
 func TestHostMetrics(t *testing.T) {
@@ -535,4 +588,16 @@ func TestBoundShutdownWaitContext(t *testing.T) {
 		require.True(t, ok)
 		assert.WithinDuration(t, before.Add(MysqldShutdownGracePeriod), deadline, 5*time.Second)
 	})
+}
+
+// TestMysqlApplyArgsStayBinlogged pins that ApplyBinlogFile's replay is binlogged:
+// PITR on restored binlogs relies on the replayed transactions landing in the
+// server's own binlogs, so the mysql client must not disable sql_log_bin.
+func TestMysqlApplyArgsStayBinlogged(t *testing.T) {
+	args := mysqlApplyArgs("/tmp/defaults.cnf")
+	assert.Equal(t, []string{"--defaults-extra-file=/tmp/defaults.cnf"}, args)
+	for _, arg := range args {
+		assert.NotContains(t, arg, "sql_log_bin")
+		assert.NotContains(t, arg, "init-command")
+	}
 }

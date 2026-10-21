@@ -179,6 +179,8 @@ func TestConnectionDrainOnTermTimeout(t *testing.T) {
 	_, err = vtConn2.ExecuteFetch("select id from t1", 1, false)
 	require.Error(t, err)
 
-	// By now vtgate will be shutdown becaused it reached its onterm-timeout, despite idle connections still being opened
-	require.True(t, clusterInstance.VtgateProcess.IsShutdown())
+	// By now vtgate will shut down because it reached its onterm-timeout, despite idle
+	// connections still being opened. There is a brief window between the connections
+	// being force-closed above and the process exiting, so allow for it.
+	require.Eventually(t, clusterInstance.VtgateProcess.IsShutdown, 10*time.Second, 100*time.Millisecond)
 }

@@ -62,27 +62,25 @@ func main() {
 
 func runCluster() {
 	cluster = &vttest.LocalCluster{
-		Config: vttest.Config{
-			Topology: &vttestpb.VTTestTopology{
-				Keyspaces: []*vttestpb.Keyspace{{
-					Name: "customer",
-					Shards: []*vttestpb.Shard{{
-						Name: "-80",
-					}, {
-						Name: "80-",
-					}},
+		Topology: &vttestpb.VTTestTopology{
+			Keyspaces: []*vttestpb.Keyspace{{
+				Name: "customer",
+				Shards: []*vttestpb.Shard{{
+					Name: "-80",
 				}, {
-					Name: "product",
-					Shards: []*vttestpb.Shard{{
-						Name: "0",
-					}},
+					Name: "80-",
 				}},
-			},
-			SchemaDir:     path.Join(os.Getenv("VTROOT"), "examples/demo/schema"),
-			MySQLBindHost: "0.0.0.0",
-			// VSchemaDDLAuthorizedUsers allows you to experiment with vschema DDLs.
-			VSchemaDDLAuthorizedUsers: "%",
+			}, {
+				Name: "product",
+				Shards: []*vttestpb.Shard{{
+					Name: "0",
+				}},
+			}},
 		},
+		SchemaDir:     path.Join(os.Getenv("VTROOT"), "examples/demo/schema"),
+		MySQLBindHost: "0.0.0.0",
+		// VSchemaDDLAuthorizedUsers allows you to experiment with vschema DDLs.
+		VSchemaDDLAuthorizedUsers: "%",
 	}
 	env, err := vttest.NewLocalTestEnv(12345)
 	if err != nil {
@@ -232,21 +230,20 @@ func resultToMap(title string, qr *sqltypes.Result) map[string]any {
 
 func streamQuerylog(port int) (<-chan string, error) {
 	request := fmt.Sprintf("http://localhost:%d/debug/querylog", port)
-	resp, err := http.Get(request)
+	resp, err := http.Get(request) //nolint:bodyclose // the body is closed by the reader goroutine below
 	if err != nil {
 		log.Error(fmt.Sprintf("Error reading stream: %v: %v", request, err))
 		return nil, err
 	}
-	defer resp.Body.Close()
 	ch := make(chan string, 100)
 	go func() {
+		defer resp.Body.Close()
 		buffered := bufio.NewReader(resp.Body)
 		for {
 			str, err := buffered.ReadString('\n')
 			if err != nil {
 				log.Error(fmt.Sprintf("Error reading stream: %v: %v", request, err))
 				close(ch)
-				resp.Body.Close()
 				return
 			}
 			splits := strings.Split(str, "\t")

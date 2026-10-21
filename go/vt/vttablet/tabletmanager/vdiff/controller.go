@@ -103,7 +103,7 @@ func newController(row sqltypes.RowNamedValues, dbClientFactory func() binlogpla
 		options:               options,
 		Errors:                stats.NewCountersWithSingleLabel("", "", "Error"),
 		TableDiffRowCounts:    stats.NewCountersWithSingleLabel("", "", "Rows"),
-		TableDiffPhaseTimings: stats.NewTimings("", "", "", "TablePhase"),
+		TableDiffPhaseTimings: stats.NewTimings("", "", ""),
 	}
 	return ct, nil
 }

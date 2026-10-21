@@ -149,7 +149,7 @@ func createDMLWithInput(ctx *plancontext.PlanningContext, op, src Operator, in *
 		panic(vterrors.VT09015())
 	}
 	dm := &DMLWithInput{}
-	var leftComp sqlparser.ValTuple
+	leftComp := make(sqlparser.ValTuple, 0, len(in.Target.VTable.PrimaryKey))
 	proj := newAliasedProjection(src)
 	dm.cols = make([][]*sqlparser.ColName, 1)
 	for _, col := range in.Target.VTable.PrimaryKey {

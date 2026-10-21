@@ -1085,10 +1085,27 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 
 	sourceKeyspace := req.SourceKeyspace
 	targetKeyspace := req.TargetKeyspace
-	// FIXME validate tableSpecs, allTables, excludeTables
-
 	if workflowType == binlogdatapb.VReplicationWorkflowType_MoveTables && sourceKeyspace == targetKeyspace {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "source and target keyspace must be different for MoveTables workflows")
+	}
+
+	// Enforce the table-selection invariants at the RPC boundary, mirroring
+	// the vtctldclient validation in common.ValidateTableSelection: VTAdmin
+	// forwards a raw request and direct gRPC callers bypass the CLI checks.
+	// An explicit include list combined with all_tables=true would otherwise
+	// silently move only the explicit subset, and a request with no selection
+	// at all would only fail later, after topo access, with a less clear
+	// error. Combining an include list with exclude_tables is supported
+	// behavior. This runs after the keyspace check so that the more
+	// fundamental source/target error still takes precedence.
+	if req.AllTables && len(req.IncludeTables) > 0 {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot specify both all_tables and an explicit list of tables to include")
+	}
+	if !req.AllTables && len(req.IncludeTables) == 0 {
+		if len(req.ExcludeTables) > 0 {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "exclude_tables requires all_tables or an explicit list of tables to include")
+		}
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "either all_tables or an explicit list of tables to include must be specified")
 	}
 
 	var (
@@ -3311,6 +3328,9 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 		// intra-keyspace materializations that write on the source), and we know for certain
 		// that any in progress writes are done.
 		if err := ts.gatherSourcePositions(ctx); err != nil {
+			if cerr := sw.cancelMigration(ctx, sm); cerr != nil {
+				err = vterrors.Errorf(vtrpcpb.Code_CANCELED, "%v\n\n%v", err, cerr)
+			}
 			return handleError("failed to gather replication positions on migration sources", err)
 		}
 
@@ -3468,32 +3488,38 @@ func (s *Server) canSwitch(ctx context.Context, ts *trafficSwitcher, maxAllowedR
 	}
 
 	// Ensure that the tablets on both sides are in good shape as we make this same call in the
-	// process and an error will cause us to backout.
+	// process and an error will cause us to backout. All of the shards are refreshed
+	// concurrently, so the shared timeout only has to cover the slowest shard.
 	refreshErrors := strings.Builder{}
 	var m sync.Mutex
-	var wg sync.WaitGroup
 	rtbsCtx, cancel := context.WithTimeout(ctx, shardTabletRefreshTimeout)
 	defer cancel()
-	refreshTablets := func(shards []*topo.ShardInfo, stype string) {
-		defer wg.Done()
-		for _, si := range shards {
-			if partial, partialDetails, err := topotools.RefreshTabletsByShard(rtbsCtx, s.ts, s.tmc, si, nil, ts.Logger()); err != nil || partial {
-				msg := fmt.Sprintf("failed to successfully refresh all tablets in the %s/%s %s shard (%v):\n  %v\n",
-					si.Keyspace(), si.ShardName(), stype, err, partialDetails)
-				if partial && ts.force {
-					log.Warn(msg)
-				} else {
-					m.Lock()
-					refreshErrors.WriteString(msg)
-					m.Unlock()
-				}
+	refreshTablets := func(si *topo.ShardInfo, stype string) {
+		if partial, partialDetails, err := topotools.RefreshTabletsByShard(rtbsCtx, s.ts, s.tmc, si, nil, ts.Logger()); err != nil || partial {
+			msg := fmt.Sprintf("failed to successfully refresh all tablets in the %s/%s %s shard (%v):\n  %v\n",
+				si.Keyspace(), si.ShardName(), stype, err, partialDetails)
+			if partial && ts.force {
+				log.Warn(msg)
+			} else {
+				m.Lock()
+				refreshErrors.WriteString(msg)
+				m.Unlock()
 			}
 		}
 	}
-	wg.Add(1)
-	go refreshTablets(ts.SourceShards(), "source")
-	wg.Add(1)
-	go refreshTablets(ts.TargetShards(), "target")
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		_ = ts.ForAllSources(func(source *MigrationSource) error {
+			refreshTablets(source.GetShard(), "source")
+			return nil
+		})
+	})
+	wg.Go(func() {
+		_ = ts.ForAllTargets(func(target *MigrationTarget) error {
+			refreshTablets(target.GetShard(), "target")
+			return nil
+		})
+	})
 	wg.Wait()
 	if refreshErrors.Len() > 0 {
 		return fmt.Sprintf(cannotSwitchFailedTabletRefresh, refreshErrors.String()), nil
@@ -3524,7 +3550,7 @@ func (s *Server) CopySchemaShard(ctx context.Context, sourceTabletAlias *topodat
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no primary in shard record %v/%v. Consider running 'vtctl InitShardPrimary' in case of a new shard or reparenting the shard to fix the topology data", destKeyspace, destShard)
 	}
 
-	diffs, err := schematools.CompareSchemas(ctx, s.ts, s.tmc, sourceTabletAlias, destShardInfo.PrimaryAlias, tables, excludeTables, includeViews)
+	diffs, err := schematools.CompareSchemas(ctx, s.env, s.ts, s.tmc, sourceTabletAlias, destShardInfo.PrimaryAlias, tables, excludeTables, includeViews)
 	if err != nil {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "CopySchemaShard failed because schemas could not be compared initially: %v", err)
 	}
@@ -3567,7 +3593,7 @@ func (s *Server) CopySchemaShard(ctx context.Context, sourceTabletAlias *topodat
 	// In that case, MySQL would have skipped our CREATE DATABASE IF NOT EXISTS
 	// statement.
 	if !skipVerify {
-		diffs, err = schematools.CompareSchemas(ctx, s.ts, s.tmc, sourceTabletAlias, destShardInfo.PrimaryAlias, tables, excludeTables, includeViews)
+		diffs, err = schematools.CompareSchemas(ctx, s.env, s.ts, s.tmc, sourceTabletAlias, destShardInfo.PrimaryAlias, tables, excludeTables, includeViews)
 		if err != nil {
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "CopySchemaShard failed because schemas could not be compared finally: %v", err)
 		}

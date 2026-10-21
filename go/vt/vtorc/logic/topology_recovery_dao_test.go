@@ -86,9 +86,9 @@ func TestExpireTableData(t *testing.T) {
 			tableName:        "recovery_detection",
 			expectedRowCount: 2,
 			insertQuery: `insert into recovery_detection (detection_id, detection_timestamp, alias, analysis, keyspace, shard) values
-(1, datetime('now', '-3 DAY'),'a','a','a','a'),
-(2, datetime('now', '-5 DAY'),'a','a','a','a'),
-(3, datetime('now', '-15 DAY'),'a','a','a','a')`,
+(1, datetime('now', '-3 DAY'),'alias1','a','a','a'),
+(2, datetime('now', '-5 DAY'),'alias2','a','a','a'),
+(3, datetime('now', '-15 DAY'),'alias3','a','a','a')`,
 			expireFunc: ExpireRecoveryDetectionHistory,
 		},
 		{

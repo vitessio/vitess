@@ -17,6 +17,8 @@ limitations under the License.
 package operators
 
 import (
+	"slices"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -114,6 +116,18 @@ func mergeUnionInputs(
 		return nil, nil
 	}
 
+	// a none routing resolves to no shards at execution time, so its side of the
+	// union contributes no rows. None pairings must be decided before the dual
+	// and anyShard cases below: those would retain the none routing and
+	// incorrectly discard the other side's rows.
+	if a == none || b == none {
+		if op, exprs, merged := tryMergeNoneUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingA, routingB, a, b); merged {
+			return op, exprs
+		}
+		checkCrossKeyspaceOp(ctx, lhs, rhs, "UNION")
+		return nil, nil
+	}
+
 	switch {
 	// if either side is a dual query, we can always merge them together
 	// an unsharded/reference route can be merged with anything going to that keyspace
@@ -121,11 +135,6 @@ func mergeUnionInputs(
 		return createMergedUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingA, nil)
 	case a == dual || (a == anyShard && sameKeyspace):
 		return createMergedUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingB, nil)
-
-	case a == none:
-		return createMergedUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingB, nil)
-	case b == none:
-		return createMergedUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingA, nil)
 
 	case a == sharded && b == sharded && sameKeyspace:
 		res, exprs := tryMergeUnionShardedRouting(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct)
@@ -138,6 +147,75 @@ func mergeUnionInputs(
 	checkCrossKeyspaceOp(ctx, lhs, rhs, "UNION")
 
 	return nil, nil
+}
+
+// tryMergeNoneUnion merges a union pairing in which at least one side has a
+// none routing. The none side contributes no rows, but its query text (and the
+// field query derived from it) still references its tables, so a merge may only
+// adopt a routing whose keyspace holds every real table of the none side.
+func tryMergeNoneUnion(
+	ctx *plancontext.PlanningContext,
+	lhsRoute, rhsRoute *Route,
+	lhsExprs, rhsExprs []sqlparser.SelectExpr,
+	distinct bool,
+	routingA, routingB Routing,
+	a, b routingType,
+) (Operator, []sqlparser.SelectExpr, bool) {
+	otherRouting, otherType := routingB, b
+	noneRoute, otherRoute := lhsRoute, rhsRoute
+	if a != none {
+		otherRouting, otherType = routingA, a
+		noneRoute, otherRoute = rhsRoute, lhsRoute
+	}
+	noneKeyspaces := realTableKeyspaces(noneRoute.Source)
+
+	var routing Routing
+	switch {
+	case otherType == none:
+		// both sides are empty. They can collapse into a single none route as
+		// long as their combined real tables live in one keyspace: the merged
+		// route's field query must be executable on a shard of that keyspace.
+		for _, ks := range realTableKeyspaces(otherRoute.Source) {
+			if !slices.Contains(noneKeyspaces, ks) {
+				noneKeyspaces = append(noneKeyspaces, ks)
+			}
+		}
+		switch len(noneKeyspaces) {
+		case 0:
+			routing = noneRoute.Routing
+		case 1:
+			routing = &NoneRouting{keyspace: noneKeyspaces[0]}
+		default:
+			return nil, nil, false
+		}
+	case hasInfoSchemaTables(noneRoute.Source):
+		// an information_schema comparison may have been rewritten to a
+		// planner-generated argument (e.g. :__vtschemaname) that only a DBA
+		// route binds. Adopting an executable routing would ship that argument
+		// to a shard with no binding for it, so this branch must stay separate.
+		return nil, nil, false
+	case len(noneKeyspaces) == 0:
+		// the none side references no real tables, so its keyspace is only a
+		// placeholder: adopt the other side's routing unconditionally.
+		routing = otherRouting
+	case otherType == dual:
+		// a dual side has no keyspace and no tables of its own, so any shard
+		// in the none side's single keyspace can produce its rows.
+		if len(noneKeyspaces) != 1 {
+			return nil, nil, false
+		}
+		routing = &AnyShardRouting{keyspace: noneKeyspaces[0]}
+	default:
+		// the other side's routing is retained, but only when it targets the
+		// keyspace holding the none side's tables: they exist nowhere else.
+		if len(noneKeyspaces) != 1 || noneKeyspaces[0] != otherRouting.Keyspace() {
+			return nil, nil, false
+		}
+		routing = otherRouting
+	}
+
+	op, exprs := createMergedUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routing, nil)
+	return op, exprs, true
 }
 
 func tryMergeUnionShardedRouting(

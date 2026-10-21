@@ -678,4 +678,4 @@ func (t tableDefinitions) Swap(i, j int) {
 	t[i], t[j] = t[j], t[i]
 }
 
-var _ sort.Interface = (tableDefinitions)(nil)
+var _ sort.Interface = tableDefinitions(nil)

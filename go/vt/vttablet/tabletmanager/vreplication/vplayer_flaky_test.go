@@ -40,11 +40,42 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	vttablet "vitess.io/vitess/go/vt/vttablet/common"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	qh "vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication/queryhistory"
 )
+
+type (
+	// fakeThrottleChecker is a throttleChecker whose verdict the test
+	// controls: while deny is set every check is refused, as for a tablet
+	// whose lag-gated throttler checks are being denied.
+	fakeThrottleChecker struct {
+		deny atomic.Bool
+	}
+)
+
+func (f *fakeThrottleChecker) ThrottleCheckOKOrWaitAppName(_ context.Context, appName throttlerapp.Name) (*throttle.CheckResult, bool) {
+	if f.deny.Load() {
+		// Mimic the real client's denial pacing so the caller's check
+		// loop does not spin hot, but pace faster than the real client:
+		// the vplayer refreshes its denial timestamp once per check, and
+		// a wide refresh-to-deadline margin keeps a paused CI runner
+		// from letting the stall timer see a stale denial.
+		time.Sleep(50 * time.Millisecond)
+		return &throttle.CheckResult{
+			ResponseCode: tabletmanagerdatapb.CheckThrottlerResponseCode_THRESHOLD_EXCEEDED,
+			AppName:      appName.String(),
+		}, false
+	}
+	return &throttle.CheckResult{
+		ResponseCode: tabletmanagerdatapb.CheckThrottlerResponseCode_OK,
+		AppName:      appName.String(),
+	}, true
+}
 
 var testGTIDCounter atomic.Uint64
 
@@ -1798,6 +1829,98 @@ func TestPlayerPartialImages(t *testing.T) {
 	}
 }
 
+// TestPlayerPartialImagesWithTargetOnlyExpressions confirms that partial row
+// images are applied correctly when the target table has more columns than the
+// source table, sourced from expressions that use no streamed column, e.g. a
+// Materialize filter that adds constants. The vstreamer's AfterDataColumns
+// bitmap describes the streamed columns, and the vplayer maps it onto its
+// target column expressions when generating the partial queries. With the
+// legacy source-ordered bitmap the generator ran out of columns and failed with
+// "unable to create partial update query". The source JSON column is not part
+// of the filter, but a partial JSON update to it still marks the row event as
+// partial.
+func TestPlayerPartialImagesWithTargetOnlyExpressions(t *testing.T) {
+	if !runPartialJSONTest {
+		t.Skip("Skipping test as binlog_row_value_options=PARTIAL_JSON is not enabled")
+	}
+
+	defer deleteTablet(addTablet(100))
+	execStatements(t, []string{
+		"create table src (id int, val varbinary(128), jd json, primary key(id))",
+		fmt.Sprintf("create table %s.dst (id int, val varbinary(128), c int, d int, primary key(id))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table src",
+		fmt.Sprintf("drop table %s.dst", vrepldb),
+	})
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "dst",
+			Filter: "select id, val, 1 as c, 1 as d from src",
+		}},
+	}
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	cancel, _ := startVReplication(t, bls, "")
+	defer cancel()
+
+	testCases := []struct {
+		input  string
+		output []string
+		data   [][]string
+	}{
+		{
+			input: `insert into src (id, val, jd) values (1, 'aaa', '{"key1": "val1"}')`,
+			output: []string{
+				"insert into dst(id,val,c,d) values (1,_binary'aaa',1,1)",
+			},
+			data: [][]string{
+				{"1", "aaa", "1", "1"},
+			},
+		},
+		{
+			// The partially updated JSON column is not streamed, but the row event is
+			// still a partial one; the constant target columns must still be set.
+			input: `update src set jd=JSON_SET(jd, '$.color', 'red') where id = 1`,
+			output: []string{
+				"update dst set val=_binary'aaa', c=1, d=1 where id=1",
+			},
+			data: [][]string{
+				{"1", "aaa", "1", "1"},
+			},
+		},
+		{
+			input: `update src set val = 'bbb' where id = 1`,
+			output: []string{
+				"update dst set val=_binary'bbb', c=1, d=1 where id=1",
+			},
+			data: [][]string{
+				{"1", "bbb", "1", "1"},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.input, func(t *testing.T) {
+			execStatements(t, []string{tc.input})
+			want := qh.Expect(
+				"begin",
+				tc.output...,
+			).Then(qh.Immediately(
+				"/update _vt.vreplication set pos=",
+				"commit",
+			))
+			expectDBClientQueries(t, want)
+			expectData(t, "dst", tc.data)
+		})
+	}
+}
+
 func TestPlayerTypes(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 	execStatements(t, []string{
@@ -2073,7 +2196,7 @@ func TestPlayerDDL(t *testing.T) {
 	expectDBClientQueries(t, qh.Expect(
 		"alter table t1 add column val2 varchar(128)",
 		"/update _vt.vreplication set message='error applying event: Duplicate",
-		"/update _vt.vreplication set state='Error', message=left\\('terminal error: error applying event: Duplicate",
+		"/update _vt.vreplication set state='Error', message=left\\('terminal error: unrecoverable: error applying event: Duplicate",
 	))
 	cancel()
 
@@ -3446,6 +3569,191 @@ func TestPlayerNoBlob(t *testing.T) {
 	require.Equal(t, int64(4), stats.PartialQueryCount.Counts()["update"])
 }
 
+// TestPlayerNoBlobProjectedFilter confirms that partial row images from
+// binlog_row_image=NOBLOB are applied correctly when the filter reorders the
+// columns, renames one through a convert(... using ...) expression and adds a
+// constant. The vplayer maps the vstreamer's projected AfterDataColumns bitmap
+// onto its target column expressions. With the legacy bitmap, which is in the
+// source table's (id, blb, val) order and has fewer bits than the target has
+// columns, the partial update could not be generated at all ("unable to create
+// partial update query"); the projected bitmap also keeps the omitted blob from
+// being mistaken for a present column when the layouts differ.
+func TestPlayerNoBlobProjectedFilter(t *testing.T) {
+	if !runNoBlobTest {
+		t.Skip()
+	}
+	oldVreplicationExperimentalFlags := vttablet.DefaultVReplicationConfig.ExperimentalFlags
+	vttablet.DefaultVReplicationConfig.ExperimentalFlags = vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage
+	defer func() {
+		vttablet.DefaultVReplicationConfig.ExperimentalFlags = oldVreplicationExperimentalFlags
+	}()
+
+	defer deleteTablet(addTablet(100))
+	execStatements(t, []string{
+		"create table src(id int, blb blob, val varbinary(4), extra varbinary(4), primary key(id))",
+		fmt.Sprintf("create table %s.dst(blb blob, id int, val2 varchar(4), c int, primary key(id))", vrepldb),
+		// src2/dst2: the only non-key target column is the blob, so an update to a
+		// source column outside the filter leaves nothing to apply on the target.
+		"create table src2(id int, blb blob, val varbinary(4), primary key(id))",
+		fmt.Sprintf("create table %s.dst2(blb blob, id int, primary key(id))", vrepldb),
+		// src3/dst3: a target expression combining a non-blob and a blob column.
+		"create table src3(id int, blb blob, val varbinary(4), extra varbinary(4), primary key(id))",
+		fmt.Sprintf("create table %s.dst3(id int, c varbinary(16), primary key(id))", vrepldb),
+		// src4/dst4: Matt's two-BLOB repro. Under NOBLOB the before image omits
+		// both blobs; UPDATE SET b1=NULL, val=2 then has after-image b1 present
+		// as NULL and b2 absent. The workflow must fail closed rather than
+		// leave a stale concat(b1,b2).
+		"create table src4(id int, b1 blob, b2 blob, val int, primary key(id))",
+		fmt.Sprintf("create table %s.dst4(id int, c varbinary(16), val int, primary key(id))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table src",
+		fmt.Sprintf("drop table %s.dst", vrepldb),
+		"drop table src2",
+		fmt.Sprintf("drop table %s.dst2", vrepldb),
+		"drop table src3",
+		fmt.Sprintf("drop table %s.dst3", vrepldb),
+		"drop table src4",
+		fmt.Sprintf("drop table %s.dst4", vrepldb),
+	})
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "dst",
+			Filter: "select blb, id, convert(val using utf8mb4) as val2, 1 as c from src",
+		}, {
+			Match:  "dst2",
+			Filter: "select blb, id from src2",
+		}, {
+			Match:  "dst3",
+			Filter: "select id, concat(val, blb) as c from src3",
+		}, {
+			Match:  "dst4",
+			Filter: "select id, concat(b1, b2) as c, val from src4",
+		}},
+	}
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	cancel, vrId := startVReplication(t, bls, "")
+	defer cancel()
+
+	testcases := []struct {
+		input  string
+		output string // empty means the row event must not produce any query
+		table  string
+		data   [][]string
+		error  string // if set, the workflow must fail closed with this message
+	}{{
+		// Inserts always carry a full image.
+		input:  "insert into src values (1, 'blob1', 'aaa', 'xxx')",
+		output: "insert into dst(blb,id,val2,c) values (_binary'blob1',1,convert(_binary'aaa' using utf8mb4),1)",
+		table:  "dst",
+		data:   [][]string{{"blob1", "1", "aaa", "1"}},
+	}, {
+		// The blob did not change, so it is absent from the row image and must be
+		// left alone on the target while the renamed column is updated.
+		input:  "update src set val = 'bbb' where id = 1",
+		output: "update dst set val2=convert(_binary'bbb' using utf8mb4), c=1 where id=1",
+		table:  "dst",
+		data:   [][]string{{"blob1", "1", "bbb", "1"}},
+	}, {
+		// NOBLOB only omits unchanged BLOB/TEXT columns: a change to a column
+		// outside the filter still ships val, so val2 is (re)written.
+		input:  "update src set extra = 'yyy' where id = 1",
+		output: "update dst set val2=convert(_binary'bbb' using utf8mb4), c=1 where id=1",
+		table:  "dst",
+		data:   [][]string{{"blob1", "1", "bbb", "1"}},
+	}, {
+		// The blob changed, so the image is full again.
+		input:  "update src set blb = 'blob2' where id = 1",
+		output: "update dst set blb=_binary'blob2', val2=convert(_binary'bbb' using utf8mb4), c=1 where id=1",
+		table:  "dst",
+		data:   [][]string{{"blob2", "1", "bbb", "1"}},
+	}, {
+		input:  "insert into src2 values (1, 'blob1', 'aaa')",
+		output: "insert into dst2(blb,id) values (_binary'blob1',1)",
+		table:  "dst2",
+		data:   [][]string{{"blob1", "1"}},
+	}, {
+		// Only a column outside the filter changed and the blob is omitted: the
+		// image has no writable target column, so nothing is applied (and no
+		// invalid empty UPDATE is generated).
+		input: "update src2 set val = 'bbb' where id = 1",
+		table: "dst2",
+		data:  [][]string{{"blob1", "1"}},
+	}, {
+		input:  "update src2 set blb = 'blob2' where id = 1",
+		output: "update dst2 set blb=_binary'blob2' where id=1",
+		table:  "dst2",
+		data:   [][]string{{"blob2", "1"}},
+	}, {
+		input:  "insert into src3 values (1, 'blob1', 'aaa', 'xxx')",
+		output: "insert into dst3(id,c) values (1,concat(_binary'aaa', _binary'blob1'))",
+		table:  "dst3",
+		data:   [][]string{{"1", "aaablob1"}},
+	}, {
+		// c uses val (present, unchanged) and blb (omitted): its value did not
+		// change, so it is left alone rather than recomputed with a NULL blob.
+		input: "update src3 set extra = 'yyy' where id = 1",
+		table: "dst3",
+		data:  [][]string{{"1", "aaablob1"}},
+	}, {
+		// The blob changed, so the image is full and c is recomputed.
+		input:  "update src3 set blb = 'blob2' where id = 1",
+		output: "update dst3 set c=concat(_binary'aaa', _binary'blob2') where id=1",
+		table:  "dst3",
+		data:   [][]string{{"1", "aaablob2"}},
+	}, {
+		input:  "insert into src4 values (1, 'a', 'b', 1)",
+		output: "insert into dst4(id,c,val) values (1,concat(_binary'a', _binary'b'),1)",
+		table:  "dst4",
+		data:   [][]string{{"1", "ab", "1"}},
+	}, {
+		// Under NOBLOB the before image omits both blobs. After UPDATE
+		// SET b1=NULL, val=2, b1 is present as NULL and b2 is absent, so
+		// concat(b1,b2) cannot be computed. Fail closed rather than
+		// silently keep c='ab' while applying val=2.
+		input: "update src4 set b1=NULL, val=2 where id=1",
+		table: "dst4",
+		data:  [][]string{{"1", "ab", "1"}},
+		error: "binary log event missing a needed value for dst4.c due to not using binlog-row-image=FULL",
+	}}
+
+	for _, tcase := range testcases {
+		t.Run(tcase.input, func(t *testing.T) {
+			execStatements(t, []string{tcase.input})
+			if tcase.error != "" {
+				// expectNontxQueries skips begin/rollback/pos updates so a
+				// leftover position write from the previous case cannot race
+				// the error assertions. The workflow must record the message
+				// and go to Error rather than apply a stale concat.
+				expectNontxQueries(t, qh.Expect(
+					fmt.Sprintf("/update _vt.vreplication set message=.*%s.*", tcase.error),
+					"/update _vt.vreplication set state='Error'",
+				), recvTimeout)
+				expectData(t, tcase.table, tcase.data)
+				return
+			}
+			if tcase.output != "" {
+				expectNontxQueries(t, qh.Expect(tcase.output), recvTimeout)
+			}
+			expectData(t, tcase.table, tcase.data)
+		})
+	}
+	// Two partial updates reached dst, both with the same projected bitmap (one
+	// cached query). The dst2 and dst3 no-ops must not have generated or cached
+	// a partial query; had they produced an invalid empty UPDATE or an error,
+	// the stream would have stopped before the following cases could be applied.
+	// The dst4 two-BLOB rejection fails before generating a partial query.
+	stats := globalStats.controllers[int32(vrId)].blpStats
+	require.Equal(t, int64(2), stats.PartialQueryCount.Counts()["update"])
+	require.Equal(t, int64(1), stats.PartialQueryCacheSize.Counts()["update"])
+}
+
 func TestPlayerBatchMode(t *testing.T) {
 	// To test trx batch splitting at 1024-64 bytes.
 	maxAllowedPacket := 1024
@@ -3940,6 +4248,85 @@ func TestPlayerBatchModeMixedRowEvent(t *testing.T) {
 	expectData(t, "t1", [][]string{{"3", "b"}})
 }
 
+// TestPlayerBatchModeGroupedPlans confirms that batch mode keeps deletes for
+// grouped plans -- as built for lookup vindex backfills and aggregating
+// materializations -- on the per-row path. The bulk-delete path would apply a
+// plain multi-row DELETE, but the correct delete handling for these plans is
+// the one generateDeleteStatement chose: a no-op for insertIgnore plans and a
+// count-decrementing UPDATE for insertOnDup plans.
+func TestPlayerBatchModeGroupedPlans(t *testing.T) {
+	oldVreplicationExperimentalFlags := vttablet.DefaultVReplicationConfig.ExperimentalFlags
+	vttablet.DefaultVReplicationConfig.ExperimentalFlags = vttablet.VReplicationExperimentalFlagVPlayerBatching
+	// This test's teardown uses defer, not t.Cleanup: execStatements and the
+	// other framework helpers run on t.Context(), which is already canceled
+	// by the time t.Cleanup callbacks execute.
+	defer func() {
+		vttablet.DefaultVReplicationConfig.ExperimentalFlags = oldVreplicationExperimentalFlags
+	}()
+
+	defer deleteTablet(addTablet(100))
+	execStatements(t, []string{
+		"create table src1(id bigint, val varbinary(128), primary key(id))",
+		// lkp1 mimics the backing table of a unique lookup vindex: every
+		// column is in the group by, so the plan is insertIgnore.
+		fmt.Sprintf("create table %s.lkp1(id bigint, val varbinary(128), primary key(id))", vrepldb),
+		"create table src2(id bigint, val varbinary(128), primary key(id))",
+		// lkp2 mimics the backing table of a non-unique lookup vindex: one
+		// target row counts multiple source rows, so the plan is insertOnDup.
+		fmt.Sprintf("create table %s.lkp2(val varbinary(128), cnt bigint, primary key(val))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table src1",
+		fmt.Sprintf("drop table %s.lkp1", vrepldb),
+		"drop table src2",
+		fmt.Sprintf("drop table %s.lkp2", vrepldb),
+	})
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "lkp1",
+			Filter: "select id, val from src1 group by id, val",
+		}, {
+			Match:  "lkp2",
+			Filter: "select val, count(*) as cnt from src2 group by val",
+		}},
+	}
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	cancel, _ := startVReplication(t, bls, "")
+	defer cancel()
+
+	execStatements(t, []string{"insert into src1 values (1, 'a'), (2, 'b'), (3, 'c')"})
+	expectNontxQueries(t, qh.Expect(
+		"insert ignore into lkp1(id,val) values (1,_binary'a'), (2,_binary'b'), (3,_binary'c')",
+	), recvTimeout)
+	expectData(t, "lkp1", [][]string{{"1", "a"}, {"2", "b"}, {"3", "c"}})
+
+	execStatements(t, []string{"insert into src2 values (1, 'x'), (2, 'x'), (3, 'x')"})
+	expectNontxQueries(t, qh.Expect(
+		"insert into lkp2(val,cnt) values (_binary'x',1), (_binary'x',1), (_binary'x',1) on duplicate key update cnt=cnt+1",
+	), recvTimeout)
+	expectData(t, "lkp2", [][]string{{"x", "3"}})
+
+	// Each multi-row delete produces one row event with multiple
+	// delete-shaped row changes, which is the shape the bulk-delete path
+	// consumes. insertIgnore deletes must be a no-op; insertOnDup deletes
+	// must decrement per row, leaving the row that still counts source
+	// row 3.
+	execStatements(t, []string{"delete from src1 where id in (1, 2)"})
+	execStatements(t, []string{"delete from src2 where id in (1, 2)"})
+	expectNontxQueries(t, qh.Expect(
+		"update lkp2 set cnt=cnt-1 where val=_binary'x'",
+		"update lkp2 set cnt=cnt-1 where val=_binary'x'",
+	), recvTimeout)
+	expectData(t, "lkp1", [][]string{{"1", "a"}, {"2", "b"}, {"3", "c"}})
+	expectData(t, "lkp2", [][]string{{"x", "1"}})
+}
+
 // TestPlayerStalls confirms that the vplayer will detect a stall and generate
 // a meaningful error -- which is stored in the vreplication record and the
 // vreplication_log table as well as being logged -- when it does.
@@ -3958,12 +4345,14 @@ func TestPlayerStalls(t *testing.T) {
 	oldProgressDeadline := vplayerProgressDeadline
 	oldRelayLogMaxItems := vttablet.DefaultVReplicationConfig.RelayLogMaxItems
 	oldRetryDelay := vttablet.DefaultVReplicationConfig.RetryDelay
+	oldIdleTimeout := idleTimeout
 	defer func() {
 		log.Error = ole
 		vreplicationMinimumHeartbeatUpdateInterval = oldMinimumHeartbeatUpdateInterval
 		vplayerProgressDeadline = oldProgressDeadline
 		vttablet.DefaultVReplicationConfig.RelayLogMaxItems = oldRelayLogMaxItems
 		vttablet.DefaultVReplicationConfig.RetryDelay = oldRetryDelay
+		idleTimeout = oldIdleTimeout
 	}()
 
 	// Shorten the deadline for the test. It only needs to comfortably exceed
@@ -3973,6 +4362,14 @@ func TestPlayerStalls(t *testing.T) {
 	vreplicationMinimumHeartbeatUpdateInterval = 2
 	// So each relay log batch will be a single statement transaction.
 	vttablet.DefaultVReplicationConfig.RelayLogMaxItems = 1
+	// The filter matches no tables, so the source's row events, including
+	// the vplayer's own writes to _vt.vreplication, reach the vplayer as
+	// empty transactions. Their position is saved once idleTimeout has
+	// passed since the last save, which also resets the heartbeat count.
+	// Don't save it during the test, so that the heartbeat recording is
+	// the only write to _vt.vreplication that the row locks taken in the
+	// heartbeat subtest can block.
+	idleTimeout = time.Hour
 
 	// Don't retry the workflow if it goes into the error state.
 	vttablet.DefaultVReplicationConfig.RetryDelay = 10 * time.Minute
@@ -4085,16 +4482,12 @@ func TestPlayerStalls(t *testing.T) {
 				// the subtest: teardown deletes from the locked table and
 				// would otherwise hang until the test timeout.
 				defer releaseLocks()
-				// Wait until a heartbeat recording attempt (or the position
-				// update it is part of) fails on the row locks held by the
-				// preFunc connection, rather than sleeping a fixed multiple of
-				// the heartbeat interval.
+				// Wait until a heartbeat recording attempt fails on the row
+				// locks held by the preFunc connection, rather than sleeping a
+				// fixed multiple of the heartbeat interval.
 				require.EventuallyWithT(t, func(c *assert.CollectT) {
 					log.Flush()
-					logMessage := logger.String()
-					assert.True(c, strings.Contains(logMessage, failedToRecordHeartbeatMsg) ||
-						strings.Contains(logMessage, "Lock wait timeout exceeded"),
-						"expected log message not found")
+					assert.Contains(c, logger.String(), failedToRecordHeartbeatMsg)
 				}, 30*time.Second, 100*time.Millisecond, "expected log message not found")
 				// The vplayer also records the failure in the vreplication
 				// record's message column, but that update is blocked by the
@@ -4114,8 +4507,6 @@ func TestPlayerStalls(t *testing.T) {
 				}
 				drainDBQueries()
 			},
-			// Nothing should get replicated because of the exclusing row locks
-			// held in the other connection from our preFunc.
 		},
 	}
 
@@ -4161,12 +4552,19 @@ func expectJSON(t *testing.T, table string, values [][]string, id int, exec func
 
 func startVReplication(t *testing.T, bls *binlogdatapb.BinlogSource, pos string) (cancelFunc func(), id int) {
 	t.Helper()
+	// fake workflow type as MoveTables so that we can test with "noblob" binlog row image
+	return startVReplicationWithWorkflowType(t, bls, pos, binlogdatapb.VReplicationWorkflowType_MoveTables)
+}
+
+func startVReplicationWithWorkflowType(t *testing.T, bls *binlogdatapb.BinlogSource, pos string,
+	workflowType binlogdatapb.VReplicationWorkflowType,
+) (cancelFunc func(), id int) {
+	t.Helper()
 
 	if pos == "" {
 		pos = primaryPosition(t)
 	}
-	// fake workflow type as MoveTables so that we can test with "noblob" binlog row image
-	query := binlogplayer.CreateVReplication("test", bls, pos, 9223372036854775807, 9223372036854775807, 0, vrepldb, binlogdatapb.VReplicationWorkflowType_MoveTables, 0, false)
+	query := binlogplayer.CreateVReplication("test", bls, pos, 9223372036854775807, 9223372036854775807, 0, vrepldb, workflowType, 0, false)
 	qr, err := playerEngine.Exec(query)
 	require.NoError(t, err)
 	expectDBClientQueries(t, qh.Expect(
@@ -4195,4 +4593,125 @@ func drainDBQueries() {
 			return
 		}
 	}
+}
+
+// TestPlayerNoStallWhileThrottled exercises the production handoff for
+// https://github.com/vitessio/vitess/issues/20922 end to end: a
+// throttler-denied vplayer reports its denials (vplayer.lastThrottledNano)
+// to the relay log, which defers the stall verdict, so sustained throttling
+// must not produce the relay log I/O stall error -- and replication must
+// resume normally once the throttler allows it again.
+func TestPlayerNoStallWhileThrottled(t *testing.T) {
+	defer deleteTablet(addTablet(100))
+
+	// Capture the error log so we can assert the stall message is absent.
+	ole := log.Error
+	logger := logutil.NewMemoryLogger()
+	log.Error = func(msg string, _ ...slog.Attr) {
+		logger.Errorf("%s", msg)
+	}
+
+	oldProgressDeadline := vplayerProgressDeadline
+	oldRelayLogMaxItems := vttablet.DefaultVReplicationConfig.RelayLogMaxItems
+	oldThrottlerClient := playerEngine.throttlerClient
+	defer func() {
+		log.Error = ole
+		vplayerProgressDeadline = oldProgressDeadline
+		vttablet.DefaultVReplicationConfig.RelayLogMaxItems = oldRelayLogMaxItems
+		playerEngine.throttlerClient = oldThrottlerClient
+		drainDBQueries()
+	}()
+	// Shorten the stall deadline so that an undeferred stall would fire
+	// well within the test's throttled window, but keep a wide margin
+	// (100x) over the fake checker's denial pacing: a spurious stall
+	// would need a full-process pause longer than the deadline between
+	// two denial-timestamp refreshes, which even a resource-starved CI
+	// runner should not produce.
+	vplayerProgressDeadline = 5 * time.Second
+	// Make each relay log batch a single transaction so the relay log
+	// fills -- and its Send blocks, starting the stall timer -- as soon as
+	// events arrive while the applier is denied.
+	vttablet.DefaultVReplicationConfig.RelayLogMaxItems = 1
+
+	// Start with the throttler allowing, so the stream starts up cleanly;
+	// the fake's verdict is flipped to denied before any row events flow.
+	throttler := &fakeThrottleChecker{}
+	playerEngine.throttlerClient = throttler
+
+	execStatements(t, []string{
+		"create table t1(id bigint, val1 varchar(128), primary key(id))",
+		fmt.Sprintf("create table %s.t1(id bigint, val1 varchar(128), primary key(id))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+		fmt.Sprintf("drop table %s.t1", vrepldb),
+	})
+
+	// Note: TestPlayerStalls uses an empty filter, which in its STATEMENT
+	// binlog_format scenarios passes statements through wholesale. Here we
+	// replicate default ROW events, which an empty filter would drop, so
+	// match the table explicitly.
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match: "/.*",
+		}},
+	}
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	// Create the stream via the engine directly rather than through
+	// startVReplication: this test makes no assertions on the shared
+	// globalDBQueries channel -- the throttled window produces a
+	// nondeterministic mix of time_throttled/heartbeat updates -- so
+	// teardown must not expect a consumed channel either. The final
+	// deferred drain leaves the channel empty for subsequent tests.
+	defer drainDBQueries()
+	query := binlogplayer.CreateVReplication("test", bls, primaryPosition(t), 9223372036854775807, 9223372036854775807, 0, vrepldb, binlogdatapb.VReplicationWorkflowType_MoveTables, 0, false)
+	qr, err := playerEngine.Exec(query)
+	require.NoError(t, err)
+	defer func() {
+		_, err := playerEngine.Exec(fmt.Sprintf("delete from _vt.vreplication where id = %d", qr.InsertID))
+		require.NoError(t, err)
+	}()
+
+	// Deny all throttler checks from here on: the vplayer stops draining
+	// the relay log, so the row events below fill it and block the
+	// vstreamer's Send, which starts the stall timer.
+	throttler.deny.Store(true)
+	execStatements(t, []string{
+		"insert into t1(id, val1) values (1, 'aaa')",
+		"insert into t1(id, val1) values (2, 'bbb')",
+		"insert into t1(id, val1) values (3, 'ccc')",
+	})
+
+	// Wait out several stall deadlines' worth of denied time: without the
+	// denial handoff to the relay log, the stall fires within
+	// vplayerProgressDeadline and errors the stream.
+	time.Sleep(3 * vplayerProgressDeadline)
+	log.Flush()
+	require.NotContains(t, logger.String(), relayLogIOStalledMsg,
+		"the stall detector fired while the vplayer was throttled")
+
+	dbc := playerEngine.dbClientFactoryFiltered()
+	require.NoError(t, dbc.Connect())
+	defer dbc.Close()
+	waitForQueryResult(t, dbc, fmt.Sprintf("select state from _vt.vreplication where id = %d", qr.InsertID), "Running")
+
+	// Once the throttler allows again, the stream must drain the relay log
+	// and apply the queued rows: it was healthy all along. Use a generous
+	// CI-safe window: the backlog drains one single-item batch at a time
+	// with RelayLogMaxItems=1.
+	throttler.deny.Store(false)
+	countQuery := fmt.Sprintf("select count(*) from %s.t1", vrepldb)
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		res, err := dbc.ExecuteFetch(countQuery, 1)
+		require.NoError(c, err)
+		require.Len(c, res.Rows, 1)
+		assert.Equal(c, "3", res.Rows[0][0].ToString())
+	}, 30*time.Second, 100*time.Millisecond, "the queued rows were not applied after the throttler allowed again")
+	log.Flush()
+	require.NotContains(t, logger.String(), relayLogIOStalledMsg)
 }

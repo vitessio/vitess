@@ -105,19 +105,20 @@ import { formatAlias } from '../util/tablets';
 /**
  * useBackups is a query hook that fetches all backups across every cluster.
  */
-export const useBackups = (options?: UseQueryOptions<pb.ClusterBackup[], Error> | undefined) =>
-    useQuery({ queryKey: ['backups'], queryFn: fetchBackups, ...options });
+export const useBackups = (
+    options?: Omit<UseQueryOptions<pb.ClusterBackup[], Error>, 'queryKey' | 'queryFn'> | undefined
+) => useQuery({ queryKey: ['backups'], queryFn: fetchBackups, ...options });
 
 /**
  * useClusters is a query hook that fetches all clusters VTAdmin is configured to discover.
  */
-export const useClusters = (options?: UseQueryOptions<pb.Cluster[], Error> | undefined) =>
+export const useClusters = (options?: Omit<UseQueryOptions<pb.Cluster[], Error>, 'queryKey' | 'queryFn'> | undefined) =>
     useQuery({ queryKey: ['clusters'], queryFn: fetchClusters, ...options });
 
 /**
  * useGates is a query hook that fetches all VTGates across every cluster.
  */
-export const useGates = (options?: UseQueryOptions<pb.VTGate[], Error> | undefined) =>
+export const useGates = (options?: Omit<UseQueryOptions<pb.VTGate[], Error>, 'queryKey' | 'queryFn'> | undefined) =>
     useQuery({ queryKey: ['gates'], queryFn: fetchGates, ...options });
 
 /**
@@ -125,7 +126,7 @@ export const useGates = (options?: UseQueryOptions<pb.VTGate[], Error> | undefin
  */
 export const useKeyspace = (
     params: Parameters<typeof fetchKeyspace>[0],
-    options?: UseQueryOptions<pb.Keyspace, Error>
+    options?: Omit<UseQueryOptions<pb.Keyspace, Error>, 'queryKey' | 'queryFn'>
 ) => {
     const queryClient = useQueryClient();
     return useQuery({
@@ -159,31 +160,35 @@ export const useCreateKeyspace = (
 /**
  * useKeyspaces is a query hook that fetches all keyspaces across every cluster.
  */
-export const useKeyspaces = (options?: UseQueryOptions<pb.Keyspace[], Error> | undefined) =>
-    useQuery({ queryKey: ['keyspaces'], queryFn: fetchKeyspaces, ...options });
+export const useKeyspaces = (
+    options?: Omit<UseQueryOptions<pb.Keyspace[], Error>, 'queryKey' | 'queryFn'> | undefined
+) => useQuery({ queryKey: ['keyspaces'], queryFn: fetchKeyspaces, ...options });
 
 /**
  * useSchemas is a query hook that fetches all schemas across every cluster.
  */
-export const useSchemas = (options?: UseQueryOptions<pb.Schema[], Error> | undefined) =>
+export const useSchemas = (options?: Omit<UseQueryOptions<pb.Schema[], Error>, 'queryKey' | 'queryFn'> | undefined) =>
     useQuery({ queryKey: ['schemas'], queryFn: fetchSchemas, ...options });
 
 /**
  * useTablets is a query hook that fetches all tablets across every cluster.
  */
-export const useTablets = (options?: UseQueryOptions<pb.Tablet[], Error> | undefined) =>
+export const useTablets = (options?: Omit<UseQueryOptions<pb.Tablet[], Error>, 'queryKey' | 'queryFn'> | undefined) =>
     useQuery({ queryKey: ['tablets'], queryFn: fetchTablets, ...options });
 
 /**
  * useVtctlds is a query hook that fetches all vtctlds across every cluster.
  */
-export const useVtctlds = (options?: UseQueryOptions<pb.Vtctld[], Error> | undefined) =>
+export const useVtctlds = (options?: Omit<UseQueryOptions<pb.Vtctld[], Error>, 'queryKey' | 'queryFn'> | undefined) =>
     useQuery({ queryKey: ['vtctlds'], queryFn: fetchVtctlds, ...options });
 
 /**
  * useTablet is a query hook that fetches a single tablet by alias.
  */
-export const useTablet = (params: Parameters<typeof fetchTablet>[0], options?: UseQueryOptions<pb.Tablet, Error>) => {
+export const useTablet = (
+    params: Parameters<typeof fetchTablet>[0],
+    options?: Omit<UseQueryOptions<pb.Tablet, Error>, 'queryKey' | 'queryFn'>
+) => {
     const queryClient = useQueryClient();
     return useQuery({
         queryKey: ['tablet', params],
@@ -266,7 +271,7 @@ export const useSetReadWrite = (
  */
 export const useShardReplicationPositions = (
     params: Parameters<typeof fetchShardReplicationPositions>[0],
-    options?: UseQueryOptions<pb.GetShardReplicationPositionsResponse, Error> | undefined
+    options?: Omit<UseQueryOptions<pb.GetShardReplicationPositionsResponse, Error>, 'queryKey' | 'queryFn'> | undefined
 ) =>
     useQuery({
         queryKey: ['shard_replication_positions', params],
@@ -309,7 +314,7 @@ export const useStopReplication = (
  */
 export const usePingTablet = (
     params: Parameters<typeof pingTablet>[0],
-    options?: UseQueryOptions<pb.PingTabletResponse, Error>
+    options?: Omit<UseQueryOptions<pb.PingTabletResponse, Error>, 'queryKey' | 'queryFn'>
 ) => {
     return useQuery({ queryKey: ['ping-tablet', params], queryFn: () => pingTablet(params), ...options });
 };
@@ -319,7 +324,7 @@ export const usePingTablet = (
  */
 export const useRefreshState = (
     params: Parameters<typeof refreshState>[0],
-    options?: UseQueryOptions<pb.RefreshStateResponse, Error>
+    options?: Omit<UseQueryOptions<pb.RefreshStateResponse, Error>, 'queryKey' | 'queryFn'>
 ) => {
     return useQuery({ queryKey: ['refresh-state', params], queryFn: () => refreshState(params), ...options });
 };
@@ -329,14 +334,14 @@ export const useRefreshState = (
  */
 export const useHealthCheck = (
     params: Parameters<typeof runHealthCheck>[0],
-    options?: UseQueryOptions<pb.RunHealthCheckResponse, Error>
+    options?: Omit<UseQueryOptions<pb.RunHealthCheckResponse, Error>, 'queryKey' | 'queryFn'>
 ) => {
     return useQuery({ queryKey: ['run-health-check', params], queryFn: () => runHealthCheck(params), ...options });
 };
 
 export const useExperimentalTabletDebugVars = (
     params: FetchTabletParams,
-    options?: UseQueryOptions<TabletDebugVarsResponse, Error>
+    options?: Omit<UseQueryOptions<TabletDebugVarsResponse, Error>, 'queryKey' | 'queryFn'>
 ) => {
     return useQuery({
         queryKey: ['experimental/tablet/debug/vars', params],
@@ -349,7 +354,7 @@ export const useExperimentalTabletDebugVars = (
 // for multiple tablets in a single request. https://github.com/vitessio/vitess/projects/12#card-63086674
 export const useManyExperimentalTabletDebugVars = (
     params: FetchTabletParams[],
-    defaultOptions: UseQueryOptions<TabletDebugVarsResponse, Error> = {}
+    defaultOptions: Omit<UseQueryOptions<TabletDebugVarsResponse, Error>, 'queryKey' | 'queryFn'> = {}
 ) => {
     // Robust typing for useQueries is still in progress, so we do
     // some sneaky type-casting. See https://github.com/tannerlinsley/react-query/issues/1675
@@ -364,8 +369,9 @@ export const useManyExperimentalTabletDebugVars = (
 /**
  * useWorkflowsResponse is a query hook that fetches all workflows (by cluster) across every cluster.
  */
-export const useWorkflowsResponse = (options?: UseQueryOptions<pb.GetWorkflowsResponse, Error> | undefined) =>
-    useQuery({ queryKey: ['workflows'], queryFn: fetchWorkflows, ...options });
+export const useWorkflowsResponse = (
+    options?: Omit<UseQueryOptions<pb.GetWorkflowsResponse, Error>, 'queryKey' | 'queryFn'> | undefined
+) => useQuery({ queryKey: ['workflows'], queryFn: fetchWorkflows, ...options });
 
 /**
  * useWorkflows is a helper hook for when a flattened list of workflows
@@ -398,7 +404,10 @@ export const useWorkflows = (
 /**
  * useSchema is a query hook that fetches a single schema for the given parameters.
  */
-export const useSchema = (params: FetchSchemaParams, options?: UseQueryOptions<pb.Schema, Error> | undefined) => {
+export const useSchema = (
+    params: FetchSchemaParams,
+    options?: Omit<UseQueryOptions<pb.Schema, Error>, 'queryKey' | 'queryFn'> | undefined
+) => {
     const queryClient = useQueryClient();
     return useQuery({
         queryKey: ['schema', params],
@@ -464,7 +473,10 @@ export const useValidateVersionKeyspace = (
 /**
  * useVSchema is a query hook that fetches a single vschema definition for the given parameters.
  */
-export const useVSchema = (params: FetchVSchemaParams, options?: UseQueryOptions<pb.VSchema, Error> | undefined) => {
+export const useVSchema = (
+    params: FetchVSchemaParams,
+    options?: Omit<UseQueryOptions<pb.VSchema, Error>, 'queryKey' | 'queryFn'> | undefined
+) => {
     return useQuery({ queryKey: ['vschema', params], queryFn: () => fetchVSchema(params), ...options });
 };
 
@@ -473,7 +485,8 @@ export const useVSchema = (params: FetchVSchemaParams, options?: UseQueryOptions
  */
 export const useTransactions = (
     params: FetchTransactionsParams,
-    options?: UseQueryOptions<vtctldata.GetUnresolvedTransactionsResponse, Error> | undefined
+    options?:
+        Omit<UseQueryOptions<vtctldata.GetUnresolvedTransactionsResponse, Error>, 'queryKey' | 'queryFn'> | undefined
 ) => {
     return useQuery({ queryKey: ['transactions', params], queryFn: () => fetchTransactions(params), ...options });
 };
@@ -483,7 +496,7 @@ export const useTransactions = (
  */
 export const useTransaction = (
     params: FetchTransactionParams,
-    options?: UseQueryOptions<vtctldata.GetTransactionInfoResponse, Error> | undefined
+    options?: Omit<UseQueryOptions<vtctldata.GetTransactionInfoResponse, Error>, 'queryKey' | 'queryFn'> | undefined
 ) => {
     return useQuery({ queryKey: ['transaction', params], queryFn: () => fetchTransaction(params), ...options });
 };
@@ -505,14 +518,14 @@ export const useConcludeTransaction = (
 
 export const useVTExplain = (
     params: Parameters<typeof fetchVTExplain>[0],
-    options?: UseQueryOptions<pb.VTExplainResponse, Error> | undefined
+    options?: Omit<UseQueryOptions<pb.VTExplainResponse, Error>, 'queryKey' | 'queryFn'> | undefined
 ) => {
     return useQuery({ queryKey: ['vtexplain', params], queryFn: () => fetchVTExplain(params), ...options });
 };
 
 export const useVExplain = (
     params: Parameters<typeof fetchVExplain>[0],
-    options?: UseQueryOptions<pb.VExplainResponse, Error> | undefined
+    options?: Omit<UseQueryOptions<pb.VExplainResponse, Error>, 'queryKey' | 'queryFn'> | undefined
 ) => {
     return useQuery({ queryKey: ['vexplain', params], queryFn: () => fetchVExplain(params), ...options });
 };
@@ -522,7 +535,7 @@ export const useVExplain = (
  */
 export const useWorkflow = (
     params: Parameters<typeof fetchWorkflow>[0],
-    options?: UseQueryOptions<pb.Workflow, Error> | undefined
+    options?: Omit<UseQueryOptions<pb.Workflow, Error>, 'queryKey' | 'queryFn'> | undefined
 ) => {
     const queryClient = useQueryClient();
     return useQuery({
@@ -564,7 +577,7 @@ export const useWorkflow = (
  */
 export const useWorkflowStatus = (
     params: Parameters<typeof fetchWorkflowStatus>[0],
-    options?: UseQueryOptions<vtctldata.WorkflowStatusResponse, Error> | undefined
+    options?: Omit<UseQueryOptions<vtctldata.WorkflowStatusResponse, Error>, 'queryKey' | 'queryFn'> | undefined
 ) => {
     return useQuery({ queryKey: ['workflow_status', params], queryFn: () => fetchWorkflowStatus(params), ...options });
 };
@@ -837,7 +850,7 @@ export const useCreateShard = (
  */
 export const useTopologyPath = (
     params: GetTopologyPathParams,
-    options?: UseQueryOptions<vtctldata.GetTopologyPathResponse, Error> | undefined
+    options?: Omit<UseQueryOptions<vtctldata.GetTopologyPathResponse, Error>, 'queryKey' | 'queryFn'> | undefined
 ) => {
     return useQuery({ queryKey: ['topology-path', params], queryFn: () => getTopologyPath(params), ...options });
 };
@@ -878,7 +891,7 @@ export const useValidateShard = (
  */
 export const useGetFullStatus = (
     params: GetFullStatusParams,
-    options?: UseQueryOptions<vtctldata.GetFullStatusResponse, Error> | undefined
+    options?: Omit<UseQueryOptions<vtctldata.GetFullStatusResponse, Error>, 'queryKey' | 'queryFn'> | undefined
 ) => useQuery({ queryKey: ['full-status', params], queryFn: () => getFullStatus(params), ...options });
 
 /**
@@ -916,7 +929,7 @@ export const useCreateVDiff = (
  */
 export const useShowVDiff = (
     params: ShowVDiffParams,
-    options?: UseQueryOptions<pb.VDiffShowResponse, Error> | undefined
+    options?: Omit<UseQueryOptions<pb.VDiffShowResponse, Error>, 'queryKey' | 'queryFn'> | undefined
 ) => {
     return useQuery({ queryKey: ['vdiff_show', params], queryFn: () => showVDiff(params), ...options });
 };
@@ -926,7 +939,7 @@ export const useShowVDiff = (
  */
 export const useSchemaMigrations = (
     request: pb.IGetSchemaMigrationsRequest,
-    options?: UseQueryOptions<pb.GetSchemaMigrationsResponse, Error> | undefined
+    options?: Omit<UseQueryOptions<pb.GetSchemaMigrationsResponse, Error>, 'queryKey' | 'queryFn'> | undefined
 ) => {
     return useQuery({ queryKey: ['migrations', request], queryFn: () => fetchSchemaMigrations(request), ...options });
 };

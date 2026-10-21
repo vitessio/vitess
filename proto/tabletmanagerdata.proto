@@ -277,6 +277,11 @@ message ExecuteFetchAsDbaResponse {
   query.QueryResult result = 1;
 }
 
+message SessionVariable {
+  string name = 1;
+  string value = 2;
+}
+
 message ExecuteMultiFetchAsDbaRequest {
   bytes sql = 1;
   string db_name = 2;
@@ -284,6 +289,7 @@ message ExecuteMultiFetchAsDbaRequest {
   bool disable_binlogs = 4;
   bool reload_schema = 5;
   bool disable_foreign_key_checks = 6;
+  repeated SessionVariable session_variables = 7;
 }
 
 message ExecuteMultiFetchAsDbaResponse {
@@ -593,6 +599,9 @@ message BackupRequest {
   // before taking the backup. If not set, the default value is used.
   vttime.Duration mysql_shutdown_timeout = 6;
   InitSQL init_sql = 7;
+  // IncludeBinlogs includes the source's binary logs in a full builtin backup.
+  // Restores use them automatically.
+  bool include_binlogs = 8;
 }
 
 message BackupResponse {
@@ -725,7 +734,7 @@ message ValidateVReplicationPermissionsRequest {
 }
 
 message ValidateVReplicationPermissionsResponse {
-  // The --db_filtered_user on the tablet.
+  // The --db-filtered-user on the tablet.
   string user = 1;
   // Does the user have the minimum privileges needed to manage
   // vreplication metadata.
@@ -763,6 +772,10 @@ message VDiffReportOptions {
   string format = 3;
   int64 max_sample_rows = 4;
   int64 row_diff_column_truncate_at = 5;
+  // no_samples strips the row-sample arrays from the per-table diff report
+  // (keeping the scalar counters), avoiding gRPC message-size limits on diffs
+  // with large blob/JSON rows.
+  bool no_samples = 6;
 }
 
 message VDiffCoreOptions {

@@ -35,15 +35,15 @@ import { READ_ONLY_COLUMNS } from '../Transactions';
 import { COLUMNS } from '../Transactions';
 import { TransactionLink } from '../../links/TransactionLink';
 
-interface RouteParams {
+type RouteParams = {
     clusterID: string;
     dtid: string;
-}
+};
 
 export const SHARD_STATE_COLUMNS = ['Shard', 'State', 'Message', 'Time Created', 'Statements'];
 
 export const Transaction = () => {
-    const { clusterID, dtid } = useParams<RouteParams>();
+    const { clusterID, dtid } = useParams<RouteParams>() as RouteParams;
 
     useDocumentTitle(`${dtid} (${clusterID})`);
 

@@ -73,6 +73,45 @@ func TestTabletCommands(t *testing.T) {
 		assertExecuteMultiFetch(t, result)
 	})
 
+	t.Run("ExecuteMultiFetchAsDBA with a compound statement", func(t *testing.T) {
+		// The body of the trigger carries semicolons of its own. MySQL parses
+		// the whole thing as one statement, but our own splitter does not, so
+		// this only works as long as the statement reaches MySQL as it was
+		// written.
+		sql := "create trigger t1_no_zero before insert on t1 for each row begin set @seen = new.id; set @last = new.value; end"
+		_, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ExecuteMultiFetchAsDBA", "--json", primaryTablet.Alias, sql)
+		require.NoError(t, err)
+		defer func() {
+			_, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ExecuteFetchAsDBA", "--json", primaryTablet.Alias, "drop trigger t1_no_zero")
+			require.NoError(t, err)
+		}()
+
+		qr := utils.Exec(t, conn, "show triggers like 't1'")
+		require.Len(t, qr.Rows, 1)
+	})
+
+	// A query that really does hold several statements is turned away by MySQL,
+	// on a connection that no longer negotiates the capability, before any of
+	// them runs.
+	//
+	// The other half, a compound statement running whole on such a connection,
+	// cannot be shown through this RPC: creating a trigger or a routine needs
+	// SUPER while binary logging is on, and the app user does not have it by
+	// design. go/mysql/endtoend covers that half against a real server, and
+	// TestTabletManager_ExecuteFetchCompoundStatement covers this RPC not
+	// counting the statements of one.
+	t.Run("ExecuteFetchAsApp with several statements", func(t *testing.T) {
+		sql := fmt.Sprintf("insert into %s.t1(id, value) values(41,'x'); insert into %s.t1(id, value) values(42,'y')", dbName, dbName)
+		out, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ExecuteFetchAsApp", "--json", primaryTablet.Alias, sql)
+		require.Error(t, err)
+		// MySQL is what turns it away, on a connection that cannot execute a
+		// batch, rather than anything of ours counting statements.
+		require.Contains(t, out, "You have an error in your SQL syntax")
+
+		qr := utils.Exec(t, conn, "select id from t1 where id in (41, 42)")
+		require.Empty(t, qr.Rows, "neither statement of the batch may have run")
+	})
+
 	t.Run("GetUnresolvedTransactions", func(t *testing.T) {
 		_, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("DistributedTransaction", "unresolved-list",
 			"--keyspace", keyspaceName)

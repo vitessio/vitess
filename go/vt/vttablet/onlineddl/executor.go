@@ -24,6 +24,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"slices"
 	"strconv"
@@ -114,19 +115,23 @@ func registerOnlineDDLFlags(fs *pflag.FlagSet) {
 }
 
 const (
-	staleMigrationFailMinutes                = 180
-	staleMigrationWarningMinutes             = 5
-	progressPctStarted               float64 = 0
-	progressPctFull                  float64 = 100.0
-	etaSecondsUnknown                        = -1
-	etaSecondsNow                            = 0
-	rowsCopiedUnknown                        = 0
-	emptyHint                                = ""
-	readyToCompleteHint                      = "ready_to_complete"
-	databasePoolSize                         = 3
-	qrBufferExtraTimeout                     = 5 * time.Second
-	grpcTimeout                              = 30 * time.Second
-	vreplicationTestSuiteWaitSeconds         = 5
+	staleMigrationFailMinutes            = 180
+	staleMigrationWarningMinutes         = 5
+	progressPctStarted           float64 = 0
+	progressPctFull              float64 = 100.0
+	etaSecondsUnknown                    = -1
+	etaSecondsNow                        = 0
+	rowsCopiedUnknown                    = 0
+	emptyHint                            = ""
+	readyToCompleteHint                  = "ready_to_complete"
+	databasePoolSize                     = 3
+	qrBufferExtraTimeout                 = 5 * time.Second
+	grpcTimeout                          = 30 * time.Second
+	// reviewQueryTimeout bounds the sidecar queries the migration review
+	// issues while holding migrationMutex: the tick's context has no
+	// deadline, and a stalled query must not hold the mutex indefinitely.
+	reviewQueryTimeout               = 30 * time.Second
+	vreplicationTestSuiteWaitSeconds = 5
 )
 
 // Executor is a state machine running migrations
@@ -154,8 +159,26 @@ type Executor struct {
 	// - be adopted by this executor (possible for vreplication migrations), or
 	// - be terminated
 	// The Executor auto-reviews the map and cleans up migrations thought to be running which are not running.
-	ownedRunningMigrations        sync.Map
-	vreplicationLastError         map[string]*vterrors.LastError
+	ownedRunningMigrations sync.Map
+	vreplicationLastError  map[string]*vterrors.LastError
+	// vreplicationProgress records each stream observed since Open, with its
+	// last observed copy-phase checkpoint; see vreplStreamShowsLiveness.
+	vreplicationProgress map[string]vreplStreamProgress
+	// vreplicationPendingCancel records cancellations (uuid -> reason) whose
+	// terminal status transition has not landed yet. Internal cancellations
+	// leave no durable cancelled_timestamp, and a successful stream stop
+	// erases the Error verdict that triggered them, so this record is what
+	// the review loop re-drives. Lost on restart like the other tracking; the
+	// stale-migration fallback still converges.
+	vreplicationPendingCancel map[string]string
+	// vreplicationPendingRepair records streams whose repair RPC failed. The
+	// engine applies the repair's write before it builds the replacement
+	// controller, so the row may already read Running with no controller
+	// behind it; the review re-drives the start, see redriveVReplRepair.
+	// Cleared by Open like the other tracking, but the park record outlives
+	// it: the first review since Open reconstructs the intent from a record
+	// still behind a running row.
+	vreplicationPendingRepair     map[string]bool
 	tickReentranceFlag            atomic.Int64
 	reviewedRunningMigrationsFlag bool
 
@@ -173,6 +196,202 @@ type cancellableMigration struct {
 	uuid    string
 	message string
 }
+
+// resolveVReplStreamAction converts any stream verdict into a cancellation
+// when the migration has an unfulfilled cancellation intent: a healthy stream
+// produces no verdict of its own, so re-driving the cancellation here is what
+// gets the migration out of 'running'.
+func resolveVReplStreamAction(action vreplStreamAction, cancellationRequested bool) vreplStreamAction {
+	if cancellationRequested {
+		return vreplStreamCancel
+	}
+	return action
+}
+
+// forgetVReplStream drops a migration's in-memory stream tracking once it
+// reaches a terminal status or is retried, so a finished migration's retry
+// window cannot leak into a later RETRY of the same UUID. Callers must hold
+// migrationMutex.
+func (e *Executor) forgetVReplStream(uuid string) {
+	delete(e.vreplicationLastError, uuid)
+	delete(e.vreplicationPendingCancel, uuid)
+	delete(e.vreplicationProgress, uuid)
+	delete(e.vreplicationPendingRepair, uuid)
+}
+
+// forgetFinishedVReplStreams drops the stream tracking of every migration
+// that is neither running nor pending. Migrations reach a terminal status by
+// many paths (a successful cut-over has no single point to hook), so the
+// tracking is reconciled against the migrations found on each review tick.
+// Pending migrations keep theirs: a ready one may still carry a cancellation
+// intent. Callers must hold migrationMutex.
+func (e *Executor) forgetFinishedVReplStreams(uuidsFoundRunning, uuidsFoundPending map[string]bool) {
+	forgetUnlessLive := func(uuid string) {
+		if !uuidsFoundRunning[uuid] && !uuidsFoundPending[uuid] {
+			e.forgetVReplStream(uuid)
+		}
+	}
+	// Deleting during range is well-defined in Go.
+	for uuid := range e.vreplicationLastError {
+		forgetUnlessLive(uuid)
+	}
+	for uuid := range e.vreplicationPendingCancel {
+		forgetUnlessLive(uuid)
+	}
+	for uuid := range e.vreplicationProgress {
+		forgetUnlessLive(uuid)
+	}
+	for uuid := range e.vreplicationPendingRepair {
+		forgetUnlessLive(uuid)
+	}
+}
+
+// vreplStreamProgress holds the copy-phase progress checkpoint last observed
+// for a migration's vreplication stream: the newest _vt.copy_state row id,
+// or zero past the copy phase. Its presence records that the executor has
+// observed the stream since it opened.
+type vreplStreamProgress struct {
+	copyStateID int64
+}
+
+// vreplThrottleLivenessWindow is how recent a stream's time_throttled stamp
+// must be for active throttling to count as copy-phase liveness. Throttle
+// updates are rate-limited on the stream side, so the window is generous.
+const vreplThrottleLivenessWindow = 15 * time.Minute
+
+// vreplStreamShowsLiveness reports whether the stream's advanced time_updated
+// may count as liveness for the stale-migration policy, along with the
+// observation to record: the copy-phase checkpoint, zero past the copy phase,
+// nil on a failed lookup. It does not record it: refreshMigrationLiveness
+// commits it as the new baseline only once the liveness refresh it earned has
+// landed.
+//
+// Past the copy phase an advanced time_updated always counts: heartbeats only
+// reach the applier once the stream is caught up. During the copy phase
+// heartbeats also flow between failing copy attempts, so liveness additionally
+// requires copy progress or active throttling. Progress is shown by either:
+//   - a newer _vt.copy_state checkpoint than the last one observed, which
+//     every committed batch inserts; or
+//   - a stream rows_copied past the value the migration record holds, which
+//     the executor acknowledges from the stream on every tick
+//     (updateRowsCopied). The stream only counts committed batches, so
+//     exceeding the acknowledged value proves durable progress since. It is
+//     secondary because it can miss progress: rows_copied is a 30s-ticker
+//     write of an in-memory counter, and a retried migration keeps its
+//     earlier record.
+//
+// The first observation since this executor opened (a restart or a failover)
+// counts on the advanced time_updated alone, as every observation did before
+// this gate existed: the stale review runs later in the same tick, and a
+// migration adopted after an outage longer than staleMigrationFailMinutes
+// would otherwise be failed while its copy is active, before any checkpoint
+// could be compared. The cost is bounded: the tracking is in-memory, so a
+// stuck copy earns one budget per executor restart, not one per tick.
+//
+// The replication position is not a progress signal: catchup advances it
+// before every copy attempt, whether or not the copy then succeeds. A failed
+// copy-state lookup is not liveness either; it is re-evaluated on the next
+// tick.
+func (e *Executor) vreplStreamShowsLiveness(ctx context.Context, uuid string, s *VReplStream, acknowledgedRowsCopied int64) (showsLiveness bool, observed *vreplStreamProgress) {
+	// The review holds migrationMutex on a tick context with no deadline.
+	ctx, cancel := context.WithTimeout(ctx, reviewQueryTimeout)
+	defer cancel()
+	query, err := sqlparser.ParseAndBind(sqlReadCopyStateProgress,
+		sqltypes.Int32BindVariable(s.id),
+	)
+	var csRow sqltypes.RowNamedValues
+	if err == nil {
+		var r *sqltypes.Result
+		if r, err = e.execQuery(ctx, query); err == nil {
+			if csRow = r.Named().Row(); csRow == nil {
+				err = errors.New("no row returned")
+			}
+		}
+	}
+	if err != nil {
+		log.Error("Online DDL: failed to read copy state for liveness evaluation; not refreshing liveness this tick",
+			slog.String("uuid", uuid), slog.String("tablet", e.TabletAliasString()), slog.Int64("stream_id", int64(s.id)), slog.Any("error", err))
+		return false, nil
+	}
+	if csRow.AsInt64("cnt", 0) == 0 {
+		// Copy phase complete: nothing to compare, but the observation is
+		// still recorded.
+		return true, &vreplStreamProgress{}
+	}
+	observed = &vreplStreamProgress{copyStateID: csRow.AsInt64("maxid", 0)}
+	if s.rowsCopied > acknowledgedRowsCopied {
+		return true, observed
+	}
+	if s.timeThrottled > 0 && time.Since(time.Unix(s.timeThrottled, 0)) <= vreplThrottleLivenessWindow {
+		return true, observed
+	}
+	last, seen := e.vreplicationProgress[uuid]
+	if !seen {
+		// First observation since this executor opened: the advanced
+		// time_updated counts, and the baseline recorded from here makes
+		// every later observation require progress.
+		return true, observed
+	}
+	return observed.copyStateID > last.copyStateID, observed
+}
+
+// refreshMigrationLiveness refreshes the migration's liveness_timestamp when
+// the stream's time_updated has advanced past lastIndicator (the value the
+// executor last acknowledged) and counts as liveness. The first observation
+// since the executor opened is exempt from that comparison: on the first tick
+// after adoption the restarted stream may not have written anything yet, and
+// the stale review runs later in that same tick.
+//
+// The durable indicator and the in-memory baseline advance only once the
+// timestamp write has landed: advancing either on a failed write would
+// acknowledge the time_updated — and consume the checkpoint that earned it —
+// while liveness_timestamp stayed stale, leaving nothing to retry until the
+// next checkpoint. Left as they were, the next tick retries the refresh. The
+// rows_copied acknowledgment is not held back the same way: updateRowsCopied
+// runs later in the tick regardless, and the retained checkpoint credit is
+// what carries the retry.
+func (e *Executor) refreshMigrationLiveness(ctx context.Context, uuid string, s *VReplStream, acknowledgedRowsCopied int64, lastIndicator int64) {
+	if _, seen := e.vreplicationProgress[uuid]; seen && lastIndicator >= s.livenessTimeIndicator() {
+		return
+	}
+	showsLiveness, observed := e.vreplStreamShowsLiveness(ctx, uuid, s, acknowledgedRowsCopied)
+	if showsLiveness {
+		if err := e.updateMigrationTimestamp(ctx, "liveness_timestamp", uuid); err != nil {
+			log.Error("Online DDL: failed to refresh migration liveness; will retry on the next tick",
+				slog.String("uuid", uuid), slog.String("tablet", e.TabletAliasString()), slog.Any("error", err))
+			return
+		}
+		_ = e.updateVitessLivenessIndicator(ctx, uuid, s.livenessTimeIndicator())
+	}
+	if observed != nil {
+		e.vreplicationProgress[uuid] = *observed
+	}
+}
+
+// cancellationRequestedByUserMessage is the reason recorded for a user
+// cancellation re-driven without its recorded intent (which does not survive
+// an executor restart): the durable cancelled_timestamp proves the request,
+// but not its original text.
+const cancellationRequestedByUserMessage = "cancellation requested by user"
+
+// vreplStreamAction is reviewVReplStreamError's decision on what
+// reviewRunningMigrations should do about a running migration's
+// vreplication stream.
+type vreplStreamAction int
+
+const (
+	// vreplStreamNoAction: the stream reports no error, or a transient
+	// error still within the LastError retry window; leave it alone.
+	vreplStreamNoAction vreplStreamAction = iota
+	// vreplStreamCancel: the stream's error is terminal for the migration;
+	// cancel (fail) the migration.
+	vreplStreamCancel
+	// vreplStreamRepair: the stream parked on a retries-exhausted error,
+	// which only a stream created before the retry-forever override existed
+	// can do (e.g. across a rolling upgrade); restart it with the override
+	// installed rather than fail the migration.
+	vreplStreamRepair
+)
 
 // pendingMigration carries both the UUID and migration context of a pending migration.
 // The context is required so that in-order completion logic can be scoped per-context:
@@ -297,6 +516,9 @@ func (e *Executor) Open() error {
 		return true
 	})
 	e.vreplicationLastError = make(map[string]*vterrors.LastError)
+	e.vreplicationPendingCancel = make(map[string]string)
+	e.vreplicationProgress = make(map[string]vreplStreamProgress)
+	e.vreplicationPendingRepair = make(map[string]bool)
 
 	if sidecar.GetName() != sidecar.DefaultName {
 		e.execQuery = e.executeQueryWithSidecarDBReplacement
@@ -428,11 +650,73 @@ func (e *Executor) isAnyConflictingMigrationRunning(onlineDDL *schema.OnlineDDL)
 	return (conflictingMigration != nil), conflictingMigration
 }
 
+// buildIdentifierQuery builds a query from a template whose %a placeholders are
+// all identifiers, escaping each one.
+//
+// sqlparser.BuildParsedQuery writes a %a argument verbatim; the escaping in
+// ParsedQuery.GenerateQuery only happens for callers that bind variables, and
+// the callers here execute the statement text as it stands. A table name reaches
+// us straight from the tenant's DDL, so it has to be escaped before the
+// statement text exists. Otherwise a name holding a back quote closes its own
+// quoting, and the rest of the name becomes part of the statement, which can then
+// name other tables or add clauses, and some of these statements run on the DBA
+// connection. The connections do not negotiate CLIENT_MULTI_STATEMENTS, so a ';'
+// does not start another statement, but the one statement is already the wrong
+// one.
+//
+// sqlescape.EscapeID supplies the back quotes and doubles any inside the name,
+// so the templates must not quote %a themselves.
+//
+// The template type is what pairs a template with this builder rather than with
+// buildLiteralQuery or with sqlparser.BuildParsedQuery; see the note on
+// identifierQueryTemplate.
+//
+// What comes back is the statement text, not the *ParsedQuery BuildParsedQuery
+// produced. That ParsedQuery still holds a bind location for every %a, now
+// pointing at text we have already escaped, so binding it would fail with a
+// missing bind variable. No caller wants that, and returning a string leaves
+// nothing to misuse.
+func buildIdentifierQuery(template identifierQueryTemplate, identifiers ...string) string {
+	args := make([]any, len(identifiers))
+	for i, identifier := range identifiers {
+		args[i] = sqlescape.EscapeID(identifier)
+	}
+	return sqlparser.BuildParsedQuery(string(template), args...).Query
+}
+
+// buildLiteralQuery builds a query from a template whose %a placeholders are all
+// string literals, encoding each one. See buildIdentifierQuery for why the
+// encoding cannot be left to GenerateQuery. The encoder supplies the quotes, so
+// the templates must not quote %a themselves.
+func buildLiteralQuery(template literalQueryTemplate, literals ...string) string {
+	args := make([]any, len(literals))
+	for i, literal := range literals {
+		args[i] = sqltypes.EncodeStringSQL(literal)
+	}
+	return sqlparser.BuildParsedQuery(string(template), args...).Query
+}
+
+// likePatternEscaper escapes a table name for use as a LIKE pattern that matches
+// only that name: the escape character itself first, then the '%' and '_'
+// wildcards, all of which a table name may hold.
+var likePatternEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+
+// buildTableExistsQuery builds the SHOW TABLES LIKE query used to test for the
+// existence of a single table, with a pattern that matches only that table.
+func buildTableExistsQuery(tableName string) string {
+	return buildLiteralQuery(sqlShowTablesLike, likePatternEscaper.Replace(tableName))
+}
+
+// buildTableStatusQuery builds the SHOW TABLE STATUS LIKE query for a single
+// table, with a pattern that matches only that table: its caller requires
+// exactly one row.
+func buildTableStatusQuery(tableName string) string {
+	return buildLiteralQuery(sqlShowTableStatus, likePatternEscaper.Replace(tableName))
+}
+
 // tableExists checks if a given table exists.
 func (e *Executor) tableExists(ctx context.Context, tableName string) (bool, error) {
-	tableName = strings.ReplaceAll(tableName, `_`, `\_`)
-	parsed := sqlparser.BuildParsedQuery(sqlShowTablesLike, tableName)
-	rs, err := e.execQuery(ctx, parsed.Query)
+	rs, err := e.execQuery(ctx, buildTableExistsQuery(tableName))
 	if err != nil {
 		return false, err
 	}
@@ -442,8 +726,8 @@ func (e *Executor) tableExists(ctx context.Context, tableName string) (bool, err
 
 // showCreateTable returns the SHOW CREATE statement for a table or a view
 func (e *Executor) showCreateTable(ctx context.Context, tableName string) (string, error) {
-	parsed := sqlparser.BuildParsedQuery(sqlShowCreateTable, tableName)
-	rs, err := e.execQuery(ctx, parsed.Query)
+	showCreateQuery := buildIdentifierQuery(sqlShowCreateTable, tableName)
+	rs, err := e.execQuery(ctx, showCreateQuery)
 	if err != nil {
 		return "", err
 	}
@@ -480,6 +764,11 @@ func (e *Executor) executeDirectly(ctx context.Context, onlineDDL *schema.Online
 	}
 	defer conn.Close()
 
+	restoreSessionVariablesFunc, err := e.initMigrationSessionVariables(ctx, onlineDDL, conn)
+	defer restoreSessionVariablesFunc()
+	if err != nil {
+		return false, err
+	}
 	restoreSQLModeFunc, err := e.initMigrationSQLMode(ctx, onlineDDL, conn)
 	defer restoreSQLModeFunc()
 	if err != nil {
@@ -616,9 +905,16 @@ func (e *Executor) terminateVReplMigration(ctx context.Context, uuid string, del
 	if err != nil {
 		return err
 	}
-	// silently skip error; stopping the stream is just a graceful act; later deleting it is more important
+	// When a delete follows, the stop is only a graceful act and its failure
+	// is just logged. Without one, the stop IS the termination and its
+	// failure must propagate: CancelMigration gates the terminal transition
+	// on it, and swallowing it would fail the migration while its stream
+	// keeps applying changes.
 	if _, err := e.vreplicationExec(ctx, tablet.Tablet, query); err != nil {
 		log.Error(fmt.Sprintf("FAIL vreplicationExec: uuid=%s, query=%v, error=%v", uuid, query, err))
+		if !deleteEntry {
+			return err
+		}
 	}
 	if deleteEntry {
 		if err := e.deleteVReplicationEntry(ctx, uuid); err != nil {
@@ -820,7 +1116,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 			return vterrors.Wrapf(err, "failed updating artifacts with sentry table name")
 		}
 
-		dropSentryTableQuery := sqlparser.BuildParsedQuery(sqlDropTableIfExists, sentryTableName)
+		dropSentryTableQuery := buildIdentifierQuery(sqlDropTableIfExists, sentryTableName)
 		defer func() {
 			// cut-over attempts may fail. We create a new, unique sentry table for every
 			// cut-over attempt. We could just leave them hanging around, and let gcArtifacts()
@@ -831,7 +1127,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 			// step is done (whether successful or failed). So, it's a cheap operation to drop the
 			// table right away, which we do, and then also reduce the `artifact` column length by
 			// removing the entry
-			_, err := e.execQuery(ctx, dropSentryTableQuery.Query)
+			_, err := e.execQuery(ctx, dropSentryTableQuery)
 			if err == nil {
 				e.clearSingleArtifact(ctx, onlineDDL.UUID, sentryTableName)
 			}
@@ -858,8 +1154,8 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 				// Run `ANALYZE TABLE` on the vreplication table so that it has up-to-date statistics at cut-over.
 				// The statement will be replicated, so that in case there's a PRS/ERS shortly after cut-over, the
 				// promoted replica will have good statistics.
-				parsed := sqlparser.BuildParsedQuery(sqlAnalyzeTable, vreplTable)
-				if _, err := preparationsConn.Conn.Exec(ctx, parsed.Query, -1, false); err != nil {
+				analyzeQuery := buildIdentifierQuery(sqlAnalyzeTable, vreplTable)
+				if _, err := preparationsConn.Conn.Exec(ctx, analyzeQuery, -1, false); err != nil {
 					// Best effort only. Do not fail the mgiration if this fails.
 					_ = e.updateMigrationMessage(ctx, "failed ANALYZE shadow table", s.workflow)
 				} else {
@@ -868,8 +1164,8 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 				// This command will have blocked the table for writes, presumably only for a brief time. But this can cause
 				// vreplication to now lag. Thankfully we're gonna create the sentry table and waitForPos.
 			}
-			parsed := sqlparser.BuildParsedQuery(sqlCreateSentryTable, sentryTableName)
-			if _, err := preparationsConn.Conn.Exec(ctx, parsed.Query, 1, false); err != nil {
+			createSentryQuery := buildIdentifierQuery(sqlCreateSentryTable, sentryTableName)
+			if _, err := preparationsConn.Conn.Exec(ctx, createSentryQuery, 1, false); err != nil {
 				return vterrors.Wrapf(err, "failed creating sentry table")
 			}
 			e.updateMigrationStage(ctx, onlineDDL.UUID, "sentry table created: %s", sentryTableName)
@@ -968,7 +1264,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 		log.Info("@@rename_table_preserve_foreign_key supported")
 	}
 
-	renameQuery := sqlparser.BuildParsedQuery(sqlSwapTables, onlineDDL.Table, sentryTableName, vreplTable, onlineDDL.Table, sentryTableName, vreplTable)
+	renameQuery := buildIdentifierQuery(sqlSwapTables, onlineDDL.Table, sentryTableName, vreplTable, onlineDDL.Table, sentryTableName, vreplTable)
 	waitForRenameProcess := func() error {
 		// This function waits until it finds the RENAME TABLE... query running in MySQL's PROCESSLIST, or until timeout
 		// The function assumes that one of the renamed tables is locked, thus causing the RENAME to block. If nothing
@@ -986,7 +1282,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 			}
 			select {
 			case <-renameWaitCtx.Done():
-				return vterrors.Errorf(vtrpcpb.Code_ABORTED, "timeout for rename query: %s", renameQuery.Query)
+				return vterrors.Errorf(vtrpcpb.Code_ABORTED, "timeout for rename query: %s", renameQuery)
 			case err := <-renameCompleteChan:
 				// We expect the RENAME to run and block, not yet complete. The caller of this function
 				// will only unblock the RENAME after the function is complete
@@ -1053,15 +1349,24 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 		}
 	}
 
+	var postWritesPos replication.Position
 	if isVreplicationTestSuite {
 		// The testing suite may inject queries internally from the server via a recurring EVENT.
 		// Those queries are unaffected by query rules (ACLs) because they don't go through Vitess.
 		// We therefore hard-rename the table into an agreed upon name, and we won't swap it with
 		// the original table. We will actually make the table disappear, creating a void.
 		testSuiteBeforeTableName := onlineDDL.Table + "_before"
-		parsed := sqlparser.BuildParsedQuery(sqlRenameTable, onlineDDL.Table, testSuiteBeforeTableName)
-		if _, err := e.execQuery(ctx, parsed.Query); err != nil {
+		renameBeforeQuery := buildIdentifierQuery(sqlRenameTable, onlineDDL.Table, testSuiteBeforeTableName)
+		if _, err := e.execQuery(ctx, renameBeforeQuery); err != nil {
 			return err
+		}
+		// No write to the table can follow the RENAME, so the position right after it covers
+		// all of them. Reading it before the stage writes below makes the position end in the
+		// RENAME itself, which VReplication saves at once, rather than in the stage writes,
+		// which reach the stream as empty transactions that it saves only after its idle
+		// timeout.
+		if postWritesPos, err = e.primaryPosition(ctx); err != nil {
+			return vterrors.Wrapf(err, "failed reading pos after renaming")
 		}
 		e.updateMigrationStage(ctx, onlineDDL.UUID, "test suite 'before' table renamed")
 	} else {
@@ -1070,8 +1375,8 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 		e.updateMigrationStage(ctx, onlineDDL.UUID, "locking tables")
 		lockCtx, killWhileRenamingCancel := context.WithTimeout(ctx, onlineDDL.CutOverThreshold)
 		defer killWhileRenamingCancel()
-		lockTableQuery := sqlparser.BuildParsedQuery(sqlLockTwoTablesWrite, sentryTableName, onlineDDL.Table)
-		if _, err := lockConn.Conn.Exec(lockCtx, lockTableQuery.Query, 1, false); err != nil {
+		lockTableQuery := buildIdentifierQuery(sqlLockTwoTablesWrite, sentryTableName, onlineDDL.Table)
+		if _, err := lockConn.Conn.Exec(lockCtx, lockTableQuery, 1, false); err != nil {
 			return vterrors.Wrapf(err, "failed locking tables")
 		}
 
@@ -1081,7 +1386,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 		// We run the RENAME in a goroutine, so that we can wait for
 		go func() {
 			defer close(renameCompleteChan)
-			_, err := renameConn.Conn.Exec(ctx, renameQuery.Query, 1, false)
+			_, err := renameConn.Conn.Exec(ctx, renameQuery, 1, false)
 			renameCompleteChan <- err
 			killWhileRenamingCancel() // RENAME is done, no need to kill queries anymore
 		}()
@@ -1098,12 +1403,11 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 				return vterrors.Wrapf(err, "failed killing table lock holders and accessors")
 			}
 		}
-	}
 
-	e.updateMigrationStage(ctx, onlineDDL.UUID, "reading post-lock pos")
-	postWritesPos, err := e.primaryPosition(ctx)
-	if err != nil {
-		return vterrors.Wrapf(err, "failed reading pos after locking")
+		e.updateMigrationStage(ctx, onlineDDL.UUID, "reading post-lock pos")
+		if postWritesPos, err = e.primaryPosition(ctx); err != nil {
+			return vterrors.Wrapf(err, "failed reading pos after locking")
+		}
 	}
 
 	// Right now: new queries are buffered, any existing query will have executed, and worst case scenario is
@@ -1146,8 +1450,8 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 		if isVreplicationTestSuite {
 			// this is used in Vitess endtoend testing suite
 			testSuiteAfterTableName := onlineDDL.Table + "_after"
-			parsed := sqlparser.BuildParsedQuery(sqlRenameTable, vreplTable, testSuiteAfterTableName)
-			if _, err := e.execQuery(ctx, parsed.Query); err != nil {
+			renameAfterQuery := buildIdentifierQuery(sqlRenameTable, vreplTable, testSuiteAfterTableName)
+			if _, err := e.execQuery(ctx, renameAfterQuery); err != nil {
 				return err
 			}
 			e.updateMigrationStage(ctx, onlineDDL.UUID, "test suite 'after' table renamed")
@@ -1161,10 +1465,10 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 			e.updateMigrationStage(ctx, onlineDDL.UUID, "dropping sentry table")
 
 			{
-				dropTableQuery := sqlparser.BuildParsedQuery(sqlDropTable, sentryTableName)
+				dropTableQuery := buildIdentifierQuery(sqlDropTable, sentryTableName)
 				lockCtx, cancel := context.WithTimeout(ctx, onlineDDL.CutOverThreshold)
 				defer cancel()
-				if _, err := lockConn.Conn.Exec(lockCtx, dropTableQuery.Query, 1, false); err != nil {
+				if _, err := lockConn.Conn.Exec(lockCtx, dropTableQuery, 1, false); err != nil {
 					return vterrors.Wrapf(err, "failed dropping sentry table")
 				}
 			}
@@ -1238,6 +1542,37 @@ func (e *Executor) initMigrationSQLMode(ctx context.Context, onlineDDL *schema.O
 	changeSQLModeQuery := fmt.Sprintf("set @@session.sql_mode=REPLACE(REPLACE('%s', 'NO_ZERO_DATE', ''), 'NO_ZERO_IN_DATE', '')", sqlMode)
 	if _, err := conn.ExecuteFetch(changeSQLModeQuery, 0, false); err != nil {
 		return deferFunc, err
+	}
+	return deferFunc, nil
+}
+
+// initMigrationSessionVariables saves and applies requested session variables,
+// returning a function that restores them in reverse order.
+func (e *Executor) initMigrationSessionVariables(ctx context.Context, onlineDDL *schema.OnlineDDL, conn *dbconnpool.DBConnection) (deferFunc func(), err error) {
+	restoreQueries := []string{}
+	deferFunc = func() {
+		for _, restoreQuery := range slices.Backward(restoreQueries) {
+			conn.ExecuteFetch(restoreQuery, 0, false)
+		}
+	}
+	sessionVariables, err := onlineDDL.StrategySetting().SessionVariables()
+	if err != nil {
+		return deferFunc, err
+	}
+	for i, variable := range sessionVariables {
+		setQuery, err := variable.SetStatement()
+		if err != nil {
+			return deferFunc, err
+		}
+		savedVariableName := fmt.Sprintf("vt_onlineddl_session_variable_%d", i)
+		saveQuery := fmt.Sprintf("set @%s=@@session.%s", savedVariableName, variable.Name)
+		if _, err := conn.ExecuteFetch(saveQuery, 0, false); err != nil {
+			return deferFunc, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not read session variable %s: %v", variable.Name, err)
+		}
+		restoreQueries = append(restoreQueries, fmt.Sprintf("set @@session.%s=@%s", variable.Name, savedVariableName))
+		if _, err := conn.ExecuteFetch(setQuery, 0, false); err != nil {
+			return deferFunc, err
+		}
 	}
 	return deferFunc, nil
 }
@@ -1335,6 +1670,11 @@ func (e *Executor) createDuplicateTableLike(ctx context.Context, newTableName st
 // - modify the vrepl table
 // - Create and return a VRepl instance
 func (e *Executor) initVreplicationOriginalMigration(ctx context.Context, onlineDDL *schema.OnlineDDL, conn *dbconnpool.DBConnection) (v *VRepl, err error) {
+	restoreSessionVariablesFunc, err := e.initMigrationSessionVariables(ctx, onlineDDL, conn)
+	defer restoreSessionVariablesFunc()
+	if err != nil {
+		return v, err
+	}
 	restoreSQLModeFunc, err := e.initMigrationSQLMode(ctx, onlineDDL, conn)
 	defer restoreSQLModeFunc()
 	if err != nil {
@@ -1394,6 +1734,11 @@ func (e *Executor) initVreplicationOriginalMigration(ctx context.Context, online
 // about the two, and about the transition between the two.
 func (e *Executor) postInitVreplicationOriginalMigration(ctx context.Context, onlineDDL *schema.OnlineDDL, v *VRepl, conn *dbconnpool.DBConnection) (err error) {
 	if v.analysis.SourceAutoIncrement > 0 && !v.alterTableAnalysis.IsAutoIncrementChangeRequested {
+		restoreSessionVariablesFunc, err := e.initMigrationSessionVariables(ctx, onlineDDL, conn)
+		defer restoreSessionVariablesFunc()
+		if err != nil {
+			return err
+		}
 		restoreSQLModeFunc, err := e.initMigrationSQLMode(ctx, onlineDDL, conn)
 		defer restoreSQLModeFunc()
 		if err != nil {
@@ -1401,7 +1746,7 @@ func (e *Executor) postInitVreplicationOriginalMigration(ctx context.Context, on
 		}
 
 		// Apply ALTER TABLE AUTO_INCREMENT=?
-		parsed := sqlparser.BuildParsedQuery(sqlAlterTableAutoIncrement, v.targetTableName(), ":auto_increment")
+		parsed := sqlparser.BuildParsedQuery(sqlAlterTableAutoIncrement, sqlescape.EscapeID(v.targetTableName()), ":auto_increment")
 		bindVars := map[string]*querypb.BindVariable{
 			"auto_increment": sqltypes.Uint64BindVariable(v.analysis.SourceAutoIncrement),
 		}
@@ -1622,7 +1967,9 @@ func (e *Executor) terminateMigration(ctx context.Context, onlineDDL *schema.Onl
 		s, _ := e.readVReplStream(ctx, onlineDDL.UUID, true)
 		foundRunning = (s != nil && s.isRunning())
 		if err := e.terminateVReplMigration(ctx, onlineDDL.UUID, false); err != nil {
-			return foundRunning, fmt.Errorf("Error terminating migration, vreplication exec error: %+v", err)
+			// Wrap rather than format: the stop RPC's error code must reach
+			// the CANCEL caller.
+			return foundRunning, vterrors.Wrapf(err, "error terminating migration, vreplication exec error")
 		}
 	}
 	return foundRunning, nil
@@ -1661,7 +2008,45 @@ func (e *Executor) CancelMigration(ctx context.Context, uuid string, message str
 			return nil, err
 		}
 	}
-	defer e.failMigration(ctx, onlineDDL, errors.New(message))
+	// The terminal transition, and the tracking cleanup that must follow it,
+	// are deferred until termination has been attempted. The transition runs
+	// on a bounded, non-cancellable context: the caller's may have been
+	// exhausted by terminateMigration.
+	defer func() {
+		if err != nil {
+			// Termination unconfirmed: failing the migration now would
+			// orphan a possibly live stream (once out of 'running', nothing
+			// reviews it until artifact GC). Leave it running, record the
+			// intent so the next review tick re-drives the cancellation, and
+			// restore the ownership terminateMigration dropped so the
+			// scheduler's conflict checks keep seeing it.
+			e.vreplicationPendingCancel[uuid] = message
+			e.ownedRunningMigrations.Store(uuid, onlineDDL)
+			log.Error("CancelMigration: not transitioning migration to a terminal state as termination did not complete; the cancellation will be re-driven",
+				slog.String("uuid", uuid), slog.String("tablet", e.TabletAliasString()), slog.Any("error", err))
+			return
+		}
+		tctx, tcancel := context.WithTimeout(context.WithoutCancel(ctx), grpcTimeout)
+		defer tcancel()
+		if ferr := e.terminallyFailMigration(tctx, onlineDDL, errors.New(message)); ferr != nil {
+			// The stop erased the Error verdict that triggered an internal
+			// cancellation, and internal cancellations leave no durable
+			// cancelled_timestamp: record the intent so the review loop can
+			// re-drive the transition. Keep ownership only if the migration
+			// was actually running.
+			e.vreplicationPendingCancel[uuid] = message
+			if onlineDDL.Status == schema.OnlineDDLStatusRunning {
+				e.ownedRunningMigrations.Store(uuid, onlineDDL)
+			}
+			log.Error("CancelMigration: failed to transition migration to a terminal state",
+				slog.String("uuid", uuid), slog.String("tablet", e.TabletAliasString()), slog.Any("error", ferr))
+			// The cancellation is not complete: the caller must not be
+			// told otherwise, and CANCEL ALL must be able to report it.
+			err = vterrors.Wrapf(ferr, "cancellation of migration %s recorded, but its terminal transition failed and will be retried", uuid)
+			return
+		}
+		e.forgetVReplStream(uuid)
+	}()
 	defer e.triggerNextCheckInterval()
 
 	switch onlineDDL.Status {
@@ -1687,21 +2072,31 @@ func (e *Executor) CancelMigration(ctx context.Context, uuid string, message str
 	return result, nil
 }
 
-// cancelMigrations attempts to abort a list of migrations
-func (e *Executor) cancelMigrations(ctx context.Context, cancellable []*cancellableMigration, issuedByUser bool) (err error) {
+// cancelMigrations attempts to abort every listed migration: one failing to
+// cancel must not leave the rest running, or free to start. It returns the
+// combined result of the cancellations that succeeded, and the failures
+// aggregated: Aggregate keeps every message and the highest-priority Vitess
+// error code, which a client maps to a MySQL error (errors.Join would report
+// UNKNOWN).
+func (e *Executor) cancelMigrations(ctx context.Context, cancellable []*cancellableMigration, issuedByUser bool) (result *sqltypes.Result, err error) {
+	result = &sqltypes.Result{}
+	var errs []error
 	for _, migration := range cancellable {
 		log.Info(fmt.Sprintf("cancelMigrations: cancelling %s; reason: %s", migration.uuid, migration.message))
-		if _, err := e.CancelMigration(ctx, migration.uuid, migration.message, issuedByUser); err != nil {
-			return err
+		res, err := e.CancelMigration(ctx, migration.uuid, migration.message, issuedByUser)
+		if err != nil {
+			errs = append(errs, vterrors.Wrapf(err, "cancelling migration %s", migration.uuid))
+			continue
 		}
+		result.AppendResult(res)
 	}
-	return nil
+	return result, vterrors.Aggregate(errs)
 }
 
 // CancelPendingMigrations cancels all pending migrations (that are expected to run or are running)
 // for this keyspace. When migrationContext is non-empty only migrations whose migration_context
 // matches are cancelled (CANCEL CONTEXT 'ctx'). When migrationContext is empty all pending
-// migrations are cancelled (CANCEL ALL).
+// migrations are cancelled (CANCEL ALL). Every matching migration is attempted, see cancelMigrations.
 func (e *Executor) CancelPendingMigrations(ctx context.Context, migrationContext string, issuedByUser bool) (result *sqltypes.Result, err error) {
 	if e.isOpen.Load() == 0 {
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, schema.ErrOnlineDDLDisabled.Error())
@@ -1718,21 +2113,14 @@ func (e *Executor) CancelPendingMigrations(ctx context.Context, migrationContext
 		message = fmt.Sprintf("CANCEL CONTEXT '%s' issued by user", migrationContext)
 	}
 
-	matched := 0
-	result = &sqltypes.Result{}
+	var cancellable []*cancellableMigration
 	for _, pending := range pendingMigrations {
 		if migrationContext == "" || migrationContext == pending.migrationContext {
-			matched++
-			log.Info("CancelPendingMigrations: cancelling " + pending.uuid)
-			res, err := e.CancelMigration(ctx, pending.uuid, message, issuedByUser)
-			if err != nil {
-				return result, err
-			}
-			result.AppendResult(res)
+			cancellable = append(cancellable, newCancellableMigration(pending.uuid, message))
 		}
 	}
-	log.Info(fmt.Sprintf("CancelPendingMigrations: done iterating %v migrations, matched %d", len(pendingMigrations), matched))
-	return result, nil
+	log.Info(fmt.Sprintf("CancelPendingMigrations: matched %d of %v pending migrations", len(cancellable), len(pendingMigrations)))
+	return e.cancelMigrations(ctx, cancellable, issuedByUser)
 }
 
 func (e *Executor) validateThrottleParams(ctx context.Context, expireString string, ratioLiteral *sqlparser.Literal) (duration time.Duration, ratio float64, err error) {
@@ -2176,7 +2564,7 @@ func (e *Executor) executeRevert(ctx context.Context, onlineDDL *schema.OnlineDD
 				if err := e.updateArtifacts(ctx, onlineDDL.UUID, artifactTable); err != nil {
 					return err
 				}
-				onlineDDL.SQL = sqlparser.BuildParsedQuery(sqlRenameTable, revertMigration.Table, artifactTable).Query
+				onlineDDL.SQL = buildIdentifierQuery(sqlRenameTable, revertMigration.Table, artifactTable)
 				if _, err := e.executeDirectly(ctx, onlineDDL); err != nil {
 					return err
 				}
@@ -2201,7 +2589,7 @@ func (e *Executor) executeRevert(ctx context.Context, onlineDDL *schema.OnlineDD
 				if err := e.updateArtifacts(ctx, onlineDDL.UUID, artifactTable); err != nil {
 					return err
 				}
-				onlineDDL.SQL = sqlparser.BuildParsedQuery(sqlRenameTable, artifactTable, revertMigration.Table).Query
+				onlineDDL.SQL = buildIdentifierQuery(sqlRenameTable, artifactTable, revertMigration.Table)
 				if _, err := e.executeDirectly(ctx, onlineDDL); err != nil {
 					return err
 				}
@@ -2270,6 +2658,11 @@ func (e *Executor) evaluateDeclarativeDiff(ctx context.Context, onlineDDL *schem
 		ddlStmt.SetTable("", comparisonTableName)
 		modifiedCreateSQL := sqlparser.String(ddlStmt)
 
+		restoreSessionVariablesFunc, err := e.initMigrationSessionVariables(ctx, onlineDDL, conn)
+		defer restoreSessionVariablesFunc()
+		if err != nil {
+			return nil, err
+		}
 		restoreSQLModeFunc, err := e.initMigrationSQLMode(ctx, onlineDDL, conn)
 		defer restoreSQLModeFunc()
 		if err != nil {
@@ -2282,8 +2675,8 @@ func (e *Executor) evaluateDeclarativeDiff(ctx context.Context, onlineDDL *schem
 
 		defer func() {
 			// Drop the comparison table
-			parsed := sqlparser.BuildParsedQuery(sqlDropTable, comparisonTableName)
-			_, _ = conn.ExecuteFetch(parsed.Query, 0, false)
+			dropComparisonTableQuery := buildIdentifierQuery(sqlDropTable, comparisonTableName)
+			_, _ = conn.ExecuteFetch(dropComparisonTableQuery, 0, false)
 			// Nothing bad happens for not checking the error code. The table is GC/HOLD. If we
 			// can't drop it now, it still gets collected later by tablegc mechanism
 		}()
@@ -2371,15 +2764,41 @@ func (e *Executor) readFailedCancelledMigrationsInContextBeforeMigration(ctx con
 	return uuids, err
 }
 
-// failMigration marks a migration as failed
-func (e *Executor) failMigration(ctx context.Context, onlineDDL *schema.OnlineDDL, withError error) error {
+// terminallyFailMigration transitions a migration to failed/cancelled and
+// reports whether that durable transition succeeded. The message is written
+// first: once the status is terminal the migration leaves every review path,
+// so a message failure after the transition could never be repaired, whereas
+// one before it aborts the transition for the caller's re-drive to retry
+// whole. This executor stops owning the migration only once the transition
+// has landed: until then the migration is still running, and a disowned
+// running migration lets the scheduler start conflicting or over-limit work
+// before the review re-adopts it.
+func (e *Executor) terminallyFailMigration(ctx context.Context, onlineDDL *schema.OnlineDDL, withError error) error {
 	defer e.triggerNextCheckInterval()
-	_ = e.updateMigrationStatusFailedOrCancelled(ctx, onlineDDL.UUID)
-	failedMigrations.Add(1)
 	if withError != nil {
-		_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, withError.Error())
+		if err := e.updateMigrationMessage(ctx, onlineDDL.UUID, withError.Error()); err != nil {
+			return err
+		}
+	}
+	// Count only migrations that actually reached a terminal state; the
+	// review loop re-drives a failed transition on every tick.
+	if err := e.updateMigrationStatusFailedOrCancelled(ctx, onlineDDL.UUID); err != nil {
+		return err
 	}
 	e.ownedRunningMigrations.Delete(onlineDDL.UUID)
+	failedMigrations.Add(1)
+	return nil
+}
+
+// failMigration marks a migration as failed and returns the causing error,
+// so callers can fail-and-propagate in one statement. A failed terminal
+// transition is logged; the stale-migration review is the backstop that
+// eventually fails a migration stuck in 'running'.
+func (e *Executor) failMigration(ctx context.Context, onlineDDL *schema.OnlineDDL, withError error) error {
+	if err := e.terminallyFailMigration(ctx, onlineDDL, withError); err != nil {
+		log.Error("Online DDL: failed to transition migration to a terminal state",
+			slog.String("uuid", onlineDDL.UUID), slog.String("tablet", e.TabletAliasString()), slog.Any("cause", withError), slog.Any("error", err))
+	}
 	return withError
 }
 
@@ -2578,12 +2997,12 @@ func (e *Executor) generateSwapTablesStatement(ctx context.Context, tableName1, 
 	if err != nil {
 		return "", swapTableName, err
 	}
-	parsed := sqlparser.BuildParsedQuery(sqlSwapTables,
+	swapQuery := buildIdentifierQuery(sqlSwapTables,
 		tableName1, swapTableName,
 		tableName2, tableName1,
 		swapTableName, tableName2,
 	)
-	return parsed.Query, swapTableName, nil
+	return swapQuery, swapTableName, nil
 }
 
 func (e *Executor) executeAlterViewOnline(ctx context.Context, onlineDDL *schema.OnlineDDL) (err error) {
@@ -2623,6 +3042,11 @@ func (e *Executor) executeAlterViewOnline(ctx context.Context, onlineDDL *schema
 		return err
 	}
 	defer conn.Close()
+	restoreSessionVariablesFunc, err := e.initMigrationSessionVariables(ctx, onlineDDL, conn)
+	defer restoreSessionVariablesFunc()
+	if err != nil {
+		return err
+	}
 
 	_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusRunning, false, progressPctStarted, etaSecondsUnknown, rowsCopiedUnknown, emptyHint)
 
@@ -2976,6 +3400,31 @@ func (e *Executor) getNonConflictingMigration(ctx context.Context) (*schema.Onli
 		}
 		isImmediateOperation := migrationRow.AsBool("is_immediate_operation", false)
 
+		// A candidate with an unfulfilled cancellation intent must not be
+		// scheduled: queued/ready selection ignores cancellation, and only
+		// the running-migrations review consumes the intent. Re-drive the
+		// terminal transition here instead.
+		pendingCancelMessage, hasPendingCancel := e.vreplicationPendingCancel[uuid]
+		if hasPendingCancel || !migrationRow["cancelled_timestamp"].IsNull() {
+			if pendingCancelMessage == "" {
+				pendingCancelMessage = "cancellation requested before migration start"
+			}
+			ferr := func() error {
+				// Bound the writes: the scheduling pass holds migrationMutex
+				// on a tick context with no deadline.
+				tctx, cancel := context.WithTimeout(ctx, reviewQueryTimeout)
+				defer cancel()
+				return e.terminallyFailMigration(tctx, onlineDDL, errors.New(pendingCancelMessage))
+			}()
+			if ferr != nil {
+				log.Error("getNonConflictingMigration: failed to transition cancelled migration to a terminal state",
+					slog.String("uuid", uuid), slog.String("tablet", e.TabletAliasString()), slog.Any("error", ferr))
+			} else {
+				e.forgetVReplStream(uuid)
+			}
+			continue
+		}
+
 		if conflictFound, _ := e.isAnyConflictingMigrationRunning(onlineDDL); conflictFound {
 			continue // this migration conflicts with a running one
 		}
@@ -3089,6 +3538,23 @@ func (e *Executor) runNextMigration(ctx context.Context) error {
 	return nil
 }
 
+// overrideStateFromHistory decides whether a historical terminal-error row
+// from _vt.vreplication_log overrides the live stream state. Unrecoverable
+// and legacy terminal errors stay sticky, as the scan always intended: the
+// stream can never progress past them. A retries-exhausted row does not: it
+// records a recoverable-class error, so a live running stream supersedes it
+// (forcing Error would trigger repairs against a healthy stream); the review
+// retires such a row once the stream is past it (retireVReplParkRecord), and
+// this exemption covers it until then. A live Error row is always
+// authoritative: setState writes it before the best-effort history insert,
+// so the newest history row can lag behind it.
+func overrideStateFromHistory(liveState binlogdatapb.VReplicationWorkflowState, historicalMessage string) bool {
+	if liveState == binlogdatapb.VReplicationWorkflowState_Error {
+		return false
+	}
+	return !isRetriesExhaustedMessage(historicalMessage)
+}
+
 // readVReplStream reads _vt.vreplication entries for given workflow
 func (e *Executor) readVReplStream(ctx context.Context, uuid string, okIfMissing bool) (*VReplStream, error) {
 	query, err := sqlparser.ParseAndBind(sqlReadVReplStream,
@@ -3143,9 +3609,14 @@ func (e *Executor) readVReplStream(ctx context.Context, uuid string, okIfMissing
 		}
 		// The query has LIMIT 1, ie returns at most one row
 		if row := r.Named().Row(); row != nil {
-			s.state = binlogdatapb.VReplicationWorkflowState_Error
-			if message := row.AsString("message", ""); message != "" {
-				s.message = "vreplication: " + message
+			historicalMessage := row.AsString("message", "")
+			if overrideStateFromHistory(s.state, historicalMessage) {
+				s.state = binlogdatapb.VReplicationWorkflowState_Error
+				if historicalMessage != "" {
+					s.message = vreplMessageWrapperPrefix + historicalMessage
+				}
+			} else if s.state != binlogdatapb.VReplicationWorkflowState_Error && isRetriesExhaustedMessage(historicalMessage) {
+				s.hasStaleParkRecord = true
 			}
 		}
 	}
@@ -3272,6 +3743,122 @@ func getInOrderCompletionPendingCount(onlineDDL *schema.OnlineDDL, pendingMigrat
 	return pendingCount
 }
 
+// reviewVReplStreamError decides what to do about a running migration's
+// stream. Transient errors are recorded in the migration's LastError and
+// cancel it only once the same error has persisted past the retry window. An
+// Error-state stream cancels it immediately — streams pin retry-forever (see
+// generateInsertStatement), so only a genuinely unrecoverable error parks
+// them — except a retries-exhausted park, which only a pre-override stream
+// can hit and which is repaired instead, unless the park has itself outlived
+// the retry window.
+func (e *Executor) reviewVReplStreamError(uuid string, s *VReplStream) vreplStreamAction {
+	if _, ok := e.vreplicationLastError[uuid]; !ok {
+		e.vreplicationLastError[uuid] = vterrors.NewLastError(
+			fmt.Sprintf("Online DDL migration %v", uuid),
+			staleMigrationFailMinutes*time.Minute,
+		)
+	}
+	lastError := e.vreplicationLastError[uuid]
+	isTerminal, vreplError := s.hasError()
+	lastError.Record(vreplError)
+	if !lastError.ShouldRetry() {
+		return vreplStreamCancel
+	}
+	if isTerminal {
+		if isRetriesExhaustedMessage(s.message) {
+			return vreplStreamRepair
+		}
+		return vreplStreamCancel
+	}
+	return vreplStreamNoAction
+}
+
+// repairVReplicationQuery restarts a stream parked on a retries-exhausted
+// error with the retry-forever override installed. The override is merged
+// into the stored options (json_insert only creates a missing config
+// container; json_set sets the one key) so overrides applied via `Workflow
+// update --config-overrides` survive. The Error-state guard avoids clobbering
+// a stream that recovered concurrently.
+func repairVReplicationQuery(id int32) string {
+	return fmt.Sprintf(`update _vt.vreplication set state='Running', message='', options=json_set(json_insert(coalesce(nullif(options, ''), '{}'), '$.config', json_object()), '$.config."%s"', '%s') where id=%d and state='Error'`,
+		retryForeverConfigKey, retryForeverConfigValue, id)
+}
+
+// retireVReplParkRecordQuery turns a stream's retries-exhausted park rows in
+// _vt.vreplication_log into the record of the stream's resumption, keeping
+// the parked error text. They must not stay Error rows: a previous release's
+// history scan takes any Error row as authoritative, so after a downgrade
+// the older executor would fail the migration on them.
+//
+// The message column is a TEXT, and a park record may already be at its
+// limit (insertLog truncates to exactly that), so the prefix must never push
+// the rewrite past it: under strict SQL mode the update would then fail on
+// every review and the row would stay an Error row. A message that would
+// overflow is cut to a character count that fits under the limit in any
+// charset, keeping its head, which carries the classification.
+func retireVReplParkRecordQuery(id int32) string {
+	const (
+		prefix = "Online DDL: the stream resumed after: "
+		// vreplLogMessageMaxBytes is the TEXT column's limit in bytes.
+		vreplLogMessageMaxBytes = 65535
+		// utf8mb4 characters take up to four bytes.
+		maxBytesPerChar = 4
+	)
+	return fmt.Sprintf(`update _vt.vreplication_log set state='Running', message=concat('%s', if(length(message) + %d <= %d, message, left(message, %d))) where vrepl_id=%d and state='Error' and message like '%s:%%'`,
+		prefix, len(prefix), vreplLogMessageMaxBytes, (vreplLogMessageMaxBytes-len(prefix))/maxBytesPerChar, id, vreplication.RetriesExhaustedIndicator)
+}
+
+// redriveVReplRepair re-drives the controller start for a stream whose repair
+// RPC failed after its write landed. The engine applies the update before it
+// builds the replacement controller, so the row can read Running with no
+// controller behind it, and nothing else would ever start one: the row no
+// longer matches the repair, and the history scan trusts a Running row. A
+// no-op state update through the engine makes it rebuild the controller;
+// against one that did start, it merely restarts the stream. The intent is
+// cleared once the RPC succeeds and kept, for the next tick, otherwise. It
+// reports whether the re-drive succeeded: until it has, the row must not be
+// reviewed further, since nothing may be behind it. Callers must hold
+// migrationMutex.
+func (e *Executor) redriveVReplRepair(ctx context.Context, uuid string, s *VReplStream) bool {
+	ctx, cancel := context.WithTimeout(ctx, grpcTimeout)
+	defer cancel()
+	tablet, err := e.ts.GetTablet(ctx, e.tabletAlias)
+	if err != nil {
+		log.Error("Online DDL: failed to get tablet to re-drive a vreplication stream repair; will retry on the next tick",
+			slog.String("uuid", uuid), slog.String("tablet", e.TabletAliasString()), slog.Int64("stream_id", int64(s.id)), slog.Any("error", err))
+		return false
+	}
+	if err := e.startVReplication(ctx, tablet.Tablet, uuid); err != nil {
+		log.Error("Online DDL: failed to re-drive a vreplication stream repair whose RPC had failed; will retry on the next tick",
+			slog.String("uuid", uuid), slog.String("tablet", e.TabletAliasString()), slog.Int64("stream_id", int64(s.id)), slog.Any("error", err))
+		return false
+	}
+	delete(e.vreplicationPendingRepair, uuid)
+	log.Info("Online DDL: re-drove the start of a repaired vreplication stream whose repair RPC had failed",
+		slog.String("uuid", uuid), slog.String("tablet", e.TabletAliasString()), slog.Int64("stream_id", int64(s.id)))
+	return true
+}
+
+// retireVReplParkRecord rewrites the park records a stream has moved past
+// (repaired, or otherwise resumed) into the record of its resumption, so
+// that a previous release's executor does not fail the migration on them
+// after a downgrade. The review calls it for as long as readVReplStream
+// keeps reporting such a record and no repair of the stream is pending, so
+// a rewrite that fails is retried on the next tick, and a record is never
+// retired ahead of the repair it traces; the repair branch also calls it
+// directly once its RPC has succeeded. Callers must hold migrationMutex.
+func (e *Executor) retireVReplParkRecord(ctx context.Context, uuid string, s *VReplStream) {
+	ctx, cancel := context.WithTimeout(ctx, reviewQueryTimeout)
+	defer cancel()
+	if _, err := e.execQuery(ctx, retireVReplParkRecordQuery(s.id)); err != nil {
+		log.Error("Online DDL: failed to retire the vreplication stream's park record in _vt.vreplication_log; will retry on the next tick",
+			slog.String("uuid", uuid), slog.String("tablet", e.TabletAliasString()), slog.Int64("stream_id", int64(s.id)), slog.Any("error", err))
+		return
+	}
+	log.Info("Online DDL: retired the vreplication stream's park record in _vt.vreplication_log",
+		slog.String("uuid", uuid), slog.String("tablet", e.TabletAliasString()), slog.Int64("stream_id", int64(s.id)))
+}
+
 // reviewRunningMigrations iterates migrations in 'running' state. Normally there's only one running, which was
 // spawned by this tablet; but vreplication migrations could also resume from failure.
 func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning int, cancellable []*cancellableMigration, err error) {
@@ -3347,23 +3934,109 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 				if isVreplicationTestSuite {
 					e.triggerNextCheckInterval()
 				}
+				// A cancellation intent is signalled by cancelled_timestamp
+				// (user-issued) or by the in-memory pending record.
+				pendingCancelMessage, hasPendingCancel := e.vreplicationPendingCancel[uuid]
+				cancellationRequested := hasPendingCancel || !migrationRow["cancelled_timestamp"].IsNull()
 				if s == nil {
+					// A missing stream is benign (a starting migration may
+					// not have one yet), but a pending cancellation has no
+					// stream verdict to ride on and must be re-driven here.
+					if cancellationRequested {
+						if pendingCancelMessage == "" {
+							pendingCancelMessage = "cancellation requested; vreplication stream not found"
+						}
+						cancellable = append(cancellable, newCancellableMigration(uuid, pendingCancelMessage))
+					}
 					return nil
 				}
-				// Let's see if vreplication indicates an error. Many errors are recoverable, and
-				// we do not wish to fail on first sight. We will use LastError to repeatedly
-				// check if this error persists, until finally, after some timeout, we give up.
-				if _, ok := e.vreplicationLastError[uuid]; !ok {
-					e.vreplicationLastError[uuid] = vterrors.NewLastError(
-						fmt.Sprintf("Online DDL migration %v", uuid),
-						staleMigrationFailMinutes*time.Minute,
-					)
+				if s.hasStaleParkRecord && !e.vreplicationPendingRepair[uuid] {
+					// Not while a repair is unconfirmed: until the re-drive
+					// succeeds, the park record is the durable trace of the
+					// repair still owed to this stream.
+					if !e.reviewedRunningMigrationsFlag && s.isRunning() {
+						// First review since Open. That intent lived only in
+						// memory, which Open cleared, and the engine is opened
+						// and closed with the tablet type rather than with the
+						// query service: a serving bounce reopens this
+						// executor while the engine, never reopened, may have
+						// no controller behind the row. Reconstruct the intent
+						// from the record and let the re-drive below confirm
+						// the repair before the record is retired; a stream
+						// that already runs is merely restarted, once.
+						log.Info("Online DDL: reconstructing the pending repair of a vreplication stream from its park record after Open; re-driving the start",
+							slog.String("uuid", uuid), slog.String("tablet", e.TabletAliasString()), slog.Int64("stream_id", int64(s.id)))
+						e.vreplicationPendingRepair[uuid] = true
+					} else {
+						e.retireVReplParkRecord(ctx, uuid, s)
+					}
 				}
-				lastError := e.vreplicationLastError[uuid]
-				isTerminal, vreplError := s.hasError()
-				lastError.Record(vreplError)
-				if isTerminal || !lastError.ShouldRetry() {
-					cancellable = append(cancellable, newCancellableMigration(uuid, s.message))
+				action := resolveVReplStreamAction(
+					e.reviewVReplStreamError(uuid, s),
+					cancellationRequested,
+				)
+				if action == vreplStreamCancel {
+					// Prefer the recorded reason: the stream stop rewrites
+					// only the state, so s.message may be a stale pre-stop
+					// error. A cancellation requested without a recorded
+					// reason is a durable user cancellation whose intent did
+					// not survive an executor restart; the stream's message
+					// is not its reason either. Only a cancellation the
+					// stream's own error triggered takes that message.
+					cancelMessage := s.message
+					switch {
+					case hasPendingCancel && pendingCancelMessage != "":
+						cancelMessage = pendingCancelMessage
+					case cancellationRequested:
+						cancelMessage = cancellationRequestedByUserMessage
+					}
+					cancellable = append(cancellable, newCancellableMigration(uuid, cancelMessage))
+					// Stop here: a cancel verdict can ride on a healthy
+					// stream, and continuing into the cutover flow could
+					// complete the migration before cancelMigrations runs.
+					return nil
+				}
+				if action == vreplStreamRepair {
+					// Own the migration so the scheduler's checks see it
+					// while it recovers. On failure, leave the park in
+					// place: the next tick retries, and the retry window and
+					// stale policy bound a park that never repairs.
+					e.ownedRunningMigrations.Store(uuid, onlineDDL)
+					// The repair rewrites the live row and the park record,
+					// so this is where the parked error stays correlated
+					// with the recovery.
+					log.Info("Online DDL: repairing vreplication stream parked on a retries-exhausted error; restarting it with the retry-forever override",
+						slog.String("uuid", uuid), slog.String("tablet", e.TabletAliasString()), slog.Int64("stream_id", int64(s.id)), slog.String("parked_error", s.message))
+					query := repairVReplicationQuery(s.id)
+					// Bound the lookup and the RPC: we hold migrationMutex
+					// and the tick's context has no deadline.
+					repairCtx, cancel := context.WithTimeout(ctx, grpcTimeout)
+					defer cancel()
+					tablet, err := e.ts.GetTablet(repairCtx, e.tabletAlias)
+					if err != nil {
+						log.Error("Online DDL: failed to get tablet for vreplication repair",
+							slog.String("uuid", uuid), slog.String("tablet", e.TabletAliasString()), slog.Any("error", err))
+						return nil
+					}
+					if _, err := e.vreplicationExec(repairCtx, tablet.Tablet, query); err != nil {
+						// The write may have landed regardless: the engine
+						// applies it before it builds the replacement
+						// controller. Record the intent so the next review
+						// re-drives the start if the row reads Running.
+						e.vreplicationPendingRepair[uuid] = true
+						log.Error("Online DDL: failed to repair vreplication stream parked on a retries-exhausted error; will retry or re-drive on the next tick",
+							slog.String("uuid", uuid), slog.String("tablet", e.TabletAliasString()), slog.Int64("stream_id", int64(s.id)), slog.Any("error", err))
+						return nil
+					}
+					delete(e.vreplicationPendingRepair, uuid)
+					log.Info("Online DDL: repaired vreplication stream parked on a retries-exhausted error; restarted with the retry-forever override",
+						slog.String("uuid", uuid), slog.String("tablet", e.TabletAliasString()), slog.Int64("stream_id", int64(s.id)))
+					// The repair is confirmed: retire the park record now, so
+					// that a downgrade before the next review does not find
+					// an Error row. A rewrite that fails is retried by the
+					// review for as long as the record remains.
+					e.retireVReplParkRecord(ctx, uuid, s)
+					return nil
 				}
 				if !s.isRunning() {
 					log.Info(fmt.Sprintf("migration %s in 'running' state but vreplication state is '%s'", uuid, s.state.String()))
@@ -3374,10 +4047,24 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 				// VReplication migrations are unique in this respect: we are able to complete
 				// a vreplication migration started by another tablet.
 				e.ownedRunningMigrations.Store(uuid, onlineDDL)
-				if lastVitessLivenessIndicator := migrationRow.AsInt64("vitess_liveness_indicator", 0); lastVitessLivenessIndicator < s.livenessTimeIndicator() {
-					_ = e.updateMigrationTimestamp(ctx, "liveness_timestamp", uuid)
-					_ = e.updateVitessLivenessIndicator(ctx, uuid, s.livenessTimeIndicator())
+				if e.vreplicationPendingRepair[uuid] {
+					// The repair's write landed (the row reads Running) but
+					// its RPC failed, so a controller may never have started.
+					if !e.redriveVReplRepair(ctx, uuid, s) {
+						// Nothing may be behind this row yet: neither its
+						// liveness nor its readiness to cut over can be
+						// judged on it. The next review re-drives again.
+						return nil
+					}
+					if s.hasStaleParkRecord {
+						// The re-drive confirmed the repair: retire the park
+						// record now, the check above having deferred it, so
+						// that a downgrade before the next review does not
+						// find an Error row.
+						e.retireVReplParkRecord(ctx, uuid, s)
+					}
 				}
+				e.refreshMigrationLiveness(ctx, uuid, s, migrationRow.AsInt64("rows_copied", 0), migrationRow.AsInt64("vitess_liveness_indicator", 0))
 				if onlineDDL.TabletAlias != e.TabletAliasString() {
 					_ = e.updateMigrationTablet(ctx, uuid)
 					log.Info(fmt.Sprintf("migration %s adopted by tablet %s", uuid, e.TabletAliasString()))
@@ -3461,6 +4148,18 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 			if err := reviewVReplRunningMigration(); err != nil {
 				return countRunnning, cancellable, err
 			}
+		default:
+			// A requested cancellation of a migration without a vreplication
+			// stream has no stream verdict to ride on: re-drive its terminal
+			// transition here. A pending intent carries its reason; a durable
+			// cancelled_timestamp without one is a user cancellation whose
+			// intent did not survive a restart.
+			if pendingCancelMessage, hasPendingCancel := e.vreplicationPendingCancel[uuid]; hasPendingCancel || !migrationRow["cancelled_timestamp"].IsNull() {
+				if pendingCancelMessage == "" {
+					pendingCancelMessage = cancellationRequestedByUserMessage
+				}
+				cancellable = append(cancellable, newCancellableMigration(uuid, pendingCancelMessage))
+			}
 		}
 		countRunnning++
 	}
@@ -3486,6 +4185,8 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 			}
 			return true
 		})
+		// Likewise drop the stream tracking of finished migrations.
+		e.forgetFinishedVReplStreams(uuidsFoundRunning, uuidsFoundPending)
 	}
 
 	e.reviewedRunningMigrationsFlag = true
@@ -3566,24 +4267,42 @@ func (e *Executor) reviewStaleMigrations(ctx context.Context) error {
 		if _, err := e.terminateMigration(ctx, onlineDDL); err != nil {
 			message = fmt.Sprintf("error terminating migration (%v): %v", message, err)
 			e.updateMigrationMessage(ctx, onlineDDL.UUID, message)
+			// Termination unconfirmed: the migration is still running, so
+			// restore the ownership terminateMigration dropped — the
+			// scheduler's conflict and concurrency checks consult ownership
+			// alone, and run before the next review could re-adopt it.
+			e.ownedRunningMigrations.Store(uuid, onlineDDL)
 			continue // we still want to handle rest of migrations
 		}
-		if err := e.updateMigrationMessage(ctx, onlineDDL.UUID, message); err != nil {
-			return err
-		}
-		if err := e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusFailed); err != nil {
-			return err
-		}
-		failedMigrations.Add(1)
-		defer e.triggerNextCheckInterval()
-		_ = e.updateMigrationStartedTimestamp(ctx, uuid)
-		// Because the migration is stale, it may not update completed_timestamp. It is essential to set completed_timestamp
-		// as this is then used when cleaning artifacts
-		if err := e.updateMigrationTimestamp(ctx, "completed_timestamp", onlineDDL.UUID); err != nil {
+		if err := e.failStaleMigration(ctx, onlineDDL, message); err != nil {
 			return err
 		}
 	}
 
+	return nil
+}
+
+// failStaleMigration applies the terminal transition to a stale migration
+// whose stream has just been stopped. It uses the failed-or-cancelled
+// transition and prefers a pending cancellation's reason: a user cancellation
+// whose own termination failed transiently is left running with
+// cancelled_timestamp set, and this review — later in the same tick — may be
+// what finally terminates it, in which case the result must be 'cancelled'
+// with the user's reason. The transition also sets completed_timestamp, which
+// artifact cleanup relies on. Tracking is dropped only once the transition has
+// landed; until then the still-running migration stays owned so the scheduler
+// keeps seeing it. Callers must hold migrationMutex.
+func (e *Executor) failStaleMigration(ctx context.Context, onlineDDL *schema.OnlineDDL, staleMessage string) error {
+	message := staleMessage
+	if pendingCancelMessage, ok := e.vreplicationPendingCancel[onlineDDL.UUID]; ok && pendingCancelMessage != "" {
+		message = pendingCancelMessage
+	}
+	if err := e.terminallyFailMigration(ctx, onlineDDL, errors.New(message)); err != nil {
+		e.ownedRunningMigrations.Store(onlineDDL.UUID, onlineDDL)
+		return err
+	}
+	e.forgetVReplStream(onlineDDL.UUID)
+	_ = e.updateMigrationStartedTimestamp(ctx, onlineDDL.UUID)
 	return nil
 }
 
@@ -3675,7 +4394,7 @@ func (e *Executor) gcArtifacts(ctx context.Context) error {
 	defer e.migrationMutex.Unlock()
 
 	query, err := sqlparser.ParseAndBind(sqlSelectUncollectedArtifacts,
-		sqltypes.Int64BindVariable(int64((retainOnlineDDLTables).Seconds())),
+		sqltypes.Int64BindVariable(int64(retainOnlineDDLTables.Seconds())),
 	)
 	if err != nil {
 		return err
@@ -3780,7 +4499,7 @@ func (e *Executor) onMigrationCheckTick() {
 	}
 	if _, cancellable, err := e.reviewRunningMigrations(ctx); err != nil {
 		log.Error(fmt.Sprint(err))
-	} else if err := e.cancelMigrations(ctx, cancellable, false); err != nil {
+	} else if _, err := e.cancelMigrations(ctx, cancellable, false); err != nil {
 		log.Error(fmt.Sprint(err))
 	}
 	if err := e.monitorStaleMigrations(ctx); err != nil {
@@ -4292,7 +5011,16 @@ func (e *Executor) RetryMigration(ctx context.Context, uuid string) (result *sql
 		return nil, err
 	}
 	defer e.triggerNextCheckInterval()
-	return e.execQuery(ctx, query)
+	result, err = e.execQuery(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	if result.RowsAffected > 0 {
+		// Only an actual requeue gets fresh tracking: a no-op RETRY against a
+		// non-terminal migration must not clear an active stream's.
+		e.forgetVReplStream(uuid)
+	}
+	return result, nil
 }
 
 // CleanupMigration sets migration is ready for artifact cleanup. Artifacts are not immediately deleted:
@@ -4810,10 +5538,10 @@ func (e *Executor) SubmitMigration(
 	log.Info(fmt.Sprintf("SubmitMigration: request to submit migration %s; action=%s, table=%s", onlineDDL.UUID, actionStr, onlineDDL.Table))
 
 	revertedUUID, _ := onlineDDL.GetRevertUUID(e.env.Environment().Parser()) // Empty value if the migration is not actually a REVERT. Safe to ignore error.
-	retainArtifactsSeconds := int64((retainOnlineDDLTables).Seconds())
+	retainArtifactsSeconds := int64(retainOnlineDDLTables.Seconds())
 	if retainArtifacts, _ := onlineDDL.StrategySetting().RetainArtifactsDuration(); retainArtifacts != 0 {
 		// Explicit retention indicated by `--retain-artifact` DDL strategy flag for this migration. Override!
-		retainArtifactsSeconds = int64((retainArtifacts).Seconds())
+		retainArtifactsSeconds = int64(retainArtifacts.Seconds())
 	}
 	cutoverThreshold, err := onlineDDL.StrategySetting().CutOverThreshold()
 	if err != nil {

@@ -176,7 +176,7 @@ func createDeleteOpWithTarget(ctx *plancontext.PlanningContext, target semantics
 		panic(err)
 	}
 
-	var leftComp sqlparser.ValTuple
+	leftComp := make(sqlparser.ValTuple, 0, len(vTbl.PrimaryKey))
 	cols := make([]*sqlparser.ColName, 0, len(vTbl.PrimaryKey))
 	for _, col := range vTbl.PrimaryKey {
 		colName := sqlparser.NewColNameWithQualifier(col.String(), tblName)
@@ -341,7 +341,7 @@ func updateQueryGraphWithSource(ctx *plancontext.PlanningContext, input Operator
 }
 
 func createFkCascadeOpForDelete(ctx *plancontext.PlanningContext, parentOp Operator, delStmt *sqlparser.Delete, childFks []vindexes.ChildFKInfo, deletedTbl *vindexes.BaseTable) Operator {
-	var fkChildren []*FkChild
+	fkChildren := make([]*FkChild, 0, len(childFks))
 	var selectExprs []sqlparser.SelectExpr
 	tblName := delStmt.Targets[0]
 	for _, fk := range childFks {
@@ -375,7 +375,7 @@ func createFkChildForDelete(ctx *plancontext.PlanningContext, fk vindexes.ChildF
 	case sqlparser.Cascade:
 		// We now construct the delete query for the child table.
 		// The query looks something like this - `DELETE FROM <child_table> WHERE <child_columns_in_fk> IN (<bind variable for the output from SELECT>)`
-		var valTuple sqlparser.ValTuple
+		valTuple := make(sqlparser.ValTuple, 0, len(fk.ChildColumns))
 		for _, column := range fk.ChildColumns {
 			valTuple = append(valTuple, sqlparser.NewColName(column.String()))
 		}
@@ -388,8 +388,8 @@ func createFkChildForDelete(ctx *plancontext.PlanningContext, fk vindexes.ChildF
 	case sqlparser.SetNull:
 		// We now construct the update query for the child table.
 		// The query looks something like this - `UPDATE <child_table> SET <child_column_in_fk> = NULL [AND <another_child_column_in_fk> = NULL]... WHERE <child_columns_in_fk> IN (<bind variable for the output from SELECT>)`
-		var valTuple sqlparser.ValTuple
-		var updExprs sqlparser.UpdateExprs
+		valTuple := make(sqlparser.ValTuple, 0, len(fk.ChildColumns))
+		updExprs := make(sqlparser.UpdateExprs, 0, len(fk.ChildColumns))
 		for _, column := range fk.ChildColumns {
 			valTuple = append(valTuple, sqlparser.NewColName(column.String()))
 			updExprs = append(updExprs, &sqlparser.UpdateExpr{

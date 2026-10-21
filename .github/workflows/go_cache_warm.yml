@@ -1,0 +1,279 @@
+name: Warm Go caches
+
+# The only writer of the Go module and build caches that every other job
+# restores through the setup-go action. Each push to main or a release branch
+# saves a module cache entry for every go.sum without one, and fresh build
+# cache entries and a golangci-lint analysis cache entry for that commit. All
+# are built from an empty cache, so they contain exactly what the jobs need and
+# nothing stale. Pull requests restore the newest entries of their base branch.
+on:
+  push:
+    branches:
+      - "main"
+      - "release-[0-9]+.[0-9]"
+  workflow_dispatch:
+
+# Runs of one branch go one at a time, so that a run never deletes the entries
+# of a newer one. A new push replaces a run that is still waiting, but never
+# cancels one in progress: runs can wait long for the Oracle VMs, and during a
+# burst of pushes cancelling would keep the slower entries from being saved.
+concurrency:
+  group: format('{0}-{1}', ${{ github.ref }}, 'Warm Go caches')
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  # One entry per go.sum, keyed by its hash: a tool's dependency update only
+  # replaces that tool's entry. Module caches do not depend on the platform.
+  modules:
+    name: "Warm Go module cache (${{ matrix.set }})"
+    if: github.repository == 'vitessio/vitess'
+    permissions:
+      contents: read
+      # To delete the entries this run supersedes.
+      actions: write
+    strategy:
+      fail-fast: false
+      matrix:
+        set: [root, addlicense, gofumpt, goimports, golangci-lint, gotestsum, goyacc]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed # v2.22.0
+        with:
+          egress-policy: audit
+
+      - name: Check out code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: "false"
+
+      - name: Determine the cache key
+        id: key
+        env:
+          SET: ${{ matrix.set }}
+          SUM: ${{ matrix.set == 'root' && hashFiles('go.sum') || hashFiles(format('tools/{0}/go.sum', matrix.set)) }}
+        run: |
+          echo "prefix=go-mod-${SET}-" >> "${GITHUB_OUTPUT}"
+          echo "key=go-mod-${SET}-${SUM}" >> "${GITHUB_OUTPUT}"
+
+      # A key is never saved twice, so only a go.sum change saves an entry.
+      - name: Look up the module cache
+        id: lookup
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ steps.key.outputs.key }}
+          lookup-only: true
+
+      - name: Set up Go
+        if: steps.lookup.outputs.cache-hit != 'true'
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      # Starts from an empty module cache, so the entry holds exactly this
+      # go.sum's modules. Retried because proxy.golang.org occasionally drops
+      # connections mid-download.
+      #
+      # -modcacherw leaves the files writable. Jobs restore several entries
+      # into one module cache, and entries share modules: without it, tar
+      # cannot replace the read-only copy another entry already extracted,
+      # and the whole restore fails.
+      - name: Download the modules
+        if: steps.lookup.outputs.cache-hit != 'true'
+        env:
+          SET: ${{ matrix.set }}
+          GOFLAGS: -modcacherw
+        run: |
+          go clean -modcache
+          args=()
+          if [ "${SET}" != "root" ]; then
+            args=(-modfile="tools/${SET}/go.mod")
+          fi
+          for attempt in 1 2 3; do
+            if go mod download "${args[@]}"; then
+              break
+            fi
+            if [ "${attempt}" = 3 ]; then
+              echo "go mod download failed after ${attempt} attempts"
+              exit 1
+            fi
+            echo "go mod download failed (attempt ${attempt}); retrying"
+            go clean -modcache
+            sleep 10
+          done
+          du -sh "$(go env GOMODCACHE)"
+
+      - name: Save the module cache
+        if: steps.lookup.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ steps.key.outputs.key }}
+
+      - name: Delete superseded module cache entries
+        if: steps.lookup.outputs.cache-hit != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          REF: ${{ github.ref }}
+          PREFIX: ${{ steps.key.outputs.prefix }}
+          KEY: ${{ steps.key.outputs.key }}
+        run: tools/delete_superseded_cache_entries.sh "${PREFIX}" "${KEY}"
+
+  warm:
+    name: "Warm Go build cache (${{ matrix.entry }}, ${{ matrix.arch }})"
+    if: github.repository == 'vitessio/vitess'
+    # Restores the module cache entries the modules job just saved.
+    needs: modules
+    permissions:
+      contents: read
+      # To delete the entries this run supersedes.
+      actions: write
+    strategy:
+      fail-fast: false
+      matrix:
+        # Every entry compiles with -trimpath, so it fits any runner of the
+        # same architecture.
+        include:
+          - entry: build
+            arch: x64
+            runner: oracle-vm-16cpu-64gb-x86-64
+            go-tools: gotestsum
+          - entry: build
+            arch: arm64
+            runner: oracle-vm-16cpu-64gb-arm64
+            go-tools: gotestsum
+          # unit shares the flags of build, which the unit jobs also restore,
+          # so it only saves what it adds on top of build.
+          - entry: unit
+            base: build
+            arch: x64
+            runner: oracle-vm-16cpu-64gb-x86-64
+            go-tools: gotestsum
+          - entry: unit
+            base: build
+            arch: arm64
+            runner: oracle-vm-16cpu-64gb-arm64
+            go-tools: gotestsum
+          - entry: race
+            arch: x64
+            runner: oracle-vm-16cpu-64gb-x86-64
+            go-tools: gotestsum
+          # Likewise tools, on top of build and unit: the static checks
+          # restore all three. Unlike the Go build cache, the golangci-lint
+          # analysis cache this leg also saves is keyed on the absolute paths
+          # of the files in the module cache, so it is built on a GitHub-hosted
+          # runner like the static checks, whose home directory differs from
+          # the Oracle VMs'.
+          - entry: tools
+            base: build,unit
+            arch: x64
+            runner: ubuntu-24.04
+            go-tools: addlicense,gofumpt,goimports,golangci-lint,gotestsum,goyacc
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed # v2.22.0
+        with:
+          egress-policy: audit
+
+      - name: Check out code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: "false"
+
+      # Restores the module caches, but no build cache: each entry starts
+      # empty.
+      - name: Set up Go
+        uses: $/.github/actions/setup-go
+        with:
+          build-cache: none
+          go-tools: ${{ matrix.go-tools }}
+
+      - name: Warm the base entries
+        if: matrix.base
+        env:
+          BASE: ${{ matrix.base }}
+        run: |
+          IFS=',' read -r -a bases <<< "${BASE}"
+          for base in "${bases[@]}"; do
+            tools/warm_go_build_cache.sh "${base}"
+          done
+          gocache="$(go env GOCACHE)"
+          find "${gocache}" -type f > "${RUNNER_TEMP}/base-files"
+
+      - name: Warm the build cache
+        env:
+          ENTRY: ${{ matrix.entry }}
+        run: tools/warm_go_build_cache.sh "${ENTRY}"
+
+      # Jobs restore the base entries next to this one, so leave their files
+      # out.
+      - name: Remove the base entries' files
+        if: matrix.base
+        run: |
+          while read -r file; do
+            rm -f -- "${file}"
+          done < "${RUNNER_TEMP}/base-files"
+
+      # setup-go restores "<prefix><sha>" by the prefix, which picks the
+      # newest entry.
+      - name: Determine the cache key
+        id: key
+        env:
+          ENTRY: ${{ matrix.entry }}
+          RUNNER_OS_NAME: ${{ runner.os }}
+          RUNNER_ARCH_NAME: ${{ runner.arch }}
+          SHA: ${{ github.sha }}
+        run: |
+          prefix="go-build-v3-${RUNNER_OS_NAME}-${RUNNER_ARCH_NAME}-$(go env GOVERSION)-${ENTRY}-"
+          echo "prefix=${prefix}" >> "${GITHUB_OUTPUT}"
+          echo "key=${prefix}${SHA}" >> "${GITHUB_OUTPUT}"
+          lint_prefix="golangci-lint-v1-${RUNNER_OS_NAME}-${RUNNER_ARCH_NAME}-$(go env GOVERSION)-"
+          echo "lint-prefix=${lint_prefix}" >> "${GITHUB_OUTPUT}"
+          echo "lint-key=${lint_prefix}${SHA}" >> "${GITHUB_OUTPUT}"
+
+      - name: Save the build cache
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/go-build
+          key: ${{ steps.key.outputs.key }}
+
+      # Keep only the entry just saved for this branch, so that per-commit
+      # entries do not push other caches out of the repository quota.
+      - name: Delete superseded build cache entries
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          REF: ${{ github.ref }}
+          PREFIX: ${{ steps.key.outputs.prefix }}
+          KEY: ${{ steps.key.outputs.key }}
+        run: tools/delete_superseded_cache_entries.sh "${PREFIX}" "${KEY}"
+
+      # The analysis cache the golangci-lint run of the tools entry filled.
+      # The static checks restore it with the tools entry.
+      - name: Save the golangci-lint cache
+        if: matrix.entry == 'tools'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/golangci-lint
+          key: ${{ steps.key.outputs.lint-key }}
+
+      - name: Delete superseded golangci-lint cache entries
+        if: matrix.entry == 'tools'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          REF: ${{ github.ref }}
+          PREFIX: ${{ steps.key.outputs.lint-prefix }}
+          KEY: ${{ steps.key.outputs.lint-key }}
+        run: tools/delete_superseded_cache_entries.sh "${PREFIX}" "${KEY}"

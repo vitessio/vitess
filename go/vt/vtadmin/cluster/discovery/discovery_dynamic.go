@@ -51,9 +51,7 @@ type DynamicDiscovery struct {
 // NewDynamic returns a DynamicDiscovery for the given cluster.
 func NewDynamic(cluster *vtadminpb.Cluster, flags *pflag.FlagSet, args []string) (Discovery, error) {
 	disco := &DynamicDiscovery{
-		JSONDiscovery: JSONDiscovery{
-			cluster: cluster,
-		},
+		cluster: cluster,
 	}
 
 	json := flags.String("discovery", "", "the json config object")

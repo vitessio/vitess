@@ -25,6 +25,7 @@ import (
 	"strconv"
 	"strings"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/mysql/decimal"
 	"vitess.io/vitess/go/sqltypes"
@@ -87,18 +88,33 @@ type LengthScaleOption struct {
 
 // IndexOption is used for trailing options for indexes: COMMENT, KEY_BLOCK_SIZE, USING, WITH PARSER
 type IndexOption struct {
-	Name   string
-	Value  *Literal
+	Name  string
+	Value *Literal
+	// String is the name of an index type or fulltext parser, as in USING BTREE
+	// or WITH PARSER ngram. It is client supplied, so it must be written out
+	// with encodeIndexOptionValue, which quotes it the way its option reads back.
 	String string
 }
 
 // TableOption is used for create table options like AUTO_INCREMENT, INSERT_METHOD, etc
 type TableOption struct {
-	Name          string
-	Value         *Literal
-	String        string
-	Tables        TableNames
+	Name  string
+	Value *Literal
+	// String is one name, and nothing else. For TABLESPACE it used to carry the
+	// trailing STORAGE clause as part of the same string; that now lives in
+	// Storage, because a value holding two clauses cannot be quoted as a name.
+	// Code outside this package that builds a TableOption by hand has to split
+	// them the same way, or the whole thing is quoted as one name.
+	String string
+	Tables TableNames
+	// CaseSensitive marks String as a client-supplied name -- a charset,
+	// collation, engine or tablespace -- rather than one of a fixed set of
+	// keywords, so it must be written out with encodeTableOptionValue, which
+	// quotes it the way its option reads back.
 	CaseSensitive bool
+	// Storage is TABLESPACE's optional trailing STORAGE clause. It is kept apart
+	// from String so that String stays a single name that can be quoted.
+	Storage string
 }
 
 // ColumnKeyOption indicates whether or not the given column is defined as an
@@ -220,6 +236,9 @@ func (ct *ColumnType) SQLType() querypb.Type {
 
 func SQLTypeToQueryType(typeName string, unsigned bool) querypb.Type {
 	switch keywordVals[strings.ToLower(typeName)] {
+	case SERIAL:
+		// SERIAL is an alias for BIGINT UNSIGNED NOT NULL AUTO_INCREMENT UNIQUE.
+		return sqltypes.Uint64
 	case TINYINT:
 		if unsigned {
 			return sqltypes.Uint8
@@ -319,8 +338,9 @@ func SQLTypeToQueryType(typeName string, unsigned bool) querypb.Type {
 
 // AddQueryHint adds the given string to list of comment.
 // If the list is empty, one will be created containing the query hint.
-// If the list already contains a query hint, the given string will be merged with the existing one.
-// This is done because only one query hint is allowed per query.
+// If the list already contains a query hint, the given string will be merged with
+// the first one: MySQL honors only the first optimizer hint comment of a statement
+// and reads any later one as an ordinary comment, so later ones are kept as they are.
 func (node *ParsedComments) AddQueryHint(queryHint string) (Comments, error) {
 	if queryHint == "" {
 		if node == nil {
@@ -334,10 +354,7 @@ func (node *ParsedComments) AddQueryHint(queryHint string) (Comments, error) {
 
 	if node != nil {
 		for _, comment := range node.comments {
-			if strings.HasPrefix(comment, queryOptimizerPrefix) {
-				if hasQueryHint {
-					return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "Must have only one query hint")
-				}
+			if strings.HasPrefix(comment, queryOptimizerPrefix) && !hasQueryHint {
 				hasQueryHint = true
 				before, _, ok := strings.Cut(comment, "*/")
 				if !ok {
@@ -1250,6 +1267,11 @@ func (node *Select) SetWith(with *With) {
 	node.With = with
 }
 
+// GetWith returns the with clause of a select statement
+func (node *Select) GetWith() *With {
+	return node.With
+}
+
 // MakeDistinct makes the statement distinct
 func (node *Select) MakeDistinct() {
 	node.Distinct = true
@@ -1396,6 +1418,11 @@ func (node *Union) SetInto(into *SelectInto) {
 // SetWith sets the with clause to a union statement
 func (node *Union) SetWith(with *With) {
 	node.With = with
+}
+
+// GetWith returns the with clause of a union statement
+func (node *Union) GetWith() *With {
+	return node.With
 }
 
 // MakeDistinct implements the SelectStatement interface
@@ -2105,6 +2132,20 @@ func (ty GTIDType) ToString() string {
 	}
 }
 
+// ExplainTypeFromName returns the EXPLAIN format named by an identifier or string
+// value, matched case-insensitively, and whether the name is one of the known formats.
+func ExplainTypeFromName(name string) (ExplainType, bool) {
+	switch strings.ToLower(name) {
+	case JSONStr:
+		return JSONType, true
+	case TreeStr:
+		return TreeType, true
+	case TraditionalStr:
+		return TraditionalType, true
+	}
+	return EmptyType, false
+}
+
 // ToString returns the type as a string
 func (ty ExplainType) ToString() string {
 	switch ty {
@@ -2136,6 +2177,8 @@ func (ty VExplainType) ToString() string {
 		return TraceStr
 	case KeysVExplainType:
 		return KeysStr
+	case MySQLVExplainType:
+		return MySQLStr
 	default:
 		return "Unknown VExplainType"
 	}
@@ -2305,11 +2348,14 @@ func (ty ShowCommandType) ToString() string {
 // formatUserOrRoleHost extracts the host from an AT_ID token value.
 // AT_ID values may be quoted (e.g., 'localhost') or unquoted (e.g., localhost).
 func formatUserOrRoleHost(atID string) string {
-	host := atID
-	if len(host) > 0 && host[0] == '\'' && host[len(host)-1] == '\'' {
-		host = host[1 : len(host)-1]
+	// The tokenizer keeps a quoted host's quotes, and a doubled quote inside it
+	// stands for the quote itself (see Tokenizer.quotedNameIsIdentifier). Read it
+	// as the host it names, which UserOrRole.formatTo encodes again.
+	if len(atID) >= 2 && (atID[0] == '\'' || atID[0] == '"') && atID[len(atID)-1] == atID[0] {
+		quote := atID[:1]
+		return strings.ReplaceAll(atID[1:len(atID)-1], quote+quote, quote)
 	}
-	return host
+	return atID
 }
 
 func (node *UserOrRole) formatTo(buf *TrackedBuffer) {
@@ -2317,14 +2363,29 @@ func (node *UserOrRole) formatTo(buf *TrackedBuffer) {
 		buf.WriteString("current_user")
 		return
 	}
-	buf.WriteString("'")
-	buf.WriteString(*node.Name)
-	buf.WriteString("'")
+	buf.WriteString(encodeSQLString(*node.Name))
 	if node.Host != nil {
-		buf.WriteString("@'")
-		buf.WriteString(*node.Host)
-		buf.WriteString("'")
+		buf.WriteByte('@')
+		buf.WriteString(encodeSQLString(*node.Host))
 	}
+}
+
+// showProfileTypes are the types SHOW PROFILE accepts, in lowercase. ALL and MEMORY
+// have productions of their own.
+var showProfileTypes = map[string]bool{
+	"block io":         true,
+	"context switches": true,
+	"cpu":              true,
+	"ipc":              true,
+	"page faults":      true,
+	"source":           true,
+	"swaps":            true,
+}
+
+// isShowProfileType reports whether name, in lowercase, is a SHOW PROFILE type.
+// Only those are accepted, since they are written back unquoted.
+func isShowProfileType(name string) bool {
+	return showProfileTypes[name]
 }
 
 // ToString returns the DropKeyType as a string
@@ -2414,6 +2475,179 @@ const (
 // encodeSQLString encodes the string as a SQL string.
 func encodeSQLString(val string) string {
 	return sqltypes.EncodeStringSQL(val)
+}
+
+// encodeSQLName encodes a charset, collation, storage engine, tablespace or
+// fulltext parser name so that it is exactly one SQL token.
+//
+// The grammar accepts most of these either quoted or unquoted, and both spellings
+// denote the same name, so it strips whatever quoting the client used and stores
+// the decoded name -- which is also what makes `COLLATE 'utf8mb4_bin'` and
+// `COLLATE utf8mb4_bin` look alike to collation lookups. Writing that name back
+// out therefore has to re-quote it, or bytes a client hid inside a quoted name
+// would come back out as bare SQL.
+//
+// This deliberately does not go through formatID. These are not identifiers in a
+// namespace but values from a server-side catalogue, and formatID is the wrong
+// policy twice over: it obeys the caller's escaping preference, so
+// escapeNoIdentifiers -- what UnescapedString sets -- would emit the name bare
+// and undo the guarantee above; and it escapes keywords, so escapeAllIdentifiers
+// -- what CanonicalString sets -- would back-quote every charset and collation
+// name in canonical output, which schemadiff and online DDL compare and emit.
+// `binary`, `memory` and `btree` are real names here and unambiguous unquoted.
+func encodeSQLName(name string) string {
+	switch {
+	case isBareName(name):
+		return name
+	case name == "":
+		// There is no such thing as an empty back-quoted identifier, but an
+		// empty string literal is accepted everywhere a name is.
+		return "''"
+	default:
+		return backQuoteName(name)
+	}
+}
+
+// backQuoteName writes name as a back-quoted identifier.
+func backQuoteName(name string) string {
+	buf := NewTrackedBuffer(nil)
+	writeEscapedString(buf, name)
+	return buf.String()
+}
+
+// encodeObjectName writes a name into a position that takes sql_id or
+// table_alias: ENGINE, TABLESPACE, a partition engine, an index type. It is also
+// what an expression's COLLATE uses.
+//
+// Those admit a non-reserved keyword bare, so names like `memory` and `btree`
+// keep the unquoted spelling that schemadiff and online DDL compare. What they
+// do not have is the BINARY alternative that the charset and collation rules
+// carry, so `binary` -- a reserved word, and the one encodeSQLName lets through
+// bare for that reason -- has to stay quoted here or the DDL will not read back.
+//
+// Vitess's expression COLLATE does accept BINARY, but MySQL 8.0's does not: its
+// `simple_expr COLLATE ident_or_text` rejects `collate binary` and accepts it
+// quoted, so the regenerated query would fail on the tablet.
+func encodeObjectName(name string) string {
+	if strings.EqualFold(name, "binary") {
+		return backQuoteName(name)
+	}
+	return encodeSQLName(name)
+}
+
+// encodeColumnCharsetName writes the charset of a column or CAST/CONVERT type.
+// The charset rule's own BINARY alternative takes no BINARY modifier after it,
+// so `character set binary binary` does not read back; when the modifier is
+// set, `binary` is back-quoted as encodeObjectName does, which reads back as
+// the same name through the rule's sql_id alternative.
+func encodeColumnCharsetName(charset ColumnCharset) string {
+	if charset.Binary {
+		return encodeObjectName(charset.Name)
+	}
+	return encodeSQLName(charset.Name)
+}
+
+// encodeIdentifierName writes a name into a ci_identifier position. WITH PARSER
+// is the only one of those.
+//
+// ci_identifier is an ID and nothing else -- not even a non-reserved keyword, as
+// sql_id would allow -- so every keyword stays quoted here. A name such as
+// `memory` still lexes as its own token rather than as an ID, and writing it
+// bare leaves DDL this parser cannot read back in full.
+func encodeIdentifierName(name string) string {
+	if _, isKeyword := keywordLookupTable.LookupString(name); isKeyword {
+		return backQuoteName(name)
+	}
+	return encodeSQLName(name)
+}
+
+// encodeTableOptionValue writes a table option's value with the quoting that
+// option's own production accepts. CHARSET, CHARACTER SET and COLLATE take the
+// charset rules, which have a BINARY alternative; ENGINE and TABLESPACE take
+// table_alias and sql_id, which do not.
+func encodeTableOptionValue(optionName, value string) string {
+	switch strings.ToLower(optionName) {
+	case "charset", "character set", "collate":
+		return encodeSQLName(value)
+	default:
+		return encodeObjectName(value)
+	}
+}
+
+// encodeIndexOptionValue writes an index option's value the same way. WITH
+// PARSER takes ci_identifier, the strictest of these; USING takes sql_id.
+func encodeIndexOptionValue(optionName, value string) string {
+	if strings.EqualFold(optionName, "with parser") {
+		return encodeIdentifierName(value)
+	}
+	return encodeObjectName(value)
+}
+
+// encodeDatabaseOptionValue encodes a database option's value using that
+// option's own syntax. CHARACTER SET and COLLATE take a name, but MySQL only
+// accepts ENCRYPTION as a quoted 'Y' or 'N'.
+func encodeDatabaseOptionValue(option DatabaseOption) string {
+	if option.Type == EncryptionType {
+		return encodeSQLString(option.Value)
+	}
+	return encodeSQLName(option.Value)
+}
+
+// isBareName reports whether name may be written unquoted into a charset,
+// collation, engine, tablespace or index type position.
+//
+// Only a name from a closed catalogue stays bare: a charset or collation name of
+// any MySQL or MariaDB version, or one of bareObjectNames. Those are the names
+// generated DDL would otherwise churn on, and each is a plain word that both
+// this grammar and MySQL read back as that same name; TestEveryKnownNameRoundTrips
+// explains how the tests hold them to it. Everything else is back-quoted -- a tablespace a user named,
+// an engine Vitess does not know -- so whether a name is safe bare never depends
+// on which words this grammar or some MySQL version treats as keywords.
+//
+// `binary` is the one reserved word in the catalogue. The charset and collation
+// rules take it in their own right, as MySQL's do, and encodeObjectName quotes it
+// for the positions that do not.
+func isBareName(name string) bool {
+	lower := strings.ToLower(name)
+	if _, ok := bareObjectNames[lower]; ok {
+		return true
+	}
+	return collations.IsKnownName(lower)
+}
+
+// bareObjectNames holds the storage engine, index type, full-text parser and
+// InnoDB tablespace names that isBareName lets through, lower-cased.
+var bareObjectNames = map[string]struct{}{
+	// MySQL's storage engines and their aliases, and Percona Server's and
+	// MariaDB's.
+	"innodb":             {},
+	"myisam":             {},
+	"memory":             {},
+	"heap":               {},
+	"csv":                {},
+	"archive":            {},
+	"blackhole":          {},
+	"mrg_myisam":         {},
+	"merge":              {},
+	"federated":          {},
+	"example":            {},
+	"ndb":                {},
+	"ndbcluster":         {},
+	"ndbinfo":            {},
+	"performance_schema": {},
+	"rocksdb":            {},
+	"tokudb":             {},
+	"aria":               {},
+	// Index types.
+	"btree": {},
+	"hash":  {},
+	"rtree": {},
+	// The full-text parser plugins MySQL ships.
+	"ngram": {},
+	"mecab": {},
+	// InnoDB's own tablespaces.
+	"innodb_system":         {},
+	"innodb_file_per_table": {},
 }
 
 // ToString prints the list of table expressions as a string
@@ -2640,7 +2874,7 @@ func AndExpressions(exprs ...Expr) Expr {
 	case 1:
 		return exprs[0]
 	default:
-		result := (Expr)(nil)
+		result := Expr(nil)
 	outer:
 		// we'll loop and remove any duplicates
 		for i, expr := range exprs {
@@ -2914,6 +3148,9 @@ func (cols Columns) Indexes(subSetCols Columns) (bool, []int) {
 // This function is meant to be used in testing code.
 func MakeColumns(colNames ...string) Columns {
 	var cols Columns
+	if len(colNames) > 0 {
+		cols = make(Columns, 0, len(colNames))
+	}
 	for _, name := range colNames {
 		cols = append(cols, NewIdentifierCI(name))
 	}
@@ -3163,6 +3400,10 @@ func (node *ValuesStatement) SetWith(with *With) {
 	node.With = with
 }
 
+func (node *ValuesStatement) GetWith() *With {
+	return node.With
+}
+
 func (node *ValuesStatement) GetOrderBy() OrderBy {
 	return node.Order
 }
@@ -3191,8 +3432,8 @@ func (node *ValuesStatement) GetColumnCount() int {
 }
 
 func (node *ValuesStatement) GetColumns() []SelectExpr {
-	var sel []SelectExpr
 	columnCount := node.GetColumnCount()
+	sel := make([]SelectExpr, 0, columnCount)
 	for i := range columnCount {
 		sel = append(sel, &AliasedExpr{Expr: NewColName(fmt.Sprintf("column_%d", i))})
 	}

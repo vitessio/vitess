@@ -137,6 +137,15 @@ const smMaterializeSchemaTarget = `
     x int not null,
 	PRIMARY KEY (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+	CREATE TABLE mat3 (
+	id bigint NOT NULL,
+	val varbinary(10) NOT NULL,
+	ts timestamp NOT NULL,
+	day int NOT NULL,
+	month int NOT NULL,
+    x int not null,
+	PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 `
 
 const smMaterializeVSchemaTarget = `
@@ -144,6 +153,14 @@ const smMaterializeVSchemaTarget = `
   "sharded": true,
   "tables": {
       "mat2": {
+          "column_vindexes": [
+              {
+                  "column": "id",
+                  "name": "hash"
+              }
+          ]
+      },
+      "mat3": {
           "column_vindexes": [
               {
                   "column": "id",
@@ -159,7 +176,11 @@ const smMaterializeVSchemaTarget = `
   }
 }
 `
-const smMaterializeSpec2 = `{"workflow": "wf1", "source_keyspace": "source", "target_keyspace": "target", "table_settings": [ {"target_table": "mat2", "source_expression": "select id, val, ts, dayofmonth(ts) as day, month(ts) as month, custom1(id, val) as x from mat"  }] }`
+
+const (
+	smMaterializeSpec2    = `{"workflow": "wf1", "source_keyspace": "source", "target_keyspace": "target", "table_settings": [ {"target_table": "mat2", "source_expression": "select id, val, ts, dayofmonth(ts) as day, month(ts) as month, custom1(id, val) as x from mat"  }] }`
+	smMaterializeDropSpec = `{"workflow": "wf2", "source_keyspace": "source", "target_keyspace": "target", "table_settings": [ {"target_table": "mat3", "source_expression": "select id, val, ts, dayofmonth(ts) as day, month(ts) as month, custom1(id, val) as x from mat"  }] }`
+)
 
 const materializeInitDataQuery = `insert into mat(id, val, ts) values (1, 'abc', '2021-10-9 16:17:36'), (2, 'def', '2021-11-10 16:17:36')`
 
@@ -216,6 +237,26 @@ func testMaterialize(t *testing.T) {
 	waitForQueryResult(t, vtgateConn, targetKs, "select count(*) from mat2", "[[INT64(3)]]")
 	want = `[[INT64(1) VARBINARY("abc") TIMESTAMP("2021-10-09 16:17:36") INT32(9) INT32(10) INT32(3)] [INT64(2) VARBINARY("def") TIMESTAMP("2021-11-10 16:17:36") INT32(10) INT32(11) INT32(6)] [INT64(3) VARBINARY("ghi") TIMESTAMP("2021-12-11 16:17:36") INT32(11) INT32(12) INT32(9)]]`
 	waitForQueryResult(t, vtgateConn, targetKs, "select id, val, ts, day, month, x from mat2", want)
+
+	output, err := vc.VtctldClient.ExecuteCommandWithOutput("materialize", "--workflow=wf1", "--target-keyspace=target", "cancel")
+	require.NoError(t, err, "Materialize cancel failed, output: %s", output)
+	require.NotContains(t, output, "WARNING")
+
+	found, err := checkIfTableExists(t, vc, ks2Primary.TabletPath, "mat2")
+	require.NoError(t, err)
+	require.True(t, found)
+	waitForQueryResult(t, vtgateConn, targetKs, "select id, val, ts, day, month, x from mat2", want)
+
+	materialize(t, smMaterializeDropSpec)
+	catchup(t, ks2Primary, "wf2", "Materialize")
+	waitForRowCount(t, vtgateConn, targetKs, "mat3", 3)
+
+	output, err = vc.VtctldClient.ExecuteCommandWithOutput("materialize", "--workflow=wf2", "--target-keyspace=target", "cancel", "--keep-data=false")
+	require.NoError(t, err, "Materialize cancel --keep-data=false failed, output: %s", output)
+
+	found, err = checkIfTableExists(t, vc, ks2Primary.TabletPath, "mat3")
+	require.NoError(t, err)
+	require.False(t, found)
 }
 
 // TestMaterialize runs all the individual materialize tests defined above.

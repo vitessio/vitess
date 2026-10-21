@@ -17,6 +17,7 @@ limitations under the License.
 package command
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -40,6 +41,7 @@ var (
 		Short:                 "Reparents the shard to the new primary. Assumes the old primary is dead and not responding.",
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.ExactArgs(1),
+		PreRunE:               validateEmergencyReparentShardOptions,
 		RunE:                  commandEmergencyReparentShard,
 	}
 	// InitShardPrimary makes an InitShardPrimary gRPC call to a vtctld.
@@ -92,11 +94,23 @@ var emergencyReparentShardOptions = struct {
 	Force                     bool
 	WaitReplicasTimeout       time.Duration
 	NewPrimaryAliasStr        string
+	AllowSplitBrainPromotion  bool
 	ExpectedPrimaryAliasStr   string
 	IgnoreReplicaAliasStrList []string
 	PreventCrossCellPromotion bool
 	WaitForAllTablets         bool
+
+	// RequiredPosition is the GTID set that the new primary must have. At least
+	// one candidate must have received it.
+	RequiredPosition string
 }{}
+
+func validateEmergencyReparentShardOptions(_ *cobra.Command, _ []string) error {
+	if emergencyReparentShardOptions.AllowSplitBrainPromotion && emergencyReparentShardOptions.NewPrimaryAliasStr == "" {
+		return errors.New("--allow-split-brain-promotion requires --new-primary")
+	}
+	return nil
+}
 
 func commandEmergencyReparentShard(cmd *cobra.Command, args []string) error {
 	keyspace, shard, err := topoproto.ParseKeyspaceShard(cmd.Flags().Arg(0))
@@ -139,6 +153,8 @@ func commandEmergencyReparentShard(cmd *cobra.Command, args []string) error {
 		Keyspace:                  keyspace,
 		Shard:                     shard,
 		NewPrimary:                newPrimaryAlias,
+		AllowSplitBrainPromotion:  emergencyReparentShardOptions.AllowSplitBrainPromotion,
+		RequiredPosition:          emergencyReparentShardOptions.RequiredPosition,
 		ExpectedPrimary:           expectedPrimaryAlias,
 		IgnoreReplicas:            ignoreReplicaAliases,
 		WaitReplicasTimeout:       protoutil.DurationToProto(emergencyReparentShardOptions.WaitReplicasTimeout),
@@ -306,10 +322,12 @@ func commandTabletExternallyReparented(cmd *cobra.Command, args []string) error 
 func init() {
 	EmergencyReparentShard.Flags().DurationVar(&emergencyReparentShardOptions.WaitReplicasTimeout, "wait-replicas-timeout", topo.RemoteOperationTimeout, "Time to wait for replicas to catch up in reparenting.")
 	EmergencyReparentShard.Flags().StringVar(&emergencyReparentShardOptions.NewPrimaryAliasStr, "new-primary", "", "Alias of a tablet that should be the new primary. If not specified, the vtctld will select the best candidate to promote.")
+	EmergencyReparentShard.Flags().BoolVar(&emergencyReparentShardOptions.AllowSplitBrainPromotion, "allow-split-brain-promotion", false, "Requires --new-primary; allows promoting it when divergent GTID histories (split brain) are detected. This is a lossy recovery: transactions that exist only on the other leading candidates are discarded.")
 	EmergencyReparentShard.Flags().StringVar(&emergencyReparentShardOptions.ExpectedPrimaryAliasStr, "expected-primary", "", "Alias of a tablet that must be the current primary in order for the reparent to be processed.")
 	EmergencyReparentShard.Flags().BoolVar(&emergencyReparentShardOptions.PreventCrossCellPromotion, "prevent-cross-cell-promotion", false, "Only promotes a new primary from the same cell as the previous primary.")
 	EmergencyReparentShard.Flags().BoolVar(&emergencyReparentShardOptions.WaitForAllTablets, "wait-for-all-tablets", false, "Should ERS wait for all the tablets to respond. Useful when all the tablets are reachable.")
 	EmergencyReparentShard.Flags().StringSliceVarP(&emergencyReparentShardOptions.IgnoreReplicaAliasStrList, "ignore-replicas", "i", nil, "Comma-separated, repeated list of replica tablet aliases to ignore during the emergency reparent.")
+	EmergencyReparentShard.Flags().StringVar(&emergencyReparentShardOptions.RequiredPosition, "required-position", "", "Minimum MySQL GTID set, for example <uuid>:1-100, that the new primary must have. Fails if no candidate has received it, either applied or still in the relay log. MySQL GTID shards only. On any other shard, ERS demotes a reachable primary and then fails. An older vtctld ignores this flag.")
 	Root.AddCommand(EmergencyReparentShard)
 
 	InitShardPrimary.Flags().DurationVar(&initShardPrimaryOptions.WaitReplicasTimeout, "wait-replicas-timeout", 30*time.Second, "Time to wait for replicas to catch up in reparenting.")

@@ -129,7 +129,7 @@ func getPlanType(p Primitive) PlanType {
 	switch prim := p.(type) {
 	case *SessionPrimitive, *SingleRow, *UpdateTarget, *VindexFunc, *PrepareStmt, *DeallocateStmt:
 		return PlanLocal
-	case *Lock, *ReplaceVariables, *RevertMigration, *Rows:
+	case *Lock, *RevertMigration, *Rows:
 		return PlanPassthrough
 	case *Send:
 		return getPlanTypeFromTarget(prim)
@@ -179,6 +179,8 @@ func getPlanType(p Primitive) PlanType {
 	case *VExplain:
 		return getPlanType(prim.Input)
 	case *RenameFields:
+		return getPlanType(prim.Input)
+	case *ReplaceVariables:
 		return getPlanType(prim.Input)
 	default:
 		return PlanComplex

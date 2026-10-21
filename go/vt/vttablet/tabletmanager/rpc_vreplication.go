@@ -689,7 +689,7 @@ func getOptionSetString(config map[string]string) string {
 		clause += ")"
 	}
 	if len(keys) > 0 {
-		clause = fmt.Sprintf("json_set(%s, '$.config', json_object(), ", clause)
+		clause = fmt.Sprintf("json_set(json_insert(%s, '$.config', json_object()), ", clause)
 		var clauseSb688 strings.Builder
 		for i, k := range keys {
 			if i > 0 {
@@ -883,7 +883,7 @@ func (tm *TabletManager) createSequenceTable(ctx context.Context, tableName stri
 	return err
 }
 
-// ValidateVReplicationPermissionsOld validates that the --db_filtered_user has
+// ValidateVReplicationPermissionsOld validates that the --db-filtered-user has
 // the minimum permissions required on the sidecardb vreplication table
 // needed in order to manage vreplication metadata.
 // Switching to use a functional test approach in ValidateVReplicationPermissions below
@@ -931,7 +931,7 @@ func (tm *TabletManager) ValidateVReplicationPermissionsOld(ctx context.Context,
 	}, nil
 }
 
-// ValidateVReplicationPermissions validates that the --db_filtered_user has
+// ValidateVReplicationPermissions validates that the --db-filtered-user has
 // the minimum permissions required on the sidecardb vreplication table
 // using a functional testing approach that doesn't require access to mysql.user table.
 func (tm *TabletManager) ValidateVReplicationPermissions(ctx context.Context, req *tabletmanagerdatapb.ValidateVReplicationPermissionsRequest) (*tabletmanagerdatapb.ValidateVReplicationPermissionsResponse, error) {

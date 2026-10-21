@@ -18,6 +18,7 @@ package scheduler
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"math/rand/v2"
@@ -31,6 +32,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/capabilities"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
@@ -82,6 +84,14 @@ var (
 	normalWaitTime            = 20 * time.Second
 	extendedWaitTime          = 60 * time.Second
 	ensureStateNotChangedTime = 5 * time.Second
+	// vreplicationRetryWindow is the tablet-wide
+	// --vreplication-max-time-to-retry-on-error. A recoverable stream error
+	// persisting longer than this parks a stream that does not carry Online
+	// DDL's retry-forever override.
+	vreplicationRetryWindow = 10 * time.Second
+	// vreplicationRetryDelay is the default --vreplication-retry-delay: how
+	// long a stream waits between retries of a recoverable error.
+	vreplicationRetryDelay = 5 * time.Second
 
 	hostname              = "localhost"
 	keyspaceName          = "ks"
@@ -203,6 +213,124 @@ func waitForReadyToComplete(t *testing.T, uuid string, expected bool) {
 	}
 }
 
+// assertRetryForeverOverride asserts that the migration's stream carries the
+// retry-forever config override and returns its parsed config map. The stored
+// JSON may be reformatted downstream, so it is parsed rather than matched
+// literally.
+func assertRetryForeverOverride(t *testing.T, uuid string) map[string]string {
+	query, err := sqlparser.ParseAndBind("select options from _vt.vreplication where workflow=%a",
+		sqltypes.StringBindVariable(uuid),
+	)
+	require.NoError(t, err)
+	rs, err := primaryTablet.VttabletProcess.QueryTabletWithContext(t.Context(), query, "", true)
+	require.NoError(t, err)
+	row := rs.Named().Row()
+	require.NotNil(t, row)
+	var options struct {
+		Config map[string]string `json:"config"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(row.AsString("options", "")), &options))
+	assert.Equal(t, "0s", options.Config["vreplication-max-time-to-retry-on-error"])
+	return options.Config
+}
+
+// queryVReplicationStream returns the state and message of the migration's
+// vreplication stream. It asserts nothing, so it is safe to call from a
+// require.Never or require.Eventually condition: testify runs the condition
+// in a goroutine that can outlive the test, and a require in there can fail
+// the test after it has completed. Pass a context captured on the test
+// goroutine (t.Context() itself must not be called from the condition) so
+// that a probe still in flight when the test ends is cancelled with it.
+func queryVReplicationStream(ctx context.Context, uuid string) (state, message string, err error) {
+	query, err := sqlparser.ParseAndBind("select state, message from _vt.vreplication where workflow=%a",
+		sqltypes.StringBindVariable(uuid),
+	)
+	if err != nil {
+		return "", "", err
+	}
+	rs, err := primaryTablet.VttabletProcess.QueryTabletWithContext(ctx, query, "", true)
+	if err != nil {
+		return "", "", err
+	}
+	row := rs.Named().Row()
+	if row == nil {
+		return "", "", fmt.Errorf("no vreplication stream found for workflow %s", uuid)
+	}
+	return row.AsString("state", ""), row.AsString("message", ""), nil
+}
+
+// queryMigrationStatus returns the migration's status as vtgate reports it
+// for this single-shard keyspace. Like queryVReplicationStream, it asserts
+// nothing, so it is safe to call from a require.Never or require.Eventually
+// condition; pass a context captured on the test goroutine (t.Context()
+// itself must not be called from the condition) so that a probe still in
+// flight when the test ends is cancelled with it rather than running on.
+func queryMigrationStatus(ctx context.Context, uuid string) (schema.OnlineDDLStatus, error) {
+	rs, err := onlineddl.ReadMigrations(ctx, &vtParams, uuid)
+	if err != nil {
+		return "", err
+	}
+	row := rs.Named().Row()
+	if row == nil {
+		return "", fmt.Errorf("migration %s not found", uuid)
+	}
+	return schema.OnlineDDLStatus(row.AsString("migration_status", "")), nil
+}
+
+// waitForVReplicationMessage waits for the migration's vreplication stream to
+// report a message containing the given substring.
+func waitForVReplicationMessage(t *testing.T, uuid string, messageSubstring string) {
+	// The condition runs in a goroutine: it must not assert on t (a
+	// transient query error would fail the test outright instead of being
+	// retried, and a late probe could touch t after the test ended), so it
+	// collects, and only the last attempt's failures are reported.
+	ctx := t.Context()
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		_, message, err := queryVReplicationStream(ctx, uuid)
+		require.NoError(c, err)
+		assert.Contains(c, message, messageSubstring)
+	}, extendedWaitTime, time.Second, "waiting for the stream message to contain %q", messageSubstring)
+}
+
+// parkVReplStream simulates the controller parking a migration's stream on a
+// terminal error: the Error state and message on the live _vt.vreplication
+// row, plus the matching _vt.vreplication_log record.
+func parkVReplStream(t *testing.T, uuid string, message string) {
+	// Stop the workflow first, as a real park leaves no controller running;
+	// otherwise the live vplayer's position updates clear the message.
+	output, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("Workflow", "--keyspace", keyspaceName, "stop", "--workflow", uuid)
+	require.NoError(t, err, output)
+	status := onlineddl.WaitForVReplicationStatus(t, &vtParams, primaryTablet, uuid, extendedWaitTime, "Stopped")
+	require.Equal(t, "Stopped", status)
+
+	query, err := sqlparser.ParseAndBind("select id from _vt.vreplication where workflow=%a",
+		sqltypes.StringBindVariable(uuid),
+	)
+	require.NoError(t, err)
+	rs, err := primaryTablet.VttabletProcess.QueryTabletWithContext(t.Context(), query, "", true)
+	require.NoError(t, err)
+	row := rs.Named().Row()
+	require.NotNil(t, row)
+	vreplID, err := row.ToInt64("id")
+	require.NoError(t, err)
+
+	query, err = sqlparser.ParseAndBind("update _vt.vreplication set state='Error', message=%a where id=%a",
+		sqltypes.StringBindVariable(message),
+		sqltypes.Int64BindVariable(vreplID),
+	)
+	require.NoError(t, err)
+	_, err = primaryTablet.VttabletProcess.QueryTabletWithContext(t.Context(), query, "", true)
+	require.NoError(t, err)
+
+	query, err = sqlparser.ParseAndBind("insert into _vt.vreplication_log (vrepl_id, type, state, message) values (%a, 'State Changed', 'Error', %a)",
+		sqltypes.Int64BindVariable(vreplID),
+		sqltypes.StringBindVariable(message),
+	)
+	require.NoError(t, err)
+	_, err = primaryTablet.VttabletProcess.QueryTabletWithContext(t.Context(), query, "", true)
+	require.NoError(t, err)
+}
+
 func waitForMessage(t *testing.T, uuid string, messageSubstring string) {
 	ctx, cancel := context.WithTimeout(t.Context(), normalWaitTime)
 	defer cancel()
@@ -262,6 +390,10 @@ func TestMain(m *testing.M) {
 			"--heartbeat-interval", "250ms",
 			"--heartbeat-on-demand-duration", "5s",
 			"--migration-check-interval", "2s",
+			// A finite tablet-wide retry window that Online DDL streams must
+			// ignore; see "Recoverable vreplication error keeps the migration
+			// running".
+			"--vreplication-max-time-to-retry-on-error", vreplicationRetryWindow.String(),
 		}
 		clusterInstance.VtGateExtraArgs = []string{}
 
@@ -618,6 +750,248 @@ func testScheduler(t *testing.T) {
 
 				assert.False(t, row["shadow_analyzed_timestamp"].IsNull())
 			}
+		})
+	})
+
+	t.Run("a bounded tablet query is interrupted while executing", func(t *testing.T) {
+		// The cleanup and the probes above rely on their context bounding
+		// the query, not only the connection: a query that stalls after
+		// connecting must still return when the context is done. The
+		// one-second context is the property under test, not a wait for a
+		// condition; the margin between it and the assertion is what needs
+		// room for a starved runner. A query that ran to completion cannot
+		// satisfy the assertion, and the connection is closed at the
+		// deadline, so the server-side sleep holds nothing the test needs.
+		const (
+			sleepQuery = "select sleep(120)"
+			deadline   = time.Second
+			margin     = time.Minute
+		)
+		ctx, cancel := context.WithTimeout(t.Context(), deadline)
+		defer cancel()
+		started := time.Now()
+		_, err := primaryTablet.VttabletProcess.QueryTabletWithContext(ctx, sleepQuery, "", false)
+		require.Error(t, err, "the query must not run to completion past the context's deadline")
+		assert.Less(t, time.Since(started), margin, "the query must return once the context is done, not when the sleep ends")
+
+		// The same holds for the vtgate path the migration status probe uses,
+		// under its own fresh context: the one above has already expired.
+		vtgateCtx, vtgateCancel := context.WithTimeout(t.Context(), deadline)
+		defer vtgateCancel()
+		started = time.Now()
+		_, err = onlineddl.VtgateExecQuery(vtgateCtx, &vtParams, sleepQuery)
+		require.Error(t, err, "the vtgate query must not run to completion past the context's deadline")
+		assert.Less(t, time.Since(started), margin, "the vtgate query must return once the context is done, not when the sleep ends")
+	})
+
+	// The message literals below deliberately hardcode the marker constants
+	// (TerminalErrorIndicator, UnrecoverableErrorIndicator and the standalone
+	// RetriesExhaustedIndicator): they are a message-string contract between
+	// the vreplication controller and the Online DDL executor.
+	t.Run("Repair vreplication stream parked on retries-exhausted error", func(t *testing.T) {
+		t1uuid = testOnlineDDLStatement(t, createParams(trivialAlterT1Statement, ddlStrategy+" --postpone-completion", "vtgate", "", "", true)) // skip wait
+
+		t.Run("wait for t1 running", func(t *testing.T) {
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, extendedWaitTime, schema.OnlineDDLStatusRunning)
+			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+			// The migration turns running before its stream is created
+			// (ExecuteWithVReplication), so wait for the stream as well: a
+			// park issued before the stream's own start would be overwritten
+			// by that start.
+			streamState := onlineddl.WaitForVReplicationStatus(t, &vtParams, primaryTablet, t1uuid, extendedWaitTime, "Copying", "Running")
+			require.Contains(t, []string{"Copying", "Running"}, streamState, "the migration's vreplication stream must be running before it is parked")
+		})
+		t.Run("verify the retry-forever config override", func(t *testing.T) {
+			assertRetryForeverOverride(t, t1uuid)
+		})
+		t.Run("park the stream with a retries-exhausted error", func(t *testing.T) {
+			// Simulate a pre-override stream carrying an unrelated operator
+			// config override, then park it exactly as the controller
+			// would. The repair must merge its override in without removing
+			// the operator's.
+			query, err := sqlparser.ParseAndBind(`update _vt.vreplication set options='{"config": {"vreplication-retry-delay": "5s"}}' where workflow=%a`,
+				sqltypes.StringBindVariable(t1uuid),
+			)
+			require.NoError(t, err)
+			_, err = primaryTablet.VttabletProcess.QueryTabletWithContext(t.Context(), query, "", true)
+			require.NoError(t, err)
+			parkVReplStream(t, t1uuid, "retries exhausted: the same error was encountered continuously for longer than --vreplication-max-time-to-retry-on-error (1m0s): io.EOF")
+			// Pad the park record to the log message column's limit, as
+			// insertLog can leave it: retiring it must not push it past.
+			query, err = sqlparser.ParseAndBind("update _vt.vreplication_log set message=concat(message, repeat('x', 65535 - length(message))) where vrepl_id=(select id from _vt.vreplication where workflow=%a) and state='Error'",
+				sqltypes.StringBindVariable(t1uuid),
+			)
+			require.NoError(t, err)
+			_, err = primaryTablet.VttabletProcess.QueryTabletWithContext(t.Context(), query, "", true)
+			require.NoError(t, err)
+		})
+		t.Run("expect repair", func(t *testing.T) {
+			status := onlineddl.WaitForVReplicationStatus(t, &vtParams, primaryTablet, t1uuid, extendedWaitTime, "Running")
+			require.Equal(t, "Running", status)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusRunning)
+			config := assertRetryForeverOverride(t, t1uuid)
+			assert.Equal(t, "5s", config["vreplication-retry-delay"], "the operator's override must survive the repair")
+			// The park's history row has become the repair's record: an
+			// Error row left behind would have a previous release's executor
+			// fail the migration after a downgrade.
+			// The LIKE pattern is bound rather than inlined: its wildcards
+			// would be read as verbs by ParseAndBind's format.
+			query, err := sqlparser.ParseAndBind("select state, message from _vt.vreplication_log where vrepl_id=(select id from _vt.vreplication where workflow=%a) and message like %a order by id",
+				sqltypes.StringBindVariable(t1uuid),
+				sqltypes.StringBindVariable("%retries exhausted:%"),
+			)
+			require.NoError(t, err)
+			ctx := t.Context()
+			require.EventuallyWithT(t, func(c *assert.CollectT) {
+				rs, err := primaryTablet.VttabletProcess.QueryTabletWithContext(ctx, query, "", true)
+				require.NoError(c, err)
+				require.Len(c, rs.Rows, 1)
+				row := rs.Named().Row()
+				assert.Equal(c, "Running", row.AsString("state", ""))
+				assert.Contains(c, row.AsString("message", ""), "Online DDL: the stream resumed after: retries exhausted:")
+			}, extendedWaitTime, time.Second, "the retries-exhausted park record must be converted into the repair record")
+		})
+		t.Run("complete", func(t *testing.T) {
+			onlineddl.CheckCompleteMigration(t, &vtParams, shards, t1uuid, true)
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, extendedWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
+		})
+	})
+
+	t.Run("Fail migration on unrecoverable vreplication error", func(t *testing.T) {
+		t1uuid = testOnlineDDLStatement(t, createParams(trivialAlterT1Statement, ddlStrategy+" --postpone-completion", "vtgate", "", "", true)) // skip wait
+
+		t.Run("wait for t1 running", func(t *testing.T) {
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, extendedWaitTime, schema.OnlineDDLStatusRunning)
+			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+			// The migration turns running before its stream is created
+			// (ExecuteWithVReplication), so wait for the stream as well: a
+			// park issued before the stream's own start would be overwritten
+			// by that start.
+			streamState := onlineddl.WaitForVReplicationStatus(t, &vtParams, primaryTablet, t1uuid, extendedWaitTime, "Copying", "Running")
+			require.Contains(t, []string{"Copying", "Running"}, streamState, "the migration's vreplication stream must be running before it is parked")
+		})
+		t.Run("park the stream with an unrecoverable error", func(t *testing.T) {
+			parkVReplStream(t, t1uuid, "terminal error: unrecoverable: error applying event: Duplicate entry '1' for key 'PRIMARY' (errno 1062) (sqlstate 23000)")
+		})
+		t.Run("expect migration failure", func(t *testing.T) {
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, extendedWaitTime, schema.OnlineDDLStatusFailed)
+			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusFailed)
+			waitForMessage(t, t1uuid, "unrecoverable")
+		})
+	})
+
+	t.Run("Recoverable vreplication error keeps the migration running", func(t *testing.T) {
+		// The tablets run with a finite --vreplication-max-time-to-retry-on-error
+		// (vreplicationRetryWindow). Online DDL streams pin retry-forever, so a
+		// recoverable error outliving that window must keep the stream retrying
+		// rather than park it and fail the migration, and the migration must
+		// complete once the error clears.
+		t1uuid = testOnlineDDLStatement(t, createParams(trivialAlterT1Statement, ddlStrategy+" --postpone-completion", "vtgate", "", "", true)) // skip wait
+		const (
+			injectedError = "injected recoverable vreplication error"
+			triggerName   = "recoverable_error_trigger"
+			injectedRowID = 998877
+		)
+		var shadowTable string
+		t.Cleanup(func() {
+			// Never leave the trigger or the row behind for later scenarios.
+			// t.Context() is already cancelled when cleanup runs, so the
+			// queries need their own bounded context; a stall in here would
+			// otherwise hang the whole suite.
+			ctx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), extendedWaitTime)
+			defer cancel()
+			_, err := primaryTablet.VttabletProcess.QueryTabletWithContext(ctx, "drop trigger if exists "+triggerName, keyspaceName, true)
+			assert.NoError(t, err)
+			_, err = onlineddl.VtgateExecQuery(ctx, &vtParams, fmt.Sprintf("delete from t1_test where id=%d", injectedRowID))
+			assert.NoError(t, err)
+		})
+
+		t.Run("wait for t1 running", func(t *testing.T) {
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, extendedWaitTime, schema.OnlineDDLStatusRunning)
+			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+		})
+		t.Run("wait for ready_to_complete", func(t *testing.T) {
+			waitForReadyToComplete(t, t1uuid, true)
+		})
+		t.Run("inject a recoverable apply error", func(t *testing.T) {
+			rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, t1uuid)
+			require.NoError(t, err)
+			row := rs.Named().Row()
+			require.NotNil(t, row)
+			artifacts := textutil.SplitDelimitedList(row.AsString("artifacts", ""))
+			require.Len(t, artifacts, 1, "a running migration's sole artifact is its shadow table")
+			shadowTable = artifacts[0]
+			// A trigger rejecting inserts into the shadow table makes every
+			// apply of the row inserted below fail with ER_SIGNAL_EXCEPTION,
+			// which vreplication classifies as recoverable and retries.
+			_, err = primaryTablet.VttabletProcess.QueryTabletWithContext(t.Context(), fmt.Sprintf(
+				"create trigger %s before insert on `%s` for each row signal sqlstate '45000' set message_text = '%s'",
+				triggerName, shadowTable, injectedError), keyspaceName, true)
+			require.NoError(t, err)
+			_, err = onlineddl.VtgateExecQuery(t.Context(), &vtParams, fmt.Sprintf("insert into t1_test (id, hint_col) values (%d, 'recoverable')", injectedRowID))
+			require.NoError(t, err)
+		})
+		t.Run("stream keeps retrying past the tablet-wide retry window", func(t *testing.T) {
+			// Wait for the stream to hit the injected error, then watch it for
+			// longer than the retry window plus two retries: a stream without
+			// the override parks in that time. Throughout, it must stay out of
+			// the Error state and the migration must stay running.
+			waitForVReplicationMessage(t, t1uuid, injectedError)
+			ctx := t.Context()
+			require.Never(t, func() bool {
+				// Never returns as soon as its window elapses, leaving an
+				// in-flight condition running after this subtest has
+				// completed, so the condition must not touch t: no
+				// assertions, and only the context captured above.
+				state, message, err := queryVReplicationStream(ctx, t1uuid)
+				if ctx.Err() != nil {
+					// The subtest has ended and Never has already returned.
+					return false
+				}
+				if err != nil || state == "Error" {
+					fmt.Printf("# stream parked instead of retrying: state=%q message=%q err=%v\n", state, message, err)
+					return true
+				}
+				status, err := queryMigrationStatus(ctx, t1uuid)
+				if ctx.Err() != nil {
+					return false
+				}
+				if err != nil || status != schema.OnlineDDLStatusRunning {
+					fmt.Printf("# migration no longer running: status=%q err=%v\n", status, err)
+					return true
+				}
+				return false
+			}, vreplicationRetryWindow+2*vreplicationRetryDelay, time.Second, "the stream must keep retrying and the migration must stay running")
+			// The error is still being retried rather than the stream having
+			// silently stalled.
+			waitForVReplicationMessage(t, t1uuid, injectedError)
+		})
+		t.Run("clear the error and expect the pending event to apply", func(t *testing.T) {
+			_, err := primaryTablet.VttabletProcess.QueryTabletWithContext(t.Context(), "drop trigger "+triggerName, keyspaceName, true)
+			require.NoError(t, err)
+			query := fmt.Sprintf("select count(*) as c from `%s` where id=%d", shadowTable, injectedRowID)
+			ctx := t.Context()
+			require.EventuallyWithT(t, func(c *assert.CollectT) {
+				rs, err := primaryTablet.VttabletProcess.QueryTabletWithContext(ctx, query, keyspaceName, true)
+				require.NoError(c, err)
+				row := rs.Named().Row()
+				require.NotNil(c, row)
+				assert.EqualValues(c, 1, row.AsInt64("c", 0))
+			}, extendedWaitTime, time.Second, "the row whose apply kept failing must land once the error clears")
+		})
+		t.Run("complete", func(t *testing.T) {
+			onlineddl.CheckCompleteMigration(t, &vtParams, shards, t1uuid, true)
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, extendedWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
+			rs, err := onlineddl.VtgateExecQuery(t.Context(), &vtParams, fmt.Sprintf("select hint_col from t1_test where id=%d", injectedRowID))
+			require.NoError(t, err)
+			row := rs.Named().Row()
+			require.NotNil(t, row)
+			assert.Equal(t, "recoverable", row.AsString("hint_col", ""))
 		})
 	})
 

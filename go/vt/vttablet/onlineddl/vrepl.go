@@ -21,16 +21,17 @@ package onlineddl
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
-	"strconv"
 	"strings"
 	"time"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/mysql/collations/colldata"
+	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/dbconnpool"
@@ -42,6 +43,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
@@ -61,6 +63,11 @@ type VReplStream struct {
 	message              string
 	rowsCopied           int64
 	bls                  *binlogdatapb.BinlogSource
+	// hasStaleParkRecord reports a retries-exhausted Error row still in
+	// _vt.vreplication_log for a stream that is no longer in Error: a park
+	// the stream has moved past (repaired, or otherwise resumed). The review
+	// retires it; see Executor.retireVReplParkRecord.
+	hasStaleParkRecord bool
 }
 
 // livenessTimeIndicator returns a time indicator for last known healthy state.
@@ -82,7 +89,23 @@ func (v *VReplStream) isRunning() bool {
 	return false
 }
 
-// hasError() returns true when the workflow has failed and will not retry
+// vreplMessageWrapperPrefix is prepended by readVReplStream to messages
+// derived from the _vt.vreplication_log history scan.
+const vreplMessageWrapperPrefix = "vreplication: "
+
+// isRetriesExhaustedMessage reports whether a vreplication error message is
+// classified retries-exhausted. The marker must start the message (after the
+// "vreplication: " wrapper) and be followed by ":", as generated, so that
+// marker text embedded in the underlying error (e.g. quoted user data) or a
+// message that merely extends the marker's words cannot match.
+func isRetriesExhaustedMessage(message string) bool {
+	message = strings.TrimPrefix(message, vreplMessageWrapperPrefix)
+	return strings.HasPrefix(message, vreplication.RetriesExhaustedIndicator+":")
+}
+
+// hasError returns the stream's error, if any, and whether it is terminal:
+// an Error-state stream will not retry on its own. What terminal means for
+// the migration is decided by reviewVReplStreamError.
 func (v *VReplStream) hasError() (isTerminal bool, vreplError error) {
 	switch {
 	case v.state == binlogdatapb.VReplicationWorkflowState_Error:
@@ -204,8 +227,8 @@ func (v *VRepl) executeAnalyzeTable(ctx context.Context, conn *dbconnpool.DBConn
 		defer conn.ExecuteFetch(sqlDisableFastAnalyzeTable, 1, false)
 	}
 
-	parsed := sqlparser.BuildParsedQuery(sqlAnalyzeTableLocal, tableName)
-	if _, err := conn.ExecuteFetch(parsed.Query, 1, false); err != nil {
+	analyzeQuery := buildIdentifierQuery(sqlAnalyzeTableLocal, tableName)
+	if _, err := conn.ExecuteFetch(analyzeQuery, 1, false); err != nil {
 		return err
 	}
 	return nil
@@ -213,8 +236,8 @@ func (v *VRepl) executeAnalyzeTable(ctx context.Context, conn *dbconnpool.DBConn
 
 // readTableStatus reads table status information
 func (v *VRepl) readTableStatus(ctx context.Context, conn *dbconnpool.DBConnection, tableName string) (tableRows int64, err error) {
-	parsed := sqlparser.BuildParsedQuery(sqlShowTableStatus, tableName)
-	rs, err := conn.ExecuteFetch(parsed.Query, -1, true)
+	statusQuery := buildTableStatusQuery(tableName)
+	rs, err := conn.ExecuteFetch(statusQuery, -1, true)
 	if err != nil {
 		return 0, err
 	}
@@ -382,11 +405,38 @@ func (v *VRepl) analyze(ctx context.Context, conn *dbconnpool.DBConnection) erro
 	return nil
 }
 
+// onlineDDLVReplicationOptions returns the options JSON every Online DDL
+// stream carries: a per-workflow override pinning
+// --vreplication-max-time-to-retry-on-error to 0 (retry forever), so a
+// recoverable error keeps the stream retrying rather than parking it and
+// failing the migration. The stale-migration policy remains the no-progress
+// bound; pure retry loops do not advance time_updated.
+func onlineDDLVReplicationOptions() (string, error) {
+	options, err := json.Marshal(&vtctldatapb.WorkflowOptions{
+		Config: map[string]string{retryForeverConfigKey: retryForeverConfigValue},
+	})
+	if err != nil {
+		return "", err
+	}
+	return string(options), nil
+}
+
+const (
+	// The per-workflow config override pinning retry-forever; the key is the
+	// vttablet flag name.
+	retryForeverConfigKey   = "vreplication-max-time-to-retry-on-error"
+	retryForeverConfigValue = "0s"
+)
+
 // generateInsertStatement generates the INSERT INTO _vt.replication statement that creates the vreplication workflow
 func (v *VRepl) generateInsertStatement() (string, error) {
+	options, err := onlineDDLVReplicationOptions()
+	if err != nil {
+		return "", err
+	}
 	ig := vreplication.NewInsertGenerator(binlogdatapb.VReplicationWorkflowState_Stopped, v.dbName)
 	ig.AddRow(v.workflow, v.bls, v.pos, "", "in_order:REPLICA,PRIMARY",
-		binlogdatapb.VReplicationWorkflowType_OnlineDDL, binlogdatapb.VReplicationWorkflowSubType_None, false, "")
+		binlogdatapb.VReplicationWorkflowType_OnlineDDL, binlogdatapb.VReplicationWorkflowSubType_None, false, options)
 
 	return ig.String(), nil
 }
@@ -414,12 +464,19 @@ func getVreplTable(s *VReplStream) (string, error) {
 	return vreplTable, nil
 }
 
-// escapeName will escape a db/table/column/... name by wrapping with backticks.
-// It is not fool proof. I'm just trying to do the right thing here, not solving
-// SQL injection issues, which should be irrelevant for this tool.
+// escapeName escapes a db/table/column/... name so that it is exactly one
+// identifier.
+//
+// These are column and table names from the tenant's own schema, and they are
+// written into the vreplication filter query. MySQL allows a back quote inside a
+// name, so wrapping alone is not enough: a name holding a back quote closes its
+// own quoting and the rest of it is read as SQL. sqlescape.EscapeID supplies the
+// back quotes and doubles any inside the name.
+//
+// This used to run the name through strconv.Unquote first. That is Go string
+// syntax, not SQL, and it only ever matched a name that was itself wrapped in
+// back quotes or double quotes -- which it then silently renamed. Nothing here
+// passes a pre-quoted name, so it is gone.
 func escapeName(name string) string {
-	if unquoted, err := strconv.Unquote(name); err == nil {
-		name = unquoted
-	}
-	return fmt.Sprintf("`%s`", name)
+	return sqlescape.EscapeID(name)
 }

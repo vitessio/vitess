@@ -88,7 +88,8 @@ var (
 	commitMode       = stats.NewTimings("CommitModeTimings", "Commit Mode Time", "mode")
 	commitUnresolved = stats.NewCounter("CommitUnresolved", "Atomic Commit failed to conclude after commit decision is made")
 
-	exceedMemoryRowsLogger = logutil.NewThrottledLogger("ExceedMemoryRows", 1*time.Minute)
+	exceedMemoryRowsLogger    = logutil.NewThrottledLogger("ExceedMemoryRows", 1*time.Minute)
+	doubleSlashCommentsLogger = logutil.NewThrottledLogger("DoubleSlashComments", 1*time.Minute)
 
 	errorTransform errorTransformer = nullErrorTransformer{}
 )
@@ -153,6 +154,10 @@ type (
 
 		vConfig   econtext.VCursorConfig
 		ddlConfig dynamicconfig.DDL
+
+		// tempTableRefresher fans session activity out to the session's idle
+		// temp-table reserved connections; see temp_table_refresh.go.
+		tempTableRefresher *tempTableActivityRefresher
 	}
 
 	Metrics struct {
@@ -207,6 +212,7 @@ func NewExecutor(
 		plans:                 plans,
 		warmingReadsSemaphore: newWarmingReadsSemaphore(warmingReadsConcurrency),
 		ddlConfig:             ddlConfig,
+		tempTableRefresher:    newTempTableActivityRefresher(resolver.scatterConn.gateway),
 	}
 	// setting the vcursor config.
 	e.initVConfig(warnOnShardedOnly, pv)
@@ -266,6 +272,12 @@ func (e *Executor) Execute(
 	defer span.Finish()
 
 	logStats := logstats.NewLogStats(ctx, method, sql, safeSession.GetSessionUUID(), bindVars, streamlog.GetQueryLogConfig())
+	// The command is real activity on this session: lease refreshes for the
+	// session's idle temp-table reserved connections for as long as it runs
+	// (a long query or stream on one shard must not let another shard's
+	// reservation idle out), with a settling refresh when it completes.
+	stopLease := e.tempTableRefresher.commandLease(ctx, safeSession)
+	defer stopLease()
 	stmtType, result, err := e.execute(ctx, mysqlCtx, safeSession, sql, bindVars, prepared, logStats)
 	logStats.Error = err
 	if result == nil {
@@ -329,6 +341,10 @@ func (e *Executor) StreamExecute(
 	defer span.Finish()
 
 	logStats := logstats.NewLogStats(ctx, method, sql, safeSession.GetSessionUUID(), bindVars, streamlog.GetQueryLogConfig())
+	// See Execute: the lease keeps the session's idle temp-table reserved
+	// connections refreshed for the whole life of the stream.
+	stopLease := e.tempTableRefresher.commandLease(ctx, safeSession)
+	defer stopLease()
 	srr := &streaminResultReceiver{callback: callback}
 	var err error
 
@@ -340,13 +356,32 @@ func (e *Executor) StreamExecute(
 			srr.callback = func(qr *sqltypes.Result) error {
 				resultMu.Lock()
 				defer resultMu.Unlock()
+				// Carry over the OK-packet data (affected rows, last insert id, info,
+				// session state changes) so statements that return an OK packet (e.g.
+				// CALL of a procedure that performs DML) report it to the client,
+				// matching the buffered Execute path.
+				result.RowsAffected += qr.RowsAffected
+				if qr.InsertIDUpdated() {
+					result.InsertID = qr.InsertID
+					result.InsertIDChanged = true
+				}
+				if qr.SessionStateChanges != "" {
+					result.SessionStateChanges = qr.SessionStateChanges
+				}
+				if qr.Info != "" {
+					result.Info = qr.Info
+				}
 				// If the row has field info, send it separately.
 				// TODO(sougou): this behavior is for handling tests because
 				// the framework currently sends all results as one packet.
 				byteCount := 0
 				if len(qr.Fields) > 0 {
 					result.Fields = qr.Fields
-					if err := callback(qr.Metadata()); err != nil {
+					// Send only the fields here: any OK-packet data on qr was
+					// accumulated into result above and goes to the client with
+					// the left-over result, so repeating it in this packet would
+					// deliver it twice to clients that sum across packets.
+					if err := callback(&sqltypes.Result{Fields: qr.Fields}); err != nil {
 						return err
 					}
 					seenResults.Store(true)
@@ -378,24 +413,46 @@ func (e *Executor) StreamExecute(
 			return srr.storeResultStats(plan.QueryType, qr)
 		})
 
-		updateLogStats := func() {
+		updateLogStats := func(err error) {
 			logStats.StmtType = plan.QueryType.String()
 			logStats.PlanType = plan.Type.String()
-			logStats.TablesUsed = plan.TablesUsed
-			executedRoot := vc.ExecutedPrimitive()
-			if executedRoot == nil {
-				executedRoot = plan.Instructions
-			}
-			logStats.RoutingIndexesUsed = engine.GetRoutingIndexes(executedRoot)
 			logStats.TabletType = vc.TabletType().String()
 			logStats.ExecuteTime = time.Since(execStart)
 			logStats.ActiveKeyspace = vc.GetKeyspace()
 
-			e.updateQueryStats(plan.QueryType.String(), plan.Type.String(), vc.TabletType().String(), int64(logStats.ShardQueries), plan.TablesUsed)
+			// On error, leave the tables, routing indexes and row counts unset so the
+			// per-table counters are not incremented, matching the buffered Execute path.
+			var tablesUsed []string
+			var errCount uint64
+			if err != nil {
+				logStats.Error = err
+				errCount = 1
+			} else {
+				srr.mu.Lock()
+				logStats.RowsAffected = srr.rowsAffected
+				logStats.RowsReturned = uint64(srr.rowsReturned)
+				srr.mu.Unlock()
+				logStats.TablesUsed = plan.TablesUsed
+				tablesUsed = plan.TablesUsed
+				executedRoot := vc.ExecutedPrimitive()
+				if executedRoot == nil {
+					executedRoot = plan.Instructions
+				}
+				logStats.RoutingIndexesUsed = engine.GetRoutingIndexes(executedRoot)
+			}
+
+			e.updateQueryStats(plan.QueryType.String(), plan.Type.String(), vc.TabletType().String(), int64(logStats.ShardQueries), tablesUsed)
+			plan.AddStats(1, time.Since(logStats.StartTime), logStats.ShardQueries, logStats.RowsAffected, logStats.RowsReturned, errCount)
 		}
 
 		// Check if there was partial DML execution. If so, rollback the effect of the partially executed query.
 		if err != nil {
+			// Record query stats for a failed row-returning query before any
+			// rollback handling, matching the buffered Execute path which always
+			// records them ahead of its own rollback handling.
+			if canReturnRows(plan.QueryType) {
+				updateLogStats(err)
+			}
 			if safeSession.InTransaction() && e.rollbackOnFatalTxError(ctx, safeSession, err) {
 				return err
 			}
@@ -406,19 +463,28 @@ func (e *Executor) StreamExecute(
 		}
 
 		if !canReturnRows(plan.QueryType) {
-			updateLogStats()
+			updateLogStats(nil)
 			return nil
 		}
 
-		// Send left-over rows if there is no error on execution.
-		if len(result.Rows) > 0 || !seenResults.Load() {
+		// Send left-over rows if there is no error on execution. The left-over
+		// result must also go out when it carries OK-packet data with no rows —
+		// e.g. an affected-row count that arrived after a result set was already
+		// sent — so that data is not dropped.
+		hasOKData := result.RowsAffected > 0 || result.InsertIDUpdated() ||
+			result.SessionStateChanges != "" || result.Info != ""
+		if len(result.Rows) > 0 || hasOKData || !seenResults.Load() {
 			if err := callback(result); err != nil {
+				// The query executed; only the delivery to the client failed.
+				// Record it as an error, like a mid-stream send failure that
+				// surfaces through the execution error above.
+				updateLogStats(err)
 				return err
 			}
 		}
 
 		// 5: Log and add statistics
-		updateLogStats()
+		updateLogStats(nil)
 
 		return err
 	}
@@ -632,6 +698,12 @@ func (e *Executor) addNeededBindVars(vcursor *econtext.VCursorImpl, bindVarNeeds
 		val := udvMap[udv]
 		if val == nil {
 			val = sqltypes.NullBindVariable
+		}
+		// The session arrives over the wire with the request, so a
+		// user-defined variable is as caller-controlled as a request bind
+		// variable and gets the same check before it reaches a tablet.
+		if err := sqltypes.ValidateBindVariable(val); err != nil {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "user-defined variable @%s: %v", udv, err)
 		}
 		bindVars[sqlparser.UserDefinedVariableName+udv] = val
 	}
@@ -1176,6 +1248,23 @@ func (e *Executor) ParseDestinationTarget(targetString string) (string, topodata
 	return econtext.ParseDestinationTarget(targetString, defaultTabletType, e.VSchema())
 }
 
+// countDoubleSlashComment counts a statement that uses a deprecated //
+// comment and logs it.
+func (e *Executor) countDoubleSlashComment() {
+	warnings.Add("DoubleSlashComment", 1)
+	doubleSlashCommentsLogger.Warningf("a statement uses a // comment, which is deprecated and will be removed in a future release; use --, # or /* */ instead")
+}
+
+// doubleSlashCommentWarning is the warning that a client gets for a statement
+// that uses a // comment. It has the shape of MySQL's warning for deprecated
+// syntax.
+func doubleSlashCommentWarning() *querypb.QueryWarning {
+	return &querypb.QueryWarning{
+		Code:    uint32(sqlerror.ERWarnDeprecatedSyntax),
+		Message: "'// comment' is deprecated and will be removed in a future release. Please use '-- ', '#' or '/* */' instead",
+	}
+}
+
 func (e *Executor) fetchOrCreatePlan(
 	ctx context.Context,
 	safeSession *econtext.SafeSession,
@@ -1192,7 +1281,18 @@ func (e *Executor) fetchOrCreatePlan(
 		return nil, nil, nil, vterrors.VT13001("vschema not initialized")
 	}
 
-	query, comments := sqlparser.SplitMarginComments(queryString)
+	// Plans can forward the statement text to MySQL as written, so MySQL must
+	// skip every comment that Vitess skips.
+	queryString, rewritten := e.env.Parser().RewriteDoubleSlashComments(queryString)
+	// Count each executed statement once: a binary protocol prepare is
+	// counted when the statement is executed, and a retry after buffering
+	// shares the statement's logStats. A SQL PREPARE is counted by
+	// PlanPrepareStmt, as the session keeps the rewritten text.
+	if rewritten && isExecutePath && !logStats.DoubleSlashComment {
+		logStats.DoubleSlashComment = true
+		e.countDoubleSlashComment()
+	}
+	query, comments := e.env.Parser().SplitMarginComments(queryString)
 	vcursor, _ = e.newVCursor(safeSession, comments, logStats)
 
 	var setVarComment string
@@ -1561,6 +1661,11 @@ func isValidPayloadSize(query string) bool {
 // Prepare executes a prepare statements.
 func (e *Executor) Prepare(ctx context.Context, method string, safeSession *econtext.SafeSession, sql string) (fld []*querypb.Field, paramsCount uint16, err error) {
 	logStats := logstats.NewLogStats(ctx, method, sql, safeSession.GetSessionUUID(), nil, streamlog.GetQueryLogConfig())
+	// Preparing a statement is session activity too — MySQL resets
+	// wait_timeout for COM_STMT_PREPARE — so it leases refreshes for the
+	// session's idle temp-table reserved connections like Execute does.
+	stopLease := e.tempTableRefresher.commandLease(ctx, safeSession)
+	defer stopLease()
 	fld, paramsCount, err = e.prepare(ctx, safeSession, sql, logStats)
 	logStats.Error = err
 
@@ -1789,6 +1894,11 @@ func (e *Executor) ExecuteMultiShard(ctx context.Context, primitive engine.Primi
 	return e.scatterConn.ExecuteMultiShard(ctx, primitive, rss, queries, session, autocommit, ignoreMaxMemoryRows, resultsObserver, fetchLastInsertID)
 }
 
+// ExecuteMultiShardPerShard implements the IExecutor interface
+func (e *Executor) ExecuteMultiShardPerShard(ctx context.Context, primitive engine.Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, session *econtext.SafeSession, autocommit bool, resultsObserver econtext.ResultsObserver, fetchLastInsertID bool) (results []*sqltypes.Result, errs []error) {
+	return e.scatterConn.ExecuteMultiShardPerShard(ctx, primitive, rss, queries, session, autocommit, resultsObserver, fetchLastInsertID)
+}
+
 // StreamExecuteMulti implements the IExecutor interface
 func (e *Executor) StreamExecuteMulti(ctx context.Context, primitive engine.Primitive, query string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, session *econtext.SafeSession, autocommit bool, callback func(reply *sqltypes.Result) error, resultsObserver econtext.ResultsObserver, fetchLastInsertID bool) []error {
 	return e.scatterConn.StreamExecuteMulti(ctx, primitive, query, rss, vars, session, autocommit, callback, resultsObserver, fetchLastInsertID)
@@ -1810,6 +1920,15 @@ func (e *Executor) ExecuteVStream(ctx context.Context, rss []*srvtopo.ResolvedSh
 }
 
 func (e *Executor) startVStream(ctx context.Context, rss []*srvtopo.ResolvedShard, filter *binlogdatapb.Filter, gtid string, callback func(evs []*binlogdatapb.VEvent) error) error {
+	vs, err := e.newSQLVStream(ctx, rss, filter, gtid, callback)
+	if err != nil {
+		return err
+	}
+	_ = vs.stream(ctx)
+	return nil
+}
+
+func (e *Executor) newSQLVStream(ctx context.Context, rss []*srvtopo.ResolvedShard, filter *binlogdatapb.Filter, gtid string, callback func(evs []*binlogdatapb.VEvent) error) (*vstream, error) {
 	shardGtids := make([]*binlogdatapb.ShardGtid, 0, len(rss))
 	for _, rs := range rss {
 		shardGtid := &binlogdatapb.ShardGtid{
@@ -1824,13 +1943,14 @@ func (e *Executor) startVStream(ctx context.Context, rss []*srvtopo.ResolvedShar
 	}
 	ts, err := e.serv.GetTopoServer()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	vsm := newVStreamManager(e.resolver.resolver, e.serv, e.cell)
-	vs := &vstream{
+	return &vstream{
 		vgtid:              vgtid,
 		tabletType:         topodatapb.TabletType_PRIMARY,
+		callerPrincipal:    vstreamCallerPrincipal(ctx),
 		filter:             filter,
 		send:               callback,
 		resolver:           e.resolver.resolver,
@@ -1841,9 +1961,7 @@ func (e *Executor) startVStream(ctx context.Context, rss []*srvtopo.ResolvedShar
 		eventCh:            make(chan []*binlogdatapb.VEvent),
 		ts:                 ts,
 		copyCompletedShard: make(map[string]struct{}),
-	}
-	_ = vs.stream(ctx)
-	return nil
+	}, nil
 }
 
 func (e *Executor) checkThatPlanIsValid(stmt sqlparser.Statement, plan *engine.Plan) error {
@@ -1917,6 +2035,13 @@ func (e *Executor) PlanPrepareStmt(ctx context.Context, safeSession *econtext.Sa
 	plan, _, _, err := e.fetchOrCreatePlan(ctx, safeSession, query, nil, false, true, lStats, false)
 	if err != nil {
 		return nil, err
+	}
+	// The session keeps the rewritten text of the statement, so this is the
+	// only time that a SQL PREPARE can be counted. Its statement clears the
+	// session warnings before it runs, so the warning stays.
+	if _, rewritten := e.env.Parser().RewriteDoubleSlashComments(query); rewritten {
+		e.countDoubleSlashComment()
+		safeSession.RecordWarning(doubleSlashCommentWarning())
 	}
 	return plan, nil
 }

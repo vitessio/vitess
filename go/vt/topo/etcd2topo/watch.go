@@ -219,7 +219,7 @@ func (s *Server) WatchRecursive(ctx context.Context, dirpath string) ([]*topo.Wa
 			case <-watchCtx.Done():
 				// This includes context cancellation errors.
 				notifications <- &topo.WatchDataRecursive{
-					WatchData: topo.WatchData{Err: convertError(watchCtx.Err(), nodePath)},
+					Err: convertError(watchCtx.Err(), nodePath),
 				}
 				return
 			case wresp, ok := <-watcher:
@@ -252,7 +252,7 @@ func (s *Server) WatchRecursive(ctx context.Context, dirpath string) ([]*topo.Wa
 				if wresp.Canceled {
 					// Final notification.
 					notifications <- &topo.WatchDataRecursive{
-						WatchData: topo.WatchData{Err: convertError(wresp.Err(), nodePath)},
+						Err: convertError(wresp.Err(), nodePath),
 					}
 					return
 				}
@@ -263,18 +263,14 @@ func (s *Server) WatchRecursive(ctx context.Context, dirpath string) ([]*topo.Wa
 					switch ev.Type {
 					case mvccpb.PUT:
 						notifications <- &topo.WatchDataRecursive{
-							Path: string(ev.Kv.Key),
-							WatchData: topo.WatchData{
-								Contents: ev.Kv.Value,
-								Version:  EtcdVersion(ev.Kv.ModRevision),
-							},
+							Path:     string(ev.Kv.Key),
+							Contents: ev.Kv.Value,
+							Version:  EtcdVersion(ev.Kv.ModRevision),
 						}
 					case mvccpb.DELETE:
 						notifications <- &topo.WatchDataRecursive{
 							Path: string(ev.Kv.Key),
-							WatchData: topo.WatchData{
-								Err: topo.NewError(topo.NoNode, nodePath),
-							},
+							Err:  topo.NewError(topo.NoNode, nodePath),
 						}
 					}
 				}

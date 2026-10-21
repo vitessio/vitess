@@ -26,8 +26,8 @@ type (
 )
 
 var (
-	_ IR   = (TupleExpr)(nil)
-	_ Expr = (TupleExpr)(nil)
+	_ IR   = TupleExpr(nil)
+	_ Expr = TupleExpr(nil)
 )
 
 func (tuple TupleExpr) IR() IR {

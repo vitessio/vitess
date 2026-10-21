@@ -419,7 +419,7 @@ func TestKeyspaceToShardName(t *testing.T) {
 func packKeyspaceID(keyspaceID uint64) []byte {
 	var keybytes [8]byte
 	binary.BigEndian.PutUint64(keybytes[:], keyspaceID)
-	return (keybytes[:])
+	return keybytes[:]
 }
 
 func getSrvKeyspace(t *testing.T, cell string, ksname string) *topodatapb.SrvKeyspace {

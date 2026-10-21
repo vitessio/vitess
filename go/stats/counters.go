@@ -130,10 +130,8 @@ type CountersWithSingleLabel struct {
 // used by Prometheus, but not by the expvar package.
 func NewCountersWithSingleLabel(name, help, label string, tags ...string) *CountersWithSingleLabel {
 	c := &CountersWithSingleLabel{
-		counters: counters{
-			counts: make(map[string]*atomic.Int64),
-			help:   help,
-		},
+		counts:        make(map[string]*atomic.Int64),
+		help:          help,
 		label:         label,
 		labelCombined: IsDimensionCombined(label),
 	}
@@ -190,15 +188,10 @@ type CountersWithMultiLabels struct {
 // instance, and publishes it if name is set.
 func NewCountersWithMultiLabels(name, help string, labels []string) *CountersWithMultiLabels {
 	t := &CountersWithMultiLabels{
-		counters: counters{
-			counts: make(map[string]*atomic.Int64),
-			help:   help,
-		},
+		counts:         make(map[string]*atomic.Int64),
+		help:           help,
 		labels:         labels,
-		combinedLabels: make([]bool, len(labels)),
-	}
-	for i, label := range labels {
-		t.combinedLabels[i] = IsDimensionCombined(label)
+		combinedLabels: CombinedLabels(labels),
 	}
 	if name != "" {
 		publish(name, t)
@@ -321,13 +314,9 @@ type GaugesWithSingleLabel struct {
 // publishes it if the name is set.
 func NewGaugesWithSingleLabel(name, help, label string, tags ...string) *GaugesWithSingleLabel {
 	g := &GaugesWithSingleLabel{
-		CountersWithSingleLabel: CountersWithSingleLabel{
-			counters: counters{
-				counts: make(map[string]*atomic.Int64),
-				help:   help,
-			},
-			label: label,
-		},
+		counts: make(map[string]*atomic.Int64),
+		help:   help,
+		label:  label,
 	}
 
 	for _, tag := range tags {
@@ -377,13 +366,9 @@ type GaugesWithMultiLabels struct {
 // and publishes it if name is set.
 func NewGaugesWithMultiLabels(name, help string, labels []string) *GaugesWithMultiLabels {
 	t := &GaugesWithMultiLabels{
-		CountersWithMultiLabels: CountersWithMultiLabels{
-			counters: counters{
-				counts: make(map[string]*atomic.Int64),
-				help:   help,
-			},
-			labels: labels,
-		},
+		counts: make(map[string]*atomic.Int64),
+		help:   help,
+		labels: labels,
 	}
 	if name != "" {
 		publish(name, t)
@@ -428,11 +413,9 @@ type GaugesFuncWithMultiLabels struct {
 // mapping to the provided function.
 func NewGaugesFuncWithMultiLabels(name, help string, labels []string, f func() map[string]int64) *GaugesFuncWithMultiLabels {
 	t := &GaugesFuncWithMultiLabels{
-		CountersFuncWithMultiLabels: CountersFuncWithMultiLabels{
-			f:      f,
-			help:   help,
-			labels: labels,
-		},
+		f:      f,
+		help:   help,
+		labels: labels,
 	}
 
 	if name != "" {

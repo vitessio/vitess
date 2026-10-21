@@ -26,7 +26,6 @@ package cache
 import (
 	"container/list"
 	"sync"
-	"time"
 )
 
 // LRUCache is a typical LRU cache implementation.  If the cache
@@ -39,7 +38,6 @@ type LRUCache[T any] struct {
 	list  *list.List
 	table map[string]*list.Element
 
-	size      int64
 	capacity  int64
 	evictions int64
 	hits      int64
@@ -53,9 +51,8 @@ type Item[T any] struct {
 }
 
 type entry[T any] struct {
-	key          string
-	value        T
-	timeAccessed time.Time
+	key   string
+	value T
 }
 
 // NewLRUCache creates a new empty cache with the given capacity.
@@ -109,7 +106,6 @@ func (lru *LRUCache[T]) delete(key string) bool {
 
 	lru.list.Remove(element)
 	delete(lru.table, key)
-	lru.size--
 	return true
 }
 
@@ -127,7 +123,7 @@ func (lru *LRUCache[T]) Len() int {
 
 // SetCapacity will set the capacity of the cache. If the capacity is
 // smaller, and the current cache size exceed that capacity, the cache
-// will be shrank.
+// will be shrunk.
 func (lru *LRUCache[T]) SetCapacity(capacity int64) {
 	lru.mu.Lock()
 	defer lru.mu.Unlock()
@@ -136,9 +132,11 @@ func (lru *LRUCache[T]) SetCapacity(capacity int64) {
 	lru.checkCapacity()
 }
 
-// UsedCapacity returns the size of the cache (in bytes)
+// UsedCapacity returns the size of the cache (in entries)
 func (lru *LRUCache[T]) UsedCapacity() int64 {
-	return lru.size
+	lru.mu.Lock()
+	defer lru.mu.Unlock()
+	return int64(lru.list.Len())
 }
 
 // MaxCapacity returns the cache maximum capacity.
@@ -191,25 +189,22 @@ func (lru *LRUCache[T]) updateInplace(element *list.Element, value T) {
 
 func (lru *LRUCache[T]) moveToFront(element *list.Element) {
 	lru.list.MoveToFront(element)
-	element.Value.(*entry[T]).timeAccessed = time.Now()
 }
 
 func (lru *LRUCache[T]) addNew(key string, value T) {
-	newEntry := &entry[T]{key, value, time.Now()}
+	newEntry := &entry[T]{key, value}
 	element := lru.list.PushFront(newEntry)
 	lru.table[key] = element
-	lru.size++
 	lru.checkCapacity()
 }
 
 func (lru *LRUCache[T]) checkCapacity() {
 	// Partially duplicated from Delete
-	for lru.size > lru.capacity {
+	for lru.list.Len() > 0 && int64(lru.list.Len()) > lru.capacity {
 		delElem := lru.list.Back()
 		delValue := delElem.Value.(*entry[T])
 		lru.list.Remove(delElem)
 		delete(lru.table, delValue.key)
-		lru.size--
 		lru.evictions++
 	}
 }

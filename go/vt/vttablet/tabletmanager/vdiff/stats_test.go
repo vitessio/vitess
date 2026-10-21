@@ -23,7 +23,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
@@ -43,7 +45,7 @@ func TestVDiffStats(t *testing.T) {
 			uuid:                  uuid.New().String(),
 			Errors:                stats.NewCountersWithSingleLabel("", "", "Error"),
 			TableDiffRowCounts:    stats.NewCountersWithSingleLabel("", "", "Rows"),
-			TableDiffPhaseTimings: stats.NewTimings("", "", "", "TablePhase"),
+			TableDiffPhaseTimings: stats.NewTimings("", "", ""),
 		},
 	}
 
@@ -73,4 +75,16 @@ func TestVDiffStats(t *testing.T) {
 
 	testStats.RowsDiffedCount.Add(512)
 	require.Equal(t, int64(512), testStats.RowsDiffedCount.Get())
+}
+
+func TestControllerPhaseTimingsNotPreseeded(t *testing.T) {
+	row := sqltypes.RowNamedValues{
+		"id":         sqltypes.NewInt64(1),
+		"vdiff_uuid": sqltypes.NewVarChar(uuid.New().String()),
+		"workflow":   sqltypes.NewVarChar("testwf"),
+	}
+	vde := &Engine{tmClientFactory: func() tmclient.TabletManagerClient { return nil }}
+	ct, err := newController(row, nil, nil, vde, nil)
+	require.NoError(t, err)
+	require.Empty(t, ct.TableDiffPhaseTimings.Histograms())
 }

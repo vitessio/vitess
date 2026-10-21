@@ -1123,6 +1123,19 @@ func (c *Conn) handleNextCommand(handler Handler) bool {
 
 	c.currentCommandIngressBytes = c.GetAndResetBytesRead()
 
+	// Any client command restarts mysqld's idle wait_timeout clock on a
+	// direct connection — including the ones this server answers locally
+	// (ping, set-option, prepared-statement bookkeeping), which never reach
+	// the handler's own methods. Notify a handler that observes connection
+	// activity here, in one place, before dispatch and whatever the
+	// command's outcome. ComQuit is excluded: the client is leaving, there
+	// is no idle wait to restart.
+	if data[0] != ComQuit {
+		if observer, ok := handler.(ConnActivityObserver); ok {
+			observer.ConnActivity(c)
+		}
+	}
+
 	switch data[0] {
 	case ComQuit:
 		c.recycleReadPacket()

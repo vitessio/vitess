@@ -738,7 +738,7 @@ func reverse(in *evalBytes) []byte {
 
 	out, end := make([]byte, len(b)), len(b)
 	for len(b) > 0 {
-		_, size := cs.DecodeRune(b)
+		_, size, _ := cs.DecodeRune(b)
 		copy(out[end-size:end], b[:size])
 		b = b[size:]
 		end -= size
@@ -831,7 +831,7 @@ func charOrd(b []byte, coll collations.ID) int64 {
 		return 0
 	}
 	cs := colldata.Lookup(coll).Charset()
-	_, l := cs.DecodeRune(b)
+	_, l, _ := cs.DecodeRune(b)
 	var r int64
 	for i := range l {
 		r = (r << 8) | int64(b[i])
@@ -1473,12 +1473,36 @@ func (call *builtinTrim) eval(env *ExpressionEnv) (eval, error) {
 
 	switch call.trim {
 	case sqlparser.LeadingTrimType:
-		return newEvalText(bytes.TrimPrefix(text.bytes, pat.bytes), text.col), nil
+		return newEvalText(trimLeftRepeated(text.bytes, pat.bytes), text.col), nil
 	case sqlparser.TrailingTrimType:
-		return newEvalText(bytes.TrimSuffix(text.bytes, pat.bytes), text.col), nil
+		return newEvalText(trimRightRepeated(text.bytes, pat.bytes), text.col), nil
 	default:
-		return newEvalText(bytes.TrimPrefix(bytes.TrimSuffix(text.bytes, pat.bytes), pat.bytes), text.col), nil
+		return newEvalText(trimRightRepeated(trimLeftRepeated(text.bytes, pat.bytes), pat.bytes), text.col), nil
 	}
+}
+
+// trimLeftRepeated removes every leading occurrence of pat from str, the way
+// MySQL's TRIM(LEADING pat FROM str) does: TRIM(LEADING 'x' FROM 'xxxa') is 'a'.
+func trimLeftRepeated(str, pat []byte) []byte {
+	if len(pat) == 0 {
+		return str
+	}
+	for bytes.HasPrefix(str, pat) {
+		str = str[len(pat):]
+	}
+	return str
+}
+
+// trimRightRepeated removes every trailing occurrence of pat from str, the way
+// MySQL's TRIM(TRAILING pat FROM str) does: TRIM(TRAILING '0' FROM '1.500') is '1.5'.
+func trimRightRepeated(str, pat []byte) []byte {
+	if len(pat) == 0 {
+		return str
+	}
+	for bytes.HasSuffix(str, pat) {
+		str = str[:len(str)-len(pat)]
+	}
+	return str
 }
 
 func (call *builtinTrim) compile(c *compiler) (ctype, error) {
@@ -1629,7 +1653,7 @@ func (call *builtinSubstring) compile(c *compiler) (ctype, error) {
 		if err != nil {
 			return ctype{}, err
 		}
-		skip2 = c.compileNullCheck2(str, l)
+		skip2 = c.compileNullCheckArg(l, 2)
 		_ = c.compileToInt64(l, 1)
 		c.asm.Fn_SUBSTRING3(tt, cs, col)
 	} else {
@@ -1698,7 +1722,7 @@ func (call *builtinLocate) compile(c *compiler) (ctype, error) {
 		return ctype{}, err
 	}
 
-	skip2 := c.compileNullCheck1(str)
+	skip2 := c.compileNullCheck1r(str)
 	var skip3 *jump
 
 	if !str.isTextual() {
@@ -1726,7 +1750,7 @@ func (call *builtinLocate) compile(c *compiler) (ctype, error) {
 		if err != nil {
 			return ctype{}, err
 		}
-		skip3 = c.compileNullCheck1(l)
+		skip3 = c.compileNullCheckArg(l, 2)
 		_ = c.compileToInt64(l, 1)
 	}
 

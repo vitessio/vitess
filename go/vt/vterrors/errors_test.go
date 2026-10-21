@@ -129,7 +129,7 @@ func TestRootCause(t *testing.T) {
 		want: nil,
 	}, {
 		// explicit nil error is nil
-		err:  (error)(nil),
+		err:  error(nil),
 		want: nil,
 	}, {
 		// typed nil is nil

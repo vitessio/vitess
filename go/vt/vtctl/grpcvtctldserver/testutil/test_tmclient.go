@@ -193,6 +193,8 @@ type TabletManagerClient struct {
 		EventJitter   time.Duration
 		ErrorAfter    time.Duration
 	}
+	// BackupRequests records the requests received by Backup, keyed by tablet alias.
+	BackupRequests map[string]*tabletmanagerdatapb.BackupRequest
 	// Backing Up - keyed by tablet alias.
 	TabletsBackupState map[string]bool
 	// keyed by tablet alias.
@@ -301,6 +303,8 @@ type TabletManagerClient struct {
 	PopulateReparentJournalResults map[string]error
 	// keyed by tablet alias
 	ReadReparentJournalInfoResults map[string]int32
+	// keyed by tablet alias; takes precedence over ReadReparentJournalInfoResults
+	ReadReparentJournalInfoErrors map[string]error
 	// keyed by tablet alias. once a WaitForPosition call for the tablet has
 	// succeeded, this value is returned instead of ReadReparentJournalInfoResults,
 	// mirroring how the reparent journal count only advances once relay logs are
@@ -437,6 +441,10 @@ func (stream *backupStreamAdapter) Send(msg *logutilpb.Event) error {
 	}
 }
 
+// backupRequestsLock guards BackupRequests. It is not a field because tests
+// copy TabletManagerClient by value.
+var backupRequestsLock sync.Mutex
+
 // Backup is part of the tmclient.TabletManagerClient interface.
 func (fake *TabletManagerClient) Backup(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.BackupRequest) (logutil.EventStream, error) {
 	if tablet.Type == topodatapb.TabletType_PRIMARY && !req.AllowPrimary {
@@ -444,6 +452,13 @@ func (fake *TabletManagerClient) Backup(ctx context.Context, tablet *topodatapb.
 	}
 
 	key := topoproto.TabletAliasString(tablet.Alias)
+	backupRequestsLock.Lock()
+	if fake.BackupRequests == nil {
+		fake.BackupRequests = make(map[string]*tabletmanagerdatapb.BackupRequest)
+	}
+	fake.BackupRequests[key] = req.CloneVT()
+	backupRequestsLock.Unlock()
+
 	testdata, ok := fake.Backups[key]
 	if !ok {
 		return nil, fmt.Errorf("no Backup fake result set for %s", key)
@@ -1004,6 +1019,9 @@ func (fake *TabletManagerClient) ReadReparentJournalInfo(ctx context.Context, ta
 		}
 	}
 
+	if err, ok := fake.ReadReparentJournalInfoErrors[key]; ok {
+		return 0, err
+	}
 	if fake.ReadReparentJournalInfoResults == nil {
 		return 1, nil
 	}

@@ -169,7 +169,7 @@ func compareAllStructFields(strct *types.Struct, spi generatorSPI) jen.Code {
 	var basicsPred []*jen.Statement
 	var others []*jen.Statement
 	for field := range strct.Fields() {
-		if field.Type().Underlying().String() == anyTypeName || strings.HasPrefix(field.Name(), "_") {
+		if types.TypeString(field.Type(), noQualifier) == anyTypeName || strings.HasPrefix(field.Name(), "_") {
 			// we can safely ignore this, we do not want ast to contain `any` types.
 			continue
 		}

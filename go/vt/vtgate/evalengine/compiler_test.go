@@ -202,6 +202,36 @@ func TestCompilerSingle(t *testing.T) {
 			result:     "INT64(2)",
 		},
 		{
+			// A NULL string operand must collapse both LOCATE operands before outer
+			// expressions consume the result.
+			expression: "null <=> locate('foo', column0)",
+			values:     []sqltypes.Value{sqltypes.NULL},
+			result:     "INT64(1)",
+		},
+		{
+			// A leftover operand would make IFNULL overflow the VM stack.
+			expression: "ifnull(locate('foo', column0), 7)",
+			values:     []sqltypes.Value{sqltypes.NULL},
+			result:     "INT64(7)",
+		},
+		{
+			// A NULL position must collapse all three LOCATE operands.
+			expression: "ifnull(locate('foo', 'foobar', column0), 7)",
+			values:     []sqltypes.Value{sqltypes.NULL},
+			result:     "INT64(7)",
+		},
+		{
+			// A NULL length must collapse all three SUBSTRING operands.
+			expression: "null <=> substring('abc', 1, column0)",
+			values:     []sqltypes.Value{sqltypes.NULL},
+			result:     "INT64(1)",
+		},
+		{
+			expression: "ifnull(substring('abc', 1, column0), 'x')",
+			values:     []sqltypes.Value{sqltypes.NULL},
+			result:     `VARCHAR("x")`,
+		},
+		{
 			expression: "1 + column0",
 			values:     []sqltypes.Value{sqltypes.NewFloat64(1)},
 			result:     "FLOAT64(2)",
@@ -841,6 +871,23 @@ func TestCompilerSingle(t *testing.T) {
 			expression: `GREATEST(JSON_OBJECT(), JSON_ARRAY())`,
 			result:     `VARCHAR("{}")`,
 		},
+		{
+			// TRIM with a remstr removes every repeated occurrence, not only one.
+			expression: `TRIM(BOTH 'x' FROM 'xxxbarxxx')`,
+			result:     `VARCHAR("bar")`,
+		},
+		{
+			expression: `TRIM('x' FROM 'xxxbarxxx')`,
+			result:     `VARCHAR("bar")`,
+		},
+		{
+			expression: `TRIM(LEADING 'ab' FROM 'ababcab')`,
+			result:     `VARCHAR("cab")`,
+		},
+		{
+			expression: `TRIM(TRAILING '0' FROM '1.500')`,
+			result:     `VARCHAR("1.5")`,
+		},
 	}
 
 	tz, _ := time.LoadLocation("Europe/Madrid")
@@ -913,7 +960,7 @@ func TestBindVarLiteral(t *testing.T) {
 			bindType: func(expr sqlparser.Expr) {
 				expr.(*sqlparser.CastExpr).Expr.(*sqlparser.Argument).Type = sqltypes.HexVal
 			},
-			bindVar: sqltypes.HexValBindVariable([]byte("0'FF'")),
+			bindVar: sqltypes.HexValBindVariable([]byte("x'FF'")),
 			result:  `VARCHAR("ÿ")`,
 		},
 	}
@@ -955,6 +1002,101 @@ func TestBindVarLiteral(t *testing.T) {
 				require.NoError(t, err)
 				assert.Equalf(t, result, res.String(), "bad evaluation from compiler: got %s, want %s (iteration %d)", res, result, i)
 			}
+		})
+	}
+}
+
+// TestBindVarLiteralMalformed pins that a malformed hex bind variable evaluated
+// by the engine — which decodes the payload itself, with no SQL encoder
+// involved — returns an error and never panics, in both the AST evaluator and
+// the compiled VM. ValidateBindVariables rejects such payloads at the vtgate
+// boundary; this closes the sink regardless of how it is reached.
+func TestBindVarLiteralMalformed(t *testing.T) {
+	testCases := []struct {
+		name       string
+		expression string
+		bindType   func(expr sqlparser.Expr)
+		bindVar    *querypb.BindVariable
+	}{
+		{
+			name:       "hexnum without prefix",
+			expression: `_latin1 :vtg1 /* HEXNUM */`,
+			bindType: func(expr sqlparser.Expr) {
+				expr.(*sqlparser.IntroducerExpr).Expr.(*sqlparser.Argument).Type = sqltypes.HexNum
+			},
+			bindVar: sqltypes.HexNumBindVariable([]byte("1+1")),
+		},
+		{
+			name:       "hexnum too short",
+			expression: `_latin1 :vtg1 /* HEXNUM */`,
+			bindType: func(expr sqlparser.Expr) {
+				expr.(*sqlparser.IntroducerExpr).Expr.(*sqlparser.Argument).Type = sqltypes.HexNum
+			},
+			bindVar: sqltypes.HexNumBindVariable([]byte("0")),
+		},
+		{
+			name:       "hexval too short",
+			expression: `cast(:vtg1 /* HEXVAL */ as char character set latin1)`,
+			bindType: func(expr sqlparser.Expr) {
+				expr.(*sqlparser.CastExpr).Expr.(*sqlparser.Argument).Type = sqltypes.HexVal
+			},
+			bindVar: sqltypes.HexValBindVariable([]byte("x")),
+		},
+		{
+			name:       "hexval without quotes",
+			expression: `cast(:vtg1 /* HEXVAL */ as char character set latin1)`,
+			bindType: func(expr sqlparser.Expr) {
+				expr.(*sqlparser.CastExpr).Expr.(*sqlparser.Argument).Type = sqltypes.HexVal
+			},
+			bindVar: sqltypes.HexValBindVariable([]byte("1+1")),
+		},
+		{
+			name:       "bitnum without prefix",
+			expression: `_latin1 :vtg1 /* BITNUM */`,
+			bindType: func(expr sqlparser.Expr) {
+				expr.(*sqlparser.IntroducerExpr).Expr.(*sqlparser.Argument).Type = sqltypes.BitNum
+			},
+			bindVar: sqltypes.BitNumBindVariable([]byte("1+1")),
+		},
+		{
+			name:       "bitnum too short",
+			expression: `_latin1 :vtg1 /* BITNUM */`,
+			bindType: func(expr sqlparser.Expr) {
+				expr.(*sqlparser.IntroducerExpr).Expr.(*sqlparser.Argument).Type = sqltypes.BitNum
+			},
+			bindVar: sqltypes.BitNumBindVariable([]byte("0")),
+		},
+	}
+
+	venv := vtenv.NewTestEnv()
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			expr, err := venv.Parser().ParseExpr(tc.expression)
+			require.NoError(t, err)
+			tc.bindType(expr)
+
+			fields := evalengine.FieldResolver(makeFields(nil))
+			cfg := &evalengine.Config{
+				ResolveColumn:     fields.Column,
+				ResolveType:       fields.Type,
+				Collation:         collations.CollationUtf8mb4ID,
+				Environment:       venv,
+				NoConstantFolding: true,
+			}
+			converted, err := evalengine.Translate(expr, cfg)
+			require.NoError(t, err)
+
+			env := evalengine.EmptyExpressionEnv(venv)
+			env.BindVars = map[string]*querypb.BindVariable{"vtg1": tc.bindVar}
+
+			require.NotPanics(t, func() {
+				_, err := env.EvaluateAST(converted)
+				assert.ErrorContains(t, err, "malformed")
+			})
+			require.NotPanics(t, func() {
+				_, err := env.EvaluateVM(converted.(*evalengine.CompiledExpr))
+				assert.ErrorContains(t, err, "malformed")
+			})
 		})
 	}
 }

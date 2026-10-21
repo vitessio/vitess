@@ -12,8 +12,8 @@ interface KeyspaceActionProps {
     errorText: string;
     loadingText: string;
     description?: string;
-    body?: JSX.Element;
-    successBody?: JSX.Element;
+    body?: React.JSX.Element;
+    successBody?: React.JSX.Element;
     closeDialog: () => void;
 }
 

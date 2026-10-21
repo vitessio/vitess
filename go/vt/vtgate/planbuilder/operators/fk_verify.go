@@ -42,7 +42,8 @@ var _ Operator = (*FkVerify)(nil)
 
 // Inputs implements the Operator interface
 func (fkv *FkVerify) Inputs() []Operator {
-	inputs := []Operator{fkv.Input}
+	inputs := make([]Operator, 0, 1+len(fkv.Verify))
+	inputs = append(inputs, fkv.Input)
 	for _, v := range fkv.Verify {
 		inputs = append(inputs, v.Op)
 	}

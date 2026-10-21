@@ -49,7 +49,33 @@ type StatefulConnection struct {
 	tainted        bool
 	enforceTimeout bool
 	timeout        time.Duration
-	expiryTime     time.Time
+	lastUsed       time.Time
+
+	// holdsTempTables and keepAliveManaged select the timer the connection
+	// killer enforces (see effectiveTimeout). Like tainted, they are written
+	// while holding the connection and read by the pool's filters under its
+	// lock, so they need no locking of their own.
+	//
+	// holdsTempTables is set when a temporary-table DDL executes on the
+	// connection. keepAliveManaged is set when a vtgate keepalive touch
+	// refreshes the connection. Both are sticky by design.
+	holdsTempTables  bool
+	keepAliveManaged bool
+
+	// sessionDiverged is set once the connection's MySQL session may carry state
+	// that nothing the pool knows about describes, such as the session variables
+	// or temporary tables of a stored procedure called on it, and stays set: the
+	// connection must not return to the pool (see MarkSessionDiverged).
+	sessionDiverged bool
+
+	// sessionWaitTimeout is this connection's own @@session.wait_timeout,
+	// captured when its first temporary-table DDL runs and re-captured after
+	// a SET wait_timeout on the connection. mysqld fixed the session value
+	// when the connection's thread started, so it — not the current global —
+	// is the deadline mysqld actually enforces on this connection. Zero until
+	// captured (fall back to the pool's global mirror). Written under the
+	// same exclusive-execution discipline as the marks above.
+	sessionWaitTimeout time.Duration
 }
 
 // Properties contains meta information about the connection
@@ -81,21 +107,129 @@ func (sc *StatefulConnection) ElapsedTimeout() bool {
 	if !sc.enforceTimeout {
 		return false
 	}
-	if sc.timeout <= 0 {
+	timeout := sc.effectiveTimeout()
+	if timeout <= 0 {
 		return false
 	}
-	return sc.expiryTime.Before(time.Now())
+	return sc.lastUsed.Add(timeout).Before(time.Now())
 }
 
-// Exec executes the statement in the dedicated connection
-func (sc *StatefulConnection) Exec(ctx context.Context, query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
+// effectiveTimeout returns the idle timeout the connection killer enforces:
+// the temp-table idle timeout when it governs this connection, otherwise the
+// connection's own timeout.
+func (sc *StatefulConnection) effectiveTimeout() time.Duration {
+	if sc.usesTempTableIdleTimeout() {
+		return sc.tempTableIdleTimeout()
+	}
+	return sc.timeout
+}
+
+// usesTempTableIdleTimeout reports whether the temp-table idle timeout —
+// rather than the connection's own timeout — governs when the killer
+// reclaims this connection: the feature is enabled, the connection holds
+// temporary tables, it is not covered by the vtgate keepalive contract
+// (beats vouch for managed connections and stop when the session dies, so
+// they keep the short timer), and it is not in a transaction (bounded
+// transaction lifetime is intended semantics).
+func (sc *StatefulConnection) usesTempTableIdleTimeout() bool {
+	return sc.holdsTempTables && !sc.keepAliveManaged && !sc.IsInTransaction() && sc.tempTableIdleTimeout() > 0
+}
+
+// tempTableIdleTimeout resolves --queryserver-config-temp-table-idle-timeout:
+// 0 disables the feature, a positive value is used as-is, and a negative
+// value (auto, the default) mirrors mysqld's wait_timeout. Auto prefers the
+// connection's own captured @@session.wait_timeout — mysqld fixed that value
+// when the connection's thread started, and it is the deadline mysqld
+// actually enforces, so a later SET GLOBAL neither reclaims this
+// connection's temp tables early (global lowered) nor leaves a socket mysqld
+// already closed at its older, shorter deadline occupying the stateful pool
+// until a longer new one (global raised). Until a temporary-table DDL's
+// probe captures the session value, the pool's global mirror — zero, and
+// therefore disabled, until a read of it succeeds — is the fallback.
+func (sc *StatefulConnection) tempTableIdleTimeout() time.Duration {
+	configured := sc.env.Config().TempTableIdleTimeout
+	switch {
+	case configured >= 0:
+		return configured
+	case sc.sessionWaitTimeout > 0:
+		return sc.sessionWaitTimeout
+	case sc.pool == nil:
+		return 0
+	default:
+		return sc.pool.MysqlWaitTimeout()
+	}
+}
+
+// captureSessionWaitTimeout records the connection's own
+// @@session.wait_timeout for auto mode; the first successful capture wins
+// until forgetSessionWaitTimeout. See tempTableIdleTimeout.
+func (sc *StatefulConnection) captureSessionWaitTimeout(waitTimeout time.Duration) {
+	if sc.sessionWaitTimeout == 0 && waitTimeout > 0 {
+		sc.sessionWaitTimeout = waitTimeout
+	}
+}
+
+// forgetSessionWaitTimeout drops the capture after a SET wait_timeout on the
+// connection changed the deadline mysqld enforces, so it is re-captured.
+func (sc *StatefulConnection) forgetSessionWaitTimeout() {
+	sc.sessionWaitTimeout = 0
+}
+
+// markHoldsTempTables records that a temporary-table DDL executed on the
+// connection. Sticky: DROP TEMPORARY TABLE does not unmark — net-zero
+// tracking would require statement bookkeeping the tablet doesn't have, and
+// a stale mark only costs a longer idle grace.
+func (sc *StatefulConnection) markHoldsTempTables() {
+	if sc.holdsTempTables {
+		return
+	}
+	sc.holdsTempTables = true
+	if !sc.keepAliveManaged && sc.pool != nil {
+		sc.pool.tempTableUnmanaged.Add(1)
+	}
+}
+
+// markKeepAliveManaged records that the vtgate keepalive contract covers the
+// connection: beats vouch for it, and when they stop it is reclaimed at the
+// normal timeout, so it never moves to the temp-table idle timeout. Sticky.
+func (sc *StatefulConnection) markKeepAliveManaged() {
+	if sc.keepAliveManaged {
+		return
+	}
+	sc.keepAliveManaged = true
+	if sc.holdsTempTables && sc.pool != nil {
+		sc.pool.tempTableUnmanaged.Add(-1)
+	}
+}
+
+// Exec executes the statement in the dedicated connection.
+//
+// keepConnOnTimeout declares whether a context deadline expiring mid-statement
+// may kill only the query (KILL QUERY) and keep the connection — preserving a
+// reserved connection's temp tables and settings — or must kill the whole
+// connection as a plain timeout always did. Only the caller knows the
+// statement: keeping the connection is safe solely for statements whose
+// interruption leaves no session state behind (reads; DML, which InnoDB rolls
+// back atomically). A killed SET applies its session-scope effects
+// left-to-right with no rollback, and a lock function can be granted just as
+// the kill lands — keeping such a connection would preserve state the session
+// never recorded, and the temp-table keepalive would then pin that divergence
+// alive indefinitely. Inside a transaction the whole connection is always
+// killed, since a partially-executed transaction cannot be continued.
+func (sc *StatefulConnection) Exec(ctx context.Context, query string, maxrows int, wantfields, keepConnOnTimeout bool) (*sqltypes.Result, error) {
 	if sc.IsClosed() {
 		if sc.IsInTransaction() {
 			return nil, vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction was aborted: %v", sc.txProps.Conclusion)
 		}
 		return nil, vterrors.New(vtrpcpb.Code_ABORTED, "connection was aborted")
 	}
-	r, err := sc.dbConn.Conn.ExecOnce(ctx, query, maxrows, wantfields)
+	var r *sqltypes.Result
+	var err error
+	if !sc.IsInTransaction() && keepConnOnTimeout {
+		r, err = sc.dbConn.Conn.ExecOnceKeepConnOnTimeout(ctx, query, maxrows, wantfields)
+	} else {
+		r, err = sc.dbConn.Conn.ExecOnce(ctx, query, maxrows, wantfields)
+	}
 	if err != nil {
 		if sqlerror.IsConnErr(err) {
 			select {
@@ -176,10 +310,29 @@ func (sc *StatefulConnection) ReleaseString(reason string) {
 	}
 	if sc.pool != nil {
 		sc.pool.unregister(sc.ConnID, reason)
+		if sc.holdsTempTables && !sc.keepAliveManaged {
+			sc.pool.tempTableUnmanaged.Add(-1)
+		}
+	}
+	if sc.sessionDiverged && !sc.tainted && !sc.dbConn.Conn.IsClosed() {
+		// The MySQL session carries state the pool cannot see or undo, and the
+		// pool would hand the connection to the next request as if it were
+		// fresh: discard it instead, and the pool opens a replacement and counts
+		// the loss. A tainted connection never returns to the pool, and one
+		// already closed, by a timeout or a failed stream, was lost for another
+		// reason and is not counted as discarded.
+		sc.dbConn.Discard()
 	}
 	sc.dbConn.Recycle()
 	sc.dbConn = nil
 	sc.logReservedConn(reason)
+}
+
+// MarkSessionDiverged records that the connection's MySQL session may carry
+// state the pool cannot see, so that the connection is discarded rather than
+// recycled when it is released.
+func (sc *StatefulConnection) MarkSessionDiverged() {
+	sc.sessionDiverged = true
 }
 
 // Renew the existing connection with new connection id.
@@ -296,7 +449,7 @@ func (sc *StatefulConnection) LogTransaction(reason tx.ReleaseReason) {
 
 func (sc *StatefulConnection) SetTimeout(timeout time.Duration) {
 	sc.timeout = timeout
-	sc.resetExpiryTime()
+	sc.resetLastUsed()
 }
 
 // logReservedConn logs reserved connection related stats.
@@ -331,8 +484,9 @@ func (sc *StatefulConnection) ApplySetting(ctx context.Context, setting *smartco
 	return true, sc.dbConn.Conn.ApplySetting(ctx, setting)
 }
 
-func (sc *StatefulConnection) resetExpiryTime() {
-	sc.expiryTime = time.Now().Add(sc.timeout)
+// resetLastUsed restarts the idle clock ElapsedTimeout measures from.
+func (sc *StatefulConnection) resetLastUsed() {
+	sc.lastUsed = time.Now()
 }
 
 // IsUnixSocket returns true if the connection is using a unix socket

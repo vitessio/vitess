@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -39,7 +40,10 @@ func TestReplTracker(t *testing.T) {
 
 	cfg := tabletenv.NewDefaultConfig()
 	cfg.ReplicationTracker.Mode = tabletenv.Heartbeat
-	cfg.ReplicationTracker.HeartbeatInterval = time.Second
+	// A long interval keeps the reader's async ticker from firing during the
+	// test: the initial read on open runs synchronously on this goroutine, so
+	// the direct lastKnownLag mutations below cannot race with a tick.
+	cfg.ReplicationTracker.HeartbeatInterval = 30 * time.Second
 	params := db.ConnParams()
 	cp := *params
 	cfg.DB = dbconfigs.NewTestDBConfigs(cp, cp, "")
@@ -50,6 +54,16 @@ func TestReplTracker(t *testing.T) {
 	}
 	target := &querypb.Target{}
 	mysqld := mysqlctl.NewFakeMysqlDaemon(nil)
+
+	// The heartbeat reader performs an initial read when it is opened.
+	db.AddQuery("SELECT ts FROM _vt.heartbeat WHERE keyspaceShard=':'", &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Name: "ts", Type: sqltypes.Int64},
+		},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt64(time.Now().UnixNano()),
+		}},
+	})
 
 	t.Run("always-on heartbeat", func(t *testing.T) {
 		rt := NewReplTracker(env, alias)

@@ -86,18 +86,18 @@ func NewCollation(name string, weights Weights, weightPatches []Patch, reorder [
 	switch {
 	case coll.param == nil && len(weightPatches) == 0 && coll.contract == nil:
 		coll.iterpool.New = func() any {
-			return &FastIterator900{iterator900: iterator900{Collation900: coll}}
+			return &FastIterator900{Collation900: coll}
 		}
 	case name == "utf8mb4_ja_0900_as_cs_ks" || name == "utf8mb4_ja_0900_as_cs":
 		coll.iterpool.New = func() any {
-			return &jaIterator900{iterator900: iterator900{Collation900: coll}}
+			return &jaIterator900{Collation900: coll}
 		}
 	case name == "utf8mb4_zh_0900_as_cs":
 		coll.implicits = unicodeImplicitChineseWeights
 		fallthrough
 	default:
 		coll.iterpool.New = func() any {
-			return &slowIterator900{iterator900: iterator900{Collation900: coll}}
+			return &slowIterator900{Collation900: coll}
 		}
 	}
 
@@ -141,6 +141,11 @@ func (c *CollationLegacy) WeightForSpace() uint16 {
 func (c *CollationLegacy) WeightsEqual(left, right rune) bool {
 	if left == right {
 		return true
+	}
+	// The weight table does not extend past maxCodepoint, and MySQL's
+	// wildcard matching treats such codepoints as equal only to themselves.
+	if left > c.maxCodepoint || right > c.maxCodepoint {
+		return false
 	}
 	return equalWeightsLegacy(c.table, left, right)
 }

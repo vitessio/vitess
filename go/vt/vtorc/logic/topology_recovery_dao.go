@@ -30,9 +30,19 @@ import (
 )
 
 // InsertRecoveryDetection inserts the recovery analysis that has been detected.
+// On a recurring (alias, analysis) pair, the existing row is reused (stable
+// detection_id) and detection_timestamp is refreshed to "now". This keeps the
+// row visible in audit queries and prevents ExpireRecoveryDetectionHistory from
+// deleting an actively-detected incident.
+//
+// RETURNING is used to capture detection_id atomically from the UPSERT itself.
+// A separate SELECT would introduce a window where a concurrent successful
+// recovery could delete the row between the INSERT and the SELECT, leaving
+// RecoveryId == 0 and producing a topology_recovery row with detection_id = 0.
 func InsertRecoveryDetection(analysisEntry *inst.DetectionAnalysis) error {
-	sqlResult, err := db.ExecVTOrc(`INSERT OR IGNORE
-		INTO recovery_detection (
+	aliasStr := topoproto.TabletAliasString(analysisEntry.AnalyzedInstanceAlias)
+	analysisStr := string(analysisEntry.Analysis)
+	err := db.Db.QueryVTOrc(`INSERT INTO recovery_detection (
 			alias,
 			analysis,
 			keyspace,
@@ -44,22 +54,26 @@ func InsertRecoveryDetection(analysisEntry *inst.DetectionAnalysis) error {
 			?,
 			?,
 			DATETIME('now')
-		)`,
-		topoproto.TabletAliasString(analysisEntry.AnalyzedInstanceAlias),
-		string(analysisEntry.Analysis),
-		analysisEntry.AnalyzedKeyspace,
-		analysisEntry.AnalyzedShard,
-	)
+		)
+		ON CONFLICT(alias, analysis) DO UPDATE
+		SET detection_timestamp = DATETIME('now'),
+		    keyspace = excluded.keyspace,
+		    shard = excluded.shard
+		RETURNING detection_id`,
+		sqlutils.Args(aliasStr, analysisStr, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard),
+		func(m sqlutils.RowMap) error {
+			analysisEntry.RecoveryId = m.GetInt64("detection_id")
+			return nil
+		})
 	if err != nil {
 		log.Error(err.Error())
 		return err
 	}
-	id, err := sqlResult.LastInsertId()
-	if err != nil {
+	if analysisEntry.RecoveryId == 0 {
+		err = fmt.Errorf("InsertRecoveryDetection: no detection_id returned for alias=%s analysis=%s", aliasStr, analysisStr)
 		log.Error(err.Error())
 		return err
 	}
-	analysisEntry.RecoveryId = id
 	return nil
 }
 
@@ -88,7 +102,6 @@ func writeTopologyRecovery(topologyRecovery *TopologyRecovery) (*TopologyRecover
 		string(analysisEntry.Analysis),
 		analysisEntry.AnalyzedKeyspace,
 		analysisEntry.AnalyzedShard,
-		topoproto.TabletAliasString(analysisEntry.AnalyzedInstanceAlias),
 		analysisEntry.RecoveryId,
 	)
 	if err != nil {
@@ -135,6 +148,11 @@ func AttemptRecoveryRegistration(analysisEntry *inst.DetectionAnalysis) (*Topolo
 
 // ResolveRecovery is called on completion of a recovery process and updates the recovery status.
 // It does not clear the "active period" as this still takes place in order to avoid flapping.
+// The recovery_detection row is NOT deleted here: if the recovery failed, the problem is still
+// active and the detection row must survive so subsequent retry attempts share the same
+// detection_id. The incident boundary is established by resolveRecovery when IsSuccessful=true
+// (i.e. a new primary was promoted via ERS/PRS); at that point the detection row is deleted so
+// any future recurrence creates a fresh detection_id.
 func writeResolveRecovery(topologyRecovery *TopologyRecovery) error {
 	_, err := db.ExecVTOrc(`UPDATE topology_recovery
 		SET
@@ -154,6 +172,21 @@ func writeResolveRecovery(topologyRecovery *TopologyRecovery) error {
 		log.Error(err.Error())
 	}
 	return err
+}
+
+// deleteResolvedDetection removes a recovery_detection row by its detection_id.
+// It is called by resolveRecovery when IsSuccessful=true (a new primary was promoted),
+// establishing the incident boundary so any future recurrence creates a fresh detection_id.
+func deleteResolvedDetection(detectionID int64) {
+	if detectionID == 0 {
+		return
+	}
+	if _, err := db.ExecVTOrc(
+		`DELETE FROM recovery_detection WHERE detection_id = ?`,
+		detectionID,
+	); err != nil {
+		log.Error(err.Error())
+	}
 }
 
 // readRecoveries reads recovery entry/audit entries from topology_recovery
@@ -268,7 +301,9 @@ func writeTopologyRecoveryStep(topologyRecoveryStep *TopologyRecoveryStep) error
 	return err
 }
 
-// ExpireRecoveryDetectionHistory removes old rows from the recovery_detection table
+// ExpireRecoveryDetectionHistory removes old rows from the recovery_detection table.
+// Actively-detected incidents are naturally preserved because the UPSERT in
+// InsertRecoveryDetection refreshes detection_timestamp on every poll cycle.
 func ExpireRecoveryDetectionHistory() error {
 	return inst.ExpireTableData("recovery_detection", "detection_timestamp")
 }

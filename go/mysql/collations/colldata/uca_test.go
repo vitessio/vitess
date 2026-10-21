@@ -165,6 +165,156 @@ func TestReplacementCharacter(t *testing.T) {
 	}
 }
 
+func TestMalformedInput(t *testing.T) {
+	utf16 := testcollation(t, "utf16_general_ci")
+	require.NotEmpty(t, utf16.WeightString(nil, []byte{0xFF, 0xFD}, 0))
+	require.Empty(t, utf16.WeightString(nil, []byte{0xD8, 0x00}, 0))
+
+	wildcard := utf16.Wildcard([]byte{0xFF, 0xFD}, '_', '%', '\\')
+	require.True(t, wildcard.Match([]byte{0xFF, 0xFD}))
+	require.False(t, wildcard.Match([]byte{0xD8, 0x00}))
+
+	sjis := testcollation(t, "sjis_japanese_ci")
+	require.Equal(t, []byte{0x81}, sjis.WeightString(nil, []byte{0x81}, 0))
+
+	for _, name := range []string{"utf32_general_ci", "utf32_unicode_ci"} {
+		coll := testcollation(t, name)
+		require.Empty(t, coll.WeightString(nil, []byte{0xFF, 0xFF, 0xFF, 0xFF}, 0))
+	}
+
+	ascii := testcollation(t, "ascii_general_ci").Charset()
+	r, width, ok := ascii.DecodeRune([]byte{0x80})
+	require.Equal(t, charset.RuneError, r)
+	require.Equal(t, 1, width)
+	require.False(t, ok)
+	r, width, ok = ascii.DecodeRune([]byte{0x00})
+	require.Equal(t, rune(0), r)
+	require.Equal(t, 1, width)
+	require.True(t, ok)
+
+	out, err := charset.Convert(nil, charset.Charset_utf8mb4{}, []byte{0x41, 0x80, 0x42}, ascii)
+	require.ErrorContains(t, err, "Cannot convert string")
+	require.Equal(t, []byte("A?B"), out)
+	out, err = charset.Convert(nil, charset.Charset_utf8mb4{}, []byte{0x41, 0x00, 0x42}, ascii)
+	require.NoError(t, err)
+	require.Equal(t, []byte{0x41, 0x00, 0x42}, out)
+
+	greek := testcollation(t, "greek_general_ci").Charset()
+	out, err = charset.Convert(nil, charset.Charset_utf8mb4{}, []byte{0x41, 0xD2, 0x42}, greek)
+	require.ErrorContains(t, err, "Cannot convert string")
+	require.Equal(t, []byte("A?B"), out)
+	out, err = charset.Convert(nil, charset.Charset_utf8mb4{}, []byte{0x41, 0x80, 0x42}, greek)
+	require.NoError(t, err)
+	require.Equal(t, []byte("A\u0080B"), out)
+
+	require.False(t, charset.Validate(ascii, []byte{0x41, 0x80, 0x42}))
+	require.True(t, charset.Validate(ascii, []byte{0x41, 0x00, 0x42}))
+	require.False(t, charset.Validate(greek, []byte{0x41, 0xD2, 0x42}))
+	require.True(t, charset.Validate(greek, []byte{0x41, 0x80, 0x42}))
+
+	require.Equal(t, 3, charset.Length(ascii, []byte{0x41, 0x80, 0x42}))
+	require.Equal(t, []byte{0x41, 0x80}, charset.Slice(ascii, []byte{0x41, 0x80, 0x42}, 0, 2))
+}
+
+func TestWildcardSupplementaryChars(t *testing.T) {
+	for _, name := range []string{"utf8mb4_swedish_ci", "utf8mb4_turkish_ci", "utf8mb4_unicode_ci", "utf8mb4_general_ci"} {
+		coll := testcollation(t, name)
+		require.False(t, coll.Wildcard([]byte("a%"), 0, 0, 0).Match([]byte("😊x")), "%s: '😊x' must not match 'a%%'", name)
+		require.True(t, coll.Wildcard([]byte("😊"), 0, 0, 0).Match([]byte("😊")), "%s: '😊' must match '😊'", name)
+	}
+
+	// The legacy UCA collations weigh distinct supplementary characters as
+	// equal only to themselves, while utf8mb4_general_ci weighs them all as
+	// the replacement character; both verified against MySQL 8.0.
+	for _, name := range []string{"utf8mb4_swedish_ci", "utf8mb4_turkish_ci", "utf8mb4_unicode_ci"} {
+		coll := testcollation(t, name)
+		require.False(t, coll.Wildcard([]byte("%💩%"), 0, 0, 0).Match([]byte("😊")), "%s: '😊' must not match '%%💩%%'", name)
+	}
+	general := testcollation(t, "utf8mb4_general_ci")
+	require.True(t, general.Wildcard([]byte("%💩%"), 0, 0, 0).Match([]byte("😊")), "utf8mb4_general_ci: '😊' must match '%%💩%%'")
+}
+
+func TestWildcardMySQLParity(t *testing.T) {
+	testCases := []struct {
+		collation string
+		pattern   string
+		input     string
+		match     bool
+	}{
+		// MySQL compares LIKE character by character: two different
+		// supplementary characters do not match under the legacy UCA
+		// collations, even though Collate weighs both as U+FFFD.
+		{"utf8mb4_swedish_ci", "💩", "😊", false},
+		{"utf8mb4_swedish_ci", "😊", "😊", true},
+		{"utf8mb4_swedish_ci", "💩%", "😊x", false},
+		{"utf8mb4_swedish_ci", "😊%", "😊x", true},
+		{"utf8mb4_swedish_ci", "A", "a", true},
+		{"utf8mb4_swedish_ci", "", "", true},
+		{"utf8mb4_swedish_ci", "", "a", false},
+		{"utf16_unicode_ci", "\xD8\x3D\xDC\xA9", "\xD8\x3D\xDE\x0A", false},
+		{"utf16_unicode_ci", "\xD8\x3D\xDE\x0A", "\xD8\x3D\xDE\x0A", true},
+		// LIKE does not apply contractions or expansions.
+		{"utf8mb4_danish_ci", "å", "aa", false},
+		{"utf8mb4_danish_ci", "å%", "aax", false},
+		{"utf8mb4_da_0900_ai_ci", "å", "aa", false},
+		{"utf8mb4_da_0900_ai_ci", "å%", "aax", false},
+		{"utf8mb4_0900_ai_ci", "ss", "ß", false},
+		{"utf8mb4_0900_ai_ci", "ß", "ss", false},
+		{"utf8mb4_0900_ai_ci", "ß", "ß", true},
+		{"utf8mb4_0900_ai_ci", "A", "a", true},
+		// Consecutive many-wildcards must not turn into a literal '%' in
+		// the Collate shortcut of the eight-bit matcher.
+		{"latin1_swedish_ci", "%%", "SS", true},
+		{"latin1_swedish_ci", "a%%", "ab", true},
+		{"latin1_swedish_ci", "a%", "ab", true},
+		{"latin1_swedish_ci", "a%%", "bb", false},
+		// sjis 81 5F decodes to the same rune as the backslash, but MySQL
+		// reads the escape character in the pattern's own encoding, so the
+		// two-byte form is an ordinary character.
+		{"sjis_japanese_ci", "S\x81\x5Fa_", "sAA", false},
+		{"sjis_japanese_ci", "\x81\x5F", "\x81\x5F", true},
+		// Some Japanese charsets encode one rune with more than one byte
+		// sequence; MySQL does not compare the different sequences as equal.
+		{"cp932_japanese_ci", "\xFA\xC2_", "\xED\xA6A", false},
+		{"cp932_japanese_ci", "\xFA\xC2_", "\xFA\xC2A", true},
+		{"ujis_japanese_ci", "\x5C_", "\xA1\xC0A", false},
+		{"eucjpms_japanese_ci", "\xAD\xF5_", "\xA2\xE5A", false},
+		{"eucjpms_japanese_ci", "\xA2\xE5_", "\xA2\xE5A", true},
+		// A pattern that ends in the escape character matches the escape
+		// character as a literal.
+		{"utf8mb4_swedish_ci", "\\", "", false},
+		{"utf8mb4_swedish_ci", "\\", "A", false},
+		{"utf8mb4_swedish_ci", "\\", "\\", true},
+		{"sjis_japanese_ci", "\x5C", "", false},
+		{"sjis_japanese_ci", "\x5C", "\x5C", true},
+	}
+	for _, tc := range testCases {
+		coll := testcollation(t, tc.collation)
+		match := coll.Wildcard([]byte(tc.pattern), 0, 0, 0).Match([]byte(tc.input))
+		require.Equal(t, tc.match, match, "%s: %q LIKE %q", tc.collation, tc.input, tc.pattern)
+	}
+}
+
+func BenchmarkWildcardLargePattern(b *testing.B) {
+	coll := testcollation(b, "cp932_japanese_ci")
+	literal := bytes.Repeat([]byte("\x93\xFAab"), 256*1024)
+	wildcard := append(append([]byte{}, literal...), '%')
+	wildcard = append(wildcard, literal...)
+
+	b.Run("literal", func(b *testing.B) {
+		b.ReportAllocs()
+		for range b.N {
+			_ = coll.Wildcard(literal, 0, 0, 0)
+		}
+	})
+	b.Run("wildcard", func(b *testing.B) {
+		b.ReportAllocs()
+		for range b.N {
+			_ = coll.Wildcard(wildcard, 0, 0, 0)
+		}
+	})
+}
+
 func TestIsPrefix(t *testing.T) {
 	collations := []string{
 		"utf8mb4_0900_ai_ci",
@@ -193,7 +343,7 @@ func DebugUcaLegacyWeightString(t *testing.T, collname string, input, expected [
 	iter := coll.uca.Iterator(input)
 
 	for {
-		curcp, _ := iter.DebugCodepoint()
+		curcp, _, _ := iter.DebugCodepoint()
 		w, ok := iter.Next()
 		if !ok {
 			break

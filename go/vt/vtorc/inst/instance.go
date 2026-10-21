@@ -115,8 +115,9 @@ func NewInstance() *Instance {
 func (instance *Instance) MarshalJSON() ([]byte, error) {
 	i := struct {
 		Instance
-	}{}
-	i.Instance = *instance
+	}{
+		Instance: *instance,
+	}
 
 	return json.Marshal(i)
 }

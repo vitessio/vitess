@@ -19,7 +19,6 @@ package utils
 import (
 	"context"
 	"fmt"
-	"math"
 	"os"
 	"testing"
 	"time"
@@ -304,18 +303,6 @@ func TestGetMysqlPort(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestGetServerID(t *testing.T) {
-	require.NotNil(t, mysqld)
-
-	sid, err := mysqld.GetServerID(t.Context())
-	require.NoError(t, err)
-	assert.Equal(t, mycnf.ServerID, sid)
-
-	suuid, err := mysqld.GetServerUUID(t.Context())
-	require.NoError(t, err)
-	assert.NotEmpty(t, suuid)
-}
-
 func TestReplicationStatus(t *testing.T) {
 	require.NotNil(t, mysqld)
 
@@ -360,17 +347,6 @@ func TestPrimaryStatus(t *testing.T) {
 
 	// The server UUID read from primary status and GetServerUUID should match
 	assert.Equal(t, suuid, res.ServerUUID)
-}
-
-func TestReplicationConfiguration(t *testing.T) {
-	require.NotNil(t, mysqld)
-
-	replConfig, err := mysqld.ReplicationConfiguration(t.Context())
-	require.NoError(t, err)
-
-	require.NotNil(t, replConfig)
-	// For a properly configured mysql, the heartbeat interval is half of the replication net timeout.
-	require.EqualValues(t, math.Round(replConfig.HeartbeatInterval*2), replConfig.ReplicaNetTimeout)
 }
 
 func TestGTID(t *testing.T) {
@@ -435,7 +411,10 @@ func TestSetAndResetReplication(t *testing.T) {
 	assert.Equal(t, port, r.SourcePort)
 	assert.Equal(t, host, r.SourceHost)
 
-	replConfig, err := mysqld.ReplicationConfiguration(t.Context())
+	conn, err := mysqld.GetDbaConnection(t.Context())
+	require.NoError(t, err)
+	replConfig, err := conn.ReplicationConfiguration(0)
+	conn.Close()
 	require.NoError(t, err)
 	assert.Equal(t, heartbeatInterval, replConfig.HeartbeatInterval)
 
@@ -462,41 +441,6 @@ func TestSetAndResetReplication(t *testing.T) {
 	require.ErrorContains(t, err, "no replication status")
 	assert.Empty(t, r.SourceHost)
 	assert.Equal(t, int32(0), r.SourcePort)
-}
-
-func TestGetBinlogInformation(t *testing.T) {
-	require.NotNil(t, mysqld)
-
-	// Default values
-	binlogFormat, logBin, logReplicaUpdates, binlogRowImage, err := mysqld.GetBinlogInformation(t.Context())
-	require.NoError(t, err)
-	assert.Equal(t, "ROW", binlogFormat)
-	assert.True(t, logBin)
-	assert.True(t, logReplicaUpdates)
-	assert.Equal(t, "FULL", binlogRowImage)
-
-	conn, err := mysql.Connect(t.Context(), &mysqlParams)
-	require.NoError(t, err)
-
-	res := Exec(t, conn, "SET GLOBAL binlog_format = 'STATEMENT'")
-	require.NotNil(t, res)
-
-	res = Exec(t, conn, "SET GLOBAL binlog_row_image = 'MINIMAL'")
-	require.NotNil(t, res)
-
-	binlogFormat, logBin, logReplicaUpdates, binlogRowImage, err = mysqld.GetBinlogInformation(t.Context())
-	require.NoError(t, err)
-	assert.Equal(t, "STATEMENT", binlogFormat)
-	assert.True(t, logBin)
-	assert.True(t, logReplicaUpdates)
-	assert.Equal(t, "MINIMAL", binlogRowImage)
-
-	// Set to default
-	res = Exec(t, conn, "SET GLOBAL binlog_format = 'ROW'")
-	require.NotNil(t, res)
-
-	res = Exec(t, conn, "SET GLOBAL binlog_row_image = 'FULL'")
-	require.NotNil(t, res)
 }
 
 func TestGetGTIDMode(t *testing.T) {

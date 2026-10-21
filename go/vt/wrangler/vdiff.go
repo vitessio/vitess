@@ -356,11 +356,10 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflowName, sou
 						dr.ExtraRowsTarget--
 						dr.ProcessedRows--
 						dr.MatchingRows++
-						// We've removed an element from both slices at the current index
-						// so we need to shift the counters back as well to process the
-						// new elements at the index and avoid using an index out of range.
+						// We've removed an element from the source slice at the current
+						// index so we need to shift the counter back as well to process
+						// the new element at the index and avoid an index out of range.
 						i--
-						j--
 						foundMatch = true
 						break
 					}

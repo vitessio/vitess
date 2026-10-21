@@ -17,6 +17,7 @@ limitations under the License.
 package cluster
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -49,7 +50,7 @@ type VtctldProcess struct {
 }
 
 // Setup starts vtctld process with required arguements
-func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error) {
+func (vtctld *VtctldProcess) Setup(extraArgs ...string) (err error) {
 	_ = createDirectory(vtctld.LogDir, 0o700)
 	_ = createDirectory(path.Join(vtctld.Directory, "backups"), 0o700)
 	vtctld.proc = exec.Command(
@@ -57,7 +58,6 @@ func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error)
 		"--topo-implementation", vtctld.TopoImplementation,
 		"--topo-global-server-address", vtctld.TopoGlobalAddress,
 		"--topo-global-root", vtctld.TopoGlobalRoot,
-		"--cell", cell,
 		"--service-map", vtctld.ServiceMap,
 		"--backup-storage-implementation", vtctld.BackupStorageImplementation,
 		"--file-backup-storage-root", vtctld.FileBackupStorageRoot,
@@ -140,6 +140,25 @@ func (vtctld *VtctldProcess) IsHealthy() bool {
 	}
 	defer resp.Body.Close()
 	return resp.StatusCode == 200
+}
+
+// GetVars gets the variables exported on the /debug/vars page of vtctld
+func (vtctld *VtctldProcess) GetVars() map[string]any {
+	resp, err := http.Get(vtctld.VerifyURL)
+	if err != nil {
+		return nil
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil
+	}
+
+	resultMap := make(map[string]any)
+	if err := json.NewDecoder(resp.Body).Decode(&resultMap); err != nil {
+		return nil
+	}
+	return resultMap
 }
 
 // TearDown shutdowns the running vtctld service

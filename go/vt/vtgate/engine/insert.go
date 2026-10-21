@@ -62,11 +62,9 @@ type Insert struct {
 // newQueryInsert creates an Insert with a query string. Used in testing.
 func newQueryInsert(opcode InsertOpcode, keyspace *vindexes.Keyspace, query string) *Insert {
 	return &Insert{
-		InsertCommon: InsertCommon{
-			Opcode:   opcode,
-			Keyspace: keyspace,
-		},
-		Query: query,
+		Opcode:   opcode,
+		Keyspace: keyspace,
+		Query:    query,
 	}
 }
 
@@ -82,13 +80,11 @@ func newInsert(
 	suffix sqlparser.OnDup,
 ) *Insert {
 	ins := &Insert{
-		InsertCommon: InsertCommon{
-			Opcode:   opcode,
-			Keyspace: keyspace,
-			Ignore:   ignore,
-			Prefix:   prefix,
-			Suffix:   suffix,
-		},
+		Opcode:       opcode,
+		Keyspace:     keyspace,
+		Ignore:       ignore,
+		Prefix:       prefix,
+		Suffix:       suffix,
 		VindexValues: vindexValues,
 		Mid:          mid,
 	}

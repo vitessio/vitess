@@ -72,6 +72,12 @@ const (
 // stop replicating.
 var waitRetryTime = 1 * time.Second
 
+// waitForPosRetryTime is how long WaitForPos waits before it first checks the
+// stream's position again. The wait doubles after each check, up to
+// waitRetryTime, so a short wait returns soon after the stream saves the
+// position, while a long one still checks only once per waitRetryTime.
+var waitForPosRetryTime = 100 * time.Millisecond
+
 // How frequently vcopier will update _vt.vreplication rows_copied
 var rowsCopiedUpdateInterval = 30 * time.Second
 
@@ -107,7 +113,7 @@ type Engine struct {
 	journaler map[string]*journalEvent
 	ec        *externalConnector
 
-	throttlerClient *throttle.Client
+	throttlerClient throttleChecker
 
 	// This should only be set in Test Engines in order to short
 	// circuit functions as needed in unit tests. It's automatically
@@ -125,6 +131,14 @@ type journalEvent struct {
 }
 
 type (
+	// throttleChecker is what the engine needs from the tablet throttler:
+	// a single check that either passes or briefly waits and denies. It
+	// is an interface -- rather than the *throttle.Client that production
+	// always installs -- so that tests can inject throttler behavior.
+	throttleChecker interface {
+		ThrottleCheckOKOrWaitAppName(ctx context.Context, appName throttlerapp.Name) (checkResult *throttle.CheckResult, throttleCheckOK bool)
+	}
+
 	PostCopyActionType int
 	PostCopyAction     struct {
 		Type PostCopyActionType `json:"type"`
@@ -178,6 +192,7 @@ func NewTestEngine(ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, db
 		dbName:                  dbname,
 		journaler:               make(map[string]*journalEvent),
 		ec:                      newExternalConnector(env, externalConfig),
+		throttlerClient:         throttle.NewBackgroundClient(nil, throttlerapp.VReplicationName, base.UndefinedScope),
 	}
 	return vre
 }
@@ -197,6 +212,7 @@ func NewSimpleTestEngine(ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaem
 		dbName:                  dbname,
 		journaler:               make(map[string]*journalEvent),
 		ec:                      newExternalConnector(env, externalConfig),
+		throttlerClient:         throttle.NewBackgroundClient(nil, throttlerapp.VReplicationName, base.UndefinedScope),
 		shortcircuit:            true,
 	}
 	return vre
@@ -232,8 +248,15 @@ func (vre *Engine) Open(ctx context.Context) {
 	log.Info("VReplication engine opened successfully")
 }
 
+// ThrottlerClient returns the engine's throttle client when it is backed
+// by one. The internal field is a throttleChecker so tests can inject
+// throttler behavior; a non-Client checker maps to nil here, which is safe
+// for callers as *throttle.Client methods accept a nil receiver.
 func (vre *Engine) ThrottlerClient() *throttle.Client {
-	return vre.throttlerClient
+	if client, ok := vre.throttlerClient.(*throttle.Client); ok {
+		return client
+	}
+	return nil
 }
 
 func (vre *Engine) openLocked(ctx context.Context) error {
@@ -582,6 +605,15 @@ func (vre *Engine) registerJournal(journal *binlogdatapb.Journal, id int32) erro
 	}
 
 	workflow := vre.controllers[id].workflow
+	// Insurance against callers that bypass the vplayer's gate (see the
+	// VEventType_JOURNAL handling): lookup vindex backfill streams must
+	// never be transitioned by a TABLES journal, as their keyspace_id()
+	// filter is not expressible in another keyspace. transitionJournal
+	// would otherwise irrecoverably delete the streams.
+	if journal.MigrationType == binlogdatapb.MigrationType_TABLES &&
+		binlogdatapb.VReplicationWorkflowType(vre.controllers[id].workflowType) == binlogdatapb.VReplicationWorkflowType_CreateLookupIndex {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot follow TABLES journal %d for lookup vindex workflow %s: lookup backfill streams cannot be retargeted to another keyspace", journal.Id, workflow)
+	}
 	key := fmt.Sprintf("%s:%d", workflow, journal.Id)
 	ks := fmt.Sprintf("%s:%s", vre.controllers[id].source.Keyspace, vre.controllers[id].source.Shard)
 	log.Info(fmt.Sprintf("Journal encountered for (%s %s): %v", key, ks, journal))
@@ -698,8 +730,10 @@ func (vre *Engine) transitionJournal(je *journalEvent) {
 		workflowSubType, _ := strconv.ParseInt(params["workflow_sub_type"], 10, 32)
 		deferSecondaryKeys, _ := strconv.ParseBool(params["defer_secondary_keys"])
 		ig := NewInsertGenerator(binlogdatapb.VReplicationWorkflowState_Running, vre.dbName)
+		// The replacement is the same workflow: it keeps the stream's
+		// options (its per-workflow configuration overrides).
 		ig.AddRow(params["workflow"], bls, sgtid.Gtid, params["cell"], params["tablet_types"],
-			binlogdatapb.VReplicationWorkflowType(workflowType), binlogdatapb.VReplicationWorkflowSubType(workflowSubType), deferSecondaryKeys, "")
+			binlogdatapb.VReplicationWorkflowType(workflowType), binlogdatapb.VReplicationWorkflowSubType(workflowSubType), deferSecondaryKeys, params["options"])
 		qr, err := dbClient.ExecuteFetch(ig.String(), maxRows)
 		if err != nil {
 			log.Error(fmt.Sprintf("transitionJournal: %v", err))
@@ -781,8 +815,9 @@ func (vre *Engine) WaitForPos(ctx context.Context, id int32, pos string) error {
 	}
 	defer dbClient.Close()
 
-	tkr := time.NewTicker(waitRetryTime)
-	defer tkr.Stop()
+	retryTime := waitForPosRetryTime
+	retry := time.NewTimer(retryTime)
+	defer retry.Stop()
 	for {
 		qr, err := dbClient.ExecuteFetch(binlogplayer.ReadVReplicationStatus(id), 10)
 		switch {
@@ -837,8 +872,10 @@ func (vre *Engine) WaitForPos(ctx context.Context, id int32, pos string) error {
 			return doneErr
 		case <-vre.ctx.Done():
 			return fmt.Errorf("vreplication is closing: %v", vre.ctx.Err())
-		case <-tkr.C:
+		case <-retry.C:
 		}
+		retryTime = min(2*retryTime, max(waitRetryTime, waitForPosRetryTime))
+		retry.Reset(retryTime)
 	}
 }
 

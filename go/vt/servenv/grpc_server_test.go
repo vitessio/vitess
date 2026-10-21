@@ -17,11 +17,17 @@ limitations under the License.
 package servenv
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	"io"
+	"log/slog"
+	"math"
 	"net"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -29,7 +35,69 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/orca"
 	"google.golang.org/protobuf/types/known/emptypb"
+
+	"vitess.io/vitess/go/vt/log"
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	vtgateservicepb "vitess.io/vitess/go/vt/proto/vtgateservice"
+	"vitess.io/vitess/go/vt/tlstest"
 )
+
+// TestGRPCServerOptionalTLSWarning checks what a server with optional TLS
+// warns about at startup. With a client CA it has to say that plain-text
+// connections are not authenticated, since --grpc-ca then only applies to the
+// TLS connections, and which stats show the plain-text connections without
+// claiming they prove that every client has moved; without a CA the plain
+// warning is enough.
+func TestGRPCServerOptionalTLSWarning(t *testing.T) {
+	certs := tlstest.CreateClientServerCertPairs(t.TempDir())
+	t.Cleanup(withTempVar(&gRPCCert, certs.ServerCert))
+	t.Cleanup(withTempVar(&gRPCKey, certs.ServerKey))
+	t.Cleanup(withTempVar(&gRPCEnableOptionalTLS, true))
+
+	for name, tc := range map[string]struct {
+		ca      string
+		want    []string
+		notWant []string
+	}{
+		"with a client CA": {
+			ca: certs.ClientCA,
+			want: []string{
+				"Plain-text connections will be accepted and are not authenticated",
+				"--grpc-ca only applies to TLS connections",
+				"GrpcOptionalTlsOpenConnections",
+				"GrpcOptionalTlsConnections",
+				"offline or connects only now and then",
+			},
+		},
+		"without a client CA": {
+			ca:      "",
+			want:    []string{"Optional TLS is active. Plain-text connections will be accepted"},
+			notWant: []string{"not authenticated", "--grpc-ca"},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Cleanup(withTempVar(&gRPCCA, tc.ca))
+			t.Cleanup(withTempVar(&gRPCPort, getFreePort()))
+			t.Cleanup(withTempVar(&GRPCServer, (*grpc.Server)(nil)))
+			var logBuf bytes.Buffer
+			oldLogger := log.SwapLogger(slog.New(slog.NewTextHandler(&logBuf, nil)))
+			t.Cleanup(func() { log.SwapLogger(oldLogger) })
+
+			createGRPCServer()
+			require.NotNil(t, GRPCServer)
+			t.Cleanup(GRPCServer.Stop)
+
+			logged := logBuf.String()
+			for _, want := range tc.want {
+				assert.Contains(t, logged, want)
+			}
+			for _, notWant := range tc.notWant {
+				assert.NotContains(t, logged, notWant)
+			}
+		})
+	}
+}
 
 func TestEmpty(t *testing.T) {
 	interceptors := &serverInterceptorBuilder{}
@@ -89,13 +157,93 @@ func TestReportedOrca(t *testing.T) {
 	t.Cleanup(GRPCServer.Stop)
 
 	serverMetrics := GRPCServerMetricsRecorder.ServerMetrics()
+	// registerOrca publishes the first CPU sample. With cgroup v2 that sample is only a
+	// baseline, so CPU stays unset (-1) until the first ticker update; host CPU and later
+	// samples report a value.
 	cpuUsage := serverMetrics.CPUUtilization
-	assert.GreaterOrEqualf(t, cpuUsage, float64(0), "CPU Utilization is not set %.2f", cpuUsage)
+	assert.Truef(t, cpuUsage == -1 || (cpuUsage >= 0 && !math.IsInf(cpuUsage, 1)), "CPU Utilization is invalid %.2f", cpuUsage)
 	t.Logf("CPU Utilization is %.2f", cpuUsage)
 
 	memUsage := serverMetrics.MemUtilization
 	assert.GreaterOrEqualf(t, memUsage, float64(0), "Mem Utilization is not set %.2f", memUsage)
 	t.Logf("Memory utilization is %.2f", memUsage)
+}
+
+func TestOrcaQPSKeepsReportingMessagesOfOpenVStream(t *testing.T) {
+	client := vtgateservicepb.NewVitessClient(startOrcaQPSTestServer(t))
+	ctx, cancel := context.WithCancel(t.Context())
+	t.Cleanup(cancel)
+
+	stream, err := client.VStream(ctx, &vtgatepb.VStreamRequest{})
+	require.NoError(t, err)
+	streamStart := time.Now()
+	go drainStream(stream.Recv)
+
+	// Check a window well after the stream opened, so the rate is sustained.
+	require.Eventually(t, func() bool {
+		return time.Since(streamStart) > 5*orcaUpdateInterval && GRPCServerMetricsRecorder.ServerMetrics().QPS > 100
+	}, 30*time.Second, 10*time.Millisecond, "expected ORCA QPS to reflect messages sent on an already-open VStream")
+
+	// Never can run its condition after returning, so it must not read the global.
+	recorder := GRPCServerMetricsRecorder
+	assert.Never(t, func() bool {
+		return recorder.ServerMetrics().QPS == 0
+	}, 5*orcaUpdateInterval, 10*time.Millisecond, "expected ORCA QPS to stay nonzero while the VStream keeps sending")
+}
+
+type orcaQPSTestVitessServer struct {
+	vtgateservicepb.UnimplementedVitessServer
+}
+
+func (orcaQPSTestVitessServer) VStream(_ *vtgatepb.VStreamRequest, stream grpc.ServerStreamingServer[vtgatepb.VStreamResponse]) error {
+	response := &vtgatepb.VStreamResponse{Events: []*binlogdatapb.VEvent{{
+		Type: binlogdatapb.VEventType_HEARTBEAT,
+	}}}
+	for {
+		if err := stream.Send(response); err != nil {
+			return err
+		}
+		select {
+		case <-stream.Context().Done():
+			return nil
+		case <-time.After(time.Millisecond):
+		}
+	}
+}
+
+func startOrcaQPSTestServer(t *testing.T) *grpc.ClientConn {
+	t.Helper()
+
+	port := getFreePort()
+	t.Cleanup(withTempVar(&gRPCPort, port))
+	t.Cleanup(withTempVar(&gRPCBindAddress, "127.0.0.1"))
+	t.Cleanup(withTempVar(&gRPCEnableOrcaMetrics, true))
+	t.Cleanup(withTempVar(&orcaUpdateInterval, 100*time.Millisecond))
+	t.Cleanup(withTempVar(&GRPCServerMetricsRecorder, nil))
+	t.Cleanup(withTempVar(&GRPCServer, (*grpc.Server)(nil)))
+	orcaEgressMessages.Store(0)
+
+	createGRPCServer()
+	vtgateservicepb.RegisterVitessServer(GRPCServer, orcaQPSTestVitessServer{})
+	stopOrcaUpdater := serveGRPC()
+	t.Cleanup(stopOrcaUpdater)
+	t.Cleanup(GRPCServer.Stop)
+
+	conn, err := grpc.NewClient(fmt.Sprintf("127.0.0.1:%d", port), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	require.NoError(t, err)
+	t.Cleanup(func() { conn.Close() })
+	return conn
+}
+
+func drainStream[T any](recv func() (T, error)) error {
+	for {
+		if _, err := recv(); err != nil {
+			if errors.Is(err, io.EOF) {
+				return nil
+			}
+			return err
+		}
+	}
 }
 
 // TestGRPCServerSkipsIngressStatsByDefault verifies that servenv gRPC servers

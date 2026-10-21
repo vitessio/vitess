@@ -45,11 +45,11 @@ func (c *testCharset1) EncodeRune([]byte, rune) int {
 	return 0
 }
 
-func (c *testCharset1) DecodeRune(bytes []byte) (rune, int) {
+func (c *testCharset1) DecodeRune(bytes []byte) (rune, int, bool) {
 	if len(bytes) < 1 {
-		return RuneError, 0
+		return RuneError, 0, false
 	}
-	return 1, 1
+	return 1, 1, true
 }
 
 type testCharset2 struct{}
@@ -74,11 +74,11 @@ func (c *testCharset2) EncodeRune([]byte, rune) int {
 	return 0
 }
 
-func (c *testCharset2) DecodeRune(bytes []byte) (rune, int) {
+func (c *testCharset2) DecodeRune(bytes []byte) (rune, int, bool) {
 	if len(bytes) < 1 {
-		return RuneError, 0
+		return RuneError, 0, false
 	}
-	return rune(bytes[0]), 1
+	return rune(bytes[0]), 1, true
 }
 
 func (c *testCharset2) Convert(_, src []byte, from Charset) ([]byte, error) {
@@ -158,6 +158,108 @@ func TestConvert(t *testing.T) {
 			dstCharset: &testCharset2{},
 			want:       []byte("😊😂🤢"),
 		},
+		{
+			src:        []byte{0xD8, 0x00},
+			srcCharset: Charset_utf16{},
+			dst:        nil,
+			dstCharset: Charset_latin1{},
+			want:       []byte("?"),
+			err:        "Cannot convert string",
+		},
+		{
+			src:        []byte{0x00, 0xD8},
+			srcCharset: Charset_utf16le{},
+			dst:        nil,
+			dstCharset: Charset_latin1{},
+			want:       []byte("?"),
+			err:        "Cannot convert string",
+		},
+		{
+			src:        []byte{0xD8, 0x00, 0x00, 0x31},
+			srcCharset: Charset_utf16{},
+			dst:        nil,
+			dstCharset: Charset_utf8mb4{},
+			want:       []byte("?1"),
+			err:        "Cannot convert string",
+		},
+		{
+			src:        []byte{0xFF, 0xFD},
+			srcCharset: Charset_utf16{},
+			dst:        nil,
+			dstCharset: Charset_utf8mb4{},
+			want:       []byte("\uFFFD"),
+		},
+		{
+			src:        []byte{0x81, 0x20, 0x41},
+			srcCharset: Charset_sjis{},
+			dst:        nil,
+			dstCharset: Charset_utf8mb4{},
+			want:       []byte("? A"),
+			err:        "Cannot convert string",
+		},
+		{
+			src:        []byte{0x81, 0x20, 0x41},
+			srcCharset: Charset_cp932{},
+			dst:        nil,
+			dstCharset: Charset_utf8mb4{},
+			want:       []byte("? A"),
+			err:        "Cannot convert string",
+		},
+		{
+			src:        []byte{0x41, 0xC9, 0x41, 0x42},
+			srcCharset: Charset_euckr{},
+			dst:        nil,
+			dstCharset: Charset_utf8mb4{},
+			want:       []byte("A?B"),
+			err:        "Cannot convert string",
+		},
+		{
+			src:        []byte{0xFF, 0xFF, 0xFF, 0xFF},
+			srcCharset: Charset_utf32{},
+			dst:        nil,
+			dstCharset: Charset_utf8mb4{},
+			want:       []byte("?"),
+			err:        "Cannot convert string",
+		},
+		{
+			src:        []byte{0xF8, 0xA1, 0xA1},
+			srcCharset: Charset_gb2312{},
+			dst:        nil,
+			dstCharset: Charset_utf8mb4{},
+			want:       []byte("?\u3000"),
+			err:        "Cannot convert string",
+		},
+		{
+			src:        []byte{0x41, 0x84, 0x31, 0xA5, 0x30, 0x42},
+			srcCharset: Charset_gb18030{},
+			dst:        nil,
+			dstCharset: Charset_utf8mb4{},
+			want:       []byte("A?B"),
+			err:        "Cannot convert string",
+		},
+		{
+			src:        []byte{0x80, 0x41},
+			srcCharset: Charset_gb18030{},
+			dst:        nil,
+			dstCharset: Charset_utf8mb4{},
+			want:       []byte("?A"),
+			err:        "Cannot convert string",
+		},
+		{
+			src:        []byte("A€B"),
+			srcCharset: Charset_utf8mb4{},
+			dst:        nil,
+			dstCharset: Charset_gb18030{},
+			want:       []byte{0x41, 0xA2, 0xE3, 0x42},
+		},
+		{
+			src:        []byte{0x00, 0x41, 0xD8, 0x00, 0x00, 0x42},
+			srcCharset: Charset_ucs2{},
+			dst:        nil,
+			dstCharset: Charset_utf8mb4{},
+			want:       []byte("A?B"),
+			err:        "Cannot convert string",
+		},
 	}
 
 	for _, tc := range testCases {
@@ -215,6 +317,12 @@ func TestExpand(t *testing.T) {
 			src:        []byte{0xFF},
 			srcCharset: Charset_latin1{},
 			want:       []rune("ÿ"),
+		},
+		{
+			dst:        nil,
+			src:        []byte{0xD8, 0x00, 0x00, 0x31},
+			srcCharset: Charset_utf16{},
+			want:       []rune{RuneError, '1'},
 		},
 		// multibyte case
 		{

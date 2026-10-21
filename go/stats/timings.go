@@ -203,17 +203,12 @@ type MultiTimings struct {
 
 // NewMultiTimings creates a new MultiTimings object.
 func NewMultiTimings(name string, help string, labels []string) *MultiTimings {
-	combinedLabels := make([]bool, len(labels))
-	for i, label := range labels {
-		combinedLabels[i] = IsDimensionCombined(label)
-	}
+	combinedLabels := CombinedLabels(labels)
 	t := &MultiTimings{
-		Timings: Timings{
-			histograms: make(map[string]*Histogram),
-			name:       name,
-			help:       help,
-			label:      safeJoinLabels(labels, combinedLabels),
-		},
+		histograms:     make(map[string]*Histogram),
+		name:           name,
+		help:           help,
+		label:          safeJoinLabels(labels, combinedLabels),
 		labels:         labels,
 		combinedLabels: combinedLabels,
 	}

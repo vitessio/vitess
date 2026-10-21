@@ -315,13 +315,10 @@ func GenerateASTHelpers(options *Options) (map[string]*jen.File, error) {
 
 // findTypeObject finds the types.Object for the given interface from the given scopes.
 func findTypeObject(interfaceToFind string, scopes map[string]*types.Scope) (types.Object, error) {
-	pos := strings.LastIndexByte(interfaceToFind, '.')
-	if pos < 0 {
+	pkgname, typename, ok := strings.CutLast(interfaceToFind, ".")
+	if !ok {
 		return nil, fmt.Errorf("unexpected input type: %s", interfaceToFind)
 	}
-
-	pkgname := interfaceToFind[:pos]
-	typename := interfaceToFind[pos+1:]
 
 	scope := scopes[pkgname]
 	if scope == nil {
@@ -429,6 +426,8 @@ var noQualifier = func(*types.Package) string { return "" }
 // printableTypeName returns a string that can be used as a valid golang identifier
 func printableTypeName(t types.Type) string {
 	switch t := t.(type) {
+	case *types.Alias:
+		return printableTypeName(types.Unalias(t))
 	case *types.Pointer:
 		return "RefOf" + printableTypeName(t.Elem())
 	case *types.Slice:

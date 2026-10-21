@@ -85,6 +85,23 @@ var (
 	}
 )
 
+// IsCoverage reports whether this is a coverage run (-is-coverage). Binaries
+// then write their coverage profiles on a graceful exit, so teardown must not
+// kill them.
+func IsCoverage() bool {
+	return *isCoverage
+}
+
+// KillDiscardedMySQL reports whether a mysqld whose data is never read again
+// is killed instead of shut down gracefully. On CI the data directory is
+// discarded after the test run, so nothing needs to be flushed to disk and a
+// graceful shutdown buys nothing: killing skips the shutdown ack wait that
+// can stall a semi-sync primary for many seconds. Coverage runs still shut
+// down gracefully so that the mysqlctl shutdown path stays exercised.
+func KillDiscardedMySQL() bool {
+	return os.Getenv("CI") == "true" && !*isCoverage
+}
+
 // LocalProcessCluster Testcases need to use this to iniate a cluster
 type LocalProcessCluster struct {
 	Keyspaces          []Keyspace
@@ -124,6 +141,9 @@ type LocalProcessCluster struct {
 	VtGatePlannerVersion plancontext.PlannerVersion
 
 	VtctldExtraArgs []string
+
+	// Extra arguments for vtorc
+	VTOrcExtraArgs []string
 
 	// mutex added to handle the parallel teardowns
 	mx                *sync.Mutex
@@ -262,7 +282,7 @@ func (cluster *LocalProcessCluster) StartTopo() (err error) {
 		cluster.TopoProcess.Port, cluster.Hostname, cluster.TmpDirectory)
 	log.Info(fmt.Sprintf("Starting vtctld server on port: %d", cluster.VtctldProcess.Port))
 	cluster.VtctldHTTPPort = cluster.VtctldProcess.Port
-	if err = cluster.VtctldProcess.Setup(cluster.Cell, cluster.VtctldExtraArgs...); err != nil {
+	if err = cluster.VtctldProcess.Setup(cluster.VtctldExtraArgs...); err != nil {
 		log.Error(err.Error())
 		return
 	}
@@ -283,6 +303,7 @@ func (cluster *LocalProcessCluster) StartTopo() (err error) {
 func (cluster *LocalProcessCluster) StartVTOrc(cell, keyspace string) error {
 	// Start vtorc
 	vtorcProcess := cluster.NewVTOrcProcess(VTOrcConfiguration{}, cell)
+	vtorcProcess.ExtraArgs = append(vtorcProcess.ExtraArgs, cluster.VTOrcExtraArgs...)
 	err := vtorcProcess.Setup()
 	if err != nil {
 		log.Error(err.Error())
@@ -1059,13 +1080,19 @@ func (cluster *LocalProcessCluster) Teardown() {
 		log.Error(fmt.Sprintf("Error in vtadmin teardown: %v", err))
 	}
 
+	killMySQL := KillDiscardedMySQL()
+
 	var mysqlctlProcessList []*exec.Cmd
 	var mysqlctlTabletUIDs []int
 	for _, keyspace := range cluster.Keyspaces {
 		for _, shard := range keyspace.Shards {
 			for _, tablet := range shard.Vttablets {
 				if tablet.MysqlctlProcess.TabletUID > 0 {
-					if proc, err := tablet.MysqlctlProcess.StopProcess(); err != nil {
+					if killMySQL {
+						if err := tablet.MysqlctlProcess.Kill(); err != nil {
+							log.Error(fmt.Sprintf("Error in mysqlctl teardown: %v", err))
+						}
+					} else if proc, err := tablet.MysqlctlProcess.StopProcess(); err != nil {
 						log.Error(fmt.Sprintf("Error in mysqlctl teardown: %v", err))
 					} else {
 						mysqlctlProcessList = append(mysqlctlProcessList, proc)

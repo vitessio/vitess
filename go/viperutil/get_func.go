@@ -171,7 +171,7 @@ func GetFuncForType[T any]() func(v *viper.Viper) func(key string) T {
 			f = func(v *viper.Viper) func(key string) T {
 				getPointer := f2(v)
 				return func(key string) T {
-					return *(getPointer(key))
+					return *getPointer(key)
 				}
 			}
 		}

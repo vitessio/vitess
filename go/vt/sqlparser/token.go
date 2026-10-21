@@ -180,6 +180,13 @@ func (tkn *Tokenizer) Scan() (int, string) {
 			if tkn.cur() == '`' {
 				tkn.skip(1)
 				tID, tBytes = tkn.scanLiteralIdentifier()
+			} else if tokenID == AT_ID && (tkn.cur() == '\'' || tkn.cur() == '"') && !tkn.quotedNameIsIdentifier() {
+				// MySQL reads a quoted name after a single '@' to its closing
+				// quote, so nothing inside the quotes is a comment. Vitess
+				// reads the name as an identifier that includes the quotes,
+				// which stops at the first character an identifier cannot
+				// hold. Rather than read such a name in part, reject it.
+				return LEX_ERROR, ""
 			} else if tkn.cur() == eofChar {
 				return LEX_ERROR, ""
 			} else {
@@ -202,12 +209,14 @@ func (tkn *Tokenizer) Scan() (int, string) {
 					return tkn.scanBitLiteral()
 				}
 			}
-			// N\'literal' is used to create a string in the national character set
+			// N'literal' is a string in the national character set. MySQL
+			// recognizes the introducer only before a single quote: N"…" is the
+			// identifier N followed by a double-quoted token, whatever the mode
+			// makes of that token.
 			if ch == 'N' || ch == 'n' {
-				nxt := tkn.peek(1)
-				if nxt == '\'' || nxt == '"' {
+				if tkn.peek(1) == '\'' {
 					tkn.skip(2)
-					return tkn.scanString(nxt, NCHAR_STRING)
+					return tkn.scanString('\'', NCHAR_STRING)
 				}
 			}
 			return tkn.scanIdentifier(false)
@@ -297,7 +306,7 @@ func (tkn *Tokenizer) Scan() (int, string) {
 				switch tkn.cur() {
 				case '-':
 					nextChar := tkn.peek(1)
-					if nextChar == ' ' || nextChar == '\n' || nextChar == '\t' || nextChar == '\r' || nextChar == eofChar {
+					if nextChar == ' ' || nextChar == '\t' || nextChar == '\n' || nextChar == '\v' || nextChar == '\f' || nextChar == '\r' || nextChar == eofChar {
 						tkn.skip(1)
 						return tkn.scanCommentType1(2)
 					}
@@ -372,10 +381,32 @@ func (tkn *Tokenizer) skipStatement() int {
 // skipBlank skips the cursor while it finds whitespace
 func (tkn *Tokenizer) skipBlank() {
 	ch := tkn.cur()
-	for ch == ' ' || ch == '\n' || ch == '\r' || ch == '\t' {
+	for ch == ' ' || ch == '\t' || ch == '\n' || ch == '\v' || ch == '\f' || ch == '\r' {
 		tkn.skip(1)
 		ch = tkn.cur()
 	}
+}
+
+// quotedNameIsIdentifier reports whether the quoted name at the cursor, read
+// to its closing quote as MySQL reads it, consists of characters that
+// scanIdentifier reads as part of a variable name, so that scanIdentifier
+// reads the whole name.
+func (tkn *Tokenizer) quotedNameIsIdentifier() bool {
+	delim := tkn.buf[tkn.Pos]
+	for i := tkn.Pos + 1; i < len(tkn.buf); i++ {
+		ch := uint16(tkn.buf[i])
+		if ch == uint16(delim) && (i+1 == len(tkn.buf) || tkn.buf[i+1] != delim) {
+			return true
+		}
+		if !isLetter(ch) && !isDigit(ch) && !isCarat(ch) {
+			return false
+		}
+		if ch == uint16(delim) {
+			// A doubled quote stands for the quote itself.
+			i++
+		}
+	}
+	return false
 }
 
 // scanIdentifier scans a language keyword or @-encased variable
@@ -616,7 +647,12 @@ func (tkn *Tokenizer) scanString(delim uint16, typ int) (int, string) {
 			fallthrough
 
 		case '\\':
+			// The next delimiter usually ends the string, so size the buffer
+			// for the text up to it rather than growing it a few bytes at a time.
 			var buffer strings.Builder
+			if rest := strings.IndexByte(tkn.buf[tkn.Pos+1:], byte(delim)); rest >= 0 {
+				buffer.Grow(tkn.Pos + 1 + rest - start)
+			}
 			buffer.WriteString(tkn.buf[start:tkn.Pos])
 			return tkn.scanStringSlow(&buffer, delim, typ)
 
@@ -704,20 +740,12 @@ func (tkn *Tokenizer) scanCommentType1(prefixLen int) (int, string) {
 // prefix has already been scanned
 func (tkn *Tokenizer) scanCommentType2() (int, string) {
 	start := tkn.Pos - 2
-	for {
-		if tkn.cur() == '*' {
-			tkn.skip(1)
-			if tkn.cur() == '/' {
-				tkn.skip(1)
-				break
-			}
-			continue
-		}
-		if tkn.cur() == eofChar {
-			return LEX_ERROR, tkn.buf[start:tkn.Pos]
-		}
-		tkn.skip(1)
+	end := strings.Index(tkn.buf[tkn.Pos:], "*/")
+	if end < 0 {
+		tkn.Pos = len(tkn.buf)
+		return LEX_ERROR, tkn.buf[start:]
 	}
+	tkn.skip(end + 2)
 	return COMMENT, tkn.buf[start:tkn.Pos]
 }
 

@@ -10,16 +10,17 @@ permissions: read-all
 jobs:
   close_stale_pull_requests:
     runs-on: ubuntu-24.04
+    timeout-minutes: 5
     permissions:
       pull-requests: write
 
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        uses: step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed # v2.22.0
         with:
           egress-policy: audit
 
-      - uses: actions/stale@eb5cf3af3ac0a1aa4c9c45633dd1ae542a27a899 # v10.3.0
+      - uses: actions/stale@4391f3da665fdf50b6810c1a66712fb9ba21aa93 # v11.0.0
         with:
           days-before-stale: 30
           # Do not handle issues at all. We only want to handle PRs.

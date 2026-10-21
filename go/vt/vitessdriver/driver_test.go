@@ -135,7 +135,7 @@ func TestOpen(t *testing.T) {
 		defer c.Close()
 
 		wantc := tc.conn
-		newc := *(c.(*conn))
+		newc := *c.(*conn)
 		newc.cfg.Address = ""
 		newc.conn = nil
 		newc.session = nil

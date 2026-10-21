@@ -19,6 +19,7 @@ package emergencyreparent
 import (
 	"fmt"
 	"os/exec"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -29,6 +30,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/reparent/utils"
+	endtoendutils "vitess.io/vitess/go/test/endtoend/utils"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 
@@ -48,7 +50,12 @@ func TestTrivialERS(t *testing.T) {
 		out, err := utils.Ers(clusterInstance, nil, "60s", "30s")
 		log.Info(fmt.Sprintf("ERS loop %d.  EmergencyReparentShard Output: %v", i, out))
 		require.NoError(t, err)
-		time.Sleep(5 * time.Second)
+
+		// ERS repoints some replicas after it returns: wait until every
+		// tablet replicates from the new primary before the next ERS.
+		primary := utils.GetShardPrimary(t, clusterInstance)
+		replicas := slices.DeleteFunc(slices.Clone(tablets), func(tablet *cluster.Vttablet) bool { return tablet == primary })
+		utils.ConfirmReplication(t, primary, replicas)
 	}
 }
 
@@ -128,6 +135,78 @@ func TestReparentDownPrimary(t *testing.T) {
 	utils.ResurrectTablet(ctx, t, clusterInstance, tablets[0])
 }
 
+func TestERSSplitBrainDetection(t *testing.T) {
+	endtoendutils.SkipIfBinaryIsBelowVersion(t, 25, "vtctld")
+
+	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
+	t.Cleanup(func() {
+		utils.TeardownCluster(clusterInstance)
+	})
+	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
+	newPrimary := tablets[2]
+	otherLeader := tablets[1]
+
+	utils.ConfirmReplication(t, tablets[0], tablets[1:])
+
+	utils.RunSQLs(t.Context(), t, []string{
+		"STOP REPLICA",
+		"RESET REPLICA ALL",
+		"SET GLOBAL super_read_only = 0",
+		"SET GLOBAL read_only = 0",
+		"INSERT INTO vt_insert_test(id, msg) VALUES (999901, 'new primary')",
+	}, newPrimary)
+	utils.RunSQLs(t.Context(), t, []string{
+		"STOP REPLICA",
+		"RESET REPLICA ALL",
+		"SET GLOBAL super_read_only = 0",
+		"SET GLOBAL read_only = 0",
+		"INSERT INTO vt_insert_test(id, msg) VALUES (999902, 'other leader')",
+	}, otherLeader)
+
+	utils.KillTablet(t, tablets[0])
+
+	out, err := utils.Ers(clusterInstance, nil, "60s", "30s")
+	require.Error(t, err, out)
+	require.Contains(t, out, "suspected split-brain")
+	require.Contains(t, out, newPrimary.Alias)
+	require.Contains(t, out, otherLeader.Alias)
+
+	out, err = clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput(
+		"--action-timeout", "60s",
+		"EmergencyReparentShard", utils.KeyspaceShard,
+		"--new-primary", newPrimary.Alias,
+		"--allow-split-brain-promotion",
+		"--wait-replicas-timeout", "30s",
+	)
+	require.NoError(t, err, out)
+	vars := clusterInstance.VtctldProcess.GetVars()
+	require.NotNil(t, vars)
+	overrideCounts, ok := vars["EmergencyReparentSplitBrainOverrides"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, float64(1), overrideCounts[utils.KeyspaceName+"."+utils.ShardName])
+	utils.CheckPrimaryTablet(t, clusterInstance, newPrimary)
+
+	result := utils.RunSQL(t.Context(), t, "SELECT msg FROM vt_insert_test WHERE id = 999901", newPrimary)
+	require.Len(t, result.Rows, 1)
+	require.Equal(t, "new primary", result.Rows[0][0].ToString())
+
+	result = utils.RunSQL(t.Context(), t, "SELECT msg FROM vt_insert_test WHERE id = 999902", newPrimary)
+	require.Empty(t, result.Rows)
+
+	// The losing leader must be fenced from serving its discarded history: the
+	// errant-GTID check in SetReplicationSource refuses to repoint it, so it never
+	// rejoins the replication graph and stays unhealthy
+	require.NoError(t, otherLeader.VttabletProcess.WaitForTabletStatus("NOT_SERVING"))
+	result = utils.RunSQL(t.Context(), t, "SHOW REPLICA STATUS", otherLeader)
+	require.Empty(t, result.Rows)
+
+	// The divergent row stays on the losing leader for an operator to inspect; the
+	// tablet keeps its history until it is rebuilt from the new primary
+	result = utils.RunSQL(t.Context(), t, "SELECT msg FROM vt_insert_test WHERE id = 999902", otherLeader)
+	require.Len(t, result.Rows, 1)
+	require.Equal(t, "other leader", result.Rows[0][0].ToString())
+}
+
 func TestEmergencyReparentWithBlockedPrimary(t *testing.T) {
 	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
 	defer utils.TeardownCluster(clusterInstance)
@@ -190,7 +269,7 @@ func TestEmergencyReparentWithBlockedPrimary(t *testing.T) {
 	})
 
 	wg.Add(1)
-	waitReplicasTimeout := time.Second * 10
+	waitReplicasTimeout := time.Second * 5
 	go func() {
 		defer wg.Done()
 
@@ -226,7 +305,7 @@ func TestEmergencyReparentWithBlockedPrimary(t *testing.T) {
 		"Execute.ks.primary.DEADLINE_EXCEEDED": float64(1),
 	}, vtgateVars["VtgateApiErrorCounts"])
 
-	// We need to wait at least 10 seconds here to ensure the wait-for-replicas-timeout has passed,
+	// We need to wait until the wait-for-replicas-timeout has passed (twice it, for margin),
 	// before we resume the old primary - otherwise the old primary will receive a `SetReplicationSource` call.
 	time.Sleep(waitReplicasTimeout * 2)
 
@@ -402,7 +481,7 @@ func TestERSPromoteRdonly(t *testing.T) {
 		utils.ConfirmReplication(t, tablets[0], tablets[1:])
 
 		// Make the current primary agent and database unavailable.
-		utils.StopTablet(t, tablets[0], true)
+		utils.KillTablet(t, tablets[0])
 
 		// We expect this one to fail because we have ignored all the replicas and have only the rdonly's which should not be promoted
 		out, err := utils.ErsIgnoreTablet(clusterInstance, nil, "30s", "30s", []*cluster.Vttablet{tablets[3]}, false)
@@ -425,7 +504,7 @@ func TestERSPreventCrossCellPromotion(t *testing.T) {
 	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
 
 	// Make the current primary agent and database unavailable.
-	utils.StopTablet(t, tablets[0], true)
+	utils.KillTablet(t, tablets[0])
 
 	// We expect that tablets[2] will be promoted since it is in the same cell as the previous primary
 	out, err := utils.ErsIgnoreTablet(clusterInstance, nil, "60s", "30s", []*cluster.Vttablet{tablets[1]}, true)
@@ -474,7 +553,7 @@ func TestPullFromRdonly(t *testing.T) {
 	insertVal := utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{rdonly})
 
 	// Make the current primary agent and database unavailable.
-	utils.StopTablet(t, tablets[0], true)
+	utils.KillTablet(t, tablets[0])
 
 	// start the replication back on the two tablets
 	err = clusterInstance.VtctldClientProcess.ExecuteCommand("StartReplication", tablets[2].Alias)
@@ -622,8 +701,8 @@ func TestRecoverWithMultipleFailures(t *testing.T) {
 	utils.ConfirmReplication(t, tablets[0], tablets[1:])
 
 	// Make the rdonly and primary tablets and databases unavailable.
-	utils.StopTablet(t, tablets[1], true)
-	utils.StopTablet(t, tablets[0], true)
+	utils.KillTablet(t, tablets[1])
+	utils.KillTablet(t, tablets[0])
 
 	// We expect this to succeed since we only have 1 primary eligible tablet which is down
 	out, err := utils.Ers(clusterInstance, nil, "", "")

@@ -24,6 +24,7 @@ import (
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
+	ddlschema "vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
@@ -113,11 +114,17 @@ func (tm *TabletManager) executeMultiFetchAsDba(
 	reloadSchema bool,
 	disableBinlogs bool,
 	disableForeignKeyChecks bool,
+	sessionVariables []ddlschema.SessionVariable,
 	validateQueries func(queries []string, countCreate int) error,
 ) ([]*querypb.QueryResult, error) {
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
 		return nil, err
 	}
+
+	// The statements are split and checked with Vitess's tokenizer and then
+	// sent to MySQL as written, so MySQL must skip every comment that Vitess
+	// skips.
+	sql, _ = tm.Env.Parser().RewriteDoubleSlashComments(sql)
 
 	// Parse, validate, and gate before acquiring an mysqld connection so a
 	// rejected batch does not cost us a connection acquire and the SET
@@ -140,6 +147,17 @@ func (tm *TabletManager) executeMultiFetchAsDba(
 			return nil, err
 		}
 	}
+	if err := ddlschema.ValidateSessionVariables(sessionVariables); err != nil {
+		return nil, err
+	}
+	sessionVariableQueries := make([]string, 0, len(sessionVariables))
+	for _, variable := range sessionVariables {
+		query, err := variable.SetStatement()
+		if err != nil {
+			return nil, err
+		}
+		sessionVariableQueries = append(sessionVariableQueries, query)
+	}
 
 	// Get a connection.
 	conn, err := tm.MysqlDaemon.GetDbaConnection(ctx)
@@ -147,6 +165,14 @@ func (tm *TabletManager) executeMultiFetchAsDba(
 		return nil, err
 	}
 	defer conn.Close()
+
+	// Apply requested session state before Vitess-enforced settings so callers
+	// cannot undo the guarantees provided by the request options.
+	for _, query := range sessionVariableQueries {
+		if _, err := conn.ExecuteFetch(query, 0, false); err != nil {
+			return nil, err
+		}
+	}
 
 	// Disable binlogs if necessary.
 	if disableBinlogs {
@@ -179,6 +205,20 @@ func (tm *TabletManager) executeMultiFetchAsDba(
 	if err != nil {
 		return nil, err
 	}
+
+	// Only a request that really carries several statements may send them in a
+	// single query. Everything else runs on a connection that cannot: that
+	// includes ExecuteFetchAsDba, whose validateQueries rejects a request with
+	// more than one statement before we get here. The capability is asked for
+	// as late as possible, so that only the batch itself runs with it, and the
+	// connection is ours alone and closed on return, so it never outlives this
+	// request.
+	if len(queries) > 1 {
+		if err := conn.SetMultiStatements(true); err != nil {
+			return nil, err
+		}
+	}
+
 	results := make([]*querypb.QueryResult, 0, len(queries))
 	result, more, err := conn.ExecuteFetchMulti(uq, maxRows, true /*wantFields*/)
 	if err == nil {
@@ -231,6 +271,7 @@ func (tm *TabletManager) ExecuteFetchAsDba(ctx context.Context, req *tabletmanag
 		req.ReloadSchema,
 		req.DisableBinlogs,
 		req.DisableForeignKeyChecks,
+		nil, /* sessionVariables */
 		func(queries []string, countCreate int) error {
 			// As of v23 we do not allow multi-statement SQL in ExecuteFetchAsDba at all, and
 			// ExecuteMultiFetchAsDba will be the only way to execute multiple statements.
@@ -252,6 +293,16 @@ func (tm *TabletManager) ExecuteFetchAsDba(ctx context.Context, req *tabletmanag
 
 // ExecuteMultiFetchAsDba will execute the given queries, possibly disabling binlogs and reload schema.
 func (tm *TabletManager) ExecuteMultiFetchAsDba(ctx context.Context, req *tabletmanagerdatapb.ExecuteMultiFetchAsDbaRequest) ([]*querypb.QueryResult, error) {
+	sessionVariables := make([]ddlschema.SessionVariable, 0, len(req.SessionVariables))
+	for _, variable := range req.SessionVariables {
+		if variable == nil {
+			return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "session variable must not be nil")
+		}
+		sessionVariables = append(sessionVariables, ddlschema.SessionVariable{
+			Name:  variable.Name,
+			Value: variable.Value,
+		})
+	}
 	results, err := tm.executeMultiFetchAsDba(
 		ctx,
 		req.DbName,
@@ -260,6 +311,7 @@ func (tm *TabletManager) ExecuteMultiFetchAsDba(ctx context.Context, req *tablet
 		req.ReloadSchema,
 		req.DisableBinlogs,
 		req.DisableForeignKeyChecks,
+		sessionVariables,
 		nil, // Validation query is not needed for ExecuteMultiFetchAsDba
 	)
 	return results, err
@@ -273,7 +325,10 @@ func (tm *TabletManager) ExecuteFetchAsAllPrivs(ctx context.Context, req *tablet
 	// Replace any provided sidecar database qualifiers with the correct one,
 	// then gate before opening the mysqld connection so a rejected batch
 	// does not cost a connection acquire and a USE round-trip.
-	uq, err := tm.Env.Parser().ReplaceTableQualifiers(string(req.Query), sidecar.DefaultName, sidecar.GetName())
+	// The query is checked with Vitess's tokenizer and then sent to MySQL as
+	// written, so MySQL must skip every comment that Vitess skips.
+	query, _ := tm.Env.Parser().RewriteDoubleSlashComments(string(req.Query))
+	uq, err := tm.Env.Parser().ReplaceTableQualifiers(query, sidecar.DefaultName, sidecar.GetName())
 	if err != nil {
 		return nil, err
 	}
@@ -312,7 +367,10 @@ func (tm *TabletManager) ExecuteFetchAsApp(ctx context.Context, req *tabletmanag
 	// Replace any provided sidecar database qualifiers with the correct one,
 	// then gate before opening the mysqld connection so a rejected batch
 	// does not cost a connection acquire.
-	uq, err := tm.Env.Parser().ReplaceTableQualifiers(string(req.Query), sidecar.DefaultName, sidecar.GetName())
+	// The query is checked with Vitess's tokenizer and then sent to MySQL as
+	// written, so MySQL must skip every comment that Vitess skips.
+	query, _ := tm.Env.Parser().RewriteDoubleSlashComments(string(req.Query))
+	uq, err := tm.Env.Parser().ReplaceTableQualifiers(query, sidecar.DefaultName, sidecar.GetName())
 	if err != nil {
 		return nil, err
 	}

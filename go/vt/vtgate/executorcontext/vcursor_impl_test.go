@@ -338,6 +338,11 @@ func (f fakeExecutor) ExecuteMultiShard(ctx context.Context, primitive engine.Pr
 	panic("implement me")
 }
 
+func (f fakeExecutor) ExecuteMultiShardPerShard(ctx context.Context, primitive engine.Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, session *SafeSession, autocommit bool, resultsObserver ResultsObserver, fetchLastInsertID bool) (results []*sqltypes.Result, errs []error) {
+	// TODO implement me
+	panic("implement me")
+}
+
 func (f fakeExecutor) StreamExecuteMulti(ctx context.Context, primitive engine.Primitive, query string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, session *SafeSession, autocommit bool, callback func(reply *sqltypes.Result) error, observer ResultsObserver, fetchLastInsertID bool) []error {
 	// TODO implement me
 	panic("implement me")
@@ -621,6 +626,67 @@ func TestGetQueryPriority(t *testing.T) {
 				require.NoError(t, err)
 				require.Equal(t, tc.wantResult, result)
 			}
+		})
+	}
+}
+
+// TestPrepareSetVarCommentSortsVariables checks that the SET_VAR hint lists the
+// session's variables sorted by name, on every rendering, skipping the variables
+// that SET_VAR cannot carry.
+func TestPrepareSetVarCommentSortsVariables(t *testing.T) {
+	safeSession := NewSafeSession(&vtgatepb.Session{SystemVariables: map[string]string{
+		"sql_safe_updates":        "1",
+		"unique_checks":           "0",
+		"sql_mode":                "'ANSI'",
+		"max_execution_time":      "100",
+		"big_tables":              "1",
+		"join_buffer_size":        "262144",
+		"sort_buffer_size":        "262144",
+		"group_concat_max_len":    "4096",
+		"div_precision_increment": "6",
+		"max_tmp_tables":          "1", // not settable through SET_VAR
+		"autocommit":              "1", // handled by vtgate itself
+	}})
+	vc, err := NewVCursorImpl(safeSession, sqlparser.MarginComments{}, nil, nil, nil, &vindexes.VSchema{}, nil, nil, fakeObserver{}, VCursorConfig{}, nil)
+	require.NoError(t, err)
+
+	want := "SET_VAR(big_tables = 1) SET_VAR(div_precision_increment = 6) SET_VAR(group_concat_max_len = 4096) " +
+		"SET_VAR(join_buffer_size = 262144) SET_VAR(max_execution_time = 100) SET_VAR(sort_buffer_size = 262144) " +
+		"SET_VAR(sql_mode = 'ANSI') SET_VAR(sql_safe_updates = 1) SET_VAR(unique_checks = 0)"
+	for range 100 {
+		require.Equal(t, want, vc.PrepareSetVarComment())
+	}
+}
+
+func TestPrepareSetVarComment(t *testing.T) {
+	tcases := []struct {
+		name             string
+		sysVars          map[string]string
+		want             string
+		wantReservedConn bool
+	}{{
+		name:    "clean values are emitted as hints",
+		sysVars: map[string]string{"sql_mode": "'only_full_group_by'"},
+		want:    "SET_VAR(sql_mode = 'only_full_group_by')",
+	}, {
+		name:             "value containing the comment terminator falls back to a reserved connection",
+		sysVars:          map[string]string{"optimizer_switch": "'x */ select 1 -- '", "sql_mode": "'only_full_group_by'"},
+		want:             "SET_VAR(sql_mode = 'only_full_group_by')",
+		wantReservedConn: true,
+	}, {
+		name:    "variables without SET_VAR support are not inspected",
+		sysVars: map[string]string{"sql_notes": "'x */ select 1 -- '"},
+		want:    "",
+	}}
+	for _, tc := range tcases {
+		t.Run(tc.name, func(t *testing.T) {
+			session := NewSafeSession(&vtgatepb.Session{SystemVariables: tc.sysVars})
+			vc, err := NewVCursorImpl(session, sqlparser.MarginComments{}, nil, nil, nil, &vindexes.VSchema{}, nil, nil, fakeObserver{}, VCursorConfig{}, nil)
+			require.NoError(t, err)
+
+			got := vc.PrepareSetVarComment()
+			require.Equal(t, tc.want, got)
+			require.Equal(t, tc.wantReservedConn, session.InReservedConn())
 		})
 	}
 }

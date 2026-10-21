@@ -777,3 +777,81 @@ func ExecTestIncrementalBackupOnTwoTablets(t *testing.T, tcase *PITRTestCase) {
 		}
 	})
 }
+
+// ExecTestIncrementalBackupWithBinlogs takes a full backup that includes the source's binlogs, then two
+// incremental backups, and restores to a position and to a timestamp between the incrementals. The replayed
+// transactions must be binlogged after the restored binlogs, so the binlogs hold every transaction from the
+// first restored binlog to the restore point.
+func ExecTestIncrementalBackupWithBinlogs(t *testing.T, tcase *PITRTestCase) {
+	t.Run(tcase.Name, func(t *testing.T) {
+		code, err := LaunchCluster(tcase.SetupType, "xbstream", 0, tcase.ComprssDetails)
+		require.NoError(t, err, "setup failed with status code %d", code)
+		defer TearDownCluster()
+
+		InitTestTable(t)
+		InsertRowOnPrimary(t, "before-full-backup")
+		waitForReplica(t, 0)
+		FlushBinaryLogsOnReplica(t, 0, 1)
+		InsertRowOnPrimary(t, "before-full-backup-2")
+		waitForReplica(t, 0)
+
+		var fullManifest binlogManifest
+		t.Run("full backup", func(t *testing.T) {
+			backups := vtctlBackupReplicaNoDestroyNoWrites(t, 0, "--include-binlogs")
+			fullManifest = readBinlogManifest(t, backups[len(backups)-1])
+			require.True(t, fullManifest.IncludesBinlogs)
+			require.NotEmpty(t, fullManifest.BinlogFileEntries)
+		})
+		t.Run("incremental backup refuses binlogs", func(t *testing.T) {
+			// The refusal comes before the init SQL queries, which would otherwise run first.
+			output, err := localCluster.VtctldClientProcess.ExecuteCommandWithOutput("BackupShard", "--include-binlogs", "--incremental-from-pos", mysqlctl.AutoIncrementalFromPos,
+				"--init-backup-sql-queries", "SET GLOBAL innodb_old_blocks_time = 1234", "--init-backup-tablet-types", "REPLICA", "--init-backup-sql-timeout", "30s", shardKsName)
+			require.Error(t, err)
+			assert.Contains(t, output, "InvalidArgument")
+			assert.Contains(t, output, "including binlogs is only supported for full backups")
+			for _, replica := range []*cluster.Vttablet{replica1, replica2} {
+				assert.NotEqual(t, "1234", queryTabletValue(t, replica, "select @@global.innodb_old_blocks_time"), "init SQL ran on %s", replica.Alias)
+			}
+		})
+
+		incrementalBackup := func(t *testing.T, msg string) {
+			InsertRowOnPrimary(t, msg)
+			// Backups are named after the current second.
+			time.Sleep(postWriteSleepDuration)
+			waitForReplica(t, 0)
+			manifest, _ := TestReplicaIncrementalBackup(t, 0, mysqlctl.AutoIncrementalFromPos, false, "")
+			require.NotNil(t, manifest)
+		}
+		incrementalBackup(t, "incremental1")
+
+		InsertRowOnPrimary(t, "between-incrementals")
+		waitForReplica(t, 0)
+		targetPos, err := replication.DecodePosition(GetReplicaPosition(t, 0))
+		require.NoError(t, err)
+		targetRows := ReadRowsFromReplica(t, 0)
+		// --restore-to-timestamp has a one second resolution and excludes that second.
+		time.Sleep(postWriteSleepDuration)
+		targetTimestamp := time.Now()
+		time.Sleep(postWriteSleepDuration)
+
+		incrementalBackup(t, "incremental2")
+
+		verifyRestore := func(t *testing.T) {
+			assert.ElementsMatch(t, targetRows, ReadRowsFromReplica(t, 0))
+			gtidExecuted := getGTIDSet(t, replica1, "gtid_executed")
+			assert.Truef(t, targetPos.GTIDSet.Equal(gtidExecuted), "gtid_executed %v, restored to %v", gtidExecuted, targetPos)
+			verifyRestoredBinlogs(t, replica1, fullManifest.BinlogFileEntries)
+			verifyBinlogStream(t, replica1, targetRows)
+		}
+		t.Run("restore to position", func(t *testing.T) {
+			TestReplicaRestoreToPos(t, 0, targetPos, "")
+			verifyRestore(t)
+			ReconnectReplicaToPrimary(t, 0)
+			waitForReplica(t, 0)
+		})
+		t.Run("restore to timestamp", func(t *testing.T) {
+			TestReplicaRestoreToTimestamp(t, targetTimestamp, "")
+			verifyRestore(t)
+		})
+	})
+}

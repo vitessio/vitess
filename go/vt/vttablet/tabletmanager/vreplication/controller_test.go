@@ -835,3 +835,29 @@ func TestControllerErrorLogMessages(t *testing.T) {
 	require.Contains(t, errorLogs, expectedRetryPrefix,
 		"log message should have format 'workflow X, stream Y: error, will retry after ...', got: %s", errorLogs)
 }
+
+// TestTerminalVReplicationError tests the terminal error messages: the
+// unrecoverable class keeps the "terminal error:" prefix the Online DDL
+// executor's history scan matches; the resumable retries-exhausted class
+// starts with its own marker — a resumable condition must not be labeled a
+// terminal error — and names the flag bounding the retry window and its
+// effective value.
+func TestTerminalVReplicationError(t *testing.T) {
+	assert.False(t, strings.HasPrefix(RetriesExhaustedIndicator, TerminalErrorIndicator),
+		"the resumable marker must not be labeled with the legacy terminal prefix")
+	// The unrecoverable class must read as terminal to every version.
+	assert.True(t, strings.HasPrefix(UnrecoverableErrorIndicator, TerminalErrorIndicator))
+
+	baseErr := errors.New("connection refused")
+
+	err := terminalVReplicationError(baseErr, true, 15*time.Minute)
+	require.ErrorContains(t, err, UnrecoverableErrorIndicator)
+	require.ErrorContains(t, err, "connection refused")
+	require.True(t, strings.HasPrefix(err.Error(), TerminalErrorIndicator+":"))
+
+	err = terminalVReplicationError(baseErr, false, 15*time.Minute)
+	require.ErrorContains(t, err, "--vreplication-max-time-to-retry-on-error (15m0s)")
+	require.ErrorContains(t, err, "connection refused")
+	require.True(t, strings.HasPrefix(err.Error(), RetriesExhaustedIndicator+":"))
+	require.False(t, strings.HasPrefix(err.Error(), TerminalErrorIndicator))
+}

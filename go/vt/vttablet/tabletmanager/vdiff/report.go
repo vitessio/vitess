@@ -63,6 +63,13 @@ type DiffMismatch struct {
 type RowDiff struct {
 	Row   map[string]string `json:"Row,omitempty"`
 	Query string            `json:"Query,omitempty"`
+	// LosslessValues is set when the sample contains all of the row's column
+	// values without truncation, meaning it can be used to prove that two
+	// rows are identical during extra-row reconciliation. The marker is
+	// deliberately affirmative: samples that are lossy (only-pks, truncated
+	// values) -- or that were persisted by an older binary and reloaded on
+	// resume -- lack it and are excluded from reconciliation.
+	LosslessValues bool `json:"LosslessValues,omitempty"`
 }
 
 func (td *tableDiffer) genRowDiff(queryStmt string, row []sqltypes.Value, opts *tabletmanagerdatapb.VDiffReportOptions) (*RowDiff, error) {
@@ -81,6 +88,7 @@ func (td *tableDiffer) genRowDiff(queryStmt string, row []sqltypes.Value, opts *
 		rd.Query = td.genDebugQueryDiff(sel, row, opts.GetOnlyPks())
 	}
 
+	truncated := false
 	addVal := func(index int, truncateAt int) error {
 		buf := sqlparser.NewTrackedBuffer(nil)
 		sel.SelectExprs.Exprs[index].Format(buf)
@@ -88,6 +96,7 @@ func (td *tableDiffer) genRowDiff(queryStmt string, row []sqltypes.Value, opts *
 		// Let's truncate if it's really worth it to avoid losing
 		// value for a few chars.
 		if truncateAt > 0 && row[index].Len() >= truncateAt+len(truncatedNotation)+20 {
+			truncated = true
 			if row[index].IsBinary() {
 				rb, err := row[index].ToBytes()
 				if err != nil { // Should never happen
@@ -126,6 +135,9 @@ func (td *tableDiffer) genRowDiff(queryStmt string, row []sqltypes.Value, opts *
 	}
 
 	if opts.GetOnlyPks() {
+		// A PK-only sample is still lossless when the PK columns cover the
+		// entire projection, since PK values are never truncated.
+		rd.LosslessValues = len(pks) == len(sel.SelectExprs.Exprs)
 		return rd, nil
 	}
 
@@ -137,6 +149,10 @@ func (td *tableDiffer) genRowDiff(queryStmt string, row []sqltypes.Value, opts *
 			}
 		}
 	}
+
+	// The sample contains all of the row's column values (this point is not
+	// reached with only-pks); it is lossless if none of them were truncated.
+	rd.LosslessValues = !truncated
 
 	return rd, nil
 }

@@ -17,8 +17,6 @@ limitations under the License.
 package migrate
 
 import (
-	"errors"
-
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
@@ -55,9 +53,8 @@ var createCommand = &cobra.Command{
 	Aliases:               []string{"Create"},
 	Args:                  cobra.NoArgs,
 	PreRunE: func(cmd *cobra.Command, args []string) error {
-		// Either specific tables or the all tables flags are required.
-		if !cmd.Flags().Lookup("tables").Changed && !cmd.Flags().Lookup("all-tables").Changed {
-			return errors.New("tables or all-tables are required to specify which tables to move")
+		if err := common.ValidateTableSelection(createOptions.IncludeTables, createOptions.ExcludeTables, createOptions.AllTables); err != nil {
+			return err
 		}
 		if err := common.ParseAndValidateCreateOptions(cmd); err != nil {
 			return err

@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"reflect"
 	"slices"
 	"strings"
@@ -28,6 +29,7 @@ import (
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/key"
@@ -115,7 +117,35 @@ func (wd *workflowDiffer) reconcileReferenceTables(dr *DiffReport) error {
 	return nil
 }
 
+// tableProjectionIsAllPKs reports whether every column in the table's
+// comparison projection is part of the primary key, in which case even a
+// PK-only row sample contains the complete row.
+func (wd *workflowDiffer) tableProjectionIsAllPKs(tableName string) bool {
+	td, ok := wd.tableDiffers[tableName]
+	if !ok || td.tablePlan == nil || len(td.tablePlan.compareCols) == 0 {
+		return false
+	}
+	for _, col := range td.tablePlan.compareCols {
+		if !col.isPK {
+			return false
+		}
+	}
+	return true
+}
+
 func (wd *workflowDiffer) doReconcileExtraRows(dr *DiffReport, maxExtraRowsToCompare int64, maxReportSampleRows int64) error {
+	// Trim the extra rows diffs to the maxReportSampleRows value on every exit
+	// path: the diff collects samples up to maxExtraRowsToCompare per side,
+	// which can be greater than maxReportSampleRows. When rows are reconciled,
+	// this must happen after the slices and counts have been updated.
+	defer func() {
+		if int64(len(dr.ExtraRowsSourceDiffs)) > maxReportSampleRows && maxReportSampleRows > 0 {
+			dr.ExtraRowsSourceDiffs = dr.ExtraRowsSourceDiffs[:maxReportSampleRows]
+		}
+		if int64(len(dr.ExtraRowsTargetDiffs)) > maxReportSampleRows && maxReportSampleRows > 0 {
+			dr.ExtraRowsTargetDiffs = dr.ExtraRowsTargetDiffs[:maxReportSampleRows]
+		}
+	}()
 	if dr.ExtraRowsSource == 0 || dr.ExtraRowsTarget == 0 {
 		return nil
 	}
@@ -123,17 +153,56 @@ func (wd *workflowDiffer) doReconcileExtraRows(dr *DiffReport, maxExtraRowsToCom
 	matchedTargetDiffs := make([]bool, len(dr.ExtraRowsTargetDiffs))
 	matchedDiffs := int64(0)
 
-	maxRows := min(int(dr.ExtraRowsSource), int(maxExtraRowsToCompare))
+	// Bound the comparison by the number of saved samples, which can be lower
+	// than the extra-row counts, rather than by the counts themselves.
+	maxRows := min(len(dr.ExtraRowsSourceDiffs), int(maxExtraRowsToCompare))
 	log.Info(fmt.Sprintf("Reconciling extra rows for table %s in vdiff %s, extra source rows %d, extra target rows %d, max rows %d", dr.TableName, wd.ct.uuid, dr.ExtraRowsSource, dr.ExtraRowsTarget, maxRows))
 
-	// Find the matching extra rows
+	// Samples persisted by an older binary and reloaded on resume lack the
+	// LosslessValues marker but may still be provably complete:
+	// - a PK-only sample is complete when the comparison projection consists
+	//   entirely of PK columns (whose values are never truncated);
+	// - with truncation configured, a sample is complete when none of its
+	//   values carries the truncation marker, which truncation always
+	//   appends. A genuine value ending in the marker is indistinguishable
+	//   from a truncated one and stays excluded, which errs on the safe side.
+	allPKs := wd.tableProjectionIsAllPKs(dr.TableName)
+	isLossless := func(rd *RowDiff) bool {
+		if rd.LosslessValues {
+			return true
+		}
+		if wd.opts.GetReportOptions().GetOnlyPks() && !allPKs {
+			return false
+		}
+		if wd.opts.GetReportOptions().GetRowDiffColumnTruncateAt() > 0 {
+			for _, v := range rd.Row {
+				if strings.HasSuffix(v, truncatedNotation) {
+					return false
+				}
+			}
+		}
+		return true
+	}
+
+	// Find the matching extra rows. The extra row counts (dr.ExtraRowsSource/dr.ExtraRowsTarget)
+	// can be higher than the number of saved sample rows -- e.g. when the counts exceed
+	// maxExtraRowsToCompare -- so all indexing must be bounded by the slice lengths, never by
+	// the counts. Only lossless samples take part: samples with truncated values cannot
+	// prove that two rows are identical, and reconciling them could hide a real difference.
 	for i := 0; i < len(dr.ExtraRowsSourceDiffs); i++ {
+		if !isLossless(dr.ExtraRowsSourceDiffs[i]) {
+			continue
+		}
 		for j := 0; j < len(dr.ExtraRowsTargetDiffs); j++ {
-			if matchedTargetDiffs[j] {
-				// previously matched
+			if matchedTargetDiffs[j] || !isLossless(dr.ExtraRowsTargetDiffs[j]) {
+				// Previously matched, or not provably identical.
 				continue
 			}
-			if reflect.DeepEqual(dr.ExtraRowsSourceDiffs[i], dr.ExtraRowsTargetDiffs[j]) {
+			// Compare only the row data: the other RowDiff fields describe the
+			// sample's provenance (the side-specific debug query, the lossless
+			// marker which differs between samples persisted by older binaries
+			// and current ones), not the row itself.
+			if reflect.DeepEqual(dr.ExtraRowsSourceDiffs[i].Row, dr.ExtraRowsTargetDiffs[j].Row) {
 				matchedSourceDiffs[i] = true
 				matchedTargetDiffs[j] = true
 				matchedDiffs++
@@ -179,15 +248,17 @@ func (wd *workflowDiffer) doReconcileExtraRows(dr *DiffReport, maxExtraRowsToCom
 		log.Info(fmt.Sprintf("Reconciled extra rows for table %s in vdiff %s, matching rows %d, extra source rows %d, extra target rows %d. Max compared rows %d", dr.TableName, wd.ct.uuid, matchedDiffs, dr.ExtraRowsSource, dr.ExtraRowsTarget, maxRows))
 	}
 
-	// Trim the extra rows diffs to the maxReportSampleRows value. Note we need to do this after updating
-	// the slices and counts above, since maxExtraRowsToCompare can be greater than maxVDiffReportSampleRows.
-	if int64(len(dr.ExtraRowsSourceDiffs)) > maxReportSampleRows && maxReportSampleRows > 0 {
-		dr.ExtraRowsSourceDiffs = dr.ExtraRowsSourceDiffs[:maxReportSampleRows-1]
-	}
-	if int64(len(dr.ExtraRowsTargetDiffs)) > maxReportSampleRows && maxReportSampleRows > 0 {
-		dr.ExtraRowsTargetDiffs = dr.ExtraRowsTargetDiffs[:maxReportSampleRows-1]
-	}
 	return nil
+}
+
+// maxDiffDurationUnresumableError builds the error diffTable returns when an
+// un-checkpointable table exceeds --max-diff-duration. It is a MySQL
+// ERNotSupportedYet error so it survives persist+rebuild as non-ephemeral and the
+// engine does not auto-retry it forever.
+func maxDiffDurationUnresumableError(tableName string) error {
+	return sqlerror.NewSQLError(sqlerror.ERNotSupportedYet, sqlerror.SSClientError,
+		fmt.Sprintf("table %s exceeded the configured --max-diff-duration and cannot be resumed because no resumable source checkpoint can be built for it (its filter does not project the full source primary key, or its target primary key extends a source key that is unique only within each source shard); increase or unset --max-diff-duration so it can complete within a single window",
+			tableName))
 }
 
 func (wd *workflowDiffer) diffTable(ctx context.Context, dbClient binlogplayer.DBClient, td *tableDiffer) error {
@@ -264,6 +335,18 @@ func (wd *workflowDiffer) diffTable(ctx context.Context, dbClient binlogplayer.D
 		if !errors.Is(diffErr, ErrMaxDiffDurationExceeded) { // We only want to retry if we hit the max-diff-duration
 			return diffErr
 		}
+		if td.tablePlan.sourceCheckpointUnavailable {
+			// This table cannot be checkpointed (see getSourcePKCols), so it
+			// cannot be resumed and every retry would restart from the beginning
+			// and hit the same timeout. We do not override the operator's
+			// --max-diff-duration bound (long-lived snapshots have real
+			// operational cost), so we stop here. The failure is wrapped as a
+			// MySQL ERNotSupportedYet so that its "(errno 1235)" suffix survives
+			// being persisted as a string and rebuilt by retryVDiffs: that makes
+			// IsEphemeralError classify it as non-ephemeral, so the engine does
+			// not auto-retry it forever.
+			return maxDiffDurationUnresumableError(td.table.Name)
+		}
 	}
 	log.Info(fmt.Sprintf("Table diff done on table %s for vdiff %s with report: %+v", td.table.Name, wd.ct.uuid, diffReport))
 
@@ -275,7 +358,7 @@ func (wd *workflowDiffer) diffTable(ctx context.Context, dbClient binlogplayer.D
 	}
 
 	if diffReport.MismatchedRows > 0 || diffReport.ExtraRowsTarget > 0 || diffReport.ExtraRowsSource > 0 {
-		if err := updateTableMismatch(dbClient, wd.ct.id, td.table.Name); err != nil {
+		if err := setTableMismatch(dbClient, wd.ct.id, td.table.Name, true); err != nil {
 			return err
 		}
 	}
@@ -346,11 +429,7 @@ func (wd *workflowDiffer) diff(ctx context.Context) (err error) {
 
 		log.Info(fmt.Sprintf("Starting diff of table %s for vdiff %s", td.table.Name, wd.ct.uuid))
 		if err := wd.diffTable(ctx, dbClient, td); err != nil {
-			if err := td.updateTableState(ctx, dbClient, ErrorState); err != nil {
-				return err
-			}
-			insertVDiffLog(ctx, dbClient, wd.ct.id, fmt.Sprintf("Table %s Error: %s", td.table.Name, err))
-			return err
+			return wd.markTableErrored(ctx, dbClient, td, err)
 		}
 		if err := td.updateTableState(ctx, dbClient, CompletedState); err != nil {
 			return err
@@ -361,6 +440,18 @@ func (wd *workflowDiffer) diff(ctx context.Context) (err error) {
 		return err
 	}
 	return nil
+}
+
+// markTableErrored returns diffErr; a failure marking the table errored (e.g. a closed connection) must not shadow it.
+func (wd *workflowDiffer) markTableErrored(ctx context.Context, dbClient binlogplayer.DBClient, td *tableDiffer, diffErr error) error {
+	if stateErr := td.updateTableState(ctx, dbClient, ErrorState); stateErr != nil {
+		log.Error("failed to mark table as errored",
+			slog.String("table", td.table.Name),
+			slog.String("vdiff", wd.ct.uuid),
+			slog.Any("error", stateErr))
+	}
+	insertVDiffLog(ctx, dbClient, wd.ct.id, fmt.Sprintf("Table %s Error: %s", td.table.Name, diffErr))
+	return diffErr
 }
 
 func (wd *workflowDiffer) markIfCompleted(ctx context.Context, dbClient binlogplayer.DBClient) error {

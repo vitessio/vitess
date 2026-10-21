@@ -172,6 +172,85 @@ func closeFile(wc io.WriteCloser, fileName string, logger logutil.Logger, finalE
 	}
 }
 
+// closeBackupFiles closes destFiles, renaming per-stripe as needed. A
+// background watchdog cancels ctx via cancel if the Close() calls don't
+// return within timeout. On some backends (e.g. S3, Ceph) ctx is also used by
+// a background upload goroutine that outlives Close(), so cancel must only be
+// called on an actual timeout, never just because closing finished — doing so
+// would abort an otherwise-successful upload that hasn't been drained yet by
+// bh.Wait()/EndBackup().
+func closeBackupFiles(ctx context.Context, cancel context.CancelFunc, timeout time.Duration, destFiles []io.WriteCloser, backupFileName string, numStripes int, logger logutil.Logger, finalErr *error) {
+	done := make(chan struct{})
+	// watchdogDone is closed when the watchdog goroutine exits, so we can wait
+	// for it to fully finish before returning and be sure it will make no
+	// further calls to cancel().
+	watchdogDone := make(chan struct{})
+	// closingFinished, guarded by mu, records that every Close() call returned.
+	// The watchdog checks it under the same lock before cancelling, so once
+	// closing is marked finished the watchdog cannot cancel.
+	//
+	// This narrows but cannot fully eliminate the boundary race: "Close()
+	// returned" only becomes observable via the statement that sets this flag
+	// (below), so a timer that fires in the few-instruction gap between the
+	// final Close() returning and mu.Lock() can still win the lock, see false,
+	// and cancel(). That gap is irreducible — no completion signal (flag,
+	// channel close/send, timer.Stop()) can land atomically with Close()
+	// returning. The consequence, given the caller drains and inspects uploads
+	// via bh.Wait()/bh.Error() before writing the MANIFEST, is at worst a rare
+	// spurious backup failure that gets retried — never the recreate-after-
+	// abort corruption this whole change exists to prevent.
+	var mu sync.Mutex
+	closingFinished := false
+	go func() {
+		defer close(watchdogDone)
+		timer := time.NewTimer(timeout)
+
+		select {
+		case <-done:
+			timer.Stop()
+		case <-timer.C:
+			mu.Lock()
+			defer mu.Unlock()
+			if closingFinished {
+				// Closing finished just as the timer fired; don't cancel an
+				// otherwise-successful, still-in-flight upload.
+				return
+			}
+			logger.Errorf("Timed out waiting for Close() on backup file to complete")
+			// Cancelling the Context that was originally passed to bh.AddFile()
+			// should hopefully cause Close() calls on the file that AddFile()
+			// returned to abort. If the underlying implementation doesn't
+			// respect cancellation of the AddFile() Context while inside
+			// Close(), then we just hang because it's unsafe to return and
+			// leave Close() running indefinitely in the background.
+			cancel()
+		}
+	}()
+
+	filename := backupFileName
+	for i, file := range destFiles {
+		if numStripes > 1 {
+			filename = stripeFileName(backupFileName, i)
+		}
+		closeFile(file, filename, logger, finalErr)
+	}
+
+	// Mark closing finished under the lock before signalling the watchdog, so a
+	// timer that fires at this instant observes the flag and suppresses its
+	// cancel() instead of aborting a successful close.
+	mu.Lock()
+	closingFinished = true
+	mu.Unlock()
+	// Signal the watchdog to stop waiting now that closing has finished. This
+	// must not call cancel(): closing successfully doesn't mean any
+	// background upload started by bh.AddFile() has finished too.
+	close(done)
+	// Wait for the watchdog to fully exit before returning, so no cancel() can
+	// fire after this function returns and abort an in-flight S3/Ceph upload
+	// that hasn't been drained yet by bh.Wait()/EndBackup().
+	<-watchdogDone
+}
+
 // ExecuteBackup runs a backup based on given params. This could be a full or incremental backup.
 // The function returns a BackupResult that indicates the usability of the backup, and an overall error.
 func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (BackupResult, error) {
@@ -255,23 +334,21 @@ func (be *XtrabackupEngine) executeFullBackup(ctx context.Context, params Backup
 	// JSON-encode and write the MANIFEST
 	bm := &xtraBackupManifest{
 		// Common base fields
-		BackupManifest: BackupManifest{
-			BackupName:     bh.Name(),
-			BackupMethod:   xtrabackupEngineName,
-			Position:       replicationPosition,
-			PurgedPosition: replicationPosition,
-			ServerUUID:     serverUUID,
-			TabletAlias:    params.TabletAlias,
-			Hostname:       hostname,
-			Keyspace:       params.Keyspace,
-			Shard:          params.Shard,
-			BackupTime:     FormatRFC3339(params.BackupTime.UTC()),
-			FinishedTime:   FormatRFC3339(time.Now().UTC()),
-			MySQLVersion:   mysqlVersion,
-			// xtrabackup backups are always created such that they
-			// are safe to use for upgrades later on.
-			UpgradeSafe: true,
-		},
+		BackupName:     bh.Name(),
+		BackupMethod:   xtrabackupEngineName,
+		Position:       replicationPosition,
+		PurgedPosition: replicationPosition,
+		ServerUUID:     serverUUID,
+		TabletAlias:    params.TabletAlias,
+		Hostname:       hostname,
+		Keyspace:       params.Keyspace,
+		Shard:          params.Shard,
+		BackupTime:     FormatRFC3339(params.BackupTime.UTC()),
+		FinishedTime:   FormatRFC3339(time.Now().UTC()),
+		MySQLVersion:   mysqlVersion,
+		// xtrabackup backups are always created such that they
+		// are safe to use for upgrades later on.
+		UpgradeSafe: true,
 
 		// XtraBackup-specific fields
 		FileName:        backupFileName,
@@ -336,45 +413,40 @@ func (be *XtrabackupEngine) backupFiles(
 	// This context also allows us to immediately abort AddFiles if we encountered
 	// an error in this function.
 	addFilesCtx, cancelAddFiles := context.WithCancel(ctx)
+	// This must run after closeBackupFiles below, so it's deferred first:
+	// defers run LIFO, and closeBackupFiles needs addFilesCtx to still be live
+	// while it closes destFiles.
 	defer func() {
 		if finalErr != nil {
+			// We're already failing: cancel first so any straggling
+			// background uploads (S3, Ceph) stop as promptly as possible,
+			// then drain them. Without this wait, the caller could invoke
+			// AbortBackup() while an upload is still in flight; AbortBackup
+			// only removes objects that already exist in storage, so an
+			// upload landing after that removal would recreate part of the
+			// backup we're trying to discard.
 			cancelAddFiles()
+			bh.Wait()
+			return
 		}
+
+		// Drain any in-flight background uploads (S3, Ceph) and surface
+		// their errors before letting the caller proceed to write the
+		// MANIFEST, for the same reason: the MANIFEST must not be written
+		// (and the backup must not be reported usable) while an upload that
+		// could still fail is outstanding.
+		bh.Wait()
+		if err := bh.Error(); err != nil {
+			finalErr = vterrors.Wrap(err, "error uploading backup file")
+		}
+		cancelAddFiles()
 	}()
 
 	destFiles, err := addStripeFiles(addFilesCtx, params, bh, backupFileName, numStripes)
 	if err != nil {
 		return replicationPosition, vterrors.Wrapf(err, "cannot create backup file %v", backupFileName)
 	}
-	defer func() {
-		// Impose a timeout on the process of closing files.
-		go func() {
-			timer := time.NewTimer(closeTimeout)
-
-			select {
-			case <-addFilesCtx.Done():
-				timer.Stop()
-				return
-			case <-timer.C:
-				params.Logger.Errorf("Timed out waiting for Close() on backup file to complete")
-				// Cancelling the Context that was originally passed to bh.AddFile()
-				// should hopefully cause Close() calls on the file that AddFile()
-				// returned to abort. If the underlying implementation doesn't
-				// respect cancellation of the AddFile() Context while inside
-				// Close(), then we just hang because it's unsafe to return and
-				// leave Close() running indefinitely in the background.
-				cancelAddFiles()
-			}
-		}()
-
-		filename := backupFileName
-		for i, file := range destFiles {
-			if numStripes > 1 {
-				filename = stripeFileName(backupFileName, i)
-			}
-			closeFile(file, filename, params.Logger, &finalErr)
-		}
-	}()
+	defer closeBackupFiles(addFilesCtx, cancelAddFiles, closeTimeout, destFiles, backupFileName, numStripes, params.Logger, &finalErr)
 
 	backupCmd := exec.CommandContext(ctx, backupProgram, flagsToExec...)
 	backupOut, err := backupCmd.StdoutPipe()

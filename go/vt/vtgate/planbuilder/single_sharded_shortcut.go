@@ -77,12 +77,15 @@ func getTableNames(semTable *semantics.SemTable) ([]sqlparser.TableName, error) 
 			}
 		}
 	}
-	var keys []string
+	if len(tableNameMap) == 0 {
+		return nil, nil
+	}
+	keys := make([]string, 0, len(tableNameMap))
 	for k := range tableNameMap {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
-	var tableNames []sqlparser.TableName
+	tableNames := make([]sqlparser.TableName, 0, len(keys))
 	for _, k := range keys {
 		tableNames = append(tableNames, tableNameMap[k])
 	}

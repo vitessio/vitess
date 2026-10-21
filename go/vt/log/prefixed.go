@@ -27,7 +27,9 @@ func NewPrefixedLogger(prefix string) *PrefixedLogger {
 }
 
 func (pl *PrefixedLogger) Info(msg string, attrs ...slog.Attr) { InfoDepth(1, pl.prefix+msg, attrs...) }
+
 func (pl *PrefixedLogger) Warn(msg string, attrs ...slog.Attr) { WarnDepth(1, pl.prefix+msg, attrs...) }
+
 func (pl *PrefixedLogger) Error(msg string, attrs ...slog.Attr) {
 	ErrorDepth(1, pl.prefix+msg, attrs...)
 }
