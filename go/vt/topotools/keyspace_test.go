@@ -34,13 +34,15 @@ import (
 )
 
 // barrierRefreshTMC holds every RefreshState call until all of the expected
-// calls have started, or until the call's context is done.
+// calls have started, or until the call's context is done. It records the
+// longest time any call had left before its context deadline.
 type barrierRefreshTMC struct {
 	tmclient.TabletManagerClient
 
 	expected int
 	mu       sync.Mutex
 	started  int
+	maxLeft  time.Duration
 	allIn    chan struct{}
 }
 
@@ -49,6 +51,9 @@ func (c *barrierRefreshTMC) RefreshState(ctx context.Context, tablet *topodatapb
 	c.started++
 	if c.started == c.expected {
 		close(c.allIn)
+	}
+	if deadline, ok := ctx.Deadline(); ok {
+		c.maxLeft = max(c.maxLeft, time.Until(deadline))
 	}
 	c.mu.Unlock()
 
@@ -61,16 +66,18 @@ func (c *barrierRefreshTMC) RefreshState(ctx context.Context, tablet *topodatapb
 }
 
 // TestUpdateShardRecordsRefreshesShardsConcurrently checks that UpdateShardRecords
-// refreshes the tablets of all the 'to' shards concurrently. Each shard has one
-// tablet whose RefreshState returns only once every shard's RefreshState has
-// started, so refreshing the shards one at a time runs into the context deadline.
+// refreshes the tablets of all the 'to' shards concurrently, within refreshTimeout.
+// Each shard has one tablet whose RefreshState returns only once every shard's
+// RefreshState has started, so refreshing the shards one at a time runs into the
+// refresh deadline.
 func TestUpdateShardRecordsRefreshesShardsConcurrently(t *testing.T) {
 	const (
-		cell      = "cell1"
-		keyspace  = "ks"
-		numShards = 16
+		cell           = "cell1"
+		keyspace       = "ks"
+		numShards      = 16
+		refreshTimeout = 30 * time.Second
 	)
-	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 2*refreshTimeout)
 	t.Cleanup(cancel)
 	ts := memorytopo.NewServer(ctx, cell)
 	t.Cleanup(ts.Close)
@@ -103,11 +110,11 @@ func TestUpdateShardRecordsRefreshesShardsConcurrently(t *testing.T) {
 
 	tmc := &barrierRefreshTMC{expected: numShards, allIn: make(chan struct{})}
 	err = UpdateShardRecords(lockCtx, ts, tmc, keyspace, shards, []string{cell}, topodatapb.TabletType_REPLICA,
-		false /* isFrom */, false /* clearSourceShards */, logutil.NewMemoryLogger())
+		false /* isFrom */, false /* clearSourceShards */, refreshTimeout, logutil.NewMemoryLogger())
 	require.NoError(t, err)
 
 	tmc.mu.Lock()
-	started := tmc.started
-	tmc.mu.Unlock()
-	require.Equal(t, numShards, started)
+	defer tmc.mu.Unlock()
+	require.Equal(t, numShards, tmc.started)
+	require.LessOrEqual(t, tmc.maxLeft, refreshTimeout)
 }
