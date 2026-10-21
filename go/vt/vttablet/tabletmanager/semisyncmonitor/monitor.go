@@ -18,6 +18,7 @@ package semisyncmonitor
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -196,28 +197,27 @@ func (m *Monitor) Close() {
 	m.ticks.Stop()
 }
 
-// callbackContext bounds a callback's work by timeout and by the monitor's
+// callbackContext returns the monitor's lifetime, which a callback reads once,
+// and a context for acquiring a connection that ends at timeout or with that
 // lifetime, so that Close does not wait for a connect in progress.
-func (m *Monitor) callbackContext(timeout time.Duration) (context.Context, context.CancelFunc) {
+func (m *Monitor) callbackContext(timeout time.Duration) (lifetime context.Context, ctx context.Context, cancel context.CancelFunc) {
 	m.mu.Lock()
-	parent := m.lifetime
-	m.mu.Unlock()
-	if parent == nil {
-		parent = context.Background()
-	}
-	return context.WithTimeout(parent, timeout)
-}
-
-// interruptOnClose closes conn when the monitor closes, which ends the query
-// in flight on it. Call the returned function before recycling conn.
-func (m *Monitor) interruptOnClose(conn *dbconnpool.PooledDBConnection) func() bool {
-	m.mu.Lock()
-	lifetime := m.lifetime
+	lifetime = m.lifetime
 	m.mu.Unlock()
 	if lifetime == nil {
-		return func() bool { return true }
+		lifetime = context.Background()
 	}
-	return context.AfterFunc(lifetime, conn.Conn.Close)
+	ctx, cancel = context.WithTimeout(lifetime, timeout)
+	return lifetime, ctx, cancel
+}
+
+// recordError counts and logs err, unless it came from the monitor closing.
+func (m *Monitor) recordError(lifetime context.Context, msg string, err error) {
+	if lifetime.Err() != nil {
+		return
+	}
+	m.errorCount.Add(1)
+	log.Error(fmt.Sprintf("SemiSync Monitor: %s: %v", msg, err))
 }
 
 // checkAndFixSemiSyncBlocked checks if the primary is blocked on semi-sync ack
@@ -227,10 +227,12 @@ func (m *Monitor) checkAndFixSemiSyncBlocked() {
 	// Check if semi-sync is blocked or not.
 	isBlocked, err := m.isSemiSyncBlocked()
 	if err != nil {
-		m.errorCount.Add(1)
 		// If we are unable to determine whether the primary is blocked or not,
 		// then we can just abort the function and try again later.
-		log.Error(fmt.Sprintf("SemiSync Monitor: failed to check if primary is blocked on semi-sync: %v", err))
+		if !errors.Is(err, context.Canceled) {
+			m.errorCount.Add(1)
+			log.Error(fmt.Sprintf("SemiSync Monitor: failed to check if primary is blocked on semi-sync: %v", err))
+		}
 		return
 	}
 	// Set the isBlocked state.
@@ -244,26 +246,37 @@ func (m *Monitor) checkAndFixSemiSyncBlocked() {
 	}
 }
 
-// isSemiSyncBlocked checks if the primary is blocked on semi-sync.
-func (m *Monitor) isSemiSyncBlocked() (bool, error) {
-	ctx, cancel := m.callbackContext(m.ticks.Interval())
+// beforeProgressDelay runs before isSemiSyncBlocked waits between its two
+// stats reads. Tests use it to close the monitor during the wait.
+var beforeProgressDelay = func() {}
+
+// isSemiSyncBlocked checks if the primary is blocked on semi-sync. An error
+// caused by the monitor closing is returned as context.Canceled.
+func (m *Monitor) isSemiSyncBlocked() (blocked bool, err error) {
+	lifetime, ctx, cancel := m.callbackContext(m.ticks.Interval())
 	defer cancel()
+	defer func() {
+		if err != nil && lifetime.Err() != nil {
+			err = lifetime.Err()
+		}
+	}()
 	// Get a connection from the pool
 	conn, err := m.appPool.Get(ctx)
 	if err != nil {
 		return false, err
 	}
 	defer conn.Recycle()
-	defer m.interruptOnClose(conn)()
+	defer context.AfterFunc(lifetime, conn.Conn.Close)()
 
 	stats, err := m.getSemiSyncStats(conn)
 	if err != nil || stats.waitingSessions == 0 {
 		return false, err
 	}
+	beforeProgressDelay()
 	select {
 	case <-time.After(m.actionDelay):
-	case <-ctx.Done():
-		return false, ctx.Err()
+	case <-lifetime.Done():
+		return false, lifetime.Err()
 	}
 	followUpStats, err := m.getSemiSyncStats(conn)
 	if err != nil || followUpStats.waitingSessions == 0 || followUpStats.ackedTrxs > stats.ackedTrxs {
@@ -404,15 +417,14 @@ func (m *Monitor) write() {
 	}
 	defer m.decrementWriteCount()
 	// Get a connection from the pool
-	ctx, cancel := m.callbackContext(m.actionTimeout)
+	lifetime, ctx, cancel := m.callbackContext(m.actionTimeout)
 	defer cancel()
 	conn, err := m.appPool.Get(ctx)
 	if err != nil {
-		m.errorCount.Add(1)
-		log.Error(fmt.Sprintf("SemiSync Monitor: failed to get a connection when writing to semisync_heartbeat table: %v", err))
+		m.recordError(lifetime, "failed to get a connection when writing to semisync_heartbeat table", err)
 		return
 	}
-	stopInterrupt := m.interruptOnClose(conn)
+	stopInterrupt := context.AfterFunc(lifetime, conn.Conn.Close)
 	err = m.setLockWaitTimeout(conn)
 	if err == nil {
 		_, err = conn.Conn.ExecuteFetch(m.bindSideCarDBName(semiSyncHeartbeatWrite), 0, false)
@@ -420,8 +432,7 @@ func (m *Monitor) write() {
 	stopInterrupt()
 	conn.Recycle()
 	if err != nil {
-		m.errorCount.Add(1)
-		log.Error(fmt.Sprintf("SemiSync Monitor: failed to write to semisync_heartbeat table: %v", err))
+		m.recordError(lifetime, "failed to write to semisync_heartbeat table", err)
 	} else {
 		// One of the writes went through without an error.
 		// This means that we aren't blocked on semi-sync anymore.
@@ -448,23 +459,21 @@ func (m *Monitor) setIsBlocked(val bool) {
 // consumes too much space on the MySQL instance.
 func (m *Monitor) clearAllData() {
 	// Get a connection from the pool
-	ctx, cancel := m.callbackContext(m.actionTimeout)
+	lifetime, ctx, cancel := m.callbackContext(m.actionTimeout)
 	defer cancel()
 	conn, err := m.appPool.Get(ctx)
 	if err != nil {
-		m.errorCount.Add(1)
-		log.Error(fmt.Sprintf("SemiSync Monitor: failed get a connection to clear semisync_heartbeat table: %v", err))
+		m.recordError(lifetime, "failed get a connection to clear semisync_heartbeat table", err)
 		return
 	}
 	defer conn.Recycle()
-	defer m.interruptOnClose(conn)()
+	defer context.AfterFunc(lifetime, conn.Conn.Close)()
 	err = m.setLockWaitTimeout(conn)
 	if err == nil {
 		_, err = conn.Conn.ExecuteFetch(m.bindSideCarDBName(semiSyncHeartbeatClear), 0, false)
 	}
 	if err != nil {
-		m.errorCount.Add(1)
-		log.Error(fmt.Sprintf("SemiSync Monitor: failed to clear semisync_heartbeat table: %v", err))
+		m.recordError(lifetime, "failed to clear semisync_heartbeat table", err)
 	}
 }
 
