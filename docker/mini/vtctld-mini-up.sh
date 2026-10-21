@@ -18,7 +18,6 @@
 
 source ./env.sh
 
-cell=${CELL:-'test'}
 grpc_port=15999
 
 echo "- Starting vtctld..."
@@ -26,7 +25,6 @@ echo "- Starting vtctld..."
 vtctld \
  $TOPOLOGY_FLAGS \
  --disable-active-reparents \
- -cell $cell \
  -service-map 'grpc-vtctl' \
  -backup-storage-implementation file \
  -file-backup-storage-root $VTDATAROOT/backups \
