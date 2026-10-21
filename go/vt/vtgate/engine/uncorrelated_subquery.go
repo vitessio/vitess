@@ -18,6 +18,13 @@ package engine
 
 import (
 	"context"
+<<<<<<< HEAD
+||||||| parent of 1a3cc02214 (vtgate: support row comparisons with subqueries that can't be merged (#21634))
+	"maps"
+=======
+	"fmt"
+	"maps"
+>>>>>>> 1a3cc02214 (vtgate: support row comparisons with subqueries that can't be merged (#21634))
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -36,6 +43,13 @@ type UncorrelatedSubquery struct {
 	// SubqueryResult and HasValues are used to send in the bindvar used in the query to the underlying primitive
 	SubqueryResult string
 	HasValues      string
+	// RowColumns is how many columns each row of a PulloutIn or PulloutNotIn subquery has, when it is more than
+	// one, as in `(a, b) in (select x, y ...)`. SubqueryResult is then bound to a list of tuples rather than of values.
+	RowColumns int
+	// RowResults holds one bind variable per column for a PulloutValue subquery whose row has more than one column,
+	// as in `(a, b) < (select x, y ...)`. Each column is bound to its own variable, and SubqueryResult is not bound,
+	// because outside of an IN list a bind variable can only hold a single value.
+	RowResults []string
 
 	Subquery Primitive
 	Outer    Primitive
@@ -76,13 +90,10 @@ func (ps *UncorrelatedSubquery) GetFields(ctx context.Context, vcursor VCursor, 
 	}
 	switch ps.Opcode {
 	case opcode.PulloutValue:
-		combinedVars[ps.SubqueryResult] = sqltypes.NullBindVariable
+		ps.bindNullValue(combinedVars)
 	case opcode.PulloutIn, opcode.PulloutNotIn:
 		combinedVars[ps.HasValues] = sqltypes.Int64BindVariable(0)
-		combinedVars[ps.SubqueryResult] = &querypb.BindVariable{
-			Type:   querypb.Type_TUPLE,
-			Values: []*querypb.Value{sqltypes.ValueToProto(sqltypes.NewInt64(0))},
-		}
+		combinedVars[ps.SubqueryResult] = ps.placeholderList()
 	case opcode.PulloutExists:
 		combinedVars[ps.HasValues] = sqltypes.Int64BindVariable(0)
 	}
@@ -108,16 +119,33 @@ func (ps *UncorrelatedSubquery) execSubquery(ctx context.Context, vcursor VCurso
 		return nil, err
 	}
 	combinedVars := make(map[string]*querypb.BindVariable, len(bindVars)+1)
+<<<<<<< HEAD
 	for k, v := range bindVars {
 		combinedVars[k] = v
+||||||| parent of 1a3cc02214 (vtgate: support row comparisons with subqueries that can't be merged (#21634))
+	maps.Copy(combinedVars, bindVars)
+=======
+	maps.Copy(combinedVars, bindVars)
+	width := max(ps.RowColumns, len(ps.RowResults))
+	for _, row := range result.Rows {
+		if len(row) < width {
+			return nil, vterrors.VT13001(fmt.Sprintf("subquery returned %d columns for a row of %d", len(row), width))
+		}
+>>>>>>> 1a3cc02214 (vtgate: support row comparisons with subqueries that can't be merged (#21634))
 	}
 	switch ps.Opcode {
 	case opcode.PulloutValue:
 		switch len(result.Rows) {
 		case 0:
-			combinedVars[ps.SubqueryResult] = sqltypes.NullBindVariable
+			ps.bindNullValue(combinedVars)
 		case 1:
-			combinedVars[ps.SubqueryResult] = sqltypes.ValueBindVariable(result.Rows[0][0])
+			if len(ps.RowResults) == 0 {
+				combinedVars[ps.SubqueryResult] = sqltypes.ValueBindVariable(result.Rows[0][0])
+				break
+			}
+			for i, name := range ps.RowResults {
+				combinedVars[name] = sqltypes.ValueBindVariable(result.Rows[0][i])
+			}
 		default:
 			return nil, errSqRow
 		}
@@ -126,10 +154,7 @@ func (ps *UncorrelatedSubquery) execSubquery(ctx context.Context, vcursor VCurso
 		case 0:
 			combinedVars[ps.HasValues] = sqltypes.Int64BindVariable(0)
 			// Add a bogus value. It will not be checked.
-			combinedVars[ps.SubqueryResult] = &querypb.BindVariable{
-				Type:   querypb.Type_TUPLE,
-				Values: []*querypb.Value{sqltypes.ValueToProto(sqltypes.NewInt64(0))},
-			}
+			combinedVars[ps.SubqueryResult] = ps.placeholderList()
 		default:
 			combinedVars[ps.HasValues] = sqltypes.Int64BindVariable(1)
 			values := &querypb.BindVariable{
@@ -137,7 +162,12 @@ func (ps *UncorrelatedSubquery) execSubquery(ctx context.Context, vcursor VCurso
 				Values: make([]*querypb.Value, len(result.Rows)),
 			}
 			for i, v := range result.Rows {
-				values.Values[i] = sqltypes.ValueToProto(v[0])
+				if ps.RowColumns > 1 {
+					// The subquery can return more columns than the row, such as a weight_string for its ordering.
+					values.Values[i] = sqltypes.TupleToProto(v[:ps.RowColumns])
+				} else {
+					values.Values[i] = sqltypes.ValueToProto(v[0])
+				}
 			}
 			combinedVars[ps.SubqueryResult] = values
 		}
@@ -152,17 +182,53 @@ func (ps *UncorrelatedSubquery) execSubquery(ctx context.Context, vcursor VCurso
 	return combinedVars, nil
 }
 
+// bindNullValue binds the result of a PulloutValue subquery that returned no rows: NULL, or a NULL for each
+// column of its row, which is how MySQL compares a row with an empty row subquery.
+func (ps *UncorrelatedSubquery) bindNullValue(bindVars map[string]*querypb.BindVariable) {
+	if len(ps.RowResults) == 0 {
+		bindVars[ps.SubqueryResult] = sqltypes.NullBindVariable
+		return
+	}
+	for _, name := range ps.RowResults {
+		bindVars[name] = sqltypes.NullBindVariable
+	}
+}
+
+// placeholderList returns the list bound for a PulloutIn or PulloutNotIn subquery that returned no rows. The
+// has-values guard keeps it from being compared, but MySQL still rejects it unless it is as wide as the row.
+func (ps *UncorrelatedSubquery) placeholderList() *querypb.BindVariable {
+	if ps.RowColumns <= 1 {
+		return &querypb.BindVariable{
+			Type:   querypb.Type_TUPLE,
+			Values: []*querypb.Value{sqltypes.ValueToProto(sqltypes.NewInt64(0))},
+		}
+	}
+	row := make([]sqltypes.Value, ps.RowColumns)
+	for i := range row {
+		row[i] = sqltypes.NewInt64(0)
+	}
+	return &querypb.BindVariable{
+		Type:   querypb.Type_TUPLE,
+		Values: []*querypb.Value{sqltypes.TupleToProto(row)},
+	}
+}
+
 func (ps *UncorrelatedSubquery) description() PrimitiveDescription {
 	other := map[string]any{}
 	var pulloutVars []string
 	if ps.HasValues != "" {
 		pulloutVars = append(pulloutVars, ps.HasValues)
 	}
-	if ps.SubqueryResult != "" {
+	if len(ps.RowResults) > 0 {
+		pulloutVars = append(pulloutVars, ps.RowResults...)
+	} else if ps.SubqueryResult != "" {
 		pulloutVars = append(pulloutVars, ps.SubqueryResult)
 	}
 	if len(pulloutVars) > 0 {
 		other["PulloutVars"] = pulloutVars
+	}
+	if ps.RowColumns > 1 {
+		other["RowColumns"] = ps.RowColumns
 	}
 	return PrimitiveDescription{
 		OperatorType: "UncorrelatedSubquery",
