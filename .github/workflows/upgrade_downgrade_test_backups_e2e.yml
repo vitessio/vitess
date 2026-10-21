@@ -61,6 +61,7 @@ jobs:
             - 'config/**'
             - 'bootstrap.sh'
             - '.github/workflows/upgrade_downgrade_test_backups_e2e.yml'
+            - '.github/actions/setup-mysql/action.yml'
 
     - name: Tune the OS
       if: steps.changes.outputs.end_to_end == 'true'

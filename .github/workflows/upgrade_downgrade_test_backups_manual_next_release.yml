@@ -58,6 +58,7 @@ jobs:
             - 'config/**'
             - 'bootstrap.sh'
             - '.github/workflows/upgrade_downgrade_test_backups_manual_next_release.yml'
+            - '.github/actions/setup-mysql/action.yml'
             - 'examples/**'
 
     - name: Set output with latest release branch

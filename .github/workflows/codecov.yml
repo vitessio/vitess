@@ -46,6 +46,7 @@ jobs:
         filters: |
           changed_files:
             - .github/workflows/codecov.yml
+            - .github/actions/setup-mysql/action.yml
             - 'go/**'
             - go.mod
             - go.sum
