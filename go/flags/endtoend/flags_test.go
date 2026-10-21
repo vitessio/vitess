@@ -22,12 +22,15 @@ package flags
 
 import (
 	"bytes"
+	"context"
 	_ "embed"
 	"os"
 	"os/exec"
 	"testing"
 	"text/template"
+	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -139,4 +142,49 @@ func TestHelpOutput(t *testing.T) {
 			require.Equal(t, buf.String(), output.String())
 		})
 	}
+}
+
+// TestVtctldHTTPAPIFlagsRemoved checks argument parsing, since these flags were
+// already hidden from help while they were accepted as deprecated no-ops.
+func TestVtctldHTTPAPIFlagsRemoved(t *testing.T) {
+	flags := []struct {
+		name  string
+		value string
+	}{
+		{"cell", "zone1"},
+		{"proxy-tablets", "true"},
+		{"proxy_tablets", "true"},
+		{"action-timeout", "1s"},
+		{"action_timeout", "1s"},
+		{"tablet-health-keep-alive", "1s"},
+		{"tablet_health_keep_alive", "1s"},
+	}
+
+	for _, binary := range []string{"vtctld", "vtcombo"} {
+		t.Run(binary, func(t *testing.T) {
+			// Help exits after argument parsing, without starting server services.
+			// The remaining flag from the shared vtctld registration must work.
+			output, err := runFlagCommand(t, binary, "--vtctld-sanitize-log-messages=true", "--help")
+			require.NoError(t, err, "%s", output)
+
+			for _, flag := range flags {
+				t.Run(flag.name, func(t *testing.T) {
+					output, err := runFlagCommand(t, binary, "--"+flag.name+"="+flag.value, "--help")
+					var exitErr *exec.ExitError
+					require.ErrorAs(t, err, &exitErr, "expected rejection of --%s", flag.name)
+					assert.Equal(t, 1, exitErr.ExitCode(), "%s", output)
+					assert.Contains(t, output, "unknown flag: --"+flag.name)
+				})
+			}
+		})
+	}
+}
+
+func runFlagCommand(t *testing.T, binary string, args ...string) (string, error) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	t.Cleanup(cancel)
+	output, err := exec.CommandContext(ctx, binary, args...).CombinedOutput()
+	require.NoError(t, ctx.Err(), "%s timed out: %s", binary, output)
+	return string(output), err
 }
