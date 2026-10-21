@@ -19,12 +19,14 @@ package etcd2topo
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net"
 	"os"
 	"os/exec"
 	"path"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -38,6 +40,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/test"
 
+	"go.etcd.io/etcd/api/v3/v3rpc/rpctypes"
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
@@ -470,18 +473,35 @@ func testKeyspaceLock(t *testing.T, ts *topo.Server) {
 		require.NoError(t, err)
 	}
 
+	// tryLock reports whether TryLock took the lock, and any error other than
+	// the lock being held.
+	tryLock := func() (bool, error) {
+		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+		ld, err := conn.TryLock(ctx, keyspacePath, "probe")
+		if err == nil {
+			return true, ld.Unlock(ctx)
+		}
+		if topo.IsErrType(err, topo.NodeExists) {
+			return false, nil
+		}
+		t.Logf("unexpected TryLock error: %v", err)
+		return false, err
+	}
+	takenOrFailed := func() bool {
+		taken, err := tryLock()
+		return taken || err != nil
+	}
+	taken := func() bool {
+		taken, err := tryLock()
+		return taken && err == nil
+	}
+
 	// Short TTL through topo.Server, which ends the acquisition context once the lock is
 	// acquired: the lease must still be kept alive until the unlock.
 	_, unlock, err := ts.LockKeyspace(ctx, "test_keyspace", "short ttl, acquisition context ended")
 	require.NoError(t, err)
-	assert.Never(t, func() bool {
-		ld, err := conn.TryLock(ctx, keyspacePath, "probe")
-		if err != nil {
-			return false
-		}
-		_ = ld.Unlock(ctx)
-		return true
-	}, 5*time.Second, 250*time.Millisecond, "the lock expired while still held")
+	assert.Never(t, takenOrFailed, 5*time.Second, 250*time.Millisecond, "the lock expired while still held")
 	var unlockErr error
 	unlock(&unlockErr)
 	require.NoError(t, unlockErr)
@@ -489,13 +509,205 @@ func testKeyspaceLock(t *testing.T, ts *topo.Server) {
 	// An explicit TTL still releases the lock after it, without an unlock.
 	_, unlock, err = ts.LockKeyspace(ctx, "test_keyspace", "explicit ttl", topo.WithTTL(time.Second))
 	require.NoError(t, err)
-	assert.Eventually(t, func() bool {
-		ld, err := conn.TryLock(ctx, keyspacePath, "probe")
-		if err != nil {
-			return false
-		}
-		_ = ld.Unlock(ctx)
-		return true
-	}, 30*time.Second, 250*time.Millisecond, "the lock with an explicit TTL did not expire")
+	assert.Eventually(t, taken, 30*time.Second, 250*time.Millisecond, "the lock with an explicit TTL did not expire")
 	unlock(&unlockErr)
+}
+
+// startRestartableEtcd starts etcd on free ports, and returns its client
+// address and functions that stop it and start it again on the same data.
+func startRestartableEtcd(t *testing.T) (addr string, stop, start func()) {
+	freeAddr := func() string {
+		listener, err := net.Listen("tcp", "127.0.0.1:0")
+		require.NoError(t, err)
+		defer listener.Close()
+		return "http://" + listener.Addr().String()
+	}
+	addr, peer := freeAddr(), freeAddr()
+	dataDir := t.TempDir()
+	var cmd *exec.Cmd
+	start = func() {
+		cmd = exec.Command("etcd",
+			"-name", "vitess_unit_test",
+			"-advertise-client-urls", addr,
+			"-listen-client-urls", addr,
+			"-initial-advertise-peer-urls", peer,
+			"-listen-peer-urls", peer,
+			"-initial-cluster", "vitess_unit_test="+peer,
+			"-data-dir", dataDir)
+		require.NoError(t, cmd.Start())
+		cli, err := clientv3.New(clientv3.Config{Endpoints: []string{addr}, DialTimeout: 5 * time.Second})
+		require.NoError(t, err)
+		defer cli.Close()
+		require.Eventually(t, func() bool {
+			ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+			defer cancel()
+			_, err := cli.Get(ctx, "/")
+			return err == nil
+		}, 30*time.Second, 50*time.Millisecond, "etcd did not start")
+	}
+	stop = func() {
+		if cmd != nil {
+			_ = cmd.Process.Kill()
+			_ = cmd.Wait()
+			cmd = nil
+		}
+	}
+	t.Cleanup(stop)
+	start()
+	return addr, stop, start
+}
+
+// countLeaseExpiredWarnings counts keepAlive's warnings that a lock's lease
+// expired before the lock was released.
+func countLeaseExpiredWarnings(t *testing.T) *atomic.Int32 {
+	var count atomic.Int32
+	original := log.Warn
+	t.Cleanup(func() { log.Warn = original })
+	log.Warn = func(msg string, attrs ...slog.Attr) {
+		if strings.Contains(msg, "expired before the lock was released") {
+			count.Add(1)
+		}
+		original(msg, attrs...)
+	}
+	return &count
+}
+
+// TestLockSurvivesEtcdRestart checks that a lock keeps its lease through an
+// etcd outage longer than the lease's TTL. The etcd client gives up on the
+// lease's KeepAlive during the outage, and the restarted etcd gives the lease a
+// fresh TTL, which must then be renewed.
+func TestLockSurvivesEtcdRestart(t *testing.T) {
+	addr, stop, start := startRestartableEtcd(t)
+	s, err := NewServer(addr, "/test")
+	require.NoError(t, err)
+	t.Cleanup(s.Close)
+	warnings := countLeaseExpiredWarnings(t)
+
+	const ttl = 6
+	ld, err := s.lock(t.Context(), "keyspaces/ks", "holder", ttl, true)
+	require.NoError(t, err)
+	t.Cleanup(ld.(*etcdLockDescriptor).stopKeepAlive)
+
+	stop()
+	// The outage is a duration, not a condition to wait for. The etcd client
+	// gives up on the KeepAlive after a TTL without a response, or, before the
+	// first response, after NewServer's 5s DialTimeout plus 1s; the outage must
+	// outlast both. It is kept short because the client's reconnection backoff
+	// grows with the outage, and must stay well within the restarted lease's TTL.
+	time.Sleep((ttl + 2) * time.Second)
+	start()
+
+	lockKeys := path.Join("/test", "keyspaces/ks", locksPath) + "/"
+	assert.Never(t, func() bool {
+		ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+		defer cancel()
+		resp, err := s.cli.Get(ctx, lockKeys, clientv3.WithPrefix())
+		return err == nil && len(resp.Kvs) == 0
+	}, 2*ttl*time.Second, 250*time.Millisecond, "the lock's lease expired after etcd restarted")
+	require.NoError(t, ld.Unlock(t.Context()))
+	assert.Zero(t, warnings.Load())
+}
+
+// TestKeepAliveStops checks that keepAlive returns, once the etcd client has
+// given up on the lease's KeepAlive, when the lease is gone, when the lock is
+// released and when the client is closed, and that it warns only about the
+// first.
+func TestKeepAliveStops(t *testing.T) {
+	addr, stop, start := startRestartableEtcd(t)
+	warnings := countLeaseExpiredWarnings(t)
+
+	// run starts keepAlive with a KeepAlive the etcd client gave up on.
+	run := func(ctx context.Context, s *Server, cli *clientv3.Client, leaseID clientv3.LeaseID) chan struct{} {
+		gaveUp := make(chan *clientv3.LeaseKeepAliveResponse)
+		close(gaveUp)
+		returned := make(chan struct{})
+		go func() {
+			s.keepAlive(ctx, cli, leaseID, "/test/locks", gaveUp)
+			close(returned)
+		}()
+		return returned
+	}
+	requireReturns := func(t *testing.T, returned chan struct{}) {
+		select {
+		case <-returned:
+		case <-time.After(30 * time.Second):
+			require.FailNow(t, "keepAlive did not return")
+		}
+	}
+	newServer := func(t *testing.T) (*Server, clientv3.LeaseID) {
+		s, err := NewServer(addr, "/test")
+		require.NoError(t, err)
+		lease, err := s.cli.Grant(t.Context(), 30)
+		require.NoError(t, err)
+		return s, lease.ID
+	}
+
+	t.Run("lease gone", func(t *testing.T) {
+		warnings.Store(0)
+		s, leaseID := newServer(t)
+		t.Cleanup(s.Close)
+		_, err := s.cli.Revoke(t.Context(), leaseID)
+		require.NoError(t, err)
+
+		requireReturns(t, run(t.Context(), s, s.cli, leaseID))
+		assert.EqualValues(t, 1, warnings.Load())
+	})
+
+	t.Run("client closed", func(t *testing.T) {
+		warnings.Store(0)
+		s, leaseID := newServer(t)
+		cli := s.cli
+		s.Close()
+
+		requireReturns(t, run(t.Context(), s, cli, leaseID))
+		assert.Zero(t, warnings.Load())
+	})
+
+	t.Run("lock released during a renewal", func(t *testing.T) {
+		warnings.Store(0)
+		s, leaseID := newServer(t)
+		t.Cleanup(s.Close)
+		lease := &leaseNotFoundOnCancel{Lease: s.cli.Lease, called: make(chan struct{})}
+		s.cli.Lease = lease
+
+		ctx, cancel := context.WithCancel(t.Context())
+		t.Cleanup(cancel)
+		returned := run(ctx, s, s.cli, leaseID)
+		select {
+		case <-lease.called:
+		case <-time.After(30 * time.Second):
+			require.FailNow(t, "keepAlive did not renew the lease")
+		}
+		cancel()
+		requireReturns(t, returned)
+		assert.Zero(t, warnings.Load())
+	})
+
+	t.Run("lock released while etcd is down", func(t *testing.T) {
+		warnings.Store(0)
+		s, leaseID := newServer(t)
+		t.Cleanup(s.Close)
+		stop()
+		t.Cleanup(start)
+
+		ctx, cancel := context.WithCancel(t.Context())
+		t.Cleanup(cancel)
+		returned := run(ctx, s, s.cli, leaseID)
+		cancel()
+		requireReturns(t, returned)
+		assert.Zero(t, warnings.Load())
+	})
+}
+
+// leaseNotFoundOnCancel's KeepAliveOnce waits for ctx to end, then reports the
+// lease gone, as etcd can when its answer races the lock's release.
+type leaseNotFoundOnCancel struct {
+	clientv3.Lease
+	called chan struct{}
+}
+
+func (l *leaseNotFoundOnCancel) KeepAliveOnce(ctx context.Context, _ clientv3.LeaseID) (*clientv3.LeaseKeepAliveResponse, error) {
+	close(l.called)
+	<-ctx.Done()
+	return nil, rpctypes.ErrLeaseNotFound
 }
