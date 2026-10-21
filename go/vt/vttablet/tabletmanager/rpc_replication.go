@@ -550,8 +550,16 @@ func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.Tab
 		return err
 	}
 
-	if err := tm.MysqlDaemon.SetReplicationPosition(ctx, pos); err != nil {
+	// If shard sync's replication already applied the new primary's history,
+	// resetting GTIDs would make replication replay it.
+	executed, err := tm.MysqlDaemon.PrimaryPosition(ctx)
+	if err != nil {
 		return err
+	}
+	if pos.IsZero() || !executed.AtLeast(pos) {
+		if err := tm.MysqlDaemon.SetReplicationPosition(ctx, pos); err != nil {
+			return err
+		}
 	}
 
 	if err := tm.setReplicationSourceRecoverable(ctx, ti.MysqlHostname, ti.MysqlPort, 0, false, true); err != nil {
