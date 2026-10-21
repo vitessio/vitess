@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { useKeyspaces, useSchemaMigrations } from '../../hooks/api';
 import { DataCell } from '../dataTable/DataCell';
 import { DataTable } from '../dataTable/DataTable';
@@ -91,10 +91,10 @@ export const SchemaMigrations = () => {
     }, [urlKeyspace, urlCluster, keyspaces, ksQuery.isLoading, replaceQuery]);
 
     const renderRows = (rows: vtadmin.ISchemaMigration[]) => {
-        return rows.map((row) => {
+        return rows.map((row, i) => {
             const migrationInfo = row.schema_migration;
 
-            if (!migrationInfo) return <></>;
+            if (!migrationInfo) return <Fragment key={i} />;
 
             return (
                 <tr key={migrationInfo.uuid}>

@@ -943,6 +943,97 @@ func TestTabletServerStreamExecute(t *testing.T) {
 		executeSQL, err)
 }
 
+// TestTabletServerRewritesDoubleSlashComments checks that a statement that
+// VTTablet sends to MySQL as written has each "//" comment rewritten to "#/",
+// so that MySQL skips the text that Vitess skipped.
+func TestTabletServerRewritesDoubleSlashComments(t *testing.T) {
+	ctx := t.Context()
+	db, tsv := setupTabletServerTest(t, ctx, "")
+	t.Cleanup(tsv.StopService)
+	t.Cleanup(db.Close)
+
+	db.AddQuery("repair table test_table #/*x*/ , t2", &sqltypes.Result{})
+	db.AddRejectedQuery("repair table test_table //*x*/ , t2", errRejected)
+
+	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
+	_, err := tsv.Execute(ctx, nil, &target, "repair table test_table //*x*/ , t2", nil, 0, 0, nil)
+	require.NoError(t, err)
+	err = tsv.StreamExecute(ctx, nil, &target, "repair table test_table //*x*/ , t2", nil, 0, 0, nil, func(*sqltypes.Result) error { return nil })
+	require.NoError(t, err)
+}
+
+// TestTabletServerRewritesDoubleSlashCommentsInSetupQueries checks that the
+// settings of a reserved connection and the queries run right after BEGIN,
+// which VTTablet sends to MySQL as written, have each "//" comment rewritten
+// to "#/".
+func TestTabletServerRewritesDoubleSlashCommentsInSetupQueries(t *testing.T) {
+	ctx := t.Context()
+	db, tsv := setupTabletServerTest(t, ctx, "")
+	t.Cleanup(tsv.StopService)
+	t.Cleanup(db.Close)
+
+	db.AddQuery("set sql_mode = '' #/ x", &sqltypes.Result{})
+	db.AddRejectedQuery("set sql_mode = '' // x", errRejected)
+	// The settings pool runs the setting rendered from the parsed statement.
+	db.AddQuery("set sql_mode = ''", &sqltypes.Result{})
+	db.AddQuery("savepoint a #/ x", &sqltypes.Result{})
+	db.AddRejectedQuery("savepoint a // x", errRejected)
+	db.AddQuery("select 1 from dual limit 10001", &sqltypes.Result{})
+	// A temporary table needs a reserved connection, which is set up with
+	// the settings as written rather than through the settings pool.
+	db.AddQueryPattern("create temporary table .*", &sqltypes.Result{})
+	db.AddQuery("select @@session.wait_timeout", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("@@session.wait_timeout", "int64"),
+		"28800",
+	))
+
+	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
+	settings := []string{"set sql_mode = '' // x"}
+	postBeginQueries := []string{"savepoint a // x"}
+
+	state, _, err := tsv.ReserveExecute(ctx, nil, &target, settings, "create temporary table temp_t(id int)", nil, 0, nil)
+	require.NoError(t, err)
+	require.NoError(t, tsv.Release(ctx, &target, 0, state.ReservedID))
+
+	txState, _, err := tsv.BeginExecute(ctx, nil, &target, postBeginQueries, "select 1", nil, 0, nil)
+	require.NoError(t, err)
+	_, err = tsv.Rollback(ctx, &target, txState.TransactionID)
+	require.NoError(t, err)
+
+	reservedTxState, _, err := tsv.ReserveBeginExecute(ctx, nil, &target, settings, postBeginQueries, "create temporary table temp_t(id int)", nil, nil)
+	require.NoError(t, err)
+	require.NoError(t, tsv.Release(ctx, &target, reservedTxState.TransactionID, reservedTxState.ReservedID))
+
+	assert.Equal(t, 2, db.GetQueryCalledNum("set sql_mode = '' #/ x"), "query log: %s", db.QueryLog())
+	assert.Positive(t, db.GetQueryCalledNum("savepoint a #/ x"), "query log: %s", db.QueryLog())
+}
+
+// TestTabletServerTxSerializerKeyRewritesDoubleSlashComments checks that hot
+// row protection plans a statement with a "//" comment under the same plan
+// cache entry as its execution, which plans the rewritten text.
+func TestTabletServerTxSerializerKeyRewritesDoubleSlashComments(t *testing.T) {
+	ctx := t.Context()
+	db, tsv := setupTabletServerTest(t, ctx, "")
+	t.Cleanup(tsv.StopService)
+	t.Cleanup(db.Close)
+
+	logStats := tabletenv.NewLogStats(ctx, "TestTxSerializerKey", streamlog.NewQueryLogConfigForTest())
+	key, table := tsv.computeTxSerializerKey(ctx, logStats, "update test_table set name_string = 'x' where pk = 1 // x", nil)
+	assert.Equal(t, "test_table where pk = 1", key)
+	assert.Equal(t, "test_table", table)
+
+	// execute plans the rewritten text without its margin comments. The plan
+	// cache admits a key only once it has been seen before, so plan again
+	// until it does.
+	query, _ := sqlparser.SplitMarginComments("update test_table set name_string = 'x' where pk = 1 #/ x")
+	planKey := PlanCacheKey(tsv.qe.getPlanCacheKey(query, false))
+	assert.Eventually(t, func() bool {
+		tsv.computeTxSerializerKey(ctx, logStats, "update test_table set name_string = 'x' where pk = 1 // x", nil)
+		_, ok := tsv.qe.plans.Get(planKey, tsv.qe.schema.Load().epoch)
+		return ok
+	}, 30*time.Second, 10*time.Millisecond, "the hot row key should plan the rewritten statement")
+}
+
 func TestTabletServerStreamExecuteComments(t *testing.T) {
 	ctx := t.Context()
 	db, tsv := setupTabletServerTest(t, ctx, "")
@@ -3343,4 +3434,191 @@ func TestReservedConnKeepAliveBatch(t *testing.T) {
 	_, err = tsv.Execute(queryservice.ContextWithReservedConnKeepAlive(ctx, []int64{1}), nil, &target,
 		"/* keepalive */ select 1", nil, 0, 0, nil)
 	require.Error(t, err, "a not-serving tablet must reject keepalives")
+}
+
+// TestTabletServerValidatesBindVariables pins the tablet's own gate on wire
+// bind variables: a payload that is not a single literal token is rejected
+// with INVALID_ARGUMENT before any query reaches the database, on both the
+// Execute and StreamExecute paths, while a well-formed payload passes through.
+// vttablet builds statements from bind variables with no other validation.
+func TestTabletServerValidatesBindVariables(t *testing.T) {
+	ctx := t.Context()
+	db, tsv := setupTabletServerTest(t, ctx, "")
+	t.Cleanup(tsv.StopService)
+	t.Cleanup(db.Close)
+
+	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
+	const sql = "select :v from test_table limit 1"
+	malformed := map[string]*querypb.BindVariable{
+		"v": {Type: querypb.Type_HEXVAL, Value: []byte("1; drop table test_table #")},
+	}
+	wellFormed := map[string]*querypb.BindVariable{
+		"v": {Type: querypb.Type_HEXVAL, Value: []byte("x'41'")},
+	}
+	db.AddQuery("select x'41' from test_table limit 1", &sqltypes.Result{})
+
+	t.Run("Execute rejects a malformed payload", func(t *testing.T) {
+		_, err := tsv.Execute(ctx, nil, &target, sql, malformed, 0, 0, nil)
+		require.Error(t, err)
+		assert.Equal(t, vtrpcpb.Code_INVALID_ARGUMENT, vterrors.Code(err))
+		require.ErrorContains(t, err, "v: invalid HEXVAL literal")
+		assert.Zero(t, db.GetQueryCalledNum("select 1; drop table test_table # from test_table limit 1"))
+	})
+	t.Run("StreamExecute rejects a malformed payload", func(t *testing.T) {
+		err := tsv.StreamExecute(ctx, nil, &target, sql, malformed, 0, 0, nil, func(*sqltypes.Result) error { return nil })
+		require.Error(t, err)
+		assert.Equal(t, vtrpcpb.Code_INVALID_ARGUMENT, vterrors.Code(err))
+		require.ErrorContains(t, err, "v: invalid HEXVAL literal")
+		assert.Zero(t, db.GetQueryCalledNum("select 1; drop table test_table # from test_table limit 1"))
+	})
+
+	// The Reserve* entry points reach the same gate. With settings, a
+	// rejected request must not reserve a connection or apply them.
+	settings := []string{"set sql_mode = ''"}
+	db.AddQueryPattern("set sql_mode = ''", &sqltypes.Result{})
+	t.Run("ReserveExecute rejects a malformed payload", func(t *testing.T) {
+		queryLog := db.QueryLog()
+		state, _, err := tsv.ReserveExecute(ctx, nil, &target, settings, sql, malformed, 0, nil)
+		require.Error(t, err)
+		assert.Equal(t, vtrpcpb.Code_INVALID_ARGUMENT, vterrors.Code(err))
+		require.ErrorContains(t, err, "v: invalid HEXVAL literal")
+		assert.Zero(t, state.ReservedID, "no connection should be reserved")
+		assert.Equal(t, queryLog, db.QueryLog(), "nothing should reach MySQL")
+	})
+	t.Run("ReserveStreamExecute rejects a malformed payload", func(t *testing.T) {
+		queryLog := db.QueryLog()
+		state, err := tsv.ReserveStreamExecute(ctx, nil, &target, settings, sql, malformed, 0, nil, func(*sqltypes.Result) error { return nil })
+		require.Error(t, err)
+		assert.Equal(t, vtrpcpb.Code_INVALID_ARGUMENT, vterrors.Code(err))
+		require.ErrorContains(t, err, "v: invalid HEXVAL literal")
+		assert.Zero(t, state.ReservedID, "no connection should be reserved")
+		assert.Equal(t, queryLog, db.QueryLog(), "nothing should reach MySQL")
+	})
+	// The four Begin* entry points validate before anything else, with or
+	// without hot row protection (off here, the default): a rejected request
+	// must not begin a transaction, reserve a connection or apply settings.
+	t.Run("BeginExecute rejects a malformed payload before begin", func(t *testing.T) {
+		queryLog := db.QueryLog()
+		state, _, err := tsv.BeginExecute(ctx, nil, &target, nil, sql, malformed, 0, nil)
+		require.Error(t, err)
+		assert.Equal(t, vtrpcpb.Code_INVALID_ARGUMENT, vterrors.Code(err))
+		require.ErrorContains(t, err, "v: invalid HEXVAL literal")
+		assert.Zero(t, state.TransactionID, "no transaction should be begun")
+		assert.Equal(t, queryLog, db.QueryLog(), "nothing should reach MySQL")
+	})
+	t.Run("BeginStreamExecute rejects a malformed payload before begin", func(t *testing.T) {
+		queryLog := db.QueryLog()
+		state, err := tsv.BeginStreamExecute(ctx, nil, &target, nil, sql, malformed, 0, nil, func(*sqltypes.Result) error { return nil })
+		require.Error(t, err)
+		assert.Equal(t, vtrpcpb.Code_INVALID_ARGUMENT, vterrors.Code(err))
+		require.ErrorContains(t, err, "v: invalid HEXVAL literal")
+		assert.Zero(t, state.TransactionID, "no transaction should be begun")
+		assert.Equal(t, queryLog, db.QueryLog(), "nothing should reach MySQL")
+	})
+	t.Run("ReserveBeginExecute rejects a malformed payload before begin", func(t *testing.T) {
+		queryLog := db.QueryLog()
+		state, _, err := tsv.ReserveBeginExecute(ctx, nil, &target, settings, nil, sql, malformed, nil)
+		require.Error(t, err)
+		assert.Equal(t, vtrpcpb.Code_INVALID_ARGUMENT, vterrors.Code(err))
+		require.ErrorContains(t, err, "v: invalid HEXVAL literal")
+		assert.Zero(t, state.TransactionID, "no transaction should be begun")
+		assert.Zero(t, state.ReservedID, "no connection should be reserved")
+		assert.Equal(t, queryLog, db.QueryLog(), "nothing should reach MySQL")
+	})
+	t.Run("ReserveBeginStreamExecute rejects a malformed payload before begin", func(t *testing.T) {
+		queryLog := db.QueryLog()
+		state, err := tsv.ReserveBeginStreamExecute(ctx, nil, &target, settings, nil, sql, malformed, nil, func(*sqltypes.Result) error { return nil })
+		require.Error(t, err)
+		assert.Equal(t, vtrpcpb.Code_INVALID_ARGUMENT, vterrors.Code(err))
+		require.ErrorContains(t, err, "v: invalid HEXVAL literal")
+		assert.Zero(t, state.TransactionID, "no transaction should be begun")
+		assert.Zero(t, state.ReservedID, "no connection should be reserved")
+		assert.Equal(t, queryLog, db.QueryLog(), "nothing should reach MySQL")
+	})
+
+	t.Run("Execute passes a well-formed payload through", func(t *testing.T) {
+		_, err := tsv.Execute(ctx, nil, &target, sql, wellFormed, 0, 0, nil)
+		require.NoError(t, err)
+		assert.Equal(t, 1, db.GetQueryCalledNum("select x'41' from test_table limit 1"))
+	})
+	t.Run("Execute passes a nested tuple through", func(t *testing.T) {
+		// The shape vtgate's engine sends for composite-key DML and foreign
+		// key cascades: a TUPLE bind variable whose members are tuples.
+		nested := map[string]*querypb.BindVariable{
+			"dml_vals": {
+				Type: querypb.Type_TUPLE,
+				Values: []*querypb.Value{
+					sqltypes.TupleToProto([]sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewVarChar("a")}),
+					sqltypes.TupleToProto([]sqltypes.Value{sqltypes.NewInt64(2), sqltypes.NewVarChar("b")}),
+				},
+			},
+		}
+		const nestedSQL = "select 1 from test_table where (pk, name) in ::dml_vals limit 1"
+		const generated = "select 1 from test_table where (pk, `name`) in ((1, 'a'), (2, 'b')) limit 1"
+		db.AddQuery(generated, &sqltypes.Result{})
+
+		_, err := tsv.Execute(ctx, nil, &target, nestedSQL, nested, 0, 0, nil)
+		require.NoError(t, err)
+		assert.Equal(t, 1, db.GetQueryCalledNum(generated))
+	})
+}
+
+// TestTabletServerValidatesBindVariablesBeforeHotRowProtection pins that with
+// hot row protection enabled, BeginExecute and BeginStreamExecute reject a
+// malformed bind variable before hot row protection builds the serializer key
+// from it and before a transaction is begun. Without the early gate the
+// request still failed in Execute, but only after begin, and after
+// GenerateQuery had recursed into whatever tuple nesting the caller sent.
+func TestTabletServerValidatesBindVariablesBeforeHotRowProtection(t *testing.T) {
+	ctx := t.Context()
+	cfg := tabletenv.NewDefaultConfig()
+	cfg.HotRowProtection.Mode = tabletenv.Enable
+	db, tsv := setupTabletServerTestCustom(t, ctx, cfg, "", vtenv.NewTestEnv())
+	t.Cleanup(tsv.StopService)
+	t.Cleanup(db.Close)
+
+	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
+
+	// Three levels of tuple nesting: one more than the tablet accepts. It goes
+	// with a list placeholder so that, without the gate, GenerateQuery would
+	// reach the tuple encoder and recurse into it; on a scalar placeholder
+	// FetchBindVar refuses a TUPLE before any encoding happens.
+	inner := sqltypes.TupleToProto([]sqltypes.Value{sqltypes.NewInt64(1)})
+	middle := sqltypes.TupleToProto([]sqltypes.Value{sqltypes.ProtoToValue(inner)})
+	payloads := map[string]struct {
+		sql string
+		bv  *querypb.BindVariable
+	}{
+		"malformed HEXNUM": {
+			sql: "update test_table set name_string = 'x' where pk = :pk",
+			bv:  &querypb.BindVariable{Type: querypb.Type_HEXNUM, Value: []byte("1; drop table test_table #")},
+		},
+		"tuple nested too deep": {
+			sql: "update test_table set name_string = 'x' where pk in ::pk",
+			bv:  &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{middle}},
+		},
+	}
+
+	for name, payload := range payloads {
+		sql := payload.sql
+		bindVars := map[string]*querypb.BindVariable{"pk": payload.bv}
+		t.Run("BeginExecute rejects "+name, func(t *testing.T) {
+			begins := db.GetQueryCalledNum("begin")
+			state, _, err := tsv.BeginExecute(ctx, nil, &target, nil, sql, bindVars, 0, nil)
+			require.Error(t, err)
+			assert.Equal(t, vtrpcpb.Code_INVALID_ARGUMENT, vterrors.Code(err))
+			require.ErrorContains(t, err, "pk: ")
+			assert.Zero(t, state.TransactionID, "no transaction should be begun")
+			assert.Equal(t, begins, db.GetQueryCalledNum("begin"), "begin should not reach MySQL")
+		})
+		t.Run("BeginStreamExecute rejects "+name, func(t *testing.T) {
+			begins := db.GetQueryCalledNum("begin")
+			state, err := tsv.BeginStreamExecute(ctx, nil, &target, nil, sql, bindVars, 0, nil, func(*sqltypes.Result) error { return nil })
+			require.Error(t, err)
+			assert.Equal(t, vtrpcpb.Code_INVALID_ARGUMENT, vterrors.Code(err))
+			require.ErrorContains(t, err, "pk: ")
+			assert.Zero(t, state.TransactionID, "no transaction should be begun")
+			assert.Equal(t, begins, db.GetQueryCalledNum("begin"), "begin should not reach MySQL")
+		})
+	}
 }

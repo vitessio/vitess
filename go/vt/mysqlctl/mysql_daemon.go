@@ -122,6 +122,9 @@ type MysqlDaemon interface {
 
 	// ExecuteSuperQueryList executes a list of queries, no result
 	ExecuteSuperQueryList(ctx context.Context, queryList []string) error
+	// ExecuteSuperQueryListMulti executes a list of queries, each of which may
+	// hold several statements separated by a semicolon, no result
+	ExecuteSuperQueryListMulti(ctx context.Context, queryList []string) error
 
 	// ExecuteSuperQueryListTainted executes a list of queries whose session state
 	// changes must not leak into pooled connections; the connection used is

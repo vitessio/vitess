@@ -59,7 +59,7 @@ export const PaginationNav = ({
     const leftWidth = (maxVisible - minWidth * 2 - 3) >> 1;
     const rightWidth = (maxVisible - minWidth * 2 - 2) >> 1;
 
-    let numbers: PageSpecifier[] = [];
+    let numbers: PageSpecifier[];
     if (totalPages <= maxVisible) {
         // No breaks in list
         numbers = range(FIRST_PAGE, totalPages);

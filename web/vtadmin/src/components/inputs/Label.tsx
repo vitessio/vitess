@@ -24,7 +24,7 @@ type NativeLabelProps = React.DetailedHTMLProps<React.LabelHTMLAttributes<HTMLLa
 interface Props extends NativeLabelProps {
     label: string;
     required?: boolean;
-    helpText?: string | JSX.Element;
+    helpText?: string | React.JSX.Element;
 }
 
 export const Label: React.FunctionComponent<Props> = ({ children, required, label, helpText, ...props }) => {

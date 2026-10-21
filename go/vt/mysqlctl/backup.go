@@ -52,7 +52,10 @@ const (
 	backupInnodbDataHomeDir     = "InnoDBData"
 	backupInnodbLogGroupHomeDir = "InnoDBLog"
 	backupBinlogDir             = "BinLog"
-	backupData                  = "Data"
+	// backupBinlogStripped marks binlogs stored as binlog.<seq> in BinlogFileEntries,
+	// restored under the target's binlog basename.
+	backupBinlogStripped = "BinLogStripped"
+	backupData           = "Data"
 
 	// backupManifestFileName is the MANIFEST file name within a backup.
 	backupManifestFileName = "MANIFEST"
@@ -127,6 +130,9 @@ func registerBackupFlags(fs *pflag.FlagSet) {
 func Backup(ctx context.Context, params BackupParams) error {
 	if params.Stats == nil {
 		params.Stats = backupstats.NoStats()
+	}
+	if err := ValidateIncludeBinlogs(params); err != nil {
+		return err
 	}
 
 	startTs := time.Now()
@@ -337,10 +343,15 @@ func ShouldRestore(ctx context.Context, logger logutil.Logger, cnf *Mycnf, mysql
 
 // ensureRestoredGTIDPurgedMatchesManifest sees the following: when you restore a full backup, you want the MySQL server to have
 // @@gtid_purged == <gtid-of-backup>. This then also implies that @@gtid_executed equals same value. This is because we restore without
-// any binary logs.
+// any binary logs, unless the backup includes them: then gtid_executed is only checked.
 func ensureRestoredGTIDPurgedMatchesManifest(ctx context.Context, manifest *BackupManifest, params *RestoreParams) error {
 	if manifest == nil {
 		return nil
+	}
+	if manifest.IncludesBinlogs {
+		// gtid_purged now comes from the first restored binlog, and setting it would
+		// RESET the binlogs away; check gtid_executed instead.
+		return verifyRestoredBinlogs(ctx, params.Mysqld, params.Cnf, manifest.Position)
 	}
 	if manifest.Position.GTIDSet == nil {
 		return nil
@@ -572,10 +583,11 @@ func ExecuteBackupInitSQL(ctx context.Context, params *BackupParams) error {
 			}
 		}()
 	}
-	// The tainted variant discards the connection afterwards: operator-supplied
-	// queries may change session state (e.g. sql_mode) that must not leak into
-	// the pooled connections Vitess uses for its own SQL.
-	if err := params.Mysqld.ExecuteSuperQueryListTainted(initCtx, params.InitSQL.Queries); err != nil {
+	// Each entry is operator written SQL and may hold several statements.
+	// The connection is discarded afterwards: operator-supplied queries may change
+	// session state (e.g. sql_mode) that must not leak into the pooled connections
+	// Vitess uses for its own SQL.
+	if err := params.Mysqld.ExecuteSuperQueryListMulti(initCtx, params.InitSQL.Queries); err != nil {
 		if params.InitSQL.FailOnError {
 			return vterrors.Wrapf(err, "failed to execute init SQL queries %q and instructed to fail backup in this case", queriesCSV)
 		}

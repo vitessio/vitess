@@ -22,7 +22,11 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"os"
+	"path/filepath"
 	"runtime"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -36,9 +40,11 @@ import (
 var (
 	once                         sync.Once
 	cgroupManager                *cgroup2.Manager
+	cgroupPath                   string
 	lastCpu                      uint64
 	lastTime                     time.Time
 	errCgroupMetricsNotAvailable = errors.New("cgroup metrics are not available")
+	errNoPreviousCpuSample       = errors.New("no previous cgroup CPU sample")
 )
 
 func setup() {
@@ -46,28 +52,24 @@ func setup() {
 		log.Warn("cgroup metrics are only supported with cgroup v2, will use host metrics")
 		return
 	}
-	manager, err := getCgroupManager()
+	manager, path, err := getCgroupManager()
 	if err != nil {
 		log.Warn(fmt.Sprintf("Failed to init cgroup manager for metrics, will use host metrics: %v", err))
 	}
 	cgroupManager = manager
-	lastCpu, err = getCurrentCgroupCpuUsage()
-	if err != nil {
-		log.Warn(fmt.Sprintf("Failed to get initial cgroup CPU usage: %v", err))
-	}
-	lastTime = time.Now()
+	cgroupPath = path
 }
 
-func getCgroupManager() (*cgroup2.Manager, error) {
+func getCgroupManager() (*cgroup2.Manager, string, error) {
 	path, err := cgroup2.NestedGroupPath("")
 	if err != nil {
-		return nil, fmt.Errorf("failed to build nested cgroup paths: %w", err)
+		return nil, "", fmt.Errorf("failed to build nested cgroup paths: %w", err)
 	}
 	cgroupManager, err := cgroup2.Load(path)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load cgroup manager: %w", err)
+		return nil, "", fmt.Errorf("failed to load cgroup manager: %w", err)
 	}
-	return cgroupManager, nil
+	return cgroupManager, path, nil
 }
 
 func getCgroupCpuUsage() (float64, error) {
@@ -81,8 +83,13 @@ func getCgroupCpuUsage() (float64, error) {
 	if err != nil {
 		return -1, fmt.Errorf("failed to read current cgroup CPU usage: %w", err)
 	}
+	if lastTime.IsZero() {
+		lastCpu = currentUsage
+		lastTime = currentTime
+		return -1, errNoPreviousCpuSample
+	}
 	duration := currentTime.Sub(lastTime)
-	usage, err := getCpuUsageFromSamples(lastCpu, currentUsage, duration)
+	usage, err := getCpuUsageFromSamples(lastCpu, currentUsage, duration, cgroupCpuCount("/sys/fs/cgroup", cgroupPath))
 	if err != nil {
 		return -1, err
 	}
@@ -103,15 +110,54 @@ func getCurrentCgroupCpuUsage() (uint64, error) {
 	return currentUsage, nil
 }
 
-func getCpuUsageFromSamples(usage1 uint64, usage2 uint64, interval time.Duration) (float64, error) {
+// cgroupCpuCount returns the number of CPUs the cgroup can use: the smallest
+// cpu.max limit set on group or any of its ancestors under mountpoint, capped
+// at runtime.NumCPU().
+func cgroupCpuCount(mountpoint, group string) float64 {
+	count := float64(runtime.NumCPU())
+	for g := group; ; g = filepath.Dir(g) {
+		if cpus := readCpuMax(filepath.Join(mountpoint, g, "cpu.max")); cpus > 0 && cpus < count {
+			count = cpus
+		}
+		if g == "/" || g == "." {
+			return count
+		}
+	}
+}
+
+// readCpuMax returns quota/period from a cpu.max file, or 0 if the file is
+// missing, malformed or set to "max".
+func readCpuMax(path string) float64 {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return 0
+	}
+	quota, period, ok := strings.Cut(strings.TrimSpace(string(content)), " ")
+	if !ok || quota == "max" {
+		return 0
+	}
+	q, err := strconv.ParseFloat(quota, 64)
+	if err != nil || q <= 0 {
+		return 0
+	}
+	p, err := strconv.ParseFloat(period, 64)
+	if err != nil || p <= 0 {
+		return 0
+	}
+	return q / p
+}
+
+func getCpuUsageFromSamples(usage1 uint64, usage2 uint64, interval time.Duration, cpuCount float64) (float64, error) {
 	if usage1 == 0 && usage2 == 0 {
 		return -1, errors.New("CPU usage for both samples is zero")
+	}
+	if interval < time.Microsecond {
+		return -1, fmt.Errorf("CPU samples are too close together: %v", interval)
 	}
 
 	deltaUsage := usage2 - usage1
 	deltaTime := float64(interval.Microseconds())
 
-	cpuCount := float64(runtime.NumCPU())
 	cpuUsage := (float64(deltaUsage) / deltaTime) / cpuCount
 
 	return cpuUsage, nil

@@ -45,6 +45,26 @@ type QueryClient struct {
 	sessionStateChanges string
 }
 
+// ExemptCallerID is the immediate caller that Server's table ACL exempts
+// (see StartServer). Under strict table ACL the tablet denies statements whose
+// table set it cannot determine (CALL, DO, REPAIR, OPTIMIZE, LOAD DATA) to
+// every other caller, so tests that exercise those statements' own semantics
+// rather than the ACL run as this caller.
+const ExemptCallerID = "acl-exempt"
+
+// NewExemptClient creates a new client for Server that the table ACL exempts.
+func NewExemptClient() *QueryClient {
+	return &QueryClient{
+		ctx: callerid.NewContext(
+			context.Background(),
+			&vtrpcpb.CallerID{},
+			&querypb.VTGateCallerID{Username: ExemptCallerID},
+		),
+		target: Target,
+		server: Server,
+	}
+}
+
 // NewClient creates a new client for Server.
 func NewClient() *QueryClient {
 	return &QueryClient{

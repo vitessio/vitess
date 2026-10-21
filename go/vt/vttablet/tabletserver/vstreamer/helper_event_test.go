@@ -141,9 +141,11 @@ type TestRowChange struct {
 	after  []string
 
 	// If you need to customize the image you can use the raw types.
-	beforeRaw      *query.Row
-	afterRaw       *query.Row
-	dataColumnsRaw *binlogdatapb.RowChange_Bitmap
+	beforeRaw            *query.Row
+	afterRaw             *query.Row
+	dataColumnsRaw       *binlogdatapb.RowChange_Bitmap
+	beforeDataColumnsRaw *binlogdatapb.RowChange_Bitmap
+	afterDataColumnsRaw  *binlogdatapb.RowChange_Bitmap
 }
 
 // TestRowEventSpec is used for defining a custom row event.
@@ -165,6 +167,12 @@ func (s *TestRowEventSpec) String() string {
 			rowChange := binlogdatapb.RowChange{}
 			if c.dataColumnsRaw != nil {
 				rowChange.DataColumns = c.dataColumnsRaw
+			}
+			if c.beforeDataColumnsRaw != nil {
+				rowChange.BeforeDataColumns = c.beforeDataColumnsRaw
+			}
+			if c.afterDataColumnsRaw != nil {
+				rowChange.AfterDataColumns = c.afterDataColumnsRaw
 			}
 			if c.beforeRaw != nil {
 				rowChange.Before = c.beforeRaw
@@ -636,7 +644,7 @@ func (ts *TestSpec) getRowChanges(table string, stmt sqlparser.Statement, row *q
 
 func (ts *TestSpec) getRowChangeForUpdate(table string, newState *query.Row) *binlogdatapb.RowChange {
 	var rowChange binlogdatapb.RowChange
-	var bitmap byte
+	var bitmap, beforeBitmap byte
 	var before, after query.Row
 
 	currentState := ts.getCurrentState(table)
@@ -644,7 +652,7 @@ func (ts *TestSpec) getRowChangeForUpdate(table string, newState *query.Row) *bi
 		return nil
 	}
 	var currentValueIndex int64
-	var hasSkip bool
+	var hasSkip, hasBeforeSkip bool
 	for i, l := range currentState.Lengths {
 		skip := false
 		isPKColumn := slices.Contains(ts.pkColumns[table], ts.fieldEvents[table].cols[i].name)
@@ -661,9 +669,11 @@ func (ts *TestSpec) getRowChangeForUpdate(table string, newState *query.Row) *bi
 		}
 		if skip && !isPKColumn {
 			before.Lengths = append(before.Lengths, -1)
+			hasBeforeSkip = true
 		} else {
 			before.Values = append(before.Values, currentState.Values[currentValueIndex:currentValueIndex+l]...)
 			before.Lengths = append(before.Lengths, l)
+			beforeBitmap |= 1 << uint(i)
 		}
 		if skip {
 			after.Lengths = append(after.Lengths, -1)
@@ -680,6 +690,18 @@ func (ts *TestSpec) getRowChangeForUpdate(table string, newState *query.Row) *bi
 		rowChange.DataColumns = &binlogdatapb.RowChange_Bitmap{
 			Count: int64(len(currentState.Lengths)),
 			Cols:  []byte{bitmap},
+		}
+		// The generated expectations are for "select *" filters, where the
+		// projected bitmap is identical to the source-ordered one.
+		rowChange.AfterDataColumns = &binlogdatapb.RowChange_Bitmap{
+			Count: int64(len(currentState.Lengths)),
+			Cols:  []byte{bitmap},
+		}
+	}
+	if hasBeforeSkip {
+		rowChange.BeforeDataColumns = &binlogdatapb.RowChange_Bitmap{
+			Count: int64(len(currentState.Lengths)),
+			Cols:  []byte{beforeBitmap},
 		}
 	}
 	return &rowChange

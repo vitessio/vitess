@@ -7,6 +7,10 @@ on:
     tags: '**'
   pull_request:
     branches: '**'
+concurrency:
+  group: format('{0}-{1}', ${{ github.ref }}, 'e2e_race')
+  cancel-in-progress: true
+
 permissions: read-all
 jobs:
 
@@ -15,7 +19,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
     - name: Harden the runner (Audit all outbound calls)
-      uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
+      uses: step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed # v2.22.0
       with:
         egress-policy: audit
 
@@ -29,13 +33,25 @@ jobs:
     - name: Check out code
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
+        # The merge commit and its first parent, for the path filter.
+        fetch-depth: 2
         persist-credentials: 'false'
+
+    - name: Find the base of the pull request's merge commit
+      # github.event.pull_request.base.sha is not updated when the base branch
+      # moves, so paths-filter would also count the base branch's newer commits.
+      # With token: '', paths-filter diffs against `base` on pull_request
+      # events too (see its README); action.yml's input description is stale.
+      id: merge-base
+      if: github.event_name == 'pull_request'
+      run: echo "sha=$(git rev-parse HEAD^1)" >> "$GITHUB_OUTPUT"
 
     - name: Check for changes in relevant files
       uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
       id: changes
       with:
         token: ''
+        base: ${{ steps.merge-base.outputs.sha }}
         filters: |
           end_to_end:
             - 'go/**/!(*_test).go'
@@ -58,20 +74,25 @@ jobs:
             - 'bootstrap.sh'
             - '.github/workflows/e2e_race.yml'
             - '.github/actions/setup-mysql/action.yml'
+            - '.github/actions/setup-go/action.yml'
 
     - name: Set up Go
       if: steps.changes.outputs.end_to_end == 'true'
-      uses: ./.github/actions/setup-go
+      uses: $/.github/actions/setup-go
+      with:
+        build-cache: build,race
+        # Runs go test directly, without gotestsum.
+        go-tools: none
 
     - name: Tune the OS
       if: steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 5
-      uses: ./.github/actions/tune-os
+      uses: $/.github/actions/tune-os
 
     - name: Setup MySQL
       if: steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 8
-      uses: ./.github/actions/setup-mysql
+      uses: $/.github/actions/setup-mysql
       with:
         flavor: mysql-8.4
 
@@ -85,8 +106,6 @@ jobs:
         sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget xz-utils
         
         sudo service etcd stop
-
-        go mod download
 
     - name: Run make minimaltools
       if: steps.changes.outputs.end_to_end == 'true'

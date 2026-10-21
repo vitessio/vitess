@@ -26,6 +26,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	"vitess.io/vitess/go/vt/schemadiff"
 )
 
 var basicTable1 = &tabletmanagerdatapb.TableDefinition{
@@ -249,6 +250,106 @@ func TestSchemaDiff(t *testing.T) {
 
 	sd2.TableDefinitions = append(sd2.TableDefinitions, &tabletmanagerdatapb.TableDefinition{Name: "table2", Schema: "schema3", Type: TableBaseTable})
 	testDiff(t, sd1, sd2, "sd1", "sd2", []string{"schemas differ on table table2:\nsd1: schema2\n differs from:\nsd2: schema3"})
+}
+
+func TestSchemaDiffWithEnvironment(t *testing.T) {
+	tests := []struct {
+		name        string
+		leftSchema  string
+		rightSchema string
+		leftType    string
+		rightType   string
+		wantDiff    bool
+	}{
+		{
+			name: "semantically equivalent tables",
+			leftSchema: "CREATE TABLE `t` (\n" +
+				"  `id` varchar(10) COLLATE utf8mb4_general_ci NOT NULL,\n" +
+				"  `note` varchar(20) COLLATE utf8mb4_general_ci DEFAULT NULL\n" +
+				") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci",
+			rightSchema: "CREATE TABLE `t` (\n" +
+				"  `id` varchar(10) COLLATE utf8mb4_general_ci NOT NULL,\n" +
+				"  `note` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL\n" +
+				") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci",
+			leftType:  TableBaseTable,
+			rightType: TableBaseTable,
+			wantDiff:  false,
+		},
+		{
+			name: "directional tablespace difference",
+			leftSchema: "CREATE TABLE `t` (\n" +
+				"  `id` bigint NOT NULL\n" +
+				") ENGINE=InnoDB TABLESPACE `ts`",
+			rightSchema: "CREATE TABLE `t` (\n" +
+				"  `id` bigint NOT NULL\n" +
+				") ENGINE=InnoDB",
+			leftType:  TableBaseTable,
+			rightType: TableBaseTable,
+			wantDiff:  true,
+		},
+		{
+			name: "real column difference",
+			leftSchema: "CREATE TABLE `t` (\n" +
+				"  `id` bigint NOT NULL\n" +
+				") ENGINE=InnoDB",
+			rightSchema: "CREATE TABLE `t` (\n" +
+				"  `id` varchar(10) NOT NULL\n" +
+				") ENGINE=InnoDB",
+			leftType:  TableBaseTable,
+			rightType: TableBaseTable,
+			wantDiff:  true,
+		},
+		{
+			name:        "unparseable definitions use textual fallback",
+			leftSchema:  "CREATE TABLE `t` (`id` bigint",
+			rightSchema: "CREATE TABLE `t` (`id` varchar(10)",
+			leftType:    TableBaseTable,
+			rightType:   TableBaseTable,
+			wantDiff:    true,
+		},
+		{
+			name:        "views use textual comparison",
+			leftSchema:  "CREATE VIEW `t` AS SELECT 1 AS `id`",
+			rightSchema: "CREATE VIEW `t` AS SELECT 2 AS `id`",
+			leftType:    TableView,
+			rightType:   TableView,
+			wantDiff:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			left := &tabletmanagerdatapb.SchemaDefinition{
+				TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
+					Name:   "t",
+					Schema: tt.leftSchema,
+					Type:   tt.leftType,
+				}},
+			}
+			right := &tabletmanagerdatapb.SchemaDefinition{
+				TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
+					Name:   "t",
+					Schema: tt.rightSchema,
+					Type:   tt.rightType,
+				}},
+			}
+
+			actual := DiffSchemaToArrayWithEnvironment(
+				schemadiff.NewTestEnv(),
+				"source",
+				left,
+				"destination",
+				right,
+			)
+
+			if tt.wantDiff {
+				require.Len(t, actual, 1)
+				require.Contains(t, actual[0], "schemas differ on table t")
+			} else {
+				require.Empty(t, actual)
+			}
+		})
+	}
 }
 
 func TestTableFilter(t *testing.T) {

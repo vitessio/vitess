@@ -23,10 +23,11 @@ jobs:
   error_code_docs:
     name: Update error code docs
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
+        uses: step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed # v2.22.0
         with:
           egress-policy: audit
 
@@ -36,7 +37,7 @@ jobs:
           persist-credentials: 'false'
 
       - name: Set up Go
-        uses: ./.github/actions/setup-go
+        uses: $/.github/actions/setup-go
 
       - name: Generate error codes
         run: |

@@ -1731,6 +1731,16 @@ func (mysqld *Mysqld) executeMysqlScript(ctx context.Context, connParams *mysql.
 	}
 	defer conn.Close()
 
+	// A script is a batch of statements, so this is where the connection that
+	// runs one is given the ability to send a batch, whichever configuration it
+	// was built from. A caller that already negotiated the capability at
+	// handshake time is left alone rather than charged a round trip for it.
+	if conn.Capabilities&mysql.CapabilityClientMultiStatements == 0 {
+		if err := conn.SetMultiStatements(true); err != nil {
+			return err
+		}
+	}
+
 	_, more, err := conn.ExecuteFetchMulti(sql, -1, false)
 	if err != nil {
 		return err
@@ -1967,6 +1977,12 @@ func mysqlbinlogEnviron(baseEnv []string) []string {
 	return append(env, "TZ=UTC")
 }
 
+// mysqlApplyArgs returns the arguments for the mysql client that ApplyBinlogFile
+// replays mysqlbinlog's output through. The replay is deliberately binlogged.
+func mysqlApplyArgs(defaultsExtraFile string) []string {
+	return []string{"--defaults-extra-file=" + defaultsExtraFile}
+}
+
 // ApplyBinlogFile extracts a binary log file and applies it to MySQL. It is the equivalent of:
 // $ mysqlbinlog --include-gtids binlog.file | mysql
 func (mysqld *Mysqld) ApplyBinlogFile(ctx context.Context, req *mysqlctlpb.ApplyBinlogFileRequest) error {
@@ -2046,9 +2062,7 @@ func (mysqld *Mysqld) ApplyBinlogFile(ctx context.Context, req *mysqlctlpb.Apply
 			return vterrors.Wrapf(err, "failed to create defaults extra file")
 		}
 		defer os.Remove(cnf)
-		args := []string{
-			"--defaults-extra-file=" + cnf,
-		}
+		args := mysqlApplyArgs(cnf)
 
 		mysqlErrFile, err = os.CreateTemp("", "err-mysql-")
 		if err != nil {
