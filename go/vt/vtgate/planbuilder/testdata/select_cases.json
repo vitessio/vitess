@@ -7359,8 +7359,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select id, (col, `name`) = (:__sq1_0, :__sq1_1) as `(col, name) = (select col, name from user where id = 5)` from `user` where 1 != 1",
-            "Query": "select id, (col, `name`) = (:__sq1_0, :__sq1_1) as `(col, name) = (select col, name from user where id = 5)` from `user` where id = 1",
+            "FieldQuery": "select id, (col, `name`) = (:__sq1_0, :__sq1_1) as `(col, ``name``) = (select col, ``name`` from ``user`` where id = 5)` from `user` where 1 != 1",
+            "Query": "select id, (col, `name`) = (:__sq1_0, :__sq1_1) as `(col, ``name``) = (select col, ``name`` from ``user`` where id = 5)` from `user` where id = 1",
             "Values": [
               "1"
             ],
@@ -7411,8 +7411,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select id, (col, `name`) in ::__sq1 as `(col, name) in (select user_id, col from music where user_id = 5)` from `user` where 1 != 1",
-            "Query": "select id, (col, `name`) in ::__sq1 as `(col, name) in (select user_id, col from music where user_id = 5)` from `user`"
+            "FieldQuery": "select id, (col, `name`) in ::__sq1 as `(col, ``name``) in (select user_id, col from music where user_id = 5)` from `user` where 1 != 1",
+            "Query": "select id, (col, `name`) in ::__sq1 as `(col, ``name``) in (select user_id, col from music where user_id = 5)` from `user`"
           }
         ]
       },

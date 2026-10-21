@@ -58,7 +58,7 @@ func TestSubqueriesHasValues(t *testing.T) {
 	mcmp.AssertMatches(`SELECT id2 FROM t1 WHERE id1 NOT IN (SELECT id1 FROM t1 WHERE id1 > 10) ORDER BY id2`, `[[INT64(1)] [INT64(2)] [INT64(3)] [INT64(4)] [INT64(5)] [INT64(6)]]`)
 
 	// Row IN and NOT IN subqueries that can't be merged bind each row as a tuple, also when they return no rows.
-	if utils.BinaryIsAtLeastAtVersion(25, "vtgate") {
+	if utils.BinaryIsAtLeastAtVersion(24, "vtgate") {
 		mcmp.Exec("insert into t2(id3, id4) values (1, 2), (3, 4), (7, 8)")
 		mcmp.AssertMatches(`SELECT id2 FROM t1 WHERE (id1, id2) IN (SELECT id3, id4 FROM t2) ORDER BY id2`, `[[INT64(2)] [INT64(4)]]`)
 		mcmp.AssertMatches(`SELECT id2 FROM t1 WHERE (id1, id2) NOT IN (SELECT id3, id4 FROM t2) ORDER BY id2`, `[[INT64(1)] [INT64(3)] [INT64(5)] [INT64(6)]]`)
@@ -231,7 +231,7 @@ func TestSubqueries(t *testing.T) {
 
 	// Row comparisons with value subqueries that can't be merged, including one that returns no rows, which
 	// compares as a row of NULLs.
-	if utils.BinaryIsAtLeastAtVersion(25, "vtgate") {
+	if utils.BinaryIsAtLeastAtVersion(24, "vtgate") {
 		queries = append(queries,
 			`SELECT id FROM user WHERE (id, name) < (SELECT user_id, extra_info FROM user_extra WHERE user_id = 3 ORDER BY extra_info LIMIT 1) ORDER BY id`,
 			`SELECT id FROM user WHERE (id, 'info1') = (SELECT user_id, extra_info FROM user_extra WHERE user_id = 7)`,
