@@ -550,51 +550,7 @@ func initTestGlobals(t *testing.T) {
 }
 
 func TestInitialSetup(t *testing.T) {
-<<<<<<< HEAD
-	shards = clusterInstance.Keyspaces[0].Shards
-	require.Equal(t, 1, len(shards))
-	require.Equal(t, 3, len(shards[0].Vttablets)) // primary, no-fk replica, fk replica
-	primary = shards[0].Vttablets[0]
-	require.NotNil(t, primary)
-	replicaNoFK = shards[0].Vttablets[1]
-	require.NotNil(t, replicaNoFK)
-	require.NotEqual(t, primary.Alias, replicaNoFK.Alias)
-	replicaFK = shards[0].Vttablets[2]
-	require.NotNil(t, replicaFK)
-	require.NotEqual(t, primary.Alias, replicaFK.Alias)
-	require.NotEqual(t, replicaNoFK.Alias, replicaFK.Alias)
-
-	reverseTableNames = slices.Clone(tableNames)
-	slices.Reverse(reverseTableNames)
-	require.ElementsMatch(t, tableNames, reverseTableNames)
-
-	for _, tableName := range tableNames {
-		writeMetrics[tableName] = &WriteMetrics{}
-	}
-||||||| parent of b1cbeb5f19 (test: deflake the foreign key stress test (#20777))
-	shards = clusterInstance.Keyspaces[0].Shards
-	require.Len(t, shards, 1)
-	require.Len(t, shards[0].Vttablets, 3) // primary, no-fk replica, fk replica
-	primary = shards[0].Vttablets[0]
-	require.NotNil(t, primary)
-	replicaNoFK = shards[0].Vttablets[1]
-	require.NotNil(t, replicaNoFK)
-	require.NotEqual(t, primary.Alias, replicaNoFK.Alias)
-	replicaFK = shards[0].Vttablets[2]
-	require.NotNil(t, replicaFK)
-	require.NotEqual(t, primary.Alias, replicaFK.Alias)
-	require.NotEqual(t, replicaNoFK.Alias, replicaFK.Alias)
-
-	reverseTableNames = slices.Clone(tableNames)
-	slices.Reverse(reverseTableNames)
-	require.ElementsMatch(t, tableNames, reverseTableNames)
-
-	for _, tableName := range tableNames {
-		writeMetrics[tableName] = &WriteMetrics{}
-	}
-=======
 	initTestGlobals(t)
->>>>>>> b1cbeb5f19 (test: deflake the foreign key stress test (#20777))
 }
 
 type testCase struct {
@@ -720,11 +676,7 @@ func ExecuteFKTest(t *testing.T, tcase *testCase) {
 }
 
 func TestStressFK(t *testing.T) {
-<<<<<<< HEAD
-||||||| parent of b1cbeb5f19 (test: deflake the foreign key stress test (#20777))
-=======
 	initTestGlobals(t)
->>>>>>> b1cbeb5f19 (test: deflake the foreign key stress test (#20777))
 
 	t.Run("validate replication health", func(t *testing.T) {
 		validateReplicationIsHealthy(t, replicaNoFK)
@@ -1312,11 +1264,6 @@ func populateTables(t *testing.T, tcase *testCase) {
 					for i := 0; i < maxTableRows/4; i++ {
 						generateUpdate(t, tableName, conn)
 					}
-<<<<<<< HEAD
-					for i := 0; i < maxTableRows/4; i++ {
-||||||| parent of b1cbeb5f19 (test: deflake the foreign key stress test (#20777))
-					for range maxTableRows / 4 {
-=======
 					// A delete only succeeds when the random id hits a row
 					// whose updates column is 1 and which no child row (or,
 					// for stress_self, the row itself) references. On
@@ -1330,7 +1277,6 @@ func populateTables(t *testing.T, tcase *testCase) {
 						if i >= maxTableRows/4 && writeMetrics[tableName].Deletes() > 0 {
 							break
 						}
->>>>>>> b1cbeb5f19 (test: deflake the foreign key stress test (#20777))
 						generateDelete(t, tableName, conn)
 					}
 					require.NotZerof(t, writeMetrics[tableName].Deletes(), "no successful delete on %s while seeding", tableName)
