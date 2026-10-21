@@ -19,7 +19,11 @@ package querythrottler
 import (
 	"context"
 	"errors"
+	"expvar"
 	"fmt"
+	"os"
+	"os/exec"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -806,6 +810,47 @@ func TestQueryThrottler_HandleConfigUpdate_DisabledConfigRunsNoStrategy(t *testi
 	require.True(t, built[0].stopped, "disabling the config must stop the running strategy")
 	require.IsType(t, &registry.NoOpStrategy{}, qt.snapshot.Load().strategy)
 	require.Len(t, built, 1, "disabling the config must not build another strategy")
+}
+
+// strategyMetricsChildEnv marks the child process that
+// TestQueryThrottler_StrategyMetricsRegisteredOnlyWhenUsed runs its checks in.
+const strategyMetricsChildEnv = "QUERYTHROTTLER_STRATEGY_METRICS_CHILD"
+
+// The TABLET_THROTTLER strategy's metrics must not be exported by a vttablet that never
+// enables it. Metric registration is process-global and other tests in this package build
+// a tablet strategy, so the checks run in a fresh child process of this test binary.
+func TestQueryThrottler_StrategyMetricsRegisteredOnlyWhenUsed(t *testing.T) {
+	if os.Getenv(strategyMetricsChildEnv) == "" {
+		cmd := exec.Command(os.Args[0], "-test.run=^TestQueryThrottler_StrategyMetricsRegisteredOnlyWhenUsed$", "-test.count=1")
+		cmd.Env = append(os.Environ(), strategyMetricsChildEnv+"=1")
+		out, err := cmd.CombinedOutput()
+		require.NoError(t, err, "child process failed:\n%s", out)
+		return
+	}
+
+	const strategyPrefix = "QueryThrottlerTabletStrategy"
+	strategyMetrics := func() []string {
+		var names []string
+		expvar.Do(func(kv expvar.KeyValue) {
+			// TabletThrottler* was the strategy's former prefix; it must not come back.
+			if strings.HasPrefix(kv.Key, strategyPrefix) || strings.HasPrefix(kv.Key, "TabletThrottler") {
+				names = append(names, kv.Key)
+			}
+		})
+		return names
+	}
+
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), &tabletenv.TabletConfig{}, "TestThrottler")
+	srvTopoServer := srvtopotest.NewPassthroughSrvTopoServer()
+	qt := NewQueryThrottler(t.Context(), &throttle.Throttler{}, env, &topodatapb.TabletAlias{Cell: "test-cell", Uid: 123}, srvTopoServer)
+	t.Cleanup(qt.Shutdown)
+
+	qt.HandleConfigUpdate(createTestSrvKeyspace(false, querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER, false), nil)
+	require.Empty(t, strategyMetrics(), "a disabled config must not register the strategy's metrics")
+
+	// Positive control: once the strategy runs, its metrics exist under the expected prefix.
+	qt.HandleConfigUpdate(createTestSrvKeyspace(true, querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER, false), nil)
+	require.Contains(t, strategyMetrics(), strategyPrefix+"DecisionCount", "an enabled config must register the strategy's metrics")
 }
 
 // TestQueryThrottler_startSrvKeyspaceWatch_InitialLoad tests that initial configuration is loaded successfully when GetSrvKeyspace succeeds.

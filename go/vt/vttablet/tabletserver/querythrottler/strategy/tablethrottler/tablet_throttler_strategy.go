@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"sort"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -44,18 +45,37 @@ var (
 	_ registry.ThrottlingStrategyHandler = (*TabletThrottlerStrategy)(nil)
 	_ registry.StrategyFactory           = (*tabletThrottlerStrategyFactory)(nil)
 
-	_metricsPrefix = "TabletThrottler"
+	_metricsPrefix = "QueryThrottlerTabletStrategy"
 
-	cacheMisses           = stats.NewCounter(_metricsPrefix+"CacheMisses", "incoming query throttler cache misses")
-	cacheHits             = stats.NewCounter(_metricsPrefix+"CacheHits", "incoming query throttler cache hits")
-	cacheRefreshFailures  = stats.NewCounter(_metricsPrefix+"CacheRefreshFailures", "background tablet throttler cache refreshes that did not produce a fresh state (e.g. timeouts)")
-	cacheStaleRefreshes   = stats.NewCounter(_metricsPrefix+"CacheStaleRefreshes", "background refresh ticks that observed the cache already older than the staleness threshold (queries are silently failing open against stale state)")
-	cacheStaleConsumption = stats.NewCounter(_metricsPrefix+"CacheStaleConsumption", "hot-path cache reads that discarded a state older than the staleness threshold and failed open (prevents indefinite throttling during a metrics outage)")
-	decisionCount         = stats.NewCountersWithMultiLabels(_metricsPrefix+"DecisionCount", "tablet throttler decisions by outcome and reason", []string{"TabletType", "StmtType", "Path", "Outcome", "Reason"})
-	fastDecisionLatency   = stats.NewMultiTimings(_metricsPrefix+"FastDecisionLatencyMicroseconds", "fast-path tablet throttler decision latency in microseconds", []string{"TabletType", "Outcome"})
-	fullDecisionLatency   = stats.NewMultiTimings(_metricsPrefix+"FullDecisionLatencyMicroseconds", "full-path tablet throttler decision latency in microseconds", []string{"TabletType", "StmtType", "Outcome"})
-	cacheLoadLatency      = stats.NewMultiTimings(_metricsPrefix+"CacheLoadLatencyMilliseconds", "tablet throttler cache load latency in milliseconds", []string{"Status"})
+	// The metrics below are registered by initMetrics when the first strategy is built, so
+	// a vttablet that never enables the TABLET_THROTTLER strategy exports none of them.
+	metricsOnce           sync.Once
+	cacheMisses           *stats.Counter
+	cacheHits             *stats.Counter
+	cacheRefreshFailures  *stats.Counter
+	cacheStaleRefreshes   *stats.Counter
+	cacheStaleConsumption *stats.Counter
+	decisionCount         *stats.CountersWithMultiLabels
+	fastDecisionLatency   *stats.MultiTimings
+	fullDecisionLatency   *stats.MultiTimings
+	cacheLoadLatency      *stats.MultiTimings
 )
+
+// initMetrics registers the strategy's metrics once per process. Strategies are rebuilt
+// whenever the config is re-enabled, and registering a metric name twice panics.
+func initMetrics() {
+	metricsOnce.Do(func() {
+		cacheMisses = stats.NewCounter(_metricsPrefix+"CacheMisses", "incoming query throttler cache misses")
+		cacheHits = stats.NewCounter(_metricsPrefix+"CacheHits", "incoming query throttler cache hits")
+		cacheRefreshFailures = stats.NewCounter(_metricsPrefix+"CacheRefreshFailures", "background tablet throttler cache refreshes that did not produce a fresh state (e.g. timeouts)")
+		cacheStaleRefreshes = stats.NewCounter(_metricsPrefix+"CacheStaleRefreshes", "background refresh ticks that observed the cache already older than the staleness threshold (queries are silently failing open against stale state)")
+		cacheStaleConsumption = stats.NewCounter(_metricsPrefix+"CacheStaleConsumption", "hot-path cache reads that discarded a state older than the staleness threshold and failed open (prevents indefinite throttling during a metrics outage)")
+		decisionCount = stats.NewCountersWithMultiLabels(_metricsPrefix+"DecisionCount", "tablet throttler decisions by outcome and reason", []string{"TabletType", "StmtType", "Path", "Outcome", "Reason"})
+		fastDecisionLatency = stats.NewMultiTimings(_metricsPrefix+"FastDecisionLatencyMicroseconds", "fast-path tablet throttler decision latency in microseconds", []string{"TabletType", "Outcome"})
+		fullDecisionLatency = stats.NewMultiTimings(_metricsPrefix+"FullDecisionLatencyMicroseconds", "full-path tablet throttler decision latency in microseconds", []string{"TabletType", "StmtType", "Outcome"})
+		cacheLoadLatency = stats.NewMultiTimings(_metricsPrefix+"CacheLoadLatencyMilliseconds", "tablet throttler cache load latency in milliseconds", []string{"Status"})
+	})
+}
 
 func init() {
 	registry.Register(querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER, &tabletThrottlerStrategyFactory{})
@@ -136,6 +156,8 @@ type TabletThrottlerStrategy struct {
 // NewTabletThrottlerStrategy creates a new TabletThrottlerStrategy. The strategy does not
 // watch SrvKeyspace itself; config reaches it only through UpdateConfig.
 func NewTabletThrottlerStrategy(throttleClient ThrottlerClientWrapper, cfg *querythrottlerpb.TabletStrategyConfig, tabletConfig *tabletenv.TabletConfig) *TabletThrottlerStrategy {
+	initMetrics()
+
 	ctx, cancel := context.WithCancel(context.Background())
 
 	strategy := &TabletThrottlerStrategy{
