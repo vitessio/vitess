@@ -545,51 +545,7 @@ func initTestGlobals(t *testing.T) {
 }
 
 func TestInitialSetup(t *testing.T) {
-<<<<<<< HEAD
-	shards = clusterInstance.Keyspaces[0].Shards
-	require.Equal(t, 1, len(shards))
-	require.Equal(t, 3, len(shards[0].Vttablets)) // primary, no-fk replica, fk replica
-	primary = shards[0].Vttablets[0]
-	require.NotNil(t, primary)
-	replicaNoFK = shards[0].Vttablets[1]
-	require.NotNil(t, replicaNoFK)
-	require.NotEqual(t, primary.Alias, replicaNoFK.Alias)
-	replicaFK = shards[0].Vttablets[2]
-	require.NotNil(t, replicaFK)
-	require.NotEqual(t, primary.Alias, replicaFK.Alias)
-	require.NotEqual(t, replicaNoFK.Alias, replicaFK.Alias)
-
-	reverseTableNames = slices.Clone(tableNames)
-	slices.Reverse(reverseTableNames)
-	require.ElementsMatch(t, tableNames, reverseTableNames)
-
-	for _, tableName := range tableNames {
-		writeMetrics[tableName] = &WriteMetrics{}
-	}
-||||||| parent of b1cbeb5f19 (test: deflake the foreign key stress test (#20777))
-	shards = clusterInstance.Keyspaces[0].Shards
-	require.Len(t, shards, 1)
-	require.Len(t, shards[0].Vttablets, 3) // primary, no-fk replica, fk replica
-	primary = shards[0].Vttablets[0]
-	require.NotNil(t, primary)
-	replicaNoFK = shards[0].Vttablets[1]
-	require.NotNil(t, replicaNoFK)
-	require.NotEqual(t, primary.Alias, replicaNoFK.Alias)
-	replicaFK = shards[0].Vttablets[2]
-	require.NotNil(t, replicaFK)
-	require.NotEqual(t, primary.Alias, replicaFK.Alias)
-	require.NotEqual(t, replicaNoFK.Alias, replicaFK.Alias)
-
-	reverseTableNames = slices.Clone(tableNames)
-	slices.Reverse(reverseTableNames)
-	require.ElementsMatch(t, tableNames, reverseTableNames)
-
-	for _, tableName := range tableNames {
-		writeMetrics[tableName] = &WriteMetrics{}
-	}
-=======
 	initTestGlobals(t)
->>>>>>> b1cbeb5f19 (test: deflake the foreign key stress test (#20777))
 }
 
 type testCase struct {
