@@ -17,9 +17,10 @@ jobs:
         branch: [ main, release-24.0, release-23.0 ]
     name: Update Golang Version
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
+        uses: step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed # v2.22.0
         with:
           egress-policy: audit
 

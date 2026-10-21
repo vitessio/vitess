@@ -2375,9 +2375,12 @@ type BackupRequest struct {
 	MysqlShutdownTimeout *vttime.Duration `protobuf:"bytes,7,opt,name=mysql_shutdown_timeout,json=mysqlShutdownTimeout,proto3" json:"mysql_shutdown_timeout,omitempty"`
 	// Optional queries to run on the mysqld instance prior to the backup and fields
 	// to control the related behavior.
-	InitSql       *tabletmanagerdata.BackupRequest_InitSQL `protobuf:"bytes,8,opt,name=init_sql,json=initSql,proto3" json:"init_sql,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	InitSql *tabletmanagerdata.BackupRequest_InitSQL `protobuf:"bytes,8,opt,name=init_sql,json=initSql,proto3" json:"init_sql,omitempty"`
+	// IncludeBinlogs includes the source's binary logs in a full builtin backup.
+	// Restores use them automatically.
+	IncludeBinlogs bool `protobuf:"varint,9,opt,name=include_binlogs,json=includeBinlogs,proto3" json:"include_binlogs,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *BackupRequest) Reset() {
@@ -2464,6 +2467,13 @@ func (x *BackupRequest) GetInitSql() *tabletmanagerdata.BackupRequest_InitSQL {
 		return x.InitSql
 	}
 	return nil
+}
+
+func (x *BackupRequest) GetIncludeBinlogs() bool {
+	if x != nil {
+		return x.IncludeBinlogs
+	}
+	return false
 }
 
 type BackupResponse struct {
@@ -2557,9 +2567,12 @@ type BackupShardRequest struct {
 	MysqlShutdownTimeout *vttime.Duration `protobuf:"bytes,7,opt,name=mysql_shutdown_timeout,json=mysqlShutdownTimeout,proto3" json:"mysql_shutdown_timeout,omitempty"`
 	// Optional queries to run on the mysqld instance prior to the backup and fields
 	// to control the related behavior.
-	InitSql       *tabletmanagerdata.BackupRequest_InitSQL `protobuf:"bytes,8,opt,name=init_sql,json=initSql,proto3" json:"init_sql,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	InitSql *tabletmanagerdata.BackupRequest_InitSQL `protobuf:"bytes,8,opt,name=init_sql,json=initSql,proto3" json:"init_sql,omitempty"`
+	// IncludeBinlogs includes the source's binary logs in a full builtin backup.
+	// Restores use them automatically.
+	IncludeBinlogs bool `protobuf:"varint,9,opt,name=include_binlogs,json=includeBinlogs,proto3" json:"include_binlogs,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *BackupShardRequest) Reset() {
@@ -2646,6 +2659,13 @@ func (x *BackupShardRequest) GetInitSql() *tabletmanagerdata.BackupRequest_InitS
 		return x.InitSql
 	}
 	return nil
+}
+
+func (x *BackupShardRequest) GetIncludeBinlogs() bool {
+	if x != nil {
+		return x.IncludeBinlogs
+	}
+	return false
 }
 
 type CancelSchemaMigrationRequest struct {
@@ -4344,8 +4364,14 @@ type EmergencyReparentShardRequest struct {
 	// are detected. NewPrimary is required and must be an upfront undominated candidate.
 	// Transactions only present on losing histories will not be preserved.
 	AllowSplitBrainPromotion bool `protobuf:"varint,9,opt,name=allow_split_brain_promotion,json=allowSplitBrainPromotion,proto3" json:"allow_split_brain_promotion,omitempty"`
-	unknownFields            protoimpl.UnknownFields
-	sizeCache                protoimpl.SizeCache
+	// RequiredPosition is the minimum MySQL GTID set, for example <uuid>:1-100,
+	// that the new primary must have. The reparent fails if no candidate has
+	// received it, either applied or still in its relay log. The check supports
+	// MySQL GTID shards only. On any other shard, the reparent fails only after it
+	// stops replication and demotes a reachable primary. Empty means no requirement.
+	RequiredPosition string `protobuf:"bytes,10,opt,name=required_position,json=requiredPosition,proto3" json:"required_position,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *EmergencyReparentShardRequest) Reset() {
@@ -4439,6 +4465,13 @@ func (x *EmergencyReparentShardRequest) GetAllowSplitBrainPromotion() bool {
 		return x.AllowSplitBrainPromotion
 	}
 	return false
+}
+
+func (x *EmergencyReparentShardRequest) GetRequiredPosition() string {
+	if x != nil {
+		return x.RequiredPosition
+	}
+	return ""
 }
 
 type EmergencyReparentShardResponse struct {
@@ -17721,7 +17754,7 @@ const file_vtctldata_proto_rawDesc = "" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12?\n" +
 	"\x05value\x18\x02 \x01(\v2).vtctldata.ApplyVSchemaResponse.ParamListR\x05value:\x028\x01\x1a#\n" +
 	"\tParamList\x12\x16\n" +
-	"\x06params\x18\x01 \x03(\tR\x06params\"\xae\x03\n" +
+	"\x06params\x18\x01 \x03(\tR\x06params\"\xd7\x03\n" +
 	"\rBackupRequest\x128\n" +
 	"\ftablet_alias\x18\x01 \x01(\v2\x15.topodata.TabletAliasR\vtabletAlias\x12#\n" +
 	"\rallow_primary\x18\x02 \x01(\bR\fallowPrimary\x12 \n" +
@@ -17730,13 +17763,14 @@ const file_vtctldata_proto_rawDesc = "" +
 	"\fupgrade_safe\x18\x05 \x01(\bR\vupgradeSafe\x12(\n" +
 	"\rbackup_engine\x18\x06 \x01(\tH\x00R\fbackupEngine\x88\x01\x01\x12F\n" +
 	"\x16mysql_shutdown_timeout\x18\a \x01(\v2\x10.vttime.DurationR\x14mysqlShutdownTimeout\x12C\n" +
-	"\binit_sql\x18\b \x01(\v2(.tabletmanagerdata.BackupRequest.InitSQLR\ainitSqlB\x10\n" +
+	"\binit_sql\x18\b \x01(\v2(.tabletmanagerdata.BackupRequest.InitSQLR\ainitSql\x12'\n" +
+	"\x0finclude_binlogs\x18\t \x01(\bR\x0eincludeBinlogsB\x10\n" +
 	"\x0e_backup_engine\"\xa2\x01\n" +
 	"\x0eBackupResponse\x128\n" +
 	"\ftablet_alias\x18\x01 \x01(\v2\x15.topodata.TabletAliasR\vtabletAlias\x12\x1a\n" +
 	"\bkeyspace\x18\x02 \x01(\tR\bkeyspace\x12\x14\n" +
 	"\x05shard\x18\x03 \x01(\tR\x05shard\x12$\n" +
-	"\x05event\x18\x04 \x01(\v2\x0e.logutil.EventR\x05event\"\xef\x02\n" +
+	"\x05event\x18\x04 \x01(\v2\x0e.logutil.EventR\x05event\"\x98\x03\n" +
 	"\x12BackupShardRequest\x12\x1a\n" +
 	"\bkeyspace\x18\x01 \x01(\tR\bkeyspace\x12\x14\n" +
 	"\x05shard\x18\x02 \x01(\tR\x05shard\x12#\n" +
@@ -17745,7 +17779,8 @@ const file_vtctldata_proto_rawDesc = "" +
 	"\fupgrade_safe\x18\x05 \x01(\bR\vupgradeSafe\x120\n" +
 	"\x14incremental_from_pos\x18\x06 \x01(\tR\x12incrementalFromPos\x12F\n" +
 	"\x16mysql_shutdown_timeout\x18\a \x01(\v2\x10.vttime.DurationR\x14mysqlShutdownTimeout\x12C\n" +
-	"\binit_sql\x18\b \x01(\v2(.tabletmanagerdata.BackupRequest.InitSQLR\ainitSql\"|\n" +
+	"\binit_sql\x18\b \x01(\v2(.tabletmanagerdata.BackupRequest.InitSQLR\ainitSql\x12'\n" +
+	"\x0finclude_binlogs\x18\t \x01(\bR\x0eincludeBinlogs\"|\n" +
 	"\x1cCancelSchemaMigrationRequest\x12\x1a\n" +
 	"\bkeyspace\x18\x01 \x01(\tR\bkeyspace\x12\x12\n" +
 	"\x04uuid\x18\x02 \x01(\tR\x04uuid\x12,\n" +
@@ -17865,7 +17900,7 @@ const file_vtctldata_proto_rawDesc = "" +
 	"\x14DeleteTabletsRequest\x12<\n" +
 	"\x0etablet_aliases\x18\x01 \x03(\v2\x15.topodata.TabletAliasR\rtabletAliases\x12#\n" +
 	"\rallow_primary\x18\x02 \x01(\bR\fallowPrimary\"\x17\n" +
-	"\x15DeleteTabletsResponse\"\x82\x04\n" +
+	"\x15DeleteTabletsResponse\"\xaf\x04\n" +
 	"\x1dEmergencyReparentShardRequest\x12\x1a\n" +
 	"\bkeyspace\x18\x01 \x01(\tR\bkeyspace\x12\x14\n" +
 	"\x05shard\x18\x02 \x01(\tR\x05shard\x126\n" +
@@ -17876,7 +17911,9 @@ const file_vtctldata_proto_rawDesc = "" +
 	"\x1cprevent_cross_cell_promotion\x18\x06 \x01(\bR\x19preventCrossCellPromotion\x12/\n" +
 	"\x14wait_for_all_tablets\x18\a \x01(\bR\x11waitForAllTablets\x12@\n" +
 	"\x10expected_primary\x18\b \x01(\v2\x15.topodata.TabletAliasR\x0fexpectedPrimary\x12=\n" +
-	"\x1ballow_split_brain_promotion\x18\t \x01(\bR\x18allowSplitBrainPromotion\"\xbc\x01\n" +
+	"\x1ballow_split_brain_promotion\x18\t \x01(\bR\x18allowSplitBrainPromotion\x12+\n" +
+	"\x11required_position\x18\n" +
+	" \x01(\tR\x10requiredPosition\"\xbc\x01\n" +
 	"\x1eEmergencyReparentShardResponse\x12\x1a\n" +
 	"\bkeyspace\x18\x01 \x01(\tR\bkeyspace\x12\x14\n" +
 	"\x05shard\x18\x02 \x01(\tR\x05shard\x12@\n" +

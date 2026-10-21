@@ -104,6 +104,8 @@ func TestTopoDownServingQuery(t *testing.T) {
 	vtParams := mysql.ConnParams{
 		Host: "localhost",
 		Port: clusterInstance.VtgateMySQLPort,
+		// Tests use these connections to run batches of statements.
+		EnableMultiStatements: true,
 	}
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)

@@ -191,9 +191,7 @@
       "Manual": false,
       "Shard": "21",
       "Tags": [],
-      "Needs": [
-        "minio"
-      ]
+      "Needs": []
     },
     "backup_s3": {
       "File": "unused.go",
@@ -209,7 +207,7 @@
       "Shard": "21",
       "Tags": [],
       "Needs": [
-        "minio"
+        "microceph"
       ]
     },
     "backup_only": {

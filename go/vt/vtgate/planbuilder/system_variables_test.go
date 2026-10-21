@@ -94,6 +94,19 @@ func TestDeniedSystemVariables(t *testing.T) {
 		query:    "set not_a_real_sysvar = 1",
 		wantErr:  "VT05006: unknown system variable '@@not_a_real_sysvar = 1'",
 		wantCode: vtrpcpb.Code_NOT_FOUND,
+	}, {
+		// The variable is resolved before its value is judged, as in MySQL: an unknown
+		// variable is reported as such even when the value is a qualified name.
+		name:     "unknown sysvar with a qualified value still returns unknown-variable error",
+		query:    "set not_a_real_sysvar = t.x",
+		wantErr:  "VT05006: unknown system variable '@@not_a_real_sysvar = t.x'",
+		wantCode: vtrpcpb.Code_NOT_FOUND,
+	}, {
+		name:     "denied sysvar with a qualified value still returns the denylist error",
+		denied:   map[string]struct{}{"unique_checks": {}},
+		query:    "set unique_checks = t.x",
+		wantErr:  "VT12001: unsupported: system setting: unique_checks",
+		wantCode: vtrpcpb.Code_UNIMPLEMENTED,
 	}}
 
 	for _, tc := range cases {

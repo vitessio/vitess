@@ -26,7 +26,7 @@ import { WorkspaceHeader } from '../../layout/WorkspaceHeader';
 import { WorkspaceTitle } from '../../layout/WorkspaceTitle';
 import { Link } from 'react-router-dom';
 
-const TopologyLink: React.FC<{ clusterID: string }> = ({ clusterID, children }) => {
+const TopologyLink: React.FC<React.PropsWithChildren<{ clusterID: string }>> = ({ clusterID, children }) => {
     const to = {
         pathname: `/topology/${clusterID}`,
     };

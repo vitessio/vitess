@@ -9,16 +9,26 @@ on:
   pull_request:
     branches: '**'
 
+concurrency:
+  group: format('{0}-{1}', ${{ github.ref }}, 'Static Code Checks, Etc.')
+  cancel-in-progress: true
+
 permissions: read-all
 
 jobs:
   build:
     name: Static Code Checks Etc
     runs-on: ubuntu-24.04
+    env:
+      # Build everything the way the go_cache_warm workflow warms it, so the
+      # checks reuse its build, unit and tools build cache entries. Nothing
+      # under go/ uses cgo.
+      CGO_ENABLED: "0"
+      GOFLAGS: -trimpath
 
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
+        uses: step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed # v2.22.0
         with:
           egress-policy: audit
 
@@ -32,9 +42,15 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          # The merge commit and its first parent, for the path filter.
+          fetch-depth: 2
           persist-credentials: 'false'
 
+      # Only uploads dependency data for FOSSA's license tracking; the policy
+      # check (skip-test) is off, so a pull request gains nothing from it.
+      # Pushes keep main, the release branches and the tags scanned.
       - name: Run FOSSA scan and upload build data
+        if: github.event_name == 'push'
         timeout-minutes: 5
         uses: fossa-contrib/fossa-action@d28f0c947e7406706981a62a91ecc009bcc39fd7 # v4.0.0
         with:
@@ -42,11 +58,21 @@ jobs:
           fossa-api-key: f62c11ef0c249fef239947f01279aa0f
           github-token: ${{ github.token }}
 
+      - name: Find the base of the pull request's merge commit
+        # github.event.pull_request.base.sha is not updated when the base branch
+        # moves, so paths-filter would also count the base branch's newer commits.
+        # With token: '', paths-filter diffs against `base` on pull_request
+        # events too (see its README); action.yml's input description is stale.
+        id: merge-base
+        if: github.event_name == 'pull_request'
+        run: echo "sha=$(git rev-parse HEAD^1)" >> "$GITHUB_OUTPUT"
+
       - name: Check for changes in files
         uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         id: changes
         with:
           token: ''
+          base: ${{ steps.merge-base.outputs.sha }}
           filters: |
             go_files:
               - '**/*.go'
@@ -126,12 +152,15 @@ jobs:
 
       - name: Set up Go
         if: (steps.changes.outputs.go_files == 'true' || steps.changes.outputs.parser_changes == 'true' || steps.changes.outputs.proto_changes == 'true')
-        uses: ./.github/actions/setup-go
+        uses: $/.github/actions/setup-go
+        with:
+          build-cache: build,unit,tools
+          go-tools: addlicense,gofumpt,goimports,golangci-lint,goyacc
 
       - name: Tune the OS
         if: steps.changes.outputs.go_files == 'true'
         timeout-minutes: 5
-        uses: ./.github/actions/tune-os
+        uses: $/.github/actions/tune-os
 
       - name: Get dependencies
         if: (steps.changes.outputs.parser_changes == 'true' || steps.changes.outputs.go_files == 'true')
@@ -140,7 +169,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget
           sudo service etcd stop
-          go mod download
 
       - name: Run make minimaltools
         if: (steps.changes.outputs.parser_changes == 'true' || steps.changes.outputs.go_files == 'true')
@@ -191,27 +219,21 @@ jobs:
             .github/ISSUE_TEMPLATE/*.yml \
             .github/workflows/*.yml
 
-      - name: Get golangci-lint version
-        if: steps.changes.outputs.go_files == 'true'
-        id: golangci_lint_version
-        run: |
-          version=$(cd tools/golangci-lint && go list -m -f '{{.Version}}' github.com/golangci/golangci-lint/v2)
-          if [ -z "$version" ]; then
-            echo "Could not determine golangci-lint version from tools/golangci-lint/go.mod"
-            exit 1
-          fi
-          echo "version=${version}" >> "$GITHUB_OUTPUT"
-
+      # Runs the golangci-lint build pinned in tools/golangci-lint, the same
+      # one "make lint" runs, which the tools build cache entry holds. With
+      # the analysis cache that setup-go restores, it only analyzes the
+      # packages that changed and those that depend on them. The problem
+      # matcher of actions/setup-go turns the issues it reports into
+      # annotations.
       - name: Run golangci-lint
         if: steps.changes.outputs.go_files == 'true'
         timeout-minutes: 15
-        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
-        with:
-          args: --timeout 10m
-          install-mode: "goinstall"
-          skip-cache: true
-          working-directory: go
-          version: ${{ steps.golangci_lint_version.outputs.version }}
+        run: |
+          lint() {
+            go run -trimpath -modfile=tools/golangci-lint/go.mod github.com/golangci/golangci-lint/v2/cmd/golangci-lint "$@"
+          }
+          lint config verify
+          lint run --timeout 10m ./go/...
 
       - name: Check license headers
         if: steps.changes.outputs.go_files == 'true'
@@ -243,7 +265,7 @@ jobs:
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           # make proto requires newer node than the pre-installed one
-          node-version: '22.13.1'
+          node-version: '24.21.0'
 
       - name: check_make_proto
         if: steps.changes.outputs.proto_changes == 'true'
@@ -271,7 +293,7 @@ jobs:
           exit 1
 
       - name: Run zizmor 🌈
-        uses: zizmorcore/zizmor-action@3dc1ecc9bcb9e94e9b2c709687979e1298497054 # v0.6.2
+        uses: zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482 # v0.6.4
         with:
           advanced-security: false
           annotations: true

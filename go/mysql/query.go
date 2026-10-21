@@ -82,17 +82,67 @@ func (c *Conn) writeComInitDB(db string) error {
 	return nil
 }
 
-// writeComSetOption changes the connection's capability of executing multi statements.
-// Returns SQLError(CRServerGone) if it can't.
-func (c *Conn) writeComSetOption(operation uint16) error {
-	data, pos := c.startEphemeralPacketWithHeader(16 + 1)
+const (
+	// multiStatementsOn is MYSQL_OPTION_MULTI_STATEMENTS_ON, the COM_SET_OPTION
+	// operand that turns multi statement support on.
+	multiStatementsOn uint16 = 0
+	// multiStatementsOff is MYSQL_OPTION_MULTI_STATEMENTS_OFF, the
+	// COM_SET_OPTION operand that turns multi statement support off.
+	multiStatementsOff uint16 = 1
+)
+
+// SetMultiStatements turns the connection's ability to execute multi statements
+// on or off, using COM_SET_OPTION. It is the runtime counterpart of
+// ConnParams.EnableMultiStatements, for connections that only send batches
+// during part of their life.
+//
+// If the server refuses the option, the connection is left untouched and
+// remains usable. If the exchange fails in a way that leaves the state of the
+// connection unknown, the connection is closed.
+func (c *Conn) SetMultiStatements(on bool) error {
+	operation := multiStatementsOff
+	if on {
+		operation = multiStatementsOn
+	}
+
+	// This is a new command, need to reset the sequence.
+	c.sequence = 0
+
+	data, pos := c.startEphemeralPacketWithHeader(1 + 2)
 	data[pos] = ComSetOption
 	pos++
 	writeUint16(data, pos, operation)
 	if err := c.writeEphemeralPacket(); err != nil {
-		return sqlerror.NewSQLError(sqlerror.CRServerGone, sqlerror.SSUnknownSQLState, err.Error())
+		c.Close()
+		return sqlerror.NewSQLErrorf(sqlerror.CRServerGone, sqlerror.SSUnknownSQLState, "%v", err)
 	}
-	return nil
+
+	data, err := c.readEphemeralPacket()
+	if err != nil {
+		c.Close()
+		return sqlerror.NewSQLErrorf(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "%v", err)
+	}
+	defer c.recycleReadPacket()
+
+	if len(data) > 0 {
+		switch {
+		case data[0] == ErrPacket:
+			// The server did not apply the option, but the connection is
+			// still in a known state.
+			return ParseErrorPacket(data)
+		case data[0] == OKPacket, c.isEOFPacket(data):
+			if on {
+				c.Capabilities |= CapabilityClientMultiStatements
+			} else {
+				c.Capabilities &^= CapabilityClientMultiStatements
+			}
+			return nil
+		}
+	}
+
+	// We cannot tell whether the option was applied.
+	c.Close()
+	return vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected packet for COM_SET_OPTION: %v", data)
 }
 
 // readColumnDefinition reads the next Column Definition packet.

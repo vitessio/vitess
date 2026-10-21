@@ -86,7 +86,7 @@ export const success = (message: string, options?: ToastOptions) =>
 export const info = (message: string, options?: ToastOptions) =>
     addSnackbar({ message, intent: Intent.none, icon: Icons.info }, options);
 
-export const SnackbarContainer: React.FC = ({ children }) => {
+export const SnackbarContainer: React.FC<React.PropsWithChildren> = ({ children }) => {
     return (
         <div className="fixed right-10 bottom-6" id="snackbar-container">
             <ToastContainer

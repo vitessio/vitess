@@ -128,7 +128,36 @@ var NeutralizedGlobalExpr = neutralizedExpr("@@global.sql_mode")
 // combination modes that imply lexer behavior (ORACLE, MSSQL, POSTGRESQL, DB2, MAXDB)
 // are not stripped and would re-enable their members on assignment, and MariaDB's
 // tolerance of the empty list members REPLACE leaves behind is unverified.
-var NeutralizeSessionQuery = "set @@session.sql_mode = " + neutralizedExpr("@@session.sql_mode")
+var NeutralizeSessionQuery = "set " + neutralizeSessionAssignment
+
+var neutralizeSessionAssignment = "@@session.sql_mode = " + neutralizedExpr("@@session.sql_mode")
+
+// SessionSetupQuery returns the statement that sets up the session of a connection
+// Vitess creates: NeutralizeSessionQuery, preceded in the same statement by SET NAMES
+// with the given character set when charset is not empty, and with the given
+// collation when that is not empty too. The server's connection initialization
+// (init_connect) runs before it and can change the connection's character set as
+// well as its sql_mode, so the character set the connection negotiated is restored
+// along with the neutralization.
+func SessionSetupQuery(charset, collation string) string {
+	if charset == "" {
+		return NeutralizeSessionQuery
+	}
+	if collation == "" {
+		return fmt.Sprintf("set names '%s', %s", charset, neutralizeSessionAssignment)
+	}
+	return fmt.Sprintf("set names '%s' collate '%s', %s", charset, collation, neutralizeSessionAssignment)
+}
+
+// IsSessionSetupQuery reports whether query is a statement SessionSetupQuery returns,
+// so that a fake backend can answer it as connection setup.
+func IsSessionSetupQuery(query string) bool {
+	query = strings.ToLower(query)
+	if query == strings.ToLower(NeutralizeSessionQuery) {
+		return true
+	}
+	return strings.HasPrefix(query, "set names ") && strings.HasSuffix(query, ", "+strings.ToLower(neutralizeSessionAssignment))
+}
 
 // modeNames lists all sql_mode set members in MySQL's numeric bit order. The
 // NOT_USED_* placeholders parse to their bit like in MySQL, where validation

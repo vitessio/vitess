@@ -18,7 +18,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { stringify } from '../../util/queryString';
 
-interface Props {
+interface Props extends React.PropsWithChildren {
     className?: string;
     clusterID: string | null | undefined;
     name: string | null | undefined;

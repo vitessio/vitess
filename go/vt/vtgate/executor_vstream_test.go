@@ -33,6 +33,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/callerid"
+	"vitess.io/vitess/go/vt/srvtopo"
 	_ "vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -122,4 +124,16 @@ func TestVStreamSQLUnsharded(t *testing.T) {
 	require.Equal(t, expectedInserts, numInserts)
 	require.Equal(t, expectedUpdates, numUpdates)
 	require.Equal(t, expectedDeletes, numDeletes)
+}
+
+func TestSQLVStreamLabelsMetricsWithTheConnectionCaller(t *testing.T) {
+	executor, _, _, _, ctx := createExecutorEnv(t)
+	ctx = callerid.NewContext(ctx, callerid.NewEffectiveCallerID("sql-user", "", ""), nil)
+	rss := []*srvtopo.ResolvedShard{{Target: &querypb.Target{Keyspace: KsTestUnsharded, Shard: "0"}}}
+
+	vs, err := executor.newSQLVStream(ctx, rss, &binlogdatapb.Filter{}, "current", nil)
+	require.NoError(t, err)
+	vs.vsm.includeCallerInMetrics = true
+
+	assert.Equal(t, []string{KsTestUnsharded, "0", "PRIMARY", "sql-user"}, vs.metricLabelValues(vs.vgtid.ShardGtids[0]))
 }
