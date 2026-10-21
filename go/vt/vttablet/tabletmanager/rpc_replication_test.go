@@ -1246,7 +1246,9 @@ func TestInitReplicaStopsReplicationFirst(t *testing.T) {
 	for _, tc := range []struct {
 		name     string
 		executed string
-		queries  []string
+		// requested overrides the position InitReplica is asked for.
+		requested string
+		queries   []string
 	}{
 		{
 			name: "no executed GTIDs",
@@ -1278,12 +1280,45 @@ func TestInitReplicaStopsReplicationFirst(t *testing.T) {
 				"START REPLICA",
 			},
 		},
+		{
+			// Every executed set contains an empty requested position.
+			name:      "empty requested MySQL position",
+			executed:  "MySQL56/" + localUUID + ":1-5",
+			requested: "MySQL56/",
+			queries: []string{
+				"STOP REPLICA",
+				"FAKE RESET BINARY LOGS AND GTIDS",
+				"FAKE SET GLOBAL gtid_purged",
+				"FAKE SET SOURCE",
+				"START REPLICA",
+			},
+		},
+		{
+			// MariaDB's containment ignores the server ID, so the local
+			// 0-100-5 appears to contain the new primary's 0-200-1.
+			name:      "only local MariaDB GTIDs",
+			executed:  "MariaDB/0-100-5",
+			requested: "MariaDB/0-200-1",
+			queries: []string{
+				"STOP REPLICA",
+				"FAKE RESET BINARY LOGS AND GTIDS",
+				"FAKE SET GLOBAL gtid_purged",
+				"FAKE SET SOURCE",
+				"START REPLICA",
+			},
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			tm, fakeMysqlDaemon, parent := setup(t, tc.executed)
+			requested := position
+			if tc.requested != "" {
+				requested = tc.requested
+				fakeMysqlDaemon.SetReplicationPositionPos, err = replication.DecodePosition(requested)
+				require.NoError(t, err)
+			}
 			fakeMysqlDaemon.ExpectedExecuteSuperQueryList = tc.queries
 
-			require.NoError(t, tm.InitReplica(t.Context(), parent, position, 0, false))
+			require.NoError(t, tm.InitReplica(t.Context(), parent, requested, 0, false))
 			require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
 		})
 	}

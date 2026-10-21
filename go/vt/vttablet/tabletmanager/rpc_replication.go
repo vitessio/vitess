@@ -551,12 +551,14 @@ func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.Tab
 	}
 
 	// If shard sync's replication already applied the new primary's history,
-	// resetting GTIDs would make replication replay it.
+	// resetting GTIDs would make replication replay it. Only a MySQL GTID set
+	// shows that: MariaDB containment ignores the server ID, so local
+	// transactions can appear to contain the new primary's position.
 	executed, err := tm.MysqlDaemon.PrimaryPosition(ctx)
 	if err != nil {
 		return err
 	}
-	if pos.IsZero() || !executed.AtLeast(pos) {
+	if _, mysql56 := pos.GTIDSet.(replication.Mysql56GTIDSet); !mysql56 || pos.IsZero() || !executed.AtLeast(pos) {
 		if err := tm.MysqlDaemon.SetReplicationPosition(ctx, pos); err != nil {
 			return err
 		}
