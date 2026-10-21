@@ -770,17 +770,11 @@ func TestTabletThrottlerStrategy_Evaluate_NilCachedResultFailsOpen(t *testing.T)
 }
 
 // A REPLACE rule must throttle a REPLACE statement, and an INSERT rule must not stand in
-// for one. The statement type comes from ASTToStatementType rather than being hardcoded —
-// that call is the fix under test, so hardcoding StmtReplace would pass either way.
+// for one. The tablet plan builder classifies REPLACE as StmtReplace; that is covered by
+// TestBuildStatementType_ReplaceRegression in the planbuilder package.
 func TestTabletThrottlerStrategy_Evaluate_ReplaceRuleMatches(t *testing.T) {
-	parser := sqlparser.NewTestParser()
 	const replaceSQL = "replace into t(a) values (1)"
-
-	stmt, err := parser.Parse(replaceSQL)
-	require.NoError(t, err)
-	stmtType := sqlparser.ASTToStatementType(stmt)
-	require.Equal(t, sqlparser.StmtReplace, stmtType,
-		"REPLACE must classify as StmtReplace, else a REPLACE rule can never match")
+	stmtType := sqlparser.StmtReplace
 
 	overloaded := &throttle.CheckResult{
 		Metrics: map[string]*throttle.MetricResult{

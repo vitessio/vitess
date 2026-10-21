@@ -45,7 +45,6 @@
         - [Stricter PROXY protocol v1 header validation](#vtgate-proxy-protocol-v1-strictness)
         - [MySQL-faithful validation and rejection of unsupported `sql_mode` values](#vtgate-sql-mode-rejection)
         - [New `VEXPLAIN MYSQLPLAN` statement](#vtgate-vexplain-mysqlplan)
-        - [`REPLACE` statements now report the `REPLACE` statement type](#vtgate-replace-statement-type)
         - [VStream metrics report live streams and can include the caller](#vtgate-vstream-metrics)
     - **[Reparent](#minor-changes-reparent)**
         - [`EmergencyReparentShard` no longer waits on replicas that cannot win the election](#ers-lagging-relay-log-wait)
@@ -135,7 +134,7 @@ See [#19918](https://github.com/vitessio/vitess/issues/19918).
 
 #### <a id="vttablet-query-throttler-tablet-throttler"/>Query throttler `TABLET_THROTTLER` strategy</a>
 
-VTTablet's incoming query throttler has a new `TABLET_THROTTLER` strategy, which throttles queries based on the tablet throttler's metrics (for example `lag` or `loadavg`). Rules are keyed by tablet type and statement type, and give each metric a list of thresholds with the percentage of matching queries to reject once the metric goes above that threshold. A throttled query fails with `RESOURCE_EXHAUSTED`, which MySQL clients receive as `ER_OUT_OF_RESOURCES` (1041). `dry_run` evaluates the rules and records metrics without rejecting anything.
+VTTablet's incoming query throttler has a new `TABLET_THROTTLER` strategy, which throttles queries based on the tablet throttler's metrics (for example `lag` or `loadavg`). Rules are keyed by tablet type and statement type, and give each metric a list of thresholds with the percentage of matching queries to reject once the metric goes above that threshold. A throttled query fails with `RESOURCE_EXHAUSTED`, which MySQL clients receive as `ER_OUT_OF_RESOURCES` (1041). `dry_run` evaluates the rules and records metrics without rejecting anything. Rules can target `REPLACE` statements separately from `INSERT`; this classification is local to the query throttler, so plans, query logs and metrics elsewhere still report `REPLACE` as `INSERT`.
 
 The configuration is set per keyspace with the new `vtctldclient UpdateQueryThrottlerConfig` command, which validates it and stores it in the `Keyspace` and every cell's `SrvKeyspace`. Tablets watch their `SrvKeyspace` and apply changes immediately. `--tablet-throttler-cache-update-interval` (default `10s`) controls how often a tablet refreshes the throttler check results that its decisions are based on. A disabled configuration runs no strategy.
 
@@ -522,18 +521,6 @@ For each `Route` in the plan, the per-shard `EXPLAIN` queries are run concurrent
 Because each per-shard `EXPLAIN` runs on a separate connection, a `VEXPLAIN MYSQLPLAN` issued inside an open transaction reflects the pre-transaction state of each shard rather than any uncommitted changes made in that transaction — the same limitation as `VEXPLAIN ALL`.
 
 Like a plain `EXPLAIN`, the per-shard `EXPLAIN FORMAT=JSON` queries `VEXPLAIN MYSQLPLAN` issues are not subject to table ACL checks on the explained tables, so `VEXPLAIN MYSQLPLAN` can return per-shard plan metadata (index names, row estimates, filtered percentages) for tables the caller could not otherwise read. For the same reason — the tablet plans an `EXPLAIN` without the explained table's identity — query denylist rules that are conditioned on a table name are not enforced against these per-shard `EXPLAIN` queries either; denylist rules conditioned on the query pattern still apply if their pattern matches the `explain format = json ...` query text. Unlike a plain `EXPLAIN`, which reaches a single arbitrary shard, `VEXPLAIN MYSQLPLAN` extends this to every resolved shard of every keyspace in the plan. Deployments that rely on table ACLs or table-scoped query denylist rules to restrict read access should restrict access to `VEXPLAIN MYSQLPLAN` accordingly.
-
-#### <a id="vtgate-replace-statement-type"/>`REPLACE` statements now report the `REPLACE` statement type</a>
-
-`REPLACE` is represented internally as an `INSERT` carrying a "replace" action, and the AST-based statement classifier previously reported it as `INSERT`. It is now reported as `REPLACE`, matching what the textual classifier has always returned for the same statements.
-
-This changes three user-visible strings for `REPLACE` statements:
-
-- `StmtType` in the VTGate query log
-- `QueryType` in plan output (`/debug/query_plans` and `VEXPLAIN`)
-- `statementType` in query-analysis output
-
-Query planning, routing, transaction behavior, and results are unchanged — only the reported statement type differs. Tooling that parses these fields and matches on the literal `INSERT` will no longer match `REPLACE` statements and should be updated to accept `REPLACE`.
 
 #### <a id="vtgate-vstream-metrics"/>VStream metrics report live streams and can include the caller</a>
 

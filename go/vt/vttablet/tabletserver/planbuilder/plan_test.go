@@ -288,6 +288,8 @@ func TestBuildStatementType_ReplaceRegression(t *testing.T) {
 	ins, ok := statement.(*sqlparser.Insert)
 	require.True(t, ok, "REPLACE should parse to *sqlparser.Insert")
 	require.Equal(t, sqlparser.ReplaceAct, ins.Action)
+	// Premise: the shared classifier, which vtgate uses, still reports REPLACE as INSERT.
+	require.Equal(t, sqlparser.StmtInsert, sqlparser.ASTToStatementType(statement))
 
 	plan, err := Build(vtenv.NewTestEnv(), statement, testSchema, "dbName", false)
 	require.NoError(t, err)
