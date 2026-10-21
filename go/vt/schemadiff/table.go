@@ -2784,12 +2784,20 @@ func (c *CreateTableEntity) validateDuplicateKeyNameError() error {
 // - all columns referenced by keys exist
 func (c *CreateTableEntity) validate() error {
 	columnExists := map[string]bool{}
+	autoIncrementColumns := 0
 	for _, col := range c.TableSpec.Columns {
 		colName := col.Name.Lowered()
 		if columnExists[colName] {
 			return &ApplyDuplicateColumnError{Table: c.Name(), Column: col.Name.String()}
 		}
 		columnExists[colName] = true
+		if col.Type.Options != nil && col.Type.Options.Autoincrement {
+			autoIncrementColumns++
+		}
+	}
+	// MySQL only allows a single AUTO_INCREMENT column per table (ER_WRONG_AUTO_KEY).
+	if autoIncrementColumns > 1 {
+		return &MultipleAutoIncrementColumnsError{Table: c.Name(), Count: autoIncrementColumns}
 	}
 	for _, colEntity := range c.ColumnDefinitionEntities() {
 		if _, _, _, _, err := colEntity.InferCharsetCollate(); err != nil {
