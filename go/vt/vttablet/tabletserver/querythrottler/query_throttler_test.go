@@ -1404,9 +1404,10 @@ func TestQueryThrottler_HandleConfigUpdate_EvaluatesRulesFromDryRunSnapshot(t *t
 	// The core assertion: the strategy is handed the snapshot's config, so its rules and
 	// the DryRun that Throttle acts on always come from the same update.
 	require.NoError(t, qt.Throttle(ctx, topodatapb.TabletType_PRIMARY, &sqlparser.ParsedQuery{Query: "SELECT 1"}, sqlparser.StmtSelect, 0, nil))
-	require.Len(t, oldStrategy.evaluatedCfgs, 1)
-	require.Same(t, snap.cfg, oldStrategy.evaluatedCfgs[0], "Evaluate must be given the config of the snapshot Throttle reads DryRun from")
-	require.Contains(t, oldStrategy.evaluatedCfgs[0].GetTabletStrategyConfig().GetTabletRules(), "PRIMARY", "Evaluate must see the new nested rules")
+	evaluatedCfgs := oldStrategy.getEvaluatedCfgs()
+	require.Len(t, evaluatedCfgs, 1)
+	require.Same(t, snap.cfg, evaluatedCfgs[0], "Evaluate must be given the config of the snapshot Throttle reads DryRun from")
+	require.Contains(t, evaluatedCfgs[0].GetTabletStrategyConfig().GetTabletRules(), "PRIMARY", "Evaluate must see the new nested rules")
 }
 
 // A SrvKeyspace update that changes only the nested TabletStrategyConfig must still
@@ -1469,8 +1470,9 @@ func TestQueryThrottler_HandleConfigUpdate_NestedOnlyChangePropagates(t *testing
 	// The strategy must evaluate with the nested change. Comparing only the top-level
 	// scalars (all unchanged here) would short-circuit and keep the old rules.
 	require.NoError(t, qt.Throttle(ctx, topodatapb.TabletType_PRIMARY, &sqlparser.ParsedQuery{Query: "SELECT 1"}, sqlparser.StmtSelect, 0, nil))
-	require.Len(t, oldStrategy.evaluatedCfgs, 1)
-	pushed := oldStrategy.evaluatedCfgs[0].GetTabletStrategyConfig().GetTabletRules()["PRIMARY"].GetStatementRules()["SELECT"].GetMetricRules()["lag"].GetThresholds()
+	evaluatedCfgs := oldStrategy.getEvaluatedCfgs()
+	require.Len(t, evaluatedCfgs, 1)
+	pushed := evaluatedCfgs[0].GetTabletStrategyConfig().GetTabletRules()["PRIMARY"].GetStatementRules()["SELECT"].GetMetricRules()["lag"].GetThresholds()
 	require.Len(t, pushed, 1)
 	require.Equal(t, float64(5), pushed[0].GetAbove(), "Evaluate must see the new threshold")
 	require.Equal(t, int32(99), pushed[0].GetThrottle(), "Evaluate must see the new throttle ratio")

@@ -18,6 +18,7 @@ package querythrottler
 
 import (
 	"context"
+	"sync"
 
 	querythrottlerpb "vitess.io/vitess/go/vt/proto/querythrottler"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -41,13 +42,24 @@ type mockThrottlingStrategy struct {
 	decision registry.ThrottleDecision
 	started  bool
 	stopped  bool
-	// evaluatedCfgs records the config passed to each Evaluate call.
+
+	mu sync.Mutex
+	// evaluatedCfgs records the config passed to each Evaluate call. Guarded by mu.
 	evaluatedCfgs []*querythrottlerpb.Config
 }
 
 func (m *mockThrottlingStrategy) Evaluate(ctx context.Context, cfg *querythrottlerpb.Config, targetTabletType topodatapb.TabletType, parsedQuery *sqlparser.ParsedQuery, statementType sqlparser.StatementType, transactionID int64, attrs registry.QueryAttributes) registry.ThrottleDecision {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.evaluatedCfgs = append(m.evaluatedCfgs, cfg)
 	return m.decision
+}
+
+// getEvaluatedCfgs returns a copy of the configs passed to Evaluate so far.
+func (m *mockThrottlingStrategy) getEvaluatedCfgs() []*querythrottlerpb.Config {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return append([]*querythrottlerpb.Config(nil), m.evaluatedCfgs...)
 }
 
 func (m *mockThrottlingStrategy) Start() {
