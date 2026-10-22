@@ -7301,5 +7301,157 @@
       ]
     },
     "skip_e2e": true
+  },
+  {
+    "comment": "update with a row comparison against a value subquery binds each column of the row",
+    "query": "update user set col = 1 where (col, name) < (select user_id, col from music where user_id = 5)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "UPDATE",
+      "Original": "update user set col = 1 where (col, name) < (select user_id, col from music where user_id = 5)",
+      "Instructions": {
+        "OperatorType": "UncorrelatedSubquery",
+        "Variant": "PulloutValue",
+        "PulloutVars": [
+          "__sq1_0",
+          "__sq1_1"
+        ],
+        "Inputs": [
+          {
+            "InputName": "SubQuery",
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select user_id, col from music where 1 != 1",
+            "Query": "select user_id, col from music where user_id = 5 lock in share mode",
+            "Values": [
+              "5"
+            ],
+            "Vindex": "user_index"
+          },
+          {
+            "InputName": "Outer",
+            "OperatorType": "Update",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "Query": "update `user` set col = 1 where (col, `name`) < (:__sq1_0, :__sq1_1)"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "update set with a row comparison against a value subquery binds each column of the row",
+    "query": "update user set col = ((col, name) = (select user_id, col from music where user_id = 5)) where id = 1",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "UPDATE",
+      "Original": "update user set col = ((col, name) = (select user_id, col from music where user_id = 5)) where id = 1",
+      "Instructions": {
+        "OperatorType": "UncorrelatedSubquery",
+        "Variant": "PulloutValue",
+        "PulloutVars": [
+          "__sq1_0",
+          "__sq1_1"
+        ],
+        "Inputs": [
+          {
+            "InputName": "SubQuery",
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select user_id, col from music where 1 != 1",
+            "Query": "select user_id, col from music where user_id = 5 lock in share mode",
+            "Values": [
+              "5"
+            ],
+            "Vindex": "user_index"
+          },
+          {
+            "InputName": "Outer",
+            "OperatorType": "Update",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "Query": "update `user` set col = (col, `name`) = (:__sq1_0, :__sq1_1) where id = 1",
+            "Values": [
+              "1"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "delete with a row NOT IN subquery binds each row as a tuple",
+    "query": "delete from user where (col, name) not in (select user_id, col from music where user_id = 5)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "DELETE",
+      "Original": "delete from user where (col, name) not in (select user_id, col from music where user_id = 5)",
+      "Instructions": {
+        "OperatorType": "UncorrelatedSubquery",
+        "Variant": "PulloutNotIn",
+        "PulloutVars": [
+          "__sq_has_values",
+          "__sq1"
+        ],
+        "RowColumns": 2,
+        "Inputs": [
+          {
+            "InputName": "SubQuery",
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select user_id, col from music where 1 != 1",
+            "Query": "select user_id, col from music where user_id = 5",
+            "Values": [
+              "5"
+            ],
+            "Vindex": "user_index"
+          },
+          {
+            "InputName": "Outer",
+            "OperatorType": "Delete",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "KsidLength": 1,
+            "KsidVindex": "user_index",
+            "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where not :__sq_has_values or (col, `name`) not in ::__sq1 for update",
+            "Query": "delete from `user` where not :__sq_has_values or (col, `name`) not in ::__sq1"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user"
+      ]
+    }
   }
 ]

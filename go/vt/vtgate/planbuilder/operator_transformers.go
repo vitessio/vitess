@@ -277,13 +277,27 @@ func transformSubQuery(ctx *plancontext.PlanningContext, op *operators.SubQuery)
 	}
 	if len(cols) == 0 {
 		// no correlation, so uncorrelated it is
-		return &engine.UncorrelatedSubquery{
+		sq := &engine.UncorrelatedSubquery{
 			Opcode:         op.FilterType,
 			SubqueryResult: op.SubqueryValueName,
 			HasValues:      op.HasValuesName,
 			Subquery:       inner,
 			Outer:          outer,
-		}, nil
+		}
+		if rowColumns := op.RowColumns(); rowColumns > 1 {
+			switch op.FilterType {
+			case opcode.PulloutValue:
+				sq.RowResults = ctx.RowSubqueryArgs[op.ArgName]
+			case opcode.PulloutIn, opcode.PulloutNotIn:
+				// Only a comparison guarded by HasValues is safe to bind as a list of rows: without the guard, an
+				// empty result would be compared with the placeholder row. In select expressions and UPDATE ... SET
+				// there is no guard, so leave those as they were, which MySQL rejects for a row.
+				if op.HasValuesName != "" {
+					sq.RowColumns = rowColumns
+				}
+			}
+		}
+		return sq, nil
 	}
 
 	return &engine.SemiJoin{
