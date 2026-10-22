@@ -25,7 +25,8 @@
 # names in /etc/hosts to every address that answered both within 3 times the
 # fastest one's time, so that whatever resolves them still has other addresses
 # to fail over to, and points apt at the archive instead of the Azure mirror.
-# When no address answers, it changes nothing.
+# When no address answers, the archive itself is down, so it leaves apt on the
+# Azure mirror.
 
 set -uo pipefail
 
@@ -37,6 +38,21 @@ else
 	path=ubuntu
 fi
 codename="$(awk -F= '$1 == "VERSION_CODENAME" {print $2}' /etc/os-release)"
+
+# Prints HOST's IPv4 addresses. The resolver of GitHub's hosted runners returns
+# only one of the archive's addresses, which may be a slow one, so this also
+# asks two public resolvers over HTTPS for all of them.
+resolve() {
+	local host="$1"
+	{
+		getent ahostsv4 "${host}" | awk '{print $1}'
+		curl -fsS --max-time 3 -H 'accept: application/dns-json' \
+			"https://cloudflare-dns.com/dns-query?name=${host}&type=A" 2> /dev/null |
+			grep -oE '"data": ?"[0-9.]+"' | grep -oE '[0-9.]+'
+		curl -fsS --max-time 3 "https://dns.google/resolve?name=${host}&type=A" 2> /dev/null |
+			grep -oE '"data": ?"[0-9.]+"' | grep -oE '[0-9.]+'
+	} | grep -xE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | sort -u
+}
 
 # Prints the seconds it took to download the release file from HOST via IP
 # over SCHEME, or nothing if that failed or took longer than 3 seconds.
@@ -58,8 +74,14 @@ probe_both() {
 
 results="$(mktemp)"
 trap 'rm -f "${results}"' EXIT
-for ip in $(getent ahostsv4 "${archive}" | awk '{print $1}' | sort -u); do
-	(t="$(probe_both "${archive}" "${ip}" "${path}")" && echo "${t} ${ip}" >> "${results}") &
+for ip in $(resolve "${archive}"); do
+	(
+		if t="$(probe_both "${archive}" "${ip}" "${path}")"; then
+			echo "${t} ${ip}" >> "${results}"
+		else
+			echo "Ubuntu archive probe: ${ip} did not answer within 3 seconds"
+		fi
+	) &
 done
 wait
 
@@ -70,7 +92,7 @@ if [[ -z "${best}" ]]; then
 	exit 0
 fi
 # security.ubuntu.com is served by the same servers as archive.ubuntu.com.
-security="$(getent ahostsv4 security.ubuntu.com | awk '{print $1}' | sort -u)"
+security="$(resolve security.ubuntu.com)"
 fastest="$(sort -n "${results}" | head -1 | cut -d' ' -f1)"
 sort -n "${results}" | awk -v max="$(awk -v t="${fastest}" 'BEGIN { print 3 * t }')" '$1 <= max { print $2 }' |
 	while read -r ip; do
