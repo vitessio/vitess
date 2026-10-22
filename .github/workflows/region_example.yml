@@ -70,6 +70,8 @@ jobs:
             - 'bootstrap.sh'
             - 'examples/**'
             - '.github/workflows/region_example.yml'
+            - '.github/actions/build-bootstrap/**'
+            - 'docker/bootstrap/**'
 
   build:
     needs: changes
