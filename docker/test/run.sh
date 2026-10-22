@@ -132,10 +132,28 @@ args="$args --cap-add=SYS_ADMIN"
 args="$args -v /dev/log:/dev/log"
 args="$args -v $PWD:/tmp/src"
 
-# Share maven dependency cache so they don't have to be redownloaded every time.
-mkdir -p /tmp/mavencache
-chmod 777 /tmp/mavencache
+# Share Maven and its dependency cache so they don't have to be redownloaded every time.
+mkdir -p /tmp/maven /tmp/mavencache
+chmod 777 /tmp/maven /tmp/mavencache
+args="$args -v /tmp/maven:/vt/maven"
 args="$args -v /tmp/mavencache:/home/vitess/.m2"
+
+# Share the Go module and build caches, so that each test doesn't download
+# every module and compile every package again. DOCKER_TEST_GOMODCACHE and
+# DOCKER_TEST_GOCACHE point them at existing caches, which the vitess user
+# (uid 1000) must be able to write to.
+gomodcache=${DOCKER_TEST_GOMODCACHE:-/tmp/gomodcache}
+gocache=${DOCKER_TEST_GOCACHE:-/tmp/gocache}
+if [[ -z "$DOCKER_TEST_GOMODCACHE" ]]; then
+	mkdir -p "$gomodcache"
+	chmod 777 "$gomodcache"
+fi
+if [[ -z "$DOCKER_TEST_GOCACHE" ]]; then
+	mkdir -p "$gocache"
+	chmod 777 "$gocache"
+fi
+args="$args -v $gomodcache:/vt/gomodcache -e GOMODCACHE=/vt/gomodcache"
+args="$args -v $gocache:/vt/gocache -e GOCACHE=/vt/gocache"
 
 # Add in the vitess user
 args="$args --user vitess"
@@ -189,8 +207,8 @@ bashcmd=$(append_cmd "$bashcmd" "rm -rf /vt/bin; ln -s /vt/src/vitess.io/vitess/
 bashcmd=$(append_cmd "$bashcmd" "rm -rf /vt/lib; ln -s /vt/src/vitess.io/vitess/lib /vt/lib")
 bashcmd=$(append_cmd "$bashcmd" "rm -rf /vt/vthook; ln -s /vt/src/vitess.io/vitess/vthook /vt/vthook")
 
-# Install Maven 3.9.12 on-demand (not in base image to avoid CVE-2024-47554)
-bashcmd=$(append_cmd "$bashcmd" "if [[ ! -x dist/maven/bin/mvn ]]; then echo 'Installing Maven 3.9.12...'; curl -fsSL --connect-timeout 10 --retry 3 https://archive.apache.org/dist/maven/maven-3/3.9.12/binaries/apache-maven-3.9.12-bin.tar.gz | tar -xz && mv apache-maven-3.9.12 dist/maven && echo 'Maven installed'; fi")
+# Install Maven on-demand into the shared /vt/maven.
+bashcmd=$(append_cmd "$bashcmd" "docker/test/install_maven.sh /vt/maven dist/maven")
 
 # Run bootstrap every time now
 bashcmd=$(append_cmd "$bashcmd" "./bootstrap.sh")
