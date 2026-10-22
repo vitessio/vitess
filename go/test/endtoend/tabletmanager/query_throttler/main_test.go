@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"testing"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -78,6 +79,7 @@ func TestMain(m *testing.M) {
 
 		err := clusterInstance.StartTopo()
 		if err != nil {
+			fmt.Fprintf(os.Stderr, "starting topo: %v\n", err)
 			return 1
 		}
 
@@ -86,6 +88,9 @@ func TestMain(m *testing.M) {
 			"--enable-replication-reporter",
 			"--heartbeat-interval", "250ms",
 			"--heartbeat-on-demand-duration", "5s",
+			// Refresh the query throttler's cached throttle check quickly, so a lag breach
+			// reaches throttle decisions within a second or so.
+			"--query-throttler-cache-update-interval", "1s",
 		}
 
 		keyspace := &cluster.Keyspace{
@@ -95,6 +100,7 @@ func TestMain(m *testing.M) {
 		}
 
 		if err = clusterInstance.StartUnshardedKeyspace(*keyspace, 1, false, clusterInstance.Cell); err != nil {
+			fmt.Fprintf(os.Stderr, "starting keyspace %s: %v\n", keyspaceName, err)
 			return 1
 		}
 
@@ -109,6 +115,7 @@ func TestMain(m *testing.M) {
 
 		vtgateInstance := clusterInstance.NewVtgateInstance()
 		if err := vtgateInstance.Setup(); err != nil {
+			fmt.Fprintf(os.Stderr, "starting vtgate: %v\n", err)
 			return 1
 		}
 		clusterInstance.VtgateProcess = *vtgateInstance
@@ -123,13 +130,15 @@ func TestMain(m *testing.M) {
 			clusterInstance.TmpDirectory,
 		)
 
-		ctx := context.Background()
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
 		vtctldAddr := fmt.Sprintf("%s:%d", hostname, clusterInstance.VtctldProcess.GrpcPort)
 		vtctldClient, err = grpcvtctldclient.NewWithDialOpts(
 			ctx, vtctldAddr, grpcclient.FailFast(false),
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		)
 		if err != nil {
+			fmt.Fprintf(os.Stderr, "connecting to vtctld at %s: %v\n", vtctldAddr, err)
 			return 1
 		}
 		defer vtctldClient.Close()

@@ -17,6 +17,9 @@ package querythrottler
 
 import (
 	"context"
+	"fmt"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -95,8 +98,7 @@ func waitForQueryThrottlerCheck(t *testing.T, tablet *cluster.Vttablet, wantResp
 // If expectError is non-empty, the error must contain that substring.
 func vtgateExec(t *testing.T, query string, expectError string) *sqltypes.Result {
 	t.Helper()
-	ctx := context.Background()
-	conn, err := mysql.Connect(ctx, &vtParams)
+	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err, "vtgate connection should succeed")
 	defer conn.Close()
 
@@ -163,6 +165,37 @@ func lagThrottleConfigForTabletType(tabletType, stmtType string, thresholdSecond
 	}
 }
 
+// lagRule names a statement type to throttle on a tablet type.
+type lagRule struct {
+	tabletType string
+	stmtType   string
+}
+
+// multiLagThrottleConfig returns an enforcing Config proto that throttles every rule's
+// statement type on its tablet type when lag exceeds the threshold.
+func multiLagThrottleConfig(thresholdSeconds float64, rules ...lagRule) *querythrottlerpb.Config {
+	tabletRules := make(map[string]*querythrottlerpb.StatementRuleSet)
+	for _, r := range rules {
+		if tabletRules[r.tabletType] == nil {
+			tabletRules[r.tabletType] = &querythrottlerpb.StatementRuleSet{StatementRules: map[string]*querythrottlerpb.MetricRuleSet{}}
+		}
+		tabletRules[r.tabletType].StatementRules[r.stmtType] = &querythrottlerpb.MetricRuleSet{
+			MetricRules: map[string]*querythrottlerpb.MetricRule{
+				"lag": {
+					Thresholds: []*querythrottlerpb.ThrottleThreshold{
+						{Above: thresholdSeconds, Throttle: 100},
+					},
+				},
+			},
+		}
+	}
+	return &querythrottlerpb.Config{
+		Enabled:              true,
+		Strategy:             querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER,
+		TabletStrategyConfig: &querythrottlerpb.TabletStrategyConfig{TabletRules: tabletRules},
+	}
+}
+
 // resetConfig returns a zero-value Config proto that resets the query throttler.
 func resetConfig() *querythrottlerpb.Config {
 	return &querythrottlerpb.Config{}
@@ -173,16 +206,70 @@ func disabledConfig() *querythrottlerpb.Config {
 	return &querythrottlerpb.Config{Enabled: false}
 }
 
+// restoreAfterTest registers a cleanup that restarts replication and disables the query
+// throttler, so a failed test does not leave lag or throttling behind for the next one.
+func restoreAfterTest(t *testing.T) {
+	t.Helper()
+	t.Cleanup(func() {
+		// t.Context() is canceled before cleanups run.
+		ctx := context.WithoutCancel(t.Context())
+		clusterInstance.EnableVTOrcRecoveries(t)
+		_, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("StartReplication", replicaTablet.Alias)
+		assert.NoError(t, err, "restarting replication")
+		_, err = vtctldClient.UpdateQueryThrottlerConfig(ctx, &vtctldatapb.UpdateQueryThrottlerConfigRequest{
+			Keyspace:             keyspaceName,
+			QueryThrottlerConfig: disabledConfig(),
+		})
+		assert.NoError(t, err, "disabling the query throttler")
+	})
+}
+
+// throttledCount returns the tablet's QueryThrottlerThrottled count, summed over every
+// label set with the given DryRun value.
+func throttledCount(t *testing.T, tablet *cluster.Vttablet, dryRun bool) float64 {
+	t.Helper()
+	counts, _ := tablet.VttabletProcess.GetVars()["QueryThrottlerThrottled"].(map[string]any)
+	// Keys are the label values joined with '.', and DryRun is the last label.
+	suffix := "." + strconv.FormatBool(dryRun)
+	var total float64
+	for key, value := range counts {
+		if n, ok := value.(float64); ok && strings.HasSuffix(key, suffix) {
+			total += n
+		}
+	}
+	return total
+}
+
+// waitForDryRunDecision polls vtgate with query until the primary records a dry-run
+// throttle decision for it. Every attempt must succeed, since dry_run never rejects.
+func waitForDryRunDecision(t *testing.T, query string) {
+	t.Helper()
+	baseline := throttledCount(t, primaryTablet, true)
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		conn, err := mysql.Connect(t.Context(), &vtParams)
+		require.NoError(c, err)
+		defer conn.Close()
+
+		_, err = conn.ExecuteFetch(query, 1000, true)
+		require.NoError(c, err, "query %q must succeed in dry-run mode", query)
+		assert.Greater(c, throttledCount(t, primaryTablet, true), baseline, "no dry-run throttle decision recorded for %q", query)
+	}, waitTimeout, time.Second)
+}
+
 // waitForThrottledQuery polls vtgate until the given query returns an error containing
-// expectError. A query throttler rejection must reach the client as ER_OUT_OF_RESOURCES
+// expectError. Any setup statements run first on the same connection. A query throttler rejection must reach the client as ER_OUT_OF_RESOURCES
 // (1041), so the errno is checked as well.
-func waitForThrottledQuery(t *testing.T, query string, expectError string) {
+func waitForThrottledQuery(t *testing.T, query string, expectError string, setup ...string) {
 	t.Helper()
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
 		conn, err := mysql.Connect(t.Context(), &vtParams)
 		require.NoError(c, err)
 		defer conn.Close()
 
+		for _, stmt := range setup {
+			_, err = conn.ExecuteFetch(stmt, 1000, true)
+			require.NoError(c, err, "setup statement %q", stmt)
+		}
 		_, err = conn.ExecuteFetch(query, 1000, true)
 		require.Error(c, err, "query %q still succeeding, expected error containing %q", query, expectError)
 		assert.Contains(c, err.Error(), expectError)
@@ -239,14 +326,7 @@ func TestDisabledByDefault(t *testing.T) {
 // observe that queries get rejected with ResourceExhausted, then restore
 // replication and confirm queries flow again.
 func TestEnableAndThrottleWithLag(t *testing.T) {
-	defer func() {
-		clusterInstance.EnableVTOrcRecoveries(t)
-		clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("StartReplication", replicaTablet.Alias)
-		vtctldClient.UpdateQueryThrottlerConfig(context.Background(), &vtctldatapb.UpdateQueryThrottlerConfigRequest{
-			Keyspace:             keyspaceName,
-			QueryThrottlerConfig: disabledConfig(),
-		})
-	}()
+	restoreAfterTest(t)
 
 	t.Run("push config with lag threshold for SELECT", func(t *testing.T) {
 		pushQueryThrottlerConfig(t, lagThrottleConfig("SELECT", 5.0, false))
@@ -292,14 +372,7 @@ func TestEnableAndThrottleWithLag(t *testing.T) {
 // TestDisableAfterEnable verifies that disabling the query throttler via config
 // stops enforcement immediately, even when the underlying metric is still breached.
 func TestDisableAfterEnable(t *testing.T) {
-	defer func() {
-		clusterInstance.EnableVTOrcRecoveries(t)
-		clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("StartReplication", replicaTablet.Alias)
-		vtctldClient.UpdateQueryThrottlerConfig(context.Background(), &vtctldatapb.UpdateQueryThrottlerConfigRequest{
-			Keyspace:             keyspaceName,
-			QueryThrottlerConfig: disabledConfig(),
-		})
-	}()
+	restoreAfterTest(t)
 
 	t.Run("push config to enable throttling", func(t *testing.T) {
 		pushQueryThrottlerConfig(t, lagThrottleConfig("SELECT", 5.0, false))
@@ -337,14 +410,7 @@ func TestDisableAfterEnable(t *testing.T) {
 // TestDryRunMode verifies that dry_run=true logs throttle decisions without
 // actually rejecting queries, and switching to dry_run=false enforces throttling.
 func TestDryRunMode(t *testing.T) {
-	defer func() {
-		clusterInstance.EnableVTOrcRecoveries(t)
-		clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("StartReplication", replicaTablet.Alias)
-		vtctldClient.UpdateQueryThrottlerConfig(context.Background(), &vtctldatapb.UpdateQueryThrottlerConfigRequest{
-			Keyspace:             keyspaceName,
-			QueryThrottlerConfig: disabledConfig(),
-		})
-	}()
+	restoreAfterTest(t)
 
 	t.Run("push dry-run config with lag threshold", func(t *testing.T) {
 		pushQueryThrottlerConfig(t, lagThrottleConfig("SELECT", 5.0, true))
@@ -362,8 +428,8 @@ func TestDryRunMode(t *testing.T) {
 		waitForQueryThrottlerCheck(t, primaryTablet, tabletmanagerdatapb.CheckThrottlerResponseCode_THRESHOLD_EXCEEDED)
 	})
 
-	t.Run("queries still succeed in dry-run mode", func(t *testing.T) {
-		vtgateExec(t, "select id from t1 limit 1", "")
+	t.Run("queries still succeed in dry-run mode while the throttler decides to throttle them", func(t *testing.T) {
+		waitForDryRunDecision(t, "select id from t1 limit 1")
 	})
 
 	t.Run("switch to enforcing mode with same threshold", func(t *testing.T) {
@@ -383,14 +449,7 @@ func TestDryRunMode(t *testing.T) {
 // throttling to a specific statement type — SELECT is throttled while INSERT
 // passes through unaffected.
 func TestThrottleByStatementType(t *testing.T) {
-	defer func() {
-		clusterInstance.EnableVTOrcRecoveries(t)
-		clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("StartReplication", replicaTablet.Alias)
-		vtctldClient.UpdateQueryThrottlerConfig(context.Background(), &vtctldatapb.UpdateQueryThrottlerConfigRequest{
-			Keyspace:             keyspaceName,
-			QueryThrottlerConfig: disabledConfig(),
-		})
-	}()
+	restoreAfterTest(t)
 
 	t.Run("push config that only throttles SELECT", func(t *testing.T) {
 		pushQueryThrottlerConfig(t, lagThrottleConfig("SELECT", 5.0, false))
@@ -425,14 +484,7 @@ func TestThrottleByStatementType(t *testing.T) {
 // TestConfigUpdateWithoutRestart verifies that pushing a new config (e.g. changing
 // the throttled statement type) takes effect live without requiring a tablet restart.
 func TestConfigUpdateWithoutRestart(t *testing.T) {
-	defer func() {
-		clusterInstance.EnableVTOrcRecoveries(t)
-		clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("StartReplication", replicaTablet.Alias)
-		vtctldClient.UpdateQueryThrottlerConfig(context.Background(), &vtctldatapb.UpdateQueryThrottlerConfigRequest{
-			Keyspace:             keyspaceName,
-			QueryThrottlerConfig: disabledConfig(),
-		})
-	}()
+	restoreAfterTest(t)
 
 	t.Run("push config throttling SELECT", func(t *testing.T) {
 		pushQueryThrottlerConfig(t, lagThrottleConfig("SELECT", 5.0, false))
@@ -474,14 +526,7 @@ func TestConfigUpdateWithoutRestart(t *testing.T) {
 // TestPriorityZeroNeverThrottled verifies that queries with priority=0 (highest
 // priority) bypass throttling entirely, while default priority queries are throttled.
 func TestPriorityZeroNeverThrottled(t *testing.T) {
-	defer func() {
-		clusterInstance.EnableVTOrcRecoveries(t)
-		clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("StartReplication", replicaTablet.Alias)
-		vtctldClient.UpdateQueryThrottlerConfig(context.Background(), &vtctldatapb.UpdateQueryThrottlerConfigRequest{
-			Keyspace:             keyspaceName,
-			QueryThrottlerConfig: disabledConfig(),
-		})
-	}()
+	restoreAfterTest(t)
 
 	t.Run("push config throttling SELECT", func(t *testing.T) {
 		pushQueryThrottlerConfig(t, lagThrottleConfig("SELECT", 5.0, false))
@@ -512,24 +557,21 @@ func TestPriorityZeroNeverThrottled(t *testing.T) {
 	})
 }
 
-// TestNoRulesForTabletType verifies that when throttle rules are configured
-// only for REPLICA, queries routed to the PRIMARY tablet are not throttled.
+// TestNoRulesForTabletType verifies that a SELECT rule configured only for REPLICA
+// throttles SELECTs routed to the REPLICA tablet but not those routed to the PRIMARY.
 func TestNoRulesForTabletType(t *testing.T) {
-	defer func() {
-		clusterInstance.EnableVTOrcRecoveries(t)
-		clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("StartReplication", replicaTablet.Alias)
-		vtctldClient.UpdateQueryThrottlerConfig(context.Background(), &vtctldatapb.UpdateQueryThrottlerConfigRequest{
-			Keyspace:             keyspaceName,
-			QueryThrottlerConfig: disabledConfig(),
-		})
-	}()
+	restoreAfterTest(t)
 
-	t.Run("push config with REPLICA-only rules", func(t *testing.T) {
-		pushQueryThrottlerConfig(t, lagThrottleConfigForTabletType("REPLICA", "SELECT", 5.0, false))
+	t.Run("push config with a REPLICA SELECT rule and a PRIMARY INSERT rule", func(t *testing.T) {
+		pushQueryThrottlerConfig(t, multiLagThrottleConfig(5.0,
+			lagRule{tabletType: "REPLICA", stmtType: "SELECT"},
+			lagRule{tabletType: "PRIMARY", stmtType: "INSERT"},
+		))
 	})
 
 	t.Run("wait for throttler to be enabled", func(t *testing.T) {
 		waitForQueryThrottlerStatus(t, primaryTablet, true)
+		waitForQueryThrottlerStatus(t, replicaTablet, true)
 	})
 
 	t.Run("stop replication to induce lag", func(t *testing.T) {
@@ -540,8 +582,17 @@ func TestNoRulesForTabletType(t *testing.T) {
 		waitForQueryThrottlerCheck(t, primaryTablet, tabletmanagerdatapb.CheckThrottlerResponseCode_THRESHOLD_EXCEEDED)
 	})
 
-	t.Run("PRIMARY SELECT succeeds despite lag breach (no PRIMARY rules)", func(t *testing.T) {
-		waitForUnthrottledQuery(t, "select id from t1 limit 1")
+	t.Run("PRIMARY INSERT is throttled", func(t *testing.T) {
+		// Positive control: the primary's throttle decisions see the lag breach.
+		waitForThrottledQuery(t, "insert into t1 (id, value) values (4000, 'no_rules')", "ResourceExhausted")
+	})
+
+	t.Run("PRIMARY SELECT succeeds despite lag breach (no PRIMARY SELECT rule)", func(t *testing.T) {
+		vtgateExec(t, "select id from t1 limit 1", "")
+	})
+
+	t.Run("REPLICA SELECT is throttled", func(t *testing.T) {
+		waitForThrottledQuery(t, "select id from t1 limit 1", "ResourceExhausted", "use `"+keyspaceName+"@replica`")
 	})
 
 	t.Run("start replication to restore healthy state", func(t *testing.T) {
@@ -552,14 +603,7 @@ func TestNoRulesForTabletType(t *testing.T) {
 // TestResetConfigClearsThrottling validates the full lifecycle of enabling,
 // resetting, re-enabling, and disabling the query throttler.
 func TestResetConfigClearsThrottling(t *testing.T) {
-	defer func() {
-		clusterInstance.EnableVTOrcRecoveries(t)
-		clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("StartReplication", replicaTablet.Alias)
-		vtctldClient.UpdateQueryThrottlerConfig(context.Background(), &vtctldatapb.UpdateQueryThrottlerConfigRequest{
-			Keyspace:             keyspaceName,
-			QueryThrottlerConfig: disabledConfig(),
-		})
-	}()
+	restoreAfterTest(t)
 
 	// --- Step 1: Enable throttler and confirm throttling ---
 
@@ -630,6 +674,100 @@ func TestResetConfigClearsThrottling(t *testing.T) {
 	})
 
 	// --- Cleanup ---
+
+	t.Run("start replication to restore healthy state", func(t *testing.T) {
+		startReplication(t)
+	})
+}
+
+// TestThrottlePathsUnderLag covers, under a single lag breach, the statement types and
+// execution paths the other tests do not: REPLACE, UPDATE and DELETE, OLAP streaming,
+// statements inside a transaction, and a RebuildKeyspaceGraph while throttling.
+func TestThrottlePathsUnderLag(t *testing.T) {
+	restoreAfterTest(t)
+
+	config := multiLagThrottleConfig(5.0,
+		lagRule{tabletType: "PRIMARY", stmtType: "SELECT"},
+		lagRule{tabletType: "PRIMARY", stmtType: "REPLACE"},
+		lagRule{tabletType: "PRIMARY", stmtType: "UPDATE"},
+		lagRule{tabletType: "PRIMARY", stmtType: "DELETE"},
+	)
+
+	t.Run("push config throttling SELECT, REPLACE, UPDATE and DELETE", func(t *testing.T) {
+		pushQueryThrottlerConfig(t, config)
+	})
+
+	t.Run("wait for throttler to be enabled", func(t *testing.T) {
+		waitForQueryThrottlerStatus(t, primaryTablet, true)
+	})
+
+	t.Run("stop replication to induce lag", func(t *testing.T) {
+		stopReplication(t)
+	})
+
+	t.Run("wait for underlying throttler to detect lag breach", func(t *testing.T) {
+		waitForQueryThrottlerCheck(t, primaryTablet, tabletmanagerdatapb.CheckThrottlerResponseCode_THRESHOLD_EXCEEDED)
+	})
+
+	// vtgate rejects REPLACE in a sharded keyspace, so send it straight to the shard.
+	shardTarget := fmt.Sprintf("use `%s:%s`", keyspaceName, clusterInstance.Keyspaces[0].Shards[0].Name)
+	for _, tc := range []struct {
+		stmtType string
+		query    string
+		setup    []string
+	}{
+		{stmtType: "REPLACE", query: "replace into t1 (id, value) values (5000, 'replace')", setup: []string{shardTarget}},
+		{stmtType: "UPDATE", query: "update t1 set value = 'update' where id = 5000"},
+		{stmtType: "DELETE", query: "delete from t1 where id = 5000"},
+	} {
+		t.Run(tc.stmtType+" is throttled", func(t *testing.T) {
+			waitForThrottledQuery(t, tc.query, "ResourceExhausted", tc.setup...)
+		})
+	}
+
+	t.Run("OLAP streaming SELECT is throttled", func(t *testing.T) {
+		waitForThrottledQuery(t, "select id from t1 limit 1", "ResourceExhausted", "set workload = olap")
+	})
+
+	t.Run("statements inside a transaction are not throttled", func(t *testing.T) {
+		// Autocommit statements are throttled, so the transaction below runs during the breach.
+		waitForThrottledQuery(t, "select id from t1 limit 1", "ResourceExhausted")
+
+		conn, err := mysql.Connect(t.Context(), &vtParams)
+		require.NoError(t, err)
+		t.Cleanup(conn.Close)
+
+		// The first statement opens the transaction on the tablet (BeginExecute), and
+		// the rest run in it (Execute with a transaction ID); cover both.
+		for _, query := range []string{
+			"begin",
+			"select id from t1 limit 1",
+			"update t1 set value = 'in_txn' where id = 5000",
+			"select id from t1 limit 1",
+			"commit",
+		} {
+			_, err := conn.ExecuteFetch(query, 1000, true)
+			require.NoError(t, err, "%q must not be throttled inside a transaction", query)
+		}
+	})
+
+	t.Run("RebuildKeyspaceGraph keeps the config and throttling", func(t *testing.T) {
+		_, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("RebuildKeyspaceGraph", keyspaceName)
+		require.NoError(t, err)
+
+		resp, err := vtctldClient.GetSrvKeyspaces(t.Context(), &vtctldatapb.GetSrvKeyspacesRequest{
+			Keyspace: keyspaceName,
+			Cells:    []string{cell},
+		})
+		require.NoError(t, err)
+		got := resp.GetSrvKeyspaces()[cell].GetQueryThrottlerConfig()
+		require.NotNil(t, got, "RebuildKeyspaceGraph dropped the query throttler config")
+		assert.True(t, got.GetEnabled())
+		assert.Len(t, got.GetTabletStrategyConfig().GetTabletRules()["PRIMARY"].GetStatementRules(), 4)
+
+		waitForQueryThrottlerStatus(t, primaryTablet, true)
+		waitForThrottledQuery(t, "select id from t1 limit 1", "ResourceExhausted")
+	})
 
 	t.Run("start replication to restore healthy state", func(t *testing.T) {
 		startReplication(t)
