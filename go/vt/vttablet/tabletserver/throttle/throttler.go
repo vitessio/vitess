@@ -88,6 +88,10 @@ const (
 	metricsAggregateInterval       = 125 * time.Millisecond
 	throttledAppsSnapshotInterval  = 5 * time.Second
 	recentCheckRateLimiterInterval = 1 * time.Second // Ticker assisting in determining when the throttler was last checked
+	// cachedPrimaryTTL is how long a non-primary reuses the primary tablet record it stimulates, before reading it
+	// from the topo again. The record can only go stale through a reparent, and this bounds how long after one the
+	// tablet keeps stimulating the old primary.
+	cachedPrimaryTTL = 15 * time.Second
 
 	aggregatedMetricsExpiration = 5 * time.Second
 	recentAppsExpiration        = time.Hour
@@ -163,8 +167,10 @@ type Throttler struct {
 	recentCheckDormantDiff int64
 	recentCheckDiff        int64
 
-	// stimulating is true while a stimulation of the primary is in flight.
-	stimulating atomic.Bool
+	// cachedPrimary is the primary tablet that this non-primary stimulates, and stimulating is true while a
+	// stimulation is in flight.
+	cachedPrimary atomic.Pointer[cachedPrimaryTablet]
+	stimulating   atomic.Bool
 
 	throttleTabletTypesMap map[topodatapb.TabletType]bool
 
@@ -292,6 +298,12 @@ func (throttler *Throttler) initThrottleTabletTypes() {
 	}
 	// always on:
 	throttler.throttleTabletTypesMap[topodatapb.TabletType_REPLICA] = true
+}
+
+// cachedPrimaryTablet is a primary tablet record and the time it was read from the topo.
+type cachedPrimaryTablet struct {
+	tablet *topodatapb.Tablet
+	readAt time.Time
 }
 
 // primaryStimulationInterval returns how often this tablet, while it is being checked, stimulates the primary to renew
@@ -695,30 +707,47 @@ func (throttler *Throttler) stimulatePrimaryThrottler(ctx context.Context, tmCli
 	ctx, cancel := context.WithTimeout(ctx, throttler.primaryStimulationInterval())
 	defer cancel()
 
+	primary, err := throttler.primaryTablet(ctx)
+	if err != nil || primary == nil {
+		return err
+	}
+	req := &tabletmanagerdatapb.CheckThrottlerRequest{AppName: throttlerapp.ThrottlerStimulatorName.String()}
+	_, err = tmClient.CheckThrottler(ctx, primary, req)
+	if err != nil {
+		// The primary may have moved: read it from the topo on the next stimulation.
+		throttler.cachedPrimary.Store(nil)
+		log.Error("stimulatePrimaryThrottler failed", slog.Any("error", err))
+	}
+	return err
+}
+
+// primaryTablet returns the shard's primary tablet, or nil if the shard has none right now. A tablet that
+// stimulates the primary every few seconds would otherwise read the shard and tablet records from the topo
+// just as often, so it reuses them for cachedPrimaryTTL.
+func (throttler *Throttler) primaryTablet(ctx context.Context) (*topodatapb.Tablet, error) {
+	if cached := throttler.cachedPrimary.Load(); cached != nil && time.Since(cached.readAt) < cachedPrimaryTTL {
+		return cached.tablet, nil
+	}
 	// The shard record names the primary, so there is no need to list and read every tablet in the
 	// shard: that costs a topo read per cell and per tablet, on every replica that gets checked.
 	si, err := throttler.ts.GetShard(ctx, throttler.keyspace, throttler.shard)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if !si.HasPrimary() {
-		return nil
+		return nil, nil
 	}
 	tablet, err := throttler.ts.GetTablet(ctx, si.PrimaryAlias)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if tablet.Type != topodatapb.TabletType_PRIMARY {
 		// The shard record and the tablet record disagree, e.g. mid-reparent. We will try again
 		// on the next stimulation.
-		return nil
+		return nil, nil
 	}
-	req := &tabletmanagerdatapb.CheckThrottlerRequest{AppName: throttlerapp.ThrottlerStimulatorName.String()}
-	_, err = tmClient.CheckThrottler(ctx, tablet.Tablet, req)
-	if err != nil {
-		log.Error("stimulatePrimaryThrottler failed", slog.Any("error", err))
-	}
-	return err
+	throttler.cachedPrimary.Store(&cachedPrimaryTablet{tablet: tablet.Tablet, readAt: time.Now()})
+	return tablet.Tablet, nil
 }
 
 // throttledAppsSnapshot returns a snapshot (a copy) of current throttled apps

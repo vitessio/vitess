@@ -2373,7 +2373,8 @@ func (c *stimulateTMClient) CheckThrottler(ctx context.Context, tablet *topodata
 
 // TestStimulatePrimaryThrottler verifies that a replica finds the primary to stimulate from the shard record
 // with one shard read and at most one tablet read, never walking the shard, and that it skips the round when
-// there is no primary or the tablet record does not say PRIMARY, and returns topo and RPC errors.
+// there is no primary or the tablet record does not say PRIMARY, and returns topo and RPC errors. A primary that
+// answered is reused for the next stimulation without reading the topo again; any other outcome is not.
 // It also verifies how often each tablet type stimulates the primary.
 func TestStimulatePrimaryThrottler(t *testing.T) {
 	primary := &topodatapb.TabletAlias{Cell: "fakezone1", Uid: 101}
@@ -2465,6 +2466,22 @@ func TestStimulatePrimaryThrottler(t *testing.T) {
 			}
 			require.Len(t, tmClient.checked, 1)
 			assert.Equal(t, topoproto.TabletAliasString(tcase.expectTarget), topoproto.TabletAliasString(tmClient.checked[0].Alias))
+
+			// A second stimulation reuses the primary only if the first one reached it.
+			_ = throttler.stimulatePrimaryThrottler(t.Context(), tmClient)
+			if tcase.checkErr == nil {
+				assert.Equal(t, 1, ts.shardReads, "the primary that answered should be reused")
+			} else {
+				assert.Equal(t, 2, ts.shardReads, "a primary that failed the check should be read again")
+			}
+			require.Len(t, tmClient.checked, 2)
+			assert.Equal(t, topoproto.TabletAliasString(tcase.expectTarget), topoproto.TabletAliasString(tmClient.checked[1].Alias))
+
+			// A cached primary older than cachedPrimaryTTL is read again.
+			throttler.cachedPrimary.Store(&cachedPrimaryTablet{tablet: tmClient.checked[0], readAt: time.Now().Add(-cachedPrimaryTTL)})
+			reads := ts.shardReads
+			_ = throttler.stimulatePrimaryThrottler(t.Context(), tmClient)
+			assert.Equal(t, reads+1, ts.shardReads)
 		})
 	}
 
