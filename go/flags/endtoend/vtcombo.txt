@@ -125,7 +125,7 @@ Flags:
       --enable-hot-row-protection-dry-run                                If true, hot row protection is not enforced but logs if transactions would have been queued.
       --enable-online-ddl                                                Allow users to submit, review and control Online DDL (default true)
       --enable-partial-keyspace-migration                                (Experimental) Follow shard routing rules: enable only while migrating a keyspace shard by shard. See documentation on Partial MoveTables for more. (default false)
-      --enable-per-workload-table-metrics                                If true, query counts and query error metrics include a label that identifies the workload
+      --enable-per-workload-table-metrics                                If true, query counts and query error metrics, and the query throttler's metrics, include a label that identifies the workload
       --enable-replication-reporter                                      Use polling to track replication lag.
       --enable-set-var                                                   This will enable the use of MySQL's SET_VAR query hint for certain system variables instead of using reserved connections (default true)
       --enable-system-settings                                           This will enable the system settings to be changed per session at the database connection level (default true)

@@ -150,7 +150,7 @@ Flags:
       --enable-consolidator-replicas                                     This option enables the query consolidator only on replicas.
       --enable-hot-row-protection                                        If true, incoming transactions for the same row (range) will be queued and cannot consume all txpool slots.
       --enable-hot-row-protection-dry-run                                If true, hot row protection is not enforced but logs if transactions would have been queued.
-      --enable-per-workload-table-metrics                                If true, query counts and query error metrics include a label that identifies the workload
+      --enable-per-workload-table-metrics                                If true, query counts and query error metrics, and the query throttler's metrics, include a label that identifies the workload
       --enable-replication-reporter                                      Use polling to track replication lag.
       --enable-transaction-limit                                         If true, limit on number of transactions open at the same time will be enforced for all users. User trying to open a new transaction after exhausting their limit will receive an error immediately, regardless of whether there are available slots or not.
       --enable-transaction-limit-dry-run                                 If true, limit on number of transactions open at the same time will be tracked for all users, but not enforced.

@@ -138,7 +138,22 @@ VTTablet's incoming query throttler has a new `TABLET_THROTTLER` strategy, which
 
 The configuration is set per keyspace with the new `vtctldclient UpdateQueryThrottlerConfig` command, which validates it and stores it in the `Keyspace` and every cell's `SrvKeyspace`. Tablets watch their `SrvKeyspace` and apply changes immediately. `--query-throttler-cache-update-interval` (default `10s`) controls how often a tablet refreshes the throttler check results that its decisions are based on. A disabled configuration runs no strategy. The strategy exports its metrics under the `QueryThrottlerTabletStrategy` prefix (for example `QueryThrottlerTabletStrategyDecisionCount` and `QueryThrottlerTabletStrategyCacheHits`), and registers them only once a tablet first runs it, so tablets that never enable it export none of them. The dedicated tablet throttler instance that the strategy checks exports its metrics under the `QueryThrottlerDedicated` prefix (for example `QueryThrottlerDedicatedCheckAnyTotal` and `QueryThrottlerDedicatedProbesTotal`), rather than into the tablet throttler's `Throttler*` metrics, and likewise only once the query throttler is enabled.
 
-**Upgrade note**: write and maintain the configuration only with a v25 `vtctld`, including for `RebuildKeyspaceGraph`. A v24 `vtctld` rebuilds each `SrvKeyspace` with only the tablet throttler configuration, so running `RebuildKeyspaceGraph` on it during an upgrade drops `query_throttler_config`. The tablets then fall back to the NoOp strategy, and nothing reports that query throttling stopped. To restore it, re-run `UpdateQueryThrottlerConfig` or rebuild the keyspace graph with a v25 `vtctld`.
+`vtctldclient CheckThrottler` and `vtctldclient GetThrottlerStatus` have a new `--throttler-type` flag. It defaults to `DEFAULT_LAG_THROTTLER`, the tablet throttler; `DEDICATED_QUERY_THROTTLER` inspects the instance the query throttler checks.
+
+Existing query throttler metrics and behavior change as follows:
+
+- The dedicated tablet throttler instance now runs only while the query throttler is enabled. Previously it ran on every tablet and wrote into the tablet throttler's `Throttler*` metrics, so those metrics now describe only the tablet throttler.
+- `QueryThrottlerThrottled` no longer has a `MetricValue` label, which created a new time series for every distinct metric value.
+- The `Workload` label of `QueryThrottlerRequests`, `QueryThrottlerThrottled`, `QueryThrottlerTotalLatencyNs` and `QueryThrottlerEvaluateLatencyNs` is `unknown` unless `--enable-per-workload-table-metrics` is set, to bound the number of time series.
+
+**Upgrade note**: upgrade every `vtctld`, `vttablet` and `vtgate` to v25 before enabling a `TABLET_THROTTLER` configuration. Until then, query throttling can stop without anything reporting it:
+
+- A v24 `vtctld` rebuilds each `SrvKeyspace` with only the tablet throttler configuration, so `RebuildKeyspaceGraph` on it drops `query_throttler_config`.
+- A v24 `vttablet` or `vtgate` that starts in a cell with no `SrvKeyspace` for the keyspace creates one without `query_throttler_config`.
+- A v24 `vttablet` has no `TABLET_THROTTLER` strategy. It runs the NoOp strategy and only logs `Unknown strategy ..., using NoOp`.
+- A v24 `vttablet` ignores `throttler_type` in `CheckThrottler` and `GetThrottlerStatus` requests and answers for the tablet throttler.
+
+In the first two cases the tablets fall back to the NoOp strategy. To restore throttling, re-run `UpdateQueryThrottlerConfig` or rebuild the keyspace graph with a v25 `vtctld`.
 
 #### <a id="backup-include-binlogs"/>Back up binary logs with full builtin backups</a>
 
