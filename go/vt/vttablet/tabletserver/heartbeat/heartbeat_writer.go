@@ -16,6 +16,11 @@ limitations under the License.
 
 package heartbeat
 
+import "time"
+
 type HeartbeatWriter interface {
 	RequestHeartbeats()
+	// OnDemandDuration returns how long heartbeats keep running after a request, or 0 when they
+	// always run.
+	OnDemandDuration() time.Duration
 }

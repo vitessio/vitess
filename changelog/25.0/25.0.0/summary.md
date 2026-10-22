@@ -65,6 +65,7 @@
         - [ApplySchema session variables](#vttablet-applyschema-session-variables)
         - [Table ACL: statements whose tables cannot be determined are denied under strict table ACL](#vttablet-table-acl-undetermined-table-set)
         - [Table ACL: reads embedded in non-SELECT statements are now checked](#vttablet-table-acl-embedded-reads)
+        - [Tablets outside `--throttle-tablet-types` keep their on-demand heartbeats running](#vttablet-throttler-unprobed-heartbeats)
     - **[VTCtld](#minor-changes-vtctld)**
         - [MySQL version-aware reparent candidate election](#vtctld-version-aware-reparent)
     - **[Backup/Restore](#minor-changes-backup)**
@@ -747,6 +748,14 @@ Connection settings — the SET statements vtgate attaches to a session's querie
 **Compatibility note:** a v24 vtgate still stores a targeted session's `SET` expression as written. Against a vttablet with this change running strict table ACL without dry run, a v24 vtgate session that runs `SET @@var = (<subquery>)` while targeted has that setting rejected on every later query until the client reconnects. Upgrade vtgate before vttablet, or avoid subqueries in targeted `SET` statements during the upgrade. Without strict table ACL nothing changes for such a session.
 
 See [#21139](https://github.com/vitessio/vitess/pull/21139) for details.
+
+#### <a id="vttablet-throttler-unprobed-heartbeats"/>Tablets outside `--throttle-tablet-types` keep their on-demand heartbeats running</a>
+
+When heartbeats run on demand, which is the case unless `--heartbeat-enable` is set without `--heartbeat-on-demand-duration`, the primary renews the heartbeat lease only for the tablet types it probes: the primary and the types in `--throttle-tablet-types` (default `replica`). A tablet of another type, RDONLY by default, asked the primary for heartbeats at most once a minute, so its heartbeats, and with them its lag, went stale for most of every minute. VTGate VStreams, workflows run with `--tablet-types rdonly`, and VDiffs sourced from RDONLY tablets were then throttled on false lag.
+
+While the throttler on such a tablet is being checked, the tablet now asks the primary for heartbeats every half lease, so its lag stays accurate. The primary writes heartbeats while those checks continue, as it already does while the throttler on a replica is being checked. Nothing changes for tablets whose heartbeats always run, or while nothing checks the throttler on the tablet.
+
+See [#20248](https://github.com/vitessio/vitess/issues/20248) for details.
 
 
 ### <a id="minor-changes-vtctld"/>VTCtld</a>

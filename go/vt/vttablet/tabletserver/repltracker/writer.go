@@ -358,6 +358,11 @@ func (w *heartbeatWriter) allowNextHeartbeatRequest() {
 	}
 }
 
+// OnDemandDuration implements heartbeat.HeartbeatWriter.OnDemandDuration().
+func (w *heartbeatWriter) OnDemandDuration() time.Duration {
+	return w.onDemandDuration
+}
+
 // RequestHeartbeats implements heartbeat.HeartbeatWriter.RequestHeartbeats()
 // A client (such as the throttler) may call this function as frequently as it wishes, to request
 // for a heartbeat "lease".

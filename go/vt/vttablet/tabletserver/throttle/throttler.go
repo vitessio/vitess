@@ -294,6 +294,26 @@ func (throttler *Throttler) initThrottleTabletTypes() {
 	throttler.throttleTabletTypesMap[topodatapb.TabletType_REPLICA] = true
 }
 
+// primaryStimulationInterval returns how often this tablet, while it is being checked, stimulates the primary to renew
+// its on-demand heartbeat lease. The primary renews the lease by itself for the tablet types it probes, so for those
+// an occasional stimulation, once per dormantPeriod, is enough. It does not probe other types, RDONLY by default, so
+// a tablet of such a type stimulates it every half lease, or else its heartbeats, and therefore its lag, go stale.
+// A tablet whose heartbeats always run has no lease to renew.
+func (throttler *Throttler) primaryStimulationInterval() time.Duration {
+	tabletType := throttler.tabletTypeFunc()
+	if tabletType == topodatapb.TabletType_PRIMARY || throttler.throttleTabletTypesMap[tabletType] {
+		return throttler.dormantPeriod
+	}
+	if throttler.heartbeatWriter == nil {
+		return throttler.dormantPeriod
+	}
+	lease := throttler.heartbeatWriter.OnDemandDuration()
+	if lease <= 0 {
+		return throttler.dormantPeriod
+	}
+	return min(max(lease/2, time.Second), throttler.dormantPeriod)
+}
+
 // InitDBConfig initializes keyspace and shard
 func (throttler *Throttler) InitDBConfig(keyspace, shard string) {
 	throttler.keyspace = keyspace
@@ -672,7 +692,7 @@ func (throttler *Throttler) requestHeartbeats() {
 // it to request for heartbeats.
 func (throttler *Throttler) stimulatePrimaryThrottler(ctx context.Context, tmClient tmclient.TabletManagerClient) error {
 	// Some reasonable timeout, to ensure we release connections even if they're hanging (otherwise grpc-go keeps polling those connections forever)
-	ctx, cancel := context.WithTimeout(ctx, throttler.dormantPeriod)
+	ctx, cancel := context.WithTimeout(ctx, throttler.primaryStimulationInterval())
 	defer cancel()
 
 	// The shard record names the primary, so there is no need to list and read every tablet in the
@@ -748,13 +768,12 @@ func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 	inventoryRefreshTicker := addTicker(throttler.inventoryRefreshInterval)
 	metricsAggregateTicker := addTicker(throttler.metricsAggregateInterval)
 	throttledAppsTicker := addTicker(throttler.throttledAppsSnapshotInterval)
-	primaryStimulatorRateLimiter := timer.NewRateLimiter(throttler.dormantPeriod)
+	var lastPrimaryStimulation time.Time
 	throttler.recentCheckRateLimiter = timer.NewRateLimiter(recentCheckRateLimiterInterval)
 
 	wg.Go(func() {
 		defer func() {
 			throttler.recentCheckRateLimiter.Stop()
-			primaryStimulatorRateLimiter.Stop()
 			throttler.aggregatedMetrics.Flush()
 			throttler.recentApps.Flush()
 			clear(throttler.inventory.TabletMetrics)
@@ -829,17 +848,13 @@ func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 							// replica metrics more frequently.
 							// The stimulation reads the topo and calls the primary, so it runs in the background, one at
 							// a time, rather than holding up this loop.
-							primaryStimulatorRateLimiter.Do(
-								func() error {
-									if throttler.stimulating.CompareAndSwap(false, true) {
-										stimulations.Go(func() {
-											defer throttler.stimulating.Store(false)
-											_ = throttler.stimulatePrimaryThrottler(ctx, tmClient)
-										})
-									}
-									return nil
-								},
-							)
+							if time.Since(lastPrimaryStimulation) >= throttler.primaryStimulationInterval() && throttler.stimulating.CompareAndSwap(false, true) {
+								lastPrimaryStimulation = time.Now()
+								stimulations.Go(func() {
+									defer throttler.stimulating.Store(false)
+									_ = throttler.stimulatePrimaryThrottler(ctx, tmClient)
+								})
+							}
 						}
 					}
 				}
