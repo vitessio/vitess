@@ -66,6 +66,7 @@ jobs:
               - 'test/**'
               - '.github/workflows/vtop_example.yml'
               - '.github/actions/setup-mysql/action.yml'
+              - '.github/actions/tune-os/**'
               - '.github/actions/setup-go/action.yml'
 
   build:
