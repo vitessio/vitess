@@ -10,6 +10,7 @@
         - [VTAdmin VExplain modes that can run the statement require the `execute` action](#vtadmin-vexplain-execute-action)
     - **[New Support](#new-support)**
         - [VTOrc failover of an unreachable primary `vttablet` via replica quorum](#vtorc-quorum-unreachable-primary)
+        - [Back up binary logs with full builtin backups](#backup-include-binlogs)
     - **[Breaking Changes](#breaking-changes)**
         - [`--watch-replication-stream` flag removed](#vttablet-watch-replication-stream-removed)
         - [VRLog feature removed](#vttablet-vrlog-removed)
@@ -43,6 +44,7 @@
         - [Stricter PROXY protocol v1 header validation](#vtgate-proxy-protocol-v1-strictness)
         - [MySQL-faithful validation and rejection of unsupported `sql_mode` values](#vtgate-sql-mode-rejection)
         - [New `VEXPLAIN MYSQLPLAN` statement](#vtgate-vexplain-mysqlplan)
+        - [VStream metrics report live streams and can include the caller](#vtgate-vstream-metrics)
     - **[Reparent](#minor-changes-reparent)**
         - [`EmergencyReparentShard` no longer waits on replicas that cannot win the election](#ers-lagging-relay-log-wait)
         - [`EmergencyReparentShard` can explicitly recover from split brain](#ers-allow-split-brain-promotion)
@@ -128,6 +130,31 @@ A graceful `vttablet` shutdown records a shutdown marker in the topology server 
 Note that in this scenario the old primary's MySQL keeps running, and because its `vttablet` is the unreachable component, it cannot be demoted until that `vttablet` comes back and discovers the shard has a new primary. As with any emergency reparent away from an unreachable primary, a semi-sync durability policy (e.g. `semi_sync`) is what prevents the old primary from acknowledging new writes in the meantime; with `none` durability, anything writing directly to the old MySQL (bypassing `vtgate`) could cause a split brain.
 
 See [#19918](https://github.com/vitessio/vitess/issues/19918).
+
+#### <a id="backup-include-binlogs"/>Back up binary logs with full builtin backups</a>
+
+A full backup taken with the `builtin` backup engine can now include the source's binary logs. Pass `--include-binlogs` to `vtbackup`, `vtctldclient Backup` or `vtctldclient BackupShard`. Restores need no flag: when a backup's manifest includes binary logs, a restore puts them in place under the target's own `log-bin` basename, adds them to the binlog index before `mysqld` starts, keeps their original file modification times, and does not reset or purge them. The restored server can therefore serve binlog streams (replicas, VStreams) for transactions from before the backup. Point-in-time recovery from such a backup still works.
+
+`--include-binlogs` is only supported with the `builtin` backup engine. The builtin engine stops `mysqld` cleanly before copying files, so the backed-up binary logs end at exactly the position the data was taken at. `xtrabackup` and `mysqlshell` back up a running server, so binary logs copied alongside the data would contain transactions the backup doesn't. A server restored from such a backup would report those transactions as executed, and replicas or VStreams reading from it would silently miss them. Requests that combine `--include-binlogs` with another engine, or with an incremental backup, fail with `INVALID_ARGUMENT`, as does `vtbackup` with both `--include-binlogs` and `--restore-with-clone`.
+
+Limitations and requirements:
+
+- Full backups only.
+- `vtbackup --restore-with-clone` together with `--include-binlogs` is refused in this release, because CLONE does not copy binary logs.
+- The backup source must have `log_bin` and `log_replica_updates` enabled. Otherwise the backup fails with `FAILED_PRECONDITION`.
+- The tablet's `log-bin` (and `log-bin-index`, if set) must say where `mysqld` keeps its binary logs, as the `my.cnf` that Vitess generates does. A source whose `mysqld` uses its default basename because `log-bin` isn't set, or another basename, is refused with `FAILED_PRECONDITION` before `mysqld` is stopped, as is one whose binary log index can't be read.
+
+Things to be aware of:
+
+- Backups grow by the size of the source's retained binary logs.
+- The binary logs keep every transaction the source logged, including errant GTIDs. Without them, a replica of the restored server that lacks such a transaction stops with error 1236, because the restored `gtid_purged` covers it. With them, the restored server sends the transaction and the replica applies it. VTOrc's errant GTID detection still applies.
+- Binlog expiry (`binlog_expire_logs_seconds`) on the restored server follows the original file times, so old binary logs may be purged soon after the restored `mysqld` starts.
+- Older Vitess versions restoring such a backup restore only the data and ignore the binary logs.
+- Encrypted binary logs (`binlog_encryption`) are backed up as they are, so only a server whose keyring holds the source's binary log master key, such as one sharing the source's keyring, can restore them. A restore fails when it cannot read a restored binary log (and `mysqld` does not start when the newest one is unreadable). The tablet then doesn't start replicating, and restarting it retries the restore. `ALTER INSTANCE ROTATE BINLOG MASTER KEY` removes the previous key from the keyring, so a backup whose binary logs were encrypted before a rotation can no longer be restored.
+
+**Upgrade order**: upgrade both `vtctld` and the tablets before using `--include-binlogs` with `vtctldclient Backup` or `BackupShard`. An older `vtctld` or `vttablet` silently ignores the field and takes a backup without binary logs.
+
+See [#17667](https://github.com/vitessio/vitess/issues/17667).
 
 ### <a id="breaking-changes"/>Breaking Changes</a>
 
@@ -482,6 +509,14 @@ Because each per-shard `EXPLAIN` runs on a separate connection, a `VEXPLAIN MYSQ
 
 Like a plain `EXPLAIN`, the per-shard `EXPLAIN FORMAT=JSON` queries `VEXPLAIN MYSQLPLAN` issues are not subject to table ACL checks on the explained tables, so `VEXPLAIN MYSQLPLAN` can return per-shard plan metadata (index names, row estimates, filtered percentages) for tables the caller could not otherwise read. For the same reason — the tablet plans an `EXPLAIN` without the explained table's identity — query denylist rules that are conditioned on a table name are not enforced against these per-shard `EXPLAIN` queries either; denylist rules conditioned on the query pattern still apply if their pattern matches the `explain format = json ...` query text. Unlike a plain `EXPLAIN`, which reaches a single arbitrary shard, `VEXPLAIN MYSQLPLAN` extends this to every resolved shard of every keyspace in the plan. Deployments that rely on table ACLs or table-scoped query denylist rules to restrict read access should restrict access to `VEXPLAIN MYSQLPLAN` accordingly.
 
+#### <a id="vtgate-vstream-metrics"/>VStream metrics report live streams and can include the caller</a>
+
+`VStreamsLag` now reports, for each keyspace, shard, and tablet type, the highest lag across the VStreams that are currently streaming from that shard. Previously it reported the lag of whichever stream sent an event last, and kept reporting it after every stream for the shard had closed. A shard's series now disappears when its last stream closes, and a newly opened stream is not reported until its first event arrives. Alerts that use `absent()` on `VStreamsLag`, or that fire when lag stays above a threshold, may behave differently.
+
+`VStreamsCount` now also drops streams that end without an error, such as a shard stream ended by a resharding journal event. Previously those streams were counted as active forever.
+
+The new `--vstream-metrics-include-caller` flag adds a `CallerID` label to `VStreamsCreated`, `VStreamsCount`, `VStreamsEventsStreamed`, `VStreamsEndedWithErrors`, `VStreamsLag`, and `VStreamsTransactionsChunked`, so each streaming application can be monitored separately. The label is set to the principal of the effective caller ID in the `VStreamRequest`, or to the MySQL user for SQL `VSTREAM`; streams without one get an empty `CallerID`. The `VStreamRequest` principal is set by the client and is not authenticated by VTGate. Each distinct principal adds a series per keyspace, shard, and tablet type, and the counters keep their series until VTGate restarts, so the number of series grows with the distinct principals seen over the process lifetime, not only those of open streams. For example, if each client instance sets its own principal, the number of series grows with every instance that has connected, so consider the cardinality before enabling the flag. The flag is off by default, and the metrics keep their existing labels when it is off.
+
 ### <a id="minor-changes-reparent"/>Reparent</a>
 
 #### <a id="ers-lagging-relay-log-wait"/>`EmergencyReparentShard` no longer waits on replicas that cannot win the election</a>
@@ -793,7 +828,7 @@ See [#20778](https://github.com/vitessio/vitess/pull/20778) for details.
 
 #### <a id="vtadmin-updated-node"/>vtadmin-web updated to node v22.23.2 (LTS)</a>
 
-Building `vtadmin-web` now requires node v22.22.2 or newer on the 22 line, v24.15.0 or newer on the 24 line, or v26 and above, up from v22.13.0; `package.json` declares exactly that range and `npm ci` enforces it. The vtadmin build script, the CI workflows, and the `vitess/vtadmin` image build with node v22.23.2. The range is what jsdom 30, a test dependency, supports; on the 22 line the bump stays within the same major, so no breaking changes are involved. Full details on the node v22.23.2 release can be found at https://nodejs.org/en/blog/release/v22.23.2.
+Building `vtadmin-web` now requires node v22.22.2 or newer on the 22 line, v24.15.0 or newer on the 24 line, or v26 and above, up from v22.13.0; `package.json` declares exactly that range and `npm ci` enforces it. The vtadmin build script and the `vitess/vtadmin` image build with node v22.23.2. The range is what jsdom 30, a test dependency, supports; on the 22 line the bump stays within the same major, so no breaking changes are involved. Full details on the node v22.23.2 release can be found at https://nodejs.org/en/blog/release/v22.23.2.
 
 ### <a id="minor-changes-general"/>General</a>
 

@@ -193,6 +193,8 @@ type TabletManagerClient struct {
 		EventJitter   time.Duration
 		ErrorAfter    time.Duration
 	}
+	// BackupRequests records the requests received by Backup, keyed by tablet alias.
+	BackupRequests map[string]*tabletmanagerdatapb.BackupRequest
 	// Backing Up - keyed by tablet alias.
 	TabletsBackupState map[string]bool
 	// keyed by tablet alias.
@@ -439,6 +441,10 @@ func (stream *backupStreamAdapter) Send(msg *logutilpb.Event) error {
 	}
 }
 
+// backupRequestsLock guards BackupRequests. It is not a field because tests
+// copy TabletManagerClient by value.
+var backupRequestsLock sync.Mutex
+
 // Backup is part of the tmclient.TabletManagerClient interface.
 func (fake *TabletManagerClient) Backup(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.BackupRequest) (logutil.EventStream, error) {
 	if tablet.Type == topodatapb.TabletType_PRIMARY && !req.AllowPrimary {
@@ -446,6 +452,13 @@ func (fake *TabletManagerClient) Backup(ctx context.Context, tablet *topodatapb.
 	}
 
 	key := topoproto.TabletAliasString(tablet.Alias)
+	backupRequestsLock.Lock()
+	if fake.BackupRequests == nil {
+		fake.BackupRequests = make(map[string]*tabletmanagerdatapb.BackupRequest)
+	}
+	fake.BackupRequests[key] = req.CloneVT()
+	backupRequestsLock.Unlock()
+
 	testdata, ok := fake.Backups[key]
 	if !ok {
 		return nil, fmt.Errorf("no Backup fake result set for %s", key)

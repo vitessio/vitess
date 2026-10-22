@@ -138,7 +138,7 @@ jobs:
 
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        uses: step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed # v2.22.0
         with:
           egress-policy: audit
 
@@ -163,6 +163,9 @@ jobs:
       - name: Set up Go
         if: needs.changes.outputs.unit_tests == 'true'
         uses: $/.github/actions/setup-go
+        with:
+          # "make unit_test" and "make unit_test_race" run "make build" first.
+          build-cache: ${{ matrix.race && 'build,race' || 'build,unit' }}
 
       - name: Set up python
         if: needs.changes.outputs.unit_tests == 'true'
@@ -247,5 +250,5 @@ jobs:
         run: |
           echo '## Slowest Tests' >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
-          go tool -modfile=tools/gotestsum/go.mod gotestsum tool slowest --num 20 --jsonfile report.json | tee -a "$GITHUB_STEP_SUMMARY"
+          go run -trimpath -modfile=tools/gotestsum/go.mod gotest.tools/gotestsum tool slowest --num 20 --jsonfile report.json | tee -a "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
