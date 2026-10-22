@@ -20,6 +20,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"regexp"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -334,7 +335,7 @@ func TestValidateQueryThrottlerConfigContent(t *testing.T) {
 					},
 				},
 			},
-			wantErr: `unknown tablet type "PRIMAY"`,
+			wantErr: `unsupported tablet type "PRIMAY"; must be one of PRIMARY, REPLICA, RDONLY, EXPERIMENTAL`,
 		},
 		{
 			name: "unknown statement type",
@@ -359,7 +360,7 @@ func TestValidateQueryThrottlerConfigContent(t *testing.T) {
 					},
 				},
 			},
-			wantErr: `unknown statement type "SELEC" (tablet_type=PRIMARY)`,
+			wantErr: `unsupported statement type "SELEC" (tablet_type=PRIMARY)`,
 		},
 		{
 			name: "custom metric rejected",
@@ -420,6 +421,38 @@ func TestValidateQueryThrottlerConfigContent(t *testing.T) {
 			},
 			wantErr: `metric "lag" is configured under multiple scopes; only one scope of a metric may be configured across the query throttler config`,
 		},
+		{
+			name:   "RDONLY tablet type and REPLACE statement type are accepted",
+			config: singleRuleConfig("RDONLY", "REPLACE", &querythrottler.ThrottleThreshold{Above: 5, Throttle: 50}),
+		},
+		{
+			name:   "EXPERIMENTAL tablet type is accepted",
+			config: singleRuleConfig("EXPERIMENTAL", "SELECT", &querythrottler.ThrottleThreshold{Above: 5, Throttle: 50}),
+		},
+		{
+			name:    "non-serving tablet type rejected",
+			config:  singleRuleConfig("SPARE", "SELECT", &querythrottler.ThrottleThreshold{Above: 5, Throttle: 50}),
+			wantErr: `unsupported tablet type "SPARE"; must be one of PRIMARY, REPLICA, RDONLY, EXPERIMENTAL`,
+		},
+		{
+			name:    "BATCH alias rejected",
+			config:  singleRuleConfig("BATCH", "SELECT", &querythrottler.ThrottleThreshold{Above: 5, Throttle: 50}),
+			wantErr: `unsupported tablet type "BATCH"; must be one of PRIMARY, REPLICA, RDONLY, EXPERIMENTAL`,
+		},
+		{
+			name:    "statement type that never reaches the query throttler rejected",
+			config:  singleRuleConfig("PRIMARY", "BEGIN", &querythrottler.ThrottleThreshold{Above: 5, Throttle: 50}),
+			wantErr: `unsupported statement type "BEGIN" (tablet_type=PRIMARY)`,
+		},
+		{
+			name: "duplicate above rejected",
+			config: singleRuleConfig("PRIMARY", "INSERT",
+				&querythrottler.ThrottleThreshold{Above: 5, Throttle: 50},
+				&querythrottler.ThrottleThreshold{Above: 10, Throttle: 80},
+				&querythrottler.ThrottleThreshold{Above: 5, Throttle: 100},
+			),
+			wantErr: `threshold[0] and threshold[2] have the same 'above' 5 (tablet_type=PRIMARY, statement=INSERT, metric=lag)`,
+		},
 	}
 
 	for _, tt := range tests {
@@ -431,6 +464,39 @@ func TestValidateQueryThrottlerConfigContent(t *testing.T) {
 				require.ErrorContains(t, err, tt.wantErr)
 			}
 		})
+	}
+}
+
+// singleRuleConfig returns an enabled TABLET_THROTTLER config with one lag rule.
+func singleRuleConfig(tabletType, stmtType string, thresholds ...*querythrottler.ThrottleThreshold) *querythrottler.Config {
+	return &querythrottler.Config{
+		Enabled:  true,
+		Strategy: querythrottler.ThrottlingStrategy_TABLET_THROTTLER,
+		TabletStrategyConfig: &querythrottler.TabletStrategyConfig{
+			TabletRules: map[string]*querythrottler.StatementRuleSet{
+				tabletType: {
+					StatementRules: map[string]*querythrottler.MetricRuleSet{
+						stmtType: {
+							MetricRules: map[string]*querythrottler.MetricRule{
+								"lag": {Thresholds: thresholds},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+// TestUpdateQueryThrottlerConfigExamples keeps the help examples working: every --config
+// in UpdateQueryThrottlerConfig.Example must parse and pass validation.
+func TestUpdateQueryThrottlerConfigExamples(t *testing.T) {
+	matches := regexp.MustCompile(`--config '([^']*)'`).FindAllStringSubmatch(UpdateQueryThrottlerConfig.Example, -1)
+	require.Len(t, matches, 2)
+	for _, m := range matches {
+		cfg, err := parseQueryThrottlerConfig([]byte(m[1]))
+		require.NoError(t, err, m[1])
+		require.NoError(t, validateQueryThrottlerConfigContent(cfg), m[1])
 	}
 }
 

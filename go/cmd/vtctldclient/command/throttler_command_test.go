@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -32,6 +33,7 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/localvtctldclient"
 
 	querythrottlerpb "vitess.io/vitess/go/vt/proto/querythrottler"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
 )
@@ -226,4 +228,100 @@ func TestUpdateQueryThrottlerConfigCommand_ServerError(t *testing.T) {
 	err := Root.Execute()
 	require.ErrorContains(t, err, "server boom")
 	require.NotNil(t, fakeServer.gotRequest, "server should have been called before returning the error")
+}
+
+// fakeThrottlerStatusServer captures CheckThrottler and GetThrottlerStatus calls.
+type fakeThrottlerStatusServer struct {
+	vtctlservicepb.UnimplementedVtctldServer
+
+	gotCheck  *vtctldatapb.CheckThrottlerRequest
+	gotStatus *vtctldatapb.GetThrottlerStatusRequest
+}
+
+func (s *fakeThrottlerStatusServer) CheckThrottler(_ context.Context, req *vtctldatapb.CheckThrottlerRequest) (*vtctldatapb.CheckThrottlerResponse, error) {
+	s.gotCheck = req
+	return &vtctldatapb.CheckThrottlerResponse{}, nil
+}
+
+func (s *fakeThrottlerStatusServer) GetThrottlerStatus(_ context.Context, req *vtctldatapb.GetThrottlerStatusRequest) (*vtctldatapb.GetThrottlerStatusResponse, error) {
+	s.gotStatus = req
+	return &vtctldatapb.GetThrottlerStatusResponse{}, nil
+}
+
+func TestThrottlerTypeFlag(t *testing.T) {
+	tests := []struct {
+		name     string
+		args     []string
+		wantErr  string
+		wantType tabletmanagerdatapb.ThrottlerType
+	}{
+		{
+			name:     "CheckThrottler defaults to the lag throttler",
+			args:     []string{"vtctldclient", "CheckThrottler", "zone1-0000000101"},
+			wantType: tabletmanagerdatapb.ThrottlerType_DEFAULT_LAG_THROTTLER,
+		},
+		{
+			name:     "CheckThrottler with the dedicated query throttler",
+			args:     []string{"vtctldclient", "CheckThrottler", "--throttler-type", "DEDICATED_QUERY_THROTTLER", "zone1-0000000101"},
+			wantType: tabletmanagerdatapb.ThrottlerType_DEDICATED_QUERY_THROTTLER,
+		},
+		{
+			name:    "CheckThrottler rejects an unknown type",
+			args:    []string{"vtctldclient", "CheckThrottler", "--throttler-type", "QUERY", "zone1-0000000101"},
+			wantErr: `unknown --throttler-type "QUERY"`,
+		},
+		{
+			name:     "GetThrottlerStatus defaults to the lag throttler",
+			args:     []string{"vtctldclient", "GetThrottlerStatus", "zone1-0000000101"},
+			wantType: tabletmanagerdatapb.ThrottlerType_DEFAULT_LAG_THROTTLER,
+		},
+		{
+			name:     "GetThrottlerStatus accepts a lowercase type",
+			args:     []string{"vtctldclient", "GetThrottlerStatus", "--throttler-type", "dedicated_query_throttler", "zone1-0000000101"},
+			wantType: tabletmanagerdatapb.ThrottlerType_DEDICATED_QUERY_THROTTLER,
+		},
+		{
+			name:    "GetThrottlerStatus rejects an unknown type",
+			args:    []string{"vtctldclient", "GetThrottlerStatus", "--throttler-type", "QUERY", "zone1-0000000101"},
+			wantErr: `unknown --throttler-type "QUERY"`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			savedArgs := append([]string{}, os.Args...)
+			savedProtocol := VtctldClientProtocol
+			savedCheckType, savedStatusType := checkThrottlerType, getThrottlerStatusType
+			t.Cleanup(func() {
+				os.Args = savedArgs
+				VtctldClientProtocol = savedProtocol
+				checkThrottlerType, getThrottlerStatusType = savedCheckType, savedStatusType
+				for _, cmd := range []*cobra.Command{CheckThrottler, GetThrottlerStatus} {
+					cmd.Flags().VisitAll(func(f *pflag.Flag) { f.Changed = false })
+				}
+			})
+
+			fakeServer := &fakeThrottlerStatusServer{}
+			localvtctldclient.SetServer(fakeServer)
+			VtctldClientProtocol = "local"
+			os.Args = tt.args
+
+			err := Root.Execute()
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				assert.Nil(t, fakeServer.gotCheck, "server should not have been called")
+				assert.Nil(t, fakeServer.gotStatus, "server should not have been called")
+				return
+			}
+			require.NoError(t, err)
+
+			if tt.args[1] == "CheckThrottler" {
+				require.NotNil(t, fakeServer.gotCheck, "server was not called")
+				assert.Equal(t, tt.wantType, fakeServer.gotCheck.ThrottlerType)
+			} else {
+				require.NotNil(t, fakeServer.gotStatus, "server was not called")
+				assert.Equal(t, tt.wantType, fakeServer.gotStatus.ThrottlerType)
+			}
+		})
+	}
 }

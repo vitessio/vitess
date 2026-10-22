@@ -263,7 +263,7 @@ func TestValidateQueryThrottlerConfigRequest(t *testing.T) {
 					},
 				},
 			},
-			wantErr: `unknown tablet type "PRIMAY"`,
+			wantErr: `unsupported tablet type "PRIMAY"; must be one of PRIMARY, REPLICA, RDONLY, EXPERIMENTAL`,
 		},
 		{
 			name: "unknown statement type",
@@ -291,7 +291,7 @@ func TestValidateQueryThrottlerConfigRequest(t *testing.T) {
 					},
 				},
 			},
-			wantErr: `unknown statement type "SELEC" (tablet_type=PRIMARY)`,
+			wantErr: `unsupported statement type "SELEC" (tablet_type=PRIMARY)`,
 		},
 		{
 			name: "custom metric rejected",
@@ -358,6 +358,38 @@ func TestValidateQueryThrottlerConfigRequest(t *testing.T) {
 			},
 			wantErr: `metric "lag" is configured under multiple scopes; only one scope of a metric may be configured across the query throttler config`,
 		},
+		{
+			name: "RDONLY tablet type and REPLACE statement type are accepted",
+			req:  singleRuleRequest("RDONLY", "REPLACE", &querythrottlerpb.ThrottleThreshold{Above: 5, Throttle: 50}),
+		},
+		{
+			name: "EXPERIMENTAL tablet type is accepted",
+			req:  singleRuleRequest("EXPERIMENTAL", "SELECT", &querythrottlerpb.ThrottleThreshold{Above: 5, Throttle: 50}),
+		},
+		{
+			name:    "non-serving tablet type rejected",
+			req:     singleRuleRequest("SPARE", "SELECT", &querythrottlerpb.ThrottleThreshold{Above: 5, Throttle: 50}),
+			wantErr: `unsupported tablet type "SPARE"; must be one of PRIMARY, REPLICA, RDONLY, EXPERIMENTAL`,
+		},
+		{
+			name:    "BATCH alias rejected",
+			req:     singleRuleRequest("BATCH", "SELECT", &querythrottlerpb.ThrottleThreshold{Above: 5, Throttle: 50}),
+			wantErr: `unsupported tablet type "BATCH"; must be one of PRIMARY, REPLICA, RDONLY, EXPERIMENTAL`,
+		},
+		{
+			name:    "statement type that never reaches the query throttler rejected",
+			req:     singleRuleRequest("PRIMARY", "BEGIN", &querythrottlerpb.ThrottleThreshold{Above: 5, Throttle: 50}),
+			wantErr: `unsupported statement type "BEGIN" (tablet_type=PRIMARY)`,
+		},
+		{
+			name: "duplicate above rejected",
+			req: singleRuleRequest("PRIMARY", "INSERT",
+				&querythrottlerpb.ThrottleThreshold{Above: 5, Throttle: 50},
+				&querythrottlerpb.ThrottleThreshold{Above: 10, Throttle: 80},
+				&querythrottlerpb.ThrottleThreshold{Above: 5, Throttle: 100},
+			),
+			wantErr: `threshold[0] and threshold[2] have the same 'above' 5 (tablet_type=PRIMARY, statement=INSERT, metric=lag)`,
+		},
 	}
 
 	for _, tt := range tests {
@@ -369,6 +401,30 @@ func TestValidateQueryThrottlerConfigRequest(t *testing.T) {
 				require.EqualError(t, err, tt.wantErr)
 			}
 		})
+	}
+}
+
+// singleRuleRequest returns an enabled TABLET_THROTTLER request with one lag rule.
+func singleRuleRequest(tabletType, stmtType string, thresholds ...*querythrottlerpb.ThrottleThreshold) *vtctldatapb.UpdateQueryThrottlerConfigRequest {
+	return &vtctldatapb.UpdateQueryThrottlerConfigRequest{
+		Keyspace: "ks1",
+		QueryThrottlerConfig: &querythrottlerpb.Config{
+			Enabled:  true,
+			Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER,
+			TabletStrategyConfig: &querythrottlerpb.TabletStrategyConfig{
+				TabletRules: map[string]*querythrottlerpb.StatementRuleSet{
+					tabletType: {
+						StatementRules: map[string]*querythrottlerpb.MetricRuleSet{
+							stmtType: {
+								MetricRules: map[string]*querythrottlerpb.MetricRule{
+									"lag": {Thresholds: thresholds},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 }
 

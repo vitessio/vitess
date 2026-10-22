@@ -5975,18 +5975,17 @@ func validateTabletThrottlerStrategyConfig(cfg *querythrottler.Config) error {
 	// it, across the whole config, so scope collisions are caught globally.
 	seenBareMetrics := make(map[string]string)
 	for tabletType, stmtRuleSet := range tsc.GetTabletRules() {
-		// Only accept names the runtime can emit. Requiring an exact String() round-trip
-		// rejects typos ("PRIMAY"), wrong case ("primary"), and aliases ("MASTER").
-		if v, ok := topodatapb.TabletType_value[tabletType]; !ok || topodatapb.TabletType(v).String() != tabletType {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unknown tablet type %q", tabletType)
+		// Only accept serving tablet types, spelled the way the runtime reports them.
+		if !base.IsQueryThrottlerTabletType(tabletType) {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported tablet type %q; must be one of PRIMARY, REPLICA, RDONLY, EXPERIMENTAL", tabletType)
 		}
 		if len(stmtRuleSet.GetStatementRules()) == 0 {
 			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "statement_rules cannot be empty (tablet_type=%s)", tabletType)
 		}
 		for stmtType, metricRuleSet := range stmtRuleSet.GetStatementRules() {
-			// Reject statement types the runtime can never emit (StatementType.String()).
-			if !sqlparser.IsValidStatementType(stmtType) {
-				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unknown statement type %q (tablet_type=%s)", stmtType, tabletType)
+			// Reject statement types that never reach the query throttler, such as BEGIN.
+			if !base.IsQueryThrottlerStatementType(stmtType) {
+				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported statement type %q (tablet_type=%s)", stmtType, tabletType)
 			}
 			if len(metricRuleSet.GetMetricRules()) == 0 {
 				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "metric_rules cannot be empty (tablet_type=%s, statement=%s)", tabletType, stmtType)
@@ -6016,6 +6015,9 @@ func validateTabletThrottlerStrategyConfig(cfg *querythrottler.Config) error {
 					return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
 						"thresholds cannot be empty (tablet_type=%s, statement=%s, metric=%s)", tabletType, stmtType, metricName)
 				}
+				// Thresholds are matched by the highest breached 'above', so two thresholds
+				// with the same 'above' leave one of them unreachable.
+				seenAbove := make(map[float64]int)
 				for i, t := range rule.GetThresholds() {
 					// NaN compares false against everything and infinities leave no reachable
 					// boundary, so either would make the threshold silently unusable.
@@ -6029,6 +6031,12 @@ func validateTabletThrottlerStrategyConfig(cfg *querythrottler.Config) error {
 							"threshold[%d] 'above' must be >= 0, got %v (tablet_type=%s, statement=%s, metric=%s)",
 							i, t.GetAbove(), tabletType, stmtType, metricName)
 					}
+					if j, ok := seenAbove[t.GetAbove()]; ok {
+						return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+							"threshold[%d] and threshold[%d] have the same 'above' %v (tablet_type=%s, statement=%s, metric=%s)",
+							j, i, t.GetAbove(), tabletType, stmtType, metricName)
+					}
+					seenAbove[t.GetAbove()] = i
 
 					if t.GetThrottle() < 0 || t.GetThrottle() > 100 {
 						return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,

@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -30,10 +31,10 @@ import (
 	"vitess.io/vitess/go/protoutil"
 
 	"vitess.io/vitess/go/vt/proto/querythrottler"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	"vitess.io/vitess/go/vt/proto/vttime"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
@@ -51,7 +52,7 @@ var (
 		RunE:                  commandUpdateThrottlerConfig,
 	}
 	CheckThrottler = &cobra.Command{
-		Use:                   "CheckThrottler [--app-name <name>] <tablet alias>",
+		Use:                   "CheckThrottler [--app-name <name>] [--throttler-type <type>] <tablet alias>",
 		Short:                 "Issue a throttler check on the given tablet.",
 		Example:               "CheckThrottler --app-name online-ddl zone1-0000000101",
 		DisableFlagsInUseLine: true,
@@ -60,9 +61,9 @@ var (
 	}
 
 	GetThrottlerStatus = &cobra.Command{
-		Use:                   "GetThrottlerStatus <tablet alias>",
+		Use:                   "GetThrottlerStatus [--throttler-type <type>] <tablet alias>",
 		Short:                 "Get the throttler status for the given tablet.",
-		Example:               "GetThrottlerStatus zone1-0000000101",
+		Example:               "GetThrottlerStatus --throttler-type DEDICATED_QUERY_THROTTLER zone1-0000000101",
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.ExactArgs(1),
 		RunE:                  commandGetThrottlerStatus,
@@ -70,10 +71,14 @@ var (
 
 	// UpdateQueryThrottlerConfig makes an UpdateQueryThrottlerConfig gRPC call to a vtctld.
 	UpdateQueryThrottlerConfig = &cobra.Command{
-		Use:                   "UpdateQueryThrottlerConfig {--config <config> | --config-file <file>} <keyspace>",
-		Short:                 "Update the query throttler configuration for the given keyspace.",
-		Long:                  "Update the query throttler configuration for the given keyspace. The configuration controls how incoming queries are throttled based on tablet throttler metrics.",
-		Example:               `UpdateQueryThrottlerConfig --config '{"enabled":true,"strategy":"TABLET_THROTTLER","dry_run":false}' my_keyspace`,
+		Use:   "UpdateQueryThrottlerConfig {--config <config> | --config-file <file>} <keyspace>",
+		Short: "Update the query throttler configuration for the given keyspace.",
+		Long:  "Update the query throttler configuration for the given keyspace. The configuration controls how incoming queries are throttled based on tablet throttler metrics.",
+		Example: `# Throttle 50% of INSERTs on primaries when replication lag is above 5s, and all of them above 10s.
+UpdateQueryThrottlerConfig --config '{"enabled":true,"strategy":"TABLET_THROTTLER","dry_run":false,"tablet_strategy_config":{"tablet_rules":{"PRIMARY":{"statement_rules":{"INSERT":{"metric_rules":{"lag":{"thresholds":[{"above":5,"throttle":50},{"above":10,"throttle":100}]}}}}}}}}' my_keyspace
+
+# Disable the query throttler.
+UpdateQueryThrottlerConfig --config '{"enabled":false}' my_keyspace`,
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.ExactArgs(1),
 		PreRunE:               validateUpdateQueryThrottlerConfig,
@@ -89,6 +94,9 @@ var (
 
 	checkThrottlerOptions vtctldatapb.CheckThrottlerRequest
 	requestHeartbeats     bool
+	checkThrottlerType    string
+
+	getThrottlerStatusType string
 
 	updateQueryThrottlerConfigOptions = struct {
 		Config     string
@@ -129,6 +137,15 @@ func commandUpdateThrottlerConfig(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+// parseThrottlerType converts a --throttler-type value to the throttler it selects.
+func parseThrottlerType(name string) (tabletmanagerdatapb.ThrottlerType, error) {
+	v, ok := tabletmanagerdatapb.ThrottlerType_value[strings.ToUpper(name)]
+	if !ok {
+		return 0, fmt.Errorf("unknown --throttler-type %q; must be one of DEFAULT_LAG_THROTTLER, DEDICATED_QUERY_THROTTLER", name)
+	}
+	return tabletmanagerdatapb.ThrottlerType(v), nil
+}
+
 func commandCheckThrottler(cmd *cobra.Command, args []string) error {
 	alias, err := topoproto.ParseTabletAlias(cmd.Flags().Arg(0))
 	if err != nil {
@@ -139,12 +156,17 @@ func commandCheckThrottler(cmd *cobra.Command, args []string) error {
 	if _, err := base.ScopeFromString(checkThrottlerOptions.Scope); err != nil {
 		return err
 	}
+	throttlerType, err := parseThrottlerType(checkThrottlerType)
+	if err != nil {
+		return err
+	}
 	resp, err := client.CheckThrottler(commandCtx, &vtctldatapb.CheckThrottlerRequest{
 		TabletAlias:           alias,
 		AppName:               checkThrottlerOptions.AppName,
 		Scope:                 checkThrottlerOptions.Scope,
 		SkipRequestHeartbeats: !requestHeartbeats,
 		OkIfNotExists:         checkThrottlerOptions.OkIfNotExists,
+		ThrottlerType:         throttlerType,
 	})
 	if err != nil {
 		return err
@@ -168,8 +190,13 @@ func commandGetThrottlerStatus(cmd *cobra.Command, args []string) error {
 
 	cli.FinishedParsing(cmd)
 
+	throttlerType, err := parseThrottlerType(getThrottlerStatusType)
+	if err != nil {
+		return err
+	}
 	resp, err := client.GetThrottlerStatus(commandCtx, &vtctldatapb.GetThrottlerStatusRequest{
-		TabletAlias: alias,
+		TabletAlias:   alias,
+		ThrottlerType: throttlerType,
 	})
 	if err != nil {
 		return err
@@ -217,15 +244,15 @@ func validateQueryThrottlerConfigContent(cfg *querythrottler.Config) error {
 	// is explained. Duplicated here only for fast feedback; keep the two in sync.
 	seenBareMetrics := make(map[string]string)
 	for tabletType, stmtRuleSet := range tsc.GetTabletRules() {
-		if v, ok := topodatapb.TabletType_value[tabletType]; !ok || topodatapb.TabletType(v).String() != tabletType {
-			return fmt.Errorf("unknown tablet type %q", tabletType)
+		if !base.IsQueryThrottlerTabletType(tabletType) {
+			return fmt.Errorf("unsupported tablet type %q; must be one of PRIMARY, REPLICA, RDONLY, EXPERIMENTAL", tabletType)
 		}
 		if len(stmtRuleSet.GetStatementRules()) == 0 {
 			return fmt.Errorf("statement_rules cannot be empty (tablet_type=%s)", tabletType)
 		}
 		for stmtType, metricRuleSet := range stmtRuleSet.GetStatementRules() {
-			if !sqlparser.IsValidStatementType(stmtType) {
-				return fmt.Errorf("unknown statement type %q (tablet_type=%s)", stmtType, tabletType)
+			if !base.IsQueryThrottlerStatementType(stmtType) {
+				return fmt.Errorf("unsupported statement type %q (tablet_type=%s)", stmtType, tabletType)
 			}
 			if len(metricRuleSet.GetMetricRules()) == 0 {
 				return fmt.Errorf("metric_rules cannot be empty (tablet_type=%s, statement=%s)", tabletType, stmtType)
@@ -246,6 +273,7 @@ func validateQueryThrottlerConfigContent(cfg *querythrottler.Config) error {
 				if len(rule.GetThresholds()) == 0 {
 					return fmt.Errorf("thresholds cannot be empty (tablet_type=%s, statement=%s, metric=%s)", tabletType, stmtType, metricName)
 				}
+				seenAbove := make(map[float64]int)
 				for i, t := range rule.GetThresholds() {
 					if math.IsNaN(t.GetAbove()) || math.IsInf(t.GetAbove(), 0) {
 						return fmt.Errorf("threshold[%d] 'above' must be a finite number, got %v (tablet_type=%s, statement=%s, metric=%s)",
@@ -255,6 +283,11 @@ func validateQueryThrottlerConfigContent(cfg *querythrottler.Config) error {
 						return fmt.Errorf("threshold[%d] 'above' must be >= 0, got %v (tablet_type=%s, statement=%s, metric=%s)",
 							i, t.GetAbove(), tabletType, stmtType, metricName)
 					}
+					if j, ok := seenAbove[t.GetAbove()]; ok {
+						return fmt.Errorf("threshold[%d] and threshold[%d] have the same 'above' %v (tablet_type=%s, statement=%s, metric=%s)",
+							j, i, t.GetAbove(), tabletType, stmtType, metricName)
+					}
+					seenAbove[t.GetAbove()] = i
 
 					if t.GetThrottle() < 0 || t.GetThrottle() > 100 {
 						return fmt.Errorf("threshold[%d] 'throttle' must be between 0 and 100, got %d (tablet_type=%s, statement=%s, metric=%s)",
@@ -340,9 +373,11 @@ func init() {
 	CheckThrottler.Flags().StringVar(&checkThrottlerOptions.Scope, "scope", base.UndefinedScope.String(), "check scope ('shard', 'self' or leave empty for per-metric defaults)")
 	CheckThrottler.Flags().BoolVar(&requestHeartbeats, "request-heartbeats", false, "request heartbeat lease")
 	CheckThrottler.Flags().BoolVar(&checkThrottlerOptions.OkIfNotExists, "ok-if-not-exists", false, "return OK even if metric does not exist")
+	CheckThrottler.Flags().StringVar(&checkThrottlerType, "throttler-type", tabletmanagerdatapb.ThrottlerType_DEFAULT_LAG_THROTTLER.String(), "throttler to check: DEFAULT_LAG_THROTTLER or DEDICATED_QUERY_THROTTLER (the query throttler's tablet throttler)")
 	Root.AddCommand(CheckThrottler)
 
 	// GetThrottlerStatus
+	GetThrottlerStatus.Flags().StringVar(&getThrottlerStatusType, "throttler-type", tabletmanagerdatapb.ThrottlerType_DEFAULT_LAG_THROTTLER.String(), "throttler to get the status of: DEFAULT_LAG_THROTTLER or DEDICATED_QUERY_THROTTLER (the query throttler's tablet throttler)")
 	Root.AddCommand(GetThrottlerStatus)
 
 	// UpdateQueryThrottlerConfig
