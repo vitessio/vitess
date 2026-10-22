@@ -104,9 +104,17 @@ const (
 
 var throttleTabletTypes = "replica"
 
+const (
+	// lagThrottlerMetricsPrefix prefixes the lag throttler's metrics.
+	lagThrottlerMetricsPrefix = "Throttler"
+	// queryThrottlerMetricsPrefix prefixes the dedicated query throttler's metrics, so its
+	// probes and checks don't mix into the lag throttler's.
+	queryThrottlerMetricsPrefix = "QueryThrottlerDedicated"
+)
+
 var (
-	statsThrottlerHeartbeatRequests    = stats.NewCounter("ThrottlerHeartbeatRequests", "heartbeat requests")
-	statsThrottlerProbeRecentlyChecked = stats.NewCounter("ThrottlerProbeRecentlyChecked", "probe recently checked")
+	statsThrottlerHeartbeatRequests    = stats.NewCounter(lagThrottlerMetricsPrefix+"HeartbeatRequests", "heartbeat requests")
+	statsThrottlerProbeRecentlyChecked = stats.NewCounter(lagThrottlerMetricsPrefix+"ProbeRecentlyChecked", "probe recently checked")
 )
 
 func init() {
@@ -685,7 +693,26 @@ func (throttler *Throttler) requestHeartbeats() {
 		return
 	}
 	go throttler.heartbeatWriter.RequestHeartbeats()
-	statsThrottlerHeartbeatRequests.Add(1)
+	throttler.counter(statsThrottlerHeartbeatRequests, "HeartbeatRequests", "heartbeat requests").Add(1)
+}
+
+// metricsPrefix returns the prefix of this throttler's metrics.
+func (throttler *Throttler) metricsPrefix() string {
+	if throttler.throttlerType == QueryTabletThrottler {
+		return queryThrottlerMetricsPrefix
+	}
+	return lagThrottlerMetricsPrefix
+}
+
+// counter returns this throttler's counter for name, which excludes the prefix. The lag
+// throttler uses lagCounter, registered at init, so its metrics are unchanged. The
+// dedicated query throttler registers its own on first use, so a tablet that never
+// enables the query throttler exports none of them.
+func (throttler *Throttler) counter(lagCounter *stats.Counter, name, help string) *stats.Counter {
+	if throttler.throttlerType != QueryTabletThrottler {
+		return lagCounter
+	}
+	return stats.GetOrNewCounter(queryThrottlerMetricsPrefix+name, help)
 }
 
 // stimulatePrimaryThrottler sends a check request to the primary tablet in the shard, to stimulate
@@ -941,7 +968,7 @@ func (throttler *Throttler) generateTabletProbeFunction(scope base.Scope, probe 
 			// We have just probed a tablet, and it reported back that someone just recently "check"ed it.
 			// We therefore renew the heartbeats lease.
 			throttler.requestHeartbeats()
-			statsThrottlerProbeRecentlyChecked.Add(1)
+			throttler.counter(statsThrottlerProbeRecentlyChecked, "ProbeRecentlyChecked", "probe recently checked").Add(1)
 		}
 		for name, metric := range resp.Metrics {
 			metricName := base.MetricName(name)
@@ -1022,7 +1049,7 @@ func (throttler *Throttler) collectSelfMetrics(ctx context.Context, tmClient tmc
 		defer atomic.StoreInt64(&probe.QueryInProgress, 0)
 
 		// Throttler is probing its own tablet's metrics:
-		_ = base.ReadThrottleMetrics(ctx, probe, tmClient, throttler.readSelfThrottleMetrics)
+		_ = base.ReadThrottleMetrics(ctx, throttler.metricsPrefix(), probe, tmClient, throttler.readSelfThrottleMetrics)
 	}()
 }
 
@@ -1045,7 +1072,7 @@ func (throttler *Throttler) collectShardMetrics(ctx context.Context, tmClient tm
 			// Throttler probing other tablets:
 			throttleMetricFunc := throttler.generateTabletProbeFunction(base.ShardScope, probe)
 
-			throttleMetrics := base.ReadThrottleMetrics(ctx, probe, tmClient, throttleMetricFunc)
+			throttleMetrics := base.ReadThrottleMetrics(ctx, throttler.metricsPrefix(), probe, tmClient, throttleMetricFunc)
 			for _, metric := range throttleMetrics {
 				select {
 				case <-ctx.Done():

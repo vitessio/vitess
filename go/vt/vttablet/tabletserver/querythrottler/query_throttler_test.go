@@ -850,8 +850,8 @@ func TestQueryThrottler_HandleConfigUpdate_DisabledConfigRunsNoStrategy(t *testi
 // TestQueryThrottler_StrategyMetricsRegisteredOnlyWhenUsed runs its checks in.
 const strategyMetricsChildEnv = "QUERYTHROTTLER_STRATEGY_METRICS_CHILD"
 
-// The TABLET_THROTTLER strategy's metrics must not be exported by a vttablet that never
-// enables it. Metric registration is process-global and other tests in this package build
+// The TABLET_THROTTLER strategy's metrics, and those of the dedicated throttler instance
+// its decisions are based on, must not be exported by a vttablet that never enables it. Metric registration is process-global and other tests in this package build
 // a tablet strategy, so the checks run in a fresh child process of this test binary.
 func TestQueryThrottler_StrategyMetricsRegisteredOnlyWhenUsed(t *testing.T) {
 	if os.Getenv(strategyMetricsChildEnv) == "" {
@@ -867,7 +867,7 @@ func TestQueryThrottler_StrategyMetricsRegisteredOnlyWhenUsed(t *testing.T) {
 		var names []string
 		expvar.Do(func(kv expvar.KeyValue) {
 			// TabletThrottler* was the strategy's former prefix; it must not come back.
-			if strings.HasPrefix(kv.Key, strategyPrefix) || strings.HasPrefix(kv.Key, "TabletThrottler") {
+			if strings.HasPrefix(kv.Key, strategyPrefix) || strings.HasPrefix(kv.Key, "TabletThrottler") || strings.HasPrefix(kv.Key, "QueryThrottlerDedicated") {
 				names = append(names, kv.Key)
 			}
 		})
@@ -876,7 +876,10 @@ func TestQueryThrottler_StrategyMetricsRegisteredOnlyWhenUsed(t *testing.T) {
 
 	env := tabletenv.NewEnv(vtenv.NewTestEnv(), &tabletenv.TabletConfig{}, "TestThrottler")
 	srvTopoServer := srvtopotest.NewPassthroughSrvTopoServer()
-	qt := NewQueryThrottler(t.Context(), &throttle.Throttler{}, env, &topodatapb.TabletAlias{Cell: "test-cell", Uid: 123}, srvTopoServer)
+	alias := &topodatapb.TabletAlias{Cell: "test-cell", Uid: 123}
+	// Build the dedicated throttler instance the way the tablet server does.
+	dedicatedThrottler := throttle.NewThrottler(env, srvTopoServer, nil, alias, nil, func() topodatapb.TabletType { return topodatapb.TabletType_PRIMARY }, throttle.QueryTabletThrottler)
+	qt := NewQueryThrottler(t.Context(), dedicatedThrottler, env, alias, srvTopoServer)
 	t.Cleanup(qt.Shutdown)
 
 	qt.HandleConfigUpdate(createTestSrvKeyspace(false, querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER, false), nil)

@@ -33,6 +33,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/protoutil"
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtenv"
@@ -2442,4 +2443,25 @@ func TestStimulatePrimaryThrottler(t *testing.T) {
 			assert.Equal(t, topoproto.TabletAliasString(tcase.expectTarget), topoproto.TabletAliasString(tmClient.checked[0].Alias))
 		})
 	}
+}
+
+// The dedicated query throttler records its metrics under its own prefix, so its probes
+// and checks don't mix into the lag throttler's Throttler* metrics.
+func TestQueryThrottlerMetricsPrefix(t *testing.T) {
+	lagThrottler := newTestThrottler()
+	assert.Equal(t, "Throttler", lagThrottler.metricsPrefix())
+	assert.Same(t, statsThrottlerCheckAnyTotal, lagThrottler.counter(statsThrottlerCheckAnyTotal, "CheckAnyTotal", ""))
+
+	queryThrottler := newTestThrottler()
+	queryThrottler.throttlerType = QueryTabletThrottler
+	assert.Equal(t, "QueryThrottlerDedicated", queryThrottler.metricsPrefix())
+	assert.NotSame(t, statsThrottlerCheckAnyTotal, queryThrottler.counter(statsThrottlerCheckAnyTotal, "CheckAnyTotal", ""))
+
+	checkAnyTotal := stats.GetOrNewCounter("QueryThrottlerDedicatedCheckAnyTotal", "")
+	checkSelfLagTotal := stats.GetOrNewCounter("QueryThrottlerDedicatedCheckSelfLagTotal", "")
+	checks, lagChecks := checkAnyTotal.Get(), checkSelfLagTotal.Get()
+	queryThrottler.check.Check(t.Context(), testAppName.String(), base.SelfScope, base.MetricNames{base.LagMetricName}, &CheckFlags{})
+	assert.Eventually(t, func() bool {
+		return checkAnyTotal.Get() > checks && checkSelfLagTotal.Get() > lagChecks
+	}, 30*time.Second, 10*time.Millisecond, "a check on the dedicated query throttler must count under its own prefix")
 }
