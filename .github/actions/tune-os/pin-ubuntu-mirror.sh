@@ -22,9 +22,10 @@
 # packages at 40 kB/s while it serves the release file instantly, so a probe
 # cannot tell when to trust it. This times a download of the release file over
 # HTTP and HTTPS from each of the archive's addresses, pins the archive's host
-# names in /etc/hosts to every address that answered both within 3 times the
-# fastest one's time, so that whatever resolves them still has other addresses
-# to fail over to, and points apt at the archive instead of the Azure mirror.
+# names in /etc/hosts to every address that answered both within 1 second or
+# within 3 times the fastest one's time, so that whatever resolves them still
+# has other addresses to fail over to even when one address is much closer than
+# the others, and points apt at the archive instead of the Azure mirror.
 # When no address answers, the archive itself is down, so it leaves apt on the
 # Azure mirror.
 
@@ -94,7 +95,7 @@ fi
 # security.ubuntu.com is served by the same servers as archive.ubuntu.com.
 security="$(resolve security.ubuntu.com)"
 fastest="$(sort -n "${results}" | head -1 | cut -d' ' -f1)"
-sort -n "${results}" | awk -v max="$(awk -v t="${fastest}" 'BEGIN { print 3 * t }')" '$1 <= max { print $2 }' |
+sort -n "${results}" | awk -v max="$(awk -v t="${fastest}" 'BEGIN { print (3 * t > 1 ? 3 * t : 1) }')" '$1 <= max { print $2 }' |
 	while read -r ip; do
 		names="${archive}"
 		if grep -qx "${ip}" <<< "${security}"; then
