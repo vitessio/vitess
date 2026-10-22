@@ -18,13 +18,7 @@ package engine
 
 import (
 	"context"
-<<<<<<< HEAD
-||||||| parent of 1a3cc02214 (vtgate: support row comparisons with subqueries that can't be merged (#21634))
-	"maps"
-=======
 	"fmt"
-	"maps"
->>>>>>> 1a3cc02214 (vtgate: support row comparisons with subqueries that can't be merged (#21634))
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -119,19 +113,14 @@ func (ps *UncorrelatedSubquery) execSubquery(ctx context.Context, vcursor VCurso
 		return nil, err
 	}
 	combinedVars := make(map[string]*querypb.BindVariable, len(bindVars)+1)
-<<<<<<< HEAD
 	for k, v := range bindVars {
 		combinedVars[k] = v
-||||||| parent of 1a3cc02214 (vtgate: support row comparisons with subqueries that can't be merged (#21634))
-	maps.Copy(combinedVars, bindVars)
-=======
-	maps.Copy(combinedVars, bindVars)
+	}
 	width := max(ps.RowColumns, len(ps.RowResults))
 	for _, row := range result.Rows {
 		if len(row) < width {
 			return nil, vterrors.VT13001(fmt.Sprintf("subquery returned %d columns for a row of %d", len(row), width))
 		}
->>>>>>> 1a3cc02214 (vtgate: support row comparisons with subqueries that can't be merged (#21634))
 	}
 	switch ps.Opcode {
 	case opcode.PulloutValue:

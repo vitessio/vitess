@@ -118,7 +118,7 @@ func TestPulloutSubqueryValueNone(t *testing.T) {
 	sfp.rewind()
 	ufp.rewind()
 	ps.RowResults = []string{"sq_0", "sq_1"}
-	_, err = ps.TryExecute(t.Context(), &noopVCursor{}, make(map[string]*querypb.BindVariable), false)
+	_, err := ps.TryExecute(t.Context(), &noopVCursor{}, make(map[string]*querypb.BindVariable), false)
 	require.NoError(t, err)
 	ufp.ExpectLog(t, []string{`Execute sq_0:  sq_1:  false`})
 }
@@ -220,7 +220,7 @@ func TestPulloutSubqueryInNotinGood(t *testing.T) {
 	ufp.rewind()
 	ps.Subquery = sfp
 	ps.RowColumns = 2
-	_, err = ps.TryExecute(t.Context(), &noopVCursor{}, make(map[string]*querypb.BindVariable), false)
+	_, err := ps.TryExecute(t.Context(), &noopVCursor{}, make(map[string]*querypb.BindVariable), false)
 	require.NoError(t, err)
 	rows := &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{
 		sqltypes.TupleToProto([]sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewVarChar("a")}),
@@ -259,7 +259,7 @@ func TestPulloutSubqueryInNone(t *testing.T) {
 	sfp.rewind()
 	ufp.rewind()
 	ps.RowColumns = 2
-	_, err = ps.TryExecute(t.Context(), &noopVCursor{}, make(map[string]*querypb.BindVariable), false)
+	_, err := ps.TryExecute(t.Context(), &noopVCursor{}, make(map[string]*querypb.BindVariable), false)
 	require.NoError(t, err)
 	placeholder := &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{
 		sqltypes.TupleToProto([]sqltypes.Value{sqltypes.NewInt64(0), sqltypes.NewInt64(0)}),

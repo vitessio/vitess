@@ -109,13 +109,7 @@ func CreatePlanningContext(stmt sqlparser.Statement,
 		VSchema:           vschema,
 		PlannerVersion:    version,
 		ReservedArguments: map[sqlparser.Expr]string{},
-<<<<<<< HEAD
-||||||| parent of 1a3cc02214 (vtgate: support row comparisons with subqueries that can't be merged (#21634))
-		MergedSubqueries:  map[string]*sqlparser.Subquery{},
-=======
-		MergedSubqueries:  map[string]*sqlparser.Subquery{},
 		RowSubqueryArgs:   map[string][]string{},
->>>>>>> 1a3cc02214 (vtgate: support row comparisons with subqueries that can't be merged (#21634))
 		Statement:         stmt,
 		PredTracker:       predicates.NewTracker(),
 	}, nil
