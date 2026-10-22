@@ -172,25 +172,15 @@ func isCommentsAndWhitespaceOnly(parser *Parser, text string) bool {
 	}
 }
 
-<<<<<<< HEAD
-// FuzzSplitMarginCommentsSkipsTokenizer checks that SplitMarginComments, which
-// reads only the leading comments of text that does not end with '*/', splits
-// every input the tokenizer accepts exactly where tokenizedMarginBounds does.
-// SplitMarginComments first removes the Unicode spaces at both ends of the
-// input, so tokenizedMarginBounds reads the input without them too.
-||||||| parent of 726e85e62a (sqlparser: keep trailing comments before a statement terminator (#21550))
-// FuzzSplitMarginCommentsSkipsTokenizer checks that SplitMarginComments, which
-// reads only the leading comments of text that does not end with '*/', splits
-// every input the tokenizer accepts exactly where tokenizedMarginBounds does.
-=======
 // FuzzSplitMarginCommentsSkipsTokenizer checks that marginBounds, which reads
 // only the leading comments of text that does not end with '*/', splits every
 // input the tokenizer accepts exactly where tokenizedMarginBounds does.
+// SplitMarginComments removes the Unicode spaces at both ends of the input
+// before it calls marginBounds, so both read the input without them.
 //
 // It checks marginBounds rather than SplitMarginComments, because
 // SplitMarginComments splits again without a statement terminator at the end,
 // and the tokenizer alone does not.
->>>>>>> 726e85e62a (sqlparser: keep trailing comments before a statement terminator (#21550))
 func FuzzSplitMarginCommentsSkipsTokenizer(f *testing.F) {
 	seeds := []string{
 		"/* a */ select 1",
@@ -222,17 +212,6 @@ func FuzzSplitMarginCommentsSkipsTokenizer(f *testing.F) {
 		if newlineFirst {
 			want.Trailing = "\n" + want.Trailing
 		}
-<<<<<<< HEAD
-		query, comments := parser.SplitMarginComments(input)
-		require.Equal(t, strings.Trim(sql[start:end], sqlSpaceChars+";"), query,
-			"query differs from the tokenizer's (from %q)", input)
-		require.Equal(t, want, comments, "margins differ from the tokenizer's (from %q)", input)
-||||||| parent of 726e85e62a (sqlparser: keep trailing comments before a statement terminator (#21550))
-		query, comments := parser.SplitMarginComments(sql)
-		require.Equal(t, strings.Trim(sql[start:end], sqlSpaceChars+";"), query,
-			"query differs from the tokenizer's (from %q)", sql)
-		require.Equal(t, want, comments, "margins differ from the tokenizer's (from %q)", sql)
-=======
 		gotStart, gotEnd, gotNewlineFirst := parser.marginBounds(sql)
 		got := MarginComments{
 			Leading:  strings.TrimLeft(sql[:gotStart], sqlSpaceChars),
@@ -244,6 +223,5 @@ func FuzzSplitMarginCommentsSkipsTokenizer(f *testing.F) {
 		require.Equal(t, strings.Trim(sql[start:end], sqlSpaceChars+";"), trimQuery(sql[gotStart:gotEnd]),
 			"query differs from the tokenizer's (from %q)", sql)
 		require.Equal(t, want, got, "margins differ from the tokenizer's (from %q)", sql)
->>>>>>> 726e85e62a (sqlparser: keep trailing comments before a statement terminator (#21550))
 	})
 }
