@@ -1,0 +1,41 @@
+name: "Restore the apt cache"
+description: >-
+  Restore the .deb files that the go_cache_warm workflow downloads for the
+  test jobs, and point apt at them, so that a job installs its packages
+  without downloading them from the mirrors, which regularly stall for
+  minutes. Run it before the job's first apt install.
+inputs:
+  packages:
+    description: >-
+      The job's set of packages, which tools/warm_apt_cache.sh downloads:
+      mysql-5.7, mysql-8.0, mysql-8.4 or percona.
+    required: true
+runs:
+  using: "composite"
+  steps:
+    # The warm job saves one entry for each OS, architecture and set of
+    # packages, keyed by the packages' versions; restoring by the prefix picks
+    # the newest.
+    - name: Determine the apt cache key
+      shell: bash
+      env:
+        PACKAGES: ${{ inputs.packages }}
+      run: |
+        echo "APT_CACHE_PREFIX=apt-v1-$(. /etc/os-release && echo "${ID}${VERSION_ID}")-$(dpkg --print-architecture)-${PACKAGES}-" >> "${GITHUB_ENV}"
+        echo "APT_CACHE_DIR=/var/cache/vitess-apt" >> "${GITHUB_ENV}"
+        sudo install -d -o "$(id -u)" -g "$(id -g)" /var/cache/vitess-apt
+
+    - name: Restore the apt cache
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: /var/cache/vitess-apt/*.deb
+        key: ${{ env.APT_CACHE_PREFIX }}
+        restore-keys: |
+          ${{ env.APT_CACHE_PREFIX }}
+
+    - name: Point apt at the cache
+      shell: bash
+      run: |
+        "${GITHUB_ACTION_PATH}/use-apt-cache.sh"
+        find /var/cache/vitess-apt -maxdepth 1 -name '*.deb' -printf '%s\n' \
+          | awk '{ n++; s += $1 } END { printf "apt cache: %d packages, %.0f MB\n", n, s / 1e6 }'

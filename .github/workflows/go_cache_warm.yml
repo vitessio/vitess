@@ -6,6 +6,7 @@ name: Warm Go caches
 # cache entries and a golangci-lint analysis cache entry for that commit. All
 # are built from an empty cache, so they contain exactly what the jobs need and
 # nothing stale. Pull requests restore the newest entries of their base branch.
+# It likewise fills the apt cache that the restore-apt-cache action restores.
 on:
   push:
     branches:
@@ -118,6 +119,80 @@ jobs:
           key: ${{ steps.key.outputs.key }}
 
       - name: Delete superseded module cache entries
+        if: steps.lookup.outputs.cache-hit != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          REF: ${{ github.ref }}
+          PREFIX: ${{ steps.key.outputs.prefix }}
+          KEY: ${{ steps.key.outputs.key }}
+        run: tools/delete_superseded_cache_entries.sh "${PREFIX}" "${KEY}"
+
+  # The packages the test jobs install with apt, one entry per set of them,
+  # keyed by their versions. See tools/warm_apt_cache.sh.
+  apt:
+    name: "Warm apt cache (${{ matrix.packages }})"
+    if: github.repository == 'vitessio/vitess'
+    permissions:
+      contents: read
+      # To delete the entries this run supersedes.
+      actions: write
+    strategy:
+      fail-fast: false
+      matrix:
+        packages: [mysql-5.7, mysql-8.0, mysql-8.4, percona]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed # v2.22.0
+        with:
+          egress-policy: audit
+
+      - name: Check out code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: "false"
+
+      # Into the directory the restore-apt-cache action restores into, since
+      # the cache entry records the path.
+      - name: Download the packages
+        env:
+          PACKAGES: ${{ matrix.packages }}
+        run: |
+          sudo install -d -o "$(id -u)" -g "$(id -g)" /var/cache/vitess-apt
+          tools/warm_apt_cache.sh "${PACKAGES}" /var/cache/vitess-apt
+
+      # The packages' file names hold their versions, so a new key means that
+      # one of them changed. The prefix matches what restore-apt-cache
+      # restores: the container is ubuntu:24.04 on amd64.
+      - name: Determine the cache key
+        id: key
+        env:
+          PACKAGES: ${{ matrix.packages }}
+        run: |
+          prefix="apt-v1-ubuntu24.04-amd64-${PACKAGES}-"
+          sum="$(find /var/cache/vitess-apt -maxdepth 1 -name '*.deb' -printf '%f\n' | sort | sha256sum | cut -d' ' -f1)"
+          echo "prefix=${prefix}" >> "${GITHUB_OUTPUT}"
+          echo "key=${prefix}${sum}" >> "${GITHUB_OUTPUT}"
+
+      - name: Look up the apt cache
+        id: lookup
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: /var/cache/vitess-apt/*.deb
+          key: ${{ steps.key.outputs.key }}
+          lookup-only: true
+
+      - name: Save the apt cache
+        if: steps.lookup.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: /var/cache/vitess-apt/*.deb
+          key: ${{ steps.key.outputs.key }}
+
+      - name: Delete superseded apt cache entries
         if: steps.lookup.outputs.cache-hit != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
