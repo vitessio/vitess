@@ -211,6 +211,7 @@ func (qt *QueryThrottler) InitDBConfig(keyspace string) {
 }
 
 // Throttle rejects the incoming request if the tablet is under heavy load.
+// Statements inside an open transaction (transactionID != 0) are never throttled.
 // The hot path takes no lock: one atomic snapshot load gives a consistent (cfg, strategy).
 func (qt *QueryThrottler) Throttle(ctx context.Context, tabletType topodatapb.TabletType, parsedQuery *sqlparser.ParsedQuery, statementType sqlparser.StatementType, transactionID int64, options *querypb.ExecuteOptions) error {
 	// Single atomic load gives a consistent (cfg, strategy) pair for this call.
@@ -219,6 +220,13 @@ func (qt *QueryThrottler) Throttle(ctx context.Context, tabletType topodatapb.Ta
 	tStrategy := snap.strategy
 
 	if !tCfg.GetEnabled() {
+		return nil
+	}
+
+	// A rejected statement makes vtgate roll back the session's whole transaction, not just
+	// that statement, so statements inside an open transaction are not throttled.
+	// TODO(siddharth16396): throttle statements inside a transaction without aborting it.
+	if transactionID != 0 {
 		return nil
 	}
 

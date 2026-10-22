@@ -263,7 +263,7 @@ func TestQueryThrottler_DryRunMode(t *testing.T) {
 				topodatapb.TabletType_REPLICA,
 				&sqlparser.ParsedQuery{Query: "SELECT * FROM test_table WHERE id = 1"},
 				sqlparser.StmtSelect,
-				12345,
+				0,
 				&querypb.ExecuteOptions{
 					WorkloadName: "test-workload",
 					Priority:     "50",
@@ -332,7 +332,7 @@ func TestQueryThrottler_DryRunLogIsRateLimited(t *testing.T) {
 			topodatapb.TabletType_REPLICA,
 			&sqlparser.ParsedQuery{Query: "SELECT * FROM test_table WHERE id = 1"},
 			sqlparser.StmtSelect,
-			12345,
+			0,
 			&querypb.ExecuteOptions{Priority: "50"},
 		)
 		require.NoError(t, err, "dry-run must never return an error")
@@ -388,7 +388,7 @@ func TestQueryThrottler_ThrottledErrorMapsToOutOfResources(t *testing.T) {
 		topodatapb.TabletType_REPLICA,
 		&sqlparser.ParsedQuery{Query: "SELECT * FROM test_table WHERE id = 1"},
 		sqlparser.StmtSelect,
-		12345,
+		0,
 		&querypb.ExecuteOptions{WorkloadName: "test-workload", Priority: "50"},
 	)
 	require.Error(t, err)
@@ -397,6 +397,40 @@ func TestQueryThrottler_ThrottledErrorMapsToOutOfResources(t *testing.T) {
 	require.True(t, ok, "throttle error must convert to a *sqlerror.SQLError")
 	require.Equal(t, sqlerror.EROutOfResources, sqlErr.Num,
 		"query-throttle rejection must map to ER_OUT_OF_RESOURCES (1041), not ER_TOO_MANY_USER_CONNECTIONS (1203)")
+}
+
+// A throttle rejection makes vtgate roll back the session's whole transaction, so a
+// statement inside an open transaction must never be rejected, while the same statement
+// outside a transaction is.
+func TestQueryThrottler_StatementInTransactionNotThrottled(t *testing.T) {
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), &tabletenv.TabletConfig{}, "TestThrottler")
+	iqt := &QueryThrottler{
+		ctx: t.Context(),
+		env: env,
+	}
+	iqt.snapshot.Store(&stateSnapshot{
+		cfg: &querythrottlerpb.Config{
+			Enabled: true,
+			DryRun:  false,
+		},
+		strategy: &mockThrottlingStrategy{
+			decision: registry.ThrottleDecision{Throttle: true, Message: "metric=lag value=20 over threshold"},
+		},
+	})
+
+	throttle := func(transactionID int64) error {
+		return iqt.Throttle(
+			t.Context(),
+			topodatapb.TabletType_PRIMARY,
+			&sqlparser.ParsedQuery{Query: "UPDATE test_table SET v = 1 WHERE id = 1"},
+			sqlparser.StmtUpdate,
+			transactionID,
+			&querypb.ExecuteOptions{Priority: "100"},
+		)
+	}
+
+	require.NoError(t, throttle(12345), "a statement inside a transaction must not be throttled")
+	require.Error(t, throttle(0), "the same statement outside a transaction must be throttled")
 }
 
 func TestQueryThrottler_extractWorkloadName(t *testing.T) {

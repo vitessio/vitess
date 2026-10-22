@@ -60,9 +60,11 @@ import (
 	"vitess.io/vitess/go/vt/tableacl/simpleacl"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/querythrottler/registry"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	querythrottlerpb "vitess.io/vitess/go/vt/proto/querythrottler"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
@@ -3147,6 +3149,70 @@ func TestTabletServerCloseShutsDownQueryThrottler(t *testing.T) {
 	require.False(t, tsv.queryThrottler.IsShutdown(), "query throttler should be running before shutdown")
 	require.NoError(t, tsv.Close(ctx))
 	require.True(t, tsv.queryThrottler.IsShutdown(), "Close must shut down the query throttler")
+}
+
+// alwaysThrottleStrategy throttles every statement the query throttler evaluates.
+type alwaysThrottleStrategy struct{}
+
+func (alwaysThrottleStrategy) Evaluate(context.Context, topodatapb.TabletType, *sqlparser.ParsedQuery, sqlparser.StatementType, int64, registry.QueryAttributes) registry.ThrottleDecision {
+	return registry.ThrottleDecision{Throttle: true, Message: "always throttle"}
+}
+func (alwaysThrottleStrategy) Start()                                {}
+func (alwaysThrottleStrategy) Stop()                                 {}
+func (alwaysThrottleStrategy) UpdateConfig(*querythrottlerpb.Config) {}
+func (alwaysThrottleStrategy) GetStrategyName() string               { return "AlwaysThrottle" }
+
+type alwaysThrottleFactory struct{}
+
+func (alwaysThrottleFactory) New(registry.Deps, *querythrottlerpb.Config) (registry.ThrottlingStrategyHandler, error) {
+	return alwaysThrottleStrategy{}, nil
+}
+
+// alwaysThrottleStrategyType is not a real strategy; it only selects alwaysThrottleFactory.
+const alwaysThrottleStrategyType = querythrottlerpb.ThrottlingStrategy(1000)
+
+// enableAlwaysThrottle makes tsv's query throttler throttle every statement it evaluates.
+func enableAlwaysThrottle(t *testing.T, tsv *TabletServer) {
+	t.Helper()
+	// The registry is process-wide and Register panics on a duplicate, e.g. with -count=2.
+	if _, ok := registry.Get(alwaysThrottleStrategyType); !ok {
+		registry.Register(alwaysThrottleStrategyType, alwaysThrottleFactory{})
+	}
+	tsv.queryThrottler.HandleConfigUpdate(&topodatapb.SrvKeyspace{
+		QueryThrottlerConfig: &querythrottlerpb.Config{Enabled: true, Strategy: alwaysThrottleStrategyType},
+	}, nil)
+}
+
+// A query throttler rejection makes vtgate roll back the session's whole transaction, so
+// statements inside a transaction are not throttled, on both the execute and stream paths.
+// Statements outside one, including on a reserved connection, still are.
+func TestTabletServerQueryThrottlerSkipsTransactions(t *testing.T) {
+	ctx := t.Context()
+	db, tsv := setupTabletServerTest(t, ctx, "keyspaceName")
+	t.Cleanup(tsv.StopService)
+	t.Cleanup(db.Close)
+	db.AddQueryPattern(".*", &sqltypes.Result{})
+	target := &querypb.Target{Keyspace: "keyspaceName", TabletType: topodatapb.TabletType_PRIMARY}
+	options := &querypb.ExecuteOptions{}
+
+	// Open the transaction and the reserved connection before throttling, since their own
+	// statements would otherwise be throttled.
+	txState, err := tsv.Begin(ctx, nil, target, options)
+	require.NoError(t, err)
+	reservedState, _, err := tsv.ReserveExecute(ctx, nil, target, nil, "set sql_mode = ''", nil, 0, options)
+	require.NoError(t, err)
+
+	enableAlwaysThrottle(t, tsv)
+
+	_, err = tsv.Execute(ctx, nil, target, "select 42", nil, txState.TransactionID, 0, options)
+	require.NoError(t, err, "a statement inside a transaction must not be throttled")
+	err = tsv.StreamExecute(ctx, nil, target, "select 42", nil, txState.TransactionID, 0, options, func(*sqltypes.Result) error { return nil })
+	require.NoError(t, err, "a streamed statement inside a transaction must not be throttled")
+
+	_, err = tsv.Execute(ctx, nil, target, "select 42", nil, 0, 0, options)
+	require.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err), "an autocommit statement must be throttled")
+	_, err = tsv.Execute(ctx, nil, target, "select 42", nil, 0, reservedState.ReservedID, options)
+	require.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err), "a statement on a reserved connection without a transaction must be throttled")
 }
 
 func setupTabletServerTest(t testing.TB, ctx context.Context, keyspaceName string) (*fakesqldb.DB, *TabletServer) {
