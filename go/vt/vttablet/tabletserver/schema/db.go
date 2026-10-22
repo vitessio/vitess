@@ -40,7 +40,7 @@ values (database(), :table_name, :create_statement, :create_time)`
 	deleteFromSchemaEngineTablesTable = `DELETE FROM %s.tables WHERE TABLE_SCHEMA = database() AND TABLE_NAME IN ::tableNames`
 
 	// readTableCreateTimes reads the tables create times
-	readTableCreateTimes = "SELECT TABLE_NAME, CREATE_TIME FROM %s.`tables`"
+	readTableCreateTimes = "SELECT TABLE_NAME, CREATE_TIME FROM %s.`tables` WHERE TABLE_SCHEMA = DATABASE()"
 
 	// fetchUpdatedTables queries fetches information about updated tables
 	fetchUpdatedTables = `select table_name, create_statement from %s.tables where table_schema = database() and table_name in ::tableNames`

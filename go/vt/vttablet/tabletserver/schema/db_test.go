@@ -1144,3 +1144,28 @@ func TestGetFetchTableAndViewsQuery(t *testing.T) {
 		})
 	}
 }
+
+func TestGetMismatchedTableNamesIgnoresOtherSchemas(t *testing.T) {
+	db := fakesqldb.New(t)
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), nil, "TestGetMismatchedTableNamesIgnoresOtherSchemas")
+	conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil, env)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	fields := sqltypes.MakeTestFields("table_name|create_time", "varchar|int64")
+	// A shared MySQL instance may store several schemas in the sidecar table.
+	// Neither a conflicting timestamp nor a table unique to another schema
+	// should mark the current schema's tables as altered or dropped.
+	query := fmt.Sprintf("SELECT TABLE_NAME, CREATE_TIME FROM %s.`tables`", sidecar.GetIdentifier())
+	db.AddQuery(query, sqltypes.MakeTestResult(fields,
+		"widgets|1000", "widgets|2000", "other_schema_only|2000"))
+	db.AddQuery(query+" WHERE TABLE_SCHEMA = DATABASE()", sqltypes.MakeTestResult(fields, "widgets|1000"))
+	se := &Engine{tables: map[string]*Table{
+		"widgets": {Name: sqlparser.NewIdentifierCS("widgets"), Type: NoType, CreateTime: 1000},
+	}}
+
+	mismatched, err := se.getMismatchedTableNames(context.Background(), conn, true)
+	require.NoError(t, err)
+	require.Empty(t, mismatched)
+	require.NoError(t, db.LastError())
+}
