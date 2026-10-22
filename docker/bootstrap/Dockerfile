@@ -16,7 +16,7 @@
 # that all flavors share, and each flavor stage adds a database on top of it.
 # Build one image with --target, e.g. --target mysql84.
 
-ARG image=golang:1.27.3-bookworm@sha256:5c3e9b43cfd3bb95c7937462e29d87ada57b481a96fa23ad0eb61778d7a00110
+ARG image=golang:1.26.10-bookworm@sha256:ee3901c61e423732605a51f1b8157c849ec01194ea0a274213b5202b2c11e7bf
 
 # The image the flavor stages build on. By default it is the common stage below;
 # set it to build a flavor on a common image built separately.

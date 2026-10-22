@@ -360,14 +360,8 @@ func replaceGoVersionInCodebase(old, new *version.Version) error {
 	}
 
 	explore := []string{
-<<<<<<< HEAD
 		"./build.env",
-		"./docker/bootstrap/Dockerfile.common",
-||||||| parent of 6a27b29206 (docker/bootstrap: build every image from one multi-stage Dockerfile (#21596))
-		"./docker/bootstrap/Dockerfile.common",
-=======
 		"./docker/bootstrap/Dockerfile",
->>>>>>> 6a27b29206 (docker/bootstrap: build every image from one multi-stage Dockerfile (#21596))
 		"./docker/lite/Dockerfile",
 		"./docker/lite/Dockerfile.mysql80",
 		"./docker/lite/Dockerfile.mysql84",
@@ -513,17 +507,7 @@ func updateBootstrapVersionInCodebase(old, new string, newGoVersion *version.Ver
 		[]*regexp.Regexp{regexp.MustCompile(regexpReplaceMakefileBootstrapVersion)},
 		[]string{"BOOTSTRAP_VERSION=" + new},
 		"./Makefile",
-<<<<<<< HEAD
-	})
-||||||| parent of 6a27b29206 (docker/bootstrap: build every image from one multi-stage Dockerfile (#21596))
-		"./docker/bootstrap/Dockerfile.mysql80",
-		"./docker/bootstrap/Dockerfile.mysql84",
-		"./docker/bootstrap/Dockerfile.percona80",
-		"./docker/bootstrap/Dockerfile.percona84",
-	})
-=======
 	)
->>>>>>> 6a27b29206 (docker/bootstrap: build every image from one multi-stage Dockerfile (#21596))
 	if err != nil {
 		return err
 	}
