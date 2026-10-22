@@ -60,11 +60,9 @@ const (
 	// Example going from go1.20 to go1.20: `go 1.20` -> `go 1.21`
 	regexpReplaceGoModGoVersion = `go[[:space:]]([0-9.]+)\.([0-9.]+)`
 
-	// The regular expressions below match the entire bootstrap_version declaration in Dockerfiles and Makefile
-	// A bootstrap version declaration is usually: 'ARG bootstrap_version = 18' in Dockerfile, and
-	// 'BOOTSTRAP_VERSION=18' in the Makefile. Note that the value 18 can also be a float.
-	regexpReplaceDockerfileBootstrapVersion = "ARG[[:space:]]*bootstrap_version[[:space:]]*=[[:space:]]*[0-9.]+"
-	regexpReplaceMakefileBootstrapVersion   = "BOOTSTRAP_VERSION[[:space:]]*=[[:space:]]*[0-9.]+"
+	// The regular expression below matches the entire bootstrap_version declaration in the Makefile:
+	// 'BOOTSTRAP_VERSION=18'. Note that the value 18 can also be a float.
+	regexpReplaceMakefileBootstrapVersion = "BOOTSTRAP_VERSION[[:space:]]*=[[:space:]]*[0-9.]+"
 
 	// The regular expression below matches the bootstrap_version we are using in the test.go file.
 	// In test.go, there is a flag named 'bootstrap-version' that has a default value. We are looking
@@ -374,7 +372,7 @@ func replaceGoVersionInCodebase(old, new *version.Version) error {
 	}
 
 	explore := []string{
-		"./docker/bootstrap/Dockerfile.common",
+		"./docker/bootstrap/Dockerfile",
 		"./docker/lite/Dockerfile",
 		"./docker/lite/Dockerfile.mysql80",
 		"./docker/lite/Dockerfile.mysql84",
@@ -538,32 +536,13 @@ func updateBootstrapVersionInCodebase(old, new string, newGoVersion *version.Ver
 	if old == new {
 		return nil
 	}
-	files, err := getListOfFilesInPaths([]string{
+	err := replaceInFile(
+		[]*regexp.Regexp{regexp.MustCompile(regexpReplaceMakefileBootstrapVersion)},
+		[]string{"BOOTSTRAP_VERSION=" + new},
 		"./Makefile",
-		"./docker/bootstrap/Dockerfile.mysql80",
-		"./docker/bootstrap/Dockerfile.mysql84",
-		"./docker/bootstrap/Dockerfile.percona80",
-		"./docker/bootstrap/Dockerfile.percona84",
-	})
+	)
 	if err != nil {
 		return err
-	}
-
-	for _, file := range files {
-		err = replaceInFile(
-			[]*regexp.Regexp{
-				regexp.MustCompile(regexpReplaceDockerfileBootstrapVersion), // Dockerfile
-				regexp.MustCompile(regexpReplaceMakefileBootstrapVersion),   // Makefile
-			},
-			[]string{
-				"ARG bootstrap_version=" + new, // Dockerfile
-				"BOOTSTRAP_VERSION=" + new,     // Makefile
-			},
-			file,
-		)
-		if err != nil {
-			return err
-		}
 	}
 
 	err = replaceInFile(

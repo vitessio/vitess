@@ -66,9 +66,9 @@ func TestExecuteSuperQueryListMulti(t *testing.T) {
 	// send a batch, which nothing else drawing on the pool expects, and operator
 	// written SQL may have changed session state such as sql_mode. The pool opens
 	// a replacement for a discarded connection, which is observable through the
-	// neutralization statement every new connection runs: one for the connection
+	// setup statement every new connection runs: one for the connection
 	// the list ran on, and one for its replacement.
-	require.Equal(t, 2, db.GetQueryCalledNum(sqlmode.NeutralizeSessionQuery),
+	require.Equal(t, 2, db.GetQueryCalledNum(sqlmode.SessionSetupQuery("utf8mb4", "utf8mb4_0900_ai_ci")),
 		"the connection went back to the dba pool instead of being discarded")
 
 	conn, err := getPoolReconnect(t.Context(), testMysqld.dbaPool)
@@ -171,7 +171,7 @@ func TestExecuteFetchContextTimeoutRedactsQuery(t *testing.T) {
 // TestExecuteSuperQueryListTaintedDiscardsConnection verifies that operator-supplied SQL
 // executed through the tainted variant cannot leak session state (e.g. sql_mode) into the
 // dba pool: the connection is discarded, and the next pool use dials a fresh connection —
-// observable through the neutralization statement every new connection runs.
+// observable through the setup statement every new connection runs.
 func TestExecuteSuperQueryListTaintedDiscardsConnection(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
@@ -185,7 +185,7 @@ func TestExecuteSuperQueryListTaintedDiscardsConnection(t *testing.T) {
 
 	// a normal super query dials one pool connection: one neutralization
 	require.NoError(t, testMysqld.ExecuteSuperQueryList(t.Context(), []string{"select 42"}))
-	require.Equal(t, 1, db.GetQueryCalledNum(sqlmode.NeutralizeSessionQuery))
+	require.Equal(t, 1, db.GetQueryCalledNum(sqlmode.SessionSetupQuery("utf8mb4", "utf8mb4_0900_ai_ci")))
 
 	// the tainted variant reuses the pooled connection (no new dial), executes the
 	// session-changing SQL, and discards the connection instead of recycling it
@@ -194,5 +194,5 @@ func TestExecuteSuperQueryListTaintedDiscardsConnection(t *testing.T) {
 
 	// the discarded connection is gone: the next pool use dials fresh and re-neutralizes
 	require.NoError(t, testMysqld.ExecuteSuperQueryList(t.Context(), []string{"select 42"}))
-	require.Equal(t, 2, db.GetQueryCalledNum(sqlmode.NeutralizeSessionQuery))
+	require.Equal(t, 2, db.GetQueryCalledNum(sqlmode.SessionSetupQuery("utf8mb4", "utf8mb4_0900_ai_ci")))
 }

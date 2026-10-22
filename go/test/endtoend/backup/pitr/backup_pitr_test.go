@@ -81,3 +81,13 @@ func TestIncrementalBackupOnTwoTablets(t *testing.T) {
 	}
 	backup.ExecTestIncrementalBackupOnTwoTablets(t, tcase)
 }
+
+// TestIncrementalBackupWithBinlogs restores incremental backups on top of a full backup that includes the
+// source's binlogs, and checks that the restored and replayed binlogs hold every transaction.
+func TestIncrementalBackupWithBinlogs(t *testing.T) {
+	tcase := &backup.PITRTestCase{
+		Name:      "BuiltinBackup",
+		SetupType: backup.BuiltinBackup,
+	}
+	backup.ExecTestIncrementalBackupWithBinlogs(t, tcase)
+}
