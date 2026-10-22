@@ -19,11 +19,13 @@
 # intermittently answer only after 10-20 seconds and then send 50 kB/s, and apt
 # keeps downloading from them however long that takes; the Azure mirror that
 # the runner images list first sometimes does not answer at all. This times a
-# download of the release file from the Azure mirror and from each of the
-# archive's addresses, and if one of the archive's addresses is fastest, pins
-# the archive's host names to it in /etc/hosts and points apt at the archive
-# instead of the Azure mirror. When the Azure mirror is fastest, or nothing
-# answers, it changes nothing.
+# download of the release file from the Azure mirror and, over HTTP and HTTPS,
+# from each of the archive's addresses. If one of the archive's addresses is
+# fastest, it pins the archive's host names in /etc/hosts to every address that
+# answered both within 3 times the fastest one's time, so that whatever
+# resolves them still has other addresses to fail over to, and points apt at
+# the archive instead of the Azure mirror. When the Azure mirror is fastest, or
+# nothing answers, it changes nothing.
 
 set -uo pipefail
 
@@ -36,22 +38,32 @@ else
 fi
 codename="$(awk -F= '$1 == "VERSION_CODENAME" {print $2}' /etc/os-release)"
 
-# Prints the seconds it took to download the release file from HOST via IP,
-# or nothing if that failed or took longer than 3 seconds.
+# Prints the seconds it took to download the release file from HOST via IP
+# over SCHEME, or nothing if that failed or took longer than 3 seconds.
 probe() {
-	local host="$1" ip="$2" root="$3"
-	curl -fsS -o /dev/null --connect-timeout 2 --max-time 3 --resolve "${host}:80:${ip}" \
-		-w '%{time_total}\n' "http://${host}/${root}/dists/${codename}/InRelease" 2> /dev/null
+	local host="$1" ip="$2" root="$3" scheme="$4" port=80
+	if [[ "${scheme}" == https ]]; then
+		port=443
+	fi
+	curl -fsS -o /dev/null --connect-timeout 2 --max-time 3 --resolve "${host}:${port}:${ip}" \
+		-w '%{time_total}\n' "${scheme}://${host}/${root}/dists/${codename}/InRelease" 2> /dev/null
+}
+
+# Prints the slower of the HTTP and HTTPS times, or nothing if either failed.
+probe_both() {
+	local http https
+	http="$(probe "$@" http)" && https="$(probe "$@" https)" &&
+		awk -v a="${http}" -v b="${https}" 'BEGIN { print (a > b ? a : b) }'
 }
 
 results="$(mktemp)"
 trap 'rm -f "${results}"' EXIT
 for ip in $(getent ahostsv4 "${archive}" | awk '{print $1}' | sort -u); do
-	(t="$(probe "${archive}" "${ip}" "${path}")" && echo "${t} ${ip}" >> "${results}") &
+	(t="$(probe_both "${archive}" "${ip}" "${path}")" && echo "${t} ${ip}" >> "${results}") &
 done
 if [[ "${archive}" == archive.ubuntu.com ]]; then
 	for ip in $(getent ahostsv4 azure.archive.ubuntu.com | awk '{print $1}' | sort -u); do
-		(t="$(probe azure.archive.ubuntu.com "${ip}" ubuntu)" && echo "${t} azure" >> "${results}") &
+		(t="$(probe azure.archive.ubuntu.com "${ip}" ubuntu http)" && echo "${t} azure" >> "${results}") &
 	done
 fi
 wait
@@ -68,12 +80,17 @@ if [[ "${best}" == azure ]]; then
 fi
 
 # security.ubuntu.com is served by the same servers as archive.ubuntu.com.
-names="${archive}"
-if getent ahostsv4 security.ubuntu.com | awk '{print $1}' | grep -qx "${best}"; then
-	names="${names} security.ubuntu.com"
-fi
-echo "Pinning ${names} to ${best}"
-echo "${best} ${names}" | sudo tee -a /etc/hosts > /dev/null
+security="$(getent ahostsv4 security.ubuntu.com | awk '{print $1}' | sort -u)"
+fastest="$(sort -n "${results}" | head -1 | cut -d' ' -f1)"
+sort -n "${results}" | awk -v max="$(awk -v t="${fastest}" 'BEGIN { print 3 * t }')" '$2 != "azure" && $1 <= max { print $2 }' |
+	while read -r ip; do
+		names="${archive}"
+		if grep -qx "${ip}" <<< "${security}"; then
+			names="${names} security.ubuntu.com"
+		fi
+		echo "Pinning ${names} to ${ip}"
+		echo "${ip} ${names}" | sudo tee -a /etc/hosts > /dev/null
+	done
 files="$(sudo grep -rlF azure.archive.ubuntu.com /etc/apt 2> /dev/null || true)"
 if [[ -n "${files}" ]]; then
 	echo "${files}" | xargs sudo sed -i 's|azure\.archive\.ubuntu\.com|archive.ubuntu.com|g'
