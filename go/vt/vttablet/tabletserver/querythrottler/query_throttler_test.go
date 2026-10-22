@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -290,6 +291,8 @@ func TestQueryThrottler_DryRunMode(t *testing.T) {
 			throttledReqs := stats.CounterForDimension(requestsThrottled, "Strategy")
 			require.Equal(t, tt.expectedTotalRequests, totalReqs.Counts()["MockStrategy"], "Total requests should match expected")
 			require.Equal(t, tt.expectedThrottledRequests, throttledReqs.Counts()["MockStrategy"], "Throttled requests should match expected")
+			throttledByDryRun := stats.CounterForDimension(requestsThrottled, "DryRun").Counts()
+			require.Equal(t, tt.expectedThrottledRequests, throttledByDryRun[strconv.FormatBool(tt.dryRun)], "Throttled requests should carry the DryRun label")
 		})
 	}
 }
@@ -891,33 +894,32 @@ func TestQueryThrottler_StrategyMetricsRegisteredOnlyWhenUsed(t *testing.T) {
 }
 
 // TestQueryThrottler_startSrvKeyspaceWatch_InitialLoad tests that initial configuration is loaded successfully when GetSrvKeyspace succeeds.
+// InitDBConfig applies the current config before it returns, so a tablet doesn't start
+// serving unthrottled while the watch gets going. The watch here delivers nothing, so the
+// config can only come from the initial load.
 func TestQueryThrottler_startSrvKeyspaceWatch_InitialLoad(t *testing.T) {
 	ctx := t.Context()
 
 	env := tabletenv.NewEnv(vtenv.NewTestEnv(), &tabletenv.TabletConfig{}, "TestThrottler")
 
-	srvTopoServer := srvtopotest.NewPassthroughSrvTopoServer()
-	srvTopoServer.SrvKeyspace = createTestSrvKeyspace(true, querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER, false)
-	srvTopoServer.SrvKeyspaceError = nil
+	passthrough := srvtopotest.NewPassthroughSrvTopoServer()
+	passthrough.SrvKeyspace = createTestSrvKeyspace(true, querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER, false)
+	passthrough.SrvKeyspaceError = nil
+	srvTopoServer := &watchRecordingSrvTopoServer{PassthroughSrvTopoServer: passthrough, skipWatch: true}
 
 	throttler := &throttle.Throttler{}
 	qt := NewQueryThrottler(ctx, throttler, env, &topodatapb.TabletAlias{Cell: "test-cell", Uid: uint32(123)}, srvTopoServer)
+	t.Cleanup(qt.Shutdown)
 
 	qt.InitDBConfig("test_keyspace")
 
-	// Verify watch was started
-	require.Eventually(t, func() bool {
-		return qt.watchStarted.Load()
-	}, 30*time.Second, 10*time.Millisecond, "Watch should have been started")
+	snap := qt.snapshot.Load()
+	require.True(t, snap.cfg.GetEnabled(), "Config should be loaded before InitDBConfig returns")
+	require.Equal(t, querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER, snap.cfg.GetStrategy())
+	require.False(t, snap.cfg.GetDryRun())
+	require.Equal(t, querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER.String(), snap.strategy.GetStrategyName())
 
-	// Verify that the configuration was loaded correctly
-	require.Eventually(t, func() bool {
-		snap := qt.snapshot.Load()
-		return snap.cfg.GetEnabled() &&
-			snap.cfg.GetStrategy() == querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER &&
-			!snap.cfg.GetDryRun()
-	}, 30*time.Second, 10*time.Millisecond, "Config should be loaded correctly: enabled=true, strategy=TabletThrottler, dryRun=false")
-
+	require.True(t, qt.watchStarted.Load(), "Watch should have been started")
 	require.Equal(t, "test_keyspace", qt.keyspace, "Keyspace should be set correctly")
 }
 
@@ -1121,9 +1123,10 @@ func TestQueryThrottler_startSrvKeyspaceWatch_ShutdownStopsWatch(t *testing.T) {
 
 	env := tabletenv.NewEnv(vtenv.NewTestEnv(), &tabletenv.TabletConfig{}, "TestThrottler")
 
-	srvTopoServer := srvtopotest.NewPassthroughSrvTopoServer()
-	srvTopoServer.SrvKeyspace = createTestSrvKeyspace(true, querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER, false)
-	srvTopoServer.SrvKeyspaceError = nil
+	passthrough := srvtopotest.NewPassthroughSrvTopoServer()
+	passthrough.SrvKeyspace = createTestSrvKeyspace(true, querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER, false)
+	passthrough.SrvKeyspaceError = nil
+	srvTopoServer := &watchRecordingSrvTopoServer{PassthroughSrvTopoServer: passthrough}
 
 	throttler := &throttle.Throttler{}
 	qt := NewQueryThrottler(ctx, throttler, env, &topodatapb.TabletAlias{Cell: "test-cell", Uid: uint32(123)}, srvTopoServer)
@@ -1132,22 +1135,21 @@ func TestQueryThrottler_startSrvKeyspaceWatch_ShutdownStopsWatch(t *testing.T) {
 
 	// Verify watch was started
 	require.Eventually(t, func() bool {
-		return qt.watchStarted.Load()
-	}, 30*time.Second, 10*time.Millisecond, "Watch should have been started before shutdown")
-
-	require.NotNil(t, qt.cancelWatchContext, "Cancel function should be set before shutdown")
+		return srvTopoServer.watches.Load() == 1
+	}, 30*time.Second, 10*time.Millisecond, "Watch should have been registered before shutdown")
+	require.True(t, qt.watchStarted.Load())
 
 	// Call Shutdown to stop the watch
 	qt.Shutdown()
 
-	// Verify that the watch started flag is reset
-	require.Eventually(t, func() bool {
-		return !qt.watchStarted.Load()
-	}, 30*time.Second, 10*time.Millisecond, "Watch should be marked as not started after shutdown")
+	// Shutdown must cancel the watch, and its listener must ask to be dropped, even when
+	// handed a valid config: srvtopo only drops a listener that returns false.
+	watchCtx, callback := srvTopoServer.lastWatch()
+	require.Error(t, watchCtx.Err(), "Shutdown should cancel the watch context")
+	require.False(t, callback(passthrough.SrvKeyspace, nil), "the listener should return false after Shutdown")
 
-	// Verify that the strategy was stopped
-	strategyInstance := qt.snapshot.Load().strategy
-	require.NotNil(t, strategyInstance, "Strategy instance should still exist after shutdown")
+	// Verify that the watch started flag is reset
+	require.False(t, qt.watchStarted.Load(), "Watch should be marked as not started after shutdown")
 
 	// Call Shutdown again to ensure it doesn't panic
 	qt.Shutdown()
@@ -1272,15 +1274,35 @@ func TestSrvKeyspaceWatcher_DropsListenerReturningFalse(t *testing.T) {
 }
 
 // watchRecordingSrvTopoServer counts WatchSrvKeyspace registrations, so a test can assert
-// no listener was registered at all rather than that a registered one stayed inert.
+// no listener was registered at all rather than that a registered one stayed inert. It
+// keeps the last registration's context and callback. With skipWatch set it registers
+// nothing, so the throttler only sees the config its initial GetSrvKeyspace load returns.
 type watchRecordingSrvTopoServer struct {
 	*srvtopotest.PassthroughSrvTopoServer
-	watches atomic.Int64
+	skipWatch bool
+	watches   atomic.Int64
+
+	mu       sync.Mutex
+	ctx      context.Context
+	callback func(*topodatapb.SrvKeyspace, error) bool
 }
 
 func (s *watchRecordingSrvTopoServer) WatchSrvKeyspace(ctx context.Context, cell, keyspace string, callback func(*topodatapb.SrvKeyspace, error) bool) {
+	s.mu.Lock()
+	s.ctx, s.callback = ctx, callback
+	s.mu.Unlock()
 	s.watches.Add(1)
+	if s.skipWatch {
+		return
+	}
 	s.PassthroughSrvTopoServer.WatchSrvKeyspace(ctx, cell, keyspace, callback)
+}
+
+// lastWatch returns the context and callback of the last registration.
+func (s *watchRecordingSrvTopoServer) lastWatch() (context.Context, func(*topodatapb.SrvKeyspace, error) bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.ctx, s.callback
 }
 
 // No watch may be registered once Shutdown has run: dropping a listener needs a later

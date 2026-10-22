@@ -63,7 +63,7 @@ func TestValidateUpdateQueryThrottlerConfigFlags(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Save and restore the global options
 			saved := updateQueryThrottlerConfigOptions
-			defer func() { updateQueryThrottlerConfigOptions = saved }()
+			t.Cleanup(func() { updateQueryThrottlerConfigOptions = saved })
 
 			updateQueryThrottlerConfigOptions.Config = tt.config
 			updateQueryThrottlerConfigOptions.ConfigFile = tt.configFile

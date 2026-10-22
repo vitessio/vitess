@@ -1186,7 +1186,7 @@ func TestUpdateSrvKeyspaceQueryThrottlerConfig(t *testing.T) {
 	t.Run("requires the keyspace lock", func(t *testing.T) {
 		ts, _ := setup(t, cell)
 		_, err := ts.UpdateSrvKeyspaceQueryThrottlerConfig(t.Context(), keyspace, nil, disableDryRun)
-		require.Error(t, err)
+		require.ErrorContains(t, err, "is not locked")
 		assert.True(t, getConfig(t, ts, cell).GetDryRun())
 	})
 }

@@ -38,7 +38,7 @@ func TestRebuildKeyspaceCopiesQueryThrottlerConfig(t *testing.T) {
 	keyspace := "test_keyspace"
 
 	ts := memorytopo.NewServer(ctx, cell)
-	defer ts.Close()
+	t.Cleanup(ts.Close)
 
 	queryThrottlerConfig := &querythrottlerpb.Config{
 		Enabled:  true,

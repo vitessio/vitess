@@ -3138,7 +3138,7 @@ func TestDatabaseNameReplaceByKeyspaceNameReserveBeginExecuteMethod(t *testing.T
 func TestTabletServerStopServiceShutsDownQueryThrottler(t *testing.T) {
 	ctx := t.Context()
 	db, tsv := setupTabletServerTest(t, ctx, "keyspaceName")
-	defer db.Close()
+	t.Cleanup(db.Close)
 
 	require.False(t, tsv.queryThrottler.IsShutdown(), "query throttler should be running before shutdown")
 	tsv.StopService()
@@ -3149,7 +3149,7 @@ func TestTabletServerStopServiceShutsDownQueryThrottler(t *testing.T) {
 func TestTabletServerCloseShutsDownQueryThrottler(t *testing.T) {
 	ctx := t.Context()
 	db, tsv := setupTabletServerTest(t, ctx, "keyspaceName")
-	defer db.Close()
+	t.Cleanup(db.Close)
 	// Close does not stop the health-check ticker that StartService started.
 	t.Cleanup(tsv.StopService)
 
