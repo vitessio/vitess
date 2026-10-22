@@ -24,9 +24,9 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"google.golang.org/protobuf/encoding/protojson"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
-	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/protoutil"
 
 	"vitess.io/vitess/go/vt/proto/querythrottler"
@@ -268,6 +268,17 @@ func validateQueryThrottlerConfigContent(cfg *querythrottler.Config) error {
 	return nil
 }
 
+// parseQueryThrottlerConfig decodes a query throttler config from JSON. Unlike
+// json2.UnmarshalPB, it rejects unknown fields, so a misspelled key such as "dry-run"
+// fails instead of being silently dropped from the config that gets pushed.
+func parseQueryThrottlerConfig(data []byte) (*querythrottler.Config, error) {
+	config := &querythrottler.Config{}
+	if err := protojson.Unmarshal(data, config); err != nil {
+		return nil, err
+	}
+	return config, nil
+}
+
 func commandUpdateQueryThrottlerConfig(cmd *cobra.Command, args []string) error {
 	keyspace := cmd.Flags().Arg(0)
 	opts := updateQueryThrottlerConfigOptions
@@ -284,8 +295,8 @@ func commandUpdateQueryThrottlerConfig(cmd *cobra.Command, args []string) error 
 		configBytes = []byte(opts.Config)
 	}
 
-	config := &querythrottler.Config{}
-	if err := json2.UnmarshalPB(configBytes, config); err != nil {
+	config, err := parseQueryThrottlerConfig(configBytes)
+	if err != nil {
 		return err
 	}
 
@@ -293,7 +304,7 @@ func commandUpdateQueryThrottlerConfig(cmd *cobra.Command, args []string) error 
 		return err
 	}
 
-	_, err := client.UpdateQueryThrottlerConfig(commandCtx, &vtctldatapb.UpdateQueryThrottlerConfigRequest{
+	_, err = client.UpdateQueryThrottlerConfig(commandCtx, &vtctldatapb.UpdateQueryThrottlerConfigRequest{
 		Keyspace:             keyspace,
 		QueryThrottlerConfig: config,
 	})

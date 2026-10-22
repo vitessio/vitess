@@ -105,6 +105,8 @@ func TestUpdateQueryThrottlerConfigCommand(t *testing.T) {
 	require.NoError(t, os.WriteFile(validConfigFile, []byte(validQueryThrottlerConfigJSON), 0o644))
 
 	missingConfigFile := filepath.Join(tmpDir, "no-such-file.json")
+	unknownFieldConfigFile := filepath.Join(tmpDir, "unknown-field.json")
+	require.NoError(t, os.WriteFile(unknownFieldConfigFile, []byte(`{"enabled":true,"strategy":"TABLET_THROTTLER","dryrun":true}`), 0o644))
 
 	tests := []struct {
 		name         string
@@ -141,6 +143,18 @@ func TestUpdateQueryThrottlerConfigCommand(t *testing.T) {
 			name:       "--config has invalid JSON",
 			args:       []string{"vtctldclient", "UpdateQueryThrottlerConfig", "--config", `{not json`, "my_keyspace"},
 			wantErr:    "syntax error",
+			wantNoCall: true,
+		},
+		{
+			name:       "--config has an unknown field",
+			args:       []string{"vtctldclient", "UpdateQueryThrottlerConfig", "--config", `{"enabled":true,"strategy":"TABLET_THROTTLER","dry-run":true}`, "my_keyspace"},
+			wantErr:    "unknown field",
+			wantNoCall: true,
+		},
+		{
+			name:       "--config-file has an unknown field",
+			args:       []string{"vtctldclient", "UpdateQueryThrottlerConfig", "--config-file", unknownFieldConfigFile, "my_keyspace"},
+			wantErr:    "unknown field",
 			wantNoCall: true,
 		},
 		{

@@ -24,7 +24,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/test/utils"
 
 	"vitess.io/vitess/go/vt/proto/querythrottler"
@@ -527,12 +526,32 @@ func TestQueryThrottlerConfigJSONParsing(t *testing.T) {
 			json:    `{not valid json}`,
 			wantErr: true,
 		},
+		{
+			name: "camelCase field names",
+			json: `{"enabled": true, "strategy": "TABLET_THROTTLER", "dryRun": true}`,
+			wantConfig: &querythrottler.Config{
+				Enabled:  true,
+				Strategy: querythrottler.ThrottlingStrategy_TABLET_THROTTLER,
+				DryRun:   true,
+			},
+		},
+		// A misspelled key must fail rather than be dropped: dropping "dry-run" would push the
+		// config in enforcing mode.
+		{
+			name:    "misspelled dry_run",
+			json:    `{"enabled": true, "strategy": "TABLET_THROTTLER", "dry-run": true}`,
+			wantErr: true,
+		},
+		{
+			name:    "unknown nested field",
+			json:    `{"enabled": true, "strategy": "TABLET_THROTTLER", "tablet_strategy_config": {"tablet_rule": {}}}`,
+			wantErr: true,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			config := &querythrottler.Config{}
-			err := json2.UnmarshalPB([]byte(tt.json), config)
+			config, err := parseQueryThrottlerConfig([]byte(tt.json))
 			if tt.wantErr {
 				require.Error(t, err)
 				return
@@ -553,8 +572,7 @@ func TestQueryThrottlerConfigFromFile(t *testing.T) {
 	data, err := os.ReadFile(tmpFile)
 	require.NoError(t, err)
 
-	config := &querythrottler.Config{}
-	err = json2.UnmarshalPB(data, config)
+	config, err := parseQueryThrottlerConfig(data)
 	require.NoError(t, err)
 
 	utils.MustMatch(t, &querythrottler.Config{
