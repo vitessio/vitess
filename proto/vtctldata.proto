@@ -26,13 +26,13 @@ import "binlogdata.proto";
 import "logutil.proto";
 import "mysqlctl.proto";
 import "query.proto";
+import "querythrottler.proto";
 import "replicationdata.proto";
 import "tabletmanagerdata.proto";
 import "topodata.proto";
 import "vschema.proto";
 import "vtrpc.proto";
 import "vttime.proto";
-import "querythrottler.proto";
 
 // ExecuteVtctlCommandRequest is the payload for ExecuteVtctlCommand.
 // timeouts are in nanoseconds.
@@ -2318,7 +2318,9 @@ message SetVtorcEmergencyReparentResponse {
 }
 
 message UpdateQueryThrottlerConfigRequest {
+  // Keyspace is the keyspace whose query throttler config to replace.
   string keyspace = 1;
+  // QueryThrottlerConfig is the new config. It replaces the existing config as a whole.
   querythrottler.Config query_throttler_config = 2;
 }
 

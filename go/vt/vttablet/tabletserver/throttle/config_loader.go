@@ -18,6 +18,7 @@ package throttle
 
 import (
 	"math"
+	"slices"
 	"time"
 
 	"vitess.io/vitess/go/protoutil"
@@ -29,14 +30,11 @@ import (
 
 // configLoader is an interface for loading throttler configuration from SrvKeyspace
 type configLoader interface {
-	initDBConfig(keyspace, shard, tabletAlias string)
 	loadConfig(srvks *topodatapb.SrvKeyspace) *topodatapb.ThrottlerConfig
 }
 
 // defaultConfigLoader loads configuration from ThrottlerConfig
 type defaultConfigLoader struct{}
-
-func (d *defaultConfigLoader) initDBConfig(keyspace, shard, tabletAlias string) {}
 
 func (d *defaultConfigLoader) loadConfig(srvks *topodatapb.SrvKeyspace) *topodatapb.ThrottlerConfig {
 	return srvks.ThrottlerConfig
@@ -45,8 +43,6 @@ func (d *defaultConfigLoader) loadConfig(srvks *topodatapb.SrvKeyspace) *topodat
 // queryConfigLoader loads configuration from QueryThrottlerConfig and
 // converts it to ThrottlerConfig format for the underlying throttle.Throttler.
 type queryConfigLoader struct{}
-
-func (q *queryConfigLoader) initDBConfig(keyspace, shard, tabletAlias string) {}
 
 func (q *queryConfigLoader) loadConfig(srvks *topodatapb.SrvKeyspace) *topodatapb.ThrottlerConfig {
 	return convertQueryThrottlerConfigToThrottlerConfig(srvks.GetQueryThrottlerConfig())
@@ -115,6 +111,9 @@ func convertQueryThrottlerConfigToThrottlerConfig(qtCfg *querythrottlerpb.Config
 	}
 
 	if len(metricsNames) > 0 {
+		// The names come from map iteration; sort them so the same config always yields
+		// the same list, as GetThrottlerStatus reports it.
+		slices.Sort(metricsNames)
 		throttlerConfig.AppCheckedMetrics = map[string]*topodatapb.ThrottlerConfig_MetricNames{
 			appName: {
 				Names: metricsNames,

@@ -151,7 +151,7 @@ func NewQueryThrottler(ctx context.Context, throttler *throttle.Throttler, env t
 		throttledLogger:    logutil.NewThrottledLogger("QueryThrottler", throttledLogInterval),
 	}
 	qt.newStrategyFactory = func(cfg *querythrottlerpb.Config) registry.ThrottlingStrategyHandler {
-		return selectThrottlingStrategy(cfg, qt.throttlerClient, qt.tabletConfig, qt.env, qt.keyspace, qt.cell, qt.srvTopoServer)
+		return selectThrottlingStrategy(cfg, qt.throttlerClient, qt.tabletConfig)
 	}
 
 	// Initialize snapshot with empty config and default NoOp strategy so Throttle()
@@ -190,13 +190,6 @@ func (qt *QueryThrottler) Shutdown() {
 	if snap := qt.snapshot.Load(); snap != nil && snap.strategy != nil {
 		snap.strategy.Stop()
 	}
-}
-
-// IsShutdown reports whether Shutdown has been called. Used to verify lifecycle wiring.
-func (qt *QueryThrottler) IsShutdown() bool {
-	qt.mu.Lock()
-	defer qt.mu.Unlock()
-	return qt.shutdown
 }
 
 // InitDBConfig sets the keyspace and starts the config watch. Called once by
@@ -381,8 +374,10 @@ func extractPriority(options *querypb.ExecuteOptions) int {
 }
 
 // HandleConfigUpdate applies a SrvKeyspace change to the QueryThrottler's config and
-// strategy. It is only meant to run as a srvtopo.WatchSrvKeyspace callback, and is the
-// only writer of qt.snapshot.
+// strategy. startSrvKeyspaceWatch calls it once for the initial load, then registers it as
+// the srvtopo.WatchSrvKeyspace callback. The initial load returns before the watch starts,
+// and srvtopo runs callbacks one at a time, so calls never overlap and it is the only
+// writer of qt.snapshot after NewQueryThrottler.
 //
 // It always returns true to keep the watch alive: errors are logged, never fatal, matching
 // throttle.Throttler.WatchSrvKeyspaceCallback.
@@ -411,7 +406,7 @@ func (qt *QueryThrottler) HandleConfigUpdate(srvks *topodatapb.SrvKeyspace, err 
 	// compare equal below and count as a no-op update.
 	newCfg = normalizeThresholds(newCfg)
 
-	// Safe without the lock: per the contract above, only this callback writes the snapshot.
+	// Safe without the lock: per the contract above, no other call writes the snapshot.
 	currentSnap := qt.snapshot.Load()
 
 	// Compare the whole proto, not just the top-level scalars: a nested-only change to
@@ -497,14 +492,10 @@ func normalizeThresholds(cfg *querythrottlerpb.Config) *querythrottlerpb.Config 
 }
 
 // selectThrottlingStrategy returns the appropriate strategy implementation based on the config.
-func selectThrottlingStrategy(cfg *querythrottlerpb.Config, client *throttle.Client, tabletConfig *tabletenv.TabletConfig, env tabletenv.Env, keyspace string, cell string, srvTopoServer srvtopo.Server) registry.ThrottlingStrategyHandler {
+func selectThrottlingStrategy(cfg *querythrottlerpb.Config, client *throttle.Client, tabletConfig *tabletenv.TabletConfig) registry.ThrottlingStrategyHandler {
 	deps := registry.Deps{
 		ThrottleClient: client,
 		TabletConfig:   tabletConfig,
-		Env:            env,
-		Keyspace:       keyspace,
-		Cell:           cell,
-		SrvTopoServer:  srvTopoServer,
 	}
 	return registry.CreateStrategy(cfg, deps)
 }
@@ -529,5 +520,5 @@ func (qt *QueryThrottler) buildNewStrategy(cfg *querythrottlerpb.Config) registr
 	if qt.newStrategyFactory != nil {
 		return qt.newStrategyFactory(cfg)
 	}
-	return selectThrottlingStrategy(cfg, qt.throttlerClient, qt.tabletConfig, qt.env, qt.keyspace, qt.cell, qt.srvTopoServer)
+	return selectThrottlingStrategy(cfg, qt.throttlerClient, qt.tabletConfig)
 }

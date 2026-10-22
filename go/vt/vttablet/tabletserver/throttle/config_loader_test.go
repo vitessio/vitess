@@ -129,7 +129,33 @@ func TestConvertQueryThrottlerConfigToThrottlerConfig_MinAcrossRules(t *testing.
 	require.NotNil(t, tc.AppCheckedMetrics[appName])
 	names := tc.AppCheckedMetrics[appName].GetNames()
 	require.Len(t, names, 2, "AppCheckedMetrics names must contain each unique metric exactly once (no duplicates from multiple rules)")
-	require.ElementsMatch(t, []string{"lag", "cpu"}, names)
+	require.Equal(t, []string{"cpu", "lag"}, names)
+}
+
+// AppCheckedMetrics is built from map iteration, so it must be sorted for one config to
+// always yield the same list.
+func TestConvertQueryThrottlerConfigToThrottlerConfig_SortsMetricNames(t *testing.T) {
+	metricRules := make(map[string]*querythrottlerpb.MetricRule)
+	for _, name := range []string{"threads_running", "lag", "loadavg", "mysqld-loadavg", "history_list_length"} {
+		metricRules[name] = &querythrottlerpb.MetricRule{Thresholds: []*querythrottlerpb.ThrottleThreshold{{Above: 1, Throttle: 100}}}
+	}
+	cfg := &querythrottlerpb.Config{
+		Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER,
+		Enabled:  true,
+		TabletStrategyConfig: &querythrottlerpb.TabletStrategyConfig{
+			TabletRules: map[string]*querythrottlerpb.StatementRuleSet{
+				"PRIMARY": {StatementRules: map[string]*querythrottlerpb.MetricRuleSet{"SELECT": {MetricRules: metricRules}}},
+			},
+		},
+	}
+
+	appName := throttlerapp.QueryThrottlerName.String()
+	want := []string{"history_list_length", "lag", "loadavg", "mysqld-loadavg", "threads_running"}
+	// Map iteration order varies between runs, so convert several times.
+	for range 20 {
+		tc := convertQueryThrottlerConfigToThrottlerConfig(cfg)
+		require.Equal(t, want, tc.AppCheckedMetrics[appName].GetNames())
+	}
 }
 
 // A scoped config key like "shard/lag" splits two ways: AppCheckedMetrics keeps the

@@ -793,12 +793,3 @@ func (ts *Server) UpdateSrvKeyspaceQueryThrottlerConfig(ctx context.Context, key
 
 	return updatedCells, nil
 }
-
-// GetSrvKeyspaceQueryThrottlerConfig returns the QueryThrottlerConfig for a cell/keyspace.
-func (ts *Server) GetSrvKeyspaceQueryThrottlerConfig(ctx context.Context, cell, keyspace string) (*querythrottler.Config, error) {
-	srvKeyspace, err := ts.GetSrvKeyspace(ctx, cell, keyspace)
-	if err != nil {
-		return nil, err
-	}
-	return srvKeyspace.GetQueryThrottlerConfig(), nil
-}

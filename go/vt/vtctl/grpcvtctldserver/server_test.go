@@ -15563,12 +15563,15 @@ func TestUpdateQueryThrottlerConfig(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name      string
-		cells     []string
-		keyspace  *vtctldatapb.Keyspace
-		req       *vtctldatapb.UpdateQueryThrottlerConfigRequest
-		expected  *vtctldatapb.UpdateQueryThrottlerConfigResponse
-		shouldErr bool
+		name     string
+		cells    []string
+		keyspace *vtctldatapb.Keyspace
+		req      *vtctldatapb.UpdateQueryThrottlerConfigRequest
+		expected *vtctldatapb.UpdateQueryThrottlerConfigResponse
+		// failSrvKeyspaceUpdate makes every SrvKeyspace write fail after the Keyspace write.
+		failSrvKeyspaceUpdate bool
+		wantCode              vtrpc.Code
+		wantErrContains       string
 	}{
 		{
 			name:  "successfully update query throttler config",
@@ -15669,7 +15672,43 @@ func TestUpdateQueryThrottlerConfig(t *testing.T) {
 					},
 				},
 			},
-			shouldErr: true,
+			wantCode:        vtrpc.Code_NOT_FOUND,
+			wantErrContains: "failed to lock keyspace nonexistent",
+		},
+		{
+			name:  "SrvKeyspace update fails",
+			cells: []string{"zone1", "zone2"},
+			keyspace: &vtctldatapb.Keyspace{
+				Name:     "testkeyspace",
+				Keyspace: &topodatapb.Keyspace{},
+			},
+			req: &vtctldatapb.UpdateQueryThrottlerConfigRequest{
+				Keyspace: "testkeyspace",
+				QueryThrottlerConfig: &querythrottler.Config{
+					Enabled:  true,
+					Strategy: querythrottler.ThrottlingStrategy_TABLET_THROTTLER,
+					TabletStrategyConfig: &querythrottler.TabletStrategyConfig{
+						TabletRules: map[string]*querythrottler.StatementRuleSet{
+							"PRIMARY": {
+								StatementRules: map[string]*querythrottler.MetricRuleSet{
+									"SELECT": {
+										MetricRules: map[string]*querythrottler.MetricRule{
+											"lag": {
+												Thresholds: []*querythrottler.ThrottleThreshold{
+													{Above: 5.0, Throttle: 100},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			failSrvKeyspaceUpdate: true,
+			wantCode:              vtrpc.Code_UNAVAILABLE,
+			wantErrContains:       "re-run the command",
 		},
 	}
 
@@ -15679,7 +15718,7 @@ func TestUpdateQueryThrottlerConfig(t *testing.T) {
 
 			ctx := t.Context()
 
-			ts := memorytopo.NewServer(ctx, tt.cells...)
+			ts, factory := memorytopo.NewServerAndFactory(ctx, tt.cells...)
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
 				return NewVtctldServer(vtenv.NewTestEnv(), ts)
 			})
@@ -15693,11 +15732,23 @@ func TestUpdateQueryThrottlerConfig(t *testing.T) {
 				require.NoError(t, err)
 			}
 
+			if tt.failSrvKeyspaceUpdate {
+				factory.AddOperationError(memorytopo.Update, "SrvKeyspace$", errors.New("cell unreachable"))
+			}
+
 			// Call the RPC
 			resp, err := vtctld.UpdateQueryThrottlerConfig(ctx, tt.req)
 
-			if tt.shouldErr {
-				assert.Error(t, err)
+			if tt.wantCode != vtrpc.Code_OK {
+				require.Error(t, err)
+				assert.Equal(t, tt.wantCode, vterrors.Code(err), "error: %v", err)
+				assert.ErrorContains(t, err, tt.wantErrContains)
+				if tt.failSrvKeyspaceUpdate {
+					// The Keyspace is written before the SrvKeyspaces, so it already holds the config.
+					ks, err := ts.GetKeyspace(ctx, tt.req.Keyspace)
+					require.NoError(t, err)
+					utils.MustMatch(t, tt.req.QueryThrottlerConfig, ks.QueryThrottlerConfig)
+				}
 				return
 			}
 

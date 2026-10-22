@@ -66,7 +66,7 @@ func CreateStrategy(cfg *querythrottlerpb.Config, deps Deps) ThrottlingStrategyH
 		return &NoOpStrategy{}
 	}
 
-	strategy, err := factory.New(deps, cfg)
+	strategy, err := factory.New(deps)
 	if err != nil {
 		log.Error(fmt.Sprintf("Strategy %s failed to init: %v, using NoOp", cfg.GetStrategy(), err))
 		return &NoOpStrategy{}

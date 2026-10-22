@@ -17,8 +17,6 @@ limitations under the License.
 package registry
 
 import (
-	querythrottlerpb "vitess.io/vitess/go/vt/proto/querythrottler"
-	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
 )
@@ -60,13 +58,10 @@ type ThrottleDecision struct {
 type Deps struct {
 	ThrottleClient *throttle.Client
 	TabletConfig   *tabletenv.TabletConfig
-	Env            tabletenv.Env
-	Keyspace       string
-	Cell           string
-	SrvTopoServer  srvtopo.Server
 }
 
-// StrategyFactory creates a new strategy instance with the given dependencies and configuration.
+// StrategyFactory creates a new strategy instance with the given dependencies. Strategies
+// take no config at construction: QueryThrottler passes the config to each Evaluate.
 type StrategyFactory interface {
-	New(deps Deps, cfg *querythrottlerpb.Config) (ThrottlingStrategyHandler, error)
+	New(deps Deps) (ThrottlingStrategyHandler, error)
 }

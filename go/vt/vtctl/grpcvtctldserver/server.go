@@ -6099,13 +6099,13 @@ func (s *VtctldServer) UpdateQueryThrottlerConfig(ctx context.Context, req *vtct
 
 	ctx, unlock, lockErr := s.ts.LockKeyspace(ctx, req.Keyspace, "UpdateQueryThrottlerConfig")
 	if lockErr != nil {
-		return nil, lockErr
+		return nil, topoErrorf(lockErr, "failed to lock keyspace %s", req.Keyspace)
 	}
 	defer unlock(&err)
 
 	ki, err := s.ts.GetKeyspace(ctx, req.Keyspace)
 	if err != nil {
-		return nil, err
+		return nil, topoErrorf(err, "failed to get keyspace %s", req.Keyspace)
 	}
 
 	update := func(_ *querythrottler.Config) *querythrottler.Config {
@@ -6116,13 +6116,36 @@ func (s *VtctldServer) UpdateQueryThrottlerConfig(ctx context.Context, req *vtct
 
 	err = s.ts.UpdateKeyspace(ctx, ki)
 	if err != nil {
-		return nil, err
+		return nil, topoErrorf(err, "failed to update keyspace %s", req.Keyspace)
 	}
 
 	_, err = s.ts.UpdateSrvKeyspaceQueryThrottlerConfig(ctx, req.Keyspace, nil, update)
 	if err != nil {
-		return nil, vterrors.Wrapf(err, "failed to update SrvKeyspace QueryThrottlerConfig for keyspace %s", req.Keyspace)
+		// The Keyspace already holds the new config, and rewriting it is idempotent,
+		// so re-running the command is how to reach the cells that failed.
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "updated keyspace %s, but failed to update its SrvKeyspace in some cells; re-run the command to update them: %v", req.Keyspace, err)
 	}
 
 	return &vtctldatapb.UpdateQueryThrottlerConfigResponse{}, nil
+}
+
+// topoErrorf adds context to a topo error and gives it a vtrpc code. Topo errors carry
+// no vtrpc code of their own, so callers would otherwise see UNKNOWN.
+func topoErrorf(err error, format string, args ...any) error {
+	code := vterrors.Code(err)
+	if code == vtrpcpb.Code_UNKNOWN {
+		switch {
+		case topo.IsErrType(err, topo.NoNode):
+			code = vtrpcpb.Code_NOT_FOUND
+		case topo.IsErrType(err, topo.BadVersion):
+			code = vtrpcpb.Code_ABORTED
+		case topo.IsErrType(err, topo.Timeout):
+			code = vtrpcpb.Code_DEADLINE_EXCEEDED
+		case topo.IsErrType(err, topo.Interrupted):
+			code = vtrpcpb.Code_CANCELED
+		default:
+			code = vtrpcpb.Code_UNAVAILABLE
+		}
+	}
+	return vterrors.Errorf(code, "%s: %v", fmt.Sprintf(format, args...), err)
 }

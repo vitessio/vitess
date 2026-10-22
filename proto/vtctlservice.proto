@@ -386,7 +386,7 @@ service Vtctld {
   // GetMirrorRules returns the VSchema routing rules.
   rpc GetMirrorRules(vtctldata.GetMirrorRulesRequest) returns (vtctldata.GetMirrorRulesResponse) {};
   rpc WorkflowMirrorTraffic(vtctldata.WorkflowMirrorTrafficRequest) returns (vtctldata.WorkflowMirrorTrafficResponse) {};
-  // UpdateQueryThrottlerConfig updated the query throttler config.
+  // UpdateQueryThrottlerConfig replaces a keyspace's query throttler config in its
+  // Keyspace record and in every cell's SrvKeyspace.
   rpc UpdateQueryThrottlerConfig(vtctldata.UpdateQueryThrottlerConfigRequest) returns (vtctldata.UpdateQueryThrottlerConfigResponse) {};
-
 }

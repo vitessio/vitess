@@ -634,7 +634,8 @@ type VtctldClient interface {
 	// GetMirrorRules returns the VSchema routing rules.
 	GetMirrorRules(ctx context.Context, in *vtctldata.GetMirrorRulesRequest, opts ...grpc.CallOption) (*vtctldata.GetMirrorRulesResponse, error)
 	WorkflowMirrorTraffic(ctx context.Context, in *vtctldata.WorkflowMirrorTrafficRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowMirrorTrafficResponse, error)
-	// UpdateQueryThrottlerConfig updated the query throttler config.
+	// UpdateQueryThrottlerConfig replaces a keyspace's query throttler config in its
+	// Keyspace record and in every cell's SrvKeyspace.
 	UpdateQueryThrottlerConfig(ctx context.Context, in *vtctldata.UpdateQueryThrottlerConfigRequest, opts ...grpc.CallOption) (*vtctldata.UpdateQueryThrottlerConfigResponse, error)
 }
 
@@ -2328,7 +2329,8 @@ type VtctldServer interface {
 	// GetMirrorRules returns the VSchema routing rules.
 	GetMirrorRules(context.Context, *vtctldata.GetMirrorRulesRequest) (*vtctldata.GetMirrorRulesResponse, error)
 	WorkflowMirrorTraffic(context.Context, *vtctldata.WorkflowMirrorTrafficRequest) (*vtctldata.WorkflowMirrorTrafficResponse, error)
-	// UpdateQueryThrottlerConfig updated the query throttler config.
+	// UpdateQueryThrottlerConfig replaces a keyspace's query throttler config in its
+	// Keyspace record and in every cell's SrvKeyspace.
 	UpdateQueryThrottlerConfig(context.Context, *vtctldata.UpdateQueryThrottlerConfigRequest) (*vtctldata.UpdateQueryThrottlerConfigResponse, error)
 	mustEmbedUnimplementedVtctldServer()
 }

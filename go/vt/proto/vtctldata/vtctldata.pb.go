@@ -16522,8 +16522,10 @@ func (*SetVtorcEmergencyReparentResponse) Descriptor() ([]byte, []int) {
 }
 
 type UpdateQueryThrottlerConfigRequest struct {
-	state                protoimpl.MessageState `protogen:"open.v1"`
-	Keyspace             string                 `protobuf:"bytes,1,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Keyspace is the keyspace whose query throttler config to replace.
+	Keyspace string `protobuf:"bytes,1,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
+	// QueryThrottlerConfig is the new config. It replaces the existing config as a whole.
 	QueryThrottlerConfig *querythrottler.Config `protobuf:"bytes,2,opt,name=query_throttler_config,json=queryThrottlerConfig,proto3" json:"query_throttler_config,omitempty"`
 	unknownFields        protoimpl.UnknownFields
 	sizeCache            protoimpl.SizeCache
@@ -17609,7 +17611,7 @@ var File_vtctldata_proto protoreflect.FileDescriptor
 
 const file_vtctldata_proto_rawDesc = "" +
 	"\n" +
-	"\x0fvtctldata.proto\x12\tvtctldata\x1a\x10binlogdata.proto\x1a\rlogutil.proto\x1a\x0emysqlctl.proto\x1a\vquery.proto\x1a\x15replicationdata.proto\x1a\x17tabletmanagerdata.proto\x1a\x0etopodata.proto\x1a\rvschema.proto\x1a\vvtrpc.proto\x1a\fvttime.proto\x1a\x14querythrottler.proto\"W\n" +
+	"\x0fvtctldata.proto\x12\tvtctldata\x1a\x10binlogdata.proto\x1a\rlogutil.proto\x1a\x0emysqlctl.proto\x1a\vquery.proto\x1a\x14querythrottler.proto\x1a\x15replicationdata.proto\x1a\x17tabletmanagerdata.proto\x1a\x0etopodata.proto\x1a\rvschema.proto\x1a\vvtrpc.proto\x1a\fvttime.proto\"W\n" +
 	"\x1aExecuteVtctlCommandRequest\x12\x12\n" +
 	"\x04args\x18\x01 \x03(\tR\x04args\x12%\n" +
 	"\x0eaction_timeout\x18\x02 \x01(\x03R\ractionTimeout\"C\n" +

@@ -80,7 +80,7 @@ func TestSelectThrottlingStrategy(t *testing.T) {
 				QueryThrottlerConfigRefreshInterval: 10 * time.Millisecond,
 			}
 
-			strategy := selectThrottlingStrategy(&querythrottlerpb.Config{Enabled: true, Strategy: tt.giveThrottlingStrategy}, mockClient, config, nil, "", "", nil)
+			strategy := selectThrottlingStrategy(&querythrottlerpb.Config{Enabled: true, Strategy: tt.giveThrottlingStrategy}, mockClient, config)
 
 			require.IsType(t, tt.expectedType, strategy)
 		})
@@ -1316,7 +1316,6 @@ func TestQueryThrottler_startSrvKeyspaceWatch_SkippedAfterShutdown(t *testing.T)
 	qt := NewQueryThrottler(t.Context(), &throttle.Throttler{}, env, &topodatapb.TabletAlias{Cell: "test-cell", Uid: 123}, srvTopoServer)
 
 	qt.Shutdown()
-	require.True(t, qt.IsShutdown())
 
 	// Registration happens on a goroutine, so allow time for it to occur if unguarded.
 	qt.InitDBConfig("test_keyspace")

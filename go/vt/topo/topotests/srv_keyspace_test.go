@@ -1150,9 +1150,9 @@ func TestUpdateSrvKeyspaceQueryThrottlerConfig(t *testing.T) {
 		return cfg
 	}
 	getConfig := func(t *testing.T, ts *topo.Server, c string) *querythrottlerpb.Config {
-		cfg, err := ts.GetSrvKeyspaceQueryThrottlerConfig(t.Context(), c, keyspace)
+		srvKeyspace, err := ts.GetSrvKeyspace(t.Context(), c, keyspace)
 		require.NoError(t, err)
-		return cfg
+		return srvKeyspace.GetQueryThrottlerConfig()
 	}
 
 	t.Run("updates only the given cells, from their existing config", func(t *testing.T) {

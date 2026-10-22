@@ -250,7 +250,7 @@ func TestTabletThrottlerStrategy_ThrottleIfNeeded_Legacy(t *testing.T) {
 			giveThrottleCheckOK:   false,
 			giveRandValue:         0.09,
 			givePriorityRandValue: 99,
-			wantErr:               "[VTTabletThrottler] query throttled: stmtType=SELECT workload=unknown priority=100 metric=lag value=20.00 breached threshold=10.00 throttle=10%",
+			wantErr:               "query throttled: stmtType=SELECT workload=unknown priority=100 metric=lag value=20.00 breached threshold=10.00 throttle=10%",
 		},
 		{
 			name:           "priority 0 query is NEVER throttled (edge case)",
@@ -304,7 +304,7 @@ func TestTabletThrottlerStrategy_ThrottleIfNeeded_Legacy(t *testing.T) {
 			giveThrottleCheckOK:   false,
 			giveRandValue:         0.5,
 			givePriorityRandValue: 99,
-			wantErr:               "[VTTabletThrottler] query throttled: stmtType=SELECT workload=unknown priority=100 metric=lag value=20.00 breached threshold=10.00 throttle=100%",
+			wantErr:               "query throttled: stmtType=SELECT workload=unknown priority=100 metric=lag value=20.00 breached threshold=10.00 throttle=100%",
 		},
 		{
 			// Regression: CTE DML (WITH ... DELETE) must match the DELETE rule.
@@ -329,7 +329,7 @@ func TestTabletThrottlerStrategy_ThrottleIfNeeded_Legacy(t *testing.T) {
 			giveThrottleCheckOK:   false,
 			giveRandValue:         0.5,
 			givePriorityRandValue: 99,
-			wantErr:               "[VTTabletThrottler] query throttled: stmtType=DELETE workload=unknown priority=100 metric=lag value=20.00 breached threshold=10.00 throttle=100%",
+			wantErr:               "query throttled: stmtType=DELETE workload=unknown priority=100 metric=lag value=20.00 breached threshold=10.00 throttle=100%",
 		},
 		{
 			// Regression: a scoped config key ("shard/lag") must match a result the
@@ -356,7 +356,7 @@ func TestTabletThrottlerStrategy_ThrottleIfNeeded_Legacy(t *testing.T) {
 			giveThrottleCheckOK:   false,
 			giveRandValue:         0.5,
 			givePriorityRandValue: 99,
-			wantErr:               "[VTTabletThrottler] query throttled: stmtType=SELECT workload=unknown priority=100 metric=lag value=20.00 breached threshold=10.00 throttle=100%",
+			wantErr:               "query throttled: stmtType=SELECT workload=unknown priority=100 metric=lag value=20.00 breached threshold=10.00 throttle=100%",
 		},
 	}
 	for _, tt := range tests {
@@ -1043,7 +1043,7 @@ func TestTabletThrottlerStrategy_Evaluate_HighestRatioWins(t *testing.T) {
 		require.Equal(t, 3.0, decision.MetricValue)
 		require.Equal(t, 2.0, decision.Threshold)
 		require.Equal(t, 1.0, decision.ThrottlePercentage)
-		require.Equal(t, "[VTTabletThrottler] query throttled: stmtType=SELECT workload=unknown priority=100 metric=loadavg value=3.00 breached threshold=2.00 throttle=100%", decision.Message)
+		require.Equal(t, "query throttled: stmtType=SELECT workload=unknown priority=100 metric=loadavg value=3.00 breached threshold=2.00 throttle=100%", decision.Message)
 	}
 }
 

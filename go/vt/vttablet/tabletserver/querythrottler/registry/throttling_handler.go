@@ -33,8 +33,10 @@ type ThrottlingStrategyHandler interface {
 	// than acting on it so callers can implement dry-run mode. cfg is the config to decide
 	// by; the caller passes the same config it reads dry_run from, so a config update can't
 	// pair new rules with an old dry_run. statementType comes from the parsed AST, which —
-	// unlike a textual scan — classifies CTE queries correctly. attrs carries pre-computed
-	// workload and priority so strategies need not recompute them.
+	// unlike a textual scan — classifies CTE queries correctly. transactionID is always 0
+	// for now, since QueryThrottler.Throttle doesn't evaluate statements inside a
+	// transaction. attrs carries pre-computed workload and priority so strategies need not
+	// recompute them.
 	Evaluate(ctx context.Context, cfg *querythrottlerpb.Config, targetTabletType topodatapb.TabletType, parsedQuery *sqlparser.ParsedQuery, statementType sqlparser.StatementType, transactionID int64, attrs QueryAttributes) ThrottleDecision
 
 	// Start initializes and starts the throttling strategy.

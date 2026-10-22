@@ -82,8 +82,7 @@ func init() {
 // tabletThrottlerStrategyFactory creates TabletThrottlerStrategy instances.
 type tabletThrottlerStrategyFactory struct{}
 
-// New ignores cfg: the strategy reads its rules from the config passed to each Evaluate.
-func (f *tabletThrottlerStrategyFactory) New(deps registry.Deps, _ *querythrottlerpb.Config) (registry.ThrottlingStrategyHandler, error) {
+func (f *tabletThrottlerStrategyFactory) New(deps registry.Deps) (registry.ThrottlingStrategyHandler, error) {
 	return NewTabletThrottlerStrategy(deps.ThrottleClient, deps.TabletConfig), nil
 }
 
@@ -121,7 +120,7 @@ type cacheState struct {
 	refreshedAt time.Time
 }
 
-// TabletThrottlerStrategy uses the Vitess Tablet Throttler (https://vitess.io/docs/21.0/reference/features/tablet-throttler) to enforce throttling.
+// TabletThrottlerStrategy uses the Vitess Tablet Throttler (https://vitess.io/docs/reference/features/tablet-throttler/) to enforce throttling.
 type TabletThrottlerStrategy struct {
 	throttlerClient ThrottlerClientWrapper
 	tabletConfig    *tabletenv.TabletConfig
@@ -312,7 +311,8 @@ func (s *TabletThrottlerStrategy) isStale(state *cacheState) bool {
 // Evaluate decides whether to throttle a query. Rules pair a tablet type and statement type
 // with metric thresholds; when a threshold is breached, the query is throttled with the
 // probability that threshold configures. The rules come from cfg's TabletStrategyConfig.
-// transactionID is unused.
+// transactionID is always 0 for now: QueryThrottler.Throttle doesn't evaluate statements
+// inside a transaction, so this strategy doesn't read it.
 func (s *TabletThrottlerStrategy) Evaluate(ctx context.Context, cfg *querythrottlerpb.Config, targetTabletType topodatapb.TabletType, parsedQuery *sqlparser.ParsedQuery, statementType sqlparser.StatementType, transactionID int64, attrs registry.QueryAttributes) registry.ThrottleDecision {
 	startTime := time.Now()
 	tabletTypeStr := targetTabletType.String()
@@ -429,7 +429,7 @@ func (s *TabletThrottlerStrategy) Evaluate(ctx context.Context, cfg *querythrott
 		s.recordFullDecision(tabletTypeStr, stmtType, decisionOutcomeThrottled, decisionReasonMetricBreach, startTime)
 		return registry.ThrottleDecision{
 			Throttle: true,
-			Message: fmt.Sprintf("[VTTabletThrottler] query throttled: stmtType=%s workload=%s priority=%d metric=%s value=%."+
+			Message: fmt.Sprintf("query throttled: stmtType=%s workload=%s priority=%d metric=%s value=%."+
 				"2f breached threshold=%.2f throttle=%.0f%%", stmtType, workloadName, priority, maxMetricName, maxMetricValue, maxBreachedThreshold,
 				maxThrottleRatio*100),
 			MetricName:         maxMetricName,

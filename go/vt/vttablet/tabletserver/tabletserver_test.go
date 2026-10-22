@@ -3140,9 +3140,8 @@ func TestTabletServerStopServiceShutsDownQueryThrottler(t *testing.T) {
 	db, tsv := setupTabletServerTest(t, ctx, "keyspaceName")
 	t.Cleanup(db.Close)
 
-	require.False(t, tsv.queryThrottler.IsShutdown(), "query throttler should be running before shutdown")
 	tsv.StopService()
-	require.True(t, tsv.queryThrottler.IsShutdown(), "StopService must shut down the query throttler")
+	requireQueryThrottlerShutDown(t, tsv)
 }
 
 // Same, for the Close path used by vtcombo and vtexplain.
@@ -3153,9 +3152,17 @@ func TestTabletServerCloseShutsDownQueryThrottler(t *testing.T) {
 	// Close does not stop the health-check ticker that StartService started.
 	t.Cleanup(tsv.StopService)
 
-	require.False(t, tsv.queryThrottler.IsShutdown(), "query throttler should be running before shutdown")
 	require.NoError(t, tsv.Close(ctx))
-	require.True(t, tsv.queryThrottler.IsShutdown(), "Close must shut down the query throttler")
+	requireQueryThrottlerShutDown(t, tsv)
+}
+
+// requireQueryThrottlerShutDown checks that tsv's query throttler was shut down. A shut-down
+// throttler discards config updates, so enabling throttling must have no effect.
+func requireQueryThrottlerShutDown(t *testing.T, tsv *TabletServer) {
+	t.Helper()
+	enableAlwaysThrottle(t, tsv)
+	err := tsv.queryThrottler.Throttle(t.Context(), topodatapb.TabletType_PRIMARY, nil, sqlparser.StmtSelect, 0, nil)
+	require.NoError(t, err, "the query throttler applied a config update, so it was not shut down")
 }
 
 // CheckThrottler and GetThrottlerStatus must reach the dedicated query throttler for
@@ -3238,7 +3245,7 @@ func (alwaysThrottleStrategy) GetStrategyName() string { return "AlwaysThrottle"
 
 type alwaysThrottleFactory struct{}
 
-func (alwaysThrottleFactory) New(registry.Deps, *querythrottlerpb.Config) (registry.ThrottlingStrategyHandler, error) {
+func (alwaysThrottleFactory) New(registry.Deps) (registry.ThrottlingStrategyHandler, error) {
 	return alwaysThrottleStrategy{}, nil
 }
 
