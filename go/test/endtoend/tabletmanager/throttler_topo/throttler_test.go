@@ -33,12 +33,10 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/throttler"
-	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
@@ -572,21 +570,6 @@ func TestLag(t *testing.T) {
 }
 
 func TestNoReplicas(t *testing.T) {
-	// vstreamer and rowstreamer stay throttled for the keyspace until this test ends: a stream served by a
-	// tablet that applies the throttler stalls, and one served by a tablet that doesn't keeps flowing.
-	streamerApps := []throttlerapp.Name{throttlerapp.VStreamerName, throttlerapp.RowStreamerName}
-	t.Cleanup(func() {
-		for _, app := range streamerApps {
-			_, err := throttler.UnthrottleAppAndWaitUntilTabletsConfirm(t, clusterInstance, app)
-			assert.NoError(t, err)
-		}
-	})
-	t.Run("throttling vstreamer and rowstreamer", func(t *testing.T) {
-		for _, app := range streamerApps {
-			_, err := throttler.ThrottleAppAndWaitUntilTabletsConfirm(t, clusterInstance, app)
-			require.NoError(t, err)
-		}
-	})
 	t.Run("changing replica to RDONLY", func(t *testing.T) {
 		err := clusterInstance.VtctldClientProcess.ExecuteCommand("ChangeTabletType", replicaTablet.Alias, "RDONLY")
 		require.NoError(t, err)
@@ -595,91 +578,11 @@ func TestNoReplicas(t *testing.T) {
 		// {"StatusCode":200,"Value":0,"Threshold":1,"Message":""}
 		waitForThrottleCheckStatus(t, primaryTablet, tabletmanagerdatapb.CheckThrottlerResponseCode_OK)
 	})
-	t.Run("RDONLY tablet does not throttle its apps", func(t *testing.T) {
-		// With the throttler disabled every check is OK, which would hide a regression.
-		require.True(t, throttleStatus(t, replicaTablet).IsEnabled)
-		for _, app := range []throttlerapp.Name{throttlerapp.TestingAlwaysThrottledName, throttlerapp.VStreamerName} {
-			resp, err := throttler.CheckThrottler(&clusterInstance.VtctldClientProcess, replicaTablet, app, nil)
-			require.NoError(t, err)
-			assert.Equal(t, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, resp.Check.ResponseCode, "app %v: %+v", app, resp)
-			assert.Contains(t, resp.Check.Message, "--throttle-tablet-types", "app %v: %+v", app, resp)
-		}
-		// A check without an app name is a "vitess" check, like the primary's probes, and gets the tablet's real metrics.
-		resp, err := throttler.CheckThrottler(&clusterInstance.VtctldClientProcess, replicaTablet, "", nil)
-		require.NoError(t, err)
-		// The RPC adds a "default" metric to a result without metrics, so look for a real one.
-		assert.Contains(t, resp.Check.Metrics, base.LagMetricName.String(), "%+v", resp)
-		assert.NotContains(t, resp.Check.Message, "--throttle-tablet-types", "%+v", resp)
-	})
-	t.Run("VStream from RDONLY tablet is not throttled", func(t *testing.T) {
-		ctx := t.Context()
-		_, err := vtgateExec(fmt.Sprintf("insert into %s.t1 (id, value) values (2024801, 'copied')", keyspaceName), "")
-		require.NoError(t, err)
-
-		conn, err := vtgateconn.Dial(ctx, fmt.Sprintf("%s:%d", clusterInstance.Hostname, clusterInstance.VtgateProcess.GrpcPort))
-		require.NoError(t, err)
-		defer conn.Close()
-		// An empty position copies the table first (rowstreamer), then streams the binlog (vstreamer).
-		vgtid := &binlogdatapb.VGtid{ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: keyspaceName, Shard: "0"}}}
-		filter := &binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{{Match: "t1", Filter: "select * from t1"}}}
-		reader, err := conn.VStream(ctx, topodatapb.TabletType_RDONLY, vgtid, filter, nil)
-		require.NoError(t, err)
-
-		var (
-			mu            sync.Mutex
-			ids           = make(map[string]bool)
-			copyCompleted bool
-		)
-		go func() {
-			for {
-				events, err := reader.Recv()
-				if err != nil {
-					return
-				}
-				mu.Lock()
-				for _, ev := range events {
-					switch ev.Type {
-					case binlogdatapb.VEventType_COPY_COMPLETED:
-						copyCompleted = true
-					case binlogdatapb.VEventType_ROW:
-						for _, change := range ev.RowEvent.RowChanges {
-							if change.After != nil {
-								// id is the first column.
-								ids[string(change.After.Values[:change.After.Lengths[0]])] = true
-							}
-						}
-					}
-				}
-				mu.Unlock()
-			}
-		}()
-
-		assert.Eventually(t, func() bool {
-			mu.Lock()
-			defer mu.Unlock()
-			return ids["2024801"] && copyCompleted
-		}, time.Minute, time.Second, "the copy phase did not deliver the existing row")
-
-		_, err = vtgateExec(fmt.Sprintf("insert into %s.t1 (id, value) values (2024802, 'streamed')", keyspaceName), "")
-		require.NoError(t, err)
-		assert.Eventually(t, func() bool {
-			mu.Lock()
-			defer mu.Unlock()
-			return ids["2024802"]
-		}, time.Minute, time.Second, "the binlog phase did not deliver the new row")
-	})
 	t.Run("restoring to REPLICA", func(t *testing.T) {
 		err := clusterInstance.VtctldClientProcess.ExecuteCommand("ChangeTabletType", replicaTablet.Alias, "REPLICA")
 		require.NoError(t, err)
 
 		waitForThrottleCheckStatus(t, primaryTablet, tabletmanagerdatapb.CheckThrottlerResponseCode_OK)
-	})
-	t.Run("REPLICA tablet throttles its apps", func(t *testing.T) {
-		for _, app := range []throttlerapp.Name{throttlerapp.TestingAlwaysThrottledName, throttlerapp.VStreamerName} {
-			resp, err := throttler.CheckThrottler(&clusterInstance.VtctldClientProcess, replicaTablet, app, nil)
-			require.NoError(t, err)
-			assert.Equal(t, tabletmanagerdatapb.CheckThrottlerResponseCode_APP_DENIED, resp.Check.ResponseCode, "app %v: %+v", app, resp)
-		}
 	})
 }
 

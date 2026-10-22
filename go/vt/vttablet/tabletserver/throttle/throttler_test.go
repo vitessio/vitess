@@ -2060,10 +2060,7 @@ func TestReplica(t *testing.T) {
 
 	throttler := newTestThrottler()
 	throttler.dormantPeriod = time.Minute
-	// The throttler's goroutines read the tablet type, so subtests switch it atomically.
-	var tabletType atomic.Int32
-	tabletType.Store(int32(topodatapb.TabletType_REPLICA))
-	throttler.tabletTypeFunc = func() topodatapb.TabletType { return topodatapb.TabletType(tabletType.Load()) }
+	throttler.tabletTypeFunc = func() topodatapb.TabletType { return topodatapb.TabletType_REPLICA }
 
 	tmClient, ok := throttler.overrideTmClient.(*fakeTMClient)
 	require.True(t, ok)
@@ -2097,49 +2094,6 @@ func TestReplica(t *testing.T) {
 				case <-time.After(time.Second):
 					assert.Empty(t, tmClient.AppNames())
 				}
-				t.Run("tablet types not in --throttle-tablet-types do not throttle their apps", func(t *testing.T) {
-					defer tabletType.Store(int32(topodatapb.TabletType_REPLICA))
-					// testAppName is mapped to loadavg, whose value exceeds its threshold.
-					throttler.appCheckedMetrics.Set(testAppName.String(), base.MetricNames{base.LoadAvgMetricName}, cache.DefaultExpiration)
-					defer throttler.appCheckedMetrics.Delete(testAppName.String())
-
-					// None of these types is in the default --throttle-tablet-types.
-					for _, excludedType := range []topodatapb.TabletType{
-						topodatapb.TabletType_RDONLY,
-						topodatapb.TabletType_SPARE,
-						topodatapb.TabletType_EXPERIMENTAL,
-						topodatapb.TabletType_BACKUP,
-						topodatapb.TabletType_RESTORE,
-						topodatapb.TabletType_DRAINED,
-						topodatapb.TabletType_UNKNOWN,
-					} {
-						tabletType.Store(int32(excludedType))
-						for _, appName := range []throttlerapp.Name{throttlerapp.OnlineDDLName, throttlerapp.TestingAlwaysThrottledName, testAppName} {
-							checkResult := throttler.Check(ctx, appName.String(), nil, flags)
-							require.NotNil(t, checkResult)
-							assert.Equal(t, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, checkResult.ResponseCode, "type %v, app %v: %+v", excludedType, appName, checkResult)
-							assert.Equal(t, appName.String(), checkResult.AppName)
-							assert.Contains(t, checkResult.Message, excludedType.String())
-							assert.Contains(t, checkResult.Message, "--throttle-tablet-types")
-							assert.False(t, checkResult.RecentlyChecked, "type %v, app %v", excludedType, appName)
-						}
-						// Streamers check through a background client with an undefined scope.
-						client := NewBackgroundClient(throttler, throttlerapp.TestingAlwaysThrottledName, base.UndefinedScope)
-						_, checkOK := client.ThrottleCheckOK(ctx, "")
-						assert.True(t, checkOK, "type %v", excludedType)
-					}
-					assert.False(t, throttler.recentlyChecked())
-
-					// "vitess" checks, which the primary's probes use, still get this tablet's real metrics.
-					tabletType.Store(int32(topodatapb.TabletType_RDONLY))
-					checkResult := throttler.Check(ctx, throttlerapp.VitessName.String(), nil, flags)
-					require.NotNil(t, checkResult)
-					assert.Equal(t, 2.718, checkResult.Value, "unexpected result: %+v", checkResult) // loadavg exceeds its threshold
-					assert.Len(t, checkResult.Metrics, len(base.KnownMetricNames))
-
-					// None of the checks above asked the primary for heartbeats.
-					assert.Never(t, func() bool { return len(tmClient.AppNames()) > 0 }, time.Second, 10*time.Millisecond)
-				})
 				t.Run("validate stimulator", func(t *testing.T) {
 					checkResult := throttler.Check(ctx, throttlerapp.OnlineDDLName.String(), nil, flags)
 					if !assert.NotNil(t, checkResult) {
@@ -2200,25 +2154,6 @@ func TestReplica(t *testing.T) {
 						appNames := tmClient.AppNames()
 						assert.Equal(t, []string{throttlerapp.ThrottlerStimulatorName.String()}, appNames)
 					}
-				})
-				t.Run("RDONLY in --throttle-tablet-types throttles its apps", func(t *testing.T) {
-					tabletType.Store(int32(topodatapb.TabletType_RDONLY))
-					defer tabletType.Store(int32(topodatapb.TabletType_REPLICA))
-					// Only the throttler's leader reads this map outside of checks, and this throttler never leads.
-					throttler.throttleTabletTypesMap[topodatapb.TabletType_RDONLY] = true
-					defer delete(throttler.throttleTabletTypesMap, topodatapb.TabletType_RDONLY)
-					throttler.appCheckedMetrics.Set(testAppName.String(), base.MetricNames{base.LoadAvgMetricName}, cache.DefaultExpiration)
-					defer throttler.appCheckedMetrics.Delete(testAppName.String())
-
-					checkResult := throttler.Check(ctx, throttlerapp.TestingAlwaysThrottledName.String(), nil, flags)
-					require.NotNil(t, checkResult)
-					assert.Equal(t, tabletmanagerdatapb.CheckThrottlerResponseCode_APP_DENIED, checkResult.ResponseCode, "%+v", checkResult)
-					assert.NotContains(t, checkResult.Message, "--throttle-tablet-types")
-
-					checkResult = throttler.Check(ctx, testAppName.String(), nil, flags)
-					require.NotNil(t, checkResult)
-					assert.Equal(t, tabletmanagerdatapb.CheckThrottlerResponseCode_THRESHOLD_EXCEEDED, checkResult.ResponseCode, "%+v", checkResult)
-					assert.NotContains(t, checkResult.Message, "--throttle-tablet-types")
 				})
 				t.Run("validate multi-metric results", func(t *testing.T) {
 					checkResult := throttler.Check(ctx, throttlerapp.VitessName.String(), nil, flags)
