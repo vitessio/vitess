@@ -57,6 +57,7 @@ jobs:
             - 'config/**'
             - 'bootstrap.sh'
             - '.github/workflows/upgrade_downgrade_test_query_serving_queries.yml'
+            - '.github/actions/setup-mysql/action.yml'
 
     - name: Set output with latest release branch
       if: steps.changes.outputs.end_to_end == 'true'
