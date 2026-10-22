@@ -185,6 +185,14 @@ jobs:
         timeout-minutes: 5
         uses: $/.github/actions/tune-os
 
+      - name: Restore the apt cache
+        if: needs.generate-matrix.outputs.end_to_end == 'true'
+        uses: $/.github/actions/apt-cache
+        with:
+          mode: restore
+          name: cluster-${{ contains(matrix.needs, 'xtrabackup') && 'percona' || 'mysql-8.4' }}
+          hash: ${{ hashFiles('.github/workflows/cluster_endtoend.yml', '.github/actions/setup-mysql/action.yml', '.github/actions/setup-percona-repo/action.yml') }}
+
       - name: Setup MySQL
         if: ${{ needs.generate-matrix.outputs.end_to_end == 'true' && !contains(matrix.needs, 'xtrabackup') }}
         timeout-minutes: 8
@@ -222,6 +230,12 @@ jobs:
 
           sudo apt-get -qq install -y make unzip g++ etcd-client etcd-server curl git wget xz-utils libncurses6
           sudo service etcd stop
+
+      - name: Save the apt cache
+        if: needs.generate-matrix.outputs.end_to_end == 'true'
+        uses: $/.github/actions/apt-cache
+        with:
+          mode: save
 
       - name: Install MicroCeph
         if: needs.generate-matrix.outputs.end_to_end == 'true' && contains(matrix.needs, 'microceph')

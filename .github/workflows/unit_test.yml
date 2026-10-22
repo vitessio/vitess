@@ -184,6 +184,14 @@ jobs:
         timeout-minutes: 5
         uses: $/.github/actions/tune-os
 
+      - name: Restore the apt cache
+        if: needs.changes.outputs.unit_tests == 'true'
+        uses: $/.github/actions/apt-cache
+        with:
+          mode: restore
+          name: unit-${{ matrix.flavor }}${{ matrix.java && '-java' || '' }}
+          hash: ${{ hashFiles('.github/workflows/unit_test.yml', '.github/actions/setup-mysql/action.yml') }}
+
       - name: Setup MySQL
         if: needs.changes.outputs.unit_tests == 'true'
         timeout-minutes: 8
@@ -197,6 +205,12 @@ jobs:
         run: |
           export DEBIAN_FRONTEND="noninteractive"
           sudo apt-get install -y make unzip g++ curl git wget ${{ matrix.java && 'ant default-jre-headless' || '' }}
+
+      - name: Save the apt cache
+        if: needs.changes.outputs.unit_tests == 'true'
+        uses: $/.github/actions/apt-cache
+        with:
+          mode: save
 
       - name: Run make tools
         if: needs.changes.outputs.unit_tests == 'true'

@@ -39,13 +39,23 @@ runs:
           return 1
         }
 
+        # The .deb files this downloads by hand go into the job's apt cache
+        # too, when it has one (see the apt-cache action).
+        from_apt_cache() {
+          [[ -n "${APT_CACHE_DIR:-}" && -f "${APT_CACHE_DIR}/$1" ]] && cp "${APT_CACHE_DIR}/$1" "$1"
+        }
+        to_apt_cache() {
+          if [[ -n "${APT_CACHE_DIR:-}" ]]; then
+            cp "$1" "${APT_CACHE_DIR}/"
+          fi
+        }
+
         sudo apt-get update
 
         # Uninstall any previously installed MySQL first
         # sudo systemctl stop apparmor
         sudo DEBIAN_FRONTEND="noninteractive" apt-get remove -y --purge mysql-server mysql-client mysql-common
         sudo apt-get -y autoremove
-        sudo apt-get -y autoclean
         # sudo deluser mysql
         sudo rm -rf /var/lib/mysql
         sudo rm -rf /etc/mysql
@@ -65,19 +75,21 @@ runs:
           # Note: these commands must stay separate statements: `set -e` does
           # not fire for failures inside a `&&` chain, and the install must
           # fail right here rather than in a later, unrelated apt-get run.
-          download_with_ip_failover \
+          from_apt_cache libaio1_0.3.112-13build1_amd64.deb || download_with_ip_failover \
             https://archive.ubuntu.com/ubuntu/pool/main/liba/libaio/libaio1_0.3.112-13build1_amd64.deb \
             libaio1_0.3.112-13build1_amd64.deb || {
             echo "Failed to download libaio1. The pinned version may have been superseded and removed from archive.ubuntu.com; check https://archive.ubuntu.com/ubuntu/pool/main/liba/libaio/ for the current version."
             exit 1
           }
           echo "2dcfe0b49d7cccfbf1bd6a3f627cf44bea9f51fb32f7e0e552a0df75698e0d27  libaio1_0.3.112-13build1_amd64.deb" | sha256sum --check
+          to_apt_cache libaio1_0.3.112-13build1_amd64.deb
           sudo dpkg -i libaio1_0.3.112-13build1_amd64.deb
           rm libaio1_0.3.112-13build1_amd64.deb
 
           # Get key to latest MySQL repo
           sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys A8D3785C
-          wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.35-1_all.deb
+          from_apt_cache mysql-apt-config_0.8.35-1_all.deb || wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.35-1_all.deb
+          to_apt_cache mysql-apt-config_0.8.35-1_all.deb
 
           if [[ "$FLAVOR" == "mysql-5.7" ]]; then
             # Bionic packages are still compatible for Jammy since there's no MySQL 5.7
@@ -88,13 +100,14 @@ runs:
             sudo apt-get update
             # libtinfo5 is also needed for older MySQL 5.7 builds. Separate
             # statements for the same fail-fast reason as libaio1 above.
-            download_with_ip_failover \
+            from_apt_cache libtinfo5_6.3-2ubuntu0.3_amd64.deb || download_with_ip_failover \
               https://archive.ubuntu.com/ubuntu/pool/universe/n/ncurses/libtinfo5_6.3-2ubuntu0.3_amd64.deb \
               libtinfo5_6.3-2ubuntu0.3_amd64.deb || {
               echo "Failed to download libtinfo5. The pinned version may have been superseded and removed from archive.ubuntu.com; check https://archive.ubuntu.com/ubuntu/pool/universe/n/ncurses/ for the current version."
               exit 1
             }
             echo "4df4288404108f1a156d014e8764a064e977e34e6d44931ab60451694c03c90d  libtinfo5_6.3-2ubuntu0.3_amd64.deb" | sha256sum --check
+            to_apt_cache libtinfo5_6.3-2ubuntu0.3_amd64.deb
             sudo dpkg -i libtinfo5_6.3-2ubuntu0.3_amd64.deb
             rm libtinfo5_6.3-2ubuntu0.3_amd64.deb
             sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y mysql-client=5.7* mysql-community-server=5.7* mysql-server=5.7* libncurses6
