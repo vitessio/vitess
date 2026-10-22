@@ -180,16 +180,16 @@ jobs:
         if: needs.generate-matrix.outputs.end_to_end == 'true'
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
 
-      - name: Tune the OS
-        if: needs.generate-matrix.outputs.end_to_end == 'true'
-        timeout-minutes: 5
-        uses: $/.github/actions/tune-os
-
       - name: Restore the apt cache
         if: needs.generate-matrix.outputs.end_to_end == 'true'
         uses: $/.github/actions/restore-apt-cache
         with:
           packages: ${{ contains(matrix.needs, 'xtrabackup') && 'percona' || 'mysql-8.4' }}
+
+      - name: Tune the OS
+        if: needs.generate-matrix.outputs.end_to_end == 'true'
+        timeout-minutes: 5
+        uses: $/.github/actions/tune-os
 
       - name: Setup MySQL
         if: ${{ needs.generate-matrix.outputs.end_to_end == 'true' && !contains(matrix.needs, 'xtrabackup') }}

@@ -32,9 +32,10 @@ set_name="$1"
 dir="$(realpath "$2")"
 mkdir -p "${dir}"
 
-# The test jobs' "Get dependencies" steps.
-cluster_packages="make unzip g++ etcd-client etcd-server curl git wget xz-utils libncurses6"
-unit_packages="make unzip g++ curl git wget ant default-jre-headless"
+# The tune-os action's package, and the test jobs' "Get dependencies" steps.
+tune_os_packages="eatmydata"
+cluster_packages="${tune_os_packages} make unzip g++ etcd-client etcd-server curl git wget xz-utils libncurses6"
+unit_packages="${tune_os_packages} make unzip g++ curl git wget ant default-jre-headless"
 
 case "${set_name}" in
 mysql-5.7 | mysql-8.0)

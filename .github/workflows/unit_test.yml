@@ -179,16 +179,16 @@ jobs:
           sudo grep -rl '\.clouds\.ports\.ubuntu\.com' /etc/apt --include='*.list' --include='*.sources' \
             | xargs -r sudo sed -i 's|https\?://[^/ ]*\.clouds\.ports\.ubuntu\.com|http://ports.ubuntu.com|g'
 
-      - name: Tune the OS
-        if: needs.changes.outputs.unit_tests == 'true'
-        timeout-minutes: 5
-        uses: $/.github/actions/tune-os
-
       - name: Restore the apt cache
         if: needs.changes.outputs.unit_tests == 'true'
         uses: $/.github/actions/restore-apt-cache
         with:
           packages: ${{ matrix.flavor }}
+
+      - name: Tune the OS
+        if: needs.changes.outputs.unit_tests == 'true'
+        timeout-minutes: 5
+        uses: $/.github/actions/tune-os
 
       - name: Setup MySQL
         if: needs.changes.outputs.unit_tests == 'true'
