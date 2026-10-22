@@ -102,8 +102,9 @@ func RefreshTabletsByShard(ctx context.Context, ts *topo.Server, tmc tmclient.Ta
 	return isPartialRefresh, prd.String(), err
 }
 
-// UpdateShardRecords updates the shard records based on 'from' or 'to'
-// direction.
+// UpdateShardRecords updates QueryServiceDisabled for servedType on the shards
+// in the SrvKeyspace of the cells, based on 'from' or 'to' direction, and
+// refreshes the tablets of the 'to' shards within refreshTimeout.
 func UpdateShardRecords(
 	ctx context.Context,
 	ts *topo.Server,
@@ -113,25 +114,12 @@ func UpdateShardRecords(
 	cells []string,
 	servedType topodatapb.TabletType,
 	isFrom bool,
-	clearSourceShards bool,
 	refreshTimeout time.Duration,
 	logger logutil.Logger,
 ) error {
 	disableQueryService := isFrom
 	if err := ts.UpdateDisableQueryService(ctx, keyspace, shards, servedType, cells, disableQueryService); err != nil {
 		return err
-	}
-	for i, si := range shards {
-		updatedShard, err := ts.UpdateShardFields(ctx, si.Keyspace(), si.ShardName(), func(si *topo.ShardInfo) error {
-			if clearSourceShards {
-				si.SourceShards = nil
-			}
-			return nil
-		})
-		if err != nil {
-			return err
-		}
-		shards[i] = updatedShard
 	}
 	// For 'to' shards, refresh to make them serve. The 'from' shards will
 	// be refreshed after traffic has migrated. The shards are refreshed

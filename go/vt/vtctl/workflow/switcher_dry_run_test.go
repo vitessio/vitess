@@ -314,7 +314,7 @@ func TestSwitchShardReads(t *testing.T) {
 		drLog: drLog,
 	}
 
-	err := dr.switchShardReads(ctx, nil, []topodatapb.TabletType{topodatapb.TabletType_PRIMARY, topodatapb.TabletType_RDONLY}, DirectionForward)
+	err := dr.switchShardReads(ctx, nil, []topodatapb.TabletType{topodatapb.TabletType_PRIMARY, topodatapb.TabletType_RDONLY}, DirectionForward, shardTabletRefreshTimeout)
 	require.NoError(t, err)
 	require.Len(t, drLog.logs, 1)
 	log := drLog.logs[0]
@@ -323,7 +323,7 @@ func TestSwitchShardReads(t *testing.T) {
 	assert.Contains(t, log, "80-")
 	assert.Contains(t, log, "[0]")
 
-	err = dr.switchShardReads(ctx, nil, []topodatapb.TabletType{topodatapb.TabletType_PRIMARY, topodatapb.TabletType_RDONLY}, DirectionBackward)
+	err = dr.switchShardReads(ctx, nil, []topodatapb.TabletType{topodatapb.TabletType_PRIMARY, topodatapb.TabletType_RDONLY}, DirectionBackward, shardTabletRefreshTimeout)
 	require.NoError(t, err)
 	require.Len(t, drLog.logs, 2)
 	log = drLog.logs[1]

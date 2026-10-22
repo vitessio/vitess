@@ -110,7 +110,7 @@ func TestUpdateShardRecordsRefreshesShardsConcurrently(t *testing.T) {
 
 	tmc := &barrierRefreshTMC{expected: numShards, allIn: make(chan struct{})}
 	err = UpdateShardRecords(lockCtx, ts, tmc, keyspace, shards, []string{cell}, topodatapb.TabletType_REPLICA,
-		false /* isFrom */, false /* clearSourceShards */, refreshTimeout, logutil.NewMemoryLogger())
+		false /* isFrom */, refreshTimeout, logutil.NewMemoryLogger())
 	require.NoError(t, err)
 
 	tmc.mu.Lock()
