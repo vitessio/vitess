@@ -135,6 +135,9 @@ type TabletThrottlerStrategy struct {
 	updateTicker *time.Ticker
 	done         chan struct{}
 	running      atomic.Bool
+	// stopped is set by Stop. A stopped strategy cannot be restarted, because its ctx is
+	// canceled and its done channel is closed; the query throttler builds a new one instead.
+	stopped atomic.Bool
 
 	fastPathLatencySampleRate float64
 
@@ -171,8 +174,13 @@ func NewTabletThrottlerStrategy(throttleClient ThrottlerClientWrapper, tabletCon
 
 // Start spawns the background cache updater. Kept out of the constructor so a strategy
 // that is built but never installed leaks nothing. Non-blocking: the first cache prime
-// runs in the updater goroutine, since callers hold a lock across Start.
+// runs in the updater goroutine, since callers hold a lock across Start. Start after
+// Stop does nothing.
 func (s *TabletThrottlerStrategy) Start() {
+	if s.stopped.Load() {
+		log.Warn("TabletThrottlerStrategy: ignoring Start after Stop")
+		return
+	}
 	if s.running.CompareAndSwap(false, true) {
 		updateInterval := resolveCacheUpdateInterval(s.tabletConfig)
 		s.updateTicker = time.NewTicker(updateInterval)
@@ -195,6 +203,7 @@ func resolveCacheUpdateInterval(cfg *tabletenv.TabletConfig) time.Duration {
 // restarted; QueryThrottler builds a fresh one on every strategy change. Safe to call
 // when Start never ran, and safe to call twice.
 func (s *TabletThrottlerStrategy) Stop() {
+	s.stopped.Store(true)
 	// Unconditional, so any goroutine bound to s.ctx exits even if Start never ran.
 	s.cancel()
 

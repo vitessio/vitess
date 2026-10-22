@@ -674,6 +674,24 @@ func TestTabletThrottlerStrategy_StopWithoutStartCancelsContext(t *testing.T) {
 	require.Error(t, strategy.ctx.Err(), "Stop() must cancel the strategy context even when Start() was never called")
 }
 
+// Start after Stop must not run a second updater: the context is canceled and the done
+// channel is already closed, so a restarted updater would close it again and panic.
+func TestTabletThrottlerStrategy_StartAfterStopIsNoOp(t *testing.T) {
+	ftcw := NewFakeThrottleClientWrapper(&throttle.CheckResult{}, true)
+
+	strategy := NewTabletThrottlerStrategy(ftcw, createTestTabletConfig())
+	t.Cleanup(strategy.Stop)
+
+	strategy.Start()
+	require.True(t, strategy.running.Load())
+	strategy.Stop()
+	require.False(t, strategy.running.Load())
+
+	strategy.Start()
+	require.False(t, strategy.running.Load(), "Start after Stop must not start the updater")
+	strategy.Stop()
+}
+
 // nilResultThrottleClient returns what a real ThrottleCheckOK returns on a canceled ctx:
 // a nil CheckResult with checkOk=false.
 type nilResultThrottleClient struct{}
