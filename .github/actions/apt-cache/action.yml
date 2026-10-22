@@ -80,7 +80,7 @@ runs:
     # Only main and release branches save, so that pull requests restore their
     # entries rather than crowd them out of the repository's cache quota.
     - name: Save the apt cache
-      if: inputs.mode == 'save' && env.APT_CACHE_HIT != 'true' && github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release-'))
+      if: inputs.mode == 'save' && env.APT_CACHE_HIT != 'true' && (github.event_name == 'pull_request' || github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release-')))
       uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: /var/cache/vitess-apt/*.deb
