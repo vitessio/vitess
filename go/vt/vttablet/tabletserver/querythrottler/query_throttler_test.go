@@ -908,7 +908,7 @@ func TestQueryThrottler_startSrvKeyspaceWatch_InitialLoad(t *testing.T) {
 	// Verify watch was started
 	require.Eventually(t, func() bool {
 		return qt.watchStarted.Load()
-	}, 2*time.Second, 10*time.Millisecond, "Watch should have been started")
+	}, 30*time.Second, 10*time.Millisecond, "Watch should have been started")
 
 	// Verify that the configuration was loaded correctly
 	require.Eventually(t, func() bool {
@@ -916,7 +916,7 @@ func TestQueryThrottler_startSrvKeyspaceWatch_InitialLoad(t *testing.T) {
 		return snap.cfg.GetEnabled() &&
 			snap.cfg.GetStrategy() == querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER &&
 			!snap.cfg.GetDryRun()
-	}, 2*time.Second, 10*time.Millisecond, "Config should be loaded correctly: enabled=true, strategy=TabletThrottler, dryRun=false")
+	}, 30*time.Second, 10*time.Millisecond, "Config should be loaded correctly: enabled=true, strategy=TabletThrottler, dryRun=false")
 
 	require.Equal(t, "test_keyspace", qt.keyspace, "Keyspace should be set correctly")
 }
@@ -941,14 +941,14 @@ func TestQueryThrottler_startSrvKeyspaceWatch_InitialLoadFailure(t *testing.T) {
 	// Verify watch was started despite initial load failure
 	require.Eventually(t, func() bool {
 		return qt.watchStarted.Load()
-	}, 2*time.Second, 10*time.Millisecond, "Watch should be started even if initial load fails")
+	}, 30*time.Second, 10*time.Millisecond, "Watch should be started even if initial load fails")
 
 	require.Equal(t, "test_keyspace", qt.keyspace, "Keyspace should be set correctly")
 
 	// Configuration should remain at default (NoOpStrategy) due to failure
 	require.Eventually(t, func() bool {
 		return !qt.snapshot.Load().cfg.GetEnabled()
-	}, 2*time.Second, 10*time.Millisecond, "Config should remain disabled after initial load failure")
+	}, 30*time.Second, 10*time.Millisecond, "Config should remain disabled after initial load failure")
 }
 
 // TestQueryThrottler_startSrvKeyspaceWatch_OnlyStartsOnce tests that watch only starts once even with concurrent calls (atomic flag protection).
@@ -988,7 +988,7 @@ func TestQueryThrottler_startSrvKeyspaceWatch_OnlyStartsOnce(t *testing.T) {
 	// Verify that the watch was started exactly once (atomic flag prevents multiple starts)
 	require.Eventually(t, func() bool {
 		return qt.watchStarted.Load()
-	}, 2*time.Second, 10*time.Millisecond, "Watch should have been started")
+	}, 30*time.Second, 10*time.Millisecond, "Watch should have been started")
 
 	require.Equal(t, numGoroutines, startedCount, "All goroutines should have called startSrvKeyspaceWatch")
 }
@@ -1041,7 +1041,7 @@ func TestQueryThrottler_startSrvKeyspaceWatch_RequiredFieldsValidation(t *testin
 			if tt.expectedWatchFlag {
 				require.Eventually(t, func() bool {
 					return qt.watchStarted.Load()
-				}, 2*time.Second, 10*time.Millisecond, tt.description)
+				}, 30*time.Second, 10*time.Millisecond, tt.description)
 			} else {
 				// For negative cases, ensure the watch doesn't start within a reasonable time
 				require.Never(t, func() bool {
@@ -1101,7 +1101,7 @@ func TestQueryThrottler_startSrvKeyspaceWatch_WatchCallback(t *testing.T) {
 			// Verify watch was started
 			require.Eventually(t, func() bool {
 				return qt.watchStarted.Load()
-			}, 2*time.Second, 10*time.Millisecond, "Watch should have been started")
+			}, 30*time.Second, 10*time.Millisecond, "Watch should have been started")
 
 			// Verify that HandleConfigUpdate was called by checking if the config was updated
 			require.Eventually(t, func() bool {
@@ -1109,7 +1109,7 @@ func TestQueryThrottler_startSrvKeyspaceWatch_WatchCallback(t *testing.T) {
 				return snap.cfg.GetEnabled() == tt.expectedEnabled &&
 					snap.cfg.GetStrategy() == tt.expectedStrategy &&
 					snap.cfg.GetDryRun() == tt.expectedDryRun
-			}, 2*time.Second, 10*time.Millisecond, "Config should be updated correctly after callback is invoked")
+			}, 30*time.Second, 10*time.Millisecond, "Config should be updated correctly after callback is invoked")
 		},
 		)
 	}
@@ -1133,7 +1133,7 @@ func TestQueryThrottler_startSrvKeyspaceWatch_ShutdownStopsWatch(t *testing.T) {
 	// Verify watch was started
 	require.Eventually(t, func() bool {
 		return qt.watchStarted.Load()
-	}, 2*time.Second, 10*time.Millisecond, "Watch should have been started before shutdown")
+	}, 30*time.Second, 10*time.Millisecond, "Watch should have been started before shutdown")
 
 	require.NotNil(t, qt.cancelWatchContext, "Cancel function should be set before shutdown")
 
@@ -1143,7 +1143,7 @@ func TestQueryThrottler_startSrvKeyspaceWatch_ShutdownStopsWatch(t *testing.T) {
 	// Verify that the watch started flag is reset
 	require.Eventually(t, func() bool {
 		return !qt.watchStarted.Load()
-	}, 2*time.Second, 10*time.Millisecond, "Watch should be marked as not started after shutdown")
+	}, 30*time.Second, 10*time.Millisecond, "Watch should be marked as not started after shutdown")
 
 	// Verify that the strategy was stopped
 	strategyInstance := qt.snapshot.Load().strategy

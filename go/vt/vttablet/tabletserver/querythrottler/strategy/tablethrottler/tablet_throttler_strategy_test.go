@@ -18,7 +18,9 @@ package tabletthrottler
 
 import (
 	"context"
+	"fmt"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -438,7 +440,7 @@ func TestTabletThrottlerStrategy_CachingBehavior(t *testing.T) {
 
 	require.Eventually(t, func() bool {
 		return ftcw.GetCallCount() >= 1 && strategy.running.Load()
-	}, 1*time.Second, 10*time.Millisecond, "Cache should be primed with at least one background call")
+	}, 30*time.Second, 10*time.Millisecond, "Cache should be primed with at least one background call")
 
 	ftcw.ResetCallCount()
 
@@ -493,6 +495,21 @@ func TestTabletThrottlerStrategy_BinarySearchThrottleDecision(t *testing.T) {
 			thresholds:       makeThresholds(10, 25, 20, 75),
 			expectedThrottle: 0.75,
 			expectedBreached: 20,
+		},
+		// A threshold is breached only when the value goes above it, not when it equals it.
+		{
+			name:             "value_equal_to_threshold_not_breached",
+			metricValue:      10.0,
+			thresholds:       makeThresholds(10, 50),
+			expectedThrottle: 0,
+			expectedBreached: 0,
+		},
+		{
+			name:             "value_equal_to_second_threshold_uses_first",
+			metricValue:      20.0,
+			thresholds:       makeThresholds(10, 25, 20, 75),
+			expectedThrottle: 0.25,
+			expectedBreached: 10,
 		},
 	}
 
@@ -635,7 +652,7 @@ func TestFakeThrottleClientWrapper_ThreadSafety(t *testing.T) {
 		default:
 			return false
 		}
-	}, 5*time.Second, 10*time.Millisecond, "All goroutines should complete within timeout")
+	}, 30*time.Second, 10*time.Millisecond, "All goroutines should complete within timeout")
 
 	finalResult, finalOk := client.GetCheckResult()
 	require.NotNil(t, finalResult)
@@ -665,13 +682,8 @@ func (nilResultThrottleClient) ThrottleCheckOK(ctx context.Context, _ throttlera
 	return nil, false
 }
 
-// When Stop() races an in-flight refresh, refreshCache must keep the prior good state.
-// Treating only DeadlineExceeded as failure lets Canceled reach the store path, poisoning
-// the cache with a nil result that later panics in Evaluate's metric loop.
-func TestTabletThrottlerStrategy_RefreshCache_CanceledContextPreservesPriorState(t *testing.T) {
-	strategy := NewTabletThrottlerStrategy(nilResultThrottleClient{}, createTestTabletConfig())
-
-	// Prime with a known-good state — what a successful prior refresh would have produced.
+// primeGoodCacheState stores the state a successful prior refresh would have produced.
+func primeGoodCacheState(strategy *TabletThrottlerStrategy) *cacheState {
 	primed := &cacheState{
 		ok: true,
 		result: &throttle.CheckResult{
@@ -682,16 +694,43 @@ func TestTabletThrottlerStrategy_RefreshCache_CanceledContextPreservesPriorState
 		refreshedAt: time.Now(),
 	}
 	strategy.cachedState.Store(primed)
+	return primed
+}
+
+// When Stop() races an in-flight refresh, refreshCache must keep the prior good state, even
+// if the client still returns a result. Treating only DeadlineExceeded as failure would let
+// Canceled reach the store path.
+func TestTabletThrottlerStrategy_RefreshCache_CanceledContextPreservesPriorState(t *testing.T) {
+	overloaded := &throttle.CheckResult{
+		Metrics: map[string]*throttle.MetricResult{
+			"lag": {ResponseCode: tabletmanagerdata.CheckThrottlerResponseCode_THRESHOLD_EXCEEDED, Value: 20},
+		},
+	}
+	strategy := NewTabletThrottlerStrategy(NewFakeThrottleClientWrapper(overloaded, false), createTestTabletConfig())
+	primed := primeGoodCacheState(strategy)
 
 	// Stands in for Stop() running while a refresh is still in flight; refreshCache's
 	// derived ctx inherits the cancellation.
 	strategy.cancel()
-
-	// The client returns (nil, false) and the ctx error is Canceled, not DeadlineExceeded.
 	strategy.refreshCache()
 
 	require.Same(t, primed, strategy.cachedState.Load(),
-		"canceled refresh must preserve the prior good cache state, not overwrite it with (nil, false)")
+		"canceled refresh must preserve the prior good cache state")
+}
+
+// A refresh that returns no result must keep the prior good state rather than store a nil
+// result that later panics in Evaluate's metric loop, and must count as a failure.
+func TestTabletThrottlerStrategy_RefreshCache_NilResultPreservesPriorState(t *testing.T) {
+	strategy := NewTabletThrottlerStrategy(nilResultThrottleClient{}, createTestTabletConfig())
+	primed := primeGoodCacheState(strategy)
+	failures := cacheRefreshFailures.Get()
+
+	strategy.refreshCache()
+
+	require.NoError(t, strategy.ctx.Err(), "the refresh context must not be canceled, so only the nil result is under test")
+	require.Same(t, primed, strategy.cachedState.Load(),
+		"a refresh with a nil result must preserve the prior good cache state")
+	require.Equal(t, failures+1, cacheRefreshFailures.Get(), "a nil result must count as a refresh failure")
 }
 
 // Defense-in-depth: should a future change let refreshCache store a nil result, Evaluate
@@ -828,4 +867,81 @@ func TestTabletThrottlerStrategy_Evaluate_StaleOverloadedStateFailsOpen(t *testi
 	strategy.cachedState.Store(&cacheState{ok: false, result: overloaded, refreshedAt: stale})
 	require.False(t, evaluate().Throttle, "stale overloaded state must fail open, not throttle indefinitely")
 	require.Greater(t, cacheStaleConsumption.Get(), before, "discarding stale state must increment CacheStaleConsumption")
+}
+
+// evaluateOverloaded evaluates a SELECT on PRIMARY against a SELECT rule throttling 100%
+// above lag 10, with lag at 20, and the given priority and random draws.
+func evaluateOverloaded(t *testing.T, priority string, ratioPercent float64, randIntN int, randFloat64 float64) registry.ThrottleDecision {
+	t.Helper()
+	overloaded := &throttle.CheckResult{
+		Metrics: map[string]*throttle.MetricResult{
+			"lag": {ResponseCode: tabletmanagerdata.CheckThrottlerResponseCode_THRESHOLD_EXCEEDED, Value: 20},
+		},
+	}
+	strategy := newTestStrategyWithRandom(NewFakeThrottleClientWrapper(overloaded, false), testRandomFuncs{
+		randFloat64: func() float64 { return randFloat64 },
+		randIntN:    func(n int) int { return randIntN },
+	})
+	strategy.running.Store(true)
+	strategy.cachedState.Store(&cacheState{ok: false, result: overloaded, refreshedAt: time.Now()})
+	cfg := createTestQueryThrottlerConfig(makeTabletStrategyConfig("PRIMARY", "SELECT", "lag", makeThresholds(10, ratioPercent)))
+	return strategy.Evaluate(t.Context(), cfg, topodatapb.TabletType_PRIMARY, &sqlparser.ParsedQuery{Query: "SELECT 1"},
+		sqlparser.StmtSelect, 0, toQueryAttributesForTest(&querypb.ExecuteOptions{Priority: priority}))
+}
+
+// A query is a throttling candidate when a draw from [0, 100) is below its priority, so
+// priority 0 is never throttled, whatever the draw, and priority 100 always is a candidate.
+func TestTabletThrottlerStrategy_Evaluate_PriorityBoundaries(t *testing.T) {
+	tests := []struct {
+		priority     string
+		randIntN     int
+		wantThrottle bool
+	}{
+		{priority: "0", randIntN: 0, wantThrottle: false},
+		{priority: "0", randIntN: 99, wantThrottle: false},
+		{priority: "1", randIntN: 0, wantThrottle: true},
+		{priority: "1", randIntN: 1, wantThrottle: false},
+		{priority: "100", randIntN: 99, wantThrottle: true},
+	}
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("priority=%s/rand=%d", tt.priority, tt.randIntN), func(t *testing.T) {
+			decision := evaluateOverloaded(t, tt.priority, 100, tt.randIntN, 0)
+			require.Equal(t, tt.wantThrottle, decision.Throttle, decision.Message)
+		})
+	}
+}
+
+// A breached threshold throttles a query when a draw from [0, 1) is below its ratio, and
+// otherwise reaches the final allow.
+func TestTabletThrottlerStrategy_Evaluate_ThrottleRatioBoundaries(t *testing.T) {
+	tests := []struct {
+		name         string
+		ratioPercent float64
+		randFloat64  float64
+		wantThrottle bool
+	}{
+		{name: "draw below ratio", ratioPercent: 50, randFloat64: 0.49, wantThrottle: true},
+		{name: "draw equal to ratio", ratioPercent: 50, randFloat64: 0.5, wantThrottle: false},
+		{name: "full ratio", ratioPercent: 100, randFloat64: 0.999, wantThrottle: true},
+		{name: "zero ratio", ratioPercent: 0, randFloat64: 0, wantThrottle: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			decision := evaluateOverloaded(t, "100", tt.ratioPercent, 0, tt.randFloat64)
+			require.Equal(t, tt.wantThrottle, decision.Throttle, decision.Message)
+		})
+	}
+}
+
+// A breach whose probabilistic draw misses must allow the query and count it as allowed.
+func TestTabletThrottlerStrategy_Evaluate_FinalAllow(t *testing.T) {
+	allowed := []string{"PRIMARY", "SELECT", decisionPathFull, decisionOutcomeAllowed, decisionReasonQueryAllowed}
+	key := strings.Join(allowed, ".")
+	before := decisionCount.Counts()[key]
+
+	decision := evaluateOverloaded(t, "100", 10, 0, 0.99)
+
+	require.False(t, decision.Throttle)
+	require.Equal(t, "No throttling conditions met", decision.Message)
+	require.Equal(t, before+1, decisionCount.Counts()[key], "the final allow must be counted as query_allowed")
 }

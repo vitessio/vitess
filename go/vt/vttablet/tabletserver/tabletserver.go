@@ -2172,26 +2172,21 @@ func (tsv *TabletServer) TopoServer() *topo.Server {
 
 // CheckThrottler issues a self check for the specified throttler type
 func (tsv *TabletServer) CheckThrottler(ctx context.Context, appName string, flags *throttle.CheckFlags, throttlerType tabletmanagerdatapb.ThrottlerType) *throttle.CheckResult {
-	var t *throttle.Throttler
-	switch throttlerType {
-	case tabletmanagerdatapb.ThrottlerType_DEDICATED_QUERY_THROTTLER:
-		t = tsv.qThrottler
-	default:
-		t = tsv.lagThrottler
-	}
-	return t.Check(ctx, appName, nil, flags)
+	return tsv.throttlerByType(throttlerType).Check(ctx, appName, nil, flags)
 }
 
 // GetThrottlerStatus gets the status of the specified throttler type
 func (tsv *TabletServer) GetThrottlerStatus(ctx context.Context, throttlerType tabletmanagerdatapb.ThrottlerType) *throttle.ThrottlerStatus {
-	var t *throttle.Throttler
-	switch throttlerType {
-	case tabletmanagerdatapb.ThrottlerType_DEDICATED_QUERY_THROTTLER:
-		t = tsv.qThrottler
-	default:
-		t = tsv.lagThrottler
+	return tsv.throttlerByType(throttlerType).Status()
+}
+
+// throttlerByType returns the dedicated query throttler for DEDICATED_QUERY_THROTTLER, and
+// the lag throttler otherwise, including for requests from callers that predate the field.
+func (tsv *TabletServer) throttlerByType(throttlerType tabletmanagerdatapb.ThrottlerType) *throttle.Throttler {
+	if throttlerType == tabletmanagerdatapb.ThrottlerType_DEDICATED_QUERY_THROTTLER {
+		return tsv.qThrottler
 	}
-	return t.Status()
+	return tsv.lagThrottler
 }
 
 // RedoPreparedTransactions redoes the prepared transactions.

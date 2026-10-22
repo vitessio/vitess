@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -65,6 +66,7 @@ import (
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	querythrottlerpb "vitess.io/vitess/go/vt/proto/querythrottler"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
@@ -3145,10 +3147,30 @@ func TestTabletServerCloseShutsDownQueryThrottler(t *testing.T) {
 	ctx := t.Context()
 	db, tsv := setupTabletServerTest(t, ctx, "keyspaceName")
 	defer db.Close()
+	// Close does not stop the health-check ticker that StartService started.
+	t.Cleanup(tsv.StopService)
 
 	require.False(t, tsv.queryThrottler.IsShutdown(), "query throttler should be running before shutdown")
 	require.NoError(t, tsv.Close(ctx))
 	require.True(t, tsv.queryThrottler.IsShutdown(), "Close must shut down the query throttler")
+}
+
+// CheckThrottler and GetThrottlerStatus must reach the dedicated query throttler for
+// DEDICATED_QUERY_THROTTLER, and the lag throttler otherwise.
+func TestTabletServerThrottlerByType(t *testing.T) {
+	ctx := t.Context()
+	db, tsv := setupTabletServerTest(t, ctx, "keyspaceName")
+	t.Cleanup(tsv.StopService)
+	t.Cleanup(db.Close)
+
+	require.NotSame(t, tsv.lagThrottler, tsv.qThrottler)
+	require.Same(t, tsv.qThrottler, tsv.throttlerByType(tabletmanagerdatapb.ThrottlerType_DEDICATED_QUERY_THROTTLER))
+	require.Same(t, tsv.lagThrottler, tsv.throttlerByType(tabletmanagerdatapb.ThrottlerType_DEFAULT_LAG_THROTTLER))
+
+	// Tell the two apart by threshold, which each throttler keeps on its own.
+	tsv.qThrottler.MetricsThreshold.Store(math.Float64bits(42))
+	require.Equal(t, float64(42), tsv.GetThrottlerStatus(ctx, tabletmanagerdatapb.ThrottlerType_DEDICATED_QUERY_THROTTLER).Threshold)
+	require.NotEqual(t, float64(42), tsv.GetThrottlerStatus(ctx, tabletmanagerdatapb.ThrottlerType_DEFAULT_LAG_THROTTLER).Threshold)
 }
 
 // alwaysThrottleStrategy throttles every statement the query throttler evaluates.

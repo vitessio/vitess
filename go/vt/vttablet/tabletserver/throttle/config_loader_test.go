@@ -17,13 +17,21 @@ limitations under the License.
 package throttle
 
 import (
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
-	querythrottlerpb "vitess.io/vitess/go/vt/proto/querythrottler"
+	"vitess.io/vitess/go/protoutil"
+	"vitess.io/vitess/go/vt/vtenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
+
+	querythrottlerpb "vitess.io/vitess/go/vt/proto/querythrottler"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // An unsorted Thresholds slice must still yield the true minimum as the floor, with the
@@ -164,4 +172,68 @@ func TestConvertQueryThrottlerConfigToThrottlerConfig_ScopedMetricName(t *testin
 	_, scopedKeyPresent := tc.MetricThresholds["shard/lag"]
 	require.False(t, scopedKeyPresent,
 		"threshold must NOT be keyed by the scoped name — convergeMetricThresholds would drop it")
+}
+
+// The converted config carries Enabled through, and always throttles the query throttler's
+// app with a non-exempt rule. A rule with Exempt=true would make every check pass.
+func TestConvertQueryThrottlerConfigToThrottlerConfig_EnabledAndAppRule(t *testing.T) {
+	appName := throttlerapp.QueryThrottlerName.String()
+	for _, enabled := range []bool{true, false} {
+		t.Run(fmt.Sprintf("enabled=%v", enabled), func(t *testing.T) {
+			tc := convertQueryThrottlerConfigToThrottlerConfig(&querythrottlerpb.Config{
+				Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER,
+				Enabled:  enabled,
+			})
+			require.NotNil(t, tc)
+			require.Equal(t, enabled, tc.GetEnabled())
+
+			rule := tc.GetThrottledApps()[appName]
+			require.NotNil(t, rule, "the query throttler app must have a rule")
+			require.Equal(t, appName, rule.GetName())
+			require.Zero(t, rule.GetRatio())
+			require.False(t, rule.GetExempt(), "the query throttler app must not be exempt")
+			require.WithinDuration(t, time.Now().Add(365*24*time.Hour), protoutil.TimeFromProto(rule.GetExpiresAt()), time.Minute)
+
+			// No rules: nothing to check and no thresholds to apply.
+			require.Nil(t, tc.GetAppCheckedMetrics())
+			require.Nil(t, tc.GetMetricThresholds())
+		})
+	}
+}
+
+// Only a TABLET_THROTTLER config drives the dedicated throttler; anything else, or no
+// config, leaves it unconfigured.
+func TestConvertQueryThrottlerConfigToThrottlerConfig_NotTabletThrottler(t *testing.T) {
+	require.Nil(t, convertQueryThrottlerConfigToThrottlerConfig(nil))
+	require.Nil(t, convertQueryThrottlerConfigToThrottlerConfig(&querythrottlerpb.Config{
+		Strategy: querythrottlerpb.ThrottlingStrategy_UNKNOWN,
+		Enabled:  true,
+	}))
+}
+
+// Each throttler type loads its config from its own SrvKeyspace field.
+func TestConfigLoaderPerThrottlerType(t *testing.T) {
+	lagCfg := &topodatapb.ThrottlerConfig{Enabled: true, Threshold: 7}
+	srvks := &topodatapb.SrvKeyspace{
+		ThrottlerConfig: lagCfg,
+		QueryThrottlerConfig: &querythrottlerpb.Config{
+			Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER,
+			Enabled:  false,
+		},
+	}
+
+	lagThrottler := NewThrottler(tabletenv.NewEnv(vtenv.NewTestEnv(), tabletenv.NewDefaultConfig(), "ConfigLoaderTest"), nil, nil, &topodatapb.TabletAlias{}, nil, nil, DefaultTabletThrottler)
+	require.IsType(t, &defaultConfigLoader{}, lagThrottler.configLoader)
+	require.Same(t, lagCfg, lagThrottler.configLoader.loadConfig(srvks))
+
+	queryThrottler := NewThrottler(tabletenv.NewEnv(vtenv.NewTestEnv(), tabletenv.NewDefaultConfig(), "ConfigLoaderTest"), nil, nil, &topodatapb.TabletAlias{}, nil, nil, QueryTabletThrottler)
+	require.IsType(t, &queryConfigLoader{}, queryThrottler.configLoader)
+	queryCfg := queryThrottler.configLoader.loadConfig(srvks)
+	require.NotNil(t, queryCfg)
+	require.False(t, queryCfg.GetEnabled(), "the dedicated throttler must follow the query throttler config, not ThrottlerConfig")
+}
+
+func TestThrottlerTypeToProto(t *testing.T) {
+	require.Equal(t, tabletmanagerdatapb.ThrottlerType_DEFAULT_LAG_THROTTLER, DefaultTabletThrottler.ToProto())
+	require.Equal(t, tabletmanagerdatapb.ThrottlerType_DEDICATED_QUERY_THROTTLER, QueryTabletThrottler.ToProto())
 }

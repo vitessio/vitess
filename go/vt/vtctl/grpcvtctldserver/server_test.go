@@ -7976,6 +7976,63 @@ func TestGetSrvVSchemas(t *testing.T) {
 	}
 }
 
+// throttlerTypeTMClient records the throttler type of each throttler request it gets.
+type throttlerTypeTMClient struct {
+	tmclient.TabletManagerClient
+	checkType  tabletmanagerdatapb.ThrottlerType
+	statusType tabletmanagerdatapb.ThrottlerType
+}
+
+func (c *throttlerTypeTMClient) CheckThrottler(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.CheckThrottlerRequest) (*tabletmanagerdatapb.CheckThrottlerResponse, error) {
+	c.checkType = req.ThrottlerType
+	return &tabletmanagerdatapb.CheckThrottlerResponse{}, nil
+}
+
+func (c *throttlerTypeTMClient) GetThrottlerStatus(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.GetThrottlerStatusRequest) (*tabletmanagerdatapb.GetThrottlerStatusResponse, error) {
+	c.statusType = req.ThrottlerType
+	return &tabletmanagerdatapb.GetThrottlerStatusResponse{}, nil
+}
+
+// CheckThrottler and GetThrottlerStatus must pass the requested throttler type on to the
+// tablet, so a request for the dedicated query throttler doesn't reach the lag one.
+func TestThrottlerRPCsForwardThrottlerType(t *testing.T) {
+	t.Parallel()
+
+	for _, throttlerType := range []tabletmanagerdatapb.ThrottlerType{
+		tabletmanagerdatapb.ThrottlerType_DEDICATED_QUERY_THROTTLER,
+		tabletmanagerdatapb.ThrottlerType_DEFAULT_LAG_THROTTLER,
+	} {
+		t.Run(throttlerType.String(), func(t *testing.T) {
+			ctx := t.Context()
+			ts := memorytopo.NewServer(ctx, "cell1")
+			// Start from the other value, so a forwarded zero value can't pass by accident.
+			initial := tabletmanagerdatapb.ThrottlerType_DEDICATED_QUERY_THROTTLER
+			if throttlerType == initial {
+				initial = tabletmanagerdatapb.ThrottlerType_DEFAULT_LAG_THROTTLER
+			}
+			tmc := &throttlerTypeTMClient{checkType: initial, statusType: initial}
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(vtenv.NewTestEnv(), ts)
+			})
+			alias := &topodatapb.TabletAlias{Cell: "cell1", Uid: 100}
+			testutil.AddTablet(ctx, t, ts, &topodatapb.Tablet{
+				Alias:    alias,
+				Keyspace: "testkeyspace",
+				Shard:    "-",
+				Type:     topodatapb.TabletType_PRIMARY,
+			}, nil)
+
+			_, err := vtctld.CheckThrottler(ctx, &vtctldatapb.CheckThrottlerRequest{TabletAlias: alias, ThrottlerType: throttlerType})
+			require.NoError(t, err)
+			require.Equal(t, throttlerType, tmc.checkType)
+
+			_, err = vtctld.GetThrottlerStatus(ctx, &vtctldatapb.GetThrottlerStatusRequest{TabletAlias: alias, ThrottlerType: throttlerType})
+			require.NoError(t, err)
+			require.Equal(t, throttlerType, tmc.statusType)
+		})
+	}
+}
+
 func TestGetTablet(t *testing.T) {
 	t.Parallel()
 
