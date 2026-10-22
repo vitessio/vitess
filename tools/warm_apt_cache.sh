@@ -43,27 +43,27 @@ case "${set_name}" in
 mysql-5.7 | mysql-8.0)
 	# The unit tests, on the setup-mysql action's MySQL.
 	script="
-		FLAVOR=${set_name} DOWNLOAD_ONLY=1 /src/.github/actions/setup-mysql/setup-mysql.sh
-		apt-get install -y --download-only ${unit_packages}"
+		FLAVOR=${set_name} DOWNLOAD_ONLY=\${fetch} /src/.github/actions/setup-mysql/setup-mysql.sh
+		\${fetch} ${unit_packages}"
 	;;
 mysql-8.4)
 	# The unit tests, and the cluster tests, which also install mysql-shell.
 	script="
-		FLAVOR=${set_name} DOWNLOAD_ONLY=1 /src/.github/actions/setup-mysql/setup-mysql.sh
-		apt-get install -y --download-only ${unit_packages} ${cluster_packages} mysql-shell"
+		FLAVOR=${set_name} DOWNLOAD_ONLY=\${fetch} /src/.github/actions/setup-mysql/setup-mysql.sh
+		\${fetch} ${unit_packages} ${cluster_packages} mysql-shell"
 	;;
 percona)
 	# The cluster tests that need XtraBackup, which install Percona Server as
 	# the setup-percona-repo action and cluster_endtoend.yml do.
 	script="
 		curl -fsSLo percona-release_latest.deb https://repo.percona.com/apt/percona-release_latest.\$(lsb_release -sc)_all.deb
-		apt-get install -y --download-only gnupg2 lsb-release
+		\${fetch} gnupg2 lsb-release
 		dpkg -i percona-release_latest.deb
 		percona-release setup pdps8.0
 		percona-release setup pxb-80
 		percona-release enable ps-80 release
 		apt-get update -qq
-		apt-get install -y --download-only percona-server-server percona-server-client percona-xtrabackup-80 lz4 ${cluster_packages}"
+		\${fetch} percona-server-server percona-server-client percona-xtrabackup-80 lz4 ${cluster_packages}"
 	;;
 *)
 	echo "unknown package set: ${set_name}" >&2
@@ -75,10 +75,18 @@ docker run --rm --platform linux/amd64 \
 	-v "${PWD}:/src:ro" -v "${dir}:/var/cache/vitess-apt" -w /tmp \
 	-e DEBIAN_FRONTEND=noninteractive -e APT_CACHE_DIR=/var/cache/vitess-apt \
 	ubuntu:24.04 bash -euo pipefail -c "
+		fetch=/src/tools/apt_fetch.sh
 		apt-get update -qq
-		apt-get install -qq -y sudo make g++ > /dev/null
+		printf '#!/bin/sh\nexec env \"\$@\"\n' > /usr/local/bin/sudo
+		chmod +x /usr/local/bin/sudo
 		/src/.github/actions/restore-apt-cache/use-apt-cache.sh
-		apt-get install -qq -y ca-certificates curl wget gnupg dirmngr lsb-release > /dev/null
+		# curl, which tools/apt_fetch.sh needs, through apt.
+		apt-get install -qq -y ca-certificates curl > /dev/null
+		# The compilers, outside the cache.
+		ARCHIVES=/var/cache/apt/archives \${fetch} make g++
+		apt-get install -qq -y -o Dir::Cache::Archives=/var/cache/apt/archives/ make g++ > /dev/null
+		\${fetch} wget gnupg dirmngr lsb-release
+		apt-get install -qq -y wget gnupg dirmngr lsb-release > /dev/null
 		${script}"
 
 find "${dir}" -maxdepth 1 -name '*.deb' -printf '%s\n' |

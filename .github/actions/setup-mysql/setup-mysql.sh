@@ -14,9 +14,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Installs the MySQL FLAVOR for the setup-mysql action. With DOWNLOAD_ONLY
-# set, it only downloads MySQL's packages, into the apt cache that
-# tools/warm_apt_cache.sh fills.
+# Installs the MySQL FLAVOR for the setup-mysql action. With DOWNLOAD_ONLY set
+# to a command that downloads packages, such as tools/apt_fetch.sh, it only
+# downloads MySQL's packages, for tools/warm_apt_cache.sh.
 
 set -e
 
@@ -59,7 +59,11 @@ to_apt_cache() {
 }
 
 install_packages() {
-  sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y ${DOWNLOAD_ONLY:+--download-only} "$@"
+  if [[ -n "${DOWNLOAD_ONLY:-}" ]]; then
+    sudo "${DOWNLOAD_ONLY}" "$@"
+  else
+    sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y "$@"
+  fi
 }
 
 sudo apt-get update
