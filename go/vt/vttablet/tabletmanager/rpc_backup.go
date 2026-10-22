@@ -129,12 +129,8 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 			return err
 		}
 		originalType = tablet.Type
-		// Update our type to `BACKUP`.
-		if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_BACKUP, DBActionNone, SemiSyncActionUnset); err != nil {
-			return err
-		}
-
-		// Adding defer to original value in case of any failures.
+		// Restore the original type even if the change to BACKUP fails after
+		// publishing it.
 		defer func() {
 			bgCtx := context.Background()
 			// Change our type back to the original value.
@@ -183,6 +179,10 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 				l.Errorf("Failed to set replication source, error: %v", err)
 			}
 		}()
+
+		if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_BACKUP, DBActionNone, SemiSyncActionUnset); err != nil {
+			return err
+		}
 	}
 
 	// Now we can run the backup.
