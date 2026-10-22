@@ -17,15 +17,15 @@
 # Points apt at a responsive Ubuntu archive server before the job's first apt
 # run. The archive's host name resolves to several servers, some of which
 # intermittently answer only after 10-20 seconds and then send 50 kB/s, and apt
-# keeps downloading from them however long that takes; the Azure mirror that
-# the runner images list first sometimes does not answer at all. This times a
-# download of the release file from the Azure mirror and, over HTTP and HTTPS,
-# from each of the archive's addresses. If one of the archive's addresses is
-# fastest, it pins the archive's host names in /etc/hosts to every address that
-# answered both within 3 times the fastest one's time, so that whatever
-# resolves them still has other addresses to fail over to, and points apt at
-# the archive instead of the Azure mirror. When the Azure mirror is fastest, or
-# nothing answers, it changes nothing.
+# keeps downloading from them however long that takes. The Azure mirror that
+# the runner images list first sometimes does not answer at all, or sends
+# packages at 40 kB/s while it serves the release file instantly, so a probe
+# cannot tell when to trust it. This times a download of the release file over
+# HTTP and HTTPS from each of the archive's addresses, pins the archive's host
+# names in /etc/hosts to every address that answered both within 3 times the
+# fastest one's time, so that whatever resolves them still has other addresses
+# to fail over to, and points apt at the archive instead of the Azure mirror.
+# When no address answers, it changes nothing.
 
 set -uo pipefail
 
@@ -61,11 +61,6 @@ trap 'rm -f "${results}"' EXIT
 for ip in $(getent ahostsv4 "${archive}" | awk '{print $1}' | sort -u); do
 	(t="$(probe_both "${archive}" "${ip}" "${path}")" && echo "${t} ${ip}" >> "${results}") &
 done
-if [[ "${archive}" == archive.ubuntu.com ]]; then
-	for ip in $(getent ahostsv4 azure.archive.ubuntu.com | awk '{print $1}' | sort -u); do
-		(t="$(probe azure.archive.ubuntu.com "${ip}" ubuntu http)" && echo "${t} azure" >> "${results}") &
-	done
-fi
 wait
 
 sort -n "${results}" | sed 's/^/Ubuntu archive probe: /'
@@ -74,15 +69,10 @@ if [[ -z "${best}" ]]; then
 	echo "No Ubuntu archive server answered within 3 seconds; leaving apt as it is."
 	exit 0
 fi
-if [[ "${best}" == azure ]]; then
-	echo "The Azure mirror is fastest; leaving apt as it is."
-	exit 0
-fi
-
 # security.ubuntu.com is served by the same servers as archive.ubuntu.com.
 security="$(getent ahostsv4 security.ubuntu.com | awk '{print $1}' | sort -u)"
 fastest="$(sort -n "${results}" | head -1 | cut -d' ' -f1)"
-sort -n "${results}" | awk -v max="$(awk -v t="${fastest}" 'BEGIN { print 3 * t }')" '$2 != "azure" && $1 <= max { print $2 }' |
+sort -n "${results}" | awk -v max="$(awk -v t="${fastest}" 'BEGIN { print 3 * t }')" '$1 <= max { print $2 }' |
 	while read -r ip; do
 		names="${archive}"
 		if grep -qx "${ip}" <<< "${security}"; then
