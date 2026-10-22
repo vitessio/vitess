@@ -1,7 +1,7 @@
 # Bootstrap Images
 
-These Dockerfiles create images that contain everything Vitess expects to have
-after successfully running `bootstrap.sh` and `dev.env`.
+The [Dockerfile](Dockerfile) creates images that contain everything Vitess
+expects to have after successfully running `bootstrap.sh` and `dev.env`.
 
 The `vitess/bootstrap` image comes in different flavors:
 
@@ -9,6 +9,9 @@ The `vitess/bootstrap` image comes in different flavors:
 * `vitess/bootstrap:mysql80`   - bootstrap image for MySQL 8.0
 * `vitess/bootstrap:mysql84`   - bootstrap image for MySQL 8.4
 * `vitess/bootstrap:percona80` - bootstrap image for Percona Server 8.0
+* `vitess/bootstrap:percona84` - bootstrap image for Percona Server 8.4
+
+Each flavor is a stage of the Dockerfile, built on top of the `common` stage.
 
 **NOTE: Unlike the base image that builds Vitess itself, this bootstrap image
 will NOT be rebuilt automatically on every push to the Vitess main branch.**
@@ -39,6 +42,13 @@ Both arguments can be combined. For example:
 
 ```sh
 vitess$ docker/bootstrap/build.sh mysql80 --base_image my-common-image --image my-mysql-image
+```
+
+To build a flavor together with its `common` stage in a single build, without
+`build.sh`, select the flavor's stage:
+
+```sh
+vitess$ docker build -f docker/bootstrap/Dockerfile --target mysql84 -t vitess/bootstrap:mysql84 .
 ```
 
 ## For Vitess Project Maintainers

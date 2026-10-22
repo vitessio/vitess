@@ -74,14 +74,6 @@ func TestRegularExpressions(t *testing.T) {
 			},
 		},
 		{
-			regexp: regexpReplaceDockerfileBootstrapVersion,
-			input:  "ARG bootstrap_version=18.1",
-			checkF: func(t *testing.T, regexp *regexp.Regexp, input string) {
-				res := regexp.ReplaceAllString(input, "ARG bootstrap_version=18.2")
-				require.Equal(t, "ARG bootstrap_version=18.2", res)
-			},
-		},
-		{
 			regexp: regexpReplaceMakefileBootstrapVersion,
 			input:  "BOOTSTRAP_VERSION=18.1",
 			checkF: func(t *testing.T, regexp *regexp.Regexp, input string) {
@@ -138,6 +130,224 @@ func TestRegularExpressions(t *testing.T) {
 	}
 }
 
+<<<<<<< HEAD
+||||||| parent of 6a27b29206 (docker/bootstrap: build every image from one multi-stage Dockerfile (#21596))
+func TestGoModFilesToUpgrade(t *testing.T) {
+	dir := t.TempDir()
+
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example\n\ngo 1.26.3\n"), 0o644))
+
+	for _, tool := range []string{"goyacc", "gofumpt"} {
+		toolDir := filepath.Join(dir, "tools", tool)
+		require.NoError(t, os.MkdirAll(toolDir, 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(toolDir, "go.mod"), []byte("module example/"+tool+"\n\ngo 1.26.3\n"), 0o644))
+	}
+
+	// A tool directory without a go.mod must not be picked up.
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "tools", "notamodule"), 0o755))
+
+	origWd, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(dir))
+	t.Cleanup(func() {
+		require.NoError(t, os.Chdir(origWd))
+	})
+
+	files, err := goModFilesToUpgrade()
+	require.NoError(t, err)
+
+	require.Len(t, files, 3)
+	require.Contains(t, files, "./go.mod")
+
+	toolModules := map[string]bool{}
+	for _, file := range files {
+		toolModules[filepath.Base(filepath.Dir(file))] = true
+	}
+	require.True(t, toolModules["goyacc"])
+	require.True(t, toolModules["gofumpt"])
+}
+
+func TestCurrentGolangVersion(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "go.mod"),
+		[]byte("module vitess.io/vitess\n\ngo 1.26.4\n\nrequire golang.org/x/tools v0.1.0\n"), 0o644))
+
+	origWd, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(dir))
+	t.Cleanup(func() {
+		require.NoError(t, os.Chdir(origWd))
+	})
+
+	v, err := currentGolangVersion()
+	require.NoError(t, err)
+	require.Equal(t, "1.26.4", v.String())
+}
+
+func TestUpgradeGoModFiles(t *testing.T) {
+	dir := t.TempDir()
+
+	rootGoMod := filepath.Join(dir, "go.mod")
+	require.NoError(t, os.WriteFile(rootGoMod, []byte("module vitess.io/vitess\n\ngo 1.26.3\n"), 0o644))
+
+	// A tool module that has drifted behind the root module.
+	driftedTool := filepath.Join(dir, "tools", "goyacc", "go.mod")
+	require.NoError(t, os.MkdirAll(filepath.Dir(driftedTool), 0o755))
+	require.NoError(t, os.WriteFile(driftedTool, []byte("module vitess.io/vitess/go/tools/goyacc\n\ngo 1.26.1\n"), 0o644))
+
+	// A tool module already at the target version: it must be left byte-identical.
+	currentTool := filepath.Join(dir, "tools", "gofumpt", "go.mod")
+	require.NoError(t, os.MkdirAll(filepath.Dir(currentTool), 0o755))
+	currentContent := []byte("module vitess.io/vitess/go/tools/gofumpt\n\ngo 1.26.4\n")
+	require.NoError(t, os.WriteFile(currentTool, currentContent, 0o644))
+
+	origWd, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(dir))
+	t.Cleanup(func() {
+		require.NoError(t, os.Chdir(origWd))
+	})
+
+	target, err := version.NewVersion("1.26.4")
+	require.NoError(t, err)
+	require.NoError(t, upgradeGoModFiles(target))
+
+	for _, file := range []string{rootGoMod, driftedTool, currentTool} {
+		content, err := os.ReadFile(file)
+		require.NoError(t, err)
+		require.Contains(t, string(content), "go 1.26.4")
+	}
+
+	// The already-current module must be untouched, byte-for-byte.
+	got, err := os.ReadFile(currentTool)
+	require.NoError(t, err)
+	require.Equal(t, currentContent, got)
+}
+
+func TestUpdateBootstrapVersionInCodebaseKeepsDockerfileDefaultsInSync(t *testing.T) {
+	dir := t.TempDir()
+	write := func(rel, content string) {
+		p := filepath.Join(dir, rel)
+		require.NoError(t, os.MkdirAll(filepath.Dir(p), 0o755))
+		require.NoError(t, os.WriteFile(p, []byte(content), 0o644))
+	}
+	write("Makefile", "BOOTSTRAP_VERSION=60\n")
+	write("test.go", "flag.String(\"bootstrap-version\", \"60\", \"the version identifier to use for the docker images\")\n")
+	write("docker/bootstrap/CHANGELOG.md", "# Changelog\n")
+	flavors := []string{"mysql80", "mysql84", "percona80", "percona84"}
+	for _, flavor := range flavors {
+		write("docker/bootstrap/Dockerfile."+flavor, "ARG bootstrap_version=60\nARG image=\"vitess/bootstrap:${bootstrap_version}-common\"\n\nFROM $image\n")
+	}
+	t.Chdir(dir)
+
+	goVersion, err := version.NewVersion("1.27.1")
+	require.NoError(t, err)
+	require.NoError(t, updateBootstrapVersionInCodebase("60", "61", goVersion))
+
+	for _, flavor := range flavors {
+		content, err := os.ReadFile(filepath.Join(dir, "docker/bootstrap/Dockerfile."+flavor))
+		require.NoError(t, err)
+		require.Equal(t, "ARG bootstrap_version=61\nARG image=\"vitess/bootstrap:${bootstrap_version}-common\"\n\nFROM $image\n", string(content))
+	}
+	makefile, err := os.ReadFile(filepath.Join(dir, "Makefile"))
+	require.NoError(t, err)
+	require.Equal(t, "BOOTSTRAP_VERSION=61\n", string(makefile))
+}
+
+=======
+func TestGoModFilesToUpgrade(t *testing.T) {
+	dir := t.TempDir()
+
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example\n\ngo 1.26.3\n"), 0o644))
+
+	for _, tool := range []string{"goyacc", "gofumpt"} {
+		toolDir := filepath.Join(dir, "tools", tool)
+		require.NoError(t, os.MkdirAll(toolDir, 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(toolDir, "go.mod"), []byte("module example/"+tool+"\n\ngo 1.26.3\n"), 0o644))
+	}
+
+	// A tool directory without a go.mod must not be picked up.
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "tools", "notamodule"), 0o755))
+
+	origWd, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(dir))
+	t.Cleanup(func() {
+		require.NoError(t, os.Chdir(origWd))
+	})
+
+	files, err := goModFilesToUpgrade()
+	require.NoError(t, err)
+
+	require.Len(t, files, 3)
+	require.Contains(t, files, "./go.mod")
+
+	toolModules := map[string]bool{}
+	for _, file := range files {
+		toolModules[filepath.Base(filepath.Dir(file))] = true
+	}
+	require.True(t, toolModules["goyacc"])
+	require.True(t, toolModules["gofumpt"])
+}
+
+func TestCurrentGolangVersion(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "go.mod"),
+		[]byte("module vitess.io/vitess\n\ngo 1.26.4\n\nrequire golang.org/x/tools v0.1.0\n"), 0o644))
+
+	origWd, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(dir))
+	t.Cleanup(func() {
+		require.NoError(t, os.Chdir(origWd))
+	})
+
+	v, err := currentGolangVersion()
+	require.NoError(t, err)
+	require.Equal(t, "1.26.4", v.String())
+}
+
+func TestUpgradeGoModFiles(t *testing.T) {
+	dir := t.TempDir()
+
+	rootGoMod := filepath.Join(dir, "go.mod")
+	require.NoError(t, os.WriteFile(rootGoMod, []byte("module vitess.io/vitess\n\ngo 1.26.3\n"), 0o644))
+
+	// A tool module that has drifted behind the root module.
+	driftedTool := filepath.Join(dir, "tools", "goyacc", "go.mod")
+	require.NoError(t, os.MkdirAll(filepath.Dir(driftedTool), 0o755))
+	require.NoError(t, os.WriteFile(driftedTool, []byte("module vitess.io/vitess/go/tools/goyacc\n\ngo 1.26.1\n"), 0o644))
+
+	// A tool module already at the target version: it must be left byte-identical.
+	currentTool := filepath.Join(dir, "tools", "gofumpt", "go.mod")
+	require.NoError(t, os.MkdirAll(filepath.Dir(currentTool), 0o755))
+	currentContent := []byte("module vitess.io/vitess/go/tools/gofumpt\n\ngo 1.26.4\n")
+	require.NoError(t, os.WriteFile(currentTool, currentContent, 0o644))
+
+	origWd, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(dir))
+	t.Cleanup(func() {
+		require.NoError(t, os.Chdir(origWd))
+	})
+
+	target, err := version.NewVersion("1.26.4")
+	require.NoError(t, err)
+	require.NoError(t, upgradeGoModFiles(target))
+
+	for _, file := range []string{rootGoMod, driftedTool, currentTool} {
+		content, err := os.ReadFile(file)
+		require.NoError(t, err)
+		require.Contains(t, string(content), "go 1.26.4")
+	}
+
+	// The already-current module must be untouched, byte-for-byte.
+	got, err := os.ReadFile(currentTool)
+	require.NoError(t, err)
+	require.Equal(t, currentContent, got)
+}
+
+>>>>>>> 6a27b29206 (docker/bootstrap: build every image from one multi-stage Dockerfile (#21596))
 // TestResolveGolangImageDigestPinsMultiPlatformIndex publishes a golang tag whose manifest is a
 // multi-platform index and checks that the resolver pins the index itself rather than one of its
 // per-platform children. A per-platform pin cannot be built natively on any other architecture.

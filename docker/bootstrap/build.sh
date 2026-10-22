@@ -44,9 +44,7 @@ if [[ ! -f bootstrap.sh ]]; then
 fi
 
 # Fix permissions before copying files, to avoid AUFS bug other must have read/access permissions
-chmod -R o=rx *;
-
-arch=$(uname -m)
+chmod -R o=rx ./*;
 
 base_image="${base_image:-vitess/bootstrap:$version-common}"
 image="${image:-vitess/bootstrap:$version-$flavor}"
@@ -54,11 +52,12 @@ image="${image:-vitess/bootstrap:$version-$flavor}"
 while [ $# -gt 0 ]; do
    if [[ $1 == *"--"* ]]; then
         param="${1/--/}"
-        declare $param="$2"
+        declare "$param"="$2"
    fi
   shift
 done
 
+<<<<<<< HEAD
 if [ -f "docker/bootstrap/Dockerfile.$flavor" ]; then
     docker build \
       -f docker/bootstrap/Dockerfile.$flavor \
@@ -66,4 +65,36 @@ if [ -f "docker/bootstrap/Dockerfile.$flavor" ]; then
       --build-arg bootstrap_version=$version \
       --build-arg image=$base_image \
       .
+||||||| parent of 6a27b29206 (docker/bootstrap: build every image from one multi-stage Dockerfile (#21596))
+if [ -f "docker/bootstrap/Dockerfile.$flavor" ]; then
+    args=(
+      --platform=linux/amd64
+      -f "docker/bootstrap/Dockerfile.$flavor"
+      -t "$image"
+      --build-arg "bootstrap_version=$version"
+    )
+
+    if [ "$flavor" != "common" ]; then
+      args+=(--build-arg "image=$base_image")
+    fi
+
+    docker build "${args[@]}" .
+=======
+if ! grep -q "^FROM .* AS $flavor\$" docker/bootstrap/Dockerfile; then
+  echo "Unknown flavor: $flavor"
+  exit 1
+>>>>>>> 6a27b29206 (docker/bootstrap: build every image from one multi-stage Dockerfile (#21596))
 fi
+
+args=(
+  --platform=linux/amd64
+  -f docker/bootstrap/Dockerfile
+  --target "$flavor"
+  -t "$image"
+)
+
+if [ "$flavor" != "common" ]; then
+  args+=(--build-arg "base_image=$base_image")
+fi
+
+docker build "${args[@]}" .
