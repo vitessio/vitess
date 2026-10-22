@@ -163,6 +163,9 @@ type Throttler struct {
 	recentCheckDormantDiff int64
 	recentCheckDiff        int64
 
+	// stimulating is true while a stimulation of the primary is in flight.
+	stimulating atomic.Bool
+
 	throttleTabletTypesMap map[topodatapb.TabletType]bool
 
 	throttleMetricChan  chan *base.ThrottleMetric
@@ -772,6 +775,9 @@ func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 			tmClient = tmclient.NewTabletManagerClient()
 			defer tmClient.Close()
 		}
+		// Background stimulations use tmClient, so they finish before it is closed.
+		var stimulations sync.WaitGroup
+		defer stimulations.Wait()
 
 		for {
 			select {
@@ -821,9 +827,17 @@ func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 							// even further.
 							// Another outcome is that the primary will go out of "dormant" mode, and start collecting
 							// replica metrics more frequently.
+							// The stimulation reads the topo and calls the primary, so it runs in the background, one at
+							// a time, rather than holding up this loop.
 							primaryStimulatorRateLimiter.Do(
 								func() error {
-									return throttler.stimulatePrimaryThrottler(ctx, tmClient)
+									if throttler.stimulating.CompareAndSwap(false, true) {
+										stimulations.Go(func() {
+											defer throttler.stimulating.Store(false)
+											_ = throttler.stimulatePrimaryThrottler(ctx, tmClient)
+										})
+									}
+									return nil
 								},
 							)
 						}
