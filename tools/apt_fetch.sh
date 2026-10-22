@@ -79,6 +79,9 @@ fetch() {
 		rm -f "${tmp}"
 		return 1
 	fi
+	# mktemp creates the file readable only by its owner; apt's own downloads,
+	# which the cache saves as another user, are readable by everyone.
+	chmod 0644 "${tmp}"
 	mv "${tmp}" "${dest}"
 }
 # Kept across runs, which tools/warm_apt_cache.sh makes several of.
