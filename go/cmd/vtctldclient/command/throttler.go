@@ -73,7 +73,13 @@ var (
 	UpdateQueryThrottlerConfig = &cobra.Command{
 		Use:   "UpdateQueryThrottlerConfig {--config <config> | --config-file <file>} <keyspace>",
 		Short: "Update the query throttler configuration for the given keyspace.",
-		Long:  "Update the query throttler configuration for the given keyspace. The configuration controls how incoming queries are throttled based on tablet throttler metrics.",
+		Long: `Update the query throttler configuration for the given keyspace. The configuration controls how incoming queries are throttled based on tablet throttler metrics.
+
+The command replaces the keyspace's whole configuration, so {"enabled":false} also removes every rule. To change one rule, pass the full configuration with that change. GetKeyspace shows the current configuration, and GetSrvKeyspaces shows each cell's copy.
+
+Tablets act on a throttler check they refresh every --query-throttler-cache-update-interval (default 10s). Throttling starts and stops up to that long after a metric crosses its threshold, and a tablet that has just enabled the configuration throttles nothing until its first check completes.
+
+On a primary, "lag" (or "shard/lag") is the highest replication lag among the replicas it probes, which --throttle-tablet-types selects (default: replica). On a replica, it is that replica's own lag.`,
 		Example: `# Throttle 50% of INSERTs on primaries when replication lag is above 5s, and all of them above 10s.
 UpdateQueryThrottlerConfig --config '{"enabled":true,"strategy":"TABLET_THROTTLER","dry_run":false,"tablet_strategy_config":{"tablet_rules":{"PRIMARY":{"statement_rules":{"INSERT":{"metric_rules":{"lag":{"thresholds":[{"above":5,"throttle":50},{"above":10,"throttle":100}]}}}}}}}}' my_keyspace
 

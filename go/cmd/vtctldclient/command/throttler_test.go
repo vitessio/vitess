@@ -731,9 +731,9 @@ func TestValidateQueryThrottlerConfigContent_RejectsUnenforceableRules(t *testin
 			wantErr: "threshold[0] 'above' must be a finite number, got -Inf",
 		},
 	}
-	// DDL and MIGRATION plans reach the throttler without a parsed query, and their rules
-	// still apply, so they are valid statement types like the data-plane ones.
-	for _, stmtType := range []string{"SELECT", "INSERT", "REPLACE", "UPDATE", "DELETE", "DDL", "MIGRATION"} {
+	// DDL plans can reach the throttler without a parsed query, and their rules still apply,
+	// so DDL is a valid statement type like the data-plane ones.
+	for _, stmtType := range []string{"SELECT", "INSERT", "REPLACE", "UPDATE", "DELETE", "DDL"} {
 		tests = append(tests, struct {
 			name    string
 			config  *querythrottler.Config

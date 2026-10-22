@@ -134,47 +134,42 @@ func createTestQueryThrottlerConfig(cfg *querythrottlerpb.TabletStrategyConfig) 
 }
 
 // A matching rule must throttle even when parsedQuery is nil. Build() leaves plan.FullQuery
-// nil for ALTER/REVERT VITESS_MIGRATION and partially parsed DDL, and the statement type
-// alone decides which rule applies, so DDL and MIGRATION rules must still be enforced.
+// nil for partially parsed DDL, and the statement type alone decides which rule applies,
+// so DDL rules must still be enforced.
 func TestTabletThrottlerStrategy_Evaluate_NilParsedQuery(t *testing.T) {
 	overloaded := &throttle.CheckResult{
 		Metrics: map[string]*throttle.MetricResult{
 			"lag": {ResponseCode: tabletmanagerdata.CheckThrottlerResponseCode_THRESHOLD_EXCEEDED, Value: 20},
 		},
 	}
+	cfg := createTestQueryThrottlerConfig(makeTabletStrategyConfig(
+		topodatapb.TabletType_PRIMARY.String(),
+		sqlparser.StmtDDL.String(),
+		"lag",
+		makeThresholds(10, 100),
+	))
+	strategy := newTestStrategyWithRandom(
+		NewFakeThrottleClientWrapper(overloaded, false),
+		testRandomFuncs{
+			randFloat64: func() float64 { return 0.5 },
+			randIntN:    func(n int) int { return 99 },
+		},
+	)
+	strategy.running.Store(true)
+	strategy.cachedState.Store(&cacheState{ok: false, result: overloaded, refreshedAt: time.Now()})
 
-	for _, stmtType := range []sqlparser.StatementType{sqlparser.StmtDDL, sqlparser.StmtMigration} {
-		t.Run(stmtType.String(), func(t *testing.T) {
-			cfg := createTestQueryThrottlerConfig(makeTabletStrategyConfig(
-				topodatapb.TabletType_PRIMARY.String(),
-				stmtType.String(),
-				"lag",
-				makeThresholds(10, 100),
-			))
-			strategy := newTestStrategyWithRandom(
-				NewFakeThrottleClientWrapper(overloaded, false),
-				testRandomFuncs{
-					randFloat64: func() float64 { return 0.5 },
-					randIntN:    func(n int) int { return 99 },
-				},
-			)
-			strategy.running.Store(true)
-			strategy.cachedState.Store(&cacheState{ok: false, result: overloaded, refreshedAt: time.Now()})
+	decision := strategy.Evaluate(
+		t.Context(),
+		cfg,
+		topodatapb.TabletType_PRIMARY,
+		nil,
+		sqlparser.StmtDDL,
+		0,
+		toQueryAttributesForTest(&querypb.ExecuteOptions{Priority: "100"}),
+	)
 
-			decision := strategy.Evaluate(
-				t.Context(),
-				cfg,
-				topodatapb.TabletType_PRIMARY,
-				nil,
-				stmtType,
-				0,
-				toQueryAttributesForTest(&querypb.ExecuteOptions{Priority: "100"}),
-			)
-
-			require.True(t, decision.Throttle, "a matching %s rule must throttle when parsedQuery is nil", stmtType)
-			require.Equal(t, "lag", decision.MetricName)
-		})
-	}
+	require.True(t, decision.Throttle, "a matching DDL rule must throttle when parsedQuery is nil")
+	require.Equal(t, "lag", decision.MetricName)
 }
 
 // TestTabletThrottlerStrategy_ThrottleIfNeeded_Legacy tests the legacy ThrottleIfNeeded-style behavior via Evaluate.

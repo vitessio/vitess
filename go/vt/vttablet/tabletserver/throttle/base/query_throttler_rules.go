@@ -22,9 +22,12 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 )
 
-// queryThrottlerStatementTypes are the statement types a vttablet query plan can report
-// (planbuilder.Build and BuildStreaming), so the only ones a query throttler rule can match.
-// Statements such as BEGIN, USE or LOCK TABLES never reach the query throttler.
+// queryThrottlerStatementTypes are the statement types a query throttler rule may name.
+// They come from the types a vttablet query plan can report (planbuilder.Build and
+// BuildStreaming); statements such as BEGIN, USE or LOCK TABLES never reach the query
+// throttler. MIGRATION and SET reach it but are left out on purpose: a MIGRATION rule would
+// also reject ALTER VITESS_MIGRATION ... CANCEL, which an operator may need while the
+// tablet is overloaded, and a SET rule would fail the statements that set up a session.
 var queryThrottlerStatementTypes = func() map[string]struct{} {
 	names := make(map[string]struct{})
 	for _, s := range []sqlparser.StatementType{
@@ -34,8 +37,6 @@ var queryThrottlerStatementTypes = func() map[string]struct{} {
 		sqlparser.StmtUpdate,
 		sqlparser.StmtDelete,
 		sqlparser.StmtDDL,
-		sqlparser.StmtMigration,
-		sqlparser.StmtSet,
 		sqlparser.StmtShow,
 		sqlparser.StmtOther,
 		sqlparser.StmtAnalyze,
