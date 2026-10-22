@@ -100,22 +100,7 @@ jobs:
           persist-credentials: "false"
 
       - name: Set up Go
-<<<<<<< HEAD
-        # zizmor: ignore[cache-poisoning] this workflow publishes no artifacts
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
-          cache: ${{ (github.base_ref == 'main' || (github.base_ref == '' && github.ref_name == 'main')) && 'true' || 'false' }}
-||||||| parent of 3a61da854a (ci: use the shared setup-go action in the remaining workflows (#20694))
-        if: steps.changes.outputs.end_to_end == 'true'
-        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
-        with:
-          go-version-file: go.mod
-          cache: ${{ (github.base_ref == 'main' || (github.base_ref == '' && github.ref_name == 'main')) && 'true' || 'false' }}
-=======
-        if: steps.changes.outputs.end_to_end == 'true'
-        uses: ./.github/actions/setup-go
->>>>>>> 3a61da854a (ci: use the shared setup-go action in the remaining workflows (#20694))
+        uses: $/.github/actions/setup-go
 
       - name: Tune the OS
         uses: $/.github/actions/tune-os
