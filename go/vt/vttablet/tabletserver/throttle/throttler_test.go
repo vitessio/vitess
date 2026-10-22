@@ -2334,15 +2334,17 @@ func (ts *stimulateTopoServer) FindAllTabletAliasesInShard(ctx context.Context, 
 	return ts.FakeTopoServer.FindAllTabletAliasesInShard(ctx, keyspace, shard)
 }
 
-// stimulateTMClient records which tablets were sent a CheckThrottler request.
+// stimulateTMClient records which tablets were sent a CheckThrottler request, and the requests.
 type stimulateTMClient struct {
 	tmclient.TabletManagerClient
 	checked  []*topodatapb.Tablet
+	requests []*tabletmanagerdatapb.CheckThrottlerRequest
 	checkErr error
 }
 
 func (c *stimulateTMClient) CheckThrottler(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.CheckThrottlerRequest) (*tabletmanagerdatapb.CheckThrottlerResponse, error) {
 	c.checked = append(c.checked, tablet)
+	c.requests = append(c.requests, req)
 	if c.checkErr != nil {
 		return nil, c.checkErr
 	}
@@ -2441,6 +2443,37 @@ func TestStimulatePrimaryThrottler(t *testing.T) {
 			}
 			require.Len(t, tmClient.checked, 1)
 			assert.Equal(t, topoproto.TabletAliasString(tcase.expectTarget), topoproto.TabletAliasString(tmClient.checked[0].Alias))
+		})
+	}
+}
+
+// Both requests a throttler sends to another tablet, the stimulation of the primary and the
+// shard probe, name the sender's throttler type. Otherwise the dedicated query throttler would
+// wake, and read its shard metrics from, the other tablet's lag throttler.
+func TestThrottlerRequestsCarryThrottlerType(t *testing.T) {
+	primary := &topodatapb.TabletAlias{Cell: "fakezone1", Uid: 101}
+	for _, throttlerType := range []ThrottlerType{DefaultTabletThrottler, QueryTabletThrottler} {
+		t.Run(throttlerType.ToProto().String(), func(t *testing.T) {
+			throttler := &Throttler{
+				keyspace: "ks",
+				shard:    "-80",
+				ts: &stimulateTopoServer{
+					primaryAlias: primary,
+					tabletTypes:  map[uint32]topodatapb.TabletType{101: topodatapb.TabletType_PRIMARY},
+				},
+				dormantPeriod: time.Minute,
+				throttlerType: throttlerType,
+			}
+			tmClient := &stimulateTMClient{}
+
+			require.NoError(t, throttler.stimulatePrimaryThrottler(t.Context(), tmClient))
+			probe := &base.Probe{Alias: "fakezone1-101", Tablet: &topodatapb.Tablet{Alias: primary}}
+			throttler.generateTabletProbeFunction(base.ShardScope, probe)(t.Context(), tmClient)
+
+			require.Len(t, tmClient.requests, 2)
+			for _, req := range tmClient.requests {
+				assert.Equal(t, throttlerType.ToProto(), req.ThrottlerType)
+			}
 		})
 	}
 }

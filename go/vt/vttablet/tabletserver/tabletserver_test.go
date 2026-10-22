@@ -63,6 +63,9 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/querythrottler/registry"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
+	"vitess.io/vitess/go/vt/vttablet/tmclient"
+	"vitess.io/vitess/go/vt/vttablet/tmclienttest"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	querythrottlerpb "vitess.io/vitess/go/vt/proto/querythrottler"
@@ -3158,6 +3161,7 @@ func TestTabletServerCloseShutsDownQueryThrottler(t *testing.T) {
 // CheckThrottler and GetThrottlerStatus must reach the dedicated query throttler for
 // DEDICATED_QUERY_THROTTLER, and the lag throttler otherwise.
 func TestTabletServerThrottlerByType(t *testing.T) {
+	useNoopTabletManagerClient(t)
 	ctx := t.Context()
 	db, tsv := setupTabletServerTest(t, ctx, "keyspaceName")
 	t.Cleanup(tsv.StopService)
@@ -3167,10 +3171,59 @@ func TestTabletServerThrottlerByType(t *testing.T) {
 	require.Same(t, tsv.qThrottler, tsv.throttlerByType(tabletmanagerdatapb.ThrottlerType_DEDICATED_QUERY_THROTTLER))
 	require.Same(t, tsv.lagThrottler, tsv.throttlerByType(tabletmanagerdatapb.ThrottlerType_DEFAULT_LAG_THROTTLER))
 
+	// InitDBConfig must reach the dedicated throttler, which needs the keyspace to watch its config.
+	require.Equal(t, "keyspaceName", tsv.GetThrottlerStatus(ctx, tabletmanagerdatapb.ThrottlerType_DEDICATED_QUERY_THROTTLER).Keyspace)
+
 	// Tell the two apart by threshold, which each throttler keeps on its own.
 	tsv.qThrottler.MetricsThreshold.Store(math.Float64bits(42))
 	require.Equal(t, float64(42), tsv.GetThrottlerStatus(ctx, tabletmanagerdatapb.ThrottlerType_DEDICATED_QUERY_THROTTLER).Threshold)
 	require.NotEqual(t, float64(42), tsv.GetThrottlerStatus(ctx, tabletmanagerdatapb.ThrottlerType_DEFAULT_LAG_THROTTLER).Threshold)
+
+	// A throttler that isn't running answers every check with OK, so enable only the dedicated
+	// one: a check that reaches it reports the metric it hasn't collected yet. A primary's
+	// dedicated throttler probes each replica through this same call.
+	dedicatedChecks := stats.GetOrNewCounter("QueryThrottlerDedicatedCheckAnyTotal", "")
+	before := dedicatedChecks.Get()
+	wg := tsv.qThrottler.Enable()
+	t.Cleanup(func() {
+		tsv.qThrottler.Disable()
+		if wg != nil {
+			wg.Wait()
+		}
+	})
+	result := tsv.CheckThrottler(ctx, "test", &throttle.CheckFlags{}, tabletmanagerdatapb.ThrottlerType_DEDICATED_QUERY_THROTTLER)
+	require.Equal(t, tabletmanagerdatapb.CheckThrottlerResponseCode_UNKNOWN_METRIC, result.ResponseCode)
+	result = tsv.CheckThrottler(ctx, "test", &throttle.CheckFlags{}, tabletmanagerdatapb.ThrottlerType_DEFAULT_LAG_THROTTLER)
+	require.True(t, result.IsOK(), "the lag throttler is not running, so it must answer OK")
+
+	// Only a throttler built as the dedicated type records its checks under its own prefix.
+	assert.Eventually(t, func() bool {
+		return dedicatedChecks.Get() > before
+	}, 30*time.Second, 10*time.Millisecond)
+}
+
+// noopTabletManagerClient lets a throttler run in a test. Every call it would make goes to a
+// tablet in the topo, and these tests have none.
+type noopTabletManagerClient struct {
+	tmclient.TabletManagerClient
+}
+
+func (*noopTabletManagerClient) Close() {}
+
+const noopTabletManagerProtocol = "tabletserver-test-noop"
+
+// The factory registry is process-wide and exits on a duplicate, e.g. with -count=2.
+var registerNoopTabletManagerClientOnce sync.Once
+
+// useNoopTabletManagerClient makes new tablet manager clients noopTabletManagerClients for the
+// rest of the test.
+func useNoopTabletManagerClient(t *testing.T) {
+	registerNoopTabletManagerClientOnce.Do(func() {
+		tmclient.RegisterTabletManagerClientFactory(noopTabletManagerProtocol, func() tmclient.TabletManagerClient {
+			return &noopTabletManagerClient{}
+		})
+	})
+	t.Cleanup(tmclienttest.SetProtocol("TabletServerTest", noopTabletManagerProtocol))
 }
 
 // alwaysThrottleStrategy throttles every statement the query throttler evaluates.
@@ -3205,8 +3258,9 @@ func enableAlwaysThrottle(t *testing.T, tsv *TabletServer) {
 }
 
 // A query throttler rejection makes vtgate roll back the session's whole transaction, so
-// statements inside a transaction are not throttled, on both the execute and stream paths.
-// Statements outside one, including on a reserved connection, still are.
+// statements inside a transaction are not throttled: not on the execute, stream or streamed DML
+// paths, and not the savepoints that BeginExecute and ReserveBeginExecute replay when a shard
+// joins a transaction late. Statements outside one, including on a reserved connection, still are.
 func TestTabletServerQueryThrottlerSkipsTransactions(t *testing.T) {
 	ctx := t.Context()
 	db, tsv := setupTabletServerTest(t, ctx, "keyspaceName")
@@ -3215,25 +3269,40 @@ func TestTabletServerQueryThrottlerSkipsTransactions(t *testing.T) {
 	db.AddQueryPattern(".*", &sqltypes.Result{})
 	target := &querypb.Target{Keyspace: "keyspaceName", TabletType: topodatapb.TabletType_PRIMARY}
 	options := &querypb.ExecuteOptions{}
+	noop := func(*sqltypes.Result) error { return nil }
+	const insert = "insert into test_table(pk) values(1)"
 
-	// Open the transaction and the reserved connection before throttling, since their own
-	// statements would otherwise be throttled.
-	txState, err := tsv.Begin(ctx, nil, target, options)
-	require.NoError(t, err)
+	// Reserve the connection before throttling, since its SET runs outside a transaction.
 	reservedState, _, err := tsv.ReserveExecute(ctx, nil, target, nil, "set sql_mode = ''", nil, 0, options)
 	require.NoError(t, err)
 
 	enableAlwaysThrottle(t, tsv)
 
+	txState, _, err := tsv.BeginExecute(ctx, nil, target, []string{"savepoint a"}, "select 42", nil, 0, options)
+	require.NoError(t, err, "BeginExecute and its replayed savepoint must not be throttled")
 	_, err = tsv.Execute(ctx, nil, target, "select 42", nil, txState.TransactionID, 0, options)
 	require.NoError(t, err, "a statement inside a transaction must not be throttled")
-	err = tsv.StreamExecute(ctx, nil, target, "select 42", nil, txState.TransactionID, 0, options, func(*sqltypes.Result) error { return nil })
+	err = tsv.StreamExecute(ctx, nil, target, "select 42", nil, txState.TransactionID, 0, options, noop)
 	require.NoError(t, err, "a streamed statement inside a transaction must not be throttled")
+	err = tsv.StreamExecute(ctx, nil, target, insert, nil, txState.TransactionID, 0, options, noop)
+	require.NoError(t, err, "a streamed DML inside a transaction must not be throttled")
+
+	// get_lock needs a reserved connection, so ReserveBeginExecute takes its reserve-then-begin
+	// path rather than BeginExecute's.
+	reservedTxState, _, err := tsv.ReserveBeginExecute(ctx, nil, target, nil, []string{"savepoint a"}, "select get_lock('a', 1) from dual", nil, options)
+	require.NoError(t, err, "ReserveBeginExecute and its replayed savepoint must not be throttled")
+	require.NotZero(t, reservedTxState.ReservedID)
 
 	_, err = tsv.Execute(ctx, nil, target, "select 42", nil, 0, 0, options)
 	require.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err), "an autocommit statement must be throttled")
+	err = tsv.StreamExecute(ctx, nil, target, insert, nil, 0, 0, options, noop)
+	require.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err), "an autocommit streamed DML must be throttled")
 	_, err = tsv.Execute(ctx, nil, target, "select 42", nil, 0, reservedState.ReservedID, options)
 	require.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err), "a statement on a reserved connection without a transaction must be throttled")
+	err = tsv.StreamExecute(ctx, nil, target, "select 42", nil, 0, reservedState.ReservedID, options, noop)
+	require.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err), "a streamed statement on a reserved connection without a transaction must be throttled")
+	err = tsv.StreamExecute(ctx, nil, target, insert, nil, 0, reservedState.ReservedID, options, noop)
+	require.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err), "a streamed DML on a reserved connection without a transaction must be throttled")
 }
 
 func setupTabletServerTest(t testing.TB, ctx context.Context, keyspaceName string) (*fakesqldb.DB, *TabletServer) {
