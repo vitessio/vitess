@@ -9,7 +9,6 @@ The `vitess/bootstrap` image comes in different flavors:
 * `vitess/bootstrap:mysql80`   - bootstrap image for MySQL 8.0
 * `vitess/bootstrap:mysql84`   - bootstrap image for MySQL 8.4
 * `vitess/bootstrap:percona80` - bootstrap image for Percona Server 8.0
-* `vitess/bootstrap:percona84` - bootstrap image for Percona Server 8.4
 
 Each flavor is a stage of the Dockerfile, built on top of the `common` stage.
 

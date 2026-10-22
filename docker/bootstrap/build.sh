@@ -57,37 +57,12 @@ while [ $# -gt 0 ]; do
   shift
 done
 
-<<<<<<< HEAD
-if [ -f "docker/bootstrap/Dockerfile.$flavor" ]; then
-    docker build \
-      -f docker/bootstrap/Dockerfile.$flavor \
-      -t $image \
-      --build-arg bootstrap_version=$version \
-      --build-arg image=$base_image \
-      .
-||||||| parent of 6a27b29206 (docker/bootstrap: build every image from one multi-stage Dockerfile (#21596))
-if [ -f "docker/bootstrap/Dockerfile.$flavor" ]; then
-    args=(
-      --platform=linux/amd64
-      -f "docker/bootstrap/Dockerfile.$flavor"
-      -t "$image"
-      --build-arg "bootstrap_version=$version"
-    )
-
-    if [ "$flavor" != "common" ]; then
-      args+=(--build-arg "image=$base_image")
-    fi
-
-    docker build "${args[@]}" .
-=======
 if ! grep -q "^FROM .* AS $flavor\$" docker/bootstrap/Dockerfile; then
   echo "Unknown flavor: $flavor"
   exit 1
->>>>>>> 6a27b29206 (docker/bootstrap: build every image from one multi-stage Dockerfile (#21596))
 fi
 
 args=(
-  --platform=linux/amd64
   -f docker/bootstrap/Dockerfile
   --target "$flavor"
   -t "$image"
