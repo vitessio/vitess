@@ -71,9 +71,9 @@ func initMetrics() {
 		cacheStaleRefreshes = stats.NewCounter(_metricsPrefix+"CacheStaleRefreshes", "background refresh ticks that observed the cache already older than the staleness threshold (queries are silently failing open against stale state)")
 		cacheStaleConsumption = stats.NewCounter(_metricsPrefix+"CacheStaleConsumption", "hot-path cache reads that discarded a state older than the staleness threshold and failed open (prevents indefinite throttling during a metrics outage)")
 		decisionCount = stats.NewCountersWithMultiLabels(_metricsPrefix+"DecisionCount", "tablet throttler decisions by outcome and reason", []string{"TabletType", "StmtType", "Path", "Outcome", "Reason"})
-		fastDecisionLatency = stats.NewMultiTimings(_metricsPrefix+"FastDecisionLatencyMicroseconds", "fast-path tablet throttler decision latency in microseconds", []string{"TabletType", "Outcome"})
-		fullDecisionLatency = stats.NewMultiTimings(_metricsPrefix+"FullDecisionLatencyMicroseconds", "full-path tablet throttler decision latency in microseconds", []string{"TabletType", "StmtType", "Outcome"})
-		cacheLoadLatency = stats.NewMultiTimings(_metricsPrefix+"CacheLoadLatencyMilliseconds", "tablet throttler cache load latency in milliseconds", []string{"Status"})
+		fastDecisionLatency = stats.NewMultiTimings(_metricsPrefix+"FastDecisionLatencyNs", "fast-path tablet throttler decision latency (nanoseconds)", []string{"TabletType", "Outcome"})
+		fullDecisionLatency = stats.NewMultiTimings(_metricsPrefix+"FullDecisionLatencyNs", "full-path tablet throttler decision latency (nanoseconds)", []string{"TabletType", "StmtType", "Outcome"})
+		cacheLoadLatency = stats.NewMultiTimings(_metricsPrefix+"CacheLoadLatencyNs", "tablet throttler cache load latency (nanoseconds)", []string{"Status"})
 	})
 }
 
@@ -198,10 +198,10 @@ func (s *TabletThrottlerStrategy) Start() {
 // resolveCacheUpdateInterval returns the configured cache refresh interval, defaulting
 // to defaultCacheUpdateInterval when the config value is non-positive.
 func resolveCacheUpdateInterval(cfg *tabletenv.TabletConfig) time.Duration {
-	if cfg == nil || cfg.TabletThrottlerCacheUpdateInterval <= 0 {
+	if cfg == nil || cfg.QueryThrottlerCacheUpdateInterval <= 0 {
 		return defaultCacheUpdateInterval
 	}
-	return cfg.TabletThrottlerCacheUpdateInterval
+	return cfg.QueryThrottlerCacheUpdateInterval
 }
 
 // Stop shuts down the background updater. It is terminal — the instance must not be

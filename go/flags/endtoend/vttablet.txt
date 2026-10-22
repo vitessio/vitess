@@ -272,6 +272,7 @@ Flags:
       --publish-retry-interval duration                                  how long vttablet waits to retry publishing the tablet record (default 30s)
       --purge-logs-interval duration                                     how often try to remove old logs (default 1h0m0s)
       --query-log-stream-handler string                                  URL handler for streaming queries log (default "/debug/querylog")
+      --query-throttler-cache-update-interval duration                   How frequently to refresh throttle check results for the query throttler TABLET_THROTTLER strategy (default 10s)
       --querylog-emit-on-any-condition-met                               Emit to query log when any of the conditions (row-threshold, time-threshold, filter-tag) is met (default false)
       --querylog-filter-tag string                                       string that must be present in the query for it to be logged; if using a value as the tag, you need to disable query normalization
       --querylog-format string                                           format for query logs ("text" or "json") (default "text")
@@ -385,7 +386,6 @@ Flags:
       --tablet-manager-protocol string                                   Protocol to use to make tabletmanager RPCs to vttablets. (default "grpc")
       --tablet-path string                                               tablet alias
       --tablet-protocol string                                           Protocol to use to make queryservice RPCs to vttablets. (default "grpc")
-      --tablet-throttler-cache-update-interval duration                  How frequently to refresh throttle check results for the tablet throttler strategy (default 10s)
       --throttle-tablet-types string                                     Comma separated VTTablet types to be considered by the throttler. default: 'replica'. example: 'replica,rdonly'. 'replica' always implicitly included (default "replica")
       --topo-consul-lock-delay duration                                  LockDelay for consul session. (default 15s)
       --topo-consul-lock-session-checks string                           List of checks for consul session. (default "serfHealth")

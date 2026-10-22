@@ -42,7 +42,7 @@ import (
 // createTestTabletConfig creates a minimal tablet config for testing
 func createTestTabletConfig() *tabletenv.TabletConfig {
 	return &tabletenv.TabletConfig{
-		TabletThrottlerCacheUpdateInterval: 10 * time.Millisecond,
+		QueryThrottlerCacheUpdateInterval: 10 * time.Millisecond,
 	}
 }
 
