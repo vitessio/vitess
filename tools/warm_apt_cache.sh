@@ -17,9 +17,11 @@
 # Downloads the packages that the test jobs on one MySQL flavor install with
 # apt into DIR, for the go_cache_warm workflow to save as the cache that the
 # restore-apt-cache action restores. The packages are downloaded in a fresh
-# ubuntu:24.04 container that first installs, uncached, the tools that every
-# runner has, so that the cache holds what the jobs download and nothing
-# more. Usage:
+# ubuntu:24.04 container that first installs, uncached, the compilers that
+# every runner has at the current version, so that the cache holds what the
+# jobs download and not the toolchain. Everything else goes into the cache,
+# including the tools that runners have but upgrade when a job installs them,
+# such as curl. Usage:
 #
 #   tools/warm_apt_cache.sh <mysql-5.7|mysql-8.0|mysql-8.4|percona> DIR
 #
@@ -74,8 +76,9 @@ docker run --rm --platform linux/amd64 \
 	-e DEBIAN_FRONTEND=noninteractive -e APT_CACHE_DIR=/var/cache/vitess-apt \
 	ubuntu:24.04 bash -euo pipefail -c "
 		apt-get update -qq
-		apt-get install -qq -y sudo ca-certificates curl wget gnupg dirmngr lsb-release make unzip g++ git xz-utils > /dev/null
+		apt-get install -qq -y sudo make g++ > /dev/null
 		/src/.github/actions/restore-apt-cache/use-apt-cache.sh
+		apt-get install -qq -y ca-certificates curl wget gnupg dirmngr lsb-release > /dev/null
 		${script}"
 
 find "${dir}" -maxdepth 1 -name '*.deb' -printf '%s\n' |
