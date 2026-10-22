@@ -3154,13 +3154,12 @@ func TestTabletServerCloseShutsDownQueryThrottler(t *testing.T) {
 // alwaysThrottleStrategy throttles every statement the query throttler evaluates.
 type alwaysThrottleStrategy struct{}
 
-func (alwaysThrottleStrategy) Evaluate(context.Context, topodatapb.TabletType, *sqlparser.ParsedQuery, sqlparser.StatementType, int64, registry.QueryAttributes) registry.ThrottleDecision {
+func (alwaysThrottleStrategy) Evaluate(context.Context, *querythrottlerpb.Config, topodatapb.TabletType, *sqlparser.ParsedQuery, sqlparser.StatementType, int64, registry.QueryAttributes) registry.ThrottleDecision {
 	return registry.ThrottleDecision{Throttle: true, Message: "always throttle"}
 }
-func (alwaysThrottleStrategy) Start()                                {}
-func (alwaysThrottleStrategy) Stop()                                 {}
-func (alwaysThrottleStrategy) UpdateConfig(*querythrottlerpb.Config) {}
-func (alwaysThrottleStrategy) GetStrategyName() string               { return "AlwaysThrottle" }
+func (alwaysThrottleStrategy) Start()                  {}
+func (alwaysThrottleStrategy) Stop()                   {}
+func (alwaysThrottleStrategy) GetStrategyName() string { return "AlwaysThrottle" }
 
 type alwaysThrottleFactory struct{}
 

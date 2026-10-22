@@ -38,13 +38,15 @@ func createTestSrvKeyspace(enabled bool, strategy querythrottlerpb.ThrottlingStr
 
 // mockThrottlingStrategy is a test strategy that allows us to control throttling decisions
 type mockThrottlingStrategy struct {
-	decision         registry.ThrottleDecision
-	started          bool
-	stopped          bool
-	updateConfigCfgs []*querythrottlerpb.Config
+	decision registry.ThrottleDecision
+	started  bool
+	stopped  bool
+	// evaluatedCfgs records the config passed to each Evaluate call.
+	evaluatedCfgs []*querythrottlerpb.Config
 }
 
-func (m *mockThrottlingStrategy) Evaluate(ctx context.Context, targetTabletType topodatapb.TabletType, parsedQuery *sqlparser.ParsedQuery, statementType sqlparser.StatementType, transactionID int64, attrs registry.QueryAttributes) registry.ThrottleDecision {
+func (m *mockThrottlingStrategy) Evaluate(ctx context.Context, cfg *querythrottlerpb.Config, targetTabletType topodatapb.TabletType, parsedQuery *sqlparser.ParsedQuery, statementType sqlparser.StatementType, transactionID int64, attrs registry.QueryAttributes) registry.ThrottleDecision {
+	m.evaluatedCfgs = append(m.evaluatedCfgs, cfg)
 	return m.decision
 }
 
@@ -54,10 +56,6 @@ func (m *mockThrottlingStrategy) Start() {
 
 func (m *mockThrottlingStrategy) Stop() {
 	m.stopped = true
-}
-
-func (m *mockThrottlingStrategy) UpdateConfig(cfg *querythrottlerpb.Config) {
-	m.updateConfigCfgs = append(m.updateConfigCfgs, cfg)
 }
 
 func (m *mockThrottlingStrategy) GetStrategyName() string {

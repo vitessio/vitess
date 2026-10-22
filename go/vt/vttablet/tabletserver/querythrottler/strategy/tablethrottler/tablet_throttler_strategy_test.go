@@ -109,8 +109,8 @@ type testRandomFuncs struct {
 }
 
 // newTestStrategyWithRandom creates a TabletThrottlerStrategy with injected random functions for deterministic testing.
-func newTestStrategyWithRandom(client ThrottlerClientWrapper, cfg *querythrottlerpb.TabletStrategyConfig, randFuncs testRandomFuncs) *TabletThrottlerStrategy {
-	strategy := NewTabletThrottlerStrategy(client, cfg, createTestTabletConfig())
+func newTestStrategyWithRandom(client ThrottlerClientWrapper, randFuncs testRandomFuncs) *TabletThrottlerStrategy {
+	strategy := NewTabletThrottlerStrategy(client, createTestTabletConfig())
 	if randFuncs.randFloat64 != nil {
 		strategy.randFloat64 = randFuncs.randFloat64
 	}
@@ -120,8 +120,8 @@ func newTestStrategyWithRandom(client ThrottlerClientWrapper, cfg *querythrottle
 	return strategy
 }
 
-// createTestQueryThrottlerConfig creates a Config (the type accepted by UpdateConfig)
-// wrapping the given TabletStrategyConfig.
+// createTestQueryThrottlerConfig creates a Config (the type Evaluate takes) wrapping the
+// given TabletStrategyConfig.
 func createTestQueryThrottlerConfig(cfg *querythrottlerpb.TabletStrategyConfig) *querythrottlerpb.Config {
 	return &querythrottlerpb.Config{
 		Enabled:              true,
@@ -143,14 +143,14 @@ func TestTabletThrottlerStrategy_Evaluate_NilParsedQuery(t *testing.T) {
 
 	for _, stmtType := range []sqlparser.StatementType{sqlparser.StmtDDL, sqlparser.StmtMigration} {
 		t.Run(stmtType.String(), func(t *testing.T) {
+			cfg := createTestQueryThrottlerConfig(makeTabletStrategyConfig(
+				topodatapb.TabletType_PRIMARY.String(),
+				stmtType.String(),
+				"lag",
+				makeThresholds(10, 100),
+			))
 			strategy := newTestStrategyWithRandom(
 				NewFakeThrottleClientWrapper(overloaded, false),
-				makeTabletStrategyConfig(
-					topodatapb.TabletType_PRIMARY.String(),
-					stmtType.String(),
-					"lag",
-					makeThresholds(10, 100),
-				),
 				testRandomFuncs{
 					randFloat64: func() float64 { return 0.5 },
 					randIntN:    func(n int) int { return 99 },
@@ -161,6 +161,7 @@ func TestTabletThrottlerStrategy_Evaluate_NilParsedQuery(t *testing.T) {
 
 			decision := strategy.Evaluate(
 				t.Context(),
+				cfg,
 				topodatapb.TabletType_PRIMARY,
 				nil,
 				stmtType,
@@ -357,7 +358,7 @@ func TestTabletThrottlerStrategy_ThrottleIfNeeded_Legacy(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ftcw := NewFakeThrottleClientWrapper(tt.giveCheckResult, tt.giveThrottleCheckOK)
-			tts := newTestStrategyWithRandom(ftcw, tt.giveCfg, testRandomFuncs{
+			tts := newTestStrategyWithRandom(ftcw, testRandomFuncs{
 				randFloat64: func() float64 { return tt.giveRandValue },
 				randIntN:    func(n int) int { return tt.givePriorityRandValue },
 			})
@@ -367,7 +368,7 @@ func TestTabletThrottlerStrategy_ThrottleIfNeeded_Legacy(t *testing.T) {
 			defer tts.Stop()
 			tts.refreshCache()
 
-			decision := tts.Evaluate(context.Background(), tt.giveTabletType, &sqlparser.ParsedQuery{Query: tt.giveSQL}, tt.giveStmtType, tt.giveTxnID, toQueryAttributesForTest(tt.giveOptions))
+			decision := tts.Evaluate(context.Background(), createTestQueryThrottlerConfig(tt.giveCfg), tt.giveTabletType, &sqlparser.ParsedQuery{Query: tt.giveSQL}, tt.giveStmtType, tt.giveTxnID, toQueryAttributesForTest(tt.giveOptions))
 			if tt.wantErr != "" {
 				require.True(t, decision.Throttle, "Expected throttling decision")
 				require.Equal(t, tt.wantErr, decision.Message, "Throttle message should match expected error")
@@ -382,8 +383,7 @@ func TestTabletThrottlerStrategy_ThrottleIfNeeded_Legacy(t *testing.T) {
 // TestTabletThrottlerStrategy_CachingLifecycle tests the Start/Stop lifecycle methods.
 func TestTabletThrottlerStrategy_CachingLifecycle(t *testing.T) {
 	ftcw := NewFakeThrottleClientWrapper(&throttle.CheckResult{}, true)
-	cfg := &querythrottlerpb.TabletStrategyConfig{}
-	strategy := NewTabletThrottlerStrategy(ftcw, cfg, createTestTabletConfig())
+	strategy := NewTabletThrottlerStrategy(ftcw, createTestTabletConfig())
 
 	require.False(t, strategy.running.Load())
 
@@ -420,7 +420,7 @@ func TestTabletThrottlerStrategy_CachingBehavior(t *testing.T) {
 		makeThresholds(10, 100),
 	)
 
-	strategy := newTestStrategyWithRandom(ftcw, cfg, testRandomFuncs{
+	strategy := newTestStrategyWithRandom(ftcw, testRandomFuncs{
 		randFloat64: func() float64 { return 0.5 },
 		randIntN:    func(n int) int { return 99 },
 	})
@@ -429,8 +429,8 @@ func TestTabletThrottlerStrategy_CachingBehavior(t *testing.T) {
 
 	// Before Start() the strategy is not running, so Evaluate() must fail open rather
 	// than call ThrottleCheckOK synchronously and add latency to the hot path.
-	_ = strategy.Evaluate(context.Background(), topodatapb.TabletType_PRIMARY, &sqlparser.ParsedQuery{Query: "SELECT * FROM table"}, sqlparser.StmtSelect, 1, toQueryAttributesForTest(options))
-	_ = strategy.Evaluate(context.Background(), topodatapb.TabletType_PRIMARY, &sqlparser.ParsedQuery{Query: "SELECT * FROM table"}, sqlparser.StmtSelect, 1, toQueryAttributesForTest(options))
+	_ = strategy.Evaluate(context.Background(), createTestQueryThrottlerConfig(cfg), topodatapb.TabletType_PRIMARY, &sqlparser.ParsedQuery{Query: "SELECT * FROM table"}, sqlparser.StmtSelect, 1, toQueryAttributesForTest(options))
+	_ = strategy.Evaluate(context.Background(), createTestQueryThrottlerConfig(cfg), topodatapb.TabletType_PRIMARY, &sqlparser.ParsedQuery{Query: "SELECT * FROM table"}, sqlparser.StmtSelect, 1, toQueryAttributesForTest(options))
 	require.Equal(t, 0, ftcw.GetCallCount(), "Expected no synchronous throttler calls before Start()")
 
 	strategy.Start()
@@ -442,9 +442,9 @@ func TestTabletThrottlerStrategy_CachingBehavior(t *testing.T) {
 
 	ftcw.ResetCallCount()
 
-	_ = strategy.Evaluate(context.Background(), topodatapb.TabletType_PRIMARY, &sqlparser.ParsedQuery{Query: "SELECT * FROM table"}, sqlparser.StmtSelect, 1, toQueryAttributesForTest(options))
-	_ = strategy.Evaluate(context.Background(), topodatapb.TabletType_PRIMARY, &sqlparser.ParsedQuery{Query: "SELECT * FROM table"}, sqlparser.StmtSelect, 1, toQueryAttributesForTest(options))
-	_ = strategy.Evaluate(context.Background(), topodatapb.TabletType_PRIMARY, &sqlparser.ParsedQuery{Query: "SELECT * FROM table"}, sqlparser.StmtSelect, 1, toQueryAttributesForTest(options))
+	_ = strategy.Evaluate(context.Background(), createTestQueryThrottlerConfig(cfg), topodatapb.TabletType_PRIMARY, &sqlparser.ParsedQuery{Query: "SELECT * FROM table"}, sqlparser.StmtSelect, 1, toQueryAttributesForTest(options))
+	_ = strategy.Evaluate(context.Background(), createTestQueryThrottlerConfig(cfg), topodatapb.TabletType_PRIMARY, &sqlparser.ParsedQuery{Query: "SELECT * FROM table"}, sqlparser.StmtSelect, 1, toQueryAttributesForTest(options))
+	_ = strategy.Evaluate(context.Background(), createTestQueryThrottlerConfig(cfg), topodatapb.TabletType_PRIMARY, &sqlparser.ParsedQuery{Query: "SELECT * FROM table"}, sqlparser.StmtSelect, 1, toQueryAttributesForTest(options))
 
 	callCount := ftcw.GetCallCount()
 	require.LessOrEqual(t, callCount, 2, "Cache should significantly reduce calls to ThrottleCheckOK")
@@ -505,72 +505,34 @@ func TestTabletThrottlerStrategy_BinarySearchThrottleDecision(t *testing.T) {
 	}
 }
 
-// UpdateConfig must store the new nested config so later Evaluate calls see it. This is
-// the same path QueryThrottler.HandleConfigUpdate takes before its snapshot swap.
-func TestTabletThrottlerStrategy_UpdateConfig_AppliesNewRules(t *testing.T) {
-	ftcw := NewFakeThrottleClientWrapper(&throttle.CheckResult{}, true)
-
-	initialCfg := makeTabletStrategyConfig("PRIMARY", "INSERT", "lag", makeThresholds(10, 50))
-	strategy := NewTabletThrottlerStrategy(ftcw, initialCfg, createTestTabletConfig())
-
-	newCfg := makeTabletStrategyConfig("PRIMARY", "SELECT", "lag", makeThresholds(20, 75))
-	strategy.UpdateConfig(createTestQueryThrottlerConfig(newCfg))
-
-	actualCfg := strategy.config.Load()
-	require.NotNil(t, actualCfg)
-	require.NotNil(t, actualCfg.TabletRules["PRIMARY"])
-	require.Contains(t, actualCfg.TabletRules["PRIMARY"].StatementRules, "SELECT", "new rule should be visible after UpdateConfig")
-	require.NotContains(t, actualCfg.TabletRules["PRIMARY"].StatementRules, "INSERT", "old rule should be replaced")
-}
-
-// A Config with a nil TabletStrategyConfig must normalize to empty, or Evaluate panics
-// reading a field off the nil proto.
-func TestTabletThrottlerStrategy_UpdateConfig_NilNestedNormalizesToEmpty(t *testing.T) {
-	ftcw := NewFakeThrottleClientWrapper(&throttle.CheckResult{}, true)
-
-	initialCfg := makeTabletStrategyConfig("PRIMARY", "INSERT", "lag", makeThresholds(10, 50))
-	strategy := NewTabletThrottlerStrategy(ftcw, initialCfg, createTestTabletConfig())
-
-	strategy.UpdateConfig(&querythrottlerpb.Config{
-		Enabled:              true,
-		Strategy:             querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER,
-		TabletStrategyConfig: nil,
+// Evaluate decides by the config it is given, not by the one the strategy was built with:
+// the strategy holds no rules, so a config update needs only QueryThrottler's snapshot swap.
+func TestTabletThrottlerStrategy_Evaluate_UsesGivenConfig(t *testing.T) {
+	overloaded := &throttle.CheckResult{
+		Metrics: map[string]*throttle.MetricResult{
+			"lag": {ResponseCode: tabletmanagerdata.CheckThrottlerResponseCode_THRESHOLD_EXCEEDED, Value: 20},
+		},
+	}
+	strategy := newTestStrategyWithRandom(NewFakeThrottleClientWrapper(overloaded, false), testRandomFuncs{
+		randFloat64: func() float64 { return 0.5 },
+		randIntN:    func(n int) int { return 99 },
 	})
+	strategy.running.Store(true)
+	strategy.cachedState.Store(&cacheState{ok: false, result: overloaded, refreshedAt: time.Now()})
 
-	actualCfg := strategy.config.Load()
-	require.NotNil(t, actualCfg, "UpdateConfig with nil nested config must store an empty config, not nil")
-	require.Empty(t, actualCfg.TabletRules)
-}
+	evaluate := func(cfg *querythrottlerpb.Config) registry.ThrottleDecision {
+		return strategy.Evaluate(t.Context(), cfg, topodatapb.TabletType_PRIMARY, &sqlparser.ParsedQuery{Query: "SELECT 1"},
+			sqlparser.StmtSelect, 0, toQueryAttributesForTest(&querypb.ExecuteOptions{Priority: "100"}))
+	}
 
-// UpdateConfig must skip the store when the new config is deep-equal to the current one.
-func TestTabletThrottlerStrategy_UpdateConfig_NoOpWhenUnchanged(t *testing.T) {
-	ftcw := NewFakeThrottleClientWrapper(&throttle.CheckResult{}, true)
+	selectRule := createTestQueryThrottlerConfig(makeTabletStrategyConfig("PRIMARY", "SELECT", "lag", makeThresholds(10, 100)))
+	insertRule := createTestQueryThrottlerConfig(makeTabletStrategyConfig("PRIMARY", "INSERT", "lag", makeThresholds(10, 100)))
+	require.True(t, evaluate(selectRule).Throttle, "a SELECT rule must throttle a SELECT")
+	require.False(t, evaluate(insertRule).Throttle, "the same strategy given only an INSERT rule must not throttle a SELECT")
 
-	cfg := makeTabletStrategyConfig("PRIMARY", "SELECT", "lag", makeThresholds(20, 75))
-	strategy := NewTabletThrottlerStrategy(ftcw, cfg, createTestTabletConfig())
-	before := strategy.config.Load()
-
-	// Same logical config (deep-equal but distinct pointer) must not swap the pointer.
-	dup := makeTabletStrategyConfig("PRIMARY", "SELECT", "lag", makeThresholds(20, 75))
-	strategy.UpdateConfig(createTestQueryThrottlerConfig(dup))
-
-	require.Same(t, before, strategy.config.Load(), "UpdateConfig must not swap when the new config is unchanged")
-}
-
-// The strategy must own its config: mutating the proto passed to the constructor or to
-// UpdateConfig afterwards must not change the rules Evaluate reads.
-func TestTabletThrottlerStrategy_ConfigIsCopiedFromCaller(t *testing.T) {
-	ftcw := NewFakeThrottleClientWrapper(&throttle.CheckResult{}, true)
-
-	initialCfg := makeTabletStrategyConfig("PRIMARY", "SELECT", "lag", makeThresholds(10, 50))
-	strategy := NewTabletThrottlerStrategy(ftcw, initialCfg, createTestTabletConfig())
-	delete(initialCfg.TabletRules, "PRIMARY")
-	require.Contains(t, strategy.config.Load().TabletRules, "PRIMARY", "mutating the constructor's config must not change live rules")
-
-	newCfg := makeTabletStrategyConfig("PRIMARY", "INSERT", "lag", makeThresholds(20, 75))
-	strategy.UpdateConfig(createTestQueryThrottlerConfig(newCfg))
-	delete(newCfg.TabletRules, "PRIMARY")
-	require.Contains(t, strategy.config.Load().TabletRules["PRIMARY"].StatementRules, "INSERT", "mutating UpdateConfig's config must not change live rules")
+	// A config without rules, or no config at all, matches nothing and must not panic.
+	require.False(t, evaluate(&querythrottlerpb.Config{Enabled: true}).Throttle)
+	require.False(t, evaluate(nil).Throttle)
 }
 
 // slowThrottleClientWrapper simulates a slow/timeout-prone client
@@ -612,7 +574,7 @@ func TestTabletThrottlerStrategy_FailOpenWhenCacheNotPrimed(t *testing.T) {
 		delay:           5 * time.Second,
 	}
 
-	strategy := NewTabletThrottlerStrategy(slowClient, &querythrottlerpb.TabletStrategyConfig{}, createTestTabletConfig())
+	strategy := NewTabletThrottlerStrategy(slowClient, createTestTabletConfig())
 
 	start := time.Now()
 	result, ok := strategy.getCachedThrottleResult()
@@ -689,7 +651,7 @@ func TestFakeThrottleClientWrapper_ThreadSafety(t *testing.T) {
 func TestTabletThrottlerStrategy_StopWithoutStartCancelsContext(t *testing.T) {
 	ftcw := NewFakeThrottleClientWrapper(&throttle.CheckResult{}, true)
 
-	strategy := NewTabletThrottlerStrategy(ftcw, nil, createTestTabletConfig())
+	strategy := NewTabletThrottlerStrategy(ftcw, createTestTabletConfig())
 
 	strategy.Stop()
 	require.Error(t, strategy.ctx.Err(), "Stop() must cancel the strategy context even when Start() was never called")
@@ -707,7 +669,7 @@ func (nilResultThrottleClient) ThrottleCheckOK(ctx context.Context, _ throttlera
 // Treating only DeadlineExceeded as failure lets Canceled reach the store path, poisoning
 // the cache with a nil result that later panics in Evaluate's metric loop.
 func TestTabletThrottlerStrategy_RefreshCache_CanceledContextPreservesPriorState(t *testing.T) {
-	strategy := NewTabletThrottlerStrategy(nilResultThrottleClient{}, &querythrottlerpb.TabletStrategyConfig{}, createTestTabletConfig())
+	strategy := NewTabletThrottlerStrategy(nilResultThrottleClient{}, createTestTabletConfig())
 
 	// Prime with a known-good state — what a successful prior refresh would have produced.
 	primed := &cacheState{
@@ -743,7 +705,6 @@ func TestTabletThrottlerStrategy_Evaluate_NilCachedResultFailsOpen(t *testing.T)
 	)
 	strategy := newTestStrategyWithRandom(
 		NewFakeThrottleClientWrapper(nil, false),
-		cfg,
 		testRandomFuncs{
 			randFloat64: func() float64 { return 0.5 },
 			randIntN:    func(n int) int { return 99 },
@@ -759,6 +720,7 @@ func TestTabletThrottlerStrategy_Evaluate_NilCachedResultFailsOpen(t *testing.T)
 	require.NotPanics(t, func() {
 		decision := strategy.Evaluate(
 			context.Background(),
+			createTestQueryThrottlerConfig(cfg),
 			topodatapb.TabletType_PRIMARY,
 			&sqlparser.ParsedQuery{Query: "SELECT * FROM t"},
 			sqlparser.StmtSelect,
@@ -784,14 +746,14 @@ func TestTabletThrottlerStrategy_Evaluate_ReplaceRuleMatches(t *testing.T) {
 
 	// evaluateWithRule runs the REPLACE statement against a config keyed by ruleStmtType.
 	evaluateWithRule := func(ruleStmtType string) registry.ThrottleDecision {
+		cfg := createTestQueryThrottlerConfig(makeTabletStrategyConfig(
+			topodatapb.TabletType_PRIMARY.String(),
+			ruleStmtType,
+			"lag",
+			makeThresholds(10, 100),
+		))
 		strategy := newTestStrategyWithRandom(
 			NewFakeThrottleClientWrapper(overloaded, false),
-			makeTabletStrategyConfig(
-				topodatapb.TabletType_PRIMARY.String(),
-				ruleStmtType,
-				"lag",
-				makeThresholds(10, 100),
-			),
 			testRandomFuncs{
 				randFloat64: func() float64 { return 0.5 },
 				randIntN:    func(n int) int { return 99 },
@@ -802,6 +764,7 @@ func TestTabletThrottlerStrategy_Evaluate_ReplaceRuleMatches(t *testing.T) {
 
 		return strategy.Evaluate(
 			context.Background(),
+			cfg,
 			topodatapb.TabletType_PRIMARY,
 			&sqlparser.ParsedQuery{Query: replaceSQL},
 			stmtType,
@@ -833,7 +796,6 @@ func TestTabletThrottlerStrategy_Evaluate_StaleOverloadedStateFailsOpen(t *testi
 	}
 	strategy := newTestStrategyWithRandom(
 		NewFakeThrottleClientWrapper(overloaded, false),
-		cfg,
 		testRandomFuncs{
 			randFloat64: func() float64 { return 0.5 },
 			randIntN:    func(n int) int { return 99 },
@@ -845,6 +807,7 @@ func TestTabletThrottlerStrategy_Evaluate_StaleOverloadedStateFailsOpen(t *testi
 	evaluate := func() registry.ThrottleDecision {
 		return strategy.Evaluate(
 			context.Background(),
+			createTestQueryThrottlerConfig(cfg),
 			topodatapb.TabletType_PRIMARY,
 			&sqlparser.ParsedQuery{Query: "SELECT * FROM t"},
 			sqlparser.StmtSelect,

@@ -25,8 +25,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"google.golang.org/protobuf/proto"
-
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
 	querythrottlerpb "vitess.io/vitess/go/vt/proto/querythrottler"
@@ -84,12 +82,9 @@ func init() {
 // tabletThrottlerStrategyFactory creates TabletThrottlerStrategy instances.
 type tabletThrottlerStrategyFactory struct{}
 
-func (f *tabletThrottlerStrategyFactory) New(deps registry.Deps, cfg *querythrottlerpb.Config) (registry.ThrottlingStrategyHandler, error) {
-	tabletCfg := cfg.GetTabletStrategyConfig()
-	if tabletCfg == nil {
-		tabletCfg = &querythrottlerpb.TabletStrategyConfig{}
-	}
-	return NewTabletThrottlerStrategy(deps.ThrottleClient, tabletCfg, deps.TabletConfig), nil
+// New ignores cfg: the strategy reads its rules from the config passed to each Evaluate.
+func (f *tabletThrottlerStrategyFactory) New(deps registry.Deps, _ *querythrottlerpb.Config) (registry.ThrottlingStrategyHandler, error) {
+	return NewTabletThrottlerStrategy(deps.ThrottleClient, deps.TabletConfig), nil
 }
 
 // Configuration constants for caching behavior
@@ -129,7 +124,6 @@ type cacheState struct {
 // TabletThrottlerStrategy uses the Vitess Tablet Throttler (https://vitess.io/docs/21.0/reference/features/tablet-throttler) to enforce throttling.
 type TabletThrottlerStrategy struct {
 	throttlerClient ThrottlerClientWrapper
-	config          atomic.Pointer[querythrottlerpb.TabletStrategyConfig]
 	tabletConfig    *tabletenv.TabletConfig
 
 	// Caching field for throttle check results - single atomic for race-free access
@@ -153,9 +147,9 @@ type TabletThrottlerStrategy struct {
 	randIntN    func(n int) int
 }
 
-// NewTabletThrottlerStrategy creates a new TabletThrottlerStrategy. The strategy does not
-// watch SrvKeyspace itself; config reaches it only through UpdateConfig.
-func NewTabletThrottlerStrategy(throttleClient ThrottlerClientWrapper, cfg *querythrottlerpb.TabletStrategyConfig, tabletConfig *tabletenv.TabletConfig) *TabletThrottlerStrategy {
+// NewTabletThrottlerStrategy creates a new TabletThrottlerStrategy. The strategy holds no
+// rules and does not watch SrvKeyspace: each Evaluate call is given the config to apply.
+func NewTabletThrottlerStrategy(throttleClient ThrottlerClientWrapper, tabletConfig *tabletenv.TabletConfig) *TabletThrottlerStrategy {
 	initMetrics()
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -171,13 +165,6 @@ func NewTabletThrottlerStrategy(throttleClient ThrottlerClientWrapper, cfg *quer
 		randFloat64:               rand.Float64,
 		randIntN:                  rand.IntN,
 	}
-	// Normalize nil to empty: Evaluate reads cfg.TabletRules directly, which would panic
-	// on a nil proto. Empty rules match nothing, so Evaluate falls through to "allow".
-	if cfg == nil {
-		cfg = &querythrottlerpb.TabletStrategyConfig{}
-	}
-	// Store a private copy so a later change to the caller's proto cannot alter live rules.
-	strategy.config.Store(cfg.CloneVT())
 
 	return strategy
 }
@@ -218,24 +205,6 @@ func (s *TabletThrottlerStrategy) Stop() {
 		<-s.done // Wait for cache updater to finish
 		log.Info("TabletThrottlerStrategy: stopped background throttle cache updater")
 	}
-}
-
-// UpdateConfig applies a new config to this live strategy. QueryThrottler.HandleConfigUpdate
-// calls it before swapping its snapshot, so the top-level and nested config land together.
-// Safe to call before Start: it only swaps the atomic pointer Evaluate reads.
-func (s *TabletThrottlerStrategy) UpdateConfig(cfg *querythrottlerpb.Config) {
-	newTabletCfg := cfg.GetTabletStrategyConfig()
-	if newTabletCfg == nil {
-		// Normalize to empty; Evaluate would panic reading TabletRules off a nil proto.
-		newTabletCfg = &querythrottlerpb.TabletStrategyConfig{}
-	}
-
-	// Skip the store when nothing changed.
-	if proto.Equal(s.config.Load(), newTabletCfg) {
-		return
-	}
-	// Store a private copy so a later change to the caller's proto cannot alter live rules.
-	s.config.Store(newTabletCfg.CloneVT())
 }
 
 // runCacheUpdater runs in a background goroutine to periodically refresh cached throttle results.
@@ -333,8 +302,9 @@ func (s *TabletThrottlerStrategy) isStale(state *cacheState) bool {
 
 // Evaluate decides whether to throttle a query. Rules pair a tablet type and statement type
 // with metric thresholds; when a threshold is breached, the query is throttled with the
-// probability that threshold configures. transactionID is unused.
-func (s *TabletThrottlerStrategy) Evaluate(ctx context.Context, targetTabletType topodatapb.TabletType, parsedQuery *sqlparser.ParsedQuery, statementType sqlparser.StatementType, transactionID int64, attrs registry.QueryAttributes) registry.ThrottleDecision {
+// probability that threshold configures. The rules come from cfg's TabletStrategyConfig.
+// transactionID is unused.
+func (s *TabletThrottlerStrategy) Evaluate(ctx context.Context, cfg *querythrottlerpb.Config, targetTabletType topodatapb.TabletType, parsedQuery *sqlparser.ParsedQuery, statementType sqlparser.StatementType, transactionID int64, attrs registry.QueryAttributes) registry.ThrottleDecision {
 	startTime := time.Now()
 	tabletTypeStr := targetTabletType.String()
 	// FAST PATH: Check if system is healthy before doing any expensive work
@@ -373,9 +343,8 @@ func (s *TabletThrottlerStrategy) Evaluate(ctx context.Context, targetTabletType
 	}
 
 	// Step 2: Look up throttling rules for this tablet type (e.g., PRIMARY, REPLICA)
-	// Load config once to ensure consistent view throughout the evaluation
-	cfg := s.config.Load()
-	stmtRules, ok := cfg.TabletRules[tabletTypeStr]
+	// The getters are nil-safe, so a config without rules matches nothing and allows.
+	stmtRules, ok := cfg.GetTabletStrategyConfig().GetTabletRules()[tabletTypeStr]
 	if !ok {
 		s.recordFullDecision(tabletTypeStr, stmtType, decisionOutcomeAllowed, decisionReasonNoRuleForTabletType, startTime)
 		return registry.ThrottleDecision{

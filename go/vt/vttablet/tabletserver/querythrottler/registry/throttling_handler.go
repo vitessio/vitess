@@ -30,10 +30,12 @@ import (
 // to determine whether throttling should be applied for an incoming query.
 type ThrottlingStrategyHandler interface {
 	// Evaluate decides whether a query should be throttled, returning the decision rather
-	// than acting on it so callers can implement dry-run mode. statementType comes from the
-	// parsed AST, which — unlike a textual scan — classifies CTE queries correctly. attrs
-	// carries pre-computed workload and priority so strategies need not recompute them.
-	Evaluate(ctx context.Context, targetTabletType topodatapb.TabletType, parsedQuery *sqlparser.ParsedQuery, statementType sqlparser.StatementType, transactionID int64, attrs QueryAttributes) ThrottleDecision
+	// than acting on it so callers can implement dry-run mode. cfg is the config to decide
+	// by; the caller passes the same config it reads dry_run from, so a config update can't
+	// pair new rules with an old dry_run. statementType comes from the parsed AST, which —
+	// unlike a textual scan — classifies CTE queries correctly. attrs carries pre-computed
+	// workload and priority so strategies need not recompute them.
+	Evaluate(ctx context.Context, cfg *querythrottlerpb.Config, targetTabletType topodatapb.TabletType, parsedQuery *sqlparser.ParsedQuery, statementType sqlparser.StatementType, transactionID int64, attrs QueryAttributes) ThrottleDecision
 
 	// Start initializes and starts the throttling strategy.
 	// This method should be called when the strategy becomes active.
@@ -44,11 +46,6 @@ type ThrottlingStrategyHandler interface {
 	// Stop is terminal: implementations are single-use and must not be restarted.
 	// QueryThrottler enforces this by building a fresh instance on every strategy change.
 	Stop()
-
-	// UpdateConfig applies a new config to a live strategy — the only way an installed
-	// strategy receives config updates. Implementations must pick out their own sub-config
-	// and apply it goroutine-safely; they must not start watches or do unbounded work here.
-	UpdateConfig(cfg *querythrottlerpb.Config)
 
 	// GetStrategyName returns the name of the strategy.
 	GetStrategyName() string

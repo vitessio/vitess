@@ -1351,11 +1351,11 @@ func TestQueryThrottler_ConcurrentThrottleAndConfigUpdate(t *testing.T) {
 	wg.Wait()
 }
 
-// When one SrvKeyspace update flips a top-level field, changes the nested config, and
-// keeps the same Strategy, the strategy must be updated before the snapshot swap.
-// Otherwise the new top-level config is published against the strategy's old rules,
-// briefly throttling on them.
-func TestQueryThrottler_HandleConfigUpdate_PushesNestedConfigBeforeSnapshotSwap(t *testing.T) {
+// When one SrvKeyspace update flips DryRun, changes the nested rules, and keeps the same
+// Strategy, Throttle must evaluate the rules from the same snapshot it reads DryRun from.
+// Otherwise a query in flight during the update can be judged against the new rules with
+// the old DryRun=false, and be rejected.
+func TestQueryThrottler_HandleConfigUpdate_EvaluatesRulesFromDryRunSnapshot(t *testing.T) {
 	ctx := t.Context()
 
 	oldStrategy := &mockThrottlingStrategy{}
@@ -1401,12 +1401,12 @@ func TestQueryThrottler_HandleConfigUpdate_PushesNestedConfigBeforeSnapshotSwap(
 	require.Same(t, oldStrategy, snap.strategy, "strategy instance must not change when the effective strategy is unchanged")
 	require.False(t, snap.cfg.GetDryRun(), "snapshot must reflect the new DryRun=false")
 
-	// The core assertion: UpdateConfig ran before HandleConfigUpdate returned.
-	// Without the fix this slice is empty and the strategy keeps its old nested config.
-	require.Len(t, oldStrategy.updateConfigCfgs, 1, "UpdateConfig must be invoked exactly once before the snapshot swap")
-	pushed := oldStrategy.updateConfigCfgs[0]
-	require.False(t, pushed.GetDryRun(), "pushed cfg must reflect new DryRun=false")
-	require.Contains(t, pushed.GetTabletStrategyConfig().GetTabletRules(), "PRIMARY", "pushed cfg must carry the new nested rules")
+	// The core assertion: the strategy is handed the snapshot's config, so its rules and
+	// the DryRun that Throttle acts on always come from the same update.
+	require.NoError(t, qt.Throttle(ctx, topodatapb.TabletType_PRIMARY, &sqlparser.ParsedQuery{Query: "SELECT 1"}, sqlparser.StmtSelect, 0, nil))
+	require.Len(t, oldStrategy.evaluatedCfgs, 1)
+	require.Same(t, snap.cfg, oldStrategy.evaluatedCfgs[0], "Evaluate must be given the config of the snapshot Throttle reads DryRun from")
+	require.Contains(t, oldStrategy.evaluatedCfgs[0].GetTabletStrategyConfig().GetTabletRules(), "PRIMARY", "Evaluate must see the new nested rules")
 }
 
 // A SrvKeyspace update that changes only the nested TabletStrategyConfig must still
@@ -1466,13 +1466,14 @@ func TestQueryThrottler_HandleConfigUpdate_NestedOnlyChangePropagates(t *testing
 
 	require.True(t, qt.HandleConfigUpdate(srvks, nil))
 
-	// The strategy must hear about the nested change. Comparing only the top-level
-	// scalars (all unchanged here) would short-circuit and leave this slice empty.
-	require.Len(t, oldStrategy.updateConfigCfgs, 1, "UpdateConfig must be invoked when only the nested TabletStrategyConfig changes")
-	pushed := oldStrategy.updateConfigCfgs[0].GetTabletStrategyConfig().GetTabletRules()["PRIMARY"].GetStatementRules()["SELECT"].GetMetricRules()["lag"].GetThresholds()
+	// The strategy must evaluate with the nested change. Comparing only the top-level
+	// scalars (all unchanged here) would short-circuit and keep the old rules.
+	require.NoError(t, qt.Throttle(ctx, topodatapb.TabletType_PRIMARY, &sqlparser.ParsedQuery{Query: "SELECT 1"}, sqlparser.StmtSelect, 0, nil))
+	require.Len(t, oldStrategy.evaluatedCfgs, 1)
+	pushed := oldStrategy.evaluatedCfgs[0].GetTabletStrategyConfig().GetTabletRules()["PRIMARY"].GetStatementRules()["SELECT"].GetMetricRules()["lag"].GetThresholds()
 	require.Len(t, pushed, 1)
-	require.Equal(t, float64(5), pushed[0].GetAbove(), "pushed cfg must carry the new threshold")
-	require.Equal(t, int32(99), pushed[0].GetThrottle(), "pushed cfg must carry the new throttle ratio")
+	require.Equal(t, float64(5), pushed[0].GetAbove(), "Evaluate must see the new threshold")
+	require.Equal(t, int32(99), pushed[0].GetThrottle(), "Evaluate must see the new throttle ratio")
 
 	// And the snapshot must also reflect the new nested config.
 	snap := qt.snapshot.Load()

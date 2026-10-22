@@ -248,7 +248,7 @@ func (qt *QueryThrottler) Throttle(ctx context.Context, tabletType topodatapb.Ta
 	}()
 
 	// Evaluate the throttling decision
-	decision := tStrategy.Evaluate(ctx, tabletType, parsedQuery, statementType, transactionID, attrs)
+	decision := tStrategy.Evaluate(ctx, tCfg, tabletType, parsedQuery, statementType, transactionID, attrs)
 
 	// Record evaluate-window latency immediately after Evaluate returns
 	evaluateLatency.Record(labels, startTime)
@@ -425,8 +425,7 @@ func (qt *QueryThrottler) HandleConfigUpdate(srvks *topodatapb.SrvKeyspace, err 
 	needsStrategyChange := effectiveStrategy(currentSnap.cfg) != effectiveStrategy(newCfg)
 	newStrategy := currentSnap.strategy
 	if needsStrategyChange {
-		// Build outside the lock; this can be slow. The factory takes newCfg, so the new
-		// strategy already holds the latest nested config and needs no UpdateConfig below.
+		// Build outside the lock; this can be slow.
 		newStrategy = qt.buildNewStrategy(newCfg)
 	}
 
@@ -445,13 +444,10 @@ func (qt *QueryThrottler) HandleConfigUpdate(srvks *topodatapb.SrvKeyspace, err 
 			return
 		}
 
+		// Strategies read their rules from the config Throttle passes to Evaluate, so the
+		// snapshot swap alone applies new rules, together with the dry_run they go with.
 		if needsStrategyChange && newStrategy != nil {
 			newStrategy.Start()
-		} else if newStrategy != nil {
-			// Strategy unchanged: push the config into the live strategy before storing the
-			// snapshot, so both land together. Otherwise flipping DryRun along with new rules
-			// could briefly throttle against the strategy's stale nested config.
-			newStrategy.UpdateConfig(newCfg)
 		}
 		qt.snapshot.Store(&stateSnapshot{
 			cfg:      newCfg,
