@@ -50,7 +50,7 @@ func (s *Server) Lock(ctx context.Context, dirPath, contents string) (topo.LockD
 		return nil, convertError(err, dirPath)
 	}
 
-	return s.lock(ctx, dirPath, contents, s.lockTTL)
+	return s.lock(ctx, dirPath, contents, s.lockTTL, true /*wait*/)
 }
 
 // LockWithTTL is part of the topo.Conn interface.
@@ -65,19 +65,20 @@ func (s *Server) LockWithTTL(ctx context.Context, dirPath, contents string, ttl 
 		return nil, convertError(err, dirPath)
 	}
 
-	return s.lock(ctx, dirPath, contents, ttl.String())
+	return s.lock(ctx, dirPath, contents, ttl.String(), true /*wait*/)
 }
 
 // LockName is part of the topo.Conn interface.
 func (s *Server) LockName(ctx context.Context, dirPath, contents string) (topo.LockDescriptor, error) {
-	return s.lock(ctx, dirPath, contents, topo.NamedLockTTL.String())
+	return s.lock(ctx, dirPath, contents, topo.NamedLockTTL.String(), true /*wait*/)
 }
 
 // TryLock is part of the topo.Conn interface.
+// It makes a single attempt to acquire the lock, so two callers cannot
+// both see the lock as free and then block on each other.
 func (s *Server) TryLock(ctx context.Context, dirPath, contents string) (topo.LockDescriptor, error) {
-	// We list all the entries under dirPath
-	entries, err := s.ListDir(ctx, dirPath, true)
-	if err != nil {
+	// We list the directory first to make sure it exists.
+	if _, err := s.ListDir(ctx, dirPath, false /*full*/); err != nil {
 		// We need to return the right error codes, like
 		// topo.ErrNoNode and topo.ErrInterrupted, and the
 		// easiest way to do this is to return convertError(err).
@@ -86,20 +87,13 @@ func (s *Server) TryLock(ctx context.Context, dirPath, contents string) (topo.Lo
 		return nil, convertError(err, dirPath)
 	}
 
-	// If there is a file 'lock' in it then we can assume that someone else already has a lock.
-	// Throw error in this case
-	for _, e := range entries {
-		if e.Name == locksFilename && e.Type == topo.TypeFile && e.Ephemeral {
-			return nil, topo.NewError(topo.NodeExists, "lock already exists at path "+dirPath)
-		}
-	}
-
-	// everything is good let's acquire the lock.
-	return s.lock(ctx, dirPath, contents, s.lockTTL)
+	return s.lock(ctx, dirPath, contents, s.lockTTL, false /*wait*/)
 }
 
-// Lock is part of the topo.Conn interface.
-func (s *Server) lock(ctx context.Context, dirPath, contents, ttl string) (topo.LockDescriptor, error) {
+// lock is used by Lock(), LockWithTTL(), LockName() and TryLock().
+// If wait is false, it returns a topo.NodeExists error instead of
+// waiting for the current holder to release the lock.
+func (s *Server) lock(ctx context.Context, dirPath, contents, ttl string, wait bool) (topo.LockDescriptor, error) {
 	lockPath := path.Join(s.root, dirPath, locksFilename)
 
 	lockOpts := &api.LockOptions{
@@ -124,6 +118,12 @@ func (s *Server) lock(ctx context.Context, dirPath, contents, ttl string) (topo.
 	if s.lockDelay > 0 {
 		lockOpts.SessionOpts.LockDelay = s.lockDelay
 	}
+	if !wait {
+		// A single acquisition attempt. LockWaitTime bounds how long
+		// that attempt blocks on a held lock; zero means the default.
+		lockOpts.LockTryOnce = true
+		lockOpts.LockWaitTime = time.Millisecond
+	}
 	// Build the lock structure.
 	l, err := s.client.LockOpts(lockOpts)
 	if err != nil {
@@ -134,6 +134,10 @@ func (s *Server) lock(ctx context.Context, dirPath, contents, ttl string) (topo.
 	// lock that path.
 	s.mu.Lock()
 	li, ok := s.locks[lockPath]
+	if ok && !wait {
+		s.mu.Unlock()
+		return nil, topo.NewError(topo.NodeExists, "lock already exists at path "+dirPath)
+	}
 	for ok {
 		// Unlock, wait for something to change.
 		s.mu.Unlock()
@@ -163,6 +167,13 @@ func (s *Server) lock(ctx context.Context, dirPath, contents, ttl string) (topo.
 		delete(s.locks, lockPath)
 		s.mu.Unlock()
 		close(li.done)
+		// With LockTryOnce, an empty leaderCh with nil error means
+		// acquisition was unsuccessful: another session holds the lock,
+		// or an active lock-delay prevents acquiring it. Both return
+		// NodeExists.
+		if err == nil && !wait && ctx.Err() == nil {
+			return nil, topo.NewError(topo.NodeExists, "lock already exists at path "+dirPath)
+		}
 		// Consul will return empty leaderCh with nil error if we cannot get lock before the timeout
 		// therefore we return a timeout error here
 		if lost == nil {
