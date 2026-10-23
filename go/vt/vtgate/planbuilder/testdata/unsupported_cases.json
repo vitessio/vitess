@@ -523,5 +523,20 @@
     "comment": "a qualified name is never a vitess_metadata value",
     "query": "set @@vitess_metadata.app_v1 = t.x",
     "plan": "Incorrect argument type to variable 'app_v1'"
+  },
+  {
+    "comment": "row comparisons with two subqueries that can't be merged in one predicate are refused, since the second subquery's result would be lost",
+    "query": "select id from user where (col, name) < (select user_id, col from music where user_id = 3) or (col, name) > (select user_id, col from music where user_id = 8)",
+    "plan": "VT12001: unsupported: row comparison with an unmergable subquery in a predicate with other subqueries"
+  },
+  {
+    "comment": "a row comparison and a scalar comparison with subqueries that can't be merged in one predicate are refused",
+    "query": "select id from user where col < (select user_id from music where user_id = 3) or (col, name) > (select user_id, col from music where user_id = 8)",
+    "plan": "VT12001: unsupported: row comparison with an unmergable subquery in a predicate with other subqueries"
+  },
+  {
+    "comment": "a DELETE with row comparisons against two subqueries that can't be merged in one predicate is refused",
+    "query": "delete from user where (col, name) in (select user_id, col from music where user_id = 3) or (col, name) = (select user_id, col from music where user_id = 8)",
+    "plan": "VT12001: unsupported: row comparison with an unmergable subquery in a predicate with other subqueries"
   }
 ]

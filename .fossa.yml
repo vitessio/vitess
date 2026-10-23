@@ -9,3 +9,8 @@ targets:
   exclude:
     - type: maven
       path: java
+
+# Exclude the Go modules that pin our development tools; they are not dependencies of Vitess.
+paths:
+  exclude:
+    - ./tools

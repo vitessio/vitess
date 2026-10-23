@@ -7,8 +7,10 @@
 - **[Major Changes](#major-changes)**
     - **[Security](#security)**
         - [Legacy vtctld HTTP API removed](#vtctld-http-api-removed)
+        - [VTAdmin VExplain modes that can run the statement require the `execute` action](#vtadmin-vexplain-execute-action)
     - **[New Support](#new-support)**
         - [VTOrc failover of an unreachable primary `vttablet` via replica quorum](#vtorc-quorum-unreachable-primary)
+        - [Back up binary logs with full builtin backups](#backup-include-binlogs)
     - **[Breaking Changes](#breaking-changes)**
         - [`--watch-replication-stream` flag removed](#vttablet-watch-replication-stream-removed)
         - [VRLog feature removed](#vttablet-vrlog-removed)
@@ -16,9 +18,11 @@
         - [VTOrc `--cell` flag is now required](#vtorc-cell-required)
         - [`BackupHandle` interface gains `Wait()` method](#backup-handle-wait-method)
         - [VTOrc: `--cells-to-watch` removed in favor of `--cells-no-recovery`](#vtorc-cells-no-recovery)
+        - [Connection character sets restricted](#vttablet-connection-charsets-restricted)
     - **[Deprecations](#deprecations)**
         - [CLI Flags](#deprecated-cli-flags)
         - [Legacy streaming-path plan types in query rules](#deprecated-selectstream-rule-plan)
+        - [`//` comments](#deprecated-double-slash-comments)
 - **[Minor Changes](#minor-changes)**
     - **[VReplication](#minor-changes-vreplication)**
         - [Default data protection for `_reverse` workflow cancel/complete](#vreplication-reverse-workflow-data-protection)
@@ -40,6 +44,7 @@
         - [Stricter PROXY protocol v1 header validation](#vtgate-proxy-protocol-v1-strictness)
         - [MySQL-faithful validation and rejection of unsupported `sql_mode` values](#vtgate-sql-mode-rejection)
         - [New `VEXPLAIN MYSQLPLAN` statement](#vtgate-vexplain-mysqlplan)
+        - [VStream metrics report live streams and can include the caller](#vtgate-vstream-metrics)
     - **[Reparent](#minor-changes-reparent)**
         - [`EmergencyReparentShard` no longer waits on replicas that cannot win the election](#ers-lagging-relay-log-wait)
         - [`EmergencyReparentShard` can explicitly recover from split brain](#ers-allow-split-brain-promotion)
@@ -74,6 +79,8 @@
         - [Connections whose certificate revocation cannot be checked against a configured CRL are rejected](#vttls-crl-fail-closed)
         - [Optional gRPC TLS: connections are counted by transport](#grpc-optional-tls-connections)
         - [ORCA metrics now report QPS and EPS](#grpc-orca-qps)
+        - [Statements are trimmed of MySQL's space characters only](#sqlparser-mysql-space-set)
+        - [Charset and collation names are quoted when regenerated](#sqlparser-charset-name-quoting)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -90,6 +97,14 @@ The removed endpoints are `cells`, `keyspaces`, `keyspace`, `shards`, `srv_keysp
 **Impact**: requests to `/api/` on vtctld's HTTP port return `404 Not Found`. Passing one of the four flags logs a deprecation warning and has no effect. For anyone who builds on the Go packages, `vtctld.InitVtctld`, `vtctld.ActionRepository`, `vtctld.ActionResult`, and `vtctld.TabletWithURL` are gone.
 
 See [#21169](https://github.com/vitessio/vitess/issues/21169) for the removal and [#21170](https://github.com/vitessio/vitess/issues/21170) for the removal of the flags in v26.
+
+#### <a id="vtadmin-vexplain-execute-action"/>VTAdmin VExplain modes that can run the statement require the `execute` action</a>
+
+VTAdmin's VExplain API was authorized with the `get` action, but `VEXPLAIN QUERIES`, `ALL` and `TRACE` run the statement they explain, and MySQL's `EXPLAIN`, which `VEXPLAIN MYSQLPLAN` runs, calls the statement's functions in some query shapes, so an actor allowed only to read could change data through it ([GHSA-c2r8-grjp-w8c2](https://github.com/vitessio/vitess/security/advisories/GHSA-c2r8-grjp-w8c2)). Those modes now require the new `execute` action on the `VExplain` resource; `PLAN` and `KEYS`, which only plan the statement, still require only `get`. For those modes VTAdmin also accepts only a `SELECT` without `INTO`, sequence next-values or advisory lock functions, and runs `QUERIES`, `ALL` and `TRACE` in a read-only transaction that is always rolled back.
+
+**Migration**: grant the `execute` action on `VExplain` to the actors that should run `VEXPLAIN QUERIES`, `ALL`, `TRACE` or `MYSQLPLAN`. Rules that grant all actions (`*`) and `--no-rbac` already include it.
+
+**Impact**: an actor with only `get` on `VExplain` gets an `unauthorized` error from `VEXPLAIN QUERIES`, `ALL`, `TRACE` and `MYSQLPLAN`.
 
 ### <a id="new-support"/>New Support</a>
 
@@ -115,6 +130,31 @@ A graceful `vttablet` shutdown records a shutdown marker in the topology server 
 Note that in this scenario the old primary's MySQL keeps running, and because its `vttablet` is the unreachable component, it cannot be demoted until that `vttablet` comes back and discovers the shard has a new primary. As with any emergency reparent away from an unreachable primary, a semi-sync durability policy (e.g. `semi_sync`) is what prevents the old primary from acknowledging new writes in the meantime; with `none` durability, anything writing directly to the old MySQL (bypassing `vtgate`) could cause a split brain.
 
 See [#19918](https://github.com/vitessio/vitess/issues/19918).
+
+#### <a id="backup-include-binlogs"/>Back up binary logs with full builtin backups</a>
+
+A full backup taken with the `builtin` backup engine can now include the source's binary logs. Pass `--include-binlogs` to `vtbackup`, `vtctldclient Backup` or `vtctldclient BackupShard`. Restores need no flag: when a backup's manifest includes binary logs, a restore puts them in place under the target's own `log-bin` basename, adds them to the binlog index before `mysqld` starts, keeps their original file modification times, and does not reset or purge them. The restored server can therefore serve binlog streams (replicas, VStreams) for transactions from before the backup. Point-in-time recovery from such a backup still works.
+
+`--include-binlogs` is only supported with the `builtin` backup engine. The builtin engine stops `mysqld` cleanly before copying files, so the backed-up binary logs end at exactly the position the data was taken at. `xtrabackup` and `mysqlshell` back up a running server, so binary logs copied alongside the data would contain transactions the backup doesn't. A server restored from such a backup would report those transactions as executed, and replicas or VStreams reading from it would silently miss them. Requests that combine `--include-binlogs` with another engine, or with an incremental backup, fail with `INVALID_ARGUMENT`, as does `vtbackup` with both `--include-binlogs` and `--restore-with-clone`.
+
+Limitations and requirements:
+
+- Full backups only.
+- `vtbackup --restore-with-clone` together with `--include-binlogs` is refused in this release, because CLONE does not copy binary logs.
+- The backup source must have `log_bin` and `log_replica_updates` enabled. Otherwise the backup fails with `FAILED_PRECONDITION`.
+- The tablet's `log-bin` (and `log-bin-index`, if set) must say where `mysqld` keeps its binary logs, as the `my.cnf` that Vitess generates does. A source whose `mysqld` uses its default basename because `log-bin` isn't set, or another basename, is refused with `FAILED_PRECONDITION` before `mysqld` is stopped, as is one whose binary log index can't be read.
+
+Things to be aware of:
+
+- Backups grow by the size of the source's retained binary logs.
+- The binary logs keep every transaction the source logged, including errant GTIDs. Without them, a replica of the restored server that lacks such a transaction stops with error 1236, because the restored `gtid_purged` covers it. With them, the restored server sends the transaction and the replica applies it. VTOrc's errant GTID detection still applies.
+- Binlog expiry (`binlog_expire_logs_seconds`) on the restored server follows the original file times, so old binary logs may be purged soon after the restored `mysqld` starts.
+- Older Vitess versions restoring such a backup restore only the data and ignore the binary logs.
+- Encrypted binary logs (`binlog_encryption`) are backed up as they are, so only a server whose keyring holds the source's binary log master key, such as one sharing the source's keyring, can restore them. A restore fails when it cannot read a restored binary log (and `mysqld` does not start when the newest one is unreadable). The tablet then doesn't start replicating, and restarting it retries the restore. `ALTER INSTANCE ROTATE BINLOG MASTER KEY` removes the previous key from the keyring, so a backup whose binary logs were encrypted before a rotation can no longer be restored.
+
+**Upgrade order**: upgrade both `vtctld` and the tablets before using `--include-binlogs` with `vtctldclient Backup` or `BackupShard`. An older `vtctld` or `vttablet` silently ignores the field and takes a backup without binary logs.
+
+See [#17667](https://github.com/vitessio/vitess/issues/17667).
 
 ### <a id="breaking-changes"/>Breaking Changes</a>
 
@@ -180,6 +220,12 @@ The replacement, `--cells-no-recovery`, is a deny-list for *recovery actions onl
 
 See [#20021](https://github.com/vitessio/vitess/issues/20021) for details.
 
+#### <a id="vttablet-connection-charsets-restricted"/>Connection character sets restricted</a>
+
+`--db-charset`, and the other places a MySQL connection character set is configured, no longer accept `sjis`, `cp932`, `gb18030`, `gbk`, `big5`, `ucs2`, `utf16`, `utf16le` or `utf32`, whether given as a character set or as one of its collations. A tablet configured with one of them fails to start, VTGate refuses a `SET` of `character_set_client`, `character_set_connection`, `character_set_results` or `collation_connection` to one of them, or to a name that is not a character set or collation, which it used to answer with OK and ignore, and VTTablet refuses a setting or `SET` statement that would switch a session's connection to one of them. A client may still ask for one of them at the handshake: VTGate reads its statements byte by byte, as the tablet's connection to MySQL does, so they cannot break out of a literal.
+
+Vitess parses and escapes SQL text byte by byte, and in these character sets the second byte of a character can be a backslash or a back quote, so text in them was misparsed or corrupted on its way through Vitess. Use `utf8mb4` as the connection character set instead. Tables and columns can still be declared with any of these character sets; MySQL converts between them and the connection character set.
+
 ### <a id="deprecations"/>Deprecations</a>
 
 #### <a id="deprecated-cli-flags"/>CLI Flags</a>
@@ -210,6 +256,14 @@ For backward compatibility, rules keep matching queries on the streaming path by
 Both compatibility behaviors will be removed in v26, along with the `SelectStream` plan name.
 
 **Impact**: Update query rules that use `SelectStream` to the concrete plan names listed above, and re-key `OtherRead` rules meant to gate streamed `ANALYZE` on the `Select` plan or a `Query` pattern. Note that rules keyed on concrete plan names match on both execution paths, not only streamed queries.
+
+#### <a id="deprecated-double-slash-comments"/>`//` comments</a>
+
+Vitess accepts `//` line comments, which are not part of MySQL's syntax. For MySQL compatibility, support for them is deprecated. It will be disabled by default in v26 and removed in v27.
+
+VTGate counts each executed statement that uses a `//` comment under the `DoubleSlashComment` type of the `VtGateWarnings` metric, and logs a throttled warning. The client gets a MySQL warning (`ER_WARN_DEPRECATED_SYNTAX`, 1287) for the statement, which `SHOW WARNINGS` and many drivers show.
+
+**Impact**: Replace `//` comments in queries with `-- `, `#` or `/* */` comments. Use the `VtGateWarnings` metric, the VTGate log, and the warnings that clients receive to find the remaining uses.
 
 ## <a id="minor-changes"/>Minor Changes</a>
 
@@ -455,6 +509,14 @@ Because each per-shard `EXPLAIN` runs on a separate connection, a `VEXPLAIN MYSQ
 
 Like a plain `EXPLAIN`, the per-shard `EXPLAIN FORMAT=JSON` queries `VEXPLAIN MYSQLPLAN` issues are not subject to table ACL checks on the explained tables, so `VEXPLAIN MYSQLPLAN` can return per-shard plan metadata (index names, row estimates, filtered percentages) for tables the caller could not otherwise read. For the same reason — the tablet plans an `EXPLAIN` without the explained table's identity — query denylist rules that are conditioned on a table name are not enforced against these per-shard `EXPLAIN` queries either; denylist rules conditioned on the query pattern still apply if their pattern matches the `explain format = json ...` query text. Unlike a plain `EXPLAIN`, which reaches a single arbitrary shard, `VEXPLAIN MYSQLPLAN` extends this to every resolved shard of every keyspace in the plan. Deployments that rely on table ACLs or table-scoped query denylist rules to restrict read access should restrict access to `VEXPLAIN MYSQLPLAN` accordingly.
 
+#### <a id="vtgate-vstream-metrics"/>VStream metrics report live streams and can include the caller</a>
+
+`VStreamsLag` now reports, for each keyspace, shard, and tablet type, the highest lag across the VStreams that are currently streaming from that shard. Previously it reported the lag of whichever stream sent an event last, and kept reporting it after every stream for the shard had closed. A shard's series now disappears when its last stream closes, and a newly opened stream is not reported until its first event arrives. Alerts that use `absent()` on `VStreamsLag`, or that fire when lag stays above a threshold, may behave differently.
+
+`VStreamsCount` now also drops streams that end without an error, such as a shard stream ended by a resharding journal event. Previously those streams were counted as active forever.
+
+The new `--vstream-metrics-include-caller` flag adds a `CallerID` label to `VStreamsCreated`, `VStreamsCount`, `VStreamsEventsStreamed`, `VStreamsEndedWithErrors`, `VStreamsLag`, and `VStreamsTransactionsChunked`, so each streaming application can be monitored separately. The label is set to the principal of the effective caller ID in the `VStreamRequest`, or to the MySQL user for SQL `VSTREAM`; streams without one get an empty `CallerID`. The `VStreamRequest` principal is set by the client and is not authenticated by VTGate. Each distinct principal adds a series per keyspace, shard, and tablet type, and the counters keep their series until VTGate restarts, so the number of series grows with the distinct principals seen over the process lifetime, not only those of open streams. For example, if each client instance sets its own principal, the number of series grows with every instance that has connected, so consider the cardinality before enabling the flag. The flag is off by default, and the metrics keep their existing labels when it is off.
+
 ### <a id="minor-changes-reparent"/>Reparent</a>
 
 #### <a id="ers-lagging-relay-log-wait"/>`EmergencyReparentShard` no longer waits on replicas that cannot win the election</a>
@@ -657,9 +719,9 @@ See [#20654](https://github.com/vitessio/vitess/pull/20654) for details.
 
 Under strict table ACL (`--queryserver-config-strict-table-acl`), vttablet checks a statement against the tables its planner derives for it. `DO`, `CALL`, `REPAIR`, `OPTIMIZE` and `LOAD DATA` are parsed into nodes that discard their table-bearing text, so no permission was derived for them and the check had nothing to enforce: any authenticated caller could run them against tables the ACL denies, with vttablet's own MySQL privileges — a `DO` carrying a table-reading subquery or a `CALL` into a procedure body to read, and a server-side `LOAD DATA INFILE` to write. See [GHSA-w6mx-2f8x-pqf4](https://github.com/vitessio/vitess/security/advisories/GHSA-w6mx-2f8x-pqf4).
 
-vttablet now fails closed: when it cannot determine a statement's tables, it denies the statement under strict table ACL rather than skip the check. With strict table ACL on, these five statements are denied for every caller outside the exempt ACL (`--queryserver-config-acl-exempt-acl`), including callers whose table grants would otherwise have sufficed, since the tablet cannot confirm which tables the statement touches. Operators who need them should issue them as a caller in the exempt ACL. With dry-run (`--queryserver-config-enable-table-acl-dry-run`) the denial is only recorded and the statement runs. Nothing changes with strict table ACL off.
+vttablet now fails closed: when it cannot determine a statement's tables, it denies the statement under strict table ACL rather than skip the check. With strict table ACL on, these five statements are denied for every caller outside the exempt ACL (`--queryserver-config-acl-exempt-acl`), including callers whose table grants would otherwise have sufficed, since the tablet cannot confirm which tables the statement touches. The one exception is a caller that is a reader, a writer and an admin in a table group covering every table (`"table_names_or_prefixes": ["%"]`): it holds every role on any table the statement could touch, so `DO`, `REPAIR` and `OPTIMIZE` run for it. `CALL` and `LOAD DATA` are not covered even then, since a `SQL SECURITY DEFINER` procedure runs with its definer's privileges and `LOAD DATA INFILE` reads files on the server, neither of which table ACL grants. Operators who need them otherwise should issue them as a caller in the exempt ACL. With dry-run (`--queryserver-config-enable-table-acl-dry-run`) the denial is only recorded and the statement runs. Nothing changes with strict table ACL off.
 
-These denials have no table to name, so they are counted under a new `TableName` label, `undetermined-table-set` (with an empty `TableGroup`), in `TableACLDenied`. With dry-run on, every non-exempt `DO`, `CALL`, `REPAIR`, `OPTIMIZE` and `LOAD DATA` from a request carrying a caller id increments `TableACLPseudoDenied` under that label whether or not strict table ACL is on, so operators sizing a strict-ACL rollout will see a new series appear.
+These checks have no table to name, so they are counted under a new `TableName` label, `undetermined-table-set`, in `TableACLDenied`, or in `TableACLAllowed` for a caller with every role on every table. Its `TableGroup` is empty. With dry-run on, every `DO`, `CALL`, `REPAIR`, `OPTIMIZE` and `LOAD DATA` from a request carrying a caller id that the check would deny increments `TableACLPseudoDenied` under that label whether or not strict table ACL is on, so operators sizing a strict-ACL rollout will see a new series appear.
 
 The exported `planbuilder.BuildPermissions` now returns a second result, `tablesUndetermined bool`, alongside the permissions. This breaks any out-of-tree caller on purpose: a one-result compatibility wrapper would keep returning "no permissions" for exactly these statements with no way to learn the table set was undetermined, so a caller left on it would silently keep the behavior this fix closes. Callers should take the new result and deny the statement when it is true.
 
@@ -676,7 +738,7 @@ This completes the fix for [GHSA-w6mx-2f8x-pqf4](https://github.com/vitessio/vit
 - `SHOW ... WHERE <expr>` requires `READER` on the tables read by any subquery in the filter, which MySQL evaluates. The `SHOW`'s own subject (the table of `SHOW COLUMNS FROM t`) remains unchecked. This covers `SHOW VITESS_MIGRATIONS ... WHERE` as well.
 - `SET` requires `READER` on the tables read by any subquery in its expressions.
 
-A `CREATE TABLE` that vttablet's parser cannot fully parse is forwarded to MySQL as the client's raw text, with only the `CREATE TABLE <name>` prefix known to the planner. Some such statements copy rows from a table the planner never sees (`CREATE TABLE t (SELECT ...)`, `CREATE TABLE t AS TABLE src`, an `EXCEPT` or `INTERSECT` source), and the planner cannot tell them from a valid statement in syntax Vitess lacks. Every partially parsed `CREATE TABLE` is therefore treated as a statement whose tables cannot be determined and denied the same way, for callers outside the exempt ACL; a `CREATE TABLE` in syntax vttablet does not parse must be issued by a caller in the exempt ACL. Parsing these sources is tracked in [#21138](https://github.com/vitessio/vitess/issues/21138).
+A `CREATE TABLE` that vttablet's parser cannot fully parse is forwarded to MySQL as the client's raw text, with only the `CREATE TABLE <name>` prefix known to the planner. Some such statements copy rows from a table the planner never sees (`CREATE TABLE t (SELECT ...)`, `CREATE TABLE t AS TABLE src`, an `EXCEPT` or `INTERSECT` source), and the planner cannot tell them from a valid statement in syntax Vitess lacks. Every partially parsed `CREATE TABLE` is therefore treated as a statement whose tables cannot be determined and denied the same way, for callers outside the exempt ACL that do not hold every role in a table group covering every table; a `CREATE TABLE` in syntax vttablet does not parse must be issued by such a caller. Parsing these sources is tracked in [#21138](https://github.com/vitessio/vitess/issues/21138).
 
 A statement flagged this way now has the permissions the planner did derive checked first, so a caller lacking `ADMIN` on the table a partial `CREATE TABLE` creates is denied on that table by name, and a dry run records both that denial and the undetermined one.
 
@@ -766,7 +828,7 @@ See [#20778](https://github.com/vitessio/vitess/pull/20778) for details.
 
 #### <a id="vtadmin-updated-node"/>vtadmin-web updated to node v22.23.2 (LTS)</a>
 
-Building `vtadmin-web` now requires node v22.22.2 or newer on the 22 line, v24.15.0 or newer on the 24 line, or v26 and above, up from v22.13.0; `package.json` declares exactly that range and `npm ci` enforces it. The vtadmin build script, the CI workflows, and the `vitess/vtadmin` image build with node v22.23.2. The range is what jsdom 30, a test dependency, supports; on the 22 line the bump stays within the same major, so no breaking changes are involved. Full details on the node v22.23.2 release can be found at https://nodejs.org/en/blog/release/v22.23.2.
+Building `vtadmin-web` now requires node v22.22.2 or newer on the 22 line, v24.15.0 or newer on the 24 line, or v26 and above, up from v22.13.0; `package.json` declares exactly that range and `npm ci` enforces it. The vtadmin build script and the `vitess/vtadmin` image build with node v22.23.2. The range is what jsdom 30, a test dependency, supports; on the 22 line the bump stays within the same major, so no breaking changes are involved. Full details on the node v22.23.2 release can be found at https://nodejs.org/en/blog/release/v22.23.2.
 
 ### <a id="minor-changes-general"/>General</a>
 
@@ -840,3 +902,19 @@ See [#21161](https://github.com/vitessio/vitess/issues/21161) for details.
 With `--grpc-enable-orca-metrics`, gRPC servers now report QPS and EPS in their ORCA load reports, alongside CPU and memory utilization. QPS is the rate of gRPC messages sent plus failed calls: one per unary response or stream message, and one per call that fails, so long-lived streams such as `VStream` keep counting while they send. EPS is the rate of calls whose gRPC handler returns an error; query errors that VTGate returns inside a successful response, as `Execute` does, are not counted. Health checks and ORCA reports are not counted.
 
 Clients using gRPC's standard `weighted_round_robin` policy with `enableOobLoadReport: true` ignore reports without QPS, so they previously fell back to plain round robin. After upgrading a server that has `--grpc-enable-orca-metrics` set, those clients switch to weighted routing with no configuration change. The policy weighs each server by its QPS, CPU utilization, and error rate.
+
+#### <a id="sqlparser-mysql-space-set"/>Statements are trimmed of MySQL's space characters only</a>
+
+VTGate and VTTablet trim whitespace from the start and end of a statement before they parse it. They used to trim every Unicode space character, including the no-break space (U+00A0), which MySQL does not treat as a space. They now trim only the characters MySQL treats as spaces: space, tab, line feed, vertical tab, form feed and carriage return. A statement that starts or ends with any other space character is now rejected with a syntax error, as MySQL rejects it, where Vitess used to remove the character and run the statement. Clients that send such characters must remove them before upgrading.
+
+#### <a id="sqlparser-charset-name-quoting"/>Charset and collation names are quoted when regenerated</a>
+
+A charset, collation, engine, tablespace or full-text parser name is now decoded when parsed, and written back as a single token when Vitess regenerates the statement: bare when it is a known charset, collation, engine, index type or parser name, back-quoted otherwise.
+
+User-visible consequences:
+
+- **A quoted name is normalized.** `COLLATE 'utf8_bin'` regenerates as `COLLATE utf8_bin` — the quoted and unquoted spellings mean the same name, and the decoded form is what is stored. Anything comparing the printed form of these statements byte for byte sees the new spelling.
+- **Only known names stay bare.** A charset or collation name of any MySQL or MariaDB version, a known storage engine such as `InnoDB` or `memory`, the `BTREE`, `HASH` and `RTREE` index types, the `ngram` and `mecab` parsers, and the `innodb_system` and `innodb_file_per_table` tablespaces are written back as they were spelled. Any other name is back-quoted: `TABLESPACE ts` regenerates as ``TABLESPACE `ts` ``, and so does an engine Vitess does not know or a keyword used as a name. `WITH PARSER` accepts only a plain identifier, so a known name that is a keyword is quoted there: ``WITH PARSER `memory` `` keeps its quoting where `ENGINE memory` does not. `binary` is still bare where the grammar has a `BINARY` alternative, except directly before the `BINARY` attribute: `CHARACTER SET 'binary' BINARY` regenerates as ``CHARACTER SET `binary` BINARY``.
+- **`COLLATE binary` in an expression is quoted.** `expr COLLATE binary` regenerates as ``expr COLLATE `binary` ``, because MySQL's expression `COLLATE` only accepts `binary` quoted. Column, table and database `COLLATE binary` and `CHARACTER SET binary` stay bare.
+- **An empty charset, collation, engine or partition tablespace name is rejected.** `CHARACTER SET ''` and `COLLATE ''` on a column, a table, `ALTER TABLE ... CONVERT TO`, `CAST`/`CONVERT`, `CONVERT ... USING`, `CHAR ... USING`, `SELECT ... INTO OUTFILE` and an expression, `ENGINE ''` on a table or a partition, and a partition's `TABLESPACE ''` no longer parse. An empty name in these positions is indistinguishable from the clause being absent, so it would previously have been dropped or mangled and a statement MySQL rejects could have become a valid, different one. Non-DDL statements get the error directly; DDL falls back to a partial parse, so the client's own text is forwarded and MySQL rejects it. `SET NAMES ... COLLATE ''` and `SET CHARACTER SET ... COLLATE ''`, which used to parse and discard the collation, are now parse errors too; MySQL rejects both. `CREATE`/`ALTER DATABASE ... CHARACTER SET ''` and `COLLATE ''` are unchanged: they still parse and are written back as `''`.
+- **`ENCRYPTION` requires a quoted value.** `CREATE`/`ALTER DATABASE ... ENCRYPTION N` no longer fully parses, matching MySQL, which only accepts `'Y'` or `'N'` as a quoted string. Such a statement now falls back to a partial parse rather than being regenerated into a spelling MySQL would refuse.

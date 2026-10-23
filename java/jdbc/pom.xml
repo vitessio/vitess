@@ -37,7 +37,7 @@
     <dependency>
       <groupId>org.apache.commons</groupId>
       <artifactId>commons-lang3</artifactId>
-      <version>3.20.0</version>
+      <version>3.21.0</version>
     </dependency>
 
     <dependency>
@@ -55,7 +55,7 @@
     <dependency>
       <groupId>org.mockito</groupId>
       <artifactId>mockito-core</artifactId>
-      <version>5.23.0</version>
+      <version>5.24.0</version>
       <scope>test</scope>
     </dependency>
   </dependencies>

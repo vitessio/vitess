@@ -88,7 +88,8 @@ var (
 	commitMode       = stats.NewTimings("CommitModeTimings", "Commit Mode Time", "mode")
 	commitUnresolved = stats.NewCounter("CommitUnresolved", "Atomic Commit failed to conclude after commit decision is made")
 
-	exceedMemoryRowsLogger = logutil.NewThrottledLogger("ExceedMemoryRows", 1*time.Minute)
+	exceedMemoryRowsLogger    = logutil.NewThrottledLogger("ExceedMemoryRows", 1*time.Minute)
+	doubleSlashCommentsLogger = logutil.NewThrottledLogger("DoubleSlashComments", 1*time.Minute)
 
 	errorTransform errorTransformer = nullErrorTransformer{}
 )
@@ -698,6 +699,12 @@ func (e *Executor) addNeededBindVars(vcursor *econtext.VCursorImpl, bindVarNeeds
 		if val == nil {
 			val = sqltypes.NullBindVariable
 		}
+		// The session arrives over the wire with the request, so a
+		// user-defined variable is as caller-controlled as a request bind
+		// variable and gets the same check before it reaches a tablet.
+		if err := sqltypes.ValidateBindVariable(val); err != nil {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "user-defined variable @%s: %v", udv, err)
+		}
 		bindVars[sqlparser.UserDefinedVariableName+udv] = val
 	}
 
@@ -1241,6 +1248,23 @@ func (e *Executor) ParseDestinationTarget(targetString string) (string, topodata
 	return econtext.ParseDestinationTarget(targetString, defaultTabletType, e.VSchema())
 }
 
+// countDoubleSlashComment counts a statement that uses a deprecated //
+// comment and logs it.
+func (e *Executor) countDoubleSlashComment() {
+	warnings.Add("DoubleSlashComment", 1)
+	doubleSlashCommentsLogger.Warningf("a statement uses a // comment, which is deprecated and will be removed in a future release; use --, # or /* */ instead")
+}
+
+// doubleSlashCommentWarning is the warning that a client gets for a statement
+// that uses a // comment. It has the shape of MySQL's warning for deprecated
+// syntax.
+func doubleSlashCommentWarning() *querypb.QueryWarning {
+	return &querypb.QueryWarning{
+		Code:    uint32(sqlerror.ERWarnDeprecatedSyntax),
+		Message: "'// comment' is deprecated and will be removed in a future release. Please use '-- ', '#' or '/* */' instead",
+	}
+}
+
 func (e *Executor) fetchOrCreatePlan(
 	ctx context.Context,
 	safeSession *econtext.SafeSession,
@@ -1257,7 +1281,18 @@ func (e *Executor) fetchOrCreatePlan(
 		return nil, nil, nil, vterrors.VT13001("vschema not initialized")
 	}
 
-	query, comments := sqlparser.SplitMarginComments(queryString)
+	// Plans can forward the statement text to MySQL as written, so MySQL must
+	// skip every comment that Vitess skips.
+	queryString, rewritten := e.env.Parser().RewriteDoubleSlashComments(queryString)
+	// Count each executed statement once: a binary protocol prepare is
+	// counted when the statement is executed, and a retry after buffering
+	// shares the statement's logStats. A SQL PREPARE is counted by
+	// PlanPrepareStmt, as the session keeps the rewritten text.
+	if rewritten && isExecutePath && !logStats.DoubleSlashComment {
+		logStats.DoubleSlashComment = true
+		e.countDoubleSlashComment()
+	}
+	query, comments := e.env.Parser().SplitMarginComments(queryString)
 	vcursor, _ = e.newVCursor(safeSession, comments, logStats)
 
 	var setVarComment string
@@ -1885,6 +1920,15 @@ func (e *Executor) ExecuteVStream(ctx context.Context, rss []*srvtopo.ResolvedSh
 }
 
 func (e *Executor) startVStream(ctx context.Context, rss []*srvtopo.ResolvedShard, filter *binlogdatapb.Filter, gtid string, callback func(evs []*binlogdatapb.VEvent) error) error {
+	vs, err := e.newSQLVStream(ctx, rss, filter, gtid, callback)
+	if err != nil {
+		return err
+	}
+	_ = vs.stream(ctx)
+	return nil
+}
+
+func (e *Executor) newSQLVStream(ctx context.Context, rss []*srvtopo.ResolvedShard, filter *binlogdatapb.Filter, gtid string, callback func(evs []*binlogdatapb.VEvent) error) (*vstream, error) {
 	shardGtids := make([]*binlogdatapb.ShardGtid, 0, len(rss))
 	for _, rs := range rss {
 		shardGtid := &binlogdatapb.ShardGtid{
@@ -1899,13 +1943,14 @@ func (e *Executor) startVStream(ctx context.Context, rss []*srvtopo.ResolvedShar
 	}
 	ts, err := e.serv.GetTopoServer()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	vsm := newVStreamManager(e.resolver.resolver, e.serv, e.cell)
-	vs := &vstream{
+	return &vstream{
 		vgtid:              vgtid,
 		tabletType:         topodatapb.TabletType_PRIMARY,
+		callerPrincipal:    vstreamCallerPrincipal(ctx),
 		filter:             filter,
 		send:               callback,
 		resolver:           e.resolver.resolver,
@@ -1916,9 +1961,7 @@ func (e *Executor) startVStream(ctx context.Context, rss []*srvtopo.ResolvedShar
 		eventCh:            make(chan []*binlogdatapb.VEvent),
 		ts:                 ts,
 		copyCompletedShard: make(map[string]struct{}),
-	}
-	_ = vs.stream(ctx)
-	return nil
+	}, nil
 }
 
 func (e *Executor) checkThatPlanIsValid(stmt sqlparser.Statement, plan *engine.Plan) error {
@@ -1992,6 +2035,13 @@ func (e *Executor) PlanPrepareStmt(ctx context.Context, safeSession *econtext.Sa
 	plan, _, _, err := e.fetchOrCreatePlan(ctx, safeSession, query, nil, false, true, lStats, false)
 	if err != nil {
 		return nil, err
+	}
+	// The session keeps the rewritten text of the statement, so this is the
+	// only time that a SQL PREPARE can be counted. Its statement clears the
+	// session warnings before it runs, so the warning stays.
+	if _, rewritten := e.env.Parser().RewriteDoubleSlashComments(query); rewritten {
+		e.countDoubleSlashComment()
+		safeSession.RecordWarning(doubleSlashCommentWarning())
 	}
 	return plan, nil
 }

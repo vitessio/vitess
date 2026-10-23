@@ -449,6 +449,7 @@ func (s *VtctldServer) Backup(req *vtctldatapb.BackupRequest, stream vtctlservic
 	span.Annotate("concurrency", req.Concurrency)
 	span.Annotate("incremental_from_pos", req.IncrementalFromPos)
 	span.Annotate("backup_engine", req.BackupEngine)
+	span.Annotate("include_binlogs", req.IncludeBinlogs)
 
 	ti, err := s.ts.GetTablet(ctx, req.TabletAlias)
 	if err != nil {
@@ -476,15 +477,12 @@ func (s *VtctldServer) BackupShard(req *vtctldatapb.BackupShardRequest, stream v
 	span.Annotate("incremental_from_pos", req.IncrementalFromPos)
 	span.Annotate("upgrade_safe", req.UpgradeSafe)
 	span.Annotate("mysql_shutdown_timeout", req.MysqlShutdownTimeout)
+	span.Annotate("include_binlogs", req.IncludeBinlogs)
 
 	tablets, stats, err := reparentutil.ShardReplicationStatuses(ctx, s.ts, s.tmc, req.Keyspace, req.Shard)
 	// Instead of return on err directly, only return err when no tablets for backup at all
-	if err != nil {
-		tablets = reparentutil.GetBackupCandidates(tablets, stats)
-		// Only return err when no usable tablet
-		if len(tablets) == 0 {
-			return err
-		}
+	if err != nil && len(reparentutil.GetBackupCandidates(tablets, stats)) == 0 {
+		return err
 	}
 
 	var (
@@ -499,8 +497,8 @@ func (s *VtctldServer) BackupShard(req *vtctldatapb.BackupShardRequest, stream v
 			continue
 		}
 
-		// ignore tablet with an unknown replication lag status
-		if stats[i].ReplicationLagUnknown {
+		// ignore a tablet whose replication lag status is missing or unknown
+		if stats[i] == nil || stats[i].ReplicationLagUnknown {
 			continue
 		}
 
@@ -535,6 +533,7 @@ func (s *VtctldServer) BackupShard(req *vtctldatapb.BackupShardRequest, stream v
 		UpgradeSafe:          req.UpgradeSafe,
 		MysqlShutdownTimeout: req.MysqlShutdownTimeout,
 		InitSql:              req.InitSql,
+		IncludeBinlogs:       req.IncludeBinlogs,
 	}
 	err = s.backupTablet(ctx, backupTablet, r, stream)
 	return err
@@ -552,6 +551,7 @@ func (s *VtctldServer) backupTablet(ctx context.Context, tablet *topodatapb.Tabl
 		UpgradeSafe:          req.UpgradeSafe,
 		MysqlShutdownTimeout: req.MysqlShutdownTimeout,
 		InitSql:              req.InitSql,
+		IncludeBinlogs:       req.IncludeBinlogs,
 	}
 	logStream, err := s.tmc.Backup(ctx, tablet, r)
 	if err != nil {
