@@ -379,6 +379,9 @@ func (throttler *Throttler) WatchSrvKeyspaceCallback(srvks *topodatapb.SrvKeyspa
 		}
 		return true
 	}
+	if srvks == nil {
+		return false
+	}
 	throttlerConfig := throttler.normalizeThrottlerConfig(srvks.ThrottlerConfig)
 
 	if throttler.IsEnabled() {
