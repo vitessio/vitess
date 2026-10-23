@@ -51,12 +51,12 @@ func TestBuildSettingQueryRejectsUnsupportedSQLModes(t *testing.T) {
 		expectedErr: "setting the IGNORE_SPACE sql_mode is unsupported",
 	}, {
 		settings:    []string{"set sql_mode = 'BOGUS'"},
-		expectedErr: "Variable 'sql_mode' can't be set to the value of 'BOGUS'",
+		expectedErr: "invalid sql_mode value in connection settings",
 	}, {
 		// settings are applied with no verification afterwards; a value that cannot be
 		// judged upfront is rejected
 		settings:    []string{"set sql_safe_updates = 1", "set sql_mode = concat('AN', 'SI')"},
-		expectedErr: "non-constant sql_mode value in connection settings: set sql_mode = concat('AN', 'SI')",
+		expectedErr: "non-constant sql_mode value in connection settings",
 	}, {
 		// MySQL accepts an unquoted mode name as the equivalent string: it is a constant
 		settings: []string{"set sql_mode = TRADITIONAL"},
@@ -67,7 +67,7 @@ func TestBuildSettingQueryRejectsUnsupportedSQLModes(t *testing.T) {
 		expectedErr: "setting the ANSI sql_mode is unsupported",
 	}, {
 		settings:    []string{"set sql_mode = BOGUS"},
-		expectedErr: "Variable 'sql_mode' can't be set to the value of 'BOGUS'",
+		expectedErr: "invalid sql_mode value in connection settings",
 	}, {
 		// a qualified name is never a mode name; MySQL rejects it as the wrong type
 		settings:    []string{"set sql_mode = t.TRADITIONAL"},
@@ -276,7 +276,7 @@ func TestSettingsRejectSubqueries(t *testing.T) {
 		for _, tc := range tests {
 			t.Run(fmt.Sprintf("strict=%t %s", strictTableACL, tc.setting), func(t *testing.T) {
 				settings := []string{"set @@sql_safe_updates = 1", tc.setting}
-				expectedErr := "connection setting must not contain a subquery: " + tc.setting
+				expectedErr := "connection setting must not contain a subquery"
 				rejected := tc.subquery && strictTableACL
 
 				query, resetQuery, err := BuildSettingQuery(settings, parser, strictTableACL)
