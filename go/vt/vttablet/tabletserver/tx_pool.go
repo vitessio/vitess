@@ -97,6 +97,7 @@ func NewTxPool(env tabletenv.Env, limiter txlimiter.TxLimiter) *TxPool {
 		tempTableIdleKills: env.Exporter().NewCounter("TempTableIdleTimeoutKills",
 			"Number of stateful connections reclaimed by the temp-table idle timer"),
 	}
+	axp.scp.concludeTx = axp.txComplete
 	// Careful: conns also exports name+"xxx" vars,
 	// but we know it doesn't export Timeout.
 	env.Exporter().NewGaugeDurationFunc("OlapTransactionTimeout", "OLAP transaction timeout", func() time.Duration {
