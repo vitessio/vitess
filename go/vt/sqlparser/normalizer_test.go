@@ -1004,6 +1004,70 @@ func TestRewritesWithSetVarComment(in *testing.T) {
 	}
 }
 
+// TestNormalizeSelectLimit checks that sql_select_limit is applied exactly once, to the
+// statement-level SELECT or UNION, and never to UNION branches, derived tables or subqueries.
+func TestNormalizeSelectLimit(in *testing.T) {
+	tests := []struct{ in, expected string }{{
+		in:       "select a from t1",
+		expected: "select a from t1 limit 10",
+	}, {
+		in:       "select a from t1 limit 3",
+		expected: "select a from t1 limit 3",
+	}, {
+		in:       "select a from t1 union select a from t2",
+		expected: "select a from t1 union select a from t2 limit 10",
+	}, {
+		in:       "select a from t1 union all select a from t2",
+		expected: "select a from t1 union all select a from t2 limit 10",
+	}, {
+		in:       "select a from t1 union select a from t2 order by a",
+		expected: "select a from t1 union select a from t2 order by a limit 10",
+	}, {
+		in:       "select a from t1 union select a from t2 limit 3",
+		expected: "select a from t1 union select a from t2 limit 3",
+	}, {
+		in:       "select a from t1 union (select a from t2 union select a from t3)",
+		expected: "select a from t1 union (select a from t2 union select a from t3) limit 10",
+	}, {
+		in:       "(select a from t1 limit 2) union select a from t2",
+		expected: "(select a from t1 limit 2) union select a from t2 limit 10",
+	}, {
+		in:       "select a from (select a from t1 union select a from t2) dt",
+		expected: "select a from (select a from t1 union select a from t2) dt limit 10",
+	}, {
+		in:       "select a from t1 where a in (select a from t2 union select a from t3)",
+		expected: "select a from t1 where a in (select a from t2 union select a from t3) limit 10",
+	}, {
+		in:       "select a from (select a from t1) dt",
+		expected: "select a from (select a from t1) dt limit 10",
+	}}
+
+	parser := NewTestParser()
+	for _, tc := range tests {
+		in.Run(tc.in, func(t *testing.T) {
+			stmt, err := parser.Parse(tc.in)
+			require.NoError(t, err)
+			result, err := Normalize(
+				stmt,
+				NewReservedVars("v", nil),
+				map[string]*querypb.BindVariable{},
+				false,
+				"ks",
+				10,
+				"",
+				map[string]string{},
+				nil,
+				&fakeViews{},
+			)
+			require.NoError(t, err)
+
+			expected, err := parser.Parse(tc.expected)
+			require.NoError(t, err, "test expectation does not parse [%s]", tc.expected)
+			assert.Equal(t, String(expected), String(result.AST))
+		})
+	}
+}
+
 func TestRewritesSysVar(in *testing.T) {
 	tests := []testCaseSysVar{{
 		in:       "select @x = @@sql_mode",
