@@ -78,6 +78,7 @@ jobs:
             - 'bootstrap.sh'
             - '.github/workflows/vitess_tester_vtgate.yml'
             - '.github/actions/setup-mysql/action.yml'
+            - '.github/actions/tune-os/**'
             - '.github/actions/setup-go/action.yml'
 
     - name: Set up Go
