@@ -165,7 +165,7 @@ func (mysqld *Mysqld) StartReplication(ctx context.Context, hookExtraEnv map[str
 	if err != nil {
 		return err
 	}
-	defer conn.Recycle()
+	defer recycle(ctx, conn)
 
 	if err := mysqld.executeSuperQueryListConn(ctx, conn, []string{conn.Conn.StartReplicationCommand()}); err != nil {
 		return err
@@ -173,7 +173,7 @@ func (mysqld *Mysqld) StartReplication(ctx context.Context, hookExtraEnv map[str
 
 	h := hook.NewSimpleHook("postflight_start_slave")
 	h.ExtraEnv = hookExtraEnv
-	return h.ExecuteOptional()
+	return h.ExecuteOptionalContext(ctx)
 }
 
 // StartReplicationUntilAfter starts replication until replication has come to `targetPos`, then it stops replication
@@ -182,7 +182,7 @@ func (mysqld *Mysqld) StartReplicationUntilAfter(ctx context.Context, targetPos 
 	if err != nil {
 		return err
 	}
-	defer conn.Recycle()
+	defer recycle(ctx, conn)
 
 	queries := []string{conn.Conn.StartReplicationUntilAfterCommand(targetPos)}
 
@@ -195,7 +195,7 @@ func (mysqld *Mysqld) StartSQLThreadUntilAfter(ctx context.Context, targetPos re
 	if err != nil {
 		return err
 	}
-	defer conn.Recycle()
+	defer recycle(ctx, conn)
 
 	queries := []string{conn.Conn.StartSQLThreadUntilAfterCommand(targetPos)}
 
@@ -206,14 +206,14 @@ func (mysqld *Mysqld) StartSQLThreadUntilAfter(ctx context.Context, targetPos re
 func (mysqld *Mysqld) StopReplication(ctx context.Context, hookExtraEnv map[string]string) error {
 	h := hook.NewSimpleHook("preflight_stop_slave")
 	h.ExtraEnv = hookExtraEnv
-	if err := h.ExecuteOptional(); err != nil {
+	if err := h.ExecuteOptionalContext(ctx); err != nil {
 		return err
 	}
 	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
 	if err != nil {
 		return err
 	}
-	defer conn.Recycle()
+	defer recycle(ctx, conn)
 
 	return mysqld.executeSuperQueryListConn(ctx, conn, []string{conn.Conn.StopReplicationCommand()})
 }
@@ -224,7 +224,7 @@ func (mysqld *Mysqld) StopIOThread(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer conn.Recycle()
+	defer recycle(ctx, conn)
 
 	return mysqld.executeSuperQueryListConn(ctx, conn, []string{conn.Conn.StopIOThreadCommand()})
 }
@@ -712,7 +712,7 @@ func (mysqld *Mysqld) StopSQLThread(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer conn.Recycle()
+	defer recycle(ctx, conn)
 
 	return mysqld.executeSuperQueryListConn(ctx, conn, []string{conn.Conn.StopSQLThreadCommand()})
 }
@@ -721,14 +721,14 @@ func (mysqld *Mysqld) StopSQLThread(ctx context.Context) error {
 func (mysqld *Mysqld) RestartReplication(ctx context.Context, hookExtraEnv map[string]string) error {
 	h := hook.NewSimpleHook("preflight_stop_slave")
 	h.ExtraEnv = hookExtraEnv
-	if err := h.ExecuteOptional(); err != nil {
+	if err := h.ExecuteOptionalContext(ctx); err != nil {
 		return err
 	}
 	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
 	if err != nil {
 		return err
 	}
-	defer conn.Recycle()
+	defer recycle(ctx, conn)
 
 	if err := mysqld.executeSuperQueryListConn(ctx, conn, conn.Conn.RestartReplicationCommands()); err != nil {
 		return err
@@ -736,7 +736,7 @@ func (mysqld *Mysqld) RestartReplication(ctx context.Context, hookExtraEnv map[s
 
 	h = hook.NewSimpleHook("postflight_start_slave")
 	h.ExtraEnv = hookExtraEnv
-	return h.ExecuteOptional()
+	return h.ExecuteOptionalContext(ctx)
 }
 
 // GetMysqlPort returns mysql port
@@ -771,7 +771,7 @@ func (mysqld *Mysqld) GetServerUUID(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer conn.Recycle()
+	defer recycle(ctx, conn)
 
 	return conn.Conn.GetServerUUID()
 }
@@ -904,7 +904,7 @@ func (mysqld *Mysqld) execSetSuperReadOnly(ctx context.Context, on bool, options
 	if err != nil {
 		return err
 	}
-	defer conn.Recycle()
+	defer recycle(ctx, conn)
 
 	// lock_wait_timeout only supports whole seconds, so round up to keep
 	// sub-second timeouts from truncating to 0.
@@ -949,7 +949,7 @@ func (mysqld *Mysqld) WaitSourcePos(ctx context.Context, targetPos replication.P
 	if err != nil {
 		return err
 	}
-	defer conn.Recycle()
+	defer recycle(ctx, conn)
 
 	// First check if filePos flavored Position was passed in. If so, we
 	// can't defer to the flavor in the connection, unless that flavor is
@@ -991,7 +991,7 @@ func (mysqld *Mysqld) CatchupToGTID(ctx context.Context, targetPos replication.P
 	if err != nil {
 		return err
 	}
-	defer conn.Recycle()
+	defer recycle(ctx, conn)
 
 	cmds := conn.Conn.CatchupToGTIDCommands(params, targetPos)
 	return mysqld.executeSuperQueryListConn(ctx, conn, cmds)
@@ -1003,9 +1003,15 @@ func (mysqld *Mysqld) ReplicationStatus(ctx context.Context) (replication.Replic
 	if err != nil {
 		return replication.ReplicationStatus{}, err
 	}
-	defer conn.Recycle()
+	defer recycle(ctx, conn)
 
-	return conn.Conn.ShowReplicationStatus()
+	var status replication.ReplicationStatus
+	err = mysqld.executeWithContext(ctx, conn, "SHOW REPLICA STATUS", func() error {
+		var err error
+		status, err = conn.Conn.ShowReplicationStatus()
+		return err
+	})
+	return status, err
 }
 
 // PrimaryStatus returns the primary replication statuses
@@ -1014,7 +1020,7 @@ func (mysqld *Mysqld) PrimaryStatus(ctx context.Context) (replication.PrimarySta
 	if err != nil {
 		return replication.PrimaryStatus{}, err
 	}
-	defer conn.Recycle()
+	defer recycle(ctx, conn)
 
 	primaryStatus, err := conn.Conn.ShowPrimaryStatus()
 	if err != nil {
@@ -1033,7 +1039,7 @@ func (mysqld *Mysqld) GetGTIDPurged(ctx context.Context) (replication.Position, 
 	if err != nil {
 		return replication.Position{}, err
 	}
-	defer conn.Recycle()
+	defer recycle(ctx, conn)
 
 	return conn.Conn.GetGTIDPurged()
 }
@@ -1044,9 +1050,15 @@ func (mysqld *Mysqld) PrimaryPosition(ctx context.Context) (replication.Position
 	if err != nil {
 		return replication.Position{}, err
 	}
-	defer conn.Recycle()
+	defer recycle(ctx, conn)
 
-	return conn.Conn.PrimaryPosition()
+	var pos replication.Position
+	err = mysqld.executeWithContext(ctx, conn, "SELECT @@global.gtid_executed", func() error {
+		var err error
+		pos, err = conn.Conn.PrimaryPosition()
+		return err
+	})
+	return pos, err
 }
 
 // SetReplicationPosition sets the replication position at which the replica will resume
@@ -1056,7 +1068,7 @@ func (mysqld *Mysqld) SetReplicationPosition(ctx context.Context, pos replicatio
 	if err != nil {
 		return err
 	}
-	defer conn.Recycle()
+	defer recycle(ctx, conn)
 
 	cmds := conn.Conn.SetReplicationPositionCommands(pos)
 	log.Info(fmt.Sprintf("Executing commands to set replication position: %v", cmds))
@@ -1074,7 +1086,7 @@ func (mysqld *Mysqld) SetReplicationSource(ctx context.Context, host string, por
 	if err != nil {
 		return err
 	}
-	defer conn.Recycle()
+	defer recycle(ctx, conn)
 
 	var cmds []string
 	if stopReplicationBefore {
@@ -1094,7 +1106,7 @@ func (mysqld *Mysqld) ResetReplication(ctx context.Context) error {
 	if connErr != nil {
 		return connErr
 	}
-	defer conn.Recycle()
+	defer recycle(ctx, conn)
 
 	cmds := conn.Conn.ResetReplicationCommands()
 	return mysqld.executeSuperQueryListConn(ctx, conn, cmds)
@@ -1106,7 +1118,7 @@ func (mysqld *Mysqld) ResetReplicationParameters(ctx context.Context) error {
 	if connErr != nil {
 		return connErr
 	}
-	defer conn.Recycle()
+	defer recycle(ctx, conn)
 
 	cmds := conn.Conn.ResetReplicationParametersCommands()
 	return mysqld.executeSuperQueryListConn(ctx, conn, cmds)
@@ -1173,7 +1185,7 @@ func (mysqld *Mysqld) GetGTIDMode(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer conn.Recycle()
+	defer recycle(ctx, conn)
 
 	return conn.Conn.GetGTIDMode()
 }
@@ -1288,6 +1300,18 @@ func (mysqld *Mysqld) SemiSyncEnabled(ctx context.Context) (primary, replica boo
 	return primary, replica
 }
 
+// ReadSemiSyncEnabled is SemiSyncEnabled, but returns an error when the
+// variables cannot be read. Without a semi-sync plugin, both are false.
+func (mysqld *Mysqld) ReadSemiSyncEnabled(ctx context.Context) (source, replica bool, err error) {
+	vars, err := mysqld.fetchVariables(ctx, "rpl_semi_sync_%_enabled")
+	if err != nil {
+		return false, false, err
+	}
+	source = vars["rpl_semi_sync_source_enabled"] == "ON" || vars["rpl_semi_sync_master_enabled"] == "ON"
+	replica = vars["rpl_semi_sync_replica_enabled"] == "ON" || vars["rpl_semi_sync_slave_enabled"] == "ON"
+	return source, replica, nil
+}
+
 // SemiSyncStatus returns the current status of semi-sync for primary and replica.
 func (mysqld *Mysqld) SemiSyncStatus(ctx context.Context) (primary, replica bool) {
 	vars, err := mysqld.fetchStatuses(ctx, "Rpl_semi_sync_%_status")
@@ -1330,9 +1354,15 @@ func (mysqld *Mysqld) SemiSyncExtensionLoaded(ctx context.Context) (mysql.SemiSy
 	if connErr != nil {
 		return mysql.SemiSyncTypeUnknown, connErr
 	}
-	defer conn.Recycle()
+	defer recycle(ctx, conn)
 
-	return conn.Conn.SemiSyncExtensionLoaded()
+	semiSyncType := mysql.SemiSyncTypeUnknown
+	err := mysqld.executeWithContext(ctx, conn, "SHOW VARIABLES LIKE 'rpl_semi_sync_%_enabled'", func() error {
+		var err error
+		semiSyncType, err = conn.Conn.SemiSyncExtensionLoaded()
+		return err
+	})
+	return semiSyncType, err
 }
 
 func (mysqld *Mysqld) IsSemiSyncBlocked(ctx context.Context) (bool, error) {
@@ -1340,7 +1370,7 @@ func (mysqld *Mysqld) IsSemiSyncBlocked(ctx context.Context) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	defer conn.Recycle()
+	defer recycle(ctx, conn)
 
 	// Execute the query to check if the primary is blocked on semi-sync.
 	semiSyncWaitSessionsRead := "select variable_value from performance_schema.global_status where regexp_like(variable_name, 'Rpl_semi_sync_(source|master)_wait_sessions')"

@@ -151,6 +151,9 @@ type FakeMysqlDaemon struct {
 	// will return an error.
 	SetReplicationPositionPos replication.Position
 
+	// GTIDPurged is returned by GetGTIDPurged.
+	GTIDPurged replication.Position
+
 	// StartReplicationUntilAfterPos is matched against the input.
 	StartReplicationUntilAfterPos replication.Position
 
@@ -225,6 +228,9 @@ type FakeMysqlDaemon struct {
 	SemiSyncPrimaryEnabled bool
 	// SemiSyncReplicaEnabled represents the state of rpl_semi_sync_replica_enabled.
 	SemiSyncReplicaEnabled bool
+	// ReadSemiSyncEnabledError is returned by ReadSemiSyncEnabled. While it
+	// is set, SemiSyncEnabled reports semi-sync as disabled, as Mysqld does.
+	ReadSemiSyncEnabledError error
 
 	// GlobalReadLock is used to test if a lock has been acquired already or not
 	GlobalReadLock bool
@@ -410,7 +416,7 @@ func (fmd *FakeMysqlDaemon) CollectFullStatusData(context.Context) (*replication
 
 // GetGTIDPurged is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) GetGTIDPurged(ctx context.Context) (replication.Position, error) {
-	return replication.Position{}, nil
+	return fmd.GTIDPurged, nil
 }
 
 // ResetReplication is part of the MysqlDaemon interface.
@@ -841,7 +847,16 @@ func (fmd *FakeMysqlDaemon) SetSemiSyncEnabled(ctx context.Context, primary, rep
 
 // SemiSyncEnabled is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) SemiSyncEnabled(ctx context.Context) (primary, replica bool) {
-	return fmd.SemiSyncPrimaryEnabled, fmd.SemiSyncReplicaEnabled
+	primary, replica, _ = fmd.ReadSemiSyncEnabled(ctx)
+	return primary, replica
+}
+
+// ReadSemiSyncEnabled is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) ReadSemiSyncEnabled(ctx context.Context) (primary, replica bool, err error) {
+	if fmd.ReadSemiSyncEnabledError != nil {
+		return false, false, fmd.ReadSemiSyncEnabledError
+	}
+	return fmd.SemiSyncPrimaryEnabled, fmd.SemiSyncReplicaEnabled, nil
 }
 
 // SemiSyncStatus is part of the MysqlDaemon interface.
