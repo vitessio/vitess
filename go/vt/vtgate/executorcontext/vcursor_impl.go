@@ -688,13 +688,20 @@ func (vc *VCursorImpl) getSortedServingKeyspaces() []*vindexes.Keyspace {
 	return keyspaces
 }
 
+// FirstSortedKeyspace returns the first keyspace in the VSchema, sorted by name.
+// It does not depend on the serving keyspaces, so that plans that use it (like
+// advisory locks) keep targeting the same keyspace across serving changes.
 func (vc *VCursorImpl) FirstSortedKeyspace() (*vindexes.Keyspace, error) {
-	if len(vc.vschema.Keyspaces) == 0 {
+	var first *vindexes.Keyspace
+	for _, ks := range vc.vschema.Keyspaces {
+		if first == nil || ks.Keyspace.Name < first.Name {
+			first = ks.Keyspace
+		}
+	}
+	if first == nil {
 		return nil, errNoDbAvailable
 	}
-	keyspaces := vc.getSortedServingKeyspaces()
-
-	return keyspaces[0], nil
+	return first, nil
 }
 
 // SysVarSetEnabled implements the ContextVSchema interface
