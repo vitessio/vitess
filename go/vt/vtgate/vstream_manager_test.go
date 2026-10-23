@@ -2801,10 +2801,12 @@ func TestVStreamChunkedTxFailureBlocksOtherShards(t *testing.T) {
 	ks := "TestVStream"
 	vsm, sbcs := chunkedTxSandbox(t, ks, []string{"-20", "20-40"}, 100)
 	sbc0, sbc1 := sbcs[0], sbcs[1]
-	// The delay gives shard 20-40 time to block in sendAll before -20 fails.
-	sbc0.VStreamEventDelay = 200 * time.Millisecond
 	sbc0.AddVStreamEvents(nil, vterrors.New(vtrpcpb.Code_UNAVAILABLE, "tablet went away"))
 	sbc1.VStreamCh = make(chan *binlogdatapb.VEvent)
+	otherShardTx := []*binlogdatapb.VEvent{
+		{Type: binlogdatapb.VEventType_BEGIN},
+		chunkedTxRowEvent("t2", 100)[0],
+	}
 
 	vgtid := &binlogdatapb.VGtid{ShardGtids: []*binlogdatapb.ShardGtid{
 		{Keyspace: ks, Shard: "-20", Gtid: "pos"},
@@ -2822,25 +2824,23 @@ func TestVStreamChunkedTxFailureBlocksOtherShards(t *testing.T) {
 			switch ev.Type {
 			case binlogdatapb.VEventType_BEGIN:
 				begins++
-			case binlogdatapb.VEventType_ROW:
-				if ev.RowEvent.TableName == "t2" {
-					otherShardRows++
+				if begins > 1 {
 					continue
 				}
-				go func() {
-					otherTx := [][]*binlogdatapb.VEvent{
-						{{Type: binlogdatapb.VEventType_BEGIN}},
-						chunkedTxRowEvent("t2", 1),
-						{{Type: binlogdatapb.VEventType_COMMIT}},
+				// -20 holds vs.mu until this returns, as its ROW chunk is still
+				// unsent. Handing 20-40 an oversized ROW makes it wait on vs.mu to
+				// start chunking, so it is blocked on the lock before -20 fails.
+				for _, otherEv := range otherShardTx {
+					select {
+					case sbc1.VStreamCh <- otherEv:
+					case <-vstreamCtx.Done():
+						return nil
 					}
-					for _, evs := range otherTx {
-						select {
-						case sbc1.VStreamCh <- evs[0]:
-						case <-vstreamCtx.Done():
-							return
-						}
-					}
-				}()
+				}
+			case binlogdatapb.VEventType_ROW:
+				if ev.RowEvent.TableName == ks+".t2" {
+					otherShardRows++
+				}
 			}
 		}
 		return nil
