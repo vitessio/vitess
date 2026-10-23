@@ -63,9 +63,18 @@ func (l *Lock) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[str
 }
 
 func (l *Lock) execLock(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	rss, _, err := vcursor.ResolveDestinations(ctx, l.Keyspace.Name, nil, []key.ShardDestination{l.TargetDestination})
-	if err != nil {
-		return nil, err
+	var rss []*srvtopo.ResolvedShard
+	if target := vcursor.Session().AdvisoryLockSessionTarget(); target != nil {
+		// Advisory locks live on a reserved MySQL connection. Once it exists,
+		// execute every lock function on that exact target instead of resolving
+		// the keyspace baked into a separately cached plan.
+		rss = []*srvtopo.ResolvedShard{{Target: target}}
+	} else {
+		var err error
+		rss, _, err = vcursor.ResolveDestinations(ctx, l.Keyspace.Name, nil, []key.ShardDestination{l.TargetDestination})
+		if err != nil {
+			return nil, vterrors.Wrapf(err, "advisory-lock keyspace %s is unavailable", l.Keyspace.Name)
+		}
 	}
 	if len(rss) != 1 {
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "lock query can be routed to single shard only: %v", rss)
