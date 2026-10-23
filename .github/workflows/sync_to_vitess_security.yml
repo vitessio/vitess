@@ -56,7 +56,8 @@ jobs:
       - name: Push branches
         env:
           APP_TOKEN: ${{ steps.app-token.outputs.token }}
-          # Unsupported releases never receive security fixes, so they are not mirrored. Raise this when a release
+          # Unsupported releases never receive security fixes, so they are not mirrored, except the one just before the
+          # oldest supported release: that release's upgrade/downgrade tests check it out. Raise this when a release
           # reaches end of life; vitess-security keeps the branch, it just stops being updated.
           OLDEST_SUPPORTED_RELEASE: 23
         run: |
@@ -65,7 +66,7 @@ jobs:
           refspecs=("refs/remotes/origin/main:refs/heads/main")
           while read -r ref; do
             branch="${ref#refs/remotes/origin/}"
-            if [[ "${branch}" =~ ^release-([1-9][0-9]*)\.0$ ]] && (( BASH_REMATCH[1] >= OLDEST_SUPPORTED_RELEASE )); then
+            if [[ "${branch}" =~ ^release-([1-9][0-9]*)\.0$ ]] && (( BASH_REMATCH[1] >= OLDEST_SUPPORTED_RELEASE - 1 )); then
               refspecs+=("${ref}:refs/heads/${branch}")
             fi
           done < <(git for-each-ref --format='%(refname)' 'refs/remotes/origin/release-*')
