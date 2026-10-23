@@ -18,6 +18,7 @@ package engine
 
 import (
 	"fmt"
+	"math"
 	"testing"
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -181,6 +182,189 @@ func TestDistinctStreamAsync(t *testing.T) {
 [VARCHAR("a") INT64(1) INT64(1) VARCHAR("a")] 
 [VARCHAR("z") INT64(1) INT64(1) VARCHAR("a")] 
 [VARCHAR("a") INT64(1) INT64(1) VARCHAR("t")]]`, qr.Rows))
+}
+
+// TestDistinctUnknownTypeUsesWeightString checks that DISTINCT over a column
+// whose type or collation the planner could not determine (an expression
+// inside a derived table) still separates distinct values, by using the
+// weight string the planner added instead of hashing every value alike.
+func TestDistinctUnknownTypeUsesWeightString(t *testing.T) {
+	offsetOne := 1
+	for name, typ := range map[string]evalengine.Type{
+		"unknown type":      evalengine.NewUnknownType(),
+		"unknown collation": evalengine.NewType(sqltypes.VarChar, collations.Unknown),
+	} {
+		t.Run(name, func(t *testing.T) {
+			input := r("x|weight_string(x)",
+				"varchar|varbinary",
+				"zoe|1F211DDD1CAA",
+				"null|null",
+				"p|1E0C")
+			distinct := &Distinct{
+				Source:    &fakePrimitive{results: []*sqltypes.Result{input}},
+				CheckCols: []CheckCol{{Col: 0, WsCol: &offsetOne, Type: typ}},
+				Truncate:  1,
+			}
+
+			qr, err := distinct.TryExecute(t.Context(), &noopVCursor{}, nil, true)
+			require.NoError(t, err)
+
+			got := fmt.Sprintf("%v", qr.Rows)
+			expected := fmt.Sprintf("%v", r("x", "varchar", "zoe", "null", "p").Rows)
+			utils.MustMatch(t, expected, got)
+		})
+	}
+
+	// Equal numbers that arrive with different numeric types (as the branches
+	// of a UNION can produce) must still be seen as one value.
+	t.Run("mixed numeric types", func(t *testing.T) {
+		input := &sqltypes.Result{
+			Fields: sqltypes.MakeTestFields("x|weight_string(x)", "decimal|varbinary"),
+			Rows: []sqltypes.Row{
+				{sqltypes.NewInt64(1), sqltypes.NULL},
+				{sqltypes.NewDecimal("1.0"), sqltypes.NULL},
+				{sqltypes.NewFloat64(1), sqltypes.NULL},
+				{sqltypes.NewUint64(2), sqltypes.NULL},
+				{sqltypes.NewDecimal("2.00"), sqltypes.NULL},
+			},
+		}
+		distinct := &Distinct{
+			Source:    &fakePrimitive{results: []*sqltypes.Result{input}},
+			CheckCols: []CheckCol{{Col: 0, WsCol: &offsetOne, Type: evalengine.NewUnknownType()}},
+			Truncate:  1,
+		}
+
+		qr, err := distinct.TryExecute(t.Context(), &noopVCursor{}, nil, true)
+		require.NoError(t, err)
+		utils.MustMatch(t, "[[INT64(1)] [UINT64(2)]]", fmt.Sprintf("%v", qr.Rows))
+	})
+
+	// Around 2^53 a float64 can no longer tell neighbouring integers apart.
+	// Hashing unknown-typed numbers through DECIMAL keeps the two integers
+	// distinct and still merges the float that is exactly equal to one of
+	// them; the integer 2^53+1 is not merged into the float 2^53 even though
+	// NullsafeCompare would coerce that pair to float64, which is the
+	// documented limit of hashing without a static type.
+	t.Run("large integers near 2^53", func(t *testing.T) {
+		input := &sqltypes.Result{
+			Fields: sqltypes.MakeTestFields("x|weight_string(x)", "decimal|varbinary"),
+			Rows: []sqltypes.Row{
+				{sqltypes.NewInt64(9007199254740993), sqltypes.NULL},
+				{sqltypes.NewInt64(9007199254740992), sqltypes.NULL},
+				{sqltypes.NewFloat64(9007199254740992), sqltypes.NULL},
+				{sqltypes.NewInt64(9007199254740993), sqltypes.NULL},
+			},
+		}
+		distinct := &Distinct{
+			Source:    &fakePrimitive{results: []*sqltypes.Result{input}},
+			CheckCols: []CheckCol{{Col: 0, WsCol: &offsetOne, Type: evalengine.NewUnknownType()}},
+			Truncate:  1,
+		}
+
+		qr, err := distinct.TryExecute(t.Context(), &noopVCursor{}, nil, true)
+		require.NoError(t, err)
+		utils.MustMatch(t, "[[INT64(9007199254740993)] [INT64(9007199254740992)]]", fmt.Sprintf("%v", qr.Rows))
+	})
+
+	// Text and non-text values interleaved in one unknown-typed column: a text
+	// value makes the hash fall back to the weight string for that row only,
+	// so a number seen before and after the text keeps hashing the same way.
+	t.Run("interleaved text and numbers", func(t *testing.T) {
+		input := &sqltypes.Result{
+			Fields: sqltypes.MakeTestFields("x|weight_string(x)", "varchar|varbinary"),
+			Rows: []sqltypes.Row{
+				{sqltypes.NewInt64(1), sqltypes.NULL},
+				{sqltypes.NewVarChar("x"), sqltypes.NewVarBinary("ws-x")},
+				{sqltypes.NewInt64(1), sqltypes.NULL},
+				{sqltypes.NewVarChar("x"), sqltypes.NewVarBinary("ws-x")},
+				{sqltypes.NewVarChar("y"), sqltypes.NewVarBinary("ws-y")},
+				{sqltypes.NewInt64(2), sqltypes.NULL},
+			},
+		}
+		distinct := &Distinct{
+			Source:    &fakePrimitive{results: []*sqltypes.Result{input}},
+			CheckCols: []CheckCol{{Col: 0, WsCol: &offsetOne, Type: evalengine.NewUnknownType()}},
+			Truncate:  1,
+		}
+
+		qr, err := distinct.TryExecute(t.Context(), &noopVCursor{}, nil, true)
+		require.NoError(t, err)
+		utils.MustMatch(t, `[[INT64(1)] [VARCHAR("x")] [VARCHAR("y")] [INT64(2)]]`, fmt.Sprintf("%v", qr.Rows))
+	})
+
+	// A temporal and a number that compare equal as scalars stay two values:
+	// MySQL gives a column mixing them (e.g. the branches of a UNION) a VARCHAR
+	// type, so DISTINCT keeps both `2000-01-01` and `20000101`.
+	t.Run("temporal and numeric values stay apart", func(t *testing.T) {
+		input := &sqltypes.Result{
+			Fields: sqltypes.MakeTestFields("x|weight_string(x)", "varchar|varbinary"),
+			Rows: []sqltypes.Row{
+				{sqltypes.NewDate("2000-01-01"), sqltypes.NULL},
+				{sqltypes.NewInt64(20000101), sqltypes.NULL},
+				{sqltypes.NewDate("2000-01-01"), sqltypes.NULL},
+				{sqltypes.NewTime("11:22:33"), sqltypes.NULL},
+				{sqltypes.NewInt64(112233), sqltypes.NULL},
+				{sqltypes.NewInt64(20000101), sqltypes.NULL},
+			},
+		}
+		distinct := &Distinct{
+			Source:    &fakePrimitive{results: []*sqltypes.Result{input}},
+			CheckCols: []CheckCol{{Col: 0, WsCol: &offsetOne, Type: evalengine.NewUnknownType()}},
+			Truncate:  1,
+		}
+
+		qr, err := distinct.TryExecute(t.Context(), &noopVCursor{}, nil, true)
+		require.NoError(t, err)
+		utils.MustMatch(t, `[[DATE("2000-01-01")] [INT64(20000101)] [TIME("11:22:33")] [INT64(112233)]]`, fmt.Sprintf("%v", qr.Rows))
+	})
+
+	// Non-finite floats have no DECIMAL form; hashing them must not panic and
+	// equal values must still be merged.
+	t.Run("non-finite floats", func(t *testing.T) {
+		input := &sqltypes.Result{
+			Fields: sqltypes.MakeTestFields("x|weight_string(x)", "float64|varbinary"),
+			Rows: []sqltypes.Row{
+				{sqltypes.NewFloat64(math.Inf(1)), sqltypes.NULL},
+				{sqltypes.NewFloat64(math.NaN()), sqltypes.NULL},
+				{sqltypes.NewFloat64(math.Inf(-1)), sqltypes.NULL},
+				{sqltypes.NewFloat64(math.Inf(1)), sqltypes.NULL},
+				{sqltypes.NewInt64(1), sqltypes.NULL},
+				{sqltypes.NewFloat64(math.Inf(-1)), sqltypes.NULL},
+			},
+		}
+		distinct := &Distinct{
+			Source:    &fakePrimitive{results: []*sqltypes.Result{input}},
+			CheckCols: []CheckCol{{Col: 0, WsCol: &offsetOne, Type: evalengine.NewUnknownType()}},
+			Truncate:  1,
+		}
+
+		qr, err := distinct.TryExecute(t.Context(), &noopVCursor{}, nil, true)
+		require.NoError(t, err)
+		utils.MustMatch(t, `[[FLOAT64(+Inf)] [FLOAT64(NaN)] [FLOAT64(-Inf)] [INT64(1)]]`, fmt.Sprintf("%v", qr.Rows))
+	})
+
+	// DATE '0000-00-00' and TIME '00:00:00' are different DATETIME values in
+	// MySQL (the TIME is placed on the current date), so both rows are kept.
+	t.Run("zero date and midnight time", func(t *testing.T) {
+		input := &sqltypes.Result{
+			Fields: sqltypes.MakeTestFields("x|weight_string(x)", "varchar|varbinary"),
+			Rows: []sqltypes.Row{
+				{sqltypes.NewDate("0000-00-00"), sqltypes.NULL},
+				{sqltypes.NewTime("00:00:00"), sqltypes.NULL},
+				{sqltypes.NewDate("0000-00-00"), sqltypes.NULL},
+				{sqltypes.NewTime("00:00:00"), sqltypes.NULL},
+			},
+		}
+		distinct := &Distinct{
+			Source:    &fakePrimitive{results: []*sqltypes.Result{input}},
+			CheckCols: []CheckCol{{Col: 0, WsCol: &offsetOne, Type: evalengine.NewUnknownType()}},
+			Truncate:  1,
+		}
+
+		qr, err := distinct.TryExecute(t.Context(), &noopVCursor{}, nil, true)
+		require.NoError(t, err)
+		utils.MustMatch(t, `[[DATE("0000-00-00")] [TIME("00:00:00")]]`, fmt.Sprintf("%v", qr.Rows))
+	})
 }
 
 func TestWeightStringFallBack(t *testing.T) {

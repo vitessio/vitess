@@ -35,6 +35,9 @@ type HashCode = uint64
 // NullsafeHashcode returns an int64 hashcode that is guaranteed to be the same
 // for two values that are considered equal by `NullsafeCompare`.
 func NullsafeHashcode(v sqltypes.Value, collation collations.ID, coerceType sqltypes.Type, sqlmode SQLMode, values *EnumSetValues) (HashCode, error) {
+	if coerceType == sqltypes.Unknown {
+		coerceType = hashTypeForUnknown(v)
+	}
 	e, err := valueToEvalCast(v, coerceType, collation, values, sqlmode)
 	if err != nil {
 		return 0, err
@@ -71,11 +74,49 @@ const (
 
 var ErrHashCoercionIsNotExact = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot coerce into target type without losing precision")
 
+// hashTypeForUnknown returns the type to hash v by when the caller could not
+// determine a static type (the planner's unknown type, e.g. for an expression
+// inside a derived table). Numbers of any kind go through DECIMAL so that
+// values NullsafeCompare considers equal (1, 1.0, 1e0) still hash alike even
+// when they arrive with different numeric types, and so that distinct large
+// integers stay distinct (hashing through float64 would merge integers above
+// 2^53). The one pair this cannot reconcile is an integer and a float beyond
+// 2^53 that NullsafeCompare coerces to the same float64: they hash apart and
+// are kept as two values, which errs on the side of not losing data. Only a
+// static type can settle that case, as it does for every known-typed column.
+// Non-finite floats (NaN, ±Inf) have no DECIMAL form and keep hashing as
+// floats. DATE and TIME values go through DATETIME, the type MySQL gives a
+// column that mixes temporal types, converting a TIME with the current date:
+// DATE '0000-00-00' and TIME '00:00:00' stay apart, while today's DATE and
+// TIME '00:00:00' hash alike. The conversion is one-to-one, so a column of
+// only DATE or only TIME values keeps every distinct value. Other values keep
+// the type they arrived with; text with an unknown collation then reports
+// UnsupportedCollationHashError, which lets the caller switch to the weight
+// string the planner added for it.
+func hashTypeForUnknown(v sqltypes.Value) sqltypes.Type {
+	if sqltypes.IsFloat(v.Type()) {
+		if f, err := v.ToFloat64(); err == nil && (math.IsNaN(f) || math.IsInf(f, 0)) {
+			return sqltypes.Float64
+		}
+	}
+	if sqltypes.IsNumber(v.Type()) {
+		return sqltypes.Decimal
+	}
+	switch v.Type() {
+	case sqltypes.Date, sqltypes.Time:
+		return sqltypes.Datetime
+	}
+	return v.Type()
+}
+
 // NullsafeHashcode128 returns a 128-bit hashcode that is guaranteed to be the same
 // for two values that are considered equal by `NullsafeCompare`.
 // This can be used to avoid having to do comparison checks after a hash,
 // since we consider the 128 bits of entropy enough to guarantee uniqueness.
 func NullsafeHashcode128(hash *vthash.Hasher, v sqltypes.Value, collation collations.ID, coerceTo sqltypes.Type, sqlmode SQLMode, values *EnumSetValues) error {
+	if coerceTo == sqltypes.Unknown {
+		coerceTo = hashTypeForUnknown(v)
+	}
 	switch {
 	case v.IsNull(), sqltypes.IsNull(coerceTo):
 		hash.Write16(hashPrefixNil)
