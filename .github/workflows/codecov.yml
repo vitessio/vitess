@@ -74,6 +74,9 @@ jobs:
     - name: Set up Go
       if: steps.mode.outputs.is_full_run != 'true' && steps.changes.outputs.changed_files == 'true'
       uses: $/.github/actions/setup-go
+      with:
+        build-cache: none
+        go-tools: none
 
     - name: Detect changed Go packages
       if: steps.mode.outputs.is_full_run != 'true' && steps.changes.outputs.changed_files == 'true'
@@ -125,7 +128,7 @@ jobs:
 
     steps:
     - name: Harden the runner (Audit all outbound calls)
-      uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+      uses: step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed # v2.22.0
       with:
         egress-policy: audit
 
@@ -136,6 +139,12 @@ jobs:
 
     - name: Set up Go
       uses: $/.github/actions/setup-go
+      with:
+        # The coverage build uses its own flags; only its "make build" step
+        # reuses the build entry.
+        build-cache: build
+        # tools/run_codecov.sh runs go test directly, without gotestsum.
+        go-tools: none
 
     - name: Set up python
       uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0

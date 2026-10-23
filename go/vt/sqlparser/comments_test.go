@@ -335,6 +335,37 @@ func TestSplitComments(t *testing.T) {
 		outSQL:              "select 1 /*rule-tag*/\u00a0",
 		outLeadingComments:  "",
 		outTrailingComments: "",
+	}, {
+		// A statement terminator after the trailing comments does not keep them
+		// in the query. The query never gets the terminator back -- the trim
+		// removes it in every case -- so a client that ends the statement with a
+		// ';', as the web console does, must still get its tags recognised.
+		input:               "select 1 /*rule-tag*/;",
+		outSQL:              "select 1",
+		outLeadingComments:  "",
+		outTrailingComments: " /*rule-tag*/",
+	}, {
+		// Spaces and more than one terminator behave in the same way.
+		input:               "select 1 /*a*/ /*b*/ ; ;\n",
+		outSQL:              "select 1",
+		outLeadingComments:  "",
+		outTrailingComments: " /*a*/ /*b*/",
+	}, {
+		// A line comment that runs to the end of the text is not a trailing
+		// comment: the newline that ends it is missing, so the comment stays in
+		// the query. A ';' in its body does not change that. The trim of
+		// terminators still takes that ';' off the end, as it always has.
+		input:               "select 1 -- rule-tag;",
+		outSQL:              "select 1 -- rule-tag",
+		outLeadingComments:  "",
+		outTrailingComments: "",
+	}, {
+		// A terminator between the query and the comments still ends the query.
+		// Only the comments after it are trailing comments.
+		input:               "select 1 /*a*/ ; /*b*/",
+		outSQL:              "select 1 /*a*/",
+		outLeadingComments:  "",
+		outTrailingComments: " /*b*/",
 	}}
 	for _, testCase := range testCases {
 		t.Run(testCase.input, func(t *testing.T) {
