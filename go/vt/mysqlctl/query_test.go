@@ -19,7 +19,9 @@ package mysqlctl
 import (
 	"bytes"
 	"context"
+	"errors"
 	"log/slog"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -30,6 +32,7 @@ import (
 	"vitess.io/vitess/go/mysql/sqlmode"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
 )
 
@@ -195,4 +198,97 @@ func TestExecuteSuperQueryListTaintedDiscardsConnection(t *testing.T) {
 	// the discarded connection is gone: the next pool use dials fresh and re-neutralizes
 	require.NoError(t, testMysqld.ExecuteSuperQueryList(t.Context(), []string{"select 42"}))
 	require.Equal(t, 2, db.GetQueryCalledNum(sqlmode.SessionSetupQuery("utf8mb4", "utf8mb4_0900_ai_ci")))
+}
+
+// TestReplicationReadsHonorContext checks that replication reads and commands
+// return when their context ends, even if mysqld never answers, not even the
+// handshake of the connection that replaces the one closed on timeout. Callers
+// make these calls while holding the tablet's action lock, which a hung mysqld
+// must not keep held.
+func TestReplicationReadsHonorContext(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		query string
+		read  func(context.Context, *Mysqld) error
+	}{{
+		name:  "replication status",
+		query: "SHOW REPLICA STATUS",
+		read: func(ctx context.Context, mysqld *Mysqld) error {
+			_, err := mysqld.ReplicationStatus(ctx)
+			return err
+		},
+	}, {
+		name:  "executed position",
+		query: "SELECT @@global.gtid_executed",
+		read: func(ctx context.Context, mysqld *Mysqld) error {
+			_, err := mysqld.PrimaryPosition(ctx)
+			return err
+		},
+	}, {
+		name:  "semi-sync plugin check",
+		query: "SHOW VARIABLES LIKE 'rpl_semi_sync_%_enabled'",
+		read: func(ctx context.Context, mysqld *Mysqld) error {
+			_, err := mysqld.SemiSyncExtensionLoaded(ctx)
+			return err
+		},
+	}, {
+		name:  "command",
+		query: "STOP REPLICA",
+		read: func(ctx context.Context, mysqld *Mysqld) error {
+			return mysqld.ExecuteSuperQueryList(ctx, []string{"STOP REPLICA"})
+		},
+	}, {
+		name:  "connection check",
+		query: "SELECT 1",
+		read: func(ctx context.Context, mysqld *Mysqld) error {
+			conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
+			if err == nil {
+				conn.Recycle()
+			}
+			return err
+		},
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			killGraceTimeout = 100 * time.Millisecond
+			t.Cleanup(func() { killGraceTimeout = 5 * time.Second })
+			db := fakesqldb.New(t)
+			t.Cleanup(db.Close)
+			db.AddQueryPattern(".*", &sqltypes.Result{})
+			// The fake server does not answer the query until the test ends.
+			release := make(chan struct{})
+			t.Cleanup(func() { close(release) })
+			db.AddQuery(tc.query, &sqltypes.Result{})
+			db.SetBeforeFunc(tc.query, func() { <-release })
+
+			params := *db.ConnParams()
+			dbcfgs := dbconfigs.NewTestDBConfigs(params, params, "fakesqldb")
+			mysqld := NewMysqld(dbcfgs)
+			t.Cleanup(mysqld.Close)
+			// Only the first pool connection completes its handshake.
+			mysqld.dbaPool.Close()
+			mysqld.dbaPool = dbconnpool.NewConnectionPool("DbaConnPool", nil, dbaPoolSize, DbaIdleTimeout, 0, 0)
+			var connects atomic.Int32
+			mysqld.dbaPool.ConnPool.Open(func(ctx context.Context) (*dbconnpool.DBConnection, error) {
+				if connects.Add(1) == 1 {
+					return dbconnpool.NewDBConnection(ctx, dbcfgs.DbaWithDB())
+				}
+				select {
+				case <-release:
+				case <-ctx.Done():
+				}
+				return nil, errors.New("handshake did not complete")
+			}, nil)
+
+			ctx, cancel := context.WithTimeout(t.Context(), 200*time.Millisecond)
+			defer cancel()
+			returned := make(chan error, 1)
+			go func() { returned <- tc.read(ctx, mysqld) }()
+			select {
+			case err := <-returned:
+				require.ErrorIs(t, err, context.DeadlineExceeded)
+			case <-time.After(30 * time.Second):
+				require.FailNow(t, "the call did not return after its context ended")
+			}
+		})
+	}
 }
