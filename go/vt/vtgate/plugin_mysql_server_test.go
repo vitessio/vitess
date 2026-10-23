@@ -921,7 +921,7 @@ func TestComQueryMulti(t *testing.T) {
 
 	executor, _, _, _, _ := createExecutorEnv(t)
 	th := &testHandler{}
-	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), th, 0, 0, false, false, 0, 0, false)
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), th, 0, 0, false, 0, false, 0, 0, false)
 	require.NoError(t, err)
 	defer listener.Close()
 
@@ -973,7 +973,7 @@ func TestSlowQueryStatusFlagsComQuery(t *testing.T) {
 	})
 
 	th := &testHandler{}
-	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), th, 0, 0, false, false, 0, 0, false)
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), th, 0, 0, false, 0, false, 0, 0, false)
 	require.NoError(t, err)
 	defer listener.Close()
 
@@ -1028,7 +1028,7 @@ func TestSlowQueryStatusFlagsComQueryOKOnlyOLAPWire(t *testing.T) {
 	sbc1.ExecDelayResponse = 20 * time.Millisecond
 
 	vh := newVtgateHandler(newVTGate(executor, nil, nil, nil, nil))
-	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), vh, 0, 0, false, false, 0, 0, false)
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), vh, 0, 0, false, 0, false, 0, 0, false)
 	require.NoError(t, err)
 	defer listener.Close()
 	defer waitForConnectionsClosed(t, vh)
@@ -1070,7 +1070,7 @@ func TestSlowQueryStatusFlagsComQueryMultiOKOnlyOLAPFallbackWire(t *testing.T) {
 	sbc1.ExecDelayResponse = 20 * time.Millisecond
 
 	vh := newVtgateHandler(newVTGate(executor, nil, nil, nil, nil))
-	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), vh, 0, 0, false, false, 0, 0, true)
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), vh, 0, 0, false, 0, false, 0, 0, true)
 	require.NoError(t, err)
 	defer listener.Close()
 	defer waitForConnectionsClosed(t, vh)
@@ -1105,7 +1105,7 @@ func TestComQueryMultiOLAPDeferredOKRefreshesTransactionStatusWire(t *testing.T)
 	})
 
 	vh := newVtgateHandler(newVTGate(executor, nil, nil, nil, nil))
-	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), vh, 0, 0, false, false, 0, 0, true)
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), vh, 0, 0, false, 0, false, 0, 0, true)
 	require.NoError(t, err)
 	defer listener.Close()
 	defer waitForConnectionsClosed(t, vh)
@@ -1156,7 +1156,7 @@ func TestSlowQueryStatusFlagsComStmtExecute(t *testing.T) {
 	})
 
 	th := &testHandler{}
-	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), th, 0, 0, false, false, 0, 0, false)
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), th, 0, 0, false, 0, false, 0, 0, false)
 	require.NoError(t, err)
 	defer listener.Close()
 
@@ -1286,7 +1286,7 @@ func TestSlowQueryStatusFlagsComQueryMulti(t *testing.T) {
 	sbc1.ExecDelayResponse = 20 * time.Millisecond
 
 	vh := newVtgateHandler(newVTGate(executor, nil, nil, nil, nil))
-	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), vh, 0, 0, false, false, 0, 0, false)
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), vh, 0, 0, false, 0, false, 0, 0, false)
 	require.NoError(t, err)
 	defer listener.Close()
 	defer waitForConnectionsClosed(t, vh)
@@ -1335,7 +1335,7 @@ func TestSlowQueryStatusFlagsStreamExecuteMultiOLAP(t *testing.T) {
 	sbc1.ExecDelayResponse = 20 * time.Millisecond
 
 	vh := newVtgateHandler(newVTGate(executor, nil, nil, nil, nil))
-	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), &testHandler{}, 0, 0, false, false, 0, 0, false)
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), &testHandler{}, 0, 0, false, 0, false, 0, 0, false)
 	require.NoError(t, err)
 	defer listener.Close()
 
@@ -1386,7 +1386,7 @@ func TestSlowQueryStatusFlagsComQueryMultiOLAPErrorAfterSlowRowsWire(t *testing.
 	sbc1.ExecDelayResponse = 20 * time.Millisecond
 
 	vh := newVtgateHandler(newVTGate(executor, nil, nil, nil, nil))
-	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), vh, 0, 0, false, false, 0, 0, true)
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), vh, 0, 0, false, 0, false, 0, 0, true)
 	require.NoError(t, err)
 	defer listener.Close()
 	defer waitForConnectionsClosed(t, vh)
@@ -1464,7 +1464,7 @@ func TestGracefulShutdown(t *testing.T) {
 
 	vh := newVtgateHandler(&VTGate{executor: executor, timings: timings, rowsReturned: rowsReturned, rowsAffected: rowsAffected, queryTextCharsProcessed: queryTextCharsProcessed})
 	th := &testHandler{}
-	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), th, 0, 0, false, false, 0, 0, false)
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), th, 0, 0, false, 0, false, 0, 0, false)
 	require.NoError(t, err)
 	defer listener.Close()
 
@@ -1556,7 +1556,7 @@ func TestComBinlogDumpGTID(t *testing.T) {
 	// Create the vtgate handler
 	vh := newVtgateHandler(vtg)
 	th := &testHandler{}
-	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), th, 0, 0, false, false, 0, 0, false)
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), th, 0, 0, false, 0, false, 0, 0, false)
 	require.NoError(t, err)
 	defer listener.Close()
 
@@ -1753,7 +1753,7 @@ func TestBinlogDumpACL(t *testing.T) {
 	// Create the vtgate handler
 	vh := newVtgateHandler(vtg)
 	th := &testHandler{}
-	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), th, 0, 0, false, false, 0, 0, false)
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), th, 0, 0, false, 0, false, 0, 0, false)
 	require.NoError(t, err)
 	defer listener.Close()
 
@@ -1940,7 +1940,7 @@ func TestGracefulShutdownWithTransaction(t *testing.T) {
 
 	vh := newVtgateHandler(&VTGate{executor: executor, timings: timings, rowsReturned: rowsReturned, rowsAffected: rowsAffected, queryTextCharsProcessed: queryTextCharsProcessed})
 	th := &testHandler{}
-	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), th, 0, 0, false, false, 0, 0, false)
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), th, 0, 0, false, 0, false, 0, 0, false)
 	require.NoError(t, err)
 	defer listener.Close()
 
@@ -3498,7 +3498,7 @@ func TestMysqlConnCallerContext(t *testing.T) {
 func TestComQueryTempTableHeartbeatRegistration(t *testing.T) {
 	executor, _, _, sbclookup, _ := createExecutorEnv(t)
 	th := &testHandler{}
-	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), th, 0, 0, false, false, 0, 0, false)
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), th, 0, 0, false, 0, false, 0, 0, false)
 	require.NoError(t, err)
 	defer listener.Close()
 
@@ -3622,7 +3622,7 @@ func TestComQueryIngressBytes(t *testing.T) {
 	}})
 
 	vh := newVtgateHandler(vtgate)
-	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), vh, 0, 0, false, false, 0, 0, false)
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), vh, 0, 0, false, 0, false, 0, 0, false)
 	require.NoError(t, err)
 	defer listener.Close()
 	defer waitForConnectionsClosed(t, vh)
@@ -3683,7 +3683,7 @@ func TestComQueryMultiOLAPIngressBytes(t *testing.T) {
 	})
 
 	vh := newVtgateHandler(vtgate)
-	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), vh, 0, 0, false, false, 0, 0, true)
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), vh, 0, 0, false, 0, false, 0, 0, true)
 	require.NoError(t, err)
 	defer listener.Close()
 	defer waitForConnectionsClosed(t, vh)
@@ -3740,7 +3740,7 @@ func TestComPrepareIngressBytes(t *testing.T) {
 	query := "SELECT id FROM user WHERE id = ?"
 
 	vh := newVtgateHandler(vtgate)
-	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), vh, 0, 0, false, false, 0, 0, false)
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), vh, 0, 0, false, 0, false, 0, 0, false)
 	require.NoError(t, err)
 	defer listener.Close()
 	defer waitForConnectionsClosed(t, vh)
