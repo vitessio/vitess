@@ -1100,3 +1100,21 @@ func TestCopySemanticInfoIntoColName(t *testing.T) {
 		require.NotContains(t, semTable.Direct, to)
 	})
 }
+
+func TestTableSetForWithNilTable(t *testing.T) {
+	st := EmptySemTable()
+	// NewTableId appends a nil entry to st.Tables as placeholder
+	_ = st.NewTableId()
+	aliased := &sqlparser.AliasedTableExpr{
+		Expr: sqlparser.TableName{
+			Name: sqlparser.NewIdentifierCS("unregistered"),
+		},
+	}
+	// TableSetFor should not panic on nil table entries
+	ts := st.TableSetFor(aliased)
+	require.Equal(t, EmptyTableSet(), ts)
+
+	// SingleKeyspace should not panic on nil table entries
+	ks := st.SingleKeyspace()
+	require.Nil(t, ks)
+}
