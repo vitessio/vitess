@@ -2803,6 +2803,11 @@ func TestVStreamChunkedTxFailureBlocksOtherShards(t *testing.T) {
 	sbc0, sbc1 := sbcs[0], sbcs[1]
 	sbc0.AddVStreamEvents(nil, vterrors.New(vtrpcpb.Code_UNAVAILABLE, "tablet went away"))
 	sbc1.VStreamCh = make(chan *binlogdatapb.VEvent)
+	// 20-40 takes vs.mu before it starts its tablet stream, so -20 must not
+	// start chunking until 20-40 is streaming and can receive its events.
+	otherShardStarted := make(chan struct{}, 1)
+	sbc1.VStreamStarted = otherShardStarted
+	sbc0.VStreamGate = otherShardStarted
 	otherShardTx := []*binlogdatapb.VEvent{
 		{Type: binlogdatapb.VEventType_BEGIN},
 		chunkedTxRowEvent("t2", 100)[0],
@@ -2819,32 +2824,42 @@ func TestVStreamChunkedTxFailureBlocksOtherShards(t *testing.T) {
 
 	var begins int
 	var otherShardRows int
-	err := vsm.VStream(vstreamCtx, topodatapb.TabletType_PRIMARY, vgtid, nil, flags, func(events []*binlogdatapb.VEvent) error {
-		for _, ev := range events {
-			switch ev.Type {
-			case binlogdatapb.VEventType_BEGIN:
-				begins++
-				if begins > 1 {
-					continue
-				}
-				// -20 holds vs.mu until this returns, as its ROW chunk is still
-				// unsent. Handing 20-40 an oversized ROW makes it wait on vs.mu to
-				// start chunking, so it is blocked on the lock before -20 fails.
-				for _, otherEv := range otherShardTx {
-					select {
-					case sbc1.VStreamCh <- otherEv:
-					case <-vstreamCtx.Done():
-						return nil
+	done := make(chan error, 1)
+	go func() {
+		done <- vsm.VStream(vstreamCtx, topodatapb.TabletType_PRIMARY, vgtid, nil, flags, func(events []*binlogdatapb.VEvent) error {
+			for _, ev := range events {
+				switch ev.Type {
+				case binlogdatapb.VEventType_BEGIN:
+					begins++
+					if begins > 1 {
+						continue
+					}
+					// -20 holds vs.mu until this returns, as its ROW chunk is still
+					// unsent. Handing 20-40 an oversized ROW makes it wait on vs.mu to
+					// start chunking, so it is blocked on the lock before -20 fails.
+					for _, otherEv := range otherShardTx {
+						select {
+						case sbc1.VStreamCh <- otherEv:
+						case <-vstreamCtx.Done():
+							return nil
+						}
+					}
+				case binlogdatapb.VEventType_ROW:
+					if ev.RowEvent.TableName == ks+".t2" {
+						otherShardRows++
 					}
 				}
-			case binlogdatapb.VEventType_ROW:
-				if ev.RowEvent.TableName == ks+".t2" {
-					otherShardRows++
-				}
 			}
-		}
-		return nil
-	})
+			return nil
+		})
+	}()
+
+	var err error
+	select {
+	case err = <-done:
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "VStream did not return: the stream is deadlocked")
+	}
 	require.Error(t, err)
 	require.ErrorContains(t, err, "partially delivering a chunked transaction")
 	require.Equal(t, 1, begins, "no other transaction may be delivered after the partial one")
