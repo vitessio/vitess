@@ -18,9 +18,9 @@ package heartbeat
 
 import "time"
 
+// MinimalOnDemandDuration is the shortest lease that an on-demand heartbeat request gets.
+const MinimalOnDemandDuration = 4 * time.Second
+
 type HeartbeatWriter interface {
 	RequestHeartbeats()
-	// OnDemandDuration returns how long heartbeats keep running after a request, or 0 when they
-	// always run.
-	OnDemandDuration() time.Duration
 }

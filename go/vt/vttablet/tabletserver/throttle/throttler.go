@@ -314,21 +314,16 @@ type cachedPrimaryTablet struct {
 // primaryStimulationInterval returns how often this tablet, while it is being checked, stimulates the primary to renew
 // its on-demand heartbeat lease. The primary renews the lease by itself for the tablet types it probes, so for those
 // an occasional stimulation, once per dormantPeriod, is enough. It does not probe other types, RDONLY by default, so
-// a tablet of such a type stimulates it every half lease, or else its heartbeats, and therefore its lag, go stale.
-// A tablet whose heartbeats always run has no lease to renew.
+// a tablet of such a type stimulates it every half of the shortest lease, or else its heartbeats, and therefore its
+// lag, go stale. The lease and whether heartbeats always run are set by the primary's flags, not this tablet's, so
+// the interval does not depend on them. Whether the primary probes this tablet's type is also the primary's
+// decision: --throttle-tablet-types must be the same on the primary and on this tablet.
 func (throttler *Throttler) primaryStimulationInterval() time.Duration {
 	tabletType := throttler.tabletTypeFunc()
 	if tabletType == topodatapb.TabletType_PRIMARY || throttler.throttleTabletTypesMap[tabletType] {
 		return throttler.dormantPeriod
 	}
-	if throttler.heartbeatWriter == nil {
-		return throttler.dormantPeriod
-	}
-	lease := throttler.heartbeatWriter.OnDemandDuration()
-	if lease <= 0 {
-		return throttler.dormantPeriod
-	}
-	return min(max(lease/2, time.Second), throttler.dormantPeriod)
+	return heartbeat.MinimalOnDemandDuration / 2
 }
 
 // InitDBConfig initializes keyspace and shard

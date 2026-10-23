@@ -220,12 +220,7 @@ func (ts *FakeTopoServer) GetSrvKeyspace(ctx context.Context, cell, keyspace str
 }
 
 type FakeHeartbeatWriter struct {
-	requests         atomic.Int64
-	onDemandDuration time.Duration
-}
-
-func (w *FakeHeartbeatWriter) OnDemandDuration() time.Duration {
-	return w.onDemandDuration
+	requests atomic.Int64
 }
 
 func (w *FakeHeartbeatWriter) RequestHeartbeats() {
@@ -2068,8 +2063,6 @@ func TestReplica(t *testing.T) {
 	var tabletType atomic.Int32
 	tabletType.Store(int32(topodatapb.TabletType_REPLICA))
 	throttler.tabletTypeFunc = func() topodatapb.TabletType { return topodatapb.TabletType(tabletType.Load()) }
-	// A 2s heartbeat lease: an RDONLY tablet, which the primary does not probe, stimulates it every second.
-	throttler.heartbeatWriter = &FakeHeartbeatWriter{onDemandDuration: 2 * time.Second}
 
 	tmClient, ok := throttler.overrideTmClient.(*fakeTMClient)
 	require.True(t, ok)
@@ -2305,7 +2298,7 @@ func TestReplica(t *testing.T) {
 				assert.Contains(t, checkResult.Summary(), testAppName.String()+" is denied access due to")
 			})
 
-			t.Run("RDONLY tablet stimulates the primary every half lease", func(t *testing.T) {
+			t.Run("RDONLY tablet stimulates the primary every half of the shortest lease", func(t *testing.T) {
 				// The REPLICA above stimulated the primary once, and a REPLICA would not again within dormantPeriod.
 				// The primary does not probe RDONLY tablets, so while one is checked it renews the lease itself.
 				tabletType.Store(int32(topodatapb.TabletType_RDONLY))
@@ -2493,38 +2486,27 @@ func TestStimulatePrimaryThrottler(t *testing.T) {
 		intervalCases := []struct {
 			name       string
 			tabletType topodatapb.TabletType
-			onDemand   time.Duration
+			listed     bool
 			expect     time.Duration
 		}{
-			{name: "primary", tabletType: topodatapb.TabletType_PRIMARY, onDemand: 10 * time.Second, expect: time.Minute},
-			{name: "replica, which the primary probes", tabletType: topodatapb.TabletType_REPLICA, onDemand: 10 * time.Second, expect: time.Minute},
-			{name: "rdonly, default lease", tabletType: topodatapb.TabletType_RDONLY, onDemand: 10 * time.Second, expect: 5 * time.Second},
-			{name: "rdonly, minimal lease", tabletType: topodatapb.TabletType_RDONLY, onDemand: 4 * time.Second, expect: 2 * time.Second},
-			{name: "rdonly, short lease is bounded below", tabletType: topodatapb.TabletType_RDONLY, onDemand: time.Second, expect: time.Second},
-			{name: "rdonly, long lease is bounded by dormantPeriod", tabletType: topodatapb.TabletType_RDONLY, onDemand: 10 * time.Minute, expect: time.Minute},
-			{name: "rdonly, heartbeats always on", tabletType: topodatapb.TabletType_RDONLY, onDemand: 0, expect: time.Minute},
-			{name: "spare", tabletType: topodatapb.TabletType_SPARE, onDemand: 10 * time.Second, expect: 5 * time.Second},
+			{name: "primary", tabletType: topodatapb.TabletType_PRIMARY, expect: time.Minute},
+			{name: "replica, which the primary probes", tabletType: topodatapb.TabletType_REPLICA, expect: time.Minute},
+			{name: "rdonly", tabletType: topodatapb.TabletType_RDONLY, expect: 2 * time.Second},
+			{name: "spare", tabletType: topodatapb.TabletType_SPARE, expect: 2 * time.Second},
+			{name: "rdonly listed in --throttle-tablet-types", tabletType: topodatapb.TabletType_RDONLY, listed: true, expect: time.Minute},
 		}
 		for _, tcase := range intervalCases {
 			t.Run(tcase.name, func(t *testing.T) {
 				throttler := &Throttler{
-					dormantPeriod:   time.Minute,
-					tabletTypeFunc:  func() topodatapb.TabletType { return tcase.tabletType },
-					heartbeatWriter: &FakeHeartbeatWriter{onDemandDuration: tcase.onDemand},
+					dormantPeriod:  time.Minute,
+					tabletTypeFunc: func() topodatapb.TabletType { return tcase.tabletType },
 				}
 				throttler.initThrottleTabletTypes()
+				if tcase.listed {
+					throttler.throttleTabletTypesMap[tcase.tabletType] = true
+				}
 				assert.Equal(t, tcase.expect, throttler.primaryStimulationInterval())
 			})
 		}
-		t.Run("rdonly listed in --throttle-tablet-types", func(t *testing.T) {
-			throttler := &Throttler{
-				dormantPeriod:   time.Minute,
-				tabletTypeFunc:  func() topodatapb.TabletType { return topodatapb.TabletType_RDONLY },
-				heartbeatWriter: &FakeHeartbeatWriter{onDemandDuration: 10 * time.Second},
-			}
-			throttler.initThrottleTabletTypes()
-			throttler.throttleTabletTypesMap[topodatapb.TabletType_RDONLY] = true
-			assert.Equal(t, time.Minute, throttler.primaryStimulationInterval())
-		})
 	})
 }

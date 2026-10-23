@@ -753,7 +753,9 @@ See [#21139](https://github.com/vitessio/vitess/pull/21139) for details.
 
 When heartbeats run on demand, which is the case unless `--heartbeat-enable` is set without `--heartbeat-on-demand-duration`, the primary renews the heartbeat lease only for the tablet types it probes: the primary and the types in `--throttle-tablet-types` (default `replica`). A tablet of another type, RDONLY by default, asked the primary for heartbeats at most once a minute, so its heartbeats, and with them its lag, went stale for most of every minute. VTGate VStreams, workflows run with `--tablet-types rdonly`, and VDiffs sourced from RDONLY tablets were then throttled on false lag.
 
-While the throttler on such a tablet is being checked, the tablet now asks the primary for heartbeats every half lease, so its lag stays accurate. The primary writes heartbeats while those checks continue, as it already does while the throttler on a replica is being checked. Nothing changes for tablets whose heartbeats always run, or while nothing checks the throttler on the tablet.
+While the throttler on such a tablet is being checked, the tablet now asks the primary for heartbeats every 2 seconds, half of the shortest lease, so its lag stays accurate. The primary writes heartbeats while those checks continue, as it already does while the throttler on a replica is being checked. Nothing changes while nothing checks the throttler on the tablet. When the primary's heartbeats always run, it ignores these requests.
+
+Each tablet decides from its own `--throttle-tablet-types` whether the primary probes it, so set the flag to the same value on the primary and on the other tablets of the keyspace. A tablet that lists its own type while the primary does not would ask for heartbeats only once a minute, as before.
 
 See [#20248](https://github.com/vitessio/vitess/issues/20248) for details.
 

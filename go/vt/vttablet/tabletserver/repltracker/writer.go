@@ -33,6 +33,7 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/heartbeat"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -53,7 +54,7 @@ const (
 
 const (
 	sqlUpsertHeartbeat      = "INSERT INTO %s.heartbeat (ts, tabletUid, keyspaceShard) VALUES (%a, %a, %a) ON DUPLICATE KEY UPDATE ts=VALUES(ts), tabletUid=VALUES(tabletUid)"
-	minimalOnDemandDuration = 4 * time.Second
+	minimalOnDemandDuration = heartbeat.MinimalOnDemandDuration
 )
 
 var (
@@ -356,11 +357,6 @@ func (w *heartbeatWriter) allowNextHeartbeatRequest() {
 	if rateLimiter := w.onDemandRequestsRateLimiter.Load(); rateLimiter != nil {
 		rateLimiter.AllowOne()
 	}
-}
-
-// OnDemandDuration implements heartbeat.HeartbeatWriter.OnDemandDuration().
-func (w *heartbeatWriter) OnDemandDuration() time.Duration {
-	return w.onDemandDuration
 }
 
 // RequestHeartbeats implements heartbeat.HeartbeatWriter.RequestHeartbeats()
