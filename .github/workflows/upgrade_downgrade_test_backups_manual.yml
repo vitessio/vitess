@@ -75,6 +75,7 @@ jobs:
             - 'bootstrap.sh'
             - '.github/workflows/upgrade_downgrade_test_backups_manual.yml'
             - '.github/actions/setup-mysql/action.yml'
+            - '.github/actions/tune-os/**'
             - '.github/actions/setup-go/action.yml'
             - 'examples/**'
 

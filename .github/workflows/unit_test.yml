@@ -68,6 +68,7 @@ jobs:
               - 'bootstrap.sh'
               - '.github/workflows/unit_test.yml'
               - '.github/actions/setup-mysql/action.yml'
+              - '.github/actions/tune-os/**'
               - '.github/actions/setup-go/action.yml'
 
   test:

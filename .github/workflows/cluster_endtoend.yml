@@ -108,6 +108,7 @@ jobs:
               - 'bootstrap.sh'
               - '.github/workflows/cluster_endtoend.yml'
               - '.github/actions/setup-mysql/action.yml'
+              - '.github/actions/tune-os/**'
               - '.github/actions/setup-go/action.yml'
               - '.github/actions/setup-microceph/action.yml'
 

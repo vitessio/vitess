@@ -62,6 +62,7 @@ jobs:
           changed_files:
             - .github/workflows/codecov.yml
             - .github/actions/setup-mysql/action.yml
+            - '.github/actions/tune-os/**'
             - .github/actions/setup-go/action.yml
             - 'go/**'
             - go.mod
