@@ -249,6 +249,18 @@ type Conn interface {
 	Close()
 }
 
+// LinearizableGetter is implemented by a Conn that can read a file
+// linearizably: the result of GetLinearizable reflects every write that
+// completed before the call started, including writes made through other
+// connections. Get is allowed to return older data.
+//
+// It is not part of Conn, so that topo implementations outside of Vitess keep
+// working. Callers must handle a Conn that doesn't implement it.
+type LinearizableGetter interface {
+	// GetLinearizable returns the same values and errors as Get.
+	GetLinearizable(ctx context.Context, filePath string) ([]byte, Version, error)
+}
+
 // DirEntryType is the type of an entry in a directory.
 type DirEntryType int
 

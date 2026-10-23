@@ -184,6 +184,14 @@ func (c *Conn) Get(ctx context.Context, filePath string) ([]byte, topo.Version, 
 	return n.contents, NodeVersion(n.version), nil
 }
 
+var _ topo.LinearizableGetter = (*Conn)(nil)
+
+// GetLinearizable is part of the topo.LinearizableGetter interface. All
+// connections share the same in-memory state, so Get is already linearizable.
+func (c *Conn) GetLinearizable(ctx context.Context, filePath string) ([]byte, topo.Version, error) {
+	return c.Get(ctx, filePath)
+}
+
 // GetVersion is part of topo.Conn interface.
 func (c *Conn) GetVersion(ctx context.Context, filePath string, version int64) ([]byte, error) {
 	return nil, topo.NewError(topo.NoImplementation, "GetVersion not supported in memory topo")
