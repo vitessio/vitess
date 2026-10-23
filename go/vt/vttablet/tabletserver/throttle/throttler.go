@@ -45,7 +45,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"math"
 	"math/rand/v2"
 	"strings"
@@ -62,6 +61,7 @@ import (
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
@@ -112,6 +112,10 @@ var throttleTabletTypes = "replica"
 var (
 	statsThrottlerHeartbeatRequests    = stats.NewCounter("ThrottlerHeartbeatRequests", "heartbeat requests")
 	statsThrottlerProbeRecentlyChecked = stats.NewCounter("ThrottlerProbeRecentlyChecked", "probe recently checked")
+
+	// stimulationErrorLogger logs failed stimulations of the primary at most once a minute: a tablet that the primary
+	// does not probe stimulates it every few seconds, including while the primary is unreachable.
+	stimulationErrorLogger = logutil.NewThrottledLogger("ThrottlerStimulation", time.Minute)
 )
 
 func init() {
@@ -709,15 +713,19 @@ func (throttler *Throttler) stimulatePrimaryThrottler(ctx context.Context, tmCli
 	defer cancel()
 
 	primary, err := throttler.primaryTablet(ctx)
-	if err != nil || primary == nil {
+	if err != nil {
+		stimulationErrorLogger.Errorf("stimulatePrimaryThrottler failed to find the primary: %v", err)
 		return err
+	}
+	if primary == nil {
+		return nil
 	}
 	req := &tabletmanagerdatapb.CheckThrottlerRequest{AppName: throttlerapp.ThrottlerStimulatorName.String()}
 	_, err = tmClient.CheckThrottler(ctx, primary, req)
 	if err != nil {
 		// The primary may have moved: read it from the topo on the next stimulation.
 		throttler.cachedPrimary.Store(nil)
-		log.Error("stimulatePrimaryThrottler failed", slog.Any("error", err))
+		stimulationErrorLogger.Errorf("stimulatePrimaryThrottler failed to check %v: %v", topoproto.TabletAliasString(primary.Alias), err)
 	}
 	return err
 }
