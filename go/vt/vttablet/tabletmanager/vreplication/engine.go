@@ -72,6 +72,12 @@ const (
 // stop replicating.
 var waitRetryTime = 1 * time.Second
 
+// waitForPosRetryTime is how long WaitForPos waits before it first checks the
+// stream's position again. The wait doubles after each check, up to
+// waitRetryTime, so a short wait returns soon after the stream saves the
+// position, while a long one still checks only once per waitRetryTime.
+var waitForPosRetryTime = 100 * time.Millisecond
+
 // How frequently vcopier will update _vt.vreplication rows_copied
 var rowsCopiedUpdateInterval = 30 * time.Second
 
@@ -809,8 +815,9 @@ func (vre *Engine) WaitForPos(ctx context.Context, id int32, pos string) error {
 	}
 	defer dbClient.Close()
 
-	tkr := time.NewTicker(waitRetryTime)
-	defer tkr.Stop()
+	retryTime := waitForPosRetryTime
+	retry := time.NewTimer(retryTime)
+	defer retry.Stop()
 	for {
 		qr, err := dbClient.ExecuteFetch(binlogplayer.ReadVReplicationStatus(id), 10)
 		switch {
@@ -865,8 +872,10 @@ func (vre *Engine) WaitForPos(ctx context.Context, id int32, pos string) error {
 			return doneErr
 		case <-vre.ctx.Done():
 			return fmt.Errorf("vreplication is closing: %v", vre.ctx.Err())
-		case <-tkr.C:
+		case <-retry.C:
 		}
+		retryTime = min(2*retryTime, max(waitRetryTime, waitForPosRetryTime))
+		retry.Reset(retryTime)
 	}
 }
 

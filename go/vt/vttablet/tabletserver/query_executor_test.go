@@ -1002,6 +1002,99 @@ func TestQueryExecutorPlanNextval(t *testing.T) {
 	require.Truef(t, got.Equal(want), "qre.Execute() =\n%#v, want:\n%#v", got, want)
 }
 
+// TestQueryExecutorPlanNextvalCommitFailureKeepsCache verifies that a failed
+// refill COMMIT leaves the sequence cache unchanged and that the next call
+// refills the cache from the sequence table.
+func TestQueryExecutorPlanNextvalCommitFailureKeepsCache(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	t.Cleanup(db.Close)
+
+	db.AddQuery("select next_id, cache from seq where id = 0 for update", &sqltypes.Result{
+		Fields: []*querypb.Field{{Type: sqltypes.Int64}, {Type: sqltypes.Int64}},
+		Rows:   [][]sqltypes.Value{{sqltypes.NewInt64(1), sqltypes.NewInt64(3)}},
+	})
+	db.AddQuery("update seq set next_id = 4 where id = 0", &sqltypes.Result{})
+
+	ctx := t.Context()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	t.Cleanup(tsv.StopService)
+
+	db.AddRejectedQuery("commit", errors.New("commit failed"))
+	qre := newTestQueryExecutor(ctx, tsv, "select next value from seq", 0)
+	_, err := qre.Execute()
+	require.ErrorContains(t, err, "commit failed")
+
+	// Check that the cache stays empty. The table still holds next_id = 1.
+	seq := qre.plan.Table.SequenceInfo
+	require.Zero(t, seq.NextVal)
+	require.Zero(t, seq.LastVal)
+
+	// Make the retry read next_id = 4 from the table. A stale cache returns 1.
+	db.AddQuery("select next_id, cache from seq where id = 0 for update", &sqltypes.Result{
+		Fields: []*querypb.Field{{Type: sqltypes.Int64}, {Type: sqltypes.Int64}},
+		Rows:   [][]sqltypes.Value{{sqltypes.NewInt64(4), sqltypes.NewInt64(3)}},
+	})
+	db.AddQuery("update seq set next_id = 7 where id = 0", &sqltypes.Result{})
+	db.DeleteRejectedQuery("commit")
+
+	qre = newTestQueryExecutor(ctx, tsv, "select next value from seq", 0)
+	got, err := qre.Execute()
+	require.NoError(t, err)
+
+	want := &sqltypes.Result{
+		Fields: []*querypb.Field{{
+			Name: "nextval",
+			Type: sqltypes.Int64,
+		}},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt64(4),
+		}},
+	}
+	require.Truef(t, got.Equal(want), "qre.Execute() =\n%#v, want:\n%#v", got, want)
+}
+
+// TestQueryExecutorPlanNextvalPartialRefillCommitFailureKeepsCache verifies
+// that a failed refill COMMIT on a non-empty cache leaves the cached range
+// unchanged. The refill starts from the cached last value, which equals the
+// next_id in the sequence table.
+func TestQueryExecutorPlanNextvalPartialRefillCommitFailureKeepsCache(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	t.Cleanup(db.Close)
+
+	db.AddQuery("select next_id, cache from seq where id = 0 for update", &sqltypes.Result{
+		Fields: []*querypb.Field{{Type: sqltypes.Int64}, {Type: sqltypes.Int64}},
+		Rows:   [][]sqltypes.Value{{sqltypes.NewInt64(1), sqltypes.NewInt64(3)}},
+	})
+	db.AddQuery("update seq set next_id = 4 where id = 0", &sqltypes.Result{})
+
+	ctx := t.Context()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	t.Cleanup(tsv.StopService)
+
+	// Use up the cached range [1, 4). The table now holds next_id = 4.
+	for range 3 {
+		qre := newTestQueryExecutor(ctx, tsv, "select next value from seq", 0)
+		_, err := qre.Execute()
+		require.NoError(t, err)
+	}
+
+	db.AddQuery("select next_id, cache from seq where id = 0 for update", &sqltypes.Result{
+		Fields: []*querypb.Field{{Type: sqltypes.Int64}, {Type: sqltypes.Int64}},
+		Rows:   [][]sqltypes.Value{{sqltypes.NewInt64(4), sqltypes.NewInt64(3)}},
+	})
+	db.AddQuery("update seq set next_id = 7 where id = 0", &sqltypes.Result{})
+	db.AddRejectedQuery("commit", errors.New("commit failed"))
+
+	qre := newTestQueryExecutor(ctx, tsv, "select next value from seq", 0)
+	_, err := qre.Execute()
+	require.ErrorContains(t, err, "commit failed")
+
+	// Check that the cache keeps the used up range. A stale cache holds LastVal = 7.
+	seq := qre.plan.Table.SequenceInfo
+	require.EqualValues(t, 4, seq.NextVal)
+	require.EqualValues(t, 4, seq.LastVal)
+}
+
 func TestQueryExecutorMessageStreamACL(t *testing.T) {
 	ctx := t.Context()
 	aclName := fmt.Sprintf("simpleacl-test-%d", rand.Int64())
@@ -2820,6 +2913,57 @@ func TestReserveSettingsRejectUnsupportedSQLModes(t *testing.T) {
 	connID, _, err := tsv.te.ReserveBegin(ctx, &querypb.ExecuteOptions{}, []string{validSetting})
 	require.NoError(t, err)
 	require.NoError(t, tsv.te.Release(ctx, connID))
+}
+
+// A connection starts out in a character set Vitess can parse safely, and a
+// session must not be able to switch it to one it cannot: not through a SET
+// statement sent to the query service, and not through connection settings,
+// which a VTGate gRPC client controls through its session's system variables.
+// Connection settings refuse any character set change, on the settings-pool
+// path and on either reservation path, since undoing one restores the server's
+// global character set.
+func TestSettingsRejectUnsafeConnectionCharsets(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	t.Cleanup(db.Close)
+	ctx := t.Context()
+	tsv := newTestTabletServer(ctx, enableStrictTableACL, db)
+	t.Cleanup(tsv.StopService)
+
+	assertSettingRefused := func(t *testing.T, setting string) {
+		const settingsErr = "the connection character set cannot be changed through connection settings"
+		_, _, err := tsv.te.ReserveBegin(ctx, &querypb.ExecuteOptions{}, []string{setting})
+		require.ErrorContains(t, err, settingsErr)
+		_, err = tsv.te.Reserve(ctx, &querypb.ExecuteOptions{}, 0, []string{setting})
+		require.ErrorContains(t, err, settingsErr)
+		_, err = tsv.qe.GetConnSetting(ctx, []string{setting})
+		require.ErrorContains(t, err, settingsErr)
+	}
+
+	for _, setting := range []string{"set character_set_client = 'gbk'", "set names 'sjis'", "set collation_connection = 'cp932_japanese_ci'"} {
+		t.Run(setting, func(t *testing.T) {
+			assertSettingRefused(t, setting)
+			_, err := tsv.Execute(ctx, nil, tsv.sm.Target(), setting, nil, 0, 0, nil)
+			require.ErrorContains(t, err, "unsupported connection character set")
+			assert.Zero(t, db.GetQueryCalledNum(setting), "a rejected setting must not reach the backend")
+		})
+	}
+
+	// even a safe character set is refused as a connection setting
+	safeSetting := "set character_set_client = 'utf8mb4'"
+	assertSettingRefused(t, safeSetting)
+	assert.Zero(t, db.GetQueryCalledNum(safeSetting), "a refused setting must not reach the backend")
+
+	// a user-defined variable named like a connection character set variable
+	// changes no connection setting, so a reserved connection may assign it
+	userVariableSetting := "set @charset = 'latin1'"
+	db.AddQuery(userVariableSetting, &sqltypes.Result{})
+	connID, _, err := tsv.te.ReserveBegin(ctx, &querypb.ExecuteOptions{}, []string{userVariableSetting})
+	require.NoError(t, err)
+	require.NoError(t, tsv.te.Release(ctx, connID))
+	connID, err = tsv.te.Reserve(ctx, &querypb.ExecuteOptions{}, 0, []string{userVariableSetting})
+	require.NoError(t, err)
+	require.NoError(t, tsv.te.Release(ctx, connID))
+	assert.Equal(t, 2, db.GetQueryCalledNum(userVariableSetting), "the pre-query must reach the backend on both reservation paths")
 }
 
 // A setting is applied with no table ACL check, so under strict table ACL one

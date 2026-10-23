@@ -1,0 +1,87 @@
+# Release of Vitess v24.0.5
+
+## Summary
+
+### Unsupported `sql_mode` values are rejected
+
+#### VTGate
+
+VTGate already rejected `SET sql_mode = ...` statements that enable a mode the Vitess parser does not support (`ANSI_QUOTES`, `NO_BACKSLASH_ESCAPES`, `PIPES_AS_CONCAT`, `REAL_AS_FLOAT`). The check compared mode names textually and could be bypassed. VTGate now implements MySQL 8.x's `sql_mode` assignment semantics and validates every assignment against them:
+
+- Setting an unsupported mode is rejected even when the underlying MySQL already runs with that mode, that is, when the `SET` would not change the value. Such statements previously succeeded, even though VTGate does not parse queries under these modes. The combination mode `ANSI` is rejected as well, because it enables `ANSI_QUOTES`, `PIPES_AS_CONCAT`, and `REAL_AS_FLOAT`.
+- `IGNORE_SPACE` and `HIGH_NOT_PRECEDENCE` are now also rejected. They are the two remaining modes that change how SQL text is interpreted. The Vitess parser does not honor them, so VTGate would parse queries differently than the session's `sql_mode` promises.
+- Unknown mode names and invalid numeric values fail with MySQL's own errors: `ER_WRONG_VALUE_FOR_VAR` (1231), and `ER_UNSUPPORTED_SQL_MODE` (3899) for the bits of modes removed in MySQL 8.0.
+- Numeric values decode against MySQL's `sql_mode` bitmask. For example, `SET sql_mode = 1048576` reports that `NO_BACKSLASH_ESCAPES` is unsupported. Valid numeric values are accepted.
+- Constant values are validated at planning time, with no shard round trip. This includes constant expressions such as `CONCAT` over literals, and it also applies when `--enable-system-settings` is disabled. Non-constant expressions are validated at execution time, once their value is known.
+
+#### VTTablet
+
+VTTablet applies the same validation at its own entry points and returns the same errors: connection settings, on the settings pool and on reserved connections, and session-scope `SET sql_mode` statements. This covers clients that bypass VTGate's validation, such as VTGates that are not upgraded yet and clients that talk to the query service directly. `SET_VAR` optimizer hints are forwarded to MySQL unchanged.
+
+Every MySQL connection Vitess creates now strips the modes that change how SQL text is interpreted from the session `sql_mode` it inherits from the server's global value. All other modes, such as the strict modes and the zero-date modes, are kept. This applies to every component: query serving, schema tracking, heartbeats, replication management, Online DDL, VReplication and VDiff, and connections to external MySQL servers. The global `sql_mode` is not changed.
+
+#### Impact
+
+- Clients that run `SET sql_mode` with an unsupported mode, including `ANSI`, `IGNORE_SPACE` and `HIGH_NOT_PRECEDENCE`, now receive an error. This also happens when the `SET` matches the backend's current `sql_mode`. Clients that set mode names MySQL would itself reject receive an error as well.
+- During a rolling upgrade, VTTablets are typically upgraded before VTGates. A session that sets a now-rejected `sql_mode` through a VTGate that is not upgraded yet starts receiving errors from upgraded VTTablets.
+- A backend whose global `sql_mode` includes one of these modes keeps it, but Vitess sessions no longer inherit it.
+
+See [#20883](https://github.com/vitessio/vitess/pull/20883) for details.
+
+### Table ACL: callers with every role on every table may run statements whose tables cannot be determined
+
+v24.0.4 began denying, under strict table ACL (`--queryserver-config-strict-table-acl`), statements whose tables vttablet cannot determine (`DO`, `CALL`, `REPAIR`, `OPTIMIZE`, `LOAD DATA`, and a `CREATE TABLE` that vttablet's parser cannot fully parse) for every caller outside the exempt ACL (`--queryserver-config-acl-exempt-acl`); see [GHSA-w6mx-2f8x-pqf4](https://github.com/vitessio/vitess/security/advisories/GHSA-w6mx-2f8x-pqf4). A caller that is a reader, a writer and an admin in a table group covering every table (`"table_names_or_prefixes": ["%"]`) holds every role on any table such a statement could touch, so `DO`, `REPAIR`, `OPTIMIZE` and a partially parsed `CREATE TABLE` now run for it. `CALL` and `LOAD DATA` remain denied even then, since a `SQL SECURITY DEFINER` procedure runs with its definer's privileges and `LOAD DATA INFILE` reads files on the server, neither of which table ACL grants; issue them as a caller in the exempt ACL.
+
+These checks are counted under the `undetermined-table-set` `TableName` label, in `TableACLDenied`, or in `TableACLAllowed` for a caller with every role on every table. With dry-run (`--queryserver-config-enable-table-acl-dry-run`), only the statements the check would deny increment `TableACLPseudoDenied`.
+
+See [#21349](https://github.com/vitessio/vitess/pull/21349) for details.
+
+### Connection character sets restricted
+
+`--db-charset`, and the other places a MySQL connection character set is configured, no longer accept `sjis`, `cp932`, `gb18030`, `gbk`, `big5`, `ucs2`, `utf16`, `utf16le` or `utf32`, whether given as a character set or as one of its collations. A tablet configured with one of them fails to start, VTGate refuses a `SET` of `character_set_client`, `character_set_connection`, `character_set_results` or `collation_connection` to one of them, or to a name that is not a character set or collation, which it used to answer with OK and ignore, and VTTablet refuses a setting or `SET` statement that would switch a session's connection to one of them. A client may still ask for one of them at the handshake: VTGate reads its statements byte by byte, as the tablet's connection to MySQL does, so they cannot break out of a literal.
+
+Vitess parses and escapes SQL text byte by byte, and in these character sets the second byte of a character can be a backslash or a back quote, so text in them was misparsed or corrupted on its way through Vitess. Use `utf8mb4` as the connection character set instead. Tables and columns can still be declared with any of these character sets; MySQL converts between them and the connection character set.
+
+This fixes [GHSA-c28j-qmfx-4gxp](https://github.com/vitessio/vitess/security/advisories/GHSA-c28j-qmfx-4gxp).
+
+See [#21392](https://github.com/vitessio/vitess/pull/21392) and [#21465](https://github.com/vitessio/vitess/pull/21465) for details.
+
+### Charset and collation names are quoted when regenerated
+
+A charset, collation, engine, tablespace or full-text parser name is now decoded when parsed, and written back as a single token when Vitess regenerates the statement: bare when it is a known charset, collation, engine, index type or parser name, back-quoted otherwise.
+
+User-visible consequences:
+
+- **A quoted name is normalized.** `COLLATE 'utf8_bin'` regenerates as `COLLATE utf8_bin` — the quoted and unquoted spellings mean the same name, and the decoded form is what is stored. Anything comparing the printed form of these statements byte for byte sees the new spelling.
+- **Only known names stay bare.** A charset or collation name of any MySQL or MariaDB version, a known storage engine such as `InnoDB` or `memory`, the `BTREE`, `HASH` and `RTREE` index types, the `ngram` and `mecab` parsers, and the `innodb_system` and `innodb_file_per_table` tablespaces are written back as they were spelled. Any other name is back-quoted: `TABLESPACE ts` regenerates as ``TABLESPACE `ts` ``, and so does an engine Vitess does not know or a keyword used as a name. `WITH PARSER` accepts only a plain identifier, so a known name that is a keyword is quoted there: ``WITH PARSER `memory` `` keeps its quoting where `ENGINE memory` does not. `binary` is still bare where the grammar has a `BINARY` alternative, except directly before the `BINARY` attribute: `CHARACTER SET 'binary' BINARY` regenerates as ``CHARACTER SET `binary` BINARY``.
+- **`COLLATE binary` in an expression is quoted.** `expr COLLATE binary` regenerates as ``expr COLLATE `binary` ``, because MySQL's expression `COLLATE` only accepts `binary` quoted. Column, table and database `COLLATE binary` and `CHARACTER SET binary` stay bare.
+- **An empty charset, collation, engine or partition tablespace name is rejected.** `CHARACTER SET ''` and `COLLATE ''` on a column, a table, `ALTER TABLE ... CONVERT TO`, `CAST`/`CONVERT`, `CONVERT ... USING`, `CHAR ... USING`, `SELECT ... INTO OUTFILE` and an expression, `ENGINE ''` on a table or a partition, and a partition's `TABLESPACE ''` no longer parse. An empty name in these positions is indistinguishable from the clause being absent, so it would previously have been dropped or mangled and a statement MySQL rejects could have become a valid, different one. Non-DDL statements get the error directly; DDL falls back to a partial parse, so the client's own text is forwarded and MySQL rejects it. `SET NAMES ... COLLATE ''` and `SET CHARACTER SET ... COLLATE ''`, which used to parse and discard the collation, are now parse errors too; MySQL rejects both. `CREATE`/`ALTER DATABASE ... CHARACTER SET ''` and `COLLATE ''` are unchanged: they still parse and are written back as `''`.
+- **`ENCRYPTION` requires a quoted value.** `CREATE`/`ALTER DATABASE ... ENCRYPTION N` no longer fully parses, matching MySQL, which only accepts `'Y'` or `'N'` as a quoted string. Such a statement now falls back to a partial parse rather than being regenerated into a spelling MySQL would refuse.
+
+This fixes [GHSA-j8pc-mcwq-qrg6](https://github.com/vitessio/vitess/security/advisories/GHSA-j8pc-mcwq-qrg6).
+
+See [#21435](https://github.com/vitessio/vitess/pull/21435) for details.
+
+### VTAdmin VExplain modes that run the statement require the `execute` action
+
+VTAdmin's VExplain API was authorized with the `get` action, but `VEXPLAIN QUERIES`, `ALL` and `TRACE` run the statement they explain, so an actor allowed only to read could change data through it ([GHSA-c2r8-grjp-w8c2](https://github.com/vitessio/vitess/security/advisories/GHSA-c2r8-grjp-w8c2)). Those modes now require the new `execute` action on the `VExplain` resource; `PLAN` and `KEYS`, which only plan the statement, still require only `get`. For those modes VTAdmin also accepts only a `SELECT` without `INTO`, sequence next-values or advisory lock functions, and runs them in a read-only transaction that is always rolled back. The VExplain page in the web UI now defaults to `PLAN`.
+
+**Migration**: grant the `execute` action on `VExplain` to the actors that should run `VEXPLAIN QUERIES`, `ALL` or `TRACE`. Rules that grant all actions (`*`) and `--no-rbac` already include it.
+
+**Impact**: an actor with only `get` on `VExplain` gets an `unauthorized` error from `VEXPLAIN QUERIES`, `ALL` and `TRACE`.
+
+See [#21396](https://github.com/vitessio/vitess/pull/21396) for details.
+
+### Security fixes
+
+- Fixes [GHSA-73pp-99vw-h5g8](https://github.com/vitessio/vitess/security/advisories/GHSA-73pp-99vw-h5g8): SQL injection through VStream LastPK values. See [#21377](https://github.com/vitessio/vitess/pull/21377).
+- Fixes [GHSA-92cc-q2h6-m2vr](https://github.com/vitessio/vitess/security/advisories/GHSA-92cc-q2h6-m2vr): SQL injection through `convert_tz()` arguments in a VStream filter. See [#21377](https://github.com/vitessio/vitess/pull/21377).
+- Fixes [GHSA-8w3p-4xg5-rm9w](https://github.com/vitessio/vitess/security/advisories/GHSA-8w3p-4xg5-rm9w): SQL injection through table names in Online DDL statements. See [#21381](https://github.com/vitessio/vitess/pull/21381).
+- Fixes [GHSA-x56j-8c72-5xgg](https://github.com/vitessio/vitess/security/advisories/GHSA-x56j-8c72-5xgg): SQL injection through the caller ID in query annotations (`--queryserver-config-annotate-queries`). See [#21369](https://github.com/vitessio/vitess/pull/21369).
+- Fixes [GHSA-m282-7w35-g77m](https://github.com/vitessio/vitess/security/advisories/GHSA-m282-7w35-g77m): SQL injection through a global `SET` variable name. See [#21390](https://github.com/vitessio/vitess/pull/21390).
+- Fixes [GHSA-9248-hccp-qf8f](https://github.com/vitessio/vitess/security/advisories/GHSA-9248-hccp-qf8f): SQL injection through `DATE`, `TIME` and `TIMESTAMP` literals. See [#21389](https://github.com/vitessio/vitess/pull/21389).
+- Fixes [GHSA-9rx3-8pwm-c228](https://github.com/vitessio/vitess/security/advisories/GHSA-9rx3-8pwm-c228): SQL injection through a session variable value carried in a `SET_VAR` hint. See [#21388](https://github.com/vitessio/vitess/pull/21388).
+- Fixes [GHSA-pfg5-ppc7-ff45](https://github.com/vitessio/vitess/security/advisories/GHSA-pfg5-ppc7-ff45): SQL hidden from parsing and table ACL checks in a trailing comment. See [#21387](https://github.com/vitessio/vitess/pull/21387).
+- Fixes [GHSA-xf67-9r78-xv82](https://github.com/vitessio/vitess/security/advisories/GHSA-xf67-9r78-xv82): SQL injection through malformed numeric bind variables. See [#21386](https://github.com/vitessio/vitess/pull/21386).
+- Fixes [GHSA-3fr2-mqr5-r5x5](https://github.com/vitessio/vitess/security/advisories/GHSA-3fr2-mqr5-r5x5): VTAdmin API routes that change cluster state accepted cross-site `GET` requests. See [#21397](https://github.com/vitessio/vitess/pull/21397).
+- Fixes [GHSA-78h7-x6qm-xpr8](https://github.com/vitessio/vitess/security/advisories/GHSA-78h7-x6qm-xpr8): VTAdmin's `ReloadSchemaShard` did not check RBAC. See [#21394](https://github.com/vitessio/vitess/pull/21394).

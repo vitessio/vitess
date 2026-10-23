@@ -33,10 +33,12 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/throttler"
+	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
@@ -577,6 +579,89 @@ func TestNoReplicas(t *testing.T) {
 		// This makes no REPLICA servers available. We expect something like:
 		// {"StatusCode":200,"Value":0,"Threshold":1,"Message":""}
 		waitForThrottleCheckStatus(t, primaryTablet, tabletmanagerdatapb.CheckThrottlerResponseCode_OK)
+	})
+	t.Run("VStream from RDONLY tablet keeps flowing while its heartbeats stay fresh", func(t *testing.T) {
+		// With the throttler disabled every check is OK, which would hide a regression.
+		require.True(t, throttleStatus(t, replicaTablet).IsEnabled)
+		ctx := t.Context()
+		t.Cleanup(func() {
+			_, err := vtgateExec(fmt.Sprintf("delete from %s.t1 where id in (2024801, 2024802)", keyspaceName), "")
+			assert.NoError(t, err)
+		})
+		_, err := vtgateExec(fmt.Sprintf("insert into %s.t1 (id, value) values (2024801, 'copied')", keyspaceName), "")
+		require.NoError(t, err)
+
+		conn, err := vtgateconn.Dial(ctx, fmt.Sprintf("%s:%d", clusterInstance.Hostname, clusterInstance.VtgateProcess.GrpcPort))
+		require.NoError(t, err)
+		t.Cleanup(conn.Close)
+		// An empty position copies the table first (rowstreamer), then streams the binlog (vstreamer).
+		vgtid := &binlogdatapb.VGtid{ShardGtids: []*binlogdatapb.ShardGtid{{Keyspace: keyspaceName, Shard: "0"}}}
+		filter := &binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{{Match: "t1", Filter: "select * from t1"}}}
+		reader, err := conn.VStream(ctx, topodatapb.TabletType_RDONLY, vgtid, filter, nil)
+		require.NoError(t, err)
+
+		var (
+			mu            sync.Mutex
+			ids           = make(map[string]bool)
+			copyCompleted bool
+		)
+		go func() {
+			for {
+				events, err := reader.Recv()
+				if err != nil {
+					return
+				}
+				mu.Lock()
+				for _, ev := range events {
+					switch ev.Type {
+					case binlogdatapb.VEventType_COPY_COMPLETED:
+						copyCompleted = true
+					case binlogdatapb.VEventType_ROW:
+						for _, change := range ev.RowEvent.RowChanges {
+							if change.After != nil {
+								// id is the first column.
+								ids[string(change.After.Values[:change.After.Lengths[0]])] = true
+							}
+						}
+					}
+				}
+				mu.Unlock()
+			}
+		}()
+
+		require.Eventually(t, func() bool {
+			mu.Lock()
+			defer mu.Unlock()
+			return ids["2024801"] && copyCompleted
+		}, time.Minute, time.Second, "the copy phase did not deliver the existing row")
+
+		// The primary renews on-demand heartbeats only for the tablet types it probes, which do not include
+		// RDONLY. While its apps check it, the RDONLY tablet renews them by stimulating the primary every half
+		// lease. Otherwise one stimulation keeps its heartbeats running for a single lease, the next one comes a
+		// minute later, and its lag grows past the threshold while the primary is idle. The checks below run for
+		// several leases while the stream is idle. The conditions run off the test goroutine, so they report
+		// errors with assert, not require.
+		checkOK := func() bool {
+			resp, err := throttler.CheckThrottler(&clusterInstance.VtctldClientProcess, replicaTablet, throttlerapp.VStreamerName, nil)
+			if !assert.NoError(t, err) {
+				return false
+			}
+			if resp.Check.ResponseCode != tabletmanagerdatapb.CheckThrottlerResponseCode_OK {
+				t.Logf("RDONLY tablet throttled vstreamer: %+v", resp.Check)
+				return false
+			}
+			return true
+		}
+		assert.Never(t, func() bool { return !checkOK() }, 4*onDemandHeartbeatDuration, 500*time.Millisecond)
+
+		// Without the renewals the stream would now be throttled until the next stimulation, up to a minute away.
+		_, err = vtgateExec(fmt.Sprintf("insert into %s.t1 (id, value) values (2024802, 'streamed')", keyspaceName), "")
+		require.NoError(t, err)
+		assert.Eventually(t, func() bool {
+			mu.Lock()
+			defer mu.Unlock()
+			return ids["2024802"]
+		}, 30*time.Second, 250*time.Millisecond, "the binlog phase did not deliver the new row promptly")
 	})
 	t.Run("restoring to REPLICA", func(t *testing.T) {
 		err := clusterInstance.VtctldClientProcess.ExecuteCommand("ChangeTabletType", replicaTablet.Alias, "REPLICA")
