@@ -889,3 +889,26 @@ func benchmarkPlanner(b *testing.B, version plancontext.PlannerVersion, testCase
 		}
 	}
 }
+
+// BenchmarkVolatileUnionGuard plans a predicate over a UNION whose branch nests derived tables
+// referencing the same column twice per level, which costs 2^depth without caching the resolutions.
+func BenchmarkVolatileUnionGuard(b *testing.B) {
+	env := vtenv.NewTestEnv()
+	vschema := loadSchema(b, "vschemas/schema.json", true)
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	require.NoError(b, err)
+
+	for _, depth := range []int{5, 10, 20} {
+		nested := "select id as c from user"
+		for i := range depth {
+			nested = fmt.Sprintf("select max(c) + max(c) as c from (%s) x%d", nested, i)
+		}
+		query := fmt.Sprintf("select * from ((%s) union all (select 1 as c from dual)) sub where c > 0", nested)
+
+		b.Run(fmt.Sprintf("depth=%d", depth), func(b *testing.B) {
+			for b.Loop() {
+				_, _ = TestBuilder(query, vw, vw.CurrentDb())
+			}
+		})
+	}
+}

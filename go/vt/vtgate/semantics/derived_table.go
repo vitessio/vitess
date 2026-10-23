@@ -170,14 +170,18 @@ func (dt *DerivedTable) getTableSet(_ originable) TableSet {
 }
 
 // GetExprFor implements the TableInfo interface
+//
+// The lookup matches dependencies on this same type, which compares names case insensitively and
+// before it considers authoritativeness. Where the two disagree a column binds to this table and
+// then fails to resolve to the expression behind it.
 func (dt *DerivedTable) getExprFor(s string) (sqlparser.Expr, error) {
-	if !dt.isAuthoritative {
-		return nil, vterrors.VT09015()
-	}
 	for i, colName := range dt.columnNames {
-		if colName == s {
+		if strings.EqualFold(colName, s) {
 			return dt.cols[i], nil
 		}
+	}
+	if !dt.isAuthoritative {
+		return nil, vterrors.VT09015()
 	}
 	return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.BadFieldError, "Unknown column '%s' in 'field list'", s)
 }
