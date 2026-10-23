@@ -31,6 +31,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
@@ -994,6 +995,7 @@ func TestSetReplicationSourceRecovery(t *testing.T) {
 		fakeMysqlDaemon.SetReplicationSourceInputs = []string{"mysql-primary:3306"}
 		fakeMysqlDaemon.StartReplicationError = recoverableReplicationInitError()
 		fakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+			"STOP REPLICA",
 			"FAKE RESET BINARY LOGS AND GTIDS",
 			"FAKE SET GLOBAL gtid_purged",
 			"FAKE SET SOURCE",
@@ -1201,6 +1203,144 @@ func TestSetReplicationSourceRecovery(t *testing.T) {
 		require.Equal(t, 2, setSourceCalls)
 		require.Equal(t, "mysql-new-primary", fakeMysqlDaemon.CurrentSourceHost)
 		require.EqualValues(t, 3306, fakeMysqlDaemon.CurrentSourcePort)
+		require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
+	})
+}
+
+// TestInitReplicaStopsReplicationFirst verifies InitReplica stops replication
+// that shard sync may have restarted after ResetReplication, before it touches
+// the GTID position or the replication source, and that it keeps the executed
+// GTIDs when that replication already applied the new primary's history.
+func TestInitReplicaStopsReplicationFirst(t *testing.T) {
+	const newPrimaryUUID = "11111111-1111-1111-1111-111111111111"
+	const localUUID = "22222222-2222-2222-2222-222222222222"
+	position := "MySQL56/" + newPrimaryUUID + ":1"
+	rp, err := replication.DecodePosition(position)
+	require.NoError(t, err)
+
+	setup := func(t *testing.T, executed string) (*TabletManager, *mysqlctl.FakeMysqlDaemon, *topodatapb.TabletAlias) {
+		ts := memorytopo.NewServer(t.Context(), "cell1")
+		parent := &topodatapb.Tablet{
+			Alias:         &topodatapb.TabletAlias{Cell: "cell1", Uid: 200},
+			Keyspace:      "ks",
+			Shard:         "0",
+			Type:          topodatapb.TabletType_PRIMARY,
+			MysqlHostname: "mysql-primary",
+			MysqlPort:     3306,
+		}
+		require.NoError(t, ts.CreateTablet(t.Context(), parent))
+
+		// Shard sync has already repointed the tablet and restarted replication.
+		fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
+		fakeMysqlDaemon.Replicating = true
+		fakeMysqlDaemon.CurrentSourceHost = "mysql-primary"
+		fakeMysqlDaemon.CurrentSourcePort = 3306
+		fakeMysqlDaemon.CurrentPrimaryPosition, err = replication.DecodePosition(executed)
+		require.NoError(t, err)
+		fakeMysqlDaemon.SetReplicationPositionPos = rp
+		fakeMysqlDaemon.SetReplicationSourceInputs = []string{"mysql-primary:3306"}
+
+		return newTestReplicationTM(newTestTablet(t, 100, "ks", "0", nil), fakeMysqlDaemon, ts), fakeMysqlDaemon, parent.Alias
+	}
+
+	for _, tc := range []struct {
+		name     string
+		executed string
+		// requested overrides the position InitReplica is asked for.
+		requested string
+		queries   []string
+	}{
+		{
+			name: "no executed GTIDs",
+			queries: []string{
+				"STOP REPLICA",
+				"FAKE RESET BINARY LOGS AND GTIDS",
+				"FAKE SET GLOBAL gtid_purged",
+				"FAKE SET SOURCE",
+				"START REPLICA",
+			},
+		},
+		{
+			name:     "new primary's history already applied",
+			executed: "MySQL56/" + newPrimaryUUID + ":1-2",
+			queries: []string{
+				"STOP REPLICA",
+				"FAKE SET SOURCE",
+				"START REPLICA",
+			},
+		},
+		{
+			name:     "only local GTIDs",
+			executed: "MySQL56/" + localUUID + ":1-5",
+			queries: []string{
+				"STOP REPLICA",
+				"FAKE RESET BINARY LOGS AND GTIDS",
+				"FAKE SET GLOBAL gtid_purged",
+				"FAKE SET SOURCE",
+				"START REPLICA",
+			},
+		},
+		{
+			// Every executed set contains an empty requested position.
+			name:      "empty requested MySQL position",
+			executed:  "MySQL56/" + localUUID + ":1-5",
+			requested: "MySQL56/",
+			queries: []string{
+				"STOP REPLICA",
+				"FAKE RESET BINARY LOGS AND GTIDS",
+				"FAKE SET GLOBAL gtid_purged",
+				"FAKE SET SOURCE",
+				"START REPLICA",
+			},
+		},
+		{
+			// MariaDB's containment ignores the server ID, so the local
+			// 0-100-5 appears to contain the new primary's 0-200-1.
+			name:      "only local MariaDB GTIDs",
+			executed:  "MariaDB/0-100-5",
+			requested: "MariaDB/0-200-1",
+			queries: []string{
+				"STOP REPLICA",
+				"FAKE RESET BINARY LOGS AND GTIDS",
+				"FAKE SET GLOBAL gtid_purged",
+				"FAKE SET SOURCE",
+				"START REPLICA",
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tm, fakeMysqlDaemon, parent := setup(t, tc.executed)
+			requested := position
+			if tc.requested != "" {
+				requested = tc.requested
+				fakeMysqlDaemon.SetReplicationPositionPos, err = replication.DecodePosition(requested)
+				require.NoError(t, err)
+			}
+			fakeMysqlDaemon.ExpectedExecuteSuperQueryList = tc.queries
+
+			require.NoError(t, tm.InitReplica(t.Context(), parent, requested, 0, false))
+			require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
+		})
+	}
+
+	t.Run("stop replication fails", func(t *testing.T) {
+		tm, fakeMysqlDaemon, parent := setup(t, "")
+		stopErr := errors.New("stop replication failed")
+		fakeMysqlDaemon.StopReplicationError = stopErr
+
+		err := tm.InitReplica(t.Context(), parent, position, 0, false)
+		require.ErrorIs(t, err, stopErr)
+		require.Zero(t, fakeMysqlDaemon.ExpectedExecuteSuperQueryCurrent)
+	})
+
+	t.Run("reading the executed position fails", func(t *testing.T) {
+		tm, fakeMysqlDaemon, parent := setup(t, "")
+		readErr := errors.New("executed position unavailable")
+		fakeMysqlDaemon.PrimaryPositionError = readErr
+		fakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA"}
+
+		err := tm.InitReplica(t.Context(), parent, position, 0, false)
+		require.ErrorIs(t, err, readErr)
 		require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
 	})
 }
