@@ -2705,7 +2705,7 @@ func (s *Server) DeleteShard(ctx context.Context, keyspace, shard string, recurs
 func (s *Server) updateShardRecords(ctx context.Context, keyspace string, shards []*topo.ShardInfo, cells []string,
 	servedType topodatapb.TabletType, isFrom bool, clearSourceShards bool, logger logutil.Logger,
 ) (err error) {
-	return topotools.UpdateShardRecords(ctx, s.ts, s.tmc, keyspace, shards, cells, servedType, isFrom, clearSourceShards, logger)
+	return topotools.UpdateShardRecords(ctx, s.ts, s.tmc, keyspace, shards, cells, servedType, isFrom, clearSourceShards, shardTabletRefreshTimeout, logger)
 }
 
 // refreshPrimaryTablets will just RPC-ping all the primary tablets with RefreshState
