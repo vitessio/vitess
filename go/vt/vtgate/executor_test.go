@@ -44,9 +44,11 @@ import (
 
 	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
 
+	"vitess.io/vitess/go/cache/theine"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/discovery"
@@ -57,6 +59,8 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vtgate/buffer"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/logstats"
@@ -138,6 +142,52 @@ func TestPlanKey(t *testing.T) {
 			require.Equal(t, tc.expectedPlanPrefixKey, key.DebugString(), "test case %d", i)
 		})
 	}
+}
+
+func TestPlanCacheKeyspaceDestinationBoundary(t *testing.T) {
+	ctx := t.Context()
+	cell := "aa"
+	ts := memorytopo.NewServer(ctx, cell)
+	t.Cleanup(ts.Close)
+	srvKeyspace, err := createUnshardedKeyspace()
+	require.NoError(t, err)
+	vschema := &vschemapb.SrvVSchema{Keyspaces: map[string]*vschemapb.Keyspace{}}
+	for _, name := range []string{"ks", "ks0"} {
+		require.NoError(t, ts.CreateKeyspace(ctx, name, &topodatapb.Keyspace{}))
+		require.NoError(t, ts.UpdateSrvKeyspace(ctx, cell, name, srvKeyspace))
+		vschema.Keyspaces[name] = &vschemapb.Keyspace{Tables: map[string]*vschemapb.Table{"user": {}}}
+	}
+	require.NoError(t, ts.UpdateSrvVSchema(ctx, cell, vschema))
+	serv := srvtopo.NewResilientServer(ctx, ts, stats.NewCountersWithSingleLabel("", "", "type"))
+	hc := discovery.NewFakeHealthCheck(nil)
+	ksConn := hc.AddTestTablet(cell, "ks", 1, "ks", "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
+	ks0Conn := hc.AddTestTablet(cell, "ks0", 1, "ks0", "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
+	resolver := newTestResolver(ctx, hc, serv, cell)
+	plans := theine.NewStore[PlanCacheKey, *engine.Plan](queryPlanCacheMemory, true)
+	executor := NewExecutor(ctx, vtenv.NewTestEnv(), serv, cell, resolver, createExecutorConfig(), false, plans, nil, querypb.ExecuteOptions_Gen4, NewDynamicViperConfig())
+	executor.SetQueryLogger(streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize))
+	t.Cleanup(executor.Close)
+	require.True(t, assert.Eventually(t, func() bool {
+		return executor.VSchema() != nil
+	}, 30*time.Second, time.Millisecond))
+
+	query := "select id from user"
+	first := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "ks0@primary", Autocommit: true})
+	require.True(t, assert.Eventually(t, func() bool {
+		_, err := executor.Execute(ctx, nil, "Execute", first, query, nil, false)
+		return err == nil && plans.Metrics.Hits() > 0
+	}, 30*time.Second, time.Millisecond))
+	firstQueries := len(ks0Conn.Queries)
+	require.Positive(t, firstQueries)
+
+	want := sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "42")
+	ksConn.SetResults([]*sqltypes.Result{want})
+	second := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "ks[deadbeef]@primary", Autocommit: true})
+	got, err := executor.Execute(ctx, nil, "Execute", second, query, nil, false)
+	require.NoError(t, err)
+	assert.Equal(t, want, got)
+	assert.Len(t, ksConn.Queries, 1)
+	assert.Len(t, ks0Conn.Queries, firstQueries)
 }
 
 func TestExecutorResultsExceeded(t *testing.T) {
