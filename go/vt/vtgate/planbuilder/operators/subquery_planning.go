@@ -98,7 +98,7 @@ func settleSubqueries(ctx *plancontext.PlanningContext, op Operator) Operator {
 			}
 		case *Aggregator:
 			for _, aggr := range op.Aggregations {
-				newExpr, rewritten := rewriteMergedSubqueryExpr(ctx, aggr.SubQueryExpression, aggr.Original.Expr)
+				newExpr, rewritten := settleSubqueryExpr(ctx, aggr.SubQueryExpression, aggr.Original.Expr)
 				if rewritten {
 					aggr.Original.Expr = newExpr
 					op.Columns[aggr.ColOffset].Expr = newExpr
@@ -141,10 +141,48 @@ func mergeSubqueryExpr(ctx *plancontext.PlanningContext, pe *ProjExpr) {
 	if !ok {
 		return
 	}
-	newExpr, rewritten := rewriteMergedSubqueryExpr(ctx, se, pe.EvalExpr)
+	newExpr, rewritten := settleSubqueryExpr(ctx, se, pe.EvalExpr)
 	if rewritten {
 		pe.EvalExpr = newExpr
 	}
+}
+
+// settleSubqueryExpr rewrites the subqueries that an expression uses: back into the expression for those that
+// were merged, and into a row of arguments for value subqueries that were pulled out with rows of more than one
+// column.
+func settleSubqueryExpr(ctx *plancontext.PlanningContext, se SubQueryExpression, expr sqlparser.Expr) (sqlparser.Expr, bool) {
+	expr, merged := rewriteMergedSubqueryExpr(ctx, se, expr)
+	expr, expanded := expandRowSubqueryArgs(ctx, se, expr)
+	return expr, merged || expanded
+}
+
+// expandRowSubqueryArgs replaces the placeholder of each pulled-out value subquery whose row has more than one
+// column with a row of arguments, one per column, since a single argument can't hold a row.
+func expandRowSubqueryArgs(ctx *plancontext.PlanningContext, se SubQueryExpression, expr sqlparser.Expr) (sqlparser.Expr, bool) {
+	rewritten := false
+	for _, sq := range se {
+		if sq.FilterType != opcode.PulloutValue || sq.isMerged(ctx) || sq.RowColumns() <= 1 {
+			continue
+		}
+		expr = sqlparser.Rewrite(expr, nil, func(cursor *sqlparser.Cursor) bool {
+			switch node := cursor.Node().(type) {
+			case *sqlparser.ColName:
+				if !node.Qualifier.IsEmpty() || node.Name.String() != sq.ArgName {
+					return true
+				}
+			case *sqlparser.Argument:
+				if node.Name != sq.ArgName {
+					return true
+				}
+			default:
+				return true
+			}
+			cursor.Replace(sq.rowArguments(ctx))
+			rewritten = true
+			return false
+		}).(sqlparser.Expr)
+	}
+	return expr, rewritten
 }
 
 func rewriteMergedSubqueryExpr(ctx *plancontext.PlanningContext, se SubQueryExpression, expr sqlparser.Expr) (sqlparser.Expr, bool) {
