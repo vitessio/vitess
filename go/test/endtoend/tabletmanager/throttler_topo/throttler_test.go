@@ -587,23 +587,21 @@ func TestNoReplicas(t *testing.T) {
 		// RDONLY. While its apps check it, the RDONLY tablet renews them by stimulating the primary every half
 		// lease. Otherwise its heartbeats stop within a lease of the last renewal, and its lag grows past the
 		// threshold while the primary is idle.
-		check := func() *vtctldatapb.CheckThrottlerResponse {
+		// The conditions run off the test goroutine, so they report errors with assert, not require.
+		checkOK := func() bool {
 			resp, err := throttler.CheckThrottler(&clusterInstance.VtctldClientProcess, replicaTablet, throttlerapp.VStreamerName, nil)
-			require.NoError(t, err)
-			return resp
-		}
-		// The heartbeats may be stale when the checks start: wait for the first renewal.
-		require.Eventually(t, func() bool {
-			return check().Check.ResponseCode == tabletmanagerdatapb.CheckThrottlerResponseCode_OK
-		}, throttlerEnabledTimeout, time.Second)
-		assert.Never(t, func() bool {
-			resp := check()
+			if !assert.NoError(t, err) {
+				return false
+			}
 			if resp.Check.ResponseCode != tabletmanagerdatapb.CheckThrottlerResponseCode_OK {
 				t.Logf("RDONLY tablet throttled vstreamer: %+v", resp.Check)
-				return true
+				return false
 			}
-			return false
-		}, 4*onDemandHeartbeatDuration, 500*time.Millisecond)
+			return true
+		}
+		// The heartbeats may be stale when the checks start: wait for the first renewal.
+		require.Eventually(t, checkOK, throttlerEnabledTimeout, time.Second)
+		assert.Never(t, func() bool { return !checkOK() }, 4*onDemandHeartbeatDuration, 500*time.Millisecond)
 	})
 	t.Run("VStream from RDONLY tablet flows", func(t *testing.T) {
 		ctx := t.Context()
