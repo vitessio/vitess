@@ -52,7 +52,7 @@ func TestAddQueryHint(t *testing.T) {
 		{
 			comments:  Comments{"/* toto */", "/*+ SET_VAR(bb) */"},
 			queryHint: "SET_VAR(aa)",
-			expected:  Comments{"/*+ SET_VAR(bb) SET_VAR(aa) */", "/* toto */"},
+			expected:  Comments{"/*+ SET_VAR(aa) SET_VAR(bb) */", "/* toto */"},
 		},
 		{
 			comments:  Comments{"/* toto */", "/*+ SET_VAR(bb) "},
@@ -65,24 +65,24 @@ func TestAddQueryHint(t *testing.T) {
 			// one is kept as it is.
 			comments:  Comments{"/* toto */", "/*+ SET_VAR(bb) */", "/*+ SET_VAR(cc) */"},
 			queryHint: "SET_VAR(aa)",
-			expected:  Comments{"/*+ SET_VAR(bb) SET_VAR(aa) */", "/* toto */", "/*+ SET_VAR(cc) */"},
+			expected:  Comments{"/*+ SET_VAR(aa) SET_VAR(bb) */", "/* toto */", "/*+ SET_VAR(cc) */"},
 		},
 		{
 			comments:  Comments{"/*+ MAX_EXECUTION_TIME(100) */", "/*+ NO_BKA(t) */"},
 			queryHint: "SET_VAR(aa)",
-			expected:  Comments{"/*+ MAX_EXECUTION_TIME(100) SET_VAR(aa) */", "/*+ NO_BKA(t) */"},
+			expected:  Comments{"/*+ SET_VAR(aa) MAX_EXECUTION_TIME(100) */", "/*+ NO_BKA(t) */"},
 		},
 		{
 			// the hint in a later comment is not honored, so it still joins the first
 			comments:  Comments{"/*+ SET_VAR(bb) */", "/*+ SET_VAR(aa) */"},
 			queryHint: "SET_VAR(aa)",
-			expected:  Comments{"/*+ SET_VAR(bb) SET_VAR(aa) */", "/*+ SET_VAR(aa) */"},
+			expected:  Comments{"/*+ SET_VAR(aa) SET_VAR(bb) */", "/*+ SET_VAR(aa) */"},
 		},
 		{
 			// a later hint comment is kept as it is, so it is not checked for its end
 			comments:  Comments{"/*+ SET_VAR(bb) */", "/*+ SET_VAR(cc) "},
 			queryHint: "SET_VAR(aa)",
-			expected:  Comments{"/*+ SET_VAR(bb) SET_VAR(aa) */", "/*+ SET_VAR(cc) "},
+			expected:  Comments{"/*+ SET_VAR(aa) SET_VAR(bb) */", "/*+ SET_VAR(cc) "},
 		},
 		{
 			comments:  Comments{"/*+ SET_VAR(bb) ", "/*+ SET_VAR(cc) */"},
@@ -93,6 +93,36 @@ func TestAddQueryHint(t *testing.T) {
 			comments:  Comments{"/*+ SET_VAR(bb) */"},
 			queryHint: "SET_VAR(bb)",
 			expected:  Comments{"/*+ SET_VAR(bb) */"},
+		},
+		{
+			// MySQL stops reading a hint comment at its first syntax error, so the
+			// query hint goes ahead of a malformed hint written by the client.
+			comments:  Comments{"/*+ BOGUS_HINT(x) */"},
+			queryHint: "SET_VAR(aa)",
+			expected:  Comments{"/*+ SET_VAR(aa) BOGUS_HINT(x) */"},
+		},
+		{
+			// a comment that starts with the query hint has it merged already
+			comments:  Comments{"/*+ SET_VAR(aa) BOGUS_HINT(x) */"},
+			queryHint: "SET_VAR(aa)",
+			expected:  Comments{"/*+ SET_VAR(aa) BOGUS_HINT(x) */"},
+		},
+		{
+			// the comment's own SET_VAR wins, so the query hint leaves that variable out
+			comments:  Comments{"/*+ SET_VAR(AA = 1) BKA(t) */"},
+			queryHint: "SET_VAR(aa = 2) SET_VAR(bb = 3)",
+			expected:  Comments{"/*+ SET_VAR(bb = 3) SET_VAR(AA = 1) BKA(t) */"},
+		},
+		{
+			// the comment sets every variable of the query hint
+			comments:  Comments{"/*+ SET_VAR(bb = 1) SET_VAR(aa = 1) */"},
+			queryHint: "SET_VAR(aa = 2) SET_VAR(bb = 3)",
+			expected:  Comments{"/*+ SET_VAR(bb = 1) SET_VAR(aa = 1) */"},
+		},
+		{
+			comments:  Comments{"/*+ */"},
+			queryHint: "SET_VAR(aa)",
+			expected:  Comments{"/*+ SET_VAR(aa) */"},
 		},
 	}
 
