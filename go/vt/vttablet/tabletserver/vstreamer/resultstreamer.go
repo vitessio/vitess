@@ -19,6 +19,7 @@ package vstreamer
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -100,8 +101,7 @@ func (rs *resultStreamer) Stream() error {
 
 	response := &binlogdatapb.VStreamResultsResponse{}
 	byteCount := 0
-	loggerName := fmt.Sprintf("%s (%v)", rs.vse.GetTabletInfo(), rs.tableName)
-	logger := logutil.NewThrottledLogger(loggerName, throttledLoggerInterval)
+	logger := logutil.NewThrottledLogger(rs.vse.GetTabletInfo(), throttledLoggerInterval)
 	for {
 		select {
 		case <-rs.ctx.Done():
@@ -111,7 +111,7 @@ func (rs *resultStreamer) Stream() error {
 
 		// check throttler.
 		if _, ok := rs.vse.throttlerClient.ThrottleCheckOKOrWaitAppName(rs.ctx, throttlerapp.ResultStreamerName); !ok {
-			logger.Infof("throttled.")
+			logger.Info("resultstreamer throttled", slog.String("table", rs.tableName.String()))
 			continue
 		}
 

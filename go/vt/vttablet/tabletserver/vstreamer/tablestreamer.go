@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"sync/atomic"
 
@@ -28,6 +29,7 @@ import (
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
+	"vitess.io/vitess/go/vt/vterrors"
 	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 
@@ -118,7 +120,10 @@ func (ts *tableStreamer) Stream() error {
 	if _, err := conn.ExecuteFetch(fmt.Sprintf("set @@session.net_write_timeout = %v", ts.config.NetWriteTimeout), 1, false); err != nil {
 		return err
 	}
-	log.Info(fmt.Sprintf("TableStreamer Stream() started with net read_timeout: %v, net write_timeout: %v", ts.config.NetReadTimeout, ts.config.NetWriteTimeout))
+	log.Info("TableStreamer Stream() started",
+		slog.Int("net_read_timeout", ts.config.NetReadTimeout),
+		slog.Int("net_write_timeout", ts.config.NetWriteTimeout),
+	)
 
 	rs, err := conn.ExecuteFetch("show full tables", -1, true)
 	if err != nil {
@@ -131,21 +136,28 @@ func (ts *tableStreamer) Stream() error {
 			continue
 		}
 		if schema2.IsInternalOperationTableName(tableName) {
-			log.Info("Skipping internal table " + tableName)
+			log.Info("Skipping internal table", slog.String("table", tableName))
 			continue
 		}
 		ts.tables = append(ts.tables, tableName)
 	}
-	log.Info(fmt.Sprintf("Found %d tables to stream: %s", len(ts.tables), strings.Join(ts.tables, ", ")))
+	log.Info("Found tables to stream",
+		slog.Int("table_count", len(ts.tables)),
+		slog.String("tables", strings.Join(ts.tables, ", ")),
+	)
 	for _, tableName := range ts.tables {
-		log.Info("Streaming table " + tableName)
+		log.Info("Streaming table", slog.String("table", tableName))
 		if err := ts.streamTable(ts.ctx, tableName); err != nil {
-			log.Error(fmt.Sprintf("Streaming table %s failed: %v", tableName, err))
+			log.Error("Streaming table failed",
+				slog.String("table", tableName),
+				slog.String("error_code", vterrors.Code(err).String()),
+				slog.Any("error", err),
+			)
 			return err
 		}
-		log.Info("Finished streaming table " + tableName)
+		log.Info("Finished streaming table", slog.String("table", tableName))
 	}
-	log.Info(fmt.Sprintf("Finished streaming %d tables", len(ts.tables)))
+	log.Info("Finished streaming tables", slog.Int("table_count", len(ts.tables)))
 	return nil
 }
 
