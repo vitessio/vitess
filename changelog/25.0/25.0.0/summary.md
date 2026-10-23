@@ -46,6 +46,7 @@
         - [New `VEXPLAIN MYSQLPLAN` statement](#vtgate-vexplain-mysqlplan)
         - [VStream metrics report live streams and can include the caller](#vtgate-vstream-metrics)
     - **[Reparent](#minor-changes-reparent)**
+        - [TabletManager adds fused reparent RPCs](#fused-tablet-reparent-rpcs)
         - [`EmergencyReparentShard` no longer waits on replicas that cannot win the election](#ers-lagging-relay-log-wait)
         - [`EmergencyReparentShard` can explicitly recover from split brain](#ers-allow-split-brain-promotion)
         - [Reparent candidate ordering now respects partially ordered GTID histories](#reparent-gtid-candidate-ordering)
@@ -519,6 +520,10 @@ Like a plain `EXPLAIN`, the per-shard `EXPLAIN FORMAT=JSON` queries `VEXPLAIN MY
 The new `--vstream-metrics-include-caller` flag adds a `CallerID` label to `VStreamsCreated`, `VStreamsCount`, `VStreamsEventsStreamed`, `VStreamsEndedWithErrors`, `VStreamsLag`, and `VStreamsTransactionsChunked`, so each streaming application can be monitored separately. The label is set to the principal of the effective caller ID in the `VStreamRequest`, or to the MySQL user for SQL `VSTREAM`; streams without one get an empty `CallerID`. The `VStreamRequest` principal is set by the client and is not authenticated by VTGate. Each distinct principal adds a series per keyspace, shard, and tablet type, and the counters keep their series until VTGate restarts, so the number of series grows with the distinct principals seen over the process lifetime, not only those of open streams. For example, if each client instance sets its own principal, the number of series grows with every instance that has connected, so consider the cardinality before enabling the flag. The flag is off by default, and the metrics keep their existing labels when it is off.
 
 ### <a id="minor-changes-reparent"/>Reparent</a>
+
+#### <a id="fused-tablet-reparent-rpcs"/>TabletManager adds fused reparent RPCs</a>
+
+vttablet now serves two additive `TabletManager` RPCs, `PrepareEmergencyReparent` and `PromoteReplicaAndJournal`. They fuse the tablet-local steps of an emergency reparent (stop the I/O thread, apply relay logs, read the reparent journal) and of promotion (promote, write the journal row) so future orchestrators need fewer round trips. Nothing calls them yet: `EmergencyReparentShard`, `PlannedReparentShard`, and VTOrc keep their existing RPCs in v25. See [#21156](https://github.com/vitessio/vitess/issues/21156) for the staged rollout.
 
 #### <a id="ers-lagging-relay-log-wait"/>`EmergencyReparentShard` no longer waits on replicas that cannot win the election</a>
 

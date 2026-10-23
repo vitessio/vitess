@@ -229,6 +229,17 @@ func (mysqld *Mysqld) StopIOThread(ctx context.Context) error {
 	return mysqld.executeSuperQueryListConn(ctx, conn, []string{conn.Conn.StopIOThreadCommand()})
 }
 
+// StartIOThread starts a replica's IO thread only.
+func (mysqld *Mysqld) StartIOThread(ctx context.Context) error {
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
+	if err != nil {
+		return err
+	}
+	defer conn.Recycle()
+
+	return mysqld.executeSuperQueryListConn(ctx, conn, []string{conn.Conn.StartIOThreadCommand()})
+}
+
 // prepareReplicaForShutdown places a replica in a crash-safe state before
 // shutdown. It calls onStateCaptured with the recorded pre-change state right
 // before it starts mutating anything, so that a caller abandoning a
