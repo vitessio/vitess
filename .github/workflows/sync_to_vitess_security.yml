@@ -75,7 +75,8 @@ jobs:
           auth="$(printf 'x-access-token:%s' "${APP_TOKEN}" | base64 -w0)"
           echo "::add-mask::${auth}"
 
-          # Deliberately no force: if vitess-security has commits that are not in vitess (an in-flight security fix),
-          # the push of that branch is rejected and this job fails instead of discarding them.
+          # Deliberately no force: fixes are staged and verified on other branches in vitess-security and never merged
+          # into the mirrored ones. If a mirrored branch has commits that are not in vitess anyway, its push is rejected
+          # and this job fails instead of discarding them.
           git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth}" \
             push https://github.com/vitessio/vitess-security.git "${refspecs[@]}"
