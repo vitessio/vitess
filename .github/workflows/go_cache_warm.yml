@@ -13,14 +13,6 @@ on:
       - "release-[0-9]+.[0-9]"
   workflow_dispatch:
 
-# Runs of one branch go one at a time, so that a run never deletes the entries
-# of a newer one. A new push replaces a run that is still waiting, but never
-# cancels one in progress: runs can wait long for the Oracle VMs, and during a
-# burst of pushes cancelling would keep the slower entries from being saved.
-concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Warm Go caches')
-  cancel-in-progress: false
-
 permissions:
   contents: read
 
@@ -30,6 +22,12 @@ jobs:
   modules:
     name: "Warm Go module cache (${{ matrix.set }})"
     if: github.repository == 'vitessio/vitess'
+    # The jobs of one module set on one branch go one at a time, in push
+    # order, so that a job never deletes the entry of a newer one. A new push
+    # replaces a job that is still waiting, but never cancels one in progress.
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}-modules-${{ matrix.set }}
+      cancel-in-progress: false
     permissions:
       contents: read
       # To delete the entries this run supersedes.
@@ -132,6 +130,16 @@ jobs:
     if: github.repository == 'vitessio/vitess'
     # Restores the module cache entries the modules job just saved.
     needs: modules
+    # Likewise one at a time per entry and architecture, so that an entry
+    # does not wait for the slowest leg of the previous run. A new push never
+    # cancels a leg in progress: legs can wait long for the Oracle VMs, and
+    # during a burst of pushes cancelling would keep the slower entries from
+    # being saved. The legs still start in push order: a leg waits for every
+    # module job of its run, and each of those starts only after the previous
+    # run's job for the same set has finished.
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}-build-${{ matrix.entry }}-${{ matrix.arch }}
+      cancel-in-progress: false
     permissions:
       contents: read
       # To delete the entries this run supersedes.
