@@ -62,6 +62,15 @@ func init() {
 	}
 }
 
+// BackupStream is the stream of messages returned by a Backup RPC, used instead
+// of logutil.EventStream so the manifest and status can be surfaced to callers.
+// Each message is a log event emitted during the backup, except that a request
+// with IncludeOutcome set ends with a terminal message carrying the backup's
+// raw MANIFEST JSON, its name and its Status, and no Event.
+type BackupStream interface {
+	Recv() (*tabletmanagerdatapb.BackupResponse, error)
+}
+
 // TabletManagerClient defines the interface used to talk to a remote tablet
 type TabletManagerClient interface {
 	//
@@ -287,8 +296,11 @@ type TabletManagerClient interface {
 	// Backup / restore related methods
 	//
 
-	// Backup creates a database backup
-	Backup(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.BackupRequest) (logutil.EventStream, error)
+	// Backup creates a database backup. The returned stream yields log-event
+	// messages during the backup and, if req.IncludeOutcome is set, a terminal
+	// message carrying the backup's MANIFEST and outcome status (see
+	// BackupStream).
+	Backup(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.BackupRequest) (BackupStream, error)
 
 	// RestoreFromBackup deletes local data and restores database from backup
 	RestoreFromBackup(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.RestoreFromBackupRequest) (logutil.EventStream, error)

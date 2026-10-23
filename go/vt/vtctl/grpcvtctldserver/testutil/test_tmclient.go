@@ -192,6 +192,11 @@ type TabletManagerClient struct {
 		EventInterval time.Duration
 		EventJitter   time.Duration
 		ErrorAfter    time.Duration
+		// Manifest and Status are sent as the terminal Backup stream message
+		// after all Events when the request sets IncludeOutcome, mirroring a
+		// real tablet.
+		Manifest string
+		Status   tabletmanagerdatapb.BackupResponse_Status
 	}
 	// BackupRequests records the requests received by Backup, keyed by tablet alias.
 	BackupRequests map[string]*tabletmanagerdatapb.BackupRequest
@@ -414,10 +419,10 @@ type TabletManagerClient struct {
 
 type backupStreamAdapter struct {
 	*grpcshim.BidiStream
-	ch chan *logutilpb.Event
+	ch chan *tabletmanagerdatapb.BackupResponse
 }
 
-func (stream *backupStreamAdapter) Recv() (*logutilpb.Event, error) {
+func (stream *backupStreamAdapter) Recv() (*tabletmanagerdatapb.BackupResponse, error) {
 	select {
 	case <-stream.Context().Done():
 		return nil, stream.Context().Err()
@@ -430,7 +435,7 @@ func (stream *backupStreamAdapter) Recv() (*logutilpb.Event, error) {
 	}
 }
 
-func (stream *backupStreamAdapter) Send(msg *logutilpb.Event) error {
+func (stream *backupStreamAdapter) Send(msg *tabletmanagerdatapb.BackupResponse) error {
 	select {
 	case <-stream.Context().Done():
 		return stream.Context().Err()
@@ -446,7 +451,7 @@ func (stream *backupStreamAdapter) Send(msg *logutilpb.Event) error {
 var backupRequestsLock sync.Mutex
 
 // Backup is part of the tmclient.TabletManagerClient interface.
-func (fake *TabletManagerClient) Backup(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.BackupRequest) (logutil.EventStream, error) {
+func (fake *TabletManagerClient) Backup(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.BackupRequest) (tmclient.BackupStream, error) {
 	if tablet.Type == topodatapb.TabletType_PRIMARY && !req.AllowPrimary {
 		return nil, errors.New("cannot backup primary with allowPrimary=false")
 	}
@@ -466,7 +471,7 @@ func (fake *TabletManagerClient) Backup(ctx context.Context, tablet *topodatapb.
 
 	stream := &backupStreamAdapter{
 		BidiStream: grpcshim.NewBidiStream(ctx),
-		ch:         make(chan *logutilpb.Event, len(testdata.Events)),
+		ch:         make(chan *tabletmanagerdatapb.BackupResponse, len(testdata.Events)+1),
 	}
 	go func() {
 		if testdata.EventInterval == 0 {
@@ -505,8 +510,15 @@ func (fake *TabletManagerClient) Backup(ctx context.Context, tablet *topodatapb.
 		defer stream.CloseWithError(nil)
 
 		for _, event := range testdata.Events {
-			stream.ch <- event
+			stream.ch <- &tabletmanagerdatapb.BackupResponse{Event: event}
 			<-ticker.C
+		}
+
+		if req.IncludeOutcome {
+			stream.ch <- &tabletmanagerdatapb.BackupResponse{
+				Manifest: testdata.Manifest,
+				Status:   testdata.Status,
+			}
 		}
 
 		// Wait for the error goroutine to finish. Note that if ErrorAfter

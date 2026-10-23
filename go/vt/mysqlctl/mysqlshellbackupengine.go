@@ -259,6 +259,9 @@ func (be *MySQLShellBackupEngine) ExecuteBackup(ctx context.Context, params Back
 	if _, err := mwc.Write([]byte(data)); err != nil {
 		return BackupUnusable, vterrors.Wrapf(err, "cannot write %v", backupManifestFileName)
 	}
+	if params.ManifestOut != nil {
+		*params.ManifestOut = string(data)
+	}
 
 	params.Logger.Infof("Backup completed")
 	return BackupUsable, nil

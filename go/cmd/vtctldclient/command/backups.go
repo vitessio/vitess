@@ -17,9 +17,11 @@ limitations under the License.
 package command
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 	"time"
 
@@ -35,22 +37,38 @@ import (
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
+// backupOutputHelp documents the backup output modes. It is shared by the
+// Backup and BackupShard long descriptions, which behave identically here.
+const backupOutputHelp = `With --json, log events are written to stderr and, once the backup completes, a JSON
+object with its outcome status ("USABLE", "EMPTY", or "UNKNOWN"), its name, and its
+MANIFEST is printed to stdout. An incremental backup that finds no new data to back up
+reports "EMPTY"; it is still a success. The status is "UNKNOWN" if the vtctld or tablet
+predates this output. Without --json, log events are written to stdout.`
+
+// backupJSONFlagHelp is the --json flag usage, shared by Backup and BackupShard.
+const backupJSONFlagHelp = "Output, on completion, the backup's outcome status, name and MANIFEST as JSON on stdout (log events go to stderr)."
+
 var (
 	// Backup makes a Backup gRPC call to a vtctld.
 	Backup = &cobra.Command{
-		Use:                   "Backup [--concurrency <concurrency>] [--allow-primary] [--incremental-from-pos=<pos>|<backup-name>|auto] [--upgrade-safe] [--backup-engine=enginename] [--include-binlogs] <tablet_alias>",
-		Short:                 "Uses the BackupStorage service on the given tablet to create and store a new backup.",
+		Use:   "Backup [--concurrency <concurrency>] [--allow-primary] [--incremental-from-pos=<pos>|<backup-name>|auto] [--upgrade-safe] [--backup-engine=enginename] [--include-binlogs] [--json] <tablet_alias>",
+		Short: "Uses the BackupStorage service on the given tablet to create and store a new backup.",
+		Long: `Uses the BackupStorage service on the given tablet to create and store a new backup.
+
+` + backupOutputHelp,
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.ExactArgs(1),
 		RunE:                  commandBackup,
 	}
 	// BackupShard makes a BackupShard gRPC call to a vtctld.
 	BackupShard = &cobra.Command{
-		Use:   "BackupShard [--concurrency <concurrency>] [--allow-primary] [--incremental-from-pos=<pos>|<backup-name>|auto] [--upgrade-safe] [--include-binlogs] <keyspace/shard>",
+		Use:   "BackupShard [--concurrency <concurrency>] [--allow-primary] [--incremental-from-pos=<pos>|<backup-name>|auto] [--upgrade-safe] [--include-binlogs] [--json] <keyspace/shard>",
 		Short: "Finds the most up-to-date REPLICA, RDONLY, or SPARE tablet in the given shard and uses the BackupStorage service on that tablet to create and store a new backup.",
 		Long: `Finds the most up-to-date REPLICA, RDONLY, or SPARE tablet in the given shard and uses the BackupStorage service on that tablet to create and store a new backup.
 
-If no replica-type tablet can be found, the backup can be taken on the primary if --allow-primary is specified.`,
+If no replica-type tablet can be found, the backup can be taken on the primary if --allow-primary is specified.
+
+` + backupOutputHelp,
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.ExactArgs(1),
 		RunE:                  commandBackupShard,
@@ -93,6 +111,7 @@ var backupOptions = struct {
 	InitSQLTimeout       time.Duration
 	InitSQLFailOnError   bool
 	IncludeBinlogs       bool
+	OutputJSON           bool
 }{}
 
 func validateBackupOptions() error {
@@ -132,6 +151,7 @@ func commandBackup(cmd *cobra.Command, args []string) error {
 			Timeout:     protoutil.DurationToProto(backupOptions.InitSQLTimeout),
 			FailOnError: backupOptions.InitSQLFailOnError,
 		},
+		IncludeOutcome: backupOptions.OutputJSON,
 	}
 
 	if backupOptions.BackupEngine != "" {
@@ -143,17 +163,7 @@ func commandBackup(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	for {
-		resp, err := stream.Recv()
-		switch err {
-		case nil:
-			fmt.Printf("%s/%s (%s): %v\n", resp.Keyspace, resp.Shard, topoproto.TabletAliasString(resp.TabletAlias), resp.Event)
-		case io.EOF:
-			return nil
-		default:
-			return err
-		}
-	}
+	return consumeBackupStream(stream, backupOptions.OutputJSON, os.Stdout, os.Stderr)
 }
 
 var backupShardOptions = struct {
@@ -163,6 +173,7 @@ var backupShardOptions = struct {
 	UpgradeSafe          bool
 	MysqlShutdownTimeout time.Duration
 	IncludeBinlogs       bool
+	OutputJSON           bool
 }{}
 
 func commandBackupShard(cmd *cobra.Command, args []string) error {
@@ -191,21 +202,115 @@ func commandBackupShard(cmd *cobra.Command, args []string) error {
 			Timeout:     protoutil.DurationToProto(backupOptions.InitSQLTimeout),
 			FailOnError: backupOptions.InitSQLFailOnError,
 		},
+		IncludeOutcome: backupShardOptions.OutputJSON,
 	})
 	if err != nil {
 		return err
 	}
 
+	return consumeBackupStream(stream, backupShardOptions.OutputJSON, os.Stdout, os.Stderr)
+}
+
+// backupResponseStream is the common Recv interface of the Backup and
+// BackupShard client streams.
+type backupResponseStream interface {
+	Recv() (*vtctldatapb.BackupResponse, error)
+}
+
+// backupJSONOutput is the structure printed to stdout by Backup/BackupShard in
+// --json mode.
+type backupJSONOutput struct {
+	// Status is the terminal outcome: "USABLE", "EMPTY", or "UNKNOWN".
+	Status string `json:"status"`
+	// BackupName is typed separately from the manifest because some engines do
+	// not record a name in their MANIFEST at all. Empty for an empty backup.
+	BackupName string `json:"backup_name"`
+	// Manifest is null for an empty backup, for an engine that does not report
+	// it, or when talking to an older server that does not return it.
+	Manifest json.RawMessage `json:"manifest"`
+}
+
+// consumeBackupStream reads all messages from a backup stream. Log events are
+// written to errOut in JSON mode (keeping out clean for the final JSON object)
+// and to out otherwise. On completion, in JSON mode, it prints the outcome
+// carried by the terminal message.
+func consumeBackupStream(stream backupResponseStream, outputJSON bool, out, errOut io.Writer) error {
+	var (
+		manifest   string
+		backupName string
+		status     = tabletmanagerdatapb.BackupResponse_STATUS_UNSPECIFIED
+	)
+
 	for {
 		resp, err := stream.Recv()
 		switch err {
 		case nil:
-			fmt.Printf("%s/%s (%s): %v\n", resp.Keyspace, resp.Shard, topoproto.TabletAliasString(resp.TabletAlias), resp.Event)
+			if resp.Event != nil {
+				line := fmt.Sprintf("%s/%s (%s): %v\n", resp.Keyspace, resp.Shard, topoproto.TabletAliasString(resp.TabletAlias), resp.Event)
+				if outputJSON {
+					fmt.Fprint(errOut, line)
+				} else {
+					fmt.Fprint(out, line)
+				}
+			}
+			if resp.Manifest != "" {
+				manifest = resp.Manifest
+			}
+			if resp.BackupName != "" {
+				backupName = resp.BackupName
+			}
+			if resp.Status != tabletmanagerdatapb.BackupResponse_STATUS_UNSPECIFIED {
+				status = resp.Status
+			}
 		case io.EOF:
-			return nil
+			return printBackupResult(out, errOut, outputJSON, manifest, backupName, status)
 		default:
 			return err
 		}
+	}
+}
+
+// printBackupResult writes the backup's outcome to out. Machine-readable output
+// is emitted only in --json mode; in the default (text) mode nothing is printed
+// here, so the command's output stays identical to prior releases (progress is
+// already streamed as log events).
+func printBackupResult(out, errOut io.Writer, outputJSON bool, manifest, backupName string, status tabletmanagerdatapb.BackupResponse_Status) error {
+	if !outputJSON {
+		return nil
+	}
+
+	// The manifest is inlined as raw JSON so engine-specific fields survive
+	// verbatim. If it is not valid JSON -- a corrupt or truncated read, or a
+	// third-party engine that does not write JSON -- inlining it would make
+	// MarshalIndent fail and turn a successful backup into a failed command.
+	// Fall back to a null manifest so the outcome status is still reported.
+	raw := json.RawMessage("null")
+	if json.Valid([]byte(manifest)) {
+		raw = json.RawMessage(manifest)
+	} else if manifest != "" {
+		fmt.Fprintf(errOut, "warning: backup MANIFEST is not valid JSON; reporting status only\n")
+	}
+	data, err := json.MarshalIndent(backupJSONOutput{
+		Status:     backupStatusString(status),
+		BackupName: backupName,
+		Manifest:   raw,
+	}, "", "  ")
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(out, "%s\n", data)
+	return nil
+}
+
+// backupStatusString renders a backup status for human/JSON output.
+func backupStatusString(status tabletmanagerdatapb.BackupResponse_Status) string {
+	switch status {
+	case tabletmanagerdatapb.BackupResponse_USABLE:
+		return "USABLE"
+	case tabletmanagerdatapb.BackupResponse_EMPTY:
+		return "EMPTY"
+	default:
+		return "UNKNOWN"
 	}
 }
 
@@ -341,6 +446,7 @@ func init() {
 	Backup.Flags().BoolVar(&backupOptions.UpgradeSafe, "upgrade-safe", false, "Whether to use innodb_fast_shutdown=0 for the backup so it is safe to use for MySQL upgrades.")
 	Backup.Flags().BoolVar(&backupOptions.IncludeBinlogs, "include-binlogs", false, "Include the source's binary logs in a full builtin backup. Restores use them automatically.")
 	Backup.Flags().DurationVar(&backupOptions.MysqlShutdownTimeout, "mysql-shutdown-timeout", mysqlctl.DefaultShutdownTimeout, "Timeout to use when MySQL is being shut down.")
+	Backup.Flags().BoolVarP(&backupOptions.OutputJSON, "json", "j", false, backupJSONFlagHelp)
 	addInitSQLFlags(Backup)
 	Root.AddCommand(Backup)
 
@@ -350,6 +456,7 @@ func init() {
 	BackupShard.Flags().BoolVar(&backupShardOptions.UpgradeSafe, "upgrade-safe", false, "Whether to use innodb_fast_shutdown=0 for the backup so it is safe to use for MySQL upgrades.")
 	BackupShard.Flags().BoolVar(&backupShardOptions.IncludeBinlogs, "include-binlogs", false, "Include the source's binary logs in a full builtin backup. Restores use them automatically.")
 	BackupShard.Flags().DurationVar(&backupShardOptions.MysqlShutdownTimeout, "mysql-shutdown-timeout", mysqlctl.DefaultShutdownTimeout, "Timeout to use when MySQL is being shut down.")
+	BackupShard.Flags().BoolVarP(&backupShardOptions.OutputJSON, "json", "j", false, backupJSONFlagHelp)
 	addInitSQLFlags(BackupShard)
 	Root.AddCommand(BackupShard)
 

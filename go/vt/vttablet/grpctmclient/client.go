@@ -1550,17 +1550,17 @@ type backupStreamAdapter struct {
 	closer io.Closer
 }
 
-func (e *backupStreamAdapter) Recv() (*logutilpb.Event, error) {
+func (e *backupStreamAdapter) Recv() (*tabletmanagerdatapb.BackupResponse, error) {
 	br, err := e.stream.Recv()
 	if err != nil {
 		e.closer.Close()
 		return nil, vterrors.FromGRPC(err)
 	}
-	return br.Event, nil
+	return br, nil
 }
 
 // Backup is part of the tmclient.TabletManagerClient interface.
-func (client *Client) Backup(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.BackupRequest) (logutil.EventStream, error) {
+func (client *Client) Backup(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.BackupRequest) (tmclient.BackupStream, error) {
 	c, closer, err := client.dialer.dial(ctx, tablet)
 	if err != nil {
 		return nil, err

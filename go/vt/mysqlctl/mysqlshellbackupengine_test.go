@@ -390,7 +390,11 @@ func TestMySQLShellBackupEngine_ExecuteBackup_ReleaseLock(t *testing.T) {
 		bh, err := bs.StartBackup(t.Context(), t.TempDir(), t.Name())
 		require.NoError(t, err)
 
-		_, err = be.ExecuteBackup(t.Context(), params, bh)
+		backupParams := params
+		var reportedManifest string
+		backupParams.ManifestOut = &reportedManifest
+
+		_, err = be.ExecuteBackup(t.Context(), backupParams, bh)
 		require.NoError(t, err)
 		require.False(t, mysql.GlobalReadLock) // lock must be released.
 
@@ -398,6 +402,7 @@ func TestMySQLShellBackupEngine_ExecuteBackup_ReleaseLock(t *testing.T) {
 		var manifest MySQLShellBackupManifest
 		err = json.Unmarshal(manifestBuffer.Bytes(), &manifest)
 		require.NoError(t, err)
+		require.Equal(t, manifestBuffer.String(), reportedManifest, "ManifestOut must be the MANIFEST bytes written to storage")
 
 		require.Equal(t, mysqlShellBackupEngineName, manifest.BackupMethod)
 

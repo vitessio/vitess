@@ -27,8 +27,11 @@ import (
 const fakeBackupEngineName = "fake"
 
 type FakeBackupEngine struct {
-	ExecuteBackupCalls           []FakeBackupEngineExecuteBackupCall
-	ExecuteBackupDuration        time.Duration
+	ExecuteBackupCalls    []FakeBackupEngineExecuteBackupCall
+	ExecuteBackupDuration time.Duration
+	// ExecuteBackupManifest, when set, is reported through params.ManifestOut,
+	// mirroring a real engine handing back the MANIFEST it just wrote.
+	ExecuteBackupManifest        string
 	ExecuteBackupReturn          FakeBackupEngineExecuteBackupReturn
 	ExecuteRestoreCalls          []FakeBackupEngineExecuteRestoreCall
 	ExecuteRestoreDuration       time.Duration
@@ -67,6 +70,10 @@ func (be *FakeBackupEngine) ExecuteBackup(
 
 	if be.ExecuteBackupDuration > 0 {
 		time.Sleep(be.ExecuteBackupDuration)
+	}
+
+	if be.ExecuteBackupManifest != "" && params.ManifestOut != nil {
+		*params.ManifestOut = be.ExecuteBackupManifest
 	}
 
 	return be.ExecuteBackupReturn.Res, be.ExecuteBackupReturn.Err

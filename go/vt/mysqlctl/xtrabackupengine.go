@@ -369,6 +369,9 @@ func (be *XtrabackupEngine) executeFullBackup(ctx context.Context, params Backup
 	if _, err := mwc.Write(data); err != nil {
 		return BackupUnusable, vterrors.Wrapf(err, "cannot write %v", backupManifestFileName)
 	}
+	if params.ManifestOut != nil {
+		*params.ManifestOut = string(data)
+	}
 
 	params.Logger.Infof("Backup completed")
 	return BackupUsable, nil

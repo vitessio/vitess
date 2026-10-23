@@ -39113,6 +39113,9 @@ export namespace tabletmanagerdata {
         /** BackupRequest include_binlogs. */
         include_binlogs: boolean;
 
+        /** BackupRequest include_outcome. */
+        include_outcome: boolean;
+
         /**
          * Creates a new BackupRequest instance using the specified properties.
          * @param [properties] Properties to set
@@ -39220,6 +39223,9 @@ export namespace tabletmanagerdata {
 
             /** BackupRequest include_binlogs */
             include_binlogs?: (boolean|null);
+
+            /** BackupRequest include_outcome */
+            include_outcome?: (boolean|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
@@ -39386,6 +39392,15 @@ export namespace tabletmanagerdata {
         /** BackupResponse event. */
         event?: (logutil.Event.$Properties|null);
 
+        /** BackupResponse manifest. */
+        manifest: string;
+
+        /** BackupResponse status. */
+        status: tabletmanagerdata.BackupResponse.Status;
+
+        /** BackupResponse backup_name. */
+        backup_name: string;
+
         /**
          * Creates a new BackupResponse instance using the specified properties.
          * @param [properties] Properties to set
@@ -39473,12 +39488,34 @@ export namespace tabletmanagerdata {
             /** BackupResponse event */
             event?: (logutil.Event.$Properties|null);
 
+            /** BackupResponse manifest */
+            manifest?: (string|null);
+
+            /** BackupResponse status */
+            status?: (tabletmanagerdata.BackupResponse.Status|null);
+
+            /** BackupResponse backup_name */
+            backup_name?: (string|null);
+
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
         /** Shape of a BackupResponse. */
         type $Shape = tabletmanagerdata.BackupResponse.$Properties;
+
+        /** Status enum. */
+        enum Status {
+
+            /** STATUS_UNSPECIFIED value */
+            STATUS_UNSPECIFIED = 0,
+
+            /** USABLE value */
+            USABLE = 1,
+
+            /** EMPTY value */
+            EMPTY = 2
+        }
     }
 
     /**
@@ -67953,6 +67990,9 @@ export namespace vtctldata {
         /** BackupRequest include_binlogs. */
         include_binlogs: boolean;
 
+        /** BackupRequest include_outcome. */
+        include_outcome: boolean;
+
         /**
          * Creates a new BackupRequest instance using the specified properties.
          * @param [properties] Properties to set
@@ -68064,6 +68104,9 @@ export namespace vtctldata {
             /** BackupRequest include_binlogs */
             include_binlogs?: (boolean|null);
 
+            /** BackupRequest include_outcome */
+            include_outcome?: (boolean|null);
+
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
@@ -68102,6 +68145,15 @@ export namespace vtctldata {
 
         /** BackupResponse event. */
         event?: (logutil.Event.$Properties|null);
+
+        /** BackupResponse manifest. */
+        manifest: string;
+
+        /** BackupResponse status. */
+        status: tabletmanagerdata.BackupResponse.Status;
+
+        /** BackupResponse backup_name. */
+        backup_name: string;
 
         /**
          * Creates a new BackupResponse instance using the specified properties.
@@ -68199,6 +68251,15 @@ export namespace vtctldata {
             /** BackupResponse event */
             event?: (logutil.Event.$Properties|null);
 
+            /** BackupResponse manifest */
+            manifest?: (string|null);
+
+            /** BackupResponse status */
+            status?: (tabletmanagerdata.BackupResponse.Status|null);
+
+            /** BackupResponse backup_name */
+            backup_name?: (string|null);
+
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
@@ -68252,6 +68313,9 @@ export namespace vtctldata {
 
         /** BackupShardRequest include_binlogs. */
         include_binlogs: boolean;
+
+        /** BackupShardRequest include_outcome. */
+        include_outcome: boolean;
 
         /**
          * Creates a new BackupShardRequest instance using the specified properties.
@@ -68363,6 +68427,9 @@ export namespace vtctldata {
 
             /** BackupShardRequest include_binlogs */
             include_binlogs?: (boolean|null);
+
+            /** BackupShardRequest include_outcome */
+            include_outcome?: (boolean|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];

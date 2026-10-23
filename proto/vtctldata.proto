@@ -479,6 +479,11 @@ message BackupRequest {
   // IncludeBinlogs includes the source's binary logs in a full builtin backup.
   // Restores use them automatically.
   bool include_binlogs = 9;
+
+  // IncludeOutcome asks for a terminal message carrying the backup's status,
+  // name and MANIFEST at the end of the stream. See
+  // tabletmanagerdata.BackupRequest.include_outcome.
+  bool include_outcome = 10;
 }
 
 message BackupResponse {
@@ -487,6 +492,13 @@ message BackupResponse {
   string keyspace = 2;
   string shard = 3;
   logutil.Event event = 4;
+
+  // Manifest, Status and BackupName are only set on the terminal message,
+  // which is sent only when the request set include_outcome. See the
+  // tabletmanagerdata.BackupResponse fields of the same names.
+  string manifest = 5;
+  tabletmanagerdata.BackupResponse.Status status = 6;
+  string backup_name = 7;
 }
 
 message BackupShardRequest {
@@ -515,6 +527,11 @@ message BackupShardRequest {
   // IncludeBinlogs includes the source's binary logs in a full builtin backup.
   // Restores use them automatically.
   bool include_binlogs = 9;
+
+  // IncludeOutcome asks for a terminal message carrying the backup's status,
+  // name and MANIFEST at the end of the stream. See
+  // tabletmanagerdata.BackupRequest.include_outcome.
+  bool include_outcome = 10;
 }
 
 message CancelSchemaMigrationRequest {

@@ -822,6 +822,7 @@ func (m *BackupRequest) CloneVT() *BackupRequest {
 	r.MysqlShutdownTimeout = m.MysqlShutdownTimeout.CloneVT()
 	r.InitSql = m.InitSql.CloneVT()
 	r.IncludeBinlogs = m.IncludeBinlogs
+	r.IncludeOutcome = m.IncludeOutcome
 	if rhs := m.BackupEngine; rhs != nil {
 		tmpVal := *rhs
 		r.BackupEngine = &tmpVal
@@ -846,6 +847,9 @@ func (m *BackupResponse) CloneVT() *BackupResponse {
 	r.Keyspace = m.Keyspace
 	r.Shard = m.Shard
 	r.Event = m.Event.CloneVT()
+	r.Manifest = m.Manifest
+	r.Status = m.Status
+	r.BackupName = m.BackupName
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -871,6 +875,7 @@ func (m *BackupShardRequest) CloneVT() *BackupShardRequest {
 	r.MysqlShutdownTimeout = m.MysqlShutdownTimeout.CloneVT()
 	r.InitSql = m.InitSql.CloneVT()
 	r.IncludeBinlogs = m.IncludeBinlogs
+	r.IncludeOutcome = m.IncludeOutcome
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -8626,6 +8631,16 @@ func (m *BackupRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.IncludeOutcome {
+		i--
+		if m.IncludeOutcome {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x50
+	}
 	if m.IncludeBinlogs {
 		i--
 		if m.IncludeBinlogs {
@@ -8738,6 +8753,25 @@ func (m *BackupResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if len(m.BackupName) > 0 {
+		i -= len(m.BackupName)
+		copy(dAtA[i:], m.BackupName)
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.BackupName)))
+		i--
+		dAtA[i] = 0x3a
+	}
+	if m.Status != 0 {
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.Status))
+		i--
+		dAtA[i] = 0x30
+	}
+	if len(m.Manifest) > 0 {
+		i -= len(m.Manifest)
+		copy(dAtA[i:], m.Manifest)
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.Manifest)))
+		i--
+		dAtA[i] = 0x2a
+	}
 	if m.Event != nil {
 		size, err := m.Event.MarshalToSizedBufferVT(dAtA[:i])
 		if err != nil {
@@ -8804,6 +8838,16 @@ func (m *BackupShardRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.IncludeOutcome {
+		i--
+		if m.IncludeOutcome {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x50
 	}
 	if m.IncludeBinlogs {
 		i--
@@ -23717,6 +23761,9 @@ func (m *BackupRequest) SizeVT() (n int) {
 	if m.IncludeBinlogs {
 		n += 2
 	}
+	if m.IncludeOutcome {
+		n += 2
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -23741,6 +23788,17 @@ func (m *BackupResponse) SizeVT() (n int) {
 	}
 	if m.Event != nil {
 		l = m.Event.SizeVT()
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	l = len(m.Manifest)
+	if l > 0 {
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	if m.Status != 0 {
+		n += 1 + protohelpers.SizeOfVarint(uint64(m.Status))
+	}
+	l = len(m.BackupName)
+	if l > 0 {
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	n += len(m.unknownFields)
@@ -23783,6 +23841,9 @@ func (m *BackupShardRequest) SizeVT() (n int) {
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	if m.IncludeBinlogs {
+		n += 2
+	}
+	if m.IncludeOutcome {
 		n += 2
 	}
 	n += len(m.unknownFields)
@@ -36212,6 +36273,26 @@ func (m *BackupRequest) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.IncludeBinlogs = bool(v != 0)
+		case 10:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field IncludeOutcome", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.IncludeOutcome = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
@@ -36398,6 +36479,89 @@ func (m *BackupResponse) UnmarshalVT(dAtA []byte) error {
 			if err := m.Event.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
+			iNdEx = postIndex
+		case 5:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Manifest", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Manifest = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 6:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Status", wireType)
+			}
+			m.Status = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Status |= tabletmanagerdata.BackupResponse_Status(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 7:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field BackupName", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.BackupName = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
@@ -36697,6 +36861,26 @@ func (m *BackupShardRequest) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.IncludeBinlogs = bool(v != 0)
+		case 10:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field IncludeOutcome", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.IncludeOutcome = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])

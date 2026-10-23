@@ -19,6 +19,7 @@
         - [`BackupHandle` interface gains `Wait()` method](#backup-handle-wait-method)
         - [VTOrc: `--cells-to-watch` removed in favor of `--cells-no-recovery`](#vtorc-cells-no-recovery)
         - [Connection character sets restricted](#vttablet-connection-charsets-restricted)
+        - [`TabletManagerClient.Backup` now returns a manifest/status stream](#tmclient-backup-stream)
     - **[Deprecations](#deprecations)**
         - [CLI Flags](#deprecated-cli-flags)
         - [Legacy streaming-path plan types in query rules](#deprecated-selectstream-rule-plan)
@@ -72,6 +73,7 @@
         - [Slow clean mysqld shutdowns no longer fail backups](#backup-mysqld-shutdown-timeout)
         - [Parallel S3 downloads during restore](#vttablet-s3-parallel-downloads)
         - [lz4 engine: library upgrade and `--compression-level` mapping](#backup-lz4-v4)
+        - [Backup commands surface the MANIFEST and empty-incremental status](#backup-manifest-output)
     - **[VTAdmin](#minor-changes-vtadmin)**
         - [vtadmin-web updated to node v22.23.2 (LTS)](#vtadmin-updated-node)
     - **[General](#minor-changes-general)**
@@ -225,6 +227,18 @@ See [#20021](https://github.com/vitessio/vitess/issues/20021) for details.
 `--db-charset`, and the other places a MySQL connection character set is configured, no longer accept `sjis`, `cp932`, `gb18030`, `gbk`, `big5`, `ucs2`, `utf16`, `utf16le` or `utf32`, whether given as a character set or as one of its collations. A tablet configured with one of them fails to start, VTGate refuses a `SET` of `character_set_client`, `character_set_connection`, `character_set_results` or `collation_connection` to one of them, or to a name that is not a character set or collation, which it used to answer with OK and ignore, and VTTablet refuses a setting or `SET` statement that would switch a session's connection to one of them. A client may still ask for one of them at the handshake: VTGate reads its statements byte by byte, as the tablet's connection to MySQL does, so they cannot break out of a literal.
 
 Vitess parses and escapes SQL text byte by byte, and in these character sets the second byte of a character can be a backslash or a back quote, so text in them was misparsed or corrupted on its way through Vitess. Use `utf8mb4` as the connection character set instead. Tables and columns can still be declared with any of these character sets; MySQL converts between them and the connection character set.
+
+#### <a id="tmclient-backup-stream"/>`TabletManagerClient.Backup` now returns a manifest/status stream</a>
+
+The `tmclient.TabletManagerClient.Backup` method now returns a `tmclient.BackupStream` instead of a `logutil.EventStream`. The stream carries log events as before; a request that sets the new `include_outcome` field also ends with a terminal message carrying the backup's raw MANIFEST JSON, its `backup_name`, and an outcome `Status` (`USABLE` or `EMPTY`). Correspondingly, the internal `RPCTM.Backup` method and `mysqlctl.Backup` now return `(mysqlctl.BackupOutcome, error)` instead of just `error`; `BackupOutcome` carries the backup's `Name`, `Manifest` and `Result`.
+
+The wire protocol is backward and forward compatible: the new request and response fields are additive, and a request that does not set `include_outcome` gets the same stream as before.
+
+The `BackupEngine` interface is **not** changed. Engines can optionally report the MANIFEST they write by setting the new `BackupParams.ManifestOut` pointer, and all in-tree engines do. For an engine that does not, the outcome has no manifest; it is not read back from storage.
+
+**Impact**: This is a source-level Go API change; the wire protocol is unchanged. Any out-of-tree implementation or caller of `tmclient.TabletManagerClient` or `tabletmanager.RPCTM`, or any caller of `mysqlctl.Backup`, must update the signature. Callers that only consumed log events can call `Recv()` on the new stream and read `resp.Event` exactly as before.
+
+See [#21243](https://github.com/vitessio/vitess/pull/21243) for details.
 
 ### <a id="deprecations"/>Deprecations</a>
 
@@ -823,6 +837,19 @@ The `lz4` compression engine now uses the `pierrec/lz4/v4` library instead of `p
 The upgrade changes how `--compression-level` is interpreted for the lz4 engine. Values `0` and `1`, including the default of `1`, select the fast compressor. Values `2` through `9` now select lz4's named hash-chain levels (`Level2` through `Level9`) instead of using the raw value as the hash-chain search depth, so higher values produce a better ratio at more CPU cost. Values above `9` and negative values, which previously requested an unlimited search, select `Level9`. Other compression engines are not affected.
 
 See [#20778](https://github.com/vitessio/vitess/pull/20778) for details.
+
+#### <a id="backup-manifest-output"/>Backup commands surface the MANIFEST and empty-incremental status</a>
+
+The `vtctldclient Backup` and `BackupShard` commands can now report a backup's outcome and MANIFEST directly, instead of requiring callers to scrape it from the log stream. With the new `--json`/`-j` flag:
+
+- Log events go to stderr and, once the backup completes, a JSON object with its outcome status (`USABLE`, `EMPTY`, or `UNKNOWN`), its name, and its MANIFEST is written to stdout. `backup_name` is a typed field, so callers that only need to identify the backup do not have to parse the manifest -- which also covers engines that do not record a name inside their MANIFEST.
+- An incremental backup that finds no new data to back up reports status `EMPTY`. It is still a successful backup and exits `0`.
+
+Without `--json`, nothing changes: the request, the output and the exit codes are as before.
+
+`--json` sets the new `include_outcome` field on the request, which vtctld passes on to the tablet. Only then does the tablet end the stream with a terminal message carrying three additive `BackupResponse` fields (`manifest`, `status`, and `backup_name`); if that message would exceed `--grpc-max-message-size`, it is sent without the MANIFEST. See the [related breaking change](#tmclient-backup-stream) for the Go API impact. Mixed-version clusters are unaffected: an older vtctld or tablet ignores `include_outcome`, so `--json` reports status `UNKNOWN`, and an older vtctld never receives the terminal message because it cannot ask for it.
+
+See [#21243](https://github.com/vitessio/vitess/pull/21243) for details.
 
 ### <a id="minor-changes-vtadmin"/>VTAdmin</a>
 

@@ -17,16 +17,21 @@ limitations under the License.
 package command
 
 import (
+	"errors"
 	"testing"
 	"time"
 
+	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/protoutil"
+	"vitess.io/vitess/go/vt/vtctl/localvtctldclient"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
 )
 
 func TestBackupCommand_InitSQLFlags(t *testing.T) {
@@ -259,6 +264,134 @@ func TestBackupCommand_BuildsCorrectRequest(t *testing.T) {
 				}
 				assert.Equal(t, tc.wantFailOnError, initSQLFailOnError)
 			}
+		})
+	}
+}
+
+// fakeBackupServer records the Backup and BackupShard request flags, then returns err.
+type fakeBackupServer struct {
+	vtctlservicepb.UnimplementedVtctldServer
+	includeOutcome bool
+	includeBinlogs bool
+	err            error
+}
+
+func (s *fakeBackupServer) Backup(req *vtctldatapb.BackupRequest, _ vtctlservicepb.Vtctld_BackupServer) error {
+	s.includeOutcome = req.IncludeOutcome
+	s.includeBinlogs = req.IncludeBinlogs
+	return s.err
+}
+
+func (s *fakeBackupServer) BackupShard(req *vtctldatapb.BackupShardRequest, _ vtctlservicepb.Vtctld_BackupShardServer) error {
+	s.includeOutcome = req.IncludeOutcome
+	s.includeBinlogs = req.IncludeBinlogs
+	return s.err
+}
+
+// TestBackupCommands_JSONOutputWiring runs Backup and BackupShard against a local
+// server to check that --json and --include-binlogs set independent request flags.
+func TestBackupCommands_JSONOutputWiring(t *testing.T) {
+	originalProtocol := VtctldClientProtocol
+	VtctldClientProtocol = "local"
+	t.Cleanup(func() {
+		Root.SetArgs(nil)
+		VtctldClientProtocol = originalProtocol
+		backupOptions.OutputJSON = false
+		backupShardOptions.OutputJSON = false
+		backupOptions.IncludeBinlogs = false
+		backupShardOptions.IncludeBinlogs = false
+	})
+
+	testCases := []struct {
+		name               string
+		args               []string
+		streamErr          error
+		wantIncludeOutcome bool
+		wantIncludeBinlogs bool
+		wantErr            string
+	}{
+		{
+			name:               "Backup --json",
+			args:               []string{"Backup", "--json", "zone1-100"},
+			wantIncludeOutcome: true,
+		},
+		{
+			name: "Backup without --json",
+			args: []string{"Backup", "zone1-100"},
+		},
+		{
+			name:               "Backup --include-binlogs",
+			args:               []string{"Backup", "--include-binlogs", "zone1-100"},
+			wantIncludeBinlogs: true,
+		},
+		{
+			name:               "Backup --json --include-binlogs",
+			args:               []string{"Backup", "--json", "--include-binlogs", "zone1-100"},
+			wantIncludeOutcome: true,
+			wantIncludeBinlogs: true,
+		},
+		{
+			name:               "BackupShard --json",
+			args:               []string{"BackupShard", "--json", "ks/0"},
+			wantIncludeOutcome: true,
+		},
+		{
+			name: "BackupShard without --json",
+			args: []string{"BackupShard", "ks/0"},
+		},
+		{
+			name:               "BackupShard --include-binlogs",
+			args:               []string{"BackupShard", "--include-binlogs", "ks/0"},
+			wantIncludeBinlogs: true,
+		},
+		{
+			name:               "BackupShard --json --include-binlogs",
+			args:               []string{"BackupShard", "--json", "--include-binlogs", "ks/0"},
+			wantIncludeOutcome: true,
+			wantIncludeBinlogs: true,
+		},
+		{
+			name:      "Backup stream error",
+			args:      []string{"Backup", "--json", "zone1-100"},
+			streamErr: errors.New("tablet went away"),
+			wantErr:   "tablet went away",
+		},
+		{
+			name:      "BackupShard stream error",
+			args:      []string{"BackupShard", "--json", "ks/0"},
+			streamErr: errors.New("tablet went away"),
+			wantErr:   "tablet went away",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Flag-bound globals persist across Root.Execute calls.
+			backupOptions.OutputJSON = false
+			backupShardOptions.OutputJSON = false
+			backupOptions.IncludeBinlogs = false
+			backupShardOptions.IncludeBinlogs = false
+			backupOptions.InitSQLQueries = nil
+			backupOptions.InitSQLTabletTypes = nil
+			backupOptions.InitSQLTimeout = 0
+			backupOptions.InitSQLFailOnError = false
+			for _, cmd := range []*cobra.Command{Backup, BackupShard} {
+				cmd.Flags().Lookup("json").Changed = false
+				cmd.Flags().Lookup("include-binlogs").Changed = false
+			}
+
+			server := &fakeBackupServer{err: tc.streamErr}
+			localvtctldclient.SetServer(server)
+			Root.SetArgs(tc.args)
+
+			err := Root.Execute()
+			if tc.wantErr != "" {
+				require.ErrorContains(t, err, tc.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tc.wantIncludeOutcome, server.includeOutcome)
+			assert.Equal(t, tc.wantIncludeBinlogs, server.includeBinlogs)
 		})
 	}
 }

@@ -18,6 +18,7 @@ package grpctmserver
 
 import (
 	"context"
+	"log/slog"
 	"path/filepath"
 	"time"
 
@@ -25,8 +26,11 @@ import (
 
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/callinfo"
+	"vitess.io/vitess/go/vt/grpccommon"
 	"vitess.io/vitess/go/vt/hook"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -693,7 +697,53 @@ func (s *server) Backup(request *tabletmanagerdatapb.BackupRequest, stream table
 		})
 	})
 
-	return s.tm.Backup(ctx, logger, request)
+	outcome, err := s.tm.Backup(ctx, logger, request)
+	if err != nil || !request.IncludeOutcome {
+		return err
+	}
+	// The caller asked for the outcome, so end the stream with a terminal message
+	// carrying it. Only callers that know these fields can set IncludeOutcome, so
+	// this message has no Event, unlike every message before it.
+	status := backupResultToStatus(outcome.Result)
+	resp := &tabletmanagerdatapb.BackupResponse{
+		Manifest:   outcome.Manifest,
+		Status:     status,
+		BackupName: outcome.Name,
+	}
+	// A message over the gRPC limit fails the whole RPC, not just this Send, so
+	// the caller would see an error for a backup that is already stored. Drop
+	// the manifest instead; the name and status still identify the backup.
+	if maxSize := grpccommon.MaxMessageSize(); resp.SizeVT() > maxSize {
+		log.Warn("backup MANIFEST exceeds --grpc-max-message-size; sending the terminal Backup message without it",
+			slog.String("backup_name", resp.BackupName),
+			slog.Int("manifest_bytes", len(resp.Manifest)),
+			slog.Int("max_message_size", maxSize),
+		)
+		resp.Manifest = ""
+	}
+	if sendErr := stream.Send(resp); sendErr != nil {
+		// gRPC has already sent this error to the caller as the RPC's status, so
+		// returning it would change nothing. The likely cause is a client that
+		// disconnected during a long backup.
+		log.Warn("backup completed but sending the terminal Backup message failed",
+			slog.String("status", status.String()),
+			slog.Any("error", sendErr),
+		)
+	}
+	return nil
+}
+
+// backupResultToStatus maps the mysqlctl backup classification to the proto
+// status enum sent on the terminal Backup stream message.
+func backupResultToStatus(result mysqlctl.BackupResult) tabletmanagerdatapb.BackupResponse_Status {
+	switch result {
+	case mysqlctl.BackupUsable:
+		return tabletmanagerdatapb.BackupResponse_USABLE
+	case mysqlctl.BackupEmpty:
+		return tabletmanagerdatapb.BackupResponse_EMPTY
+	default:
+		return tabletmanagerdatapb.BackupResponse_STATUS_UNSPECIFIED
+	}
 }
 
 func (s *server) RestoreFromBackup(request *tabletmanagerdatapb.RestoreFromBackupRequest, stream tabletmanagerservicepb.TabletManager_RestoreFromBackupServer) (err error) {

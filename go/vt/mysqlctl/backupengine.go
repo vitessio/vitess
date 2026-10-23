@@ -98,6 +98,25 @@ type BackupParams struct {
 	InitSQL *tabletmanagerdatapb.BackupRequest_InitSQL
 	// IncludeBinlogs includes the source's binlogs in a full builtin backup.
 	IncludeBinlogs bool
+	// ManifestOut, when non-nil, is set by the backup engine to the raw JSON of the
+	// MANIFEST it wrote, so callers can surface it without reading it back from
+	// backup storage. It is optional: for an engine that leaves it unset, the
+	// backup outcome simply has no manifest.
+	ManifestOut *string
+}
+
+// BackupOutcome describes a completed backup.
+type BackupOutcome struct {
+	// Name is the backup's name in backup storage, which is also its directory,
+	// e.g. "2026-09-10.161343.zone1-0000000102". It identifies the backup for a
+	// later restore. Empty when no backup was stored.
+	Name string
+	// Manifest is the raw JSON of the backup's MANIFEST, exactly as written to
+	// storage. Empty when no backup was stored, or if the engine did not report
+	// it through BackupParams.ManifestOut.
+	Manifest string
+	// Result classifies the outcome of the backup.
+	Result BackupResult
 }
 
 func (b *BackupParams) Copy() BackupParams {
@@ -119,6 +138,7 @@ func (b *BackupParams) Copy() BackupParams {
 		MysqlShutdownTimeout: b.MysqlShutdownTimeout,
 		InitSQL:              b.InitSQL,
 		IncludeBinlogs:       b.IncludeBinlogs,
+		ManifestOut:          b.ManifestOut,
 	}
 }
 
