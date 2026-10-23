@@ -89,8 +89,9 @@ const (
 	throttledAppsSnapshotInterval  = 5 * time.Second
 	recentCheckRateLimiterInterval = 1 * time.Second // Ticker assisting in determining when the throttler was last checked
 	// cachedPrimaryTTL is how long a non-primary reuses the primary tablet record it stimulates, before reading it
-	// from the topo again. The record can only go stale through a reparent, and this bounds how long after one the
-	// tablet keeps stimulating the old primary.
+	// from the topo again. A primary restarted on another host or port fails the check, which drops the record at
+	// once. A demoted primary still answers it, so after a reparent this bounds how long the tablet keeps
+	// stimulating the old primary.
 	cachedPrimaryTTL = 15 * time.Second
 
 	aggregatedMetricsExpiration = 5 * time.Second
