@@ -4283,6 +4283,187 @@
     }
   },
   {
+    "comment": "join on all columns of a multicolumn vindex is merged into a single route",
+    "query": "select m.colc, c.id from multicol_tbl m join multicol_tbl_child c on c.cola = m.cola and c.parent_colb = m.colb",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "select m.colc, c.id from multicol_tbl m join multicol_tbl_child c on c.cola = m.cola and c.parent_colb = m.colb",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select m.colc, c.id from multicol_tbl as m, multicol_tbl_child as c where 1 != 1",
+        "Query": "select m.colc, c.id from multicol_tbl as m, multicol_tbl_child as c where c.cola = m.cola and c.parent_colb = m.colb"
+      },
+      "TablesUsed": [
+        "user.multicol_tbl",
+        "user.multicol_tbl_child"
+      ]
+    }
+  },
+  {
+    "comment": "join on all columns of a multicolumn vindex with a prefix filter is merged into a single SubShard route",
+    "query": "select m.colc, c.id from multicol_tbl m join multicol_tbl_child c on c.cola = m.cola and c.parent_colb = m.colb where m.cola = 'a'",
+    "plan": {
+      "Type": "MultiShard",
+      "QueryType": "SELECT",
+      "Original": "select m.colc, c.id from multicol_tbl m join multicol_tbl_child c on c.cola = m.cola and c.parent_colb = m.colb where m.cola = 'a'",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "SubShard",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select m.colc, c.id from multicol_tbl as m, multicol_tbl_child as c where 1 != 1",
+        "Query": "select m.colc, c.id from multicol_tbl as m, multicol_tbl_child as c where m.cola = 'a' and c.cola = m.cola and c.parent_colb = m.colb",
+        "Values": [
+          "'a'"
+        ],
+        "Vindex": "multicolIdx"
+      },
+      "TablesUsed": [
+        "user.multicol_tbl",
+        "user.multicol_tbl_child"
+      ]
+    }
+  },
+  {
+    "comment": "left join on all columns of a multicolumn vindex with a prefix filter on the outer side is merged into a single SubShard route",
+    "query": "select m.colc, c.id from multicol_tbl m left join multicol_tbl_child c on c.cola = m.cola and c.parent_colb = m.colb where m.cola = 'a'",
+    "plan": {
+      "Type": "MultiShard",
+      "QueryType": "SELECT",
+      "Original": "select m.colc, c.id from multicol_tbl m left join multicol_tbl_child c on c.cola = m.cola and c.parent_colb = m.colb where m.cola = 'a'",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "SubShard",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select m.colc, c.id from multicol_tbl as m left join multicol_tbl_child as c on c.cola = m.cola and c.parent_colb = m.colb where 1 != 1",
+        "Query": "select m.colc, c.id from multicol_tbl as m left join multicol_tbl_child as c on c.cola = m.cola and c.parent_colb = m.colb where m.cola = 'a'",
+        "Values": [
+          "'a'"
+        ],
+        "Vindex": "multicolIdx"
+      },
+      "TablesUsed": [
+        "user.multicol_tbl",
+        "user.multicol_tbl_child"
+      ]
+    }
+  },
+  {
+    "comment": "join on all columns of a multicolumn vindex with prefix filters on both sides is merged into a single SubShard route",
+    "query": "select m.colc, c.id from multicol_tbl m join multicol_tbl_child c on c.cola = m.cola and c.parent_colb = m.colb where m.cola = 'a' and c.cola = 'a'",
+    "plan": {
+      "Type": "MultiShard",
+      "QueryType": "SELECT",
+      "Original": "select m.colc, c.id from multicol_tbl m join multicol_tbl_child c on c.cola = m.cola and c.parent_colb = m.colb where m.cola = 'a' and c.cola = 'a'",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "SubShard",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select m.colc, c.id from multicol_tbl as m, multicol_tbl_child as c where 1 != 1",
+        "Query": "select m.colc, c.id from multicol_tbl as m, multicol_tbl_child as c where m.cola = 'a' and c.cola = 'a' and c.cola = m.cola and c.parent_colb = m.colb",
+        "Values": [
+          "'a'"
+        ],
+        "Vindex": "multicolIdx"
+      },
+      "TablesUsed": [
+        "user.multicol_tbl",
+        "user.multicol_tbl_child"
+      ]
+    }
+  },
+  {
+    "comment": "join on all columns of a multicolumn vindex with all columns bound on one side is merged into a single EqualUnique route",
+    "query": "select m.colc, c.id from multicol_tbl m join multicol_tbl_child c on c.cola = m.cola and c.parent_colb = m.colb where m.cola = 'a' and m.colb = 'b'",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select m.colc, c.id from multicol_tbl m join multicol_tbl_child c on c.cola = m.cola and c.parent_colb = m.colb where m.cola = 'a' and m.colb = 'b'",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select m.colc, c.id from multicol_tbl as m, multicol_tbl_child as c where 1 != 1",
+        "Query": "select m.colc, c.id from multicol_tbl as m, multicol_tbl_child as c where m.cola = 'a' and m.colb = 'b' and c.cola = m.cola and c.parent_colb = m.colb",
+        "Values": [
+          "'a'",
+          "'b'"
+        ],
+        "Vindex": "multicolIdx"
+      },
+      "TablesUsed": [
+        "user.multicol_tbl",
+        "user.multicol_tbl_child"
+      ]
+    }
+  },
+  {
+    "comment": "join that equates multicolumn vindex columns at different positions is not merged",
+    "query": "select m.colc, c.id from multicol_tbl m join multicol_tbl_child c on c.cola = m.colb and c.parent_colb = m.cola",
+    "plan": {
+      "Type": "Join",
+      "QueryType": "SELECT",
+      "Original": "select m.colc, c.id from multicol_tbl m join multicol_tbl_child c on c.cola = m.colb and c.parent_colb = m.cola",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0,R:0",
+        "JoinVars": {
+          "m_cola": 2,
+          "m_colb": 1
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select m.colc, m.colb, m.cola from multicol_tbl as m where 1 != 1",
+            "Query": "select m.colc, m.colb, m.cola from multicol_tbl as m"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select c.id from multicol_tbl_child as c where 1 != 1",
+            "Query": "select c.id from multicol_tbl_child as c where c.parent_colb = :m_cola and c.cola = :m_colb",
+            "Values": [
+              ":m_colb",
+              ":m_cola"
+            ],
+            "Vindex": "multicolIdx"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.multicol_tbl",
+        "user.multicol_tbl_child"
+      ]
+    }
+  },
+  {
     "comment": "select with a target destination",
     "query": "select * from `user[-]`.user_metadata",
     "plan": "VT09017: SELECT with a target destination is not allowed"
