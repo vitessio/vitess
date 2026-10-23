@@ -102,6 +102,39 @@ jobs:
         if: steps.changes.outputs.end_to_end == 'true'
         uses: $/.github/actions/setup-go
 
+      # The test containers run as the vitess user (uid 1000), not as the
+      # runner user that restored the caches, and add to them.
+      - name: Share the Go caches with the test containers
+        if: steps.changes.outputs.end_to_end == 'true'
+        run: |
+          gomodcache=$(go env GOMODCACHE)
+          gocache=$(go env GOCACHE)
+          mkdir -p "${gomodcache}" "${gocache}"
+          chmod -R a+rwX "${gomodcache}" "${gocache}"
+          echo "DOCKER_TEST_GOMODCACHE=${gomodcache}" >> "${GITHUB_ENV}"
+          echo "DOCKER_TEST_GOCACHE=${gocache}" >> "${GITHUB_ENV}"
+
+      # docker/test/run.sh installs Maven into /tmp/maven and shares
+      # /tmp/mavencache as the containers' ~/.m2. Only the java shard uses
+      # them, but every test installs Maven. The go_cache_warm workflow is the
+      # only writer of this cache.
+      - name: Restore the Maven cache
+        if: steps.changes.outputs.end_to_end == 'true'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            /tmp/maven
+            /tmp/mavencache
+          key: docker-maven-${{ hashFiles('docker/test/install_maven.sh', 'tools/warm_maven_cache.sh', 'java/**/pom.xml') }}
+          restore-keys: |
+            docker-maven-
+
+      - name: Share the Maven cache with the test containers
+        if: steps.changes.outputs.end_to_end == 'true'
+        run: |
+          mkdir -p /tmp/maven /tmp/mavencache
+          chmod -R a+rwX /tmp/maven /tmp/mavencache
+
       - name: Tune the OS
         if: steps.changes.outputs.end_to_end == 'true'
         timeout-minutes: 5
@@ -112,3 +145,4 @@ jobs:
         timeout-minutes: 30
         run: |
           go run test.go -docker=true -pull=false -flavor=${{ env.BOOTSTRAP_FLAVOR }} -bootstrap-version=${{ env.BOOTSTRAP_VERSION }} --follow -shard ${{ matrix.shard }}
+
