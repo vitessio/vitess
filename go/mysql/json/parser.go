@@ -21,6 +21,7 @@ package json
 
 import (
 	"bytes"
+	"cmp"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -903,23 +904,24 @@ func (o *Object) getKV() *kv {
 	return &o.kvs[len(o.kvs)-1]
 }
 
+// compareJSONKeys orders object member keys the way MySQL does:
+// by key length first, then lexicographically by bytes.
+// This matches MySQL's json_key_less in sql-common/json_dom.cc,
+// which is also the order MySQL stores in its binary JSON format.
+func compareJSONKeys(a, b string) int {
+	if len(a) != len(b) {
+		return cmp.Compare(len(a), len(b))
+	}
+	return cmp.Compare(a, b)
+}
+
 func (o *Object) sort() {
 	if len(o.kvs) < 2 {
 		return
 	}
 
 	slices.SortStableFunc(o.kvs, func(a, b kv) int {
-		// TODO: switch to cmp.Compare for Go 1.21+.
-		//
-		// https://pkg.go.dev/cmp@master#Compare.
-		switch {
-		case a.k < b.k:
-			return -1
-		case a.k > b.k:
-			return 1
-		default:
-			return 0
-		}
+		return compareJSONKeys(a.k, b.k)
 	})
 	uniq := o.kvs[:1]
 	for _, kv := range o.kvs[1:] {
@@ -944,7 +946,7 @@ func (o *Object) find(key string) (int, bool) {
 	for i < j {
 		h := int(uint(i+j) >> 1) // avoid overflow when computing h
 		// i ≤ h < j
-		if o.kvs[h].k < key {
+		if compareJSONKeys(o.kvs[h].k, key) < 0 {
 			i = h + 1 // preserves cmp(x[i - 1], target) < 0
 		} else {
 			j = h // preserves cmp(x[j], target) >= 0
