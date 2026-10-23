@@ -81,6 +81,9 @@ jobs:
               - 'go.mod'
               - 'tools/**/go.mod'
               - 'tools/**/go.sum'
+              - 'go/tools/logcheck/packages.txt'
+              - 'tools/check_logcheck.sh'
+              - 'Makefile'
               - '.github/workflows/static_checks_etc.yml'
             parser_changes:
               - 'go/vt/sqlparser/**'
@@ -234,6 +237,12 @@ jobs:
           }
           lint config verify
           lint run --timeout 10m ./go/...
+
+      - name: Run logcheck
+        if: steps.changes.outputs.go_files == 'true'
+        timeout-minutes: 10
+        run: |
+          make lint-logcheck
 
       - name: Check license headers
         if: steps.changes.outputs.go_files == 'true'

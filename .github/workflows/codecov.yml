@@ -100,6 +100,8 @@ jobs:
         # Validate as Go packages and exclude endtoend tests. Only consider
         # paths under go/; anything else (e.g. ".", "changelog", ".github")
         # would expand to ./.../... and pull in the full endtoend suite.
+        # testdata is excluded like ./go/... excludes it in a full run: go list
+        # accepts it when named, but its fixtures need not build.
         PACKAGES=""
         for dir in $PACKAGE_DIRS; do
           case "$dir" in
@@ -108,6 +110,7 @@ jobs:
           esac
           case "$dir" in
             */endtoend*|go/cmd/vttestserver*) continue ;;
+            */testdata|*/testdata/*) continue ;;
           esac
           if go list "./$dir" >/dev/null 2>&1; then
             PACKAGES="${PACKAGES:+$PACKAGES }$dir"

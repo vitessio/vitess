@@ -1,0 +1,10 @@
+# Packages checked by tools/check_logcheck.sh (make lint), one import path per
+# line. Subpackages are not included; list each one. To add a package, make its
+# log messages constant and add its import path here.
+vitess.io/vitess/go/cmd/vtclient/cli
+vitess.io/vitess/go/cmd/zkctld/cli
+vitess.io/vitess/go/vt/vtadmin/internal/backoff
+vitess.io/vitess/go/vt/vtadmin/vtctldclient
+vitess.io/vitess/go/vt/vtadmin/vtsql
+vitess.io/vitess/go/vt/vtorc/server
+vitess.io/vitess/go/vt/vttls
