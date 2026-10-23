@@ -21,6 +21,8 @@ permissions:
 
 jobs:
   error_code_docs:
+    # Skip pushes and schedules in vitess-security, which mirrors this repository's branches.
+    if: github.repository != 'vitessio/vitess-security' || (github.event_name != 'push' && github.event_name != 'schedule')
     name: Update error code docs
     runs-on: ubuntu-latest
     timeout-minutes: 15

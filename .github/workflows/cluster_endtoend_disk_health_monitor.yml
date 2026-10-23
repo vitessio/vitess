@@ -22,6 +22,8 @@ env:
 
 jobs:
   test:
+    # Skip pushes and schedules in vitess-security, which mirrors this repository's branches.
+    if: github.repository != 'vitessio/vitess-security' || (github.event_name != 'push' && github.event_name != 'schedule')
     name: Run endtoend tests on Cluster (tabletmanager_disk_health_monitor)
     runs-on: ubuntu-24.04
     timeout-minutes: 60

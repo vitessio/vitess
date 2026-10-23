@@ -24,6 +24,8 @@ jobs:
   # GitHub-hosted runner, so that the test job below (on a large runner) is not
   # started at all when nothing relevant changed or there is no next release.
   changes:
+    # Skip pushes and schedules in vitess-security, which mirrors this repository's branches.
+    if: github.repository != 'vitessio/vitess-security' || (github.event_name != 'push' && github.event_name != 'schedule')
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
@@ -91,7 +93,8 @@ jobs:
     # succeed (it failed, or was cancelled by its timeout) or the PR has the
     # 'Skip CI' label, so that those fail this job instead of silently skipping
     # a required status check.
-    if: ${{ !cancelled() && (needs.changes.result != 'success' || contains(github.event.pull_request.labels.*.name, 'Skip CI') || (needs.changes.outputs.end_to_end == 'true' && needs.changes.outputs.next_release_ref != '')) }}
+    # Repeats the vitess-security check: !cancelled() would run this job when the job it needs is skipped.
+    if: ${{ (github.repository != 'vitessio/vitess-security' || (github.event_name != 'push' && github.event_name != 'schedule')) && !cancelled() && (needs.changes.result != 'success' || contains(github.event.pull_request.labels.*.name, 'Skip CI') || (needs.changes.outputs.end_to_end == 'true' && needs.changes.outputs.next_release_ref != '')) }}
     timeout-minutes: 60
     name: Run Upgrade Downgrade Test - Query Serving (Queries - 2) Next Release (${{ matrix.name }})
     # The large runner is only claimed when the tests will actually run; a
@@ -229,7 +232,8 @@ jobs:
   # skipped because nothing relevant changed.
   upgrade_downgrade_test_result:
     needs: upgrade_downgrade_test
-    if: ${{ !cancelled() }}
+    # Repeats the vitess-security check: !cancelled() would run this job when the job it needs is skipped.
+    if: ${{ (github.repository != 'vitessio/vitess-security' || (github.event_name != 'push' && github.event_name != 'schedule')) && !cancelled() }}
     name: Run Upgrade Downgrade Test - Query Serving (Queries - 2) Next Release
     runs-on: ubuntu-24.04
     timeout-minutes: 5

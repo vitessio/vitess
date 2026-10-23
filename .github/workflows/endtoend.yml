@@ -15,6 +15,8 @@ permissions: read-all
 jobs:
 
   build:
+    # Skip pushes and schedules in vitess-security, which mirrors this repository's branches.
+    if: github.repository != 'vitessio/vitess-security' || (github.event_name != 'push' && github.event_name != 'schedule')
     name: End-to-End Test
     runs-on: ubuntu-24.04
     steps:

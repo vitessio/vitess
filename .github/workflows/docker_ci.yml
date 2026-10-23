@@ -19,6 +19,8 @@ env:
 
 jobs:
   build:
+    # Skip pushes and schedules in vitess-security, which mirrors this repository's branches.
+    if: github.repository != 'vitessio/vitess-security' || (github.event_name != 'push' && github.event_name != 'schedule')
     name: ${{ matrix.name }}
     runs-on: ubuntu-24.04
 

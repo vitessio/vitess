@@ -9,6 +9,8 @@ permissions: read-all
 
 jobs:
   close_stale_pull_requests:
+    # Skip pushes and schedules in vitess-security, which mirrors this repository's branches.
+    if: github.repository != 'vitessio/vitess-security' || (github.event_name != 'push' && github.event_name != 'schedule')
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:

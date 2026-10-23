@@ -13,6 +13,8 @@ permissions: read-all
 
 jobs:
   analysis:
+    # Skip pushes and schedules in vitess-security, which mirrors this repository's branches.
+    if: github.repository != 'vitessio/vitess-security' || (github.event_name != 'push' && github.event_name != 'schedule')
     name: Scorecard analysis
     runs-on: ubuntu-24.04
     timeout-minutes: 10

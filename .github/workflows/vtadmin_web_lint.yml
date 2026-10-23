@@ -21,6 +21,8 @@ permissions: read-all
 
 jobs:
   lint:
+    # Skip pushes and schedules in vitess-security, which mirrors this repository's branches.
+    if: github.repository != 'vitessio/vitess-security' || (github.event_name != 'push' && github.event_name != 'schedule')
     runs-on: ubuntu-24.04
     steps:
       - name: Harden the runner (Audit all outbound calls)

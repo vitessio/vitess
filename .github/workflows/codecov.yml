@@ -19,7 +19,8 @@ jobs:
   # at all when there is nothing to measure. Code Coverage is not a required
   # check, so skipping it at the job level reports nothing misleading.
   changes:
-    if: github.event_name != 'pull_request' || !contains(github.event.pull_request.labels.*.name, 'Backport')
+    # Skip pushes and schedules in vitess-security, which mirrors this repository's branches.
+    if: (github.repository != 'vitessio/vitess-security' || (github.event_name != 'push' && github.event_name != 'schedule')) && (github.event_name != 'pull_request' || !contains(github.event.pull_request.labels.*.name, 'Backport'))
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     outputs:

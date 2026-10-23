@@ -26,6 +26,8 @@ jobs:
   # matrix jobs below (on large runners) are not started at all when nothing
   # relevant changed.
   changes:
+    # Skip pushes and schedules in vitess-security, which mirrors this repository's branches.
+    if: github.repository != 'vitessio/vitess-security' || (github.event_name != 'push' && github.event_name != 'schedule')
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
@@ -69,7 +71,8 @@ jobs:
     needs: changes
     # Matrix jobs skipped at the job level report a single un-expanded check
     # name, which would leave the per-flavor required status checks pending.
-    if: ${{ !cancelled() }}
+    # Repeats the vitess-security check: !cancelled() would run this job when the job it needs is skipped.
+    if: ${{ (github.repository != 'vitessio/vitess-security' || (github.event_name != 'push' && github.event_name != 'schedule')) && !cancelled() }}
     timeout-minutes: ${{ matrix.race && 45 || 30 }}
     strategy:
       fail-fast: false
