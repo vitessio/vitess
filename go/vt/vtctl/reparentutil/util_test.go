@@ -1716,6 +1716,122 @@ zone1-0000000100 is not a replica`,
 	}
 }
 
+func TestWarnIfDeprecatedServingShardReplication(t *testing.T) {
+	tests := []struct {
+		name            string
+		version         string
+		positions       []string
+		expectedWarning string
+	}{
+		{
+			name:            "MariaDB version",
+			version:         "Ver 10.10.2-MariaDB",
+			expectedWarning: "MariaDB support for serving shards is deprecated",
+		},
+		{
+			name:            "MariaDB position without version",
+			positions:       []string{"MariaDB/0-1-5"},
+			expectedWarning: "MariaDB support for serving shards is deprecated",
+		},
+		{
+			name:            "FilePos with MySQL version",
+			version:         "Ver 8.0.35",
+			positions:       []string{"FilePos/mysql-bin.000001:100"},
+			expectedWarning: "File-position replication for serving shards is deprecated",
+		},
+		{
+			name:      "MySQL GTID position",
+			version:   "Ver 8.0.35",
+			positions: []string{"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5"},
+		},
+		{
+			name:      "invalid position",
+			positions: []string{"not-a-position"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			logger := logutil.NewMemoryLogger()
+			warnIfDeprecatedServingShardReplication(logger, tt.version, "zone1-0000000100", tt.positions...)
+			if tt.expectedWarning == "" {
+				assert.NotContains(t, logger.String(), "will become unsupported in v26.0.0")
+			} else {
+				assert.Contains(t, logger.String(), tt.expectedWarning)
+			}
+		})
+	}
+}
+
+func TestElectNewPrimaryWarnsForDeprecatedReplication(t *testing.T) {
+	alias101 := &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}
+	alias102 := &topodatapb.TabletAlias{Cell: "zone1", Uid: 102}
+	tmc := &chooseNewPrimaryTestTMClient{
+		replicationStatuses: map[string]*replicationdatapb.Status{
+			topoproto.TabletAliasString(alias101): {
+				Position:         "MariaDB/0-1-5",
+				RelayLogPosition: "MariaDB/0-1-5",
+			},
+			topoproto.TabletAliasString(alias102): {
+				Position:         "MariaDB/0-1-10",
+				RelayLogPosition: "MariaDB/0-1-10",
+			},
+		},
+	}
+	tabletMap := map[string]*topo.TabletInfo{
+		topoproto.TabletAliasString(alias101): {
+			Tablet: &topodatapb.Tablet{Alias: alias101, Type: topodatapb.TabletType_REPLICA},
+		},
+		topoproto.TabletAliasString(alias102): {
+			Tablet: &topodatapb.Tablet{Alias: alias102, Type: topodatapb.TabletType_REPLICA},
+		},
+	}
+	durability, err := policy.GetDurabilityPolicy(policy.DurabilityNone)
+	require.NoError(t, err)
+	logger := logutil.NewMemoryLogger()
+
+	primary, err := ElectNewPrimary(t.Context(), tmc, topo.NewShardInfo("testkeyspace", "0", &topodatapb.Shard{}, nil), tabletMap, nil, &PlannedReparentOptions{
+		durability:          durability,
+		WaitReplicasTimeout: 30 * time.Second,
+	}, logger)
+	require.NoError(t, err)
+	assert.True(t, topoproto.TabletAliasEqual(alias102, primary))
+	assert.Contains(t, logger.String(), "MariaDB support for serving shards is deprecated")
+
+	for _, status := range tmc.replicationStatuses {
+		status.BackupRunning = true
+		status.ServerVersion = "Ver 10.10.2-MariaDB"
+	}
+	logger = logutil.NewMemoryLogger()
+	_, err = ElectNewPrimary(t.Context(), tmc, topo.NewShardInfo("testkeyspace", "0", &topodatapb.Shard{}, nil), tabletMap, nil, &PlannedReparentOptions{
+		durability:          durability,
+		WaitReplicasTimeout: 30 * time.Second,
+	}, logger)
+	require.ErrorContains(t, err, "cannot find a tablet to reparent to")
+	assert.Contains(t, logger.String(), "MariaDB support for serving shards is deprecated")
+
+	tmc.replicationStatuses[topoproto.TabletAliasString(alias101)] = &replicationdatapb.Status{
+		Position:         "FilePos/mysql-bin.000001:5",
+		RelayLogPosition: "FilePos/mysql-bin.000001:5",
+		ServerVersion:    "Ver 8.0.35",
+	}
+	tmc.replicationStatuses[topoproto.TabletAliasString(alias102)] = &replicationdatapb.Status{
+		Position:         "FilePos/mysql-bin.000001:10",
+		RelayLogPosition: "FilePos/mysql-bin.000001:10",
+		ServerVersion:    "Ver 8.0.35",
+	}
+	logger = logutil.NewMemoryLogger()
+	primary, err = ElectNewPrimary(t.Context(), tmc, topo.NewShardInfo("testkeyspace", "0", &topodatapb.Shard{}, nil), tabletMap, nil, &PlannedReparentOptions{
+		durability:          durability,
+		WaitReplicasTimeout: 30 * time.Second,
+	}, logger)
+	require.NoError(t, err)
+	assert.True(t, topoproto.TabletAliasEqual(alias102, primary))
+	assert.Contains(t, logger.String(), "File-position replication for serving shards is deprecated")
+}
+
 func TestFindPositionForTablet(t *testing.T) {
 	t.Parallel()
 

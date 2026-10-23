@@ -236,6 +236,11 @@ type FakeMysqlDaemon struct {
 
 	// Version is the version that will be returned by GetVersionString.
 	Version string
+
+	// GTIDMode is the value returned by GetGTIDMode. It is served directly
+	// rather than through ExecuteSuperQueryList so a startup-time lookup does
+	// not consume a test's ExpectedExecuteSuperQueryList.
+	GTIDMode string
 }
 
 // NewFakeMysqlDaemon returns a FakeMysqlDaemon where mysqld appears
@@ -247,6 +252,7 @@ func NewFakeMysqlDaemon(db *fakesqldb.DB) *FakeMysqlDaemon {
 		Running:         true,
 		IOThreadRunning: true,
 		Version:         "8.0.32",
+		GTIDMode:        "ON",
 	}
 	if db != nil {
 		result.appPool = dbconnpool.NewConnectionPool("AppConnPool", nil, 5, time.Minute, 0, 0)
@@ -429,9 +435,7 @@ func (fmd *FakeMysqlDaemon) ResetReplicationParameters(ctx context.Context) erro
 
 // GetGTIDMode is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) GetGTIDMode(ctx context.Context) (gtidMode string, err error) {
-	return "ON", fmd.ExecuteSuperQueryList(ctx, []string{
-		"FAKE select @@global",
-	})
+	return fmd.GTIDMode, nil
 }
 
 // FlushBinaryLogs is part of the MysqlDaemon interface.
