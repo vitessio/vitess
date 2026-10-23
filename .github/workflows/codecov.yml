@@ -60,21 +60,14 @@ jobs:
         base: ${{ steps.merge-base.outputs.sha }}
         filters: |
           changed_files:
-<<<<<<< HEAD
             - .github/workflows/codecov.yml
             - .github/actions/setup-mysql/action.yml
+            - '.github/actions/tune-os/**'
             - .github/actions/setup-go/action.yml
             - 'go/**'
             - go.mod
             - go.sum
             - Makefile
-||||||| parent of 7be2d66fca (CI: point apt at a responsive Ubuntu archive server (#21724))
-            - '{.github/workflows/codecov.yml,.github/actions/setup-mysql/action.yml,.github/actions/setup-go/action.yml,go/**,go.mod,go.sum,Makefile}'
-            - '!{go/test/endtoend,go/flags/endtoend,go/mysql/endtoend,go/vt/vtctl/endtoend,go/vt/vtctl/grpcvtctldserver/endtoend,go/vt/vtgate/endtoend,go/vt/vttablet/endtoend}/**/*_test.go'
-=======
-            - '{.github/workflows/codecov.yml,.github/actions/setup-mysql/action.yml,.github/actions/tune-os/**,.github/actions/setup-go/action.yml,go/**,go.mod,go.sum,Makefile}'
-            - '!{go/test/endtoend,go/flags/endtoend,go/mysql/endtoend,go/vt/vtctl/endtoend,go/vt/vtctl/grpcvtctldserver/endtoend,go/vt/vtgate/endtoend,go/vt/vttablet/endtoend}/**/*_test.go'
->>>>>>> 7be2d66fca (CI: point apt at a responsive Ubuntu archive server (#21724))
 
     # Needed by `go list` in the next step.
     - name: Set up Go
