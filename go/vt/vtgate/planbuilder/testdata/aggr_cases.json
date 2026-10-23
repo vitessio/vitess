@@ -3167,6 +3167,44 @@
     }
   },
   {
+    "comment": "having predicate with a constant-folded json value is evaluated at the vtgate level",
+    "query": "select foo, count(*) from user group by foo having min(textcol1) = json_array(1)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select foo, count(*) from user group by foo having min(textcol1) = json_array(1)",
+      "Instructions": {
+        "OperatorType": "Filter",
+        "Predicate": "min(textcol1) = json_array(1)",
+        "ResultColumns": 2,
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Ordered",
+            "Aggregates": "sum_count_star(1) AS count(*), min(2 COLLATE latin1_swedish_ci) AS min(textcol1)",
+            "GroupBy": "(0|3)",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select foo, count(*), min(textcol1), weight_string(foo) from `user` where 1 != 1 group by foo, weight_string(foo)",
+                "OrderBy": "(0|3) ASC",
+                "Query": "select foo, count(*), min(textcol1), weight_string(foo) from `user` group by foo, weight_string(foo) order by foo asc"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
     "comment": "find aggregation expression and use column offset in filter times two",
     "query": "select foo, sum(foo), sum(bar) from user group by foo having sum(foo)+sum(bar) = 42",
     "plan": {

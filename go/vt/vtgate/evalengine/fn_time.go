@@ -273,6 +273,10 @@ func (call *builtinSysdate) constant() bool {
 	return false
 }
 
+func (call *builtinSysdate) constForExecution() bool {
+	return false
+}
+
 func (call *builtinCurdate) eval(env *ExpressionEnv) (eval, error) {
 	now := env.time(false)
 	return newEvalDate(now.Date, false), nil
