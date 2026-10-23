@@ -189,13 +189,15 @@ func tryMergeApplyJoin(in *ApplyJoin, ctx *plancontext.PlanningContext) (_ Opera
 		return in, NoRewrite
 	}
 
-	// Special case: If LHS is a DualRouting AND the join isn't INNER or targeting a single shard,
+	// Special case: If LHS is a DualRouting or AnyShardRouting AND the join isn't INNER or targeting a single shard,
 	// we cannot safely perform this rewrite.
-	if _, isDual := rb.Routing.(*DualRouting); isDual &&
+	_, isDual := rb.Routing.(*DualRouting)
+	_, isAnyShard := rb.Routing.(*AnyShardRouting)
+	if (isDual || isAnyShard) &&
 		(!jm.joinType.IsInner() && !r.Routing.OpCode().IsSingleShard()) {
 		// to check the resulting opcode, we've used the original predicates.
 		// Since we are not using them, we need to restore the argument versions of the predicates
-		debugNoRewrite("apply join merge blocked: dual routing with non-inner join and multi-shard target")
+		debugNoRewrite("apply join merge blocked: dual or anyShard routing with non-inner join and multi-shard target")
 		return in, NoRewrite
 	}
 
