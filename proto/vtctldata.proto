@@ -26,6 +26,7 @@ import "binlogdata.proto";
 import "logutil.proto";
 import "mysqlctl.proto";
 import "query.proto";
+import "querythrottler.proto";
 import "replicationdata.proto";
 import "tabletmanagerdata.proto";
 import "topodata.proto";
@@ -562,6 +563,8 @@ message CheckThrottlerRequest {
   bool skip_request_heartbeats = 4;
   // OKIfNotExists asks the throttler to return OK even if the metric does not exist
   bool ok_if_not_exists = 5;
+  // ThrottlerType specifies which throttler to check (defaults to DEFAULT_LAG_THROTTLER)
+  tabletmanagerdata.ThrottlerType throttler_type = 6;
 }
 
 message CheckThrottlerResponse {
@@ -1171,6 +1174,8 @@ message GetTabletsResponse {
 message GetThrottlerStatusRequest {
   // TabletAlias is the alias of the tablet to probe
   topodata.TabletAlias tablet_alias = 1;
+  // ThrottlerType specifies which throttler to query (defaults to DEFAULT_LAG_THROTTLER)
+  tabletmanagerdata.ThrottlerType throttler_type = 2;
 }
 
 message GetThrottlerStatusResponse {
@@ -2310,4 +2315,14 @@ message SetVtorcEmergencyReparentRequest {
 }
 
 message SetVtorcEmergencyReparentResponse {
+}
+
+message UpdateQueryThrottlerConfigRequest {
+  // Keyspace is the keyspace whose query throttler config to replace.
+  string keyspace = 1;
+  // QueryThrottlerConfig is the new config. It replaces the existing config as a whole.
+  querythrottler.Config query_throttler_config = 2;
+}
+
+message UpdateQueryThrottlerConfigResponse {
 }

@@ -10,6 +10,7 @@
         - [VTAdmin VExplain modes that can run the statement require the `execute` action](#vtadmin-vexplain-execute-action)
     - **[New Support](#new-support)**
         - [VTOrc failover of an unreachable primary `vttablet` via replica quorum](#vtorc-quorum-unreachable-primary)
+        - [Query throttler `TABLET_THROTTLER` strategy](#vttablet-query-throttler-tablet-throttler)
         - [Back up binary logs with full builtin backups](#backup-include-binlogs)
     - **[Breaking Changes](#breaking-changes)**
         - [`--watch-replication-stream` flag removed](#vttablet-watch-replication-stream-removed)
@@ -131,6 +132,30 @@ Note that in this scenario the old primary's MySQL keeps running, and because it
 
 See [#19918](https://github.com/vitessio/vitess/issues/19918).
 
+#### <a id="vttablet-query-throttler-tablet-throttler"/>Query throttler `TABLET_THROTTLER` strategy</a>
+
+VTTablet's incoming query throttler has a new `TABLET_THROTTLER` strategy, which throttles queries based on the tablet throttler's metrics (for example `lag` or `loadavg`). Rules are keyed by tablet type and statement type, and give each metric a list of thresholds with the percentage of matching queries to reject once the metric goes above that threshold. A throttled query fails with `RESOURCE_EXHAUSTED`, which MySQL clients receive as `ER_OUT_OF_RESOURCES` (1041). `dry_run` evaluates the rules and records metrics without rejecting anything. Statements inside an open transaction are never throttled, because VTGate rolls back the whole transaction when one of its statements is rejected. Rules can target `REPLACE` statements separately from `INSERT`; this classification is local to the query throttler, so plans, query logs and metrics elsewhere still report `REPLACE` as `INSERT`.
+
+The configuration is set per keyspace with the new `vtctldclient UpdateQueryThrottlerConfig` command, which validates it and stores it in the `Keyspace` and every cell's `SrvKeyspace`. The command replaces the whole configuration, so `{"enabled":false}` also removes every rule. Rules can name any statement type that reaches the query throttler except `MIGRATION` and `SET`: a rule for those would also reject `ALTER VITESS_MIGRATION ... CANCEL` and the statements that set up a session. Tablets watch their `SrvKeyspace` and apply changes immediately. `--query-throttler-cache-update-interval` (default `10s`) controls how often a tablet refreshes the throttler check results that its decisions are based on, so throttling starts and stops up to that long after a metric crosses its threshold. A disabled configuration runs no strategy. The strategy exports its metrics under the `QueryThrottlerTabletStrategy` prefix (for example `QueryThrottlerTabletStrategyDecisionCount` and `QueryThrottlerTabletStrategyCacheHits`), and registers them only once a tablet first runs it, so tablets that never enable it export none of them. The dedicated tablet throttler instance that the strategy checks exports its metrics under the `QueryThrottlerDedicated` prefix (for example `QueryThrottlerDedicatedCheckAnyTotal` and `QueryThrottlerDedicatedProbesTotal`), rather than into the tablet throttler's `Throttler*` metrics, and likewise only once the query throttler is enabled.
+
+`vtctldclient CheckThrottler` and `vtctldclient GetThrottlerStatus` have a new `--throttler-type` flag. It defaults to `DEFAULT_LAG_THROTTLER`, the tablet throttler; `DEDICATED_QUERY_THROTTLER` inspects the instance the query throttler checks.
+
+Existing query throttler metrics and behavior change as follows:
+
+- The dedicated tablet throttler instance now runs only while the query throttler is enabled. Previously it ran wherever the tablet throttler was enabled and wrote into the tablet throttler's `Throttler*` metrics, so those metrics now describe only the tablet throttler.
+- `QueryThrottlerThrottled` no longer has a `MetricValue` label, which created a new time series for every distinct metric value.
+- The `Workload` label of `QueryThrottlerRequests`, `QueryThrottlerThrottled`, `QueryThrottlerTotalLatencyNs` and `QueryThrottlerEvaluateLatencyNs` is `unknown` unless `--enable-per-workload-table-metrics` is set, to bound the number of time series.
+- In vtcombo and vtexplain, which run several tablets in one process, those four metrics no longer have a `Tablet` label. The tablets in a process now share one set of series.
+
+**Upgrade note**: upgrade every `vtctld`, `vttablet` and `vtgate` to v25 before enabling a `TABLET_THROTTLER` configuration. Until then, query throttling can stop without anything reporting it:
+
+- A v24 `vtctld` rebuilds each `SrvKeyspace` with only the tablet throttler configuration, so `RebuildKeyspaceGraph` on it drops `query_throttler_config`.
+- A v24 `vttablet` or `vtgate` that starts in a cell with no `SrvKeyspace` for the keyspace creates one without `query_throttler_config`.
+- A v24 `vttablet` has no `TABLET_THROTTLER` strategy. It runs the NoOp strategy and only logs `Unknown strategy ..., using NoOp`.
+- A v24 `vttablet` ignores `throttler_type` in `CheckThrottler` and `GetThrottlerStatus` requests and answers for the tablet throttler.
+
+In the first two cases the tablets fall back to the NoOp strategy. To restore throttling, re-run `UpdateQueryThrottlerConfig` or rebuild the keyspace graph with a v25 `vtctld`.
+
 #### <a id="backup-include-binlogs"/>Back up binary logs with full builtin backups</a>
 
 A full backup taken with the `builtin` backup engine can now include the source's binary logs. Pass `--include-binlogs` to `vtbackup`, `vtctldclient Backup` or `vtctldclient BackupShard`. Restores need no flag: when a backup's manifest includes binary logs, a restore puts them in place under the target's own `log-bin` basename, adds them to the binlog index before `mysqld` starts, keeps their original file modification times, and does not reset or purge them. The restored server can therefore serve binlog streams (replicas, VStreams) for transactions from before the backup. Point-in-time recovery from such a backup still works.
@@ -243,6 +268,10 @@ The VTTablet flag `--vreplication-enable-http-log` is now deprecated and is a no
 The vtctld and vtcombo flags `--cell`, `--proxy-tablets`, `--action-timeout`, and `--tablet-health-keep-alive` are now deprecated and are no-ops, as the [legacy vtctld HTTP API they configured has been removed](#vtctld-http-api-removed). The flags will be removed entirely in v26. This deprecation is tracked in https://github.com/vitessio/vitess/issues/21170.
 
 **Impact**: Remove any usage of these flags from vtctld and vtcombo startup scripts or configuration.
+
+The VTTablet and vtcombo flag `--query-throttler-config-refresh-interval` is now deprecated. It has had no effect since v24, when the query throttler started applying configuration changes as soon as they are written to the `SrvKeyspace`, through a topology watch, instead of polling on an interval. The flag will be removed entirely in v26.
+
+**Impact**: Remove any usage of the `--query-throttler-config-refresh-interval` flag from VTTablet and vtcombo startup scripts or configuration.
 
 #### <a id="deprecated-selectstream-rule-plan"/>Legacy streaming-path plan types in query rules</a>
 

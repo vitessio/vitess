@@ -70,6 +70,9 @@ type QueryExecutor struct {
 	// The target type we requested might be different from tsv's tablet type, if we had a change to the tablet type recently.
 	targetTabletType topodatapb.TabletType
 	setting          *smartconnpool.Setting
+	// transactionID is the open transaction the query runs in, or 0. Unlike connID, it is 0
+	// for a reserved connection without a transaction.
+	transactionID int64
 }
 
 const (
@@ -166,7 +169,7 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		return nil, err
 	}
 
-	if reqThrottledErr := qre.tsv.queryThrottler.Throttle(qre.ctx, qre.targetTabletType, qre.plan.FullQuery, qre.connID, qre.options); reqThrottledErr != nil {
+	if reqThrottledErr := qre.tsv.queryThrottler.Throttle(qre.ctx, qre.targetTabletType, qre.plan.FullQuery, qre.plan.StatementType, qre.transactionID, qre.options); reqThrottledErr != nil {
 		return nil, reqThrottledErr
 	}
 
@@ -499,7 +502,7 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) (err error) {
 		return err
 	}
 
-	if reqThrottledErr := qre.tsv.queryThrottler.Throttle(qre.ctx, qre.targetTabletType, qre.plan.FullQuery, qre.connID, qre.options); reqThrottledErr != nil {
+	if reqThrottledErr := qre.tsv.queryThrottler.Throttle(qre.ctx, qre.targetTabletType, qre.plan.FullQuery, qre.plan.StatementType, qre.transactionID, qre.options); reqThrottledErr != nil {
 		return reqThrottledErr
 	}
 
@@ -812,7 +815,7 @@ func (qre *QueryExecutor) streamDML(callback StreamCallback) (err error) {
 		return err
 	}
 
-	if err = qre.tsv.queryThrottler.Throttle(qre.ctx, qre.targetTabletType, qre.plan.FullQuery, qre.connID, qre.options); err != nil {
+	if err = qre.tsv.queryThrottler.Throttle(qre.ctx, qre.targetTabletType, qre.plan.FullQuery, qre.plan.StatementType, qre.transactionID, qre.options); err != nil {
 		return err
 	}
 

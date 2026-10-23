@@ -125,7 +125,7 @@ Flags:
       --enable-hot-row-protection-dry-run                                If true, hot row protection is not enforced but logs if transactions would have been queued.
       --enable-online-ddl                                                Allow users to submit, review and control Online DDL (default true)
       --enable-partial-keyspace-migration                                (Experimental) Follow shard routing rules: enable only while migrating a keyspace shard by shard. See documentation on Partial MoveTables for more. (default false)
-      --enable-per-workload-table-metrics                                If true, query counts and query error metrics include a label that identifies the workload
+      --enable-per-workload-table-metrics                                If true, query counts and query error metrics, and the query throttler's metrics, include a label that identifies the workload
       --enable-replication-reporter                                      Use polling to track replication lag.
       --enable-set-var                                                   This will enable the use of MySQL's SET_VAR query hint for certain system variables instead of using reserved connections (default true)
       --enable-system-settings                                           This will enable the system settings to be changed per session at the database connection level (default true)
@@ -280,7 +280,7 @@ Flags:
       --publish-retry-interval duration                                  how long vttablet waits to retry publishing the tablet record (default 30s)
       --purge-logs-interval duration                                     how often try to remove old logs (default 1h0m0s)
       --query-log-stream-handler string                                  URL handler for streaming queries log (default "/debug/querylog")
-      --query-throttler-config-refresh-interval duration                 How frequently to refresh configuration for the query throttler (default 1m0s)
+      --query-throttler-cache-update-interval duration                   How frequently to refresh throttle check results for the query throttler TABLET_THROTTLER strategy (default 10s)
       --query-timeout int                                                Sets the default query timeout (in ms). Can be overridden by session variable (query_timeout) or comment directive (QUERY_TIMEOUT_MS)
       --querylog-buffer-size int                                         Maximum number of buffered query logs before throttling log output (default 10)
       --querylog-emit-on-any-condition-met                               Emit to query log when any of the conditions (row-threshold, time-threshold, filter-tag) is met (default false)

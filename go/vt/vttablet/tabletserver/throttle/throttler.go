@@ -104,9 +104,17 @@ const (
 
 var throttleTabletTypes = "replica"
 
+const (
+	// lagThrottlerMetricsPrefix prefixes the lag throttler's metrics.
+	lagThrottlerMetricsPrefix = "Throttler"
+	// queryThrottlerMetricsPrefix prefixes the dedicated query throttler's metrics, so its
+	// probes and checks don't mix into the lag throttler's.
+	queryThrottlerMetricsPrefix = "QueryThrottlerDedicated"
+)
+
 var (
-	statsThrottlerHeartbeatRequests    = stats.NewCounter("ThrottlerHeartbeatRequests", "heartbeat requests")
-	statsThrottlerProbeRecentlyChecked = stats.NewCounter("ThrottlerProbeRecentlyChecked", "probe recently checked")
+	statsThrottlerHeartbeatRequests    = stats.NewCounter(lagThrottlerMetricsPrefix+"HeartbeatRequests", "heartbeat requests")
+	statsThrottlerProbeRecentlyChecked = stats.NewCounter(lagThrottlerMetricsPrefix+"ProbeRecentlyChecked", "probe recently checked")
 )
 
 func init() {
@@ -132,10 +140,12 @@ type throttlerTopoService interface {
 // Throttler is the main entity in the throttling mechanism. This service runs, probes, collects data,
 // aggregates, reads inventory, provides information, etc.
 type Throttler struct {
-	keyspace    string
-	shard       string
-	tabletAlias *topodatapb.TabletAlias
-	tabletInfo  atomic.Pointer[topo.TabletInfo]
+	keyspace      string
+	shard         string
+	tabletAlias   *topodatapb.TabletAlias
+	throttlerType ThrottlerType
+	configLoader  configLoader
+	tabletInfo    atomic.Pointer[topo.TabletInfo]
 
 	check     *ThrottlerCheck
 	isEnabled atomic.Bool
@@ -216,15 +226,28 @@ type ThrottlerStatus struct {
 }
 
 // NewThrottler creates a Throttler
-func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Server, tabletAlias *topodatapb.TabletAlias, heartbeatWriter heartbeat.HeartbeatWriter, tabletTypeFunc func() topodatapb.TabletType, connectionPoolName string) *Throttler {
+func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Server, tabletAlias *topodatapb.TabletAlias, heartbeatWriter heartbeat.HeartbeatWriter, tabletTypeFunc func() topodatapb.TabletType, throttlerType ThrottlerType) *Throttler {
+	var poolName string
+	var cfgLoader configLoader
+	switch throttlerType {
+	case QueryTabletThrottler:
+		poolName = "QueryThrottlerPool"
+		cfgLoader = &queryConfigLoader{}
+	default:
+		poolName = "ThrottlerPool"
+		cfgLoader = &defaultConfigLoader{}
+	}
+
 	throttler := &Throttler{
 		tabletAlias:     tabletAlias,
+		throttlerType:   throttlerType,
+		configLoader:    cfgLoader,
 		env:             env,
 		tabletTypeFunc:  tabletTypeFunc,
 		srvTopoServer:   srvTopoServer,
 		ts:              ts,
 		heartbeatWriter: heartbeatWriter,
-		pool: connpool.NewPool(env, connectionPoolName, tabletenv.ConnPoolConfig{
+		pool: connpool.NewPool(env, poolName, tabletenv.ConnPoolConfig{
 			Size:        2,
 			IdleTimeout: env.Config().OltpReadPool.IdleTimeout,
 		}),
@@ -297,6 +320,14 @@ func (throttler *Throttler) InitDBConfig(keyspace, shard string) {
 	throttler.shard = shard
 }
 
+// getConfigLoader returns the configLoader, defaulting to defaultConfigLoader if not set.
+func (throttler *Throttler) getConfigLoader() configLoader {
+	if throttler.configLoader != nil {
+		return throttler.configLoader
+	}
+	return &defaultConfigLoader{}
+}
+
 func (throttler *Throttler) GetMetricsQuery() string {
 	if customQuery := throttler.GetCustomMetricsQuery(); customQuery != "" {
 		return customQuery
@@ -346,7 +377,7 @@ func (throttler *Throttler) readThrottlerConfig(ctx context.Context) (*topodatap
 	if err != nil {
 		return nil, err
 	}
-	return throttler.normalizeThrottlerConfig(srvks.ThrottlerConfig), nil
+	return throttler.normalizeThrottlerConfig(throttler.getConfigLoader().loadConfig(srvks)), nil
 }
 
 // normalizeThrottlerConfig normalizes missing throttler config information, as needed.
@@ -379,7 +410,7 @@ func (throttler *Throttler) WatchSrvKeyspaceCallback(srvks *topodatapb.SrvKeyspa
 		}
 		return true
 	}
-	throttlerConfig := throttler.normalizeThrottlerConfig(srvks.ThrottlerConfig)
+	throttlerConfig := throttler.normalizeThrottlerConfig(throttler.getConfigLoader().loadConfig(srvks))
 
 	if throttler.IsEnabled() {
 		// Throttler is enabled and we should apply the config change
@@ -662,7 +693,26 @@ func (throttler *Throttler) requestHeartbeats() {
 		return
 	}
 	go throttler.heartbeatWriter.RequestHeartbeats()
-	statsThrottlerHeartbeatRequests.Add(1)
+	throttler.counter(statsThrottlerHeartbeatRequests, "HeartbeatRequests", "heartbeat requests").Add(1)
+}
+
+// metricsPrefix returns the prefix of this throttler's metrics.
+func (throttler *Throttler) metricsPrefix() string {
+	if throttler.throttlerType == QueryTabletThrottler {
+		return queryThrottlerMetricsPrefix
+	}
+	return lagThrottlerMetricsPrefix
+}
+
+// counter returns this throttler's counter for name, which excludes the prefix. The lag
+// throttler uses lagCounter, registered at init, so its metrics are unchanged. The
+// dedicated query throttler registers its own on first use, so a tablet that never
+// enables the query throttler exports none of them.
+func (throttler *Throttler) counter(lagCounter *stats.Counter, name, help string) *stats.Counter {
+	if throttler.throttlerType != QueryTabletThrottler {
+		return lagCounter
+	}
+	return stats.GetOrNewCounter(queryThrottlerMetricsPrefix+name, help)
 }
 
 // stimulatePrimaryThrottler sends a check request to the primary tablet in the shard, to stimulate
@@ -690,7 +740,10 @@ func (throttler *Throttler) stimulatePrimaryThrottler(ctx context.Context, tmCli
 		// on the next stimulation.
 		return nil
 	}
-	req := &tabletmanagerdatapb.CheckThrottlerRequest{AppName: throttlerapp.ThrottlerStimulatorName.String()}
+	req := &tabletmanagerdatapb.CheckThrottlerRequest{
+		AppName:       throttlerapp.ThrottlerStimulatorName.String(),
+		ThrottlerType: throttler.throttlerType.ToProto(),
+	}
 	_, err = tmClient.CheckThrottler(ctx, tablet.Tablet, req)
 	if err != nil {
 		log.Error("stimulatePrimaryThrottler failed", slog.Any("error", err))
@@ -899,7 +952,9 @@ func (throttler *Throttler) generateTabletProbeFunction(scope base.Scope, probe 
 		}
 		metrics := make(base.ThrottleMetrics)
 
-		req := &tabletmanagerdatapb.CheckThrottlerRequest{} // We leave AppName empty; it will default to VitessName anyway, and we can save some proto space
+		req := &tabletmanagerdatapb.CheckThrottlerRequest{
+			ThrottlerType: throttler.throttlerType.ToProto(),
+		} // We leave AppName empty; it will default to VitessName anyway, and we can save some proto space
 		resp, err := tmClient.CheckThrottler(ctx, probe.Tablet, req)
 		if err != nil {
 			err = vterrors.Wrapf(err, "gRPC error accessing tablet %v", probe.Alias)
@@ -913,7 +968,7 @@ func (throttler *Throttler) generateTabletProbeFunction(scope base.Scope, probe 
 			// We have just probed a tablet, and it reported back that someone just recently "check"ed it.
 			// We therefore renew the heartbeats lease.
 			throttler.requestHeartbeats()
-			statsThrottlerProbeRecentlyChecked.Add(1)
+			throttler.counter(statsThrottlerProbeRecentlyChecked, "ProbeRecentlyChecked", "probe recently checked").Add(1)
 		}
 		for name, metric := range resp.Metrics {
 			metricName := base.MetricName(name)
@@ -994,7 +1049,7 @@ func (throttler *Throttler) collectSelfMetrics(ctx context.Context, tmClient tmc
 		defer atomic.StoreInt64(&probe.QueryInProgress, 0)
 
 		// Throttler is probing its own tablet's metrics:
-		_ = base.ReadThrottleMetrics(ctx, probe, tmClient, throttler.readSelfThrottleMetrics)
+		_ = base.ReadThrottleMetrics(ctx, throttler.metricsPrefix(), probe, tmClient, throttler.readSelfThrottleMetrics)
 	}()
 }
 
@@ -1017,7 +1072,7 @@ func (throttler *Throttler) collectShardMetrics(ctx context.Context, tmClient tm
 			// Throttler probing other tablets:
 			throttleMetricFunc := throttler.generateTabletProbeFunction(base.ShardScope, probe)
 
-			throttleMetrics := base.ReadThrottleMetrics(ctx, probe, tmClient, throttleMetricFunc)
+			throttleMetrics := base.ReadThrottleMetrics(ctx, throttler.metricsPrefix(), probe, tmClient, throttleMetricFunc)
 			for _, metric := range throttleMetrics {
 				select {
 				case <-ctx.Done():

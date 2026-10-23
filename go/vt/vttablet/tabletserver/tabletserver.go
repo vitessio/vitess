@@ -99,11 +99,6 @@ var logComputeRowSerializerKey = logutil.NewThrottledLogger("ComputeRowSerialize
 // Open and Close can be called repeatedly during the lifetime of
 // a subcomponent. These should also be idempotent.
 
-const (
-	throttlerPoolName      = "ThrottlerPool"
-	queryThrottlerPoolName = "QueryThrottlerPool"
-)
-
 type TabletServer struct {
 	exporter               *servenv.Exporter
 	config                 *tabletenv.TabletConfig
@@ -191,8 +186,8 @@ func NewTabletServer(ctx context.Context, env *vtenv.Environment, name string, c
 	tsv.se = schema.NewEngine(tsv)
 	tsv.hs = newHealthStreamer(tsv, alias, tsv.se)
 	tsv.rt = repltracker.NewReplTracker(tsv, alias)
-	tsv.lagThrottler = throttle.NewThrottler(tsv, srvTopoServer, topoServer, alias, tsv.rt.HeartbeatWriter(), tabletTypeFunc, throttlerPoolName)
-	tsv.qThrottler = throttle.NewThrottler(tsv, srvTopoServer, topoServer, alias, tsv.rt.HeartbeatWriter(), tabletTypeFunc, queryThrottlerPoolName)
+	tsv.lagThrottler = throttle.NewThrottler(tsv, srvTopoServer, topoServer, alias, tsv.rt.HeartbeatWriter(), tabletTypeFunc, throttle.DefaultTabletThrottler)
+	tsv.qThrottler = throttle.NewThrottler(tsv, srvTopoServer, topoServer, alias, tsv.rt.HeartbeatWriter(), tabletTypeFunc, throttle.QueryTabletThrottler)
 	tsv.queryThrottler = querythrottler.NewQueryThrottler(ctx, tsv.qThrottler, tsv, alias, srvTopoServer)
 
 	tsv.vstreamer = vstreamer.NewEngine(tsv, srvTopoServer, tsv.se, tsv.lagThrottler, alias.Cell)
@@ -462,6 +457,9 @@ func (tsv *TabletServer) StartService(target *querypb.Target, dbcfgs *dbconfigs.
 // should be called before process termination, or if MySQL is unreachable.
 // Under normal circumstances, SetServingType should be called.
 func (tsv *TabletServer) StopService() {
+	// Shut the throttler down first, so its background updater stops polling services
+	// that are about to be torn down.
+	tsv.queryThrottler.Shutdown()
 	tsv.sm.StopService()
 }
 
@@ -598,6 +596,7 @@ func (tsv *TabletServer) begin(
 					ctx:              ctx,
 					query:            query,
 					connID:           transactionID,
+					transactionID:    transactionID,
 					options:          options,
 					plan:             plan,
 					logStats:         logStats,
@@ -1046,6 +1045,7 @@ func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sq
 				marginComments:   comments,
 				bindVars:         bindVariables,
 				connID:           connID,
+				transactionID:    transactionID,
 				options:          options,
 				plan:             plan,
 				ctx:              ctx,
@@ -1150,6 +1150,7 @@ func (tsv *TabletServer) streamExecute(ctx context.Context, target *querypb.Targ
 				marginComments:   comments,
 				bindVars:         bindVariables,
 				connID:           connID,
+				transactionID:    transactionID,
 				options:          options,
 				plan:             plan,
 				ctx:              ctx,
@@ -1264,7 +1265,8 @@ func (tsv *TabletServer) beginWaitForSameRangeTransactions(ctx context.Context, 
 			}
 
 			return waitErr
-		})
+		},
+	)
 	return txDone, err
 }
 
@@ -1755,6 +1757,7 @@ func (tsv *TabletServer) ReserveBeginExecute(ctx context.Context, session querys
 					ctx:              ctx,
 					query:            query,
 					connID:           connID,
+					transactionID:    connID,
 					options:          options,
 					plan:             plan,
 					logStats:         logStats,
@@ -2167,16 +2170,23 @@ func (tsv *TabletServer) TopoServer() *topo.Server {
 	return tsv.topoServer
 }
 
-// CheckThrottler issues a self check
-func (tsv *TabletServer) CheckThrottler(ctx context.Context, appName string, flags *throttle.CheckFlags) *throttle.CheckResult {
-	r := tsv.lagThrottler.Check(ctx, appName, nil, flags)
-	return r
+// CheckThrottler issues a self check for the specified throttler type
+func (tsv *TabletServer) CheckThrottler(ctx context.Context, appName string, flags *throttle.CheckFlags, throttlerType tabletmanagerdatapb.ThrottlerType) *throttle.CheckResult {
+	return tsv.throttlerByType(throttlerType).Check(ctx, appName, nil, flags)
 }
 
-// GetThrottlerStatus gets the status of the tablet throttler
-func (tsv *TabletServer) GetThrottlerStatus(ctx context.Context) *throttle.ThrottlerStatus {
-	r := tsv.lagThrottler.Status()
-	return r
+// GetThrottlerStatus gets the status of the specified throttler type
+func (tsv *TabletServer) GetThrottlerStatus(ctx context.Context, throttlerType tabletmanagerdatapb.ThrottlerType) *throttle.ThrottlerStatus {
+	return tsv.throttlerByType(throttlerType).Status()
+}
+
+// throttlerByType returns the dedicated query throttler for DEDICATED_QUERY_THROTTLER, and
+// the lag throttler otherwise, including for requests from callers that predate the field.
+func (tsv *TabletServer) throttlerByType(throttlerType tabletmanagerdatapb.ThrottlerType) *throttle.Throttler {
+	if throttlerType == tabletmanagerdatapb.ThrottlerType_DEDICATED_QUERY_THROTTLER {
+		return tsv.qThrottler
+	}
+	return tsv.lagThrottler
 }
 
 // RedoPreparedTransactions redoes the prepared transactions.
@@ -2199,6 +2209,8 @@ func (tsv *TabletServer) HandlePanic(err *error) {
 
 // Close shuts down any remaining go routines
 func (tsv *TabletServer) Close(ctx context.Context) error {
+	// Shut the throttler down first, as in StopService.
+	tsv.queryThrottler.Shutdown()
 	tsv.sm.closeAll()
 	tsv.stats.Stop()
 	return nil
