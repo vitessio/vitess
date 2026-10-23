@@ -112,10 +112,10 @@ func TestGatewayBufferingWhenPrimarySwitchesServingState(t *testing.T) {
 	waitForBuffering(true)
 
 	// execute the query in a go routine since it should be buffered, and check that it eventually succeed
-	queryChan := make(chan struct{})
+	done := make(chan struct{}, 1)
 	go func() {
 		res, err = tg.Execute(ctx, target, "query", nil, 0, 0, nil)
-		queryChan <- struct{}{}
+		done <- struct{}{}
 	}()
 
 	// set the serving type for the primary tablet true and broadcast it so that the buffering code registers this change
@@ -127,7 +127,7 @@ func TestGatewayBufferingWhenPrimarySwitchesServingState(t *testing.T) {
 
 	// wait for the query to execute before checking for results
 	select {
-	case <-queryChan:
+	case <-done:
 		require.NoError(t, err)
 		require.Equal(t, sqlResult1, res)
 	case <-time.After(15 * time.Second):
@@ -222,10 +222,10 @@ func TestGatewayBufferingWhileReparenting(t *testing.T) {
 	sbcReplica.SetResults([]*sqltypes.Result{sqlResult1})
 
 	// execute the query in a go routine since it should be buffered, and check that it eventually succeed
-	queryChan := make(chan struct{})
+	done := make(chan struct{}, 1)
 	go func() {
 		res, err = tg.Execute(ctx, target, "query", nil, 0, 0, nil)
-		queryChan <- struct{}{}
+		done <- struct{}{}
 	}()
 
 	// set the serving type for the new primary tablet true and broadcast it so that the buffering code registers this change
@@ -256,7 +256,7 @@ outer:
 
 	// wait for the query to execute before checking for results
 	select {
-	case <-queryChan:
+	case <-done:
 		require.NoError(t, err)
 		require.Equal(t, sqlResult1, res)
 	case <-time.After(15 * time.Second):
@@ -330,14 +330,14 @@ func TestInconsistentStateDetectedBuffering(t *testing.T) {
 
 	var res *sqltypes.Result
 	var err error
-	queryChan := make(chan struct{})
+	done := make(chan struct{}, 1)
 	go func() {
 		res, err = tg.Execute(ctx, target, "query", nil, 0, 0, nil)
-		queryChan <- struct{}{}
+		done <- struct{}{}
 	}()
 
 	select {
-	case <-queryChan:
+	case <-done:
 		require.Nil(t, res)
 		require.Error(t, err)
 		// depending on whether the health check ticks before or after the buffering code, we might get different errors

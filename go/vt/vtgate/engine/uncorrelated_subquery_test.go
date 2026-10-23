@@ -67,6 +67,26 @@ func TestPulloutSubqueryValueGood(t *testing.T) {
 	sfp.ExpectLog(t, []string{fmt.Sprintf(`Execute aa: %v false`, sqltypes.Int64BindVariable(1))})
 	ufp.ExpectLog(t, []string{fmt.Sprintf(`Execute aa: %v sq: %v false`, sqltypes.Int64BindVariable(1), sqltypes.Int64BindVariable(1))})
 	expectResult(t, result, underlyingResult)
+
+	// A row of more than one column binds each column to its own variable, leaving out any extra columns the
+	// subquery returns, such as a weight_string for its ordering.
+	rowResult := sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"col1|col2|weight_string(col2)",
+			"int64|varchar|varbinary",
+		),
+		"1|a|A",
+	)
+	sfp = &fakePrimitive{
+		results: []*sqltypes.Result{rowResult},
+	}
+	ufp.rewind()
+	ps.Subquery = sfp
+	ps.RowResults = []string{"sq_0", "sq_1"}
+
+	_, err = ps.TryExecute(t.Context(), &noopVCursor{}, bindVars, false)
+	require.NoError(t, err)
+	ufp.ExpectLog(t, []string{fmt.Sprintf(`Execute aa: %v sq_0: %v sq_1: %v false`, sqltypes.Int64BindVariable(1), sqltypes.Int64BindVariable(1), sqltypes.StringBindVariable("a"))})
 }
 
 func TestPulloutSubqueryValueNone(t *testing.T) {
@@ -92,6 +112,15 @@ func TestPulloutSubqueryValueNone(t *testing.T) {
 	}
 	sfp.ExpectLog(t, []string{`Execute  false`})
 	ufp.ExpectLog(t, []string{`Execute sq:  false`})
+
+	// For a row of more than one column, each column is NULL, which is how MySQL compares a row with an empty
+	// row subquery.
+	sfp.rewind()
+	ufp.rewind()
+	ps.RowResults = []string{"sq_0", "sq_1"}
+	_, err := ps.TryExecute(t.Context(), &noopVCursor{}, make(map[string]*querypb.BindVariable), false)
+	require.NoError(t, err)
+	ufp.ExpectLog(t, []string{`Execute sq_0:  sq_1:  false`})
 }
 
 func TestPulloutSubqueryValueBadRows(t *testing.T) {
@@ -114,6 +143,28 @@ func TestPulloutSubqueryValueBadRows(t *testing.T) {
 
 	_, err := ps.TryExecute(context.Background(), &noopVCursor{}, make(map[string]*querypb.BindVariable), false)
 	require.EqualError(t, err, "subquery returned more than one row")
+
+	// A row that is narrower than the comparison it is bound for is a planner bug, for a value comparison and for
+	// IN alike.
+	narrowResult := sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"col1",
+			"int64",
+		),
+		"1",
+	)
+	ps.Subquery = &fakePrimitive{results: []*sqltypes.Result{narrowResult}}
+	ps.RowResults = []string{"sq_0", "sq_1"}
+	_, err = ps.TryExecute(t.Context(), &noopVCursor{}, make(map[string]*querypb.BindVariable), false)
+	require.EqualError(t, err, "VT13001: [BUG] subquery returned 1 columns for a row of 2")
+
+	ps.Subquery = &fakePrimitive{results: []*sqltypes.Result{narrowResult}}
+	ps.Opcode = PulloutIn
+	ps.HasValues = "has_values"
+	ps.RowResults = nil
+	ps.RowColumns = 2
+	_, err = ps.TryExecute(t.Context(), &noopVCursor{}, make(map[string]*querypb.BindVariable), false)
+	require.EqualError(t, err, "VT13001: [BUG] subquery returned 1 columns for a row of 2")
 }
 
 func TestPulloutSubqueryInNotinGood(t *testing.T) {
@@ -152,6 +203,30 @@ func TestPulloutSubqueryInNotinGood(t *testing.T) {
 	}
 	sfp.ExpectLog(t, []string{`Execute  false`})
 	ufp.ExpectLog(t, []string{fmt.Sprintf(`Execute has_values: %v sq: %v false`, sqltypes.Int64BindVariable(1), &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: querypb.Type_INT64, Value: []byte("1")}, {Type: querypb.Type_INT64, Value: []byte("2")}}})})
+
+	// Rows of more than one column are bound as a list of tuples, leaving out any extra columns the subquery
+	// returns.
+	rowResult := sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"col1|col2|weight_string(col2)",
+			"int64|varchar|varbinary",
+		),
+		"1|a|A",
+		"2|b|B",
+	)
+	sfp = &fakePrimitive{
+		results: []*sqltypes.Result{rowResult},
+	}
+	ufp.rewind()
+	ps.Subquery = sfp
+	ps.RowColumns = 2
+	_, err := ps.TryExecute(t.Context(), &noopVCursor{}, make(map[string]*querypb.BindVariable), false)
+	require.NoError(t, err)
+	rows := &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{
+		sqltypes.TupleToProto([]sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewVarChar("a")}),
+		sqltypes.TupleToProto([]sqltypes.Value{sqltypes.NewInt64(2), sqltypes.NewVarChar("b")}),
+	}}
+	ufp.ExpectLog(t, []string{fmt.Sprintf(`Execute has_values: %v sq: %v false`, sqltypes.Int64BindVariable(1), rows)})
 }
 
 func TestPulloutSubqueryInNone(t *testing.T) {
@@ -178,6 +253,18 @@ func TestPulloutSubqueryInNone(t *testing.T) {
 	}
 	sfp.ExpectLog(t, []string{`Execute  false`})
 	ufp.ExpectLog(t, []string{fmt.Sprintf(`Execute has_values: %v sq: %v false`, sqltypes.Int64BindVariable(0), &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: querypb.Type_INT64, Value: []byte("0")}}})})
+
+	// For rows of more than one column, the placeholder is a tuple as wide as the row: MySQL rejects anything
+	// else, even when the has-values guard is false.
+	sfp.rewind()
+	ufp.rewind()
+	ps.RowColumns = 2
+	_, err := ps.TryExecute(t.Context(), &noopVCursor{}, make(map[string]*querypb.BindVariable), false)
+	require.NoError(t, err)
+	placeholder := &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{
+		sqltypes.TupleToProto([]sqltypes.Value{sqltypes.NewInt64(0), sqltypes.NewInt64(0)}),
+	}}
+	ufp.ExpectLog(t, []string{fmt.Sprintf(`Execute has_values: %v sq: %v false`, sqltypes.Int64BindVariable(0), placeholder)})
 }
 
 func TestPulloutSubqueryExists(t *testing.T) {
