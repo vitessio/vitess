@@ -19,6 +19,7 @@ package json
 
 import (
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -809,4 +810,41 @@ func TestMarshalToBlob(t *testing.T) {
 		obj.Add("k", NewBlob("foo"))
 		require.Equal(t, `{"k": `+encoded+`}`, string(NewObject(obj).MarshalTo(nil)))
 	})
+}
+
+func TestParsedValueConcurrentReads(t *testing.T) {
+	var p Parser
+	doc, err := p.Parse(`{"s": "a\nb", "n": 1.5}`)
+	require.NoError(t, err)
+	obj, ok := doc.Object()
+	require.True(t, ok)
+	str, num := obj.Get("s"), obj.Get("n")
+
+	var wg sync.WaitGroup
+	for range 2 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if str.Type() != TypeString {
+				t.Errorf("expected TypeString, got %v", str.Type())
+			}
+			if num.NumberType() != NumberTypeFloat {
+				t.Errorf("expected NumberTypeFloat, got %v", num.NumberType())
+			}
+		}()
+	}
+	wg.Wait()
+
+	require.Equal(t, TypeString, str.Type())
+	sBytes, ok := str.StringBytes()
+	require.True(t, ok)
+	require.Equal(t, "a\nb", string(sBytes))
+	require.Equal(t, "a\nb", str.Raw())
+	require.Equal(t, NumberTypeFloat, num.NumberType())
+
+	// Strings that were never inspected used to marshal raw characters like ["\/"].
+	// They now marshal normalized and re-escaped as ["/"].
+	docSlash, err := p.Parse(`["\/"]`)
+	require.NoError(t, err)
+	require.Equal(t, `["/"]`, string(docSlash.MarshalTo(nil)))
 }
