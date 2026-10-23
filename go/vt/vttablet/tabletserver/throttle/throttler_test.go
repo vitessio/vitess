@@ -2462,6 +2462,10 @@ func TestStimulatePrimaryThrottler(t *testing.T) {
 			assert.Len(t, ts.tabletReads, tcase.expectReads)
 			if tcase.expectTarget == nil {
 				assert.Empty(t, tmClient.checked)
+				// Nothing was cached, so a second stimulation reads the shard record again.
+				_ = throttler.stimulatePrimaryThrottler(t.Context(), tmClient)
+				assert.Equal(t, 2, ts.shardReads)
+				assert.Empty(t, tmClient.checked)
 				return
 			}
 			require.Len(t, tmClient.checked, 1)
