@@ -95,10 +95,12 @@ type testEnv struct {
 	cell    string
 }
 
-func newTestEnv(t *testing.T, ctx context.Context, cell string, sourceKeyspace, targetKeyspace *testKeyspace) *testEnv {
+// newTestEnv creates a test environment with the tablets in the given cell. Any extra
+// cells are created in the topo without tablets.
+func newTestEnv(t *testing.T, ctx context.Context, cell string, sourceKeyspace, targetKeyspace *testKeyspace, extraCells ...string) *testEnv {
 	t.Helper()
 	env := &testEnv{
-		ts:             memorytopo.NewServer(ctx, cell),
+		ts:             memorytopo.NewServer(ctx, append([]string{cell}, extraCells...)...),
 		sourceKeyspace: sourceKeyspace,
 		targetKeyspace: targetKeyspace,
 		tablets:        make(map[string]map[int]*topodatapb.Tablet),
