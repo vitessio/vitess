@@ -103,6 +103,7 @@ const (
 	cannotSwitchHighLag             = "replication lag %ds is higher than allowed lag %ds"
 	cannotSwitchFailedTabletRefresh = "could not refresh all of the tablets involved in the operation:\n%s"
 	cannotSwitchFrozen              = "workflow is frozen"
+	cannotSwitchStopped             = "workflow is stopped"
 
 	// Number of LOCK TABLES cycles to perform on the sources during SwitchWrites.
 	lockTablesCycles = 2
@@ -3473,6 +3474,8 @@ func (s *Server) canSwitch(ctx context.Context, ts *trafficSwitcher, maxAllowedR
 	if wf.MaxVReplicationTransactionLag > maxAllowedReplLagSecs {
 		return fmt.Sprintf(cannotSwitchHighLag, wf.MaxVReplicationTransactionLag, maxAllowedReplLagSecs), nil
 	}
+	// Whether the journals exist, which we only check, at most once, if a stream is stopped.
+	var journalsChecked, journalsExist bool
 	for _, stream := range wf.ShardStreams {
 		for _, st := range stream.GetStreams() {
 			if st.Message == Frozen {
@@ -3483,6 +3486,26 @@ func (s *Server) canSwitch(ctx context.Context, ts *trafficSwitcher, maxAllowedR
 				return cannotSwitchCopyIncomplete, nil
 			case binlogdatapb.VReplicationWorkflowState_Error.String():
 				return cannotSwitchError, nil
+			case binlogdatapb.VReplicationWorkflowState_Stopped.String():
+				// A stopped stream is not replicating, so the target may be missing
+				// data no matter what the lag says. A stream that never ran reports
+				// its lag as the time since it was created.
+				// The exception is a stream stopped for the cutover by an earlier
+				// attempt at switching writes that created the journals, and so
+				// passed the point of no return. Running SwitchTraffic again must
+				// then be able to complete the switch.
+				if !journalsChecked {
+					if journalsExist, _, err = ts.checkJournals(ctx); err != nil {
+						return "", err
+					}
+					journalsChecked = true
+				}
+				if !journalsExist {
+					return cannotSwitchStopped, nil
+				}
+			}
+			if len(st.CopyStates) > 0 {
+				return cannotSwitchCopyIncomplete, nil
 			}
 		}
 	}
