@@ -23,9 +23,11 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"testing"
 	"time"
 
@@ -3851,4 +3853,74 @@ func TestSetSuperReadOnlyLockWaitTimeout(t *testing.T) {
 		assert.Equal(t, 1, db.GetQueryCalledNum("SET GLOBAL super_read_only = 'ON'"))
 		assert.Equal(t, 0, db.GetQueryCalledNum("SET SESSION lock_wait_timeout = @@global.lock_wait_timeout"), "must not restore a lock_wait_timeout that was never set")
 	})
+}
+
+// TestReplicationHooksUseCallerContext checks that the replication hooks are
+// killed when the caller's context ends, and which statements ran by then.
+func TestReplicationHooksUseCallerContext(t *testing.T) {
+	for _, tc := range []struct {
+		name, hook     string
+		start, restart bool
+	}{
+		{name: "StopReplication preflight", hook: "preflight_stop_slave"},
+		{name: "RestartReplication preflight", hook: "preflight_stop_slave", restart: true},
+		{name: "StartReplication postflight", hook: "postflight_start_slave", start: true},
+		{name: "RestartReplication postflight", hook: "postflight_start_slave", start: true, restart: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			require.NoError(t, os.Mkdir(filepath.Join(root, "vthook"), 0o700))
+			t.Setenv("VTROOT", root)
+			// The hook records its PID, which sleep keeps, so that cleanup can
+			// kill a hook the test failed to cancel.
+			marker := filepath.Join(root, "entered")
+			require.NoError(t, os.WriteFile(filepath.Join(root, "vthook", tc.hook), []byte("#!/bin/sh\necho $$ > "+marker+"\nexec sleep 60\n"), 0o700))
+			t.Cleanup(func() {
+				data, _ := os.ReadFile(marker)
+				if pid, err := strconv.Atoi(strings.TrimSpace(string(data))); err == nil {
+					_ = syscall.Kill(pid, syscall.SIGKILL)
+				}
+			})
+			db := fakesqldb.New(t)
+			t.Cleanup(db.Close)
+			cp := *db.ConnParams()
+			mysqld := NewMysqld(dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb"))
+			t.Cleanup(mysqld.Close)
+			for _, query := range []string{"SELECT 1", "STOP REPLICA", "RESET REPLICA", "START REPLICA"} {
+				db.AddQuery(query, &sqltypes.Result{})
+			}
+
+			ctx, cancel := context.WithCancel(t.Context())
+			t.Cleanup(cancel)
+			returned := make(chan error, 1)
+			go func() {
+				switch {
+				case tc.restart:
+					returned <- mysqld.RestartReplication(ctx, nil)
+				case tc.start:
+					returned <- mysqld.StartReplication(ctx, nil)
+				default:
+					returned <- mysqld.StopReplication(ctx, nil)
+				}
+			}()
+			require.Eventually(t, func() bool {
+				_, err := os.Stat(marker)
+				return err == nil
+			}, 30*time.Second, 10*time.Millisecond, "the hook did not start")
+			cancel()
+			select {
+			case err := <-returned:
+				require.ErrorContains(t, err, "failed(-7)")
+			case <-time.After(30 * time.Second):
+				require.FailNow(t, "the replication hook ignored the caller's context")
+			}
+			if tc.start {
+				// The postflight hook runs after replication started.
+				require.Equal(t, 1, db.GetQueryCalledNum("START REPLICA"))
+			} else {
+				require.Zero(t, db.GetQueryCalledNum("STOP REPLICA"))
+				require.Zero(t, db.GetQueryCalledNum("START REPLICA"))
+			}
+		})
+	}
 }

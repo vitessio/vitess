@@ -18,12 +18,16 @@ package hook
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"path"
+	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -61,6 +65,138 @@ func TestExecuteContext(t *testing.T) {
 	h.Parameters = []string{"0.1"}
 	hr = h.Execute()
 	assert.Equal(t, HOOK_SUCCESS, hr.ExitStatus)
+}
+
+// installHook writes a shell hook to $VTROOT/vthook, with $MARKER and $PIDS in
+// script replaced by a marker file to touch and a file to append the PIDs of
+// the hook's children to. The children are killed on cleanup.
+func installHook(t *testing.T, name, script string) (marker string) {
+	vtroot, err := vtenv.VtRoot()
+	require.NoError(t, err)
+	dir := t.TempDir()
+	marker, pids := path.Join(dir, "marker"), path.Join(dir, "pids")
+	t.Cleanup(func() {
+		data, _ := os.ReadFile(pids)
+		for field := range strings.FieldsSeq(string(data)) {
+			if pid, err := strconv.Atoi(field); err == nil {
+				_ = syscall.Kill(pid, syscall.SIGKILL)
+			}
+		}
+	})
+	hookPath := path.Join(vtroot, "vthook", name)
+	script = strings.NewReplacer("$MARKER", marker, "$PIDS", pids).Replace(script)
+	require.NoError(t, os.WriteFile(hookPath, []byte("#!/bin/sh\n"+script), 0o755))
+	t.Cleanup(func() { require.NoError(t, os.Remove(hookPath)) })
+	return marker
+}
+
+// TestExecuteOptionalContext runs real hook processes.
+func TestExecuteOptionalContext(t *testing.T) {
+	waitForFile := func(t *testing.T, file string) {
+		require.Eventually(t, func() bool {
+			_, err := os.Stat(file)
+			return err == nil
+		}, 30*time.Second, 10*time.Millisecond, "the hook did not write %s", file)
+	}
+	// runAsync runs the hook in the background and returns its error.
+	runAsync := func(ctx context.Context, name string) chan error {
+		returned := make(chan error, 1)
+		go func() { returned <- NewSimpleHook(name).ExecuteOptionalContext(ctx) }()
+		return returned
+	}
+	requireReturns := func(t *testing.T, returned chan error) error {
+		t.Helper()
+		select {
+		case err := <-returned:
+			return err
+		case <-time.After(30 * time.Second):
+			require.FailNow(t, "the hook call did not return")
+			return nil
+		}
+	}
+
+	t.Run("canceled running hook", func(t *testing.T) {
+		marker := installHook(t, "running_hook", "touch $MARKER\nexec sleep 60\n")
+		ctx, cancel := context.WithCancel(t.Context())
+		t.Cleanup(cancel)
+		returned := runAsync(ctx, "running_hook")
+		waitForFile(t, marker)
+		cancel()
+		require.ErrorContains(t, requireReturns(t, returned), "failed(-7)")
+	})
+
+	t.Run("canceled hook with a child holding its output", func(t *testing.T) {
+		marker := installHook(t, "background_child", "sleep 60 &\necho $! >> $PIDS\ntouch $MARKER\nwait\n")
+		ctx, cancel := context.WithCancel(t.Context())
+		t.Cleanup(cancel)
+		returned := runAsync(ctx, "background_child")
+		waitForFile(t, marker)
+		cancel()
+		require.ErrorContains(t, requireReturns(t, returned), "failed(-7)")
+	})
+
+	t.Run("successful hook with a child holding its output", func(t *testing.T) {
+		installHook(t, "exiting_parent", "sleep 60 &\necho $! >> $PIDS\nexit 0\n")
+		start := time.Now()
+		require.NoError(t, NewSimpleHook("exiting_parent").ExecuteOptionalContext(t.Context()))
+		assert.Less(t, time.Since(start), 30*time.Second, "the hook call waited for the child")
+		hr := NewSimpleHook("exiting_parent").execute(t.Context(), hookWaitDelay)
+		assert.Equal(t, HOOK_SUCCESS, hr.ExitStatus)
+		assert.Contains(t, hr.Stderr, "the output may be incomplete")
+	})
+
+	// The context ends after the hook exited, while a child holds its output.
+	for _, tc := range []struct {
+		exitCode int
+		wantErr  string
+	}{
+		{exitCode: 0},
+		{exitCode: 17, wantErr: "failed(17)"},
+	} {
+		t.Run(fmt.Sprintf("hook that exited %d before the cancellation", tc.exitCode), func(t *testing.T) {
+			marker := installHook(t, "exited_hook", fmt.Sprintf("sleep 60 &\necho $! >> $PIDS\necho $$ > $MARKER\nexit %d\n", tc.exitCode))
+			ctx, cancel := context.WithCancel(t.Context())
+			t.Cleanup(cancel)
+			returned := runAsync(ctx, "exited_hook")
+			waitForFile(t, marker)
+			require.Eventually(t, func() bool {
+				data, err := os.ReadFile(marker)
+				if err != nil {
+					return false
+				}
+				pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
+				// The hook has exited and been reaped.
+				return err == nil && errors.Is(syscall.Kill(pid, 0), syscall.ESRCH)
+			}, 30*time.Second, time.Millisecond)
+			select {
+			case err := <-returned:
+				require.FailNow(t, "the hook call returned before the cancellation", "error: %v", err)
+			default:
+			}
+			cancel()
+			err := requireReturns(t, returned)
+			if tc.wantErr == "" {
+				require.NoError(t, err)
+			} else {
+				require.ErrorContains(t, err, tc.wantErr)
+			}
+		})
+	}
+
+	t.Run("missing hook", func(t *testing.T) {
+		require.NoError(t, NewSimpleHook("missing_hook").ExecuteOptionalContext(t.Context()))
+	})
+}
+
+// TestExecuteContextWaitsForChildOutput checks that ExecuteContext still waits
+// for output a child of the hook writes after the hook exits.
+func TestExecuteContextWaitsForChildOutput(t *testing.T) {
+	installHook(t, "late_writer", "(sleep 2; echo late) &\necho $! >> $PIDS\nexit 0\n")
+
+	hr := NewSimpleHook("late_writer").ExecuteContext(t.Context())
+	assert.Equal(t, HOOK_SUCCESS, hr.ExitStatus)
+	assert.Equal(t, "late\n", hr.Stdout)
+	assert.Empty(t, hr.Stderr)
 }
 
 func TestExecuteOptional(t *testing.T) {
