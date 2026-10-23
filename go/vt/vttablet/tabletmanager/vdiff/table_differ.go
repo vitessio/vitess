@@ -973,15 +973,90 @@ func (td *tableDiffer) lastPKFromRow(row []sqltypes.Value) *tabletmanagerdatapb.
 		}
 	}
 
-	lastPK := &tabletmanagerdatapb.VDiffTableLastPK{
-		Target: buildQR(td.tablePlan.pkCols, targetFields),
+	// When a source time zone is configured, adjustForSourceTimeZone rewrites each
+	// target DATETIME column as convert_tz(col, target_tz, source_tz) so that the
+	// diff compares values in the source time zone. The row values we receive are
+	// therefore in the source time zone. The target checkpoint must store values in
+	// the target time zone (as the target table does), so convert each DATETIME
+	// primary-key value back from source TZ to target TZ before writing it.
+	// See https://github.com/vitessio/vitess/issues/21298.
+	var targetPKVals []sqltypes.Value
+	if td.wd.ct.sourceTimeZone != "" {
+		targetPKVals = make([]sqltypes.Value, len(td.tablePlan.pkCols))
+		for i, colIndex := range td.tablePlan.pkCols {
+			v := row[colIndex]
+			if targetFields[i] != nil && targetFields[i].Type == querypb.Type_DATETIME {
+				converted, err := convertDatetimeToTargetTZ(v, td.wd.ct.sourceTimeZone, td.wd.ct.targetTimeZone)
+				if err != nil {
+					// Log and keep the unconverted value; getSourcePKCols will have
+					// already disabled resumption if the conversion is structurally
+					// impossible, so this path is a belt-and-suspenders guard.
+					log.Errorf("vdiff %s: could not convert DATETIME PK column %s from source TZ %q to target TZ %q: %v",
+						td.wd.ct.uuid, targetFields[i].Name,
+						td.wd.ct.sourceTimeZone, td.wd.ct.targetTimeZone, err)
+					targetPKVals[i] = v
+					continue
+				}
+				targetPKVals[i] = converted
+				continue
+			}
+			targetPKVals[i] = v
+		}
 	}
-	// A separate source lastpk is only needed when the source key differs from the
-	// target by column position or by field type; otherwise the target value is reused.
-	if !slices.Equal(td.tablePlan.pkCols, td.tablePlan.sourcePkCols) || !fieldTypesEqual(targetFields, sourceFields) {
+
+	buildTargetQR := func() *querypb.QueryResult {
+		if targetPKVals != nil {
+			// Use the TZ-converted values for the target checkpoint.
+			return &querypb.QueryResult{
+				Fields: targetFields,
+				Rows:   []*querypb.Row{sqltypes.RowToProto3(targetPKVals)},
+			}
+		}
+		return buildQR(td.tablePlan.pkCols, targetFields)
+	}
+
+	lastPK := &tabletmanagerdatapb.VDiffTableLastPK{
+		Target: buildTargetQR(),
+	}
+	// A separate source lastpk is needed when the source key differs from the target
+	// by column position or field type, or when TZ conversion is active (the target
+	// checkpoint then carries different values from the source row).
+	needsSeparateSource := !slices.Equal(td.tablePlan.pkCols, td.tablePlan.sourcePkCols) ||
+		!fieldTypesEqual(targetFields, sourceFields) ||
+		targetPKVals != nil
+	if needsSeparateSource {
 		lastPK.Source = buildQR(td.tablePlan.sourcePkCols, sourceFields)
 	}
 	return lastPK
+}
+
+// convertDatetimeToTargetTZ converts a MySQL DATETIME string value from
+// sourceTZ to targetTZ using Go's time package (IANA timezone names).
+// This reverses the convert_tz(col, targetTZ, sourceTZ) that
+// adjustForSourceTimeZone applied to the target query so that the checkpoint
+// stored for the target stream is in the same time zone as the target table.
+func convertDatetimeToTargetTZ(val sqltypes.Value, sourceTZ, targetTZ string) (sqltypes.Value, error) {
+	if val.IsNull() {
+		return val, nil
+	}
+	// Default to UTC when the target TZ is unset (VReplication default).
+	if targetTZ == "" {
+		targetTZ = "UTC"
+	}
+	srcLoc, err := time.LoadLocation(sourceTZ)
+	if err != nil {
+		return val, fmt.Errorf("could not load source time zone %q: %w", sourceTZ, err)
+	}
+	tgtLoc, err := time.LoadLocation(targetTZ)
+	if err != nil {
+		return val, fmt.Errorf("could not load target time zone %q: %w", targetTZ, err)
+	}
+	t, err := time.ParseInLocation("2006-01-02 15:04:05", val.ToString(), srcLoc)
+	if err != nil {
+		return val, fmt.Errorf("could not parse DATETIME value %q: %w", val.ToString(), err)
+	}
+	converted := sqltypes.NewVarChar(t.In(tgtLoc).Format("2006-01-02 15:04:05"))
+	return converted, nil
 }
 
 // fieldTypesEqual reports whether two field slices have the same length and
@@ -1190,6 +1265,7 @@ func (td *tableDiffer) getSourcePKCols() error {
 		td.lastSourcePK = nil
 		td.lastTargetPK = nil
 	}
+
 
 	return nil
 }
