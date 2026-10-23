@@ -1108,6 +1108,45 @@ func TestMoveTablesCreateShardedVSchemaRollback(t *testing.T) {
 	require.True(t, proto.Equal(got.Keyspace, targetVSchema), "got: %v, want: %v", got.Keyspace, targetVSchema)
 }
 
+// TestMoveTablesCreateLockFailure confirms that a MoveTables Create that fails
+// to take the target keyspace lock leaves nothing behind: no streams are
+// created and the target vschema does not get the moved tables.
+func TestMoveTablesCreateLockFailure(t *testing.T) {
+	ms := &vtctldatapb.MaterializeSettings{
+		Workflow:       "workflow",
+		SourceKeyspace: "sourceks",
+		TargetKeyspace: "targetks",
+		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
+			TargetTable:      "t1",
+			SourceExpression: "select * from t1",
+		}},
+	}
+
+	ctx := t.Context()
+	env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
+	t.Cleanup(env.close)
+
+	// Hold the target keyspace lock so that Create times out taking it.
+	origLockTimeout := topo.LockTimeout
+	t.Cleanup(func() { topo.LockTimeout = origLockTimeout })
+	topo.LockTimeout = 100 * time.Millisecond
+	_, unlock, err := env.ws.ts.LockKeyspace(ctx, ms.TargetKeyspace, "test")
+	require.NoError(t, err)
+	t.Cleanup(func() { unlock(&err) })
+
+	_, err = env.ws.MoveTablesCreate(ctx, &vtctldatapb.MoveTablesCreateRequest{
+		Workflow:       ms.Workflow,
+		SourceKeyspace: ms.SourceKeyspace,
+		TargetKeyspace: ms.TargetKeyspace,
+		IncludeTables:  []string{"t1"},
+	})
+	require.ErrorContains(t, err, "deadline exceeded: keyspaces/targetks")
+
+	got, err := env.ws.ts.GetVSchema(ctx, ms.TargetKeyspace)
+	require.NoError(t, err)
+	require.NotContains(t, got.Tables, "t1", "the target vschema still has the moved table")
+}
+
 func TestMoveTablesCreateUnshardedVSchemaRollback(t *testing.T) {
 	ms := &vtctldatapb.MaterializeSettings{
 		Workflow:       "workflow",
