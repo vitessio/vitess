@@ -61,6 +61,7 @@ jobs:
             - 'bootstrap.sh'
             - '.github/workflows/e2e_race.yml'
             - '.github/actions/setup-mysql/action.yml'
+            - '.github/actions/tune-os/**'
             - '.github/actions/setup-go/action.yml'
 
     - name: Set up Go
