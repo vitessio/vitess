@@ -78,6 +78,7 @@ jobs:
             - 'bootstrap.sh'
             - '.github/workflows/upgrade_downgrade_test_reparent_old_vtctl.yml'
             - '.github/actions/setup-mysql/action.yml'
+            - '.github/actions/tune-os/**'
             - '.github/actions/setup-go/action.yml'
 
   upgrade_downgrade_test:
