@@ -74,14 +74,6 @@ func TestRegularExpressions(t *testing.T) {
 			},
 		},
 		{
-			regexp: regexpReplaceDockerfileBootstrapVersion,
-			input:  "ARG bootstrap_version=18.1",
-			checkF: func(t *testing.T, regexp *regexp.Regexp, input string) {
-				res := regexp.ReplaceAllString(input, "ARG bootstrap_version=18.2")
-				require.Equal(t, "ARG bootstrap_version=18.2", res)
-			},
-		},
-		{
 			regexp: regexpReplaceMakefileBootstrapVersion,
 			input:  "BOOTSTRAP_VERSION=18.1",
 			checkF: func(t *testing.T, regexp *regexp.Regexp, input string) {
