@@ -996,3 +996,83 @@ func TestBeginNewDbaConnectionClosesOnFailure(t *testing.T) {
 		require.NoError(t, db.WaitForClose(30*time.Second), "dba connection must be closed when begin fails")
 	})
 }
+
+// redoRowsForDtidAA returns the redo log read result for one prepared
+// transaction with the dtid "aa".
+func redoRowsForDtidAA() *sqltypes.Result {
+	return &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Type: sqltypes.VarChar},
+			{Type: sqltypes.Int64},
+			{Type: sqltypes.Int64},
+			{Type: sqltypes.VarChar},
+			{Type: sqltypes.Text},
+		},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewVarBinary("aa"),
+			sqltypes.NewInt64(RedoStatePrepared),
+			sqltypes.NewVarBinary("1"),
+			sqltypes.NewVarBinary("update test_table set `name` = 2 where pk = 1 limit 10001"),
+			sqltypes.NULL,
+		}},
+	}
+}
+
+// TestRedoPreparedTransactionsReadFailureKeepsPoolClosed verifies that a
+// failed redo log read leaves the prepared pool closed. CommitPrepared must not
+// report a dtid that recovery did not read as committed.
+func TestRedoPreparedTransactionsReadFailureKeepsPoolClosed(t *testing.T) {
+	ctx := t.Context()
+	txe, tsv, db, closer := newTestTxExecutor(t, ctx)
+	t.Cleanup(closer)
+
+	te := tsv.te
+	db.AddRejectedQuery(te.twoPC.readAllRedo, errors.New("redo read failed"))
+
+	te.RedoPreparedTransactions()
+
+	require.False(t, te.preparedPool.IsOpen())
+	require.ErrorContains(t, txe.CommitPrepared("aa"), "pool is shutdown")
+}
+
+// TestRedoPreparedTransactionsReplayFailureKeepsDtidInDoubt verifies that a
+// dtid whose replay fails with a retryable error stays reserved. CommitPrepared
+// must not report it as committed.
+func TestRedoPreparedTransactionsReplayFailureKeepsDtidInDoubt(t *testing.T) {
+	ctx := t.Context()
+	txe, tsv, db, closer := newTestTxExecutor(t, ctx)
+	t.Cleanup(closer)
+
+	te := tsv.te
+	db.AddQuery(te.twoPC.readAllRedo, redoRowsForDtidAA())
+	db.AddRejectedQuery("begin", sqlerror.NewSQLError(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "lost connection"))
+
+	te.RedoPreparedTransactions()
+
+	db.DeleteRejectedQuery("begin")
+	require.True(t, te.preparedPool.IsOpen())
+	require.ErrorContains(t, txe.CommitPrepared("aa"), "not restored by redo recovery")
+}
+
+// TestPrepareTxReleasesConnectionWhenPutFails verifies that prepareTx rolls
+// back and releases the replayed connection when the prepared pool rejects it.
+func TestPrepareTxReleasesConnectionWhenPutFails(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	t.Cleanup(db.Close)
+	db.AddQueryPattern(".*", &sqltypes.Result{})
+
+	cfg := tabletenv.NewDefaultConfig()
+	cfg.DB = newDBConfigs(db)
+	cfg.TwoPCAbandonAge = 200 * time.Second
+	te := NewTxEngine(tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TabletServerTest"), nil)
+	te.AcceptReadWrite()
+	t.Cleanup(te.Close)
+	te.preparedPool.Close()
+
+	_, err := te.prepareTx(t.Context(), &tx.PreparedTx{
+		Dtid:    "aa",
+		Queries: []string{"insert into vitess_test (intval) values(40)"},
+	})
+	require.ErrorContains(t, err, "pool is shutdown")
+	require.Equal(t, 1, db.GetQueryCalledNum("rollback"))
+}
