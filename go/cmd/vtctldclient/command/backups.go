@@ -38,7 +38,7 @@ import (
 var (
 	// Backup makes a Backup gRPC call to a vtctld.
 	Backup = &cobra.Command{
-		Use:                   "Backup [--concurrency <concurrency>] [--allow-primary] [--incremental-from-pos=<pos>|<backup-name>|auto] [--upgrade-safe] [--backup-engine=enginename] <tablet_alias>",
+		Use:                   "Backup [--concurrency <concurrency>] [--allow-primary] [--incremental-from-pos=<pos>|<backup-name>|auto] [--upgrade-safe] [--backup-engine=enginename] [--include-binlogs] <tablet_alias>",
 		Short:                 "Uses the BackupStorage service on the given tablet to create and store a new backup.",
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.ExactArgs(1),
@@ -46,7 +46,7 @@ var (
 	}
 	// BackupShard makes a BackupShard gRPC call to a vtctld.
 	BackupShard = &cobra.Command{
-		Use:   "BackupShard [--concurrency <concurrency>] [--allow-primary] [--incremental-from-pos=<pos>|<backup-name>|auto] [--upgrade-safe] <keyspace/shard>",
+		Use:   "BackupShard [--concurrency <concurrency>] [--allow-primary] [--incremental-from-pos=<pos>|<backup-name>|auto] [--upgrade-safe] [--include-binlogs] <keyspace/shard>",
 		Short: "Finds the most up-to-date REPLICA, RDONLY, or SPARE tablet in the given shard and uses the BackupStorage service on that tablet to create and store a new backup.",
 		Long: `Finds the most up-to-date REPLICA, RDONLY, or SPARE tablet in the given shard and uses the BackupStorage service on that tablet to create and store a new backup.
 
@@ -92,6 +92,7 @@ var backupOptions = struct {
 	InitSQLTabletTypes   []topodatapb.TabletType
 	InitSQLTimeout       time.Duration
 	InitSQLFailOnError   bool
+	IncludeBinlogs       bool
 }{}
 
 func validateBackupOptions() error {
@@ -124,6 +125,7 @@ func commandBackup(cmd *cobra.Command, args []string) error {
 		IncrementalFromPos:   backupOptions.IncrementalFromPos,
 		UpgradeSafe:          backupOptions.UpgradeSafe,
 		MysqlShutdownTimeout: protoutil.DurationToProto(backupOptions.MysqlShutdownTimeout),
+		IncludeBinlogs:       backupOptions.IncludeBinlogs,
 		InitSql: &tabletmanagerdatapb.BackupRequest_InitSQL{
 			Queries:     backupOptions.InitSQLQueries,
 			TabletTypes: backupOptions.InitSQLTabletTypes,
@@ -160,6 +162,7 @@ var backupShardOptions = struct {
 	IncrementalFromPos   string
 	UpgradeSafe          bool
 	MysqlShutdownTimeout time.Duration
+	IncludeBinlogs       bool
 }{}
 
 func commandBackupShard(cmd *cobra.Command, args []string) error {
@@ -181,6 +184,7 @@ func commandBackupShard(cmd *cobra.Command, args []string) error {
 		IncrementalFromPos:   backupShardOptions.IncrementalFromPos,
 		UpgradeSafe:          backupShardOptions.UpgradeSafe,
 		MysqlShutdownTimeout: protoutil.DurationToProto(backupShardOptions.MysqlShutdownTimeout),
+		IncludeBinlogs:       backupShardOptions.IncludeBinlogs,
 		InitSql: &tabletmanagerdatapb.BackupRequest_InitSQL{
 			Queries:     backupOptions.InitSQLQueries,
 			TabletTypes: backupOptions.InitSQLTabletTypes,
@@ -335,6 +339,7 @@ func init() {
 	Backup.Flags().StringVar(&backupOptions.BackupEngine, "backup-engine", "", "Request a specific backup engine for this backup request. Defaults to the preferred backup engine of the target vttablet")
 
 	Backup.Flags().BoolVar(&backupOptions.UpgradeSafe, "upgrade-safe", false, "Whether to use innodb_fast_shutdown=0 for the backup so it is safe to use for MySQL upgrades.")
+	Backup.Flags().BoolVar(&backupOptions.IncludeBinlogs, "include-binlogs", false, "Include the source's binary logs in a full builtin backup. Restores use them automatically.")
 	Backup.Flags().DurationVar(&backupOptions.MysqlShutdownTimeout, "mysql-shutdown-timeout", mysqlctl.DefaultShutdownTimeout, "Timeout to use when MySQL is being shut down.")
 	addInitSQLFlags(Backup)
 	Root.AddCommand(Backup)
@@ -343,6 +348,7 @@ func init() {
 	BackupShard.Flags().Int32Var(&backupShardOptions.Concurrency, "concurrency", 4, "Specifies the number of compression/checksum jobs to run simultaneously.")
 	BackupShard.Flags().StringVar(&backupShardOptions.IncrementalFromPos, "incremental-from-pos", "", "Position, or name of backup from which to create an incremental backup. Default: empty. If given, then this backup becomes an incremental backup from given position or given backup. If value is 'auto', this backup will be taken from the last successful backup position.")
 	BackupShard.Flags().BoolVar(&backupShardOptions.UpgradeSafe, "upgrade-safe", false, "Whether to use innodb_fast_shutdown=0 for the backup so it is safe to use for MySQL upgrades.")
+	BackupShard.Flags().BoolVar(&backupShardOptions.IncludeBinlogs, "include-binlogs", false, "Include the source's binary logs in a full builtin backup. Restores use them automatically.")
 	BackupShard.Flags().DurationVar(&backupShardOptions.MysqlShutdownTimeout, "mysql-shutdown-timeout", mysqlctl.DefaultShutdownTimeout, "Timeout to use when MySQL is being shut down.")
 	addInitSQLFlags(BackupShard)
 	Root.AddCommand(BackupShard)

@@ -657,3 +657,36 @@ func TestPrepareSetVarCommentSortsVariables(t *testing.T) {
 		require.Equal(t, want, vc.PrepareSetVarComment())
 	}
 }
+
+func TestPrepareSetVarComment(t *testing.T) {
+	tcases := []struct {
+		name             string
+		sysVars          map[string]string
+		want             string
+		wantReservedConn bool
+	}{{
+		name:    "clean values are emitted as hints",
+		sysVars: map[string]string{"sql_mode": "'only_full_group_by'"},
+		want:    "SET_VAR(sql_mode = 'only_full_group_by')",
+	}, {
+		name:             "value containing the comment terminator falls back to a reserved connection",
+		sysVars:          map[string]string{"optimizer_switch": "'x */ select 1 -- '", "sql_mode": "'only_full_group_by'"},
+		want:             "SET_VAR(sql_mode = 'only_full_group_by')",
+		wantReservedConn: true,
+	}, {
+		name:    "variables without SET_VAR support are not inspected",
+		sysVars: map[string]string{"sql_notes": "'x */ select 1 -- '"},
+		want:    "",
+	}}
+	for _, tc := range tcases {
+		t.Run(tc.name, func(t *testing.T) {
+			session := NewSafeSession(&vtgatepb.Session{SystemVariables: tc.sysVars})
+			vc, err := NewVCursorImpl(session, sqlparser.MarginComments{}, nil, nil, nil, &vindexes.VSchema{}, nil, nil, fakeObserver{}, VCursorConfig{}, nil)
+			require.NoError(t, err)
+
+			got := vc.PrepareSetVarComment()
+			require.Equal(t, tc.want, got)
+			require.Equal(t, tc.wantReservedConn, session.InReservedConn())
+		})
+	}
+}

@@ -16,7 +16,10 @@ limitations under the License.
 
 package sysvars
 
-import "sync"
+import (
+	"strings"
+	"sync"
+)
 
 // This information lives here, because it's needed from the vtgate planbuilder, the vtgate engine,
 // and the AST rewriter, that happens to live in sqlparser.
@@ -299,6 +302,14 @@ func SupportsSetVar(name string) bool {
 	}
 
 	return sys.SupportSetVar
+}
+
+// IsSafeSetVarValue reports whether a system variable value can be carried
+// in a SET_VAR optimizer hint. The hint lives inside a /*+ ... */ comment and
+// nothing inside a block comment can escape the sequence that terminates it,
+// so such a value has to be applied through a reserved connection instead.
+func IsSafeSetVarValue(value string) bool {
+	return !strings.Contains(value, "*/")
 }
 
 // GetInterestingVariables returns the variables whose values VTGate substitutes in the
