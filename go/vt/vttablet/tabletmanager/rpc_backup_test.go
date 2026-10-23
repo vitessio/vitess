@@ -21,9 +21,15 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/proto/vttime"
+	"vitess.io/vitess/go/vt/topo/memorytopo"
+
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 func TestShutdownTimeout(t *testing.T) {
@@ -49,6 +55,75 @@ func TestShutdownTimeout(t *testing.T) {
 			l := logutil.NewMemoryLogger()
 			timeout := shutdownTimeout(l, tc.timeout)
 			assert.Equal(t, tc.expected, timeout)
+		})
+	}
+}
+
+// Backup drains a tablet by changing its type, and that type change carries a semi-sync action.
+// SemiSyncActionUnset reaches fixSemiSync, which writes rpl_semi_sync_replica_enabled and can then
+// stop and restart replication. On an unmanaged tablet that is a write to a MySQL Vitess was told
+// not to manage, and none of the 17 guarded RPCs covers this path.
+//
+// An --unmanaged tablet normally cannot reach here at all: verifyUnmanagedTabletConfig requires
+// DB.HasGlobalSettings(), which makes initConfig skip my.cnf, leaving tm.Cnf nil so Backup refuses
+// up front. That coupling is undocumented and breaks when `unmanaged: true` comes from
+// --tablet-config alone, because config.Verify() runs before the YAML is unmarshalled over the
+// config. The test sets Cnf directly to stand in for that state.
+func TestBackupDrainLeavesAnUnmanagedMysqlAlone(t *testing.T) {
+	const engineName = "fake-unmanaged-drain"
+
+	tests := []struct {
+		name              string
+		mode              topodatapb.TabletMySQLMode
+		wantSemiSyncTouch bool
+	}{
+		{
+			name:              "unmanaged tablet drains without touching semi-sync",
+			mode:              topodatapb.TabletMySQLMode_UNMANAGED,
+			wantSemiSyncTouch: false,
+		}, {
+			// Control: the same drain on a managed tablet does reach MySQL.
+			name:              "managed tablet still fixes semi-sync on drain",
+			mode:              topodatapb.TabletMySQLMode_MANAGED,
+			wantSemiSyncTouch: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := t.Context()
+
+			mysqlctl.BackupRestoreEngineMap[engineName] = &mysqlctl.FakeBackupEngine{
+				ShouldDrainForBackupReturn: true,
+			}
+			t.Cleanup(func() { delete(mysqlctl.BackupRestoreEngineMap, engineName) })
+
+			ts := memorytopo.NewServer(ctx, "cell1")
+			t.Cleanup(ts.Close)
+
+			tm := newTestTM(t, ts, 1, "ks", "0", nil)
+			t.Cleanup(tm.Stop)
+
+			fakeDb, ok := tm.MysqlDaemon.(*mysqlctl.FakeMysqlDaemon)
+			require.True(t, ok)
+			fakeDb.SemiSyncPrimaryEnabled = true
+			fakeDb.SemiSyncReplicaEnabled = true
+
+			tm.mysqlMode = tt.mode
+			// Stands in for the --tablet-config path that leaves Cnf set on an unmanaged tablet.
+			tm.Cnf = &mysqlctl.Mycnf{DataDir: t.TempDir()}
+
+			// The backup itself fails: no storage is configured. The drain phase runs first,
+			// which is the part under test.
+			engine := engineName
+			err := tm.Backup(ctx, logutil.NewMemoryLogger(), &tabletmanagerdatapb.BackupRequest{
+				BackupEngine: &engine,
+			})
+			require.Error(t, err, "the backup is expected to fail at storage, after the drain")
+
+			semiSyncTouched := !fakeDb.SemiSyncPrimaryEnabled || !fakeDb.SemiSyncReplicaEnabled
+			assert.Equal(t, tt.wantSemiSyncTouch, semiSyncTouched,
+				"semi-sync state on the external MySQL")
 		})
 	}
 }
