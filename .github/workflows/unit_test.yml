@@ -55,7 +55,6 @@ jobs:
           base: ${{ steps.merge-base.outputs.sha }}
           filters: |
             unit_tests:
-<<<<<<< HEAD
               - 'test/config.json'
               - 'go/**'
               - 'test.go'
@@ -69,14 +68,8 @@ jobs:
               - 'bootstrap.sh'
               - '.github/workflows/unit_test.yml'
               - '.github/actions/setup-mysql/action.yml'
+              - '.github/actions/tune-os/**'
               - '.github/actions/setup-go/action.yml'
-||||||| parent of 7be2d66fca (CI: point apt at a responsive Ubuntu archive server (#21724))
-              - '{test/config.json,go/**,test.go,Makefile,build.env,go.sum,go.mod,proto/*.proto,tools/**,config/**,bootstrap.sh,.github/workflows/unit_test.yml,.github/actions/setup-mysql/action.yml,.github/actions/setup-go/action.yml}'
-              - '!{go/test/endtoend,go/flags/endtoend,go/mysql/endtoend,go/vt/vtctl/endtoend,go/vt/vtctl/grpcvtctldserver/endtoend,go/vt/vtgate/endtoend,go/vt/vttablet/endtoend}/**/*_test.go'
-=======
-              - '{test/config.json,go/**,test.go,Makefile,build.env,go.sum,go.mod,proto/*.proto,tools/**,config/**,bootstrap.sh,.github/workflows/unit_test.yml,.github/actions/setup-mysql/action.yml,.github/actions/tune-os/**,.github/actions/setup-go/action.yml}'
-              - '!{go/test/endtoend,go/flags/endtoend,go/mysql/endtoend,go/vt/vtctl/endtoend,go/vt/vtctl/grpcvtctldserver/endtoend,go/vt/vtgate/endtoend,go/vt/vttablet/endtoend}/**/*_test.go'
->>>>>>> 7be2d66fca (CI: point apt at a responsive Ubuntu archive server (#21724))
 
   test:
     needs: changes
