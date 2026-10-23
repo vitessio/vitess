@@ -1,0 +1,170 @@
+/*
+Copyright 2026 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package vreplication_test
+
+import (
+	"context"
+	"os"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/cmd/vtctldclient/command"
+	vtctldclientcommon "vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/common"
+	_ "vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/movetables"
+	_ "vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/workflow"
+	"vitess.io/vitess/go/vt/vtctl/localvtctldclient"
+
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
+)
+
+type overrideCaptureServer struct {
+	vtctlservicepb.UnimplementedVtctldServer
+
+	moveTablesCreateReq *vtctldatapb.MoveTablesCreateRequest
+	workflowUpdateReq   *vtctldatapb.WorkflowUpdateRequest
+}
+
+func (s *overrideCaptureServer) MoveTablesCreate(_ context.Context, req *vtctldatapb.MoveTablesCreateRequest) (*vtctldatapb.WorkflowStatusResponse, error) {
+	s.moveTablesCreateReq = req
+	return &vtctldatapb.WorkflowStatusResponse{}, nil
+}
+
+func (s *overrideCaptureServer) WorkflowUpdate(_ context.Context, req *vtctldatapb.WorkflowUpdateRequest) (*vtctldatapb.WorkflowUpdateResponse, error) {
+	s.workflowUpdateReq = req
+	return &vtctldatapb.WorkflowUpdateResponse{}, nil
+}
+
+func TestVtctldclientConfigOverrideRequestsIncludeParallelReplicationWorkers(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+
+	server := &overrideCaptureServer{}
+	localvtctldclient.SetServer(server)
+
+	origArgs := append([]string{}, os.Args...)
+	origProtocol := command.VtctldClientProtocol
+	t.Cleanup(func() {
+		os.Args = append([]string{}, origArgs...)
+		command.VtctldClientProtocol = origProtocol
+	})
+
+	command.VtctldClientProtocol = "local"
+	vtctldclientcommon.SetCommandCtx(ctx)
+
+	t.Run("MoveTablesCreate", func(t *testing.T) {
+		os.Args = []string{
+			"vtctldclient",
+			"--server", "ignored",
+			"MoveTables",
+			"--workflow", "wf1",
+			"--target-keyspace", "target",
+			"create",
+			"--source-keyspace", "source",
+			"--all-tables",
+			"--config-overrides", "vreplication-parallel-replication-workers=7",
+		}
+
+		err := command.Root.Execute()
+		require.NoError(t, err)
+		require.NotNil(t, server.moveTablesCreateReq)
+		require.NotNil(t, server.moveTablesCreateReq.WorkflowOptions)
+		require.Equal(t, "7", server.moveTablesCreateReq.WorkflowOptions.Config["vreplication-parallel-replication-workers"])
+	})
+
+	// A whitespace-only value is not a value: it is sent as empty, which the
+	// tablet ignores on create, rather than as whitespace the tablet cannot
+	// parse, which would keep the workflow's stream from starting.
+	t.Run("MoveTablesCreate sends a whitespace-only value as empty", func(t *testing.T) {
+		server.moveTablesCreateReq = nil
+		os.Args = []string{
+			"vtctldclient",
+			"--server", "ignored",
+			"MoveTables",
+			"--workflow", "wf1",
+			"--target-keyspace", "target",
+			"create",
+			"--source-keyspace", "source",
+			"--all-tables",
+			"--config-overrides", "vreplication-net-read-timeout= ",
+		}
+
+		err := command.Root.Execute()
+		require.NoError(t, err)
+		require.NotNil(t, server.moveTablesCreateReq)
+		value, ok := server.moveTablesCreateReq.WorkflowOptions.Config["vreplication-net-read-timeout"]
+		require.True(t, ok)
+		require.Empty(t, value)
+	})
+
+	t.Run("WorkflowUpdate", func(t *testing.T) {
+		os.Args = []string{
+			"vtctldclient",
+			"--server", "ignored",
+			"Workflow",
+			"--keyspace", "target",
+			"update",
+			"--workflow", "wf1",
+			"--config-overrides", "vreplication-parallel-replication-workers=9",
+		}
+
+		err := command.Root.Execute()
+		require.NoError(t, err)
+		require.NotNil(t, server.workflowUpdateReq)
+		require.NotNil(t, server.workflowUpdateReq.TabletRequest)
+		require.Equal(t, "9", server.workflowUpdateReq.TabletRequest.ConfigOverrides["vreplication-parallel-replication-workers"])
+	})
+
+	// An invalid value is rejected before the request is sent: once stored,
+	// it would keep the workflow's stream from starting.
+	t.Run("WorkflowUpdate rejects an out-of-range value", func(t *testing.T) {
+		server.workflowUpdateReq = nil
+		os.Args = []string{
+			"vtctldclient",
+			"--server", "ignored",
+			"Workflow",
+			"--keyspace", "target",
+			"update",
+			"--workflow", "wf1",
+			"--config-overrides", "vreplication-parallel-replication-workers=65",
+		}
+
+		err := command.Root.Execute()
+		require.ErrorContains(t, err, "must be at most")
+		require.Nil(t, server.workflowUpdateReq)
+	})
+
+	// An empty value removes the override, so it is not validated.
+	t.Run("WorkflowUpdate accepts an empty value", func(t *testing.T) {
+		server.workflowUpdateReq = nil
+		os.Args = []string{
+			"vtctldclient",
+			"--server", "ignored",
+			"Workflow",
+			"--keyspace", "target",
+			"update",
+			"--workflow", "wf1",
+			"--config-overrides", "vreplication-parallel-replication-workers=",
+		}
+
+		err := command.Root.Execute()
+		require.NoError(t, err)
+		require.NotNil(t, server.workflowUpdateReq)
+	})
+}

@@ -1,0 +1,766 @@
+/*
+Copyright 2026 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package vreplication
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/mysql/capabilities"
+	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/binlog/binlogplayer"
+	"vitess.io/vitess/go/vt/vterrors"
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+)
+
+type failingDBClient struct {
+	connectErr   error
+	failOnQuery  map[string]error
+	supportsCaps bool
+	// multiStatements records every SetMultiStatements call, in order.
+	multiStatements []bool
+	// multiStatementsErr, when set, is returned by SetMultiStatements.
+	multiStatementsErr error
+	// closed is set by Close, so IsClosed reports it as the real client does.
+	closed bool
+}
+
+type recordingDBClient struct {
+	queries []string
+}
+
+func (f *failingDBClient) DBName() string  { return "db" }
+func (f *failingDBClient) Connect() error  { return f.connectErr }
+func (f *failingDBClient) Begin() error    { return nil }
+func (f *failingDBClient) Commit() error   { return nil }
+func (f *failingDBClient) Rollback() error { return nil }
+func (f *failingDBClient) Close()          { f.closed = true }
+func (f *failingDBClient) IsClosed() bool  { return f.closed }
+func (f *failingDBClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Result, error) {
+	for key, err := range f.failOnQuery {
+		if strings.Contains(query, key) {
+			return nil, err
+		}
+	}
+	if strings.Contains(query, getSQLModeQuery) {
+		return sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("sql_mode", "varchar"),
+			"STRICT_TRANS_TABLES,NO_ZERO_DATE,ANSI_QUOTES",
+		), nil
+	}
+	if strings.Contains(query, "from _vt.vreplication where id=") {
+		return sqlModeWorkflowSettingsResult(binlogdatapb.VReplicationWorkflowType_MoveTables), nil
+	}
+	if strings.Contains(query, "from _vt.copy_state where vrepl_id=") {
+		return sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("count(distinct table_name)", "int64"),
+			"0",
+		), nil
+	}
+	return &sqltypes.Result{}, nil
+}
+
+func (f *failingDBClient) ExecuteFetchMulti(query string, maxrows int) ([]*sqltypes.Result, error) {
+	qr, err := f.ExecuteFetch(query, maxrows)
+	if err != nil {
+		return nil, err
+	}
+	return []*sqltypes.Result{qr}, nil
+}
+
+func (f *failingDBClient) SupportsCapability(capability capabilities.FlavorCapability) (bool, error) {
+	return f.supportsCaps, nil
+}
+
+func (f *failingDBClient) SetMultiStatements(on bool) error {
+	f.multiStatements = append(f.multiStatements, on)
+	return f.multiStatementsErr
+}
+
+func (r *recordingDBClient) DBName() string  { return "db" }
+func (r *recordingDBClient) Connect() error  { return nil }
+func (r *recordingDBClient) Begin() error    { return nil }
+func (r *recordingDBClient) Commit() error   { return nil }
+func (r *recordingDBClient) Rollback() error { return nil }
+func (r *recordingDBClient) Close()          {}
+func (r *recordingDBClient) IsClosed() bool  { return false }
+func (r *recordingDBClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Result, error) {
+	r.queries = append(r.queries, query)
+	return &sqltypes.Result{}, nil
+}
+
+func (r *recordingDBClient) ExecuteFetchMulti(query string, maxrows int) ([]*sqltypes.Result, error) {
+	r.queries = append(r.queries, query)
+	return []*sqltypes.Result{{}}, nil
+}
+
+func (r *recordingDBClient) SupportsCapability(capability capabilities.FlavorCapability) (bool, error) {
+	return false, nil
+}
+
+func TestApplyWorkerCloseRollsBack(t *testing.T) {
+	worker := &applyWorker{}
+	assert.NotPanics(t, func() {
+		worker.close()
+	})
+}
+
+func TestApplyWorkerRollbackNoError(t *testing.T) {
+	worker := &applyWorker{}
+	assert.NotPanics(t, func() {
+		worker.rollback()
+	})
+
+	// The worker applies a rolled-back transaction again from its events, so
+	// its connection forgets the recorded statements, which would otherwise
+	// pile up with each retry, and the foreign_key_checks value it tracks: in
+	// batch mode a failed flush may not have run a queued SET, so the next
+	// event has to set it again.
+	stats := binlogplayer.NewStats()
+	stats.VReplicationLagGauges.Stop()
+	t.Cleanup(stats.Stop)
+	client := newVDBClient(&recordingDBClient{}, stats, 100)
+	client.maxBatchSize = 1024
+	require.NoError(t, client.Begin())
+	require.NoError(t, client.AddQueryToTrxBatch("set @@session.foreign_key_checks=false"))
+	require.NoError(t, client.AddQueryToTrxBatch("insert into t values (1)"))
+	client.foreignKeyChecksEnabled = false
+	client.foreignKeyChecksStateInitialized = true
+	worker = &applyWorker{client: client}
+	worker.rollback()
+	require.False(t, client.InTransaction)
+	require.Empty(t, client.queries)
+	require.False(t, client.foreignKeyChecksStateInitialized)
+}
+
+func TestApplyWorkerApplyEventRestoresVPlayer(t *testing.T) {
+	vp, _ := testVPlayer(t)
+	ctx := t.Context()
+
+	originalClient := vp.dbClient
+	vp.query = nil
+	vp.commit = nil
+
+	altDB := binlogplayer.NewMockDBClient(t)
+	altClient := newVDBClient(altDB, vp.vr.stats, vp.vr.workflowConfig.RelayLogMaxItems)
+
+	worker := &applyWorker{ctx: ctx, client: altClient}
+	worker.query = func(ctx context.Context, sql string) (*sqltypes.Result, error) {
+		return &sqltypes.Result{}, nil
+	}
+	worker.commit = func() error {
+		return nil
+	}
+
+	gtid := "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5"
+	event := &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_GTID, Gtid: gtid}
+
+	err := worker.applyEvent(ctx, event, false, vp)
+	require.NoError(t, err)
+
+	expectedPos, err := binlogplayer.DecodePosition(gtid)
+	require.NoError(t, err)
+	assert.Equal(t, expectedPos.String(), vp.pos.String())
+
+	assert.Equal(t, originalClient, vp.dbClient)
+	assert.Nil(t, vp.query)
+	assert.Nil(t, vp.commit)
+}
+
+func TestApplyWorkerApplyEventNilClientFailsFast(t *testing.T) {
+	vp, _ := testVPlayer(t)
+	ctx := t.Context()
+
+	initial := "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-1"
+	pos, err := binlogplayer.DecodePosition(initial)
+	require.NoError(t, err)
+	vp.pos = pos
+
+	worker := &applyWorker{ctx: ctx}
+	event := &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5"}
+
+	err = worker.applyEvent(ctx, event, false, vp)
+	require.ErrorContains(t, err, "apply worker has no active client")
+	assert.Equal(t, pos.String(), vp.pos.String())
+}
+
+func TestApplyWorkerApplyEventInsertStatementAcceptsMatchAllFilter(t *testing.T) {
+	vp, _ := testVPlayer(t)
+	ctx := t.Context()
+	vp.canAcceptStmtEvents = true
+
+	db := &recordingDBClient{}
+	worker := &applyWorker{
+		ctx:    ctx,
+		client: newVDBClient(db, vp.vr.stats, vp.vr.workflowConfig.RelayLogMaxItems),
+	}
+	worker.bindFunctions()
+
+	event := &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_INSERT,
+		Dml:  "insert into t1(id) values (1)",
+	}
+
+	workerVP := workerLocalVPlayer(vp)
+	err := worker.applyEvent(ctx, event, false, &workerVP)
+	require.NoError(t, err)
+	assert.Contains(t, db.queries, event.Dml)
+}
+
+func TestApplyWorkerStatsReturnsVReplicatorStats(t *testing.T) {
+	vp, _ := testVPlayer(t)
+	worker := &applyWorker{vr: vp.vr}
+
+	assert.Equal(t, vp.vr.stats, worker.stats())
+}
+
+func TestNewApplyWorker(t *testing.T) {
+	stats := binlogplayer.NewStats()
+	stats.VReplicationLagGauges.Stop()
+	t.Cleanup(stats.Stop)
+
+	config := vttablet.InitVReplicationConfigDefaults()
+
+	mockDB := binlogplayer.NewMockDBClient(t)
+	// The default config batches, and a batching worker turns on multi
+	// statement support for its connections.
+	mockDB.AllowMultiStatements = true
+	mockDB.AddInvariant("set @@session.time_zone", &sqltypes.Result{})
+	mockDB.AddInvariant("set session transaction isolation level read committed", &sqltypes.Result{})
+	mockDB.AddInvariant("set @@session.innodb_lock_wait_timeout", &sqltypes.Result{})
+	mockDB.AddInvariant("set names 'binary'", &sqltypes.Result{})
+	mockDB.AddInvariant("set @@session.net_read_timeout", &sqltypes.Result{})
+	mockDB.AddInvariant("set @@session.net_write_timeout", &sqltypes.Result{})
+	mockDB.AddInvariant("set @@session.sql_mode", &sqltypes.Result{})
+	mockDB.AddInvariant("set @@session.foreign_key_checks", &sqltypes.Result{})
+	mockDB.AddInvariant("select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow, workflow_sub_type, defer_secondary_keys, options from _vt.vreplication where id=1", sqlModeWorkflowSettingsResult(binlogdatapb.VReplicationWorkflowType_MoveTables))
+	mockDB.AddInvariant("select count(distinct table_name) from _vt.copy_state where vrepl_id=1", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("count(distinct table_name)", "int64"),
+		"0",
+	))
+	mockDB.AddInvariant("max_allowed_packet", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("max_allowed_packet", "int64"),
+		"4194304",
+	))
+
+	vr := &vreplicator{
+		id:             1,
+		stats:          stats,
+		dbClient:       newVDBClient(mockDB, stats, config.RelayLogMaxItems),
+		workflowConfig: config,
+		vre:            &Engine{dbClientFactoryFiltered: func() binlogplayer.DBClient { return mockDB }},
+	}
+
+	worker, err := newApplyWorker(t.Context(), vr)
+	require.NoError(t, err)
+	require.NotNil(t, worker)
+
+	worker.close()
+
+	// A worker must not retry a lock wait timeout or a deadlock in place. The
+	// commitLoop commits in source order, so a later-ordered worker can hold
+	// a lock (e.g. a unique index gap lock) that an earlier-ordered worker
+	// waits on while itself waiting for that earlier worker to commit. InnoDB
+	// cannot see that cycle, and retrying in place would wait on it forever.
+	// The statement's error has to reach the worker loop, which rolls the
+	// transaction back and resolves the cycle (see resolveCommitOrderLockWait).
+	for _, errNum := range []sqlerror.ErrorCode{sqlerror.ERLockWaitTimeout, sqlerror.ERLockDeadlock} {
+		t.Run(fmt.Sprintf("non-batching worker returns error %d without retrying", errNum), func(t *testing.T) {
+			// A copy: InitVReplicationConfigDefaults returns the shared defaults.
+			cfg := vttablet.GetDefaultVReplicationConfig()
+			cfg.ExperimentalFlags &^= vttablet.VReplicationExperimentalFlagVPlayerBatching
+			client := &failingDBClient{failOnQuery: map[string]error{
+				"insert into t": sqlerror.NewSQLError(errNum, sqlerror.SSUnknownSQLState, "lock"),
+			}}
+			vr := &vreplicator{
+				id:             1,
+				stats:          stats,
+				dbClient:       newVDBClient(client, stats, cfg.RelayLogMaxItems),
+				workflowConfig: cfg,
+				vre:            &Engine{dbClientFactoryFiltered: func() binlogplayer.DBClient { return client }},
+			}
+			worker, err := newApplyWorker(t.Context(), vr)
+			require.NoError(t, err)
+			t.Cleanup(worker.close)
+			require.False(t, worker.batchMode)
+
+			ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+			defer cancel()
+			start := time.Now()
+			_, err = worker.query(ctx, "insert into t values (1)")
+			require.Error(t, err)
+			sqlErr, ok := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError)
+			require.True(t, ok, "expected a SQL error, got %v", err)
+			require.Equal(t, errNum, sqlErr.Num)
+			require.Less(t, time.Since(start), dbLockRetryDelay)
+		})
+	}
+}
+
+// TestNewApplyWorkerSmallMaxBatchSizeFallback tests the batch size fallback
+// when the max_allowed_packet lookup fails: the user-configurable
+// relay-log-max-size may validly be tiny (relay log tests use 10), and the
+// headroom subtraction must not drive maxBatchSize non-positive — that would
+// leave batchMode enabled with a batch that force-flushes on every add and
+// commits empty batches. Must match vreplicator.maxQuerySize's semantics:
+// only subtract the headroom when the value exceeds it.
+func TestNewApplyWorkerSmallMaxBatchSizeFallback(t *testing.T) {
+	stats := binlogplayer.NewStats()
+	stats.VReplicationLagGauges.Stop()
+	t.Cleanup(stats.Stop)
+
+	cfg := vttablet.GetDefaultVReplicationConfig()
+	cfg.RelayLogMaxSize = 10
+
+	client := &failingDBClient{failOnQuery: map[string]error{"max_allowed_packet": errors.New("lookup failed")}}
+	vr := &vreplicator{
+		id:             1,
+		stats:          stats,
+		dbClient:       newVDBClient(client, stats, cfg.RelayLogMaxItems),
+		workflowConfig: cfg,
+		vre:            &Engine{dbClientFactoryFiltered: func() binlogplayer.DBClient { return client }},
+	}
+
+	worker, err := newApplyWorker(t.Context(), vr)
+	require.NoError(t, err)
+	t.Cleanup(worker.close)
+
+	require.True(t, worker.batchMode)
+	for _, c := range worker.conns {
+		assert.Equal(t, int64(10), c.maxBatchSize)
+	}
+	// Connections no longer negotiate multi statement support by default, so
+	// a batching worker has to turn it on for each of its connections before
+	// it sends a batch.
+	assert.Equal(t, []bool{true, true}, client.multiStatements)
+
+	t.Run("failing to enable multi statements fails the worker", func(t *testing.T) {
+		client := &failingDBClient{multiStatementsErr: errors.New("server refused")}
+		vr := &vreplicator{
+			id:             1,
+			stats:          stats,
+			dbClient:       newVDBClient(client, stats, cfg.RelayLogMaxItems),
+			workflowConfig: cfg,
+			vre:            &Engine{dbClientFactoryFiltered: func() binlogplayer.DBClient { return client }},
+		}
+		worker, err := newApplyWorker(t.Context(), vr)
+		require.ErrorContains(t, err, "failed to configure multi statement support")
+		// The server refused, so retrying cannot help: the error is
+		// terminal, as it is for the vplayer, even though the worker
+		// closes its connections before returning it.
+		require.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+		require.Nil(t, worker)
+	})
+}
+
+func TestCreateWorkerConn_UsesSerialSQLModeContract(t *testing.T) {
+	testCases := []struct {
+		name         string
+		workflowType binlogdatapb.VReplicationWorkflowType
+		expectedMode string
+	}{
+		{
+			name:         "non-online-ddl uses exact sql mode",
+			workflowType: binlogdatapb.VReplicationWorkflowType_MoveTables,
+			expectedMode: SQLMode,
+		},
+		{
+			name:         "online-ddl uses exact strict sql mode",
+			workflowType: binlogdatapb.VReplicationWorkflowType_OnlineDDL,
+			expectedMode: StrictSQLMode,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			stats := binlogplayer.NewStats()
+			stats.VReplicationLagGauges.Stop()
+			teardownStats := stats
+			defer teardownStats.Stop()
+
+			config := vttablet.InitVReplicationConfigDefaults()
+			workerDB := binlogplayer.NewMockDBClient(t)
+			workerDB.RemoveInvariants("select @@session.sql_mode", "set @@session.sql_mode", "set @@session.foreign_key_checks")
+			workerDB.AddInvariant("set @@session.time_zone", &sqltypes.Result{})
+			workerDB.AddInvariant("set session transaction isolation level read committed", &sqltypes.Result{})
+			workerDB.AddInvariant("set @@session.innodb_lock_wait_timeout", &sqltypes.Result{})
+			workerDB.AddInvariant("set names 'binary'", &sqltypes.Result{})
+			workerDB.AddInvariant("set @@session.net_read_timeout", &sqltypes.Result{})
+			workerDB.AddInvariant("set @@session.net_write_timeout", &sqltypes.Result{})
+			workerDB.AddInvariant("set @@session.sql_mode = CONCAT(@@session.sql_mode, ',NO_AUTO_VALUE_ON_ZERO')", &sqltypes.Result{})
+			workerDB.AddInvariant("set @@session.sql_mode = REPLACE(REPLACE(REPLACE(@@session.sql_mode, 'NO_ZERO_DATE', ''), 'NO_ZERO_IN_DATE', ''), 'NO_BACKSLASH_ESCAPES', '')", &sqltypes.Result{})
+			workerDB.ExpectRequest(getSQLModeQuery, sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields("sql_mode", "varchar"),
+				"STRICT_TRANS_TABLES,NO_ZERO_DATE,ANSI_QUOTES",
+			), nil)
+			workerDB.ExpectRequest(binlogplayer.TestGetWorkflowQueryId1, sqlModeWorkflowSettingsResult(tc.workflowType), nil)
+			workerDB.ExpectRequest("select count(distinct table_name) from _vt.copy_state where vrepl_id=1", sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields("count(distinct table_name)", "int64"),
+				"0",
+			), nil)
+			workerDB.ExpectRequest(fmt.Sprintf(setSQLModeQueryf, tc.expectedMode), &sqltypes.Result{}, nil)
+			workerDB.ExpectRequest("set @@session.foreign_key_checks=0", &sqltypes.Result{}, nil)
+
+			vr := &vreplicator{
+				id:             1,
+				stats:          stats,
+				dbClient:       newVDBClient(workerDB, stats, config.RelayLogMaxItems),
+				workflowConfig: config,
+				vre:            &Engine{dbClientFactoryFiltered: func() binlogplayer.DBClient { return workerDB }},
+			}
+
+			conn, err := createWorkerConn(t.Context(), vr)
+			require.NoError(t, err)
+			require.NotNil(t, conn)
+			workerDB.Wait()
+			conn.Close()
+		})
+	}
+}
+
+func TestCreateWorkerConn_UsesRunningFKSessionSettings(t *testing.T) {
+	stats := binlogplayer.NewStats()
+	stats.VReplicationLagGauges.Stop()
+	defer stats.Stop()
+
+	config := vttablet.InitVReplicationConfigDefaults()
+	workerDB := binlogplayer.NewMockDBClient(t)
+	workerDB.RemoveInvariants("select @@session.sql_mode", "set @@session.sql_mode", "set @@session.foreign_key_checks")
+	workerDB.AddInvariant("set @@session.time_zone", &sqltypes.Result{})
+	workerDB.AddInvariant("set session transaction isolation level read committed", &sqltypes.Result{})
+	workerDB.AddInvariant("set @@session.innodb_lock_wait_timeout", &sqltypes.Result{})
+	workerDB.AddInvariant("set names 'binary'", &sqltypes.Result{})
+	workerDB.AddInvariant("set @@session.net_read_timeout", &sqltypes.Result{})
+	workerDB.AddInvariant("set @@session.net_write_timeout", &sqltypes.Result{})
+	workerDB.AddInvariant("set @@session.sql_mode = CONCAT(@@session.sql_mode, ',NO_AUTO_VALUE_ON_ZERO')", &sqltypes.Result{})
+	workerDB.AddInvariant("set @@session.sql_mode = REPLACE(REPLACE(REPLACE(@@session.sql_mode, 'NO_ZERO_DATE', ''), 'NO_ZERO_IN_DATE', ''), 'NO_BACKSLASH_ESCAPES', '')", &sqltypes.Result{})
+	workerDB.ExpectRequest(getSQLModeQuery, sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("sql_mode", "varchar"),
+		"STRICT_TRANS_TABLES,NO_ZERO_DATE,ANSI_QUOTES",
+	), nil)
+	workerDB.ExpectRequest(binlogplayer.TestGetWorkflowQueryId1, sqlModeWorkflowSettingsResult(binlogdatapb.VReplicationWorkflowType_MoveTables), nil)
+	workerDB.ExpectRequest("select count(distinct table_name) from _vt.copy_state where vrepl_id=1", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("count(distinct table_name)", "int64"),
+		"0",
+	), nil)
+	workerDB.ExpectRequest(fmt.Sprintf(setSQLModeQueryf, SQLMode), &sqltypes.Result{}, nil)
+	workerDB.ExpectRequest("set @@session.foreign_key_checks=1", &sqltypes.Result{}, nil)
+
+	vr := &vreplicator{
+		id:                     1,
+		stats:                  stats,
+		dbClient:               newVDBClient(workerDB, stats, config.RelayLogMaxItems),
+		workflowConfig:         config,
+		originalFKCheckSetting: 1,
+		vre:                    &Engine{dbClientFactoryFiltered: func() binlogplayer.DBClient { return workerDB }},
+	}
+
+	conn, err := createWorkerConn(t.Context(), vr)
+	require.NoError(t, err)
+	require.NotNil(t, conn)
+	workerDB.Wait()
+	conn.Close()
+}
+
+func TestNewApplyWorkerConnectError(t *testing.T) {
+	stats := binlogplayer.NewStats()
+	stats.VReplicationLagGauges.Stop()
+	t.Cleanup(stats.Stop)
+
+	config := vttablet.InitVReplicationConfigDefaults()
+
+	connectErr := errors.New("connect failed")
+	badClient := &failingDBClient{connectErr: connectErr}
+	vr := &vreplicator{
+		id:             1,
+		stats:          stats,
+		workflowConfig: config,
+		vre:            &Engine{dbClientFactoryFiltered: func() binlogplayer.DBClient { return badClient }},
+	}
+
+	worker, err := newApplyWorker(t.Context(), vr)
+	require.ErrorIs(t, err, connectErr)
+	require.Nil(t, worker)
+}
+
+func TestNewApplyWorkerSettingsError(t *testing.T) {
+	stats := binlogplayer.NewStats()
+	stats.VReplicationLagGauges.Stop()
+	t.Cleanup(stats.Stop)
+
+	config := vttablet.InitVReplicationConfigDefaults()
+
+	settingsErr := errors.New("settings failed")
+	badClient := &failingDBClient{failOnQuery: map[string]error{"time_zone": settingsErr}}
+	vr := &vreplicator{
+		id:             1,
+		stats:          stats,
+		workflowConfig: config,
+		vre:            &Engine{dbClientFactoryFiltered: func() binlogplayer.DBClient { return badClient }},
+	}
+
+	worker, err := newApplyWorker(t.Context(), vr)
+	require.ErrorIs(t, err, settingsErr)
+	require.Nil(t, worker)
+}
+
+func TestNewApplyWorkerClearFKCheckError(t *testing.T) {
+	stats := binlogplayer.NewStats()
+	stats.VReplicationLagGauges.Stop()
+	t.Cleanup(stats.Stop)
+
+	config := vttablet.InitVReplicationConfigDefaults()
+
+	fkErr := errors.New("fk checks failed")
+	badClient := &failingDBClient{failOnQuery: map[string]error{"set @@session.foreign_key_checks=0": fkErr}}
+	vr := &vreplicator{
+		id:             1,
+		stats:          stats,
+		dbClient:       newVDBClient(badClient, stats, config.RelayLogMaxItems),
+		workflowConfig: config,
+		vre:            &Engine{dbClientFactoryFiltered: func() binlogplayer.DBClient { return badClient }},
+	}
+
+	worker, err := newApplyWorker(t.Context(), vr)
+	require.ErrorIs(t, err, fkErr)
+	require.Nil(t, worker)
+}
+
+func TestNewApplyWorkerClearFKRestrictError(t *testing.T) {
+	stats := binlogplayer.NewStats()
+	stats.VReplicationLagGauges.Stop()
+	t.Cleanup(stats.Stop)
+
+	config := vttablet.InitVReplicationConfigDefaults()
+
+	restrictErr := errors.New("fk restrict failed")
+	workerClient := &failingDBClient{failOnQuery: map[string]error{"set @@session.restrict_fk_on_non_standard_key=0": restrictErr}}
+	capClient := &failingDBClient{supportsCaps: true}
+
+	vr := &vreplicator{
+		id:             1,
+		stats:          stats,
+		dbClient:       newVDBClient(capClient, stats, config.RelayLogMaxItems),
+		workflowConfig: config,
+		vre:            &Engine{dbClientFactoryFiltered: func() binlogplayer.DBClient { return workerClient }},
+	}
+
+	worker, err := newApplyWorker(t.Context(), vr)
+	require.ErrorIs(t, err, restrictErr)
+	require.Nil(t, worker)
+}
+
+func TestApplyWorkerApplyEventSetsFKChecksAfterRotate(t *testing.T) {
+	vp, _ := testVPlayer(t)
+	ctx := t.Context()
+	vp.tablePlans["t1"] = &TablePlan{TargetName: "t1"}
+	vp.vr.storeState(binlogdatapb.VReplicationWorkflowState_Running)
+
+	db0 := &recordingDBClient{}
+	db1 := &recordingDBClient{}
+	worker := &applyWorker{
+		ctx:    ctx,
+		conns:  [2]*vdbClient{newVDBClient(db0, vp.vr.stats, vp.vr.workflowConfig.RelayLogMaxItems), newVDBClient(db1, vp.vr.stats, vp.vr.workflowConfig.RelayLogMaxItems)},
+		active: 0,
+	}
+	worker.client = worker.conns[0]
+	worker.bindFunctions()
+
+	vp.query = worker.query
+	vp.commit = worker.commit
+	vp.dbClient = worker.client
+	rowEvent := &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_ROW,
+		RowEvent: &binlogdatapb.RowEvent{
+			Flags:     0,
+			TableName: "t1",
+		},
+	}
+
+	require.NoError(t, worker.applyEvent(ctx, rowEvent, false, vp))
+	assert.Contains(t, db0.queries, "set @@session.foreign_key_checks=true")
+
+	worker.rotate()
+	vp.query = worker.query
+	vp.commit = worker.commit
+	vp.dbClient = worker.client
+
+	require.NoError(t, worker.applyEvent(ctx, rowEvent, false, vp))
+	assert.Contains(t, db1.queries, "set @@session.foreign_key_checks=true")
+}
+
+func sqlModeWorkflowSettingsResult(workflowType binlogdatapb.VReplicationWorkflowType) *sqltypes.Result {
+	return &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Name: "pos", Type: sqltypes.VarBinary},
+			{Name: "stop_pos", Type: sqltypes.VarBinary},
+			{Name: "max_tps", Type: sqltypes.Int64},
+			{Name: "max_replication_lag", Type: sqltypes.Int64},
+			{Name: "state", Type: sqltypes.VarBinary},
+			{Name: "workflow_type", Type: sqltypes.Int64},
+			{Name: "workflow", Type: sqltypes.VarChar},
+			{Name: "workflow_sub_type", Type: sqltypes.Int64},
+			{Name: "defer_secondary_keys", Type: sqltypes.Int64},
+			{Name: "options", Type: sqltypes.VarBinary},
+		},
+		RowsAffected: 1,
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewVarBinary("MariaDB/0-1-1083"),
+			sqltypes.NULL,
+			sqltypes.NewInt64(0),
+			sqltypes.NewInt64(0),
+			sqltypes.NewVarBinary(binlogdatapb.VReplicationWorkflowState_Running.String()),
+			sqltypes.NewInt64(int64(workflowType)),
+			sqltypes.NewVarChar("wf"),
+			sqltypes.NewInt64(0),
+			sqltypes.NewInt64(0),
+			sqltypes.NewVarBinary("{}"),
+		}},
+	}
+}
+
+// recordingFailingDBClient records every query while delegating behavior to
+// failingDBClient (which serves the standard setup queries).
+type recordingFailingDBClient struct {
+	failingDBClient
+	queries []string
+}
+
+func (c *recordingFailingDBClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Result, error) {
+	c.queries = append(c.queries, query)
+	return c.failingDBClient.ExecuteFetch(query, maxrows)
+}
+
+// failingCommitDBClient delegates to failingDBClient but fails COMMIT, for
+// exercising commit-failure paths (failingDBClient.Commit always succeeds).
+type failingCommitDBClient struct {
+	failingDBClient
+	commitErr error
+}
+
+func (c *failingCommitDBClient) Commit() error { return c.commitErr }
+
+// TestCreateWorkerConnSetsReadCommitted pins that worker connections run at
+// READ COMMITTED. The writeset scheduler models PK/unique/FK conflicts, but
+// it cannot model InnoDB gap/next-key locks, which REPEATABLE READ takes
+// even for point operations on absent rows (e.g. DELETE of a row that does
+// not exist, or delete-marking in a non-unique secondary index). A
+// later-ordered transaction's gap lock can block an earlier-ordered
+// transaction's INSERT while the commitLoop's strict ordering keeps that gap
+// lock held until the earlier transaction commits — a deadlock InnoDB's
+// detector cannot see because half the cycle lives in the commitLoop. READ
+// COMMITTED takes no gap locks for row-image application and is MySQL's own
+// recommendation for row-based parallel appliers.
+func TestCreateWorkerConnSetsReadCommitted(t *testing.T) {
+	recording := &recordingFailingDBClient{}
+	stats := binlogplayer.NewStats()
+	vr := &vreplicator{
+		id:             1,
+		stats:          stats,
+		dbClient:       newVDBClient(&failingDBClient{}, stats, 0),
+		workflowConfig: vttablet.InitVReplicationConfigDefaults(),
+		vre:            &Engine{dbClientFactoryFiltered: func() binlogplayer.DBClient { return recording }},
+	}
+	conn, err := createWorkerConn(t.Context(), vr)
+	require.NoError(t, err)
+	require.NotNil(t, conn)
+
+	// Pin the SQL-standard statement form: the worker conn talks directly to
+	// the target mysqld (no vtgate sysvar rewriting), and the
+	// transaction_isolation sysvar spelling is flavor-specific (MariaDB used
+	// tx_isolation until 11.1; MySQL only added transaction_isolation in
+	// 5.7.20). The statement form works everywhere. Lowercase keeps it
+	// consistent with the other session-setup statements and the framework's
+	// globalDBQueries filter (which skips lowercase "set ..." setup queries).
+	require.Contains(t, recording.queries, "set session transaction isolation level read committed",
+		"worker connections must run at READ COMMITTED to avoid gap-lock deadlocks through the commit order")
+	// A commit-order deadlock (see applyScheduler.abortGen) ends with a lock
+	// wait timeout, so it must be short.
+	require.Contains(t, recording.queries, "set @@session.innodb_lock_wait_timeout = 1")
+}
+
+func (r *recordingDBClient) SetMultiStatements(on bool) error { return nil }
+
+// TestVDBClientReplayTrx pins how a rolled-back transaction is applied again
+// to resolve a commit-order deadlock: its recorded statements since BEGIN are
+// executed again in a new transaction, in one batch on a batching connection,
+// leaving the transaction open for the commitLoop's position update and
+// commit; statements run before BEGIN are not part of it.
+func TestVDBClientReplayTrx(t *testing.T) {
+	stats := binlogplayer.NewStats()
+	stats.VReplicationLagGauges.Stop()
+	t.Cleanup(stats.Stop)
+
+	t.Run("non-batching", func(t *testing.T) {
+		recording := &recordingDBClient{}
+		vc := newVDBClient(recording, stats, 100)
+		_, err := vc.ExecuteFetch("set @@session.foreign_key_checks=0", 1)
+		require.NoError(t, err)
+		require.NoError(t, vc.Begin())
+		_, err = vc.ExecuteFetch("insert into t values (1)", 1)
+		require.NoError(t, err)
+		_, err = vc.ExecuteFetch("update t set c=2 where id=1", 1)
+		require.NoError(t, err)
+		require.NoError(t, vc.Rollback())
+
+		recording.queries = nil
+		require.NoError(t, vc.replayTrx())
+		require.Equal(t, []string{"insert into t values (1)", "update t set c=2 where id=1"}, recording.queries)
+		require.True(t, vc.InTransaction)
+	})
+
+	t.Run("batching", func(t *testing.T) {
+		recording := &recordingDBClient{}
+		vc := newVDBClient(recording, stats, 100)
+		vc.maxBatchSize = 1024
+		require.NoError(t, vc.Begin())
+		require.NoError(t, vc.AddQueryToTrxBatch("insert into t values (1)"))
+		_, err := vc.ExecuteTrxQueryBatch()
+		require.NoError(t, err)
+		require.NoError(t, vc.AddQueryToTrxBatch("insert into t values (2)"))
+		_, err = vc.ExecuteTrxQueryBatch()
+		require.NoError(t, err)
+		require.NoError(t, vc.Rollback())
+
+		recording.queries = nil
+		require.NoError(t, vc.replayTrx())
+		require.Equal(t, []string{"begin;insert into t values (1);insert into t values (2)"}, recording.queries)
+		require.True(t, vc.InTransaction)
+
+		// The commitLoop then sends only the commit.
+		recording.queries = nil
+		require.NoError(t, vc.CommitTrxQueryBatch())
+		require.Equal(t, []string{"commit"}, recording.queries)
+	})
+
+	t.Run("no recorded transaction", func(t *testing.T) {
+		vc := newVDBClient(&recordingDBClient{}, stats, 100)
+		require.ErrorContains(t, vc.replayTrx(), "no transaction to replay")
+	})
+}

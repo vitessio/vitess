@@ -499,6 +499,26 @@
         "binlog-compression"
       ]
     },
+    "onlineddl_vrepl_stress_suite_parallel": {
+      "File": "unused.go",
+      "Packages": [
+        "vitess.io/vitess/go/test/endtoend/onlineddl/vrepl_stress_suite"
+      ],
+      "Args": [
+        "-timeout",
+        "30m",
+        "-vreplication-parallel-replication-workers",
+        "4"
+      ],
+      "Command": [],
+      "Manual": false,
+      "Shard": "onlineddl_vrepl_stress_suite_parallel",
+      "Tags": [],
+      "Needs": [
+        "larger-runner",
+        "binlog-compression"
+      ]
+    },
     "onlineddl_revert": {
       "File": "unused.go",
       "Packages": [
@@ -2157,20 +2177,20 @@
         "binlog-compression"
       ]
     },
-    "vreplication_copy_parallel": {
+    "vreplication_parallel": {
       "File": "unused.go",
       "Packages": [
         "vitess.io/vitess/go/test/endtoend/vreplication"
       ],
       "Args": [
         "-run",
-        "TestVreplicationCopyParallel",
+        "TestVreplicationParallel",
         "-timeout",
         "20m"
       ],
       "Command": [],
       "Manual": false,
-      "Shard": "vreplication_copy_parallel",
+      "Shard": "vreplication_parallel",
       "Tags": [],
       "Needs": [
         "larger-runner",
@@ -2613,11 +2633,30 @@
       ],
       "Args": [
         "-run",
-        "TestFKExt"
+        "^TestFKExt$"
       ],
       "Command": [],
       "Manual": false,
       "Shard": "vreplication_foreign_key_stress",
+      "Tags": [],
+      "Needs": [
+        "larger-runner",
+        "limit-resources",
+        "binlog-compression"
+      ]
+    },
+    "vreplication_foreign_key_stress_parallel": {
+      "File": "unused.go",
+      "Packages": [
+        "vitess.io/vitess/go/test/endtoend/vreplication"
+      ],
+      "Args": [
+        "-run",
+        "^TestFKExtParallelApply$"
+      ],
+      "Command": [],
+      "Manual": false,
+      "Shard": "vreplication_foreign_key_stress_parallel",
       "Tags": [],
       "Needs": [
         "larger-runner",

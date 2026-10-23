@@ -452,6 +452,8 @@ func (tp *TablePlan) getPartialInsertQuery(rowChange *binlogdatapb.RowChange) (*
 		return nil, err
 	}
 	key := hex.EncodeToString(dataColumns.Cols)
+	tp.partialMu.Lock()
+	defer tp.partialMu.Unlock()
 	ins, ok := tp.PartialInserts[key]
 	if ok {
 		return ins, nil
@@ -474,6 +476,8 @@ func (tp *TablePlan) getPartialUpdateQuery(rowChange *binlogdatapb.RowChange) (*
 		return nil, err
 	}
 	key := hex.EncodeToString(dataColumns.Cols)
+	tp.partialMu.Lock()
+	defer tp.partialMu.Unlock()
 	upd, ok := tp.PartialUpdates[key]
 	if ok {
 		return upd, nil
