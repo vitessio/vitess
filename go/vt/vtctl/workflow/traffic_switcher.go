@@ -620,7 +620,7 @@ func (ts *trafficSwitcher) dropSourceShards(ctx context.Context) error {
 	})
 }
 
-func (ts *trafficSwitcher) switchShardReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, direction TrafficSwitchDirection, refreshTimeout time.Duration) error {
+func (ts *trafficSwitcher) switchShardReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, direction TrafficSwitchDirection) error {
 	ts.Logger().Infof("switchShardReads: workflow: %s, direction: %s, cells: %v, tablet types: %v",
 		ts.workflow, direction.String(), cells, servedTypes)
 
@@ -639,10 +639,10 @@ func (ts *trafficSwitcher) switchShardReads(ctx context.Context, cells []string,
 		return err2
 	}
 	for _, servedType := range servedTypes {
-		if err := ts.ws.updateShardRecords(ctx, ts.SourceKeyspaceName(), fromShards, cells, servedType, true /* isFrom */, refreshTimeout, ts.Logger()); err != nil {
+		if err := ts.ws.updateShardRecords(ctx, ts.SourceKeyspaceName(), fromShards, cells, servedType, true /* isFrom */, ts.Logger()); err != nil {
 			return err
 		}
-		if err := ts.ws.updateShardRecords(ctx, ts.SourceKeyspaceName(), toShards, cells, servedType, false, refreshTimeout, ts.Logger()); err != nil {
+		if err := ts.ws.updateShardRecords(ctx, ts.SourceKeyspaceName(), toShards, cells, servedType, false, ts.Logger()); err != nil {
 			return err
 		}
 		err := ts.TopoServer().MigrateServedType(ctx, ts.SourceKeyspaceName(), toShards, fromShards, servedType, cells)

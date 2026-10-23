@@ -86,7 +86,7 @@ func (dr *switcherDryRun) switchKeyspaceReads(ctx context.Context, types []topod
 	return nil
 }
 
-func (dr *switcherDryRun) switchShardReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, direction TrafficSwitchDirection, refreshTimeout time.Duration) error {
+func (dr *switcherDryRun) switchShardReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, direction TrafficSwitchDirection) error {
 	sourceShards := make([]string, 0, len(dr.ts.Sources()))
 	targetShards := make([]string, 0, len(dr.ts.Targets()))
 	for _, source := range dr.ts.Sources() {

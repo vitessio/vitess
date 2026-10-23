@@ -21,11 +21,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math"
 	"slices"
 	"sort"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -33,7 +31,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/prototext"
 
-	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/ptr"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
@@ -2043,98 +2040,6 @@ func TestCanSwitchRefreshesShardsConcurrently(t *testing.T) {
 	reason, err := env.ws.canSwitch(ctx, ts, 30, nil)
 	require.NoError(t, err)
 	require.Empty(t, reason)
-}
-
-// blockingRefreshTMC records how long each RefreshState call has before its
-// deadline. RefreshState on blockedTabletUID returns only at the deadline, like
-// a tablet whose action lock is held by another action.
-type blockingRefreshTMC struct {
-	*testTMClient
-	blockedTabletUID uint32
-
-	mu      sync.Mutex
-	calls   int
-	maxLeft time.Duration
-}
-
-func (tmc *blockingRefreshTMC) RefreshState(ctx context.Context, tablet *topodatapb.Tablet) error {
-	left := time.Duration(math.MaxInt64)
-	if deadline, ok := ctx.Deadline(); ok {
-		left = time.Until(deadline)
-	}
-	tmc.mu.Lock()
-	tmc.calls++
-	tmc.maxLeft = max(tmc.maxLeft, left)
-	tmc.mu.Unlock()
-	if tablet.Alias.Uid != tmc.blockedTabletUID {
-		return nil
-	}
-	<-ctx.Done()
-	return ctx.Err()
-}
-
-// TestSwitchReadsBoundsTargetRefreshByLockTTL checks that the reads switch of a
-// Reshard gives the target tablet refresh at most half of the keyspace lock's
-// TTL (the SwitchTraffic timeout), so that a target tablet that does not
-// refresh cannot hold the switch until the lock's lease expires. memorytopo
-// does not expire locks, so the test checks the refresh deadline. The test
-// SrvKeyspace has only PRIMARY partitions, so the switch changes no partition.
-func TestSwitchReadsBoundsTargetRefreshByLockTTL(t *testing.T) {
-	const (
-		keyspaceName = "ks"
-		workflowName = "wf1"
-		tableName    = "t1"
-		lockTTL      = 2 * time.Second
-	)
-	ctx, cancel := context.WithTimeout(t.Context(), 3*shardTabletRefreshTimeout)
-	t.Cleanup(cancel)
-
-	sourceKeyspace := &testKeyspace{
-		KeyspaceName: keyspaceName,
-		ShardNames:   []string{"0"},
-	}
-	targetKeyspace := &testKeyspace{
-		KeyspaceName: keyspaceName,
-		ShardNames:   []string{"-80", "80-"},
-	}
-	env := newTestEnv(t, ctx, defaultCellName, sourceKeyspace, targetKeyspace)
-	t.Cleanup(env.close)
-	env.tmc.schema = map[string]*tabletmanagerdatapb.SchemaDefinition{
-		tableName: {
-			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
-				{
-					Name:   tableName,
-					Schema: fmt.Sprintf("CREATE TABLE %s (id BIGINT, name VARCHAR(64), PRIMARY KEY (id))", tableName),
-				},
-			},
-		},
-	}
-	tmc := &blockingRefreshTMC{testTMClient: env.tmc, blockedTabletUID: startingTargetTabletUID}
-	env.ws.tmc = tmc
-	env.tmc.expectVRQuery(startingSourceTabletUID, "/select val from _vt.resharding_journal", &sqltypes.Result{})
-	// The source shard is in the same keyspace and has no streams.
-	env.tmc.expectReadVReplicationWorkflowRequest(startingSourceTabletUID, &readVReplicationWorkflowRequestResponse{
-		req: &tabletmanagerdatapb.ReadVReplicationWorkflowRequest{Workflow: workflowName},
-		res: &tabletmanagerdatapb.ReadVReplicationWorkflowResponse{},
-	})
-
-	ts, state, err := env.ws.getWorkflowState(ctx, keyspaceName, workflowName)
-	require.NoError(t, err)
-	require.Equal(t, binlogdatapb.MigrationType_SHARDS, ts.MigrationType())
-
-	_, err = env.ws.switchReads(ctx, &vtctldatapb.WorkflowSwitchTrafficRequest{
-		Keyspace:    keyspaceName,
-		Workflow:    workflowName,
-		TabletTypes: roTabletTypes,
-		Timeout:     protoutil.DurationToProto(lockTTL),
-	}, ts, state, false /* rebuildSrvVSchema */, DirectionForward)
-	require.NoError(t, err)
-
-	tmc.mu.Lock()
-	defer tmc.mu.Unlock()
-	// Each of the two target tablets is refreshed once per tablet type.
-	require.Equal(t, 2*len(roTabletTypes), tmc.calls)
-	require.LessOrEqual(t, tmc.maxLeft, lockTTL/2)
 }
 
 func TestMoveTablesSwitchWritesCompletesAfterCancelOnFreeze(t *testing.T) {

@@ -2704,9 +2704,9 @@ func (s *Server) DeleteShard(ctx context.Context, keyspace, shard string, recurs
 // updateShardRecords updates QueryServiceDisabled for the shards based on 'from'
 // or 'to' direction. See topotools.UpdateShardRecords.
 func (s *Server) updateShardRecords(ctx context.Context, keyspace string, shards []*topo.ShardInfo, cells []string,
-	servedType topodatapb.TabletType, isFrom bool, refreshTimeout time.Duration, logger logutil.Logger,
+	servedType topodatapb.TabletType, isFrom bool, logger logutil.Logger,
 ) (err error) {
-	return topotools.UpdateShardRecords(ctx, s.ts, s.tmc, keyspace, shards, cells, servedType, isFrom, refreshTimeout, logger)
+	return topotools.UpdateShardRecords(ctx, s.ts, s.tmc, keyspace, shards, cells, servedType, isFrom, shardTabletRefreshTimeout, logger)
 }
 
 // refreshPrimaryTablets will just RPC-ping all the primary tablets with RefreshState
@@ -3137,11 +3137,7 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 		return defaultErrorHandler(ts.Logger(), "locks were lost", err)
 	}
 	ts.Logger().Infof("About to switchShardReads: cells: %s, tablet types: %s, direction: %d", cellsStr, roTypesToSwitchStr, direction)
-	// With the etcd topo, the lease of a lock is renewed only when the lock is
-	// checked, so the target tablet refresh between two checks has to end well
-	// within the lock's TTL.
-	refreshTimeout := min(shardTabletRefreshTimeout, ksLockTTL/2)
-	if err := sw.switchShardReads(ctx, req.Cells, roTabletTypes, direction, refreshTimeout); err != nil {
+	if err := sw.switchShardReads(ctx, req.Cells, roTabletTypes, direction); err != nil {
 		return defaultErrorHandler(ts.Logger(), "failed to switch read traffic for the shards", err)
 	}
 

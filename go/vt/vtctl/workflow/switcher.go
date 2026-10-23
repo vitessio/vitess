@@ -76,8 +76,8 @@ func (r *switcher) switchKeyspaceReads(ctx context.Context, servedTypes []topoda
 	return nil
 }
 
-func (r *switcher) switchShardReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, direction TrafficSwitchDirection, refreshTimeout time.Duration) error {
-	return r.ts.switchShardReads(ctx, cells, servedTypes, direction, refreshTimeout)
+func (r *switcher) switchShardReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, direction TrafficSwitchDirection) error {
+	return r.ts.switchShardReads(ctx, cells, servedTypes, direction)
 }
 
 func (r *switcher) switchTableReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, rebuildSrvVSchema bool, direction TrafficSwitchDirection) error {

@@ -41,7 +41,7 @@ type iswitcher interface {
 	startReverseVReplication(ctx context.Context) error
 	switchKeyspaceReads(ctx context.Context, types []topodatapb.TabletType) error
 	switchTableReads(ctx context.Context, cells []string, servedType []topodatapb.TabletType, rebuildSrvVSchema bool, direction TrafficSwitchDirection) error
-	switchShardReads(ctx context.Context, cells []string, servedType []topodatapb.TabletType, direction TrafficSwitchDirection, refreshTimeout time.Duration) error
+	switchShardReads(ctx context.Context, cells []string, servedType []topodatapb.TabletType, direction TrafficSwitchDirection) error
 	validateWorkflowHasCompleted(ctx context.Context) error
 	removeSourceTables(ctx context.Context, removalType TableRemovalType) error
 	dropSourceShards(ctx context.Context) error
