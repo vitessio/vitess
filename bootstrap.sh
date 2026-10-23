@@ -230,15 +230,19 @@ install_etcd() {
 		;;
 	esac
 
-	# SHA256 checksums for etcd v3.6.7 from official releases.
+	# SHA256 checksums for etcd from official releases.
 	local sha256
-	case "${platform}-${target}" in
-	linux-amd64) sha256="cf8af880c5a01ee5363cefa14a3e0cb7e5308dcf4ed17a6973099c9a7aee5a9a" ;;
-	linux-arm64) sha256="ef5fc443cf7cc5b82738f3c28363704896551900af90a6d622cae740b5644270" ;;
-	darwin-amd64) sha256="a9fe546f109b99733d1c797ff2598946b7ad155899e8458215da458f1d822ad5" ;;
-	darwin-arm64) sha256="7a2d708e4f8aab9ba800676d2cfd4455367f5b67f9a012fad167f4b2b94524d7" ;;
+	case "${version}-${platform}-${target}" in
+	v3.6.7-linux-amd64) sha256="cf8af880c5a01ee5363cefa14a3e0cb7e5308dcf4ed17a6973099c9a7aee5a9a" ;;
+	v3.6.7-linux-arm64) sha256="ef5fc443cf7cc5b82738f3c28363704896551900af90a6d622cae740b5644270" ;;
+	v3.6.7-darwin-amd64) sha256="a9fe546f109b99733d1c797ff2598946b7ad155899e8458215da458f1d822ad5" ;;
+	v3.6.7-darwin-arm64) sha256="7a2d708e4f8aab9ba800676d2cfd4455367f5b67f9a012fad167f4b2b94524d7" ;;
+	v3.7.2-linux-amd64) sha256="3a3679bc51a4ee9d30bccea1da7cd4fe62c6fc1d2ca1255068d2c53bf3026135" ;;
+	v3.7.2-linux-arm64) sha256="5e3ff99d428fabfcefdc95348f6560d1efe835f7b2d1ab3334fe0831076966b7" ;;
+	v3.7.2-darwin-amd64) sha256="2965e00f6379339c0765177929a8e73ed0861df5a72ec97619dd836b1c95bd1c" ;;
+	v3.7.2-darwin-arm64) sha256="73b7cc4b55ee302943f644f3b9a1a42c919bb64f8f45b6dd03cb2e4c2a2c8960" ;;
 	*)
-		echo "ERROR: no checksum for etcd $platform-$target"
+		echo "ERROR: no checksum for etcd $version-$platform-$target"
 		exit 1
 		;;
 	esac
