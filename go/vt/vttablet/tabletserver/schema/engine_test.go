@@ -1602,7 +1602,7 @@ func TestEngineReload(t *testing.T) {
 
 			// Finding mismatches in the tables.
 			// t5 exists in the database.
-			db.AddQuery("SELECT TABLE_NAME, CREATE_TIME FROM _vt.`tables`", sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name|create_time", "varchar|int64"),
+			db.AddQuery("SELECT TABLE_NAME, CREATE_TIME FROM _vt.`tables` WHERE TABLE_SCHEMA = DATABASE()", sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name|create_time", "varchar|int64"),
 				"t1|123456789",
 				"t2|123456789",
 				"t4|123456789",
