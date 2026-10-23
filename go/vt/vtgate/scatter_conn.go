@@ -434,8 +434,10 @@ func (stc *ScatterConn) processOneStreamingResult(mu *sync.Mutex, fieldSent *boo
 // StreamExecuteMulti is like StreamExecute,
 // but each shard gets its own bindVars. If len(shards) is not equal to
 // len(bindVars), the function panics.
-// Note we guarantee the callback will not be called concurrently
-// by multiple go routines, through processOneStreamingResult.
+// Unlike MessageStream, the callback is not serialized through
+// processOneStreamingResult: each shard's stream runs in its own goroutine
+// and invokes the callback directly, so the callback must synchronize any
+// shared state it touches.
 func (stc *ScatterConn) StreamExecuteMulti(
 	ctx context.Context,
 	primitive engine.Primitive,

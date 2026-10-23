@@ -21,6 +21,8 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -689,4 +691,81 @@ func TestPrepareSetVarComment(t *testing.T) {
 			require.Equal(t, tc.wantReservedConn, session.InReservedConn())
 		})
 	}
+}
+
+// TestWrapCallbackLastInsertIDConcurrent hammers the wrapped stream callback
+// from many goroutines against one session. A single streamed scatter route
+// already produces that shape: StreamExecuteMulti runs one goroutine per shard
+// and does not serialize the callback. A parallel streamed union does the same
+// by driving each source through its own stream. With a direct field write
+// this fails under -race; through the locked setter it passes.
+func TestWrapCallbackLastInsertIDConcurrent(t *testing.T) {
+	for _, withStats := range []bool{false, true} {
+		t.Run(fmt.Sprintf("interOpStats=%t", withStats), func(t *testing.T) {
+			vc := &VCursorImpl{SafeSession: NewSafeSession(&vtgatepb.Session{})}
+			if withStats {
+				vc.interOpStats = make(map[engine.Primitive]engine.RowsReceived)
+			}
+			cb := vc.wrapCallback(func(*sqltypes.Result) error { return nil }, nil)
+
+			const goroutines = 32
+			var wg sync.WaitGroup
+			wg.Add(goroutines)
+			for i := range goroutines {
+				go func(id uint64) {
+					defer wg.Done()
+					_ = cb(&sqltypes.Result{InsertID: id, InsertIDChanged: true})
+				}(uint64(i + 1))
+			}
+			wg.Wait()
+
+			// any writer may win; the guarantee under test is no data race,
+			// not which id lands last
+			require.NotZero(t, vc.SafeSession.GetLastInsertId())
+		})
+	}
+}
+
+// insertIDExecutor answers every ExecuteMultiShard with a fresh result
+// carrying an InsertID, the way an autocommit insert reports it.
+type insertIDExecutor struct {
+	fakeExecutor
+	nextID atomic.Uint64
+}
+
+func (e *insertIDExecutor) ExecuteMultiShard(ctx context.Context, primitive engine.Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, session *SafeSession, autocommit bool, ignoreMaxMemoryRows bool, resultsObserver ResultsObserver, fetchLastInsertID bool) (*sqltypes.Result, []error) {
+	return &sqltypes.Result{InsertID: e.nextID.Add(1), InsertIDChanged: true}, make([]error, len(rss))
+}
+
+// TestExecuteMultiShardLastInsertIDConcurrent drives ExecuteMultiShard from
+// many goroutines against one session, the way a buffered UNION ALL outside a
+// transaction runs each source concurrently through Concatenate.parallelExec.
+// With a direct field write this fails under -race; through the locked setter
+// it passes.
+func TestExecuteMultiShardLastInsertIDConcurrent(t *testing.T) {
+	vc := &VCursorImpl{
+		SafeSession: NewSafeSession(&vtgatepb.Session{}),
+		executor:    &insertIDExecutor{},
+		logStats:    logstats.NewLogStats(t.Context(), t.Name(), "", "", nil, streamlog.NewQueryLogConfigForTest()),
+	}
+	rss := []*srvtopo.ResolvedShard{{}}
+	queries := []*querypb.BoundQuery{{}}
+
+	const goroutines = 32
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+	for range goroutines {
+		go func() {
+			defer wg.Done()
+			qr, errs := vc.ExecuteMultiShard(t.Context(), nil, rss, queries, false, true, true)
+			if qr == nil || len(errs) != len(rss) {
+				t.Errorf("ExecuteMultiShard returned qr=%v errs=%v", qr, errs)
+			}
+		}()
+	}
+	wg.Wait()
+
+	// any writer may win; the guarantee under test is no data race,
+	// not which id lands last
+	require.NotZero(t, vc.SafeSession.GetLastInsertId())
 }
