@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"io"
@@ -32,7 +33,6 @@ import (
 	"sync/atomic"
 	"syscall"
 	"testing"
-	"testing/synctest"
 	"time"
 
 	"github.com/stretchr/testify/assert"
@@ -387,36 +387,53 @@ func TestInitTLSConfigWithServerCA(t *testing.T) {
 	testInitTLSConfig(t, true)
 }
 
+// testInitTLSConfig checks that the MySQL listener serves the
+// certificate that replaced its files on disk once it gets a SIGHUP.
 func testInitTLSConfig(t *testing.T, serverCA bool) {
-	synctest.Test(t, func(t *testing.T) {
-		// Create the certs.
-		ctx := utils.LeakCheckContext(t)
+	ctx := utils.LeakCheckContext(t)
 
-		root := t.TempDir()
+	// Two unrelated sets of files, the second one installed over the
+	// first one under the same paths.
+	oldRoot, newRoot, live := t.TempDir(), t.TempDir(), t.TempDir()
+	for _, root := range []string{oldRoot, newRoot} {
 		tlstest.CreateCA(root)
 		tlstest.CreateCRL(root, tlstest.CA)
 		tlstest.CreateSignedCert(root, tlstest.CA, "01", "server", "server.example.com")
-
-		serverCACert := ""
-		if serverCA {
-			serverCACert = path.Join(root, "ca-cert.pem")
-		}
-
-		srv := &mysqlServer{tcpListener: &mysql.Listener{}}
-		if err := initTLSConfig(ctx, srv, path.Join(root, "server-cert.pem"), path.Join(root, "server-key.pem"), path.Join(root, "ca-cert.pem"), path.Join(root, "ca-crl.pem"), serverCACert, true, tls.VersionTLS12); err != nil {
+	}
+	install := func(root string) {
+		for _, name := range []string{"server-cert.pem", "server-key.pem", "ca-cert.pem", "ca-crl.pem"} {
+			b, err := os.ReadFile(path.Join(root, name))
 			require.NoError(t, err)
+			require.NoError(t, os.WriteFile(path.Join(live, name), b, 0o600))
 		}
+	}
+	servedCert := func(srv *mysqlServer) []byte {
+		return srv.tcpListener.TLSConfig.Load().(*tls.Config).Certificates[0].Certificate[0]
+	}
+	certOf := func(root string) []byte {
+		b, err := os.ReadFile(path.Join(root, "server-cert.pem"))
+		require.NoError(t, err)
+		block, _ := pem.Decode(b)
+		require.NotNil(t, block)
+		return block.Bytes
+	}
 
-		serverConfig := srv.tcpListener.TLSConfig.Load()
-		require.NotNil(t, serverConfig, "init tls config shouldn't create nil server config")
+	serverCACert := ""
+	if serverCA {
+		serverCACert = path.Join(live, "ca-cert.pem")
+	}
 
-		srv.sigChan <- syscall.SIGHUP
+	install(oldRoot)
+	srv := &mysqlServer{tcpListener: &mysql.Listener{}}
+	require.NoError(t, initTLSConfig(ctx, srv, path.Join(live, "server-cert.pem"), path.Join(live, "server-key.pem"), path.Join(live, "ca-cert.pem"), path.Join(live, "ca-crl.pem"), serverCACert, true, tls.VersionTLS12))
+	t.Cleanup(srv.tlsReloader.Stop)
+	require.Equal(t, certOf(oldRoot), servedCert(srv))
 
-		// wait for signal handler
-		synctest.Wait()
-
-		require.NotEqual(t, serverConfig, srv.tcpListener.TLSConfig.Load(), "init tls config should have been recreated after SIGHUP")
-	})
+	install(newRoot)
+	srv.sigChan <- syscall.SIGHUP
+	assert.Eventually(t, func() bool {
+		return bytes.Equal(certOf(newRoot), servedCert(srv))
+	}, 30*time.Second, 10*time.Millisecond, "the listener must serve the new certificate after SIGHUP")
 }
 
 // TestKillMethods test the mysql plugin for kill method calls.
