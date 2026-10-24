@@ -52,6 +52,7 @@ jobs:
   add_review_checklist:
     name: Add Review Checklist
     permissions:
+      contents: read
       pull-requests: write
     runs-on: ubuntu-latest
     timeout-minutes: 5

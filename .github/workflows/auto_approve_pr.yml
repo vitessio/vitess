@@ -13,6 +13,7 @@ jobs:
     timeout-minutes: 5
 
     permissions:
+      contents: read
       pull-requests: write  # only given on local PRs, forks run with `read` access
 
     steps:
