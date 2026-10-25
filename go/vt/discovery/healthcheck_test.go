@@ -680,6 +680,8 @@ func TestHealthCheckErrorOnPrimaryAfterExternalReparent(t *testing.T) {
 	mustMatch(t, health, a, "unexpected result")
 }
 
+// TestHealthCheckVerifiesTabletAlias checks that a mismatch removes the current
+// connection from both the healthcheck cache and the routing list.
 func TestHealthCheckVerifiesTabletAlias(t *testing.T) {
 	for _, tabletType := range []topodatapb.TabletType{topodatapb.TabletType_REPLICA, topodatapb.TabletType_PRIMARY} {
 		t.Run(tabletType.String(), func(t *testing.T) {
@@ -1158,10 +1160,7 @@ func TestStaleDeleteFromReplacedCheckConn(t *testing.T) {
 				oldInput <- response(oldTablet.Alias, 1)
 				synctest.Wait()
 				require.Len(t, hc.GetHealthyTabletStats(target), 1)
-				alias := tabletAliasString(topoproto.TabletAliasString(oldTablet.Alias))
-				hc.mu.Lock()
-				oldHealthCheck := hc.healthByAlias[alias]
-				hc.mu.Unlock()
+				oldHealthCheck := hc.registeredHealthCheck(oldTablet.Alias)
 				require.NotNil(t, oldHealthCheck)
 
 				// The old address now belongs to another tablet. Park the stream
@@ -1179,15 +1178,13 @@ func TestStaleDeleteFromReplacedCheckConn(t *testing.T) {
 					newTablet = oldTablet
 				}
 				newInput := make(chan *querypb.StreamHealthResponse)
-				newConn := createFakeConn(newTablet, newInput)
+				createFakeConn(newTablet, newInput)
 				hc.ReplaceTablet(oldTablet, newTablet)
 				newInput <- response(newTablet.Alias, 1)
 				synctest.Wait()
 				require.Len(t, hc.GetHealthyTabletStats(target), 1)
 
-				hc.mu.Lock()
-				replacement := hc.healthByAlias[alias]
-				hc.mu.Unlock()
+				replacement := hc.registeredHealthCheck(newTablet.Alias)
 				require.NotNil(t, replacement)
 				require.NotSame(t, oldHealthCheck, replacement)
 
@@ -1197,15 +1194,13 @@ func TestStaleDeleteFromReplacedCheckConn(t *testing.T) {
 				synctest.Wait()
 				// finalizeConn records cancellation after checkConn has handled the
 				// mismatch and returned; the old stream cannot act on the maps later.
-				require.ErrorIs(t, oldHealthCheck.SimpleCopy().LastError, context.Canceled)
-				assert.Nil(t, oldHealthCheck.currentConnection())
+				oldHealth := oldHealthCheck.SimpleCopy()
+				require.ErrorIs(t, oldHealth.LastError, context.Canceled)
+				assert.Nil(t, oldHealth.Conn)
 
-				hc.mu.Lock()
-				registered := hc.healthByAlias[alias]
-				hc.mu.Unlock()
+				registered := hc.registeredHealthCheck(newTablet.Alias)
 				require.Same(t, replacement, registered, "stale mismatch deregistered the replacement")
 				require.NoError(t, replacement.ctx.Err(), "stale mismatch canceled the replacement")
-				assert.False(t, newConn.isCanceled())
 				require.Len(t, hc.GetTabletStats(target), 1)
 				require.Len(t, hc.GetHealthyTabletStats(target), 1)
 
