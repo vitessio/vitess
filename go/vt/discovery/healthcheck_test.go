@@ -680,8 +680,7 @@ func TestHealthCheckErrorOnPrimaryAfterExternalReparent(t *testing.T) {
 	mustMatch(t, health, a, "unexpected result")
 }
 
-// TestHealthCheckVerifiesTabletAlias checks that a mismatch removes the current
-// connection from both the healthcheck cache and the routing list.
+// TestHealthCheckVerifiesTabletAlias covers removal after a current-stream mismatch.
 func TestHealthCheckVerifiesTabletAlias(t *testing.T) {
 	for _, tabletType := range []topodatapb.TabletType{topodatapb.TabletType_REPLICA, topodatapb.TabletType_PRIMARY} {
 		t.Run(tabletType.String(), func(t *testing.T) {
@@ -717,7 +716,6 @@ func TestHealthCheckVerifiesTabletAlias(t *testing.T) {
 				require.ErrorContains(t, <-fc.cbErrCh, "health stats mismatch")
 				synctest.Wait()
 
-				// A mismatch from the current connection must still remove it.
 				require.ErrorIs(t, registered.ctx.Err(), context.Canceled)
 				assert.Nil(t, hc.registeredHealthCheck(tablet.Alias))
 				assert.Empty(t, hc.GetTabletStats(target))
@@ -1118,8 +1116,7 @@ func TestStaleUpdateFromCanceledCheckConn(t *testing.T) {
 	})
 }
 
-// TestStaleDeleteFromReplacedCheckConn checks that an alias mismatch from an
-// old stream cannot deregister a replacement healthcheck for the same alias.
+// TestStaleDeleteFromReplacedCheckConn covers replacement survival after a stale error.
 func TestStaleDeleteFromReplacedCheckConn(t *testing.T) {
 	for _, tc := range []struct {
 		name          string
@@ -1163,9 +1160,6 @@ func TestStaleDeleteFromReplacedCheckConn(t *testing.T) {
 				oldHealthCheck := hc.registeredHealthCheck(oldTablet.Alias)
 				require.NotNil(t, oldHealthCheck)
 
-				// The old address now belongs to another tablet. Park the stream
-				// after processResponse detects the mismatch, before checkConn can
-				// delete the tablet from the healthcheck.
 				oldInput <- response(&topodatapb.TabletAlias{Cell: "cell", Uid: 1}, 1)
 				require.ErrorContains(t, <-oldConn.cbErrCh, "health stats mismatch")
 
@@ -1188,12 +1182,8 @@ func TestStaleDeleteFromReplacedCheckConn(t *testing.T) {
 				require.NotNil(t, replacement)
 				require.NotSame(t, oldHealthCheck, replacement)
 
-				// The old goroutine handles the mismatch after its replacement is
-				// already serving. Its cleanup must not affect the new generation.
 				releaseOldConn()
 				synctest.Wait()
-				// finalizeConn records cancellation after checkConn has handled the
-				// mismatch and returned; the old stream cannot act on the maps later.
 				oldHealth := oldHealthCheck.SimpleCopy()
 				require.ErrorIs(t, oldHealth.LastError, context.Canceled)
 				assert.Nil(t, oldHealth.Conn)
@@ -1204,8 +1194,6 @@ func TestStaleDeleteFromReplacedCheckConn(t *testing.T) {
 				require.Len(t, hc.GetTabletStats(target), 1)
 				require.Len(t, hc.GetHealthyTabletStats(target), 1)
 
-				// A further health response proves the replacement stream remains
-				// live, as well as retaining its cache and routing entries.
 				newInput <- response(newTablet.Alias, 2)
 				synctest.Wait()
 				stats := hc.GetTabletStats(target)
@@ -2022,9 +2010,7 @@ type fakeConn struct {
 	// releaseOnCancel, if non-nil, parks a canceled stream until the channel
 	// is closed and then makes it return ctx.Err() like a real gRPC stream,
 	// instead of returning nil right away.
-	releaseOnCancel chan struct{}
-	// releaseOnCallbackError, if non-nil, parks a stream after its callback
-	// rejects a response but before the error is returned to checkConn.
+	releaseOnCancel        chan struct{}
 	releaseOnCallbackError chan struct{}
 
 	mu       sync.Mutex
