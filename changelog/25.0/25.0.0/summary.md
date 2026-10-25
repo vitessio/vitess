@@ -19,6 +19,7 @@
         - [`BackupHandle` interface gains `Wait()` method](#backup-handle-wait-method)
         - [VTOrc: `--cells-to-watch` removed in favor of `--cells-no-recovery`](#vtorc-cells-no-recovery)
         - [Connection character sets restricted](#vttablet-connection-charsets-restricted)
+        - [`vtbackup` refuses backups with errant GTIDs](#vtbackup-errant-gtids)
     - **[Deprecations](#deprecations)**
         - [CLI Flags](#deprecated-cli-flags)
         - [Legacy streaming-path plan types in query rules](#deprecated-selectstream-rule-plan)
@@ -226,6 +227,25 @@ See [#20021](https://github.com/vitessio/vitess/issues/20021) for details.
 `--db-charset`, and the other places a MySQL connection character set is configured, no longer accept `sjis`, `cp932`, `gb18030`, `gbk`, `big5`, `ucs2`, `utf16`, `utf16le` or `utf32`, whether given as a character set or as one of its collations. A tablet configured with one of them fails to start, VTGate refuses a `SET` of `character_set_client`, `character_set_connection`, `character_set_results` or `collation_connection` to one of them, or to a name that is not a character set or collation, which it used to answer with OK and ignore, and VTTablet refuses a setting or `SET` statement that would switch a session's connection to one of them. A client may still ask for one of them at the handshake: VTGate reads its statements byte by byte, as the tablet's connection to MySQL does, so they cannot break out of a literal.
 
 Vitess parses and escapes SQL text byte by byte, and in these character sets the second byte of a character can be a backslash or a back quote, so text in them was misparsed or corrupted on its way through Vitess. Use `utf8mb4` as the connection character set instead. Tables and columns can still be declared with any of these character sets; MySQL converts between them and the connection character set.
+
+#### <a id="vtbackup-errant-gtids"/>`vtbackup` refuses backups with errant GTIDs</a>
+
+`vtbackup` now fails a run, without completing a backup, when a position has GTIDs that the shard primary doesn't have. Tablets call such GTIDs errant: a replica restored from a backup that has them fails with `Errant GTID detected`, and before this change every `vtbackup` run restored such a backup and carried the errant GTIDs into the next one. `vtbackup` checks three times:
+
+- **The restored backup**, or the data cloned with `--restore-with-clone`, before catching up.
+- **The data to back up**, before the upload. Errant GTIDs here come from a reparent that lost transactions `vtbackup` had already applied, or from `--init-backup-sql-queries` running binlogged statements such as `ANALYZE TABLE`, `OPTIMIZE TABLE` or `FLUSH TABLES`.
+- **The new backup**, just before its `MANIFEST` is written. If an emergency reparent during the upload loses transactions that the backup holds, the backup is aborted instead of left for restores to reject.
+
+The error names where the errant GTIDs came from and how to repair them. Before the upload, `vtbackup` also waits while the primary hasn't committed GTIDs that `vtbackup` already applied, as when the primary waits for semi-sync acknowledgements, and then checks them against whichever primary the shard has.
+
+**Impact**:
+- Runs whose base or new backup has errant GTIDs now fail. That includes setups that use these backups only for point-in-time restores, SNAPSHOT keyspaces or `--unmanaged` tablets, which accept them today. Pass `--allow-errant-gtids` to log a warning instead of failing. With the flag, each check makes one attempt and doesn't wait for the primary.
+- Init SQL that runs binlogged statements now fails the run. Use the statements' `NO_WRITE_TO_BINLOG` or `LOCAL` forms, or start the queries with `SET sql_log_bin = 0`.
+- If a reparent happens during the upload, the run waits for the new primary before writing the `MANIFEST`.
+- `vtbackup` now waits at most one minute between attempts to read the primary's position.
+- MariaDB and other non-MySQL56 flavors are not checked, as on tablets.
+
+See [#20677](https://github.com/vitessio/vitess/issues/20677) and [#20678](https://github.com/vitessio/vitess/issues/20678).
 
 ### <a id="deprecations"/>Deprecations</a>
 
