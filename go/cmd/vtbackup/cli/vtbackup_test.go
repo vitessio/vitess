@@ -18,8 +18,10 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"testing/synctest"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -172,4 +174,27 @@ func TestValidateBinlogFlags(t *testing.T) {
 	require.ErrorContains(t, err, "--restore-with-clone")
 	assert.Equal(t, vtrpc.Code_INVALID_ARGUMENT, vterrors.Code(err))
 	require.NoError(t, validateBinlogFlags(mysqlctl.BackupParams{}, true))
+}
+
+func TestRetryOnError(t *testing.T) {
+	t.Run("the wait between attempts stops growing at operationTimeout", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			var attempts []time.Time
+			err := retryOnError(t.Context(), func() error {
+				attempts = append(attempts, time.Now())
+				if len(attempts) < 10 {
+					return errors.New("primary unavailable")
+				}
+				return nil
+			})
+			require.NoError(t, err)
+
+			var waits []time.Duration
+			for i := 1; i < len(attempts); i++ {
+				waits = append(waits, attempts[i].Sub(attempts[i-1]))
+			}
+			s := time.Second
+			assert.Equal(t, []time.Duration{s, 2 * s, 4 * s, 8 * s, 16 * s, 32 * s, operationTimeout, operationTimeout, operationTimeout}, waits)
+		})
+	})
 }

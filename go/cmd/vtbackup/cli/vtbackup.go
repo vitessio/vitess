@@ -873,8 +873,8 @@ func getPrimaryPosition(ctx context.Context, tmc tmclient.TabletManagerClient, t
 
 // retryOnError keeps calling the given function until it succeeds, or the given
 // Context is done. It waits an exponentially increasing amount of time between
-// retries to avoid hot-looping. The only time this returns an error is if the
-// Context is cancelled.
+// retries, up to operationTimeout, to avoid hot-looping. The only time this
+// returns an error is if the Context is cancelled.
 func retryOnError(ctx context.Context, fn func() error) error {
 	waitTime := 1 * time.Second
 
@@ -890,7 +890,7 @@ func retryOnError(ctx context.Context, fn func() error) error {
 			log.Error(fmt.Sprintf("Not retrying after error: %v", ctx.Err()))
 			return ctx.Err()
 		case <-time.After(waitTime):
-			waitTime *= 2
+			waitTime = min(2*waitTime, operationTimeout)
 		}
 	}
 }
