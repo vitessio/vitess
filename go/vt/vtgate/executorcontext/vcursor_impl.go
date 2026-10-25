@@ -663,14 +663,27 @@ func (vc *VCursorImpl) getSortedServingKeyspaces() []*vindexes.Keyspace {
 	}
 
 	if len(keyspaces) == 0 {
-		for _, ks := range vc.vschema.Keyspaces {
-			keyspaces = append(keyspaces, ks.Keyspace)
-		}
+		return vc.getSortedKeyspaces()
 	}
+	sortKeyspaces(keyspaces)
+	return keyspaces
+}
+
+// getSortedKeyspaces gets every VSchema keyspace, sorted by name, regardless of
+// serving state.
+func (vc *VCursorImpl) getSortedKeyspaces() []*vindexes.Keyspace {
+	keyspaces := make([]*vindexes.Keyspace, 0, len(vc.vschema.Keyspaces))
+	for _, ks := range vc.vschema.Keyspaces {
+		keyspaces = append(keyspaces, ks.Keyspace)
+	}
+	sortKeyspaces(keyspaces)
+	return keyspaces
+}
+
+func sortKeyspaces(keyspaces []*vindexes.Keyspace) {
 	sort.Slice(keyspaces, func(i, j int) bool {
 		return keyspaces[i].Name < keyspaces[j].Name
 	})
-	return keyspaces
 }
 
 // FirstSortedKeyspace returns the alphabetically first keyspace in the VSchema.
@@ -685,14 +698,7 @@ func (vc *VCursorImpl) FirstSortedKeyspace() (*vindexes.Keyspace, error) {
 	if len(vc.vschema.Keyspaces) == 0 {
 		return nil, errNoDbAvailable
 	}
-	keyspaces := make([]*vindexes.Keyspace, 0, len(vc.vschema.Keyspaces))
-	for _, ks := range vc.vschema.Keyspaces {
-		keyspaces = append(keyspaces, ks.Keyspace)
-	}
-	sort.Slice(keyspaces, func(i, j int) bool {
-		return keyspaces[i].Name < keyspaces[j].Name
-	})
-	return keyspaces[0], nil
+	return vc.getSortedKeyspaces()[0], nil
 }
 
 // SysVarSetEnabled implements the ContextVSchema interface
@@ -971,7 +977,9 @@ func (vc *VCursorImpl) ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShar
 	// A Lock primitive can bypass topology resolution when this session already
 	// has a reserved lock connection. Attach the gateway needed to reach it.
 	if rs.Gateway == nil {
-		rs = &srvtopo.ResolvedShard{Target: rs.Target, Gateway: vc.resolver.GetGateway()}
+		withGateway := *rs
+		withGateway.Gateway = vc.resolver.GetGateway()
+		rs = &withGateway
 	}
 	query.Sql = vc.marginComments.Leading + query.Sql + vc.marginComments.Trailing
 	return vc.executor.ExecuteLock(ctx, rs, query, vc.SafeSession, lockFuncType)

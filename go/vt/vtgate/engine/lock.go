@@ -73,7 +73,7 @@ func (l *Lock) execLock(ctx context.Context, vcursor VCursor, bindVars map[strin
 		var err error
 		rss, _, err = vcursor.ResolveDestinations(ctx, l.Keyspace.Name, nil, []key.ShardDestination{l.TargetDestination})
 		if err != nil {
-			return nil, vterrors.Wrapf(err, "advisory-lock keyspace %s is unavailable", l.Keyspace.Name)
+			return nil, vterrors.Wrapf(err, "failed to resolve advisory-lock keyspace %s", l.Keyspace.Name)
 		}
 	}
 	if len(rss) != 1 {
