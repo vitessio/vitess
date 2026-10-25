@@ -4638,6 +4638,8 @@ func TestSelectAggregationRandom(t *testing.T) {
 func TestSelectDateTypes(t *testing.T) {
 	executor, _, _, _, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 	session := econtext.NewAutocommitSession(&vtgatepb.Session{})
+	// FROM_UNIXTIME uses the session time zone, which defaults to the local one.
+	session.SetSystemVariable("time_zone", "'+00:00'")
 
 	qr, err := executor.Execute(t.Context(), nil, "TestSelectDateTypes", session, "select '2020-01-01' + interval month(date_sub(FROM_UNIXTIME(1234), interval 1 month))-1 month", nil, false)
 	require.NoError(t, err)
