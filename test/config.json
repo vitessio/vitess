@@ -227,6 +227,23 @@
       ],
       "Needs": []
     },
+    "vtbackup_errant_gtids": {
+      "File": "unused.go",
+      "Packages": [
+        "vitess.io/vitess/go/test/endtoend/backup/vtbackup_errant_gtids"
+      ],
+      "Args": [
+        "-timeout",
+        "20m"
+      ],
+      "Command": [],
+      "Manual": false,
+      "Shard": "vtbackup_errant_gtids",
+      "Tags": [
+        "upgrade_downgrade_backups"
+      ],
+      "Needs": []
+    },
     "backup_xtrabackup": {
       "File": "unused.go",
       "Packages": [
