@@ -620,7 +620,11 @@ type nopWriteCloser struct{}
 func (nopWriteCloser) Write(p []byte) (int, error) { return len(p), nil }
 func (nopWriteCloser) Close() error                { return nil }
 
-func TestBackupFilesDoesNotCallEndBackup(t *testing.T) {
+// TestBackupFilesFinish tests how backupFiles finishes a backup. It verifies the
+// backup position before writing the MANIFEST, writes no MANIFEST and does not
+// retry when that check fails, and never calls EndBackup, which only the
+// top-level Backup() caller should.
+func TestBackupFilesFinish(t *testing.T) {
 	tmpDir := t.TempDir()
 	dataDir := path.Join(tmpDir, "datadir", "test1")
 	require.NoError(t, os.MkdirAll(dataDir, 0o755))
@@ -653,33 +657,50 @@ func TestBackupFilesDoesNotCallEndBackup(t *testing.T) {
 		},
 	}
 
-	be := &BuiltinBackupEngine{}
-	err := be.backupFiles(
-		t.Context(),
-		BackupParams{
-			Cnf: &Mycnf{
-				InnodbDataHomeDir:     path.Join(tmpDir, "innodb"),
-				InnodbLogGroupHomeDir: path.Join(tmpDir, "log"),
-				DataDir:               path.Join(tmpDir, "datadir"),
-			},
-			Logger:      logutil.NewMemoryLogger(),
-			Stats:       backupstats.NoStats(),
-			Concurrency: 1,
+	pos, err := replication.DecodePosition("MySQL56/16b1039f-22b6-11ed-b765-0a43f95f28a3:1-10")
+	require.NoError(t, err)
+	var verified []replication.Position
+	var verifyErr error
+	params := BackupParams{
+		Cnf: &Mycnf{
+			InnodbDataHomeDir:     path.Join(tmpDir, "innodb"),
+			InnodbLogGroupHomeDir: path.Join(tmpDir, "log"),
+			DataDir:               path.Join(tmpDir, "datadir"),
 		},
-		bh,
-		replication.Position{},
-		replication.Position{},
-		replication.Position{},
-		"",
-		nil,
-		"",
-		"",
-		nil,
-	)
+		Logger:      logutil.NewMemoryLogger(),
+		Stats:       backupstats.NoStats(),
+		Concurrency: 1,
+		VerifyPosition: func(ctx context.Context, p replication.Position) error {
+			verified = append(verified, p)
+			return verifyErr
+		},
+	}
+	manifestAdds := func() int {
+		v, ok := addFileCalls.Load(backupManifestFileName)
+		if !ok {
+			return 0
+		}
+		return v.(int)
+	}
+
+	be := &BuiltinBackupEngine{}
+	err = be.backupFiles(t.Context(), params, bh, pos, replication.Position{}, replication.Position{}, "", nil, "", "", nil)
 	require.NoError(t, err)
 
 	assert.Empty(t, bh.EndBackupCalls, "backupFiles must not call EndBackup; only the top-level Backup() caller should")
 	assert.Positive(t, bh.WaitCalls, "backupFiles must call Wait() to flush pending async operations")
+	require.Len(t, verified, 1)
+	assert.True(t, pos.Equal(verified[0]), "verified %v, want %v", verified[0], pos)
+	assert.Equal(t, 1, manifestAdds())
+
+	// A failed check fails the backup before its MANIFEST, and is not retried.
+	verified = nil
+	verifyErr = vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "errant GTIDs")
+	err = be.backupFiles(t.Context(), params, bh, pos, replication.Position{}, replication.Position{}, "", nil, "", "", nil)
+	require.ErrorContains(t, err, "errant GTIDs")
+	assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+	assert.Len(t, verified, 1)
+	assert.Equal(t, 1, manifestAdds(), "a failed check must not write the MANIFEST")
 }
 
 // newBackupTestTopo sets up the topo that ExecuteBackup needs for the MANIFEST

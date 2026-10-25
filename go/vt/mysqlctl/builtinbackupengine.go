@@ -821,6 +821,12 @@ func (be *BuiltinBackupEngine) backupFiles(
 		return backupErr
 	}
 
+	// Verify the position before the MANIFEST makes the backup complete. A failed
+	// check is not retried with the MANIFEST below.
+	if err := params.verifyPosition(ctx, backupPosition); err != nil {
+		return err
+	}
+
 	// Backup the MANIFEST file and apply retry logic.
 	var manifestErr error
 	for currentRetry := 0; currentRetry <= maxRetriesPerFile; currentRetry++ {
