@@ -230,17 +230,18 @@ Vitess parses and escapes SQL text byte by byte, and in these character sets the
 
 #### <a id="vtbackup-errant-gtids"/>`vtbackup` refuses backups with errant GTIDs</a>
 
-`vtbackup` now fails a run, without completing a backup, when a position has GTIDs that the shard primary doesn't have. Tablets call such GTIDs errant: a replica restored from a backup that has them fails with `Errant GTID detected`, and before this change every `vtbackup` run restored such a backup and carried the errant GTIDs into the next one. `vtbackup` checks three times:
+`vtbackup` now fails a run, without completing a backup, when a position has errant GTIDs: GTIDs that the shard primary doesn't have, under any server UUID but the primary's own. A replica restored from a backup that has them fails with `Errant GTID detected`, and before this change every `vtbackup` run restored such a backup and carried the errant GTIDs into the next one. `vtbackup` checks three times:
 
 - **The restored backup**, or the data cloned with `--restore-with-clone`, before catching up.
 - **The data to back up**, before the upload. Errant GTIDs here come from a reparent that lost transactions `vtbackup` had already applied, or from `--init-backup-sql-queries` running binlogged statements such as `ANALYZE TABLE`, `OPTIMIZE TABLE` or `FLUSH TABLES`.
 - **The new backup**, just before its `MANIFEST` is written. If an emergency reparent during the upload loses transactions that the backup holds, the backup is aborted instead of left for restores to reject.
 
-The error names where the errant GTIDs came from and how to repair them. Before the upload, `vtbackup` also waits while the primary hasn't committed GTIDs that `vtbackup` already applied, as when the primary waits for semi-sync acknowledgements, and then checks them against whichever primary the shard has.
+The error names where the errant GTIDs came from and how to repair them. Before the upload, and again before writing the `MANIFEST`, `vtbackup` also waits while the primary hasn't committed GTIDs under its own UUID that `vtbackup` already applied, as when the primary waits for semi-sync acknowledgements, and then checks them against whichever primary the shard has.
 
 **Impact**:
 - Runs whose base or new backup has errant GTIDs now fail. That includes setups that use these backups only for point-in-time restores, SNAPSHOT keyspaces or `--unmanaged` tablets, which accept them today. Pass `--allow-errant-gtids` to log a warning instead of failing. With the flag, each check makes one attempt and doesn't wait for the primary.
 - Init SQL that runs binlogged statements now fails the run. Use the statements' `NO_WRITE_TO_BINLOG` or `LOCAL` forms, or start the queries with `SET sql_log_bin = 0`.
+- While the primary waits for semi-sync acknowledgements, a run waits before the upload until the acknowledgement arrives or a reparent happens. Like the existing wait for the primary's position, these waits are bounded only by the job's deadline, if it has one.
 - If a reparent happens during the upload, the run waits for the new primary before writing the `MANIFEST`.
 - `vtbackup` now waits at most one minute between attempts to read the primary's position.
 - MariaDB and other non-MySQL56 flavors are not checked, as on tablets.
