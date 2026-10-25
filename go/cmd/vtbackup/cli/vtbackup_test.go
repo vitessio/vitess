@@ -452,6 +452,13 @@ func TestVerifyPosition(t *testing.T) {
 			require.ErrorContains(t, err, testOtherUUID+":1-2 came from the restored backup")
 			require.ErrorContains(t, err, testLocalUUID+":1 were written by this run's --init-backup-sql-queries")
 			require.ErrorContains(t, err, "vtbackup applied "+testNewPrimaryUUID+":1 during catch-up")
+			require.ErrorContains(t, err, "or set --allow-errant-gtids")
+
+			// With the flag, the same report is a warning, which doesn't suggest the flag.
+			setAllowErrantGTIDs(t, true)
+			_, err = checkPositionOnce(t.Context(), vt.tmc, vt.ts, pos, check)
+			require.ErrorContains(t, err, testOtherUUID+":1-2 came from the restored backup")
+			assert.NotContains(t, err.Error(), "--allow-errant-gtids")
 		})
 	})
 

@@ -227,7 +227,7 @@ func init() {
 	Main.Flags().Var((*topoproto.TabletTypeListFlag)(&initSQLTabletTypes), "init-backup-tablet-types", "Tablet types used for the backup where the init SQL queries (--init-backup-sql-queries) will be executed after catch-up replication, before initializing the backup")
 	Main.Flags().DurationVar(&initSQLTimeout, "init-backup-sql-timeout", initSQLTimeout, "At what point should we time out the init SQL query (--init-backup-sql-queries) work and either fail the backup job (--init-backup-sql-fail-on-error) or continue on with the backup")
 	Main.Flags().BoolVar(&initSQLFailOnError, "init-backup-sql-fail-on-error", false, "Whether or not to fail the backup if the init SQL queries (--init-backup-sql-queries) fail, which includes if they fail to complete before the specified timeout (--init-backup-sql-timeout)")
-	Main.Flags().BoolVar(&allowErrantGTIDs, "allow-errant-gtids", allowErrantGTIDs, "Log a warning instead of failing when the restored backup, or the backup this run takes, has GTIDs that the shard primary doesn't have. Replica restores reject such a backup. Point-in-time restores, SNAPSHOT keyspaces and --unmanaged tablets accept it. Init SQL creates such GTIDs when it runs binlogged statements such as ANALYZE TABLE, OPTIMIZE TABLE or FLUSH TABLES; use their NO_WRITE_TO_BINLOG or LOCAL forms, or start the queries with SET sql_log_bin = 0. With this flag, each check makes one attempt: vtbackup doesn't wait for a missing or unreachable primary, or for the primary to commit GTIDs that vtbackup already applied.")
+	Main.Flags().BoolVar(&allowErrantGTIDs, "allow-errant-gtids", allowErrantGTIDs, "Log a warning instead of failing when the restored backup, or the backup this run takes, has errant GTIDs: GTIDs that the shard primary doesn't have, under any server UUID but the primary's own. Replica restores reject such a backup. Point-in-time restores, SNAPSHOT keyspaces and --unmanaged tablets accept it. Init SQL creates such GTIDs when it runs binlogged statements such as ANALYZE TABLE, OPTIMIZE TABLE or FLUSH TABLES; use their NO_WRITE_TO_BINLOG or LOCAL forms, or start the queries with SET sql_log_bin = 0. With this flag, each check makes one attempt: vtbackup doesn't wait for a missing or unreachable primary, or for the primary to commit GTIDs that vtbackup already applied.")
 
 	// vttablet-like flags
 	utils.SetFlagStringVar(Main.Flags(), &initDbNameOverride, "init-db-name-override", initDbNameOverride, "(init parameter) override the name of the db used by vttablet")
@@ -1025,12 +1025,17 @@ func errantGTIDsError(check positionCheck, errant replication.Mysql56GTIDSet, pr
 		rest = rest.RemoveUUID(localSID)
 	}
 
+	// With the flag set, this is a warning, so the flag is no remedy.
+	optOut := ", or set --allow-errant-gtids"
+	if allowErrantGTIDs {
+		optOut = ""
+	}
 	switch {
 	case len(restored) == 0:
 	case restoreWithClone:
-		msg += fmt.Sprintf(". %v came from the donor, which has them too. Fix the donor's errant GTIDs or clone from another tablet, or set --allow-errant-gtids", restored)
+		msg += fmt.Sprintf(". %v came from the donor, which has them too. Fix the donor's errant GTIDs or clone from another tablet%s", restored, optOut)
 	default:
-		msg += fmt.Sprintf(`. %v came from the restored backup, and tablets restored from it fail with "Errant GTID detected". If these transactions change no data, as with init SQL in an older vtbackup run, inject an empty transaction for each one on the primary with binary logging on; that also repairs the backups that contain them. Otherwise, remove every backup that contains them with vtctldclient RemoveBackup, after copying any whose transactions the shard lost, or set --allow-errant-gtids`, restored)
+		msg += fmt.Sprintf(`. %v came from the restored backup, and tablets restored from it fail with "Errant GTID detected". If these transactions change no data, as with init SQL in an older vtbackup run, inject an empty transaction for each one on the primary with binary logging on; that also repairs the backups that contain them. Otherwise, remove every backup that contains them with vtctldclient RemoveBackup, after copying any whose transactions the shard lost%s`, restored, optOut)
 	}
 	if len(initSQL) > 0 {
 		msg += fmt.Sprintf(". %v were written by this run's --init-backup-sql-queries. Use the statements' NO_WRITE_TO_BINLOG or LOCAL forms, or start the queries with SET sql_log_bin = 0", initSQL)
