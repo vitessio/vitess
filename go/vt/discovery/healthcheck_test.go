@@ -681,46 +681,47 @@ func TestHealthCheckErrorOnPrimaryAfterExternalReparent(t *testing.T) {
 }
 
 func TestHealthCheckVerifiesTabletAlias(t *testing.T) {
-	ctx := utils.LeakCheckContext(t)
+	for _, tabletType := range []topodatapb.TabletType{topodatapb.TabletType_REPLICA, topodatapb.TabletType_PRIMARY} {
+		t.Run(tabletType.String(), func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				ctx := t.Context()
+				ts := memorytopo.NewServer(ctx, "cell")
+				t.Cleanup(func() { ts.Close() })
+				hc := createTestHc(ctx, ts)
+				t.Cleanup(func() { hc.Close() })
 
-	ts := memorytopo.NewServer(ctx, "cell")
-	defer ts.Close()
-	hc := createTestHc(ctx, ts)
-	defer hc.Close()
+				tablet := createTestTablet(0, "cell", "a")
+				tablet.Type = tabletType
+				target := &querypb.Target{Keyspace: "k", Shard: "s", TabletType: tabletType}
+				input := make(chan *querypb.StreamHealthResponse)
+				fc := createFakeConn(tablet, input)
+				hc.AddTablet(tablet)
+				registered := hc.registeredHealthCheck(tablet.Alias)
+				require.NotNil(t, registered)
 
-	tablet := createTestTablet(0, "cell", "a")
-	input := make(chan *querypb.StreamHealthResponse, 1)
-	fc := createFakeConn(tablet, input)
-	resultChan := hc.Subscribe("TestHealthCheckVerifiesTabletAlias")
+				input <- &querypb.StreamHealthResponse{
+					Target: target, TabletAlias: tablet.Alias, Serving: true,
+					PrimaryTermStartTimestamp: 10,
+					RealtimeStats:             &querypb.RealtimeStats{ReplicationLagSeconds: 1},
+				}
+				synctest.Wait()
+				require.Len(t, hc.GetHealthyTabletStats(target), 1)
 
-	hc.AddTablet(tablet)
+				input <- &querypb.StreamHealthResponse{
+					Target: target, TabletAlias: &topodatapb.TabletAlias{Uid: 20, Cell: "cellb"}, Serving: true,
+					PrimaryTermStartTimestamp: 10,
+					RealtimeStats:             &querypb.RealtimeStats{ReplicationLagSeconds: 1},
+				}
+				require.ErrorContains(t, <-fc.cbErrCh, "health stats mismatch")
+				synctest.Wait()
 
-	// Immediately after AddTablet() there will be the first notification.
-	want := &TabletHealth{
-		Tablet:               tablet,
-		Target:               &querypb.Target{Keyspace: "k", Shard: "s"},
-		Serving:              false,
-		PrimaryTermStartTime: 0,
-	}
-	result := <-resultChan
-	mustMatch(t, want, result, "Wrong TabletHealth data")
-
-	input <- &querypb.StreamHealthResponse{
-		Target:                    &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY},
-		TabletAlias:               &topodatapb.TabletAlias{Uid: 20, Cell: "cellb"},
-		Serving:                   true,
-		PrimaryTermStartTimestamp: 10,
-		RealtimeStats:             &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
-	}
-
-	ticker := time.NewTicker(1 * time.Second)
-	select {
-	case err := <-fc.cbErrCh:
-		assert.Contains(t, err.Error(), "health stats mismatch", "wrong error")
-	case <-resultChan:
-		require.Fail(t, "StreamHealth should have returned a health stats mismatch error")
-	case <-ticker.C:
-		require.Fail(t, "Timed out waiting for StreamHealth to return a health stats mismatch error")
+				// A mismatch from the current connection must still remove it.
+				assert.ErrorIs(t, registered.ctx.Err(), context.Canceled)
+				assert.Nil(t, hc.registeredHealthCheck(tablet.Alias))
+				assert.Empty(t, hc.GetTabletStats(target))
+				assert.Empty(t, hc.GetHealthyTabletStats(target))
+			})
+		})
 	}
 }
 
@@ -1113,6 +1114,111 @@ func TestStaleUpdateFromCanceledCheckConn(t *testing.T) {
 			"tablet is serving and streaming health but missing from the healthy list: stale update from the canceled checkConn poisoned the healthy list")
 		assert.True(t, healthy[0].Serving)
 	})
+}
+
+// TestStaleDeleteFromReplacedCheckConn checks that an alias mismatch from an
+// old stream cannot deregister a replacement healthcheck for the same alias.
+func TestStaleDeleteFromReplacedCheckConn(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		tabletType    topodatapb.TabletType
+		changeAddress bool
+	}{
+		{name: "replica at new address", tabletType: topodatapb.TabletType_REPLICA, changeAddress: true},
+		{name: "primary at new address", tabletType: topodatapb.TabletType_PRIMARY, changeAddress: true},
+		{name: "same tablet record", tabletType: topodatapb.TabletType_REPLICA},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				ctx := t.Context()
+				ts := memorytopo.NewServer(ctx, "cell")
+				t.Cleanup(func() { ts.Close() })
+				hc := createTestHc(ctx, ts)
+				t.Cleanup(func() { hc.Close() })
+
+				target := &querypb.Target{Keyspace: "k", Shard: "s", TabletType: tc.tabletType}
+				oldTablet := createTestTablet(0, "cell", "a")
+				oldTablet.Type = tc.tabletType
+				oldInput := make(chan *querypb.StreamHealthResponse)
+				oldConn := createFakeConn(oldTablet, oldInput)
+				oldConn.releaseOnCallbackError = make(chan struct{})
+				releaseOldConn := sync.OnceFunc(func() { close(oldConn.releaseOnCallbackError) })
+				t.Cleanup(releaseOldConn)
+
+				response := func(alias *topodatapb.TabletAlias, lag uint32) *querypb.StreamHealthResponse {
+					return &querypb.StreamHealthResponse{
+						TabletAlias:               alias,
+						Target:                    target,
+						Serving:                   true,
+						PrimaryTermStartTimestamp: 10,
+						RealtimeStats:             &querypb.RealtimeStats{ReplicationLagSeconds: lag},
+					}
+				}
+				hc.AddTablet(oldTablet)
+				oldInput <- response(oldTablet.Alias, 1)
+				synctest.Wait()
+				require.Len(t, hc.GetHealthyTabletStats(target), 1)
+				alias := tabletAliasString(topoproto.TabletAliasString(oldTablet.Alias))
+				hc.mu.Lock()
+				oldHealthCheck := hc.healthByAlias[alias]
+				hc.mu.Unlock()
+				require.NotNil(t, oldHealthCheck)
+
+				// The old address now belongs to another tablet. Park the stream
+				// after processResponse detects the mismatch, before checkConn can
+				// delete the tablet from the healthcheck.
+				oldInput <- response(&topodatapb.TabletAlias{Cell: "cell", Uid: 1}, 1)
+				require.ErrorContains(t, <-oldConn.cbErrCh, "health stats mismatch")
+
+				newTablet := createTestTablet(0, "cell", "a")
+				newTablet.Type = tc.tabletType
+				if tc.changeAddress {
+					newTablet.PortMap["vt"] = 5
+					newTablet.PortMap["grpc"] = 6
+				} else {
+					newTablet = oldTablet
+				}
+				newInput := make(chan *querypb.StreamHealthResponse)
+				newConn := createFakeConn(newTablet, newInput)
+				hc.ReplaceTablet(oldTablet, newTablet)
+				newInput <- response(newTablet.Alias, 1)
+				synctest.Wait()
+				require.Len(t, hc.GetHealthyTabletStats(target), 1)
+
+				hc.mu.Lock()
+				replacement := hc.healthByAlias[alias]
+				hc.mu.Unlock()
+				require.NotNil(t, replacement)
+				require.NotSame(t, oldHealthCheck, replacement)
+
+				// The old goroutine handles the mismatch after its replacement is
+				// already serving. Its cleanup must not affect the new generation.
+				releaseOldConn()
+				synctest.Wait()
+				// finalizeConn records cancellation after checkConn has handled the
+				// mismatch and returned; the old stream cannot act on the maps later.
+				assert.ErrorIs(t, oldHealthCheck.SimpleCopy().LastError, context.Canceled)
+				assert.Nil(t, oldHealthCheck.currentConnection())
+
+				hc.mu.Lock()
+				registered := hc.healthByAlias[alias]
+				hc.mu.Unlock()
+				require.Same(t, replacement, registered, "stale mismatch deregistered the replacement")
+				assert.NoError(t, replacement.ctx.Err(), "stale mismatch canceled the replacement")
+				assert.False(t, newConn.isCanceled())
+				require.Len(t, hc.GetTabletStats(target), 1)
+				require.Len(t, hc.GetHealthyTabletStats(target), 1)
+
+				// A further health response proves the replacement stream remains
+				// live, as well as retaining its cache and routing entries.
+				newInput <- response(newTablet.Alias, 2)
+				synctest.Wait()
+				stats := hc.GetTabletStats(target)
+				require.Len(t, stats, 1)
+				assert.EqualValues(t, 2, stats[0].Stats.ReplicationLagSeconds)
+			})
+		})
+	}
 }
 
 // When an external primary failover is performed,
@@ -1922,6 +2028,9 @@ type fakeConn struct {
 	// is closed and then makes it return ctx.Err() like a real gRPC stream,
 	// instead of returning nil right away.
 	releaseOnCancel chan struct{}
+	// releaseOnCallbackError, if non-nil, parks a stream after its callback
+	// rejects a response but before the error is returned to checkConn.
+	releaseOnCallbackError chan struct{}
 
 	mu       sync.Mutex
 	canceled bool
@@ -1956,6 +2065,9 @@ func (fc *fakeConn) StreamHealth(ctx context.Context, callback func(shr *querypb
 				select {
 				case fc.cbErrCh <- err:
 				case <-ctx.Done():
+				}
+				if fc.releaseOnCallbackError != nil {
+					<-fc.releaseOnCallbackError
 				}
 				return err
 			}
