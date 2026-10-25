@@ -716,7 +716,7 @@ func TestHealthCheckVerifiesTabletAlias(t *testing.T) {
 				synctest.Wait()
 
 				// A mismatch from the current connection must still remove it.
-				assert.ErrorIs(t, registered.ctx.Err(), context.Canceled)
+				require.ErrorIs(t, registered.ctx.Err(), context.Canceled)
 				assert.Nil(t, hc.registeredHealthCheck(tablet.Alias))
 				assert.Empty(t, hc.GetTabletStats(target))
 				assert.Empty(t, hc.GetHealthyTabletStats(target))
@@ -1197,14 +1197,14 @@ func TestStaleDeleteFromReplacedCheckConn(t *testing.T) {
 				synctest.Wait()
 				// finalizeConn records cancellation after checkConn has handled the
 				// mismatch and returned; the old stream cannot act on the maps later.
-				assert.ErrorIs(t, oldHealthCheck.SimpleCopy().LastError, context.Canceled)
+				require.ErrorIs(t, oldHealthCheck.SimpleCopy().LastError, context.Canceled)
 				assert.Nil(t, oldHealthCheck.currentConnection())
 
 				hc.mu.Lock()
 				registered := hc.healthByAlias[alias]
 				hc.mu.Unlock()
 				require.Same(t, replacement, registered, "stale mismatch deregistered the replacement")
-				assert.NoError(t, replacement.ctx.Err(), "stale mismatch canceled the replacement")
+				require.NoError(t, replacement.ctx.Err(), "stale mismatch canceled the replacement")
 				assert.False(t, newConn.isCanceled())
 				require.Len(t, hc.GetTabletStats(target), 1)
 				require.Len(t, hc.GetHealthyTabletStats(target), 1)

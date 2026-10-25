@@ -475,6 +475,25 @@ func (hc *HealthCheckImpl) deleteTablet(tablet *topodata.Tablet) {
 	hc.mu.Lock()
 	defer hc.mu.Unlock()
 
+	hc.deleteTabletLocked(tablet)
+}
+
+// deleteTabletHealthCheck removes only the currently registered healthcheck.
+// A replaced checkConn may still be handling an error from its old stream.
+func (hc *HealthCheckImpl) deleteTabletHealthCheck(thc *tabletHealthCheck) {
+	hc.mu.Lock()
+	defer hc.mu.Unlock()
+
+	tabletAlias := tabletAliasString(topoproto.TabletAliasString(thc.Tablet.Alias))
+	if !hc.isRegisteredHealthCheckLocked(tabletAlias, thc) {
+		return
+	}
+	hc.deleteTabletLocked(thc.Tablet)
+}
+
+// deleteTabletLocked removes the tablet from the authoritative and secondary maps.
+// hc.mu must be locked before calling it.
+func (hc *HealthCheckImpl) deleteTabletLocked(tablet *topodata.Tablet) {
 	tabletAlias := tabletAliasString(topoproto.TabletAliasString(tablet.Alias))
 	defer func() {
 		// We want to be sure the tablet is gone from the secondary
