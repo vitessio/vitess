@@ -32,9 +32,12 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
+	vttimepb "vitess.io/vitess/go/vt/proto/vttime"
 )
 
 func TestCatchUpReplicationForBackupClearsLastErrWhenReplicationBecomesHealthy(t *testing.T) {
@@ -195,6 +198,431 @@ func TestRetryOnError(t *testing.T) {
 			}
 			s := time.Second
 			assert.Equal(t, []time.Duration{s, 2 * s, 4 * s, 8 * s, 16 * s, 32 * s, operationTimeout, operationTimeout, operationTimeout}, waits)
+		})
+	})
+
+	t.Run("a permanent error returns at once", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			calls := 0
+			errErrant := errors.New("errant GTIDs")
+			err := retryOnError(t.Context(), func() error {
+				calls++
+				return permanentError{errErrant}
+			})
+			assert.Equal(t, errErrant, err)
+			assert.Equal(t, 1, calls)
+		})
+	})
+}
+
+const (
+	testPrimaryUUID    = "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9"
+	testNewPrimaryUUID = "8bc65cca-3fe4-11ed-bbfb-091034d48b3e"
+	testOtherUUID      = "8bc65d0a-3fe4-11ed-9a67-7d0f0fd51f1c"
+	testLocalUUID      = "8bc65d48-3fe4-11ed-a47a-77f2e3d1e1a8"
+)
+
+// testGTIDPosition parses a MySQL56 GTID set into a position.
+func testGTIDPosition(t *testing.T, gtids string) replication.Position {
+	t.Helper()
+	pos, err := replication.DecodePosition("MySQL56/" + gtids)
+	require.NoError(t, err)
+	return pos
+}
+
+// primaryStatus is the PrimaryStatus of a primary with the given UUID and MySQL56 GTID set.
+func primaryStatus(uuid, gtids string) *replicationdatapb.PrimaryStatus {
+	return &replicationdatapb.PrimaryStatus{Position: "MySQL56/" + gtids, ServerUuid: uuid}
+}
+
+// fakePrimaryStatusTMC serves PrimaryStatus from a function and counts the calls.
+type fakePrimaryStatusTMC struct {
+	tmclient.TabletManagerClient
+
+	primaryStatus func(tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error)
+	calls         int
+}
+
+func (f *fakePrimaryStatusTMC) PrimaryStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
+	f.calls++
+	return f.primaryStatus(tablet)
+}
+
+// verifyPositionTest is a shard with two tablets that can be its primary, 100 and
+// 101, and a fake tmclient that serves their PrimaryStatus.
+type verifyPositionTest struct {
+	ts   *topo.Server
+	tmc  *fakePrimaryStatusTMC
+	term int64
+}
+
+// newVerifyPositionTest creates the shard, with no primary, and points
+// initKeyspace and initShard at it for the test.
+func newVerifyPositionTest(t *testing.T, status func(tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error)) *verifyPositionTest {
+	t.Helper()
+	ctx := t.Context()
+	oldInitKeyspace, oldInitShard := initKeyspace, initShard
+	initKeyspace, initShard = "test_keyspace", "0"
+	t.Cleanup(func() { initKeyspace, initShard = oldInitKeyspace, oldInitShard })
+
+	ts := memorytopo.NewServer(ctx, "zone1")
+	t.Cleanup(ts.Close)
+	require.NoError(t, ts.CreateKeyspace(ctx, initKeyspace, &topodatapb.Keyspace{}))
+	require.NoError(t, ts.CreateShard(ctx, initKeyspace, initShard))
+	for _, uid := range []uint32{100, 101} {
+		require.NoError(t, ts.CreateTablet(ctx, &topodatapb.Tablet{
+			Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: uid},
+			Keyspace: initKeyspace,
+			Shard:    initShard,
+			Type:     topodatapb.TabletType_REPLICA,
+		}))
+	}
+	return &verifyPositionTest{ts: ts, tmc: &fakePrimaryStatusTMC{primaryStatus: status}}
+}
+
+// setPrimary makes tablet uid the shard primary, in a new term.
+func (vt *verifyPositionTest) setPrimary(t *testing.T, uid uint32) {
+	vt.term++
+	term := vt.term
+	_, err := vt.ts.UpdateShardFields(t.Context(), initKeyspace, initShard, func(si *topo.ShardInfo) error {
+		si.PrimaryAlias = &topodatapb.TabletAlias{Cell: "zone1", Uid: uid}
+		si.PrimaryTermStartTime = &vttimepb.Time{Seconds: term}
+		return nil
+	})
+	assert.NoError(t, err)
+}
+
+// setAllowErrantGTIDs sets --allow-errant-gtids for the test.
+func setAllowErrantGTIDs(t *testing.T, allow bool) {
+	old := allowErrantGTIDs
+	allowErrantGTIDs = allow
+	t.Cleanup(func() { allowErrantGTIDs = old })
+}
+
+func TestVerifyPosition(t *testing.T) {
+	committed := func(gtids string) func(*topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
+		return func(*topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
+			return primaryStatus(testPrimaryUUID, gtids), nil
+		}
+	}
+	checkData := positionCheck{what: "the data to back up", requireCommitted: true}
+
+	t.Run("a clean position passes", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			vt := newVerifyPositionTest(t, committed(testPrimaryUUID+":1-10"))
+			vt.setPrimary(t, 100)
+			term, err := verifyPosition(t.Context(), vt.tmc, vt.ts, testGTIDPosition(t, testPrimaryUUID+":1-5"), checkData)
+			require.NoError(t, err)
+			assert.Equal(t, uint32(100), term.alias.GetUid())
+			assert.Equal(t, 1, vt.tmc.calls)
+		})
+	})
+
+	t.Run("errant GTIDs fail at once", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			vt := newVerifyPositionTest(t, committed(testPrimaryUUID+":1-10"))
+			vt.setPrimary(t, 100)
+			_, err := verifyPosition(t.Context(), vt.tmc, vt.ts, testGTIDPosition(t, testPrimaryUUID+":1-5,"+testOtherUUID+":1-2"), checkData)
+			require.ErrorContains(t, err, "the data to back up has errant GTIDs "+testOtherUUID+":1-2 that primary zone1-0000000100")
+			assert.Equal(t, vtrpc.Code_FAILED_PRECONDITION, vterrors.Code(err))
+			assert.Equal(t, 1, vt.tmc.calls)
+		})
+	})
+
+	t.Run("the primary's own GTIDs ahead of it pass check 1", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			vt := newVerifyPositionTest(t, committed(testPrimaryUUID+":1-10"))
+			vt.setPrimary(t, 100)
+			_, err := verifyPosition(t.Context(), vt.tmc, vt.ts, testGTIDPosition(t, testPrimaryUUID+":1-12"), positionCheck{what: "restored backup b1"})
+			require.NoError(t, err)
+			assert.Equal(t, 1, vt.tmc.calls)
+		})
+	})
+
+	t.Run("uncommitted GTIDs are retried until the primary commits them", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			gtids := []string{testPrimaryUUID + ":1-10", testPrimaryUUID + ":1-12"}
+			var vt *verifyPositionTest
+			vt = newVerifyPositionTest(t, func(*topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
+				return primaryStatus(testPrimaryUUID, gtids[min(vt.tmc.calls, len(gtids))-1]), nil
+			})
+			vt.setPrimary(t, 100)
+			_, err := verifyPosition(t.Context(), vt.tmc, vt.ts, testGTIDPosition(t, testPrimaryUUID+":1-12"), checkData)
+			require.NoError(t, err)
+			assert.Equal(t, 2, vt.tmc.calls)
+		})
+	})
+
+	t.Run("uncommitted GTIDs become errant under a new primary", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			var vt *verifyPositionTest
+			vt = newVerifyPositionTest(t, func(tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
+				if tablet.Alias.Uid == 100 {
+					// The primary loses the race: a reparent replaces it.
+					vt.setPrimary(t, 101)
+					return primaryStatus(testPrimaryUUID, testPrimaryUUID+":1-10"), nil
+				}
+				return primaryStatus(testNewPrimaryUUID, testPrimaryUUID+":1-10,"+testNewPrimaryUUID+":1"), nil
+			})
+			vt.setPrimary(t, 100)
+			_, err := verifyPosition(t.Context(), vt.tmc, vt.ts, testGTIDPosition(t, testPrimaryUUID+":1-12"), checkData)
+			require.ErrorContains(t, err, "has errant GTIDs "+testPrimaryUUID+":11-12 that primary zone1-0000000101")
+			assert.Equal(t, 2, vt.tmc.calls)
+		})
+	})
+
+	t.Run("a missing primary is retried", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			vt := newVerifyPositionTest(t, committed(testPrimaryUUID+":1-10"))
+			time.AfterFunc(10*time.Second, func() { vt.setPrimary(t, 100) })
+			_, err := verifyPosition(t.Context(), vt.tmc, vt.ts, testGTIDPosition(t, testPrimaryUUID+":1-5"), checkData)
+			require.NoError(t, err)
+			assert.Equal(t, 1, vt.tmc.calls)
+		})
+	})
+
+	t.Run("an unreachable primary is retried", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			var vt *verifyPositionTest
+			vt = newVerifyPositionTest(t, func(*topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
+				if vt.tmc.calls == 1 {
+					return nil, errors.New("connection refused")
+				}
+				return primaryStatus(testPrimaryUUID, testPrimaryUUID+":1-10"), nil
+			})
+			vt.setPrimary(t, 100)
+			_, err := verifyPosition(t.Context(), vt.tmc, vt.ts, testGTIDPosition(t, testPrimaryUUID+":1-5"), checkData)
+			require.NoError(t, err)
+			assert.Equal(t, 2, vt.tmc.calls)
+		})
+	})
+
+	t.Run("MariaDB positions pass", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			vt := newVerifyPositionTest(t, func(*topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
+				return &replicationdatapb.PrimaryStatus{Position: "MariaDB/0-1-10"}, nil
+			})
+			vt.setPrimary(t, 100)
+			pos, err := replication.DecodePosition("MariaDB/0-1-5")
+			require.NoError(t, err)
+			_, err = verifyPosition(t.Context(), vt.tmc, vt.ts, pos, checkData)
+			require.NoError(t, err)
+			assert.Equal(t, 1, vt.tmc.calls)
+		})
+	})
+
+	t.Run("an unparsable primary UUID fails at once", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			vt := newVerifyPositionTest(t, committed(testPrimaryUUID+":1-10"))
+			vt.tmc.primaryStatus = func(*topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
+				return &replicationdatapb.PrimaryStatus{Position: "MySQL56/" + testPrimaryUUID + ":1-10"}, nil
+			}
+			vt.setPrimary(t, 100)
+			_, err := verifyPosition(t.Context(), vt.tmc, vt.ts, testGTIDPosition(t, testPrimaryUUID+":1-5"), checkData)
+			require.ErrorContains(t, err, "can't parse the server UUID of primary zone1-0000000100")
+			assert.Equal(t, 1, vt.tmc.calls)
+		})
+	})
+
+	t.Run("a zero position makes no lookup", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			// The shard has no primary, so a lookup would wait for one.
+			vt := newVerifyPositionTest(t, committed(testPrimaryUUID+":1-10"))
+			ctx, cancel := context.WithTimeout(t.Context(), time.Hour)
+			defer cancel()
+			term, err := verifyPosition(ctx, vt.tmc, vt.ts, replication.Position{}, checkData)
+			require.NoError(t, err)
+			assert.Nil(t, term.alias)
+			assert.Equal(t, 0, vt.tmc.calls)
+		})
+	})
+
+	t.Run("the error gives the remedy for each source of errant GTIDs", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			vt := newVerifyPositionTest(t, committed(testPrimaryUUID+":1-10"))
+			vt.setPrimary(t, 100)
+			check := positionCheck{
+				what:             "the data to back up",
+				restorePos:       testGTIDPosition(t, testPrimaryUUID+":1-5,"+testOtherUUID+":1-2"),
+				localUUID:        testLocalUUID,
+				requireCommitted: true,
+			}
+			pos := testGTIDPosition(t, testPrimaryUUID+":1-10,"+testOtherUUID+":1-2,"+testLocalUUID+":1,"+testNewPrimaryUUID+":1")
+			_, err := verifyPosition(t.Context(), vt.tmc, vt.ts, pos, check)
+			require.ErrorContains(t, err, testOtherUUID+":1-2 came from the restored backup")
+			require.ErrorContains(t, err, testLocalUUID+":1 were written by this run's --init-backup-sql-queries")
+			require.ErrorContains(t, err, "vtbackup applied "+testNewPrimaryUUID+":1 during catch-up")
+		})
+	})
+
+	t.Run("a clone's errant GTIDs get the donor remedy", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			oldRestoreWithClone := restoreWithClone
+			restoreWithClone = true
+			t.Cleanup(func() { restoreWithClone = oldRestoreWithClone })
+			vt := newVerifyPositionTest(t, committed(testPrimaryUUID+":1-10"))
+			vt.setPrimary(t, 100)
+			pos := testGTIDPosition(t, testPrimaryUUID+":1-5,"+testOtherUUID+":1")
+			_, err := verifyPosition(t.Context(), vt.tmc, vt.ts, pos, positionCheck{what: "data cloned from the donor", restorePos: pos})
+			require.ErrorContains(t, err, "data cloned from the donor has errant GTIDs "+testOtherUUID+":1")
+			require.ErrorContains(t, err, "came from the donor, which has them too")
+		})
+	})
+
+	t.Run("a cancelled wait stops verifying and says what it waited for", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			vt := newVerifyPositionTest(t, committed(testPrimaryUUID+":1-10"))
+			vt.setPrimary(t, 100)
+			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Minute)
+			defer cancel()
+			_, err := verifyPosition(ctx, vt.tmc, vt.ts, testGTIDPosition(t, testPrimaryUUID+":1-12"), checkData)
+			require.ErrorContains(t, err, "stopped verifying the data to back up")
+			require.ErrorContains(t, err, "primary zone1-0000000100 has not committed "+testPrimaryUUID+":11-12")
+			require.ErrorContains(t, err, "deadline exceeded")
+			assert.Equal(t, vtrpc.Code_DEADLINE_EXCEEDED, vterrors.Code(err))
+		})
+	})
+
+	// The warning itself is asserted in the e2e test, which reads vtbackup's log.
+	t.Run("--allow-errant-gtids lets the check pass", func(t *testing.T) {
+		for name, status := range map[string]func(*topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error){
+			"errant GTIDs":      committed(testPrimaryUUID + ":1-10"),
+			"uncommitted GTIDs": committed(testPrimaryUUID + ":1-5"),
+			"an unreachable primary": func(*topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
+				return nil, errors.New("connection refused")
+			},
+		} {
+			t.Run(name, func(t *testing.T) {
+				synctest.Test(t, func(t *testing.T) {
+					setAllowErrantGTIDs(t, true)
+					vt := newVerifyPositionTest(t, status)
+					vt.setPrimary(t, 100)
+					pos := testGTIDPosition(t, testPrimaryUUID+":1-10")
+					if name == "errant GTIDs" {
+						pos = testGTIDPosition(t, testPrimaryUUID+":1-10,"+testOtherUUID+":1")
+					}
+					term, err := verifyPosition(t.Context(), vt.tmc, vt.ts, pos, checkData)
+					require.NoError(t, err)
+					assert.Nil(t, term.alias, "a check that only warned verified nothing")
+					assert.Equal(t, 1, vt.tmc.calls)
+				})
+			})
+		}
+	})
+}
+
+// positionMysqlDaemon serves the position and server UUID that verifyNewBackup reads.
+type positionMysqlDaemon struct {
+	mysqlctl.MysqlDaemon
+
+	pos  replication.Position
+	uuid string
+}
+
+func (m *positionMysqlDaemon) PrimaryPosition(context.Context) (replication.Position, error) {
+	return m.pos, nil
+}
+
+func (m *positionMysqlDaemon) GetServerUUID(context.Context) (string, error) {
+	return m.uuid, nil
+}
+
+func TestVerifyNewBackup(t *testing.T) {
+	local := testPrimaryUUID + ":1-11"
+	// newBackup runs check 2 for a local position of gtids against primary 100,
+	// which has committed testPrimaryUUID:1-11, and returns the shard and check 3.
+	newBackup := func(t *testing.T, gtids string) (*verifyPositionTest, func(ctx context.Context, pos replication.Position) error, error) {
+		vt := newVerifyPositionTest(t, func(tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
+			if tablet.Alias.Uid == 100 {
+				return primaryStatus(testPrimaryUUID, local), nil
+			}
+			// Tablet 101 has lost testPrimaryUUID:11.
+			return primaryStatus(testNewPrimaryUUID, testPrimaryUUID+":1-10,"+testNewPrimaryUUID+":1"), nil
+		})
+		vt.setPrimary(t, 100)
+		mysqld := &positionMysqlDaemon{pos: testGTIDPosition(t, gtids), uuid: testLocalUUID}
+		params := &mysqlctl.BackupParams{}
+		err := verifyNewBackup(t.Context(), vt.tmc, vt.ts, mysqld, replication.Position{}, params)
+		return vt, params.VerifyPosition, err
+	}
+
+	t.Run("check 3 reuses check 2 while the primary is unchanged", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			vt, verify, err := newBackup(t, local)
+			require.NoError(t, err)
+			require.NoError(t, verify(t.Context(), testGTIDPosition(t, local)))
+			assert.Equal(t, 1, vt.tmc.calls)
+		})
+	})
+
+	t.Run("check 3 reuses check 2 for a position within it", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			// An incremental backup's position can be a subset of gtid_executed.
+			vt, verify, err := newBackup(t, local)
+			require.NoError(t, err)
+			require.NoError(t, verify(t.Context(), testGTIDPosition(t, testPrimaryUUID+":1-9")))
+			assert.Equal(t, 1, vt.tmc.calls)
+		})
+	})
+
+	t.Run("check 3 fails after a reparent that lost a GTID", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			vt, verify, err := newBackup(t, local)
+			require.NoError(t, err)
+			vt.setPrimary(t, 101)
+			err = verify(t.Context(), testGTIDPosition(t, local))
+			require.ErrorContains(t, err, "the new backup has errant GTIDs "+testPrimaryUUID+":11 that primary zone1-0000000101")
+			assert.Equal(t, 2, vt.tmc.calls)
+		})
+	})
+
+	t.Run("check 3 passes after a reparent that kept every GTID", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			vt, verify, err := newBackup(t, testPrimaryUUID+":1-10")
+			require.NoError(t, err)
+			vt.setPrimary(t, 101)
+			require.NoError(t, verify(t.Context(), testGTIDPosition(t, testPrimaryUUID+":1-10")))
+			assert.Equal(t, 2, vt.tmc.calls)
+		})
+	})
+
+	t.Run("check 3 checks again in a new term of the same primary", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			vt, verify, err := newBackup(t, local)
+			require.NoError(t, err)
+			vt.setPrimary(t, 100)
+			require.NoError(t, verify(t.Context(), testGTIDPosition(t, local)))
+			assert.Equal(t, 2, vt.tmc.calls)
+		})
+	})
+
+	t.Run("check 3 checks a position that check 2 didn't verify", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			vt, verify, err := newBackup(t, local)
+			require.NoError(t, err)
+			err = verify(t.Context(), testGTIDPosition(t, local+","+testOtherUUID+":1"))
+			require.ErrorContains(t, err, "the new backup has errant GTIDs "+testOtherUUID+":1")
+			assert.Equal(t, 2, vt.tmc.calls)
+		})
+	})
+
+	t.Run("check 2 fails on GTIDs written by init SQL", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			_, verify, err := newBackup(t, local+","+testLocalUUID+":1")
+			require.ErrorContains(t, err, "the data to back up has errant GTIDs "+testLocalUUID+":1")
+			require.ErrorContains(t, err, "were written by this run's --init-backup-sql-queries")
+			assert.Nil(t, verify, "a failed check 2 sets no check 3")
+		})
+	})
+
+	t.Run("a check 2 that only warned is not reused", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			setAllowErrantGTIDs(t, true)
+			errant := local + "," + testOtherUUID + ":1"
+			vt, verify, err := newBackup(t, errant)
+			require.NoError(t, err)
+			require.NoError(t, verify(t.Context(), testGTIDPosition(t, errant)))
+			assert.Equal(t, 2, vt.tmc.calls)
 		})
 	})
 }
