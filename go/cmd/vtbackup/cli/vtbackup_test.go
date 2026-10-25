@@ -483,6 +483,24 @@ func TestVerifyPosition(t *testing.T) {
 		})
 	})
 
+	t.Run("a cancelled run fails even with --allow-errant-gtids", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			setAllowErrantGTIDs(t, true)
+			vt := newVerifyPositionTest(t, committed(testPrimaryUUID+":1-10"))
+			vt.setPrimary(t, 100)
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			// The run is cancelled, as by SIGTERM, while the check waits for the primary.
+			vt.tmc.primaryStatus = func(*topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
+				cancel()
+				return nil, context.Canceled
+			}
+			_, err := verifyPosition(ctx, vt.tmc, vt.ts, testGTIDPosition(t, testPrimaryUUID+":1-5"), checkData)
+			require.ErrorContains(t, err, "stopped verifying the data to back up")
+			assert.Equal(t, vtrpc.Code_CANCELED, vterrors.Code(err))
+		})
+	})
+
 	// The warning itself is asserted in the e2e test, which reads vtbackup's log.
 	t.Run("--allow-errant-gtids lets the check pass", func(t *testing.T) {
 		for name, status := range map[string]func(*topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error){

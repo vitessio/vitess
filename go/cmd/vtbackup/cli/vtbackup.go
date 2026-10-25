@@ -941,6 +941,10 @@ func verifyPosition(ctx context.Context, tmc tmclient.TabletManagerClient, ts *t
 	}
 	if allowErrantGTIDs {
 		if err := attempt(); err != nil {
+			// The flag accepts an unverified position, not a cancelled run.
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				return primaryTerm{}, vterrors.Wrapf(ctxErr, "stopped verifying %s against the shard primary (last error: %v)", check.what, err)
+			}
 			log.Warn(fmt.Sprintf("Continuing because of --allow-errant-gtids: %v", err))
 		}
 		return verified, nil
