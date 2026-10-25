@@ -29,9 +29,11 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 var (
@@ -61,10 +63,16 @@ EmergencyReparentShard should be used instead.
 	}
 	// PlannedReparentShard makes a PlannedReparentShard gRPC call to a vtctld.
 	PlannedReparentShard = &cobra.Command{
-		Use:                   "PlannedReparentShard <keyspace/shard>",
-		Short:                 "Reparents the shard to a new primary, or away from an old primary. Both the old and new primaries must be up and running.",
+		Use:   "PlannedReparentShard [<keyspace/shard>]",
+		Short: "Reparents the shard to a new primary, or away from an old primary. Both the old and new primaries must be up and running.",
+		Long: `Reparents the shard to a new primary, or away from an old primary. Both the old and new primaries must be up and running.
+
+The <keyspace/shard> argument may be omitted when --new-primary is set, in which case the shard is the one that the new primary belongs to.`,
+		Example: `PlannedReparentShard commerce/0
+PlannedReparentShard --new-primary zone1-0000000101
+PlannedReparentShard --avoid-primary zone1-0000000100 commerce/0`,
 		DisableFlagsInUseLine: true,
-		Args:                  cobra.ExactArgs(1),
+		Args:                  cobra.MaximumNArgs(1),
 		RunE:                  commandPlannedReparentShard,
 	}
 	// ReparentTablet makes a ReparentTablet gRPC call to a vtctld.
@@ -218,16 +226,24 @@ var plannedReparentShardOptions = struct {
 }{}
 
 func commandPlannedReparentShard(cmd *cobra.Command, args []string) error {
-	keyspace, shard, err := topoproto.ParseKeyspaceShard(cmd.Flags().Arg(0))
-	if err != nil {
-		return err
+	if cmd.Flags().NArg() == 0 && plannedReparentShardOptions.NewPrimaryAliasStr == "" {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "PlannedReparentShard requires <keyspace/shard>, --new-primary, or both")
 	}
 
 	var (
+		keyspace, shard      string
 		newPrimaryAlias      *topodatapb.TabletAlias
 		avoidPrimaryAlias    *topodatapb.TabletAlias
 		expectedPrimaryAlias *topodatapb.TabletAlias
+		err                  error
 	)
+
+	if cmd.Flags().NArg() == 1 {
+		keyspace, shard, err = topoproto.ParseKeyspaceShard(cmd.Flags().Arg(0))
+		if err != nil {
+			return err
+		}
+	}
 
 	if plannedReparentShardOptions.NewPrimaryAliasStr != "" {
 		newPrimaryAlias, err = topoproto.ParseTabletAlias(plannedReparentShardOptions.NewPrimaryAliasStr)
@@ -251,6 +267,18 @@ func commandPlannedReparentShard(cmd *cobra.Command, args []string) error {
 	}
 
 	cli.FinishedParsing(cmd)
+
+	if keyspace == "" {
+		// Resolve the shard from the new primary's tablet record.
+		tabletResp, err := client.GetTablet(commandCtx, &vtctldatapb.GetTabletRequest{TabletAlias: newPrimaryAlias})
+		if err != nil {
+			return vterrors.Wrapf(err, "failed to look up the shard of new primary %s", topoproto.TabletAliasString(newPrimaryAlias))
+		}
+		keyspace, shard = tabletResp.GetTablet().GetKeyspace(), tabletResp.GetTablet().GetShard()
+		if keyspace == "" || shard == "" {
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "new primary %s does not belong to a shard", topoproto.TabletAliasString(newPrimaryAlias))
+		}
+	}
 
 	resp, err := client.PlannedReparentShard(commandCtx, &vtctldatapb.PlannedReparentShardRequest{
 		Keyspace:                keyspace,
