@@ -30,6 +30,7 @@
         - [Preserve Materialize target data on cancel by default](#vreplication-materialize-cancel-data-protection)
         - [Online DDL migrations are no longer failed by recoverable vreplication errors](#onlineddl-vrepl-auto-resume)
         - [VStream: `before_data_columns` bitmap for partial before images](#vstream-before-data-columns)
+        - [Copied tables whose statistics aren't recalculated automatically are analyzed](#vreplication-analyze-stats-auto-recalc)
     - **[VTGate](#minor-changes-vtgate)**
         - [Ingress bytes in query LogStats](#vtgate-logstats-ingress-bytes)
         - [New controls for cross-keyspace reads](#vtgate-cross-keyspace-reads)
@@ -316,6 +317,18 @@ When MySQL runs with `binlog_row_image=NOBLOB`, it omits BLOB/TEXT columns that 
 `RowChange` now has an additional `before_data_columns` bitmap, set only when the before image is partial (and `--vreplication-experimental-flags` allows NOBLOB row images, which is the default). A bit is set for every column that is present in the before image, in the order of the columns emitted by the stream's filter (after projection). Note that the existing `data_columns` bitmap for the after image remains in the source table's column order for compatibility with existing consumers; aligning the two is tracked in [#21075](https://github.com/vitessio/vitess/issues/21075). The field is additive: VReplication ignores it and consumers that do not know about it are unaffected.
 
 See [#21065](https://github.com/vitessio/vitess/issues/21065) for details.
+
+#### <a id="vreplication-analyze-stats-auto-recalc"/>Copied tables whose statistics aren't recalculated automatically are analyzed</a>
+
+VReplication creates target tables with the source's table options, including `STATS_AUTO_RECALC=0`. InnoDB saves empty statistics for such a table when it is created and never recalculates them on its own, so after a copy the target, its replicas and their backups kept statistics that describe an empty table. The same happens to a table that leaves `STATS_AUTO_RECALC` at its default while `innodb_stats_auto_recalc` is off.
+
+At the end of each copy cycle of a workflow or Online DDL migration, the target now runs `ANALYZE TABLE` on such tables:
+
+- The statement is written to the target's binary log, with its own GTID, and the target's replicas apply it.
+- It is best effort: a failure is logged and does not fail the copy. If the workflow stops while it runs, it is killed, and the table is analyzed when the copy resumes; an atomic copy, which can't resume, finishes without it and logs a warning.
+- Tables copied before the upgrade keep their empty statistics until `ANALYZE TABLE` is run on them.
+
+See [#21749](https://github.com/vitessio/vitess/issues/21749) for details.
 
 ### <a id="minor-changes-vtgate"/>VTGate</a>
 
