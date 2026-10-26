@@ -474,6 +474,13 @@ func TestVerifyPosition(t *testing.T) {
 			_, err := verifyPosition(t.Context(), vt.tmc, vt.ts, pos, positionCheck{what: "data cloned from the donor", restorePos: pos})
 			require.ErrorContains(t, err, "data cloned from the donor has errant GTIDs "+testOtherUUID+":1")
 			require.ErrorContains(t, err, "came from the donor, which has them too")
+
+			// GTIDs applied during catch-up don't lead back to a previous backup:
+			// the next run clones the donor again.
+			_, err = verifyPosition(t.Context(), vt.tmc, vt.ts, testGTIDPosition(t, testPrimaryUUID+":1-5,"+testNewPrimaryUUID+":1"), positionCheck{what: "the data to back up", restorePos: testGTIDPosition(t, testPrimaryUUID+":1-5")})
+			require.ErrorContains(t, err, "vtbackup applied "+testNewPrimaryUUID+":1 during catch-up")
+			require.ErrorContains(t, err, "the next run clones the donor again")
+			require.NotContains(t, err.Error(), "starts from the previous backup")
 		})
 	})
 

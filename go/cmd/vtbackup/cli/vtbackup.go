@@ -1039,7 +1039,11 @@ func errantGTIDsError(check positionCheck, errant replication.Mysql56GTIDSet, pr
 	if len(initSQL) > 0 {
 		msg += fmt.Sprintf(". %v were written by this run's --init-backup-sql-queries. Use the statements' NO_WRITE_TO_BINLOG or LOCAL forms, or start the queries with SET sql_log_bin = 0", initSQL)
 	}
-	if len(rest) > 0 {
+	switch {
+	case len(rest) == 0:
+	case restoreWithClone:
+		msg += fmt.Sprintf(". vtbackup applied %v during catch-up, and the primary doesn't have them, for example because a reparent lost them. No backup was completed; the next run clones the donor again, and if the donor applied them too, it fails with the donor's errant GTIDs", rest)
+	default:
 		msg += fmt.Sprintf(". vtbackup applied %v during catch-up, and the primary doesn't have them, for example because a reparent lost them. No backup was completed; the next run starts from the previous backup and should succeed", rest)
 	}
 	return vterrors.New(vtrpc.Code_FAILED_PRECONDITION, msg)
