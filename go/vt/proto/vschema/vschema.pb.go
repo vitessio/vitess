@@ -212,7 +212,8 @@ type Keyspace struct {
 	PreventCrossKeyspaceReads bool `protobuf:"varint,7,opt,name=prevent_cross_keyspace_reads,json=preventCrossKeyspaceReads,proto3" json:"prevent_cross_keyspace_reads,omitempty"`
 	// If advisory_locks is true, vtgate runs advisory lock functions such as
 	// GET_LOCK and RELEASE_LOCK in this keyspace, and never moves them to
-	// another keyspace. Designating more than one keyspace is not supported yet.
+	// another keyspace. If more than one keyspace sets it, vtgate acquires each
+	// lock in a majority of them.
 	AdvisoryLocks bool `protobuf:"varint,8,opt,name=advisory_locks,json=advisoryLocks,proto3" json:"advisory_locks,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -3858,9 +3859,7 @@ func TestLockUsesDesignatedKeyspace(t *testing.T) {
 
 	executor, sbc1, _, sbclookup, _ := createExecutorEnv(t)
 
-	srvVSchema := proto.Clone(executor.vm.GetCurrentSrvVschema()).(*vschemapb.SrvVSchema)
-	srvVSchema.Keyspaces[KsTestUnsharded].AdvisoryLocks = true
-	executor.vm.VSchemaUpdate(srvVSchema, nil)
+	designateLockKeyspaces(executor, KsTestUnsharded)
 
 	sbc1.Queries = nil
 	session := econtext.NewSafeSession(nil)
@@ -3891,16 +3890,75 @@ func TestLockUsesDesignatedKeyspace(t *testing.T) {
 	require.Equal(t, KsTestUnsharded, lock.Keyspace.Name)
 }
 
-// TestLockRejectsMultipleDesignatedKeyspaces tests that planning an advisory
-// lock fails when the VSchema designates more than one keyspace.
-func TestLockRejectsMultipleDesignatedKeyspaces(t *testing.T) {
-	executor, _, _, _, _ := createExecutorEnv(t)
-
+// designateLockKeyspaces marks the given keyspaces as advisory lock keyspaces
+// in the executor's VSchema, and clears the advisory_locks flag elsewhere.
+func designateLockKeyspaces(executor *Executor, keyspaces ...string) {
 	srvVSchema := proto.Clone(executor.vm.GetCurrentSrvVschema()).(*vschemapb.SrvVSchema)
-	srvVSchema.Keyspaces[KsTestSharded].AdvisoryLocks = true
-	srvVSchema.Keyspaces[KsTestUnsharded].AdvisoryLocks = true
+	for name, ks := range srvVSchema.Keyspaces {
+		ks.AdvisoryLocks = slices.Contains(keyspaces, name)
+	}
 	executor.vm.VSchemaUpdate(srvVSchema, nil)
+}
 
-	_, err := exec(executor, econtext.NewSafeSession(nil), "select get_lock('lock name', 10) from dual")
-	require.ErrorContains(t, err, "VT12001: unsupported: advisory locks designated in more than one keyspace")
+// lockSessionKeyspaces returns the keyspaces where the session holds lock
+// connections.
+func lockSessionKeyspaces(session *econtext.SafeSession) []string {
+	var keyspaces []string
+	for _, ls := range session.LockSessions() {
+		keyspaces = append(keyspaces, ls.Target.Keyspace)
+	}
+	return keyspaces
+}
+
+// TestLockUsesMajorityOfDesignatedKeyspaces tests that advisory locks are
+// acquired and released in a majority of the designated keyspaces. A majority
+// of two keyspaces is both.
+func TestLockUsesMajorityOfDesignatedKeyspaces(t *testing.T) {
+	executor, sbc1, _, sbclookup, _ := createExecutorEnv(t)
+	designateLockKeyspaces(executor, KsTestSharded, KsTestUnsharded)
+
+	session := econtext.NewSafeSession(nil)
+	_, err := exec(executor, session, "select get_lock('lock name', 10) from dual")
+	require.NoError(t, err)
+	require.ElementsMatch(t, []string{KsTestSharded, KsTestUnsharded}, lockSessionKeyspaces(session))
+	require.EqualValues(t, 1, sbc1.ReserveCount.Load())
+	require.EqualValues(t, 1, sbclookup.ReserveCount.Load())
+
+	_, err = exec(executor, session, "select release_lock('lock name') from dual")
+	require.NoError(t, err)
+	require.Empty(t, session.LockSessions())
+	require.EqualValues(t, 1, sbc1.ReleaseCount.Load())
+	require.EqualValues(t, 1, sbclookup.ReleaseCount.Load())
+}
+
+// TestLockMovesToAdditionalDesignatedKeyspace tests the first step of moving
+// advisory locks between keyspaces. A session that holds a lock in the only
+// designated keyspace keeps it there, and also takes new locks in a keyspace
+// that is designated later.
+func TestLockMovesToAdditionalDesignatedKeyspace(t *testing.T) {
+	executor, sbc1, _, sbclookup, _ := createExecutorEnv(t)
+	designateLockKeyspaces(executor, KsTestUnsharded)
+
+	session := econtext.NewSafeSession(nil)
+	_, err := exec(executor, session, "select get_lock('first', 10) from dual")
+	require.NoError(t, err)
+	require.Equal(t, []string{KsTestUnsharded}, lockSessionKeyspaces(session))
+
+	designateLockKeyspaces(executor, KsTestSharded, KsTestUnsharded)
+
+	_, err = exec(executor, session, "select get_lock('second', 10) from dual")
+	require.NoError(t, err)
+	require.ElementsMatch(t, []string{KsTestSharded, KsTestUnsharded}, lockSessionKeyspaces(session))
+	require.EqualValues(t, 1, sbclookup.ReserveCount.Load())
+	require.EqualValues(t, 1, sbc1.ReserveCount.Load())
+
+	_, err = exec(executor, session, "select release_lock('first') from dual")
+	require.NoError(t, err)
+	require.Len(t, session.LockSessions(), 2)
+
+	_, err = exec(executor, session, "select release_lock('second') from dual")
+	require.NoError(t, err)
+	require.Empty(t, session.LockSessions())
+	require.EqualValues(t, 1, sbc1.ReleaseCount.Load())
+	require.EqualValues(t, 1, sbclookup.ReleaseCount.Load())
 }

@@ -64,7 +64,8 @@ message Keyspace {
   bool prevent_cross_keyspace_reads = 7;
   // If advisory_locks is true, vtgate runs advisory lock functions such as
   // GET_LOCK and RELEASE_LOCK in this keyspace, and never moves them to
-  // another keyspace. Designating more than one keyspace is not supported yet.
+  // another keyspace. If more than one keyspace sets it, vtgate acquires each
+  // lock in a majority of them.
   bool advisory_locks = 8;
 }
 

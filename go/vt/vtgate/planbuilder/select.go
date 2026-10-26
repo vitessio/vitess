@@ -336,15 +336,14 @@ func buildLockingPrimitive(sel *sqlparser.Select, vschema plancontext.VSchema, l
 	if err != nil {
 		return nil, err
 	}
-	if len(keyspaces) > 1 {
-		return nil, vterrors.VT12001("advisory locks designated in more than one keyspace")
-	}
-	ks := keyspaces[0]
-	buf := sqlparser.NewTrackedBuffer(sqlparser.FormatImpossibleQuery).WriteNode(sel)
-	return &engine.Lock{
-		Keyspace:          ks,
+	lock := &engine.Lock{
+		Keyspace:          keyspaces[0],
 		TargetDestination: key.DestinationKeyspaceID{0},
-		FieldQuery:        buf.String(),
+		FieldQuery:        sqlparser.NewTrackedBuffer(sqlparser.FormatImpossibleQuery).WriteNode(sel).String(),
 		LockFunctions:     lockFunctions,
-	}, nil
+	}
+	if len(keyspaces) > 1 {
+		lock.Keyspaces = keyspaces
+	}
+	return lock, nil
 }

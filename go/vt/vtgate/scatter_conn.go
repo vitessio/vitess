@@ -363,11 +363,16 @@ func triggerLockHeartBeat(session *econtext.SafeSession) bool {
 }
 
 func (stc *ScatterConn) runLockQuery(ctx context.Context, session *econtext.SafeSession) {
-	rs := &srvtopo.ResolvedShard{Target: session.LockSession.Target, Gateway: stc.gateway}
-	query := &querypb.BoundQuery{Sql: "select 1", BindVariables: nil}
-	_, lockErr := stc.ExecuteLock(ctx, rs, query, session, sqlparser.IsUsedLock)
-	if lockErr != nil {
-		log.Warn("Locking heartbeat failed, held locks might be released: " + lockErr.Error())
+	// TODO: when locks are held in a majority of keyspaces, a session that
+	// loses enough lock connections to drop below a majority has lost its
+	// locks. Detect that here and report it.
+	for _, ls := range session.LockSessions() {
+		rs := &srvtopo.ResolvedShard{Target: ls.Target, Gateway: stc.gateway}
+		query := &querypb.BoundQuery{Sql: "select 1", BindVariables: nil}
+		_, lockErr := stc.ExecuteLock(ctx, rs, query, session, sqlparser.IsUsedLock, true)
+		if lockErr != nil {
+			log.Warn("Locking heartbeat failed, held locks might be released: " + lockErr.Error())
+		}
 	}
 }
 
@@ -823,7 +828,10 @@ func (stc *ScatterConn) multiGoTransaction(
 // It returns an error recorder in which each shard error is recorded positionally,
 // i.e. if rss[2] had an error, then the error recorder will store that error
 // in the second position.
-func (stc *ScatterConn) ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, session *econtext.SafeSession, lockFuncType sqlparser.LockingFuncType) (*sqltypes.Result, error) {
+//
+// When multiKeyspace is true, the session may hold lock connections in more
+// than one keyspace, and a lock function for a new target opens another one.
+func (stc *ScatterConn) ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, session *econtext.SafeSession, lockFuncType sqlparser.LockingFuncType, multiKeyspace bool) (*sqltypes.Result, error) {
 	var (
 		qr    *sqltypes.Result
 		err   error
@@ -839,7 +847,7 @@ func (stc *ScatterConn) ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedSha
 	}
 
 	opts = session.Options
-	info, err := lockInfo(rs.Target, session, lockFuncType)
+	info, err := lockInfo(rs.Target, session, lockFuncType, multiKeyspace)
 	// Lock session is created on alphabetic sorted keyspace.
 	// This error will occur if the existing session target does not match the current target.
 	// This will happen either due to re-sharding or a new keyspace which comes before the existing order.
@@ -875,7 +883,7 @@ func (stc *ScatterConn) ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedSha
 		}
 
 		if reservedID != 0 {
-			session.SetLockSession(&vtgatepb.Session_ShardSession{
+			session.AddLockSession(&vtgatepb.Session_ShardSession{
 				Target:      rs.Target,
 				ReservedId:  reservedID,
 				TabletAlias: alias,
@@ -985,14 +993,13 @@ func actionInfo(ctx context.Context, target *querypb.Target, session *econtext.S
 }
 
 // lockInfo looks at the current session, and returns information about what needs to be done for this tablet
-func lockInfo(target *querypb.Target, session *econtext.SafeSession, lockFuncType sqlparser.LockingFuncType) (*shardActionInfo, error) {
+func lockInfo(target *querypb.Target, session *econtext.SafeSession, lockFuncType sqlparser.LockingFuncType, multiKeyspace bool) (*shardActionInfo, error) {
 	info := &shardActionInfo{actionNeeded: nothing}
-	if session.LockSession != nil {
-		if !proto.Equal(target, session.LockSession.Target) {
-			return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "target does match the existing lock session target: (%v, %v)", target, session.LockSession.Target)
-		}
-		info.reservedID = session.LockSession.ReservedId
-		info.alias = session.LockSession.TabletAlias
+	if ls := session.LockSessionForTarget(target); ls != nil {
+		info.reservedID = ls.ReservedId
+		info.alias = ls.TabletAlias
+	} else if session.LockSession != nil && !multiKeyspace {
+		return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "target does match the existing lock session target: (%v, %v)", target, session.LockSession.Target)
 	}
 	// Only GetLock needs to start a reserved connection.
 	// Once in reserved connection, it will be used for other calls as well.

@@ -1905,8 +1905,8 @@ func (e *Executor) StreamExecuteMulti(ctx context.Context, primitive engine.Prim
 }
 
 // ExecuteLock implements the IExecutor interface
-func (e *Executor) ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, session *econtext.SafeSession, lockFuncType sqlparser.LockingFuncType) (*sqltypes.Result, error) {
-	return e.scatterConn.ExecuteLock(ctx, rs, query, session, lockFuncType)
+func (e *Executor) ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, session *econtext.SafeSession, lockFuncType sqlparser.LockingFuncType, multiKeyspace bool) (*sqltypes.Result, error) {
+	return e.scatterConn.ExecuteLock(ctx, rs, query, session, lockFuncType, multiKeyspace)
 }
 
 // ExecuteMessageStream implements the IExecutor interface

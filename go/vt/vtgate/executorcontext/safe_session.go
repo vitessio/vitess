@@ -163,6 +163,7 @@ func NewAutocommitSession(sessn *vtgatepb.Session) *SafeSession {
 	newSession.PreSessions = nil
 	newSession.PostSessions = nil
 	newSession.LockSession = nil
+	newSession.AdditionalLockSessions = nil
 	newSession.Autocommit = true
 	newSession.Warnings = nil
 	return NewSafeSession(newSession)
@@ -210,6 +211,7 @@ func (session *SafeSession) ResetAll() {
 	session.PreSessions = nil
 	session.PostSessions = nil
 	session.LockSession = nil
+	session.AdditionalLockSessions = nil
 	session.AdvisoryLock = nil
 }
 
@@ -471,11 +473,7 @@ func (session *SafeSession) ShardSessionSnapshots() []ShardSessionSnapshot {
 func (session *SafeSession) ShardSessionsForReleaseAll() []*vtgatepb.Session_ShardSession {
 	session.mu.Lock()
 	defer session.mu.Unlock()
-	var lockSessions []*vtgatepb.Session_ShardSession
-	if session.LockSession != nil {
-		lockSessions = []*vtgatepb.Session_ShardSession{session.LockSession}
-	}
-	return slices.Concat(session.PreSessions, session.ShardSessions, session.PostSessions, lockSessions)
+	return slices.Concat(session.PreSessions, session.ShardSessions, session.PostSessions, session.lockSessionsLocked())
 }
 
 // FindAndChangeSessionIfInSingleTxMode retrieves the ShardSession matching the given keyspace, shard, and tablet type.
@@ -830,6 +828,46 @@ func (session *SafeSession) SetLockSession(lockSession *vtgatepb.Session_ShardSe
 	session.LastLockHeartbeat = time.Now().Unix()
 }
 
+// AddLockSession adds a lock session for a target. The first lock session is
+// stored in LockSession, and any others in AdditionalLockSessions.
+func (session *SafeSession) AddLockSession(lockSession *vtgatepb.Session_ShardSession) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	if session.LockSession == nil {
+		session.LockSession = lockSession
+	} else {
+		session.AdditionalLockSessions = append(session.AdditionalLockSessions, lockSession)
+	}
+	session.LastLockHeartbeat = time.Now().Unix()
+}
+
+// LockSessions returns all of the session's lock sessions.
+func (session *SafeSession) LockSessions() []*vtgatepb.Session_ShardSession {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	return session.lockSessionsLocked()
+}
+
+func (session *SafeSession) lockSessionsLocked() []*vtgatepb.Session_ShardSession {
+	if session.LockSession == nil {
+		return session.AdditionalLockSessions
+	}
+	return append([]*vtgatepb.Session_ShardSession{session.LockSession}, session.AdditionalLockSessions...)
+}
+
+// LockSessionForTarget returns the lock session for a target, or nil if the
+// session has none there.
+func (session *SafeSession) LockSessionForTarget(target *querypb.Target) *vtgatepb.Session_ShardSession {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	for _, ls := range session.lockSessionsLocked() {
+		if proto.Equal(ls.Target, target) {
+			return ls
+		}
+	}
+	return nil
+}
+
 // UpdateLockHeartbeat updates the LastLockHeartbeat time
 func (session *SafeSession) UpdateLockHeartbeat() {
 	session.mu.Lock()
@@ -856,6 +894,7 @@ func (session *SafeSession) ResetLock() {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	session.LockSession = nil
+	session.AdditionalLockSessions = nil
 	session.AdvisoryLock = nil
 }
 
