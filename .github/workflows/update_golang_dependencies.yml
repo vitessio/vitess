@@ -13,7 +13,7 @@ jobs:
     permissions:
       contents: read
     name: Update Golang Dependencies
-    runs-on: ${{ github.repository_owner == 'vitessio' && 'cncf-ubuntu-4-16-x86' || 'ubuntu-24.04' }}
+    runs-on: ${{ github.repository_owner == 'vitessio' && 'cncf-ubuntu-24.04-4-16-x86' || 'ubuntu-24.04' }}
     timeout-minutes: 15
     steps:
       - name: Harden the runner (Audit all outbound calls)

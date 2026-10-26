@@ -9,7 +9,7 @@ jobs:
   check_pull_request_labels:
     name: Check Pull Request labels
     timeout-minutes: 10
-    runs-on: ${{ github.repository_owner == 'vitessio' && 'cncf-ubuntu-4-16-x86' || 'ubuntu-24.04' }}
+    runs-on: ${{ github.repository_owner == 'vitessio' && 'cncf-ubuntu-24.04-4-16-x86' || 'ubuntu-24.04' }}
     if: github.repository == 'vitessio/vitess'
     steps:
       - name: Harden the runner (Audit all outbound calls)

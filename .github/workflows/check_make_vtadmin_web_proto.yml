@@ -13,7 +13,7 @@ permissions: read-all
 jobs:
   build:
     name: Check Make VTAdmin Web Proto
-    runs-on: ${{ github.repository_owner == 'vitessio' && 'cncf-ubuntu-4-16-x86' || 'ubuntu-24.04' }}
+    runs-on: ${{ github.repository_owner == 'vitessio' && 'cncf-ubuntu-24.04-4-16-x86' || 'ubuntu-24.04' }}
     steps:
     - name: Harden the runner (Audit all outbound calls)
       uses: step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed # v2.22.0
