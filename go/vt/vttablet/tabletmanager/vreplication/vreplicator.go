@@ -99,9 +99,9 @@ const (
 	json_unquote(json_extract(action, '$.type'))=%a and vrepl_id=%a and table_name=%a`
 	sqlDeletePostCopyAction = `delete from _vt.post_copy_action where vrepl_id=%a and
 	table_name=%a and id=%a`
-	sqlGetTableCreateOptions = `select create_options from information_schema.tables where table_schema=%a and table_name=%a`
-	SqlMaxAllowedPacket      = "select @@session.max_allowed_packet as max_allowed_packet"
-	maxQuerySizeHeadroom     = int64(64)
+	sqlGetTableStatsAutoRecalc = `select create_options, @@global.innodb_stats_auto_recalc from information_schema.tables where table_schema=%a and table_name=%a`
+	SqlMaxAllowedPacket        = "select @@session.max_allowed_packet as max_allowed_packet"
+	maxQuerySizeHeadroom       = int64(64)
 )
 
 // vreplicator provides the core logic to start vreplication streams
@@ -1235,8 +1235,9 @@ func (vr *vreplicator) killConnectionOnStop(stopCtx context.Context, dbClient *v
 }
 
 // analyzeTableIfStatsAutoRecalcDisabled runs ANALYZE TABLE on a target table
-// whose InnoDB statistics are not recalculated automatically, because it was
-// created with STATS_AUTO_RECALC=0 like its source. InnoDB saves empty
+// whose InnoDB statistics are not recalculated automatically: because it was
+// created with STATS_AUTO_RECALC=0 like its source, or because it leaves the
+// option at its default and innodb_stats_auto_recalc is off. InnoDB saves empty
 // statistics for such a table when it is created and never refreshes them on
 // its own, so after a restart the optimizer would see an empty table. ANALYZE
 // TABLE is written to the binary log, so the target's replicas refresh their
@@ -1250,7 +1251,7 @@ func (vr *vreplicator) killConnectionOnStop(stopCtx context.Context, dbClient *v
 // resumes.
 func (vr *vreplicator) analyzeTableIfStatsAutoRecalcDisabled(stopCtx context.Context, tableName string) bool {
 	dbName := vr.dbClient.DBName()
-	query, err := sqlparser.ParseAndBind(sqlGetTableCreateOptions, sqltypes.StringBindVariable(dbName), sqltypes.StringBindVariable(tableName))
+	query, err := sqlparser.ParseAndBind(sqlGetTableStatsAutoRecalc, sqltypes.StringBindVariable(dbName), sqltypes.StringBindVariable(tableName))
 	if err != nil {
 		log.Warn("Unable to check the table options",
 			slog.String("table", tableName),
@@ -1270,7 +1271,16 @@ func (vr *vreplicator) analyzeTableIfStatsAutoRecalcDisabled(stopCtx context.Con
 		)
 		return false
 	}
-	if len(qr.Rows) == 0 || !strings.Contains(strings.ToLower(qr.Rows[0][0].ToString()), "stats_auto_recalc=0") {
+	if len(qr.Rows) == 0 || len(qr.Rows[0]) != 2 {
+		return false
+	}
+	// The table's STATS_AUTO_RECALC option overrides innodb_stats_auto_recalc.
+	// create_options shows it only when it isn't DEFAULT.
+	switch createOptions := strings.ToLower(qr.Rows[0][0].ToString()); {
+	case strings.Contains(createOptions, "stats_auto_recalc=0"):
+	case strings.Contains(createOptions, "stats_auto_recalc=1"):
+		return false
+	case qr.Rows[0][1].ToString() != "0":
 		return false
 	}
 	stopping := func() bool {
@@ -1344,7 +1354,7 @@ func (vr *vreplicator) analyzeTableIfStatsAutoRecalcDisabled(stopCtx context.Con
 		)
 		return stopping()
 	}
-	log.Info("Analyzed the table, as it has STATS_AUTO_RECALC=0",
+	log.Info("Analyzed the table, as InnoDB does not recalculate its statistics automatically",
 		slog.String("table", tableName),
 		slog.String("workflow", vr.WorkflowName),
 	)

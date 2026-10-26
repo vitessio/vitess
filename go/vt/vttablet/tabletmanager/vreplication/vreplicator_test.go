@@ -1233,6 +1233,8 @@ func TestAnalyzeTableIfStatsAutoRecalcDisabled(t *testing.T) {
 	testCases := []struct {
 		name         string
 		tableOptions string
+		// globalAutoRecalcOff turns innodb_stats_auto_recalc off.
+		globalAutoRecalcOff bool
 		// lockStats holds the table's row in mysql.innodb_table_stats past
 		// the lock wait timeout, so that ANALYZE TABLE fails.
 		lockStats bool
@@ -1245,6 +1247,19 @@ func TestAnalyzeTableIfStatsAutoRecalcDisabled(t *testing.T) {
 			wantAnalyzed: true,
 		},
 		{
+			name: "default option",
+		},
+		{
+			name:                "default option with innodb_stats_auto_recalc off",
+			globalAutoRecalcOff: true,
+			wantAnalyzed:        true,
+		},
+		{
+			name:                "stats_auto_recalc=1 with innodb_stats_auto_recalc off",
+			tableOptions:        "stats_auto_recalc=1",
+			globalAutoRecalcOff: true,
+		},
+		{
 			name:         "statistics locked past the lock wait timeout",
 			tableOptions: "stats_auto_recalc=0",
 			lockStats:    true,
@@ -1252,6 +1267,10 @@ func TestAnalyzeTableIfStatsAutoRecalcDisabled(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			if tc.globalAutoRecalcOff {
+				execDba("set @@global.innodb_stats_auto_recalc = 0")
+				t.Cleanup(func() { execDba("set @@global.innodb_stats_auto_recalc = 1") })
+			}
 			execDba(fmt.Sprintf("create table %s.%s (id int not null, primary key(id)) %s", dbName, tableName, tc.tableOptions))
 			t.Cleanup(func() { execDba(fmt.Sprintf("drop table %s.%s", dbName, tableName)) })
 			execDba(fmt.Sprintf("insert into %s.%s values (1), (2), (3)", dbName, tableName))
@@ -1288,17 +1307,19 @@ func TestAnalyzeTableIfStatsAutoRecalcDisabled(t *testing.T) {
 			logMu.Lock()
 			defer logMu.Unlock()
 			if tc.wantAnalyzed {
-				assert.Contains(t, infoLogs, "Analyzed the table, as it has STATS_AUTO_RECALC=0")
+				assert.Contains(t, infoLogs, "Analyzed the table, as InnoDB does not recalculate its statistics automatically")
 				assert.Empty(t, warnLogs)
 				assert.Equal(t, "3", nRows())
 				return
 			}
-			assert.NotContains(t, infoLogs, "Analyzed the table, as it has STATS_AUTO_RECALC=0")
-			if tc.lockStats {
-				assert.Contains(t, warnLogs, "Unable to analyze the table")
-				execDba("rollback")
-				assert.Equal(t, "0", nRows())
+			assert.NotContains(t, infoLogs, "Analyzed the table, as InnoDB does not recalculate its statistics automatically")
+			if !tc.lockStats {
+				assert.Empty(t, warnLogs)
+				return
 			}
+			assert.Contains(t, warnLogs, "Unable to analyze the table")
+			execDba("rollback")
+			assert.Equal(t, "0", nRows())
 		})
 	}
 }
