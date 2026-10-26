@@ -169,13 +169,12 @@ jobs:
           # Likewise tools, on top of build and unit: the static checks
           # restore all three. Unlike the Go build cache, the golangci-lint
           # analysis cache this leg also saves is keyed on the absolute paths
-          # of the files in the module cache, so it is built on a GitHub-hosted
-          # runner like the static checks, whose home directory differs from
-          # the Oracle VMs'.
+          # of the files in the module cache, so it is built on the runner the
+          # static checks use.
           - entry: tools
             base: build,unit
             arch: x64
-            runner: ubuntu-24.04
+            runner: cncf-ubuntu-4-16-x86
             go-tools: addlicense,gofumpt,goimports,golangci-lint,gotestsum,goyacc
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
