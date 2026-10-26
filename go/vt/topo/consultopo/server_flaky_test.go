@@ -501,18 +501,40 @@ func TestConsulTopoTryLockAcrossServers(t *testing.T) {
 	wg.Wait()
 
 	var held topo.LockDescriptor
+	holder := -1
 	for i, err := range errs {
 		if err == nil {
 			require.Nil(t, held, "more than one TryLock got the lock")
-			held = locks[i]
+			held, holder = locks[i], i
 			continue
 		}
 		require.True(t, topo.IsErrType(err, topo.NodeExists), "TryLock should return NodeExists, got: %v", err)
 	}
 	require.NotNil(t, held, "no TryLock got the lock")
+
+	// While another server holds the lock, a TryLock returns without
+	// waiting out Consul's default LockWaitTime (15s).
+	for i, s := range servers {
+		if i == holder {
+			continue
+		}
+		heldCtx, heldCancel := context.WithTimeout(ctx, 30*time.Second)
+		start := time.Now()
+		_, err := s.TryLock(heldCtx, "ks", "held-elsewhere")
+		heldCancel()
+		require.True(t, topo.IsErrType(err, topo.NodeExists), "TryLock should return NodeExists, got: %v", err)
+		require.Less(t, time.Since(start), 10*time.Second, "TryLock waited on a lock held by another server")
+	}
 	require.NoError(t, held.Unlock(ctx))
 
-	lockDescriptor, err := servers[0].TryLock(tryCtx, "ks", "after")
-	require.NoError(t, err)
-	require.NoError(t, lockDescriptor.Unlock(ctx))
+	// Rejected attempts must not leave anything behind on any server.
+	for _, s := range servers {
+		lockDescriptor, err := s.TryLock(tryCtx, "ks", "after")
+		require.NoError(t, err)
+		require.NoError(t, lockDescriptor.Unlock(ctx))
+
+		lockDescriptor, err = s.Lock(tryCtx, "ks", "after")
+		require.NoError(t, err)
+		require.NoError(t, lockDescriptor.Unlock(ctx))
+	}
 }
