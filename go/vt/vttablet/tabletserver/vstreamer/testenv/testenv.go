@@ -245,6 +245,8 @@ type ServerCapability int32
 const (
 	ServerCapabilityInvisibleColumn              ServerCapability = 1
 	ServerCapabilityGeneratedInvisiblePrimaryKey ServerCapability = 2
+	// ServerCapabilityIndexOptimizerHint is the INDEX optimizer hint from MySQL 8.0.20.
+	ServerCapabilityIndexOptimizerHint ServerCapability = 3
 )
 
 // HasCapability returns true if the server has the given capability.
@@ -258,6 +260,8 @@ func (te *Env) HasCapability(cap ServerCapability) bool {
 		return te.DBMinorVersion > 0 || te.DBPatchVersion >= 23
 	case ServerCapabilityGeneratedInvisiblePrimaryKey:
 		return te.DBMinorVersion > 0 || te.DBPatchVersion >= 30
+	case ServerCapabilityIndexOptimizerHint:
+		return te.DBMajorVersion > 8 || te.DBMinorVersion > 0 || te.DBPatchVersion >= 20
 	}
 	return false
 }

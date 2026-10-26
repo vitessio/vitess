@@ -17,7 +17,9 @@ limitations under the License.
 package vreplication
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -27,9 +29,11 @@ import (
 	"vitess.io/vitess/go/bytes2"
 	"vitess.io/vitess/go/mysql/collations"
 	vjson "vitess.io/vitess/go/mysql/json"
+	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -855,44 +859,51 @@ func TestBuildPlayerPlanExclude(t *testing.T) {
 // generateDeleteStatement: a count-decrementing UPDATE for insertOnDup and a
 // no-op for insertIgnore.
 func TestBuildPlayerPlanMultiDelete(t *testing.T) {
-	PrimaryKeyInfos := map[string][]*ColumnInfo{
-		"t1": {&ColumnInfo{Name: "c1", IsPK: true}},
-	}
-
 	vttablet.InitVReplicationConfigDefaults()
 	require.NotZero(t, vttablet.DefaultVReplicationConfig.ExperimentalFlags&vttablet.VReplicationExperimentalFlagVPlayerBatching,
 		"this test requires VPlayer batching to be enabled in the default config")
 
 	testcases := []struct {
 		name            string
+		table           string
 		filter          string
 		wantMultiDelete string
 	}{{
 		name:            "insertNormal builds a bulk delete",
+		table:           "t1",
 		filter:          "select c1, c2 from t1",
-		wantMultiDelete: "delete from t1 where c1 in ::bulk_pks",
+		wantMultiDelete: "delete /*+ INDEX(`t1`) */ from t1 where c1 in ::bulk_pks",
 	}, {
 		name:   "insertOnDup (partial group by) must not build a bulk delete",
+		table:  "t1",
 		filter: "select c1, count(*) as c2 from t1 group by c1",
 	}, {
 		name:   "insertIgnore (full group by) must not build a bulk delete",
+		table:  "t1",
 		filter: "select c1, c2 from t1 group by c1, c2",
+	}, {
+		name:   "table name that ends the hint's comment must not build a bulk delete",
+		table:  "a*/b",
+		filter: "select c1, c2 from `a*/b`",
 	}}
 
 	for _, tcase := range testcases {
 		t.Run(tcase.name, func(t *testing.T) {
 			input := &binlogdatapb.Filter{
 				Rules: []*binlogdatapb.Rule{{
-					Match:  "t1",
+					Match:  tcase.table,
 					Filter: tcase.filter,
 				}},
+			}
+			primaryKeyInfos := map[string][]*ColumnInfo{
+				tcase.table: {&ColumnInfo{Name: "c1", IsPK: true}},
 			}
 			vr := &vreplicator{
 				workflowConfig: vttablet.DefaultVReplicationConfig,
 			}
-			plan, err := vr.buildReplicatorPlan(getSource(input), PrimaryKeyInfos, nil, binlogplayer.NewStats(), collations.MySQL8(), sqlparser.NewTestParser())
+			plan, err := vr.buildReplicatorPlan(getSource(input), primaryKeyInfos, nil, binlogplayer.NewStats(), collations.MySQL8(), sqlparser.NewTestParser())
 			require.NoError(t, err)
-			tplan := plan.TargetTables["t1"]
+			tplan := plan.TargetTables[tcase.table]
 			require.NotNil(t, tplan)
 			if tcase.wantMultiDelete == "" {
 				require.Nil(t, tplan.MultiDelete)
@@ -902,6 +913,144 @@ func TestBuildPlayerPlanMultiDelete(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestBulkDeleteUsesKeyWithEmptyTableStats confirms that the bulk DELETE reads
+// through the key when the target's saved InnoDB stats are empty.
+func TestBulkDeleteUsesKeyWithEmptyTableStats(t *testing.T) {
+	if !env.HasCapability(testenv.ServerCapabilityIndexOptimizerHint) {
+		t.Skip("the INDEX optimizer hint requires MySQL 8.0.20 or later")
+	}
+
+	testcases := []struct {
+		name                   string
+		table                  string
+		definition             string
+		colInfos               []*ColumnInfo
+		targetUniqueKeyColumns string
+		wantKey                string
+	}{{
+		name:       "primary key",
+		table:      "bulk_delete_pk",
+		definition: "id varchar(36) not null, v int, primary key (id)",
+		colInfos:   []*ColumnInfo{{Name: "id", IsPK: true}, {Name: "v"}},
+		wantKey:    "PRIMARY",
+	}, {
+		name:       "unique key standing in for a missing primary key",
+		table:      "bulk_delete_pke",
+		definition: "id varchar(36) not null, v int, unique key uk_id (id)",
+		colInfos:   []*ColumnInfo{{Name: "id", IsPK: true}, {Name: "v"}},
+		wantKey:    "uk_id",
+	}, {
+		name:                   "unique key chosen over the primary key",
+		table:                  "bulk_delete_uk",
+		definition:             "pk int not null auto_increment, id varchar(36) not null, v int, primary key (pk), unique key uk_id (id)",
+		colInfos:               []*ColumnInfo{{Name: "pk", IsPK: true}, {Name: "id"}, {Name: "v"}},
+		targetUniqueKeyColumns: "id",
+		wantKey:                "uk_id",
+	}, {
+		name:       "table named after an optimizer hint keyword",
+		table:      "bnl",
+		definition: "id varchar(36) not null, v int, primary key (id)",
+		colInfos:   []*ColumnInfo{{Name: "id", IsPK: true}, {Name: "v"}},
+		wantKey:    "PRIMARY",
+	}}
+
+	for _, tcase := range testcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			createTableWithEmptyStats(t, tcase.table, tcase.definition, 1000)
+			tplan := buildBulkDeletePlan(t, tcase.table, tcase.colInfos, tcase.targetUniqueKeyColumns)
+
+			qr := execOnTarget(t, "explain format=traditional "+bulkDeleteQuery(t, tplan, 10))
+			explained := qr.Named().Row()
+			assert.Equal(t, "range", explained.AsString("type", ""))
+			assert.Equal(t, tcase.wantKey, explained.AsString("key", ""))
+		})
+	}
+}
+
+// buildBulkDeletePlan returns the batching plan of a filter that copies id and v
+// from table, and requires that it has a bulk DELETE.
+func buildBulkDeletePlan(t *testing.T, table string, colInfos []*ColumnInfo, targetUniqueKeyColumns string) *TablePlan {
+	t.Helper()
+
+	workflowConfig := vttablet.GetDefaultVReplicationConfig()
+	workflowConfig.ExperimentalFlags |= vttablet.VReplicationExperimentalFlagVPlayerBatching
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:                  table,
+			Filter:                 "select id, v from " + sqlescape.EscapeID(table),
+			TargetUniqueKeyColumns: targetUniqueKeyColumns,
+		}},
+	}
+	vr := &vreplicator{workflowConfig: workflowConfig}
+	plan, err := vr.buildReplicatorPlan(getSource(filter), map[string][]*ColumnInfo{table: colInfos}, nil,
+		binlogplayer.NewStats(), collations.MySQL8(), sqlparser.NewTestParser())
+	require.NoError(t, err)
+
+	tplan := plan.TargetTables[table]
+	require.NotNil(t, tplan)
+	require.NotNil(t, tplan.MultiDelete)
+	return tplan
+}
+
+// createTableWithEmptyStats creates a STATS_AUTO_RECALC=0 table with rowCount
+// rows and flushes it to reload its empty saved stats.
+func createTableWithEmptyStats(t *testing.T, table, definition string, rowCount int) {
+	t.Helper()
+
+	values := make([]string, 0, rowCount)
+	for i := 1; i <= rowCount; i++ {
+		values = append(values, fmt.Sprintf("('%036d', %d)", i, i))
+	}
+
+	qualified := vrepldb + "." + sqlescape.EscapeID(table)
+	execStatements(t, []string{
+		fmt.Sprintf("create table %s (%s) stats_auto_recalc=0", qualified, definition),
+		fmt.Sprintf("insert into %s (id, v) values %s", qualified, strings.Join(values, ", ")),
+		"flush tables " + qualified,
+	})
+	t.Cleanup(func() {
+		// Drop with a live context. t.Context() is canceled before cleanups run.
+		ctx := context.WithoutCancel(t.Context())
+		assert.NoError(t, env.Mysqld.ExecuteSuperQuery(ctx, "drop table "+qualified))
+		deleteMockTable(vrepldb, table)
+	})
+
+	qr, err := env.Mysqld.FetchSuperQuery(t.Context(), fmt.Sprintf(
+		"select n_rows from mysql.innodb_table_stats where database_name = '%s' and table_name = '%s'", vrepldb, table))
+	require.NoError(t, err)
+	require.Len(t, qr.Rows, 1)
+	require.Equal(t, "0", qr.Rows[0][0].ToString(), "saved stats of %s must be empty", table)
+}
+
+// bulkDeleteQuery returns the plan's bulk DELETE for the first idCount ids.
+func bulkDeleteQuery(t *testing.T, tplan *TablePlan, idCount int) string {
+	t.Helper()
+
+	ids := make([]sqltypes.Value, 0, idCount)
+	for i := 1; i <= idCount; i++ {
+		ids = append(ids, sqltypes.NewVarChar(fmt.Sprintf("%036d", i)))
+	}
+	pksBV, err := sqltypes.BuildBindVariable(ids)
+	require.NoError(t, err)
+	query, err := tplan.MultiDelete.GenerateQuery(map[string]*querypb.BindVariable{"bulk_pks": pksBV}, nil)
+	require.NoError(t, err)
+	return query
+}
+
+// execOnTarget runs query on the vreplication target database.
+func execOnTarget(t *testing.T, query string) *sqltypes.Result {
+	t.Helper()
+
+	dbClient := &realDBClient{nolog: true}
+	require.NoError(t, dbClient.Connect())
+	t.Cleanup(dbClient.Close)
+
+	qr, err := dbClient.ExecuteFetch(query, 10)
+	require.NoError(t, err)
+	return qr
 }
 
 func TestAppendFromRow(t *testing.T) {

@@ -24,6 +24,7 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -885,6 +886,9 @@ func (tpb *tablePlanBuilder) generateDeleteStatement() *sqlparser.ParsedQuery {
 	return buf.ParsedQuery()
 }
 
+// generateMultiDeleteStatement returns the bulk DELETE for a table with a single
+// key column, or nil if deletes must be applied row by row. Its INDEX hint keeps
+// MySQL on the key when empty saved stats make a table scan look cheaper.
 func (tpb *tablePlanBuilder) generateMultiDeleteStatement() *sqlparser.ParsedQuery {
 	if tpb.workflowConfig.ExperimentalFlags&vttablet.VReplicationExperimentalFlagVPlayerBatching == 0 ||
 		(len(tpb.pkCols)+len(tpb.extraSourcePkCols)) != 1 {
@@ -897,8 +901,16 @@ func (tpb *tablePlanBuilder) generateMultiDeleteStatement() *sqlparser.ParsedQue
 	if tpb.onInsert != insertNormal {
 		return nil
 	}
+
+	// Apply deletes row by row for a name that would end the hint's comment early.
+	if strings.Contains(tpb.name.String(), "*/") {
+		return nil
+	}
+
+	// Quote the name. The hint parser has keywords, like bnl, that sqlparser does not quote.
 	return sqlparser.BuildParsedQuery(
-		"delete from %s where %s in %a",
+		"delete /*+ INDEX(%s) */ from %s where %s in %a",
+		sqlescape.EscapeID(tpb.name.String()),
 		sqlparser.String(tpb.name),
 		sqlparser.String(tpb.pkCols[0].colName),
 		"::bulk_pks",
