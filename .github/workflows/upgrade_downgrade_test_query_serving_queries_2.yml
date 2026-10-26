@@ -215,6 +215,8 @@ jobs:
       run: |
         rm -rf /tmp/vtdataroot
         mkdir -p /tmp/vtdataroot
+        # Keep the path of the mysql.sock file short: under the checkout it can exceed the 107-character limit for a Unix socket path.
+        export VTDATAROOT=/tmp/vtdataroot
 
         source build.env
         go run test.go -skip-build -keep-data=false -docker=false -print-log -follow -tag upgrade_downgrade_query_serving_queries_2

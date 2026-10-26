@@ -242,6 +242,8 @@ jobs:
       run: |
         rm -rf /tmp/vtdataroot
         mkdir -p /tmp/vtdataroot
+        # Keep the path of the mysql.sock file short: under the checkout it can exceed the 107-character limit for a Unix socket path.
+        export VTDATAROOT=/tmp/vtdataroot
 
         source build.env
         export PRIMARY_TABLET_BINARY_SUFFIX=""
@@ -253,6 +255,8 @@ jobs:
       run: |
         rm -rf /tmp/vtdataroot
         mkdir -p /tmp/vtdataroot
+        # Keep the path of the mysql.sock file short: under the checkout it can exceed the 107-character limit for a Unix socket path.
+        export VTDATAROOT=/tmp/vtdataroot
 
         source build.env
         export PRIMARY_TABLET_BINARY_SUFFIX="-last"
@@ -264,6 +268,8 @@ jobs:
       run: |
         rm -rf /tmp/vtdataroot
         mkdir -p /tmp/vtdataroot
+        # Keep the path of the mysql.sock file short: under the checkout it can exceed the 107-character limit for a Unix socket path.
+        export VTDATAROOT=/tmp/vtdataroot
 
         source build.env
         export PRIMARY_TABLET_BINARY_SUFFIX="-next"
@@ -275,6 +281,8 @@ jobs:
       run: |
         rm -rf /tmp/vtdataroot
         mkdir -p /tmp/vtdataroot
+        # Keep the path of the mysql.sock file short: under the checkout it can exceed the 107-character limit for a Unix socket path.
+        export VTDATAROOT=/tmp/vtdataroot
 
         source build.env
         export PRIMARY_TABLET_BINARY_SUFFIX=""
