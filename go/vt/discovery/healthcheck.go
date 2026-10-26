@@ -479,17 +479,18 @@ func (hc *HealthCheckImpl) deleteTablet(tablet *topodata.Tablet) {
 }
 
 // Stale stream errors must not remove a replacement.
+// Log outside hc.mu so synchronous logger callbacks can read healthcheck state.
 func (hc *HealthCheckImpl) deleteTabletHealthCheck(thc *tabletHealthCheck) {
-	hc.mu.Lock()
-	defer hc.mu.Unlock()
-
 	tabletAlias := tabletAliasString(topoproto.TabletAliasString(thc.Tablet.Alias))
+	hc.mu.Lock()
 	if !hc.isRegisteredHealthCheckLocked(tabletAlias, thc) {
+		hc.mu.Unlock()
 		hc.logger().Infof("Tablet %v has been deleted or replaced, skipping deletion", tabletAlias)
 		return
 	}
-	thc.logger.Warningf("Removing tablet from healthcheck: %v due to health stats mismatch", thc.Tablet)
 	hc.deleteTabletLocked(thc.Tablet)
+	hc.mu.Unlock()
+	thc.logger.Warningf("Removing tablet from healthcheck: %v due to health stats mismatch", thc.Tablet)
 }
 
 // deleteTabletLocked requires hc.mu to be held.

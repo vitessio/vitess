@@ -472,6 +472,79 @@ func TestHealthCheckReentrantLoggerCallback(t *testing.T) {
 	}
 }
 
+// TestHealthCheckDeleteLoggerCanReenter verifies that removal and stale-skip logs
+// allow synchronous callbacks to read the completed healthcheck state.
+func TestHealthCheckDeleteLoggerCanReenter(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		stale   bool
+		level   logutilpb.Level
+		message string
+	}{
+		{name: "removal", level: logutilpb.Level_WARNING, message: "Removing tablet from healthcheck:"},
+		{name: "stale skip", stale: true, level: logutilpb.Level_INFO, message: "has been deleted or replaced, skipping deletion"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tablet := createTestTablet(0, "cell", "a")
+			tablet.Type = topodatapb.TabletType_REPLICA
+			target := &querypb.Target{Keyspace: "k", Shard: "s", TabletType: tablet.Type}
+			newCheck := func() *tabletHealthCheck {
+				ctx, cancel := context.WithCancel(t.Context())
+				t.Cleanup(cancel)
+				return &tabletHealthCheck{
+					ctx: ctx, cancelFunc: cancel, Tablet: tablet, Target: target, Serving: true,
+				}
+			}
+			originating := newCheck()
+			registered := originating
+			if tc.stale {
+				registered = newCheck()
+			}
+
+			var hc *HealthCheckImpl
+			logCount := 0
+			logger := logutil.NewCallbackLogger(func(event *logutilpb.Event) {
+				logCount++
+				assert.Equal(t, tc.level, event.Level)
+				assert.Contains(t, event.Value, tc.message)
+				// This takes hc.mu again and deadlocks if the logger is invoked with it held.
+				health, err := hc.GetTabletHealthByAlias(tablet.Alias)
+				if tc.stale {
+					require.NoError(t, err)
+					assert.Same(t, registered.Tablet, health.Tablet)
+				} else {
+					require.Error(t, err)
+					assert.Nil(t, health)
+				}
+			})
+			originating.logger = logger
+			alias := tabletAliasString(topoproto.TabletAliasString(tablet.Alias))
+			key := KeyFromTarget(target)
+			health := registered.SimpleCopy()
+			hc = &HealthCheckImpl{
+				healthByAlias: map[tabletAliasString]*tabletHealthCheck{alias: registered},
+				healthData:    map[KeyspaceShardTabletType]map[tabletAliasString]*TabletHealth{key: {alias: health}},
+				healthy:       map[KeyspaceShardTabletType][]*TabletHealth{key: {health}},
+				options:       withOptions(WithLogger(logger)),
+			}
+
+			hc.deleteTabletHealthCheck(originating)
+			require.Equal(t, 1, logCount)
+			if tc.stale {
+				assert.Same(t, registered, hc.registeredHealthCheck(tablet.Alias))
+				require.NoError(t, registered.ctx.Err())
+				assert.Len(t, hc.GetTabletStats(target), 1)
+				assert.Len(t, hc.GetHealthyTabletStats(target), 1)
+			} else {
+				require.ErrorIs(t, originating.ctx.Err(), context.Canceled)
+				assert.Nil(t, hc.registeredHealthCheck(tablet.Alias))
+				assert.Empty(t, hc.GetTabletStats(target))
+				assert.Empty(t, hc.GetHealthyTabletStats(target))
+			}
+		})
+	}
+}
+
 func TestHealthCheckStreamError(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
 
