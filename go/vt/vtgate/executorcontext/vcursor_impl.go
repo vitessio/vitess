@@ -697,6 +697,12 @@ func (vc *VCursorImpl) FirstSortedKeyspace() (*vindexes.Keyspace, error) {
 	return keyspaces[0], nil
 }
 
+// AdvisoryLockKeyspace implements the engine.VCursor interface. It returns the
+// first serving keyspace by name, and is called each time a lock function runs.
+func (vc *VCursorImpl) AdvisoryLockKeyspace() (*vindexes.Keyspace, error) {
+	return vc.FirstSortedKeyspace()
+}
+
 // SysVarSetEnabled implements the ContextVSchema interface
 func (vc *VCursorImpl) SysVarSetEnabled() bool {
 	return vc.GetSessionEnableSystemSettings()

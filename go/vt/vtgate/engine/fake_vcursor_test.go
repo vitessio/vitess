@@ -316,6 +316,10 @@ func (t *noopVCursor) ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard
 	panic("implement me")
 }
 
+func (t *noopVCursor) AdvisoryLockKeyspace() (*vindexes.Keyspace, error) {
+	return &vindexes.Keyspace{Name: "ks"}, nil
+}
+
 func (t *noopVCursor) NeedsReservedConn() {
 }
 

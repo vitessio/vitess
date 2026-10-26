@@ -237,11 +237,6 @@ func (v *vschema) AnyKeyspace() (*vindexes.Keyspace, error) {
 	panic("implement me")
 }
 
-func (v *vschema) FirstSortedKeyspace() (*vindexes.Keyspace, error) {
-	// TODO implement me
-	panic("implement me")
-}
-
 func (v *vschema) SysVarSetEnabled() bool {
 	// TODO implement me
 	panic("implement me")

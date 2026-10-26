@@ -95,6 +95,9 @@ type (
 		SQLMode() string
 
 		ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, lockFuncType sqlparser.LockingFuncType) (*sqltypes.Result, error)
+		// AdvisoryLockKeyspace returns the keyspace for advisory lock functions.
+		// It is called each time a lock function runs.
+		AdvisoryLockKeyspace() (*vindexes.Keyspace, error)
 
 		InTransactionAndIsDML() bool
 
