@@ -2896,6 +2896,8 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 	// switch back if we then fail to switch writes, and those that were already
 	// switched in some cells, which we cannot fully switch back.
 	var readsSwitched, readsPartiallySwitched []topodatapb.TabletType
+	// The state, read while holding the workflow lock, from which we determine those.
+	var readsStartState *State
 	if switchReplica || switchRdonly {
 		// Determine the tablet types to switch reads for, which can include rdonly
 		// reads switched along with replica reads, before changing any routing, so
@@ -2904,14 +2906,22 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 		if readTabletTypes, err = s.readTabletTypesToSwitch(ctx, req.Cells, req.TabletTypes); err != nil {
 			return nil, err
 		}
+		// To know which reads this call switches, and so may need to switch back, we
+		// read the state again now that we hold the workflow lock, as another call may
+		// have switched reads since we first read it.
+		if !req.DryRun && switchPrimary {
+			if _, readsStartState, err = s.getWorkflowState(ctx, ts.TargetKeyspaceName(), ts.WorkflowName()); err != nil {
+				return nil, err
+			}
+		}
 		// If we're going to switch writes immediately after then we don't need to
 		// rebuild the SrvVSchema here as we will do it after switching writes.
 		if rdDryRunResults, err = s.switchReads(ctx, req, ts, startState, readTabletTypes, !switchPrimary /* rebuildSrvVSchema */, direction); err != nil {
 			return nil, err
 		}
 		s.Logger().Infof("Switch Reads done for workflow %s.%s", req.Keyspace, req.Workflow)
-		if !req.DryRun && switchPrimary {
-			readsSwitched, readsPartiallySwitched = readsSwitchedFromState(startState, readTabletTypes)
+		if readsStartState != nil {
+			readsSwitched, readsPartiallySwitched = readsSwitchedFromState(readsStartState, readTabletTypes)
 		}
 	}
 	if rdDryRunResults != nil {
@@ -2923,7 +2933,7 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 			if (len(readsSwitched) > 0 || len(readsPartiallySwitched) > 0) && direction == DirectionForward {
 				// Tell the user what happened to the reads this call switched, keeping
 				// the code of the error that failed the write switch.
-				outcome, rerr := s.revertReadsSwitch(ctx, req, ts, startState, readsSwitched, readsPartiallySwitched)
+				outcome, rerr := s.revertReadsSwitch(ctx, req, ts, readsStartState, readsSwitched, readsPartiallySwitched)
 				if rerr != nil {
 					outcome = fmt.Sprintf("failed to switch reads back after failing to switch writes, manual cleanup work may be necessary: %v", rerr)
 				}

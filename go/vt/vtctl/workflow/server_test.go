@@ -2342,6 +2342,86 @@ func TestMoveTablesSwitchTrafficRevertWithMirroring(t *testing.T) {
 	}
 }
 
+// TestMoveTablesSwitchTrafficRevertKeepsReadsSwitchedConcurrently confirms that when
+// reads are switched after SwitchTraffic first reads the workflow state, as another
+// SwitchTraffic call can do while this one waits for the workflow lock, failing to
+// switch writes does not switch those reads back.
+func TestMoveTablesSwitchTrafficRevertKeepsReadsSwitchedConcurrently(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	t.Cleanup(cancel)
+
+	const (
+		workflowName       = "wf1"
+		tableName          = "t1"
+		sourceKeyspaceName = "sourceks"
+		targetKeyspaceName = "targetks"
+		vrID               = 1
+	)
+
+	env := newTestEnv(t, ctx, defaultCellName, &testKeyspace{
+		KeyspaceName: sourceKeyspaceName,
+		ShardNames:   []string{"0"},
+	}, &testKeyspace{
+		KeyspaceName: targetKeyspaceName,
+		ShardNames:   []string{"0"},
+	})
+	t.Cleanup(env.close)
+	env.tmc.schema = map[string]*tabletmanagerdatapb.SchemaDefinition{
+		tableName: {
+			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
+				Name:   tableName,
+				Schema: fmt.Sprintf("CREATE TABLE %s (id BIGINT, name VARCHAR(64), PRIMARY KEY (id))", tableName),
+			}},
+		},
+	}
+	env.updateTableRoutingRules(t, ctx, roTabletTypes, []string{tableName},
+		sourceKeyspaceName, targetKeyspaceName, sourceKeyspaceName)
+
+	// canSwitch runs after SwitchTraffic first reads the workflow state, so we switch
+	// the reads when it checks the copy state.
+	env.tmc.expectVRQueryResultOnKeyspaceTablets(targetKeyspaceName, &queryResult{
+		query: fmt.Sprintf("select vrepl_id, table_name, lastpk from _vt.copy_state where vrepl_id in (%d) and id in (select max(id) from _vt.copy_state where vrepl_id in (%d) group by vrepl_id, table_name)",
+			vrID, vrID),
+		result: &querypb.QueryResult{},
+		beforeReturnHook: func(context.Context, *topodatapb.Tablet, string) {
+			env.updateTableRoutingRules(t, ctx, roTabletTypes, []string{tableName},
+				sourceKeyspaceName, targetKeyspaceName, targetKeyspaceName)
+		},
+	})
+	env.tmc.expectVRQueryResultOnKeyspaceTablets(sourceKeyspaceName, &queryResult{ // switchReads
+		query:  "/select val from _vt.resharding_journal.*",
+		result: &querypb.QueryResult{},
+	})
+	env.tmc.expectVRQueryResultOnKeyspaceTablets(sourceKeyspaceName, &queryResult{ // switchWrites
+		query: "/select val from _vt.resharding_journal.*",
+		err:   errors.New("journal read error"),
+	})
+	// Not expected to be used, but lets switching reads back succeed if it is wrongly
+	// attempted, so that the test checks where the reads end up.
+	env.tmc.expectVRQueryResultOnKeyspaceTablets(sourceKeyspaceName, &queryResult{
+		query:  "/select val from _vt.resharding_journal.*",
+		result: &querypb.QueryResult{},
+	})
+
+	_, err := env.ws.WorkflowSwitchTraffic(ctx, &vtctldatapb.WorkflowSwitchTrafficRequest{
+		Keyspace:    targetKeyspaceName,
+		Workflow:    workflowName,
+		Direction:   int32(DirectionForward),
+		TabletTypes: allTabletTypes,
+	})
+	require.ErrorContains(t, err, "journal read error")
+	require.NotContains(t, err.Error(), "reads back")
+
+	// The reads switched by the other call should still be routed to the target.
+	want := []string{targetKeyspaceName + "." + tableName}
+	rules, err := topotools.GetRoutingRules(ctx, env.ts)
+	require.NoError(t, err)
+	for _, tabletType := range roTabletTypes {
+		from := tableName + "@" + strings.ToLower(tabletType.String())
+		require.Equal(t, want, rules[from], "routing rule for %s", from)
+	}
+}
+
 // TestReshardSwitchTrafficRevertsReadsOnWriteSwitchFailure confirms that when a Reshard
 // SwitchTraffic switches reads and then fails to switch writes, it switches the reads
 // back to the source shards, which are served directly from the SrvKeyspace.
