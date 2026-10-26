@@ -26,7 +26,7 @@ jobs:
   # matrix jobs below (on large runners) are not started at all when nothing
   # relevant changed.
   changes:
-    runs-on: ubuntu-24.04
+    runs-on: ${{ github.repository_owner == 'vitessio' && 'cncf-ubuntu-24.04-4-16-x86' || 'ubuntu-24.04' }}
     timeout-minutes: 5
     outputs:
       unit_tests: ${{ steps.changes.outputs.unit_tests }}
@@ -128,7 +128,7 @@ jobs:
     # status checks are reported), but on a GitHub-hosted runner with every
     # step below skipped. The 'Skip CI' label also gets the small runner, since
     # the legs then only fail at that step.
-    runs-on: ${{ needs.changes.outputs.unit_tests == 'true' && !contains(github.event.pull_request.labels.*.name, 'Skip CI') && matrix.race && github.repository == 'vitessio/vitess' && 'oracle-vm-16cpu-64gb-x86-64' || 'ubuntu-24.04' }}
+    runs-on: ${{ needs.changes.outputs.unit_tests == 'true' && !contains(github.event.pull_request.labels.*.name, 'Skip CI') && matrix.race && github.repository_owner == 'vitessio' && 'cncf-ubuntu-24.04-16-64-x86' || (github.repository_owner == 'vitessio' && 'cncf-ubuntu-24.04-4-16-x86' || 'ubuntu-24.04') }}
 
     steps:
       - name: Harden the runner (Audit all outbound calls)
