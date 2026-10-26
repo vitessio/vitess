@@ -169,7 +169,8 @@ func (s *Server) lock(ctx context.Context, dirPath, contents, ttl string, wait b
 		close(li.done)
 		// With LockTryOnce, an empty leaderCh with nil error means
 		// acquisition was unsuccessful: another session holds the lock,
-		// or an active lock-delay prevents acquiring it. Both return
+		// an active lock-delay prevents acquiring it, or another caller
+		// acquired and released it during our attempt. All return
 		// NodeExists.
 		if err == nil && !wait && ctx.Err() == nil {
 			return nil, topo.NewError(topo.NodeExists, "lock already exists at path "+dirPath)
