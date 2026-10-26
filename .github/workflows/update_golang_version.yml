@@ -16,7 +16,7 @@ jobs:
       matrix:
         branch: [ main, release-24.0, release-23.0 ]
     name: Update Golang Version
-    runs-on: ubuntu-24.04
+    runs-on: ${{ github.repository_owner == 'vitessio' && 'cncf-ubuntu-4-16-x86' || 'ubuntu-24.04' }}
     timeout-minutes: 10
     steps:
       - name: Harden the runner (Audit all outbound calls)

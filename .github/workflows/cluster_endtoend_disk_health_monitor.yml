@@ -23,7 +23,7 @@ env:
 jobs:
   test:
     name: Run endtoend tests on Cluster (tabletmanager_disk_health_monitor)
-    runs-on: ubuntu-24.04
+    runs-on: ${{ github.repository_owner == 'vitessio' && 'cncf-ubuntu-4-16-x86' || 'ubuntu-24.04' }}
     timeout-minutes: 60
 
     steps:

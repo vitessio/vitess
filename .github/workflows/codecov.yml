@@ -20,7 +20,7 @@ jobs:
   # check, so skipping it at the job level reports nothing misleading.
   changes:
     if: github.event_name != 'pull_request' || !contains(github.event.pull_request.labels.*.name, 'Backport')
-    runs-on: ubuntu-24.04
+    runs-on: ${{ github.repository_owner == 'vitessio' && 'cncf-ubuntu-4-16-x86' || 'ubuntu-24.04' }}
     timeout-minutes: 10
     outputs:
       is_full_run: ${{ steps.mode.outputs.is_full_run }}
@@ -124,7 +124,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.is_full_run == 'true' || needs.changes.outputs.packages != ''
     name: Code Coverage
-    runs-on: ${{ github.repository_owner == 'vitessio' && 'oracle-vm-8cpu-32gb-x86-64' || 'ubuntu-24.04' }}
+    runs-on: ${{ github.repository_owner == 'vitessio' && 'oracle-vm-8cpu-32gb-x86-64' || (github.repository_owner == 'vitessio' && 'cncf-ubuntu-4-16-x86' || 'ubuntu-24.04') }}
 
     steps:
     - name: Harden the runner (Audit all outbound calls)

@@ -38,7 +38,7 @@ jobs:
       fail-fast: false
       matrix:
         set: [root, addlicense, gofumpt, goimports, golangci-lint, gotestsum, goyacc]
-    runs-on: ubuntu-24.04
+    runs-on: ${{ github.repository_owner == 'vitessio' && 'cncf-ubuntu-4-16-x86' || 'ubuntu-24.04' }}
     timeout-minutes: 15
 
     steps:

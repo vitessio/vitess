@@ -18,7 +18,7 @@ permissions: read-all
 jobs:
   build:
     name: Static Code Checks Etc
-    runs-on: ubuntu-24.04
+    runs-on: ${{ github.repository_owner == 'vitessio' && 'cncf-ubuntu-4-16-x86' || 'ubuntu-24.04' }}
     env:
       # Build everything the way the go_cache_warm workflow warms it, so the
       # checks reuse its build, unit and tools build cache entries. Nothing
