@@ -821,15 +821,15 @@ func (be *BuiltinBackupEngine) backupFiles(
 		return backupErr
 	}
 
-	// Verify the position before the MANIFEST makes the backup complete. A failed
-	// check is not retried with the MANIFEST below.
-	if err := params.verifyPosition(ctx, backupPosition); err != nil {
-		return err
-	}
-
 	// Backup the MANIFEST file and apply retry logic.
 	var manifestErr error
 	for currentRetry := 0; currentRetry <= maxRetriesPerFile; currentRetry++ {
+		// Verify the position before each attempt makes the backup complete, since a
+		// reparent during a failed attempt can lose GTIDs that the backup holds. A
+		// failed check is not retried.
+		if err := params.verifyPosition(ctx, backupPosition); err != nil {
+			return err
+		}
 		manifestErr = be.backupManifest(ctx, params, bh, backupPosition, purgedPosition, fromPosition, fromBackupName, serverUUID, mysqlVersion, incrDetails, fes, currentRetry)
 		if manifestErr == nil || hasErrorCode(manifestErr, vtrpcpb.Code_FAILED_PRECONDITION) {
 			break

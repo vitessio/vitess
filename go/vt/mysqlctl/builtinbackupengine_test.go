@@ -639,6 +639,9 @@ func TestBackupFilesFinish(t *testing.T) {
 		require.NoError(t, f.Close())
 	}
 
+	var verified []replication.Position
+	var verifyErr error
+	var failManifestOnce bool
 	var addFileCalls sync.Map
 	bh := &FakeBackupHandle{
 		AddFileReturnF: func(filename string) FakeBackupHandleAddFileReturn {
@@ -653,14 +656,18 @@ func TestBackupFilesFinish(t *testing.T) {
 			if filename == "0" && count == 1 {
 				return FakeBackupHandleAddFileReturn{WriteCloser: nil, Err: errors.New("simulated transient error")}
 			}
+			if filename == backupManifestFileName && failManifestOnce {
+				// A reparent during this attempt loses GTIDs that the backup holds.
+				failManifestOnce = false
+				verifyErr = vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "errant GTIDs")
+				return FakeBackupHandleAddFileReturn{WriteCloser: nil, Err: errors.New("simulated transient error")}
+			}
 			return FakeBackupHandleAddFileReturn{WriteCloser: nopWriteCloser{}}
 		},
 	}
 
 	pos, err := replication.DecodePosition("MySQL56/16b1039f-22b6-11ed-b765-0a43f95f28a3:1-10")
 	require.NoError(t, err)
-	var verified []replication.Position
-	var verifyErr error
 	params := BackupParams{
 		Cnf: &Mycnf{
 			InnodbDataHomeDir:     path.Join(tmpDir, "innodb"),
@@ -701,6 +708,15 @@ func TestBackupFilesFinish(t *testing.T) {
 	assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
 	assert.Len(t, verified, 1)
 	assert.Equal(t, 1, manifestAdds(), "a failed check must not write the MANIFEST")
+
+	// A failed MANIFEST attempt is retried only after the position passes the check again.
+	verified = nil
+	verifyErr = nil
+	failManifestOnce = true
+	err = be.backupFiles(t.Context(), params, bh, pos, replication.Position{}, replication.Position{}, "", nil, "", "", nil)
+	require.ErrorContains(t, err, "errant GTIDs")
+	assert.Len(t, verified, 2)
+	assert.Equal(t, 2, manifestAdds(), "a failed check must not retry the MANIFEST")
 }
 
 // newBackupTestTopo sets up the topo that ExecuteBackup needs for the MANIFEST

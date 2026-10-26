@@ -99,7 +99,7 @@ type BackupParams struct {
 	// IncludeBinlogs includes the source's binlogs in a full builtin backup.
 	IncludeBinlogs bool
 	// VerifyPosition, if set, is called with the position that the backup's MANIFEST will record,
-	// just before the MANIFEST is written. An error makes the backup unusable, so it is aborted.
+	// just before each attempt to write the MANIFEST. An error makes the backup unusable, so it is aborted.
 	VerifyPosition func(ctx context.Context, pos replication.Position) error
 }
 
