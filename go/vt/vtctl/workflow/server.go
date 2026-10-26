@@ -3492,12 +3492,13 @@ func (s *Server) canSwitch(ctx context.Context, ts *trafficSwitcher, maxAllowedR
 				// A stopped stream is not replicating, so the target may be missing
 				// data no matter what the lag says. A stream that never ran reports
 				// its lag as the time since it was created.
-				// The exception is a stream that an earlier attempt at switching
-				// writes stopped for the cutover and that then created the journals,
-				// and so passed the point of no return. Running SwitchTraffic again
-				// must then be able to complete the switch. We require both, as
-				// MoveTables Create leaves the streams stopped when it finds a
-				// journal from a previous run for the same migration.
+				// We allow a stream that switching writes stopped for the cutover when
+				// the journals exist, which is the case when an earlier attempt at
+				// switching writes passed the point of no return and then failed, so
+				// that this check does not block running SwitchTraffic again to
+				// complete the switch. We check the message as well, as a stopped
+				// stream can also have a journal from a previous run for the same
+				// migration.
 				if st.Message != stoppedForCutoverMessage {
 					return cannotSwitchStopped, nil
 				}

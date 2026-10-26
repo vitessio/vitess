@@ -2034,10 +2034,8 @@ func TestMoveTablesSwitchWritesCompletesAfterCancelOnFreeze(t *testing.T) {
 }
 
 // TestCanSwitchStreamNotReplicating confirms that we refuse to switch traffic when a
-// stream is stopped, even though its reported lag is low. A stream that never ran
-// reports its lag as the time since it was created. A stream that an earlier attempt
-// at switching writes stopped for the cutover, and that then created the journals, is
-// allowed, so that SwitchTraffic can complete the switch.
+// stream is stopped, even though its reported lag is low, unless it was stopped for the
+// cutover and the journals exist.
 func TestCanSwitchStreamNotReplicating(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	t.Cleanup(cancel)
@@ -2064,8 +2062,8 @@ func TestCanSwitchStreamNotReplicating(t *testing.T) {
 			want:  cannotSwitchStopped,
 		},
 		{
-			// MoveTables Create leaves the streams stopped when it finds a journal
-			// from a previous run for the same migration.
+			// A stopped stream that has a journal from a previous run for the same
+			// migration.
 			name:          "stopped with journals but not for cutover",
 			state:         binlogdatapb.VReplicationWorkflowState_Stopped,
 			journalsExist: true,
@@ -2155,10 +2153,10 @@ func TestCanSwitchStreamNotReplicating(t *testing.T) {
 	}
 }
 
-// TestMoveTablesSwitchTrafficRetryAfterJournalsCreated confirms that SwitchTraffic can
-// complete a switch whose earlier attempt at switching writes created the journals, and
-// so passed the point of no return, but then failed, leaving the target streams stopped
-// for the cutover.
+// TestMoveTablesSwitchTrafficRetryAfterJournalsCreated confirms that SwitchTraffic
+// completes a switch whose earlier attempt at switching writes created the journals and
+// then failed, leaving the target streams stopped for the cutover. The streams here
+// report a low lag; the lag check still applies to a real retry.
 func TestMoveTablesSwitchTrafficRetryAfterJournalsCreated(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
