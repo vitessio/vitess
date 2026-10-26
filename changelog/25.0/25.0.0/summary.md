@@ -232,8 +232,8 @@ Vitess parses and escapes SQL text byte by byte, and in these character sets the
 VTGate used to report a planned `REPLACE` statement with the `INSERT` statement type, because `REPLACE` is parsed as an `INSERT` that carries a "replace" action. It now reports it as `REPLACE`, which is what VTGate already reported for `REPLACE` on paths that don't build a plan, such as `PREPARE`. This changes the statement type of `REPLACE` statements in:
 
 - `StmtType` in the VTGate query log
-- the query-type label of the `QueryExecutions`, `QueryRoutes` and `QueryExecutionsByTable` metrics
-- `QueryType` in plan output (`/debug/query_plans` and `VEXPLAIN`)
+- the query-type label of the `QueryExecutions`, `QueryRoutes`, `QueryExecutionsByTable` and `SlowQueries` metrics
+- `QueryType` in plan output (`/debug/query_plans` and the `vtexplain` tool's JSON output)
 - `statementType` in `VEXPLAIN KEYS` output
 
 **Impact**: dashboards, alerts and query-log parsing that count `INSERT` no longer include `REPLACE` statements. Planning, routing, transactions and results are unchanged.

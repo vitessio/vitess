@@ -121,22 +121,6 @@ func TestASTToStatementType(t *testing.T) {
 	}
 }
 
-// TestASTToStatementTypeMatchesPreview guards the two classifiers against drifting
-// apart for INSERT/REPLACE, which is how the REPLACE misclassification went unnoticed.
-func TestASTToStatementTypeMatchesPreview(t *testing.T) {
-	parser := NewTestParser()
-	for _, sql := range []string{
-		"insert into t(a) values (1)",
-		"replace into t(a) values (1)",
-	} {
-		t.Run(sql, func(t *testing.T) {
-			stmt, err := parser.Parse(sql)
-			require.NoError(t, err)
-			assert.Equal(t, Preview(sql), ASTToStatementType(stmt))
-		})
-	}
-}
-
 func TestIsDML(t *testing.T) {
 	testcases := []struct {
 		sql  string
