@@ -978,11 +978,20 @@ func checkPositionOnce(ctx context.Context, tmc tmclient.TabletManagerClient, ts
 	if err != nil {
 		return primaryTerm{}, vterrors.Wrapf(err, "can't get the status of primary %v", primary)
 	}
+	// PrimaryStatus doesn't check the tablet type, so a primary that a reparent
+	// replaced during the call still answers, maybe with GTIDs that the new primary
+	// lost. Check against the new primary instead.
+	term := primaryTerm{alias: si.PrimaryAlias, termStart: si.PrimaryTermStartTime}
+	if si, err = ts.GetShard(ctx, initKeyspace, initShard); err != nil {
+		return primaryTerm{}, vterrors.Wrap(err, "can't read shard")
+	}
+	if !term.equal(primaryTerm{alias: si.PrimaryAlias, termStart: si.PrimaryTermStartTime}) {
+		return primaryTerm{}, vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "the shard primary changed from %v while checking %s", primary, check.what)
+	}
 	primaryPos, err := replication.DecodePosition(status.Position)
 	if err != nil {
 		return primaryTerm{}, permanentError{vterrors.Wrapf(err, "can't decode the position %q of primary %v", status.Position, primary)}
 	}
-	term := primaryTerm{alias: si.PrimaryAlias, termStart: si.PrimaryTermStartTime}
 
 	// Errant GTID detection supports only MySQL56 GTID sets, as on tablets.
 	posSet, ok := pos.GTIDSet.(replication.Mysql56GTIDSet)

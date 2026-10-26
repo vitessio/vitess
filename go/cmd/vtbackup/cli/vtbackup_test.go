@@ -371,6 +371,33 @@ func TestVerifyPosition(t *testing.T) {
 		})
 	})
 
+	t.Run("a primary replaced during its status call is checked again", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			var vt *verifyPositionTest
+			vt = newVerifyPositionTest(t, func(tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
+				if tablet.Alias.Uid == 100 {
+					// A reparent replaces the primary during the call, but the demoted
+					// primary still answers, with GTIDs that the new primary lost.
+					vt.setPrimary(t, 101)
+					return primaryStatus(testPrimaryUUID, testPrimaryUUID+":1-12"), nil
+				}
+				return primaryStatus(testNewPrimaryUUID, testPrimaryUUID+":1-10,"+testNewPrimaryUUID+":1"), nil
+			})
+			check := positionCheck{what: "the new backup", requireCommitted: true}
+			pos := testGTIDPosition(t, testPrimaryUUID+":1-12")
+
+			vt.setPrimary(t, 100)
+			_, err := checkPositionOnce(t.Context(), vt.tmc, vt.ts, pos, check)
+			require.ErrorContains(t, err, "the shard primary changed from zone1-0000000100 while checking the new backup")
+			assert.Equal(t, vtrpc.Code_UNAVAILABLE, vterrors.Code(err))
+
+			vt.setPrimary(t, 100)
+			_, err = verifyPosition(t.Context(), vt.tmc, vt.ts, pos, check)
+			require.ErrorContains(t, err, "the new backup has errant GTIDs "+testPrimaryUUID+":11-12 that primary zone1-0000000101")
+			assert.Equal(t, 3, vt.tmc.calls)
+		})
+	})
+
 	t.Run("a missing primary is retried", func(t *testing.T) {
 		synctest.Test(t, func(t *testing.T) {
 			vt := newVerifyPositionTest(t, committed(testPrimaryUUID+":1-10"))
