@@ -57,7 +57,7 @@ const (
 // completing a backup. The subtests share one shard and run in order; the last
 // two kill primaries.
 func TestVtbackupErrantGTIDs(t *testing.T) {
-	// The checks and --allow-errant-gtids are new in v25.
+	// --enable-errant-gtid-checks is new in v25.
 	utils.SkipIfBinaryIsBelowVersion(t, 25, "vtbackup")
 	initTablets(t)
 	_, err := primary.VttabletProcess.QueryTablet(vtInsertTest, keyspaceName, true)
@@ -74,8 +74,8 @@ func TestVtbackupErrantGTIDs(t *testing.T) {
 }
 
 // testPoisonedBaseBackup checks that vtbackup refuses a base backup with an
-// errant GTID, takes a backup anyway with --allow-errant-gtids, and succeeds
-// once the primary has the GTID, which is the remedy the error names.
+// errant GTID, takes a backup anyway with the checks off, and succeeds once the
+// primary has the GTID, which is the remedy the error names.
 func testPoisonedBaseBackup(t *testing.T) {
 	// An empty transaction under a new UUID changes no data, so injecting it
 	// on the primary afterwards is a safe repair.
@@ -103,9 +103,7 @@ func testPoisonedBaseBackup(t *testing.T) {
 	require.ErrorContains(t, err, "came from the restored backup")
 	assert.Len(t, listBackups(t), len(backups))
 
-	run := startVtbackup(t, "--allow-errant-gtids")
-	require.NoError(t, run.wait(t))
-	run.waitForLog(t, "Continuing because of --allow-errant-gtids")
+	require.NoError(t, startVtbackup(t, "--enable-errant-gtid-checks=false").wait(t))
 	assert.Len(t, listBackups(t), len(backups)+1)
 
 	execOnTablet(t, primary,
@@ -241,7 +239,8 @@ type vtbackupRun struct {
 	done   chan error
 }
 
-// startVtbackup starts vtbackup in the background with the given extra flags.
+// startVtbackup starts vtbackup in the background, with the errant GTID checks
+// on, and with the given extra flags.
 func startVtbackup(t *testing.T, extraArgs ...string) *vtbackupRun {
 	t.Helper()
 	// A short temp path keeps the socket under the unix socket length limit.
@@ -256,7 +255,7 @@ func startVtbackup(t *testing.T, extraArgs ...string) *vtbackupRun {
 		newInitDBFile, keyspaceName, shardName, cell, hostname,
 		localCluster.TmpDirectory, localCluster.TopoPort, false,
 	)
-	vtb.ExtraArgs = append([]string{"--db-credentials-file", dbCredentialFile, "--mysql-socket", socket}, extraArgs...)
+	vtb.ExtraArgs = append([]string{"--db-credentials-file", dbCredentialFile, "--mysql-socket", socket, "--enable-errant-gtid-checks"}, extraArgs...)
 	vtb.StderrFile = path.Join(t.TempDir(), "vtbackup-stderr.txt")
 	run := &vtbackupRun{socket: socket, stderr: vtb.StderrFile, done: make(chan error, 1)}
 	go func() { run.done <- vtb.Setup() }()

@@ -91,7 +91,7 @@ var (
 	initSQLTabletTypes  []topodatapb.TabletType
 	initSQLTimeout      time.Duration
 	initSQLFailOnError  bool
-	allowErrantGTIDs    bool
+	errantGTIDChecks    bool
 
 	// vttablet-like flags
 	initDbNameOverride string
@@ -227,7 +227,7 @@ func init() {
 	Main.Flags().Var((*topoproto.TabletTypeListFlag)(&initSQLTabletTypes), "init-backup-tablet-types", "Tablet types used for the backup where the init SQL queries (--init-backup-sql-queries) will be executed after catch-up replication, before initializing the backup")
 	Main.Flags().DurationVar(&initSQLTimeout, "init-backup-sql-timeout", initSQLTimeout, "At what point should we time out the init SQL query (--init-backup-sql-queries) work and either fail the backup job (--init-backup-sql-fail-on-error) or continue on with the backup")
 	Main.Flags().BoolVar(&initSQLFailOnError, "init-backup-sql-fail-on-error", false, "Whether or not to fail the backup if the init SQL queries (--init-backup-sql-queries) fail, which includes if they fail to complete before the specified timeout (--init-backup-sql-timeout)")
-	Main.Flags().BoolVar(&allowErrantGTIDs, "allow-errant-gtids", allowErrantGTIDs, "Log a warning instead of failing when the restored backup, or the backup this run takes, has errant GTIDs: GTIDs that the shard primary doesn't have, under any server UUID but the primary's own. Replica restores reject such a backup. Point-in-time restores, SNAPSHOT keyspaces and --unmanaged tablets accept it. Init SQL creates such GTIDs when it runs binlogged statements such as ANALYZE TABLE, OPTIMIZE TABLE or FLUSH TABLES; use their NO_WRITE_TO_BINLOG or LOCAL forms, or start the queries with SET sql_log_bin = 0. With this flag, each check makes one attempt: vtbackup doesn't wait for a missing or unreachable primary, or for the primary to commit GTIDs that vtbackup already applied.")
+	Main.Flags().BoolVar(&errantGTIDChecks, "enable-errant-gtid-checks", errantGTIDChecks, "Fail the run, without completing a backup, when the restored backup or the backup this run takes has errant GTIDs: GTIDs that the shard primary doesn't have, under any server UUID but the primary's own. Replica restores reject such a backup. Init SQL creates such GTIDs when it runs binlogged statements such as ANALYZE TABLE, OPTIMIZE TABLE or FLUSH TABLES; use their NO_WRITE_TO_BINLOG or LOCAL forms, or start the queries with SET sql_log_bin = 0. The checks wait, with no limit of their own, for a missing or unreachable primary, and for the primary to commit GTIDs that vtbackup already applied, such as writes waiting for a semi-sync acknowledgement.")
 
 	// vttablet-like flags
 	utils.SetFlagStringVar(Main.Flags(), &initDbNameOverride, "init-db-name-override", initDbNameOverride, "(init parameter) override the name of the db used by vttablet")
@@ -646,8 +646,10 @@ func runBackup(ctx context.Context, topoServer *topo.Server, mysqld *mysqlctl.My
 
 	// Fail before catching up if the restored base has GTIDs that tablets would
 	// reject. A shard with no primary has already failed in startReplication.
-	if _, err := verifyPosition(ctx, tmc, topoServer, restorePos, positionCheck{what: restoredFrom, restorePos: restorePos}); err != nil {
-		return err
+	if errantGTIDChecks {
+		if _, err := verifyPosition(ctx, tmc, topoServer, restorePos, positionCheck{what: restoredFrom, restorePos: restorePos}); err != nil {
+			return err
+		}
 	}
 
 	status, err := catchUpReplicationForBackup(ctx, topoServer, mysqld, restorePos, primaryPos)
@@ -698,8 +700,10 @@ func runBackup(ctx context.Context, topoServer *topo.Server, mysqld *mysqlctl.My
 
 	// Check the position to back up before the upload starts, and set the check
 	// that runs just before the backup's MANIFEST is written.
-	if err := verifyNewBackup(ctx, tmc, topoServer, mysqld, restorePos, backupParams); err != nil {
-		return err
+	if errantGTIDChecks {
+		if err := verifyNewBackup(ctx, tmc, topoServer, mysqld, restorePos, backupParams); err != nil {
+			return err
+		}
 	}
 
 	// Now we can take a new backup.
@@ -919,9 +923,8 @@ func (p primaryTerm) equal(other primaryTerm) bool {
 // verifyPosition checks that pos has no GTIDs that the shard primary lacks. It
 // retries while the primary is missing, unreachable or hasn't committed GTIDs
 // under its own UUID yet (when check.requireCommitted), and fails at once on
-// errant GTIDs. With --allow-errant-gtids it makes one attempt and logs a
-// warning instead of failing. It returns the primary it verified pos against,
-// which is zero if it verified nothing.
+// errant GTIDs. It returns the primary it verified pos against, which is zero
+// if pos is.
 func verifyPosition(ctx context.Context, tmc tmclient.TabletManagerClient, ts *topo.Server, pos replication.Position, check positionCheck) (primaryTerm, error) {
 	if pos.IsZero() {
 		return primaryTerm{}, nil
@@ -938,16 +941,6 @@ func verifyPosition(ctx context.Context, tmc tmclient.TabletManagerClient, ts *t
 		}
 		verified = term
 		return nil
-	}
-	if allowErrantGTIDs {
-		if err := attempt(); err != nil {
-			// The flag accepts an unverified position, not a cancelled run.
-			if ctxErr := ctx.Err(); ctxErr != nil {
-				return primaryTerm{}, vterrors.Wrapf(ctxErr, "stopped verifying %s against the shard primary (last error: %v)", check.what, err)
-			}
-			log.Warn(fmt.Sprintf("Continuing because of --allow-errant-gtids: %v", err))
-		}
-		return verified, nil
 	}
 	if err := retryOnError(ctx, attempt); err != nil {
 		// A done Context ends the wait; say what the check was waiting for.
@@ -1034,17 +1027,12 @@ func errantGTIDsError(check positionCheck, errant replication.Mysql56GTIDSet, pr
 		rest = rest.RemoveUUID(localSID)
 	}
 
-	// With the flag set, this is a warning, so the flag is no remedy.
-	optOut := ", or set --allow-errant-gtids"
-	if allowErrantGTIDs {
-		optOut = ""
-	}
 	switch {
 	case len(restored) == 0:
 	case restoreWithClone:
-		msg += fmt.Sprintf(". %v came from the donor, which has them too. Fix the donor's errant GTIDs or clone from another tablet%s", restored, optOut)
+		msg += fmt.Sprintf(". %v came from the donor, which has them too. Fix the donor's errant GTIDs or clone from another tablet", restored)
 	default:
-		msg += fmt.Sprintf(`. %v came from the restored backup, and tablets restored from it fail with "Errant GTID detected". If these transactions change no data, as with init SQL in an older vtbackup run, inject an empty transaction for each one on the primary with binary logging on; that also repairs the backups that contain them. Otherwise, remove every backup that contains them with vtctldclient RemoveBackup, after copying any whose transactions the shard lost%s`, restored, optOut)
+		msg += fmt.Sprintf(`. %v came from the restored backup, and tablets restored from it fail with "Errant GTID detected". If these transactions change no data, as with init SQL in an older vtbackup run, inject an empty transaction for each one on the primary with binary logging on; that also repairs the backups that contain them. Otherwise, remove every backup that contains them with vtctldclient RemoveBackup, after copying any whose transactions the shard lost`, restored)
 	}
 	if len(initSQL) > 0 {
 		msg += fmt.Sprintf(". %v were written by this run's --init-backup-sql-queries. Use the statements' NO_WRITE_TO_BINLOG or LOCAL forms, or start the queries with SET sql_log_bin = 0", initSQL)

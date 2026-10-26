@@ -19,7 +19,6 @@
         - [`BackupHandle` interface gains `Wait()` method](#backup-handle-wait-method)
         - [VTOrc: `--cells-to-watch` removed in favor of `--cells-no-recovery`](#vtorc-cells-no-recovery)
         - [Connection character sets restricted](#vttablet-connection-charsets-restricted)
-        - [`vtbackup` refuses backups with errant GTIDs](#vtbackup-errant-gtids)
     - **[Deprecations](#deprecations)**
         - [CLI Flags](#deprecated-cli-flags)
         - [Legacy streaming-path plan types in query rules](#deprecated-selectstream-rule-plan)
@@ -74,6 +73,7 @@
         - [Slow clean mysqld shutdowns no longer fail backups](#backup-mysqld-shutdown-timeout)
         - [Parallel S3 downloads during restore](#vttablet-s3-parallel-downloads)
         - [lz4 engine: library upgrade and `--compression-level` mapping](#backup-lz4-v4)
+        - [`vtbackup` can refuse backups with errant GTIDs](#vtbackup-errant-gtid-checks)
     - **[VTAdmin](#minor-changes-vtadmin)**
         - [vtadmin-web updated to node v22.23.2 (LTS)](#vtadmin-updated-node)
     - **[General](#minor-changes-general)**
@@ -227,26 +227,6 @@ See [#20021](https://github.com/vitessio/vitess/issues/20021) for details.
 `--db-charset`, and the other places a MySQL connection character set is configured, no longer accept `sjis`, `cp932`, `gb18030`, `gbk`, `big5`, `ucs2`, `utf16`, `utf16le` or `utf32`, whether given as a character set or as one of its collations. A tablet configured with one of them fails to start, VTGate refuses a `SET` of `character_set_client`, `character_set_connection`, `character_set_results` or `collation_connection` to one of them, or to a name that is not a character set or collation, which it used to answer with OK and ignore, and VTTablet refuses a setting or `SET` statement that would switch a session's connection to one of them. A client may still ask for one of them at the handshake: VTGate reads its statements byte by byte, as the tablet's connection to MySQL does, so they cannot break out of a literal.
 
 Vitess parses and escapes SQL text byte by byte, and in these character sets the second byte of a character can be a backslash or a back quote, so text in them was misparsed or corrupted on its way through Vitess. Use `utf8mb4` as the connection character set instead. Tables and columns can still be declared with any of these character sets; MySQL converts between them and the connection character set.
-
-#### <a id="vtbackup-errant-gtids"/>`vtbackup` refuses backups with errant GTIDs</a>
-
-`vtbackup` now fails a run, without completing a backup, when a position has errant GTIDs: GTIDs that the shard primary doesn't have, under any server UUID but the primary's own. A replica restored from a backup that has them fails with `Errant GTID detected`, and before this change every `vtbackup` run restored such a backup and carried the errant GTIDs into the next one. `vtbackup` checks three times:
-
-- **The restored backup**, or the data cloned with `--restore-with-clone`, before catching up.
-- **The data to back up**, before the upload. Errant GTIDs here come from a reparent that lost transactions `vtbackup` had already applied, or from `--init-backup-sql-queries` running binlogged statements such as `ANALYZE TABLE`, `OPTIMIZE TABLE` or `FLUSH TABLES`.
-- **The new backup**, just before its `MANIFEST` is written. If an emergency reparent during the upload loses transactions that the backup holds, the backup is aborted instead of left for restores to reject.
-
-The error names where the errant GTIDs came from and how to repair them. Before the upload, and again before writing the `MANIFEST`, `vtbackup` also waits while the primary hasn't committed GTIDs under its own UUID that `vtbackup` already applied, as when the primary waits for semi-sync acknowledgements, and then checks them against whichever primary the shard has.
-
-**Impact**:
-- Runs whose base or new backup has errant GTIDs now fail. That includes setups that use these backups only for point-in-time restores, SNAPSHOT keyspaces or `--unmanaged` tablets, which accept them today. Pass `--allow-errant-gtids` to log a warning instead of failing. With the flag, each check makes one attempt and doesn't wait for the primary.
-- Init SQL that runs binlogged statements now fails the run. Use the statements' `NO_WRITE_TO_BINLOG` or `LOCAL` forms, or start the queries with `SET sql_log_bin = 0`.
-- While the primary waits for semi-sync acknowledgements, a run waits before the upload until the acknowledgement arrives or a reparent happens. Like the existing wait for the primary's position, these waits are bounded only by the job's deadline, if it has one.
-- If a reparent happens during the upload, the run waits for the new primary before writing the `MANIFEST`.
-- `vtbackup` now waits at most one minute between attempts to read the primary's position.
-- MariaDB and other non-MySQL56 flavors are not checked, as on tablets.
-
-See [#20677](https://github.com/vitessio/vitess/issues/20677) and [#20678](https://github.com/vitessio/vitess/issues/20678).
 
 ### <a id="deprecations"/>Deprecations</a>
 
@@ -855,6 +835,26 @@ The `lz4` compression engine now uses the `pierrec/lz4/v4` library instead of `p
 The upgrade changes how `--compression-level` is interpreted for the lz4 engine. Values `0` and `1`, including the default of `1`, select the fast compressor. Values `2` through `9` now select lz4's named hash-chain levels (`Level2` through `Level9`) instead of using the raw value as the hash-chain search depth, so higher values produce a better ratio at more CPU cost. Values above `9` and negative values, which previously requested an unlimited search, select `Level9`. Other compression engines are not affected.
 
 See [#20778](https://github.com/vitessio/vitess/pull/20778) for details.
+
+#### <a id="vtbackup-errant-gtid-checks"/>`vtbackup` can refuse backups with errant GTIDs</a>
+
+The new `--enable-errant-gtid-checks` flag makes `vtbackup` fail a run, without completing a backup, when a position has errant GTIDs: GTIDs that the shard primary doesn't have, under any server UUID but the primary's own. A replica restored from a backup that has them fails with `Errant GTID detected`, and without the checks every `vtbackup` run restores such a backup and carries the errant GTIDs into the next one. With the flag, `vtbackup` checks three times:
+
+- **The restored backup**, or the data cloned with `--restore-with-clone`, before catching up.
+- **The data to back up**, before the upload. Errant GTIDs here come from a reparent that lost transactions `vtbackup` had already applied, or from `--init-backup-sql-queries` running binlogged statements such as `ANALYZE TABLE`, `OPTIMIZE TABLE` or `FLUSH TABLES`.
+- **The new backup**, just before its `MANIFEST` is written. If an emergency reparent during the upload loses transactions that the backup holds, the backup is aborted instead of left for restores to reject.
+
+The error names where the errant GTIDs came from and how to repair them. Before the upload, and again before writing the `MANIFEST`, `vtbackup` also waits while the primary hasn't committed GTIDs under its own UUID that `vtbackup` already applied, as when the primary waits for semi-sync acknowledgements, and then checks them against whichever primary the shard has.
+
+Before turning the flag on:
+- If the shard's newest backup already has errant GTIDs, every run fails until they are repaired or the backups that hold them are removed.
+- Init SQL that runs binlogged statements fails the run. Use the statements' `NO_WRITE_TO_BINLOG` or `LOCAL` forms, or start the queries with `SET sql_log_bin = 0`.
+- The checks wait for a missing or unreachable primary, for the primary to commit GTIDs that `vtbackup` already applied, and, after a reparent during the upload, for the new primary. Like the existing wait for the primary's position, these waits are bounded only by the job's deadline, if it has one.
+- MariaDB and other non-MySQL56 flavors are not checked, as on tablets.
+
+With or without the flag, `vtbackup` now waits at most one minute between attempts to read the primary's position.
+
+See [#20677](https://github.com/vitessio/vitess/issues/20677) and [#20678](https://github.com/vitessio/vitess/issues/20678).
 
 ### <a id="minor-changes-vtadmin"/>VTAdmin</a>
 

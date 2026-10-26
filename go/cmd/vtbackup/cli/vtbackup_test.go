@@ -292,13 +292,6 @@ func (vt *verifyPositionTest) setPrimary(t *testing.T, uid uint32) {
 	assert.NoError(t, err)
 }
 
-// setAllowErrantGTIDs sets --allow-errant-gtids for the test.
-func setAllowErrantGTIDs(t *testing.T, allow bool) {
-	old := allowErrantGTIDs
-	allowErrantGTIDs = allow
-	t.Cleanup(func() { allowErrantGTIDs = old })
-}
-
 func TestVerifyPosition(t *testing.T) {
 	committed := func(gtids string) func(*topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
 		return func(*topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
@@ -479,13 +472,6 @@ func TestVerifyPosition(t *testing.T) {
 			require.ErrorContains(t, err, testOtherUUID+":1-2 came from the restored backup")
 			require.ErrorContains(t, err, testLocalUUID+":1 were written by this run's --init-backup-sql-queries")
 			require.ErrorContains(t, err, "vtbackup applied "+testNewPrimaryUUID+":1 during catch-up")
-			require.ErrorContains(t, err, "or set --allow-errant-gtids")
-
-			// With the flag, the same report is a warning, which doesn't suggest the flag.
-			setAllowErrantGTIDs(t, true)
-			_, err = checkPositionOnce(t.Context(), vt.tmc, vt.ts, pos, check)
-			require.ErrorContains(t, err, testOtherUUID+":1-2 came from the restored backup")
-			assert.NotContains(t, err.Error(), "--allow-errant-gtids")
 		})
 	})
 
@@ -515,51 +501,6 @@ func TestVerifyPosition(t *testing.T) {
 			require.ErrorContains(t, err, "deadline exceeded")
 			assert.Equal(t, vtrpc.Code_DEADLINE_EXCEEDED, vterrors.Code(err))
 		})
-	})
-
-	t.Run("a cancelled run fails even with --allow-errant-gtids", func(t *testing.T) {
-		synctest.Test(t, func(t *testing.T) {
-			setAllowErrantGTIDs(t, true)
-			vt := newVerifyPositionTest(t, committed(testPrimaryUUID+":1-10"))
-			vt.setPrimary(t, 100)
-			ctx, cancel := context.WithCancel(t.Context())
-			defer cancel()
-			// The run is cancelled, as by SIGTERM, while the check waits for the primary.
-			vt.tmc.primaryStatus = func(*topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
-				cancel()
-				return nil, context.Canceled
-			}
-			_, err := verifyPosition(ctx, vt.tmc, vt.ts, testGTIDPosition(t, testPrimaryUUID+":1-5"), checkData)
-			require.ErrorContains(t, err, "stopped verifying the data to back up")
-			assert.Equal(t, vtrpc.Code_CANCELED, vterrors.Code(err))
-		})
-	})
-
-	// The warning itself is asserted in the e2e test, which reads vtbackup's log.
-	t.Run("--allow-errant-gtids lets the check pass", func(t *testing.T) {
-		for name, status := range map[string]func(*topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error){
-			"errant GTIDs":      committed(testPrimaryUUID + ":1-10"),
-			"uncommitted GTIDs": committed(testPrimaryUUID + ":1-5"),
-			"an unreachable primary": func(*topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
-				return nil, errors.New("connection refused")
-			},
-		} {
-			t.Run(name, func(t *testing.T) {
-				synctest.Test(t, func(t *testing.T) {
-					setAllowErrantGTIDs(t, true)
-					vt := newVerifyPositionTest(t, status)
-					vt.setPrimary(t, 100)
-					pos := testGTIDPosition(t, testPrimaryUUID+":1-10")
-					if name == "errant GTIDs" {
-						pos = testGTIDPosition(t, testPrimaryUUID+":1-10,"+testOtherUUID+":1")
-					}
-					term, err := verifyPosition(t.Context(), vt.tmc, vt.ts, pos, checkData)
-					require.NoError(t, err)
-					assert.Nil(t, term.alias, "a check that only warned verified nothing")
-					assert.Equal(t, 1, vt.tmc.calls)
-				})
-			})
-		}
 	})
 }
 
@@ -664,17 +605,6 @@ func TestVerifyNewBackup(t *testing.T) {
 			require.ErrorContains(t, err, "the data to back up has errant GTIDs "+testLocalUUID+":1")
 			require.ErrorContains(t, err, "were written by this run's --init-backup-sql-queries")
 			assert.Nil(t, verify, "a failed check 2 sets no check 3")
-		})
-	})
-
-	t.Run("a check 2 that only warned is not reused", func(t *testing.T) {
-		synctest.Test(t, func(t *testing.T) {
-			setAllowErrantGTIDs(t, true)
-			errant := local + "," + testOtherUUID + ":1"
-			vt, verify, err := newBackup(t, errant)
-			require.NoError(t, err)
-			require.NoError(t, verify(t.Context(), testGTIDPosition(t, errant)))
-			assert.Equal(t, 2, vt.tmc.calls)
 		})
 	})
 }

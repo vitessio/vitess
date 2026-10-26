@@ -48,7 +48,6 @@ Usage:
   vtbackup [flags]
 
 Flags:
-      --allow-errant-gtids                                          Log a warning instead of failing when the restored backup, or the backup this run takes, has errant GTIDs: GTIDs that the shard primary doesn't have, under any server UUID but the primary's own. Replica restores reject such a backup. Point-in-time restores, SNAPSHOT keyspaces and --unmanaged tablets accept it. Init SQL creates such GTIDs when it runs binlogged statements such as ANALYZE TABLE, OPTIMIZE TABLE or FLUSH TABLES; use their NO_WRITE_TO_BINLOG or LOCAL forms, or start the queries with SET sql_log_bin = 0. With this flag, each check makes one attempt: vtbackup doesn't wait for a missing or unreachable primary, or for the primary to commit GTIDs that vtbackup already applied.
       --allow-first-backup                                          Allow this job to take the first backup of an existing shard.
       --azblob-backup-account-key-file string                       Path to a file containing the Azure Storage account key; if this flag is unset, the environment variable VT_AZBLOB_ACCOUNT_KEY will be used as the key itself (NOT a file path).
       --azblob-backup-account-name string                           Azure Storage Account name for backups; if this flag is unset, the environment variable VT_AZBLOB_ACCOUNT_NAME will be used.
@@ -136,6 +135,7 @@ Flags:
       --detach                                                      detached mode - run backups detached from the terminal
       --disable-redo-log                                            Disable InnoDB redo log during replication-from-primary phase of backup.
       --emit-stats                                                  If set, emit stats to push-based monitoring and stats backends
+      --enable-errant-gtid-checks                                   Fail the run, without completing a backup, when the restored backup or the backup this run takes has errant GTIDs: GTIDs that the shard primary doesn't have, under any server UUID but the primary's own. Replica restores reject such a backup. Init SQL creates such GTIDs when it runs binlogged statements such as ANALYZE TABLE, OPTIMIZE TABLE or FLUSH TABLES; use their NO_WRITE_TO_BINLOG or LOCAL forms, or start the queries with SET sql_log_bin = 0. The checks wait, with no limit of their own, for a missing or unreachable primary, and for the primary to commit GTIDs that vtbackup already applied, such as writes waiting for a semi-sync acknowledgement.
       --external-compressor string                                  command with arguments to use when compressing a backup.
       --external-compressor-extension string                        extension to use when using an external compressor.
       --external-decompressor string                                command with arguments to use when decompressing a backup.
