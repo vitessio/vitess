@@ -1194,6 +1194,115 @@ func removeVersionDifferences(in string) string {
 	return out
 }
 
+// TestAnalyzeTableIfStatsAutoRecalcDisabled tests which tables are analyzed at
+// the end of a copy cycle, and that a table is counted as analyzed only when
+// ANALYZE TABLE reports success.
+func TestAnalyzeTableIfStatsAutoRecalcDisabled(t *testing.T) {
+	// The test env uses the same factory for both dba and filtered
+	// connections.
+	oldUser := dbconfigs.GlobalDBConfigs.Filtered.User
+	dbconfigs.GlobalDBConfigs.Filtered.User = "vt_dba"
+	t.Cleanup(func() { dbconfigs.GlobalDBConfigs.Filtered.User = oldUser })
+	dbaconn := playerEngine.dbClientFactoryDba()
+	require.NoError(t, dbaconn.Connect())
+	t.Cleanup(dbaconn.Close)
+	dbClient := playerEngine.dbClientFactoryFiltered()
+	require.NoError(t, dbClient.Connect())
+	t.Cleanup(dbClient.Close)
+	dbName := dbClient.DBName()
+	stats := binlogplayer.NewStats()
+	t.Cleanup(stats.Stop)
+	execDba := func(query string) *sqltypes.Result {
+		qr, err := dbaconn.ExecuteFetch(query, 10)
+		require.NoError(t, err)
+		return qr
+	}
+	// The new connection reads the workflow's settings.
+	id := int32(1)
+	execDba(fmt.Sprintf("insert into _vt.vreplication (id, workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, options) values (%d, 'test', '', '', 99999, 99999, 0, 0, 'Running', '%s', '{}') on duplicate key update workflow='test', source='', pos='', max_tps=99999, max_replication_lag=99999, time_updated=0, transaction_timestamp=0, state='Running', db_name='%s'",
+		id, dbName, dbName))
+	t.Cleanup(func() { execDba(fmt.Sprintf("delete from _vt.vreplication where id = %d", id)) })
+	vr := newVReplicator(id, &binlogdatapb.BinlogSource{}, nil, stats, dbClient, env.Mysqld, playerEngine, vttablet.DefaultVReplicationConfig)
+	tableName := "analyze_t1"
+	nRows := func() string {
+		qr := execDba(fmt.Sprintf("select n_rows from mysql.innodb_table_stats where database_name = '%s' and table_name = '%s'", dbName, tableName))
+		require.Len(t, qr.Rows, 1)
+		return qr.Rows[0][0].ToString()
+	}
+
+	testCases := []struct {
+		name         string
+		tableOptions string
+		// lockStats holds the table's row in mysql.innodb_table_stats past
+		// the lock wait timeout, so that ANALYZE TABLE fails.
+		lockStats bool
+		// wantAnalyzed is whether the table's statistics are refreshed.
+		wantAnalyzed bool
+	}{
+		{
+			name:         "stats_auto_recalc=0",
+			tableOptions: "stats_auto_recalc=0",
+			wantAnalyzed: true,
+		},
+		{
+			name:         "statistics locked past the lock wait timeout",
+			tableOptions: "stats_auto_recalc=0",
+			lockStats:    true,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			execDba(fmt.Sprintf("create table %s.%s (id int not null, primary key(id)) %s", dbName, tableName, tc.tableOptions))
+			t.Cleanup(func() { execDba(fmt.Sprintf("drop table %s.%s", dbName, tableName)) })
+			execDba(fmt.Sprintf("insert into %s.%s values (1), (2), (3)", dbName, tableName))
+
+			if tc.lockStats {
+				// ANALYZE TABLE's update of the statistics uses the global
+				// lock wait timeout, not the session's.
+				timeout := execDba("select @@global.innodb_lock_wait_timeout").Rows[0][0].ToString()
+				execDba("set @@global.innodb_lock_wait_timeout = 1")
+				t.Cleanup(func() { execDba("set @@global.innodb_lock_wait_timeout = " + timeout) })
+				execDba("begin")
+				execDba(fmt.Sprintf("select * from mysql.innodb_table_stats where database_name = '%s' and table_name = '%s' for update", dbName, tableName))
+				t.Cleanup(func() { execDba("rollback") })
+			}
+
+			var logMu sync.Mutex
+			var infoLogs, warnLogs []string
+			oldInfo, oldWarn := log.Info, log.Warn
+			log.Info = func(msg string, _ ...slog.Attr) {
+				logMu.Lock()
+				defer logMu.Unlock()
+				infoLogs = append(infoLogs, msg)
+			}
+			log.Warn = func(msg string, _ ...slog.Attr) {
+				logMu.Lock()
+				defer logMu.Unlock()
+				warnLogs = append(warnLogs, msg)
+			}
+			t.Cleanup(func() { log.Info, log.Warn = oldInfo, oldWarn })
+
+			// It returns true only when the controller stopped.
+			assert.False(t, vr.analyzeTableIfStatsAutoRecalcDisabled(t.Context(), tableName))
+
+			logMu.Lock()
+			defer logMu.Unlock()
+			if tc.wantAnalyzed {
+				assert.Contains(t, infoLogs, "Analyzed the table, as it has STATS_AUTO_RECALC=0")
+				assert.Empty(t, warnLogs)
+				assert.Equal(t, "3", nRows())
+				return
+			}
+			assert.NotContains(t, infoLogs, "Analyzed the table, as it has STATS_AUTO_RECALC=0")
+			if tc.lockStats {
+				assert.Contains(t, warnLogs, "Unable to analyze the table")
+				execDba("rollback")
+				assert.Equal(t, "0", nRows())
+			}
+		})
+	}
+}
+
 func waitForQueryResult(t *testing.T, dbc binlogplayer.DBClient, query, val string) {
 	tmr := time.NewTimer(1 * time.Second)
 	defer tmr.Stop()

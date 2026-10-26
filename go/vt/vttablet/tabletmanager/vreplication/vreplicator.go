@@ -1319,17 +1319,30 @@ func (vr *vreplicator) analyzeTableIfStatsAutoRecalcDisabled(stopCtx context.Con
 	if err != nil {
 		return failed("Unable to analyze the table", err)
 	}
-	// ANALYZE TABLE reports some failures, such as a missing table, as rows
-	// rather than as an error. Its columns are Table, Op, Msg_type and Msg_text.
+	// ANALYZE TABLE reports most failures as rows rather than as an error: a
+	// missing table as an error row, and a lock wait timeout on the table's
+	// row in mysql.innodb_table_stats as a status row with "Operation failed".
+	// Its columns are Table, Op, Msg_type and Msg_text. So the table was
+	// analyzed only if it reports status OK.
+	analyzed := false
+	var result []string
 	for _, row := range qr.Rows {
-		if len(row) == 4 && strings.EqualFold(row[2].ToString(), "error") {
-			log.Warn("Unable to analyze the table",
-				slog.String("table", tableName),
-				slog.String("workflow", vr.WorkflowName),
-				slog.String("error", row[3].ToString()),
-			)
-			return stopping()
+		if len(row) != 4 {
+			continue
 		}
+		msgType, msgText := row[2].ToString(), row[3].ToString()
+		if strings.EqualFold(msgType, "status") && strings.EqualFold(msgText, "OK") {
+			analyzed = true
+		}
+		result = append(result, msgType+": "+msgText)
+	}
+	if !analyzed {
+		log.Warn("Unable to analyze the table",
+			slog.String("table", tableName),
+			slog.String("workflow", vr.WorkflowName),
+			slog.String("result", strings.Join(result, "; ")),
+		)
+		return stopping()
 	}
 	log.Info("Analyzed the table, as it has STATS_AUTO_RECALC=0",
 		slog.String("table", tableName),
