@@ -855,6 +855,26 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		catchup(t, customerTab1, workflow, workflowType)
 		catchup(t, customerTab2, workflow, workflowType)
 
+		// json_tbl is created with stats_auto_recalc=0 and only a primary key, so
+		// InnoDB never recalculates its statistics on its own. The copy analyzes
+		// it, so each target shard's statistics count the rows it copied, instead
+		// of the empty ones saved at create time.
+		copiedRows := int64(0)
+		for _, tab := range []*cluster.VttabletProcess{customerTab1, customerTab2} {
+			qr, err := tab.QueryTablet("select count(*) from json_tbl", defaultTargetKs, true)
+			require.NoError(t, err)
+			count, err := qr.Rows[0][0].ToInt64()
+			require.NoError(t, err)
+			copiedRows += count
+			qr, err = tab.QueryTablet("select n_rows from mysql.innodb_table_stats where database_name = 'vt_"+defaultTargetKs+"' and table_name = 'json_tbl'", defaultTargetKs, false)
+			require.NoError(t, err)
+			require.Len(t, qr.Rows, 1)
+			nRows, err := qr.Rows[0][0].ToInt64()
+			require.NoError(t, err)
+			require.Equal(t, count, nRows, "json_tbl statistics on %s were not updated after the copy", tab.TabletPath)
+		}
+		require.Positive(t, copiedRows)
+
 		// The wait in the next code block which checks that customer.dec80 is updated, also confirms that the
 		// blob-related dmls we execute here are vreplicated.
 		insertIntoBlobTable(t)

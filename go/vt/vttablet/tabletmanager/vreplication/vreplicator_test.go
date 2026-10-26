@@ -1335,22 +1335,10 @@ func TestAnalyzeTableIfStatsAutoRecalcDisabled(t *testing.T) {
 }
 
 func waitForQueryResult(t *testing.T, dbc binlogplayer.DBClient, query, val string) {
-	tmr := time.NewTimer(1 * time.Second)
-	defer tmr.Stop()
-	for {
+	require.Eventually(t, func() bool {
 		res, err := dbc.ExecuteFetch(query, 1)
-		require.NoError(t, err)
-		assert.Len(t, res.Rows, 1)
-		if res.Rows[0][0].ToString() == val {
-			return
-		}
-		select {
-		case <-tmr.C:
-			require.Failf(t, "unexpected query result", "query %s did not return expected value of %s", query, val)
-		default:
-			time.Sleep(50 * time.Millisecond)
-		}
-	}
+		return err == nil && len(res.Rows) == 1 && res.Rows[0][0].ToString() == val
+	}, 30*time.Second, 50*time.Millisecond, "query %s did not return expected value of %s", query, val)
 }
 
 func TestThrottlerAppNames(t *testing.T) {
