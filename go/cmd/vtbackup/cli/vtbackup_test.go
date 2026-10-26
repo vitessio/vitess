@@ -457,6 +457,7 @@ func TestVerifyPosition(t *testing.T) {
 			pos := testGTIDPosition(t, testPrimaryUUID+":1-10,"+testOtherUUID+":1-2,"+testLocalUUID+":1,"+testNewPrimaryUUID+":1")
 			_, err := verifyPosition(t.Context(), vt.tmc, vt.ts, pos, check)
 			require.ErrorContains(t, err, testOtherUUID+":1-2 came from the restored backup")
+			require.ErrorContains(t, err, "take a new backup of a healthy replica, one without them, with vtctldclient Backup")
 			require.ErrorContains(t, err, testLocalUUID+":1 were written by this run's --init-backup-sql-queries")
 			require.ErrorContains(t, err, "vtbackup applied "+testNewPrimaryUUID+":1 during catch-up")
 		})

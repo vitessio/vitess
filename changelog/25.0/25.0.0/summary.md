@@ -847,7 +847,7 @@ The new `--enable-errant-gtid-checks` flag makes `vtbackup` fail a run, without 
 The error names where the errant GTIDs came from and how to repair them. Before the upload, and again before writing the `MANIFEST`, `vtbackup` also waits while the primary hasn't committed GTIDs under its own UUID that `vtbackup` already applied, as when the primary waits for semi-sync acknowledgements, and then checks them against whichever primary the shard has.
 
 Before turning the flag on:
-- If the shard's newest backup already has errant GTIDs, every run fails until they are repaired or the backups that hold them are removed.
+- If the shard's newest backup already has errant GTIDs, every run fails. `vtbackup` restores the newest backup, so take a new backup of a healthy replica with `vtctldclient Backup`, and then remove the backups that hold the errant GTIDs.
 - Init SQL that runs binlogged statements fails the run. Use the statements' `NO_WRITE_TO_BINLOG` or `LOCAL` forms, or start the queries with `SET sql_log_bin = 0`.
 - The checks wait for a missing or unreachable primary, for the primary to commit GTIDs that `vtbackup` already applied, and, after a reparent during the upload, for the new primary. Like the existing wait for the primary's position, these waits are bounded only by the job's deadline, if it has one.
 - MariaDB and other non-MySQL56 flavors are not checked, as on tablets.

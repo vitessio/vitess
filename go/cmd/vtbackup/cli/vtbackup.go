@@ -1034,7 +1034,7 @@ func errantGTIDsError(check positionCheck, errant replication.Mysql56GTIDSet, pr
 	case restoreWithClone:
 		msg += fmt.Sprintf(". %v came from the donor, which has them too. Fix the donor's errant GTIDs or clone from another tablet", restored)
 	default:
-		msg += fmt.Sprintf(`. %v came from the restored backup, and tablets restored from it fail with "Errant GTID detected". If these transactions change no data, as with init SQL in an older vtbackup run, inject an empty transaction for each one on the primary with binary logging on; that also repairs the backups that contain them. Otherwise, remove every backup that contains them with vtctldclient RemoveBackup, after copying any whose transactions the shard lost`, restored)
+		msg += fmt.Sprintf(`. %v came from the restored backup, and tablets restored from it fail with "Errant GTID detected". vtbackup restores the newest backup, so take a new backup of a healthy replica, one without them, with vtctldclient Backup, and the next run starts from it. Then remove the backups that contain them with vtctldclient RemoveBackup, after copying any whose transactions the shard lost. Injecting an empty transaction for each one on the primary instead is safe only if they change no data, as with init SQL in an older vtbackup run: GTIDs under a former primary's UUID usually hold writes that a reparent lost`, restored)
 	}
 	if len(initSQL) > 0 {
 		msg += fmt.Sprintf(". %v were written by this run's --init-backup-sql-queries. Use the statements' NO_WRITE_TO_BINLOG or LOCAL forms, or start the queries with SET sql_log_bin = 0", initSQL)
