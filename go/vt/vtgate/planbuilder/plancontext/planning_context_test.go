@@ -237,7 +237,7 @@ func (v *vschema) AnyKeyspace() (*vindexes.Keyspace, error) {
 	panic("implement me")
 }
 
-func (v *vschema) FirstSortedKeyspace() (*vindexes.Keyspace, error) {
+func (v *vschema) AdvisoryLockKeyspaces() ([]*vindexes.Keyspace, error) {
 	// TODO implement me
 	panic("implement me")
 }
