@@ -221,7 +221,7 @@ jobs:
             sudo apt-get -qq install -y mysql-shell
           fi
 
-          sudo apt-get -qq install -y make unzip g++ etcd-client etcd-server curl git wget xz-utils libncurses6
+          sudo apt-get -qq install -y make unzip g++ etcd-client etcd-server curl git wget xz-utils libncurses6 tzdata-legacy
           sudo service etcd stop
 
       - name: Install MicroCeph
