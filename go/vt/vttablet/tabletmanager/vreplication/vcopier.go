@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"math"
 	"slices"
 	"strconv"
@@ -698,7 +699,10 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 	// copy state: the copy then resumes the table, with nothing left to copy,
 	// and analyzes it.
 	if vc.vr.analyzeTableIfStatsAutoRecalcDisabled(stopCtx, tableName) {
-		log.Info(fmt.Sprintf("Copy of %v finished, but the controller stopped before analyzing the table", tableName))
+		log.Info("Copy of the table finished, but the controller stopped before analyzing it",
+			slog.String("table", tableName),
+			slog.String("workflow", vc.vr.WorkflowName),
+		)
 		return nil
 	}
 

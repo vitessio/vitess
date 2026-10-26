@@ -986,7 +986,8 @@ func (vr *vreplicator) execPostCopyActions(ctx, stopCtx context.Context, tableNa
 	// This could take hours, so interrupt the actions if the controller
 	// stops or the engine closes. A failed/killed ALTER will be tried
 	// again when the copy phase starts up again on the (new) PRIMARY.
-	stopKillWatch, err := vr.killConnectionOnStop(stopCtx, dbClient, tableName, "post copy actions")
+	stopKillWatch, err := vr.killConnectionOnStop(stopCtx, dbClient, tableName,
+		"Interrupting post copy actions", "Failed to kill the connection executing post copy actions")
 	if err != nil {
 		return err
 	}
@@ -1149,10 +1150,11 @@ func (vr *vreplicator) execPostCopyActions(ctx, stopCtx context.Context, tableNa
 // subsequent statement on the connection fails immediately. Without this we
 // could e.g. cause a PRS to fail as the running statement will block setting
 // [super_]read_only, or cause a workflow delete to time out as the engine
-// cannot process it until the controller has stopped. what names the work
-// done on the connection, for logging. The caller must call the returned
+// cannot process it until the controller has stopped. interruptMsg and
+// killFailedMsg are the messages logged when it interrupts the work done on
+// the connection and when that fails. The caller must call the returned
 // function once that work is done.
-func (vr *vreplicator) killConnectionOnStop(stopCtx context.Context, dbClient *vdbClient, tableName, what string) (func(), error) {
+func (vr *vreplicator) killConnectionOnStop(stopCtx context.Context, dbClient *vdbClient, tableName, interruptMsg, killFailedMsg string) (func(), error) {
 	// Save our connection ID so we can use it to easily KILL any
 	// running SQL statement we may execute later if needed.
 	idqr, err := dbClient.ExecuteFetch("select connection_id()", 1)
@@ -1182,7 +1184,7 @@ func (vr *vreplicator) killConnectionOnStop(stopCtx context.Context, dbClient *v
 		defer cancel()
 		killdbc, err := vr.mysqld.GetDbaConnection(killCtx)
 		if err != nil {
-			return vterrors.Wrapf(err, "unable to connect to the database when attempting to kill the connection executing %s", what)
+			return vterrors.Wrapf(err, "unable to connect to the database when attempting to kill the connection")
 		}
 		defer killdbc.Close()
 		go func() {
@@ -1208,7 +1210,7 @@ func (vr *vreplicator) killConnectionOnStop(stopCtx context.Context, dbClient *v
 			// We're done, so no longer need to listen for cancellation.
 			return
 		}
-		log.Info("Interrupting "+what,
+		log.Info(interruptMsg,
 			slog.String("table", tableName),
 			slog.String("workflow", vr.WorkflowName),
 			slog.String("reason", reason),
@@ -1220,7 +1222,7 @@ func (vr *vreplicator) killConnectionOnStop(stopCtx context.Context, dbClient *v
 		// would have before the interruption support existed, and the
 		// interrupted operation can be retried by the user/caller.
 		if err := killConnection(); err != nil {
-			log.Error("Failed to kill the connection executing "+what,
+			log.Error(killFailedMsg,
 				slog.String("table", tableName),
 				slog.String("workflow", vr.WorkflowName),
 				slog.Any("error", err),
@@ -1248,12 +1250,22 @@ func (vr *vreplicator) analyzeTableIfStatsAutoRecalcDisabled(stopCtx context.Con
 	dbName := vr.dbClient.DBName()
 	query, err := sqlparser.ParseAndBind(sqlGetTableCreateOptions, sqltypes.StringBindVariable(dbName), sqltypes.StringBindVariable(tableName))
 	if err != nil {
-		log.Warn(fmt.Sprintf("Unable to check the table options of the %q table in the %q VReplication workflow: %v", tableName, vr.WorkflowName, err))
+		log.Warn("Unable to check the table options",
+			slog.String("table", tableName),
+			slog.String("workflow", vr.WorkflowName),
+			slog.Any("error", err),
+			slog.String("error_code", vterrors.Code(err).String()),
+		)
 		return false
 	}
 	qr, err := vr.dbClient.ExecuteFetch(query, 1)
 	if err != nil {
-		log.Warn(fmt.Sprintf("Unable to check the table options of the %q table in the %q VReplication workflow: %v", tableName, vr.WorkflowName, err))
+		log.Warn("Unable to check the table options",
+			slog.String("table", tableName),
+			slog.String("workflow", vr.WorkflowName),
+			slog.Any("error", err),
+			slog.String("error_code", vterrors.Code(err).String()),
+		)
 		return false
 	}
 	if len(qr.Rows) == 0 || !strings.Contains(strings.ToLower(qr.Rows[0][0].ToString()), "stats_auto_recalc=0") {
@@ -1269,33 +1281,56 @@ func (vr *vreplicator) analyzeTableIfStatsAutoRecalcDisabled(stopCtx context.Con
 	// interfere with any transaction open on the shared one.
 	dbClient, err := vr.newClientConnection(stopCtx)
 	if err != nil {
-		log.Warn(fmt.Sprintf("Unable to connect to the database to analyze the %q table in the %q VReplication workflow: %v", tableName, vr.WorkflowName, err))
+		log.Warn("Unable to connect to the database to analyze the table",
+			slog.String("table", tableName),
+			slog.String("workflow", vr.WorkflowName),
+			slog.Any("error", err),
+			slog.String("error_code", vterrors.Code(err).String()),
+		)
 		return stopping()
 	}
 	defer dbClient.Close()
 	// ANALYZE TABLE can wait for a lock on the table, so interrupt it if the
 	// controller stops or the engine closes.
-	stopKillWatch, err := vr.killConnectionOnStop(stopCtx, dbClient, tableName, "ANALYZE TABLE")
+	stopKillWatch, err := vr.killConnectionOnStop(stopCtx, dbClient, tableName,
+		"Interrupting ANALYZE TABLE", "Failed to kill the connection executing ANALYZE TABLE")
 	if err != nil {
-		log.Warn(fmt.Sprintf("Unable to analyze the %q table in the %q VReplication workflow: %v", tableName, vr.WorkflowName, err))
+		log.Warn("Unable to analyze the table",
+			slog.String("table", tableName),
+			slog.String("workflow", vr.WorkflowName),
+			slog.Any("error", err),
+			slog.String("error_code", vterrors.Code(err).String()),
+		)
 		return stopping()
 	}
 	defer stopKillWatch()
 	analyze := "analyze table " + sqlescape.EscapeID(dbName) + "." + sqlescape.EscapeID(tableName)
 	qr, err = dbClient.ExecuteFetch(analyze, 10)
 	if err != nil {
-		log.Warn(fmt.Sprintf("Unable to analyze the %q table in the %q VReplication workflow: %v", tableName, vr.WorkflowName, err))
+		log.Warn("Unable to analyze the table",
+			slog.String("table", tableName),
+			slog.String("workflow", vr.WorkflowName),
+			slog.Any("error", err),
+			slog.String("error_code", vterrors.Code(err).String()),
+		)
 		return stopping()
 	}
 	// ANALYZE TABLE reports some failures, such as a missing table, as rows
 	// rather than as an error. Its columns are Table, Op, Msg_type and Msg_text.
 	for _, row := range qr.Rows {
 		if len(row) == 4 && strings.EqualFold(row[2].ToString(), "error") {
-			log.Warn(fmt.Sprintf("Unable to analyze the %q table in the %q VReplication workflow: %s", tableName, vr.WorkflowName, row[3].ToString()))
+			log.Warn("Unable to analyze the table",
+				slog.String("table", tableName),
+				slog.String("workflow", vr.WorkflowName),
+				slog.String("error", row[3].ToString()),
+			)
 			return stopping()
 		}
 	}
-	log.Info(fmt.Sprintf("Analyzed the %q table in the %q VReplication workflow, as it has STATS_AUTO_RECALC=0", tableName, vr.WorkflowName))
+	log.Info("Analyzed the table, as it has STATS_AUTO_RECALC=0",
+		slog.String("table", tableName),
+		slog.String("workflow", vr.WorkflowName),
+	)
 	return false
 }
 
