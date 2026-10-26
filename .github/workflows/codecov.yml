@@ -133,7 +133,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.can_upload == 'true' && (needs.changes.outputs.is_full_run == 'true' || needs.changes.outputs.packages != '')
     name: Code Coverage
-    runs-on: ${{ github.repository_owner == 'vitessio' && 'oracle-vm-8cpu-32gb-x86-64' || (github.repository_owner == 'vitessio' && 'cncf-ubuntu-4-16-x86' || 'ubuntu-24.04') }}
+    runs-on: ${{ github.repository_owner == 'vitessio' && 'cncf-ubuntu-8-32-x86' || (github.repository_owner == 'vitessio' && 'cncf-ubuntu-4-16-x86' || 'ubuntu-24.04') }}
 
     steps:
     - name: Harden the runner (Audit all outbound calls)

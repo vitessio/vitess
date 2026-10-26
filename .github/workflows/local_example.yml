@@ -83,7 +83,7 @@ jobs:
     # status checks are reported), but on a GitHub-hosted runner with every
     # step below skipped. The 'Skip CI' label also gets the small runner, since
     # the legs then only fail at that step.
-    runs-on: ${{ needs.changes.outputs.examples == 'true' && !contains(github.event.pull_request.labels.*.name, 'Skip CI') && (github.repository_owner == 'vitessio' && 'oracle-vm-16cpu-64gb-x86-64' || 'ubuntu-24.04') || (github.repository_owner == 'vitessio' && 'cncf-ubuntu-4-16-x86' || 'ubuntu-24.04') }}
+    runs-on: ${{ needs.changes.outputs.examples == 'true' && !contains(github.event.pull_request.labels.*.name, 'Skip CI') && (github.repository_owner == 'vitessio' && 'cncf-ubuntu-16-64-x86' || 'ubuntu-24.04') || (github.repository_owner == 'vitessio' && 'cncf-ubuntu-4-16-x86' || 'ubuntu-24.04') }}
     strategy:
       matrix:
         topo: [etcd, zk2]
