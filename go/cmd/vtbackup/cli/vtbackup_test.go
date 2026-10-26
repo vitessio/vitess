@@ -404,17 +404,19 @@ func TestVerifyPosition(t *testing.T) {
 		})
 	})
 
-	t.Run("MariaDB positions pass", func(t *testing.T) {
+	t.Run("MariaDB positions pass without a lookup", func(t *testing.T) {
 		synctest.Test(t, func(t *testing.T) {
+			// The shard has no primary, so a lookup would wait for one.
 			vt := newVerifyPositionTest(t, func(*topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
 				return &replicationdatapb.PrimaryStatus{Position: "MariaDB/0-1-10"}, nil
 			})
-			vt.setPrimary(t, 100)
 			pos, err := replication.DecodePosition("MariaDB/0-1-5")
 			require.NoError(t, err)
-			_, err = verifyPosition(t.Context(), vt.tmc, vt.ts, pos, checkData)
+			ctx, cancel := context.WithTimeout(t.Context(), time.Hour)
+			t.Cleanup(cancel)
+			_, err = verifyPosition(ctx, vt.tmc, vt.ts, pos, checkData)
 			require.NoError(t, err)
-			assert.Equal(t, 1, vt.tmc.calls)
+			assert.Equal(t, 0, vt.tmc.calls)
 		})
 	})
 

@@ -930,6 +930,11 @@ func verifyPosition(ctx context.Context, tmc tmclient.TabletManagerClient, ts *t
 	if pos.IsZero() {
 		return primaryTerm{}, nil
 	}
+	// Errant GTID detection supports only MySQL56 GTID sets, as on tablets, so
+	// don't wait for a primary that would not be checked against.
+	if _, ok := pos.GTIDSet.(replication.Mysql56GTIDSet); !ok {
+		return primaryTerm{}, nil
+	}
 	for waitTime := time.Second; ; waitTime = min(2*waitTime, operationTimeout) {
 		opCtx, cancel := context.WithTimeout(ctx, operationTimeout)
 		term, err := checkPositionOnce(opCtx, tmc, ts, pos, check)
