@@ -661,9 +661,10 @@ func TestQueryThrottler_HandleConfigUpdate_ErrorHandling(t *testing.T) {
 			ctx := t.Context()
 
 			qt := &QueryThrottler{
-				ctx:          ctx,
-				keyspace:     "test-keyspace",
-				tabletConfig: &tabletenv.TabletConfig{},
+				ctx:             ctx,
+				keyspace:        "test-keyspace",
+				tabletConfig:    &tabletenv.TabletConfig{},
+				throttledLogger: logutil.NewThrottledLogger("test", time.Hour),
 			}
 			qt.snapshot.Store(&stateSnapshot{
 				cfg:      &querythrottlerpb.Config{Enabled: true, Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER},
@@ -678,6 +679,29 @@ func TestQueryThrottler_HandleConfigUpdate_ErrorHandling(t *testing.T) {
 			require.Equal(t, tt.expectedResult, result, tt.description)
 		})
 	}
+}
+
+// While a cell has no SrvKeyspace, the watch calls back with NoNode about once a second, on every tablet in the cell
+// whether or not it enables the query throttler. The warning must be rate-limited rather than logged every time.
+func TestQueryThrottler_HandleConfigUpdate_NoNodeWarningIsRateLimited(t *testing.T) {
+	// A large interval guarantees only the first warning is logged; the rest are suppressed.
+	qt := &QueryThrottler{
+		ctx:             t.Context(),
+		keyspace:        "test-keyspace",
+		tabletConfig:    &tabletenv.TabletConfig{},
+		throttledLogger: logutil.NewThrottledLogger("test", time.Hour),
+	}
+	qt.snapshot.Store(&stateSnapshot{cfg: &querythrottlerpb.Config{}, strategy: &registry.NoOpStrategy{}})
+	noNode := topo.NewError(topo.NoNode, "keyspace/test-keyspace")
+
+	require.True(t, qt.HandleConfigUpdate(nil, noNode), "NoNode must keep the watch alive")
+	firstLogTime := qt.throttledLogger.GetLastLogTime()
+	require.False(t, firstLogTime.IsZero(), "the first NoNode callback must log a warning")
+
+	for range 5 {
+		require.True(t, qt.HandleConfigUpdate(nil, noNode), "NoNode must keep the watch alive")
+	}
+	require.Equal(t, firstLogTime, qt.throttledLogger.GetLastLogTime(), "NoNode warnings within the interval must be suppressed")
 }
 
 // TestQueryThrottler_HandleConfigUpdate__ConfigExtraction verifies config is properly extracted from SrvKeyspace.

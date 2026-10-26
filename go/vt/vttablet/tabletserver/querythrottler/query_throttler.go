@@ -386,7 +386,9 @@ func (qt *QueryThrottler) HandleConfigUpdate(srvks *topodatapb.SrvKeyspace, err 
 	if err != nil {
 		switch {
 		case topo.IsErrType(err, topo.NoNode):
-			log.Warn("HandleConfigUpdate: keyspace not found in topology (may not be created yet)", slog.String("keyspace", qt.keyspace), slog.Any("error", err))
+			// The watch keeps retrying while the cell has no SrvKeyspace, calling back about once a second,
+			// even on tablets that never enable the query throttler, so this warning is rate-limited.
+			qt.throttledLogger.Warningf("HandleConfigUpdate: keyspace %s not found in topology (may not be created yet): %v", qt.keyspace, err)
 		case errors.Is(err, context.Canceled) || topo.IsErrType(err, topo.Interrupted):
 			log.Info("HandleConfigUpdate: watch interrupted", slog.String("keyspace", qt.keyspace), slog.Any("error", err))
 		default:
