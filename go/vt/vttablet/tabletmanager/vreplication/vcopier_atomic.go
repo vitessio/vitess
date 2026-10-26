@@ -333,6 +333,8 @@ func (vc *vcopier) runPostCopyActionsAndDeleteCopyState(ctx, stopCtx context.Con
 	if err := vc.vr.execPostCopyActions(ctx, stopCtx, tableName); err != nil {
 		return vterrors.Wrapf(err, "failed to execute post copy actions for table %q", tableName)
 	}
+	// After the post copy actions, so that any deferred secondary keys exist.
+	vc.vr.analyzeTableIfStatsAutoRecalcDisabled(stopCtx, tableName)
 	log.Info("Deleting copy state and post copy actions for table " + tableName)
 	delQueryBuf := sqlparser.NewTrackedBuffer(nil)
 	delQueryBuf.Myprintf(

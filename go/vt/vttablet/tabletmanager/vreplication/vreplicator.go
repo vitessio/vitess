@@ -31,6 +31,7 @@ import (
 	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -98,8 +99,9 @@ const (
 	json_unquote(json_extract(action, '$.type'))=%a and vrepl_id=%a and table_name=%a`
 	sqlDeletePostCopyAction = `delete from _vt.post_copy_action where vrepl_id=%a and
 	table_name=%a and id=%a`
-	SqlMaxAllowedPacket  = "select @@session.max_allowed_packet as max_allowed_packet"
-	maxQuerySizeHeadroom = int64(64)
+	sqlGetTableCreateOptions = `select create_options from information_schema.tables where table_schema=%a and table_name=%a`
+	SqlMaxAllowedPacket      = "select @@session.max_allowed_packet as max_allowed_packet"
+	maxQuerySizeHeadroom     = int64(64)
 )
 
 // vreplicator provides the core logic to start vreplication streams
@@ -1222,6 +1224,57 @@ func (vr *vreplicator) execPostCopyActions(ctx, stopCtx context.Context, tableNa
 	vr.insertLog(LogCopyStart, fmt.Sprintf("Completed all post copy actions for %s table", tableName))
 
 	return nil
+}
+
+// analyzeTableIfStatsAutoRecalcDisabled runs ANALYZE TABLE on a target table
+// whose InnoDB statistics are not recalculated automatically, because it was
+// created with STATS_AUTO_RECALC=0 like its source. InnoDB saves empty
+// statistics for such a table when it is created and never refreshes them on
+// its own, so after a restart the optimizer would see an empty table. ANALYZE
+// TABLE is written to the binary log, so the target's replicas refresh their
+// statistics too. This is best effort: a failure is logged and does not fail
+// the copy.
+func (vr *vreplicator) analyzeTableIfStatsAutoRecalcDisabled(ctx context.Context, tableName string) {
+	if ctx.Err() != nil {
+		return
+	}
+	dbName := vr.dbClient.DBName()
+	query, err := sqlparser.ParseAndBind(sqlGetTableCreateOptions, sqltypes.StringBindVariable(dbName), sqltypes.StringBindVariable(tableName))
+	if err != nil {
+		log.Warn(fmt.Sprintf("Unable to check the table options of the %q table in the %q VReplication workflow: %v", tableName, vr.WorkflowName, err))
+		return
+	}
+	qr, err := vr.dbClient.ExecuteFetch(query, 1)
+	if err != nil {
+		log.Warn(fmt.Sprintf("Unable to check the table options of the %q table in the %q VReplication workflow: %v", tableName, vr.WorkflowName, err))
+		return
+	}
+	if len(qr.Rows) == 0 || !strings.Contains(strings.ToLower(qr.Rows[0][0].ToString()), "stats_auto_recalc=0") {
+		return
+	}
+	// ANALYZE TABLE causes an implicit commit, so use a new connection to not
+	// interfere with any transaction open on the shared one.
+	dbClient, err := vr.newClientConnection(ctx)
+	if err != nil {
+		log.Warn(fmt.Sprintf("Unable to connect to the database to analyze the %q table in the %q VReplication workflow: %v", tableName, vr.WorkflowName, err))
+		return
+	}
+	defer dbClient.Close()
+	analyze := "analyze table " + sqlescape.EscapeID(dbName) + "." + sqlescape.EscapeID(tableName)
+	qr, err = dbClient.ExecuteFetch(analyze, 10)
+	if err != nil {
+		log.Warn(fmt.Sprintf("Unable to analyze the %q table in the %q VReplication workflow: %v", tableName, vr.WorkflowName, err))
+		return
+	}
+	// ANALYZE TABLE reports some failures, such as a missing table, as rows
+	// rather than as an error. Its columns are Table, Op, Msg_type and Msg_text.
+	for _, row := range qr.Rows {
+		if len(row) == 4 && strings.EqualFold(row[2].ToString(), "error") {
+			log.Warn(fmt.Sprintf("Unable to analyze the %q table in the %q VReplication workflow: %s", tableName, vr.WorkflowName, row[3].ToString()))
+			return
+		}
+	}
+	log.Info(fmt.Sprintf("Analyzed the %q table in the %q VReplication workflow, as it has STATS_AUTO_RECALC=0", tableName, vr.WorkflowName))
 }
 
 // supportsDeferredSecondaryKeys tells you if related work should be done
