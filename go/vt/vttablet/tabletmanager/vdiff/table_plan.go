@@ -234,8 +234,12 @@ func (tp *tablePlan) findPKs(dbClient binlogplayer.DBClient, targetSelect *sqlpa
 			switch ct := expr.(type) {
 			case *sqlparser.ColName:
 				colname = ct.Name.String()
-			case *sqlparser.FuncExpr: // eg. weight_string()
-				// no-op
+			case *sqlparser.FuncExpr: // eg. weight_string() or convert_tz() from adjustForSourceTimeZone
+				// For a convert_tz(col, ...) AS col expression written by adjustForSourceTimeZone,
+				// the alias on the enclosing AliasedExpr carries the original column name.
+				if alias := selExpr.(*sqlparser.AliasedExpr).As; !alias.IsEmpty() {
+					colname = alias.String()
+				}
 			default:
 				log.Warn(fmt.Sprintf("Not considering column %v for PK, type %v not handled", selExpr, ct))
 			}
