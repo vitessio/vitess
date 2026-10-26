@@ -433,6 +433,17 @@ func TestVerifyPosition(t *testing.T) {
 		})
 	})
 
+	t.Run("checks 1 and 2 run in the VerifyErrantGTIDs phase", func(t *testing.T) {
+		var during int64
+		err := inVerifyErrantGTIDsPhase(func() error {
+			during = phase.Counts()[phaseNameVerifyErrantGTIDs]
+			return errors.New("check failed")
+		})
+		require.EqualError(t, err, "check failed")
+		assert.Equal(t, int64(1), during)
+		assert.Equal(t, int64(0), phase.Counts()[phaseNameVerifyErrantGTIDs], "the phase must end with the check, even a failed one")
+	})
+
 	t.Run("a zero position makes no lookup", func(t *testing.T) {
 		synctest.Test(t, func(t *testing.T) {
 			// The shard has no primary, so a lookup would wait for one.

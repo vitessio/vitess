@@ -68,10 +68,14 @@ const (
 	// forever for things that should be quick.
 	operationTimeout = 1 * time.Minute
 
-	phaseNameCatchupReplication          = "CatchupReplication"
-	phaseNameInitialBackup               = "InitialBackup"
-	phaseNameRestoreLastBackup           = "RestoreLastBackup"
-	phaseNameTakeNewBackup               = "TakeNewBackup"
+	phaseNameCatchupReplication = "CatchupReplication"
+	phaseNameInitialBackup      = "InitialBackup"
+	phaseNameRestoreLastBackup  = "RestoreLastBackup"
+	phaseNameTakeNewBackup      = "TakeNewBackup"
+	// phaseNameVerifyErrantGTIDs is active while the errant GTID checks of the
+	// restored and to-be-backed-up data run. It isn't in phaseNames, so it only
+	// appears with --enable-errant-gtid-checks.
+	phaseNameVerifyErrantGTIDs           = "VerifyErrantGTIDs"
 	phaseStatusCatchupReplicationStalled = "Stalled"
 	phaseStatusCatchupReplicationStopped = "Stopped"
 
@@ -647,7 +651,10 @@ func runBackup(ctx context.Context, topoServer *topo.Server, mysqld *mysqlctl.My
 	// Fail before catching up if the restored base has GTIDs that tablets would
 	// reject. A shard with no primary has already failed in startReplication.
 	if errantGTIDChecks {
-		if _, err := verifyPosition(ctx, tmc, topoServer, restorePos, positionCheck{what: restoredFrom, restorePos: restorePos}); err != nil {
+		if err := inVerifyErrantGTIDsPhase(func() error {
+			_, err := verifyPosition(ctx, tmc, topoServer, restorePos, positionCheck{what: restoredFrom, restorePos: restorePos})
+			return err
+		}); err != nil {
 			return err
 		}
 	}
@@ -701,7 +708,9 @@ func runBackup(ctx context.Context, topoServer *topo.Server, mysqld *mysqlctl.My
 	// Check the position to back up before the upload starts, and set the check
 	// that runs just before the backup's MANIFEST is written.
 	if errantGTIDChecks {
-		if err := verifyNewBackup(ctx, tmc, topoServer, mysqld, restorePos, backupParams); err != nil {
+		if err := inVerifyErrantGTIDsPhase(func() error {
+			return verifyNewBackup(ctx, tmc, topoServer, mysqld, restorePos, backupParams)
+		}); err != nil {
 			return err
 		}
 	}
@@ -923,9 +932,10 @@ func (p primaryTerm) equal(other primaryTerm) bool {
 // verifyPosition checks that pos has no GTIDs that the shard primary lacks. It
 // retries while the primary is missing, unreachable or hasn't committed GTIDs
 // under its own UUID yet (when check.requireCommitted), and fails at once on
-// errant GTIDs. The wait between attempts doubles up to operationTimeout, so a
-// long wait still notices a commit or a reparent within a minute. It returns the
-// primary it verified pos against, which is zero if pos is.
+// errant GTIDs. The wait between attempts doubles up to operationTimeout, and an
+// attempt against a primary that doesn't answer can take operationTimeout too,
+// so a long wait still notices a commit or a reparent within about two minutes.
+// It returns the primary it verified pos against, which is zero if pos is.
 func verifyPosition(ctx context.Context, tmc tmclient.TabletManagerClient, ts *topo.Server, pos replication.Position, check positionCheck) (primaryTerm, error) {
 	if pos.IsZero() {
 		return primaryTerm{}, nil
@@ -945,7 +955,7 @@ func verifyPosition(ctx context.Context, tmc tmclient.TabletManagerClient, ts *t
 		if permanent, ok := errors.AsType[permanentError](err); ok {
 			return primaryTerm{}, permanent.error
 		}
-		log.Error(fmt.Sprintf("Waiting %v to retry verifying %s after error: %v", waitTime, check.what, err))
+		log.Warn(fmt.Sprintf("Waiting %v to retry verifying %s after error: %v", waitTime, check.what, err))
 
 		select {
 		case <-ctx.Done():
@@ -954,6 +964,15 @@ func verifyPosition(ctx context.Context, tmc tmclient.TabletManagerClient, ts *t
 		case <-time.After(waitTime):
 		}
 	}
+}
+
+// inVerifyErrantGTIDsPhase runs fn, a check of the restored or to-be-backed-up
+// data, with the VerifyErrantGTIDs phase active, so that a check that waits
+// shows up in the phase metrics. Check 3 runs within the TakeNewBackup phase.
+func inVerifyErrantGTIDsPhase(fn func() error) error {
+	phase.Set(phaseNameVerifyErrantGTIDs, int64(1))
+	defer phase.Set(phaseNameVerifyErrantGTIDs, int64(0))
+	return fn()
 }
 
 // permanentError wraps an error that verifyPosition returns at once instead of retrying.
