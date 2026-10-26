@@ -1802,6 +1802,29 @@ func TestDormant(t *testing.T) {
 	})
 }
 
+// The query throttler's strategy checks the dedicated query throttler only once per refresh interval, which can
+// outlast an on-demand heartbeat lease. The dedicated query throttler on the primary must therefore keep renewing the
+// lease while it runs, even when nothing checks it, or the lag read on the next refresh includes the paused heartbeats.
+func TestQueryThrottlerRenewsHeartbeatLease(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	throttler := newTestThrottler()
+	throttler.throttlerType = QueryTabletThrottler
+	heartbeatWriter, ok := throttler.heartbeatWriter.(*FakeHeartbeatWriter)
+	require.True(t, ok)
+
+	runThrottler(t, ctx, throttler, time.Minute, func(t *testing.T, ctx context.Context) {
+		defer cancel() // early termination
+
+		// Nothing checks the throttler, so every request from here on renews the lease by itself.
+		requests := heartbeatWriter.Requests()
+		assert.Eventually(t, func() bool {
+			return heartbeatWriter.Requests() >= requests+2
+		}, 30*time.Second, 100*time.Millisecond, "the dedicated query throttler must renew the heartbeat lease without being checked")
+	})
+}
+
 func TestChecks(t *testing.T) {
 	ctx := t.Context() // for development, replace with	ctx := utils.LeakCheckContext(t)
 	ctx, cancel := context.WithCancel(ctx)

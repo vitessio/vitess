@@ -93,6 +93,9 @@ const (
 	// once. A demoted primary still answers it, so after a reparent this bounds how long the tablet keeps
 	// stimulating the old primary.
 	cachedPrimaryTTL = 15 * time.Second
+	// queryThrottlerHeartbeatLeaseInterval is how often the dedicated query throttler renews the heartbeat lease:
+	// half of the shortest lease, as for the tablets that the primary does not probe.
+	queryThrottlerHeartbeatLeaseInterval = heartbeat.MinimalOnDemandDuration / 2
 
 	aggregatedMetricsExpiration = 5 * time.Second
 	recentAppsExpiration        = time.Hour
@@ -854,6 +857,15 @@ func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 	inventoryRefreshTicker := addTicker(throttler.inventoryRefreshInterval)
 	metricsAggregateTicker := addTicker(throttler.metricsAggregateInterval)
 	throttledAppsTicker := addTicker(throttler.throttledAppsSnapshotInterval)
+	// The query throttler's strategy checks the dedicated query throttler only once per
+	// --query-throttler-cache-update-interval, which can outlast an on-demand heartbeat lease. The lag it read would
+	// then include the time that heartbeats were paused, so the dedicated query throttler keeps the lease for as long
+	// as it runs. requestHeartbeats does nothing unless this tablet is the primary. Other throttlers leave the channel
+	// nil, so this case never fires for them.
+	var heartbeatLeaseC <-chan time.Time
+	if throttler.throttlerType == QueryTabletThrottler {
+		heartbeatLeaseC = addTicker(queryThrottlerHeartbeatLeaseInterval).C
+	}
 	var lastPrimaryStimulation time.Time
 	throttler.recentCheckRateLimiter = timer.NewRateLimiter(recentCheckRateLimiterInterval)
 
@@ -974,6 +986,10 @@ func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 			case <-throttledAppsTicker.C:
 				if throttler.IsOpen() {
 					go throttler.expireThrottledApps()
+				}
+			case <-heartbeatLeaseC:
+				if throttler.IsOpen() {
+					throttler.requestHeartbeats()
 				}
 			case throttlerConfig := <-throttler.throttlerConfigChan:
 				throttler.applyThrottlerConfig(ctx, throttlerConfig)
