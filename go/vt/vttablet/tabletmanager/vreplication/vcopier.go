@@ -696,8 +696,8 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 	}
 	// After the post copy actions, so that any deferred secondary keys exist.
 	// If the controller stopped before the table could be analyzed, keep its
-	// copy state: the copy then resumes the table, with nothing left to copy,
-	// and analyzes it.
+	// copy state: the copy then resumes the table, copies any rows the source
+	// added past lastpk since, and analyzes it.
 	if vc.vr.analyzeTableIfStatsAutoRecalcDisabled(stopCtx, tableName) {
 		log.Info("Copy of the table finished, but the controller stopped before analyzing it",
 			slog.String("table", tableName),
