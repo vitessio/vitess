@@ -490,7 +490,7 @@ func (hc *HealthCheckImpl) deleteTabletHealthCheck(thc *tabletHealthCheck) {
 	}
 	hc.deleteTabletLocked(thc.Tablet)
 	hc.mu.Unlock()
-	thc.logger.Warningf("Removing tablet from healthcheck: %v due to health stats mismatch", thc.Tablet)
+	hc.logger().Warningf("Removed tablet from healthcheck: %v due to health stats mismatch", thc.Tablet)
 }
 
 // deleteTabletLocked requires hc.mu to be held.
