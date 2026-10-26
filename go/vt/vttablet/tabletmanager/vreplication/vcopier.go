@@ -679,7 +679,8 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 	case <-ctx.Done():
 		log.Info(fmt.Sprintf("Copy of %v stopped at lastpk: %v", tableName, lastpkbv))
 		// Refresh the statistics of what this cycle copied, as the table is
-		// caught up and replicated before the next cycle.
+		// caught up and replicated before the next cycle. If the controller
+		// is stopping, the next cycle analyzes the table.
 		vc.vr.analyzeTableIfStatsAutoRecalcDisabled(stopCtx, tableName)
 		return nil
 	default:
@@ -693,7 +694,13 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 		return vterrors.Wrapf(err, "failed to execute post copy actions for table %q", tableName)
 	}
 	// After the post copy actions, so that any deferred secondary keys exist.
-	vc.vr.analyzeTableIfStatsAutoRecalcDisabled(stopCtx, tableName)
+	// If the controller stopped before the table could be analyzed, keep its
+	// copy state: the copy then resumes the table, with nothing left to copy,
+	// and analyzes it.
+	if vc.vr.analyzeTableIfStatsAutoRecalcDisabled(stopCtx, tableName) {
+		log.Info(fmt.Sprintf("Copy of %v finished, but the controller stopped before analyzing the table", tableName))
+		return nil
+	}
 
 	log.Info(fmt.Sprintf("Copy of %v finished at lastpk: %v", tableName, lastpkbv))
 	buf := sqlparser.NewTrackedBuffer(nil)

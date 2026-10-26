@@ -1239,56 +1239,64 @@ func (vr *vreplicator) killConnectionOnStop(stopCtx context.Context, dbClient *v
 // statistics too. This is best effort: a failure is logged and does not fail
 // the copy. stopCtx is cancelled when the controller stops, not when a copy
 // phase cycle ends.
-func (vr *vreplicator) analyzeTableIfStatsAutoRecalcDisabled(stopCtx context.Context, tableName string) {
-	if stopCtx.Err() != nil {
-		return
-	}
+//
+// It returns true if the table needed analyzing but the controller stopped or
+// the engine closed, so the ANALYZE TABLE may not have run. The caller must
+// then keep the table's copy state, so that the table is analyzed when the copy
+// resumes.
+func (vr *vreplicator) analyzeTableIfStatsAutoRecalcDisabled(stopCtx context.Context, tableName string) bool {
 	dbName := vr.dbClient.DBName()
 	query, err := sqlparser.ParseAndBind(sqlGetTableCreateOptions, sqltypes.StringBindVariable(dbName), sqltypes.StringBindVariable(tableName))
 	if err != nil {
 		log.Warn(fmt.Sprintf("Unable to check the table options of the %q table in the %q VReplication workflow: %v", tableName, vr.WorkflowName, err))
-		return
+		return false
 	}
 	qr, err := vr.dbClient.ExecuteFetch(query, 1)
 	if err != nil {
 		log.Warn(fmt.Sprintf("Unable to check the table options of the %q table in the %q VReplication workflow: %v", tableName, vr.WorkflowName, err))
-		return
+		return false
 	}
 	if len(qr.Rows) == 0 || !strings.Contains(strings.ToLower(qr.Rows[0][0].ToString()), "stats_auto_recalc=0") {
-		return
+		return false
+	}
+	stopping := func() bool {
+		return stopCtx.Err() != nil || vr.vre.ctx.Err() != nil
+	}
+	if stopping() {
+		return true
 	}
 	// ANALYZE TABLE causes an implicit commit, so use a new connection to not
 	// interfere with any transaction open on the shared one.
 	dbClient, err := vr.newClientConnection(stopCtx)
 	if err != nil {
 		log.Warn(fmt.Sprintf("Unable to connect to the database to analyze the %q table in the %q VReplication workflow: %v", tableName, vr.WorkflowName, err))
-		return
+		return stopping()
 	}
 	defer dbClient.Close()
 	// ANALYZE TABLE can wait for a lock on the table, so interrupt it if the
-	// controller stops or the engine closes. It runs again in the next copy
-	// cycle.
+	// controller stops or the engine closes.
 	stopKillWatch, err := vr.killConnectionOnStop(stopCtx, dbClient, tableName, "ANALYZE TABLE")
 	if err != nil {
 		log.Warn(fmt.Sprintf("Unable to analyze the %q table in the %q VReplication workflow: %v", tableName, vr.WorkflowName, err))
-		return
+		return stopping()
 	}
 	defer stopKillWatch()
 	analyze := "analyze table " + sqlescape.EscapeID(dbName) + "." + sqlescape.EscapeID(tableName)
 	qr, err = dbClient.ExecuteFetch(analyze, 10)
 	if err != nil {
 		log.Warn(fmt.Sprintf("Unable to analyze the %q table in the %q VReplication workflow: %v", tableName, vr.WorkflowName, err))
-		return
+		return stopping()
 	}
 	// ANALYZE TABLE reports some failures, such as a missing table, as rows
 	// rather than as an error. Its columns are Table, Op, Msg_type and Msg_text.
 	for _, row := range qr.Rows {
 		if len(row) == 4 && strings.EqualFold(row[2].ToString(), "error") {
 			log.Warn(fmt.Sprintf("Unable to analyze the %q table in the %q VReplication workflow: %s", tableName, vr.WorkflowName, row[3].ToString()))
-			return
+			return stopping()
 		}
 	}
 	log.Info(fmt.Sprintf("Analyzed the %q table in the %q VReplication workflow, as it has STATS_AUTO_RECALC=0", tableName, vr.WorkflowName))
+	return false
 }
 
 // supportsDeferredSecondaryKeys tells you if related work should be done

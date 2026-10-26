@@ -32,6 +32,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -334,7 +335,11 @@ func (vc *vcopier) runPostCopyActionsAndDeleteCopyState(ctx, stopCtx context.Con
 		return vterrors.Wrapf(err, "failed to execute post copy actions for table %q", tableName)
 	}
 	// After the post copy actions, so that any deferred secondary keys exist.
-	vc.vr.analyzeTableIfStatsAutoRecalcDisabled(stopCtx, tableName)
+	// If the controller stopped before the table could be analyzed, keep its
+	// copy state, so that the table is analyzed when the copy resumes.
+	if vc.vr.analyzeTableIfStatsAutoRecalcDisabled(stopCtx, tableName) {
+		return vterrors.Errorf(vtrpcpb.Code_CANCELED, "the controller stopped before the %q table could be analyzed", tableName)
+	}
 	log.Info("Deleting copy state and post copy actions for table " + tableName)
 	delQueryBuf := sqlparser.NewTrackedBuffer(nil)
 	delQueryBuf.Myprintf(

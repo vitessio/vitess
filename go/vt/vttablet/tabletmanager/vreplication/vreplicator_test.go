@@ -893,9 +893,10 @@ func TestCancelledDeferSecondaryKeys(t *testing.T) {
 					require.NoError(t, err)
 				})
 
+				var interrupted atomic.Bool
 				go func() {
 					defer close(done)
-					vr.analyzeTableIfStatsAutoRecalcDisabled(stopCtx, tableName)
+					interrupted.Store(vr.analyzeTableIfStatsAutoRecalcDisabled(stopCtx, tableName))
 				}()
 				query := fmt.Sprintf("select count(*) from performance_schema.events_statements_current where sql_text = 'analyze table `%s`.`%s`'", dbName, tableName)
 				waitForQueryResult(t, dbaconn, query, "1")
@@ -914,6 +915,9 @@ func TestCancelledDeferSecondaryKeys(t *testing.T) {
 
 				_, err = dbaconn.ExecuteFetch("unlock tables", 1)
 				require.NoError(t, err)
+				// It reports that the table still needs analyzing, so that
+				// the caller keeps its copy state.
+				assert.True(t, interrupted.Load())
 				// The killed ANALYZE TABLE did not update the statistics.
 				res, err := dbaconn.ExecuteFetch(fmt.Sprintf("select n_rows from mysql.innodb_table_stats where database_name = '%s' and table_name = '%s'", dbName, tableName), 1)
 				require.NoError(t, err)
