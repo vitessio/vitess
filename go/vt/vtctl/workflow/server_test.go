@@ -2034,13 +2034,13 @@ func TestMoveTablesSwitchWritesCompletesAfterCancelOnFreeze(t *testing.T) {
 }
 
 // TestCanSwitchStreamNotReplicating confirms that we refuse to switch traffic when a
-// stream is not replicating or has not finished copying, even though its reported lag
-// is low. A stream that never ran reports its lag as the time since it was created.
-// A stream stopped for the cutover by an earlier attempt at switching writes that
-// created the journals is allowed, so that SwitchTraffic can complete the switch.
+// stream is stopped, even though its reported lag is low. A stream that never ran
+// reports its lag as the time since it was created. A stream that an earlier attempt
+// at switching writes stopped for the cutover, and that then created the journals, is
+// allowed, so that SwitchTraffic can complete the switch.
 func TestCanSwitchStreamNotReplicating(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
-	defer cancel()
+	t.Cleanup(cancel)
 
 	const (
 		workflowName       = "wf1"
@@ -2051,11 +2051,10 @@ func TestCanSwitchStreamNotReplicating(t *testing.T) {
 	)
 
 	testcases := []struct {
-		name      string
-		state     binlogdatapb.VReplicationWorkflowState
-		message   string
-		copyState bool
-		// Whether the journals exist, which we only check for a stopped stream.
+		name    string
+		state   binlogdatapb.VReplicationWorkflowState
+		message string
+		// Whether the journals exist.
 		journalsExist bool
 		want          string
 	}{
@@ -2065,27 +2064,23 @@ func TestCanSwitchStreamNotReplicating(t *testing.T) {
 			want:  cannotSwitchStopped,
 		},
 		{
-			name:      "stopped with copy state left",
-			state:     binlogdatapb.VReplicationWorkflowState_Stopped,
-			copyState: true,
-			want:      cannotSwitchStopped,
-		},
-		{
-			name:      "copy state left",
-			state:     binlogdatapb.VReplicationWorkflowState_Init,
-			copyState: true,
-			want:      cannotSwitchCopyIncomplete,
+			// MoveTables Create leaves the streams stopped when it finds a journal
+			// from a previous run for the same migration.
+			name:          "stopped with journals but not for cutover",
+			state:         binlogdatapb.VReplicationWorkflowState_Stopped,
+			journalsExist: true,
+			want:          cannotSwitchStopped,
 		},
 		{
 			name:    "stopped for cutover without journals",
 			state:   binlogdatapb.VReplicationWorkflowState_Stopped,
-			message: "stopped for cutover",
+			message: stoppedForCutoverMessage,
 			want:    cannotSwitchStopped,
 		},
 		{
 			name:          "stopped for cutover with journals",
 			state:         binlogdatapb.VReplicationWorkflowState_Stopped,
-			message:       "stopped for cutover",
+			message:       stoppedForCutoverMessage,
 			journalsExist: true,
 		},
 	}
@@ -2099,7 +2094,7 @@ func TestCanSwitchStreamNotReplicating(t *testing.T) {
 				KeyspaceName: targetKeyspaceName,
 				ShardNames:   []string{"0"},
 			})
-			defer env.close()
+			t.Cleanup(env.close)
 			env.tmc.schema = map[string]*tabletmanagerdatapb.SchemaDefinition{
 				tableName: {
 					TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
@@ -2112,18 +2107,14 @@ func TestCanSwitchStreamNotReplicating(t *testing.T) {
 			ts, _, err := env.ws.getWorkflowState(ctx, targetKeyspaceName, workflowName)
 			require.NoError(t, err)
 
-			copyStateResult := &querypb.QueryResult{}
-			if tc.copyState {
-				copyStateResult = sqltypes.ResultToProto3(sqltypes.MakeTestResult(
-					sqltypes.MakeTestFields("vrepl_id|table_name|lastpk", "int64|varchar|varbinary"),
-					fmt.Sprintf("%d|%s|", vrID, tableName),
-				))
-			}
 			env.tmc.expectVRQueryResultOnKeyspaceTablets(targetKeyspaceName, &queryResult{
 				query: fmt.Sprintf("select vrepl_id, table_name, lastpk from _vt.copy_state where vrepl_id in (%d) and id in (select max(id) from _vt.copy_state where vrepl_id in (%d) group by vrepl_id, table_name)",
 					vrID, vrID),
-				result: copyStateResult,
+				result: &querypb.QueryResult{},
 			})
+			// We only expect to check the journals for a stream stopped for the cutover,
+			// but we set them up for any stopped stream, so that checking them for other
+			// streams would let the switch through and fail the test.
 			if tc.state == binlogdatapb.VReplicationWorkflowState_Stopped {
 				journalResult := &querypb.QueryResult{}
 				if tc.journalsExist {
@@ -2208,7 +2199,7 @@ func TestMoveTablesSwitchTrafficRetryAfterJournalsCreated(t *testing.T) {
 			Streams: []*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream{{
 				Id:      vrID,
 				State:   binlogdatapb.VReplicationWorkflowState_Stopped,
-				Message: "stopped for cutover",
+				Message: stoppedForCutoverMessage,
 				Bls: &binlogdatapb.BinlogSource{
 					Keyspace: sourceKeyspaceName,
 					Shard:    "0",

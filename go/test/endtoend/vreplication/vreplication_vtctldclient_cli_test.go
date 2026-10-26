@@ -420,6 +420,18 @@ func testMoveTablesFlags3(t *testing.T, sourceKeyspace, targetKeyspace string, t
 	require.True(t, checkTablesExist(t, "zone1-100", []string{"_customer2_old"}))
 	require.False(t, checkTablesExist(t, "zone1-100", []string{"customer2"}))
 
+	// Confirm that SwitchTraffic refuses a workflow that never ran, whose reported lag is
+	// the time since it was created, and that it leaves the routing rules alone.
+	mt = createMoveTables(t, sourceKeyspace, targetKeyspace, defaultWorkflowName, "customer", []string{"--auto-start=false"}, nil, nil)
+	output, err := vc.VtctldClient.ExecuteCommandWithOutput("MoveTables", "--workflow", defaultWorkflowName,
+		"--target-keyspace", targetKeyspace, "SwitchTraffic", "--timeout", "10s")
+	require.Error(t, err, output)
+	require.Contains(t, output, "workflow is stopped")
+	validateTableRoutingRule(t, "customer", "replica", targetKeyspace, sourceKeyspace)
+	validateTableRoutingRule(t, "customer", "rdonly", targetKeyspace, sourceKeyspace)
+	validateTableRoutingRule(t, "customer", "", targetKeyspace, sourceKeyspace)
+	mt.Cancel()
+
 	// Confirm that we can cancel a workflow after ONLY switching read traffic.
 	mt = createMoveTables(t, sourceKeyspace, targetKeyspace, defaultWorkflowName, "customer", createFlags, nil, nil)
 	mt.Start() // Need to start because we set stop-after-copy to true.
