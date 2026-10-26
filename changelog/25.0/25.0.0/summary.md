@@ -19,6 +19,7 @@
         - [`BackupHandle` interface gains `Wait()` method](#backup-handle-wait-method)
         - [VTOrc: `--cells-to-watch` removed in favor of `--cells-no-recovery`](#vtorc-cells-no-recovery)
         - [Connection character sets restricted](#vttablet-connection-charsets-restricted)
+        - [VTGate reports `REPLACE` statements as `REPLACE`](#vtgate-replace-statement-type)
     - **[Deprecations](#deprecations)**
         - [CLI Flags](#deprecated-cli-flags)
         - [Legacy streaming-path plan types in query rules](#deprecated-selectstream-rule-plan)
@@ -226,6 +227,19 @@ See [#20021](https://github.com/vitessio/vitess/issues/20021) for details.
 `--db-charset`, and the other places a MySQL connection character set is configured, no longer accept `sjis`, `cp932`, `gb18030`, `gbk`, `big5`, `ucs2`, `utf16`, `utf16le` or `utf32`, whether given as a character set or as one of its collations. A tablet configured with one of them fails to start, VTGate refuses a `SET` of `character_set_client`, `character_set_connection`, `character_set_results` or `collation_connection` to one of them, or to a name that is not a character set or collation, which it used to answer with OK and ignore, and VTTablet refuses a setting or `SET` statement that would switch a session's connection to one of them. A client may still ask for one of them at the handshake: VTGate reads its statements byte by byte, as the tablet's connection to MySQL does, so they cannot break out of a literal.
 
 Vitess parses and escapes SQL text byte by byte, and in these character sets the second byte of a character can be a backslash or a back quote, so text in them was misparsed or corrupted on its way through Vitess. Use `utf8mb4` as the connection character set instead. Tables and columns can still be declared with any of these character sets; MySQL converts between them and the connection character set.
+
+#### <a id="vtgate-replace-statement-type"/>VTGate reports `REPLACE` statements as `REPLACE`</a>
+
+VTGate used to report a planned `REPLACE` statement with the `INSERT` statement type, because `REPLACE` is parsed as an `INSERT` that carries a "replace" action. It now reports it as `REPLACE`, which is what VTGate already reported for `REPLACE` on paths that don't build a plan, such as `PREPARE`. This changes the statement type of `REPLACE` statements in:
+
+- `StmtType` in the VTGate query log
+- the query-type label of the `QueryExecutions`, `QueryRoutes`, `QueryExecutionsByTable` and `SlowQueries` metrics
+- `QueryType` in plan output (`/debug/query_plans` and the `vtexplain` tool's JSON output)
+- `statementType` in `VEXPLAIN KEYS` output
+
+**Impact**: dashboards, alerts and query-log parsing that count `INSERT` no longer include `REPLACE` statements. Planning, routing, transactions and results are unchanged.
+
+**Migration**: match `REPLACE` as well as `INSERT` wherever `REPLACE` statements should be included.
 
 ### <a id="deprecations"/>Deprecations</a>
 

@@ -68,10 +68,14 @@ const (
 
 // ASTToStatementType returns a StatementType from an AST stmt
 func ASTToStatementType(stmt Statement) StatementType {
-	switch stmt.(type) {
+	switch stmt := stmt.(type) {
 	case *Select, *Union:
 		return StmtSelect
 	case *Insert:
+		// REPLACE parses to an *Insert, so the action distinguishes the two.
+		if stmt.Action == ReplaceAct {
+			return StmtReplace
+		}
 		return StmtInsert
 	case *Update:
 		return StmtUpdate
