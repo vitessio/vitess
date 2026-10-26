@@ -24,6 +24,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -539,6 +540,38 @@ func TestStatsURL(t *testing.T) {
 	request, _ = http.NewRequest("GET", "/debug/query_rules", nil)
 	response = httptest.NewRecorder()
 	qe.handleHTTPQueryRules(response, request)
+}
+
+// /debug/query_plans must show a plan's statement type by name, not as a bare integer.
+func TestQueryPlansURLShowsStatementTypeByName(t *testing.T) {
+	db := fakesqldb.New(t)
+	t.Cleanup(db.Close)
+	schematest.AddDefaultQueries(db)
+	qe := newTestQueryEngine(1*time.Second, true, newDBConfigs(db))
+	qe.se.Open()
+	qe.Open()
+	t.Cleanup(qe.Close)
+
+	ctx := t.Context()
+	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats", streamlog.NewQueryLogConfigForTest())
+	_, err := qe.GetPlan(ctx, logStats, "replace into test_table_01(pk) values (1)", false, false)
+	require.NoError(t, err)
+
+	queryPlans := func() string {
+		request, err := http.NewRequest("GET", "/debug/query_plans", nil)
+		require.NoError(t, err)
+		response := httptest.NewRecorder()
+		qe.handleHTTPQueryPlans(response, request)
+		return response.Body.String()
+	}
+	// The plan cache stores new plans asynchronously.
+	require.Eventually(t, func() bool {
+		return strings.Contains(queryPlans(), "replace into test_table_01")
+	}, 30*time.Second, 10*time.Millisecond, "the plan was never cached")
+
+	body := queryPlans()
+	assert.Contains(t, body, `"StatementType": "REPLACE"`)
+	assert.Contains(t, body, `"PlanID": "Insert"`)
 }
 
 func newTestQueryEngine(idleTimeout time.Duration, strict bool, dbcfgs *dbconfigs.DBConfigs) *QueryEngine {
