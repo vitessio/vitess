@@ -111200,6 +111200,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @property {string|null} [app_name] CheckThrottlerResponse app_name
          * @property {string|null} [summary] CheckThrottlerResponse summary
          * @property {tabletmanagerdata.CheckThrottlerResponseCode|null} [response_code] CheckThrottlerResponse response_code
+         * @property {tabletmanagerdata.ThrottlerType|null} [throttler_type] CheckThrottlerResponse throttler_type
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -111305,6 +111306,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         CheckThrottlerResponse.prototype.response_code = 0;
 
         /**
+         * CheckThrottlerResponse throttler_type.
+         * @member {tabletmanagerdata.ThrottlerType} throttler_type
+         * @memberof tabletmanagerdata.CheckThrottlerResponse
+         * @instance
+         */
+        CheckThrottlerResponse.prototype.throttler_type = 0;
+
+        /**
          * Creates a new CheckThrottlerResponse instance using the specified properties.
          * @function create
          * @memberof tabletmanagerdata.CheckThrottlerResponse
@@ -111357,6 +111366,8 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 writer.uint32(/* id 9, wireType 2 =*/74).string(message.summary);
             if (message.response_code != null && $Object.hasOwnProperty.call(message, "response_code") && message.response_code !== 0)
                 writer.uint32(/* id 10, wireType 0 =*/80).int32(message.response_code);
+            if (message.throttler_type != null && $Object.hasOwnProperty.call(message, "throttler_type") && message.throttler_type !== 0)
+                writer.uint32(/* id 11, wireType 0 =*/88).int32(message.throttler_type);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -111522,6 +111533,15 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                             delete message.response_code;
                         continue;
                     }
+                case 11: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.int32())
+                            message.throttler_type = value;
+                        else
+                            delete message.throttler_type;
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -111604,6 +111624,9 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
             if (message.response_code != null && $Object.hasOwnProperty.call(message, "response_code"))
                 if (typeof message.response_code !== "number" || (message.response_code | 0) !== message.response_code)
                     return "response_code: enum value expected";
+            if (message.throttler_type != null && $Object.hasOwnProperty.call(message, "throttler_type"))
+                if (typeof message.throttler_type !== "number" || (message.throttler_type | 0) !== message.throttler_type)
+                    return "throttler_type: enum value expected";
             return null;
         };
 
@@ -111688,6 +111711,20 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                     if (typeof object.response_code === "number" && (object.response_code | 0) === object.response_code)
                         message.response_code = object.response_code;
                 }
+            if (object.throttler_type !== 0 && (typeof object.throttler_type !== "string" || $root.tabletmanagerdata.ThrottlerType[object.throttler_type] !== 0))
+                switch (object.throttler_type) {
+                case "DEFAULT_LAG_THROTTLER":
+                case 0:
+                    message.throttler_type = 0;
+                    break;
+                case "DEDICATED_QUERY_THROTTLER":
+                case 1:
+                    message.throttler_type = 1;
+                    break;
+                default:
+                    if (typeof object.throttler_type === "number" && (object.throttler_type | 0) === object.throttler_type)
+                        message.throttler_type = object.throttler_type;
+                }
             return message;
         };
 
@@ -111719,6 +111756,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 object.app_name = "";
                 object.summary = "";
                 object.response_code = options.enums === $String ? "UNDEFINED" : 0;
+                object.throttler_type = options.enums === $String ? "DEFAULT_LAG_THROTTLER" : 0;
             }
             if (message.value != null && $Object.hasOwnProperty.call(message, "value"))
                 object.value = options.json && !$isFinite(message.value) ? $String(message.value) : message.value;
@@ -111745,6 +111783,8 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 object.summary = message.summary;
             if (message.response_code != null && $Object.hasOwnProperty.call(message, "response_code"))
                 object.response_code = options.enums === $String ? $root.tabletmanagerdata.CheckThrottlerResponseCode[message.response_code] === $undefined ? message.response_code : $root.tabletmanagerdata.CheckThrottlerResponseCode[message.response_code] : message.response_code;
+            if (message.throttler_type != null && $Object.hasOwnProperty.call(message, "throttler_type"))
+                object.throttler_type = options.enums === $String ? $root.tabletmanagerdata.ThrottlerType[message.throttler_type] === $undefined ? message.throttler_type : $root.tabletmanagerdata.ThrottlerType[message.throttler_type] : message.throttler_type;
             return object;
         };
 
@@ -112562,6 +112602,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @property {Object.<string,string>|null} [app_checked_metrics] GetThrottlerStatusResponse app_checked_metrics
          * @property {boolean|null} [recently_checked] GetThrottlerStatusResponse recently_checked
          * @property {Object.<string,tabletmanagerdata.GetThrottlerStatusResponse.RecentApp.$Properties>|null} [recent_apps] GetThrottlerStatusResponse recent_apps
+         * @property {tabletmanagerdata.ThrottlerType|null} [throttler_type] GetThrottlerStatusResponse throttler_type
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -112744,6 +112785,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         GetThrottlerStatusResponse.prototype.recent_apps = $util.emptyObject;
 
         /**
+         * GetThrottlerStatusResponse throttler_type.
+         * @member {tabletmanagerdata.ThrottlerType} throttler_type
+         * @memberof tabletmanagerdata.GetThrottlerStatusResponse
+         * @instance
+         */
+        GetThrottlerStatusResponse.prototype.throttler_type = 0;
+
+        /**
          * Creates a new GetThrottlerStatusResponse instance using the specified properties.
          * @function create
          * @memberof tabletmanagerdata.GetThrottlerStatusResponse
@@ -112825,6 +112874,8 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                     writer.uint32(/* id 18, wireType 2 =*/146).fork().uint32(/* id 1, wireType 2 =*/10).string(keys[i]);
                     $root.tabletmanagerdata.GetThrottlerStatusResponse.RecentApp.encode(message.recent_apps[keys[i]], writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim().ldelim();
                 }
+            if (message.throttler_type != null && $Object.hasOwnProperty.call(message, "throttler_type") && message.throttler_type !== 0)
+                writer.uint32(/* id 19, wireType 0 =*/152).int32(message.throttler_type);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -113206,6 +113257,15 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                         message.recent_apps[key] = value || new $root.tabletmanagerdata.GetThrottlerStatusResponse.RecentApp();
                         continue;
                     }
+                case 19: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.int32())
+                            message.throttler_type = value;
+                        else
+                            delete message.throttler_type;
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -113346,6 +113406,9 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                         return "recent_apps." + error;
                 }
             }
+            if (message.throttler_type != null && $Object.hasOwnProperty.call(message, "throttler_type"))
+                if (typeof message.throttler_type !== "number" || (message.throttler_type | 0) !== message.throttler_type)
+                    return "throttler_type: enum value expected";
             return null;
         };
 
@@ -113471,6 +113534,20 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                     message.recent_apps[keys[i]] = $root.tabletmanagerdata.GetThrottlerStatusResponse.RecentApp.fromObject(object.recent_apps[keys[i]], _depth + 1);
                 }
             }
+            if (object.throttler_type !== 0 && (typeof object.throttler_type !== "string" || $root.tabletmanagerdata.ThrottlerType[object.throttler_type] !== 0))
+                switch (object.throttler_type) {
+                case "DEFAULT_LAG_THROTTLER":
+                case 0:
+                    message.throttler_type = 0;
+                    break;
+                case "DEDICATED_QUERY_THROTTLER":
+                case 1:
+                    message.throttler_type = 1;
+                    break;
+                default:
+                    if (typeof object.throttler_type === "number" && (object.throttler_type | 0) === object.throttler_type)
+                        message.throttler_type = object.throttler_type;
+                }
             return message;
         };
 
@@ -113512,6 +113589,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 object.default_threshold = 0;
                 object.metric_name_used_as_default = "";
                 object.recently_checked = false;
+                object.throttler_type = options.enums === $String ? "DEFAULT_LAG_THROTTLER" : 0;
             }
             if (message.tablet_alias != null && $Object.hasOwnProperty.call(message, "tablet_alias"))
                 object.tablet_alias = message.tablet_alias;
@@ -113586,6 +113664,8 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                     object.recent_apps[keys2[j]] = $root.tabletmanagerdata.GetThrottlerStatusResponse.RecentApp.toObject(message.recent_apps[keys2[j]], options, _depth + 1);
                 }
             }
+            if (message.throttler_type != null && $Object.hasOwnProperty.call(message, "throttler_type"))
+                object.throttler_type = options.enums === $String ? $root.tabletmanagerdata.ThrottlerType[message.throttler_type] === $undefined ? message.throttler_type : $root.tabletmanagerdata.ThrottlerType[message.throttler_type] : message.throttler_type;
             return object;
         };
 

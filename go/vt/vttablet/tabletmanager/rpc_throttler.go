@@ -61,6 +61,9 @@ func (tm *TabletManager) CheckThrottler(ctx context.Context, req *tabletmanagerd
 		AppName:         checkResult.AppName,
 		Summary:         checkResult.Summary(),
 		Metrics:         make(map[string]*tabletmanagerdatapb.CheckThrottlerResponse_Metric),
+		// Report the throttler that answered, so a caller can tell an answer from the lag throttler
+		// apart from one by the throttler it asked for.
+		ThrottlerType: throttle.ThrottlerTypeFromProto(req.ThrottlerType).ToProto(),
 	}
 	for name, metric := range checkResult.Metrics {
 		resp.Metrics[name] = &tabletmanagerdatapb.CheckThrottlerResponse_Metric{
@@ -114,6 +117,7 @@ func (tm *TabletManager) GetThrottlerStatus(ctx context.Context, req *tabletmana
 		ThrottledApps:           make(map[string]*topodatapb.ThrottledAppRule),
 		AppCheckedMetrics:       status.AppCheckedMetrics,
 		RecentApps:              make(map[string]*tabletmanagerdatapb.GetThrottlerStatusResponse_RecentApp),
+		ThrottlerType:           throttle.ThrottlerTypeFromProto(req.ThrottlerType).ToProto(),
 	}
 	for k, m := range status.AggregatedMetrics {
 		val, err := m.Get()

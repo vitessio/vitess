@@ -7458,7 +7458,10 @@ type CheckThrottlerResponse struct {
 	// Summary is a human readable analysis of the result
 	Summary string `protobuf:"bytes,9,opt,name=summary,proto3" json:"summary,omitempty"`
 	// ResponseCode is the enum representation of the response
-	ResponseCode  CheckThrottlerResponseCode `protobuf:"varint,10,opt,name=response_code,json=responseCode,proto3,enum=tabletmanagerdata.CheckThrottlerResponseCode" json:"response_code,omitempty"`
+	ResponseCode CheckThrottlerResponseCode `protobuf:"varint,10,opt,name=response_code,json=responseCode,proto3,enum=tabletmanagerdata.CheckThrottlerResponseCode" json:"response_code,omitempty"`
+	// ThrottlerType is the throttler that answered the check. Tablets that predate the field
+	// always answer for the lag throttler and leave it unset, which reads as DEFAULT_LAG_THROTTLER.
+	ThrottlerType ThrottlerType `protobuf:"varint,11,opt,name=throttler_type,json=throttlerType,proto3,enum=tabletmanagerdata.ThrottlerType" json:"throttler_type,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -7556,6 +7559,13 @@ func (x *CheckThrottlerResponse) GetResponseCode() CheckThrottlerResponseCode {
 	return CheckThrottlerResponseCode_UNDEFINED
 }
 
+func (x *CheckThrottlerResponse) GetThrottlerType() ThrottlerType {
+	if x != nil {
+		return x.ThrottlerType
+	}
+	return ThrottlerType_DEFAULT_LAG_THROTTLER
+}
+
 type GetThrottlerStatusRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// ThrottlerType specifies which throttler to query (defaults to DEFAULT_LAG_THROTTLER)
@@ -7638,7 +7648,10 @@ type GetThrottlerStatusResponse struct {
 	AppCheckedMetrics map[string]string `protobuf:"bytes,16,rep,name=app_checked_metrics,json=appCheckedMetrics,proto3" json:"app_checked_metrics,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	RecentlyChecked   bool              `protobuf:"varint,17,opt,name=recently_checked,json=recentlyChecked,proto3" json:"recently_checked,omitempty"`
 	// RecentApps is a map of app names to their recent check status
-	RecentApps    map[string]*GetThrottlerStatusResponse_RecentApp `protobuf:"bytes,18,rep,name=recent_apps,json=recentApps,proto3" json:"recent_apps,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	RecentApps map[string]*GetThrottlerStatusResponse_RecentApp `protobuf:"bytes,18,rep,name=recent_apps,json=recentApps,proto3" json:"recent_apps,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// ThrottlerType is the throttler that this status describes. Tablets that predate the field
+	// always describe the lag throttler and leave it unset, which reads as DEFAULT_LAG_THROTTLER.
+	ThrottlerType ThrottlerType `protobuf:"varint,19,opt,name=throttler_type,json=throttlerType,proto3,enum=tabletmanagerdata.ThrottlerType" json:"throttler_type,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -7797,6 +7810,13 @@ func (x *GetThrottlerStatusResponse) GetRecentApps() map[string]*GetThrottlerSta
 		return x.RecentApps
 	}
 	return nil
+}
+
+func (x *GetThrottlerStatusResponse) GetThrottlerType() ThrottlerType {
+	if x != nil {
+		return x.ThrottlerType
+	}
+	return ThrottlerType_DEFAULT_LAG_THROTTLER
 }
 
 type ChangeTagsRequest struct {
@@ -9161,7 +9181,7 @@ const file_tabletmanagerdata_proto_rawDesc = "" +
 	"\x05scope\x18\x02 \x01(\tR\x05scope\x126\n" +
 	"\x17skip_request_heartbeats\x18\x03 \x01(\bR\x15skipRequestHeartbeats\x12'\n" +
 	"\x10ok_if_not_exists\x18\x04 \x01(\bR\rokIfNotExists\x12G\n" +
-	"\x0ethrottler_type\x18\x06 \x01(\x0e2 .tabletmanagerdata.ThrottlerTypeR\rthrottlerTypeJ\x04\b\x05\x10\x06R\x15multi_metrics_enabled\"\xf6\x05\n" +
+	"\x0ethrottler_type\x18\x06 \x01(\x0e2 .tabletmanagerdata.ThrottlerTypeR\rthrottlerTypeJ\x04\b\x05\x10\x06R\x15multi_metrics_enabled\"\xbf\x06\n" +
 	"\x16CheckThrottlerResponse\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\x01R\x05value\x12\x1c\n" +
 	"\tthreshold\x18\x03 \x01(\x01R\tthreshold\x12\x14\n" +
@@ -9172,7 +9192,8 @@ const file_tabletmanagerdata_proto_rawDesc = "" +
 	"\bapp_name\x18\b \x01(\tR\aappName\x12\x18\n" +
 	"\asummary\x18\t \x01(\tR\asummary\x12R\n" +
 	"\rresponse_code\x18\n" +
-	" \x01(\x0e2-.tabletmanagerdata.CheckThrottlerResponseCodeR\fresponseCode\x1a\xf0\x01\n" +
+	" \x01(\x0e2-.tabletmanagerdata.CheckThrottlerResponseCodeR\fresponseCode\x12G\n" +
+	"\x0ethrottler_type\x18\v \x01(\x0e2 .tabletmanagerdata.ThrottlerTypeR\rthrottlerType\x1a\xf0\x01\n" +
 	"\x06Metric\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
 	"\x05value\x18\x03 \x01(\x01R\x05value\x12\x1c\n" +
@@ -9185,7 +9206,7 @@ const file_tabletmanagerdata_proto_rawDesc = "" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12F\n" +
 	"\x05value\x18\x02 \x01(\v20.tabletmanagerdata.CheckThrottlerResponse.MetricR\x05value:\x028\x01J\x04\b\x01\x10\x02R\vstatus_code\"d\n" +
 	"\x19GetThrottlerStatusRequest\x12G\n" +
-	"\x0ethrottler_type\x18\x01 \x01(\x0e2 .tabletmanagerdata.ThrottlerTypeR\rthrottlerType\"\x9b\x10\n" +
+	"\x0ethrottler_type\x18\x01 \x01(\x0e2 .tabletmanagerdata.ThrottlerTypeR\rthrottlerType\"\xe4\x10\n" +
 	"\x1aGetThrottlerStatusResponse\x12!\n" +
 	"\ftablet_alias\x18\x01 \x01(\tR\vtabletAlias\x12\x1a\n" +
 	"\bkeyspace\x18\x02 \x01(\tR\bkeyspace\x12\x14\n" +
@@ -9208,7 +9229,8 @@ const file_tabletmanagerdata_proto_rawDesc = "" +
 	"\x13app_checked_metrics\x18\x10 \x03(\v2D.tabletmanagerdata.GetThrottlerStatusResponse.AppCheckedMetricsEntryR\x11appCheckedMetrics\x12)\n" +
 	"\x10recently_checked\x18\x11 \x01(\bR\x0frecentlyChecked\x12^\n" +
 	"\vrecent_apps\x18\x12 \x03(\v2=.tabletmanagerdata.GetThrottlerStatusResponse.RecentAppsEntryR\n" +
-	"recentApps\x1a:\n" +
+	"recentApps\x12G\n" +
+	"\x0ethrottler_type\x18\x13 \x01(\x0e2 .tabletmanagerdata.ThrottlerTypeR\rthrottlerType\x1a:\n" +
 	"\fMetricResult\x12\x14\n" +
 	"\x05value\x18\x01 \x01(\x01R\x05value\x12\x14\n" +
 	"\x05error\x18\x02 \x01(\tR\x05error\x1a\x80\x01\n" +
@@ -9583,40 +9605,42 @@ var file_tabletmanagerdata_proto_depIdxs = []int32{
 	2,   // 78: tabletmanagerdata.CheckThrottlerRequest.throttler_type:type_name -> tabletmanagerdata.ThrottlerType
 	165, // 79: tabletmanagerdata.CheckThrottlerResponse.metrics:type_name -> tabletmanagerdata.CheckThrottlerResponse.MetricsEntry
 	1,   // 80: tabletmanagerdata.CheckThrottlerResponse.response_code:type_name -> tabletmanagerdata.CheckThrottlerResponseCode
-	2,   // 81: tabletmanagerdata.GetThrottlerStatusRequest.throttler_type:type_name -> tabletmanagerdata.ThrottlerType
-	167, // 82: tabletmanagerdata.GetThrottlerStatusResponse.aggregated_metrics:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.AggregatedMetricsEntry
-	168, // 83: tabletmanagerdata.GetThrottlerStatusResponse.metric_thresholds:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.MetricThresholdsEntry
-	170, // 84: tabletmanagerdata.GetThrottlerStatusResponse.metrics_health:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.MetricsHealthEntry
-	171, // 85: tabletmanagerdata.GetThrottlerStatusResponse.throttled_apps:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.ThrottledAppsEntry
-	172, // 86: tabletmanagerdata.GetThrottlerStatusResponse.app_checked_metrics:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.AppCheckedMetricsEntry
-	174, // 87: tabletmanagerdata.GetThrottlerStatusResponse.recent_apps:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.RecentAppsEntry
-	175, // 88: tabletmanagerdata.ChangeTagsRequest.tags:type_name -> tabletmanagerdata.ChangeTagsRequest.TagsEntry
-	176, // 89: tabletmanagerdata.ChangeTagsResponse.tags:type_name -> tabletmanagerdata.ChangeTagsResponse.TagsEntry
-	177, // 90: tabletmanagerdata.UpdateSequenceTablesRequest.sequences:type_name -> tabletmanagerdata.UpdateSequenceTablesRequest.SequenceMetadata
-	178, // 91: tabletmanagerdata.GetMaxValueForSequencesRequest.sequences:type_name -> tabletmanagerdata.GetMaxValueForSequencesRequest.SequenceMetadata
-	179, // 92: tabletmanagerdata.GetMaxValueForSequencesResponse.max_values_by_sequence_table:type_name -> tabletmanagerdata.GetMaxValueForSequencesResponse.MaxValuesBySequenceTableEntry
-	181, // 93: tabletmanagerdata.BackupRequest.InitSQL.tablet_types:type_name -> topodata.TabletType
-	192, // 94: tabletmanagerdata.BackupRequest.InitSQL.timeout:type_name -> vttime.Duration
-	195, // 95: tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream.bls:type_name -> binlogdata.BinlogSource
-	194, // 96: tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream.time_updated:type_name -> vttime.Time
-	194, // 97: tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream.transaction_timestamp:type_name -> vttime.Time
-	198, // 98: tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream.state:type_name -> binlogdata.VReplicationWorkflowState
-	194, // 99: tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream.time_heartbeat:type_name -> vttime.Time
-	194, // 100: tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream.time_throttled:type_name -> vttime.Time
-	1,   // 101: tabletmanagerdata.CheckThrottlerResponse.Metric.response_code:type_name -> tabletmanagerdata.CheckThrottlerResponseCode
-	164, // 102: tabletmanagerdata.CheckThrottlerResponse.MetricsEntry.value:type_name -> tabletmanagerdata.CheckThrottlerResponse.Metric
-	166, // 103: tabletmanagerdata.GetThrottlerStatusResponse.AggregatedMetricsEntry.value:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.MetricResult
-	194, // 104: tabletmanagerdata.GetThrottlerStatusResponse.MetricHealth.last_healthy_at:type_name -> vttime.Time
-	169, // 105: tabletmanagerdata.GetThrottlerStatusResponse.MetricsHealthEntry.value:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.MetricHealth
-	201, // 106: tabletmanagerdata.GetThrottlerStatusResponse.ThrottledAppsEntry.value:type_name -> topodata.ThrottledAppRule
-	194, // 107: tabletmanagerdata.GetThrottlerStatusResponse.RecentApp.checked_at:type_name -> vttime.Time
-	1,   // 108: tabletmanagerdata.GetThrottlerStatusResponse.RecentApp.response_code:type_name -> tabletmanagerdata.CheckThrottlerResponseCode
-	173, // 109: tabletmanagerdata.GetThrottlerStatusResponse.RecentAppsEntry.value:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.RecentApp
-	110, // [110:110] is the sub-list for method output_type
-	110, // [110:110] is the sub-list for method input_type
-	110, // [110:110] is the sub-list for extension type_name
-	110, // [110:110] is the sub-list for extension extendee
-	0,   // [0:110] is the sub-list for field type_name
+	2,   // 81: tabletmanagerdata.CheckThrottlerResponse.throttler_type:type_name -> tabletmanagerdata.ThrottlerType
+	2,   // 82: tabletmanagerdata.GetThrottlerStatusRequest.throttler_type:type_name -> tabletmanagerdata.ThrottlerType
+	167, // 83: tabletmanagerdata.GetThrottlerStatusResponse.aggregated_metrics:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.AggregatedMetricsEntry
+	168, // 84: tabletmanagerdata.GetThrottlerStatusResponse.metric_thresholds:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.MetricThresholdsEntry
+	170, // 85: tabletmanagerdata.GetThrottlerStatusResponse.metrics_health:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.MetricsHealthEntry
+	171, // 86: tabletmanagerdata.GetThrottlerStatusResponse.throttled_apps:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.ThrottledAppsEntry
+	172, // 87: tabletmanagerdata.GetThrottlerStatusResponse.app_checked_metrics:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.AppCheckedMetricsEntry
+	174, // 88: tabletmanagerdata.GetThrottlerStatusResponse.recent_apps:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.RecentAppsEntry
+	2,   // 89: tabletmanagerdata.GetThrottlerStatusResponse.throttler_type:type_name -> tabletmanagerdata.ThrottlerType
+	175, // 90: tabletmanagerdata.ChangeTagsRequest.tags:type_name -> tabletmanagerdata.ChangeTagsRequest.TagsEntry
+	176, // 91: tabletmanagerdata.ChangeTagsResponse.tags:type_name -> tabletmanagerdata.ChangeTagsResponse.TagsEntry
+	177, // 92: tabletmanagerdata.UpdateSequenceTablesRequest.sequences:type_name -> tabletmanagerdata.UpdateSequenceTablesRequest.SequenceMetadata
+	178, // 93: tabletmanagerdata.GetMaxValueForSequencesRequest.sequences:type_name -> tabletmanagerdata.GetMaxValueForSequencesRequest.SequenceMetadata
+	179, // 94: tabletmanagerdata.GetMaxValueForSequencesResponse.max_values_by_sequence_table:type_name -> tabletmanagerdata.GetMaxValueForSequencesResponse.MaxValuesBySequenceTableEntry
+	181, // 95: tabletmanagerdata.BackupRequest.InitSQL.tablet_types:type_name -> topodata.TabletType
+	192, // 96: tabletmanagerdata.BackupRequest.InitSQL.timeout:type_name -> vttime.Duration
+	195, // 97: tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream.bls:type_name -> binlogdata.BinlogSource
+	194, // 98: tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream.time_updated:type_name -> vttime.Time
+	194, // 99: tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream.transaction_timestamp:type_name -> vttime.Time
+	198, // 100: tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream.state:type_name -> binlogdata.VReplicationWorkflowState
+	194, // 101: tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream.time_heartbeat:type_name -> vttime.Time
+	194, // 102: tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream.time_throttled:type_name -> vttime.Time
+	1,   // 103: tabletmanagerdata.CheckThrottlerResponse.Metric.response_code:type_name -> tabletmanagerdata.CheckThrottlerResponseCode
+	164, // 104: tabletmanagerdata.CheckThrottlerResponse.MetricsEntry.value:type_name -> tabletmanagerdata.CheckThrottlerResponse.Metric
+	166, // 105: tabletmanagerdata.GetThrottlerStatusResponse.AggregatedMetricsEntry.value:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.MetricResult
+	194, // 106: tabletmanagerdata.GetThrottlerStatusResponse.MetricHealth.last_healthy_at:type_name -> vttime.Time
+	169, // 107: tabletmanagerdata.GetThrottlerStatusResponse.MetricsHealthEntry.value:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.MetricHealth
+	201, // 108: tabletmanagerdata.GetThrottlerStatusResponse.ThrottledAppsEntry.value:type_name -> topodata.ThrottledAppRule
+	194, // 109: tabletmanagerdata.GetThrottlerStatusResponse.RecentApp.checked_at:type_name -> vttime.Time
+	1,   // 110: tabletmanagerdata.GetThrottlerStatusResponse.RecentApp.response_code:type_name -> tabletmanagerdata.CheckThrottlerResponseCode
+	173, // 111: tabletmanagerdata.GetThrottlerStatusResponse.RecentAppsEntry.value:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.RecentApp
+	112, // [112:112] is the sub-list for method output_type
+	112, // [112:112] is the sub-list for method input_type
+	112, // [112:112] is the sub-list for extension type_name
+	112, // [112:112] is the sub-list for extension extendee
+	0,   // [0:112] is the sub-list for field type_name
 }
 
 func init() { file_tabletmanagerdata_proto_init() }

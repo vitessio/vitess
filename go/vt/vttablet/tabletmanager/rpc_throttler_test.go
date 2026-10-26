@@ -20,6 +20,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -75,6 +76,51 @@ func TestTabletManager_ThrottlerRPCsForwardThrottlerType(t *testing.T) {
 			_, err = tm.GetThrottlerStatus(ctx, &tabletmanagerdatapb.GetThrottlerStatusRequest{ThrottlerType: throttlerType})
 			require.NoError(t, err)
 			require.Equal(t, throttlerType, qsc.statusType)
+		})
+	}
+}
+
+// CheckThrottler and GetThrottlerStatus must report the throttler that answered, which is the lag
+// throttler for any type other than DEDICATED_QUERY_THROTTLER, so a caller that sends a type this
+// tablet doesn't know learns that the lag throttler answered instead.
+func TestTabletManager_ThrottlerRPCsReportAnsweringThrottlerType(t *testing.T) {
+	ctx := t.Context()
+
+	tests := []struct {
+		requested tabletmanagerdatapb.ThrottlerType
+		answered  tabletmanagerdatapb.ThrottlerType
+	}{
+		{
+			requested: tabletmanagerdatapb.ThrottlerType_DEDICATED_QUERY_THROTTLER,
+			answered:  tabletmanagerdatapb.ThrottlerType_DEDICATED_QUERY_THROTTLER,
+		},
+		{
+			requested: tabletmanagerdatapb.ThrottlerType_DEFAULT_LAG_THROTTLER,
+			answered:  tabletmanagerdatapb.ThrottlerType_DEFAULT_LAG_THROTTLER,
+		},
+		{
+			// A type from a newer caller.
+			requested: tabletmanagerdatapb.ThrottlerType(7),
+			answered:  tabletmanagerdatapb.ThrottlerType_DEFAULT_LAG_THROTTLER,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.requested.String(), func(t *testing.T) {
+			qsc := &throttlerTypeRecorder{Controller: tabletservermock.NewController()}
+			tm := &TabletManager{
+				QueryServiceControl: qsc,
+				Env:                 vtenv.NewTestEnv(),
+				BatchCtx:            ctx,
+			}
+			tm.tmState = newTMState(tm, newTestTablet(t, 100, "ks", "-80", nil))
+
+			checkResp, err := tm.CheckThrottler(ctx, &tabletmanagerdatapb.CheckThrottlerRequest{ThrottlerType: tt.requested})
+			require.NoError(t, err)
+			assert.Equal(t, tt.answered, checkResp.ThrottlerType)
+
+			statusResp, err := tm.GetThrottlerStatus(ctx, &tabletmanagerdatapb.GetThrottlerStatusRequest{ThrottlerType: tt.requested})
+			require.NoError(t, err)
+			assert.Equal(t, tt.answered, statusResp.ThrottlerType)
 		})
 	}
 }

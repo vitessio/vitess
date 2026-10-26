@@ -150,7 +150,7 @@ The configuration is set per keyspace with the new `vtctldclient UpdateQueryThro
 
 While a `TABLET_THROTTLER` configuration is enabled, the primary renews its heartbeat lease every 2 seconds. A tablet refreshes its throttler check only once per `--query-throttler-cache-update-interval`, which can be longer than an on-demand lease, and heartbeats that paused when the lease lapsed would read as replication lag on an idle, healthy shard. With `--heartbeat-on-demand-duration`, the primary therefore writes heartbeats for as long as the configuration is enabled, as it does with `--heartbeat-enable`.
 
-`vtctldclient CheckThrottler` and `vtctldclient GetThrottlerStatus` have a new `--throttler-type` flag. It defaults to `DEFAULT_LAG_THROTTLER`, the tablet throttler; `DEDICATED_QUERY_THROTTLER` inspects the instance the query throttler checks.
+`vtctldclient CheckThrottler` and `vtctldclient GetThrottlerStatus` have a new `--throttler-type` flag. It defaults to `DEFAULT_LAG_THROTTLER`, the tablet throttler; `DEDICATED_QUERY_THROTTLER` inspects the instance the query throttler checks. The responses have a new `throttler_type` field that names the throttler that answered. A v24 `vtctld` drops `throttler_type` from the request and a v24 `vttablet` ignores it, so either answers for the tablet throttler; `vtctldclient` then fails with `UNIMPLEMENTED` rather than print the tablet throttler's answer as the query throttler's.
 
 Existing query throttler metrics and behavior change as follows:
 
@@ -164,7 +164,6 @@ Existing query throttler metrics and behavior change as follows:
 - A v24 `vtctld` rebuilds each `SrvKeyspace` with only the tablet throttler configuration, so `RebuildKeyspaceGraph` on it drops `query_throttler_config`.
 - A v24 `vttablet` or `vtgate` that starts in a cell with no `SrvKeyspace` for the keyspace creates one without `query_throttler_config`.
 - A v24 `vttablet` has no `TABLET_THROTTLER` strategy. It runs the NoOp strategy and only logs `Unknown strategy ..., using NoOp`.
-- A v24 `vttablet` ignores `throttler_type` in `CheckThrottler` and `GetThrottlerStatus` requests and answers for the tablet throttler.
 
 In the first two cases the tablets fall back to the NoOp strategy. To restore throttling, re-run `UpdateQueryThrottlerConfig` or rebuild the keyspace graph with a v25 `vtctld`.
 

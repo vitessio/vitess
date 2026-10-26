@@ -2918,6 +2918,7 @@ func (m *CheckThrottlerResponse) CloneVT() *CheckThrottlerResponse {
 	r.AppName = m.AppName
 	r.Summary = m.Summary
 	r.ResponseCode = m.ResponseCode
+	r.ThrottlerType = m.ThrottlerType
 	if rhs := m.Metrics; rhs != nil {
 		tmpContainer := make(map[string]*CheckThrottlerResponse_Metric, len(rhs))
 		for k, v := range rhs {
@@ -3024,6 +3025,7 @@ func (m *GetThrottlerStatusResponse) CloneVT() *GetThrottlerStatusResponse {
 	r.DefaultThreshold = m.DefaultThreshold
 	r.MetricNameUsedAsDefault = m.MetricNameUsedAsDefault
 	r.RecentlyChecked = m.RecentlyChecked
+	r.ThrottlerType = m.ThrottlerType
 	if rhs := m.AggregatedMetrics; rhs != nil {
 		tmpContainer := make(map[string]*GetThrottlerStatusResponse_MetricResult, len(rhs))
 		for k, v := range rhs {
@@ -10479,6 +10481,11 @@ func (m *CheckThrottlerResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.ThrottlerType != 0 {
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.ThrottlerType))
+		i--
+		dAtA[i] = 0x58
+	}
 	if m.ResponseCode != 0 {
 		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.ResponseCode))
 		i--
@@ -10768,6 +10775,13 @@ func (m *GetThrottlerStatusResponse) MarshalToSizedBufferVT(dAtA []byte) (int, e
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.ThrottlerType != 0 {
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.ThrottlerType))
+		i--
+		dAtA[i] = 0x1
+		i--
+		dAtA[i] = 0x98
 	}
 	if len(m.RecentApps) > 0 {
 		for k := range m.RecentApps {
@@ -14022,6 +14036,9 @@ func (m *CheckThrottlerResponse) SizeVT() (n int) {
 	if m.ResponseCode != 0 {
 		n += 1 + protohelpers.SizeOfVarint(uint64(m.ResponseCode))
 	}
+	if m.ThrottlerType != 0 {
+		n += 1 + protohelpers.SizeOfVarint(uint64(m.ThrottlerType))
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -14205,6 +14222,9 @@ func (m *GetThrottlerStatusResponse) SizeVT() (n int) {
 			mapEntrySize := 1 + len(k) + protohelpers.SizeOfVarint(uint64(len(k))) + l
 			n += mapEntrySize + 2 + protohelpers.SizeOfVarint(uint64(mapEntrySize))
 		}
+	}
+	if m.ThrottlerType != 0 {
+		n += 2 + protohelpers.SizeOfVarint(uint64(m.ThrottlerType))
 	}
 	n += len(m.unknownFields)
 	return n
@@ -30875,6 +30895,25 @@ func (m *CheckThrottlerResponse) UnmarshalVT(dAtA []byte) error {
 					break
 				}
 			}
+		case 11:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ThrottlerType", wireType)
+			}
+			m.ThrottlerType = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.ThrottlerType |= ThrottlerType(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
@@ -32354,6 +32393,25 @@ func (m *GetThrottlerStatusResponse) UnmarshalVT(dAtA []byte) error {
 			}
 			m.RecentApps[mapkey] = mapvalue
 			iNdEx = postIndex
+		case 19:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ThrottlerType", wireType)
+			}
+			m.ThrottlerType = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.ThrottlerType |= ThrottlerType(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])

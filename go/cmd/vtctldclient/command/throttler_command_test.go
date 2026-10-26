@@ -230,22 +230,59 @@ func TestUpdateQueryThrottlerConfigCommand_ServerError(t *testing.T) {
 	require.NotNil(t, fakeServer.gotRequest, "server should have been called before returning the error")
 }
 
-// fakeThrottlerStatusServer captures CheckThrottler and GetThrottlerStatus calls.
+// fakeThrottlerStatusServer captures CheckThrottler and GetThrottlerStatus calls, and answers for the
+// requested throttler.
 type fakeThrottlerStatusServer struct {
 	vtctlservicepb.UnimplementedVtctldServer
+
+	// predatesThrottlerType makes the server answer for the lag throttler, whatever the request asks
+	// for, without setting the response's type, as a vtctld or tablet that predates the field does.
+	predatesThrottlerType bool
 
 	gotCheck  *vtctldatapb.CheckThrottlerRequest
 	gotStatus *vtctldatapb.GetThrottlerStatusRequest
 }
 
+func (s *fakeThrottlerStatusServer) answeringType(requested tabletmanagerdatapb.ThrottlerType) tabletmanagerdatapb.ThrottlerType {
+	if s.predatesThrottlerType {
+		return tabletmanagerdatapb.ThrottlerType_DEFAULT_LAG_THROTTLER
+	}
+	return requested
+}
+
 func (s *fakeThrottlerStatusServer) CheckThrottler(_ context.Context, req *vtctldatapb.CheckThrottlerRequest) (*vtctldatapb.CheckThrottlerResponse, error) {
 	s.gotCheck = req
-	return &vtctldatapb.CheckThrottlerResponse{}, nil
+	return &vtctldatapb.CheckThrottlerResponse{
+		Check: &tabletmanagerdatapb.CheckThrottlerResponse{ThrottlerType: s.answeringType(req.ThrottlerType)},
+	}, nil
 }
 
 func (s *fakeThrottlerStatusServer) GetThrottlerStatus(_ context.Context, req *vtctldatapb.GetThrottlerStatusRequest) (*vtctldatapb.GetThrottlerStatusResponse, error) {
 	s.gotStatus = req
-	return &vtctldatapb.GetThrottlerStatusResponse{}, nil
+	return &vtctldatapb.GetThrottlerStatusResponse{
+		Status: &tabletmanagerdatapb.GetThrottlerStatusResponse{ThrottlerType: s.answeringType(req.ThrottlerType)},
+	}, nil
+}
+
+// setupThrottlerStatusTest wires the local vtctld client to the given fake server and registers cleanup
+// that restores the global state that CheckThrottler and GetThrottlerStatus touch.
+func setupThrottlerStatusTest(t *testing.T, server vtctlservicepb.VtctldServer) {
+	t.Helper()
+
+	savedArgs := append([]string{}, os.Args...)
+	savedProtocol := VtctldClientProtocol
+	savedCheckType, savedStatusType := checkThrottlerType, getThrottlerStatusType
+	t.Cleanup(func() {
+		os.Args = savedArgs
+		VtctldClientProtocol = savedProtocol
+		checkThrottlerType, getThrottlerStatusType = savedCheckType, savedStatusType
+		for _, cmd := range []*cobra.Command{CheckThrottler, GetThrottlerStatus} {
+			cmd.Flags().VisitAll(func(f *pflag.Flag) { f.Changed = false })
+		}
+	})
+
+	localvtctldclient.SetServer(server)
+	VtctldClientProtocol = "local"
 }
 
 func TestThrottlerTypeFlag(t *testing.T) {
@@ -289,21 +326,8 @@ func TestThrottlerTypeFlag(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			savedArgs := append([]string{}, os.Args...)
-			savedProtocol := VtctldClientProtocol
-			savedCheckType, savedStatusType := checkThrottlerType, getThrottlerStatusType
-			t.Cleanup(func() {
-				os.Args = savedArgs
-				VtctldClientProtocol = savedProtocol
-				checkThrottlerType, getThrottlerStatusType = savedCheckType, savedStatusType
-				for _, cmd := range []*cobra.Command{CheckThrottler, GetThrottlerStatus} {
-					cmd.Flags().VisitAll(func(f *pflag.Flag) { f.Changed = false })
-				}
-			})
-
 			fakeServer := &fakeThrottlerStatusServer{}
-			localvtctldclient.SetServer(fakeServer)
-			VtctldClientProtocol = "local"
+			setupThrottlerStatusTest(t, fakeServer)
 			os.Args = tt.args
 
 			err := Root.Execute()
@@ -322,6 +346,49 @@ func TestThrottlerTypeFlag(t *testing.T) {
 				require.NotNil(t, fakeServer.gotStatus, "server was not called")
 				assert.Equal(t, tt.wantType, fakeServer.gotStatus.ThrottlerType)
 			}
+		})
+	}
+}
+
+// A vtctld or tablet that predates --throttler-type answers for the lag throttler, so CheckThrottler and
+// GetThrottlerStatus must fail instead of printing the lag throttler's answer for another throttler.
+func TestThrottlerTypeAnsweredByAnotherThrottler(t *testing.T) {
+	tests := []struct {
+		name    string
+		args    []string
+		wantErr string
+	}{
+		{
+			name:    "CheckThrottler for the dedicated query throttler",
+			args:    []string{"vtctldclient", "CheckThrottler", "--throttler-type", "DEDICATED_QUERY_THROTTLER", "zone1-0000000101"},
+			wantErr: "--throttler-type DEDICATED_QUERY_THROTTLER was requested, but DEFAULT_LAG_THROTTLER answered",
+		},
+		{
+			name: "CheckThrottler for the lag throttler",
+			args: []string{"vtctldclient", "CheckThrottler", "zone1-0000000101"},
+		},
+		{
+			name:    "GetThrottlerStatus for the dedicated query throttler",
+			args:    []string{"vtctldclient", "GetThrottlerStatus", "--throttler-type", "DEDICATED_QUERY_THROTTLER", "zone1-0000000101"},
+			wantErr: "--throttler-type DEDICATED_QUERY_THROTTLER was requested, but DEFAULT_LAG_THROTTLER answered",
+		},
+		{
+			name: "GetThrottlerStatus for the lag throttler",
+			args: []string{"vtctldclient", "GetThrottlerStatus", "zone1-0000000101"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			setupThrottlerStatusTest(t, &fakeThrottlerStatusServer{predatesThrottlerType: true})
+			os.Args = tt.args
+
+			err := Root.Execute()
+			if tt.wantErr == "" {
+				require.NoError(t, err)
+				return
+			}
+			require.ErrorContains(t, err, tt.wantErr)
 		})
 	}
 }

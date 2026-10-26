@@ -43702,6 +43702,9 @@ export namespace tabletmanagerdata {
         /** CheckThrottlerResponse response_code. */
         response_code: tabletmanagerdata.CheckThrottlerResponseCode;
 
+        /** CheckThrottlerResponse throttler_type. */
+        throttler_type: tabletmanagerdata.ThrottlerType;
+
         /**
          * Creates a new CheckThrottlerResponse instance using the specified properties.
          * @param [properties] Properties to set
@@ -43812,6 +43815,9 @@ export namespace tabletmanagerdata {
 
             /** CheckThrottlerResponse response_code */
             response_code?: (tabletmanagerdata.CheckThrottlerResponseCode|null);
+
+            /** CheckThrottlerResponse throttler_type */
+            throttler_type?: (tabletmanagerdata.ThrottlerType|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
@@ -44164,6 +44170,9 @@ export namespace tabletmanagerdata {
         /** GetThrottlerStatusResponse recent_apps. */
         recent_apps: { [k: string]: tabletmanagerdata.GetThrottlerStatusResponse.RecentApp.$Properties };
 
+        /** GetThrottlerStatusResponse throttler_type. */
+        throttler_type: tabletmanagerdata.ThrottlerType;
+
         /**
          * Creates a new GetThrottlerStatusResponse instance using the specified properties.
          * @param [properties] Properties to set
@@ -44301,6 +44310,9 @@ export namespace tabletmanagerdata {
 
             /** GetThrottlerStatusResponse recent_apps */
             recent_apps?: ({ [k: string]: tabletmanagerdata.GetThrottlerStatusResponse.RecentApp.$Properties }|null);
+
+            /** GetThrottlerStatusResponse throttler_type */
+            throttler_type?: (tabletmanagerdata.ThrottlerType|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];

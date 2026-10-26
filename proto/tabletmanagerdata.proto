@@ -928,6 +928,10 @@ message CheckThrottlerResponse {
 
   // ResponseCode is the enum representation of the response
   CheckThrottlerResponseCode response_code = 10;
+
+  // ThrottlerType is the throttler that answered the check. Tablets that predate the field
+  // always answer for the lag throttler and leave it unset, which reads as DEFAULT_LAG_THROTTLER.
+  ThrottlerType throttler_type = 11;
 }
 
 message GetThrottlerStatusRequest {
@@ -993,6 +997,10 @@ message GetThrottlerStatusResponse {
   }
   // RecentApps is a map of app names to their recent check status
   map<string, RecentApp> recent_apps = 18;
+
+  // ThrottlerType is the throttler that this status describes. Tablets that predate the field
+  // always describe the lag throttler and leave it unset, which reads as DEFAULT_LAG_THROTTLER.
+  ThrottlerType throttler_type = 19;
 }
 
 message ChangeTagsRequest {

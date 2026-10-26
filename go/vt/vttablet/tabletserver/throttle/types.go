@@ -37,3 +37,13 @@ func (t ThrottlerType) ToProto() tabletmanagerdatapb.ThrottlerType {
 		return tabletmanagerdatapb.ThrottlerType_DEFAULT_LAG_THROTTLER
 	}
 }
+
+// ThrottlerTypeFromProto returns the throttler that serves a request for the given protobuf type:
+// the dedicated query throttler for DEDICATED_QUERY_THROTTLER, and the lag throttler for anything
+// else, including requests from callers that predate the field.
+func ThrottlerTypeFromProto(t tabletmanagerdatapb.ThrottlerType) ThrottlerType {
+	if t == tabletmanagerdatapb.ThrottlerType_DEDICATED_QUERY_THROTTLER {
+		return QueryTabletThrottler
+	}
+	return DefaultTabletThrottler
+}

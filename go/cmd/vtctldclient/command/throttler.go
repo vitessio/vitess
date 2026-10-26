@@ -34,8 +34,10 @@ import (
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/proto/vttime"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
@@ -154,6 +156,17 @@ func parseThrottlerType(name string) (tabletmanagerdatapb.ThrottlerType, error) 
 	return tabletmanagerdatapb.ThrottlerType(v), nil
 }
 
+// checkAnsweringThrottlerType returns an error when a response comes from another throttler than the one
+// --throttler-type asked for. A vtctld that predates the field drops it from the request, and a tablet that
+// predates it answers for the lag throttler; either way, the response carries no type, which reads as
+// DEFAULT_LAG_THROTTLER.
+func checkAnsweringThrottlerType(requested, answered tabletmanagerdatapb.ThrottlerType) error {
+	if answered == requested {
+		return nil
+	}
+	return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "--throttler-type %s was requested, but %s answered; the vtctld or the tablet probably runs a version that does not support --throttler-type", requested, answered)
+}
+
 func commandCheckThrottler(cmd *cobra.Command, args []string) error {
 	alias, err := topoproto.ParseTabletAlias(cmd.Flags().Arg(0))
 	if err != nil {
@@ -177,6 +190,9 @@ func commandCheckThrottler(cmd *cobra.Command, args []string) error {
 		ThrottlerType:         throttlerType,
 	})
 	if err != nil {
+		return err
+	}
+	if err := checkAnsweringThrottlerType(throttlerType, resp.GetCheck().GetThrottlerType()); err != nil {
 		return err
 	}
 
@@ -207,6 +223,9 @@ func commandGetThrottlerStatus(cmd *cobra.Command, args []string) error {
 		ThrottlerType: throttlerType,
 	})
 	if err != nil {
+		return err
+	}
+	if err := checkAnsweringThrottlerType(throttlerType, resp.GetStatus().GetThrottlerType()); err != nil {
 		return err
 	}
 

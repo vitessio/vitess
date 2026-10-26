@@ -70,6 +70,7 @@ func waitForQueryThrottlerStatus(t *testing.T, tablet *cluster.Vttablet, wantEna
 		resp, err := vtctldClient.GetThrottlerStatus(t.Context(), req)
 		require.NoError(c, err)
 		require.NotNil(c, resp.GetStatus())
+		assert.Equal(c, tabletmanagerdatapb.ThrottlerType_DEDICATED_QUERY_THROTTLER, resp.GetStatus().GetThrottlerType(), "throttler that answered on tablet %s", tablet.Alias)
 		assert.Equal(c, wantEnabled, resp.GetStatus().GetIsEnabled(), "query throttler enabled state on tablet %s", tablet.Alias)
 	}, waitTimeout, time.Second)
 }
@@ -88,6 +89,7 @@ func waitForQueryThrottlerCheck(t *testing.T, tablet *cluster.Vttablet, wantResp
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
 		resp, err := vtctldClient.CheckThrottler(t.Context(), req)
 		require.NoError(c, err)
+		assert.Equal(c, tabletmanagerdatapb.ThrottlerType_DEDICATED_QUERY_THROTTLER, resp.GetCheck().GetThrottlerType(), "throttler that answered on tablet %s", tablet.Alias)
 		lagMetric, ok := resp.GetCheck().GetMetrics()["lag"]
 		require.True(c, ok, "lag metric missing from check on tablet %s: %v", tablet.Alias, resp)
 		assert.Equal(c, wantResponseCode, lagMetric.GetResponseCode(), "lag response_code on tablet %s", tablet.Alias)

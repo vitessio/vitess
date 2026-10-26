@@ -2180,10 +2180,11 @@ func (tsv *TabletServer) GetThrottlerStatus(ctx context.Context, throttlerType t
 	return tsv.throttlerByType(throttlerType).Status()
 }
 
-// throttlerByType returns the dedicated query throttler for DEDICATED_QUERY_THROTTLER, and
-// the lag throttler otherwise, including for requests from callers that predate the field.
+// throttlerByType returns the throttler that throttle.ThrottlerTypeFromProto selects: the dedicated
+// query throttler for DEDICATED_QUERY_THROTTLER, and the lag throttler otherwise. The throttler RPCs
+// report the same choice back to the caller.
 func (tsv *TabletServer) throttlerByType(throttlerType tabletmanagerdatapb.ThrottlerType) *throttle.Throttler {
-	if throttlerType == tabletmanagerdatapb.ThrottlerType_DEDICATED_QUERY_THROTTLER {
+	if throttle.ThrottlerTypeFromProto(throttlerType) == throttle.QueryTabletThrottler {
 		return tsv.qThrottler
 	}
 	return tsv.lagThrottler
