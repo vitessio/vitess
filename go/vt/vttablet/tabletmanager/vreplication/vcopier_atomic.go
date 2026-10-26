@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"math"
 	"strconv"
 	"time"
@@ -32,7 +33,6 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -335,10 +335,14 @@ func (vc *vcopier) runPostCopyActionsAndDeleteCopyState(ctx, stopCtx context.Con
 		return vterrors.Wrapf(err, "failed to execute post copy actions for table %q", tableName)
 	}
 	// After the post copy actions, so that any deferred secondary keys exist.
-	// If the controller stopped before the table could be analyzed, keep its
-	// copy state, so that the table is analyzed when the copy resumes.
+	// An atomic copy can't resume: any error fails the workflow. So if the
+	// controller stopped before the table could be analyzed, finish the copy
+	// without it, as every row has been copied.
 	if vc.vr.analyzeTableIfStatsAutoRecalcDisabled(stopCtx, tableName) {
-		return vterrors.Errorf(vtrpcpb.Code_CANCELED, "the controller stopped before the %q table could be analyzed", tableName)
+		log.Warn("The atomic copy finished the table without analyzing it, as the controller stopped; run ANALYZE TABLE on it to refresh its statistics",
+			slog.String("table", tableName),
+			slog.String("workflow", vc.vr.WorkflowName),
+		)
 	}
 	log.Info("Deleting copy state and post copy actions for table " + tableName)
 	delQueryBuf := sqlparser.NewTrackedBuffer(nil)

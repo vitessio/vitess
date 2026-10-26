@@ -1246,9 +1246,9 @@ func (vr *vreplicator) killConnectionOnStop(stopCtx context.Context, dbClient *v
 // phase cycle ends.
 //
 // It returns true if the table needed analyzing but the controller stopped or
-// the engine closed, so the ANALYZE TABLE may not have run. The caller must
-// then keep the table's copy state, so that the table is analyzed when the copy
-// resumes.
+// the engine closed, so the ANALYZE TABLE may not have run. A copy that can
+// resume then keeps the table's copy state, so that the table is analyzed when
+// the copy resumes.
 func (vr *vreplicator) analyzeTableIfStatsAutoRecalcDisabled(stopCtx context.Context, tableName string) bool {
 	dbName := vr.dbClient.DBName()
 	query, err := sqlparser.ParseAndBind(sqlGetTableStatsAutoRecalc, sqltypes.StringBindVariable(dbName), sqltypes.StringBindVariable(tableName))

@@ -942,10 +942,20 @@ func TestCancelledDeferSecondaryKeys(t *testing.T) {
 				assert.Contains(t, infoLogs, "The table was not analyzed, as the controller stopped")
 				assert.NotContains(t, warnLogs, "Unable to analyze the table")
 				logMu.Unlock()
+
 				// The killed ANALYZE TABLE did not update the statistics.
 				res, err := dbaconn.ExecuteFetch(fmt.Sprintf("select n_rows from mysql.innodb_table_stats where database_name = '%s' and table_name = '%s'", dbName, tableName), 1)
 				require.NoError(t, err)
 				require.Len(t, res.Rows, 1)
+				assert.Equal(t, "0", res.Rows[0][0].ToString())
+
+				// An atomic copy can't resume, so it finishes the table
+				// without the ANALYZE TABLE rather than fail the workflow.
+				_, err = dbClient.ExecuteFetch(fmt.Sprintf("insert into _vt.copy_state (vrepl_id, table_name) values (%d, '%s')", id, tableName), 1)
+				require.NoError(t, err)
+				require.NoError(t, newVCopier(vr).runPostCopyActionsAndDeleteCopyState(t.Context(), stopCtx, tableName))
+				res, err = dbaconn.ExecuteFetch(fmt.Sprintf("select count(*) from _vt.copy_state where vrepl_id = %d and table_name = '%s'", id, tableName), 1)
+				require.NoError(t, err)
 				assert.Equal(t, "0", res.Rows[0][0].ToString())
 				return
 			}
