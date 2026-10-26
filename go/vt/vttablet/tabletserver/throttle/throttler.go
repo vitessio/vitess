@@ -45,7 +45,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"math"
 	"math/rand/v2"
 	"strings"
@@ -62,6 +61,7 @@ import (
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
@@ -88,6 +88,11 @@ const (
 	metricsAggregateInterval       = 125 * time.Millisecond
 	throttledAppsSnapshotInterval  = 5 * time.Second
 	recentCheckRateLimiterInterval = 1 * time.Second // Ticker assisting in determining when the throttler was last checked
+	// cachedPrimaryTTL is how long a non-primary reuses the primary tablet record it stimulates, before reading it
+	// from the topo again. A primary restarted on another host or port fails the check, which drops the record at
+	// once. A demoted primary still answers it, so after a reparent this bounds how long the tablet keeps
+	// stimulating the old primary.
+	cachedPrimaryTTL = 15 * time.Second
 
 	aggregatedMetricsExpiration = 5 * time.Second
 	recentAppsExpiration        = time.Hour
@@ -115,6 +120,10 @@ const (
 var (
 	statsThrottlerHeartbeatRequests    = stats.NewCounter(lagThrottlerMetricsPrefix+"HeartbeatRequests", "heartbeat requests")
 	statsThrottlerProbeRecentlyChecked = stats.NewCounter(lagThrottlerMetricsPrefix+"ProbeRecentlyChecked", "probe recently checked")
+
+	// stimulationErrorLogger logs failed stimulations of the primary at most once a minute: a tablet that the primary
+	// does not probe stimulates it every few seconds, including while the primary is unreachable.
+	stimulationErrorLogger = logutil.NewThrottledLogger("ThrottlerStimulation", time.Minute)
 )
 
 func init() {
@@ -172,6 +181,11 @@ type Throttler struct {
 	recentCheckRateLimiter *timer.RateLimiter
 	recentCheckDormantDiff int64
 	recentCheckDiff        int64
+
+	// cachedPrimary is the primary tablet that this non-primary stimulates, and stimulating is true while a
+	// stimulation is in flight.
+	cachedPrimary atomic.Pointer[cachedPrimaryTablet]
+	stimulating   atomic.Bool
 
 	throttleTabletTypesMap map[topodatapb.TabletType]bool
 
@@ -312,6 +326,27 @@ func (throttler *Throttler) initThrottleTabletTypes() {
 	}
 	// always on:
 	throttler.throttleTabletTypesMap[topodatapb.TabletType_REPLICA] = true
+}
+
+// cachedPrimaryTablet is a primary tablet record and the time it was read from the topo.
+type cachedPrimaryTablet struct {
+	tablet *topodatapb.Tablet
+	readAt time.Time
+}
+
+// primaryStimulationInterval returns how often this tablet, while it is being checked, stimulates the primary to renew
+// its on-demand heartbeat lease. The primary renews the lease by itself for the tablet types it probes, so for those
+// an occasional stimulation, once per dormantPeriod, is enough. It does not probe other types, RDONLY by default, so
+// a tablet of such a type stimulates it every half of the shortest lease, or else its heartbeats, and therefore its
+// lag, go stale. The lease and whether heartbeats always run are set by the primary's flags, not this tablet's, so
+// the interval does not depend on them. Whether the primary probes this tablet's type is also the primary's
+// decision: --throttle-tablet-types must be the same on the primary and on this tablet.
+func (throttler *Throttler) primaryStimulationInterval() time.Duration {
+	tabletType := throttler.tabletTypeFunc()
+	if tabletType == topodatapb.TabletType_PRIMARY || throttler.throttleTabletTypesMap[tabletType] {
+		return throttler.dormantPeriod
+	}
+	return heartbeat.MinimalOnDemandDuration / 2
 }
 
 // InitDBConfig initializes keyspace and shard
@@ -719,36 +754,57 @@ func (throttler *Throttler) counter(lagCounter *stats.Counter, name, help string
 // it to request for heartbeats.
 func (throttler *Throttler) stimulatePrimaryThrottler(ctx context.Context, tmClient tmclient.TabletManagerClient) error {
 	// Some reasonable timeout, to ensure we release connections even if they're hanging (otherwise grpc-go keeps polling those connections forever)
-	ctx, cancel := context.WithTimeout(ctx, throttler.dormantPeriod)
+	ctx, cancel := context.WithTimeout(ctx, throttler.primaryStimulationInterval())
 	defer cancel()
 
-	// The shard record names the primary, so there is no need to list and read every tablet in the
-	// shard: that costs a topo read per cell and per tablet, on every replica that gets checked.
-	si, err := throttler.ts.GetShard(ctx, throttler.keyspace, throttler.shard)
+	primary, err := throttler.primaryTablet(ctx)
 	if err != nil {
+		stimulationErrorLogger.Errorf("stimulatePrimaryThrottler failed to find the primary: %v", err)
 		return err
 	}
-	if !si.HasPrimary() {
-		return nil
-	}
-	tablet, err := throttler.ts.GetTablet(ctx, si.PrimaryAlias)
-	if err != nil {
-		return err
-	}
-	if tablet.Type != topodatapb.TabletType_PRIMARY {
-		// The shard record and the tablet record disagree, e.g. mid-reparent. We will try again
-		// on the next stimulation.
+	if primary == nil {
 		return nil
 	}
 	req := &tabletmanagerdatapb.CheckThrottlerRequest{
 		AppName:       throttlerapp.ThrottlerStimulatorName.String(),
 		ThrottlerType: throttler.throttlerType.ToProto(),
 	}
-	_, err = tmClient.CheckThrottler(ctx, tablet.Tablet, req)
+	_, err = tmClient.CheckThrottler(ctx, primary, req)
 	if err != nil {
-		log.Error("stimulatePrimaryThrottler failed", slog.Any("error", err))
+		// The primary may have moved: read it from the topo on the next stimulation.
+		throttler.cachedPrimary.Store(nil)
+		stimulationErrorLogger.Errorf("stimulatePrimaryThrottler failed to check %v: %v", topoproto.TabletAliasString(primary.Alias), err)
 	}
 	return err
+}
+
+// primaryTablet returns the shard's primary tablet, or nil if the shard has none right now. A tablet that
+// stimulates the primary every few seconds would otherwise read the shard and tablet records from the topo
+// just as often, so it reuses them for cachedPrimaryTTL.
+func (throttler *Throttler) primaryTablet(ctx context.Context) (*topodatapb.Tablet, error) {
+	if cached := throttler.cachedPrimary.Load(); cached != nil && time.Since(cached.readAt) < cachedPrimaryTTL {
+		return cached.tablet, nil
+	}
+	// The shard record names the primary, so there is no need to list and read every tablet in the
+	// shard: that costs a topo read per cell and per tablet, on every replica that gets checked.
+	si, err := throttler.ts.GetShard(ctx, throttler.keyspace, throttler.shard)
+	if err != nil {
+		return nil, err
+	}
+	if !si.HasPrimary() {
+		return nil, nil
+	}
+	tablet, err := throttler.ts.GetTablet(ctx, si.PrimaryAlias)
+	if err != nil {
+		return nil, err
+	}
+	if tablet.Type != topodatapb.TabletType_PRIMARY {
+		// The shard record and the tablet record disagree, e.g. mid-reparent. We will try again
+		// on the next stimulation.
+		return nil, nil
+	}
+	throttler.cachedPrimary.Store(&cachedPrimaryTablet{tablet: tablet.Tablet, readAt: time.Now()})
+	return tablet.Tablet, nil
 }
 
 // throttledAppsSnapshot returns a snapshot (a copy) of current throttled apps
@@ -798,13 +854,12 @@ func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 	inventoryRefreshTicker := addTicker(throttler.inventoryRefreshInterval)
 	metricsAggregateTicker := addTicker(throttler.metricsAggregateInterval)
 	throttledAppsTicker := addTicker(throttler.throttledAppsSnapshotInterval)
-	primaryStimulatorRateLimiter := timer.NewRateLimiter(throttler.dormantPeriod)
+	var lastPrimaryStimulation time.Time
 	throttler.recentCheckRateLimiter = timer.NewRateLimiter(recentCheckRateLimiterInterval)
 
 	wg.Go(func() {
 		defer func() {
 			throttler.recentCheckRateLimiter.Stop()
-			primaryStimulatorRateLimiter.Stop()
 			throttler.aggregatedMetrics.Flush()
 			throttler.recentApps.Flush()
 			clear(throttler.inventory.TabletMetrics)
@@ -825,6 +880,9 @@ func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 			tmClient = tmclient.NewTabletManagerClient()
 			defer tmClient.Close()
 		}
+		// Background stimulations use tmClient, so they finish before it is closed.
+		var stimulations sync.WaitGroup
+		defer stimulations.Wait()
 
 		for {
 			select {
@@ -874,11 +932,15 @@ func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 							// even further.
 							// Another outcome is that the primary will go out of "dormant" mode, and start collecting
 							// replica metrics more frequently.
-							primaryStimulatorRateLimiter.Do(
-								func() error {
-									return throttler.stimulatePrimaryThrottler(ctx, tmClient)
-								},
-							)
+							// The stimulation reads the topo and calls the primary, so it runs in the background, one at
+							// a time, rather than holding up this loop.
+							if time.Since(lastPrimaryStimulation) >= throttler.primaryStimulationInterval() && throttler.stimulating.CompareAndSwap(false, true) {
+								lastPrimaryStimulation = time.Now()
+								stimulations.Go(func() {
+									defer throttler.stimulating.Store(false)
+									_ = throttler.stimulatePrimaryThrottler(ctx, tmClient)
+								})
+							}
 						}
 					}
 				}

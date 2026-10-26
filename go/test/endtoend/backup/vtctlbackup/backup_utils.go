@@ -1040,7 +1040,7 @@ func vtctlBackup(t *testing.T, tabletType string) {
 // resume replication from them, and stream from them across the restored files,
 // whose rotate events still name the source's binlogs.
 func backupShardWithBinlogs(t *testing.T) {
-	if currentSetupType != BuiltinBackup {
+	if currentSetupType == XtraBackup || currentSetupType == MySQLShell {
 		t.Skip("--include-binlogs is only supported by the builtin backup engine")
 	}
 	verifyInitialReplication(t)

@@ -2061,7 +2061,9 @@ func TestReplica(t *testing.T) {
 
 	throttler := newTestThrottler()
 	throttler.dormantPeriod = time.Minute
-	throttler.tabletTypeFunc = func() topodatapb.TabletType { return topodatapb.TabletType_REPLICA }
+	var tabletType atomic.Int32
+	tabletType.Store(int32(topodatapb.TabletType_REPLICA))
+	throttler.tabletTypeFunc = func() topodatapb.TabletType { return topodatapb.TabletType(tabletType.Load()) }
 
 	tmClient, ok := throttler.overrideTmClient.(*fakeTMClient)
 	require.True(t, ok)
@@ -2296,6 +2298,20 @@ func TestReplica(t *testing.T) {
 				assert.NotNil(t, checkResult)
 				assert.Contains(t, checkResult.Summary(), testAppName.String()+" is denied access due to")
 			})
+
+			t.Run("RDONLY tablet stimulates the primary every half of the shortest lease", func(t *testing.T) {
+				// The REPLICA above stimulated the primary once, and a REPLICA would not again within dormantPeriod.
+				// The primary does not probe RDONLY tablets, so while one is checked it renews the lease itself.
+				tabletType.Store(int32(topodatapb.TabletType_RDONLY))
+				before := len(tmClient.AppNames())
+				assert.Eventually(t, func() bool {
+					throttler.Check(ctx, throttlerapp.VStreamerName.String(), nil, flags)
+					return len(tmClient.AppNames()) >= before+2
+				}, 30*time.Second, 200*time.Millisecond)
+				for _, appName := range tmClient.AppNames() {
+					assert.Equal(t, throttlerapp.ThrottlerStimulatorName.String(), appName)
+				}
+			})
 		}()
 	})
 }
@@ -2353,7 +2369,9 @@ func (c *stimulateTMClient) CheckThrottler(ctx context.Context, tablet *topodata
 
 // TestStimulatePrimaryThrottler verifies that a replica finds the primary to stimulate from the shard record
 // with one shard read and at most one tablet read, never walking the shard, and that it skips the round when
-// there is no primary or the tablet record does not say PRIMARY, and returns topo and RPC errors.
+// there is no primary or the tablet record does not say PRIMARY, and returns topo and RPC errors. A primary that
+// answered is reused for the next stimulation without reading the topo again; any other outcome is not.
+// It also verifies how often each tablet type stimulates the primary.
 func TestStimulatePrimaryThrottler(t *testing.T) {
 	primary := &topodatapb.TabletAlias{Cell: "fakezone1", Uid: 101}
 	errShard := errors.New("topo unavailable")
@@ -2420,10 +2438,11 @@ func TestStimulatePrimaryThrottler(t *testing.T) {
 			}
 			tmClient := &stimulateTMClient{checkErr: tcase.checkErr}
 			throttler := &Throttler{
-				keyspace:      "ks",
-				shard:         "-80",
-				ts:            ts,
-				dormantPeriod: time.Minute,
+				keyspace:       "ks",
+				shard:          "-80",
+				ts:             ts,
+				dormantPeriod:  time.Minute,
+				tabletTypeFunc: func() topodatapb.TabletType { return topodatapb.TabletType_REPLICA },
 			}
 
 			err := throttler.stimulatePrimaryThrottler(t.Context(), tmClient)
@@ -2439,12 +2458,60 @@ func TestStimulatePrimaryThrottler(t *testing.T) {
 			assert.Len(t, ts.tabletReads, tcase.expectReads)
 			if tcase.expectTarget == nil {
 				assert.Empty(t, tmClient.checked)
+				// Nothing was cached, so a second stimulation reads the shard record again.
+				_ = throttler.stimulatePrimaryThrottler(t.Context(), tmClient)
+				assert.Equal(t, 2, ts.shardReads)
+				assert.Empty(t, tmClient.checked)
 				return
 			}
 			require.Len(t, tmClient.checked, 1)
 			assert.Equal(t, topoproto.TabletAliasString(tcase.expectTarget), topoproto.TabletAliasString(tmClient.checked[0].Alias))
+
+			// A second stimulation reuses the primary only if the first one reached it.
+			_ = throttler.stimulatePrimaryThrottler(t.Context(), tmClient)
+			if tcase.checkErr == nil {
+				assert.Equal(t, 1, ts.shardReads, "the primary that answered should be reused")
+			} else {
+				assert.Equal(t, 2, ts.shardReads, "a primary that failed the check should be read again")
+			}
+			require.Len(t, tmClient.checked, 2)
+			assert.Equal(t, topoproto.TabletAliasString(tcase.expectTarget), topoproto.TabletAliasString(tmClient.checked[1].Alias))
+
+			// A cached primary older than cachedPrimaryTTL is read again.
+			throttler.cachedPrimary.Store(&cachedPrimaryTablet{tablet: tmClient.checked[0], readAt: time.Now().Add(-cachedPrimaryTTL)})
+			reads := ts.shardReads
+			_ = throttler.stimulatePrimaryThrottler(t.Context(), tmClient)
+			assert.Equal(t, reads+1, ts.shardReads)
 		})
 	}
+
+	t.Run("stimulation interval", func(t *testing.T) {
+		intervalCases := []struct {
+			name       string
+			tabletType topodatapb.TabletType
+			listed     bool
+			expect     time.Duration
+		}{
+			{name: "primary", tabletType: topodatapb.TabletType_PRIMARY, expect: time.Minute},
+			{name: "replica, which the primary probes", tabletType: topodatapb.TabletType_REPLICA, expect: time.Minute},
+			{name: "rdonly", tabletType: topodatapb.TabletType_RDONLY, expect: 2 * time.Second},
+			{name: "spare", tabletType: topodatapb.TabletType_SPARE, expect: 2 * time.Second},
+			{name: "rdonly listed in --throttle-tablet-types", tabletType: topodatapb.TabletType_RDONLY, listed: true, expect: time.Minute},
+		}
+		for _, tcase := range intervalCases {
+			t.Run(tcase.name, func(t *testing.T) {
+				throttler := &Throttler{
+					dormantPeriod:  time.Minute,
+					tabletTypeFunc: func() topodatapb.TabletType { return tcase.tabletType },
+				}
+				throttler.initThrottleTabletTypes()
+				if tcase.listed {
+					throttler.throttleTabletTypesMap[tcase.tabletType] = true
+				}
+				assert.Equal(t, tcase.expect, throttler.primaryStimulationInterval())
+			})
+		}
+	})
 }
 
 // Both requests a throttler sends to another tablet, the stimulation of the primary and the
@@ -2461,8 +2528,9 @@ func TestThrottlerRequestsCarryThrottlerType(t *testing.T) {
 					primaryAlias: primary,
 					tabletTypes:  map[uint32]topodatapb.TabletType{101: topodatapb.TabletType_PRIMARY},
 				},
-				dormantPeriod: time.Minute,
-				throttlerType: throttlerType,
+				dormantPeriod:  time.Minute,
+				throttlerType:  throttlerType,
+				tabletTypeFunc: func() topodatapb.TabletType { return topodatapb.TabletType_REPLICA },
 			}
 			tmClient := &stimulateTMClient{}
 

@@ -66,6 +66,7 @@
         - [ApplySchema session variables](#vttablet-applyschema-session-variables)
         - [Table ACL: statements whose tables cannot be determined are denied under strict table ACL](#vttablet-table-acl-undetermined-table-set)
         - [Table ACL: reads embedded in non-SELECT statements are now checked](#vttablet-table-acl-embedded-reads)
+        - [Tablets outside `--throttle-tablet-types` keep their on-demand heartbeats running](#vttablet-throttler-unprobed-heartbeats)
     - **[VTCtld](#minor-changes-vtctld)**
         - [MySQL version-aware reparent candidate election](#vtctld-version-aware-reparent)
     - **[Backup/Restore](#minor-changes-backup)**
@@ -777,6 +778,16 @@ Connection settings — the SET statements vtgate attaches to a session's querie
 
 See [#21139](https://github.com/vitessio/vitess/pull/21139) for details.
 
+#### <a id="vttablet-throttler-unprobed-heartbeats"/>Tablets outside `--throttle-tablet-types` keep their on-demand heartbeats running</a>
+
+When heartbeats run on demand, which is the case unless `--heartbeat-enable` is set without `--heartbeat-on-demand-duration`, the primary renews the heartbeat lease only for the tablet types it probes: the primary and the types in `--throttle-tablet-types` (default `replica`). A tablet of another type, RDONLY by default, asked the primary for heartbeats at most once a minute, so its heartbeats, and with them its lag, went stale for most of every minute. VTGate VStreams, workflows run with `--tablet-types rdonly`, and VDiffs sourced from RDONLY tablets were then throttled on false lag.
+
+While the throttler on such a tablet is being checked, the tablet now asks the primary for heartbeats every 2 seconds, half of the shortest lease, so its lag stays accurate. The primary writes heartbeats while those checks continue, as it already does while the throttler on a replica is being checked. Nothing changes while nothing checks the throttler on the tablet. When the primary's heartbeats always run, it ignores these requests.
+
+Each tablet decides from its own `--throttle-tablet-types` whether the primary probes it, so set the flag to the same value on the primary and on the other tablets of the keyspace. A tablet that lists its own type while the primary does not would ask for heartbeats only once a minute, as before.
+
+See [#20248](https://github.com/vitessio/vitess/issues/20248) for details.
+
 
 ### <a id="minor-changes-vtctld"/>VTCtld</a>
 
@@ -857,7 +868,7 @@ See [#20778](https://github.com/vitessio/vitess/pull/20778) for details.
 
 #### <a id="vtadmin-updated-node"/>vtadmin-web updated to node v22.23.2 (LTS)</a>
 
-Building `vtadmin-web` now requires node v22.22.2 or newer on the 22 line, v24.15.0 or newer on the 24 line, or v26 and above, up from v22.13.0; `package.json` declares exactly that range and `npm ci` enforces it. The vtadmin build script, the CI workflows, and the `vitess/vtadmin` image build with node v22.23.2. The range is what jsdom 30, a test dependency, supports; on the 22 line the bump stays within the same major, so no breaking changes are involved. Full details on the node v22.23.2 release can be found at https://nodejs.org/en/blog/release/v22.23.2.
+Building `vtadmin-web` now requires node v22.22.2 or newer on the 22 line, v24.15.0 or newer on the 24 line, or v26 and above, up from v22.13.0; `package.json` declares exactly that range and `npm ci` enforces it. The vtadmin build script and the `vitess/vtadmin` image build with node v22.23.2. The range is what jsdom 30, a test dependency, supports; on the 22 line the bump stays within the same major, so no breaking changes are involved. Full details on the node v22.23.2 release can be found at https://nodejs.org/en/blog/release/v22.23.2.
 
 ### <a id="minor-changes-general"/>General</a>
 
