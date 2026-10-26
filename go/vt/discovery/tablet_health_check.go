@@ -325,7 +325,6 @@ func (thc *tabletHealthCheck) checkConn(hc *HealthCheckImpl) {
 			// the healthcheck cache again via the topology watcher.
 			// WARNING: Under no other circumstances should we be deleting the tablet here.
 			if strings.Contains(err.Error(), "health stats mismatch") {
-				thc.logger.Warningf("deleting tablet %v from healthcheck due to health stats mismatch", thc.Tablet)
 				hc.deleteTabletHealthCheck(thc)
 				return
 			}

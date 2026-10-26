@@ -485,8 +485,10 @@ func (hc *HealthCheckImpl) deleteTabletHealthCheck(thc *tabletHealthCheck) {
 
 	tabletAlias := tabletAliasString(topoproto.TabletAliasString(thc.Tablet.Alias))
 	if !hc.isRegisteredHealthCheckLocked(tabletAlias, thc) {
+		hc.logger().Infof("Tablet %v has been deleted or replaced, skipping deletion", tabletAlias)
 		return
 	}
+	thc.logger.Warningf("Removing tablet from healthcheck: %v due to health stats mismatch", thc.Tablet)
 	hc.deleteTabletLocked(thc.Tablet)
 }
 

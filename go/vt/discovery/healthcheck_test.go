@@ -680,7 +680,7 @@ func TestHealthCheckErrorOnPrimaryAfterExternalReparent(t *testing.T) {
 	mustMatch(t, health, a, "unexpected result")
 }
 
-// TestHealthCheckVerifiesTabletAlias covers removal after a current-stream mismatch.
+// TestHealthCheckVerifiesTabletAlias covers removal without broadcasting a current-stream mismatch.
 func TestHealthCheckVerifiesTabletAlias(t *testing.T) {
 	for _, tabletType := range []topodatapb.TabletType{topodatapb.TabletType_REPLICA, topodatapb.TabletType_PRIMARY} {
 		t.Run(tabletType.String(), func(t *testing.T) {
@@ -708,13 +708,24 @@ func TestHealthCheckVerifiesTabletAlias(t *testing.T) {
 				synctest.Wait()
 				require.Len(t, hc.GetHealthyTabletStats(target), 1)
 
+				// Subscribe after the valid update so only mismatch-related notifications remain.
+				resultChan := hc.Subscribe(t.Name())
+				t.Cleanup(func() { hc.Unsubscribe(resultChan) })
+
 				input <- &querypb.StreamHealthResponse{
 					Target: target, TabletAlias: &topodatapb.TabletAlias{Uid: 20, Cell: "cellb"}, Serving: true,
 					PrimaryTermStartTimestamp: 10,
 					RealtimeStats:             &querypb.RealtimeStats{ReplicationLagSeconds: 1},
 				}
-				require.ErrorContains(t, <-fc.cbErrCh, "health stats mismatch")
+				select {
+				case err := <-fc.cbErrCh:
+					require.ErrorContains(t, err, "health stats mismatch")
+				case <-resultChan:
+					require.FailNow(t, "mismatched health response was broadcast before the callback error")
+				}
 				synctest.Wait()
+				// If both channels were ready, select may have received the error first.
+				assert.Empty(t, resultChan, "mismatched health response was broadcast")
 
 				require.ErrorIs(t, registered.ctx.Err(), context.Canceled)
 				assert.Nil(t, hc.registeredHealthCheck(tablet.Alias))
