@@ -1232,7 +1232,15 @@ func TestAnalyzeTableIfStatsAutoRecalcDisabled(t *testing.T) {
 	execDba(fmt.Sprintf("insert into _vt.vreplication (id, workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, options) values (%d, 'test', '', '', 99999, 99999, 0, 0, 'Running', '%s', '{}') on duplicate key update workflow='test', source='', pos='', max_tps=99999, max_replication_lag=99999, time_updated=0, transaction_timestamp=0, state='Running', db_name='%s'",
 		id, dbName, dbName))
 	t.Cleanup(func() { execDba(fmt.Sprintf("delete from _vt.vreplication where id = %d", id)) })
-	vr := newVReplicator(id, &binlogdatapb.BinlogSource{}, nil, stats, dbClient, env.Mysqld, playerEngine, vttablet.DefaultVReplicationConfig)
+	// An engine of its own, as TestCancelledDeferSecondaryKeys closes the shared
+	// one, and a closed engine stops the ANALYZE TABLE before it runs.
+	vre := &Engine{
+		ctx:                     t.Context(),
+		env:                     playerEngine.env,
+		dbClientFactoryFiltered: playerEngine.dbClientFactoryFiltered,
+		dbClientFactoryDba:      playerEngine.dbClientFactoryDba,
+	}
+	vr := newVReplicator(id, &binlogdatapb.BinlogSource{}, nil, stats, dbClient, env.Mysqld, vre, vttablet.DefaultVReplicationConfig)
 	tableName := "analyze_t1"
 	nRows := func() string {
 		qr := execDba(fmt.Sprintf("select n_rows from mysql.innodb_table_stats where database_name = '%s' and table_name = '%s'", dbName, tableName))
