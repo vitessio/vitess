@@ -21,6 +21,7 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math"
 	"math/big"
 	"os"
@@ -955,7 +956,12 @@ func verifyPosition(ctx context.Context, tmc tmclient.TabletManagerClient, ts *t
 		if permanent, ok := errors.AsType[permanentError](err); ok {
 			return primaryTerm{}, permanent.error
 		}
-		log.Warn(fmt.Sprintf("Waiting %v to retry verifying %s after error: %v", waitTime, check.what, err))
+		log.Warn("Waiting to retry verifying a position against the shard primary",
+			slog.String("check", check.what),
+			slog.Duration("wait", waitTime),
+			slog.Any("error", err),
+			slog.String("error_code", vterrors.Code(err).String()),
+		)
 
 		select {
 		case <-ctx.Done():
@@ -1109,7 +1115,9 @@ func verifyNewBackup(ctx context.Context, tmc tmclient.TabletManagerClient, ts *
 			si, err := ts.GetShard(opCtx, initKeyspace, initShard)
 			cancel()
 			if err == nil && verified.equal(primaryTerm{alias: si.PrimaryAlias, termStart: si.PrimaryTermStartTime}) {
-				log.Info(fmt.Sprintf("Primary %v is unchanged since the data to back up was verified", topoproto.TabletAliasString(verified.alias)))
+				log.Info("The shard primary is unchanged since the data to back up was verified",
+					slog.String("primary", topoproto.TabletAliasString(verified.alias)),
+				)
 				return nil
 			}
 		}
