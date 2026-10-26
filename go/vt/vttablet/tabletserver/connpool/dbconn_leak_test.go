@@ -32,10 +32,9 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
-// queryGoroutinesBlockedOnSend counts goroutines started by execOnce or
-// streamOnce that are parked sending their result on a channel nobody is
-// receiving from.
-func queryGoroutinesBlockedOnSend() int {
+// outstandingQueryWorkers counts goroutines started by execOnce or streamOnce
+// that have not exited, whatever they are waiting on.
+func outstandingQueryWorkers() int {
 	buf := make([]byte, 1<<20)
 	for {
 		n := runtime.Stack(buf, true)
@@ -48,11 +47,8 @@ func queryGoroutinesBlockedOnSend() int {
 
 	count := 0
 	for _, goroutine := range strings.Split(string(buf), "\n\n") {
-		header, _, _ := strings.Cut(goroutine, "\n")
-		blockedOnSend := strings.Contains(header, "chan send")
-		startedByQuery := strings.Contains(goroutine, "connpool.(*Conn).execOnce") ||
-			strings.Contains(goroutine, "connpool.(*Conn).streamOnce")
-		if blockedOnSend && startedByQuery {
+		if strings.Contains(goroutine, "connpool.(*Conn).execOnce") ||
+			strings.Contains(goroutine, "connpool.(*Conn).streamOnce") {
 			count++
 		}
 	}
@@ -61,7 +57,9 @@ func queryGoroutinesBlockedOnSend() int {
 
 // TestDBConnKillDoesNotLeakGoroutines kills statements whose context is
 // cancelled while they run, through Exec, ExecOnce, Stream and StreamOnce, and
-// verifies that no goroutine is left behind.
+// verifies that every goroutine the statements started exits. Each statement is
+// cancelled only after it has reached the server, and the server ends it only
+// once it receives the kill, so every kill hits a running statement.
 func TestDBConnKillDoesNotLeakGoroutines(t *testing.T) {
 	const kills = 5
 	const query = "delete from t where id in (1, 2, 3)"
@@ -111,31 +109,44 @@ func TestDBConnKillDoesNotLeakGoroutines(t *testing.T) {
 			connPool.Open(params, params, params)
 			defer connPool.Close()
 
+			queryStarted := make(chan struct{}, kills)
+			killReceived := make(chan struct{}, kills)
+			release := make(chan struct{})
+			defer close(release)
+
 			db.AddQuery(query, &sqltypes.Result{})
 			db.SetBeforeFunc(query, func() {
-				time.Sleep(100 * time.Millisecond)
+				queryStarted <- struct{}{}
+				select {
+				case <-killReceived:
+				case <-release:
+				}
 			})
-			db.AddQueryPattern(`kill( query)? \d+`, &sqltypes.Result{})
+			db.AddQueryPatternWithCallback(`kill( query)? \d+`, &sqltypes.Result{}, func(string) {
+				killReceived <- struct{}{}
+			})
 
-			blockedBefore := queryGoroutinesBlockedOnSend()
+			workersBefore := outstandingQueryWorkers()
 
 			for range kills {
 				dbConn, err := newPooledConn(context.Background(), connPool, params)
 				require.NoError(t, err)
 
 				ctx, cancel := context.WithCancel(context.Background())
-				time.AfterFunc(10*time.Millisecond, cancel)
+				go func() {
+					<-queryStarted
+					cancel()
+				}()
 
 				err = testCase.execute(ctx, dbConn)
 				require.ErrorContains(t, err, "errno 1317")
+				require.ErrorContains(t, err, "killing")
 				dbConn.Close()
 			}
 
-			leaked := func() int {
-				return queryGoroutinesBlockedOnSend() - blockedBefore
-			}
-			assert.Eventually(t, func() bool { return leaked() == 0 }, 2*time.Second, 20*time.Millisecond)
-			assert.Zero(t, leaked(), "goroutines still blocked sending the query result after %d kills", kills)
+			assert.Eventually(t, func() bool {
+				return outstandingQueryWorkers() <= workersBefore
+			}, 5*time.Second, 20*time.Millisecond, "query goroutines still running after %d kills", kills)
 		})
 	}
 }
