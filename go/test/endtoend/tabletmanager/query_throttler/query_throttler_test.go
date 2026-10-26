@@ -25,6 +25,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/sqlerror"
@@ -53,6 +54,15 @@ func pushQueryThrottlerConfig(t *testing.T, config *querythrottlerpb.Config) {
 		_, err := vtctldClient.UpdateQueryThrottlerConfig(t.Context(), req)
 		assert.NoError(c, err, "pushing query throttler config")
 	}, waitTimeout, time.Second)
+}
+
+// requireKeyspaceQueryThrottlerConfig requires the keyspace to store want as its query throttler config.
+func requireKeyspaceQueryThrottlerConfig(t *testing.T, want *querythrottlerpb.Config) {
+	t.Helper()
+	resp, err := vtctldClient.GetKeyspace(t.Context(), &vtctldatapb.GetKeyspaceRequest{Keyspace: keyspaceName})
+	require.NoError(t, err)
+	got := resp.GetKeyspace().GetKeyspace().GetQueryThrottlerConfig()
+	require.True(t, proto.Equal(want, got), "keyspace query throttler config: want %v, got %v", want, got)
 }
 
 // waitForQueryThrottlerStatus polls GetThrottlerStatus via gRPC until
@@ -228,8 +238,7 @@ func restoreAfterTest(t *testing.T) {
 
 // throttledCount returns the tablet's QueryThrottlerThrottled count, summed over every
 // label set with the given DryRun value.
-func throttledCount(t *testing.T, tablet *cluster.Vttablet, dryRun bool) float64 {
-	t.Helper()
+func throttledCount(tablet *cluster.Vttablet, dryRun bool) float64 {
 	counts, _ := tablet.VttabletProcess.GetVars()["QueryThrottlerThrottled"].(map[string]any)
 	// Keys are the label values joined with '.', and DryRun is the last label.
 	suffix := "." + strconv.FormatBool(dryRun)
@@ -246,15 +255,19 @@ func throttledCount(t *testing.T, tablet *cluster.Vttablet, dryRun bool) float64
 // throttle decision for it. Every attempt must succeed, since dry_run never rejects.
 func waitForDryRunDecision(t *testing.T, query string) {
 	t.Helper()
-	baseline := throttledCount(t, primaryTablet, true)
+	baseline := throttledCount(primaryTablet, true)
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
 		conn, err := mysql.Connect(t.Context(), &vtParams)
 		require.NoError(c, err)
 		defer conn.Close()
 
+		// A failure on c would only retry, so a rejected query fails the test itself, and
+		// returning without a failure on c ends the wait.
 		_, err = conn.ExecuteFetch(query, 1000, true)
-		require.NoError(c, err, "query %q must succeed in dry-run mode", query)
-		assert.Greater(c, throttledCount(t, primaryTablet, true), baseline, "no dry-run throttle decision recorded for %q", query)
+		if !assert.NoError(t, err, "query %q must succeed in dry-run mode", query) {
+			return
+		}
+		assert.Greater(c, throttledCount(primaryTablet, true), baseline, "no dry-run throttle decision recorded for %q", query)
 	}, waitTimeout, time.Second)
 }
 
@@ -414,8 +427,26 @@ func TestDisableAfterEnable(t *testing.T) {
 func TestDryRunMode(t *testing.T) {
 	restoreAfterTest(t)
 
-	t.Run("push dry-run config with lag threshold", func(t *testing.T) {
-		pushQueryThrottlerConfig(t, lagThrottleConfig("SELECT", 5.0, true))
+	// Push the config through vtctldclient, as an operator would, rather than over gRPC like the
+	// other tests, so the CLI's parsing is covered end to end.
+	const dryRunConfigJSON = `{"enabled":true,"strategy":"TABLET_THROTTLER","dry_run":true,"tablet_strategy_config":{"tablet_rules":{"PRIMARY":{"statement_rules":{"SELECT":{"metric_rules":{"lag":{"thresholds":[{"above":5,"throttle":100}]}}}}}}}}`
+
+	t.Run("push dry-run config with lag threshold through vtctldclient", func(t *testing.T) {
+		out, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("UpdateQueryThrottlerConfig", "--config", dryRunConfigJSON, keyspaceName)
+		require.NoError(t, err, out)
+		requireKeyspaceQueryThrottlerConfig(t, lagThrottleConfig("SELECT", 5.0, true))
+	})
+
+	t.Run("vtctldclient refuses a misspelled key and leaves the config unchanged", func(t *testing.T) {
+		// Dropping the unknown "dry-run" key would push an enforcing config.
+		misspelled := strings.Replace(dryRunConfigJSON, `"dry_run":true`, `"dry-run":true`, 1)
+		require.NotEqual(t, dryRunConfigJSON, misspelled)
+		out, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("UpdateQueryThrottlerConfig", "--config", misspelled, keyspaceName)
+		require.Error(t, err)
+		// vtctldclient logs the error as JSON, which escapes the quotes around the field name.
+		assert.Contains(t, out, "unknown field")
+		assert.Contains(t, out, "dry-run")
+		requireKeyspaceQueryThrottlerConfig(t, lagThrottleConfig("SELECT", 5.0, true))
 	})
 
 	t.Run("wait for throttler to be enabled", func(t *testing.T) {

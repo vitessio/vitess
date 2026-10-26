@@ -382,6 +382,12 @@ func TestValidateQueryThrottlerConfigRequest(t *testing.T) {
 			wantErr: `unsupported statement type "BEGIN" (tablet_type=PRIMARY)`,
 		},
 		{
+			// The case for 150 above is far from the boundary: an off-by-one limit of 101 would still reject 150.
+			name:    "throttle just above 100 rejected",
+			req:     singleRuleRequest("PRIMARY", "SELECT", &querythrottlerpb.ThrottleThreshold{Above: 5, Throttle: 101}),
+			wantErr: "threshold[0] 'throttle' must be between 0 and 100, got 101 (tablet_type=PRIMARY, statement=SELECT, metric=lag)",
+		},
+		{
 			name: "duplicate above rejected",
 			req: singleRuleRequest("PRIMARY", "INSERT",
 				&querythrottlerpb.ThrottleThreshold{Above: 5, Throttle: 50},

@@ -1042,6 +1042,31 @@ func TestTabletThrottlerStrategy_Evaluate_HighestRatioWins(t *testing.T) {
 	}
 }
 
+// Only metrics that the throttler reports as THRESHOLD_EXCEEDED count. A metric that is within the
+// tablet throttler's own threshold must not throttle, even when its value is above a query throttler
+// rule, because the check failed on another metric.
+func TestTabletThrottlerStrategy_Evaluate_IgnoresMetricsWithinThrottlerThreshold(t *testing.T) {
+	overloaded := &throttle.CheckResult{Metrics: map[string]*throttle.MetricResult{
+		"lag":     breachedMetric(20),
+		"loadavg": {ResponseCode: tabletmanagerdata.CheckThrottlerResponseCode_OK, Value: 3},
+	}}
+	cfg := createTestQueryThrottlerConfig(&querythrottlerpb.TabletStrategyConfig{TabletRules: map[string]*querythrottlerpb.StatementRuleSet{
+		"PRIMARY": {StatementRules: map[string]*querythrottlerpb.MetricRuleSet{
+			"SELECT": {MetricRules: map[string]*querythrottlerpb.MetricRule{
+				"lag":     {Thresholds: makeThresholds(10, 25)},
+				"loadavg": {Thresholds: makeThresholds(1, 100)},
+			}},
+		}},
+	}})
+	strategy := newOverloadedStrategy(overloaded, 0, 99)
+
+	decision := strategy.Evaluate(t.Context(), cfg, topodatapb.TabletType_PRIMARY, &sqlparser.ParsedQuery{Query: "SELECT 1"},
+		sqlparser.StmtSelect, 0, toQueryAttributesForTest(&querypb.ExecuteOptions{Priority: "100"}))
+	require.True(t, decision.Throttle)
+	require.Equal(t, "lag", decision.MetricName)
+	require.Equal(t, 0.25, decision.ThrottlePercentage)
+}
+
 // A cached state goes stale cacheStalenessMultiplier refresh intervals after it was
 // refreshed, and a non-positive interval falls back to the default.
 func TestTabletThrottlerStrategy_CacheStaleness(t *testing.T) {

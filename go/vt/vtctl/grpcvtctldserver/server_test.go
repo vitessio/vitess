@@ -15568,6 +15568,10 @@ func TestUpdateQueryThrottlerConfig(t *testing.T) {
 		keyspace *vtctldatapb.Keyspace
 		req      *vtctldatapb.UpdateQueryThrottlerConfigRequest
 		expected *vtctldatapb.UpdateQueryThrottlerConfigResponse
+		// wantConfig is the config that the Keyspace and every SrvKeyspace must store, when it differs from
+		// the request's. The server normalizes the request in place, so comparing with tt.req can't show
+		// that it normalized anything.
+		wantConfig *querythrottler.Config
 		// failSrvKeyspaceUpdate makes every SrvKeyspace write fail after the Keyspace write.
 		failSrvKeyspaceUpdate bool
 		wantCode              vtrpc.Code
@@ -15640,6 +15644,64 @@ func TestUpdateQueryThrottlerConfig(t *testing.T) {
 				},
 			},
 			expected: &vtctldatapb.UpdateQueryThrottlerConfigResponse{},
+		},
+		{
+			name:  "thresholds are stored sorted by above",
+			cells: []string{"zone1", "zone2"},
+			keyspace: &vtctldatapb.Keyspace{
+				Name:     "testkeyspace",
+				Keyspace: &topodatapb.Keyspace{},
+			},
+			req: &vtctldatapb.UpdateQueryThrottlerConfigRequest{
+				Keyspace: "testkeyspace",
+				QueryThrottlerConfig: &querythrottler.Config{
+					Enabled:  true,
+					Strategy: querythrottler.ThrottlingStrategy_TABLET_THROTTLER,
+					TabletStrategyConfig: &querythrottler.TabletStrategyConfig{
+						TabletRules: map[string]*querythrottler.StatementRuleSet{
+							"PRIMARY": {
+								StatementRules: map[string]*querythrottler.MetricRuleSet{
+									"INSERT": {
+										MetricRules: map[string]*querythrottler.MetricRule{
+											"lag": {
+												Thresholds: []*querythrottler.ThrottleThreshold{
+													{Above: 10, Throttle: 100},
+													{Above: 2, Throttle: 25},
+													{Above: 5, Throttle: 50},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: &vtctldatapb.UpdateQueryThrottlerConfigResponse{},
+			wantConfig: &querythrottler.Config{
+				Enabled:  true,
+				Strategy: querythrottler.ThrottlingStrategy_TABLET_THROTTLER,
+				TabletStrategyConfig: &querythrottler.TabletStrategyConfig{
+					TabletRules: map[string]*querythrottler.StatementRuleSet{
+						"PRIMARY": {
+							StatementRules: map[string]*querythrottler.MetricRuleSet{
+								"INSERT": {
+									MetricRules: map[string]*querythrottler.MetricRule{
+										"lag": {
+											Thresholds: []*querythrottler.ThrottleThreshold{
+												{Above: 2, Throttle: 25},
+												{Above: 5, Throttle: 50},
+												{Above: 10, Throttle: 100},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
 		},
 		{
 			name:  "keyspace not found",
@@ -15755,16 +15817,21 @@ func TestUpdateQueryThrottlerConfig(t *testing.T) {
 			require.NoError(t, err)
 			utils.MustMatch(t, tt.expected, resp)
 
+			wantConfig := tt.wantConfig
+			if wantConfig == nil {
+				wantConfig = tt.req.QueryThrottlerConfig
+			}
+
 			// Verify the keyspace was updated
 			ks, err := ts.GetKeyspace(ctx, tt.req.Keyspace)
 			require.NoError(t, err)
-			utils.MustMatch(t, tt.req.QueryThrottlerConfig, ks.QueryThrottlerConfig)
+			utils.MustMatch(t, wantConfig, ks.QueryThrottlerConfig)
 
 			// Verify SrvKeyspace was updated in all cells
 			for _, cell := range tt.cells {
 				srvKs, err := ts.GetSrvKeyspace(ctx, cell, tt.req.Keyspace)
 				require.NoError(t, err)
-				utils.MustMatch(t, tt.req.QueryThrottlerConfig, srvKs.QueryThrottlerConfig)
+				utils.MustMatch(t, wantConfig, srvKs.QueryThrottlerConfig)
 			}
 		})
 	}
