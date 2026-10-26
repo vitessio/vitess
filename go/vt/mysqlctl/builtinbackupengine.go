@@ -640,16 +640,27 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 		backupResult = BackupUsable
 	}
 
+	// Once ctx is done, restoring mysqld's state below fails too, so a failed
+	// backup reports its own error, which says why it failed, and logs the
+	// restore's.
+	restoreErr := func(err error) error {
+		if backupErr != nil {
+			params.Logger.Errorf("failed to restore mysqld's state after the backup failed: %v", err)
+			return backupErr
+		}
+		return err
+	}
+
 	// Try to restart mysqld, use background context in case we timed out the original context
 	err = params.Mysqld.Start(context.Background(), params.Cnf)
 	if err != nil {
-		return backupResult, vterrors.Wrap(err, "can't restart mysqld")
+		return backupResult, restoreErr(vterrors.Wrap(err, "can't restart mysqld"))
 	}
 
 	// Resetting super_read_only back to its original value
 	params.Logger.Infof("resetting mysqld super_read_only to %v", superReadOnly)
 	if _, err := params.Mysqld.SetSuperReadOnly(ctx, superReadOnly); err != nil {
-		return backupResult, err
+		return backupResult, restoreErr(err)
 	}
 
 	// Restore original mysqld state that we saved above.
@@ -660,18 +671,18 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 			semiSyncSource, semiSyncReplica)
 		err := params.Mysqld.SetSemiSyncEnabled(ctx, semiSyncSource, semiSyncReplica)
 		if err != nil {
-			return backupResult, err
+			return backupResult, restoreErr(err)
 		}
 	}
 	if replicaStartRequired {
 		params.Logger.Infof("restarting mysql replication")
 		if err := params.Mysqld.StartReplication(ctx, params.HookExtraEnv); err != nil {
-			return backupResult, vterrors.Wrap(err, "cannot restart replica")
+			return backupResult, restoreErr(vterrors.Wrap(err, "cannot restart replica"))
 		}
 
 		// this should be quick, but we might as well just wait
 		if err := WaitForReplicationStart(ctx, params.Mysqld, replicationStartDeadline); err != nil {
-			return backupResult, vterrors.Wrap(err, "replica is not restarting")
+			return backupResult, restoreErr(vterrors.Wrap(err, "replica is not restarting"))
 		}
 
 		// Wait for a reliable value for ReplicationLagSeconds from ReplicationStatus()
@@ -689,16 +700,16 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 		pos, err := getPrimaryPosition(remoteCtx, tmc, params.TopoServer, params.Keyspace, params.Shard)
 		// If we are unable to get the primary's position, return error.
 		if err != nil {
-			return backupResult, err
+			return backupResult, restoreErr(err)
 		}
 		if !replicationPosition.Equal(pos) {
 			for {
 				if err := ctx.Err(); err != nil {
-					return backupResult, err
+					return backupResult, restoreErr(err)
 				}
 				status, err := params.Mysqld.ReplicationStatus(ctx)
 				if err != nil {
-					return backupResult, err
+					return backupResult, restoreErr(err)
 				}
 				newPos := status.Position
 				if !newPos.Equal(replicationPosition) {

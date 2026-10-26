@@ -719,6 +719,50 @@ func TestBackupFilesFinish(t *testing.T) {
 	assert.Equal(t, 2, manifestAdds(), "a failed check must not retry the MANIFEST")
 }
 
+// TestExecuteFullBackupReportsBackupError checks that a full backup that fails
+// reports its own error, rather than the error from restoring mysqld's state
+// afterwards, which also fails once the backup's context is done.
+func TestExecuteFullBackupReportsBackupError(t *testing.T) {
+	backupRoot := t.TempDir()
+	filebackupstorage.FileBackupStorageRoot = backupRoot
+	require.NoError(t, os.MkdirAll(path.Join(backupRoot, "innodb"), 0o755))
+	require.NoError(t, os.MkdirAll(path.Join(backupRoot, "log"), 0o755))
+	dataDir := path.Join(backupRoot, "datadir", "test1")
+	require.NoError(t, os.MkdirAll(dataDir, 0o755))
+	require.NoError(t, os.WriteFile(path.Join(dataDir, "0.ibd"), []byte("test data for backup"), 0o644))
+
+	ts, keyspace, shard := newBackupTestTopo(t)
+	mysqld := newBackupTestMysqld(t)
+	// super_read_only is already on, so the backup sets it only when restoring
+	// mysqld's state afterwards, and that fails, as with a done context.
+	mysqld.SuperReadOnly.Store(true)
+	mysqld.SetSuperReadOnlyError = errors.New("connection pool context already expired")
+
+	be := &BuiltinBackupEngine{}
+	backupResult, err := be.ExecuteBackup(t.Context(), BackupParams{
+		Logger: logutil.NewMemoryLogger(),
+		Mysqld: mysqld,
+		Cnf: &Mycnf{
+			InnodbDataHomeDir:     path.Join(backupRoot, "innodb"),
+			InnodbLogGroupHomeDir: path.Join(backupRoot, "log"),
+			DataDir:               path.Join(backupRoot, "datadir"),
+		},
+		Stats:                backupstats.NoStats(),
+		Concurrency:          1,
+		HookExtraEnv:         map[string]string{},
+		TopoServer:           ts,
+		Keyspace:             keyspace,
+		Shard:                shard,
+		MysqlShutdownTimeout: time.Minute,
+		VerifyPosition: func(context.Context, replication.Position) error {
+			return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "errant GTIDs")
+		},
+	}, filebackupstorage.NewBackupHandle(nil, "", "", false))
+	require.ErrorContains(t, err, "errant GTIDs")
+	assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+	assert.Equal(t, BackupUnusable, backupResult)
+}
+
 // newBackupTestTopo sets up the topo that ExecuteBackup needs for the MANIFEST
 // metadata, and shortens the mysqld shutdown timeout for the test.
 func newBackupTestTopo(t *testing.T) (ts *topo.Server, keyspace, shard string) {
