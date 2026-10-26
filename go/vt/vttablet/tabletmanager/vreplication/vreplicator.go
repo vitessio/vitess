@@ -970,21 +970,6 @@ func (vr *vreplicator) execPostCopyActions(ctx, stopCtx context.Context, tableNa
 
 	vr.insertLog(LogCopyStart, fmt.Sprintf("Executing %d post copy action(s) for %s table", len(qr.Rows), tableName))
 
-	// Save our connection ID so we can use it to easily KILL any
-	// running SQL action we may perform later if needed.
-	idqr, err := dbClient.ExecuteFetch("select connection_id()", 1)
-	if err != nil {
-		return err
-	}
-	// qr should never be nil, but check anyway to be extra safe.
-	if idqr == nil || len(idqr.Rows) != 1 {
-		return fmt.Errorf("unexpected number of rows returned (%d) from connection_id() query", len(idqr.Rows))
-	}
-	connID, err := idqr.Rows[0][0].ToInt64()
-	if err != nil || connID == 0 {
-		return fmt.Errorf("unexpected result (%d) from connection_id() query, error: %v", connID, err)
-	}
-
 	deleteAction := func(dbc *vdbClient, id int64, vid int32, tn string) error {
 		delq, err := sqlparser.ParseAndBind(sqlDeletePostCopyAction, sqltypes.Int32BindVariable(vid),
 			sqltypes.StringBindVariable(tn), sqltypes.Int64BindVariable(id))
@@ -998,85 +983,14 @@ func (vr *vreplicator) execPostCopyActions(ctx, stopCtx context.Context, tableNa
 		return nil
 	}
 
-	// This could take hours so we start a monitoring goroutine to
-	// listen for the cancellations which indicate that the controller
-	// is stopping: engine shutdown (tablet shutdown or transition) or
-	// controller stop (the workflow is being stopped, deleted, or
-	// updated). If either happens we KILL the connection being used
-	// to execute the actions, using a DBA connection, so that any
-	// in-flight statement (e.g. an ALTER) is aborted and any
-	// subsequent statement on the connection fails immediately.
-	// If we don't do this then we could e.g. cause a PRS to fail as
-	// the running ALTER will block setting [super_]read_only, or cause
-	// a workflow delete to time out as the engine cannot process it
-	// until the controller has stopped.
-	// A failed/killed ALTER will be tried again when the copy
-	// phase starts up again on the (new) PRIMARY.
-	done := make(chan struct{})
-	defer close(done)
-	// killActionsConnection is deliberately independent of which
-	// action -- if any -- is currently executing so that a
-	// cancellation which arrives between actions cannot be lost.
-	// Non-SQL action types, if ever added, will need their own
-	// interruption mechanism.
-	killActionsConnection := func() error {
-		if connID < 1 {
-			return fmt.Errorf("invalid connection ID found (%d) when attempting to kill the connection executing post copy actions", connID)
-		}
-		// The attempt is bounded: the connection setup honors the
-		// context, and if the KILL query itself stalls the goroutine
-		// below closes the connection, which unblocks it. We don't
-		// parent this context on the ones whose cancellation got us
-		// here -- they are already done -- but we keep their values.
-		killCtx, cancel := context.WithTimeout(context.WithoutCancel(stopCtx), killActionsConnectionTimeout)
-		defer cancel()
-		killdbc, err := vr.mysqld.GetDbaConnection(killCtx)
-		if err != nil {
-			return fmt.Errorf("unable to connect to the database when attempting to kill the connection executing post copy actions: %v", err)
-		}
-		defer killdbc.Close()
-		go func() {
-			// killCtx is always cancelled when the attempt returns, so
-			// this goroutine cannot leak. Close is idempotent and safe
-			// to call concurrently with an in-flight query.
-			<-killCtx.Done()
-			killdbc.Close()
-		}()
-		_, kerr := killdbc.ExecuteFetch(fmt.Sprintf("kill %d", connID), 1, false)
-		return kerr
+	// This could take hours, so interrupt the actions if the controller
+	// stops or the engine closes. A failed/killed ALTER will be tried
+	// again when the copy phase starts up again on the (new) PRIMARY.
+	stopKillWatch, err := vr.killConnectionOnStop(stopCtx, dbClient, tableName, "post copy actions")
+	if err != nil {
+		return err
 	}
-	go func() {
-		var reason string
-		select {
-		// Only kill the connection executing the post copy actions
-		// if the engine is closing or the controller is stopping.
-		case <-vr.vre.ctx.Done():
-			reason = "the engine is closing"
-		case <-stopCtx.Done():
-			reason = "the controller is stopping"
-		case <-done:
-			// We're done, so no longer need to listen for cancellation.
-			return
-		}
-		log.Info("Interrupting post copy actions",
-			slog.String("table", tableName),
-			slog.String("workflow", vr.WorkflowName),
-			slog.String("reason", reason),
-		)
-		// We make a single kill attempt: retrying a failed kill could
-		// exhaust DB connections when the DBA path is stalled -- the
-		// very state a failed kill tends to indicate. On failure we log
-		// the error and leave the in-flight action to complete, as it
-		// would have before the interruption support existed, and the
-		// interrupted operation can be retried by the user/caller.
-		if err := killActionsConnection(); err != nil {
-			log.Error("Failed to kill the connection executing post copy actions",
-				slog.String("table", tableName),
-				slog.String("workflow", vr.WorkflowName),
-				slog.Any("error", err),
-			)
-		}
-	}()
+	defer stopKillWatch()
 
 	for _, row := range qr.Named().Rows {
 		select {
@@ -1226,6 +1140,96 @@ func (vr *vreplicator) execPostCopyActions(ctx, stopCtx context.Context, tableNa
 	return nil
 }
 
+// killConnectionOnStop watches for the cancellations which indicate that the
+// controller is stopping: engine shutdown (tablet shutdown or transition) or
+// controller stop (the workflow is being stopped, deleted, or updated). If
+// either happens before the returned function is called, it KILLs dbClient's
+// connection, using a DBA connection, so that any in-flight statement on it
+// (e.g. an ALTER, or an ANALYZE TABLE waiting for a lock) is aborted and any
+// subsequent statement on the connection fails immediately. Without this we
+// could e.g. cause a PRS to fail as the running statement will block setting
+// [super_]read_only, or cause a workflow delete to time out as the engine
+// cannot process it until the controller has stopped. what names the work
+// done on the connection, for logging. The caller must call the returned
+// function once that work is done.
+func (vr *vreplicator) killConnectionOnStop(stopCtx context.Context, dbClient *vdbClient, tableName, what string) (func(), error) {
+	// Save our connection ID so we can use it to easily KILL any
+	// running SQL statement we may execute later if needed.
+	idqr, err := dbClient.ExecuteFetch("select connection_id()", 1)
+	if err != nil {
+		return nil, err
+	}
+	// qr should never be nil, but check anyway to be extra safe.
+	if idqr == nil || len(idqr.Rows) != 1 {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected number of rows returned (%d) from connection_id() query", len(idqr.Rows))
+	}
+	connID, err := idqr.Rows[0][0].ToInt64()
+	if err != nil || connID == 0 {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected result (%d) from connection_id() query, error: %v", connID, err)
+	}
+
+	done := make(chan struct{})
+	// killConnection is deliberately independent of which statement --
+	// if any -- is currently executing so that a cancellation which
+	// arrives between statements cannot be lost.
+	killConnection := func() error {
+		// The attempt is bounded: the connection setup honors the
+		// context, and if the KILL query itself stalls the goroutine
+		// below closes the connection, which unblocks it. We don't
+		// parent this context on the ones whose cancellation got us
+		// here -- they are already done -- but we keep their values.
+		killCtx, cancel := context.WithTimeout(context.WithoutCancel(stopCtx), killActionsConnectionTimeout)
+		defer cancel()
+		killdbc, err := vr.mysqld.GetDbaConnection(killCtx)
+		if err != nil {
+			return vterrors.Wrapf(err, "unable to connect to the database when attempting to kill the connection executing %s", what)
+		}
+		defer killdbc.Close()
+		go func() {
+			// killCtx is always cancelled when the attempt returns, so
+			// this goroutine cannot leak. Close is idempotent and safe
+			// to call concurrently with an in-flight query.
+			<-killCtx.Done()
+			killdbc.Close()
+		}()
+		_, kerr := killdbc.ExecuteFetch(fmt.Sprintf("kill %d", connID), 1, false)
+		return kerr
+	}
+	go func() {
+		var reason string
+		select {
+		// Only kill the connection if the engine is closing or the
+		// controller is stopping.
+		case <-vr.vre.ctx.Done():
+			reason = "the engine is closing"
+		case <-stopCtx.Done():
+			reason = "the controller is stopping"
+		case <-done:
+			// We're done, so no longer need to listen for cancellation.
+			return
+		}
+		log.Info("Interrupting "+what,
+			slog.String("table", tableName),
+			slog.String("workflow", vr.WorkflowName),
+			slog.String("reason", reason),
+		)
+		// We make a single kill attempt: retrying a failed kill could
+		// exhaust DB connections when the DBA path is stalled -- the
+		// very state a failed kill tends to indicate. On failure we log
+		// the error and leave the in-flight statement to complete, as it
+		// would have before the interruption support existed, and the
+		// interrupted operation can be retried by the user/caller.
+		if err := killConnection(); err != nil {
+			log.Error("Failed to kill the connection executing "+what,
+				slog.String("table", tableName),
+				slog.String("workflow", vr.WorkflowName),
+				slog.Any("error", err),
+			)
+		}
+	}()
+	return func() { close(done) }, nil
+}
+
 // analyzeTableIfStatsAutoRecalcDisabled runs ANALYZE TABLE on a target table
 // whose InnoDB statistics are not recalculated automatically, because it was
 // created with STATS_AUTO_RECALC=0 like its source. InnoDB saves empty
@@ -1233,9 +1237,10 @@ func (vr *vreplicator) execPostCopyActions(ctx, stopCtx context.Context, tableNa
 // its own, so after a restart the optimizer would see an empty table. ANALYZE
 // TABLE is written to the binary log, so the target's replicas refresh their
 // statistics too. This is best effort: a failure is logged and does not fail
-// the copy.
-func (vr *vreplicator) analyzeTableIfStatsAutoRecalcDisabled(ctx context.Context, tableName string) {
-	if ctx.Err() != nil {
+// the copy. stopCtx is cancelled when the controller stops, not when a copy
+// phase cycle ends.
+func (vr *vreplicator) analyzeTableIfStatsAutoRecalcDisabled(stopCtx context.Context, tableName string) {
+	if stopCtx.Err() != nil {
 		return
 	}
 	dbName := vr.dbClient.DBName()
@@ -1254,12 +1259,21 @@ func (vr *vreplicator) analyzeTableIfStatsAutoRecalcDisabled(ctx context.Context
 	}
 	// ANALYZE TABLE causes an implicit commit, so use a new connection to not
 	// interfere with any transaction open on the shared one.
-	dbClient, err := vr.newClientConnection(ctx)
+	dbClient, err := vr.newClientConnection(stopCtx)
 	if err != nil {
 		log.Warn(fmt.Sprintf("Unable to connect to the database to analyze the %q table in the %q VReplication workflow: %v", tableName, vr.WorkflowName, err))
 		return
 	}
 	defer dbClient.Close()
+	// ANALYZE TABLE can wait for a lock on the table, so interrupt it if the
+	// controller stops or the engine closes. It runs again in the next copy
+	// cycle.
+	stopKillWatch, err := vr.killConnectionOnStop(stopCtx, dbClient, tableName, "ANALYZE TABLE")
+	if err != nil {
+		log.Warn(fmt.Sprintf("Unable to analyze the %q table in the %q VReplication workflow: %v", tableName, vr.WorkflowName, err))
+		return
+	}
+	defer stopKillWatch()
 	analyze := "analyze table " + sqlescape.EscapeID(dbName) + "." + sqlescape.EscapeID(tableName)
 	qr, err = dbClient.ExecuteFetch(analyze, 10)
 	if err != nil {

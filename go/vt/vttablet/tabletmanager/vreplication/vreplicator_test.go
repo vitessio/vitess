@@ -697,7 +697,9 @@ func TestDeferSecondaryKeys(t *testing.T) {
 // the --defer-secondary-keys flag was used), after
 // copying all rows, is properly killed when the context
 // is cancelled -- e.g. due to the VReplication engine
-// closing for a tablet transition during a PRS.
+// closing for a tablet transition during a PRS. It also
+// tests that the ANALYZE TABLE run at the end of a copy
+// cycle is killed the same way.
 type (
 	// stalledDbaDaemon simulates a stalled DBA connection setup:
 	// GetDbaConnection blocks until the given context is done -- so an
@@ -795,6 +797,9 @@ func TestCancelledDeferSecondaryKeys(t *testing.T) {
 		// expires -- rather than blocking forever -- after which the
 		// in-flight action is simply left to complete.
 		stalledKill bool
+		// analyze interrupts the ANALYZE TABLE of a table with
+		// stats_auto_recalc=0 instead of the post copy actions.
+		analyze bool
 	}{
 		{
 			// The stop context is cancelled when the controller is
@@ -831,6 +836,17 @@ func TestCancelledDeferSecondaryKeys(t *testing.T) {
 			stalledKill: true,
 		},
 		{
+			// An ANALYZE TABLE waiting for a lock on the table must be
+			// interrupted the same way.
+			name: "workflow stopped while analyzing",
+			setup: func(t *testing.T) (context.Context, func()) {
+				stopCtx, stopCancel := context.WithCancel(t.Context())
+				t.Cleanup(stopCancel)
+				return stopCtx, stopCancel
+			},
+			analyze: true,
+		},
+		{
 			// The engine's context is cancelled on tablet shutdown or
 			// transition. This case must run last as the shared test
 			// engine cannot be re-opened within this test.
@@ -843,6 +859,69 @@ func TestCancelledDeferSecondaryKeys(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			if tc.analyze {
+				// A table whose statistics are never recalculated
+				// automatically, with rows that ANALYZE TABLE would count.
+				_, err = dbClient.ExecuteFetch(fmt.Sprintf("create table %s.%s (id int not null, primary key(id)) stats_auto_recalc=0", dbName, tableName), 1)
+				require.NoError(t, err)
+				t.Cleanup(func() {
+					_, err := dbClient.ExecuteFetch(fmt.Sprintf("drop table %s.%s", dbName, tableName), 1)
+					require.NoError(t, err)
+				})
+				_, err = dbClient.ExecuteFetch(fmt.Sprintf("insert into %s.%s values (1), (2), (3)", dbName, tableName), 1)
+				require.NoError(t, err)
+
+				stopCtx, interrupt := tc.setup(t)
+				done := make(chan struct{})
+				t.Cleanup(func() {
+					// analyzeTableIfStatsAutoRecalcDisabled uses the shared
+					// dbClient, so wait for it after the cleanup below has
+					// unlocked the table.
+					select {
+					case <-done:
+					case <-time.After(30 * time.Second):
+					}
+				})
+
+				// Lock the table to block the ANALYZE TABLE so that we can
+				// be sure that it runs and we can KILL it.
+				_, err = dbaconn.ExecuteFetch(fmt.Sprintf("lock table %s.%s write", dbName, tableName), 1)
+				require.NoError(t, err)
+				t.Cleanup(func() {
+					// A no-op if the test already unlocked them.
+					_, err := dbaconn.ExecuteFetch("unlock tables", 1)
+					require.NoError(t, err)
+				})
+
+				go func() {
+					defer close(done)
+					vr.analyzeTableIfStatsAutoRecalcDisabled(stopCtx, tableName)
+				}()
+				query := fmt.Sprintf("select count(*) from performance_schema.events_statements_current where sql_text = 'analyze table `%s`.`%s`'", dbName, tableName)
+				waitForQueryResult(t, dbaconn, query, "1")
+
+				// Stop the workflow while the ANALYZE TABLE is blocked: it
+				// must be killed rather than left waiting for the lock.
+				interrupt()
+				require.Eventually(t, func() bool {
+					select {
+					case <-done:
+						return true
+					default:
+						return false
+					}
+				}, 30*time.Second, 10*time.Millisecond)
+
+				_, err = dbaconn.ExecuteFetch("unlock tables", 1)
+				require.NoError(t, err)
+				// The killed ANALYZE TABLE did not update the statistics.
+				res, err := dbaconn.ExecuteFetch(fmt.Sprintf("select n_rows from mysql.innodb_table_stats where database_name = '%s' and table_name = '%s'", dbName, tableName), 1)
+				require.NoError(t, err)
+				require.Len(t, res.Rows, 1)
+				assert.Equal(t, "0", res.Rows[0][0].ToString())
+				return
+			}
+
 			// Create the table.
 			_, err = dbClient.ExecuteFetch(ddl, 1)
 			require.NoError(t, err)
