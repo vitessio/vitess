@@ -107,11 +107,7 @@ jobs:
 
     - name: Set up Go
       if: needs.changes.outputs.examples == 'true'
-      # zizmor: ignore[cache-poisoning] this workflow publishes no artifacts
-      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-      with:
-        go-version-file: go.mod
-        cache: ${{ (github.base_ref == 'main' || (github.base_ref == '' && github.ref_name == 'main')) && 'true' || 'false' }}
+      uses: $/.github/actions/setup-go
 
     - name: Tune the OS
       if: needs.changes.outputs.examples == 'true'
