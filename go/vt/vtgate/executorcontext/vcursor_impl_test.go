@@ -264,6 +264,42 @@ func TestFirstSortedKeyspace(t *testing.T) {
 	require.Equal(t, ks3Schema.Keyspace, ks)
 }
 
+type servingKeyspacesGateway struct {
+	srvtopo.Gateway
+	keyspaces []string
+}
+
+func (g *servingKeyspacesGateway) GetServingKeyspaces() []string {
+	return g.keyspaces
+}
+
+// TestFirstSortedKeyspaceIgnoresServingKeyspaces checks that the keyspace
+// chosen for advisory locks does not change when the serving keyspaces change.
+func TestFirstSortedKeyspaceIgnoresServingKeyspaces(t *testing.T) {
+	ks1Schema := &vindexes.KeyspaceSchema{Keyspace: &vindexes.Keyspace{Name: "xks1"}}
+	ks2Schema := &vindexes.KeyspaceSchema{Keyspace: &vindexes.Keyspace{Name: "aks1"}}
+	vschema := &vindexes.VSchema{
+		Keyspaces: map[string]*vindexes.KeyspaceSchema{
+			ks1Schema.Keyspace.Name: ks1Schema,
+			ks2Schema.Keyspace.Name: ks2Schema,
+		},
+	}
+
+	gw := &servingKeyspacesGateway{keyspaces: []string{"xks1", "aks1"}}
+	vc, err := NewVCursorImpl(NewSafeSession(nil), sqlparser.MarginComments{}, nil, nil, &fakeVSchemaOperator{vschema: vschema}, vschema, srvtopo.NewResolver(&FakeTopoServer{}, gw, ""), nil, fakeObserver{}, VCursorConfig{}, nil)
+	require.NoError(t, err)
+
+	ks, err := vc.FirstSortedKeyspace()
+	require.NoError(t, err)
+	require.Equal(t, ks2Schema.Keyspace, ks)
+
+	// aks1 stops serving; the chosen keyspace must stay the same.
+	gw.keyspaces = []string{"xks1"}
+	ks, err = vc.FirstSortedKeyspace()
+	require.NoError(t, err)
+	require.Equal(t, ks2Schema.Keyspace, ks)
+}
+
 // TestSetExecQueryTimeout tests the SetExecQueryTimeout method.
 // Validates the timeout value is set based on override rule.
 func TestSetExecQueryTimeout(t *testing.T) {
