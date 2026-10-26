@@ -40,25 +40,28 @@ type zkLockDescriptor struct {
 
 // Lock is part of the topo.Conn interface.
 func (zs *Server) Lock(ctx context.Context, dirPath, contents string) (topo.LockDescriptor, error) {
-	return zs.lock(ctx, dirPath, contents)
+	return zs.lock(ctx, dirPath, contents, true /*wait*/)
 }
 
 // LockWithTTL is part of the topo.Conn interface. It behaves the same as Lock
 // as TTLs are not supported in Zookeeper.
 func (zs *Server) LockWithTTL(ctx context.Context, dirPath, contents string, _ time.Duration) (topo.LockDescriptor, error) {
-	return zs.lock(ctx, dirPath, contents)
+	return zs.lock(ctx, dirPath, contents, true /*wait*/)
 }
 
 // LockName is part of the topo.Conn interface.
 func (zs *Server) LockName(ctx context.Context, dirPath, contents string) (topo.LockDescriptor, error) {
-	return zs.lock(ctx, dirPath, contents)
+	return zs.lock(ctx, dirPath, contents, true /*wait*/)
 }
 
 // TryLock is part of the topo.Conn interface.
+// Like the non-blocking variant of the ZooKeeper lock recipe, it creates
+// its lock node and gives up if it is not the lowest one, so two callers
+// cannot both see the lock as free and then block on each other.
 func (zs *Server) TryLock(ctx context.Context, dirPath, contents string) (topo.LockDescriptor, error) {
-	// We list all the entries under dirPath
-	entries, err := zs.ListDir(ctx, dirPath, true)
-	if err != nil {
+	// We list the directory first to make sure it exists, as lock()
+	// creates any missing parent directories.
+	if _, err := zs.ListDir(ctx, dirPath, false /*full*/); err != nil {
 		// We need to return the right error codes, like
 		// topo.ErrNoNode and topo.ErrInterrupted, and the
 		// easiest way to do this is to return convertError(err).
@@ -67,23 +70,13 @@ func (zs *Server) TryLock(ctx context.Context, dirPath, contents string) (topo.L
 		return nil, convertError(err, dirPath)
 	}
 
-	// If there is a folder '/locks' with some entries in it then we can assume that someone else already has a lock.
-	// Throw error in this case
-	for _, e := range entries {
-		// there is a bug where ListDir return ephemeral = false for locks. It is due
-		// https://github.com/vitessio/vitess/blob/main/go/vt/topo/zk2topo/utils.go#L55
-		// TODO: Fix/send ephemeral flag value recursively while creating ephemeral file
-		if e.Name == locksPath && e.Type == topo.TypeDirectory {
-			return nil, topo.NewError(topo.NodeExists, "lock already exists at path "+dirPath)
-		}
-	}
-
-	// everything is good let's acquire the lock.
-	return zs.lock(ctx, dirPath, contents)
+	return zs.lock(ctx, dirPath, contents, false /*wait*/)
 }
 
-// Lock is part of the topo.Conn interface.
-func (zs *Server) lock(ctx context.Context, dirPath, contents string) (topo.LockDescriptor, error) {
+// lock is used by Lock(), LockWithTTL(), LockName() and TryLock().
+// If wait is false, it returns a topo.NodeExists error instead of
+// waiting for older lock nodes to go away.
+func (zs *Server) lock(ctx context.Context, dirPath, contents string, wait bool) (topo.LockDescriptor, error) {
 	// Lock paths end in a trailing slash so that when we create
 	// sequential nodes, they are created as children, not siblings.
 	locksDir := path.Join(zs.root, dirPath, locksPath) + "/"
@@ -94,7 +87,17 @@ func (zs *Server) lock(ctx context.Context, dirPath, contents string) (topo.Lock
 		return nil, convertError(err, locksDir)
 	}
 
-	err = obtainQueueLock(ctx, zs.conn, nodePath)
+	err = obtainQueueLock(ctx, zs.conn, nodePath, wait)
+	if err == errQueueLockHeld {
+		// Someone else holds the lock. Remove our node so it does
+		// not block the callers queued behind it.
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), baseTimeout)
+		defer cancel()
+		if err := zs.conn.Delete(cleanupCtx, nodePath, -1); err != nil {
+			log.Warn(fmt.Sprintf("Failed to cleanup unsuccessful lock path %s: %v", nodePath, err))
+		}
+		return nil, topo.NewError(topo.NodeExists, "lock already exists at path "+dirPath)
+	}
 	if err != nil {
 		var errToReturn error
 		switch err {
