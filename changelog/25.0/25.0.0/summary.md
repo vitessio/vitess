@@ -852,8 +852,6 @@ Before turning the flag on:
 - The checks wait for a missing or unreachable primary, for the primary to commit GTIDs that `vtbackup` already applied, and, after a reparent during the upload, for the new primary. Like the existing wait for the primary's position, these waits are bounded only by the job's deadline, if it has one.
 - MariaDB and other non-MySQL56 flavors are not checked, as on tablets.
 
-With or without the flag, `vtbackup` now waits at most one minute between attempts to read the primary's position.
-
 See [#20677](https://github.com/vitessio/vitess/issues/20677) and [#20678](https://github.com/vitessio/vitess/issues/20678).
 
 ### <a id="minor-changes-vtadmin"/>VTAdmin</a>

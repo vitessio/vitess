@@ -179,42 +179,6 @@ func TestValidateBinlogFlags(t *testing.T) {
 	require.NoError(t, validateBinlogFlags(mysqlctl.BackupParams{}, true))
 }
 
-func TestRetryOnError(t *testing.T) {
-	t.Run("the wait between attempts stops growing at operationTimeout", func(t *testing.T) {
-		synctest.Test(t, func(t *testing.T) {
-			var attempts []time.Time
-			err := retryOnError(t.Context(), func() error {
-				attempts = append(attempts, time.Now())
-				if len(attempts) < 10 {
-					return errors.New("primary unavailable")
-				}
-				return nil
-			})
-			require.NoError(t, err)
-
-			var waits []time.Duration
-			for i := 1; i < len(attempts); i++ {
-				waits = append(waits, attempts[i].Sub(attempts[i-1]))
-			}
-			s := time.Second
-			assert.Equal(t, []time.Duration{s, 2 * s, 4 * s, 8 * s, 16 * s, 32 * s, operationTimeout, operationTimeout, operationTimeout}, waits)
-		})
-	})
-
-	t.Run("a permanent error returns at once", func(t *testing.T) {
-		synctest.Test(t, func(t *testing.T) {
-			calls := 0
-			errErrant := errors.New("errant GTIDs")
-			err := retryOnError(t.Context(), func() error {
-				calls++
-				return permanentError{errErrant}
-			})
-			assert.Equal(t, errErrant, err)
-			assert.Equal(t, 1, calls)
-		})
-	})
-}
-
 const (
 	testPrimaryUUID    = "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9"
 	testNewPrimaryUUID = "8bc65cca-3fe4-11ed-bbfb-091034d48b3e"
@@ -343,6 +307,29 @@ func TestVerifyPosition(t *testing.T) {
 			_, err := verifyPosition(t.Context(), vt.tmc, vt.ts, testGTIDPosition(t, testPrimaryUUID+":1-12"), checkData)
 			require.NoError(t, err)
 			assert.Equal(t, 2, vt.tmc.calls)
+		})
+	})
+
+	t.Run("the wait between attempts stops growing at operationTimeout", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			var attempts []time.Time
+			vt := newVerifyPositionTest(t, func(*topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
+				attempts = append(attempts, time.Now())
+				if len(attempts) < 10 {
+					return primaryStatus(testPrimaryUUID, testPrimaryUUID+":1-10"), nil
+				}
+				return primaryStatus(testPrimaryUUID, testPrimaryUUID+":1-12"), nil
+			})
+			vt.setPrimary(t, 100)
+			_, err := verifyPosition(t.Context(), vt.tmc, vt.ts, testGTIDPosition(t, testPrimaryUUID+":1-12"), checkData)
+			require.NoError(t, err)
+
+			var waits []time.Duration
+			for i := 1; i < len(attempts); i++ {
+				waits = append(waits, attempts[i].Sub(attempts[i-1]))
+			}
+			s := time.Second
+			assert.Equal(t, []time.Duration{s, 2 * s, 4 * s, 8 * s, 16 * s, 32 * s, operationTimeout, operationTimeout, operationTimeout}, waits)
 		})
 	})
 

@@ -923,34 +923,36 @@ func (p primaryTerm) equal(other primaryTerm) bool {
 // verifyPosition checks that pos has no GTIDs that the shard primary lacks. It
 // retries while the primary is missing, unreachable or hasn't committed GTIDs
 // under its own UUID yet (when check.requireCommitted), and fails at once on
-// errant GTIDs. It returns the primary it verified pos against, which is zero
-// if pos is.
+// errant GTIDs. The wait between attempts doubles up to operationTimeout, so a
+// long wait still notices a commit or a reparent within a minute. It returns the
+// primary it verified pos against, which is zero if pos is.
 func verifyPosition(ctx context.Context, tmc tmclient.TabletManagerClient, ts *topo.Server, pos replication.Position, check positionCheck) (primaryTerm, error) {
 	if pos.IsZero() {
 		return primaryTerm{}, nil
 	}
-	var verified primaryTerm
-	var lastErr error
-	attempt := func() error {
+	for waitTime := time.Second; ; waitTime = min(2*waitTime, operationTimeout) {
 		opCtx, cancel := context.WithTimeout(ctx, operationTimeout)
-		defer cancel()
 		term, err := checkPositionOnce(opCtx, tmc, ts, pos, check)
-		if err != nil {
-			lastErr = err
-			return err
+		cancel()
+		if err == nil {
+			return term, nil
 		}
-		verified = term
-		return nil
-	}
-	if err := retryOnError(ctx, attempt); err != nil {
-		// A done Context ends the wait; say what the check was waiting for.
-		if ctxErr := ctx.Err(); ctxErr != nil && errors.Is(err, ctxErr) {
-			return primaryTerm{}, vterrors.Wrapf(err, "stopped verifying %s against the shard primary (last error: %v)", check.what, lastErr)
+		if permanent, ok := errors.AsType[permanentError](err); ok {
+			return primaryTerm{}, permanent.error
 		}
-		return primaryTerm{}, err
+		log.Error(fmt.Sprintf("Waiting %v to retry verifying %s after error: %v", waitTime, check.what, err))
+
+		select {
+		case <-ctx.Done():
+			// A done Context ends the wait; say what the check was waiting for.
+			return primaryTerm{}, vterrors.Wrapf(ctx.Err(), "stopped verifying %s against the shard primary (last error: %v)", check.what, err)
+		case <-time.After(waitTime):
+		}
 	}
-	return verified, nil
 }
+
+// permanentError wraps an error that verifyPosition returns at once instead of retrying.
+type permanentError struct{ error }
 
 // checkPositionOnce makes one attempt at verifyPosition's check. Errant GTIDs,
 // and a primary status that can't be parsed, return a permanentError.
@@ -1080,14 +1082,10 @@ func verifyNewBackup(ctx context.Context, tmc tmclient.TabletManagerClient, ts *
 	return nil
 }
 
-// permanentError wraps an error that retryOnError returns at once instead of retrying.
-type permanentError struct{ error }
-
-// retryOnError keeps calling the given function until it succeeds, it returns
-// a permanentError, or the given Context is done. It waits an exponentially
-// increasing amount of time between retries, up to operationTimeout, to avoid
-// hot-looping. It returns the error inside a permanentError, or the Context's
-// error once it is done.
+// retryOnError keeps calling the given function until it succeeds, or the given
+// Context is done. It waits an exponentially increasing amount of time between
+// retries to avoid hot-looping. The only time this returns an error is if the
+// Context is cancelled.
 func retryOnError(ctx context.Context, fn func() error) error {
 	waitTime := 1 * time.Second
 
@@ -1096,9 +1094,6 @@ func retryOnError(ctx context.Context, fn func() error) error {
 		if err == nil {
 			return nil
 		}
-		if permanent, ok := errors.AsType[permanentError](err); ok {
-			return permanent.error
-		}
 		log.Error(fmt.Sprintf("Waiting %v to retry after error: %v", waitTime, err))
 
 		select {
@@ -1106,7 +1101,7 @@ func retryOnError(ctx context.Context, fn func() error) error {
 			log.Error(fmt.Sprintf("Not retrying after error: %v", ctx.Err()))
 			return ctx.Err()
 		case <-time.After(waitTime):
-			waitTime = min(2*waitTime, operationTimeout)
+			waitTime *= 2
 		}
 	}
 }
