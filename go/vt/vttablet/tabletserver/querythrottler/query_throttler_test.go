@@ -47,6 +47,7 @@ import (
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
@@ -1601,6 +1602,75 @@ func TestQueryThrottler_HandleConfigUpdate_DiscardsStrategyAfterShutdown(t *test
 	require.Same(t, originalMock, snap.strategy, "snapshot must NOT be swapped to the discarded strategy")
 	require.Equal(t, querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER, snap.cfg.GetStrategy(),
 		"snapshot cfg must NOT be replaced with the post-shutdown update")
+}
+
+// Two overlapping HandleConfigUpdate calls must run one after the other. Otherwise both read the same snapshot, both
+// build and start a strategy, and the one stored first is never stopped, leaking its background updater.
+func TestQueryThrottler_HandleConfigUpdate_SerializesOverlappingCalls(t *testing.T) {
+	qt := &QueryThrottler{
+		ctx:          t.Context(),
+		tabletConfig: &tabletenv.TabletConfig{},
+	}
+	qt.snapshot.Store(&stateSnapshot{cfg: &querythrottlerpb.Config{}, strategy: &registry.NoOpStrategy{}})
+
+	// The first build blocks until released, parking the first call in the middle of its update.
+	var (
+		builtMu sync.Mutex
+		built   []*mockThrottlingStrategy
+	)
+	firstBuildEntered := make(chan struct{})
+	releaseFirstBuild := make(chan struct{})
+	qt.newStrategyFactory = func(_ *querythrottlerpb.Config) registry.ThrottlingStrategyHandler {
+		strategy := &mockThrottlingStrategy{}
+		builtMu.Lock()
+		built = append(built, strategy)
+		first := len(built) == 1
+		builtMu.Unlock()
+		if first {
+			close(firstBuildEntered)
+			<-releaseFirstBuild
+		}
+		return strategy
+	}
+	isDone := func(done <-chan struct{}) func() bool {
+		return func() bool {
+			select {
+			case <-done:
+				return true
+			default:
+				return false
+			}
+		}
+	}
+
+	// Both configs enable the strategy, so a call that reads the initial, disabled snapshot builds one.
+	firstDone := make(chan struct{})
+	go func() {
+		defer close(firstDone)
+		qt.HandleConfigUpdate(createTestSrvKeyspace(true, querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER, true), nil)
+	}()
+	<-firstBuildEntered
+
+	secondDone := make(chan struct{})
+	go func() {
+		defer close(secondDone)
+		qt.HandleConfigUpdate(createTestSrvKeyspace(true, querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER, false), nil)
+	}()
+	assert.Never(t, isDone(secondDone), time.Second, 10*time.Millisecond, "the second call must wait for the first one to finish")
+
+	close(releaseFirstBuild)
+	require.Eventually(t, isDone(firstDone), 30*time.Second, 10*time.Millisecond, "the first call must finish once its build is released")
+	require.Eventually(t, isDone(secondDone), 30*time.Second, 10*time.Millisecond, "the second call must finish after the first one")
+
+	// The second call read the first call's snapshot, so it only swapped the config.
+	builtMu.Lock()
+	defer builtMu.Unlock()
+	require.Len(t, built, 1, "only the first call builds a strategy")
+	assert.True(t, built[0].started, "the installed strategy must be started")
+	assert.False(t, built[0].stopped, "the installed strategy must keep running")
+	snap := qt.snapshot.Load()
+	assert.Same(t, built[0], snap.strategy, "the snapshot must hold the only strategy built")
+	assert.False(t, snap.cfg.GetDryRun(), "the snapshot must hold the second call's config")
 }
 
 // HandleConfigUpdate must store thresholds sorted ascending, as GetThrottleDecision's

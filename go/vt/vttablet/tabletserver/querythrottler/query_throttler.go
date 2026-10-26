@@ -106,8 +106,13 @@ type QueryThrottler struct {
 	cell          string
 	srvTopoServer srvtopo.Server
 
-	// mu serializes config updates against Shutdown and each other. Throttle() does not
-	// take it; it loads the snapshot atomically instead.
+	// updateMu serializes HandleConfigUpdate calls, from the snapshot load through the
+	// strategy swap, so two calls can't both build and start a strategy. Shutdown does not
+	// take it, so a slow strategy build never holds up Shutdown.
+	updateMu sync.Mutex
+
+	// mu serializes the snapshot swap in HandleConfigUpdate against Shutdown. Throttle()
+	// does not take it; it loads the snapshot atomically instead.
 	mu           sync.Mutex
 	watchStarted atomic.Bool
 
@@ -375,9 +380,9 @@ func extractPriority(options *querypb.ExecuteOptions) int {
 
 // HandleConfigUpdate applies a SrvKeyspace change to the QueryThrottler's config and
 // strategy. startSrvKeyspaceWatch calls it once for the initial load, then registers it as
-// the srvtopo.WatchSrvKeyspace callback. The initial load returns before the watch starts,
-// and srvtopo runs callbacks one at a time, so calls never overlap and it is the only
-// writer of qt.snapshot after NewQueryThrottler.
+// the srvtopo.WatchSrvKeyspace callback. It is the only writer of qt.snapshot after
+// NewQueryThrottler, and updateMu serializes its calls, so it never relies on its callers
+// not overlapping.
 //
 // It always returns true to keep the watch alive: errors are logged, never fatal, matching
 // throttle.Throttler.WatchSrvKeyspaceCallback.
@@ -408,7 +413,12 @@ func (qt *QueryThrottler) HandleConfigUpdate(srvks *topodatapb.SrvKeyspace, err 
 	// compare equal below and count as a no-op update.
 	newCfg = normalizeThresholds(newCfg)
 
-	// Safe without the lock: per the contract above, no other call writes the snapshot.
+	// Held until the old strategy is stopped: otherwise two overlapping calls would both
+	// read this snapshot, both build and start a strategy, and the one stored first would
+	// never be stopped, leaking its background updater.
+	qt.updateMu.Lock()
+	defer qt.updateMu.Unlock()
+
 	currentSnap := qt.snapshot.Load()
 
 	// Compare the whole proto, not just the top-level scalars: a nested-only change to
@@ -422,11 +432,11 @@ func (qt *QueryThrottler) HandleConfigUpdate(srvks *topodatapb.SrvKeyspace, err 
 	needsStrategyChange := effectiveStrategy(currentSnap.cfg) != effectiveStrategy(newCfg)
 	newStrategy := currentSnap.strategy
 	if needsStrategyChange {
-		// Build outside the lock; this can be slow.
+		// Build outside qt.mu; this can be slow.
 		newStrategy = qt.buildNewStrategy(newCfg)
 	}
 
-	// Lock only for the swap. Start() runs under it so the shutdown check, Start, and
+	// Take qt.mu only for the swap. Start() runs under it so the shutdown check, Start, and
 	// Store are atomic — otherwise a Shutdown landing between Start and Store would leak
 	// the new strategy's goroutines. Safe to hold, since Start() is non-blocking.
 	shutdownLost := false
@@ -462,7 +472,7 @@ func (qt *QueryThrottler) HandleConfigUpdate(srvks *topodatapb.SrvKeyspace, err 
 		return true
 	}
 
-	// Stop the old strategy outside the lock; this can be slow.
+	// Stop the old strategy outside qt.mu; this can be slow.
 	if needsStrategyChange && currentSnap.strategy != nil {
 		currentSnap.strategy.Stop()
 	}
