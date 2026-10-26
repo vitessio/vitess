@@ -1054,6 +1054,15 @@ func errantGTIDsError(check positionCheck, errant replication.Mysql56GTIDSet, pr
 // MANIFEST will record (check 3). Check 3 reuses check 2's result when the
 // shard record still names the primary that check 2 verified against, in the
 // same term, and the MANIFEST position is one that check 2 verified.
+//
+// The checks trust the shard record, which a new primary's shard sync updates
+// only after its promotion, and which an ERS doesn't wait for. In that gap,
+// normally milliseconds but up to --shard-sync-retry-delay if the new primary's
+// topo write fails, the reuse still sees the old primary in the old term and
+// passes, even if the new primary lacks GTIDs in the backup; so does the full
+// check if the old primary still answers. As when a later ERS loses
+// transactions that a backup holds, the next run's check 1 catches the backup,
+// and replica restores reject it.
 func verifyNewBackup(ctx context.Context, tmc tmclient.TabletManagerClient, ts *topo.Server, mysqld mysqlctl.MysqlDaemon, restorePos replication.Position, backupParams *mysqlctl.BackupParams) error {
 	localPos, err := mysqld.PrimaryPosition(ctx)
 	if err != nil {
