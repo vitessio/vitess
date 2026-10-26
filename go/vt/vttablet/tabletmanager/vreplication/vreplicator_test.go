@@ -21,8 +21,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"regexp"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -38,6 +40,7 @@ import (
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/dbconnpool"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/schemadiff"
 	vttablet "vitess.io/vitess/go/vt/vttablet/common"
@@ -893,6 +896,23 @@ func TestCancelledDeferSecondaryKeys(t *testing.T) {
 					require.NoError(t, err)
 				})
 
+				// A stop is expected, so it's logged at Info, not as a
+				// failure to analyze the table.
+				var logMu sync.Mutex
+				var infoLogs, warnLogs []string
+				oldInfo, oldWarn := log.Info, log.Warn
+				log.Info = func(msg string, _ ...slog.Attr) {
+					logMu.Lock()
+					defer logMu.Unlock()
+					infoLogs = append(infoLogs, msg)
+				}
+				log.Warn = func(msg string, _ ...slog.Attr) {
+					logMu.Lock()
+					defer logMu.Unlock()
+					warnLogs = append(warnLogs, msg)
+				}
+				t.Cleanup(func() { log.Info, log.Warn = oldInfo, oldWarn })
+
 				var interrupted atomic.Bool
 				go func() {
 					defer close(done)
@@ -918,6 +938,10 @@ func TestCancelledDeferSecondaryKeys(t *testing.T) {
 				// It reports that the table still needs analyzing, so that
 				// the caller keeps its copy state.
 				assert.True(t, interrupted.Load())
+				logMu.Lock()
+				assert.Contains(t, infoLogs, "The table was not analyzed, as the controller stopped")
+				assert.NotContains(t, warnLogs, "Unable to analyze the table")
+				logMu.Unlock()
 				// The killed ANALYZE TABLE did not update the statistics.
 				res, err := dbaconn.ExecuteFetch(fmt.Sprintf("select n_rows from mysql.innodb_table_stats where database_name = '%s' and table_name = '%s'", dbName, tableName), 1)
 				require.NoError(t, err)

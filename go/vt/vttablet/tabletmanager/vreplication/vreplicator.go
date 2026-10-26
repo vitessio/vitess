@@ -1184,7 +1184,9 @@ func (vr *vreplicator) killConnectionOnStop(stopCtx context.Context, dbClient *v
 		defer cancel()
 		killdbc, err := vr.mysqld.GetDbaConnection(killCtx)
 		if err != nil {
-			return vterrors.Wrapf(err, "unable to connect to the database when attempting to kill the connection")
+			// Only ever logged: keep it on one line, which a wrapped vterrors
+			// error's %v formatting is not.
+			return fmt.Errorf("unable to connect to the database when attempting to kill the connection: %v", err)
 		}
 		defer killdbc.Close()
 		go func() {
@@ -1277,17 +1279,31 @@ func (vr *vreplicator) analyzeTableIfStatsAutoRecalcDisabled(stopCtx context.Con
 	if stopping() {
 		return true
 	}
-	// ANALYZE TABLE causes an implicit commit, so use a new connection to not
-	// interfere with any transaction open on the shared one.
-	dbClient, err := vr.newClientConnection(stopCtx)
-	if err != nil {
-		log.Warn("Unable to connect to the database to analyze the table",
+	// failed logs why the table was not analyzed, and returns whether that was
+	// because the controller stopped or the engine closed, which kill the
+	// ANALYZE TABLE.
+	failed := func(msg string, err error) bool {
+		if stopping() {
+			log.Info("The table was not analyzed, as the controller stopped",
+				slog.String("table", tableName),
+				slog.String("workflow", vr.WorkflowName),
+				slog.Any("error", err),
+			)
+			return true
+		}
+		log.Warn(msg,
 			slog.String("table", tableName),
 			slog.String("workflow", vr.WorkflowName),
 			slog.Any("error", err),
 			slog.String("error_code", vterrors.Code(err).String()),
 		)
-		return stopping()
+		return false
+	}
+	// ANALYZE TABLE causes an implicit commit, so use a new connection to not
+	// interfere with any transaction open on the shared one.
+	dbClient, err := vr.newClientConnection(stopCtx)
+	if err != nil {
+		return failed("Unable to connect to the database to analyze the table", err)
 	}
 	defer dbClient.Close()
 	// ANALYZE TABLE can wait for a lock on the table, so interrupt it if the
@@ -1295,25 +1311,13 @@ func (vr *vreplicator) analyzeTableIfStatsAutoRecalcDisabled(stopCtx context.Con
 	stopKillWatch, err := vr.killConnectionOnStop(stopCtx, dbClient, tableName,
 		"Interrupting ANALYZE TABLE", "Failed to kill the connection executing ANALYZE TABLE")
 	if err != nil {
-		log.Warn("Unable to analyze the table",
-			slog.String("table", tableName),
-			slog.String("workflow", vr.WorkflowName),
-			slog.Any("error", err),
-			slog.String("error_code", vterrors.Code(err).String()),
-		)
-		return stopping()
+		return failed("Unable to analyze the table", err)
 	}
 	defer stopKillWatch()
 	analyze := "analyze table " + sqlescape.EscapeID(dbName) + "." + sqlescape.EscapeID(tableName)
 	qr, err = dbClient.ExecuteFetch(analyze, 10)
 	if err != nil {
-		log.Warn("Unable to analyze the table",
-			slog.String("table", tableName),
-			slog.String("workflow", vr.WorkflowName),
-			slog.Any("error", err),
-			slog.String("error_code", vterrors.Code(err).String()),
-		)
-		return stopping()
+		return failed("Unable to analyze the table", err)
 	}
 	// ANALYZE TABLE reports some failures, such as a missing table, as rows
 	// rather than as an error. Its columns are Table, Op, Msg_type and Msg_text.
