@@ -93,11 +93,7 @@ jobs:
 
       - name: Set up Go
         if: steps.changes.outputs.end_to_end == 'true'
-        # zizmor: ignore[cache-poisoning] this workflow publishes no artifacts
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
-          cache: ${{ (github.base_ref == 'main' || (github.base_ref == '' && github.ref_name == 'main')) && 'true' || 'false' }}
+        uses: $/.github/actions/setup-go
 
       - name: Tune the OS
         if: steps.changes.outputs.end_to_end == 'true'

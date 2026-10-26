@@ -65,15 +65,8 @@ jobs:
       uses: $/.github/actions/tune-os
 
     - name: Set up Go
-      # zizmor: ignore[cache-poisoning] this workflow publishes no artifacts
-      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      uses: $/.github/actions/setup-go
       if: steps.changes.outputs.vtadmin_changes == 'true'
-      with:
-        go-version-file: go.mod
-        cache: ${{ (github.base_ref == 'main' || (github.base_ref == '' && github.ref_name == 'main')) && 'true' || 'false' }}
-        cache-dependency-path: |
-          go.sum
-          tools/**/go.sum
 
     - name: Get dependencies
       if: steps.changes.outputs.vtadmin_changes == 'true'
