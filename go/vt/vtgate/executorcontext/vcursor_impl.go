@@ -697,6 +697,20 @@ func (vc *VCursorImpl) FirstSortedKeyspace() (*vindexes.Keyspace, error) {
 	return keyspaces[0], nil
 }
 
+// AdvisoryLockKeyspaces implements the VSchema interface. It returns the
+// keyspaces designated for advisory locks in the VSchema. If none is
+// designated, it falls back to FirstSortedKeyspace.
+func (vc *VCursorImpl) AdvisoryLockKeyspaces() ([]*vindexes.Keyspace, error) {
+	if keyspaces := vc.vschema.AdvisoryLockKeyspaces(); len(keyspaces) > 0 {
+		return keyspaces, nil
+	}
+	ks, err := vc.FirstSortedKeyspace()
+	if err != nil {
+		return nil, err
+	}
+	return []*vindexes.Keyspace{ks}, nil
+}
+
 // SysVarSetEnabled implements the ContextVSchema interface
 func (vc *VCursorImpl) SysVarSetEnabled() bool {
 	return vc.GetSessionEnableSystemSettings()

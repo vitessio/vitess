@@ -53,7 +53,8 @@ type VSchema interface {
 	TabletType() topodatapb.TabletType
 	TargetDestination(qualifier string) (key.ShardDestination, *vindexes.Keyspace, topodatapb.TabletType, error)
 	AnyKeyspace() (*vindexes.Keyspace, error)
-	FirstSortedKeyspace() (*vindexes.Keyspace, error)
+	// AdvisoryLockKeyspaces returns the keyspaces for advisory lock functions.
+	AdvisoryLockKeyspaces() ([]*vindexes.Keyspace, error)
 	SysVarSetEnabled() bool
 	// IsSystemVariableDenied reports whether the given system variable name is
 	// in the VTGate-configured denylist. Names are compared case-insensitively.
