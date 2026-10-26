@@ -23,9 +23,18 @@ jobs:
     runs-on: ${{ github.repository_owner == 'vitessio' && 'cncf-ubuntu-4-16-x86' || 'ubuntu-24.04' }}
     timeout-minutes: 10
     outputs:
+      can_upload: ${{ steps.upload.outputs.can_upload }}
       is_full_run: ${{ steps.mode.outputs.is_full_run }}
       packages: ${{ steps.packages.outputs.packages }}
     steps:
+    # Codecov accepts uploads without a token only from public repositories, so a private repository without the
+    # CODECOV_TOKEN secret, such as vitess-security, skips the coverage job instead of failing its upload.
+    - name: Check whether the coverage report can be uploaded
+      id: upload
+      env:
+        CAN_UPLOAD: ${{ !github.event.repository.private || secrets.CODECOV_TOKEN != '' }}
+      run: echo "can_upload=$CAN_UPLOAD" >> "$GITHUB_OUTPUT"
+
     - name: Check out code
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
@@ -122,7 +131,7 @@ jobs:
 
   test:
     needs: changes
-    if: needs.changes.outputs.is_full_run == 'true' || needs.changes.outputs.packages != ''
+    if: needs.changes.outputs.can_upload == 'true' && (needs.changes.outputs.is_full_run == 'true' || needs.changes.outputs.packages != '')
     name: Code Coverage
     runs-on: ${{ github.repository_owner == 'vitessio' && 'oracle-vm-8cpu-32gb-x86-64' || (github.repository_owner == 'vitessio' && 'cncf-ubuntu-4-16-x86' || 'ubuntu-24.04') }}
 
