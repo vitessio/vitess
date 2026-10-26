@@ -25,7 +25,9 @@ import (
 // queryThrottlerStatementTypes are the statement types a query throttler rule may name.
 // They come from the types a vttablet query plan can report (planbuilder.Build and
 // BuildStreaming); statements such as BEGIN, USE or LOCK TABLES never reach the query
-// throttler. MIGRATION and SET reach it but are left out on purpose: a MIGRATION rule would
+// throttler. SAVEPOINT, ROLLBACK TO and RELEASE are left out too: VTGate sends them only
+// inside a transaction, where the query throttler never throttles, so a rule for them could
+// never fire. MIGRATION and SET reach it but are left out on purpose: a MIGRATION rule would
 // also reject ALTER VITESS_MIGRATION ... CANCEL, which an operator may need while the
 // tablet is overloaded, and a SET rule would fail the statements that set up a session.
 var queryThrottlerStatementTypes = func() map[string]struct{} {
@@ -41,9 +43,6 @@ var queryThrottlerStatementTypes = func() map[string]struct{} {
 		sqlparser.StmtOther,
 		sqlparser.StmtAnalyze,
 		sqlparser.StmtExplain,
-		sqlparser.StmtSavepoint,
-		sqlparser.StmtSRollback,
-		sqlparser.StmtRelease,
 		sqlparser.StmtUnlockTables,
 		sqlparser.StmtFlush,
 		sqlparser.StmtCallProc,
