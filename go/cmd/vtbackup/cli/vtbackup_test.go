@@ -558,7 +558,7 @@ func TestVerifyPosition(t *testing.T) {
 		})
 	})
 
-	t.Run("checks 1 and 2 run in the VerifyErrantGTIDs phase", func(t *testing.T) {
+	t.Run("inVerifyErrantGTIDsPhase sets the phase while fn runs and clears it after", func(t *testing.T) {
 		var during int64
 		err := inVerifyErrantGTIDsPhase(func() error {
 			during = phase.Counts()[phaseNameVerifyErrantGTIDs]
@@ -582,16 +582,20 @@ func TestVerifyPosition(t *testing.T) {
 	})
 
 	t.Run("a zero position makes no lookup", func(t *testing.T) {
-		synctest.Test(t, func(t *testing.T) {
-			// The shard has no primary, so a lookup would wait for one.
-			vt := newVerifyPositionTest(t, committed(testPrimaryUUID+":1-10"))
-			ctx, cancel := context.WithTimeout(t.Context(), time.Hour)
-			defer cancel()
-			term, err := verifyPosition(ctx, vt.tmc, vt.ts, replication.Position{}, checkData)
-			require.NoError(t, err)
-			assert.Nil(t, term.alias)
-			assert.Equal(t, 0, vt.tmc.calls)
-		})
+		// An empty MySQL56 set is a zero position that passes the flavor check.
+		emptyMySQL56 := testGTIDPosition(t, "")
+		for name, pos := range map[string]replication.Position{"no GTID set": {}, "an empty MySQL56 GTID set": emptyMySQL56} {
+			t.Run(name, func(t *testing.T) {
+				synctest.Test(t, func(t *testing.T) {
+					// The shard has no primary, so a lookup would wait for one.
+					vt := newVerifyPositionTest(t, committed(testPrimaryUUID+":1-10"))
+					term, err := verifyPosition(boundedContext(t), vt.tmc, vt.ts, pos, checkData)
+					require.NoError(t, err)
+					assert.Nil(t, term.alias)
+					assert.Equal(t, 0, vt.tmc.calls)
+				})
+			})
+		}
 	})
 
 	t.Run("the error gives the remedy for each source of errant GTIDs", func(t *testing.T) {
@@ -800,6 +804,9 @@ func TestVerifyNewBackup(t *testing.T) {
 			_, verify, err := newBackup(t, local+","+testLocalUUID+":1")
 			require.ErrorContains(t, err, "the data to back up has errant GTIDs "+testLocalUUID+":1")
 			require.ErrorContains(t, err, "were written by this run's --init-backup-sql-queries")
+			// Only init SQL wrote them, so the other sources' remedies don't apply.
+			assert.NotContains(t, err.Error(), "came from the restored backup")
+			assert.NotContains(t, err.Error(), "during catch-up")
 			assert.Nil(t, verify, "a failed check 2 sets no check 3")
 		})
 	})
