@@ -3676,4 +3676,34 @@ func TestTabletServerBeginRejectsPostBeginQueriesNeedingReservedConn(t *testing.
 		assert.NotZero(t, state.ReservedID, "the SET should run on a reserved connection")
 		require.NoError(t, tsv.Release(ctx, &target, state.TransactionID, state.ReservedID))
 	})
+
+	// Settings don't exempt a post-begin SET: the pool resets only the settings
+	// it applied, so the SET must still go to a reserved connection.
+	settings := []string{"set sql_mode = ''"}
+	db.AddQuery("set sql_mode = ''", &sqltypes.Result{})
+	t.Run("ReserveBeginExecute with settings runs a SET on a reserved connection", func(t *testing.T) {
+		state, _, err := tsv.ReserveBeginExecute(ctx, nil, &target, settings, []string{queries["set"]}, "select 1", nil, nil)
+		require.NoError(t, err)
+		assert.NotZero(t, state.ReservedID, "the SET should run on a reserved connection")
+		require.NoError(t, tsv.Release(ctx, &target, state.TransactionID, state.ReservedID))
+	})
+	t.Run("ReserveBeginStreamExecute with settings rejects a SET", func(t *testing.T) {
+		begins := db.GetQueryCalledNum("begin")
+		state, err := tsv.ReserveBeginStreamExecute(ctx, nil, &target, settings, []string{queries["set"]}, "select 1", nil, nil, func(*sqltypes.Result) error { return nil })
+		require.ErrorContains(t, err, "not allowed without reserved connection")
+		assert.Zero(t, state.TransactionID, "no transaction should be begun")
+		assert.Equal(t, begins, db.GetQueryCalledNum("begin"), "begin should not reach MySQL")
+	})
+
+	// When a post-begin query fails on the reserved connection of the fallback,
+	// the reservation is released: its ID is not returned with the error, so the
+	// caller could not release it.
+	t.Run("ReserveBeginExecute releases the reservation when a post-begin query fails", func(t *testing.T) {
+		db.AddRejectedQuery("set unique_checks = 0", errors.New("rejected"))
+		active := tsv.te.txPool.scp.active.Size()
+		state, _, err := tsv.ReserveBeginExecute(ctx, nil, &target, nil, []string{"set unique_checks = 0"}, "select 1", nil, nil)
+		require.ErrorContains(t, err, "rejected")
+		assert.Zero(t, state.ReservedID)
+		assert.Equal(t, active, tsv.te.txPool.scp.active.Size(), "the reservation should be released")
+	})
 }

@@ -578,7 +578,8 @@ func (tsv *TabletServer) begin(
 			// does for its query. A statement that needs a reserved connection (a
 			// SET, for one) would otherwise run on a pooled transaction connection,
 			// which goes back to the pool with its session changed when the
-			// transaction ends.
+			// transaction ends. Settings don't exempt a post-begin SET: the pool
+			// resets only the settings it applied, not what the SET changed.
 			postBeginQueries = rewriteDoubleSlashComments(tsv.env.Parser(), postBeginQueries)
 			postBeginPlans := make([]*TabletPlan, len(postBeginQueries))
 			for i, query := range postBeginQueries {
@@ -586,7 +587,7 @@ func (tsv *TabletServer) begin(
 				if err != nil {
 					return err
 				}
-				if err := plan.IsValid(reservedID != 0, len(settings) > 0); err != nil {
+				if err := plan.IsValid(reservedID != 0, false /* hasSysSettings */); err != nil {
 					return err
 				}
 				postBeginPlans[i] = plan
@@ -1760,22 +1761,23 @@ func (tsv *TabletServer) ReserveBeginExecute(ctx context.Context, session querys
 
 			for _, query := range rewriteDoubleSlashComments(tsv.env.Parser(), postBeginQueries) {
 				plan, err := tsv.qe.GetPlan(ctx, logStats, query, true, false)
-				if err != nil {
-					return err
+				if err == nil {
+					qre := &QueryExecutor{
+						ctx:              ctx,
+						query:            query,
+						connID:           connID,
+						options:          options,
+						plan:             plan,
+						logStats:         logStats,
+						tsv:              tsv,
+						targetTabletType: targetType,
+					}
+					_, err = qre.Execute()
 				}
-
-				qre := &QueryExecutor{
-					ctx:              ctx,
-					query:            query,
-					connID:           connID,
-					options:          options,
-					plan:             plan,
-					logStats:         logStats,
-					tsv:              tsv,
-					targetTabletType: targetType,
-				}
-				_, err = qre.Execute()
 				if err != nil {
+					// The connection ID is returned only on success, so the caller
+					// could not release the reservation: release it here.
+					_ = tsv.te.Release(ctx, connID)
 					return err
 				}
 			}
