@@ -9,6 +9,12 @@ The controls pass on main and show that the fixture behaves as scenarios rely on
   replication state stay.
 - `TestShardLockControl`: hold a test-owned shard lock past its etcd lease TTL by checking it
   periodically, and detect a lost lease.
+- `TestERSHeldByApplierBarriers`: hold a real EmergencyReparentShard after it stops the
+  replicas and before it promotes, using read locks that block the appliers of the two most
+  advanced replicas while a third replicates through one of them. Release the locks and verify
+  the promotion. ERS holds the shard lock through the hold, and nothing renews the lock's lease
+  there, so the hold has a budget well within the lease TTL. An attempt that exceeds it, or
+  whose lease is about to expire at the release, fails as an invalid control.
 
 Run the package through the CI entry point, keeping the data of every run:
 
