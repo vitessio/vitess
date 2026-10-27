@@ -849,7 +849,7 @@ The error names where the errant GTIDs came from and how to repair them. Before 
 Before turning the flag on:
 - If the shard's newest backup already has errant GTIDs, every run fails. `vtbackup` restores the newest backup, so take a new backup of a healthy replica with `vtctldclient Backup`, and then remove the backups that hold the errant GTIDs.
 - Init SQL that runs binlogged statements fails the run. Use the statements' `NO_WRITE_TO_BINLOG` or `LOCAL` forms, or start the queries with `SET sql_log_bin = 0`.
-- The checks wait for a missing or unreachable primary, for the primary to commit GTIDs that `vtbackup` already applied, and, after a reparent during the upload, for the new primary. Like the existing wait for the primary's position, these waits are bounded only by the job's deadline, if it has one. While the checks of the restored data and of the data to back up run, the `Phase` metric reports the `VerifyErrantGTIDs` phase; the check before the `MANIFEST` runs within `TakeNewBackup`.
+- The checks wait for a missing or unreachable primary, an unreachable topo server, for the primary to commit GTIDs that `vtbackup` already applied, and, after a reparent during the upload, for the new primary. Like the existing wait for the primary's position, these waits are bounded only by the job's deadline, if it has one. While the checks of the restored data and of the data to back up run, the `Phase` metric reports the `VerifyErrantGTIDs` phase; the check before the `MANIFEST` runs within `TakeNewBackup`.
 - MariaDB and other non-MySQL56 flavors are not checked, as on tablets.
 
 See [#20677](https://github.com/vitessio/vitess/issues/20677) and [#20678](https://github.com/vitessio/vitess/issues/20678).

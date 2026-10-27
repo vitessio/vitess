@@ -1113,7 +1113,9 @@ func errantGTIDsError(check positionCheck, errant replication.Mysql56GTIDSet, pr
 // and sets backupParams.VerifyPosition to check the position that the backup's
 // MANIFEST will record (check 3). Check 3 reuses check 2's result when the
 // shard record still names the primary that check 2 verified against, in the
-// same term, and the MANIFEST position is one that check 2 verified.
+// same term, and the MANIFEST position is one that check 2 verified. Otherwise,
+// including when the shard record can't be read, it runs the full check, which
+// for a MySQL56 position waits for topo and then needs a reachable primary.
 //
 // The checks trust the shard record, which a new primary's shard sync updates
 // only after its promotion, and which an ERS doesn't wait for. An old primary
