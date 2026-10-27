@@ -100,7 +100,7 @@ const (
 	json_unquote(json_extract(action, '$.type'))=%a and vrepl_id=%a and table_name=%a`
 	sqlDeletePostCopyAction = `delete from _vt.post_copy_action where vrepl_id=%a and
 	table_name=%a and id=%a`
-	sqlGetTableStatsAutoRecalc = `select create_options, @@global.innodb_stats_auto_recalc from information_schema.tables where table_schema=%a and table_name=%a`
+	sqlGetTableStatsAutoRecalc = `select engine, create_options, @@global.innodb_stats_persistent, @@global.innodb_stats_auto_recalc from information_schema.tables where table_schema=%a and table_name=%a`
 	SqlMaxAllowedPacket        = "select @@session.max_allowed_packet as max_allowed_packet"
 	maxQuerySizeHeadroom       = int64(64)
 )
@@ -1242,12 +1242,12 @@ func (vr *vreplicator) killConnectionOnStop(stopCtx context.Context, dbClient *v
 	return func() { close(done) }, nil
 }
 
-// analyzeTableIfStatsAutoRecalcDisabled runs ANALYZE TABLE on a target table
-// whose InnoDB statistics are not recalculated automatically: because it was
-// created with STATS_AUTO_RECALC=0 like its source, or because it leaves the
-// option at its default and innodb_stats_auto_recalc is off. InnoDB saves empty
-// statistics for such a table when it is created and never refreshes them on
-// its own, so after a restart the optimizer would see an empty table. ANALYZE
+// analyzeTableIfStatsAutoRecalcDisabled runs ANALYZE TABLE on an InnoDB target
+// table whose persistent statistics are not recalculated automatically: because
+// it was created with STATS_AUTO_RECALC=0 like its source, or because it leaves
+// the option at its default and innodb_stats_auto_recalc is off. InnoDB saves
+// empty statistics for such a table when it is created and never refreshes them
+// on its own, so after a restart the optimizer would see an empty table. ANALYZE
 // TABLE is written to the binary log, so the target's replicas refresh their
 // statistics too. This is best effort: a failure is logged and does not fail
 // the copy. stopCtx is cancelled when the controller stops, not when a copy
@@ -1278,16 +1278,30 @@ func (vr *vreplicator) analyzeTableIfStatsAutoRecalcDisabled(stopCtx context.Con
 	if err != nil {
 		return optionsFailed(err)
 	}
-	if len(qr.Rows) == 0 || len(qr.Rows[0]) != 2 {
+	if len(qr.Rows) == 0 || len(qr.Rows[0]) != 4 {
 		return false
 	}
-	// The table's STATS_AUTO_RECALC option overrides innodb_stats_auto_recalc.
-	// create_options shows it only when it isn't DEFAULT.
-	switch createOptions := strings.ToLower(qr.Rows[0][0].ToString()); {
-	case strings.Contains(createOptions, "stats_auto_recalc=0"):
-	case strings.Contains(createOptions, "stats_auto_recalc=1"):
+	// STATS_AUTO_RECALC applies only to InnoDB's persistent statistics. Other
+	// engines don't have them, and InnoDB recalculates transient statistics on
+	// its own. A table's STATS_PERSISTENT and STATS_AUTO_RECALC options override
+	// innodb_stats_persistent and innodb_stats_auto_recalc; create_options shows
+	// them only when they aren't DEFAULT.
+	row := qr.Rows[0]
+	if !strings.EqualFold(row[0].ToString(), "InnoDB") {
 		return false
-	case qr.Rows[0][1].ToString() != "0":
+	}
+	createOptions := strings.ToLower(row[1].ToString())
+	enabled := func(option string, global sqltypes.Value) bool {
+		switch {
+		case strings.Contains(createOptions, option+"=0"):
+			return false
+		case strings.Contains(createOptions, option+"=1"):
+			return true
+		default:
+			return global.ToString() != "0"
+		}
+	}
+	if !enabled("stats_persistent", row[2]) || enabled("stats_auto_recalc", row[3]) {
 		return false
 	}
 	stopping := func() bool {

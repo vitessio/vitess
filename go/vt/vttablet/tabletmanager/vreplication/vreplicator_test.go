@@ -1271,6 +1271,8 @@ func TestAnalyzeTableIfStatsAutoRecalcDisabled(t *testing.T) {
 		tableOptions string
 		// globalAutoRecalcOff turns innodb_stats_auto_recalc off.
 		globalAutoRecalcOff bool
+		// globalPersistentOff turns innodb_stats_persistent off.
+		globalPersistentOff bool
 		// lockStats holds the table's row in mysql.innodb_table_stats past
 		// the lock wait timeout, so that ANALYZE TABLE fails.
 		lockStats bool
@@ -1299,6 +1301,32 @@ func TestAnalyzeTableIfStatsAutoRecalcDisabled(t *testing.T) {
 			globalAutoRecalcOff: true,
 		},
 		{
+			// STATS_AUTO_RECALC only applies to InnoDB's persistent
+			// statistics.
+			name:                "MEMORY table with innodb_stats_auto_recalc off",
+			tableOptions:        "engine=memory",
+			globalAutoRecalcOff: true,
+		},
+		{
+			name:         "MyISAM table with stats_auto_recalc=0",
+			tableOptions: "engine=myisam stats_auto_recalc=0",
+		},
+		{
+			name:         "stats_persistent=0 and stats_auto_recalc=0",
+			tableOptions: "stats_persistent=0 stats_auto_recalc=0",
+		},
+		{
+			name:                "stats_auto_recalc=0 with innodb_stats_persistent off",
+			tableOptions:        "stats_auto_recalc=0",
+			globalPersistentOff: true,
+		},
+		{
+			name:                "stats_persistent=1 and stats_auto_recalc=0 with innodb_stats_persistent off",
+			tableOptions:        "stats_persistent=1 stats_auto_recalc=0",
+			globalPersistentOff: true,
+			wantAnalyzed:        true,
+		},
+		{
 			name:         "table locked past the metadata lock wait timeout",
 			tableOptions: "stats_auto_recalc=0",
 			lockTable:    true,
@@ -1314,6 +1342,10 @@ func TestAnalyzeTableIfStatsAutoRecalcDisabled(t *testing.T) {
 			if tc.globalAutoRecalcOff {
 				execDba(t, "set @@global.innodb_stats_auto_recalc = 0")
 				t.Cleanup(func() { execDba(t, "set @@global.innodb_stats_auto_recalc = 1") })
+			}
+			if tc.globalPersistentOff {
+				execDba(t, "set @@global.innodb_stats_persistent = 0")
+				t.Cleanup(func() { execDba(t, "set @@global.innodb_stats_persistent = 1") })
 			}
 			execDba(t, fmt.Sprintf("create table %s.%s (id int not null, primary key(id)) %s", dbName, tableName, tc.tableOptions))
 			t.Cleanup(func() { execDba(t, fmt.Sprintf("drop table %s.%s", dbName, tableName)) })
