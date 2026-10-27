@@ -18,7 +18,7 @@ jobs:
   upgrade_downgrade_test_e2e:
     timeout-minutes: 60
     name: Run Semi Sync Upgrade Downgrade Test
-    runs-on: ${{ github.repository == 'vitessio/vitess' && 'oracle-vm-16cpu-64gb-x86-64' || 'ubuntu-24.04' }}
+    runs-on: ${{ github.repository_owner == 'vitessio' && 'cncf-ubuntu-24.04-16-64-x86' || (github.repository_owner == 'vitessio' && 'cncf-ubuntu-24.04-4-16-x86' || 'ubuntu-24.04') }}
 
     steps:
       - name: Harden the runner (Audit all outbound calls)
@@ -187,6 +187,8 @@ jobs:
         run: |
           rm -rf /tmp/vtdataroot
           mkdir -p /tmp/vtdataroot
+          # Keep the path of the mysql.sock file short: under the checkout it can exceed the 107-character limit for a Unix socket path.
+          export VTDATAROOT=/tmp/vtdataroot
           set -x
           source build.env
           go test -v -count=1 -run="" ./go/test/endtoend/reparent/semisync
