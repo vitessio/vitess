@@ -19,6 +19,7 @@
         - [`BackupHandle` interface gains `Wait()` method](#backup-handle-wait-method)
         - [VTOrc: `--cells-to-watch` removed in favor of `--cells-no-recovery`](#vtorc-cells-no-recovery)
         - [Connection character sets restricted](#vttablet-connection-charsets-restricted)
+        - [VTGate reports `REPLACE` statements as `REPLACE`](#vtgate-replace-statement-type)
     - **[Deprecations](#deprecations)**
         - [CLI Flags](#deprecated-cli-flags)
         - [Legacy streaming-path plan types in query rules](#deprecated-selectstream-rule-plan)
@@ -30,6 +31,7 @@
         - [Preserve Materialize target data on cancel by default](#vreplication-materialize-cancel-data-protection)
         - [Online DDL migrations are no longer failed by recoverable vreplication errors](#onlineddl-vrepl-auto-resume)
         - [VStream: `before_data_columns` bitmap for partial before images](#vstream-before-data-columns)
+        - [Copied tables whose statistics aren't recalculated automatically are analyzed](#vreplication-analyze-stats-auto-recalc)
     - **[VTGate](#minor-changes-vtgate)**
         - [Ingress bytes in query LogStats](#vtgate-logstats-ingress-bytes)
         - [New controls for cross-keyspace reads](#vtgate-cross-keyspace-reads)
@@ -65,6 +67,7 @@
         - [ApplySchema session variables](#vttablet-applyschema-session-variables)
         - [Table ACL: statements whose tables cannot be determined are denied under strict table ACL](#vttablet-table-acl-undetermined-table-set)
         - [Table ACL: reads embedded in non-SELECT statements are now checked](#vttablet-table-acl-embedded-reads)
+        - [Tablets outside `--throttle-tablet-types` keep their on-demand heartbeats running](#vttablet-throttler-unprobed-heartbeats)
     - **[VTCtld](#minor-changes-vtctld)**
         - [MySQL version-aware reparent candidate election](#vtctld-version-aware-reparent)
     - **[Backup/Restore](#minor-changes-backup)**
@@ -226,6 +229,19 @@ See [#20021](https://github.com/vitessio/vitess/issues/20021) for details.
 
 Vitess parses and escapes SQL text byte by byte, and in these character sets the second byte of a character can be a backslash or a back quote, so text in them was misparsed or corrupted on its way through Vitess. Use `utf8mb4` as the connection character set instead. Tables and columns can still be declared with any of these character sets; MySQL converts between them and the connection character set.
 
+#### <a id="vtgate-replace-statement-type"/>VTGate reports `REPLACE` statements as `REPLACE`</a>
+
+VTGate used to report a planned `REPLACE` statement with the `INSERT` statement type, because `REPLACE` is parsed as an `INSERT` that carries a "replace" action. It now reports it as `REPLACE`, which is what VTGate already reported for `REPLACE` on paths that don't build a plan, such as `PREPARE`. This changes the statement type of `REPLACE` statements in:
+
+- `StmtType` in the VTGate query log
+- the query-type label of the `QueryExecutions`, `QueryRoutes`, `QueryExecutionsByTable` and `SlowQueries` metrics
+- `QueryType` in plan output (`/debug/query_plans` and the `vtexplain` tool's JSON output)
+- `statementType` in `VEXPLAIN KEYS` output
+
+**Impact**: dashboards, alerts and query-log parsing that count `INSERT` no longer include `REPLACE` statements. Planning, routing, transactions and results are unchanged.
+
+**Migration**: match `REPLACE` as well as `INSERT` wherever `REPLACE` statements should be included.
+
 ### <a id="deprecations"/>Deprecations</a>
 
 #### <a id="deprecated-cli-flags"/>CLI Flags</a>
@@ -315,6 +331,18 @@ When MySQL runs with `binlog_row_image=NOBLOB`, it omits BLOB/TEXT columns that 
 `RowChange` now has an additional `before_data_columns` bitmap, set only when the before image is partial (and `--vreplication-experimental-flags` allows NOBLOB row images, which is the default). A bit is set for every column that is present in the before image, in the order of the columns emitted by the stream's filter (after projection). Note that the existing `data_columns` bitmap for the after image remains in the source table's column order for compatibility with existing consumers; aligning the two is tracked in [#21075](https://github.com/vitessio/vitess/issues/21075). The field is additive: VReplication ignores it and consumers that do not know about it are unaffected.
 
 See [#21065](https://github.com/vitessio/vitess/issues/21065) for details.
+
+#### <a id="vreplication-analyze-stats-auto-recalc"/>Copied tables whose statistics aren't recalculated automatically are analyzed</a>
+
+VReplication creates target tables with the source's table options, including `STATS_AUTO_RECALC=0`. InnoDB saves empty persistent statistics for such a table when it is created and never recalculates them on its own, so after a copy the target, its replicas and their backups kept statistics that describe an empty table. The same happens to an InnoDB table that leaves `STATS_AUTO_RECALC` at its default while `innodb_stats_auto_recalc` is off. Tables of other engines, and InnoDB tables with transient statistics (`STATS_PERSISTENT=0`, or the default while `innodb_stats_persistent` is off), are not affected, as InnoDB recalculates transient statistics whenever it opens a table.
+
+At the end of each copy cycle of a workflow or Online DDL migration, the target now runs `ANALYZE TABLE` on the table the cycle copied, if its persistent statistics aren't recalculated automatically:
+
+- The statement is written to the target's binary log, with its own GTID, and the target's replicas apply it. A replica applying it waits while a backup there holds `LOCK INSTANCE FOR BACKUP`, as it does for DDL.
+- It is best effort: a failure does not fail the copy, and is logged and recorded in the workflow's log, which `vtctldclient Workflow show` displays. On the target, its wait for a metadata lock, such as one held by `LOCK TABLES` or `LOCK INSTANCE FOR BACKUP`, is bounded at 60 seconds; a replica applies it under its own `lock_wait_timeout`. If the workflow, or the tablet's VReplication engine, stops while it runs, it is killed, and the table is analyzed when the copy resumes; an atomic copy, which can't resume, finishes without it and logs a warning in the vttablet log.
+- Tables copied before the upgrade keep their empty statistics until `ANALYZE TABLE` is run on them.
+
+See [#21749](https://github.com/vitessio/vitess/issues/21749) for details.
 
 ### <a id="minor-changes-vtgate"/>VTGate</a>
 
@@ -747,6 +775,16 @@ Connection settings — the SET statements vtgate attaches to a session's querie
 **Compatibility note:** a v24 vtgate still stores a targeted session's `SET` expression as written. Against a vttablet with this change running strict table ACL without dry run, a v24 vtgate session that runs `SET @@var = (<subquery>)` while targeted has that setting rejected on every later query until the client reconnects. Upgrade vtgate before vttablet, or avoid subqueries in targeted `SET` statements during the upgrade. Without strict table ACL nothing changes for such a session.
 
 See [#21139](https://github.com/vitessio/vitess/pull/21139) for details.
+
+#### <a id="vttablet-throttler-unprobed-heartbeats"/>Tablets outside `--throttle-tablet-types` keep their on-demand heartbeats running</a>
+
+When heartbeats run on demand, which is the case unless `--heartbeat-enable` is set without `--heartbeat-on-demand-duration`, the primary renews the heartbeat lease only for the tablet types it probes: the primary and the types in `--throttle-tablet-types` (default `replica`). A tablet of another type, RDONLY by default, asked the primary for heartbeats at most once a minute, so its heartbeats, and with them its lag, went stale for most of every minute. VTGate VStreams, workflows run with `--tablet-types rdonly`, and VDiffs sourced from RDONLY tablets were then throttled on false lag.
+
+While the throttler on such a tablet is being checked, the tablet now asks the primary for heartbeats every 2 seconds, half of the shortest lease, so its lag stays accurate. The primary writes heartbeats while those checks continue, as it already does while the throttler on a replica is being checked. Nothing changes while nothing checks the throttler on the tablet. When the primary's heartbeats always run, it ignores these requests.
+
+Each tablet decides from its own `--throttle-tablet-types` whether the primary probes it, so set the flag to the same value on the primary and on the other tablets of the keyspace. A tablet that lists its own type while the primary does not would ask for heartbeats only once a minute, as before.
+
+See [#20248](https://github.com/vitessio/vitess/issues/20248) for details.
 
 
 ### <a id="minor-changes-vtctld"/>VTCtld</a>

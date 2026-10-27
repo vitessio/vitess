@@ -26,7 +26,7 @@ jobs:
   # matrix jobs below (many of them on large runners) are not started at all
   # when nothing relevant changed.
   generate-matrix:
-    runs-on: ubuntu-24.04
+    runs-on: ${{ github.repository_owner == 'vitessio' && 'cncf-ubuntu-24.04-4-16-x86' || 'ubuntu-24.04' }}
     timeout-minutes: 5
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
@@ -138,7 +138,7 @@ jobs:
     # status checks are reported), but on a GitHub-hosted runner with every
     # step below skipped. The 'Skip CI' label also gets the small runner, since
     # the shards then only fail at that step.
-    runs-on: ${{ needs.generate-matrix.outputs.end_to_end == 'true' && !contains(github.event.pull_request.labels.*.name, 'Skip CI') && contains(matrix.needs, 'larger-runner') && github.repository == 'vitessio/vitess' && 'oracle-vm-16cpu-64gb-x86-64' || 'ubuntu-24.04' }}
+    runs-on: ${{ needs.generate-matrix.outputs.end_to_end == 'true' && !contains(github.event.pull_request.labels.*.name, 'Skip CI') && contains(matrix.needs, 'larger-runner') && github.repository_owner == 'vitessio' && 'cncf-ubuntu-24.04-16-64-x86' || (github.repository_owner == 'vitessio' && 'cncf-ubuntu-24.04-4-16-x86' || 'ubuntu-24.04') }}
 
     steps:
       - name: Harden the runner (Audit all outbound calls)
@@ -221,7 +221,7 @@ jobs:
             sudo apt-get -qq install -y mysql-shell
           fi
 
-          sudo apt-get -qq install -y make unzip g++ etcd-client etcd-server curl git wget xz-utils libncurses6
+          sudo apt-get -qq install -y make unzip g++ etcd-client etcd-server curl git wget xz-utils libncurses6 tzdata-legacy
           sudo service etcd stop
 
       - name: Install MicroCeph

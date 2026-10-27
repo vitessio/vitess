@@ -17,8 +17,6 @@ limitations under the License.
 package vstreamer
 
 import (
-	"bytes"
-	"encoding/json"
 	"log/slog"
 	"testing"
 
@@ -27,25 +25,21 @@ import (
 
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/stats"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-// captureLog logs JSON to a buffer for the rest of the test and returns a
-// function that decodes the single record logged so far.
+// captureLog logs JSON for the rest of the test and returns a function that
+// decodes the single record logged so far.
 func captureLog(t *testing.T) func() map[string]any {
 	t.Helper()
-	var buf bytes.Buffer
-	saved := log.SwapLogger(slog.New(slog.NewJSONHandler(&buf, nil)))
-	t.Cleanup(func() { log.SwapLogger(saved) })
+	logs := captureLogs(t, slog.LevelInfo)
 	return func() map[string]any {
 		t.Helper()
-		var record map[string]any
-		require.NoError(t, json.NewDecoder(&buf).Decode(&record))
-		require.Zero(t, buf.Len(), "expected a single log record")
-		return record
+		records := logs.records(t)
+		require.Len(t, records, 1, "expected a single log record")
+		return records[0]
 	}
 }
 
@@ -54,10 +48,11 @@ func captureLog(t *testing.T) func() map[string]any {
 // which only sees the code if wrapError does not flatten the error to text.
 func TestWrapErrorPreservesCode(t *testing.T) {
 	vse := &Engine{
-		vstreamersEndedWithErrors: stats.NewCounter("TestWrapErrorVStreamersEndedWithErrors", "test"),
-		errorCounts:               stats.NewCountersWithSingleLabel("TestWrapErrorVStreamerErrors", "test", "type"),
+		vstreamersEndedWithErrors: stats.NewCounter("", "test"),
+		errorCounts:               stats.NewCountersWithSingleLabel("", "test", "type"),
 	}
-	pos, err := replication.DecodePosition("MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5")
+	const encodedPos = "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5"
+	pos, err := replication.DecodePosition(encodedPos)
 	require.NoError(t, err)
 
 	t.Run("nil", func(t *testing.T) {
@@ -67,7 +62,7 @@ func TestWrapErrorPreservesCode(t *testing.T) {
 		record := logged()
 		assert.Equal(t, "INFO", record["level"])
 		assert.Equal(t, "stream (at source tablet) ended", record["msg"])
-		assert.Equal(t, pos.String(), record["position"])
+		assert.Equal(t, encodedPos, record["position"])
 	})
 
 	t.Run("FAILED_PRECONDITION", func(t *testing.T) {
@@ -82,7 +77,7 @@ func TestWrapErrorPreservesCode(t *testing.T) {
 		record := logged()
 		assert.Equal(t, "ERROR", record["level"])
 		assert.Equal(t, "stream (at source tablet) error, position includes the GTID we failed to process", record["msg"])
-		assert.Equal(t, pos.String(), record["position"])
+		assert.Equal(t, encodedPos, record["position"])
 		assert.Equal(t, "FAILED_PRECONDITION", record["error_code"])
 		assert.Equal(t, "missing a needed value", record["error"])
 	})
