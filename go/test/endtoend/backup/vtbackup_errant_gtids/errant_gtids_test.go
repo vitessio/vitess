@@ -21,6 +21,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"regexp"
 	"strconv"
 	"strings"
 	"syscall"
@@ -598,21 +599,26 @@ func listBackups(t *testing.T) []string {
 // stopLeakedVtbackup stops a background vtbackup that is still running when the
 // test ends, because the test failed. VtbackupProcess.TearDown can't stop a
 // process that is still inside Setup, so this signals it by its socket flag.
-// SIGTERM lets vtbackup's deferred cleanup shut down its mysqld, whose own
-// command line doesn't name the socket. SIGKILL is the fallback.
+// SIGTERM goes to vtbackup alone, so that its deferred cleanup shuts down its
+// mysqld. The SIGKILL fallback also kills that mysqld when its command line
+// names the socket (--socket=<path>), as when mysqld_safe starts it.
 func stopLeakedVtbackup(done chan error, socketPath string) {
 	select {
 	case <-done:
 		return
 	default:
 	}
-	_ = exec.Command("pkill", "-TERM", "-f", socketPath).Run()
+	// pkill matches an extended regex anywhere in a command line, so quote the
+	// path and require the end of the argument after it: socket names from
+	// os.CreateTemp vary in length, and a bare prefix could match another run's.
+	socket := regexp.QuoteMeta(socketPath) + "( |$)"
+	_ = exec.Command("pkill", "-TERM", "-f", "mysql-socket "+socket).Run()
 	select {
 	case <-done:
 		return
 	case <-time.After(time.Minute):
 	}
-	_ = exec.Command("pkill", "-9", "-f", socketPath).Run()
+	_ = exec.Command("pkill", "-9", "-f", "(mysql-socket |socket=)"+socket).Run()
 	select {
 	case <-done:
 	case <-time.After(15 * time.Second):
