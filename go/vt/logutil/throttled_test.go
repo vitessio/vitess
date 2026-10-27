@@ -54,7 +54,8 @@ func TestThrottledLogger(t *testing.T) {
 	}
 
 	go tl.Infof("test %v", 2)
-	if got, want := <-log, "name: skipped 1 log messages"; got != want {
+	go tl.Infof("test %v", 2)
+	if got, want := <-log, "name: skipped 2 log messages"; got != want {
 		assert.Equalf(t, want, got, "got %q, want %q", got, want)
 	}
 	if got, want := skippedCount(tl), 0; got != want {
@@ -73,47 +74,26 @@ func TestThrottledLogger(t *testing.T) {
 	}
 }
 
-func TestThrottledLoggerAttrs(t *testing.T) {
-	type record struct {
-		depth int
-		msg   string
-		attrs []slog.Attr
+// TestThrottledLoggerReportsOncePerInterval checks that only the first skipped
+// call in an interval starts a skipped report.
+func TestThrottledLoggerReportsOncePerInterval(t *testing.T) {
+	tl := NewThrottledLogger("name", time.Minute)
+	now := time.Now()
+	logNow, _, _ := tl.throttle(now)
+	require.True(t, logNow)
+	for i, want := range []bool{true, false, false} {
+		logNow, report, _ := tl.throttle(now)
+		assert.Falsef(t, logNow, "call %d logged", i)
+		assert.Equalf(t, want, report, "call %d report", i)
 	}
-	log := make(chan record)
-	infoDepth = func(depth int, msg string, attrs ...slog.Attr) {
-		log <- record{depth, msg, attrs}
-	}
-	t.Cleanup(func() { infoDepth = vtlog.InfoDepth })
-	interval := 100 * time.Millisecond
-	tl := NewThrottledLogger("name", interval)
-
-	start := time.Now()
-
-	go tl.Info("test", slog.Int("n", 1))
-	got := <-log
-	assert.Equal(t, 2, got.depth)
-	assert.Equal(t, "test", got.msg)
-	assertAttrs(t, []slog.Attr{slog.String("logger", "name"), slog.Int("n", 1)}, got.attrs)
-
-	go tl.Info("test", slog.Int("n", 2))
-	got = <-log
-	assert.Equal(t, 0, got.depth)
-	assert.Equal(t, "skipped log messages", got.msg)
-	assertAttrs(t, []slog.Attr{slog.String("logger", "name"), slog.Int("skipped", 1)}, got.attrs)
-	assert.Equal(t, 0, skippedCount(tl))
-	assert.GreaterOrEqual(t, time.Since(start), interval, "did not wait long enough before logging")
-
-	go tl.Info("test", slog.Int("n", 3))
-	got = <-log
-	assert.Equal(t, "test", got.msg)
-	assertAttrs(t, []slog.Attr{slog.String("logger", "name"), slog.Int("n", 3)}, got.attrs)
-	assert.Equal(t, 0, skippedCount(tl))
+	assert.Equal(t, 3, skippedCount(tl))
 }
 
 // TestThrottledLoggerWriteOutsideLock checks that a call that is throttled
 // doesn't wait for a write in progress.
 func TestThrottledLoggerWriteOutsideLock(t *testing.T) {
 	type record struct {
+		depth int
 		msg   string
 		attrs []slog.Attr
 	}
@@ -123,8 +103,8 @@ func TestThrottledLoggerWriteOutsideLock(t *testing.T) {
 		msg     string
 		skipped record
 	}{
-		{"Info", func(tl *ThrottledLogger) { tl.Info("test") }, "test", record{"skipped log messages", []slog.Attr{slog.String("logger", "name"), slog.Int("skipped", 1)}}},
-		{"Infof", func(tl *ThrottledLogger) { tl.Infof("test") }, "name: test", record{"name: skipped 1 log messages", nil}},
+		{"Info", func(tl *ThrottledLogger) { tl.Info("test") }, "test", record{0, "skipped log messages", []slog.Attr{slog.String("logger", "name"), slog.Int("skipped", 1)}}},
+		{"Infof", func(tl *ThrottledLogger) { tl.Infof("test") }, "name: test", record{0, "name: skipped 1 log messages", nil}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -135,7 +115,7 @@ func TestThrottledLoggerWriteOutsideLock(t *testing.T) {
 			releaseWrite := sync.OnceFunc(func() { close(release) })
 			t.Cleanup(releaseWrite)
 			infoDepth = func(depth int, msg string, attrs ...slog.Attr) {
-				written <- record{msg, attrs}
+				written <- record{depth, msg, attrs}
 				select {
 				case <-first:
 					<-release
@@ -164,6 +144,7 @@ func TestThrottledLoggerWriteOutsideLock(t *testing.T) {
 
 			releaseWrite()
 			got := <-written
+			assert.Equal(t, tt.skipped.depth, got.depth)
 			assert.Equal(t, tt.skipped.msg, got.msg)
 			assertAttrs(t, tt.skipped.attrs, got.attrs)
 		})
