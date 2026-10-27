@@ -171,6 +171,8 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 		}
 		clusterInstance.Teardown()
 		stopMySQLInits(mysqlCtlProcessList)
+		// Teardown has already run; this removes the data directory on CI.
+		TeardownCluster(clusterInstance)
 	})
 
 	// Start topo server
