@@ -1324,27 +1324,27 @@ func (vr *vreplicator) analyzeTableIfStatsAutoRecalcDisabled(stopCtx context.Con
 	}
 	// ANALYZE TABLE causes an implicit commit, so use a new connection to not
 	// interfere with any transaction open on the shared one.
-	dbClient, err := vr.newClientConnection(stopCtx)
+	analyzeConn, err := vr.newClientConnection(stopCtx)
 	if err != nil {
 		return failed("Unable to connect to the database to analyze the table", err.Error(), errAttrs(err))
 	}
-	defer dbClient.Close()
+	defer analyzeConn.Close()
 	// Bound the metadata lock wait; a timeout comes back as a failure row. The
 	// setting is not binlogged, so a replica applies the ANALYZE TABLE under its
 	// own lock_wait_timeout, as it does any DDL.
-	if _, err := dbClient.ExecuteFetch(fmt.Sprintf("set @@session.lock_wait_timeout = %d", int64(analyzeLockWaitTimeout/time.Second)), 0); err != nil {
+	if _, err := analyzeConn.ExecuteFetch(fmt.Sprintf("set @@session.lock_wait_timeout = %d", int64(analyzeLockWaitTimeout/time.Second)), 0); err != nil {
 		return failed("Unable to analyze the table", err.Error(), errAttrs(err))
 	}
 	// ANALYZE TABLE can wait for a lock on the table, so interrupt it if the
 	// controller stops or the engine closes.
-	stopKillWatch, err := vr.killConnectionOnStop(stopCtx, dbClient, tableName,
+	stopKillWatch, err := vr.killConnectionOnStop(stopCtx, analyzeConn, tableName,
 		"Interrupting ANALYZE TABLE", "Failed to kill the connection executing ANALYZE TABLE")
 	if err != nil {
 		return failed("Unable to analyze the table", err.Error(), errAttrs(err))
 	}
 	defer stopKillWatch()
 	analyze := "analyze table " + sqlescape.EscapeID(dbName) + "." + sqlescape.EscapeID(tableName)
-	qr, err = dbClient.ExecuteFetch(analyze, 10)
+	analyzeResult, err := analyzeConn.ExecuteFetch(analyze, 10)
 	if err != nil {
 		return failed("Unable to analyze the table", err.Error(), errAttrs(err))
 	}
@@ -1355,7 +1355,7 @@ func (vr *vreplicator) analyzeTableIfStatsAutoRecalcDisabled(stopCtx context.Con
 	// analyzed only if it reports status OK.
 	analyzed := false
 	var result []string
-	for _, row := range qr.Rows {
+	for _, row := range analyzeResult.Rows {
 		if len(row) != 4 {
 			continue
 		}
