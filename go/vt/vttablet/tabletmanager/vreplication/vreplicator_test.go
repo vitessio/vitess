@@ -879,10 +879,12 @@ func TestCancelledDeferSecondaryKeys(t *testing.T) {
 				t.Cleanup(func() {
 					// analyzeTableIfStatsAutoRecalcDisabled uses the shared
 					// dbClient, so wait for it after the cleanup below has
-					// unlocked the table.
+					// unlocked the table, before the earlier cleanups use the
+					// shared dbClient too.
 					select {
 					case <-done:
 					case <-time.After(30 * time.Second):
+						t.Error("analyzeTableIfStatsAutoRecalcDisabled did not return, and may still be using the shared dbClient")
 					}
 				})
 
