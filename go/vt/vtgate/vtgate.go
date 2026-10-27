@@ -169,6 +169,8 @@ var (
 	enableViews              = true
 	enableUdfs               bool
 
+	vstreamMetricsIncludeCaller bool
+
 	// vtgate views flags
 	queryTimeout int
 	// slowQueryThreshold marks vtgate queries as slow when TotalTime meets or exceeds it.
@@ -225,6 +227,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	utils.SetFlagDurationVar(fs, &messageStreamGracePeriod, "message-stream-grace-period", messageStreamGracePeriod, "the amount of time to give for a vttablet to resume if it ends a message stream, usually because of a reparent.")
 	fs.BoolVar(&enableViews, "enable-views", enableViews, "Enable views support in vtgate.")
 	fs.BoolVar(&enableUdfs, "track-udfs", enableUdfs, "Track UDFs in vtgate.")
+	fs.BoolVar(&vstreamMetricsIncludeCaller, "vstream-metrics-include-caller", vstreamMetricsIncludeCaller, "Add a CallerID label to VStream metrics, set to the client-supplied effective caller principal, or the MySQL user for SQL VSTREAM. Each distinct principal adds a series per keyspace, shard, and tablet type, and the counters keep their series until VTGate restarts. Streams without a principal get an empty CallerID.")
 	fs.BoolVar(&allowKillStmt, "allow-kill-statement", allowKillStmt, "Allows the execution of kill statement")
 	fs.IntVar(&warmingReadsPercent, "warming-reads-percent", 0, "Percentage of reads on the primary to forward to replicas. Useful for keeping buffer pools warm")
 	fs.IntVar(&warmingReadsConcurrency, "warming-reads-concurrency", 500, "Number of concurrent warming reads allowed")
@@ -251,7 +254,7 @@ var (
 	// Error counters should be global so they can be set from anywhere
 	errorCounts = stats.NewCountersWithMultiLabels("VtgateApiErrorCounts", "Vtgate API error counts per error type", []string{"Operation", "Keyspace", "DbType", "Code"})
 
-	warnings = stats.NewCountersWithSingleLabel("VtGateWarnings", "Vtgate warnings", "type", "IgnoredSet", "NonAtomicCommit", "ResultsExceeded", "WarnPayloadSizeExceeded", "WarnUnshardedOnly")
+	warnings = stats.NewCountersWithSingleLabel("VtGateWarnings", "Vtgate warnings", "type", "DoubleSlashComment", "IgnoredSet", "NonAtomicCommit", "ResultsExceeded", "WarnPayloadSizeExceeded", "WarnUnshardedOnly")
 
 	vstreamSkewDelayCount = stats.NewCounter("VStreamEventsDelayedBySkewAlignment",
 		"Number of events that had to wait because the skew across shards was too high")

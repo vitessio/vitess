@@ -79,7 +79,21 @@ func TestDropTableDisablesForeignKeyChecks(t *testing.T) {
 	// foreign_key_checks must be disabled before the drop, and restored after it.
 	assert.Less(t, disableIdx, dropIdx, "foreign_key_checks must be disabled before the drop")
 	assert.Less(t, dropIdx, restoreIdx, "foreign_key_checks must be restored after the drop")
+
+	// A name can pass schema.AnalyzeGCTableName and still hold a back quote, since
+	// its [0-f] ranges accept punctuation. It must be dropped as one identifier.
+	isGCTable, _, _, _, err := schema.AnalyzeGCTableName(injectingGCTableName)
+	require.NoError(t, err)
+	require.True(t, isGCTable)
+	db.ResetQueryLog()
+	require.NoError(t, collector.dropTable(t.Context(), injectingGCTableName, true))
+	// The query log is lowercased.
+	assert.Contains(t, db.QueryLog(), strings.ToLower("drop table if exists `_vt_drp_6ace8bcef73211ea``;DROP``TABLE``X``;_20200915120410_`"))
 }
+
+// injectingGCTableName is accepted by schema.AnalyzeGCTableName but holds back
+// quotes and a ';' that would end the identifier if it were not escaped.
+const injectingGCTableName = "_vt_drp_6ace8bcef73211ea`;DROP`TABLE`X`;_20200915120410_"
 
 // TestPurgeDisablesForeignKeyChecks verifies that purge disables foreign key checks before deleting
 // rows. This lets the GC purge a doomed parent table's rows even while a doomed child still
@@ -106,6 +120,16 @@ func TestPurgeDisablesForeignKeyChecks(t *testing.T) {
 	// foreign_key_checks must be disabled before purging rows, and restored afterwards.
 	assert.Less(t, disableIdx, deleteIdx, "foreign_key_checks must be disabled before purging rows")
 	assert.Less(t, deleteIdx, restoreIdx, "foreign_key_checks must be restored after purging")
+
+	// The purged table's name must be escaped, even one AnalyzeGCTableName accepts.
+	collector = newFakeDBTableGC(t, db)
+	injectingPurgeTableName := strings.Replace(injectingGCTableName, "_vt_drp_", "_vt_prg_", 1)
+	require.True(t, collector.addPurgingTable(injectingPurgeTableName))
+	db.ResetQueryLog()
+	_, err = collector.purge(t.Context())
+	require.NoError(t, err)
+	// The query log is lowercased.
+	assert.Contains(t, db.QueryLog(), strings.ToLower("delete from `_vt_prg_6ace8bcef73211ea``;DROP``TABLE``X``;_20200915120410_` limit 50"))
 }
 
 func TestNextTableToPurge(t *testing.T) {

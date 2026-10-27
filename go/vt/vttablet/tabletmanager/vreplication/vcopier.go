@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"math"
 	"slices"
 	"strconv"
@@ -678,6 +679,21 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 	select {
 	case <-ctx.Done():
 		log.Info(fmt.Sprintf("Copy of %v stopped at lastpk: %v", tableName, lastpkbv))
+		// Refresh the statistics of what this cycle copied, as the table is
+		// caught up and replicated before the next cycle. If the controller
+		// is stopping, the next cycle analyzes the table. First roll back any
+		// batch that the cancellation left uncommitted on the shared
+		// connection, which the deferred rollback would only discard after
+		// the ANALYZE TABLE: InnoDB's sampled statistics count uncommitted
+		// rows, so they would include rows that the rollback then removes.
+		if err := vc.vr.dbClient.Rollback(); err != nil {
+			log.Warn("Unable to roll back the copy transaction before analyzing the table",
+				slog.String("table", tableName),
+				slog.String("workflow", vc.vr.WorkflowName),
+				slog.Any("error", err),
+			)
+		}
+		vc.vr.analyzeTableIfStatsAutoRecalcDisabled(stopCtx, tableName)
 		return nil
 	default:
 	}
@@ -685,23 +701,8 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 		return serr
 	}
 
-	// Perform any post copy actions
-	if err := vc.vr.execPostCopyActions(ctx, stopCtx, tableName); err != nil {
-		return vterrors.Wrapf(err, "failed to execute post copy actions for table %q", tableName)
-	}
-
-	log.Info(fmt.Sprintf("Copy of %v finished at lastpk: %v", tableName, lastpkbv))
-	buf := sqlparser.NewTrackedBuffer(nil)
-	buf.Myprintf(
-		"delete cs, pca from _vt.%s as cs left join _vt.%s as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name where cs.vrepl_id=%d and cs.table_name=%s",
-		copyStateTableName, postCopyActionTableName,
-		vc.vr.id, encodeString(tableName),
-	)
-	if _, err := vc.vr.dbClient.Execute(buf.String()); err != nil {
-		return err
-	}
-
-	return nil
+	return vc.runPostCopyActionsAndDeleteCopyState(ctx, stopCtx, tableName, true,
+		fmt.Sprintf("Copy of %v finished at lastpk: %v", tableName, lastpkbv))
 }
 
 // updatePos is called after the last table is copied in an atomic copy, to set the gtid so that the replicating phase

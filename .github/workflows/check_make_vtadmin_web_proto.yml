@@ -13,10 +13,10 @@ permissions: read-all
 jobs:
   build:
     name: Check Make VTAdmin Web Proto
-    runs-on: ubuntu-24.04
+    runs-on: ${{ github.repository_owner == 'vitessio' && 'cncf-ubuntu-24.04-4-16-x86' || 'ubuntu-24.04' }}
     steps:
     - name: Harden the runner (Audit all outbound calls)
-      uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+      uses: step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed # v2.22.0
       with:
         egress-policy: audit
 
@@ -30,17 +30,29 @@ jobs:
     - name: Check out code
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
+        # The merge commit and its first parent, for the path filter.
+        fetch-depth: 2
         persist-credentials: 'false'
 
     - name: Tune the OS
       timeout-minutes: 5
       uses: $/.github/actions/tune-os
 
+    - name: Find the base of the pull request's merge commit
+      # github.event.pull_request.base.sha is not updated when the base branch
+      # moves, so paths-filter would also count the base branch's newer commits.
+      # With token: '', paths-filter diffs against `base` on pull_request
+      # events too (see its README); action.yml's input description is stale.
+      id: merge-base
+      if: github.event_name == 'pull_request'
+      run: echo "sha=$(git rev-parse HEAD^1)" >> "$GITHUB_OUTPUT"
+
     - name: Check for changes in relevant files
       uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
       id: changes
       with:
         token: ''
+        base: ${{ steps.merge-base.outputs.sha }}
         filters: |
           proto_changes:
             - 'bootstrap.sh'
@@ -66,7 +78,7 @@ jobs:
       uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
       with:
         # node-version should match package.json
-        node-version: '22.23.2'
+        node-version: '24.21.0'
 
     - name: Install npm dependencies
       if: steps.changes.outputs.proto_changes == 'true'

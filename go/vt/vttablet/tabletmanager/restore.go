@@ -253,6 +253,7 @@ func (tm *TabletManager) restoreBackupLocked(ctx context.Context, logger logutil
 			// Reconnect to primary only for "NORMAL" keyspaces
 			replCmd.action = replicationActionStart
 			replCmd.position = &pos
+			replCmd.keepBinlogs = backupManifest.IncludesBinlogs
 		}
 	case err == mysqlctl.ErrNoBackup:
 		// Starting with empty database.
@@ -377,7 +378,7 @@ func (tm *TabletManager) disableReplication(ctx context.Context) error {
 	return nil
 }
 
-func (tm *TabletManager) startReplication(ctx context.Context, pos replication.Position, tabletType topodatapb.TabletType) error {
+func (tm *TabletManager) startReplication(ctx context.Context, pos replication.Position, tabletType topodatapb.TabletType, keepBinlogs bool) error {
 	// The first three steps of stopping replication, and setting the replication position,
 	// we want to do even if the context expires, so we use a background context for these tasks.
 	if err := tm.MysqlDaemon.StopReplication(context.Background(), nil); err != nil {
@@ -387,9 +388,12 @@ func (tm *TabletManager) startReplication(ctx context.Context, pos replication.P
 		return vterrors.Wrap(err, "failed to reset replication")
 	}
 
-	// Set the position at which to resume from the primary.
-	if err := tm.MysqlDaemon.SetReplicationPosition(context.Background(), pos); err != nil {
-		return vterrors.Wrap(err, "failed to set replication position")
+	// Set the position at which to resume from the primary, unless the restored
+	// binlogs already put gtid_executed there: setting it would RESET them away.
+	if !keepBinlogs {
+		if err := tm.MysqlDaemon.SetReplicationPosition(context.Background(), pos); err != nil {
+			return vterrors.Wrap(err, "failed to set replication position")
+		}
 	}
 
 	primaryPosStr, err := tm.initializeReplication(ctx, tabletType)
@@ -488,6 +492,8 @@ type replicationCommand struct {
 	action replicationAction
 	// position is used by the replicationActionStart action.
 	position *replication.Position
+	// keepBinlogs is set when the restore installed the backup's binlogs, which setting the position would delete.
+	keepBinlogs bool
 }
 
 // restoreState represents the state of a restoreStateManager.
@@ -558,7 +564,7 @@ func (rt *restoreStateManager) finish(ctx context.Context, replCmd replicationCo
 			return vterrors.New(vtrpcpb.Code_INTERNAL, "cannot start replication with nil position")
 		}
 		rt.logger.Infof("Restore: starting replication at position %v", *replCmd.position)
-		if err := rt.tm.startReplication(ctx, *replCmd.position, rt.prevTabletType); err != nil {
+		if err := rt.tm.startReplication(ctx, *replCmd.position, rt.prevTabletType, replCmd.keepBinlogs); err != nil {
 			return vterrors.Wrapf(err, "failed to start replication with position %q", replCmd.position.String())
 		}
 	}

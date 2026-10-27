@@ -146,6 +146,11 @@ func TestSQLTypeToQueryType(t *testing.T) {
 			input:  "decimal",
 			output: sqltypes.Decimal,
 		},
+		{
+			// SERIAL is an alias for BIGINT UNSIGNED NOT NULL AUTO_INCREMENT UNIQUE
+			input:  "serial",
+			output: sqltypes.Uint64,
+		},
 	}
 
 	for _, tc := range tcs {

@@ -145,6 +145,7 @@ type TestRowChange struct {
 	afterRaw             *query.Row
 	dataColumnsRaw       *binlogdatapb.RowChange_Bitmap
 	beforeDataColumnsRaw *binlogdatapb.RowChange_Bitmap
+	afterDataColumnsRaw  *binlogdatapb.RowChange_Bitmap
 }
 
 // TestRowEventSpec is used for defining a custom row event.
@@ -169,6 +170,9 @@ func (s *TestRowEventSpec) String() string {
 			}
 			if c.beforeDataColumnsRaw != nil {
 				rowChange.BeforeDataColumns = c.beforeDataColumnsRaw
+			}
+			if c.afterDataColumnsRaw != nil {
+				rowChange.AfterDataColumns = c.afterDataColumnsRaw
 			}
 			if c.beforeRaw != nil {
 				rowChange.Before = c.beforeRaw
@@ -684,6 +688,12 @@ func (ts *TestSpec) getRowChangeForUpdate(table string, newState *query.Row) *bi
 	rowChange.After = &after
 	if hasSkip {
 		rowChange.DataColumns = &binlogdatapb.RowChange_Bitmap{
+			Count: int64(len(currentState.Lengths)),
+			Cols:  []byte{bitmap},
+		}
+		// The generated expectations are for "select *" filters, where the
+		// projected bitmap is identical to the source-ordered one.
+		rowChange.AfterDataColumns = &binlogdatapb.RowChange_Bitmap{
 			Count: int64(len(currentState.Lengths)),
 			Cols:  []byte{bitmap},
 		}
