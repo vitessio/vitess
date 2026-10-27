@@ -274,10 +274,10 @@ func (pk PlanKey) Hash() theine.HashKey256 {
 	return planKey
 }
 
-func NewPlan(query string, stmt sqlparser.Statement, primitive Primitive, bindVarNeeds *sqlparser.BindVarNeeds, tablesUsed []string) *Plan {
+func NewPlan(query string, queryType sqlparser.StatementType, primitive Primitive, bindVarNeeds *sqlparser.BindVarNeeds, tablesUsed []string) *Plan {
 	return &Plan{
 		Type:         getPlanType(primitive),
-		QueryType:    sqlparser.ASTToStatementType(stmt),
+		QueryType:    queryType,
 		Original:     query,
 		Instructions: primitive,
 		BindVarNeeds: bindVarNeeds,

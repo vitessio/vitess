@@ -20,12 +20,21 @@ jobs:
   # check, so skipping it at the job level reports nothing misleading.
   changes:
     if: github.event_name != 'pull_request' || !contains(github.event.pull_request.labels.*.name, 'Backport')
-    runs-on: ubuntu-24.04
+    runs-on: ${{ github.repository_owner == 'vitessio' && 'cncf-ubuntu-24.04-4-16-x86' || 'ubuntu-24.04' }}
     timeout-minutes: 10
     outputs:
+      can_upload: ${{ steps.upload.outputs.can_upload }}
       is_full_run: ${{ steps.mode.outputs.is_full_run }}
       packages: ${{ steps.packages.outputs.packages }}
     steps:
+    # Codecov accepts uploads without a token only from public repositories, so a private repository without the
+    # CODECOV_TOKEN secret, such as vitess-security, skips the coverage job instead of failing its upload.
+    - name: Check whether the coverage report can be uploaded
+      id: upload
+      env:
+        CAN_UPLOAD: ${{ !github.event.repository.private || secrets.CODECOV_TOKEN != '' }}
+      run: echo "can_upload=$CAN_UPLOAD" >> "$GITHUB_OUTPUT"
+
     - name: Check out code
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
@@ -67,13 +76,16 @@ jobs:
         predicate-quantifier: 'every'
         filters: |
           changed_files:
-            - '{.github/workflows/codecov.yml,.github/actions/setup-mysql/action.yml,.github/actions/setup-go/action.yml,go/**,go.mod,go.sum,Makefile}'
+            - '{.github/workflows/codecov.yml,.github/actions/setup-mysql/action.yml,.github/actions/tune-os/**,.github/actions/setup-go/action.yml,go/**,go.mod,go.sum,Makefile}'
             - '!{go/test/endtoend,go/flags/endtoend,go/mysql/endtoend,go/vt/vtctl/endtoend,go/vt/vtctl/grpcvtctldserver/endtoend,go/vt/vtgate/endtoend,go/vt/vttablet/endtoend}/**/*_test.go'
 
     # Needed by `go list` in the next step.
     - name: Set up Go
       if: steps.mode.outputs.is_full_run != 'true' && steps.changes.outputs.changed_files == 'true'
       uses: $/.github/actions/setup-go
+      with:
+        build-cache: none
+        go-tools: none
 
     - name: Detect changed Go packages
       if: steps.mode.outputs.is_full_run != 'true' && steps.changes.outputs.changed_files == 'true'
@@ -119,13 +131,13 @@ jobs:
 
   test:
     needs: changes
-    if: needs.changes.outputs.is_full_run == 'true' || needs.changes.outputs.packages != ''
+    if: needs.changes.outputs.can_upload == 'true' && (needs.changes.outputs.is_full_run == 'true' || needs.changes.outputs.packages != '')
     name: Code Coverage
-    runs-on: ${{ github.repository == 'vitessio/vitess' && 'oracle-vm-8cpu-32gb-x86-64' || 'ubuntu-24.04' }}
+    runs-on: ${{ github.repository_owner == 'vitessio' && 'cncf-ubuntu-24.04-8-32-x86' || (github.repository_owner == 'vitessio' && 'cncf-ubuntu-24.04-4-16-x86' || 'ubuntu-24.04') }}
 
     steps:
     - name: Harden the runner (Audit all outbound calls)
-      uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+      uses: step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed # v2.22.0
       with:
         egress-policy: audit
 
@@ -136,6 +148,12 @@ jobs:
 
     - name: Set up Go
       uses: $/.github/actions/setup-go
+      with:
+        # The coverage build uses its own flags; only its "make build" step
+        # reuses the build entry.
+        build-cache: build
+        # tools/run_codecov.sh runs go test directly, without gotestsum.
+        go-tools: none
 
     - name: Set up python
       uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -181,7 +199,7 @@ jobs:
         fi
 
     - name: Upload coverage reports
-      uses: codecov/codecov-action@0b35c9ecc4f0529d0eb674914510c22f85b196b4 # v7.1.0
+      uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
       with:
         files: coverage.out
         fail_ci_if_error: true

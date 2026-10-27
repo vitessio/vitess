@@ -2543,11 +2543,13 @@ func TestCreateTableDiff(t *testing.T) {
 
 func TestValidate(t *testing.T) {
 	tt := []struct {
-		name      string
-		from      string
-		to        string
-		alter     string
-		expectErr error
+		name  string
+		from  string
+		to    string
+		alter string
+		// subsequent, if set, is an ALTER TABLE applied as a subsequent diff of alter.
+		subsequent string
+		expectErr  error
 	}{
 		// columns
 		{
@@ -3112,6 +3114,21 @@ func TestValidate(t *testing.T) {
 			alter: "alter table t drop constraint f",
 			to:    "create table t (id int primary key, i int, key i_idx (i))",
 		},
+		// partitions
+		{
+			name:  "add partition",
+			from:  "create table t (id int primary key) partition by range (id) (partition p1 values less than (10))",
+			alter: "alter table t add partition (partition p2 values less than (20) engine = innodb)",
+			to:    "create table t (id int primary key) partition by range (id) (partition p1 values less than (10), partition p2 values less than (20) engine = innodb)",
+		},
+		// subsequent diffs
+		{
+			name:       "subsequent diff",
+			from:       "create table t (id int)",
+			alter:      "alter table t add column s serial",
+			subsequent: "alter table t modify column id int primary key",
+			to:         "create table t (id int primary key, s bigint unsigned not null auto_increment, unique key s (s))",
+		},
 	}
 	hints := DiffHints{}
 	env := NewTestEnv()
@@ -3130,7 +3147,24 @@ func TestValidate(t *testing.T) {
 			from, err := NewCreateTableEntity(env, fromCreateTable)
 			require.NoError(t, err)
 			a := &AlterTableEntityDiff{from: from, alterTable: alterTable}
+			alterTables := []*sqlparser.AlterTable{alterTable}
+			if ts.subsequent != "" {
+				stmt, err = env.Parser().ParseStrictDDL(ts.subsequent)
+				require.NoError(t, err)
+				subsequentAlterTable, ok := stmt.(*sqlparser.AlterTable)
+				require.True(t, ok)
+				a.SetSubsequentDiff(&AlterTableEntityDiff{from: from, alterTable: subsequentAlterTable})
+				alterTables = append(alterTables, subsequentAlterTable)
+			}
+			clones := make([]*sqlparser.AlterTable, len(alterTables))
+			for i, alterTable := range alterTables {
+				clones[i] = sqlparser.Clone(alterTable)
+			}
 			applied, err := from.Apply(a)
+			// Apply must leave the diff unchanged.
+			for i, alterTable := range alterTables {
+				assert.Truef(t, sqlparser.Equals.RefOfAlterTable(clones[i], alterTable), "diff modified by Apply: %s", sqlparser.String(alterTable))
+			}
 			if ts.expectErr != nil {
 				appliedCanonicalStatementString := ""
 				if applied != nil {

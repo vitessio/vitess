@@ -38,6 +38,7 @@ import (
 	"go.uber.org/mock/gomock"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
@@ -391,6 +392,7 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 				Analysis:         inst.ReplicationStopped,
 				AnalyzedKeyspace: keyspace,
 				AnalyzedShard:    shard,
+				LastCheckValid:   true,
 			},
 			wantRecoveryFunction: fixReplicaFunc,
 		}, {
@@ -482,6 +484,31 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 			require.Equal(t, tt.wantRecoveryFunction, gotFunc)
 			require.Equal(t, tt.wantRecoverySkipCode.String(), recoverySkipCode.String())
 		})
+	}
+
+	// A replica problem is repaired only while VTOrc's last check of the replica is
+	// valid. Otherwise the problem was detected from stale MySQL state, and the
+	// repair, which needs the same tablet, could only fail.
+	for _, analysis := range []inst.AnalysisCode{
+		inst.NotConnectedToPrimary, inst.ConnectedToWrongPrimary, inst.ReplicationStopped, inst.ReplicaIsWritable,
+		inst.ReplicaSemiSyncMustBeSet, inst.ReplicaSemiSyncMustNotBeSet, inst.ReplicaMisconfigured,
+	} {
+		for _, lastCheckValid := range []bool{true, false} {
+			t.Run(fmt.Sprintf("%s with a valid last check: %t", analysis, lastCheckValid), func(t *testing.T) {
+				gotFunc, recoverySkipCode := getCheckAndRecoverFunctionCode(&inst.DetectionAnalysis{
+					Analysis:         analysis,
+					AnalyzedKeyspace: keyspace,
+					AnalyzedShard:    shard,
+					LastCheckValid:   lastCheckValid,
+				})
+				require.Equal(t, fixReplicaFunc, gotFunc)
+				wantSkipCode := RecoverySkipNone
+				if !lastCheckValid {
+					wantSkipCode = RecoverySkipReplicaUnreachable
+				}
+				require.Equal(t, wantSkipCode.String(), recoverySkipCode.String())
+			})
+		}
 	}
 }
 
@@ -693,6 +720,7 @@ func TestRecheckPrimaryHealth(t *testing.T) {
 				Analysis:              analysis,
 				AnalyzedKeyspace:      "ks",
 				AnalyzedShard:         "0",
+				LastCheckValid:        true,
 			}, []string{"ks", "0", ""}, func(*topodatapb.TabletAlias, bool) {
 				// the implementation for DiscoverInstance is not required because we are mocking the db response.
 			})
@@ -1742,6 +1770,7 @@ func TestCellsNoRecoveryGateSkip(t *testing.T) {
 				AnalyzedCell:          "zone1",
 				AnalyzedKeyspace:      "ks",
 				AnalyzedShard:         "0",
+				LastCheckValid:        true,
 			},
 			cellsToSet: []string{"zone1"},
 			wantSkip:   true,
@@ -2563,4 +2592,100 @@ func TestFixReplicaHeartbeatInterval(t *testing.T) {
 			assert.True(t, attempted)
 		})
 	}
+}
+
+// TestReplicaUnreachableAfterDetectionSkipsRepair covers a replica that VTOrc
+// could read when it detected a problem, but not when it checks the problem
+// again: the refreshed analysis carries the ReplicaUnreachable skip. The repair
+// must be skipped and counted as ReplicaUnreachable, not mistaken for a problem
+// that another agent fixed (StaleAnalysis) or that needs the primary recovered
+// first (PrimaryRecovery).
+func TestReplicaUnreachableAfterDetectionSkipsRepair(t *testing.T) {
+	db.ClearVTOrcDatabase()
+	defer db.ClearVTOrcDatabase()
+
+	ctx := t.Context()
+	oldTs := ts
+	ts = memorytopo.NewServer(ctx, "zone1")
+	defer func() { ts = oldTs }()
+	require.NoError(t, ts.CreateKeyspace(ctx, "ks", &topodatapb.Keyspace{DurabilityPolicy: policy.DurabilityNone}))
+	require.NoError(t, ts.CreateShard(ctx, "ks", "0"))
+
+	prevKeys := recentDiscoveryOperationKeys
+	recentDiscoveryOperationKeys = cache.New(config.GetInstancePollTime(), time.Second)
+	defer func() { recentDiscoveryOperationKeys = prevKeys }()
+
+	// Every analysis after detection shows the replica's replication stopped,
+	// with its last check invalid.
+	info := []*test.InfoForRecoveryAnalysis{{
+		TabletInfo: &topodatapb.Tablet{
+			Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+			Hostname:      "localhost",
+			Keyspace:      "ks",
+			Shard:         "0",
+			Type:          topodatapb.TabletType_PRIMARY,
+			MysqlHostname: "localhost",
+			MysqlPort:     6708,
+		},
+		DurabilityPolicy:              policy.DurabilityNone,
+		LastCheckValid:                1,
+		CountReplicas:                 1,
+		CountValidReplicas:            1,
+		CountValidReplicatingReplicas: 1,
+		CountValidOracleGTIDReplicas:  1,
+		CountLoggingReplicas:          1,
+		IsPrimary:                     1,
+		CurrentTabletType:             int(topodatapb.TabletType_PRIMARY),
+	}, {
+		TabletInfo: &topodatapb.Tablet{
+			Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+			Hostname:      "localhost",
+			Keyspace:      "ks",
+			Shard:         "0",
+			Type:          topodatapb.TabletType_REPLICA,
+			MysqlHostname: "localhost",
+			MysqlPort:     6709,
+		},
+		DurabilityPolicy: policy.DurabilityNone,
+		PrimaryTabletInfo: &topodatapb.Tablet{
+			Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+		},
+		LastCheckValid:     0,
+		ReplicationStopped: 1,
+		ReadOnly:           1,
+	}}
+	var rowMaps []sqlutils.RowMap
+	for _, analysis := range info {
+		analysis.SetValuesFromTabletInfo()
+		rowMaps = append(rowMaps, analysis.ConvertToRowMap())
+	}
+	oldDB := db.Db
+	defer func() { db.Db = oldDB }()
+	// The queries through db.Db are, in order: the detection's insert, which
+	// returns its ID, the analysis that recheckPrimaryHealth runs, the shard's
+	// primary, and the analysis after the shard lock.
+	detection := []sqlutils.RowMap{{"detection_id": sqlutils.CellData{String: "1", Valid: true}}}
+	primaryInfo, err := prototext.Marshal(info[0].TabletInfo)
+	require.NoError(t, err)
+	primary := []sqlutils.RowMap{{"info": sqlutils.CellData{String: string(primaryInfo), Valid: true}}}
+	db.Db = test.NewTestDB([][]sqlutils.RowMap{detection, rowMaps, primary, rowMaps})
+
+	// At detection, VTOrc could still read the replica.
+	analysis := &inst.DetectionAnalysis{
+		Analysis:                     inst.ReplicationStopped,
+		AnalyzedInstanceAlias:        &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+		AnalyzedInstancePrimaryAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+		AnalyzedKeyspace:             "ks",
+		AnalyzedShard:                "0",
+		LastCheckValid:               true,
+	}
+	skips := func(code RecoverySkipCode) int64 {
+		return recoveriesSkippedCounter.Counts()[strings.Join([]string{FixReplicaRecoveryName, "ks", "0", code.String()}, ".")]
+	}
+	unreachableBefore, staleBefore, primaryBefore := skips(RecoverySkipReplicaUnreachable), skips(RecoverySkipStaleAnalysis), skips(RecoverySkipPrimaryRecovery)
+
+	require.NoError(t, executeCheckAndRecoverFunction(analysis))
+	assert.Equal(t, unreachableBefore+1, skips(RecoverySkipReplicaUnreachable))
+	assert.Equal(t, staleBefore, skips(RecoverySkipStaleAnalysis))
+	assert.Equal(t, primaryBefore, skips(RecoverySkipPrimaryRecovery))
 }
