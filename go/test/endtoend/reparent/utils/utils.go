@@ -169,8 +169,8 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 		if setupDone {
 			return
 		}
-		finishMySQLInits(mysqlCtlProcessList, time.Now().Add(time.Minute))
 		clusterInstance.Teardown()
+		stopMySQLInits(mysqlCtlProcessList)
 	})
 
 	// Start topo server
@@ -242,28 +242,22 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 	return clusterInstance
 }
 
-// finishMySQLInits waits until deadline for the MySQL initializations in procs that are
-// still running, so that a teardown finds and stops the mysqld they start by its pid file.
-// An initialization still running at the deadline may have started a mysqld without a pid
-// file yet, so its whole process group is killed. procs must have been started with
+// stopMySQLInits kills whatever the MySQL initializations in procs started and a teardown
+// did not stop, and reaps the initializations not yet reaped. A teardown finds mysqld by
+// its pid file, which an initialization that is still running or that failed may not have
+// written, and does not wait for initializations. So, whatever state each one is in, its
+// whole process group is killed: the group holds the mysqld_safe and mysqld it started,
+// and outlives it. A descendant that leaves the group is not killed; mysqld_safe and
+// mysqld do not. Run it after the teardown: a mysqld killed first leaves the teardown's
+// graceful shutdown of it waiting. procs must have been started with
 // MysqlctlProcess.ProcessGroup set.
-func finishMySQLInits(procs []*exec.Cmd, deadline time.Time) {
+func stopMySQLInits(procs []*exec.Cmd) {
 	for _, proc := range procs {
-		if proc.ProcessState != nil {
-			continue
-		}
-		done := make(chan struct{})
-		go func() {
-			_ = proc.Wait()
-			close(done)
-		}()
-		select {
-		case <-done:
-		case <-time.After(time.Until(deadline)):
-			_ = syscall.Kill(-proc.Process.Pid, syscall.SIGKILL)
-			// Ends the wait even if the process group could not be killed.
+		_ = syscall.Kill(-proc.Process.Pid, syscall.SIGKILL)
+		if proc.ProcessState == nil {
+			// Also kills an initializer outside the group, so that the wait returns.
 			_ = proc.Process.Kill()
-			<-done
+			_ = proc.Wait()
 		}
 	}
 }
