@@ -1232,16 +1232,16 @@ func TestAnalyzeTableIfStatsAutoRecalcDisabled(t *testing.T) {
 	dbName := dbClient.DBName()
 	stats := binlogplayer.NewStats()
 	t.Cleanup(stats.Stop)
-	execDba := func(query string) *sqltypes.Result {
+	execDba := func(t *testing.T, query string) *sqltypes.Result {
 		qr, err := dbaconn.ExecuteFetch(query, 10)
 		require.NoError(t, err)
 		return qr
 	}
 	// The new connection reads the workflow's settings.
 	id := int32(1)
-	execDba(fmt.Sprintf("insert into _vt.vreplication (id, workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, options) values (%d, 'test', '', '', 99999, 99999, 0, 0, 'Running', '%s', '{}') on duplicate key update workflow='test', source='', pos='', max_tps=99999, max_replication_lag=99999, time_updated=0, transaction_timestamp=0, state='Running', db_name='%s'",
+	execDba(t, fmt.Sprintf("insert into _vt.vreplication (id, workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, options) values (%d, 'test', '', '', 99999, 99999, 0, 0, 'Running', '%s', '{}') on duplicate key update workflow='test', source='', pos='', max_tps=99999, max_replication_lag=99999, time_updated=0, transaction_timestamp=0, state='Running', db_name='%s'",
 		id, dbName, dbName))
-	t.Cleanup(func() { execDba(fmt.Sprintf("delete from _vt.vreplication where id = %d", id)) })
+	t.Cleanup(func() { execDba(t, fmt.Sprintf("delete from _vt.vreplication where id = %d", id)) })
 	// An engine of its own, as TestCancelledDeferSecondaryKeys closes the shared
 	// one, and a closed engine stops the ANALYZE TABLE before it runs.
 	vre := &Engine{
@@ -1252,15 +1252,17 @@ func TestAnalyzeTableIfStatsAutoRecalcDisabled(t *testing.T) {
 	}
 	vr := newVReplicator(id, &binlogdatapb.BinlogSource{}, nil, stats, dbClient, env.Mysqld, vre, vttablet.DefaultVReplicationConfig)
 	tableName := "analyze_t1"
-	nRows := func() string {
-		qr := execDba(fmt.Sprintf("select n_rows from mysql.innodb_table_stats where database_name = '%s' and table_name = '%s'", dbName, tableName))
+	nRows := func(t *testing.T) string {
+		qr := execDba(t, fmt.Sprintf("select n_rows from mysql.innodb_table_stats where database_name = '%s' and table_name = '%s'", dbName, tableName))
 		require.Len(t, qr.Rows, 1)
 		return qr.Rows[0][0].ToString()
 	}
+	// The helpers take the calling test, so that a failure in a subtest is
+	// reported as that subtest's.
 	// failureLogs counts the workflow log's entries for a failure to analyze
 	// the table.
-	failureLogs := func() string {
-		qr := execDba(fmt.Sprintf("select count(*) from _vt.vreplication_log where vrepl_id = %d and message like 'Unable to analyze the %s table%%'", id, tableName))
+	failureLogs := func(t *testing.T) string {
+		qr := execDba(t, fmt.Sprintf("select count(*) from _vt.vreplication_log where vrepl_id = %d and message like 'Unable to analyze the %s table%%'", id, tableName))
 		return qr.Rows[0][0].ToString()
 	}
 
@@ -1310,30 +1312,30 @@ func TestAnalyzeTableIfStatsAutoRecalcDisabled(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			if tc.globalAutoRecalcOff {
-				execDba("set @@global.innodb_stats_auto_recalc = 0")
-				t.Cleanup(func() { execDba("set @@global.innodb_stats_auto_recalc = 1") })
+				execDba(t, "set @@global.innodb_stats_auto_recalc = 0")
+				t.Cleanup(func() { execDba(t, "set @@global.innodb_stats_auto_recalc = 1") })
 			}
-			execDba(fmt.Sprintf("create table %s.%s (id int not null, primary key(id)) %s", dbName, tableName, tc.tableOptions))
-			t.Cleanup(func() { execDba(fmt.Sprintf("drop table %s.%s", dbName, tableName)) })
-			execDba(fmt.Sprintf("insert into %s.%s values (1), (2), (3)", dbName, tableName))
-			t.Cleanup(func() { execDba(fmt.Sprintf("delete from _vt.vreplication_log where vrepl_id = %d", id)) })
+			execDba(t, fmt.Sprintf("create table %s.%s (id int not null, primary key(id)) %s", dbName, tableName, tc.tableOptions))
+			t.Cleanup(func() { execDba(t, fmt.Sprintf("drop table %s.%s", dbName, tableName)) })
+			execDba(t, fmt.Sprintf("insert into %s.%s values (1), (2), (3)", dbName, tableName))
+			t.Cleanup(func() { execDba(t, fmt.Sprintf("delete from _vt.vreplication_log where vrepl_id = %d", id)) })
 
 			if tc.lockStats {
 				// ANALYZE TABLE's update of the statistics uses the global
 				// lock wait timeout, not the session's.
-				timeout := execDba("select @@global.innodb_lock_wait_timeout").Rows[0][0].ToString()
-				execDba("set @@global.innodb_lock_wait_timeout = 1")
-				t.Cleanup(func() { execDba("set @@global.innodb_lock_wait_timeout = " + timeout) })
-				execDba("begin")
-				execDba(fmt.Sprintf("select * from mysql.innodb_table_stats where database_name = '%s' and table_name = '%s' for update", dbName, tableName))
-				t.Cleanup(func() { execDba("rollback") })
+				timeout := execDba(t, "select @@global.innodb_lock_wait_timeout").Rows[0][0].ToString()
+				execDba(t, "set @@global.innodb_lock_wait_timeout = 1")
+				t.Cleanup(func() { execDba(t, "set @@global.innodb_lock_wait_timeout = "+timeout) })
+				execDba(t, "begin")
+				execDba(t, fmt.Sprintf("select * from mysql.innodb_table_stats where database_name = '%s' and table_name = '%s' for update", dbName, tableName))
+				t.Cleanup(func() { execDba(t, "rollback") })
 			}
 			if tc.lockTable {
 				oldTimeout := analyzeLockWaitTimeout
 				analyzeLockWaitTimeout = time.Second
 				t.Cleanup(func() { analyzeLockWaitTimeout = oldTimeout })
-				execDba(fmt.Sprintf("lock tables %s.%s write", dbName, tableName))
-				t.Cleanup(func() { execDba("unlock tables") })
+				execDba(t, fmt.Sprintf("lock tables %s.%s write", dbName, tableName))
+				t.Cleanup(func() { execDba(t, "unlock tables") })
 			}
 
 			var logMu sync.Mutex
@@ -1360,7 +1362,7 @@ func TestAnalyzeTableIfStatsAutoRecalcDisabled(t *testing.T) {
 			if tc.lockTable {
 				// nRows reads mysql.innodb_table_stats on this connection,
 				// which LOCK TABLES doesn't allow until it is unlocked.
-				execDba("unlock tables")
+				execDba(t, "unlock tables")
 			}
 
 			logMu.Lock()
@@ -1368,22 +1370,22 @@ func TestAnalyzeTableIfStatsAutoRecalcDisabled(t *testing.T) {
 			if tc.wantAnalyzed {
 				assert.Contains(t, infoLogs, "Analyzed the table, as InnoDB does not recalculate its statistics automatically")
 				assert.Empty(t, warnLogs)
-				assert.Equal(t, "3", nRows())
-				assert.Equal(t, "0", failureLogs())
+				assert.Equal(t, "3", nRows(t))
+				assert.Equal(t, "0", failureLogs(t))
 				return
 			}
 			assert.NotContains(t, infoLogs, "Analyzed the table, as InnoDB does not recalculate its statistics automatically")
 			if !tc.lockStats && !tc.lockTable {
 				assert.Empty(t, warnLogs)
-				assert.Equal(t, "0", failureLogs())
+				assert.Equal(t, "0", failureLogs(t))
 				return
 			}
 			assert.Contains(t, warnLogs, "Unable to analyze the table")
 			// The failure is in the workflow's log too, where Workflow show
 			// surfaces it.
-			assert.Equal(t, "1", failureLogs())
-			execDba("rollback")
-			assert.Equal(t, "0", nRows())
+			assert.Equal(t, "1", failureLogs(t))
+			execDba(t, "rollback")
+			assert.Equal(t, "0", nRows(t))
 		})
 	}
 }
