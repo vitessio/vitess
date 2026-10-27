@@ -574,6 +574,24 @@ func (tsv *TabletServer) begin(
 					return err
 				}
 			}
+			// Plan and validate the post-begin queries before beginning, as Execute
+			// does for its query. A statement that needs a reserved connection (a
+			// SET, for one) would otherwise run on a pooled transaction connection,
+			// which goes back to the pool with its session changed when the
+			// transaction ends.
+			postBeginQueries = rewriteDoubleSlashComments(tsv.env.Parser(), postBeginQueries)
+			postBeginPlans := make([]*TabletPlan, len(postBeginQueries))
+			for i, query := range postBeginQueries {
+				plan, err := tsv.qe.GetPlan(ctx, logStats, query, true, false)
+				if err != nil {
+					return err
+				}
+				if err := plan.IsValid(reservedID != 0, len(settings) > 0); err != nil {
+					return err
+				}
+				postBeginPlans[i] = plan
+			}
+
 			transactionID, beginSQL, sessionStateChanges, err := tsv.te.Begin(ctx, reservedID, connSetting, options)
 			state.TransactionID = transactionID
 			state.SessionStateChanges = sessionStateChanges
@@ -588,18 +606,13 @@ func (tsv *TabletServer) begin(
 			if err != nil {
 				return err
 			}
-			for _, query := range rewriteDoubleSlashComments(tsv.env.Parser(), postBeginQueries) {
-				plan, err := tsv.qe.GetPlan(ctx, logStats, query, true, false)
-				if err != nil {
-					return err
-				}
-
+			for i, query := range postBeginQueries {
 				qre := &QueryExecutor{
 					ctx:              ctx,
 					query:            query,
 					connID:           transactionID,
 					options:          options,
-					plan:             plan,
+					plan:             postBeginPlans[i],
 					logStats:         logStats,
 					tsv:              tsv,
 					targetTabletType: targetType,
