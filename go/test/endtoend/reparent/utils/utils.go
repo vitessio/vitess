@@ -160,6 +160,35 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 	var tablets []*cluster.Vttablet
 	clusterInstance := cluster.NewCluster(cells[0], Hostname)
 	keyspace := &cluster.Keyspace{Name: KeyspaceName}
+	// A failed setup returns no cluster for the caller to tear down, so stop
+	// the processes it started here. MySQL initializations still running are
+	// left to finish first, so that the teardown finds and stops the mysqld
+	// they start; those that do not finish in time are killed.
+	var mysqlCtlProcessList []*exec.Cmd
+	setupDone := false
+	t.Cleanup(func() {
+		if setupDone {
+			return
+		}
+		deadline := time.Now().Add(time.Minute)
+		for _, proc := range mysqlCtlProcessList {
+			if proc.ProcessState != nil {
+				continue
+			}
+			done := make(chan struct{})
+			go func() {
+				_ = proc.Wait()
+				close(done)
+			}()
+			select {
+			case <-done:
+			case <-time.After(time.Until(deadline)):
+				_ = proc.Process.Kill()
+				<-done
+			}
+		}
+		clusterInstance.Teardown()
+	})
 
 	// Start topo server
 	err := clusterInstance.StartTopo()
@@ -204,7 +233,6 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 	require.NoError(t, err, "Cannot launch cluster")
 
 	// Start MySql
-	var mysqlCtlProcessList []*exec.Cmd
 	for _, shard := range clusterInstance.Keyspaces[0].Shards {
 		for _, tablet := range shard.Vttablets {
 			log.Info(fmt.Sprintf("Starting MySql for tablet %v", tablet.Alias))
@@ -226,6 +254,7 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 	require.NoError(t, err, out)
 
 	setupShard(ctx, t, clusterInstance, shardName, tablets)
+	setupDone = true
 	return clusterInstance
 }
 
