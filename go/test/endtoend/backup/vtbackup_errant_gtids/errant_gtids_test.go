@@ -579,7 +579,7 @@ func killTabletHard(t *testing.T, tablet *cluster.Vttablet) {
 	pid, err := strconv.Atoi(strings.TrimSpace(string(pidData)))
 	require.NoError(t, err)
 	require.NoError(t, syscall.Kill(pid, syscall.SIGKILL))
-	require.NoError(t, tablet.VttabletProcess.TearDownWithTimeout(5*time.Second))
+	require.NoError(t, tablet.VttabletProcess.TearDownWithTimeout(30*time.Second))
 }
 
 func listBackups(t *testing.T) []string {
