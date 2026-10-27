@@ -19,6 +19,12 @@ jobs:
   build:
     name: Static Code Checks Etc
     runs-on: ubuntu-24.04
+    env:
+      # Build everything the way the go_cache_warm workflow warms it, so the
+      # checks reuse its build, unit and tools build cache entries. Nothing
+      # under go/ uses cgo.
+      CGO_ENABLED: "0"
+      GOFLAGS: -trimpath
 
     steps:
       - name: Skip CI
@@ -141,6 +147,9 @@ jobs:
       - name: Set up Go
         if: (steps.changes.outputs.go_files == 'true' || steps.changes.outputs.parser_changes == 'true' || steps.changes.outputs.proto_changes == 'true')
         uses: $/.github/actions/setup-go
+        with:
+          build-cache: build,unit,tools
+          go-tools: goimports,golangci-lint
 
       - name: Tune the OS
         if: steps.changes.outputs.go_files == 'true'
@@ -207,27 +216,19 @@ jobs:
           git status
           test -z "$(git diff-index --name-only HEAD --)" || exit 1
 
-      - name: Install golangci-lint
-        if: steps.changes.outputs.go_files == 'true'
-        run: |
-          version=$(cd tools/golangci-lint && go list -m -f '{{.Version}}' github.com/golangci/golangci-lint/v2)
-          if [ -z "$version" ]; then
-            echo "Could not determine golangci-lint version from tools/golangci-lint/go.mod"
-            exit 1
-          fi
-          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${version}
-
-      - name: Clean Env
-        if: steps.changes.outputs.go_files == 'true'
-        run: $(go env GOPATH)/bin/golangci-lint cache clean
-
-      - name: Print linter version
-        if: steps.changes.outputs.go_files == 'true'
-        run: $(go env GOPATH)/bin/golangci-lint --version
-
+      # Runs the golangci-lint build pinned in tools/golangci-lint, which the
+      # tools build cache entry holds. With the analysis cache that setup-go
+      # restores, it only analyzes the packages that changed and those that
+      # depend on them. The problem matcher of actions/setup-go turns the
+      # issues it reports into annotations.
       - name: Run golangci-lint
         if: steps.changes.outputs.go_files == 'true'
-        run: $(go env GOPATH)/bin/golangci-lint run go/... --timeout 10m || exit 1
+        run: |
+          lint() {
+            go run -trimpath -modfile=tools/golangci-lint/go.mod github.com/golangci/golangci-lint/v2/cmd/golangci-lint "$@"
+          }
+          lint config verify
+          lint run --timeout 10m ./go/...
 
       - name: Run go mod tidy
         if: steps.changes.outputs.go_files == 'true'

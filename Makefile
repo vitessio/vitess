@@ -177,7 +177,7 @@ sqlparser:
 codegen: sqlparser sizegen
 
 demo:
-	go install ./examples/demo/demo.go
+	CGO_ENABLED=0 go install -trimpath ./examples/demo/demo.go
 
 sizegen:
 	go run ./go/tools/sizegen/sizegen.go \
