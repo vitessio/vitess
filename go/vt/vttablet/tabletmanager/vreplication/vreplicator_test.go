@@ -1247,6 +1247,12 @@ func TestAnalyzeTableIfStatsAutoRecalcDisabled(t *testing.T) {
 		require.Len(t, qr.Rows, 1)
 		return qr.Rows[0][0].ToString()
 	}
+	// failureLogs counts the workflow log's entries for a failure to analyze
+	// the table.
+	failureLogs := func() string {
+		qr := execDba(fmt.Sprintf("select count(*) from _vt.vreplication_log where vrepl_id = %d and message like 'Unable to analyze the %s table%%'", id, tableName))
+		return qr.Rows[0][0].ToString()
+	}
 
 	testCases := []struct {
 		name         string
@@ -1300,6 +1306,7 @@ func TestAnalyzeTableIfStatsAutoRecalcDisabled(t *testing.T) {
 			execDba(fmt.Sprintf("create table %s.%s (id int not null, primary key(id)) %s", dbName, tableName, tc.tableOptions))
 			t.Cleanup(func() { execDba(fmt.Sprintf("drop table %s.%s", dbName, tableName)) })
 			execDba(fmt.Sprintf("insert into %s.%s values (1), (2), (3)", dbName, tableName))
+			t.Cleanup(func() { execDba(fmt.Sprintf("delete from _vt.vreplication_log where vrepl_id = %d", id)) })
 
 			if tc.lockStats {
 				// ANALYZE TABLE's update of the statistics uses the global
@@ -1352,14 +1359,19 @@ func TestAnalyzeTableIfStatsAutoRecalcDisabled(t *testing.T) {
 				assert.Contains(t, infoLogs, "Analyzed the table, as InnoDB does not recalculate its statistics automatically")
 				assert.Empty(t, warnLogs)
 				assert.Equal(t, "3", nRows())
+				assert.Equal(t, "0", failureLogs())
 				return
 			}
 			assert.NotContains(t, infoLogs, "Analyzed the table, as InnoDB does not recalculate its statistics automatically")
 			if !tc.lockStats && !tc.lockTable {
 				assert.Empty(t, warnLogs)
+				assert.Equal(t, "0", failureLogs())
 				return
 			}
 			assert.Contains(t, warnLogs, "Unable to analyze the table")
+			// The failure is in the workflow's log too, where Workflow show
+			// surfaces it.
+			assert.Equal(t, "1", failureLogs())
 			execDba("rollback")
 			assert.Equal(t, "0", nRows())
 		})

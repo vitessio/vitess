@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -1257,26 +1258,25 @@ func (vr *vreplicator) killConnectionOnStop(stopCtx context.Context, dbClient *v
 // resume then keeps the table's copy state, so that the table is analyzed when
 // the copy resumes.
 func (vr *vreplicator) analyzeTableIfStatsAutoRecalcDisabled(stopCtx context.Context, tableName string) bool {
+	tableAttrs := []slog.Attr{slog.String("table", tableName), slog.String("workflow", vr.WorkflowName)}
+	errAttrs := func(err error) []slog.Attr {
+		return slices.Concat(tableAttrs, []slog.Attr{slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String())})
+	}
+	// Failures also go to the workflow's log, where Workflow show surfaces
+	// them, as a table that isn't analyzed can keep empty statistics.
+	optionsFailed := func(err error) bool {
+		log.Warn("Unable to check the table options", errAttrs(err)...)
+		vr.insertLog(LogMessage, fmt.Sprintf("Unable to check whether the %s table needs ANALYZE TABLE to refresh its statistics: %v", tableName, err))
+		return false
+	}
 	dbName := vr.dbClient.DBName()
 	query, err := sqlparser.ParseAndBind(sqlGetTableStatsAutoRecalc, sqltypes.StringBindVariable(dbName), sqltypes.StringBindVariable(tableName))
 	if err != nil {
-		log.Warn("Unable to check the table options",
-			slog.String("table", tableName),
-			slog.String("workflow", vr.WorkflowName),
-			slog.Any("error", err),
-			slog.String("error_code", vterrors.Code(err).String()),
-		)
-		return false
+		return optionsFailed(err)
 	}
 	qr, err := vr.dbClient.ExecuteFetch(query, 1)
 	if err != nil {
-		log.Warn("Unable to check the table options",
-			slog.String("table", tableName),
-			slog.String("workflow", vr.WorkflowName),
-			slog.Any("error", err),
-			slog.String("error_code", vterrors.Code(err).String()),
-		)
-		return false
+		return optionsFailed(err)
 	}
 	if len(qr.Rows) == 0 || len(qr.Rows[0]) != 2 {
 		return false
@@ -1299,48 +1299,40 @@ func (vr *vreplicator) analyzeTableIfStatsAutoRecalcDisabled(stopCtx context.Con
 	// failed logs why the table was not analyzed, and returns whether that was
 	// because the controller stopped or the engine closed, which kill the
 	// ANALYZE TABLE.
-	failed := func(msg string, err error) bool {
+	failed := func(msg, cause string, attrs []slog.Attr) bool {
 		if stopping() {
-			log.Info("The table was not analyzed, as the controller stopped",
-				slog.String("table", tableName),
-				slog.String("workflow", vr.WorkflowName),
-				slog.Any("error", err),
-			)
+			log.Info("The table was not analyzed, as the controller stopped", attrs...)
 			return true
 		}
-		log.Warn(msg,
-			slog.String("table", tableName),
-			slog.String("workflow", vr.WorkflowName),
-			slog.Any("error", err),
-			slog.String("error_code", vterrors.Code(err).String()),
-		)
+		log.Warn(msg, attrs...)
+		vr.insertLog(LogMessage, fmt.Sprintf("Unable to analyze the %s table, so its statistics may stay empty until a later copy cycle analyzes it or ANALYZE TABLE is run on it: %s", tableName, cause))
 		return false
 	}
 	// ANALYZE TABLE causes an implicit commit, so use a new connection to not
 	// interfere with any transaction open on the shared one.
 	dbClient, err := vr.newClientConnection(stopCtx)
 	if err != nil {
-		return failed("Unable to connect to the database to analyze the table", err)
+		return failed("Unable to connect to the database to analyze the table", err.Error(), errAttrs(err))
 	}
 	defer dbClient.Close()
 	// Bound the metadata lock wait; a timeout comes back as a failure row. The
 	// setting is not binlogged, so a replica applies the ANALYZE TABLE under its
 	// own lock_wait_timeout, as it does any DDL.
 	if _, err := dbClient.ExecuteFetch(fmt.Sprintf("set @@session.lock_wait_timeout = %d", int64(analyzeLockWaitTimeout/time.Second)), 0); err != nil {
-		return failed("Unable to analyze the table", err)
+		return failed("Unable to analyze the table", err.Error(), errAttrs(err))
 	}
 	// ANALYZE TABLE can wait for a lock on the table, so interrupt it if the
 	// controller stops or the engine closes.
 	stopKillWatch, err := vr.killConnectionOnStop(stopCtx, dbClient, tableName,
 		"Interrupting ANALYZE TABLE", "Failed to kill the connection executing ANALYZE TABLE")
 	if err != nil {
-		return failed("Unable to analyze the table", err)
+		return failed("Unable to analyze the table", err.Error(), errAttrs(err))
 	}
 	defer stopKillWatch()
 	analyze := "analyze table " + sqlescape.EscapeID(dbName) + "." + sqlescape.EscapeID(tableName)
 	qr, err = dbClient.ExecuteFetch(analyze, 10)
 	if err != nil {
-		return failed("Unable to analyze the table", err)
+		return failed("Unable to analyze the table", err.Error(), errAttrs(err))
 	}
 	// ANALYZE TABLE reports most failures as rows rather than as an error: a
 	// missing table as an error row, and a lock wait timeout on the table's
@@ -1360,17 +1352,10 @@ func (vr *vreplicator) analyzeTableIfStatsAutoRecalcDisabled(stopCtx context.Con
 		result = append(result, msgType+": "+msgText)
 	}
 	if !analyzed {
-		log.Warn("Unable to analyze the table",
-			slog.String("table", tableName),
-			slog.String("workflow", vr.WorkflowName),
-			slog.String("result", strings.Join(result, "; ")),
-		)
-		return stopping()
+		cause := strings.Join(result, "; ")
+		return failed("Unable to analyze the table", cause, slices.Concat(tableAttrs, []slog.Attr{slog.String("result", cause)}))
 	}
-	log.Info("Analyzed the table, as InnoDB does not recalculate its statistics automatically",
-		slog.String("table", tableName),
-		slog.String("workflow", vr.WorkflowName),
-	)
+	log.Info("Analyzed the table, as InnoDB does not recalculate its statistics automatically", tableAttrs...)
 	return false
 }
 
