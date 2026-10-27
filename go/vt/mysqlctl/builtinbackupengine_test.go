@@ -720,47 +720,87 @@ func TestBackupFilesFinish(t *testing.T) {
 }
 
 // TestExecuteFullBackupReportsBackupError checks that a full backup that fails
-// reports its own error, rather than the error from restoring mysqld's state
-// afterwards, which also fails once the backup's context is done.
+// reports its own error, with its code, and adds a failure to restore mysqld's
+// state afterwards unless that failure comes from the backup's context being
+// done.
 func TestExecuteFullBackupReportsBackupError(t *testing.T) {
-	backupRoot := t.TempDir()
-	filebackupstorage.FileBackupStorageRoot = backupRoot
-	require.NoError(t, os.MkdirAll(path.Join(backupRoot, "innodb"), 0o755))
-	require.NoError(t, os.MkdirAll(path.Join(backupRoot, "log"), 0o755))
-	dataDir := path.Join(backupRoot, "datadir", "test1")
-	require.NoError(t, os.MkdirAll(dataDir, 0o755))
-	require.NoError(t, os.WriteFile(path.Join(dataDir, "0.ibd"), []byte("test data for backup"), 0o644))
+	// runBackup runs a full builtin backup whose position check calls
+	// beforeFailing and then fails with "errant GTIDs", where restoring
+	// super_read_only afterwards fails with setSuperReadOnlyErr.
+	runBackup := func(t *testing.T, ctx context.Context, setSuperReadOnlyErr error, beforeFailing func(mysqld *FakeMysqlDaemon)) (BackupResult, error) {
+		backupRoot := t.TempDir()
+		filebackupstorage.FileBackupStorageRoot = backupRoot
+		require.NoError(t, os.MkdirAll(path.Join(backupRoot, "innodb"), 0o755))
+		require.NoError(t, os.MkdirAll(path.Join(backupRoot, "log"), 0o755))
+		dataDir := path.Join(backupRoot, "datadir", "test1")
+		require.NoError(t, os.MkdirAll(dataDir, 0o755))
+		require.NoError(t, os.WriteFile(path.Join(dataDir, "0.ibd"), []byte("test data for backup"), 0o644))
 
-	ts, keyspace, shard := newBackupTestTopo(t)
-	mysqld := newBackupTestMysqld(t)
-	// super_read_only is already on, so the backup sets it only when restoring
-	// mysqld's state afterwards, and that fails, as with a done context.
-	mysqld.SuperReadOnly.Store(true)
-	mysqld.SetSuperReadOnlyError = errors.New("connection pool context already expired")
+		ts, keyspace, shard := newBackupTestTopo(t)
+		mysqld := newBackupTestMysqld(t)
+		// super_read_only is already on, so the backup sets it only when
+		// restoring mysqld's state afterwards.
+		mysqld.SuperReadOnly.Store(true)
+		mysqld.SetSuperReadOnlyError = setSuperReadOnlyErr
 
-	be := &BuiltinBackupEngine{}
-	backupResult, err := be.ExecuteBackup(t.Context(), BackupParams{
-		Logger: logutil.NewMemoryLogger(),
-		Mysqld: mysqld,
-		Cnf: &Mycnf{
-			InnodbDataHomeDir:     path.Join(backupRoot, "innodb"),
-			InnodbLogGroupHomeDir: path.Join(backupRoot, "log"),
-			DataDir:               path.Join(backupRoot, "datadir"),
-		},
-		Stats:                backupstats.NoStats(),
-		Concurrency:          1,
-		HookExtraEnv:         map[string]string{},
-		TopoServer:           ts,
-		Keyspace:             keyspace,
-		Shard:                shard,
-		MysqlShutdownTimeout: time.Minute,
-		VerifyPosition: func(context.Context, replication.Position) error {
-			return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "errant GTIDs")
-		},
-	}, filebackupstorage.NewBackupHandle(nil, "", "", false))
-	require.ErrorContains(t, err, "errant GTIDs")
-	assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
-	assert.Equal(t, BackupUnusable, backupResult)
+		be := &BuiltinBackupEngine{}
+		return be.ExecuteBackup(ctx, BackupParams{
+			Logger: logutil.NewMemoryLogger(),
+			Mysqld: mysqld,
+			Cnf: &Mycnf{
+				InnodbDataHomeDir:     path.Join(backupRoot, "innodb"),
+				InnodbLogGroupHomeDir: path.Join(backupRoot, "log"),
+				DataDir:               path.Join(backupRoot, "datadir"),
+			},
+			Stats:                backupstats.NoStats(),
+			Concurrency:          1,
+			HookExtraEnv:         map[string]string{},
+			TopoServer:           ts,
+			Keyspace:             keyspace,
+			Shard:                shard,
+			MysqlShutdownTimeout: time.Minute,
+			VerifyPosition: func(context.Context, replication.Position) error {
+				if beforeFailing != nil {
+					beforeFailing(mysqld)
+				}
+				return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "errant GTIDs")
+			},
+		}, filebackupstorage.NewBackupHandle(nil, "", "", false))
+	}
+
+	t.Run("a done context reports only the backup's error", func(t *testing.T) {
+		// The run is cancelled while the position is checked, so restoring
+		// super_read_only with the backup's context fails too.
+		ctx, cancel := context.WithCancel(t.Context())
+		t.Cleanup(cancel)
+		backupResult, err := runBackup(t, ctx, errors.New("connection pool context already expired"), func(*FakeMysqlDaemon) { cancel() })
+		require.ErrorContains(t, err, "errant GTIDs")
+		assert.NotContains(t, err.Error(), "connection pool context already expired")
+		assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+		assert.Equal(t, BackupUnusable, backupResult)
+	})
+
+	t.Run("a failed restore of mysqld's state is reported with the backup's error", func(t *testing.T) {
+		backupResult, err := runBackup(t, t.Context(), errors.New("super_read_only is stuck"), nil)
+		require.ErrorContains(t, err, "errant GTIDs")
+		require.ErrorContains(t, err, "restoring mysqld's state afterwards also failed: super_read_only is stuck")
+		assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+		assert.Equal(t, BackupUnusable, backupResult)
+	})
+
+	t.Run("a failed mysqld restart is reported even after the context is done", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		t.Cleanup(cancel)
+		// Marking the stopped fake mysqld as running makes its restart fail.
+		backupResult, err := runBackup(t, ctx, nil, func(mysqld *FakeMysqlDaemon) {
+			mysqld.Running = true
+			cancel()
+		})
+		require.ErrorContains(t, err, "errant GTIDs")
+		require.ErrorContains(t, err, "can't restart mysqld")
+		assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+		assert.Equal(t, BackupUnusable, backupResult)
+	})
 }
 
 // newBackupTestTopo sets up the topo that ExecuteBackup needs for the MANIFEST

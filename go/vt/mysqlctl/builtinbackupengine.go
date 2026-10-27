@@ -640,21 +640,31 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 		backupResult = BackupUsable
 	}
 
-	// Once ctx is done, restoring mysqld's state below fails too, so a failed
-	// backup reports its own error, which says why it failed, and logs the
-	// restore's.
+	// restoreErr reports a failure to restore mysqld's state after the backup.
+	// If the backup failed too, its error keeps its code and gets the restore's
+	// added, except when ctx is done: the steps below that use it then fail
+	// because of that, so only the backup's error, usually the reason ctx is
+	// done, is returned, and the restore's is logged.
 	restoreErr := func(err error) error {
-		if backupErr != nil {
+		switch {
+		case backupErr == nil:
+			return err
+		case ctx.Err() != nil:
 			params.Logger.Errorf("failed to restore mysqld's state after the backup failed: %v", err)
 			return backupErr
+		default:
+			return vterrors.Wrapf(backupErr, "restoring mysqld's state afterwards also failed: %v", err)
 		}
-		return err
 	}
 
 	// Try to restart mysqld, use background context in case we timed out the original context
 	err = params.Mysqld.Start(context.Background(), params.Cnf)
 	if err != nil {
-		return backupResult, restoreErr(vterrors.Wrap(err, "can't restart mysqld"))
+		// The restart doesn't use ctx, so its failure is always reported.
+		if backupErr != nil {
+			return backupResult, vterrors.Wrapf(backupErr, "restoring mysqld's state afterwards also failed: can't restart mysqld: %v", err)
+		}
+		return backupResult, vterrors.Wrap(err, "can't restart mysqld")
 	}
 
 	// Resetting super_read_only back to its original value
