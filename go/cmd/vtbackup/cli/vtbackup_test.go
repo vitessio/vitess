@@ -17,8 +17,10 @@ limitations under the License.
 package cli
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -28,6 +30,7 @@ import (
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -289,6 +292,14 @@ func (vt *verifyPositionTest) setType(t *testing.T, uid uint32, tabletType topod
 	assert.NoError(t, err)
 }
 
+// captureLogs sends the structured log to a buffer for the rest of the test.
+func captureLogs(t *testing.T) *bytes.Buffer {
+	var logs bytes.Buffer
+	old := log.SwapLogger(slog.New(slog.NewTextHandler(&logs, nil)))
+	t.Cleanup(func() { log.SwapLogger(old) })
+	return &logs
+}
+
 func TestVerifyPosition(t *testing.T) {
 	committed := func(gtids string) func(*topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
 		return func(*topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
@@ -299,12 +310,14 @@ func TestVerifyPosition(t *testing.T) {
 
 	t.Run("a clean position passes", func(t *testing.T) {
 		synctest.Test(t, func(t *testing.T) {
+			logs := captureLogs(t)
 			vt := newVerifyPositionTest(t, committed(testPrimaryUUID+":1-10"))
 			vt.setPrimary(t, 100)
 			term, err := verifyPosition(boundedContext(t), vt.tmc, vt.ts, testGTIDPosition(t, testPrimaryUUID+":1-5"), checkData)
 			require.NoError(t, err)
 			assert.Equal(t, uint32(100), term.alias.GetUid())
 			assert.Equal(t, 1, vt.tmc.calls)
+			assert.Contains(t, logs.String(), `msg="Verified a position against the shard primary" check="the data to back up" primary=zone1-0000000100`)
 		})
 	})
 
@@ -477,9 +490,11 @@ func TestVerifyPosition(t *testing.T) {
 			require.NoError(t, err)
 			ctx, cancel := context.WithTimeout(t.Context(), time.Hour)
 			t.Cleanup(cancel)
+			logs := captureLogs(t)
 			_, err = verifyPosition(ctx, vt.tmc, vt.ts, pos, checkData)
 			require.NoError(t, err)
 			assert.Equal(t, 0, vt.tmc.calls)
+			assert.Contains(t, logs.String(), `msg="Not verifying a position that isn't a MySQL56 GTID set" check="the data to back up"`)
 		})
 	})
 
@@ -620,7 +635,27 @@ func TestVerifyPosition(t *testing.T) {
 			require.ErrorContains(t, err, "stopped verifying the data to back up")
 			require.ErrorContains(t, err, "primary zone1-0000000100 has not committed "+testPrimaryUUID+":11-12")
 			require.ErrorContains(t, err, "deadline exceeded")
+			assert.NotContains(t, err.Error(), "Code:")
 			assert.Equal(t, vtrpc.Code_DEADLINE_EXCEEDED, vterrors.Code(err))
+		})
+	})
+
+	t.Run("a run cancelled during an attempt stops without announcing a retry", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			logs := captureLogs(t)
+			vt := newVerifyPositionTest(t, committed(testPrimaryUUID+":1-10"))
+			vt.setPrimary(t, 100)
+			ctx, cancel := context.WithCancel(t.Context())
+			t.Cleanup(cancel)
+			// The run is cancelled, as by SIGTERM, while it asks the primary.
+			vt.tmc.primaryStatus = func(*topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
+				cancel()
+				return nil, context.Canceled
+			}
+			_, err := verifyPosition(ctx, vt.tmc, vt.ts, testGTIDPosition(t, testPrimaryUUID+":1-5"), checkData)
+			require.ErrorContains(t, err, "stopped verifying the data to back up")
+			assert.Equal(t, vtrpc.Code_CANCELED, vterrors.Code(err))
+			assert.NotContains(t, logs.String(), "Waiting to retry")
 		})
 	})
 }

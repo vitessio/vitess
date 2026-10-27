@@ -944,17 +944,32 @@ func verifyPosition(ctx context.Context, tmc tmclient.TabletManagerClient, ts *t
 	// Errant GTID detection supports only MySQL56 GTID sets, as on tablets, so
 	// don't wait for a primary that would not be checked against.
 	if _, ok := pos.GTIDSet.(replication.Mysql56GTIDSet); !ok {
+		log.Info("Not verifying a position that isn't a MySQL56 GTID set",
+			slog.String("check", check.what),
+		)
 		return primaryTerm{}, nil
+	}
+	// stopped reports that a done Context ended the check, and what it was
+	// waiting for.
+	stopped := func(lastErr error) error {
+		return vterrors.Wrapf(ctx.Err(), "stopped verifying %s against the shard primary (last error: %s)", check.what, lastErr)
 	}
 	for waitTime := time.Second; ; waitTime = min(2*waitTime, operationTimeout) {
 		opCtx, cancel := context.WithTimeout(ctx, operationTimeout)
 		term, err := checkPositionOnce(opCtx, tmc, ts, pos, check)
 		cancel()
 		if err == nil {
+			log.Info("Verified a position against the shard primary",
+				slog.String("check", check.what),
+				slog.String("primary", topoproto.TabletAliasString(term.alias)),
+			)
 			return term, nil
 		}
 		if permanent, ok := errors.AsType[permanentError](err); ok {
 			return primaryTerm{}, permanent.error
+		}
+		if ctx.Err() != nil {
+			return primaryTerm{}, stopped(err)
 		}
 		log.Warn("Waiting to retry verifying a position against the shard primary",
 			slog.String("check", check.what),
@@ -965,8 +980,7 @@ func verifyPosition(ctx context.Context, tmc tmclient.TabletManagerClient, ts *t
 
 		select {
 		case <-ctx.Done():
-			// A done Context ends the wait; say what the check was waiting for.
-			return primaryTerm{}, vterrors.Wrapf(ctx.Err(), "stopped verifying %s against the shard primary (last error: %v)", check.what, err)
+			return primaryTerm{}, stopped(err)
 		case <-time.After(waitTime):
 		}
 	}
@@ -1149,6 +1163,7 @@ func verifyNewBackup(ctx context.Context, tmc tmclient.TabletManagerClient, ts *
 			cancel()
 			if err == nil {
 				log.Info("The shard primary is unchanged since the data to back up was verified",
+					slog.String("check", check.what),
 					slog.String("primary", topoproto.TabletAliasString(verified.alias)),
 				)
 				return nil
