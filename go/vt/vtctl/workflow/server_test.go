@@ -3411,6 +3411,72 @@ func TestWorkflowUpdate(t *testing.T) {
 	}
 }
 
+// TestWorkflowUpdateShardSubset confirms that WorkflowUpdate only contacts
+// target primaries for TabletRequest.Shards. Details must list only those
+// tablets (200 is -80, 210 is 80-).
+func TestWorkflowUpdateShardSubset(t *testing.T) {
+	ctx := t.Context()
+
+	sourceKeyspace := &testKeyspace{"source_keyspace", []string{"-"}}
+	targetKeyspace := &testKeyspace{"target_keyspace", []string{"-80", "80-"}}
+
+	te := newTestEnv(t, ctx, defaultCellName, sourceKeyspace, targetKeyspace)
+	defer te.close()
+
+	testcases := []struct {
+		name         string
+		shards       []string
+		expectedUIDs []uint32
+	}{
+		{
+			name:         "single shard -80",
+			shards:       []string{"-80"},
+			expectedUIDs: []uint32{200},
+		},
+		{
+			name:         "single shard 80-",
+			shards:       []string{"80-"},
+			expectedUIDs: []uint32{210},
+		},
+		{
+			name:         "both shards",
+			shards:       []string{"-80", "80-"},
+			expectedUIDs: []uint32{200, 210},
+		},
+		{
+			name:         "empty subset updates all",
+			shards:       nil,
+			expectedUIDs: []uint32{200, 210},
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := &vtctldatapb.WorkflowUpdateRequest{
+				Keyspace: targetKeyspace.KeyspaceName,
+				TabletRequest: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
+					Workflow: "wf1",
+					Cells:    []string{"zone1"},
+					Shards:   tc.shards,
+				},
+			}
+
+			res, err := te.ws.WorkflowUpdate(ctx, req)
+			require.NoError(t, err)
+			require.Len(t, res.Details, len(tc.expectedUIDs))
+
+			gotUIDs := make([]uint32, 0, len(res.Details))
+			for _, det := range res.Details {
+				gotUIDs = append(gotUIDs, det.Tablet.Uid)
+			}
+			slices.Sort(gotUIDs)
+			wantUIDs := append([]uint32(nil), tc.expectedUIDs...)
+			slices.Sort(wantUIDs)
+			require.Equal(t, wantUIDs, gotUIDs)
+		})
+	}
+}
+
 func TestFinalizeMigrateWorkflow(t *testing.T) {
 	ctx := t.Context()
 
