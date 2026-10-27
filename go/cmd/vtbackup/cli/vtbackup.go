@@ -1004,14 +1004,11 @@ func checkPositionOnce(ctx context.Context, tmc tmclient.TabletManagerClient, ts
 		return primaryTerm{}, vterrors.Wrapf(err, "can't get the status of primary %v", primary)
 	}
 	// PrimaryStatus doesn't check the tablet type, so a primary that a reparent
-	// replaced during the call still answers, maybe with GTIDs that the new primary
-	// lost. Check against the new primary instead.
+	// replaced or repointed during the call still answers, maybe with GTIDs that
+	// the new primary lacks. Check against the new primary instead.
 	term := primaryTerm{alias: si.PrimaryAlias, termStart: si.PrimaryTermStartTime}
-	if si, err = ts.GetShard(ctx, initKeyspace, initShard); err != nil {
-		return primaryTerm{}, vterrors.Wrap(err, "can't read shard")
-	}
-	if !term.equal(primaryTerm{alias: si.PrimaryAlias, termStart: si.PrimaryTermStartTime}) {
-		return primaryTerm{}, vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "the shard primary changed from %v while checking %s", primary, check.what)
+	if err := confirmPrimary(ctx, ts, term, check.what); err != nil {
+		return primaryTerm{}, err
 	}
 	primaryPos, err := replication.DecodePosition(status.Position)
 	if err != nil {
@@ -1042,6 +1039,39 @@ func checkPositionOnce(ctx context.Context, tmc tmclient.TabletManagerClient, ts
 		return primaryTerm{}, vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "primary %v has not committed %v from %s yet; waiting for a semi-sync acknowledgement or a reparent", primary, missing, check.what)
 	}
 	return term, nil
+}
+
+// confirmPrimary checks, after a check has read the primary's status, that the
+// shard record still names term's primary in the same term, and that the
+// primary is still a PRIMARY tablet. An ERS starts repointing a primary that
+// still answers before it promotes the new one. The repoint makes the old
+// primary a REPLICA in topo, then turns off its primary-side semi-sync, which
+// commits writes waiting for an acknowledgement that the new primary never
+// gets, and the shard record keeps naming it until the new primary's shard sync
+// updates the record. Since the type is published first, a status read before
+// this check holds those writes only if the type here says REPLICA. Two cases
+// still slip through: the topo write of the type fails, and the tablet retries
+// it in the background; or ERS cancels a forced demotion after it turned off
+// semi-sync, which commits the writes while the type says PRIMARY until the
+// repoint, seconds later. Check 3 then catches the backup if the repoint comes
+// before the MANIFEST, and otherwise the next run's check 1 does.
+func confirmPrimary(ctx context.Context, ts *topo.Server, term primaryTerm, what string) error {
+	primary := topoproto.TabletAliasString(term.alias)
+	si, err := ts.GetShard(ctx, initKeyspace, initShard)
+	if err != nil {
+		return vterrors.Wrap(err, "can't read shard")
+	}
+	if !term.equal(primaryTerm{alias: si.PrimaryAlias, termStart: si.PrimaryTermStartTime}) {
+		return vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "the shard primary changed from %v while checking %s", primary, what)
+	}
+	ti, err := ts.GetTablet(ctx, term.alias)
+	if err != nil {
+		return vterrors.Wrapf(err, "can't read primary tablet %v", primary)
+	}
+	if ti.Type != topodatapb.TabletType_PRIMARY {
+		return vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "shard primary %v is a %v tablet, as during a reparent, while checking %s", primary, ti.Type, what)
+	}
+	return nil
 }
 
 // errantGTIDsError reports errant GTIDs, with the remedy for each place they came from.
@@ -1086,13 +1116,14 @@ func errantGTIDsError(check positionCheck, errant replication.Mysql56GTIDSet, pr
 // same term, and the MANIFEST position is one that check 2 verified.
 //
 // The checks trust the shard record, which a new primary's shard sync updates
-// only after its promotion, and which an ERS doesn't wait for. In that gap,
-// normally milliseconds but up to --shard-sync-retry-delay if the new primary's
-// topo write fails, the reuse still sees the old primary in the old term and
-// passes, even if the new primary lacks GTIDs in the backup; so does the full
-// check if the old primary still answers. As when a later ERS loses
-// transactions that a backup holds, the next run's check 1 catches the backup,
-// and replica restores reject it.
+// only after its promotion, and which an ERS doesn't wait for. An old primary
+// that still answers is repointed during the ERS, and confirmPrimary then sees
+// its REPLICA type, with the exceptions it lists. But a dead old primary's
+// tablet record still says PRIMARY, so in that gap, normally milliseconds but up
+// to --shard-sync-retry-delay if the new primary's topo write fails, the reuse
+// still passes, even if the new primary lacks GTIDs in the backup. As when a
+// later ERS loses transactions that a backup holds, the next run's check 1
+// catches the backup, and replica restores reject it.
 func verifyNewBackup(ctx context.Context, tmc tmclient.TabletManagerClient, ts *topo.Server, mysqld mysqlctl.MysqlDaemon, restorePos replication.Position, backupParams *mysqlctl.BackupParams) error {
 	localPos, err := mysqld.PrimaryPosition(ctx)
 	if err != nil {
@@ -1112,9 +1143,9 @@ func verifyNewBackup(ctx context.Context, tmc tmclient.TabletManagerClient, ts *
 	backupParams.VerifyPosition = func(ctx context.Context, pos replication.Position) error {
 		if verified.alias != nil && localPos.AtLeast(pos) {
 			opCtx, cancel := context.WithTimeout(ctx, operationTimeout)
-			si, err := ts.GetShard(opCtx, initKeyspace, initShard)
+			err := confirmPrimary(opCtx, ts, verified, check.what)
 			cancel()
-			if err == nil && verified.equal(primaryTerm{alias: si.PrimaryAlias, termStart: si.PrimaryTermStartTime}) {
+			if err == nil {
 				log.Info("The shard primary is unchanged since the data to back up was verified",
 					slog.String("primary", topoproto.TabletAliasString(verified.alias)),
 				)

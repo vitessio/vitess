@@ -34,6 +34,9 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/vt/topo/topoproto"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 const (
@@ -69,6 +72,7 @@ func TestVtbackupErrantGTIDs(t *testing.T) {
 
 	require.True(t, t.Run("poisoned base backup", testPoisonedBaseBackup))
 	require.True(t, t.Run("binlogged init SQL", testBinloggedInitSQL))
+	require.True(t, t.Run("ERS with a reachable primary", testERSWithReachablePrimary))
 	require.True(t, t.Run("primary blocked on semi-sync", testPrimaryBlockedOnSemiSync))
 	require.True(t, t.Run("reparent during the upload", testReparentDuringUpload))
 }
@@ -130,6 +134,186 @@ func testBinloggedInitSQL(t *testing.T) {
 	require.ErrorContains(t, err, "the data to back up has errant GTIDs")
 	require.ErrorContains(t, err, "were written by this run's --init-backup-sql-queries")
 	assert.Len(t, listBackups(t), len(backups))
+}
+
+// testERSWithReachablePrimary makes an ERS leave a reachable primary out of its
+// election, then release, by repointing that primary, a write that vtbackup
+// applied while the primary waited for a semi-sync acknowledgement. The old
+// primary commits the write while the shard record still names it, and a later
+// ERS elects a primary that lacks it. vtbackup must not complete a backup with
+// the write.
+//
+// Tablet action locks order the steps. replica1's lock is held while ERS stops
+// replication, so the replicas answer while the primary's forced demotion is
+// still running, held up by closing the semi-sync monitor, which waits for the
+// monitor's blocked writes until the pool's close timeout (10s, longer than the
+// first sleep): ERS cancels the demotion and leaves the primary's position out. ERS then repoints the primary, which disables its primary-side
+// semi-sync and commits the write. A second sleep on replica1, queued behind ERS's RPC,
+// outlasts the promotion's timeout (topo.RemoteOperationTimeout, 15s), so the
+// promotion fails and the shard record keeps naming the repointed old primary.
+func testERSWithReachablePrimary(t *testing.T) {
+	const msg = "released-by-repoint"
+	backups := listBackups(t)
+	run := startVtbackup(t, initSQLWindow()...)
+	run.waitForInitSQLWindow(t)
+	for _, replica := range []*cluster.Vttablet{replica1, replica2} {
+		execOnTablet(t, replica, "STOP REPLICA IO_THREAD")
+	}
+	// ERS elects replica1 without an intermediate source only if replica1 is as
+	// advanced as replica2.
+	require.Eventually(t, func() bool {
+		r1, err1 := vtbackupQuery(t, tabletSocketPath(replica1), "select @@global.gtid_executed")
+		r2, err2 := vtbackupQuery(t, tabletSocketPath(replica2), "select @@global.gtid_executed")
+		return err1 == nil && err2 == nil && r1.Rows[0][0].ToString() == r2.Rows[0][0].ToString()
+	}, 30*time.Second, 250*time.Millisecond, "the replicas stopped at different positions")
+	writeInBackground(t, primary, msg)
+	run.waitForRow(t, msg)
+	run.waitForLog(t, "has not committed")
+	// The forced demotion closes the semi-sync monitor before it disables
+	// semi-sync, and the close waits for the monitor's blocked writes.
+	require.Eventually(t, func() bool {
+		blocked, ok := primary.VttabletProcess.GetVars()["SemiSyncMonitorWritesBlocked"].(float64)
+		return ok && blocked > 0
+	}, time.Minute, 500*time.Millisecond, "the primary's semi-sync monitor never blocked on a write")
+
+	firstSleep := sleepTablet(replica1, 8*time.Second)
+	require.Eventually(t, func() bool { return actionLockHeld(replica1) }, 30*time.Second, 100*time.Millisecond,
+		"%s never held its action lock", replica1.Alias)
+	stopRPCs := countInFile(replica1.VttabletProcess.ErrorLog, "StopReplicationAndGetStatus")
+	ers := make(chan error, 1)
+	go func() {
+		ers <- localCluster.VtctldClientProcess.ExecuteCommand("EmergencyReparentShard", shardKsName,
+			"--new-primary", replica1.Alias, "--wait-replicas-timeout", "60s")
+	}()
+	// Once ERS's RPC waits for replica1's action lock, queue the second sleep
+	// behind it. The lock is granted in order.
+	require.Eventually(t, func() bool {
+		return countInFile(replica1.VttabletProcess.ErrorLog, "StopReplicationAndGetStatus") > stopRPCs
+	}, 30*time.Second, 50*time.Millisecond, "ERS never asked %s to stop replication", replica1.Alias)
+	secondSleep := sleepTablet(replica1, 40*time.Second)
+
+	var ersErr error
+	select {
+	case ersErr = <-ers:
+	case <-time.After(2 * time.Minute):
+		require.FailNow(t, "ERS never returned")
+	}
+	// The scenario: ERS repointed the old primary, which committed the write,
+	// and failed to promote replica1, so the shard record still names the old
+	// primary in its old term.
+	require.Error(t, ersErr, "ERS promoted %s, so the scenario is invalid", replica1.Alias)
+	shard, err := localCluster.VtctldClientProcess.GetShard(keyspaceName, shardName)
+	require.NoError(t, err)
+	require.Equal(t, primary.Alias, topoproto.TabletAliasString(shard.Shard.PrimaryAlias))
+	oldPrimary, err := localCluster.VtctldClientProcess.GetTablet(primary.Alias)
+	require.NoError(t, err)
+	require.Equal(t, topodatapb.TabletType_REPLICA, oldPrimary.Type, "ERS didn't repoint %s, so the scenario is invalid", primary.Alias)
+	qr := execOnTablet(t, primary, fmt.Sprintf("select count(*) from vt_insert_test where msg = '%s'", msg))
+	require.Equal(t, "1", qr.Rows[0][0].ToString(), "%s didn't commit %q, so the scenario is invalid", primary.Alias, msg)
+	requireRowAbsent(t, replica1, msg)
+
+	// vtbackup must wait while the shard record names a repointed primary. If
+	// it doesn't, it finishes the backup here, and the check below fails.
+	require.Eventually(t, func() bool {
+		select {
+		case err := <-run.done:
+			run.done <- err
+			return true
+		default:
+		}
+		data, err := os.ReadFile(run.stderr)
+		return err == nil && strings.Contains(string(data), "is a REPLICA tablet, as during a reparent")
+	}, 3*time.Minute, 250*time.Millisecond, "vtbackup neither finished nor waited for the repointed primary")
+
+	// Elect replica1, which lacks the write, once its action lock is free.
+	for _, sleep := range []<-chan error{firstSleep, secondSleep} {
+		select {
+		case <-sleep:
+		case <-time.After(2 * time.Minute):
+			require.FailNow(t, "SleepTablet never returned")
+		}
+	}
+	// The old primary has the write, so it must stay out of this election too:
+	// as the most advanced tablet, it would become the intermediate source and
+	// give replica1 the write.
+	require.NoError(t, localCluster.VtctldClientProcess.ExecuteCommand("EmergencyReparentShard", shardKsName,
+		"--new-primary", replica1.Alias, "--ignore-replicas", primary.Alias, "--wait-replicas-timeout", "30s"))
+	requireRowAbsent(t, replica1, msg)
+
+	err = run.wait(t)
+	require.ErrorContains(t, err, "has errant GTIDs", "vtbackup completed a backup with %q, which the new primary %s lacks", msg, replica1.Alias)
+	assert.Len(t, listBackups(t), len(backups))
+
+	// Repair the shard for the next subtests: remove the write from the old
+	// primary without a GTID, give the new primary the old primary's extra GTIDs
+	// (the write and the semi-sync monitor's writes) as empty transactions, and
+	// make the old primary the primary again.
+	newPrimaryGTIDs := execOnTablet(t, replica1, "select @@global.gtid_executed").Rows[0][0].ToString()
+	extra := execOnTablet(t, primary, fmt.Sprintf("select gtid_subtract(@@global.gtid_executed, '%s')", newPrimaryGTIDs)).Rows[0][0].ToString()
+	execOnTablet(t, primary,
+		"SET GLOBAL super_read_only = OFF",
+		"SET sql_log_bin = 0",
+		fmt.Sprintf("DELETE FROM vt_insert_test WHERE msg = '%s'", msg),
+		"SET sql_log_bin = 1",
+		"SET GLOBAL super_read_only = ON",
+	)
+	var inject []string
+	for _, gtid := range gtidsOf(t, extra) {
+		inject = append(inject, fmt.Sprintf("SET GTID_NEXT = '%s'", gtid), "BEGIN", "COMMIT")
+	}
+	execOnTablet(t, replica1, append(inject, "SET GTID_NEXT = 'AUTOMATIC'")...)
+	require.NoError(t, localCluster.VtctldClientProcess.PlannedReparentShard(keyspaceName, shardName, primary.Alias))
+	for _, tablet := range []*cluster.Vttablet{primary, replica1, replica2} {
+		requireRowAbsent(t, tablet, msg)
+	}
+}
+
+// sleepTablet holds the tablet's action lock for d in the background, and
+// returns a channel that receives the result.
+func sleepTablet(tablet *cluster.Vttablet, d time.Duration) <-chan error {
+	done := make(chan error, 1)
+	go func() {
+		done <- localCluster.VtctldClientProcess.ExecuteCommand("SleepTablet", tablet.Alias, d.String())
+	}()
+	return done
+}
+
+// actionLockHeld reports whether another action holds the tablet's action lock,
+// by running an action that takes it with a short timeout.
+func actionLockHeld(tablet *cluster.Vttablet) bool {
+	return localCluster.VtctldClientProcess.ExecuteCommand("--action-timeout", "1s", "RefreshState", tablet.Alias) != nil
+}
+
+// countInFile counts the occurrences of substr in the file, which is 0 if it
+// can't be read.
+func countInFile(file, substr string) int {
+	data, _ := os.ReadFile(file)
+	return strings.Count(string(data), substr)
+}
+
+// gtidsOf lists the GTIDs of a GTID set with one server UUID, such as
+// "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-3:5".
+func gtidsOf(t *testing.T, set string) []string {
+	t.Helper()
+	set = strings.TrimSpace(set)
+	require.NotContains(t, set, ",", "GTID set %q has more than one server UUID", set)
+	uuid, intervals, ok := strings.Cut(set, ":")
+	require.True(t, ok, "GTID set %q has no transactions", set)
+	var gtids []string
+	for interval := range strings.SplitSeq(intervals, ":") {
+		first, last, isRange := strings.Cut(interval, "-")
+		if !isRange {
+			last = first
+		}
+		start, err := strconv.ParseInt(first, 10, 64)
+		require.NoError(t, err)
+		end, err := strconv.ParseInt(last, 10, 64)
+		require.NoError(t, err)
+		for n := start; n <= end; n++ {
+			gtids = append(gtids, fmt.Sprintf("%s:%d", uuid, n))
+		}
+	}
+	return gtids
 }
 
 // testPrimaryBlockedOnSemiSync makes vtbackup apply a write that the primary is

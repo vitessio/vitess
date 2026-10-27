@@ -260,13 +260,30 @@ func newVerifyPositionTest(t *testing.T, status func(tablet *topodatapb.Tablet) 
 	return &verifyPositionTest{ts: ts, tmc: &fakePrimaryStatusTMC{primaryStatus: status}}
 }
 
-// setPrimary makes tablet uid the shard primary, in a new term.
+// setPrimary makes tablet uid the shard primary, in a new term, with the PRIMARY
+// type in its tablet record and REPLICA in the other's.
 func (vt *verifyPositionTest) setPrimary(t *testing.T, uid uint32) {
 	vt.term++
 	term := vt.term
+	for _, tablet := range []uint32{100, 101} {
+		tabletType := topodatapb.TabletType_REPLICA
+		if tablet == uid {
+			tabletType = topodatapb.TabletType_PRIMARY
+		}
+		vt.setType(t, tablet, tabletType)
+	}
 	_, err := vt.ts.UpdateShardFields(t.Context(), initKeyspace, initShard, func(si *topo.ShardInfo) error {
 		si.PrimaryAlias = &topodatapb.TabletAlias{Cell: "zone1", Uid: uid}
 		si.PrimaryTermStartTime = &vttimepb.Time{Seconds: term}
+		return nil
+	})
+	assert.NoError(t, err)
+}
+
+// setType sets the type in tablet uid's record, without changing the shard record.
+func (vt *verifyPositionTest) setType(t *testing.T, uid uint32, tabletType topodatapb.TabletType) {
+	_, err := vt.ts.UpdateTabletFields(t.Context(), &topodatapb.TabletAlias{Cell: "zone1", Uid: uid}, func(tablet *topodatapb.Tablet) error {
+		tablet.Type = tabletType
 		return nil
 	})
 	assert.NoError(t, err)
@@ -364,6 +381,36 @@ func TestVerifyPosition(t *testing.T) {
 			_, err := verifyPosition(boundedContext(t), vt.tmc, vt.ts, testGTIDPosition(t, testPrimaryUUID+":1-12"), checkData)
 			require.ErrorContains(t, err, "has errant GTIDs "+testPrimaryUUID+":11-12 that primary zone1-0000000101")
 			assert.Equal(t, 2, vt.tmc.calls)
+		})
+	})
+
+	t.Run("a primary that a reparent repointed is checked again", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			var vt *verifyPositionTest
+			vt = newVerifyPositionTest(t, func(tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
+				if tablet.Alias.Uid == 100 {
+					// ERS repoints the old primary before it promotes 101: 100
+					// becomes a REPLICA, and turning off its semi-sync commits
+					// GTIDs 11-12, which 101 never gets. The shard record still
+					// names 100.
+					vt.setType(t, 100, topodatapb.TabletType_REPLICA)
+					return primaryStatus(testPrimaryUUID, testPrimaryUUID+":1-12"), nil
+				}
+				return primaryStatus(testNewPrimaryUUID, testPrimaryUUID+":1-10,"+testNewPrimaryUUID+":1"), nil
+			})
+			check := positionCheck{what: "the new backup", requireCommitted: true}
+			pos := testGTIDPosition(t, testPrimaryUUID+":1-12")
+
+			vt.setPrimary(t, 100)
+			_, err := checkPositionOnce(t.Context(), vt.tmc, vt.ts, pos, check)
+			require.ErrorContains(t, err, "shard primary zone1-0000000100 is a REPLICA tablet, as during a reparent, while checking the new backup")
+			assert.Equal(t, vtrpc.Code_UNAVAILABLE, vterrors.Code(err))
+
+			// The check waits until the shard record names the new primary.
+			vt.setPrimary(t, 100)
+			time.AfterFunc(10*time.Second, func() { vt.setPrimary(t, 101) })
+			_, err = verifyPosition(boundedContext(t), vt.tmc, vt.ts, pos, check)
+			require.ErrorContains(t, err, "the new backup has errant GTIDs "+testPrimaryUUID+":11-12 that primary zone1-0000000101")
 		})
 	})
 
@@ -657,6 +704,19 @@ func TestVerifyNewBackup(t *testing.T) {
 			vt.setPrimary(t, 100)
 			require.NoError(t, verify(boundedContext(t), testGTIDPosition(t, local)))
 			assert.Equal(t, 2, vt.tmc.calls)
+		})
+	})
+
+	t.Run("check 3 checks again when the primary has been repointed", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			vt, verify, err := newBackup(t, local)
+			require.NoError(t, err)
+			// ERS has repointed 100 but not promoted 101 yet, so the shard record
+			// still names 100 in its term.
+			vt.setType(t, 100, topodatapb.TabletType_REPLICA)
+			time.AfterFunc(10*time.Second, func() { vt.setPrimary(t, 101) })
+			err = verify(boundedContext(t), testGTIDPosition(t, local))
+			require.ErrorContains(t, err, "the new backup has errant GTIDs "+testPrimaryUUID+":11 that primary zone1-0000000101")
 		})
 	})
 
