@@ -135,7 +135,7 @@ Flags:
       --detach                                                      detached mode - run backups detached from the terminal
       --disable-redo-log                                            Disable InnoDB redo log during replication-from-primary phase of backup.
       --emit-stats                                                  If set, emit stats to push-based monitoring and stats backends
-      --enable-errant-gtid-checks                                   Fail the run, without completing a backup, when the restored backup or the backup this run takes has errant GTIDs: GTIDs that the shard primary doesn't have, under any server UUID but the primary's own. Replica restores reject such a backup. Init SQL creates such GTIDs when it runs binlogged statements such as ANALYZE TABLE, OPTIMIZE TABLE or FLUSH TABLES; use their NO_WRITE_TO_BINLOG or LOCAL forms, or start the queries with SET sql_log_bin = 0. The checks wait, with no limit of their own, for a missing or unreachable primary, and for the primary to commit GTIDs that vtbackup already applied, such as writes waiting for a semi-sync acknowledgement.
+      --enable-errant-gtid-checks                                   Fail the run when the restored backup or the backup this run takes has errant GTIDs.
       --external-compressor string                                  command with arguments to use when compressing a backup.
       --external-compressor-extension string                        extension to use when using an external compressor.
       --external-decompressor string                                command with arguments to use when decompressing a backup.
