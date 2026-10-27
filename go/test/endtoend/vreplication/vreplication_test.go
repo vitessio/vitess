@@ -857,23 +857,47 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 
 		// json_tbl is created with stats_auto_recalc=0 and only a primary key, so
 		// InnoDB never recalculates its statistics on its own. The copy analyzes
-		// it, so each target shard's statistics count the rows it copied, instead
-		// of the empty ones saved at create time.
-		copiedRows := int64(0)
-		for _, tab := range []*cluster.VttabletProcess{customerTab1, customerTab2} {
+		// it, so each target shard that copied rows has statistics that count
+		// some, instead of the empty ones saved at create time. n_rows is a
+		// sampled estimate, so it is not compared with the row count.
+		statsQuery := "select n_rows from mysql.innodb_table_stats where database_name = 'vt_" + defaultTargetKs + "' and table_name = 'json_tbl'"
+		copiedRows := map[string]int64{}
+		for shard, tab := range map[string]*cluster.VttabletProcess{"-80": customerTab1, "80-": customerTab2} {
 			qr, err := tab.QueryTablet("select count(*) from json_tbl", defaultTargetKs, true)
 			require.NoError(t, err)
 			count, err := qr.Rows[0][0].ToInt64()
 			require.NoError(t, err)
-			copiedRows += count
-			qr, err = tab.QueryTablet("select n_rows from mysql.innodb_table_stats where database_name = 'vt_"+defaultTargetKs+"' and table_name = 'json_tbl'", defaultTargetKs, false)
+			copiedRows[shard] = count
+			qr, err = tab.QueryTablet(statsQuery, defaultTargetKs, false)
 			require.NoError(t, err)
 			require.Len(t, qr.Rows, 1)
 			nRows, err := qr.Rows[0][0].ToInt64()
 			require.NoError(t, err)
-			require.Equal(t, count, nRows, "json_tbl statistics on %s were not updated after the copy", tab.TabletPath)
+			if count > 0 {
+				require.Positive(t, nRows, "json_tbl statistics on %s were not updated after the copy", tab.TabletPath)
+			}
 		}
-		require.Positive(t, copiedRows)
+		require.Positive(t, copiedRows["-80"]+copiedRows["80-"])
+		// The ANALYZE TABLE is binlogged, so the targets' replicas, in every cell,
+		// get the statistics too.
+		for shard, count := range copiedRows {
+			if count == 0 {
+				continue
+			}
+			for _, tablet := range custKs.Shards[shard].Tablets {
+				if tablet.Vttablet.IsPrimary {
+					continue
+				}
+				require.Eventuallyf(t, func() bool {
+					qr, err := tablet.Vttablet.QueryTablet(statsQuery, defaultTargetKs, false)
+					if err != nil || len(qr.Rows) != 1 {
+						return false
+					}
+					nRows, err := qr.Rows[0][0].ToInt64()
+					return err == nil && nRows > 0
+				}, defaultTimeout, defaultTick, "json_tbl statistics on replica %s were not updated after the copy", tablet.Vttablet.TabletPath)
+			}
+		}
 
 		// The wait in the next code block which checks that customer.dec80 is updated, also confirms that the
 		// blob-related dmls we execute here are vreplicated.
