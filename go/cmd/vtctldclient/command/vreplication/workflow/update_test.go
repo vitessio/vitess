@@ -130,7 +130,7 @@ func TestCommandUpdatePassesShards(t *testing.T) {
 			common.SetCommandCtx(t.Context())
 			t.Cleanup(func() {
 				common.SetClient(nil)
-				common.SetCommandCtx(nil)
+				common.SetCommandCtx(context.Background())
 			})
 
 			cmd := &cobra.Command{Use: "update"}
