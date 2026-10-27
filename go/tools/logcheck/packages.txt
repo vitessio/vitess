@@ -7,4 +7,5 @@ vitess.io/vitess/go/vt/vtadmin/internal/backoff
 vitess.io/vitess/go/vt/vtadmin/vtctldclient
 vitess.io/vitess/go/vt/vtadmin/vtsql
 vitess.io/vitess/go/vt/vtorc/server
+vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer
 vitess.io/vitess/go/vt/vttls
