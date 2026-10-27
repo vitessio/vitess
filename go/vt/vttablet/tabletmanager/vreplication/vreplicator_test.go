@@ -949,14 +949,22 @@ func TestCancelledDeferSecondaryKeys(t *testing.T) {
 				require.Len(t, res.Rows, 1)
 				assert.Equal(t, "0", res.Rows[0][0].ToString())
 
-				// An atomic copy can't resume, so it finishes the table
-				// without the ANALYZE TABLE rather than fail the workflow.
+				// A copy that can resume keeps the table's copy state, so that
+				// the resumed copy analyzes the table. An atomic copy can't
+				// resume, so it finishes the table without the ANALYZE TABLE
+				// rather than fail the workflow.
 				_, err = dbClient.ExecuteFetch(fmt.Sprintf("insert into _vt.copy_state (vrepl_id, table_name) values (%d, '%s')", id, tableName), 1)
 				require.NoError(t, err)
-				require.NoError(t, newVCopier(vr).runPostCopyActionsAndDeleteCopyState(t.Context(), stopCtx, tableName))
-				res, err = dbaconn.ExecuteFetch(fmt.Sprintf("select count(*) from _vt.copy_state where vrepl_id = %d and table_name = '%s'", id, tableName), 1)
-				require.NoError(t, err)
-				assert.Equal(t, "0", res.Rows[0][0].ToString())
+				copyStateRows := func() string {
+					res, err := dbaconn.ExecuteFetch(fmt.Sprintf("select count(*) from _vt.copy_state where vrepl_id = %d and table_name = '%s'", id, tableName), 1)
+					require.NoError(t, err)
+					return res.Rows[0][0].ToString()
+				}
+				vc := newVCopier(vr)
+				require.NoError(t, vc.runPostCopyActionsAndDeleteCopyState(t.Context(), stopCtx, tableName, true, "resumable copy done"))
+				assert.Equal(t, "1", copyStateRows())
+				require.NoError(t, vc.runPostCopyActionsAndDeleteCopyState(t.Context(), stopCtx, tableName, false, "atomic copy done"))
+				assert.Equal(t, "0", copyStateRows())
 				return
 			}
 

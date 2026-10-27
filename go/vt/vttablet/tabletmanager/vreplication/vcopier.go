@@ -700,34 +700,8 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 		return serr
 	}
 
-	// Perform any post copy actions
-	if err := vc.vr.execPostCopyActions(ctx, stopCtx, tableName); err != nil {
-		return vterrors.Wrapf(err, "failed to execute post copy actions for table %q", tableName)
-	}
-	// After the post copy actions, so that any deferred secondary keys exist.
-	// If the controller stopped before the table could be analyzed, keep its
-	// copy state: the copy then resumes the table, copies any rows the source
-	// added past lastpk since, and analyzes it.
-	if vc.vr.analyzeTableIfStatsAutoRecalcDisabled(stopCtx, tableName) {
-		log.Info("Copy of the table finished, but the controller stopped before analyzing it",
-			slog.String("table", tableName),
-			slog.String("workflow", vc.vr.WorkflowName),
-		)
-		return nil
-	}
-
-	log.Info(fmt.Sprintf("Copy of %v finished at lastpk: %v", tableName, lastpkbv))
-	buf := sqlparser.NewTrackedBuffer(nil)
-	buf.Myprintf(
-		"delete cs, pca from _vt.%s as cs left join _vt.%s as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name where cs.vrepl_id=%d and cs.table_name=%s",
-		copyStateTableName, postCopyActionTableName,
-		vc.vr.id, encodeString(tableName),
-	)
-	if _, err := vc.vr.dbClient.Execute(buf.String()); err != nil {
-		return err
-	}
-
-	return nil
+	return vc.runPostCopyActionsAndDeleteCopyState(ctx, stopCtx, tableName, true,
+		fmt.Sprintf("Copy of %v finished at lastpk: %v", tableName, lastpkbv))
 }
 
 // updatePos is called after the last table is copied in an atomic copy, to set the gtid so that the replicating phase

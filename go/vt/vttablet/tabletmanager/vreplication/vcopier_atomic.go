@@ -149,7 +149,8 @@ func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings
 			copyWorkQueue = vc.newCopyWorkQueue(parallelism, copyWorkerFactory)
 			if state.currentTableName != "" {
 				log.Info(fmt.Sprintf("copy of table %s is done at lastpk %+v", state.currentTableName, lastpkbv))
-				if err := vc.runPostCopyActionsAndDeleteCopyState(ctx, stopCtx, state.currentTableName); err != nil {
+				if err := vc.runPostCopyActionsAndDeleteCopyState(ctx, stopCtx, state.currentTableName, false,
+					"Deleting copy state and post copy actions for table "+state.currentTableName); err != nil {
 					return err
 				}
 			} else {
@@ -316,7 +317,8 @@ func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings
 		log.Info(fmt.Sprintf("Copy of %v stopped", state.currentTableName))
 		return errors.New("CopyAll was interrupted due to context expiration")
 	default:
-		if err := vc.runPostCopyActionsAndDeleteCopyState(ctx, stopCtx, state.currentTableName); err != nil {
+		if err := vc.runPostCopyActionsAndDeleteCopyState(ctx, stopCtx, state.currentTableName, false,
+			"Deleting copy state and post copy actions for table "+state.currentTableName); err != nil {
 			return err
 		}
 		if err := vc.updatePos(ctx, gtid); err != nil {
@@ -327,24 +329,35 @@ func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings
 	return nil
 }
 
-// runPostCopyActionsAndDeleteCopyState runs post copy actions and deletes the
-// copy state entry for a table, signifying that the copy phase is complete for
-// that table.
-func (vc *vcopier) runPostCopyActionsAndDeleteCopyState(ctx, stopCtx context.Context, tableName string) error {
+// runPostCopyActionsAndDeleteCopyState runs post copy actions, analyzes the
+// table if InnoDB doesn't recalculate its statistics automatically, and deletes
+// the copy state entry for a table, signifying that the copy phase is complete
+// for that table. doneMsg is logged before the copy state is deleted.
+//
+// If the controller stopped before the table could be analyzed, a copy that can
+// resume keeps the table's copy state: the resumed copy then copies any rows the
+// source added past lastpk since, and analyzes the table. An atomic copy can't
+// resume, as any error fails the workflow, so it finishes the table without the
+// ANALYZE TABLE, as every row has been copied.
+func (vc *vcopier) runPostCopyActionsAndDeleteCopyState(ctx, stopCtx context.Context, tableName string, resumable bool, doneMsg string) error {
 	if err := vc.vr.execPostCopyActions(ctx, stopCtx, tableName); err != nil {
 		return vterrors.Wrapf(err, "failed to execute post copy actions for table %q", tableName)
 	}
 	// After the post copy actions, so that any deferred secondary keys exist.
-	// An atomic copy can't resume: any error fails the workflow. So if the
-	// controller stopped before the table could be analyzed, finish the copy
-	// without it, as every row has been copied.
 	if vc.vr.analyzeTableIfStatsAutoRecalcDisabled(stopCtx, tableName) {
+		if resumable {
+			log.Info("Copy of the table finished, but the controller stopped before analyzing it",
+				slog.String("table", tableName),
+				slog.String("workflow", vc.vr.WorkflowName),
+			)
+			return nil
+		}
 		log.Warn("The atomic copy finished the table without analyzing it, as the controller stopped; run ANALYZE TABLE on it to refresh its statistics",
 			slog.String("table", tableName),
 			slog.String("workflow", vc.vr.WorkflowName),
 		)
 	}
-	log.Info("Deleting copy state and post copy actions for table " + tableName)
+	log.Info(doneMsg)
 	delQueryBuf := sqlparser.NewTrackedBuffer(nil)
 	delQueryBuf.Myprintf(
 		"delete cs, pca from _vt.%s as cs left join _vt.%s as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name where cs.vrepl_id=%d and cs.table_name=%s",
