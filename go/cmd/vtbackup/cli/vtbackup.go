@@ -1092,7 +1092,7 @@ func errantGTIDsError(check positionCheck, errant replication.Mysql56GTIDSet, pr
 	switch {
 	case len(restored) == 0:
 	case restoreWithClone:
-		msg += fmt.Sprintf(". %v came from the donor, which has them too. Fix the donor's errant GTIDs or clone from another tablet", restored)
+		msg += fmt.Sprintf(". %v came from the donor, which has them too. With --clone-from-primary, the donor was a primary that a reparent replaced, and the next run clones the new one. With --clone-from-tablet, fix the donor's errant GTIDs or clone from another tablet", restored)
 	default:
 		msg += fmt.Sprintf(`. %v came from the restored backup, and tablets restored from it fail with "Errant GTID detected". vtbackup restores the newest backup, so take a new backup of a healthy replica, one without them, with vtctldclient Backup, and the next run starts from it. Then remove the backups that contain them with vtctldclient RemoveBackup, after copying any whose transactions the shard lost. Injecting an empty transaction for each one on the primary instead is safe only if they change no data, as with init SQL in an older vtbackup run: GTIDs under a former primary's UUID usually hold writes that a reparent lost`, restored)
 	}
@@ -1102,7 +1102,7 @@ func errantGTIDsError(check positionCheck, errant replication.Mysql56GTIDSet, pr
 	switch {
 	case len(rest) == 0:
 	case restoreWithClone:
-		msg += fmt.Sprintf(". vtbackup applied %v during catch-up, and the primary doesn't have them, for example because a reparent lost them. No backup was completed; the next run clones the donor again, and if the donor applied them too, it fails with the donor's errant GTIDs", rest)
+		msg += fmt.Sprintf(". vtbackup applied %v during catch-up, and the primary doesn't have them, for example because a reparent lost them. No backup was completed; the next run clones the donor again. With --clone-from-tablet, if the donor applied them too, that run fails with the donor's errant GTIDs", rest)
 	default:
 		msg += fmt.Sprintf(". vtbackup applied %v during catch-up, and the primary doesn't have them, for example because a reparent lost them. No backup was completed; the next run starts from the previous backup and should succeed", rest)
 	}

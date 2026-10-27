@@ -597,6 +597,9 @@ func TestVerifyPosition(t *testing.T) {
 			_, err := verifyPosition(boundedContext(t), vt.tmc, vt.ts, pos, positionCheck{what: "data cloned from the donor", restorePos: pos})
 			require.ErrorContains(t, err, "data cloned from the donor has errant GTIDs "+testOtherUUID+":1")
 			require.ErrorContains(t, err, "came from the donor, which has them too")
+			// With --clone-from-primary, the next run clones whichever primary the
+			// shard has then.
+			require.ErrorContains(t, err, "With --clone-from-primary, the donor was a primary that a reparent replaced, and the next run clones the new one")
 
 			// GTIDs applied during catch-up don't lead back to a previous backup:
 			// the next run clones the donor again.
