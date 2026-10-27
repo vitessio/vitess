@@ -25,6 +25,7 @@ import (
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -58,6 +59,9 @@ type RecurseCTE struct {
 
 	// Distinct is used to determine if the result set should be distinct
 	Distinct bool
+
+	// CheckCols are the columns used to deduplicate rows when Distinct is set.
+	CheckCols []engine.CheckCol
 }
 
 var _ Operator = (*RecurseCTE)(nil)
@@ -88,6 +92,7 @@ func (r *RecurseCTE) Clone(inputs []Operator) Operator {
 	klone.Vars = maps.Clone(r.Vars)
 	klone.Predicates = slices.Clone(r.Predicates)
 	klone.Projections = slices.Clone(r.Projections)
+	klone.CheckCols = slices.Clone(r.CheckCols)
 	return &klone
 }
 
@@ -190,7 +195,30 @@ func (r *RecurseCTE) planOffsets(ctx *plancontext.PlanningContext) Operator {
 			panic(vterrors.VT13001("couldn't find column"))
 		}
 	}
+
+	if r.Distinct {
+		r.planCheckCols(ctx, columns)
+	}
 	return r
+}
+
+// planCheckCols prepares the columns used to deduplicate a UNION DISTINCT CTE.
+func (r *RecurseCTE) planCheckCols(ctx *plancontext.PlanningContext, columns []*sqlparser.AliasedExpr) {
+	r.CheckCols = nil
+	for idx, col := range columns {
+		var wsCol *int
+		if ctx.NeedsWeightString(col.Expr) {
+			offset := r.AddWSColumn(ctx, idx, false)
+			wsCol = &offset
+		}
+		typ, _ := ctx.TypeForExpr(col.Expr)
+		r.CheckCols = append(r.CheckCols, engine.CheckCol{
+			Col:          idx,
+			WsCol:        wsCol,
+			Type:         typ,
+			CollationEnv: ctx.VSchema.Environment().CollationEnv(),
+		})
+	}
 }
 
 func (r *RecurseCTE) introducesTableID() semantics.TableSet {

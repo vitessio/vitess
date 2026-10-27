@@ -1043,3 +1043,32 @@ func TestOlapErrorAfterFields(t *testing.T) {
 	// The error ended the result set cleanly, so the connection stays usable.
 	utils.AssertMatches(t, mcmp.VtConn, "select 1", "[[INT64(1)]]")
 }
+
+// TestRecursiveCTEUnionDistinct checks that an unmerged UNION DISTINCT
+// recursive CTE deduplicates like MySQL, including on cyclic data.
+func TestRecursiveCTEUnionDistinct(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	// id1 -> id2: 1 -> 2 -> 3 -> 1 is a cycle, 4 -> 1 reaches 1 twice, 5 and 6 lead to NULL.
+	mcmp.Exec("insert into t1(id1, id2) values (1, 2), (2, 3), (3, 1), (4, 1), (5, null), (6, null)")
+
+	queries := []string{
+		`with recursive cte as (select id1 as node from t1 where id1 in (1, 4)
+			union select t.id2 from t1 t inner join cte on t.id1 = cte.node)
+			select node from cte order by node`,
+		`with recursive cte as (select id2 as node from t1 where id1 in (5, 6)
+			union select t.id2 from t1 t inner join cte on t.id1 = cte.node)
+			select node from cte`,
+	}
+
+	for _, workload := range []string{"olap", "oltp"} {
+		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
+			_, err := mcmp.VtConn.ExecuteFetch("set workload = "+workload, 1, false)
+			require.NoError(t, err)
+			for _, query := range queries {
+				mcmp.Exec(query)
+			}
+		})
+	}
+}
