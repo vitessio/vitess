@@ -1386,11 +1386,21 @@ func TestAnalyzeTableIfStatsAutoRecalcDisabled(t *testing.T) {
 	}
 }
 
+// waitForQueryResult polls on the test goroutine rather than with
+// require.Eventually, whose condition goroutine outlives a timeout and would
+// keep using dbc while the test's cleanups use it too.
 func waitForQueryResult(t *testing.T, dbc binlogplayer.DBClient, query, val string) {
-	require.Eventually(t, func() bool {
+	deadline := time.Now().Add(30 * time.Second)
+	for {
 		res, err := dbc.ExecuteFetch(query, 1)
-		return err == nil && len(res.Rows) == 1 && res.Rows[0][0].ToString() == val
-	}, 30*time.Second, 50*time.Millisecond, "query %s did not return expected value of %s", query, val)
+		require.NoError(t, err)
+		require.Len(t, res.Rows, 1)
+		if res.Rows[0][0].ToString() == val {
+			return
+		}
+		require.Truef(t, time.Now().Before(deadline), "query %s did not return expected value of %s", query, val)
+		time.Sleep(50 * time.Millisecond)
+	}
 }
 
 func TestThrottlerAppNames(t *testing.T) {
