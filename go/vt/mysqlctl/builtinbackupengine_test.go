@@ -782,8 +782,7 @@ func TestExecuteFullBackupReportsBackupError(t *testing.T) {
 
 	t.Run("a failed restore of mysqld's state is reported with the backup's error", func(t *testing.T) {
 		backupResult, err := runBackup(t, t.Context(), errors.New("super_read_only is stuck"), nil)
-		require.ErrorContains(t, err, "errant GTIDs")
-		require.ErrorContains(t, err, "restoring mysqld's state afterwards also failed: super_read_only is stuck")
+		require.EqualError(t, err, "not writing the backup MANIFEST: errant GTIDs; restoring mysqld's state afterwards also failed: super_read_only is stuck")
 		assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
 		assert.Equal(t, BackupUnusable, backupResult)
 	})
@@ -796,8 +795,7 @@ func TestExecuteFullBackupReportsBackupError(t *testing.T) {
 			mysqld.Running = true
 			cancel()
 		})
-		require.ErrorContains(t, err, "errant GTIDs")
-		require.ErrorContains(t, err, "can't restart mysqld")
+		require.EqualError(t, err, "not writing the backup MANIFEST: errant GTIDs; restoring mysqld's state afterwards also failed: can't restart mysqld: fake mysql daemon already running")
 		assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
 		assert.Equal(t, BackupUnusable, backupResult)
 	})

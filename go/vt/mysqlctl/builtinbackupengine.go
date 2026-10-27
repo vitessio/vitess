@@ -640,9 +640,16 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 		backupResult = BackupUsable
 	}
 
+	// alsoFailed returns a new error with the backup's code that reports the
+	// backup's error and then a failure to restore mysqld's state, so that the
+	// backup's error doesn't read as the restore failure's cause.
+	alsoFailed := func(err error) error {
+		return vterrors.Errorf(vterrors.Code(backupErr), "%s; restoring mysqld's state afterwards also failed: %s", backupErr, err)
+	}
+
 	// restoreErr reports a failure to restore mysqld's state after the backup.
-	// If the backup failed too, its error keeps its code and gets the restore's
-	// added, except when ctx is done: the steps below that use it then fail
+	// If the backup failed too, the restore's failure is reported with its
+	// error, except when ctx is done: the steps below that use it then fail
 	// because of that, so only the backup's error, usually the reason ctx is
 	// done, is returned, and the restore's is logged.
 	restoreErr := func(err error) error {
@@ -653,18 +660,19 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 			params.Logger.Errorf("failed to restore mysqld's state after the backup failed: %v", err)
 			return backupErr
 		default:
-			return vterrors.Wrapf(backupErr, "restoring mysqld's state afterwards also failed: %v", err)
+			return alsoFailed(err)
 		}
 	}
 
 	// Try to restart mysqld, use background context in case we timed out the original context
 	err = params.Mysqld.Start(context.Background(), params.Cnf)
 	if err != nil {
+		err = vterrors.Wrap(err, "can't restart mysqld")
 		// The restart doesn't use ctx, so its failure is always reported.
 		if backupErr != nil {
-			return backupResult, vterrors.Wrapf(backupErr, "restoring mysqld's state afterwards also failed: can't restart mysqld: %v", err)
+			return backupResult, alsoFailed(err)
 		}
-		return backupResult, vterrors.Wrap(err, "can't restart mysqld")
+		return backupResult, err
 	}
 
 	// Resetting super_read_only back to its original value
