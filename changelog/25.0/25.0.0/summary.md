@@ -322,10 +322,10 @@ See [#21065](https://github.com/vitessio/vitess/issues/21065) for details.
 
 VReplication creates target tables with the source's table options, including `STATS_AUTO_RECALC=0`. InnoDB saves empty statistics for such a table when it is created and never recalculates them on its own, so after a copy the target, its replicas and their backups kept statistics that describe an empty table. The same happens to a table that leaves `STATS_AUTO_RECALC` at its default while `innodb_stats_auto_recalc` is off.
 
-At the end of each copy cycle of a workflow or Online DDL migration, the target now runs `ANALYZE TABLE` on such tables:
+At the end of each copy cycle of a workflow or Online DDL migration, the target now runs `ANALYZE TABLE` on the table the cycle copied, if it is such a table:
 
-- The statement is written to the target's binary log, with its own GTID, and the target's replicas apply it.
-- It is best effort: a failure is logged and does not fail the copy. If the workflow stops while it runs, it is killed, and the table is analyzed when the copy resumes; an atomic copy, which can't resume, finishes without it and logs a warning.
+- The statement is written to the target's binary log, with its own GTID, and the target's replicas apply it. A replica applying it waits while a backup there holds `LOCK INSTANCE FOR BACKUP`, as it does for DDL.
+- It is best effort: a failure does not fail the copy, and is logged and recorded in the workflow's log, which `vtctldclient Workflow show` displays. On the target, its wait for a metadata lock, such as one held by `LOCK TABLES` or `LOCK INSTANCE FOR BACKUP`, is bounded at 60 seconds; a replica applies it under its own `lock_wait_timeout`. If the workflow, or the tablet's VReplication engine, stops while it runs, it is killed, and the table is analyzed when the copy resumes; an atomic copy, which can't resume, finishes without it and logs a warning in the vttablet log.
 - Tables copied before the upgrade keep their empty statistics until `ANALYZE TABLE` is run on them.
 
 See [#21749](https://github.com/vitessio/vitess/issues/21749) for details.
