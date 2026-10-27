@@ -929,6 +929,13 @@ func (vr *vreplicator) getTableSecondaryKeys(ctx context.Context, tableName stri
 // connection executing the post copy actions when interrupted.
 const killActionsConnectionTimeout = 10 * time.Second
 
+// analyzeLockWaitTimeout bounds how long the ANALYZE TABLE at the end of a copy
+// cycle waits for a metadata lock, such as one held by LOCK TABLES or LOCK
+// INSTANCE FOR BACKUP, so that a lock holder can't stall the copy indefinitely.
+// Its wait for the table's rows in mysql.innodb_table_stats and
+// mysql.innodb_index_stats is bounded by the global innodb_lock_wait_timeout.
+var analyzeLockWaitTimeout = 60 * time.Second
+
 // execPostCopyActions executes any post copy actions recorded for the given
 // table, e.g. re-adding deferred secondary keys. ctx bounds the work itself
 // and typically carries the copy phase duration timeout, whose expiry must
@@ -1316,6 +1323,12 @@ func (vr *vreplicator) analyzeTableIfStatsAutoRecalcDisabled(stopCtx context.Con
 		return failed("Unable to connect to the database to analyze the table", err)
 	}
 	defer dbClient.Close()
+	// Bound the metadata lock wait; a timeout comes back as a failure row. The
+	// setting is not binlogged, so a replica applies the ANALYZE TABLE under its
+	// own lock_wait_timeout, as it does any DDL.
+	if _, err := dbClient.ExecuteFetch(fmt.Sprintf("set @@session.lock_wait_timeout = %d", int64(analyzeLockWaitTimeout/time.Second)), 0); err != nil {
+		return failed("Unable to analyze the table", err)
+	}
 	// ANALYZE TABLE can wait for a lock on the table, so interrupt it if the
 	// controller stops or the engine closes.
 	stopKillWatch, err := vr.killConnectionOnStop(stopCtx, dbClient, tableName,

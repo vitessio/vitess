@@ -1256,6 +1256,9 @@ func TestAnalyzeTableIfStatsAutoRecalcDisabled(t *testing.T) {
 		// lockStats holds the table's row in mysql.innodb_table_stats past
 		// the lock wait timeout, so that ANALYZE TABLE fails.
 		lockStats bool
+		// lockTable holds a write lock on the table past the metadata lock
+		// wait timeout, so that ANALYZE TABLE fails.
+		lockTable bool
 		// wantAnalyzed is whether the table's statistics are refreshed.
 		wantAnalyzed bool
 	}{
@@ -1276,6 +1279,11 @@ func TestAnalyzeTableIfStatsAutoRecalcDisabled(t *testing.T) {
 			name:                "stats_auto_recalc=1 with innodb_stats_auto_recalc off",
 			tableOptions:        "stats_auto_recalc=1",
 			globalAutoRecalcOff: true,
+		},
+		{
+			name:         "table locked past the metadata lock wait timeout",
+			tableOptions: "stats_auto_recalc=0",
+			lockTable:    true,
 		},
 		{
 			name:         "statistics locked past the lock wait timeout",
@@ -1303,6 +1311,13 @@ func TestAnalyzeTableIfStatsAutoRecalcDisabled(t *testing.T) {
 				execDba(fmt.Sprintf("select * from mysql.innodb_table_stats where database_name = '%s' and table_name = '%s' for update", dbName, tableName))
 				t.Cleanup(func() { execDba("rollback") })
 			}
+			if tc.lockTable {
+				oldTimeout := analyzeLockWaitTimeout
+				analyzeLockWaitTimeout = time.Second
+				t.Cleanup(func() { analyzeLockWaitTimeout = oldTimeout })
+				execDba(fmt.Sprintf("lock tables %s.%s write", dbName, tableName))
+				t.Cleanup(func() { execDba("unlock tables") })
+			}
 
 			var logMu sync.Mutex
 			var infoLogs, warnLogs []string
@@ -1319,8 +1334,17 @@ func TestAnalyzeTableIfStatsAutoRecalcDisabled(t *testing.T) {
 			}
 			t.Cleanup(func() { log.Info, log.Warn = oldInfo, oldWarn })
 
-			// It returns true only when the controller stopped.
-			assert.False(t, vr.analyzeTableIfStatsAutoRecalcDisabled(t.Context(), tableName))
+			// It returns true only when the controller stopped. A stop at the
+			// deadline, by killing an ANALYZE TABLE left waiting for a lock,
+			// fails the test instead of hanging it.
+			stopCtx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+			defer cancel()
+			assert.False(t, vr.analyzeTableIfStatsAutoRecalcDisabled(stopCtx, tableName))
+			if tc.lockTable {
+				// nRows reads mysql.innodb_table_stats on this connection,
+				// which LOCK TABLES doesn't allow until it is unlocked.
+				execDba("unlock tables")
+			}
 
 			logMu.Lock()
 			defer logMu.Unlock()
@@ -1331,7 +1355,7 @@ func TestAnalyzeTableIfStatsAutoRecalcDisabled(t *testing.T) {
 				return
 			}
 			assert.NotContains(t, infoLogs, "Analyzed the table, as InnoDB does not recalculate its statistics automatically")
-			if !tc.lockStats {
+			if !tc.lockStats && !tc.lockTable {
 				assert.Empty(t, warnLogs)
 				return
 			}
