@@ -250,14 +250,14 @@ func TestVStreamWithTablesToSkipCopyFlag(t *testing.T) {
 	// query hint. Adding the hint forces unnecessary copy resume cycles for VStream clients that may
 	// not support resume well, or at all (see issue #20039).
 	logFiles := path.Join(vc.ClusterConfig.tmpDir, "*-vttablet-stderr.txt")
-	totalCmd := fmt.Sprintf("grep -h 'Streaming rows for query:' %s | wc -l", logFiles)
+	totalCmd := fmt.Sprintf("grep -h 'row streamer executing query query=' %s | wc -l", logFiles)
 	totalOut, err := exec.Command("bash", "-c", totalCmd).Output()
 	require.NoError(t, err)
 	totalCount, err := strconv.Atoi(strings.TrimSpace(string(totalOut)))
 	require.NoError(t, err)
-	require.Positive(t, totalCount, "expected at least one rowstreamer 'Streaming rows for query:' log line during copy phase")
+	require.Positive(t, totalCount, "expected at least one rowstreamer 'row streamer executing query' log line during copy phase")
 
-	withHintCmd := fmt.Sprintf("grep -h 'Streaming rows for query:' %s | grep -c MAX_EXECUTION_TIME || true", logFiles)
+	withHintCmd := fmt.Sprintf("grep -h 'row streamer executing query query=' %s | grep -c MAX_EXECUTION_TIME || true", logFiles)
 	withHintOut, err := exec.Command("bash", "-c", withHintCmd).Output()
 	require.NoError(t, err)
 	withHintCount, err := strconv.Atoi(strings.TrimSpace(string(withHintOut)))
