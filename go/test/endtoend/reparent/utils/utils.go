@@ -26,6 +26,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -161,32 +162,14 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 	clusterInstance := cluster.NewCluster(cells[0], Hostname)
 	keyspace := &cluster.Keyspace{Name: KeyspaceName}
 	// A failed setup returns no cluster for the caller to tear down, so stop
-	// the processes it started here. MySQL initializations still running are
-	// left to finish first, so that the teardown finds and stops the mysqld
-	// they start; those that do not finish in time are killed.
+	// the processes it started here.
 	var mysqlCtlProcessList []*exec.Cmd
 	setupDone := false
 	t.Cleanup(func() {
 		if setupDone {
 			return
 		}
-		deadline := time.Now().Add(time.Minute)
-		for _, proc := range mysqlCtlProcessList {
-			if proc.ProcessState != nil {
-				continue
-			}
-			done := make(chan struct{})
-			go func() {
-				_ = proc.Wait()
-				close(done)
-			}()
-			select {
-			case <-done:
-			case <-time.After(time.Until(deadline)):
-				_ = proc.Process.Kill()
-				<-done
-			}
-		}
+		finishMySQLInits(mysqlCtlProcessList, time.Now().Add(time.Minute))
 		clusterInstance.Teardown()
 	})
 
@@ -236,6 +219,7 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 	for _, shard := range clusterInstance.Keyspaces[0].Shards {
 		for _, tablet := range shard.Vttablets {
 			log.Info(fmt.Sprintf("Starting MySql for tablet %v", tablet.Alias))
+			tablet.MysqlctlProcess.ProcessGroup = true
 			proc, err := tablet.MysqlctlProcess.StartProcess()
 			require.NoError(t, err, "Error starting start mysql")
 			mysqlCtlProcessList = append(mysqlCtlProcessList, proc)
@@ -256,6 +240,32 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 	setupShard(ctx, t, clusterInstance, shardName, tablets)
 	setupDone = true
 	return clusterInstance
+}
+
+// finishMySQLInits waits until deadline for the MySQL initializations in procs that are
+// still running, so that a teardown finds and stops the mysqld they start by its pid file.
+// An initialization still running at the deadline may have started a mysqld without a pid
+// file yet, so its whole process group is killed. procs must have been started with
+// MysqlctlProcess.ProcessGroup set.
+func finishMySQLInits(procs []*exec.Cmd, deadline time.Time) {
+	for _, proc := range procs {
+		if proc.ProcessState != nil {
+			continue
+		}
+		done := make(chan struct{})
+		go func() {
+			_ = proc.Wait()
+			close(done)
+		}()
+		select {
+		case <-done:
+		case <-time.After(time.Until(deadline)):
+			_ = syscall.Kill(-proc.Process.Pid, syscall.SIGKILL)
+			// Ends the wait even if the process group could not be killed.
+			_ = proc.Process.Kill()
+			<-done
+		}
+	}
 }
 
 func setupShard(ctx context.Context, t *testing.T, clusterInstance *cluster.LocalProcessCluster, shardName string, tablets []*cluster.Vttablet) {
