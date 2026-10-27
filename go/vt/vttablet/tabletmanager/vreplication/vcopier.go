@@ -681,7 +681,17 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 		log.Info(fmt.Sprintf("Copy of %v stopped at lastpk: %v", tableName, lastpkbv))
 		// Refresh the statistics of what this cycle copied, as the table is
 		// caught up and replicated before the next cycle. If the controller
-		// is stopping, the next cycle analyzes the table.
+		// is stopping, the next cycle analyzes the table. First roll back any
+		// batch that the cancellation left uncommitted on the shared
+		// connection, which the deferred rollback would only discard after
+		// the ANALYZE TABLE, so that its locks don't overlap the ANALYZE.
+		if err := vc.vr.dbClient.Rollback(); err != nil {
+			log.Warn("Unable to roll back the copy transaction before analyzing the table",
+				slog.String("table", tableName),
+				slog.String("workflow", vc.vr.WorkflowName),
+				slog.Any("error", err),
+			)
+		}
 		vc.vr.analyzeTableIfStatsAutoRecalcDisabled(stopCtx, tableName)
 		return nil
 	default:
