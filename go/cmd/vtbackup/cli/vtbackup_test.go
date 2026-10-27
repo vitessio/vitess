@@ -569,6 +569,18 @@ func TestVerifyPosition(t *testing.T) {
 		assert.Equal(t, int64(0), phase.Counts()[phaseNameVerifyErrantGTIDs], "the phase must end with the check, even a failed one")
 	})
 
+	t.Run("initPhases starts the VerifyErrantGTIDs phase at 0 only with the flag", func(t *testing.T) {
+		oldChecks := errantGTIDChecks
+		t.Cleanup(func() { errantGTIDChecks = oldChecks })
+		phase.Set(phaseNameVerifyErrantGTIDs, 1)
+		errantGTIDChecks = false
+		initPhases()
+		assert.Equal(t, int64(1), phase.Counts()[phaseNameVerifyErrantGTIDs], "without the flag, the phase is left alone")
+		errantGTIDChecks = true
+		initPhases()
+		assert.Equal(t, int64(0), phase.Counts()[phaseNameVerifyErrantGTIDs])
+	})
+
 	t.Run("a zero position makes no lookup", func(t *testing.T) {
 		synctest.Test(t, func(t *testing.T) {
 			// The shard has no primary, so a lookup would wait for one.

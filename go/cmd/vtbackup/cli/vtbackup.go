@@ -300,9 +300,7 @@ func run(cc *cobra.Command, args []string) error {
 	defer topoServer.Close()
 
 	// Initialize stats.
-	for _, phaseName := range phaseNames {
-		phase.Set(phaseName, int64(0))
-	}
+	initPhases()
 	for phaseName, statuses := range phaseStatuses {
 		for _, status := range statuses {
 			phaseStatus.Set([]string{phaseName, status}, 0)
@@ -983,6 +981,18 @@ func verifyPosition(ctx context.Context, tmc tmclient.TabletManagerClient, ts *t
 			return primaryTerm{}, stopped(err)
 		case <-time.After(waitTime):
 		}
+	}
+}
+
+// initPhases sets every phase this run can report to 0, so that each series
+// exists from the start of the run. The VerifyErrantGTIDs phase is only
+// reported with --enable-errant-gtid-checks.
+func initPhases() {
+	for _, phaseName := range phaseNames {
+		phase.Set(phaseName, int64(0))
+	}
+	if errantGTIDChecks {
+		phase.Set(phaseNameVerifyErrantGTIDs, int64(0))
 	}
 }
 
