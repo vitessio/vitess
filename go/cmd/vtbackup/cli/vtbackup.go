@@ -722,7 +722,7 @@ func runBackup(ctx context.Context, topoServer *topo.Server, mysqld *mysqlctl.My
 	defer phase.Set(phaseNameTakeNewBackup, int64(0))
 
 	if err := mysqlctl.Backup(ctx, *backupParams); err != nil {
-		return vterrors.Wrap(err, "error taking backup")
+		return fmt.Errorf("error taking backup: %v", err)
 	}
 
 	deprecatedDurationByPhase.Set("TakeNewBackup", int64(time.Since(backupAt).Seconds()))
