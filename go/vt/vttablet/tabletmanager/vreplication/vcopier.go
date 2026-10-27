@@ -684,7 +684,8 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 		// is stopping, the next cycle analyzes the table. First roll back any
 		// batch that the cancellation left uncommitted on the shared
 		// connection, which the deferred rollback would only discard after
-		// the ANALYZE TABLE, so that its locks don't overlap the ANALYZE.
+		// the ANALYZE TABLE: InnoDB's sampled statistics count uncommitted
+		// rows, so they would include rows that the rollback then removes.
 		if err := vc.vr.dbClient.Rollback(); err != nil {
 			log.Warn("Unable to roll back the copy transaction before analyzing the table",
 				slog.String("table", tableName),
