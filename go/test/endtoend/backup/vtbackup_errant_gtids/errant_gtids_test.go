@@ -103,7 +103,7 @@ func testPoisonedBaseBackup(t *testing.T) {
 	require.NotEmpty(t, backups)
 
 	err := startVtbackup(t).wait(t)
-	require.ErrorContains(t, err, "restored backup "+backups[len(backups)-1]+" has errant GTIDs "+errantGTID)
+	require.ErrorContains(t, err, fmt.Sprintf("restored backup %q has errant GTIDs %s", backups[len(backups)-1], errantGTID))
 	require.ErrorContains(t, err, "came from the restored backup")
 	assert.Len(t, listBackups(t), len(backups))
 

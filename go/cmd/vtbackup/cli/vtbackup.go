@@ -575,7 +575,9 @@ func restoreForBackup(ctx context.Context, mysqlTermHandler *mySQLTermHandler, t
 		deprecatedDurationByPhase.Set("RestoreLastBackup", int64(time.Since(restoreAt).Seconds()))
 		restoredFrom := "the restored backup"
 		if backupManifest.BackupName != "" {
-			restoredFrom = "restored backup " + backupManifest.BackupName
+			// Quoted, since the name comes from the MANIFEST and ends up in
+			// errors and logs.
+			restoredFrom = fmt.Sprintf("restored backup %q", backupManifest.BackupName)
 		}
 		return backupManifest.Position, restoredFrom, backupManifest.IncludesBinlogs, nil
 	case mysqlctl.ErrNoBackup:

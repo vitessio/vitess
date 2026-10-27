@@ -336,7 +336,7 @@ func TestVerifyPosition(t *testing.T) {
 		synctest.Test(t, func(t *testing.T) {
 			vt := newVerifyPositionTest(t, committed(testPrimaryUUID+":1-10"))
 			vt.setPrimary(t, 100)
-			_, err := verifyPosition(boundedContext(t), vt.tmc, vt.ts, testGTIDPosition(t, testPrimaryUUID+":1-12"), positionCheck{what: "restored backup b1"})
+			_, err := verifyPosition(boundedContext(t), vt.tmc, vt.ts, testGTIDPosition(t, testPrimaryUUID+":1-12"), positionCheck{what: `restored backup "b1"`})
 			require.NoError(t, err)
 			assert.Equal(t, 1, vt.tmc.calls)
 		})
