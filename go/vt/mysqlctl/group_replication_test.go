@@ -33,6 +33,7 @@ import (
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -230,6 +231,30 @@ func TestGroupReplicationStatusOnMySQLWithoutPaxosSingleLeader(t *testing.T) {
 	assert.True(t, status.PluginActive)
 	assert.Equal(t, "ONLINE", status.MemberState)
 	assert.False(t, status.PaxosSingleLeader)
+}
+
+// TestGroupReplicationStatusOnMySQLBefore8027 checks that the status of a MySQL older than 8.0.27,
+// the first version that Vitess runs Group Replication on, reports no Group Replication instead of
+// failing, also with the plugin loaded: FullStatus and every promotion read this status, also where
+// Vitess does not run Group Replication, and older servers lack what the status queries read.
+func TestGroupReplicationStatusOnMySQLBefore8027(t *testing.T) {
+	env, err := vtenv.New(vtenv.Options{MySQLServerVersion: "8.0.21"})
+	require.NoError(t, err)
+	db := fakesqldb.NewWithEnv(t, env)
+	t.Cleanup(db.Close)
+	params := db.ConnParams()
+	cp := *params
+	mysqld := NewMysqld(dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb"))
+	t.Cleanup(mysqld.Close)
+	addGroupReplicationStatusQueries(db)
+	// A server without MEMBER_ROLE refuses the members query.
+	db.AddRejectedQuery("SELECT MEMBER_ID, MEMBER_HOST, MEMBER_PORT, MEMBER_STATE, MEMBER_ROLE, MEMBER_VERSION FROM performance_schema.replication_group_members WHERE MEMBER_ID != '' ORDER BY MEMBER_ID",
+		errors.New("Unknown column 'MEMBER_ROLE' in 'field list' (errno 1054) (sqlstate 42S22)"))
+
+	status, err := mysqld.GroupReplicationStatus(t.Context())
+	require.NoError(t, err)
+	assert.False(t, status.PluginActive)
+	assert.Empty(t, status.MemberState)
 }
 
 // TestGroupReplicationStatusReportsStartInProgress checks that the status reports a START

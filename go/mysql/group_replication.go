@@ -21,6 +21,7 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/sqltypes"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -115,9 +116,16 @@ const (
 )
 
 // GroupReplicationStatus reads the Group Replication state of the server. It returns a
-// status with PluginActive set to false, and no error, if the plugin is not loaded.
+// status with PluginActive set to false, and no error, if the plugin is not loaded, or if the
+// server is older than MySQL 8.0.27, the first version that Vitess runs Group Replication on.
+// FullStatus and every promotion read this status, also where Vitess does not run Group
+// Replication, and the queries below fail on older servers (performance_schema.processlist is
+// from 8.0.22, MEMBER_ROLE and MEMBER_VERSION are not in 5.7).
 func (c *Conn) GroupReplicationStatus() (*replicationdatapb.GroupReplicationStatus, error) {
 	status := &replicationdatapb.GroupReplicationStatus{}
+	if supported, err := capabilities.ServerVersionAtLeast(c.ServerVersion, 8, 0, 27); err == nil && !supported {
+		return status, nil
+	}
 
 	qr, err := c.ExecuteFetch(readGroupReplicationPlugin, 1, false)
 	if err != nil {
