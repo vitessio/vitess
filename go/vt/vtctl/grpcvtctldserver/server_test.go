@@ -693,6 +693,18 @@ func TestApplyVSchema(t *testing.T) {
 
 func TestBackup(t *testing.T) {
 	ctx := t.Context()
+	includeBinlogsTMC := &testutil.TabletManagerClient{
+		Backups: map[string]struct {
+			Events        []*logutilpb.Event
+			EventInterval time.Duration
+			EventJitter   time.Duration
+			ErrorAfter    time.Duration
+		}{
+			"zone1-0000000100": {
+				Events: []*logutilpb.Event{{}, {}, {}},
+			},
+		},
+	}
 	tests := []struct {
 		name      string
 		ts        *topo.Server
@@ -738,6 +750,32 @@ func TestBackup(t *testing.T) {
 			assertion: func(t *testing.T, responses []*vtctldatapb.BackupResponse, err error) {
 				require.ErrorIs(t, err, io.EOF, "expected Recv loop to end with io.EOF")
 				assert.Len(t, responses, 3, "expected 3 messages from backupclient stream")
+			},
+		},
+		{
+			name: "include binlogs",
+			ts:   memorytopo.NewServer(ctx, "zone1"),
+			tmc:  includeBinlogsTMC,
+			tablet: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+				Type:     topodatapb.TabletType_REPLICA,
+				Keyspace: "ks",
+				Shard:    "-",
+			},
+			req: &vtctldatapb.BackupRequest{
+				TabletAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+				IncludeBinlogs: true,
+			},
+			assertion: func(t *testing.T, responses []*vtctldatapb.BackupResponse, err error) {
+				require.ErrorIs(t, err, io.EOF, "expected Recv loop to end with io.EOF")
+				assert.Len(t, responses, 3, "expected 3 messages from backupclient stream")
+				assert.True(t, includeBinlogsTMC.BackupRequests["zone1-0000000100"].GetIncludeBinlogs())
 			},
 		},
 		{
@@ -924,6 +962,31 @@ func TestBackup(t *testing.T) {
 
 func TestBackupShard(t *testing.T) {
 	ctx := t.Context()
+	includeBinlogsTMC := &testutil.TabletManagerClient{
+		Backups: map[string]struct {
+			Events        []*logutilpb.Event
+			EventInterval time.Duration
+			EventJitter   time.Duration
+			ErrorAfter    time.Duration
+		}{
+			"zone1-0000000100": {
+				Events: []*logutilpb.Event{{}, {}, {}},
+			},
+		},
+		PrimaryPositionResults: map[string]struct {
+			Position string
+			Error    error
+		}{
+			"zone1-0000000200": {Position: "some-position"},
+		},
+		ReplicationStatusResults: map[string]struct {
+			Position *replicationdatapb.Status
+			Error    error
+		}{
+			"zone1-0000000100": {Position: &replicationdatapb.Status{}},
+		},
+		SetReplicationSourceResults: map[string]error{"zone1-0000000100": nil},
+	}
 	tests := []struct {
 		name      string
 		ts        *topo.Server
@@ -1018,6 +1081,35 @@ func TestBackupShard(t *testing.T) {
 				for _, resp := range responses {
 					assert.Equal(t, 101, int(resp.TabletAlias.Uid))
 				}
+			},
+		},
+		{
+			name: "include binlogs",
+			ts:   memorytopo.NewServer(ctx, "zone1"),
+			tmc:  includeBinlogsTMC,
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+					Keyspace: "ks",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_REPLICA,
+				},
+				{
+					Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 200},
+					Keyspace: "ks",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_PRIMARY,
+				},
+			},
+			req: &vtctldatapb.BackupShardRequest{
+				Keyspace:       "ks",
+				Shard:          "-",
+				IncludeBinlogs: true,
+			},
+			assertion: func(t *testing.T, responses []*vtctldatapb.BackupResponse, err error) {
+				require.ErrorIs(t, err, io.EOF, "expected Recv loop to end with io.EOF")
+				assert.Len(t, responses, 3, "expected 3 messages from backupclient stream")
+				assert.True(t, includeBinlogsTMC.BackupRequests["zone1-0000000100"].GetIncludeBinlogs())
 			},
 		},
 		{

@@ -18,8 +18,8 @@ all: grpcvtctldclient localvtctldclient
 
 grpcvtctldclient:
 	go generate ../$@/...
-	go tool -modfile=../../../../tools/gofumpt/go.mod gofumpt -w ../$@/client_gen.go
+	go run -trimpath -modfile=../../../../tools/gofumpt/go.mod mvdan.cc/gofumpt -w ../$@/client_gen.go
 
 localvtctldclient:
 	go generate ../$@/...
-	go tool -modfile=../../../../tools/gofumpt/go.mod gofumpt -w ../$@/client_gen.go
+	go run -trimpath -modfile=../../../../tools/gofumpt/go.mod mvdan.cc/gofumpt -w ../$@/client_gen.go

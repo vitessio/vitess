@@ -476,6 +476,9 @@ message BackupRequest {
   // Optional queries to run on the mysqld instance prior to the backup and fields
   // to control the related behavior.
   tabletmanagerdata.BackupRequest.InitSQL init_sql = 8;
+  // IncludeBinlogs includes the source's binary logs in a full builtin backup.
+  // Restores use them automatically.
+  bool include_binlogs = 9;
 }
 
 message BackupResponse {
@@ -509,6 +512,9 @@ message BackupShardRequest {
   // Optional queries to run on the mysqld instance prior to the backup and fields
   // to control the related behavior.
   tabletmanagerdata.BackupRequest.InitSQL init_sql = 8;
+  // IncludeBinlogs includes the source's binary logs in a full builtin backup.
+  // Restores use them automatically.
+  bool include_binlogs = 9;
 }
 
 message CancelSchemaMigrationRequest {
