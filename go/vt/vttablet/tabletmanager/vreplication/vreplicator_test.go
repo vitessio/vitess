@@ -21,8 +21,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"regexp"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -38,6 +40,7 @@ import (
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/dbconnpool"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/schemadiff"
 	vttablet "vitess.io/vitess/go/vt/vttablet/common"
@@ -697,7 +700,9 @@ func TestDeferSecondaryKeys(t *testing.T) {
 // the --defer-secondary-keys flag was used), after
 // copying all rows, is properly killed when the context
 // is cancelled -- e.g. due to the VReplication engine
-// closing for a tablet transition during a PRS.
+// closing for a tablet transition during a PRS. It also
+// tests that the ANALYZE TABLE run at the end of a copy
+// cycle is killed the same way.
 type (
 	// stalledDbaDaemon simulates a stalled DBA connection setup:
 	// GetDbaConnection blocks until the given context is done -- so an
@@ -795,6 +800,9 @@ func TestCancelledDeferSecondaryKeys(t *testing.T) {
 		// expires -- rather than blocking forever -- after which the
 		// in-flight action is simply left to complete.
 		stalledKill bool
+		// analyze interrupts the ANALYZE TABLE of a table with
+		// stats_auto_recalc=0 instead of the post copy actions.
+		analyze bool
 	}{
 		{
 			// The stop context is cancelled when the controller is
@@ -831,6 +839,17 @@ func TestCancelledDeferSecondaryKeys(t *testing.T) {
 			stalledKill: true,
 		},
 		{
+			// An ANALYZE TABLE waiting for a lock on the table must be
+			// interrupted the same way.
+			name: "workflow stopped while analyzing",
+			setup: func(t *testing.T) (context.Context, func()) {
+				stopCtx, stopCancel := context.WithCancel(t.Context())
+				t.Cleanup(stopCancel)
+				return stopCtx, stopCancel
+			},
+			analyze: true,
+		},
+		{
 			// The engine's context is cancelled on tablet shutdown or
 			// transition. This case must run last as the shared test
 			// engine cannot be re-opened within this test.
@@ -843,6 +862,114 @@ func TestCancelledDeferSecondaryKeys(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			if tc.analyze {
+				// A table whose statistics are never recalculated
+				// automatically, with rows that ANALYZE TABLE would count.
+				_, err = dbClient.ExecuteFetch(fmt.Sprintf("create table %s.%s (id int not null, primary key(id)) stats_auto_recalc=0", dbName, tableName), 1)
+				require.NoError(t, err)
+				t.Cleanup(func() {
+					_, err := dbClient.ExecuteFetch(fmt.Sprintf("drop table %s.%s", dbName, tableName), 1)
+					require.NoError(t, err)
+				})
+				_, err = dbClient.ExecuteFetch(fmt.Sprintf("insert into %s.%s values (1), (2), (3)", dbName, tableName), 1)
+				require.NoError(t, err)
+
+				stopCtx, interrupt := tc.setup(t)
+				done := make(chan struct{})
+				t.Cleanup(func() {
+					// analyzeTableIfStatsAutoRecalcDisabled uses the shared
+					// dbClient, so wait for it after the cleanup below has
+					// unlocked the table, before the earlier cleanups use the
+					// shared dbClient too.
+					select {
+					case <-done:
+					case <-time.After(30 * time.Second):
+						t.Error("analyzeTableIfStatsAutoRecalcDisabled did not return, and may still be using the shared dbClient")
+					}
+				})
+
+				// Lock the table to block the ANALYZE TABLE so that we can
+				// be sure that it runs and we can KILL it.
+				_, err = dbaconn.ExecuteFetch(fmt.Sprintf("lock table %s.%s write", dbName, tableName), 1)
+				require.NoError(t, err)
+				t.Cleanup(func() {
+					// A no-op if the test already unlocked them.
+					_, err := dbaconn.ExecuteFetch("unlock tables", 1)
+					require.NoError(t, err)
+				})
+
+				// A stop is expected, so it's logged at Info, not as a
+				// failure to analyze the table.
+				var logMu sync.Mutex
+				var infoLogs, warnLogs []string
+				oldInfo, oldWarn := log.Info, log.Warn
+				log.Info = func(msg string, _ ...slog.Attr) {
+					logMu.Lock()
+					defer logMu.Unlock()
+					infoLogs = append(infoLogs, msg)
+				}
+				log.Warn = func(msg string, _ ...slog.Attr) {
+					logMu.Lock()
+					defer logMu.Unlock()
+					warnLogs = append(warnLogs, msg)
+				}
+				t.Cleanup(func() { log.Info, log.Warn = oldInfo, oldWarn })
+
+				var interrupted atomic.Bool
+				go func() {
+					defer close(done)
+					interrupted.Store(vr.analyzeTableIfStatsAutoRecalcDisabled(stopCtx, tableName))
+				}()
+				query := fmt.Sprintf("select count(*) from performance_schema.events_statements_current where sql_text = 'analyze table `%s`.`%s`'", dbName, tableName)
+				waitForQueryResult(t, dbaconn, query, "1")
+
+				// Stop the workflow while the ANALYZE TABLE is blocked: it
+				// must be killed rather than left waiting for the lock.
+				interrupt()
+				require.Eventually(t, func() bool {
+					select {
+					case <-done:
+						return true
+					default:
+						return false
+					}
+				}, 30*time.Second, 10*time.Millisecond)
+
+				_, err = dbaconn.ExecuteFetch("unlock tables", 1)
+				require.NoError(t, err)
+				// It reports that the table still needs analyzing, so that
+				// the caller keeps its copy state.
+				assert.True(t, interrupted.Load())
+				logMu.Lock()
+				assert.Contains(t, infoLogs, "The table was not analyzed, as the controller stopped")
+				assert.NotContains(t, warnLogs, "Unable to analyze the table")
+				logMu.Unlock()
+
+				// The killed ANALYZE TABLE did not update the statistics.
+				res, err := dbaconn.ExecuteFetch(fmt.Sprintf("select n_rows from mysql.innodb_table_stats where database_name = '%s' and table_name = '%s'", dbName, tableName), 1)
+				require.NoError(t, err)
+				require.Len(t, res.Rows, 1)
+				assert.Equal(t, "0", res.Rows[0][0].ToString())
+
+				// A copy that can resume keeps the table's copy state, so that
+				// the resumed copy analyzes the table. An atomic copy can't
+				// resume, so it finishes the table without the ANALYZE TABLE
+				// rather than fail the workflow.
+				_, err = dbClient.ExecuteFetch(fmt.Sprintf("insert into _vt.copy_state (vrepl_id, table_name) values (%d, '%s')", id, tableName), 1)
+				require.NoError(t, err)
+				copyStateRows := func() string {
+					res, err := dbaconn.ExecuteFetch(fmt.Sprintf("select count(*) from _vt.copy_state where vrepl_id = %d and table_name = '%s'", id, tableName), 1)
+					require.NoError(t, err)
+					return res.Rows[0][0].ToString()
+				}
+				vc := newVCopier(vr)
+				require.NoError(t, vc.runPostCopyActionsAndDeleteCopyState(t.Context(), stopCtx, tableName, true, "resumable copy done"))
+				assert.Equal(t, "1", copyStateRows())
+				require.NoError(t, vc.runPostCopyActionsAndDeleteCopyState(t.Context(), stopCtx, tableName, false, "atomic copy done"))
+				assert.Equal(t, "0", copyStateRows())
+				return
+			}
+
 			// Create the table.
 			_, err = dbClient.ExecuteFetch(ddl, 1)
 			require.NoError(t, err)
@@ -1087,22 +1214,228 @@ func removeVersionDifferences(in string) string {
 	return out
 }
 
+// TestAnalyzeTableIfStatsAutoRecalcDisabled tests which tables are analyzed at
+// the end of a copy cycle, and that a table is counted as analyzed only when
+// ANALYZE TABLE reports success.
+func TestAnalyzeTableIfStatsAutoRecalcDisabled(t *testing.T) {
+	// The test env uses the same factory for both dba and filtered
+	// connections.
+	oldUser := dbconfigs.GlobalDBConfigs.Filtered.User
+	dbconfigs.GlobalDBConfigs.Filtered.User = "vt_dba"
+	t.Cleanup(func() { dbconfigs.GlobalDBConfigs.Filtered.User = oldUser })
+	dbaconn := playerEngine.dbClientFactoryDba()
+	require.NoError(t, dbaconn.Connect())
+	t.Cleanup(dbaconn.Close)
+	dbClient := playerEngine.dbClientFactoryFiltered()
+	require.NoError(t, dbClient.Connect())
+	t.Cleanup(dbClient.Close)
+	dbName := dbClient.DBName()
+	stats := binlogplayer.NewStats()
+	t.Cleanup(stats.Stop)
+	execDba := func(t *testing.T, query string) *sqltypes.Result {
+		qr, err := dbaconn.ExecuteFetch(query, 10)
+		require.NoError(t, err)
+		return qr
+	}
+	// The new connection reads the workflow's settings.
+	id := int32(1)
+	execDba(t, fmt.Sprintf("insert into _vt.vreplication (id, workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, options) values (%d, 'test', '', '', 99999, 99999, 0, 0, 'Running', '%s', '{}') on duplicate key update workflow='test', source='', pos='', max_tps=99999, max_replication_lag=99999, time_updated=0, transaction_timestamp=0, state='Running', db_name='%s'",
+		id, dbName, dbName))
+	t.Cleanup(func() { execDba(t, fmt.Sprintf("delete from _vt.vreplication where id = %d", id)) })
+	// An engine of its own, as TestCancelledDeferSecondaryKeys closes the shared
+	// one, and a closed engine stops the ANALYZE TABLE before it runs.
+	vre := &Engine{
+		ctx:                     t.Context(),
+		env:                     playerEngine.env,
+		dbClientFactoryFiltered: playerEngine.dbClientFactoryFiltered,
+		dbClientFactoryDba:      playerEngine.dbClientFactoryDba,
+	}
+	vr := newVReplicator(id, &binlogdatapb.BinlogSource{}, nil, stats, dbClient, env.Mysqld, vre, vttablet.DefaultVReplicationConfig)
+	tableName := "analyze_t1"
+	nRows := func(t *testing.T) string {
+		qr := execDba(t, fmt.Sprintf("select n_rows from mysql.innodb_table_stats where database_name = '%s' and table_name = '%s'", dbName, tableName))
+		require.Len(t, qr.Rows, 1)
+		return qr.Rows[0][0].ToString()
+	}
+	// The helpers take the calling test, so that a failure in a subtest is
+	// reported as that subtest's.
+	// failureLogs counts the workflow log's entries for a failure to analyze
+	// the table.
+	failureLogs := func(t *testing.T) string {
+		qr := execDba(t, fmt.Sprintf("select count(*) from _vt.vreplication_log where vrepl_id = %d and message like 'Unable to analyze the %s table%%'", id, tableName))
+		return qr.Rows[0][0].ToString()
+	}
+
+	testCases := []struct {
+		name         string
+		tableOptions string
+		// globalAutoRecalcOff turns innodb_stats_auto_recalc off.
+		globalAutoRecalcOff bool
+		// globalPersistentOff turns innodb_stats_persistent off.
+		globalPersistentOff bool
+		// lockStats holds the table's row in mysql.innodb_table_stats past
+		// the lock wait timeout, so that ANALYZE TABLE fails.
+		lockStats bool
+		// lockTable holds a write lock on the table past the metadata lock
+		// wait timeout, so that ANALYZE TABLE fails.
+		lockTable bool
+		// wantAnalyzed is whether the table's statistics are refreshed.
+		wantAnalyzed bool
+	}{
+		{
+			name:         "stats_auto_recalc=0",
+			tableOptions: "stats_auto_recalc=0",
+			wantAnalyzed: true,
+		},
+		{
+			name: "default option",
+		},
+		{
+			name:                "default option with innodb_stats_auto_recalc off",
+			globalAutoRecalcOff: true,
+			wantAnalyzed:        true,
+		},
+		{
+			name:                "stats_auto_recalc=1 with innodb_stats_auto_recalc off",
+			tableOptions:        "stats_auto_recalc=1",
+			globalAutoRecalcOff: true,
+		},
+		{
+			// STATS_AUTO_RECALC only applies to InnoDB's persistent
+			// statistics.
+			name:                "MEMORY table with innodb_stats_auto_recalc off",
+			tableOptions:        "engine=memory",
+			globalAutoRecalcOff: true,
+		},
+		{
+			name:         "MyISAM table with stats_auto_recalc=0",
+			tableOptions: "engine=myisam stats_auto_recalc=0",
+		},
+		{
+			name:         "stats_persistent=0 and stats_auto_recalc=0",
+			tableOptions: "stats_persistent=0 stats_auto_recalc=0",
+		},
+		{
+			name:                "stats_auto_recalc=0 with innodb_stats_persistent off",
+			tableOptions:        "stats_auto_recalc=0",
+			globalPersistentOff: true,
+		},
+		{
+			name:                "stats_persistent=1 and stats_auto_recalc=0 with innodb_stats_persistent off",
+			tableOptions:        "stats_persistent=1 stats_auto_recalc=0",
+			globalPersistentOff: true,
+			wantAnalyzed:        true,
+		},
+		{
+			name:         "table locked past the metadata lock wait timeout",
+			tableOptions: "stats_auto_recalc=0",
+			lockTable:    true,
+		},
+		{
+			name:         "statistics locked past the lock wait timeout",
+			tableOptions: "stats_auto_recalc=0",
+			lockStats:    true,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.globalAutoRecalcOff {
+				execDba(t, "set @@global.innodb_stats_auto_recalc = 0")
+				t.Cleanup(func() { execDba(t, "set @@global.innodb_stats_auto_recalc = 1") })
+			}
+			if tc.globalPersistentOff {
+				execDba(t, "set @@global.innodb_stats_persistent = 0")
+				t.Cleanup(func() { execDba(t, "set @@global.innodb_stats_persistent = 1") })
+			}
+			execDba(t, fmt.Sprintf("create table %s.%s (id int not null, primary key(id)) %s", dbName, tableName, tc.tableOptions))
+			t.Cleanup(func() { execDba(t, fmt.Sprintf("drop table %s.%s", dbName, tableName)) })
+			execDba(t, fmt.Sprintf("insert into %s.%s values (1), (2), (3)", dbName, tableName))
+			t.Cleanup(func() { execDba(t, fmt.Sprintf("delete from _vt.vreplication_log where vrepl_id = %d", id)) })
+
+			if tc.lockStats {
+				// ANALYZE TABLE's update of the statistics uses the global
+				// lock wait timeout, not the session's.
+				timeout := execDba(t, "select @@global.innodb_lock_wait_timeout").Rows[0][0].ToString()
+				execDba(t, "set @@global.innodb_lock_wait_timeout = 1")
+				t.Cleanup(func() { execDba(t, "set @@global.innodb_lock_wait_timeout = "+timeout) })
+				execDba(t, "begin")
+				execDba(t, fmt.Sprintf("select * from mysql.innodb_table_stats where database_name = '%s' and table_name = '%s' for update", dbName, tableName))
+				t.Cleanup(func() { execDba(t, "rollback") })
+			}
+			if tc.lockTable {
+				oldTimeout := analyzeLockWaitTimeout
+				analyzeLockWaitTimeout = time.Second
+				t.Cleanup(func() { analyzeLockWaitTimeout = oldTimeout })
+				execDba(t, fmt.Sprintf("lock tables %s.%s write", dbName, tableName))
+				t.Cleanup(func() { execDba(t, "unlock tables") })
+			}
+
+			var logMu sync.Mutex
+			var infoLogs, warnLogs []string
+			oldInfo, oldWarn := log.Info, log.Warn
+			log.Info = func(msg string, _ ...slog.Attr) {
+				logMu.Lock()
+				defer logMu.Unlock()
+				infoLogs = append(infoLogs, msg)
+			}
+			log.Warn = func(msg string, _ ...slog.Attr) {
+				logMu.Lock()
+				defer logMu.Unlock()
+				warnLogs = append(warnLogs, msg)
+			}
+			t.Cleanup(func() { log.Info, log.Warn = oldInfo, oldWarn })
+
+			// It returns true only when the controller stopped. A stop at the
+			// deadline, by killing an ANALYZE TABLE left waiting for a lock,
+			// fails the test instead of hanging it.
+			stopCtx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+			defer cancel()
+			assert.False(t, vr.analyzeTableIfStatsAutoRecalcDisabled(stopCtx, tableName))
+			if tc.lockTable {
+				// nRows reads mysql.innodb_table_stats on this connection,
+				// which LOCK TABLES doesn't allow until it is unlocked.
+				execDba(t, "unlock tables")
+			}
+
+			logMu.Lock()
+			defer logMu.Unlock()
+			if tc.wantAnalyzed {
+				assert.Contains(t, infoLogs, "Analyzed the table, as InnoDB does not recalculate its statistics automatically")
+				assert.Empty(t, warnLogs)
+				assert.Equal(t, "3", nRows(t))
+				assert.Equal(t, "0", failureLogs(t))
+				return
+			}
+			assert.NotContains(t, infoLogs, "Analyzed the table, as InnoDB does not recalculate its statistics automatically")
+			if !tc.lockStats && !tc.lockTable {
+				assert.Empty(t, warnLogs)
+				assert.Equal(t, "0", failureLogs(t))
+				return
+			}
+			assert.Contains(t, warnLogs, "Unable to analyze the table")
+			// The failure is in the workflow's log too, where Workflow show
+			// surfaces it.
+			assert.Equal(t, "1", failureLogs(t))
+			execDba(t, "rollback")
+			assert.Equal(t, "0", nRows(t))
+		})
+	}
+}
+
+// waitForQueryResult polls on the test goroutine rather than with
+// require.Eventually, whose condition goroutine outlives a timeout and would
+// keep using dbc while the test's cleanups use it too.
 func waitForQueryResult(t *testing.T, dbc binlogplayer.DBClient, query, val string) {
-	tmr := time.NewTimer(1 * time.Second)
-	defer tmr.Stop()
+	deadline := time.Now().Add(30 * time.Second)
 	for {
 		res, err := dbc.ExecuteFetch(query, 1)
 		require.NoError(t, err)
-		assert.Len(t, res.Rows, 1)
+		require.Len(t, res.Rows, 1)
 		if res.Rows[0][0].ToString() == val {
 			return
 		}
-		select {
-		case <-tmr.C:
-			require.Failf(t, "unexpected query result", "query %s did not return expected value of %s", query, val)
-		default:
-			time.Sleep(50 * time.Millisecond)
-		}
+		require.Truef(t, time.Now().Before(deadline), "query %s did not return expected value of %s", query, val)
+		time.Sleep(50 * time.Millisecond)
 	}
 }
 
