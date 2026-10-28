@@ -337,6 +337,7 @@
     "clustertest": {
       "File": "unused.go",
       "Packages": [
+        "vitess.io/vitess/go/test/endtoend/cluster",
         "vitess.io/vitess/go/test/endtoend/clustertest"
       ],
       "Args": [],
