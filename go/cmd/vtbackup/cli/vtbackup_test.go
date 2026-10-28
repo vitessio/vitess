@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"testing"
 	"testing/synctest"
@@ -43,92 +44,334 @@ import (
 	vttimepb "vitess.io/vitess/go/vt/proto/vttime"
 )
 
-func TestCatchUpReplicationForBackupClearsLastErrWhenReplicationBecomesHealthy(t *testing.T) {
-	synctest.Test(t, func(t *testing.T) {
-		ctx := t.Context()
+func TestCatchUpReplicationForBackup(t *testing.T) {
+	t.Run("clears the last error when replication becomes healthy", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			ctx := t.Context()
 
-		oldInitKeyspace := initKeyspace
-		oldInitShard := initShard
-		initKeyspace = "test_keyspace"
-		initShard = "0"
-		t.Cleanup(func() {
-			initKeyspace = oldInitKeyspace
-			initShard = oldInitShard
-		})
-
-		ts := memorytopo.NewServer(ctx, "zone1")
-		t.Cleanup(ts.Close)
-		require.NoError(t, ts.CreateKeyspace(ctx, initKeyspace, &topodatapb.Keyspace{}))
-		require.NoError(t, ts.CreateShard(ctx, initKeyspace, initShard))
-		primaryAlias := &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}
-		require.NoError(t, ts.CreateTablet(ctx, &topodatapb.Tablet{
-			Alias:         primaryAlias,
-			Keyspace:      initKeyspace,
-			Shard:         initShard,
-			Hostname:      "primary.test",
-			MysqlHostname: "primary-mysql.test",
-			MysqlPort:     3306,
-			Type:          topodatapb.TabletType_PRIMARY,
-		}))
-		_, err := ts.UpdateShardFields(ctx, initKeyspace, initShard, func(si *topo.ShardInfo) error {
-			si.PrimaryAlias = primaryAlias
-			return nil
-		})
-		require.NoError(t, err)
-
-		restorePos := testCatchupPosition(1)
-		primaryPos := testCatchupPosition(3)
-		statuses := []replication.ReplicationStatus{
-			{
-				Position:    restorePos,
-				IOState:     replication.ReplicationStateConnecting,
-				LastIOError: "Replica I/O for channel '': Error reconnecting to source 'vt_test@192.0.2.10:3306'. This was attempt 1/300, with a delay of 10 seconds between attempts. Message: Can't connect to MySQL server on '192.0.2.10:3306' (111), Error_code: MY-002003",
-				SQLState:    replication.ReplicationStateRunning,
-			},
-		}
-		for range int(timeoutWaitingForReplicationStatus.Seconds()) + 1 {
-			statuses = append(statuses, replication.ReplicationStatus{
-				Position: restorePos,
-				IOState:  replication.ReplicationStateRunning,
-				SQLState: replication.ReplicationStateRunning,
+			oldInitKeyspace := initKeyspace
+			oldInitShard := initShard
+			initKeyspace = "test_keyspace"
+			initShard = "0"
+			t.Cleanup(func() {
+				initKeyspace = oldInitKeyspace
+				initShard = oldInitShard
 			})
-		}
-		statuses = append(
-			statuses,
-			replication.ReplicationStatus{
-				Position: primaryPos,
-				IOState:  replication.ReplicationStateRunning,
-				SQLState: replication.ReplicationStateRunning,
-			},
-			replication.ReplicationStatus{
-				Position: primaryPos,
-				IOState:  replication.ReplicationStateRunning,
-				SQLState: replication.ReplicationStateRunning,
-			},
-		)
-		mysqld := &catchupReplicationMysqlDaemon{
-			statuses: statuses,
-		}
 
-		status, err := catchUpReplicationForBackup(ctx, ts, mysqld, restorePos, primaryPos)
+			ts := memorytopo.NewServer(ctx, "zone1")
+			t.Cleanup(ts.Close)
+			require.NoError(t, ts.CreateKeyspace(ctx, initKeyspace, &topodatapb.Keyspace{}))
+			require.NoError(t, ts.CreateShard(ctx, initKeyspace, initShard))
+			primaryAlias := &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}
+			require.NoError(t, ts.CreateTablet(ctx, &topodatapb.Tablet{
+				Alias:         primaryAlias,
+				Keyspace:      initKeyspace,
+				Shard:         initShard,
+				Hostname:      "primary.test",
+				MysqlHostname: "primary-mysql.test",
+				MysqlPort:     3306,
+				Type:          topodatapb.TabletType_PRIMARY,
+			}))
+			_, err := ts.UpdateShardFields(ctx, initKeyspace, initShard, func(si *topo.ShardInfo) error {
+				si.PrimaryAlias = primaryAlias
+				return nil
+			})
+			require.NoError(t, err)
 
-		require.NoError(t, err)
-		assert.True(t, status.Position.Equal(primaryPos))
-		assert.Equal(t, 1, mysqld.setReplicationSourceCalls)
-		assert.Equal(t, 1, mysqld.stopReplicationCalls)
+			restorePos := testCatchupPosition(1)
+			primaryPos := testCatchupPosition(3)
+			statuses := []replication.ReplicationStatus{
+				{
+					Position:    restorePos,
+					IOState:     replication.ReplicationStateConnecting,
+					LastIOError: "Replica I/O for channel '': Error reconnecting to source 'vt_test@192.0.2.10:3306'. This was attempt 1/300, with a delay of 10 seconds between attempts. Message: Can't connect to MySQL server on '192.0.2.10:3306' (111), Error_code: MY-002003",
+					SQLState:    replication.ReplicationStateRunning,
+				},
+			}
+			for range int(timeoutWaitingForReplicationStatus.Seconds()) + 1 {
+				statuses = append(statuses, replication.ReplicationStatus{
+					Position: restorePos,
+					IOState:  replication.ReplicationStateRunning,
+					SQLState: replication.ReplicationStateRunning,
+				})
+			}
+			statuses = append(
+				statuses,
+				replication.ReplicationStatus{
+					Position: primaryPos,
+					IOState:  replication.ReplicationStateRunning,
+					SQLState: replication.ReplicationStateRunning,
+				},
+				replication.ReplicationStatus{
+					Position: primaryPos,
+					IOState:  replication.ReplicationStateRunning,
+					SQLState: replication.ReplicationStateRunning,
+				},
+			)
+			mysqld := &catchupReplicationMysqlDaemon{
+				statuses: statuses,
+			}
+			tmc := &fakePrimaryStatusTMC{primaryStatus: func(*topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
+				return &replicationdatapb.PrimaryStatus{Position: replication.EncodePosition(primaryPos)}, nil
+			}}
+
+			// Before MySQL 8.4, replication restarts as it always did.
+			status, goal, err := catchUpReplicationForBackup(ctx, tmc, ts, mysqld, restorePos, primaryPos, false)
+
+			require.NoError(t, err)
+			assert.True(t, status.Position.Equal(primaryPos))
+			assert.True(t, goal.Equal(primaryPos))
+			assert.Equal(t, 1, mysqld.setReplicationSourceCalls)
+			assert.Equal(t, []bool{true}, mysqld.startReplicationAfter)
+			assert.Empty(t, mysqld.startUntil)
+			assert.Zero(t, tmc.calls, "without the errant GTID checks, a restart doesn't read the primary")
+			assert.Equal(t, 1, mysqld.stopReplicationCalls)
+		})
+	})
+
+	// vtbackup was catching up to 100's committed position when a reparent made
+	// 101 the primary and replication broke.
+	t.Run("restarts up to the committed position of the primary it repoints to", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			restorePos := testGTIDPosition(t, testPrimaryUUID+":1-2")
+			oldGoal := testGTIDPosition(t, testPrimaryUUID+":1-3")
+			newGoal := testGTIDPosition(t, testPrimaryUUID+":1-3,"+testNewPrimaryUUID+":1-2")
+			vt := newVerifyPositionTest(t, func(*topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
+				return primaryStatus(testNewPrimaryUUID, testPrimaryUUID+":1-3,"+testNewPrimaryUUID+":1-2"), nil
+			})
+			vt.setPrimary(t, 101)
+			mysqld := &catchupReplicationMysqlDaemon{statuses: []replication.ReplicationStatus{
+				{Position: restorePos, IOState: replication.ReplicationStateConnecting, LastIOError: lostPrimaryIOError, SQLState: replication.ReplicationStateRunning},
+				// The goal read from 100 is reached, but not the one read from 101.
+				{Position: oldGoal, IOState: replication.ReplicationStateRunning, SQLState: replication.ReplicationStateRunning},
+				{Position: newGoal, IOState: replication.ReplicationStateRunning, SQLState: replication.ReplicationStateRunning},
+				{Position: newGoal, IOState: replication.ReplicationStateRunning, SQLState: replication.ReplicationStateRunning},
+			}}
+
+			status, goal, err := catchUpReplicationForBackup(boundedContext(t), vt.tmc, vt.ts, mysqld, restorePos, oldGoal, true)
+
+			require.NoError(t, err)
+			assert.True(t, goal.Equal(newGoal), "goal %v", goal)
+			assert.True(t, status.Position.Equal(newGoal), "position %v", status.Position)
+			assert.Equal(t, []string{"primary-101.test:3306"}, mysqld.sources)
+			assert.Equal(t, []bool{false}, mysqld.startReplicationAfter, "the source must be set without starting replication")
+			require.Len(t, mysqld.startUntil, 1)
+			assert.True(t, mysqld.startUntil[0].Equal(newGoal), "replication must stop at 101's committed position, not at %v", mysqld.startUntil[0])
+		})
+	})
+
+	// The primary's tablet record was deleted, which clears the shard record's
+	// primary, and a new primary was elected while replication was down.
+	t.Run("retries a restart while the shard has no primary", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			restorePos := testGTIDPosition(t, testPrimaryUUID+":1-2")
+			goal := testGTIDPosition(t, testPrimaryUUID+":1-3")
+			vt := newVerifyPositionTest(t, func(*topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
+				return primaryStatus(testPrimaryUUID, testPrimaryUUID+":1-3"), nil
+			})
+			broken := replication.ReplicationStatus{Position: restorePos, IOState: replication.ReplicationStateConnecting, LastIOError: lostPrimaryIOError, SQLState: replication.ReplicationStateRunning}
+			mysqld := &catchupReplicationMysqlDaemon{
+				statuses: []replication.ReplicationStatus{
+					broken,
+					broken,
+					{Position: goal, IOState: replication.ReplicationStateRunning, SQLState: replication.ReplicationStateRunning},
+					{Position: goal, IOState: replication.ReplicationStateRunning, SQLState: replication.ReplicationStateRunning},
+				},
+				// The new primary is elected after the first restart fails.
+				onStatus: func(call int) {
+					if call == 1 {
+						vt.setPrimary(t, 100)
+					}
+				},
+			}
+
+			_, gotGoal, err := catchUpReplicationForBackup(boundedContext(t), vt.tmc, vt.ts, mysqld, restorePos, goal, true)
+
+			require.NoError(t, err)
+			assert.True(t, gotGoal.Equal(goal), "goal %v", gotGoal)
+			assert.Equal(t, []string{"primary-100.test:3306"}, mysqld.sources)
+		})
+	})
+
+	// The primary goes down, so replication breaks and the restart can't read the
+	// primary, first because the read times out and then because it fails at
+	// once, for longer than replication may stay stopped, until an emergency
+	// reparent makes 101 the primary. That wait must not count as replication
+	// staying stopped.
+	t.Run("waits through a primary that can't be read until a reparent replaces it", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			restorePos := testGTIDPosition(t, testPrimaryUUID+":1-2")
+			goal := testGTIDPosition(t, testPrimaryUUID+":1-2,"+testNewPrimaryUUID+":1-3")
+			primaryDown := true
+			vt := newVerifyPositionTest(t, func(*topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
+				if primaryDown {
+					return nil, vterrors.New(vtrpc.Code_UNAVAILABLE, "connection refused")
+				}
+				return primaryStatus(testNewPrimaryUUID, testPrimaryUUID+":1-2,"+testNewPrimaryUUID+":1-3"), nil
+			})
+			vt.setPrimary(t, 100)
+			vt.tmc.hangFirst = 1
+			broken := replication.ReplicationStatus{Position: restorePos, IOState: replication.ReplicationStateConnecting, LastIOError: lostPrimaryIOError, SQLState: replication.ReplicationStateRunning}
+			reparentedAt := int(timeoutWaitingForReplicationStatus.Seconds()) + 10
+			var statuses []replication.ReplicationStatus
+			for range reparentedAt + 1 {
+				statuses = append(statuses, broken)
+			}
+			caughtUp := replication.ReplicationStatus{Position: goal, IOState: replication.ReplicationStateRunning, SQLState: replication.ReplicationStateRunning}
+			mysqld := &catchupReplicationMysqlDaemon{
+				statuses: append(statuses, caughtUp, caughtUp),
+				onStatus: func(call int) {
+					if call == reparentedAt {
+						vt.setPrimary(t, 101)
+						primaryDown = false
+					}
+				},
+			}
+
+			_, gotGoal, err := catchUpReplicationForBackup(boundedContext(t), vt.tmc, vt.ts, mysqld, restorePos, testGTIDPosition(t, testPrimaryUUID+":1-3"), true)
+
+			require.NoError(t, err)
+			assert.True(t, gotGoal.Equal(goal), "goal %v", gotGoal)
+			assert.Equal(t, []string{"primary-101.test:3306"}, mysqld.sources)
+		})
+	})
+
+	t.Run("fails on a primary whose server UUID can't be parsed, with the errant GTID checks", func(t *testing.T) {
+		oldChecks := errantGTIDChecks
+		t.Cleanup(func() { errantGTIDChecks = oldChecks })
+		errantGTIDChecks = true
+		synctest.Test(t, func(t *testing.T) {
+			restorePos := testGTIDPosition(t, testPrimaryUUID+":1-2")
+			vt := newVerifyPositionTest(t, func(*topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
+				return primaryStatus("not-a-uuid", testPrimaryUUID+":1-3"), nil
+			})
+			vt.setPrimary(t, 100)
+			mysqld := &catchupReplicationMysqlDaemon{statuses: []replication.ReplicationStatus{
+				{Position: restorePos, IOState: replication.ReplicationStateConnecting, LastIOError: lostPrimaryIOError, SQLState: replication.ReplicationStateRunning},
+			}}
+
+			_, _, err := catchUpReplicationForBackup(boundedContext(t), vt.tmc, vt.ts, mysqld, restorePos, testGTIDPosition(t, testPrimaryUUID+":1-3"), true)
+
+			require.ErrorContains(t, err, "can't parse the server UUID of primary zone1-0000000100")
+			assert.Zero(t, mysqld.setReplicationSourceCalls)
+		})
+	})
+
+	t.Run("fails before repointing to a primary that lacks applied GTIDs, with the errant GTID checks", func(t *testing.T) {
+		oldChecks := errantGTIDChecks
+		t.Cleanup(func() { errantGTIDChecks = oldChecks })
+		errantGTIDChecks = true
+		synctest.Test(t, func(t *testing.T) {
+			restorePos := testGTIDPosition(t, testPrimaryUUID+":1-2")
+			vt := newVerifyPositionTest(t, func(*topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
+				// The reparent lost testPrimaryUUID:3-4, and vtbackup applied 3.
+				return primaryStatus(testNewPrimaryUUID, testPrimaryUUID+":1-2,"+testNewPrimaryUUID+":1-5"), nil
+			})
+			vt.setPrimary(t, 101)
+			mysqld := &catchupReplicationMysqlDaemon{statuses: []replication.ReplicationStatus{
+				{Position: testGTIDPosition(t, testPrimaryUUID+":1-3"), IOState: replication.ReplicationStateConnecting, LastIOError: lostPrimaryIOError, SQLState: replication.ReplicationStateRunning},
+			}}
+
+			_, _, err := catchUpReplicationForBackup(boundedContext(t), vt.tmc, vt.ts, mysqld, restorePos, testGTIDPosition(t, testPrimaryUUID+":1-4"), true)
+
+			require.ErrorContains(t, err, "the data caught up so far has errant GTIDs "+testPrimaryUUID+":3 that primary zone1-0000000101")
+			require.ErrorContains(t, err, "during catch-up")
+			assert.Equal(t, vtrpc.Code_FAILED_PRECONDITION, vterrors.Code(err))
+			assert.Zero(t, mysqld.setReplicationSourceCalls, "vtbackup must not repoint to a primary that lacks GTIDs it applied")
+		})
+	})
+
+	// Before MySQL 8.4, a restart repoints as it always did, even with the errant
+	// GTID checks: a check that read the primary could wait on a primary that is
+	// down for as long as replication may stay stopped. The check of the data to
+	// back up catches errant GTIDs instead.
+	t.Run("before MySQL 8.4, restarts as before without reading the primary, with the errant GTID checks", func(t *testing.T) {
+		oldChecks := errantGTIDChecks
+		t.Cleanup(func() { errantGTIDChecks = oldChecks })
+		errantGTIDChecks = true
+		synctest.Test(t, func(t *testing.T) {
+			restorePos := testGTIDPosition(t, testPrimaryUUID+":1-2")
+			goal := testGTIDPosition(t, testPrimaryUUID+":1-3")
+			vt := newVerifyPositionTest(t, func(*topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
+				return primaryStatus(testNewPrimaryUUID, testPrimaryUUID+":1-2,"+testNewPrimaryUUID+":1-5"), nil
+			})
+			vt.setPrimary(t, 101)
+			caughtUp := replication.ReplicationStatus{Position: goal, IOState: replication.ReplicationStateRunning, SQLState: replication.ReplicationStateRunning}
+			mysqld := &catchupReplicationMysqlDaemon{statuses: []replication.ReplicationStatus{
+				{Position: restorePos, IOState: replication.ReplicationStateConnecting, LastIOError: lostPrimaryIOError, SQLState: replication.ReplicationStateRunning},
+				caughtUp,
+				caughtUp,
+			}}
+
+			_, gotGoal, err := catchUpReplicationForBackup(boundedContext(t), vt.tmc, vt.ts, mysqld, restorePos, goal, false)
+
+			require.NoError(t, err)
+			assert.True(t, gotGoal.Equal(goal), "goal %v", gotGoal)
+			assert.Equal(t, []string{"primary-101.test:3306"}, mysqld.sources)
+			assert.Equal(t, []bool{true}, mysqld.startReplicationAfter)
+			assert.Zero(t, vt.tmc.calls, "a restart before MySQL 8.4 must not read the primary")
+		})
+	})
+
+	t.Run("repoints to a primary that lacks applied GTIDs, without the errant GTID checks", func(t *testing.T) {
+		oldChecks := errantGTIDChecks
+		t.Cleanup(func() { errantGTIDChecks = oldChecks })
+		errantGTIDChecks = false
+		synctest.Test(t, func(t *testing.T) {
+			restorePos := testGTIDPosition(t, testPrimaryUUID+":1-2")
+			newGoal := testGTIDPosition(t, testPrimaryUUID+":1-2,"+testNewPrimaryUUID+":1-5")
+			vt := newVerifyPositionTest(t, func(*topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
+				return primaryStatus(testNewPrimaryUUID, testPrimaryUUID+":1-2,"+testNewPrimaryUUID+":1-5"), nil
+			})
+			vt.setPrimary(t, 101)
+			caughtUp := testGTIDPosition(t, testPrimaryUUID+":1-3,"+testNewPrimaryUUID+":1-5")
+			mysqld := &catchupReplicationMysqlDaemon{statuses: []replication.ReplicationStatus{
+				{Position: testGTIDPosition(t, testPrimaryUUID+":1-3"), IOState: replication.ReplicationStateConnecting, LastIOError: lostPrimaryIOError, SQLState: replication.ReplicationStateRunning},
+				{Position: caughtUp, IOState: replication.ReplicationStateRunning, SQLState: replication.ReplicationStateRunning},
+				{Position: caughtUp, IOState: replication.ReplicationStateRunning, SQLState: replication.ReplicationStateRunning},
+			}}
+
+			_, goal, err := catchUpReplicationForBackup(boundedContext(t), vt.tmc, vt.ts, mysqld, restorePos, testGTIDPosition(t, testPrimaryUUID+":1-4"), true)
+
+			require.NoError(t, err)
+			assert.True(t, goal.Equal(newGoal), "goal %v", goal)
+			assert.Equal(t, 1, mysqld.setReplicationSourceCalls)
+		})
 	})
 }
 
+// lostPrimaryIOError is the IO thread's error after the primary it replicated from went away.
+const lostPrimaryIOError = "Replica I/O for channel '': Error reconnecting to source 'vt_test@192.0.2.10:3306'. Message: Can't connect to MySQL server on '192.0.2.10:3306' (111), Error_code: MY-002003"
+
+// catchupReplicationMysqlDaemon serves ReplicationStatus from a list, and records
+// how replication is pointed at a source and started.
 type catchupReplicationMysqlDaemon struct {
 	mysqlctl.MysqlDaemon
 
-	statuses                  []replication.ReplicationStatus
-	statusCalls               int
+	statuses    []replication.ReplicationStatus
+	statusCalls int
+	// onStatus, if set, runs before each ReplicationStatus call, with the call's index.
+	onStatus                  func(call int)
 	setReplicationSourceCalls int
-	stopReplicationCalls      int
+	// sources and startReplicationAfter are SetReplicationSource's host:port and
+	// startReplicationAfter, per call.
+	sources               []string
+	startReplicationAfter []bool
+	// startUntil holds StartReplicationUntilAfter's positions, and startCalls
+	// counts StartReplication calls.
+	startUntil           []replication.Position
+	startCalls           int
+	stopReplicationCalls int
 }
 
 func (m *catchupReplicationMysqlDaemon) ReplicationStatus(ctx context.Context) (replication.ReplicationStatus, error) {
+	if m.onStatus != nil {
+		m.onStatus(m.statusCalls)
+	}
+	if m.statusCalls >= len(m.statuses) {
+		// Catch-up kept polling past the statuses its test expected.
+		return replication.ReplicationStatus{}, errors.New("no more replication statuses")
+	}
 	status := m.statuses[m.statusCalls]
 	m.statusCalls++
 	return status, nil
@@ -136,6 +379,18 @@ func (m *catchupReplicationMysqlDaemon) ReplicationStatus(ctx context.Context) (
 
 func (m *catchupReplicationMysqlDaemon) SetReplicationSource(ctx context.Context, host string, port int32, heartbeatInterval float64, stopReplicationBefore bool, startReplicationAfter bool) error {
 	m.setReplicationSourceCalls++
+	m.sources = append(m.sources, fmt.Sprintf("%s:%d", host, port))
+	m.startReplicationAfter = append(m.startReplicationAfter, startReplicationAfter)
+	return nil
+}
+
+func (m *catchupReplicationMysqlDaemon) StartReplicationUntilAfter(ctx context.Context, pos replication.Position) error {
+	m.startUntil = append(m.startUntil, pos)
+	return nil
+}
+
+func (m *catchupReplicationMysqlDaemon) StartReplication(ctx context.Context, hookExtraEnv map[string]string) error {
+	m.startCalls++
 	return nil
 }
 
@@ -208,14 +463,27 @@ type fakePrimaryStatusTMC struct {
 
 	primaryStatus func(tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error)
 	calls         int
+	positionCalls int
 	// hang makes PrimaryStatus block until its Context is done, like a primary
-	// that doesn't answer.
-	hang bool
+	// that doesn't answer, and hangFirst does so for only the first hangFirst calls.
+	hang      bool
+	hangFirst int
+}
+
+// PrimaryPosition serves the position from primaryStatus, as the tablet does,
+// and counts the calls in positionCalls.
+func (f *fakePrimaryStatusTMC) PrimaryPosition(ctx context.Context, tablet *topodatapb.Tablet) (string, error) {
+	f.positionCalls++
+	status, err := f.primaryStatus(tablet)
+	if err != nil {
+		return "", err
+	}
+	return status.Position, nil
 }
 
 func (f *fakePrimaryStatusTMC) PrimaryStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
 	f.calls++
-	if f.hang {
+	if f.hang || f.calls <= f.hangFirst {
 		<-ctx.Done()
 		return nil, ctx.Err()
 	}
@@ -254,10 +522,12 @@ func newVerifyPositionTest(t *testing.T, status func(tablet *topodatapb.Tablet) 
 	require.NoError(t, ts.CreateShard(ctx, initKeyspace, initShard))
 	for _, uid := range []uint32{100, 101} {
 		require.NoError(t, ts.CreateTablet(ctx, &topodatapb.Tablet{
-			Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: uid},
-			Keyspace: initKeyspace,
-			Shard:    initShard,
-			Type:     topodatapb.TabletType_REPLICA,
+			Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: uid},
+			Keyspace:      initKeyspace,
+			Shard:         initShard,
+			MysqlHostname: fmt.Sprintf("primary-%d.test", uid),
+			MysqlPort:     3306,
+			Type:          topodatapb.TabletType_REPLICA,
 		}))
 	}
 	return &verifyPositionTest{ts: ts, tmc: &fakePrimaryStatusTMC{primaryStatus: status}}
@@ -298,6 +568,149 @@ func captureLogs(t *testing.T) *bytes.Buffer {
 	old := log.SwapLogger(slog.New(slog.NewTextHandler(&logs, nil)))
 	t.Cleanup(func() { log.SwapLogger(old) })
 	return &logs
+}
+
+func TestReadPrimaryTarget(t *testing.T) {
+	vt := newVerifyPositionTest(t, func(*topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
+		return primaryStatus(testPrimaryUUID, testPrimaryUUID+":1-5"), nil
+	})
+
+	_, err := readPrimaryTarget(t.Context(), vt.tmc, vt.ts)
+	require.ErrorContains(t, err, "has no primary")
+	_, noPrimary := errors.AsType[noPrimaryError](err)
+	assert.True(t, noPrimary, "%v", err)
+	// The first start fails at once, since vtbackup is a batch job.
+	synctest.Test(t, func(t *testing.T) {
+		_, err := readInitialTarget(boundedContext(t), vt.tmc, vt.ts)
+		require.ErrorContains(t, err, "shard test_keyspace/0 has no primary")
+		assert.Zero(t, vt.tmc.calls)
+	})
+
+	vt.setPrimary(t, 100)
+	target, err := readPrimaryTarget(t.Context(), vt.tmc, vt.ts)
+	require.NoError(t, err)
+	assert.Equal(t, uint32(100), target.tablet.Alias.Uid)
+	assert.True(t, target.pos.Equal(testGTIDPosition(t, testPrimaryUUID+":1-5")), "position %v", target.pos)
+	assert.Equal(t, testPrimaryUUID, target.uuid)
+
+	// An ERS repoints a primary that still answers before it promotes the new one,
+	// and the repoint commits writes that the new primary never gets, so a position
+	// that a demoted primary reports must not become the stop position.
+	vt.tmc.primaryStatus = func(*topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
+		vt.setType(t, 100, topodatapb.TabletType_REPLICA)
+		return primaryStatus(testPrimaryUUID, testPrimaryUUID+":1-6"), nil
+	}
+	_, err = readPrimaryTarget(t.Context(), vt.tmc, vt.ts)
+	require.ErrorContains(t, err, "is a REPLICA tablet")
+	_, permanent := errors.AsType[permanentError](err)
+	assert.False(t, permanent, "a demoted primary must be retried")
+
+	vt.setType(t, 100, topodatapb.TabletType_PRIMARY)
+	vt.tmc.primaryStatus = func(*topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
+		return &replicationdatapb.PrimaryStatus{Position: "MySQL56/not-a-gtid-set", ServerUuid: testPrimaryUUID}, nil
+	}
+	_, err = readPrimaryTarget(t.Context(), vt.tmc, vt.ts)
+	require.ErrorContains(t, err, "can't decode the position")
+	_, permanent = errors.AsType[permanentError](err)
+	assert.True(t, permanent, "a position that can't be decoded must not be retried")
+}
+
+func TestStartCatchUp(t *testing.T) {
+	committed := testGTIDPosition(t, testPrimaryUUID+":1-5")
+	vt := newVerifyPositionTest(t, func(*topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
+		return primaryStatus(testPrimaryUUID, testPrimaryUUID+":1-5"), nil
+	})
+	vt.setPrimary(t, 100)
+
+	t.Run("MySQL 8.4 and later stop at the confirmed primary's committed position", func(t *testing.T) {
+		mysqld := &catchupReplicationMysqlDaemon{}
+		goal, err := startCatchUp(t.Context(), vt.tmc, vt.ts, mysqld, true)
+		require.NoError(t, err)
+		assert.True(t, goal.Equal(committed), "goal %v", goal)
+		assert.Equal(t, []bool{false}, mysqld.startReplicationAfter)
+		require.Len(t, mysqld.startUntil, 1)
+		assert.True(t, mysqld.startUntil[0].Equal(committed))
+	})
+
+	t.Run("earlier versions start replication and then read the primary's position, as before", func(t *testing.T) {
+		mysqld := &catchupReplicationMysqlDaemon{}
+		statusCalls := vt.tmc.calls
+		goal, err := startCatchUp(t.Context(), vt.tmc, vt.ts, mysqld, false)
+		require.NoError(t, err)
+		assert.True(t, goal.Equal(committed), "goal %v", goal)
+		assert.Equal(t, []string{"primary-100.test:3306"}, mysqld.sources)
+		assert.Equal(t, []bool{true}, mysqld.startReplicationAfter)
+		assert.Empty(t, mysqld.startUntil)
+		assert.Equal(t, 1, vt.tmc.positionCalls)
+		assert.Equal(t, statusCalls, vt.tmc.calls, "the primary must not be read through PrimaryStatus")
+	})
+}
+
+func TestRetryOnError(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		calls := 0
+		err := retryOnError(boundedContext(t), func() error {
+			calls++
+			if calls < 3 {
+				return errors.New("the primary is unreachable")
+			}
+			return nil
+		})
+		require.NoError(t, err)
+		assert.Equal(t, 3, calls, "an error is retried")
+
+		calls = 0
+		noPrimary := vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "shard has no primary")
+		err = retryOnError(boundedContext(t), func() error {
+			calls++
+			return permanentError{noPrimary}
+		})
+		require.Equal(t, noPrimary, err)
+		assert.Equal(t, 1, calls, "a permanentError is not retried")
+	})
+}
+
+func TestStartReplicationAt(t *testing.T) {
+	tablet := &topodatapb.Tablet{
+		Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+		MysqlHostname: "primary-mysql.test",
+		MysqlPort:     3306,
+	}
+
+	gtidPos := testGTIDPosition(t, testPrimaryUUID+":1-5")
+	mysqld := &catchupReplicationMysqlDaemon{}
+	require.NoError(t, startReplicationAt(t.Context(), mysqld, primaryTarget{tablet: tablet, pos: gtidPos}))
+	assert.Equal(t, []string{"primary-mysql.test:3306"}, mysqld.sources)
+	assert.Equal(t, []bool{false}, mysqld.startReplicationAfter, "the source must be set without starting replication")
+	require.Len(t, mysqld.startUntil, 1)
+	assert.True(t, mysqld.startUntil[0].Equal(gtidPos), "replication must stop at the primary's committed position, not at %v", mysqld.startUntil[0])
+	assert.Zero(t, mysqld.startCalls)
+
+	// Positions that aren't MySQL56 GTID sets replicate without a stop position, as before.
+	mysqld = &catchupReplicationMysqlDaemon{}
+	require.NoError(t, startReplicationAt(t.Context(), mysqld, primaryTarget{tablet: tablet, pos: testCatchupPosition(3)}))
+	assert.Equal(t, []bool{true}, mysqld.startReplicationAfter)
+	assert.Empty(t, mysqld.startUntil)
+	assert.Zero(t, mysqld.startCalls)
+}
+
+func TestStopsAtCommittedPosition(t *testing.T) {
+	for version, want := range map[string]bool{
+		"Ver 8.4.9 MySQL Community Server - GPL": true,
+		"Ver 9.1.0 MySQL Community Server - GPL": true,
+		"Ver 8.3.0 MySQL Community Server - GPL": false,
+		"Ver 8.0.46 Homebrew":                    false,
+		"Ver 5.7.44 MySQL Community Server":      false,
+		"Ver 10.11.6-MariaDB-log mariadb.org":    false,
+		"an unparseable version":                 false,
+	} {
+		t.Run(version, func(t *testing.T) {
+			mysqld := mysqlctl.NewFakeMysqlDaemon(fakesqldb.New(t))
+			t.Cleanup(mysqld.Close)
+			mysqld.Version = version
+			assert.Equal(t, want, stopsAtCommittedPosition(t.Context(), mysqld))
+		})
+	}
 }
 
 func TestVerifyPosition(t *testing.T) {
