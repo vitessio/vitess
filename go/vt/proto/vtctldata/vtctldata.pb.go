@@ -4370,8 +4370,16 @@ type EmergencyReparentShardRequest struct {
 	// MySQL GTID shards only. On any other shard, the reparent fails only after it
 	// stops replication and demotes a reachable primary. Empty means no requirement.
 	RequiredPosition string `protobuf:"bytes,10,opt,name=required_position,json=requiredPosition,proto3" json:"required_position,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// GroupReplicationForceNewGroup applies to a shard whose durability policy uses
+	// MySQL Group Replication, once its group has lost its majority and its members
+	// have left it. It drops the voters that do not answer from the shard record,
+	// and bootstraps a new group from the voters that answer. Transactions that only
+	// the dropped voters held are lost. The operator must make sure that the dropped
+	// voters are down: one that still runs, cut off from the vtctld and from the
+	// topology server, keeps serving its clients.
+	GroupReplicationForceNewGroup bool `protobuf:"varint,11,opt,name=group_replication_force_new_group,json=groupReplicationForceNewGroup,proto3" json:"group_replication_force_new_group,omitempty"`
+	unknownFields                 protoimpl.UnknownFields
+	sizeCache                     protoimpl.SizeCache
 }
 
 func (x *EmergencyReparentShardRequest) Reset() {
@@ -4472,6 +4480,13 @@ func (x *EmergencyReparentShardRequest) GetRequiredPosition() string {
 		return x.RequiredPosition
 	}
 	return ""
+}
+
+func (x *EmergencyReparentShardRequest) GetGroupReplicationForceNewGroup() bool {
+	if x != nil {
+		return x.GroupReplicationForceNewGroup
+	}
+	return false
 }
 
 type EmergencyReparentShardResponse struct {
@@ -9582,6 +9597,309 @@ func (x *MigrateCompleteResponse) GetDryRunResults() []string {
 	return nil
 }
 
+type MigrateReplicationModeRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Keyspace is the keyspace whose shards are converted.
+	Keyspace string `protobuf:"bytes,1,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
+	// Shard restricts the conversion to one shard. When empty, every shard of the
+	// keyspace is converted.
+	Shard string `protobuf:"bytes,2,opt,name=shard,proto3" json:"shard,omitempty"`
+	// DurabilityPolicy is the target durability policy. A group replication policy
+	// (group_replication, group_replication_cross_cell) converts the shards from
+	// asynchronous replication to MySQL Group Replication; any other policy converts
+	// them back.
+	DurabilityPolicy string `protobuf:"bytes,3,opt,name=durability_policy,json=durabilityPolicy,proto3" json:"durability_policy,omitempty"`
+	// DryRun, when set, returns the plan without changing anything.
+	DryRun bool `protobuf:"varint,4,opt,name=dry_run,json=dryRun,proto3" json:"dry_run,omitempty"`
+	// WaitTimeout bounds each wait of the conversion, for example for a member to
+	// become ONLINE or for the primary to change its semi-sync setting.
+	WaitTimeout   *vttime.Duration `protobuf:"bytes,5,opt,name=wait_timeout,json=waitTimeout,proto3" json:"wait_timeout,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MigrateReplicationModeRequest) Reset() {
+	*x = MigrateReplicationModeRequest{}
+	mi := &file_vtctldata_proto_msgTypes[151]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MigrateReplicationModeRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MigrateReplicationModeRequest) ProtoMessage() {}
+
+func (x *MigrateReplicationModeRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_vtctldata_proto_msgTypes[151]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MigrateReplicationModeRequest.ProtoReflect.Descriptor instead.
+func (*MigrateReplicationModeRequest) Descriptor() ([]byte, []int) {
+	return file_vtctldata_proto_rawDescGZIP(), []int{151}
+}
+
+func (x *MigrateReplicationModeRequest) GetKeyspace() string {
+	if x != nil {
+		return x.Keyspace
+	}
+	return ""
+}
+
+func (x *MigrateReplicationModeRequest) GetShard() string {
+	if x != nil {
+		return x.Shard
+	}
+	return ""
+}
+
+func (x *MigrateReplicationModeRequest) GetDurabilityPolicy() string {
+	if x != nil {
+		return x.DurabilityPolicy
+	}
+	return ""
+}
+
+func (x *MigrateReplicationModeRequest) GetDryRun() bool {
+	if x != nil {
+		return x.DryRun
+	}
+	return false
+}
+
+func (x *MigrateReplicationModeRequest) GetWaitTimeout() *vttime.Duration {
+	if x != nil {
+		return x.WaitTimeout
+	}
+	return nil
+}
+
+// ReplicationModeMigrationStep is one step of a replication mode conversion.
+type ReplicationModeMigrationStep struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Action names the step, for example bootstrap_group, join_group,
+	// wait_semi_sync, set_replication_source, leave_group or set_durability_policy.
+	Action string `protobuf:"bytes,1,opt,name=action,proto3" json:"action,omitempty"`
+	// Tablet is the tablet the step acts on, if any.
+	Tablet *topodata.TabletAlias `protobuf:"bytes,2,opt,name=tablet,proto3" json:"tablet,omitempty"`
+	// Description is a human readable description of the step.
+	Description string `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty"`
+	// Status is "planned" (dry run), "done", or "skipped" (the tablet was already in
+	// the desired state).
+	Status        string `protobuf:"bytes,4,opt,name=status,proto3" json:"status,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReplicationModeMigrationStep) Reset() {
+	*x = ReplicationModeMigrationStep{}
+	mi := &file_vtctldata_proto_msgTypes[152]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReplicationModeMigrationStep) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReplicationModeMigrationStep) ProtoMessage() {}
+
+func (x *ReplicationModeMigrationStep) ProtoReflect() protoreflect.Message {
+	mi := &file_vtctldata_proto_msgTypes[152]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReplicationModeMigrationStep.ProtoReflect.Descriptor instead.
+func (*ReplicationModeMigrationStep) Descriptor() ([]byte, []int) {
+	return file_vtctldata_proto_rawDescGZIP(), []int{152}
+}
+
+func (x *ReplicationModeMigrationStep) GetAction() string {
+	if x != nil {
+		return x.Action
+	}
+	return ""
+}
+
+func (x *ReplicationModeMigrationStep) GetTablet() *topodata.TabletAlias {
+	if x != nil {
+		return x.Tablet
+	}
+	return nil
+}
+
+func (x *ReplicationModeMigrationStep) GetDescription() string {
+	if x != nil {
+		return x.Description
+	}
+	return ""
+}
+
+func (x *ReplicationModeMigrationStep) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+// ReplicationModeMigrationShardResult is the outcome of a conversion for one shard.
+type ReplicationModeMigrationShardResult struct {
+	state protoimpl.MessageState          `protogen:"open.v1"`
+	Shard string                          `protobuf:"bytes,1,opt,name=shard,proto3" json:"shard,omitempty"`
+	Steps []*ReplicationModeMigrationStep `protobuf:"bytes,2,rep,name=steps,proto3" json:"steps,omitempty"`
+	// ReplicationMode is the replication mode of the shard after the conversion
+	// ("group_replication" or "async"), or the mode it would have after a dry run.
+	ReplicationMode string `protobuf:"bytes,3,opt,name=replication_mode,json=replicationMode,proto3" json:"replication_mode,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *ReplicationModeMigrationShardResult) Reset() {
+	*x = ReplicationModeMigrationShardResult{}
+	mi := &file_vtctldata_proto_msgTypes[153]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReplicationModeMigrationShardResult) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReplicationModeMigrationShardResult) ProtoMessage() {}
+
+func (x *ReplicationModeMigrationShardResult) ProtoReflect() protoreflect.Message {
+	mi := &file_vtctldata_proto_msgTypes[153]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReplicationModeMigrationShardResult.ProtoReflect.Descriptor instead.
+func (*ReplicationModeMigrationShardResult) Descriptor() ([]byte, []int) {
+	return file_vtctldata_proto_rawDescGZIP(), []int{153}
+}
+
+func (x *ReplicationModeMigrationShardResult) GetShard() string {
+	if x != nil {
+		return x.Shard
+	}
+	return ""
+}
+
+func (x *ReplicationModeMigrationShardResult) GetSteps() []*ReplicationModeMigrationStep {
+	if x != nil {
+		return x.Steps
+	}
+	return nil
+}
+
+func (x *ReplicationModeMigrationShardResult) GetReplicationMode() string {
+	if x != nil {
+		return x.ReplicationMode
+	}
+	return ""
+}
+
+type MigrateReplicationModeResponse struct {
+	state    protoimpl.MessageState                 `protogen:"open.v1"`
+	Keyspace string                                 `protobuf:"bytes,1,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
+	Shards   []*ReplicationModeMigrationShardResult `protobuf:"bytes,2,rep,name=shards,proto3" json:"shards,omitempty"`
+	// DurabilityPolicy is the keyspace's durability policy after the conversion.
+	DurabilityPolicy string `protobuf:"bytes,3,opt,name=durability_policy,json=durabilityPolicy,proto3" json:"durability_policy,omitempty"`
+	// KeyspaceSteps are the keyspace-wide steps, such as updating the durability
+	// policy.
+	KeyspaceSteps []*ReplicationModeMigrationStep `protobuf:"bytes,4,rep,name=keyspace_steps,json=keyspaceSteps,proto3" json:"keyspace_steps,omitempty"`
+	Events        []*logutil.Event                `protobuf:"bytes,5,rep,name=events,proto3" json:"events,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MigrateReplicationModeResponse) Reset() {
+	*x = MigrateReplicationModeResponse{}
+	mi := &file_vtctldata_proto_msgTypes[154]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MigrateReplicationModeResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MigrateReplicationModeResponse) ProtoMessage() {}
+
+func (x *MigrateReplicationModeResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_vtctldata_proto_msgTypes[154]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MigrateReplicationModeResponse.ProtoReflect.Descriptor instead.
+func (*MigrateReplicationModeResponse) Descriptor() ([]byte, []int) {
+	return file_vtctldata_proto_rawDescGZIP(), []int{154}
+}
+
+func (x *MigrateReplicationModeResponse) GetKeyspace() string {
+	if x != nil {
+		return x.Keyspace
+	}
+	return ""
+}
+
+func (x *MigrateReplicationModeResponse) GetShards() []*ReplicationModeMigrationShardResult {
+	if x != nil {
+		return x.Shards
+	}
+	return nil
+}
+
+func (x *MigrateReplicationModeResponse) GetDurabilityPolicy() string {
+	if x != nil {
+		return x.DurabilityPolicy
+	}
+	return ""
+}
+
+func (x *MigrateReplicationModeResponse) GetKeyspaceSteps() []*ReplicationModeMigrationStep {
+	if x != nil {
+		return x.KeyspaceSteps
+	}
+	return nil
+}
+
+func (x *MigrateReplicationModeResponse) GetEvents() []*logutil.Event {
+	if x != nil {
+		return x.Events
+	}
+	return nil
+}
+
 type MountRegisterRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	TopoType      string                 `protobuf:"bytes,1,opt,name=topo_type,json=topoType,proto3" json:"topo_type,omitempty"`
@@ -9594,7 +9912,7 @@ type MountRegisterRequest struct {
 
 func (x *MountRegisterRequest) Reset() {
 	*x = MountRegisterRequest{}
-	mi := &file_vtctldata_proto_msgTypes[151]
+	mi := &file_vtctldata_proto_msgTypes[155]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9606,7 +9924,7 @@ func (x *MountRegisterRequest) String() string {
 func (*MountRegisterRequest) ProtoMessage() {}
 
 func (x *MountRegisterRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[151]
+	mi := &file_vtctldata_proto_msgTypes[155]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9619,7 +9937,7 @@ func (x *MountRegisterRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MountRegisterRequest.ProtoReflect.Descriptor instead.
 func (*MountRegisterRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{151}
+	return file_vtctldata_proto_rawDescGZIP(), []int{155}
 }
 
 func (x *MountRegisterRequest) GetTopoType() string {
@@ -9658,7 +9976,7 @@ type MountRegisterResponse struct {
 
 func (x *MountRegisterResponse) Reset() {
 	*x = MountRegisterResponse{}
-	mi := &file_vtctldata_proto_msgTypes[152]
+	mi := &file_vtctldata_proto_msgTypes[156]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9670,7 +9988,7 @@ func (x *MountRegisterResponse) String() string {
 func (*MountRegisterResponse) ProtoMessage() {}
 
 func (x *MountRegisterResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[152]
+	mi := &file_vtctldata_proto_msgTypes[156]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9683,7 +10001,7 @@ func (x *MountRegisterResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MountRegisterResponse.ProtoReflect.Descriptor instead.
 func (*MountRegisterResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{152}
+	return file_vtctldata_proto_rawDescGZIP(), []int{156}
 }
 
 type MountUnregisterRequest struct {
@@ -9695,7 +10013,7 @@ type MountUnregisterRequest struct {
 
 func (x *MountUnregisterRequest) Reset() {
 	*x = MountUnregisterRequest{}
-	mi := &file_vtctldata_proto_msgTypes[153]
+	mi := &file_vtctldata_proto_msgTypes[157]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9707,7 +10025,7 @@ func (x *MountUnregisterRequest) String() string {
 func (*MountUnregisterRequest) ProtoMessage() {}
 
 func (x *MountUnregisterRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[153]
+	mi := &file_vtctldata_proto_msgTypes[157]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9720,7 +10038,7 @@ func (x *MountUnregisterRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MountUnregisterRequest.ProtoReflect.Descriptor instead.
 func (*MountUnregisterRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{153}
+	return file_vtctldata_proto_rawDescGZIP(), []int{157}
 }
 
 func (x *MountUnregisterRequest) GetName() string {
@@ -9738,7 +10056,7 @@ type MountUnregisterResponse struct {
 
 func (x *MountUnregisterResponse) Reset() {
 	*x = MountUnregisterResponse{}
-	mi := &file_vtctldata_proto_msgTypes[154]
+	mi := &file_vtctldata_proto_msgTypes[158]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9750,7 +10068,7 @@ func (x *MountUnregisterResponse) String() string {
 func (*MountUnregisterResponse) ProtoMessage() {}
 
 func (x *MountUnregisterResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[154]
+	mi := &file_vtctldata_proto_msgTypes[158]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9763,7 +10081,7 @@ func (x *MountUnregisterResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MountUnregisterResponse.ProtoReflect.Descriptor instead.
 func (*MountUnregisterResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{154}
+	return file_vtctldata_proto_rawDescGZIP(), []int{158}
 }
 
 type MountShowRequest struct {
@@ -9775,7 +10093,7 @@ type MountShowRequest struct {
 
 func (x *MountShowRequest) Reset() {
 	*x = MountShowRequest{}
-	mi := &file_vtctldata_proto_msgTypes[155]
+	mi := &file_vtctldata_proto_msgTypes[159]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9787,7 +10105,7 @@ func (x *MountShowRequest) String() string {
 func (*MountShowRequest) ProtoMessage() {}
 
 func (x *MountShowRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[155]
+	mi := &file_vtctldata_proto_msgTypes[159]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9800,7 +10118,7 @@ func (x *MountShowRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MountShowRequest.ProtoReflect.Descriptor instead.
 func (*MountShowRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{155}
+	return file_vtctldata_proto_rawDescGZIP(), []int{159}
 }
 
 func (x *MountShowRequest) GetName() string {
@@ -9822,7 +10140,7 @@ type MountShowResponse struct {
 
 func (x *MountShowResponse) Reset() {
 	*x = MountShowResponse{}
-	mi := &file_vtctldata_proto_msgTypes[156]
+	mi := &file_vtctldata_proto_msgTypes[160]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9834,7 +10152,7 @@ func (x *MountShowResponse) String() string {
 func (*MountShowResponse) ProtoMessage() {}
 
 func (x *MountShowResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[156]
+	mi := &file_vtctldata_proto_msgTypes[160]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9847,7 +10165,7 @@ func (x *MountShowResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MountShowResponse.ProtoReflect.Descriptor instead.
 func (*MountShowResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{156}
+	return file_vtctldata_proto_rawDescGZIP(), []int{160}
 }
 
 func (x *MountShowResponse) GetTopoType() string {
@@ -9886,7 +10204,7 @@ type MountListRequest struct {
 
 func (x *MountListRequest) Reset() {
 	*x = MountListRequest{}
-	mi := &file_vtctldata_proto_msgTypes[157]
+	mi := &file_vtctldata_proto_msgTypes[161]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9898,7 +10216,7 @@ func (x *MountListRequest) String() string {
 func (*MountListRequest) ProtoMessage() {}
 
 func (x *MountListRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[157]
+	mi := &file_vtctldata_proto_msgTypes[161]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9911,7 +10229,7 @@ func (x *MountListRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MountListRequest.ProtoReflect.Descriptor instead.
 func (*MountListRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{157}
+	return file_vtctldata_proto_rawDescGZIP(), []int{161}
 }
 
 type MountListResponse struct {
@@ -9923,7 +10241,7 @@ type MountListResponse struct {
 
 func (x *MountListResponse) Reset() {
 	*x = MountListResponse{}
-	mi := &file_vtctldata_proto_msgTypes[158]
+	mi := &file_vtctldata_proto_msgTypes[162]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9935,7 +10253,7 @@ func (x *MountListResponse) String() string {
 func (*MountListResponse) ProtoMessage() {}
 
 func (x *MountListResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[158]
+	mi := &file_vtctldata_proto_msgTypes[162]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9948,7 +10266,7 @@ func (x *MountListResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MountListResponse.ProtoReflect.Descriptor instead.
 func (*MountListResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{158}
+	return file_vtctldata_proto_rawDescGZIP(), []int{162}
 }
 
 func (x *MountListResponse) GetNames() []string {
@@ -9997,7 +10315,7 @@ type MoveTablesCreateRequest struct {
 
 func (x *MoveTablesCreateRequest) Reset() {
 	*x = MoveTablesCreateRequest{}
-	mi := &file_vtctldata_proto_msgTypes[159]
+	mi := &file_vtctldata_proto_msgTypes[163]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10009,7 +10327,7 @@ func (x *MoveTablesCreateRequest) String() string {
 func (*MoveTablesCreateRequest) ProtoMessage() {}
 
 func (x *MoveTablesCreateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[159]
+	mi := &file_vtctldata_proto_msgTypes[163]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10022,7 +10340,7 @@ func (x *MoveTablesCreateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MoveTablesCreateRequest.ProtoReflect.Descriptor instead.
 func (*MoveTablesCreateRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{159}
+	return file_vtctldata_proto_rawDescGZIP(), []int{163}
 }
 
 func (x *MoveTablesCreateRequest) GetWorkflow() string {
@@ -10175,7 +10493,7 @@ type MoveTablesCreateResponse struct {
 
 func (x *MoveTablesCreateResponse) Reset() {
 	*x = MoveTablesCreateResponse{}
-	mi := &file_vtctldata_proto_msgTypes[160]
+	mi := &file_vtctldata_proto_msgTypes[164]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10187,7 +10505,7 @@ func (x *MoveTablesCreateResponse) String() string {
 func (*MoveTablesCreateResponse) ProtoMessage() {}
 
 func (x *MoveTablesCreateResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[160]
+	mi := &file_vtctldata_proto_msgTypes[164]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10200,7 +10518,7 @@ func (x *MoveTablesCreateResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MoveTablesCreateResponse.ProtoReflect.Descriptor instead.
 func (*MoveTablesCreateResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{160}
+	return file_vtctldata_proto_rawDescGZIP(), []int{164}
 }
 
 func (x *MoveTablesCreateResponse) GetSummary() string {
@@ -10235,7 +10553,7 @@ type MoveTablesCompleteRequest struct {
 
 func (x *MoveTablesCompleteRequest) Reset() {
 	*x = MoveTablesCompleteRequest{}
-	mi := &file_vtctldata_proto_msgTypes[161]
+	mi := &file_vtctldata_proto_msgTypes[165]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10247,7 +10565,7 @@ func (x *MoveTablesCompleteRequest) String() string {
 func (*MoveTablesCompleteRequest) ProtoMessage() {}
 
 func (x *MoveTablesCompleteRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[161]
+	mi := &file_vtctldata_proto_msgTypes[165]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10260,7 +10578,7 @@ func (x *MoveTablesCompleteRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MoveTablesCompleteRequest.ProtoReflect.Descriptor instead.
 func (*MoveTablesCompleteRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{161}
+	return file_vtctldata_proto_rawDescGZIP(), []int{165}
 }
 
 func (x *MoveTablesCompleteRequest) GetWorkflow() string {
@@ -10330,7 +10648,7 @@ type MoveTablesCompleteResponse struct {
 
 func (x *MoveTablesCompleteResponse) Reset() {
 	*x = MoveTablesCompleteResponse{}
-	mi := &file_vtctldata_proto_msgTypes[162]
+	mi := &file_vtctldata_proto_msgTypes[166]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10342,7 +10660,7 @@ func (x *MoveTablesCompleteResponse) String() string {
 func (*MoveTablesCompleteResponse) ProtoMessage() {}
 
 func (x *MoveTablesCompleteResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[162]
+	mi := &file_vtctldata_proto_msgTypes[166]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10355,7 +10673,7 @@ func (x *MoveTablesCompleteResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MoveTablesCompleteResponse.ProtoReflect.Descriptor instead.
 func (*MoveTablesCompleteResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{162}
+	return file_vtctldata_proto_rawDescGZIP(), []int{166}
 }
 
 func (x *MoveTablesCompleteResponse) GetSummary() string {
@@ -10388,7 +10706,7 @@ type PingTabletRequest struct {
 
 func (x *PingTabletRequest) Reset() {
 	*x = PingTabletRequest{}
-	mi := &file_vtctldata_proto_msgTypes[163]
+	mi := &file_vtctldata_proto_msgTypes[167]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10400,7 +10718,7 @@ func (x *PingTabletRequest) String() string {
 func (*PingTabletRequest) ProtoMessage() {}
 
 func (x *PingTabletRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[163]
+	mi := &file_vtctldata_proto_msgTypes[167]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10413,7 +10731,7 @@ func (x *PingTabletRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PingTabletRequest.ProtoReflect.Descriptor instead.
 func (*PingTabletRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{163}
+	return file_vtctldata_proto_rawDescGZIP(), []int{167}
 }
 
 func (x *PingTabletRequest) GetTabletAlias() *topodata.TabletAlias {
@@ -10431,7 +10749,7 @@ type PingTabletResponse struct {
 
 func (x *PingTabletResponse) Reset() {
 	*x = PingTabletResponse{}
-	mi := &file_vtctldata_proto_msgTypes[164]
+	mi := &file_vtctldata_proto_msgTypes[168]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10443,7 +10761,7 @@ func (x *PingTabletResponse) String() string {
 func (*PingTabletResponse) ProtoMessage() {}
 
 func (x *PingTabletResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[164]
+	mi := &file_vtctldata_proto_msgTypes[168]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10456,7 +10774,7 @@ func (x *PingTabletResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PingTabletResponse.ProtoReflect.Descriptor instead.
 func (*PingTabletResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{164}
+	return file_vtctldata_proto_rawDescGZIP(), []int{168}
 }
 
 type PlannedReparentShardRequest struct {
@@ -10498,7 +10816,7 @@ type PlannedReparentShardRequest struct {
 
 func (x *PlannedReparentShardRequest) Reset() {
 	*x = PlannedReparentShardRequest{}
-	mi := &file_vtctldata_proto_msgTypes[165]
+	mi := &file_vtctldata_proto_msgTypes[169]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10510,7 +10828,7 @@ func (x *PlannedReparentShardRequest) String() string {
 func (*PlannedReparentShardRequest) ProtoMessage() {}
 
 func (x *PlannedReparentShardRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[165]
+	mi := &file_vtctldata_proto_msgTypes[169]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10523,7 +10841,7 @@ func (x *PlannedReparentShardRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlannedReparentShardRequest.ProtoReflect.Descriptor instead.
 func (*PlannedReparentShardRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{165}
+	return file_vtctldata_proto_rawDescGZIP(), []int{169}
 }
 
 func (x *PlannedReparentShardRequest) GetKeyspace() string {
@@ -10600,7 +10918,7 @@ type PlannedReparentShardResponse struct {
 
 func (x *PlannedReparentShardResponse) Reset() {
 	*x = PlannedReparentShardResponse{}
-	mi := &file_vtctldata_proto_msgTypes[166]
+	mi := &file_vtctldata_proto_msgTypes[170]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10612,7 +10930,7 @@ func (x *PlannedReparentShardResponse) String() string {
 func (*PlannedReparentShardResponse) ProtoMessage() {}
 
 func (x *PlannedReparentShardResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[166]
+	mi := &file_vtctldata_proto_msgTypes[170]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10625,7 +10943,7 @@ func (x *PlannedReparentShardResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlannedReparentShardResponse.ProtoReflect.Descriptor instead.
 func (*PlannedReparentShardResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{166}
+	return file_vtctldata_proto_rawDescGZIP(), []int{170}
 }
 
 func (x *PlannedReparentShardResponse) GetKeyspace() string {
@@ -10669,7 +10987,7 @@ type RebuildKeyspaceGraphRequest struct {
 
 func (x *RebuildKeyspaceGraphRequest) Reset() {
 	*x = RebuildKeyspaceGraphRequest{}
-	mi := &file_vtctldata_proto_msgTypes[167]
+	mi := &file_vtctldata_proto_msgTypes[171]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10681,7 +10999,7 @@ func (x *RebuildKeyspaceGraphRequest) String() string {
 func (*RebuildKeyspaceGraphRequest) ProtoMessage() {}
 
 func (x *RebuildKeyspaceGraphRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[167]
+	mi := &file_vtctldata_proto_msgTypes[171]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10694,7 +11012,7 @@ func (x *RebuildKeyspaceGraphRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RebuildKeyspaceGraphRequest.ProtoReflect.Descriptor instead.
 func (*RebuildKeyspaceGraphRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{167}
+	return file_vtctldata_proto_rawDescGZIP(), []int{171}
 }
 
 func (x *RebuildKeyspaceGraphRequest) GetKeyspace() string {
@@ -10726,7 +11044,7 @@ type RebuildKeyspaceGraphResponse struct {
 
 func (x *RebuildKeyspaceGraphResponse) Reset() {
 	*x = RebuildKeyspaceGraphResponse{}
-	mi := &file_vtctldata_proto_msgTypes[168]
+	mi := &file_vtctldata_proto_msgTypes[172]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10738,7 +11056,7 @@ func (x *RebuildKeyspaceGraphResponse) String() string {
 func (*RebuildKeyspaceGraphResponse) ProtoMessage() {}
 
 func (x *RebuildKeyspaceGraphResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[168]
+	mi := &file_vtctldata_proto_msgTypes[172]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10751,7 +11069,7 @@ func (x *RebuildKeyspaceGraphResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RebuildKeyspaceGraphResponse.ProtoReflect.Descriptor instead.
 func (*RebuildKeyspaceGraphResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{168}
+	return file_vtctldata_proto_rawDescGZIP(), []int{172}
 }
 
 type RebuildVSchemaGraphRequest struct {
@@ -10765,7 +11083,7 @@ type RebuildVSchemaGraphRequest struct {
 
 func (x *RebuildVSchemaGraphRequest) Reset() {
 	*x = RebuildVSchemaGraphRequest{}
-	mi := &file_vtctldata_proto_msgTypes[169]
+	mi := &file_vtctldata_proto_msgTypes[173]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10777,7 +11095,7 @@ func (x *RebuildVSchemaGraphRequest) String() string {
 func (*RebuildVSchemaGraphRequest) ProtoMessage() {}
 
 func (x *RebuildVSchemaGraphRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[169]
+	mi := &file_vtctldata_proto_msgTypes[173]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10790,7 +11108,7 @@ func (x *RebuildVSchemaGraphRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RebuildVSchemaGraphRequest.ProtoReflect.Descriptor instead.
 func (*RebuildVSchemaGraphRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{169}
+	return file_vtctldata_proto_rawDescGZIP(), []int{173}
 }
 
 func (x *RebuildVSchemaGraphRequest) GetCells() []string {
@@ -10808,7 +11126,7 @@ type RebuildVSchemaGraphResponse struct {
 
 func (x *RebuildVSchemaGraphResponse) Reset() {
 	*x = RebuildVSchemaGraphResponse{}
-	mi := &file_vtctldata_proto_msgTypes[170]
+	mi := &file_vtctldata_proto_msgTypes[174]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10820,7 +11138,7 @@ func (x *RebuildVSchemaGraphResponse) String() string {
 func (*RebuildVSchemaGraphResponse) ProtoMessage() {}
 
 func (x *RebuildVSchemaGraphResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[170]
+	mi := &file_vtctldata_proto_msgTypes[174]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10833,7 +11151,7 @@ func (x *RebuildVSchemaGraphResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RebuildVSchemaGraphResponse.ProtoReflect.Descriptor instead.
 func (*RebuildVSchemaGraphResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{170}
+	return file_vtctldata_proto_rawDescGZIP(), []int{174}
 }
 
 type RefreshStateRequest struct {
@@ -10845,7 +11163,7 @@ type RefreshStateRequest struct {
 
 func (x *RefreshStateRequest) Reset() {
 	*x = RefreshStateRequest{}
-	mi := &file_vtctldata_proto_msgTypes[171]
+	mi := &file_vtctldata_proto_msgTypes[175]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10857,7 +11175,7 @@ func (x *RefreshStateRequest) String() string {
 func (*RefreshStateRequest) ProtoMessage() {}
 
 func (x *RefreshStateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[171]
+	mi := &file_vtctldata_proto_msgTypes[175]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10870,7 +11188,7 @@ func (x *RefreshStateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RefreshStateRequest.ProtoReflect.Descriptor instead.
 func (*RefreshStateRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{171}
+	return file_vtctldata_proto_rawDescGZIP(), []int{175}
 }
 
 func (x *RefreshStateRequest) GetTabletAlias() *topodata.TabletAlias {
@@ -10888,7 +11206,7 @@ type RefreshStateResponse struct {
 
 func (x *RefreshStateResponse) Reset() {
 	*x = RefreshStateResponse{}
-	mi := &file_vtctldata_proto_msgTypes[172]
+	mi := &file_vtctldata_proto_msgTypes[176]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10900,7 +11218,7 @@ func (x *RefreshStateResponse) String() string {
 func (*RefreshStateResponse) ProtoMessage() {}
 
 func (x *RefreshStateResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[172]
+	mi := &file_vtctldata_proto_msgTypes[176]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10913,7 +11231,7 @@ func (x *RefreshStateResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RefreshStateResponse.ProtoReflect.Descriptor instead.
 func (*RefreshStateResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{172}
+	return file_vtctldata_proto_rawDescGZIP(), []int{176}
 }
 
 type RefreshStateByShardRequest struct {
@@ -10927,7 +11245,7 @@ type RefreshStateByShardRequest struct {
 
 func (x *RefreshStateByShardRequest) Reset() {
 	*x = RefreshStateByShardRequest{}
-	mi := &file_vtctldata_proto_msgTypes[173]
+	mi := &file_vtctldata_proto_msgTypes[177]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10939,7 +11257,7 @@ func (x *RefreshStateByShardRequest) String() string {
 func (*RefreshStateByShardRequest) ProtoMessage() {}
 
 func (x *RefreshStateByShardRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[173]
+	mi := &file_vtctldata_proto_msgTypes[177]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10952,7 +11270,7 @@ func (x *RefreshStateByShardRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RefreshStateByShardRequest.ProtoReflect.Descriptor instead.
 func (*RefreshStateByShardRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{173}
+	return file_vtctldata_proto_rawDescGZIP(), []int{177}
 }
 
 func (x *RefreshStateByShardRequest) GetKeyspace() string {
@@ -10987,7 +11305,7 @@ type RefreshStateByShardResponse struct {
 
 func (x *RefreshStateByShardResponse) Reset() {
 	*x = RefreshStateByShardResponse{}
-	mi := &file_vtctldata_proto_msgTypes[174]
+	mi := &file_vtctldata_proto_msgTypes[178]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10999,7 +11317,7 @@ func (x *RefreshStateByShardResponse) String() string {
 func (*RefreshStateByShardResponse) ProtoMessage() {}
 
 func (x *RefreshStateByShardResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[174]
+	mi := &file_vtctldata_proto_msgTypes[178]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11012,7 +11330,7 @@ func (x *RefreshStateByShardResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RefreshStateByShardResponse.ProtoReflect.Descriptor instead.
 func (*RefreshStateByShardResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{174}
+	return file_vtctldata_proto_rawDescGZIP(), []int{178}
 }
 
 func (x *RefreshStateByShardResponse) GetIsPartialRefresh() bool {
@@ -11038,7 +11356,7 @@ type ReloadSchemaRequest struct {
 
 func (x *ReloadSchemaRequest) Reset() {
 	*x = ReloadSchemaRequest{}
-	mi := &file_vtctldata_proto_msgTypes[175]
+	mi := &file_vtctldata_proto_msgTypes[179]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11050,7 +11368,7 @@ func (x *ReloadSchemaRequest) String() string {
 func (*ReloadSchemaRequest) ProtoMessage() {}
 
 func (x *ReloadSchemaRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[175]
+	mi := &file_vtctldata_proto_msgTypes[179]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11063,7 +11381,7 @@ func (x *ReloadSchemaRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReloadSchemaRequest.ProtoReflect.Descriptor instead.
 func (*ReloadSchemaRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{175}
+	return file_vtctldata_proto_rawDescGZIP(), []int{179}
 }
 
 func (x *ReloadSchemaRequest) GetTabletAlias() *topodata.TabletAlias {
@@ -11081,7 +11399,7 @@ type ReloadSchemaResponse struct {
 
 func (x *ReloadSchemaResponse) Reset() {
 	*x = ReloadSchemaResponse{}
-	mi := &file_vtctldata_proto_msgTypes[176]
+	mi := &file_vtctldata_proto_msgTypes[180]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11093,7 +11411,7 @@ func (x *ReloadSchemaResponse) String() string {
 func (*ReloadSchemaResponse) ProtoMessage() {}
 
 func (x *ReloadSchemaResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[176]
+	mi := &file_vtctldata_proto_msgTypes[180]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11106,7 +11424,7 @@ func (x *ReloadSchemaResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReloadSchemaResponse.ProtoReflect.Descriptor instead.
 func (*ReloadSchemaResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{176}
+	return file_vtctldata_proto_rawDescGZIP(), []int{180}
 }
 
 type ReloadSchemaKeyspaceRequest struct {
@@ -11124,7 +11442,7 @@ type ReloadSchemaKeyspaceRequest struct {
 
 func (x *ReloadSchemaKeyspaceRequest) Reset() {
 	*x = ReloadSchemaKeyspaceRequest{}
-	mi := &file_vtctldata_proto_msgTypes[177]
+	mi := &file_vtctldata_proto_msgTypes[181]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11136,7 +11454,7 @@ func (x *ReloadSchemaKeyspaceRequest) String() string {
 func (*ReloadSchemaKeyspaceRequest) ProtoMessage() {}
 
 func (x *ReloadSchemaKeyspaceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[177]
+	mi := &file_vtctldata_proto_msgTypes[181]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11149,7 +11467,7 @@ func (x *ReloadSchemaKeyspaceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReloadSchemaKeyspaceRequest.ProtoReflect.Descriptor instead.
 func (*ReloadSchemaKeyspaceRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{177}
+	return file_vtctldata_proto_rawDescGZIP(), []int{181}
 }
 
 func (x *ReloadSchemaKeyspaceRequest) GetKeyspace() string {
@@ -11189,7 +11507,7 @@ type ReloadSchemaKeyspaceResponse struct {
 
 func (x *ReloadSchemaKeyspaceResponse) Reset() {
 	*x = ReloadSchemaKeyspaceResponse{}
-	mi := &file_vtctldata_proto_msgTypes[178]
+	mi := &file_vtctldata_proto_msgTypes[182]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11201,7 +11519,7 @@ func (x *ReloadSchemaKeyspaceResponse) String() string {
 func (*ReloadSchemaKeyspaceResponse) ProtoMessage() {}
 
 func (x *ReloadSchemaKeyspaceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[178]
+	mi := &file_vtctldata_proto_msgTypes[182]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11214,7 +11532,7 @@ func (x *ReloadSchemaKeyspaceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReloadSchemaKeyspaceResponse.ProtoReflect.Descriptor instead.
 func (*ReloadSchemaKeyspaceResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{178}
+	return file_vtctldata_proto_rawDescGZIP(), []int{182}
 }
 
 func (x *ReloadSchemaKeyspaceResponse) GetEvents() []*logutil.Event {
@@ -11238,7 +11556,7 @@ type ReloadSchemaShardRequest struct {
 
 func (x *ReloadSchemaShardRequest) Reset() {
 	*x = ReloadSchemaShardRequest{}
-	mi := &file_vtctldata_proto_msgTypes[179]
+	mi := &file_vtctldata_proto_msgTypes[183]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11250,7 +11568,7 @@ func (x *ReloadSchemaShardRequest) String() string {
 func (*ReloadSchemaShardRequest) ProtoMessage() {}
 
 func (x *ReloadSchemaShardRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[179]
+	mi := &file_vtctldata_proto_msgTypes[183]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11263,7 +11581,7 @@ func (x *ReloadSchemaShardRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReloadSchemaShardRequest.ProtoReflect.Descriptor instead.
 func (*ReloadSchemaShardRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{179}
+	return file_vtctldata_proto_rawDescGZIP(), []int{183}
 }
 
 func (x *ReloadSchemaShardRequest) GetKeyspace() string {
@@ -11310,7 +11628,7 @@ type ReloadSchemaShardResponse struct {
 
 func (x *ReloadSchemaShardResponse) Reset() {
 	*x = ReloadSchemaShardResponse{}
-	mi := &file_vtctldata_proto_msgTypes[180]
+	mi := &file_vtctldata_proto_msgTypes[184]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11322,7 +11640,7 @@ func (x *ReloadSchemaShardResponse) String() string {
 func (*ReloadSchemaShardResponse) ProtoMessage() {}
 
 func (x *ReloadSchemaShardResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[180]
+	mi := &file_vtctldata_proto_msgTypes[184]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11335,7 +11653,7 @@ func (x *ReloadSchemaShardResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReloadSchemaShardResponse.ProtoReflect.Descriptor instead.
 func (*ReloadSchemaShardResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{180}
+	return file_vtctldata_proto_rawDescGZIP(), []int{184}
 }
 
 func (x *ReloadSchemaShardResponse) GetEvents() []*logutil.Event {
@@ -11356,7 +11674,7 @@ type RemoveBackupRequest struct {
 
 func (x *RemoveBackupRequest) Reset() {
 	*x = RemoveBackupRequest{}
-	mi := &file_vtctldata_proto_msgTypes[181]
+	mi := &file_vtctldata_proto_msgTypes[185]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11368,7 +11686,7 @@ func (x *RemoveBackupRequest) String() string {
 func (*RemoveBackupRequest) ProtoMessage() {}
 
 func (x *RemoveBackupRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[181]
+	mi := &file_vtctldata_proto_msgTypes[185]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11381,7 +11699,7 @@ func (x *RemoveBackupRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveBackupRequest.ProtoReflect.Descriptor instead.
 func (*RemoveBackupRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{181}
+	return file_vtctldata_proto_rawDescGZIP(), []int{185}
 }
 
 func (x *RemoveBackupRequest) GetKeyspace() string {
@@ -11413,7 +11731,7 @@ type RemoveBackupResponse struct {
 
 func (x *RemoveBackupResponse) Reset() {
 	*x = RemoveBackupResponse{}
-	mi := &file_vtctldata_proto_msgTypes[182]
+	mi := &file_vtctldata_proto_msgTypes[186]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11425,7 +11743,7 @@ func (x *RemoveBackupResponse) String() string {
 func (*RemoveBackupResponse) ProtoMessage() {}
 
 func (x *RemoveBackupResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[182]
+	mi := &file_vtctldata_proto_msgTypes[186]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11438,7 +11756,7 @@ func (x *RemoveBackupResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveBackupResponse.ProtoReflect.Descriptor instead.
 func (*RemoveBackupResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{182}
+	return file_vtctldata_proto_rawDescGZIP(), []int{186}
 }
 
 type RemoveKeyspaceCellRequest struct {
@@ -11458,7 +11776,7 @@ type RemoveKeyspaceCellRequest struct {
 
 func (x *RemoveKeyspaceCellRequest) Reset() {
 	*x = RemoveKeyspaceCellRequest{}
-	mi := &file_vtctldata_proto_msgTypes[183]
+	mi := &file_vtctldata_proto_msgTypes[187]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11470,7 +11788,7 @@ func (x *RemoveKeyspaceCellRequest) String() string {
 func (*RemoveKeyspaceCellRequest) ProtoMessage() {}
 
 func (x *RemoveKeyspaceCellRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[183]
+	mi := &file_vtctldata_proto_msgTypes[187]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11483,7 +11801,7 @@ func (x *RemoveKeyspaceCellRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveKeyspaceCellRequest.ProtoReflect.Descriptor instead.
 func (*RemoveKeyspaceCellRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{183}
+	return file_vtctldata_proto_rawDescGZIP(), []int{187}
 }
 
 func (x *RemoveKeyspaceCellRequest) GetKeyspace() string {
@@ -11522,7 +11840,7 @@ type RemoveKeyspaceCellResponse struct {
 
 func (x *RemoveKeyspaceCellResponse) Reset() {
 	*x = RemoveKeyspaceCellResponse{}
-	mi := &file_vtctldata_proto_msgTypes[184]
+	mi := &file_vtctldata_proto_msgTypes[188]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11534,7 +11852,7 @@ func (x *RemoveKeyspaceCellResponse) String() string {
 func (*RemoveKeyspaceCellResponse) ProtoMessage() {}
 
 func (x *RemoveKeyspaceCellResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[184]
+	mi := &file_vtctldata_proto_msgTypes[188]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11547,7 +11865,7 @@ func (x *RemoveKeyspaceCellResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveKeyspaceCellResponse.ProtoReflect.Descriptor instead.
 func (*RemoveKeyspaceCellResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{184}
+	return file_vtctldata_proto_rawDescGZIP(), []int{188}
 }
 
 type RemoveShardCellRequest struct {
@@ -11568,7 +11886,7 @@ type RemoveShardCellRequest struct {
 
 func (x *RemoveShardCellRequest) Reset() {
 	*x = RemoveShardCellRequest{}
-	mi := &file_vtctldata_proto_msgTypes[185]
+	mi := &file_vtctldata_proto_msgTypes[189]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11580,7 +11898,7 @@ func (x *RemoveShardCellRequest) String() string {
 func (*RemoveShardCellRequest) ProtoMessage() {}
 
 func (x *RemoveShardCellRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[185]
+	mi := &file_vtctldata_proto_msgTypes[189]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11593,7 +11911,7 @@ func (x *RemoveShardCellRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveShardCellRequest.ProtoReflect.Descriptor instead.
 func (*RemoveShardCellRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{185}
+	return file_vtctldata_proto_rawDescGZIP(), []int{189}
 }
 
 func (x *RemoveShardCellRequest) GetKeyspace() string {
@@ -11639,7 +11957,7 @@ type RemoveShardCellResponse struct {
 
 func (x *RemoveShardCellResponse) Reset() {
 	*x = RemoveShardCellResponse{}
-	mi := &file_vtctldata_proto_msgTypes[186]
+	mi := &file_vtctldata_proto_msgTypes[190]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11651,7 +11969,7 @@ func (x *RemoveShardCellResponse) String() string {
 func (*RemoveShardCellResponse) ProtoMessage() {}
 
 func (x *RemoveShardCellResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[186]
+	mi := &file_vtctldata_proto_msgTypes[190]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11664,7 +11982,7 @@ func (x *RemoveShardCellResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveShardCellResponse.ProtoReflect.Descriptor instead.
 func (*RemoveShardCellResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{186}
+	return file_vtctldata_proto_rawDescGZIP(), []int{190}
 }
 
 type ReparentTabletRequest struct {
@@ -11678,7 +11996,7 @@ type ReparentTabletRequest struct {
 
 func (x *ReparentTabletRequest) Reset() {
 	*x = ReparentTabletRequest{}
-	mi := &file_vtctldata_proto_msgTypes[187]
+	mi := &file_vtctldata_proto_msgTypes[191]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11690,7 +12008,7 @@ func (x *ReparentTabletRequest) String() string {
 func (*ReparentTabletRequest) ProtoMessage() {}
 
 func (x *ReparentTabletRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[187]
+	mi := &file_vtctldata_proto_msgTypes[191]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11703,7 +12021,7 @@ func (x *ReparentTabletRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReparentTabletRequest.ProtoReflect.Descriptor instead.
 func (*ReparentTabletRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{187}
+	return file_vtctldata_proto_rawDescGZIP(), []int{191}
 }
 
 func (x *ReparentTabletRequest) GetTablet() *topodata.TabletAlias {
@@ -11727,7 +12045,7 @@ type ReparentTabletResponse struct {
 
 func (x *ReparentTabletResponse) Reset() {
 	*x = ReparentTabletResponse{}
-	mi := &file_vtctldata_proto_msgTypes[188]
+	mi := &file_vtctldata_proto_msgTypes[192]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11739,7 +12057,7 @@ func (x *ReparentTabletResponse) String() string {
 func (*ReparentTabletResponse) ProtoMessage() {}
 
 func (x *ReparentTabletResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[188]
+	mi := &file_vtctldata_proto_msgTypes[192]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11752,7 +12070,7 @@ func (x *ReparentTabletResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReparentTabletResponse.ProtoReflect.Descriptor instead.
 func (*ReparentTabletResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{188}
+	return file_vtctldata_proto_rawDescGZIP(), []int{192}
 }
 
 func (x *ReparentTabletResponse) GetKeyspace() string {
@@ -11803,7 +12121,7 @@ type ReshardCreateRequest struct {
 
 func (x *ReshardCreateRequest) Reset() {
 	*x = ReshardCreateRequest{}
-	mi := &file_vtctldata_proto_msgTypes[189]
+	mi := &file_vtctldata_proto_msgTypes[193]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11815,7 +12133,7 @@ func (x *ReshardCreateRequest) String() string {
 func (*ReshardCreateRequest) ProtoMessage() {}
 
 func (x *ReshardCreateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[189]
+	mi := &file_vtctldata_proto_msgTypes[193]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11828,7 +12146,7 @@ func (x *ReshardCreateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReshardCreateRequest.ProtoReflect.Descriptor instead.
 func (*ReshardCreateRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{189}
+	return file_vtctldata_proto_rawDescGZIP(), []int{193}
 }
 
 func (x *ReshardCreateRequest) GetWorkflow() string {
@@ -11945,7 +12263,7 @@ type RestoreFromBackupRequest struct {
 
 func (x *RestoreFromBackupRequest) Reset() {
 	*x = RestoreFromBackupRequest{}
-	mi := &file_vtctldata_proto_msgTypes[190]
+	mi := &file_vtctldata_proto_msgTypes[194]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11957,7 +12275,7 @@ func (x *RestoreFromBackupRequest) String() string {
 func (*RestoreFromBackupRequest) ProtoMessage() {}
 
 func (x *RestoreFromBackupRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[190]
+	mi := &file_vtctldata_proto_msgTypes[194]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11970,7 +12288,7 @@ func (x *RestoreFromBackupRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RestoreFromBackupRequest.ProtoReflect.Descriptor instead.
 func (*RestoreFromBackupRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{190}
+	return file_vtctldata_proto_rawDescGZIP(), []int{194}
 }
 
 func (x *RestoreFromBackupRequest) GetTabletAlias() *topodata.TabletAlias {
@@ -12028,7 +12346,7 @@ type RestoreFromBackupResponse struct {
 
 func (x *RestoreFromBackupResponse) Reset() {
 	*x = RestoreFromBackupResponse{}
-	mi := &file_vtctldata_proto_msgTypes[191]
+	mi := &file_vtctldata_proto_msgTypes[195]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12040,7 +12358,7 @@ func (x *RestoreFromBackupResponse) String() string {
 func (*RestoreFromBackupResponse) ProtoMessage() {}
 
 func (x *RestoreFromBackupResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[191]
+	mi := &file_vtctldata_proto_msgTypes[195]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12053,7 +12371,7 @@ func (x *RestoreFromBackupResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RestoreFromBackupResponse.ProtoReflect.Descriptor instead.
 func (*RestoreFromBackupResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{191}
+	return file_vtctldata_proto_rawDescGZIP(), []int{195}
 }
 
 func (x *RestoreFromBackupResponse) GetTabletAlias() *topodata.TabletAlias {
@@ -12097,7 +12415,7 @@ type RetrySchemaMigrationRequest struct {
 
 func (x *RetrySchemaMigrationRequest) Reset() {
 	*x = RetrySchemaMigrationRequest{}
-	mi := &file_vtctldata_proto_msgTypes[192]
+	mi := &file_vtctldata_proto_msgTypes[196]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12109,7 +12427,7 @@ func (x *RetrySchemaMigrationRequest) String() string {
 func (*RetrySchemaMigrationRequest) ProtoMessage() {}
 
 func (x *RetrySchemaMigrationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[192]
+	mi := &file_vtctldata_proto_msgTypes[196]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12122,7 +12440,7 @@ func (x *RetrySchemaMigrationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RetrySchemaMigrationRequest.ProtoReflect.Descriptor instead.
 func (*RetrySchemaMigrationRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{192}
+	return file_vtctldata_proto_rawDescGZIP(), []int{196}
 }
 
 func (x *RetrySchemaMigrationRequest) GetKeyspace() string {
@@ -12155,7 +12473,7 @@ type RetrySchemaMigrationResponse struct {
 
 func (x *RetrySchemaMigrationResponse) Reset() {
 	*x = RetrySchemaMigrationResponse{}
-	mi := &file_vtctldata_proto_msgTypes[193]
+	mi := &file_vtctldata_proto_msgTypes[197]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12167,7 +12485,7 @@ func (x *RetrySchemaMigrationResponse) String() string {
 func (*RetrySchemaMigrationResponse) ProtoMessage() {}
 
 func (x *RetrySchemaMigrationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[193]
+	mi := &file_vtctldata_proto_msgTypes[197]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12180,7 +12498,7 @@ func (x *RetrySchemaMigrationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RetrySchemaMigrationResponse.ProtoReflect.Descriptor instead.
 func (*RetrySchemaMigrationResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{193}
+	return file_vtctldata_proto_rawDescGZIP(), []int{197}
 }
 
 func (x *RetrySchemaMigrationResponse) GetRowsAffectedByShard() map[string]uint64 {
@@ -12199,7 +12517,7 @@ type RunHealthCheckRequest struct {
 
 func (x *RunHealthCheckRequest) Reset() {
 	*x = RunHealthCheckRequest{}
-	mi := &file_vtctldata_proto_msgTypes[194]
+	mi := &file_vtctldata_proto_msgTypes[198]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12211,7 +12529,7 @@ func (x *RunHealthCheckRequest) String() string {
 func (*RunHealthCheckRequest) ProtoMessage() {}
 
 func (x *RunHealthCheckRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[194]
+	mi := &file_vtctldata_proto_msgTypes[198]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12224,7 +12542,7 @@ func (x *RunHealthCheckRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RunHealthCheckRequest.ProtoReflect.Descriptor instead.
 func (*RunHealthCheckRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{194}
+	return file_vtctldata_proto_rawDescGZIP(), []int{198}
 }
 
 func (x *RunHealthCheckRequest) GetTabletAlias() *topodata.TabletAlias {
@@ -12242,7 +12560,7 @@ type RunHealthCheckResponse struct {
 
 func (x *RunHealthCheckResponse) Reset() {
 	*x = RunHealthCheckResponse{}
-	mi := &file_vtctldata_proto_msgTypes[195]
+	mi := &file_vtctldata_proto_msgTypes[199]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12254,7 +12572,7 @@ func (x *RunHealthCheckResponse) String() string {
 func (*RunHealthCheckResponse) ProtoMessage() {}
 
 func (x *RunHealthCheckResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[195]
+	mi := &file_vtctldata_proto_msgTypes[199]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12267,7 +12585,7 @@ func (x *RunHealthCheckResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RunHealthCheckResponse.ProtoReflect.Descriptor instead.
 func (*RunHealthCheckResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{195}
+	return file_vtctldata_proto_rawDescGZIP(), []int{199}
 }
 
 type SetKeyspaceDurabilityPolicyRequest struct {
@@ -12280,7 +12598,7 @@ type SetKeyspaceDurabilityPolicyRequest struct {
 
 func (x *SetKeyspaceDurabilityPolicyRequest) Reset() {
 	*x = SetKeyspaceDurabilityPolicyRequest{}
-	mi := &file_vtctldata_proto_msgTypes[196]
+	mi := &file_vtctldata_proto_msgTypes[200]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12292,7 +12610,7 @@ func (x *SetKeyspaceDurabilityPolicyRequest) String() string {
 func (*SetKeyspaceDurabilityPolicyRequest) ProtoMessage() {}
 
 func (x *SetKeyspaceDurabilityPolicyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[196]
+	mi := &file_vtctldata_proto_msgTypes[200]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12305,7 +12623,7 @@ func (x *SetKeyspaceDurabilityPolicyRequest) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use SetKeyspaceDurabilityPolicyRequest.ProtoReflect.Descriptor instead.
 func (*SetKeyspaceDurabilityPolicyRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{196}
+	return file_vtctldata_proto_rawDescGZIP(), []int{200}
 }
 
 func (x *SetKeyspaceDurabilityPolicyRequest) GetKeyspace() string {
@@ -12332,7 +12650,7 @@ type SetKeyspaceDurabilityPolicyResponse struct {
 
 func (x *SetKeyspaceDurabilityPolicyResponse) Reset() {
 	*x = SetKeyspaceDurabilityPolicyResponse{}
-	mi := &file_vtctldata_proto_msgTypes[197]
+	mi := &file_vtctldata_proto_msgTypes[201]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12344,7 +12662,7 @@ func (x *SetKeyspaceDurabilityPolicyResponse) String() string {
 func (*SetKeyspaceDurabilityPolicyResponse) ProtoMessage() {}
 
 func (x *SetKeyspaceDurabilityPolicyResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[197]
+	mi := &file_vtctldata_proto_msgTypes[201]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12357,7 +12675,7 @@ func (x *SetKeyspaceDurabilityPolicyResponse) ProtoReflect() protoreflect.Messag
 
 // Deprecated: Use SetKeyspaceDurabilityPolicyResponse.ProtoReflect.Descriptor instead.
 func (*SetKeyspaceDurabilityPolicyResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{197}
+	return file_vtctldata_proto_rawDescGZIP(), []int{201}
 }
 
 func (x *SetKeyspaceDurabilityPolicyResponse) GetKeyspace() *topodata.Keyspace {
@@ -12377,7 +12695,7 @@ type SetKeyspaceShardingInfoRequest struct {
 
 func (x *SetKeyspaceShardingInfoRequest) Reset() {
 	*x = SetKeyspaceShardingInfoRequest{}
-	mi := &file_vtctldata_proto_msgTypes[198]
+	mi := &file_vtctldata_proto_msgTypes[202]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12389,7 +12707,7 @@ func (x *SetKeyspaceShardingInfoRequest) String() string {
 func (*SetKeyspaceShardingInfoRequest) ProtoMessage() {}
 
 func (x *SetKeyspaceShardingInfoRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[198]
+	mi := &file_vtctldata_proto_msgTypes[202]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12402,7 +12720,7 @@ func (x *SetKeyspaceShardingInfoRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetKeyspaceShardingInfoRequest.ProtoReflect.Descriptor instead.
 func (*SetKeyspaceShardingInfoRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{198}
+	return file_vtctldata_proto_rawDescGZIP(), []int{202}
 }
 
 func (x *SetKeyspaceShardingInfoRequest) GetKeyspace() string {
@@ -12429,7 +12747,7 @@ type SetKeyspaceShardingInfoResponse struct {
 
 func (x *SetKeyspaceShardingInfoResponse) Reset() {
 	*x = SetKeyspaceShardingInfoResponse{}
-	mi := &file_vtctldata_proto_msgTypes[199]
+	mi := &file_vtctldata_proto_msgTypes[203]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12441,7 +12759,7 @@ func (x *SetKeyspaceShardingInfoResponse) String() string {
 func (*SetKeyspaceShardingInfoResponse) ProtoMessage() {}
 
 func (x *SetKeyspaceShardingInfoResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[199]
+	mi := &file_vtctldata_proto_msgTypes[203]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12454,7 +12772,7 @@ func (x *SetKeyspaceShardingInfoResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetKeyspaceShardingInfoResponse.ProtoReflect.Descriptor instead.
 func (*SetKeyspaceShardingInfoResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{199}
+	return file_vtctldata_proto_rawDescGZIP(), []int{203}
 }
 
 func (x *SetKeyspaceShardingInfoResponse) GetKeyspace() *topodata.Keyspace {
@@ -12475,7 +12793,7 @@ type SetShardIsPrimaryServingRequest struct {
 
 func (x *SetShardIsPrimaryServingRequest) Reset() {
 	*x = SetShardIsPrimaryServingRequest{}
-	mi := &file_vtctldata_proto_msgTypes[200]
+	mi := &file_vtctldata_proto_msgTypes[204]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12487,7 +12805,7 @@ func (x *SetShardIsPrimaryServingRequest) String() string {
 func (*SetShardIsPrimaryServingRequest) ProtoMessage() {}
 
 func (x *SetShardIsPrimaryServingRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[200]
+	mi := &file_vtctldata_proto_msgTypes[204]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12500,7 +12818,7 @@ func (x *SetShardIsPrimaryServingRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetShardIsPrimaryServingRequest.ProtoReflect.Descriptor instead.
 func (*SetShardIsPrimaryServingRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{200}
+	return file_vtctldata_proto_rawDescGZIP(), []int{204}
 }
 
 func (x *SetShardIsPrimaryServingRequest) GetKeyspace() string {
@@ -12534,7 +12852,7 @@ type SetShardIsPrimaryServingResponse struct {
 
 func (x *SetShardIsPrimaryServingResponse) Reset() {
 	*x = SetShardIsPrimaryServingResponse{}
-	mi := &file_vtctldata_proto_msgTypes[201]
+	mi := &file_vtctldata_proto_msgTypes[205]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12546,7 +12864,7 @@ func (x *SetShardIsPrimaryServingResponse) String() string {
 func (*SetShardIsPrimaryServingResponse) ProtoMessage() {}
 
 func (x *SetShardIsPrimaryServingResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[201]
+	mi := &file_vtctldata_proto_msgTypes[205]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12559,7 +12877,7 @@ func (x *SetShardIsPrimaryServingResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetShardIsPrimaryServingResponse.ProtoReflect.Descriptor instead.
 func (*SetShardIsPrimaryServingResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{201}
+	return file_vtctldata_proto_rawDescGZIP(), []int{205}
 }
 
 func (x *SetShardIsPrimaryServingResponse) GetShard() *topodata.Shard {
@@ -12598,7 +12916,7 @@ type SetShardTabletControlRequest struct {
 
 func (x *SetShardTabletControlRequest) Reset() {
 	*x = SetShardTabletControlRequest{}
-	mi := &file_vtctldata_proto_msgTypes[202]
+	mi := &file_vtctldata_proto_msgTypes[206]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12610,7 +12928,7 @@ func (x *SetShardTabletControlRequest) String() string {
 func (*SetShardTabletControlRequest) ProtoMessage() {}
 
 func (x *SetShardTabletControlRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[202]
+	mi := &file_vtctldata_proto_msgTypes[206]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12623,7 +12941,7 @@ func (x *SetShardTabletControlRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetShardTabletControlRequest.ProtoReflect.Descriptor instead.
 func (*SetShardTabletControlRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{202}
+	return file_vtctldata_proto_rawDescGZIP(), []int{206}
 }
 
 func (x *SetShardTabletControlRequest) GetKeyspace() string {
@@ -12685,7 +13003,7 @@ type SetShardTabletControlResponse struct {
 
 func (x *SetShardTabletControlResponse) Reset() {
 	*x = SetShardTabletControlResponse{}
-	mi := &file_vtctldata_proto_msgTypes[203]
+	mi := &file_vtctldata_proto_msgTypes[207]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12697,7 +13015,7 @@ func (x *SetShardTabletControlResponse) String() string {
 func (*SetShardTabletControlResponse) ProtoMessage() {}
 
 func (x *SetShardTabletControlResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[203]
+	mi := &file_vtctldata_proto_msgTypes[207]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12710,7 +13028,7 @@ func (x *SetShardTabletControlResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetShardTabletControlResponse.ProtoReflect.Descriptor instead.
 func (*SetShardTabletControlResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{203}
+	return file_vtctldata_proto_rawDescGZIP(), []int{207}
 }
 
 func (x *SetShardTabletControlResponse) GetShard() *topodata.Shard {
@@ -12730,7 +13048,7 @@ type SetWritableRequest struct {
 
 func (x *SetWritableRequest) Reset() {
 	*x = SetWritableRequest{}
-	mi := &file_vtctldata_proto_msgTypes[204]
+	mi := &file_vtctldata_proto_msgTypes[208]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12742,7 +13060,7 @@ func (x *SetWritableRequest) String() string {
 func (*SetWritableRequest) ProtoMessage() {}
 
 func (x *SetWritableRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[204]
+	mi := &file_vtctldata_proto_msgTypes[208]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12755,7 +13073,7 @@ func (x *SetWritableRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetWritableRequest.ProtoReflect.Descriptor instead.
 func (*SetWritableRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{204}
+	return file_vtctldata_proto_rawDescGZIP(), []int{208}
 }
 
 func (x *SetWritableRequest) GetTabletAlias() *topodata.TabletAlias {
@@ -12780,7 +13098,7 @@ type SetWritableResponse struct {
 
 func (x *SetWritableResponse) Reset() {
 	*x = SetWritableResponse{}
-	mi := &file_vtctldata_proto_msgTypes[205]
+	mi := &file_vtctldata_proto_msgTypes[209]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12792,7 +13110,7 @@ func (x *SetWritableResponse) String() string {
 func (*SetWritableResponse) ProtoMessage() {}
 
 func (x *SetWritableResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[205]
+	mi := &file_vtctldata_proto_msgTypes[209]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12805,7 +13123,7 @@ func (x *SetWritableResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetWritableResponse.ProtoReflect.Descriptor instead.
 func (*SetWritableResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{205}
+	return file_vtctldata_proto_rawDescGZIP(), []int{209}
 }
 
 type ShardReplicationAddRequest struct {
@@ -12819,7 +13137,7 @@ type ShardReplicationAddRequest struct {
 
 func (x *ShardReplicationAddRequest) Reset() {
 	*x = ShardReplicationAddRequest{}
-	mi := &file_vtctldata_proto_msgTypes[206]
+	mi := &file_vtctldata_proto_msgTypes[210]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12831,7 +13149,7 @@ func (x *ShardReplicationAddRequest) String() string {
 func (*ShardReplicationAddRequest) ProtoMessage() {}
 
 func (x *ShardReplicationAddRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[206]
+	mi := &file_vtctldata_proto_msgTypes[210]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12844,7 +13162,7 @@ func (x *ShardReplicationAddRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ShardReplicationAddRequest.ProtoReflect.Descriptor instead.
 func (*ShardReplicationAddRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{206}
+	return file_vtctldata_proto_rawDescGZIP(), []int{210}
 }
 
 func (x *ShardReplicationAddRequest) GetKeyspace() string {
@@ -12876,7 +13194,7 @@ type ShardReplicationAddResponse struct {
 
 func (x *ShardReplicationAddResponse) Reset() {
 	*x = ShardReplicationAddResponse{}
-	mi := &file_vtctldata_proto_msgTypes[207]
+	mi := &file_vtctldata_proto_msgTypes[211]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12888,7 +13206,7 @@ func (x *ShardReplicationAddResponse) String() string {
 func (*ShardReplicationAddResponse) ProtoMessage() {}
 
 func (x *ShardReplicationAddResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[207]
+	mi := &file_vtctldata_proto_msgTypes[211]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12901,7 +13219,7 @@ func (x *ShardReplicationAddResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ShardReplicationAddResponse.ProtoReflect.Descriptor instead.
 func (*ShardReplicationAddResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{207}
+	return file_vtctldata_proto_rawDescGZIP(), []int{211}
 }
 
 type ShardReplicationFixRequest struct {
@@ -12915,7 +13233,7 @@ type ShardReplicationFixRequest struct {
 
 func (x *ShardReplicationFixRequest) Reset() {
 	*x = ShardReplicationFixRequest{}
-	mi := &file_vtctldata_proto_msgTypes[208]
+	mi := &file_vtctldata_proto_msgTypes[212]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12927,7 +13245,7 @@ func (x *ShardReplicationFixRequest) String() string {
 func (*ShardReplicationFixRequest) ProtoMessage() {}
 
 func (x *ShardReplicationFixRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[208]
+	mi := &file_vtctldata_proto_msgTypes[212]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12940,7 +13258,7 @@ func (x *ShardReplicationFixRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ShardReplicationFixRequest.ProtoReflect.Descriptor instead.
 func (*ShardReplicationFixRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{208}
+	return file_vtctldata_proto_rawDescGZIP(), []int{212}
 }
 
 func (x *ShardReplicationFixRequest) GetKeyspace() string {
@@ -12976,7 +13294,7 @@ type ShardReplicationFixResponse struct {
 
 func (x *ShardReplicationFixResponse) Reset() {
 	*x = ShardReplicationFixResponse{}
-	mi := &file_vtctldata_proto_msgTypes[209]
+	mi := &file_vtctldata_proto_msgTypes[213]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12988,7 +13306,7 @@ func (x *ShardReplicationFixResponse) String() string {
 func (*ShardReplicationFixResponse) ProtoMessage() {}
 
 func (x *ShardReplicationFixResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[209]
+	mi := &file_vtctldata_proto_msgTypes[213]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13001,7 +13319,7 @@ func (x *ShardReplicationFixResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ShardReplicationFixResponse.ProtoReflect.Descriptor instead.
 func (*ShardReplicationFixResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{209}
+	return file_vtctldata_proto_rawDescGZIP(), []int{213}
 }
 
 func (x *ShardReplicationFixResponse) GetError() *topodata.ShardReplicationError {
@@ -13021,7 +13339,7 @@ type ShardReplicationPositionsRequest struct {
 
 func (x *ShardReplicationPositionsRequest) Reset() {
 	*x = ShardReplicationPositionsRequest{}
-	mi := &file_vtctldata_proto_msgTypes[210]
+	mi := &file_vtctldata_proto_msgTypes[214]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13033,7 +13351,7 @@ func (x *ShardReplicationPositionsRequest) String() string {
 func (*ShardReplicationPositionsRequest) ProtoMessage() {}
 
 func (x *ShardReplicationPositionsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[210]
+	mi := &file_vtctldata_proto_msgTypes[214]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13046,7 +13364,7 @@ func (x *ShardReplicationPositionsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ShardReplicationPositionsRequest.ProtoReflect.Descriptor instead.
 func (*ShardReplicationPositionsRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{210}
+	return file_vtctldata_proto_rawDescGZIP(), []int{214}
 }
 
 func (x *ShardReplicationPositionsRequest) GetKeyspace() string {
@@ -13077,7 +13395,7 @@ type ShardReplicationPositionsResponse struct {
 
 func (x *ShardReplicationPositionsResponse) Reset() {
 	*x = ShardReplicationPositionsResponse{}
-	mi := &file_vtctldata_proto_msgTypes[211]
+	mi := &file_vtctldata_proto_msgTypes[215]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13089,7 +13407,7 @@ func (x *ShardReplicationPositionsResponse) String() string {
 func (*ShardReplicationPositionsResponse) ProtoMessage() {}
 
 func (x *ShardReplicationPositionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[211]
+	mi := &file_vtctldata_proto_msgTypes[215]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13102,7 +13420,7 @@ func (x *ShardReplicationPositionsResponse) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use ShardReplicationPositionsResponse.ProtoReflect.Descriptor instead.
 func (*ShardReplicationPositionsResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{211}
+	return file_vtctldata_proto_rawDescGZIP(), []int{215}
 }
 
 func (x *ShardReplicationPositionsResponse) GetReplicationStatuses() map[string]*replicationdata.Status {
@@ -13130,7 +13448,7 @@ type ShardReplicationRemoveRequest struct {
 
 func (x *ShardReplicationRemoveRequest) Reset() {
 	*x = ShardReplicationRemoveRequest{}
-	mi := &file_vtctldata_proto_msgTypes[212]
+	mi := &file_vtctldata_proto_msgTypes[216]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13142,7 +13460,7 @@ func (x *ShardReplicationRemoveRequest) String() string {
 func (*ShardReplicationRemoveRequest) ProtoMessage() {}
 
 func (x *ShardReplicationRemoveRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[212]
+	mi := &file_vtctldata_proto_msgTypes[216]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13155,7 +13473,7 @@ func (x *ShardReplicationRemoveRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ShardReplicationRemoveRequest.ProtoReflect.Descriptor instead.
 func (*ShardReplicationRemoveRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{212}
+	return file_vtctldata_proto_rawDescGZIP(), []int{216}
 }
 
 func (x *ShardReplicationRemoveRequest) GetKeyspace() string {
@@ -13187,7 +13505,7 @@ type ShardReplicationRemoveResponse struct {
 
 func (x *ShardReplicationRemoveResponse) Reset() {
 	*x = ShardReplicationRemoveResponse{}
-	mi := &file_vtctldata_proto_msgTypes[213]
+	mi := &file_vtctldata_proto_msgTypes[217]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13199,7 +13517,7 @@ func (x *ShardReplicationRemoveResponse) String() string {
 func (*ShardReplicationRemoveResponse) ProtoMessage() {}
 
 func (x *ShardReplicationRemoveResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[213]
+	mi := &file_vtctldata_proto_msgTypes[217]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13212,7 +13530,7 @@ func (x *ShardReplicationRemoveResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ShardReplicationRemoveResponse.ProtoReflect.Descriptor instead.
 func (*ShardReplicationRemoveResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{213}
+	return file_vtctldata_proto_rawDescGZIP(), []int{217}
 }
 
 type SleepTabletRequest struct {
@@ -13225,7 +13543,7 @@ type SleepTabletRequest struct {
 
 func (x *SleepTabletRequest) Reset() {
 	*x = SleepTabletRequest{}
-	mi := &file_vtctldata_proto_msgTypes[214]
+	mi := &file_vtctldata_proto_msgTypes[218]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13237,7 +13555,7 @@ func (x *SleepTabletRequest) String() string {
 func (*SleepTabletRequest) ProtoMessage() {}
 
 func (x *SleepTabletRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[214]
+	mi := &file_vtctldata_proto_msgTypes[218]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13250,7 +13568,7 @@ func (x *SleepTabletRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SleepTabletRequest.ProtoReflect.Descriptor instead.
 func (*SleepTabletRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{214}
+	return file_vtctldata_proto_rawDescGZIP(), []int{218}
 }
 
 func (x *SleepTabletRequest) GetTabletAlias() *topodata.TabletAlias {
@@ -13275,7 +13593,7 @@ type SleepTabletResponse struct {
 
 func (x *SleepTabletResponse) Reset() {
 	*x = SleepTabletResponse{}
-	mi := &file_vtctldata_proto_msgTypes[215]
+	mi := &file_vtctldata_proto_msgTypes[219]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13287,7 +13605,7 @@ func (x *SleepTabletResponse) String() string {
 func (*SleepTabletResponse) ProtoMessage() {}
 
 func (x *SleepTabletResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[215]
+	mi := &file_vtctldata_proto_msgTypes[219]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13300,7 +13618,7 @@ func (x *SleepTabletResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SleepTabletResponse.ProtoReflect.Descriptor instead.
 func (*SleepTabletResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{215}
+	return file_vtctldata_proto_rawDescGZIP(), []int{219}
 }
 
 type SourceShardAddRequest struct {
@@ -13322,7 +13640,7 @@ type SourceShardAddRequest struct {
 
 func (x *SourceShardAddRequest) Reset() {
 	*x = SourceShardAddRequest{}
-	mi := &file_vtctldata_proto_msgTypes[216]
+	mi := &file_vtctldata_proto_msgTypes[220]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13334,7 +13652,7 @@ func (x *SourceShardAddRequest) String() string {
 func (*SourceShardAddRequest) ProtoMessage() {}
 
 func (x *SourceShardAddRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[216]
+	mi := &file_vtctldata_proto_msgTypes[220]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13347,7 +13665,7 @@ func (x *SourceShardAddRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SourceShardAddRequest.ProtoReflect.Descriptor instead.
 func (*SourceShardAddRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{216}
+	return file_vtctldata_proto_rawDescGZIP(), []int{220}
 }
 
 func (x *SourceShardAddRequest) GetKeyspace() string {
@@ -13409,7 +13727,7 @@ type SourceShardAddResponse struct {
 
 func (x *SourceShardAddResponse) Reset() {
 	*x = SourceShardAddResponse{}
-	mi := &file_vtctldata_proto_msgTypes[217]
+	mi := &file_vtctldata_proto_msgTypes[221]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13421,7 +13739,7 @@ func (x *SourceShardAddResponse) String() string {
 func (*SourceShardAddResponse) ProtoMessage() {}
 
 func (x *SourceShardAddResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[217]
+	mi := &file_vtctldata_proto_msgTypes[221]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13434,7 +13752,7 @@ func (x *SourceShardAddResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SourceShardAddResponse.ProtoReflect.Descriptor instead.
 func (*SourceShardAddResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{217}
+	return file_vtctldata_proto_rawDescGZIP(), []int{221}
 }
 
 func (x *SourceShardAddResponse) GetShard() *topodata.Shard {
@@ -13455,7 +13773,7 @@ type SourceShardDeleteRequest struct {
 
 func (x *SourceShardDeleteRequest) Reset() {
 	*x = SourceShardDeleteRequest{}
-	mi := &file_vtctldata_proto_msgTypes[218]
+	mi := &file_vtctldata_proto_msgTypes[222]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13467,7 +13785,7 @@ func (x *SourceShardDeleteRequest) String() string {
 func (*SourceShardDeleteRequest) ProtoMessage() {}
 
 func (x *SourceShardDeleteRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[218]
+	mi := &file_vtctldata_proto_msgTypes[222]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13480,7 +13798,7 @@ func (x *SourceShardDeleteRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SourceShardDeleteRequest.ProtoReflect.Descriptor instead.
 func (*SourceShardDeleteRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{218}
+	return file_vtctldata_proto_rawDescGZIP(), []int{222}
 }
 
 func (x *SourceShardDeleteRequest) GetKeyspace() string {
@@ -13514,7 +13832,7 @@ type SourceShardDeleteResponse struct {
 
 func (x *SourceShardDeleteResponse) Reset() {
 	*x = SourceShardDeleteResponse{}
-	mi := &file_vtctldata_proto_msgTypes[219]
+	mi := &file_vtctldata_proto_msgTypes[223]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13526,7 +13844,7 @@ func (x *SourceShardDeleteResponse) String() string {
 func (*SourceShardDeleteResponse) ProtoMessage() {}
 
 func (x *SourceShardDeleteResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[219]
+	mi := &file_vtctldata_proto_msgTypes[223]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13539,7 +13857,7 @@ func (x *SourceShardDeleteResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SourceShardDeleteResponse.ProtoReflect.Descriptor instead.
 func (*SourceShardDeleteResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{219}
+	return file_vtctldata_proto_rawDescGZIP(), []int{223}
 }
 
 func (x *SourceShardDeleteResponse) GetShard() *topodata.Shard {
@@ -13558,7 +13876,7 @@ type StartReplicationRequest struct {
 
 func (x *StartReplicationRequest) Reset() {
 	*x = StartReplicationRequest{}
-	mi := &file_vtctldata_proto_msgTypes[220]
+	mi := &file_vtctldata_proto_msgTypes[224]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13570,7 +13888,7 @@ func (x *StartReplicationRequest) String() string {
 func (*StartReplicationRequest) ProtoMessage() {}
 
 func (x *StartReplicationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[220]
+	mi := &file_vtctldata_proto_msgTypes[224]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13583,7 +13901,7 @@ func (x *StartReplicationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StartReplicationRequest.ProtoReflect.Descriptor instead.
 func (*StartReplicationRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{220}
+	return file_vtctldata_proto_rawDescGZIP(), []int{224}
 }
 
 func (x *StartReplicationRequest) GetTabletAlias() *topodata.TabletAlias {
@@ -13601,7 +13919,7 @@ type StartReplicationResponse struct {
 
 func (x *StartReplicationResponse) Reset() {
 	*x = StartReplicationResponse{}
-	mi := &file_vtctldata_proto_msgTypes[221]
+	mi := &file_vtctldata_proto_msgTypes[225]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13613,7 +13931,7 @@ func (x *StartReplicationResponse) String() string {
 func (*StartReplicationResponse) ProtoMessage() {}
 
 func (x *StartReplicationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[221]
+	mi := &file_vtctldata_proto_msgTypes[225]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13626,7 +13944,7 @@ func (x *StartReplicationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StartReplicationResponse.ProtoReflect.Descriptor instead.
 func (*StartReplicationResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{221}
+	return file_vtctldata_proto_rawDescGZIP(), []int{225}
 }
 
 type StopReplicationRequest struct {
@@ -13638,7 +13956,7 @@ type StopReplicationRequest struct {
 
 func (x *StopReplicationRequest) Reset() {
 	*x = StopReplicationRequest{}
-	mi := &file_vtctldata_proto_msgTypes[222]
+	mi := &file_vtctldata_proto_msgTypes[226]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13650,7 +13968,7 @@ func (x *StopReplicationRequest) String() string {
 func (*StopReplicationRequest) ProtoMessage() {}
 
 func (x *StopReplicationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[222]
+	mi := &file_vtctldata_proto_msgTypes[226]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13663,7 +13981,7 @@ func (x *StopReplicationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StopReplicationRequest.ProtoReflect.Descriptor instead.
 func (*StopReplicationRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{222}
+	return file_vtctldata_proto_rawDescGZIP(), []int{226}
 }
 
 func (x *StopReplicationRequest) GetTabletAlias() *topodata.TabletAlias {
@@ -13681,7 +13999,7 @@ type StopReplicationResponse struct {
 
 func (x *StopReplicationResponse) Reset() {
 	*x = StopReplicationResponse{}
-	mi := &file_vtctldata_proto_msgTypes[223]
+	mi := &file_vtctldata_proto_msgTypes[227]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13693,7 +14011,7 @@ func (x *StopReplicationResponse) String() string {
 func (*StopReplicationResponse) ProtoMessage() {}
 
 func (x *StopReplicationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[223]
+	mi := &file_vtctldata_proto_msgTypes[227]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13706,7 +14024,7 @@ func (x *StopReplicationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StopReplicationResponse.ProtoReflect.Descriptor instead.
 func (*StopReplicationResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{223}
+	return file_vtctldata_proto_rawDescGZIP(), []int{227}
 }
 
 type TabletExternallyReparentedRequest struct {
@@ -13720,7 +14038,7 @@ type TabletExternallyReparentedRequest struct {
 
 func (x *TabletExternallyReparentedRequest) Reset() {
 	*x = TabletExternallyReparentedRequest{}
-	mi := &file_vtctldata_proto_msgTypes[224]
+	mi := &file_vtctldata_proto_msgTypes[228]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13732,7 +14050,7 @@ func (x *TabletExternallyReparentedRequest) String() string {
 func (*TabletExternallyReparentedRequest) ProtoMessage() {}
 
 func (x *TabletExternallyReparentedRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[224]
+	mi := &file_vtctldata_proto_msgTypes[228]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13745,7 +14063,7 @@ func (x *TabletExternallyReparentedRequest) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use TabletExternallyReparentedRequest.ProtoReflect.Descriptor instead.
 func (*TabletExternallyReparentedRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{224}
+	return file_vtctldata_proto_rawDescGZIP(), []int{228}
 }
 
 func (x *TabletExternallyReparentedRequest) GetTablet() *topodata.TabletAlias {
@@ -13767,7 +14085,7 @@ type TabletExternallyReparentedResponse struct {
 
 func (x *TabletExternallyReparentedResponse) Reset() {
 	*x = TabletExternallyReparentedResponse{}
-	mi := &file_vtctldata_proto_msgTypes[225]
+	mi := &file_vtctldata_proto_msgTypes[229]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13779,7 +14097,7 @@ func (x *TabletExternallyReparentedResponse) String() string {
 func (*TabletExternallyReparentedResponse) ProtoMessage() {}
 
 func (x *TabletExternallyReparentedResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[225]
+	mi := &file_vtctldata_proto_msgTypes[229]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13792,7 +14110,7 @@ func (x *TabletExternallyReparentedResponse) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use TabletExternallyReparentedResponse.ProtoReflect.Descriptor instead.
 func (*TabletExternallyReparentedResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{225}
+	return file_vtctldata_proto_rawDescGZIP(), []int{229}
 }
 
 func (x *TabletExternallyReparentedResponse) GetKeyspace() string {
@@ -13833,7 +14151,7 @@ type UpdateCellInfoRequest struct {
 
 func (x *UpdateCellInfoRequest) Reset() {
 	*x = UpdateCellInfoRequest{}
-	mi := &file_vtctldata_proto_msgTypes[226]
+	mi := &file_vtctldata_proto_msgTypes[230]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13845,7 +14163,7 @@ func (x *UpdateCellInfoRequest) String() string {
 func (*UpdateCellInfoRequest) ProtoMessage() {}
 
 func (x *UpdateCellInfoRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[226]
+	mi := &file_vtctldata_proto_msgTypes[230]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13858,7 +14176,7 @@ func (x *UpdateCellInfoRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateCellInfoRequest.ProtoReflect.Descriptor instead.
 func (*UpdateCellInfoRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{226}
+	return file_vtctldata_proto_rawDescGZIP(), []int{230}
 }
 
 func (x *UpdateCellInfoRequest) GetName() string {
@@ -13885,7 +14203,7 @@ type UpdateCellInfoResponse struct {
 
 func (x *UpdateCellInfoResponse) Reset() {
 	*x = UpdateCellInfoResponse{}
-	mi := &file_vtctldata_proto_msgTypes[227]
+	mi := &file_vtctldata_proto_msgTypes[231]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13897,7 +14215,7 @@ func (x *UpdateCellInfoResponse) String() string {
 func (*UpdateCellInfoResponse) ProtoMessage() {}
 
 func (x *UpdateCellInfoResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[227]
+	mi := &file_vtctldata_proto_msgTypes[231]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13910,7 +14228,7 @@ func (x *UpdateCellInfoResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateCellInfoResponse.ProtoReflect.Descriptor instead.
 func (*UpdateCellInfoResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{227}
+	return file_vtctldata_proto_rawDescGZIP(), []int{231}
 }
 
 func (x *UpdateCellInfoResponse) GetName() string {
@@ -13937,7 +14255,7 @@ type UpdateCellsAliasRequest struct {
 
 func (x *UpdateCellsAliasRequest) Reset() {
 	*x = UpdateCellsAliasRequest{}
-	mi := &file_vtctldata_proto_msgTypes[228]
+	mi := &file_vtctldata_proto_msgTypes[232]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13949,7 +14267,7 @@ func (x *UpdateCellsAliasRequest) String() string {
 func (*UpdateCellsAliasRequest) ProtoMessage() {}
 
 func (x *UpdateCellsAliasRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[228]
+	mi := &file_vtctldata_proto_msgTypes[232]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13962,7 +14280,7 @@ func (x *UpdateCellsAliasRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateCellsAliasRequest.ProtoReflect.Descriptor instead.
 func (*UpdateCellsAliasRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{228}
+	return file_vtctldata_proto_rawDescGZIP(), []int{232}
 }
 
 func (x *UpdateCellsAliasRequest) GetName() string {
@@ -13989,7 +14307,7 @@ type UpdateCellsAliasResponse struct {
 
 func (x *UpdateCellsAliasResponse) Reset() {
 	*x = UpdateCellsAliasResponse{}
-	mi := &file_vtctldata_proto_msgTypes[229]
+	mi := &file_vtctldata_proto_msgTypes[233]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14001,7 +14319,7 @@ func (x *UpdateCellsAliasResponse) String() string {
 func (*UpdateCellsAliasResponse) ProtoMessage() {}
 
 func (x *UpdateCellsAliasResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[229]
+	mi := &file_vtctldata_proto_msgTypes[233]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14014,7 +14332,7 @@ func (x *UpdateCellsAliasResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateCellsAliasResponse.ProtoReflect.Descriptor instead.
 func (*UpdateCellsAliasResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{229}
+	return file_vtctldata_proto_rawDescGZIP(), []int{233}
 }
 
 func (x *UpdateCellsAliasResponse) GetName() string {
@@ -14040,7 +14358,7 @@ type ValidateRequest struct {
 
 func (x *ValidateRequest) Reset() {
 	*x = ValidateRequest{}
-	mi := &file_vtctldata_proto_msgTypes[230]
+	mi := &file_vtctldata_proto_msgTypes[234]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14052,7 +14370,7 @@ func (x *ValidateRequest) String() string {
 func (*ValidateRequest) ProtoMessage() {}
 
 func (x *ValidateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[230]
+	mi := &file_vtctldata_proto_msgTypes[234]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14065,7 +14383,7 @@ func (x *ValidateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValidateRequest.ProtoReflect.Descriptor instead.
 func (*ValidateRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{230}
+	return file_vtctldata_proto_rawDescGZIP(), []int{234}
 }
 
 func (x *ValidateRequest) GetPingTablets() bool {
@@ -14085,7 +14403,7 @@ type ValidateResponse struct {
 
 func (x *ValidateResponse) Reset() {
 	*x = ValidateResponse{}
-	mi := &file_vtctldata_proto_msgTypes[231]
+	mi := &file_vtctldata_proto_msgTypes[235]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14097,7 +14415,7 @@ func (x *ValidateResponse) String() string {
 func (*ValidateResponse) ProtoMessage() {}
 
 func (x *ValidateResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[231]
+	mi := &file_vtctldata_proto_msgTypes[235]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14110,7 +14428,7 @@ func (x *ValidateResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValidateResponse.ProtoReflect.Descriptor instead.
 func (*ValidateResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{231}
+	return file_vtctldata_proto_rawDescGZIP(), []int{235}
 }
 
 func (x *ValidateResponse) GetResults() []string {
@@ -14137,7 +14455,7 @@ type ValidateKeyspaceRequest struct {
 
 func (x *ValidateKeyspaceRequest) Reset() {
 	*x = ValidateKeyspaceRequest{}
-	mi := &file_vtctldata_proto_msgTypes[232]
+	mi := &file_vtctldata_proto_msgTypes[236]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14149,7 +14467,7 @@ func (x *ValidateKeyspaceRequest) String() string {
 func (*ValidateKeyspaceRequest) ProtoMessage() {}
 
 func (x *ValidateKeyspaceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[232]
+	mi := &file_vtctldata_proto_msgTypes[236]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14162,7 +14480,7 @@ func (x *ValidateKeyspaceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValidateKeyspaceRequest.ProtoReflect.Descriptor instead.
 func (*ValidateKeyspaceRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{232}
+	return file_vtctldata_proto_rawDescGZIP(), []int{236}
 }
 
 func (x *ValidateKeyspaceRequest) GetKeyspace() string {
@@ -14189,7 +14507,7 @@ type ValidateKeyspaceResponse struct {
 
 func (x *ValidateKeyspaceResponse) Reset() {
 	*x = ValidateKeyspaceResponse{}
-	mi := &file_vtctldata_proto_msgTypes[233]
+	mi := &file_vtctldata_proto_msgTypes[237]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14201,7 +14519,7 @@ func (x *ValidateKeyspaceResponse) String() string {
 func (*ValidateKeyspaceResponse) ProtoMessage() {}
 
 func (x *ValidateKeyspaceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[233]
+	mi := &file_vtctldata_proto_msgTypes[237]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14214,7 +14532,7 @@ func (x *ValidateKeyspaceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValidateKeyspaceResponse.ProtoReflect.Descriptor instead.
 func (*ValidateKeyspaceResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{233}
+	return file_vtctldata_proto_rawDescGZIP(), []int{237}
 }
 
 func (x *ValidateKeyspaceResponse) GetResults() []string {
@@ -14243,7 +14561,7 @@ type ValidatePermissionsKeyspaceRequest struct {
 
 func (x *ValidatePermissionsKeyspaceRequest) Reset() {
 	*x = ValidatePermissionsKeyspaceRequest{}
-	mi := &file_vtctldata_proto_msgTypes[234]
+	mi := &file_vtctldata_proto_msgTypes[238]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14255,7 +14573,7 @@ func (x *ValidatePermissionsKeyspaceRequest) String() string {
 func (*ValidatePermissionsKeyspaceRequest) ProtoMessage() {}
 
 func (x *ValidatePermissionsKeyspaceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[234]
+	mi := &file_vtctldata_proto_msgTypes[238]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14268,7 +14586,7 @@ func (x *ValidatePermissionsKeyspaceRequest) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use ValidatePermissionsKeyspaceRequest.ProtoReflect.Descriptor instead.
 func (*ValidatePermissionsKeyspaceRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{234}
+	return file_vtctldata_proto_rawDescGZIP(), []int{238}
 }
 
 func (x *ValidatePermissionsKeyspaceRequest) GetKeyspace() string {
@@ -14293,7 +14611,7 @@ type ValidatePermissionsKeyspaceResponse struct {
 
 func (x *ValidatePermissionsKeyspaceResponse) Reset() {
 	*x = ValidatePermissionsKeyspaceResponse{}
-	mi := &file_vtctldata_proto_msgTypes[235]
+	mi := &file_vtctldata_proto_msgTypes[239]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14305,7 +14623,7 @@ func (x *ValidatePermissionsKeyspaceResponse) String() string {
 func (*ValidatePermissionsKeyspaceResponse) ProtoMessage() {}
 
 func (x *ValidatePermissionsKeyspaceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[235]
+	mi := &file_vtctldata_proto_msgTypes[239]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14318,7 +14636,7 @@ func (x *ValidatePermissionsKeyspaceResponse) ProtoReflect() protoreflect.Messag
 
 // Deprecated: Use ValidatePermissionsKeyspaceResponse.ProtoReflect.Descriptor instead.
 func (*ValidatePermissionsKeyspaceResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{235}
+	return file_vtctldata_proto_rawDescGZIP(), []int{239}
 }
 
 type ValidateSchemaKeyspaceRequest struct {
@@ -14337,7 +14655,7 @@ type ValidateSchemaKeyspaceRequest struct {
 
 func (x *ValidateSchemaKeyspaceRequest) Reset() {
 	*x = ValidateSchemaKeyspaceRequest{}
-	mi := &file_vtctldata_proto_msgTypes[236]
+	mi := &file_vtctldata_proto_msgTypes[240]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14349,7 +14667,7 @@ func (x *ValidateSchemaKeyspaceRequest) String() string {
 func (*ValidateSchemaKeyspaceRequest) ProtoMessage() {}
 
 func (x *ValidateSchemaKeyspaceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[236]
+	mi := &file_vtctldata_proto_msgTypes[240]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14362,7 +14680,7 @@ func (x *ValidateSchemaKeyspaceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValidateSchemaKeyspaceRequest.ProtoReflect.Descriptor instead.
 func (*ValidateSchemaKeyspaceRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{236}
+	return file_vtctldata_proto_rawDescGZIP(), []int{240}
 }
 
 func (x *ValidateSchemaKeyspaceRequest) GetKeyspace() string {
@@ -14417,7 +14735,7 @@ type ValidateSchemaKeyspaceResponse struct {
 
 func (x *ValidateSchemaKeyspaceResponse) Reset() {
 	*x = ValidateSchemaKeyspaceResponse{}
-	mi := &file_vtctldata_proto_msgTypes[237]
+	mi := &file_vtctldata_proto_msgTypes[241]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14429,7 +14747,7 @@ func (x *ValidateSchemaKeyspaceResponse) String() string {
 func (*ValidateSchemaKeyspaceResponse) ProtoMessage() {}
 
 func (x *ValidateSchemaKeyspaceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[237]
+	mi := &file_vtctldata_proto_msgTypes[241]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14442,7 +14760,7 @@ func (x *ValidateSchemaKeyspaceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValidateSchemaKeyspaceResponse.ProtoReflect.Descriptor instead.
 func (*ValidateSchemaKeyspaceResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{237}
+	return file_vtctldata_proto_rawDescGZIP(), []int{241}
 }
 
 func (x *ValidateSchemaKeyspaceResponse) GetResults() []string {
@@ -14470,7 +14788,7 @@ type ValidateShardRequest struct {
 
 func (x *ValidateShardRequest) Reset() {
 	*x = ValidateShardRequest{}
-	mi := &file_vtctldata_proto_msgTypes[238]
+	mi := &file_vtctldata_proto_msgTypes[242]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14482,7 +14800,7 @@ func (x *ValidateShardRequest) String() string {
 func (*ValidateShardRequest) ProtoMessage() {}
 
 func (x *ValidateShardRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[238]
+	mi := &file_vtctldata_proto_msgTypes[242]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14495,7 +14813,7 @@ func (x *ValidateShardRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValidateShardRequest.ProtoReflect.Descriptor instead.
 func (*ValidateShardRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{238}
+	return file_vtctldata_proto_rawDescGZIP(), []int{242}
 }
 
 func (x *ValidateShardRequest) GetKeyspace() string {
@@ -14528,7 +14846,7 @@ type ValidateShardResponse struct {
 
 func (x *ValidateShardResponse) Reset() {
 	*x = ValidateShardResponse{}
-	mi := &file_vtctldata_proto_msgTypes[239]
+	mi := &file_vtctldata_proto_msgTypes[243]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14540,7 +14858,7 @@ func (x *ValidateShardResponse) String() string {
 func (*ValidateShardResponse) ProtoMessage() {}
 
 func (x *ValidateShardResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[239]
+	mi := &file_vtctldata_proto_msgTypes[243]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14553,7 +14871,7 @@ func (x *ValidateShardResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValidateShardResponse.ProtoReflect.Descriptor instead.
 func (*ValidateShardResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{239}
+	return file_vtctldata_proto_rawDescGZIP(), []int{243}
 }
 
 func (x *ValidateShardResponse) GetResults() []string {
@@ -14572,7 +14890,7 @@ type ValidateVersionKeyspaceRequest struct {
 
 func (x *ValidateVersionKeyspaceRequest) Reset() {
 	*x = ValidateVersionKeyspaceRequest{}
-	mi := &file_vtctldata_proto_msgTypes[240]
+	mi := &file_vtctldata_proto_msgTypes[244]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14584,7 +14902,7 @@ func (x *ValidateVersionKeyspaceRequest) String() string {
 func (*ValidateVersionKeyspaceRequest) ProtoMessage() {}
 
 func (x *ValidateVersionKeyspaceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[240]
+	mi := &file_vtctldata_proto_msgTypes[244]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14597,7 +14915,7 @@ func (x *ValidateVersionKeyspaceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValidateVersionKeyspaceRequest.ProtoReflect.Descriptor instead.
 func (*ValidateVersionKeyspaceRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{240}
+	return file_vtctldata_proto_rawDescGZIP(), []int{244}
 }
 
 func (x *ValidateVersionKeyspaceRequest) GetKeyspace() string {
@@ -14617,7 +14935,7 @@ type ValidateVersionKeyspaceResponse struct {
 
 func (x *ValidateVersionKeyspaceResponse) Reset() {
 	*x = ValidateVersionKeyspaceResponse{}
-	mi := &file_vtctldata_proto_msgTypes[241]
+	mi := &file_vtctldata_proto_msgTypes[245]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14629,7 +14947,7 @@ func (x *ValidateVersionKeyspaceResponse) String() string {
 func (*ValidateVersionKeyspaceResponse) ProtoMessage() {}
 
 func (x *ValidateVersionKeyspaceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[241]
+	mi := &file_vtctldata_proto_msgTypes[245]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14642,7 +14960,7 @@ func (x *ValidateVersionKeyspaceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValidateVersionKeyspaceResponse.ProtoReflect.Descriptor instead.
 func (*ValidateVersionKeyspaceResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{241}
+	return file_vtctldata_proto_rawDescGZIP(), []int{245}
 }
 
 func (x *ValidateVersionKeyspaceResponse) GetResults() []string {
@@ -14669,7 +14987,7 @@ type ValidateVersionShardRequest struct {
 
 func (x *ValidateVersionShardRequest) Reset() {
 	*x = ValidateVersionShardRequest{}
-	mi := &file_vtctldata_proto_msgTypes[242]
+	mi := &file_vtctldata_proto_msgTypes[246]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14681,7 +14999,7 @@ func (x *ValidateVersionShardRequest) String() string {
 func (*ValidateVersionShardRequest) ProtoMessage() {}
 
 func (x *ValidateVersionShardRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[242]
+	mi := &file_vtctldata_proto_msgTypes[246]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14694,7 +15012,7 @@ func (x *ValidateVersionShardRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValidateVersionShardRequest.ProtoReflect.Descriptor instead.
 func (*ValidateVersionShardRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{242}
+	return file_vtctldata_proto_rawDescGZIP(), []int{246}
 }
 
 func (x *ValidateVersionShardRequest) GetKeyspace() string {
@@ -14720,7 +15038,7 @@ type ValidateVersionShardResponse struct {
 
 func (x *ValidateVersionShardResponse) Reset() {
 	*x = ValidateVersionShardResponse{}
-	mi := &file_vtctldata_proto_msgTypes[243]
+	mi := &file_vtctldata_proto_msgTypes[247]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14732,7 +15050,7 @@ func (x *ValidateVersionShardResponse) String() string {
 func (*ValidateVersionShardResponse) ProtoMessage() {}
 
 func (x *ValidateVersionShardResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[243]
+	mi := &file_vtctldata_proto_msgTypes[247]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14745,7 +15063,7 @@ func (x *ValidateVersionShardResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValidateVersionShardResponse.ProtoReflect.Descriptor instead.
 func (*ValidateVersionShardResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{243}
+	return file_vtctldata_proto_rawDescGZIP(), []int{247}
 }
 
 func (x *ValidateVersionShardResponse) GetResults() []string {
@@ -14767,7 +15085,7 @@ type ValidateVSchemaRequest struct {
 
 func (x *ValidateVSchemaRequest) Reset() {
 	*x = ValidateVSchemaRequest{}
-	mi := &file_vtctldata_proto_msgTypes[244]
+	mi := &file_vtctldata_proto_msgTypes[248]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14779,7 +15097,7 @@ func (x *ValidateVSchemaRequest) String() string {
 func (*ValidateVSchemaRequest) ProtoMessage() {}
 
 func (x *ValidateVSchemaRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[244]
+	mi := &file_vtctldata_proto_msgTypes[248]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14792,7 +15110,7 @@ func (x *ValidateVSchemaRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValidateVSchemaRequest.ProtoReflect.Descriptor instead.
 func (*ValidateVSchemaRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{244}
+	return file_vtctldata_proto_rawDescGZIP(), []int{248}
 }
 
 func (x *ValidateVSchemaRequest) GetKeyspace() string {
@@ -14833,7 +15151,7 @@ type ValidateVSchemaResponse struct {
 
 func (x *ValidateVSchemaResponse) Reset() {
 	*x = ValidateVSchemaResponse{}
-	mi := &file_vtctldata_proto_msgTypes[245]
+	mi := &file_vtctldata_proto_msgTypes[249]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14845,7 +15163,7 @@ func (x *ValidateVSchemaResponse) String() string {
 func (*ValidateVSchemaResponse) ProtoMessage() {}
 
 func (x *ValidateVSchemaResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[245]
+	mi := &file_vtctldata_proto_msgTypes[249]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14858,7 +15176,7 @@ func (x *ValidateVSchemaResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValidateVSchemaResponse.ProtoReflect.Descriptor instead.
 func (*ValidateVSchemaResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{245}
+	return file_vtctldata_proto_rawDescGZIP(), []int{249}
 }
 
 func (x *ValidateVSchemaResponse) GetResults() []string {
@@ -14963,7 +15281,7 @@ type VDiffCreateRequest struct {
 
 func (x *VDiffCreateRequest) Reset() {
 	*x = VDiffCreateRequest{}
-	mi := &file_vtctldata_proto_msgTypes[246]
+	mi := &file_vtctldata_proto_msgTypes[250]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14975,7 +15293,7 @@ func (x *VDiffCreateRequest) String() string {
 func (*VDiffCreateRequest) ProtoMessage() {}
 
 func (x *VDiffCreateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[246]
+	mi := &file_vtctldata_proto_msgTypes[250]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14988,7 +15306,7 @@ func (x *VDiffCreateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VDiffCreateRequest.ProtoReflect.Descriptor instead.
 func (*VDiffCreateRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{246}
+	return file_vtctldata_proto_rawDescGZIP(), []int{250}
 }
 
 func (x *VDiffCreateRequest) GetWorkflow() string {
@@ -15156,7 +15474,7 @@ type VDiffCreateResponse struct {
 
 func (x *VDiffCreateResponse) Reset() {
 	*x = VDiffCreateResponse{}
-	mi := &file_vtctldata_proto_msgTypes[247]
+	mi := &file_vtctldata_proto_msgTypes[251]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15168,7 +15486,7 @@ func (x *VDiffCreateResponse) String() string {
 func (*VDiffCreateResponse) ProtoMessage() {}
 
 func (x *VDiffCreateResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[247]
+	mi := &file_vtctldata_proto_msgTypes[251]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15181,7 +15499,7 @@ func (x *VDiffCreateResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VDiffCreateResponse.ProtoReflect.Descriptor instead.
 func (*VDiffCreateResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{247}
+	return file_vtctldata_proto_rawDescGZIP(), []int{251}
 }
 
 func (x *VDiffCreateResponse) GetUUID() string {
@@ -15203,7 +15521,7 @@ type VDiffDeleteRequest struct {
 
 func (x *VDiffDeleteRequest) Reset() {
 	*x = VDiffDeleteRequest{}
-	mi := &file_vtctldata_proto_msgTypes[248]
+	mi := &file_vtctldata_proto_msgTypes[252]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15215,7 +15533,7 @@ func (x *VDiffDeleteRequest) String() string {
 func (*VDiffDeleteRequest) ProtoMessage() {}
 
 func (x *VDiffDeleteRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[248]
+	mi := &file_vtctldata_proto_msgTypes[252]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15228,7 +15546,7 @@ func (x *VDiffDeleteRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VDiffDeleteRequest.ProtoReflect.Descriptor instead.
 func (*VDiffDeleteRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{248}
+	return file_vtctldata_proto_rawDescGZIP(), []int{252}
 }
 
 func (x *VDiffDeleteRequest) GetWorkflow() string {
@@ -15260,7 +15578,7 @@ type VDiffDeleteResponse struct {
 
 func (x *VDiffDeleteResponse) Reset() {
 	*x = VDiffDeleteResponse{}
-	mi := &file_vtctldata_proto_msgTypes[249]
+	mi := &file_vtctldata_proto_msgTypes[253]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15272,7 +15590,7 @@ func (x *VDiffDeleteResponse) String() string {
 func (*VDiffDeleteResponse) ProtoMessage() {}
 
 func (x *VDiffDeleteResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[249]
+	mi := &file_vtctldata_proto_msgTypes[253]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15285,7 +15603,7 @@ func (x *VDiffDeleteResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VDiffDeleteResponse.ProtoReflect.Descriptor instead.
 func (*VDiffDeleteResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{249}
+	return file_vtctldata_proto_rawDescGZIP(), []int{253}
 }
 
 type VDiffResumeRequest struct {
@@ -15300,7 +15618,7 @@ type VDiffResumeRequest struct {
 
 func (x *VDiffResumeRequest) Reset() {
 	*x = VDiffResumeRequest{}
-	mi := &file_vtctldata_proto_msgTypes[250]
+	mi := &file_vtctldata_proto_msgTypes[254]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15312,7 +15630,7 @@ func (x *VDiffResumeRequest) String() string {
 func (*VDiffResumeRequest) ProtoMessage() {}
 
 func (x *VDiffResumeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[250]
+	mi := &file_vtctldata_proto_msgTypes[254]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15325,7 +15643,7 @@ func (x *VDiffResumeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VDiffResumeRequest.ProtoReflect.Descriptor instead.
 func (*VDiffResumeRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{250}
+	return file_vtctldata_proto_rawDescGZIP(), []int{254}
 }
 
 func (x *VDiffResumeRequest) GetWorkflow() string {
@@ -15364,7 +15682,7 @@ type VDiffResumeResponse struct {
 
 func (x *VDiffResumeResponse) Reset() {
 	*x = VDiffResumeResponse{}
-	mi := &file_vtctldata_proto_msgTypes[251]
+	mi := &file_vtctldata_proto_msgTypes[255]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15376,7 +15694,7 @@ func (x *VDiffResumeResponse) String() string {
 func (*VDiffResumeResponse) ProtoMessage() {}
 
 func (x *VDiffResumeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[251]
+	mi := &file_vtctldata_proto_msgTypes[255]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15389,7 +15707,7 @@ func (x *VDiffResumeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VDiffResumeResponse.ProtoReflect.Descriptor instead.
 func (*VDiffResumeResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{251}
+	return file_vtctldata_proto_rawDescGZIP(), []int{255}
 }
 
 type VDiffShowRequest struct {
@@ -15408,7 +15726,7 @@ type VDiffShowRequest struct {
 
 func (x *VDiffShowRequest) Reset() {
 	*x = VDiffShowRequest{}
-	mi := &file_vtctldata_proto_msgTypes[252]
+	mi := &file_vtctldata_proto_msgTypes[256]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15420,7 +15738,7 @@ func (x *VDiffShowRequest) String() string {
 func (*VDiffShowRequest) ProtoMessage() {}
 
 func (x *VDiffShowRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[252]
+	mi := &file_vtctldata_proto_msgTypes[256]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15433,7 +15751,7 @@ func (x *VDiffShowRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VDiffShowRequest.ProtoReflect.Descriptor instead.
 func (*VDiffShowRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{252}
+	return file_vtctldata_proto_rawDescGZIP(), []int{256}
 }
 
 func (x *VDiffShowRequest) GetWorkflow() string {
@@ -15474,7 +15792,7 @@ type VDiffShowResponse struct {
 
 func (x *VDiffShowResponse) Reset() {
 	*x = VDiffShowResponse{}
-	mi := &file_vtctldata_proto_msgTypes[253]
+	mi := &file_vtctldata_proto_msgTypes[257]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15486,7 +15804,7 @@ func (x *VDiffShowResponse) String() string {
 func (*VDiffShowResponse) ProtoMessage() {}
 
 func (x *VDiffShowResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[253]
+	mi := &file_vtctldata_proto_msgTypes[257]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15499,7 +15817,7 @@ func (x *VDiffShowResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VDiffShowResponse.ProtoReflect.Descriptor instead.
 func (*VDiffShowResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{253}
+	return file_vtctldata_proto_rawDescGZIP(), []int{257}
 }
 
 func (x *VDiffShowResponse) GetTabletResponses() map[string]*tabletmanagerdata.VDiffResponse {
@@ -15521,7 +15839,7 @@ type VDiffStopRequest struct {
 
 func (x *VDiffStopRequest) Reset() {
 	*x = VDiffStopRequest{}
-	mi := &file_vtctldata_proto_msgTypes[254]
+	mi := &file_vtctldata_proto_msgTypes[258]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15533,7 +15851,7 @@ func (x *VDiffStopRequest) String() string {
 func (*VDiffStopRequest) ProtoMessage() {}
 
 func (x *VDiffStopRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[254]
+	mi := &file_vtctldata_proto_msgTypes[258]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15546,7 +15864,7 @@ func (x *VDiffStopRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VDiffStopRequest.ProtoReflect.Descriptor instead.
 func (*VDiffStopRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{254}
+	return file_vtctldata_proto_rawDescGZIP(), []int{258}
 }
 
 func (x *VDiffStopRequest) GetWorkflow() string {
@@ -15585,7 +15903,7 @@ type VDiffStopResponse struct {
 
 func (x *VDiffStopResponse) Reset() {
 	*x = VDiffStopResponse{}
-	mi := &file_vtctldata_proto_msgTypes[255]
+	mi := &file_vtctldata_proto_msgTypes[259]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15597,7 +15915,7 @@ func (x *VDiffStopResponse) String() string {
 func (*VDiffStopResponse) ProtoMessage() {}
 
 func (x *VDiffStopResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[255]
+	mi := &file_vtctldata_proto_msgTypes[259]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15610,7 +15928,7 @@ func (x *VDiffStopResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VDiffStopResponse.ProtoReflect.Descriptor instead.
 func (*VDiffStopResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{255}
+	return file_vtctldata_proto_rawDescGZIP(), []int{259}
 }
 
 type WorkflowDeleteRequest struct {
@@ -15634,7 +15952,7 @@ type WorkflowDeleteRequest struct {
 
 func (x *WorkflowDeleteRequest) Reset() {
 	*x = WorkflowDeleteRequest{}
-	mi := &file_vtctldata_proto_msgTypes[256]
+	mi := &file_vtctldata_proto_msgTypes[260]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15646,7 +15964,7 @@ func (x *WorkflowDeleteRequest) String() string {
 func (*WorkflowDeleteRequest) ProtoMessage() {}
 
 func (x *WorkflowDeleteRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[256]
+	mi := &file_vtctldata_proto_msgTypes[260]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15659,7 +15977,7 @@ func (x *WorkflowDeleteRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkflowDeleteRequest.ProtoReflect.Descriptor instead.
 func (*WorkflowDeleteRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{256}
+	return file_vtctldata_proto_rawDescGZIP(), []int{260}
 }
 
 func (x *WorkflowDeleteRequest) GetKeyspace() string {
@@ -15722,7 +16040,7 @@ type WorkflowDeleteResponse struct {
 
 func (x *WorkflowDeleteResponse) Reset() {
 	*x = WorkflowDeleteResponse{}
-	mi := &file_vtctldata_proto_msgTypes[257]
+	mi := &file_vtctldata_proto_msgTypes[261]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15734,7 +16052,7 @@ func (x *WorkflowDeleteResponse) String() string {
 func (*WorkflowDeleteResponse) ProtoMessage() {}
 
 func (x *WorkflowDeleteResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[257]
+	mi := &file_vtctldata_proto_msgTypes[261]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15747,7 +16065,7 @@ func (x *WorkflowDeleteResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkflowDeleteResponse.ProtoReflect.Descriptor instead.
 func (*WorkflowDeleteResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{257}
+	return file_vtctldata_proto_rawDescGZIP(), []int{261}
 }
 
 func (x *WorkflowDeleteResponse) GetSummary() string {
@@ -15782,7 +16100,7 @@ type WorkflowStatusRequest struct {
 
 func (x *WorkflowStatusRequest) Reset() {
 	*x = WorkflowStatusRequest{}
-	mi := &file_vtctldata_proto_msgTypes[258]
+	mi := &file_vtctldata_proto_msgTypes[262]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15794,7 +16112,7 @@ func (x *WorkflowStatusRequest) String() string {
 func (*WorkflowStatusRequest) ProtoMessage() {}
 
 func (x *WorkflowStatusRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[258]
+	mi := &file_vtctldata_proto_msgTypes[262]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15807,7 +16125,7 @@ func (x *WorkflowStatusRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkflowStatusRequest.ProtoReflect.Descriptor instead.
 func (*WorkflowStatusRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{258}
+	return file_vtctldata_proto_rawDescGZIP(), []int{262}
 }
 
 func (x *WorkflowStatusRequest) GetKeyspace() string {
@@ -15843,7 +16161,7 @@ type WorkflowStatusResponse struct {
 
 func (x *WorkflowStatusResponse) Reset() {
 	*x = WorkflowStatusResponse{}
-	mi := &file_vtctldata_proto_msgTypes[259]
+	mi := &file_vtctldata_proto_msgTypes[263]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15855,7 +16173,7 @@ func (x *WorkflowStatusResponse) String() string {
 func (*WorkflowStatusResponse) ProtoMessage() {}
 
 func (x *WorkflowStatusResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[259]
+	mi := &file_vtctldata_proto_msgTypes[263]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15868,7 +16186,7 @@ func (x *WorkflowStatusResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkflowStatusResponse.ProtoReflect.Descriptor instead.
 func (*WorkflowStatusResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{259}
+	return file_vtctldata_proto_rawDescGZIP(), []int{263}
 }
 
 func (x *WorkflowStatusResponse) GetTableCopyState() map[string]*WorkflowStatusResponse_TableCopyState {
@@ -15912,7 +16230,7 @@ type WorkflowSwitchTrafficRequest struct {
 
 func (x *WorkflowSwitchTrafficRequest) Reset() {
 	*x = WorkflowSwitchTrafficRequest{}
-	mi := &file_vtctldata_proto_msgTypes[260]
+	mi := &file_vtctldata_proto_msgTypes[264]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15924,7 +16242,7 @@ func (x *WorkflowSwitchTrafficRequest) String() string {
 func (*WorkflowSwitchTrafficRequest) ProtoMessage() {}
 
 func (x *WorkflowSwitchTrafficRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[260]
+	mi := &file_vtctldata_proto_msgTypes[264]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15937,7 +16255,7 @@ func (x *WorkflowSwitchTrafficRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkflowSwitchTrafficRequest.ProtoReflect.Descriptor instead.
 func (*WorkflowSwitchTrafficRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{260}
+	return file_vtctldata_proto_rawDescGZIP(), []int{264}
 }
 
 func (x *WorkflowSwitchTrafficRequest) GetKeyspace() string {
@@ -16036,7 +16354,7 @@ type WorkflowSwitchTrafficResponse struct {
 
 func (x *WorkflowSwitchTrafficResponse) Reset() {
 	*x = WorkflowSwitchTrafficResponse{}
-	mi := &file_vtctldata_proto_msgTypes[261]
+	mi := &file_vtctldata_proto_msgTypes[265]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16048,7 +16366,7 @@ func (x *WorkflowSwitchTrafficResponse) String() string {
 func (*WorkflowSwitchTrafficResponse) ProtoMessage() {}
 
 func (x *WorkflowSwitchTrafficResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[261]
+	mi := &file_vtctldata_proto_msgTypes[265]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16061,7 +16379,7 @@ func (x *WorkflowSwitchTrafficResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkflowSwitchTrafficResponse.ProtoReflect.Descriptor instead.
 func (*WorkflowSwitchTrafficResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{261}
+	return file_vtctldata_proto_rawDescGZIP(), []int{265}
 }
 
 func (x *WorkflowSwitchTrafficResponse) GetSummary() string {
@@ -16104,7 +16422,7 @@ type WorkflowUpdateRequest struct {
 
 func (x *WorkflowUpdateRequest) Reset() {
 	*x = WorkflowUpdateRequest{}
-	mi := &file_vtctldata_proto_msgTypes[262]
+	mi := &file_vtctldata_proto_msgTypes[266]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16116,7 +16434,7 @@ func (x *WorkflowUpdateRequest) String() string {
 func (*WorkflowUpdateRequest) ProtoMessage() {}
 
 func (x *WorkflowUpdateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[262]
+	mi := &file_vtctldata_proto_msgTypes[266]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16129,7 +16447,7 @@ func (x *WorkflowUpdateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkflowUpdateRequest.ProtoReflect.Descriptor instead.
 func (*WorkflowUpdateRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{262}
+	return file_vtctldata_proto_rawDescGZIP(), []int{266}
 }
 
 func (x *WorkflowUpdateRequest) GetKeyspace() string {
@@ -16156,7 +16474,7 @@ type WorkflowUpdateResponse struct {
 
 func (x *WorkflowUpdateResponse) Reset() {
 	*x = WorkflowUpdateResponse{}
-	mi := &file_vtctldata_proto_msgTypes[263]
+	mi := &file_vtctldata_proto_msgTypes[267]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16168,7 +16486,7 @@ func (x *WorkflowUpdateResponse) String() string {
 func (*WorkflowUpdateResponse) ProtoMessage() {}
 
 func (x *WorkflowUpdateResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[263]
+	mi := &file_vtctldata_proto_msgTypes[267]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16181,7 +16499,7 @@ func (x *WorkflowUpdateResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkflowUpdateResponse.ProtoReflect.Descriptor instead.
 func (*WorkflowUpdateResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{263}
+	return file_vtctldata_proto_rawDescGZIP(), []int{267}
 }
 
 func (x *WorkflowUpdateResponse) GetSummary() string {
@@ -16206,7 +16524,7 @@ type GetMirrorRulesRequest struct {
 
 func (x *GetMirrorRulesRequest) Reset() {
 	*x = GetMirrorRulesRequest{}
-	mi := &file_vtctldata_proto_msgTypes[264]
+	mi := &file_vtctldata_proto_msgTypes[268]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16218,7 +16536,7 @@ func (x *GetMirrorRulesRequest) String() string {
 func (*GetMirrorRulesRequest) ProtoMessage() {}
 
 func (x *GetMirrorRulesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[264]
+	mi := &file_vtctldata_proto_msgTypes[268]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16231,7 +16549,7 @@ func (x *GetMirrorRulesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetMirrorRulesRequest.ProtoReflect.Descriptor instead.
 func (*GetMirrorRulesRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{264}
+	return file_vtctldata_proto_rawDescGZIP(), []int{268}
 }
 
 type GetMirrorRulesResponse struct {
@@ -16243,7 +16561,7 @@ type GetMirrorRulesResponse struct {
 
 func (x *GetMirrorRulesResponse) Reset() {
 	*x = GetMirrorRulesResponse{}
-	mi := &file_vtctldata_proto_msgTypes[265]
+	mi := &file_vtctldata_proto_msgTypes[269]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16255,7 +16573,7 @@ func (x *GetMirrorRulesResponse) String() string {
 func (*GetMirrorRulesResponse) ProtoMessage() {}
 
 func (x *GetMirrorRulesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[265]
+	mi := &file_vtctldata_proto_msgTypes[269]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16268,7 +16586,7 @@ func (x *GetMirrorRulesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetMirrorRulesResponse.ProtoReflect.Descriptor instead.
 func (*GetMirrorRulesResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{265}
+	return file_vtctldata_proto_rawDescGZIP(), []int{269}
 }
 
 func (x *GetMirrorRulesResponse) GetMirrorRules() *vschema.MirrorRules {
@@ -16290,7 +16608,7 @@ type WorkflowMirrorTrafficRequest struct {
 
 func (x *WorkflowMirrorTrafficRequest) Reset() {
 	*x = WorkflowMirrorTrafficRequest{}
-	mi := &file_vtctldata_proto_msgTypes[266]
+	mi := &file_vtctldata_proto_msgTypes[270]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16302,7 +16620,7 @@ func (x *WorkflowMirrorTrafficRequest) String() string {
 func (*WorkflowMirrorTrafficRequest) ProtoMessage() {}
 
 func (x *WorkflowMirrorTrafficRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[266]
+	mi := &file_vtctldata_proto_msgTypes[270]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16315,7 +16633,7 @@ func (x *WorkflowMirrorTrafficRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkflowMirrorTrafficRequest.ProtoReflect.Descriptor instead.
 func (*WorkflowMirrorTrafficRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{266}
+	return file_vtctldata_proto_rawDescGZIP(), []int{270}
 }
 
 func (x *WorkflowMirrorTrafficRequest) GetKeyspace() string {
@@ -16357,7 +16675,7 @@ type WorkflowMirrorTrafficResponse struct {
 
 func (x *WorkflowMirrorTrafficResponse) Reset() {
 	*x = WorkflowMirrorTrafficResponse{}
-	mi := &file_vtctldata_proto_msgTypes[267]
+	mi := &file_vtctldata_proto_msgTypes[271]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16369,7 +16687,7 @@ func (x *WorkflowMirrorTrafficResponse) String() string {
 func (*WorkflowMirrorTrafficResponse) ProtoMessage() {}
 
 func (x *WorkflowMirrorTrafficResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[267]
+	mi := &file_vtctldata_proto_msgTypes[271]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16382,7 +16700,7 @@ func (x *WorkflowMirrorTrafficResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkflowMirrorTrafficResponse.ProtoReflect.Descriptor instead.
 func (*WorkflowMirrorTrafficResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{267}
+	return file_vtctldata_proto_rawDescGZIP(), []int{271}
 }
 
 func (x *WorkflowMirrorTrafficResponse) GetSummary() string {
@@ -16417,7 +16735,7 @@ type SetVtorcEmergencyReparentRequest struct {
 
 func (x *SetVtorcEmergencyReparentRequest) Reset() {
 	*x = SetVtorcEmergencyReparentRequest{}
-	mi := &file_vtctldata_proto_msgTypes[268]
+	mi := &file_vtctldata_proto_msgTypes[272]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16429,7 +16747,7 @@ func (x *SetVtorcEmergencyReparentRequest) String() string {
 func (*SetVtorcEmergencyReparentRequest) ProtoMessage() {}
 
 func (x *SetVtorcEmergencyReparentRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[268]
+	mi := &file_vtctldata_proto_msgTypes[272]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16442,7 +16760,7 @@ func (x *SetVtorcEmergencyReparentRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetVtorcEmergencyReparentRequest.ProtoReflect.Descriptor instead.
 func (*SetVtorcEmergencyReparentRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{268}
+	return file_vtctldata_proto_rawDescGZIP(), []int{272}
 }
 
 func (x *SetVtorcEmergencyReparentRequest) GetKeyspace() string {
@@ -16474,7 +16792,7 @@ type SetVtorcEmergencyReparentResponse struct {
 
 func (x *SetVtorcEmergencyReparentResponse) Reset() {
 	*x = SetVtorcEmergencyReparentResponse{}
-	mi := &file_vtctldata_proto_msgTypes[269]
+	mi := &file_vtctldata_proto_msgTypes[273]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16486,7 +16804,7 @@ func (x *SetVtorcEmergencyReparentResponse) String() string {
 func (*SetVtorcEmergencyReparentResponse) ProtoMessage() {}
 
 func (x *SetVtorcEmergencyReparentResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[269]
+	mi := &file_vtctldata_proto_msgTypes[273]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16499,7 +16817,7 @@ func (x *SetVtorcEmergencyReparentResponse) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use SetVtorcEmergencyReparentResponse.ProtoReflect.Descriptor instead.
 func (*SetVtorcEmergencyReparentResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{269}
+	return file_vtctldata_proto_rawDescGZIP(), []int{273}
 }
 
 type Workflow_ReplicationLocation struct {
@@ -16512,7 +16830,7 @@ type Workflow_ReplicationLocation struct {
 
 func (x *Workflow_ReplicationLocation) Reset() {
 	*x = Workflow_ReplicationLocation{}
-	mi := &file_vtctldata_proto_msgTypes[272]
+	mi := &file_vtctldata_proto_msgTypes[276]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16524,7 +16842,7 @@ func (x *Workflow_ReplicationLocation) String() string {
 func (*Workflow_ReplicationLocation) ProtoMessage() {}
 
 func (x *Workflow_ReplicationLocation) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[272]
+	mi := &file_vtctldata_proto_msgTypes[276]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16565,7 +16883,7 @@ type Workflow_ShardStream struct {
 
 func (x *Workflow_ShardStream) Reset() {
 	*x = Workflow_ShardStream{}
-	mi := &file_vtctldata_proto_msgTypes[273]
+	mi := &file_vtctldata_proto_msgTypes[277]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16577,7 +16895,7 @@ func (x *Workflow_ShardStream) String() string {
 func (*Workflow_ShardStream) ProtoMessage() {}
 
 func (x *Workflow_ShardStream) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[273]
+	mi := &file_vtctldata_proto_msgTypes[277]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16650,7 +16968,7 @@ type Workflow_Stream struct {
 
 func (x *Workflow_Stream) Reset() {
 	*x = Workflow_Stream{}
-	mi := &file_vtctldata_proto_msgTypes[274]
+	mi := &file_vtctldata_proto_msgTypes[278]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16662,7 +16980,7 @@ func (x *Workflow_Stream) String() string {
 func (*Workflow_Stream) ProtoMessage() {}
 
 func (x *Workflow_Stream) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[274]
+	mi := &file_vtctldata_proto_msgTypes[278]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16829,7 +17147,7 @@ type Workflow_Stream_CopyState struct {
 
 func (x *Workflow_Stream_CopyState) Reset() {
 	*x = Workflow_Stream_CopyState{}
-	mi := &file_vtctldata_proto_msgTypes[275]
+	mi := &file_vtctldata_proto_msgTypes[279]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16841,7 +17159,7 @@ func (x *Workflow_Stream_CopyState) String() string {
 func (*Workflow_Stream_CopyState) ProtoMessage() {}
 
 func (x *Workflow_Stream_CopyState) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[275]
+	mi := &file_vtctldata_proto_msgTypes[279]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16894,7 +17212,7 @@ type Workflow_Stream_Log struct {
 
 func (x *Workflow_Stream_Log) Reset() {
 	*x = Workflow_Stream_Log{}
-	mi := &file_vtctldata_proto_msgTypes[276]
+	mi := &file_vtctldata_proto_msgTypes[280]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16906,7 +17224,7 @@ func (x *Workflow_Stream_Log) String() string {
 func (*Workflow_Stream_Log) ProtoMessage() {}
 
 func (x *Workflow_Stream_Log) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[276]
+	mi := &file_vtctldata_proto_msgTypes[280]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16988,7 +17306,7 @@ type Workflow_Stream_ThrottlerStatus struct {
 
 func (x *Workflow_Stream_ThrottlerStatus) Reset() {
 	*x = Workflow_Stream_ThrottlerStatus{}
-	mi := &file_vtctldata_proto_msgTypes[277]
+	mi := &file_vtctldata_proto_msgTypes[281]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -17000,7 +17318,7 @@ func (x *Workflow_Stream_ThrottlerStatus) String() string {
 func (*Workflow_Stream_ThrottlerStatus) ProtoMessage() {}
 
 func (x *Workflow_Stream_ThrottlerStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[277]
+	mi := &file_vtctldata_proto_msgTypes[281]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -17039,7 +17357,7 @@ type ApplyVSchemaResponse_ParamList struct {
 
 func (x *ApplyVSchemaResponse_ParamList) Reset() {
 	*x = ApplyVSchemaResponse_ParamList{}
-	mi := &file_vtctldata_proto_msgTypes[280]
+	mi := &file_vtctldata_proto_msgTypes[284]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -17051,7 +17369,7 @@ func (x *ApplyVSchemaResponse_ParamList) String() string {
 func (*ApplyVSchemaResponse_ParamList) ProtoMessage() {}
 
 func (x *ApplyVSchemaResponse_ParamList) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[280]
+	mi := &file_vtctldata_proto_msgTypes[284]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -17083,7 +17401,7 @@ type GetSrvKeyspaceNamesResponse_NameList struct {
 
 func (x *GetSrvKeyspaceNamesResponse_NameList) Reset() {
 	*x = GetSrvKeyspaceNamesResponse_NameList{}
-	mi := &file_vtctldata_proto_msgTypes[292]
+	mi := &file_vtctldata_proto_msgTypes[296]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -17095,7 +17413,7 @@ func (x *GetSrvKeyspaceNamesResponse_NameList) String() string {
 func (*GetSrvKeyspaceNamesResponse_NameList) ProtoMessage() {}
 
 func (x *GetSrvKeyspaceNamesResponse_NameList) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[292]
+	mi := &file_vtctldata_proto_msgTypes[296]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -17129,7 +17447,7 @@ type MoveTablesCreateResponse_TabletInfo struct {
 
 func (x *MoveTablesCreateResponse_TabletInfo) Reset() {
 	*x = MoveTablesCreateResponse_TabletInfo{}
-	mi := &file_vtctldata_proto_msgTypes[296]
+	mi := &file_vtctldata_proto_msgTypes[300]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -17141,7 +17459,7 @@ func (x *MoveTablesCreateResponse_TabletInfo) String() string {
 func (*MoveTablesCreateResponse_TabletInfo) ProtoMessage() {}
 
 func (x *MoveTablesCreateResponse_TabletInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[296]
+	mi := &file_vtctldata_proto_msgTypes[300]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -17154,7 +17472,7 @@ func (x *MoveTablesCreateResponse_TabletInfo) ProtoReflect() protoreflect.Messag
 
 // Deprecated: Use MoveTablesCreateResponse_TabletInfo.ProtoReflect.Descriptor instead.
 func (*MoveTablesCreateResponse_TabletInfo) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{160, 0}
+	return file_vtctldata_proto_rawDescGZIP(), []int{164, 0}
 }
 
 func (x *MoveTablesCreateResponse_TabletInfo) GetTablet() *topodata.TabletAlias {
@@ -17182,7 +17500,7 @@ type WorkflowDeleteResponse_TabletInfo struct {
 
 func (x *WorkflowDeleteResponse_TabletInfo) Reset() {
 	*x = WorkflowDeleteResponse_TabletInfo{}
-	mi := &file_vtctldata_proto_msgTypes[306]
+	mi := &file_vtctldata_proto_msgTypes[310]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -17194,7 +17512,7 @@ func (x *WorkflowDeleteResponse_TabletInfo) String() string {
 func (*WorkflowDeleteResponse_TabletInfo) ProtoMessage() {}
 
 func (x *WorkflowDeleteResponse_TabletInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[306]
+	mi := &file_vtctldata_proto_msgTypes[310]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -17207,7 +17525,7 @@ func (x *WorkflowDeleteResponse_TabletInfo) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use WorkflowDeleteResponse_TabletInfo.ProtoReflect.Descriptor instead.
 func (*WorkflowDeleteResponse_TabletInfo) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{257, 0}
+	return file_vtctldata_proto_rawDescGZIP(), []int{261, 0}
 }
 
 func (x *WorkflowDeleteResponse_TabletInfo) GetTablet() *topodata.TabletAlias {
@@ -17239,7 +17557,7 @@ type WorkflowStatusResponse_TableCopyState struct {
 
 func (x *WorkflowStatusResponse_TableCopyState) Reset() {
 	*x = WorkflowStatusResponse_TableCopyState{}
-	mi := &file_vtctldata_proto_msgTypes[307]
+	mi := &file_vtctldata_proto_msgTypes[311]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -17251,7 +17569,7 @@ func (x *WorkflowStatusResponse_TableCopyState) String() string {
 func (*WorkflowStatusResponse_TableCopyState) ProtoMessage() {}
 
 func (x *WorkflowStatusResponse_TableCopyState) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[307]
+	mi := &file_vtctldata_proto_msgTypes[311]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -17264,7 +17582,7 @@ func (x *WorkflowStatusResponse_TableCopyState) ProtoReflect() protoreflect.Mess
 
 // Deprecated: Use WorkflowStatusResponse_TableCopyState.ProtoReflect.Descriptor instead.
 func (*WorkflowStatusResponse_TableCopyState) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{259, 0}
+	return file_vtctldata_proto_rawDescGZIP(), []int{263, 0}
 }
 
 func (x *WorkflowStatusResponse_TableCopyState) GetRowsCopied() int64 {
@@ -17330,7 +17648,7 @@ type WorkflowStatusResponse_ShardStreamState struct {
 
 func (x *WorkflowStatusResponse_ShardStreamState) Reset() {
 	*x = WorkflowStatusResponse_ShardStreamState{}
-	mi := &file_vtctldata_proto_msgTypes[308]
+	mi := &file_vtctldata_proto_msgTypes[312]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -17342,7 +17660,7 @@ func (x *WorkflowStatusResponse_ShardStreamState) String() string {
 func (*WorkflowStatusResponse_ShardStreamState) ProtoMessage() {}
 
 func (x *WorkflowStatusResponse_ShardStreamState) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[308]
+	mi := &file_vtctldata_proto_msgTypes[312]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -17355,7 +17673,7 @@ func (x *WorkflowStatusResponse_ShardStreamState) ProtoReflect() protoreflect.Me
 
 // Deprecated: Use WorkflowStatusResponse_ShardStreamState.ProtoReflect.Descriptor instead.
 func (*WorkflowStatusResponse_ShardStreamState) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{259, 1}
+	return file_vtctldata_proto_rawDescGZIP(), []int{263, 1}
 }
 
 func (x *WorkflowStatusResponse_ShardStreamState) GetId() int32 {
@@ -17409,7 +17727,7 @@ type WorkflowStatusResponse_ShardStreams struct {
 
 func (x *WorkflowStatusResponse_ShardStreams) Reset() {
 	*x = WorkflowStatusResponse_ShardStreams{}
-	mi := &file_vtctldata_proto_msgTypes[309]
+	mi := &file_vtctldata_proto_msgTypes[313]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -17421,7 +17739,7 @@ func (x *WorkflowStatusResponse_ShardStreams) String() string {
 func (*WorkflowStatusResponse_ShardStreams) ProtoMessage() {}
 
 func (x *WorkflowStatusResponse_ShardStreams) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[309]
+	mi := &file_vtctldata_proto_msgTypes[313]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -17434,7 +17752,7 @@ func (x *WorkflowStatusResponse_ShardStreams) ProtoReflect() protoreflect.Messag
 
 // Deprecated: Use WorkflowStatusResponse_ShardStreams.ProtoReflect.Descriptor instead.
 func (*WorkflowStatusResponse_ShardStreams) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{259, 2}
+	return file_vtctldata_proto_rawDescGZIP(), []int{263, 2}
 }
 
 func (x *WorkflowStatusResponse_ShardStreams) GetStreams() []*WorkflowStatusResponse_ShardStreamState {
@@ -17456,7 +17774,7 @@ type WorkflowUpdateResponse_TabletInfo struct {
 
 func (x *WorkflowUpdateResponse_TabletInfo) Reset() {
 	*x = WorkflowUpdateResponse_TabletInfo{}
-	mi := &file_vtctldata_proto_msgTypes[312]
+	mi := &file_vtctldata_proto_msgTypes[316]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -17468,7 +17786,7 @@ func (x *WorkflowUpdateResponse_TabletInfo) String() string {
 func (*WorkflowUpdateResponse_TabletInfo) ProtoMessage() {}
 
 func (x *WorkflowUpdateResponse_TabletInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[312]
+	mi := &file_vtctldata_proto_msgTypes[316]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -17481,7 +17799,7 @@ func (x *WorkflowUpdateResponse_TabletInfo) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use WorkflowUpdateResponse_TabletInfo.ProtoReflect.Descriptor instead.
 func (*WorkflowUpdateResponse_TabletInfo) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{263, 0}
+	return file_vtctldata_proto_rawDescGZIP(), []int{267, 0}
 }
 
 func (x *WorkflowUpdateResponse_TabletInfo) GetTablet() *topodata.TabletAlias {
@@ -17900,7 +18218,7 @@ const file_vtctldata_proto_rawDesc = "" +
 	"\x14DeleteTabletsRequest\x12<\n" +
 	"\x0etablet_aliases\x18\x01 \x03(\v2\x15.topodata.TabletAliasR\rtabletAliases\x12#\n" +
 	"\rallow_primary\x18\x02 \x01(\bR\fallowPrimary\"\x17\n" +
-	"\x15DeleteTabletsResponse\"\xaf\x04\n" +
+	"\x15DeleteTabletsResponse\"\xf9\x04\n" +
 	"\x1dEmergencyReparentShardRequest\x12\x1a\n" +
 	"\bkeyspace\x18\x01 \x01(\tR\bkeyspace\x12\x14\n" +
 	"\x05shard\x18\x02 \x01(\tR\x05shard\x126\n" +
@@ -17913,7 +18231,8 @@ const file_vtctldata_proto_rawDesc = "" +
 	"\x10expected_primary\x18\b \x01(\v2\x15.topodata.TabletAliasR\x0fexpectedPrimary\x12=\n" +
 	"\x1ballow_split_brain_promotion\x18\t \x01(\bR\x18allowSplitBrainPromotion\x12+\n" +
 	"\x11required_position\x18\n" +
-	" \x01(\tR\x10requiredPosition\"\xbc\x01\n" +
+	" \x01(\tR\x10requiredPosition\x12H\n" +
+	"!group_replication_force_new_group\x18\v \x01(\bR\x1dgroupReplicationForceNewGroup\"\xbc\x01\n" +
 	"\x1eEmergencyReparentShardResponse\x12\x1a\n" +
 	"\bkeyspace\x18\x01 \x01(\tR\bkeyspace\x12\x14\n" +
 	"\x05shard\x18\x02 \x01(\tR\x05shard\x12@\n" +
@@ -18248,7 +18567,28 @@ const file_vtctldata_proto_rawDesc = "" +
 	"\adry_run\x18\a \x01(\bR\x06dryRun\"[\n" +
 	"\x17MigrateCompleteResponse\x12\x18\n" +
 	"\asummary\x18\x01 \x01(\tR\asummary\x12&\n" +
-	"\x0fdry_run_results\x18\x02 \x03(\tR\rdryRunResults\"\x85\x01\n" +
+	"\x0fdry_run_results\x18\x02 \x03(\tR\rdryRunResults\"\xcc\x01\n" +
+	"\x1dMigrateReplicationModeRequest\x12\x1a\n" +
+	"\bkeyspace\x18\x01 \x01(\tR\bkeyspace\x12\x14\n" +
+	"\x05shard\x18\x02 \x01(\tR\x05shard\x12+\n" +
+	"\x11durability_policy\x18\x03 \x01(\tR\x10durabilityPolicy\x12\x17\n" +
+	"\adry_run\x18\x04 \x01(\bR\x06dryRun\x123\n" +
+	"\fwait_timeout\x18\x05 \x01(\v2\x10.vttime.DurationR\vwaitTimeout\"\x9f\x01\n" +
+	"\x1cReplicationModeMigrationStep\x12\x16\n" +
+	"\x06action\x18\x01 \x01(\tR\x06action\x12-\n" +
+	"\x06tablet\x18\x02 \x01(\v2\x15.topodata.TabletAliasR\x06tablet\x12 \n" +
+	"\vdescription\x18\x03 \x01(\tR\vdescription\x12\x16\n" +
+	"\x06status\x18\x04 \x01(\tR\x06status\"\xa5\x01\n" +
+	"#ReplicationModeMigrationShardResult\x12\x14\n" +
+	"\x05shard\x18\x01 \x01(\tR\x05shard\x12=\n" +
+	"\x05steps\x18\x02 \x03(\v2'.vtctldata.ReplicationModeMigrationStepR\x05steps\x12)\n" +
+	"\x10replication_mode\x18\x03 \x01(\tR\x0freplicationMode\"\xa9\x02\n" +
+	"\x1eMigrateReplicationModeResponse\x12\x1a\n" +
+	"\bkeyspace\x18\x01 \x01(\tR\bkeyspace\x12F\n" +
+	"\x06shards\x18\x02 \x03(\v2..vtctldata.ReplicationModeMigrationShardResultR\x06shards\x12+\n" +
+	"\x11durability_policy\x18\x03 \x01(\tR\x10durabilityPolicy\x12N\n" +
+	"\x0ekeyspace_steps\x18\x04 \x03(\v2'.vtctldata.ReplicationModeMigrationStepR\rkeyspaceSteps\x12&\n" +
+	"\x06events\x18\x05 \x03(\v2\x0e.logutil.EventR\x06events\"\x85\x01\n" +
 	"\x14MountRegisterRequest\x12\x1b\n" +
 	"\ttopo_type\x18\x01 \x01(\tR\btopoType\x12\x1f\n" +
 	"\vtopo_server\x18\x02 \x01(\tR\n" +
@@ -18805,7 +19145,7 @@ func file_vtctldata_proto_rawDescGZIP() []byte {
 }
 
 var file_vtctldata_proto_enumTypes = make([]protoimpl.EnumInfo, 6)
-var file_vtctldata_proto_msgTypes = make([]protoimpl.MessageInfo, 313)
+var file_vtctldata_proto_msgTypes = make([]protoimpl.MessageInfo, 317)
 var file_vtctldata_proto_goTypes = []any{
 	(MaterializationIntent)(0),                  // 0: vtctldata.MaterializationIntent
 	(QueryOrdering)(0),                          // 1: vtctldata.QueryOrdering
@@ -18964,472 +19304,482 @@ var file_vtctldata_proto_goTypes = []any{
 	(*MigrateCreateRequest)(nil),                // 154: vtctldata.MigrateCreateRequest
 	(*MigrateCompleteRequest)(nil),              // 155: vtctldata.MigrateCompleteRequest
 	(*MigrateCompleteResponse)(nil),             // 156: vtctldata.MigrateCompleteResponse
-	(*MountRegisterRequest)(nil),                // 157: vtctldata.MountRegisterRequest
-	(*MountRegisterResponse)(nil),               // 158: vtctldata.MountRegisterResponse
-	(*MountUnregisterRequest)(nil),              // 159: vtctldata.MountUnregisterRequest
-	(*MountUnregisterResponse)(nil),             // 160: vtctldata.MountUnregisterResponse
-	(*MountShowRequest)(nil),                    // 161: vtctldata.MountShowRequest
-	(*MountShowResponse)(nil),                   // 162: vtctldata.MountShowResponse
-	(*MountListRequest)(nil),                    // 163: vtctldata.MountListRequest
-	(*MountListResponse)(nil),                   // 164: vtctldata.MountListResponse
-	(*MoveTablesCreateRequest)(nil),             // 165: vtctldata.MoveTablesCreateRequest
-	(*MoveTablesCreateResponse)(nil),            // 166: vtctldata.MoveTablesCreateResponse
-	(*MoveTablesCompleteRequest)(nil),           // 167: vtctldata.MoveTablesCompleteRequest
-	(*MoveTablesCompleteResponse)(nil),          // 168: vtctldata.MoveTablesCompleteResponse
-	(*PingTabletRequest)(nil),                   // 169: vtctldata.PingTabletRequest
-	(*PingTabletResponse)(nil),                  // 170: vtctldata.PingTabletResponse
-	(*PlannedReparentShardRequest)(nil),         // 171: vtctldata.PlannedReparentShardRequest
-	(*PlannedReparentShardResponse)(nil),        // 172: vtctldata.PlannedReparentShardResponse
-	(*RebuildKeyspaceGraphRequest)(nil),         // 173: vtctldata.RebuildKeyspaceGraphRequest
-	(*RebuildKeyspaceGraphResponse)(nil),        // 174: vtctldata.RebuildKeyspaceGraphResponse
-	(*RebuildVSchemaGraphRequest)(nil),          // 175: vtctldata.RebuildVSchemaGraphRequest
-	(*RebuildVSchemaGraphResponse)(nil),         // 176: vtctldata.RebuildVSchemaGraphResponse
-	(*RefreshStateRequest)(nil),                 // 177: vtctldata.RefreshStateRequest
-	(*RefreshStateResponse)(nil),                // 178: vtctldata.RefreshStateResponse
-	(*RefreshStateByShardRequest)(nil),          // 179: vtctldata.RefreshStateByShardRequest
-	(*RefreshStateByShardResponse)(nil),         // 180: vtctldata.RefreshStateByShardResponse
-	(*ReloadSchemaRequest)(nil),                 // 181: vtctldata.ReloadSchemaRequest
-	(*ReloadSchemaResponse)(nil),                // 182: vtctldata.ReloadSchemaResponse
-	(*ReloadSchemaKeyspaceRequest)(nil),         // 183: vtctldata.ReloadSchemaKeyspaceRequest
-	(*ReloadSchemaKeyspaceResponse)(nil),        // 184: vtctldata.ReloadSchemaKeyspaceResponse
-	(*ReloadSchemaShardRequest)(nil),            // 185: vtctldata.ReloadSchemaShardRequest
-	(*ReloadSchemaShardResponse)(nil),           // 186: vtctldata.ReloadSchemaShardResponse
-	(*RemoveBackupRequest)(nil),                 // 187: vtctldata.RemoveBackupRequest
-	(*RemoveBackupResponse)(nil),                // 188: vtctldata.RemoveBackupResponse
-	(*RemoveKeyspaceCellRequest)(nil),           // 189: vtctldata.RemoveKeyspaceCellRequest
-	(*RemoveKeyspaceCellResponse)(nil),          // 190: vtctldata.RemoveKeyspaceCellResponse
-	(*RemoveShardCellRequest)(nil),              // 191: vtctldata.RemoveShardCellRequest
-	(*RemoveShardCellResponse)(nil),             // 192: vtctldata.RemoveShardCellResponse
-	(*ReparentTabletRequest)(nil),               // 193: vtctldata.ReparentTabletRequest
-	(*ReparentTabletResponse)(nil),              // 194: vtctldata.ReparentTabletResponse
-	(*ReshardCreateRequest)(nil),                // 195: vtctldata.ReshardCreateRequest
-	(*RestoreFromBackupRequest)(nil),            // 196: vtctldata.RestoreFromBackupRequest
-	(*RestoreFromBackupResponse)(nil),           // 197: vtctldata.RestoreFromBackupResponse
-	(*RetrySchemaMigrationRequest)(nil),         // 198: vtctldata.RetrySchemaMigrationRequest
-	(*RetrySchemaMigrationResponse)(nil),        // 199: vtctldata.RetrySchemaMigrationResponse
-	(*RunHealthCheckRequest)(nil),               // 200: vtctldata.RunHealthCheckRequest
-	(*RunHealthCheckResponse)(nil),              // 201: vtctldata.RunHealthCheckResponse
-	(*SetKeyspaceDurabilityPolicyRequest)(nil),  // 202: vtctldata.SetKeyspaceDurabilityPolicyRequest
-	(*SetKeyspaceDurabilityPolicyResponse)(nil), // 203: vtctldata.SetKeyspaceDurabilityPolicyResponse
-	(*SetKeyspaceShardingInfoRequest)(nil),      // 204: vtctldata.SetKeyspaceShardingInfoRequest
-	(*SetKeyspaceShardingInfoResponse)(nil),     // 205: vtctldata.SetKeyspaceShardingInfoResponse
-	(*SetShardIsPrimaryServingRequest)(nil),     // 206: vtctldata.SetShardIsPrimaryServingRequest
-	(*SetShardIsPrimaryServingResponse)(nil),    // 207: vtctldata.SetShardIsPrimaryServingResponse
-	(*SetShardTabletControlRequest)(nil),        // 208: vtctldata.SetShardTabletControlRequest
-	(*SetShardTabletControlResponse)(nil),       // 209: vtctldata.SetShardTabletControlResponse
-	(*SetWritableRequest)(nil),                  // 210: vtctldata.SetWritableRequest
-	(*SetWritableResponse)(nil),                 // 211: vtctldata.SetWritableResponse
-	(*ShardReplicationAddRequest)(nil),          // 212: vtctldata.ShardReplicationAddRequest
-	(*ShardReplicationAddResponse)(nil),         // 213: vtctldata.ShardReplicationAddResponse
-	(*ShardReplicationFixRequest)(nil),          // 214: vtctldata.ShardReplicationFixRequest
-	(*ShardReplicationFixResponse)(nil),         // 215: vtctldata.ShardReplicationFixResponse
-	(*ShardReplicationPositionsRequest)(nil),    // 216: vtctldata.ShardReplicationPositionsRequest
-	(*ShardReplicationPositionsResponse)(nil),   // 217: vtctldata.ShardReplicationPositionsResponse
-	(*ShardReplicationRemoveRequest)(nil),       // 218: vtctldata.ShardReplicationRemoveRequest
-	(*ShardReplicationRemoveResponse)(nil),      // 219: vtctldata.ShardReplicationRemoveResponse
-	(*SleepTabletRequest)(nil),                  // 220: vtctldata.SleepTabletRequest
-	(*SleepTabletResponse)(nil),                 // 221: vtctldata.SleepTabletResponse
-	(*SourceShardAddRequest)(nil),               // 222: vtctldata.SourceShardAddRequest
-	(*SourceShardAddResponse)(nil),              // 223: vtctldata.SourceShardAddResponse
-	(*SourceShardDeleteRequest)(nil),            // 224: vtctldata.SourceShardDeleteRequest
-	(*SourceShardDeleteResponse)(nil),           // 225: vtctldata.SourceShardDeleteResponse
-	(*StartReplicationRequest)(nil),             // 226: vtctldata.StartReplicationRequest
-	(*StartReplicationResponse)(nil),            // 227: vtctldata.StartReplicationResponse
-	(*StopReplicationRequest)(nil),              // 228: vtctldata.StopReplicationRequest
-	(*StopReplicationResponse)(nil),             // 229: vtctldata.StopReplicationResponse
-	(*TabletExternallyReparentedRequest)(nil),   // 230: vtctldata.TabletExternallyReparentedRequest
-	(*TabletExternallyReparentedResponse)(nil),  // 231: vtctldata.TabletExternallyReparentedResponse
-	(*UpdateCellInfoRequest)(nil),               // 232: vtctldata.UpdateCellInfoRequest
-	(*UpdateCellInfoResponse)(nil),              // 233: vtctldata.UpdateCellInfoResponse
-	(*UpdateCellsAliasRequest)(nil),             // 234: vtctldata.UpdateCellsAliasRequest
-	(*UpdateCellsAliasResponse)(nil),            // 235: vtctldata.UpdateCellsAliasResponse
-	(*ValidateRequest)(nil),                     // 236: vtctldata.ValidateRequest
-	(*ValidateResponse)(nil),                    // 237: vtctldata.ValidateResponse
-	(*ValidateKeyspaceRequest)(nil),             // 238: vtctldata.ValidateKeyspaceRequest
-	(*ValidateKeyspaceResponse)(nil),            // 239: vtctldata.ValidateKeyspaceResponse
-	(*ValidatePermissionsKeyspaceRequest)(nil),  // 240: vtctldata.ValidatePermissionsKeyspaceRequest
-	(*ValidatePermissionsKeyspaceResponse)(nil), // 241: vtctldata.ValidatePermissionsKeyspaceResponse
-	(*ValidateSchemaKeyspaceRequest)(nil),       // 242: vtctldata.ValidateSchemaKeyspaceRequest
-	(*ValidateSchemaKeyspaceResponse)(nil),      // 243: vtctldata.ValidateSchemaKeyspaceResponse
-	(*ValidateShardRequest)(nil),                // 244: vtctldata.ValidateShardRequest
-	(*ValidateShardResponse)(nil),               // 245: vtctldata.ValidateShardResponse
-	(*ValidateVersionKeyspaceRequest)(nil),      // 246: vtctldata.ValidateVersionKeyspaceRequest
-	(*ValidateVersionKeyspaceResponse)(nil),     // 247: vtctldata.ValidateVersionKeyspaceResponse
-	(*ValidateVersionShardRequest)(nil),         // 248: vtctldata.ValidateVersionShardRequest
-	(*ValidateVersionShardResponse)(nil),        // 249: vtctldata.ValidateVersionShardResponse
-	(*ValidateVSchemaRequest)(nil),              // 250: vtctldata.ValidateVSchemaRequest
-	(*ValidateVSchemaResponse)(nil),             // 251: vtctldata.ValidateVSchemaResponse
-	(*VDiffCreateRequest)(nil),                  // 252: vtctldata.VDiffCreateRequest
-	(*VDiffCreateResponse)(nil),                 // 253: vtctldata.VDiffCreateResponse
-	(*VDiffDeleteRequest)(nil),                  // 254: vtctldata.VDiffDeleteRequest
-	(*VDiffDeleteResponse)(nil),                 // 255: vtctldata.VDiffDeleteResponse
-	(*VDiffResumeRequest)(nil),                  // 256: vtctldata.VDiffResumeRequest
-	(*VDiffResumeResponse)(nil),                 // 257: vtctldata.VDiffResumeResponse
-	(*VDiffShowRequest)(nil),                    // 258: vtctldata.VDiffShowRequest
-	(*VDiffShowResponse)(nil),                   // 259: vtctldata.VDiffShowResponse
-	(*VDiffStopRequest)(nil),                    // 260: vtctldata.VDiffStopRequest
-	(*VDiffStopResponse)(nil),                   // 261: vtctldata.VDiffStopResponse
-	(*WorkflowDeleteRequest)(nil),               // 262: vtctldata.WorkflowDeleteRequest
-	(*WorkflowDeleteResponse)(nil),              // 263: vtctldata.WorkflowDeleteResponse
-	(*WorkflowStatusRequest)(nil),               // 264: vtctldata.WorkflowStatusRequest
-	(*WorkflowStatusResponse)(nil),              // 265: vtctldata.WorkflowStatusResponse
-	(*WorkflowSwitchTrafficRequest)(nil),        // 266: vtctldata.WorkflowSwitchTrafficRequest
-	(*WorkflowSwitchTrafficResponse)(nil),       // 267: vtctldata.WorkflowSwitchTrafficResponse
-	(*WorkflowUpdateRequest)(nil),               // 268: vtctldata.WorkflowUpdateRequest
-	(*WorkflowUpdateResponse)(nil),              // 269: vtctldata.WorkflowUpdateResponse
-	(*GetMirrorRulesRequest)(nil),               // 270: vtctldata.GetMirrorRulesRequest
-	(*GetMirrorRulesResponse)(nil),              // 271: vtctldata.GetMirrorRulesResponse
-	(*WorkflowMirrorTrafficRequest)(nil),        // 272: vtctldata.WorkflowMirrorTrafficRequest
-	(*WorkflowMirrorTrafficResponse)(nil),       // 273: vtctldata.WorkflowMirrorTrafficResponse
-	(*SetVtorcEmergencyReparentRequest)(nil),    // 274: vtctldata.SetVtorcEmergencyReparentRequest
-	(*SetVtorcEmergencyReparentResponse)(nil),   // 275: vtctldata.SetVtorcEmergencyReparentResponse
-	nil,                                     // 276: vtctldata.WorkflowOptions.ConfigEntry
-	nil,                                     // 277: vtctldata.Workflow.ShardStreamsEntry
-	(*Workflow_ReplicationLocation)(nil),    // 278: vtctldata.Workflow.ReplicationLocation
-	(*Workflow_ShardStream)(nil),            // 279: vtctldata.Workflow.ShardStream
-	(*Workflow_Stream)(nil),                 // 280: vtctldata.Workflow.Stream
-	(*Workflow_Stream_CopyState)(nil),       // 281: vtctldata.Workflow.Stream.CopyState
-	(*Workflow_Stream_Log)(nil),             // 282: vtctldata.Workflow.Stream.Log
-	(*Workflow_Stream_ThrottlerStatus)(nil), // 283: vtctldata.Workflow.Stream.ThrottlerStatus
-	nil,                                     // 284: vtctldata.ApplySchemaResponse.RowsAffectedByShardEntry
-	nil,                                     // 285: vtctldata.ApplyVSchemaResponse.UnknownVindexParamsEntry
-	(*ApplyVSchemaResponse_ParamList)(nil),  // 286: vtctldata.ApplyVSchemaResponse.ParamList
-	nil,                                     // 287: vtctldata.CancelSchemaMigrationResponse.RowsAffectedByShardEntry
-	nil,                                     // 288: vtctldata.ChangeTabletTagsRequest.TagsEntry
-	nil,                                     // 289: vtctldata.ChangeTabletTagsResponse.BeforeTagsEntry
-	nil,                                     // 290: vtctldata.ChangeTabletTagsResponse.AfterTagsEntry
-	nil,                                     // 291: vtctldata.CleanupSchemaMigrationResponse.RowsAffectedByShardEntry
-	nil,                                     // 292: vtctldata.CompleteSchemaMigrationResponse.RowsAffectedByShardEntry
-	nil,                                     // 293: vtctldata.FindAllShardsInKeyspaceResponse.ShardsEntry
-	nil,                                     // 294: vtctldata.ForceCutOverSchemaMigrationResponse.RowsAffectedByShardEntry
-	nil,                                     // 295: vtctldata.GetCellsAliasesResponse.AliasesEntry
-	nil,                                     // 296: vtctldata.GetShardReplicationResponse.ShardReplicationByCellEntry
-	nil,                                     // 297: vtctldata.GetSrvKeyspaceNamesResponse.NamesEntry
-	(*GetSrvKeyspaceNamesResponse_NameList)(nil), // 298: vtctldata.GetSrvKeyspaceNamesResponse.NameList
-	nil, // 299: vtctldata.GetSrvKeyspacesResponse.SrvKeyspacesEntry
-	nil, // 300: vtctldata.GetSrvVSchemasResponse.SrvVSchemasEntry
-	nil, // 301: vtctldata.LaunchSchemaMigrationResponse.RowsAffectedByShardEntry
-	(*MoveTablesCreateResponse_TabletInfo)(nil), // 302: vtctldata.MoveTablesCreateResponse.TabletInfo
-	nil, // 303: vtctldata.RetrySchemaMigrationResponse.RowsAffectedByShardEntry
-	nil, // 304: vtctldata.ShardReplicationPositionsResponse.ReplicationStatusesEntry
-	nil, // 305: vtctldata.ShardReplicationPositionsResponse.TabletMapEntry
-	nil, // 306: vtctldata.ValidateResponse.ResultsByKeyspaceEntry
-	nil, // 307: vtctldata.ValidateKeyspaceResponse.ResultsByShardEntry
-	nil, // 308: vtctldata.ValidateSchemaKeyspaceResponse.ResultsByShardEntry
-	nil, // 309: vtctldata.ValidateVersionKeyspaceResponse.ResultsByShardEntry
-	nil, // 310: vtctldata.ValidateVSchemaResponse.ResultsByShardEntry
-	nil, // 311: vtctldata.VDiffShowResponse.TabletResponsesEntry
-	(*WorkflowDeleteResponse_TabletInfo)(nil),       // 312: vtctldata.WorkflowDeleteResponse.TabletInfo
-	(*WorkflowStatusResponse_TableCopyState)(nil),   // 313: vtctldata.WorkflowStatusResponse.TableCopyState
-	(*WorkflowStatusResponse_ShardStreamState)(nil), // 314: vtctldata.WorkflowStatusResponse.ShardStreamState
-	(*WorkflowStatusResponse_ShardStreams)(nil),     // 315: vtctldata.WorkflowStatusResponse.ShardStreams
-	nil, // 316: vtctldata.WorkflowStatusResponse.TableCopyStateEntry
-	nil, // 317: vtctldata.WorkflowStatusResponse.ShardStreamsEntry
-	(*WorkflowUpdateResponse_TabletInfo)(nil),                   // 318: vtctldata.WorkflowUpdateResponse.TabletInfo
-	(*logutil.Event)(nil),                                       // 319: logutil.Event
-	(tabletmanagerdata.TabletSelectionPreference)(0),            // 320: tabletmanagerdata.TabletSelectionPreference
-	(*topodata.Keyspace)(nil),                                   // 321: topodata.Keyspace
-	(*vttime.Time)(nil),                                         // 322: vttime.Time
-	(*topodata.TabletAlias)(nil),                                // 323: topodata.TabletAlias
-	(*vttime.Duration)(nil),                                     // 324: vttime.Duration
-	(*topodata.Shard)(nil),                                      // 325: topodata.Shard
-	(*topodata.CellInfo)(nil),                                   // 326: topodata.CellInfo
-	(*vschema.KeyspaceRoutingRules)(nil),                        // 327: vschema.KeyspaceRoutingRules
-	(*vschema.RoutingRules)(nil),                                // 328: vschema.RoutingRules
-	(*vschema.ShardRoutingRules)(nil),                           // 329: vschema.ShardRoutingRules
-	(*vtrpc.CallerID)(nil),                                      // 330: vtrpc.CallerID
-	(*vschema.Keyspace)(nil),                                    // 331: vschema.Keyspace
-	(*tabletmanagerdata.BackupRequest_InitSQL)(nil),             // 332: tabletmanagerdata.BackupRequest.InitSQL
-	(topodata.TabletType)(0),                                    // 333: topodata.TabletType
-	(*topodata.Tablet)(nil),                                     // 334: topodata.Tablet
-	(*tabletmanagerdata.CheckThrottlerResponse)(nil),            // 335: tabletmanagerdata.CheckThrottlerResponse
-	(topodata.KeyspaceType)(0),                                  // 336: topodata.KeyspaceType
-	(*query.QueryResult)(nil),                                   // 337: query.QueryResult
-	(*tabletmanagerdata.ExecuteHookRequest)(nil),                // 338: tabletmanagerdata.ExecuteHookRequest
-	(*tabletmanagerdata.ExecuteHookResponse)(nil),               // 339: tabletmanagerdata.ExecuteHookResponse
-	(*mysqlctl.BackupInfo)(nil),                                 // 340: mysqlctl.BackupInfo
-	(*replicationdata.FullStatus)(nil),                          // 341: replicationdata.FullStatus
-	(*tabletmanagerdata.Permissions)(nil),                       // 342: tabletmanagerdata.Permissions
-	(*tabletmanagerdata.SchemaDefinition)(nil),                  // 343: tabletmanagerdata.SchemaDefinition
-	(*topodata.ThrottledAppRule)(nil),                           // 344: topodata.ThrottledAppRule
-	(*vschema.SrvVSchema)(nil),                                  // 345: vschema.SrvVSchema
-	(*tabletmanagerdata.GetThrottlerStatusResponse)(nil),        // 346: tabletmanagerdata.GetThrottlerStatusResponse
-	(*query.TransactionMetadata)(nil),                           // 347: query.TransactionMetadata
-	(*query.Target)(nil),                                        // 348: query.Target
-	(*topodata.ShardReplicationError)(nil),                      // 349: topodata.ShardReplicationError
-	(*topodata.KeyRange)(nil),                                   // 350: topodata.KeyRange
-	(*topodata.CellsAlias)(nil),                                 // 351: topodata.CellsAlias
-	(*tabletmanagerdata.UpdateVReplicationWorkflowRequest)(nil), // 352: tabletmanagerdata.UpdateVReplicationWorkflowRequest
-	(*vschema.MirrorRules)(nil),                                 // 353: vschema.MirrorRules
-	(*topodata.Shard_TabletControl)(nil),                        // 354: topodata.Shard.TabletControl
-	(*binlogdata.BinlogSource)(nil),                             // 355: binlogdata.BinlogSource
-	(*topodata.ShardReplication)(nil),                           // 356: topodata.ShardReplication
-	(*topodata.SrvKeyspace)(nil),                                // 357: topodata.SrvKeyspace
-	(*replicationdata.Status)(nil),                              // 358: replicationdata.Status
-	(*tabletmanagerdata.VDiffResponse)(nil),                     // 359: tabletmanagerdata.VDiffResponse
+	(*MigrateReplicationModeRequest)(nil),       // 157: vtctldata.MigrateReplicationModeRequest
+	(*ReplicationModeMigrationStep)(nil),        // 158: vtctldata.ReplicationModeMigrationStep
+	(*ReplicationModeMigrationShardResult)(nil), // 159: vtctldata.ReplicationModeMigrationShardResult
+	(*MigrateReplicationModeResponse)(nil),      // 160: vtctldata.MigrateReplicationModeResponse
+	(*MountRegisterRequest)(nil),                // 161: vtctldata.MountRegisterRequest
+	(*MountRegisterResponse)(nil),               // 162: vtctldata.MountRegisterResponse
+	(*MountUnregisterRequest)(nil),              // 163: vtctldata.MountUnregisterRequest
+	(*MountUnregisterResponse)(nil),             // 164: vtctldata.MountUnregisterResponse
+	(*MountShowRequest)(nil),                    // 165: vtctldata.MountShowRequest
+	(*MountShowResponse)(nil),                   // 166: vtctldata.MountShowResponse
+	(*MountListRequest)(nil),                    // 167: vtctldata.MountListRequest
+	(*MountListResponse)(nil),                   // 168: vtctldata.MountListResponse
+	(*MoveTablesCreateRequest)(nil),             // 169: vtctldata.MoveTablesCreateRequest
+	(*MoveTablesCreateResponse)(nil),            // 170: vtctldata.MoveTablesCreateResponse
+	(*MoveTablesCompleteRequest)(nil),           // 171: vtctldata.MoveTablesCompleteRequest
+	(*MoveTablesCompleteResponse)(nil),          // 172: vtctldata.MoveTablesCompleteResponse
+	(*PingTabletRequest)(nil),                   // 173: vtctldata.PingTabletRequest
+	(*PingTabletResponse)(nil),                  // 174: vtctldata.PingTabletResponse
+	(*PlannedReparentShardRequest)(nil),         // 175: vtctldata.PlannedReparentShardRequest
+	(*PlannedReparentShardResponse)(nil),        // 176: vtctldata.PlannedReparentShardResponse
+	(*RebuildKeyspaceGraphRequest)(nil),         // 177: vtctldata.RebuildKeyspaceGraphRequest
+	(*RebuildKeyspaceGraphResponse)(nil),        // 178: vtctldata.RebuildKeyspaceGraphResponse
+	(*RebuildVSchemaGraphRequest)(nil),          // 179: vtctldata.RebuildVSchemaGraphRequest
+	(*RebuildVSchemaGraphResponse)(nil),         // 180: vtctldata.RebuildVSchemaGraphResponse
+	(*RefreshStateRequest)(nil),                 // 181: vtctldata.RefreshStateRequest
+	(*RefreshStateResponse)(nil),                // 182: vtctldata.RefreshStateResponse
+	(*RefreshStateByShardRequest)(nil),          // 183: vtctldata.RefreshStateByShardRequest
+	(*RefreshStateByShardResponse)(nil),         // 184: vtctldata.RefreshStateByShardResponse
+	(*ReloadSchemaRequest)(nil),                 // 185: vtctldata.ReloadSchemaRequest
+	(*ReloadSchemaResponse)(nil),                // 186: vtctldata.ReloadSchemaResponse
+	(*ReloadSchemaKeyspaceRequest)(nil),         // 187: vtctldata.ReloadSchemaKeyspaceRequest
+	(*ReloadSchemaKeyspaceResponse)(nil),        // 188: vtctldata.ReloadSchemaKeyspaceResponse
+	(*ReloadSchemaShardRequest)(nil),            // 189: vtctldata.ReloadSchemaShardRequest
+	(*ReloadSchemaShardResponse)(nil),           // 190: vtctldata.ReloadSchemaShardResponse
+	(*RemoveBackupRequest)(nil),                 // 191: vtctldata.RemoveBackupRequest
+	(*RemoveBackupResponse)(nil),                // 192: vtctldata.RemoveBackupResponse
+	(*RemoveKeyspaceCellRequest)(nil),           // 193: vtctldata.RemoveKeyspaceCellRequest
+	(*RemoveKeyspaceCellResponse)(nil),          // 194: vtctldata.RemoveKeyspaceCellResponse
+	(*RemoveShardCellRequest)(nil),              // 195: vtctldata.RemoveShardCellRequest
+	(*RemoveShardCellResponse)(nil),             // 196: vtctldata.RemoveShardCellResponse
+	(*ReparentTabletRequest)(nil),               // 197: vtctldata.ReparentTabletRequest
+	(*ReparentTabletResponse)(nil),              // 198: vtctldata.ReparentTabletResponse
+	(*ReshardCreateRequest)(nil),                // 199: vtctldata.ReshardCreateRequest
+	(*RestoreFromBackupRequest)(nil),            // 200: vtctldata.RestoreFromBackupRequest
+	(*RestoreFromBackupResponse)(nil),           // 201: vtctldata.RestoreFromBackupResponse
+	(*RetrySchemaMigrationRequest)(nil),         // 202: vtctldata.RetrySchemaMigrationRequest
+	(*RetrySchemaMigrationResponse)(nil),        // 203: vtctldata.RetrySchemaMigrationResponse
+	(*RunHealthCheckRequest)(nil),               // 204: vtctldata.RunHealthCheckRequest
+	(*RunHealthCheckResponse)(nil),              // 205: vtctldata.RunHealthCheckResponse
+	(*SetKeyspaceDurabilityPolicyRequest)(nil),  // 206: vtctldata.SetKeyspaceDurabilityPolicyRequest
+	(*SetKeyspaceDurabilityPolicyResponse)(nil), // 207: vtctldata.SetKeyspaceDurabilityPolicyResponse
+	(*SetKeyspaceShardingInfoRequest)(nil),      // 208: vtctldata.SetKeyspaceShardingInfoRequest
+	(*SetKeyspaceShardingInfoResponse)(nil),     // 209: vtctldata.SetKeyspaceShardingInfoResponse
+	(*SetShardIsPrimaryServingRequest)(nil),     // 210: vtctldata.SetShardIsPrimaryServingRequest
+	(*SetShardIsPrimaryServingResponse)(nil),    // 211: vtctldata.SetShardIsPrimaryServingResponse
+	(*SetShardTabletControlRequest)(nil),        // 212: vtctldata.SetShardTabletControlRequest
+	(*SetShardTabletControlResponse)(nil),       // 213: vtctldata.SetShardTabletControlResponse
+	(*SetWritableRequest)(nil),                  // 214: vtctldata.SetWritableRequest
+	(*SetWritableResponse)(nil),                 // 215: vtctldata.SetWritableResponse
+	(*ShardReplicationAddRequest)(nil),          // 216: vtctldata.ShardReplicationAddRequest
+	(*ShardReplicationAddResponse)(nil),         // 217: vtctldata.ShardReplicationAddResponse
+	(*ShardReplicationFixRequest)(nil),          // 218: vtctldata.ShardReplicationFixRequest
+	(*ShardReplicationFixResponse)(nil),         // 219: vtctldata.ShardReplicationFixResponse
+	(*ShardReplicationPositionsRequest)(nil),    // 220: vtctldata.ShardReplicationPositionsRequest
+	(*ShardReplicationPositionsResponse)(nil),   // 221: vtctldata.ShardReplicationPositionsResponse
+	(*ShardReplicationRemoveRequest)(nil),       // 222: vtctldata.ShardReplicationRemoveRequest
+	(*ShardReplicationRemoveResponse)(nil),      // 223: vtctldata.ShardReplicationRemoveResponse
+	(*SleepTabletRequest)(nil),                  // 224: vtctldata.SleepTabletRequest
+	(*SleepTabletResponse)(nil),                 // 225: vtctldata.SleepTabletResponse
+	(*SourceShardAddRequest)(nil),               // 226: vtctldata.SourceShardAddRequest
+	(*SourceShardAddResponse)(nil),              // 227: vtctldata.SourceShardAddResponse
+	(*SourceShardDeleteRequest)(nil),            // 228: vtctldata.SourceShardDeleteRequest
+	(*SourceShardDeleteResponse)(nil),           // 229: vtctldata.SourceShardDeleteResponse
+	(*StartReplicationRequest)(nil),             // 230: vtctldata.StartReplicationRequest
+	(*StartReplicationResponse)(nil),            // 231: vtctldata.StartReplicationResponse
+	(*StopReplicationRequest)(nil),              // 232: vtctldata.StopReplicationRequest
+	(*StopReplicationResponse)(nil),             // 233: vtctldata.StopReplicationResponse
+	(*TabletExternallyReparentedRequest)(nil),   // 234: vtctldata.TabletExternallyReparentedRequest
+	(*TabletExternallyReparentedResponse)(nil),  // 235: vtctldata.TabletExternallyReparentedResponse
+	(*UpdateCellInfoRequest)(nil),               // 236: vtctldata.UpdateCellInfoRequest
+	(*UpdateCellInfoResponse)(nil),              // 237: vtctldata.UpdateCellInfoResponse
+	(*UpdateCellsAliasRequest)(nil),             // 238: vtctldata.UpdateCellsAliasRequest
+	(*UpdateCellsAliasResponse)(nil),            // 239: vtctldata.UpdateCellsAliasResponse
+	(*ValidateRequest)(nil),                     // 240: vtctldata.ValidateRequest
+	(*ValidateResponse)(nil),                    // 241: vtctldata.ValidateResponse
+	(*ValidateKeyspaceRequest)(nil),             // 242: vtctldata.ValidateKeyspaceRequest
+	(*ValidateKeyspaceResponse)(nil),            // 243: vtctldata.ValidateKeyspaceResponse
+	(*ValidatePermissionsKeyspaceRequest)(nil),  // 244: vtctldata.ValidatePermissionsKeyspaceRequest
+	(*ValidatePermissionsKeyspaceResponse)(nil), // 245: vtctldata.ValidatePermissionsKeyspaceResponse
+	(*ValidateSchemaKeyspaceRequest)(nil),       // 246: vtctldata.ValidateSchemaKeyspaceRequest
+	(*ValidateSchemaKeyspaceResponse)(nil),      // 247: vtctldata.ValidateSchemaKeyspaceResponse
+	(*ValidateShardRequest)(nil),                // 248: vtctldata.ValidateShardRequest
+	(*ValidateShardResponse)(nil),               // 249: vtctldata.ValidateShardResponse
+	(*ValidateVersionKeyspaceRequest)(nil),      // 250: vtctldata.ValidateVersionKeyspaceRequest
+	(*ValidateVersionKeyspaceResponse)(nil),     // 251: vtctldata.ValidateVersionKeyspaceResponse
+	(*ValidateVersionShardRequest)(nil),         // 252: vtctldata.ValidateVersionShardRequest
+	(*ValidateVersionShardResponse)(nil),        // 253: vtctldata.ValidateVersionShardResponse
+	(*ValidateVSchemaRequest)(nil),              // 254: vtctldata.ValidateVSchemaRequest
+	(*ValidateVSchemaResponse)(nil),             // 255: vtctldata.ValidateVSchemaResponse
+	(*VDiffCreateRequest)(nil),                  // 256: vtctldata.VDiffCreateRequest
+	(*VDiffCreateResponse)(nil),                 // 257: vtctldata.VDiffCreateResponse
+	(*VDiffDeleteRequest)(nil),                  // 258: vtctldata.VDiffDeleteRequest
+	(*VDiffDeleteResponse)(nil),                 // 259: vtctldata.VDiffDeleteResponse
+	(*VDiffResumeRequest)(nil),                  // 260: vtctldata.VDiffResumeRequest
+	(*VDiffResumeResponse)(nil),                 // 261: vtctldata.VDiffResumeResponse
+	(*VDiffShowRequest)(nil),                    // 262: vtctldata.VDiffShowRequest
+	(*VDiffShowResponse)(nil),                   // 263: vtctldata.VDiffShowResponse
+	(*VDiffStopRequest)(nil),                    // 264: vtctldata.VDiffStopRequest
+	(*VDiffStopResponse)(nil),                   // 265: vtctldata.VDiffStopResponse
+	(*WorkflowDeleteRequest)(nil),               // 266: vtctldata.WorkflowDeleteRequest
+	(*WorkflowDeleteResponse)(nil),              // 267: vtctldata.WorkflowDeleteResponse
+	(*WorkflowStatusRequest)(nil),               // 268: vtctldata.WorkflowStatusRequest
+	(*WorkflowStatusResponse)(nil),              // 269: vtctldata.WorkflowStatusResponse
+	(*WorkflowSwitchTrafficRequest)(nil),        // 270: vtctldata.WorkflowSwitchTrafficRequest
+	(*WorkflowSwitchTrafficResponse)(nil),       // 271: vtctldata.WorkflowSwitchTrafficResponse
+	(*WorkflowUpdateRequest)(nil),               // 272: vtctldata.WorkflowUpdateRequest
+	(*WorkflowUpdateResponse)(nil),              // 273: vtctldata.WorkflowUpdateResponse
+	(*GetMirrorRulesRequest)(nil),               // 274: vtctldata.GetMirrorRulesRequest
+	(*GetMirrorRulesResponse)(nil),              // 275: vtctldata.GetMirrorRulesResponse
+	(*WorkflowMirrorTrafficRequest)(nil),        // 276: vtctldata.WorkflowMirrorTrafficRequest
+	(*WorkflowMirrorTrafficResponse)(nil),       // 277: vtctldata.WorkflowMirrorTrafficResponse
+	(*SetVtorcEmergencyReparentRequest)(nil),    // 278: vtctldata.SetVtorcEmergencyReparentRequest
+	(*SetVtorcEmergencyReparentResponse)(nil),   // 279: vtctldata.SetVtorcEmergencyReparentResponse
+	nil,                                     // 280: vtctldata.WorkflowOptions.ConfigEntry
+	nil,                                     // 281: vtctldata.Workflow.ShardStreamsEntry
+	(*Workflow_ReplicationLocation)(nil),    // 282: vtctldata.Workflow.ReplicationLocation
+	(*Workflow_ShardStream)(nil),            // 283: vtctldata.Workflow.ShardStream
+	(*Workflow_Stream)(nil),                 // 284: vtctldata.Workflow.Stream
+	(*Workflow_Stream_CopyState)(nil),       // 285: vtctldata.Workflow.Stream.CopyState
+	(*Workflow_Stream_Log)(nil),             // 286: vtctldata.Workflow.Stream.Log
+	(*Workflow_Stream_ThrottlerStatus)(nil), // 287: vtctldata.Workflow.Stream.ThrottlerStatus
+	nil,                                     // 288: vtctldata.ApplySchemaResponse.RowsAffectedByShardEntry
+	nil,                                     // 289: vtctldata.ApplyVSchemaResponse.UnknownVindexParamsEntry
+	(*ApplyVSchemaResponse_ParamList)(nil),  // 290: vtctldata.ApplyVSchemaResponse.ParamList
+	nil,                                     // 291: vtctldata.CancelSchemaMigrationResponse.RowsAffectedByShardEntry
+	nil,                                     // 292: vtctldata.ChangeTabletTagsRequest.TagsEntry
+	nil,                                     // 293: vtctldata.ChangeTabletTagsResponse.BeforeTagsEntry
+	nil,                                     // 294: vtctldata.ChangeTabletTagsResponse.AfterTagsEntry
+	nil,                                     // 295: vtctldata.CleanupSchemaMigrationResponse.RowsAffectedByShardEntry
+	nil,                                     // 296: vtctldata.CompleteSchemaMigrationResponse.RowsAffectedByShardEntry
+	nil,                                     // 297: vtctldata.FindAllShardsInKeyspaceResponse.ShardsEntry
+	nil,                                     // 298: vtctldata.ForceCutOverSchemaMigrationResponse.RowsAffectedByShardEntry
+	nil,                                     // 299: vtctldata.GetCellsAliasesResponse.AliasesEntry
+	nil,                                     // 300: vtctldata.GetShardReplicationResponse.ShardReplicationByCellEntry
+	nil,                                     // 301: vtctldata.GetSrvKeyspaceNamesResponse.NamesEntry
+	(*GetSrvKeyspaceNamesResponse_NameList)(nil), // 302: vtctldata.GetSrvKeyspaceNamesResponse.NameList
+	nil, // 303: vtctldata.GetSrvKeyspacesResponse.SrvKeyspacesEntry
+	nil, // 304: vtctldata.GetSrvVSchemasResponse.SrvVSchemasEntry
+	nil, // 305: vtctldata.LaunchSchemaMigrationResponse.RowsAffectedByShardEntry
+	(*MoveTablesCreateResponse_TabletInfo)(nil), // 306: vtctldata.MoveTablesCreateResponse.TabletInfo
+	nil, // 307: vtctldata.RetrySchemaMigrationResponse.RowsAffectedByShardEntry
+	nil, // 308: vtctldata.ShardReplicationPositionsResponse.ReplicationStatusesEntry
+	nil, // 309: vtctldata.ShardReplicationPositionsResponse.TabletMapEntry
+	nil, // 310: vtctldata.ValidateResponse.ResultsByKeyspaceEntry
+	nil, // 311: vtctldata.ValidateKeyspaceResponse.ResultsByShardEntry
+	nil, // 312: vtctldata.ValidateSchemaKeyspaceResponse.ResultsByShardEntry
+	nil, // 313: vtctldata.ValidateVersionKeyspaceResponse.ResultsByShardEntry
+	nil, // 314: vtctldata.ValidateVSchemaResponse.ResultsByShardEntry
+	nil, // 315: vtctldata.VDiffShowResponse.TabletResponsesEntry
+	(*WorkflowDeleteResponse_TabletInfo)(nil),       // 316: vtctldata.WorkflowDeleteResponse.TabletInfo
+	(*WorkflowStatusResponse_TableCopyState)(nil),   // 317: vtctldata.WorkflowStatusResponse.TableCopyState
+	(*WorkflowStatusResponse_ShardStreamState)(nil), // 318: vtctldata.WorkflowStatusResponse.ShardStreamState
+	(*WorkflowStatusResponse_ShardStreams)(nil),     // 319: vtctldata.WorkflowStatusResponse.ShardStreams
+	nil, // 320: vtctldata.WorkflowStatusResponse.TableCopyStateEntry
+	nil, // 321: vtctldata.WorkflowStatusResponse.ShardStreamsEntry
+	(*WorkflowUpdateResponse_TabletInfo)(nil),                   // 322: vtctldata.WorkflowUpdateResponse.TabletInfo
+	(*logutil.Event)(nil),                                       // 323: logutil.Event
+	(tabletmanagerdata.TabletSelectionPreference)(0),            // 324: tabletmanagerdata.TabletSelectionPreference
+	(*topodata.Keyspace)(nil),                                   // 325: topodata.Keyspace
+	(*vttime.Time)(nil),                                         // 326: vttime.Time
+	(*topodata.TabletAlias)(nil),                                // 327: topodata.TabletAlias
+	(*vttime.Duration)(nil),                                     // 328: vttime.Duration
+	(*topodata.Shard)(nil),                                      // 329: topodata.Shard
+	(*topodata.CellInfo)(nil),                                   // 330: topodata.CellInfo
+	(*vschema.KeyspaceRoutingRules)(nil),                        // 331: vschema.KeyspaceRoutingRules
+	(*vschema.RoutingRules)(nil),                                // 332: vschema.RoutingRules
+	(*vschema.ShardRoutingRules)(nil),                           // 333: vschema.ShardRoutingRules
+	(*vtrpc.CallerID)(nil),                                      // 334: vtrpc.CallerID
+	(*vschema.Keyspace)(nil),                                    // 335: vschema.Keyspace
+	(*tabletmanagerdata.BackupRequest_InitSQL)(nil),             // 336: tabletmanagerdata.BackupRequest.InitSQL
+	(topodata.TabletType)(0),                                    // 337: topodata.TabletType
+	(*topodata.Tablet)(nil),                                     // 338: topodata.Tablet
+	(*tabletmanagerdata.CheckThrottlerResponse)(nil),            // 339: tabletmanagerdata.CheckThrottlerResponse
+	(topodata.KeyspaceType)(0),                                  // 340: topodata.KeyspaceType
+	(*query.QueryResult)(nil),                                   // 341: query.QueryResult
+	(*tabletmanagerdata.ExecuteHookRequest)(nil),                // 342: tabletmanagerdata.ExecuteHookRequest
+	(*tabletmanagerdata.ExecuteHookResponse)(nil),               // 343: tabletmanagerdata.ExecuteHookResponse
+	(*mysqlctl.BackupInfo)(nil),                                 // 344: mysqlctl.BackupInfo
+	(*replicationdata.FullStatus)(nil),                          // 345: replicationdata.FullStatus
+	(*tabletmanagerdata.Permissions)(nil),                       // 346: tabletmanagerdata.Permissions
+	(*tabletmanagerdata.SchemaDefinition)(nil),                  // 347: tabletmanagerdata.SchemaDefinition
+	(*topodata.ThrottledAppRule)(nil),                           // 348: topodata.ThrottledAppRule
+	(*vschema.SrvVSchema)(nil),                                  // 349: vschema.SrvVSchema
+	(*tabletmanagerdata.GetThrottlerStatusResponse)(nil),        // 350: tabletmanagerdata.GetThrottlerStatusResponse
+	(*query.TransactionMetadata)(nil),                           // 351: query.TransactionMetadata
+	(*query.Target)(nil),                                        // 352: query.Target
+	(*topodata.ShardReplicationError)(nil),                      // 353: topodata.ShardReplicationError
+	(*topodata.KeyRange)(nil),                                   // 354: topodata.KeyRange
+	(*topodata.CellsAlias)(nil),                                 // 355: topodata.CellsAlias
+	(*tabletmanagerdata.UpdateVReplicationWorkflowRequest)(nil), // 356: tabletmanagerdata.UpdateVReplicationWorkflowRequest
+	(*vschema.MirrorRules)(nil),                                 // 357: vschema.MirrorRules
+	(*topodata.Shard_TabletControl)(nil),                        // 358: topodata.Shard.TabletControl
+	(*binlogdata.BinlogSource)(nil),                             // 359: binlogdata.BinlogSource
+	(*topodata.ShardReplication)(nil),                           // 360: topodata.ShardReplication
+	(*topodata.SrvKeyspace)(nil),                                // 361: topodata.SrvKeyspace
+	(*replicationdata.Status)(nil),                              // 362: replicationdata.Status
+	(*tabletmanagerdata.VDiffResponse)(nil),                     // 363: tabletmanagerdata.VDiffResponse
 }
 var file_vtctldata_proto_depIdxs = []int32{
-	319, // 0: vtctldata.ExecuteVtctlCommandResponse.event:type_name -> logutil.Event
+	323, // 0: vtctldata.ExecuteVtctlCommandResponse.event:type_name -> logutil.Event
 	8,   // 1: vtctldata.MaterializeSettings.table_settings:type_name -> vtctldata.TableMaterializeSettings
 	0,   // 2: vtctldata.MaterializeSettings.materialization_intent:type_name -> vtctldata.MaterializationIntent
-	320, // 3: vtctldata.MaterializeSettings.tablet_selection_preference:type_name -> tabletmanagerdata.TabletSelectionPreference
+	324, // 3: vtctldata.MaterializeSettings.tablet_selection_preference:type_name -> tabletmanagerdata.TabletSelectionPreference
 	13,  // 4: vtctldata.MaterializeSettings.workflow_options:type_name -> vtctldata.WorkflowOptions
-	321, // 5: vtctldata.Keyspace.keyspace:type_name -> topodata.Keyspace
+	325, // 5: vtctldata.Keyspace.keyspace:type_name -> topodata.Keyspace
 	4,   // 6: vtctldata.SchemaMigration.strategy:type_name -> vtctldata.SchemaMigration.Strategy
-	322, // 7: vtctldata.SchemaMigration.added_at:type_name -> vttime.Time
-	322, // 8: vtctldata.SchemaMigration.requested_at:type_name -> vttime.Time
-	322, // 9: vtctldata.SchemaMigration.ready_at:type_name -> vttime.Time
-	322, // 10: vtctldata.SchemaMigration.started_at:type_name -> vttime.Time
-	322, // 11: vtctldata.SchemaMigration.liveness_timestamp:type_name -> vttime.Time
-	322, // 12: vtctldata.SchemaMigration.completed_at:type_name -> vttime.Time
-	322, // 13: vtctldata.SchemaMigration.cleaned_up_at:type_name -> vttime.Time
+	326, // 7: vtctldata.SchemaMigration.added_at:type_name -> vttime.Time
+	326, // 8: vtctldata.SchemaMigration.requested_at:type_name -> vttime.Time
+	326, // 9: vtctldata.SchemaMigration.ready_at:type_name -> vttime.Time
+	326, // 10: vtctldata.SchemaMigration.started_at:type_name -> vttime.Time
+	326, // 11: vtctldata.SchemaMigration.liveness_timestamp:type_name -> vttime.Time
+	326, // 12: vtctldata.SchemaMigration.completed_at:type_name -> vttime.Time
+	326, // 13: vtctldata.SchemaMigration.cleaned_up_at:type_name -> vttime.Time
 	5,   // 14: vtctldata.SchemaMigration.status:type_name -> vtctldata.SchemaMigration.Status
-	323, // 15: vtctldata.SchemaMigration.tablet:type_name -> topodata.TabletAlias
-	324, // 16: vtctldata.SchemaMigration.artifact_retention:type_name -> vttime.Duration
-	322, // 17: vtctldata.SchemaMigration.last_throttled_at:type_name -> vttime.Time
-	322, // 18: vtctldata.SchemaMigration.cancelled_at:type_name -> vttime.Time
-	322, // 19: vtctldata.SchemaMigration.reviewed_at:type_name -> vttime.Time
-	322, // 20: vtctldata.SchemaMigration.ready_to_complete_at:type_name -> vttime.Time
-	325, // 21: vtctldata.Shard.shard:type_name -> topodata.Shard
+	327, // 15: vtctldata.SchemaMigration.tablet:type_name -> topodata.TabletAlias
+	328, // 16: vtctldata.SchemaMigration.artifact_retention:type_name -> vttime.Duration
+	326, // 17: vtctldata.SchemaMigration.last_throttled_at:type_name -> vttime.Time
+	326, // 18: vtctldata.SchemaMigration.cancelled_at:type_name -> vttime.Time
+	326, // 19: vtctldata.SchemaMigration.reviewed_at:type_name -> vttime.Time
+	326, // 20: vtctldata.SchemaMigration.ready_to_complete_at:type_name -> vttime.Time
+	329, // 21: vtctldata.Shard.shard:type_name -> topodata.Shard
 	2,   // 22: vtctldata.WorkflowOptions.sharded_auto_increment_handling:type_name -> vtctldata.ShardedAutoIncrementHandling
-	276, // 23: vtctldata.WorkflowOptions.config:type_name -> vtctldata.WorkflowOptions.ConfigEntry
-	278, // 24: vtctldata.Workflow.source:type_name -> vtctldata.Workflow.ReplicationLocation
-	278, // 25: vtctldata.Workflow.target:type_name -> vtctldata.Workflow.ReplicationLocation
-	277, // 26: vtctldata.Workflow.shard_streams:type_name -> vtctldata.Workflow.ShardStreamsEntry
+	280, // 23: vtctldata.WorkflowOptions.config:type_name -> vtctldata.WorkflowOptions.ConfigEntry
+	282, // 24: vtctldata.Workflow.source:type_name -> vtctldata.Workflow.ReplicationLocation
+	282, // 25: vtctldata.Workflow.target:type_name -> vtctldata.Workflow.ReplicationLocation
+	281, // 26: vtctldata.Workflow.shard_streams:type_name -> vtctldata.Workflow.ShardStreamsEntry
 	13,  // 27: vtctldata.Workflow.options:type_name -> vtctldata.WorkflowOptions
-	326, // 28: vtctldata.AddCellInfoRequest.cell_info:type_name -> topodata.CellInfo
-	327, // 29: vtctldata.ApplyKeyspaceRoutingRulesRequest.keyspace_routing_rules:type_name -> vschema.KeyspaceRoutingRules
-	327, // 30: vtctldata.ApplyKeyspaceRoutingRulesResponse.keyspace_routing_rules:type_name -> vschema.KeyspaceRoutingRules
-	328, // 31: vtctldata.ApplyRoutingRulesRequest.routing_rules:type_name -> vschema.RoutingRules
-	329, // 32: vtctldata.ApplyShardRoutingRulesRequest.shard_routing_rules:type_name -> vschema.ShardRoutingRules
-	324, // 33: vtctldata.ApplySchemaRequest.wait_replicas_timeout:type_name -> vttime.Duration
-	330, // 34: vtctldata.ApplySchemaRequest.caller_id:type_name -> vtrpc.CallerID
-	284, // 35: vtctldata.ApplySchemaResponse.rows_affected_by_shard:type_name -> vtctldata.ApplySchemaResponse.RowsAffectedByShardEntry
-	331, // 36: vtctldata.ApplyVSchemaRequest.v_schema:type_name -> vschema.Keyspace
-	331, // 37: vtctldata.ApplyVSchemaResponse.v_schema:type_name -> vschema.Keyspace
-	285, // 38: vtctldata.ApplyVSchemaResponse.unknown_vindex_params:type_name -> vtctldata.ApplyVSchemaResponse.UnknownVindexParamsEntry
-	323, // 39: vtctldata.BackupRequest.tablet_alias:type_name -> topodata.TabletAlias
-	324, // 40: vtctldata.BackupRequest.mysql_shutdown_timeout:type_name -> vttime.Duration
-	332, // 41: vtctldata.BackupRequest.init_sql:type_name -> tabletmanagerdata.BackupRequest.InitSQL
-	323, // 42: vtctldata.BackupResponse.tablet_alias:type_name -> topodata.TabletAlias
-	319, // 43: vtctldata.BackupResponse.event:type_name -> logutil.Event
-	324, // 44: vtctldata.BackupShardRequest.mysql_shutdown_timeout:type_name -> vttime.Duration
-	332, // 45: vtctldata.BackupShardRequest.init_sql:type_name -> tabletmanagerdata.BackupRequest.InitSQL
-	330, // 46: vtctldata.CancelSchemaMigrationRequest.caller_id:type_name -> vtrpc.CallerID
-	287, // 47: vtctldata.CancelSchemaMigrationResponse.rows_affected_by_shard:type_name -> vtctldata.CancelSchemaMigrationResponse.RowsAffectedByShardEntry
-	323, // 48: vtctldata.ChangeTabletTagsRequest.tablet_alias:type_name -> topodata.TabletAlias
-	288, // 49: vtctldata.ChangeTabletTagsRequest.tags:type_name -> vtctldata.ChangeTabletTagsRequest.TagsEntry
-	289, // 50: vtctldata.ChangeTabletTagsResponse.before_tags:type_name -> vtctldata.ChangeTabletTagsResponse.BeforeTagsEntry
-	290, // 51: vtctldata.ChangeTabletTagsResponse.after_tags:type_name -> vtctldata.ChangeTabletTagsResponse.AfterTagsEntry
-	323, // 52: vtctldata.ChangeTabletTypeRequest.tablet_alias:type_name -> topodata.TabletAlias
-	333, // 53: vtctldata.ChangeTabletTypeRequest.db_type:type_name -> topodata.TabletType
-	334, // 54: vtctldata.ChangeTabletTypeResponse.before_tablet:type_name -> topodata.Tablet
-	334, // 55: vtctldata.ChangeTabletTypeResponse.after_tablet:type_name -> topodata.Tablet
-	323, // 56: vtctldata.CheckThrottlerRequest.tablet_alias:type_name -> topodata.TabletAlias
-	323, // 57: vtctldata.CheckThrottlerResponse.tablet_alias:type_name -> topodata.TabletAlias
-	335, // 58: vtctldata.CheckThrottlerResponse.Check:type_name -> tabletmanagerdata.CheckThrottlerResponse
-	330, // 59: vtctldata.CleanupSchemaMigrationRequest.caller_id:type_name -> vtrpc.CallerID
-	291, // 60: vtctldata.CleanupSchemaMigrationResponse.rows_affected_by_shard:type_name -> vtctldata.CleanupSchemaMigrationResponse.RowsAffectedByShardEntry
-	330, // 61: vtctldata.CompleteSchemaMigrationRequest.caller_id:type_name -> vtrpc.CallerID
-	292, // 62: vtctldata.CompleteSchemaMigrationResponse.rows_affected_by_shard:type_name -> vtctldata.CompleteSchemaMigrationResponse.RowsAffectedByShardEntry
-	323, // 63: vtctldata.CopySchemaShardRequest.source_tablet_alias:type_name -> topodata.TabletAlias
-	324, // 64: vtctldata.CopySchemaShardRequest.wait_replicas_timeout:type_name -> vttime.Duration
-	336, // 65: vtctldata.CreateKeyspaceRequest.type:type_name -> topodata.KeyspaceType
-	322, // 66: vtctldata.CreateKeyspaceRequest.snapshot_time:type_name -> vttime.Time
+	330, // 28: vtctldata.AddCellInfoRequest.cell_info:type_name -> topodata.CellInfo
+	331, // 29: vtctldata.ApplyKeyspaceRoutingRulesRequest.keyspace_routing_rules:type_name -> vschema.KeyspaceRoutingRules
+	331, // 30: vtctldata.ApplyKeyspaceRoutingRulesResponse.keyspace_routing_rules:type_name -> vschema.KeyspaceRoutingRules
+	332, // 31: vtctldata.ApplyRoutingRulesRequest.routing_rules:type_name -> vschema.RoutingRules
+	333, // 32: vtctldata.ApplyShardRoutingRulesRequest.shard_routing_rules:type_name -> vschema.ShardRoutingRules
+	328, // 33: vtctldata.ApplySchemaRequest.wait_replicas_timeout:type_name -> vttime.Duration
+	334, // 34: vtctldata.ApplySchemaRequest.caller_id:type_name -> vtrpc.CallerID
+	288, // 35: vtctldata.ApplySchemaResponse.rows_affected_by_shard:type_name -> vtctldata.ApplySchemaResponse.RowsAffectedByShardEntry
+	335, // 36: vtctldata.ApplyVSchemaRequest.v_schema:type_name -> vschema.Keyspace
+	335, // 37: vtctldata.ApplyVSchemaResponse.v_schema:type_name -> vschema.Keyspace
+	289, // 38: vtctldata.ApplyVSchemaResponse.unknown_vindex_params:type_name -> vtctldata.ApplyVSchemaResponse.UnknownVindexParamsEntry
+	327, // 39: vtctldata.BackupRequest.tablet_alias:type_name -> topodata.TabletAlias
+	328, // 40: vtctldata.BackupRequest.mysql_shutdown_timeout:type_name -> vttime.Duration
+	336, // 41: vtctldata.BackupRequest.init_sql:type_name -> tabletmanagerdata.BackupRequest.InitSQL
+	327, // 42: vtctldata.BackupResponse.tablet_alias:type_name -> topodata.TabletAlias
+	323, // 43: vtctldata.BackupResponse.event:type_name -> logutil.Event
+	328, // 44: vtctldata.BackupShardRequest.mysql_shutdown_timeout:type_name -> vttime.Duration
+	336, // 45: vtctldata.BackupShardRequest.init_sql:type_name -> tabletmanagerdata.BackupRequest.InitSQL
+	334, // 46: vtctldata.CancelSchemaMigrationRequest.caller_id:type_name -> vtrpc.CallerID
+	291, // 47: vtctldata.CancelSchemaMigrationResponse.rows_affected_by_shard:type_name -> vtctldata.CancelSchemaMigrationResponse.RowsAffectedByShardEntry
+	327, // 48: vtctldata.ChangeTabletTagsRequest.tablet_alias:type_name -> topodata.TabletAlias
+	292, // 49: vtctldata.ChangeTabletTagsRequest.tags:type_name -> vtctldata.ChangeTabletTagsRequest.TagsEntry
+	293, // 50: vtctldata.ChangeTabletTagsResponse.before_tags:type_name -> vtctldata.ChangeTabletTagsResponse.BeforeTagsEntry
+	294, // 51: vtctldata.ChangeTabletTagsResponse.after_tags:type_name -> vtctldata.ChangeTabletTagsResponse.AfterTagsEntry
+	327, // 52: vtctldata.ChangeTabletTypeRequest.tablet_alias:type_name -> topodata.TabletAlias
+	337, // 53: vtctldata.ChangeTabletTypeRequest.db_type:type_name -> topodata.TabletType
+	338, // 54: vtctldata.ChangeTabletTypeResponse.before_tablet:type_name -> topodata.Tablet
+	338, // 55: vtctldata.ChangeTabletTypeResponse.after_tablet:type_name -> topodata.Tablet
+	327, // 56: vtctldata.CheckThrottlerRequest.tablet_alias:type_name -> topodata.TabletAlias
+	327, // 57: vtctldata.CheckThrottlerResponse.tablet_alias:type_name -> topodata.TabletAlias
+	339, // 58: vtctldata.CheckThrottlerResponse.Check:type_name -> tabletmanagerdata.CheckThrottlerResponse
+	334, // 59: vtctldata.CleanupSchemaMigrationRequest.caller_id:type_name -> vtrpc.CallerID
+	295, // 60: vtctldata.CleanupSchemaMigrationResponse.rows_affected_by_shard:type_name -> vtctldata.CleanupSchemaMigrationResponse.RowsAffectedByShardEntry
+	334, // 61: vtctldata.CompleteSchemaMigrationRequest.caller_id:type_name -> vtrpc.CallerID
+	296, // 62: vtctldata.CompleteSchemaMigrationResponse.rows_affected_by_shard:type_name -> vtctldata.CompleteSchemaMigrationResponse.RowsAffectedByShardEntry
+	327, // 63: vtctldata.CopySchemaShardRequest.source_tablet_alias:type_name -> topodata.TabletAlias
+	328, // 64: vtctldata.CopySchemaShardRequest.wait_replicas_timeout:type_name -> vttime.Duration
+	340, // 65: vtctldata.CreateKeyspaceRequest.type:type_name -> topodata.KeyspaceType
+	326, // 66: vtctldata.CreateKeyspaceRequest.snapshot_time:type_name -> vttime.Time
 	10,  // 67: vtctldata.CreateKeyspaceResponse.keyspace:type_name -> vtctldata.Keyspace
 	10,  // 68: vtctldata.CreateShardResponse.keyspace:type_name -> vtctldata.Keyspace
 	12,  // 69: vtctldata.CreateShardResponse.shard:type_name -> vtctldata.Shard
 	12,  // 70: vtctldata.DeleteShardsRequest.shards:type_name -> vtctldata.Shard
-	323, // 71: vtctldata.DeleteTabletsRequest.tablet_aliases:type_name -> topodata.TabletAlias
-	323, // 72: vtctldata.EmergencyReparentShardRequest.new_primary:type_name -> topodata.TabletAlias
-	323, // 73: vtctldata.EmergencyReparentShardRequest.ignore_replicas:type_name -> topodata.TabletAlias
-	324, // 74: vtctldata.EmergencyReparentShardRequest.wait_replicas_timeout:type_name -> vttime.Duration
-	323, // 75: vtctldata.EmergencyReparentShardRequest.expected_primary:type_name -> topodata.TabletAlias
-	323, // 76: vtctldata.EmergencyReparentShardResponse.promoted_primary:type_name -> topodata.TabletAlias
-	319, // 77: vtctldata.EmergencyReparentShardResponse.events:type_name -> logutil.Event
-	323, // 78: vtctldata.ExecuteFetchAsAppRequest.tablet_alias:type_name -> topodata.TabletAlias
-	337, // 79: vtctldata.ExecuteFetchAsAppResponse.result:type_name -> query.QueryResult
-	323, // 80: vtctldata.ExecuteFetchAsDBARequest.tablet_alias:type_name -> topodata.TabletAlias
-	337, // 81: vtctldata.ExecuteFetchAsDBAResponse.result:type_name -> query.QueryResult
-	323, // 82: vtctldata.ExecuteHookRequest.tablet_alias:type_name -> topodata.TabletAlias
-	338, // 83: vtctldata.ExecuteHookRequest.tablet_hook_request:type_name -> tabletmanagerdata.ExecuteHookRequest
-	339, // 84: vtctldata.ExecuteHookResponse.hook_result:type_name -> tabletmanagerdata.ExecuteHookResponse
-	323, // 85: vtctldata.ExecuteMultiFetchAsDBARequest.tablet_alias:type_name -> topodata.TabletAlias
-	337, // 86: vtctldata.ExecuteMultiFetchAsDBAResponse.results:type_name -> query.QueryResult
-	293, // 87: vtctldata.FindAllShardsInKeyspaceResponse.shards:type_name -> vtctldata.FindAllShardsInKeyspaceResponse.ShardsEntry
-	330, // 88: vtctldata.ForceCutOverSchemaMigrationRequest.caller_id:type_name -> vtrpc.CallerID
-	294, // 89: vtctldata.ForceCutOverSchemaMigrationResponse.rows_affected_by_shard:type_name -> vtctldata.ForceCutOverSchemaMigrationResponse.RowsAffectedByShardEntry
-	340, // 90: vtctldata.GetBackupsResponse.backups:type_name -> mysqlctl.BackupInfo
-	326, // 91: vtctldata.GetCellInfoResponse.cell_info:type_name -> topodata.CellInfo
-	295, // 92: vtctldata.GetCellsAliasesResponse.aliases:type_name -> vtctldata.GetCellsAliasesResponse.AliasesEntry
-	323, // 93: vtctldata.GetFullStatusRequest.tablet_alias:type_name -> topodata.TabletAlias
-	341, // 94: vtctldata.GetFullStatusResponse.status:type_name -> replicationdata.FullStatus
+	327, // 71: vtctldata.DeleteTabletsRequest.tablet_aliases:type_name -> topodata.TabletAlias
+	327, // 72: vtctldata.EmergencyReparentShardRequest.new_primary:type_name -> topodata.TabletAlias
+	327, // 73: vtctldata.EmergencyReparentShardRequest.ignore_replicas:type_name -> topodata.TabletAlias
+	328, // 74: vtctldata.EmergencyReparentShardRequest.wait_replicas_timeout:type_name -> vttime.Duration
+	327, // 75: vtctldata.EmergencyReparentShardRequest.expected_primary:type_name -> topodata.TabletAlias
+	327, // 76: vtctldata.EmergencyReparentShardResponse.promoted_primary:type_name -> topodata.TabletAlias
+	323, // 77: vtctldata.EmergencyReparentShardResponse.events:type_name -> logutil.Event
+	327, // 78: vtctldata.ExecuteFetchAsAppRequest.tablet_alias:type_name -> topodata.TabletAlias
+	341, // 79: vtctldata.ExecuteFetchAsAppResponse.result:type_name -> query.QueryResult
+	327, // 80: vtctldata.ExecuteFetchAsDBARequest.tablet_alias:type_name -> topodata.TabletAlias
+	341, // 81: vtctldata.ExecuteFetchAsDBAResponse.result:type_name -> query.QueryResult
+	327, // 82: vtctldata.ExecuteHookRequest.tablet_alias:type_name -> topodata.TabletAlias
+	342, // 83: vtctldata.ExecuteHookRequest.tablet_hook_request:type_name -> tabletmanagerdata.ExecuteHookRequest
+	343, // 84: vtctldata.ExecuteHookResponse.hook_result:type_name -> tabletmanagerdata.ExecuteHookResponse
+	327, // 85: vtctldata.ExecuteMultiFetchAsDBARequest.tablet_alias:type_name -> topodata.TabletAlias
+	341, // 86: vtctldata.ExecuteMultiFetchAsDBAResponse.results:type_name -> query.QueryResult
+	297, // 87: vtctldata.FindAllShardsInKeyspaceResponse.shards:type_name -> vtctldata.FindAllShardsInKeyspaceResponse.ShardsEntry
+	334, // 88: vtctldata.ForceCutOverSchemaMigrationRequest.caller_id:type_name -> vtrpc.CallerID
+	298, // 89: vtctldata.ForceCutOverSchemaMigrationResponse.rows_affected_by_shard:type_name -> vtctldata.ForceCutOverSchemaMigrationResponse.RowsAffectedByShardEntry
+	344, // 90: vtctldata.GetBackupsResponse.backups:type_name -> mysqlctl.BackupInfo
+	330, // 91: vtctldata.GetCellInfoResponse.cell_info:type_name -> topodata.CellInfo
+	299, // 92: vtctldata.GetCellsAliasesResponse.aliases:type_name -> vtctldata.GetCellsAliasesResponse.AliasesEntry
+	327, // 93: vtctldata.GetFullStatusRequest.tablet_alias:type_name -> topodata.TabletAlias
+	345, // 94: vtctldata.GetFullStatusResponse.status:type_name -> replicationdata.FullStatus
 	10,  // 95: vtctldata.GetKeyspacesResponse.keyspaces:type_name -> vtctldata.Keyspace
 	10,  // 96: vtctldata.GetKeyspaceResponse.keyspace:type_name -> vtctldata.Keyspace
-	323, // 97: vtctldata.GetPermissionsRequest.tablet_alias:type_name -> topodata.TabletAlias
-	342, // 98: vtctldata.GetPermissionsResponse.permissions:type_name -> tabletmanagerdata.Permissions
-	327, // 99: vtctldata.GetKeyspaceRoutingRulesResponse.keyspace_routing_rules:type_name -> vschema.KeyspaceRoutingRules
-	328, // 100: vtctldata.GetRoutingRulesResponse.routing_rules:type_name -> vschema.RoutingRules
-	323, // 101: vtctldata.GetSchemaRequest.tablet_alias:type_name -> topodata.TabletAlias
-	343, // 102: vtctldata.GetSchemaResponse.schema:type_name -> tabletmanagerdata.SchemaDefinition
+	327, // 97: vtctldata.GetPermissionsRequest.tablet_alias:type_name -> topodata.TabletAlias
+	346, // 98: vtctldata.GetPermissionsResponse.permissions:type_name -> tabletmanagerdata.Permissions
+	331, // 99: vtctldata.GetKeyspaceRoutingRulesResponse.keyspace_routing_rules:type_name -> vschema.KeyspaceRoutingRules
+	332, // 100: vtctldata.GetRoutingRulesResponse.routing_rules:type_name -> vschema.RoutingRules
+	327, // 101: vtctldata.GetSchemaRequest.tablet_alias:type_name -> topodata.TabletAlias
+	347, // 102: vtctldata.GetSchemaResponse.schema:type_name -> tabletmanagerdata.SchemaDefinition
 	5,   // 103: vtctldata.GetSchemaMigrationsRequest.status:type_name -> vtctldata.SchemaMigration.Status
-	324, // 104: vtctldata.GetSchemaMigrationsRequest.recent:type_name -> vttime.Duration
+	328, // 104: vtctldata.GetSchemaMigrationsRequest.recent:type_name -> vttime.Duration
 	1,   // 105: vtctldata.GetSchemaMigrationsRequest.order:type_name -> vtctldata.QueryOrdering
 	11,  // 106: vtctldata.GetSchemaMigrationsResponse.migrations:type_name -> vtctldata.SchemaMigration
-	296, // 107: vtctldata.GetShardReplicationResponse.shard_replication_by_cell:type_name -> vtctldata.GetShardReplicationResponse.ShardReplicationByCellEntry
+	300, // 107: vtctldata.GetShardReplicationResponse.shard_replication_by_cell:type_name -> vtctldata.GetShardReplicationResponse.ShardReplicationByCellEntry
 	12,  // 108: vtctldata.GetShardResponse.shard:type_name -> vtctldata.Shard
-	329, // 109: vtctldata.GetShardRoutingRulesResponse.shard_routing_rules:type_name -> vschema.ShardRoutingRules
-	297, // 110: vtctldata.GetSrvKeyspaceNamesResponse.names:type_name -> vtctldata.GetSrvKeyspaceNamesResponse.NamesEntry
-	299, // 111: vtctldata.GetSrvKeyspacesResponse.srv_keyspaces:type_name -> vtctldata.GetSrvKeyspacesResponse.SrvKeyspacesEntry
-	344, // 112: vtctldata.UpdateThrottlerConfigRequest.throttled_app:type_name -> topodata.ThrottledAppRule
-	345, // 113: vtctldata.GetSrvVSchemaResponse.srv_v_schema:type_name -> vschema.SrvVSchema
-	300, // 114: vtctldata.GetSrvVSchemasResponse.srv_v_schemas:type_name -> vtctldata.GetSrvVSchemasResponse.SrvVSchemasEntry
-	323, // 115: vtctldata.GetTabletRequest.tablet_alias:type_name -> topodata.TabletAlias
-	334, // 116: vtctldata.GetTabletResponse.tablet:type_name -> topodata.Tablet
-	323, // 117: vtctldata.GetTabletsRequest.tablet_aliases:type_name -> topodata.TabletAlias
-	333, // 118: vtctldata.GetTabletsRequest.tablet_type:type_name -> topodata.TabletType
-	334, // 119: vtctldata.GetTabletsResponse.tablets:type_name -> topodata.Tablet
-	323, // 120: vtctldata.GetThrottlerStatusRequest.tablet_alias:type_name -> topodata.TabletAlias
-	346, // 121: vtctldata.GetThrottlerStatusResponse.status:type_name -> tabletmanagerdata.GetThrottlerStatusResponse
+	333, // 109: vtctldata.GetShardRoutingRulesResponse.shard_routing_rules:type_name -> vschema.ShardRoutingRules
+	301, // 110: vtctldata.GetSrvKeyspaceNamesResponse.names:type_name -> vtctldata.GetSrvKeyspaceNamesResponse.NamesEntry
+	303, // 111: vtctldata.GetSrvKeyspacesResponse.srv_keyspaces:type_name -> vtctldata.GetSrvKeyspacesResponse.SrvKeyspacesEntry
+	348, // 112: vtctldata.UpdateThrottlerConfigRequest.throttled_app:type_name -> topodata.ThrottledAppRule
+	349, // 113: vtctldata.GetSrvVSchemaResponse.srv_v_schema:type_name -> vschema.SrvVSchema
+	304, // 114: vtctldata.GetSrvVSchemasResponse.srv_v_schemas:type_name -> vtctldata.GetSrvVSchemasResponse.SrvVSchemasEntry
+	327, // 115: vtctldata.GetTabletRequest.tablet_alias:type_name -> topodata.TabletAlias
+	338, // 116: vtctldata.GetTabletResponse.tablet:type_name -> topodata.Tablet
+	327, // 117: vtctldata.GetTabletsRequest.tablet_aliases:type_name -> topodata.TabletAlias
+	337, // 118: vtctldata.GetTabletsRequest.tablet_type:type_name -> topodata.TabletType
+	338, // 119: vtctldata.GetTabletsResponse.tablets:type_name -> topodata.Tablet
+	327, // 120: vtctldata.GetThrottlerStatusRequest.tablet_alias:type_name -> topodata.TabletAlias
+	350, // 121: vtctldata.GetThrottlerStatusResponse.status:type_name -> tabletmanagerdata.GetThrottlerStatusResponse
 	124, // 122: vtctldata.GetTopologyPathResponse.cell:type_name -> vtctldata.TopologyCell
-	347, // 123: vtctldata.GetUnresolvedTransactionsResponse.transactions:type_name -> query.TransactionMetadata
-	347, // 124: vtctldata.GetTransactionInfoResponse.metadata:type_name -> query.TransactionMetadata
+	351, // 123: vtctldata.GetUnresolvedTransactionsResponse.transactions:type_name -> query.TransactionMetadata
+	351, // 124: vtctldata.GetTransactionInfoResponse.metadata:type_name -> query.TransactionMetadata
 	128, // 125: vtctldata.GetTransactionInfoResponse.shard_states:type_name -> vtctldata.ShardTransactionState
-	348, // 126: vtctldata.ConcludeTransactionRequest.participants:type_name -> query.Target
-	323, // 127: vtctldata.GetVersionRequest.tablet_alias:type_name -> topodata.TabletAlias
-	331, // 128: vtctldata.GetVSchemaResponse.v_schema:type_name -> vschema.Keyspace
+	352, // 126: vtctldata.ConcludeTransactionRequest.participants:type_name -> query.Target
+	327, // 127: vtctldata.GetVersionRequest.tablet_alias:type_name -> topodata.TabletAlias
+	335, // 128: vtctldata.GetVSchemaResponse.v_schema:type_name -> vschema.Keyspace
 	14,  // 129: vtctldata.GetWorkflowsResponse.workflows:type_name -> vtctldata.Workflow
-	323, // 130: vtctldata.InitShardPrimaryRequest.primary_elect_tablet_alias:type_name -> topodata.TabletAlias
-	324, // 131: vtctldata.InitShardPrimaryRequest.wait_replicas_timeout:type_name -> vttime.Duration
-	319, // 132: vtctldata.InitShardPrimaryResponse.events:type_name -> logutil.Event
-	330, // 133: vtctldata.LaunchSchemaMigrationRequest.caller_id:type_name -> vtrpc.CallerID
-	301, // 134: vtctldata.LaunchSchemaMigrationResponse.rows_affected_by_shard:type_name -> vtctldata.LaunchSchemaMigrationResponse.RowsAffectedByShardEntry
-	331, // 135: vtctldata.LookupVindexCreateRequest.vindex:type_name -> vschema.Keyspace
-	333, // 136: vtctldata.LookupVindexCreateRequest.tablet_types:type_name -> topodata.TabletType
-	320, // 137: vtctldata.LookupVindexCreateRequest.tablet_selection_preference:type_name -> tabletmanagerdata.TabletSelectionPreference
+	327, // 130: vtctldata.InitShardPrimaryRequest.primary_elect_tablet_alias:type_name -> topodata.TabletAlias
+	328, // 131: vtctldata.InitShardPrimaryRequest.wait_replicas_timeout:type_name -> vttime.Duration
+	323, // 132: vtctldata.InitShardPrimaryResponse.events:type_name -> logutil.Event
+	334, // 133: vtctldata.LaunchSchemaMigrationRequest.caller_id:type_name -> vtrpc.CallerID
+	305, // 134: vtctldata.LaunchSchemaMigrationResponse.rows_affected_by_shard:type_name -> vtctldata.LaunchSchemaMigrationResponse.RowsAffectedByShardEntry
+	335, // 135: vtctldata.LookupVindexCreateRequest.vindex:type_name -> vschema.Keyspace
+	337, // 136: vtctldata.LookupVindexCreateRequest.tablet_types:type_name -> topodata.TabletType
+	324, // 137: vtctldata.LookupVindexCreateRequest.tablet_selection_preference:type_name -> tabletmanagerdata.TabletSelectionPreference
 	9,   // 138: vtctldata.MaterializeCreateRequest.settings:type_name -> vtctldata.MaterializeSettings
 	8,   // 139: vtctldata.WorkflowAddTablesRequest.table_settings:type_name -> vtctldata.TableMaterializeSettings
 	0,   // 140: vtctldata.WorkflowAddTablesRequest.materialization_intent:type_name -> vtctldata.MaterializationIntent
-	333, // 141: vtctldata.MigrateCreateRequest.tablet_types:type_name -> topodata.TabletType
-	320, // 142: vtctldata.MigrateCreateRequest.tablet_selection_preference:type_name -> tabletmanagerdata.TabletSelectionPreference
-	333, // 143: vtctldata.MoveTablesCreateRequest.tablet_types:type_name -> topodata.TabletType
-	320, // 144: vtctldata.MoveTablesCreateRequest.tablet_selection_preference:type_name -> tabletmanagerdata.TabletSelectionPreference
-	13,  // 145: vtctldata.MoveTablesCreateRequest.workflow_options:type_name -> vtctldata.WorkflowOptions
-	302, // 146: vtctldata.MoveTablesCreateResponse.details:type_name -> vtctldata.MoveTablesCreateResponse.TabletInfo
-	323, // 147: vtctldata.PingTabletRequest.tablet_alias:type_name -> topodata.TabletAlias
-	323, // 148: vtctldata.PlannedReparentShardRequest.new_primary:type_name -> topodata.TabletAlias
-	323, // 149: vtctldata.PlannedReparentShardRequest.avoid_primary:type_name -> topodata.TabletAlias
-	324, // 150: vtctldata.PlannedReparentShardRequest.wait_replicas_timeout:type_name -> vttime.Duration
-	324, // 151: vtctldata.PlannedReparentShardRequest.tolerable_replication_lag:type_name -> vttime.Duration
-	323, // 152: vtctldata.PlannedReparentShardRequest.expected_primary:type_name -> topodata.TabletAlias
-	323, // 153: vtctldata.PlannedReparentShardResponse.promoted_primary:type_name -> topodata.TabletAlias
-	319, // 154: vtctldata.PlannedReparentShardResponse.events:type_name -> logutil.Event
-	323, // 155: vtctldata.RefreshStateRequest.tablet_alias:type_name -> topodata.TabletAlias
-	323, // 156: vtctldata.ReloadSchemaRequest.tablet_alias:type_name -> topodata.TabletAlias
-	319, // 157: vtctldata.ReloadSchemaKeyspaceResponse.events:type_name -> logutil.Event
-	319, // 158: vtctldata.ReloadSchemaShardResponse.events:type_name -> logutil.Event
-	323, // 159: vtctldata.ReparentTabletRequest.tablet:type_name -> topodata.TabletAlias
-	323, // 160: vtctldata.ReparentTabletResponse.primary:type_name -> topodata.TabletAlias
-	333, // 161: vtctldata.ReshardCreateRequest.tablet_types:type_name -> topodata.TabletType
-	320, // 162: vtctldata.ReshardCreateRequest.tablet_selection_preference:type_name -> tabletmanagerdata.TabletSelectionPreference
-	13,  // 163: vtctldata.ReshardCreateRequest.workflow_options:type_name -> vtctldata.WorkflowOptions
-	323, // 164: vtctldata.RestoreFromBackupRequest.tablet_alias:type_name -> topodata.TabletAlias
-	322, // 165: vtctldata.RestoreFromBackupRequest.backup_time:type_name -> vttime.Time
-	322, // 166: vtctldata.RestoreFromBackupRequest.restore_to_timestamp:type_name -> vttime.Time
-	323, // 167: vtctldata.RestoreFromBackupResponse.tablet_alias:type_name -> topodata.TabletAlias
-	319, // 168: vtctldata.RestoreFromBackupResponse.event:type_name -> logutil.Event
-	330, // 169: vtctldata.RetrySchemaMigrationRequest.caller_id:type_name -> vtrpc.CallerID
-	303, // 170: vtctldata.RetrySchemaMigrationResponse.rows_affected_by_shard:type_name -> vtctldata.RetrySchemaMigrationResponse.RowsAffectedByShardEntry
-	323, // 171: vtctldata.RunHealthCheckRequest.tablet_alias:type_name -> topodata.TabletAlias
-	321, // 172: vtctldata.SetKeyspaceDurabilityPolicyResponse.keyspace:type_name -> topodata.Keyspace
-	321, // 173: vtctldata.SetKeyspaceShardingInfoResponse.keyspace:type_name -> topodata.Keyspace
-	325, // 174: vtctldata.SetShardIsPrimaryServingResponse.shard:type_name -> topodata.Shard
-	333, // 175: vtctldata.SetShardTabletControlRequest.tablet_type:type_name -> topodata.TabletType
-	325, // 176: vtctldata.SetShardTabletControlResponse.shard:type_name -> topodata.Shard
-	323, // 177: vtctldata.SetWritableRequest.tablet_alias:type_name -> topodata.TabletAlias
-	323, // 178: vtctldata.ShardReplicationAddRequest.tablet_alias:type_name -> topodata.TabletAlias
-	349, // 179: vtctldata.ShardReplicationFixResponse.error:type_name -> topodata.ShardReplicationError
-	304, // 180: vtctldata.ShardReplicationPositionsResponse.replication_statuses:type_name -> vtctldata.ShardReplicationPositionsResponse.ReplicationStatusesEntry
-	305, // 181: vtctldata.ShardReplicationPositionsResponse.tablet_map:type_name -> vtctldata.ShardReplicationPositionsResponse.TabletMapEntry
-	323, // 182: vtctldata.ShardReplicationRemoveRequest.tablet_alias:type_name -> topodata.TabletAlias
-	323, // 183: vtctldata.SleepTabletRequest.tablet_alias:type_name -> topodata.TabletAlias
-	324, // 184: vtctldata.SleepTabletRequest.duration:type_name -> vttime.Duration
-	350, // 185: vtctldata.SourceShardAddRequest.key_range:type_name -> topodata.KeyRange
-	325, // 186: vtctldata.SourceShardAddResponse.shard:type_name -> topodata.Shard
-	325, // 187: vtctldata.SourceShardDeleteResponse.shard:type_name -> topodata.Shard
-	323, // 188: vtctldata.StartReplicationRequest.tablet_alias:type_name -> topodata.TabletAlias
-	323, // 189: vtctldata.StopReplicationRequest.tablet_alias:type_name -> topodata.TabletAlias
-	323, // 190: vtctldata.TabletExternallyReparentedRequest.tablet:type_name -> topodata.TabletAlias
-	323, // 191: vtctldata.TabletExternallyReparentedResponse.new_primary:type_name -> topodata.TabletAlias
-	323, // 192: vtctldata.TabletExternallyReparentedResponse.old_primary:type_name -> topodata.TabletAlias
-	326, // 193: vtctldata.UpdateCellInfoRequest.cell_info:type_name -> topodata.CellInfo
-	326, // 194: vtctldata.UpdateCellInfoResponse.cell_info:type_name -> topodata.CellInfo
-	351, // 195: vtctldata.UpdateCellsAliasRequest.cells_alias:type_name -> topodata.CellsAlias
-	351, // 196: vtctldata.UpdateCellsAliasResponse.cells_alias:type_name -> topodata.CellsAlias
-	306, // 197: vtctldata.ValidateResponse.results_by_keyspace:type_name -> vtctldata.ValidateResponse.ResultsByKeyspaceEntry
-	307, // 198: vtctldata.ValidateKeyspaceResponse.results_by_shard:type_name -> vtctldata.ValidateKeyspaceResponse.ResultsByShardEntry
-	308, // 199: vtctldata.ValidateSchemaKeyspaceResponse.results_by_shard:type_name -> vtctldata.ValidateSchemaKeyspaceResponse.ResultsByShardEntry
-	309, // 200: vtctldata.ValidateVersionKeyspaceResponse.results_by_shard:type_name -> vtctldata.ValidateVersionKeyspaceResponse.ResultsByShardEntry
-	310, // 201: vtctldata.ValidateVSchemaResponse.results_by_shard:type_name -> vtctldata.ValidateVSchemaResponse.ResultsByShardEntry
-	333, // 202: vtctldata.VDiffCreateRequest.tablet_types:type_name -> topodata.TabletType
-	320, // 203: vtctldata.VDiffCreateRequest.tablet_selection_preference:type_name -> tabletmanagerdata.TabletSelectionPreference
-	324, // 204: vtctldata.VDiffCreateRequest.filtered_replication_wait_time:type_name -> vttime.Duration
-	324, // 205: vtctldata.VDiffCreateRequest.wait_update_interval:type_name -> vttime.Duration
-	324, // 206: vtctldata.VDiffCreateRequest.max_diff_duration:type_name -> vttime.Duration
-	311, // 207: vtctldata.VDiffShowResponse.tablet_responses:type_name -> vtctldata.VDiffShowResponse.TabletResponsesEntry
-	312, // 208: vtctldata.WorkflowDeleteResponse.details:type_name -> vtctldata.WorkflowDeleteResponse.TabletInfo
-	316, // 209: vtctldata.WorkflowStatusResponse.table_copy_state:type_name -> vtctldata.WorkflowStatusResponse.TableCopyStateEntry
-	317, // 210: vtctldata.WorkflowStatusResponse.shard_streams:type_name -> vtctldata.WorkflowStatusResponse.ShardStreamsEntry
-	333, // 211: vtctldata.WorkflowSwitchTrafficRequest.tablet_types:type_name -> topodata.TabletType
-	324, // 212: vtctldata.WorkflowSwitchTrafficRequest.max_replication_lag_allowed:type_name -> vttime.Duration
-	324, // 213: vtctldata.WorkflowSwitchTrafficRequest.timeout:type_name -> vttime.Duration
-	352, // 214: vtctldata.WorkflowUpdateRequest.tablet_request:type_name -> tabletmanagerdata.UpdateVReplicationWorkflowRequest
-	318, // 215: vtctldata.WorkflowUpdateResponse.details:type_name -> vtctldata.WorkflowUpdateResponse.TabletInfo
-	353, // 216: vtctldata.GetMirrorRulesResponse.mirror_rules:type_name -> vschema.MirrorRules
-	333, // 217: vtctldata.WorkflowMirrorTrafficRequest.tablet_types:type_name -> topodata.TabletType
-	279, // 218: vtctldata.Workflow.ShardStreamsEntry.value:type_name -> vtctldata.Workflow.ShardStream
-	280, // 219: vtctldata.Workflow.ShardStream.streams:type_name -> vtctldata.Workflow.Stream
-	354, // 220: vtctldata.Workflow.ShardStream.tablet_controls:type_name -> topodata.Shard.TabletControl
-	323, // 221: vtctldata.Workflow.Stream.tablet:type_name -> topodata.TabletAlias
-	355, // 222: vtctldata.Workflow.Stream.binlog_source:type_name -> binlogdata.BinlogSource
-	322, // 223: vtctldata.Workflow.Stream.transaction_timestamp:type_name -> vttime.Time
-	322, // 224: vtctldata.Workflow.Stream.time_updated:type_name -> vttime.Time
-	281, // 225: vtctldata.Workflow.Stream.copy_states:type_name -> vtctldata.Workflow.Stream.CopyState
-	282, // 226: vtctldata.Workflow.Stream.logs:type_name -> vtctldata.Workflow.Stream.Log
-	283, // 227: vtctldata.Workflow.Stream.throttler_status:type_name -> vtctldata.Workflow.Stream.ThrottlerStatus
-	333, // 228: vtctldata.Workflow.Stream.tablet_types:type_name -> topodata.TabletType
-	320, // 229: vtctldata.Workflow.Stream.tablet_selection_preference:type_name -> tabletmanagerdata.TabletSelectionPreference
-	322, // 230: vtctldata.Workflow.Stream.Log.created_at:type_name -> vttime.Time
-	322, // 231: vtctldata.Workflow.Stream.Log.updated_at:type_name -> vttime.Time
-	322, // 232: vtctldata.Workflow.Stream.ThrottlerStatus.time_throttled:type_name -> vttime.Time
-	286, // 233: vtctldata.ApplyVSchemaResponse.UnknownVindexParamsEntry.value:type_name -> vtctldata.ApplyVSchemaResponse.ParamList
-	12,  // 234: vtctldata.FindAllShardsInKeyspaceResponse.ShardsEntry.value:type_name -> vtctldata.Shard
-	351, // 235: vtctldata.GetCellsAliasesResponse.AliasesEntry.value:type_name -> topodata.CellsAlias
-	356, // 236: vtctldata.GetShardReplicationResponse.ShardReplicationByCellEntry.value:type_name -> topodata.ShardReplication
-	298, // 237: vtctldata.GetSrvKeyspaceNamesResponse.NamesEntry.value:type_name -> vtctldata.GetSrvKeyspaceNamesResponse.NameList
-	357, // 238: vtctldata.GetSrvKeyspacesResponse.SrvKeyspacesEntry.value:type_name -> topodata.SrvKeyspace
-	345, // 239: vtctldata.GetSrvVSchemasResponse.SrvVSchemasEntry.value:type_name -> vschema.SrvVSchema
-	323, // 240: vtctldata.MoveTablesCreateResponse.TabletInfo.tablet:type_name -> topodata.TabletAlias
-	358, // 241: vtctldata.ShardReplicationPositionsResponse.ReplicationStatusesEntry.value:type_name -> replicationdata.Status
-	334, // 242: vtctldata.ShardReplicationPositionsResponse.TabletMapEntry.value:type_name -> topodata.Tablet
-	239, // 243: vtctldata.ValidateResponse.ResultsByKeyspaceEntry.value:type_name -> vtctldata.ValidateKeyspaceResponse
-	245, // 244: vtctldata.ValidateKeyspaceResponse.ResultsByShardEntry.value:type_name -> vtctldata.ValidateShardResponse
-	245, // 245: vtctldata.ValidateSchemaKeyspaceResponse.ResultsByShardEntry.value:type_name -> vtctldata.ValidateShardResponse
-	245, // 246: vtctldata.ValidateVersionKeyspaceResponse.ResultsByShardEntry.value:type_name -> vtctldata.ValidateShardResponse
-	245, // 247: vtctldata.ValidateVSchemaResponse.ResultsByShardEntry.value:type_name -> vtctldata.ValidateShardResponse
-	359, // 248: vtctldata.VDiffShowResponse.TabletResponsesEntry.value:type_name -> tabletmanagerdata.VDiffResponse
-	323, // 249: vtctldata.WorkflowDeleteResponse.TabletInfo.tablet:type_name -> topodata.TabletAlias
-	3,   // 250: vtctldata.WorkflowStatusResponse.TableCopyState.phase:type_name -> vtctldata.TableCopyPhase
-	323, // 251: vtctldata.WorkflowStatusResponse.ShardStreamState.tablet:type_name -> topodata.TabletAlias
-	314, // 252: vtctldata.WorkflowStatusResponse.ShardStreams.streams:type_name -> vtctldata.WorkflowStatusResponse.ShardStreamState
-	313, // 253: vtctldata.WorkflowStatusResponse.TableCopyStateEntry.value:type_name -> vtctldata.WorkflowStatusResponse.TableCopyState
-	315, // 254: vtctldata.WorkflowStatusResponse.ShardStreamsEntry.value:type_name -> vtctldata.WorkflowStatusResponse.ShardStreams
-	323, // 255: vtctldata.WorkflowUpdateResponse.TabletInfo.tablet:type_name -> topodata.TabletAlias
-	256, // [256:256] is the sub-list for method output_type
-	256, // [256:256] is the sub-list for method input_type
-	256, // [256:256] is the sub-list for extension type_name
-	256, // [256:256] is the sub-list for extension extendee
-	0,   // [0:256] is the sub-list for field type_name
+	337, // 141: vtctldata.MigrateCreateRequest.tablet_types:type_name -> topodata.TabletType
+	324, // 142: vtctldata.MigrateCreateRequest.tablet_selection_preference:type_name -> tabletmanagerdata.TabletSelectionPreference
+	328, // 143: vtctldata.MigrateReplicationModeRequest.wait_timeout:type_name -> vttime.Duration
+	327, // 144: vtctldata.ReplicationModeMigrationStep.tablet:type_name -> topodata.TabletAlias
+	158, // 145: vtctldata.ReplicationModeMigrationShardResult.steps:type_name -> vtctldata.ReplicationModeMigrationStep
+	159, // 146: vtctldata.MigrateReplicationModeResponse.shards:type_name -> vtctldata.ReplicationModeMigrationShardResult
+	158, // 147: vtctldata.MigrateReplicationModeResponse.keyspace_steps:type_name -> vtctldata.ReplicationModeMigrationStep
+	323, // 148: vtctldata.MigrateReplicationModeResponse.events:type_name -> logutil.Event
+	337, // 149: vtctldata.MoveTablesCreateRequest.tablet_types:type_name -> topodata.TabletType
+	324, // 150: vtctldata.MoveTablesCreateRequest.tablet_selection_preference:type_name -> tabletmanagerdata.TabletSelectionPreference
+	13,  // 151: vtctldata.MoveTablesCreateRequest.workflow_options:type_name -> vtctldata.WorkflowOptions
+	306, // 152: vtctldata.MoveTablesCreateResponse.details:type_name -> vtctldata.MoveTablesCreateResponse.TabletInfo
+	327, // 153: vtctldata.PingTabletRequest.tablet_alias:type_name -> topodata.TabletAlias
+	327, // 154: vtctldata.PlannedReparentShardRequest.new_primary:type_name -> topodata.TabletAlias
+	327, // 155: vtctldata.PlannedReparentShardRequest.avoid_primary:type_name -> topodata.TabletAlias
+	328, // 156: vtctldata.PlannedReparentShardRequest.wait_replicas_timeout:type_name -> vttime.Duration
+	328, // 157: vtctldata.PlannedReparentShardRequest.tolerable_replication_lag:type_name -> vttime.Duration
+	327, // 158: vtctldata.PlannedReparentShardRequest.expected_primary:type_name -> topodata.TabletAlias
+	327, // 159: vtctldata.PlannedReparentShardResponse.promoted_primary:type_name -> topodata.TabletAlias
+	323, // 160: vtctldata.PlannedReparentShardResponse.events:type_name -> logutil.Event
+	327, // 161: vtctldata.RefreshStateRequest.tablet_alias:type_name -> topodata.TabletAlias
+	327, // 162: vtctldata.ReloadSchemaRequest.tablet_alias:type_name -> topodata.TabletAlias
+	323, // 163: vtctldata.ReloadSchemaKeyspaceResponse.events:type_name -> logutil.Event
+	323, // 164: vtctldata.ReloadSchemaShardResponse.events:type_name -> logutil.Event
+	327, // 165: vtctldata.ReparentTabletRequest.tablet:type_name -> topodata.TabletAlias
+	327, // 166: vtctldata.ReparentTabletResponse.primary:type_name -> topodata.TabletAlias
+	337, // 167: vtctldata.ReshardCreateRequest.tablet_types:type_name -> topodata.TabletType
+	324, // 168: vtctldata.ReshardCreateRequest.tablet_selection_preference:type_name -> tabletmanagerdata.TabletSelectionPreference
+	13,  // 169: vtctldata.ReshardCreateRequest.workflow_options:type_name -> vtctldata.WorkflowOptions
+	327, // 170: vtctldata.RestoreFromBackupRequest.tablet_alias:type_name -> topodata.TabletAlias
+	326, // 171: vtctldata.RestoreFromBackupRequest.backup_time:type_name -> vttime.Time
+	326, // 172: vtctldata.RestoreFromBackupRequest.restore_to_timestamp:type_name -> vttime.Time
+	327, // 173: vtctldata.RestoreFromBackupResponse.tablet_alias:type_name -> topodata.TabletAlias
+	323, // 174: vtctldata.RestoreFromBackupResponse.event:type_name -> logutil.Event
+	334, // 175: vtctldata.RetrySchemaMigrationRequest.caller_id:type_name -> vtrpc.CallerID
+	307, // 176: vtctldata.RetrySchemaMigrationResponse.rows_affected_by_shard:type_name -> vtctldata.RetrySchemaMigrationResponse.RowsAffectedByShardEntry
+	327, // 177: vtctldata.RunHealthCheckRequest.tablet_alias:type_name -> topodata.TabletAlias
+	325, // 178: vtctldata.SetKeyspaceDurabilityPolicyResponse.keyspace:type_name -> topodata.Keyspace
+	325, // 179: vtctldata.SetKeyspaceShardingInfoResponse.keyspace:type_name -> topodata.Keyspace
+	329, // 180: vtctldata.SetShardIsPrimaryServingResponse.shard:type_name -> topodata.Shard
+	337, // 181: vtctldata.SetShardTabletControlRequest.tablet_type:type_name -> topodata.TabletType
+	329, // 182: vtctldata.SetShardTabletControlResponse.shard:type_name -> topodata.Shard
+	327, // 183: vtctldata.SetWritableRequest.tablet_alias:type_name -> topodata.TabletAlias
+	327, // 184: vtctldata.ShardReplicationAddRequest.tablet_alias:type_name -> topodata.TabletAlias
+	353, // 185: vtctldata.ShardReplicationFixResponse.error:type_name -> topodata.ShardReplicationError
+	308, // 186: vtctldata.ShardReplicationPositionsResponse.replication_statuses:type_name -> vtctldata.ShardReplicationPositionsResponse.ReplicationStatusesEntry
+	309, // 187: vtctldata.ShardReplicationPositionsResponse.tablet_map:type_name -> vtctldata.ShardReplicationPositionsResponse.TabletMapEntry
+	327, // 188: vtctldata.ShardReplicationRemoveRequest.tablet_alias:type_name -> topodata.TabletAlias
+	327, // 189: vtctldata.SleepTabletRequest.tablet_alias:type_name -> topodata.TabletAlias
+	328, // 190: vtctldata.SleepTabletRequest.duration:type_name -> vttime.Duration
+	354, // 191: vtctldata.SourceShardAddRequest.key_range:type_name -> topodata.KeyRange
+	329, // 192: vtctldata.SourceShardAddResponse.shard:type_name -> topodata.Shard
+	329, // 193: vtctldata.SourceShardDeleteResponse.shard:type_name -> topodata.Shard
+	327, // 194: vtctldata.StartReplicationRequest.tablet_alias:type_name -> topodata.TabletAlias
+	327, // 195: vtctldata.StopReplicationRequest.tablet_alias:type_name -> topodata.TabletAlias
+	327, // 196: vtctldata.TabletExternallyReparentedRequest.tablet:type_name -> topodata.TabletAlias
+	327, // 197: vtctldata.TabletExternallyReparentedResponse.new_primary:type_name -> topodata.TabletAlias
+	327, // 198: vtctldata.TabletExternallyReparentedResponse.old_primary:type_name -> topodata.TabletAlias
+	330, // 199: vtctldata.UpdateCellInfoRequest.cell_info:type_name -> topodata.CellInfo
+	330, // 200: vtctldata.UpdateCellInfoResponse.cell_info:type_name -> topodata.CellInfo
+	355, // 201: vtctldata.UpdateCellsAliasRequest.cells_alias:type_name -> topodata.CellsAlias
+	355, // 202: vtctldata.UpdateCellsAliasResponse.cells_alias:type_name -> topodata.CellsAlias
+	310, // 203: vtctldata.ValidateResponse.results_by_keyspace:type_name -> vtctldata.ValidateResponse.ResultsByKeyspaceEntry
+	311, // 204: vtctldata.ValidateKeyspaceResponse.results_by_shard:type_name -> vtctldata.ValidateKeyspaceResponse.ResultsByShardEntry
+	312, // 205: vtctldata.ValidateSchemaKeyspaceResponse.results_by_shard:type_name -> vtctldata.ValidateSchemaKeyspaceResponse.ResultsByShardEntry
+	313, // 206: vtctldata.ValidateVersionKeyspaceResponse.results_by_shard:type_name -> vtctldata.ValidateVersionKeyspaceResponse.ResultsByShardEntry
+	314, // 207: vtctldata.ValidateVSchemaResponse.results_by_shard:type_name -> vtctldata.ValidateVSchemaResponse.ResultsByShardEntry
+	337, // 208: vtctldata.VDiffCreateRequest.tablet_types:type_name -> topodata.TabletType
+	324, // 209: vtctldata.VDiffCreateRequest.tablet_selection_preference:type_name -> tabletmanagerdata.TabletSelectionPreference
+	328, // 210: vtctldata.VDiffCreateRequest.filtered_replication_wait_time:type_name -> vttime.Duration
+	328, // 211: vtctldata.VDiffCreateRequest.wait_update_interval:type_name -> vttime.Duration
+	328, // 212: vtctldata.VDiffCreateRequest.max_diff_duration:type_name -> vttime.Duration
+	315, // 213: vtctldata.VDiffShowResponse.tablet_responses:type_name -> vtctldata.VDiffShowResponse.TabletResponsesEntry
+	316, // 214: vtctldata.WorkflowDeleteResponse.details:type_name -> vtctldata.WorkflowDeleteResponse.TabletInfo
+	320, // 215: vtctldata.WorkflowStatusResponse.table_copy_state:type_name -> vtctldata.WorkflowStatusResponse.TableCopyStateEntry
+	321, // 216: vtctldata.WorkflowStatusResponse.shard_streams:type_name -> vtctldata.WorkflowStatusResponse.ShardStreamsEntry
+	337, // 217: vtctldata.WorkflowSwitchTrafficRequest.tablet_types:type_name -> topodata.TabletType
+	328, // 218: vtctldata.WorkflowSwitchTrafficRequest.max_replication_lag_allowed:type_name -> vttime.Duration
+	328, // 219: vtctldata.WorkflowSwitchTrafficRequest.timeout:type_name -> vttime.Duration
+	356, // 220: vtctldata.WorkflowUpdateRequest.tablet_request:type_name -> tabletmanagerdata.UpdateVReplicationWorkflowRequest
+	322, // 221: vtctldata.WorkflowUpdateResponse.details:type_name -> vtctldata.WorkflowUpdateResponse.TabletInfo
+	357, // 222: vtctldata.GetMirrorRulesResponse.mirror_rules:type_name -> vschema.MirrorRules
+	337, // 223: vtctldata.WorkflowMirrorTrafficRequest.tablet_types:type_name -> topodata.TabletType
+	283, // 224: vtctldata.Workflow.ShardStreamsEntry.value:type_name -> vtctldata.Workflow.ShardStream
+	284, // 225: vtctldata.Workflow.ShardStream.streams:type_name -> vtctldata.Workflow.Stream
+	358, // 226: vtctldata.Workflow.ShardStream.tablet_controls:type_name -> topodata.Shard.TabletControl
+	327, // 227: vtctldata.Workflow.Stream.tablet:type_name -> topodata.TabletAlias
+	359, // 228: vtctldata.Workflow.Stream.binlog_source:type_name -> binlogdata.BinlogSource
+	326, // 229: vtctldata.Workflow.Stream.transaction_timestamp:type_name -> vttime.Time
+	326, // 230: vtctldata.Workflow.Stream.time_updated:type_name -> vttime.Time
+	285, // 231: vtctldata.Workflow.Stream.copy_states:type_name -> vtctldata.Workflow.Stream.CopyState
+	286, // 232: vtctldata.Workflow.Stream.logs:type_name -> vtctldata.Workflow.Stream.Log
+	287, // 233: vtctldata.Workflow.Stream.throttler_status:type_name -> vtctldata.Workflow.Stream.ThrottlerStatus
+	337, // 234: vtctldata.Workflow.Stream.tablet_types:type_name -> topodata.TabletType
+	324, // 235: vtctldata.Workflow.Stream.tablet_selection_preference:type_name -> tabletmanagerdata.TabletSelectionPreference
+	326, // 236: vtctldata.Workflow.Stream.Log.created_at:type_name -> vttime.Time
+	326, // 237: vtctldata.Workflow.Stream.Log.updated_at:type_name -> vttime.Time
+	326, // 238: vtctldata.Workflow.Stream.ThrottlerStatus.time_throttled:type_name -> vttime.Time
+	290, // 239: vtctldata.ApplyVSchemaResponse.UnknownVindexParamsEntry.value:type_name -> vtctldata.ApplyVSchemaResponse.ParamList
+	12,  // 240: vtctldata.FindAllShardsInKeyspaceResponse.ShardsEntry.value:type_name -> vtctldata.Shard
+	355, // 241: vtctldata.GetCellsAliasesResponse.AliasesEntry.value:type_name -> topodata.CellsAlias
+	360, // 242: vtctldata.GetShardReplicationResponse.ShardReplicationByCellEntry.value:type_name -> topodata.ShardReplication
+	302, // 243: vtctldata.GetSrvKeyspaceNamesResponse.NamesEntry.value:type_name -> vtctldata.GetSrvKeyspaceNamesResponse.NameList
+	361, // 244: vtctldata.GetSrvKeyspacesResponse.SrvKeyspacesEntry.value:type_name -> topodata.SrvKeyspace
+	349, // 245: vtctldata.GetSrvVSchemasResponse.SrvVSchemasEntry.value:type_name -> vschema.SrvVSchema
+	327, // 246: vtctldata.MoveTablesCreateResponse.TabletInfo.tablet:type_name -> topodata.TabletAlias
+	362, // 247: vtctldata.ShardReplicationPositionsResponse.ReplicationStatusesEntry.value:type_name -> replicationdata.Status
+	338, // 248: vtctldata.ShardReplicationPositionsResponse.TabletMapEntry.value:type_name -> topodata.Tablet
+	243, // 249: vtctldata.ValidateResponse.ResultsByKeyspaceEntry.value:type_name -> vtctldata.ValidateKeyspaceResponse
+	249, // 250: vtctldata.ValidateKeyspaceResponse.ResultsByShardEntry.value:type_name -> vtctldata.ValidateShardResponse
+	249, // 251: vtctldata.ValidateSchemaKeyspaceResponse.ResultsByShardEntry.value:type_name -> vtctldata.ValidateShardResponse
+	249, // 252: vtctldata.ValidateVersionKeyspaceResponse.ResultsByShardEntry.value:type_name -> vtctldata.ValidateShardResponse
+	249, // 253: vtctldata.ValidateVSchemaResponse.ResultsByShardEntry.value:type_name -> vtctldata.ValidateShardResponse
+	363, // 254: vtctldata.VDiffShowResponse.TabletResponsesEntry.value:type_name -> tabletmanagerdata.VDiffResponse
+	327, // 255: vtctldata.WorkflowDeleteResponse.TabletInfo.tablet:type_name -> topodata.TabletAlias
+	3,   // 256: vtctldata.WorkflowStatusResponse.TableCopyState.phase:type_name -> vtctldata.TableCopyPhase
+	327, // 257: vtctldata.WorkflowStatusResponse.ShardStreamState.tablet:type_name -> topodata.TabletAlias
+	318, // 258: vtctldata.WorkflowStatusResponse.ShardStreams.streams:type_name -> vtctldata.WorkflowStatusResponse.ShardStreamState
+	317, // 259: vtctldata.WorkflowStatusResponse.TableCopyStateEntry.value:type_name -> vtctldata.WorkflowStatusResponse.TableCopyState
+	319, // 260: vtctldata.WorkflowStatusResponse.ShardStreamsEntry.value:type_name -> vtctldata.WorkflowStatusResponse.ShardStreams
+	327, // 261: vtctldata.WorkflowUpdateResponse.TabletInfo.tablet:type_name -> topodata.TabletAlias
+	262, // [262:262] is the sub-list for method output_type
+	262, // [262:262] is the sub-list for method input_type
+	262, // [262:262] is the sub-list for extension type_name
+	262, // [262:262] is the sub-list for extension extendee
+	0,   // [0:262] is the sub-list for field type_name
 }
 
 func init() { file_vtctldata_proto_init() }
@@ -19438,16 +19788,16 @@ func file_vtctldata_proto_init() {
 		return
 	}
 	file_vtctldata_proto_msgTypes[23].OneofWrappers = []any{}
-	file_vtctldata_proto_msgTypes[161].OneofWrappers = []any{}
-	file_vtctldata_proto_msgTypes[246].OneofWrappers = []any{}
-	file_vtctldata_proto_msgTypes[256].OneofWrappers = []any{}
+	file_vtctldata_proto_msgTypes[165].OneofWrappers = []any{}
+	file_vtctldata_proto_msgTypes[250].OneofWrappers = []any{}
+	file_vtctldata_proto_msgTypes[260].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_vtctldata_proto_rawDesc), len(file_vtctldata_proto_rawDesc)),
 			NumEnums:      6,
-			NumMessages:   313,
+			NumMessages:   317,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

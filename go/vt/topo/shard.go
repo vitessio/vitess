@@ -21,6 +21,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"maps"
 	"path"
 	"slices"
 	"sort"
@@ -707,6 +708,65 @@ func (ts *Server) GetTabletMapForShardByCell(ctx context.Context, keyspace, shar
 		gerr = err
 	}
 	return result, gerr
+}
+
+// GetTabletMapForShardWithCellTimeout returns the tablets of a shard like GetTabletMapForShard,
+// but reads each cell with its own deadline of cellTimeout. The topology server of a cell that is
+// cut off does not answer until the caller gives up: GetTabletMapForShard then spends the caller's
+// whole deadline waiting for it, and the reads of the tablet records of the cells that did answer
+// fail with it. Here, an unreachable cell costs at most cellTimeout, and the tablets of the other
+// cells are returned with ErrPartialResult. The map is indexed by
+// topoproto.TabletAliasString(tablet alias).
+func (ts *Server) GetTabletMapForShardWithCellTimeout(ctx context.Context, keyspace, shard string, cellTimeout time.Duration) (map[string]*TabletInfo, error) {
+	result, _, err := ts.GetTabletMapAndFailedCellsForShard(ctx, keyspace, shard, cellTimeout)
+	return result, err
+}
+
+// GetTabletMapAndFailedCellsForShard is GetTabletMapForShardWithCellTimeout, and also returns the
+// cells that did not answer within cellTimeout, sorted, so that the caller can tell a tablet whose
+// cell's topology server does not answer from a tablet that does not exist.
+func (ts *Server) GetTabletMapAndFailedCellsForShard(ctx context.Context, keyspace, shard string, cellTimeout time.Duration) (map[string]*TabletInfo, []string, error) {
+	cells, err := ts.GetCellInfoNames(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	var (
+		mu       sync.Mutex
+		wg       sync.WaitGroup
+		result   = make(map[string]*TabletInfo)
+		failed   []string
+		firstErr error
+		answered int
+	)
+	for _, cell := range cells {
+		wg.Go(func() {
+			cellCtx, cancel := context.WithTimeout(ctx, cellTimeout)
+			defer cancel()
+			tablets, err := ts.GetTabletMapForShardByCell(cellCtx, keyspace, shard, []string{cell})
+			mu.Lock()
+			defer mu.Unlock()
+			maps.Copy(result, tablets)
+			if err == nil {
+				answered++
+				return
+			}
+			failed = append(failed, cell)
+			if firstErr == nil && !IsErrType(err, PartialResult) {
+				firstErr = err
+			}
+		})
+	}
+	wg.Wait()
+	if len(failed) == 0 {
+		return result, nil, nil
+	}
+	sort.Strings(failed)
+	if answered == 0 && len(result) == 0 && firstErr != nil {
+		// No cell answered: for example, the shard does not exist.
+		return nil, failed, firstErr
+	}
+	log.Warn(fmt.Sprintf("GetTabletMapForShardWithCellTimeout(%v,%v): got partial result, failed cells: %v", keyspace, shard, strings.Join(failed, ",")))
+	return result, failed, NewError(PartialResult, strings.Join(failed, ","))
 }
 
 func shardFilePath(keyspace, shard string) string {

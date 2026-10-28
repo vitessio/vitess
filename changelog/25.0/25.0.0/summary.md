@@ -10,6 +10,7 @@
         - [VTAdmin VExplain modes that can run the statement require the `execute` action](#vtadmin-vexplain-execute-action)
     - **[New Support](#new-support)**
         - [VTOrc failover of an unreachable primary `vttablet` via replica quorum](#vtorc-quorum-unreachable-primary)
+        - [MySQL Group Replication as a replication mode (experimental)](#group-replication)
         - [Back up binary logs with full builtin backups](#backup-include-binlogs)
     - **[Breaking Changes](#breaking-changes)**
         - [`--watch-replication-stream` flag removed](#vttablet-watch-replication-stream-removed)
@@ -133,6 +134,29 @@ A graceful `vttablet` shutdown records a shutdown marker in the topology server 
 Note that in this scenario the old primary's MySQL keeps running, and because its `vttablet` is the unreachable component, it cannot be demoted until that `vttablet` comes back and discovers the shard has a new primary. As with any emergency reparent away from an unreachable primary, a semi-sync durability policy (e.g. `semi_sync`) is what prevents the old primary from acknowledging new writes in the meantime; with `none` durability, anything writing directly to the old MySQL (bypassing `vtgate`) could cause a split brain.
 
 See [#19918](https://github.com/vitessio/vitess/issues/19918).
+
+#### <a id="group-replication"/>MySQL Group Replication as a replication mode (experimental)</a>
+
+A shard can now replicate with MySQL Group Replication in single-primary mode instead of asynchronous replication with semi-sync. The group acknowledges a commit once a majority of its voting members accepted it, fences a primary that lost its majority, and elects a new primary on its own; Vitess keeps the topology, vtgate's routing and buffering, `PlannedReparentShard`, `EmergencyReparentShard` and VTOrc in step with the group.
+
+Group Replication is selected with the `group_replication_cross_cell` durability policy, like `semi_sync` and `cross_cell`: one voting member per cell, up to nine, so the shard keeps its primary through the loss of a cell. A shard needs `PRIMARY` or `REPLICA` tablets in at least three cells: `PlannedReparentShard`, `InitShardPrimary` and `MigrateReplicationMode` refuse a shard with fewer, and VTOrc reports it as `GroupVotersBelowTarget` instead of starting its group.
+
+Additional `REPLICA` tablets and all `RDONLY` tablets replicate asynchronously from the group's primary. A voting member whose tablet type changes to one that the policy does not allow as a voter (`RDONLY`, `DRAINED`) gives its seat to another `REPLICA` of its cell right away, and leaves the group.
+
+To use it:
+
+- Start every `vttablet` of the keyspace with `--enable-group-replication` (MySQL 8.4 with the `group_replication` plugin; `MigrateReplicationMode` also accepts MySQL 8.0.27 or later, the first version with the MySQL communication stack, but only 8.4 was tested). The tablet derives the group's configuration from the topology and applies `--group-replication-consistency` (default `BEFORE_ON_PRIMARY_FAILOVER`), `--group-replication-exit-state-action` (default `READ_ONLY`) and `--group-replication-autorejoin-tries` (default `0`) before its MySQL joins the group.
+- Convert an existing semi-sync keyspace online, shard by shard, with `vtctldclient MigrateReplicationMode`, which also converts it back. The keyspace's durability policy changes before the first shard is converted, so components that do not support Group Replication stop acting on the keyspace.
+- VTOrc waits `--group-replication-failover-grace-period` (default `30s`) for the group to elect a new primary before it runs an emergency reparent. It gives the seat of a voting member that has been unreachable for `--group-replication-voter-replacement-grace-period` (default `1m`) to another `REPLICA` of its cell, and gives a seat to a `REPLICA` of a cell that has no voting member; otherwise it reports `GroupVoterUnreplaceable` or `GroupVotersBelowTarget`.
+- To remove a voting member for good, for example to decommission its cell, delete its tablet record with `vtctldclient DeleteTablets`: VTOrc swaps it for another `REPLICA` of its cell, or removes it from the group. This also unblocks a shard whose group lost its majority while that member is gone for good: VTOrc bootstraps the group from the remaining members. Transactions that only the deleted member held are lost, as with a forced `EmergencyReparentShard` (below); a member whose MySQL is still in the group is kept, with the alert `GroupVoterRecordDeleted`. Each voting member records its address and its MySQL's `server_uuid` in the shard record (`group_replication_voter_identities`), so that a VTOrc that restarted after the deletion still finds the member, and removes it once it has failed to reach it for the grace period. Deleting the record of the live primary needs `DeleteTablets --allow-primary`: VTOrc then moves the primary role to another member, within about one recovery cycle, and what the deleted primary acknowledged until then can be lost if it crashes before and the group is then bootstrapped without it.
+- To restore writes on a shard whose group lost its majority while the other voting members are down but expected back, run `vtctldclient EmergencyReparentShard --group-replication-force-new-group` once the remaining members left the group. It drops the voting members that do not answer, starts a new group from those that answer, on the one that holds every transaction the others executed or received, and promotes it. Transactions that only the dropped members held are lost. Make sure the dropped members are down first: one that still runs, cut off from `vtctld` and from the topology server, keeps serving its clients. VTOrc never forces a new group; an older `vtctld` ignores the flag.
+- `PlannedReparentShard --new-primary` accepts a `REPLICA` that is not a voting member: it takes the seat of the voting member of its cell, or a new seat when its cell has none, and joins the group before the reparent. When it replaces the current primary (the same cell), writes pause while it joins, which vtgate buffers with `--enable-buffer`.
+
+Upgrade every `vtctld`, VTOrc and `vttablet` before converting a keyspace, and keep at least one VTOrc of this version running. Do not downgrade a component that serves a Group Replication keyspace: convert the keyspace back to semi-sync first. `SetKeyspaceDurabilityPolicy` refuses to switch an initialized keyspace between semi-sync and Group Replication; use `MigrateReplicationMode`.
+
+Behaviour that changes with Group Replication: every table needs a primary key; a transaction above `group_replication_transaction_size_limit` is rolled back; a failover takes about 7s (Group Replication's fixed 5s failure detection), against about 3s with semi-sync when the primary's host fails; a shard whose group lost its majority waits until every voting member is reachable again before VTOrc restores it, unless an operator forces a new group.
+
+See the design document, `doc/design-docs/GroupReplication.md`, for the guarantees and the known gaps.
 
 #### <a id="backup-include-binlogs"/>Back up binary logs with full builtin backups</a>
 

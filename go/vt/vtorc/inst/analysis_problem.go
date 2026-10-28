@@ -220,6 +220,90 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 		},
 	},
 
+	// Group Replication
+	{
+		Meta: &DetectionAnalysisProblemMeta{
+			Analysis:    GroupNotBootstrapped,
+			Description: "Group Replication is not active on any tablet of the shard",
+			Priority:    detectionAnalysisPriorityShardWideAction,
+		},
+		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
+			return matchGroupNotBootstrapped(a, ca)
+		},
+	},
+	{
+		Meta: &DetectionAnalysisProblemMeta{
+			Analysis:    GroupPrimaryNotVoter,
+			Description: "Tablet's MySQL is the primary of the shard's replication group, but the tablet is not a voter",
+			Priority:    detectionAnalysisPriorityCritical,
+		},
+		// The tablet does not serve: the group primary moves to a voter, whose tablet becomes the
+		// shard primary in the same step. GroupPrimaryNotInTopo does not match such a tablet.
+		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
+			return matchGroupVoterAnalysis(a, ca, GroupPrimaryNotVoter)
+		},
+	},
+	{
+		Meta: &DetectionAnalysisProblemMeta{
+			Analysis:    GroupPrimaryNotInTopo,
+			Description: "Tablet's MySQL is the group primary, but the tablet is not the shard primary",
+			Priority:    detectionAnalysisPriorityCritical,
+		},
+		// The group has already elected this member. Promoting its tablet in the topology is
+		// what the shard-wide failovers would otherwise try to achieve with a reparent, and it
+		// makes them obsolete.
+		BeforeAnalyses: []AnalysisCode{
+			DeadPrimary, DeadPrimaryAndReplicas, DeadPrimaryAndSomeReplicas, DeadPrimaryWithoutReplicas,
+			PrimaryTabletUnreachableByQuorum, IncapacitatedPrimary, PrimarySemiSyncBlocked,
+			PrimaryTabletDeleted, ClusterHasNoPrimary,
+		},
+		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
+			return matchGroupPrimaryNotInTopo(a, ca, time.Now())
+		},
+	},
+	{
+		Meta: &DetectionAnalysisProblemMeta{
+			Analysis:    GroupBootstrapNotRecorded,
+			Description: "Tablet's MySQL is the primary of a group that a bootstrap created, but the shard record does not list its incarnation",
+			Priority:    detectionAnalysisPriorityCritical,
+		},
+		// Until the incarnation is recorded, no tablet follows the group, and the shard has no
+		// primary that a reparent could follow either.
+		BeforeAnalyses: []AnalysisCode{
+			DeadPrimary, DeadPrimaryAndReplicas, DeadPrimaryAndSomeReplicas, DeadPrimaryWithoutReplicas,
+			PrimaryTabletUnreachableByQuorum, IncapacitatedPrimary, PrimarySemiSyncBlocked,
+			PrimaryTabletDeleted, ClusterHasNoPrimary,
+		},
+		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
+			return matchGroupBootstrapNotRecorded(a, ca)
+		},
+	},
+	{
+		Meta: &DetectionAnalysisProblemMeta{
+			Analysis:    GroupMemberNotOnline,
+			Description: "Tablet should be a member of the shard's replication group, but its MySQL is not an active member",
+			// Higher than the asynchronous replication problems (NotConnectedToPrimary, ...) that
+			// the same tablet also shows: a voting member must join the group, not replicate
+			// from the primary.
+			Priority: detectionAnalysisPriorityHigh,
+		},
+		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
+			// A voter whose START GROUP_REPLICATION is still in progress is joining already: MySQL
+			// refuses another START, and a STOP, until it ends.
+			return matchGroupMemberNotOnline(a, ca) && !a.GroupStartInProgress
+		},
+	},
+	{
+		Meta: &DetectionAnalysisProblemMeta{
+			Analysis:    GroupVotersOutOfDate,
+			Description: "VTOrc changes the voters of the shard's replication group: it selects them, swaps a failed one, grows the group into a cell, or removes a voter whose tablet record was deleted",
+			Priority:    detectionAnalysisPriorityHigh,
+		},
+		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
+			return matchGroupVotersOutOfDate(a, ca)
+		},
+	},
+
 	// PrimaryHasPrimary
 	{
 		Meta: &DetectionAnalysisProblemMeta{
@@ -228,7 +312,8 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 			Priority:    detectionAnalysisPriorityShardWideAction,
 		},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
-			return a.IsClusterPrimary && !a.IsPrimary
+			// An active group member has no replication source of its own.
+			return a.IsClusterPrimary && !a.IsPrimary && !a.IsGroupMemberActive
 		},
 	},
 
@@ -241,7 +326,13 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 		},
 		BeforeAnalyses: []AnalysisCode{PrimarySemiSyncBlocked},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
-			return a.IsClusterPrimary && a.IsReadOnly
+			// A group secondary is read-only by design. It is the group primary's tablet that
+			// must become the shard primary (GroupPrimaryNotInTopo), not this one writable. Under a
+			// group replication policy, MySQL stays read-only as long as its tablet may not serve
+			// (the serving invariant), and the recovery's UndoDemotePrimary is refused then: it only
+			// applies to the primary of the shard's legitimate group, the backstop that makes it
+			// writable once it may serve.
+			return a.IsClusterPrimary && a.IsReadOnly && !isGroupSecondary(a) && matchPrimaryOfGroupShard(a, ca)
 		},
 	},
 	{
@@ -251,7 +342,9 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 			Priority:    detectionAnalysisPriorityMedium,
 		},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
-			return topo.IsReplicaType(a.TabletType) && !a.IsReadOnly
+			// The group primary is writable by design; GroupPrimaryNotInTopo makes its tablet
+			// the shard primary. A writable group secondary is still a problem.
+			return topo.IsReplicaType(a.TabletType) && !a.IsReadOnly && !a.IsGroupPrimary
 		},
 	},
 
@@ -267,7 +360,7 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 			if !hasMinSemiSyncAckers(ca.durability, primary, a) {
 				return false
 			}
-			return a.IsClusterPrimary && policy.SemiSyncAckers(ca.durability, tablet) != 0 && !a.SemiSyncPrimaryEnabled
+			return a.IsClusterPrimary && policy.SemiSyncAckers(ca.durability, tablet) != 0 && !a.SemiSyncPrimaryEnabled && !a.IsGroupMemberActive
 		},
 	},
 	{
@@ -278,7 +371,7 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 		},
 		BeforeAnalyses: []AnalysisCode{ReplicaSemiSyncMustNotBeSet},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
-			return a.IsClusterPrimary && policy.SemiSyncAckers(ca.durability, tablet) == 0 && a.SemiSyncPrimaryEnabled
+			return a.IsClusterPrimary && policy.SemiSyncAckers(ca.durability, tablet) == 0 && a.SemiSyncPrimaryEnabled && !a.IsGroupMemberActive
 		},
 	},
 	{
@@ -289,7 +382,7 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 		},
 		BeforeAnalyses: []AnalysisCode{PrimarySemiSyncMustBeSet},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
-			return topo.IsReplicaType(a.TabletType) && !a.IsPrimary && policy.IsReplicaSemiSync(ca.durability, primary, tablet) && !a.SemiSyncReplicaEnabled
+			return topo.IsReplicaType(a.TabletType) && !a.IsPrimary && policy.IsReplicaSemiSync(ca.durability, primary, tablet) && !a.SemiSyncReplicaEnabled && !replicatesThroughGroup(a, ca)
 		},
 	},
 	{
@@ -300,7 +393,7 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 		},
 		AfterAnalyses: []AnalysisCode{PrimarySemiSyncMustNotBeSet},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
-			return topo.IsReplicaType(a.TabletType) && !a.IsPrimary && !policy.IsReplicaSemiSync(ca.durability, primary, tablet) && a.SemiSyncReplicaEnabled
+			return topo.IsReplicaType(a.TabletType) && !a.IsPrimary && !policy.IsReplicaSemiSync(ca.durability, primary, tablet) && a.SemiSyncReplicaEnabled && !replicatesThroughGroup(a, ca)
 		},
 	},
 	{
@@ -322,7 +415,12 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 			Priority:    detectionAnalysisPriorityMedium,
 		},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
-			return a.IsClusterPrimary && a.CurrentTabletType != topodatapb.TabletType_UNKNOWN && a.CurrentTabletType != topodatapb.TabletType_PRIMARY
+			// A tablet whose MySQL is no longer the group primary demotes itself. The group
+			// primary's tablet takes over (GroupPrimaryNotInTopo, then StaleTopoPrimary). Its
+			// recovery, UndoDemotePrimary, only succeeds on the primary of the shard's legitimate group
+			// under a group replication policy (see matchPrimaryOfGroupShard).
+			return a.IsClusterPrimary && a.CurrentTabletType != topodatapb.TabletType_UNKNOWN && a.CurrentTabletType != topodatapb.TabletType_PRIMARY &&
+				!isGroupSecondary(a) && matchPrimaryOfGroupShard(a, ca)
 		},
 	},
 	{
@@ -356,7 +454,8 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 			Priority:    detectionAnalysisPriorityShardWideAction,
 		},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
-			return topo.IsReplicaType(a.TabletType) && ca.primaryAlias == nil && a.ShardPrimaryTermTimestamp.IsZero()
+			return topo.IsReplicaType(a.TabletType) && ca.primaryAlias == nil && a.ShardPrimaryTermTimestamp.IsZero() && !groupHasNoMember(a, ca) &&
+				!matchGroupMemberNotOnline(a, ca)
 		},
 	},
 	{
@@ -366,7 +465,8 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 			Priority:    detectionAnalysisPriorityShardWideAction,
 		},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
-			return topo.IsReplicaType(a.TabletType) && ca.primaryAlias == nil && !a.ShardPrimaryTermTimestamp.IsZero()
+			return topo.IsReplicaType(a.TabletType) && ca.primaryAlias == nil && !a.ShardPrimaryTermTimestamp.IsZero() && !groupHasNoMember(a, ca) &&
+				!matchGroupMemberNotOnline(a, ca)
 		},
 	},
 
@@ -379,7 +479,7 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 		},
 		BeforeAnalyses: []AnalysisCode{PrimarySemiSyncBlocked},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
-			return topo.IsReplicaType(a.TabletType) && !a.IsPrimary && a.ReplicationStopped
+			return topo.IsReplicaType(a.TabletType) && !a.IsPrimary && a.ReplicationStopped && !replicatesThroughGroup(a, ca)
 		},
 	},
 	{
@@ -389,7 +489,8 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 			Priority:    detectionAnalysisPriorityMedium,
 		},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
-			return topo.IsReplicaType(a.TabletType) && a.IsPrimary
+			// An active group member replicates through the group, not from the primary.
+			return topo.IsReplicaType(a.TabletType) && a.IsPrimary && !replicatesThroughGroup(a, ca)
 		},
 	},
 	{
@@ -399,7 +500,7 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 			Priority:    detectionAnalysisPriorityMedium,
 		},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
-			return topo.IsReplicaType(a.TabletType) && !a.IsPrimary && math.Round(a.HeartbeatInterval*2) != float64(a.ReplicaNetTimeout)
+			return topo.IsReplicaType(a.TabletType) && !a.IsPrimary && math.Round(a.HeartbeatInterval*2) != float64(a.ReplicaNetTimeout) && !replicatesThroughGroup(a, ca)
 		},
 	},
 	{
@@ -409,7 +510,7 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 			Priority:    detectionAnalysisPriorityMedium,
 		},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
-			return topo.IsReplicaType(a.TabletType) && !a.IsPrimary && ca.primaryAlias != nil && !topoproto.TabletAliasEqual(a.AnalyzedInstancePrimaryAlias, ca.primaryAlias)
+			return topo.IsReplicaType(a.TabletType) && !a.IsPrimary && ca.primaryAlias != nil && !topoproto.TabletAliasEqual(a.AnalyzedInstancePrimaryAlias, ca.primaryAlias) && !replicatesThroughGroup(a, ca)
 		},
 	},
 	// Unreachable primary checks
@@ -497,6 +598,58 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 		},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
 			return a.IsPrimary && a.LastCheckValid && a.CountReplicas > 1 && a.CountValidReplicas < a.CountReplicas && a.CountValidReplicas > 0 && a.CountValidReplicatingReplicas == 0
+		},
+	},
+
+	// Group Replication alerts. Detection only: recovering from them requires an operator decision.
+	{
+		Meta: &DetectionAnalysisProblemMeta{
+			Analysis:    GroupQuorumLost,
+			Description: "The shard's replication group has active members, but none of them has quorum",
+			Priority:    detectionAnalysisPriorityMedium,
+		},
+		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
+			return a.LastCheckValid && a.IsGroupMemberActive && a.ShardGroupQuorumMembers == 0
+		},
+	},
+	{
+		Meta: &DetectionAnalysisProblemMeta{
+			Analysis:    GroupVotersBelowTarget,
+			Description: "The shard's replication group has fewer voters than cells with an eligible tablet, or fewer than three, and VTOrc cannot add one",
+			Priority:    detectionAnalysisPriorityMedium,
+		},
+		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
+			return matchGroupVoterAnalysis(a, ca, GroupVotersBelowTarget)
+		},
+	},
+	{
+		Meta: &DetectionAnalysisProblemMeta{
+			Analysis:    GroupVoterUnreplaceable,
+			Description: "A voter of the shard's replication group failed, and its cell has no valid spare",
+			Priority:    detectionAnalysisPriorityMedium,
+		},
+		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
+			return matchGroupVoterAnalysis(a, ca, GroupVoterUnreplaceable)
+		},
+	},
+	{
+		Meta: &DetectionAnalysisProblemMeta{
+			Analysis:    GroupVoterRecordDeleted,
+			Description: "A voter of the shard's replication group has no tablet record, but its MySQL is still in the group",
+			Priority:    detectionAnalysisPriorityMedium,
+		},
+		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
+			return matchGroupVoterAnalysis(a, ca, GroupVoterRecordDeleted)
+		},
+	},
+	{
+		Meta: &DetectionAnalysisProblemMeta{
+			Analysis:    GroupCellMajority,
+			Description: "A single cell holds a majority of the ONLINE members of the shard's replication group",
+			Priority:    detectionAnalysisPriorityLow,
+		},
+		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
+			return policy.IsGroupReplication(ca.durability) && a.LastCheckValid && a.IsGroupPrimary && a.ShardGroupCellMajority != ""
 		},
 	},
 }

@@ -33,19 +33,21 @@ func (sw *shardWatcher) active() bool {
 	return sw.watchChan != nil
 }
 
-func (sw *shardWatcher) start(ts *topo.Server, keyspace, shard string) error {
+// start starts the watch, and returns the shard record as it is when the watch starts: the events
+// only carry the changes after it.
+func (sw *shardWatcher) start(ts *topo.Server, keyspace, shard string) (*topo.WatchShardData, error) {
 	log.Info(fmt.Sprintf("Starting shard watch of %v/%v", keyspace, shard))
 
 	ctx, cancel := context.WithCancel(context.Background())
-	_, c, err := ts.WatchShard(ctx, keyspace, shard)
+	current, c, err := ts.WatchShard(ctx, keyspace, shard)
 	if err != nil {
 		cancel()
-		return err
+		return nil, err
 	}
 
 	sw.watchChan = c
 	sw.watchCancel = cancel
-	return nil
+	return current, nil
 }
 
 func (sw *shardWatcher) stop() {

@@ -150,12 +150,13 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 
 	vttablet.DbName = "vt_" + vttablet.Keyspace
 
-	vttablet.exit = make(chan error)
+	// The goroutine keeps the channel and the process it was started for: a restart replaces both
+	// fields, and the goroutine of the earlier process must not close the new channel.
+	exit, proc := make(chan error), vttablet.proc
+	vttablet.exit = exit
 	go func() {
-		if vttablet.proc != nil {
-			vttablet.exit <- vttablet.proc.Wait()
-			close(vttablet.exit)
-		}
+		exit <- proc.Wait()
+		close(exit)
 	}()
 
 	if vttablet.ServingStatus != "" {
@@ -499,6 +500,29 @@ func (vttablet *VttabletProcess) SemiSyncExtensionLoaded() (mysql.SemiSyncType, 
 	}
 	defer conn.Close()
 	return conn.SemiSyncExtensionLoaded()
+}
+
+// DisableSemiSyncCommand returns the command to disable semi-sync on both the
+// source and replica side, or an empty string when no semi-sync extension is
+// loaded.
+func (vttablet *VttabletProcess) DisableSemiSyncCommand() (string, error) {
+	conn, err := vttablet.TabletConn("", false)
+	if err != nil {
+		return "", err
+	}
+	defer conn.Close()
+	semiSyncType, err := conn.SemiSyncExtensionLoaded()
+	if err != nil {
+		return "", err
+	}
+	switch semiSyncType {
+	case mysql.SemiSyncTypeSource:
+		return "SET GLOBAL rpl_semi_sync_source_enabled = false, GLOBAL rpl_semi_sync_replica_enabled = false", nil
+	case mysql.SemiSyncTypeMaster:
+		return "SET GLOBAL rpl_semi_sync_master_enabled = false, GLOBAL rpl_semi_sync_slave_enabled = false", nil
+	default:
+		return "", nil
+	}
 }
 
 // ResetBinaryLogsCommand returns the commands to reset binary logs
