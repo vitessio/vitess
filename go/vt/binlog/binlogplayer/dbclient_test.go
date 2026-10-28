@@ -17,12 +17,15 @@ limitations under the License.
 package binlogplayer
 
 import (
+	"log/slog"
 	"net"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/vt/log/logtest"
 )
 
 // TestSetMultiStatementsOnAClosedConnection covers what a dead connection
@@ -40,4 +43,23 @@ func TestSetMultiStatementsOnAClosedConnection(t *testing.T) {
 
 	dc := &dbClientImpl{dbConn: conn}
 	require.Error(t, dc.SetMultiStatements(true), "a closed connection cannot grant the capability, whatever it last negotiated")
+}
+
+func TestTransactionErrorLogs(t *testing.T) {
+	logs := logtest.Capture(t, slog.LevelInfo)
+	client, server := net.Pipe()
+	t.Cleanup(func() { server.Close() })
+	conn := mysql.NewConnForTest(client)
+	conn.Close()
+	dc := &dbClientImpl{dbConn: conn}
+
+	require.Error(t, dc.Begin())
+	require.Error(t, dc.Commit())
+	require.Error(t, dc.Rollback())
+
+	for _, msg := range []string{"BEGIN failed w/ error", "COMMIT failed w/ error", "ROLLBACK failed w/ error"} {
+		record := logs.Record(t, msg)
+		assert.Equal(t, "ERROR", record["level"])
+		assert.NotEmpty(t, record["error"])
+	}
 }

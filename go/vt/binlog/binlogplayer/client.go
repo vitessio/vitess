@@ -18,7 +18,7 @@ package binlogplayer
 
 import (
 	"context"
-	"fmt"
+	"log/slog"
 	"os"
 
 	"github.com/spf13/pflag"
@@ -78,7 +78,7 @@ var clientFactories = make(map[string]ClientFactory)
 // RegisterClientFactory adds a new factory. Call during init().
 func RegisterClientFactory(name string, factory ClientFactory) {
 	if _, ok := clientFactories[name]; ok {
-		log.Error(fmt.Sprintf("ClientFactory %s already exists", name))
+		log.Error("ClientFactory already exists", slog.String("name", name))
 		os.Exit(1)
 	}
 	clientFactories[name] = factory

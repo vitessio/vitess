@@ -39,6 +39,12 @@ type fakeBinlogClient struct {
 	lastTables   []string
 	lastKeyRange *topodatapb.KeyRange
 	lastCharset  *binlogdatapb.Charset
+
+	// txn, if set, is the transaction the stream sends instead of the default.
+	txn *binlogdatapb.BinlogTransaction
+	// dialErr and streamErr, if set, are returned by Dial and the Stream calls.
+	dialErr   error
+	streamErr error
 }
 
 func newFakeBinlogClient() *fakeBinlogClient {
@@ -48,7 +54,7 @@ func newFakeBinlogClient() *fakeBinlogClient {
 
 func (fbc *fakeBinlogClient) Dial(ctx context.Context, tablet *topodatapb.Tablet) error {
 	fbc.lastTablet = tablet
-	return nil
+	return fbc.dialErr
 }
 
 func (fbc *fakeBinlogClient) Close() {
@@ -58,25 +64,32 @@ func (fbc *fakeBinlogClient) StreamTables(ctx context.Context, position string, 
 	fbc.lastPos = position
 	fbc.lastTables = tables
 	fbc.lastCharset = charset
-	return &btStream{ctx: ctx}, nil
+	if fbc.streamErr != nil {
+		return nil, fbc.streamErr
+	}
+	return &btStream{ctx: ctx, txn: fbc.txn}, nil
 }
 
 func (fbc *fakeBinlogClient) StreamKeyRange(ctx context.Context, position string, keyRange *topodatapb.KeyRange, charset *binlogdatapb.Charset) (BinlogTransactionStream, error) {
 	fbc.lastPos = position
 	fbc.lastKeyRange = keyRange
 	fbc.lastCharset = charset
-	return &btStream{ctx: ctx}, nil
+	return &btStream{ctx: ctx, txn: fbc.txn}, nil
 }
 
 // btStream satisfies BinlogTransactionStream
 type btStream struct {
 	ctx  context.Context
+	txn  *binlogdatapb.BinlogTransaction
 	sent bool
 }
 
 func (t *btStream) Recv() (*binlogdatapb.BinlogTransaction, error) {
 	if !t.sent {
 		t.sent = true
+		if t.txn != nil {
+			return t.txn, nil
+		}
 		return &binlogdatapb.BinlogTransaction{
 			Statements: []*binlogdatapb.BinlogTransaction_Statement{
 				{

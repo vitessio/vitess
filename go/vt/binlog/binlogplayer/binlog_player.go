@@ -24,13 +24,14 @@ import (
 	"compress/zlib"
 	"context"
 	"encoding/binary"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"math"
 	"os"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -46,11 +47,13 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/textutil"
+	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/vtctldata"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/throttler"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -215,6 +218,7 @@ type BinlogPlayer struct {
 
 	// common to all
 	uid            int32
+	workflow       string
 	position       replication.Position
 	stopPosition   replication.Position
 	blplStats      *Stats
@@ -262,16 +266,28 @@ func NewBinlogPlayerTables(dbClient DBClient, tablet *topodatapb.Tablet, tables 
 // If a stop position was specified, and reached, the state is updated to "Stopped".
 func (blp *BinlogPlayer) ApplyBinlogEvents(ctx context.Context) error {
 	if err := blp.setVReplicationState(binlogdatapb.VReplicationWorkflowState_Running, ""); err != nil {
-		log.Error(fmt.Sprintf("Error writing Running state: %v", err))
+		log.Error("Error writing Running state", blp.logAttrs(slog.Any("error", err))...)
 	}
 
 	if err := blp.applyEvents(ctx); err != nil {
 		if err := blp.setVReplicationState(binlogdatapb.VReplicationWorkflowState_Error, err.Error()); err != nil {
-			log.Error(fmt.Sprintf("Error writing stop state: %v", err))
+			log.Error("Error writing stop state", blp.logAttrs(slog.Any("error", err))...)
 		}
 		return err
 	}
 	return nil
+}
+
+// logAttrs returns the attributes that identify the stream in the player's
+// log records, followed by attrs. The workflow is left out until applyEvents
+// has read it from the settings.
+func (blp *BinlogPlayer) logAttrs(attrs ...slog.Attr) []slog.Attr {
+	logAttrs := make([]slog.Attr, 0, 2+len(attrs))
+	if blp.workflow != "" {
+		logAttrs = append(logAttrs, slog.String("workflow", blp.workflow))
+	}
+	logAttrs = append(logAttrs, slog.Int("stream_id", int(blp.uid)))
+	return append(logAttrs, attrs...)
 }
 
 // applyEvents returns a recordable status message on termination or an error otherwise.
@@ -279,10 +295,11 @@ func (blp *BinlogPlayer) applyEvents(ctx context.Context) error {
 	// Read starting values for vreplication.
 	settings, err := ReadVRSettings(blp.dbClient, blp.uid)
 	if err != nil {
-		log.Error(fmt.Sprint(err))
+		log.Error("Error reading the VReplication settings", blp.logAttrs(slog.Any("error", err))...)
 		return err
 	}
 
+	blp.workflow = settings.WorkflowName
 	blp.position = settings.StartPos
 	blp.stopPosition = settings.StopPos
 	t, err := throttler.NewThrottler(
@@ -293,44 +310,52 @@ func (blp *BinlogPlayer) applyEvents(ctx context.Context) error {
 		settings.MaxReplicationLag,
 	)
 	if err != nil {
-		err := fmt.Errorf("failed to instantiate throttler: %v", err)
-		log.Error(fmt.Sprint(err))
-		return err
+		log.Error("failed to instantiate throttler", blp.logAttrs(slog.Any("error", err))...)
+		return fmt.Errorf("failed to instantiate throttler: %v", err)
 	}
 	defer t.Close()
 
 	// Log the mode of operation and when the player stops.
 	if len(blp.tables) > 0 {
-		log.Info(fmt.Sprintf("BinlogPlayer client %v for tables %v starting @ '%v', server: %v", blp.uid,
-			blp.tables,
-			blp.position,
-			blp.tablet))
+		log.Info("BinlogPlayer client for tables starting",
+			blp.logAttrs(
+				slog.Any("tables", blp.tables),
+				slog.String("position", replication.EncodePosition(blp.position)),
+				slog.String("tablet", topoproto.TabletAliasString(blp.tablet.GetAlias())),
+			)...)
 	} else {
-		log.Info(fmt.Sprintf("BinlogPlayer client %v for keyrange '%v-%v' starting @ '%v', server: %v", blp.uid,
-			hex.EncodeToString(blp.keyRange.GetStart()),
-			hex.EncodeToString(blp.keyRange.GetEnd()),
-			blp.position,
-			blp.tablet))
+		log.Info("BinlogPlayer client for keyrange starting",
+			blp.logAttrs(
+				slog.String("key_range", key.KeyRangeString(blp.keyRange)),
+				slog.String("position", replication.EncodePosition(blp.position)),
+				slog.String("tablet", topoproto.TabletAliasString(blp.tablet.GetAlias())),
+			)...)
 	}
 	if !blp.stopPosition.IsZero() {
 		switch {
 		case blp.position.Equal(blp.stopPosition):
+			log.Info("not starting BinlogPlayer, we're already at the desired position",
+				blp.logAttrs(slog.String("stop_position", replication.EncodePosition(blp.stopPosition)))...)
 			msg := fmt.Sprintf("not starting BinlogPlayer, we're already at the desired position %v", blp.stopPosition)
-			log.Info(msg)
 			if err := blp.setVReplicationState(binlogdatapb.VReplicationWorkflowState_Stopped, msg); err != nil {
-				log.Error(fmt.Sprintf("Error writing stop state: %v", err))
+				log.Error("Error writing stop state", blp.logAttrs(slog.Any("error", err))...)
 			}
 			return nil
 		case blp.position.AtLeast(blp.stopPosition):
+			log.Error("starting point greater than stopping point",
+				blp.logAttrs(
+					slog.String("start_position", replication.EncodePosition(blp.position)),
+					slog.String("stop_position", replication.EncodePosition(blp.stopPosition)),
+				)...)
 			msg := fmt.Sprintf("starting point %v greater than stopping point %v", blp.position, blp.stopPosition)
-			log.Error(msg)
 			if err := blp.setVReplicationState(binlogdatapb.VReplicationWorkflowState_Stopped, msg); err != nil {
-				log.Error(fmt.Sprintf("Error writing stop state: %v", err))
+				log.Error("Error writing stop state", blp.logAttrs(slog.Any("error", err))...)
 			}
 			// Don't return an error. Otherwise, it will keep retrying.
 			return nil
 		default:
-			log.Info(fmt.Sprintf("Will stop player when reaching %v", blp.stopPosition))
+			log.Info("Will stop player when reaching the stop position",
+				blp.logAttrs(slog.String("stop_position", replication.EncodePosition(blp.stopPosition)))...)
 		}
 	}
 
@@ -341,9 +366,8 @@ func (blp *BinlogPlayer) applyEvents(ctx context.Context) error {
 	blplClient := clientFactory()
 	err = blplClient.Dial(ctx, blp.tablet)
 	if err != nil {
-		err := fmt.Errorf("error dialing binlog server: %v", err)
-		log.Error(fmt.Sprint(err))
-		return err
+		log.Error("error dialing binlog server", blp.logAttrs(slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))...)
+		return fmt.Errorf("error dialing binlog server: %v", err)
 	}
 	defer blplClient.Close()
 
@@ -355,7 +379,7 @@ func (blp *BinlogPlayer) applyEvents(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("can't get charset to request binlog stream: %v", err)
 		}
-		log.Info(fmt.Sprintf("original charset: %v", blp.defaultCharset))
+		log.Info("original charset", blp.logAttrs(slog.String("charset", fmt.Sprint(blp.defaultCharset)))...)
 		blp.currentCharset = blp.defaultCharset
 		// Restore original charset when we're done.
 		defer func() {
@@ -364,9 +388,13 @@ func (blp *BinlogPlayer) applyEvents(ctx context.Context) error {
 			if dbClient.dbConn == nil {
 				return
 			}
-			log.Info(fmt.Sprintf("restoring original charset %v", blp.defaultCharset))
+			log.Info("restoring original charset", blp.logAttrs(slog.String("charset", fmt.Sprint(blp.defaultCharset)))...)
 			if csErr := mysql.SetCharset(dbClient.dbConn, blp.defaultCharset); csErr != nil {
-				log.Error(fmt.Sprintf("can't restore original charset %v: %v", blp.defaultCharset, csErr))
+				log.Error("can't restore original charset",
+					blp.logAttrs(
+						slog.String("charset", fmt.Sprint(blp.defaultCharset)),
+						slog.Any("error", csErr),
+					)...)
 			}
 		}()
 	}
@@ -378,9 +406,8 @@ func (blp *BinlogPlayer) applyEvents(ctx context.Context) error {
 		stream, err = blplClient.StreamKeyRange(ctx, replication.EncodePosition(blp.position), blp.keyRange, blp.defaultCharset)
 	}
 	if err != nil {
-		err := vterrors.Wrapf(err, "error sending streaming query to binlog server")
-		log.Error(fmt.Sprint(err))
-		return err
+		log.Error("error sending streaming query to binlog server", blp.logAttrs(slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))...)
+		return vterrors.Wrapf(err, "error sending streaming query to binlog server")
 	}
 
 	for {
@@ -414,26 +441,26 @@ func (blp *BinlogPlayer) applyEvents(ctx context.Context) error {
 		for {
 			ok, err = blp.processTransaction(response)
 			if err != nil {
-				log.Info(fmt.Sprintf("transaction failed: %v", err))
+				log.Info("transaction failed", blp.logAttrs(slog.Any("error", err))...)
 				for _, stmt := range response.Statements {
-					log.Info(fmt.Sprintf("statement: %q", stmt.Sql))
+					log.Info("statement", blp.logAttrs(slog.String("query", strconv.Quote(string(stmt.Sql))))...)
 				}
 				return fmt.Errorf("error in processing binlog event %v", err)
 			}
 			if ok {
 				if !blp.stopPosition.IsZero() {
 					if blp.position.AtLeast(blp.stopPosition) {
-						msg := "Reached stopping position, done playing logs"
-						log.Info(msg)
+						const msg = "Reached stopping position, done playing logs"
+						log.Info(msg, blp.logAttrs()...)
 						if err := blp.setVReplicationState(binlogdatapb.VReplicationWorkflowState_Stopped, msg); err != nil {
-							log.Error(fmt.Sprintf("Error writing stop state: %v", err))
+							log.Error("Error writing stop state", blp.logAttrs(slog.Any("error", err))...)
 						}
 						return nil
 					}
 				}
 				break
 			}
-			log.Info(fmt.Sprintf("Retrying txn in %v.", blp.deadlockRetry))
+			log.Info("Retrying txn", blp.logAttrs(slog.Duration("retry_delay", blp.deadlockRetry))...)
 			time.Sleep(blp.deadlockRetry)
 		}
 	}
@@ -460,7 +487,13 @@ func (blp *BinlogPlayer) processTransaction(tx *binlogdatapb.BinlogTransaction) 
 				// needed during event playback. Here we also adjust so that playback
 				// proceeds, but in Vitess-land this usually means a misconfigured
 				// server or a misbehaving client, so we spam the logs with warnings.
-				log.Warn(fmt.Sprintf("BinlogPlayer changing charset from %v to %v for statement %d in transaction %v", blp.currentCharset, stmtCharset, i, tx))
+				log.Warn("BinlogPlayer changing charset for statement in transaction",
+					blp.logAttrs(
+						slog.String("from_charset", fmt.Sprint(blp.currentCharset)),
+						slog.String("to_charset", fmt.Sprint(stmtCharset)),
+						slog.Int("statement_index", i),
+						slog.String("transaction", fmt.Sprint(tx)),
+					)...)
 				err = mysql.SetCharset(dbClient.dbConn, stmtCharset)
 				if err != nil {
 					return false, fmt.Errorf("can't set charset for statement %d in transaction %v: %v", i, tx, err)
@@ -473,7 +506,7 @@ func (blp *BinlogPlayer) processTransaction(tx *binlogdatapb.BinlogTransaction) 
 		}
 		if sqlErr, ok := err.(*sqlerror.SQLError); ok && sqlErr.Number() == sqlerror.ERLockDeadlock {
 			// Deadlock: ask for retry
-			log.Info(fmt.Sprintf("Deadlock: %v", err))
+			log.Info("Deadlock", blp.logAttrs(slog.Any("error", err))...)
 			if err = blp.dbClient.Rollback(); err != nil {
 				return false, err
 			}
@@ -500,7 +533,7 @@ func (blp *BinlogPlayer) exec(sql string) (*sqltypes.Result, error) {
 	qr, err := blp.dbClient.ExecuteFetch(sql, 0)
 	blp.blplStats.Timings.Record(BlplQuery, queryStartTime)
 	if d := time.Since(queryStartTime); d > SlowQueryThreshold {
-		log.Info(fmt.Sprintf("SLOW QUERY (took %.2fs) '%s'", d.Seconds(), sql))
+		log.Info("SLOW QUERY", blp.logAttrs(slog.Duration("duration", d), slog.String("query", sql))...)
 	}
 	return qr, err
 }
@@ -716,7 +749,7 @@ func MessageTruncate(msg string) string {
 	// message length is 1000 bytes.
 	const maxLen = 950
 	if len(msg) > maxLen {
-		log.Warn(fmt.Sprintf("VReplication message truncated (len=%d). Full message: %s", len(msg), msg))
+		log.Warn("VReplication message truncated", slog.Int("length", len(msg)), slog.String("message", msg))
 	}
 	return LimitString(msg, maxLen)
 }
@@ -820,13 +853,12 @@ func SetProtocol(name string, protocol string) (reset func()) {
 	case nil:
 		reset = func() { SetProtocol(name, oldVal) }
 	default:
-		log.Error(fmt.Sprintf("failed to get string value for flag %q: %v", binlogPlayerProtocolFlagName, err))
+		log.Error("failed to get string value for flag", slog.String("flag", binlogPlayerProtocolFlagName), slog.Any("error", err))
 		reset = func() {}
 	}
 
 	if err := pflag.Set(binlogPlayerProtocolFlagName, protocol); err != nil {
-		msg := "failed to set flag %q to %q: %v"
-		log.Error(fmt.Sprintf(msg, binlogPlayerProtocolFlagName, protocol, err))
+		log.Error("failed to set flag", slog.String("flag", binlogPlayerProtocolFlagName), slog.String("value", protocol), slog.Any("error", err))
 		reset = func() {}
 	}
 
