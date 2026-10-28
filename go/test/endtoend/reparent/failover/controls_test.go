@@ -215,13 +215,14 @@ func (l *heldLock) release(t *testing.T) {
 }
 
 // shardLockLease returns the etcd lease of the shard's lock, failing if the shard is not locked.
-func shardLockLease(t *testing.T, ci *cluster.LocalProcessCluster) (*clientv3.Client, clientv3.LeaseID) {
+// ctx bounds the lookup: the client's DialTimeout does not bound requests.
+func shardLockLease(ctx context.Context, t *testing.T, ci *cluster.LocalProcessCluster) (*clientv3.Client, clientv3.LeaseID) {
 	require.Equal(t, "etcd2", *ci.TopoFlavorString(), "shard lock leases are etcd specific")
 	cli, err := clientv3.New(clientv3.Config{Endpoints: []string{net.JoinHostPort(ci.TopoProcess.Host, strconv.Itoa(ci.TopoProcess.Port))}, DialTimeout: 5 * time.Second})
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = cli.Close() })
 	locks := path.Join(cluster.TopoGlobalRoot("etcd2"), "keyspaces", utils.KeyspaceName, "shards", utils.ShardName, "locks")
-	resp, err := cli.Get(t.Context(), locks, clientv3.WithPrefix())
+	resp, err := cli.Get(ctx, locks, clientv3.WithPrefix())
 	require.NoError(t, err)
 	require.Len(t, resp.Kvs, 1, "the shard is not locked")
 	return cli, clientv3.LeaseID(resp.Kvs[0].Lease)
@@ -268,8 +269,10 @@ func TestShardLockControl(t *testing.T) {
 
 	// A lost lease: revoke the lock's lease in etcd and expect the checker to fail.
 	l = holdShardLock(t, ts, "control lost lease", ttl, interval)
-	cli, lease := shardLockLease(t, ci)
-	_, err = cli.Revoke(t.Context(), lease)
+	ctx, cancel := context.WithTimeout(t.Context(), topo.RemoteOperationTimeout)
+	defer cancel()
+	cli, lease := shardLockLease(ctx, t, ci)
+	_, err = cli.Revoke(ctx, lease)
 	require.NoError(t, err)
 	select {
 	case <-l.done:
