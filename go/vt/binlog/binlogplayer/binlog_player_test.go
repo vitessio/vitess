@@ -148,7 +148,7 @@ func TestNewBinlogPlayerTables(t *testing.T) {
 	record := logs.Record(t, "BinlogPlayer client for tables starting")
 	assert.Equal(t, "wf", record["workflow"])
 	assert.EqualValues(t, 1, record["stream_id"])
-	assert.Equal(t, []any{"a", "b"}, record["tables"])
+	assert.Equal(t, "a, b", record["tables"])
 	assert.Equal(t, testPos, record["position"])
 	assert.Equal(t, "cell-0000000001", record["tablet"])
 }

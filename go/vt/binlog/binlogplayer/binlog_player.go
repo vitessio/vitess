@@ -32,6 +32,7 @@ import (
 	"math"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -319,7 +320,7 @@ func (blp *BinlogPlayer) applyEvents(ctx context.Context) error {
 	if len(blp.tables) > 0 {
 		log.Info("BinlogPlayer client for tables starting",
 			blp.logAttrs(
-				slog.Any("tables", blp.tables),
+				slog.String("tables", strings.Join(blp.tables, ", ")),
 				slog.String("position", replication.EncodePosition(blp.position)),
 				slog.String("tablet", topoproto.TabletAliasString(blp.tablet.GetAlias())),
 			)...)
