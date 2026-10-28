@@ -6003,6 +6003,12 @@ func validateTabletThrottlerStrategyConfig(cfg *querythrottler.Config) error {
 					return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
 						"custom metric is not supported by the query throttler (tablet_type=%s, statement=%s, metric=%s)", tabletType, stmtType, metricName)
 				}
+				// "default", "self" and "shard" name the throttler's default metric. It reads lag here, but the
+				// heartbeat lease only follows rules that name lag, so a rule spelled this way can read stale lag.
+				if mName == base.DefaultMetricName {
+					return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+						"metric %q names the throttler's default metric; name the metric, such as lag or shard/lag (tablet_type=%s, statement=%s)", metricName, tabletType, stmtType)
+				}
 				// Two different keys for the same bare metric ("self/lag" and "shard/lag")
 				// collapse into one CheckResult entry, so one of them silently stops
 				// matching. Repeating the same exact key across statements is fine.

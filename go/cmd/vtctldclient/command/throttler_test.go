@@ -480,6 +480,38 @@ func TestValidateQueryThrottlerConfigContent(t *testing.T) {
 			wantErr: `unsupported statement type "BEGIN" (tablet_type=PRIMARY)`,
 		},
 		{
+			name:    "negative throttle percentage rejected",
+			config:  singleRuleConfig("PRIMARY", "SELECT", &querythrottler.ThrottleThreshold{Above: 5, Throttle: -10}),
+			wantErr: "threshold[0] 'throttle' must be between 0 and 100, got -10 (tablet_type=PRIMARY, statement=SELECT, metric=lag)",
+		},
+		{
+			name:    "default metric rejected",
+			config:  withMetric(singleRuleConfig("PRIMARY", "SELECT", &querythrottler.ThrottleThreshold{Above: 5, Throttle: 50}), "default"),
+			wantErr: `metric "default" names the throttler's default metric; name the metric, such as lag or shard/lag (tablet_type=PRIMARY, statement=SELECT)`,
+		},
+		{
+			name:    "shard alias of the default metric rejected",
+			config:  withMetric(singleRuleConfig("PRIMARY", "SELECT", &querythrottler.ThrottleThreshold{Above: 5, Throttle: 50}), "shard"),
+			wantErr: `metric "shard" names the throttler's default metric; name the metric, such as lag or shard/lag (tablet_type=PRIMARY, statement=SELECT)`,
+		},
+		{
+			name:    "self alias of the default metric rejected",
+			config:  withMetric(singleRuleConfig("PRIMARY", "SELECT", &querythrottler.ThrottleThreshold{Above: 5, Throttle: 50}), "self"),
+			wantErr: `metric "self" names the throttler's default metric; name the metric, such as lag or shard/lag (tablet_type=PRIMARY, statement=SELECT)`,
+		},
+		{
+			// The spelling check spans tablet types, not only the statement types of one tablet type.
+			name: "a second spelling of a metric under another tablet type rejected",
+			config: func() *querythrottler.Config {
+				cfg := singleRuleConfig("PRIMARY", "SELECT", &querythrottler.ThrottleThreshold{Above: 5, Throttle: 50})
+				cfg.TabletStrategyConfig.TabletRules["REPLICA"] = withMetric(
+					singleRuleConfig("REPLICA", "SELECT", &querythrottler.ThrottleThreshold{Above: 5, Throttle: 50}), "self/lag",
+				).TabletStrategyConfig.TabletRules["REPLICA"]
+				return cfg
+			}(),
+			wantErr: `metric "lag" is configured under multiple scopes; only one scope of a metric may be configured across the query throttler config`,
+		},
+		{
 			name: "duplicate above rejected",
 			config: singleRuleConfig("PRIMARY", "INSERT",
 				&querythrottler.ThrottleThreshold{Above: 5, Throttle: 50},
@@ -521,6 +553,17 @@ func singleRuleConfig(tabletType, stmtType string, thresholds ...*querythrottler
 			},
 		},
 	}
+}
+
+// withMetric renames the lag rule of a singleRuleConfig config to metric.
+func withMetric(cfg *querythrottler.Config, metric string) *querythrottler.Config {
+	for _, stmtRules := range cfg.TabletStrategyConfig.TabletRules {
+		for _, metricRules := range stmtRules.StatementRules {
+			metricRules.MetricRules[metric] = metricRules.MetricRules["lag"]
+			delete(metricRules.MetricRules, "lag")
+		}
+	}
+	return cfg
 }
 
 // TestUpdateQueryThrottlerConfigExamples keeps the help examples working: every --config

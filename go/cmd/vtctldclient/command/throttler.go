@@ -296,6 +296,9 @@ func validateQueryThrottlerConfigContent(cfg *querythrottler.Config) error {
 				if mName == base.CustomMetricName {
 					return fmt.Errorf("custom metric is not supported by the query throttler (tablet_type=%s, statement=%s, metric=%s)", tabletType, stmtType, metricName)
 				}
+				if mName == base.DefaultMetricName {
+					return fmt.Errorf("metric %q names the throttler's default metric; name the metric, such as lag or shard/lag (tablet_type=%s, statement=%s)", metricName, tabletType, stmtType)
+				}
 				bare := mName.String()
 				if prevKey, ok := seenBareMetrics[bare]; ok && prevKey != metricName {
 					return fmt.Errorf("metric %q is configured under multiple scopes; only one scope of a metric may be configured across the query throttler config", bare)

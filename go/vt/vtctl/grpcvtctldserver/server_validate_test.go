@@ -435,6 +435,33 @@ func TestValidateQueryThrottlerConfigRequest(t *testing.T) {
 			req:  singleRuleRequest("PRIMARY", "SELECT", &querythrottlerpb.ThrottleThreshold{Above: 5, Throttle: 0}),
 		},
 		{
+			name:    "default metric rejected",
+			req:     withMetric(singleRuleRequest("PRIMARY", "SELECT", &querythrottlerpb.ThrottleThreshold{Above: 5, Throttle: 50}), "default"),
+			wantErr: `metric "default" names the throttler's default metric; name the metric, such as lag or shard/lag (tablet_type=PRIMARY, statement=SELECT)`,
+		},
+		{
+			name:    "shard alias of the default metric rejected",
+			req:     withMetric(singleRuleRequest("PRIMARY", "SELECT", &querythrottlerpb.ThrottleThreshold{Above: 5, Throttle: 50}), "shard"),
+			wantErr: `metric "shard" names the throttler's default metric; name the metric, such as lag or shard/lag (tablet_type=PRIMARY, statement=SELECT)`,
+		},
+		{
+			name:    "self alias of the default metric rejected",
+			req:     withMetric(singleRuleRequest("PRIMARY", "SELECT", &querythrottlerpb.ThrottleThreshold{Above: 5, Throttle: 50}), "self"),
+			wantErr: `metric "self" names the throttler's default metric; name the metric, such as lag or shard/lag (tablet_type=PRIMARY, statement=SELECT)`,
+		},
+		{
+			// The spelling check spans tablet types, not only the statement types of one tablet type.
+			name: "a second spelling of a metric under another tablet type rejected",
+			req: func() *vtctldatapb.UpdateQueryThrottlerConfigRequest {
+				req := singleRuleRequest("PRIMARY", "SELECT", &querythrottlerpb.ThrottleThreshold{Above: 5, Throttle: 50})
+				req.QueryThrottlerConfig.TabletStrategyConfig.TabletRules["REPLICA"] = withMetric(
+					singleRuleRequest("REPLICA", "SELECT", &querythrottlerpb.ThrottleThreshold{Above: 5, Throttle: 50}), "self/lag",
+				).QueryThrottlerConfig.TabletStrategyConfig.TabletRules["REPLICA"]
+				return req
+			}(),
+			wantErr: `metric "lag" is configured under multiple scopes; only one scope of a metric may be configured across the query throttler config`,
+		},
+		{
 			name: "duplicate above rejected",
 			req: singleRuleRequest("PRIMARY", "INSERT",
 				&querythrottlerpb.ThrottleThreshold{Above: 5, Throttle: 50},
@@ -479,6 +506,17 @@ func singleRuleRequest(tabletType, stmtType string, thresholds ...*querythrottle
 			},
 		},
 	}
+}
+
+// withMetric renames the lag rule of a singleRuleRequest request to metric.
+func withMetric(req *vtctldatapb.UpdateQueryThrottlerConfigRequest, metric string) *vtctldatapb.UpdateQueryThrottlerConfigRequest {
+	for _, stmtRules := range req.QueryThrottlerConfig.TabletStrategyConfig.TabletRules {
+		for _, metricRules := range stmtRules.StatementRules {
+			metricRules.MetricRules[metric] = metricRules.MetricRules["lag"]
+			delete(metricRules.MetricRules, "lag")
+		}
+	}
+	return req
 }
 
 func TestSanitizeQueryThrottlerConfig(t *testing.T) {
