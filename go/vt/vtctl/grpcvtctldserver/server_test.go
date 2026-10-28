@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path"
 	"slices"
@@ -65,6 +66,7 @@ import (
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/proto/querythrottler"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -7974,6 +7976,63 @@ func TestGetSrvVSchemas(t *testing.T) {
 	}
 }
 
+// throttlerTypeTMClient records the throttler type of each throttler request it gets.
+type throttlerTypeTMClient struct {
+	tmclient.TabletManagerClient
+	checkType  tabletmanagerdatapb.ThrottlerType
+	statusType tabletmanagerdatapb.ThrottlerType
+}
+
+func (c *throttlerTypeTMClient) CheckThrottler(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.CheckThrottlerRequest) (*tabletmanagerdatapb.CheckThrottlerResponse, error) {
+	c.checkType = req.ThrottlerType
+	return &tabletmanagerdatapb.CheckThrottlerResponse{}, nil
+}
+
+func (c *throttlerTypeTMClient) GetThrottlerStatus(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.GetThrottlerStatusRequest) (*tabletmanagerdatapb.GetThrottlerStatusResponse, error) {
+	c.statusType = req.ThrottlerType
+	return &tabletmanagerdatapb.GetThrottlerStatusResponse{}, nil
+}
+
+// CheckThrottler and GetThrottlerStatus must pass the requested throttler type on to the
+// tablet, so a request for the dedicated query throttler doesn't reach the lag one.
+func TestThrottlerRPCsForwardThrottlerType(t *testing.T) {
+	t.Parallel()
+
+	for _, throttlerType := range []tabletmanagerdatapb.ThrottlerType{
+		tabletmanagerdatapb.ThrottlerType_DEDICATED_QUERY_THROTTLER,
+		tabletmanagerdatapb.ThrottlerType_DEFAULT_LAG_THROTTLER,
+	} {
+		t.Run(throttlerType.String(), func(t *testing.T) {
+			ctx := t.Context()
+			ts := memorytopo.NewServer(ctx, "cell1")
+			// Start from the other value, so a forwarded zero value can't pass by accident.
+			initial := tabletmanagerdatapb.ThrottlerType_DEDICATED_QUERY_THROTTLER
+			if throttlerType == initial {
+				initial = tabletmanagerdatapb.ThrottlerType_DEFAULT_LAG_THROTTLER
+			}
+			tmc := &throttlerTypeTMClient{checkType: initial, statusType: initial}
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(vtenv.NewTestEnv(), ts)
+			})
+			alias := &topodatapb.TabletAlias{Cell: "cell1", Uid: 100}
+			testutil.AddTablet(ctx, t, ts, &topodatapb.Tablet{
+				Alias:    alias,
+				Keyspace: "testkeyspace",
+				Shard:    "-",
+				Type:     topodatapb.TabletType_PRIMARY,
+			}, nil)
+
+			_, err := vtctld.CheckThrottler(ctx, &vtctldatapb.CheckThrottlerRequest{TabletAlias: alias, ThrottlerType: throttlerType})
+			require.NoError(t, err)
+			require.Equal(t, throttlerType, tmc.checkType)
+
+			_, err = vtctld.GetThrottlerStatus(ctx, &vtctldatapb.GetThrottlerStatusRequest{TabletAlias: alias, ThrottlerType: throttlerType})
+			require.NoError(t, err)
+			require.Equal(t, throttlerType, tmc.statusType)
+		})
+	}
+}
+
 func TestGetTablet(t *testing.T) {
 	t.Parallel()
 
@@ -15500,7 +15559,378 @@ func TestValidateShard(t *testing.T) {
 	}
 }
 
+func TestUpdateQueryThrottlerConfig(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		cells    []string
+		keyspace *vtctldatapb.Keyspace
+		req      *vtctldatapb.UpdateQueryThrottlerConfigRequest
+		expected *vtctldatapb.UpdateQueryThrottlerConfigResponse
+		// wantConfig is the config that the Keyspace and every SrvKeyspace must store, when it differs from
+		// the request's. The server normalizes the request in place, so comparing with tt.req can't show
+		// that it normalized anything.
+		wantConfig *querythrottler.Config
+		// failSrvKeyspaceUpdate makes every SrvKeyspace write fail after the Keyspace write.
+		failSrvKeyspaceUpdate bool
+		wantCode              vtrpc.Code
+		wantErrContains       string
+	}{
+		{
+			name:  "successfully update query throttler config",
+			cells: []string{"zone1"},
+			keyspace: &vtctldatapb.Keyspace{
+				Name:     "testkeyspace",
+				Keyspace: &topodatapb.Keyspace{},
+			},
+			req: &vtctldatapb.UpdateQueryThrottlerConfigRequest{
+				Keyspace: "testkeyspace",
+				QueryThrottlerConfig: &querythrottler.Config{
+					Enabled:  true,
+					Strategy: querythrottler.ThrottlingStrategy_TABLET_THROTTLER,
+					DryRun:   false,
+					TabletStrategyConfig: &querythrottler.TabletStrategyConfig{
+						TabletRules: map[string]*querythrottler.StatementRuleSet{
+							"PRIMARY": {
+								StatementRules: map[string]*querythrottler.MetricRuleSet{
+									"SELECT": {
+										MetricRules: map[string]*querythrottler.MetricRule{
+											"lag": {
+												Thresholds: []*querythrottler.ThrottleThreshold{
+													{Above: 5.0, Throttle: 100},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: &vtctldatapb.UpdateQueryThrottlerConfigResponse{},
+		},
+		{
+			name:  "update with dry run enabled",
+			cells: []string{"zone1"},
+			keyspace: &vtctldatapb.Keyspace{
+				Name:     "testkeyspace",
+				Keyspace: &topodatapb.Keyspace{},
+			},
+			req: &vtctldatapb.UpdateQueryThrottlerConfigRequest{
+				Keyspace: "testkeyspace",
+				QueryThrottlerConfig: &querythrottler.Config{
+					Enabled:  true,
+					Strategy: querythrottler.ThrottlingStrategy_TABLET_THROTTLER,
+					DryRun:   true,
+					TabletStrategyConfig: &querythrottler.TabletStrategyConfig{
+						TabletRules: map[string]*querythrottler.StatementRuleSet{
+							"PRIMARY": {
+								StatementRules: map[string]*querythrottler.MetricRuleSet{
+									"SELECT": {
+										MetricRules: map[string]*querythrottler.MetricRule{
+											"lag": {
+												Thresholds: []*querythrottler.ThrottleThreshold{
+													{Above: 5.0, Throttle: 100},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: &vtctldatapb.UpdateQueryThrottlerConfigResponse{},
+		},
+		{
+			name:  "thresholds are stored sorted by above",
+			cells: []string{"zone1", "zone2"},
+			keyspace: &vtctldatapb.Keyspace{
+				Name:     "testkeyspace",
+				Keyspace: &topodatapb.Keyspace{},
+			},
+			req: &vtctldatapb.UpdateQueryThrottlerConfigRequest{
+				Keyspace: "testkeyspace",
+				QueryThrottlerConfig: &querythrottler.Config{
+					Enabled:  true,
+					Strategy: querythrottler.ThrottlingStrategy_TABLET_THROTTLER,
+					TabletStrategyConfig: &querythrottler.TabletStrategyConfig{
+						TabletRules: map[string]*querythrottler.StatementRuleSet{
+							"PRIMARY": {
+								StatementRules: map[string]*querythrottler.MetricRuleSet{
+									"INSERT": {
+										MetricRules: map[string]*querythrottler.MetricRule{
+											"lag": {
+												Thresholds: []*querythrottler.ThrottleThreshold{
+													// Throttle descends as above ascends, so a sort on the wrong field fails.
+													{Above: 10, Throttle: 25},
+													{Above: 2, Throttle: 100},
+													{Above: 5, Throttle: 50},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: &vtctldatapb.UpdateQueryThrottlerConfigResponse{},
+			wantConfig: &querythrottler.Config{
+				Enabled:  true,
+				Strategy: querythrottler.ThrottlingStrategy_TABLET_THROTTLER,
+				TabletStrategyConfig: &querythrottler.TabletStrategyConfig{
+					TabletRules: map[string]*querythrottler.StatementRuleSet{
+						"PRIMARY": {
+							StatementRules: map[string]*querythrottler.MetricRuleSet{
+								"INSERT": {
+									MetricRules: map[string]*querythrottler.MetricRule{
+										"lag": {
+											Thresholds: []*querythrottler.ThrottleThreshold{
+												{Above: 2, Throttle: 100},
+												{Above: 5, Throttle: 50},
+												{Above: 10, Throttle: 25},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:  "keyspace not found",
+			cells: []string{"zone1"},
+			keyspace: &vtctldatapb.Keyspace{
+				Name:     "otherkeyspace",
+				Keyspace: &topodatapb.Keyspace{},
+			},
+			req: &vtctldatapb.UpdateQueryThrottlerConfigRequest{
+				Keyspace: "nonexistent",
+				QueryThrottlerConfig: &querythrottler.Config{
+					Enabled:  true,
+					Strategy: querythrottler.ThrottlingStrategy_TABLET_THROTTLER,
+					TabletStrategyConfig: &querythrottler.TabletStrategyConfig{
+						TabletRules: map[string]*querythrottler.StatementRuleSet{
+							"PRIMARY": {
+								StatementRules: map[string]*querythrottler.MetricRuleSet{
+									"SELECT": {
+										MetricRules: map[string]*querythrottler.MetricRule{
+											"lag": {
+												Thresholds: []*querythrottler.ThrottleThreshold{
+													{Above: 5.0, Throttle: 100},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantCode:        vtrpc.Code_NOT_FOUND,
+			wantErrContains: "failed to lock keyspace nonexistent",
+		},
+		{
+			name:  "SrvKeyspace update fails",
+			cells: []string{"zone1", "zone2"},
+			keyspace: &vtctldatapb.Keyspace{
+				Name:     "testkeyspace",
+				Keyspace: &topodatapb.Keyspace{},
+			},
+			req: &vtctldatapb.UpdateQueryThrottlerConfigRequest{
+				Keyspace: "testkeyspace",
+				QueryThrottlerConfig: &querythrottler.Config{
+					Enabled:  true,
+					Strategy: querythrottler.ThrottlingStrategy_TABLET_THROTTLER,
+					TabletStrategyConfig: &querythrottler.TabletStrategyConfig{
+						TabletRules: map[string]*querythrottler.StatementRuleSet{
+							"PRIMARY": {
+								StatementRules: map[string]*querythrottler.MetricRuleSet{
+									"SELECT": {
+										MetricRules: map[string]*querythrottler.MetricRule{
+											"lag": {
+												Thresholds: []*querythrottler.ThrottleThreshold{
+													{Above: 5.0, Throttle: 100},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			failSrvKeyspaceUpdate: true,
+			wantCode:              vtrpc.Code_UNAVAILABLE,
+			wantErrContains:       "re-run the command",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ctx := t.Context()
+
+			ts, factory := memorytopo.NewServerAndFactory(ctx, tt.cells...)
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(vtenv.NewTestEnv(), ts)
+			})
+
+			// Add the keyspace
+			testutil.AddKeyspace(ctx, t, ts, tt.keyspace)
+
+			// Add SrvKeyspace for the keyspace in all cells
+			for _, cell := range tt.cells {
+				err := ts.UpdateSrvKeyspace(ctx, cell, tt.keyspace.Name, &topodatapb.SrvKeyspace{})
+				require.NoError(t, err)
+			}
+
+			if tt.failSrvKeyspaceUpdate {
+				factory.AddOperationError(memorytopo.Update, "SrvKeyspace$", errors.New("cell unreachable"))
+			}
+
+			// Call the RPC
+			resp, err := vtctld.UpdateQueryThrottlerConfig(ctx, tt.req)
+
+			if tt.wantCode != vtrpc.Code_OK {
+				require.Error(t, err)
+				assert.Equal(t, tt.wantCode, vterrors.Code(err), "error: %v", err)
+				assert.ErrorContains(t, err, tt.wantErrContains)
+				if tt.failSrvKeyspaceUpdate {
+					// The Keyspace is written before the SrvKeyspaces, so it already holds the config.
+					ks, err := ts.GetKeyspace(ctx, tt.req.Keyspace)
+					require.NoError(t, err)
+					utils.MustMatch(t, tt.req.QueryThrottlerConfig, ks.QueryThrottlerConfig)
+				}
+				return
+			}
+
+			require.NoError(t, err)
+			utils.MustMatch(t, tt.expected, resp)
+
+			wantConfig := tt.wantConfig
+			if wantConfig == nil {
+				wantConfig = tt.req.QueryThrottlerConfig
+			}
+
+			// Verify the keyspace was updated
+			ks, err := ts.GetKeyspace(ctx, tt.req.Keyspace)
+			require.NoError(t, err)
+			utils.MustMatch(t, wantConfig, ks.QueryThrottlerConfig)
+
+			// Verify SrvKeyspace was updated in all cells
+			for _, cell := range tt.cells {
+				srvKs, err := ts.GetSrvKeyspace(ctx, cell, tt.req.Keyspace)
+				require.NoError(t, err)
+				utils.MustMatch(t, wantConfig, srvKs.QueryThrottlerConfig)
+			}
+		})
+	}
+}
+
 func TestMain(m *testing.M) {
 	_flag.ParseFlagsForTest()
 	os.Exit(m.Run())
+}
+
+// TestValidateTabletThrottlerStrategyConfig_RejectsUnenforceableRules covers configs that would be
+// accepted as enabled while containing a rule that can never throttle a query.
+func TestValidateTabletThrottlerStrategyConfig_RejectsUnenforceableRules(t *testing.T) {
+	// config builds an enabled TABLET_THROTTLER config with a single PRIMARY rule set.
+	config := func(stmtRules map[string]*querythrottler.MetricRuleSet) *querythrottler.Config {
+		return &querythrottler.Config{
+			Enabled:  true,
+			Strategy: querythrottler.ThrottlingStrategy_TABLET_THROTTLER,
+			TabletStrategyConfig: &querythrottler.TabletStrategyConfig{
+				TabletRules: map[string]*querythrottler.StatementRuleSet{
+					"PRIMARY": {StatementRules: stmtRules},
+				},
+			},
+		}
+	}
+	// rule builds a single-metric rule set for stmtType.
+	rule := func(stmtType string, thresholds ...*querythrottler.ThrottleThreshold) map[string]*querythrottler.MetricRuleSet {
+		return map[string]*querythrottler.MetricRuleSet{
+			stmtType: {MetricRules: map[string]*querythrottler.MetricRule{
+				"lag": {Thresholds: thresholds},
+			}},
+		}
+	}
+
+	tests := []struct {
+		name    string
+		config  *querythrottler.Config
+		wantErr string
+	}{
+		{
+			name:    "empty statement_rules",
+			config:  config(nil),
+			wantErr: "statement_rules cannot be empty (tablet_type=PRIMARY)",
+		},
+		{
+			name:    "empty metric_rules",
+			config:  config(map[string]*querythrottler.MetricRuleSet{"SELECT": {}}),
+			wantErr: "metric_rules cannot be empty (tablet_type=PRIMARY, statement=SELECT)",
+		},
+		{
+			name: "nil metric rule",
+			config: config(map[string]*querythrottler.MetricRuleSet{
+				"SELECT": {MetricRules: map[string]*querythrottler.MetricRule{"lag": nil}},
+			}),
+			wantErr: "thresholds cannot be empty (tablet_type=PRIMARY, statement=SELECT, metric=lag)",
+		},
+		{
+			name:    "empty thresholds",
+			config:  config(rule("SELECT")),
+			wantErr: "thresholds cannot be empty (tablet_type=PRIMARY, statement=SELECT, metric=lag)",
+		},
+		{
+			name:    "NaN above",
+			config:  config(rule("SELECT", &querythrottler.ThrottleThreshold{Above: math.NaN(), Throttle: 100})),
+			wantErr: "threshold[0] 'above' must be a finite number, got NaN",
+		},
+		{
+			name:    "positive infinity above",
+			config:  config(rule("SELECT", &querythrottler.ThrottleThreshold{Above: math.Inf(1), Throttle: 100})),
+			wantErr: "threshold[0] 'above' must be a finite number, got +Inf",
+		},
+		{
+			name:    "negative infinity above",
+			config:  config(rule("SELECT", &querythrottler.ThrottleThreshold{Above: math.Inf(-1), Throttle: 100})),
+			wantErr: "threshold[0] 'above' must be a finite number, got -Inf",
+		},
+	}
+	// DDL plans can reach the throttler without a parsed query, and their rules still apply,
+	// so DDL is a valid statement type like the data-plane ones.
+	for _, stmtType := range []string{"SELECT", "INSERT", "REPLACE", "UPDATE", "DELETE", "DDL"} {
+		tests = append(tests, struct {
+			name    string
+			config  *querythrottler.Config
+			wantErr string
+		}{
+			name:   stmtType + " statement type is supported",
+			config: config(rule(stmtType, &querythrottler.ThrottleThreshold{Above: 5, Throttle: 100})),
+		})
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateTabletThrottlerStrategyConfig(tt.config)
+			if tt.wantErr == "" {
+				require.NoError(t, err)
+				return
+			}
+			require.ErrorContains(t, err, tt.wantErr)
+		})
+	}
 }

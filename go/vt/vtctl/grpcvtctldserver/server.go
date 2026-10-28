@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"path/filepath"
 	"runtime/debug"
@@ -34,6 +35,8 @@ import (
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/semaphore"
 	"google.golang.org/grpc"
+
+	"vitess.io/vitess/go/vt/proto/querythrottler"
 
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/mysql/replication"
@@ -764,6 +767,7 @@ func (s *VtctldServer) CheckThrottler(ctx context.Context, req *vtctldatapb.Chec
 		Scope:                 req.Scope,
 		SkipRequestHeartbeats: req.SkipRequestHeartbeats,
 		OkIfNotExists:         req.OkIfNotExists,
+		ThrottlerType:         req.ThrottlerType,
 	}
 	r, err := s.tmc.CheckThrottler(ctx, ti.Tablet, tmReq)
 	if err != nil {
@@ -791,7 +795,9 @@ func (s *VtctldServer) GetThrottlerStatus(ctx context.Context, req *vtctldatapb.
 		return nil, err
 	}
 
-	r, err := s.tmc.GetThrottlerStatus(ctx, ti.Tablet, &tabletmanagerdatapb.GetThrottlerStatusRequest{})
+	r, err := s.tmc.GetThrottlerStatus(ctx, ti.Tablet, &tabletmanagerdatapb.GetThrottlerStatusRequest{
+		ThrottlerType: req.ThrottlerType,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -5927,4 +5933,227 @@ func (s *VtctldServer) GetKeyspaceRoutingRules(ctx context.Context, req *vtctlda
 	return &vtctldatapb.GetKeyspaceRoutingRulesResponse{
 		KeyspaceRoutingRules: rules,
 	}, nil
+}
+
+func validateQueryThrottlerConfigRequest(req *vtctldatapb.UpdateQueryThrottlerConfigRequest) error {
+	if req.GetKeyspace() == "" {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "keyspace is required")
+	}
+
+	if req.GetQueryThrottlerConfig() == nil {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "query_throttler_config is required")
+	}
+
+	return validateQueryThrottlerConfig(req.GetQueryThrottlerConfig())
+}
+
+func validateQueryThrottlerConfig(cfg *querythrottler.Config) error {
+	if !cfg.GetEnabled() {
+		return nil
+	}
+
+	switch cfg.GetStrategy() {
+	case querythrottler.ThrottlingStrategy_TABLET_THROTTLER:
+		return validateTabletThrottlerStrategyConfig(cfg)
+
+	default:
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "strategy must be TABLET_THROTTLER when enabled is true")
+	}
+}
+
+func validateTabletThrottlerStrategyConfig(cfg *querythrottler.Config) error {
+	tsc := cfg.GetTabletStrategyConfig()
+	if tsc == nil {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "tablet_strategy_config is required when strategy is TABLET_THROTTLER")
+	}
+
+	if len(tsc.GetTabletRules()) == 0 {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "tablet_rules cannot be empty when strategy is TABLET_THROTTLER")
+	}
+
+	// seenBareMetrics maps a bare metric name ("lag") to the first rule key that produced
+	// it, across the whole config, so scope collisions are caught globally.
+	seenBareMetrics := make(map[string]string)
+	for tabletType, stmtRuleSet := range tsc.GetTabletRules() {
+		// Only accept serving tablet types, spelled the way the runtime reports them.
+		if !base.IsQueryThrottlerTabletType(tabletType) {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported tablet type %q; must be one of PRIMARY, REPLICA, RDONLY, EXPERIMENTAL", tabletType)
+		}
+		if len(stmtRuleSet.GetStatementRules()) == 0 {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "statement_rules cannot be empty (tablet_type=%s)", tabletType)
+		}
+		for stmtType, metricRuleSet := range stmtRuleSet.GetStatementRules() {
+			// Reject statement types that the query throttler never evaluates, such as BEGIN and
+			// SAVEPOINT, and those it must not reject: MIGRATION, SET and UNLOCK_TABLES. See
+			// base.IsQueryThrottlerStatementType.
+			if !base.IsQueryThrottlerStatementType(stmtType) {
+				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported statement type %q (tablet_type=%s)", stmtType, tabletType)
+			}
+			if len(metricRuleSet.GetMetricRules()) == 0 {
+				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "metric_rules cannot be empty (tablet_type=%s, statement=%s)", tabletType, stmtType)
+			}
+			for metricName, rule := range metricRuleSet.GetMetricRules() {
+				_, mName, err := base.DisaggregateMetricName(metricName)
+				if err != nil {
+					return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+						"unknown metric name %q (tablet_type=%s, statement=%s)", metricName, tabletType, stmtType)
+				}
+				// The custom metric reads from a custom_query this config cannot supply, so
+				// it always reads zero and never breaches. Reject until that is wired up.
+				if mName == base.CustomMetricName {
+					return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+						"custom metric is not supported by the query throttler (tablet_type=%s, statement=%s, metric=%s)", tabletType, stmtType, metricName)
+				}
+				// "default", "self" and "shard" name the throttler's default metric. It reads lag here, but the
+				// heartbeat lease only follows rules that name lag, so a rule spelled this way can read stale lag.
+				if mName == base.DefaultMetricName {
+					return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+						"metric %q names the throttler's default metric; name the metric, such as lag or shard/lag (tablet_type=%s, statement=%s)", metricName, tabletType, stmtType)
+				}
+				// Two different keys for the same bare metric ("self/lag" and "shard/lag")
+				// collapse into one CheckResult entry, so one of them silently stops
+				// matching. Repeating the same exact key across statements is fine.
+				bare := mName.String()
+				if prevKey, ok := seenBareMetrics[bare]; ok && prevKey != metricName {
+					return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+						"metric %q is configured under multiple scopes; only one scope of a metric may be configured across the query throttler config", bare)
+				}
+				seenBareMetrics[bare] = metricName
+				if len(rule.GetThresholds()) == 0 {
+					return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+						"thresholds cannot be empty (tablet_type=%s, statement=%s, metric=%s)", tabletType, stmtType, metricName)
+				}
+				// Thresholds are matched by the highest breached 'above', so two thresholds
+				// with the same 'above' leave one of them unreachable.
+				seenAbove := make(map[float64]int)
+				for i, t := range rule.GetThresholds() {
+					// NaN compares false against everything and infinities leave no reachable
+					// boundary, so either would make the threshold silently unusable.
+					if math.IsNaN(t.GetAbove()) || math.IsInf(t.GetAbove(), 0) {
+						return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+							"threshold[%d] 'above' must be a finite number, got %v (tablet_type=%s, statement=%s, metric=%s)",
+							i, t.GetAbove(), tabletType, stmtType, metricName)
+					}
+					if t.GetAbove() < 0 {
+						return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+							"threshold[%d] 'above' must be >= 0, got %v (tablet_type=%s, statement=%s, metric=%s)",
+							i, t.GetAbove(), tabletType, stmtType, metricName)
+					}
+					if j, ok := seenAbove[t.GetAbove()]; ok {
+						return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+							"threshold[%d] and threshold[%d] have the same 'above' %v (tablet_type=%s, statement=%s, metric=%s)",
+							j, i, t.GetAbove(), tabletType, stmtType, metricName)
+					}
+					seenAbove[t.GetAbove()] = i
+
+					if t.GetThrottle() < 0 || t.GetThrottle() > 100 {
+						return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+							"threshold[%d] 'throttle' must be between 0 and 100, got %d (tablet_type=%s, statement=%s, metric=%s)",
+							i, t.GetThrottle(), tabletType, stmtType, metricName)
+					}
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+// sanitizeQueryThrottlerConfig normalizes a Config in-place. For the
+// TABLET_THROTTLER strategy it sorts every threshold slice ascending by Above
+// so that the binary search in GetThrottleDecision works correctly.
+func sanitizeQueryThrottlerConfig(cfg *querythrottler.Config) {
+	if cfg == nil {
+		return
+	}
+
+	if cfg.GetStrategy() != querythrottler.ThrottlingStrategy_TABLET_THROTTLER {
+		return
+	}
+
+	tsc := cfg.GetTabletStrategyConfig()
+	if tsc == nil {
+		return
+	}
+
+	for _, stmtRuleSet := range tsc.GetTabletRules() {
+		for _, metricRuleSet := range stmtRuleSet.GetStatementRules() {
+			for _, rule := range metricRuleSet.GetMetricRules() {
+				ts := rule.GetThresholds()
+				if len(ts) > 1 {
+					sort.Slice(ts, func(i, j int) bool {
+						return ts[i].GetAbove() < ts[j].GetAbove()
+					})
+				}
+			}
+		}
+	}
+}
+
+func (s *VtctldServer) UpdateQueryThrottlerConfig(ctx context.Context, req *vtctldatapb.UpdateQueryThrottlerConfigRequest) (resp *vtctldatapb.UpdateQueryThrottlerConfigResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.UpdateQueryThrottlerConfig")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	if err := validateQueryThrottlerConfigRequest(req); err != nil {
+		return nil, err
+	}
+
+	sanitizeQueryThrottlerConfig(req.GetQueryThrottlerConfig())
+
+	span.Annotate("keyspace", req.GetKeyspace())
+	span.Annotate("strategy", req.GetQueryThrottlerConfig().GetStrategy())
+
+	ctx, unlock, lockErr := s.ts.LockKeyspace(ctx, req.Keyspace, "UpdateQueryThrottlerConfig")
+	if lockErr != nil {
+		return nil, topoErrorf(lockErr, "failed to lock keyspace %s", req.Keyspace)
+	}
+	defer unlock(&err)
+
+	ki, err := s.ts.GetKeyspace(ctx, req.Keyspace)
+	if err != nil {
+		return nil, topoErrorf(err, "failed to get keyspace %s", req.Keyspace)
+	}
+
+	update := func(_ *querythrottler.Config) *querythrottler.Config {
+		return req.GetQueryThrottlerConfig()
+	}
+
+	ki.QueryThrottlerConfig = update(ki.QueryThrottlerConfig)
+
+	err = s.ts.UpdateKeyspace(ctx, ki)
+	if err != nil {
+		return nil, topoErrorf(err, "failed to update keyspace %s", req.Keyspace)
+	}
+
+	_, err = s.ts.UpdateSrvKeyspaceQueryThrottlerConfig(ctx, req.Keyspace, nil, update)
+	if err != nil {
+		// The Keyspace already holds the new config, and rewriting it is idempotent,
+		// so re-running the command is how to reach the cells that failed.
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "updated keyspace %s, but failed to update its SrvKeyspace in some cells; re-run the command to update them: %v", req.Keyspace, err)
+	}
+
+	return &vtctldatapb.UpdateQueryThrottlerConfigResponse{}, nil
+}
+
+// topoErrorf adds context to a topo error and gives it a vtrpc code. Topo errors carry
+// no vtrpc code of their own, so callers would otherwise see UNKNOWN.
+func topoErrorf(err error, format string, args ...any) error {
+	code := vterrors.Code(err)
+	if code == vtrpcpb.Code_UNKNOWN {
+		switch {
+		case topo.IsErrType(err, topo.NoNode):
+			code = vtrpcpb.Code_NOT_FOUND
+		case topo.IsErrType(err, topo.BadVersion):
+			code = vtrpcpb.Code_ABORTED
+		case topo.IsErrType(err, topo.Timeout):
+			code = vtrpcpb.Code_DEADLINE_EXCEEDED
+		case topo.IsErrType(err, topo.Interrupted):
+			code = vtrpcpb.Code_CANCELED
+		default:
+			code = vtrpcpb.Code_UNAVAILABLE
+		}
+	}
+	return vterrors.Errorf(code, "%s: %v", fmt.Sprintf(format, args...), err)
 }

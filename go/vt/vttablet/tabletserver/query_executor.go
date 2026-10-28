@@ -70,6 +70,9 @@ type QueryExecutor struct {
 	// The target type we requested might be different from tsv's tablet type, if we had a change to the tablet type recently.
 	targetTabletType topodatapb.TabletType
 	setting          *smartconnpool.Setting
+	// transactionID is the open transaction the query runs in, or 0. Unlike connID, it is 0
+	// for a reserved connection without a transaction.
+	transactionID int64
 }
 
 const (
@@ -166,8 +169,8 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		return nil, err
 	}
 
-	if reqThrottledErr := qre.tsv.queryThrottler.Throttle(qre.ctx, qre.targetTabletType, qre.plan.FullQuery, qre.connID, qre.options); reqThrottledErr != nil {
-		return nil, reqThrottledErr
+	if err = qre.throttle(); err != nil {
+		return nil, err
 	}
 
 	if qre.plan.PlanID == p.PlanNextval {
@@ -499,8 +502,8 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) (err error) {
 		return err
 	}
 
-	if reqThrottledErr := qre.tsv.queryThrottler.Throttle(qre.ctx, qre.targetTabletType, qre.plan.FullQuery, qre.connID, qre.options); reqThrottledErr != nil {
-		return reqThrottledErr
+	if err := qre.throttle(); err != nil {
+		return err
 	}
 
 	// Plans that don't use generic SQL execution run a dedicated executor and
@@ -812,7 +815,7 @@ func (qre *QueryExecutor) streamDML(callback StreamCallback) (err error) {
 		return err
 	}
 
-	if err = qre.tsv.queryThrottler.Throttle(qre.ctx, qre.targetTabletType, qre.plan.FullQuery, qre.connID, qre.options); err != nil {
+	if err = qre.throttle(); err != nil {
 		return err
 	}
 
@@ -862,6 +865,27 @@ func (qre *QueryExecutor) MessageStream(callback StreamCallback) error {
 	}
 	<-done
 	return nil
+}
+
+// throttle returns the query throttler's error if it rejects the query. The query
+// throttler itself skips statements inside a transaction. throttle also skips statements
+// whose rejection costs more than running them:
+//   - A sequence fetch. VTGate sends it outside the user's transaction, so rejecting it
+//     fails a statement inside that transaction, and VTGate rolls back the whole
+//     transaction when the fetch was an explicit SELECT NEXT.
+//   - A statement that takes or releases an advisory lock, so that clients can still
+//     release their locks while a rule rejects queries.
+//   - A SELECT that reads no table, which puts no load on the tables that throttling
+//     protects. VTGate sends them to check a SET and to keep a lock session or a temporary
+//     table's connection alive, and /debug/health runs one.
+func (qre *QueryExecutor) throttle() error {
+	switch {
+	case qre.plan.PlanID == p.PlanNextval,
+		qre.plan.PlanID == p.PlanSelectLockFunc || qre.plan.KillsConnOnTimeout,
+		qre.plan.StatementType() == sqlparser.StmtSelect && len(qre.plan.Permissions) == 0:
+		return nil
+	}
+	return qre.tsv.queryThrottler.Throttle(qre.ctx, qre.targetTabletType, qre.plan.FullQuery, qre.plan.StatementType(), qre.transactionID, qre.options)
 }
 
 // checkPermissions returns an error if the query does not pass all checks

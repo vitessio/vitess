@@ -1005,6 +1005,30 @@ func TestQueryExecutorPlanNextval(t *testing.T) {
 // TestQueryExecutorPlanNextvalCommitFailureKeepsCache verifies that a failed
 // refill COMMIT leaves the sequence cache unchanged and that the next call
 // refills the cache from the sequence table.
+// VTGate fetches sequence values outside the user's transaction and rolls the transaction
+// back when an explicit fetch is rejected, so the query throttler must not reject them.
+func TestQueryExecutorThrottlerSkipsNextval(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	t.Cleanup(db.Close)
+	db.AddQuery("select next_id, cache from seq where id = 0 for update", &sqltypes.Result{
+		Fields: []*querypb.Field{{Type: sqltypes.Int64}, {Type: sqltypes.Int64}},
+		Rows:   [][]sqltypes.Value{{sqltypes.NewInt64(1), sqltypes.NewInt64(3)}},
+	})
+	db.AddQuery("update seq set next_id = 4 where id = 0", &sqltypes.Result{})
+	ctx := t.Context()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	t.Cleanup(tsv.StopService)
+	enableAlwaysThrottle(t, tsv)
+
+	_, err := newTestQueryExecutor(ctx, tsv, "select * from test_table", 0).Execute()
+	require.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err), "the query throttler must reject other statements")
+
+	qre := newTestQueryExecutor(ctx, tsv, "select next value from seq", 0)
+	require.Equal(t, planbuilder.PlanNextval, qre.plan.PlanID)
+	_, err = qre.Execute()
+	require.NoError(t, err)
+}
+
 func TestQueryExecutorPlanNextvalCommitFailureKeepsCache(t *testing.T) {
 	db := setUpQueryExecutorTest(t)
 	t.Cleanup(db.Close)

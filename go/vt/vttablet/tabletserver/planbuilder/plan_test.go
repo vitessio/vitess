@@ -215,6 +215,63 @@ func TestStreamPlan(t *testing.T) {
 	}
 }
 
+// Build must set Plan.StatementType from the parsed AST. The CTE cases are the
+// regression: a textual scan calls anything starting with WITH unknown.
+func TestBuildStatementType(t *testing.T) {
+	testSchema := loadSchema("schema_test.json")
+	parser := sqlparser.NewTestParser()
+
+	tcases := []struct {
+		input string
+		want  sqlparser.StatementType
+	}{
+		{"select * from a", sqlparser.StmtSelect},
+		{"select * from a union select * from b", sqlparser.StmtSelect},
+		{"insert into a(eid, id) values (1, 2)", sqlparser.StmtInsert},
+		{"replace into a(eid, id) values (1, 2)", sqlparser.StmtReplace},
+		{"update a set name='foo' where id=1", sqlparser.StmtUpdate},
+		{"delete from a where id=1", sqlparser.StmtDelete},
+		{"with cte as (select id from a) select * from cte", sqlparser.StmtSelect},
+		{"with cte as (select id from a) update a set name='foo' where id in (select id from cte)", sqlparser.StmtUpdate},
+		{"with cte as (select id from a) delete from a where id in (select id from cte)", sqlparser.StmtDelete},
+	}
+
+	for _, tcase := range tcases {
+		t.Run(tcase.input, func(t *testing.T) {
+			statement, err := parser.Parse(tcase.input)
+			require.NoError(t, err)
+
+			plan, err := Build(vtenv.NewTestEnv(), statement, testSchema, "dbName", false)
+			require.NoError(t, err)
+			require.Equal(t, tcase.want, plan.StatementType())
+		})
+	}
+}
+
+// Why the statement type comes from the AST: sqlparser.Preview calls a CTE SELECT
+// UNKNOWN, which fails open in the query throttler. Build and BuildStreaming must both
+// say SELECT.
+func TestBuildStatementType_CTERegression(t *testing.T) {
+	testSchema := loadSchema("schema_test.json")
+	parser := sqlparser.NewTestParser()
+
+	const cteSelect = "with cte as (select id from a) select * from cte"
+
+	// Premise guard: the textual classifier gets this wrong.
+	require.Equal(t, sqlparser.StmtUnknown, sqlparser.Preview(cteSelect))
+
+	statement, err := parser.Parse(cteSelect)
+	require.NoError(t, err)
+
+	plan, err := Build(vtenv.NewTestEnv(), statement, testSchema, "dbName", false)
+	require.NoError(t, err)
+	require.Equal(t, sqlparser.StmtSelect, plan.StatementType())
+
+	streamPlan, err := BuildStreaming(vtenv.NewTestEnv(), statement, testSchema, "dbName")
+	require.NoError(t, err)
+	require.Equal(t, sqlparser.StmtSelect, streamPlan.StatementType())
+}
+
 func TestMessageStreamingPlan(t *testing.T) {
 	testSchema := loadSchema("schema_test.json")
 	plan, err := BuildMessageStreaming("msg", testSchema)

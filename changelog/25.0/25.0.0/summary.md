@@ -10,6 +10,7 @@
         - [VTAdmin VExplain modes that can run the statement require the `execute` action](#vtadmin-vexplain-execute-action)
     - **[New Support](#new-support)**
         - [VTOrc failover of an unreachable primary `vttablet` via replica quorum](#vtorc-quorum-unreachable-primary)
+        - [Query throttler `TABLET_THROTTLER` strategy](#vttablet-query-throttler-tablet-throttler)
         - [Back up binary logs with full builtin backups](#backup-include-binlogs)
     - **[Breaking Changes](#breaking-changes)**
         - [`--watch-replication-stream` flag removed](#vttablet-watch-replication-stream-removed)
@@ -133,6 +134,44 @@ A graceful `vttablet` shutdown records a shutdown marker in the topology server 
 Note that in this scenario the old primary's MySQL keeps running, and because its `vttablet` is the unreachable component, it cannot be demoted until that `vttablet` comes back and discovers the shard has a new primary. As with any emergency reparent away from an unreachable primary, a semi-sync durability policy (e.g. `semi_sync`) is what prevents the old primary from acknowledging new writes in the meantime; with `none` durability, anything writing directly to the old MySQL (bypassing `vtgate`) could cause a split brain.
 
 See [#19918](https://github.com/vitessio/vitess/issues/19918).
+
+#### <a id="vttablet-query-throttler-tablet-throttler"/>Query throttler `TABLET_THROTTLER` strategy</a>
+
+VTTablet's incoming query throttler has a new `TABLET_THROTTLER` strategy, which throttles queries based on the tablet throttler's metrics (for example `lag` or `loadavg`). Rules are keyed by tablet type and statement type, and give each metric a list of thresholds with the percentage of matching queries to reject once the metric goes above that threshold. A query's priority (`/*vt+ PRIORITY=N */`, from 0 to 100, default 100) scales that percentage: a query with priority 50 is rejected half as often, and one with priority 0 is never throttled. A throttled query fails with `RESOURCE_EXHAUSTED`, which MySQL clients receive as `ER_OUT_OF_RESOURCES` (1041). `dry_run` evaluates the rules and records metrics without rejecting anything: a query that would have been rejected counts in `QueryThrottlerThrottled` with `DryRun` set to `true`, and in `QueryThrottlerTabletStrategyDecisionCount` with the `would_throttle` outcome rather than `throttled`. Rules can target `REPLACE` statements separately from `INSERT`. VTTablet's own plans, query logs and metrics still report a `REPLACE` with the `Insert` plan type.
+
+Some statements are never throttled, because rejecting them would cost more than running them:
+
+- Statements that run inside a transaction, because VTGate rolls back the whole transaction when one of its statements is rejected. That covers more than explicit `BEGIN` ... `COMMIT` blocks:
+  - Statements in a session with `autocommit=0`, which is common with ORMs, on replicas as well as primaries: from the session's first statement other than a `SELECT` that reads no table, `SET`, `USE` or a similar session statement, VTGate runs its statements in a transaction that it opens for them.
+  - DML that VTGate runs in a transaction of its own even under autocommit, for example an `UPDATE` or `DELETE` that spans several shards, or a write to a table with an owned lookup vindex.
+- Sequence fetches. VTGate fetches sequence values outside the user's transaction, both for an `INSERT` that needs them and for `SELECT NEXT ... VALUES`.
+- Statements that take or release an advisory lock (`GET_LOCK()`, `RELEASE_LOCK()`, `RELEASE_ALL_LOCKS()`), so that clients can still release their locks while a rule rejects queries.
+- `SELECT` statements that read no table, such as `SELECT SLEEP(1)`. They put no load on the tables that throttling protects, and VTGate sends them to check a `SET` and to keep a lock session or a temporary table's connection alive.
+
+The query throttler does not evaluate these statements at all, so the `dry_run` counts do not include them either.
+
+A `lag` rule ties every query it matches to the slowest tablet that the throttler probes. On a primary, `lag` (or `shard/lag`) is the highest of the primary's own heartbeat lag and the lag of the tablets of the `--throttle-tablet-types` types. The throttler leaves a tablet out only when it cannot probe it or cannot read its lag, and a rule whose metric cannot be read does not throttle. So a single replica that lags, for example one whose replication is stopped for maintenance or is broken, makes the primary reject the share of matching queries that the rule sets, for as long as that replica lags. VTGate does not retry these rejections, so clients receive error 1041. The tablet throttler aggregates `lag` the same way, but there it delays Online DDL and VReplication rather than user traffic. Try a configuration with `dry_run` first, and take a tablet out of the probed types before maintenance, for example by changing its type to `DRAINED`.
+
+The configuration is set per keyspace with the new `vtctldclient UpdateQueryThrottlerConfig` command, which validates it and stores it in the `Keyspace` and in each cell's `SrvKeyspace`; a cell with no `SrvKeyspace` for the keyspace yet gets the configuration when its `SrvKeyspace` is built. The command replaces the whole configuration, so `{"enabled":false}` also removes every rule. Rules can name any statement type that reaches the query throttler except `MIGRATION`, `SET` and `UNLOCK_TABLES`: a rule for those would also reject `ALTER VITESS_MIGRATION ... CANCEL`, the statements that set up a session, and the `UNLOCK TABLES` that releases a `FLUSH TABLES ... WITH READ LOCK`. Rules for `SAVEPOINT`, `SAVEPOINT_ROLLBACK` (`ROLLBACK TO`) and `RELEASE` are refused as well, because those statements only run inside a transaction and could never be throttled. A rule names a metric either bare, such as `lag`, or with a scope, such as `shard/lag` or `self/lag`. `custom` is not supported, and neither are `default`, `self` and `shard` on their own, which name the throttler's default metric rather than `lag`. A metric can appear in any number of rules, but always spelled the same way, so a configuration that names both `lag` and `shard/lag` is refused. The dedicated throttler that the strategy checks keeps one threshold per metric, the lowest `above` among that metric's rules, and that is the threshold its status shows; each rule still applies its own thresholds. Tablets watch their `SrvKeyspace` and apply changes immediately. `--query-throttler-cache-update-interval` (default `10s`) controls how often a tablet refreshes the throttler check results that its decisions are based on, so throttling starts and stops up to that long after a metric crosses its threshold, plus the time the throttler takes to collect the metric: under a second, or up to 5 seconds with an interval longer than a minute. If refreshing the check keeps failing, for example because it times out, a tablet stops throttling once its last check result is more than six intervals old, rather than keep throttling on an old result. A disabled configuration runs no strategy. The strategy exports its metrics under the `QueryThrottlerTabletStrategy` prefix (for example `QueryThrottlerTabletStrategyDecisionCount` and `QueryThrottlerTabletStrategyCacheHits`), and registers them only once a tablet first runs it, so tablets that never enable it export none of them. The dedicated tablet throttler instance that the strategy checks exports its metrics under the `QueryThrottlerDedicated` prefix (for example `QueryThrottlerDedicatedCheckAnyTotal` and `QueryThrottlerDedicatedProbesTotal`), rather than into the tablet throttler's `Throttler*` metrics, and likewise only once the query throttler is enabled. Its MySQL connection pool keeps the `QueryThrottlerPool` prefix it has had since v23 (for example `QueryThrottlerPoolCapacity`) and, like every connection pool, exports those metrics on every tablet from startup.
+
+While an enabled `TABLET_THROTTLER` configuration has a `lag` rule, in `dry_run` too, the primary renews its heartbeat lease every 2 seconds. A tablet refreshes its throttler check only once per `--query-throttler-cache-update-interval`, which can be longer than an on-demand lease, and heartbeats that paused when the lease lapsed would read as replication lag on an idle, healthy shard. So the primary writes heartbeats for as long as such a configuration is enabled, both with the default heartbeat settings and with `--heartbeat-on-demand-duration`, as it always does with `--heartbeat-enable`. A configuration whose rules use only other metrics, such as `loadavg` or `threads_running`, leaves heartbeats as they were.
+
+`vtctldclient CheckThrottler` and `vtctldclient GetThrottlerStatus` have a new `--throttler-type` flag. It defaults to `DEFAULT_LAG_THROTTLER`, the tablet throttler; `DEDICATED_QUERY_THROTTLER` inspects the instance the query throttler checks. The responses have a new `throttler_type` field that names the throttler that answered. `DEDICATED_QUERY_THROTTLER` needs v25 throughout: a v24 `vtctld` drops `throttler_type` from the request and a v24 `vttablet` ignores it, so the tablet throttler answers instead, and `vtctldclient` then fails with `UNIMPLEMENTED` rather than print that answer as the query throttler's. The default works against any version.
+
+Existing query throttler metrics and behavior change as follows:
+
+- The dedicated tablet throttler instance now runs only while the query throttler is enabled. Previously it ran wherever the tablet throttler was enabled and wrote into the tablet throttler's `Throttler*` metrics, so those metrics now describe only the tablet throttler.
+- `QueryThrottlerThrottled` no longer has a `MetricValue` label, which created a new time series for every distinct metric value.
+- The `Workload` label of `QueryThrottlerRequests`, `QueryThrottlerThrottled`, `QueryThrottlerTotalLatencyNs` and `QueryThrottlerEvaluateLatencyNs` is `unknown` unless `--enable-per-workload-table-metrics` is set, to bound the number of time series.
+- In vtcombo and vtexplain, which run several tablets in one process, those four metrics no longer have a `Tablet` label. The tablets in a process now share one set of series.
+
+**Upgrade note**: upgrade every `vtctld`, `vttablet` and `vtgate` to v25 before enabling a `TABLET_THROTTLER` configuration. Until then, query throttling can stop without anything reporting it:
+
+- A v24 `vtctld` rebuilds each `SrvKeyspace` with only the tablet throttler configuration, so `RebuildKeyspaceGraph` on it drops `query_throttler_config`.
+- A v24 `vttablet` or `vtgate` that starts in a cell with no `SrvKeyspace` for the keyspace creates one without `query_throttler_config`.
+- A v24 `vttablet` has no `TABLET_THROTTLER` strategy. It runs the NoOp strategy and only logs `Unknown strategy ..., using NoOp`.
+
+In the first two cases the tablets fall back to the NoOp strategy. To restore throttling, re-run `UpdateQueryThrottlerConfig` or rebuild the keyspace graph with a v25 `vtctld`.
 
 #### <a id="backup-include-binlogs"/>Back up binary logs with full builtin backups</a>
 
@@ -259,6 +298,10 @@ The VTTablet flag `--vreplication-enable-http-log` is now deprecated and is a no
 The vtctld and vtcombo flags `--cell`, `--proxy-tablets`, `--action-timeout`, and `--tablet-health-keep-alive` are now deprecated and are no-ops, as the [legacy vtctld HTTP API they configured has been removed](#vtctld-http-api-removed). The flags will be removed entirely in v26. This deprecation is tracked in https://github.com/vitessio/vitess/issues/21170.
 
 **Impact**: Remove any usage of these flags from vtctld and vtcombo startup scripts or configuration.
+
+The VTTablet and vtcombo flag `--query-throttler-config-refresh-interval` is now deprecated. It has had no effect since v24, when the query throttler started applying configuration changes as soon as they are written to the `SrvKeyspace`, through a topology watch, instead of polling on an interval. The flag will be removed entirely in v26.
+
+**Impact**: Remove any usage of the `--query-throttler-config-refresh-interval` flag from VTTablet and vtcombo startup scripts or configuration.
 
 #### <a id="deprecated-selectstream-rule-plan"/>Legacy streaming-path plan types in query rules</a>
 
