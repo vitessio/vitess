@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -158,7 +159,10 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 	ct.workflow = params["workflow"]
 	wfType, _ := strconv.ParseInt(params["workflow_type"], 10, 32)
 	ct.workflowType = int32(wfType)
-	log.Info(fmt.Sprintf("%s creating controller, cell: %v, tabletTypes: %v", ct.logPrefix(), cell, tabletTypesStr))
+	log.Info("creating controller", ct.logAttrs(
+		slog.String("cell", cell),
+		slog.String("tablet_types", tabletTypesStr),
+	)...)
 
 	ct.lastWorkflowError = vterrors.NewLastError(fmt.Sprintf("VReplication controller %d for workflow %q", ct.id, ct.workflow), workflowConfig.MaxTimeToRetryError)
 
@@ -184,7 +188,12 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 		if v := params["tablet_types"]; v != "" {
 			tabletTypesStr = v
 		}
-		log.Info(fmt.Sprintf("creating tablet picker for source keyspace/shard %v/%v with cell: %v and tabletTypes: %v", ct.source.Keyspace, ct.source.Shard, cell, tabletTypesStr))
+		log.Info("creating tablet picker for source keyspace/shard", ct.logAttrs(
+			slog.String("keyspace", ct.source.Keyspace),
+			slog.String("shard", ct.source.Shard),
+			slog.String("cell", cell),
+			slog.String("tablet_types", tabletTypesStr),
+		)...)
 		cells := strings.Split(cell, ",")
 
 		sourceTopo := ts
@@ -209,14 +218,17 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 	return ct, nil
 }
 
-// Returns the shared prefix for log messages in the controller, includes workflow and stream ID.
-func (ct *controller) logPrefix() string {
-	return fmt.Sprintf("workflow %s, stream %d:", ct.workflow, ct.id)
+// logAttrs returns the attributes that identify the stream in the controller's
+// log records, followed by attrs.
+func (ct *controller) logAttrs(attrs ...slog.Attr) []slog.Attr {
+	logAttrs := make([]slog.Attr, 0, 2+len(attrs))
+	logAttrs = append(logAttrs, slog.String("workflow", ct.workflow), slog.Int("stream_id", int(ct.id)))
+	return append(logAttrs, attrs...)
 }
 
 func (ct *controller) run(ctx context.Context) {
 	defer func() {
-		log.Info(ct.logPrefix() + " stopped")
+		log.Info("stream stopped", ct.logAttrs()...)
 		close(ct.done)
 	}()
 
@@ -229,7 +241,7 @@ func (ct *controller) run(ctx context.Context) {
 		// Sometimes, canceled contexts get wrapped as errors.
 		select {
 		case <-ctx.Done():
-			log.Warn(fmt.Sprintf("%s context canceled: %v", ct.logPrefix(), err))
+			log.Warn("context canceled", ct.logAttrs(slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))...)
 			return
 		default:
 		}
@@ -238,19 +250,25 @@ func (ct *controller) run(ctx context.Context) {
 		action := discovery.ShouldRetryTabletError(err)
 		if action == discovery.TabletErrorActionIgnoreTablet && ct.lastPickedTablet != nil {
 			ct.ignoreTablets = append(ct.ignoreTablets, ct.lastPickedTablet)
-			log.Info(fmt.Sprintf("%s adding tablet %s to ignore list due to error: %v",
-				ct.logPrefix(), topoproto.TabletAliasString(ct.lastPickedTablet), err))
+			log.Info("adding tablet to ignore list due to error", ct.logAttrs(
+				slog.String("tablet", topoproto.TabletAliasString(ct.lastPickedTablet)),
+				slog.Any("error", err),
+				slog.String("error_code", vterrors.Code(err).String()),
+			)...)
 		} else if action == discovery.TabletErrorActionFail {
 			// Retry for unrecoverable errors since some other process may change the state leading to this error.
-			log.Warn(fmt.Sprintf("%s potentially unrecoverable error, will retry: %v", ct.logPrefix(), err))
+			log.Warn("potentially unrecoverable error, will retry", ct.logAttrs(slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))...)
 		}
 
 		ct.blpStats.ErrorCounts.Add([]string{"Stream Error"}, 1)
-		binlogplayer.LogError(fmt.Sprintf("%s error, will retry after %v", ct.logPrefix(), ct.WorkflowConfig.RetryDelay), err)
+		log.Error("error, will retry", ct.logAttrs(
+			slog.Duration("retry_delay", ct.WorkflowConfig.RetryDelay),
+			slog.String("error", binlogplayer.MessageTruncate(err.Error())),
+		)...)
 		timer := time.NewTimer(ct.WorkflowConfig.RetryDelay)
 		select {
 		case <-ctx.Done():
-			log.Warn(fmt.Sprintf("%s context canceled: %v", ct.logPrefix(), err))
+			log.Warn("context canceled", ct.logAttrs(slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))...)
 			timer.Stop()
 			return
 		case <-timer.C:
@@ -294,7 +312,10 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 	defer func() {
 		ct.sourceTablet.Store(&topodatapb.TabletAlias{})
 		if x := recover(); x != nil {
-			log.Error(fmt.Sprintf("%s caught panic: %v\n%s", ct.logPrefix(), x, tb.Stack(4)))
+			log.Error("caught panic", ct.logAttrs(
+				slog.Any("panic", x),
+				slog.String("stack", string(tb.Stack(4))),
+			)...)
 			err = fmt.Errorf("panic: %v", x)
 		}
 	}()
@@ -363,10 +384,14 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 		if unrecoverable || !ct.lastWorkflowError.ShouldRetry() {
 			err = terminalVReplicationError(err, unrecoverable, ct.WorkflowConfig.MaxTimeToRetryError)
 			if errSetState := vr.setState(binlogdatapb.VReplicationWorkflowState_Error, err.Error()); errSetState != nil {
-				log.Error(fmt.Sprintf("INTERNAL: unable to setState() in controller: %v. Could not set error text to: %v.", errSetState, err))
+				log.Error("INTERNAL: unable to setState() in controller. Could not set error text.", ct.logAttrs(
+					slog.Any("error", errSetState),
+					slog.Any("error_text", err),
+					slog.String("error_text_code", vterrors.Code(err).String()),
+				)...)
 				return err // yes, err and not errSetState.
 			}
-			log.Error(fmt.Sprintf("%s going into error state due to %+v", ct.logPrefix(), err))
+			log.Error("going into error state", ct.logAttrs(slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))...)
 			return nil // this will cause vreplicate to quit the workflow
 		}
 		return err
@@ -409,14 +434,16 @@ func (ct *controller) pickSourceTablet(ctx context.Context, dbClient binlogplaye
 	if ct.tpTs == nil {
 		return nil, fmt.Errorf("no tablet picker configured for %s/%s", ct.source.Keyspace, ct.source.Shard)
 	}
-	log.Info(fmt.Sprintf("%s trying to find an eligible source tablet in %s/%s", ct.logPrefix(), ct.source.Keyspace, ct.source.Shard))
+	log.Info("trying to find an eligible source tablet", ct.logAttrs(
+		slog.String("keyspace", ct.source.Keyspace),
+		slog.String("shard", ct.source.Shard),
+	)...)
 
 	tablet, err := ct.pickSourceTabletWithIgnoreList(ctx, dbClient)
 	// If we failed to find any tablet and we specified an ignore list, then clear the ignore list so that
 	// we can try tablets that were previously ignored(since some state may have changed since the last attempt).
 	if err != nil && len(ct.ignoreTablets) > 0 {
-		log.Info(fmt.Sprintf("%s clearing ignore list of %d tablets and retrying tablet picker",
-			ct.logPrefix(), len(ct.ignoreTablets)))
+		log.Info("clearing ignore list and retrying tablet picker", ct.logAttrs(slog.Int("tablet_count", len(ct.ignoreTablets)))...)
 		ct.ignoreTablets = nil
 		tablet, err = ct.pickSourceTabletWithIgnoreList(ctx, dbClient)
 	}
@@ -424,7 +451,7 @@ func (ct *controller) pickSourceTablet(ctx context.Context, dbClient binlogplaye
 		return tablet, err
 	}
 	ct.setMessage(dbClient, "Picked source tablet: "+tablet.Alias.String())
-	log.Info(fmt.Sprintf("%s found eligible source tablet %s", ct.logPrefix(), tablet.Alias.String()))
+	log.Info("found eligible source tablet", ct.logAttrs(slog.String("tablet", topoproto.TabletAliasString(tablet.Alias)))...)
 	ct.sourceTablet.Store(tablet.Alias)
 	ct.lastPickedTablet = tablet.Alias
 	return tablet, err

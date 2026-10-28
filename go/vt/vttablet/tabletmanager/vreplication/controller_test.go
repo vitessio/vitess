@@ -30,8 +30,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/log/logtest"
 	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -780,22 +779,10 @@ func TestControllerErrorLogMessages(t *testing.T) {
 	oldErrors := fakeBinlogClientErrorsByTablet
 	defer func() { fakeBinlogClientErrorsByTablet = oldErrors }()
 	fakeBinlogClientErrorsByTablet = map[uint32]error{
-		100: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.GTIDSetMismatch+" test"),
+		100: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.GTIDSetMismatch+" test "+strings.Repeat("x", 1000)),
 	}
 
-	infoLogger := logutil.NewMemoryLogger()
-	oldLogInfo := log.Info
-	log.Info = func(msg string, _ ...slog.Attr) {
-		infoLogger.Infof("%s", msg)
-	}
-	defer func() { log.Info = oldLogInfo }()
-
-	errorLogger := logutil.NewMemoryLogger()
-	oldLogError := log.Error
-	log.Error = func(msg string, _ ...slog.Attr) {
-		errorLogger.Errorf("%s", msg)
-	}
-	defer func() { log.Error = oldLogError }()
+	logs := logtest.Capture(t, slog.LevelInfo)
 
 	dbClient := binlogplayer.NewMockDBClient(t)
 	dbClient.AddInvariant("update _vt.vreplication set message=", testDMLResponse)
@@ -816,24 +803,21 @@ func TestControllerErrorLogMessages(t *testing.T) {
 	ct, err := newController(t.Context(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], nil, vre, defaultTabletPickerOptions)
 	require.NoError(t, err)
 
-	require.Eventually(t, func() bool {
-		return strings.Contains(infoLogger.String(), "adding tablet") &&
-			strings.Contains(infoLogger.String(), "to ignore list")
-	}, 30*time.Second, 10*time.Millisecond)
-
+	ignored := logs.Wait(t, "adding tablet to ignore list due to error")
+	retried := logs.Wait(t, "error, will retry")
 	ct.Stop(true)
 
-	infoLogs := infoLogger.String()
-	t.Logf("=== CAPTURED INFO LOGS ===\n%s", infoLogs)
-	expectedIgnorePrefix := fmt.Sprintf("workflow %s, stream %s: adding tablet cell1-0000000100 to ignore list due to error:", workflowName, streamID)
-	require.Contains(t, infoLogs, expectedIgnorePrefix,
-		"log message should have format 'workflow X, stream Y: adding tablet Z to ignore list due to error: ...', got: %s", infoLogs)
-
-	errorLogs := errorLogger.String()
-	t.Logf("=== CAPTURED ERROR LOGS ===\n%s", errorLogs)
-	expectedRetryPrefix := fmt.Sprintf("workflow %s, stream %s: error, will retry after", workflowName, streamID)
-	require.Contains(t, errorLogs, expectedRetryPrefix,
-		"log message should have format 'workflow X, stream Y: error, will retry after ...', got: %s", errorLogs)
+	for _, record := range []map[string]any{ignored, retried} {
+		assert.Equal(t, workflowName, record["workflow"])
+		assert.EqualValues(t, 1, record["stream_id"])
+		assert.Contains(t, record["error"], vterrors.GTIDSetMismatch+" test")
+	}
+	assert.Equal(t, "INFO", ignored["level"])
+	assert.Equal(t, "cell1-0000000100", ignored["tablet"])
+	assert.Equal(t, "INVALID_ARGUMENT", ignored["error_code"])
+	assert.Equal(t, "ERROR", retried["level"])
+	assert.EqualValues(t, 10*time.Millisecond, retried["retry_delay"])
+	assert.LessOrEqual(t, len(retried["error"].(string)), 950, "the retry error is truncated like the vreplication message")
 }
 
 // TestTerminalVReplicationError tests the terminal error messages: the
