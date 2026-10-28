@@ -18,6 +18,8 @@ package vdiff
 
 import (
 	"log/slog"
+	"maps"
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -81,6 +83,7 @@ func TestDiffMismatchLog(t *testing.T) {
 	require.Equal(t, int64(1), dr.MismatchedRows)
 
 	record := logs.Record(t, "Flagging mismatch in vdiff")
+	assertReportCountKeys(t, record)
 	assert.Equal(t, td.wd.ct.uuid, record["vdiff"])
 	assert.Equal(t, td.wd.ct.workflow, record["workflow"])
 	assert.Equal(t, td.table.Name, record["table"])
@@ -89,6 +92,21 @@ func TestDiffMismatchLog(t *testing.T) {
 	assert.EqualValues(t, 1, record["mismatched_rows"])
 	assert.EqualValues(t, 3, record["extra_rows_source"])
 	assert.EqualValues(t, 2, record["extra_rows_target"])
+	// The report's sample rows stay in the stored report.
+	assert.NotContains(t, logs.String(), sourceValue)
+	assert.NotContains(t, logs.String(), targetValue)
+}
+
+// assertReportCountKeys checks that record has exactly the table and the
+// report's row counts besides the standard and controller keys, so the
+// report itself isn't logged.
+func assertReportCountKeys(t *testing.T, record map[string]any) {
+	t.Helper()
+	keys := slices.Sorted(maps.Keys(record))
+	assert.Equal(t, []string{
+		"extra_rows_source", "extra_rows_target", "level", "matching_rows", "mismatched_rows",
+		"msg", "processed_rows", "table", "time", "vdiff", "workflow",
+	}, keys)
 }
 
 // TestDiffRowLimitLog checks that the row limit log carries the configured
