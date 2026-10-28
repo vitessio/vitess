@@ -221,8 +221,10 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 	for _, shard := range clusterInstance.Keyspaces[0].Shards {
 		for _, tablet := range shard.Vttablets {
 			log.Info(fmt.Sprintf("Starting MySql for tablet %v", tablet.Alias))
-			tablet.MysqlctlProcess.ProcessGroup = true
-			proc, err := tablet.MysqlctlProcess.StartProcess()
+			// Group only this start; later restarts use the tablet's own MysqlctlProcess.
+			mysqlctl := tablet.MysqlctlProcess
+			mysqlctl.ProcessGroup = true
+			proc, err := mysqlctl.StartProcess()
 			require.NoError(t, err, "Error starting start mysql")
 			mysqlCtlProcessList = append(mysqlCtlProcessList, proc)
 		}
