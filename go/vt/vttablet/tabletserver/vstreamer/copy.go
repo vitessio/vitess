@@ -96,8 +96,8 @@ func (uvs *uvstreamer) catchup(ctx context.Context) error {
 		sbm := uvs.getReplicationLagSeconds()
 		if sbm <= seconds {
 			log.Info("Canceling context because replication lag is within maximum",
-				slog.Int64("lag_seconds", sbm),
-				slog.Int64("max_lag_seconds", seconds),
+				slog.Int64("replication_lag_seconds", sbm),
+				slog.Int64("max_replication_lag_seconds", seconds),
 			)
 			cancel()
 			// Make sure vplayer returns before returning.

@@ -193,6 +193,13 @@ func TestCopyLogs(t *testing.T) {
 	record := logs.Record(t, "catchup vs.stream returned")
 	assert.Regexp(t, "^"+regexp.QuoteMeta(flavor)+"/.", record["current_position"])
 
+	// Same keys as "VStream source is not ready to stream more rows".
+	record = logs.Record(t, "Canceling context because replication lag is within maximum")
+	assert.Contains(t, record, "replication_lag_seconds")
+	assert.Contains(t, record, "max_replication_lag_seconds")
+	assert.NotContains(t, record, "lag_seconds")
+	assert.NotContains(t, record, "max_lag_seconds")
+
 	record = logs.Record(t, "Starting copyTable")
 	assert.Equal(t, "t1", record["table"])
 	assert.Equal(t, "select * from t1", record["filter"])
