@@ -74,11 +74,22 @@ func TestBackupExecutesBackupWithScopedParams(t *testing.T) {
 	require.Equal(t, "Fake", executeBackupStats.ScopeV[backupstats.ScopeImplementation])
 }
 
-// TestBackupParamsCopy tests that Copy carries IncludeBinlogs, which Backup
-// would otherwise silently drop before it reaches the backup engine.
+// TestBackupParamsCopy tests that Copy carries IncludeBinlogs and VerifyPosition,
+// which Backup would otherwise silently drop before they reach the backup engine.
 func TestBackupParamsCopy(t *testing.T) {
-	params := BackupParams{IncludeBinlogs: true}
-	assert.True(t, params.Copy().IncludeBinlogs)
+	called := false
+	params := BackupParams{
+		IncludeBinlogs: true,
+		VerifyPosition: func(context.Context, replication.Position) error {
+			called = true
+			return nil
+		},
+	}
+	copied := params.Copy()
+	assert.True(t, copied.IncludeBinlogs)
+	require.NotNil(t, copied.VerifyPosition)
+	require.NoError(t, copied.VerifyPosition(t.Context(), replication.Position{}))
+	assert.True(t, called)
 }
 
 // TestBackupRejectsIncludeBinlogsWithOtherEngine tests that Backup refuses
