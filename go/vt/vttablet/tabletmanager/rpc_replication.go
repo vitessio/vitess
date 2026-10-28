@@ -1307,9 +1307,9 @@ func (tm *TabletManager) fixSemiSyncAndReplication(ctx context.Context, tabletTy
 	if err != nil {
 		return vterrors.Wrap(err, "failed to read replication status")
 	}
-	// A stopped receiver reads the new setting when it starts. One that is
-	// reconnecting after an error needs the restart too: reconnecting under a
-	// changed setting stops it with error 13117.
+	// A stopped receiver reads the setting when it starts. A receiver
+	// reconnecting after an error needs the restart when ACKs are turned off:
+	// reconnecting with them off stops it with error 13117.
 	if status.IOState == replication.ReplicationStateStopped {
 		return nil
 	}

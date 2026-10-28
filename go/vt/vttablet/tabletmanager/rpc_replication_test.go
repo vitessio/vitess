@@ -1761,7 +1761,8 @@ func TestSetReplicationSourceDemotesPrimaryBeforeSemiSync(t *testing.T) {
 }
 
 // TestSetReplicationSourceKeepsPrimaryWhenDemotionFails checks that a PRIMARY
-// whose demotion fails keeps its type instead of becoming a REPLICA.
+// whose demotion fails keeps its type instead of becoming a REPLICA, and stays
+// out of service.
 func TestSetReplicationSourceKeepsPrimaryWhenDemotionFails(t *testing.T) {
 	ctx, tm, daemon, newPrimary := newBlockedPrimaryTest(t)
 	injectedErr := errors.New("injected semi-sync failure")
@@ -1771,6 +1772,7 @@ func TestSetReplicationSourceKeepsPrimaryWhenDemotionFails(t *testing.T) {
 		}
 		return nil
 	}
+	require.True(t, tm.QueryServiceControl.IsServing())
 
 	err := tm.SetReplicationSource(ctx, newPrimary.Alias, 0, "", false, true, 0)
 	require.ErrorContains(t, err, "failed to demote the primary before repointing it: "+injectedErr.Error())
@@ -1778,6 +1780,7 @@ func TestSetReplicationSourceKeepsPrimaryWhenDemotionFails(t *testing.T) {
 	ti, err := tm.TopoServer.GetTablet(ctx, tm.Tablet().Alias)
 	require.NoError(t, err)
 	assert.Equal(t, topodatapb.TabletType_PRIMARY, ti.Type)
+	assert.False(t, tm.QueryServiceControl.IsServing())
 }
 
 // TestChangeTypeReportsStatusErrorAfterPublishing checks that non-DRAINED type

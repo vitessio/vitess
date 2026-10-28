@@ -336,3 +336,44 @@ func TestBackupLeavesReplicaSourceSemiSyncOff(t *testing.T) {
 		})
 	}
 }
+
+// ctxSemiSyncMysqlDaemon fails SetSemiSyncEnabled once its context is done, as
+// a real MySQL connection does.
+type ctxSemiSyncMysqlDaemon struct {
+	*mysqlctl.FakeMysqlDaemon
+}
+
+func (d *ctxSemiSyncMysqlDaemon) SetSemiSyncEnabled(ctx context.Context, primary, replica bool) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return d.FakeMysqlDaemon.SetSemiSyncEnabled(ctx, primary, replica)
+}
+
+// TestBackupRestoresPrimarySemiSyncWhenCanceled checks that a primary whose
+// backup is canceled after it enters BACKUP still turns semi-sync back on and
+// serves as PRIMARY again.
+func TestBackupRestoresPrimarySemiSyncWhenCanceled(t *testing.T) {
+	ctx, tm, fake, qsc, _ := newBackupTest(t, topodatapb.TabletType_PRIMARY)
+	tm.MysqlDaemon = &ctxSemiSyncMysqlDaemon{FakeMysqlDaemon: fake}
+	useFakeBackupStorage(t)
+	backupCtx, cancel := context.WithCancel(ctx)
+	t.Cleanup(cancel)
+	mysqlctl.BackupRestoreEngineMap[primaryDrainEngine] = &duringBackupEngine{
+		FakeBackupEngine: mysqlctl.BackupRestoreEngineMap[primaryDrainEngine].(*mysqlctl.FakeBackupEngine),
+		during: func() {
+			assert.False(t, fake.SemiSyncPrimaryEnabled)
+			cancel()
+		},
+	}
+
+	err := tm.Backup(backupCtx, logutil.NewMemoryLogger(), &tabletmanagerdatapb.BackupRequest{AllowPrimary: true, BackupEngine: new(primaryDrainEngine)})
+	// The fake engine completes the backup despite the cancellation.
+	require.NoError(t, err)
+	assert.Equal(t, topodatapb.TabletType_PRIMARY, tm.Tablet().Type)
+	ti, err := tm.TopoServer.GetTablet(ctx, tm.Tablet().Alias)
+	require.NoError(t, err)
+	assert.Equal(t, topodatapb.TabletType_PRIMARY, ti.Type)
+	assert.True(t, qsc.IsServing())
+	assert.True(t, fake.SemiSyncPrimaryEnabled)
+}
