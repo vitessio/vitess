@@ -950,9 +950,11 @@ func TestRestartReplicationRecoversFromRecoverableReplicationInitializationError
 }
 
 // TestFixSemiSyncAndReplicationRecoversFromRecoverableReplicationInitializationError verifies semi-sync restart path self-heals recoverable init failures.
+// Only flavors without receiver commands restart replication as a whole.
 func TestFixSemiSyncAndReplicationRecoversFromRecoverableReplicationInitializationError(t *testing.T) {
 	fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
 	fakeMysqlDaemon.Replicating = true
+	fakeMysqlDaemon.RestartReplicationReceiverError = mysqlctl.ErrReceiverRestartUnsupported
 	fakeMysqlDaemon.StartReplicationError = recoverableReplicationInitError()
 	fakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"STOP REPLICA",
@@ -1663,6 +1665,17 @@ type semiSyncOrderMysqlDaemon struct {
 	tm                     *TabletManager
 	disabledSourceSemiSync bool
 	servingWhenDisabled    bool
+	// sourceSemiSyncAtSuperReadOnly records source-side semi-sync when
+	// super_read_only is first enabled.
+	sourceSemiSyncAtSuperReadOnly *bool
+}
+
+func (d *semiSyncOrderMysqlDaemon) SetSuperReadOnly(ctx context.Context, on bool, opts ...mysqlctl.SetSuperReadOnlyOption) (mysqlctl.ResetSuperReadOnlyFunc, error) {
+	if on && d.sourceSemiSyncAtSuperReadOnly == nil {
+		enabled := d.SemiSyncPrimaryEnabled
+		d.sourceSemiSyncAtSuperReadOnly = &enabled
+	}
+	return d.FakeMysqlDaemon.SetSuperReadOnly(ctx, on, opts...)
 }
 
 func (d *semiSyncOrderMysqlDaemon) IsSemiSyncBlocked(context.Context) (bool, error) {
@@ -1705,6 +1718,10 @@ func TestSetReplicationSourceDemotesPrimaryBeforeSemiSync(t *testing.T) {
 
 	require.True(t, daemon.disabledSourceSemiSync)
 	assert.False(t, daemon.servingWhenDisabled, "source-side semi-sync was disabled while the query service served")
+	// A forced demotion turns off semi-sync before super_read_only, which
+	// would otherwise wait on commits blocked on ACKs.
+	require.NotNil(t, daemon.sourceSemiSyncAtSuperReadOnly)
+	assert.False(t, *daemon.sourceSemiSyncAtSuperReadOnly, "super_read_only was enabled before source-side semi-sync was disabled")
 	assert.True(t, fakeMysqlDaemon.SuperReadOnly.Load())
 	assert.Equal(t, topodatapb.TabletType_REPLICA, tm.Tablet().Type)
 }
@@ -1778,7 +1795,7 @@ type drainSemiSyncMysqlDaemon struct {
 	*mysqlctl.FakeMysqlDaemon
 	tm            *TabletManager
 	setError      error
-	stopError     error
+	restartError  error
 	acking        bool
 	typeAtRevoke  topodatapb.TabletType
 	typeAtRestart topodatapb.TabletType
@@ -1799,15 +1816,11 @@ func (d *drainSemiSyncMysqlDaemon) SemiSyncReplicationStatus(ctx context.Context
 	return d.acking, nil
 }
 
-func (d *drainSemiSyncMysqlDaemon) StopReplication(ctx context.Context, hookExtraEnv map[string]string) error {
-	if d.stopError != nil {
-		return d.stopError
+func (d *drainSemiSyncMysqlDaemon) RestartReplicationReceiver(ctx context.Context, hookExtraEnv map[string]string) error {
+	if d.restartError != nil {
+		return d.restartError
 	}
-	return d.FakeMysqlDaemon.StopReplication(ctx, hookExtraEnv)
-}
-
-func (d *drainSemiSyncMysqlDaemon) StartReplication(ctx context.Context, hookExtraEnv map[string]string) error {
-	if err := d.FakeMysqlDaemon.StartReplication(ctx, hookExtraEnv); err != nil {
+	if err := d.FakeMysqlDaemon.RestartReplicationReceiver(ctx, hookExtraEnv); err != nil {
 		return err
 	}
 	d.typeAtRestart = d.tm.Tablet().Type
@@ -1834,7 +1847,7 @@ func TestChangeTypeDrainedRevokesSemiSyncBeforePublishing(t *testing.T) {
 			} else {
 				fake.Replicating = true
 				fake.IOThreadRunning = true
-				fake.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA", "START REPLICA"}
+				fake.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA IO_THREAD", "START REPLICA IO_THREAD"}
 				daemon.acking = true
 				switch stage {
 				case "status read":
@@ -1843,7 +1856,7 @@ func TestChangeTypeDrainedRevokesSemiSyncBeforePublishing(t *testing.T) {
 					injectedErr = context.Canceled
 					fake.ReplicationStatusError = injectedErr
 				case "receiver restart":
-					daemon.stopError = injectedErr
+					daemon.restartError = injectedErr
 				}
 			}
 
@@ -1857,7 +1870,7 @@ func TestChangeTypeDrainedRevokesSemiSyncBeforePublishing(t *testing.T) {
 				assert.Zero(t, fake.ExpectedExecuteSuperQueryCurrent)
 			}
 
-			daemon.setError, daemon.stopError = nil, nil
+			daemon.setError, daemon.restartError = nil, nil
 			fake.ReplicationStatusError = nil
 			require.NoError(t, tm.ChangeType(ctx, topodatapb.TabletType_DRAINED, true))
 			assert.Equal(t, topodatapb.TabletType_REPLICA, daemon.typeAtRevoke)

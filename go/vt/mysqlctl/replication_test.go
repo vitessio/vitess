@@ -3852,3 +3852,35 @@ func TestSetSuperReadOnlyLockWaitTimeout(t *testing.T) {
 		assert.Equal(t, 0, db.GetQueryCalledNum("SET SESSION lock_wait_timeout = @@global.lock_wait_timeout"), "must not restore a lock_wait_timeout that was never set")
 	})
 }
+
+// TestRestartReplicationReceiver checks that only the receiver is restarted,
+// and that a flavor without receiver commands runs nothing.
+func TestRestartReplicationReceiver(t *testing.T) {
+	t.Run("receiver commands", func(t *testing.T) {
+		db := fakesqldb.New(t)
+		t.Cleanup(db.Close)
+		db.OrderMatters()
+		t.Cleanup(db.VerifyAllExecutedOrFail)
+		db.AddExpectedQuery("SELECT 1", nil)
+		db.AddExpectedQuery("STOP REPLICA IO_THREAD", nil)
+		db.AddExpectedQuery("START REPLICA IO_THREAD", nil)
+		cp := *db.ConnParams()
+		mysqld := NewMysqld(dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb"))
+		t.Cleanup(mysqld.Close)
+
+		require.NoError(t, mysqld.RestartReplicationReceiver(t.Context(), nil))
+	})
+	t.Run("unsupported flavor", func(t *testing.T) {
+		db := fakesqldb.New(t)
+		t.Cleanup(db.Close)
+		db.OrderMatters()
+		t.Cleanup(db.VerifyAllExecutedOrFail)
+		db.AddExpectedQuery("SELECT 1", nil)
+		cp := *db.ConnParams()
+		cp.Flavor = replication.FilePosFlavorID
+		mysqld := NewMysqld(dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb"))
+		t.Cleanup(mysqld.Close)
+
+		require.ErrorIs(t, mysqld.RestartReplicationReceiver(t.Context(), nil), ErrReceiverRestartUnsupported)
+	})
+}

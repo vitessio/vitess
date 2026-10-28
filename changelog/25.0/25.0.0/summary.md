@@ -50,6 +50,7 @@
         - [`EmergencyReparentShard` can explicitly recover from split brain](#ers-allow-split-brain-promotion)
         - [Reparent candidate ordering now respects partially ordered GTID histories](#reparent-gtid-candidate-ordering)
         - [`EmergencyReparentShard` can require a position on the new primary](#ers-required-position)
+        - [Semi-sync durability when demoting, draining, promoting and backing up a primary](#reparent-semi-sync-durability)
     - **[VTOrc](#minor-changes-vtorc)**
         - [VTOrc can require the last known primary position in an emergency reparent](#vtorc-emergency-reparent-require-primary-position)
     - **[VTTablet](#minor-changes-vttablet)**
@@ -560,6 +561,17 @@ The check supports MySQL GTID sets on MySQL GTID shards only. A position of anot
 The check runs in vtctld. An older vtctld ignores `--required-position` and runs ERS without it. Upgrade vtctld before relying on the flag.
 
 See [#21109](https://github.com/vitessio/vitess/issues/21109).
+
+#### <a id="reparent-semi-sync-durability"/>Semi-sync durability when demoting, draining, promoting and backing up a primary</a>
+
+Several operations no longer weaken semi-sync durability, at the cost of failing in some cases where they used to succeed:
+
+- **Old primaries.** A tablet that is still `PRIMARY` when it is repointed, for example an old primary that `EmergencyReparentShard` could not reach, is demoted first. It stops serving before disabling source-side semi-sync to release blocked commits, then establishes `super_read_only` before joining replication. If the demotion fails, the tablet keeps its `PRIMARY` type, possibly no longer serving. Commits that were blocked on ACKs and that the new primary doesn't have become errant GTIDs, so the tablet does not rejoin replication, and VTOrc drains it if it runs with `--change-tablets-with-errant-gtid-to-drained`.
+- **Draining.** A tablet stops sending semi-sync ACKs before it becomes `DRAINED`, by restarting only its replication receiver. If it was the only replica sending ACKs, the primary's commits wait on semi-sync until an eligible replica is available, and VTOrc does not fail over for this.
+- **Promotion.** A replica being promoted waits until the transactions it received are applied, until the promotion deadline. If they can't be applied in time, the promotion fails and the replica keeps its relay logs, and the shard can be left without a writable primary until the backlog applies and the promotion is retried.
+- **Primary backups.** A draining backup of a primary (`--allow-primary`) is refused if the keyspace's durability policy can't be read, and the tablet does not serve as `PRIMARY` again until its semi-sync matches that policy.
+
+No flags were added or changed.
 
 ### <a id="minor-changes-vtorc"/>VTOrc</a>
 

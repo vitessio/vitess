@@ -98,7 +98,7 @@ func TestBackupRestoresTypeWhenChangeToBackupFails(t *testing.T) {
 // TestBackupRestoresPrimarySemiSync checks that a primary whose change to BACKUP
 // fails turns source-side semi-sync back on before it serves again.
 func TestBackupRestoresPrimarySemiSync(t *testing.T) {
-	ctx, tm, fake, qsc := newPrimaryBackupTest(t)
+	ctx, tm, fake, qsc, _ := newPrimaryBackupTest(t)
 	injectedErr := errors.New("injected replication status failure")
 	fake.ReplicationStatusError = injectedErr
 	servingWhenEnabled := true
@@ -137,7 +137,7 @@ func TestBackupKeepsPrimaryDrainedWhenSemiSyncRestoreFails(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx, tm, fake, qsc := newPrimaryBackupTest(t)
+			ctx, tm, fake, qsc, _ := newPrimaryBackupTest(t)
 			handle := useFakeBackupStorage(t)
 			fake.ReplicationStatusError = tt.statusErr
 			fake.SetSemiSyncEnabledFunc = func(primary, replica bool) error {
@@ -186,10 +186,10 @@ const primaryDrainEngine = "fake-primary-drain"
 
 // newPrimaryBackupTest returns a serving primary with semi-sync enabled, in a
 // keyspace whose durability policy requires it, and a draining backup engine.
-func newPrimaryBackupTest(t *testing.T) (context.Context, *TabletManager, *mysqlctl.FakeMysqlDaemon, *tabletservermock.Controller) {
+func newPrimaryBackupTest(t *testing.T) (context.Context, *TabletManager, *mysqlctl.FakeMysqlDaemon, *tabletservermock.Controller, *memorytopo.Factory) {
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	t.Cleanup(cancel)
-	ts := memorytopo.NewServer(ctx, "cell1")
+	ts, factory := memorytopo.NewServerAndFactory(ctx, "cell1")
 	t.Cleanup(ts.Close)
 	tm := newTestTM(t, ts, 1, "ks", "0", nil)
 	t.Cleanup(tm.Stop)
@@ -211,5 +211,81 @@ func newPrimaryBackupTest(t *testing.T) (context.Context, *TabletManager, *mysql
 		ExecuteBackupReturn:        mysqlctl.FakeBackupEngineExecuteBackupReturn{Res: mysqlctl.BackupUsable},
 	}
 	t.Cleanup(func() { delete(mysqlctl.BackupRestoreEngineMap, primaryDrainEngine) })
-	return ctx, tm, fake, qsc
+	return ctx, tm, fake, qsc, factory
+}
+
+// TestBackupRefusesPrimaryWhoseDurabilityPolicyCannotBeRead checks that a
+// primary backup that cannot read or resolve the durability policy is refused
+// before the tablet changes type.
+func TestBackupRefusesPrimaryWhoseDurabilityPolicyCannotBeRead(t *testing.T) {
+	topoErr := errors.New("injected keyspace read failure")
+	for _, tc := range []struct {
+		name    string
+		fail    func(t *testing.T, ctx context.Context, tm *TabletManager, factory *memorytopo.Factory)
+		wantErr string
+	}{
+		{
+			name: "keyspace read fails",
+			fail: func(t *testing.T, ctx context.Context, tm *TabletManager, factory *memorytopo.Factory) {
+				factory.AddOperationError(memorytopo.Get, "keyspaces/ks/Keyspace$", topoErr)
+			},
+			wantErr: topoErr.Error(),
+		},
+		{
+			name: "unknown policy",
+			fail: func(t *testing.T, ctx context.Context, tm *TabletManager, factory *memorytopo.Factory) {
+				reparenttestutil.SetKeyspaceDurability(ctx, t, tm.TopoServer, "ks", "unknown-policy")
+			},
+			wantErr: "unknown-policy",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx, tm, fake, qsc, factory := newPrimaryBackupTest(t)
+			tc.fail(t, ctx, tm, factory)
+			engine := mysqlctl.BackupRestoreEngineMap[primaryDrainEngine].(*mysqlctl.FakeBackupEngine)
+
+			err := tm.Backup(ctx, logutil.NewMemoryLogger(), &tabletmanagerdatapb.BackupRequest{AllowPrimary: true, BackupEngine: new(primaryDrainEngine)})
+			require.ErrorContains(t, err, tc.wantErr)
+			assert.Empty(t, engine.ExecuteBackupCalls)
+			assert.Equal(t, topodatapb.TabletType_PRIMARY, tm.Tablet().Type)
+			ti, err := tm.TopoServer.GetTablet(ctx, tm.Tablet().Alias)
+			require.NoError(t, err)
+			assert.Equal(t, topodatapb.TabletType_PRIMARY, ti.Type)
+			assert.True(t, qsc.IsServing())
+			assert.True(t, fake.SemiSyncPrimaryEnabled)
+		})
+	}
+}
+
+// duringBackupEngine runs a function while the backup runs.
+type duringBackupEngine struct {
+	*mysqlctl.FakeBackupEngine
+	during func()
+}
+
+func (e *duringBackupEngine) ExecuteBackup(ctx context.Context, params mysqlctl.BackupParams, bh backupstorage.BackupHandle) (mysqlctl.BackupResult, error) {
+	e.during()
+	return e.FakeBackupEngine.ExecuteBackup(ctx, params, bh)
+}
+
+// TestBackupRestoresPrimarySemiSyncFromPolicyAtStart checks that a primary's
+// semi-sync is restored as the durability policy required when the backup
+// started. VTOrc reconciles a policy that changed during the backup.
+func TestBackupRestoresPrimarySemiSyncFromPolicyAtStart(t *testing.T) {
+	ctx, tm, fake, qsc, _ := newPrimaryBackupTest(t)
+	reparenttestutil.SetKeyspaceDurability(ctx, t, tm.TopoServer, "ks", policy.DurabilityNone)
+	require.NoError(t, fake.SetSemiSyncEnabled(ctx, false, false))
+	useFakeBackupStorage(t)
+	mysqlctl.BackupRestoreEngineMap[primaryDrainEngine] = &duringBackupEngine{
+		FakeBackupEngine: mysqlctl.BackupRestoreEngineMap[primaryDrainEngine].(*mysqlctl.FakeBackupEngine),
+		during: func() {
+			reparenttestutil.SetKeyspaceDurability(ctx, t, tm.TopoServer, "ks", policy.DurabilitySemiSync)
+		},
+	}
+
+	err := tm.Backup(ctx, logutil.NewMemoryLogger(), &tabletmanagerdatapb.BackupRequest{AllowPrimary: true, BackupEngine: new(primaryDrainEngine)})
+	require.NoError(t, err)
+	assert.Equal(t, topodatapb.TabletType_PRIMARY, tm.Tablet().Type)
+	assert.True(t, qsc.IsServing())
+	assert.False(t, fake.SemiSyncPrimaryEnabled)
 }

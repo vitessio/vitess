@@ -258,3 +258,48 @@ func TestPromoteSkipsWaitForEmptyReceivedPosition(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-5", pos.String())
 }
+
+// A promotion that cannot read the replication state or stop the receiver must
+// fail before it resets replication.
+func TestPromoteFailsBeforeResetWhenReceiverStateUnknown(t *testing.T) {
+	injectedErr := errors.New("injected promotion failure")
+	for _, tc := range []struct {
+		name    string
+		queries []fakesqldb.ExpectedExecuteFetch
+	}{
+		{name: "status read", queries: []fakesqldb.ExpectedExecuteFetch{
+			{Query: "SHOW REPLICA STATUS", Error: injectedErr},
+		}},
+		// A connecting receiver must be stopped too.
+		{name: "receiver stop", queries: []fakesqldb.ExpectedExecuteFetch{
+			{Query: "SHOW REPLICA STATUS", QueryResult: replicaStatusResult("Connecting", "Yes", "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-5", "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8")},
+			{Query: "STOP REPLICA IO_THREAD", Error: injectedErr},
+		}},
+		{name: "status read after the receiver stop", queries: []fakesqldb.ExpectedExecuteFetch{
+			{Query: "SHOW REPLICA STATUS", QueryResult: replicaStatusResult("Yes", "Yes", "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-5", "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8")},
+			{Query: "STOP REPLICA IO_THREAD", QueryResult: &sqltypes.Result{}},
+			{Query: "SHOW REPLICA STATUS", Error: injectedErr},
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db := fakesqldb.New(t)
+			t.Cleanup(db.Close)
+			db.OrderMatters()
+			t.Cleanup(db.VerifyAllExecutedOrFail)
+			db.AddExpectedQuery("SELECT 1", nil)
+			// Any STOP REPLICA or RESET after the failure is unexpected.
+			for _, q := range tc.queries {
+				db.AddExpectedExecuteFetch(q)
+			}
+			cp := *db.ConnParams()
+			mysqld := NewMysqld(dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb"))
+			t.Cleanup(mysqld.Close)
+			ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+			t.Cleanup(cancel)
+
+			pos, err := mysqld.Promote(ctx, nil)
+			require.ErrorContains(t, err, injectedErr.Error())
+			assert.True(t, pos.IsZero())
+		})
+	}
+}

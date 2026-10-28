@@ -129,14 +129,23 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 			return err
 		}
 		originalType = tablet.Type
+		// A primary's semi-sync is restored from the policy in effect now, so a
+		// policy that can't be read refuses the backup before the type changes.
+		// VTOrc reconciles a later policy change once the primary serves again.
+		var primarySemiSync SemiSyncAction
+		if originalType == topodatapb.TabletType_PRIMARY {
+			if primarySemiSync, err = tm.primarySemiSyncAction(ctx, tablet.Tablet); err != nil {
+				return err
+			}
+		}
 		// Restore the original type even if the change to BACKUP fails after
 		// publishing it.
 		defer func() {
 			bgCtx := context.Background()
 			// Entering BACKUP turned off semi-sync. A primary turns it back on as
-			// its durability policy requires before it serves again.
+			// its policy required when the backup started, before it serves again.
 			if originalType == topodatapb.TabletType_PRIMARY {
-				if err := tm.restorePrimarySemiSync(bgCtx, tablet.Tablet); err != nil {
+				if err := tm.fixSemiSync(bgCtx, topodatapb.TabletType_PRIMARY, primarySemiSync); err != nil {
 					err = vterrors.Wrapf(err, "failed to restore primary semi-sync, keeping tablet type %v", topodatapb.TabletType_BACKUP)
 					l.Errorf("%v", err)
 					// An earlier error explains why the backup failed; keep it.
@@ -205,22 +214,18 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 	return returnErr
 }
 
-// restorePrimarySemiSync sets primary semi-sync as the keyspace's durability
-// policy requires.
-func (tm *TabletManager) restorePrimarySemiSync(ctx context.Context, tablet *topodatapb.Tablet) error {
+// primarySemiSyncAction returns the semi-sync action that the keyspace's
+// durability policy requires for the primary.
+func (tm *TabletManager) primarySemiSyncAction(ctx context.Context, tablet *topodatapb.Tablet) (SemiSyncAction, error) {
 	durabilityName, err := tm.TopoServer.GetKeyspaceDurability(ctx, tablet.Keyspace)
 	if err != nil {
-		return vterrors.Wrapf(err, "cannot read keyspace durability policy %v", tablet.Keyspace)
+		return SemiSyncActionNone, vterrors.Wrapf(err, "cannot read keyspace durability policy %v", tablet.Keyspace)
 	}
 	durability, err := policy.GetDurabilityPolicy(durabilityName)
 	if err != nil {
-		return vterrors.Wrapf(err, "cannot get durability policy %v", durabilityName)
+		return SemiSyncActionNone, vterrors.Wrapf(err, "cannot get durability policy %v", durabilityName)
 	}
-	semiSyncAction, err := tm.convertBoolToSemiSyncAction(ctx, policy.SemiSyncAckers(durability, tablet) > 0)
-	if err != nil {
-		return err
-	}
-	return tm.fixSemiSync(ctx, topodatapb.TabletType_PRIMARY, semiSyncAction)
+	return tm.convertBoolToSemiSyncAction(ctx, policy.SemiSyncAckers(durability, tablet) > 0)
 }
 
 // RestoreFromBackup deletes all local data and then restores the data from the latest backup [at

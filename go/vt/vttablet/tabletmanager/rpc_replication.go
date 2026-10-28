@@ -1305,7 +1305,7 @@ func (tm *TabletManager) fixSemiSyncAndReplication(ctx context.Context, tabletTy
 		return nil
 	}
 	if err != nil {
-		return vterrors.Wrapf(err, "failed to read replication status")
+		return vterrors.Wrap(err, "failed to read replication status")
 	}
 	if !status.IOHealthy() {
 		// IO thread is not running, nothing to do.
@@ -1322,8 +1322,14 @@ func (tm *TabletManager) fixSemiSyncAndReplication(ctx context.Context, tabletTy
 		return nil
 	}
 
-	// We need to restart replication
-	log.Info(fmt.Sprintf("Restarting replication for semi-sync flag change to take effect from %v to %v", acking, shouldAck))
+	// Only the receiver registers with the source as a semi-sync replica, so
+	// restarting it applies the change without waiting for the applier.
+	log.Info(fmt.Sprintf("Restarting the replication receiver for semi-sync flag change to take effect from %v to %v", acking, shouldAck))
+	err = tm.MysqlDaemon.RestartReplicationReceiver(ctx, tm.hookExtraEnv())
+	if !errors.Is(err, mysqlctl.ErrReceiverRestartUnsupported) {
+		return vterrors.Wrap(err, "failed to restart the replication receiver")
+	}
+	// Flavors that can't restart the receiver on its own restart replication.
 	if err := tm.MysqlDaemon.StopReplication(ctx, tm.hookExtraEnv()); err != nil {
 		return vterrors.Wrap(err, "failed to StopReplication")
 	}

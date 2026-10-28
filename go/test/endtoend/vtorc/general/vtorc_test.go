@@ -128,6 +128,69 @@ func TestErrantGTIDOnPreviousPrimary(t *testing.T) {
 	utils.WaitForTabletType(t, curPrimary, "drained")
 }
 
+// TestErrantGTIDDrainWithdrawsSemiSyncAck checks that draining a connected
+// replica with errant GTIDs stops its semi-sync ACKs by restarting only its
+// receiver: the primary loses it as a semi-sync client, and its applier keeps
+// running.
+func TestErrantGTIDDrainWithdrawsSemiSyncAck(t *testing.T) {
+	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
+	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 3, 0, []string{"--change-tablets-with-errant-gtid-to-drained"}, cluster.VTOrcConfiguration{}, cluster.DefaultVtorcsByCell, policy.DurabilitySemiSync)
+	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
+	shard0 := &keyspace.Shards[0]
+
+	primary := utils.ShardPrimaryTablet(t, clusterInfo, keyspace, shard0)
+	require.NotNil(t, primary, "should have elected a primary")
+	var errantReplica, ackingReplica *cluster.Vttablet
+	for _, tablet := range shard0.Vttablets {
+		if tablet.Alias == primary.Alias {
+			continue
+		}
+		if errantReplica == nil {
+			errantReplica = tablet
+		} else {
+			ackingReplica = tablet
+		}
+	}
+	require.NotNil(t, ackingReplica, "should be able to find two replicas")
+	utils.CheckReplication(t, clusterInfo, primary, []*cluster.Vttablet{errantReplica, ackingReplica}, 15*time.Second)
+
+	semiSyncClients := func() string {
+		clients, err := primary.VttabletProcess.GetDBStatus("Rpl_semi_sync_source_clients", "")
+		require.NoError(t, err)
+		return clients
+	}
+	require.Eventually(t, func() bool { return semiSyncClients() == "2" }, 30*time.Second, time.Second, "both replicas should send semi-sync ACKs")
+
+	threadID := func(names string) string {
+		qr, err := utils.RunSQL(t, "SELECT THREAD_ID FROM performance_schema.threads WHERE NAME IN ("+names+")", errantReplica, "")
+		require.NoError(t, err)
+		require.Len(t, qr.Rows, 1)
+		return qr.Rows[0][0].ToString()
+	}
+	const receiverThread, applierThread = "'thread/sql/replica_io', 'thread/sql/slave_io'", "'thread/sql/replica_sql', 'thread/sql/slave_sql'"
+
+	// Insert an errant GTID while the replica stays connected, with recoveries
+	// off so that only the errant GTID recovery acts on it.
+	vtOrcProcess := clusterInfo.ClusterInstance.VTOrcProcesses[0]
+	vtOrcProcess.DisableGlobalRecoveries(t)
+	receiverBefore, applierBefore := threadID(receiverThread), threadID(applierThread)
+	err := utils.RunSQLs(t, []string{
+		"SET GLOBAL read_only = OFF",
+		"INSERT INTO vt_ks.vt_insert_test(id, msg) VALUES (10174, 'errant')",
+		"SET GLOBAL super_read_only = ON",
+	}, errantReplica, "")
+	require.NoError(t, err)
+	vtOrcProcess.EnableGlobalRecoveries(t)
+
+	utils.WaitForTabletType(t, errantReplica, "drained")
+	assert.True(t, utils.IsSemiSyncSetupCorrectly(t, errantReplica, "OFF"))
+	assert.True(t, utils.IsSemiSyncSetupCorrectly(t, ackingReplica, "ON"))
+	assert.Eventually(t, func() bool { return semiSyncClients() == "1" }, 30*time.Second, time.Second, "the drained replica should stop sending semi-sync ACKs")
+	assert.NotEqual(t, receiverBefore, threadID(receiverThread), "the receiver should have been restarted")
+	assert.Equal(t, applierBefore, threadID(applierThread), "the applier should have kept running")
+	assert.True(t, cluster.ValidateReplicationIsHealthy(t, errantReplica))
+}
+
 // TestClustersToWatch verifies that VTOrc elects a primary and sets up replication when it is
 // told to watch a cluster either by keyspace ("ks") or by keyspace/shard ("ks/0"). It creates a
 // cluster with 1 replica and 1 rdonly and confirms only the replica is elected primary.
