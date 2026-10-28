@@ -25,6 +25,7 @@ import (
 
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -34,10 +35,10 @@ import (
 // decodes the single record logged so far.
 func captureLog(t *testing.T) func() map[string]any {
 	t.Helper()
-	logs := captureLogs(t, slog.LevelInfo)
+	logs := logtest.Capture(t, slog.LevelInfo)
 	return func() map[string]any {
 		t.Helper()
-		records := logs.records(t)
+		records := logs.Records(t)
 		require.Len(t, records, 1, "expected a single log record")
 		return records[0]
 	}
