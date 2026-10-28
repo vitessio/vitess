@@ -1091,14 +1091,9 @@ func (session *SafeSession) AddAdvisoryLock(name string) {
 	defer session.mu.Unlock()
 
 	if session.AdvisoryLock == nil {
-		session.AdvisoryLock = map[string]int64{name: 1}
-		return
+		session.AdvisoryLock = map[string]int64{}
 	}
-	count, exists := session.AdvisoryLock[name]
-	if exists {
-		count++
-	}
-	session.AdvisoryLock[name] = count
+	session.AdvisoryLock[name]++
 }
 
 // RemoveAdvisoryLock removes the advisory lock from the list.
