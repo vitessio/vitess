@@ -243,7 +243,7 @@ func TestBuildStatementType(t *testing.T) {
 
 			plan, err := Build(vtenv.NewTestEnv(), statement, testSchema, "dbName", false)
 			require.NoError(t, err)
-			require.Equal(t, tcase.want, plan.StatementType)
+			require.Equal(t, tcase.want, plan.StatementType())
 		})
 	}
 }
@@ -265,11 +265,11 @@ func TestBuildStatementType_CTERegression(t *testing.T) {
 
 	plan, err := Build(vtenv.NewTestEnv(), statement, testSchema, "dbName", false)
 	require.NoError(t, err)
-	require.Equal(t, sqlparser.StmtSelect, plan.StatementType)
+	require.Equal(t, sqlparser.StmtSelect, plan.StatementType())
 
 	streamPlan, err := BuildStreaming(vtenv.NewTestEnv(), statement, testSchema, "dbName")
 	require.NoError(t, err)
-	require.Equal(t, sqlparser.StmtSelect, streamPlan.StatementType)
+	require.Equal(t, sqlparser.StmtSelect, streamPlan.StatementType())
 }
 
 // TestBuildStatementType_ReplaceRegression pins REPLACE to its own statement type.
@@ -293,18 +293,18 @@ func TestBuildStatementType_ReplaceRegression(t *testing.T) {
 
 	plan, err := Build(vtenv.NewTestEnv(), statement, testSchema, "dbName", false)
 	require.NoError(t, err)
-	require.Equal(t, sqlparser.StmtReplace, plan.StatementType)
+	require.Equal(t, sqlparser.StmtReplace, plan.StatementType())
 
 	streamPlan, err := BuildStreaming(vtenv.NewTestEnv(), statement, testSchema, "dbName")
 	require.NoError(t, err)
-	require.Equal(t, sqlparser.StmtReplace, streamPlan.StatementType)
+	require.Equal(t, sqlparser.StmtReplace, streamPlan.StatementType())
 
 	// An INSERT must stay an INSERT.
 	insertStatement, err := parser.Parse("insert into a(eid, id) values (1, 2)")
 	require.NoError(t, err)
 	insertPlan, err := Build(vtenv.NewTestEnv(), insertStatement, testSchema, "dbName", false)
 	require.NoError(t, err)
-	require.Equal(t, sqlparser.StmtInsert, insertPlan.StatementType)
+	require.Equal(t, sqlparser.StmtInsert, insertPlan.StatementType())
 }
 
 func TestMessageStreamingPlan(t *testing.T) {

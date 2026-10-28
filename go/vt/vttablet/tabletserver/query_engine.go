@@ -815,17 +815,6 @@ type perQueryStats struct {
 	ErrorCount   uint64
 }
 
-// planFields has the fields of planbuilder.Plan but none of its methods, so embedding it
-// promotes no MarshalJSON.
-type planFields planbuilder.Plan
-
-// queryPlanJSON is a plan as /debug/query_plans shows it. Its StatementType shadows the
-// embedded one, so the statement type reads as a name rather than a bare integer.
-type queryPlanJSON struct {
-	*planFields
-	StatementType string
-}
-
 func (qe *QueryEngine) handleHTTPQueryPlans(response http.ResponseWriter, request *http.Request) {
 	if err := acl.CheckAccessHTTP(request, acl.DEBUGGING); err != nil {
 		acl.SendError(response, err)
@@ -835,8 +824,7 @@ func (qe *QueryEngine) handleHTTPQueryPlans(response http.ResponseWriter, reques
 	response.Header().Set("Content-Type", "text/plain")
 	qe.ForEachPlan(func(plan *TabletPlan) bool {
 		fmt.Fprintf(response, "%#v\n", qe.env.Environment().Parser().TruncateForUI(plan.Original))
-		planJSON := queryPlanJSON{planFields: (*planFields)(plan.Plan), StatementType: plan.StatementType.String()}
-		if b, err := json.MarshalIndent(planJSON, "", "  "); err != nil {
+		if b, err := json.MarshalIndent(plan.Plan, "", "  "); err != nil {
 			response.Write([]byte(err.Error()))
 		} else {
 			response.Write(b)

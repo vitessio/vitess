@@ -884,10 +884,10 @@ func (qre *QueryExecutor) throttle() error {
 	switch {
 	case qre.plan.PlanID == p.PlanNextval,
 		qre.plan.PlanID == p.PlanSelectLockFunc || qre.plan.KillsConnOnTimeout,
-		qre.plan.StatementType == sqlparser.StmtSelect && len(qre.plan.Permissions) == 0:
+		qre.plan.StatementType() == sqlparser.StmtSelect && len(qre.plan.Permissions) == 0:
 		return nil
 	}
-	return qre.tsv.queryThrottler.Throttle(qre.ctx, qre.targetTabletType, qre.plan.FullQuery, qre.plan.StatementType, qre.transactionID, qre.options)
+	return qre.tsv.queryThrottler.Throttle(qre.ctx, qre.targetTabletType, qre.plan.FullQuery, qre.plan.StatementType(), qre.transactionID, qre.options)
 }
 
 func (qre *QueryExecutor) checkPermissions() error {

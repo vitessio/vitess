@@ -179,10 +179,6 @@ func (pt PlanType) MarshalJSON() ([]byte, error) {
 // Plan contains the parameters for executing a request.
 type Plan struct {
 	PlanID PlanType
-	// StatementType is the statement type derived from the parsed AST. Unlike a
-	// textual scan (sqlparser.Preview), it classifies CTE queries (WITH ... SELECT/DML)
-	// by their real plan type. It reports REPLACE separately from INSERT; see statementType.
-	StatementType sqlparser.StatementType
 	// When the query indicates a single table
 	Table *schema.Table
 	// This indicates all the tables that are accessed in the query.
@@ -228,6 +224,18 @@ type Plan struct {
 	// applied value and validate it with sqlmode.Validate. Such a plan has sql_mode as
 	// its only assignment (see validateSetStatementSQLMode).
 	VerifySQLMode bool
+
+	// stmtType is a sqlparser.StatementType; see StatementType. It is unexported so that
+	// /debug/query_plans doesn't show it, and a uint8 so that it fits in the padding after
+	// the bools above and doesn't grow every cached plan.
+	stmtType uint8
+}
+
+// StatementType returns the statement type derived from the parsed AST. Unlike a textual
+// scan (sqlparser.Preview), it classifies CTE queries (WITH ... SELECT/DML) by their real
+// plan type. It reports REPLACE separately from INSERT; see statementType.
+func (plan *Plan) StatementType() sqlparser.StatementType {
+	return sqlparser.StatementType(plan.stmtType)
 }
 
 // TableName returns the table name for the plan.
@@ -354,7 +362,7 @@ func BuildStreaming(env *vtenv.Environment, statement sqlparser.Statement, table
 	if err != nil {
 		return nil, err
 	}
-	plan.StatementType = statementType(statement)
+	plan.stmtType = uint8(statementType(statement))
 	// A lock function reached through DML mutates or acquires connection-
 	// scoped lock state exactly as it does in a SELECT predicate; the plan
 	// type stays DML (dispatch is unchanged) but the timeout and reservation

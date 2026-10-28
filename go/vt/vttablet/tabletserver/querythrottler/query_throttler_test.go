@@ -833,6 +833,19 @@ func TestQueryThrottler_HandleConfigUpdate__NoChange(t *testing.T) {
 	require.Equal(t, oldStrategy, snap.strategy, "strategy should remain unchanged")
 }
 
+// A SrvKeyspace without a query throttler config, which is every SrvKeyspace of a keyspace
+// that never enabled the query throttler, must not count as a config update on a new
+// throttler, which would log it on every tablet's startup.
+func TestQueryThrottler_HandleConfigUpdate_NoConfigIsNoChange(t *testing.T) {
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), &tabletenv.TabletConfig{}, "TestThrottler")
+	qt := NewQueryThrottler(t.Context(), &throttle.Throttler{}, env, &topodatapb.TabletAlias{Cell: "test-cell", Uid: 123}, srvtopotest.NewPassthroughSrvTopoServer())
+	t.Cleanup(qt.Shutdown)
+	initial := qt.snapshot.Load()
+
+	require.True(t, qt.HandleConfigUpdate(&topodatapb.SrvKeyspace{}, nil))
+	require.Same(t, initial, qt.snapshot.Load(), "the snapshot must not be replaced")
+}
+
 // A disabled config must run no strategy, whatever its Strategy enum says. Validation skips
 // disabled configs, and a running TABLET_THROTTLER strategy keeps checking the throttler in
 // the background, so turning the throttler off must leave only the NoOp strategy behind.

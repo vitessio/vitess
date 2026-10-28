@@ -159,10 +159,10 @@ func NewQueryThrottler(ctx context.Context, throttler *throttle.Throttler, env t
 		return selectThrottlingStrategy(cfg, qt.throttlerClient, qt.tabletConfig)
 	}
 
-	// Initialize snapshot with empty config and default NoOp strategy so Throttle()
-	// always sees a non-nil snapshot until the first config update lands.
+	// Initialize snapshot with no config and default NoOp strategy so Throttle()
+	// always sees a non-nil snapshot until the first config update lands. The config is nil,
+	// as in a SrvKeyspace without a query throttler config, so such a SrvKeyspace is no update.
 	initial := &stateSnapshot{
-		cfg:      &querythrottlerpb.Config{},
 		strategy: &registry.NoOpStrategy{},
 	}
 	qt.snapshot.Store(initial)
