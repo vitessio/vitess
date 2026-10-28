@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"slices"
 	"strings"
 	"sync"
@@ -33,6 +34,7 @@ import (
 	"vitess.io/vitess/go/vt/log/logtest"
 	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/discovery"
@@ -818,6 +820,69 @@ func TestControllerErrorLogMessages(t *testing.T) {
 	assert.Equal(t, "ERROR", retried["level"])
 	assert.EqualValues(t, 10*time.Millisecond, retried["retry_delay"])
 	assert.LessOrEqual(t, len(retried["error"].(string)), 950, "the retry error is truncated like the vreplication message")
+}
+
+// TestControllerSetStateErrorLogs checks that when the controller can't save a
+// terminal error, it logs the save failure and the terminal error as separate
+// records, each under error.
+func TestControllerSetStateErrorLogs(t *testing.T) {
+	savedDelay := vttablet.DefaultVReplicationConfig.RetryDelay
+	defer func() { vttablet.DefaultVReplicationConfig.RetryDelay = savedDelay }()
+	vttablet.DefaultVReplicationConfig.RetryDelay = time.Hour
+
+	defer deleteTablet(addTablet(100))
+
+	const rowValue = "zq7rowvalue"
+	params := map[string]string{
+		"id":           "1",
+		"workflow":     "test_workflow",
+		"state":        binlogdatapb.VReplicationWorkflowState_Running.String(),
+		"source":       fmt.Sprintf(`keyspace:"%s" shard:"0" filter:{rules:{match:"t1"}}`, env.KeyspaceName),
+		"cell":         "",
+		"tablet_types": "replica",
+		"options":      "{}",
+	}
+
+	logs := logtest.Capture(t, slog.LevelInfo)
+
+	dbClient := binlogplayer.NewMockDBClient(t)
+	dbClient.AddInvariant("update _vt.vreplication set message=", testDMLResponse)
+	dbClient.AddInvariant("update _vt.vreplication set state='Running'", testDMLResponse)
+	dbClient.AddInvariant("select pos", testSettingsResponse)
+	dbClient.AddInvariant("set @@session.", testDMLResponse)
+	dbClient.AddInvariant("set names", testDMLResponse)
+	dbClient.AddInvariant("select rows_copied", sqltypes.MakeTestResult(sqltypes.MakeTestFields("rows_copied", "int64"), "0"))
+	// An unrecoverable error, like a duplicate key carrying a row value, makes
+	// the controller save the error, and saving it fails.
+	dbClient.ExpectRequestRE("from _vt.copy_state", nil, sqlerror.NewSQLError(sqlerror.ERDupEntry, sqlerror.SSConstraintViolation, "Duplicate entry '"+rowValue+"' for key 'val'"))
+	dbClient.ExpectRequestRE("update _vt.vreplication set state='Error'", nil, errors.New("zq7setstatefailure"))
+
+	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
+	mysqld := &mysqlctl.FakeMysqlDaemon{}
+	mysqld.MysqlPort.Store(3306)
+	vre := NewTestEngine(nil, env.Cells[0], mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil)
+
+	defer setTabletTypesStr("replica")()
+
+	ct, err := newController(t.Context(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], nil, vre, defaultTabletPickerOptions)
+	require.NoError(t, err)
+
+	setStateRecord := logs.Wait(t, "INTERNAL: unable to setState() in controller")
+	errorTextRecord := logs.Wait(t, "INTERNAL: could not set error text")
+	ct.Stop(true)
+
+	for _, record := range []map[string]any{setStateRecord, errorTextRecord} {
+		assert.Equal(t, "ERROR", record["level"])
+		assert.Equal(t, "test_workflow", record["workflow"])
+		assert.EqualValues(t, 1, record["stream_id"])
+	}
+	// Each record carries only its own error.
+	assert.Equal(t, []string{"error", "level", "msg", "stream_id", "time", "workflow"}, slices.Sorted(maps.Keys(setStateRecord)))
+	assert.Equal(t, []string{"error", "error_code", "level", "msg", "stream_id", "time", "workflow"}, slices.Sorted(maps.Keys(errorTextRecord)))
+	assert.Contains(t, setStateRecord["error"], "zq7setstatefailure")
+	assert.Contains(t, errorTextRecord["error"], rowValue)
+	assert.NotContains(t, errorTextRecord["error"], "zq7setstatefailure")
+	assert.Equal(t, "UNKNOWN", errorTextRecord["error_code"])
 }
 
 // TestTerminalVReplicationError tests the terminal error messages: the

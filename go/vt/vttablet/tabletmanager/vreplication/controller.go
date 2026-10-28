@@ -384,11 +384,8 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 		if unrecoverable || !ct.lastWorkflowError.ShouldRetry() {
 			err = terminalVReplicationError(err, unrecoverable, ct.WorkflowConfig.MaxTimeToRetryError)
 			if errSetState := vr.setState(binlogdatapb.VReplicationWorkflowState_Error, err.Error()); errSetState != nil {
-				log.Error("INTERNAL: unable to setState() in controller. Could not set error text.", ct.logAttrs(
-					slog.Any("error", errSetState),
-					slog.Any("error_text", err),
-					slog.String("error_text_code", vterrors.Code(err).String()),
-				)...)
+				log.Error("INTERNAL: unable to setState() in controller", ct.logAttrs(slog.Any("error", errSetState))...)
+				log.Error("INTERNAL: could not set error text", ct.logAttrs(slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))...)
 				return err // yes, err and not errSetState.
 			}
 			log.Error("going into error state", ct.logAttrs(slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))...)
