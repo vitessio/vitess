@@ -24,7 +24,7 @@ jobs:
   # GitHub-hosted runner, so that the test job below (on a large runner) is not
   # started at all when nothing relevant changed or there is no next release.
   changes:
-    runs-on: ${{ github.repository_owner == 'vitessio' && 'cncf-ubuntu-24.04-4-16-x86' || 'ubuntu-24.04' }}
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
       end_to_end: ${{ steps.changes.outputs.end_to_end }}
@@ -96,7 +96,7 @@ jobs:
     name: Run Upgrade Downgrade Test - Reparent New Vtctl
     # The large runner is only claimed when the tests will actually run; a
     # failed or cancelled gate and the 'Skip CI' label only report a failure.
-    runs-on: ${{ needs.changes.result == 'success' && needs.changes.outputs.end_to_end == 'true' && !contains(github.event.pull_request.labels.*.name, 'Skip CI') && github.repository_owner == 'vitessio' && 'cncf-ubuntu-24.04-16-64-x86' || (github.repository_owner == 'vitessio' && 'cncf-ubuntu-24.04-4-16-x86' || 'ubuntu-24.04') }}
+    runs-on: ${{ needs.changes.result == 'success' && needs.changes.outputs.end_to_end == 'true' && !contains(github.event.pull_request.labels.*.name, 'Skip CI') && github.repository_owner == 'vitessio' && 'cncf-ubuntu-24.04-16-64-x86' || 'ubuntu-24.04' }}
 
     steps:
     - name: Harden the runner (Audit all outbound calls)

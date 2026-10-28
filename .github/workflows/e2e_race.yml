@@ -13,23 +13,15 @@ concurrency:
 
 permissions: read-all
 jobs:
-
-  build:
-    name: End-to-End Test (Race)
-    runs-on: ${{ github.repository_owner == 'vitessio' && 'cncf-ubuntu-24.04-4-16-x86' || 'ubuntu-24.04' }}
+  # Path filtering runs here, on a GitHub-hosted runner, so that the job below
+  # claims a VM runner (in vitess-security) only when something relevant
+  # changed.
+  changes:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      end_to_end: ${{ steps.changes.outputs.end_to_end }}
     steps:
-    - name: Harden the runner (Audit all outbound calls)
-      uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
-      with:
-        egress-policy: audit
-
-    - name: Skip CI
-      run: |
-        if [[ "${{contains( github.event.pull_request.labels.*.name, 'Skip CI')}}" == "true" ]]; then
-          echo "skipping CI due to the 'Skip CI' label"
-          exit 1
-        fi
-
     - name: Check out code
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
@@ -77,8 +69,43 @@ jobs:
             - '.github/actions/tune-os/**'
             - '.github/actions/setup-go/action.yml'
 
+  build:
+    name: End-to-End Test (Race)
+    needs: changes
+    if: ${{ !cancelled() }}
+    # When nothing relevant changed the job still runs (so its required status
+    # check is reported), but on a GitHub-hosted runner with every step below
+    # skipped. The 'Skip CI' label also gets the small runner, since the job
+    # then only fails at that step.
+    # vitess-security is private, so its GitHub-hosted runners are smaller; it
+    # uses a CNCF VM the size of the public ubuntu-24.04 runner instead.
+    runs-on: ${{ needs.changes.outputs.end_to_end == 'true' && !contains(github.event.pull_request.labels.*.name, 'Skip CI') && github.repository == 'vitessio/vitess-security' && 'cncf-ubuntu-24.04-4-16-x86' || 'ubuntu-24.04' }}
+    steps:
+    - name: Fail if the gate job failed
+      # A failed gate must not turn into a silently-skipped (i.e. passing) required check.
+      if: needs.changes.result != 'success'
+      run: exit 1
+
+    - name: Harden the runner (Audit all outbound calls)
+      uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+      with:
+        egress-policy: audit
+
+    - name: Skip CI
+      run: |
+        if [[ "${{contains( github.event.pull_request.labels.*.name, 'Skip CI')}}" == "true" ]]; then
+          echo "skipping CI due to the 'Skip CI' label"
+          exit 1
+        fi
+
+    - name: Check out code
+      if: needs.changes.outputs.end_to_end == 'true'
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: 'false'
+
     - name: Set up Go
-      if: steps.changes.outputs.end_to_end == 'true'
+      if: needs.changes.outputs.end_to_end == 'true'
       uses: $/.github/actions/setup-go
       with:
         build-cache: build,race
@@ -86,19 +113,19 @@ jobs:
         go-tools: none
 
     - name: Tune the OS
-      if: steps.changes.outputs.end_to_end == 'true'
+      if: needs.changes.outputs.end_to_end == 'true'
       timeout-minutes: 5
       uses: $/.github/actions/tune-os
 
     - name: Setup MySQL
-      if: steps.changes.outputs.end_to_end == 'true'
+      if: needs.changes.outputs.end_to_end == 'true'
       timeout-minutes: 8
       uses: $/.github/actions/setup-mysql
       with:
         flavor: mysql-8.4
 
     - name: Get dependencies
-      if: steps.changes.outputs.end_to_end == 'true'
+      if: needs.changes.outputs.end_to_end == 'true'
       timeout-minutes: 5
       run: |
         sudo apt-get update
@@ -109,13 +136,13 @@ jobs:
         sudo service etcd stop
 
     - name: Run make minimaltools
-      if: steps.changes.outputs.end_to_end == 'true'
+      if: needs.changes.outputs.end_to_end == 'true'
       timeout-minutes: 5
       run: |
         make minimaltools
 
     - name: e2e_race
-      if: steps.changes.outputs.end_to_end == 'true'
+      if: needs.changes.outputs.end_to_end == 'true'
       timeout-minutes: 30
       run: |
         NOVTADMINBUILD=1 make e2e_test_race

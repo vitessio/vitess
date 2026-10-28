@@ -18,32 +18,15 @@ env:
   BOOTSTRAP_FLAVOR: "mysql84"
 
 jobs:
-  build:
-    name: ${{ matrix.name }}
-    runs-on: ${{ github.repository_owner == 'vitessio' && 'cncf-ubuntu-24.04-4-16-x86' || 'ubuntu-24.04' }}
-
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - shard: java
-            name: Java Docker Test
-          - shard: docker_cluster
-            name: Docker Test Cluster
-
+  # Path filtering runs here, on a GitHub-hosted runner, so that the job below
+  # claims a VM runner (in vitess-security) only when something relevant
+  # changed.
+  changes:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      end_to_end: ${{ steps.changes.outputs.end_to_end }}
     steps:
-      - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
-        with:
-          egress-policy: audit
-
-      - name: Skip CI
-        run: |
-          if [[ "${{contains( github.event.pull_request.labels.*.name, 'Skip CI')}}" == "true" ]]; then
-            echo "skipping CI due to the 'Skip CI' label"
-            exit 1
-          fi
-
       - name: Check out code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -89,8 +72,53 @@ jobs:
               - '.github/workflows/docker_ci.yml'
               - '.github/actions/build-bootstrap/**'
 
+  build:
+    name: ${{ matrix.name }}
+    needs: changes
+    if: ${{ !cancelled() }}
+    # When nothing relevant changed the job still runs (so its required status
+    # check is reported), but on a GitHub-hosted runner with every step below
+    # skipped. The 'Skip CI' label also gets the small runner, since the job
+    # then only fails at that step.
+    # vitess-security is private, so its GitHub-hosted runners are smaller; it
+    # uses a CNCF VM the size of the public ubuntu-24.04 runner instead.
+    runs-on: ${{ needs.changes.outputs.end_to_end == 'true' && !contains(github.event.pull_request.labels.*.name, 'Skip CI') && github.repository == 'vitessio/vitess-security' && 'cncf-ubuntu-24.04-4-16-x86' || 'ubuntu-24.04' }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - shard: java
+            name: Java Docker Test
+          - shard: docker_cluster
+            name: Docker Test Cluster
+
+    steps:
+      - name: Fail if the gate job failed
+        # A failed gate must not turn into a silently-skipped (i.e. passing) required check.
+        if: needs.changes.result != 'success'
+        run: exit 1
+
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+        with:
+          egress-policy: audit
+
+      - name: Skip CI
+        run: |
+          if [[ "${{contains( github.event.pull_request.labels.*.name, 'Skip CI')}}" == "true" ]]; then
+            echo "skipping CI due to the 'Skip CI' label"
+            exit 1
+          fi
+
+      - name: Check out code
+        if: needs.changes.outputs.end_to_end == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: "false"
+
       - name: Build bootstrap images
-        if: steps.changes.outputs.end_to_end == 'true'
+        if: needs.changes.outputs.end_to_end == 'true'
         timeout-minutes: 20
         uses: $/.github/actions/build-bootstrap
         with:
@@ -99,16 +127,16 @@ jobs:
           cache-export: ${{ matrix.shard == 'java' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release-')) }}
 
       - name: Set up Go
-        if: steps.changes.outputs.end_to_end == 'true'
+        if: needs.changes.outputs.end_to_end == 'true'
         uses: $/.github/actions/setup-go
 
       - name: Tune the OS
-        if: steps.changes.outputs.end_to_end == 'true'
+        if: needs.changes.outputs.end_to_end == 'true'
         timeout-minutes: 5
         uses: $/.github/actions/tune-os
 
       - name: Run docker tests - ${{ matrix.shard }}
-        if: steps.changes.outputs.end_to_end == 'true'
+        if: needs.changes.outputs.end_to_end == 'true'
         timeout-minutes: 30
         run: |
           go run test.go -docker=true -pull=false -flavor=${{ env.BOOTSTRAP_FLAVOR }} -bootstrap-version=${{ env.BOOTSTRAP_VERSION }} --follow -shard ${{ matrix.shard }}
