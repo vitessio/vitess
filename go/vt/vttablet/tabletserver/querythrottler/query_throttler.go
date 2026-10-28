@@ -173,8 +173,9 @@ func NewQueryThrottler(ctx context.Context, throttler *throttle.Throttler, env t
 	return qt
 }
 
-// Shutdown gracefully stops the throttler and cleans up resources.
-// This should be called when the QueryThrottler is no longer needed.
+// Shutdown stops the config watch and the strategy, and leaves the throttler disabled. It is
+// final: nothing restarts the watch or applies a config afterwards. The tablet server calls
+// it when it stops for good.
 func (qt *QueryThrottler) Shutdown() {
 	qt.mu.Lock()
 	defer qt.mu.Unlock()
@@ -188,11 +189,9 @@ func (qt *QueryThrottler) Shutdown() {
 		qt.cancelWatchContext()
 	}
 
-	// Reset the watch started flag to allow restarting the watch if needed
-	qt.watchStarted.Store(false)
-
-	// Stop the current strategy to clean up any background processes
-	if snap := qt.snapshot.Load(); snap != nil && snap.strategy != nil {
+	// Disable before stopping the strategy, so that Throttle no longer evaluates it.
+	snap := qt.snapshot.Swap(&stateSnapshot{strategy: &registry.NoOpStrategy{}})
+	if snap != nil && snap.strategy != nil {
 		snap.strategy.Stop()
 	}
 }

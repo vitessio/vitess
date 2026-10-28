@@ -137,6 +137,24 @@ func TestQueryThrottler_Shutdown(t *testing.T) {
 	require.NotNil(t, strategy)
 }
 
+// After Shutdown, Throttle must allow every query without evaluating the stopped strategy.
+func TestQueryThrottler_ShutdownDisables(t *testing.T) {
+	mock := &mockThrottlingStrategy{decision: registry.ThrottleDecision{Throttle: true, Message: "always throttle"}}
+	qt := &QueryThrottler{ctx: t.Context(), tabletConfig: &tabletenv.TabletConfig{}}
+	qt.snapshot.Store(&stateSnapshot{
+		cfg:      &querythrottlerpb.Config{Enabled: true, Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER},
+		strategy: mock,
+	})
+	query := &sqlparser.ParsedQuery{Query: "select * from t"}
+	require.Error(t, qt.Throttle(t.Context(), topodatapb.TabletType_PRIMARY, query, sqlparser.StmtSelect, 0, nil), "the enabled throttler must throttle before Shutdown")
+
+	qt.Shutdown()
+
+	require.True(t, mock.stopped)
+	require.NoError(t, qt.Throttle(t.Context(), topodatapb.TabletType_PRIMARY, query, sqlparser.StmtSelect, 0, nil))
+	require.Len(t, mock.getEvaluatedCfgs(), 1, "Throttle must not evaluate the stopped strategy")
+}
+
 // TestQueryThrottler_DryRunMode tests that dry-run mode logs decisions but doesn't throttle queries.
 func TestQueryThrottler_DryRunMode(t *testing.T) {
 	tests := []struct {
@@ -1186,14 +1204,8 @@ func TestQueryThrottler_startSrvKeyspaceWatch_ShutdownStopsWatch(t *testing.T) {
 	require.Error(t, watchCtx.Err(), "Shutdown should cancel the watch context")
 	require.False(t, callback(passthrough.SrvKeyspace, nil), "the listener should return false after Shutdown")
 
-	// Verify that the watch started flag is reset
-	require.False(t, qt.watchStarted.Load(), "Watch should be marked as not started after shutdown")
-
 	// Call Shutdown again to ensure it doesn't panic
 	qt.Shutdown()
-
-	// Verify the watch flag remains false
-	require.False(t, qt.watchStarted.Load(), "Watch should remain not started after multiple shutdowns")
 }
 
 // The listener must return false once the watch is cancelled. HandleConfigUpdate's
@@ -1611,10 +1623,10 @@ func TestQueryThrottler_HandleConfigUpdate_DiscardsStrategyAfterShutdown(t *test
 	require.True(t, newMock.stopped, "discarded strategy must be Stop()'d as defense-in-depth so its background work cannot leak")
 	require.True(t, originalMock.stopped, "Shutdown must have Stop()'d the original strategy")
 
+	// Shutdown leaves the throttler disabled, and the discarded update must not replace that.
 	snap := qt.snapshot.Load()
-	require.Same(t, originalMock, snap.strategy, "snapshot must NOT be swapped to the discarded strategy")
-	require.Equal(t, querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER, snap.cfg.GetStrategy(),
-		"snapshot cfg must NOT be replaced with the post-shutdown update")
+	require.IsType(t, &registry.NoOpStrategy{}, snap.strategy, "snapshot must NOT be swapped to the discarded strategy")
+	require.Nil(t, snap.cfg, "snapshot cfg must NOT be replaced with the post-shutdown update")
 }
 
 // Two overlapping HandleConfigUpdate calls must run one after the other. Otherwise both read the same snapshot, both
