@@ -1,0 +1,47 @@
+name: "Check out a prepared release commit"
+description: >-
+  Clones the current checkout into a separate directory, imports the commits
+  prepared by tools/release/prepare.sh from their git bundle and checks one of
+  them out. A clone rather than a worktree, so the directory carries a real
+  .git and builds that stamp version control information keep working, also
+  inside a Docker build context.
+inputs:
+  bundle:
+    description: "Path of the release.bundle produced by tools/release/prepare.sh"
+    required: true
+  ref:
+    description: "Commit to check out; must be one of the two bundled commits"
+    required: true
+  path:
+    description: "Directory to clone into; must not exist"
+    required: true
+outputs:
+  path:
+    description: "Directory of the checkout"
+    value: ${{ inputs.path }}
+runs:
+  using: "composite"
+  steps:
+    - name: Check out the release commit
+      shell: bash
+      env:
+        BUNDLE: ${{ inputs.bundle }}
+        REF: ${{ inputs.ref }}
+        DEST: ${{ inputs.path }}
+      run: |
+        set -euo pipefail
+        if [[ ! "${REF}" =~ ^[0-9a-f]{40}$ ]]; then
+          echo "ref must be a full commit hash, got '${REF}'" >&2
+          exit 1
+        fi
+        git clone --quiet --no-checkout "${GITHUB_WORKSPACE}" "${DEST}"
+        git -C "${DEST}" bundle verify "${BUNDLE}"
+        git -C "${DEST}" fetch --quiet "${BUNDLE}" 'refs/release/*:refs/release/*'
+        release="$(git -C "${DEST}" rev-parse refs/release/release)"
+        back_to_dev="$(git -C "${DEST}" rev-parse refs/release/back-to-dev)"
+        if [ "${REF}" != "${release}" ] && [ "${REF}" != "${back_to_dev}" ]; then
+          echo "${REF} is neither the bundled release commit ${release} nor the back-to-dev commit ${back_to_dev}" >&2
+          exit 1
+        fi
+        git -C "${DEST}" checkout --quiet --detach "${REF}"
+        git -C "${DEST}" log --oneline -1

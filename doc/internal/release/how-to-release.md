@@ -40,6 +40,8 @@ This allows us to test that the release branch can be released and avoid discove
 However, we also proceed to a code freeze the Friday before the GA release. (Assuming GA is on a Tuesday)
 Regarding patch releases, no code freeze is planned.
 
+Patch releases are being moved to a GitHub Actions workflow, see [Patch Release Automation](./patch-release-automation.md). Until publishing lands there, the process below still applies to them.
+
 ### Tracking Issue for each Release
 
 For each release, it is recommended to create an issue like [this one](https://github.com/vitessio/vitess/issues/10476) to track the current and past progress of a release.
