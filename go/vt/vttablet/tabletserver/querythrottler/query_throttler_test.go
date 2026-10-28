@@ -680,10 +680,10 @@ func TestQueryThrottler_HandleConfigUpdate_ErrorHandling(t *testing.T) {
 			ctx := t.Context()
 
 			qt := &QueryThrottler{
-				ctx:             ctx,
-				keyspace:        "test-keyspace",
-				tabletConfig:    &tabletenv.TabletConfig{},
-				throttledLogger: logutil.NewThrottledLogger("test", time.Hour),
+				ctx:          ctx,
+				keyspace:     "test-keyspace",
+				tabletConfig: &tabletenv.TabletConfig{},
+				noNodeLogger: logutil.NewThrottledLogger("test", time.Hour),
 			}
 			qt.snapshot.Store(&stateSnapshot{
 				cfg:      &querythrottlerpb.Config{Enabled: true, Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER},
@@ -705,22 +705,43 @@ func TestQueryThrottler_HandleConfigUpdate_ErrorHandling(t *testing.T) {
 func TestQueryThrottler_HandleConfigUpdate_NoNodeWarningIsRateLimited(t *testing.T) {
 	// A large interval guarantees only the first warning is logged; the rest are suppressed.
 	qt := &QueryThrottler{
-		ctx:             t.Context(),
-		keyspace:        "test-keyspace",
-		tabletConfig:    &tabletenv.TabletConfig{},
-		throttledLogger: logutil.NewThrottledLogger("test", time.Hour),
+		ctx:          t.Context(),
+		keyspace:     "test-keyspace",
+		tabletConfig: &tabletenv.TabletConfig{},
+		noNodeLogger: logutil.NewThrottledLogger("test", time.Hour),
 	}
 	qt.snapshot.Store(&stateSnapshot{cfg: &querythrottlerpb.Config{}, strategy: &registry.NoOpStrategy{}})
 	noNode := topo.NewError(topo.NoNode, "keyspace/test-keyspace")
 
 	require.True(t, qt.HandleConfigUpdate(nil, noNode), "NoNode must keep the watch alive")
-	firstLogTime := qt.throttledLogger.GetLastLogTime()
+	firstLogTime := qt.noNodeLogger.GetLastLogTime()
 	require.False(t, firstLogTime.IsZero(), "the first NoNode callback must log a warning")
 
 	for range 5 {
 		require.True(t, qt.HandleConfigUpdate(nil, noNode), "NoNode must keep the watch alive")
 	}
-	require.Equal(t, firstLogTime, qt.throttledLogger.GetLastLogTime(), "NoNode warnings within the interval must be suppressed")
+	require.Equal(t, firstLogTime, qt.noNodeLogger.GetLastLogTime(), "NoNode warnings within the interval must be suppressed")
+}
+
+// The NoNode warning and the dry-run decision log are rate-limited separately, so that a
+// dry-run configuration logging every few seconds can't hide that a cell lost its SrvKeyspace.
+func TestQueryThrottler_NoNodeWarningAndDryRunLogAreRateLimitedSeparately(t *testing.T) {
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), &tabletenv.TabletConfig{}, "TestThrottler")
+	qt := NewQueryThrottler(t.Context(), &throttle.Throttler{}, env, &topodatapb.TabletAlias{Cell: "test-cell", Uid: 123}, srvtopotest.NewPassthroughSrvTopoServer())
+	t.Cleanup(qt.Shutdown)
+	qt.snapshot.Store(&stateSnapshot{
+		cfg:      &querythrottlerpb.Config{Enabled: true, DryRun: true, Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER},
+		strategy: &mockThrottlingStrategy{decision: registry.ThrottleDecision{Throttle: true, Message: "always throttle"}},
+	})
+
+	require.NoError(t, qt.Throttle(t.Context(), topodatapb.TabletType_PRIMARY, &sqlparser.ParsedQuery{Query: "select * from t"}, sqlparser.StmtSelect, 0, nil))
+	dryRunLogTime := qt.throttledLogger.GetLastLogTime()
+	require.False(t, dryRunLogTime.IsZero(), "the dry-run decision must be logged")
+	require.True(t, qt.noNodeLogger.GetLastLogTime().IsZero(), "the dry-run log must not count against the NoNode warning")
+
+	require.True(t, qt.HandleConfigUpdate(nil, topo.NewError(topo.NoNode, "keyspace/test-keyspace")))
+	require.False(t, qt.noNodeLogger.GetLastLogTime().IsZero(), "the NoNode warning must be logged after a dry-run log")
+	require.Equal(t, dryRunLogTime, qt.throttledLogger.GetLastLogTime(), "the NoNode warning must not count against the dry-run log")
 }
 
 // TestQueryThrottler_HandleConfigUpdate__ConfigExtraction verifies config is properly extracted from SrvKeyspace.
