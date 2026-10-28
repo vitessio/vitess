@@ -131,3 +131,31 @@ func TestDiffRowLimitLog(t *testing.T) {
 	assert.Equal(t, td.table.Name, record["table"])
 	assert.EqualValues(t, 2, record["row_limit"])
 }
+
+// TestReconcileExtraRowsLogs checks that both reconcile lines log the number
+// of rows compared under the same key.
+func TestReconcileExtraRowsLogs(t *testing.T) {
+	wd := &workflowDiffer{
+		ct: &controller{uuid: "d99795d9-8bb1-4741-b25f-b3a2a1edee0b", workflow: "wf"},
+		opts: &tabletmanagerdatapb.VDiffOptions{
+			CoreOptions:   &tabletmanagerdatapb.VDiffCoreOptions{},
+			ReportOptions: &tabletmanagerdatapb.VDiffReportOptions{MaxSampleRows: 10},
+		},
+	}
+	dr := &DiffReport{
+		TableName:            "t1",
+		ExtraRowsSource:      1,
+		ExtraRowsSourceDiffs: []*RowDiff{{Row: map[string]string{"c1": "1"}}},
+		ExtraRowsTarget:      1,
+		ExtraRowsTargetDiffs: []*RowDiff{{Row: map[string]string{"c1": "2"}}},
+	}
+
+	logs := logtest.Capture(t, slog.LevelInfo)
+	require.NoError(t, wd.doReconcileExtraRows(dr, 10, 10))
+
+	for _, msg := range []string{"Reconciling extra rows for table in vdiff", "No matching extra rows found for table in vdiff"} {
+		record := logs.Record(t, msg)
+		assert.Equal(t, "t1", record["table"], msg)
+		assert.EqualValues(t, 1, record["max_rows"], msg)
+	}
+}

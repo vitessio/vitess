@@ -217,7 +217,7 @@ func (wd *workflowDiffer) doReconcileExtraRows(dr *DiffReport, maxExtraRowsToCom
 	}
 
 	if matchedDiffs == 0 {
-		log.Info("No matching extra rows found for table in vdiff", wd.ct.logAttrs(slog.String("table", dr.TableName), slog.Int("checked_rows", maxRows))...)
+		log.Info("No matching extra rows found for table in vdiff", wd.ct.logAttrs(slog.String("table", dr.TableName), slog.Int("max_rows", maxRows))...)
 	} else {
 		// Now remove the matching extra rows
 		newExtraRowsSourceDiffs := make([]*RowDiff, 0, int64(len(dr.ExtraRowsSourceDiffs))-matchedDiffs)
