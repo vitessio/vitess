@@ -76,6 +76,7 @@
         - [Parallel S3 downloads during restore](#vttablet-s3-parallel-downloads)
         - [lz4 engine: library upgrade and `--compression-level` mapping](#backup-lz4-v4)
         - [`vtbackup` can refuse backups with errant GTIDs](#vtbackup-errant-gtid-checks)
+        - [`vtbackup` stops catching up at the primary's committed position on MySQL 8.4 and later](#vtbackup-stop-at-committed-position)
     - **[VTAdmin](#minor-changes-vtadmin)**
         - [vtadmin-web updated to node v22.23.2 (LTS)](#vtadmin-updated-node)
     - **[General](#minor-changes-general)**
@@ -871,6 +872,8 @@ The new `--enable-errant-gtid-checks` flag makes `vtbackup` fail a run, without 
 - **The data to back up**, before the upload. Errant GTIDs here come from a reparent that lost transactions `vtbackup` had already applied, or from `--init-backup-sql-queries` running binlogged statements such as `ANALYZE TABLE`, `OPTIMIZE TABLE` or `FLUSH TABLES`.
 - **The new backup**, just before its `MANIFEST` is written. If an emergency reparent during the upload loses transactions that the backup holds, the backup is aborted instead of left for restores to reject.
 
+On MySQL 8.4 and later, if replication breaks while `vtbackup` catches up, the flag also makes `vtbackup` check, before it points replication at the shard's current primary, that this primary has every GTID that `vtbackup` already applied, apart from GTIDs under the primary's own server UUID. If it doesn't, the run fails without changing the source, since a new source can't undo applied transactions. Before MySQL 8.4, `vtbackup` repoints as before, and the check of the data to back up catches those GTIDs instead.
+
 The error names where the errant GTIDs came from and how to repair them. Before the upload, and again before writing the `MANIFEST`, `vtbackup` also waits while the primary hasn't committed GTIDs under its own UUID that `vtbackup` already applied, as when the primary waits for semi-sync acknowledgements, and then checks them against whichever primary the shard has.
 
 Before turning the flag on:
@@ -879,7 +882,19 @@ Before turning the flag on:
 - The checks wait for a missing or unreachable primary, an unreachable topo server, for the primary to commit GTIDs that `vtbackup` already applied, and, after a reparent during the upload, for the new primary. Like the existing wait for the primary's position, these waits are bounded only by the job's deadline, if it has one. While the checks of the restored data and of the data to back up run, the `Phase` metric reports the `VerifyErrantGTIDs` phase; the check before the `MANIFEST` runs within `TakeNewBackup`.
 - MariaDB and other non-MySQL56 flavors are not checked, as on tablets.
 
-See [#20677](https://github.com/vitessio/vitess/issues/20677) and [#20678](https://github.com/vitessio/vitess/issues/20678).
+See [#20677](https://github.com/vitessio/vitess/issues/20677), [#20678](https://github.com/vitessio/vitess/issues/20678) and [#20679](https://github.com/vitessio/vitess/issues/20679).
+
+#### <a id="vtbackup-stop-at-committed-position"/>`vtbackup` stops catching up at the primary's committed position on MySQL 8.4 and later</a>
+
+`vtbackup` replicates from the shard primary without acknowledging semi-sync, so it used to apply transactions that were still waiting for an acknowledgement. An emergency reparent can lose such a transaction, and the backup then held a GTID that the new primary never had: every replica restored from it failed with `Errant GTID detected`, and later `vtbackup` runs carried the GTID forward.
+
+On MySQL 8.4 and later, `vtbackup` now reads the primary's committed position, its `gtid_executed`, from a tablet that it confirms is still the shard primary in the same term, and stops replication at that position with `START REPLICA UNTIL SQL_AFTER_GTIDS`, with or without `--enable-errant-gtid-checks`. If replication breaks during catch-up, `vtbackup` restarts it from the shard's current primary, confirmed the same way, and catches up to that primary's committed position instead of the position it read at the start, which a reparent can make unreachable. Whenever it can't read and confirm a primary, for example while a reparent replaces one that is down, while a failed reparent leaves the shard record naming a tablet that is no longer `PRIMARY`, or while the primary's `vttablet` is down, it waits for one without repointing replication, and the stop position stays in force. During catch-up it also waits while the shard has no primary, which still fails the run at once before catch-up starts. Like the waits of the errant GTID checks, these waits are bounded only by the job's deadline, if it has one.
+
+Before MySQL 8.4, `vtbackup` catches up as before, without a stop position: those versions apply with a single thread until they reach one (MySQL note 1753), which could make catch-up much slower. `vtbackup` decides from its own `mysqld`'s version, and catches up as before if it can't read it. MariaDB is unchanged.
+
+A transaction that the primary has committed can still be lost by a reparent: under the `none` durability policy, with `rpl_semi_sync_source_wait_point=AFTER_COMMIT`, or when the replica that acknowledged it is left out of the reparent. Init SQL that restarts replication can also apply transactions past the stop position. `--enable-errant-gtid-checks` fails a run that applied either before its upload, and if a reparent loses a transaction only after the backup is complete, the next run's check of the restored backup fails instead.
+
+See [#20676](https://github.com/vitessio/vitess/issues/20676).
 
 ### <a id="minor-changes-vtadmin"/>VTAdmin</a>
 
