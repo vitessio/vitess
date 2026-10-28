@@ -859,9 +859,9 @@ func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 	throttledAppsTicker := addTicker(throttler.throttledAppsSnapshotInterval)
 	// The query throttler's strategy checks the dedicated query throttler only once per
 	// --query-throttler-cache-update-interval, which can outlast an on-demand heartbeat lease. The lag it read would
-	// then include the time that heartbeats were paused, so the dedicated query throttler keeps the lease for as long
-	// as it runs. requestHeartbeats does nothing unless this tablet is the primary. Other throttlers leave the channel
-	// nil, so this case never fires for them.
+	// then include the time that heartbeats were paused, so the dedicated query throttler keeps the lease while a
+	// query throttler rule uses lag. requestHeartbeats does nothing unless this tablet is the primary. Other throttlers
+	// leave the channel nil, so this case never fires for them.
 	var heartbeatLeaseC <-chan time.Time
 	if throttler.throttlerType == QueryTabletThrottler {
 		heartbeatLeaseC = addTicker(queryThrottlerHeartbeatLeaseInterval).C
@@ -988,7 +988,7 @@ func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 					go throttler.expireThrottledApps()
 				}
 			case <-heartbeatLeaseC:
-				if throttler.IsOpen() {
+				if throttler.IsOpen() && throttler.queryThrottlerChecksLag() {
 					throttler.requestHeartbeats()
 				}
 			case throttlerConfig := <-throttler.throttlerConfigChan:
@@ -1344,6 +1344,30 @@ func (throttler *Throttler) metricThresholdsSnapshot() map[string]float64 {
 		snapshot[key] = threshold
 	}
 	return snapshot
+}
+
+// queryThrottlerChecksLag reports whether the query throttler's app checks lag, in any scope, which it does when
+// a rule of the query throttler config uses lag. Heartbeats feed only the lag metric, so a config without a lag
+// rule needs none.
+func (throttler *Throttler) queryThrottlerChecksLag() bool {
+	val, found := throttler.appCheckedMetrics.Get(throttlerapp.QueryThrottlerName.String())
+	if !found {
+		return false
+	}
+	var metricNames []base.MetricName
+	// As in Check, a base.MetricNames can come back as a []base.MetricName.
+	switch val := val.(type) {
+	case base.MetricNames:
+		metricNames = val
+	case []base.MetricName:
+		metricNames = val
+	}
+	for _, name := range metricNames {
+		if _, metricName, err := base.DisaggregateMetricName(name.String()); err == nil && metricName == base.LagMetricName {
+			return true
+		}
+	}
+	return false
 }
 
 func (throttler *Throttler) appCheckedMetricsSnapshot() map[string]string {

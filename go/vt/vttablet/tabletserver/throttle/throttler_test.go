@@ -1804,25 +1804,75 @@ func TestDormant(t *testing.T) {
 
 // The query throttler's strategy checks the dedicated query throttler only once per refresh interval, which can
 // outlast an on-demand heartbeat lease. The dedicated query throttler on the primary must therefore keep renewing the
-// lease while it runs, even when nothing checks it, or the lag read on the next refresh includes the paused heartbeats.
+// lease even when nothing checks it, or the lag read on the next refresh includes the paused heartbeats. It must do
+// so only while a query throttler rule uses lag, though: heartbeats feed only the lag metric.
 func TestQueryThrottlerRenewsHeartbeatLease(t *testing.T) {
-	ctx, cancel := context.WithCancel(t.Context())
-	defer cancel()
+	tcases := []struct {
+		name         string
+		metrics      []string
+		wantRenewals bool
+	}{
+		{name: "lag rule", metrics: []string{"loadavg", "shard/lag"}, wantRenewals: true},
+		{name: "no lag rule", metrics: []string{"loadavg", "threads_running"}, wantRenewals: false},
+	}
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
 
-	throttler := newTestThrottler()
-	throttler.throttlerType = QueryTabletThrottler
-	heartbeatWriter, ok := throttler.heartbeatWriter.(*FakeHeartbeatWriter)
-	require.True(t, ok)
+			throttler := newTestThrottler()
+			throttler.throttlerType = QueryTabletThrottler
+			heartbeatWriter, ok := throttler.heartbeatWriter.(*FakeHeartbeatWriter)
+			require.True(t, ok)
 
-	runThrottler(t, ctx, throttler, time.Minute, func(t *testing.T, ctx context.Context) {
-		defer cancel() // early termination
+			runThrottler(t, ctx, throttler, time.Minute, func(t *testing.T, ctx context.Context) {
+				defer cancel() // early termination
+				throttler.applyThrottlerConfig(ctx, &topodatapb.ThrottlerConfig{
+					Enabled: true,
+					AppCheckedMetrics: map[string]*topodatapb.ThrottlerConfig_MetricNames{
+						throttlerapp.QueryThrottlerName.String(): {Names: tcase.metrics},
+					},
+				})
 
-		// Nothing checks the throttler, so every request from here on renews the lease by itself.
-		requests := heartbeatWriter.Requests()
-		assert.Eventually(t, func() bool {
-			return heartbeatWriter.Requests() >= requests+2
-		}, 30*time.Second, 100*time.Millisecond, "the dedicated query throttler must renew the heartbeat lease without being checked")
-	})
+				// Nothing checks the throttler, so every request from here on renews the lease by itself.
+				requests := heartbeatWriter.Requests()
+				if tcase.wantRenewals {
+					assert.Eventually(t, func() bool {
+						return heartbeatWriter.Requests() >= requests+2
+					}, 30*time.Second, 100*time.Millisecond, "the dedicated query throttler must renew the heartbeat lease without being checked")
+				} else {
+					assert.Never(t, func() bool {
+						return heartbeatWriter.Requests() > requests
+					}, 3*queryThrottlerHeartbeatLeaseInterval, 100*time.Millisecond, "the dedicated query throttler must not renew the heartbeat lease without a lag rule")
+				}
+			})
+		})
+	}
+}
+
+func TestQueryThrottlerChecksLag(t *testing.T) {
+	tcases := []struct {
+		name    string
+		metrics any // nil: the app has no entry
+		want    bool
+	}{
+		{name: "no entry"},
+		{name: "no lag", metrics: base.MetricNames{base.LoadAvgMetricName, base.ThreadsRunningMetricName}},
+		{name: "bare lag", metrics: base.MetricNames{base.LoadAvgMetricName, base.LagMetricName}, want: true},
+		{name: "scoped lag", metrics: base.MetricNames{"shard/lag"}, want: true},
+		{name: "as a slice", metrics: []base.MetricName{"self/lag"}, want: true},
+	}
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			throttler := newTestThrottler()
+			if tcase.metrics != nil {
+				throttler.appCheckedMetrics.Set(throttlerapp.QueryThrottlerName.String(), tcase.metrics, cache.DefaultExpiration)
+			}
+			// Another app's lag must not count.
+			throttler.appCheckedMetrics.Set(throttlerapp.OnlineDDLName.String(), base.MetricNames{base.LagMetricName}, cache.DefaultExpiration)
+			assert.Equal(t, tcase.want, throttler.queryThrottlerChecksLag())
+		})
+	}
 }
 
 func TestChecks(t *testing.T) {
