@@ -426,6 +426,15 @@ func TestValidateQueryThrottlerConfigRequest(t *testing.T) {
 			wantErr: "threshold[0] 'throttle' must be between 0 and 100, got 101 (tablet_type=PRIMARY, statement=SELECT, metric=lag)",
 		},
 		{
+			// The lower bounds are inclusive, as in vtctldclient's validation.
+			name: "above 0 accepted",
+			req:  singleRuleRequest("PRIMARY", "SELECT", &querythrottlerpb.ThrottleThreshold{Above: 0, Throttle: 50}),
+		},
+		{
+			name: "throttle 0 accepted",
+			req:  singleRuleRequest("PRIMARY", "SELECT", &querythrottlerpb.ThrottleThreshold{Above: 5, Throttle: 0}),
+		},
+		{
 			name: "duplicate above rejected",
 			req: singleRuleRequest("PRIMARY", "INSERT",
 				&querythrottlerpb.ThrottleThreshold{Above: 5, Throttle: 50},

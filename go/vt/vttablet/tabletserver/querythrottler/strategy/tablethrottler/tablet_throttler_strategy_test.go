@@ -590,14 +590,19 @@ func TestTabletThrottlerStrategy_FailOpenWhenCacheNotPrimed(t *testing.T) {
 
 	strategy := NewTabletThrottlerStrategy(slowClient, createTestTabletConfig())
 
-	start := time.Now()
-	result, ok := strategy.getCachedThrottleResult()
-	elapsed := time.Since(start)
+	for _, running := range []bool{false, true} {
+		// Marking it running without Start leaves the cache unprimed, as just after Start.
+		strategy.running.Store(running)
 
-	require.True(t, ok, "Expected fail-open (checkOk=true) when cache is not primed")
-	require.Nil(t, result, "Expected nil checkResult when cache is not primed")
-	require.Less(t, elapsed, 100*time.Millisecond, "Expected fail-open path to return immediately without calling the throttler")
-	require.Equal(t, 0, slowClient.GetCallCount(), "Expected no synchronous ThrottleCheckOK calls from the hot path")
+		start := time.Now()
+		result, ok := strategy.getCachedThrottleResult()
+		elapsed := time.Since(start)
+
+		require.True(t, ok, "Expected fail-open (checkOk=true) when cache is not primed (running=%v)", running)
+		require.Nil(t, result, "Expected nil checkResult when cache is not primed (running=%v)", running)
+		require.Less(t, elapsed, 100*time.Millisecond, "Expected fail-open path to return immediately without calling the throttler")
+		require.Equal(t, 0, slowClient.GetCallCount(), "Expected no synchronous ThrottleCheckOK calls from the hot path")
+	}
 }
 
 // TestFakeThrottleClientWrapper_ThreadSafety tests that the FakeThrottleClientWrapper is thread-safe
@@ -1083,7 +1088,7 @@ func TestTabletThrottlerStrategy_Evaluate_IgnoresMetricsWithinThrottlerThreshold
 }
 
 // A cached state goes stale cacheStalenessMultiplier refresh intervals after it was
-// refreshed, and a non-positive interval falls back to the default.
+// refreshed, and then fails open. A non-positive interval falls back to the default.
 func TestTabletThrottlerStrategy_CacheStaleness(t *testing.T) {
 	require.Equal(t, defaultCacheUpdateInterval, resolveCacheUpdateInterval(nil))
 	require.Equal(t, defaultCacheUpdateInterval, resolveCacheUpdateInterval(&tabletenv.TabletConfig{}))
@@ -1097,6 +1102,15 @@ func TestTabletThrottlerStrategy_CacheStaleness(t *testing.T) {
 	require.False(t, strategy.isStale(&cacheState{}), "a state that was never refreshed is a miss, not stale")
 	require.False(t, strategy.isStale(&cacheState{refreshedAt: time.Now().Add(-59 * time.Second)}))
 	require.True(t, strategy.isStale(&cacheState{refreshedAt: time.Now().Add(-61 * time.Second)}))
+
+	// Even a state that last recorded an overload. Running is set without Start, so it is
+	// cleared again before the Stop cleanup, which would otherwise wait for an updater.
+	strategy.running.Store(true)
+	strategy.cachedState.Store(&cacheState{ok: false, result: &throttle.CheckResult{}, refreshedAt: time.Now().Add(-61 * time.Second)})
+	result, ok := strategy.getCachedThrottleResult()
+	strategy.running.Store(false)
+	require.True(t, ok)
+	require.Nil(t, result)
 }
 
 // A failed refresh over a state that has already gone stale counts in CacheStaleRefreshes,

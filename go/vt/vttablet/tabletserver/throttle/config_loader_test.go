@@ -134,6 +134,35 @@ func TestConvertQueryThrottlerConfigToThrottlerConfig_MinAcrossRules(t *testing.
 	require.Equal(t, []string{"cpu", "lag"}, names)
 }
 
+// Validation refuses a metric rule with no thresholds, but a direct topo write can still store
+// one. Convert must skip it rather than index its empty slice, which would panic the tablet's
+// SrvKeyspace watch.
+func TestConvertQueryThrottlerConfigToThrottlerConfig_SkipsRuleWithoutThresholds(t *testing.T) {
+	cfg := &querythrottlerpb.Config{
+		Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER,
+		Enabled:  true,
+		TabletStrategyConfig: &querythrottlerpb.TabletStrategyConfig{
+			TabletRules: map[string]*querythrottlerpb.StatementRuleSet{
+				"PRIMARY": {
+					StatementRules: map[string]*querythrottlerpb.MetricRuleSet{
+						"SELECT": {
+							MetricRules: map[string]*querythrottlerpb.MetricRule{
+								"lag":     {Thresholds: []*querythrottlerpb.ThrottleThreshold{{Above: 5, Throttle: 100}}},
+								"loadavg": {},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	tc := convertQueryThrottlerConfigToThrottlerConfig(cfg)
+	require.NotNil(t, tc)
+	require.Equal(t, []string{"lag"}, tc.AppCheckedMetrics[throttlerapp.QueryThrottlerName.String()].GetNames())
+	require.NotContains(t, tc.MetricThresholds, "loadavg")
+}
+
 // AppCheckedMetrics is built from map iteration, so it must be sorted for one config to
 // always yield the same list.
 func TestConvertQueryThrottlerConfigToThrottlerConfig_SortsMetricNames(t *testing.T) {
