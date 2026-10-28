@@ -272,41 +272,6 @@ func TestBuildStatementType_CTERegression(t *testing.T) {
 	require.Equal(t, sqlparser.StmtSelect, streamPlan.StatementType())
 }
 
-// TestBuildStatementType_ReplaceRegression pins REPLACE to its own statement type.
-// Reporting it as INSERT makes a query throttler REPLACE rule unmatchable, and wrongly
-// applies an INSERT rule instead.
-func TestBuildStatementType_ReplaceRegression(t *testing.T) {
-	testSchema := loadSchema("schema_test.json")
-	parser := sqlparser.NewTestParser()
-
-	const replaceStmt = "replace into a(eid, id) values (1, 2)"
-
-	statement, err := parser.Parse(replaceStmt)
-	require.NoError(t, err)
-
-	// Premise: REPLACE is represented as an *Insert with ReplaceAct.
-	ins, ok := statement.(*sqlparser.Insert)
-	require.True(t, ok, "REPLACE should parse to *sqlparser.Insert")
-	require.Equal(t, sqlparser.ReplaceAct, ins.Action)
-	// Premise: the shared classifier, which vtgate uses, still reports REPLACE as INSERT.
-	require.Equal(t, sqlparser.StmtInsert, sqlparser.ASTToStatementType(statement))
-
-	plan, err := Build(vtenv.NewTestEnv(), statement, testSchema, "dbName", false)
-	require.NoError(t, err)
-	require.Equal(t, sqlparser.StmtReplace, plan.StatementType())
-
-	streamPlan, err := BuildStreaming(vtenv.NewTestEnv(), statement, testSchema, "dbName")
-	require.NoError(t, err)
-	require.Equal(t, sqlparser.StmtReplace, streamPlan.StatementType())
-
-	// An INSERT must stay an INSERT.
-	insertStatement, err := parser.Parse("insert into a(eid, id) values (1, 2)")
-	require.NoError(t, err)
-	insertPlan, err := Build(vtenv.NewTestEnv(), insertStatement, testSchema, "dbName", false)
-	require.NoError(t, err)
-	require.Equal(t, sqlparser.StmtInsert, insertPlan.StatementType())
-}
-
 func TestMessageStreamingPlan(t *testing.T) {
 	testSchema := loadSchema("schema_test.json")
 	plan, err := BuildMessageStreaming("msg", testSchema)

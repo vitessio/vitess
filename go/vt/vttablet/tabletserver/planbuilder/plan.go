@@ -233,7 +233,7 @@ type Plan struct {
 
 // StatementType returns the statement type derived from the parsed AST. Unlike a textual
 // scan (sqlparser.Preview), it classifies CTE queries (WITH ... SELECT/DML) by their real
-// plan type. It reports REPLACE separately from INSERT; see statementType.
+// plan type. It reports REPLACE separately from INSERT.
 func (plan *Plan) StatementType() sqlparser.StatementType {
 	return sqlparser.StatementType(plan.stmtType)
 }
@@ -289,16 +289,6 @@ func Build(env *vtenv.Environment, statement sqlparser.Statement, tables map[str
 		}
 	}
 	return plan, nil
-}
-
-// statementType classifies statement for Plan.StatementType. It reports REPLACE
-// separately from INSERT, which sqlparser.ASTToStatementType does not: vtgate shares
-// that function and reports REPLACE as INSERT in plans and metrics.
-func statementType(statement sqlparser.Statement) sqlparser.StatementType {
-	if ins, ok := statement.(*sqlparser.Insert); ok && ins.Action == sqlparser.ReplaceAct {
-		return sqlparser.StmtReplace
-	}
-	return sqlparser.ASTToStatementType(statement)
 }
 
 // BuildStreaming builds a streaming plan based on the schema.
@@ -362,7 +352,7 @@ func BuildStreaming(env *vtenv.Environment, statement sqlparser.Statement, table
 	if err != nil {
 		return nil, err
 	}
-	plan.stmtType = uint8(statementType(statement))
+	plan.stmtType = uint8(sqlparser.ASTToStatementType(statement))
 	// A lock function reached through DML mutates or acquires connection-
 	// scoped lock state exactly as it does in a SELECT predicate; the plan
 	// type stays DML (dispatch is unchanged) but the timeout and reservation

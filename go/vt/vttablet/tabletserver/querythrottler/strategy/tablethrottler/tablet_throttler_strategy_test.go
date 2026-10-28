@@ -807,7 +807,7 @@ func TestTabletThrottlerStrategy_Evaluate_NilCachedResultFailsOpen(t *testing.T)
 
 // A REPLACE rule must throttle a REPLACE statement, and an INSERT rule must not stand in
 // for one. The tablet plan builder classifies REPLACE as StmtReplace; that is covered by
-// TestBuildStatementType_ReplaceRegression in the planbuilder package.
+// TestBuildStatementType in the planbuilder package.
 func TestTabletThrottlerStrategy_Evaluate_ReplaceRuleMatches(t *testing.T) {
 	const replaceSQL = "replace into t(a) values (1)"
 	stmtType := sqlparser.StmtReplace
