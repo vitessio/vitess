@@ -145,8 +145,11 @@ func TestERSHeldByApplierBarriers(t *testing.T) {
 	}
 	err := tryLockShard(t, ci.TopoProcess.Server)
 	require.True(t, topo.IsErrType(err, topo.NodeExists), "ERS does not hold the shard lock: %v", err)
-	cli, lease := shardLockLease(t, ci)
-	ttl, err := cli.TimeToLive(t.Context(), lease)
+	// The lease reads are bounded by the hold budget, so an unresponsive etcd fails the hold.
+	leaseCtx, cancelLease := context.WithDeadline(t.Context(), deadline)
+	defer cancelLease()
+	cli, lease := shardLockLease(leaseCtx, t, ci)
+	ttl, err := cli.TimeToLive(leaseCtx, lease)
 	require.NoError(t, err)
 	held := time.Since(start)
 	t.Logf("held ERS for %v; its shard lock lease has %ds left", held, ttl.TTL)
