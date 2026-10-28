@@ -5983,8 +5983,9 @@ func validateTabletThrottlerStrategyConfig(cfg *querythrottler.Config) error {
 			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "statement_rules cannot be empty (tablet_type=%s)", tabletType)
 		}
 		for stmtType, metricRuleSet := range stmtRuleSet.GetStatementRules() {
-			// Reject statement types that never reach the query throttler, such as BEGIN, and
-			// those it must not reject, MIGRATION and SET; see base.IsQueryThrottlerStatementType.
+			// Reject statement types that the query throttler never evaluates, such as BEGIN and
+			// SAVEPOINT, and those it must not reject: MIGRATION, SET and UNLOCK_TABLES. See
+			// base.IsQueryThrottlerStatementType.
 			if !base.IsQueryThrottlerStatementType(stmtType) {
 				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported statement type %q (tablet_type=%s)", stmtType, tabletType)
 			}

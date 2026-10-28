@@ -315,7 +315,7 @@ func (s *TabletThrottlerStrategy) Evaluate(ctx context.Context, cfg *querythrott
 	startTime := time.Now()
 	tabletTypeStr := targetTabletType.String()
 	// FAST PATH: Check if system is healthy before doing any expensive work
-	// This optimizes for the common case (90-95% of queries) where checkOk == true
+	// This optimizes for the common case, where checkOk == true
 	if s.running.Load() {
 		if state := s.cachedState.Load(); state != nil && state.ok {
 			s.recordFastDecision(tabletTypeStr, decisionOutcomeAllowed, startTime)

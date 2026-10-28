@@ -867,8 +867,6 @@ func (qre *QueryExecutor) MessageStream(callback StreamCallback) error {
 	return nil
 }
 
-// checkPermissions returns an error if the query does not pass all checks
-// (denied query, table ACL).
 // throttle returns the query throttler's error if it rejects the query. The query
 // throttler itself skips statements inside a transaction. throttle also skips statements
 // whose rejection costs more than running them:
@@ -890,6 +888,8 @@ func (qre *QueryExecutor) throttle() error {
 	return qre.tsv.queryThrottler.Throttle(qre.ctx, qre.targetTabletType, qre.plan.FullQuery, qre.plan.StatementType(), qre.transactionID, qre.options)
 }
 
+// checkPermissions returns an error if the query does not pass all checks
+// (denied query, table ACL).
 func (qre *QueryExecutor) checkPermissions() error {
 	// Skip permissions check if the context is local.
 	if tabletenv.IsLocalContext(qre.ctx) {
