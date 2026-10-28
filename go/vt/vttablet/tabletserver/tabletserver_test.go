@@ -3233,11 +3233,12 @@ func useNoopTabletManagerClient(t *testing.T) {
 	t.Cleanup(tmclienttest.SetProtocol("TabletServerTest", noopTabletManagerProtocol))
 }
 
-// alwaysThrottleStrategy throttles every statement the query throttler evaluates.
+// alwaysThrottleStrategy throttles every statement the query throttler evaluates. Its message
+// names the statement type it was given, so tests can check what each call site passes.
 type alwaysThrottleStrategy struct{}
 
-func (alwaysThrottleStrategy) Evaluate(context.Context, *querythrottlerpb.Config, topodatapb.TabletType, *sqlparser.ParsedQuery, sqlparser.StatementType, int64, registry.QueryAttributes) registry.ThrottleDecision {
-	return registry.ThrottleDecision{Throttle: true, Message: "always throttle"}
+func (alwaysThrottleStrategy) Evaluate(_ context.Context, _ *querythrottlerpb.Config, _ topodatapb.TabletType, _ *sqlparser.ParsedQuery, statementType sqlparser.StatementType, _ int64, _ registry.QueryAttributes) registry.ThrottleDecision {
+	return registry.ThrottleDecision{Throttle: true, Message: "always throttle " + statementType.String()}
 }
 func (alwaysThrottleStrategy) Start()                  {}
 func (alwaysThrottleStrategy) Stop()                   {}
@@ -3314,12 +3315,19 @@ func TestTabletServerQueryThrottlerSkippedStatements(t *testing.T) {
 	_, err = tsv.Execute(ctx, nil, target, "select @@sql_mode orig, 'STRICT_TRANS_TABLES' new from dual", nil, 0, 0, options)
 	require.NoError(t, err, "a SELECT that reads no table, such as the one vtgate runs to check a SET, must not be throttled")
 
+	// Each call site must also pass the statement's type, which alwaysThrottleStrategy names in
+	// its message: Execute, Stream, and Stream's DML path.
 	_, err = tsv.Execute(ctx, nil, target, selectTable, nil, 0, 0, options)
 	require.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err), "an autocommit statement must be throttled")
+	require.ErrorContains(t, err, "always throttle SELECT")
 	_, err = tsv.Execute(ctx, nil, target, "flush logs", nil, 0, 0, options)
 	require.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err), "a statement other than SELECT must be throttled even if it reads no table")
+	err = tsv.StreamExecute(ctx, nil, target, selectTable, nil, 0, 0, options, noop)
+	require.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err), "an autocommit streamed statement must be throttled")
+	require.ErrorContains(t, err, "always throttle SELECT")
 	err = tsv.StreamExecute(ctx, nil, target, insert, nil, 0, 0, options, noop)
 	require.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err), "an autocommit streamed DML must be throttled")
+	require.ErrorContains(t, err, "always throttle INSERT")
 	_, err = tsv.Execute(ctx, nil, target, selectTable, nil, 0, reservedState.ReservedID, options)
 	require.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err), "a statement on a reserved connection without a transaction must be throttled")
 	err = tsv.StreamExecute(ctx, nil, target, selectTable, nil, 0, reservedState.ReservedID, options, noop)

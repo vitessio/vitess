@@ -422,6 +422,41 @@ func TestValidateQueryThrottlerConfigContent(t *testing.T) {
 			wantErr: `metric "lag" is configured under multiple scopes; only one scope of a metric may be configured across the query throttler config`,
 		},
 		{
+			// Only a second spelling of a metric is refused; the same key may appear in any number of rules.
+			name: "same metric key under several statement and tablet types accepted",
+			config: &querythrottler.Config{
+				Enabled:  true,
+				Strategy: querythrottler.ThrottlingStrategy_TABLET_THROTTLER,
+				TabletStrategyConfig: &querythrottler.TabletStrategyConfig{
+					TabletRules: map[string]*querythrottler.StatementRuleSet{
+						"PRIMARY": {
+							StatementRules: map[string]*querythrottler.MetricRuleSet{
+								"SELECT": {
+									MetricRules: map[string]*querythrottler.MetricRule{
+										"shard/lag": {Thresholds: []*querythrottler.ThrottleThreshold{{Above: 5.0, Throttle: 100}}},
+									},
+								},
+								"INSERT": {
+									MetricRules: map[string]*querythrottler.MetricRule{
+										"shard/lag": {Thresholds: []*querythrottler.ThrottleThreshold{{Above: 5.0, Throttle: 100}}},
+									},
+								},
+							},
+						},
+						"REPLICA": {
+							StatementRules: map[string]*querythrottler.MetricRuleSet{
+								"SELECT": {
+									MetricRules: map[string]*querythrottler.MetricRule{
+										"shard/lag": {Thresholds: []*querythrottler.ThrottleThreshold{{Above: 5.0, Throttle: 100}}},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
 			name:   "RDONLY tablet type and REPLACE statement type are accepted",
 			config: singleRuleConfig("RDONLY", "REPLACE", &querythrottler.ThrottleThreshold{Above: 5, Throttle: 50}),
 		},

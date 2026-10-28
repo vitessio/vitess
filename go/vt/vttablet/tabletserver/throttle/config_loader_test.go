@@ -17,6 +17,7 @@ limitations under the License.
 package throttle
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -27,6 +28,7 @@ import (
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
 	querythrottlerpb "vitess.io/vitess/go/vt/proto/querythrottler"
@@ -257,6 +259,67 @@ func TestConfigLoaderPerThrottlerType(t *testing.T) {
 	queryCfg := queryThrottler.configLoader.loadConfig(srvks)
 	require.NotNil(t, queryCfg)
 	require.False(t, queryCfg.GetEnabled(), "the dedicated throttler must follow the query throttler config, not ThrottlerConfig")
+}
+
+// srvKeyspaceTopoServer serves one SrvKeyspace.
+type srvKeyspaceTopoServer struct {
+	FakeTopoServer
+	srvks *topodatapb.SrvKeyspace
+}
+
+func (ts *srvKeyspaceTopoServer) GetSrvKeyspace(context.Context, string, string) (*topodatapb.SrvKeyspace, error) {
+	return ts.srvks, nil
+}
+
+// The dedicated throttler takes its config from the query throttler config both where it reads
+// the SrvKeyspace and where it watches it, never from ThrottlerConfig.
+func TestQueryThrottlerConfigSource(t *testing.T) {
+	srvks := &topodatapb.SrvKeyspace{
+		ThrottlerConfig: &topodatapb.ThrottlerConfig{Enabled: true, Threshold: 7, MetricThresholds: map[string]float64{"loadavg": 9}},
+		QueryThrottlerConfig: &querythrottlerpb.Config{
+			Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER,
+			TabletStrategyConfig: &querythrottlerpb.TabletStrategyConfig{
+				TabletRules: map[string]*querythrottlerpb.StatementRuleSet{
+					"PRIMARY": {
+						StatementRules: map[string]*querythrottlerpb.MetricRuleSet{
+							"SELECT": {
+								MetricRules: map[string]*querythrottlerpb.MetricRule{
+									"shard/lag": {Thresholds: []*querythrottlerpb.ThrottleThreshold{{Above: 3, Throttle: 50}}},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	newDedicatedThrottler := func() *Throttler {
+		throttler := newTestThrottler()
+		throttler.throttlerType = QueryTabletThrottler
+		throttler.configLoader = &queryConfigLoader{}
+		throttler.ts = &srvKeyspaceTopoServer{srvks: srvks}
+		throttler.tabletAlias = &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}
+		return throttler
+	}
+	appName := throttlerapp.QueryThrottlerName.String()
+
+	t.Run("read", func(t *testing.T) {
+		cfg, err := newDedicatedThrottler().readThrottlerConfig(t.Context())
+		require.NoError(t, err)
+		require.False(t, cfg.GetEnabled())
+		require.Equal(t, map[string]float64{"lag": 3}, cfg.GetMetricThresholds())
+		require.Equal(t, []string{"shard/lag"}, cfg.GetAppCheckedMetrics()[appName].GetNames())
+	})
+
+	t.Run("watch", func(t *testing.T) {
+		throttler := newDedicatedThrottler()
+		// The throttler is not enabled, so the callback applies the config right away.
+		require.True(t, throttler.WatchSrvKeyspaceCallback(srvks, nil))
+		require.False(t, throttler.IsEnabled())
+		metrics, found := throttler.appCheckedMetrics.Get(appName)
+		require.True(t, found, "the query throttler config's metrics must be applied")
+		require.Equal(t, base.MetricNames{"shard/lag"}, metrics)
+	})
 }
 
 func TestThrottlerTypeToProto(t *testing.T) {

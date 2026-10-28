@@ -18,6 +18,7 @@ package topotests
 
 import (
 	"context"
+	"path"
 	"reflect"
 	"sort"
 	"strings"
@@ -1181,6 +1182,22 @@ func TestUpdateSrvKeyspaceQueryThrottlerConfig(t *testing.T) {
 		assert.False(t, getConfig(t, ts, cell).GetDryRun())
 		_, err = ts.GetSrvKeyspace(t.Context(), cell2, keyspace)
 		assert.True(t, topo.IsErrType(err, topo.NoNode), "a cell without a SrvKeyspace must not get one created")
+	})
+
+	t.Run("reports a cell it could not read as a partial result", func(t *testing.T) {
+		ts, ctx := setup(t, cell, cell2)
+		// memorytopo's injected errors match on the path within a cell, which is the same in every
+		// cell, so cell2 fails through a SrvKeyspace that doesn't unmarshal instead.
+		conn, err := ts.ConnForCell(ctx, cell2)
+		require.NoError(t, err)
+		_, err = conn.Update(ctx, path.Join(topo.KeyspacesPath, keyspace, topo.SrvKeyspaceFile), []byte{0xff}, nil)
+		require.NoError(t, err)
+
+		updated, err := ts.UpdateSrvKeyspaceQueryThrottlerConfig(ctx, keyspace, nil, disableDryRun)
+		require.True(t, topo.IsErrType(err, topo.PartialResult), "got %v", err)
+		require.ErrorContains(t, err, "SrvKeyspace unmarshal failed")
+		require.Equal(t, []string{cell}, updated)
+		assert.False(t, getConfig(t, ts, cell).GetDryRun(), "a readable cell must still be updated")
 	})
 
 	t.Run("requires the keyspace lock", func(t *testing.T) {

@@ -31,6 +31,7 @@ import (
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
 	querythrottlerpb "vitess.io/vitess/go/vt/proto/querythrottler"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -320,18 +321,61 @@ func waitForUnthrottledQuery(t *testing.T, query string) {
 	}, waitTimeout, 2*time.Second)
 }
 
-// TestDisabledByDefault validates that with no QueryThrottlerConfig pushed,
-// queries flow through normally (NoOpStrategy active, no throttling).
+// TestDisabledByDefault validates that with no QueryThrottlerConfig pushed, queries are never
+// throttled, even while the replica lags and the lag throttler, which follows the keyspace's
+// ThrottlerConfig, reports that lag.
 func TestDisabledByDefault(t *testing.T) {
-	t.Run("queries succeed with no throttler config", func(t *testing.T) {
+	requireKeyspaceQueryThrottlerConfig(t, nil)
+	t.Cleanup(func() {
+		// t.Context() is canceled before cleanups run.
+		ctx := context.WithoutCancel(t.Context())
+		clusterInstance.EnableVTOrcRecoveries(t)
+		_, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("StartReplication", replicaTablet.Alias)
+		assert.NoError(t, err, "restarting replication")
+		_, err = vtctldClient.UpdateThrottlerConfig(ctx, &vtctldatapb.UpdateThrottlerConfigRequest{Keyspace: keyspaceName, Disable: true})
+		assert.NoError(t, err, "disabling the lag throttler")
+	})
+
+	t.Run("enable the lag throttler", func(t *testing.T) {
+		req := &vtctldatapb.UpdateThrottlerConfigRequest{Keyspace: keyspaceName, Enable: true, Threshold: 1}
+		require.EventuallyWithT(t, func(c *assert.CollectT) {
+			_, err := vtctldClient.UpdateThrottlerConfig(t.Context(), req)
+			assert.NoError(c, err, "enabling the lag throttler")
+		}, waitTimeout, time.Second)
+	})
+
+	t.Run("stop replication to induce lag", func(t *testing.T) {
+		stopReplication(t)
+	})
+
+	t.Run("lag throttler reports the lag", func(t *testing.T) {
+		tabletAlias, err := topoproto.ParseTabletAlias(primaryTablet.Alias)
+		require.NoError(t, err)
+		// Unlike the "vitess" app's, the "test" app's checks renew the heartbeat lease.
+		req := &vtctldatapb.CheckThrottlerRequest{TabletAlias: tabletAlias, AppName: throttlerapp.TestingName.String()}
+		require.EventuallyWithT(t, func(c *assert.CollectT) {
+			resp, err := vtctldClient.CheckThrottler(t.Context(), req)
+			require.NoError(c, err)
+			assert.Equal(c, tabletmanagerdatapb.ThrottlerType_DEFAULT_LAG_THROTTLER, resp.GetCheck().GetThrottlerType())
+			assert.Equal(c, tabletmanagerdatapb.CheckThrottlerResponseCode_THRESHOLD_EXCEEDED, resp.GetCheck().GetResponseCode())
+		}, waitTimeout, time.Second)
+	})
+
+	t.Run("query throttler is still disabled", func(t *testing.T) {
+		tabletAlias, err := topoproto.ParseTabletAlias(primaryTablet.Alias)
+		require.NoError(t, err)
+		resp, err := vtctldClient.GetThrottlerStatus(t.Context(), &vtctldatapb.GetThrottlerStatusRequest{
+			TabletAlias:   tabletAlias,
+			ThrottlerType: tabletmanagerdatapb.ThrottlerType_DEDICATED_QUERY_THROTTLER,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, tabletmanagerdatapb.ThrottlerType_DEDICATED_QUERY_THROTTLER, resp.GetStatus().GetThrottlerType())
+		assert.False(t, resp.GetStatus().GetIsEnabled(), "the lag throttler's config must not enable the query throttler")
+	})
+
+	t.Run("SELECT and INSERT succeed under lag", func(t *testing.T) {
 		vtgateExec(t, "select id from t1 limit 1", "")
-	})
-
-	t.Run("insert succeeds with no throttler config", func(t *testing.T) {
 		vtgateExec(t, "insert into t1 (id, value) values (1000, 'default_test')", "")
-	})
-
-	t.Run("cleanup", func(t *testing.T) {
 		vtgateExec(t, "delete from t1 where id = 1000", "")
 	})
 }

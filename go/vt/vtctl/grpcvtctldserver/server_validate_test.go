@@ -359,6 +359,44 @@ func TestValidateQueryThrottlerConfigRequest(t *testing.T) {
 			wantErr: `metric "lag" is configured under multiple scopes; only one scope of a metric may be configured across the query throttler config`,
 		},
 		{
+			// Only a second spelling of a metric is refused; the same key may appear in any number of rules.
+			name: "same metric key under several statement and tablet types accepted",
+			req: &vtctldatapb.UpdateQueryThrottlerConfigRequest{
+				Keyspace: "ks1",
+				QueryThrottlerConfig: &querythrottlerpb.Config{
+					Enabled:  true,
+					Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER,
+					TabletStrategyConfig: &querythrottlerpb.TabletStrategyConfig{
+						TabletRules: map[string]*querythrottlerpb.StatementRuleSet{
+							"PRIMARY": {
+								StatementRules: map[string]*querythrottlerpb.MetricRuleSet{
+									"SELECT": {
+										MetricRules: map[string]*querythrottlerpb.MetricRule{
+											"shard/lag": {Thresholds: []*querythrottlerpb.ThrottleThreshold{{Above: 5.0, Throttle: 100}}},
+										},
+									},
+									"INSERT": {
+										MetricRules: map[string]*querythrottlerpb.MetricRule{
+											"shard/lag": {Thresholds: []*querythrottlerpb.ThrottleThreshold{{Above: 5.0, Throttle: 100}}},
+										},
+									},
+								},
+							},
+							"REPLICA": {
+								StatementRules: map[string]*querythrottlerpb.MetricRuleSet{
+									"SELECT": {
+										MetricRules: map[string]*querythrottlerpb.MetricRule{
+											"shard/lag": {Thresholds: []*querythrottlerpb.ThrottleThreshold{{Above: 5.0, Throttle: 100}}},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
 			name: "RDONLY tablet type and REPLACE statement type are accepted",
 			req:  singleRuleRequest("RDONLY", "REPLACE", &querythrottlerpb.ThrottleThreshold{Above: 5, Throttle: 50}),
 		},
