@@ -19,6 +19,7 @@ package tabletmanager
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"sort"
 	"strconv"
 	"strings"
@@ -213,13 +214,12 @@ func (tm *TabletManager) DeleteTableData(ctx context.Context, req *tabletmanager
 		rowsDeleted := uint64(0)
 		// Delete all of the matching rows from the table, in batches, until we've
 		// deleted them all.
-		log.Info(fmt.Sprintf("Starting deletion of data from table %s using query %q", table, query))
+		log.Info("Starting deletion of data from table", slog.String("table", table), slog.String("query", query))
 		for {
 			// Back off if we're causing too much load on the database with these
 			// batch deletes.
 			if _, ok := tm.VREngine.ThrottlerClient().ThrottleCheckOKOrWaitAppName(ctx, throttlerapp.VReplicationName); !ok {
-				throttledLogger.Infof("throttling bulk data delete for table %s using query %q",
-					table, query)
+				throttledLogger.Info("throttling bulk data delete for table", slog.String("table", table), slog.String("query", query))
 				if err := checkIfCanceled(); err != nil {
 					return nil, err
 				}
@@ -239,7 +239,7 @@ func (tm *TabletManager) DeleteTableData(ctx context.Context, req *tabletmanager
 			// how much work we've done, how much is left, and how long it may take
 			// (considering throttling, system performance, etc).
 			if rowsDeleted%progressRows == 0 {
-				log.Info(fmt.Sprintf("Successfully deleted %d rows of data from table %s so far, using query %q", rowsDeleted, table, query))
+				log.Info("Successfully deleted rows of data from table so far", slog.Uint64("rows_deleted", rowsDeleted), slog.String("table", table), slog.String("query", query))
 			}
 			if res.RowsAffected == 0 { // We're done with this table
 				break
@@ -248,7 +248,7 @@ func (tm *TabletManager) DeleteTableData(ctx context.Context, req *tabletmanager
 				return nil, err
 			}
 		}
-		log.Info(fmt.Sprintf("Completed deletion of data (%d rows) from table %s using query %q", rowsDeleted, table, query))
+		log.Info("Completed deletion of data from table", slog.Uint64("rows_deleted", rowsDeleted), slog.String("table", table), slog.String("query", query))
 	}
 
 	return &tabletmanagerdatapb.DeleteTableDataResponse{}, nil
@@ -822,7 +822,7 @@ func (tm *TabletManager) updateSequenceValue(ctx context.Context, seq *tabletman
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid table name %s specified for sequence backing table: %v",
 			seq.BackingTableName, err)
 	}
-	log.Info(fmt.Sprintf("Updating sequence %s.%s to %d", seq.BackingTableDbName, seq.BackingTableName, nextVal))
+	log.Info("Updating sequence", slog.String("db_name", seq.BackingTableDbName), slog.String("table", seq.BackingTableName), slog.Int64("next_value", nextVal))
 	initQuery := sqlparser.BuildParsedQuery(
 		sqlInitSequenceTable,
 		backingTableDbNameEscaped,
@@ -899,7 +899,7 @@ func (tm *TabletManager) ValidateVReplicationPermissionsOld(ctx context.Context,
 	if err != nil {
 		return nil, err
 	}
-	log.Info(fmt.Sprintf("Validating VReplication permissions on %s using query %s", tm.tabletAlias, query))
+	log.Info("Validating VReplication permissions", slog.String("tablet", topoproto.TabletAliasString(tm.tabletAlias)), slog.String("query", query))
 	conn, err := tm.MysqlDaemon.GetAllPrivsConnection(ctx)
 	if err != nil {
 		return nil, err
@@ -922,7 +922,7 @@ func (tm *TabletManager) ValidateVReplicationPermissionsOld(ctx context.Context,
 	if !val {
 		errorString = fmt.Sprintf("user %s does not have the required set of permissions (select,insert,update,delete) on the %s.vreplication table on tablet %s",
 			tm.DBConfigs.Filtered.User, sidecar.GetName(), topoproto.TabletAliasString(tm.tabletAlias))
-		log.Error(fmt.Sprintf("validateVReplicationPermissions returning error: %s. Permission query run was %s", errorString, query))
+		log.Error("validateVReplicationPermissions returning error", slog.String("error", errorString), slog.String("query", query))
 	}
 	return &tabletmanagerdatapb.ValidateVReplicationPermissionsResponse{
 		User:  tm.DBConfigs.Filtered.User,
@@ -935,7 +935,7 @@ func (tm *TabletManager) ValidateVReplicationPermissionsOld(ctx context.Context,
 // the minimum permissions required on the sidecardb vreplication table
 // using a functional testing approach that doesn't require access to mysql.user table.
 func (tm *TabletManager) ValidateVReplicationPermissions(ctx context.Context, req *tabletmanagerdatapb.ValidateVReplicationPermissionsRequest) (*tabletmanagerdatapb.ValidateVReplicationPermissionsResponse, error) {
-	log.Info(fmt.Sprintf("Validating VReplication permissions on sidecar db %s", tm.tabletAlias))
+	log.Info("Validating VReplication permissions on sidecar db", slog.String("tablet", topoproto.TabletAliasString(tm.tabletAlias)))
 
 	conn, err := tm.MysqlDaemon.GetFilteredConnection(ctx)
 	if err != nil {
@@ -949,7 +949,7 @@ func (tm *TabletManager) ValidateVReplicationPermissions(ctx context.Context, re
 	defer func() {
 		_, err := conn.ExecuteFetch("ROLLBACK", 1, false)
 		if err != nil {
-			log.Warn(fmt.Sprintf("failed to rollback transaction after permission testing: %v", err))
+			log.Warn("failed to rollback transaction after permission testing", slog.Any("error", err))
 		}
 	}()
 
@@ -985,7 +985,7 @@ func (tm *TabletManager) ValidateVReplicationPermissions(ctx context.Context, re
 			return nil, vterrors.Wrapf(err, "failed to bind %s query for permission testing", test.permission)
 		}
 
-		log.Info(fmt.Sprintf("Testing %s permission using query: %s", test.permission, query))
+		log.Info("Testing permission using query", slog.String("permission", test.permission), slog.String("query", query))
 		if _, err := conn.ExecuteFetch(query, 1, false); err != nil {
 			// Check if we got `ERTableAccessDenied` error code from MySQL
 			sqlErr, ok := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError)
@@ -1002,7 +1002,7 @@ func (tm *TabletManager) ValidateVReplicationPermissions(ctx context.Context, re
 		}
 	}
 
-	log.Info(fmt.Sprintf("VReplication sidecardb permission validation succeeded for user %s on tablet %s", tm.DBConfigs.Filtered.User, tm.tabletAlias))
+	log.Info("VReplication sidecardb permission validation succeeded", slog.String("db_user", tm.DBConfigs.Filtered.User), slog.String("tablet", topoproto.TabletAliasString(tm.tabletAlias)))
 
 	return &tabletmanagerdatapb.ValidateVReplicationPermissionsResponse{
 		User:  tm.DBConfigs.Filtered.User,

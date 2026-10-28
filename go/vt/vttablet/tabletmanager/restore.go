@@ -19,6 +19,7 @@ package tabletmanager
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/spf13/pflag"
@@ -225,7 +226,7 @@ func (tm *TabletManager) restoreBackupLocked(ctx context.Context, logger logutil
 			break
 		}
 
-		log.Info(fmt.Sprintf("No backup found. Waiting %v (from -wait-for-backup-interval flag) to check again.", waitForBackupInterval))
+		log.Info("No backup found. Waiting (from --wait-for-backup-interval flag) to check again.", slog.Duration("retry_delay", waitForBackupInterval))
 		select {
 		case <-ctx.Done():
 			return "", ctx.Err()
@@ -460,9 +461,9 @@ func (tm *TabletManager) invokeRestoreDoneHook(startTime time.Time, err error, b
 	case hook.HOOK_DOES_NOT_EXIST:
 		log.Info("No vttablet_restore_done hook.")
 	case hook.HOOK_TIMEOUT_ERROR:
-		log.Warn(fmt.Sprintf("vttablet_restore_done hook timed out (exit status %d), stderr: %s", hr.ExitStatus, hr.Stderr))
+		log.Warn("vttablet_restore_done hook timed out", slog.Int("exit_status", hr.ExitStatus), slog.String("stderr", hr.Stderr))
 	default:
-		log.Warn(fmt.Sprintf("vttablet_restore_done hook failed with exit status %d, stderr: %s", hr.ExitStatus, hr.Stderr))
+		log.Warn("vttablet_restore_done hook failed", slog.Int("exit_status", hr.ExitStatus), slog.String("stderr", hr.Stderr))
 	}
 }
 

@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"runtime"
 	"strconv"
 	"strings"
@@ -37,6 +38,7 @@ import (
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
@@ -208,6 +210,29 @@ func TestMonitorIsSemiSyncBlockedWithBadResults(t *testing.T) {
 			require.ErrorContains(t, err, tt.wantErr)
 		})
 	}
+}
+
+// TestCheckAndFixSemiSyncBlockedLogsError tests the record logged when the
+// monitor can't tell whether the primary is blocked.
+func TestCheckAndFixSemiSyncBlockedLogsError(t *testing.T) {
+	defer utils.EnsureNoLeaks(t)
+	logs := logtest.Capture(t, slog.LevelInfo)
+	db, m := createFakeDBAndMonitor(t)
+	m.actionTimeout = 1 * time.Second
+	defer db.Close()
+	defer func() {
+		m.Close()
+		waitUntilWritingStopped(t, m)
+	}()
+	db.AddQuery(fmt.Sprintf(semiSyncStatsQuery, m.actionTimeout.Milliseconds()),
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("variable_name|variable_value", "varchar|varchar"), "Rpl_semi_sync_source_wait_sessions|1"))
+
+	m.checkAndFixSemiSyncBlocked()
+
+	require.EqualValues(t, 1, m.errorCount.Get())
+	record := logs.Record(t, "SemiSync Monitor: failed to check if primary is blocked on semi-sync")
+	assert.Contains(t, record["error"], "unexpected number of rows received, expected 2 but got 1")
+	assert.Equal(t, "INTERNAL", record["error_code"])
 }
 
 // TestMonitorIsSemiSyncBlockedProgressDetection tests various scenarios
