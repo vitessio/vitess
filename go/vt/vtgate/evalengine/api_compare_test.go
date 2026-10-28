@@ -948,6 +948,50 @@ func TestCompareStrings(t *testing.T) {
 			out: &T, op: sqlparser.EqualOp,
 			row: []sqltypes.Value{sqltypes.NewVarChar("1"), sqltypes.NewInt64(1)},
 		},
+		{
+			name: "json bind var not equal varchar (abc without quotes)",
+			v1:   NewBindVar("j", NewType(sqltypes.TypeJSON, collations.CollationUtf8mb4ID)),
+			v2:   NewBindVar("s", NewType(sqltypes.VarChar, collations.CollationUtf8mb4ID)),
+			out:  &F,
+			op:   sqlparser.EqualOp,
+			bv: map[string]*querypb.BindVariable{
+				"j": {Type: querypb.Type_JSON, Value: []byte(`"abc"`)},
+				"s": sqltypes.StringBindVariable("abc"),
+			},
+		},
+		{
+			name: "json bind var equal varchar (abc with quotes)",
+			v1:   NewBindVar("j", NewType(sqltypes.TypeJSON, collations.CollationUtf8mb4ID)),
+			v2:   NewBindVar("s", NewType(sqltypes.VarChar, collations.CollationUtf8mb4ID)),
+			out:  &T,
+			op:   sqlparser.EqualOp,
+			bv: map[string]*querypb.BindVariable{
+				"j": {Type: querypb.Type_JSON, Value: []byte(`"abc"`)},
+				"s": sqltypes.StringBindVariable(`"abc"`),
+			},
+		},
+		{
+			name: "json bind var equal varchar (number format preserved)",
+			v1:   NewBindVar("j", NewType(sqltypes.TypeJSON, collations.CollationUtf8mb4ID)),
+			v2:   NewBindVar("s", NewType(sqltypes.VarChar, collations.CollationUtf8mb4ID)),
+			out:  &T,
+			op:   sqlparser.EqualOp,
+			bv: map[string]*querypb.BindVariable{
+				"j": {Type: querypb.Type_JSON, Value: []byte("1.50")},
+				"s": sqltypes.StringBindVariable("1.50"),
+			},
+		},
+		{
+			name: "json bind var not equal varchar (number format mismatch)",
+			v1:   NewBindVar("j", NewType(sqltypes.TypeJSON, collations.CollationUtf8mb4ID)),
+			v2:   NewBindVar("s", NewType(sqltypes.VarChar, collations.CollationUtf8mb4ID)),
+			out:  &F,
+			op:   sqlparser.EqualOp,
+			bv: map[string]*querypb.BindVariable{
+				"j": {Type: querypb.Type_JSON, Value: []byte("1.50")},
+				"s": sqltypes.StringBindVariable("1.5"),
+			},
+		},
 	}
 
 	for i, tcase := range tests {

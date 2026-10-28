@@ -73,6 +73,17 @@ func TestTupleBindVarEval(t *testing.T) {
 			newEvalText([]byte("b"), collation),
 			newEvalText([]byte("c"), collation),
 		},
+	}, {
+		tName: "bind variable provided - json element coerced to text",
+		bv: &querypb.BindVariable{
+			Type: querypb.Type_TUPLE,
+			Values: []*querypb.Value{
+				sqltypes.ValueToProto(sqltypes.TestTuple(sqltypes.NewInt64(1), sqltypes.MakeTrusted(querypb.Type_JSON, []byte(`"abc"`)))),
+			},
+		},
+		expEval: []eval{
+			newEvalText([]byte(`"abc"`), collation),
+		},
 	}}
 
 	for _, tcase := range tcases {
