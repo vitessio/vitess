@@ -725,9 +725,14 @@ func (throttler *Throttler) Close() {
 }
 
 // requestHeartbeats sends a heartbeat lease request to the heartbeat writer.
-// This action is recorded in stats.
+// This action is recorded in stats. The dedicated query throttler requests heartbeats only while a query
+// throttler rule uses lag, whether the request comes from its lease ticker, a check, or a probed replica that
+// reports a recent check.
 func (throttler *Throttler) requestHeartbeats() {
 	if !throttler.isLeader.Load() {
+		return
+	}
+	if throttler.throttlerType == QueryTabletThrottler && !throttler.queryThrottlerChecksLag() {
 		return
 	}
 	go throttler.heartbeatWriter.RequestHeartbeats()
@@ -988,7 +993,7 @@ func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 					go throttler.expireThrottledApps()
 				}
 			case <-heartbeatLeaseC:
-				if throttler.IsOpen() && throttler.queryThrottlerChecksLag() {
+				if throttler.IsOpen() {
 					throttler.requestHeartbeats()
 				}
 			case throttlerConfig := <-throttler.throttlerConfigChan:

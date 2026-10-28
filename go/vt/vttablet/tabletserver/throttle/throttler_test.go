@@ -1841,9 +1841,13 @@ func TestQueryThrottlerRenewsHeartbeatLease(t *testing.T) {
 						return heartbeatWriter.Requests() >= requests+2
 					}, 30*time.Second, 100*time.Millisecond, "the dedicated query throttler must renew the heartbeat lease without being checked")
 				} else {
+					// The strategy's checks, and a probed replica reporting them, must not request heartbeats either.
+					require.True(t, throttler.IsRunning())
 					assert.Never(t, func() bool {
+						throttler.Check(ctx, throttlerapp.QueryThrottlerName.String(), nil, &CheckFlags{})
+						throttler.requestHeartbeats()
 						return heartbeatWriter.Requests() > requests
-					}, 3*queryThrottlerHeartbeatLeaseInterval, 100*time.Millisecond, "the dedicated query throttler must not renew the heartbeat lease without a lag rule")
+					}, 3*queryThrottlerHeartbeatLeaseInterval, 100*time.Millisecond, "the dedicated query throttler must not request heartbeats without a lag rule")
 				}
 			})
 		})
