@@ -11,6 +11,7 @@
     - **[New Support](#new-support)**
         - [VTOrc failover of an unreachable primary `vttablet` via replica quorum](#vtorc-quorum-unreachable-primary)
         - [Back up binary logs with full builtin backups](#backup-include-binlogs)
+        - [Reloading TLS certificates without a restart](#tls-reload)
     - **[Breaking Changes](#breaking-changes)**
         - [`--watch-replication-stream` flag removed](#vttablet-watch-replication-stream-removed)
         - [VRLog feature removed](#vttablet-vrlog-removed)
@@ -159,6 +160,23 @@ Things to be aware of:
 **Upgrade order**: upgrade both `vtctld` and the tablets before using `--include-binlogs` with `vtctldclient Backup` or `BackupShard`. An older `vtctld` or `vttablet` silently ignores the field and takes a backup without binary logs.
 
 See [#17667](https://github.com/vitessio/vitess/issues/17667).
+
+#### <a id="tls-reload"/>Reloading TLS certificates without a restart</a>
+
+Vitess components now reload their TLS certificate, key, CA and CRL files from disk on `SIGHUP`, without a restart:
+
+- The gRPC server of every Vitess component (`--grpc-cert`, `--grpc-key`, `--grpc-ca`, `--grpc-crl`, `--grpc-server-ca`), and the MySQL server of `vtgate` and `vtcombo` (`--mysql-server-ssl-cert`, `--mysql-server-ssl-key`, `--mysql-server-ssl-ca`, `--mysql-server-ssl-crl`, `--mysql-server-ssl-server-ca`). `vtgate` already reloaded its MySQL server's TLS config on `SIGHUP`, but reused the certificate, key and CA it had loaded at startup, so only a changed CRL took effect; now every file does.
+- The TLS clients of `vtgate`, `vttablet`, `vtctld`, `vtorc`, `vtbackup`, `vtcombo`, `mysqlctld` and `vttestserver`: their gRPC clients (the `--tablet-grpc-*`, `--tablet-manager-grpc-*`, `--vtgate-grpc-*`, `--vtctld-grpc-*` and `--binlog-player-grpc-*` flags), their MySQL client connections to `mysqld` (the `--db-ssl-*` flags), and the connections of the LDAP authentication server to LDAP.
+
+The new `--tls-reload-interval` flag (default `0`, disabled) of those components also checks the files for changes periodically, which suits deployments that update certificates without signaling the process, such as Kubernetes secrets.
+
+New connections use the reloaded files as soon as a reload succeeds; established connections keep the session they negotiated until they close. A gRPC client connection, such as the one from `vtgate` to a `vttablet`, stays open for as long as it is healthy, and uses the reloaded files when it next reconnects. A reload that fails, for instance because a certificate was replaced before its key, is logged and leaves the previous files in use: the next `SIGHUP`, or the next check with `--tls-reload-interval`, tries again. The MySQL and LDAP clients still read their CRL file for every new connection, so a new CRL takes effect for them without a reload; a gRPC client picks up a changed CRL with the next reload, as it does its other files. While a CRL file cannot be read or used, a client now checks against the CRLs it last loaded from it under the same CA file, where before every new MySQL or LDAP connection failed. A read of a client's CRL file that hangs, as on an unresponsive NFS mount, holds up the reload of every client's TLS files until it returns, and the new connections that use that CRL file wait for it as well; connections that use other files, and the reloads of the servers' TLS files, carry on, and shutting down waits for it no longer than `--onterm-timeout`. When a server's CA file changes, TLS sessions established before the reload no longer resume, so that a client whose CA was removed has to present a certificate that the new CAs accept.
+
+Every component listed above already handled `SIGHUP` rather than terminating on it, so sending it to reload the TLS files does not stop any of them.
+
+To rotate a CA, first install a CA file that holds both the old and the new CA and reload, then reissue the certificates under the new CA, and remove the old CA last.
+
+Each server exports, labeled by `Server` (`grpc` or `mysql`), `TLSReloadSuccessTimestamp`, the Unix time of the last successful load, `TLSReloadErrors`, the number of failed reloads, and `TLSCertNotAfter`, the Unix time at which the certificate it presents expires. The reloads of a component's TLS clients are counted in `TLSReloadSuccessTimestamp` and `TLSReloadErrors` under `clients`.
 
 ### <a id="breaking-changes"/>Breaking Changes</a>
 
