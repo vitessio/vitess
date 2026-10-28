@@ -17,12 +17,17 @@ limitations under the License.
 package grpcvtctldserver
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	querythrottlerpb "vitess.io/vitess/go/vt/proto/querythrottler"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 func TestValidateQueryThrottlerConfigRequest(t *testing.T) {
@@ -638,6 +643,30 @@ func TestSanitizeQueryThrottlerConfig(t *testing.T) {
 				require.Equal(t, want.Above, thresholds[i].Above)
 				require.Equal(t, want.Throttle, thresholds[i].Throttle)
 			}
+		})
+	}
+}
+
+// topoErrorf maps a topo error to the code a client can act on, and keeps a code the error
+// already has.
+func TestTopoErrorf(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want vtrpcpb.Code
+	}{
+		{name: "NoNode", err: topo.NewError(topo.NoNode, "ks"), want: vtrpcpb.Code_NOT_FOUND},
+		{name: "BadVersion", err: topo.NewError(topo.BadVersion, "ks"), want: vtrpcpb.Code_ABORTED},
+		{name: "Timeout", err: topo.NewError(topo.Timeout, "ks"), want: vtrpcpb.Code_DEADLINE_EXCEEDED},
+		{name: "Interrupted", err: topo.NewError(topo.Interrupted, "ks"), want: vtrpcpb.Code_CANCELED},
+		{name: "other error", err: errors.New("connection refused"), want: vtrpcpb.Code_UNAVAILABLE},
+		{name: "error with a code", err: vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "bad"), want: vtrpcpb.Code_INVALID_ARGUMENT},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := topoErrorf(tt.err, "failed to update keyspace %s", "ks")
+			require.Equal(t, tt.want, vterrors.Code(err))
+			require.ErrorContains(t, err, "failed to update keyspace ks: ")
 		})
 	}
 }

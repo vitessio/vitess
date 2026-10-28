@@ -18,6 +18,7 @@ package topotests
 
 import (
 	"context"
+	"errors"
 	"path"
 	"reflect"
 	"sort"
@@ -1182,6 +1183,31 @@ func TestUpdateSrvKeyspaceQueryThrottlerConfig(t *testing.T) {
 		assert.False(t, getConfig(t, ts, cell).GetDryRun())
 		_, err = ts.GetSrvKeyspace(t.Context(), cell2, keyspace)
 		assert.True(t, topo.IsErrType(err, topo.NoNode), "a cell without a SrvKeyspace must not get one created")
+	})
+
+	t.Run("does not report a cell whose write failed", func(t *testing.T) {
+		ctx := t.Context()
+		ts, factory := memorytopo.NewServerAndFactory(ctx, cell, cell2)
+		t.Cleanup(ts.Close)
+		require.NoError(t, ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{}))
+		for _, c := range []string{cell, cell2} {
+			require.NoError(t, ts.UpdateSrvKeyspace(ctx, c, keyspace, &topodatapb.SrvKeyspace{
+				QueryThrottlerConfig: &querythrottlerpb.Config{Enabled: true, DryRun: true},
+			}))
+		}
+		lockedCtx, unlock, err := ts.LockKeyspace(ctx, keyspace, "Locking for tests")
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			var err error
+			unlock(&err)
+			assert.NoError(t, err)
+		})
+		// The path within a cell is the same in every cell, so both writes fail.
+		factory.AddOperationError(memorytopo.Update, topo.SrvKeyspaceFile+"$", errors.New("write failed"))
+		updated, err := ts.UpdateSrvKeyspaceQueryThrottlerConfig(lockedCtx, keyspace, nil, disableDryRun)
+		require.True(t, topo.IsErrType(err, topo.PartialResult), "got %v", err)
+		require.ErrorContains(t, err, "write failed")
+		require.Empty(t, updated)
 	})
 
 	t.Run("reports a cell it could not read as a partial result", func(t *testing.T) {

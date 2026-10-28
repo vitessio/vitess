@@ -15665,8 +15665,9 @@ func TestUpdateQueryThrottlerConfig(t *testing.T) {
 										MetricRules: map[string]*querythrottler.MetricRule{
 											"lag": {
 												Thresholds: []*querythrottler.ThrottleThreshold{
-													{Above: 10, Throttle: 100},
-													{Above: 2, Throttle: 25},
+													// Throttle descends as above ascends, so a sort on the wrong field fails.
+													{Above: 10, Throttle: 25},
+													{Above: 2, Throttle: 100},
 													{Above: 5, Throttle: 50},
 												},
 											},
@@ -15690,9 +15691,9 @@ func TestUpdateQueryThrottlerConfig(t *testing.T) {
 									MetricRules: map[string]*querythrottler.MetricRule{
 										"lag": {
 											Thresholds: []*querythrottler.ThrottleThreshold{
-												{Above: 2, Throttle: 25},
+												{Above: 2, Throttle: 100},
 												{Above: 5, Throttle: 50},
-												{Above: 10, Throttle: 100},
+												{Above: 10, Throttle: 25},
 											},
 										},
 									},

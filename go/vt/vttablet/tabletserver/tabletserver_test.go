@@ -3234,11 +3234,15 @@ func useNoopTabletManagerClient(t *testing.T) {
 }
 
 // alwaysThrottleStrategy throttles every statement the query throttler evaluates. Its message
-// names the statement type it was given, so tests can check what each call site passes.
+// names the statement type, tablet type, priority and query it was given, so tests can check
+// what each call site passes.
 type alwaysThrottleStrategy struct{}
 
-func (alwaysThrottleStrategy) Evaluate(_ context.Context, _ *querythrottlerpb.Config, _ topodatapb.TabletType, _ *sqlparser.ParsedQuery, statementType sqlparser.StatementType, _ int64, _ registry.QueryAttributes) registry.ThrottleDecision {
-	return registry.ThrottleDecision{Throttle: true, Message: "always throttle " + statementType.String()}
+func (alwaysThrottleStrategy) Evaluate(_ context.Context, _ *querythrottlerpb.Config, tabletType topodatapb.TabletType, parsedQuery *sqlparser.ParsedQuery, statementType sqlparser.StatementType, _ int64, attrs registry.QueryAttributes) registry.ThrottleDecision {
+	return registry.ThrottleDecision{
+		Throttle: true,
+		Message:  fmt.Sprintf("always throttle %s on %s with priority %d: %s", statementType, tabletType, attrs.Priority, parsedQuery.Query),
+	}
 }
 func (alwaysThrottleStrategy) Start()                  {}
 func (alwaysThrottleStrategy) Stop()                   {}
@@ -3279,7 +3283,7 @@ func TestTabletServerQueryThrottlerSkippedStatements(t *testing.T) {
 	t.Cleanup(db.Close)
 	db.AddQueryPattern(".*", &sqltypes.Result{})
 	target := &querypb.Target{Keyspace: "keyspaceName", TabletType: topodatapb.TabletType_PRIMARY}
-	options := &querypb.ExecuteOptions{}
+	options := &querypb.ExecuteOptions{Priority: "20"}
 	noop := func(*sqltypes.Result) error { return nil }
 	// The statements read a table, so the no-table skip doesn't hide the case under test.
 	const selectTable = "select * from test_table"
@@ -3319,7 +3323,7 @@ func TestTabletServerQueryThrottlerSkippedStatements(t *testing.T) {
 	// its message: Execute, Stream, and Stream's DML path.
 	_, err = tsv.Execute(ctx, nil, target, selectTable, nil, 0, 0, options)
 	require.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err), "an autocommit statement must be throttled")
-	require.ErrorContains(t, err, "always throttle SELECT")
+	require.ErrorContains(t, err, "always throttle SELECT on PRIMARY with priority 20: "+selectTable)
 	_, err = tsv.Execute(ctx, nil, target, "flush logs", nil, 0, 0, options)
 	require.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err), "a statement other than SELECT must be throttled even if it reads no table")
 	err = tsv.StreamExecute(ctx, nil, target, selectTable, nil, 0, 0, options, noop)
