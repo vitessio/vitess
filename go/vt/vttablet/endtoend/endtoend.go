@@ -21,6 +21,7 @@ package endtoend
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
@@ -29,7 +30,7 @@ import (
 func prettyPrint(qr sqltypes.Result) string {
 	out, err := json.Marshal(qr)
 	if err != nil {
-		log.Error(fmt.Sprintf("Could not marshal result to json for %#v", qr))
+		log.Error("Could not marshal result to json", slog.String("result", fmt.Sprintf("%#v", qr)), slog.Any("error", err))
 		return fmt.Sprintf("%#v", qr)
 	}
 	return string(out)

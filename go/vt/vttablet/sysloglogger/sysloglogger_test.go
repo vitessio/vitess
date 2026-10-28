@@ -22,15 +22,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"log/syslog"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/streamlog"
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
@@ -222,6 +225,7 @@ func TestSyslogWithBadData(t *testing.T) {
 // while they're processing.  Verifies that the plugin gracefully handles and recovers from the broken connectivity,
 // and that all messages received while the connection is alive are logged successfully.
 func TestSyslogWithInterruptedConnection(t *testing.T) {
+	logs := logtest.Capture(t, slog.LevelInfo)
 	// This mock will simulate a broken syslog connection when processing every 4th record
 	mock := newFailingFakeWriter()
 	writer = mock
@@ -252,4 +256,8 @@ func TestSyslogWithInterruptedConnection(t *testing.T) {
 		_, ok := queriesLogged[expected]
 		require.Truef(t, ok, "Expected query %q was not logged", expected)
 	}
+
+	record := logs.Record(t, "Error writing to syslog")
+	assert.Equal(t, "Cannot connect to syslog", record["error"])
+	assert.NotContains(t, logs.String(), "select 4")
 }
