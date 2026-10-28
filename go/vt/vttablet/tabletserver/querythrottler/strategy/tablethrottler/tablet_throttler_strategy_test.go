@@ -1105,7 +1105,7 @@ func TestTabletThrottlerStrategy_RefreshCache_CountsStaleRefreshes(t *testing.T)
 func TestTabletThrottlerStrategy_Evaluate_RecordsDecisions(t *testing.T) {
 	overloaded := &throttle.CheckResult{Metrics: map[string]*throttle.MetricResult{"lag": breachedMetric(20)}}
 	overloadedState := &cacheState{ok: false, result: overloaded, refreshedAt: time.Now()}
-	cfg := createTestQueryThrottlerConfig(makeTabletStrategyConfig("PRIMARY", "SELECT", "lag", makeThresholds(10, 50)))
+	rules := makeTabletStrategyConfig("PRIMARY", "SELECT", "lag", makeThresholds(10, 50))
 
 	tests := []struct {
 		name        string
@@ -1115,6 +1115,7 @@ func TestTabletThrottlerStrategy_Evaluate_RecordsDecisions(t *testing.T) {
 		stmtType    sqlparser.StatementType
 		priority    string
 		randFloat64 float64
+		dryRun      bool
 		wantLabels  []string
 		wantHits    int64
 		wantMisses  int64
@@ -1177,6 +1178,19 @@ func TestTabletThrottlerStrategy_Evaluate_RecordsDecisions(t *testing.T) {
 			wantHits:    1,
 		},
 		{
+			// The query still runs in dry_run, so the decision must not count as throttled.
+			name:        "breach in dry_run",
+			running:     true,
+			state:       overloadedState,
+			tabletType:  topodatapb.TabletType_PRIMARY,
+			stmtType:    sqlparser.StmtSelect,
+			priority:    "100",
+			randFloat64: 0.4,
+			dryRun:      true,
+			wantLabels:  []string{"PRIMARY", "SELECT", decisionPathFull, decisionOutcomeWouldThrottle, decisionReasonMetricBreach},
+			wantHits:    1,
+		},
+		{
 			name:        "breach allowed",
 			running:     true,
 			state:       overloadedState,
@@ -1193,6 +1207,9 @@ func TestTabletThrottlerStrategy_Evaluate_RecordsDecisions(t *testing.T) {
 			strategy := newOverloadedStrategy(overloaded, tt.randFloat64, 99)
 			strategy.running.Store(tt.running)
 			strategy.cachedState.Store(tt.state)
+
+			cfg := createTestQueryThrottlerConfig(rules)
+			cfg.DryRun = tt.dryRun
 
 			key := strings.Join(tt.wantLabels, ".")
 			decisions, hits, misses := decisionCount.Counts()[key], cacheHits.Get(), cacheMisses.Get()

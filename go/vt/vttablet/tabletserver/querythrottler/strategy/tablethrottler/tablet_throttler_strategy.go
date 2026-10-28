@@ -96,6 +96,7 @@ const (
 	decisionPathFull                  = "full"
 	decisionOutcomeAllowed            = "allowed"
 	decisionOutcomeThrottled          = "throttled"
+	decisionOutcomeWouldThrottle      = "would_throttle" // a throttle decision in dry_run, where the query still runs
 	decisionReasonBypassFast          = "bypass_fast"
 	decisionReasonBypassPrior         = "bypass_priority"
 	decisionReasonNoRuleForTabletType = "no_rule_for_tablet_type"
@@ -426,7 +427,11 @@ func (s *TabletThrottlerStrategy) Evaluate(ctx context.Context, cfg *querythrott
 
 	// Step 8: Apply probabilistic throttling based on max throttle ratio (priority check already passed)
 	if maxThrottleRatio > 0 && maxThrottleRatio > s.randFloat64() {
-		s.recordFullDecision(tabletTypeStr, stmtType, decisionOutcomeThrottled, decisionReasonMetricBreach, startTime)
+		outcome := decisionOutcomeThrottled
+		if cfg.GetDryRun() {
+			outcome = decisionOutcomeWouldThrottle
+		}
+		s.recordFullDecision(tabletTypeStr, stmtType, outcome, decisionReasonMetricBreach, startTime)
 		return registry.ThrottleDecision{
 			Throttle: true,
 			Message: fmt.Sprintf("query throttled: stmtType=%s workload=%s priority=%d metric=%s value=%."+
