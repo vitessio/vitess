@@ -246,20 +246,19 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 	return clusterInstance
 }
 
-// stopMySQLInits kills whatever the MySQL initializations in procs started and a teardown
-// did not stop, and reaps the initializations not yet reaped. A teardown finds mysqld by
-// its pid file, which an initialization that is still running or that failed may not have
-// written, and does not wait for initializations. So, whatever state each one is in, its
-// whole process group is killed: the group holds the mysqld_safe and mysqld it started,
-// and outlives it. A descendant that leaves the group is not killed; mysqld_safe and
-// mysqld do not. Run it after the teardown: a mysqld killed first leaves the teardown's
-// graceful shutdown of it waiting. procs must have been started with
-// MysqlctlProcess.ProcessGroup set.
+// stopMySQLInits kills the process groups of the mysqlctl inits in procs and
+// reaps any init not yet waited on. procs must have been started with
+// MysqlctlProcess.ProcessGroup set. Call it after Teardown: if a mysqld is
+// killed first, Teardown's graceful shutdown of it cannot complete and blocks
+// until its 30s timeout expires.
 func stopMySQLInits(procs []*exec.Cmd) {
 	for _, proc := range procs {
+		// Teardown finds mysqld by its pid file, which a running or failed init may
+		// not have written. The init's group holds the mysqld_safe and mysqld it
+		// started, and outlives it.
 		_ = syscall.Kill(-proc.Process.Pid, syscall.SIGKILL)
 		if proc.ProcessState == nil {
-			// Also kills an initializer outside the group, so that the wait returns.
+			// The group kill misses an init started without ProcessGroup; kill it so that Wait returns.
 			_ = proc.Process.Kill()
 			_ = proc.Wait()
 		}
