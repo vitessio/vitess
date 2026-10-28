@@ -19,6 +19,7 @@ package repltracker
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -272,7 +273,7 @@ func (w *heartbeatWriter) recordError(err error) {
 	if err == nil {
 		return
 	}
-	w.errorLog.Errorf("%v", err)
+	w.errorLog.Error("failed to write heartbeat", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 	writeErrors.Add(1)
 }
 

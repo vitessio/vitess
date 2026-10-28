@@ -18,10 +18,12 @@ package registry
 
 import (
 	"fmt"
+	"log/slog"
 	"sync"
 
 	"vitess.io/vitess/go/vt/log"
 	querythrottlerpb "vitess.io/vitess/go/vt/proto/querythrottler"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 var (
@@ -40,7 +42,7 @@ func Register(name querythrottlerpb.ThrottlingStrategy, factory StrategyFactory)
 	}
 
 	factories[name] = factory
-	log.Info(fmt.Sprintf("Registered throttling strategy: %s", name))
+	log.Info("Registered throttling strategy", slog.String("strategy", name.String()))
 }
 
 // Get retrieves a strategy factory by name.
@@ -63,13 +65,17 @@ func CreateStrategy(cfg StrategyConfig, deps Deps) ThrottlingStrategyHandler {
 	// NoOpStrategy must always be available—even before any registration happens—so the registry itself can safely fall back on it.
 	factory, ok := Get(cfg.GetStrategy())
 	if !ok {
-		log.Warn(fmt.Sprintf("Unknown strategy %s, using NoOp", cfg.GetStrategy()))
+		log.Warn("Unknown strategy, using NoOp", slog.String("strategy", cfg.GetStrategy().String()))
 		return &NoOpStrategy{}
 	}
 
 	strategy, err := factory.New(deps, cfg)
 	if err != nil {
-		log.Error(fmt.Sprintf("Strategy %s failed to init: %v, using NoOp", cfg.GetStrategy(), err))
+		log.Error("Strategy failed to init, using NoOp",
+			slog.String("strategy", cfg.GetStrategy().String()),
+			slog.Any("error", err),
+			slog.String("error_code", vterrors.Code(err).String()),
+		)
 		return &NoOpStrategy{}
 	}
 

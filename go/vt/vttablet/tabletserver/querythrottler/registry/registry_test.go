@@ -17,11 +17,17 @@ limitations under the License.
 package registry
 
 import (
+	"log/slog"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/log/logtest"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	querythrottlerpb "vitess.io/vitess/go/vt/proto/querythrottler"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // reset clears all registered factories. This is used for testing.
@@ -101,6 +107,32 @@ func TestCreateStrategyUnknown(t *testing.T) {
 	strategy := CreateStrategy(cfg, deps)
 	// Should fallback to NoOpStrategy
 	require.IsType(t, &NoOpStrategy{}, strategy)
+}
+
+// failingStrategyFactory is a factory whose strategies fail to init.
+type failingStrategyFactory struct{}
+
+func (f failingStrategyFactory) New(deps Deps, cfg StrategyConfig) (ThrottlingStrategyHandler, error) {
+	return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "no throttler client")
+}
+
+func TestCreateStrategyInitError(t *testing.T) {
+	reset()
+
+	Register(querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER, failingStrategyFactory{})
+	cfg := &querythrottlerpb.Config{
+		Enabled:  true,
+		Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER,
+	}
+
+	logs := logtest.Capture(t, slog.LevelWarn)
+	strategy := CreateStrategy(cfg, Deps{})
+	require.IsType(t, &NoOpStrategy{}, strategy)
+
+	record := logs.Record(t, "Strategy failed to init, using NoOp")
+	assert.Equal(t, "TABLET_THROTTLER", record["strategy"])
+	assert.Equal(t, "no throttler client", record["error"])
+	assert.Equal(t, "FAILED_PRECONDITION", record["error_code"])
 }
 
 func TestListRegistered(t *testing.T) {

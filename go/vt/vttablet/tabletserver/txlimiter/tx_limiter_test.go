@@ -17,12 +17,14 @@ limitations under the License.
 package txlimiter
 
 import (
+	"log/slog"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/callerid"
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
@@ -69,6 +71,7 @@ func TestTxLimiter_LimitsOnlyOffendingUser(t *testing.T) {
 	cfg.TransactionLimitByComponent = false
 	cfg.TransactionLimitBySubcomponent = false
 
+	logs := logtest.Capture(t, slog.LevelInfo)
 	// This should allow 3 slots to all users
 	newlimiter := New(tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TabletServerTest"))
 	limiter, ok := newlimiter.(*Impl)
@@ -104,6 +107,14 @@ func TestTxLimiter_LimitsOnlyOffendingUser(t *testing.T) {
 
 	// Rejection count for user 1 should still be 1.
 	assert.Equalf(t, int64(1), limiter.rejections.Counts()[key1], "Rejections count for %s", key1)
+
+	var rejectedUsers []any
+	for _, record := range logs.Records(t) {
+		if record["msg"] == "TxLimiter: Over limit, rejecting transaction request for user" {
+			rejectedUsers = append(rejectedUsers, record["user"])
+		}
+	}
+	assert.Equal(t, []any{key1, key2}, rejectedUsers)
 }
 
 func TestTxLimiterDryRun(t *testing.T) {
@@ -117,6 +128,7 @@ func TestTxLimiterDryRun(t *testing.T) {
 	cfg.TransactionLimitByComponent = false
 	cfg.TransactionLimitBySubcomponent = false
 
+	logs := logtest.Capture(t, slog.LevelInfo)
 	// This should allow 3 slots to all users
 	newlimiter := New(tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TabletServerTest"))
 	limiter, ok := newlimiter.(*Impl)
@@ -135,4 +147,7 @@ func TestTxLimiterDryRun(t *testing.T) {
 
 	assert.Equalf(t, int64(0), limiter.rejections.Counts()[key], "Rejections count for %s", key)
 	assert.Equalf(t, int64(1), limiter.rejectionsDryRun.Counts()[key], "RejectionsDryRun count for %s", key)
+
+	record := logs.Record(t, "TxLimiter: DRY RUN: user over limit")
+	assert.Equal(t, key, record["user"])
 }

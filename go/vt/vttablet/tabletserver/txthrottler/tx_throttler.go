@@ -19,6 +19,7 @@ package txthrottler
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"math/rand/v2"
 	"slices"
 	"strings"
@@ -32,6 +33,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/throttler"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -87,7 +89,11 @@ const TxThrottlerName = "TransactionThrottler"
 func fetchKnownCells(ctx context.Context, topoServer *topo.Server, target *querypb.Target) []string {
 	cells, err := topoServer.GetKnownCells(ctx)
 	if err != nil {
-		log.Error(fmt.Sprintf("txThrottler: falling back to local cell due to error fetching cells from topology: %+v", err))
+		log.Error("txThrottler: falling back to local cell due to error fetching cells from topology",
+			slog.String("cell", target.Cell),
+			slog.Any("error", err),
+			slog.String("error_code", vterrors.Code(err).String()),
+		)
 		cells = []string{target.Cell}
 	}
 	return cells
@@ -176,9 +182,18 @@ func NewTxThrottler(env tabletenv.Env, topoServer *topo.Server) TxThrottler {
 	config := env.Config()
 	if config.EnableTxThrottler {
 		if len(config.TxThrottlerHealthCheckCells) == 0 {
-			defer log.Info(fmt.Sprintf("Initialized transaction throttler using tabletTypes: %+v, cellsFromTopo: true, topoRefreshInterval: %s, throttlerConfig: %q", config.TxThrottlerTabletTypes, config.TxThrottlerTopoRefreshInterval, config.TxThrottlerConfig.Get()))
+			defer log.Info("Initialized transaction throttler",
+				slog.String("tablet_types", fmt.Sprintf("%+v", config.TxThrottlerTabletTypes)),
+				slog.Bool("cells_from_topo", true),
+				slog.Duration("topo_refresh_interval", config.TxThrottlerTopoRefreshInterval),
+				slog.String("tx_throttler_config", fmt.Sprint(config.TxThrottlerConfig.Get())),
+			)
 		} else {
-			defer log.Info(fmt.Sprintf("Initialized transaction throttler using tabletTypes: %+v, healthCheckCells: %+v, throttlerConfig: %q", config.TxThrottlerTabletTypes, config.TxThrottlerHealthCheckCells, config.TxThrottlerConfig.Get()))
+			defer log.Info("Initialized transaction throttler",
+				slog.String("tablet_types", fmt.Sprintf("%+v", config.TxThrottlerTabletTypes)),
+				slog.String("health_check_cells", strings.Join(config.TxThrottlerHealthCheckCells, ",")),
+				slog.String("tx_throttler_config", fmt.Sprint(config.TxThrottlerConfig.Get())),
+			)
 		}
 	}
 
@@ -350,7 +365,7 @@ func (ts *txThrottlerStateImpl) healthChecksProcessor(topoServer *topo.Server, t
 			return
 		case <-cellsUpdateTicks:
 			if err := ts.updateHealthCheckCells(topoServer, target); err != nil {
-				log.Error(fmt.Sprintf("txThrottler: failed to update cell list: %+v", err))
+				log.Error("txThrottler: failed to update cell list", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 			}
 		case th := <-ts.healthCheckChan:
 			ts.StatsUpdate(th)

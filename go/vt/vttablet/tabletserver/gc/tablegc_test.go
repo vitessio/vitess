@@ -18,6 +18,7 @@ package gc
 
 import (
 	"context"
+	"log/slog"
 	"strings"
 	"testing"
 	"time"
@@ -29,8 +30,10 @@ import (
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/vtenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
@@ -510,6 +513,67 @@ func TestCheckTables(t *testing.T) {
 	}
 	assert.ElementsMatch(t, expectDropTables, foundDropTables)
 	assert.ElementsMatch(t, expectTransitionRequests, foundTransitionRequests)
+}
+
+// TestOperateLogs runs the collector against a fake MySQL holding a table due
+// to leave HOLD, whose rename fails, and a table due to be dropped.
+func TestOperateLogs(t *testing.T) {
+	const (
+		holdTable = "_vt_hld_22222222222222222222222222222222_20200920093324_"
+		dropTable = "_vt_drp_33333333333333333333333333333333_20200919083451_"
+	)
+	db := fakesqldb.New(t)
+	defer db.Close()
+	db.SetNeverFail(true)
+	db.AddQuery(sqlShowVtTables, sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("Tables_in_test|Table_type", "varchar|varchar"),
+		holdTable+"|BASE TABLE",
+		dropTable+"|BASE TABLE",
+	))
+	db.RejectQueryPattern("rename table .*", "rename failed")
+
+	collector := newFakeDBTableGC(t, db)
+	collector.checkRequestChan = make(chan bool)
+	collector.pool = connpool.NewPool(collector.env, "TableGCPool", tabletenv.ConnPoolConfig{Size: 2})
+	collector.pool.Open(collector.env.Config().DB.AllPrivsWithDB(), collector.env.Config().DB.DbaWithDB(), collector.env.Config().DB.AppDebugWithDB())
+	defer collector.pool.Close()
+
+	logs := logtest.Capture(t, slog.LevelInfo)
+	ctx, cancel := context.WithCancel(t.Context())
+	go collector.operate(ctx)
+	failed := logs.Wait(t, "TableGC: error transitioning table")
+	logs.Wait(t, "TableGC: dropped table")
+	cancel()
+	logs.Wait(t, "TableGC: done operating")
+
+	var operatedOn []any
+	for _, record := range logs.Records(t) {
+		if record["msg"] == "TableGC: will operate on table" {
+			operatedOn = append(operatedOn, record["table"])
+		}
+	}
+	assert.ElementsMatch(t, []any{holdTable, dropTable}, operatedOn)
+	assert.Equal(t, holdTable, logs.Record(t, "TableGC: submitting transition request")["table"])
+
+	transition := logs.Record(t, "TableGC: transitionRequestsChan")
+	for _, record := range []map[string]any{transition, failed} {
+		assert.Equal(t, holdTable, record["table"])
+		assert.Equal(t, true, record["is_base_table"])
+		assert.Equal(t, string(schema.PurgeTableGCState), record["to_gc_state"])
+		assert.Equal(t, "22222222222222222222222222222222", record["uuid"])
+	}
+	assert.Contains(t, failed["error"], "rename failed")
+	assert.Equal(t, "UNKNOWN", failed["error_code"])
+
+	renaming := logs.Record(t, "TableGC: renaming table")
+	assert.Equal(t, holdTable, renaming["table"])
+	assert.Contains(t, renaming["to_table"], "_vt_prg_22222222222222222222222222222222_")
+
+	assert.Equal(t, dropTable, logs.Record(t, "TableGC: found table in dropTablesChan")["table"])
+	assert.Equal(t, dropTable, logs.Record(t, "TableGC: dropping table")["table"])
+	dropped := logs.Record(t, "TableGC: dropped table")
+	assert.Equal(t, dropTable, dropped["table"])
+	assert.Equal(t, true, dropped["is_base_table"])
 }
 
 type fakeGCConn struct {
